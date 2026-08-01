@@ -1,7 +1,15 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/hooks-install.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 
@@ -39,9 +47,8 @@ function configPath(): string {
 }
 
 describe("openclaudeIntegration", () => {
-  it("capability 为 full，id 为 openclaude", async () => {
+  it("id 为 openclaude", async () => {
     const integration = await loadIntegration();
-    expect(integration.capability).toBe("full");
     expect(integration.id).toBe("openclaude");
   });
 
@@ -55,7 +62,7 @@ describe("openclaudeIntegration", () => {
     expect(integration.detect()).toBe(true);
   });
 
-  it("为全部 13 个事件各注入一条 pier 命令，无 matcher", async () => {
+  it("只为有可信状态语义的 12 个 OpenClaude 事件注入命令，无 matcher", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -66,9 +73,8 @@ describe("openclaudeIntegration", () => {
       "PreToolUse",
       "PostToolUse",
       "PostToolUseFailure",
-      "PermissionRequest",
-      "PermissionDenied",
       "PreCompact",
+      "PostCompact",
       "Stop",
       "StopFailure",
       "SubagentStart",
@@ -85,6 +91,10 @@ describe("openclaudeIntegration", () => {
       expect(typedHooks[evt]?.[0]?.matcher).toBeUndefined();
     }
     expect(hooks.Notification).toBeUndefined();
+    expect(hooks.PermissionRequest).toBeUndefined();
+    expect(hooks.PermissionDenied).toBeUndefined();
+    expect(hooks.Elicitation).toBeUndefined();
+    expect(hooks.ElicitationResult).toBeUndefined();
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
       expect(cmd).toContain('"openclaude"');
@@ -95,10 +105,67 @@ describe("openclaudeIntegration", () => {
         Array<{ hooks: Array<{ command: string }> }>
       >
     ).UserPromptSubmit?.[0]?.hooks?.[0]?.command;
-    expect(ups).toContain("sessionTitle");
-    expect(ups).toContain("promptSnippet");
-    expect(ups).toContain("hookSpecificOutput");
+    // OpenClaude 只消费其公开 hook 输入；不复制 Claude 专属 sessionTitle 双写。
+    const hooksDirRef = ["$", "{PIER_AGENT_HOOKS_DIR}"].join("");
+    expect(ups).not.toContain(`${hooksDirRef}/derive-claude-session-title`);
+    expect(ups).toContain(`${hooksDirRef}/extract-stdin-meta`);
+    expect(ups).not.toContain("ELECTRON_RUN_AS_NODE");
   });
+
+  it("不安装缺少完整结果闭环的 waiting，PreToolUse 只开始工具", async () => {
+    const integration = await loadIntegration();
+    await integration.install();
+    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const hooks = installed.hooks as Record<
+      string,
+      Array<{ hooks: Array<{ command: string }> }>
+    >;
+    const acceptedCommand = hooks.PreToolUse?.[0]?.hooks?.[0]?.command ?? "";
+    expect(hooks.PermissionRequest).toBeUndefined();
+    expect(hooks.Elicitation).toBeUndefined();
+    expect(hooks.ElicitationResult).toBeUndefined();
+
+    const root = await mkdtemp(join(tmpdir(), "pier-openclaude-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const env = {
+      ...process.env,
+      PATH: pathForHookSpawn(process.env.PATH),
+      PIER_AGENT_EVENT_LOG: logPath,
+      PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+      PIER_PANEL_ID: "p1",
+      PIER_WINDOW_ID: "w1",
+    };
+    const payload = JSON.stringify({
+      hook_event_name: "PreToolUse",
+      prompt_id: "prompt-1",
+      session_id: "session-1",
+      tool_name: "Bash",
+      tool_use_id: "tool-1",
+    });
+    const acceptedResult = spawnSync("/bin/sh", ["-c", acceptedCommand], {
+      env,
+      input: payload,
+    });
+    expect(acceptedResult.status, acceptedResult.stderr.toString()).toBe(0);
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      {
+        agent: "openclaude",
+        event: "ToolStart",
+        nativeEvent: "PreToolUse",
+        sessionId: "session-1",
+        toolUseId: "tool-1",
+        turnId: "prompt-1",
+        v: 3,
+      },
+    ]);
+  }, 15_000);
 
   it("幂等：重复安装不产生重复条目", async () => {
     const integration = await loadIntegration();

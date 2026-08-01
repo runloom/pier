@@ -7,19 +7,19 @@ import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
 import { initProjectSkillsBridge } from "@/stores/project-skills-actions.ts";
 import type { SkillDetailTarget } from "@/stores/project-skills-model.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
-import { discardReviewCandidate } from "./skills/skills-candidate-lifecycle.ts";
-import { SkillsImportReview } from "./skills/skills-import-review.tsx";
-import { SkillsProjectDetail } from "./skills/skills-project-detail.tsx";
-import { SkillsProjectList } from "./skills/skills-project-list.tsx";
-import { useSkillsSectionActions } from "./skills/skills-section-actions.ts";
-import {
-  confirmDiscardSkillEditDrafts,
-  leaveSkillsTransientState,
-} from "./skills/skills-shared.tsx";
+import { discardReviewCandidate } from "./skills/candidate-lifecycle.ts";
 import {
   openSkillsManagedSkillDialog,
   openSkillsReadonlySkillDialog,
-} from "./skills/skills-skill-dialogs.tsx";
+} from "./skills/dialogs.tsx";
+import { SkillsImportReview } from "./skills/import-review.tsx";
+import { SkillsProjectDetail } from "./skills/project-detail.tsx";
+import { SkillsProjectList } from "./skills/project-list.tsx";
+import { useSkillsSectionActions } from "./skills/section-actions.ts";
+import {
+  confirmDiscardSkillEditDrafts,
+  leaveSkillsTransientState,
+} from "./skills/shared.tsx";
 
 export { confirmSkillsLaunchBlock } from "@/lib/skills/launch-block.ts";
 

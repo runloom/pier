@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { assetRootRefSchema } from "./agent-assets.ts";
+import { assetRootRefSchema } from "./agent/assets.ts";
 
 /**
  * Live Modules host contract (C 轨).

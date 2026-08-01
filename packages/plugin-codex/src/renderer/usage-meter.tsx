@@ -1,34 +1,13 @@
-import { Badge } from "@pier/ui/badge.tsx";
-import {
-  COLLECTION_QUOTA_ITEM_MIN_WIDTH,
-  collectionAutoFitClassName,
-  collectionAutoFitStyle,
-  collectionLayoutMode,
-} from "@pier/ui/collection-auto-layout.ts";
-import {
-  formatCount,
-  formatDurationShort,
-  formatPercent,
-} from "@pier/ui/format.tsx";
-import { Progress } from "@pier/ui/progress.tsx";
-import { cn } from "@pier/ui/utils";
-import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
+import type {
+  AccountUsageMetric,
+  AccountUsageQuotaMetric,
+} from "@pier/plugin-api/account-usage";
+import { AccountUsageMetrics } from "@pier/plugin-api/account-usage/renderer";
+import type { WidgetDensity } from "@pier/ui/collection-auto-layout.ts";
+import { formatCount } from "@pier/ui/format.tsx";
 import type { JSX } from "react";
-import type { CodexUsageWindow } from "../shared/accounts.ts";
-import {
-  remainingPercent,
-  type UsageRisk,
-  usageRisk,
-} from "../shared/usage.ts";
 
 export type Translate = (key: string, fallback: string) => string;
-
-export interface UsageProgressProps {
-  label: string;
-  language: string;
-  t: Translate;
-  window: CodexUsageWindow;
-}
 
 function replace(template: string, values: Record<string, string>): string {
   return Object.entries(values).reduce(
@@ -38,11 +17,11 @@ function replace(template: string, values: Record<string, string>): string {
 }
 
 export function usageWindowLabel(
-  window: CodexUsageWindow,
+  metric: AccountUsageQuotaMetric,
   language: string,
   t: Translate
 ): string {
-  const minutes = window.windowMinutes;
+  const minutes = metric.windowMinutes;
   let quota: string;
   if (!(minutes && Number.isFinite(minutes) && minutes > 0)) {
     quota = t("pier.codex.usage.quota", "Quota");
@@ -60,169 +39,73 @@ export function usageWindowLabel(
       { count: formatCount(minutes, language) }
     );
   }
-  return window.limitName
+  return metric.name
     ? replace(t("pier.codex.usage.namedQuota", "{name} · {quota}"), {
-        name: window.limitName,
+        name: metric.name,
         quota,
       })
     : quota;
 }
 
-function resetsLabel(
-  window: CodexUsageWindow,
-  now: number,
-  language: string
-): string | null {
-  if (!window.resetsAt || window.resetsAt <= now) return null;
-  return formatDurationShort(window.resetsAt - now, language);
-}
-
-export function usageProgressVariant(
-  risk: UsageRisk
-): "destructive" | "success" | "warning" {
-  if (risk === "critical") return "destructive";
-  if (risk === "warning") return "warning";
-  return "success";
-}
-
-function riskLabel(risk: UsageRisk, t: Translate): string {
-  if (risk === "critical") {
-    return t("pier.codex.usage.risk.critical", "Critical");
+export function usageMetricLabel(
+  metric: AccountUsageMetric,
+  language: string,
+  t: Translate
+): string {
+  if (metric.kind === "quota") {
+    return usageWindowLabel(metric, language, t);
   }
-  if (risk === "warning") {
-    return t("pier.codex.usage.risk.warning", "Warning");
+  if (metric.id === "codex:reset-credits") {
+    return t("pier.codex.usage.resetCredits", "Quota resets");
   }
-  return t("pier.codex.usage.risk.normal", "Normal");
-}
-
-export function UsageProgress({
-  label,
-  language,
-  t,
-  window,
-}: UsageProgressProps): JSX.Element {
-  const remaining = remainingPercent(window.usedPercent);
-  const remainingLabel = formatPercent(remaining / 100, language);
-  const risk = usageRisk(window.usedPercent);
-  const reset = resetsLabel(window, Date.now(), language);
-
-  return (
-    <div
-      className="flex w-full min-w-0 flex-col gap-1.5"
-      data-limit-id={window.limitId}
-      data-risk={risk}
-      data-slot="codex-usage-progress"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0 truncate font-medium text-xs" title={label}>
-          {label}
-        </span>
-        <span className="shrink-0 font-semibold text-lg tabular-nums tracking-tight">
-          {remainingLabel}
-        </span>
-      </div>
-      <Progress
-        aria-label={`${label}: ${t("pier.codex.widget.remaining", "remaining")} ${remainingLabel}, ${riskLabel(risk, t)}`}
-        className="h-1"
-        value={remaining}
-        variant={usageProgressVariant(risk)}
-      />
-      {reset ? (
-        <div className="flex min-w-0 items-center justify-between gap-2 text-muted-foreground text-xs">
-          {risk === "normal" ? (
-            <span />
-          ) : (
-            <Badge
-              size="xs"
-              variant={risk === "critical" ? "danger" : "warning"}
-            >
-              {riskLabel(risk, t)}
-            </Badge>
-          )}
-          <span className="truncate text-right tabular-nums">
-            {t("pier.codex.widget.resetsIn", "Resets in")} {reset}
-          </span>
-        </div>
-      ) : null}
-    </div>
-  );
+  return metric.name ?? t("pier.codex.usage.value", "Usage value");
 }
 
 export interface UsageMeterProps {
   className?: string;
+  density?: WidgetDensity;
   language: string;
+  metrics: readonly AccountUsageMetric[];
+  status: "error" | "ok";
   t: Translate;
-  windows: CodexUsageWindow[];
-}
-
-/** 保持服务端桶顺序，并确保首个（主）桶内周期从短到长。 */
-export function sortUsageWindows(
-  windows: readonly CodexUsageWindow[]
-): CodexUsageWindow[] {
-  const firstLimitId = windows[0]?.limitId;
-  const limitOrder = new Map<string, number>();
-  for (const window of windows) {
-    if (!limitOrder.has(window.limitId)) {
-      limitOrder.set(window.limitId, limitOrder.size);
-    }
-  }
-  return windows
-    .map((window, index) => ({ index, window }))
-    .sort((left, right) => {
-      const leftPrimary = left.window.limitId === firstLimitId;
-      const rightPrimary = right.window.limitId === firstLimitId;
-      if (leftPrimary !== rightPrimary) return leftPrimary ? -1 : 1;
-      const bucketOrder =
-        (limitOrder.get(left.window.limitId) ?? 0) -
-        (limitOrder.get(right.window.limitId) ?? 0);
-      if (bucketOrder !== 0) return bucketOrder;
-      const durationOrder =
-        (left.window.windowMinutes ?? Number.POSITIVE_INFINITY) -
-        (right.window.windowMinutes ?? Number.POSITIVE_INFINITY);
-      return durationOrder || left.index - right.index;
-    })
-    .map(({ window }) => window);
+  updatedAt?: number;
 }
 
 export function UsageMeter({
   className,
+  density,
   language,
+  metrics,
+  status,
   t,
-  windows,
+  updatedAt,
 }: UsageMeterProps): JSX.Element {
-  if (windows.length === 0) {
-    return (
-      <WidgetEmpty
-        title={t("pier.codex.widget.noUsage", "No usage data available yet.")}
-      />
-    );
-  }
-
-  const sorted = sortUsageWindows(windows);
-  const count = sorted.length;
-  const layout = collectionLayoutMode(count);
-
   return (
-    <div
-      className={cn(
-        collectionAutoFitClassName(count, { singleAs: "flex" }),
-        "pier-codex-usage-meter",
-        className
-      )}
-      data-count={count}
-      data-layout={layout}
-      data-slot="codex-usage-meter"
-      style={collectionAutoFitStyle(count, COLLECTION_QUOTA_ITEM_MIN_WIDTH)}
-    >
-      {sorted.map((window) => (
-        <UsageProgress
-          key={window.id}
-          label={usageWindowLabel(window, language, t)}
-          language={language}
-          t={t}
-          window={window}
-        />
-      ))}
-    </div>
+    <AccountUsageMetrics
+      {...(className === undefined ? {} : { className })}
+      {...(density === undefined ? {} : { density })}
+      copy={{
+        noUsage: t("pier.codex.widget.noUsage", "No usage data available yet."),
+        remaining: t("pier.codex.widget.remaining", "remaining"),
+        resetsIn: (duration) =>
+          replace(t("pier.codex.widget.resetsIn", "Resets in {duration}"), {
+            duration,
+          }),
+        risk: {
+          critical: t("pier.codex.usage.risk.critical", "Critical"),
+          warning: t("pier.codex.usage.risk.warning", "Warning"),
+        },
+        stale: (duration) =>
+          replace(
+            t("pier.codex.widget.stale", "Showing data from {duration} ago"),
+            { duration }
+          ),
+      }}
+      language={language}
+      metricLabel={(metric) => usageMetricLabel(metric, language, t)}
+      metrics={metrics}
+      status={status}
+      {...(updatedAt === undefined ? {} : { updatedAt })}
+    />
   );
 }

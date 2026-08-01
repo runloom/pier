@@ -13,26 +13,84 @@ private enum TerminalMouseButton {
 }
 
 @MainActor
+private final class TerminalPresentationCoverView: NSView {
+    override var isOpaque: Bool { true }
+
+    override func hitTest(_: NSPoint) -> NSView? {
+        nil
+    }
+}
+
+struct TerminalPresentationGate {
+    private var expected: TerminalFramePresentationRequest?
+    private(set) var isCovered = true
+
+    mutating func rearm() {
+        expected = nil
+        isCovered = true
+    }
+
+    mutating func request(_ request: TerminalFramePresentationRequest) {
+        if expected?.surfaceGeneration != request.surfaceGeneration {
+            isCovered = true
+        }
+        expected = request
+    }
+
+    @discardableResult
+    mutating func commit(_ presentation: TerminalFramePresentation) -> Bool {
+        guard let expected,
+              presentation.surfaceGeneration == expected.surfaceGeneration,
+              presentation.requestSequence == expected.requestSequence,
+              presentation.pixelWidth == expected.pixelWidth,
+              presentation.pixelHeight == expected.pixelHeight
+        else {
+            return false
+        }
+        isCovered = false
+        return true
+    }
+}
+
+@MainActor
 final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     static var forwardFocusRequestCallback: ((Int, String) -> Void)?
+    static var forwardFrameCommittedCallback:
+        ((Int, String, UInt64, TerminalFramePresentation) -> Void)?
 
     let terminalView: TerminalView
     private let terminalScrollView: AppTerminalScrollView
+    private let presentationCoverView = TerminalPresentationCoverView(frame: .zero)
+    private var presentationGate = TerminalPresentationGate()
     private(set) var browserWindowId: Int
     private(set) var panelId: String
+    private(set) var presentationId: UInt64
     private var capturedTerminalMouseButton: TerminalMouseButton?
+    private var lastForwardedPresentationId: UInt64?
 
     var backgroundColor: NSColor = .black {
         didSet {
             layer?.backgroundColor = backgroundColor.cgColor
+            presentationCoverView.layer?.backgroundColor = backgroundColor.cgColor
         }
     }
 
-    init(frame frameRect: NSRect, terminalView: TerminalView, panelId: String, browserWindowId: Int) {
+    var isPresentationCovered: Bool {
+        presentationGate.isCovered
+    }
+
+    init(
+        frame frameRect: NSRect,
+        terminalView: TerminalView,
+        panelId: String,
+        browserWindowId: Int,
+        presentationId: UInt64 = 0
+    ) {
         self.terminalView = terminalView
         terminalScrollView = AppTerminalScrollView(terminalView: terminalView)
         self.panelId = panelId
         self.browserWindowId = browserWindowId
+        self.presentationId = presentationId
         super.init(frame: frameRect)
 
         wantsLayer = true
@@ -41,7 +99,17 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         terminalScrollView.onScrollerInteraction = { [weak self] in
             self?.activateFocusIntent()
         }
+        terminalView.onFramePresentationRequested = { [weak self] request in
+            self?.handlePresentationRequest(request)
+        }
+        terminalView.onFramePresented = { [weak self] presentation in
+            self?.handleFramePresentation(presentation)
+        }
         addSubview(terminalScrollView)
+
+        presentationCoverView.wantsLayer = true
+        presentationCoverView.layer?.backgroundColor = backgroundColor.cgColor
+        addSubview(presentationCoverView, positioned: .above, relativeTo: terminalScrollView)
     }
 
     @available(*, unavailable)
@@ -74,6 +142,30 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         CATransaction.commit()
     }
 
+    func prepareForVisibilityPresentation() {
+        presentationGate.rearm()
+        presentationCoverView.layer?.isHidden = false
+    }
+
+    func handlePresentationRequest(_ request: TerminalFramePresentationRequest) {
+        presentationGate.request(request)
+        guard presentationGate.isCovered else { return }
+        presentationCoverView.layer?.isHidden = false
+    }
+
+    func handleFramePresentation(_ presentation: TerminalFramePresentation) {
+        guard presentationGate.commit(presentation) else { return }
+        presentationCoverView.layer?.isHidden = true
+        guard lastForwardedPresentationId != presentationId else { return }
+        lastForwardedPresentationId = presentationId
+        Self.forwardFrameCommittedCallback?(
+            browserWindowId,
+            panelId,
+            presentationId,
+            presentation
+        )
+    }
+
     func updateBrowserWindowId(_ browserWindowId: Int) {
         self.browserWindowId = browserWindowId
     }
@@ -82,9 +174,15 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         self.panelId = panelId
     }
 
+    func updatePresentationId(_ presentationId: UInt64) {
+        self.presentationId = presentationId
+        lastForwardedPresentationId = nil
+    }
+
     private func synchronizeChildFrames() {
         terminalScrollView.frame = bounds
         terminalScrollView.synchronizeLayout()
+        presentationCoverView.frame = bounds
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {

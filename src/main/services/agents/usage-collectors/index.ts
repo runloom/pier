@@ -1,5 +1,5 @@
 import { createLogger, type Logger } from "@shared/logger.ts";
-import type { UsageDataService } from "../../usage-data/usage-data-service.ts";
+import type { UsageDataService } from "../../usage-data/service.ts";
 import { AGENT_USAGE_COLLECTOR_FACTORIES } from "./registry.ts";
 import type { AgentUsageCollector } from "./types.ts";
 

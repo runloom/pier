@@ -13,9 +13,25 @@ export type SpawnLoginFn = (
 /** Strip ANSI escape sequences so parsed CLI output is plain text. */
 // biome-ignore lint/suspicious/noControlCharactersInRegex: matching terminal escape bytes is the point
 const ANSI_PATTERN = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007]*\u0007/g;
+const LOGIN_OUTPUT_LIMIT = 8192;
+const LOGIN_FAILURE_DETAIL_LIMIT = 512;
+const SENSITIVE_LOGIN_OUTPUT_PATTERN =
+  /(?:access|refresh|id)[_-]?token|authorization|bearer\s|xai-[a-z0-9_-]+/i;
 
 export function stripAnsi(text: string): string {
   return text.replace(ANSI_PATTERN, "");
+}
+
+function safeLoginFailureDetail(output: string): string | null {
+  const lines = stripAnsi(output)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const detail = lines.findLast(
+    (line) => !SENSITIVE_LOGIN_OUTPUT_PATTERN.test(line)
+  );
+  if (!detail) return null;
+  return detail.slice(0, LOGIN_FAILURE_DETAIL_LIMIT);
 }
 
 export function defaultSpawnLogin(
@@ -45,8 +61,11 @@ export function defaultSpawnLogin(
       stdio: ["ignore", "pipe", "pipe"],
     });
 
+    let output = "";
     const forward = (chunk: Buffer | string): void => {
-      opts.onOutput?.(stripAnsi(String(chunk)));
+      const plain = stripAnsi(String(chunk));
+      output = (output + plain).slice(-LOGIN_OUTPUT_LIMIT);
+      opts.onOutput?.(plain);
     };
     child.stdout?.on("data", forward);
     child.stderr?.on("data", forward);
@@ -76,7 +95,14 @@ export function defaultSpawnLogin(
       } else if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`Grok login exited with code ${code}`));
+        const detail = safeLoginFailureDetail(output);
+        reject(
+          new Error(
+            detail
+              ? `Grok login failed (exit code ${code}): ${detail}`
+              : `Grok login exited with code ${code}`
+          )
+        );
       }
     });
   });

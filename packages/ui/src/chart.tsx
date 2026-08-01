@@ -41,6 +41,71 @@ export function useChart() {
   return context;
 }
 
+/**
+ * Pier 图表默认可视、可 hover tooltip，不进入 Tab 序。
+ * Recharts accessibilityLayer 默认 true 会给 SVG tabIndex=0，在 Electron/macOS
+ * 上点图会弹出系统橙 focus 环——展示型图应关掉；需要键盘读图时由调用方显式
+ * `accessibilityLayer`（并自行提供产品风 focus-visible）。
+ *
+ * 合约：`children` 为 Recharts 根图（Line/Bar/Area/Pie…）或其 Fragment/数组；
+ * 只在图根上注入默认值，不递归进轴/系列子节点。
+ */
+function withDisplayChartDefaults(
+  children: React.ComponentProps<
+    typeof RechartsPrimitive.ResponsiveContainer
+  >["children"]
+): React.ComponentProps<
+  typeof RechartsPrimitive.ResponsiveContainer
+>["children"] {
+  return React.Children.map(children, (child) => {
+    if (!React.isValidElement(child)) {
+      return child;
+    }
+    if (child.type === React.Fragment) {
+      const fragmentProps = child.props as { children?: React.ReactNode };
+      return React.cloneElement(
+        child as React.ReactElement<{ children?: React.ReactNode }>,
+        {
+          children: withDisplayChartDefaults(
+            fragmentProps.children as React.ComponentProps<
+              typeof RechartsPrimitive.ResponsiveContainer
+            >["children"]
+          ),
+        }
+      );
+    }
+    const props = child.props as { accessibilityLayer?: boolean };
+    if (props.accessibilityLayer !== undefined) {
+      return child;
+    }
+    return React.cloneElement(
+      child as React.ReactElement<{ accessibilityLayer?: boolean }>,
+      { accessibilityLayer: false }
+    );
+  });
+}
+
+/** recharts 主题色 / 网格 / 游标；含 focus 环防御（双保险，主闸是 accessibilityLayer=false）。 */
+const CHART_CONTAINER_BASE_CLASS =
+  "flex aspect-video justify-center text-xs " +
+  "[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground " +
+  "[&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 " +
+  "[&_.recharts-curve.recharts-tooltip-cursor]:stroke-border " +
+  "[&_.recharts-dot[stroke='#fff']]:stroke-transparent " +
+  "[&_.recharts-layer]:outline-none " +
+  "[&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border " +
+  "[&_.recharts-radial-bar-background-sector]:fill-muted " +
+  "[&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted " +
+  "[&_.recharts-reference-line_[stroke='#ccc']]:stroke-border " +
+  "[&_.recharts-sector[stroke='#fff']]:stroke-transparent " +
+  "[&_.recharts-sector]:outline-none " +
+  "[&_.recharts-wrapper]:outline-none " +
+  "[&_.recharts-surface]:outline-none " +
+  "[&_.recharts-surface]:focus:outline-none " +
+  "[&_.recharts-surface]:focus-visible:outline-none " +
+  "[&_.recharts-surface]:focus:shadow-none " +
+  "[&_.recharts-surface]:focus-visible:shadow-none";
+
 function ChartContainer({
   id,
   className,
@@ -64,10 +129,7 @@ function ChartContainer({
   return (
     <ChartContext.Provider value={{ chartId, config }}>
       <div
-        className={cn(
-          "flex aspect-video justify-center text-xs [&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-sector]:outline-hidden [&_.recharts-surface]:outline-hidden",
-          className
-        )}
+        className={cn(CHART_CONTAINER_BASE_CLASS, className)}
         data-chart={chartId}
         data-slot="chart"
         {...props}
@@ -77,7 +139,7 @@ function ChartContainer({
           initialDimension={initialDimension}
           minWidth={0}
         >
-          {children}
+          {withDisplayChartDefaults(children)}
         </RechartsPrimitive.ResponsiveContainer>
       </div>
     </ChartContext.Provider>

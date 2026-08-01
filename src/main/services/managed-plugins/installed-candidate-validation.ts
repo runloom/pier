@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import type { ManagedPluginPackageManifest } from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginPackageManifest } from "@shared/contracts/plugin/managed.ts";
 import { assertPluginDataSchemaCompatibility } from "./data-schema-compatibility.ts";
 import { computePackageContentHash } from "./package-content-hash.ts";
 import { validateManagedPluginPackage } from "./package-validation.ts";

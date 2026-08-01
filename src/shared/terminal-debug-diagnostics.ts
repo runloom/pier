@@ -1,14 +1,14 @@
 import type {
+  TerminalDebugIssue,
+  TerminalDebugNativeSnapshot,
+  TerminalDebugRendererSnapshot,
+} from "./contracts/terminal/debug.ts";
+import type {
   TerminalCoordinatorDebugSnapshot,
   TerminalFrame,
   TerminalHostEntry,
   TerminalHostSnapshot,
 } from "./contracts/terminal.ts";
-import type {
-  TerminalDebugIssue,
-  TerminalDebugNativeSnapshot,
-  TerminalDebugRendererSnapshot,
-} from "./contracts/terminal-debug.ts";
 import { buildTerminalInputRoutingIssues } from "./terminal-debug-diagnostics-input-routing.ts";
 
 function frameDelta(a: TerminalFrame, b: TerminalFrame): number {

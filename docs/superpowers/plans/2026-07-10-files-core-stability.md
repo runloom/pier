@@ -701,13 +701,13 @@ type FileQueryEvent =
 - 修改 `src/main/app-core/file-commands.ts`
 - 修改 `src/main/app-core/command-router.ts`
 - 修改 `src/main/app-core/permissions.ts`
-- 修改 `src/main/app-quit/quit-controller.ts`
+- 修改 `src/main/app-quit/controller.ts`
 - 修改 `src/main/app-core/app-core.ts`
 - 修改 `src/main/app-core/plugin-commands.ts`
 - 新建 `src/main/app-core/plugin-disable-transition.ts`
 - 修改 `src/main/services/window-service.ts`
 - 修改 `src/main/services/renderer-command-service.ts`
-- 修改 `src/main/windows/window-manager.ts`
+- 修改 `src/main/windows/manager.ts`
 - 修改 `src/main/index.ts`
 - 修改 `src/shared/contracts/renderer-command.ts`
 - 修改 `src/preload/file-api.ts`
@@ -720,7 +720,7 @@ type FileQueryEvent =
 - 新建 `src/renderer/lib/plugins/plugin-lifecycle-finalizers.ts`
 - 新建 `src/renderer/lib/plugins/plugin-lifecycle-preparation.ts`
 - 新建 `src/renderer/lib/plugins/plugin-lifecycle-receipts.ts`
-- 新建 `src/main/windows/window-close-coordinator.ts`
+- 新建 `src/main/windows/close-coordinator.ts`
 - 新建 `src/renderer/components/workspace/workspace-lifecycle-commands.ts`
 - 修改 `src/renderer/lib/plugins/bootstrap.ts`
 - 修改 `src/renderer/lib/plugins/runtime.ts`
@@ -731,7 +731,7 @@ type FileQueryEvent =
 - 新建 `src/plugins/builtin/files/renderer/files-draft-client-types.ts`
 - 新建 `src/plugins/builtin/files/renderer/files-draft-emergency-storage.ts`
 - 新建 `src/plugins/builtin/files/renderer/files-draft-protection.ts`
-- 新建 `src/plugins/builtin/files/renderer/files-async-drain.ts`
+- 新建 `src/plugins/builtin/files/renderer/files-document/async-drain.ts`
 - 修改 `src/plugins/builtin/files/renderer/files-document-store.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-document-lifecycle.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-editor-controller.ts`
@@ -832,21 +832,21 @@ type FileQueryEvent =
 - 修改 `src/plugins/builtin/files/renderer/files-document-factory.ts`
 - 修改 `src/plugins/builtin/files/renderer/files-document-store.ts`
 - 修改 `src/plugins/builtin/files/renderer/files-document-drafts.ts`
-- 新建 `src/plugins/builtin/files/renderer/files-save-as-journal.ts`
+- 新建 `src/plugins/builtin/files/renderer/files-save/as-journal.ts`
 - 新建 `src/plugins/builtin/files/renderer/files-document-save-as.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-document-saver.ts`
-- 修改 `src/plugins/builtin/files/renderer/file-save-outcome.ts`
-- 新建 `src/plugins/builtin/files/renderer/file-save-as-state-machine.ts`
+- 修改 `src/plugins/builtin/files/renderer/file-save/outcome.ts`
+- 新建 `src/plugins/builtin/files/renderer/file-save/as-state-machine.ts`
 - 新建 `src/plugins/builtin/files/renderer/file-editor-save-coordinator.ts`
-- 新建 `src/plugins/builtin/files/renderer/file-save-all-action.ts`
-- 新建 `src/plugins/builtin/files/renderer/use-file-panel-save-as.ts`
+- 新建 `src/plugins/builtin/files/renderer/file-save/all-action.ts`
+- 新建 `src/plugins/builtin/files/renderer/panel/use-save-as.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-panel-actions.tsx`
 - 修改 `src/plugins/builtin/files/renderer/index.tsx`
 - 修改 `src/shared/keybindings.ts`
 - 修改中英文 `locales`
 - 修改 `tests/unit/renderer/files-document-store.test.ts`
-- 新建 `tests/unit/renderer/file-save-as-state-machine.test.ts`
-- 新建 `tests/unit/renderer/file-save-all-action.test.ts`
+- 新建 `tests/unit/renderer/save-as-state-machine.test.ts`
+- 新建 `tests/unit/renderer/save-all-action.test.ts`
 - 新建 `tests/unit/renderer/host-files-context-save-target.test.ts`
 - 修改 `tests/unit/renderer/plugin-host-context.test.tsx`
 - 修改 `tests/unit/main/panel-context-resolver.test.ts`
@@ -901,15 +901,15 @@ type FileQueryEvent =
 - 修改 `src/preload/file-api.ts`
 - 修改 `src/plugins/api/renderer-facades.ts`
 - 修改 `src/renderer/lib/plugins/host-files-context.ts`
-- 新建 `src/plugins/builtin/files/renderer/files-dirty-path-guard.ts`
-- 新建 `src/plugins/builtin/files/renderer/file-path-mutation-guard.ts`
+- 新建 `src/plugins/builtin/files/renderer/files-mutation/dirty-path-guard.ts`
+- 新建 `src/plugins/builtin/files/renderer/file-mutation/path-guard.ts`
 - 新建 `src/plugins/builtin/files/renderer/file-tree-delete-action.ts`
-- 新建 `src/plugins/builtin/files/renderer/files-mutation-gate.ts`
+- 新建 `src/plugins/builtin/files/renderer/files-mutation/gate.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-tree-actions.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-editor-path-mutations.ts`
 - 修改 `src/plugins/builtin/files/renderer/files-document-store.ts`
 - 修改 `src/plugins/builtin/files/renderer/files-document-drafts.ts`
-- 修改 `src/plugins/builtin/files/renderer/files-nav-history.ts`
+- 修改 `src/plugins/builtin/files/renderer/files-panel/nav-history.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-editor-controller.ts`
 - 修改 `src/plugins/builtin/files/renderer/index.tsx`
 - 修改中英文 `locales`
@@ -1041,9 +1041,9 @@ type FileQueryEvent =
 - 修改 `src/renderer/lib/command-palette/controller.ts`
 - 修改 `src/renderer/components/common/command-palette.tsx`
 - 修改 `src/renderer/components/common/command-palette-quick-pick-view.tsx`
-- 新建 `src/plugins/builtin/files/renderer/files-quick-open.ts`
+- 新建 `src/plugins/builtin/files/renderer/files-search/quick-open.ts`
 - 新建 `src/plugins/builtin/files/renderer/files-path-ranking.ts`
-- 新建 `src/plugins/builtin/files/renderer/files-quick-open-mru.ts`
+- 新建 `src/plugins/builtin/files/renderer/files-search/quick-open-mru.ts`
 - 修改 `src/plugins/builtin/files/renderer/index.tsx`
 - 修改 `src/plugins/builtin/files/renderer/file-tree-sidebar.tsx`
 - 删除或收缩 `src/plugins/builtin/files/renderer/files-tree-search-loader.ts`
@@ -1239,7 +1239,7 @@ type FileQueryEvent =
 - 修改 `src/plugins/builtin/files/renderer/file-editor-view-session.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-editor-adapter.tsx`
 - 修改 `src/plugins/builtin/files/renderer/file-panel-actions.tsx`
-- 修改 `src/plugins/builtin/files/renderer/files-editor-actions.ts`
+- 修改 `src/plugins/builtin/files/renderer/files-editor/actions.ts`
 - 修改 `src/plugins/builtin/files/renderer/files-group-view.tsx`
 - 修改 `src/plugins/builtin/files/settings.ts`
 - 修改 `src/plugins/builtin/files/manifest.ts`
@@ -1318,13 +1318,13 @@ type FileQueryEvent =
 **涉及文件：**
 
 - 新建 `src/plugins/builtin/files/renderer/file-diff-view.tsx`
-- 修改 `src/plugins/builtin/files/renderer/files-line-diff.tsx`
+- 修改 `src/plugins/builtin/files/renderer/files-markdown/line-diff.tsx`
 - 修改 `src/plugins/builtin/files/renderer/file-document-saver.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-panel-body.tsx`
 - 修改 `src/plugins/builtin/files/renderer/files-document-types.ts`
 - 修改 `src/plugins/builtin/files/renderer/files-document-reducers.ts`
 - 修改 `src/plugins/builtin/files/renderer/file-panel-actions.tsx`
-- 修改 `src/plugins/builtin/files/renderer/files-editor-actions.ts`
+- 修改 `src/plugins/builtin/files/renderer/files-editor/actions.ts`
 - 修改 `src/plugins/builtin/files/renderer/files-group-view.tsx`
 - 修改 `src/plugins/builtin/files/manifest.ts`
 - 修改 `package.json`
@@ -1385,8 +1385,8 @@ type FileQueryEvent =
 | 草稿按窗口隔离、代际回执和配额失败可见 | 部分闭环 | `file-drafts-service.test.ts`、`files-draft-lifecycle.test.ts`、文件面板组件测试 | 损坏条目诊断、真实双窗口、真实 8 MiB 重开和强杀恢复 |
 | 关闭、退出、插件停用/重载屏障 | 部分闭环 | `plugin-lifecycle-barriers.test.ts`、`window-close-coordinator.test.ts`、`window-service.test.ts`、`plugin-disable-transition.test.ts`、`startup-stability.spec.ts` 的草稿故障关闭否决/单次提示/修复后重试 | 8 MiB 强杀恢复、真实双窗口同键草稿隔离和应用退出失败反馈 |
 | 保存冲突交互 | 部分闭环 | `file-editor-controller.test.ts`、现有冲突比较组件 | 重新加载、覆盖、另存为、取消的完整交互矩阵 |
-| 另存为写盘回执与可恢复身份迁移 | 部分闭环 | `file-save-as-state-machine.test.ts`、文件面板布局刷新组件测试、`file-save-target-ipc.test.ts` | 启动全局判别、无未保存修改目标的共享文档合并、项目外重启和各提交后强杀点 |
-| 全部保存与部分失败汇总 | 部分闭环 | `file-save-all-action.test.ts`、`files-file-panel.test.tsx` | 分类结果、取消剩余、跨 group 组合与未编辑临时文档三入口 Electron 测试 |
+| 另存为写盘回执与可恢复身份迁移 | 部分闭环 | `save-as-state-machine.test.ts`、文件面板布局刷新组件测试、`file-save-target-ipc.test.ts` | 启动全局判别、无未保存修改目标的共享文档合并、项目外重启和各提交后强杀点 |
+| 全部保存与部分失败汇总 | 部分闭环 | `save-all-action.test.ts`、`files-file-panel.test.tsx` | 分类结果、取消剩余、跨 group 组合与未编辑临时文档三入口 Electron 测试 |
 | 回收/移动/重命名 dirty 保护 | 部分闭环 | `files-dirty-path-guard.test.ts`、`file-tree-actions.test.ts`、`files-document-store.test.ts` | main 操作令牌、目标规范身份、失败 `abortPathMutation`、转临时文档后的布局耐久提交、持久日志、启动恢复和强杀点 |
 | 外部删除保留内存与草稿 | 状态已落地 | `file-editor-controller.test.ts`、文件状态组件 | 原路径重新创建动作及其冲突、失败和重启测试 |
 | CodeMirror 编辑器决策 | 已冻结 | `file-editor-view-session.ts` 与本方案“固定技术决策” | 无 Monaco 迁移任务，也不预留替换工作包 |

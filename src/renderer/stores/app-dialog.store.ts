@@ -13,8 +13,7 @@
  * |---------|---------|------|
  * | alert   | sm      | 单按钮告知 |
  * | confirm | sm      | 取消\|确认 短确认 |
- * | prompt  | sm      | 单行输入 |
- * | choice  | default | 三键横排需要更宽 |
+ * | choice  | default | 三键横排略宽（token: max-w-sm；confirm 为 max-w-xs） |
  *
  * 更长内容请走 content dialog（`openAppContentDialog` / `dialogs.open`），不要
  * 用 default 宽的 confirm 硬塞说明。
@@ -35,9 +34,9 @@ export function appDialogSizeForKind(
 }
 
 export interface AppAlertOptions {
-  body?: string;
-  confirmLabel?: string;
-  intent?: AppDialogIntent;
+  body?: string | undefined;
+  confirmLabel?: string | undefined;
+  intent?: AppDialogIntent | undefined;
   title: string;
 }
 

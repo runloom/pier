@@ -166,4 +166,4 @@ click
 - `src/plugins/builtin/files/renderer/` — 新 status item 组件 + `openProjectFiles` 辅助 + `activate` 注册
 - 必要时扩展 `revealFilesTreePath` / group 打开路径以支持「仅打开树、无磁盘文件 tab」
 
-参考实现：`src/plugins/builtin/git/renderer/git-status-item.tsx` 的 `registerGitStatusItem`。
+参考实现：`src/plugins/builtin/git/renderer/status-item.tsx` 的 `registerGitStatusItem`。

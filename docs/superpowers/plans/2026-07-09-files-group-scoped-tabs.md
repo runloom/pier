@@ -935,7 +935,7 @@ Expected: FAIL，错误包含新函数未导出。
 ```ts
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import type { FilesDocumentPanelSource } from "./files-document-types.ts";
-import { stableFileIdentityHash } from "./files-stable-hash.ts";
+import { stableFileIdentityHash } from "./files-document/stable-hash.ts";
 
 function sourceIdentitySuffix(source: FilesDocumentPanelSource): string {
   if (source.kind === "untitled") {

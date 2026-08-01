@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Git Review 金标准（G0–G4 + G6 探针；G5 为 Z1 中间态）。** 正文仅
+  content-bearing（pure rename / empty / binary 默认不进 CodeView）；pending
+  骨架 5 行真实 DOM + **inline 几何**（防整宽灰板）；**estimate 仅 demand/seed
+  窗口**（禁止全 content 灰条海）；window 出现后 seed 退居 buffered 继续水合
+  （禁止 cancel 首批）；demand 内 8s 超时→error；导航 `pending_scroll`；
+  `lineDiffType=none` 单源；并发默认 12。
+- **G5 / 加载路径（Z1 达 DoD，Z2 批摘录未合入）。** 当前主路径仍为 content 子集
+  上的有界 `getReviewFileDocument`。S1–S9 在 Z1 机测可证；**Z2 多文件批摘录流
+  未完成**，超大仓仍可能有界排队。后续须补 Z2。
+
 ## [0.1.10] - 2026-07-27
 
 ### Added
@@ -416,7 +428,7 @@ flush 队列同步落盘。
   - `window-service.test.ts` — flushOpenWindows / flushWindowBeforeClose 断言 `flushProjectStore` + `flushPanelContextState` 也在 flush 队列里。
   - `panel-context-resolver-upsert-warn.test.ts` — `upsertProjectFromPath` 失败的 30s 时间窗口 throttle（配合新导出的 `_resetUpsertWarnForTests` 测试重置）。
 - **一致性打磨**：
-  - `CollectTaskCandidatesOptions.projectRoot` / `ComposerSourceOptions` / `DenoSourceOptions` / `VscodeSourceOptions` 等所有内部 fs-path 字段全部改名 `projectRootPath`，与契约层 `TaskListResult.projectRootPath` / `TaskLaunchPlan.projectRootPath` 命名对齐；task-sources.ts 内部 destructure 与 utils.packageManagerFor 参数同步改名。
+  - `CollectTaskCandidatesOptions.projectRoot` / `ComposerSourceOptions` / `DenoSourceOptions` / `VscodeSourceOptions` 等所有内部 fs-path 字段全部改名 `projectRootPath`，与契约层 `TaskListResult.projectRootPath` / `TaskLaunchPlan.projectRootPath` 命名对齐；sources.ts 内部 destructure 与 utils.packageManagerFor 参数同步改名。
   - `window-service` flushOpenWindows / flushWindowBeforeClose 从 `Promise.all` 换成 `Promise.allSettled`，抽出 `flushAllStoresSettled` 单点，每一路失败独立 log 不再吞其他成功。
-  - 抽 `task-recent-launcher.ts`（99 行）承接 recent-tasks 记忆 + 排序，`task-service.ts` 从 491 行降到 425 行（距硬帽 500 有 75 行缓冲，下一次 task lifecycle 变更空间充足）。
+  - 抽 `recent-launcher.ts`（99 行）承接 recent-tasks 记忆 + 排序，`service.ts` 从 491 行降到 425 行（距硬帽 500 有 75 行缓冲，下一次 task lifecycle 变更空间充足）。
 - **JSDoc + 陈旧注释**：`foreground-activity.ts` 门面 JSDoc 更新为"前台活动服务门面"（旧文本"agent-session facade 历史命名保留"删）。

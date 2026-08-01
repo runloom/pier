@@ -41,4 +41,7 @@ jobs:
         run: pnpm plugins:pack
 
       - name: Validate index against published release assets
+        env:
+          # Authenticated downloads avoid unauthenticated API rate limits.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/verify-plugin-index-assets.mjs --source=release

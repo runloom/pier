@@ -502,6 +502,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     TerminalSurfaceCommandFinishedDelegate,
     TerminalSurfaceCommandStartedDelegate,
     TerminalSurfaceCloseDelegate,
+    TerminalSurfaceChildExitedDelegate,
     TerminalSurfaceScrollbarDelegate
 {
     var panelId: String
@@ -540,6 +541,11 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     /// 全局 callback: Ghostty surface close → main process.
     /// processAlive=false 表示底层进程已自然退出；true 表示 surface 关闭时进程仍存活。
     static var forwardProcessClosedCallback: ((Int, String, String, Bool) -> Void)?
+
+    /// 全局 callback: Ghostty SHOW_CHILD_EXITED → main process（宿主已消费 action）。
+    /// 宿主返回 true 抑制英文 printString；本地化串由 renderer 解析后 injectDisplayText。
+    /// (browserWindowId, panelId, lifecycleId, exitCode, runtimeMs)
+    static var forwardChildExitedCallback: ((Int, String, String, UInt32, UInt64) -> Void)?
 
     init(panelId: String, browserWindowId: Int, lifecycleId: String) {
         self.panelId = panelId
@@ -595,6 +601,18 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
             panelId,
             lifecycleId,
             processAlive
+        )
+    }
+
+    func terminalDidExitChild(exitCode: UInt32, runtimeMilliseconds: UInt64) {
+        // Action callback already returned true → Ghostty skips English printString.
+        // Renderer resolves final copy and calls injectDisplayText (single path).
+        TerminalEventDelegate.forwardChildExitedCallback?(
+            browserWindowId,
+            panelId,
+            lifecycleId,
+            exitCode,
+            runtimeMilliseconds
         )
     }
 
@@ -1017,6 +1035,9 @@ final class GhosttyBridgeImpl {
             guard var term = terminals[entry.panelId],
                   term.parentWindow === parent else { continue }
             if term.surfaceVisible != entry.visible {
+                if entry.visible {
+                    term.containerView.prepareForVisibilityPresentation()
+                }
                 term.terminalView.setSurfaceVisible(entry.visible)
                 term.surfaceVisible = entry.visible
                 terminals[entry.panelId] = term
@@ -1273,6 +1294,7 @@ final class GhosttyBridgeImpl {
         command: String?,
         environment: [String: String],
         lifecycleId: String,
+        presentationId: UInt64 = 0,
         hostManaged: Bool = false
     ) -> Bool {
         guard let contentView = parent.contentView else { return false }
@@ -1289,8 +1311,13 @@ final class GhosttyBridgeImpl {
             let existingHostManaged = existing.outputSession != nil
             if existing.parentWindow === parent,
                existingHostManaged == hostManaged {
+                existing.containerView.updatePresentationId(presentationId)
                 let frame = computeFrame(in: contentView, viewport: viewport)
                 existing.containerView.applyHostFrame(frame)
+                // 页面热重载会复用原生终端，但新的 renderer 生命周期仍需收到
+                // 一次由真实 IOSurface 验证过的首帧提交。相同 frame 会被
+                // applyHostFrame 去重，因此这里显式请求一次异步刷新。
+                existing.terminalView.flushHostResizeFrame()
                 rememberLayout(
                     panelId: panelId,
                     contentView: contentView,
@@ -1357,10 +1384,12 @@ final class GhosttyBridgeImpl {
             frame: frame,
             terminalView: terminalView,
             panelId: panelId,
-            browserWindowId: browserWindowId
+            browserWindowId: browserWindowId,
+            presentationId: presentationId
         )
         container.backgroundColor = terminalBackgrounds[parentWindowId] ?? .black
         eventDelegate.scrollbarSink = container
+        terminalView.setSurfaceVisible(false)
 
         // PIER: 放在所有 web 渲染相关 NSView 之下.
         // Electron 43 macOS contentView 实际结构 (subviews 从底到顶):
@@ -1401,6 +1430,17 @@ final class GhosttyBridgeImpl {
             return false
         }
         session.receive(data)
+        return true
+    }
+
+    /// Inject UTF-8 into the terminal **display** (any surface), not the PTY.
+    /// Caller must pass the fully localized final text (no further i18n here).
+    @discardableResult
+    func injectDisplayText(panelId: String, text: String) -> Bool {
+        guard let term = terminals[panelId], !text.isEmpty else {
+            return false
+        }
+        term.terminalView.injectDisplayText(text)
         return true
     }
 
@@ -1460,6 +1500,7 @@ final class GhosttyBridgeImpl {
             command: nil,
             environment: [:],
             lifecycleId: "",
+            presentationId: term.containerView.presentationId,
             hostManaged: true
         )
         if created && wasVisible {
@@ -1512,6 +1553,7 @@ final class GhosttyBridgeImpl {
         let browserWindowId: Int
         let containerView: TerminalContainerView
         let controller: TerminalController?
+        let framePresentationRequestSequence: UInt64
         let parentWindow: NSWindow
         let surfaceGeneration: UInt64
         let terminalView: TerminalView
@@ -1523,6 +1565,9 @@ final class GhosttyBridgeImpl {
             browserWindowId: term.eventDelegate.browserWindowId,
             containerView: term.containerView,
             controller: term.terminalView.controller,
+            framePresentationRequestSequence:
+                term.terminalView.pierRenderDiagnostics
+                    .framePresentationRequestSequence,
             parentWindow: term.parentWindow,
             surfaceGeneration: term.terminalView.pierRenderDiagnostics.surfaceGeneration,
             terminalView: term.terminalView
@@ -1737,6 +1782,20 @@ final class GhosttyBridgeImpl {
         }
 
         return true
+    }
+
+    func requestTerminalPresentation(
+        panelId: String,
+        presentationId: UInt64
+    ) -> UInt64? {
+        guard let term = terminals[panelId] else {
+            return nil
+        }
+        let previousPresentationId = term.containerView.presentationId
+        term.containerView.updatePresentationId(presentationId)
+        term.containerView.prepareForVisibilityPresentation()
+        term.terminalView.requestHostPresentationFrame()
+        return previousPresentationId
     }
 
     /// Spike-era thin wrapper: same-key move for compatibility. Prefer `moveTerminal`
@@ -2001,6 +2060,9 @@ final class GhosttyBridgeImpl {
                     "cursorSuppressed": term.terminalView.cursorSuppressed,
                     "drawPending": render.drawPending,
                     "drawSequence": Double(render.drawSequence),
+                    "framePresentationRequestSequence": Double(
+                        render.framePresentationRequestSequence
+                    ),
                     "frame": Self.rectDebugPayload(frame),
                     "ghosttyRenderReadySequence": Double(
                         render.ghosttyRenderReadySequence
@@ -2018,6 +2080,8 @@ final class GhosttyBridgeImpl {
                         render.lastDrawnGhosttyRenderReadySequence
                     ),
                     "panelId": panelId,
+                    "presentationCovered": term.containerView.isPresentationCovered,
+                    "presentationId": Double(term.containerView.presentationId),
                     "refreshPending": render.refreshPending,
                     "surfaceVisible": term.surfaceVisible,
                     "surfaceGeneration": Double(render.surfaceGeneration),
@@ -2108,7 +2172,8 @@ public func ghosttyBridgeCreateTerminal(
     _ envKeysPtr: UnsafePointer<UnsafePointer<CChar>?>?,
     _ envValuesPtr: UnsafePointer<UnsafePointer<CChar>?>?,
     _ envCount: Int,
-    _ lifecycleIdPtr: UnsafePointer<CChar>
+    _ lifecycleIdPtr: UnsafePointer<CChar>,
+    _ presentationId: UInt64
 ) -> Bool {
     MainActor.assumeIsolated {
         let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
@@ -2135,7 +2200,8 @@ public func ghosttyBridgeCreateTerminal(
             workingDirectory: workingDirectory,
             command: command,
             environment: environment,
-            lifecycleId: String(cString: lifecycleIdPtr)
+            lifecycleId: String(cString: lifecycleIdPtr),
+            presentationId: presentationId
         )
     }
 }
@@ -2146,7 +2212,8 @@ public func ghosttyBridgeCreateOutputTerminal(
     _ panelIdPtr: UnsafePointer<CChar>,
     _ x: Double, _ y: Double, _ w: Double, _ h: Double,
     _ fontFamilyPtr: UnsafePointer<CChar>,
-    _ fontSize: Float
+    _ fontSize: Float,
+    _ presentationId: UInt64
 ) -> Bool {
     MainActor.assumeIsolated {
         let window = Unmanaged<NSWindow>.fromOpaque(nsWindowPtr).takeUnretainedValue()
@@ -2160,6 +2227,7 @@ public func ghosttyBridgeCreateOutputTerminal(
             command: nil,
             environment: [:],
             lifecycleId: "",
+            presentationId: presentationId,
             hostManaged: true
         )
     }
@@ -2267,6 +2335,80 @@ public func ghosttyBridgeSetTerminalConfig(
     }
 }
 
+/// Push UI language for host-owned terminal copy (paste confirm). Empty clears override.
+@_cdecl("ghostty_bridge_set_host_language")
+public func ghosttyBridgeSetHostLanguage(_ languageTagPtr: UnsafePointer<CChar>?) {
+    let tag = languageTagPtr.map { String(cString: $0) } ?? ""
+    TerminalHostCopy.setLanguageOverride(tag)
+}
+
+/// JSON object of fully localized host messages: `{ "processExited": "...", "ptyExhausted": "..." }`.
+@_cdecl("ghostty_bridge_set_host_copy_catalog")
+public func ghosttyBridgeSetHostCopyCatalog(_ jsonPtr: UnsafePointer<CChar>?) {
+    guard let jsonPtr else {
+        TerminalHostCopy.setCatalog([:])
+        return
+    }
+    let json = String(cString: jsonPtr)
+    guard let data = json.data(using: .utf8),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String]
+    else {
+        return
+    }
+    TerminalHostCopy.setCatalog(obj)
+}
+
+/// Inject fully localized text into the terminal display buffer (not PTY).
+@_cdecl("ghostty_bridge_inject_display_text")
+public func ghosttyBridgeInjectDisplayText(
+    _ panelIdPtr: UnsafePointer<CChar>,
+    _ textPtr: UnsafePointer<CChar>?
+) -> Bool {
+    guard let textPtr else { return false }
+    let panelId = String(cString: panelIdPtr)
+    let text = String(cString: textPtr)
+    return MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.injectDisplayText(panelId: panelId, text: text)
+    }
+}
+
+// C ABI consumed by libghostty Thread.zig / Surface.zig (0105 patch).
+// Storage lives in TerminalHostCopy (Pier renderer pushes full catalog).
+
+@_cdecl("ghostty_host_messages_set")
+public func ghosttyHostMessagesSet(
+    _ keyPtr: UnsafePointer<CChar>?,
+    _ valuePtr: UnsafePointer<CChar>?
+) {
+    guard let keyPtr else { return }
+    let key = String(cString: keyPtr)
+    if let valuePtr {
+        let value = String(cString: valuePtr)
+        var next = TerminalHostCopy.snapshotCatalog()
+        next[key] = value
+        TerminalHostCopy.setCatalog(next)
+    } else {
+        var next = TerminalHostCopy.snapshotCatalog()
+        next.removeValue(forKey: key)
+        TerminalHostCopy.setCatalog(next)
+    }
+}
+
+@_cdecl("ghostty_host_messages_clear")
+public func ghosttyHostMessagesClear() {
+    TerminalHostCopy.setCatalog([:])
+}
+
+/// Returned pointer is valid until the next catalog mutation.
+@_cdecl("ghostty_host_messages_get")
+public func ghosttyHostMessagesGet(
+    _ keyPtr: UnsafePointer<CChar>?
+) -> UnsafePointer<CChar>? {
+    guard let keyPtr else { return nil }
+    let key = String(cString: keyPtr)
+    return TerminalHostCopy.cStringPointer(for: key)
+}
+
 
 
 @_cdecl("ghostty_bridge_move_terminal")
@@ -2284,6 +2426,19 @@ public func ghosttyBridgeMoveTerminal(
             to: targetWindow,
             toBrowserWindowId: toBrowserWindowId
         )
+    }
+}
+
+@_cdecl("ghostty_bridge_request_terminal_presentation")
+public func ghosttyBridgeRequestTerminalPresentation(
+    _ panelIdPtr: UnsafePointer<CChar>,
+    _ presentationId: UInt64
+) -> UInt64 {
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.requestTerminalPresentation(
+            panelId: String(cString: panelIdPtr),
+            presentationId: presentationId
+        ) ?? UInt64.max
     }
 }
 
@@ -2423,12 +2578,22 @@ public typealias KeyboardForwardCallback = @convention(c) (Int, UInt, UnsafePoin
 public typealias ModifierForwardCallback = @convention(c) (Int, UInt) -> Void
 public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
 public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePointer<CChar>) -> Void
+public typealias FrameCommittedCallback = @convention(c) (
+    Int, UnsafePointer<CChar>, UInt64, UInt64, UInt64, UInt64, UInt32, UInt32
+) -> Void
 public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias OpenUrlForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias SearchForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, Int) -> Void
 public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias CommandFinishedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, Int, UInt64) -> Void
 public typealias ProcessClosedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, Bool) -> Void
+public typealias ChildExitedForwardCallback = @convention(c) (
+    Int,
+    UnsafePointer<CChar>,
+    UnsafePointer<CChar>,
+    UInt32,
+    UInt64
+) -> Void
 
 @_cdecl("ghostty_bridge_set_keyboard_forward_callback")
 public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallback?) {
@@ -2496,6 +2661,31 @@ public func ghosttyBridgeSetTerminalFocusRequestCallback(_ cb: TerminalFocusRequ
             }
         } else {
             TerminalContainerView.forwardFocusRequestCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_frame_committed_callback")
+public func ghosttyBridgeSetFrameCommittedCallback(_ cb: FrameCommittedCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalContainerView.forwardFrameCommittedCallback = {
+                wid, panelId, presentationId, presentation in
+                panelId.withCString { ptr in
+                    cb(
+                        wid,
+                        ptr,
+                        presentationId,
+                        presentation.surfaceGeneration,
+                        presentation.requestSequence,
+                        presentation.drawSequence,
+                        presentation.pixelWidth,
+                        presentation.pixelHeight
+                    )
+                }
+            }
+        } else {
+            TerminalContainerView.forwardFrameCommittedCallback = nil
         }
     }
 }
@@ -2602,6 +2792,28 @@ public func ghosttyBridgeSetCommandStartedForwardCallback(_ cb: CommandStartedFo
             }
         } else {
             TerminalEventDelegate.forwardCommandStartedCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_child_exited_forward_callback")
+public func ghosttyBridgeSetChildExitedForwardCallback(_ cb: ChildExitedForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalEventDelegate.forwardChildExitedCallback = {
+                wid,
+                panelId,
+                lifecycleId,
+                exitCode,
+                runtimeMs in
+                panelId.withCString { pidPtr in
+                    lifecycleId.withCString { lifecyclePtr in
+                        cb(wid, pidPtr, lifecyclePtr, exitCode, runtimeMs)
+                    }
+                }
+            }
+        } else {
+            TerminalEventDelegate.forwardChildExitedCallback = nil
         }
     }
 }

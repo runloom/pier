@@ -12,8 +12,8 @@
 
 ## 文件结构
 
-- 新建 `src/main/files/file-preview-protocol.ts`：注册并处理受限图片资源协议，复用文件路径身份校验和图片签名识别。
-- 新建 `src/plugins/builtin/files/renderer/file-image-preview.tsx`：图片画布、缩放、适应窗口、原始尺寸和加载失败状态。
+- 新建 `src/main/files/preview-protocol.ts`：注册并处理受限图片资源协议，复用文件路径身份校验和图片签名识别。
+- 新建 `src/plugins/builtin/files/renderer/file-preview/image.tsx`：图片画布、缩放、适应窗口、原始尺寸和加载失败状态。
 - 修改 `src/main/services/file-document-reader.ts`：在文本大小限制前用有限文件头识别可预览图片，返回图片描述信息。
 - 修改 `src/shared/contracts/file.ts`：增加 `kind: "image"` 读取结果及 MIME 白名单类型。
 - 修改 `src/main/index.ts`、`src/main/csp.ts`：注册协议并只为 `img-src` 放行。
@@ -35,7 +35,7 @@
 
 - [x] 新增协议测试，覆盖合法 root-relative 图片、路径越界、伪装 MIME、SVG、目录和不存在文件；断言 `Content-Type`、`Content-Length`、`ETag`、`nosniff`。
 - [x] 运行该测试，确认因协议解析器不存在而失败。
-- [x] 新建 `file-preview-protocol.ts`，URL 只携带 base64url 编码的 root/path 和 revision；handler 解码后调用现有文件身份解析，再校验文件签名和 revision，最后返回图片 bytes。
+- [x] 新建 `preview-protocol.ts`，URL 只携带 base64url 编码的 root/path 和 revision；handler 解码后调用现有文件身份解析，再校验文件签名和 revision，最后返回图片 bytes。
 - [x] 在 `main/index.ts` 于 `app.ready` 前注册 scheme、ready 后安装 handler；在 `csp.ts` 的 `img-src` 增加 `pier-file-preview:`，不修改其他 CSP 指令。
 - [x] 重跑协议测试和 CSP 测试。
 
@@ -51,7 +51,7 @@
 
 - [x] 在组件测试先覆盖图片渲染、alt、默认适应窗口、缩放上下限、原始尺寸、加载失败后的 `Empty` 和文本操作隐藏。
 - [x] 运行组件测试，确认因图片查看器不存在而失败。
-- [x] 新建 `file-image-preview.tsx`：使用 `<img>` 与受限协议 URL；实现 10% 到 800% 缩放、适应窗口、100% 原始尺寸、双击切换和键盘 `+/-/0`；加载失败显示 `Empty`。
+- [x] 新建 `file-preview/image.tsx`：使用 `<img>` 与受限协议 URL；实现 10% 到 800% 缩放、适应窗口、100% 原始尺寸、双击切换和键盘 `+/-/0`；加载失败显示 `Empty`。
 - [x] 在 `file-panel-body.tsx` 优先分派图片视图；在 `file-panel-actions.tsx` 对 image/binary 返回空操作，避免语言、格式和文本视图切换误导用户。
 - [x] 重跑组件测试。
 

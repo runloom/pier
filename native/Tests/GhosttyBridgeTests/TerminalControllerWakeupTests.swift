@@ -90,6 +90,48 @@ final class TerminalControllerWakeupTests: XCTestCase {
         )
     }
 
+    func testHostResizeWaitsForGhosttyTargetBeforeDrawing() async throws {
+        let fixture = try makeOneSurfaceFixture()
+        defer { fixture.window.orderOut(nil) }
+        await settleRendering()
+        let baseline = fixture.view.pierRenderDiagnostics
+
+        fixture.view.flushHostResizeFrame()
+        let afterResizeSync = fixture.view.pierRenderDiagnostics
+
+        XCTAssertEqual(afterResizeSync.drawSequence, baseline.drawSequence)
+        XCTAssertGreaterThan(
+            afterResizeSync.hostRefreshRequestSequence,
+            baseline.hostRefreshRequestSequence
+        )
+    }
+
+    func testCommittedFrameMatchesLatestRequestedIOSurfaceSize() async throws {
+        let controller = makeController()
+        let session = makeSession()
+        let view = makeTerminalView(controller: controller, session: session)
+        var requests: [TerminalFramePresentationRequest] = []
+        var presentations: [TerminalFramePresentation] = []
+        view.onFramePresentationRequested = { requests.append($0) }
+        view.onFramePresented = { presentations.append($0) }
+        let window = makeWindow()
+        view.frame = NSRect(x: 0, y: 0, width: 640, height: 400)
+        try XCTUnwrap(window.contentView).addSubview(view)
+        defer { window.orderOut(nil) }
+
+        let committed = await waitUntil {
+            !requests.isEmpty && !presentations.isEmpty
+        }
+
+        XCTAssertTrue(committed)
+        let request = try XCTUnwrap(requests.last)
+        let presentation = try XCTUnwrap(presentations.last)
+        XCTAssertEqual(presentation.surfaceGeneration, request.surfaceGeneration)
+        XCTAssertEqual(presentation.requestSequence, request.requestSequence)
+        XCTAssertEqual(presentation.pixelWidth, request.pixelWidth)
+        XCTAssertEqual(presentation.pixelHeight, request.pixelHeight)
+    }
+
     func testHiddenOutputAdvancesViewportAndRestoresTargetDraw() async throws {
         let fixture = try makeOneSurfaceFixture()
         defer { fixture.window.orderOut(nil) }
@@ -129,6 +171,25 @@ final class TerminalControllerWakeupTests: XCTestCase {
         XCTAssertTrue(
             fixture.session.readViewportText()?.contains("pier-hidden-final") == true
         )
+    }
+
+    func testVisibilityRestoreStartsNewFramePresentationRequest() async throws {
+        let fixture = try makeOneSurfaceFixture()
+        defer { fixture.window.orderOut(nil) }
+        await settleRendering()
+        var requests: [TerminalFramePresentationRequest] = []
+        fixture.view.onFramePresentationRequested = { requests.append($0) }
+        let generation = fixture.view.pierRenderDiagnostics.surfaceGeneration
+
+        fixture.view.setSurfaceVisible(false)
+        fixture.view.setSurfaceVisible(true)
+
+        let requested = await waitUntil {
+            !requests.isEmpty
+        }
+        XCTAssertTrue(requested)
+        let request = try XCTUnwrap(requests.last)
+        XCTAssertEqual(request.surfaceGeneration, generation)
     }
 
     func testStaleBridgeCannotRenderRebuiltSurfaceGeneration() async throws {

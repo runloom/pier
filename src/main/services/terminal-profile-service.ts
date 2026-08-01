@@ -1,4 +1,4 @@
-import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
+import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal/launch.ts";
 import {
   deleteTerminalProfile,
   readTerminalProfile,

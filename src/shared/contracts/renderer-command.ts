@@ -3,6 +3,7 @@ import {
   type PierCommandErrorCode,
   pierCommandPlacementSchema,
 } from "./commands.ts";
+import { terminalExitPresentationSchema } from "./ghostty-host-copy.ts";
 import {
   normalizePanelTabChromeInput,
   panelContextSchema,
@@ -44,6 +45,7 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("terminal.open"),
     context: panelContextSchema.optional(),
+    exitPresentation: terminalExitPresentationSchema.optional(),
     focus: z.boolean().optional(),
     initialInput: z.string().min(1).max(64_000).optional(),
     launchId: z.string().min(1),

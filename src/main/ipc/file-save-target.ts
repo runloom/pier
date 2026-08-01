@@ -3,7 +3,7 @@ import {
   type FileSaveTargetRequest,
   fileSaveTargetRequestSchema,
   fileSaveTargetSchema,
-} from "@shared/contracts/file-save-target.ts";
+} from "@shared/contracts/file/save-target.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import {
   dialog,
@@ -13,8 +13,8 @@ import {
 } from "electron";
 import { resolveFileSaveTargetForPath } from "../services/panel-context-resolver.ts";
 import type { AppWindow } from "../windows/app-window.ts";
-import { findWindowContext } from "../windows/window-identity.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { findWindowContext } from "../windows/identity.ts";
+import { windowManager } from "../windows/manager.ts";
 
 type ResolveSaveTarget = (
   path: string,

@@ -1,7 +1,13 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/hooks-install.ts";
 import {
   installKimiHooks,
   KIMI_HOOK_TIMEOUT_SECONDS_VALUE,
@@ -12,6 +18,9 @@ import {
   withoutPierKimiHooks,
   withPierKimiHooks,
 } from "../../../src/main/services/agents/integrations/kimi.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 const COMMAND_LINE_RE = /^command = (".*")$/;
@@ -71,7 +80,136 @@ describe("withPierKimiHooks (TOML 注入)", () => {
     // 至少一条 command 含 SessionStart / UserPromptSubmit。
     expect(next).toMatch(SESSION_START_HOOK_RE);
     expect(next).toMatch(USER_PROMPT_SUBMIT_HOOK_RE);
+    expect(next).toContain('\\"agentEventV3\\"');
   });
+
+  it("固定 Python 协议真实载荷保留 tool_call_id，StopFailure fatal，子智能体匿名计数", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-kimi-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const config = withPierKimiHooks("");
+    const commandFor = (nativeEvent: string): string => {
+      const chunk = config
+        .split("[[hooks]]")
+        .find((entry) => entry.includes(`event = "${nativeEvent}"`));
+      const line = chunk
+        ?.split("\n")
+        .find((entry) => entry.startsWith("command = "));
+      return JSON.parse((line ?? "").slice("command = ".length)) as string;
+    };
+    for (const [event, payload] of [
+      [
+        "SessionStart",
+        { hook_event_name: "SessionStart", session_id: "session-k" },
+      ],
+      [
+        "UserPromptSubmit",
+        {
+          hook_event_name: "UserPromptSubmit",
+          prompt: "Fix it",
+          session_id: "session-k",
+        },
+      ],
+      [
+        "PreToolUse",
+        {
+          hook_event_name: "PreToolUse",
+          session_id: "session-k",
+          tool_call_id: "tool-k",
+          tool_name: "Shell",
+        },
+      ],
+      [
+        "PostToolUseFailure",
+        {
+          hook_event_name: "PostToolUseFailure",
+          error: "exit 1",
+          session_id: "session-k",
+          tool_call_id: "tool-k",
+          tool_name: "Shell",
+        },
+      ],
+      [
+        "SubagentStart",
+        {
+          agent_name: "researcher",
+          hook_event_name: "SubagentStart",
+          session_id: "session-k",
+        },
+      ],
+      [
+        "SubagentStop",
+        {
+          agent_name: "researcher",
+          hook_event_name: "SubagentStop",
+          session_id: "session-k",
+        },
+      ],
+      [
+        "StopFailure",
+        {
+          error_message: "fatal model failure",
+          error_type: "ModelError",
+          hook_event_name: "StopFailure",
+          session_id: "session-k",
+        },
+      ],
+    ] as const) {
+      const result = spawnSync("/bin/sh", ["-c", commandFor(event)], {
+        env: {
+          ...process.env,
+          PATH: pathForHookSpawn(process.env.PATH),
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "panel-1",
+          PIER_WINDOW_ID: "window-1",
+        },
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows[2]).toMatchObject({
+      event: "ToolStart",
+      toolName: "Shell",
+      toolUseId: "tool-k",
+      v: 3,
+    });
+    expect(rows[3]).toMatchObject({
+      event: "ToolComplete",
+      toolUseId: "tool-k",
+      v: 3,
+    });
+    expect(rows[4]).toMatchObject({
+      agentType: "researcher",
+      event: "SubagentStart",
+    });
+    expect(rows[4]).not.toHaveProperty("agentInstanceId");
+    expect(rows.at(-1)).toMatchObject({
+      event: "error",
+      nativeEvent: "StopFailure",
+      v: 3,
+    });
+    const aggregator = createForegroundActivityAggregator();
+    const counts: number[] = [];
+    for (const row of rows) {
+      if (row.kind !== "agentEvent") continue;
+      aggregator.ingestAgentEvent(row, { stopAuthority: "advisory" });
+      const activity = aggregator.snapshot().activities[0];
+      if (activity?.kind === "agent") counts.push(activity.subagentCount);
+    }
+    // SessionStart 只更新身份缓存，首个 PromptSubmit 才创建前台活动。
+    expect(counts).toEqual([0, 0, 0, 1, 0, 0]);
+    expect(aggregator.snapshot().activities[0]).toMatchObject({
+      kind: "agent",
+      status: "error",
+    });
+  }, 15_000);
 
   it("幂等：二次注入同源同结果", () => {
     const once = withPierKimiHooks("foo = 1\n");
@@ -83,6 +221,37 @@ describe("withPierKimiHooks (TOML 注入)", () => {
     const raw = 'other = "keep"\n';
     const next = withPierKimiHooks(raw);
     expect(next).toContain('other = "keep"');
+  });
+
+  it("Pier 文本块内已有更高世代时保持原文，不降级覆盖", () => {
+    const newer = [
+      "# >>> pier-agent-status:kimi (managed by Pier; do not edit) >>>",
+      "[[hooks]]",
+      'event = "Stop"',
+      `command = "pier-hook-gen=11; \${PIER_AGENT_HOOKS_DIR}/emit"`,
+      "# <<< pier-agent-status:kimi <<<",
+      "",
+    ].join("\n");
+
+    expect(withPierKimiHooks(newer)).toBe(newer);
+  });
+
+  it("重复块以后块更高世代为准，旧客户端保持整份文件原样", () => {
+    const begin =
+      "# >>> pier-agent-status:kimi (managed by Pier; do not edit) >>>";
+    const end = "# <<< pier-agent-status:kimi <<<";
+    const raw = [
+      "user = true",
+      begin,
+      'command = "pier-hook-gen=1; emit"',
+      end,
+      begin,
+      'command = "pier-hook-gen=11; emit"',
+      end,
+      "",
+    ].join("\n");
+
+    expect(withPierKimiHooks(raw)).toBe(raw);
   });
 });
 
@@ -96,6 +265,30 @@ describe("withoutPierKimiHooks (TOML 剔除)", () => {
   it("无 pier marker 时原样返回输入引用", () => {
     const raw = "foo = 1\n";
     expect(withoutPierKimiHooks(raw)).toBe(raw);
+  });
+
+  it("卸载会清除同一文件中的全部完整 Pier 块", () => {
+    const begin =
+      "# >>> pier-agent-status:kimi (managed by Pier; do not edit) >>>";
+    const end = "# <<< pier-agent-status:kimi <<<";
+    const raw = [
+      "first = true",
+      begin,
+      "old = 1",
+      end,
+      "middle = true",
+      begin,
+      "old = 2",
+      end,
+      "last = true",
+      "",
+    ].join("\n");
+
+    const cleaned = withoutPierKimiHooks(raw);
+    expect(cleaned).not.toContain(begin);
+    expect(cleaned).toContain("first = true");
+    expect(cleaned).toContain("middle = true");
+    expect(cleaned).toContain("last = true");
   });
 });
 
@@ -236,8 +429,7 @@ describe("kimiDetect", () => {
 });
 
 describe("kimiIntegration 契约", () => {
-  it("capability 为 full, id 为 kimi", () => {
-    expect(kimiIntegration.capability).toBe("full");
+  it("id 为 kimi", () => {
     expect(kimiIntegration.id).toBe("kimi");
   });
 });

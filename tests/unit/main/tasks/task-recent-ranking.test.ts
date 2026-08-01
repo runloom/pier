@@ -3,7 +3,7 @@ import {
   recentPackageScriptKey,
   sameRecentIdentity,
   sortTasksByRecentUse,
-} from "@main/services/tasks/task-recent-ranking.ts";
+} from "@main/services/tasks/recent-ranking.ts";
 import type {
   TaskCandidate,
   TaskRecentEntry,

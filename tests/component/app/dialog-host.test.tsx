@@ -1,0 +1,394 @@
+import { TerminalOverlayContext } from "@pier/ui/use-terminal-overlay.tsx";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import i18next from "i18next";
+import type { ReactNode } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AppDialogHost } from "@/components/common/dialogs/host.tsx";
+import { initI18n } from "@/i18n/index.ts";
+import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
+import {
+  resetAppDialogForTests,
+  showAppAlert,
+  showAppChoice,
+  showAppConfirm,
+  showAppPrompt,
+} from "@/stores/app-dialog.store.ts";
+import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
+import {
+  registerTerminalElementWebOverlay,
+  resetTerminalInputRoutingForTests,
+} from "@/stores/terminal-input-routing-slice.ts";
+
+const terminalOverlayRegistry = {
+  registerElement: registerTerminalElementWebOverlay,
+};
+
+function renderHost(children: ReactNode = <AppDialogHost />) {
+  return render(
+    <TerminalOverlayContext.Provider value={terminalOverlayRegistry}>
+      {children}
+    </TerminalOverlayContext.Provider>
+  );
+}
+
+describe("AppDialogHost", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    resetTerminalInputRoutingForTests();
+    await initI18n();
+    await i18next.changeLanguage("en");
+    useKeybindingScope.setState({
+      activePanelComponent: null,
+      activePanelId: null,
+      activePanelKind: null,
+      overlayStack: [],
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        onWindowLayoutPulse: vi.fn(() => vi.fn()),
+        terminal: { applyHostSnapshot: vi.fn() },
+      },
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      bottom: 720,
+      height: 696,
+      left: 0,
+      right: 1280,
+      toJSON: () => ({}),
+      top: 24,
+      width: 1280,
+      x: 0,
+      y: 24,
+    });
+  });
+
+  afterEach(() => {
+    act(() => {
+      resetAppDialogForTests();
+    });
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it("confirm 弹窗点确认按钮 resolve true", async () => {
+    renderHost();
+
+    let result: Promise<boolean> | undefined;
+    act(() => {
+      result = showAppConfirm({
+        body: "Delete worktree feature-x?",
+        confirmLabel: "Delete",
+        intent: "destructive",
+        title: "Delete Worktree",
+      });
+    });
+
+    expect(await screen.findByText("Delete Worktree")).toBeVisible();
+    expect(screen.getByText("Delete worktree feature-x?")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+
+    await expect(result).resolves.toBe(true);
+  });
+
+  it("confirm 弹窗默认取消按钮走宿主 i18n 并 resolve false", async () => {
+    renderHost();
+
+    let result: Promise<boolean> | undefined;
+    act(() => {
+      result = showAppConfirm({
+        confirmLabel: "Go",
+        intent: "default",
+        title: "Rebase Branch",
+      });
+    });
+
+    expect(await screen.findByText("Rebase Branch")).toBeVisible();
+    const dialog = screen.getByRole("alertdialog");
+    let resolvedValue: boolean | undefined;
+    result?.then((value) => {
+      resolvedValue = value;
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(dialog).toHaveAttribute("data-state", "closed");
+    expect(dialog).toHaveClass("data-closed:animate-out");
+    await act(() => Promise.resolve());
+    expect(resolvedValue).toBe(false);
+    await expect(result).resolves.toBe(false);
+    expect(screen.queryByText("Rebase Branch")).not.toBeInTheDocument();
+  });
+
+  it("危险确认弹窗使用共享 StatusIcon 与 destructive 主按钮", async () => {
+    renderHost();
+
+    let result: Promise<boolean> | undefined;
+    act(() => {
+      result = showAppConfirm({
+        body: "Quitting will terminate these processes.",
+        confirmLabel: "Quit",
+        intent: "destructive",
+        title: "Quit Pier?",
+      });
+    });
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveAttribute("data-size", "sm");
+    const statusIcon = dialog.querySelector('[data-slot="status-icon"]');
+    expect(statusIcon).toBeInTheDocument();
+    expect(statusIcon).toHaveAttribute("data-kind", "error");
+    expect(
+      dialog.querySelector('[data-slot="alert-dialog-media"]')
+    ).not.toBeInTheDocument();
+    const header = dialog.querySelector('[data-slot="alert-dialog-header"]');
+    expect(header?.className ?? "").toContain("text-left");
+    expect(header?.className ?? "").not.toContain("text-center");
+    // icon 与 title 在同一 flex 行，items-center 保证垂直居中。
+    const titleRow = header?.querySelector(
+      ':scope > div:has(> [data-slot="status-icon"])'
+    );
+    expect(titleRow?.className ?? "").toContain("items-center");
+    const footer = dialog.querySelector('[data-slot="alert-dialog-footer"]');
+    expect(footer?.className ?? "").toContain("sm:justify-end");
+    expect(footer?.className ?? "").not.toContain("grid-cols-2");
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute(
+      "data-variant",
+      "outline"
+    );
+    expect(screen.getByRole("button", { name: "Quit" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Quit" }));
+    await expect(result).resolves.toBe(true);
+  });
+
+  it("alert 弹窗只有 OK 按钮且点击后 resolve", async () => {
+    renderHost();
+
+    let result: Promise<void> | undefined;
+    act(() => {
+      result = showAppAlert({
+        body: "fatal: not a git repository",
+        title: "Git operation failed",
+      });
+    });
+
+    expect(await screen.findByText("Git operation failed")).toBeVisible();
+    expect(screen.getByText("fatal: not a git repository")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
+    expect(
+      screen.queryByRole("button", { name: "Cancel" })
+    ).not.toBeInTheDocument();
+    // 长技术详情不得撑破 sm 弹窗：长 token 断行，正文超高时自己滚动。
+    const description = screen
+      .getByRole("alertdialog")
+      .querySelector('[data-slot="alert-dialog-description"]');
+    expect(description?.className ?? "").toContain("break-words");
+    expect(description?.className ?? "").toContain("overflow-y-auto");
+    expect(description?.className ?? "").toContain("max-h-");
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+
+    await expect(result).resolves.toBeUndefined();
+  });
+
+  it("choice 弹窗立即返回所选操作并独立退场", async () => {
+    renderHost();
+
+    let result: Promise<"alt" | "cancel" | "confirm"> | undefined;
+    act(() => {
+      result = showAppChoice({
+        altLabel: "Discard",
+        confirmLabel: "Save",
+        intent: "destructive",
+        title: "Save changes?",
+      });
+    });
+
+    expect(await screen.findByText("Save changes?")).toBeVisible();
+    const dialog = screen.getByRole("alertdialog");
+    // choice 宽度由 host 固定 default，调用方不可选；无危险侧标。
+    expect(dialog).toHaveAttribute("data-size", "default");
+    expect(
+      dialog.querySelector('[data-slot="alert-dialog-media"]')
+    ).not.toBeInTheDocument();
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "Discard",
+      "Cancel",
+      "Save",
+    ]);
+    expect(screen.getByRole("button", { name: "Discard" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute(
+      "data-variant",
+      "outline"
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toHaveAttribute(
+      "data-variant",
+      "default"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+
+    expect(dialog).toHaveAttribute("data-state", "closed");
+    await expect(result).resolves.toBe("alt");
+  });
+
+  it("choice 支持 confirm-alt-cancel 顺序（主动作 | 次动作 | 取消）", async () => {
+    renderHost();
+
+    let result: Promise<"alt" | "cancel" | "confirm"> | undefined;
+    act(() => {
+      result = showAppChoice({
+        altLabel: "Discard All",
+        buttonOrder: "confirm-alt-cancel",
+        confirmLabel: "Discard Modified",
+        intent: "destructive",
+        title: "Discard Changes",
+      });
+    });
+
+    expect(await screen.findByText("Discard Changes")).toBeVisible();
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "Discard Modified",
+      "Discard All",
+      "Cancel",
+    ]);
+    expect(
+      screen.getByRole("button", { name: "Discard Modified" })
+    ).toHaveAttribute("data-variant", "default");
+    expect(screen.getByRole("button", { name: "Discard All" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Discard Modified" }));
+    await expect(result).resolves.toBe("confirm");
+  });
+
+  it("prompt 弹窗立即返回输入值并独立退场", async () => {
+    renderHost();
+
+    let result: Promise<string | null> | undefined;
+    act(() => {
+      result = showAppPrompt({
+        confirmLabel: "Save",
+        initialValue: "old-name",
+        intent: "default",
+        title: "Rename",
+      });
+    });
+
+    const input = await screen.findByRole("textbox", { name: "Rename" });
+    const dialog = screen.getByRole("alertdialog");
+    fireEvent.change(input, { target: { value: "new-name" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(dialog).toHaveAttribute("data-state", "closed");
+    await expect(result).resolves.toBe("new-name");
+  });
+
+  it("打开期间注册 blocking overlay 与 keybinding scope,关闭后释放", async () => {
+    renderHost();
+
+    let result: Promise<boolean> | undefined;
+    act(() => {
+      result = showAppConfirm({
+        confirmLabel: "Go",
+        intent: "default",
+        title: "Routing Check",
+      });
+    });
+
+    expect(await screen.findByText("Routing Check")).toBeVisible();
+    expect(getLastTerminalHostSnapshot()).toEqual(
+      expect.objectContaining({
+        webOverlayRects: expect.arrayContaining([
+          expect.objectContaining({ id: "app-dialog" }),
+        ]),
+        webRequestCount: 1,
+      })
+    );
+    expect(useKeybindingScope.getState().overlayStack).toContain(
+      "overlay:app-dialog"
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Go" }));
+    await result;
+
+    await waitFor(() => {
+      expect(getLastTerminalHostSnapshot()).toEqual(
+        expect.objectContaining({
+          webOverlayRects: [],
+          webRequestCount: 0,
+        })
+      );
+    });
+    expect(useKeybindingScope.getState().overlayStack).not.toContain(
+      "overlay:app-dialog"
+    );
+  });
+
+  it("弹窗出现时关闭仍开着的命令面板,不与面板叠放", async () => {
+    renderHost();
+
+    act(() => {
+      useCommandPaletteController.getState().openPalette();
+    });
+    expect(useCommandPaletteController.getState().open).toBe(true);
+
+    let result: Promise<void> | undefined;
+    act(() => {
+      result = showAppAlert({
+        body: "fatal: no rebase in progress",
+        title: "Git 操作失败",
+      });
+    });
+
+    expect(useCommandPaletteController.getState().open).toBe(false);
+    expect(await screen.findByText("Git 操作失败")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    await expect(result).resolves.toBeUndefined();
+  });
+
+  it("新弹窗替换旧弹窗,旧的按取消 resolve false", async () => {
+    renderHost();
+
+    let first: Promise<boolean> | undefined;
+    act(() => {
+      first = showAppConfirm({
+        confirmLabel: "A",
+        intent: "default",
+        title: "First Dialog",
+      });
+    });
+    expect(await screen.findByText("First Dialog")).toBeVisible();
+
+    let second: Promise<boolean> | undefined;
+    act(() => {
+      second = showAppConfirm({
+        confirmLabel: "B",
+        intent: "default",
+        title: "Second Dialog",
+      });
+    });
+
+    await expect(first).resolves.toBe(false);
+    expect(await screen.findByText("Second Dialog")).toBeVisible();
+    expect(screen.queryByText("First Dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "B" }));
+    await expect(second).resolves.toBe(true);
+  });
+});

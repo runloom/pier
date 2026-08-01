@@ -14,8 +14,8 @@ import type {
   TerminalStatusBarItemOverridePatch,
   TerminalStatusBarOverridePatches,
   TerminalStatusBarPrefs,
-} from "@shared/contracts/terminal-status-bar.ts";
-import { emptyTerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
+} from "@shared/contracts/terminal/status-bar.ts";
+import { emptyTerminalStatusBarPrefs } from "@shared/contracts/terminal/status-bar.ts";
 import { create } from "zustand";
 
 interface TerminalStatusBarPrefsState {

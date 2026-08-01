@@ -1,5 +1,6 @@
 export const terminal = {
   closeFailed: "无法关闭终端",
+  frameWaitFailed: "终端画面未能显示。请重试；如果问题持续，请重新打开该终端。",
   openPathFailed: "无法打开路径",
   agentSession: {
     coldStart: "未能恢复上次会话，已重新打开智能体。",
@@ -31,8 +32,11 @@ export const terminal = {
   composer: {
     attachFailed: "无法添加文件",
     attachFile: "添加文件",
-    // 门禁只认 TUI 输入光标：hidden = 未聚焦输入框（非 FA waiting）。
-    blockedUnfocused: "未聚焦输入框",
+    // 仅对已核实的 TUI 提示输入聚焦风险；不会直接禁用发送。
+    blockedUnfocused: "终端输入框可能未聚焦",
+    blockedUnfocusedBody:
+      "Pier 无法确认终端中的输入位置。请先点一下会话的输入框；若你确认它可以接收输入，也可以继续发送。",
+    blockedUnfocusedTitle: "终端输入框可能未聚焦",
     invalidAttachmentRef: "存在无效的附件引用",
     keyHint: "⇧⏎ 换行 · {{attach}} 添加文件 · Esc 关闭",
     label: "增强输入",
@@ -45,12 +49,12 @@ export const terminal = {
     mentionNoResults: "没有匹配的文件",
     mentionPlaceholder: "提及文件或文件夹…",
     noActiveTerminal: "请先切换到目标终端标签页，再打开增强输入。",
-    sendStateUnknown: "无法确认会话输入状态，发送已取消。请重试。",
     pasteInsertAnyway: "仍插入正文",
     pathUnreadable: "无法读取该文件路径",
     placeholder: "在此输入，发送到终端中的会话",
     removeAttachment: "移除附件",
     send: "发送",
+    sendAnyway: "仍然发送",
     sendFailed: "发送到终端失败",
     sendTooLong: "内容过长，无法发送",
     skillEmptyProjectBody: "请先打开项目文件夹，再输入 / 插入技能。",
@@ -78,7 +82,7 @@ export const terminal = {
     cancelled: "已取消",
     close: "关闭任务面板",
     controlLabel: "任务运行控制：{{label}}",
-    dismiss: "收起任务控制条",
+    dismiss: "关闭",
     duration: "已运行：{{duration}}",
     failed: "失败",
     finishedBlocked: "任务已阻塞",
@@ -128,5 +132,43 @@ export const terminal = {
       },
     },
     manage: "管理状态栏…",
+  },
+  /**
+   * Ghostty / native 宿主文案（见 ghostty-host-copy 目录）。
+   * 面向用户时避免直出 Ghostty 品牌与实现词。
+   */
+  ghosttyHost: {
+    processExited: "进程已退出",
+    processExitedFailed: "进程已退出，退出码 {{code}}",
+    processExitedAbnormal:
+      "命令很快就退出了（{{duration}}），可能未能正常启动。",
+    agentExited: "智能体会话已结束",
+    agentExitedFailed: "智能体会话已结束，退出码 {{code}}",
+    agentExitedAbnormal:
+      "智能体很快就退出了（{{duration}}），可能未能正常启动。",
+    taskExited: "任务已结束",
+    taskExitedFailed: "任务失败，退出码 {{code}}",
+    taskExitedAbnormal: "任务很快就退出了（{{duration}}），可能未能正常启动。",
+    taskOutputExited: "任务输出已结束",
+    taskOutputExitedFailed: "任务输出已结束，退出码 {{code}}",
+    taskOutputExitedAbnormal:
+      "任务输出很快就结束了（{{duration}}），进程可能未能正常启动。",
+    dismissAnyKey: "按任意键关闭",
+    dismissExplicit: "查看结束后可关闭标签页",
+    injectExitFailed: "无法在终端中显示会话结束提示。查看结束后可关闭标签页。",
+    launchFailedTitle: "无法启动命令",
+    launchFailedRuntime: "运行时长：{{duration}}",
+    launchFailedExitCode: "退出码：{{code}}",
+    launchFailedDismiss: "按任意键关闭",
+    ptyExhausted:
+      "当前无法再打开终端。请先关闭不用的终端或其他占用终端会话的应用，然后重试。",
+    inputPathFailed:
+      "配置的启动输入文件不存在或无法读取。请检查终端输入设置后重试。",
+    ioThreadFailed: "无法启动终端会话（{{error}}）。请关闭此标签页后重试。",
+    ioThreadOom: "内存不足，无法启动终端。请关闭此标签页后重试。",
+    pasteConfirmTitle: "粘贴到终端？",
+    pasteConfirmBody: "这段内容包含 {{lines}} 行，可能会直接执行命令。",
+    pasteConfirmAccept: "粘贴",
+    pasteConfirmCancel: "取消",
   },
 } as const;

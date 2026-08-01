@@ -1,0 +1,261 @@
+import type { PierDiffViewItem } from "@pier/ui/diff-view/index.tsx";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { GitReviewIndexEntry } from "@shared/contracts/git/review.ts";
+import { isReviewSlotIncludedInBody } from "./body-class.ts";
+import { lineStatsFromReviewSlot, reviewStageControl } from "./estimates.ts";
+import type { ReviewDocumentResourceProjection } from "./projection-types.ts";
+import type { GitReviewDocumentResource } from "./resource.ts";
+import { stateSectionText } from "./state-text.ts";
+
+const loadedResourceProjectionCache = new WeakMap<
+  object,
+  Map<string, ReviewDocumentResourceProjection>
+>();
+
+type ReviewSlot = GitReviewIndexEntry["renderSlots"][number];
+
+export function isCodeViewMemberResource(
+  resource: GitReviewDocumentResource
+): resource is Extract<
+  GitReviewDocumentResource,
+  { kind: "loaded" | "error" }
+> {
+  return resource.kind === "loaded" || resource.kind === "error";
+}
+
+export function projectReviewDocumentResource(
+  resource: GitReviewDocumentResource,
+  context: RendererPluginContext,
+  locale: string
+): ReviewDocumentResourceProjection {
+  if (!isCodeViewMemberResource(resource)) {
+    return { items: [] };
+  }
+  if (resource.kind === "error") {
+    return projectFailedReviewDocumentResource(resource, context);
+  }
+  let projectionsByKey = loadedResourceProjectionCache.get(context);
+  if (projectionsByKey === undefined) {
+    projectionsByKey = new Map();
+    loadedResourceProjectionCache.set(context, projectionsByKey);
+  }
+  // 文档可能由 IPC 在每次权威刷新后重新物化，但 revision 是内容身份。
+  // 按内容身份缓存可避免未变化大文件重复 hash patch、复制数千个 change block。
+  const projectionKey = JSON.stringify([
+    locale,
+    resource.document.revision,
+    resource.document.sections.map((section) =>
+      section.kind === "patch"
+        ? [
+            section.sectionKey,
+            section.patch.length,
+            section.changeBlocks.length,
+          ]
+        : [section.sectionKey, section.kind, section.reason]
+    ),
+    resource.entry,
+  ]);
+  const cached = projectionsByKey.get(projectionKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const projection = projectLoadedReviewDocumentResource(
+    resource,
+    context,
+    locale
+  );
+  projectionsByKey.set(projectionKey, projection);
+  return projection;
+}
+
+function projectFailedReviewDocumentResource(
+  resource: Extract<GitReviewDocumentResource, { kind: "error" }>,
+  context: RendererPluginContext
+): ReviewDocumentResourceProjection {
+  // timeout 走专用文案；其余通用失败（均已 i18n）
+  const notice =
+    resource.failure.reason === "timeout"
+      ? context.i18n.t(
+          "ui.reviewFailureTimeout",
+          undefined,
+          "Reading the change timed out."
+        )
+      : context.i18n.t(
+          "ui.reviewDocumentLoadFailed",
+          undefined,
+          "Unable to load this change"
+        );
+  // 仅 content 槽进正文；meta/notice 不挂 error 卡
+  const slotItems = resource.entry.renderSlots
+    .filter((slot) => isReviewSlotIncludedInBody(slot))
+    .map((slot) => {
+      const stageControl = reviewStageControl(slot.group, slot.status);
+      const lineStats = lineStatsFromReviewSlot(slot);
+      return {
+        cacheKey: `git-review-error:${slot.sectionKey}:${resource.failure.reason}`,
+        fileDisplay: fileDisplayForSlot(slot),
+        id: slot.sectionKey,
+        kind: "error" as const,
+        ...(lineStats === undefined ? {} : { lineStats }),
+        patch: null,
+        ...(stageControl === null ? {} : { stageControl }),
+        stateNotice: notice,
+      };
+    });
+  return { items: slotItems };
+}
+
+function projectLoadedReviewDocumentResource(
+  resource: Extract<GitReviewDocumentResource, { kind: "loaded" }>,
+  context: RendererPluginContext,
+  locale: string
+): ReviewDocumentResourceProjection {
+  const sections = new Map(
+    resource.document.sections.map((section) => [section.sectionKey, section])
+  );
+  const slotItems = resource.entry.renderSlots
+    .filter((slot) => isReviewSlotIncludedInBody(slot))
+    .flatMap((slot): PierDiffViewItem[] => {
+      // 精确匹配 sectionKey；stage 迁移后旧 document 的 unstaged key 对不上
+      // staged slot 时，回退到「同 group 唯一 patch 段」以免空投影 + 坏 estimate。
+      const section =
+        sections.get(slot.sectionKey) ??
+        fallbackSectionForSlot(resource.document, slot, sections);
+      if (section === undefined) {
+        return [];
+      }
+      const stageControl = reviewStageControl(slot.group, slot.status);
+      const lineStats = lineStatsFromReviewSlot(slot);
+      // item id 始终用当前 index 槽 sectionKey（stage 迁移后 id 跟新槽走）
+      const itemId = slot.sectionKey;
+      if (section.kind === "state") {
+        const stateText = stateSectionText(context, section, locale);
+        return [
+          {
+            cacheKey: JSON.stringify([
+              itemId,
+              locale,
+              section.reason,
+              stateText,
+            ]),
+            fileDisplay: fileDisplayForSlot(slot),
+            id: itemId,
+            kind: "ready-notice",
+            ...(lineStats === undefined ? {} : { lineStats }),
+            patch: null,
+            ...(stageControl === null ? {} : { stageControl }),
+            stateNotice: stateText,
+          },
+        ];
+      }
+      const changeControls =
+        stageControl === null
+          ? []
+          : section.changeBlocks.flatMap((block) =>
+              block.stageState === null
+                ? []
+                : [
+                    {
+                      canRevert: block.stageState !== "staged",
+                      changeBlockIndex: block.changeBlockIndex,
+                      changeKey: block.changeKey,
+                      hunkIndex: block.hunkIndex,
+                      state: block.stageState,
+                    },
+                  ]
+            );
+      return [
+        {
+          cacheKey: `git-review-section:${itemId}:${section.patch.length}:${fnv1a32(section.patch)}`,
+          ...(changeControls.length === 0 ? {} : { changeControls }),
+          fileDisplay: fileDisplayForSlot(slot),
+          id: itemId,
+          kind: "loaded",
+          ...(lineStats === undefined ? {} : { lineStats }),
+          patch: section.patch,
+          ...(stageControl === null ? {} : { stageControl }),
+        },
+      ];
+    });
+  return { items: slotItems };
+}
+
+function fileDisplayForSlot(
+  slot: ReviewSlot
+): NonNullable<PierDiffViewItem["fileDisplay"]> {
+  return {
+    path: slot.targetPath,
+    status: slot.status,
+    ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
+  };
+}
+
+/**
+ * soft-retain 跨 stage 时 document.sections 仍是旧 sectionKey。
+ * item id 用**当前** slot.sectionKey；正文借用可匹配的旧 section。
+ */
+function fallbackSectionForSlot(
+  document: Extract<GitReviewDocumentResource, { kind: "loaded" }>["document"],
+  slot: ReviewSlot,
+  sections: ReadonlyMap<string, (typeof document.sections)[number]>
+): (typeof document.sections)[number] | undefined {
+  if (sections.size === 0) {
+    return;
+  }
+  // 优先 surfaceSections 提示
+  let surfaceHint: string | null | undefined;
+  if (slot.group === "staged") {
+    surfaceHint = document.surfaceSections.staged;
+  } else if (slot.group === "unstaged") {
+    surfaceHint = document.surfaceSections.index;
+  } else if (slot.group === "conflict") {
+    surfaceHint = null;
+  } else {
+    surfaceHint = document.surfaceSections.committed;
+  }
+  if (surfaceHint !== null && surfaceHint !== undefined) {
+    const hinted = sections.get(surfaceHint);
+    if (hinted !== undefined) {
+      return hinted;
+    }
+  }
+  const patchSections = document.sections.filter(
+    (section) => section.kind === "patch"
+  );
+  if (patchSections.length === 1) {
+    return patchSections[0];
+  }
+  // 半暂存 2 段：优先 stageState 与目标 group 一致的 patch
+  let stageStateWanted: "staged" | "unstaged" | null = null;
+  if (slot.group === "staged") {
+    stageStateWanted = "staged";
+  } else if (slot.group === "unstaged") {
+    stageStateWanted = "unstaged";
+  }
+  if (stageStateWanted !== null) {
+    const byStage = patchSections.find((section) =>
+      section.changeBlocks.some(
+        (block) => block.stageState === stageStateWanted
+      )
+    );
+    if (byStage !== undefined) {
+      return byStage;
+    }
+  }
+  // 仍无匹配：任意唯一 state 段，或首个 patch（总比空 estimate 好）
+  if (document.sections.length === 1) {
+    return document.sections[0];
+  }
+  return patchSections[0];
+}
+
+function fnv1a32(text: string): string {
+  let hash = 0x81_1c_9d_c5;
+  for (let index = 0; index < text.length; index += 1) {
+    // biome-ignore lint/suspicious/noBitwiseOperators: FNV-1a hash
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01_00_01_93);
+  }
+  // biome-ignore lint/suspicious/noBitwiseOperators: FNV-1a unsigned coerce
+  return (hash >>> 0).toString(16);
+}

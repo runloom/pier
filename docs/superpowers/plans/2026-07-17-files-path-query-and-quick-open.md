@@ -39,9 +39,9 @@
 | `src/renderer/lib/command-palette/controller.ts` | Session update/close for async pick |
 | `src/renderer/lib/plugins/host-command-palette-context.ts` | Plugin adapt layer |
 | `src/plugins/builtin/files/renderer/files-path-ranking.ts` | Shared score helpers if needed client-side |
-| `src/plugins/builtin/files/renderer/files-quick-open-mru.ts` | In-memory MRU |
-| `src/plugins/builtin/files/renderer/files-quick-open.ts` | `pier.files.quickOpen` command |
-| `src/plugins/builtin/files/renderer/files-path-query-client.ts` | Debounced start/cancel helper |
+| `src/plugins/builtin/files/renderer/files-search/quick-open-mru.ts` | In-memory MRU |
+| `src/plugins/builtin/files/renderer/files-search/quick-open.ts` | `pier.files.quickOpen` command |
+| `src/plugins/builtin/files/renderer/files-search/path-query-client.ts` | Debounced start/cancel helper |
 | `src/plugins/builtin/files/renderer/files-tree-search-results.tsx` | Result list UI |
 | `src/plugins/builtin/files/renderer/use-files-tree-search.ts` | Switch to path query |
 | `src/plugins/builtin/files/renderer/files-tree-search-loader.ts` | Shrink or delete whole-tree load |
@@ -290,8 +290,8 @@ git commit -m "feat(files): expose path query IPC and plugin facade"
 ### Task 4: MRU + path query client helper
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-quick-open-mru.ts`
-- Create: `src/plugins/builtin/files/renderer/files-path-query-client.ts`
+- Create: `src/plugins/builtin/files/renderer/files-search/quick-open-mru.ts`
+- Create: `src/plugins/builtin/files/renderer/files-search/path-query-client.ts`
 - Create: `tests/unit/renderer/files-quick-open-mru.test.ts`
 - Create: `tests/unit/renderer/files-path-query-client.test.ts`
 
@@ -373,7 +373,7 @@ git commit -m "feat(command-palette): support async query-driven quick picks"
 ### Task 6: `pier.files.quickOpen` + `Cmd+P`
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-quick-open.ts`
+- Create: `src/plugins/builtin/files/renderer/files-search/quick-open.ts`
 - Modify: `src/plugins/builtin/files/renderer/index.tsx` (register command)
 - Modify: `src/plugins/builtin/files/manifest.ts` (command id + title)
 - Modify: locales en/zh-CN
@@ -407,7 +407,7 @@ git commit -m "feat(files): add Cmd+P path quick open"
 - Modify: `src/plugins/builtin/files/renderer/file-tree-sidebar.tsx`
 - Modify: `src/plugins/builtin/files/renderer/files-tree-search-loader.ts` — **delete whole-tree load API** or reduce to no-op deprecated export if tests require temporary shim; remove recursive list usage
 - Modify: locales for truncated/empty/error
-- Create/modify: `tests/unit/renderer/use-files-tree-search.test.ts`, `tests/component/files-file-panel.test.tsx` (search cases), update `files-tree-search-loader.test.ts` (delete or rewrite)
+- Create/modify: `tests/unit/renderer/use-tree-search.test.ts`, `tests/component/files-file-panel.test.tsx` (search cases), update `files-tree-search-loader.test.ts` (delete or rewrite)
 
 **Behavior:**
 - When search open + non-empty query (or empty with MRU): show **result list** above/instead of filtered Pierre search; do **not** call `loadFilesTreeForSearch`.

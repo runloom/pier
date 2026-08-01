@@ -8,10 +8,10 @@ import { isPreviewableAttentionSoundId } from "@shared/attention-sound-catalog.t
 import {
   ATTENTION_SOUND_IDS,
   type AttentionSoundId,
-} from "@shared/contracts/agent-attention.ts";
+} from "@shared/contracts/agent/attention.ts";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
-import { playAttentionSound } from "@/lib/attention/play-attention-sound.ts";
+import { playAttentionSound } from "@/lib/attention/play-sound.ts";
 import { patchAttention } from "@/pages/settings/components/attention-patch.ts";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";

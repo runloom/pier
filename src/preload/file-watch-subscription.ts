@@ -1,4 +1,4 @@
-import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
+import type { FileWatchEvent } from "@shared/contracts/file/watch.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import type { IpcRenderer, IpcRendererEvent } from "electron";
 

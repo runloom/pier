@@ -196,7 +196,7 @@ dashboardWidgets: {
 
 ### 4.4 运行时注册表：`src/renderer/lib/plugins/plugin-dashboard-widget-registry.ts`（新建）
 
-照抄 `plugin-panel-registry.ts` 模式：模块级 `Map<string, RendererDashboardWidgetRegistration>` + revision 计数 + subscribe/notify + `registerPluginDashboardWidget` / 注销闭包。
+照抄 `panel-registry.ts` 模式：模块级 `Map<string, RendererDashboardWidgetRegistration>` + revision 计数 + subscribe/notify + `registerPluginDashboardWidget` / 注销闭包。
 
 跨插件 id 冲突与 terminalStatusItems 同构：`plugin-service.ts` 新增 `findDashboardWidgetIdConflict`（对齐既有 `findTerminalStatusItemIdConflict`，`plugin-service.ts:122`）——两个插件声明同一 widget id 时后者整包进 diagnostics，防止运行时注册表静默互踩。
 

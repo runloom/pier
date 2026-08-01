@@ -2,11 +2,11 @@ import type {
   FilePreviewRuntimeAcquireResult,
   FilePreviewTicketIssueRequest,
   FilePreviewTicketIssueResult,
-} from "@shared/contracts/file-preview-ticket.ts";
+} from "@shared/contracts/file/preview-ticket.ts";
 import {
   filePreviewRuntimeAcquireResultSchema,
   filePreviewTicketIssueResultSchema,
-} from "@shared/contracts/file-preview-ticket.ts";
+} from "@shared/contracts/file/preview-ticket.ts";
 
 export interface PierFilePreviewApi {
   acquire(recordId: string): Promise<FilePreviewRuntimeAcquireResult>;

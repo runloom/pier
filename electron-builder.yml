@@ -24,6 +24,10 @@ extraResources:
     to: fonts
   - from: resources/notification-sounds
     to: notification-sounds
+  - from: resources/system-skills
+    to: system-skills
+    filter:
+      - "**/*"
   # Content search runtime (rg). Layout: search/<arch>/rg
   - from: resources/search
     to: search
@@ -62,6 +66,19 @@ asarUnpack:
   # 画布编译走 esbuild，它 spawn 一个原生二进制。asar 是单个文件，spawn 会
   # ENOTDIR；main 侧 ensureEsbuildBinaryPath() 把路径改写到这里的解包副本。
   - '**/node_modules/@esbuild/**'
+  # TypeScript language server is launched via ELECTRON_RUN_AS_NODE + cli.mjs.
+  # Unpack so the main process can open the CLI (and its typescript dependency)
+  # from a real path, not only from inside app.asar.
+  - '**/node_modules/typescript-language-server/**'
+  - '**/node_modules/typescript/**'
+
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  extraResources:
+    - from: native/lsp-windows-job/artifacts/${arch}/Release/lsp_windows_job.node
+      to: lsp-windows-job/${arch}/lsp_windows_job.node
 
 mac:
   category: public.app-category.developer-tools

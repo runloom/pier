@@ -42,6 +42,13 @@ public protocol TerminalSurfaceCloseDelegate: TerminalSurfaceViewDelegate {
     func terminalDidClose(processAlive: Bool)
 }
 
+/// Ghostty `SHOW_CHILD_EXITED` — host should show localized UI and return
+/// true from the action callback so libghostty does not print English buffer text.
+@MainActor
+public protocol TerminalSurfaceChildExitedDelegate: TerminalSurfaceViewDelegate {
+    func terminalDidExitChild(exitCode: UInt32, runtimeMilliseconds: UInt64)
+}
+
 // MARK: - Extended action delegates
 
 public struct TerminalScrollbarState: Sendable, Equatable {

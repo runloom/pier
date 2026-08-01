@@ -1,3 +1,4 @@
+import type { AccountUsageMetric } from "@pier/plugin-api/account-usage";
 import { z } from "zod/mini";
 
 /**
@@ -13,15 +14,6 @@ export type GrokAccountStatus =
   | "login-pending"
   | "error";
 
-export interface GrokUsageWindow {
-  id: string;
-  limitId: string;
-  limitName?: string | undefined;
-  resetsAt?: number | undefined;
-  usedPercent: number;
-  windowMinutes?: number | undefined;
-}
-
 export interface GrokSubscriptionSummary {
   cancelAtPeriodEnd?: boolean | undefined;
   expiresAt?: number | undefined;
@@ -31,12 +23,12 @@ export interface GrokSubscriptionSummary {
 }
 
 export interface GrokUsageSnapshot {
+  attemptedAt: number;
   error?: string | undefined;
-  fetchedAt: number;
-  raw?: unknown;
+  metrics: AccountUsageMetric[];
   status: "ok" | "error";
   subscription?: GrokSubscriptionSummary | undefined;
-  windows: GrokUsageWindow[];
+  updatedAt?: number | undefined;
 }
 
 export interface GrokAccountSummary {

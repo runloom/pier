@@ -43,7 +43,7 @@ src/
 │   │   │   ├── dedupe.ts                   ✚ M1.2  dedupeKey + 冷却合并
 │   │   │   └── store.ts                    ✚ M1.2  ring buffer + 过期清理 + 持久化
 │   │   └── agent-attention/
-│   │       └── attention-service.ts        ✎ M2.1  事件同步 ingest 到 NCS
+│   │       └── service.ts        ✎ M2.1  事件同步 ingest 到 NCS
 │   ├── ipc/
 │   │   └── notification-center.ts          ✚ M1.2  registerNotificationCenterIpc
 │   ├── state/
@@ -67,7 +67,7 @@ src/
     │   │   └── all-action-contributions.ts ✎ M2.2  登记 +1 行
     │   └── plugins/
     │       ├── host-context.ts             ✎ M1.4  notifications 门面 +meta 透传
-    │       └── external-plugin-context.ts  ✎ M1.4  同上
+    │       └── external-context.ts  ✎ M1.4  同上
     ├── components/
     │   ├── common/
     │   │   ├── notification-card.tsx       ✚ M1.5  唯一消息卡片（compact/standard）
@@ -136,7 +136,7 @@ docs/ 与治理
 M1 已完成并全部验证（typecheck / lint / unit 全绿）。与 §1.1/§2 计划的偏差：
 
 1. **routing.ts 上移 shared**：`src/shared/notification-delivery.ts` 替代 `main/services/notification-center/routing.ts`。原因：toast 决策在 renderer 门面本地完成（不等 main 往返），同一路由纯函数须被门面与 NCS（M2）共用。
-2. **runAction 通道取消**：preload/契约均无 `run-action` 通道。action 全部在 renderer 本地分发（`lib/notifications/notification-actions.ts`），执行后调 `markRead`——action 上下文（workspace api、stores）本就在 renderer，跨进程转发无收益。
+2. **runAction 通道取消**：preload/契约均无 `run-action` 通道。action 全部在 renderer 本地分发（`lib/notifications/actions.ts`），执行后调 `markRead`——action 上下文（workspace api、stores）本就在 renderer，跨进程转发无收益。
 3. **本地 toast 节流保留**：`readyToastVersion` / `notifiedRunIds` / `toasted` 未删。实测 facade 的镜像去重无法覆盖同步连发（同一 tick 内 mirror 尚未水合），本地守卫仍承载「会话内同步去重」；NCS dedupeKey 负责「跨会话记录去重」。M3 治理时再评估是否完全下沉。
 4. **Popover footer「打开消息中心」M1 未渲染**：panel 未落地前无有效深链，M2.2 随单例 panel 一起接入。
 5. **`biome.jsonc` 新增 `!docs/**/*.html` 忽略**：docs 下的原型稿 HTML 是设计资产非产品代码。
@@ -152,7 +152,7 @@ M2/M3 已完成并全部验证。与 §3/§4 计划的偏差：
 4. **快捷键**：`pier.notifications.open` 等三个命令只进命令面板，不分配默认键位（避免与既有键位冲突；后续按使用频率再评）。
 5. **设置页 Card 2 门闸语义**：agent 组开关（enabled/enableErrorAttention/turnNotifyMode）是「分类门闸」——关闭后事件不进 inbox；任务与系统组（mutedKinds）只静音 toast、记录照进。两组 desc 文案已按此如实区分。
 6. **治理扫描器约定**：`systemNotify({...})` 调用要求 `kind` / `severity` 显式写在调用点（可解构简写），不放公共 base 对象——保证静态扫描可判定。
-7. **文件行数硬顶（500）拆分**：`notifications-section.tsx` 拆为 `pages/settings/components/notifications/`（message-center-card / content-card / delivery-card + group-legend，section 只留编排与 re-export）；`openNotificationsPanel` 抽至 `lib/workspace/open-notifications-panel.ts`；插件上报助手合并为 `lib/plugins/plugin-notification-report.ts`（builtin/external 门面共用，去重）。
+7. **文件行数硬顶（500）拆分**：`notifications-section.tsx` 拆为 `pages/settings/components/notifications/`（message-center-card / content-card / delivery-card + group-legend，section 只留编排与 re-export）；`openNotificationsPanel` 抽至 `lib/workspace/open-notifications-panel.ts`；插件上报助手合并为 `lib/plugins/notification-report.ts`（builtin/external 门面共用，去重）。
 8. **命令注册连带义务**：新增 core action 必须同步 `src/shared/plugin-core-contribution-ids.ts` 的 `CORE_RESERVED_ACTION_IDS`（action-registry 测试锁定）；`pier.notifications.{open,toggleDnd,markAllRead}` 已登记。
 9. **import 环规避**：`workspace.store` 不得 import panel kit 实现（panel → notification-card → notification-actions → task-run-operations → workspace.store 成环）；标题解析与单例逻辑放 `lib/workspace/`。
 10. **铃铛拖拽区逃逸**：mac 标题栏是 `app-drag` 窗口拖拽区，铃铛 Button 必须带 `app-no-drag`（对齐 AgentIndexCountsControl / AppUpdateControl），否则点击被窗口拖动吃掉——已加组件测试锁定。
@@ -244,7 +244,7 @@ systemNotify({
 | 4 | `components/common/agent-runtime-index-bridge.tsx:33` | 裸 toast → `systemNotify({kind:"channel.health", dedupeKey:"notif-capability"})`；删 `toasted` flag |
 | 5 | `packages/plugin-api/src/peer-sync/notify-failures.ts:56` | 插件侧 `context.notifications.error` 保留 + host 门面层按 kind 上报（见下） |
 
-**插件通路**：`lib/plugins/host-context.ts` / `external-plugin-context.ts` 的 notifications 门面增加可选 `meta?: { systemEvent?: boolean; kind? }` 透传——插件代码不改接口，只有显式传 meta 的调用（peer-sync）会上报 inbox；`pluginId` 自动写入 `source`。
+**插件通路**：`lib/plugins/host-context.ts` / `external-context.ts` 的 notifications 门面增加可选 `meta?: { systemEvent?: boolean; kind? }` 透传——插件代码不改接口，只有显式传 meta 的调用（peer-sync）会上报 inbox；`pluginId` 自动写入 `source`。
 
 **测试**：`tests/unit/renderer/system-notify.test.ts`（双写行为、toast 不等 IPC、report 失败静默不炸页面）。
 
@@ -280,7 +280,7 @@ systemNotify({
 
 ### M2.1 agent-attention 接入 NCS（1.5 人日）
 
-**修改** `src/main/services/agent-attention/attention-service.ts`：`classifyAgentNotificationEvent` 判定出事件后，除现有 OS 通知 + 声音外，**同步调用 NCS ingest**（main 内部直接引用 service 单例，不走 IPC）：
+**修改** `src/main/services/agent-attention/service.ts`：`classifyAgentNotificationEvent` 判定出事件后，除现有 OS 通知 + 声音外，**同步调用 NCS ingest**（main 内部直接引用 service 单例，不走 IPC）：
 
 - `kind: "agent.attention"` / `agent.turn-finished` / `agent.runtime`，携带 `agentRef` + `panelRef` + `dedupeKey: agent.attention:<agentRef>`；
 - `turn-finished` 是否进 inbox 读 `turnNotifyMode`（off 则只记 debug 不进）；

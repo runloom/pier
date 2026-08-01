@@ -1,7 +1,7 @@
 import type { PierCoreServices } from "@main/app-core/command-router-services.ts";
-import { executePluginCommand } from "@main/app-core/plugin-commands.ts";
+import { executePluginCommand } from "@main/app-core/commands/plugin.ts";
 import { PluginDisableTransitionCoordinator } from "@main/app-core/plugin-disable-transition.ts";
-import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/plugin/managed.ts";
 import { describe, expect, it, vi } from "vitest";
 
 describe("plugin command routing", () => {

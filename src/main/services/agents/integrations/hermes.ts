@@ -1,43 +1,73 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { readFile, rm, rmdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import * as hermesConfig from "./hermes-config.ts";
+import { pierManagedPluginMarker } from "./managed-plugin-file.ts";
+import {
+  type ManagedPluginGroupFile,
+  ownedManagedPluginGroupPaths,
+  writeManagedPluginGroup,
+} from "./managed-plugin-group.ts";
 import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 
 const AGENT_ID: AgentKind = "hermes";
 const PLUGIN_NAME = "pier-status";
-const MARKER = "pier-agent-status:v1 (managed by Pier)";
+const MARKER = pierManagedPluginMarker();
 
-/**
- * hermes 事件 → pier 事件名（capability "coarse"——无真回合结束信号）。
- *
- * hermes 的 `post_llm_call` 在每轮 LLM 调用后触发, 而非回合结束; 多工具
- * 循环中映射 Stop 会在工具执行期间谎报「等待输入」, 且 turnEnded 吸收后续
- * ToolStart/ToolComplete——与 omp turn_end→Stop 完全同源。hermes 事件体系
- * 无真正的用户可见回合终结事件, 故不映射 Stop。
- * 通用不变式：宁可 false-busy（漏报 ready, 危害小）, 不可 false-idle
- *（谎报 ready, 吸收工具事件, 正是 omp 原 bug）。
- *
- * `on_session_reset` 是唯一例外：reset 后 agent 确实回到等待输入状态,
- * 且下一轮 `pre_llm_call→processing` 能及时解除吸收。
- *
- * `post_approval_response` → ToolStart：与 omp 同理——批准路径（绝大多数）
- * 立即准确；拒绝路径短暂错标 tool, 由后续事件纠正。
- */
+/** 固定提交 cbecd72 的原生事实到规范事件映射。 */
 const HERMES_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> =
   [
     { nativeEvent: "on_session_start", pierEvent: "SessionStart" },
-    { nativeEvent: "pre_llm_call", pierEvent: "processing" },
+    { nativeEvent: "pre_llm_call", pierEvent: "PromptSubmit" },
     { nativeEvent: "pre_tool_call", pierEvent: "ToolStart" },
+    {
+      nativeEvent: "pre_tool_call.clarify",
+      pierEvent: "InteractionRequested",
+    },
     { nativeEvent: "post_tool_call", pierEvent: "ToolComplete" },
-    { nativeEvent: "pre_approval_request", pierEvent: "PermissionRequest" },
-    { nativeEvent: "post_approval_response", pierEvent: "ToolStart" },
-    { nativeEvent: "on_session_end", pierEvent: "SessionEnd" },
+    {
+      nativeEvent: "post_tool_call.clarify",
+      pierEvent: "InteractionResolved",
+    },
+    {
+      nativeEvent: "pre_approval_request",
+      pierEvent: "InteractionRequested",
+    },
+    {
+      nativeEvent: "post_approval_response",
+      pierEvent: "InteractionResolved",
+    },
+    {
+      nativeEvent: "on_session_end.completed",
+      pierEvent: "TurnCompleted",
+    },
+    { nativeEvent: "on_session_end.failed", pierEvent: "error" },
+    {
+      nativeEvent: "on_session_end.interrupted",
+      pierEvent: "TurnInterrupted",
+    },
     { nativeEvent: "on_session_finalize", pierEvent: "SessionEnd" },
-    { nativeEvent: "on_session_reset", pierEvent: "Stop" },
+    { nativeEvent: "on_session_reset", pierEvent: "SessionStart" },
+    { nativeEvent: "subagent_start", pierEvent: "SubagentStart" },
+    { nativeEvent: "subagent_stop", pierEvent: "SubagentStop" },
   ];
+
+const HERMES_HOOK_NAMES = [
+  "on_session_start",
+  "pre_llm_call",
+  "pre_tool_call",
+  "post_tool_call",
+  "pre_approval_request",
+  "post_approval_response",
+  "on_session_end",
+  "on_session_finalize",
+  "on_session_reset",
+  "subagent_start",
+  "subagent_stop",
+] as const;
 
 export function hermesHome(): string {
   const raw = (process.env.HERMES_HOME ?? "").trim();
@@ -65,7 +95,7 @@ export function hermesDetect(): boolean {
 }
 
 export function buildHermesPluginManifest(): string {
-  const eventLines = HERMES_EVENTS.map((e) => `  - ${e.nativeEvent}`).join(
+  const eventLines = HERMES_HOOK_NAMES.map((event) => `  - ${event}`).join(
     "\n"
   );
   return `# ${MARKER}
@@ -86,10 +116,7 @@ ${eventLines}
  * POSIX 保证 <4KB append 原子。
  */
 export function buildHermesPluginInit(): string {
-  const eventNames = HERMES_EVENTS.map((e) => `"${e.nativeEvent}"`).join(", ");
-  const eventMapEntries = HERMES_EVENTS.map(
-    (e) => `    "${e.nativeEvent}": "${e.pierEvent}",`
-  ).join("\n");
+  const eventNames = HERMES_HOOK_NAMES.map((event) => `"${event}"`).join(", ");
   return `# ${MARKER}
 from __future__ import annotations
 
@@ -101,35 +128,41 @@ from typing import Any, Callable
 EVENTS = (${eventNames})
 
 EVENT_MAP = {
-${eventMapEntries}
+    "on_session_start": "SessionStart",
+    "pre_llm_call": "PromptSubmit",
+    "pre_tool_call": "ToolStart",
+    "post_tool_call": "ToolComplete",
+    "on_session_finalize": "SessionEnd",
+    "on_session_reset": "SessionStart",
+    "subagent_start": "SubagentStart",
+    "subagent_stop": "SubagentStop",
 }
 
 
-def _pier_session_id_from(value: Any) -> str | None:
-    if not isinstance(value, dict):
-        return None
-    for key in ("sessionId", "sessionID", "session_id"):
+def _pier_string(value: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
         candidate = value.get(key)
         if isinstance(candidate, str) and candidate:
             return candidate
-    for key in ("session", "thread", "context", "ctx"):
-        nested = value.get(key)
-        if isinstance(nested, dict):
-            for nested_key in ("id", "sessionId", "sessionID", "session_id"):
-                candidate = nested.get(nested_key)
-                if isinstance(candidate, str) and candidate:
-                    return candidate
     return None
 
 
-def _pier_emit(pier_event: str, native_event: str, payload: dict[str, Any]) -> None:
+def _pier_emit(
+    pier_event: str,
+    native_event: str,
+    payload: dict[str, Any],
+    *,
+    interaction_kind: str | None = None,
+    interaction_outcome: str | None = None,
+    native_state: str | None = None,
+) -> None:
     log = os.environ.get("PIER_AGENT_EVENT_LOG", "")
     panel_id = os.environ.get("PIER_PANEL_ID", "")
     window_id = os.environ.get("PIER_WINDOW_ID", "")
     if not log or not panel_id or not window_id:
         return
     body = {
-        "v": 2,
+        "v": 3,
         "kind": "agentEvent",
         "ts": int(time.time_ns()),
         "panelId": panel_id,
@@ -139,12 +172,53 @@ def _pier_emit(pier_event: str, native_event: str, payload: dict[str, Any]) -> N
         "event": pier_event,
         "nativeEvent": native_event,
     }
-    session_id = _pier_session_id_from(payload)
+    session_id = _pier_string(
+        payload,
+        "session_id",
+        "sessionId",
+        "sessionID",
+        "session_key",
+        "child_session_id",
+    )
     if session_id:
         body["sessionId"] = session_id
-    line = json.dumps(
-        body
-    ) + "\\n"
+    turn_id = _pier_string(payload, "turn_id", "parent_turn_id", "task_id")
+    if turn_id:
+        body["turnId"] = turn_id
+    tool_use_id = _pier_string(payload, "tool_call_id")
+    if tool_use_id:
+        body["toolUseId"] = tool_use_id
+    tool_name = _pier_string(payload, "tool_name")
+    if tool_name:
+        body["toolName"] = tool_name
+    parent_session_id = _pier_string(payload, "parent_session_id")
+    if parent_session_id:
+        body["parentSessionId"] = parent_session_id
+    if native_event in ("subagent_start", "subagent_stop"):
+        body["actorHint"] = "subagent"
+        # cbecd72 tools/delegate_tool.py 的真实 start/stop 调用点都从同一个
+        # child.session_id 传入 child_session_id；child_subagent_id 只在
+        # start 出现，不能作为双方关联键。
+        child_session_id = _pier_string(payload, "child_session_id")
+        if child_session_id:
+            body["agentInstanceId"] = child_session_id
+        child_role = _pier_string(payload, "child_role")
+        if child_role:
+            body["agentType"] = child_role
+    if pier_event == "PromptSubmit":
+        prompt = _pier_string(payload, "user_message")
+        if prompt:
+            body["promptSnippet"] = prompt[:512]
+    interaction_id = _pier_string(payload, "pattern_key", "tool_call_id")
+    if interaction_kind:
+        body["interactionKind"] = interaction_kind
+        if interaction_id:
+            body["interactionId"] = interaction_id
+    if interaction_outcome:
+        body["interactionOutcome"] = interaction_outcome
+    if native_state:
+        body["nativeState"] = native_state
+    line = json.dumps(body) + "\\n"
     lock = log + ".lock"
     token = f"{os.getpid()}.{time.time_ns()}"
     candidate = lock + "." + token
@@ -183,11 +257,80 @@ def _pier_emit(pier_event: str, native_event: str, payload: dict[str, Any]) -> N
             pass
 
 
+def _pier_approval_outcome(choice: Any) -> tuple[str, str]:
+    if choice in ("once", "session", "always", "smart_approve"):
+        return ("accepted", str(choice))
+    if choice in ("deny", "smart_deny"):
+        return ("rejected", str(choice))
+    if choice == "timeout":
+        return ("cancelled", "timeout")
+    return ("unknown", str(choice or "unknown"))
+
+
 def _make_hook(event_name: str) -> Callable[..., None]:
-    pier_event = EVENT_MAP[event_name]
 
     def _hook(**kwargs: Any) -> None:
-        _pier_emit(pier_event, event_name, kwargs)
+        if event_name == "pre_tool_call" and kwargs.get("tool_name") == "clarify":
+            _pier_emit(
+                "InteractionRequested",
+                "pre_tool_call.clarify",
+                kwargs,
+                interaction_kind="question",
+            )
+            return
+        if event_name == "post_tool_call" and kwargs.get("tool_name") == "clarify":
+            state = str(kwargs.get("status") or "unknown")
+            outcome = "completed" if state == "ok" else "failed"
+            _pier_emit(
+                "InteractionResolved",
+                "post_tool_call.clarify",
+                kwargs,
+                interaction_kind="question",
+                interaction_outcome=outcome,
+                native_state=state,
+            )
+            return
+        if event_name == "pre_approval_request":
+            _pier_emit(
+                "InteractionRequested",
+                event_name,
+                kwargs,
+                interaction_kind="permission",
+            )
+            return
+        if event_name == "post_approval_response":
+            outcome, state = _pier_approval_outcome(kwargs.get("choice"))
+            _pier_emit(
+                "InteractionResolved",
+                event_name,
+                kwargs,
+                interaction_kind="permission",
+                interaction_outcome=outcome,
+                native_state=state,
+            )
+            return
+        if event_name == "on_session_end":
+            if kwargs.get("failed") is True:
+                _pier_emit("error", "on_session_end.failed", kwargs)
+            elif kwargs.get("interrupted") is True:
+                _pier_emit(
+                    "TurnInterrupted", "on_session_end.interrupted", kwargs
+                )
+            elif kwargs.get("completed") is True:
+                _pier_emit("TurnCompleted", "on_session_end.completed", kwargs)
+            return
+        pier_event = EVENT_MAP[event_name]
+        native_state = (
+            str(kwargs.get("status") or "unknown")
+            if event_name == "post_tool_call"
+            else None
+        )
+        _pier_emit(
+            pier_event,
+            event_name,
+            kwargs,
+            native_state=native_state,
+        )
 
     return _hook
 
@@ -198,179 +341,25 @@ def register(ctx: Any) -> None:
 `;
 }
 
-function isManagedByPier(raw: string): boolean {
-  return raw.includes(MARKER);
-}
-
-async function readFileRaw(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, "utf8");
-  } catch {
-    return null;
-  }
-}
-
-/** 插件文件双托管检测：manifest + init 都存在且都含 marker 才算托管。 */
-async function pluginManagedState(): Promise<{
-  present: boolean;
-  managed: boolean;
-}> {
-  const manifest = await readFileRaw(hermesManifestPath());
-  const init = await readFileRaw(hermesInitPath());
-  if (manifest === null || init === null) {
-    return { present: false, managed: false };
-  }
-  return {
-    present: true,
-    managed: isManagedByPier(manifest) && isManagedByPier(init),
-  };
-}
-
-async function writePluginFiles(): Promise<void> {
-  await mkdir(hermesPluginDir(), { recursive: true });
-  await atomicWriteFile(hermesManifestPath(), buildHermesPluginManifest());
-  await atomicWriteFile(hermesInitPath(), buildHermesPluginInit());
-}
-
-// ---------------------------------------------------------------------------
-// config.yaml 的 plugins.enabled 文本级处理（wave-1 goose 纪律：无解析器,
-// 只做保守插入；`plugins:` 结构异常时 warn 跳过, 不破坏用户文件）。
-// ---------------------------------------------------------------------------
-
-const TOP_LEVEL_PLUGINS_KEY_RE = /^plugins:\s*$/m;
-const PLUGINS_KEY_LINE_RE = /^plugins:\s*$/;
-const NON_INDENTED_LINE_RE = /^\S/;
-const ENABLED_BLOCK_KEY_RE = /^ {2}enabled:\s*$/;
-const ENABLED_INLINE_KEY_RE = /^ {2}enabled:\s*\S.*$/;
-const ENABLED_LIST_ITEM_RE = /^( {4}- )(.+)$/;
-const TRAILING_NEWLINE_RE = /\n$/;
-
-interface PluginsBlockLocation {
-  /** true = enabled: 存在但非受支持的块列表形式（如内联数组）→ 结构异常。 */
-  enabledIsMalformed: boolean;
-  enabledLine: number | null;
-  /** `plugins:` 行之后、下一个非缩进顶层键（或 EOF）之前的行范围（含）。 */
-  endLine: number;
-  startLine: number;
-}
-
-function findPluginsBlock(lines: string[]): PluginsBlockLocation | null {
-  const startLine = lines.findIndex((l) => PLUGINS_KEY_LINE_RE.test(l));
-  if (startLine === -1) {
-    return null;
-  }
-  let endLine = lines.length - 1;
-  for (let i = startLine + 1; i < lines.length; i++) {
-    const line = lines[i] ?? "";
-    if (line.length > 0 && NON_INDENTED_LINE_RE.test(line)) {
-      endLine = i - 1;
-      break;
-    }
-  }
-  let enabledLine: number | null = null;
-  let enabledIsMalformed = false;
-  for (let i = startLine + 1; i <= endLine; i++) {
-    const line = lines[i] ?? "";
-    if (ENABLED_BLOCK_KEY_RE.test(line)) {
-      enabledLine = i;
-      break;
-    }
-    if (ENABLED_INLINE_KEY_RE.test(line)) {
-      enabledLine = i;
-      enabledIsMalformed = true;
-      break;
-    }
-  }
-  return { enabledIsMalformed, endLine, enabledLine, startLine };
-}
-
-/**
- * 保守文本插入：`plugins:` 顶层键不存在 → 追加整块；存在但 `enabled:`
- * 子键不存在 → 在 `plugins:` 块内追加 `enabled:` 列表；`enabled:` 已存在
- * 但含非 `  - foo` 形式的子行（例如内联数组 `enabled: [a, b]`）→ 判定结构
- * 异常, 返回 null（调用方 warn 跳过, 不覆盖用户文件）。
- */
-export function withHermesPluginEnabled(raw: string): string | null {
-  if (raw.trim().length === 0) {
-    return `plugins:\n  enabled:\n    - ${PLUGIN_NAME}\n`;
-  }
-  const hasTrailingNewline = raw.endsWith("\n");
-  const lines = raw.replace(TRAILING_NEWLINE_RE, "").split("\n");
-  const block = findPluginsBlock(lines);
-  if (!block) {
-    const sep = hasTrailingNewline ? "" : "\n";
-    return `${raw}${sep}plugins:\n  enabled:\n    - ${PLUGIN_NAME}\n`;
-  }
-  if (block.enabledLine === null) {
-    const insertAt = block.startLine + 1;
-    const next = [
-      ...lines.slice(0, insertAt),
-      "  enabled:",
-      `    - ${PLUGIN_NAME}`,
-      ...lines.slice(insertAt),
-    ];
-    return `${next.join("\n")}\n`;
-  }
-  if (block.enabledIsMalformed) {
-    return null;
-  }
-  // enabled: 子键已存在——收集其下的列表项行，全部须匹配 `    - foo` 形式。
-  let listEnd = block.enabledLine;
-  const items: string[] = [];
-  for (let i = block.enabledLine + 1; i <= block.endLine; i++) {
-    const line = lines[i] ?? "";
-    if (line.trim().length === 0) {
-      listEnd = i;
-      continue;
-    }
-    const match = line.match(ENABLED_LIST_ITEM_RE);
-    const captured = match?.[2];
-    if (captured === undefined) {
-      return null;
-    }
-    items.push(captured.trim());
-    listEnd = i;
-  }
-  if (items.includes(PLUGIN_NAME)) {
-    return raw;
-  }
-  const next = [
-    ...lines.slice(0, listEnd + 1),
-    `    - ${PLUGIN_NAME}`,
-    ...lines.slice(listEnd + 1),
+function hermesPluginFiles(): ManagedPluginGroupFile[] {
+  return [
+    {
+      label: AGENT_ID,
+      path: hermesManifestPath(),
+      source: buildHermesPluginManifest(),
+    },
+    {
+      label: AGENT_ID,
+      path: hermesInitPath(),
+      source: buildHermesPluginInit(),
+    },
   ];
-  return `${next.join("\n")}\n`;
 }
 
-/**
- * 从 `plugins.enabled` 列表移除本插件条目；无该条目/无 plugins 块时原样
- * 返回输入引用。同样不解析 YAML, 仅做行级删除。
- */
-export function withoutHermesPluginEnabled(raw: string): string {
-  if (raw.trim().length === 0) {
-    return raw;
-  }
-  const hasTrailingNewline = raw.endsWith("\n");
-  const lines = raw.replace(TRAILING_NEWLINE_RE, "").split("\n");
-  const targetLine = `    - ${PLUGIN_NAME}`;
-  const idx = lines.indexOf(targetLine);
-  if (idx === -1) {
-    return raw;
-  }
-  // 若移除后 `  enabled:` 变为空列表（前一行是 enabled: 键, 后一行不是同级
-  // 列表项）, 一并删除该空键——保持与 withHermesPluginEnabled 生成结构对称,
-  // 使 install→uninstall 回到原始字节。
-  const beforeIsEnabledKey = ENABLED_BLOCK_KEY_RE.test(lines[idx - 1] ?? "");
-  const afterIsListItem = ENABLED_LIST_ITEM_RE.test(lines[idx + 1] ?? "");
-  const removeStart = beforeIsEnabledKey && !afterIsListItem ? idx - 1 : idx;
-  const next = [...lines.slice(0, removeStart), ...lines.slice(idx + 1)];
-  const joined = next.join("\n");
-  return hasTrailingNewline ? `${joined}\n` : joined;
-}
-
-function hasTopLevelPluginsKey(raw: string): boolean {
-  return TOP_LEVEL_PLUGINS_KEY_RE.test(raw);
-}
+export {
+  withHermesPluginEnabled,
+  withoutHermesPluginEnabled,
+} from "./hermes-config.ts";
 
 async function readConfigRaw(path: string): Promise<string> {
   try {
@@ -387,7 +376,7 @@ export async function installHermesPlugin(
     return;
   }
   const raw = await readConfigRaw(configPath);
-  const next = withHermesPluginEnabled(raw);
+  const next = hermesConfig.withHermesPluginEnabled(raw);
   if (next === null) {
     console.warn(
       "[agent-hooks:hermes] plugins.enabled has unrecognized structure, skip install to avoid corrupting config.yaml:",
@@ -395,7 +384,11 @@ export async function installHermesPlugin(
     );
     return;
   }
-  await writePluginFiles();
+  const pluginsOk = await writeManagedPluginGroup(hermesPluginFiles());
+  if (!pluginsOk) {
+    // 更高世代或非托管插件文件：不写 plugins.enabled，避免混世代半启用。
+    return;
+  }
   if (next !== raw) {
     await atomicWriteFile(configPath, next);
   }
@@ -404,15 +397,19 @@ export async function installHermesPlugin(
 export async function uninstallHermesPlugin(
   configPath: string = hermesConfigPath()
 ): Promise<void> {
-  const state = await pluginManagedState();
-  if (state.managed) {
-    await rm(hermesPluginDir(), { force: true, recursive: true });
-  }
-  const raw = await readConfigRaw(configPath);
-  if (!hasTopLevelPluginsKey(raw)) {
+  const ownedPaths = await ownedManagedPluginGroupPaths(hermesPluginFiles());
+  if (!ownedPaths) {
     return;
   }
-  const next = withoutHermesPluginEnabled(raw);
+  for (const path of ownedPaths) {
+    await rm(path, { force: true });
+  }
+  await rmdir(hermesPluginDir()).catch(() => undefined);
+  const raw = await readConfigRaw(configPath);
+  if (!hermesConfig.hasTopLevelHermesPluginsKey(raw)) {
+    return;
+  }
+  const next = hermesConfig.withoutHermesPluginEnabled(raw);
   if (next === raw) {
     return;
   }
@@ -420,10 +417,12 @@ export async function uninstallHermesPlugin(
 }
 
 export const hermesIntegration: AgentHookIntegration = {
-  capability: "coarse",
   detect: hermesDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "reset-only" },
+  runtime: {
+    emittedMappings: HERMES_EVENTS,
+    stopAuthority: "none",
+  },
   install: () => installHermesPlugin(),
   uninstall: () => uninstallHermesPlugin(),
 };

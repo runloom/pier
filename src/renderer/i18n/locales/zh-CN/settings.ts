@@ -297,6 +297,24 @@ export const settings = {
     worktreeRootPath: "工作树目录",
     worktreeRootPathDesc: "留空时使用与主项目同级的 {项目名}.worktree 目录。",
     worktreeRootPathPlaceholder: "~/Projects/pier.worktree",
+    panelCloseFocusPolicy: "关闭标签后激活",
+    panelCloseFocusPolicyDesc:
+      "关闭当前标签时，优先激活相邻标签，还是最近使用过的标签。",
+    lspEnabled: "启用语言服务",
+    lspEnabledDesc: "为支持的文件提供诊断、补全和跳转定义",
+    lspIdleReleaseMinutes: "空闲释放时间（分钟）",
+    lspIdleReleaseMinutesDesc:
+      "语言服务空闲达到此时长后释放资源（1–1440 分钟）",
+    lspMaxLocalWorkspaces: "本地工作区上限",
+    lspMaxLocalWorkspacesDesc:
+      "可同时运行语言服务的本地项目数上限（设为 0 将停用本地语言服务）",
+    lspMaxRemoteWorkspaces: "远程工作区上限",
+    lspMaxRemoteWorkspacesDesc:
+      "可同时运行语言服务的远程项目数上限（设为 0 将停用远程语言服务）",
+    lspUpdateFailed: "无法更新语言服务设置",
+    lspWorktreesEnabled: "在工作树中启用",
+    lspWorktreesEnabledDesc:
+      "允许在智能体工作树中运行语言服务（默认关闭以节省资源）",
     defaultAgent: "默认智能体",
     defaultAgentDesc: "“启动默认智能体”动作启动的默认智能体程序",
     agentPermissionMode: "权限确认方式",
@@ -317,6 +335,10 @@ export const settings = {
     hasActivity: "有运行中活动时确认",
     always: "总是确认",
     never: "从不确认",
+  },
+  panelCloseFocusPolicy: {
+    adjacent: "相邻标签",
+    recent: "最近使用的标签",
   },
   keybindings: {
     change: "更改快捷键",
@@ -463,16 +485,10 @@ export const settings = {
       env: "启动环境变量",
       envDesc: "启动此智能体时附加的环境变量",
     },
-    sessionTitleRefine: {
-      label: "自动命名会话",
-      description:
-        "首轮对话结束后，把标签页标题改写成更贴切的任务名。关闭后仍会按你的第一句话命名，只是不再调用智能体，也不消耗额度。",
-      failed: "无法更新会话命名设置",
-    },
     statusHooks: {
       label: "智能体状态提示",
       description:
-        "面板实时显示智能体运行或等待状态。关闭后不再自动安装状态上报，也不会发送“需要你处理”的系统通知。已在运行的会话可能仍会上报，重开后完全生效。",
+        "面板实时显示智能体运行或等待状态。关闭后移除 Pier 的状态上报，也不会发送「需要你处理」的系统通知。多个 Pier 版本共用本机钩子运行时，较新版本优先；退出应用不会卸掉钩子。若 Codex 等工具提示审查钩子，选择「信任全部」即可，一般只需一次。",
       failed: "无法更新智能体状态提示",
     },
   },

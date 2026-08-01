@@ -3,13 +3,14 @@
  */
 import { z } from "zod";
 import {
+  agentAttentionSettingsSchema,
+  DEFAULT_AGENT_ATTENTION_SETTINGS,
+} from "./agent/attention.ts";
+import {
   agentKindSchema,
   agentPermissionModePreferenceSchema,
 } from "./agent.ts";
-import {
-  agentAttentionSettingsSchema,
-  DEFAULT_AGENT_ATTENTION_SETTINGS,
-} from "./agent-attention.ts";
+import { DEFAULT_LSP_POLICY_PREFS, lspPolicyPrefsSchema } from "./lsp.ts";
 import {
   DEFAULT_NOTIFICATION_CENTER_PREFS,
   notificationCenterPrefsSchema,
@@ -22,6 +23,12 @@ export const terminalNewCwdPolicySchema = z.enum([
   "activeTerminal",
   "shellDefault",
 ]);
+/**
+ * 关闭当前 active 标签后激活谁（同 group 内）。
+ * - adjacent：右侧优先，否则左侧（浏览器式 / VS Code 关 focusRecent 时）
+ * - recent：组内最近使用（dockview 默认 / VS Code 默认）
+ */
+export const panelCloseFocusPolicySchema = z.enum(["adjacent", "recent"]);
 export const appQuitConfirmationModeSchema = z.enum([
   "always",
   "hasActivity",
@@ -76,12 +83,18 @@ export const DEFAULT_TERMINAL_CURSOR_BLINK = true;
 export const DEFAULT_TERMINAL_SCROLLBACK_MB = 64;
 export const DEFAULT_TERMINAL_PASTE_PROTECTION = true;
 export const DEFAULT_TERMINAL_NEW_CWD_POLICY = "activeTerminal";
+/** 默认邻接：顺序关 tab 时更稳；需要 VS Code 默认可改 recent。 */
+export const DEFAULT_PANEL_CLOSE_FOCUS_POLICY = "adjacent";
 export const DEFAULT_APP_QUIT_CONFIRMATION_MODE = "hasActivity";
 export const DEFAULT_WINDOW_ZOOM_LEVEL = 0;
 export const MIN_WINDOW_ZOOM_LEVEL = -3;
 export const MAX_WINDOW_ZOOM_LEVEL = 5;
 export const DEFAULT_GIT_AUTO_FETCH_ENABLED = true;
 export const DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES = 5;
+export const DEFAULT_LSP_WORKTREES_ENABLED = false;
+export const DEFAULT_LSP_MAX_LOCAL_WORKSPACES = 3;
+export const DEFAULT_LSP_MAX_REMOTE_WORKSPACES = 2;
+export const DEFAULT_LSP_IDLE_RELEASE_MS = 1_800_000;
 
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
@@ -106,6 +119,9 @@ export const projectPreferencesSchema = z.object({
     .default(DEFAULT_TERMINAL_PASTE_PROTECTION),
   terminalNewCwdPolicy: terminalNewCwdPolicySchema.default(
     DEFAULT_TERMINAL_NEW_CWD_POLICY
+  ),
+  panelCloseFocusPolicy: panelCloseFocusPolicySchema.default(
+    DEFAULT_PANEL_CLOSE_FOCUS_POLICY
   ),
   confirmOnQuit: appQuitConfirmationModeSchema.default(
     DEFAULT_APP_QUIT_CONFIRMATION_MODE
@@ -133,11 +149,6 @@ export const projectPreferencesSchema = z.object({
   worktreeRootPath: z.string().max(1024).default(""),
   /** 是否向已安装 agent 的官方 hook 配置里注入 Pier agent 状态 hook (opt-out, 默认开; 关闭即卸载)。 */
   agentStatusHooks: z.boolean().default(true),
-  /**
-   * 是否允许在首轮结束后用小模型精修会话标题（opt-out, 默认开）。
-   * 关闭后标题只走规则派生——离线可用、不消耗智能体额度。
-   */
-  agentSessionTitleRefine: z.boolean().default(true),
   agentAttention: agentAttentionSettingsSchema.default(
     DEFAULT_AGENT_ATTENTION_SETTINGS
   ),
@@ -151,6 +162,7 @@ export const projectPreferencesSchema = z.object({
     .min(1)
     .max(120)
     .default(DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES),
+  lsp: lspPolicyPrefsSchema.default(DEFAULT_LSP_POLICY_PREFS),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;
@@ -158,6 +170,7 @@ export type ResolvedTheme = z.infer<typeof resolvedThemeSchema>;
 export type StylePresetId = z.infer<typeof stylePresetIdSchema>;
 export type TerminalCursorStyle = z.infer<typeof terminalCursorStyleSchema>;
 export type TerminalNewCwdPolicy = z.infer<typeof terminalNewCwdPolicySchema>;
+export type PanelCloseFocusPolicy = z.infer<typeof panelCloseFocusPolicySchema>;
 export type AppQuitConfirmationMode = z.infer<
   typeof appQuitConfirmationModeSchema
 >;

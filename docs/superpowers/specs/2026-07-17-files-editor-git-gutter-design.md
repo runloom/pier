@@ -101,8 +101,8 @@
 ### 4.3 CodeMirror 接入
 
 - 新模块（建议）：
-  - `files-editor-git-markers.ts`：纯函数 `markersFromDiffPatch(patch | null): ReadonlyMap<number, GitGutterKind>`
-  - `files-editor-git-gutter.ts`：`createGitGutterExtension(markers)` + theme 类名
+  - `files-editor/git-markers.ts`：纯函数 `markersFromDiffPatch(patch | null): ReadonlyMap<number, GitGutterKind>`
+  - `files-editor/git-gutter.ts`：`createGitGutterExtension(markers)` + theme 类名
 - `FileEditorViewSession`：
   - 增加 `#gitGutterCompartment: Compartment`
   - `setGitGutterMarkers(markers)` → `reconfigure`
@@ -173,8 +173,8 @@ Gutter 仅展示，无点击 handler、无 tooltip。
 
 主要触点：
 
-- `src/plugins/builtin/files/renderer/files-editor-git-markers.ts`（新）
-- `src/plugins/builtin/files/renderer/files-editor-git-gutter.ts`（新）
+- `src/plugins/builtin/files/renderer/files-editor/git-markers.ts`（新）
+- `src/plugins/builtin/files/renderer/files-editor/git-gutter.ts`（新）
 - `src/plugins/builtin/files/renderer/file-editor-view-session.ts` — Compartment + setMarkers
 - `src/plugins/builtin/files/renderer/file-editor-controller.ts`（或 view coordinator）— 拉取与 watch
 - `src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts` — 如需主题补丁

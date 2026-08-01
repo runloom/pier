@@ -1,4 +1,4 @@
-import type { AgentRuntimeIndexSnapshot } from "@shared/contracts/agent-runtime-index.ts";
+import type { AgentRuntimeIndexSnapshot } from "@shared/contracts/agent/runtime-index.ts";
 import { create } from "zustand";
 
 interface AgentRuntimeIndexState {

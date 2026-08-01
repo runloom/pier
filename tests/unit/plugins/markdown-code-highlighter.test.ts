@@ -1,11 +1,11 @@
 import type {
   MarkdownCodeHighlightRequest,
   MarkdownCodeHighlightResponse,
-} from "@plugins/builtin/files/renderer/markdown/markdown-code-highlight-protocol.ts";
+} from "@plugins/builtin/files/renderer/markdown/code-highlight-protocol.ts";
 import {
   createMarkdownCodeHighlighter,
   type MarkdownCodeHighlightWorker,
-} from "@plugins/builtin/files/renderer/markdown/markdown-code-highlighter.ts";
+} from "@plugins/builtin/files/renderer/markdown/code-highlighter.ts";
 import { describe, expect, it, vi } from "vitest";
 
 class FakeHighlightWorker implements MarkdownCodeHighlightWorker {

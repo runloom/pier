@@ -46,17 +46,17 @@ preferences.agentAttention (+ soundEnabled, soundId)
 | `src/shared/attention-sound-catalog.ts` | soundId→文件名、内置列表、preview 可播判定 |
 | `src/main/services/agent-attention/notification-audio.ts` | `decideNotificationAudio`、spacing、`maybePlayAfterShown`、单窗 send |
 | `src/main/services/system-notification.ts` | `silent`/`sound` options → `new Notification` |
-| `src/main/services/agent-attention/attention-service.ts` | show 端口带 audio options；shown 后 maybePlay |
+| `src/main/services/agent-attention/service.ts` | show 端口带 audio options；shown 后 maybePlay |
 | `src/main/ipc/agent-attention.ts` | 接线 decide + play；共享 settings |
 | `src/main/ipc/notification.ts` | 测试通知同一 decide/play |
 | `src/main/app-core/window-broadcasts.ts` | **单窗** `sendAttentionSoundPlay`（非 all-windows） |
 | `src/shared/ipc-channels.ts` | `ATTENTION_SOUND_PLAY` + ALLOWED 列表 |
 | `src/main/fonts/asset-protocol.ts` + 新 `sound-asset-paths.ts` | sounds host + 独立根目录 |
 | `src/main/csp.ts` | `media-src` |
-| `src/main/windows/window-manager.ts` | `autoplayPolicy: 'no-user-gesture-required'` |
+| `src/main/windows/manager.ts` | `autoplayPolicy: 'no-user-gesture-required'` |
 | `electron-builder.yml` | extraResources notification-sounds |
 | `resources/notification-sounds/*.wav` | 4 个自生成短音 |
-| `src/renderer/lib/attention/play-attention-sound.ts` | 单例 HTMLAudio |
+| `src/renderer/lib/attention/play-sound.ts` | 单例 HTMLAudio |
 | `src/renderer/components/common/attention-sound-bridge.tsx` | 订阅 play 通道 |
 | `src/renderer/pages/settings/components/notification-sound-block.tsx` | 提示音 UI 子块 |
 | `src/renderer/pages/settings/components/notifications-section.tsx` | 挂载子块 |
@@ -321,7 +321,7 @@ git commit -m "feat(attention): add decideNotificationAudio matrix"
 **Files:**
 - Create: `scripts/generate-notification-sounds.mjs`（一次性生成 4 个短 WAV，可提交产物）
 - Create: `resources/notification-sounds/{soft,clear,bright,bell}.wav`
-- Create: `src/main/sounds/sound-asset-paths.ts`
+- Create: `src/main/sounds/asset-paths.ts`
 - Modify: `src/main/fonts/asset-protocol.ts`（扩展 sounds host；或拆 handler 仍单 scheme）
 - Modify: `src/main/csp.ts`
 - Modify: `electron-builder.yml`
@@ -407,7 +407,7 @@ return 404;
 pnpm test:unit -- sound-asset-paths
 pnpm test:unit -- csp
 git add scripts/generate-notification-sounds.mjs resources/notification-sounds \
-  src/main/sounds/sound-asset-paths.ts src/main/fonts/asset-protocol.ts \
+  src/main/sounds/asset-paths.ts src/main/fonts/asset-protocol.ts \
   src/main/csp.ts electron-builder.yml NOTICE tests/unit/main/sound-asset-paths.test.ts \
   tests/unit/main/csp-media-src.test.ts
 git commit -m "feat(attention): bundle notification sounds and media-src CSP"
@@ -488,9 +488,9 @@ git commit -m "feat(notification): honor silent and sound options"
 - Modify: `src/main/services/agent-attention/notification-audio.ts`（maybePlay、spacing、reset for tests）
 - Modify: `src/main/app-core/window-broadcasts.ts` — `sendAttentionSoundPlayToOneWindow`
 - Modify: `src/shared/ipc-channels.ts` — `ATTENTION_SOUND_PLAY`
-- Modify: `src/main/services/agent-attention/attention-service.ts` — 端口扩展
+- Modify: `src/main/services/agent-attention/service.ts` — 端口扩展
 - Modify: `src/main/ipc/agent-attention.ts` — wrapper show + maybePlay
-- Create: `src/renderer/lib/attention/play-attention-sound.ts`
+- Create: `src/renderer/lib/attention/play-sound.ts`
 - Create: `src/renderer/components/common/attention-sound-bridge.tsx`
 - Modify: `src/renderer/components/common/app-shell.tsx` — mount bridge
 - Modify: preload（`src/preload/index.ts` 或 notifications API）— `onAttentionSoundPlay`
@@ -660,12 +660,12 @@ pnpm test:unit -- agent-attention
 
 ```bash
 git add src/main/services/agent-attention/notification-audio.ts \
-  src/main/services/agent-attention/attention-service.ts \
+  src/main/services/agent-attention/service.ts \
   src/main/ipc/agent-attention.ts \
   src/main/app-core/window-broadcasts.ts \
   src/shared/ipc-channels.ts \
   src/preload/index.ts \
-  src/renderer/lib/attention/play-attention-sound.ts \
+  src/renderer/lib/attention/play-sound.ts \
   src/renderer/components/common/attention-sound-bridge.tsx \
   src/renderer/components/common/app-shell.tsx \
   tests/unit/main/attention-notification-audio.test.ts \
@@ -679,7 +679,7 @@ git commit -m "feat(attention): play builtin sounds on shown via single window"
 
 **Files:**
 - Modify: `src/main/ipc/notification.ts`
-- Modify: `src/main/windows/window-manager.ts`（`autoplayPolicy: "no-user-gesture-required"` + 注释）
+- Modify: `src/main/windows/manager.ts`（`autoplayPolicy: "no-user-gesture-required"` + 注释）
 - 可选：抽出 `getAgentAttentionSettingsCached(): AgentAttentionSettings` 供 attention ipc 与 notification ipc 共享（避免双缓存漂移）
 
 **共享缓存策略（锁定）：**
@@ -752,7 +752,7 @@ pnpm test:unit -- attention-test-notification
 pnpm test:unit -- agent-attention
 git add src/main/services/agent-attention/settings-cache.ts \
   src/main/ipc/agent-attention.ts src/main/ipc/notification.ts \
-  src/main/windows/window-manager.ts \
+  src/main/windows/manager.ts \
   tests/unit/main/attention-test-notification.test.ts
 git commit -m "feat(attention): share sound decision on test notifications"
 ```

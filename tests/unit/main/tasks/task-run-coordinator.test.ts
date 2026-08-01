@@ -1,7 +1,7 @@
 import {
   createTaskRunCoordinator,
   type TaskRunLaunchPlan,
-} from "@main/services/tasks/task-run-coordinator.ts";
+} from "@main/services/tasks/run-coordinator.ts";
 import { describe, expect, it } from "vitest";
 
 function launch(

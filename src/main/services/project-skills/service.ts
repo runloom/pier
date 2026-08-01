@@ -8,7 +8,7 @@ import type {
   SkillContentRef,
   SkillContentResult,
 } from "../../../shared/contracts/project-skills.ts";
-import type { FilePathTransactionLock } from "../file-path-transaction-lock.ts";
+import type { FilePathTransactionLock } from "../files/path-transaction-lock.ts";
 import {
   createSkillDiscoveryAdapterRegistry,
   type SkillDiscoveryAdapterRegistry,
@@ -17,7 +17,8 @@ import {
   type CreateProjectSkillsApplyServiceOptions,
   createProjectSkillsApplyService,
   type ProjectSkillsApplyService,
-} from "./apply-service.ts";
+} from "./apply/service.ts";
+import { readSkillContent } from "./content.ts";
 import {
   createProjectSkillsHealthService,
   type ProjectSkillsHealthService,
@@ -33,11 +34,11 @@ import {
   type ImportCandidateView,
   type OpenDirectoryDialog,
   type ProjectSkillsImportService,
-} from "./import-service.ts";
+} from "./import/service.ts";
 import { createProjectSkillsLock, type ProjectSkillsLock } from "./lock.ts";
 import { createObservedRevisionProvider } from "./observed-revision.ts";
 import { createProjectSkillsPaths } from "./paths.ts";
-import { healPierBindingsBeforeSnapshot } from "./pier-bindings-snapshot-heal.ts";
+import { healPierBindingsBeforeSnapshot } from "./pier-bindings/snapshot-heal.ts";
 import {
   createProjectSkillsPlanService,
   type ProjectSkillsPlan,
@@ -55,8 +56,7 @@ import {
   type ProjectSkillsRepairService,
   type ReconcileResult,
   type RepairRequest,
-} from "./repair-service.ts";
-import { readSkillContent } from "./skill-content.ts";
+} from "./repair/service.ts";
 import {
   buildProjectSnapshot,
   type ProjectSkillsProjectSummary,
@@ -69,15 +69,18 @@ export type {
   ProjectSkillsSnapshot,
 } from "./snapshot-builder.ts";
 
-import type { PierBindingsChannel } from "./pier-bindings.ts";
 import {
   createPierBindingsServiceApi,
   type PierBindingsServiceApi,
   unavailablePierBindingsApi,
-} from "./pier-bindings-api.ts";
+} from "./pier-bindings/api.ts";
+import type { PierBindingsChannel } from "./pier-bindings/index.ts";
 import { buildProjectsSnapshot } from "./projects-snapshot.ts";
-import { createProjectSkillsStore, type ProjectSkillsStore } from "./store.ts";
-import type { SystemSkillsChannel } from "./system-skills.ts";
+import {
+  createProjectSkillsStore,
+  type ProjectSkillsStore,
+} from "./store/index.ts";
+import type { SystemSkillsChannel } from "./system-skills/index.ts";
 
 export interface ProjectSkillsService extends PierBindingsServiceApi {
   apply(request: {

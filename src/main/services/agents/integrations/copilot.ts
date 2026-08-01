@@ -5,7 +5,8 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  pierHookCommandWithStdinSessionId,
+  pierHookCommandV3WithStdin,
+  pierHookCommandV3WithStdinValueDispatch,
   transformJsonConfig,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
@@ -16,7 +17,7 @@ const TIMEOUT_SECONDS = 5;
 /** 专用文件（loomdesk codeisland.json 同模式）。 */
 const configPath = () => join(homedir(), ".copilot", "hooks", "pier.json");
 
-/** Copilot CLI hook 事件 → pier 事件名。 */
+/** Copilot CLI 已核验的原生事实 → Pier 规范事件名。 */
 export const COPILOT_EVENTS: ReadonlyArray<{
   nativeEvent: string;
   pierEvent: string;
@@ -26,18 +27,117 @@ export const COPILOT_EVENTS: ReadonlyArray<{
   { nativeEvent: "userPromptSubmitted", pierEvent: "PromptSubmit" },
   { nativeEvent: "preToolUse", pierEvent: "ToolStart" },
   { nativeEvent: "postToolUse", pierEvent: "ToolComplete" },
+  { nativeEvent: "postToolUseFailure", pierEvent: "ToolComplete" },
   { nativeEvent: "agentStop", pierEvent: "Stop" },
-  { nativeEvent: "permissionRequest", pierEvent: "PermissionRequest" },
+  { nativeEvent: "preCompact", pierEvent: "processing" },
   { nativeEvent: "subagentStart", pierEvent: "SubagentStart" },
   { nativeEvent: "subagentStop", pierEvent: "SubagentStop" },
+  { nativeEvent: "errorOccurred.recoverable", pierEvent: "processing" },
   { nativeEvent: "errorOccurred", pierEvent: "error" },
 ];
 
 interface CopilotHookEntry {
   bash: string;
+  matcher?: string;
   timeoutSec?: number;
   type: "command";
 }
+
+interface CopilotHookSpec {
+  buildCommand: () => string;
+  matcher?: string;
+  nativeEvent: string;
+}
+
+function standardCommand(
+  event:
+    | "SessionStart"
+    | "SessionEnd"
+    | "PromptSubmit"
+    | "ToolStart"
+    | "ToolComplete"
+    | "Stop"
+    | "processing"
+    | "SubagentStart"
+    | "SubagentStop",
+  nativeEvent: string
+): string {
+  return pierHookCommandV3WithStdin({ agentId: AGENT_ID, event, nativeEvent });
+}
+
+const COPILOT_HOOK_SPECS: readonly CopilotHookSpec[] = [
+  {
+    buildCommand: () => standardCommand("SessionStart", "sessionStart"),
+    nativeEvent: "sessionStart",
+  },
+  {
+    buildCommand: () => standardCommand("SessionEnd", "sessionEnd"),
+    nativeEvent: "sessionEnd",
+  },
+  {
+    buildCommand: () => standardCommand("PromptSubmit", "userPromptSubmitted"),
+    nativeEvent: "userPromptSubmitted",
+  },
+  {
+    buildCommand: () => standardCommand("ToolStart", "preToolUse"),
+    nativeEvent: "preToolUse",
+  },
+  {
+    buildCommand: () => standardCommand("ToolComplete", "postToolUse"),
+    nativeEvent: "postToolUse",
+  },
+  {
+    buildCommand: () => standardCommand("ToolComplete", "postToolUseFailure"),
+    nativeEvent: "postToolUseFailure",
+  },
+  {
+    buildCommand: () => standardCommand("Stop", "agentStop"),
+    nativeEvent: "agentStop",
+  },
+  {
+    buildCommand: () => standardCommand("processing", "preCompact"),
+    nativeEvent: "preCompact",
+  },
+  {
+    buildCommand: () =>
+      pierHookCommandV3WithStdin({
+        actorHint: "subagent",
+        agentId: AGENT_ID,
+        agentTypeFields: ["agentName"],
+        event: "SubagentStart",
+        nativeEvent: "subagentStart",
+        sessionIdAsParent: true,
+      }),
+    nativeEvent: "subagentStart",
+  },
+  {
+    buildCommand: () =>
+      pierHookCommandV3WithStdin({
+        actorHint: "subagent",
+        agentId: AGENT_ID,
+        agentInstanceIdFields: ["agentId"],
+        agentTypeFields: ["agentType", "agentName"],
+        event: "SubagentStop",
+        nativeEvent: "subagentStop",
+        sessionIdAsParent: true,
+      }),
+    nativeEvent: "subagentStop",
+  },
+  {
+    buildCommand: () =>
+      pierHookCommandV3WithStdinValueDispatch({
+        agentId: AGENT_ID,
+        cases: [
+          { nativeValue: "true", pierEvent: "processing" },
+          { nativeValue: "false", pierEvent: "error" },
+        ],
+        fallbackPierEvent: "processing",
+        nativeEvent: "errorOccurred",
+        nativeStateFields: ["recoverable"],
+      }),
+    nativeEvent: "errorOccurred",
+  },
+];
 
 function hooksRecord(
   settings: Record<string, unknown>
@@ -65,20 +165,23 @@ export function withPierCopilotHooks(
   settings: Record<string, unknown>
 ): Record<string, unknown> {
   const hooks = hooksRecord(settings);
-  for (const event of COPILOT_EVENTS) {
+  for (const nativeEvent of new Set(
+    COPILOT_HOOK_SPECS.map((event) => event.nativeEvent)
+  )) {
+    const current = hooks[nativeEvent];
+    const existing = Array.isArray(current) ? current : [];
+    hooks[nativeEvent] = existing.filter((entry) => !isPierCopilotEntry(entry));
+  }
+  for (const event of COPILOT_HOOK_SPECS) {
     const current = hooks[event.nativeEvent];
     const existing = Array.isArray(current) ? current : [];
-    const kept = existing.filter((entry) => !isPierCopilotEntry(entry));
     const pierEntry: CopilotHookEntry = {
-      bash: pierHookCommandWithStdinSessionId(
-        AGENT_ID,
-        event.pierEvent,
-        event.nativeEvent
-      ),
+      bash: event.buildCommand(),
+      ...(event.matcher === undefined ? {} : { matcher: event.matcher }),
       timeoutSec: TIMEOUT_SECONDS,
       type: "command",
     };
-    hooks[event.nativeEvent] = [...kept, pierEntry];
+    hooks[event.nativeEvent] = [...existing, pierEntry];
   }
   return {
     ...settings,
@@ -144,11 +247,13 @@ export async function uninstallCopilotHooks(
 }
 
 export const copilotIntegration: AgentHookIntegration = {
-  capability: "full",
   detect: () =>
     existsSync(join(homedir(), ".copilot")) || commandExistsOnPath("copilot"),
   id: AGENT_ID,
-  runtime: { stopAuthority: "advisory" },
+  runtime: {
+    emittedMappings: COPILOT_EVENTS,
+    stopAuthority: "advisory",
+  },
   install: () => installCopilotHooks(),
   uninstall: () => uninstallCopilotHooks(),
 };

@@ -29,6 +29,14 @@ const FRAMEWORK_SUFFIXES: ReadonlyArray<{
   { framework: "svelte", suffix: ".canvas.svelte" },
 ];
 
+/**
+ * Leading-dot canvas file suffixes (e.g. `.canvas.tsx`). Single source for
+ * framework detection; keep `packages/ui` `PIER_CANVAS_FILE_EXTENSIONS` in
+ * sync via unit test (ui package cannot import host `shared/`).
+ */
+export const LIVE_MODULE_CANVAS_FILE_SUFFIXES: readonly string[] =
+  FRAMEWORK_SUFFIXES.map(({ suffix }) => suffix);
+
 export function isLiveModuleCanvasFileName(fileName: string): boolean {
   const base = fileName.split(/[/\\]/u).at(-1) ?? "";
   const lowered = base.toLowerCase();

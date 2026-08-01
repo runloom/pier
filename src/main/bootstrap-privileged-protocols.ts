@@ -3,7 +3,7 @@ import {
   handleFilePreviewProtocol,
   registerFilePreviewRequestGuard,
   registerFilePreviewScheme,
-} from "./files/file-preview-protocol.ts";
+} from "./files/preview-protocol.ts";
 import {
   handleAssetProtocol,
   registerAssetScheme,
@@ -15,7 +15,7 @@ import {
 import {
   handlePluginAssetProtocol,
   registerPluginAssetScheme,
-} from "./plugins/plugin-asset-protocol.ts";
+} from "./plugins/asset-protocol.ts";
 import type { ManagedPluginRuntimeSource } from "./services/managed-plugins/install-runtime.ts";
 
 /** Register privileged custom schemes before `app.whenReady()`. */

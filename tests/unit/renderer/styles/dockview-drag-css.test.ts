@@ -1,13 +1,15 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  PANEL_TAB_GHOST_MAX_WIDTH_PX,
+  PANEL_TAB_TITLE_MAX_WIDTH_PX,
+} from "@/components/workspace/panel-tab-layout.ts";
 
 const SUBTLE_DROP_TARGET_BACKGROUND_RE =
   /--dv-drag-over-background-color:\s*color-mix\(\s*in oklab,\s*var\(--primary\) 10%,\s*transparent\s*\)/;
 const SUBTLE_DROP_TARGET_BORDER_RE =
   /--dv-drag-over-border:\s*1px solid\s*color-mix\(in oklab, var\(--primary\) 55%, transparent\)/;
-const TAB_HINT_MIN_WIDTH_RE = /min-width:\s*14px(?:\s*!important)?;/;
-
 describe("Pier dockview drag CSS", () => {
   it("keeps drop targets subtle over native terminal content", () => {
     const css = readFileSync(
@@ -39,7 +41,7 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain("height: 32px !important");
     expect(css).toContain("max-width: 220px");
     expect(css).toContain("overflow: hidden");
-    expect(css).toContain("padding-inline: 10px 12px !important");
+    expect(css).toContain("padding-inline: 8px 10px !important");
     expect(css).toContain("width: fit-content !important");
     expect(css).toContain(".dockview-theme-pier .dv-tab-ghost-drag::after");
     expect(css).toContain(".dv-tab-ghost-drag::after");
@@ -65,7 +67,7 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain("font-weight: 600 !important");
   });
 
-  it("sizes idle tabs to content instead of a fixed 280px ellipsis cap", () => {
+  it("sizes idle tabs to content with a title-slot max-width (not a fixed 280px tab cap)", () => {
     const css = readFileSync(
       join(process.cwd(), "src/renderer/app/globals.css"),
       "utf8"
@@ -75,28 +77,35 @@ describe("Pier dockview drag CSS", () => {
     );
     expect(idleTabRuleStart).toBeGreaterThanOrEqual(0);
     // Idle tab rule ends before the content-title rule.
-    const idleTabRule = css.slice(
-      idleTabRuleStart,
-      css.indexOf(
-        ".dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-content",
-        idleTabRuleStart
-      )
+    const contentRuleStart = css.indexOf(
+      ".dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-content",
+      idleTabRuleStart
     );
+    const idleTabRule = css.slice(idleTabRuleStart, contentRuleStart);
     expect(idleTabRule).toContain("max-width: none");
+    expect(idleTabRule).toContain("padding-inline: 6px 3px");
+    expect(idleTabRule).toContain("gap: 4px");
     expect(idleTabRule).not.toContain("max-width: 280px");
+    // 标题文本槽单独限宽；与 panel-tab-layout.ts 常量交叉校验。
+    expect(css).toContain(
+      `--pier-tab-title-max: ${PANEL_TAB_TITLE_MAX_WIDTH_PX}px`
+    );
+    const contentRule = css.slice(contentRuleStart, contentRuleStart + 400);
+    expect(contentRule).toContain("max-width: var(--pier-tab-title-max");
+    expect(css).toContain('data-pier-tab-kind="file"');
+    expect(css).toContain("font-family: var(--font-mono)");
+    expect(css).toContain(`max-width: ${PANEL_TAB_GHOST_MAX_WIDTH_PX}px`);
   });
 
-  it("keeps tab shortcut hint metrics aligned with the normal icon slot", () => {
+  it("keeps file-kind tab titles non-bold under ghost drag !important weight", () => {
     const css = readFileSync(
       join(process.cwd(), "src/renderer/app/globals.css"),
       "utf8"
     );
-
-    expect(css).toContain(".dockview-theme-pier .pier-panel-tab-index-hint");
-    expect(css).toContain(".dv-tab.dv-tab-dragging .pier-panel-tab-index-hint");
-    expect(css).toContain(".dv-tab-ghost-drag .pier-panel-tab-index-hint");
-    expect(css).toContain("height: 14px;");
-    expect(css).toMatch(TAB_HINT_MIN_WIDTH_RE);
+    expect(css).toContain(
+      '.dv-tab-ghost-drag\n  .dv-default-tab[data-pier-tab-kind="file"]\n  .dv-default-tab-content'
+    );
+    expect(css).toContain("font-weight: 400 !important");
   });
 
   it("reserves a left gutter for the absolute active-task presence dot", () => {
@@ -106,12 +115,12 @@ describe("Pier dockview drag CSS", () => {
     );
 
     expect(css).toContain('&[data-pier-tab-has-active-task="true"]');
-    expect(css).toContain("padding-left: 18px");
+    expect(css).toContain("padding-left: 14px");
     // drag/ghost 的 padding-inline !important 不得盖掉 gutter
     expect(css).toContain(
       '.dv-default-tab[data-pier-tab-has-active-task="true"]'
     );
-    expect(css).toContain("padding-left: 20px !important");
+    expect(css).toContain("padding-left: 16px !important");
   });
 
   it("keeps tab close actions always visible with circular hover", () => {

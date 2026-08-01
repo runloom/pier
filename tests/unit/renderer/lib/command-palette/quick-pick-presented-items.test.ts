@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isQuickPickLoadingEmpty,
   quickPickPresentedItems,
-} from "@/components/common/command-palette-quick-pick-view.tsx";
+} from "@/components/common/command-palette/quick-pick-view.tsx";
 import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
 
 function item(id: string, label: string): QuickPickItem {

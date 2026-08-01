@@ -27,6 +27,14 @@ export const PIER = {
   FILE_QUERY_START: "pier://file-query:start",
   FILE_QUERY_CANCEL: "pier://file-query:cancel",
   FILE_QUERY_EVENT: "pier://file-query:event",
+  // LSP stdio host (typescript-language-server): ensure/send/close + directed messages.
+  LSP_SESSION_ENSURE: "pier://lsp:session-ensure",
+  LSP_SESSION_SEND: "pier://lsp:session-send",
+  LSP_SESSION_CLOSE: "pier://lsp:session-close",
+  LSP_SESSION_CLOSED: "pier://lsp:session-closed",
+  LSP_SESSION_MESSAGE: "pier://lsp:session-message",
+  LSP_POLICY_CHANGED: "pier://lsp:policy-changed",
+  LSP_LANGUAGE_TOOLS_REQUEST: "pier://lsp:language-tools-request",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
@@ -92,6 +100,10 @@ export const PIER_BROADCAST = {
   TERMINAL_TITLE_CHANGED: "pier://terminal:title-changed",
   // Ghostty 在已退出进程的 surface 上收到用户关闭确认。
   TERMINAL_SURFACE_CLOSE_REQUEST: "pier://terminal:surface-close-request",
+  // Ghostty SHOW_CHILD_EXITED（宿主已拦截英文 buffer 文案）→ renderer inject。
+  TERMINAL_CHILD_EXITED: "pier://terminal:child-exited",
+  // 终端结果查看终态（agent/task end）→ renderer EndState store。
+  TERMINAL_END_STATE_CHANGED: "pier://terminal:end-state-changed",
   // 命令面板 MRU 变更广播 (main → renderer, payload MruState).
   COMMAND_PALETTE_MRU_CHANGED: "pier://command-palette-mru:changed",
   // git 变更广播 (main → renderer, payload GitChangeEvent).
@@ -104,6 +116,8 @@ export const PIER_BROADCAST = {
   // renderer 下发的 presentation 已被 native 同步应用 (main → renderer,
   // payload { rendererSequence })，用于 resize 撤占位的精确握手。
   TERMINAL_PRESENTATION_APPLIED: "pier:terminal:presentation-applied",
+  // Ghostty 已把当前实例、当前尺寸的 IOSurface 与原生遮罩原子提交。
+  TERMINAL_FRAME_COMMITTED: "pier://terminal:frame-committed",
   // 终端状态栏用户覆盖变更后广播完整快照 (main → renderer, payload TerminalStatusBarPrefs).
   TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
   // 全部 task run 的窗口级控制快照（运行控制浮层唯一数据源）。

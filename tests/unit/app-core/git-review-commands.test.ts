@@ -1,9 +1,9 @@
 import type { PierCoreServices } from "@main/app-core/command-router-services.ts";
-import { executeGitReviewCommand } from "@main/app-core/git-review-commands.ts";
+import { executeGitReviewCommand } from "@main/app-core/commands/git-review.ts";
 import {
   GIT_REVIEW_DEADLINE_MS,
   GitReviewBudget,
-} from "@main/services/git-review/git-review-budget.ts";
+} from "@main/services/git-review/budget.ts";
 import { describe, expect, it, vi } from "vitest";
 
 const OPERATION_ID = "c4883f41-047b-4f05-b858-9207eb0617d0";

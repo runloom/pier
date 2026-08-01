@@ -1,5 +1,7 @@
 export const terminal = {
   closeFailed: "Couldn't close terminal",
+  frameWaitFailed:
+    "The terminal view didn't appear. Try again, or reopen this terminal if the problem continues.",
   openPathFailed: "Couldn't open path",
   agentSession: {
     coldStart: "Couldn’t resume the previous session. Started a fresh agent.",
@@ -32,8 +34,11 @@ export const terminal = {
   composer: {
     attachFailed: "Couldn’t add file",
     attachFile: "Add file",
-    // Gate is cursor-only: hidden = terminal input not focused (not FA waiting).
-    blockedUnfocused: "Input not focused",
+    // Only warn for verified TUIs; cursor risk never disables sending by itself.
+    blockedUnfocused: "Terminal input may not be focused",
+    blockedUnfocusedBody:
+      "Pier can’t confirm the input position in the terminal. Click the session’s input box first, or continue if you’re sure it can accept input.",
+    blockedUnfocusedTitle: "Terminal input may not be focused",
     invalidAttachmentRef: "Invalid attachment reference",
     keyHint: "⇧⏎ newline · {{attach}} attach · Esc close",
     label: "Rich Input",
@@ -49,13 +54,12 @@ export const terminal = {
     mentionPlaceholder: "Mention a file or folder…",
     noActiveTerminal:
       "Switch to the target terminal tab first, then open Rich Input.",
-    sendStateUnknown:
-      "Couldn’t confirm the session input state. Sending cancelled — try again.",
     pasteInsertAnyway: "Insert into message anyway",
     pathUnreadable: "Couldn’t read that file path",
     placeholder: "Type here; sends into the terminal session",
     removeAttachment: "Remove attachment",
     send: "Send",
+    sendAnyway: "Send anyway",
     sendFailed: "Failed to send to terminal",
     sendTooLong: "Message is too long to send",
     skillEmptyProjectBody:
@@ -84,7 +88,7 @@ export const terminal = {
     cancelled: "Cancelled",
     close: "Close task panel",
     controlLabel: "Task run controls: {{label}}",
-    dismiss: "Dismiss task controls",
+    dismiss: "Close",
     duration: "Elapsed time: {{duration}}",
     failed: "Failed",
     finishedBlocked: "Task blocked",
@@ -135,5 +139,48 @@ export const terminal = {
       },
     },
     manage: "Manage Status Bar…",
+  },
+  /**
+   * Ghostty / native host messages (see ghostty-host-copy catalog).
+   * Prefer product wording over Ghostty brand for user-facing copy.
+   */
+  ghosttyHost: {
+    processExited: "Process exited",
+    processExitedFailed: "Process exited with code {{code}}",
+    processExitedAbnormal:
+      "The command exited too quickly ({{duration}}). It may have failed to start.",
+    agentExited: "Agent session ended",
+    agentExitedFailed: "Agent session ended with code {{code}}",
+    agentExitedAbnormal:
+      "The agent exited too quickly ({{duration}}). It may have failed to start.",
+    taskExited: "Task finished",
+    taskExitedFailed: "Task failed with code {{code}}",
+    taskExitedAbnormal:
+      "The task exited too quickly ({{duration}}). It may have failed to start.",
+    taskOutputExited: "Task output ended",
+    taskOutputExitedFailed: "Task output ended with code {{code}}",
+    taskOutputExitedAbnormal:
+      "Task output ended too quickly ({{duration}}). The process may have failed to start.",
+    dismissAnyKey: "Press any key to close",
+    dismissExplicit: "Close the tab when you’re done reviewing",
+    injectExitFailed:
+      "Couldn’t show the session end message in the terminal. Close the tab when you’re done.",
+    launchFailedTitle: "Couldn’t start the command",
+    launchFailedRuntime: "Runtime: {{duration}}",
+    launchFailedExitCode: "Exit code: {{code}}",
+    launchFailedDismiss: "Press any key to close",
+    ptyExhausted:
+      "This Mac can’t open another terminal right now. Close unused terminals or other apps that use terminal sessions, then try again.",
+    inputPathFailed:
+      "A configured startup input file is missing or unreadable. Check your terminal input settings and try again.",
+    ioThreadFailed:
+      "Couldn’t start the terminal session ({{error}}). Close this tab and try again.",
+    ioThreadOom:
+      "Not enough memory to start the terminal. Close this tab and try again.",
+    pasteConfirmTitle: "Paste into the terminal?",
+    pasteConfirmBody:
+      "This paste has {{lines}} lines and may run commands immediately.",
+    pasteConfirmAccept: "Paste",
+    pasteConfirmCancel: "Cancel",
   },
 } as const;

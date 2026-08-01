@@ -1,3 +1,4 @@
+import type { AccountUsageMetric } from "@pier/plugin-api/account-usage";
 import { z } from "zod/mini";
 
 /**
@@ -12,22 +13,12 @@ export type CodexAccountStatus =
   | "login-pending"
   | "error";
 
-export interface CodexUsageWindow {
-  id: string;
-  limitId: string;
-  limitName?: string;
-  resetsAt?: number;
-  usedPercent: number;
-  windowMinutes?: number;
-}
-
 export interface CodexUsageSnapshot {
+  attemptedAt: number;
   error?: string;
-  fetchedAt: number;
-  raw?: unknown;
-  resetCreditsAvailable?: number;
+  metrics: AccountUsageMetric[];
   status: "ok" | "error";
-  windows: CodexUsageWindow[];
+  updatedAt?: number;
 }
 
 export interface CodexAccountSummary {

@@ -25,13 +25,13 @@ import {
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
-import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AssetRootRef,
   McpAgentEffectCell,
   McpServerListing,
   McpServerView,
-} from "@shared/contracts/agent-assets.ts";
+} from "@shared/contracts/agent/assets.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import { Cable, ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";

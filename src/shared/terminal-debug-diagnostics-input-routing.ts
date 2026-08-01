@@ -1,11 +1,11 @@
 import type {
+  TerminalDebugIssue,
+  TerminalDebugNativeSnapshot,
+} from "./contracts/terminal/debug.ts";
+import type {
   TerminalHostSnapshot,
   TerminalNativeWindowState,
 } from "./contracts/terminal.ts";
-import type {
-  TerminalDebugIssue,
-  TerminalDebugNativeSnapshot,
-} from "./contracts/terminal-debug.ts";
 import {
   computeEffectiveKeyboardTarget,
   sameKeyboardFocusTarget,

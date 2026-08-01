@@ -1,6 +1,10 @@
 import { fireEvent, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
+import {
+  popupContextMenuAt,
+  useContextMenu,
+} from "@/lib/context-menu/use-menu.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 const buildMenuEntriesMock = vi.hoisted(() =>
@@ -39,6 +43,7 @@ describe("useContextMenu", () => {
     suppressTooltipsMock.mockClear();
     releaseTooltipSuppressionMock.mockClear();
     useZoomStore.setState({ windowZoomLevel: 0 });
+    useWorkspaceStore.setState({ api: null });
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -88,5 +93,58 @@ describe("useContextMenu", () => {
       throw new Error("expected invocation call order");
     }
     expect(suppressOrder).toBeLessThan(releaseOrder);
+  });
+
+  it("does not setActive when opening a dockview-tab menu with sourcePanelId", async () => {
+    const setActive = vi.fn();
+    useWorkspaceStore.setState({
+      api: {
+        panels: [
+          {
+            api: { setActive },
+            id: "terminal-inactive",
+            view: { contentComponent: "terminal" },
+          },
+        ],
+      } as never,
+    });
+
+    await popupContextMenuAt(
+      "dockview-tab",
+      { x: 1, y: 2 },
+      { sourcePanelId: "terminal-inactive" }
+    );
+
+    expect(setActive).not.toHaveBeenCalled();
+    expect(buildMenuEntriesMock).toHaveBeenCalledWith(
+      "dockview-tab",
+      expect.objectContaining({
+        sourcePanelId: "terminal-inactive",
+        surface: "dockview-tab",
+      })
+    );
+  });
+
+  it("still setActive for non-tab surfaces that pass sourcePanelId", async () => {
+    const setActive = vi.fn();
+    useWorkspaceStore.setState({
+      api: {
+        panels: [
+          {
+            api: { setActive },
+            id: "terminal-1",
+            view: { contentComponent: "terminal" },
+          },
+        ],
+      } as never,
+    });
+
+    await popupContextMenuAt(
+      "terminal/status",
+      { x: 1, y: 2 },
+      { sourcePanelId: "terminal-1" }
+    );
+
+    expect(setActive).toHaveBeenCalledOnce();
   });
 });

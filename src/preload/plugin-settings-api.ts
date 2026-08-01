@@ -2,7 +2,7 @@ import type {
   JsonValue,
   PluginSettingsChangedPayload,
   PluginSettingsState,
-} from "@shared/contracts/plugin-settings.ts";
+} from "@shared/contracts/plugin/settings.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 import { invokePierCommand } from "./ipc-envelope.ts";

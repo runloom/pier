@@ -8,6 +8,7 @@
 #if canImport(AppKit) && !canImport(UIKit)
     import AppKit
     import GhosttyKit
+    import IOSurface
 
     @MainActor
     open class AppTerminalView: NSView {
@@ -19,6 +20,8 @@
         var lastPointerSelectionRect: CGRect?
         var pendingSelectionMenuPoint: CGPoint?
         var onFocusChange: ((Bool) -> Void)?
+        public var onFramePresentationRequested: ((TerminalFramePresentationRequest) -> Void)?
+        public var onFramePresented: ((TerminalFramePresentation) -> Void)?
         // nil means no focus state has reached the surface yet; the first sync
         // must propagate even when it is `false` so inactive terminals do not
         // render an active cursor on creation.
@@ -143,8 +146,38 @@
             core.onMetricsUpdate = { [weak self] in
                 self?.updateMetalLayerMetrics()
             }
-            core.onPostRender = { [weak self] in
-                self?.enforceMetalLayerScale()
+            core.onPresentationRequested = { [weak self] request in
+                self?.onFramePresentationRequested?(request)
+            }
+            core.beginFramePresentationTransaction = {
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+            }
+            core.endFramePresentationTransaction = {
+                CATransaction.commit()
+            }
+            core.onPostRender = { [weak self] presentation in
+                guard let self else { return }
+                enforceMetalLayerScale()
+                guard let surface = layer?.contents as? IOSurface else {
+                    TerminalDebugLog.log(
+                        .render,
+                        "frame presentation rejected: layer has no IOSurface contents"
+                    )
+                    return
+                }
+                let actualWidth = UInt32(clamping: IOSurfaceGetWidth(surface))
+                let actualHeight = UInt32(clamping: IOSurfaceGetHeight(surface))
+                guard actualWidth == presentation.pixelWidth,
+                      actualHeight == presentation.pixelHeight
+                else {
+                    TerminalDebugLog.log(
+                        .render,
+                        "frame presentation rejected: IOSurface=\(actualWidth)x\(actualHeight) expected=\(presentation.pixelWidth)x\(presentation.pixelHeight)"
+                    )
+                    return
+                }
+                onFramePresented?(presentation)
             }
         }
 

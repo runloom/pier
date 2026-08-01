@@ -1,4 +1,4 @@
-import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
+import type { JsonValue } from "@shared/contracts/plugin/settings.ts";
 import type { WorkbenchGridSize } from "@shared/contracts/workbench.ts";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent, ReactNode } from "react";
@@ -48,11 +48,18 @@ export interface RendererWorkbenchWidgetAction {
   priority?: number;
 }
 
+export type WorkbenchWidgetContentMode = "contained" | "host-scroll";
+
 export interface RendererWorkbenchWidgetRegistration {
   actions?(
     context: WorkbenchWidgetActionContext
   ): readonly RendererWorkbenchWidgetAction[];
   component: FunctionComponent<WorkbenchWidgetComponentProps>;
+  /**
+   * `host-scroll`（默认）由卡片正文滚动；`contained` 由组件自行组织
+   * 固定区、滚动区或裁切区，宿主只负责隐藏溢出。
+   */
+  contentMode?: WorkbenchWidgetContentMode;
   icon: LucideIcon;
   /** 必须在本插件 manifest.workbenchWidgets 中声明。 */
   id: string;

@@ -1,7 +1,7 @@
-import { createAgentAttentionService } from "@main/services/agent-attention/attention-service.ts";
+import { createAgentAttentionService } from "@main/services/agent-attention/service.ts";
 import { createAgentRuntimeIndexService } from "@main/services/agent-runtime-index/index.ts";
-import { AGENT_ATTENTION_KIND } from "@shared/contracts/agent-attention.ts";
-import { makeAgentRef } from "@shared/contracts/agent-runtime-index.ts";
+import { AGENT_ATTENTION_KIND } from "@shared/contracts/agent/attention.ts";
+import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import type { SystemNotificationRequest } from "@shared/contracts/notification.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";

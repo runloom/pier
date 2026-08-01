@@ -12,32 +12,18 @@ export type TitleOutcome =
   | "applied"
   /** 秩不升高（已有更高层标题，含用户改名） */
   | "rejected-rank"
-  /** 输入是噪声（寒暄 / slash / 报错栈 / 纯路径） */
-  | "noise"
-  /** hook 没带出 prompt 文案 */
-  | "empty"
-  /** 模型层超时 */
-  | "timeout"
-  /** 该 agent 无 titleArgs，或依赖未注册 */
-  | "unavailable"
-  /** 模型层结果与规则层相同，不值得写 */
-  | "same-as-rule"
-  /** 用户在设置里关掉了模型精修 */
-  | "disabled"
-  /** 并发闸拦截（同 panel 在途，或全局并发已满） */
-  | "concurrency-skipped"
-  /** 该面板精修预算已耗尽（失败次数达上限），永久放弃 */
-  | "exhausted";
+  /** hook 没带出 prompt 文案、provider 没给出会话名，或规范化后为空 */
+  | "empty";
 
 const log = createLogger("agent.title");
 
 export function logTitleTier(ctx: {
   panelId: string;
-  tier: "rule" | "model";
+  tier: "prompt" | "provider";
   outcome: TitleOutcome;
   agentId?: string;
-  attempt?: number;
-  durationMs?: number;
+  /** provider 秩：标题所来自的原生记录（如 claude.transcript.ai_title）。 */
+  nativeEvent?: string;
 }): void {
   log.debug("tier", ctx);
 }

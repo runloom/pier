@@ -31,7 +31,7 @@
 | `src/renderer/components/common/app-content-dialog-host.tsx` | Renders host Dialog shells for stack layers |
 | `src/renderer/components/common/app-shell.tsx` / `main.tsx` | Mount content dialog host beside `AppDialogHost` |
 | `packages/plugin-api/src/renderer.ts` | External plugin dialogs types (`open/update/close`) |
-| `src/renderer/lib/plugins/external-plugin-context.ts` | Wire external plugin dialogs to host store |
+| `src/renderer/lib/plugins/external-context.ts` | Wire external plugin dialogs to host store |
 | `src/renderer/lib/plugins/host-context.ts` | Wire builtin/host dialogs if needed for parity |
 | `packages/plugin-grok/src/renderer/add-account-dialog.tsx` | Become content + trigger only |
 | `packages/plugin-grok/src/renderer/switch-confirm-dialog.tsx` | Become content opened via host |
@@ -455,7 +455,7 @@ EOF
 
 **Files:**
 - Modify: `packages/plugin-api/src/renderer.ts`
-- Modify: `src/renderer/lib/plugins/external-plugin-context.ts`
+- Modify: `src/renderer/lib/plugins/external-context.ts`
 - Modify: `src/renderer/lib/plugins/host-context.ts` (if builtin plugins need parity)
 - Test: `tests/unit/renderer/external-plugin-content-dialog.test.ts` (or extend existing plugin context tests)
 
@@ -493,7 +493,7 @@ Assert external context `dialogs.open` namespaces id with plugin id and pushes s
 
 - [ ] **Step 3: Implement types + wiring**
 
-In `external-plugin-context.ts`:
+In `external-context.ts`:
 
 ```ts
 open: (options) =>

@@ -1,9 +1,19 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/hooks-install.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
+const ORIGINAL_PATH = process.env.PATH;
 
 interface AutohandEntry {
   command: string;
@@ -42,9 +52,8 @@ function configPath(): string {
 }
 
 describe("autohandIntegration", () => {
-  it("capability 为 full，id 为 autohand", async () => {
+  it("id 为 autohand", async () => {
     const integration = await loadIntegration();
-    expect(integration.capability).toBe("full");
     expect(integration.id).toBe("autohand");
   });
 
@@ -63,7 +72,7 @@ describe("autohandIntegration", () => {
     expect(integration.detect()).toBe(true);
   });
 
-  it("事件表齐全：8 个事件各一条命令，kebab 命名，enabled 恒为 true", async () => {
+  it("只安装有完整状态语义的 7 个事件，权限与提问不制造悬挂等待", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -75,7 +84,6 @@ describe("autohandIntegration", () => {
       "session-error",
       "pre-prompt",
       "stop",
-      "permission-request",
       "pre-tool",
       "post-tool",
     ];
@@ -87,6 +95,9 @@ describe("autohandIntegration", () => {
     }
     // post-response 别名不重复安装
     expect(byEvent.has("post-response")).toBe(false);
+    expect(byEvent.has("permission-request")).toBe(false);
+    expect(byEvent.has("ask-followup-question")).toBe(false);
+    expect(byEvent.has("subagent-stop")).toBe(false);
 
     for (const entry of entries) {
       expect(entry.command).toContain(MARK);
@@ -98,12 +109,107 @@ describe("autohandIntegration", () => {
     expect(byEvent.get("session-error")?.command).toContain('"error"');
     expect(byEvent.get("pre-prompt")?.command).toContain('"PromptSubmit"');
     expect(byEvent.get("stop")?.command).toContain('"Stop"');
-    expect(byEvent.get("permission-request")?.command).toContain(
-      '"PermissionRequest"'
-    );
     expect(byEvent.get("pre-tool")?.command).toContain('"ToolStart"');
     expect(byEvent.get("post-tool")?.command).toContain('"ToolComplete"');
+    for (const entry of entries) {
+      expect(entry.command).toContain('"agentEventV3"');
+    }
   });
+
+  it("真实 tool_use_id 载荷形成 v3 工具闭环，局部失败后由权威 stop 回到 ready", async () => {
+    const integration = await loadIntegration();
+    await integration.install();
+    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const byEvent = new Map(
+      hookEntries(installed).map((entry) => [entry.event, entry])
+    );
+    const root = await mkdtemp(join(tmpdir(), "pier-autohand-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const payloads = [
+      [
+        "session-start",
+        { hook_event_name: "session-start", session_id: "session-a" },
+      ],
+      [
+        "pre-prompt",
+        {
+          hook_event_name: "pre-prompt",
+          prompt: "Fix it",
+          session_id: "session-a",
+        },
+      ],
+      [
+        "pre-tool",
+        {
+          hook_event_name: "pre-tool",
+          session_id: "session-a",
+          tool_name: "terminal",
+          tool_use_id: "tool-1",
+        },
+      ],
+      [
+        "post-tool",
+        {
+          hook_event_name: "post-tool",
+          session_id: "session-a",
+          status: "error",
+          tool_name: "terminal",
+          tool_use_id: "tool-1",
+        },
+      ],
+      ["stop", { hook_event_name: "stop", session_id: "session-a" }],
+    ] as const;
+    for (const [event, payload] of payloads) {
+      const result = spawnSync(
+        "/bin/sh",
+        ["-c", byEvent.get(event)?.command ?? ""],
+        {
+          env: {
+            ...process.env,
+            PATH: pathForHookSpawn(ORIGINAL_PATH),
+            PIER_AGENT_EVENT_LOG: logPath,
+            PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+            PIER_PANEL_ID: "panel-1",
+            PIER_WINDOW_ID: "window-1",
+          },
+          input: JSON.stringify(payload),
+        }
+      );
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows[2]).toMatchObject({
+      event: "ToolStart",
+      toolName: "terminal",
+      toolUseId: "tool-1",
+      v: 3,
+    });
+    expect(rows[3]).toMatchObject({
+      event: "ToolComplete",
+      nativeState: "error",
+      toolUseId: "tool-1",
+      v: 3,
+    });
+    expect(
+      rows.some((row) => row.kind === "agentEvent" && row.event === "error")
+    ).toBe(false);
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: string[] = [];
+    for (const row of rows) {
+      if (row.kind !== "agentEvent") continue;
+      aggregator.ingestAgentEvent(row, { stopAuthority: "authoritative" });
+      const activity = aggregator.snapshot().activities[0];
+      if (activity?.kind === "agent" && activity.status)
+        statuses.push(activity.status);
+    }
+    expect(statuses).toEqual(["processing", "tool", "processing", "ready"]);
+  }, 15_000);
 
   it("幂等：重复安装不产生重复条目", async () => {
     const integration = await loadIntegration();
@@ -170,6 +276,24 @@ describe("autohandIntegration", () => {
     const integration = await loadIntegration();
     await integration.install();
     expect(await readFile(configPath(), "utf8")).toBe("{ not json");
+  });
+
+  it.each([
+    '{"hooks":"user-value"}',
+    '{"hooks":{"hooks":{"custom":true}}}',
+    '{"hooks":{"hooks":[],"enabled":"user-value"}}',
+  ])("合法 JSON 的异常 Autohand shape 安装时保持字节不变：%s", async (raw) => {
+    await mkdir(join(homeDir, ".autohand"), { recursive: true });
+    await writeFile(configPath(), raw, "utf8");
+    const integration = await loadIntegration();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await integration.install();
+      expect(await readFile(configPath(), "utf8")).toBe(raw);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("无变化不落盘：卸载未安装文件字节不变", async () => {

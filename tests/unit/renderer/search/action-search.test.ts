@@ -12,7 +12,7 @@ import type { Action } from "@/lib/actions/types.ts";
 import {
   buildActionSearchDocument,
   rankActionSearchDocuments,
-} from "@/lib/search/action-search.ts";
+} from "@/lib/search/action.ts";
 import type { SearchDocument } from "@/lib/search/types.ts";
 
 interface GitLocaleCommand {

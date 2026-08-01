@@ -1,11 +1,18 @@
+import { notifyFilesDiskPathOpened } from "@plugins/api/files-disk-path-opened.ts";
 import { nonEmptyFileRootRelativePathSchema } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { openPluginPanelInstance } from "../plugins/host-panel-instance-open.ts";
-import { getPluginPanelRegistrations } from "../plugins/plugin-panel-registry.ts";
+import { openPluginPanelInstance } from "../plugins/host/panel-instance-open.ts";
+import { getPluginPanelRegistrations } from "../plugins/panel-registry.ts";
 
 /** 与 files 插件 `FILES_FILE_PANEL_ID` 对齐；宿主不 import 插件包。 */
 export const FILES_FILE_PANEL_COMPONENT_ID = "pier.files.filePanel";
+
+export type {
+  FilesDiskPathOpenedEvent,
+  FilesDiskPathOpenedListener,
+} from "@plugins/api/files-disk-path-opened.ts";
+export { onFilesDiskPathOpened } from "@plugins/api/files-disk-path-opened.ts";
 
 const HASH_MULTIPLIER = 33;
 const HASH_MODULUS = 2_147_483_647;
@@ -106,8 +113,10 @@ export function openFilesDiskPath(input: {
   });
 
   const existingParams = cloneParamsRecord(existing?.params);
-  const params = existingParams ?? {
-    pinned: true,
+  // Always refresh disk source on open so params match the request path even
+  // when reusing an instance (identity key is path-scoped today).
+  const params = {
+    ...(existingParams ?? { pinned: true }),
     source,
   };
   const identityKey = `${FILES_FILE_PANEL_COMPONENT_ID}:disk:${stableFileIdentityHash(
@@ -125,5 +134,12 @@ export function openFilesDiskPath(input: {
     params,
     title: input.title ?? basename(source.path),
   });
+  if (result.kind === "opened") {
+    notifyFilesDiskPathOpened({
+      instanceId,
+      path: source.path,
+      root: source.root,
+    });
+  }
   return result.kind === "opened";
 }

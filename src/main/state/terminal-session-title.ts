@@ -10,17 +10,29 @@ export type SetAgentSessionTitleResult =
       ok: true;
       title?: string;
       source?: AgentSessionTitleSource;
+      sessionId?: string;
     }
   | { ok: false };
 
+function normalizedSessionId(
+  value: string | null | undefined
+): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed || undefined;
+}
+
 /**
  * 持久化产品 sessionTitle。裁决由 decideAgentSessionTitleWrite 的秩比较负责。
- * 面板条目不存在时 ok:true applied:false（失败安全，不抛）。
+ * 未应用时仍返回磁盘中的规范标题，供 FA 回填真正生效的状态。
  */
 export async function setTerminalPanelSessionTitle(
   windowId: string,
   panelId: string,
-  input: { title: string; source: AgentSessionTitleSource }
+  input: {
+    title: string;
+    source: AgentSessionTitleSource;
+    sessionId?: string | undefined;
+  }
 ): Promise<SetAgentSessionTitleResult> {
   if (windowId.trim().length === 0 || panelId.trim().length === 0) {
     return { ok: false };
@@ -31,21 +43,47 @@ export async function setTerminalPanelSessionTitle(
     const windowState = state.windows[windowId];
     const current = windowState?.panels[panelId];
     if (!(windowState && current)) {
+      result = { applied: false, ok: true };
       return state;
     }
+    const nextSessionId = normalizedSessionId(input.sessionId);
+    const currentSessionId = normalizedSessionId(current.sessionTitleSessionId);
+    const crossedKnownSessionBoundary =
+      nextSessionId !== undefined &&
+      currentSessionId !== undefined &&
+      nextSessionId !== currentSessionId;
     const decision = decideAgentSessionTitleWrite({
-      currentSource: current.sessionTitleSource ?? null,
-      currentTitle: current.sessionTitle ?? null,
+      currentSource: crossedKnownSessionBoundary
+        ? null
+        : (current.sessionTitleSource ?? null),
+      currentTitle: crossedKnownSessionBoundary
+        ? null
+        : (current.sessionTitle ?? null),
       nextSource: input.source,
       nextTitle: input.title,
     });
     if (!decision.apply) {
-      result = { applied: false, ok: true };
+      result = {
+        applied: false,
+        ok: true,
+        ...(current.sessionTitleSource === undefined
+          ? {}
+          : { source: current.sessionTitleSource }),
+        ...(current.sessionTitle === undefined
+          ? {}
+          : { title: current.sessionTitle }),
+        ...(currentSessionId === undefined
+          ? {}
+          : { sessionId: currentSessionId }),
+      };
       return state;
     }
     windowState.panels[panelId] = {
       ...current,
       sessionTitle: decision.title,
+      ...(nextSessionId === undefined
+        ? {}
+        : { sessionTitleSessionId: nextSessionId }),
       sessionTitleSource: decision.source,
       updatedAt: new Date().toISOString(),
     };
@@ -54,6 +92,69 @@ export async function setTerminalPanelSessionTitle(
       ok: true,
       source: decision.source,
       title: decision.title,
+      ...(nextSessionId === undefined ? {} : { sessionId: nextSessionId }),
+    };
+    return state;
+  });
+  return result;
+}
+
+/**
+ * `SessionStart` 是会话边界：已绑定到别的会话的标题必须清除；历史未绑定标题
+ * 第一次遇到可靠 sessionId 时只补作用域，不改变用户可见标题。
+ */
+export async function reconcileTerminalPanelSessionTitleScope(
+  windowId: string,
+  panelId: string,
+  nextSessionId: string | null | undefined
+): Promise<SetAgentSessionTitleResult> {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return { ok: false };
+  }
+  const normalizedNext = normalizedSessionId(nextSessionId);
+  const s = await ensureTerminalSessionStore();
+  let result: SetAgentSessionTitleResult = { applied: false, ok: true };
+  s.mutate((state) => {
+    const current = state.windows[windowId]?.panels[panelId];
+    if (!current) {
+      return state;
+    }
+    const currentSessionId = normalizedSessionId(current.sessionTitleSessionId);
+    const title = current.sessionTitle?.trim();
+    const source = current.sessionTitleSource;
+    if (!(title && source)) {
+      result = { applied: false, ok: true };
+      return state;
+    }
+    if (normalizedNext && !currentSessionId) {
+      current.sessionTitleSessionId = normalizedNext;
+      current.updatedAt = new Date().toISOString();
+      result = {
+        applied: true,
+        ok: true,
+        sessionId: normalizedNext,
+        source,
+        title,
+      };
+      return state;
+    }
+    if (
+      currentSessionId &&
+      (!normalizedNext || normalizedNext !== currentSessionId)
+    ) {
+      Reflect.deleteProperty(current, "sessionTitle");
+      Reflect.deleteProperty(current, "sessionTitleSource");
+      Reflect.deleteProperty(current, "sessionTitleSessionId");
+      current.updatedAt = new Date().toISOString();
+      result = { applied: true, ok: true };
+      return state;
+    }
+    result = {
+      applied: false,
+      ok: true,
+      ...(currentSessionId ? { sessionId: currentSessionId } : {}),
+      source,
+      title,
     };
     return state;
   });

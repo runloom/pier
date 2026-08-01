@@ -101,7 +101,7 @@ Enter / 打开 → 既有 onOpenFile + reveal
 
 建议新文件（名可微调）：
 
-`src/plugins/builtin/files/renderer/files-path-query-materialize.ts`
+`src/plugins/builtin/files/renderer/files-search/path-query-materialize.ts`
 
 ```ts
 async function materializePathQueryHits(input: {

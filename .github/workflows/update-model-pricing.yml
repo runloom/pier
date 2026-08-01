@@ -25,9 +25,9 @@ on:
       - "scripts/update-model-pricing.mjs"
       - "src/main/services/usage-data/pricing-catalog.json"
       - "src/main/services/usage-data/pricing.ts"
-      - "tests/unit/main/pricing-catalog-schema.test.ts"
-      - "tests/unit/main/pricing-catalog.test.ts"
-      - "tests/unit/main/update-model-pricing.test.ts"
+      - "tests/unit/main/preferences/pricing-catalog-schema.test.ts"
+      - "tests/unit/main/preferences/pricing-catalog.test.ts"
+      - "tests/unit/main/preferences/update-model-pricing.test.ts"
 
 permissions:
   contents: write
@@ -79,7 +79,7 @@ jobs:
         if: >-
           github.event_name == 'pull_request' ||
           steps.diff.outputs.changed == 'true'
-        run: pnpm exec vitest run tests/unit/main/pricing-catalog-schema.test.ts tests/unit/main/pricing-catalog.test.ts tests/unit/main/update-model-pricing.test.ts --run
+        run: pnpm exec vitest run tests/unit/main/preferences/pricing-catalog-schema.test.ts tests/unit/main/preferences/pricing-catalog.test.ts tests/unit/main/preferences/update-model-pricing.test.ts --run
 
       - name: Upload pricing diff
         if: >-

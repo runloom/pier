@@ -1,4 +1,4 @@
-import { createTaskService } from "@main/services/tasks/task-service.ts";
+import { createTaskService } from "@main/services/tasks/service.ts";
 import type { TaskLaunchPlan } from "@shared/contracts/tasks.ts";
 import { describe, expect, it, vi } from "vitest";
 

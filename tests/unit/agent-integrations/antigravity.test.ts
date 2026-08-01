@@ -1,7 +1,13 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/hooks-install.ts";
 import {
   antigravityIntegration,
   installAntigravityHooks,
@@ -9,27 +15,46 @@ import {
   withoutPierAntigravityHooks,
   withPierAntigravityHooks,
 } from "../../../src/main/services/agents/integrations/antigravity.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
+const PIER_HOOK_NAME = "pier-agent-status";
+const ALL_EVENTS = ["PreInvocation", "Stop"];
 
-const ALL_EVENTS = ["PreInvocation", "PostToolUse", "Stop"];
+interface AntigravityHandler {
+  command: string;
+  timeout?: number;
+  type: "command";
+}
+
+function pierHookDefinition(
+  settings: Record<string, unknown>
+): Record<string, AntigravityHandler[]> {
+  return (settings[PIER_HOOK_NAME] ?? {}) as Record<
+    string,
+    AntigravityHandler[]
+  >;
+}
 
 function hookCommands(settings: Record<string, unknown>): string[] {
-  const hooks = (settings.hooks ?? {}) as Record<
-    string,
-    Array<{ hooks: Array<{ command: string }> }>
-  >;
-  return Object.values(hooks)
+  return Object.values(pierHookDefinition(settings))
     .flat()
-    .flatMap((m) => m.hooks.map((h) => h.command));
+    .map((handler) => handler.command);
 }
 
 describe("withPierAntigravityHooks", () => {
-  it("为 3 个 Antigravity hook 事件各注入一条 pier 命令", () => {
+  it("按官方命名 hook 顶层结构只注入 2 个有状态证据的事件", () => {
     const next = withPierAntigravityHooks({});
-    const hooks = next.hooks as Record<string, unknown[]>;
+    const hooks = pierHookDefinition(next);
+    expect(next.hooks).toBeUndefined();
     for (const evt of ALL_EVENTS) {
       expect(hooks[evt], evt).toHaveLength(1);
+      expect(hooks[evt]?.[0]).toMatchObject({
+        timeout: 5,
+        type: "command",
+      });
     }
     for (const cmd of hookCommands(next)) {
       expect(cmd).toContain(MARK);
@@ -38,48 +63,142 @@ describe("withPierAntigravityHooks", () => {
 
   it("CRITICAL: 绝不安装 PreToolUse 键（Antigravity 用它做权限阻塞判定, cmux#4768）", () => {
     const next = withPierAntigravityHooks({});
-    const hooks = next.hooks as Record<string, unknown>;
+    const hooks = pierHookDefinition(next);
     expect(Object.keys(hooks)).not.toContain("PreToolUse");
     expect(hooks.PreToolUse).toBeUndefined();
   });
 
   it("不安装 PostInvocation（与 Stop 语义重叠，避免双 Stop）", () => {
     const next = withPierAntigravityHooks({});
-    const hooks = next.hooks as Record<string, unknown>;
+    const hooks = pierHookDefinition(next);
     expect(hooks.PostInvocation).toBeUndefined();
   });
 
   it("不安装 Notification（无确证信源支撑 PermissionRequest 映射）", () => {
     const next = withPierAntigravityHooks({});
-    const hooks = next.hooks as Record<string, unknown>;
+    const hooks = pierHookDefinition(next);
     expect(hooks.Notification).toBeUndefined();
   });
 
-  it("PostToolUse 事件写 matcher '*'，其余事件不写 matcher", () => {
+  it("不安装 PostToolUse（官方载荷不足以证明工具生命周期）", () => {
     const next = withPierAntigravityHooks({});
-    const hooks = next.hooks as Record<
-      string,
-      Array<{ hooks: Array<{ command: string }>; matcher?: string }>
-    >;
-    expect(hooks.PostToolUse?.[0]?.matcher).toBe("*");
-    expect(hooks.PreInvocation?.[0]?.matcher).toBeUndefined();
-    expect(hooks.Stop?.[0]?.matcher).toBeUndefined();
+    const hooks = pierHookDefinition(next);
+    expect(hooks.PostToolUse).toBeUndefined();
   });
 
-  it("PreInvocation 映射到 pierEvent PromptSubmit，PostToolUse 映射到 ToolComplete，Stop 映射到 Stop", () => {
+  it("PreInvocation 只表示 processing，Stop 命令按 fullyIdle/error 精确分支", () => {
     const next = withPierAntigravityHooks({});
-    const hooks = next.hooks as Record<
-      string,
-      Array<{ hooks: Array<{ command: string }> }>
-    >;
-    expect(hooks.PreInvocation?.[0]?.hooks[0]?.command).toContain(
-      '"PromptSubmit"'
-    );
-    expect(hooks.PostToolUse?.[0]?.hooks[0]?.command).toContain(
-      '"ToolComplete"'
-    );
-    expect(hooks.Stop?.[0]?.hooks[0]?.command).toContain('"Stop"');
+    const hooks = pierHookDefinition(next);
+    expect(hooks.PreInvocation?.[0]?.command).toContain('"processing"');
+    expect(hooks.Stop?.[0]?.command).toContain('"Stop"');
+    expect(hooks.Stop?.[0]?.command).toContain('"error"');
+    expect(hooks.Stop?.[0]?.command).toContain('"agentEventV3"');
   });
+
+  it("官方 camelCase 载荷：写入严格 v3 事件并返回合法 hook JSON", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-antigravity-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const hooks = pierHookDefinition(withPierAntigravityHooks({}));
+    const command = (event: string) => hooks[event]?.[0]?.command ?? "";
+    const outputs: string[] = [];
+    for (const [event, payload] of [
+      [
+        "PreInvocation",
+        {
+          conversationId: "conversation-a",
+          hook_event_name: "PreInvocation",
+          invocationNum: 2,
+        },
+      ],
+      [
+        "Stop",
+        {
+          conversationId: "conversation-a",
+          fullyIdle: false,
+          hook_event_name: "Stop",
+          terminationReason: "tool_pending",
+        },
+      ],
+      [
+        "Stop",
+        {
+          conversationId: "conversation-a",
+          fullyIdle: true,
+          hook_event_name: "Stop",
+          terminationReason: "completed",
+        },
+      ],
+      [
+        "Stop",
+        {
+          conversationId: "conversation-a",
+          error: "model crashed",
+          fullyIdle: true,
+          hook_event_name: "Stop",
+          terminationReason: "error",
+        },
+      ],
+    ] as const) {
+      const result = spawnSync("/bin/sh", ["-c", command(event)], {
+        env: {
+          ...process.env,
+          PATH: pathForHookSpawn(process.env.PATH),
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "panel-1",
+          PIER_WINDOW_ID: "window-1",
+        },
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+      outputs.push(result.stdout.toString().trim());
+    }
+    expect(outputs[0]).toBe("{}");
+    expect(outputs.slice(1)).toEqual([
+      '{"decision":""}',
+      '{"decision":""}',
+      '{"decision":""}',
+    ]);
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      {
+        event: "processing",
+        nativeEvent: "PreInvocation",
+        sessionId: "conversation-a",
+        v: 3,
+      },
+      {
+        event: "processing",
+        nativeEvent: "Stop.active",
+        nativeState: "tool_pending",
+      },
+      {
+        event: "Stop",
+        nativeEvent: "Stop.fullyIdle",
+        nativeState: "completed",
+      },
+      {
+        event: "error",
+        nativeEvent: "Stop.error",
+        nativeState: "model crashed",
+      },
+    ]);
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: Array<string | undefined> = [];
+    for (const row of rows) {
+      if (row.kind !== "agentEvent") continue;
+      aggregator.ingestAgentEvent(row, { stopAuthority: "advisory" });
+      const activity = aggregator.snapshot().activities[0];
+      statuses.push(activity?.kind === "agent" ? activity.status : undefined);
+    }
+    expect(statuses).toEqual(["processing", "processing", undefined, "error"]);
+  }, 15_000);
 
   it("幂等：重复安装不产生重复条目", () => {
     const once = withPierAntigravityHooks({});
@@ -87,53 +206,82 @@ describe("withPierAntigravityHooks", () => {
     expect(hookCommands(twice)).toHaveLength(hookCommands(once).length);
   });
 
-  it("保留用户已有的无关 hook、顶层配置，以及用户自建的 PreToolUse 条目", () => {
+  it("保留用户命名 hook、顶层配置，以及用户自建的 PreToolUse 条目", () => {
     const user = {
       model: "antigravity-1",
-      hooks: {
+      "user-hook": {
         PreToolUse: [
-          { hooks: [{ type: "command", command: "user-permission-gate" }] },
+          { type: "command", command: "user-permission-gate", timeout: 12 },
         ],
-        SomeOtherEvent: [{ hooks: [{ type: "command", command: "say done" }] }],
+        PostInvocation: [{ type: "command", command: "say done", timeout: 12 }],
       },
     };
     const next = withPierAntigravityHooks(user);
     expect(next.model).toBe("antigravity-1");
-    const hooks = next.hooks as Record<
-      string,
-      Array<{ hooks: Array<{ command: string }> }>
-    >;
-    // 用户的 PreToolUse 条目必须原封不动保留，pier 从不写这个键。
-    const preToolUse = hooks.PreToolUse ?? [];
-    expect(preToolUse).toHaveLength(1);
-    expect(preToolUse[0]?.hooks[0]?.command).toBe("user-permission-gate");
-    // 无关键名保持原样，不会被 pier 条目追加。
-    const other = hooks.SomeOtherEvent ?? [];
-    expect(other).toHaveLength(1);
-    expect(other[0]?.hooks[0]?.command).toBe("say done");
+    expect(next["user-hook"]).toEqual(user["user-hook"]);
+  });
+
+  it("同名 hook 已被用户占用时不覆盖", () => {
+    const user = {
+      [PIER_HOOK_NAME]: {
+        Stop: [{ type: "command", command: "user-stop", timeout: 12 }],
+      },
+    };
+    expect(withPierAntigravityHooks(user)).toBe(user);
   });
 });
 
 describe("withoutPierAntigravityHooks", () => {
-  it("只移除 pier 条目，保留用户 hook（包括用户的 PreToolUse）", () => {
+  it("只移除 Pier 命名 hook，保留用户命名 hook", () => {
     const user = {
-      hooks: {
+      "user-hook": {
         PreToolUse: [
-          { hooks: [{ type: "command", command: "user-permission-gate" }] },
+          { type: "command", command: "user-permission-gate", timeout: 12 },
         ],
-        SomeOtherEvent: [{ hooks: [{ type: "command", command: "say done" }] }],
       },
     };
     const cleaned = withoutPierAntigravityHooks(withPierAntigravityHooks(user));
-    const cmds = hookCommands(cleaned);
-    expect(cmds).toEqual(
-      expect.arrayContaining(["user-permission-gate", "say done"])
-    );
-    expect(cmds).toHaveLength(2);
-    const hooks = cleaned.hooks as Record<string, unknown>;
-    expect(hooks.PreInvocation).toBeUndefined();
-    expect(hooks.PostToolUse).toBeUndefined();
-    expect((hooks.PreToolUse as unknown[]).length).toBe(1);
+    expect(cleaned[PIER_HOOK_NAME]).toBeUndefined();
+    expect(cleaned["user-hook"]).toEqual(user["user-hook"]);
+  });
+
+  it("保留误加在 Pier 命名定义内的用户 handler，只移除 Pier handler", () => {
+    const installed = withPierAntigravityHooks({});
+    const definition = pierHookDefinition(installed);
+    definition.Stop?.push({
+      command: "say user-stop",
+      timeout: 12,
+      type: "command",
+    });
+    const cleaned = withoutPierAntigravityHooks(installed);
+    expect(pierHookDefinition(cleaned)).toEqual({
+      Stop: [{ command: "say user-stop", timeout: 12, type: "command" }],
+    });
+  });
+
+  it("升级时只清理旧错误嵌套结构中的 Pier 条目", () => {
+    const legacy = {
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              { type: "command", command: "user-stop" },
+              { type: "command", command: `\${${MARK}}/emit legacy` },
+            ],
+          },
+        ],
+      },
+    };
+    const upgraded = withPierAntigravityHooks(legacy);
+    const legacyStop = (
+      upgraded.hooks as {
+        Stop: Array<{ hooks: Array<{ command: string }> }>;
+      }
+    ).Stop;
+    expect(legacyStop).toEqual([
+      { hooks: [{ type: "command", command: "user-stop" }] },
+    ]);
+    expect(hookCommands(upgraded)).toHaveLength(2);
   });
 });
 
@@ -144,12 +292,11 @@ describe("install/uninstallAntigravityHooks (文件 IO)", () => {
     await installAntigravityHooks(path);
     const installed = JSON.parse(await readFile(path, "utf8"));
     expect(hookCommands(installed).length).toBeGreaterThan(0);
-    expect(
-      (installed.hooks as Record<string, unknown>).PreToolUse
-    ).toBeUndefined();
+    expect(installed.hooks).toBeUndefined();
     await uninstallAntigravityHooks(path);
     const cleaned = JSON.parse(await readFile(path, "utf8"));
     expect(hookCommands(cleaned)).toHaveLength(0);
+    expect(cleaned[PIER_HOOK_NAME]).toBeUndefined();
   });
 
   it("已损坏的 hooks.json 不被覆盖(安装静默放弃)", async () => {
@@ -158,6 +305,28 @@ describe("install/uninstallAntigravityHooks (文件 IO)", () => {
     await writeFile(path, "{ not json", "utf8");
     await installAntigravityHooks(path);
     expect(await readFile(path, "utf8")).toBe("{ not json");
+  });
+
+  it("更高世代 Pier 命名 hook 存在时安装不改写文件", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-hook-test-"));
+    const path = join(dir, "hooks.json");
+    const original = JSON.stringify({
+      model: "antigravity-newer",
+      [PIER_HOOK_NAME]: {
+        Stop: [
+          {
+            command: `pier-hook-gen=11; "\${PIER_AGENT_HOOKS_DIR}/emit" newer`,
+            timeout: 5,
+            type: "command",
+          },
+        ],
+      },
+    });
+    await writeFile(path, original, "utf8");
+
+    await installAntigravityHooks(path);
+
+    expect(await readFile(path, "utf8")).toBe(original);
   });
 });
 
@@ -188,6 +357,17 @@ describe("antigravityIntegration.detect()", () => {
 
   it("integration 元信息符合 spec", () => {
     expect(antigravityIntegration.id).toBe("antigravity");
-    expect(antigravityIntegration.capability).toBe("coarse");
+  });
+
+  it("识别官方 agy 命令", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-agy-path-"));
+    await writeFile(join(dir, "agy"), "", "utf8");
+    const previousPath = process.env.PATH;
+    process.env.PATH = dir;
+    try {
+      expect(antigravityIntegration.detect()).toBe(true);
+    } finally {
+      process.env.PATH = previousPath;
+    }
   });
 });

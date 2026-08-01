@@ -1,7 +1,7 @@
 import type { StatusStackItem } from "@pier/ui/status-stack.tsx";
 import type { PluginRegistryDiagnostic } from "@shared/contracts/plugin.ts";
 import type { TFunction } from "i18next";
-import type { RendererPluginRuntimeDiagnostic } from "@/lib/plugins/plugin-runtime-diagnostics.ts";
+import type { RendererPluginRuntimeDiagnostic } from "@/lib/plugins/runtime-diagnostics.ts";
 import { groupPluginDiagnostics } from "./plugin-diagnostics-summary.tsx";
 
 type DiagnosticKind = PluginRegistryDiagnostic["code"] | "runtime";

@@ -3,8 +3,8 @@ import {
   type PierClient,
 } from "@shared/contracts/permissions.ts";
 import { app } from "electron";
-import type { PierAppCore } from "../../app-core/app-core.ts";
-import { appCore } from "../../app-core/app-core.ts";
+import type { PierAppCore } from "../../app-core/index.ts";
+import { appCore } from "../../app-core/index.ts";
 import {
   createPierLocalControlServer,
   type PierLocalControlServer,

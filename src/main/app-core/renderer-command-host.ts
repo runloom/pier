@@ -1,7 +1,7 @@
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
 import { app } from "electron";
 import type { AppWindow } from "../windows/app-window.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { windowManager } from "../windows/manager.ts";
 
 function focusRendererTarget(win: AppWindow): void {
   if (win.isMinimized()) {

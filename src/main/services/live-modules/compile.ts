@@ -10,12 +10,10 @@ import {
   PIER_CANVAS_COMPONENT_EXPORT_NAMES,
   PIER_CANVAS_VALUE_EXPORT_NAMES,
 } from "@shared/pier-canvas-export-names.ts";
-// Type-only: erased at runtime. esbuild reads ESBUILD_BINARY_PATH once at
-// module load and caches it (node_modules/esbuild/lib/main.js), so a static
-// `import * as esbuild` would capture the env before we can set it. The value
-// is loaded lazily below, AFTER ensureEsbuildBinaryPath() runs.
+// Type-only: erased at runtime. Packaged mode synchronously loads esbuild under
+// a narrowly scoped ESBUILD_BINARY_PATH in esbuild-binary.ts.
 import type * as esbuild from "esbuild";
-import { ensureEsbuildBinaryPath } from "./esbuild-binary.ts";
+import { loadEsbuildModule } from "./esbuild-binary.ts";
 import {
   assertNotNodeModulesPath,
   assertPathInsideRoot,
@@ -33,6 +31,7 @@ import {
   toProjectRelative,
   tryResolveFile,
 } from "./resolve.ts";
+import { registerVisualizationsStub } from "./visualizations-stub.ts";
 
 export const LIVE_MODULE_COMPILE_TIMEOUT_MS = 15_000;
 export const LIVE_MODULE_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
@@ -177,12 +176,7 @@ function diagnosticFromError(
 export async function compileLiveModule(
   input: CompileLiveModuleInput
 ): Promise<CompileLiveModuleResult> {
-  // esbuild caches process.env.ESBUILD_BINARY_PATH into a module-level variable
-  // the first time its module loads. Loading esbuild lazily here (after setting
-  // the env) is what makes the packaged fix work — a static top-level import
-  // would have already captured `undefined` at app startup.
-  ensureEsbuildBinaryPath();
-  const esbuild = await import("esbuild");
+  const esbuild = await loadEsbuildModule();
   const graph = new Set<string>();
   const fenceRoot = input.projectRoot ?? input.contentRoot;
   const entryDir = dirname(input.entryAbsolutePath);
@@ -190,6 +184,8 @@ export async function compileLiveModule(
   const resolvePlugin: esbuild.Plugin = {
     name: "pier-live-modules",
     setup(build) {
+      registerVisualizationsStub(build);
+
       if (input.framework === "react") {
         build.onResolve({ filter: /^pier\/canvas$/ }, () => ({
           namespace: PIER_CANVAS_STUB_NAMESPACE,

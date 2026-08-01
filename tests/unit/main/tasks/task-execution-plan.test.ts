@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createTaskService } from "@main/services/tasks/task-service.ts";
+import { createTaskService } from "@main/services/tasks/service.ts";
 import { TASK_EXIT_TITLE_PREFIX } from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,7 +11,7 @@ const ENV_TARGET_VAR = `${TASK_VAR_PREFIX}{env:PIER_TARGET}`;
 const WORKSPACE_FOLDER_VAR = `${TASK_VAR_PREFIX}{workspaceFolder}`;
 const WORKSPACE_FOLDER_BASENAME_VAR = `${TASK_VAR_PREFIX}{workspaceFolderBasename}`;
 const DAY_MS = 86_400_000;
-const SHELL_LAUNCH_PREFIX_RE = /^\/bin\/sh -lc /;
+const SHELL_LAUNCH_PREFIX_RE = /^\/bin\/sh -c /;
 
 describe("task execution planning", () => {
   let projectRoot = "";

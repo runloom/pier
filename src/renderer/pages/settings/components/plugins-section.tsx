@@ -6,7 +6,7 @@ import { useT } from "@/i18n/use-t.ts";
 import {
   getRendererPluginRuntimeDiagnostics,
   subscribeRendererPluginRuntimeDiagnostics,
-} from "@/lib/plugins/plugin-runtime-diagnostics.ts";
+} from "@/lib/plugins/runtime-diagnostics.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { ManagedPluginsSection } from "./managed-plugins-section.tsx";
 import { buildPluginStatusItems } from "./plugin-status-items.ts";

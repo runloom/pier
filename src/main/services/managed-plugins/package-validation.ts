@@ -14,7 +14,7 @@ import { createGunzip } from "node:zlib";
 import {
   type ManagedPluginPackageManifest,
   managedPluginPackageManifestSchema,
-} from "@shared/contracts/managed-plugin.ts";
+} from "@shared/contracts/plugin/managed.ts";
 import { parse as parseImports } from "es-module-lexer";
 import * as tar from "tar-stream";
 import { isPierRangeCompatible } from "./version.ts";

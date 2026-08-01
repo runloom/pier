@@ -2,7 +2,7 @@ import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import type { IpcMain } from "electron";
 import { broadcastUsageDataChanged } from "../app-core/window-broadcasts.ts";
-import type { UsageDataService } from "../services/usage-data/usage-data-service.ts";
+import type { UsageDataService } from "../services/usage-data/service.ts";
 
 const log = createLogger("usage-data.ipc");
 

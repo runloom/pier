@@ -7,7 +7,10 @@ const RENDERER_BOOT_TIMEOUT_MS = 15_000;
 
 export interface RendererShowGate {
   cancel(): void;
+  hasShown(): boolean;
   holdUntilReleased(reason: string): void;
+  /** Re-arm boot handshake without navigating (caller loads the app entry). */
+  rearmBoot(): void;
   releaseHold(reason: string): void;
   retry(): void;
   setReadyTimeoutHandler(handler: () => void): void;
@@ -125,12 +128,20 @@ export function createRendererShowGate(input: {
   // dom-ready 事件。每次重试重新 arm，旧 challenge 无法通过新一轮校验。
   arm();
   startBootDeadline();
+  const rearmBoot = () => {
+    cancel();
+    arm();
+    startBootDeadline();
+  };
+
   return {
     cancel,
+    hasShown: () => didShow,
     holdUntilReleased: (reason) => {
       holds.add(reason);
       trace("hold", { reason, holds: [...holds] });
     },
+    rearmBoot,
     releaseHold: (reason) => {
       if (!holds.delete(reason)) {
         return;
@@ -142,9 +153,7 @@ export function createRendererShowGate(input: {
     },
     retry: () => {
       if (!didShow) {
-        cancel();
-        arm();
-        startBootDeadline();
+        rearmBoot();
       }
       window.webContents.reload();
     },

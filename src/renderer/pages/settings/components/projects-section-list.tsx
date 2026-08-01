@@ -106,6 +106,11 @@ export function ProjectsSectionList({
               onClick={() => {
                 onOpenProject(project.projectRootPath);
               }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                onOpenProject(project.projectRootPath);
+              }}
               role="button"
               tabIndex={0}
               variant="outline"

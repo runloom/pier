@@ -11,7 +11,7 @@ import {
   markdownOutlineHoverWidthPx,
   markdownTocTickWidthPx,
   readMarkdownContentWidthPx,
-} from "@plugins/builtin/files/renderer/markdown-preview-toc-layout.ts";
+} from "@plugins/builtin/files/renderer/markdown/preview-toc-layout.ts";
 import { describe, expect, it } from "vitest";
 
 describe("markdownTocTickWidthPx", () => {

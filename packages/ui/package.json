@@ -11,14 +11,21 @@
     "./collection-auto-layout": "./src/collection-auto-layout.ts",
     "./collection-auto-layout.ts": "./src/collection-auto-layout.ts",
     "./dialog-form-layout": "./src/dialog-form-layout.ts",
-    "./dialog-form-layout.ts": "./src/dialog-form-layout.ts"
+    "./dialog-form-layout.ts": "./src/dialog-form-layout.ts",
+    "./diff-view/*": "./src/diff-view/*",
+    "./file/*": "./src/file/*",
+    "./image-preview/*": "./src/image-preview/*",
+    "./diff-view": "./src/diff-view/index.tsx",
+    "./diff-view.tsx": "./src/diff-view/index.tsx"
   },
   "dependencies": {
     "@pierre/diffs": "1.2.12",
     "@pierre/trees": "1.0.0-beta.5",
+    "@xyflow/react": "12.11.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "2.1.1",
     "cmdk": "^1.1.1",
+    "elkjs": "0.12.0",
     "embla-carousel-react": "^8.6.0",
     "input-otp": "^1.4.2",
     "lucide-react": "1.24.0",

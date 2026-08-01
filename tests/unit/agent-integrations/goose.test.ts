@@ -1,7 +1,13 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/hooks-install.ts";
 import {
   buildGoosePluginManifest,
   GOOSE_PLUGIN_MARKER_TEXT,
@@ -15,6 +21,9 @@ import {
   withoutPierGooseHooks,
   withPierGooseHooks,
 } from "../../../src/main/services/agents/integrations/goose.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 const NATIVE_EVENTS = [
@@ -58,7 +67,98 @@ describe("withPierGooseHooks / withoutPierGooseHooks", () => {
     expect(preToolCommand).toContain('"ToolStart"');
     const stopCommand = hooks.Stop?.[0]?.hooks[0]?.command ?? "";
     expect(stopCommand).toContain('"Stop"');
+    for (const event of NATIVE_EVENTS) {
+      expect(hooks[event]?.[0]?.hooks[0]?.command).toContain('"agentEventV3"');
+    }
   });
+
+  it("真实 HookContext 无工具 ID，失败只作匿名 ToolComplete，Stop 保持 advisory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-goose-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const hooks = withPierGooseHooks({}).hooks as Record<
+      string,
+      Array<{ hooks: Array<{ command: string }> }>
+    >;
+    for (const [event, payload] of [
+      ["SessionStart", { event: "SessionStart", session_id: "session-g" }],
+      [
+        "UserPromptSubmit",
+        {
+          event: "UserPromptSubmit",
+          message: "Fix it",
+          session_id: "session-g",
+        },
+      ],
+      [
+        "PreToolUse",
+        {
+          event: "PreToolUse",
+          session_id: "session-g",
+          tool_input: { command: "false" },
+          tool_name: "developer",
+        },
+      ],
+      [
+        "PostToolUseFailure",
+        {
+          event: "PostToolUseFailure",
+          session_id: "session-g",
+          tool_name: "developer",
+          tool_output: "exit 1",
+        },
+      ],
+      ["Stop", { event: "Stop", session_id: "session-g" }],
+    ] as const) {
+      const result = spawnSync(
+        "/bin/sh",
+        ["-c", hooks[event]?.[0]?.hooks[0]?.command ?? ""],
+        {
+          env: {
+            ...process.env,
+            PATH: pathForHookSpawn(process.env.PATH),
+            PIER_AGENT_EVENT_LOG: logPath,
+            PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+            PIER_PANEL_ID: "panel-1",
+            PIER_WINDOW_ID: "window-1",
+          },
+          input: JSON.stringify(payload),
+        }
+      );
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows[2]).toMatchObject({
+      event: "ToolStart",
+      toolName: "developer",
+      v: 3,
+    });
+    expect(rows[2]).not.toHaveProperty("toolUseId");
+    expect(rows[3]).toMatchObject({
+      event: "ToolComplete",
+      nativeEvent: "PostToolUseFailure",
+      v: 3,
+    });
+    expect(rows[3]).not.toHaveProperty("toolUseId");
+    expect(
+      rows.some((row) => row.kind === "agentEvent" && row.event === "error")
+    ).toBe(false);
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: string[] = [];
+    for (const row of rows) {
+      if (row.kind !== "agentEvent") continue;
+      aggregator.ingestAgentEvent(row, { stopAuthority: "advisory" });
+      const activity = aggregator.snapshot().activities[0];
+      if (activity?.kind === "agent" && activity.status)
+        statuses.push(activity.status);
+    }
+    expect(statuses).toEqual(["processing", "tool", "processing"]);
+  }, 15_000);
 
   it("幂等：重复安装事件条目不重复", () => {
     const once = withPierGooseHooks({});
@@ -288,6 +388,56 @@ describe("install/uninstallGooseHooks (文件 IO)", () => {
     warnSpy.mockRestore();
   });
 
+  it("磁盘更高世代 manifest 时不降级 hooks.json", async () => {
+    const mod = await withDetectTrue();
+    const { pierManagedPluginMarker, PIER_MANAGED_PLUGIN_GENERATION } =
+      await import(
+        "../../../src/main/services/agents/integrations/managed-plugin-file.ts"
+      );
+    const dir = await mkdtemp(join(tmpdir(), "pier-goose-io-test-"));
+    const pluginDir = join(dir, "plugins", "pier");
+    const settingsPath = join(dir, "settings.json");
+    const hooksDir = join(pluginDir, "hooks");
+    await mkdir(hooksDir, { recursive: true });
+    const high = PIER_MANAGED_PLUGIN_GENERATION + 2;
+    const highManifest = `${JSON.stringify(
+      {
+        description: `Pier hooks (${pierManagedPluginMarker(high)})`,
+        name: "pier",
+        version: "9.9.9",
+      },
+      null,
+      2
+    )}\n`;
+    await writeFile(join(pluginDir, "plugin.json"), highManifest, "utf8");
+    const highHooks = `${JSON.stringify(
+      {
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: `_pier_hook_gen=pier-hook-gen=${high}; echo high-gen; [ -x "\${PIER_AGENT_HOOKS_DIR}/emit" ] && true || true`,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      null,
+      2
+    )}\n`;
+    await writeFile(join(hooksDir, "hooks.json"), highHooks, "utf8");
+    await mod.installGooseHooks(pluginDir, settingsPath);
+    expect(await readFile(join(pluginDir, "plugin.json"), "utf8")).toBe(
+      highManifest
+    );
+    expect(await readFile(join(hooksDir, "hooks.json"), "utf8")).toBe(
+      highHooks
+    );
+  });
+
   it("卸载非托管插件目录不删除, 发出告警", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-goose-io-test-"));
     const pluginDir = join(dir, "plugins", "pier");
@@ -347,8 +497,7 @@ describe("旧 config.yaml 遗留清理", () => {
 });
 
 describe("gooseIntegration 契约", () => {
-  it("capability 为 full, id 为 goose", () => {
-    expect(gooseIntegration.capability).toBe("full");
+  it("id 为 goose", () => {
     expect(gooseIntegration.id).toBe("goose");
   });
 });

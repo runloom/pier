@@ -111,5 +111,13 @@
         public func cursorVisibleProbe() -> Bool? {
             surface?.cursorVisible()
         }
+
+        /// Feed UTF-8 into the **display** VT parser only (not the PTY).
+        /// Used for host-localized exit / startup-failure messages after
+        /// Ghostty suppresses its hardcoded English `printString` paths.
+        public func injectDisplayText(_ text: String) {
+            guard !text.isEmpty else { return }
+            surface?.writeOutput(Data(text.utf8))
+        }
     }
 #endif

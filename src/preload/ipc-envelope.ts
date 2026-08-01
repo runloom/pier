@@ -33,7 +33,15 @@ export async function invokePierCommand<T>(command: PierCommand): Promise<T> {
  * IPC 广播订阅助手。renderer 侧只关心 payload，callback 不看 event 元数据；
  * 统一封装避免每个 API 文件重复 `on(channel, (_e, p) => cb(p))` + `off` 解绑
  * 样板。返回 disposer.
+ *
+ * 偏好镜像等通道会有十余个 store 各挂一次监听（设计如此，非泄漏）。
+ * EventEmitter 默认 maxListeners=10，抬高以免 MaxListenersExceededWarning 误报。
  */
+const PRELOAD_IPC_MAX_LISTENERS = 32;
+if (ipcRenderer.getMaxListeners() < PRELOAD_IPC_MAX_LISTENERS) {
+  ipcRenderer.setMaxListeners(PRELOAD_IPC_MAX_LISTENERS);
+}
+
 export function subscribeIpc<P>(
   channel: string,
   cb: (payload: P) => void

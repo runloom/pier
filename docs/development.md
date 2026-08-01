@@ -66,16 +66,56 @@ pnpm typecheck           # 宿主 + packages
 pnpm lint / pnpm lint:fix
 pnpm depcruise           # 架构边界
 pnpm check:file-size
-pnpm check:static        # typecheck + lint + depcruise + file-size
+pnpm check:dir-density   # 单目录直接源码文件数（配置 .pier/dir-density.json）
+pnpm check:static        # typecheck + lint + depcruise + file-size + dir-density
 pnpm check               # static + unit + component + integration
 pnpm test:unit
 pnpm test:component
 pnpm test:integration
+pnpm test:coverage       # 与 CI coverage job 同形（含阈值门槛）
 pnpm test:e2e
 pnpm build               # electron-vite → out/
 pnpm build:dist          # 双架构 dmg/zip（签名 / 公证）
 pnpm build:icons         # 改 build/app-icon-*.svg 后重建 icon
 ```
+
+## Quality Gate：正确性优先，CI 做确认与加速
+
+两条硬原则：
+
+1. **先本地保证正确，再 push**，目标 **CI 一次绿**。不要用远程 job 当调试器。
+2. **CI 只跑必要的活，并尽量跑快**：path filter 去掉不会挂的重 job；coverage 文件并行 + CI 轻量报告。
+
+### 本地 preflight（正确性）
+
+| 档位 | 命令 | 内容 | 何时用 |
+|------|------|------|--------|
+| **push（默认 pre-push）** | `pnpm preflight:push` | static + unit + component + plugin-index | 每次 push，挡住绝大多数远程红 |
+| merge | `pnpm preflight:merge` | + integration + build | 合 main 前更稳 |
+| ci | `pnpm preflight:ci` | static + coverage（含棘轮）+ build | 对齐 Ubuntu static/coverage/build；发版前 |
+| full | `pnpm preflight:full` | ci + native | mac 上再对齐 native |
+
+```bash
+# 默认 git push 已跑 preflight:push
+git push
+
+# 发版 / 怀疑覆盖率棘轮：
+pnpm preflight:ci
+# 或
+PIER_PREFLIGHT=ci git push
+```
+
+### CI 与本机对应
+
+| CI job | 本机 | 何时跑（远程） |
+|--------|------|----------------|
+| static | `check:static` | 总是 |
+| coverage | `test:coverage` | 应用源码/单元测试等路径变更 |
+| build | `build` | 同上 |
+| native | mac native + 相关 e2e | native / 终端 / 相关 e2e 路径变更 |
+| windows-lsp | （本机通常不跑） | Windows LSP 相关路径变更 |
+
+远程加速：**path filter** 跳过无关 OS job；coverage **文件并行**；CI **轻量 reporter**；同 ref **cancel-in-progress**（新 push 取消旧 run）。
 
 插件相关：
 

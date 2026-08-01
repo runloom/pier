@@ -109,7 +109,7 @@ export async function initPluginSettingsStore(): Promise<() => void>;
 export interface PluginConfigurationApi { get<T>(key: string): T; set(key: string, value: JsonValue): Promise<void>; reset(key: string): Promise<void>; onDidChange(listener: (e: PluginConfigurationChangeEvent) => void): () => void; }
 // MainPluginContext / RendererPluginContext 均增 configuration: PluginConfigurationApi
 
-// src/main/plugins/plugin-context.ts
+// src/main/plugins/context.ts
 export function createMainPluginContext(opts: { entries: readonly PluginRegistryEntry[]; entry: PluginRegistryEntry; settings: PluginSettingsService }): MainPluginContext;
 // MainPluginRuntime 构造函数增 contextFactory: (entry, entries) => MainPluginContext；
 // createMainPluginHostApi 增 settings: PluginSettingsService，refresh() 先 await settings.init()
@@ -1739,7 +1739,7 @@ await initPluginSettingsStore();
 
 - Create: `src/plugins/api/configuration.ts`
 - Modify: `src/plugins/api/main.ts`（现 1–11 行：删 brand，`MainPluginContext` 增 `configuration`）
-- Create: `src/main/plugins/plugin-context.ts`
+- Create: `src/main/plugins/context.ts`
 - Modify: `src/main/plugins/runtime.ts`（现 11–13 行无参 `createMainPluginContext` 删除；构造函数增必选 `contextFactory`；`refresh`（现 32–58 行）改为 per-entry 创建 context）
 - Modify: `src/main/plugins/host-api.ts`（现 15–42 行：`createMainPluginHostApi` 增 `settings` 参数，默认 runtime 用 context factory 构造；`refresh` 先 `await settings.init()`）
 - Modify: `src/main/app-core/app-core.ts`（Task 5 改过的 pluginHost 创建行传入 `settings: pluginSettings`）
@@ -1807,7 +1807,7 @@ vi.mock("electron", () => ({
   app: { getPath: vi.fn(() => "/unused-in-this-test") },
 }));
 
-import { createMainPluginContext } from "@main/plugins/plugin-context.ts";
+import { createMainPluginContext } from "@main/plugins/context.ts";
 import type { PluginService } from "@main/services/plugin-service.ts";
 import { createPluginSettingsService } from "@main/services/plugin-settings-service.ts";
 import { createPluginSettingsStore } from "@main/state/plugin-settings.ts";
@@ -1922,8 +1922,8 @@ describe("createMainPluginContext(entry).configuration", () => {
 });
 ```
 
-- [ ] `pnpm vitest run tests/unit/main/plugin-context.test.ts`，预期失败：`Cannot find module '@main/plugins/plugin-context.ts'`。
-- [ ] 新建 `src/main/plugins/plugin-context.ts`：
+- [ ] `pnpm vitest run tests/unit/main/plugin-context.test.ts`，预期失败：`Cannot find module '@main/plugins/context.ts'`。
+- [ ] 新建 `src/main/plugins/context.ts`：
 
 ```ts
 import type { MainPluginContext } from "@plugins/api/main.ts";
@@ -2063,7 +2063,7 @@ export class MainPluginRuntime {
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { PluginService } from "../services/plugin-service.ts";
 import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
-import { createMainPluginContext } from "./plugin-context.ts";
+import { createMainPluginContext } from "./context.ts";
 import { MainPluginRuntime } from "./runtime.ts";
 
 export interface MainPluginRuntimeController {
@@ -2164,8 +2164,8 @@ it("为每个启用插件按 entry 创建独立 context", () => {
 ```
 
 - [ ] `pnpm vitest run tests/unit/main/plugin-context.test.ts tests/unit/main/plugin-runtime.test.ts` 全绿；`pnpm test:unit` 无回归（`src/plugins/builtin/git/main/index.ts` 的 `activate: () => () => undefined` 不读 context，无需改）。
-- [ ] `pnpm check` 全绿（depcruise：`src/plugins/api/configuration.ts` 只 import `@shared`，合规；`src/main/plugins/plugin-context.ts` 属 main，import `@plugins/api` 与 `@shared`，合规）。
-- [ ] Commit：`git add src/plugins/api/configuration.ts src/plugins/api/main.ts src/main/plugins/plugin-context.ts src/main/plugins/runtime.ts src/main/plugins/host-api.ts src/main/app-core/app-core.ts tests/unit/main/plugin-context.test.ts tests/unit/main/plugin-runtime.test.ts` → diff → `feat(plugin): per-plugin main context with configuration api and settings init gate` → 等确认。
+- [ ] `pnpm check` 全绿（depcruise：`src/plugins/api/configuration.ts` 只 import `@shared`，合规；`src/main/plugins/context.ts` 属 main，import `@plugins/api` 与 `@shared`，合规）。
+- [ ] Commit：`git add src/plugins/api/configuration.ts src/plugins/api/main.ts src/main/plugins/context.ts src/main/plugins/runtime.ts src/main/plugins/host-api.ts src/main/app-core/app-core.ts tests/unit/main/plugin-context.test.ts tests/unit/main/plugin-runtime.test.ts` → diff → `feat(plugin): per-plugin main context with configuration api and settings init gate` → 等确认。
 
 ---
 
@@ -3582,7 +3582,7 @@ export function PluginSettingsContribution({
 - Modify: `src/plugins/builtin/git/manifest.ts`（现 87–99 行之间：`commands` 数组结束后、`description` 前按字母序加 `configuration` 块）
 - Modify: `src/plugins/builtin/git/locales/en.json`（顶层加 `settings` 段）
 - Modify: `src/plugins/builtin/git/locales/zh-CN.json`（顶层加 `settings` 段）
-- Modify: `src/plugins/builtin/git/renderer/git-status-item.tsx`（新增 `useShowDirtyIndicator` hook；`StatusBody`（现 150–220 行）的 working-tree 计数块（现 198–211 行）受设置门控并包 `data-testid="git-dirty-indicator"`；`WorktreeStatusItem`（现 222–281 行）取值下传）
+- Modify: `src/plugins/builtin/git/renderer/status-item.tsx`（新增 `useShowDirtyIndicator` hook；`StatusBody`（现 150–220 行）的 working-tree 计数块（现 198–211 行）受设置门控并包 `data-testid="git-dirty-indicator"`；`WorktreeStatusItem`（现 222–281 行）取值下传）
 - Test: `tests/unit/renderer/git-status-item-config.test.tsx`（新建）
 - Test: `tests/e2e/plugin-settings.spec.ts`（新建）
 
@@ -3640,7 +3640,7 @@ import type {
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { registerGitStatusItem } from "@plugins/builtin/git/renderer/git-status-item.tsx";
+import { registerGitStatusItem } from "@plugins/builtin/git/renderer/status-item.tsx";
 
 const DIRTY_STATUS = {
   branch: { ahead: 0, behind: 0, branch: "main", upstream: null },
@@ -3742,7 +3742,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
 ```
 
 - [ ] `pnpm vitest run tests/unit/renderer/git-status-item-config.test.tsx`，预期失败：`Unable to find an element by: [data-testid="git-dirty-indicator"]`。
-- [ ] `src/plugins/builtin/git/renderer/git-status-item.tsx`：
+- [ ] `src/plugins/builtin/git/renderer/status-item.tsx`：
   - 常量区（现 95–96 行阈值旁）加设置 key 常量：
 
 ```ts
@@ -3882,7 +3882,7 @@ test.describe("Plugin settings e2e", () => {
 
 - [ ] `pnpm build`（e2e 跑 `out/main/index.js`，需先构建）→ `pnpm test:e2e tests/e2e/plugin-settings.spec.ts` 通过。
 - [ ] `pnpm test:unit` + `pnpm check` 全绿。
-- [ ] Commit：`git add src/plugins/builtin/git/manifest.ts src/plugins/builtin/git/locales/en.json src/plugins/builtin/git/locales/zh-CN.json src/plugins/builtin/git/renderer/git-status-item.tsx tests/unit/renderer/git-status-item-config.test.tsx tests/e2e/plugin-settings.spec.ts` → diff → `feat(git): pilot showDirtyIndicator setting consumed via plugin configuration api` → 等确认。
+- [ ] Commit：`git add src/plugins/builtin/git/manifest.ts src/plugins/builtin/git/locales/en.json src/plugins/builtin/git/locales/zh-CN.json src/plugins/builtin/git/renderer/status-item.tsx tests/unit/renderer/git-status-item-config.test.tsx tests/e2e/plugin-settings.spec.ts` → diff → `feat(git): pilot showDirtyIndicator setting consumed via plugin configuration api` → 等确认。
 
 ---
 

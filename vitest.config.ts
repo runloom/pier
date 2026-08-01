@@ -19,6 +19,10 @@ export default defineConfig({
         import.meta.dirname,
         "tests/support/pier-canvas.ts"
       ),
+      "pier/visualizations": resolve(
+        import.meta.dirname,
+        "tests/support/pier-visualizations.ts"
+      ),
     },
   },
   test: {
@@ -28,9 +32,16 @@ export default defineConfig({
     setupFiles: ["./tests/setup/jsdom-setup.ts"],
     include: ["tests/{unit,component,integration}/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["tests/e2e/**", "node_modules/**"],
+    // Parallel test files = main coverage wall-clock win. Isolation for flaky
+    // suites is per-file / `test:integration --no-file-parallelism`, not global serial.
+    fileParallelism: true,
+    pool: "forks",
     coverage: {
       provider: "v8",
-      reporter: ["text", "html", "json"],
+      // CI: less report IO. Local: html/json for browsing.
+      reporter: process.env.CI
+        ? (["text-summary", "json-summary"] as const)
+        : (["text", "html", "json"] as const),
       include: [
         "src/**/*.{ts,tsx}",
         "packages/{plugin-api,plugin-claude,plugin-codex,plugin-grok,ui}/src/**/*.{ts,tsx}",
@@ -58,7 +69,7 @@ export default defineConfig({
             lines: 25,
             statements: 25,
           },
-        "src/main/plugins/{external-main-runtime,plugin-activation-ipc,plugin-rpc-bus,plugin-rpc-ipc,plugin-secrets}.ts":
+        "src/main/plugins/{external-main-runtime,activation-ipc,rpc-bus,rpc-ipc,secrets}.ts":
           {
             branches: 50,
             functions: 60,

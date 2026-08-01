@@ -1,14 +1,37 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  isPierManagedPluginContent,
+  pierManagedPluginMarker,
+  writeManagedPluginFile,
+} from "./managed-plugin-file.ts";
 import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
-import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
+import { commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "mimo-code";
+const MIMO_CODE_EMITTED_MAPPINGS = [
+  { nativeEvent: "session.created", pierEvent: "SessionStart" },
+  { nativeEvent: "session.deleted", pierEvent: "SessionEnd" },
+  { nativeEvent: "chat.message", pierEvent: "PromptSubmit" },
+  { nativeEvent: "session.pre", pierEvent: "running" },
+  { nativeEvent: "session.post=completed", pierEvent: "TurnCompleted" },
+  { nativeEvent: "session.post=cancelled", pierEvent: "TurnInterrupted" },
+  { nativeEvent: "session.post=error", pierEvent: "error" },
+  { nativeEvent: "permission.asked", pierEvent: "InteractionRequested" },
+  { nativeEvent: "permission.replied", pierEvent: "InteractionResolved" },
+  { nativeEvent: "question.asked", pierEvent: "InteractionRequested" },
+  { nativeEvent: "question.replied", pierEvent: "InteractionResolved" },
+  { nativeEvent: "question.rejected", pierEvent: "InteractionResolved" },
+  { nativeEvent: "tool.execute.before", pierEvent: "ToolStart" },
+  { nativeEvent: "tool.execute.after", pierEvent: "ToolComplete" },
+  { nativeEvent: "message.part.updated=completed", pierEvent: "ToolComplete" },
+  { nativeEvent: "message.part.updated=error", pierEvent: "ToolComplete" },
+] as const;
 
 /**
  * mimo-code 是 opencode 的 fork（复用
@@ -22,13 +45,20 @@ const AGENT_ID: AgentKind = "mimo-code";
 const PLUGIN_FILE = "mimo-code-agent-status.js";
 
 /** 托管标记：写在插件源码内, install 幂等比对 + uninstall 删除前必查。 */
-const PLUGIN_MARKER = "pier-agent-status:v1 (managed by Pier)";
+const PLUGIN_MARKER = pierManagedPluginMarker();
 
-/** mimo-code 配置目录：$MIMOCODE_HOME/config 优先, 否则 XDG ~/.config/mimocode。 */
-function mimoCodeConfigDir(): string {
+/** mimo-code 配置目录：绝对 $MIMOCODE_HOME/config 优先，其次 XDG 配置根。 */
+export function mimoCodeConfigDir(): string {
   const home = process.env.MIMOCODE_HOME;
   if (home && home.length > 0) {
+    if (!isAbsolute(home)) {
+      throw new Error("MIMOCODE_HOME must be an absolute path");
+    }
     return join(home, "config");
+  }
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+  if (xdgConfigHome && isAbsolute(xdgConfigHome)) {
+    return join(xdgConfigHome, "mimocode");
   }
   return join(homedir(), ".config", "mimocode");
 }
@@ -38,18 +68,21 @@ export function mimoCodePluginPath(): string {
 }
 
 /**
- * 插件源码：与 opencode 同一套事件表/emit 逻辑（mimo-code 是 opencode
- * 家族 fork, 仅 agent id 不同）。emit 用
+ * 插件源码：固定支持 MiMo Code v0.1.9（发布提交 c045a989，当前同版本
+ * main 提交 f91eb633）的插件格式：
+ * default `{id, server}`；同时保留命名 factory 供该版本的兼容加载器使用。
+ * emit 用
  * `process.getBuiltinModule("node:fs")` 同步 append（同 omp 先例：
  * 同步既保文件序——聚合器按 JSONL 文件序消费, 也保证宿主退出前
  * session.idle 落盘）；旧 Node 宿主退化为异步 best-effort。
  * env 三要素任一缺失即静默 no-op, fire-and-forget + 吞异常。
  *
- * permission 事件按 XiaomiMiMo/MiMo-Code main 分支 SDK 生成类型
- * (packages/sdk/js/src/gen/types.gen.ts) 使用 permission.updated /
- * permission.replied——与 opencode SDK 完全一致。**注意**：mimo 家族内
- * app 层还有 permission.asked 名字, 但 plugin API 收到的事件走 SDK 类型,
- * 名字是 permission.updated。
+ * permission 事件以固定提交
+ * `c045a9891069000b112079bb10bdc8828d75eb6e` 的内部总线为准：
+ * Permission.ask 发布 permission.asked（Request.id），Permission.reply 发布
+ * permission.replied（requestID / reply），plugin/index.ts 的 subscribeAll
+ * 将总线事件原样投给 hosted plugin。SDK 生成类型中的 permission.updated /
+ * permissionID / response 与该运行时链路存在漂移，不能作为插件载荷依据。
  */
 export function buildMimoCodePluginSource(): string {
   return `// ${PLUGIN_MARKER}
@@ -92,7 +125,7 @@ function pierToolIdFrom(event) {
 
 const pierParentSessionIds = new Map();
 
-function emitPierEvent(pierEvent, nativeEvent, rawEvent) {
+function emitPierEvent(pierEvent, nativeEvent, rawEvent, extra = {}) {
   const log = process.env.PIER_AGENT_EVENT_LOG;
   const panelId = process.env.PIER_PANEL_ID;
   const windowId = process.env.PIER_WINDOW_ID;
@@ -122,7 +155,7 @@ function emitPierEvent(pierEvent, nativeEvent, rawEvent) {
   const promptSnippet =
     pierEvent === "PromptSubmit" ? pierPromptSnippetFrom(rawEvent) : undefined;
   const line = JSON.stringify({
-    v: 2,
+    v: 3,
     kind: "agentEvent",
     ts: Date.now() * 1_000_000,
     panelId,
@@ -139,6 +172,7 @@ function emitPierEvent(pierEvent, nativeEvent, rawEvent) {
     ...(sessionId ? { sessionId } : {}),
     ...(toolUseId ? { toolUseId } : {}),
     ...(promptSnippet ? { promptSnippet } : {}),
+    ...extra,
   }) + "\\n";
   try {
     pierAppend(log, line);
@@ -150,28 +184,25 @@ function emitPierEvent(pierEvent, nativeEvent, rawEvent) {
   }
 }
 
-function mapPierEvent(event) {
-  if (!event || typeof event.type !== "string") return null;
-  if (event.type === "session.created") return "SessionStart";
-  if (event.type === "session.idle") return "Stop";
-  if (event.type === "session.error") return "error";
-  if (event.type === "session.deleted") return "SessionEnd";
-  if (event.type === "session.status") {
-    // 同 opencode（MiMo 是 opencode fork, SDK 事件同源）:
-    // busy/retry 推进心跳, idle 回合结束。
-    const statusType =
-      event.properties && event.properties.status && event.properties.status.type;
-    if (statusType === "busy" || statusType === "retry") return "running";
-    if (statusType === "idle") return "Stop";
-    return null;
-  }
-  if (event.type === "tui.command.execute") {
-    const command = event.properties && event.properties.command;
-    return command === "prompt.submit" ? "PromptSubmit" : null;
-  }
-  if (event.type === "permission.updated") return "PermissionRequest";
-  if (event.type === "permission.replied") return "processing";
-  return null;
+function pierInteraction(event, kind, outcome) {
+  const p = event.properties || {};
+  emitPierEvent(
+    outcome ? "InteractionResolved" : "InteractionRequested",
+    event.type,
+    event,
+    {
+      interactionId: p.id || p.requestID,
+      interactionKind: kind,
+      ...(outcome ? { interactionOutcome: outcome } : {}),
+    }
+  );
+}
+
+function pierPermissionOutcome(reply) {
+  if (reply === "once" || reply === "always")
+    return "accepted";
+  if (reply === "reject") return "rejected";
+  return "unknown";
 }
 
 export const PierAgentStatus = () => {
@@ -179,22 +210,65 @@ export const PierAgentStatus = () => {
   // 合成版在工厂按会话/子代理多次执行的宿主上会打穿主状态（omp 教训）。
   return {
     event: ({ event }) => {
-      const mapped = mapPierEvent(event);
-      if (mapped) emitPierEvent(mapped, event.type, event);
+      if (!event || typeof event.type !== "string") return;
+      const p = event.properties || {};
+      if (event.type === "session.created") {
+        if (!(p.info && p.info.parentID))
+          emitPierEvent("SessionStart", event.type, event);
+      } else if (event.type === "session.deleted") {
+        if (!(p.info && p.info.parentID))
+          emitPierEvent("SessionEnd", event.type, event);
+      } else if (event.type === "permission.asked")
+        pierInteraction(event, "permission");
+      else if (event.type === "permission.replied")
+        pierInteraction(event, "permission", pierPermissionOutcome(p.reply));
+      else if (event.type === "question.asked")
+        pierInteraction(event, "question");
+      else if (event.type === "question.replied")
+        pierInteraction(event, "question", "completed");
+      else if (event.type === "question.rejected")
+        pierInteraction(event, "question", "rejected");
+      else if (event.type === "message.part.updated") {
+        const part = p.part;
+        const state = part && part.type === "tool" && part.state && part.state.status;
+        if (state === "completed" || state === "error")
+          emitPierEvent("ToolComplete", "message.part.updated=" + state, event, {
+            toolUseId: part.callID,
+            toolName: part.tool,
+            nativeState: state,
+          });
+      }
     },
-    "tool.execute.before": (...args) => {
-      emitPierEvent("ToolStart", "tool.execute.before", args);
+    "chat.message": (input, output) => {
+      emitPierEvent("PromptSubmit", "chat.message", input, {
+        turnId: input.messageID || (output.message && output.message.id),
+        promptSnippet: pierPromptSnippetFrom({ content: output.parts }, output.message),
+      });
     },
-    "tool.execute.after": (...args) => {
-      emitPierEvent("ToolComplete", "tool.execute.after", args);
+    "session.pre": (input) => {
+      if (input.agentID === "main")
+        emitPierEvent("running", "session.pre", input);
+    },
+    "session.post": (input) => {
+      if (input.agentID !== "main") return;
+      if (input.outcome === "completed")
+        emitPierEvent("TurnCompleted", "session.post=completed", input, { nativeState: "completed" });
+      else if (input.outcome === "cancelled")
+        emitPierEvent("TurnInterrupted", "session.post=cancelled", input, { nativeState: "cancelled" });
+      else if (input.outcome === "error")
+        emitPierEvent("error", "session.post=error", input, { nativeState: "error" });
+    },
+    "tool.execute.before": (input) => {
+      emitPierEvent("ToolStart", "tool.execute.before", input, { toolUseId: input.callID, toolName: input.tool });
+    },
+    "tool.execute.after": (input) => {
+      emitPierEvent("ToolComplete", "tool.execute.after", input, { toolUseId: input.callID, toolName: input.tool });
     },
   };
 };
-`;
-}
 
-function isManagedPlugin(content: string): boolean {
-  return content.includes(PLUGIN_MARKER);
+export default { id: "pier-agent-status", server: PierAgentStatus };
+`;
 }
 
 async function readPluginFile(path: string): Promise<string | null> {
@@ -206,26 +280,17 @@ async function readPluginFile(path: string): Promise<string | null> {
 }
 
 /**
- * install：无 config 注册步骤——plugins/ 目录下任意文件自动加载（opencode
- * 家族机制）。非托管同名文件绝不覆盖；字节相同不落盘（幂等零写入）。
+ * install：无 config 注册步骤——plugins/ 目录下任意文件自动加载。
+ * 非托管/更高世代跳过；字节相同不落盘。
  */
 export async function installMimoCodeHooks(
   pluginPath: string = mimoCodePluginPath()
 ): Promise<void> {
-  const existing = await readPluginFile(pluginPath);
-  if (existing !== null && !isManagedPlugin(existing)) {
-    console.warn(
-      `[agent-hooks:${AGENT_ID}] unmanaged plugin file present, skip install:`,
-      pluginPath
-    );
-    return;
-  }
-  const source = buildMimoCodePluginSource();
-  if (existing === source) {
-    return;
-  }
-  await mkdir(dirname(pluginPath), { recursive: true });
-  await atomicWriteFile(pluginPath, source);
+  await writeManagedPluginFile({
+    path: pluginPath,
+    source: buildMimoCodePluginSource(),
+    label: AGENT_ID,
+  });
 }
 
 /**
@@ -239,7 +304,7 @@ export async function uninstallMimoCodeHooks(
   if (existing === null) {
     return;
   }
-  if (!isManagedPlugin(existing)) {
+  if (!isPierManagedPluginContent(existing)) {
     console.warn(
       `[agent-hooks:${AGENT_ID}] unmanaged plugin file present, skip uninstall:`,
       pluginPath
@@ -254,14 +319,16 @@ export async function uninstallMimoCodeHooks(
  * （XDG 目录或已有 home 均视为已装）。
  */
 function mimoCodeDetect(): boolean {
-  return existsSync(mimoCodeConfigDir()) || commandExistsOnPath("mimo-code");
+  return existsSync(mimoCodeConfigDir()) || commandExistsOnPath("mimo");
 }
 
 export const mimoCodeIntegration: AgentHookIntegration = {
-  capability: "full",
   detect: mimoCodeDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "authoritative" },
+  runtime: {
+    emittedMappings: MIMO_CODE_EMITTED_MAPPINGS,
+    stopAuthority: "authoritative",
+  },
   install: () => installMimoCodeHooks(),
   uninstall: () => uninstallMimoCodeHooks(),
 };

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  crushIntegration,
   installCrushHooks,
   uninstallCrushHooks,
   withoutPierCrushHooks,
@@ -19,28 +20,35 @@ interface CrushHookEntry {
 }
 
 describe("withPierCrushHooks", () => {
-  it("为 hooks.PreToolUse 写入一条 pier 命令条目（官方仅支持这一个事件）", () => {
+  it("PreToolUse 只有策略前置事实，安装不得生成五态 agentEvent", () => {
     const next = withPierCrushHooks({});
-    const hooks = next.hooks as Record<string, CrushHookEntry[]>;
+    const hooks = (next.hooks ?? {}) as Record<string, CrushHookEntry[]>;
     const preToolUse = hooks.PreToolUse ?? [];
-    expect(preToolUse).toHaveLength(1);
-    expect(preToolUse[0]?.command).toContain(MARK);
+    expect(preToolUse).toHaveLength(0);
+    expect(crushIntegration.runtime.emittedMappings).toEqual([]);
   });
 
-  it("schema 形状：PreToolUse 是对象数组，条目无 type 字段、无内层 hooks 包装", () => {
-    const next = withPierCrushHooks({});
+  it("安装路径仅清理历史 Pier 条目，保留用户扁平 PreToolUse 条目", () => {
+    const next = withPierCrushHooks({
+      hooks: {
+        PreToolUse: [
+          {
+            command: `pier-hook-gen=1; "\${${MARK}}/emit" legacy-pre-tool`,
+          },
+          { command: "echo user-defined", name: "user-hook" },
+        ],
+      },
+    });
     const hooks = next.hooks as Record<string, CrushHookEntry[]>;
     const preToolUse = hooks.PreToolUse ?? [];
-    const entry = preToolUse[0] as unknown as Record<string, unknown>;
-    expect(Array.isArray(preToolUse)).toBe(true);
-    expect(typeof entry.command).toBe("string");
-    expect("type" in entry).toBe(false);
-    expect("hooks" in entry).toBe(false);
+    expect(preToolUse).toEqual([
+      { command: "echo user-defined", name: "user-hook" },
+    ]);
   });
 
   it("不再装 tool_call_before/tool_call_after（官方文档不存在这两个事件名）", () => {
     const next = withPierCrushHooks({});
-    const hooks = next.hooks as Record<string, unknown>;
+    const hooks = (next.hooks ?? {}) as Record<string, unknown>;
     expect(hooks.tool_call_before).toBeUndefined();
     expect(hooks.tool_call_after).toBeUndefined();
   });
@@ -48,8 +56,8 @@ describe("withPierCrushHooks", () => {
   it("幂等：重复安装不产生重复条目", () => {
     const once = withPierCrushHooks({});
     const twice = withPierCrushHooks(once);
-    const hooks = twice.hooks as Record<string, CrushHookEntry[]>;
-    expect(hooks.PreToolUse).toHaveLength(1);
+    const hooks = (twice.hooks ?? {}) as Record<string, CrushHookEntry[]>;
+    expect(hooks.PreToolUse).toBeUndefined();
   });
 
   it("保留用户已有的其他 PreToolUse 条目与顶层配置", () => {
@@ -63,11 +71,11 @@ describe("withPierCrushHooks", () => {
     expect(next.model).toBe("crush-1");
     const hooks = next.hooks as Record<string, CrushHookEntry[]>;
     const preToolUse = hooks.PreToolUse ?? [];
-    expect(preToolUse).toHaveLength(2);
+    expect(preToolUse).toHaveLength(1);
     expect(preToolUse.some((e) => e.command === "echo user-defined")).toBe(
       true
     );
-    expect(preToolUse.some((e) => e.command.includes(MARK))).toBe(true);
+    expect(preToolUse.some((e) => e.command.includes(MARK))).toBe(false);
   });
 });
 
@@ -88,7 +96,7 @@ describe("withoutPierCrushHooks", () => {
 
   it("pier 条目移除后为空数组时删除 PreToolUse 键", () => {
     const cleaned = withoutPierCrushHooks(withPierCrushHooks({}));
-    const hooks = cleaned.hooks as Record<string, unknown>;
+    const hooks = (cleaned.hooks ?? {}) as Record<string, unknown>;
     expect(hooks.PreToolUse).toBeUndefined();
   });
 
@@ -99,16 +107,12 @@ describe("withoutPierCrushHooks", () => {
 });
 
 describe("install/uninstallCrushHooks (文件 IO)", () => {
-  it("往不存在的 crush.json 安装 hooks 并可卸载", async () => {
+  it("不存在配置时安装保持无副作用，不创建 PreToolUse 映射", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-crush-test-"));
     const path = join(dir, "crush.json");
     await installCrushHooks(path);
-    const installed = JSON.parse(await readFile(path, "utf8"));
-    expect(installed.hooks.PreToolUse[0].command).toContain(MARK);
-    expect(installed.options?.tui?.transparent).toBeUndefined();
+    await expect(readFile(path, "utf8")).rejects.toThrow();
     await uninstallCrushHooks(path);
-    const cleaned = JSON.parse(await readFile(path, "utf8"));
-    expect(cleaned.hooks?.PreToolUse ?? []).toEqual([]);
   });
 
   it("已损坏的 crush.json 不被覆盖（安装静默放弃）", async () => {
@@ -131,9 +135,18 @@ describe("无变化不落盘", () => {
     expect(await readFile(path, "utf8")).toBe(original);
   });
 
-  it("重复安装第二次不改变文件内容", async () => {
+  it("重复安装只清理历史映射且第二次不改变文件内容", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-crush-test-"));
     const path = join(dir, "crush.json");
+    await writeFile(
+      path,
+      JSON.stringify({
+        hooks: {
+          PreToolUse: [{ command: `echo \${${MARK}}; old-pier` }],
+        },
+      }),
+      "utf8"
+    );
     await installCrushHooks(path);
     const afterFirst = await readFile(path, "utf8");
     await installCrushHooks(path);

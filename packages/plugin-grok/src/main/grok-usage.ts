@@ -33,6 +33,8 @@ import {
   abortedResult,
   accessDeniedResult,
   authFailureResult,
+  hasQuotaMetric,
+  mergeScalarMetrics,
   SESSION_EXPIRED_RELOGIN_ERROR,
   timedOutResult,
   transientFailureResult,
@@ -67,6 +69,7 @@ export const GROK_BILLING_CREDITS_URL =
   "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
 export const API_KEY_QUOTA_ERROR =
   "API key accounts cannot report Grok quota — switch to an OIDC account";
+
 function userIdFromEntry(entry: OidcAuthEntry | undefined): string | null {
   const id = entry?.user_id;
   return typeof id === "string" && id.length > 0 ? id : null;
@@ -99,7 +102,7 @@ export async function fetchGrokUsage(options: {
     return {
       status: "error",
       error: API_KEY_QUOTA_ERROR,
-      windows: [],
+      metrics: [],
     };
   }
   if (options.signal.aborted) {
@@ -142,7 +145,7 @@ export async function fetchGrokUsage(options: {
     result.subscription === undefined &&
     latestSessionKey &&
     !options.signal.aborted &&
-    !(result.status === "ok" && result.windows.length > 0)
+    !hasQuotaMetric(result)
   ) {
     return await withSoftSubscription(result, {
       caller: options.signal,
@@ -281,7 +284,7 @@ async function fetchGrokUsageAttempt(options: {
           return {
             status: "error",
             error: classification.detail,
-            windows: [],
+            metrics: [],
           };
         }
         let json: unknown;
@@ -291,7 +294,7 @@ async function fetchGrokUsageAttempt(options: {
           return {
             status: "error",
             error: "Invalid Grok billing response",
-            windows: [],
+            metrics: [],
           };
         }
         return parseGrokBillingResult(json);
@@ -303,13 +306,13 @@ async function fetchGrokUsageAttempt(options: {
           return {
             status: "error",
             error: BILLING_TIMEOUT_ERROR,
-            windows: [],
+            metrics: [],
           };
         }
         return {
           status: "error",
           error: error instanceof Error ? error.message : String(error),
-          windows: [],
+          metrics: [],
         };
       }
     }
@@ -393,7 +396,7 @@ async function fetchGrokUsageAttempt(options: {
     // only — it reports monthly USD spend and can look "healthy" while weekly
     // credits are exhausted. Retry credits once on transport/timeout before cash.
     let credits = await requestWithOptionalRefresh(GROK_BILLING_CREDITS_URL);
-    if (credits.status === "ok" && credits.windows.length > 0) {
+    if (hasQuotaMetric(credits)) {
       // Membership hop is independent of the billing overall deadline —
       // otherwise a slow credits path can abort the subscription request
       // and leave the UI stuck on bare "OIDC".
@@ -428,7 +431,7 @@ async function fetchGrokUsageAttempt(options: {
       const creditsRetry = await requestWithOptionalRefresh(
         GROK_BILLING_CREDITS_URL
       );
-      if (creditsRetry.status === "ok" && creditsRetry.windows.length > 0) {
+      if (hasQuotaMetric(creditsRetry)) {
         return await withSoftSubscription(creditsRetry, {
           caller,
           fetchImpl,
@@ -451,8 +454,8 @@ async function fetchGrokUsageAttempt(options: {
       return credits.status === "error" ? credits : timedOutResult();
     }
     const fallback = await requestWithOptionalRefresh(GROK_BILLING_URL);
-    if (fallback.status === "ok" && fallback.windows.length > 0) {
-      return await withSoftSubscription(fallback, {
+    if (hasQuotaMetric(fallback)) {
+      return await withSoftSubscription(mergeScalarMetrics(fallback, credits), {
         caller,
         fetchImpl,
         overall: null,
@@ -475,7 +478,7 @@ async function fetchGrokUsageAttempt(options: {
     return {
       status: "error",
       error: message || "Grok billing request failed",
-      windows: [],
+      metrics: [],
     };
   }
 }

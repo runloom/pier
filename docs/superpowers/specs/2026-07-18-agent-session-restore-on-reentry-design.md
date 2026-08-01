@@ -106,11 +106,11 @@ exited → 终态卡 + 重新启动
 
 ## 8. 锚点
 
-- 全表 adapter：`agent-resume-adapters.ts`（`#65`）  
+- 全表 adapter：`resume-adapters.ts`（`#65`）  
 - create：`terminal-create-handler.ts` / `terminal-create-launch.ts`  
 - sessionId：`foreground-activity.ts`；omp/pi：`integrations/omp.ts` / `pi.ts`  
 - 误标：`terminal-task-lifecycle-wiring.ts`  
-- 关窗：`window-manager.ts` / `window-service.ts`  
+- 关窗：`manager.ts` / `window-service.ts`  
 - UI：`terminal-restored-result-view.tsx`  
 
 ## 9. 验收句

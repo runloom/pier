@@ -20,7 +20,7 @@
 
 **新建**
 
-- `src/renderer/panel-kits/git-changes/git-changes-panel.tsx` — git 变更面板组件（第一期空占位）+ `gitChangesPanelKit` 元数据。
+- `src/renderer/panel-kits/git-changes/changes-panel.tsx` — git 变更面板组件（第一期空占位）+ `gitChangesPanelKit` 元数据。
 - `src/renderer/panel-kits/git-changes/register-actions.ts` — 核心侧「打开变更面板」命令贡献与注册函数。
 - `tests/component/git-changes-panel.test.tsx` — 面板占位渲染测试。
 - `tests/unit/renderer/git-changes-actions.test.ts` — 命令贡献元数据测试。
@@ -39,7 +39,7 @@
 **改名（Task 3）**
 
 - `src/shared/contracts/plugin.ts` — `WORKTREE_PLUGIN_ID` → `GIT_PLUGIN_ID`，值 `"pier.worktree"` → `"pier.git"`。
-- 目录 `src/plugins/builtin/worktree/` → `src/plugins/builtin/git/`（含内部模块名与 `worktree-status-item.tsx` → `git-status-item.tsx`）。
+- 目录 `src/plugins/builtin/worktree/` → `src/plugins/builtin/git/`（含内部模块名与 `worktree-status-item.tsx` → `status-item.tsx`）。
 - `src/renderer/lib/plugins/builtin-catalog.ts` — import 路径与模块名。
 - `src/main/plugins/builtin-catalog.ts` — import、常量名、两处硬编码目录字符串。
 - `src/renderer/lib/plugins/host-context.ts` — 若引用 `WORKTREE_PLUGIN_ID` 则同步。
@@ -57,7 +57,7 @@
 
 **Files:**
 - Create: `tests/component/git-changes-panel.test.tsx`
-- Create: `src/renderer/panel-kits/git-changes/git-changes-panel.tsx`
+- Create: `src/renderer/panel-kits/git-changes/changes-panel.tsx`
 - Modify: `src/renderer/components/workspace/panel-registry.ts`
 
 - [ ] **Step 1: 写失败的面板渲染测试**
@@ -69,7 +69,7 @@
 import { render, screen } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { describe, expect, it, vi } from "vitest";
-import { GitChangesPanel } from "@/panel-kits/git-changes/git-changes-panel.tsx";
+import { GitChangesPanel } from "@/panel-kits/git-changes/changes-panel.tsx";
 
 // GitChangesPanel 调 usePanelDescriptor, 需要 mock api.id + api.setTitle.
 const mockProps = {
@@ -93,14 +93,14 @@ describe("GitChangesPanel", () => {
 - [ ] **Step 2: 跑测试确认失败**
 
 Run: `pnpm vitest run tests/component/git-changes-panel.test.tsx`
-Expected: FAIL —— 模块 `@/panel-kits/git-changes/git-changes-panel.tsx` 不存在。
+Expected: FAIL —— 模块 `@/panel-kits/git-changes/changes-panel.tsx` 不存在。
 
 - [ ] **Step 3: 实现占位面板与 kit 元数据**
 
 照 `src/renderer/components/workspace/welcome-panel.tsx` 结构。`kind: "web"`（面板内是 web DOM，键盘路由用）。
 
 ```tsx
-// src/renderer/panel-kits/git-changes/git-changes-panel.tsx
+// src/renderer/panel-kits/git-changes/changes-panel.tsx
 import type { IDockviewPanelProps } from "dockview-react";
 import { GitBranch } from "lucide-react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
@@ -133,7 +133,7 @@ export const gitChangesPanelKit = {
 import 段加：
 
 ```ts
-import { gitChangesPanelKit } from "@/panel-kits/git-changes/git-changes-panel.tsx";
+import { gitChangesPanelKit } from "@/panel-kits/git-changes/changes-panel.tsx";
 ```
 
 `panelKits` 对象加 `gitChanges`：
@@ -171,7 +171,7 @@ Expected: 无错误（确认 `gitChangesPanelKit` 的 `kind: "web"` 满足 `Pane
 - [ ] **Step 7: 提交**
 
 ```bash
-git add src/renderer/panel-kits/git-changes/git-changes-panel.tsx src/renderer/components/workspace/panel-registry.ts tests/component/git-changes-panel.test.tsx
+git add src/renderer/panel-kits/git-changes/changes-panel.tsx src/renderer/components/workspace/panel-registry.ts tests/component/git-changes-panel.test.tsx
 git commit -m "feat(git-changes): add placeholder git-changes panel-kit"
 ```
 
@@ -425,7 +425,7 @@ export const GIT_PLUGIN_ID = "pier.git";
 
 ```bash
 git mv src/plugins/builtin/worktree src/plugins/builtin/git
-git mv src/plugins/builtin/git/renderer/worktree-status-item.tsx src/plugins/builtin/git/renderer/git-status-item.tsx
+git mv src/plugins/builtin/git/renderer/worktree-status-item.tsx src/plugins/builtin/git/renderer/status-item.tsx
 ```
 
 - [ ] **Step 3: 改 manifest（id / name / category / 常量名）**
@@ -442,9 +442,9 @@ git mv src/plugins/builtin/git/renderer/worktree-status-item.tsx src/plugins/bui
 - [ ] **Step 4: 改 renderer/main/locales 模块内部名**
 
 `src/plugins/builtin/git/renderer/index.ts`：
-- import `GIT_PLUGIN_ID`；`worktreeRendererPlugin` → `gitRendererPlugin`；函数 `registerWorktreePluginContributions` → `registerGitPluginContributions`；`id: GIT_PLUGIN_ID`；`registerWorktreeStatusItem` import 路径改为 `./git-status-item.tsx`。
+- import `GIT_PLUGIN_ID`；`worktreeRendererPlugin` → `gitRendererPlugin`；函数 `registerWorktreePluginContributions` → `registerGitPluginContributions`；`id: GIT_PLUGIN_ID`；`registerWorktreeStatusItem` import 路径改为 `./status-item.tsx`。
 
-`src/plugins/builtin/git/renderer/git-status-item.tsx`：
+`src/plugins/builtin/git/renderer/status-item.tsx`：
 - 导出 `registerWorktreeStatusItem` → `registerGitStatusItem`（在 `renderer/index.ts` 同步引用名）。状态项 id `pier.worktree.status` 字面量**保留不变**（避免破坏持久化与既有断言）。
 
 `src/plugins/builtin/git/main/index.ts`：
@@ -507,7 +507,7 @@ git mv tests/unit/renderer/worktree-plugin.test.tsx tests/unit/renderer/git-plug
 - 末尾「renderer builtin catalog owns the worktree plugin module」用例：`WORKTREE_PLUGIN_ID` → `GIT_PLUGIN_ID`，`worktreeRendererPlugin.id` → `gitRendererPlugin.id`。
 - 「worktree renderer 插件只通过 plugin host API 访问宿主能力」用例的硬编码路径：
   - `src/plugins/builtin/worktree/renderer/worktree-list-action.ts` → `src/plugins/builtin/git/renderer/worktree-list-action.ts`
-  - `src/plugins/builtin/worktree/renderer/worktree-status-item.tsx` → `src/plugins/builtin/git/renderer/git-status-item.tsx`
+  - `src/plugins/builtin/worktree/renderer/worktree-status-item.tsx` → `src/plugins/builtin/git/renderer/status-item.tsx`
 - `describe("worktree builtin plugin", ...)` 标题可更新为 `"git builtin plugin"`（可选，不影响断言）。
 
 - [ ] **Step 10: 类型检查 + 全量测试**

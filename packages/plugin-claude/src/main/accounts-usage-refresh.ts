@@ -1,14 +1,12 @@
 import {
+  type AccountUsageMetric,
   activeUsageCacheKey,
   createInflightCoalescer,
   createUsageCacheEntry,
   USAGE_MIN_REFETCH_MS,
   type UsageCacheEntryBase,
 } from "@pier/plugin-api/account-usage";
-import type {
-  ClaudeUsageSnapshot,
-  ClaudeUsageWindow,
-} from "../shared/accounts.ts";
+import type { ClaudeUsageSnapshot } from "../shared/accounts.ts";
 import type { ClaudeAccountProvider } from "./claude-provider.ts";
 import { type FetchImpl, LOGIN_EXPIRED_ERROR } from "./oauth.ts";
 import type { ClaudeAccountsStateStore } from "./state.ts";
@@ -16,13 +14,14 @@ import { type AccountUsageResult, fetchClaudeUsage } from "./usage-fetch.ts";
 
 export { activeUsageCacheKey } from "@pier/plugin-api/account-usage";
 
-export type UsageCacheEntry = UsageCacheEntryBase<ClaudeUsageWindow>;
+export type UsageCacheEntry = UsageCacheEntryBase<AccountUsageMetric>;
 
 export function toUsageSnapshot(entry: UsageCacheEntry): ClaudeUsageSnapshot {
   return {
-    fetchedAt: entry.fetchedAt,
+    attemptedAt: entry.attemptedAt,
+    metrics: entry.metrics,
     status: entry.status,
-    windows: entry.windows,
+    ...(entry.updatedAt === undefined ? {} : { updatedAt: entry.updatedAt }),
     ...(entry.error ? { error: entry.error } : {}),
   };
 }
@@ -143,8 +142,8 @@ export function createClaudeUsageRefreshRunner(options: {
     if (!credential) {
       return {
         error: "This account's stored credential is missing",
+        metrics: [],
         status: "error",
-        windows: [],
       };
     }
     return await fetchClaudeUsage({
@@ -197,7 +196,7 @@ export function createClaudeUsageRefreshRunner(options: {
     if (
       !refreshOptions.force &&
       cached &&
-      now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS
+      now() - cached.attemptedAt < USAGE_MIN_REFETCH_MS
     ) {
       return;
     }
@@ -210,7 +209,7 @@ export function createClaudeUsageRefreshRunner(options: {
       if (
         !refreshOptions.force &&
         latestCached &&
-        now() - latestCached.fetchedAt < USAGE_MIN_REFETCH_MS
+        now() - latestCached.attemptedAt < USAGE_MIN_REFETCH_MS
       ) {
         return;
       }
@@ -229,8 +228,8 @@ export function createClaudeUsageRefreshRunner(options: {
       } else {
         result = {
           error: "No active Claude account",
+          metrics: [],
           status: "error",
-          windows: [],
         };
       }
 

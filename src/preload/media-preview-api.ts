@@ -2,8 +2,8 @@ import type {
   FilePreviewTicketIssueResult,
   MediaPreviewAbsoluteIssueRequest,
   MediaPreviewAbsoluteReleaseRequest,
-} from "@shared/contracts/file-preview-ticket.ts";
-import { filePreviewTicketIssueResultSchema } from "@shared/contracts/file-preview-ticket.ts";
+} from "@shared/contracts/file/preview-ticket.ts";
+import { filePreviewTicketIssueResultSchema } from "@shared/contracts/file/preview-ticket.ts";
 
 export interface PierMediaPreviewApi {
   issueAbsolute(

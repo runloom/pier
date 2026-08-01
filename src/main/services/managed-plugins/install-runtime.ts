@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type {
   ManagedPluginInstallIndexEntry,
   ManagedPluginPackageManifest,
-} from "@shared/contracts/managed-plugin.ts";
+} from "@shared/contracts/plugin/managed.ts";
 import { assertPluginDataSchemaCompatibility } from "./data-schema-compatibility.ts";
 import { computePackageContentHash } from "./package-content-hash.ts";
 import {

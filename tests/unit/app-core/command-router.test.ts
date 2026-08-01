@@ -5,19 +5,19 @@ import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import type { PierCoreServices } from "@main/app-core/command-router.ts";
 import { createCommandRouter } from "@main/app-core/command-router.ts";
 import { PluginDisableTransitionCoordinator } from "@main/app-core/plugin-disable-transition.ts";
-import { createFileService } from "@main/services/file-service.ts";
-import { GitExecError } from "@main/services/git-exec.ts";
-import { createGitService } from "@main/services/git-service.ts";
-import { createGitWatchService } from "@main/services/git-watch-service.ts";
+import { createFileService } from "@main/services/files/service.ts";
+import { GitExecError } from "@main/services/git/exec.ts";
+import { createGitService } from "@main/services/git/service.ts";
+import { createGitWatchService } from "@main/services/git/watch/service.ts";
+import { WorktreeServiceError } from "@main/services/git/worktree/service.ts";
 import { LocalEnvironmentServiceError } from "@main/services/local-environments-service.ts";
 import { PluginServiceError } from "@main/services/plugin-service.ts";
 import type {
   ProcessEnvironmentResolveRequest,
   ProcessEnvironmentResolveResult,
 } from "@main/services/process-environment-service.ts";
-import { createTaskService } from "@main/services/tasks/task-service.ts";
-import { WorktreeServiceError } from "@main/services/worktree-service.ts";
-import { agentTabIconId } from "@shared/contracts/agent-session.ts";
+import { createTaskService } from "@main/services/tasks/service.ts";
+import { agentTabIconId } from "@shared/contracts/agent/session.ts";
 import { fileWriteCommitReceiptStorageKey } from "@shared/contracts/file.ts";
 import type { PanelContext, PanelSnapshot } from "@shared/contracts/panel.ts";
 import {
@@ -3677,6 +3677,10 @@ describe("createCommandRouter", () => {
     ]);
     expect(rendererCommands.at(-1)).toEqual({
       context: panelContext("/repo/.worktrees/feature-a"),
+      exitPresentation: {
+        dismissMode: "explicit",
+        role: "agent",
+      },
       focus: true,
       initialInput: "修复终端焦点问题\r",
       launchId: "launch-1",

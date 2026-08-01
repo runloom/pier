@@ -23,7 +23,7 @@
 
 **新建（10）**：
 - `src/shared/contracts/dashboard.ts` — `DASHBOARD_GRID_COLS`、`dashboardGridSizeSchema` / `DashboardGridSize`、`pluginDashboardWidgetContributionSchema`（含 `validateWidgetSizeBounds` superRefine）、`HOST_DEFAULT/MIN/MAX_WIDGET_SIZE`、`dashboardPanelWidgetEntrySchema`（x/y/w/h/id）、`dashboardPanelParamsSchema`、`CoreDashboardWidgetDeclaration`
-- `src/renderer/lib/plugins/plugin-dashboard-widget-registry.ts` — 运行时注册表（镜像 `plugin-panel-registry.ts`）
+- `src/renderer/lib/plugins/plugin-dashboard-widget-registry.ts` — 运行时注册表（镜像 `panel-registry.ts`）
 - `src/renderer/hooks/use-container-width.ts` — ResizeObserver 量宽 hook（jsdom 无 RO 时回退固定宽）
 - `src/renderer/panel-kits/dashboard/dashboard-grid-geometry.ts` — `ROW_HEIGHT` / `MARGIN` 常量 + `entryToLayoutItem` / `layoutToEntries` / `appendEntry` 纯函数
 - `src/renderer/panel-kits/dashboard/dashboard-merge.ts` — 合并层纯函数（params ∩ 声明 → 渲染清单）
@@ -1095,7 +1095,7 @@ function assertDeclaredContribution(
 
 - [ ] **Step 3: 在 host-context.ts 顶部增加 import 并扩展 `createRendererPluginContext`**
 
-在 `src/renderer/lib/plugins/host-context.ts` 顶部 import 区新增（在 `import { ... } from "./plugin-panel-registry.ts"` 之后）：
+在 `src/renderer/lib/plugins/host-context.ts` 顶部 import 区新增（在 `import { ... } from "./panel-registry.ts"` 之后）：
 
 ```ts
 import { registerPluginDashboardWidget } from "./plugin-dashboard-widget-registry.ts";
@@ -3532,7 +3532,7 @@ Expected: PASS（typecheck + lint + depcruise + file-size + unit + component）�
 | §4.2 manifest 扩展 `plugin.ts` | Task 1 Step 2-3（`pluginLocaleMessagesSchema.dashboardWidgets`、`pluginManifestSchema.dashboardWidgets`）；Task 2（`collectEffectivePermissions` 并入 dashboardWidgets） |
 | §4.2 插件详情摘要 | Task 10 Step 7-10（`plugins-section.tsx` contributionSummary 数组增 dashboardWidgets 条目（Icon: LayoutDashboard）+ en/zh-CN `settings.plugins.contributionSummary.dashboardWidget(s)` key + `plugins-section.test.tsx` 工厂扩展 + 新 case） |
 | §4.3 插件 API `renderer.ts` | Task 4 Step 1（`DashboardWidgetComponentProps { size: DashboardGridSize }`、`RendererDashboardWidgetRegistration`、`RendererPluginContext.dashboardWidgets.register`——签名与 Contract 逐字一致） |
-| §4.4 运行时注册表 | Task 3（`plugin-dashboard-widget-registry.ts` 照搬 `plugin-panel-registry.ts` 模式）；Task 4 Step 2-3（`assertDeclaredContribution("dashboardWidget")` + host-context 集成） |
+| §4.4 运行时注册表 | Task 3（`plugin-dashboard-widget-registry.ts` 照搬 `panel-registry.ts` 模式）；Task 4 Step 2-3（`assertDeclaredContribution("dashboardWidget")` + host-context 集成） |
 | §4.5 Core 大盘 kit（7 文件） | Task 6（`dashboard-grid-geometry.ts` + `dashboard-merge.ts`）；Task 7（`core-dashboard-widgets.ts` + `activity-widget.tsx`）；Task 8（`dashboard-widget-card.tsx` + `dashboard-add-card.tsx`）；Task 9（`dashboard-panel.tsx` + panelKits 登记 + `addDashboard` + 菜单项 + action） |
 | §4.5 布局引擎 RGL v2 | Task 0（依赖安装 + API 核对）；Task 9 Step 2（`ReactGridLayout` 12 列、`compactType="vertical"`、`draggableHandle=".dashboard-widget-drag-handle"`、`width` 由 ResizeObserver 量测） |
 | §4.5 宽度自测 | Task 9 Step 1（`use-container-width.ts` ResizeObserver hook；不用 WidthProvider） |
@@ -3592,7 +3592,7 @@ Expected: PASS（typecheck + lint + depcruise + file-size + unit + component）�
 - `DashboardWidgetComponentProps`：`{ size: DashboardGridSize }` ✓
 - `RendererDashboardWidgetRegistration`：`{ component: FunctionComponent<DashboardWidgetComponentProps>; icon: LucideIcon; id: string; title?: (() => string) | string }` ✓
 - `RendererPluginContext.dashboardWidgets.register(registration): () => void` ✓
-- 注册表命名镜像 `plugin-panel-registry.ts`：`registerPluginDashboardWidget` / `getPluginDashboardWidgetRegistrations` / `getPluginDashboardWidgetRevision` / `subscribePluginDashboardWidgetRegistry` / `clearPluginDashboardWidgetsForTests` ✓
+- 注册表命名镜像 `panel-registry.ts`：`registerPluginDashboardWidget` / `getPluginDashboardWidgetRegistrations` / `getPluginDashboardWidgetRevision` / `subscribePluginDashboardWidgetRegistry` / `clearPluginDashboardWidgetsForTests` ✓
 - panelKit：component `"dashboard"`，icon `LayoutDashboard`，kind `"web"` ✓
 - 多实例 panel id：`dashboard-<timestamp>`（`uniquePanelId(api, "dashboard")`） ✓
 - core widget：`CORE_DASHBOARD_WIDGETS`，首个 `{ id: "core.activity-overview", titleKey: "dashboard.widget.activityOverview.title", defaultSize: { w: 4, h: 3 }, minSize: { w: 3, h: 2 } }` ✓

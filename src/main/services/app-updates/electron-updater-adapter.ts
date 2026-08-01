@@ -1,5 +1,5 @@
 import electronUpdater from "electron-updater";
-import type { AppUpdaterAdapter } from "./app-update-service.ts";
+import type { AppUpdaterAdapter } from "./service.ts";
 
 export function createElectronAppUpdaterAdapter(): AppUpdaterAdapter {
   // electron-updater 的 autoUpdater 是 getter，取值即构造 MacUpdater 并读取

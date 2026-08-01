@@ -1,5 +1,10 @@
 name: Quality Gate
 
+# Design:
+# 1) Correctness is owned locally (pre-push preflight). CI confirms + covers OS.
+# 2) Speed: skip jobs that cannot fail for the changed paths; parallelize work
+#    that must run; avoid duplicate installs of work that path filters skip.
+
 on:
   pull_request:
   push:
@@ -13,6 +18,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      native: ${{ steps.filter.outputs.native }}
+      windows_lsp: ${{ steps.filter.outputs.windows_lsp }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          # Only run a job when a failure there is *possible* for this diff.
+          # Do not list package.json on native/windows — lockfile/app source do.
+          filters: |
+            app:
+              - 'src/**'
+              - 'packages/**'
+              - 'tests/unit/**'
+              - 'tests/component/**'
+              - 'tests/integration/**'
+              - 'tests/setup/**'
+              - 'scripts/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'vitest.config.ts'
+              - 'electron.vite.config.*'
+              - 'tsconfig*.json'
+              - 'biome.json'
+              - 'dependency-cruiser*'
+              - '.pier/**'
+              - '.github/workflows/ci.yml'
+              - 'playwright.config.ts'
+              - 'electron-builder.yml'
+            native:
+              - 'native/**'
+              - 'scripts/build-libghostty.sh'
+              - 'tests/e2e/native/**'
+              - 'tests/e2e/git/**'
+              - 'playwright.config.ts'
+              - 'src/main/ipc/terminal/**'
+              - 'src/main/services/terminal/**'
+              - 'src/renderer/panel-kits/terminal/**'
+              - '.github/workflows/ci.yml'
+            windows_lsp:
+              - 'native/lsp-windows-job/**'
+              - 'src/main/**/lsp/**'
+              - 'src/main/lsp/**'
+              - 'scripts/**/*lsp*'
+              - 'scripts/**/*windows*'
+              - 'tests/unit/main/lsp/**'
+              - '.github/workflows/ci.yml'
+
   static:
     runs-on: ubuntu-latest
     steps:
@@ -26,6 +84,8 @@ jobs:
       - run: pnpm check:static
 
   coverage:
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,8 +96,12 @@ jobs:
           node-version: 24
       - run: pnpm install --frozen-lockfile
       - run: pnpm test:coverage
+        env:
+          CI: true
 
   build:
+    needs: [changes]
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +114,8 @@ jobs:
       - run: pnpm build
 
   native:
+    needs: [changes]
+    if: needs.changes.outputs.native == 'true'
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -81,21 +147,70 @@ jobs:
       - run: pnpm build:electron
       - run: >-
           pnpm exec playwright test --config playwright.config.ts
-          tests/e2e/native-terminal-render.spec.ts tests/e2e/git-review.spec.ts
+          tests/e2e/native/terminal-render.spec.ts tests/e2e/git/review.spec.ts
+
+  windows-lsp:
+    needs: [changes]
+    if: needs.changes.outputs.windows_lsp == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build:lsp-windows-job
+      - run: >-
+          pnpm exec vitest run tests/unit/main/lsp/process-termination.test.ts
+          tests/unit/main/lsp/windows-job.integration.test.ts
+      - run: pnpm build:electron
+      - name: Package both Windows architectures
+        run: pnpm exec electron-builder --win --dir --x64 --arm64
+      - name: Verify packaged Windows LSP addon architectures
+        shell: pwsh
+        run: node ./scripts/verify-lsp-windows-job-package.mjs "$env:GITHUB_WORKSPACE/dist-builder/win-unpacked/resources" x64; node ./scripts/verify-lsp-windows-job-package.mjs "$env:GITHUB_WORKSPACE/dist-builder/win-arm64-unpacked/resources" arm64
+      - name: Verify fixed Windows LSP artifacts independently of cwd
+        shell: pwsh
+        run: |
+          Push-Location $env:TEMP
+          $runtimeModule = "$env:GITHUB_WORKSPACE/out/main/lsp-windows-runtime.js"
+          $resolved = node --input-type=module -e "const { pathToFileURL } = await import('node:url'); const runtime = await import(pathToFileURL(process.argv[1]).href); console.log(JSON.stringify([runtime.resolveWindowsSupervisorPath(), runtime.resolveWindowsJobAddonPath()]));" $runtimeModule | ConvertFrom-Json
+          $expectedSupervisor = [IO.Path]::GetFullPath("$env:GITHUB_WORKSPACE/out/main/lsp-windows-process-supervisor.js")
+          $expectedAddon = [IO.Path]::GetFullPath("$env:GITHUB_WORKSPACE/native/lsp-windows-job/artifacts/$(node -p process.arch)/Release/lsp_windows_job.node")
+          if ([IO.Path]::GetFullPath($resolved[0]) -ne $expectedSupervisor) { throw "production supervisor resolver returned $($resolved[0])" }
+          if ([IO.Path]::GetFullPath($resolved[1]) -ne $expectedAddon) { throw "production addon resolver returned $($resolved[1])" }
+          Pop-Location
 
   check:
     if: always()
-    needs: [static, coverage, build, native]
+    needs: [changes, static, coverage, build, native, windows-lsp]
     runs-on: ubuntu-latest
     steps:
       - name: Require successful quality jobs
         env:
+          APP: ${{ needs.changes.outputs.app }}
           BUILD_RESULT: ${{ needs.build.result }}
           COVERAGE_RESULT: ${{ needs.coverage.result }}
+          NATIVE: ${{ needs.changes.outputs.native }}
           NATIVE_RESULT: ${{ needs.native.result }}
           STATIC_RESULT: ${{ needs.static.result }}
+          WINDOWS_LSP: ${{ needs.changes.outputs.windows_lsp }}
+          WINDOWS_LSP_RESULT: ${{ needs.windows-lsp.result }}
         run: |
+          set -euo pipefail
+          require_ok_or_skipped() {
+            local label="$1" required="$2" result="$3"
+            if [ "$required" = "true" ]; then
+              test "$result" = "success"
+            else
+              test "$result" = "success" -o "$result" = "skipped"
+            fi
+            echo "ok $label required=$required result=$result"
+          }
           test "$STATIC_RESULT" = "success"
-          test "$COVERAGE_RESULT" = "success"
-          test "$NATIVE_RESULT" = "success"
-          test "$BUILD_RESULT" = "success"
+          require_ok_or_skipped coverage "$APP" "$COVERAGE_RESULT"
+          require_ok_or_skipped build "$APP" "$BUILD_RESULT"
+          require_ok_or_skipped native "$NATIVE" "$NATIVE_RESULT"
+          require_ok_or_skipped windows-lsp "$WINDOWS_LSP" "$WINDOWS_LSP_RESULT"

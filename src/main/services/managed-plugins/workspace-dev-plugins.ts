@@ -4,7 +4,7 @@ import type {
   ManagedPluginInstallIndex,
   ManagedPluginInstallIndexEntry,
   ManagedPluginOperationResult,
-} from "@shared/contracts/managed-plugin.ts";
+} from "@shared/contracts/plugin/managed.ts";
 
 /**
  * Workspace-local plugin development isolation (first-party + user custom).

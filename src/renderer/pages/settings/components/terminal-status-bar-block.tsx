@@ -23,7 +23,7 @@ import type {
   CoreTerminalStatusItemDeclaration,
   TerminalStatusBarOverridePatches,
   TerminalStatusBarPrefs,
-} from "@shared/contracts/terminal-status-bar.ts";
+} from "@shared/contracts/terminal/status-bar.ts";
 import i18next from "i18next";
 import { ArrowDown, ArrowLeftRight, ArrowUp, RotateCcw } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
@@ -33,7 +33,7 @@ import {
   compareOuterFirst,
   normalizedGroupOrders,
   resolveEffectiveTerminalStatusItemConfig,
-} from "@/panel-kits/terminal/terminal-status-bar-merge.ts";
+} from "@/panel-kits/terminal/status-bar-merge.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";

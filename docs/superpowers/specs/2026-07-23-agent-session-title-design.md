@@ -1,286 +1,188 @@
-# Agent 会话标题（sessionTitle）产品设计
+# 智能体会话标题设计
 
-> 日期：2026-07-23  
-> 状态：**P0/P1/P2 已实现**  
-> 实施计划：[../plans/2026-07-23-agent-session-title.md](../plans/2026-07-23-agent-session-title.md)  
-> 前置：[`2026-07-15-agent-runtime-index-and-attention-design.md`](./2026-07-15-agent-runtime-index-and-attention-design.md)（Index 主标题用 catalog，故意不读 OSC）  
-> 范围：Agent 面板 / Index / title bar / 关闭摘要 / activity 物料的**产品主标题**；不含普通 shell 终端 OSC 行为变更
+> 日期：2026-07-23
+>
+> 状态：已实现并完成边界加固
+>
+> 实施计划：[../plans/2026-07-23-agent-session-title.md](../plans/2026-07-23-agent-session-title.md)
 
-## 1. 目标与完成标准
+## 1. 目标和完成标准
 
-### 1.1 一句话定位
+Pier 为智能体会话提供独立的产品标题 `sessionTitle`。标题只负责帮助用户辨认会话，
+不得承担会话身份、状态或命令路由职责，也不得从终端 OSC 标题反推。
 
-为 Agent 会话引入一等公民 **`sessionTitle`**（产品名），与 **`terminalTitle`（OSC 0/2）** 彻底分离。全 UI 只通过单一 resolver 读产品名；OSC 降级为终端元数据。
+完成标准：
 
-### 1.2 要解决的问题
+1. tab、标题栏、智能体索引、关闭摘要和活动组件统一读取
+   `resolveAgentSessionTitle`。
+2. 标题来源固定为 `prompt < provider < user`，只允许严格升秩覆盖；
+   `user` 可主动再次改名。
+3. 标题按 `sessionId` 绑定。主会话发生 `SessionStart` 切换时，不得把旧会话标题带入
+   新会话。
+4. 子会话事件不得改写面板主会话的身份、状态和标题。
+5. 标题长度上限为 120 个 Unicode 码点，schema、宿主派生和 hook 脚本同构。
+6. 用户可从终端内容菜单、dockview tab、命令面板和活动总览四处发起改名，四处共用
+   同一交互门面。
+7. 全量 `pnpm check` 通过。
 
-1. 当前把 OSC 当会话名 → cwd / 长首条消息 / 品牌名混用，体验不友好且跨表面不一致。  
-2. Index 已纪律性不用 OSC，tab / title bar 仍吃 OSC → 同一 agent 多处文案分裂。  
-3. 缺少手改优先、只命名一次、失败留占位等业界金标准约束。
+## 2. 当前结构为什么不足
 
-### 1.3 金标准（冻结）
+早期实现先解决了 OSC 与产品标题混用，但仍有四个结构缺口：
 
-| # | 原则 | 冻结语义 |
+- 持久化只按 `panelId` 保存标题，没有记录标题属于哪个 `sessionId`；`/clear`、resume
+  或新会话可能继承旧标题。
+- main 的标题旁路和前台活动聚合器都能收到子会话事件；若各自判断主/子身份，规则会
+  漂移，子会话的 prompt、状态或会话号可能污染面板主行。
+- 写入被高秩标题拒绝时，运行投影曾错误水合“本次尝试值”，而不是磁盘中的最终真值，
+  形成内存与持久化分叉。
+- JavaScript 的 `string.length` 和 `slice` 按 UTF-16 码元工作，不满足“120 个码点”
+  的契约，还可能从代理对中间截断。
+
+这些问题不能靠展示层兜底。标题作用域、写入裁决和事件身份必须在各自所有者处闭环。
+
+## 3. 所有权划分
+
+| 责任 | 所有者 | 说明 |
 | --- | --- | --- |
-| G1 | 字段分离 | `sessionTitle` ≠ `terminalTitle`（OSC） |
-| G2 | 占位 → 一次命名 | 启动用 placeholder；首条后最多自动写一次（P1） |
-| G3 | 专用生成 | 规则或轻量模型；禁止依赖主 agent 自觉 `/rename` |
-| G4 | 手改优先 | `source: "user"` 永不被 auto 覆盖 |
-| G5 | 失败安全 | 生成失败留 placeholder；禁止回退成长 OSC / cwd 全文 |
-| G6 | UI 单源 | tab / Index / title bar / 通知摘要 / activity 物料同一 resolver |
+| 身份判定 | `src/shared/agent-session-actor.ts` | 主/子会话判据唯一来源 |
+| 标题规范化与秩 | `src/shared/agent-session-title/` | Unicode 上限、派生、展示解析和写入裁决 |
+| 持久化真值 | `src/main/state/terminal-session-title.ts` | 保存标题、来源及 `sessionTitleSessionId` |
+| 事件编排 | `src/main/services/agents/session-title/` | 只接主会话事件，处理 prompt/provider 标题和会话切换 |
+| 运行投影 | `src/main/services/foreground-activity/` | 把持久化真值投影到 `AgentActivity`，不自行推断标题 |
+| provider 适配 | `src/main/services/agents/integrations/` | 只分类 provider 已写下的原生标题，不额外调用模型 |
+| 用户交互 | `src/renderer/lib/agent-runtime/rename-agent-session.ts` | 四个入口共用的初值、校验、IPC 与错误反馈 |
+| UI 展示 | `resolveAgentSessionTitle` 的调用点 | 不接收 OSC；无标题时使用智能体与项目路径占位 |
+| 测试 | 标题单测、聚合器单测、治理测试、组件测试 | 证明层间契约和用户入口 |
 
-### 1.4 完成标准（按阶段）
+`sessionTitle` 是可读性信号，不是身份。确定性身份由 `agentId`、项目路径锚点、
+`panelId`、`sessionId`、`actorHint` 和 `parentSessionId` 提供。
 
-| 闭环 | 阶段 | 通过标准 |
-| --- | --- | --- |
-| T0 | **P0** | Agent 主标题不再来自 OSC；全调用点走 `resolveAgentSessionTitle`；无 title 时稳定显示 `catalogLabel · projectBasename` |
-| T1 | **P1** | `UserPromptSubmit` 规则生成 → 写入 `sessionTitle(source=auto)`；每会话一次；失败不影响回合 |
-| T2 | **P2** | 可选小模型 refine；Claude 双写 provider `sessionTitle`；用户「重命名会话」入口 |
+## 4. 数据流与控制流
 
-本文件正文锁定 **P0**；P1/P2 仅规定接口与禁止项，避免实现时漂移。
-
-### 1.5 边界
-
-- **做**：Agent kind 的产品主标题契约、resolver、展示换源、OSC 降权。  
-- **不做（P0）**：自动生成、小模型、provider `/rename` 双写、用户 rename UI。  
-- **不动**：FA 五态状态机、hook status 权威、OSC 转发与 `updateTerminalPanelTitle` 持久化（OSC 管线保留）。  
-- **普通 shell**：仍可用 cwd / OSC；本设计只约束 `activity.kind === "agent"`。
-
----
-
-## 2. 现状梳理（基线）
-
-### 2.1 今日管线
+### 4.1 prompt 标题
 
 ```text
-Agent TUI → OSC 0/2 → Ghostty → main 转发
-  → 持久化 terminal session.title（实为 OSC）
-  → pier://terminal:title-changed
-  → renderer effectiveTitle
-  → agentTabTitleFromTerminal(OSC, catalog)  // ≤40 / 无换行才用 OSC
-  → display.short → dockview tab
-  → display.long = 完整 OSC 或 cwd     // title bar / tooltip 仍可能很长
+主会话 UserPromptSubmit
+  → isSubagentHookEvent：拒绝子会话旁路
+  → deriveAgentSessionTitleFromPrompt
+  → writeAgentSessionTitle(source="prompt", sessionId)
+  → setTerminalPanelSessionTitle：持久化裁决
+  → 用持久化返回的最终真值更新前台活动投影
+  → resolveAgentSessionTitle → 各展示表面
 ```
 
-关键代码：
+Claude 的 `derive-claude-session-title` 只做同构双写。生成脚本必须与 shared 派生结果
+逐字一致；修改脚本时必须提升 `PIER_HOOK_COMMAND_GENERATION`。
 
-- `terminal-panel.tsx`：`effectiveTitle = sequenceTitle ?? savedSession?.title`
-- `terminal-tab-chrome.ts`：`agentTabTitleFromTerminal` / `activityTabChromeOverlay` / `terminalPanelDescriptor`
-- Index：catalog label + 路径（已不读 OSC）
-- `panel-close-activity.ts` / `activity-widget.tsx`：存在 raw `agentId` 展示
-
-### 2.2 根因
-
-**没有会话标题字段**；OSC 被误用为产品名。40 字截断是止血，不是模型。
-
----
-
-## 3. 目标模型
-
-### 3.1 字段
-
-```ts
-/** 产品会话名；与 OSC terminalTitle 分离 */
-type AgentSessionTitleSource = "user" | "auto";
-
-interface AgentSessionTitleState {
-  sessionTitle: string; // 已 trim，单行，建议 ≤40
-  source: AgentSessionTitleSource;
-  updatedAt: number;
-}
-```
-
-**FA（`AgentActivity`）扩展（可选字段，strict schema 增加）**：
-
-- `sessionTitle?: string`
-- `sessionTitleSource?: "user" | "auto"`
-
-P0：字段可出现在契约中但运行时恒缺席 → resolver 走 placeholder。  
-P1：main 写入后经既有 FA broadcast 到达 renderer。
-
-### 3.2 持久化归属（锁定）
-
-| 数据 | 存哪 | 说明 |
-| --- | --- | --- |
-| OSC | 现有 `terminal-session-state` 的 `title` | **改名语义**：文档与代码注释称为 `terminalTitle`；存储键可暂不 rename 以免大迁移，但 API/类型别名必须区分 |
-| `sessionTitle` + `source` | **同一 session JSON 旁路新键** `sessionTitle` / `sessionTitleSource` | reload 可恢复；与 OSC 并存 |
-| 运行投影 | FA `AgentActivity` 可选字段 | Index / Attention 继续只订 FA，无需第二订阅 |
-
-**为什么挂 FA，不另起旁路 map（P0 决策）**：
-
-- Index 已从 FA 投影；标题进 FA 才能满足 G6「单源」而不开第二广播。  
-- FA 仍是活动语义源；title 是 agent 活动的展示属性，不是新编排域。  
-- status 映射函数禁止读/写 title（纪律测试锁死）。
-
-### 3.3 Resolver（唯一入口）
-
-```ts
-function resolveAgentSessionTitle(input: {
-  agentId: AgentKind;
-  projectRootPath?: string | null;
-  cwd?: string | null;
-  sessionTitle?: string | null;
-  sessionTitleSource?: AgentSessionTitleSource | null;
-  // 明确禁止传入 OSC 作为主标题候选——类型上不接收 terminalTitle
-}): {
-  primary: string; // tab / Index 主行 / title bar
-  secondary?: string; // Index 副行等：项目短名或路径
-  placeholder: string; // 无 sessionTitle 时的 primary
-};
-```
-
-**优先级（高 → 低）**：
-
-1. 非空 `sessionTitle`（无论 user/auto；写入时已保证 user 不被覆盖）  
-2. `placeholder = `${catalogLabel} · ${projectBasename}``  
-   - `catalogLabel`：`getAgentCatalogEntry(agentId).label ?? agentId`  
-   - `projectBasename`：`basename(projectRootPath ?? cwd)`；皆空则省略 ` · …`，仅品牌名  
-3. **禁止**：OSC、cwd 全文、首条消息原文作为 `primary`
-
-### 3.4 目标数据流
+### 4.2 provider 标题
 
 ```text
-[P0] 启动 → placeholder → 全 UI
-     OSC 仍转发，仅可进 tooltip（可选、须截断），不进 primary
-
-[P1] UserPromptSubmit → 规则生成 → 写 session JSON + FA
-     → resolver 输出短标题；每会话 auto 一次；user 不覆盖
-
-[P2] 可选 refine / Claude 双写 / 手改 UI
+provider transcript 增量行
+  → agent 专属 classifyTitleLine
+  → transcript-title-routing 按 sessionId/唯一 owner 归属
+  → applyProviderAgentSessionTitle(source="provider")
+  → 同一持久化裁决与投影通路
 ```
 
----
+当前只消费 Claude 的 `ai-title`。首次绑定时的历史回扫不写标题；会话号不匹配且存在
+多个 owner 时放弃，不猜归属。`custom-title` 和 `agent-name` 是 Pier 自己双写的 prompt
+派生，不得洗成更高的 `provider` 秩。
 
-## 4. P0 实施设计
+### 4.3 会话切换
 
-### 4.1 行为变更（用户可见）
-
-| 表面 | P0 之前 | P0 之后 |
-| --- | --- | --- |
-| Agent tab | 短 OSC 或 catalog | **恒** `sessionTitle` 或 `Claude · pier` |
-| Title bar / document.title | 常为完整 OSC 或 cwd | **与 tab 同一 primary**（不再灌长 OSC） |
-| Tab tooltip | 完整 OSC | 允许保留截断后的 `terminalTitle`（建议 ≤120）或省略 |
-| Index | catalog + 路径 | primary 同 resolver；副行仍路径/状态（有 sessionTitle 时主行用它） |
-| 关闭摘要 / activity 物料 | 常 raw `agentId` | catalog / resolver primary |
-
-### 4.2 代码改动清单（必改）
-
-| # | 位置 | 改法 |
-| --- | --- | --- |
-| 1 | `shared/contracts/foreground-activity.ts` | `AgentActivity` 增加可选 `sessionTitle` / `sessionTitleSource` |
-| 2 | 新建 `shared/agent-session-title.ts`（或 `renderer`+`shared` 纯函数包） | `resolveAgentSessionTitle` + `agentSessionPlaceholder` + 长度常量 |
-| 3 | `terminal-tab-chrome.ts` | `activityTabChromeOverlay` 改用 resolver；**删除或降级** `agentTabTitleFromTerminal` 为主路径 |
-| 4 | `terminalPanelDescriptor` | agent 场景 `display.short` / `display.long` 均来自 resolver primary；`terminalTitle` 仅填 OSC 截断（可选） |
-| 5 | `terminal-panel.tsx` | overlay 传入 FA 的 sessionTitle，**不要**把 `effectiveTitle`(OSC) 当主标题候选 |
-| 6 | `agent-index-quickpick.ts` | 主 label 走 resolver（P0 无 sessionTitle 时等于 catalog·项目，与现 catalog 对齐并统一项目段） |
-| 7 | `panel-close-activity.ts` | `label` 用 catalog/resolver，禁止 raw `agentId` |
-| 8 | `activity-widget.tsx` | 同上 |
-| 9 | 单测 | resolver 优先级；agent overlay 不因长 OSC 改变 primary；governance：禁止业务再 call 旧 OSC→tab 主路径 |
-
-### 4.3 明确不改（P0）
-
-- `terminal-task-lifecycle-wiring` OSC 转发  
-- FA status ingest / hook install 命令  
-- Attention 通知策略（标题字符串可随后用 resolver，但不改触发矩阵）
-
-### 4.4 对现状逻辑的影响
-
-| 层 | 影响 |
-| --- | --- |
-| Status / hooks | 无 |
-| OSC 管线 | 无（只降展示权） |
-| 展示层 | **有意变更**：Agent 主标题变干净、可预期 |
-| 契约 | FA 可选字段向前兼容；旧 renderer 忽略未知字段需确认 zod `.strict()` —— **必须同步改 schema 与所有构造点** |
-
----
-
-## 5. P1 / P2 接口预留（本阶段不实现）
-
-### 5.1 P1 写入 API（草案）
-
-```ts
-// main：仅 agent panel
-setAgentSessionTitle(panelId, {
-  title: string;
-  source: "auto" | "user";
-}): Result;
-// 规则：
-// - source=auto 且已有任意 sessionTitle → no-op
-// - source=user → 覆盖 auto；再来的 auto no-op
-// - trim / 拒换行 / 硬上限 40；失败返回 ok 且不改状态（失败安全）
+```text
+主会话 SessionStart(nextSessionId)
+  → reconcileTerminalPanelSessionTitleScope
+  ├─ 历史标题未绑定 sessionId：只绑定到首次可靠会话
+  ├─ sessionId 相同：保留标题
+  └─ sessionId 不同或新会话号缺失：清除旧标题、来源和作用域
+  → 用持久化最终结果覆盖或清除前台活动投影
 ```
 
-触发：现有 `UserPromptSubmit` emit 路径旁路，**不改变** status 映射。生成：规则清洗（去 Image 占位、压缩空白、截断）；寒暄词表不命名。
+### 4.4 用户改名
 
-### 5.2 P2
+```text
+终端内容菜单 / dockview tab / 命令面板 / 活动总览
+  → promptRenameAgentSession
+  → pier:terminal:set-session-title(source="user")
+  → main 读取当前主会话 sessionId
+  → 持久化裁决
+  → 返回并水合磁盘最终真值
+```
 
-- 异步小模型 refine（fire-and-forget，超时丢弃）  
-- Claude hook 回写 `hookSpecificOutput.sessionTitle`（双写，非主路径）  
-- UI「重命名会话」→ `source: "user"`
+写入冲突时，调用方不得假定尝试值获胜；必须消费持久化层返回的
+`title/source/sessionId`。
 
-### 5.3 禁止项（永久）
+## 5. 标题契约
 
-- 主标题回退到 OSC / cwd 全文 / 首条原文  
-- 用 `additionalContext` 要求模型自行 `/rename` 作为主方案  
-- auto 覆盖 user  
-- 每回合自动改名（无冷却的 Stop refine 不得进默认路径）
+### 5.1 来源优先级
 
----
+| 来源 | 秩 | 语义 |
+| --- | ---: | --- |
+| `prompt` | 1 | 首条主会话 prompt 的确定性截断 |
+| `provider` | 2 | provider 自己已经生成并写入 transcript 的标题 |
+| `user` | 3 | 用户主动改名 |
 
-## 6. 可行性 / 稳定性 / 性能
+空槽可写；`user` 可覆盖任意来源；其他写入必须严格升秩。同秩不覆盖，避免每回合标题
+抖动。历史 `auto`、`rule`、`model` 只在读取期归一为 `prompt`，不回写。
 
-| 维度 | P0 | P1 |
+### 5.2 长度和文本
+
+- `MAX_AGENT_SESSION_TITLE_LENGTH` 固定为 120 个 Unicode 码点。
+- `agentSessionTitleValueSchema`、`normalizeAgentSessionTitle` 和 hook 生成脚本都按
+  `Array.from(value)` 计数。
+- 派生流程为：清协议标记 → 取首个非空行 → 规范化 → 软断点硬截断。
+- 不做寒暄判断、语义改写、名词化或标题专用模型调用。
+- 存储保留合法全标题；tab 和列表的视觉截断由 CSS 负责。
+
+### 5.3 展示
+
+`resolveAgentSessionTitle` 不接受 `terminalTitle`。无 `sessionTitle` 时，主标题使用
+“智能体名称 · 项目短名”；调用点必须传 `projectRootPath` 或 `cwd`。OSC 仅可作为经
+截断的终端 tooltip 元数据。
+
+## 6. 明确禁止的反模式
+
+- 从标题反推 `sessionId`、父子关系或命令目标。
+- 让子会话的 `PromptSubmit`、工具细节或会话号改写面板主会话。
+- main 与聚合器各写一套主/子会话判据。
+- 写入被拒后把尝试值水合进运行投影。
+- 只按 `panelId` 持久化标题而不记录会话作用域。
+- 用 `string.length` 或 `slice(0, 120)` 实现码点上限。
+- 恢复 OSC/cwd 全文作为产品主标题。
+- 恢复 `titleArgs`、精修进程或标题专用模型调用。
+- 为四个改名入口分别实现校验、弹窗或错误反馈。
+- 把 provider transcript 做成宿主公共存储、索引或回放能力。
+
+## 7. 最小实施方案
+
+1. 为终端 session 状态增加 `sessionTitleSessionId`，持久化写入返回磁盘最终真值。
+2. 在 `SessionStart` 上统一执行标题作用域对账。
+3. main 旁路与前台活动聚合器共同消费 `isSubagentHookEvent`；子会话只保留
+   `SubagentStart` / `SubagentStop` 计数和必要的结束清理。
+4. 把 schema、归一化和 hook 截断改为 Unicode 码点语义，提升 hook 世代。
+5. 补齐终端内容菜单改名入口，并由治理测试锁定四入口。
+6. 按职责拆分超过 500 行的相关模块，不调整文件大小门禁。
+
+## 8. 需求到证据的验收矩阵
+
+| 需求 | 代码证据 | 测试证据 |
 | --- | --- | --- |
-| 可行性 | 高：纯展示换源 + 契约预留 | 高：复用 UserPromptSubmit |
-| 稳定性 | 高：行为更保守 | 高：失败留占位；`\|\| true` |
-| 性能 | 无额外 IO | 每会话 ≤1 次规则生成 |
-| 回归面 | Agent tab / title bar / Index / 两处 raw agentId | hook emit + session JSON + FA 投影 |
+| 来源秩唯一 | `agent-session-title/precedence.ts` | `agent-session-title.test.ts`、治理测试 |
+| Unicode 120 码点 | `agent-session-title/schema.ts`、`normalize.ts`、`hooks-title-script.ts` | `agent-session-title.test.ts`、hook 同构测试 |
+| 标题按会话绑定 | `terminal-session-state-schemas.ts`、`terminal-session-title.ts` | `main/terminal-session-state.test.ts` |
+| 写入冲突回到持久化真值 | `session-title/write.ts`、`ipc/terminal.ts` | `main/terminal-session-state.test.ts`、聚合器测试 |
+| 子会话不污染面板主行 | `agent-session-actor.ts`、`foreground-activity/aggregator.ts`、`ipc/foreground-activity.ts` | `main/foreground-activity-aggregator.test.ts` |
+| provider 标题不猜 owner | `transcript-title-routing.ts`、Claude 适配器 | `main/claude-transcript-reconciler.test.ts`、治理测试 |
+| 四个改名入口同门面 | `register-actions.ts`、`activity-row.tsx`、`rename-agent-session.ts` | 治理测试、`activity-widget.test.tsx` |
+| UI 单源且不读 OSC | `resolveAgentSessionTitle` 及调用点 | 治理测试、组件测试 |
+| 模块边界和文件规模 | 拆分后的标题、聚合器、文件迁移辅助模块 | `pnpm check:static` |
 
----
+## 9. 验证命令
 
-## 7. 验收
+```bash
+pnpm check
+```
 
-### 7.1 P0
-
-- [ ] Grok/长 OSC：tab 与 title bar **均为** `Grok · <项目>`（或仅品牌），主文案无长 prompt  
-- [ ] 短 OSC「Fix parser」：**不再**因 OSC 变短而进 tab（P0 故意忽略 OSC；P1 后由 sessionTitle 提供友好名）  
-- [ ] Index / tab / title bar 主标题一致（同 resolver）  
-- [ ] 关闭摘要与 activity 物料不显示 raw `agentId`  
-- [ ] OSC 仍更新 session 持久化字段；tooltip 可选展示截断 OSC  
-- [ ] FA status 单测全集绿；无 title 逻辑进入 status 分支
-
-### 7.2 说明：P0 相对「短 OSC 进 tab」是刻意回退
-
-今日若 TUI 写出短会话名，tab 会显示它。P0 **放弃**这条不可靠好运，换可预期占位；友好名交给 P1 正式生成。这是金标准交易，验收时不得当回归缺陷重开 OSC 主路径。
-
----
-
-## 8. 决策记录
-
-| 决策 | 选择 | 理由 |
-| --- | --- | --- |
-| 标题存哪 | session JSON 新键 + FA 可选投影 | reload + Index 单订 FA |
-| P0 是否读 OSC | **否**（主标题） | 结束不可靠好运；对齐 Index 纪律 |
-| 生成放哪 | P1 宿主规则，非模型自觉 | 业界可靠路径；跨 provider |
-| status 与 title | 隔离 | 防止污染五态 |
-
----
-
-## 9. Agent 自动命名覆盖矩阵
-
-自动命名只认 FA `PromptSubmit` + `promptSnippet`（[`agent-session-title-effects.ts`](../../src/main/services/agents/agent-session-title-effects.ts)）。按安装形态分三档：
-
-| 档 | 机制 | Agents | 文案来源 |
-| --- | --- | --- | --- |
-| A. Stdin hooks | `extract-stdin-meta` / 内联提取 `prompt`→`promptSnippet`（hook gen≥3） | claude, cursor, codex, openclaude（含 Claude 同款 dual-write）, grok, droid, qwen-code, qodercli, codebuddy, aug, gemini, antigravity, goose, devin, kimi, copilot, cline, kiro, autohand | Provider stdin JSON 顶层字符串字段 |
-| B. Plugin JSONL | 生成插件 `pierPromptSnippetFrom` 写入顶层 `promptSnippet` | omp, pi, amp, opencode, mimo-code | event / properties / sessionManager best-effort；无文案则 fail-soft 留占位 |
-| C. 无 PromptSubmit | **不**伪造 UPS | hermes, kilo, command-code, crush, mistral-vibe, aider | 仅 `catalog · project` 占位；上游补 UPS 后再接 |
-
-禁止：为 C 档硬插假 `PromptSubmit`（会污染 FA 五态）；主标题回退 OSC。
-
----
-
-## 10. 下一步
-
-1. 本设计确认后 → 写 [`plans/2026-07-23-agent-session-title.md`](../plans/2026-07-23-agent-session-title.md) 拆 P0 Task。  
-2. 实现 P0 → 再开 P1 生成与写入。  
+`pnpm check` 依次执行静态检查、单元测试、组件测试和集成测试。局部开发可先跑标题相关
+测试，但交付标准是全量命令通过。

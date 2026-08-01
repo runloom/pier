@@ -1,5 +1,14 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { setAgentStatusHooksIngestEnabled } from "../agent-status-hooks-gate.ts";
+import { app } from "electron";
+import {
+  type InstallAgentHooksOptions,
+  PIER_HOOK_COMMAND_GENERATION,
+  pierHooksHomeDir,
+  readInstalledHookRuntimeGeneration,
+  withAgentHooksInstallLock,
+  withInstalledAgentHooksRuntime,
+} from "../hooks-install.ts";
+import { setAgentStatusHooksIngestEnabled } from "../status-hooks-gate.ts";
 import { aiderIntegration } from "./aider.ts";
 import { ampIntegration } from "./amp.ts";
 import { antigravityIntegration } from "./antigravity.ts";
@@ -15,6 +24,7 @@ import { crushIntegration } from "./crush.ts";
 import { cursorIntegration } from "./cursor.ts";
 import { devinIntegration } from "./devin.ts";
 import { droidIntegration } from "./droid.ts";
+import { AGENT_STATUS_EVIDENCE } from "./evidence/matrix.ts";
 import { geminiIntegration } from "./gemini.ts";
 import { gooseIntegration } from "./goose.ts";
 import { grokIntegration } from "./grok.ts";
@@ -30,44 +40,54 @@ import { opencodeIntegration } from "./opencode.ts";
 import { piIntegration } from "./pi.ts";
 import { qodercliIntegration } from "./qodercli.ts";
 import { qwenCodeIntegration } from "./qwen-code.ts";
-import type { AgentHookIntegration } from "./types.ts";
+import type {
+  AgentHookIntegration,
+  RegisteredAgentHookIntegration,
+} from "./types.ts";
 
 /**
  * 已接入的 agent hook 集成注册表。适配器彼此独立（各管各的配置文件）,
  * 新增 agent = 新增一个 integrations/<agent>.ts + 此处一行。
  */
-export const AGENT_HOOK_INTEGRATIONS: readonly AgentHookIntegration[] = [
-  aiderIntegration,
-  ampIntegration,
-  antigravityIntegration,
-  augIntegration,
-  autohandIntegration,
-  claudeIntegration,
-  codebuddyIntegration,
-  clineIntegration,
-  codexIntegration,
-  commandCodeIntegration,
-  copilotIntegration,
-  crushIntegration,
-  cursorIntegration,
-  devinIntegration,
-  droidIntegration,
-  geminiIntegration,
-  gooseIntegration,
-  grokIntegration,
-  hermesIntegration,
-  kiloIntegration,
-  kimiIntegration,
-  kiroIntegration,
-  mimoCodeIntegration,
-  mistralVibeIntegration,
-  ompIntegration,
-  opencodeIntegration,
-  openclaudeIntegration,
-  piIntegration,
-  qodercliIntegration,
-  qwenCodeIntegration,
-];
+const AGENT_HOOK_INTEGRATION_IMPLEMENTATIONS: readonly AgentHookIntegration[] =
+  [
+    aiderIntegration,
+    ampIntegration,
+    antigravityIntegration,
+    augIntegration,
+    autohandIntegration,
+    claudeIntegration,
+    codebuddyIntegration,
+    clineIntegration,
+    codexIntegration,
+    commandCodeIntegration,
+    copilotIntegration,
+    crushIntegration,
+    cursorIntegration,
+    devinIntegration,
+    droidIntegration,
+    geminiIntegration,
+    gooseIntegration,
+    grokIntegration,
+    hermesIntegration,
+    kiloIntegration,
+    kimiIntegration,
+    kiroIntegration,
+    mimoCodeIntegration,
+    mistralVibeIntegration,
+    ompIntegration,
+    opencodeIntegration,
+    openclaudeIntegration,
+    piIntegration,
+    qodercliIntegration,
+    qwenCodeIntegration,
+  ];
+
+export const AGENT_HOOK_INTEGRATIONS: readonly RegisteredAgentHookIntegration[] =
+  AGENT_HOOK_INTEGRATION_IMPLEMENTATIONS.map((integration) => ({
+    ...integration,
+    statusEvidence: AGENT_STATUS_EVIDENCE[integration.id],
+  }));
 
 const AGENT_HOOK_INTEGRATIONS_BY_ID = new Map(
   AGENT_HOOK_INTEGRATIONS.map((integration) => [integration.id, integration])
@@ -75,26 +95,60 @@ const AGENT_HOOK_INTEGRATIONS_BY_ID = new Map(
 
 export function getAgentHookIntegration(
   agentId: AgentKind
-): AgentHookIntegration | null {
+): RegisteredAgentHookIntegration | null {
   return AGENT_HOOK_INTEGRATIONS_BY_ID.get(agentId) ?? null;
 }
 
 /**
  * 幂等安装全部已检测到的集成。单个失败不影响其他（逐个隔离告警）——
  * 一家 agent 的配置异常不应拖垮整个状态功能 / 偏好切换。
+ *
+ * 各集成 transformJsonConfig 在语义无变化时不落盘，避免无谓改写
+ * ~/.codex/hooks.json 等触发 Codex 再次「hooks need review」。
  */
-export async function installAllAgentHooks(): Promise<void> {
+export async function installAllAgentHooks(
+  integrations: readonly AgentHookIntegration[] = AGENT_HOOK_INTEGRATIONS
+): Promise<void> {
   await Promise.allSettled(
-    AGENT_HOOK_INTEGRATIONS.map(async (integration) => {
-      if (!integration.detect()) {
-        return;
-      }
+    integrations.map(async (integration) => {
       try {
+        if (!integration.detect()) {
+          return;
+        }
         await integration.install();
       } catch (err) {
-        console.warn(`[agent-hooks:${integration.id}] install failed:`, err);
+        console.warn(
+          `[agent-hooks:${integration.id}] detect/install failed:`,
+          err
+        );
       }
     })
+  );
+}
+
+/**
+ * 完整安装栈（终态 P2）：先共享运行时 `~/.pier/hooks`，再写各 agent 全局配置。
+ * 顺序固定——全局 hooks 命令依赖 `${PIER_AGENT_HOOKS_DIR}/…` 脚本已就位。
+ */
+export async function installAgentHooksStack(
+  options: InstallAgentHooksOptions & {
+    platform?: NodeJS.Platform;
+    userData?: string;
+  } = {},
+  integrations: readonly AgentHookIntegration[] = AGENT_HOOK_INTEGRATIONS
+): Promise<void> {
+  const platform = options.platform ?? process.platform;
+  if (platform !== "darwin" && platform !== "linux") {
+    console.warn(
+      `[agent-hooks] unsupported hook platform, skip stack: ${platform}`
+    );
+    return;
+  }
+  const userData = options.userData ?? app.getPath("userData");
+  await withInstalledAgentHooksRuntime(
+    userData,
+    () => installAllAgentHooks(integrations),
+    options
   );
 }
 
@@ -102,16 +156,42 @@ export async function installAllAgentHooks(): Promise<void> {
  * 卸载全部集成。不设 detect 门控——二进制已卸但配置残留时也要能清干净；
  * 对从未安装过的目标, 变换无变化不落盘, 零副作用。
  * 单个失败不影响其他，也不回滚偏好 / 摄入门闸。
+ *
+ * **不删除** `~/.pier/hooks/vN` 运行时——关偏好只撤全局 pier 条目；
+ * 退出 App 也不得调用本函数（多版本/多 channel 共享运行时）。
  */
-export async function uninstallAllAgentHooks(): Promise<void> {
-  await Promise.allSettled(
-    AGENT_HOOK_INTEGRATIONS.map(async (integration) => {
-      try {
-        await integration.uninstall();
-      } catch (err) {
-        console.warn(`[agent-hooks:${integration.id}] uninstall failed:`, err);
+export async function uninstallAllAgentHooks(
+  options: Pick<InstallAgentHooksOptions, "hooksHome" | "lockOptions"> = {},
+  integrations: readonly AgentHookIntegration[] = AGENT_HOOK_INTEGRATIONS
+): Promise<void> {
+  const hooksHome = options.hooksHome ?? pierHooksHomeDir();
+  const installedGeneration =
+    await readInstalledHookRuntimeGeneration(hooksHome);
+  if (installedGeneration > PIER_HOOK_COMMAND_GENERATION) {
+    return;
+  }
+  await withAgentHooksInstallLock(
+    hooksHome,
+    async () => {
+      const installedUnderLock =
+        await readInstalledHookRuntimeGeneration(hooksHome);
+      if (installedUnderLock > PIER_HOOK_COMMAND_GENERATION) {
+        return;
       }
-    })
+      await Promise.allSettled(
+        integrations.map(async (integration) => {
+          try {
+            await integration.uninstall();
+          } catch (err) {
+            console.warn(
+              `[agent-hooks:${integration.id}] uninstall failed:`,
+              err
+            );
+          }
+        })
+      );
+    },
+    options.lockOptions
   );
 }
 
@@ -119,5 +199,5 @@ export async function applyAgentStatusHooksPreference(
   enabled: boolean
 ): Promise<void> {
   setAgentStatusHooksIngestEnabled(enabled);
-  await (enabled ? installAllAgentHooks() : uninstallAllAgentHooks());
+  await (enabled ? installAgentHooksStack() : uninstallAllAgentHooks());
 }

@@ -1,0 +1,217 @@
+import type { PanelContext } from "@shared/contracts/panel.ts";
+import { getDocument, updateDocumentContents } from "../document/store.ts";
+import type { FilesDocument } from "../document/types.ts";
+import {
+  type EditorSearchOptions,
+  type EditorSearchState,
+  EMPTY_EDITOR_SEARCH_STATE,
+} from "./cm-search-state.ts";
+import type { FilesEditorPrefs } from "./prefs.ts";
+import {
+  type FileEditorCommand,
+  type FileEditorLspHoverResult,
+  type FileEditorViewPresentation,
+  FileEditorViewSession,
+} from "./view-session.ts";
+
+/** 管理 CodeMirror 视图实例，文档状态仍由 files-document-store 唯一持有。 */
+export class FileEditorViewCoordinator {
+  readonly #sessions = new Map<string, FileEditorViewSession>();
+
+  values(): Iterable<FileEditorViewSession> {
+    return this.#sessions.values();
+  }
+
+  getSession(editorSessionId: string): FileEditorViewSession | undefined {
+    return this.#sessions.get(editorSessionId);
+  }
+
+  captureDocumentSnapshot(documentId: string): {
+    selection?: { anchor: number; head: number };
+    scroll: { left: number; top: number };
+  } | null {
+    for (const session of this.#sessions.values()) {
+      if (session.documentId !== documentId) {
+        continue;
+      }
+      return session.captureSnapshot();
+    }
+    return null;
+  }
+
+  applySnapshot(
+    editorSessionId: string,
+    snapshot: {
+      selection?: { anchor: number; head: number };
+      scroll?: { left: number; top: number };
+    }
+  ): void {
+    this.#sessions.get(editorSessionId)?.applySnapshot(snapshot);
+  }
+
+  attach(input: {
+    document: FilesDocument;
+    editorPrefs: FilesEditorPrefs;
+    editorSessionId: string;
+    minimapEnabled: boolean;
+    panelContext?: PanelContext;
+    parent: HTMLElement;
+    presentation: FileEditorViewPresentation;
+  }): void {
+    let session = this.#sessions.get(input.editorSessionId);
+    if (session && getDocument(session.documentId)?.id !== input.document.id) {
+      session.dispose();
+      this.#sessions.delete(input.editorSessionId);
+      session = undefined;
+    }
+    if (session) {
+      session.updatePresentation(input.presentation);
+      session.setMinimapEnabled(input.minimapEnabled);
+      session.setEditorPrefs(input.editorPrefs);
+      session.setPanelContext(input.panelContext);
+    } else {
+      session = new FileEditorViewSession({
+        documentId: input.document.id,
+        editorPrefs: input.editorPrefs,
+        editorSessionId: input.editorSessionId,
+        minimapEnabled: input.minimapEnabled,
+        onChange: (documentId, contents) => {
+          const latest = getDocument(documentId);
+          if (latest && !latest.readOnly) {
+            updateDocumentContents(latest.id, contents);
+          }
+        },
+        ...(input.panelContext ? { panelContext: input.panelContext } : {}),
+        presentation: input.presentation,
+      });
+      this.#sessions.set(input.editorSessionId, session);
+    }
+    session.mount(input.parent, input.document);
+  }
+
+  updatePresentation(
+    editorSessionId: string,
+    presentation: FileEditorViewPresentation
+  ): void {
+    this.#sessions.get(editorSessionId)?.updatePresentation(presentation);
+  }
+
+  detach(editorSessionId: string, parent?: HTMLElement): boolean {
+    return this.#sessions.get(editorSessionId)?.detach(parent) ?? false;
+  }
+
+  cancelQueuedLspHovers(): void {
+    for (const session of this.#sessions.values()) {
+      session.cancelQueuedLspHover();
+    }
+  }
+
+  showLspHover(editorSessionId: string): Promise<FileEditorLspHoverResult> {
+    const session = this.#sessions.get(editorSessionId);
+    return session ? session.showLspHover() : Promise.resolve("unavailable");
+  }
+
+  applySearchQuery(
+    editorSessionId: string,
+    search: string,
+    replace: string,
+    options: EditorSearchOptions,
+    navigate: boolean
+  ): EditorSearchState {
+    return (
+      this.#sessions
+        .get(editorSessionId)
+        ?.applySearchQuery(search, replace, options, navigate) ??
+      EMPTY_EDITOR_SEARCH_STATE
+    );
+  }
+
+  clearSearch(
+    editorSessionId: string,
+    replace: string,
+    options: EditorSearchOptions
+  ): EditorSearchState {
+    return (
+      this.#sessions.get(editorSessionId)?.clearSearch(replace, options) ??
+      EMPTY_EDITOR_SEARCH_STATE
+    );
+  }
+
+  navigateSearch(
+    editorSessionId: string,
+    direction: "next" | "previous"
+  ): EditorSearchState {
+    return (
+      this.#sessions.get(editorSessionId)?.navigateSearch(direction) ??
+      EMPTY_EDITOR_SEARCH_STATE
+    );
+  }
+
+  replaceSearch(editorSessionId: string, all: boolean): EditorSearchState {
+    return (
+      this.#sessions.get(editorSessionId)?.replaceSearch(all) ??
+      EMPTY_EDITOR_SEARCH_STATE
+    );
+  }
+
+  selectAllMatches(editorSessionId: string): EditorSearchState {
+    return (
+      this.#sessions.get(editorSessionId)?.selectAllMatches() ??
+      EMPTY_EDITOR_SEARCH_STATE
+    );
+  }
+
+  async execute(
+    documentId: string,
+    editorSessionId: string,
+    command: FileEditorCommand
+  ): Promise<void> {
+    const session = this.#sessions.get(editorSessionId);
+    const document = getDocument(documentId);
+    if (
+      !(session && document) ||
+      getDocument(session.documentId)?.id !== document.id
+    ) {
+      return;
+    }
+    await session.execute(command);
+  }
+
+  syncDocuments(): void {
+    for (const [sessionId, session] of this.#sessions) {
+      const document = getDocument(session.documentId);
+      if (document) {
+        session.syncDocument(document);
+      } else {
+        session.dispose();
+        this.#sessions.delete(sessionId);
+      }
+    }
+  }
+
+  /** After host CSS font vars change, force CM6 geometry remeasure on all views. */
+  requestMeasureAll(): void {
+    for (const session of this.#sessions.values()) {
+      session.requestMeasure();
+    }
+  }
+
+  disposeDocument(documentId: string): void {
+    for (const [sessionId, session] of this.#sessions) {
+      if (
+        getDocument(session.documentId)?.id === documentId ||
+        session.documentId === documentId
+      ) {
+        session.dispose();
+        this.#sessions.delete(sessionId);
+      }
+    }
+  }
+
+  dispose(): void {
+    for (const session of this.#sessions.values()) {
+      session.dispose();
+    }
+    this.#sessions.clear();
+  }
+}

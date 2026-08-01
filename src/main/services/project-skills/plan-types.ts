@@ -6,7 +6,7 @@ import type {
 import type { SkillDiscoveryAdapterRegistry } from "./adapters.ts";
 import type { ProjectSkillsIssue } from "./health.ts";
 import type { ProjectRootRef as MainProjectRootRef } from "./identity.ts";
-import type { ProjectSkillsStore } from "./store.ts";
+import type { ProjectSkillsStore } from "./store/index.ts";
 
 /**
  * Plan types, draft normalization, and the planDigest computation, split

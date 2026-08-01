@@ -1,4 +1,4 @@
-import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
+import type { JsonValue } from "@shared/contracts/plugin/settings.ts";
 import type { PluginConfigurationChangeEvent } from "@shared/plugin-settings.ts";
 
 export type { PluginConfigurationChangeEvent } from "@shared/plugin-settings.ts";

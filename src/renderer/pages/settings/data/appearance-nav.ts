@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { resolvePluginConfigurationTitle } from "@/lib/plugins/display.ts";
-import { resolvePluginIcon } from "@/lib/plugins/resolve-plugin-icon.tsx";
+import { resolvePluginIcon } from "@/lib/plugins/resolve-icon.tsx";
 
 export interface StaticNavItem {
   icon: LucideIcon;

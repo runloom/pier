@@ -10,7 +10,7 @@ import { z } from "zod";
 import type {
   PanelTransferJournalFile,
   PanelTransferJournalRecord,
-} from "../services/panel-transfer/panel-transfer-types.ts";
+} from "../services/panel-transfer/types.ts";
 import { pathExists, writeDurableJson } from "./durable-json-io.ts";
 
 const callerSchema = z

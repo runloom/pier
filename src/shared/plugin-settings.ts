@@ -1,8 +1,8 @@
+import type { JsonValue } from "./contracts/plugin/settings.ts";
 import type {
   PluginConfigurationProperty,
   PluginRegistryEntry,
 } from "./contracts/plugin.ts";
-import type { JsonValue } from "./contracts/plugin-settings.ts";
 
 export type ConfigurationValueValidation =
   | { ok: true }

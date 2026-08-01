@@ -3,7 +3,7 @@ import type {
   RuleFileId,
   RuleFileState,
   RuleFileView,
-} from "@shared/contracts/agent-assets.ts";
+} from "@shared/contracts/agent/assets.ts";
 import { File, FileQuestion, FileWarning, Folder } from "lucide-react";
 import type { useT } from "@/i18n/use-t.ts";
 

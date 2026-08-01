@@ -8,7 +8,7 @@ import {
   type Mock,
   vi,
 } from "vitest";
-import { useTerminalRelaunch } from "@/panel-kits/terminal/use-terminal-relaunch.ts";
+import { useTerminalRelaunch } from "@/panel-kits/terminal/hooks/use-relaunch.ts";
 import type { TerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 
 describe("useTerminalRelaunch", () => {

@@ -37,7 +37,7 @@ FA 变迁
 - Ev5：只允许**真实**原生失败 → `error`；无证据则审计表标「不支持 error」，禁止假绿。
 - 用户文案走 i18n；禁止业务内联中英用户串；产品词「智能体 / 需要你处理」。
 - 测试：`pnpm test:unit -- <pattern>`；不跑全量 e2e 除非任务要求。
-- 文件硬顶约 500 行；`attention-service.ts` 若继续胀，把事件分类抽到同目录纯模块。
+- 文件硬顶约 500 行；`service.ts` 若继续胀，把事件分类抽到同目录纯模块。
 
 ---
 
@@ -48,7 +48,7 @@ FA 变迁
 | `src/shared/contracts/agent-attention.ts` | `turnNotifyMode` schema + defaults |
 | `src/shared/agent-attention-copy.ts` | 文案支持 `ready` |
 | `src/main/services/agent-attention/notification-event.ts`（新建） | 纯函数：事件分类 + 门控（可单测） |
-| `src/main/services/agent-attention/attention-service.ts` | observe 走新分类；注入 windowFocused |
+| `src/main/services/agent-attention/service.ts` | observe 走新分类；注入 windowFocused |
 | `src/main/services/agent-attention/notification-copy.ts` | 透传 ready |
 | `src/main/ipc/agent-attention.ts` | `isOwnerWindowFocused` 接线 |
 | `src/renderer/pages/settings/components/notifications-section.tsx` | 三组策略 UI |
@@ -170,7 +170,7 @@ EOF
 
 **Files:**
 - Create: `src/main/services/agent-attention/notification-event.ts`
-- Modify: `src/main/services/agent-attention/attention-service.ts`
+- Modify: `src/main/services/agent-attention/service.ts`
 - Modify: `src/main/ipc/agent-attention.ts`
 - Modify: `tests/unit/main/agent-attention.test.ts`
 - Create: `tests/unit/main/attention-notification-event.test.ts`（若与 service 测重复可合并，但矩阵必须覆盖）
@@ -355,7 +355,7 @@ Expected: PASS
 
 ```bash
 git add src/main/services/agent-attention/notification-event.ts \
-  src/main/services/agent-attention/attention-service.ts \
+  src/main/services/agent-attention/service.ts \
   src/main/ipc/agent-attention.ts \
   tests/unit/main/agent-attention.test.ts \
   tests/unit/main/attention-notification-event.test.ts

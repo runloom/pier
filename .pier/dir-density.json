@@ -1,0 +1,46 @@
+{
+  "$schemaComment": "Directory density gate — scripts/check-dir-density.mjs. maxDirectSourceFiles is the hard cap for non-allowlisted dirs. allowlist.max is a ratchet: count must not exceed max; when count drops to hard cap, delete the entry. Prefer feature folders + strip redundant name prefixes (see scripts/rename-strip-dir-prefix.mjs).",
+  "maxDirectSourceFiles": 40,
+  "softCap": 25,
+  "scanRoots": ["src", "packages/*/src", "tests"],
+  "skipDirPatterns": [
+    "**/node_modules",
+    "**/dist",
+    "**/dist-package",
+    "**/dist-pkg",
+    "**/out",
+    "**/coverage",
+    "src/plugins/api/components/agent-icons/favicons",
+    "src/renderer/i18n/locales/**",
+    "tests/unit/agent-integrations/status-traces",
+    "tests/fixtures/**",
+    "tests/support/**",
+    "resources/**"
+  ],
+  "allowlist": {
+    "packages/ui/src": {
+      "max": 70,
+      "reason": "shadcn primitives intentionally flat; feature clusters live under diff-view/, file/, image-preview/"
+    },
+    "src/renderer/stores": {
+      "max": 53,
+      "reason": "debt: optional domain subfolders (terminal/workspace/agent); workspace-close split pending folder"
+    },
+    "src/shared/contracts": {
+      "max": 50,
+      "reason": "debt: finish remaining contract domain groups"
+    },
+    "src/renderer/panel-kits/terminal": {
+      "max": 47,
+      "reason": "debt: more surface vs chrome split beyond hooks/"
+    },
+    "src/renderer/pages/settings/components": {
+      "max": 42,
+      "reason": "debt: section subfolders (skills/ already extracted)"
+    },
+    "src/main/services/agents/integrations": {
+      "max": 41,
+      "reason": "debt: provider files still flat; evidence/transcript/hooks extracted"
+    }
+  }
+}

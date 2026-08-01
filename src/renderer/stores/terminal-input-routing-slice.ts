@@ -12,7 +12,7 @@ import {
   resetTerminalHostStateForTests,
   updateTerminalHostInputFacts,
 } from "@/lib/workspace/terminal-host-state-reconciler.ts";
-import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-viewport.ts";
+import { readTerminalViewportFrame } from "@/panel-kits/terminal/viewport.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
 // ===========================================================================

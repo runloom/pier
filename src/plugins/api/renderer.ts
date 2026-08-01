@@ -1,4 +1,4 @@
-import type { AgentSelectionResult } from "@shared/contracts/agent-usage.ts";
+import type { AgentSelectionResult } from "@shared/contracts/agent/usage.ts";
 import type {
   AiGenerateTextRequest,
   AiGenerateTextResult,
@@ -8,13 +8,13 @@ import type { ExternalNavigationResult } from "@shared/contracts/external-naviga
 import type {
   FilePreviewTicketIssueResult,
   FilePreviewTicketLocator,
-} from "@shared/contracts/file-preview-ticket.ts";
+} from "@shared/contracts/file/preview-ticket.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { TerminalLaunchOptions } from "@shared/contracts/terminal/launch.ts";
 import type {
   TerminalOpenUrlEvent,
   TerminalSelectionTextResult,
 } from "@shared/contracts/terminal.ts";
-import type { TerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";
@@ -114,15 +114,18 @@ export type RendererPluginActionInvocation = ActionInvocation;
 
 export interface RendererPluginAction {
   category: string;
-  disabledReason?: () => null | string | undefined;
-  enabled?: () => boolean;
+  disabledReason?: (
+    invocation?: RendererPluginActionInvocation
+  ) => null | string | undefined;
+  enabled?: (invocation?: RendererPluginActionInvocation) => boolean;
   handler: (
     invocation?: RendererPluginActionInvocation
   ) => Promise<void> | void;
   id: string;
   metadata?: RendererPluginActionMetadata;
   surfaces?: readonly (string & {})[];
-  title: () => string;
+  /** 可读取 invocation（如右键 metadata）生成动态标题。 */
+  title: (invocation?: RendererPluginActionInvocation) => string;
 }
 
 export interface RendererPluginQuickPickItemBadge {

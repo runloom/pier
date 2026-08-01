@@ -1,23 +1,22 @@
-/** T1 规则派生：首条 prompt → 任务短语。纯函数，离线，零成本。 */
-
-import { isNoiseTitleInput } from "./noise.ts";
-import { normalizeAgentSessionTitle } from "./normalize.ts";
-import { applyTitleRules } from "./rules.ts";
-import { stripAgentPromptMarkup } from "./strip.ts";
-
 /**
- * 噪声（寒暄 / slash 命令 / 报错栈 / 纯路径 / 纯符号）返回 null —— 标题保持
- * 占位，等下一条 prompt 再试，而不是永久放弃。
+ * 首条 prompt → 会话标题：确定性截断，无启发式。
+ *
+ * 只做三件事：清协议标记 → 取首行 → 规范化并按硬上限截断。
+ * 不判断寒暄、不剥前缀、不名词化、不猜「这条 prompt 值不值得当标题」——
+ * 那类规则在中文口语输入下既不可复现也无法解释，用户看到的标题会随措辞抖动。
+ * 宁可原样呈现用户自己写的第一句话（随时可改名），也不给一个「看起来更像
+ * 标题」但对不上原文的结果。
  */
+
+import { normalizeAgentSessionTitle } from "./normalize.ts";
+import { firstAgentPromptLine } from "./strip.ts";
+
 export function deriveAgentSessionTitleFromPrompt(
   prompt: string | null | undefined
 ): string | null {
   if (!prompt) {
     return null;
   }
-  const text = stripAgentPromptMarkup(prompt);
-  if (isNoiseTitleInput(text)) {
-    return null;
-  }
-  return normalizeAgentSessionTitle(applyTitleRules(text));
+  // 取首行（不是把整段折成一行）：多行 prompt 的后续说明不该拼进标题。
+  return normalizeAgentSessionTitle(firstAgentPromptLine(prompt));
 }

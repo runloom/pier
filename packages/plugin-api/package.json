@@ -17,6 +17,9 @@
     "./build-preset": "./src/build-preset.ts",
     "./peer-sync/main": "./src/peer-sync/main.ts"
   },
+  "dependencies": {
+    "@pier/ui": "workspace:*"
+  },
   "peerDependencies": {
     "react": "19.2.7",
     "react-dom": "19.2.7"

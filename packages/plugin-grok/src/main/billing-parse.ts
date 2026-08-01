@@ -1,3 +1,4 @@
+import type { AccountUsageMetric } from "@pier/plugin-api/account-usage";
 import type { AccountUsageResult } from "./types.ts";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -52,7 +53,7 @@ function windowMinutesFromRange(
 }
 
 function pushPeriodWindow(
-  windows: AccountUsageResult["windows"],
+  metrics: AccountUsageMetric[],
   options: {
     endMs: number | null;
     limitName: string;
@@ -60,10 +61,11 @@ function pushPeriodWindow(
     usedPercent: number;
   }
 ): void {
-  windows.push({
+  metrics.push({
+    groupId: "grok:period",
     id: "grok:period",
-    limitId: "period",
-    limitName: options.limitName,
+    kind: "quota",
+    name: options.limitName,
     usedPercent: options.usedPercent,
     ...(options.endMs === null ? {} : { resetsAt: options.endMs }),
     ...(options.minutes === undefined
@@ -91,7 +93,7 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
     return {
       status: "error",
       error: "Invalid Grok billing response",
-      windows: [],
+      metrics: [],
     };
   }
 
@@ -100,12 +102,12 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
     parseIsoMs(period?.start) ?? parseIsoMs(config.billingPeriodStart);
   const endMs = parseIsoMs(period?.end) ?? parseIsoMs(config.billingPeriodEnd);
   const minutes = windowMinutesFromRange(startMs, endMs);
-  const windows: AccountUsageResult["windows"] = [];
+  const metrics: AccountUsageMetric[] = [];
 
   // 1) Credit period percent first — real rate-limit / credit quota.
   const creditUsagePercent = asFiniteNumber(config.creditUsagePercent);
   if (creditUsagePercent !== null) {
-    pushPeriodWindow(windows, {
+    pushPeriodWindow(metrics, {
       endMs,
       limitName: periodLabel(period?.type),
       minutes,
@@ -127,7 +129,7 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
         return [{ product, usedPercent }];
       })
     : [];
-  const hasPeriodWindow = windows.some((window) => window.id === "grok:period");
+  const hasPeriodWindow = metrics.some((metric) => metric.id === "grok:period");
   if (productUsage.length > 1 || !hasPeriodWindow) {
     // Duplicate product names must still yield unique window ids — the
     // renderer uses ids as React keys.
@@ -139,10 +141,11 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
         seen === 0
           ? `grok:product:${productRow.product}`
           : `grok:product:${productRow.product}#${seen + 1}`;
-      windows.push({
+      metrics.push({
+        groupId: "grok:product",
         id,
-        limitId: "product",
-        limitName: productLabel(productRow.product),
+        kind: "quota",
+        name: productLabel(productRow.product),
         usedPercent: productRow.usedPercent,
         ...(endMs === null ? {} : { resetsAt: endMs }),
         ...(minutes === undefined ? {} : { windowMinutes: minutes }),
@@ -161,7 +164,7 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
     monthlyLimit > 0 &&
     used !== null
   ) {
-    pushPeriodWindow(windows, {
+    pushPeriodWindow(metrics, {
       endMs,
       limitName: "Monthly spend",
       minutes:
@@ -177,24 +180,36 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
   const cap = asCents(config.onDemandCap);
   const onDemandUsed = asCents(config.onDemandUsed);
   if (cap !== null && cap > 0 && onDemandUsed !== null) {
-    windows.push({
+    metrics.push({
+      groupId: "grok:on-demand",
       id: "grok:on-demand",
-      limitId: "on-demand",
-      limitName: "On-demand",
+      kind: "quota",
+      name: "On-demand",
       usedPercent: (onDemandUsed / cap) * 100,
     });
   }
 
-  if (windows.length === 0) {
+  const prepaidBalance = asCents(config.prepaidBalance);
+  if (prepaidBalance !== null && prepaidBalance > 0) {
+    metrics.push({
+      currency: "USD",
+      format: "currency",
+      id: "grok:prepaid-balance",
+      kind: "scalar",
+      value: prepaidBalance / 100,
+    });
+  }
+
+  if (metrics.length === 0) {
     return {
       status: "error",
       error: "No Grok quota windows in billing response",
-      windows: [],
+      metrics: [],
     };
   }
 
   return {
     status: "ok",
-    windows,
+    metrics,
   };
 }

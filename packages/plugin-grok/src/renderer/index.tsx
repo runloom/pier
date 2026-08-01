@@ -39,6 +39,7 @@ export const plugin: ExternalRendererPluginModule = {
           <AccountsWidgetImpl context={context} {...props} />
         </GrokRendererRoot>
       ),
+      contentMode: "contained",
     });
     const disposeSettings = context.settingsPages.register({
       id: "pier.grok.accounts",

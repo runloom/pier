@@ -63,10 +63,24 @@ const SHELL_ENV_START = "__PIER_ENV_START__";
 const SHELL_ENV_END = "__PIER_ENV_END__";
 const DEFAULT_TIMEOUT_MS = 10_000;
 
+function isPierInternalEsbuildBinaryPath(value: string): boolean {
+  const normalized = value.replaceAll("\\", "/");
+  return (
+    normalized.includes(
+      "/Contents/Resources/app.asar.unpacked/node_modules/@esbuild/"
+    ) && /\/bin\/esbuild(?:\.exe)?$/u.test(normalized)
+  );
+}
+
 function cleanEnv(env: RawEnvironment | undefined): Environment {
   const entries = Object.entries(env ?? {}).filter(
     (entry): entry is [string, string] =>
-      ENV_KEY_RE.test(entry[0]) && typeof entry[1] === "string"
+      ENV_KEY_RE.test(entry[0]) &&
+      typeof entry[1] === "string" &&
+      !(
+        entry[0] === "ESBUILD_BINARY_PATH" &&
+        isPierInternalEsbuildBinaryPath(entry[1])
+      )
   );
   return Object.fromEntries(entries);
 }

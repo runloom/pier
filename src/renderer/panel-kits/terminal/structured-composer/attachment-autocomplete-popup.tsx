@@ -1,6 +1,6 @@
-import { PierFileIcon } from "@pier/ui/file-icon.tsx";
+import { PierFileIcon } from "@pier/ui/file/icon.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import type { ComposerAttachment } from "../terminal-composer-attachments-model.ts";
+import type { ComposerAttachment } from "../composer-attachments-model.ts";
 import {
   ComposerSuggestList,
   type ComposerSuggestRowModel,

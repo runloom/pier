@@ -11,18 +11,6 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     iconId: "claude",
     homepageUrl: "https://claude.com/claude-code",
     oneShotArgs: (prompt) => ["-p", prompt],
-    // `haiku` 别名解析到当前最便宜/最快的 Haiku，比钉死版本号耐版本变化；
-    // 空 --mcp-config + --strict-mcp-config 掐掉 MCP 冷启动（冷启动是这条
-    // 链路的主要延迟来源，不是推理本身）。
-    titleArgs: (prompt) => [
-      "-p",
-      prompt,
-      "--model",
-      "haiku",
-      "--strict-mcp-config",
-      "--mcp-config",
-      "{}",
-    ],
   },
   {
     id: "codex",
@@ -141,6 +129,9 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     faviconDomain: "x.ai",
     homepageUrl: "https://x.ai/cli",
     oneShotArgs: (prompt) => ["-p", prompt],
+    // 实测（pty 探测）：首帧后硬件光标保持 `?25h`，浏览态（提示行为
+    // `Space:prompt | Enter:open`）与聚焦态可区分，等价关系成立，故启用光标探针。
+    inputFocusProbe: "cursor",
   },
   {
     id: "mimo-code",
@@ -192,6 +183,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     label: "Kilocode",
     launchCmd: "kilo",
     detectCmd: "kilo",
+    detectCmdAliases: ["kilocode"],
     expectedProcess: "kilo",
     iconId: "kilo",
     homepageUrl: "https://kilo.ai/docs/cli",
@@ -212,6 +204,9 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     // Tab 在 chat/main 态必定重新 Focus 编辑器（ui.go:2553），符合
     // inputFocusKey 的确定性要求。
     inputFocusKey: { keycode: APPKIT_KEYCODE.tab },
+    // 实测（v0.86.0，pty 探测）：进入 chat 后编辑器聚焦 → `?25h`，Tab 切走
+    // → `?25l`，切回 → `?25h`，等价关系成立，故启用光标探针。
+    inputFocusProbe: "cursor",
     label: "Charm",
     launchCmd: "crush",
     detectCmd: "crush",
@@ -286,9 +281,11 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
   {
     id: "qwen-code",
     label: "Qwen Code",
-    launchCmd: "qwen-code",
-    detectCmd: "qwen-code",
-    expectedProcess: "qwen-code",
+    // npm `@qwen-code/qwen-code` 安装后二进制为 `qwen`（integration detect 亦同）。
+    launchCmd: "qwen",
+    detectCmd: "qwen",
+    detectCmdAliases: ["qwen-code"],
+    expectedProcess: "qwen",
     faviconDomain: "qwenlm.github.io",
     homepageUrl: "https://github.com/QwenLM/qwen-code",
     oneShotArgs: (prompt) => ["-p", prompt],
@@ -296,9 +293,10 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
   {
     id: "rovo",
     label: "Rovo Dev",
-    launchCmd: "rovo",
-    detectCmd: "rovo",
-    expectedProcess: "rovo",
+    launchCmd: "acli rovodev run",
+    launchCommandPrefix: ["acli", "rovodev", "run"],
+    detectCmd: "acli",
+    expectedProcess: "acli",
     faviconDomain: "atlassian.com",
     homepageUrl:
       "https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/",
@@ -306,7 +304,8 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
   {
     id: "hermes",
     label: "Hermes",
-    launchCmd: "hermes --tui",
+    // Hermes CLI v0.8+：无子命令即交互会话；已无 `--tui`（会 unrecognized arguments）。
+    launchCmd: "hermes",
     detectCmd: "hermes",
     expectedProcess: "hermes",
     faviconDomain: "nousresearch.com",

@@ -1,9 +1,6 @@
 import type { ProjectsSettingsTab } from "@/pages/settings/data/projects-settings.ts";
 import { leavePierHomeSkillsTransientState } from "./pier-home-skills-panel.tsx";
-import {
-  leaveSkillsTransientState,
-  type Translate,
-} from "./skills/skills-shared.tsx";
+import { leaveSkillsTransientState, type Translate } from "./skills/shared.tsx";
 
 export { isPierHomeSkillsDirty } from "./pier-home-skills-panel.tsx";
 

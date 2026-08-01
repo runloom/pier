@@ -60,20 +60,28 @@ export interface AgentCatalogEntry {
     mods?: number | undefined;
     text?: string | undefined;
   };
+  /**
+   * 声明「硬件光标可见 ⇔ TUI 输入框聚焦」这一等价关系已在该 agent 上逐一
+   * 核实（DECTCEM `?25` 模式位）。**只有**声明者才用 cursor-visible 探针做
+   * 输入聚焦风险提示与自动恢复。
+   *
+   * 已核实成立：grok、crush（浏览态与聚焦态的 `?25` 位不同）。
+   *
+   * 未声明 = 探针对该 agent 无意义，一律放行。部分现代 TUI 自绘光标并在
+   * 首帧后恒 `?25l`（实测 claude / gemini / opencode / droid / cursor-agent
+   * 全程隐藏硬件光标，无论输入框是否聚焦），启用探针会持续产生误报。
+   */
+  inputFocusProbe?: "cursor";
   label: string;
   launchCmd: string;
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>;
+  /**
+   * OSC 133 命令识别必须匹配的完整 argv 前缀。用于多个产品共享同一可执行体的
+   * 场景；声明后 detectCmd / expectedProcess 不参与 shell launch 词元匹配。
+   */
+  launchCommandPrefix?: readonly [string, ...string[]];
   /** Headless 一次性调用:append 在 launchCmd/defaultArgs 之后的 argv(含 prompt)。 */
   oneShotArgs?: (prompt: string, context: { cwd: string }) => readonly string[];
-  /**
-   * 会话标题专用的轻量一次性调用。与 oneShotArgs 有意分离——标题要的是
-   * 小模型、禁 MCP、快冷启动，且**不继承** agentDefaultArgs / permissionMode
-   * （那两个是交互式会话的配置）。
-   *
-   * 缺席 = 该 agent 不参与模型精修，标题降级为纯规则派生。推理型 CLI
-   * （如 codex exec）故意不声明：用 75 秒量级的调用写一个 20 字标题是错配。
-   */
-  titleArgs?: (prompt: string) => readonly string[];
 }
 
 /** 探测结果（IPC 返回）。 */

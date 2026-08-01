@@ -1,7 +1,7 @@
-import { resolveAttentionLocale } from "@main/services/agent-attention/attention-locale.ts";
-import { runAttentionTestNotification } from "@main/services/agent-attention/attention-test-notification.ts";
+import { resolveAttentionLocale } from "@main/services/agent-attention/locale.ts";
 import { maybePlayAfterShown } from "@main/services/agent-attention/notification-audio.ts";
 import { getAgentAttentionSettingsCached } from "@main/services/agent-attention/settings-cache.ts";
+import { runAttentionTestNotification } from "@main/services/agent-attention/test-notification.ts";
 import type { AgentRuntimeIndexService } from "@main/services/agent-runtime-index/index.ts";
 import { formatAttentionTestNotificationCopy } from "@shared/agent-attention-copy.ts";
 import type {
@@ -21,7 +21,7 @@ import {
   showSystemNotification,
   showTestSystemNotification,
 } from "../services/system-notification.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { windowManager } from "../windows/manager.ts";
 
 export interface NotificationIpcDeps {
   index?: AgentRuntimeIndexService;

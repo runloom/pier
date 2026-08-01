@@ -137,7 +137,7 @@ describe("createPierAppCore worktree service graph", () => {
     mockElectron(userDataDir);
 
     // 惰性 app core 首次属性访问才构造，因此先安装每例独立的 Electron mock。
-    const { appCore } = await import("@main/app-core/app-core.ts");
+    const { appCore } = await import("@main/app-core/index.ts");
     await appCore.ready;
     const now = 1_772_000_000_000;
     const clientId = "app-core-worktree-test";

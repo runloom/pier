@@ -8,21 +8,23 @@ import {
   OMP_EVENT_MAP,
   OMP_FA_ERROR_REACHABILITY,
   OMP_MARKER,
-  OMP_SUBAGENT_EVENT_MAP,
   ompDetect,
   ompExtensionPath,
   ompHome,
   uninstallOmpExtension,
 } from "../../../src/main/services/agents/integrations/omp.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
 
 const NATIVE_EVENTS = [
   "session_start",
-  "agent_start",
-  "tool_call",
-  "tool_result",
+  "before_agent_start",
+  "tool_execution_start",
+  "tool_execution_end",
   "tool_approval_requested",
   "tool_approval_resolved",
   "agent_end",
+  "session_stop",
   "session_shutdown",
 ];
 
@@ -53,53 +55,48 @@ describe("buildOmpExtensionSource", () => {
     expect(src).not.toContain("/agent-event");
   });
 
-  it("事件表齐全：主表 8 项、子代理表 2 项, 逐事件单次订阅且无 turn_*", () => {
+  it("按固定提交中的公开扩展事件注册，不虚构子智能体生命周期", () => {
     const src = buildOmpExtensionSource();
-    // 主会话映射：回合真边界是 agent_start/agent_end；turn_* 是每轮 LLM
-    // round 边界, 映射 Stop 会在多轮工具循环中途谎报「等待输入」——不再订阅。
-    expect(OMP_EVENT_MAP).toHaveLength(8);
-    expect(
-      Object.fromEntries(OMP_EVENT_MAP.map((e) => [e.nativeEvent, e.pierEvent]))
-    ).toEqual({
-      session_start: "SessionStart",
-      agent_start: "PromptSubmit",
-      tool_call: "ToolStart",
-      tool_result: "ToolComplete",
-      tool_approval_requested: "PermissionRequest",
-      tool_approval_resolved: "ToolStart",
-      agent_end: "Stop",
-      session_shutdown: "SessionEnd",
-    });
-    // 子代理映射：task subagent 实例只上报计数事件, 不打穿主状态。
-    expect(OMP_SUBAGENT_EVENT_MAP).toHaveLength(2);
-    expect(
-      Object.fromEntries(
-        OMP_SUBAGENT_EVENT_MAP.map((e) => [e.nativeEvent, e.pierEvent])
-      )
-    ).toEqual({
-      agent_start: "SubagentStart",
-      agent_end: "SubagentStop",
-    });
-    // 生成源码：8 个原生事件各恰好一次订阅（主/子映射合一, 单次 pi.on）。
+    expect(OMP_EVENT_MAP).toEqual([
+      { nativeEvent: "session_start", pierEvent: "SessionStart" },
+      { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
+      { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
+      { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
+      {
+        nativeEvent: "tool_approval_requested",
+        pierEvent: "InteractionRequested",
+      },
+      {
+        nativeEvent: "tool_approval_resolved",
+        pierEvent: "InteractionResolved",
+      },
+      { nativeEvent: "agent_end.willContinue", pierEvent: "processing" },
+      { nativeEvent: "agent_end.error", pierEvent: "error" },
+      { nativeEvent: "agent_end.aborted", pierEvent: "TurnInterrupted" },
+      { nativeEvent: "session_stop", pierEvent: "Stop" },
+      { nativeEvent: "session_shutdown", pierEvent: "SessionEnd" },
+    ]);
     for (const evt of NATIVE_EVENTS) {
       expect(
         src.match(new RegExp(`pi\\.on\\("${evt}"`, "g")),
         evt
       ).toHaveLength(1);
     }
+    expect(src).not.toContain("SubagentStart");
+    expect(src).not.toContain("SubagentStop");
+    expect(src).not.toContain("pierInstanceCount");
     expect(src).not.toContain('pi.on("turn_start"');
     expect(src).not.toContain('pi.on("turn_end"');
   });
 
-  it("Ev5: FA error unsupported — mapping table has no error pierEvent", () => {
-    expect(OMP_FA_ERROR_REACHABILITY).toBe("unsupported");
-    expect(OMP_EVENT_MAP.some((e) => e.pierEvent === "error")).toBe(false);
-    expect(OMP_SUBAGENT_EVENT_MAP.some((e) => e.pierEvent === "error")).toBe(
-      false
-    );
-    // abort/ESC still agent_end→Stop; must not fake-green as error.
+  it("Ev5: agent_end 的最后 assistant stopReason 可达全局错误", () => {
+    expect(OMP_FA_ERROR_REACHABILITY).toBe("native");
+    expect(OMP_EVENT_MAP).toContainEqual({
+      nativeEvent: "agent_end.error",
+      pierEvent: "error",
+    });
     expect(
-      OMP_EVENT_MAP.find((e) => e.nativeEvent === "agent_end")?.pierEvent
+      OMP_EVENT_MAP.find((e) => e.nativeEvent === "session_stop")?.pierEvent
     ).toBe("Stop");
   });
 
@@ -108,17 +105,11 @@ describe("buildOmpExtensionSource", () => {
     expect(src).toContain('agent: "omp"');
   });
 
-  it("角色分派取代加载即上报：无字面量 pierEmit 调用, 经实例计数 + hasUI 判定", () => {
+  it("不按 ctx.hasUI 猜测主从角色", () => {
     const src = buildOmpExtensionSource();
-    // 不再「加载即 pierEmit(\"SessionStart\")」——SessionStart 只作为
-    // pierDispatch 的参数出现, 由 session_start 事件触发。
-    expect(src).not.toContain('pierEmit("');
-    // 角色判定要素：模块级实例计数、统一分派函数、hasUI 主会话判定。
-    expect(src).toContain("pierInstanceCount");
-    expect(src).toContain("pierDispatch");
-    expect(src).toContain("hasUI === true");
-    // 同步 append 已取代 promise 串行链。
-    expect(src).not.toContain("pierEmitChain");
+    expect(src).not.toContain("pierInstanceCount");
+    expect(src).not.toContain("hasUI === true");
+    expect(src).not.toContain("actorHint");
   });
 });
 
@@ -238,47 +229,184 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
     return records.map((record) => record.event);
   }
 
-  it("主会话(hasUI=true)：事件同步落盘且顺序精确, turn_end 无输出", async () => {
+  it("真实事件载荷形成严格 v3 闭环，agent_end 只有 willContinue 时续为处理中", async () => {
     const { factory, logPath } = await loadFreshExtension();
     const main = createFakePi();
     factory(main.pi);
-    const ctx: OmpEventCtx = { hasUI: true };
-    // turn_end 夹在序列中间：未订阅 → 不产生任何行（核心 bug 回归——
-    // 旧版映射 Stop, 多轮工具循环中途会谎报「等待输入」）。
-    for (const evt of [
-      "session_start",
-      "agent_start",
-      "tool_call",
-      "tool_result",
-      "turn_end",
-      "tool_approval_requested",
-      "tool_approval_resolved",
-      "agent_end",
-    ]) {
-      main.fire(evt, ctx);
-    }
+    const ctx: OmpEventCtx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => "session-omp" },
+    };
+    main.fire("session_start", ctx, { type: "session_start" });
+    main.fire("before_agent_start", ctx, {
+      prompt: "Run the checks",
+      type: "before_agent_start",
+    });
+    main.fire("tool_execution_start", ctx, {
+      args: { command: "pnpm test" },
+      toolCallId: "tool-1",
+      toolName: "bash",
+      type: "tool_execution_start",
+    });
+    main.fire("tool_execution_end", ctx, {
+      isError: true,
+      result: { content: "one test failed" },
+      toolCallId: "tool-1",
+      toolName: "bash",
+      type: "tool_execution_end",
+    });
+    main.fire("tool_approval_requested", ctx, {
+      approvalMode: "ask",
+      sessionId: "session-omp",
+      toolCallId: "approval-1",
+      toolName: "write",
+      type: "tool_approval_requested",
+    });
+    main.fire("tool_approval_resolved", ctx, {
+      approved: false,
+      sessionId: "session-omp",
+      toolCallId: "approval-1",
+      toolName: "write",
+      type: "tool_approval_resolved",
+    });
+    main.fire("agent_end", ctx, {
+      type: "agent_end",
+      willContinue: false,
+    });
+    main.fire("agent_end", ctx, {
+      type: "agent_end",
+      willContinue: true,
+    });
+    main.fire("session_stop", ctx, { type: "session_stop" });
     const records = await readEmittedRecords(logPath);
     expect(eventsOf(records)).toEqual([
       "SessionStart",
       "PromptSubmit",
       "ToolStart",
       "ToolComplete",
-      "PermissionRequest",
-      "ToolStart",
+      "InteractionRequested",
+      "InteractionResolved",
+      "processing",
       "Stop",
     ]);
-    // JSONL 载荷契约（聚合器按这些字段消费）。
-    expect(records[0]).toMatchObject({
-      v: 2,
-      kind: "agentEvent",
-      panelId: "panel-1",
-      windowId: "window-1",
-      pid: process.pid,
-      agent: "omp",
-      event: "SessionStart",
-      nativeEvent: "session_start",
+    expect(records[2]).toMatchObject({
+      event: "ToolStart",
+      toolName: "bash",
+      toolUseId: "tool-1",
+      v: 3,
     });
-    expect(typeof records[0]?.ts).toBe("number");
+    expect(records[3]).toMatchObject({
+      event: "ToolComplete",
+      nativeState: "error",
+      toolUseId: "tool-1",
+      v: 3,
+    });
+    expect(records[4]).toMatchObject({
+      event: "InteractionRequested",
+      interactionId: "approval-1",
+      interactionKind: "permission",
+      toolUseId: "approval-1",
+    });
+    expect(records[5]).toMatchObject({
+      event: "InteractionResolved",
+      interactionId: "approval-1",
+      interactionKind: "permission",
+      interactionOutcome: "rejected",
+      nativeState: "rejected",
+      toolUseId: "approval-1",
+    });
+    expect(records.some((record) => record.event === "error")).toBe(false);
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: string[] = [];
+    for (const record of records) {
+      const parsed = agentHookEventSchema.parse(record);
+      if (parsed.kind !== "agentEvent") {
+        continue;
+      }
+      aggregator.ingestAgentEvent(parsed, { stopAuthority: "authoritative" });
+      const activity = aggregator.snapshot().activities[0];
+      if (activity?.kind === "agent" && activity.status) {
+        statuses.push(activity.status);
+      }
+    }
+    expect(statuses).toEqual([
+      "processing",
+      "tool",
+      "processing",
+      "waiting",
+      "processing",
+      "processing",
+      "ready",
+    ]);
+  });
+
+  it.each([
+    {
+      expectedEvent: "error",
+      expectedNativeEvent: "agent_end.error",
+      expectedStatus: "error",
+      stopReason: "error",
+    },
+    {
+      expectedEvent: "TurnInterrupted",
+      expectedNativeEvent: "agent_end.aborted",
+      expectedStatus: "ready",
+      stopReason: "aborted",
+    },
+  ] as const)("真实顺序 session_stop → agent_end($stopReason) 最终为 $expectedEvent", async ({
+    expectedEvent,
+    expectedNativeEvent,
+    expectedStatus,
+    stopReason,
+  }) => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: OmpEventCtx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => "session-omp-terminal" },
+    };
+    main.fire("before_agent_start", ctx, {
+      prompt: "Run the checks",
+      type: "before_agent_start",
+    });
+    main.fire("session_stop", ctx, { type: "session_stop" });
+    main.fire("agent_end", ctx, {
+      messages: [
+        { content: "request", role: "user" },
+        {
+          content: "terminal",
+          errorMessage: "provider stopped",
+          role: "assistant",
+          stopReason,
+        },
+      ],
+      type: "agent_end",
+    });
+
+    const records = await readEmittedRecords(logPath);
+    expect(records).toMatchObject([
+      { event: "PromptSubmit", v: 3 },
+      { event: "Stop", nativeEvent: "session_stop", v: 3 },
+      {
+        event: expectedEvent,
+        nativeEvent: expectedNativeEvent,
+        nativeState: stopReason,
+        v: 3,
+      },
+    ]);
+    const aggregator = createForegroundActivityAggregator();
+    for (const record of records) {
+      const parsed = agentHookEventSchema.parse(record);
+      if (parsed.kind !== "agentEvent") continue;
+      aggregator.ingestAgentEvent(parsed, {
+        stopAuthority: "authoritative",
+      });
+    }
+    expect(aggregator.snapshot().activities[0]).toMatchObject({
+      kind: "agent",
+      status: expectedStatus,
+    });
   });
 
   it("从 ctx.sessionManager.getSessionId 写入 sessionId 供重启 resume", async () => {
@@ -296,7 +424,7 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
     };
     // omp 宿主 session_start 载荷只有 type，sessionId 在 ctx.sessionManager。
     main.fire("session_start", ctx, { type: "session_start" });
-    main.fire("agent_start", ctx, { type: "agent_start" });
+    main.fire("before_agent_start", ctx, { type: "before_agent_start" });
     const records = await readEmittedRecords(logPath);
     expect(records).toEqual([
       expect.objectContaining({
@@ -315,9 +443,9 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
     const main = createFakePi();
     factory(main.pi);
     const ctx: OmpEventCtx = { hasUI: true };
-    main.fire("agent_start", ctx, {
+    main.fire("before_agent_start", ctx, {
       prompt: "帮我分析下当前未提交的修改",
-      type: "agent_start",
+      type: "before_agent_start",
     });
     const records = await readEmittedRecords(logPath);
     expect(records).toEqual([
@@ -339,76 +467,13 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
         getSessionId: () => "sess-1",
       },
     };
-    main.fire("agent_start", ctx, { type: "agent_start" });
+    main.fire("before_agent_start", ctx, { type: "before_agent_start" });
     const records = await readEmittedRecords(logPath);
     expect(records[0]).toMatchObject({
       event: "PromptSubmit",
       promptSnippet: "fix the flaky test",
       sessionId: "sess-1",
     });
-  });
-
-  it("task subagent(非首实例且 hasUI=false)：交错序列中只追加 Subagent 计数事件", async () => {
-    const { factory, logPath } = await loadFreshExtension();
-    // 同进程两次工厂调用 = 主会话 + task subagent（实测同 pid）。
-    const main = createFakePi();
-    const sub = createFakePi();
-    factory(main.pi);
-    factory(sub.pi);
-    const mainCtx: OmpEventCtx = { hasUI: true };
-    const subCtx: OmpEventCtx = { hasUI: false };
-    // 真实 probe 交错序列（2026-07-05, M 主会话 / S 子实例）。
-    main.fire("session_start", mainCtx); // SessionStart
-    main.fire("agent_start", mainCtx); // PromptSubmit
-    main.fire("tool_call", mainCtx); // ToolStart (task)
-    main.fire("tool_result", mainCtx); // ToolComplete
-    sub.fire("session_start", subCtx); // 子表无此项 → 无输出, 角色在此锁定 sub
-    sub.fire("agent_start", subCtx); // SubagentStart
-    main.fire("tool_call", mainCtx); // ToolStart (job)
-    sub.fire("tool_call", subCtx); // 无输出
-    sub.fire("tool_result", subCtx); // 无输出
-    sub.fire("agent_end", subCtx); // SubagentStop
-    main.fire("tool_result", mainCtx); // ToolComplete
-    main.fire("agent_end", mainCtx); // Stop
-    sub.fire("session_shutdown", subCtx); // 无输出——不拆主会话层
-    main.fire("session_shutdown", mainCtx); // SessionEnd
-    const records = await readEmittedRecords(logPath);
-    expect(eventsOf(records)).toEqual([
-      "SessionStart",
-      "PromptSubmit",
-      "ToolStart",
-      "ToolComplete",
-      "SubagentStart",
-      "ToolStart",
-      "SubagentStop",
-      "ToolComplete",
-      "Stop",
-      "SessionEnd",
-    ]);
-    expect(
-      records.filter((record) =>
-        ["SubagentStart", "SubagentStop"].includes(String(record.event))
-      )
-    ).toEqual([
-      expect.objectContaining({ actorHint: "subagent" }),
-      expect.objectContaining({ actorHint: "subagent" }),
-    ]);
-  });
-
-  it("headless 主会话兜底：首实例即使 hasUI=false 也按主表上报", async () => {
-    const { factory, logPath } = await loadFreshExtension();
-    const main = createFakePi();
-    factory(main.pi);
-    // omp -p 主会话无 UI, 靠「进程内首实例必是主会话」兜底。
-    const ctx: OmpEventCtx = { hasUI: false };
-    main.fire("session_start", ctx);
-    main.fire("agent_start", ctx);
-    main.fire("agent_end", ctx);
-    expect(eventsOf(await readEmittedRecords(logPath))).toEqual([
-      "SessionStart",
-      "PromptSubmit",
-      "Stop",
-    ]);
   });
 
   it("PIER_ 环境变量缺失时静默 no-op；恢复后按 emit 调用时读取生效", async () => {
@@ -423,7 +488,7 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
     // 恢复后生效, 且被拦截的 SessionStart 不会补写（若守卫失效, 它会先于
     // PromptSubmit 出现在文件里）。
     process.env.PIER_PANEL_ID = "panel-1";
-    main.fire("agent_start", ctx);
+    main.fire("before_agent_start", ctx);
     expect(eventsOf(await readEmittedRecords(logPath))).toEqual([
       "PromptSubmit",
     ]);
@@ -576,11 +641,10 @@ describe("install/uninstallOmpExtension (文件 IO)", () => {
 });
 
 describe("ompIntegration 契约", () => {
-  it("capability 为 full, id 为 omp", async () => {
+  it("id 为 omp", async () => {
     const { ompIntegration } = await import(
       "../../../src/main/services/agents/integrations/omp.ts"
     );
-    expect(ompIntegration.capability).toBe("full");
     expect(ompIntegration.id).toBe("omp");
   });
 });

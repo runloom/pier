@@ -11,8 +11,11 @@ import {
   type TaskPanelMetadata,
   type TaskPanelStatus,
   taskPanelMetadataSchema,
-  taskRunTabState,
 } from "@shared/contracts/tasks.ts";
+import {
+  applyAgentEndTabChrome,
+  stripLegacyAgentSuccessTab,
+} from "@shared/contracts/terminal/end-state.ts";
 import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import {
   type TerminalPanelSession,
@@ -28,9 +31,16 @@ export {
   detachAgentsForWindowSync,
 } from "./terminal-session-detach-agents.ts";
 export { ensureTerminalPanelSession } from "./terminal-session-ensure.ts";
+export {
+  migrateLegacyAgentSuccessTabs,
+  reconcileOrphanedRunningTasks,
+} from "./terminal-session-reconcile.ts";
 export { retainTerminalPanelSessions } from "./terminal-session-retain-panels.ts";
 export type { TerminalPanelSession } from "./terminal-session-state-schemas.ts";
-export { peekTerminalPanelContext } from "./terminal-session-store.ts";
+export {
+  peekTerminalPanelAgent,
+  peekTerminalPanelContext,
+} from "./terminal-session-store.ts";
 
 const ensureStore = ensureTerminalSessionStore;
 
@@ -42,7 +52,20 @@ export async function readTerminalPanelSession(
     return null;
   }
   const s = await ensureStore();
-  return s.get().windows[windowId]?.panels[panelId] ?? null;
+  const panel = s.get().windows[windowId]?.panels[panelId] ?? null;
+  if (!panel) {
+    return null;
+  }
+  // Historical agentExitTabPatch wrote success on clean exit — strip on read.
+  const tab = stripLegacyAgentSuccessTab(panel.tab, panel.agent);
+  if (tab === panel.tab) {
+    return panel;
+  }
+  if (tab === undefined) {
+    const { tab: _drop, ...rest } = panel;
+    return rest;
+  }
+  return { ...panel, tab };
 }
 
 function isRestorableTitle(title: string): boolean {
@@ -81,19 +104,12 @@ function mergePanelTabChrome(
   return normalizePanelTabChromeInput(next) ?? current;
 }
 
-function agentExitTabPatch(
+/** Agent 会话结束 tab：shared applyAgentEndTabChrome（干净退出无 success）。 */
+function tabChromeAfterAgentExit(
+  current: PanelTabChrome | undefined,
   exitCode: number | undefined
-): Partial<PanelTabChrome> {
-  const succeeded = exitCode === undefined || exitCode === 0;
-  return {
-    state: succeeded
-      ? { colorToken: "success", label: "Exited", status: "succeeded" }
-      : {
-          colorToken: "destructive",
-          label: `Exited ${exitCode}`,
-          status: "failed",
-        },
-  };
+): PanelTabChrome | undefined {
+  return applyAgentEndTabChrome(current, exitCode);
 }
 
 export async function updateTerminalPanelContext(
@@ -289,7 +305,7 @@ export async function patchTerminalPanelAgentStatus(
       agent: parsed.data,
       ...(patch.status === "exited"
         ? {
-            tab: mergePanelTabChrome(current.tab, agentExitTabPatch(exitCode)),
+            tab: tabChromeAfterAgentExit(current.tab, exitCode),
           }
         : {}),
       updatedAt: new Date().toISOString(),
@@ -456,43 +472,6 @@ export async function removeTerminalPanelSession(
     }
     return state;
   });
-}
-/** App 启动孤儿清算：上个进程的 running task 统一落成 cancelled。 */
-export async function reconcileOrphanedRunningTasks(
-  now: () => number = Date.now
-): Promise<number> {
-  const s = await ensureStore();
-  let swept = 0;
-  s.mutate((state) => {
-    for (const windowState of Object.values(state.windows)) {
-      for (const [panelId, panel] of Object.entries(windowState.panels)) {
-        if (panel.task?.status !== "running") {
-          continue;
-        }
-        const nextTask = taskPanelMetadataSchema.safeParse({
-          ...panel.task,
-          exitReason: "restore",
-          exitSource: "restore",
-          finishedAt: now(),
-          status: "cancelled",
-        });
-        if (!nextTask.success) {
-          continue;
-        }
-        windowState.panels[panelId] = {
-          ...panel,
-          tab: mergePanelTabChrome(panel.tab, {
-            state: taskRunTabState("cancelled"),
-          }),
-          task: nextTask.data,
-          updatedAt: new Date(now()).toISOString(),
-        };
-        swept += 1;
-      }
-    }
-    return state;
-  });
-  return swept;
 }
 export async function flushTerminalSessionState(): Promise<void> {
   const s = await ensureStore();

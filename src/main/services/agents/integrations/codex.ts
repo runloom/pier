@@ -1,13 +1,35 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   createNestedJsonIntegration,
   type NestedJsonIntegrationSpec,
+  pierHookCommandV3WithStdin,
+  preflightPierNestedHooksInstall,
   transformJsonConfig,
   withoutPierNestedHooks,
   withPierNestedHooks,
 } from "./shared.ts";
+
+type StandardV3Event = Exclude<
+  AgentHookEventPayloadV3["event"],
+  "InteractionRequested" | "InteractionResolved"
+>;
+
+function codexStandardCommand(
+  event: StandardV3Event,
+  nativeEvent: string
+): (agentId: AgentKind) => string {
+  return (agentId) =>
+    pierHookCommandV3WithStdin({
+      actorHintFromAgentId: true,
+      agentId,
+      event,
+      nativeEvent,
+    });
+}
 
 /**
  * `$CODEX_HOME` 解析（未设置时默认 `~/.codex`）：
@@ -39,23 +61,13 @@ const codexConfigPath = () => join(codexHomeDir(), "hooks.json");
  * `/hooks` 信任审查警告（见 issue#21639），这是预期 UX，用户首次触发时
  * 需要在 codex 内确认信任该 hooks.json，不代表集成出错。
  *
- * 当前 Codex hook 事件全集（以发布版文档与本机 generated schema 为准）：
- * - session_start.rs → SessionStart
- * - user_prompt_submit.rs → UserPromptSubmit
- * - pre_tool_use.rs → PreToolUse
- * - post_tool_use.rs → PostToolUse
- * - permission_request.rs → PermissionRequest
- * - stop.rs → Stop
- * - compact.rs → PreCompact + PostCompact
- * - subagent_start.rs → SubagentStart
- * - subagent_stop.rs → SubagentStop
+ * 当前事件集合以官方 hooks 文档与 openai/codex 源码为准。SessionEnd 已正式
+ * 发布。SessionEnd 的 `timeout` 必须 ≤3s（官方 cap；写 5 会 clamp 并警告）。
+ * PermissionRequest 输入没有请求 ID，且 hooks 没有用户批准、拒绝或
+ * 取消后的结果事件，因此不进入 waiting；具名交互只归 transcript 对账器所有。
  *
  * **补装**：PreCompact/PostCompact 官方源码级存在, 先前版本漏装。
  * 都映射为 processing——避免上下文压缩期间被 30min TTL 误衰减状态。
- *
- * SessionEnd 仍未发布（openai/codex#20603 持续跟踪中）——刻意不装：装了
- * 也是死条目（不会被触发）。Pier 用进程退出时自身的 `command_finished`
- * 驱动状态兜底复位, 覆盖同样的"会话结束"语义转换, 不依赖不存在的 hook。
  *
  * Ev5 / FA `error`：hooks 表无 `StopFailure`（或等价失败 hook）；transcript
  * 对账仅补 `task_complete→TurnCompleted` 与 `turn_aborted→TurnInterrupted`
@@ -67,7 +79,6 @@ const codexConfigPath = () => join(codexHomeDir(), "hooks.json");
  */
 const CODEX_SPEC: NestedJsonIntegrationSpec = {
   agentId: "codex",
-  capability: "full",
   runtime: { stopAuthority: "advisory" },
   configPath: codexConfigPath,
   // 与 claude/gemini/grok 默认 detect（配置文件是否已存在）不同：
@@ -76,16 +87,59 @@ const CODEX_SPEC: NestedJsonIntegrationSpec = {
   // {}, install 会正常创建该文件。
   detect: () => existsSync(codexHomeDir()),
   events: [
-    { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
-    { nativeEvent: "UserPromptSubmit", pierEvent: "PromptSubmit" },
-    { nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
-    { nativeEvent: "PostToolUse", pierEvent: "ToolComplete" },
-    { nativeEvent: "PermissionRequest", pierEvent: "PermissionRequest" },
-    { nativeEvent: "PreCompact", pierEvent: "processing" },
-    { nativeEvent: "PostCompact", pierEvent: "processing" },
-    { nativeEvent: "SubagentStart", pierEvent: "SubagentStart" },
-    { nativeEvent: "SubagentStop", pierEvent: "SubagentStop" },
-    { nativeEvent: "Stop", pierEvent: "Stop" },
+    {
+      buildCommand: codexStandardCommand("SessionStart", "SessionStart"),
+      nativeEvent: "SessionStart",
+      pierEvent: "SessionStart",
+    },
+    {
+      buildCommand: codexStandardCommand("PromptSubmit", "UserPromptSubmit"),
+      nativeEvent: "UserPromptSubmit",
+      pierEvent: "PromptSubmit",
+    },
+    {
+      buildCommand: codexStandardCommand("ToolStart", "PreToolUse"),
+      nativeEvent: "PreToolUse",
+      pierEvent: "ToolStart",
+    },
+    {
+      buildCommand: codexStandardCommand("ToolComplete", "PostToolUse"),
+      nativeEvent: "PostToolUse",
+      pierEvent: "ToolComplete",
+    },
+    {
+      buildCommand: codexStandardCommand("processing", "PreCompact"),
+      nativeEvent: "PreCompact",
+      pierEvent: "processing",
+    },
+    {
+      buildCommand: codexStandardCommand("processing", "PostCompact"),
+      nativeEvent: "PostCompact",
+      pierEvent: "processing",
+    },
+    {
+      buildCommand: codexStandardCommand("SubagentStart", "SubagentStart"),
+      nativeEvent: "SubagentStart",
+      pierEvent: "SubagentStart",
+    },
+    {
+      buildCommand: codexStandardCommand("SubagentStop", "SubagentStop"),
+      nativeEvent: "SubagentStop",
+      pierEvent: "SubagentStop",
+    },
+    {
+      buildCommand: codexStandardCommand("Stop", "Stop"),
+      nativeEvent: "Stop",
+      pierEvent: "Stop",
+    },
+    {
+      buildCommand: codexStandardCommand("SessionEnd", "SessionEnd"),
+      nativeEvent: "SessionEnd",
+      pierEvent: "SessionEnd",
+      // Codex SessionEnd：官方默认 ~1s、上限 3s；写 >3 会 clamp 并打警告。
+      // 见 developers.openai.com/codex/hooks（SessionEnd timeout cap）。
+      timeout: 3,
+    },
   ],
 };
 
@@ -119,7 +173,12 @@ export async function installCodexHooks(
   // 保持一致——清理上一版 spec 装过但本版已移出的遗留。
   await transformJsonConfig(
     settingsPath,
-    (s) => withPierCodexHooks(withoutPierCodexHooks(s)),
+    (s) => {
+      if (!preflightPierNestedHooksInstall(s, CODEX_SPEC)) {
+        return s;
+      }
+      return withPierCodexHooks(withoutPierCodexHooks(s));
+    },
     "codex"
   );
 }

@@ -15,10 +15,10 @@ import {
   type PierCoreServices,
 } from "@main/app-core/command-router.ts";
 import { PluginDisableTransitionCoordinator } from "@main/app-core/plugin-disable-transition.ts";
-import { createGitService } from "@main/services/git-service.ts";
-import { createGitWatchService } from "@main/services/git-watch-service.ts";
-import { createTaskService } from "@main/services/tasks/task-service.ts";
-import { createWorktreeService } from "@main/services/worktree-service.ts";
+import { createGitService } from "@main/services/git/service.ts";
+import { createGitWatchService } from "@main/services/git/watch/service.ts";
+import { createWorktreeService } from "@main/services/git/worktree/service.ts";
+import { createTaskService } from "@main/services/tasks/service.ts";
 import {
   type PierCommandEnvelope,
   pierCommandEnvelopeSchema,

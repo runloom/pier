@@ -1,14 +1,18 @@
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
-import { createClaudeTranscriptReconciler } from "./claude-transcript-reconciler.ts";
-import { createCodexTranscriptReconciler } from "./codex-transcript-reconciler.ts";
-import { createGrokTranscriptReconciler } from "./grok-transcript-reconciler.ts";
-import type { TranscriptTailReconciler } from "./transcript-tail-reconciler.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
+import { createClaudeTranscriptReconciler } from "./transcript/claude-reconciler.ts";
+import { createCodexTranscriptReconciler } from "./transcript/codex-reconciler.ts";
+import { createGrokTranscriptReconciler } from "./transcript/grok-reconciler.ts";
+import type {
+  TranscriptTailReconciler,
+  TranscriptTitleListener,
+} from "./transcript/tail-reconciler.ts";
 
 /**
  * Agent 私有终态对账的统一宿主边界。foreground-activity 只投递已验收的
  * 规范事件，不感知各 provider transcript 路径、格式或 watcher 生命周期。
- * 当前接入：Codex（task_complete / turn_aborted）、Claude（中断标记）、
- * Grok（updates.jsonl turn_completed cancelled / end_turn）。
+ * 当前接入：Codex（task_complete / turn_aborted）、Claude（中断标记 +
+ * provider 原生会话名）、Grok（updates.jsonl turn_completed cancelled /
+ * end_turn）。
  */
 export interface AgentTerminalReconciler {
   dispose(): void;
@@ -25,11 +29,17 @@ export interface AgentTerminalReconciler {
 
 export function createAgentTerminalReconciler(args: {
   onTerminalEvent: (event: AgentHookEventPayload) => void;
+  /**
+   * provider 原生会话名（可选）。只有能从 transcript 读出自有标题的 agent 会
+   * 调用；接不到就没有，标题退回首条 prompt 派生。
+   */
+  onTitleRecord?: TranscriptTitleListener;
 }): AgentTerminalReconciler {
+  const terminalOnly = { onTerminalEvent: args.onTerminalEvent };
   const reconcilers: readonly TranscriptTailReconciler[] = [
-    createCodexTranscriptReconciler(args),
+    createCodexTranscriptReconciler(terminalOnly),
     createClaudeTranscriptReconciler(args),
-    createGrokTranscriptReconciler(args),
+    createGrokTranscriptReconciler(terminalOnly),
   ];
   return {
     dispose: () => {

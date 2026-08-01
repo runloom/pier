@@ -120,8 +120,7 @@ describe("uninstallAiderHooks", () => {
 });
 
 describe("aiderIntegration 契约", () => {
-  it("capability 为 coarse, id 为 aider", () => {
-    expect(aiderIntegration.capability).toBe("coarse");
+  it("id 为 aider", () => {
     expect(aiderIntegration.id).toBe("aider");
   });
 });

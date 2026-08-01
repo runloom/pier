@@ -1,7 +1,7 @@
 import type {
   AgentRuntimeFocusResult,
   SortAgentIndexEntriesOptions,
-} from "@shared/contracts/agent-runtime-index.ts";
+} from "@shared/contracts/agent/runtime-index.ts";
 import i18next from "i18next";
 import { toast } from "sonner";
 import { systemNotify } from "@/lib/notifications/system-notify.ts";

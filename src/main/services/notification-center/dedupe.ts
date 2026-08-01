@@ -1,8 +1,9 @@
 /**
  * 消息去重：同一 dedupeKey 在窗口期内不新增条目，合并为 repeatCount++ 并顶到最新。
  *
- * 取代散落在调用方的 readyToastVersion（app-update）/ notifiedRunIds（task-run）/
- * toasted flag（能力降级）三处一次性去重逻辑。
+ * 合并 inbox 条目；是否再弹 toast 仍由 report.suppressToast 决定
+ * （agent.attention 可重复打断；app-update 等 one-shot 由调用方带 suppressToast）。
+ * app-update ready 的进程级单次上报在 main `notifyAppUpdateReady`（downloaded 边沿）。
  */
 
 import { NOTIFICATION_DEDUPE_WINDOW_MS } from "@shared/contracts/notification-center.ts";

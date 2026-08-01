@@ -10,7 +10,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createPanelTransferService } from "@main/services/panel-transfer/panel-transfer-service.ts";
+import { createPanelTransferService } from "@main/services/panel-transfer/service.ts";
 import type {
   PanelTransferCaller,
   PanelTransferFilesPort,
@@ -19,7 +19,7 @@ import type {
   PanelTransferTerminalPort,
   PanelTransferWindowPort,
   PanelTransferWorkspacePort,
-} from "@main/services/panel-transfer/panel-transfer-types.ts";
+} from "@main/services/panel-transfer/types.ts";
 import type { WindowTransitionLease } from "@main/services/window-service.ts";
 import { PanelTransferJournal } from "@main/state/panel-transfer-journal.ts";
 import type {

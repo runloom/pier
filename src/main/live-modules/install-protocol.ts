@@ -3,7 +3,7 @@ import type { LiveModulesService } from "../services/live-modules/service.ts";
 import {
   handleLiveModuleProtocol,
   registerLiveModuleScheme,
-} from "./live-module-protocol.ts";
+} from "./protocol.ts";
 
 /** Privileged scheme registration (before app.whenReady). */
 export function registerLiveModuleProtocolScheme(): void {

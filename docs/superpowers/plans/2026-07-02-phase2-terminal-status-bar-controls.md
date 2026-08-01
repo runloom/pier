@@ -33,7 +33,7 @@ TerminalStatusBar 渲染：[左组] ←flex-1 spacer→ [右组]
 交互入口：状态栏右键原生菜单（checkbox 显隐 + 管理入口）／设置页「状态栏」子块
 ```
 
-**关键取舍 — 右键菜单走原生 `window.pier.menu.popup` 而非 `@pier/ui` Radix ContextMenu**：终端面板主体是原生 WebContentsView，层级恒在 base web content 之上；状态栏位于面板底部，web popover 向上展开会被原生视图遮挡（settings 对话框需要 `registerTerminalFullscreenWebOverlay` 上报矩形才能盖住原生面，为一个小菜单引入该机制不成比例）。项目内终端面板既有右键（`src/renderer/lib/context-menu/use-context-menu.ts` → `pier:menu:popup`）就是原生菜单通道。为支持勾选显隐，本计划给 menu 契约补 `checkbox` 项类型（Electron 原生支持）。
+**关键取舍 — 右键菜单走原生 `window.pier.menu.popup` 而非 `@pier/ui` Radix ContextMenu**：终端面板主体是原生 WebContentsView，层级恒在 base web content 之上；状态栏位于面板底部，web popover 向上展开会被原生视图遮挡（settings 对话框需要 `registerTerminalFullscreenWebOverlay` 上报矩形才能盖住原生面，为一个小菜单引入该机制不成比例）。项目内终端面板既有右键（`src/renderer/lib/context-menu/use-menu.ts` → `pier:menu:popup`）就是原生菜单通道。为支持勾选显隐，本计划给 menu 契约补 `checkbox` 项类型（Electron 原生支持）。
 
 **Tech Stack**：Electron 42 · React 19 · TypeScript 6 strict · Zustand 5 · Zod · electron-vite 5 · Vitest 4 · Biome 2.5 + Ultracite · pnpm 10
 
@@ -318,7 +318,7 @@ export function withItemOverridePatch(
 - Modify: `src/plugins/api/renderer.ts`（`RendererTerminalStatusItem` 第 114-119 行，删除第 117 行 `order?: number;`）
 - Modify: `src/renderer/panel-kits/terminal/terminal-status-bar.tsx`（`list()` 第 24-28 行）
 - Modify: `src/plugins/builtin/git/manifest.ts`（`terminalStatusItems` 第 119-125 行，加 `order: 10`）
-- Modify: `src/plugins/builtin/git/renderer/git-status-item.tsx`（删除第 295 行 `order: 10,`）
+- Modify: `src/plugins/builtin/git/renderer/status-item.tsx`（删除第 295 行 `order: 10,`）
 - Test: `tests/unit/renderer/terminal-status-items.test.tsx`（去掉 `order:` 字段）、`tests/unit/renderer/plugin-host-context.test.tsx`（第 131 行 `order: 20,` 删除）
 
 **Interfaces:**
@@ -354,12 +354,12 @@ export function withItemOverridePatch(
   ],
 ```
 
-- [ ] `src/plugins/builtin/git/renderer/git-status-item.tsx`：删除 `registerGitStatusItem` 注册对象中的 `order: 10,` 行（原第 295 行）。
+- [ ] `src/plugins/builtin/git/renderer/status-item.tsx`：删除 `registerGitStatusItem` 注册对象中的 `order: 10,` 行（原第 295 行）。
 - [ ] 跑 `pnpm typecheck`，预期两个测试文件报错（对象字面量多余属性 `order`）：`tests/unit/renderer/terminal-status-items.test.tsx`、`tests/unit/renderer/plugin-host-context.test.tsx:131`。
 - [ ] 更新测试：`plugin-host-context.test.tsx` 删除第 131 行 `order: 20,`；`terminal-status-items.test.tsx` 删除所有 `order: 10,` / `order: 20,` 行（现状注册 id 为 `test.first` / `test.second`，id 字典序即原断言顺序 `FirstSecond`，断言不变）。
 - [ ] 跑 `pnpm test:unit tests/unit/renderer/terminal-status-items.test.tsx tests/unit/renderer/plugin-host-context.test.tsx tests/unit/renderer/git-plugin.test.tsx`，预期全绿。
 - [ ] 跑 `pnpm check` 与 `pnpm test:unit`。
-- [ ] Commit：stage `src/plugins/api/renderer.ts src/renderer/panel-kits/terminal/terminal-status-bar.tsx src/plugins/builtin/git/manifest.ts src/plugins/builtin/git/renderer/git-status-item.tsx tests/unit/renderer/terminal-status-items.test.tsx tests/unit/renderer/plugin-host-context.test.tsx`，message `refactor(plugin): move terminal status item order from runtime registration to manifest`，等用户确认后提交。
+- [ ] Commit：stage `src/plugins/api/renderer.ts src/renderer/panel-kits/terminal/terminal-status-bar.tsx src/plugins/builtin/git/manifest.ts src/plugins/builtin/git/renderer/status-item.tsx tests/unit/renderer/terminal-status-items.test.tsx tests/unit/renderer/plugin-host-context.test.tsx`，message `refactor(plugin): move terminal status item order from runtime registration to manifest`，等用户确认后提交。
 
 ---
 
@@ -676,7 +676,7 @@ export function flushTerminalStatusBarPrefs(): Promise<void> {
 
 **Interfaces:**
 
-- Consumes: Task 1 契约；Task 3 默认单例函数；`windowManager.getAll()`（`src/main/windows/window-manager.ts:477`）。
+- Consumes: Task 1 契约；Task 3 默认单例函数；`windowManager.getAll()`（`src/main/windows/manager.ts:477`）。
 - Produces:
   - `PierCommand` 新增：`{ type: "terminalStatusBar.prefs.getAll" }`、`{ type: "terminalStatusBar.prefs.setItemOverride"; itemId: string; override: TerminalStatusBarItemOverride }`、`{ type: "terminalStatusBar.prefs.resetItem"; itemId: string }`——三者 resolve `TerminalStatusBarPrefs` 全量快照。
   - `PIER_BROADCAST.TERMINAL_STATUS_BAR_PREFS_CHANGED = "pier://terminal-status-bar:prefs-changed"`，payload `TerminalStatusBarPrefs`（`ALLOWED_RENDERER_CHANNELS` 由 `Object.values(PIER_BROADCAST)` 自动派生，无需另改）。
@@ -1876,7 +1876,7 @@ export const useSettingsDialogStore = create<SettingsDialogState>((set) => ({
  * 终端状态栏右键菜单 — 走原生 Menu.popup(window.pier.menu.popup)而非 Radix
  * ContextMenu:终端面板主体是原生 WebContentsView,层级恒在 base web content
  * 之上,web popover 自状态栏向上展开会被原生视图遮挡;原生菜单也是终端面板
- * 既有右键通道(lib/context-menu/use-context-menu.ts)。
+ * 既有右键通道(lib/context-menu/use-menu.ts)。
  *
  * 勾选列表数据源 = 已启用插件 manifest 声明的 terminalStatusItems(与设置页
  * 管理块一致,含当前未注册渲染的项);标题经 resolvePluginTerminalStatusItemDisplay
@@ -2331,7 +2331,7 @@ export function TerminalStatusBarBlock() {
 }
 ```
 
-  注：`Button` 的 `size` 取值以 `packages/ui/src/button.tsx` 实际 variant 为准（`git-status-item.tsx` 用过 `size="xs"`；若无 `icon-sm` 用 `size="xs"` + `className="px-1"` 替代，执行时核对）。
+  注：`Button` 的 `size` 取值以 `packages/ui/src/button.tsx` 实际 variant 为准（`status-item.tsx` 用过 `size="xs"`；若无 `icon-sm` 用 `size="xs"` + `className="px-1"` 替代，执行时核对）。
 - [ ] `src/renderer/pages/settings/components/terminal-section.tsx`：import 加 `import { TerminalStatusBarBlock } from "@/pages/settings/components/terminal-status-bar-block.tsx";`；`TerminalSection` 返回 JSX 中既有 `</Card>`（第 159 行）之后、外层 `</div>` 之前插入 `<TerminalStatusBarBlock />`。
 - [ ] 跑 `pnpm check` 与 `pnpm test:unit`。
 - [ ] 人工验证（`pnpm dev`，中英各过一遍——设置页切语言后复查标题/按钮文案）：

@@ -9,6 +9,7 @@ import type {
 } from "@shared/contracts/panel.ts";
 import type { ReactNode } from "react";
 import {
+  runtimeStatusColorClassName,
   runtimeStatusLabel,
   runtimeStatusVisual,
 } from "@/components/common/runtime-status-visual.ts";
@@ -103,20 +104,40 @@ export function tabTooltipText(
 export function tabAriaLabel(
   explicit: string | undefined,
   title: string,
-  stateLabel: string | undefined
+  stateLabel: string | undefined,
+  trailingLabel?: string | undefined,
+  /**
+   * Hover-only tooltip body (may include title/state). Extra lines are folded
+   * into aria so keyboard/SR keep Command/CWD/path after openOnFocus=false.
+   */
+  tooltipDetail?: string | null
 ): string | undefined {
   if (explicit) {
     return explicit;
   }
-  if (!stateLabel) {
+  const seen = new Set(
+    [title, stateLabel, trailingLabel].filter((part): part is string =>
+      Boolean(part)
+    )
+  );
+  const tooltipParts = (tooltipDetail ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !seen.has(line));
+  const parts = [title, stateLabel, trailingLabel, ...tooltipParts].filter(
+    (part): part is string => Boolean(part)
+  );
+  // 无 state / trailing / tooltip 明细时不要强塞 aria-label（留给外层 title 文本即可）。
+  if (parts.length <= 1) {
     return;
   }
-  return [title, stateLabel].filter(Boolean).join(", ");
+  return parts.join(", ");
 }
 
 export function tabStatusIndicator(
   status: PanelTabStatus,
-  label: string | undefined
+  label: string | undefined,
+  options?: { preserveSemanticColor?: boolean }
 ): ReactNode {
   if (status === "idle") {
     return null;
@@ -124,21 +145,27 @@ export function tabStatusIndicator(
   const displayLabel = label ?? runtimeStatusLabel(status);
   const visual = runtimeStatusVisual(status);
   const Icon = visual.Icon;
+  const textClassName = options?.preserveSemanticColor
+    ? runtimeStatusColorClassName(status, "important")
+    : visual.textClassName;
   return (
     <span
       aria-label={displayLabel}
       className={cn(
         "inline-flex size-4 shrink-0 items-center justify-center",
-        visual.textClassName
+        textClassName
       )}
       data-panel-tab-state-indicator={status}
       data-tab-status={status}
       role="img"
-      title={displayLabel}
     >
       <Icon
         aria-hidden="true"
-        className={cn("size-3 shrink-0", visual.iconClassName)}
+        className={cn(
+          "size-3 shrink-0",
+          visual.iconClassName,
+          options?.preserveSemanticColor && textClassName
+        )}
         data-panel-tab-state-icon={status}
       />
     </span>

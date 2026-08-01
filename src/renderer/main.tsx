@@ -10,15 +10,15 @@ import {
   installTerminalInputRoutingPointerDownListener,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";
-import { AppContentDialogHost } from "./components/common/app-content-dialog-host.tsx";
-import { AppDialogHost } from "./components/common/app-dialog-host.tsx";
 import { AppRuntimeErrorBoundary } from "./components/common/app-runtime-error-boundary.tsx";
+import { AppContentDialogHost } from "./components/common/dialogs/content-host.tsx";
+import { AppDialogHost } from "./components/common/dialogs/host.tsx";
 import {
   StartupErrorScreen,
   StartupScreen,
 } from "./components/common/startup-error-screen.tsx";
-import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
-import { installWorkspaceRendererCommandListener } from "./components/workspace/workspace-renderer-command-listener.ts";
+import { TerminalDebugWindow } from "./components/common/terminal-debug/window.tsx";
+import { installWorkspaceRendererCommandListener } from "./components/workspace/renderer-command-listener.ts";
 import { initI18n } from "./i18n/index.ts";
 import { registerAgentRuntimeActions } from "./lib/actions/agent-runtime-actions.ts";
 import { registerAgentStartActions } from "./lib/actions/agent-start-actions.ts";
@@ -48,11 +48,13 @@ import { initFont } from "./stores/font.store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
 import { initLocalEnvironments } from "./stores/local-environments.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
+import { initLspPreferences } from "./stores/lsp-preferences.store.ts";
 import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
 import { initTaskRunsStore } from "./stores/task-runs.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
+import { initWorkspacePreferences } from "./stores/workspace-preferences.store.ts";
 import { initWorktreePreferences } from "./stores/worktree-preferences.store.ts";
 import { initZoom } from "./stores/zoom.store.ts";
 
@@ -126,6 +128,8 @@ async function bootstrap() {
       initTerminalStatusBarPrefs(),
       initTaskRunsStore(),
       initWorktreePreferences(),
+      initWorkspacePreferences(),
+      initLspPreferences(),
       initLocalEnvironments(),
     ]);
   } catch (err) {

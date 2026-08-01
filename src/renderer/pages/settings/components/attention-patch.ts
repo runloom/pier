@@ -1,4 +1,4 @@
-import type { AgentAttentionSettings } from "@shared/contracts/agent-attention.ts";
+import type { AgentAttentionSettings } from "@shared/contracts/agent/attention.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
 /**

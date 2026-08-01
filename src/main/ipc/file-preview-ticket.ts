@@ -4,17 +4,17 @@ import {
   filePreviewRuntimeRevokeRequestSchema,
   filePreviewTicketIssueRequestSchema,
   filePreviewTicketReleaseRequestSchema,
-} from "@shared/contracts/file-preview-ticket.ts";
+} from "@shared/contracts/file/preview-ticket.ts";
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { type IpcMainInvokeEvent, ipcMain, type WebContents } from "electron";
-import { appCore } from "../app-core/app-core.ts";
+import { appCore } from "../app-core/index.ts";
 import {
   type FilePreviewTicketOwner,
   filePreviewPartitionKey,
   filePreviewTicketRegistry,
-} from "../files/file-preview-ticket-registry.ts";
-import { windowManager } from "../windows/window-manager.ts";
+} from "../files/preview-ticket-registry.ts";
+import { windowManager } from "../windows/manager.ts";
 import { isTrustedMainFrame } from "./trusted-main-frame.ts";
 
 interface RuntimeLease {

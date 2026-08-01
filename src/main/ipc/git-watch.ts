@@ -1,14 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { gitReviewRootPathSchema } from "@shared/contracts/git-review.ts";
+import { gitReviewRootPathSchema } from "@shared/contracts/git/review.ts";
 import {
   type GitWatchLease,
   gitWatchStopRequestSchema,
-} from "@shared/contracts/git-watch.ts";
+} from "@shared/contracts/git/watch.ts";
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { type IpcMainInvokeEvent, ipcMain, type WebContents } from "electron";
-import { appCore } from "../app-core/app-core.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { appCore } from "../app-core/index.ts";
+import { windowManager } from "../windows/manager.ts";
 import { resolveCanonicalGitWatchRoot } from "./git-watch-root.ts";
 import {
   createGitWatchSubscriptions,

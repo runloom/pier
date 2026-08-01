@@ -227,6 +227,32 @@ final class TerminalWindowTransferTests: XCTestCase {
             impl.routerHasTargetForTests(window: target, panelId: toNativePanelId)
         )
 
+        let presentationRequestSequenceBefore =
+            afterMove.framePresentationRequestSequence
+        XCTAssertEqual(
+            impl.requestTerminalPresentation(
+                panelId: toNativePanelId,
+                presentationId: 73
+            ),
+            0
+        )
+        XCTAssertEqual(
+            impl.terminalIdentityForTests(panelId: toNativePanelId)?
+                .containerView.presentationId,
+            73
+        )
+        XCTAssertGreaterThan(
+            try XCTUnwrap(
+                impl.terminalIdentityForTests(panelId: toNativePanelId)
+            ).framePresentationRequestSequence,
+            presentationRequestSequenceBefore,
+            "adoption must request a fresh frame even when geometry is unchanged"
+        )
+        XCTAssertTrue(
+            afterMove.containerView.isPresentationCovered,
+            "adoption must remain covered until the target presentation commits"
+        )
+
         // Present on target — production path uses applyWindowState, not moveTerminal.
         XCTAssertEqual(
             impl.applyWindowState(

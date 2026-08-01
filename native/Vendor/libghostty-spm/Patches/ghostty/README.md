@@ -13,6 +13,7 @@ Lakr233 上游 patches 之后再 apply 这一批。编号从 `0100` 起，跟 La
 | `0102-embedded-main-thread-target-render.patch` | 为 embedded runtime 声明主线程绘制要求。renderer 完成 frame 后沿 Ghostty 原有 `redraw_surface` 路径保留精确 surface target，由宿主主线程只呈现目标 surface。 |
 | `0103-host-cursor-suppress.patch` | 加 `ghostty_surface_set_cursor_suppress`：renderer 层强制不画光标（不受 TUI `CSI ?25h` 影响）。增强输入 pin 时 suppress 绘制（只闪 composer caret）；探针 0104 仍读模式位。 |
 | `0104-cursor-visibility-probe.patch` | 加 `ghostty_surface_cursor_visible` 只读探针：读应用设置的 DECTCEM(?25) 模式位（不受 0103 渲染层 suppress 影响），用作「TUI 输入框是否聚焦」信号——现代 TUI 输入失焦即藏光标。 |
+| `0105-host-user-messages.patch` | 宿主文案 get API（Pier Swift 实现）：Thread 启动失败 printString 读 catalog；Surface 进程退出 **fallback**（action 未消费）可读 `processExitedWithDismiss`。进程退出主路径不依赖本 patch——Pier 抑制英文后由 renderer `injectDisplayText`。需 `pnpm build:libghostty`。 |
 
 ## 规则
 

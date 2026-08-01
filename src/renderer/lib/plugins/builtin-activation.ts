@@ -1,10 +1,10 @@
 import type { RendererPluginModule } from "@plugins/api/renderer.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { closeContentDialogsForPlugin } from "../../stores/app-content-dialog.store.ts";
-import { createRendererPluginContext } from "./host-context.ts";
-import { clearHostGroupContentForPlugin } from "./host-group-content-context.tsx";
+import { createRendererPluginContext } from "./host/context.ts";
+import { clearHostGroupContentForPlugin } from "./host/group-content-context.tsx";
 
-import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
+import { pluginLifecycleBarriers } from "./lifecycle/barriers.ts";
 export function activateBuiltinRendererPlugin(
   module: RendererPluginModule,
   entry: PluginRegistryEntry

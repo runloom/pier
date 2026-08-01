@@ -9,6 +9,15 @@ const PREVIEW_DIR = join(
   "plugins",
   "builtin",
   "files",
+  "renderer",
+  "markdown"
+);
+const RENDERER_DIR = join(
+  ROOT,
+  "src",
+  "plugins",
+  "builtin",
+  "files",
   "renderer"
 );
 
@@ -31,9 +40,9 @@ describe("markdown preview layout governance", () => {
   });
 
   it("keeps one outline shell and frame-aligned floating rail", () => {
-    const preview = readPreview("markdown-preview.tsx");
-    const article = readPreview("markdown-preview-article-layout.tsx");
-    const toc = readPreview("markdown-preview-toc.tsx");
+    const preview = readPreview("preview.tsx");
+    const article = readPreview("preview-article-layout.tsx");
+    const toc = readPreview("preview-toc.tsx");
 
     expect(article).toContain('data-slot="markdown-preview-layout"');
     expect(article).toContain("MarkdownPreviewOverlayRail");
@@ -68,11 +77,11 @@ describe("markdown preview layout governance", () => {
   });
 
   it("shares outline geometry constants instead of hard-coded twins", () => {
-    const preview = readPreview("markdown-preview.tsx");
-    const toc = readPreview("markdown-preview-toc.tsx");
-    const article = readPreview("markdown-preview-article-layout.tsx");
-    const layout = readPreview("markdown-preview-toc-layout.ts");
-    const fontScale = readPreview("markdown-preview-font-scale.tsx");
+    const preview = readPreview("preview.tsx");
+    const toc = readPreview("preview-toc.tsx");
+    const article = readPreview("preview-article-layout.tsx");
+    const layout = readPreview("preview-toc-layout.ts");
+    const fontScale = readPreview("preview-font-scale.tsx");
 
     expect(layout).toContain("export const MARKDOWN_TOC_INSET_PX");
     expect(layout).toContain("export const MARKDOWN_TOC_PANEL_WIDTH_PX");
@@ -96,8 +105,8 @@ describe("markdown preview layout governance", () => {
   });
 
   it("keeps reading prefs in the shared store without outline side/collapse", () => {
-    const prefs = readPreview("markdown-preview-preferences.ts");
-    const toc = readPreview("markdown-preview-toc.tsx");
+    const prefs = readPreview("preview-preferences.ts");
+    const toc = readPreview("preview-toc.tsx");
     expect(prefs).toContain("useMarkdownPreviewPrefsStore");
     expect(prefs).not.toContain("tocCollapsed");
     expect(prefs).not.toContain("tocSide");
@@ -106,7 +115,10 @@ describe("markdown preview layout governance", () => {
   });
 
   it("keeps visible measure owned by CSS --md-measure", () => {
-    const proseCss = readPreview("markdown-prose.css");
+    const proseCss = readFileSync(
+      join(RENDERER_DIR, "markdown/prose.css"),
+      "utf8"
+    );
     expect(proseCss).toContain("--md-measure:");
     expect(proseCss).toContain("max-width: var(--md-measure)");
   });

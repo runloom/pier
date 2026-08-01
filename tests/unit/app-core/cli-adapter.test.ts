@@ -1,5 +1,5 @@
-import { parsePierCliArgs } from "@main/adapters/cli/cli-parser.ts";
 import { createPierCliCommandClient } from "@main/adapters/cli/local-command-client.ts";
+import { parsePierCliArgs } from "@main/adapters/cli/parser.ts";
 import { resolvePierCliBin } from "@main/adapters/cli/pier-path.ts";
 import { describe, expect, it } from "vitest";
 

@@ -1,5 +1,5 @@
 import type { PierCommandPlacement } from "@shared/contracts/commands.ts";
-import type { TerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
+import type { TerminalLaunchOptions } from "@shared/contracts/terminal/launch.ts";
 import { invokePierCommand } from "./ipc-envelope.ts";
 
 /**

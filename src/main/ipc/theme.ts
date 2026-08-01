@@ -1,6 +1,6 @@
 import { NATIVE_CHROME_FALLBACK } from "@shared/theme-colors.ts";
 import { type IpcMain, nativeTheme } from "electron";
-import { windowManager } from "../windows/window-manager.ts";
+import { windowManager } from "../windows/manager.ts";
 
 type ResolvedTheme = keyof typeof NATIVE_CHROME_FALLBACK;
 

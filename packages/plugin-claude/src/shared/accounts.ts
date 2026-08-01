@@ -1,3 +1,4 @@
+import type { AccountUsageMetric } from "@pier/plugin-api/account-usage";
 import { z } from "zod/mini";
 
 /**
@@ -21,22 +22,12 @@ export interface ClaudeSubscriptionSummary {
   planType: string;
 }
 
-export interface ClaudeUsageWindow {
-  id: string;
-  /** Stable bucket id: "session" / "weekly" / "weekly:<model>". */
-  limitId: string;
-  /** Human bucket name, e.g. "Session", "Weekly limit", "Opus". */
-  limitName?: string | undefined;
-  resetsAt?: number | undefined;
-  usedPercent: number;
-  windowMinutes?: number | undefined;
-}
-
 export interface ClaudeUsageSnapshot {
+  attemptedAt: number;
   error?: string | undefined;
-  fetchedAt: number;
+  metrics: AccountUsageMetric[];
   status: "ok" | "error";
-  windows: ClaudeUsageWindow[];
+  updatedAt?: number | undefined;
 }
 
 export interface ClaudeAccountSummary {

@@ -108,7 +108,7 @@ FileEditorViewSession.attach / #extensions
 
 ### 4.3 CodeMirror 接入
 
-新小模块（建议）`files-editor-minimap.ts`：
+新小模块（建议）`files-editor/minimap.ts`：
 
 ```ts
 import type { Extension } from "@codemirror/state";
@@ -223,7 +223,7 @@ this.#minimapConfigDispose = context.configuration.onDidChange((event) => {
 | `src/plugins/builtin/files/settings.ts` | 导出 `FILES_EDITOR_MINIMAP_SETTING_KEY` |
 | `src/plugins/builtin/files/manifest.ts` | configuration 属性 order 15 |
 | `src/plugins/builtin/files/locales/en.json` / `zh-CN.json` | settings 文案 |
-| `src/plugins/builtin/files/renderer/files-editor-minimap.ts` | **新** extension 工厂 |
+| `src/plugins/builtin/files/renderer/files-editor/minimap.ts` | **新** extension 工厂 |
 | `src/plugins/builtin/files/renderer/file-editor-view-session.ts` | Compartment + `setMinimapEnabled` + 构造参数 |
 | `src/plugins/builtin/files/renderer/file-editor-view-coordinator.ts` | attach 透传 `minimapEnabled` |
 | `src/plugins/builtin/files/renderer/file-editor-controller.ts` | 读配置、订阅、广播、dispose |

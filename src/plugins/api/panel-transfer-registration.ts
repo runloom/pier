@@ -5,7 +5,7 @@
  * without pulling the full plugin panel surface (and vice versa). The
  * workspace re-exports a richer `CorePanelTransferRegistration` (adds
  * `kind: "terminal"` for core-internal use) from
- * `src/renderer/components/workspace/panel-transfer-adapters.ts`.
+ * `src/renderer/components/workspace/transfer/adapters.ts`.
  *
  * External plugins MUST NOT declare `kind: "terminal"`; the workspace
  * resolver rejects it.

@@ -3,10 +3,7 @@ import type {
   PierCommandEnvelope,
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
-import {
-  type ParsePierCliArgsOptions,
-  parsePierCliArgs,
-} from "./cli-parser.ts";
+import { type ParsePierCliArgsOptions, parsePierCliArgs } from "./parser.ts";
 
 export interface PierLocalCommandTransport {
   request(envelope: PierCommandEnvelope): Promise<PierCommandResult>;

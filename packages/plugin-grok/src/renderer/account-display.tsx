@@ -1,26 +1,21 @@
+import type {
+  AccountMembershipSnapshot,
+  AccountUsageMetric,
+} from "@pier/plugin-api/account-usage";
+import {
+  type AccountMetadataBadgeMode,
+  AccountMetadataBadges,
+} from "@pier/plugin-api/account-usage/renderer";
 import { Avatar, AvatarFallback } from "@pier/ui/avatar.tsx";
 import { Button } from "@pier/ui/button.tsx";
-import {
-  COLLECTION_QUOTA_SETTINGS_ITEM_MIN_WIDTH,
-  collectionAutoFitClassName,
-  collectionAutoFitStyle,
-  collectionLayoutMode,
-} from "@pier/ui/collection-auto-layout.ts";
-import { Empty, EmptyDescription, EmptyHeader } from "@pier/ui/empty.tsx";
-import {
-  formatDurationShort,
-  formatPercent,
-  formatRelativeTime,
-} from "@pier/ui/format.tsx";
+import { formatRelativeTime } from "@pier/ui/format.tsx";
 import {
   Item,
   ItemActions,
   ItemContent,
-  ItemDescription,
   ItemMedia,
   ItemTitle,
 } from "@pier/ui/item.tsx";
-import { Progress } from "@pier/ui/progress.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
 import { cn } from "@pier/ui/utils.ts";
@@ -29,14 +24,12 @@ import type { JSX } from "react";
 import type {
   GrokAccountSummary,
   GrokSubscriptionSummary,
-  GrokUsageWindow,
 } from "../shared/accounts.ts";
-import { remainingPercent, usageRisk } from "../shared/usage.ts";
 import {
   isTransientUsageError,
   type Translate,
 } from "./format-account-error.ts";
-import { usageProgressVariant, usageWindowLabel } from "./usage-meter.tsx";
+import { UsageMeter, usageMetricLabel } from "./usage-meter.tsx";
 
 export function accountDisplayLabel(account: {
   email?: string | undefined;
@@ -58,7 +51,10 @@ export function accountMembershipSummary(
   t: Translate,
   now = Date.now()
 ): string {
-  const kindLabel = account.kind === "api_key" ? "API key" : "OIDC";
+  const kindLabel =
+    account.kind === "api_key"
+      ? t("pier.grok.accounts.settings.authKindApiKey", "API key")
+      : t("pier.grok.accounts.settings.authKindOidc", "OIDC");
   const subscription = account.subscription;
   if (!subscription) return kindLabel;
 
@@ -91,6 +87,78 @@ export function accountMembershipSummary(
   return parts.join(" · ");
 }
 
+export function AccountBadges({
+  account,
+  includeScalars = false,
+  language,
+  mode = "all",
+  t,
+}: {
+  account: Pick<GrokAccountSummary, "kind" | "subscription" | "usage">;
+  includeScalars?: boolean;
+  language: string;
+  mode?: AccountMetadataBadgeMode;
+  t: Translate;
+}): JSX.Element | null {
+  const updatedAt = account.usage?.updatedAt;
+  const membership = grokAccountMembership(account, updatedAt ?? 0);
+  return (
+    <AccountMetadataBadges
+      copy={{
+        cancelAtPeriodEnd: t(
+          "pier.grok.accounts.settings.cancelAtPeriodEnd",
+          "Cancels at period end"
+        ),
+        expired: t("pier.grok.accounts.settings.expired", "Expired"),
+        expires: (relative) =>
+          `${t("pier.grok.accounts.settings.expires", "Expires")} ${relative}`,
+        trialEnds: (relative) =>
+          `${t("pier.grok.accounts.settings.trialEnds", "Trial ends")} ${relative}`,
+      }}
+      identityLabel={
+        account.kind === "api_key"
+          ? t("pier.grok.accounts.settings.authKindApiKey", "API key")
+          : t("pier.grok.accounts.settings.authKindOidc", "OIDC")
+      }
+      language={language}
+      {...(membership ? { membership } : {})}
+      membershipLabel={(value) => value.tier.toUpperCase().replaceAll("_", " ")}
+      metricLabel={(metric) => usageMetricLabel(metric, language, t)}
+      metrics={includeScalars ? (account.usage?.metrics ?? []) : []}
+      mode={mode}
+    />
+  );
+}
+
+export function grokAccountMembership(
+  account: Pick<GrokAccountSummary, "subscription">,
+  updatedAt: number
+): AccountMembershipSnapshot | undefined {
+  const subscription = account.subscription;
+  let membershipStatus: AccountMembershipSnapshot["status"] | undefined;
+  if (subscription?.status === "none") {
+    membershipStatus = "free";
+  } else if (subscription) {
+    membershipStatus = subscription.status;
+  }
+  return subscription
+    ? {
+        ...(subscription.cancelAtPeriodEnd === undefined
+          ? {}
+          : { cancelAtPeriodEnd: subscription.cancelAtPeriodEnd }),
+        ...(subscription.expiresAt === undefined
+          ? {}
+          : { expiresAt: subscription.expiresAt }),
+        status: membershipStatus ?? "unknown",
+        tier: subscription.planType,
+        ...(subscription.trialEndsAt === undefined
+          ? {}
+          : { trialEndsAt: subscription.trialEndsAt }),
+        updatedAt: updatedAt ?? 0,
+      }
+    : undefined;
+}
+
 export function AccountAvatar({
   label,
   size = "default",
@@ -106,69 +174,26 @@ export function AccountAvatar({
   );
 }
 
-function Quota({
-  compact = false,
-  label,
-  language,
-  t,
-  window,
-}: {
-  compact?: boolean;
-  label: string;
-  language: string;
-  t: Translate;
-  window: GrokUsageWindow;
-}): JSX.Element {
-  const remaining = remainingPercent(window.usedPercent);
-  const reset =
-    window.resetsAt && window.resetsAt > Date.now()
-      ? formatDurationShort(window.resetsAt - Date.now(), language)
-      : null;
-  const risk = usageRisk(window.usedPercent);
-  return (
-    <div
-      className="w-full min-w-0"
-      data-compact={compact || undefined}
-      data-risk={risk}
-      data-slot="grok-usage-progress"
-    >
-      <div className="mb-2.5 flex w-full items-baseline justify-between gap-4">
-        <span className="min-w-0 truncate font-semibold text-xs">{label}</span>
-        <strong className="shrink-0 font-semibold tabular-nums tracking-tight">
-          {formatPercent(remaining / 100, language)}
-        </strong>
-      </div>
-      <Progress
-        aria-label={`${label} ${formatPercent(remaining / 100, language)}`}
-        className={cn("w-full", compact ? "h-1" : "h-1.5")}
-        value={remaining}
-        variant={usageProgressVariant(risk)}
-      />
-      <div className="mt-2 min-h-4 w-full text-right text-muted-foreground text-xs tabular-nums">
-        {reset
-          ? `${t("pier.grok.widget.resetsIn", "Resets in")} ${reset}`
-          : "—"}
-      </div>
-    </div>
-  );
-}
-
 export function QuotaGroup({
   compact = false,
   error,
   errorTransient = false,
   language,
   loading = false,
+  metrics,
+  status,
   t,
-  windows,
+  updatedAt,
 }: {
   compact?: boolean;
   error: string | undefined;
   errorTransient?: boolean;
   language: string;
   loading?: boolean;
+  metrics: readonly AccountUsageMetric[];
+  status: "error" | "ok";
   t: Translate;
-  windows: GrokUsageWindow[];
+  updatedAt?: number;
 }): JSX.Element {
   if (loading) {
     return (
@@ -197,7 +222,7 @@ export function QuotaGroup({
   // when there is nothing to show do we surface a muted note, not a red
   // banner — the next poll retries automatically.
   const transientNote =
-    hasError && errorTransient && windows.length === 0 ? (
+    hasError && errorTransient && metrics.length === 0 ? (
       <p
         className="w-full text-muted-foreground text-sm"
         data-slot="grok-usage-error"
@@ -209,26 +234,14 @@ export function QuotaGroup({
       </p>
     ) : null;
 
-  if (windows.length === 0) {
+  if (metrics.length === 0) {
     if (errorBanner) {
       return errorBanner;
     }
     if (transientNote) {
       return transientNote;
     }
-    return (
-      <Empty className="min-h-19 gap-0 border-0 p-3">
-        <EmptyHeader className="gap-0">
-          <EmptyDescription>
-            {t("pier.grok.accounts.settings.noUsage", "No usage data")}
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
   }
-
-  const count = windows.length;
-  const layout = collectionLayoutMode(count);
 
   return (
     <div
@@ -236,40 +249,17 @@ export function QuotaGroup({
         "flex w-full min-w-0 flex-col gap-3",
         compact && "flex-1 max-[48rem]:col-span-full max-[48rem]:row-start-2"
       )}
-      data-count={count}
+      data-count={metrics.length}
       data-slot="grok-quota-group"
     >
       {errorBanner}
-      {/*
-        Single window: block + w-full only — never auto-fit grid.
-        auto-fit with one item can still size the track to content on a wide
-        settings card, leaving the meter on a half-row.
-      */}
-      <div
-        className={cn(
-          collectionAutoFitClassName(count, {
-            gapClassName: "gap-4",
-            singleAs: "block",
-          })
-        )}
-        data-layout={layout}
-        data-slot="grok-quota-grid"
-        style={collectionAutoFitStyle(
-          count,
-          COLLECTION_QUOTA_SETTINGS_ITEM_MIN_WIDTH
-        )}
-      >
-        {windows.map((window) => (
-          <Quota
-            compact={compact}
-            key={window.id}
-            label={usageWindowLabel(window, language, t)}
-            language={language}
-            t={t}
-            window={window}
-          />
-        ))}
-      </div>
+      <UsageMeter
+        language={language}
+        metrics={metrics}
+        status={status}
+        t={t}
+        {...(updatedAt === undefined ? {} : { updatedAt })}
+      />
     </div>
   );
 }
@@ -307,9 +297,7 @@ export function OtherAccount({
         </ItemMedia>
         <ItemContent className="w-60 min-w-0 flex-none max-[48rem]:w-auto max-[48rem]:flex-1">
           <ItemTitle title={label}>{label}</ItemTitle>
-          <ItemDescription>
-            {accountMembershipSummary(account, language, t)}
-          </ItemDescription>
+          <AccountBadges account={account} language={language} t={t} />
         </ItemContent>
         <QuotaGroup
           compact
@@ -317,8 +305,16 @@ export function OtherAccount({
           errorTransient={isTransientUsageError(account.usage?.error)}
           language={language}
           loading={!account.usage}
+          metrics={
+            account.usage?.metrics.filter(
+              (metric) => metric.kind === "quota"
+            ) ?? []
+          }
+          status={account.usage?.status ?? "ok"}
           t={t}
-          windows={account.usage?.windows ?? []}
+          {...(account.usage?.updatedAt === undefined
+            ? {}
+            : { updatedAt: account.usage.updatedAt })}
         />
         <ItemActions className="gap-1">
           <Button

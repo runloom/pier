@@ -28,7 +28,7 @@
 | `src/main/ipc/terminal-task-lifecycle-wiring.ts` | 悬挂码 + detaching 门闸 |
 | `src/main/ipc/foreground-activity.ts` | SessionEnd → exited 门闸 |
 | `src/main/state/terminal-session-state.ts` | `detachAgentsForWindow`；可选 list panels |
-| `src/main/windows/window-manager.ts` | close/quit 调用 arm→detachAgents→detach |
+| `src/main/windows/manager.ts` | close/quit 调用 arm→detachAgents→detach |
 | `src/main/ipc/terminal-initial-session.ts` | restore 合并 persist |
 | `src/main/ipc/terminal-create-handler.ts` | restore 失败不清 agent |
 | `src/renderer/panel-kits/terminal/*` | skipNativeCreate、终态卡、重启 |
@@ -197,7 +197,7 @@ git commit -m "fix(terminal): suppress agent exited while window detaching"
 
 **Files:**
 - Modify: `src/main/state/terminal-session-state.ts`
-- Modify: `src/main/windows/window-manager.ts`
+- Modify: `src/main/windows/manager.ts`
 - Modify: `src/main/services/window-service.ts`（若 quit 需在 destroy 前暴露 hook；优先全放 window-manager）
 - Test: `tests/unit/main/terminal-session-detach-agents.test.ts`
 
@@ -271,7 +271,7 @@ pnpm exec vitest run tests/unit/main/terminal-session-detach-agents.test.ts
 git add src/main/state/terminal-session-state.ts \
   src/main/state/terminal-session-state-schemas.ts \
   src/shared/contracts/terminal.ts \
-  src/main/windows/window-manager.ts \
+  src/main/windows/manager.ts \
   src/main/services/window-service.ts \
   tests/unit/main/terminal-session-detach-agents.test.ts
 git commit -m "fix(terminal): keep running agent sessions across window close"

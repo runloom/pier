@@ -6,24 +6,14 @@ import type {
 import { FileText, FolderSearch, FolderTree } from "lucide-react";
 import {
   FILES_FILE_PANEL_ID,
-  FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
   FILES_PLUGIN_ID,
   FILES_SAVE_AS_COMMAND_ID,
   FILES_SAVE_COMMAND_ID,
   FILES_SEARCH_PANEL_ID,
+  FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID,
+  FILES_TREE_EXPAND_ALL_COMMAND_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
 } from "../manifest.ts";
-import { FileEditorController } from "./file-editor-controller.ts";
-import { createFilePanel as createFilesFilePanel } from "./file-panel.tsx";
-import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
-import { createSaveAllAction } from "./file-save-all-action.ts";
-import { createFilesTreeActions } from "./file-tree-actions.ts";
-import { filePanelProjectRoot } from "./file-tree-preferences.ts";
-import {
-  createSearchContentsAction,
-  createSearchInFolderAction,
-} from "./files-content-search-actions.ts";
-import { createFilesContentSearchPanel } from "./files-content-search-panel.tsx";
 import {
   abortFilesDraftSuspend,
   commitFilesDraftSuspend,
@@ -33,33 +23,55 @@ import {
   prepareFilesDraftSuspend,
   releaseFilesDraftSuspendAfterDispose,
   removeFilesDraftRecord,
-} from "./files-document-drafts.ts";
+} from "./document/drafts.ts";
 import {
   ensureDiskDocument,
   getDocument,
   getDocumentForPanelSource,
   restoreUntitledDocumentFromPanelSource,
-} from "./files-document-store.ts";
-import { parseFilesDocumentPanelSource } from "./files-document-types.ts";
-import { createFilesEditorActions } from "./files-editor-actions.ts";
-import { createFilesMarkdownPreviewActions } from "./files-markdown-preview-actions.ts";
-import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
-import { clearFilesNavHistory } from "./files-nav-history.ts";
-import { createFilesOpenDirectoryAction } from "./files-open-directory-action.ts";
-import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
-import { filesPanelTabChrome } from "./files-panel-tab.ts";
-import { createFilesPanelTransferRegistration } from "./files-panel-transfer.ts";
-import { readFilesPanelViewMode } from "./files-panel-transfer-state.ts";
-import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
-import { createFilesQuickOpenAction } from "./files-quick-open.ts";
-import { registerFilesTerminalOpenUrlHandler } from "./files-terminal-open-url-handler.ts";
+} from "./document/store.ts";
+import { parseFilesDocumentPanelSource } from "./document/types.ts";
+import { createFilesEditorActions } from "./editor/actions.ts";
+import { FileEditorController } from "./editor/controller.ts";
+import { registerFilesLspNavigationDeps } from "./lsp/navigation.ts";
+import { markdownCodeHighlighter } from "./markdown/code-highlighter.ts";
+import { createFilesMarkdownPreviewActions } from "./markdown/preview-actions.ts";
+import { markdownRuntime } from "./markdown/runtime.ts";
+import { FilesMutationSuspendedError } from "./mutation/gate.ts";
+import { registerFilesTerminalOpenUrlHandler } from "./open-url/handler.ts";
+import { createFilePanel as createFilesFilePanel } from "./panel/index.tsx";
+import { hasOtherOpenFilesSourceInstance } from "./panel/instance-utils.ts";
+import { clearFilesNavHistory } from "./panel/nav-history.ts";
+import { filesPanelTabChrome } from "./panel/tab.ts";
+import { createFilesPanelTransferRegistration } from "./panel/transfer-registration.ts";
+import { readFilesPanelViewMode } from "./panel/transfer-state.ts";
+import { createFilesOpenDirectoryAction } from "./project/open-directory-action.ts";
+import { registerFilesProjectStatusItem } from "./project/status-item.tsx";
+import { createSaveAllAction } from "./save/all-action.ts";
+import {
+  createSearchContentsAction,
+  createSearchInFolderAction,
+} from "./search/actions.ts";
+import { createFilesSearchResultActions } from "./search/context-actions.ts";
+import { createFilesContentSearchPanel } from "./search/panel.tsx";
+import { createFilesQuickOpenAction } from "./search/quick-open.ts";
+import {
+  parseTreeBackgroundMetadata,
+  parseTreeMetadata,
+} from "./tree/action-utils.ts";
+import { createFilesTreeActions } from "./tree/actions.ts";
+import { registerFilesDiskOpenTreeReveal } from "./tree/open-disk-reveal.ts";
+import { filePanelProjectRoot } from "./tree/preferences.ts";
 import {
   clearFileTreeSidebarCache,
+  collapseFilesTreeFolders,
+  expandFilesTreeKnownFolders,
   openFilesTreeSearch,
-} from "./files-tree-registry.ts";
-import { clearFilesTreeStore } from "./files-tree-store.ts";
-import { clearFilesTreeWatchers } from "./files-tree-watch.ts";
-import { FilesWatchHub } from "./files-watch-hub.ts";
+} from "./tree/registry.ts";
+import { createRevealActiveFileInTreeAction } from "./tree/reveal-active-action.ts";
+import { clearFilesTreeStore } from "./tree/store.ts";
+import { clearFilesTreeWatchers } from "./tree/watch.ts";
+import { FilesWatchHub } from "./watch-hub.ts";
 
 function withFilesMutationGate(
   action: RendererPluginAction,
@@ -76,77 +88,6 @@ function withFilesMutationGate(
         }
       }
     },
-  };
-}
-
-function createOpenSelectionAsMarkdownAction(
-  context: RendererPluginContext,
-  controller: FileEditorController
-): RendererPluginAction {
-  const t = (key: string, fallback?: string) =>
-    context.i18n.t(key, undefined, fallback);
-
-  return {
-    category: "file",
-    handler: async (invocation) => {
-      const sourcePanelId = invocation?.sourcePanelId;
-      if (!sourcePanelId) {
-        context.notifications.info(
-          t(
-            "files.notifications.noTerminalSelection",
-            "Select some text in the terminal first."
-          )
-        );
-        return;
-      }
-
-      const result = await context.terminal.readSelectionText(sourcePanelId);
-      if (result.kind !== "ok" || result.text.trim().length === 0) {
-        context.notifications.info(
-          t(
-            "files.notifications.noTerminalSelection",
-            "Select some text in the terminal first."
-          )
-        );
-        return;
-      }
-
-      const document = controller.createUntitledDocument({
-        contents: result.text,
-        origin: { panelId: sourcePanelId, source: "terminal-selection" },
-      });
-      if (document.source.kind !== "untitled") {
-        return;
-      }
-      const source = {
-        id: document.source.id,
-        kind: "untitled" as const,
-        name: document.name,
-      };
-
-      context.panels.openInstance({
-        componentId: FILES_FILE_PANEL_ID,
-        ...(invocation?.sourcePanelContext
-          ? { context: invocation.sourcePanelContext }
-          : {}),
-        instanceId: createFileFilePanelInstanceId(source),
-        params: {
-          // untitled = 用户产生的临时草稿,天然 pinned,不能被 preview 语义
-          // 顶掉,否则受保护草稿会随 panel 关闭一并 remove。
-          pinned: true,
-          source,
-        },
-        ...(invocation?.sourcePanelGroupId
-          ? { targetGroupId: invocation.sourcePanelGroupId }
-          : {}),
-        title: document.name,
-      });
-    },
-    id: FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
-    metadata: { group: "0_edit", sortOrder: 6 },
-    surfaces: ["terminal/content"],
-    title: () =>
-      t("files.actions.openSelectionAsMarkdown.title", "Preview Selected Text"),
   };
 }
 
@@ -223,6 +164,97 @@ function createTreeSearchAction(
     // 树内快捷键 / 控件触发；不进命令面板。
     surfaces: [],
     title: () => t("filePanel.tree.action.search", "Find in File Tree"),
+  };
+}
+
+function resolveTreeActionTarget(
+  context: RendererPluginContext,
+  invocation: Parameters<RendererPluginAction["handler"]>[0]
+): { instanceId?: string; path?: string; root: string } | null {
+  const treeItem = parseTreeMetadata(invocation);
+  const treeBackground = parseTreeBackgroundMetadata(invocation);
+  const root =
+    treeItem?.root ??
+    treeBackground?.root ??
+    filePanelProjectRoot(context.panels.getActiveContext());
+  if (!root) {
+    return null;
+  }
+  // Directory row: scope Expand/Collapse All to that folder subtree.
+  // File row: use parent directory; background: whole tree (no path).
+  let path: string | undefined;
+  if (treeItem?.kind === "directory") {
+    path = treeItem.path;
+  } else if (treeItem?.kind === "file") {
+    const slash = treeItem.path.lastIndexOf("/");
+    path = slash < 0 ? undefined : treeItem.path.slice(0, slash);
+  }
+  const treeId = treeItem?.treeId ?? treeBackground?.treeId;
+  if (treeId) {
+    return { instanceId: treeId, ...(path ? { path } : {}), root };
+  }
+  const activePanelId = context.panels.getActiveInstanceId(FILES_FILE_PANEL_ID);
+  if (activePanelId) {
+    return { instanceId: activePanelId, ...(path ? { path } : {}), root };
+  }
+  return { ...(path ? { path } : {}), root };
+}
+
+function createTreeExpandAllAction(
+  context: RendererPluginContext
+): RendererPluginAction {
+  const t = (key: string, fallback?: string) =>
+    context.i18n.t(key, undefined, fallback);
+  return {
+    category: "file",
+    handler: async (invocation) => {
+      const target = resolveTreeActionTarget(context, invocation);
+      if (!target) {
+        return;
+      }
+      expandFilesTreeKnownFolders(target);
+      return await Promise.resolve();
+    },
+    id: FILES_TREE_EXPAND_ALL_COMMAND_ID,
+    metadata: {
+      group: "2_view",
+      // 文件行不显示展开/折叠（落到父目录语义不清晰）；空白与目录保留。
+      menuHidden: (invocation) =>
+        parseTreeMetadata(invocation)?.kind === "file",
+      sortOrder: 1,
+    },
+    // Context menu only — no default keybinding, no command palette.
+    surfaces: ["files/tree-item", "files/tree-background"],
+    title: () => t("filePanel.tree.expandAll", "Expand Folders"),
+  };
+}
+
+function createTreeCollapseFoldersAction(
+  context: RendererPluginContext
+): RendererPluginAction {
+  const t = (key: string, fallback?: string) =>
+    context.i18n.t(key, undefined, fallback);
+  return {
+    category: "file",
+    handler: async (invocation) => {
+      // Prefer tree menu metadata; fall back to active panel.
+      const target = resolveTreeActionTarget(context, invocation);
+      if (!target) {
+        return;
+      }
+      collapseFilesTreeFolders(target);
+      return await Promise.resolve();
+    },
+    id: FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID,
+    metadata: {
+      group: "2_view",
+      menuHidden: (invocation) =>
+        parseTreeMetadata(invocation)?.kind === "file",
+      sortOrder: 2,
+    },
+    // Context menu only — no default keybinding, no command palette.
+    surfaces: ["files/tree-item", "files/tree-background"],
+    title: () => t("filePanel.tree.collapseAll", "Collapse Folders"),
   };
 }
 
@@ -367,6 +399,8 @@ export const filesRendererPlugin: RendererPluginModule = {
             flushFilesDraftWrites,
             getDocument,
             getDocumentForPanelSource,
+            getPanelSource: (panelId) =>
+              editorController.getPanelSource(panelId),
             hydrateDraftKey: hydrateFilesDraftRecordFromBackend,
             persistFilesDraftRecord,
             readFilesPanelViewMode,
@@ -389,12 +423,6 @@ export const filesRendererPlugin: RendererPluginModule = {
       registerDirtyCloseGuard(context, editorController),
       context.actions.register(
         withFilesMutationGate(
-          createOpenSelectionAsMarkdownAction(context, editorController),
-          editorController
-        )
-      ),
-      context.actions.register(
-        withFilesMutationGate(
           createSaveAction(context, editorController),
           editorController
         )
@@ -415,9 +443,15 @@ export const filesRendererPlugin: RendererPluginModule = {
       context.actions.register(createFilesOpenDirectoryAction(context)),
       context.actions.register(createSearchContentsAction(context)),
       context.actions.register(createSearchInFolderAction(context)),
+      ...createFilesSearchResultActions(context, editorController).map(
+        (action) => context.actions.register(action)
+      ),
       context.actions.register(
         withFilesMutationGate(createTreeSearchAction(context), editorController)
       ),
+      context.actions.register(createRevealActiveFileInTreeAction(context)),
+      context.actions.register(createTreeExpandAllAction(context)),
+      context.actions.register(createTreeCollapseFoldersAction(context)),
       ...createFilesTreeActions(context, editorController).map((action) =>
         context.actions.register(
           withFilesMutationGate(action, editorController)
@@ -432,7 +466,13 @@ export const filesRendererPlugin: RendererPluginModule = {
         context.actions.register(action)
       ),
       registerFilesProjectStatusItem(context),
-      registerFilesTerminalOpenUrlHandler(context),
+      registerFilesTerminalOpenUrlHandler(context, editorController),
+      registerFilesLspNavigationDeps({
+        context,
+        controller: editorController,
+      }),
+      // Git review / host openInEditor → project tree reveal (explicit center).
+      registerFilesDiskOpenTreeReveal(context),
     ];
 
     return () => {
@@ -446,6 +486,9 @@ export const filesRendererPlugin: RendererPluginModule = {
       clearFilesTreeStore();
       clearFilesNavHistory();
       clearFileTreeSidebarCache();
+      // 释放 markdown 单例 worker，避免插件重载时孤儿 Worker 累积。
+      markdownRuntime.dispose();
+      markdownCodeHighlighter.dispose();
     };
   },
   // 设置页(插件行/插件导航项)读取此图标;module 自描述,宿主不再按 id 特判。

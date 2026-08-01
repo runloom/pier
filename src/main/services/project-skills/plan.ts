@@ -22,11 +22,11 @@ import {
   expectedLinkTarget,
   toIdentity,
 } from "./plan-helpers.ts";
-import { readManifestState } from "./repair-log.ts";
+import { readManifestState } from "./repair/log.ts";
 import {
   createProjectSkillsStore,
   ProjectSkillsLedgerCorrupt,
-} from "./store.ts";
+} from "./store/index.ts";
 
 /** Git five-state for managed projection targets (design §3.6 / §8). */
 export {

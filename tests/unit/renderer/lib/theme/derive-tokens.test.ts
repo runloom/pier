@@ -4,6 +4,17 @@ import { chromaOf, contrast, oklabLightness } from "@/lib/theme/oklch.ts";
 import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
 
 const HEX6_RE = /^#[0-9a-f]{6}$/;
+const HEX8_RE = /^#[0-9a-f]{8}$/;
+const EDITOR_DECORATION_KEYS = [
+  "editor-active-line-bg",
+  "editor-search-match-active-bg",
+  "editor-search-match-active-border",
+  "editor-search-match-bg",
+  "editor-search-match-border",
+  "editor-selection-bg",
+  "editor-selection-match-bg",
+  "editor-selection-match-main-bg",
+] as const;
 
 describe("renderer/lib/theme/derive-tokens", () => {
   it("returns theme-owned UI tokens without overriding product status colors", () => {
@@ -33,14 +44,32 @@ describe("renderer/lib/theme/derive-tokens", () => {
       "chart-4",
       "chart-5",
       "radius",
+      ...EDITOR_DECORATION_KEYS,
     ];
 
     expect(Object.keys(tokens).sort()).toEqual(expected.sort());
     for (const [key, value] of Object.entries(tokens)) {
       if (key === "radius") {
         expect(value).toBe("0.625rem");
+      } else if (key.startsWith("editor-")) {
+        // Translucent decoration washes (#RRGGBBAA).
+        expect(value).toMatch(HEX8_RE);
       } else {
         expect(value).toMatch(HEX6_RE);
+      }
+    }
+  });
+
+  it("keeps editor decoration washes translucent across light and dark", () => {
+    for (const mode of ["light", "dark"] as const) {
+      const tokens = deriveAppStyleTokens(getShikiTheme("github", mode), mode);
+      for (const key of EDITOR_DECORATION_KEYS) {
+        const value = tokens[key];
+        expect(value).toMatch(HEX8_RE);
+        const alpha = Number.parseInt(value.slice(7, 9), 16) / 255;
+        // Must not hide syntax (VS Code: decoration backgrounds non-opaque).
+        expect(alpha, `${mode} ${key}`).toBeLessThan(0.92);
+        expect(alpha, `${mode} ${key}`).toBeGreaterThanOrEqual(0.05);
       }
     }
   });

@@ -5,7 +5,7 @@ import {
   agentHookEventSchema,
   type CommandFinishedHookEvent,
   type CommandStartHookEvent,
-} from "@shared/contracts/agent-session.ts";
+} from "@shared/contracts/agent/session.ts";
 import { createLogger } from "@shared/logger.ts";
 import {
   acquireRotationLock,
@@ -387,8 +387,10 @@ function enrichAgentEventFromRawPayload(
       return;
     };
     const promptSnippet =
-      readString("promptSnippet", "prompt_snippet") ??
-      (event.v === 2 ? event.promptSnippet : undefined);
+      event.v === 1
+        ? undefined
+        : (readString("promptSnippet", "prompt_snippet") ??
+          event.promptSnippet);
     // v1 agentEvent is `.strict()` and has no promptSnippet — omit the key
     // entirely so enrichment cannot fail validation and fall back to the
     // un-enriched line (which would keep nested/tool_input session ids).
@@ -397,12 +399,29 @@ function enrichAgentEventFromRawPayload(
       agentInstanceId:
         readString("agent_id", "agentId") ?? event.agentInstanceId,
       agentType: readString("agent_type", "agentType") ?? event.agentType,
-      sessionId: readString("session_id", "sessionId") ?? event.sessionId,
+      sessionId:
+        readString(
+          "session_id",
+          "sessionId",
+          "conversation_id",
+          "conversationId",
+          "task_id",
+          "taskId"
+        ) ?? event.sessionId,
       toolName: readString("tool_name", "toolName") ?? event.toolName,
-      toolUseId: readString("tool_use_id", "toolUseId") ?? event.toolUseId,
+      toolUseId:
+        readString("tool_use_id", "toolUseId", "tool_call_id", "toolCallId") ??
+        event.toolUseId,
       transcriptPath:
         readString("transcript_path", "transcriptPath") ?? event.transcriptPath,
       turnId: readString("turn_id", "turnId") ?? event.turnId,
+      ...(event.v === 1
+        ? {}
+        : {
+            parentSessionId:
+              readString("parent_session_id", "parentSessionId") ??
+              event.parentSessionId,
+          }),
       ...(promptSnippet === undefined ? {} : { promptSnippet }),
     };
     const validated = agentHookEventSchema.safeParse(candidate);

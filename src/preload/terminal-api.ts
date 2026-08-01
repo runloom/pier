@@ -1,8 +1,8 @@
-import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import type {
   TerminalDebugRendererSnapshotRequest,
   TerminalDebugRendererSnapshotResult,
-} from "@shared/contracts/terminal-debug.ts";
+} from "@shared/contracts/terminal/debug.ts";
+import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer, webUtils } from "electron";
 import { subscribeIpc } from "./ipc-envelope.ts";
@@ -61,13 +61,24 @@ export const terminalApi: TerminalAPI = {
     };
   },
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
+  onFrameCommitted: (cb) =>
+    subscribeIpc(PIER_BROADCAST.TERMINAL_FRAME_COMMITTED, cb),
   onSearchOpenRequest: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_SEARCH_OPEN_REQUEST, cb),
   onSearchState: (cb) => subscribeIpc("pier:terminal:search-state", cb),
   onSurfaceCloseRequest: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_SURFACE_CLOSE_REQUEST, cb),
+  onChildExited: (cb) => subscribeIpc(PIER_BROADCAST.TERMINAL_CHILD_EXITED, cb),
+  onEndStateChanged: (cb) =>
+    subscribeIpc(PIER_BROADCAST.TERMINAL_END_STATE_CHANGED, cb),
   onTitleChange: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_TITLE_CHANGED, cb),
+  setHostLanguage: (languageTag) =>
+    ipcRenderer.invoke("pier:terminal:set-host-language", languageTag),
+  setHostCopyCatalog: (messages) =>
+    ipcRenderer.invoke("pier:terminal:set-host-copy-catalog", messages),
+  injectDisplayText: (panelId, text) =>
+    ipcRenderer.invoke("pier:terminal:inject-display-text", panelId, text),
   materializeComposerClipboardImage: () =>
     ipcRenderer.invoke("pier:terminal:composer-materialize-clipboard-image"),
   materializeComposerImageBytes: (data) =>

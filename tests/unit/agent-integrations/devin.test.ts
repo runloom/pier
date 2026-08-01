@@ -1,8 +1,17 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/hooks-install.ts";
 import { stripJsonComments } from "../../../src/main/services/agents/integrations/devin.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 
@@ -79,9 +88,8 @@ describe("stripJsonComments", () => {
 });
 
 describe("devinIntegration", () => {
-  it("capability 为 full，id 为 devin", async () => {
+  it("id 为 devin", async () => {
     const integration = await loadIntegration();
-    expect(integration.capability).toBe("full");
     expect(integration.id).toBe("devin");
   });
 
@@ -94,7 +102,7 @@ describe("devinIntegration", () => {
     expect(integration.detect()).toBe(true);
   });
 
-  it("8 个事件各一条命令，全部无 matcher", async () => {
+  it("只安装 7 个可闭环状态事件，全部无 matcher", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -108,12 +116,12 @@ describe("devinIntegration", () => {
       "SessionEnd",
       "PreToolUse",
       "PostToolUse",
-      "PermissionRequest",
     ];
     interface Matcher {
       hooks: Array<{ command: string }>;
       matcher?: string;
     }
+    expect(hooks.PermissionRequest).toBeUndefined();
     const typedHooks = hooks as unknown as Record<string, Matcher[]>;
     for (const evt of expectedEvents) {
       expect(hooks[evt], evt).toHaveLength(1);
@@ -132,6 +140,170 @@ describe("devinIntegration", () => {
       '"PromptSubmit"'
     );
   });
+
+  it("官方载荷：session_id 与 prompt_id 分层，匿名工具失败仅闭合工具，权限请求不伪造等待", async () => {
+    const integration = await loadIntegration();
+    await integration.install();
+    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const hooks = installed.hooks as Record<
+      string,
+      Array<{ hooks: Array<{ command: string }> }>
+    >;
+    const command = (event: string) =>
+      hooks[event]?.[0]?.hooks[0]?.command ?? "";
+    const root = await mkdtemp(join(tmpdir(), "pier-devin-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    for (const [event, payload] of [
+      [
+        "SessionStart",
+        {
+          hook_event_name: "SessionStart",
+          session_id: "devin-session-1",
+          source: "startup",
+        },
+      ],
+      [
+        "UserPromptSubmit",
+        {
+          hook_event_name: "UserPromptSubmit",
+          prompt: "Fix the parser",
+          prompt_id: "prompt-1",
+          session_id: "devin-session-1",
+        },
+      ],
+      [
+        "PreToolUse",
+        {
+          hook_event_name: "PreToolUse",
+          prompt_id: "prompt-1",
+          session_id: "devin-session-1",
+          tool_input: { command: "pnpm test" },
+          tool_name: "exec",
+        },
+      ],
+      [
+        "PostToolUse",
+        {
+          hook_event_name: "PostToolUse",
+          prompt_id: "prompt-1",
+          session_id: "devin-session-1",
+          tool_input: { command: "pnpm test" },
+          tool_name: "exec",
+          tool_response: {
+            error: "tests failed",
+            output: "",
+            success: false,
+          },
+        },
+      ],
+      [
+        "Stop",
+        {
+          hook_event_name: "Stop",
+          prompt_id: "prompt-1",
+          session_id: "devin-session-1",
+          stop_hook_active: false,
+        },
+      ],
+      [
+        "SessionEnd",
+        {
+          hook_event_name: "SessionEnd",
+          prompt_id: "prompt-1",
+          reason: "exit",
+          session_id: "devin-session-1",
+        },
+      ],
+    ] as const) {
+      const result = spawnSync("/bin/sh", ["-c", command(event)], {
+        env: {
+          ...process.env,
+          PATH: pathForHookSpawn(process.env.PATH),
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "panel-1",
+          PIER_WINDOW_ID: "window-1",
+        },
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      {
+        event: "SessionStart",
+        nativeEvent: "SessionStart",
+        sessionId: "devin-session-1",
+        v: 3,
+      },
+      {
+        event: "PromptSubmit",
+        nativeEvent: "UserPromptSubmit",
+        sessionId: "devin-session-1",
+        turnId: "prompt-1",
+        v: 3,
+      },
+      {
+        event: "ToolStart",
+        nativeEvent: "PreToolUse",
+        sessionId: "devin-session-1",
+        toolName: "exec",
+        turnId: "prompt-1",
+        v: 3,
+      },
+      {
+        event: "ToolComplete",
+        nativeEvent: "PostToolUse",
+        sessionId: "devin-session-1",
+        toolName: "exec",
+        turnId: "prompt-1",
+        v: 3,
+      },
+      {
+        event: "Stop",
+        nativeEvent: "Stop",
+        sessionId: "devin-session-1",
+        turnId: "prompt-1",
+        v: 3,
+      },
+      {
+        event: "SessionEnd",
+        nativeEvent: "SessionEnd",
+        sessionId: "devin-session-1",
+        turnId: "prompt-1",
+        v: 3,
+      },
+    ]);
+    expect(rows[2]).not.toHaveProperty("toolUseId");
+    expect(rows[3]).not.toHaveProperty("toolUseId");
+    expect(
+      integration.runtime.emittedMappings.some(
+        ({ nativeEvent }) => nativeEvent === "PermissionRequest"
+      )
+    ).toBe(false);
+
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: Array<string | undefined> = [];
+    for (const row of rows.slice(0, 5)) {
+      if (row.kind !== "agentEvent") continue;
+      aggregator.ingestAgentEvent(row, integration.runtime);
+      const activity = aggregator.snapshot().activities[0];
+      statuses.push(activity?.kind === "agent" ? activity.status : undefined);
+    }
+    expect(statuses).toEqual([
+      undefined,
+      "processing",
+      "tool",
+      "processing",
+      undefined,
+    ]);
+  }, 15_000);
 
   it("幂等：重复安装不产生重复条目", async () => {
     const integration = await loadIntegration();
@@ -170,6 +342,103 @@ describe("devinIntegration", () => {
     expect(stop).toHaveLength(2);
   });
 
+  it("安装先清理所有旧 Pier 事件，并保留同 matcher 的用户 handler", async () => {
+    await mkdir(join(homeDir, ".config", "devin"), { recursive: true });
+    await writeFile(
+      configPath(),
+      JSON.stringify({
+        hooks: {
+          PermissionRequest: [
+            {
+              matcher: "legacy",
+              hooks: [
+                { type: "command", command: "user-permission" },
+                {
+                  type: "command",
+                  command: `pier-hook-gen=9; "\${PIER_AGENT_HOOKS_DIR}/emit" legacy`,
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      "utf8"
+    );
+
+    const integration = await loadIntegration();
+    await integration.install();
+
+    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const hooks = installed.hooks as Record<
+      string,
+      Array<{
+        hooks: Array<{ command: string }>;
+        matcher?: string;
+      }>
+    >;
+    expect(hooks.PermissionRequest).toEqual([
+      {
+        hooks: [{ command: "user-permission", type: "command" }],
+        matcher: "legacy",
+      },
+    ]);
+    expect(
+      hookCommands(installed).filter((command) => command.includes(MARK))
+    ).toHaveLength(7);
+  });
+
+  it("更高世代 Pier hook 存在时安装不改写 JSONC", async () => {
+    await mkdir(join(homeDir, ".config", "devin"), { recursive: true });
+    const original = [
+      "{",
+      "  // installed by a newer Pier",
+      '  "hooks": {',
+      `    "Stop": [{ "hooks": [{ "type": "command", "command": "pier-hook-gen=11; \${PIER_AGENT_HOOKS_DIR}/emit" }] }],`,
+      "  },",
+      "}",
+      "",
+    ].join("\n");
+    await writeFile(configPath(), original, "utf8");
+
+    const integration = await loadIntegration();
+    await integration.install();
+
+    expect(await readFile(configPath(), "utf8")).toBe(original);
+  });
+
+  it("安装与卸载均保留 JSONC 注释和未知字段的原始格式", async () => {
+    await mkdir(join(homeDir, ".config", "devin"), { recursive: true });
+    const original = [
+      "{",
+      "  // keep this account note",
+      '  "model": "devin-1",',
+      '  "unknown": { "enabled": true },',
+      '  "hooks": {',
+      "    // keep this user hook note",
+      '    "Stop": [{ "hooks": [{ "type": "command", "command": "say done" }] }],',
+      "  },",
+      "}",
+      "",
+    ].join("\n");
+    await writeFile(configPath(), original, "utf8");
+
+    const integration = await loadIntegration();
+    await integration.install();
+    const installed = await readFile(configPath(), "utf8");
+    expect(installed).toContain("pier-hook-gen=10");
+    expect(installed).toContain("// keep this account note");
+    expect(installed).toContain("// keep this user hook note");
+    expect(installed).toContain('"unknown": { "enabled": true }');
+
+    await integration.uninstall();
+    const uninstalled = await readFile(configPath(), "utf8");
+    expect(uninstalled).toContain("// keep this account note");
+    expect(uninstalled).toContain("// keep this user hook note");
+    expect(uninstalled).toContain('"unknown": { "enabled": true }');
+    expect(uninstalled).toContain('"command": "say done"');
+    expect(uninstalled).not.toContain("pier-hook-gen=");
+  });
+
   it("卸载只移除 pier 条目，保留用户 hook", async () => {
     await mkdir(join(homeDir, ".config", "devin"), { recursive: true });
     await writeFile(
@@ -191,7 +460,7 @@ describe("devinIntegration", () => {
     ).toBeUndefined();
   });
 
-  it("带注释的合法 JSONC 不算损坏，能正常安装（注释在写回后丢失，属预期行为）", async () => {
+  it("带注释的合法 JSONC 能正常安装且保留注释", async () => {
     await mkdir(join(homeDir, ".config", "devin"), { recursive: true });
     await writeFile(
       configPath(),
@@ -202,7 +471,10 @@ describe("devinIntegration", () => {
     );
     const integration = await loadIntegration();
     await integration.install();
-    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const raw = await readFile(configPath(), "utf8");
+    const installed = JSON.parse(stripJsonComments(raw));
+    expect(raw).toContain("// user config");
+    expect(raw).toContain("/* pinned */");
     expect(installed.model).toBe("devin-1");
     expect(hookCommands(installed).length).toBeGreaterThan(0);
   });
@@ -213,6 +485,34 @@ describe("devinIntegration", () => {
     const integration = await loadIntegration();
     await integration.install();
     expect(await readFile(configPath(), "utf8")).toBe("{ not json // comment");
+  });
+
+  it("目标键异常时不先清理另一键旧 Pier，JSONC 原字节不变", async () => {
+    await mkdir(join(homeDir, ".config", "devin"), { recursive: true });
+    const raw = JSON.stringify({
+      hooks: {
+        LegacyEvent: [
+          {
+            hooks: [
+              {
+                command: `pier-hook-gen=9; "\${PIER_AGENT_HOOKS_DIR}/emit" legacy`,
+              },
+            ],
+          },
+        ],
+        Stop: { custom: true },
+      },
+    });
+    await writeFile(configPath(), raw, "utf8");
+    const integration = await loadIntegration();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await integration.install();
+      expect(await readFile(configPath(), "utf8")).toBe(raw);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("无变化不落盘：卸载未安装文件字节不变", async () => {

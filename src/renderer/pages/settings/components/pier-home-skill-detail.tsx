@@ -19,8 +19,8 @@ import type { PierDiscoveryChannelId } from "@shared/project-skills-pier-channel
 import { Copy, Loader2, Trash2 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { MarkdownSourceEditor } from "@/components/code-editor/markdown-source-editor.tsx";
-import { useContentDialogFooter } from "@/components/common/use-content-dialog-footer.ts";
+import { MarkdownSourceEditor } from "@/components/code-editor/markdown-source.tsx";
+import { useContentDialogFooter } from "@/components/common/dialogs/use-footer.ts";
 import { useT } from "@/i18n/use-t.ts";
 import {
   type AppContentDialogRenderProps,
@@ -38,9 +38,9 @@ import {
   normalizeSkillMutationResult,
   storedDelivery,
 } from "./pier-home-skill-detail-helpers.ts";
-import { SkillDetailSection } from "./skills/skill-detail-section.tsx";
-import { SkillsDiscoveryChannelEditor } from "./skills/skills-discovery-channel-editor.tsx";
-import { SkillMdScopeNotice } from "./skills/skills-shared.tsx";
+import { SkillDetailSection } from "./skills/detail-section.tsx";
+import { SkillsDiscoveryChannelEditor } from "./skills/discovery-channel-editor.tsx";
+import { SkillMdScopeNotice } from "./skills/shared.tsx";
 
 export interface PierHomeLibrarySkillDialogResult {
   deleted?: boolean;

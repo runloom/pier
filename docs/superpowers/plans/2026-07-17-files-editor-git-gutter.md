@@ -26,9 +26,9 @@
 
 **新建**
 
-- `src/plugins/builtin/files/renderer/files-editor-git-markers.ts`：纯函数 `markersFromDiffPatch` + `GitGutterKind` 类型。
-- `src/plugins/builtin/files/renderer/files-editor-git-gutter.ts`：CodeMirror 扩展 `createGitGutterExtension()` + `setGitGutterMarkers(view, markers)` + theme。
-- `src/plugins/builtin/files/renderer/files-editor-git-gutter-controller.ts`：编排类 `FilesEditorGitGutterController`（拉取 / watch / 防抖 / generation / 路径解析）。
+- `src/plugins/builtin/files/renderer/files-editor/git-markers.ts`：纯函数 `markersFromDiffPatch` + `GitGutterKind` 类型。
+- `src/plugins/builtin/files/renderer/files-editor/git-gutter.ts`：CodeMirror 扩展 `createGitGutterExtension()` + `setGitGutterMarkers(view, markers)` + theme。
+- `src/plugins/builtin/files/renderer/files-editor/git-gutter-controller.ts`：编排类 `FilesEditorGitGutterController`（拉取 / watch / 防抖 / generation / 路径解析）。
 - `tests/unit/renderer/files-editor-git-markers.test.ts`
 - `tests/unit/renderer/files-editor-git-gutter-controller.test.ts`
 
@@ -43,7 +43,7 @@
 ### Task 1: Hunk → 行标记纯函数
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-editor-git-markers.ts`
+- Create: `src/plugins/builtin/files/renderer/files-editor/git-markers.ts`
 - Test: `tests/unit/renderer/files-editor-git-markers.test.ts`
 
 **Interfaces:**
@@ -66,7 +66,7 @@
 
 ```ts
 // tests/unit/renderer/files-editor-git-markers.test.ts
-import { markersFromDiffPatch } from "@plugins/builtin/files/renderer/files-editor-git-markers.ts";
+import { markersFromDiffPatch } from "@plugins/builtin/files/renderer/files-editor/git-markers.ts";
 import type { GitDiffFilePatch } from "@shared/contracts/git.ts";
 import { describe, expect, it } from "vitest";
 
@@ -223,7 +223,7 @@ Expected: FAIL（模块不存在）
 - [ ] **Step 3: Write minimal implementation**
 
 ```ts
-// src/plugins/builtin/files/renderer/files-editor-git-markers.ts
+// src/plugins/builtin/files/renderer/files-editor/git-markers.ts
 import type { GitDiffFilePatch } from "@shared/contracts/git.ts";
 
 export type GitGutterKind = "added" | "modified" | "deleted";
@@ -328,7 +328,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**（需用户确认后）
 
 ```bash
-git add src/plugins/builtin/files/renderer/files-editor-git-markers.ts tests/unit/renderer/files-editor-git-markers.test.ts
+git add src/plugins/builtin/files/renderer/files-editor/git-markers.ts tests/unit/renderer/files-editor-git-markers.test.ts
 git commit -m "$(cat <<'EOF'
 feat(files): add hunk-to-git-gutter marker mapping
 
@@ -343,7 +343,7 @@ EOF
 ### Task 2: CodeMirror Git Gutter 扩展
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-editor-git-gutter.ts`
+- Create: `src/plugins/builtin/files/renderer/files-editor/git-gutter.ts`
 
 **Interfaces:**
 - Consumes: `GitGutterKind` from Task 1
@@ -355,7 +355,7 @@ EOF
 - [ ] **Step 1: Write the implementation**
 
 ```ts
-// src/plugins/builtin/files/renderer/files-editor-git-gutter.ts
+// src/plugins/builtin/files/renderer/files-editor/git-gutter.ts
 import { gutter, GutterMarker, type Extension } from "@codemirror/view";
 import { EditorView } from "codemirror";
 import {
@@ -364,7 +364,7 @@ import {
   StateEffect,
   StateField,
 } from "@codemirror/state";
-import type { GitGutterKind } from "./files-editor-git-markers.ts";
+import type { GitGutterKind } from "./files-editor/git-markers.ts";
 
 const setGitGutterMarkersEffect = StateEffect.define<RangeSet<GutterMarker>>();
 
@@ -482,7 +482,7 @@ Expected: 无该文件报错
 - [ ] **Step 3: Commit**（需用户确认后）
 
 ```bash
-git add src/plugins/builtin/files/renderer/files-editor-git-gutter.ts
+git add src/plugins/builtin/files/renderer/files-editor/git-gutter.ts
 git commit -m "feat(files): add CodeMirror git gutter extension"
 ```
 
@@ -508,8 +508,8 @@ import {
   clearGitGutterMarkers,
   createGitGutterExtension,
   setGitGutterMarkers,
-} from "./files-editor-git-gutter.ts";
-import type { GitGutterKind } from "./files-editor-git-markers.ts";
+} from "./files-editor/git-gutter.ts";
+import type { GitGutterKind } from "./files-editor/git-markers.ts";
 ```
 
 - [ ] **Step 2: Mount extension at front of `#extensions`**
@@ -563,7 +563,7 @@ git commit -m "feat(files): mount git gutter extension in editor view session"
 ### Task 4: Git gutter 编排类
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-editor-git-gutter-controller.ts`
+- Create: `src/plugins/builtin/files/renderer/files-editor/git-gutter-controller.ts`
 - Test: `tests/unit/renderer/files-editor-git-gutter-controller.test.ts`
 
 **Interfaces:**
@@ -603,7 +603,7 @@ git commit -m "feat(files): mount git gutter extension in editor view session"
 
 ```ts
 // tests/unit/renderer/files-editor-git-gutter-controller.test.ts
-import { FilesEditorGitGutterController } from "@plugins/builtin/files/renderer/files-editor-git-gutter-controller.ts";
+import { FilesEditorGitGutterController } from "@plugins/builtin/files/renderer/files-editor/git-gutter-controller.ts";
 import type { FileEditorViewSession } from "@plugins/builtin/files/renderer/file-editor-view-session.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitDiffPatch } from "@shared/contracts/git.ts";
@@ -720,10 +720,10 @@ Expected: FAIL（模块不存在）
 - [ ] **Step 3: Write minimal implementation**
 
 ```ts
-// src/plugins/builtin/files/renderer/files-editor-git-gutter-controller.ts
+// src/plugins/builtin/files/renderer/files-editor/git-gutter-controller.ts
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileEditorViewSession } from "./file-editor-view-session.ts";
-import { markersFromDiffPatch } from "./files-editor-git-markers.ts";
+import { markersFromDiffPatch } from "./files-editor/git-markers.ts";
 import type { FilesDocument } from "./files-document-types.ts";
 
 interface GitGutterEntry {
@@ -891,7 +891,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**（需用户确认后）
 
 ```bash
-git add src/plugins/builtin/files/renderer/files-editor-git-gutter-controller.ts tests/unit/renderer/files-editor-git-gutter-controller.test.ts
+git add src/plugins/builtin/files/renderer/files-editor/git-gutter-controller.ts tests/unit/renderer/files-editor-git-gutter-controller.test.ts
 git commit -m "feat(files): add git gutter orchestration controller"
 ```
 
@@ -927,7 +927,7 @@ getSession(editorSessionId: string): FileEditorViewSession | undefined {
 
 import：
 ```ts
-import { FilesEditorGitGutterController } from "./files-editor-git-gutter-controller.ts";
+import { FilesEditorGitGutterController } from "./files-editor/git-gutter-controller.ts";
 ```
 
 字段（`#views` 附近）：
@@ -1023,7 +1023,7 @@ git commit -m "feat(files): wire git gutter into editor controller and panel"
 - [ ] **Step 1: 类型 + lint + 依赖巡航 + file-size**
 
 Run: `pnpm check 2>&1 | tail -40`
-Expected: typecheck/lint/depcruise/file-size 全绿；确认新增三文件均 < 500 行（`files-editor-git-gutter-controller.ts` 约 150 行、`files-editor-git-gutter.ts` 约 120 行、`files-editor-git-markers.ts` 约 90 行）。
+Expected: typecheck/lint/depcruise/file-size 全绿；确认新增三文件均 < 500 行（`files-editor/git-gutter-controller.ts` 约 150 行、`files-editor/git-gutter.ts` 约 120 行、`files-editor/git-markers.ts` 约 90 行）。
 
 - [ ] **Step 2: 单元测试全量**
 

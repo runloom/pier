@@ -5,6 +5,9 @@ import type {
   RendererCommandEnvelope,
   RendererCommandResult,
 } from "@shared/contracts/renderer-command.ts";
+import { createLogger } from "@shared/logger.ts";
+
+const log = createLogger("renderer-command");
 
 export interface RendererCommandHost {
   send(
@@ -142,8 +145,15 @@ export function createRendererCommandService({
       }
       const { promise, resolve } =
         Promise.withResolvers<RendererCommandResult>();
+      const effectiveTimeoutMs = options?.timeoutMs ?? timeoutMs;
       const rejectTimer = setTimeout(() => {
         pending.delete(requestId);
+        log.error("timed-out", {
+          commandType: command.type,
+          requestId,
+          timeoutMs: effectiveTimeoutMs,
+          windowId: targetWindowId ?? null,
+        });
         resolve(
           failure(
             requestId,
@@ -151,7 +161,7 @@ export function createRendererCommandService({
             "platform_unavailable"
           )
         );
-      }, options?.timeoutMs ?? timeoutMs);
+      }, effectiveTimeoutMs);
       pending.set(requestId, {
         expectedWebContentsId: webContentsId,
         rejectTimer,

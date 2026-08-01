@@ -1,23 +1,37 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   createNestedJsonIntegration,
   type NestedJsonIntegrationSpec,
+  pierHookCommandV3WithStdin,
+  preflightPierNestedHooksInstall,
   transformJsonConfig,
   withoutPierNestedHooks,
   withPierNestedHooks,
 } from "./shared.ts";
 
+type StandardV3Event = Exclude<
+  AgentHookEventPayloadV3["event"],
+  "InteractionRequested" | "InteractionResolved"
+>;
+
+function geminiStandardCommand(
+  event: StandardV3Event,
+  nativeEvent: string
+): (agentId: AgentKind) => string {
+  return (agentId) =>
+    pierHookCommandV3WithStdin({ agentId, event, nativeEvent });
+}
+
 /**
  * Gemini CLI hook 事件 → pier 事件名。
  * 依据 google-gemini/gemini-cli packages/core/src/hooks/types.ts：
- * HookEventName 含 Notification, NotificationType 当前仅 ToolPermission
- * （工具权限弹窗提示）——observability-only, 不能 grant/block, 但足以
- * 驱动 pier 的 "waiting" 状态, 映 PermissionRequest。
- * （此前注释断言"无权限确认类 hook"已过时——上游 docs/hooks/reference.md
- * §Notification 明确该事件在 Tool Permissions 系统提示时触发。）
- * 工具事件（BeforeTool/AfterTool）matcher 用空字符串 ""（Gemini 官方
- * 事件表约定, 区别于 grok 的 "*"）。
+ * Notification.ToolPermission 没有稳定请求 ID 或结果 hook；ask_user 的
+ * BeforeTool 发生在权限判定之前，拒绝、取消、异常可不触发 AfterTool。
+ * 两条链路均不能覆盖完整等待闭环，因此不发射交互事件；ask_user 与其他工具
+ * 一样只报告 ToolStart / ToolComplete。
  *
  * subagent 风险备忘：AfterAgent 仅在最外层调用（activeCalls===1）时触发,
  * 且按 prompt_id 去重（client.ts fireBeforeAgentHookSafe / fireAfterAgentHookSafe）。
@@ -35,18 +49,44 @@ import {
  */
 const GEMINI_SPEC: NestedJsonIntegrationSpec = {
   agentId: "gemini",
-  capability: "full",
   runtime: { stopAuthority: "advisory" },
   configPath: () => join(homedir(), ".gemini", "settings.json"),
   events: [
-    { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
-    { nativeEvent: "SessionEnd", pierEvent: "SessionEnd" },
-    { nativeEvent: "BeforeAgent", pierEvent: "PromptSubmit" },
-    { nativeEvent: "AfterAgent", pierEvent: "Stop" },
-    { nativeEvent: "Notification", pierEvent: "PermissionRequest" },
-    { nativeEvent: "PreCompress", pierEvent: "processing" },
-    { matcher: "", nativeEvent: "BeforeTool", pierEvent: "ToolStart" },
-    { matcher: "", nativeEvent: "AfterTool", pierEvent: "ToolComplete" },
+    {
+      buildCommand: geminiStandardCommand("SessionStart", "SessionStart"),
+      nativeEvent: "SessionStart",
+      pierEvent: "SessionStart",
+    },
+    {
+      buildCommand: geminiStandardCommand("SessionEnd", "SessionEnd"),
+      nativeEvent: "SessionEnd",
+      pierEvent: "SessionEnd",
+    },
+    {
+      buildCommand: geminiStandardCommand("PromptSubmit", "BeforeAgent"),
+      nativeEvent: "BeforeAgent",
+      pierEvent: "PromptSubmit",
+    },
+    {
+      buildCommand: geminiStandardCommand("Stop", "AfterAgent"),
+      nativeEvent: "AfterAgent",
+      pierEvent: "Stop",
+    },
+    {
+      buildCommand: geminiStandardCommand("processing", "PreCompress"),
+      nativeEvent: "PreCompress",
+      pierEvent: "processing",
+    },
+    {
+      buildCommand: geminiStandardCommand("ToolStart", "BeforeTool"),
+      nativeEvent: "BeforeTool",
+      pierEvent: "ToolStart",
+    },
+    {
+      buildCommand: geminiStandardCommand("ToolComplete", "AfterTool"),
+      nativeEvent: "AfterTool",
+      pierEvent: "ToolComplete",
+    },
   ],
   timeoutSeconds: 10_000,
 };
@@ -73,7 +113,12 @@ export async function installGeminiHooks(
 ): Promise<void> {
   await transformJsonConfig(
     settingsPath,
-    (s) => withPierGeminiHooks(withoutPierGeminiHooks(s)),
+    (s) => {
+      if (!preflightPierNestedHooksInstall(s, GEMINI_SPEC)) {
+        return s;
+      }
+      return withPierGeminiHooks(withoutPierGeminiHooks(s));
+    },
     "gemini"
   );
 }

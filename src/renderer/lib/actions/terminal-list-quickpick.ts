@@ -4,7 +4,7 @@ import { panelKindOf } from "@/components/workspace/panel-registry.ts";
 import {
   buildWorkspacePanelSnapshots,
   type WorkspacePanelSnapshot,
-} from "@/components/workspace/workspace-panel-snapshots.ts";
+} from "@/components/workspace/panel-snapshots.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type {
   QuickPickItem,

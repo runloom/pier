@@ -16,7 +16,7 @@
 import {
   FILE_PATH_QUERY_LIMIT_DEFAULT,
   FILE_PATH_QUERY_LIMIT_MAX,
-} from "@shared/contracts/file-query.ts";
+} from "@shared/contracts/file/query.ts";
 
 const BASENAME_HIT_BONUS = 1000;
 const DEPTH_PENALTY = 2;

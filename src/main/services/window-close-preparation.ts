@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { createLogger } from "@shared/logger.ts";
 import { flushPanelContextState } from "../state/panel-context-state.ts";
 import { flushPluginSettings } from "../state/plugin-settings.ts";
 import { flushPluginState } from "../state/plugin-state.ts";
+import { flushPreferences } from "../state/preferences.ts";
 import {
   detachAgentsForWindow,
   flushTerminalSessionState,
@@ -12,11 +14,12 @@ import {
   markWindowRecordClosed,
   markWindowRecordFocused,
 } from "../state/window-record-state.ts";
-import { findWindowContext } from "../windows/window-identity.ts";
+import { findWindowContext } from "../windows/identity.ts";
+import { type WindowCloseDecision, windowManager } from "../windows/manager.ts";
 import {
-  type WindowCloseDecision,
-  windowManager,
-} from "../windows/window-manager.ts";
+  isRendererUnreachableCloseError,
+  type NativeWindowCloseFailureDecision,
+} from "../windows/native-close-failure.ts";
 import { armDetaching } from "./agents/window-detaching-guard.ts";
 
 export interface WindowTransitionLease {
@@ -28,6 +31,11 @@ export const windowTransitionState: {
 } = {
   activeLease: null,
 };
+
+const log = createLogger("window.close");
+
+/** Windows that already failed prepare once — next close offers force path faster. */
+const forceCloseCandidates = new Set<string>();
 
 export let currentFinalizeRendererClose: (
   windowId: string,
@@ -53,7 +61,10 @@ export let currentReportCloseFailureFallback: (input: {
   closeError: unknown;
   feedbackError: unknown;
   windowId: string;
-}) => Promise<void> | void = () => undefined;
+}) =>
+  | Promise<NativeWindowCloseFailureDecision | undefined>
+  | NativeWindowCloseFailureDecision
+  | undefined = () => undefined;
 export let currentSettlePanelTransferBeforeClose: (
   lease: WindowTransitionLease,
   windowId: string,
@@ -103,16 +114,141 @@ export function setWindowCloseHooks(hooks: {
   }
 }
 
+export function __resetWindowCloseForceCandidatesForTests(): void {
+  forceCloseCandidates.clear();
+}
+
+export function markWindowCloseForceCandidate(windowId: string): void {
+  forceCloseCandidates.add(windowId);
+}
+
+export function clearWindowCloseForceCandidate(windowId: string): void {
+  forceCloseCandidates.delete(windowId);
+}
+
+async function forceAllowCloseAfterUnreachableRenderer(
+  windowId: string,
+  reason: string
+): Promise<WindowCloseDecision> {
+  log.error("force-allow-close", { reason, windowId });
+  try {
+    await currentFlushCriticalState();
+  } catch (err) {
+    log.error("force-close-critical-flush-failed", {
+      message: err instanceof Error ? err.message : String(err),
+      windowId,
+    });
+  }
+  try {
+    await armAndDetachAgentsBeforeClose(windowId);
+  } catch (err) {
+    log.error("force-close-detach-failed", {
+      message: err instanceof Error ? err.message : String(err),
+      windowId,
+    });
+  }
+  await flushAllStoresSettled();
+  clearWindowCloseForceCandidate(windowId);
+  return "allow";
+}
+
+async function presentForceCloseFallback(
+  windowId: string,
+  closeError: unknown,
+  feedbackError: unknown
+): Promise<WindowCloseDecision> {
+  markWindowCloseForceCandidate(windowId);
+
+  // Renderer IPC timeout / missing window: force-close immediately. A native
+  // prompt cannot be answered if the user already believes the app is stuck,
+  // and waiting for another click only prolongs the hang.
+  if (isRendererUnreachableCloseError(closeError)) {
+    log.error("auto-force-close-unreachable", {
+      closeError:
+        closeError instanceof Error ? closeError.message : String(closeError),
+      feedbackError:
+        feedbackError instanceof Error
+          ? feedbackError.message
+          : String(feedbackError),
+      windowId,
+    });
+    return forceAllowCloseAfterUnreachableRenderer(
+      windowId,
+      "auto-force-timeout"
+    );
+  }
+
+  try {
+    const decision = await currentReportCloseFailureFallback({
+      closeError,
+      feedbackError,
+      windowId,
+    });
+    if (decision === "force-close") {
+      return forceAllowCloseAfterUnreachableRenderer(
+        windowId,
+        "user-force-close"
+      );
+    }
+  } catch (fallbackError) {
+    log.error("native-close-fallback-failed", {
+      message:
+        fallbackError instanceof Error
+          ? fallbackError.message
+          : String(fallbackError),
+      windowId,
+    });
+    console.error("[window-close-native-feedback] failed:", fallbackError);
+  }
+  return "veto";
+}
+
 async function reportCloseFailure(
   windowId: string,
   closeError: unknown
-): Promise<void> {
+): Promise<WindowCloseDecision> {
+  // Renderer already unreachable: skip another 15s IPC round-trip and offer force close.
+  if (isRendererUnreachableCloseError(closeError)) {
+    log.error("prepare-unreachable", {
+      message:
+        closeError instanceof Error ? closeError.message : String(closeError),
+      windowId,
+    });
+    if (windowManager.isQuitting()) {
+      log.error("native-close-fallback-suppressed-while-quitting", {
+        message:
+          closeError instanceof Error ? closeError.message : String(closeError),
+        windowId,
+      });
+      console.error(
+        "[window-close-native-feedback] suppressed while quitting:",
+        closeError instanceof Error ? closeError.message : String(closeError)
+      );
+      return "veto";
+    }
+    return presentForceCloseFallback(windowId, closeError, closeError);
+  }
+
   try {
     await currentReportCloseFailure(windowId, closeError);
+    markWindowCloseForceCandidate(windowId);
+    log.warn("close-failure-reported-to-renderer", {
+      message:
+        closeError instanceof Error ? closeError.message : String(closeError),
+      windowId,
+    });
+    return "veto";
   } catch (feedbackError) {
     console.error("[window-close-feedback] failed:", feedbackError);
-    // Update/relaunch quit already flushed layout; a dying renderer must not
-    // block install with the native "Unable to close window" error box.
+    log.error("close-failure-report-failed", {
+      closeError:
+        closeError instanceof Error ? closeError.message : String(closeError),
+      feedbackError:
+        feedbackError instanceof Error
+          ? feedbackError.message
+          : String(feedbackError),
+      windowId,
+    });
     if (windowManager.isQuitting()) {
       console.error(
         "[window-close-native-feedback] suppressed while quitting:",
@@ -120,17 +256,9 @@ async function reportCloseFailure(
           ? feedbackError.message
           : String(feedbackError)
       );
-      return;
+      return "veto";
     }
-    try {
-      await currentReportCloseFailureFallback({
-        closeError,
-        feedbackError,
-        windowId,
-      });
-    } catch (fallbackError) {
-      console.error("[window-close-native-feedback] failed:", fallbackError);
-    }
+    return presentForceCloseFallback(windowId, closeError, feedbackError);
   }
 }
 
@@ -139,6 +267,7 @@ export async function flushAllStoresSettled(): Promise<void> {
     ["plugin-state", flushPluginState],
     ["plugin-settings", flushPluginSettings],
     ["panel-context-state", flushPanelContextState],
+    ["preferences", flushPreferences],
     ["terminal-session-state", flushTerminalSessionState],
     ["terminal-status-bar-prefs", flushTerminalStatusBarPrefs],
     ["window-record-state", flushWindowRecordState],
@@ -152,6 +281,10 @@ export async function flushAllStoresSettled(): Promise<void> {
         `[${label}] flush failed:`,
         err instanceof Error ? err.message : String(err)
       );
+      log.error("store-flush-failed", {
+        label,
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 }
@@ -179,6 +312,22 @@ export async function prepareWindowBeforeCloseCore(
 ): Promise<WindowCloseDecision> {
   const transitionId = `${reason}:${windowId}:${randomUUID()}`;
   const lease = windowTransitionState.activeLease;
+  const priorForceCandidate = forceCloseCandidates.has(windowId);
+
+  if (priorForceCandidate && reason === "window-close") {
+    log.warn("repeat-close-after-failed-prepare", { windowId });
+    // Second close after a failed prepare: do not wait another full renderer
+    // round-trip; offer force-close immediately.
+    if (windowManager.isQuitting()) {
+      return "veto";
+    }
+    return presentForceCloseFallback(
+      windowId,
+      new Error("renderer command timed out"),
+      new Error("renderer command timed out")
+    );
+  }
+
   if (lease) {
     try {
       await currentSettlePanelTransferBeforeClose(lease, windowId, reason);
@@ -187,6 +336,10 @@ export async function prepareWindowBeforeCloseCore(
         "[window-close-panel-transfer-settle] failed:",
         err instanceof Error ? err.message : String(err)
       );
+      log.error("panel-transfer-settle-failed", {
+        message: err instanceof Error ? err.message : String(err),
+        windowId,
+      });
     }
   }
   try {
@@ -206,8 +359,13 @@ export async function prepareWindowBeforeCloseCore(
       "[window-close-prepare] failed:",
       err instanceof Error ? err.message : String(err)
     );
-    await reportCloseFailure(windowId, err);
-    return "veto";
+    log.error("prepare-failed", {
+      message: err instanceof Error ? err.message : String(err),
+      reason,
+      transitionId,
+      windowId,
+    });
+    return reportCloseFailure(windowId, err);
   }
   try {
     await currentFlushCriticalState();
@@ -215,8 +373,11 @@ export async function prepareWindowBeforeCloseCore(
     await currentFinalizeRendererClose(windowId, transitionId, "abort").catch(
       () => undefined
     );
-    await reportCloseFailure(windowId, err);
-    return "veto";
+    log.error("critical-flush-failed", {
+      message: err instanceof Error ? err.message : String(err),
+      windowId,
+    });
+    return reportCloseFailure(windowId, err);
   }
   try {
     await currentFinalizeRendererClose(windowId, transitionId, "commit");
@@ -235,11 +396,17 @@ export async function prepareWindowBeforeCloseCore(
       "[window-close-commit] failed:",
       err instanceof Error ? err.message : String(err)
     );
-    await reportCloseFailure(windowId, err);
-    return "veto";
+    log.error("finalize-failed", {
+      message: err instanceof Error ? err.message : String(err),
+      transitionId,
+      windowId,
+    });
+    return reportCloseFailure(windowId, err);
   }
   await armAndDetachAgentsBeforeClose(windowId);
   await flushAllStoresSettled();
+  clearWindowCloseForceCandidate(windowId);
+  log.info("prepare-committed", { reason, transitionId, windowId });
   return "allow";
 }
 
@@ -264,7 +431,8 @@ export function ensureCloseHandler(): void {
       prepareWindowBeforeCloseCore(windowId, "window-close")
     );
   });
-  windowManager.onClose(({ recordId, transferDestroy }) => {
+  windowManager.onClose(({ recordId, transferDestroy, windowId }) => {
+    clearWindowCloseForceCandidate(windowId);
     if (transferDestroy) {
       return;
     }

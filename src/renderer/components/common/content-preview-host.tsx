@@ -2,7 +2,7 @@ import { Button } from "@pier/ui/button.tsx";
 import {
   ImagePreviewCanvas,
   type ImagePreviewCanvasLabels,
-} from "@pier/ui/image-preview-canvas.tsx";
+} from "@pier/ui/image-preview/canvas.tsx";
 import { X } from "lucide-react";
 import {
   type SyntheticEvent,
@@ -13,7 +13,7 @@ import {
   useState,
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import { acquireTerminalSurfaceSuppression } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
+import { acquireTerminalSurfaceSuppression } from "@/panel-kits/terminal/layout-coordinator.ts";
 import {
   type ContentPreviewImageSource,
   type ContentPreviewPayload,

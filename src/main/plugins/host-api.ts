@@ -2,7 +2,7 @@ import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import type { PluginService } from "../services/plugin-service.ts";
 import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
 import { BUILTIN_MAIN_PLUGIN_MODULES } from "./builtin-catalog.ts";
-import { createMainPluginContext } from "./plugin-context.ts";
+import { createMainPluginContext } from "./context.ts";
 import { MainPluginRuntime } from "./runtime.ts";
 
 export interface MainPluginRuntimeController {

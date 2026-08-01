@@ -14,7 +14,7 @@
 import type {
   FileQueryEvent,
   FileQueryStartInput,
-} from "@shared/contracts/file-query.ts";
+} from "@shared/contracts/file/query.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { type IpcRendererEvent, ipcRenderer } from "electron";
 

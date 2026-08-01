@@ -15,7 +15,7 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/plugin/managed.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
 import { Loader2, Puzzle, RefreshCw } from "lucide-react";

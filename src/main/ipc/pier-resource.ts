@@ -1,7 +1,7 @@
 import type { PierResourceSnapshot } from "@shared/contracts/pier-resource.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import type { IpcMain } from "electron";
-import { samplePierResource } from "../services/pier-resource/sample-pier-resource.ts";
+import { samplePierResource } from "../services/pier-resource/sample.ts";
 import { foregroundActivityService } from "./foreground-activity.ts";
 
 /**

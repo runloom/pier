@@ -18,7 +18,7 @@ import {
   isTabAllowedForProject,
   projectBasename,
 } from "./projects-section-helpers.ts";
-import { SkillsAddMenu } from "./skills/skills-add-menu.tsx";
+import { SkillsAddMenu } from "./skills/add-menu.tsx";
 import { SkillsSection } from "./skills-section.tsx";
 
 export function ProjectsSectionDetail({

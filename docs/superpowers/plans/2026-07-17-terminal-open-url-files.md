@@ -29,9 +29,9 @@
 
 - `src/main/services/file-open-path.ts` — `openPathViaElectronShell` + 纯校验
 - `src/main/ipc/terminal-open-url-forwarding.ts` — 远程/本地分流 + 广播
-- `src/plugins/builtin/files/renderer/files-terminal-open-url-resolve.ts` — URL/路径纯解析
-- `src/plugins/builtin/files/renderer/files-terminal-open-url-anchors.ts` — 锚点集合 / 最长覆盖根
-- `src/plugins/builtin/files/renderer/files-terminal-open-url-handler.ts` — 订阅处理：stat / open / fallback
+- `src/plugins/builtin/files/renderer/files-open-url/resolve.ts` — URL/路径纯解析
+- `src/plugins/builtin/files/renderer/files-open-url/anchors.ts` — 锚点集合 / 最长覆盖根
+- `src/plugins/builtin/files/renderer/files-open-url/handler.ts` — 订阅处理：stat / open / fallback
 - `src/renderer/lib/plugins/terminal-open-url-host.ts` — host：handlers + 无订阅者本地兜底
 - `tests/unit/main/file-open-path.test.ts`
 - `tests/unit/main/terminal-open-url-forwarding.test.ts`
@@ -221,7 +221,7 @@ EOF
 ### Task 2: 终端 open-url 路径纯解析
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-terminal-open-url-resolve.ts`
+- Create: `src/plugins/builtin/files/renderer/files-open-url/resolve.ts`
 - Test: `tests/unit/renderer/files-terminal-open-url-resolve.test.ts`
 
 **Interfaces:**
@@ -255,7 +255,7 @@ Expected: PASS
 - [ ] **Step 5: Commit（需用户确认）**
 
 ```bash
-git add src/plugins/builtin/files/renderer/files-terminal-open-url-resolve.ts tests/unit/renderer/files-terminal-open-url-resolve.test.ts
+git add src/plugins/builtin/files/renderer/files-open-url/resolve.ts tests/unit/renderer/files-terminal-open-url-resolve.test.ts
 git commit -m "$(cat <<'EOF'
 feat(files): parse terminal open-url local and remote targets
 
@@ -268,7 +268,7 @@ EOF
 ### Task 3: 锚点集合与最长覆盖根
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-terminal-open-url-anchors.ts`
+- Create: `src/plugins/builtin/files/renderer/files-open-url/anchors.ts`
 - Test: `tests/unit/renderer/files-terminal-open-url-anchors.test.ts`
 
 **Interfaces:**
@@ -293,7 +293,7 @@ Expected: PASS
 - [ ] **Step 5: Commit（需用户确认）**
 
 ```bash
-git add src/plugins/builtin/files/renderer/files-terminal-open-url-anchors.ts tests/unit/renderer/files-terminal-open-url-anchors.test.ts
+git add src/plugins/builtin/files/renderer/files-open-url/anchors.ts tests/unit/renderer/files-terminal-open-url-anchors.test.ts
 git commit -m "$(cat <<'EOF'
 feat(files): resolve longest terminal open-url anchor root
 
@@ -484,7 +484,7 @@ EOF
 ### Task 8: files open-url handler + locales
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-terminal-open-url-handler.ts`
+- Create: `src/plugins/builtin/files/renderer/files-open-url/handler.ts`
 - Modify: `src/plugins/builtin/files/locales/en.json`
 - Modify: `src/plugins/builtin/files/locales/zh-CN.json`
 - Modify: `src/plugins/builtin/files/renderer/index.tsx`
@@ -520,7 +520,7 @@ Expected: PASS
 - [ ] **Step 4: Commit（需用户确认）**
 
 ```bash
-git add src/plugins/builtin/files/renderer/files-terminal-open-url-handler.ts src/plugins/builtin/files/renderer/index.tsx src/plugins/builtin/files/locales/en.json src/plugins/builtin/files/locales/zh-CN.json tests/unit/renderer/files-terminal-open-url-handler.test.ts
+git add src/plugins/builtin/files/renderer/files-open-url/handler.ts src/plugins/builtin/files/renderer/index.tsx src/plugins/builtin/files/locales/en.json src/plugins/builtin/files/locales/zh-CN.json tests/unit/renderer/files-terminal-open-url-handler.test.ts
 git commit -m "$(cat <<'EOF'
 feat(files): open terminal local paths in the files plugin
 
@@ -552,7 +552,7 @@ EOF
 - [ ] **Step 4: Commit（需用户确认）**
 
 ```bash
-git add src/renderer/lib/plugins/terminal-open-url-host.ts src/renderer/lib/plugins/runtime.ts src/plugins/builtin/files/renderer/files-terminal-open-url-handler.ts tests/unit/renderer/terminal-open-url-host.test.ts
+git add src/renderer/lib/plugins/terminal-open-url-host.ts src/renderer/lib/plugins/runtime.ts src/plugins/builtin/files/renderer/files-open-url/handler.ts tests/unit/renderer/terminal-open-url-host.test.ts
 git commit -m "$(cat <<'EOF'
 feat(plugins): fall back terminal local open-url to system openPath
 

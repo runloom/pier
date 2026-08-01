@@ -57,12 +57,12 @@
 
 当前结构优点：
 
-- `git-status-item.tsx` 已经有 `useGitStatus`，通过 `getStatus` 初始拉取和 `watch` 广播更新状态，并用递增序号避免旧响应覆盖新状态。
+- `status-item.tsx` 已经有 `useGitStatus`，通过 `getStatus` 初始拉取和 `watch` 广播更新状态，并用递增序号避免旧响应覆盖新状态。
 - `StatusBody` 已经把状态栏内容拆成 `BranchLabel`、`RepoStatePill`、`SyncCounts`、`WorkingTreeCounts`、`LineDelta`、`StashBadge` 等可复用展示块。
 - `GitStatus.branch` 已包含 `upstreamGone` 与 `mergedIntoDefault`，属于 `getStatus` 快照内事实，不需要 renderer 新增状态来源。
 - `RendererPluginContext.git` 已暴露 `stash`、`abortMerge`、`abortRebase`、`continueRebase`、`popStash`、`applyStash`、`dropStash` 等能力；这些动作已有 main 侧 Git 服务和命令路由承载，不需要 renderer 直接执行 git。
 - `RendererPluginContext.git` 未暴露 cherry-pick / revert / bisect 的 continue、abort 或 skip 能力；首版下拉面板不能臆造这些按钮。
-- `git-changes-panel.tsx` 已经负责完整变更文件树和 diff 预览。
+- `changes-panel.tsx` 已经负责完整变更文件树和 diff 预览。
 - `@pier/ui/popover` 已通过 `useTerminalOverlay()` 接入终端 overlay 层，可避免普通 web 浮层被终端原生视图遮挡。
 
 不足：
@@ -77,7 +77,7 @@
 - 数据：`main/services/git-service` 和 `git-watch-service` 继续生成 `GitStatus`；renderer 不自行派生新事实。
 - 策略：Git 插件 renderer 内新增轻量视图模型（view model），把 `GitStatus + PanelContext` 派生成下拉面板的状态、动作和文案。
 - 执行：复用 `RendererPluginContext` 的 `git`、`panels`、`worktrees`、`notifications`、`dialogs` 能力。
-- UI：新增 Git 插件内部组件，例如 `git-status-dropdown.tsx`；由 `git-status-item.tsx` 组合。
+- UI：新增 Git 插件内部组件，例如 `status-dropdown.tsx`；由 `status-item.tsx` 组合。
 - 状态：Popover open/close 为组件本地状态，不写入 userData。
 - 测试：组件测试覆盖 view model 和渲染；端到端测试只覆盖关键点击链路。
 

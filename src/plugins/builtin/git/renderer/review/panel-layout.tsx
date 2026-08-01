@@ -1,0 +1,392 @@
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@pier/ui/empty.tsx";
+import {
+  FilePanelHeader,
+  FilePanelLayout,
+  FilePanelSearchButton,
+  FilePanelSidebarToggleButton,
+} from "@pier/ui/file/panel-layout.tsx";
+import { FileSearchBar } from "@pier/ui/file/search-bar.tsx";
+import {
+  getTreeExpansionAuthority,
+  gitReviewTreeExpansionScopeId,
+  PierFileTree,
+} from "@pier/ui/file/tree.tsx";
+import { useFileTreeSearch } from "@pier/ui/file/use-tree-search.tsx";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { SearchX } from "lucide-react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo } from "react";
+import { pluginText } from "../plugin-text.ts";
+import { ReviewTreeLoading } from "./feedback.tsx";
+import type { gitReviewTreeModel } from "./tree.tsx";
+import { registerGitReviewTreeFolderHandlers } from "./tree-collapse-registry.ts";
+import { useGitReviewTreeContextMenu } from "./tree-context-menu.ts";
+import { revealGitReviewTreeSelection } from "./tree-reveal-selection.ts";
+
+const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
+
+function GitReviewTreeSidebarComponent({
+  context,
+  contextId,
+  gitRootPath,
+  mutationAuthorityBlocked,
+  onOpenPath,
+  isActiveOpenPath,
+  onContextMenuSession,
+  sidebarFooter,
+  sidebarHeader,
+  sourcePanelId,
+  treeLoading,
+  treeSearch,
+  treeModel,
+}: {
+  context: RendererPluginContext;
+  contextId: string;
+  gitRootPath: string;
+  mutationAuthorityBlocked: boolean;
+  onOpenPath: (path: string) => void;
+  isActiveOpenPath?: (path: string) => boolean;
+  onContextMenuSession?: (
+    phase: "begin" | "end",
+    detail: {
+      readonly intent: "inspect" | "command";
+      readonly path: string;
+    }
+  ) => void;
+  sidebarFooter?: ReactNode;
+  sidebarHeader?: ReactNode;
+  sourcePanelId?: string;
+  treeLoading?: boolean;
+  treeSearch: ReturnType<typeof useFileTreeSearch>;
+  treeModel: ReturnType<typeof gitReviewTreeModel>;
+}) {
+  const openItemContextMenu = useGitReviewTreeContextMenu({
+    context,
+    contextId,
+    gitRootPath,
+    mutationAuthorityBlocked,
+    ...(sourcePanelId ? { sourcePanelId } : {}),
+    treeModel,
+  });
+  const expansionAuthority = useMemo(
+    () =>
+      getTreeExpansionAuthority(
+        gitReviewTreeExpansionScopeId(contextId, gitRootPath)
+      ),
+    [contextId, gitRootPath]
+  );
+  const hasQuery = treeSearch.value.trim().length > 0;
+  const searchHasNoResults =
+    treeSearch.open &&
+    hasQuery &&
+    treeSearch.queryApplied &&
+    treeSearch.matchCount === 0;
+  const searchActionsDisabled = treeSearch.matchCount === 0;
+
+  // Explicit open: center the row in the tree viewport (sticky-aware via
+  // PierFileTree reveal). Not continuous active tracking.
+  const handleOpenPath = useCallback(
+    (path: string) => {
+      onOpenPath(path);
+      revealGitReviewTreeSelection(treeSearch.treeApiRef.current, path);
+    },
+    [onOpenPath, treeSearch.treeApiRef]
+  );
+
+  return (
+    <aside className="flex h-full min-h-0 w-full flex-col bg-sidebar">
+      {sidebarHeader ?? null}
+      {treeSearch.open ? (
+        <div className="shrink-0 px-2 py-1">
+          <FileSearchBar
+            className="w-full"
+            focusSignal={treeSearch.focusSignal}
+            labels={{
+              close: pluginText(context, "reviewTreeSearchClose", "Close"),
+              next: pluginText(context, "reviewTreeSearchNext", "Next match"),
+              open: pluginText(
+                context,
+                "reviewTreeSearchOpen",
+                "Open selected change"
+              ),
+              placeholder: pluginText(
+                context,
+                "reviewTreeSearch",
+                "Find in changed files"
+              ),
+              previous: pluginText(
+                context,
+                "reviewTreeSearchPrevious",
+                "Previous match"
+              ),
+            }}
+            matchAnnouncement={
+              treeSearch.matchCount > 0
+                ? pluginText(
+                    context,
+                    "reviewTreeSearchMatchAnnouncement",
+                    "Matching changes: {{count}}",
+                    { count: treeSearch.matchCount }
+                  )
+                : ""
+            }
+            matchText={hasQuery ? String(treeSearch.matchCount) : ""}
+            navigationDisabled={searchActionsDisabled}
+            onChange={treeSearch.changeSearch}
+            onClose={treeSearch.closeSearch}
+            onNavigate={treeSearch.navigateSearch}
+            onSubmit={treeSearch.openFocusedMatch}
+            submitDisabled={
+              searchActionsDisabled || !treeSearch.focusedMatchOpenable
+            }
+            surface="sidebar"
+            testId="git-review-tree-search-bar"
+            value={treeSearch.value}
+          />
+        </div>
+      ) : null}
+      <div className="relative flex min-h-0 flex-1">
+        {treeLoading === true ? (
+          <ReviewTreeLoading context={context} />
+        ) : (
+          <PierFileTree
+            className="min-h-0 w-full flex-1"
+            expansionAuthority={expansionAuthority}
+            expansionSeed="file-ancestors"
+            flattenEmptyDirectories
+            flattenMinDepth={2}
+            items={treeModel.items}
+            label={pluginText(context, "reviewTreeLabel", "Changed files")}
+            onOpenItemContextMenu={openItemContextMenu}
+            onOpenPath={handleOpenPath}
+            {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
+            {...(onContextMenuSession ? { onContextMenuSession } : {})}
+            onSearchMatchStateChange={treeSearch.updateMatchState}
+            stickyFolders
+            treeApiRef={treeSearch.treeApiRef}
+          />
+        )}
+        {searchHasNoResults && treeLoading !== true ? (
+          <Empty
+            aria-live="polite"
+            className="absolute inset-0 z-10 min-h-0 rounded-none border-0 bg-sidebar/95 p-4"
+            data-testid="git-review-tree-search-empty"
+            role="status"
+          >
+            <EmptyHeader className="gap-1.5">
+              <EmptyMedia className="mb-1" variant="icon">
+                <SearchX />
+              </EmptyMedia>
+              <EmptyTitle>
+                {pluginText(
+                  context,
+                  "reviewTreeNoSearchResultsTitle",
+                  "No matching changes"
+                )}
+              </EmptyTitle>
+              <EmptyDescription>
+                {pluginText(
+                  context,
+                  "reviewTreeNoSearchResultsDescription",
+                  "Try another file name or path."
+                )}
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : null}
+      </div>
+      {sidebarFooter ?? null}
+    </aside>
+  );
+}
+
+const GitReviewTreeSidebar = memo(GitReviewTreeSidebarComponent);
+
+export function GitReviewPanelLayout({
+  children,
+  context,
+  contextId,
+  gitRootPath,
+  mutationAuthorityBlocked = false,
+  headerCenter,
+  headerLeading,
+  headerTrailing,
+  onOpenPath,
+  isActiveOpenPath,
+  onContextMenuSession,
+  setSidebarCollapsed,
+  sidebarCollapsed,
+  sidebarFooter,
+  sidebarHeader,
+  sourcePanelId,
+  treeLoading = false,
+  treeModel,
+}: {
+  children: ReactNode;
+  context: RendererPluginContext;
+  contextId?: string | null;
+  gitRootPath: string | null;
+  mutationAuthorityBlocked?: boolean;
+  headerCenter?: ReactNode;
+  headerLeading?: ReactNode;
+  headerTrailing?: ReactNode;
+  onOpenPath?: (path: string) => void;
+  isActiveOpenPath?: (path: string) => boolean;
+  onContextMenuSession?: (
+    phase: "begin" | "end",
+    detail: {
+      readonly intent: "inspect" | "command";
+      readonly path: string;
+    }
+  ) => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
+  sidebarCollapsed: boolean;
+  sidebarFooter?: ReactNode;
+  sidebarHeader?: ReactNode;
+  sourcePanelId?: string;
+  /** index 加载中：侧栏显示树骨架而非空 PierFileTree */
+  treeLoading?: boolean;
+  treeModel?: ReturnType<typeof gitReviewTreeModel> | null;
+}) {
+  const treeSearch = useFileTreeSearch();
+  const hasTree = Boolean((treeModel || treeLoading) && onOpenPath);
+
+  useEffect(() => {
+    if (!(hasTree && !sidebarCollapsed && treeLoading !== true)) {
+      return;
+    }
+    return registerGitReviewTreeFolderHandlers({
+      collapseAll: (rootPath) => {
+        const api = treeSearch.treeApiRef.current;
+        if (api) {
+          api.collapseAll(rootPath ? { rootPath } : undefined);
+          return;
+        }
+        treeSearch.collapseAllFolders();
+      },
+      expandAll: (rootPath) => {
+        const api = treeSearch.treeApiRef.current;
+        if (api) {
+          api.expandAll(rootPath ? { rootPath } : undefined);
+          return;
+        }
+        treeSearch.expandAllFolders();
+      },
+    });
+  }, [hasTree, sidebarCollapsed, treeLoading, treeSearch]);
+
+  const toggleSearch = () => {
+    if (!hasTree || treeLoading) {
+      return;
+    }
+    if (sidebarCollapsed) {
+      setSidebarCollapsed(false);
+      treeSearch.openSearch();
+      return;
+    }
+    treeSearch.toggleSearch();
+  };
+  const collapseSidebar = () => {
+    treeSearch.closeSearch();
+    setSidebarCollapsed(true);
+  };
+  const sidebar =
+    hasTree &&
+    !sidebarCollapsed &&
+    onOpenPath &&
+    gitRootPath &&
+    contextId &&
+    (treeModel || treeLoading) ? (
+      <GitReviewTreeSidebar
+        context={context}
+        contextId={contextId}
+        gitRootPath={gitRootPath}
+        mutationAuthorityBlocked={mutationAuthorityBlocked}
+        onOpenPath={onOpenPath}
+        {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
+        {...(onContextMenuSession ? { onContextMenuSession } : {})}
+        {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
+        {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
+        {...(sourcePanelId ? { sourcePanelId } : {})}
+        treeLoading={treeLoading}
+        treeModel={
+          treeModel ??
+          ({
+            items: [],
+            visibleGroups: [],
+            groupCounts: { conflict: 0, staged: 0, unstaged: 0 },
+            groupLabels: {
+              conflict: "",
+              staged: "",
+              unstaged: "",
+            },
+            entryByKey: new Map(),
+            fileRefByNodeId: new Map(),
+            getFileRefForTreePath: () => undefined,
+            getFileRefsUnderTreePath: () => [],
+            getGroupForTreePath: () => undefined,
+            mutation: { expectedIndexRevision: null, uncommitted: true },
+          } satisfies ReturnType<typeof gitReviewTreeModel>)
+        }
+        treeSearch={treeSearch}
+      />
+    ) : null;
+
+  return (
+    <FilePanelLayout
+      contentPanelId="git-review-diff"
+      header={
+        <FilePanelHeader
+          center={headerCenter ?? null}
+          {...(headerTrailing === undefined
+            ? {}
+            : { trailing: headerTrailing })}
+          leading={
+            <>
+              <FilePanelSidebarToggleButton
+                collapsed={sidebarCollapsed}
+                collapseLabel={pluginText(
+                  context,
+                  "reviewTreeCollapse",
+                  "Collapse changed files"
+                )}
+                expandLabel={pluginText(
+                  context,
+                  "reviewTreeExpand",
+                  "Expand changed files"
+                )}
+                onToggle={() => {
+                  if (sidebarCollapsed) {
+                    setSidebarCollapsed(false);
+                  } else {
+                    collapseSidebar();
+                  }
+                }}
+              />
+              <FilePanelSearchButton
+                label={pluginText(
+                  context,
+                  "reviewTreeSearch",
+                  "Find in changed files"
+                )}
+                onOpenSearch={toggleSearch}
+              />
+              {headerLeading}
+            </>
+          }
+        />
+      }
+      onSidebarAutoCollapse={collapseSidebar}
+      sidebar={sidebar}
+      sidebarPanelId="git-review-tree"
+      sidebarWidthStorageKey={REVIEW_TREE_WIDTH_STORAGE_KEY}
+    >
+      {children}
+    </FilePanelLayout>
+  );
+}

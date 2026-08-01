@@ -3,24 +3,28 @@ import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
+import { isWorkspaceBootstrapGateActive } from "@/components/workspace/bootstrap-gate.ts";
 import { equalizeDockviewSplits } from "@/components/workspace/dockview-equalize.ts";
-import { isWorkspaceBootstrapGateActive } from "@/components/workspace/workspace-bootstrap-gate.ts";
-import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
-import { runPanelCloseGuards } from "@/lib/workspace/panel-close-guards.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
-import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
   clearFreshTerminalPanel,
   markFreshTerminalPanel,
   setFreshTerminalInitialInput,
 } from "@/stores/terminal-panel-session-hints.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
+import {
+  closeActivePanel as closeActivePanelImpl,
+  closeAll as closeAllImpl,
+  closeGroup as closeGroupImpl,
+  closeOthers as closeOthersImpl,
+  closePanel as closePanelImpl,
+  closeToTheRight as closeToTheRightImpl,
+} from "@/stores/workspace-close.ts";
 import { focusWorkspaceGroup } from "@/stores/workspace-focus-group.ts";
 import {
   clearCurrentWindowLayout,
   inheritedActiveTerminalContext,
-  panelsInSameGroup,
   type TerminalPanelParams,
   terminalPanelContext,
   terminalPanelParams,
@@ -41,6 +45,7 @@ interface WorkspaceState {
   addTerminal: (opts?: {
     /** `null` forces no cwd; omit the key to inherit from the active terminal. */
     context?: PanelContext | null;
+    exitPresentation?: TerminalPanelParams["exitPresentation"];
     initialInput?: string;
     launchId?: string;
     placement?: PierCommandPlacement;
@@ -54,8 +59,15 @@ interface WorkspaceState {
   api: DockviewApi | null;
   closeActivePanel: () => Promise<boolean>;
   closeAll: () => Promise<void>;
+  /**
+   * 关闭同组全部标签（含当前）。
+   * 多分组时只卸本组；sole-group 卸完后关窗（与 closeAll 对称，避免空 dockview）。
+   */
+  closeGroup: (panelId: string) => Promise<void>;
   closeOthers: (panelId: string) => Promise<void>;
   closePanel: (panelId: string) => Promise<boolean>;
+  /** 关闭同组中位于 source 右侧的 tabs（按 group.panels 顺序）。 */
+  closeToTheRight: (panelId: string) => Promise<void>;
   equalizeSplits: () => void;
   focusGroup: (
     direction: "right" | "down" | "left" | "up",
@@ -69,7 +81,6 @@ interface WorkspaceState {
     panelId: string,
     direction: "right" | "below" | "left" | "above"
   ) => void;
-  syncTabShortcutHints: () => void;
   toggleActivePanelMaximized: () => void;
 }
 
@@ -78,11 +89,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   hasMaximizedGroup: false,
   setApi: (api) => set({ api, hasMaximizedGroup: false }),
   setHasMaximizedGroup: (hasMaximizedGroup) => set({ hasMaximizedGroup }),
-  syncTabShortcutHints: () => {
-    useTerminalStore
-      .getState()
-      .setActiveGroupPanels(get().api?.activeGroup?.panels ?? []);
-  },
   activateTabInActiveGroup: (index) => {
     const api = get().api;
     if (!(api && Number.isInteger(index) && index >= 0)) {
@@ -172,6 +178,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         : inheritedActiveTerminalContext(api);
     const params = terminalPanelParams({
       context,
+      exitPresentation: opts?.exitPresentation,
       launchId: opts?.launchId,
       tab: opts?.tab,
       task: opts?.task,
@@ -218,155 +225,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     scheduleRevealDockviewTabByPanelId(id);
     return id;
   },
-  closeActivePanel: async () => {
-    if (isWorkspaceBootstrapGateActive()) {
-      return false;
-    }
-    const api = get().api;
-    if (!api) {
-      return false;
-    }
-    const panel = api.activePanel;
-    if (!panel) {
-      return false;
-    }
-    const allowed = await runPanelCloseGuards({
-      closingPanelIds: [panel.id],
-      componentId: panel.view.contentComponent,
-      panelId: panel.id,
-      params: panel.params,
-    });
-    if (!allowed) {
-      return false;
-    }
-    // 全局仅剩最后一个 panel → 关窗口 (而非删 panel 留空 group).
-    if (api.totalPanels <= 1) {
-      if (panel.view.contentComponent === "terminal") {
-        closeNativeTerminalPanel(panel.id);
-      }
-      closeCurrentWindow().catch((err) => {
-        console.error("[workspace] closeCurrentWindow failed:", err);
-      });
-      return true;
-    }
-    // 主动先发 native close IPC, 再 removePanel；不把 React unmount 当显式关闭.
-    // 用 contentComponent 而非 params?.component: 前者是 dockview stable key.
-    if (panel.view.contentComponent === "terminal") {
-      closeNativeTerminalPanel(panel.id);
-    }
-    api.removePanel(panel);
-    return true;
-  },
-  closePanel: async (panelId) => {
-    if (isWorkspaceBootstrapGateActive()) {
-      return false;
-    }
-    const api = get().api;
-    if (!api) {
-      return false;
-    }
-    const panel = api.panels.find((p) => p.id === panelId);
-    if (!panel) {
-      return false;
-    }
-    const allowed = await runPanelCloseGuards({
-      closingPanelIds: [panel.id],
-      componentId: panel.view.contentComponent,
-      panelId: panel.id,
-      params: panel.params,
-    });
-    if (!allowed) {
-      return false;
-    }
-    // 同 closeActivePanel: 全局仅剩最后一个 panel → 关窗口 (而非留空 group).
-    if (api.totalPanels <= 1) {
-      if (panel.view.contentComponent === "terminal") {
-        closeNativeTerminalPanel(panel.id);
-      }
-      closeCurrentWindow().catch((err) => {
-        console.error("[workspace] closeCurrentWindow failed:", err);
-      });
-      return true;
-    }
-    if (panel.view.contentComponent === "terminal") {
-      closeNativeTerminalPanel(panel.id);
-    }
-    api.removePanel(panel);
-    return true;
-  },
-
-  closeOthers: async (panelId) => {
-    if (isWorkspaceBootstrapGateActive()) {
-      return;
-    }
-    const api = get().api;
-    if (!api) {
-      return;
-    }
-    const keepPanel = api.panels.find((p) => p.id === panelId);
-    if (!keepPanel) {
-      return;
-    }
-    const toClose = panelsInSameGroup(api, keepPanel.id).filter(
-      (p) => p.id !== panelId
-    );
-    const closingPanelIds = toClose.map((p) => p.id);
-    for (const p of toClose) {
-      const allowed = await runPanelCloseGuards({
-        closingPanelIds,
-        componentId: p.view.contentComponent,
-        panelId: p.id,
-        params: p.params,
-      });
-      if (!allowed) {
-        continue;
-      }
-      if (p.view.contentComponent === "terminal") {
-        closeNativeTerminalPanel(p.id);
-      }
-      api.removePanel(p);
-    }
-  },
-
-  closeAll: async () => {
-    if (isWorkspaceBootstrapGateActive()) {
-      return;
-    }
-    const api = get().api;
-    if (!api) {
-      return;
-    }
-    const all = [...api.panels];
-    const closingPanelIds = all.map((p) => p.id);
-    for (const p of all) {
-      const allowed = await runPanelCloseGuards({
-        closingPanelIds,
-        componentId: p.view.contentComponent,
-        panelId: p.id,
-        params: p.params,
-      });
-      if (!allowed) {
-        return;
-      }
-      if (p.view.contentComponent === "terminal") {
-        closeNativeTerminalPanel(p.id);
-      }
-      api.removePanel(p);
-    }
-    // 所有 panel 都已通过各自 guard 并提交关闭后,显式清掉 record layout。
-    // 这既避免用户取消时提前破坏持久化布局,也避免全关窗口把空 dockview
-    // JSON 当作可恢复布局写回。
-    try {
-      await clearCurrentWindowLayout();
-    } catch (err) {
-      console.error("[workspace] clearLayout failed:", err);
-    }
-    // 同 closePanel/closeActivePanel: 全 panel 关闭等价于"想退出当前 workspace",
-    // 留空 dockview 用户无路可走 (Cmd+T 才能恢复). 一律 close window 保持对称.
-    closeCurrentWindow().catch((err) => {
-      console.error("[workspace] closeCurrentWindow failed:", err);
-    });
-  },
+  closeActivePanel: async () => closeActivePanelImpl(get),
+  closePanel: async (panelId) => closePanelImpl(get, panelId),
+  closeOthers: async (panelId) => closeOthersImpl(get, panelId),
+  closeToTheRight: async (panelId) => closeToTheRightImpl(get, panelId),
+  closeGroup: async (panelId) => closeGroupImpl(get, panelId),
+  closeAll: async () => closeAllImpl(get),
 
   splitPanel: (panelId, direction) => {
     const api = get().api;

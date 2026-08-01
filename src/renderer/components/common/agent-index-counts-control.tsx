@@ -1,5 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
-import { agentIndexCounts } from "@shared/contracts/agent-runtime-index.ts";
+import { agentIndexCounts } from "@shared/contracts/agent/runtime-index.ts";
 import i18next from "i18next";
 import type { ReactNode } from "react";
 import { openAgentIndexQuickPick } from "@/lib/actions/agent-runtime-actions.ts";

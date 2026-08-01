@@ -29,7 +29,7 @@
 - `src/main/ipc/menu.ts` — `pier:menu:popup` handler
 - `src/renderer/lib/context-menu/build-entries.ts` — `buildMenuEntries(surface, args)`：actionRegistry 投影 + group 分段 + 快捷键反查
 - `src/renderer/lib/context-menu/build-entries.test.ts` — 单元测试
-- `src/renderer/lib/context-menu/use-context-menu.ts` — React hook：onContextMenu handler
+- `src/renderer/lib/context-menu/use-menu.ts` — React hook：onContextMenu handler
 - `src/renderer/components/workspace/panel-tab-header.tsx` — dockview 自定义 tab 组件
 - `src/renderer/panel-kits/terminal/register-actions.ts` — terminal panel 的 actions（surface=terminal/content）
 
@@ -1093,12 +1093,12 @@ git commit -m "feat(menu): buildMenuEntries 按 group 分段 + accelerator 反�
 **Goal:** React hook 暴露 `onContextMenu` handler — 一行集成给 surface 的 React 组件用。
 
 **Files:**
-- Create: `src/renderer/lib/context-menu/use-context-menu.ts`
+- Create: `src/renderer/lib/context-menu/use-menu.ts`
 
 - [ ] **Step 1: 实现 hook**
 
 ```ts
-// src/renderer/lib/context-menu/use-context-menu.ts
+// src/renderer/lib/context-menu/use-menu.ts
 /**
  * 给 React 组件提供 onContextMenu handler — 阻止浏览器默认菜单, 调 main popup,
  * dispatch 选中的 action.
@@ -1197,7 +1197,7 @@ Expected: PASS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/renderer/lib/context-menu/use-context-menu.ts
+git add src/renderer/lib/context-menu/use-menu.ts
 git commit -m "feat(menu): useContextMenu hook + popupContextMenuAt 函数"
 ```
 
@@ -1561,7 +1561,7 @@ git commit -m "feat(i18n): 加 contextMenu.action 中英翻译"
  */
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { type MouseEvent, useCallback } from "react";
-import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
+import { useContextMenu } from "@/lib/context-menu/use-menu.ts";
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const baseOnContextMenu = useContextMenu("dockview-tab", {
@@ -2192,7 +2192,7 @@ git commit -m "feat(menu): 加 terminal/content surface actions + i18n"
 
 1. 顶部 import 加：
 ```ts
-import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
+import { popupContextMenuAt } from "@/lib/context-menu/use-menu.ts";
 ```
 
 2. 在现有 `useEffect(() => { ... }, [api, panelId])` （管理 terminal lifecycle 的那个）**之后**加一个新的独立 useEffect：

@@ -7,6 +7,16 @@ import type {
   LocalEnvironmentWorktreeBindingSnapshot,
 } from "@shared/contracts/environment.ts";
 import type {
+  FileContentQueryStartInput,
+  FilePathQueryStartInput,
+  FileQueryEvent,
+} from "@shared/contracts/file/query.ts";
+import type {
+  FileSaveTargetRequest,
+  FileSaveTargetResult,
+} from "@shared/contracts/file/save-target.ts";
+import type { FileWatchEvent } from "@shared/contracts/file/watch.ts";
+import type {
   FileConfirmDurabilityRequest,
   FileConfirmDurabilityResult,
   FileCopyRequest,
@@ -44,20 +54,18 @@ import type {
   FileWriteTextResult,
 } from "@shared/contracts/file.ts";
 import type {
-  FileContentQueryStartInput,
-  FilePathQueryStartInput,
-  FileQueryEvent,
-} from "@shared/contracts/file-query.ts";
+  GitReviewCancelRequest,
+  GitReviewFileDocumentRequest,
+  GitReviewFileDocumentResult,
+  GitReviewIndexRequest,
+  GitReviewIndexResult,
+  GitReviewMutationRequest,
+  GitReviewMutationResult,
+  GitReviewPathMutationRequest,
+} from "@shared/contracts/git/review.ts";
 import type {
-  FileSaveTargetRequest,
-  FileSaveTargetResult,
-} from "@shared/contracts/file-save-target.ts";
-import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
-import type {
-  GitApplyPatchResult,
   GitBranchRef,
   GitChangeEvent,
-  GitCommit,
   GitCommitSearchResult,
   GitDiffBranchesResult,
   GitDiffPatch,
@@ -67,7 +75,6 @@ import type {
   GitRebaseContinueResult,
   GitRebaseResult,
   GitRemoteOperationResult,
-  GitRepoInfo,
   GitSequencerAbortResult,
   GitSequencerContinueResult,
   GitSequencerResult,
@@ -79,13 +86,6 @@ import type {
   GitStatus,
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
-import type {
-  GitReviewCancelRequest,
-  GitReviewFileDocumentRequest,
-  GitReviewFileDocumentResult,
-  GitReviewIndexRequest,
-  GitReviewIndexResult,
-} from "@shared/contracts/git-review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
   WorktreeCheckRequest,
@@ -211,19 +211,12 @@ export interface RendererPluginGitFacade {
   abortMerge(cwd: string): Promise<GitMergeAbortResult>;
   abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
   abortRevert(cwd: string): Promise<GitSequencerAbortResult>;
-  /**
-   * Codex review apply-patch (`git apply` target/revert).
-   * Caller supplies a unified patch (file or single hunk).
-   */
-  applyPatch(
-    cwd: string,
-    options: {
-      atomic?: boolean;
-      diff: string;
-      revert?: boolean;
-      target: "staged" | "unstaged" | "staged-and-unstaged";
-    }
-  ): Promise<GitApplyPatchResult>;
+  applyReviewMutation(
+    request: GitReviewMutationRequest
+  ): Promise<GitReviewMutationResult>;
+  applyReviewPathMutation(
+    request: GitReviewPathMutationRequest
+  ): Promise<GitReviewMutationResult>;
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
 
   cancelReviewRequest(request: GitReviewCancelRequest): Promise<void>;
@@ -249,31 +242,6 @@ export interface RendererPluginGitFacade {
       to?: string;
     }
   ): Promise<GitDiffPatch>;
-  getDiffText(
-    cwd: string,
-    options?: {
-      from?: string;
-      paths?: string[];
-      staged?: boolean;
-      to?: string;
-    }
-  ): Promise<string>;
-  getFileContent(
-    cwd: string,
-    options: { path: string; ref?: string }
-  ): Promise<string>;
-  getLog(
-    cwd: string,
-    options?: {
-      author?: string;
-      grep?: string;
-      maxCount?: number;
-      path?: string;
-      since?: string;
-      until?: string;
-    }
-  ): Promise<GitCommit[]>;
-  getRepoInfo(cwd: string): Promise<GitRepoInfo>;
   getReviewFileDocument(
     request: GitReviewFileDocumentRequest
   ): Promise<GitReviewFileDocumentResult>;

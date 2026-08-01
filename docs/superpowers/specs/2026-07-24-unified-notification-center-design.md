@@ -543,7 +543,7 @@ export interface NotificationCenterSnapshot {
 | `notification-sound-block.tsx`、`notifications-section.tsx`（测试通知） | 试听失败 / 测试发送成功 | `toast.error` / `toast.success` | **形态 A 保留** | 标题 对应 key／无／无 |
 | `skills-section.tsx`、`skills-shared.tsx`、`skills-project-detail.tsx` 等 | skills 复制成功 / 有未保存更改 | `toast.success/info/error` | **形态 A 保留** | 标题 对应 key／无／无 |
 | `managed-plugins-section.tsx`（检查更新成功）、`managed-plugin-rows.tsx`（安装/更新进度） | 插件管理反馈 | `toast.success` / `toast.loading→success` | **形态 A 保留** | 标题 对应 key／无／loading 句柄 |
-| `workbench/use-workbench-panel-state.ts`、`cost-overview-widget.tsx` | 全部刷新 / 物料刷新成功 | `toast.success` | **形态 A 保留** | 标题 对应 key／无／无 |
+| `workbench/use-panel-state.ts`、`cost-overview-widget.tsx` | 全部刷新 / 物料刷新成功 | `toast.success` | **形态 A 保留** | 标题 对应 key／无／无 |
 | `lib/agent-runtime/focus-feedback.ts` | 快捷键聚焦 agent：无目标 / 已消失 | 裸 `toast` / `toast.error` | **形态 A 保留**；带技术详情失败 → **dialog + 落档** | 标题 `agents.focusEmpty/…Gone`／无／无；详情失败时 err.message（仅 dialog+inbox），kind `operation.result` |
 | `keybindings-section.tsx` 录制快捷键 | 缺修饰键 / 冲突 / IPC 错误 | `toast.error(localizedError)`；IPC 错误原为 `toast.error(err.message)` 违规 | **形态 A 保留**；IPC 错误（已修）→ **dialog + 落档** | 标题 校验文案／无／无；IPC 失败 body=err.message，kind `operation.result`、suppressToast |
 | `managed-plugins-section.tsx` toggle 失败（已修） | 启用/禁用插件失败 | `toast.error(err.message)` 违规 | **dialog + 落档** | 标题 `settings.plugins.toast.{enable,disable}Failed`（{name}）／详情 err.message（仅 dialog+inbox）／kind `operation.result`、suppressToast |

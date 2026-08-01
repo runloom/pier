@@ -1,3 +1,5 @@
+import { normalizeClaudeMembershipTier } from "./claude-membership.ts";
+
 /**
  * Claude account identity parsing.
  *
@@ -50,7 +52,12 @@ export function subscriptionTypeFromCredential(
   try {
     const root = asRecord(JSON.parse(credential));
     const oauth = asRecord(root?.claudeAiOauth) ?? root;
-    return oauth ? stringField(oauth, "subscriptionType") : undefined;
+    return oauth
+      ? normalizeClaudeMembershipTier({
+          rateLimitTier: stringField(oauth, "rateLimitTier"),
+          subscriptionType: stringField(oauth, "subscriptionType"),
+        })
+      : undefined;
   } catch {
     return;
   }
@@ -69,9 +76,12 @@ export function parseIdentityFromOauthAccount(
   if (!(email && providerAccountId)) {
     return null;
   }
-  const subscriptionType = credential
-    ? subscriptionTypeFromCredential(credential)
-    : undefined;
+  const subscriptionType =
+    (credential ? subscriptionTypeFromCredential(credential) : undefined) ??
+    normalizeClaudeMembershipTier({
+      organizationType: stringField(oauthAccount, "organizationType"),
+      rateLimitTier: stringField(oauthAccount, "organizationRateLimitTier"),
+    });
   return {
     email,
     providerAccountId,

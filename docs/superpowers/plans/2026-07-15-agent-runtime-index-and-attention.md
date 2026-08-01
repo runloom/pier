@@ -266,7 +266,7 @@ pnpm test:unit -- agent-runtime-index
 
 **Files:**
 
-- Create: `src/renderer/lib/agent-runtime/agent-index-quickpick.ts`（**唯一**列表 UI builder）
+- Create: `src/renderer/lib/agent-runtime/index-quickpick.ts`（**唯一**列表 UI builder）
 - Create: `src/renderer/lib/actions/agent-runtime-actions.ts`
 - Modify: `src/renderer/main.tsx` 注册
 - Modify: `src/shared/commands.ts` / `keybindings.ts`（`pier.agents.focusWaiting`；`pier.agents.list`）
@@ -344,7 +344,7 @@ buildAgentIndexQuickPick(entries, { limit?: number; emptyAction?: "new-agent" })
 
 **Files:**
 
-- Create: `src/main/services/agent-attention/attention-service.ts`
+- Create: `src/main/services/agent-attention/service.ts`
 - Create: `src/shared/contracts/agent-attention.ts`（设置：enableErrorAttention 默认 false；cooldownMs 默认 180000）
 - Create: `tests/unit/main/agent-attention.test.ts`
 - Modify: FA broadcast 路径旁路挂钩（在 aggregator 发布后或 publication 前比较 prev/next status）

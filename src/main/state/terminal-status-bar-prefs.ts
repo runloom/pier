@@ -9,7 +9,7 @@ import {
   terminalStatusBarOverridePatchesSchema,
   terminalStatusBarPrefsSchema,
   withItemOverridePatch,
-} from "@shared/contracts/terminal-status-bar.ts";
+} from "@shared/contracts/terminal/status-bar.ts";
 import { app } from "electron";
 import {
   type DebouncedJsonStore,

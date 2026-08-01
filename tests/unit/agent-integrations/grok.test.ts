@@ -1,9 +1,19 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/hooks-install.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
+const ORIGINAL_PATH = process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin";
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -39,9 +49,8 @@ function configPath(): string {
 }
 
 describe("grokIntegration", () => {
-  it("capability 为 full，id 为 grok", async () => {
+  it("id 为 grok", async () => {
     const integration = await loadIntegration();
-    expect(integration.capability).toBe("full");
     expect(integration.id).toBe("grok");
   });
 
@@ -51,6 +60,32 @@ describe("grokIntegration", () => {
     expect(integration.detect()).toBe(false);
     await mkdir(join(homeDir, ".grok"), { recursive: true });
     expect(integration.detect()).toBe(true);
+  });
+
+  it("GROK_HOME 覆盖安装与探测目录，并忽略变量两端空白", async () => {
+    const customHome = join(homeDir, "custom-grok-home");
+    vi.stubEnv("GROK_HOME", `  ${customHome}  `);
+    vi.stubEnv("PATH", "");
+    const integration = await loadIntegration();
+
+    expect(integration.detect()).toBe(false);
+    await mkdir(customHome, { recursive: true });
+    expect(integration.detect()).toBe(true);
+
+    await integration.install();
+    const installed = JSON.parse(
+      await readFile(join(customHome, "hooks", "pier-status.json"), "utf8")
+    );
+    expect(hookCommands(installed)).toHaveLength(13);
+  });
+
+  it("空白 GROK_HOME 回落 HOME/.grok", async () => {
+    vi.stubEnv("GROK_HOME", "   ");
+    const integration = await loadIntegration();
+    await integration.install();
+    expect(
+      hookCommands(JSON.parse(await readFile(configPath(), "utf8")))
+    ).toHaveLength(13);
   });
 
   it("写入专用文件 ~/.grok/hooks/pier-status.json，13 个事件各一条命令（不含 Notification）", async () => {
@@ -87,10 +122,19 @@ describe("grokIntegration", () => {
     // 不装 Notification：Turn complete / Background task completed 会假 waiting
     expect(hooks.Notification).toBeUndefined();
 
-    // 所有命令包含 agentId + camelCase 身份键（Grok envelope）
+    // 所有命令都使用 strict v3；工具命令显式消费 Grok camelCase 身份键。
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
       expect(cmd).toContain('"grok"');
+      expect(cmd).toContain('"agentEventV3"');
+    }
+    for (const event of [
+      "PreToolUse",
+      "PostToolUse",
+      "PostToolUseFailure",
+      "PermissionDenied",
+    ]) {
+      const cmd = typedHooks[event]?.[0]?.hooks[0]?.command ?? "";
       expect(cmd).toContain("toolUseId");
       expect(cmd).toContain("toolName");
     }
@@ -104,7 +148,7 @@ describe("grokIntegration", () => {
     );
     expect(typedHooks.StopFailure?.[0]?.hooks[0]?.command).toContain('"error"');
     expect(typedHooks.PermissionDenied?.[0]?.hooks[0]?.command).toContain(
-      '"processing"'
+      '"ToolComplete"'
     );
     expect(typedHooks.SubagentStart?.[0]?.hooks[0]?.command).toContain(
       '"SubagentStart"'
@@ -119,6 +163,301 @@ describe("grokIntegration", () => {
       '"processing"'
     );
   });
+
+  it("0.2.114 官方载荷：子智能体在父会话启动、子会话停止，并发与重复停止均闭环", async () => {
+    const integration = await loadIntegration();
+    await integration.install();
+    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const hooks = installed.hooks as Record<
+      string,
+      Array<{ hooks: Array<{ command: string }> }>
+    >;
+    const command = (event: string) =>
+      hooks[event]?.[0]?.hooks[0]?.command ?? "";
+    const root = await mkdtemp(join(tmpdir(), "pier-grok-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const common = {
+      cwd: "/repo",
+      hookEventName: "fixture",
+      permissionMode: "default",
+      sessionId: "grok-session-1",
+      timestamp: "2026-07-29T12:00:00Z",
+      workspaceRoot: "/repo",
+    };
+    for (const [event, payload] of [
+      ["SessionStart", { ...common, hookEventName: "session_start" }],
+      [
+        "UserPromptSubmit",
+        {
+          ...common,
+          hookEventName: "user_prompt_submit",
+          prompt: "Fix the parser",
+        },
+      ],
+      [
+        "PreToolUse",
+        {
+          ...common,
+          hookEventName: "pre_tool_use",
+          toolInput: { command: "pnpm test" },
+          toolInputTruncated: false,
+          toolName: "run_terminal_command",
+          toolUseId: "tool-grok-1",
+        },
+      ],
+      [
+        "PostToolUseFailure",
+        {
+          ...common,
+          error: "command_failed",
+          hookEventName: "post_tool_use_failure",
+          toolInput: { command: "pnpm test" },
+          toolInputTruncated: false,
+          toolName: "run_terminal_command",
+          toolUseId: "tool-grok-1",
+        },
+      ],
+      [
+        "PreToolUse",
+        {
+          ...common,
+          hookEventName: "pre_tool_use",
+          toolInput: { path: "/repo/.env" },
+          toolInputTruncated: false,
+          toolName: "read_file",
+          toolUseId: "tool-grok-2",
+        },
+      ],
+      [
+        "PermissionDenied",
+        {
+          ...common,
+          hookEventName: "permission_denied",
+          toolInput: { path: "/repo/.env" },
+          toolInputTruncated: false,
+          toolName: "read_file",
+          toolUseId: "tool-grok-2",
+        },
+      ],
+      [
+        "SubagentStart",
+        {
+          ...common,
+          hookEventName: "subagent_start",
+          subagentId: "subagent-grok-1",
+          subagentType: "explore",
+        },
+      ],
+      [
+        "SubagentStart",
+        {
+          ...common,
+          hookEventName: "subagent_start",
+          subagentId: "subagent-grok-2",
+          subagentType: "explore",
+        },
+      ],
+      [
+        "SubagentStop",
+        {
+          ...common,
+          hookEventName: "subagent_stop",
+          phase: "gate",
+          sessionId: "subagent-grok-1",
+          subagentId: "subagent-grok-1",
+          subagentType: "explore",
+        },
+      ],
+      [
+        "SubagentStop",
+        {
+          ...common,
+          hookEventName: "subagent_stop",
+          phase: "gate",
+          sessionId: "subagent-grok-1",
+          subagentId: "subagent-grok-1",
+          subagentType: "explore",
+        },
+      ],
+      [
+        "SubagentStop",
+        {
+          ...common,
+          hookEventName: "subagent_stop",
+          phase: "gate",
+          sessionId: "subagent-grok-2",
+          subagentId: "subagent-grok-2",
+          subagentType: "explore",
+        },
+      ],
+      [
+        "Stop",
+        {
+          ...common,
+          backgroundTasks: [],
+          hookEventName: "stop",
+          reason: "end_turn",
+          sessionCrons: [],
+        },
+      ],
+      [
+        "StopFailure",
+        {
+          ...common,
+          error: "rate_limit",
+          errorDetails: "capacity unavailable",
+          hookEventName: "stop_failure",
+          lastAssistantMessage: "Please retry later.",
+        },
+      ],
+      [
+        "SessionEnd",
+        {
+          ...common,
+          hookEventName: "session_end",
+          reason: "channel_closed",
+        },
+      ],
+    ] as const) {
+      const result = spawnSync("/bin/sh", ["-c", command(event)], {
+        env: {
+          ...process.env,
+          PATH: pathForHookSpawn(ORIGINAL_PATH),
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "panel-1",
+          PIER_WINDOW_ID: "window-1",
+        },
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      { event: "SessionStart", sessionId: "grok-session-1", v: 3 },
+      { event: "PromptSubmit", sessionId: "grok-session-1", v: 3 },
+      {
+        event: "ToolStart",
+        toolName: "run_terminal_command",
+        toolUseId: "tool-grok-1",
+        v: 3,
+      },
+      {
+        event: "ToolComplete",
+        nativeEvent: "PostToolUseFailure",
+        toolName: "run_terminal_command",
+        toolUseId: "tool-grok-1",
+        v: 3,
+      },
+      {
+        event: "ToolStart",
+        toolName: "read_file",
+        toolUseId: "tool-grok-2",
+        v: 3,
+      },
+      {
+        event: "ToolComplete",
+        nativeEvent: "PermissionDenied",
+        toolName: "read_file",
+        toolUseId: "tool-grok-2",
+        v: 3,
+      },
+      {
+        actorHint: "subagent",
+        agentInstanceId: "subagent-grok-1",
+        agentType: "explore",
+        event: "SubagentStart",
+        parentSessionId: "grok-session-1",
+        v: 3,
+      },
+      {
+        actorHint: "subagent",
+        agentInstanceId: "subagent-grok-2",
+        agentType: "explore",
+        event: "SubagentStart",
+        parentSessionId: "grok-session-1",
+        v: 3,
+      },
+      {
+        actorHint: "subagent",
+        agentInstanceId: "subagent-grok-1",
+        agentType: "explore",
+        event: "SubagentStop",
+        sessionId: "subagent-grok-1",
+        v: 3,
+      },
+      {
+        actorHint: "subagent",
+        agentInstanceId: "subagent-grok-1",
+        agentType: "explore",
+        event: "SubagentStop",
+        sessionId: "subagent-grok-1",
+        v: 3,
+      },
+      {
+        actorHint: "subagent",
+        agentInstanceId: "subagent-grok-2",
+        agentType: "explore",
+        event: "SubagentStop",
+        sessionId: "subagent-grok-2",
+        v: 3,
+      },
+      { event: "Stop", nativeState: "end_turn", v: 3 },
+      { event: "error", nativeState: "rate_limit", v: 3 },
+      { event: "SessionEnd", nativeState: "channel_closed", v: 3 },
+    ]);
+
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: Array<string | undefined> = [];
+    for (const row of rows.slice(0, 6)) {
+      if (row.kind !== "agentEvent") {
+        continue;
+      }
+      aggregator.ingestAgentEvent(row, integration.runtime);
+      const activity = aggregator.snapshot().activities[0];
+      statuses.push(activity?.kind === "agent" ? activity.status : undefined);
+    }
+    expect(statuses).toEqual([
+      undefined,
+      "processing",
+      "tool",
+      "processing",
+      "tool",
+      "processing",
+    ]);
+
+    const lifecycleAggregator = createForegroundActivityAggregator();
+    const lifecycleRows = rows.filter(
+      (row) =>
+        row.kind === "agentEvent" &&
+        (row.event === "SessionStart" ||
+          row.event === "PromptSubmit" ||
+          row.event === "SubagentStart" ||
+          row.event === "SubagentStop")
+    );
+    const counts: number[] = [];
+    const accepted: boolean[] = [];
+    for (const row of lifecycleRows) {
+      if (row.kind !== "agentEvent") {
+        continue;
+      }
+      accepted.push(
+        lifecycleAggregator.ingestAgentEvent(row, integration.runtime)
+      );
+      const activity = lifecycleAggregator.snapshot().activities[0];
+      if (activity?.kind === "agent") {
+        counts.push(activity.subagentCount);
+      }
+    }
+    expect(accepted).toEqual([true, true, true, true, true, false, true]);
+    expect(counts).toEqual([0, 1, 2, 1, 1, 0]);
+  }, 15_000);
 
   it("幂等：重复安装不产生重复条目", async () => {
     const integration = await loadIntegration();

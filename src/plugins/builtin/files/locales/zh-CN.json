@@ -1,8 +1,5 @@
 {
   "commands": {
-    "pier.files.openSelectionAsMarkdown": {
-      "title": "预览选中文本"
-    },
     "pier.files.quickOpen": {
       "title": "转到文件"
     },
@@ -14,6 +11,15 @@
     },
     "pier.files.searchInFolder": {
       "title": "在文件夹中查找…"
+    },
+    "pier.files.editor.goToLine": {
+      "title": "转到行…"
+    },
+    "pier.files.editor.showHover": {
+      "title": "显示符号信息"
+    },
+    "pier.files.revealActiveFileInTree": {
+      "title": "在文件树中显示当前文件"
     }
   },
   "messages": {
@@ -21,7 +27,7 @@
     "filePanel.breadcrumbLabel": "文件位置",
     "filePanel.empty.title": "未选择文件",
     "filePanel.empty.withTree.description": "从项目目录树中选择一个文件，在当前标签页打开。",
-    "filePanel.empty.noTree.description": "打开文件，或从终端选中文本后预览 Markdown。",
+    "filePanel.empty.noTree.description": "打开文件以开始编辑。",
     "filePanel.image.actualSize": "原始尺寸",
     "filePanel.image.controlsLabel": "图片控制",
     "filePanel.image.fit": "适应窗口",
@@ -49,6 +55,9 @@
     "filePanel.markdown.toc.title": "大纲",
     "filePanel.markdown.measure.comfortable": "舒适阅读",
     "filePanel.markdown.measure.wide": "宽屏阅读",
+    "filePanel.markdown.appearance.auto": "跟随应用外观",
+    "filePanel.markdown.appearance.light": "浅色阅读",
+    "filePanel.markdown.appearance.dark": "深色阅读",
     "filePanel.markdown.contextMenuFailed": "无法打开预览菜单",
     "filePanel.markdown.zoom.in": "放大正文字号",
     "filePanel.markdown.zoom.out": "缩小正文字号",
@@ -95,6 +104,34 @@
     "filePanel.status.saving": "保存中…",
     "filePanel.status.temporary": "临时文件",
     "filePanel.status.unsaved": "未保存更改",
+    "filePanel.languageService.state.disabled": "已禁用",
+    "filePanel.languageService.state.unsupported": "不支持",
+    "filePanel.languageService.state.starting": "正在启动",
+    "filePanel.languageService.state.ready": "已就绪",
+    "filePanel.languageService.state.retrying": "正在重试",
+    "filePanel.languageService.state.paused": "已暂停",
+    "filePanel.languageService.state.error": "错误",
+    "filePanel.languageService.description.disabled.editorDisabled": "请在“设置”中启用编辑器语言功能。",
+    "filePanel.languageService.description.disabled.globallyDisabled": "请在“设置”中启用语言服务。",
+    "filePanel.languageService.description.disabled.worktreesDisabled": "请在“设置”中启用工作树语言服务。",
+    "filePanel.languageService.description.unsupported.nonDisk": "将此文件保存到工作区后即可使用语言功能。",
+    "filePanel.languageService.description.unsupported.noProvider": "请安装或配置适用于此文件类型的语言服务器。",
+    "filePanel.languageService.description.unsupported.unsupportedRoot": "打开受支持的本地工作区后即可使用语言功能。",
+    "filePanel.languageService.description.starting": "语言功能正在启动。",
+    "filePanel.languageService.description.ready": "语言功能已就绪。",
+    "filePanel.languageService.description.retrying.exited": "语言服务器已退出。Pier 将自动重试。",
+    "filePanel.languageService.description.retrying.failed": "语言服务器运行失败。Pier 将自动重试。",
+    "filePanel.languageService.description.retrying.sendFailed": "Pier 无法连接语言服务器，将自动重试。",
+    "filePanel.languageService.description.retrying.initializeFailed": "语言服务器无法初始化。Pier 将自动重试。",
+    "filePanel.languageService.description.paused.idleRelease": "将焦点移到编辑器即可恢复语言功能。",
+    "filePanel.languageService.description.paused.workspaceEvicted": "此工作区已暂停以释放资源。将焦点移到编辑器即可恢复语言功能。",
+    "filePanel.languageService.description.error.limitReached": "关闭另一个工作区，或在“设置”中调整语言服务数量上限。",
+    "filePanel.languageService.description.error.serverUnavailable": "请检查是否已安装适用于此文件类型的语言服务器。",
+    "filePanel.languageService.description.error.launchFailed": "请检查是否已安装适用于此文件类型的语言服务器，然后重试。",
+    "filePanel.languageService.description.error.initializeFailed": "请检查语言服务器安装，然后重试。",
+    "filePanel.languageService.description.error.cleanupFailed": "语言服务进程未能关闭。请重启 Pier 后重试。",
+    "filePanel.languageService.description.error.bridgeUnavailable": "Pier 无法连接语言服务。请重启 Pier 后重试。",
+    "filePanel.languageService.description.error.retryExhausted": "语言服务器反复停止。请重启 Pier；如果问题仍然存在，请检查语言服务器安装。",
     "filePanel.temporary.missing.title": "临时文件无法恢复",
     "filePanel.temporary.missing.description": "临时内容会尽量从本机草稿恢复；关闭标签页后会清除。",
     "filePanel.unsupported.title": "无法编辑此文件",
@@ -112,6 +149,11 @@
     "filePanel.unsupported.revealUnavailable": "系统文件管理器未能显示该文件。",
     "filePanel.tree.blockedByDirtyDocument": "请先保存或处理当前文件，再从目录树打开其他文件。",
     "filePanel.tree.collapse": "折叠目录树",
+    "filePanel.tree.collapseAll": "折叠目录",
+    "filePanel.tree.collapseFolders": "折叠目录",
+    "filePanel.tree.revealActiveFile": "在文件树中显示当前文件",
+    "filePanel.tree.expandAll": "展开目录",
+    "filePanel.tree.expandKnownFolders": "展开目录",
     "filePanel.tree.expand": "展开目录树",
     "filePanel.canvas.compileFailed": "无法编译画布",
     "filePanel.canvas.compileFailedHint": "请修复画布文件或其引用，然后重新加载。",
@@ -125,10 +167,8 @@
     "filePanel.view.source": "源码",
     "filePanel.view.switchToPreview": "切换到预览",
     "filePanel.view.switchToSource": "切换到源码",
-    "files.actions.openSelectionAsMarkdown.title": "预览选中文本",
     "files.draftProtection.failed": "无法自动保存草稿",
     "files.draftRecovery.failed": "无法恢复已保存的草稿",
-    "files.notifications.noTerminalSelection": "请先在终端中选中文本",
     "panel.title": "文件",
     "panel.noProjectContext.title": "未打开项目",
     "panel.noProjectContext.description": "请先打开项目文件夹以浏览文件。",
@@ -277,7 +317,40 @@
     "filePanel.contentSearch.invalidRegexpTitle": "正则表达式无效",
     "filePanel.contentSearch.invalidRegexpBody": "请检查表达式，或关闭正则后按普通文本搜索。",
     "filePanel.contentSearch.invalidScopeTitle": "文件夹不可用",
-    "filePanel.contentSearch.invalidScopeBody": "搜索目录已移动或不在项目内。请清除文件夹范围后重试。"
+    "filePanel.contentSearch.invalidScopeBody": "搜索目录已移动或不在项目内。请清除文件夹范围后重试。",
+    "filePanel.editor.goToLine.title": "转到行…",
+    "filePanel.editor.goToLine.body": "输入行号，或 行:列。",
+    "filePanel.editor.goToLine.confirm": "跳转",
+    "filePanel.editor.goToLine.invalid": "请输入行号，或 行:列。",
+    "filePanel.editor.goToLine.failed": "无法跳转到该行。",
+    "filePanel.editor.goToDefinition.failed": "无法打开该定义。",
+    "filePanel.editor.goToDefinition.unavailable": "此处无法跳转到定义。",
+    "filePanel.editor.showHover.title": "显示符号信息",
+    "filePanel.editor.showHover.noActiveFile": "请先在编辑器中打开文件。",
+    "filePanel.editor.showHover.unavailable": "此处无法显示符号信息。",
+    "filePanel.editor.hover.contentTruncated": "文档内容已截断",
+    "filePanel.editor.hover.definitionsTitle": "定义",
+    "filePanel.editor.hover.definitionsTruncated": "仅显示前几个定义",
+    "filePanel.editor.hover.documentationTitle": "文档",
+    "filePanel.editor.hover.lineTruncated": "行内容已截断",
+    "filePanel.editor.hover.noInformation": "此处没有可用的符号信息。",
+    "filePanel.editor.hover.previewUnavailable": "预览不可用",
+    "filePanel.editor.hover.symbolTitle": "符号信息",
+    "filePanel.editor.hover.unavailable": "符号信息暂时不可用。",
+    "filePanel.tree.action.cut": "剪切",
+    "filePanel.tree.action.copy": "复制",
+    "filePanel.tree.action.paste": "粘贴",
+    "filePanel.tree.cutReady": "已剪切，可粘贴",
+    "filePanel.tree.copyReady": "已复制，可粘贴",
+    "filePanel.tree.pasteDone": "粘贴完成",
+    "filePanel.tree.pasteWrongProject": "只能在同一项目内粘贴。",
+    "filePanel.tree.pasteFailed": "无法粘贴",
+    "filePanel.tree.pastePartial": "已粘贴 {{done}} / {{total}} 项，其余失败。",
+    "filePanel.tree.pasteIntoSelf": "不能将文件夹粘贴到自身内部。",
+    "filePanel.contentSearch.action.open": "打开",
+    "filePanel.contentSearch.action.copyMatch": "复制匹配行",
+    "filePanel.contentSearch.matchCopied": "已复制匹配行",
+    "filePanel.contentSearch.contextMenuFailed": "无法打开菜单"
   },
   "terminalStatusItems": {
     "pier.files.project": {
@@ -300,6 +373,51 @@
       "description": "在源码编辑器右侧显示文档缩略图。",
       "label": "缩略图"
     },
+    "pier.files.editor.wordWrap": {
+      "description": "在源码编辑器中自动换行。",
+      "label": "自动换行"
+    },
+    "pier.files.editor.tabSize": {
+      "description": "源码编辑器中一个制表符对应的空格数。",
+      "enumDescriptions": ["2 个空格", "4 个空格", "8 个空格"],
+      "label": "制表符宽度"
+    },
+    "pier.files.editor.defaultLanguage": {
+      "description": "无法从扩展名识别文件类型时使用的语法语言。",
+      "enumDescriptions": [
+        "自动",
+        "纯文本",
+        "Markdown",
+        "JavaScript",
+        "TypeScript",
+        "JSON",
+        "CSS",
+        "HTML",
+        "XML",
+        "YAML",
+        "Python",
+        "Shell",
+        "C/C++",
+        "Go",
+        "Java",
+        "Kotlin",
+        "Ruby",
+        "Rust",
+        "SQL",
+        "Swift",
+        "TOML"
+      ],
+      "label": "默认语言"
+    },
+    "pier.files.editor.defaultEol": {
+      "enumDescriptions": ["自动", "LF", "CRLF"],
+      "description": "创建新文件时使用的换行符。",
+      "label": "默认换行符"
+    },
+    "pier.files.editor.lspEnabled": {
+      "description": "为支持的文件显示诊断、补全和跳转定义；同时需要在工作区中启用语言服务。",
+      "label": "编辑器语言功能"
+    },
     "pier.files.tree.showExcludedFiles": {
       "description": "显示被下方排除规则命中的路径。",
       "label": "显示排除项"
@@ -311,6 +429,23 @@
     "pier.files.tree.showGitIgnoredFiles": {
       "description": "显示被 .gitignore、.git/info/exclude 和其它 Git 忽略来源命中的文件与文件夹。",
       "label": "显示 Git 忽略项"
+    },
+    "pier.files.tree.compactFolders": {
+      "description": "将单子目录链合并为一行显示。",
+      "label": "压缩文件夹"
+    },
+    "pier.files.tree.autoReveal": {
+      "description": "切换标签时自动在项目文件树中定位当前文件。不作用于「打开文件 / 跳转定义 / 面包屑」等主动定位（这些仍会定位）。也可随时用「在文件树中显示当前文件」。",
+      "enumDescriptions": [
+        "定位并在需要时滚动到可见位置",
+        "仅选中，不滚动",
+        "不跟随标签切换"
+      ],
+      "label": "自动定位当前文件"
+    },
+    "pier.files.tree.autoRevealExcludePatterns": {
+      "description": "切换标签自动定位时忽略这些规则命中的路径。「打开文件 / 跳转定义 / 在文件树中显示当前文件」仍会定位。每行一条规则；空行和以 # 开头的行会被忽略。",
+      "label": "自动定位排除规则"
     }
   }
 }

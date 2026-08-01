@@ -3,6 +3,7 @@ import type {
   PierCommandErrorCode,
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
+import type { FileWatchEvent } from "@shared/contracts/file/watch.ts";
 import type {
   FileConfirmDurabilityRequest,
   FileConfirmDurabilityResult,
@@ -51,7 +52,6 @@ import {
   filePathImpactSchema,
   fileWriteTargetInspectionSchema,
 } from "@shared/contracts/file.ts";
-import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 import {

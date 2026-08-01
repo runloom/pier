@@ -1,60 +1,65 @@
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   atomicWriteFile,
   commandExistsOnPath,
   pierBlockMarkers,
-  pierHookCommandWithStdinSessionId,
+  pierHookCommandV3WithStdin,
   removePierTextBlock,
-  upsertPierTextBlock,
+  upsertPierTextBlockUnlessNewer,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 
 const AGENT_ID: AgentKind = "mistral-vibe";
 
 /**
- * Mistral Vibe hook（Experimental）事件 → pier 事件名。
- * 依据官方 README github.com/mistralai/mistral-vibe（Hooks 章节）：
- * - 配置路径 `~/.vibe/hooks.toml`（用户级；项目级 `.vibe/hooks.toml` 优先
- *   级更高但 Pier 只管用户级全局文件，与其余集成一致）。
+ * Mistral Vibe 2.21+ 正式 hook 事件 → Pier 事件名。
+ * 依据 v2.21.0（0685654a）与 v2.22.0（89350a4）固定发布源码：
+ * - 配置路径 `$VIBE_HOME/hooks.toml`，默认 `~/.vibe/hooks.toml`。受信任
+ *   项目的 `.vibe/hooks.toml` 优先，但 Pier 只管理用户级全局文件。
  * - schema 是 TOML `[[hooks]]` 表数组，顶层直接是条目（无嵌套 Event 分组），
  *   字段 `{name, type, match?, command, timeout?, strict?, description?}`；
  *   无解析器场景, 走 shared.ts 的 upsertPierTextBlock marker 块方案
  *   （hooks.toml 是 Vibe 专用 hook 文件, marker 块与用户自定义 [[hooks]]
  *   条目共存不冲突, 无需像 goose 那样检测"顶层键已存在"的合法性风险）。
  * - 官方仅 3 个 hook type：
- *     post_agent_turn → Stop  （回合结束, 无待处理工具调用）
- *     before_tool     → ToolStart
- *     after_tool      → ToolComplete
+ *     post_agent → Stop（可由 hook 请求重试，故仅是 advisory）
+ *     pre_tool   → processing（发生在用户权限确认之前，不能证明工具执行）
+ *     post_tool  → ToolComplete（只结算局部工具；失败不得升级全局 error）
  *   无会话级事件（无 SessionStart/SessionEnd 等价物）——因此
- *   capability 为 "coarse"。
- * - **必须同时在 `~/.vibe/config.toml` 设 enable_experimental_hooks = true
- *   （或环境变量 VIBE_ENABLE_EXPERIMENTAL_HOOKS=1）hooks.toml 才生效**。
- *   改配置文件开实验开关的动作对用户过于侵入（且该开关可能影响用户自己
- *   其他 hook 条目的启用状态), 因此 Pier 不代为设置——仅在安装时检测
- *   config.toml 是否已开启, 未开启则 console.warn 提示（hooks.toml 本身
- *   安装无害, 照常写入）, 由用户自行决定是否开启实验开关。
- * - Experimental 特性, 官方已有一次 breaking change 历史——schema 未来
- *   可能变化, 需要留意上游更新。
+ *   状态证据仅覆盖这些事件。
+ * - 2.21.0 已移除旧 `enable_experimental_hooks` 门控；2.22.0 的破坏性
+ *   配置变化属于 ConfigOrchestrator，不改变 hooks.toml 格式。
+ * - `timeout` 由 `asyncio.wait_for(..., timeout=hook.timeout)` 消费，单位为秒。
  * - matcher 字段名是 `match`（不是 `matcher`），且是 fnmatch glob 或
  *   `re:` 前缀正则（不同于 aug/droid 家族的纯正则 matcher）；工具类事件
  *   省略 match 表示匹配全部工具（同 kimi 的省略即全匹配语义）。
  */
 const VIBE_HOOK_EVENTS: ReadonlyArray<{
   nativeType: string;
-  pierEvent: string;
+  pierEvent: "processing" | "Stop" | "ToolComplete";
 }> = [
-  { nativeType: "before_tool", pierEvent: "ToolStart" },
-  { nativeType: "after_tool", pierEvent: "ToolComplete" },
-  { nativeType: "post_agent_turn", pierEvent: "Stop" },
+  { nativeType: "pre_tool", pierEvent: "processing" },
+  { nativeType: "post_tool", pierEvent: "ToolComplete" },
+  { nativeType: "post_agent", pierEvent: "Stop" },
 ];
 
 const VIBE_HOOK_TIMEOUT_SECONDS = 10;
 
 function vibeHomeDir(): string {
+  const configured = process.env.VIBE_HOME?.trim();
+  if (configured) {
+    if (configured === "~") {
+      return homedir();
+    }
+    if (configured.startsWith("~/")) {
+      return resolve(homedir(), configured.slice(2));
+    }
+    return resolve(configured);
+  }
   return join(homedir(), ".vibe");
 }
 
@@ -62,32 +67,8 @@ export function vibeHooksConfigPath(): string {
   return join(vibeHomeDir(), "hooks.toml");
 }
 
-export function vibeConfigPath(): string {
-  return join(vibeHomeDir(), "config.toml");
-}
-
 export function vibeDetect(): boolean {
   return existsSync(vibeHomeDir()) || commandExistsOnPath("vibe");
-}
-
-/**
- * `~/.vibe/config.toml` 是否已开启实验性 hook 开关（`enable_experimental_hooks
- * = true`，允许行内空白但要求键在行首无缩进）。文件不存在/无法读取时视为
- * 未开启（安装仍照常进行, 仅少一次告警之外的信息量, 不阻塞）。
- */
-const EXPERIMENTAL_HOOKS_FLAG_RE = /^enable_experimental_hooks\s*=\s*true\s*$/m;
-
-export async function vibeExperimentalHooksEnabled(): Promise<boolean> {
-  if (process.env.VIBE_ENABLE_EXPERIMENTAL_HOOKS === "1") {
-    return true;
-  }
-  let raw: string;
-  try {
-    raw = await readFile(vibeConfigPath(), "utf8");
-  } catch {
-    return false;
-  }
-  return EXPERIMENTAL_HOOKS_FLAG_RE.test(raw);
 }
 
 /**
@@ -98,11 +79,17 @@ export async function vibeExperimentalHooksEnabled(): Promise<boolean> {
  */
 export function buildVibeHookBlock(): string {
   const entries = VIBE_HOOK_EVENTS.map((event) => {
-    const command = pierHookCommandWithStdinSessionId(
-      AGENT_ID,
-      event.pierEvent,
-      event.nativeType
-    );
+    const command = pierHookCommandV3WithStdin({
+      agentId: AGENT_ID,
+      event: event.pierEvent,
+      nativeEvent: event.nativeType,
+      ...(event.nativeType === "post_tool"
+        ? { nativeStateFields: ["tool_status"] }
+        : {}),
+      parentSessionIdFields: ["parent_session_id"],
+      toolNamePaths: ["tool_name"],
+      toolUseIdPaths: ["tool_call_id"],
+    });
     const commandLiteral = JSON.stringify(command);
     const nameLiteral = JSON.stringify(`pier-${event.nativeType}`);
     return (
@@ -118,7 +105,7 @@ export function buildVibeHookBlock(): string {
 
 /** 纯函数：注入/替换 pier marker 块（幂等）。 */
 export function withPierVibeHooks(raw: string): string {
-  return upsertPierTextBlock(raw, AGENT_ID, buildVibeHookBlock());
+  return upsertPierTextBlockUnlessNewer(raw, AGENT_ID, buildVibeHookBlock());
 }
 
 /** 纯函数：移除 pier marker 块；无块时原样返回输入引用。 */
@@ -140,13 +127,6 @@ export async function installVibeHooks(
   if (!vibeDetect()) {
     return;
   }
-  if (!(await vibeExperimentalHooksEnabled())) {
-    console.warn(
-      "[agent-hooks:mistral-vibe] enable_experimental_hooks is not set in ~/.vibe/config.toml " +
-        "(or VIBE_ENABLE_EXPERIMENTAL_HOOKS=1) — hooks.toml will be installed but Vibe will " +
-        "ignore it until the experimental flag is enabled."
-    );
-  }
   const raw = await readConfigRaw(configPath);
   const next = withPierVibeHooks(raw);
   if (next === raw) {
@@ -167,10 +147,15 @@ export async function uninstallVibeHooks(
 }
 
 export const mistralVibeIntegration: AgentHookIntegration = {
-  capability: "coarse",
   detect: vibeDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "authoritative" },
+  runtime: {
+    emittedMappings: VIBE_HOOK_EVENTS.map(({ nativeType, pierEvent }) => ({
+      nativeEvent: nativeType,
+      pierEvent,
+    })),
+    stopAuthority: "advisory",
+  },
   install: () => installVibeHooks(),
   uninstall: () => uninstallVibeHooks(),
 };

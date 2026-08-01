@@ -49,7 +49,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 ### 宿主弹窗使用规范
 
-宿主级确认/提示弹窗统一走 `src/renderer/components/common/app-dialog-host.tsx`：
+宿主级确认/提示弹窗统一走 `src/renderer/components/common/dialogs/host.tsx`：
 
 - 业务代码不要直接 import `@pier/ui/alert-dialog.tsx`；宿主 renderer 使用 `showAppConfirm` / `showAppAlert` / `showAppChoice` / `showAppPrompt`，插件使用 `RendererPluginContext.dialogs` / `ExternalRendererPluginContext.dialogs`。
 - builtin 与 external 插件的简单弹窗 API **同构**：`alert` / `confirm` / `choice` / `prompt`；复杂内容另加 `open` / `update` / `close`。
@@ -72,7 +72,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
   - `choice`：作用在 **alt**（不保存/丢弃）；confirm 始终 default 样式
   - 若破坏动作落在 `choice.confirm`（如覆盖），`intent` 仍必须 `"default"`，不能为了“看起来危险”去染 alt
 - 取消按钮一律 `outline`（含 destructive 场景）；Esc / 点遮罩 = 取消
-- 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts` 与 `tests/component/app-dialog-host.test.tsx`
+- 检查点在 `tests/unit/renderer/notifications/app-dialog-governance.test.ts` 与 `tests/component/app-dialog-host.test.tsx`
 
 复杂内容弹窗（表单、多步、等待态、带自定义 body）统一走宿主 `AppContentDialogHost`：
 
@@ -108,7 +108,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 3. **控件密度**：弹窗表单主路径 Select / Input / Button 用默认 28px 密度；**禁止**为「显得紧凑」给主表单 `SelectTrigger size="sm"` / footer `Button size="sm"`。列表内图标排序等次要 hit 可用 `icon-xs`。
 4. **物料设置**：`configurable` widget 的 `settingsComponent` 只渲染 **即时偏好**（改即写），但 **字段布局必须与提交型 dialog 一致**（垂直堆叠、全宽 Select/Input，参考 worktree）；宿主壳固定 `WorkbenchSettingsDialog`（Header + 可滚 body + **可选 sticky footer**，经 `setFooter` 注册，与 content dialog 同壳）。主面主操作（如「添加区块」）放 **footer**，不要散在 body 底。不得自挂 Dialog，不得用设置页水平 `SelectRow` 样式塞进物料弹窗。多实例列表用 `Item outline` 表达块边界。**添加/创建类草稿** 走 **二级 content dialog**（`openAppContentDialog` + sticky `取消|确认`）。
 5. **校验**：提交型在 submit 时校验并用 `FieldError`；`prompt` 走 `validate`。即时偏好以合法枚举/开关为主，避免半填草稿。
-6. **检查点**：`tests/unit/renderer/dialog-form-governance.test.ts`（与本节标题绑定）。
+6. **检查点**：`tests/unit/renderer/app/dialog-form-governance.test.ts`（与本节标题绑定）。
 
 ### 浮层后打开 Dialog / 设置
 
@@ -143,7 +143,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 硬规则：
 
-1. **toast 双形态**：确认型（用户动作即时反馈，不进消息中心）维持 **触发窗** sonner 反色胶囊（默认 Toaster `position="top-center"`）；消息型（系统/后台事件，进消息中心）仅经 main 单投 → `NotificationMessageToastBridge` → `lib/notifications/show-notification-toast.tsx` 标准 shadcn sonner 卡片（同 Toaster，per-call `position: "top-right"`）——**标题 + 详情（必备，必须由调用方提供友好内容：下一步/上下文/摘要；类型行回退仅为防御兜底，不得作为常态）+ ≤1 outline 操作 + 关闭 X（右上），无前置状态图标**。消息中心卡片唯一实现是 `components/common/notification-card.tsx` 的 `NotificationCard`（无前置图标；标题/详情/时间 + 未读红点 + 操作），**仅 Popover 列表使用**（无 dockview panel），禁止另写一套卡片样式。action 统一走 `lib/notifications/notification-actions.ts` 分发（同一 id 各载体行为一致；toast 副本按 dedupeKey 标已读）。
+1. **toast 双形态**：确认型（用户动作即时反馈，不进消息中心）维持 **触发窗** sonner 反色胶囊（默认 Toaster `position="top-center"`）；消息型（系统/后台事件，进消息中心）仅经 main 单投 → `NotificationMessageToastBridge` → `lib/notifications/show-notification-toast.tsx` 标准 shadcn sonner 卡片（同 Toaster，per-call `position: "top-right"`）——**标题 + 详情（必备，必须由调用方提供友好内容：下一步/上下文/摘要；类型行回退仅为防御兜底，不得作为常态）+ ≤1 outline 操作 + 关闭 X（右上），无前置状态图标**。消息中心卡片唯一实现是 `components/common/notification-card.tsx` 的 `NotificationCard`（无前置图标；标题/详情/时间 + 未读红点 + 操作），**仅 Popover 列表使用**（无 dockview panel），禁止另写一套卡片样式。action 统一走 `lib/notifications/actions.ts` 分发（同一 id 各载体行为一致；toast 副本按 dedupeKey 标已读）。
 2. **状态图标的归属**：StatusIcon 只出现在确认型 toast（结果确认着色）与 Alert 等即时反馈中；**消息型 toast 与消息中心条目一律无前置状态图标**。severity 只驱动行为：徽标只计 warning/error 未读（`attentionUnreadCount`）、toast 时长 error 10s / warning 6s / success·info 4s、DND 仅 error 弹出。不要给 inbox 条目重新引入 severity 图标。
 3. **路由单一实现**：toast / inbox / OS 通知的投递判定只走 `src/shared/notification-delivery.ts` 的 `routeDelivery`（mutedKinds → DND（error 除外）→ suppressToast）；业务代码不得手写 DND 判断。
 4. **去重下沉**：同 `dedupeKey` 窗口（24h，`NOTIFICATION_DEDUPE_WINDOW_MS`，契约单一来源）内由 NCS 合并（`repeatCount`），调用方不维护版本/runId 级记录去重；toast 同步连发节流（会话内）是门面与调用方仅有的例外。dedupe 判定依赖镜像水合（`hydrated`），启动期未水合时门面延后判定。
@@ -181,11 +181,11 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 中文界面出现 Agent、worktree、选区、上下文、耐久性、Needs you、DETACHED 等 → finding。
 - 业务代码 `toast.*("…")` / `showAppAlert({ title: "…" })` 内联用户串未走 i18n → finding。
 
-检查点在 `tests/unit/renderer/user-copy-governance.test.ts`：锁定本节存在，并扫描中英 locale 字符串值中的禁用实现词。
+检查点在 `tests/unit/renderer/app/user-copy-governance.test.ts`：锁定本节存在，并扫描中英 locale 字符串值中的禁用实现词。
 
 ### Markdown 预览大纲布局复用（最高优先级）
 
-`src/plugins/builtin/files/renderer/markdown-preview*.tsx` 的大纲与正文布局必须先复用，再分交互态。交互态差异只能落在**细轨 / hover 浮层**，不得复制第二套壳、高度或间距。
+`src/plugins/builtin/files/renderer/markdown/preview*.tsx` 的大纲与正文布局必须先复用，再分交互态。交互态差异只能落在**细轨 / hover 浮层**，不得复制第二套壳、高度或间距。
 
 硬规则：
 
@@ -217,6 +217,41 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
 - `asChild` 触发器由子控件持有尺寸；应优先组合 `@pier/ui` 的 Button 等统一控件，不在业务层复制高度。
 - Textarea、卡片内容、头像、骨架内容块、导航分组标题等非单行交互控件不适用本规则。
 - 检查点在 `tests/unit/renderer/interactive-density-governance.test.ts`；新增通用交互原语必须接入统一密度定义，例外必须在测试中说明原因。
+
+### 焦点与 Tab 序规范
+
+桌面工作台的 focus 纪律：**去掉不该 focus 的脏环；该 focus 的只用产品 `focus-visible` ring。**  
+不要为了「干净」全局消灭键盘焦点指示。
+
+硬规则：
+
+1. **鼠标点中不画 UA outline。** 底座在 `src/renderer/app/globals.css`：
+   `:focus:not(:focus-visible) { outline: none; }`。禁止依赖 Electron/macOS 系统强调色
+   的 `outline: auto` 粗环。
+2. **真正可操作控件**（Button / Input / Select / Toggle / 菜单项 / 拖拽把手等）使用
+   **`focus-visible:ring-*` + `outline-none`（或等价）**；token 优先 `ring-ring/30~50`，
+   禁止用 `ring-primary` 当 focus 铬（主题橙会像脏 focus 环）。
+3. **展示型 / 只读表面不进 Tab 序**：图表（`ChartContainer` 默认注入
+   `accessibilityLayer={false}`，子节点经 `Children.map`/Fragment 处理）、
+   纯展示节点图（无 `onSelectNode`/`editable` 时 `focusable=false`、`role="img"`；
+   有选择/编辑合约时节点可键盘聚焦并带产品 `ring-ring`）、
+   状态徽标（短标签 + 完整 `aria-label`，不要为 tooltip 硬挂 `tabIndex={0}`）、
+   装饰 SVG。hover tooltip / 点击选点仍可用。
+4. **业务高亮 ≠ focus。** 工作台新加/缩放物料用轻量 `ring-1 ring-ring/40`（或阴影），
+   短时反馈即可；禁止与 focus 环共用 `ring-primary/50` 粗描边。
+5. **`tabIndex={0}` 白名单**（产品源码；新增必须在治理测试里登记理由）：
+   - 图片预览画布（缩放/平移快捷键）
+   - 工作台网格（Shift+F10 原生右键菜单合约）
+   - dockview panel tab 内容（标签激活）
+   - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）
+6. **`role="button"` 的非 button 元素**必须同时具备：键盘激活（Enter/Space）、
+   `tabIndex={0}`、以及可见的 `focus-visible` 环（或复用已带 ring 的 `Item` 等原语）。
+   能改成真正 `<button>` / `Button` 时优先改。
+7. 菜单/列表的 `:focus` 背景高亮（Radix roving focus）保留；那是选中态，不是 UA outline。
+
+检查点在 `tests/unit/renderer/chart-focus-governance.test.ts`（锁定本节标题、全局
+outline 抑制、Chart/DataChart/NodeGraph 默认、状态徽标不进 Tab、`tabIndex={0}` 白名单、
+禁止 `ring-primary` focus 铬）。
 
 ### 颜色使用规范
 
@@ -264,7 +299,7 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
 - 允许保留专用渲染：Dockview tab 原生动作、shadcn Sidebar 自身实现、终端/调试几何
   画布、图表及物料静态预览。这些例外不得扩展为普通业务表单或信息卡。
 
-检查点在 `tests/unit/renderer/shadcn-governance.test.ts`；新增例外必须写明组件边界和
+检查点在 `tests/unit/renderer/app/shadcn-governance.test.ts`；新增例外必须写明组件边界和
 无法使用现有 shadcn 原语的原因。
 
 ### 设置页状态提示布局
@@ -280,7 +315,7 @@ section 根节点下的裸子节点。
 - 参考：`plugins-section.tsx`（错误 Alert 在内容 Card 内）、
   `notifications-section.tsx`（权限/hooks Alert 在策略 Card 顶部）。
 - 一次性动作失败的详情仍走 `showAppAlert`（与本条不冲突）。
-- 检查点在 `tests/unit/renderer/settings-section-alert-layout-governance.test.ts`（仅扫描 `settings-dialog` 直接挂载的 `*-section.tsx`；嵌套在父 Card 内的子块不扫）。
+- 检查点在 `tests/unit/renderer/settings/section-alert-layout-governance.test.ts`（仅扫描 `settings-dialog` 直接挂载的 `*-section.tsx`；嵌套在父 Card 内的子块不扫）。
 
 ### 前台活动模块 `src/main/services/foreground-activity/`
 
@@ -291,6 +326,22 @@ section 根节点下的裸子节点。
 - 双源迁移已完成：老 `agent-session` broadcast 已下线，此通道是唯一活动广播源
 - 模块内不 import `services/agents/`（agent 只是 activity 的一种 kind，边界单向）
 - Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
+
+#### Agent 会话标题与身份（标题 ≠ 身份）
+
+标题是**尽力而为的可读性信号**：来源不可靠（不同 agent 的 hook 能力不一致）、用户随时可改、永不全覆盖。**多 agent 调度要用的身份必须确定性**，不得从标题反推。
+
+- **身份四件套**：`agentId` + 项目路径锚点（`projectRootPath` / `cwd`）+ `panelId` + 角色（`actorHint` 主/子会话，`parentSessionId` 记委派边，`sessionId` 由 provider 原样上报）。这些字段在 `agentActivitySchema`（`.strict()`）里，缺席只表示证据不足，消费方按主会话处理。
+- **身份只由主会话事件推进**：主/子会话判据唯一实现在 `src/shared/agent-session-actor.ts`（`isSubagentHookEvent` / `SUBAGENT_HOOK_EVENTS`），main 与 foreground-activity 都必须消费它，不得各写一份。子会话事件只累加计数，永不写面板行身份；`SessionStart` 是**换会话**（resume / clear 后会话号会变），身份整体替换而非叠加，否则旧 `sessionId` 会残留成错误身份；`agent-launch` 先验没有任何 hook 事实，因此不带身份字段，也不得从命令行反推会话号。
+- **标题只有三层**：`prompt`(1) < `provider`(2) < `user`(3)。`prompt` 来自首条 prompt 的**确定性截断**（`deriveAgentSessionTitleFromPrompt`：清协议标记 → 取首行 → 规范化 + 软断点硬截断）；`provider` 是 **agent 自己算好的会话名**，从其原生 transcript 读出后原样采信；`user` 是改名。历史 `auto` / `rule` / `model` 在读取期归一为 `prompt`，**不回写**。
+- **provider 秩是「尽量用 agent 自身能力」的唯一正确形态**：通路在 `transcript-tail-reconciler.ts` 的 `classifyTitleLine` / `onTitleRecord`（逐 agent 增量接入，当前只有 Claude 的 `ai-title`），宿主侧消费在 `session-title/index.ts` 的 `applyProviderAgentSessionTitle`。硬约束：**不额外起进程、不花 token、不需要 `titleArgs`**；**只收 agent 真正自己生成的标题**——Claude 的 `custom-title` / `agent-name` 装的是 Pier 经 `derive-claude-session-title` 双写回去的 prompt 派生（逐字相同，含 `…` 截断标记），收下等于把自己的截断洗成更高的秩，且它们先到会把随后真正的 `ai-title` 永久挡在门外；只在增量区消费（初始 tail 回扫的旧标题不得占空槽）；`sessionId` 对不上且 transcript 有多个 owner 时**放弃**而非猜；同秩不覆盖，所以每回合重算的 `ai-title` 只有第一条生效，标题不抖。**接不到就不接**——静默降级回 `prompt` 地板，不报错、不影响终态对账。
+- **没有启发式改写层，也没有模型精修层**：不判断寒暄、不剥前缀、不名词化、不猜「这条 prompt 值不值得当标题」。那类规则在中文口语输入下不可复现也无法解释，标题会随措辞抖动。宁可原样呈现用户写的第一句话。`titleArgs`（标题专用模型调用入口）与 refine 偏好开关均已删除，不得复活。
+- **写入裁决**在 `precedence.ts`：空槽可写；`user` 永远可写；否则要求 rank 严格递增。
+- **标题按主会话绑定**：持久化同时保存 `sessionTitleSessionId`。主会话 `SessionStart` 会统一对账作用域：首次可靠会话可接管历史未绑定标题；会话号变化必须清除旧标题。写入被拒时，运行投影只能水合持久化返回的最终真值，禁止继续使用本次尝试值。
+- **长度**：存全（上限 `MAX_AGENT_SESSION_TITLE_LENGTH` = 120 code points，唯一来源 `agent-session-title/constants.ts`，各 schema 引常量而非字面量），视觉截断交给 CSS（tab / 行内 `truncate`）。
+- **展示层硬规则**：产品标题唯一入口是 `resolveAgentSessionTitle`，**不接收 OSC / terminalTitle**（OSC 只能做 tooltip）。每个 `agentSessionTitleInput` 调用点**必须传路径锚点**——否则无标题会话的 placeholder 塌成裸 catalog 标签，同 agent 的多个面板行完全一样。同名会话经 `disambiguateAgentSessionTitles` 追加序号。列表行的无障碍名字要能读出「哪个 agent · 哪个项目 · 是否子会话」。
+- **hook 同构**：下发的 `derive-claude-session-title` 脚本必须与 shared 侧 `deriveAgentSessionTitleFromPrompt` 行为逐字一致（治理测试按严格相等校验）；改脚本必须同时 bump `PIER_HOOK_COMMAND_GENERATION`。
+- 检查点在 `tests/unit/agent-session-title-governance.test.ts`、`tests/unit/agent-session-title-hook-parity.test.ts`、`tests/unit/agent-session-title.test.ts`、`tests/unit/main/foreground-activity-aggregator.test.ts`（身份闸门）与 `tests/component/activity-widget.test.tsx`。
 
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 
@@ -340,7 +391,7 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 插件可经 manifest `workbenchWidgets` 声明 + renderer 运行时 `context.workbenchWidgets.register` 注册工作台卡片组件：
 
 - 纪律链与 `panels` / `terminalStatusItems` 一致：`assertDeclaredContribution("workbenchWidget")` → 运行时注册表 → 宿主容器渲染
-- 注册表在 `src/renderer/lib/plugins/plugin-workbench-widget-registry.ts`（镜像 `plugin-panel-registry.ts` 结构）
+- 注册表在 `src/renderer/lib/plugins/workbench-widget-registry.ts`（镜像 `panel-registry.ts` 结构）
 - Core-owned widget 走 `CORE_WORKBENCH_WIDGETS` 静态声明（平行于 `CORE_TERMINAL_STATUS_ITEMS`），不经插件通道
 - 工作台 panel 为 core panel kit（`component: "workbench"`，多实例 `workbench-<uuid>`），组装状态存 dockview panel params 随 layout 持久化
 
@@ -364,6 +415,24 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 7. 无障碍：图标按钮有 `aria-label`；拖拽只从显式抓手开始，交互元素必须在拖拽 `cancel` 名单内（`button/a/input/...`），特殊容器用 `[data-no-drag]` 逃生舱。
 8. 尺寸适配：`size` prop 做结构决策（是否渲染某区块、图表显示天数/范围），container query 做布局密度（列数、横排↔纵排）；两者不可互换。禁止用 container query `display: none` 静默删除有意义内容（时间戳、余额、次要指标等）——compact 尺寸应摘要化或重排，辅以 tooltip / 渐进式披露保留可访问性。`minSize` 必须能容纳物料核心信息（至少一个指标 + 状态），不得声明小于核心内容所需的最小格数。
 9. 重复指标自适应：重复指标是同构且均有意义的数据项，必须保留数据契约中的源顺序和语义标识；只有存在独立标题、操作或说明时才拆成占整行的可见分区，普通指标不得仅因数据分组键不同而强制换行。指标集合优先使用浏览器原生内在尺寸网格 `repeat(auto-fit, minmax(min(100%, var(--item-min-width)), 1fr))`：集合只有单项时占满整行，多项在核心内容最小宽度允许时横排，否则纵向重排。`--item-min-width` 由标签、数值、状态和操作等核心内容共同决定，不得从宿主 `size.w` 换算像素，也不得用固定列数留下空轨道。所有数据必须进入可访问的 DOM，不得按尺寸丢弃、用 `hidden` 隐藏或只保留部分数据；高度不足时保持 `min-content` 并交由宿主滚动，高度富余时按内容自然高度顶部对齐，不得靠居中或拉大项目内部间距伪造填满效果。重复指标之间留白优先于分割线，只有存在无法由标题、标签或间距表达的独立语义章节时才使用 `Separator`。
+
+#### 工作台滚动区域
+
+- 每张卡遵守单一滚动所有者原则，只允许一个实际纵向滚动容器。注册项 `contentMode` 省略或为
+  `host-scroll` 时由宿主正文滚动；需要固定头部或自主管理滚动区时必须声明
+  `contained`，此时宿主只裁切溢出，组件负责自己的 viewport。
+- 外部插件注册经宿主适配时必须透传 `contentMode`，不得在重建注册对象时丢失布局语义并
+  静默回退到 `host-scroll`。
+- 可见渐隐统一使用 `@pier/ui/scroll-area.tsx` 的 `viewportFade`。渐隐 class 只能落在
+  Radix viewport，圆角、背景和边框归外层壳，ScrollBar 保持为 viewport 的兄弟节点。
+- 固定区与滚动区的内边距归各自内容层；滚动 viewport 必须全宽贴卡片内容区边缘。
+  禁止使用负边距、超宽度或绝对偏移把滚动条拉到边框，也禁止宿主与组件嵌套
+  `overflow-y-auto`。
+- 检查点在 `tests/unit/renderer/workbench-scroll-governance.test.ts`、
+  `tests/unit/renderer/scroll-area.test.tsx`、
+  `tests/unit/renderer/external-plugin-workbench-contract.test.ts` 与
+  `tests/component/workbench-panel.test.tsx`。
+
 - 网格几何：`CELL_WIDTH = 88`、`ROW_HEIGHT = 88`、`MARGIN = [12, 12]` 为目标节奏；容器宽度自动换算为 `2..12` 列。布局严格按实例数组做 Z 字逐行排布，当前行放不下即换行，行高取本行最高物料，不用后续小物料回填纵向空洞。删除后由同一派生算法立即压实；添加和复制追加到数组末尾；拖拽只修改数组顺序。
 - Dockview 宽度变化只重新派生列数与 `x/y`，不得写 panel params。窄容器可把卡片显示宽度临时夹到当前列数，容器恢复后继续使用原 `w/h` 偏好；普通布局禁止横向滚动。
 - 调整尺寸仍由 RGL 处理，停止时只持久化目标实例的 `w/h`；不得把 RGL compactor 与自定义排序求解器混用。全局菜单不提供“整理布局”“锁定布局”或新增方向，自动布局始终生效。
@@ -380,11 +449,34 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - Electron 桌面开发：`pnpm dev`（或 `pnpm electron:dev`）
 - 类型检查：`pnpm typecheck`
 - Lint + Format：`pnpm lint` / `pnpm lint:fix`
-- 完整检查：`pnpm check`（typecheck + lint + depcruise + file-size + unit + component 测试）
-- 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`
-- E2E 测试：`pnpm test:e2e`
+- 完整检查：`pnpm check`（typecheck + lint + depcruise + file-size + dir-density + unit + component 测试）
+- **推送前正确性（默认 pre-push）**：`pnpm preflight:push`（static + unit + component + plugin-index）。目标 **CI 一次绿**；禁止用远程 coverage 当调试器。
+- 合 main / 发版前：`pnpm preflight:ci`（+ coverage 棘轮 + build）；mac native：`pnpm preflight:full`
+- 单文件行数：`pnpm check:file-size`（硬上限 500 行）
+- 目录密度：`pnpm check:dir-density`（单目录直接源码文件硬上限见 `.pier/dir-density.json`；资源目录 skip，过渡债 allowlist 棘轮）
+- 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`；覆盖率：`pnpm test:coverage`
+- E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
 - 图标重建：`pnpm build:icons`（改 `build/app-icon-*.svg` 后跑一次，产出 `build/icon.{icns,ico,png}`）
+
+### E2E 执行优先级（编码助手硬约定）
+
+Pier e2e 会启动真实 Electron 窗，**在主力开发机上跑会打扰当前使用**。存在闲置 Mac runner 时：
+
+1. **默认**执行：`pnpm test:e2e:auto` 或  
+   `bash scripts/e2e-runner/run-e2e.sh [playwright 路径/参数…]`  
+   脚本先探测 SSH Host `pier-e2e`（`PIER_E2E_SSH_HOST` 可覆盖）。可达则在远端跑；不可达再回退本机。  
+   主力机须已配置 `~/.ssh/config` 的 `Host pier-e2e`（见 `scripts/e2e-runner/FIRST-BOOT.txt`「主力机 SSH Host」）。
+2. **远端会同步本机 tip**（`git bundle`，不必先 push），在闲置机 `checkout --detach` 后跑 playwright。  
+   - clean 工作区 → 同步 git HEAD  
+   - dirty 工作区 → 同步临时 worktree snapshot（已跟踪改动 + 未忽略未跟踪文件），**开发中的未提交改动默认也能上闲置机**  
+   - 只要已提交 HEAD：`--committed-only`（工作区 dirty 时拒绝远端，避免误测）  
+3. **强制只走远端**（不可达则失败、不回退）：  
+   `bash scripts/e2e-runner/run-e2e.sh --remote …`  
+4. 强制重建：`--rebuild`。tree/SHA 变化或缺少 `out/main` 时远端也会自动 rebuild。  
+5. 禁止在未探测闲置机的情况下，把「全量 e2e」默认打在主力机上；unit/component/integration 仍本机即可。
+
+闲置机装机与 runner：`scripts/e2e-runner/FIRST-BOOT.txt`、`setup-mac.sh`、`install-actions-runner.sh`。
 
 ### 新机首次 clone → dev 一键：`pnpm bootstrap`
 
@@ -458,6 +550,37 @@ pnpm dev              # 否则 panel 内会报 "Cannot find module .../ghostty_n
    ```
    `<TEAM_ID>` 换成签名证书括号里的 10 位。
 4. `pnpm build:dist`。
+## 04b 目录密度与命名（强制门禁）
+
+与 `check:file-size` 并列的静态门禁：`pnpm check:dir-density`（已挂入 `check:static`）。
+
+### 密度
+
+- 配置：`.pier/dir-density.json`（`maxDirectSourceFiles` 硬上限默认 40；`softCap` 告警；`skipDirPatterns` 跳过资源目录；`allowlist` 仅过渡债且 `max` 为棘轮）。
+- 扫描：`src/`、`packages/*/src`、`tests/` 每个目录的**直接** `.ts/.tsx/.js/...` 文件数（不含子目录、不含 `.d.ts`）。
+- 超过硬上限且不在 allowlist → 失败；allowlist 条目的实际数量不得超过 `max`；数量已 ≤ 硬上限时必须删除该 allowlist 条目（防陈旧白名单）。
+- 资源类目录（`favicons`、`locales/**`、`status-traces`、`fixtures`、`resources` 等）走 skip，不计入。
+- 拆分优先按**领域/功能**分子目录，不要按技术层无限堆 `hooks/`/`utils/`。
+
+### 命名（去冗余）
+
+目录已经表达领域时，**文件名不得再重复父目录语义**：
+
+| 禁止 | 应为 |
+|------|------|
+| `services/git/git-service.ts` | `services/git/service.ts` |
+| `ipc/terminal/terminal-create-handler.ts` | `ipc/terminal/create-handler.ts` |
+| `review/git-review-document-loader.ts` | `review/document/loader.ts`（或 `review/document-loader.ts`） |
+| `diff-view/diff-view-items.ts` | `diff-view/items.ts` |
+| `host/host-context.ts` | `host/context.ts` |
+| `commands/file-commands.ts` | `commands/file.ts` |
+
+- 入口文件优先 `index.ts` / `index.tsx`，不要 `foo/foo.ts`。
+- React hooks 在 `hooks/` 下可保留 `use-` 前缀，但应去掉领域重复段（`hooks/use-git-review-x.ts` → `hooks/use-x.ts`）。
+- 角色与目录名不同时保留角色词（例如 `services/git/worktree-service.ts` 在迁入 `worktree/` 后变成 `worktree/service.ts`）。
+- 一次性迁移脚本已归档至 `scripts/archive/`（`reorg-*` / `rename-strip-*`）；日常只跑 `pnpm check:dir-density` 与治理单测，勿再依赖 one-shot 作为门禁。
+- 检查点：`tests/unit/scripts/dir-density-governance.test.ts`。
+
 ## 05 安全边界
 
 - Git 默认只读。除非用户明确要求，不创建 commit、分支、PR 或 push。

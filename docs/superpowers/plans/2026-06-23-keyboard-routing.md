@@ -689,7 +689,7 @@ EOF
 - Modify: `src/renderer/lib/keybindings/types.ts`
 - Modify: `src/renderer/lib/keybindings/registry.ts`
 - Modify: `src/renderer/lib/keybindings/defaults.ts`
-- Modify: `src/renderer/lib/keybindings/use-keybindings.ts`
+- Modify: `src/renderer/lib/keybindings/use-registry.ts`
 
 - [ ] **Step 1: types.ts 加 scope 字段**
 
@@ -810,7 +810,7 @@ export const DEFAULT_KEYMAP: readonly KeybindingInput[] = [
 
 - [ ] **Step 4: use-keybindings.ts pickAction 用 scope**
 
-修改 `src/renderer/lib/keybindings/use-keybindings.ts`：
+修改 `src/renderer/lib/keybindings/use-registry.ts`：
 
 import scope store：
 
@@ -861,7 +861,7 @@ pnpm typecheck
 git add src/renderer/lib/keybindings/types.ts \
   src/renderer/lib/keybindings/registry.ts \
   src/renderer/lib/keybindings/defaults.ts \
-  src/renderer/lib/keybindings/use-keybindings.ts
+  src/renderer/lib/keybindings/use-registry.ts
 git commit -m "$(cat <<'EOF'
 feat(keyboard): keybinding registry scope 字段 + resolve chain
 

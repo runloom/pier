@@ -24,9 +24,9 @@
 
 **新建**
 
-- `src/plugins/builtin/files/renderer/files-project-anchor.ts`：`projectAnchor` + `formatProjectPath` 纯函数。
-- `src/plugins/builtin/files/renderer/files-open-project.ts`：`openProjectFiles`（打开/复用 Files + 展开树 + reveal 根）。
-- `src/plugins/builtin/files/renderer/files-project-status-item.tsx`：状态项 UI + `registerFilesProjectStatusItem`。
+- `src/plugins/builtin/files/renderer/files-project/anchor.ts`：`projectAnchor` + `formatProjectPath` 纯函数。
+- `src/plugins/builtin/files/renderer/files-project/open-project.ts`：`openProjectFiles`（打开/复用 Files + 展开树 + reveal 根）。
+- `src/plugins/builtin/files/renderer/files-project/status-item.tsx`：状态项 UI + `registerFilesProjectStatusItem`。
 - `tests/unit/renderer/files-project-anchor.test.ts`
 - `tests/unit/renderer/files-open-project.test.ts`
 - `tests/unit/renderer/files-project-status-item.test.tsx`
@@ -43,7 +43,7 @@
 ### Task 1: 项目锚点与路径折叠纯函数
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-project-anchor.ts`
+- Create: `src/plugins/builtin/files/renderer/files-project/anchor.ts`
 - Test: `tests/unit/renderer/files-project-anchor.test.ts`
 
 **Interfaces:**
@@ -59,7 +59,7 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   formatProjectPath,
   projectAnchor,
-} from "../../../src/plugins/builtin/files/renderer/files-project-anchor.ts";
+} from "../../../src/plugins/builtin/files/renderer/files-project/anchor.ts";
 
 function ctx(partial: Partial<PanelContext> & Pick<PanelContext, "contextId" | "projectRootPath" | "updatedAt">): PanelContext {
   return partial;
@@ -153,7 +153,7 @@ Expected: FAIL（模块不存在）
 
 - [ ] **Step 3: Write minimal implementation**
 
-`src/plugins/builtin/files/renderer/files-project-anchor.ts`:
+`src/plugins/builtin/files/renderer/files-project/anchor.ts`:
 
 ```ts
 import type { PanelContext } from "@shared/contracts/panel.ts";
@@ -211,7 +211,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**（需用户确认后）
 
 ```bash
-git add src/plugins/builtin/files/renderer/files-project-anchor.ts tests/unit/renderer/files-project-anchor.test.ts
+git add src/plugins/builtin/files/renderer/files-project/anchor.ts tests/unit/renderer/files-project-anchor.test.ts
 git commit -m "$(cat <<'EOF'
 feat(files): add project anchor and path fold helpers
 
@@ -226,7 +226,7 @@ EOF
 
 **Files:**
 - Modify: `src/plugins/builtin/files/renderer/file-tree-preferences.ts`
-- Create: `src/plugins/builtin/files/renderer/files-open-project.ts`
+- Create: `src/plugins/builtin/files/renderer/files-project/open-project.ts`
 - Test: `tests/unit/renderer/files-open-project.test.ts`
 
 **Interfaces:**
@@ -263,7 +263,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FILES_FILE_PANEL_ID } from "../../../src/plugins/builtin/files/manifest.ts";
-import { openProjectFiles } from "../../../src/plugins/builtin/files/renderer/files-open-project.ts";
+import { openProjectFiles } from "../../../src/plugins/builtin/files/renderer/files-project/open-project.ts";
 import * as treeRegistry from "../../../src/plugins/builtin/files/renderer/files-tree-registry.ts";
 import * as prefs from "../../../src/plugins/builtin/files/renderer/file-tree-preferences.ts";
 
@@ -356,7 +356,7 @@ Run: `pnpm exec vitest run tests/unit/renderer/files-open-project.test.ts`
 
 Expected: FAIL
 
-- [ ] **Step 4: Implement `files-open-project.ts`**
+- [ ] **Step 4: Implement `files-project/open-project.ts`**
 
 ```ts
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
@@ -364,9 +364,9 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import { panelContextSchema } from "@shared/contracts/panel.ts";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { projectNameFromRoot, ensureProjectFileTreeExpanded } from "./file-tree-preferences.ts";
-import { projectAnchor } from "./files-project-anchor.ts";
+import { projectAnchor } from "./files-project/anchor.ts";
 import { revealFilesTreePath } from "./files-tree-registry.ts";
-import { stableFileIdentityHash } from "./files-stable-hash.ts";
+import { stableFileIdentityHash } from "./files-document/stable-hash.ts";
 
 const REVEAL_DELAY_MS = 80;
 
@@ -442,7 +442,7 @@ Expected: PASS
 
 ```bash
 git add src/plugins/builtin/files/renderer/file-tree-preferences.ts \
-  src/plugins/builtin/files/renderer/files-open-project.ts \
+  src/plugins/builtin/files/renderer/files-project/open-project.ts \
   tests/unit/renderer/files-open-project.test.ts
 git commit -m "$(cat <<'EOF'
 feat(files): open project Files panel from status item helper
@@ -460,7 +460,7 @@ EOF
 - Modify: `src/plugins/builtin/files/manifest.ts`
 - Modify: `src/plugins/builtin/files/locales/en.json`
 - Modify: `src/plugins/builtin/files/locales/zh-CN.json`
-- Create: `src/plugins/builtin/files/renderer/files-project-status-item.tsx`
+- Create: `src/plugins/builtin/files/renderer/files-project/status-item.tsx`
 - Modify: `src/plugins/builtin/files/renderer/index.tsx`
 - Test: `tests/unit/renderer/files-project-status-item.test.tsx`
 
@@ -534,7 +534,7 @@ terminalStatusItems: [
 2. 点击调用 `openProjectFiles`；失败时 `notifications.error`。
 3. 按钮 `data-testid="files-project-status-trigger"` 存在；主文案为 `formatProjectPath(anchor)`（home=null → 绝对路径）。
 
-可用 `vi.mock("./files-open-project.ts")`。注册后从 registry 取 item 较重时，改为直接测导出的 `FilesProjectStatusItem` 组件 + 单独测 `isVisible` 函数（若抽出 `isFilesProjectStatusVisible`）。
+可用 `vi.mock("./files-project/open-project.ts")`。注册后从 registry 取 item 较重时，改为直接测导出的 `FilesProjectStatusItem` 组件 + 单独测 `isVisible` 函数（若抽出 `isFilesProjectStatusVisible`）。
 
 推荐抽出：
 
@@ -548,7 +548,7 @@ export function isFilesProjectStatusVisible(
 
 - [ ] **Step 3: Implement status item**
 
-`files-project-status-item.tsx`（对齐 git 触发器）：
+`files-project/status-item.tsx`（对齐 git 触发器）：
 
 ```tsx
 import { Button } from "@pier/ui/button.tsx";
@@ -561,8 +561,8 @@ import { FILES_PROJECT_STATUS_ITEM_ID } from "../manifest.ts";
 import {
   formatProjectPath,
   projectAnchor,
-} from "./files-project-anchor.ts";
-import { openProjectFiles } from "./files-open-project.ts";
+} from "./files-project/anchor.ts";
+import { openProjectFiles } from "./files-project/open-project.ts";
 
 export function isFilesProjectStatusVisible(
   statusContext: RendererTerminalStatusItemContext
@@ -658,9 +658,9 @@ Expected: PASS
 
 ```bash
 pnpm exec biome check src/plugins/builtin/files/manifest.ts \
-  src/plugins/builtin/files/renderer/files-project-anchor.ts \
-  src/plugins/builtin/files/renderer/files-open-project.ts \
-  src/plugins/builtin/files/renderer/files-project-status-item.tsx \
+  src/plugins/builtin/files/renderer/files-project/anchor.ts \
+  src/plugins/builtin/files/renderer/files-project/open-project.ts \
+  src/plugins/builtin/files/renderer/files-project/status-item.tsx \
   src/plugins/builtin/files/renderer/file-tree-preferences.ts \
   src/plugins/builtin/files/renderer/index.tsx
 pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | head -40
@@ -674,7 +674,7 @@ pnpm exec tsc -p tsconfig.json --noEmit 2>&1 | head -40
 git add src/plugins/builtin/files/manifest.ts \
   src/plugins/builtin/files/locales/en.json \
   src/plugins/builtin/files/locales/zh-CN.json \
-  src/plugins/builtin/files/renderer/files-project-status-item.tsx \
+  src/plugins/builtin/files/renderer/files-project/status-item.tsx \
   src/plugins/builtin/files/renderer/index.tsx \
   tests/unit/renderer/files-project-status-item.test.tsx
 git commit -m "$(cat <<'EOF'

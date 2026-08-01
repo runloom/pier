@@ -3,26 +3,27 @@ import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  isPierManagedPluginContent,
+  pierManagedPluginMarker,
+  writeManagedPluginFile,
+} from "./managed-plugin-file.ts";
 import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
-import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
+import { commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "pi";
 const EXTENSION_FILE_NAME = "pier-agent-status.ts";
-const MARKER = "pier-agent-status:v1 (managed by Pier)";
+const MARKER = pierManagedPluginMarker();
 
-/**
- * pi 事件 → pier 事件名（capability "coarse"——pi 无工具/权限粒度, 仅回合级
- * session/prompt/run/stop 边界）。
- * agent_start → PromptSubmit（与 omp 对齐）：agent_start 在 model validation
- * 成功后才触发, 不存在 validation 失败时状态卡 processing 到 TTL 的问题；
- * 旧 input 事件在 validation 前触发, 已删。
- */
+/** 固定提交 0c32e83 的公开扩展事件。 */
 const PI_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
   { nativeEvent: "session_start", pierEvent: "SessionStart" },
-  { nativeEvent: "agent_start", pierEvent: "PromptSubmit" },
-  { nativeEvent: "agent_end", pierEvent: "Stop" },
+  { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
+  { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
+  { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
+  { nativeEvent: "agent_settled", pierEvent: "Stop" },
   { nativeEvent: "session_shutdown", pierEvent: "SessionEnd" },
 ];
 
@@ -61,8 +62,7 @@ export function piDetect(): boolean {
  * 三 PIER_ 环境变量缺任一即静默 no-op。
  */
 export function buildPiExtensionSource(): string {
-  return `// pier-agent-status:v1 (managed by Pier). Safe to leave in place.
-// ${MARKER}
+  return `// ${MARKER}. Safe to leave in place.
 // Deliberately no top-level import declarations: electron-vite scans
 // template literals in main's bundle and can otherwise inject an invalid
 // CommonJS shim into the ESM output. process.getBuiltinModule is a runtime
@@ -110,16 +110,26 @@ function pierSessionIdFrom(values) {
 	return undefined;
 }
 
-function pierEmit(event, nativeEvent, ...values) {
+function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
 	if (!log || !panelId || !windowId) return;
-	const sessionId = pierSessionIdFrom(values);
+	const sessionId = pierSessionIdFrom([nativePayload, ctx]);
 	const promptSnippet =
-		event === "PromptSubmit" ? pierPromptSnippetFrom(...values) : undefined;
+		event === "PromptSubmit"
+			? pierPromptSnippetFrom(nativePayload, ctx)
+			: undefined;
+	const toolUseId =
+		nativePayload && typeof nativePayload.toolCallId === "string"
+			? nativePayload.toolCallId
+			: undefined;
+	const toolName =
+		nativePayload && typeof nativePayload.toolName === "string"
+			? nativePayload.toolName
+			: undefined;
 	const line = JSON.stringify({
-		v: 2,
+		v: 3,
 		kind: "agentEvent",
 		ts: Date.now() * 1_000_000,
 		panelId,
@@ -129,6 +139,9 @@ function pierEmit(event, nativeEvent, ...values) {
 		event,
 		nativeEvent,
 		...(sessionId ? { sessionId } : {}),
+		...(toolUseId ? { toolUseId } : {}),
+		...(toolName ? { toolName } : {}),
+		...(details.nativeState ? { nativeState: details.nativeState } : {}),
 		...(promptSnippet ? { promptSnippet } : {}),
 	}) + "\\n";
 	try {
@@ -139,21 +152,22 @@ function pierEmit(event, nativeEvent, ...values) {
 }
 
 export default function PierAgentStatus(pi) {
-	// 加载即 agent 启动：合成 SessionStart 点亮启动态图标（事件流要到首个
-	// 会话/消息才有信号）。pi-mono 无 subagent 机制（Agent.prompt() throws
-	// if already processing）, 不存在 omp 式多实例加载风险, 合成安全。
-	pierEmit("SessionStart", "pier.synthetic.session_start");
-
-	pi.on("session_start", (event, ctx) => pierEmit("SessionStart", "session_start", event, ctx));
-	pi.on("agent_start", (event, ctx) => pierEmit("PromptSubmit", "agent_start", event, ctx));
-	pi.on("agent_end", (event, ctx) => pierEmit("Stop", "agent_end", event, ctx));
-	pi.on("session_shutdown", (event, ctx) => pierEmit("SessionEnd", "session_shutdown", event, ctx));
+	pi.on("session_start", (event, ctx) =>
+		pierEmit("SessionStart", "session_start", event, ctx));
+	pi.on("before_agent_start", (event, ctx) =>
+		pierEmit("PromptSubmit", "before_agent_start", event, ctx));
+	pi.on("tool_execution_start", (event, ctx) =>
+		pierEmit("ToolStart", "tool_execution_start", event, ctx));
+	pi.on("tool_execution_end", (event, ctx) =>
+		pierEmit("ToolComplete", "tool_execution_end", event, ctx, {
+			nativeState: event && event.isError === true ? "error" : "completed",
+		}));
+	pi.on("agent_settled", (event, ctx) =>
+		pierEmit("Stop", "agent_settled", event, ctx));
+	pi.on("session_shutdown", (event, ctx) =>
+		pierEmit("SessionEnd", "session_shutdown", event, ctx));
 }
 `;
-}
-
-function isManagedByPier(raw: string): boolean {
-  return raw.includes(MARKER);
 }
 
 async function readExtensionRaw(path: string): Promise<string | null> {
@@ -165,8 +179,8 @@ async function readExtensionRaw(path: string): Promise<string | null> {
 }
 
 /**
- * 整文件 overwrite；仅当文件缺失或已由 pier 管理时才写。非托管文件一律
- * 跳过并 warn, 不覆盖。
+ * 整文件 overwrite；仅当文件缺失或已由 pier 管理时才写。
+ * 非托管 / 更高世代跳过。
  */
 export async function installPiExtension(
   path: string = piExtensionPath()
@@ -174,19 +188,11 @@ export async function installPiExtension(
   if (!piDetect()) {
     return;
   }
-  const existing = await readExtensionRaw(path);
-  if (existing !== null && !isManagedByPier(existing)) {
-    console.warn(
-      "[agent-hooks:pi] existing unmanaged extension file, skip install:",
-      path
-    );
-    return;
-  }
-  const next = buildPiExtensionSource();
-  if (existing === next) {
-    return;
-  }
-  await atomicWriteFile(path, next);
+  await writeManagedPluginFile({
+    path,
+    source: buildPiExtensionSource(),
+    label: AGENT_ID,
+  });
 }
 
 /** 仅删除含 marker 的托管文件；非托管/不存在时零副作用。 */
@@ -194,17 +200,19 @@ export async function uninstallPiExtension(
   path: string = piExtensionPath()
 ): Promise<void> {
   const existing = await readExtensionRaw(path);
-  if (existing === null || !isManagedByPier(existing)) {
+  if (existing === null || !isPierManagedPluginContent(existing)) {
     return;
   }
   await rm(path, { force: true });
 }
 
 export const piIntegration: AgentHookIntegration = {
-  capability: "coarse",
   detect: piDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "authoritative" },
+  runtime: {
+    emittedMappings: PI_EVENTS,
+    stopAuthority: "authoritative",
+  },
   install: () => installPiExtension(),
   uninstall: () => uninstallPiExtension(),
 };

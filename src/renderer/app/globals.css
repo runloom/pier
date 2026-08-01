@@ -2,6 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@pier/ui/tailwind-theme.css";
+@import "@xyflow/react/dist/style.css";
 
 @source "../../../packages/ui/src";
 @source "../../plugins";
@@ -181,6 +182,53 @@
     var(--background) 80%,
     var(--diff-modification-fg)
   );
+  /*
+   * Editor decoration layer (CodeMirror selection / occurrence / find).
+   * Separate from product status hues used as syntax foregrounds
+   * (--success strings, --warning types, --info functions, --done keywords).
+   * Recipe: translucent washes so syntax color stays the primary signal
+   * (VS Code/Zed: selectionHighlight & document highlight must not be opaque).
+   * Relative to --foreground/--background/--info so every style preset that
+   * rewrites those shells inherits usable decorations without per-theme CSS.
+   * Hierarchy (weak → strong): selection-match < selection-match-main
+   *   < text selection < search-match < search-match-active.
+   */
+  --editor-selection-bg: color-mix(in oklab, var(--info) 30%, transparent);
+  --editor-selection-match-bg: color-mix(
+    in oklab,
+    var(--foreground) 16%,
+    transparent
+  );
+  --editor-selection-match-main-bg: color-mix(
+    in oklab,
+    var(--foreground) 22%,
+    transparent
+  );
+  --editor-search-match-bg: color-mix(
+    in oklab,
+    var(--foreground) 14%,
+    transparent
+  );
+  --editor-search-match-border: color-mix(
+    in oklab,
+    var(--foreground) 42%,
+    transparent
+  );
+  --editor-search-match-active-bg: color-mix(
+    in oklab,
+    var(--foreground) 22%,
+    transparent
+  );
+  --editor-search-match-active-border: color-mix(
+    in oklab,
+    var(--foreground) 72%,
+    transparent
+  );
+  --editor-active-line-bg: color-mix(
+    in oklab,
+    var(--foreground) 6%,
+    transparent
+  );
   --status-solid-foreground: oklch(0.985 0 0);
   --action-accent: var(--primary);
   --action-accent-foreground: var(--primary-foreground);
@@ -318,6 +366,43 @@
     var(--background) 88%,
     var(--diff-modification-fg)
   );
+  /* Light canvas: dark foreground wash needs slightly lower alpha to stay calm. */
+  --editor-selection-bg: color-mix(in oklab, var(--info) 24%, transparent);
+  --editor-selection-match-bg: color-mix(
+    in oklab,
+    var(--foreground) 10%,
+    transparent
+  );
+  --editor-selection-match-main-bg: color-mix(
+    in oklab,
+    var(--foreground) 14%,
+    transparent
+  );
+  --editor-search-match-bg: color-mix(
+    in oklab,
+    var(--foreground) 9%,
+    transparent
+  );
+  --editor-search-match-border: color-mix(
+    in oklab,
+    var(--foreground) 32%,
+    transparent
+  );
+  --editor-search-match-active-bg: color-mix(
+    in oklab,
+    var(--foreground) 14%,
+    transparent
+  );
+  --editor-search-match-active-border: color-mix(
+    in oklab,
+    var(--foreground) 55%,
+    transparent
+  );
+  --editor-active-line-bg: color-mix(
+    in oklab,
+    var(--foreground) 5%,
+    transparent
+  );
   --chart-1: var(--info);
   --chart-2: var(--success);
   --chart-3: var(--warning);
@@ -332,6 +417,61 @@
   --toast-surface: oklch(0.2 0 0);
   --toast-foreground: oklch(0.98 0 0);
   --toast-action-bg: color-mix(in oklab, var(--toast-foreground) 14%, transparent);
+}
+
+/*
+ * Markdown preview paper appearance (files plugin).
+ * Independent of app chrome: only the preview root sets
+ * data-reading-appearance="light"|"dark". "auto" omits the attribute and
+ * inherits app tokens. Values mirror :root / :root.light neutral shells so
+ * prose, code chrome, TOC, and zoom controls stay consistent.
+ */
+[data-slot="markdown-preview-root"][data-reading-appearance="light"] {
+  color-scheme: light;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.55 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --border: oklch(0.92 0 0);
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.708 0 0);
+  --action-accent: var(--primary);
+  --action-accent-foreground: var(--primary-foreground);
+  --action-muted: var(--muted-foreground);
+}
+
+[data-slot="markdown-preview-root"][data-reading-appearance="dark"] {
+  color-scheme: dark;
+  --background: oklch(0.13 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.18 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.25 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.22 0 0);
+  --muted-foreground: oklch(0.65 0 0);
+  --accent: oklch(0.25 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 0.1);
+  --input: oklch(1 0 0 / 0.15);
+  --ring: oklch(0.55 0 0);
+  --action-accent: var(--primary);
+  --action-accent-foreground: var(--primary-foreground);
+  --action-muted: var(--muted-foreground);
 }
 
 :root:not(.light) {
@@ -374,6 +514,16 @@
 @layer base {
   * {
     border-color: var(--border);
+  }
+
+  /*
+   * Focus 纪律（与 chart / 控件 focus-visible ring 配套）：
+   * - 鼠标点中：不画 UA outline（避免 Electron/macOS 系统橙粗环）
+   * - 键盘导航：:focus-visible 仍由 Button/Input 等产品 ring 承担
+   * - 展示型图/只读表面：不进 Tab 序（见 ChartContainer accessibilityLayer 默认 false）
+   */
+  :focus:not(:focus-visible) {
+    outline: none;
   }
 }
 
@@ -603,6 +753,8 @@ body {
   --dv-tab-margin: 0;
   --dv-tab-border-radius: 0;
   --dv-border-radius: 0;
+  /* 标题文本槽上限；数值与 panel-tab-layout.ts PANEL_TAB_TITLE_MAX_WIDTH_PX 对齐（治理测试交叉校验） */
+  --pier-tab-title-max: 160px;
 
   /* — 面板 / Tab 栏底色 — */
   --dv-group-view-background-color: var(--background);
@@ -690,24 +842,32 @@ body {
   color: var(--foreground);
 }
 
+/* dockview 外层 .dv-tab 是实际 Tab 停靠：产品 focus-visible ring（非系统 UA 橙环） */
+.dockview-theme-pier .dv-tab:focus {
+  outline: none;
+}
+.dockview-theme-pier .dv-tab:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px
+    color-mix(in oklab, var(--ring) 40%, transparent);
+}
+
 .dockview-theme-pier .dv-tab .dv-default-tab,
 .dv-tab.dv-tab-dragging .dv-default-tab,
 .dv-tab-ghost-drag .dv-default-tab {
   box-sizing: border-box;
-  gap: 6px;
+  gap: 4px;
   /*
-   * Tab 按内容定宽，不设固定 max-width。
-   * 有空位时展示完整标题（工作树名 / session 名等）；多 tab 超出时由
-   * dockview tabs 横向滚动承载，避免「条带仍空却 ellipsis」。
-   * 极端长标题（agent/OSC）仍可在被父级真正约束时由下方 content
-   * ellipsis 兜底。拖拽 ghost 另有 220px 上限（见下方 dragging 规则）。
+   * Tab 仍按内容定宽（整颗 tab 不设硬顶）；标题文本槽单独 max-width +
+   * ellipsis。trailing / dirty / × 始终 shrink-0 可见。多 tab 超出时由
+   * dockview tabs 横向滚动承载。拖拽 ghost 另有 220px 整 tab 上限。
    */
   max-width: none;
   min-width: 0;
-  padding-inline: 8px 4px;
-  /* 活跃任务圆点占左缘槽位：6px 点 + 6px 与 flex gap 对齐的间距 */
+  padding-inline: 6px 3px;
+  /* 活跃任务圆点占左缘槽位：4px left + 6px 点 + 4px gap = 14 */
   &[data-pier-tab-has-active-task="true"] {
-    padding-left: 18px;
+    padding-left: 14px;
   }
 }
 
@@ -716,6 +876,7 @@ body {
 .dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
   font-weight: 600;
   margin-right: 0;
+  max-width: var(--pier-tab-title-max, 160px);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -726,9 +887,29 @@ body {
   font-weight: 600 !important;
 }
 
+/* 文件 tab：文件名等宽、非粗体（路径标识符语义；preview 斜体仍叠加）。
+ * ghost 的 600 !important 必须被文件 kind 覆盖，否则拖动时文件名变粗。 */
+.dockview-theme-pier
+  .dv-tab
+  .dv-default-tab[data-pier-tab-kind="file"]
+  .dv-default-tab-content,
+.dv-tab.dv-tab-dragging
+  .dv-default-tab[data-pier-tab-kind="file"]
+  .dv-default-tab-content,
+.dv-tab-ghost-drag .dv-default-tab[data-pier-tab-kind="file"] .dv-default-tab-content {
+  font-family: var(--font-mono);
+  font-weight: 400;
+}
+
+.dv-tab-ghost-drag
+  .dv-default-tab[data-pier-tab-kind="file"]
+  .dv-default-tab-content {
+  font-weight: 400 !important;
+}
+
 /* Preview tab 视觉 —— 与 Cursor / VS Code 对齐:tab title 斜体、图标半透明,
  * 表示"这个 tab 是临时预览,再点其他文件会被替换";修改内容或双击后 params.pinned
- * 变 true,data-pier-tab-preview 消失,恢复正常粗体 tab。 */
+ * 变 true,data-pier-tab-preview 消失,恢复正常 tab。 */
 .dockview-theme-pier .dv-tab .dv-default-tab[data-pier-tab-preview="true"] .dv-default-tab-content {
   font-style: italic;
   font-weight: 400;
@@ -808,26 +989,9 @@ body {
   border-radius: 999px;
 }
 
-.dockview-theme-pier .pier-panel-tab-index-hint,
-.dv-tab.dv-tab-dragging .pier-panel-tab-index-hint,
-.dv-tab-ghost-drag .pier-panel-tab-index-hint {
-  align-items: center;
-  display: inline-flex;
-  height: 14px;
-  justify-content: center;
-  line-height: 1;
-  width: 14px;
-  opacity: 0.9;
-}
-
 .dv-tab-ghost-drag .pier-panel-tab-icon {
   height: 14px !important;
   width: 14px !important;
-}
-
-.dv-tab-ghost-drag .pier-panel-tab-index-hint {
-  height: 14px !important;
-  min-width: 14px !important;
 }
 
 .dockview-theme-pier .dv-tab.dv-tab-dragging,
@@ -860,7 +1024,7 @@ body {
   height: 32px !important;
   max-width: 220px !important;
   overflow: hidden !important;
-  padding-inline: 10px 12px !important;
+  padding-inline: 8px 10px !important;
   width: fit-content !important;
 }
 
@@ -870,7 +1034,7 @@ body {
   .dv-default-tab[data-pier-tab-has-active-task="true"],
 .dv-tab.dv-tab-dragging .dv-default-tab[data-pier-tab-has-active-task="true"],
 .dv-tab-ghost-drag .dv-default-tab[data-pier-tab-has-active-task="true"] {
-  padding-left: 20px !important;
+  padding-left: 16px !important;
 }
 
 .dockview-theme-pier .dv-tab-ghost-drag::after,
@@ -1104,6 +1268,14 @@ body {
   /* 保证落在终端 NSView 之上的命中层语义清晰；实际命中靠 webOverlayRects。 */
   pointer-events: auto;
   z-index: 100;
+
+  /* 水平居中：强制 Sonner 的 center positioning 在终端/特殊上下文下也生效 */
+  display: flex !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+  width: min(420px, calc(100vw - 32px)) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
 }
 
 /* ── 形态 A · 确认型胶囊（.pier-toast 默认即胶囊）────────────────────

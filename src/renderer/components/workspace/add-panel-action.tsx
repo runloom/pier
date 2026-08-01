@@ -27,7 +27,13 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@pier/ui/popover.tsx";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import {
+  releaseTooltipSuppression,
+  suppressTooltips,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@pier/ui/tooltip.tsx";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import i18next from "i18next";
 import { Plus } from "lucide-react";
@@ -40,7 +46,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ActionCommandItem } from "@/components/common/command-palette-action-rows.tsx";
+import { ActionCommandItem } from "@/components/common/command-palette/action-rows.tsx";
 import { groupCreateActions } from "@/components/workspace/add-panel-create-menu.ts";
 import { useT } from "@/i18n/use-t.ts";
 import {
@@ -58,7 +64,7 @@ import {
   keybindingRegistry,
   subscribeKeybindingRegistry,
 } from "@/lib/keybindings/registry.ts";
-import { useActionKeybindingLabel } from "@/lib/keybindings/use-action-keybinding-label.ts";
+import { useActionKeybindingLabel } from "@/lib/keybindings/use-action-label.ts";
 import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import {
   consumeWebOverlayOutsideDismiss,
@@ -242,6 +248,17 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
       }
     };
   }, [open, props.activePanel, sourceActionInvocation]);
+
+  // executeAction 等路径会旁路 onOpenChange 直接 setOpen(false)；hard suppress 绑 open。
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    suppressTooltips();
+    return () => {
+      releaseTooltipSuppression();
+    };
+  }, [open]);
 
   const executeAction = async (action: Action) => {
     props.activePanel?.api.setActive();

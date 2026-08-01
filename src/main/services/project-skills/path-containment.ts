@@ -1,6 +1,6 @@
 import { lstat, mkdir, realpath } from "node:fs/promises";
 import { isAbsolute, join, normalize, posix, resolve, sep } from "node:path";
-import { isPathInside } from "./import-fs.ts";
+import { isPathInside } from "./import/fs.ts";
 
 /**
  * Reject project-relative paths that could escape via `..`, absolute form,

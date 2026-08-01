@@ -87,8 +87,12 @@ export async function runLocalEnvironmentLifecycle(request: {
     shell = process.env.ComSpec ?? "cmd.exe";
     args = ["/d", "/s", "/c", command];
   } else {
-    shell = resolved.env.SHELL ?? process.env.SHELL ?? "/bin/sh";
-    args = ["-lc", command];
+    shell = "/bin/sh";
+    // Non-login + POSIX sh: resolved.env already reflects the login+interactive
+    // shell environment. A login flag would re-run .zprofile/.profile and
+    // clobber the resolved PATH. /bin/sh (not env.SHELL) keeps lifecycle
+    // script semantics independent of the user's interactive shell.
+    args = ["-c", command];
   }
 
   const spawn = request.spawn ?? getDefaultSpawn();

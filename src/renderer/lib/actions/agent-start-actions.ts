@@ -18,6 +18,7 @@ import {
 import { AGENT_AUTO_PICK_ORDER, pickAgent } from "@shared/agent-selection.ts";
 import { AGENT_START_COMMAND_PREFIX } from "@shared/commands.ts";
 import type { AgentCatalogEntry, AgentKind } from "@shared/contracts/agent.ts";
+import { AGENT_TERMINAL_EXIT_PRESENTATION } from "@shared/contracts/ghostty-host-copy.ts";
 import i18next from "i18next";
 import { Bot } from "lucide-react";
 import { toast } from "sonner";
@@ -67,6 +68,7 @@ export async function startAgentInAnchoredTerminal(
     }
     const panelId = useWorkspaceStore.getState().addTerminal({
       ...terminalOptions,
+      exitPresentation: AGENT_TERMINAL_EXIT_PRESENTATION,
       launchId,
     });
     if (!panelId) {

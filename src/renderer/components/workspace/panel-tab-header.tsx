@@ -5,10 +5,8 @@
  * 在没传该 prop 时 early-return 不 preventDefault, 事件冒泡到这里的 onContextMenu
  * (dockview-react@6.6.1, components/tab/tab.js:116 + contextMenu.js:118-132).
  *
- * 右键 → 显式 setActive 确保 actions 拿到的 activePanel 就是被右键的 tab. dockview
- * onPointerDown 在 contextmenu 之前 fire 时本会顺带激活, 但 macOS 上鼠标右键的
- * pointerdown→contextmenu 顺序与 dockview tab 内部 setActive 触发条件未必每次都满
- * (单 group 内已 active 的 tab 上再右键不会重新 setActive, 但行为也无需变更, 安全).
+ * 右键菜单经 invocation.sourcePanelId 锚定目标 tab，**不**在打开菜单时 setActive：
+ * 关 inactive tab 须保持当前 active（与 × 路径、panelCloseFocusPolicy=adjacent 一致）。
  *
  * 样式: 用 dockview 默认 `.dv-default-tab` class 维持 hover/active 状态. 若样式与
  * 改前不一致, inspect DOM 取 dockview 实际默认 tab 的 class 对齐.
@@ -30,16 +28,19 @@ import {
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
-import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
+import { useContextMenu } from "@/lib/context-menu/use-menu.ts";
 import { ensureTuiInputFocus } from "@/panel-kits/terminal/tui-input-focus.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {
   panelHasActiveTaskRun,
   useTaskRunsStore,
 } from "@/stores/task-runs.store.ts";
-import { useTabShortcutHintsStore } from "@/stores/terminal.store.ts";
 import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
+import {
+  PANEL_TAB_FILE_COMPONENT_ID,
+  panelTabKind,
+} from "./panel-tab-layout.ts";
 import { PanelTabLeadingIcon } from "./panel-tab-leading-icon.tsx";
 import {
   PANEL_TAB_TOOLTIP_DELAY_MS,
@@ -47,10 +48,12 @@ import {
   tabStatusIndicator,
   tabTooltipText,
 } from "./panel-tab-tooltip.tsx";
+import {
+  PanelTabTrailingView,
+  panelTabTrailingAriaSuffix,
+} from "./panel-tab-trailing.tsx";
 
 export { PANEL_TAB_TOOLTIP_DELAY_MS } from "./panel-tab-tooltip.tsx";
-
-const FILE_PANEL_COMPONENT_ID = "pier.files.filePanel";
 
 // dockview panel params 里可选 `pinned: boolean`。只有文件面板显式
 // pinned:false 才是 preview tab(Cursor / VS Code 语义:斜体 + 半透明);
@@ -64,7 +67,7 @@ function paramsIsPreview(
   component: string | undefined,
   params: PanelPreviewParams | undefined
 ): boolean {
-  return component === FILE_PANEL_COMPONENT_ID && params?.pinned === false;
+  return component === PANEL_TAB_FILE_COMPONENT_ID && params?.pinned === false;
 }
 
 // 文件面板未保存标记(VS Code 语义:tab 上的实心圆点)。dirty 由 files 插件
@@ -73,7 +76,7 @@ function paramsIsDirty(
   component: string | undefined,
   params: PanelPreviewParams | undefined
 ): boolean {
-  return component === FILE_PANEL_COMPONENT_ID && params?.dirty === true;
+  return component === PANEL_TAB_FILE_COMPONENT_ID && params?.dirty === true;
 }
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
@@ -102,6 +105,8 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   );
   const tab = descriptor?.tab;
   const displayTitle = tab?.title ?? title;
+  const kind = panelTabKind(props.api.component);
+  const trailingAria = panelTabTrailingAriaSuffix(tab?.trailing);
   const tooltipText = tabTooltipText(
     tab?.tooltip,
     descriptor?.display.long ?? descriptor?.display.terminalTitle,
@@ -112,28 +117,10 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const statusIndicator = status
     ? tabStatusIndicator(status, tab?.state?.label)
     : null;
-  const commandKeyDown = useTabShortcutHintsStore(
-    (state) => state.commandKeyDown
+  // Chrome/VS Code model: ⌘1–9 works with no hold-to-reveal chrome.
+  const leadingVisual: ReactNode = (
+    <PanelTabLeadingIcon component={props.api.component} tab={tab} />
   );
-  const shortcutIndex = useTabShortcutHintsStore((state) =>
-    commandKeyDown ? state.activeGroupTabHints[props.api.id] : undefined
-  );
-  let leadingVisual: ReactNode = null;
-  if (shortcutIndex) {
-    leadingVisual = (
-      <span
-        aria-hidden="true"
-        className="pier-panel-tab-index-hint shrink-0 font-semibold text-[10px] text-primary"
-        data-panel-tab-index-hint={shortcutIndex}
-      >
-        ⌘{shortcutIndex}
-      </span>
-    );
-  } else {
-    leadingVisual = (
-      <PanelTabLeadingIcon component={props.api.component} tab={tab} />
-    );
-  }
   useEffect(() => {
     // dockview onDidTitleChange fire 时把新 title 写入 state, 触发 tab 重渲.
     const disposable = props.api.onDidTitleChange((e) => {
@@ -202,14 +189,9 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       props.api.id,
     ]
   );
-  const baseOnContextMenu = useContextMenu("dockview-tab", contextMenuOptions);
-  const onContextMenu = useCallback(
-    (event: MouseEvent) => {
-      props.api.setActive();
-      baseOnContextMenu(event);
-    },
-    [baseOnContextMenu, props.api]
-  );
+  // 不包一层 setActive：useContextMenu(dockview-tab) 也不再预激活；关闭等动作走
+  // sourcePanelId。需要聚焦的动作在 handler 内自行 setActive。
+  const onContextMenu = useContextMenu("dockview-tab", contextMenuOptions);
   const publishTerminalFocusIntent = useCallback(() => {
     if (props.api.component !== "terminal") {
       return;
@@ -276,18 +258,22 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     },
     [promotePreview, props.api.isActive]
   );
-  // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
-  // onContextMenu div 有 role. dockview 外层 .dv-tab 已有 tabIndex=0, 两层重叠影响有限:
-  // 外层是 dockview 自己渲染的 DOM, 不受此 React 树控制.
+  // biome a11y: onContextMenu 需要 role。
+  // dockview 外层 .dv-tab 是主 Tab 停靠（CSS focus-visible ring 见 globals.css）；
+  // 内层保留 role=tab + tabIndex=0 + Enter/Space 合约（终端 refocus），outline 清掉避免双环脏描边。
   const tabContent = (
     <div
-      aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
-      className="dv-default-tab relative"
+      aria-label={tabAriaLabel(
+        tab?.ariaLabel,
+        displayTitle,
+        tab?.state?.label,
+        trailingAria,
+        tooltipText
+      )}
+      className="dv-default-tab relative outline-none"
       data-panel-tab-id={props.api.id}
       data-pier-tab-has-active-task={showActiveTaskDot ? "true" : undefined}
-      data-pier-tab-kind={
-        props.api.component === FILE_PANEL_COMPONENT_ID ? "file" : undefined
-      }
+      data-pier-tab-kind={kind}
       data-pier-tab-preview={isPreview ? "true" : undefined}
       data-tab-state-label={tab?.state?.label}
       data-tab-status={status}
@@ -302,20 +288,20 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       {showActiveTaskDot ? (
         <span
           aria-label={t("workspace.tab.activeTask")}
-          className="pointer-events-none absolute top-1/2 left-1.5 z-10 size-1.5 -translate-y-1/2 rounded-full bg-status-info-fg"
+          className="pointer-events-none absolute top-1/2 left-1 z-10 size-1.5 -translate-y-1/2 rounded-full bg-status-info-fg"
           data-pier-tab-active-task="true"
           role="status"
         />
       ) : null}
       {leadingVisual}
       <span className="dv-default-tab-content">{displayTitle}</span>
+      <PanelTabTrailingView trailing={tab?.trailing} />
       {isDirty ? (
         <span
           aria-label={t("workspace.tab.unsaved")}
           className="size-1.5 shrink-0 rounded-full bg-warning"
           data-pier-tab-dirty="true"
           role="status"
-          title={t("workspace.tab.unsaved")}
         />
       ) : null}
       {statusIndicator}
@@ -325,8 +311,12 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          props.api.setActive();
-          actionRegistry.get("pier.panel.close")?.handler();
+          // 关本 tab，不先 setActive：关 inactive 时保持当前 active（VS Code 语义）；
+          // 关 active 时由 closePanel 内邻接 successor 接管。
+          actionRegistry.get("pier.panel.close")?.handler({
+            sourcePanelId: props.api.id,
+            surface: "dockview-tab",
+          });
         }}
         onPointerDown={(e) => e.preventDefault()}
         type="button"
@@ -336,13 +326,19 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     </div>
   );
 
-  if (!(tooltipText && !commandKeyDown)) {
+  if (!tooltipText) {
     return tabContent;
   }
 
   return (
     <Tooltip delayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
-      <TooltipTrigger asChild>{tabContent}</TooltipTrigger>
+      {/*
+       * Tab 条只走 hover delay。Radix focus 会即时 open，快捷键切 tab /
+       * 程序化 focus 会误弹出；tooltip 明细已并入 aria-label。
+       */}
+      <TooltipTrigger asChild openOnFocus={false}>
+        {tabContent}
+      </TooltipTrigger>
       <TooltipContent align="center" side="bottom" sideOffset={8}>
         <span className="whitespace-pre-line">{tooltipText}</span>
       </TooltipContent>

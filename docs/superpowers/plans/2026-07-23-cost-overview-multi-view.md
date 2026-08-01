@@ -31,7 +31,7 @@
 | `src/renderer/panel-kits/workbench/core-widgets/cost/cost-overview-settings.tsx` | 设置 UI |
 | `src/renderer/panel-kits/workbench/core-widgets/cost/cost-overview-widget.tsx` | 自原路径迁入的渲染组件 + refresh actions（或原路径 re-export） |
 | `src/renderer/panel-kits/workbench/core-widgets/cost-overview-widget.tsx` | 薄 re-export，避免测试/import 大爆炸（可选；若全量改 import 也可删） |
-| `src/renderer/panel-kits/workbench/core-workbench-widgets.ts` | `configurable`/`multiInstance`/`settingsComponent` |
+| `src/renderer/panel-kits/workbench/core-registry.ts` | `configurable`/`multiInstance`/`settingsComponent` |
 | `src/renderer/i18n/locales/en/workbench.ts` + `zh-CN/workbench.ts` | 设置/预设/空态/范围文案 |
 | `tests/unit/renderer/cost-overview-params.test.ts` | params salvage + preset |
 | `tests/unit/renderer/cost-view-query.test.ts` | query 口径 |
@@ -452,7 +452,7 @@ EOF
 
 **Files:**
 - Create: `src/renderer/panel-kits/workbench/core-widgets/cost/cost-overview-settings.tsx`
-- Modify: `src/renderer/panel-kits/workbench/core-workbench-widgets.ts`
+- Modify: `src/renderer/panel-kits/workbench/core-registry.ts`
 - Test: `tests/component/cost-overview-settings.test.tsx`
 
 **Interfaces:**
@@ -538,7 +538,7 @@ Expected: all PASS
 ```bash
 git add \
   src/renderer/panel-kits/workbench/core-widgets/cost/cost-overview-settings.tsx \
-  src/renderer/panel-kits/workbench/core-workbench-widgets.ts \
+  src/renderer/panel-kits/workbench/core-registry.ts \
   tests/component/cost-overview-settings.test.tsx
 git commit -m "$(cat <<'EOF'
 feat(workbench): add cost overview settings and multi-instance

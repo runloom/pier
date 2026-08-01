@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
+import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal/launch.ts";
 
 export interface TerminalLaunchRegistry {
   consume(launchId: string): ResolvedTerminalLaunchOptions | null;

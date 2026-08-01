@@ -1,5 +1,5 @@
 import { subscribeFileWatch } from "@preload/file-watch-subscription.ts";
-import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
+import type { FileWatchEvent } from "@shared/contracts/file/watch.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 function deferred<T>() {

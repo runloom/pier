@@ -2,7 +2,7 @@ import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type {
   CoreTerminalStatusItemDeclaration,
   TerminalStatusBarPrefs,
-} from "@shared/contracts/terminal-status-bar.ts";
+} from "@shared/contracts/terminal/status-bar.ts";
 import { describe, expect, it } from "vitest";
 import {
   compareOuterFirst,
@@ -11,7 +11,7 @@ import {
   mergeTerminalStatusItems,
   normalizedGroupOrders,
   resolveEffectiveTerminalStatusItemConfig,
-} from "@/panel-kits/terminal/terminal-status-bar-merge.ts";
+} from "@/panel-kits/terminal/status-bar-merge.ts";
 
 interface Item {
   readonly id: string;

@@ -250,6 +250,16 @@ function unwrapExecutorWrapper(
  * exec、uv run），guard 上限防构造输入死循环。返回 null = 解析不出命令。
  */
 export function commandExecutableText(commandLine: string): string | null {
+  const resolved = resolveCommandWords(commandLine);
+  return resolved ? commandTextAt(resolved.words, resolved.index) : null;
+}
+
+interface ResolvedCommandWords {
+  index: number;
+  words: readonly string[];
+}
+
+function resolveCommandWords(commandLine: string): ResolvedCommandWords | null {
   const words = splitShellCommandWords(commandLine, 24);
   let index = 0;
 
@@ -260,7 +270,7 @@ export function commandExecutableText(commandLine: string): string | null {
     }
     const nextIndex = unwrapExecutorWrapper(words, index);
     if (nextIndex === null) {
-      return commandTextAt(words, index);
+      return { index, words };
     }
     index = nextIndex;
   }
@@ -275,14 +285,27 @@ function tokenBoundaryRe(token: string): RegExp {
   return new RegExp(`(?<![\\w-])${escaped}(?![\\w-])`, "i");
 }
 
-interface AgentCommandMatcher {
-  id: AgentKind;
-  tokens: readonly RegExp[];
-}
+type AgentCommandMatcher =
+  | {
+      id: AgentKind;
+      launchCommandPrefix: readonly [string, ...string[]];
+      tokens?: never;
+    }
+  | {
+      id: AgentKind;
+      launchCommandPrefix?: never;
+      tokens: readonly RegExp[];
+    };
 
 /** 命令词元来自 catalog 的命令类字段（label 是展示名，不参与命令匹配）。 */
 const AGENT_COMMAND_MATCHERS: readonly AgentCommandMatcher[] =
   AGENT_CATALOG.map((entry) => {
+    if (entry.launchCommandPrefix) {
+      return {
+        id: entry.id,
+        launchCommandPrefix: entry.launchCommandPrefix,
+      };
+    }
     const tokens = new Set<string>([entry.id, entry.detectCmd]);
     for (const alias of entry.detectCmdAliases ?? []) {
       tokens.add(alias);
@@ -295,6 +318,19 @@ const AGENT_COMMAND_MATCHERS: readonly AgentCommandMatcher[] =
     return { id: entry.id, tokens: [...tokens].map(tokenBoundaryRe) };
   });
 
+function matchesLaunchCommandPrefix(
+  words: readonly string[],
+  commandIndex: number,
+  prefix: readonly [string, ...string[]]
+): boolean {
+  return prefix.every((expected, offset) => {
+    const actual = words[commandIndex + offset];
+    return offset === 0
+      ? commandBasename(actual ?? "") === expected
+      : actual === expected;
+  });
+}
+
 /**
  * 命令行 → agent id。只有可执行体词元命中才算（`echo codex` 不命中）。
  * npm scoped 包（`@openai/codex`）经 `/` 边界自然命中同名词元。
@@ -305,12 +341,24 @@ export function matchAgentCommand(
   if (!commandLine || commandLine.trim().length === 0) {
     return null;
   }
-  const text = commandExecutableText(commandLine);
+  const resolved = resolveCommandWords(commandLine);
+  if (!resolved) {
+    return null;
+  }
+  const text = commandTextAt(resolved.words, resolved.index);
   if (!text) {
     return null;
   }
   for (const matcher of AGENT_COMMAND_MATCHERS) {
-    if (matcher.tokens.some((re) => re.test(text))) {
+    if (
+      matcher.launchCommandPrefix
+        ? matchesLaunchCommandPrefix(
+            resolved.words,
+            resolved.index,
+            matcher.launchCommandPrefix
+          )
+        : matcher.tokens.some((re) => re.test(text))
+    ) {
       return matcher.id;
     }
   }

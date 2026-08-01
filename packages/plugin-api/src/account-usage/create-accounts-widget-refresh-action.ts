@@ -8,7 +8,7 @@ import {
   type AccountUsageTranslate,
   isNoActiveAccountError,
   refreshAccountUsage,
-} from "./refresh-account-usage.ts";
+} from "./refresh.ts";
 
 export interface AccountsWidgetRefreshActionI18n {
   label: { fallback: string; key: string };

@@ -6,7 +6,7 @@ import type {
   ManagedPluginInstallIndexEntry,
   ManagedPluginOperationResult,
   OfficialPluginIndex,
-} from "@shared/contracts/managed-plugin.ts";
+} from "@shared/contracts/plugin/managed.ts";
 import {
   computeSimulateRestartMutation,
   performListCatalogSnapshot,

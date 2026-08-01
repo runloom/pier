@@ -172,10 +172,23 @@ function Tooltip({
 
 function TooltipTrigger({
   onFocus,
+  openOnFocus = true,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Trigger>) {
+}: React.ComponentProps<typeof TooltipPrimitive.Trigger> & {
+  /**
+   * When false, focus never opens the tooltip (hover / controlled only).
+   * Use on dense chrome where programmatic or keyboard focus would flash tips
+   * (panel tabs, terminal status chips). Default keeps Radix a11y focus-open.
+   */
+  openOnFocus?: boolean;
+}) {
   const handleFocus = React.useCallback(
     (event: React.FocusEvent<HTMLButtonElement>) => {
+      if (!openOnFocus) {
+        onFocus?.(event);
+        event.preventDefault();
+        return;
+      }
       if (focusInputModality === "keyboard") {
         softSuppressed = false;
       }
@@ -184,7 +197,7 @@ function TooltipTrigger({
         event.preventDefault();
       }
     },
-    [onFocus]
+    [onFocus, openOnFocus]
   );
   return (
     <TooltipPrimitive.Trigger

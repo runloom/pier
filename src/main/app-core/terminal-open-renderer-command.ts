@@ -1,4 +1,5 @@
 import type { PierCommand } from "@shared/contracts/commands.ts";
+import type { TerminalExitPresentation } from "@shared/contracts/ghostty-host-copy.ts";
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { RendererCommand } from "@shared/contracts/renderer-command.ts";
 import type {
@@ -9,6 +10,7 @@ import type { ProcessEnvironmentSource } from "../services/process-environment-s
 
 export interface TerminalOpenOptions {
   clientEnv?: Record<string, string> | undefined;
+  exitPresentation?: TerminalExitPresentation | undefined;
   initialInput?: string | undefined;
   reusePanel?: TaskPanelRef | undefined;
   source?: ProcessEnvironmentSource | undefined;
@@ -26,6 +28,9 @@ export function rendererTerminalOpenCommand(args: {
 }): Extract<RendererCommand, { type: "terminal.open" }> {
   return {
     ...(args.context && { context: args.context }),
+    ...(args.options.exitPresentation && {
+      exitPresentation: args.options.exitPresentation,
+    }),
     focus: args.command.focus,
     ...(args.options.initialInput && {
       initialInput: args.options.initialInput,

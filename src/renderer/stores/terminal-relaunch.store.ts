@@ -1,9 +1,11 @@
+import type { TerminalExitPresentation } from "@shared/contracts/ghostty-host-copy.ts";
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import { create } from "zustand";
 
 export interface TerminalRelaunchRequest {
   context?: PanelContext | undefined;
+  exitPresentation?: TerminalExitPresentation | undefined;
   initialInput?: string | undefined;
   launchId: string;
   panelId: string;

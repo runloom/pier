@@ -3,7 +3,7 @@ import {
   MARKDOWN_MAX_SOURCE_BYTES,
   parseMarkdownRequest,
   parseMarkdownToIr,
-} from "@plugins/builtin/files/renderer/markdown/markdown-parser.ts";
+} from "@plugins/builtin/files/renderer/markdown/parser.ts";
 import { describe, expect, it } from "vitest";
 
 describe("Markdown IR parser", () => {

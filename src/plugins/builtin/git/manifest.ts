@@ -200,6 +200,36 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       permissions: ["git:write"],
       title: "Git: Discard Changes",
     },
+    {
+      category: "Git",
+      id: "pier.git.review.expandAll",
+      permissions: [],
+      title: "Expand Folders",
+    },
+    {
+      category: "Git",
+      id: "pier.git.review.collapseFolders",
+      permissions: [],
+      title: "Collapse Folders",
+    },
+    {
+      category: "Git",
+      id: "pier.git.review.copyPath",
+      permissions: ["file:read"],
+      title: "Git: Copy Path",
+    },
+    {
+      category: "Git",
+      id: "pier.git.review.copyRelativePath",
+      permissions: ["file:read"],
+      title: "Git: Copy Relative Path",
+    },
+    {
+      category: "Git",
+      id: "pier.git.review.revealInFinder",
+      permissions: ["file:read"],
+      title: "Git: Reveal in Finder",
+    },
   ],
 
   configuration: {

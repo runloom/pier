@@ -43,7 +43,7 @@ overlays: {
 
 - 单例语义（同 app-dialog）：新 open 顶替当前 overlay（旧的视为 close）。
 - 宿主实现：`src/renderer/stores/plugin-overlay.store.ts`（zustand，`{current: {pluginId, id, render} | null}`）+ `src/renderer/components/common/plugin-overlay-host.tsx` 挂 app-shell。host 在 overlay 存在期间执行 blocking 三件套，scope id `overlay:plugin:<pluginId>:<id>`。
-- 插件自绘 Dialog（`@pier/ui` 插件本就可用，先例 `git-branch-quick-pick-row.tsx`），host 只负责挂载 `current.render({close})` 与 blocking，不包壳——保持原语最小。
+- 插件自绘 Dialog（`@pier/ui` 插件本就可用，先例 `branch-quick-pick-row.tsx`），host 只负责挂载 `current.render({close})` 与 blocking，不包壳——保持原语最小。
 - 插件 deactivate 时宿主自动 close 该插件的 overlay（host-context 的 dispose 链上做）。
 - 权限：不设 manifest 权限（对齐 quick-pick / dialogs 先例，纯 renderer UI）。
 

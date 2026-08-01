@@ -834,7 +834,7 @@ app.on("will-quit", () => {
 });
 ```
 
-import 补 `createGitAutofetchService`；`windowManager` 若未在 index.ts 引入则从 `./windows/window-manager.ts` 引入；`appCore.services.gitWatch` 的类型在 `command-router.ts` 的 `PierCoreServices`——若那里对 gitWatch 的类型声明窄于新接口，同步更新。
+import 补 `createGitAutofetchService`；`windowManager` 若未在 index.ts 引入则从 `./windows/manager.ts` 引入；`appCore.services.gitWatch` 的类型在 `command-router.ts` 的 `PierCoreServices`——若那里对 gitWatch 的类型声明窄于新接口，同步更新。
 
 - [ ] **Step 2: 验证**
 
@@ -1098,8 +1098,8 @@ git commit -m "feat(git): detect branch merged into default via merge-base ances
 ### Task 7: "已合并"胶囊 UI
 
 **Files:**
-- Modify: `src/plugins/builtin/git/renderer/git-status-parts.tsx`（PILL_VARIANT + MergedPill）
-- Modify: `src/plugins/builtin/git/renderer/git-status-item.tsx`（StatusBody）
+- Modify: `src/plugins/builtin/git/renderer/status-parts.tsx`（PILL_VARIANT + MergedPill）
+- Modify: `src/plugins/builtin/git/renderer/status-item.tsx`（StatusBody）
 - Modify: `src/plugins/builtin/git/locales/en.json` / `zh-CN.json`
 - Test: `tests/unit/renderer/git-plugin.test.tsx`
 
@@ -1159,7 +1159,7 @@ Expected: FAIL——`merged-pill` 找不到。
 
 - [ ] **Step 3: 实现**
 
-`git-status-parts.tsx`：
+`status-parts.tsx`：
 
 ```ts
 // PILL_VARIANT 加：
@@ -1191,7 +1191,7 @@ export function MergedPill({
 
 （`Check` 已在该文件 lucide 导入里。）
 
-`git-status-item.tsx` StatusBody，`<UpstreamPill ... />` 之后加：
+`status-item.tsx` StatusBody，`<UpstreamPill ... />` 之后加：
 
 ```tsx
       <MergedPill
@@ -1222,7 +1222,7 @@ Expected: 全部通过。
 - [ ] **Step 5: Commit（需用户确认）**
 
 ```bash
-git add src/plugins/builtin/git/renderer/git-status-parts.tsx src/plugins/builtin/git/renderer/git-status-item.tsx src/plugins/builtin/git/locales/en.json src/plugins/builtin/git/locales/zh-CN.json tests/unit/renderer/git-plugin.test.tsx
+git add src/plugins/builtin/git/renderer/status-parts.tsx src/plugins/builtin/git/renderer/status-item.tsx src/plugins/builtin/git/locales/en.json src/plugins/builtin/git/locales/zh-CN.json tests/unit/renderer/git-plugin.test.tsx
 git commit -m "feat(git): merged-into-default pill in terminal status bar"
 ```
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 import { spawn } from "node:child_process";
+import { withoutEsbuildBinaryOverride } from "./esbuild-process-env.mjs";
 
 const children = [];
+const childEnv = withoutEsbuildBinaryOverride();
 let shuttingDown = false;
 
 function isRunning(child) {
@@ -11,7 +13,7 @@ function isRunning(child) {
 
 function start(label, command, args) {
   const child = spawn(command, args, {
-    env: process.env,
+    env: childEnv,
     stdio: "inherit",
   });
   children.push({ child, label });

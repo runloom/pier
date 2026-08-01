@@ -247,7 +247,7 @@ function emitBucket(bucket: Action[]): MenuItem[] {
 | [types.ts](../../src/renderer/lib/keybindings/types.ts) | KeyChord 加 `readonly ctrl: boolean` |
 | [parse.ts](../../src/renderer/lib/keybindings/parse.ts) | 加 `Ctrl+` 前缀解析;`parseChord(keys, isMac: boolean)` 函数签名扩平台参数 |
 | [matcher.ts](../../src/renderer/lib/keybindings/matcher.ts) | `chordFromEvent` 加 ctrl 字段;`chordEquals` 加 ctrl 比较 |
-| [use-keybindings.ts](../../src/renderer/lib/keybindings/use-keybindings.ts) | `chordFromNativeForward` 加 ctrl 字段 |
+| [use-keybindings.ts](../../src/renderer/lib/keybindings/use-registry.ts) | `chordFromNativeForward` 加 ctrl 字段 |
 | [registry.ts](../../src/renderer/lib/keybindings/registry.ts) | 调 `parseChord` 处传 isMac() |
 | [build-entries.ts](../../src/renderer/lib/context-menu/build-entries.ts) | `toElectronAccelerator` 加 ctrl → `"Control"` |
 

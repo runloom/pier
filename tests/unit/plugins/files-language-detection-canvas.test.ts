@@ -1,4 +1,4 @@
-import { languageForPath } from "@plugins/builtin/files/renderer/files-language-detection.ts";
+import { languageForPath } from "@plugins/builtin/files/renderer/editor/language-detection.ts";
 import { describe, expect, it } from "vitest";
 
 describe("languageForPath canvas", () => {

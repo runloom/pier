@@ -2,7 +2,7 @@ import type {
   TerminalStatusBarItemOverridePatch,
   TerminalStatusBarOverridePatches,
   TerminalStatusBarPrefs,
-} from "@shared/contracts/terminal-status-bar.ts";
+} from "@shared/contracts/terminal/status-bar.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 import { invokePierCommand } from "./ipc-envelope.ts";

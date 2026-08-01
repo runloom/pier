@@ -3,7 +3,7 @@ import type {
   ManagedPluginCatalogSnapshot,
   ManagedPluginInstallIndex,
   ManagedPluginInstallIndexEntry,
-} from "@shared/contracts/managed-plugin.ts";
+} from "@shared/contracts/plugin/managed.ts";
 import type { OperationsContext } from "./install-operations.ts";
 import { selectNewestVersion } from "./version.ts";
 

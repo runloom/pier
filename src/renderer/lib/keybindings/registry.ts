@@ -50,8 +50,9 @@ class KeybindingRegistry extends Notifier {
   resolve(chord: KeyChord, scopeState: ResolveScopeState): string | null {
     const topOverlay = scopeState.overlayStack.at(-1);
     if (topOverlay) {
-      // 阻断: 不 fall through 到 panel/global.
-      return this.findInScope(chord, `overlay:${topOverlay}`);
+      // Stack entries are full scope tags (e.g. "overlay:command-palette").
+      // Overlay is blocking: miss does not fall through to panel/global.
+      return this.findInScope(chord, normalizeOverlayScope(topOverlay));
     }
     if (scopeState.activePanelComponent) {
       const panelScope: KeybindingScope = `panel:${scopeState.activePanelComponent}`;
@@ -174,6 +175,17 @@ class KeybindingRegistry extends Notifier {
     list.push({ chord, commandId: parsed.commandId, scope, source });
     table.set(parsed.commandId, list);
   }
+}
+
+/**
+ * Callers push either bare ids (`app-dialog`) or full tags (`overlay:app-dialog`).
+ * Resolve always looks up a full `overlay:…` KeybindingScope.
+ */
+function normalizeOverlayScope(topOverlay: string): KeybindingScope {
+  if (topOverlay.startsWith("overlay:")) {
+    return topOverlay as KeybindingScope;
+  }
+  return `overlay:${topOverlay}`;
 }
 
 export const keybindingRegistry = new KeybindingRegistry();

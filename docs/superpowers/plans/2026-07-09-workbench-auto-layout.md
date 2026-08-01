@@ -19,7 +19,7 @@
 
 **Files:**
 - Modify: `src/shared/contracts/workbench.ts`
-- Modify: `src/renderer/panel-kits/workbench/core-workbench-widgets.ts`
+- Modify: `src/renderer/panel-kits/workbench/core-registry.ts`
 - Test: `tests/unit/shared/workbench-contracts.test.ts`
 
 - [ ] **Step 1: Write failing contract tests**
@@ -72,7 +72,7 @@ Enumerate contiguous row slices, choose candidate widths that fit `cols`, score 
 
 **Files:**
 - Modify: `src/renderer/panel-kits/workbench/workbench-panel.tsx`
-- Modify: `src/renderer/panel-kits/workbench/use-workbench-panel-state.ts`
+- Modify: `src/renderer/panel-kits/workbench/use-panel-state.ts`
 - Test: `tests/component/workbench-panel.test.tsx`
 
 - [ ] **Step 1: Write failing component tests**
@@ -107,7 +107,7 @@ Expected: all selected tests pass.
 Run:
 
 ```bash
-pnpm exec ultracite check src/shared/contracts/workbench.ts src/renderer/panel-kits/workbench/core-workbench-widgets.ts src/renderer/panel-kits/workbench/workbench-grid-geometry.ts src/renderer/panel-kits/workbench/workbench-panel.tsx src/renderer/panel-kits/workbench/use-workbench-panel-state.ts tests/unit/shared/workbench-contracts.test.ts tests/unit/renderer/workbench-grid-geometry.test.ts tests/component/workbench-panel.test.tsx
+pnpm exec ultracite check src/shared/contracts/workbench.ts src/renderer/panel-kits/workbench/core-registry.ts src/renderer/panel-kits/workbench/workbench-grid-geometry.ts src/renderer/panel-kits/workbench/workbench-panel.tsx src/renderer/panel-kits/workbench/use-panel-state.ts tests/unit/shared/workbench-contracts.test.ts tests/unit/renderer/workbench-grid-geometry.test.ts tests/component/workbench-panel.test.tsx
 pnpm typecheck
 ```
 

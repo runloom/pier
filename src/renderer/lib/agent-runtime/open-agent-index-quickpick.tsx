@@ -1,12 +1,12 @@
 import i18next from "i18next";
 import { handleNewAgent } from "@/lib/actions/new-agent-action.ts";
-import { enrichAgentIndexEntriesWithLocalFa } from "@/lib/agent-runtime/agent-index-display-status.ts";
+import { invokeAgentRuntimeFocus } from "@/lib/agent-runtime/focus-feedback.ts";
+import { enrichAgentIndexEntriesWithLocalFa } from "@/lib/agent-runtime/index-display-status.ts";
 import {
   AGENT_INDEX_NEW_ID,
   buildAgentIndexQuickPick,
-} from "@/lib/agent-runtime/agent-index-quickpick.ts";
-import { AgentIndexQuickPickRow } from "@/lib/agent-runtime/agent-index-quickpick-row.tsx";
-import { invokeAgentRuntimeFocus } from "@/lib/agent-runtime/focus-feedback.ts";
+} from "@/lib/agent-runtime/index-quickpick.ts";
+import { AgentIndexQuickPickRow } from "@/lib/agent-runtime/index-quickpick-row.tsx";
 import { preferredAgentIndexSortOptions } from "@/lib/agent-runtime/preferred-sort-options.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type { QuickPick } from "@/lib/command-palette/types.ts";

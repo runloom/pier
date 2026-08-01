@@ -1,3 +1,4 @@
+import { isSubagentHookEvent } from "@shared/agent-session-actor.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AgentSessionTitleSource,
@@ -6,19 +7,14 @@ import type {
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app, type IpcMain } from "electron";
-import { effectsForAcceptedAgentEvent } from "../services/agents/agent-event-effects.ts";
+import { effectsForAcceptedAgentEvent } from "../services/agents/event-effects.ts";
 import {
-  agentHooksDir,
   eventsJsonlPath,
-  installAgentHooksEmitScript,
-} from "../services/agents/agent-hooks-install.ts";
-import {
-  isAgentStatusHooksIngestEnabled,
-  setAgentStatusHooksIngestEnabled,
-} from "../services/agents/agent-status-hooks-gate.ts";
+  pierHooksCurrentDir,
+} from "../services/agents/hooks-install.ts";
 import {
   getAgentHookIntegration,
-  installAllAgentHooks,
+  installAgentHooksStack,
   uninstallAllAgentHooks,
 } from "../services/agents/integrations/registry.ts";
 import {
@@ -27,8 +23,12 @@ import {
 } from "../services/agents/integrations/terminal-reconciliation.ts";
 import {
   applyAgentSessionTitleFromHookEvent,
-  forgetPanelTitleState,
+  applyProviderAgentSessionTitle,
 } from "../services/agents/session-title/index.ts";
+import {
+  isAgentStatusHooksIngestEnabled,
+  setAgentStatusHooksIngestEnabled,
+} from "../services/agents/status-hooks-gate.ts";
 import { isWindowDetaching } from "../services/agents/window-detaching-guard.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
 import { isBlankShellCommandLine } from "../services/foreground-activity/blank-command-line.ts";
@@ -48,10 +48,11 @@ import {
   findAppWindowByInternalId,
   findAppWindowByWebContents,
   listAppWindowIds,
-} from "../windows/window-identity.ts";
+} from "../windows/identity.ts";
 import { materializeForegroundActivityPublications } from "./foreground-activity-publication.ts";
-import { forwardToWindow } from "./terminal-forwarding.ts";
-import { windowRecordIdFor } from "./terminal-window-scope.ts";
+import { broadcastAgentEndStateForPanel } from "./terminal/end-state-broadcast.ts";
+import { forwardToWindow } from "./terminal/forwarding.ts";
+import { windowRecordIdFor } from "./terminal/window-scope.ts";
 
 const log = createLogger("foreground-activity.ipc");
 
@@ -94,13 +95,20 @@ function markAgentSessionExited(args: {
   ) {
     return;
   }
-  patchTerminalPanelAgentStatus(windowRecordIdFor(win), args.panelId, {
+  const sessionWindowId = windowRecordIdFor(win);
+  patchTerminalPanelAgentStatus(sessionWindowId, args.panelId, {
     ...(args.exitCode === undefined ? {} : { exitCode: args.exitCode }),
     finishedAt: Date.now(),
     status: "exited",
-  }).catch((err) => {
-    log.error("agent session exit persist failed", { err });
-  });
+  })
+    .then((ok) => {
+      if (ok) {
+        broadcastAgentEndStateForPanel(win, sessionWindowId, args.panelId);
+      }
+    })
+    .catch((err) => {
+      log.error("agent session exit persist failed", { err });
+    });
 }
 
 function recordAgentResumeSession(args: {
@@ -204,7 +212,9 @@ export const foregroundActivityService = {
   hookEnv(): Record<string, string> {
     const userData = app.getPath("userData");
     return {
-      PIER_AGENT_HOOKS_DIR: agentHooksDir(userData),
+      // 共享运行时（~/.pier/hooks/current）；跨 worktree / 版本稳定。
+      PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(),
+      // 事件日志仍按实例 userData 隔离，避免多窗抢同一 JSONL。
       PIER_AGENT_EVENT_LOG: eventsJsonlPath(userData),
     };
   },
@@ -265,9 +275,6 @@ export const foregroundActivityService = {
   },
   panelClosed(panelId: string, windowId?: string): void {
     agentTerminalReconciler?.releasePanel(panelId, windowId);
-    if (windowId) {
-      forgetPanelTitleState(windowId, panelId);
-    }
     foregroundActivityAggregator.panelClosed(panelId, windowId);
   },
   ptyExited(panelId: string, windowId?: string): void {
@@ -301,7 +308,11 @@ export const foregroundActivityService = {
   setAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: AgentSessionTitleSource }
+    input: {
+      title: string;
+      source: AgentSessionTitleSource;
+      sessionId?: string | undefined;
+    }
   ): boolean {
     return foregroundActivityAggregator.setAgentSessionTitle(
       windowId,
@@ -312,7 +323,11 @@ export const foregroundActivityService = {
   hydrateAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: AgentSessionTitleSource }
+    input: {
+      title: string;
+      source: AgentSessionTitleSource;
+      sessionId?: string | undefined;
+    }
   ): void {
     foregroundActivityAggregator.hydrateAgentSessionTitle(
       windowId,
@@ -320,9 +335,16 @@ export const foregroundActivityService = {
       input
     );
   },
+  clearAgentSessionTitle(windowId: string, panelId: string): void {
+    foregroundActivityAggregator.clearAgentSessionTitle(windowId, panelId);
+  },
 };
 
-/** app 退出时释放 JSONL observer 等副资源。 */
+/**
+ * app 退出时释放 JSONL observer 等副资源。
+ * **不得**卸载全局 agent hooks 或删除 `~/.pier/hooks`——运行时与 pier 条目
+ * 跨版本/channel 共享，退出不等于用户关闭「智能体状态提示」。
+ */
 export function closeForegroundActivityResources(): void {
   jsonlObserver?.dispose();
   jsonlObserver = null;
@@ -332,10 +354,6 @@ export function closeForegroundActivityResources(): void {
 
 export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   foregroundActivityAggregator.onChange(handleBroadcast);
-  // emit 脚本安装（一次性）——fire-and-forget，失败仅告警。
-  installAgentHooksEmitScript(app.getPath("userData")).catch((err) => {
-    log.error("emit script install failed", { err });
-  });
   // JSONL 尾读（spec §4.4 主路径）：hooks.json 系集成通过 emit 脚本
   // append 到 events.jsonl，observer 250ms 轮询 → 按 kind 分派到
   // aggregator 对应 hook。commandStart/commandFinished hook 目前无消费者
@@ -344,6 +362,26 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
     onTerminalEvent: (event) => {
       foregroundActivityAggregator.ingestAgentEvent(event, {
         stopAuthority: "authoritative",
+      });
+    },
+    // provider 原生会话名（`provider` 秩）：只有能从自家 transcript 读出标题的
+    // agent 会走到这里；读不到就没有，标题退回首条 prompt 派生。
+    onTitleRecord: ({ context, record }) => {
+      if (isSubagentHookEvent(context)) {
+        return;
+      }
+      applyProviderAgentSessionTitle({
+        aggregator: foregroundActivityAggregator,
+        agentId: context.agent,
+        nativeEvent: record.nativeEvent,
+        panelId: context.panelId,
+        ...(context.sessionId?.trim()
+          ? { sessionId: context.sessionId.trim() }
+          : {}),
+        title: record.title,
+        windowId: context.windowId,
+      }).catch((err) => {
+        log.warn("agent session title effect failed", { err });
       });
     },
   });
@@ -382,12 +420,14 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
           windowId: routed.windowId,
         });
       }
-      applyAgentSessionTitleFromHookEvent({
-        aggregator: foregroundActivityAggregator,
-        event: routed,
-      }).catch((err) => {
-        log.warn("agent session title effect failed", { err });
-      });
+      if (!isSubagentHookEvent(routed)) {
+        applyAgentSessionTitleFromHookEvent({
+          aggregator: foregroundActivityAggregator,
+          event: routed,
+        }).catch((err) => {
+          log.warn("agent session title effect failed", { err });
+        });
+      }
     },
     onCommandFinished: (event) => {
       const routed = withResolvedOwner(event);
@@ -414,13 +454,15 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
     return foregroundActivityService.snapshot(String(win.id));
   });
 
-  // 启动时按偏好双向对齐 hook 安装状态（幂等）：开→装, 关→卸。
-  // 关闭态必须主动卸载, 防止旧版本/外部同步写回的 hook 静默复活。
+  // 启动时按偏好双向对齐 hook 安装状态（幂等）：
+  // 开 → installAgentHooksStack（运行时 + 各 agent 全局配置，同事务顺序）；
+  // 关 → 仅卸 pier 条目（保留 ~/.pier/hooks 运行时）。
+  // 关闭态必须主动卸载 pier 条目, 防止旧版本/外部同步写回的 hook 静默复活。
   readPreferences()
     .then((prefs) => {
       setAgentStatusHooksIngestEnabled(prefs.agentStatusHooks);
       return prefs.agentStatusHooks
-        ? installAllAgentHooks()
+        ? installAgentHooksStack()
         : uninstallAllAgentHooks();
     })
     .catch((err) => {

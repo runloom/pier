@@ -125,7 +125,7 @@
             core.onCellSizeDidChange = { [weak self] in
                 self?.refreshTextInputGeometry(reason: "cell-size-action")
             }
-            core.onPostRender = { [weak self] in
+            core.onPostRender = { [weak self] _ in
                 self?.enforceSublayerScale()
             }
 

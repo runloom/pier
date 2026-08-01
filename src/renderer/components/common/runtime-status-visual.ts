@@ -16,23 +16,34 @@ interface RuntimeStatusVisual {
 }
 
 export function runtimeStatusColorClassName(
-  status: PanelTabStatus | TaskRunNodeStatus
+  status: PanelTabStatus | TaskRunNodeStatus,
+  priority: "normal" | "important" = "normal"
 ): string {
   switch (status) {
     case "pending":
     case "running":
-      return "text-status-info-fg";
+      return priority === "important"
+        ? "text-status-info-fg!"
+        : "text-status-info-fg";
     case "succeeded":
-      return "text-status-success-fg";
+      return priority === "important"
+        ? "text-status-success-fg!"
+        : "text-status-success-fg";
     case "failed":
-      return "text-status-danger-fg";
+      return priority === "important"
+        ? "text-status-danger-fg!"
+        : "text-status-danger-fg";
     case "waiting":
     case "stopping":
     case "blocked":
     case "cancelled":
-      return "text-status-warning-fg";
+      return priority === "important"
+        ? "text-status-warning-fg!"
+        : "text-status-warning-fg";
     case "idle":
-      return "text-status-neutral-fg";
+      return priority === "important"
+        ? "text-status-neutral-fg!"
+        : "text-status-neutral-fg";
     default: {
       const exhaustive: never = status;
       return exhaustive;

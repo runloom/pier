@@ -4,7 +4,7 @@ import type {
   TaskCommandSpec,
   TaskInputRequest,
 } from "@shared/contracts/tasks.ts";
-import { taskCandidate as candidate, optionalEnv } from "./task-candidate.ts";
+import { taskCandidate as candidate, optionalEnv } from "./candidate.ts";
 import {
   asRecord,
   asString,

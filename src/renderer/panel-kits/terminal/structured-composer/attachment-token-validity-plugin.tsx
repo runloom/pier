@@ -1,7 +1,7 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { useEffect } from "react";
-import type { ComposerAttachment } from "../terminal-composer-attachments-model.ts";
-import { syncAttachmentTokenValidityInLexical } from "./structured-composer-mutations.ts";
+import type { ComposerAttachment } from "../composer-attachments-model.ts";
+import { syncAttachmentTokenValidityInLexical } from "./mutations.ts";
 
 /**
  * Keep attachment chip ordinal / valid state in sync with the rail.

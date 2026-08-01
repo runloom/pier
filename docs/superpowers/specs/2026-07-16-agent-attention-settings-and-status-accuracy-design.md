@@ -451,5 +451,5 @@ denied + sticky
 - [2026-07-13 状态审计](./2026-07-13-agent-status-adapter-contract-audit.md)  
 - `src/main/services/preferences-service.ts`（`PATCHABLE_KEYS`）  
 - `src/main/services/system-notification.ts`（`stickyDenied`）  
-- `src/main/services/agent-attention/attention-service.ts`（`enteredAttention`）  
+- `src/main/services/agent-attention/service.ts`（`enteredAttention`）  
 - [AGENTS.md](../../../AGENTS.md)  

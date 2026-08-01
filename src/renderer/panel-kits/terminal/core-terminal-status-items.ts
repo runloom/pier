@@ -1,4 +1,4 @@
-import type { CoreTerminalStatusItemDeclaration } from "@shared/contracts/terminal-status-bar.ts";
+import type { CoreTerminalStatusItemDeclaration } from "@shared/contracts/terminal/status-bar.ts";
 import { CORE_AGENT_STATUS_ITEM_ID } from "@shared/plugin-core-contribution-ids.ts";
 
 export { CORE_AGENT_STATUS_ITEM_ID } from "@shared/plugin-core-contribution-ids.ts";

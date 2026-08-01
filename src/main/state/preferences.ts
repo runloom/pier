@@ -1,11 +1,13 @@
 import { join } from "node:path";
+import { DEFAULT_AGENT_ATTENTION_SETTINGS } from "@shared/contracts/agent/attention.ts";
 import { resolvePermissionMode } from "@shared/contracts/agent.ts";
-import { DEFAULT_AGENT_ATTENTION_SETTINGS } from "@shared/contracts/agent-attention.ts";
+import { DEFAULT_LSP_POLICY_PREFS } from "@shared/contracts/lsp.ts";
 import { DEFAULT_NOTIFICATION_CENTER_PREFS } from "@shared/contracts/notification-center.ts";
 import {
   DEFAULT_APP_QUIT_CONFIRMATION_MODE,
   DEFAULT_GIT_AUTO_FETCH_ENABLED,
   DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
+  DEFAULT_PANEL_CLOSE_FOCUS_POLICY,
   DEFAULT_TERMINAL_CURSOR_BLINK,
   DEFAULT_TERMINAL_CURSOR_STYLE,
   DEFAULT_TERMINAL_NEW_CWD_POLICY,
@@ -40,6 +42,7 @@ const DEFAULTS: ProjectPreferences = {
   terminalScrollbackMb: DEFAULT_TERMINAL_SCROLLBACK_MB,
   terminalPasteProtection: DEFAULT_TERMINAL_PASTE_PROTECTION,
   terminalNewCwdPolicy: DEFAULT_TERMINAL_NEW_CWD_POLICY,
+  panelCloseFocusPolicy: DEFAULT_PANEL_CLOSE_FOCUS_POLICY,
   confirmOnQuit: DEFAULT_APP_QUIT_CONFIRMATION_MODE,
   windowZoomLevel: DEFAULT_WINDOW_ZOOM_LEVEL,
   userKeymap: [],
@@ -51,11 +54,11 @@ const DEFAULTS: ProjectPreferences = {
   agentCommandOverrides: {},
   worktreeRootPath: "",
   agentStatusHooks: true,
-  agentSessionTitleRefine: true,
   agentAttention: { ...DEFAULT_AGENT_ATTENTION_SETTINGS },
   notificationCenter: { ...DEFAULT_NOTIFICATION_CENTER_PREFS },
   gitAutoFetchEnabled: DEFAULT_GIT_AUTO_FETCH_ENABLED,
   gitAutoFetchIntervalMinutes: DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
+  lsp: { ...DEFAULT_LSP_POLICY_PREFS },
 };
 
 let store: DebouncedJsonStore<ProjectPreferences> | undefined;
@@ -145,4 +148,9 @@ export async function updatePreferences(
 ): Promise<ProjectPreferences> {
   const s = await ensureStore();
   return s.mutate((current) => ({ ...current, ...patch }));
+}
+
+export async function flushPreferences(): Promise<void> {
+  const s = await ensureStore();
+  await s.flush();
 }

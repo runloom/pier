@@ -12,11 +12,15 @@ import {
   piHome,
   uninstallPiExtension,
 } from "../../../src/main/services/agents/integrations/pi.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
 
 const NATIVE_EVENTS = [
   "session_start",
-  "agent_start",
-  "agent_end",
+  "before_agent_start",
+  "tool_execution_start",
+  "tool_execution_end",
+  "agent_settled",
   "session_shutdown",
 ];
 
@@ -44,33 +48,21 @@ describe("buildPiExtensionSource", () => {
     expect(src).not.toContain("/agent-event");
   });
 
-  it("事件表齐全：全部 4 个原生事件均注册且映射到正确 pier 事件（coarse 粒度）", () => {
+  it("按固定提交中的公开事件注册，只有 agent_settled 结束回合", () => {
     const src = buildPiExtensionSource();
-    expect(PI_EVENT_MAP).toHaveLength(4);
+    expect(PI_EVENT_MAP).toEqual([
+      { nativeEvent: "session_start", pierEvent: "SessionStart" },
+      { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
+      { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
+      { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
+      { nativeEvent: "agent_settled", pierEvent: "Stop" },
+      { nativeEvent: "session_shutdown", pierEvent: "SessionEnd" },
+    ]);
     for (const evt of NATIVE_EVENTS) {
       expect(src).toContain(`pi.on("${evt}"`);
     }
-    expect(src).toContain(
-      'pierEmit("SessionStart", "pier.synthetic.session_start")'
-    );
-    expect(src).toContain(
-      'pierEmit("PromptSubmit", "agent_start", event, ctx)'
-    );
-    expect(src).toContain('pierEmit("Stop", "agent_end", event, ctx)');
-    expect(src).toContain(
-      'pierEmit("SessionEnd", "session_shutdown", event, ctx)'
-    );
-    // agent_start 映射 PromptSubmit（与 omp 对齐, 非旧 processing）
-    expect(
-      PI_EVENT_MAP.find((e) => e.nativeEvent === "agent_start")?.pierEvent
-    ).toBe("PromptSubmit");
-    expect(
-      PI_EVENT_MAP.find((e) => e.nativeEvent === "agent_end")?.pierEvent
-    ).toBe("Stop");
-    // 旧 input→PromptSubmit 已删——input 在 validation 前触发, 会卡态
-    expect(PI_EVENT_MAP.find((e) => e.nativeEvent === "input")).toBeUndefined();
-    // pi 无工具/权限粒度事件
-    expect(src).not.toContain("ToolStart");
+    expect(src).not.toContain('pi.on("agent_end"');
+    expect(src).not.toContain('pi.on("agent_start"');
     expect(src).not.toContain("PermissionRequest");
   });
 
@@ -79,25 +71,18 @@ describe("buildPiExtensionSource", () => {
     expect(src).toContain('agent: "pi"');
   });
 
-  it("加载即 emit SessionStart：extension 函数体开头独立调用, 先于 pi.on 订阅", () => {
+  it("不合成 SessionStart，只消费真实 session_start", () => {
     const src = buildPiExtensionSource();
     const functionStart = src.indexOf(
       "export default function PierAgentStatus(pi)"
-    );
-    const loadEmit = src.indexOf(
-      'pierEmit("SessionStart", "pier.synthetic.session_start");',
-      functionStart
     );
     const firstSubscription = src.indexOf(
       'pi.on("session_start"',
       functionStart
     );
     expect(functionStart).toBeGreaterThanOrEqual(0);
-    expect(loadEmit).toBeGreaterThan(functionStart);
-    expect(loadEmit).toBeLessThan(firstSubscription);
-    // 独立语句, 不在任何 pi.on(...) 回调闭包内。
     const between = src.slice(functionStart, firstSubscription);
-    expect(between.match(/pierEmit\("SessionStart"/g)).toHaveLength(1);
+    expect(between).not.toContain("pierEmit(");
     expect(between).not.toContain("pi.on(");
   });
 });
@@ -213,16 +198,12 @@ describe("生成源码行为（动态加载 + 假 pi 触发）", () => {
       },
     };
     main.fire("session_start", ctx, { type: "session_start" });
-    main.fire("agent_start", ctx, { type: "agent_start" });
-    const records = await readEmittedRecords(logPath);
-    // load-time synthetic SessionStart has no ctx, so no sessionId; subsequent
-    // real events must carry the manager-provided id.
-    expect(records[0]).toMatchObject({
-      event: "SessionStart",
-      nativeEvent: "pier.synthetic.session_start",
+    main.fire("before_agent_start", ctx, {
+      prompt: "Fix the flaky test",
+      type: "before_agent_start",
     });
-    expect(records[0]).not.toHaveProperty("sessionId");
-    expect(records.slice(1)).toEqual([
+    const records = await readEmittedRecords(logPath);
+    expect(records).toEqual([
       expect.objectContaining({
         event: "SessionStart",
         nativeEvent: "session_start",
@@ -240,15 +221,82 @@ describe("生成源码行为（动态加载 + 假 pi 触发）", () => {
     const main = createFakePi();
     factory(main.pi);
     main.fire(
-      "agent_start",
+      "before_agent_start",
       {},
-      { prompt: "帮我分析下当前未提交的修改", type: "agent_start" }
+      {
+        prompt: "帮我分析下当前未提交的修改",
+        type: "before_agent_start",
+      }
     );
     const records = await readEmittedRecords(logPath);
     const submit = records.find((r) => r.event === "PromptSubmit");
     expect(submit).toMatchObject({
       promptSnippet: "帮我分析下当前未提交的修改",
     });
+  });
+
+  it("真实工具载荷保留 toolCallId，局部失败只结束对应工具", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: PiEventCtx = {
+      sessionManager: { getSessionId: () => "session-pi" },
+    };
+    main.fire("tool_execution_start", ctx, {
+      args: { command: "false" },
+      toolCallId: "call-7",
+      toolName: "bash",
+      type: "tool_execution_start",
+    });
+    main.fire("tool_execution_end", ctx, {
+      isError: true,
+      result: { content: "exit 1" },
+      toolCallId: "call-7",
+      toolName: "bash",
+      type: "tool_execution_end",
+    });
+    main.fire("agent_settled", ctx, { type: "agent_settled" });
+    const records = await readEmittedRecords(logPath);
+    expect(records).toMatchObject([
+      {
+        event: "ToolStart",
+        nativeEvent: "tool_execution_start",
+        sessionId: "session-pi",
+        toolName: "bash",
+        toolUseId: "call-7",
+        v: 3,
+      },
+      {
+        event: "ToolComplete",
+        nativeEvent: "tool_execution_end",
+        nativeState: "error",
+        sessionId: "session-pi",
+        toolName: "bash",
+        toolUseId: "call-7",
+        v: 3,
+      },
+      {
+        event: "Stop",
+        nativeEvent: "agent_settled",
+        sessionId: "session-pi",
+        v: 3,
+      },
+    ]);
+    expect(records.some((record) => record.event === "error")).toBe(false);
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: string[] = [];
+    for (const record of records) {
+      const parsed = agentHookEventSchema.parse(record);
+      if (parsed.kind !== "agentEvent") {
+        continue;
+      }
+      aggregator.ingestAgentEvent(parsed, { stopAuthority: "authoritative" });
+      const activity = aggregator.snapshot().activities[0];
+      if (activity?.kind === "agent" && activity.status) {
+        statuses.push(activity.status);
+      }
+    }
+    expect(statuses).toEqual(["tool", "processing", "ready"]);
   });
 });
 
@@ -396,11 +444,10 @@ describe("install/uninstallPiExtension (文件 IO)", () => {
 });
 
 describe("piIntegration 契约", () => {
-  it("capability 为 coarse, id 为 pi", async () => {
+  it("id 为 pi", async () => {
     const { piIntegration } = await import(
       "../../../src/main/services/agents/integrations/pi.ts"
     );
-    expect(piIntegration.capability).toBe("coarse");
     expect(piIntegration.id).toBe("pi");
   });
 });

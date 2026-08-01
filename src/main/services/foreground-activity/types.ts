@@ -1,9 +1,9 @@
-import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AgentHookEventPayload,
   CommandFinishedHookEvent,
   CommandStartHookEvent,
-} from "@shared/contracts/agent-session.ts";
+} from "@shared/contracts/agent/session.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AgentSessionTitleSource,
   ForegroundActivityBroadcast,
@@ -30,12 +30,18 @@ export interface ForegroundActivityAggregator {
    * 接管 status。
    */
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void;
+  /** 清除已切换主会话留下的旧标题。 */
+  clearAgentSessionTitle(windowId: string, panelId: string): void;
   dispose(): void;
-  /** 从持久化种子标题（reload / launch）；不覆盖已有 slot 标题。 */
+  /** 用持久化真值水合标题（reload / launch / 写入冲突回读）。 */
   hydrateAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: AgentSessionTitleSource }
+    input: {
+      title: string;
+      source: AgentSessionTitleSource;
+      sessionId?: string | undefined;
+    }
   ): void;
 
   /**
@@ -91,7 +97,11 @@ export interface ForegroundActivityAggregator {
   setAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: AgentSessionTitleSource }
+    input: {
+      title: string;
+      source: AgentSessionTitleSource;
+      sessionId?: string | undefined;
+    }
   ): boolean;
 
   snapshot(windowId?: string): ForegroundActivityBroadcast;

@@ -19,6 +19,7 @@ import {
   useTerminalRelaunchRequest,
 } from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { useWorkspacePreferencesStore } from "@/stores/workspace-preferences.store.ts";
 
 function terminalPanel(id: string) {
   return {
@@ -94,6 +95,9 @@ describe("workspace terminal close lifecycle", () => {
       },
     });
     useWorkspaceStore.getState().setApi(null);
+    useWorkspacePreferencesStore.setState({
+      panelCloseFocusPolicy: "adjacent",
+    });
   });
 
   it("closes the native terminal when a terminal panel is explicitly closed", async () => {
@@ -202,6 +206,76 @@ describe("workspace terminal close lifecycle", () => {
     expect(closeCurrentWindowMock).not.toHaveBeenCalled();
   });
 
+  it("activates the right neighbor before removing the active panel", async () => {
+    const left = terminalPanel("terminal-left");
+    const middle = terminalPanel("terminal-middle");
+    const right = webPanel("welcome-right");
+    const api = createApi([left, middle, right]);
+    api.activePanel = middle;
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    await useWorkspaceStore.getState().closeActivePanel();
+
+    expect(right.api.setActive).toHaveBeenCalledOnce();
+    expect(left.api.setActive).not.toHaveBeenCalled();
+    expect(firstInvocationOrder(right.api.setActive)).toBeLessThan(
+      firstInvocationOrder(api.removePanel)
+    );
+    expect(api.removePanel).toHaveBeenCalledWith(middle);
+  });
+
+  it("activates the left neighbor when the active panel is rightmost", async () => {
+    const left = terminalPanel("terminal-left");
+    const right = terminalPanel("terminal-right");
+    const api = createApi([left, right]);
+    api.activePanel = right;
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    await useWorkspaceStore.getState().closePanel("terminal-right");
+
+    expect(left.api.setActive).toHaveBeenCalledOnce();
+    expect(firstInvocationOrder(left.api.setActive)).toBeLessThan(
+      firstInvocationOrder(api.removePanel)
+    );
+    expect(api.removePanel).toHaveBeenCalledWith(right);
+  });
+
+  it("does not re-activate when closing an inactive panel", async () => {
+    const active = terminalPanel("terminal-active");
+    const inactive = webPanel("welcome-inactive");
+    const api = createApi([active, inactive]);
+    api.activePanel = active;
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    await useWorkspaceStore.getState().closePanel("welcome-inactive");
+
+    expect(active.api.setActive).not.toHaveBeenCalled();
+    expect(inactive.api.setActive).not.toHaveBeenCalled();
+    expect(api.removePanel).toHaveBeenCalledWith(inactive);
+  });
+
+  it("skips adjacent pre-activation when panelCloseFocusPolicy is recent", async () => {
+    const left = terminalPanel("terminal-left");
+    const middle = terminalPanel("terminal-middle");
+    const right = webPanel("welcome-right");
+    const api = createApi([left, middle, right]);
+    api.activePanel = middle;
+    useWorkspacePreferencesStore.setState({
+      panelCloseFocusPolicy: "recent",
+    });
+
+    useWorkspaceStore.getState().setApi(api as never);
+
+    await useWorkspaceStore.getState().closeActivePanel();
+
+    expect(left.api.setActive).not.toHaveBeenCalled();
+    expect(right.api.setActive).not.toHaveBeenCalled();
+    expect(api.removePanel).toHaveBeenCalledWith(middle);
+  });
+
   it("does not close a native terminal when a web panel is explicitly closed", async () => {
     const terminal = terminalPanel("terminal-1");
     const web = webPanel("welcome-1");
@@ -286,6 +360,62 @@ describe("workspace terminal close lifecycle", () => {
     expect(api.removePanel).toHaveBeenCalledWith(web);
     expect(api.removePanel).not.toHaveBeenCalledWith(keep);
     expect(api.removePanel).not.toHaveBeenCalledWith(otherGroupTerminal);
+  });
+
+  it("closeGroup removes only same-group panels and does not close window when other groups remain", async () => {
+    const a = terminalPanel("g1-a");
+    const b = webPanel("g1-b");
+    const other = terminalPanel("g2-a");
+    const panels = [a, b, other];
+    const api = {
+      activeGroup: { panels: [a, b] },
+      activePanel: a,
+      groups: [{ panels: [a, b] }, { panels: [other] }],
+      addPanel: vi.fn(),
+      panels,
+      removePanel: vi.fn((panel: { id: string }) => {
+        const index = panels.findIndex((p) => p.id === panel.id);
+        if (index >= 0) {
+          panels.splice(index, 1);
+        }
+      }),
+      totalPanels: 3,
+    };
+
+    useWorkspaceStore.getState().setApi(api as never);
+    await useWorkspaceStore.getState().closeGroup("g1-a");
+
+    expect(api.removePanel).toHaveBeenCalledWith(a);
+    expect(api.removePanel).toHaveBeenCalledWith(b);
+    expect(api.removePanel).not.toHaveBeenCalledWith(other);
+    expect(closeCurrentWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("closeGroup closes the window when it empties the last group", async () => {
+    const a = terminalPanel("solo-a");
+    const b = webPanel("solo-b");
+    const panels = [a, b];
+    const api = {
+      activeGroup: { panels: [a, b] },
+      activePanel: a,
+      groups: [{ panels: [a, b] }],
+      addPanel: vi.fn(),
+      panels,
+      removePanel: vi.fn((panel: { id: string }) => {
+        const index = panels.findIndex((p) => p.id === panel.id);
+        if (index >= 0) {
+          panels.splice(index, 1);
+        }
+      }),
+      totalPanels: 2,
+    };
+
+    useWorkspaceStore.getState().setApi(api as never);
+    await useWorkspaceStore.getState().closeGroup("solo-a");
+
+    expect(api.removePanel).toHaveBeenCalledWith(a);
+    expect(api.removePanel).toHaveBeenCalledWith(b);
+    expect(closeCurrentWindowMock).toHaveBeenCalledOnce();
   });
 
   it("clears layout after all panels close during closeAll", async () => {

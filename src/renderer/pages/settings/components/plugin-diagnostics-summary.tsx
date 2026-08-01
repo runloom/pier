@@ -1,5 +1,5 @@
 import type { PluginRegistryDiagnostic } from "@shared/contracts/plugin.ts";
-import type { RendererPluginRuntimeDiagnostic } from "@/lib/plugins/plugin-runtime-diagnostics.ts";
+import type { RendererPluginRuntimeDiagnostic } from "@/lib/plugins/runtime-diagnostics.ts";
 
 type DiagnosticKind = PluginRegistryDiagnostic["code"] | "runtime";
 

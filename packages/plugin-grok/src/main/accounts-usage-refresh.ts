@@ -61,7 +61,7 @@ export function createGrokUsageRefreshRunner(options: {
     if (
       !refreshOptions.force &&
       cached &&
-      now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS
+      now() - cached.attemptedAt < USAGE_MIN_REFETCH_MS
     ) {
       return;
     }
@@ -74,7 +74,7 @@ export function createGrokUsageRefreshRunner(options: {
       if (
         !refreshOptions.force &&
         latestCached &&
-        now() - latestCached.fetchedAt < USAGE_MIN_REFETCH_MS
+        now() - latestCached.attemptedAt < USAGE_MIN_REFETCH_MS
       ) {
         return;
       }
@@ -102,15 +102,15 @@ export function createGrokUsageRefreshRunner(options: {
         } catch (error) {
           result = {
             error: error instanceof Error ? error.message : String(error),
+            metrics: [],
             status: "error",
-            windows: [],
           };
         }
       } else {
         result = {
           status: "error",
           error: "No active Grok account",
-          windows: [],
+          metrics: [],
         };
       }
 

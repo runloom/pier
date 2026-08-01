@@ -3,7 +3,7 @@ import {
   acquireTerminalEscapeShortcut,
   isBareEscapeForward,
   resetTerminalEscapeShortcutForTests,
-} from "@/panel-kits/terminal/terminal-escape-shortcut.ts";
+} from "@/panel-kits/terminal/escape-shortcut.ts";
 
 describe("acquireTerminalEscapeShortcut", () => {
   afterEach(() => {

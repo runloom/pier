@@ -7,7 +7,7 @@ import {
 import {
   buildActionSearchDocument,
   rankActionSearchDocuments,
-} from "@/lib/search/action-search.ts";
+} from "@/lib/search/action.ts";
 
 export interface ActionGroup {
   actions: Action[];

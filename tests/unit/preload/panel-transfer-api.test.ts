@@ -5,7 +5,9 @@ const ipcInvokeMock = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", () => ({
   ipcRenderer: {
+    getMaxListeners: () => 10,
     invoke: ipcInvokeMock,
+    setMaxListeners: vi.fn(),
   },
 }));
 
