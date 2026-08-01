@@ -59,6 +59,7 @@ describe("Git diff renderer governance", () => {
     }
 
     expect(importers).toEqual([
+      "src/renderer/lib/theme/register-custom-themes.ts",
       "packages/ui/src/diff-view/hunk-annotations.ts",
       "packages/ui/src/diff-view/index.tsx",
       "packages/ui/src/diff-view/item-sync.ts",
@@ -72,6 +73,7 @@ describe("Git diff renderer governance", () => {
       "packages/ui/src/diff-view/use-handle.ts",
       "packages/ui/src/diff-view/use-headers.tsx",
       "packages/ui/src/diff-view/use-item-apply.ts",
+      "packages/ui/src/diff-view/view-shell.tsx",
       "packages/ui/src/diff-view/worker.tsx",
     ]);
   });
@@ -80,6 +82,10 @@ describe("Git diff renderer governance", () => {
     const uiFiles = await sourceFiles(join(ROOT, "packages/ui/src"));
     const source = await readFile(
       join(ROOT, "packages/ui/src/diff-view/index.tsx"),
+      "utf8"
+    );
+    const shellSource = await readFile(
+      join(ROOT, "packages/ui/src/diff-view/view-shell.tsx"),
       "utf8"
     );
     const codeOptionsSource = await readFile(
@@ -104,7 +110,7 @@ describe("Git diff renderer governance", () => {
     const codeViewOptions = codeOptionsSource.match(
       /useMemo<CodeViewOptions<[^>]+>>\(\n\s+\(\) => \(\{([\s\S]*?)\n\s+\}\),\n\s+\[[\s\S]*?\n\s+\]\n\s+\);/u
     )?.[1];
-    const adapterSource = `${source}\n${codeOptionsSource}`;
+    const adapterSource = `${source}\n${shellSource}\n${codeOptionsSource}`;
 
     expect(uiFiles.map((file) => relative(ROOT, file))).not.toContain(
       "packages/ui/src/diff-view/diff-view-profile.ts"
@@ -194,10 +200,10 @@ describe("Git diff renderer governance", () => {
     expect(customCss).toContain("[data-diffs-header]");
     expect(customCss).toContain("[data-metadata] > [data-deletions-count]");
     expect(source).toContain("renderHeaderMetadata={renderHeaderMetadata}");
-    const codeViewClassName = source.match(
-      /<CodeView\s+className="([^"]+)"/u
+    const codeViewClassName = shellSource.match(
+      /export const PIER_DIFF_CODE_VIEW_CLASSNAME =\s*\n?\s*"([^"]+)"/u
     )?.[1];
-    expect(source).toContain('data-scrollbar="overlay"');
+    expect(shellSource).toContain('data-scrollbar="overlay"');
     expect(codeViewClassName).toContain("cv-scrollbar");
     expect(codeViewClassName).toContain("[scrollbar-gutter:auto]");
     const packageJson = JSON.parse(
@@ -211,7 +217,9 @@ describe("Git diff renderer governance", () => {
     expect(`${adapterSource}\n${appearanceSource}`).not.toMatch(
       /#[0-9a-f]{3,8}|rgb\(|hsl\(|oklch\(/iu
     );
-    expect(source).toContain("renderHeaderPrefix={renderHeaderPrefix}");
+    expect(shellSource).toContain(
+      "renderHeaderPrefix={props.renderHeaderPrefix}"
+    );
     expect(collapseSource).toContain("function CollapseDiffButton(");
     expect(collapseSource).toContain("shouldRotateCollapseChevron");
     expect(collapseSource).toContain("loading");
@@ -239,7 +247,9 @@ describe("Git diff renderer governance", () => {
     expect(workerSource).toContain(
       'worker.addEventListener("error", reportWorkerPoolFailure);'
     );
-    expect(source).toContain("disableWorkerPool={workerUnavailable}");
+    expect(shellSource).toContain(
+      "disableWorkerPool={props.workerUnavailable}"
+    );
   });
 
   it("命令式正文更新只允许存在于 packages/ui 适配器，并禁止第二套 worker 池或 Shadow DOM 读取", async () => {
@@ -253,10 +263,12 @@ describe("Git diff renderer governance", () => {
         join(ROOT, "packages/ui/src/diff-view/index.tsx"),
         join(ROOT, "packages/ui/src/diff-view/item-sync.ts"),
         join(ROOT, "packages/ui/src/diff-view/item-transition.ts"),
+        join(ROOT, "packages/ui/src/diff-view/code-view-runtime.ts"),
         join(ROOT, "packages/ui/src/diff-view/use-handle.ts"),
         join(ROOT, "packages/ui/src/diff-view/use-headers.tsx"),
         join(ROOT, "packages/ui/src/diff-view/use-item-apply.ts"),
         join(ROOT, "packages/ui/src/diff-view/use-code-options.ts"),
+        join(ROOT, "packages/ui/src/diff-view/view-shell.tsx"),
         // estimate 骨架注入 shadowRoot（金标准 pending UI）
         join(ROOT, "packages/ui/src/diff-view/estimate-skeleton.ts"),
         // 路径标题 mono + hover 下划线（shadow 内 [data-title]）
@@ -279,6 +291,9 @@ describe("Git diff renderer governance", () => {
     const adapter = [
       reviewSources.get(join(ROOT, "packages/ui/src/diff-view/index.tsx")),
       reviewSources.get(join(ROOT, "packages/ui/src/diff-view/item-sync.ts")),
+      reviewSources.get(
+        join(ROOT, "packages/ui/src/diff-view/code-view-runtime.ts")
+      ),
       reviewSources.get(join(ROOT, "packages/ui/src/diff-view/use-handle.ts")),
       reviewSources.get(
         join(ROOT, "packages/ui/src/diff-view/use-headers.tsx")
@@ -286,10 +301,11 @@ describe("Git diff renderer governance", () => {
       reviewSources.get(
         join(ROOT, "packages/ui/src/diff-view/use-item-apply.ts")
       ),
+      reviewSources.get(join(ROOT, "packages/ui/src/diff-view/view-shell.tsx")),
     ].join("\n");
     expect(adapter).toContain("getInstance()");
     expect(adapter).toContain("getRenderedItems()");
-    expect(adapter).toContain("initialItems={codeViewItems}");
+    expect(adapter).toContain("initialItems={props.codeViewItems}");
     expect(adapter).toContain("handle.updateItem(item)");
     // DiffsHub 对齐：成员变更走实例 API，禁止 id 列表 topology remount / 受控 items=。
     expect(adapter).toContain("syncCodeViewItems");
@@ -300,6 +316,8 @@ describe("Git diff renderer governance", () => {
     expect(adapter).toContain("suppressMembershipScrollRestore");
     expect(adapter).toContain("getSuppressMembershipScrollRestore");
     expect(adapter).toContain("shouldRestoreMembershipScrollTop");
+    expect(adapter).toContain("hardenCodeViewInstanceChanged");
+    expect(adapter).toContain("scheduleCodeViewMembershipLayoutFlush");
     // 宿主 wiring：pending 同步闸门接到 DiffView（state + hasPendingNavigation ref）
     const surfaceView = await readFile(
       join(ROOT, "src/plugins/builtin/git/renderer/review/surface-view.tsx"),

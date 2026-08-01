@@ -1,5 +1,9 @@
 import type { CodeViewHandle, SelectionSide } from "@pierre/diffs/react";
 import { DIFF_HEADER_HEIGHT_PX } from "./appearance.ts";
+import {
+  hardenCodeViewInstanceChanged,
+  scheduleCodeViewMembershipLayoutFlush,
+} from "./code-view-runtime.ts";
 import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import {
   hasSameCodeViewItemIdOrder,
@@ -214,6 +218,7 @@ export function applyCodeViewItemsAnchored(
   } = {}
 ): DiffViewAnchoredApplyResult {
   const instanceBefore = handle.getInstance();
+  hardenCodeViewInstanceChanged(instanceBefore);
   const viewportAnchor = captureCodeViewItemAnchor(instanceBefore);
   const contentChanged = codeViewItemsContentChanged(previousItems, nextItems);
   const accepted = syncCodeViewItems(handle, nextItems, previousItems);
@@ -221,6 +226,7 @@ export function applyCodeViewItemsAnchored(
     return { accepted: false, disposition: "noop" };
   }
   const instance = handle.getInstance();
+  hardenCodeViewInstanceChanged(instance);
   // membership 显式 flush 或任意正文版本变化：都要 remeasure 虚拟窗口
   const shouldFlush = options.flushLayout === true || contentChanged;
   if (options.focusId !== undefined) {
@@ -272,12 +278,11 @@ export function applyCodeViewItemsAnchored(
 function flushCodeViewMembershipLayout(
   instance: ReturnType<PierCodeViewHandle["getInstance"]>
 ): void {
-  // Pierre 1.2.x flushes item render managers after its first height
-  // reconciliation. A second immediate pass measures the populated DOM and
-  // commits the final virtual window before the browser can paint it.
-  for (let pass = 0; pass < MEMBERSHIP_LAYOUT_PASSES; pass += 1) {
-    instance?.render(true);
-  }
+  // Pierre 1.2.x：render(true) 内部 flushSync。membership apply 常在
+  // useLayoutEffect 中调用；React 19 禁止在 lifecycle 里再 flushSync。
+  // 命令式 setItems 仍同步；measure 放到 microtask，同一事件循环、commit 之后。
+  // 连续 apply 只保留最后一代 flush，避免对已拆/换代实例 render。
+  scheduleCodeViewMembershipLayoutFlush(instance, MEMBERSHIP_LAYOUT_PASSES);
 }
 
 /**

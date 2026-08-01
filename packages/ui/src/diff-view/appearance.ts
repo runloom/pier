@@ -338,14 +338,42 @@ export function diffFontMetrics(codeFontSize: string): {
 }
 
 /**
- * CodeView remount key for layout invariants only.
+ * Dual theme pair + colorMode identity for remount / render-watchdog.
+ * Pierre CodeView.onThemeChange only invalidates the element pool (no render).
+ */
+export function pierDiffThemeKey(parts: {
+  readonly codeThemes: {
+    readonly dark: string;
+    readonly light: string;
+  };
+  readonly colorMode: "dark" | "light";
+}): string {
+  return `${parts.codeThemes.dark}|${parts.codeThemes.light}|${parts.colorMode}`;
+}
+
+/**
+ * CodeView remount key for layout + theme invariants.
  * Item membership / stage / demand 不得进入此 key——成员变更走实例内 sync（见 diff-view-item-sync）。
+ * themeKey 必进：Pierre CodeView.onThemeChange 只 invalidate 元素池不 re-render。
  */
 export function pierDiffCodeViewKey(parts: {
   diffStyle: string;
   lineHeight: number;
   overflow: string;
   renderMode: string;
+  themeKey: string;
 }): string {
-  return `${parts.renderMode}\0selection=uncontrolled\0${parts.diffStyle}\0${parts.overflow}\0lh=${parts.lineHeight}`;
+  return `${parts.renderMode}\0selection=uncontrolled\0${parts.diffStyle}\0${parts.overflow}\0lh=${parts.lineHeight}\0theme=${parts.themeKey}`;
+}
+
+/** Watchdog generation: mode / theme / metrics / presentation. */
+export function pierDiffRenderEnvironment(parts: {
+  readonly diffStyle: string;
+  readonly lineHeight: number;
+  readonly metricsDiffHeaderHeight: number;
+  readonly overflow: string;
+  readonly renderMode: string;
+  readonly themeKey: string;
+}): string {
+  return `${parts.renderMode}\0${parts.themeKey}\0${parts.metricsDiffHeaderHeight}\0${parts.lineHeight}\0${parts.diffStyle}\0${parts.overflow}`;
 }

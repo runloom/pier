@@ -58,6 +58,8 @@ function ReviewDocumentsComponent(
     : preferredUncommittedReadingSurface(props.treeModel.visibleGroups);
   const [activeSurface, setActiveSurface] =
     useState<GitReviewReadingSurface>(initialSurface);
+  const activeSurfaceRef = useRef(activeSurface);
+  activeSurfaceRef.current = activeSurface;
   const [mountedSurfaces, setMountedSurfaces] = useState<
     ReadonlySet<GitReviewReadingSurface>
   >(() => new Set([initialSurface]));
@@ -71,8 +73,6 @@ function ReviewDocumentsComponent(
     useState<ReviewSurfaceNavigationRequest | null>(null);
   const [mutationTransition, setMutationTransition] =
     useState<PendingMutationTransition | null>(null);
-  const [handoffSourceSurface, setHandoffSourceSurface] =
-    useState<GitReviewReadingSurface | null>(null);
   const navigationRequestRef = useRef<ReviewSurfaceNavigationRequest | null>(
     null
   );
@@ -128,7 +128,6 @@ function ReviewDocumentsComponent(
     useReviewViewOptions();
   const selectSurface = useCallback((surface: GitReviewReadingSurface) => {
     userPickedSurfaceRef.current = true;
-    setHandoffSourceSurface(null);
     navigationRequestRef.current = null;
     setNavigationRequest(null);
     setMountedSurfaces((current) => {
@@ -138,6 +137,7 @@ function ReviewDocumentsComponent(
       return new Set([...current, surface]);
     });
     setActiveSurface(surface);
+    activeSurfaceRef.current = surface;
   }, []);
   const requestTreeOpen = useCallback(
     (entryKey: string, sectionKey: string, group: GitReviewGroup) => {
@@ -153,6 +153,12 @@ function ReviewDocumentsComponent(
         }
         return new Set([...current, surface]);
       });
+      // 树跨面点击：立即切面 + 立即可见新面（无旧面 handoff 叠层）。
+      // 切面后由目标面 beginNavigation 做 demand/scroll。
+      if (activeSurfaceRef.current !== surface) {
+        setActiveSurface(surface);
+        activeSurfaceRef.current = surface;
+      }
       navigationNonceRef.current += 1;
       const nonce = navigationNonceRef.current;
       setNavigationSeq(nonce);
@@ -330,15 +336,15 @@ function ReviewDocumentsComponent(
       if (request.activation === "preserve") {
         navigationRequestRef.current = null;
         setNavigationRequest(null);
-        setHandoffSourceSurface(null);
         return;
       }
-      setHandoffSourceSurface(
-        activeSurface === request.surface ? null : activeSurface
-      );
-      setActiveSurface(request.surface);
+      // activate 兜底：树路径已在 requestTreeOpen 切面；无 handoff 叠层。
+      if (activeSurfaceRef.current !== request.surface) {
+        setActiveSurface(request.surface);
+        activeSurfaceRef.current = request.surface;
+      }
     },
-    [activeSurface]
+    []
   );
   const handleNavigationSettled = useCallback(
     (request: ReviewSurfaceNavigationRequest) => {
@@ -347,7 +353,6 @@ function ReviewDocumentsComponent(
       }
       navigationRequestRef.current = null;
       setNavigationRequest(null);
-      setHandoffSourceSurface(null);
     },
     []
   );
@@ -447,7 +452,6 @@ function ReviewDocumentsComponent(
             return null;
           }
           const active = surface === activeSurface;
-          const handoffOverlay = surface === handoffSourceSurface;
           const navigationLeavingSurface =
             active &&
             navigationRequest?.activation === "activate" &&
@@ -461,8 +465,7 @@ function ReviewDocumentsComponent(
               key={surface}
               style={{
                 pointerEvents: active ? "auto" : "none",
-                visibility: active || handoffOverlay ? "visible" : "hidden",
-                zIndex: handoffOverlay ? 1 : 0,
+                visibility: active ? "visible" : "hidden",
               }}
             >
               <ReviewSurface

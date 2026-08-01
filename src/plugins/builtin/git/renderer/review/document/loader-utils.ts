@@ -22,16 +22,24 @@ export function sameEntries(
   );
 }
 
+/**
+ * 规范化 demand 窗口 entryKey。
+ *
+ * stage/unstage 全量、watch 刷新会让条目跨阅读面移动或消失；调用方 ref 里的
+ * visible/buffered 键可能短暂落后于 loader `#resources`。与 setProtectedEntryKey
+ * 一样 **软丢弃** 不存在的键，禁止 throw 打爆 UI（金标准：mutation TOCTOU 非致命）。
+ * 仅 filter，不做日志（避免滚动热路径噪声）。
+ */
 export function validateReviewDocumentDemand(
   entryKeys: readonly string[],
-  label: string,
+  _label: string,
   hasEntry: (entryKey: string) => boolean
 ): string[] {
   const unique: string[] = [];
   const seen = new Set<string>();
   for (const entryKey of entryKeys) {
     if (!hasEntry(entryKey)) {
-      throw new Error(`Git Review ${label}窗口条目不存在: ${entryKey}`);
+      continue;
     }
     if (!seen.has(entryKey)) {
       seen.add(entryKey);

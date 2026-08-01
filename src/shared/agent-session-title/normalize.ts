@@ -46,17 +46,20 @@ export function normalizeAgentSessionTitle(
   return trimmed;
 }
 
-/** OSC → tooltip 用；空 / 含换行则丢弃，过长截断。 */
+/**
+ * OSC 0/2 → tab short/long / tooltip。
+ * 折叠空白与换行（不整段丢弃）；仅超安全上限时硬裁。视觉截断交给 CSS。
+ */
 export function truncateTerminalTitleForTooltip(
   terminalTitle: string | null | undefined
 ): string | undefined {
-  const trimmed = terminalTitle?.trim();
-  if (!trimmed || trimmed.includes("\n")) {
+  const collapsed = terminalTitle?.replace(/\s+/g, " ").trim();
+  if (!collapsed) {
     return;
   }
-  const points = Array.from(trimmed);
+  const points = Array.from(collapsed);
   if (points.length <= MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH) {
-    return trimmed;
+    return collapsed;
   }
   return `${points
     .slice(0, MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH - 1)

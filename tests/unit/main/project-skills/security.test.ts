@@ -611,17 +611,15 @@ describe("project-skills security: cross-profile isolation", () => {
       expect(await storeB.readOwnership(rootKey)).toBeNull();
 
       // Profile B must not adopt profile A's projection into its ownership.
+      // Launch still proceeds (unmanaged-conflict is settings-only); the
+      // ledger stays empty so B never claims A's object.
       const serviceB = createService(userDataB);
       const ready = await serviceB.ensureReady({
         projectRef: await projectRef(),
         agentId: "codex",
         launchAttemptId: "profile-b-attempt",
       });
-      expect(ready.status).toBe("blocked");
-      if (ready.status !== "blocked") return;
-      expect(
-        ready.issueSummary.some((i) => i.code === "unmanaged-conflict")
-      ).toBe(true);
+      expect(ready.status).toBe("ready");
 
       expect(await storeB.readOwnership(rootKey)).toBeNull();
 

@@ -133,13 +133,14 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       tool: "native",
       waiting: "native",
       error: "native",
-      completed: "unsupported",
+      completed: "native",
       interrupted: "native",
       subagent: "unsupported",
     },
     eventMappings: facts(
       nativeFact("lifecycle", "session_start", "SessionStart"),
       nativeFact("lifecycle", "session_shutdown", "SessionEnd"),
+      nativeFact("ready", "agent_end.completed", "TurnCompleted"),
       nativeFact("ready", "session_stop", "Stop"),
       nativeFact("processing", "before_agent_start", "PromptSubmit"),
       nativeFact("processing", "agent_end.willContinue", "processing"),
@@ -148,7 +149,8 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       nativeFact("waiting", "tool_approval_resolved", "InteractionResolved"),
       nativeFact("processing", "tool_execution_end", "ToolComplete"),
       nativeFact("error", "agent_end.error", "error"),
-      nativeFact("interrupted", "agent_end.aborted", "TurnInterrupted")
+      nativeFact("interrupted", "agent_end.aborted", "TurnInterrupted"),
+      nativeFact("completed", "agent_end.completed", "TurnCompleted")
     ),
     upstream: sourceCommit(
       "https://omp.sh/docs",

@@ -1,8 +1,5 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import {
-  DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME,
-  EXTRACT_STDIN_META_SCRIPT_NAME,
-} from "../../hooks-install.ts";
+import { EXTRACT_STDIN_META_SCRIPT_NAME } from "../../hooks-install.ts";
 import {
   PIER_AGENT_HOOKS_DIR_MARK,
   PIER_HOOK_GEN_MARK,
@@ -300,17 +297,12 @@ export function pierHookCommandV3WithStdinOutcomeDispatch(
 }
 
 /**
- * Claude UserPromptSubmit：emit 之后向 stdout 回写 hookSpecificOutput.sessionTitle，
- * 让 Claude 自己的会话列表也有个像样的名字。
+ * Claude UserPromptSubmit：只上报 PromptSubmit 身份/回合信号。
  *
- * **这是对第三方 UI 的顺带写入，不是 Pier 标题的真源**——Pier 的 tab 走 FA。
- * 因此这里只做「剥标记 + 挡寒暄 + 硬截断」这个便宜子集，**不复刻**规则层的
- * 首句/前缀/名词化流水线。实现落在共享运行时
- * `derive-claude-session-title`（`~/.pier/hooks/vN`，启动时只前进安装）；
- * 全局 hooks 命令只引用 `${PIER_AGENT_HOOKS_DIR}/…`，不嵌 Electron 绝对路径。
+ * 金标准：不再双写 hookSpecificOutput.sessionTitle（旧 derive 脚本已下线）。
+ * 终端 tab 标题由进程 OSC 0/2 自管；产品 sessionTitle 只认 provider 与 user。
  */
 export function pierClaudeUserPromptSubmitCommand(agentId: AgentKind): string {
-  const deriveScript = `\${${PIER_AGENT_HOOKS_DIR_MARK}}/${DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME}`;
   return [
     ...stdinIdentityExtractionLines(),
     pierHookCommand(
@@ -319,15 +311,13 @@ export function pierClaudeUserPromptSubmitCommand(agentId: AgentKind): string {
       "UserPromptSubmit",
       ...STDIN_IDENTITY_PAYLOAD_ARGS
     ),
-    `printf '%s' "$_pier_payload" | { if [ -x "${deriveScript}" ]; then "${deriveScript}"; fi; } 2>/dev/null || true`,
   ].join("; ");
 }
 
-/** Claude 专属 sessionTitle 双写的严格 v3 版本。 */
+/** Claude UserPromptSubmit 严格 v3：与上同，仅 emit，无标题双写。 */
 export function pierClaudeUserPromptSubmitCommandV3(
   agentId: AgentKind
 ): string {
-  const deriveScript = `\${${PIER_AGENT_HOOKS_DIR_MARK}}/${DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME}`;
   return [
     ...stdinIdentityExtractionLines({
       actorHintFromAgentId: true,
@@ -348,7 +338,6 @@ export function pierClaudeUserPromptSubmitCommandV3(
       transcriptPath: "$_pier_transcript_path",
       turnId: "$_pier_turn_id",
     } as unknown as PierHookCommandV3Spec),
-    `printf '%s' "$_pier_payload" | { if [ -x "${deriveScript}" ]; then "${deriveScript}"; fi; } 2>/dev/null || true`,
   ].join("; ");
 }
 

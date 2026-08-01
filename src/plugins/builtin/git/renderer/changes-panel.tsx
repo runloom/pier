@@ -336,16 +336,15 @@ function GitChangesPanelBody({
     );
   }
   if (state.kind === "error") {
+    // index 失败时 entries 恒为空：与成功空态一致，不传树 props（无空侧栏）。
     return (
       <GitReviewPanelLayout
         context={context}
         contextId={source.contextId}
         gitRootPath={source.gitRootPath}
         headerLeading={scopeSwitcher}
-        onOpenPath={noopOpenPath}
         setSidebarCollapsed={setSidebarCollapsed}
         sidebarCollapsed={sidebarCollapsed}
-        treeModel={treeModel}
       >
         <ReviewFailureEmpty
           context={context}
@@ -388,16 +387,15 @@ function GitChangesPanelBody({
       </div>
     );
   }
+  // 无变更：不挂树侧栏（避免空目录树黑区）；主区 Empty 为唯一占位。
   return (
     <GitReviewPanelLayout
       context={context}
       contextId={source.contextId}
       gitRootPath={source.gitRootPath}
       headerLeading={scopeSwitcher}
-      onOpenPath={noopOpenPath}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
-      treeModel={treeModel}
     >
       <div
         aria-busy={state.refreshing || undefined}

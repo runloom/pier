@@ -7,14 +7,27 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@pier/ui/item.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type {
   ProjectSkillView,
   UnmanagedSkillView,
   UserGlobalSkillView,
 } from "@shared/contracts/project-skills.ts";
+import { CircleHelp } from "lucide-react";
 import { useId } from "react";
 import { AgentEffectSummary, sourceLabel, type Translate } from "./shared.tsx";
+
+function unmanagedConflictTarget(skill: ProjectSkillView): string | undefined {
+  for (const id of skill.issueIds) {
+    if (!id.startsWith("unmanaged-conflict:")) continue;
+    // id format: code:skillId:adapterKind:relativeTarget
+    const parts = id.split(":");
+    const target = parts.slice(3).join(":");
+    if (target.length > 0) return target;
+  }
+  return;
+}
 
 /**
  * Unified-list rows (design v8 §7.3 / IA v5), split from skills-project-detail.tsx
@@ -111,6 +124,29 @@ export function ManagedSkillRow({
               <Badge variant="destructive">
                 {t("settings.skills.missingBadge")}
               </Badge>
+            ) : null}
+            {skill.issueIds.some((id) =>
+              id.startsWith("unmanaged-conflict")
+            ) ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    aria-label={t("settings.skills.unmanagedConflictHelpLabel")}
+                    className="cursor-help gap-0.5"
+                    variant="outline"
+                  >
+                    {t("settings.skills.unmanagedConflictBadge")}
+                    <CircleHelp aria-hidden data-icon="inline-end" />
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-64 text-left">
+                  {t("settings.skills.unmanagedConflictHint", {
+                    target:
+                      unmanagedConflictTarget(skill) ??
+                      `.agents/skills/${skill.id}`,
+                  })}
+                </TooltipContent>
+              </Tooltip>
             ) : null}
           </ItemTitle>
           <ItemDescription>{skill.description || skill.id}</ItemDescription>

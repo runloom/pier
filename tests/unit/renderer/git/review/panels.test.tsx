@@ -1,5 +1,6 @@
 import type {
   PierDiffViewAnchor,
+  PierDiffViewAppearance,
   PierDiffViewHandle,
   PierDiffViewItem,
   PierDiffViewRenderWindow,
@@ -109,7 +110,7 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
   PIER_DIFF_DEFAULT_ESTIMATE_LINES: 16,
   PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX: 360,
   PierDiffView: (props: {
-    appearance: RendererPluginAppearance;
+    appearance: PierDiffViewAppearance;
     items: readonly PierDiffViewItem[];
     onRenderWindowChange?: (window: PierDiffViewRenderWindow) => void;
     onScroll?: () => void;
@@ -251,7 +252,11 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
           renderedItems.filter((item) => item.stageControl != null).length
         }
         data-testid="pierre-diff"
-        data-theme={props.appearance.codeTheme}
+        data-theme={
+          props.appearance.colorMode === "light"
+            ? props.appearance.codeThemes.light
+            : props.appearance.codeThemes.dark
+        }
       >
         {renderedItems
           .map((item) => item.stateNotice ?? item.patch ?? "")
@@ -493,6 +498,7 @@ function pluginContext(input: {
 }): RendererPluginContext {
   const appearance: RendererPluginAppearance = input.appearance ?? {
     codeTheme: "github-dark",
+    codeThemes: { dark: "github-dark", light: "github-light" },
     density: "compact",
     language: "en",
     locale: "en",
@@ -946,11 +952,30 @@ describe("Git review panel", () => {
     expect(
       view.container.querySelector('[data-slot="file-panel-header"]')
     ).toBeInstanceOf(HTMLElement);
+    // 冷加载：侧栏树骨架可见
+    expect(
+      view.getByRole("status", { name: "Loading changed files" })
+    ).toBeVisible();
     pendingIndex.resolve(indexResult([]));
     await expect(view.findByText("No changes")).resolves.toBeVisible();
     expect(
       view.container.querySelectorAll('[data-slot="file-panel-header"]')
     ).toHaveLength(1);
+    // 空态：隐藏变更树侧栏，主区 Empty 为唯一占位
+    expect(
+      view.queryByRole("status", { name: "Loading changed files" })
+    ).toBeNull();
+    expect(
+      view.container.querySelector(
+        'file-tree-container[data-slot="pier-file-tree"]'
+      )
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Collapse changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Find in changed files" })
+    ).toBeNull();
   });
 
   it("当前阅读面没有成员时显示明确空态而不是空 CodeView", async () => {
@@ -965,6 +990,21 @@ describe("Git review panel", () => {
     await expect(view.findByText("No changes")).resolves.toBeVisible();
     expect(
       view.container.querySelector('[data-testid="pierre-diff"]')
+    ).toBeNull();
+    // 方案 A：无变更不挂空目录树，也不展示树折叠/搜索 chrome。
+    expect(
+      view.container.querySelector(
+        'file-tree-container[data-slot="pier-file-tree"]'
+      )
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Collapse changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Expand changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Find in changed files" })
     ).toBeNull();
   });
 
@@ -1057,6 +1097,21 @@ describe("Git review panel", () => {
     expect(
       view.container.querySelector('[data-testid="pierre-diff"]')
     ).toBeNull();
+    // files→empty 过渡：权威空态下树与折叠/搜索 chrome 一并消失
+    expect(
+      view.container.querySelector(
+        'file-tree-container[data-slot="pier-file-tree"]'
+      )
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Collapse changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Expand changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Find in changed files" })
+    ).toBeNull();
   });
 
   it("初次 index 读取失败时可重试并进入 Review 正文", async () => {
@@ -1084,6 +1139,18 @@ describe("Git review panel", () => {
     ).toBeVisible();
     expect(view.queryByRole("alert")).toBeNull();
     expect(view.queryByText("initial index failed")).toBeNull();
+    // 错误态与成功空态一致：不挂变更树与树 chrome
+    expect(
+      view.container.querySelector(
+        'file-tree-container[data-slot="pier-file-tree"]'
+      )
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Collapse changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Find in changed files" })
+    ).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
     expect(view.queryByRole("button", { name: "Retry" })).toBeNull();
 
@@ -2717,7 +2784,7 @@ describe("Git review panel", () => {
     expect(diffViewRuntime.unmounts).toBe(unmountsBefore);
   });
 
-  it("跨阅读面点击：目标正文水合前保留当前阅读面，水合后原子切换并定位", async () => {
+  it("跨阅读面点击：目标面立即切换，正文水合后保持定位", async () => {
     const stagedPath = "src/far-staged.ts";
     const stagedSectionKey = "staged:far";
     const stagedEntry = entry(1, stagedPath, [
@@ -2756,18 +2823,22 @@ describe("Git review panel", () => {
     fireEvent.click(findTreeItem(view.container, "far-staged.ts"));
     await waitFor(() => expect(stagedRequested).toBe(true));
 
-    expect(
-      view.container.querySelector(
-        '[data-git-review-surface="index"][aria-hidden="false"]'
-      )
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(
+          '[data-git-review-surface="staged"][aria-hidden="false"]'
+        )
+      ).toBeInTheDocument()
+    );
     expect(activeDiff(view.container)).toHaveAttribute(
       "data-item-ids",
-      "section:0"
+      stagedSectionKey
     );
-    expect(
-      scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
-    ).toHaveLength(0);
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
+      ).toHaveLength(1)
+    );
 
     act(() =>
       stagedPending.resolve(
@@ -2797,11 +2868,9 @@ describe("Git review panel", () => {
       "data-item-ids",
       stagedSectionKey
     );
-    await waitFor(() =>
-      expect(
-        scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
-      ).toHaveLength(1)
-    );
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
+    ).toHaveLength(1);
   });
 
   it("连续点击不同树文件时 boost demand 并定位最新目标", async () => {
@@ -3616,6 +3685,7 @@ describe("Git review panel", () => {
     const context = pluginContext({
       appearance: {
         codeTheme: "github-dark",
+        codeThemes: { dark: "github-dark", light: "github-light" },
         density: "compact",
         language: "system",
         locale: "en",

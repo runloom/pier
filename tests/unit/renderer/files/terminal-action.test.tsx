@@ -112,12 +112,16 @@ function createMockContext(overrides?: {
     appearance: {
       current: vi.fn(() => ({
         codeTheme: "github-dark",
+        codeThemes: { dark: "github-dark", light: "github-light" },
+        density: "compact" as const,
+        language: "en",
+        locale: "en",
+        theme: "dark" as const,
         typography: {
+          baseFontSize: "16px",
           codeFontFamily: "JetBrains Mono",
-          codeFontSize: 13,
-          monoFontFamily: "JetBrains Mono",
-          monoFontSize: 13,
-          uiFontFamily: "system-ui",
+          codeFontSize: "13px",
+          fontFamily: "system-ui",
         },
       })),
       onDidChange: vi.fn(() => vi.fn()),

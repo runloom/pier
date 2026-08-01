@@ -21,6 +21,7 @@ import {
 import {
   enumerateProjectDiscoveryRoots,
   enumerateUserGlobalSkills,
+  type ProjectionPresence,
 } from "./enumeration.ts";
 import { peekSkillMetadata } from "./frontmatter.ts";
 import type { ProjectSkillsHealthService, SnapshotHealth } from "./health.ts";
@@ -35,6 +36,30 @@ import type { PierBindingsChannel } from "./pier-bindings/index.ts";
 import { analyzeLibrarySkill } from "./risk.ts";
 import type { ProjectSkillsStore } from "./store/index.ts";
 import type { SystemSkillsChannel } from "./system-skills/index.ts";
+
+/**
+ * Skill-scoped issue ids for a system row: the projection is unowned when
+ * the ledger has no record for it under any discovery root (correct link
+ * with a lost ledger, or a foreign object at the projection path). Mirror
+ * of the repair planner's unmanaged-conflict id for the same target.
+ * Settings-only: launch is never refused for this state.
+ */
+function systemProjectionIssueIds(args: {
+  ownedRoots: readonly string[];
+  presence: ProjectionPresence;
+  skillId: string;
+}): string[] {
+  const { ownedRoots, presence, skillId } = args;
+  const unownedRoots = presence.unmanaged.filter(
+    (entry) =>
+      entry.directoryName === skillId &&
+      entry.root === ".agents/skills" &&
+      !ownedRoots.some((root) => root === entry.root)
+  );
+  return unownedRoots.map((entry) =>
+    ["unmanaged-conflict", skillId, "", `${entry.root}/${skillId}`].join(":")
+  );
+}
 
 /**
  * Snapshot assembly (design v8 §3.6 / §5.1), split from service.ts
@@ -299,6 +324,15 @@ export async function buildProjectSnapshot(
       view.id,
       view.contentDigest ?? ""
     );
+    // A system projection still unowned (correct link, lost ledger, or
+    // foreign object at the projection path) is a skill-scoped integrity
+    // issue — settings-only. Launch is never refused; the badge surfaces
+    // residual state until the user resolves it in settings.
+    const issueIds = systemProjectionIssueIds({
+      ownedRoots: presence.ownedProjectedRoots.get(view.id) ?? [],
+      presence,
+      skillId: view.id,
+    });
     skills.push({
       id: view.id,
       name: meta.name,
@@ -315,7 +349,7 @@ export async function buildProjectSnapshot(
       riskSummary: analysis?.riskSummary ?? null,
       directorySummary: analysis?.directorySummary ?? null,
       effects: matrix.managedEffects.get(view.id) ?? [],
-      issueIds: [],
+      issueIds,
     });
   }
   for (const view of pierBoundViews) {

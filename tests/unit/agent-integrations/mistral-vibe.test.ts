@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
+  PIER_HOOK_COMMAND_GENERATION,
   pierHooksCurrentDir,
 } from "../../../src/main/services/agents/hooks-install.ts";
 import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
@@ -15,6 +16,7 @@ import { pathForHookSpawn } from "./hook-spawn-path.ts";
 const MARK = "PIER_AGENT_HOOKS_DIR";
 const NATIVE_TYPES = ["pre_tool", "post_tool", "post_agent"];
 const ORIGINAL_PATH = process.env.PATH;
+const HIGHER_HOOK_GENERATION = PIER_HOOK_COMMAND_GENERATION + 1;
 
 let homeDir: string;
 
@@ -222,7 +224,7 @@ describe("buildVibeHookBlock / withPierVibeHooks", () => {
       VIBE_BLOCK_MARKERS.begin,
       "[[hooks]]",
       'type = "post_agent"',
-      `command = "pier-hook-gen=11; \${PIER_AGENT_HOOKS_DIR}/emit"`,
+      `command = "pier-hook-gen=${HIGHER_HOOK_GENERATION}; \${PIER_AGENT_HOOKS_DIR}/emit"`,
       VIBE_BLOCK_MARKERS.end,
       "",
     ].join("\n");

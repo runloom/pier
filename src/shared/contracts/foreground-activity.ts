@@ -53,23 +53,15 @@ const baseActivityFields = {
 };
 
 /**
- * 标题来源即优先级秩：prompt(1) < provider(2) < user(3)。
+ * 产品会话名来源（≠ 终端 OSC tab 标题）。
  *
- * 三个来源都是「已经存在的事实」，宿主不额外推断：
- * - `prompt`：会话自己的首条 prompt，确定性截断。
- * - `provider`：agent 自己写出的会话名（如 Claude transcript 的 `ai-title`）。
- *   属于「尽量用 agent 自身能力」——不起进程、不花 token、接不到就没有。
- * - `user`：用户改名，永远最高。
+ * - `provider`：agent 自己写出的会话名（如 Claude `ai-title`）。不起进程、不花 token。
+ * - `user`：用户改名（可钉 tab），永远最高。
  *
- * 仍然没有模型精修层：宿主不为了标题去调模型。历史值 `auto` / `rule` /
- * `model` 一律等价 `prompt`，读取期由 normalizeAgentSessionTitleSource
- * 归一，永不写回。
+ * 历史 `prompt` / `auto` / `rule` / `model` 读取期丢弃（normalize → undefined），
+ * 永不写回。宿主不为标题调模型，也不再从首条 prompt 派生。
  */
-export const agentSessionTitleSourceSchema = z.enum([
-  "prompt",
-  "provider",
-  "user",
-]);
+export const agentSessionTitleSourceSchema = z.enum(["provider", "user"]);
 
 const agentActivitySchema = z
   .object({

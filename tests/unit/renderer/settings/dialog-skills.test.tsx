@@ -466,6 +466,38 @@ describe("settings dialog skills section", () => {
     expect(screen.queryAllByRole("switch")).toHaveLength(0);
   });
 
+  it("flags an unowned system projection with a path-in-use help badge", async () => {
+    fixtures.skills = [
+      ...fixtures.skills,
+      {
+        id: "pier-canvas",
+        enabled: true,
+        delivery: null,
+        name: "Pier Canvas",
+        description: "Canvas capability",
+        managedBy: "pier-system",
+        contentDigest: `sha256:${"b".repeat(64)}`,
+        effects: [],
+        // Lost-ledger / foreign-object state surfaced by the snapshot builder.
+        issueIds: [
+          "unmanaged-conflict:pier-canvas::.agents/skills/pier-canvas",
+        ],
+        fileCount: 1,
+        totalBytes: 100,
+        riskSummary: null,
+        source: { type: "local-import" },
+      },
+    ];
+    renderDialog();
+    fireEvent.click(await screen.findByText("demo"));
+    await waitFor(() => expect(projectSkillsApi.snapshot).toHaveBeenCalled());
+    // Non-blocking hygiene: badge label only; guidance lives in the help tooltip.
+    expect(screen.getByText(/路径占用|Path in use/)).toBeDefined();
+    expect(
+      screen.getByLabelText(/路径占用说明|About path in use/)
+    ).toBeDefined();
+  });
+
   it("does not render a global Apply bar", async () => {
     renderDialog();
     fireEvent.click(await screen.findByText("demo"));

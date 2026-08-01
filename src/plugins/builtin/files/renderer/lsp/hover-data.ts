@@ -1,4 +1,6 @@
+import { syntaxTree } from "@codemirror/language";
 import type { LSPPlugin, WorkspaceMapping } from "@codemirror/lsp-client";
+import type { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { highlightFilesLspCodeToHtml } from "./code-highlight.ts";
 import { decodeFilesLspFileUriPath } from "./definition-preview.ts";
@@ -19,6 +21,88 @@ export interface FilesLspHoverCandidate {
   to: number;
 }
 
+/** Lezer node names that denote a full string / path literal (not word pieces). */
+const STRING_NODE_NAMES = new Set([
+  "ByteString",
+  "RawString",
+  "String",
+  "TemplateString",
+  "string",
+]);
+
+/** Inside these, prefer identifier/word ranges over the outer template string. */
+const STRING_INTERPOLATION_NODE_NAMES = new Set([
+  "Interpolation",
+  "TemplateSubstitution",
+  "substitution",
+]);
+
+/**
+ * CodeMirror ranges are half-open [from, to). Empty (from === to) only covers
+ * that single position (punctuation / no-word fallback).
+ */
+export function filesLspHoverRangeContains(
+  from: number,
+  to: number,
+  position: number
+): boolean {
+  if (from === to) {
+    return position === from;
+  }
+  return position >= from && position < to;
+}
+
+/**
+ * Prefer a full string literal from the syntax tree (import paths, URLs) so
+ * `apply-tokens` is one candidate, not word fragments. Skip template
+ * interpolations (`${…}`) so identifiers inside keep word ranges.
+ */
+export function filesLspStringRangeAt(
+  state: EditorState,
+  position: number
+): { from: number; to: number } | null {
+  const docLength = state.doc.length;
+  if (position < 0 || position > docLength) {
+    return null;
+  }
+  const tree = syntaxTree(state);
+  if (tree.length === 0) {
+    return null;
+  }
+  // side -1 first: prefer the node ending at a boundary (closing quote).
+  for (const side of [-1, 1] as const) {
+    const start = tree.resolveInner(position, side);
+    for (
+      let current: typeof start | null = start;
+      current;
+      current = current.parent
+    ) {
+      // Inside `${…}`: do not expand to the outer template string.
+      if (STRING_INTERPOLATION_NODE_NAMES.has(current.name)) {
+        return null;
+      }
+      if (STRING_NODE_NAMES.has(current.name) && current.to > current.from) {
+        return { from: current.from, to: current.to };
+      }
+    }
+  }
+  return null;
+}
+
+export function filesLspHoverCandidateAtPosition(
+  view: EditorView,
+  position: number
+): FilesLspHoverCandidate {
+  const stringRange = filesLspStringRangeAt(view.state, position);
+  if (stringRange) {
+    return { from: stringRange.from, position, to: stringRange.to };
+  }
+  const word = view.state.wordAt(position);
+  return word
+    ? { from: word.from, position, to: word.to }
+    : { from: position, position, to: position };
+}
+
 export function filesLspHoverCandidateAt(
   view: EditorView,
   x: number,
@@ -28,10 +112,7 @@ export function filesLspHoverCandidateAt(
   if (position === null) {
     return null;
   }
-  const word = view.state.wordAt(position);
-  return word
-    ? { from: word.from, position, to: word.to }
-    : { from: position, position, to: position };
+  return filesLspHoverCandidateAtPosition(view, position);
 }
 
 export function filesLspHoverParams(
@@ -44,11 +125,38 @@ export function filesLspHoverParams(
   };
 }
 
+/**
+ * Same hover symbol when ranges match, or when the pointer is still inside an
+ * already-expanded anchor (server Hover.range / full string) even if the new
+ * probe was a smaller wordAt fragment.
+ */
 export function sameFilesLspHoverCandidate(
   left: FilesLspHoverCandidate | null,
   right: FilesLspHoverCandidate
 ): boolean {
-  return left?.from === right.from && left.to === right.to;
+  if (!left) {
+    return false;
+  }
+  if (left.from === right.from && left.to === right.to) {
+    return true;
+  }
+  return filesLspHoverRangeContains(left.from, left.to, right.position);
+}
+
+/** Prefer the wider of two ranges that cover the same pointer (server expand). */
+export function preferFilesLspHoverCandidateRange(
+  anchor: FilesLspHoverCandidate | null,
+  probe: FilesLspHoverCandidate
+): FilesLspHoverCandidate {
+  if (!(anchor && sameFilesLspHoverCandidate(anchor, probe))) {
+    return probe;
+  }
+  const anchorSpan = anchor.to - anchor.from;
+  const probeSpan = probe.to - probe.from;
+  if (anchorSpan > probeSpan) {
+    return { from: anchor.from, position: probe.position, to: anchor.to };
+  }
+  return probe;
 }
 
 export interface FilesLspDefinitionResponseTarget {

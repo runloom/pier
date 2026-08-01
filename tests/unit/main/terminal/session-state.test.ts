@@ -163,13 +163,13 @@ describe("terminal session state", () => {
     await expect(
       setTerminalPanelSessionTitle("main", "terminal-title", {
         sessionId: "session-new",
-        source: "prompt",
+        source: "provider",
         title: "新会话",
       })
     ).resolves.toMatchObject({
       applied: true,
       sessionId: "session-new",
-      source: "prompt",
+      source: "provider",
       title: "新会话",
     });
   });

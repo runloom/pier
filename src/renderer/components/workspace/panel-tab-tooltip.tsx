@@ -134,6 +134,45 @@ export function tabAriaLabel(
   return parts.join(", ");
 }
 
+/**
+ * Running 态指示。
+ * - dockview tab：视觉在外层 `.dv-tab::before`（与选中线同盒、全宽贴边）；本节点仅 a11y + 状态锚点。
+ * - overflow 菜单：无 `.dv-tab`，用 `--menu` 自绘轨。
+ */
+function tabRunningTopBar(
+  displayLabel: string,
+  options?: { preserveSemanticColor?: boolean }
+): ReactNode {
+  const isMenu = Boolean(options?.preserveSemanticColor);
+  return (
+    <span
+      aria-label={displayLabel}
+      className={cn(
+        "pier-tab-running-bar pointer-events-none absolute overflow-hidden",
+        isMenu && "pier-tab-running-bar--menu"
+      )}
+      data-panel-tab-state-indicator="running"
+      data-tab-status="running"
+      role="img"
+    >
+      {isMenu ? (
+        <>
+          <span
+            aria-hidden="true"
+            className="pier-tab-running-bar-track absolute inset-0"
+            data-panel-tab-running-track
+          />
+          <span
+            aria-hidden="true"
+            className="pier-tab-running-bar-segment absolute inset-y-0 left-0 w-1/4"
+            data-panel-tab-running-segment
+          />
+        </>
+      ) : null}
+    </span>
+  );
+}
+
 export function tabStatusIndicator(
   status: PanelTabStatus,
   label: string | undefined,
@@ -143,6 +182,9 @@ export function tabStatusIndicator(
     return null;
   }
   const displayLabel = label ?? runtimeStatusLabel(status);
+  if (status === "running") {
+    return tabRunningTopBar(displayLabel, options);
+  }
   const visual = runtimeStatusVisual(status);
   const Icon = visual.Icon;
   const textClassName = options?.preserveSemanticColor

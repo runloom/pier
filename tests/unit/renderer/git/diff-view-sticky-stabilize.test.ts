@@ -23,10 +23,12 @@ describe("diff header metrics", () => {
     const small = pierDiffCodeViewKey({
       ...base,
       lineHeight: diffFontMetrics("13px").lineHeight,
+      themeKey: "github-dark|github-light|dark",
     });
     const large = pierDiffCodeViewKey({
       ...base,
       lineHeight: diffFontMetrics("16px").lineHeight,
+      themeKey: "github-dark|github-light|dark",
     });
     expect(small).not.toBe(large);
     expect(small).toContain("lh=");
@@ -39,6 +41,7 @@ describe("diff header metrics", () => {
       lineHeight: 22.75,
       overflow: "scroll",
       renderMode: "worker",
+      themeKey: "github-dark|github-light|dark",
     });
     expect(key).not.toContain("topology");
     expect(key).toBe(
@@ -47,8 +50,27 @@ describe("diff header metrics", () => {
         lineHeight: 22.75,
         overflow: "scroll",
         renderMode: "worker",
+        themeKey: "github-dark|github-light|dark",
       })
     );
+  });
+
+  it("pierDiffCodeViewKey remounts when color mode flips", () => {
+    const dark = pierDiffCodeViewKey({
+      diffStyle: "split",
+      lineHeight: 22.75,
+      overflow: "scroll",
+      renderMode: "worker",
+      themeKey: "github-dark|github-light|dark",
+    });
+    const light = pierDiffCodeViewKey({
+      diffStyle: "split",
+      lineHeight: 22.75,
+      overflow: "scroll",
+      renderMode: "worker",
+      themeKey: "github-dark|github-light|light",
+    });
+    expect(dark).not.toBe(light);
   });
 });
 

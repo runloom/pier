@@ -36,11 +36,7 @@ export const CLOSE_COOLDOWN_MS = 5000;
 export const SESSION_END_COOLDOWN_MS = 1500;
 /** hook 静默 30min → 清除不再可信的 status（活动证据仍保留, 计数 0）。 */
 export const HOOK_FRESH_TTL_MS = 30 * 60 * 1000;
-/**
- * 新建层的消抖隐藏时长（防瞬时闪条）。hook 层用于 SessionStart；
- * launch 层一律适用——`omp --version` 这类瞬时命令不闪（loomdesk
- * starting 相位同款语义）。
- */
+/** 新建层消抖隐藏（hook SessionStart / launch 瞬时命令不闪）。 */
 export const VISIBILITY_DEBOUNCE_MS = 250;
 
 /**
@@ -148,6 +144,7 @@ export interface HookScope {
    */
   completionObservedAt: number | undefined;
   currentTurnId: string | undefined;
+  deferredReady: boolean;
   /** 当前 scope 的主会话身份事实；hook.identity 只是选中 scope 的镜像。 */
   identity: HookIdentityFacts;
   interactionHistoryIncomplete: boolean;
@@ -312,6 +309,7 @@ export function newHookScope(
     completionObserved: false,
     completionObservedAt: undefined,
     currentTurnId: undefined,
+    deferredReady: false,
     identity,
     interactionHistoryIncomplete: false,
     key,

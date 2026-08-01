@@ -20,10 +20,7 @@ import {
   withAgentHooksInstallLock,
 } from "./hooks-install-lock.ts";
 import { buildExtractStdinMetaScript } from "./hooks-stdin-script.ts";
-import {
-  buildDeriveClaudeSessionTitleScript,
-  PIER_HOOK_COMMAND_GENERATION,
-} from "./hooks-title-script.ts";
+import { PIER_HOOK_COMMAND_GENERATION } from "./hooks-title-script.ts";
 
 export {
   AgentHooksInstallLockBusy,
@@ -31,10 +28,7 @@ export {
   withAgentHooksInstallLock,
 } from "./hooks-install-lock.ts";
 export { buildExtractStdinMetaScript } from "./hooks-stdin-script.ts";
-export {
-  buildDeriveClaudeSessionTitleScript,
-  PIER_HOOK_COMMAND_GENERATION,
-} from "./hooks-title-script.ts";
+export { PIER_HOOK_COMMAND_GENERATION } from "./hooks-title-script.ts";
 
 /**
  * 实例私有事件日志目录名（相对 userData）。
@@ -50,13 +44,6 @@ export const EMIT_SCRIPT_NAME = "emit";
  * hooks.json 经 `${PIER_AGENT_HOOKS_DIR}/extract-stdin-meta` 调用。
  */
 export const EXTRACT_STDIN_META_SCRIPT_NAME = "extract-stdin-meta";
-
-/**
- * Claude UserPromptSubmit 会话标题派生脚本。
- * hooks.json 只引用 `${PIER_AGENT_HOOKS_DIR}/derive-claude-session-title`。
- */
-export const DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME =
-  "derive-claude-session-title";
 
 /** events.jsonl 文件名（实例私有，在 userData/agent-hooks/）。 */
 export const EVENTS_JSONL_NAME = "events.jsonl";
@@ -264,16 +251,6 @@ export function extractStdinMetaScriptPath(
   return join(pierHooksCurrentDir(hooksHome), EXTRACT_STDIN_META_SCRIPT_NAME);
 }
 
-/** derive-claude-session-title 路径（经 current）。 */
-export function deriveClaudeSessionTitleScriptPath(
-  hooksHome: string = pierHooksHomeDir()
-): string {
-  return join(
-    pierHooksCurrentDir(hooksHome),
-    DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME
-  );
-}
-
 /** 返回实例私有 events.jsonl 绝对路径。 */
 export function eventsJsonlPath(userData: string): string {
   return join(agentHooksDir(userData), EVENTS_JSONL_NAME);
@@ -400,7 +377,6 @@ async function installAgentHooksRuntimeUnderLock(
   await mkdir(versionDir, { recursive: true });
 
   const extractBody = buildExtractStdinMetaScript();
-  const deriveBody = buildDeriveClaudeSessionTitleScript();
   await writeExecutableIfChanged(
     join(versionDir, EMIT_SCRIPT_NAME),
     EMIT_SCRIPT
@@ -409,10 +385,7 @@ async function installAgentHooksRuntimeUnderLock(
     join(versionDir, EXTRACT_STDIN_META_SCRIPT_NAME),
     extractBody
   );
-  await writeExecutableIfChanged(
-    join(versionDir, DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME),
-    deriveBody
-  );
+  // gen≥11：不再安装 derive-claude-session-title（tab 标题归 OSC）。
 
   // 所有脚本内容与执行位完整后，才允许发布 current/GENERATION。
   await Promise.all([
@@ -420,10 +393,6 @@ async function installAgentHooksRuntimeUnderLock(
     assertRuntimeFileReady(
       join(versionDir, EXTRACT_STDIN_META_SCRIPT_NAME),
       extractBody
-    ),
-    assertRuntimeFileReady(
-      join(versionDir, DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME),
-      deriveBody
     ),
   ]);
 

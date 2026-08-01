@@ -19,6 +19,8 @@ describe("theme store native chrome backing", () => {
           applyTheme: vi.fn(),
         },
         theme: {
+          onVisualPreview: vi.fn(() => () => undefined),
+          previewVisual: vi.fn(async () => undefined),
           setNativeChrome: vi.fn(async () => undefined),
         },
       },
@@ -75,5 +77,20 @@ describe("theme store native chrome backing", () => {
     expect(
       document.documentElement.style.getPropertyValue("--terminal-background")
     ).toBe(expected);
+  });
+
+  it("broadcasts ephemeral visual preview to other windows by default", async () => {
+    const { applyThemeVisual } = await import("@/stores/theme.store.ts");
+    applyThemeVisual("light", "github");
+    expect(window.pier.theme.previewVisual).toHaveBeenCalledWith({
+      stylePresetId: "github",
+      theme: "light",
+    });
+  });
+
+  it("skips broadcast when applying a remote visual preview", async () => {
+    const { applyThemeVisual } = await import("@/stores/theme.store.ts");
+    applyThemeVisual("light", "github", { broadcast: false });
+    expect(window.pier.theme.previewVisual).not.toHaveBeenCalled();
   });
 });

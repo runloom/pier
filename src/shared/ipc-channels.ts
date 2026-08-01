@@ -74,6 +74,11 @@ export const PIER = {
     "pier://notification-center:mark-read-by-key",
   NOTIFICATION_CENTER_MARK_ALL_READ: "pier://notification-center:mark-all-read",
   NOTIFICATION_CENTER_SET_DND: "pier://notification-center:set-dnd",
+  /**
+   * 命令面板 hover 主题/风格预览：renderer → main 请求广播到其它窗。
+   * 不落盘；落盘仍走 preferences.update。
+   */
+  THEME_PREVIEW_VISUAL: "pier://theme:preview-visual",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -87,6 +92,11 @@ export const PIER_BROADCAST = {
   TERMINAL_SEARCH_OPEN_REQUEST: "pier://terminal:search-open-request",
   // 偏好更新后广播完整快照给每个 renderer.
   PREFERENCES_CHANGED: "pier:preferences:changed",
+  /**
+   * 命令面板 hover 主题/风格视觉预览（不落盘）。
+   * payload: { theme, stylePresetId }；main 排除 sender。
+   */
+  THEME_VISUAL_PREVIEW: "pier://theme:visual-preview",
   // 原生窗口几何变化后触发 renderer 补发 overlay / native view layout.
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
   // OS 级窗口 key-window 聚焦变化 (main → 该窗 renderer, payload WindowFocusChangedPayload).

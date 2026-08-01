@@ -9,20 +9,14 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  MAX_AGENT_SESSION_TITLE_LENGTH,
-  MAX_PROMPT_SNIPPET_LENGTH,
-} from "@shared/agent-session-title/index.ts";
+import { MAX_PROMPT_SNIPPET_LENGTH } from "@shared/agent-session-title/index.ts";
 import { agentHookEventSchema } from "@shared/contracts/agent/session.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import * as agentHooksInstallModule from "../../../../src/main/services/agents/hooks-install.ts";
 import {
   agentHooksDir,
   atomicReplaceSymlink,
-  buildDeriveClaudeSessionTitleScript,
   buildExtractStdinMetaScript,
-  DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME,
-  deriveClaudeSessionTitleScriptPath,
   EXTRACT_STDIN_META_SCRIPT_NAME,
   emitScriptPath,
   eventsJsonlPath,
@@ -54,19 +48,20 @@ function runtimeInstallLock(): RuntimeInstallLock {
 }
 
 describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () => {
-  it("严格 v3 运行时使用受管世代 10", () => {
-    expect(PIER_HOOK_COMMAND_GENERATION).toBe(10);
+  it("严格 v3 运行时使用受管世代（≥11，已卸 derive 双写）", () => {
+    expect(PIER_HOOK_COMMAND_GENERATION).toBeGreaterThanOrEqual(11);
   });
 
   it("返回可区分的安装结果", async () => {
     const root = await makeTempDir();
     const hooksHome = join(root, "hooks");
+    const newer = PIER_HOOK_COMMAND_GENERATION + 1;
     await expect(
       installAgentHooksEmitScript(join(root, "userData"), { hooksHome })
     ).resolves.toBe("installed");
-    await mkdir(join(hooksHome, "v11"), { recursive: true });
-    await atomicReplaceSymlink(join(hooksHome, "current"), "v11");
-    await writeFile(join(hooksHome, "GENERATION"), "11\n", "utf8");
+    await mkdir(join(hooksHome, `v${newer}`), { recursive: true });
+    await atomicReplaceSymlink(join(hooksHome, "current"), `v${newer}`);
+    await writeFile(join(hooksHome, "GENERATION"), `${newer}\n`, "utf8");
     await expect(
       installAgentHooksEmitScript(join(root, "userData"), { hooksHome })
     ).resolves.toBe("skipped-newer");
@@ -137,10 +132,11 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     expect(order).toEqual(["first-enter", "first-exit", "second-enter"]);
   });
 
-  it("并发较高世代发布后，v10 在锁内重读并拒绝降级", async () => {
+  it("并发较高世代发布后，本机世代在锁内重读并拒绝降级", async () => {
     const root = await makeTempDir();
     const hooksHome = join(root, "hooks");
     const userData = join(root, "userData");
+    const newer = PIER_HOOK_COMMAND_GENERATION + 1;
     const withLock = runtimeInstallLock();
     const firstEntered = Promise.withResolvers<void>();
     const publishHigher = Promise.withResolvers<void>();
@@ -150,9 +146,9 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     const higherInstall = withLock(hooksHome, async () => {
       firstEntered.resolve();
       await publishHigher.promise;
-      await mkdir(join(hooksHome, "v11"), { recursive: true });
-      await atomicReplaceSymlink(join(hooksHome, "current"), "v11");
-      await writeFile(join(hooksHome, "GENERATION"), "11\n", "utf8");
+      await mkdir(join(hooksHome, `v${newer}`), { recursive: true });
+      await atomicReplaceSymlink(join(hooksHome, "current"), `v${newer}`);
+      await writeFile(join(hooksHome, "GENERATION"), `${newer}\n`, "utf8");
     });
     await firstEntered.promise;
 
@@ -183,23 +179,28 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     await expect(lowerInstall).resolves.toBe("skipped-newer");
 
     expect(firstOutcome).toBe("contended");
-    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(11);
-    expect(await readlink(join(hooksHome, "current"))).toBe("v11");
+    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(newer);
+    expect(await readlink(join(hooksHome, "current"))).toBe(`v${newer}`);
   });
 
   it("较高世代已切换 current 但 GENERATION 尚未落盘时仍不可降级", async () => {
     const root = await makeTempDir();
     const hooksHome = join(root, "hooks");
-    await mkdir(join(hooksHome, "v11"), { recursive: true });
-    await atomicReplaceSymlink(join(hooksHome, "current"), "v11");
-    await writeFile(join(hooksHome, "GENERATION"), "10\n", "utf8");
+    const newer = PIER_HOOK_COMMAND_GENERATION + 1;
+    await mkdir(join(hooksHome, `v${newer}`), { recursive: true });
+    await atomicReplaceSymlink(join(hooksHome, "current"), `v${newer}`);
+    await writeFile(
+      join(hooksHome, "GENERATION"),
+      `${PIER_HOOK_COMMAND_GENERATION - 1}\n`,
+      "utf8"
+    );
 
     await expect(
       installAgentHooksEmitScript(join(root, "userData"), { hooksHome })
     ).resolves.toBe("skipped-newer");
 
-    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(11);
-    expect(await readlink(join(hooksHome, "current"))).toBe("v11");
+    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(newer);
+    expect(await readlink(join(hooksHome, "current"))).toBe(`v${newer}`);
   });
 
   it("emit 脚本写入 current 且 chmod 755，current 为指向 vN 的 symlink", async () => {
@@ -219,25 +220,22 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     );
   });
 
-  it("extract/derive 为 #!/usr/bin/env node 纯脚本（无 Electron 路径）", async () => {
+  it("extract 为 #!/usr/bin/env node 纯脚本；不再安装 derive 标题脚本", async () => {
     const root = await makeTempDir();
     const { hooksHome } = await installPair(root);
-    for (const scriptPath of [
-      extractStdinMetaScriptPath(hooksHome),
-      deriveClaudeSessionTitleScriptPath(hooksHome),
-    ]) {
-      const st = await stat(scriptPath);
-      // biome-ignore lint/suspicious/noBitwiseOperators: POSIX mode 位掩码
-      expect(st.mode & 0o777).toBe(0o755);
-      const content = await readFile(scriptPath, "utf8");
-      expect(content.startsWith("#!/usr/bin/env node\n")).toBe(true);
-      expect(content).not.toContain("ELECTRON_RUN_AS_NODE");
-      expect(content).not.toContain(process.execPath);
-      expect(content).not.toMatch(/\/Users\/|\/Applications\//);
-      expect(content).toContain(
-        `pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}`
-      );
-    }
+    const extractPath = extractStdinMetaScriptPath(hooksHome);
+    const st = await stat(extractPath);
+    // biome-ignore lint/suspicious/noBitwiseOperators: POSIX mode 位掩码
+    expect(st.mode & 0o777).toBe(0o755);
+    const content = await readFile(extractPath, "utf8");
+    expect(content.startsWith("#!/usr/bin/env node\n")).toBe(true);
+    expect(content).not.toContain("ELECTRON_RUN_AS_NODE");
+    expect(content).not.toContain(process.execPath);
+    expect(content).not.toMatch(/\/Users\/|\/Applications\//);
+    expect(content).toContain(`pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}`);
+    await expect(
+      stat(join(pierHooksCurrentDir(hooksHome), "derive-claude-session-title"))
+    ).rejects.toThrow();
   });
 
   it("emit 内容包含三 kind case 分支", async () => {
@@ -622,9 +620,6 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     expect(extractStdinMetaScriptPath("/h")).toBe(
       join("/h", "current", EXTRACT_STDIN_META_SCRIPT_NAME)
     );
-    expect(deriveClaudeSessionTitleScriptPath("/h")).toBe(
-      join("/h", "current", DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME)
-    );
     expect(pierHooksVersionDir(5, "/h")).toBe(join("/h", "v5"));
   });
 
@@ -689,69 +684,11 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     expect(metadata).not.toHaveProperty("id");
   }, 15_000);
 
-  it("derive-claude-session-title spawn：标题 / 原样保留 / 超长截断", {
-    timeout: 15_000,
-  }, async () => {
-    const root = await makeTempDir();
-    const { hooksHome } = await installPair(root);
-    const script = deriveClaudeSessionTitleScriptPath(hooksHome);
-
-    const run = (prompt: string) =>
-      spawnSync(script, [], {
-        input: JSON.stringify({ prompt }),
-        encoding: "utf8",
-      });
-
-    const ok = run("帮我修一下 parser 崩溃");
-    expect(ok.status).toBe(0);
-    const okBody = JSON.parse(ok.stdout) as {
-      hookSpecificOutput?: { sessionTitle?: string };
-    };
-    expect(okBody.hookSpecificOutput?.sessionTitle).toBe(
-      "帮我修一下 parser 崩溃"
-    );
-
-    // 确定性派生：不判断寒暄。用户写 "hi" 就叫 "hi"，随时可改名。
-    const greeting = run("hi");
-    expect(greeting.status).toBe(0);
-    const greetingBody = JSON.parse(greeting.stdout) as {
-      hookSpecificOutput?: { sessionTitle?: string };
-    };
-    expect(greetingBody.hookSpecificOutput?.sessionTitle).toBe("hi");
-
-    const long = "a".repeat(MAX_AGENT_SESSION_TITLE_LENGTH + 20);
-    const capped = run(long);
-    expect(capped.status).toBe(0);
-    const capBody = JSON.parse(capped.stdout) as {
-      hookSpecificOutput?: { sessionTitle?: string };
-    };
-    const title = capBody.hookSpecificOutput?.sessionTitle;
-    expect(title).toBeDefined();
-    expect(title?.length).toBeLessThanOrEqual(MAX_AGENT_SESSION_TITLE_LENGTH);
-    expect(title?.endsWith("…")).toBe(true);
-
-    const markup = run("<user_query>cmd + p 会先展示 loading</user_query>");
-    expect(markup.status).toBe(0);
-    const markupBody = JSON.parse(markup.stdout) as {
-      hookSpecificOutput?: { sessionTitle?: string };
-    };
-    expect(markupBody.hookSpecificOutput?.sessionTitle).toBe(
-      "cmd + p 会先展示 loading"
-    );
-  });
-
-  it("build*Script 为纯 node shebang 且跨调用内容稳定", () => {
+  it("buildExtractStdinMetaScript 为纯 node shebang 且跨调用内容稳定", () => {
     expect(buildExtractStdinMetaScript()).toBe(buildExtractStdinMetaScript());
-    expect(buildDeriveClaudeSessionTitleScript()).toBe(
-      buildDeriveClaudeSessionTitleScript()
-    );
-    for (const content of [
-      buildExtractStdinMetaScript(),
-      buildDeriveClaudeSessionTitleScript(),
-    ]) {
-      expect(content.startsWith("#!/usr/bin/env node\n")).toBe(true);
-      expect(content).not.toContain("ELECTRON_RUN_AS_NODE");
-      expect(content).not.toContain(process.execPath);
-    }
+    const content = buildExtractStdinMetaScript();
+    expect(content.startsWith("#!/usr/bin/env node\n")).toBe(true);
+    expect(content).not.toContain("ELECTRON_RUN_AS_NODE");
+    expect(content).not.toContain(process.execPath);
   });
 });

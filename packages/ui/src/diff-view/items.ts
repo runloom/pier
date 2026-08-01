@@ -313,32 +313,47 @@ function parsedFileDiff(input: PierDiffViewItem): FileDiffMetadata {
   if (!parsed) {
     throw new Error(`Pierre did not parse diff item: ${input.id}`);
   }
-  // processFile 对 new/deleted（缺一侧完整文件）会标 isPartial。
-  // DiffsHub 靠 loadDiffFiles 再 hydrate；Pier Review 只用 patch 内嵌行文本、
-  // 不接 loadDiffFiles。半水合路径在暂存切换/重绑时会触发
-  // DiffHunksRenderer「deletionLine and additionLine are null」。
-  // 若 patch 已自带完整 +/- 行缓冲，按非 partial 渲染。
+  // processFile 无 oldFile/newFile 时 isPartial=true：patch 只有 hunk 片段行缓冲
+  // （Pierre 官方语义）。Pier Review 不接 loadDiffFiles，不得假装全文缓冲：
+  // 若把 isPartial 清成 false，高亮路径会 expandedHunks:true 展开 collapsedBefore，
+  // OOB 读到 undefined 再 value += undefined → 字面 "undefinedundefined…"。
+  // 此处只校验 hunk 内 +/-/context 索引落在缓冲内；保持 isPartial。
   return applyFileDisplay(
-    markSelfContainedPatchComplete(parsed),
+    assertPatchHunkBuffersCovered(parsed),
     input.fileDisplay
   );
 }
 
 /**
- * patch 解析结果若已含 walk 所需的 addition/deletion 行文本，则去掉 isPartial。
+ * 校验 patch-only FileDiff 的 hunk 行缓冲完整。
+ * **保持 isPartial**（金标准：片段 patch ≠ 全文）。
+ * - 0 hunk：合法空正文（mode-only 等），不 throw
+ * - 有 hunk 但索引越界：throw → error notice
+ *
+ * @deprecated 旧名 markSelfContainedPatchComplete 曾错误清 isPartial；请改用本函数。
  */
-export function markSelfContainedPatchComplete(
+export function assertPatchHunkBuffersCovered(
   fileDiff: FileDiffMetadata
 ): FileDiffMetadata {
-  if (!fileDiff.isPartial) {
+  if (fileDiff.hunks.length === 0) {
     return fileDiff;
   }
   if (!patchLineBuffersCoverHunks(fileDiff)) {
-    return fileDiff;
+    throw new Error(
+      `Pierre patch line buffers do not cover hunks: ${fileDiff.name || fileDiff.cacheKey || "unknown"}`
+    );
   }
-  return { ...fileDiff, isPartial: false };
+  return fileDiff;
 }
 
+/** @deprecated Use {@link assertPatchHunkBuffersCovered}. */
+export function markSelfContainedPatchComplete(
+  fileDiff: FileDiffMetadata
+): FileDiffMetadata {
+  return assertPatchHunkBuffersCovered(fileDiff);
+}
+
+/** true = 每个 hunk 的行索引落在 addition/deletion 缓冲内。0 hunk 视为 true。 */
 function patchLineBuffersCoverHunks(fileDiff: FileDiffMetadata): boolean {
   for (const hunk of fileDiff.hunks) {
     for (const content of hunk.hunkContent) {
@@ -371,7 +386,7 @@ function patchLineBuffersCoverHunks(fileDiff: FileDiffMetadata): boolean {
       }
     }
   }
-  return fileDiff.hunks.length > 0;
+  return true;
 }
 
 /**

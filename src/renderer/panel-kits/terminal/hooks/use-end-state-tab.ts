@@ -12,6 +12,7 @@ import { useTerminalEndStateStore } from "@/stores/terminal-end-state.store.ts";
 import {
   activityTabChromeOverlay,
   mergeTabChrome,
+  stripTabChromeTitle,
   taskOutputTabChromeOverlay,
   taskRunTabChromeOverlay,
 } from "../tab-chrome.ts";
@@ -79,54 +80,56 @@ export function useTerminalEndStateTab(args: {
       ? endState.tab
       : (savedSession?.tab ?? activeLaunchTab);
 
-  const effectiveTab = useMemo(
-    () =>
+  const effectiveTab = useMemo(() => {
+    const agentOverlay =
+      activity?.kind === "agent"
+        ? activityTabChromeOverlay(activity, {
+            cwd: args.effectiveCwd,
+            projectRootPath: args.projectRootPath,
+            sessionTitle: savedSession?.sessionTitle,
+            sessionTitleSource: savedSession?.sessionTitleSource,
+            taskRuns: args.taskRunsSnapshot,
+          })
+        : null;
+    // 活体 agent 且无用户改名：剥掉启动/持久化 chrome 的 title，交给 OSC → cwd。
+    const agentBaseTab =
+      activity?.kind === "agent" && !agentOverlay?.title
+        ? stripTabChromeTitle(baseTab)
+        : baseTab;
+    return mergeTabChrome(
       mergeTabChrome(
-        mergeTabChrome(
-          mergeTabChrome(
-            baseTab,
-            activity?.kind === "agent"
-              ? activityTabChromeOverlay(activity, {
-                  cwd: args.effectiveCwd,
-                  projectRootPath: args.projectRootPath,
-                  sessionTitle: savedSession?.sessionTitle,
-                  sessionTitleSource: savedSession?.sessionTitleSource,
-                  taskRuns: args.taskRunsSnapshot,
-                })
-              : null
-          ),
-          agentEndView
-            ? null
-            : taskRunTabChromeOverlay(
-                panelId,
-                args.taskRunsSnapshot,
-                savedSession?.task ?? args.activeLaunchTask,
-                args.selectedTaskRunId
-              )
-        ),
+        mergeTabChrome(agentBaseTab, agentOverlay),
         agentEndView
           ? null
-          : taskOutputTabChromeOverlay(
-              args.currentTaskOutput,
-              args.taskRunsSnapshot
+          : taskRunTabChromeOverlay(
+              panelId,
+              args.taskRunsSnapshot,
+              savedSession?.task ?? args.activeLaunchTask,
+              args.selectedTaskRunId
             )
       ),
-    [
-      activity,
-      agentEndView,
-      args.activeLaunchTask,
-      args.currentTaskOutput,
-      args.effectiveCwd,
-      args.projectRootPath,
-      args.selectedTaskRunId,
-      args.taskRunsSnapshot,
-      baseTab,
-      panelId,
-      savedSession?.sessionTitle,
-      savedSession?.sessionTitleSource,
-      savedSession?.task,
-    ]
-  );
+      agentEndView
+        ? null
+        : taskOutputTabChromeOverlay(
+            args.currentTaskOutput,
+            args.taskRunsSnapshot
+          )
+    );
+  }, [
+    activity,
+    agentEndView,
+    args.activeLaunchTask,
+    args.currentTaskOutput,
+    args.effectiveCwd,
+    args.projectRootPath,
+    args.selectedTaskRunId,
+    args.taskRunsSnapshot,
+    baseTab,
+    panelId,
+    savedSession?.sessionTitle,
+    savedSession?.sessionTitleSource,
+    savedSession?.task,
+  ]);
 
   return { effectiveTab, endState };
 }

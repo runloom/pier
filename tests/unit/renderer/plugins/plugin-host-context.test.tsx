@@ -1859,6 +1859,10 @@ describe("createRendererPluginContext", () => {
 
     expect(context.appearance.current()).toMatchObject({
       codeTheme: "github-light-default",
+      codeThemes: {
+        dark: "github-dark-default",
+        light: "github-light-default",
+      },
       density: "compact",
       language: "zh-CN",
       locale: "zh-CN",
@@ -1877,6 +1881,10 @@ describe("createRendererPluginContext", () => {
     expect(listener).toHaveBeenLastCalledWith(
       expect.objectContaining({
         codeTheme: "github-dark-default",
+        codeThemes: {
+          dark: "github-dark-default",
+          light: "github-light-default",
+        },
         theme: "dark",
       })
     );

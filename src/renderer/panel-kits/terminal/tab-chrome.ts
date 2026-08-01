@@ -1,8 +1,4 @@
-import {
-  agentSessionTitleInput,
-  resolveAgentSessionTitle,
-  truncateTerminalTitleForTooltip,
-} from "@shared/agent-session-title/index.ts";
+import { truncateTerminalTitleForTooltip } from "@shared/agent-session-title/index.ts";
 import { agentTabIconId } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
@@ -74,6 +70,17 @@ export function tabChromeForAgentResultBase(
   });
 }
 
+/** 去掉 title，让 descriptor 回退到 OSC / cwd（活体 agent 无用户改名时用）。 */
+export function stripTabChromeTitle(
+  tab: PanelTabChrome | undefined
+): PanelTabChrome | undefined {
+  if (!tab?.title) {
+    return tab;
+  }
+  const { title: _title, ...rest } = tab;
+  return normalizePanelTabChromeInput(rest) ?? rest;
+}
+
 export function mergeTabChrome(
   current: PanelTabChrome | undefined,
   patch: Partial<PanelTabChrome> | null
@@ -117,13 +124,8 @@ export function terminalPanelDescriptor(args: {
   effectiveCwd: string | null;
   effectiveTab: PanelTabChrome | undefined;
   /**
-   * 产品主标题（Agent 走 resolveAgentSessionTitle.primary）。
-   * 缺席时 short 回退 cwd basename（普通 shell）。
-   */
-  displayPrimary?: string | null | undefined;
-  /**
-   * OSC 终端标题——仅进 display.terminalTitle（tooltip）。
-   * 普通 shell 无 displayPrimary 时仍可作为 long 回退。
+   * OSC 0/2 终端标题（进程 / TUI / shell 自己设置）。
+   * 对齐 Ghostty：有 OSC 则作 tab 主标题；无则回退目录规则（cwd basename）。
    */
   terminalTitle?: string | null | undefined;
   sessionLoaded: boolean;
@@ -131,22 +133,25 @@ export function terminalPanelDescriptor(args: {
   if (!args.sessionLoaded) {
     return null;
   }
-  const primary = args.displayPrimary?.trim() || null;
-  const oscTooltip = truncateTerminalTitleForTooltip(args.terminalTitle);
-  const short =
-    args.effectiveTab?.title ??
-    primary ??
-    (args.effectiveCwd ? basename(args.effectiveCwd) : "Terminal");
+  // 显式 chrome 覆盖：任务 label、用户改名、end-state 等；不含 prompt 派生。
+  const chromeTitle = args.effectiveTab?.title?.trim() || null;
+  const oscTitle = truncateTerminalTitleForTooltip(args.terminalTitle);
+  const cwdShort = args.effectiveCwd ? basename(args.effectiveCwd) : null;
+  // Ghostty / 业界：
+  // short = 显式覆盖 → OSC → 目录名
+  // long  = OSC 优先（hover 看进程自报标题）；无 OSC 时用全路径 cwd，再退覆盖文案
+  const short = chromeTitle ?? oscTitle ?? cwdShort ?? "Terminal";
   const long =
-    primary ??
-    oscTooltip ??
-    (args.effectiveCwd ? args.effectiveCwd : undefined);
+    oscTitle ??
+    (args.effectiveCwd ? args.effectiveCwd : undefined) ??
+    chromeTitle ??
+    undefined;
   return {
     ...(args.effectiveContext ? { context: args.effectiveContext } : {}),
     display: {
       short,
       ...(long ? { long } : {}),
-      ...(oscTooltip ? { terminalTitle: oscTooltip } : {}),
+      ...(oscTitle ? { terminalTitle: oscTitle } : {}),
     },
     ...(args.effectiveTab ? { tab: args.effectiveTab } : {}),
   };
@@ -155,40 +160,41 @@ export function terminalPanelDescriptor(args: {
 export interface ActivityTabChromeOverlayOptions {
   cwd?: string | null | undefined;
   projectRootPath?: string | null | undefined;
-  /** session JSON 回退（FA 尚未 hydrate 时） */
+  /** session JSON 回退（FA 尚未 hydrate 时）；仅 source=user 可进 tab 覆盖 */
   sessionTitle?: string | null | undefined;
   sessionTitleSource?: AgentSessionTitleSource | null | undefined;
   taskRuns?: TaskRunsSnapshot | undefined;
 }
 
-/** Agent 产品主标题（FA 优先，session JSON 回退）；非 agent 返回 null。 */
-export function agentPanelDisplayPrimary(
+/**
+ * 用户主动改名时的 tab 覆盖文案（FA 优先，session JSON 回退）。
+ * prompt / provider 不得抢 OSC——终端标题由进程 OSC 0/2 自管。
+ */
+export function agentUserTabTitleOverride(
   activity: ForegroundActivity | undefined,
   options?: ActivityTabChromeOverlayOptions
 ): string | null {
   if (activity?.kind !== "agent") {
     return null;
   }
-  return resolveAgentSessionTitle(
-    agentSessionTitleInput({
-      agentId: activity.agentId,
-      cwd: options?.cwd,
-      projectRootPath: options?.projectRootPath,
-      sessionTitle: activity.sessionTitle ?? options?.sessionTitle ?? null,
-      sessionTitleSource:
-        activity.sessionTitleSource ?? options?.sessionTitleSource ?? null,
-    })
-  ).primary;
+  const source =
+    activity.sessionTitleSource ?? options?.sessionTitleSource ?? null;
+  if (source !== "user") {
+    return null;
+  }
+  const raw = activity.sessionTitle ?? options?.sessionTitle ?? null;
+  const title = raw?.trim();
+  return title || null;
 }
 
 /**
- * 前台活动 → tab 呈现 overlay：状态点 + icon + title 全部由 renderer store
+ * 前台活动 → tab 呈现 overlay：状态点 + icon 由 renderer store
  * 消费同一 `ForegroundActivityBroadcast` 单源驱动（纯呈现层, 不进
  * tab-chrome-patch 持久化管线）——reload 后经 snapshot pull 自动恢复,
  * 活动消失即自动回退。
  *
- * - `agent` kind: 状态点从 agent status 派生, icon 换 agent；title 走
- *   `resolveAgentSessionTitle`（sessionTitle → catalog·项目；**不读 OSC**）
+ * - `agent` kind: 状态点 + icon；**标题不写**（OSC → cwd，对齐 Ghostty）。
+ *   仅 `sessionTitleSource === "user"` 时写入 title 覆盖。
  * - `task` kind: 无 tab state overlay（活体状态只读 TaskRunsSnapshot）；label 作为 title
  * - `shell` / `idle` / undefined: 无 overlay, 走 tab 默认呈现
  */
@@ -200,11 +206,11 @@ export function activityTabChromeOverlay(
     return null;
   }
   if (activity.kind === "agent") {
-    const title = agentPanelDisplayPrimary(activity, options);
+    const userTitle = agentUserTabTitleOverride(activity, options);
     return {
       state: { status: tabStatusForActivityStatus(activity.status) },
       icon: { id: agentTabIconId(activity.agentId) },
-      ...(title ? { title } : {}),
+      ...(userTitle ? { title: userTitle } : {}),
     };
   }
   if (activity.kind === "task") {

@@ -197,6 +197,10 @@ function createMockContext(): RendererPluginContext {
     appearance: {
       current: () => ({
         codeTheme: "github-dark-default",
+        codeThemes: {
+          dark: "github-dark-default",
+          light: "github-light-default",
+        },
         density: "compact",
         language: "en",
         locale: "en",

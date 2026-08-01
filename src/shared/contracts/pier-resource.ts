@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { agentSessionTitleValueSchema } from "../agent-session-title/schema.ts";
 import { agentKindSchema } from "./agent.ts";
+import { agentSessionTitleSourceSchema } from "./foreground-activity.ts";
 
 /**
  * Pier 资源快照（工作台「工作台资源」物料 / 指标目录）。
@@ -35,6 +36,7 @@ export const sessionIdentitySchema = z.discriminatedUnion("kind", [
       agentId: agentKindSchema,
       kind: z.literal("agent"),
       sessionTitle: agentSessionTitleValueSchema.optional(),
+      sessionTitleSource: agentSessionTitleSourceSchema.optional(),
       status: z.string().optional(),
     })
     .strict(),

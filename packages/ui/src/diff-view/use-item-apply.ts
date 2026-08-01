@@ -40,7 +40,8 @@ export const shouldRestoreMembershipScrollTop = shouldFlushMembershipLayout;
  * 禁止通过下一帧或定时器重试。不因 id 集合变化 remount。
  *
  * membership 拓扑变后：禁止外层 item 级 scrollTo（会清 Pierre 行锚并闪一下）。
- * 改为 instance.render(true) 在 paint 前同步 recompute + 行级 anchoring。
+ * setItems 仍在 layout 同步；instance.render(true) 经 microtask 延后（React 19
+ * 禁止 layout 内 flushSync），见 item-sync.flushCodeViewMembershipLayout。
  */
 export function useDiffViewItemApply({
   appliedItemsRef,

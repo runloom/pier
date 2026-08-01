@@ -84,6 +84,7 @@
     "rose-pine": ["rose pine"],
     "slack": ["slack"],
     "solarized": ["solarized"],
+    "tokyo-night": ["tokyo night", "tokyo", "tokyonight"],
     "vitesse": ["vitesse"]
   },
   "locale": {

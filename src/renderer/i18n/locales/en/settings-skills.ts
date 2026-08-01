@@ -111,6 +111,10 @@ export const settingsSkills = {
   userGlobalBadge: "On this Mac",
   importAsManaged: "Manage with Pier",
   systemBadge: "Pier system",
+  unmanagedConflictBadge: "Path in use",
+  unmanagedConflictHelpLabel: "About path in use",
+  unmanagedConflictHint:
+    "{{target}} already has same-named content. Pier won’t overwrite it. Starting an agent is unaffected. To use Pier’s version, move that path aside in the project first.",
   pierLibraryBadge: "Pier",
   pierBoundBadge: "Pier",
   alwaysIncludeBadge: "Always included",
@@ -151,7 +155,7 @@ export const settingsSkills = {
   confirmContentDeleteBody:
     "Removes the skill from this project. Turning the switch off only hides it from agents. This cannot be undone.",
   issueUnmanagedConflict:
-    "{{target}} already has a same-named directory that Pier does not manage. Pier will not overwrite it. Remove that directory first, or cancel and keep using the original.",
+    "{{target}} already has same-named content. Pier won’t overwrite it. Starting an agent is unaffected. To use Pier’s version, move that path aside in the project first.",
   issueDuplicateDiscovery:
     "With Claude Code delivery on, {{agent}} discovers same-named skills in multiple directories. Turn Claude Code delivery off to resolve.",
   issueIdentityChanged:

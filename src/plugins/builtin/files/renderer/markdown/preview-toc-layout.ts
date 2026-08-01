@@ -43,8 +43,9 @@ export const MARKDOWN_TOC_TOP_RATIO = 0.22;
 export const MARKDOWN_PREVIEW_EDGE_INSET_PX = 12;
 
 /**
- * Outline rail inset from the right edge — looser than the zoom control so the
- * tick rail is not flush against the frame.
+ * Trailing blank between the outline card/ticks and the preview frame edge.
+ * The rail is flush-right; this width is a hover bridge so moving into the
+ * blank does not dismiss the panel, while ticks/card stay visually inset.
  */
 export const MARKDOWN_TOC_EDGE_INSET_PX = 28;
 

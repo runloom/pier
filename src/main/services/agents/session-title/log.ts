@@ -12,14 +12,14 @@ export type TitleOutcome =
   | "applied"
   /** 秩不升高（已有更高层标题，含用户改名） */
   | "rejected-rank"
-  /** hook 没带出 prompt 文案、provider 没给出会话名，或规范化后为空 */
+  /** provider 没给出会话名，或规范化后为空 */
   | "empty";
 
 const log = createLogger("agent.title");
 
 export function logTitleTier(ctx: {
   panelId: string;
-  tier: "prompt" | "provider";
+  tier: "provider";
   outcome: TitleOutcome;
   agentId?: string;
   /** provider 秩：标题所来自的原生记录（如 claude.transcript.ai_title）。 */

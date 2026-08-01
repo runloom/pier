@@ -198,6 +198,11 @@ export function MarkdownPreview({
     codeTheme,
     readingAppearance,
   });
+  // Mermaid / paper-coupled surfaces: fixed reading paper overrides app chrome.
+  const previewColorMode: "dark" | "light" =
+    readingAppearance === "auto"
+      ? (appearanceTheme ?? "dark")
+      : readingAppearance;
   const [tocAnchor, setTocAnchor] = useState<string | undefined>(undefined);
   const [tocAnchorRequestId, setTocAnchorRequestId] = useState(0);
   // 外部锚点导航（initialAnchorRequestId 变化）会清除 TOC 点击留下的 tocAnchor，
@@ -415,6 +420,7 @@ export function MarkdownPreview({
                   charts={charts}
                   codeHighlighter={codeHighlighter}
                   codeTheme={resolvedCodeTheme}
+                  colorMode={previewColorMode}
                   copyCode={copyCode}
                   fileResources={fileResources}
                   initialAnchor={effectiveAnchor}

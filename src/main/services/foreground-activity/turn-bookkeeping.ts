@@ -73,12 +73,18 @@ export function applyTurnBookkeeping(
   ) {
     return false;
   }
-  const isTerminal =
+  const isForceTerminal =
+    eventName === "error" || eventName === "TurnInterrupted";
+  const isSoftTerminal =
     eventName === "TurnCompleted" ||
-    eventName === "TurnInterrupted" ||
-    eventName === "error" ||
     (eventName === "Stop" &&
       (stopAuthority === "authoritative" || stopAuthority === "reset-only"));
+  const isTerminal = isForceTerminal || isSoftTerminal;
+  // 终态早到但仍有未完成工具：不得清工具集、不得 turnEnded——否则长任务会
+  // 被锁在 ready，后续 ToolComplete 被吸收（「状态一久就变成等待输入」）。
+  // 仅工具延迟；悬挂交互仍随可信终态清掉（「可信终态清理交互并保持 ready」）。
+  const deferSoftTerminal =
+    isSoftTerminal && !isForceTerminal && hookScopeHasActiveTools(scope);
   if (isTerminal && eventTurnId) {
     if (scope.recentSettledTurnIds.has(eventTurnId) && !isTerminalCorrection) {
       return false;
@@ -90,29 +96,35 @@ export function applyTurnBookkeeping(
       );
     }
   }
-  if (TURN_BOUNDARY_EVENTS.has(eventName)) {
+  if (deferSoftTerminal) {
+    scope.deferredReady = true;
+  } else if (TURN_BOUNDARY_EVENTS.has(eventName)) {
     scope.turnEnded = true;
     scope.turnEndedAt = at;
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
+    scope.deferredReady = false;
     clearActiveWork(scope);
   } else if (TURN_RESET_EVENTS.has(eventName)) {
     scope.turnEnded = false;
     scope.turnEndedAt = undefined;
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
+    scope.deferredReady = false;
     scope.turnResetAt = at;
     clearActiveWork(scope);
     scope.currentTurnId = eventTurnId;
   } else if (eventName === "Stop" && stopAuthority === "advisory") {
     scope.completionObserved = true;
     scope.completionObservedAt = at;
+    scope.deferredReady = false;
     clearActiveWork(scope);
   } else if (eventName === "Stop") {
     scope.turnEnded = true;
     scope.turnEndedAt = at;
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
+    scope.deferredReady = false;
     clearActiveWork(scope);
   } else if (
     scope.completionObserved &&
@@ -124,7 +136,9 @@ export function applyTurnBookkeeping(
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
   }
-  if (eventName === "Stop" || eventName === "SessionEnd") {
+  // Stop 的工作集清理只走上方终态分支；延迟终态（deferredReady）必须保留
+  // 未完成工具/交互，否则会立刻被误密封为 ready。
+  if (eventName === "SessionEnd") {
     clearActiveWork(scope);
   } else if (eventName === "InteractionRequested") {
     const id =
@@ -213,6 +227,16 @@ export function applyTurnBookkeeping(
   }
   scope.subagentCount =
     scope.activeSubagentIds.size + scope.anonymousSubagentCount;
+  // 延迟终态：工作集已空 → 真正密封回合，供 nextStatus 落 ready。
+  if (
+    scope.deferredReady &&
+    !(hookScopeHasActiveTools(scope) || hookScopeHasActiveInteractions(scope))
+  ) {
+    scope.turnEnded = true;
+    scope.turnEndedAt = at;
+    scope.completionObserved = false;
+    scope.completionObservedAt = undefined;
+  }
   return true;
 }
 
@@ -259,17 +283,23 @@ export function nextStatusAfterTurnBookkeeping(
   event: AgentHookEventPayload,
   mappedStatus: ActivityStatus | undefined
 ): ActivityStatus | undefined {
-  if (scope.completionObserved) {
+  if (scope.completionObserved && !scope.deferredReady) {
     return;
   }
   if (hookScopeHasActiveInteractions(scope)) {
     return "waiting";
   }
-  if (event.event === "InteractionResolved") {
-    return hookScopeHasActiveTools(scope) ? "tool" : "processing";
-  }
-  if (event.event === "ToolComplete" && hookScopeHasActiveTools(scope)) {
+  if (hookScopeHasActiveTools(scope)) {
+    // 含 deferredReady：终态早到时保持 tool，不投影 ready。
     return "tool";
+  }
+  if (scope.deferredReady) {
+    // 工作集已空且 applyTurnBookkeeping 已密封 turnEnded。
+    scope.deferredReady = false;
+    return "ready";
+  }
+  if (event.event === "InteractionResolved") {
+    return "processing";
   }
   return mappedStatus;
 }

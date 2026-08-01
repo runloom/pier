@@ -69,6 +69,8 @@ interface MarkdownIrRendererProps {
   charts: RendererPluginContext["charts"] | undefined;
   codeHighlighter: MarkdownCodeHighlighter | undefined;
   codeTheme: string;
+  /** Paper / app light-dark for mermaid re-render on theme switch. */
+  colorMode: "dark" | "light";
   copyCode: ((code: string) => Promise<void>) | undefined;
   fileResources: MarkdownFileResources | undefined;
   initialAnchor: string | undefined;
@@ -110,6 +112,7 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
           charts: props.charts,
           codeHighlighter: props.codeHighlighter,
           codeTheme: props.codeTheme,
+          colorMode: props.colorMode,
           copyCode: props.copyCode,
           fileResources: props.fileResources,
           labels: props.labels,
@@ -176,9 +179,11 @@ function renderBlock(
             })}
           >
             <MarkdownDiagram
+              // Remount on color mode so mermaid re-renders (facade reads store at call).
               charts={context.charts}
               contentPreview={context.fileResources?.contentPreview}
               errorLabel={context.labels.diagramFailed}
+              key={`mermaid:${context.colorMode}:${block.range.startOffset}`}
               label={context.labels.diagramLabel}
               openFullscreenLabel={context.labels.openFullscreen}
               previewTitle={context.labels.diagramPreviewTitle}

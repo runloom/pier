@@ -1,11 +1,9 @@
 /**
- * Agent 会话标题——纯函数层唯一对外入口。
+ * Agent 产品会话名——纯函数层唯一对外入口。
  *
- * 三层收敛：占位 → 首条 prompt 确定性派生(prompt) → agent 自己的会话名
- * (provider) → 用户改名(user)。
- * 没有启发式改写层，也没有模型精修层：标题只是可读性信号，身份由
- * agentId + 项目路径 + panelId + actorHint 承担。
- * 写入裁决见 precedence.ts；main 侧编排见 services/agents/session-title/。
+ * 终端 tab 标题不在此层：OSC 0/2 → cwd（terminalPanelDescriptor）。
+ * 产品 sessionTitle 仅 provider（agent 自命名）与 user（改名）。
+ * 无启发式、无模型精修、无 prompt 派生。
  */
 
 export type { AgentSessionTitleSource } from "../contracts/foreground-activity.ts";
@@ -14,7 +12,6 @@ export {
   MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH,
   MAX_PROMPT_SNIPPET_LENGTH,
 } from "./constants.ts";
-export { deriveAgentSessionTitleFromPrompt } from "./derive.ts";
 export {
   type AgentSessionTitleDisambiguationEntry,
   disambiguateAgentSessionTitles,
@@ -35,6 +32,7 @@ export {
   type ResolvedAgentSessionTitle,
   resolveAgentSessionTitle,
 } from "./resolve.ts";
+export { agentSessionTitleValueSchema } from "./schema.ts";
 export {
   firstAgentPromptLine,
   stripAgentPromptMarkup,

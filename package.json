@@ -109,6 +109,7 @@
     "@lezer/highlight": "1.2.3",
     "@pier/plugin-api": "workspace:*",
     "@pier/ui": "workspace:*",
+    "@pierre/diffs": "1.2.12",
     "@pierre/theme": "^1.1.0",
     "@replit/codemirror-minimap": "0.5.2",
     "@shikijs/themes": "^4.3.1",

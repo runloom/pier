@@ -35,8 +35,10 @@ import slackDark from "@shikijs/themes/slack-dark";
 import slackOchin from "@shikijs/themes/slack-ochin";
 import solarizedDark from "@shikijs/themes/solarized-dark";
 import solarizedLight from "@shikijs/themes/solarized-light";
+import tokyoNight from "@shikijs/themes/tokyo-night";
 import vitesseDark from "@shikijs/themes/vitesse-dark";
 import vitesseLight from "@shikijs/themes/vitesse-light";
+import tokyoNightLight from "./presets/tokyo-night-light.ts";
 
 export interface ShikiThemeLike {
   colors?: Record<string, string>;
@@ -72,6 +74,11 @@ export const STYLE_PRESET_REGISTRY: Record<StylePresetId, PresetEntry> = {
   "rose-pine": { light: rosePineDawn, dark: rosePine },
   slack: { light: slackOchin, dark: slackDark },
   solarized: { light: solarizedLight, dark: solarizedDark },
+  /**
+   * Night: Shiki official `tokyo-night`.
+   * Light: Enkia official pair (vendored; Shiki has no light bundle).
+   */
+  "tokyo-night": { light: tokyoNightLight, dark: tokyoNight },
   vitesse: { light: vitesseLight, dark: vitesseDark },
 };
 
@@ -80,4 +87,21 @@ export function getShikiTheme(
   mode: "light" | "dark"
 ): ShikiThemeLike {
   return STYLE_PRESET_REGISTRY[presetId][mode];
+}
+
+/**
+ * Dual Shiki theme names for Pierre Diffs dual-theme mode.
+ * Worker loads both once; light/dark only flips themeType (CSS variables),
+ * avoiding setRenderOptions races that leave CodeView tokens stale.
+ */
+export function getShikiThemePair(presetId: StylePresetId): {
+  readonly dark: string;
+  readonly light: string;
+} {
+  const dark = getShikiTheme(presetId, "dark");
+  const light = getShikiTheme(presetId, "light");
+  return {
+    dark: dark.name ?? `${presetId}-dark`,
+    light: light.name ?? `${presetId}-light`,
+  };
 }

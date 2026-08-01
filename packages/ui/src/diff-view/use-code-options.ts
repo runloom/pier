@@ -49,7 +49,11 @@ export function useDiffViewCodeOptions(options: {
   readonly appearance: {
     readonly codeFontFamily: string;
     readonly codeFontSize: string;
-    readonly codeTheme: string;
+    /** Dual shiki names — Pierre CSS-variable dual-theme mode. */
+    readonly codeThemes: {
+      readonly dark: string;
+      readonly light: string;
+    };
     readonly colorMode: "dark" | "light";
   };
   readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
@@ -176,7 +180,8 @@ export function useDiffViewCodeOptions(options: {
       preferredHighlighter: "shiki-wasm",
       smoothScrollSettings: PIER_DIFF_VIEW_SMOOTH_SCROLL_SETTINGS,
       stickyHeaders: true,
-      theme: appearance.codeTheme,
+      // Dual pair + themeType: light/dark only flips CSS vars (no re-tokenize).
+      theme: appearance.codeThemes,
       themeType: appearance.colorMode,
       tokenizeMaxLength: PIER_DIFF_VIEW_TOKENIZE_MAX_LINES,
       // 路径 hover/mono 权威在 path-title-chrome postRender；unsafeCSS 只承载其它壳样式。
@@ -184,7 +189,7 @@ export function useDiffViewCodeOptions(options: {
       unsafeCSS: CODE_VIEW_CUSTOM_CSS,
     }),
     [
-      appearance.codeTheme,
+      appearance.codeThemes,
       appearance.colorMode,
       codeViewRef,
       diffStyle,

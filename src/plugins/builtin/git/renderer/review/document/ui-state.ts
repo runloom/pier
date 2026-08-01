@@ -15,6 +15,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { create } from "zustand";
 import type { GitReviewReadingSurface } from "../reading-surface.ts";
 import {
   ensureReviewSurfaceSession,
@@ -78,16 +79,30 @@ function readReviewViewOptions(): ReviewViewOptions {
   }
 }
 
-/** diff 展示偏好(split/unified、wrap);全局持久化,跨面板共享。 */
-export function useReviewViewOptions(): {
-  readonly options: ReviewViewOptions;
+interface ReviewViewOptionsStore extends ReviewViewOptions {
   readonly setOptions: (patch: Partial<ReviewViewOptions>) => void;
-} {
-  const [options, setOptionsState] = useState(readReviewViewOptions);
-  const setOptions = useMemo(
-    () => (patch: Partial<ReviewViewOptions>) => {
-      setOptionsState((previous) => {
-        const next = { ...previous, ...patch };
+}
+
+/**
+ * diff 展示偏好（split/unified、wrap）全局单源 + localStorage。
+ * toolbar 与 CodeView 必须共用；禁止各组件独立 useState（会只变图标不改正文）。
+ * 对齐 files markdown preview prefs。
+ */
+export const useReviewViewOptionsStore = create<ReviewViewOptionsStore>(
+  (set) => ({
+    ...readReviewViewOptions(),
+    setOptions(patch) {
+      set((previous) => {
+        const next: ReviewViewOptions = {
+          diffStyle:
+            patch.diffStyle === "unified" || patch.diffStyle === "split"
+              ? patch.diffStyle
+              : previous.diffStyle,
+          wrapLines:
+            patch.wrapLines === undefined
+              ? previous.wrapLines
+              : patch.wrapLines === true,
+        };
         try {
           viewOptionsStorage()?.setItem(
             REVIEW_VIEW_OPTIONS_KEY,
@@ -99,9 +114,21 @@ export function useReviewViewOptions(): {
         return next;
       });
     },
-    []
-  );
-  return { options, setOptions };
+  })
+);
+
+/** diff 展示偏好(split/unified、wrap);全局持久化,跨面板共享。 */
+export function useReviewViewOptions(): {
+  readonly options: ReviewViewOptions;
+  readonly setOptions: (patch: Partial<ReviewViewOptions>) => void;
+} {
+  const diffStyle = useReviewViewOptionsStore((state) => state.diffStyle);
+  const wrapLines = useReviewViewOptionsStore((state) => state.wrapLines);
+  const setOptions = useReviewViewOptionsStore((state) => state.setOptions);
+  return {
+    options: { diffStyle, wrapLines },
+    setOptions,
+  };
 }
 
 export function useReviewAppearance(

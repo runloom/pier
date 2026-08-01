@@ -220,6 +220,10 @@ const preferencesApi: PierPreferencesAPI = {
 };
 
 const themeApi: PierThemeAPI = {
+  onVisualPreview: (cb) =>
+    subscribeIpc(PIER_BROADCAST.THEME_VISUAL_PREVIEW, cb),
+  previewVisual: (payload) =>
+    ipcRenderer.invoke(PIER.THEME_PREVIEW_VISUAL, payload),
   setNativeChrome: (resolved, chromeColor) =>
     ipcRenderer.invoke("pier:theme:set-native-chrome", resolved, chromeColor),
 };

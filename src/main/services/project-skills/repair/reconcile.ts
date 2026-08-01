@@ -1,9 +1,6 @@
 import { readlink, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type {
-  ProjectRootRef as ContractProjectRootRef,
-  ProjectSkillsManifest,
-} from "../../../../shared/contracts/project-skills.ts";
+import type { ProjectSkillsManifest } from "../../../../shared/contracts/project-skills.ts";
 import { toContractProjectRootRef } from "../identity.ts";
 import type {
   OperationTerminalStatus,
@@ -25,23 +22,7 @@ import {
   type TargetOpResult,
   writeRepairRecoveryLog,
 } from "./log.ts";
-
-export function minimalSnapshot(args: {
-  projectRef: ContractProjectRootRef;
-  manifest: ProjectSkillsManifest | null;
-  manifestRevision: string | null;
-  observedRevision: string;
-  pendingIssueIds: string[];
-}): unknown {
-  return {
-    projectRef: args.projectRef,
-    manifestRevision: args.manifestRevision,
-    observedRevision: args.observedRevision,
-    manifest: args.manifest,
-    pendingIssueIds: args.pendingIssueIds,
-    skills: args.manifest?.skills ?? [],
-  };
-}
+import { minimalSnapshot } from "./minimal-snapshot.ts";
 
 async function reconcileTargets(
   ctx: RepairContext,

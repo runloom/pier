@@ -32,6 +32,7 @@ const OMP_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
     pierEvent: "InteractionResolved",
   },
   { nativeEvent: "agent_end.willContinue", pierEvent: "processing" },
+  { nativeEvent: "agent_end.completed", pierEvent: "TurnCompleted" },
   { nativeEvent: "agent_end.error", pierEvent: "error" },
   { nativeEvent: "agent_end.aborted", pierEvent: "TurnInterrupted" },
   { nativeEvent: "session_stop", pierEvent: "Stop" },
@@ -224,6 +225,9 @@ export default function PierAgentStatus(pi) {
 		});
 	});
 	pi.on("agent_end", (event, ctx) => {
+		// willContinue=true：同一次用户回合内还会继续（多步/工具环），保持 processing。
+		// willContinue=false：本回合 agent loop 已结束——正常完成必须落 TurnCompleted，
+		// 否则状态会卡在「思考中」直到 session_stop（会话退出）才 ready。
 		if (event && event.willContinue === true) {
 			pierEmit("processing", "agent_end.willContinue", event, ctx, {
 				nativeState: "will_continue",
@@ -238,6 +242,10 @@ export default function PierAgentStatus(pi) {
 		} else if (stopReason === "aborted") {
 			pierEmit("TurnInterrupted", "agent_end.aborted", event, ctx, {
 				nativeState: stopReason,
+			});
+		} else {
+			pierEmit("TurnCompleted", "agent_end.completed", event, ctx, {
+				nativeState: stopReason || "completed",
 			});
 		}
 	});

@@ -164,12 +164,29 @@ const ompActions: AgentStatusTraceAction[] = [
     { approved: false, toolCallId: "approval-1" }
   ),
   extensionAction(
-    "session_stop",
-    "Stop",
-    "ready",
+    "agent_end.completed",
+    "TurnCompleted",
+    "completed",
     { expectedStatus: "ready" },
-    "omp-session-1"
+    "omp-session-1",
+    {
+      messages: [{ role: "assistant", stopReason: "completed" }],
+      willContinue: false,
+    },
+    "agent_end"
   ),
+  {
+    ...extensionAction(
+      "session_stop",
+      "Stop",
+      "ready",
+      { expectedStatus: "ready" },
+      "omp-session-1"
+    ),
+    checkpoints: [],
+    expectedIngest: false,
+    scenarios: ["late-event"],
+  },
   extensionAction(
     "session_start",
     "SessionStart",
@@ -266,6 +283,7 @@ export const EXTENSION_PLUGIN_STATUS_TRACES = [
       "tool",
       "waiting",
       "error",
+      "completed",
       "interrupted",
     ],
     createProducer: () =>

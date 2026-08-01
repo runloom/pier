@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
+  PIER_HOOK_COMMAND_GENERATION,
   pierHooksCurrentDir,
 } from "../../../src/main/services/agents/hooks-install.ts";
 import {
@@ -22,6 +23,7 @@ import { pathForHookSpawn } from "./hook-spawn-path.ts";
 const MARK = "PIER_AGENT_HOOKS_DIR";
 const PIER_HOOK_NAME = "pier-agent-status";
 const ALL_EVENTS = ["PreInvocation", "Stop"];
+const HIGHER_HOOK_GENERATION = PIER_HOOK_COMMAND_GENERATION + 1;
 
 interface AntigravityHandler {
   command: string;
@@ -315,7 +317,7 @@ describe("install/uninstallAntigravityHooks (文件 IO)", () => {
       [PIER_HOOK_NAME]: {
         Stop: [
           {
-            command: `pier-hook-gen=11; "\${PIER_AGENT_HOOKS_DIR}/emit" newer`,
+            command: `pier-hook-gen=${HIGHER_HOOK_GENERATION}; "\${PIER_AGENT_HOOKS_DIR}/emit" newer`,
             timeout: 5,
             type: "command",
           },

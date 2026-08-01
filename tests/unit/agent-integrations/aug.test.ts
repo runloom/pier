@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
+  PIER_HOOK_COMMAND_GENERATION,
   pierHooksCurrentDir,
 } from "../../../src/main/services/agents/hooks-install.ts";
 import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
@@ -15,6 +16,7 @@ import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 const ORIGINAL_PATH = process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin";
+const HIGHER_HOOK_GENERATION = PIER_HOOK_COMMAND_GENERATION + 1;
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -484,7 +486,7 @@ describe("augIntegration", () => {
     await mkdir(join(homeDir, ".augment", "hooks"), { recursive: true });
     const newerScript = [
       "#!/bin/sh",
-      "# pier-agent-status:v11 (managed by Pier)",
+      `# pier-agent-status:v${HIGHER_HOOK_GENERATION} (managed by Pier)`,
       "exit 0",
       "",
     ].join("\n");

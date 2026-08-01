@@ -287,7 +287,9 @@ export function createSystemSkillsChannel(
       try {
         const info = await lstat(absolute);
         if (info.isSymbolicLink()) {
-          continue; // Existing link (owned or foreign) — never replace here.
+          // Existing link (owned or foreign) — never replace here. Launch
+          // must not decide ownership either; settings surfaces the state.
+          continue;
         }
         continue; // Unmanaged real entry — never overwrite.
       } catch (error) {

@@ -44,6 +44,7 @@ const SNAPSHOT = {
         agentId: "codex" as const,
         kind: "agent" as const,
         sessionTitle: "Hot agent",
+        sessionTitleSource: "provider" as const,
         status: "processing",
       },
       memoryBytes: 400 * 1024 * 1024,
