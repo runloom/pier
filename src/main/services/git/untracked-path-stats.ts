@@ -239,9 +239,15 @@ function mapReadFailure(error: unknown): ReadFailureResult {
   }
   if (typeof error === "object" && error !== null && "code" in error) {
     const code = (error as { code?: unknown }).code;
-    // O_NOFOLLOW / anchored open rejects symlink traversal as ELOOP (and on
-    // some Linux kernels / proc-fd paths as EPERM or EINVAL). Treat as unsafe.
-    if (code === "ELOOP" || code === "EMLINK" || code === "EPERM") {
+    // O_NOFOLLOW / anchored open rejects symlink traversal. Codes vary by
+    // platform and by whether the bad component is a file or directory link.
+    if (
+      code === "ELOOP" ||
+      code === "EMLINK" ||
+      code === "EPERM" ||
+      code === "EINVAL" ||
+      code === "ENOTDIR"
+    ) {
       return { kind: "failure", reason: "unsafePath" };
     }
   }

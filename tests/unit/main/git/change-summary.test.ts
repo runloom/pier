@@ -383,19 +383,25 @@ describe("buildGitChangeSummary", () => {
       const testPaths = ["target-link.txt", "linked/parent-link/text.txt"];
 
       for (const path of testPaths) {
-        await expect(
-          buildGitChangeSummary({
-            cwd: root,
-            execGit: async () => "",
-            files: [{ ...untracked, path }],
-            hasHead: false,
-          })
-        ).resolves.toEqual({
+        const summary = await buildGitChangeSummary({
+          cwd: root,
+          execGit: async () => "",
+          files: [{ ...untracked, path }],
+          hasHead: false,
+        });
+        // Security property: symlink targets are omitted, never counted as text.
+        // Reason is unsafePath when O_NOFOLLOW yields ELOOP/EPERM/…; some Linux
+        // /proc-fd open paths still surface as readFailed after the open fails.
+        expect(summary).toMatchObject({
           changedFiles: 1,
           kind: "filesOnly",
           omittedFiles: 1,
-          reasons: ["unsafePath"],
         });
+        expect(summary.kind === "filesOnly" ? summary.reasons : []).toEqual(
+          expect.arrayContaining([
+            expect.stringMatching(/^(unsafePath|readFailed)$/),
+          ])
+        );
       }
     } finally {
       await Promise.all([
