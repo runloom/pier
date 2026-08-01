@@ -77,10 +77,11 @@ async function selectReviewSurface(
     return;
   }
   // Switcher lives in the panel header chrome, not inside each surface body.
+  // Anchor names: bare /Changes/ also matches "Staged Changes" (strict mode).
   const tabName =
     surface === "staged"
-      ? /Staged Changes|已暂存更改/u
-      : /Unstaged Changes|Changes|^更改$/u;
+      ? /^(?:Staged Changes|已暂存更改)$/u
+      : /^(?:Unstaged Changes|Changes|更改)$/u;
   const tab = page
     .getByTestId("git-review-surface-switcher")
     .getByRole("tab", { name: tabName });
