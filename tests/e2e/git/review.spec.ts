@@ -56,6 +56,16 @@ function activeReviewSurface(page: Page): Locator {
   return page.locator('[data-git-review-surface][aria-hidden="false"]:visible');
 }
 
+/** Shared header change summary (chrome, not nested under a surface body). */
+function reviewChangeSummary(page: Page): Locator {
+  return page.getByTestId("git-review-change-summary");
+}
+
+/** Navigation host that owns monotonic data-git-review-navigation-seq. */
+function reviewNavigationHost(page: Page): Locator {
+  return page.locator("[data-git-review-shared-tree]");
+}
+
 async function selectReviewSurface(
   page: Page,
   surface: "index" | "staged"
@@ -1680,12 +1690,17 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     });
     const reviewHeader = page.locator('[data-slot="file-panel-header"]');
     await expect(reviewHeader).toBeVisible();
-    const initialChangeSummary = activeReviewSurface(page).getByTestId(
-      "git-review-change-summary"
-    );
-    await expect(initialChangeSummary).toBeVisible();
-    await expect(initialChangeSummary).toContainText("+5002");
-    await expect(initialChangeSummary).toContainText("−5002");
+    // Header summary tracks the active surface (shared chrome, outside surface body).
+    // Staged-only half of the fixture is app.tsx (+1/−1); large.ts is unstaged.
+    const stagedSummary = reviewChangeSummary(page);
+    await expect(stagedSummary).toBeVisible();
+    await expect(stagedSummary).toContainText("+1");
+    await expect(stagedSummary).toContainText("−1");
+    await selectReviewSurface(page, "index");
+    const unstagedSummary = reviewChangeSummary(page);
+    await expect(unstagedSummary).toContainText("+5002");
+    await expect(unstagedSummary).toContainText("−5002");
+    // Stay on Changes (index): later steps cover script.py / large.ts / binaries.
     expect(
       await reviewHeader.evaluate((header) =>
         Math.round(header.getBoundingClientRect().height)
@@ -2029,9 +2044,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
         '[data-git-review-document-settled="true"]'
       )
     ).toBeAttached({ timeout: 30_000 });
-    const stagedChangeSummary = activeReviewSurface(page).getByTestId(
-      "git-review-change-summary"
-    );
+    const stagedChangeSummary = reviewChangeSummary(page);
     await expect(stagedChangeSummary).toContainText("+1");
     await expect(stagedChangeSummary).toContainText("−1");
     await expect(stagedChangeSummary).not.toContainText("+5002");
@@ -2710,8 +2723,7 @@ test("cold-opens staged multi-file Review and hydrates real CodeView text", asyn
     await expect
       .poll(
         () =>
-          activeReviewSurface(page)
-            .getByTestId("git-review-tree")
+          reviewTree(page)
             .getByRole("treeitem", { name: /file-0030\.ts/u })
             .count(),
         { timeout: 20_000 }
@@ -3227,9 +3239,10 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         { once: true }
       );
     });
-    const navigationHost = activeReviewSurface(page).locator("..");
-    const navigationNonceBefore = Number(
-      await navigationHost.getAttribute("data-git-review-navigation-nonce")
+    // Monotonic seq survives request settle (active nonce attr resets to 0).
+    const navigationHost = reviewNavigationHost(page);
+    const navigationSeqBefore = Number(
+      await navigationHost.getAttribute("data-git-review-navigation-seq")
     );
     await installNavigationAnchorProbe(page, "value2000");
     await target.click();
@@ -3237,13 +3250,11 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
       .poll(
         async () =>
           Number(
-            await navigationHost.getAttribute(
-              "data-git-review-navigation-nonce"
-            )
+            await navigationHost.getAttribute("data-git-review-navigation-seq")
           ),
         { timeout: 5000 }
       )
-      .toBeGreaterThan(navigationNonceBefore);
+      .toBeGreaterThan(navigationSeqBefore);
     await expect
       .poll(() => isDiffTextInViewport(page, "value2000"), {
         timeout: 30_000,

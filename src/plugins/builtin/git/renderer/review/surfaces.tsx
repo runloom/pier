@@ -34,7 +34,6 @@ import type {
 import { GitReviewToolbar } from "./toolbar.tsx";
 
 type PendingMutationTransition = GitReviewMutationTransition;
-
 function ReviewDocumentsComponent(
   props: Omit<
     ReviewSurfaceProps,
@@ -82,6 +81,8 @@ function ReviewDocumentsComponent(
   );
   const lastNavigationPathRef = useRef<string | null>(null);
   const navigationNonceRef = useRef(0);
+  // Monotonic seq (e2e); active nonce attr resets on settle.
+  const [navigationSeq, setNavigationSeq] = useState(0);
   useEffect(
     () =>
       subscribeGitReviewMutationTransition((event) => {
@@ -153,14 +154,16 @@ function ReviewDocumentsComponent(
         return new Set([...current, surface]);
       });
       navigationNonceRef.current += 1;
+      const nonce = navigationNonceRef.current;
+      setNavigationSeq(nonce);
       const request = {
-        activation: "activate",
+        activation: "activate" as const,
         entryKey,
         itemId: sectionKey,
-        nonce: navigationNonceRef.current,
+        nonce,
         surface,
         treeSectionKey: sectionKey,
-      } satisfies ReviewSurfaceNavigationRequest;
+      };
       navigationRequestRef.current = request;
       setNavigationRequest(request);
     },
@@ -285,18 +288,20 @@ function ReviewDocumentsComponent(
       return new Set([...current, mutationTransition.targetSurface]);
     });
     navigationNonceRef.current += 1;
+    const nonce = navigationNonceRef.current;
+    setNavigationSeq(nonce);
     const request = {
-      activation: "preserve",
+      activation: "preserve" as const,
       ...(mutationTransition.anchorOffset === undefined
         ? {}
         : { anchorOffset: mutationTransition.anchorOffset }),
       entryKey: mutationTransition.entryKey,
       itemId,
       minimumIndexGeneration: mutationTransition.minimumIndexGeneration,
-      nonce: navigationNonceRef.current,
+      nonce,
       surface: mutationTransition.targetSurface,
       treeSectionKey: itemId,
-    } satisfies ReviewSurfaceNavigationRequest;
+    };
     navigationRequestRef.current = request;
     setNavigationRequest(request);
     setMutationTransition(null);
@@ -355,14 +360,10 @@ function ReviewDocumentsComponent(
     !props.treeModel.visibleGroups.includes(
       reviewGroupForSurface(activeSurface)
     );
-  let headerSummaryGroup: keyof typeof props.groupSummaries;
-  if (activeSurface === "index") {
-    headerSummaryGroup = "unstaged";
-  } else if (activeSurface === "committed") {
-    headerSummaryGroup = "committed";
-  } else {
-    headerSummaryGroup = activeSurface;
-  }
+  const headerSummaryGroup =
+    activeSurface === "committed"
+      ? "committed"
+      : reviewGroupForSurface(activeSurface);
   const headerSummary = props.groupSummaries[headerSummaryGroup];
   const sharedHeaderLeading =
     committed || props.treeModel.visibleGroups.length === 0 ? (
@@ -430,6 +431,7 @@ function ReviewDocumentsComponent(
       <div
         className="relative h-full min-h-0"
         data-git-review-navigation-nonce={navigationRequest?.nonce ?? 0}
+        data-git-review-navigation-seq={navigationSeq}
         data-git-review-navigation-surface={navigationRequest?.surface ?? ""}
         data-git-review-shared-tree=""
       >
