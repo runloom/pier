@@ -52,10 +52,22 @@ async function selectReviewSurface(
   page: Page,
   surface: "index" | "staged"
 ): Promise<void> {
-  const tabs = activeReviewSurface(page)
+  const current = await activeReviewSurface(page).getAttribute(
+    "data-git-review-surface"
+  );
+  if (current === surface) {
+    return;
+  }
+  // Switcher lives in the panel header chrome, not inside each surface body.
+  const tabName =
+    surface === "staged"
+      ? /Staged Changes|已暂存更改/u
+      : /Unstaged Changes|Changes|^更改$/u;
+  const tab = page
     .getByTestId("git-review-surface-switcher")
-    .getByRole("tab");
-  await tabs.nth(surface === "staged" ? 0 : 1).click();
+    .getByRole("tab", { name: tabName });
+  await expect(tab).toBeVisible({ timeout: 15_000 });
+  await tab.click();
   await expect(activeReviewSurface(page)).toHaveAttribute(
     "data-git-review-surface",
     surface
@@ -63,6 +75,22 @@ async function selectReviewSurface(
   await expect(
     page.locator("[data-git-review-navigation-surface]")
   ).toHaveAttribute("data-git-review-navigation-surface", "");
+}
+
+/** Expand the active surface's group root (and optional src/) so file rows exist. */
+async function ensureReviewTreeFilesVisible(
+  page: Page,
+  group: "staged" | "unstaged" = "unstaged"
+): Promise<void> {
+  const targetSurface = group === "staged" ? "staged" : "index";
+  await selectReviewSurface(page, targetSurface).catch(() => undefined);
+  await expandReviewTreeGroup(page, group);
+  const src = activeReviewSurface(page)
+    .getByTestId("git-review-tree")
+    .getByRole("treeitem", { name: /^src$/u });
+  if ((await src.count()) > 0) {
+    await expandReviewTreeDirectory(page, /^src$/u, group);
+  }
 }
 
 async function waitForReviewMutationRelease(page: Page): Promise<void> {
@@ -1635,7 +1663,9 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(
       page.locator('[data-panel-tab-id^="pier.git.diff:"]')
     ).toHaveCount(0);
-    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
+    // Half-staged fixture prefers staged surface; expand so app.tsx is a row.
+    await ensureReviewTreeFilesVisible(page, "staged");
+    await expect(reviewTreeFileItem(page, /app\.tsx/u, "staged")).toBeVisible({
       timeout: 20_000,
     });
     await expect(
@@ -2651,8 +2681,8 @@ test("cold-opens staged multi-file Review and hydrates real CodeView text", asyn
       .poll(() => reviewPanelIds(page), { timeout: 20_000 })
       .toHaveLength(1);
 
-    // Staged-only fixture → staged surface (or switch there).
-    await selectReviewSurface(page, "staged").catch(() => undefined);
+    // Staged-only fixture → staged surface (or switch there) and expand tree.
+    await ensureReviewTreeFilesVisible(page, "staged");
     await expect(activeReviewSurface(page)).toHaveAttribute(
       "data-git-review-surface",
       "staged",
@@ -2807,6 +2837,7 @@ test("keeps real CodeView text after staging onto the staged surface", async () 
       .toHaveLength(1);
 
     // script.py is unstaged-only in the compact fixture.
+    await ensureReviewTreeFilesVisible(page, "unstaged");
     await clickReviewTreeFile(page, /script\.py/u, "unstaged");
     await expect(activeReviewSurface(page)).toHaveAttribute(
       "data-git-review-surface",
@@ -2960,7 +2991,8 @@ test("keeps the reading viewport stable through real stage and unstage", async (
     await expect
       .poll(() => reviewPanelIds(page), { timeout: 20_000 })
       .toHaveLength(1);
-    await clickReviewTreeFile(page, /app\.tsx/u);
+    await ensureReviewTreeFilesVisible(page, "unstaged");
+    await clickReviewTreeFile(page, /app\.tsx/u, "unstaged");
     await expect(activeReviewSurface(page)).toHaveAttribute(
       "data-git-review-surface",
       "index"
@@ -3660,7 +3692,8 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
     const reviewId = reviewIds[0] as string;
     expect(await panelSharesGroup(page, terminalId, reviewId)).toBe(true);
 
-    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
+    await ensureReviewTreeFilesVisible(page, "staged");
+    await expect(reviewTreeFileItem(page, /app\.tsx/u, "staged")).toBeVisible({
       timeout: 20_000,
     });
     // app.tsx exists in both groups. Each click must anchor the exact section,
@@ -3751,7 +3784,7 @@ test("gold-standard probes: hydrate timeout attr, navigation gate false, pure re
     expect(terminalPanelId).not.toBe("");
     await openReviewFromTerminal(page, terminalPanelId);
     // git mv 落在 staged；切到 staged 面看 pure rename 海
-    await selectReviewSurface(page, "staged");
+    await ensureReviewTreeFilesVisible(page, "staged");
 
     await expect(
       reviewTreeFileItem(page, /renamed-a\.ts/u, "staged")
