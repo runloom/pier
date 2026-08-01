@@ -22,6 +22,8 @@ import {
   createFilesLspHoverModel,
   type FilesLspHoverCandidate,
   FilesLspOwnedMapping,
+  filesLspHoverCandidateAtPosition,
+  preferFilesLspHoverCandidateRange,
   prepareFilesLspDefinitions,
   sameFilesLspHoverCandidate,
 } from "./hover-data.ts";
@@ -78,11 +80,8 @@ export class FilesLspHoverController extends FilesLspHoverControllerBase {
   async showManual(): Promise<"shown" | "queued" | "unavailable"> {
     this._clear();
     const position = this._view.state.selection.main.head;
-    const word = this._view.state.wordAt(position);
     const intent: ManualHoverIntent = {
-      candidate: word
-        ? { from: word.from, position, to: word.to }
-        : { from: position, position, to: position },
+      candidate: filesLspHoverCandidateAtPosition(this._view, position),
     };
     this._manualQueued = intent;
     const pluginBeforePrepare = LSPPlugin.get(this._view);
@@ -113,10 +112,7 @@ export class FilesLspHoverController extends FilesLspHoverControllerBase {
    */
   async jumpToDefinition(): Promise<boolean> {
     const position = this._view.state.selection.main.head;
-    const word = this._view.state.wordAt(position);
-    const candidate: FilesLspHoverCandidate = word
-      ? { from: word.from, position, to: word.to }
-      : { from: position, position, to: position };
+    const candidate = filesLspHoverCandidateAtPosition(this._view, position);
     if (!(await this._ensurePluginForDefinitionJump(candidate))) {
       return true;
     }
@@ -128,13 +124,8 @@ export class FilesLspHoverController extends FilesLspHoverControllerBase {
       this._clear();
       this._mode = "definition";
       this._sticky = true;
-      const word = this._view.state.wordAt(
-        this._view.state.selection.main.head
-      );
-      const position = this._view.state.selection.main.head;
-      this._candidate = word
-        ? { from: word.from, position, to: word.to }
-        : { from: position, position, to: position };
+      const head = this._view.state.selection.main.head;
+      this._candidate = filesLspHoverCandidateAtPosition(this._view, head);
       this._mapping = new FilesLspOwnedMapping(result.mapping);
       this._preparedPlugin = result.plugin;
       const epoch = this._epoch;
@@ -348,9 +339,14 @@ export class FilesLspHoverController extends FilesLspHoverControllerBase {
     if (this._destroyed) {
       return;
     }
+    // Prefer an already-expanded anchor (Hover.range / full string) over a
+    // smaller word probe so Cmd+hover underlines the whole specifier.
+    const range = candidate
+      ? preferFilesLspHoverCandidateRange(this._candidate, candidate)
+      : null;
     // Never dispatch from ViewPlugin.update — queue to the next microtask.
     const effect = this._setAffordance.of(
-      candidate ? { from: candidate.from, to: candidate.to } : null
+      range ? { from: range.from, to: range.to } : null
     );
     queueMicrotask(() => {
       if (!this._destroyed) {

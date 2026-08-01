@@ -1,4 +1,5 @@
-import { Compartment, EditorState } from "@codemirror/state";
+import { javascript } from "@codemirror/lang-javascript";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import type { FileDocumentReadResult } from "@shared/contracts/file.ts";
 import { EditorView } from "codemirror";
 import {
@@ -265,6 +266,7 @@ function mountHover(
     compartment?: Compartment;
     documentId?: string;
     doc?: string;
+    extensions?: Extension[];
     pointerPosition?: number;
     prepareForManual?: HoverExtensionInput["prepareForManual"];
     readDocument?: Parameters<typeof filesLspHoverExtension>[0]["readDocument"];
@@ -291,7 +293,7 @@ function mountHover(
     parent: host,
     state: EditorState.create({
       doc: options.doc ?? SOURCE,
-      extensions: [extension],
+      extensions: [...(options.extensions ?? []), extension],
       selection: { anchor: 7 },
     }),
   });
@@ -556,6 +558,66 @@ describe("filesLspHoverExtension", () => {
     movePointer(view);
     await vi.advanceTimersByTimeAsync(300);
     expect(harness.client.request).toHaveBeenCalledOnce();
+  });
+
+  it("underlines the full import string on Cmd+hover, not a path word fragment", async () => {
+    const harness = createLspHarness();
+    const doc = 'import { applyTokens } from "@/lib/theme/apply-tokens.ts";';
+    const applyInPath = doc.indexOf("apply-tokens") + 2;
+    const { view } = mountHover(harness, {
+      doc,
+      extensions: [javascript()],
+      pointerPosition: applyInPath,
+    });
+
+    movePointer(view, { metaKey: true });
+    await flushAsyncWork();
+    view.measure();
+    await flushAsyncWork();
+
+    const mark = view.dom.querySelector(".cm-lsp-definition-affordance");
+    expect(mark).not.toBeNull();
+    expect(mark?.textContent).toBe('"@/lib/theme/apply-tokens.ts"');
+    // Continuous underline uses a rectangle layer (not per-token text-decoration).
+    expect(
+      view.dom.querySelector(".cm-lsp-definition-affordance-layer")
+    ).not.toBeNull();
+    expect(harness.client.request).not.toHaveBeenCalled();
+  });
+
+  it("does not clear documentation when Hover.range expands beyond the word probe", async () => {
+    const harness = createLspHarness();
+    // Wider than word "beta" so post-response identity cannot rely on from/to equality.
+    harness.responders.set("textDocument/hover", () =>
+      Promise.resolve({
+        contents: { kind: "markdown", value: "Wide range" },
+        range: range(0, 18),
+      })
+    );
+    const beta = SOURCE.indexOf("beta");
+    const { setPointerPosition, view } = mountHover(harness, {
+      pointerPosition: beta + 1,
+    });
+
+    movePointer(view);
+    await vi.advanceTimersByTimeAsync(300);
+    await flushAsyncWork();
+
+    expect(
+      view.dom.querySelector('[data-slot="files-lsp-hover-card"]')
+    ).not.toBeNull();
+    expect(harness.client.request).toHaveBeenCalledOnce();
+
+    // Stay on the same word fragment inside the expanded range.
+    setPointerPosition(beta + 2);
+    movePointer(view);
+    await vi.advanceTimersByTimeAsync(300);
+    await flushAsyncWork();
+
+    expect(harness.client.request).toHaveBeenCalledOnce();
+    expect(
+      view.dom.querySelector('[data-slot="files-lsp-hover-card"]')
+    ).not.toBeNull();
   });
 
   it("does not mount a documentation card when hover returns no content", async () => {

@@ -330,10 +330,21 @@ export const pierEditorTheme = EditorView.theme({
     cursor: "pointer",
     fontFamily: "var(--font-mono)",
   },
+  /* Cursor only — continuous underline is .cm-lsp-definition-affordance-rect */
   ".cm-lsp-definition-affordance": {
-    textDecoration: "underline",
-    textUnderlineOffset: "2px",
     cursor: "pointer",
+  },
+  ".cm-lsp-definition-affordance-layer": {
+    pointerEvents: "none",
+  },
+  /*
+   * Full-height range rect with bottom border: stays continuous across
+   * syntax-highlight splits (unlike text-decoration on nested spans).
+   */
+  ".cm-lsp-definition-affordance-rect": {
+    borderBottom: "1px solid var(--info)",
+    boxSizing: "border-box",
+    pointerEvents: "none",
   },
 });
 

@@ -1,9 +1,16 @@
-import { type Extension, StateEffect, StateField } from "@codemirror/state";
+import {
+  EditorSelection,
+  type Extension,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
   EditorView,
   keymap,
+  layer,
+  RectangleMarker,
   showTooltip,
   type Tooltip,
   ViewPlugin,
@@ -21,19 +28,38 @@ const setAffordanceEffect = StateEffect.define<{
   to: number;
 } | null>();
 
-const affordanceMark = Decoration.mark({
+export interface FilesLspAffordanceRange {
+  from: number;
+  to: number;
+}
+
+/**
+ * Cursor-only mark. Underline is drawn by a layer so it stays continuous when
+ * syntax highlighting splits the range into multiple inline spans.
+ */
+const affordanceCursorMark = Decoration.mark({
   attributes: {
     class: "cm-lsp-definition-affordance",
   },
 });
 
-const affordanceField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-  provide: (field) => EditorView.decorations.from(field),
+function affordanceDecorations(
+  range: FilesLspAffordanceRange | null
+): DecorationSet {
+  if (!range || range.from >= range.to) {
+    return Decoration.none;
+  }
+  return Decoration.set([affordanceCursorMark.range(range.from, range.to)]);
+}
+
+const affordanceField = StateField.define<FilesLspAffordanceRange | null>({
+  create: () => null,
+  provide: (field) =>
+    EditorView.decorations.from(field, (range) => affordanceDecorations(range)),
   update(value, transaction) {
     // Drop affordance on edit/selection without a nested ViewPlugin dispatch.
     if (transaction.docChanged || transaction.selection !== undefined) {
-      return Decoration.none;
+      return null;
     }
     let next = value;
     for (const effect of transaction.effects) {
@@ -41,17 +67,46 @@ const affordanceField = StateField.define<DecorationSet>({
         continue;
       }
       if (effect.value === null) {
-        next = Decoration.none;
+        next = null;
         continue;
       }
       const { from, to } = effect.value;
       if (from >= to) {
-        next = Decoration.none;
+        next = null;
         continue;
       }
-      next = Decoration.set([affordanceMark.range(from, to)]);
+      next = { from, to };
     }
     return next;
+  },
+});
+
+/**
+ * Continuous underline under the full affordance range (one rect per visual
+ * line / bidi piece). Avoids per-token text-decoration gaps.
+ */
+const affordanceUnderlineLayer = layer({
+  above: false,
+  class: "cm-lsp-definition-affordance-layer",
+  markers(view) {
+    const range = view.state.field(affordanceField);
+    if (!range || range.from >= range.to) {
+      return [];
+    }
+    return RectangleMarker.forRange(
+      view,
+      "cm-lsp-definition-affordance-rect",
+      EditorSelection.range(range.from, range.to)
+    );
+  },
+  update(update) {
+    return (
+      update.startState.field(affordanceField) !==
+        update.state.field(affordanceField) ||
+      update.docChanged ||
+      update.geometryChanged ||
+      update.viewportChanged
+    );
   },
 });
 
@@ -103,6 +158,7 @@ export function filesLspHoverExtension(input: FilesLspHoverInput): Extension {
   return [
     tooltipField,
     affordanceField,
+    affordanceUnderlineLayer,
     controllerPlugin,
     filesLspDefinitionKeymap(),
   ];
