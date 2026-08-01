@@ -1943,47 +1943,35 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     );
     // Demand-loaded review may not keep binary sections mounted after viewing
     // another file — navigate via the tree so the binary state patch is loaded.
-    const binaryTreeItem = reviewTreeFileItem(page, /binary-6\\special\.bin/u);
-    await binaryTreeItem.focus();
-    await binaryTreeItem.press("Enter");
+    // Search reveals virtualized rows after earlier file opens.
+    await page
+      .getByRole("button", {
+        name: /Find in changed files|在变更文件中查找/u,
+      })
+      .click();
+    const binaryTreeSearch = page.getByRole("textbox", {
+      name: /Find in changed files|在变更文件中查找/u,
+    });
+    await binaryTreeSearch.fill("binary-6");
+    await binaryTreeSearch.press("Enter");
     await expect
       .poll(
         () =>
-          page.evaluate((noticePatternSource) => {
-            // Multi-surface layout keeps inactive roots in the DOM — scope to active.
-            const surface = document.querySelector(
-              '[data-git-review-surface][aria-hidden="false"]'
-            );
-            if (!(surface instanceof HTMLElement)) {
-              return false;
-            }
-            const scroller = surface.querySelector<HTMLElement>(
-              '[data-testid="pierre-diff-root"] .cv-scrollbar'
-            );
-            if (!scroller) {
-              return false;
-            }
-            const viewport = scroller.getBoundingClientRect();
-            const noticePattern = new RegExp(noticePatternSource, "u");
-            // Binary notice lives in Pier light-DOM header metadata (not shadow).
-            const notices = [
-              ...surface.querySelectorAll(
-                '[data-slot="pier-diff-header-state-notice"]'
-              ),
-            ];
-            return notices.some((node) => {
-              const text = node.textContent ?? "";
-              const bounds = node.getBoundingClientRect();
-              return (
-                noticePattern.test(text) &&
-                bounds.bottom > viewport.top &&
-                bounds.top < viewport.bottom
-              );
-            });
-          }, BINARY_STATE_NOTICE.source),
-        { timeout: 30_000 }
+          reviewTree(page)
+            .getByRole("treeitem", { name: /binary-6\\special\.bin/u })
+            .count(),
+        { timeout: 20_000 }
       )
-      .toBe(true);
+      .toBeGreaterThan(0);
+    await reviewTreeFileItem(page, /binary-6\\special\.bin/u).click();
+    await binaryTreeSearch.press("Escape").catch(() => undefined);
+    // Binary views often have no CodeView scroller; assert the header notice on
+    // the active surface without requiring cv-scrollbar intersection.
+    await expect(
+      activeReviewSurface(page).locator(
+        '[data-slot="pier-diff-header-state-notice"]'
+      )
+    ).toContainText(BINARY_STATE_NOTICE, { timeout: 30_000 });
     await expect(
       page.locator('[role="alert"]').filter({ hasText: BINARY_STATE_NOTICE })
     ).toHaveCount(0);
