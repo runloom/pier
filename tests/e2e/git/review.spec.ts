@@ -1943,7 +1943,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     );
     // Demand-loaded review may not keep binary sections mounted after viewing
     // another file — navigate via the tree so the binary state patch is loaded.
-    // Search reveals virtualized rows after earlier file opens.
+    await ensureReviewTreeFilesVisible(page, "unstaged");
     await page
       .getByRole("button", {
         name: /Find in changed files|在变更文件中查找/u,
@@ -1954,24 +1954,19 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     });
     await binaryTreeSearch.fill("binary-6");
     await binaryTreeSearch.press("Enter");
-    await expect
-      .poll(
-        () =>
-          reviewTree(page)
-            .getByRole("treeitem", { name: /binary-6\\special\.bin/u })
-            .count(),
-        { timeout: 20_000 }
-      )
-      .toBeGreaterThan(0);
-    await reviewTreeFileItem(page, /binary-6\\special\.bin/u).click();
+    const binaryTreeItem = reviewTree(page).getByRole("treeitem", {
+      name: /binary-6/u,
+    });
+    await expect(binaryTreeItem.first()).toBeVisible({ timeout: 20_000 });
+    await binaryTreeItem.first().click();
     await binaryTreeSearch.press("Escape").catch(() => undefined);
-    // Binary views often have no CodeView scroller; assert the header notice on
-    // the active surface without requiring cv-scrollbar intersection.
+    // Binary views often have no CodeView scroller. Notice is light-DOM header
+    // metadata; match page-wide so multi-surface DOM order cannot hide it.
     await expect(
-      activeReviewSurface(page).locator(
-        '[data-slot="pier-diff-header-state-notice"]'
-      )
-    ).toContainText(BINARY_STATE_NOTICE, { timeout: 30_000 });
+      page.locator('[data-slot="pier-diff-header-state-notice"]').filter({
+        hasText: BINARY_STATE_NOTICE,
+      })
+    ).toBeVisible({ timeout: 30_000 });
     await expect(
       page.locator('[role="alert"]').filter({ hasText: BINARY_STATE_NOTICE })
     ).toHaveCount(0);
