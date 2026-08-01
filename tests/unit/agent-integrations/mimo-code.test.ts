@@ -365,6 +365,8 @@ describe("mimoCodePluginPath", () => {
     const HOME = "/tmp/pier-mimocode-home";
     delete process.env.MIMOCODE_HOME;
     process.env.HOME = HOME;
+    // Pin XDG so host CI XDG_CONFIG_HOME cannot redirect away from HOME.
+    process.env.XDG_CONFIG_HOME = join(HOME, ".config");
     expect(mimoCodePluginPath()).toBe(
       join(HOME, ".config", "mimocode", "plugins", "mimo-code-agent-status.js")
     );
@@ -484,6 +486,7 @@ describe("mimoCodeIntegration 契约", () => {
   const originalHome = process.env.HOME;
   const originalPath = process.env.PATH;
   const originalMimoHome = process.env.MIMOCODE_HOME;
+  const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
 
   afterEach(() => {
     process.env.HOME = originalHome;
@@ -492,6 +495,11 @@ describe("mimoCodeIntegration 契约", () => {
       delete process.env.MIMOCODE_HOME;
     } else {
       process.env.MIMOCODE_HOME = originalMimoHome;
+    }
+    if (originalXdgConfigHome === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
     }
   });
 
@@ -517,6 +525,7 @@ describe("mimoCodeIntegration 契约", () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-mimocode-detect-"));
     delete process.env.MIMOCODE_HOME;
     process.env.HOME = dir;
+    process.env.XDG_CONFIG_HOME = join(dir, ".config");
     process.env.PATH = "";
     expect(mimoCodeIntegration.detect()).toBe(false);
   });
@@ -526,6 +535,7 @@ describe("mimoCodeIntegration 契约", () => {
     await mkdir(join(dir, ".config", "mimocode"), { recursive: true });
     delete process.env.MIMOCODE_HOME;
     process.env.HOME = dir;
+    process.env.XDG_CONFIG_HOME = join(dir, ".config");
     process.env.PATH = "";
     expect(mimoCodeIntegration.detect()).toBe(true);
   });

@@ -413,6 +413,12 @@ describe("opencodeConfigPath / opencodePluginPath", () => {
   const originalHome = process.env.HOME;
   const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
 
+  function isolateHome(dir: string): void {
+    process.env.HOME = dir;
+    // Prefer explicit XDG under the temp root so host CI XDG cannot win.
+    process.env.XDG_CONFIG_HOME = join(dir, ".config");
+  }
+
   afterEach(() => {
     process.env.HOME = originalHome;
     if (originalXdgConfigHome === undefined) {
@@ -424,7 +430,7 @@ describe("opencodeConfigPath / opencodePluginPath", () => {
 
   it("没有配置文件时默认正式全局 JSONC 路径", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-opencode-cfgpath-"));
-    process.env.HOME = dir;
+    isolateHome(dir);
     expect(opencodeConfigPath()).toBe(
       join(dir, ".config", "opencode", "opencode.jsonc")
     );
@@ -440,13 +446,13 @@ describe("opencodeConfigPath / opencodePluginPath", () => {
       "{\n  // user\n}",
       "utf8"
     );
-    process.env.HOME = dir;
+    isolateHome(dir);
     expect(opencodeConfigPath()).toBe(join(configDir, "opencode.jsonc"));
   });
 
   it("插件路径落在 config 根目录的自动发现 plugins/ 子目录", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-opencode-plugpath-"));
-    process.env.HOME = dir;
+    isolateHome(dir);
     expect(opencodePluginPath()).toBe(
       join(dir, ".config", "opencode", "plugins", OPENCODE_PLUGIN_FILE_NAME)
     );
@@ -456,7 +462,7 @@ describe("opencodeConfigPath / opencodePluginPath", () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-opencode-plugpath2-"));
     await mkdir(join(dir, ".opencode"), { recursive: true });
     await writeFile(join(dir, ".opencode", "opencode.json"), "{}", "utf8");
-    process.env.HOME = dir;
+    isolateHome(dir);
     expect(opencodePluginPath()).toBe(
       join(dir, ".config", "opencode", "plugins", OPENCODE_PLUGIN_FILE_NAME)
     );
@@ -732,10 +738,16 @@ describe("install/uninstallOpencodeHooks (文件 IO)", () => {
 describe("opencodeIntegration 契约", () => {
   const originalHome = process.env.HOME;
   const originalPath = process.env.PATH;
+  const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
 
   afterEach(() => {
     process.env.HOME = originalHome;
     process.env.PATH = originalPath;
+    if (originalXdgConfigHome === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
+    }
   });
 
   it("id 为 opencode", () => {
@@ -745,6 +757,7 @@ describe("opencodeIntegration 契约", () => {
   it("detect：正式配置目录和命令都不存在 → false", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-opencode-detect-"));
     process.env.HOME = dir;
+    process.env.XDG_CONFIG_HOME = join(dir, ".config");
     process.env.PATH = "";
     expect(opencodeIntegration.detect()).toBe(false);
   });
@@ -758,6 +771,7 @@ describe("opencodeIntegration 契约", () => {
       "utf8"
     );
     process.env.HOME = dir;
+    process.env.XDG_CONFIG_HOME = join(dir, ".config");
     process.env.PATH = "";
     expect(opencodeIntegration.detect()).toBe(true);
   });
@@ -767,6 +781,7 @@ describe("opencodeIntegration 契约", () => {
     const bin = await mkdtemp(join(tmpdir(), "pier-opencode-bin-"));
     await writeFile(join(bin, "opencode"), "#!/bin/sh\n", { mode: 0o755 });
     process.env.HOME = home;
+    process.env.XDG_CONFIG_HOME = join(home, ".config");
     process.env.PATH = bin;
     expect(opencodeIntegration.detect()).toBe(true);
   });

@@ -13,7 +13,10 @@ let homeDir: string;
 
 beforeEach(async () => {
   homeDir = await mkdtemp(join(tmpdir(), "pier-kilo-home-"));
+  // Pin both HOME and XDG_CONFIG_HOME under the temp root. CI runners often
+  // export a host XDG_CONFIG_HOME, and os.homedir() may ignore process.env.HOME.
   vi.stubEnv("HOME", homeDir);
+  vi.stubEnv("XDG_CONFIG_HOME", join(homeDir, ".config"));
   vi.resetModules();
 });
 
