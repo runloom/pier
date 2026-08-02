@@ -13,6 +13,8 @@ import {
   ItemSeparator,
   ItemTitle,
 } from "@pier/ui/item.tsx";
+import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { Fragment, type JSX, useLayoutEffect, useRef, useState } from "react";
 import { describeSshTarget, type SshHost } from "../shared/hosts.ts";
 import type { Translate } from "./translate.ts";
@@ -107,7 +109,12 @@ function ImportContent({
 
   return (
     <div className="flex flex-col gap-4" data-slot="dialog-commit-form">
-      <ItemGroup className="max-h-72 gap-0 overflow-y-auto rounded-md border">
+      <ItemGroup
+        className={cn(
+          "max-h-72 gap-0 overflow-y-auto rounded-md border",
+          scrollFadeClassName({ fade: "vertical", profile: "short" })
+        )}
+      >
         {candidates.map((candidate, index) => (
           <Fragment key={candidate.id}>
             {index > 0 ? <ItemSeparator /> : null}

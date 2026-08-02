@@ -18,6 +18,7 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@pier/ui/input-group.tsx";
+import { ScrollArea } from "@pier/ui/scroll-area.tsx";
 import type { WorkbenchWidgetCategory } from "@shared/contracts/workbench.ts";
 import {
   Blocks,
@@ -325,9 +326,10 @@ export function WorkbenchLibraryDialog({
                 value={query}
               />
             </InputGroup>
-            <div
-              className="-mr-6 min-h-0 flex-1 overflow-y-auto pr-6"
-              data-scrollbar="stable"
+            <ScrollArea
+              className="min-h-0 min-w-0 flex-1"
+              viewportClassName="pr-4"
+              viewportFade="vertical"
             >
               {visibleItems.length > 0 ? (
                 <div className="grid grid-cols-1 gap-3 pb-1 sm:grid-cols-2 lg:grid-cols-3">
@@ -353,7 +355,7 @@ export function WorkbenchLibraryDialog({
                   </EmptyHeader>
                 </Empty>
               )}
-            </div>
+            </ScrollArea>
           </main>
         </SidebarProvider>
       </DialogContent>

@@ -13,6 +13,7 @@ import {
   CONTROL_HEIGHT_CLASS,
   MENU_ITEM_DENSITY_CLASS,
 } from "./interactive-density.ts";
+import { scrollFadeClassName } from "./scroll-area.tsx";
 import { cn } from "./utils.ts";
 
 function Command({
@@ -102,7 +103,10 @@ function CommandList({
   return (
     <CommandPrimitive.List
       className={cn(
+        // cmdk List must remain the scroll owner (keyboard navigation).
+        // Apply shared fade utilities directly — cannot nest ScrollArea here.
         "max-h-72 scroll-py-1 overflow-y-auto overflow-x-hidden outline-none",
+        scrollFadeClassName({ fade: "vertical", profile: "short" }),
         scrollbar === "none" && "no-scrollbar",
         className
       )}

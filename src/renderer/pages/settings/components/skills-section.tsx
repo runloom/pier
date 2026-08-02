@@ -146,7 +146,10 @@ export function SkillsSection({
   useEffect(() => {
     if (!modeIdentity) return;
     const section = document.getElementById("skills");
-    const scrollContainer = section?.closest("main");
+    // Prefer the settings dialog scroll slot; fall back to main for older shells.
+    const scrollContainer =
+      section?.closest<HTMLElement>('[data-slot="settings-scroll"]') ??
+      section?.closest("main");
     if (!scrollContainer) return;
     const previousKind = previousModeKindRef.current;
     if (mode.kind === "detail" && previousKind !== "projects") {

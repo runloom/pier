@@ -1,4 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
+import { ScrollArea } from "@pier/ui/scroll-area.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { markdownViewportFocusY } from "./cross-mode-anchor.ts";
@@ -32,11 +33,14 @@ export function MarkdownPreviewToc({
   onSelect: (headingId: string) => void;
 }) {
   const ticksRef = useRef<HTMLElement | null>(null);
-  const panelNavRef = useRef<HTMLElement | null>(null);
+  const panelScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!activeHeadingId) return;
-    for (const root of [ticksRef.current, panelNavRef.current]) {
+    const panelViewport = panelScrollRef.current?.querySelector<HTMLElement>(
+      '[data-slot="scroll-area-viewport"]'
+    );
+    for (const root of [ticksRef.current, panelViewport]) {
       if (!root) continue;
       const active = Array.from(
         root.querySelectorAll<HTMLElement>("[data-heading-id]")
@@ -138,43 +142,53 @@ export function MarkdownPreviewToc({
           ...(maxHeightPx > 0 ? { maxHeight: maxHeightPx } : {}),
         }}
       >
-        <nav
-          aria-label={labels.title}
-          className="min-h-0 flex-1 overflow-auto py-1"
-          data-scrollbar="none"
-          ref={panelNavRef}
-        >
-          <ul className="flex flex-col gap-0.5 px-1">
-            {headings.map((heading) => {
-              const active = heading.id === activeHeadingId;
-              return (
-                <li key={heading.id}>
-                  <Button
-                    className={cn(
-                      // Override Button defaults (whitespace-nowrap, fixed height)
-                      // so long headings wrap fully inside the panel width.
-                      "h-auto min-h-0 w-full items-start justify-start whitespace-normal px-2 py-1 text-left font-normal text-[11px] leading-4",
-                      active
-                        ? "bg-muted text-foreground"
-                        : "text-muted-foreground/80 hover:bg-muted/50 hover:text-foreground"
-                    )}
-                    data-heading-id={heading.id}
-                    onClick={() => onSelect(heading.id)}
-                    style={{
-                      paddingLeft: `${0.5 + (heading.depth - 1) * 0.45}rem`,
-                    }}
-                    type="button"
-                    variant="ghost"
-                  >
-                    <span className="min-w-0 flex-1 whitespace-normal break-words text-left">
-                      {heading.text}
-                    </span>
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
+        {/*
+          Short floating outline list: ScrollArea owns the only vertical scroll
+          owner and applies viewportFade (short) so clipped titles are discoverable
+          without permanent scrollbar chrome (type=hover).
+        */}
+        <div className="min-h-0 min-w-0 flex-1" ref={panelScrollRef}>
+          <ScrollArea
+            className="h-full min-h-0 min-w-0"
+            type="hover"
+            viewportClassName="py-1"
+            viewportFade="vertical"
+            viewportFadeProfile="short"
+          >
+            <nav aria-label={labels.title}>
+              <ul className="flex flex-col gap-0.5 px-1">
+                {headings.map((heading) => {
+                  const active = heading.id === activeHeadingId;
+                  return (
+                    <li key={heading.id}>
+                      <Button
+                        className={cn(
+                          // Override Button defaults (whitespace-nowrap, fixed height)
+                          // so long headings wrap fully inside the panel width.
+                          "h-auto min-h-0 w-full items-start justify-start whitespace-normal px-2 py-1 text-left font-normal text-[11px] leading-4",
+                          active
+                            ? "bg-muted text-foreground"
+                            : "text-muted-foreground/80 hover:bg-muted/50 hover:text-foreground"
+                        )}
+                        data-heading-id={heading.id}
+                        onClick={() => onSelect(heading.id)}
+                        style={{
+                          paddingLeft: `${0.5 + (heading.depth - 1) * 0.45}rem`,
+                        }}
+                        type="button"
+                        variant="ghost"
+                      >
+                        <span className="min-w-0 flex-1 whitespace-normal break-words text-left">
+                          {heading.text}
+                        </span>
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </nav>
+          </ScrollArea>
+        </div>
       </aside>
     </div>
   );

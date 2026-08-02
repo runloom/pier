@@ -1,3 +1,4 @@
+import { ScrollArea } from "@pier/ui/scroll-area.tsx";
 import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
 import type { WorkbenchWidgetComponentProps } from "@plugins/api/renderer.ts";
 import {
@@ -218,7 +219,11 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
       </div>
 
       {/* 仅列表区在内容超出时滚动；根节点不 min-h-full 叠高 */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <ScrollArea
+        className="min-h-0 min-w-0 flex-1"
+        viewportFade="vertical"
+        viewportFadeProfile="short"
+      >
         <div className="flex flex-col gap-2 px-3">
           {needsYouRows.length > 0 ? (
             <Section
@@ -250,7 +255,7 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
             </p>
           ) : null}
         </div>
-      </div>
+      </ScrollArea>
 
       {showFooter && otherWindowAgentCount > 0 ? (
         <button

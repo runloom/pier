@@ -15,6 +15,26 @@ interface ScrollAreaProps
   viewportFadeProfile?: ScrollAreaViewportFadeProfile;
 }
 
+/**
+ * Shared fade utilities for ScrollArea viewports and rare native scroll owners
+ * that cannot host Radix ScrollArea (cmdk List, Radix menu content, etc.).
+ * Prefer ScrollArea `viewportFade` for new product surfaces.
+ */
+function scrollFadeClassName(options: {
+  fade?: ScrollAreaViewportFade | undefined;
+  profile?: ScrollAreaViewportFadeProfile | undefined;
+}): string {
+  if (!options.fade) {
+    return "";
+  }
+  return cn(
+    options.fade === "vertical" && "scroll-fade-y",
+    options.fade === "horizontal" && "scroll-fade-x",
+    options.profile === "short" &&
+      "scroll-fade-t-2 scroll-fade-b-4 [--scroll-fade-reveal:24px]"
+  );
+}
+
 function ScrollArea({
   className,
   children,
@@ -32,10 +52,10 @@ function ScrollArea({
       <ScrollAreaPrimitive.Viewport
         className={cn(
           "size-full rounded-[inherit] outline-none transition-[color,box-shadow] focus-visible:outline-1 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-          viewportFade === "vertical" && "scroll-fade-y",
-          viewportFade === "horizontal" && "scroll-fade-x",
-          viewportFadeProfile === "short" &&
-            "scroll-fade-t-2 scroll-fade-b-4 [--scroll-fade-reveal:24px]",
+          scrollFadeClassName({
+            fade: viewportFade,
+            profile: viewportFadeProfile,
+          }),
           viewportClassName
         )}
         data-slot="scroll-area-viewport"
@@ -78,4 +98,5 @@ export {
   type ScrollAreaViewportFade,
   type ScrollAreaViewportFadeProfile,
   ScrollBar,
+  scrollFadeClassName,
 };

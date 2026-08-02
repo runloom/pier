@@ -21,6 +21,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@pier/ui/popover.tsx";
+import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import {
@@ -30,6 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { Bell, BellOff, Inbox } from "lucide-react";
 import {
   type ReactNode,
@@ -134,7 +136,10 @@ function NotificationCenterPopoverBody({
   const itemGroupBody =
     visible.length > 0 ? (
       <ItemGroup
-        className="max-h-[min(28rem,70vh)] overflow-y-auto p-1 data-[size=xs]:gap-1"
+        className={cn(
+          "max-h-[min(28rem,70vh)] overflow-y-auto p-1 data-[size=xs]:gap-1",
+          scrollFadeClassName({ fade: "vertical", profile: "short" })
+        )}
         data-scrollbar="none"
         data-size="xs"
         data-testid="notification-center-list"

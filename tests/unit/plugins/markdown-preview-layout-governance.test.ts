@@ -71,9 +71,13 @@ describe("markdown preview layout governance", () => {
     expect(toc).not.toContain("line-clamp-");
     expect(toc).not.toContain("setTocCollapsed");
     expect(toc).not.toContain("<X");
-    // Pier light-DOM scrollbars only hide via data-scrollbar="none"
-    // (globals.css); Tailwind scrollbar utilities cannot override *::-webkit-scrollbar.
+    // Tick rail stays native + hidden scrollbar; hover title list uses ScrollArea
+    // viewportFade (short) so overflow is discoverable without permanent chrome.
     expect(toc).toContain('data-scrollbar="none"');
+    expect(toc).toContain("ScrollArea");
+    expect(toc).toContain('viewportFade="vertical"');
+    expect(toc).toContain('viewportFadeProfile="short"');
+    expect(toc).toContain('data-slot="scroll-area-viewport"');
     expect(preview).toContain("MarkdownPreviewArticleLayout");
     expect(preview).toContain("MarkdownPreviewOverlayRail");
     expect(preview).toContain("<MarkdownPreviewToc");

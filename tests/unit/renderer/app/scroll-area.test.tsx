@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ScrollArea } from "@pier/ui/scroll-area.tsx";
+import { ScrollArea, scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -72,5 +72,20 @@ describe("ScrollArea viewport behavior", () => {
     );
 
     expect(source).toContain("bg-(--shell-scrollbar-thumb)");
+  });
+
+  it("exports shared fade class helpers for native scroll owners", () => {
+    expect(
+      scrollFadeClassName({ fade: "vertical", profile: "short" })
+    ).toContain("scroll-fade-y");
+    expect(
+      scrollFadeClassName({ fade: "vertical", profile: "short" })
+    ).toContain("scroll-fade-t-2");
+    expect(scrollFadeClassName({ fade: "horizontal" })).toContain(
+      "scroll-fade-x"
+    );
+    // Profile alone must not emit size tokens without a fade axis.
+    expect(scrollFadeClassName({ profile: "short" })).toBe("");
+    expect(scrollFadeClassName({})).toBe("");
   });
 });

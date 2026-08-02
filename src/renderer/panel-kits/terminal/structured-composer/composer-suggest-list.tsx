@@ -1,4 +1,5 @@
 import { MENU_ITEM_DENSITY_CLASS } from "@pier/ui/interactive-density.ts";
+import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { ReactNode } from "react";
 import { COMPOSER_SUGGEST_MAX_HEIGHT_PX } from "./composer-suggest-layout.ts";
@@ -66,8 +67,15 @@ export function ComposerSuggestList({
       role="listbox"
       style={{ maxHeight: COMPOSER_SUGGEST_MAX_HEIGHT_PX }}
     >
+      {/*
+        Native scroller: product contract hides chrome (no-scrollbar). cmdk-style
+        ownership is not needed, but ScrollArea would reintroduce hover thumbs.
+      */}
       <div
-        className="no-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+        className={cn(
+          "no-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+          scrollFadeClassName({ fade: "vertical", profile: "short" })
+        )}
         data-scrollbar="none"
       >
         {showEmpty ? (
