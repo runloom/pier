@@ -39,7 +39,7 @@ export function FocusRoutingSummary({
   );
 
   return (
-    <div className="shrink-0 space-y-1 border-t px-3 py-2 font-mono text-xs">
+    <div className="flex shrink-0 flex-col gap-1 border-t px-3 py-2 font-mono text-xs">
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1">
           <span className="text-muted-foreground">effective </span>
@@ -75,7 +75,7 @@ export function FocusRoutingSummary({
         {webRequestIdsText}
       </div>
       {recentFocus.length > 0 ? (
-        <ul className="max-h-24 space-y-0.5 overflow-auto text-muted-foreground">
+        <ul className="flex max-h-24 flex-col gap-0.5 overflow-auto text-muted-foreground">
           {recentFocus.map((event) => (
             <li key={event.seq}>
               <span className="font-semibold text-foreground">
