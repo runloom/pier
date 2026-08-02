@@ -154,6 +154,8 @@ type TurnResetEvidence =
   | "none";
 
 interface AgentTurnEventSemantics {
+  /** 该事件是否足以取消 advisory Stop 形成的完成候选。 */
+  readonly cancelsTerminalCandidate: boolean;
   readonly category: AgentTurnEventCategory;
   readonly createsSession: boolean;
   readonly mappedStatus: ActivityStatus | null | undefined;
@@ -172,6 +174,7 @@ interface AgentTurnEventSemantics {
 - 其余 `processing` / `running` 是普通 `progress`。
 - `TurnCompleted`、`TurnInterrupted`、`error` 以及 `authoritative/reset-only Stop` 是可信终态。
 - advisory `Stop` 是候选终态，映射状态为 `undefined`。
+- 分类器通过 `cancelsTerminalCandidate` 区分真正仍在活动的事实与迟到收尾：回合起点、普通推进、`ToolStart`、`InteractionRequested` 为 `true`；`ToolComplete`、`InteractionResolved`、子智能体事件及终态为 `false`。归约器只据此取消 advisory 候选，不能把迟到收尾投影为虚假的 `processing`。
 - `stopAuthority: "none"` 的 `Stop` 是忽略事件。
 - v1/v2 `PermissionRequest` 的兼容 waiting 规则保留在分类器中；严格 v3 仍只接受成对交互事件。
 - `SessionStart` / `SessionEnd` 只表达会话生命周期，不伪造回合状态。

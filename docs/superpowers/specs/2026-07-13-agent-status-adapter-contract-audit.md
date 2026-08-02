@@ -82,7 +82,7 @@ flowchart LR
 | `PermissionRequest` | `waiting` | `waiting` | 等待用户输入或授权 |
 | `error` | `error` | `failed` | 回合级失败，不把单个工具失败误报成会话失败 |
 | `SessionStart` | `ready` | `idle` | 建立有 hook 证据但尚未开始回合的活动 |
-| `Stop`（`authoritative` / `reset-only`）、`TurnCompleted`、`TurnInterrupted` | `ready` | `idle` | 只有可信终态可以结算当前回合 |
+| `Stop`（`authoritative` / `reset-only`）、`TurnCompleted`、`TurnInterrupted` | `ready` | `idle` | 可信终态同步封账；未闭合工具记账不得否定终态 |
 | `Stop`（`advisory`） | 缺席 | `idle` | 只记录候选终态，不能谎报 ready；后续可信事件可恢复具体状态 |
 | `SessionEnd` | 删除当前 scope；无剩余 scope 时删除 Agent 活动 | 回到父 scope 投影或无 Agent 指示 | 聚合器在普通状态映射前处理会话结束，不把已结束会话保留为 ready |
 | `SubagentStart`、`SubagentStop` | 保持主回合推进并更新计数 | `running` | 子代理不覆盖父会话恢复信息 |
@@ -190,6 +190,7 @@ flowchart LR
 - 不把提供方原生 session 路径加入 plugin API、preload 或 command router。
 - 不让 renderer 根据终端文字、标题或计时器生成第二份 Agent 状态。
 - 不让终态对账器（Codex/Claude）投影工具、processing、permission 或内容数据；它们只补可信终态。
+- 不让未配对的 `ToolStart` 否定可信终态，也不靠定时器、TTL 或补造 `ToolComplete` 延后封账。
 - 不因某家提供方事件不足而合成虚假 `Stop`、`ready` 或 `SessionStart`。
 - 不用公共 capability 包装尚不存在的服务；后续 Profile、Evidence 能力须随各自服务一起验收。
 
@@ -251,3 +252,59 @@ Ev5 表已同步：
 未处置项（显式接受）：crush 只有 `PreToolUse`，工具态直到 TTL/进程退出是能力
 上限（`stopAuthority: "none"` 已声明）；kiro/antigravity/command-code 等 coarse
 档位同理。聚合器不做超时推断——没有证据时保持现状是纪律，不是缺陷。
+
+## 增补：2026-08-02 可信终态原子封账
+
+### 根因与完成标准
+
+Codex 代码模式（code mode）的长命令可能只在后续 `write_stdin` 观察到命令完成时交付
+`PostToolUse`，工具失败路径也可能只留下 `PreToolUse`。此前聚合器把
+`TurnCompleted` 和可信 `Stop` 设为“等待工具账本排空”的软终态，导致提供方已经
+写出最终答复、transcript 已落 `task_complete` 后，未配对工具仍把状态永久压在
+`tool`。
+
+规范终态现在是当前回合的原子提交点：`TurnCompleted`、`TurnInterrupted`、`error`
+以及 `authoritative/reset-only Stop` 到达时，同步设置回合终态、退休活动工具、交互
+和子智能体记账，并投影 `ready/error`；同回合迟到事件被吸收，只有新的回合重置信号
+可以重新进入活动态。没有可信终态时，既有 TTL 仍只降低陈旧状态置信度，不生成
+`ready`。
+
+### 所有权与控制流
+
+- 提供方适配器和终态对账器只负责把已确认结束的原生事实映射为规范终态；若某个
+  原生事件可能在回合结束前出现，应修正该适配器的映射或 `stopAuthority`。
+- `ForegroundActivity` 聚合器独占回合和工作集记账，并在规范终态处完成原子封账；
+  工具账本只在活动回合内决定 `tool`，不能反向否定终态。
+- 发布层和 renderer 继续只镜像主进程快照，不读取终端画面或提供方文件补状态。
+- 终态若退休了未闭合工作，现有 `agent-terminal-trusted` 诊断只记录工具、交互、
+  子智能体数量，不记录标识符、参数或正文。
+
+控制流固定为：
+
+`原生 hook/transcript → 规范事件 → 回合身份校验 → 可信终态封账 → 清理工作集 → 状态投影 → UI`
+
+### 验收证据
+
+| 需求 | 证据 | 通过条件 |
+|---|---|---|
+| 未配对工具不能阻止完成 | `foreground-activity-aggregator.test.ts` | `ToolStart → TurnCompleted/可信 Stop` 不推进时钟即进入 `ready` |
+| 跨来源顺序收敛 | `codex-status-chain.test.tsx` | `task_complete→Stop`、`Stop→task_complete/turn_aborted` 均从真实 `tool` 收敛到 `ready` |
+| 迟到事件不复活旧回合 | `foreground-activity-aggregator.test.ts` | 迟到工具收尾被拒绝，新 `PromptSubmit` 可正常开启下一回合 |
+| 证据缺口可诊断且不泄漏内容 | 聚合器生命周期日志测试 | 只出现退休数量，不出现工具标识、输入或 transcript 正文 |
+
+## 增补：2026-08-02 回合重开语义收敛
+
+### 稳定结论
+
+`processing` / `running` 不再作为全局回合重开信号。它们在活跃回合内只是推进事实；可信终态之后，只有明确的 `PromptSubmit`、未结算的新 `turnId`，或适配器逐原生事件声明的无关联重开权威，才能开始新回合。首批逐事件权威是 Cline 的 `TaskResume` 与 Antigravity 的 `PreInvocation`。其他提供方仍须以各自带身份的 `PromptSubmit` 等证据重开，不能因普通状态快照绕过已结算身份。
+
+统一分类器由 `src/main/services/foreground-activity/agent-turn-event-semantics.ts` 拥有；它将 hook 或 transcript 的规范事件连同 `stopAuthority`、`turnStartAuthority` 分类，并以 `cancelsTerminalCandidate` 明确哪些事件足以推翻 advisory `Stop` 的完成候选。真实活动起点、普通推进以及 `ToolStart` / `InteractionRequested` 可取消候选；`ToolComplete`、`InteractionResolved`、`SubagentStart` / `SubagentStop` 等迟到收尾或非主回合活动不能伪造恢复。`src/main/services/foreground-activity/turn-bookkeeping.ts` 是唯一可变归约器，负责身份优先校验、可信终态原子封账、合法重开、已结算身份吸收及有限拒绝原因。
+
+接入层在 `src/main/ipc/foreground-activity.ts` 为每条 JSONL 事件解析运行语义；`src/main/services/agents/integrations/runtime/event-authority.ts` 只在原生事件名和规范事件同时匹配适配器映射时授予重开权威。生命周期日志记录 `evidenceSource`（`hook` / `transcript`）、`nativeEvent`、分类、转换、有限拒绝原因和退休工作数量；不记录 prompt、transcript 正文、路径、工具标识或参数。
+
+### 不变量与可复验路径
+
+- 可信终态立即封账，工作账本不得否定 `ready` / `error`：`tests/unit/main/panel/foreground-activity-aggregator.test.ts`、`tests/unit/main/panel/foreground-activity-turn-state-machine.test.ts`。
+- advisory `Stop` 后仅真实活动取消候选，迟到收尾不投影虚假的 `processing`：`tests/unit/main/panel/agent-turn-event-semantics.test.ts`、`tests/unit/main/panel/foreground-activity-aggregator.test.ts`。
+- Cline `TaskResume` 与 Antigravity `PreInvocation` 的逐事件权威，以及 IPC 的精确映射校验：`tests/unit/main/agents/agent-runtime-event-authority.test.ts`、`tests/unit/main/agents/agent-hook-runtime-semantics.test.ts`、`tests/unit/agent-integrations/agent-status-trace-e2e.test.ts`。
+- Codex hook / transcript 两种事件顺序及全部现役提供方轨迹收敛：`tests/unit/renderer/accounts/codex-status-chain.test.tsx`、`tests/unit/agent-integrations/agent-status-trace-e2e.test.ts`。
