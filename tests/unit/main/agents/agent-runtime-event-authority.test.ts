@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAgentTurnStartAuthority } from "../../../../src/main/services/agents/integrations/runtime-event-authority.ts";
+import { resolveAgentTurnStartAuthority } from "../../../../src/main/services/agents/integrations/runtime/event-authority.ts";
 import type { AgentRuntimeSemantics } from "../../../../src/main/services/agents/integrations/types.ts";
 
 const runtime: AgentRuntimeSemantics = {

@@ -17,7 +17,7 @@ import {
   installAgentHooksStack,
   uninstallAllAgentHooks,
 } from "../services/agents/integrations/registry.ts";
-import { resolveAgentTurnStartAuthority } from "../services/agents/integrations/runtime-event-authority.ts";
+import { resolveAgentTurnStartAuthority } from "../services/agents/integrations/runtime/event-authority.ts";
 import {
   type AgentTerminalReconciler,
   createAgentTerminalReconciler,
