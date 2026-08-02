@@ -123,7 +123,9 @@ describe("git review tree actions", () => {
         hasStaged: true,
         hasUnstaged: true,
         kind: "directory",
-        path: "src",
+        // tree path may include synthetic group root; repoPath is disk path.
+        path: "\u0001Changes/src",
+        repoPath: "src",
         stagePaths: ["src/a.ts"],
         unstagePaths: ["src/b.ts"],
         uncommitted: true,
@@ -142,6 +144,27 @@ describe("git review tree actions", () => {
     expect(ids).toContain("pier.git.review.copyPath");
   });
 
+  it("hides copy/reveal on synthetic group roots without repoPath", () => {
+    const groupRootMenu = buildMenuEntries(GIT_REVIEW_TREE_ITEM_SURFACE, {
+      metadata: {
+        contextId: "ctx",
+        expectedIndexRevision: "index:1",
+        gitRootPath: "/repo",
+        hasUnstaged: true,
+        kind: "directory",
+        path: "\u0001Changes",
+        stagePaths: ["src/a.ts"],
+        uncommitted: true,
+      },
+      surface: GIT_REVIEW_TREE_ITEM_SURFACE,
+    });
+    const ids = collectActionIds(groupRootMenu);
+    expect(ids).toContain("pier.git.review.expandAll");
+    expect(ids).not.toContain("pier.git.review.copyPath");
+    expect(ids).not.toContain("pier.git.review.copyRelativePath");
+    expect(ids).not.toContain("pier.git.review.revealInFinder");
+  });
+
   it("orders review / view / path groups for file rows", () => {
     const fileMenu = buildMenuEntries(GIT_REVIEW_TREE_ITEM_SURFACE, {
       metadata: {
@@ -150,7 +173,8 @@ describe("git review tree actions", () => {
         gitRootPath: "/repo",
         hasUnstaged: true,
         kind: "file",
-        path: "src/a.ts",
+        path: "\u0001Changes/src/a.ts",
+        repoPath: "src/a.ts",
         stagePaths: ["src/a.ts"],
         unstagedStatus: "modified",
         uncommitted: true,
@@ -208,7 +232,8 @@ describe("git review tree actions", () => {
         contextId: "ctx",
         gitRootPath: "/repo",
         kind: "file",
-        path: "src/a.ts",
+        path: "\u0001Changes/src/a.ts",
+        repoPath: "src/a.ts",
       },
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
@@ -222,6 +247,41 @@ describe("git review tree actions", () => {
       root: "/repo",
       title: "a.ts",
     });
+  });
+
+  it("copies absolute and relative paths from repoPath not tree path", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const absolute = actionRegistry.get("pier.git.review.copyPath");
+    await absolute?.handler({
+      metadata: {
+        contextId: "ctx",
+        gitRootPath: "/repo",
+        kind: "directory",
+        path: "\u0001Changed Files/src",
+        repoPath: "src",
+      },
+      surface: GIT_REVIEW_TREE_ITEM_SURFACE,
+    });
+    expect(writeText).toHaveBeenCalledWith("/repo/src");
+
+    writeText.mockClear();
+    const relative = actionRegistry.get("pier.git.review.copyRelativePath");
+    await relative?.handler({
+      metadata: {
+        contextId: "ctx",
+        gitRootPath: "/repo",
+        kind: "directory",
+        path: "\u0001Changed Files/src",
+        repoPath: "src",
+      },
+      surface: GIT_REVIEW_TREE_ITEM_SURFACE,
+    });
+    expect(writeText).toHaveBeenCalledWith("src");
   });
 
   it("routes tree stage through the atomic path mutation command", async () => {

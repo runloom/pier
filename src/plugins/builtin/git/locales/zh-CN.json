@@ -414,6 +414,7 @@
     "ui.reviewSurfacePathOnlyEmptyDescription": "这些文件只有路径变更或没有文本差异。请在侧栏中暂存或打开。",
     "ui.reviewSurfacePathOnlyEmptyTitle": "没有可展示的文本变更",
     "ui.reviewSurfaceSwitcherLabel": "选择更改视图",
+    "ui.reviewTreeGroupCommitted": "变更文件",
     "ui.reviewTreeGroupStaged": "已暂存更改",
     "ui.reviewTreeGroupConflict": "合并更改",
     "ui.reviewEmptyDescriptionBranch": "当前分支相对 {{branch}} 没有变更。",

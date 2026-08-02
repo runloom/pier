@@ -3,6 +3,10 @@ import type {
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import { pluginText } from "../plugin-text.ts";
+import {
+  type GitReviewTreeItemMetadata,
+  reviewTreeItemRepoPath,
+} from "./tree-item-model.ts";
 
 export const GIT_REVIEW_COPY_PATH_COMMAND_ID = "pier.git.review.copyPath";
 export const GIT_REVIEW_COPY_RELATIVE_PATH_COMMAND_ID =
@@ -11,6 +15,7 @@ export const GIT_REVIEW_REVEAL_COMMAND_ID = "pier.git.review.revealInFinder";
 
 interface PathItem {
   gitRootPath: string;
+  /** Repo-relative path (never includes synthetic group roots). */
   path: string;
 }
 
@@ -29,20 +34,37 @@ async function writeClipboardText(text: string): Promise<void> {
   await navigator.clipboard.writeText(text);
 }
 
+function pathItemFromMetadata(
+  item: GitReviewTreeItemMetadata | null
+): PathItem | null {
+  if (!item) {
+    return null;
+  }
+  const repoPath = reviewTreeItemRepoPath(item);
+  if (repoPath == null || repoPath.length === 0) {
+    return null;
+  }
+  return { gitRootPath: item.gitRootPath, path: repoPath };
+}
+
 export function registerGitReviewTreePathActions(options: {
   context: RendererPluginContext;
   parseItem: (
     invocation: RendererPluginActionInvocation | undefined
-  ) => PathItem | null;
+  ) => GitReviewTreeItemMetadata | null;
   surface: string;
 }): () => void {
   const { context, parseItem, surface } = options;
+  const resolvePathItem = (
+    invocation: RendererPluginActionInvocation | undefined
+  ): PathItem | null => pathItemFromMetadata(parseItem(invocation));
+
   const disposers = [
     context.actions.register({
       category: "Git",
-      enabled: (invocation) => parseItem(invocation) != null,
+      enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
-        const item = parseItem(invocation);
+        const item = resolvePathItem(invocation);
         if (!item) {
           return;
         }
@@ -68,6 +90,7 @@ export function registerGitReviewTreePathActions(options: {
       metadata: {
         categoryKey: "git",
         group: "6_path",
+        menuHidden: (invocation) => resolvePathItem(invocation) == null,
         sortOrder: 1,
       },
       surfaces: [surface],
@@ -75,9 +98,9 @@ export function registerGitReviewTreePathActions(options: {
     }),
     context.actions.register({
       category: "Git",
-      enabled: (invocation) => parseItem(invocation) != null,
+      enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
-        const item = parseItem(invocation);
+        const item = resolvePathItem(invocation);
         if (!item) {
           return;
         }
@@ -101,6 +124,7 @@ export function registerGitReviewTreePathActions(options: {
       metadata: {
         categoryKey: "git",
         group: "6_path",
+        menuHidden: (invocation) => resolvePathItem(invocation) == null,
         sortOrder: 2,
       },
       surfaces: [surface],
@@ -109,9 +133,9 @@ export function registerGitReviewTreePathActions(options: {
     }),
     context.actions.register({
       category: "Git",
-      enabled: (invocation) => parseItem(invocation) != null,
+      enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
-        const item = parseItem(invocation);
+        const item = resolvePathItem(invocation);
         if (!item) {
           return;
         }
@@ -135,6 +159,7 @@ export function registerGitReviewTreePathActions(options: {
       metadata: {
         categoryKey: "git",
         group: "6_path",
+        menuHidden: (invocation) => resolvePathItem(invocation) == null,
         sortOrder: 4,
       },
       surfaces: [surface],

@@ -37,7 +37,16 @@ const reviewTreeItemMetadataSchema = z.object({
   kind: z.enum(["directory", "file"]),
   mutationBlocked: z.boolean().default(false),
   oldPaths: z.array(z.string().min(1)).default([]),
+  /**
+   * Tree row path (may include synthetic group root). Expand/collapse uses this.
+   * Disk/git path ops must use `repoPath` when present.
+   */
   path: z.string().min(1),
+  /**
+   * Repo-relative path for copy/reveal/open. Absent on synthetic group roots
+   * (tree path is only the section label, not a real directory).
+   */
+  repoPath: z.string().min(1).optional(),
   /** Explicit paths for directory/group bulk ops; file falls back to path+oldPaths. */
   discardPaths: z.array(z.string().min(1)).default([]),
   discardTrackedPaths: z.array(z.string().min(1)).default([]),
@@ -54,6 +63,20 @@ const reviewTreeItemMetadataSchema = z.object({
 export type GitReviewTreeItemMetadata = z.infer<
   typeof reviewTreeItemMetadataSchema
 >;
+
+/** Prefer repoPath; file rows historically put the git path in `path`. */
+export function reviewTreeItemRepoPath(
+  item: Pick<GitReviewTreeItemMetadata, "kind" | "path" | "repoPath">
+): string | null {
+  if (item.repoPath != null && item.repoPath.length > 0) {
+    return item.repoPath;
+  }
+  // Legacy: file menus stored repo-relative path in `path` without repoPath.
+  if (item.kind === "file") {
+    return item.path;
+  }
+  return null;
+}
 
 export function parseGitReviewTreeItemMetadata(
   invocation: RendererPluginActionInvocation | undefined
@@ -147,13 +170,17 @@ export function discardSelectionFromItem(
     };
   }
   if (item.kind === "file" && item.hasUnstaged) {
+    const repoPath = reviewTreeItemRepoPath(item);
+    if (repoPath == null) {
+      return { trackedPaths: [], untrackedPaths: [] };
+    }
     if (isUntrackedDiscardStatus(item.unstagedStatus)) {
-      return { trackedPaths: [], untrackedPaths: [item.path] };
+      return { trackedPaths: [], untrackedPaths: [repoPath] };
     }
     if (isTrackedDiscardStatus(item.unstagedStatus)) {
       return {
         allTrackedDeleted: item.unstagedStatus === "deleted",
-        trackedPaths: [item.path],
+        trackedPaths: [repoPath],
         untrackedPaths: [],
       };
     }
@@ -165,7 +192,11 @@ export function stageOperationPaths(item: GitReviewTreeItemMetadata): string[] {
   if (item.stagePaths.length > 0) {
     return [...item.stagePaths];
   }
-  return [item.path, ...item.oldPaths.filter((path) => path !== item.path)];
+  const repoPath = reviewTreeItemRepoPath(item);
+  if (repoPath == null) {
+    return [];
+  }
+  return [repoPath, ...item.oldPaths.filter((path) => path !== repoPath)];
 }
 
 export function unstageOperationPaths(
@@ -174,7 +205,11 @@ export function unstageOperationPaths(
   if (item.unstagePaths.length > 0) {
     return [...item.unstagePaths];
   }
-  return [item.path, ...item.oldPaths.filter((path) => path !== item.path)];
+  const repoPath = reviewTreeItemRepoPath(item);
+  if (repoPath == null) {
+    return [];
+  }
+  return [repoPath, ...item.oldPaths.filter((path) => path !== repoPath)];
 }
 
 export function treeMutationSource(
@@ -246,10 +281,11 @@ export async function runTreePathMutation(options: {
       ? crypto.randomUUID()
       : null;
   if (transitionId !== null) {
+    const transitionPath = reviewTreeItemRepoPath(item) ?? item.path;
     beginGitReviewMutationTransition({
       contextId: item.contextId,
       gitRootPath: item.gitRootPath,
-      path: item.path,
+      path: transitionPath,
       targetSurface: action === "stage" ? "staged" : "index",
       transitionId,
     });

@@ -9,7 +9,7 @@ function entry(partial: {
   path: string;
   entryKey?: string;
   slots: Array<{
-    group: "unstaged" | "staged" | "conflict";
+    group: "unstaged" | "staged" | "conflict" | "committed";
     sectionKey: string;
     status?: "modified" | "added" | "conflicted";
   }>;
@@ -45,6 +45,7 @@ function sortLikePierreTrees<T extends { path: string }>(
 
 describe("gitReviewTreeModel grouped", () => {
   const labels = {
+    committed: "Changed Files",
     conflict: "Merge Changes",
     staged: "Staged Changes",
     unstaged: "Changes",
@@ -106,6 +107,7 @@ describe("gitReviewTreeModel grouped", () => {
 
   it("keeps conflict→staged→unstaged root order under zh labels", () => {
     const zhLabels = {
+      committed: "变更文件",
       conflict: "合并更改",
       staged: "已暂存更改",
       unstaged: "更改",
@@ -283,6 +285,62 @@ describe("gitReviewTreeModel grouped", () => {
     const id = makeReviewTreeNodeId("sec:u:a");
     expect(parseReviewTreeNodeId(id)).toEqual({ sectionKey: "sec:u:a" });
   });
+
+  it("strips synthetic group roots for repo-relative path copy", () => {
+    const model = gitReviewTreeModel(
+      [
+        entry({
+          path: "src/a.ts",
+          slots: [{ group: "unstaged", sectionKey: "sec:u:a" }],
+        }),
+      ],
+      (name) => name,
+      labels
+    );
+
+    const unstagedRoot = model.items.find(
+      (item) =>
+        item.kind === "directory" &&
+        model.getGroupForTreePath(item.path) === "unstaged" &&
+        !item.path.includes("/")
+    );
+    expect(unstagedRoot).toBeDefined();
+    expect(model.getRepoRelativePath(unstagedRoot?.path ?? "")).toBeNull();
+    expect(model.getRepoRelativePath(`${unstagedRoot?.path}/src`)).toBe("src");
+    expect(model.getRepoRelativePath(`${unstagedRoot?.path}/src/a.ts`)).toBe(
+      "src/a.ts"
+    );
+  });
+
+  it("labels committed scope as Changed Files not bare Files", () => {
+    const model = gitReviewTreeModel(
+      [
+        entry({
+          path: "src/a.ts",
+          slots: [{ group: "committed", sectionKey: "sec:committed:a" }],
+        }),
+      ],
+      (name) => name,
+      labels
+    );
+    const root = model.items.find(
+      (item) =>
+        item.kind === "directory" &&
+        model.getGroupForTreePath(item.path) === "committed" &&
+        !item.path.includes("/")
+    );
+    expect(root?.path.endsWith("Changed Files")).toBe(true);
+    expect(root?.path.includes("Changed")).toBe(true);
+    // Must not use the old bare "Files" product-confusing label alone.
+    expect(
+      root?.path.endsWith("Files") && !root?.path.includes("Changed")
+    ).toBe(false);
+    expect(model.getRepoRelativePath(root?.path ?? "")).toBeNull();
+    expect(model.getRepoRelativePath(`${root?.path}/src`)).toBe("src");
+    expect(model.getRepoRelativePath(`${root?.path}/src/a.ts`)).toBe(
+      "src/a.ts"
+    );
+  });
 });
 
 describe("gitReviewTreeModel rename chains", () => {
@@ -312,7 +370,7 @@ describe("gitReviewTreeModel rename chains", () => {
       },
     ];
     const model = gitReviewTreeModel(entries, (name) => name, {
-      committed: "Files",
+      committed: "Changed Files",
       conflict: "Conflicts",
       staged: "Staged",
       unstaged: "Changes",

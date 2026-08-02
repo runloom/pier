@@ -227,7 +227,8 @@ export function useGitReviewTreeContextMenu({
       item: PierFileTreeContextMenuItem,
       point: PierFileTreeContextMenuPoint
     ): Promise<void> => {
-      // tree path 带 group 前缀；Open File 必须用真实 git path。
+      // tree path 带 group 前缀（Changed Files / Changes / …）。
+      // path 保留树路径供 expand/collapse；repoPath 才是磁盘/git 相对路径。
       // 目录/组根：聚合子文件 refs，供 stage/unstage 批量路径。
       const fileRef =
         item.kind === "file"
@@ -240,8 +241,7 @@ export function useGitReviewTreeContextMenu({
       const entry = fileRef
         ? treeModel.entryByKey.get(fileRef.entryKey)
         : undefined;
-      const path =
-        item.kind === "file" ? (fileRef?.path ?? item.path) : item.path;
+      const repoPath = treeModel.getRepoRelativePath(item.path);
       const flags = buildGitReviewTreeItemMenuFlags({
         ...(entry ? { entry } : {}),
         ...(fileRef ? { fileRef } : {}),
@@ -265,7 +265,10 @@ export function useGitReviewTreeContextMenu({
             kind: item.kind,
             mutationBlocked: mutationAuthorityBlocked,
             oldPaths: entry?.oldPaths ?? [],
-            path,
+            // Tree path (with group root) so expand/collapse targets the row.
+            path: item.path,
+            // Repo-relative for copy/reveal/open; omitted on synthetic group roots.
+            ...(repoPath == null ? {} : { repoPath }),
             stagePaths: flags.stagePaths,
             unstagePaths: flags.unstagePaths,
             unstagedStatus: flags.unstagedStatus,

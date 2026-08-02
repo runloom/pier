@@ -13,6 +13,7 @@ import {
   isMutableReviewItem,
   panelContextFromReviewItem,
   parseGitReviewTreeItemMetadata,
+  reviewTreeItemRepoPath,
   runTreePathMutation,
   stageOperationPaths,
   unstageOperationPaths,
@@ -46,11 +47,15 @@ export function registerGitReviewTreeActions(
         if (item?.kind !== "file") {
           return;
         }
+        const repoPath = reviewTreeItemRepoPath(item);
+        if (repoPath == null) {
+          return;
+        }
         const opened = context.files.openInEditor({
           context: panelContextFromReviewItem(item),
-          path: item.path,
+          path: repoPath,
           root: item.gitRootPath,
-          title: basename(item.path),
+          title: basename(repoPath),
         });
         if (!opened) {
           context.notifications.error(
