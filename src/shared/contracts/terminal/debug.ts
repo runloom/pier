@@ -5,6 +5,23 @@ import type {
   TerminalKeyboardFocusTarget,
 } from "../terminal.ts";
 
+/** Minimal sticky-web dump: who owns keyboard + short breadcrumb ring. */
+export interface TerminalFocusTraceEvent {
+  at: number;
+  detail?: string | undefined;
+  kind: "add" | "remove" | "flip" | "sticky" | "intent";
+  seq: number;
+}
+
+export interface TerminalFocusRoutingDebugSnapshot {
+  basePanel: TerminalKeyboardFocusTarget;
+  effectiveKind: TerminalKeyboardFocusTarget["kind"];
+  events: TerminalFocusTraceEvent[];
+  focusDisabledPanelIds: string[];
+  webOverlayIds: string[];
+  webRequestIds: string[];
+}
+
 export type TerminalDebugRoute =
   | "renderer->main->native"
   | "renderer->main->webContents"
@@ -173,6 +190,8 @@ export interface TerminalDebugRendererPanelSnapshot {
 export interface TerminalDebugRendererSnapshot {
   activePanelId: string | null;
   desiredHostSnapshot?: TerminalHostSnapshot | undefined;
+  /** Renderer keyboard ownership + recent focus breadcrumbs (for sticky-web dumps). */
+  focusRouting?: TerminalFocusRoutingDebugSnapshot | undefined;
   hasMaximizedGroup: boolean;
   panelCount: number;
   panels: TerminalDebugRendererPanelSnapshot[];

@@ -6,13 +6,16 @@ import {
 } from "@/panel-kits/terminal/layout-coordinator.ts";
 import { readTerminalPanelLifecycleDebug } from "@/panel-kits/terminal/lifecycle-debug.ts";
 import { readTerminalViewportFrame } from "@/panel-kits/terminal/viewport.ts";
+import { getTerminalFocusRoutingDebugSnapshot } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
+  const focusRouting = getTerminalFocusRoutingDebugSnapshot();
   const api = useWorkspaceStore.getState().api;
   if (!api) {
     return {
       activePanelId: null,
+      focusRouting,
       hasMaximizedGroup: false,
       panelCount: 0,
       panels: [],
@@ -22,6 +25,7 @@ export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
   return {
     activePanelId,
     desiredHostSnapshot: getLastTerminalHostSnapshot() ?? undefined,
+    focusRouting,
     hasMaximizedGroup: api.hasMaximizedGroup(),
     panelCount: api.panels.length,
     panels: api.panels.map((panel) => ({

@@ -1,3 +1,4 @@
+import type { TerminalFocusRoutingDebugSnapshot } from "@shared/contracts/terminal/debug.ts";
 import type {
   TerminalFrame,
   TerminalKeyboardFocusTarget,
@@ -8,6 +9,11 @@ import {
   sameKeyboardFocusTarget as sameBasePanel,
 } from "@shared/terminal-keyboard-target.ts";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
+import {
+  getTerminalFocusTraceEvents,
+  recordTerminalFocusTrace,
+  resetTerminalFocusTraceForTests,
+} from "@/lib/workspace/terminal-focus-trace.ts";
 import {
   resetTerminalHostStateForTests,
   updateTerminalHostInputFacts,
@@ -64,6 +70,10 @@ function frameKey(frame: TerminalFrame): string {
   return `${frame.x},${frame.y},${frame.width},${frame.height}`;
 }
 
+function sortedIds(ids: Iterable<string>): string[] {
+  return Array.from(ids).sort();
+}
+
 function applyTerminalInputRouting(): void {
   const nextEffectiveKind = computeEffectiveKeyboardTarget(
     basePanel,
@@ -72,6 +82,27 @@ function applyTerminalInputRouting(): void {
   if (lastEffectiveKeyboardKind === "terminal" && nextEffectiveKind === "web") {
     webFocusHandOffArmedUntil =
       performance.now() + WEB_FOCUS_HAND_OFF_BLUR_SUPPRESS_MS;
+  }
+  if (lastEffectiveKeyboardKind !== nextEffectiveKind) {
+    const ids = sortedIds(webRequestIds).join(",") || "-";
+    const base =
+      basePanel.kind === "terminal" ? `terminal:${basePanel.panelId}` : "web";
+    recordTerminalFocusTrace(
+      "flip",
+      `${lastEffectiveKeyboardKind}->${nextEffectiveKind} base=${base} ids=${ids}`
+    );
+    // Sticky pier.click while base still says terminal is the classic
+    // "closed settings / menu then keys don't reach Ghostty" failure mode.
+    if (
+      nextEffectiveKind === "web" &&
+      basePanel.kind === "terminal" &&
+      webRequestIds.has(TRANSIENT_WEB_CLICK_FOCUS_ID)
+    ) {
+      recordTerminalFocusTrace(
+        "sticky",
+        `panel=${basePanel.panelId} ids=${ids}`
+      );
+    }
   }
   lastEffectiveKeyboardKind = nextEffectiveKind;
   updateTerminalHostInputFacts(
@@ -86,6 +117,19 @@ function applyTerminalInputRouting(): void {
     },
     "input-routing"
   );
+}
+
+/** Debug / dump: current renderer keyboard ownership (ids, not just count). */
+export function getTerminalFocusRoutingDebugSnapshot(): TerminalFocusRoutingDebugSnapshot {
+  return {
+    basePanel,
+    effectiveKind: computeEffectiveKeyboardTarget(basePanel, webRequestIds.size)
+      .kind,
+    events: [...getTerminalFocusTraceEvents()],
+    focusDisabledPanelIds: sortedIds(focusDisabledPanelIds),
+    webOverlayIds: sortedIds(webOverlayRects.keys()),
+    webRequestIds: sortedIds(webRequestIds),
+  };
 }
 
 /**
@@ -155,7 +199,11 @@ export function requestTerminalFocusIntent(panelId: string): void {
   if (!sameBasePanel(basePanel, target)) {
     basePanel = target;
   }
-  webRequestIds.delete(TRANSIENT_WEB_CLICK_FOCUS_ID);
+  const clearedClick = webRequestIds.delete(TRANSIENT_WEB_CLICK_FOCUS_ID);
+  recordTerminalFocusTrace(
+    "intent",
+    clearedClick ? `panel=${panelId} cleared=pier.click` : `panel=${panelId}`
+  );
   applyTerminalInputRouting();
 }
 
@@ -168,6 +216,7 @@ export function clearTransientWebClickFocus(): void {
   if (!webRequestIds.delete(TRANSIENT_WEB_CLICK_FOCUS_ID)) {
     return;
   }
+  recordTerminalFocusTrace("remove", TRANSIENT_WEB_CLICK_FOCUS_ID);
   applyTerminalInputRouting();
 }
 
@@ -178,10 +227,12 @@ export function clearTransientWebClickFocus(): void {
 export function requestTerminalWebFocus(id: string): () => void {
   if (!webRequestIds.has(id)) {
     webRequestIds.add(id);
+    recordTerminalFocusTrace("add", id);
     applyTerminalInputRouting();
   }
   return () => {
     if (webRequestIds.delete(id)) {
+      recordTerminalFocusTrace("remove", id);
       applyTerminalInputRouting();
     }
   };
@@ -355,6 +406,7 @@ export function resetTerminalInputRoutingForTests(): void {
   focusDisabledPanelIds.clear();
   basePanel = { kind: "web" };
   resetTerminalHostStateForTests();
+  resetTerminalFocusTraceForTests();
   lastEffectiveKeyboardKind = "web";
   webFocusHandOffArmedUntil = 0;
 }

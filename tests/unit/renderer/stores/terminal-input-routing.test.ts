@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import {
   beginTerminalPanelWebDragCapture,
+  getTerminalFocusRoutingDebugSnapshot,
   installTerminalInputRoutingBlurSuppressor,
   registerTerminalFullscreenWebOverlay,
   requestTerminalFocusIntent,
@@ -69,6 +70,20 @@ describe("terminal input routing store", () => {
         webRequestCount: 1,
       })
     );
+  });
+
+  it("exposes webRequestIds (not only count) for debug dumps", () => {
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    const releaseA = requestTerminalWebFocus("a");
+    requestTerminalWebFocus("pier.click");
+    expect(getTerminalFocusRoutingDebugSnapshot().webRequestIds).toEqual([
+      "a",
+      "pier.click",
+    ]);
+    releaseA();
+    expect(getTerminalFocusRoutingDebugSnapshot().webRequestIds).toEqual([
+      "pier.click",
+    ]);
   });
 
   it("base panel goes into snapshot.basePanel", () => {

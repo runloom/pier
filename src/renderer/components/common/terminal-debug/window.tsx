@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { FocusRoutingSummary } from "./focus-routing-summary.tsx";
 import { LayoutStateView } from "./layout-view.tsx";
 import {
   type TerminalDebugRouteStatus,
@@ -363,6 +364,7 @@ function RoutingStateView({
             </NodeCard>
           </div>
         </div>
+        <FocusRoutingSummary focusRouting={snapshot?.renderer?.focusRouting} />
       </section>
       <aside className="shrink-0 border bg-card">
         <div className="flex h-9 items-center gap-2 border-b bg-muted px-3">
