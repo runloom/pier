@@ -135,6 +135,56 @@ describe("Swift state invariants (source-level lock)", () => {
     expect(SOURCE).toMatch(RIGHT_MOUSE_WEB_OVERLAY_FIRST_RE);
   });
 
+  it("installs a host mouse filter so tracking-area moves cannot report through web overlays", () => {
+    // Dialog scrim / menus register webOverlayRects; EventRouterView hitTest
+    // already prefers them for mouseDown. AppTerminalView still has an
+    // NSTrackingArea that can deliver mouseMoved under a transparent WKWebView
+    // — without hostAllowsMouseEvent, TUI mouse-mode highlights follow the
+    // cursor through modals.
+    const appTerminalViewSource = readFileSync(
+      join(
+        process.cwd(),
+        "native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Platform/AppKit/AppTerminalView.swift"
+      ),
+      "utf8"
+    );
+    const appTerminalInputSource = readFileSync(
+      join(
+        process.cwd(),
+        "native/Vendor/libghostty-spm/Sources/GhosttyTerminal/Platform/AppKit/AppTerminalView+Input.swift"
+      ),
+      "utf8"
+    );
+    const scrollContainerSource = readFileSync(
+      TERMINAL_SCROLL_CONTAINER_PATH,
+      "utf8"
+    );
+    expect(appTerminalViewSource).toMatch(
+      /open var hostAllowsMouseEvent: \(\(NSEvent\) -> Bool\)\?/
+    );
+    expect(appTerminalInputSource).toMatch(
+      /private func hostDeliversMouse\(_ event: NSEvent\) -> Bool/
+    );
+    expect(appTerminalInputSource).toMatch(
+      /override open func mouseMoved\(with event: NSEvent\) \{\s*guard hostDeliversMouse\(event\) else \{ return \}/
+    );
+    expect(SOURCE).toMatch(
+      /private func installMouseOverlayFilter\(\s*on term: Terminal,\s*router: EventRouterView\?/
+    );
+    expect(SOURCE).toMatch(
+      /term\.terminalView\.hostAllowsMouseEvent = \{ \[weak router\] event in/
+    );
+    expect(SOURCE).toMatch(
+      /return !router\.containsWebOverlay\(atWindowPoint: event\.locationInWindow\)/
+    );
+    expect(scrollContainerSource).toMatch(
+      /weak var eventRouter: EventRouterView\?/
+    );
+    expect(scrollContainerSource).toMatch(
+      /if isUnderWebOverlay\(localPoint: local\) \{\s*return nil/
+    );
+  });
+
   it("does not contain the bug-prone hide guard against activePanelId", () => {
     // 历史 bug:hide 内 `guard panelId != activePanelId else { return }` 在 tab
     // switch 场景下错误地保护了旧 active panel 不被 hide, 新 panel addSubview

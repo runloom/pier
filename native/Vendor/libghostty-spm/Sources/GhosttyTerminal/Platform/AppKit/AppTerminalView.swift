@@ -41,6 +41,13 @@
             }
         }
 
+        /// Host veto for mouse delivery. Pier installs a filter that returns
+        /// `false` when the event is over a registered web overlay (dialog
+        /// scrim, menus, tooltips). NSTrackingArea on this view can still
+        /// deliver `mouseMoved` under a transparent WKWebView; without this
+        /// gate, TUI mouse-mode highlights follow the cursor through modals.
+        open var hostAllowsMouseEvent: ((NSEvent) -> Bool)?
+
         /// Visual suppress (patch 0103). Suppress when this terminal lacks
         /// keyboard ownership **or** when Rich Input has focus-disabled pin
         /// (composer open — no dual blinking carets).
