@@ -28,6 +28,11 @@ export interface PierDiffViewLabels {
   readonly expandDiff: string;
   /** Optional; when set, title click opens the file. */
   readonly openFile?: string;
+  /**
+   * error 槽行内重试（document materialize 失败等）。
+   * 缺省时不渲染 Retry 按钮。
+   */
+  readonly retry?: string;
   /** Hunk toolbar (Codex); falls back to stageChanges / unstageChanges. */
   readonly revertHunk?: string;
   readonly stageChanges: string;

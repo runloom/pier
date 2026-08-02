@@ -51,6 +51,22 @@ function entry(index: number) {
   };
 }
 
+function documentFailure(
+  index: number,
+  reason: ReviewFailedResource["failure"]["reason"] = "commandFailed"
+): ReviewFailedResource {
+  return {
+    entry: entry(index),
+    failure: {
+      kind: "error",
+      message: `diagnostic-${index}`,
+      reason,
+      retryable: true,
+    },
+    kind: "error",
+  };
+}
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -112,7 +128,7 @@ describe("Git Review feedback", () => {
     expect(screen.getByRole("button", { name: "Details" })).toBeVisible();
   });
 
-  it("已有正文时的 index 刷新失败只发一次 toast，详情走对话框且不插入 Alert", () => {
+  it("背景 index 刷新失败不弹全局 toast（有 last-good 时静默）", () => {
     const failure = {
       kind: "error" as const,
       message: "invalid source after mutation",
@@ -125,51 +141,11 @@ describe("Git Review feedback", () => {
 
     expect(screen.queryByRole("alert")).toBeNull();
     expect(view.container).toBeEmptyDOMElement();
-    expect(notifyError).toHaveBeenCalledTimes(1);
-    expect(notifyError).toHaveBeenCalledWith(
-      "Failed to refresh changes",
-      expect.objectContaining({
-        action: {
-          label: "Details",
-          onClick: expect.any(Function),
-        },
-      })
-    );
-
-    view.rerender(
-      <ReviewFeedback context={context} failures={[]} indexFailure={failure} />
-    );
-    expect(notifyError).toHaveBeenCalledTimes(1);
-
-    const notificationOptions = notifyError.mock.calls[0]?.[1];
-    notificationOptions?.action?.onClick();
-    expect(context.dialogs.alert).toHaveBeenCalledWith({
-      body: "invalid source after mutation",
-      title: "Failed to refresh changes",
-    });
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(notifyInfo).not.toHaveBeenCalled();
   });
 
-  it("刷新恢复后，同一错误再次发生会重新提示", () => {
-    const failure = {
-      kind: "error" as const,
-      message: "index diagnostic",
-      reason: "commandFailed" as const,
-      retryable: true,
-    };
-    const view = render(
-      <ReviewFeedback context={context} failures={[]} indexFailure={failure} />
-    );
-    expect(notifyError).toHaveBeenCalledTimes(1);
-
-    view.rerender(<ReviewFeedback context={context} failures={[]} />);
-    view.rerender(
-      <ReviewFeedback context={context} failures={[]} indexFailure={failure} />
-    );
-
-    expect(notifyError).toHaveBeenCalledTimes(2);
-  });
-
-  it("渲染失败走可重试 toast，不插入顶部 Alert", () => {
+  it("渲染失败不弹全局 toast（由面板内 Empty 承担）", () => {
     const onRetryRender = vi.fn();
     const view = render(
       <ReviewFeedback
@@ -182,112 +158,29 @@ describe("Git Review feedback", () => {
 
     expect(view.container).toBeEmptyDOMElement();
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(notifyError).toHaveBeenCalledWith("Failed to render diff", {
-      action: {
-        label: "Retry",
-        onClick: onRetryRender,
-      },
-    });
-  });
-
-  it("隐藏阅读面不投递反馈，切为活动面后只投递一次", () => {
-    const failure = {
-      kind: "error" as const,
-      message: "index diagnostic",
-      reason: "commandFailed" as const,
-      retryable: true,
-    };
-    const onRetryIndex = vi.fn();
-    const view = render(
-      <ReviewFeedback
-        context={context}
-        enabled={false}
-        failures={[]}
-        indexFailure={failure}
-        onRetryIndex={onRetryIndex}
-      />
-    );
     expect(notifyError).not.toHaveBeenCalled();
-
-    view.rerender(
-      <ReviewFeedback
-        context={context}
-        failures={[]}
-        indexFailure={failure}
-        onRetryIndex={onRetryIndex}
-      />
-    );
-
-    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notifyInfo).not.toHaveBeenCalled();
   });
 
-  it("同一文档失败周期只投递一次，Retry 使用点击时的最新失败集合", () => {
+  it("文档加载失败不弹全局 toast（行内 error 槽承担）", () => {
     const onRetryFailure = vi.fn();
-    const firstFailure = {
-      entry: entry(0),
-      failure: {
-        kind: "error" as const,
-        message: "first",
-        reason: "commandFailed" as const,
-        retryable: true,
-      },
-      kind: "error" as const,
-    } satisfies ReviewFailedResource;
-    const secondFailure = {
-      entry: entry(1),
-      failure: {
-        kind: "error" as const,
-        message: "second",
-        reason: "commandFailed" as const,
-        retryable: true,
-      },
-      kind: "error" as const,
-    } satisfies ReviewFailedResource;
-    const view = render(
+    render(
       <ReviewFeedback
         context={context}
-        failures={[firstFailure]}
-        onRetryFailure={onRetryFailure}
-      />
-    );
-    view.rerender(
-      <ReviewFeedback
-        context={context}
-        failures={[firstFailure, secondFailure]}
+        failures={[documentFailure(0), documentFailure(1)]}
         onRetryFailure={onRetryFailure}
       />
     );
 
-    expect(notifyError).toHaveBeenCalledTimes(1);
-    expect(notifyError).toHaveBeenCalledWith(
-      "Could not display file.ts.",
-      expect.objectContaining({
-        action: expect.objectContaining({ label: "Retry" }),
-      })
-    );
-    const notificationOptions = notifyError.mock.calls[0]?.[1];
-    notificationOptions?.action?.onClick();
-    // cycle 锁定后第二次失败不入 toast 集合；Retry 仅重试首波 entry。
-    expect(onRetryFailure).toHaveBeenCalledTimes(1);
-    expect(onRetryFailure).toHaveBeenCalledWith("entry:0");
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(notifyInfo).not.toHaveBeenCalled();
   });
 
   it("stage/watch 竞态失败（staleRevision 等）不弹全局 toast", () => {
     render(
       <ReviewFeedback
         context={context}
-        failures={[
-          {
-            entry: entry(0),
-            failure: {
-              kind: "error",
-              message: "index churned",
-              reason: "staleRevision",
-              retryable: true,
-            },
-            kind: "error",
-          },
-        ]}
+        failures={[documentFailure(0, "staleRevision")]}
         onRetryFailure={vi.fn()}
       />
     );
@@ -296,99 +189,28 @@ describe("Git Review feedback", () => {
     expect(notifyInfo).not.toHaveBeenCalled();
   });
 
-  it("soft-retain 永久刷新失败用 info + 中性保留文案，不说无法显示", () => {
+  it("soft-retain 刷新失败不弹 info/error toast", () => {
     render(
       <ReviewFeedback
         context={context}
-        failures={[
-          {
-            entry: entry(0),
-            failure: {
-              kind: "error",
-              message: "refresh failed",
-              reason: "internal",
-              retryable: true,
-            },
-            kind: "error",
-          },
-        ]}
+        failures={[documentFailure(0, "internal")]}
         onRetryFailure={vi.fn()}
         softRetainedOnly
       />
     );
 
     expect(notifyError).not.toHaveBeenCalled();
-    expect(notifyInfo).toHaveBeenCalledWith(
-      "Couldn't refresh this diff. The previous view is still shown.",
-      expect.objectContaining({
-        action: expect.objectContaining({ label: "Retry" }),
-      })
-    );
+    expect(notifyInfo).not.toHaveBeenCalled();
   });
 
-  it("soft-retain info 后升为 hard document 失败会再发 error toast", () => {
-    const softFailure = {
-      entry: entry(0),
-      failure: {
-        kind: "error" as const,
-        message: "soft",
-        reason: "internal" as const,
-        retryable: true,
-      },
-      kind: "error" as const,
-    } satisfies ReviewFailedResource;
-    const hardFailure = {
-      entry: entry(0),
-      failure: {
-        kind: "error" as const,
-        message: "hard",
-        reason: "commandFailed" as const,
-        retryable: true,
-      },
-      kind: "error" as const,
-    } satisfies ReviewFailedResource;
-    const onRetryFailure = vi.fn();
+  it("document + runtime + index 同帧失败仍零 toast", () => {
+    const failures = Array.from({ length: 5 }, (_, index) =>
+      documentFailure(index)
+    );
     const view = render(
       <ReviewFeedback
         context={context}
-        failures={[softFailure]}
-        onRetryFailure={onRetryFailure}
-        softRetainedOnly
-      />
-    );
-    expect(notifyInfo).toHaveBeenCalledTimes(1);
-    expect(notifyError).not.toHaveBeenCalled();
-
-    view.rerender(
-      <ReviewFeedback
-        context={context}
-        failures={[hardFailure]}
-        onRetryFailure={onRetryFailure}
-      />
-    );
-    expect(notifyError).toHaveBeenCalledWith(
-      "Could not display file.ts.",
-      expect.objectContaining({
-        action: expect.objectContaining({ label: "Retry" }),
-      })
-    );
-  });
-
-  it("文件加载失败由对应文件项承载，不在正文顶部重复堆叠", () => {
-    const failures = Array.from({ length: 7 }, (_, index) => ({
-      entry: entry(index),
-      failure: {
-        kind: "error" as const,
-        message: "main diagnostic must not be shown",
-        reason: "commandFailed" as const,
-        retryable: true,
-      },
-      kind: "error" as const,
-    })) satisfies readonly ReviewFailedResource[];
-    const view = render(
-      <ReviewFeedback
-        context={context}
-        failures={failures.slice(0, 5)}
+        failures={failures}
         hasHiddenFailures
         indexFailure={{
           kind: "error",
@@ -406,15 +228,37 @@ describe("Git Review feedback", () => {
 
     expect(view.container).toBeEmptyDOMElement();
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(notifyError).toHaveBeenCalledTimes(3);
-    expect(notifyError).toHaveBeenCalledWith(
-      "5 files could not be displayed.",
-      {
-        action: {
-          label: "Retry",
-          onClick: expect.any(Function),
-        },
-      }
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(notifyInfo).not.toHaveBeenCalled();
+  });
+
+  it("隐藏阅读面与活动面均不因背景失败投递 toast", () => {
+    const failure = {
+      kind: "error" as const,
+      message: "index diagnostic",
+      reason: "commandFailed" as const,
+      retryable: true,
+    };
+    const view = render(
+      <ReviewFeedback
+        context={context}
+        enabled={false}
+        failures={[documentFailure(0)]}
+        indexFailure={failure}
+        runtimeError={new Error("render")}
+      />
     );
+    expect(notifyError).not.toHaveBeenCalled();
+
+    view.rerender(
+      <ReviewFeedback
+        context={context}
+        failures={[documentFailure(0)]}
+        indexFailure={failure}
+        runtimeError={new Error("render")}
+      />
+    );
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(notifyInfo).not.toHaveBeenCalled();
   });
 });

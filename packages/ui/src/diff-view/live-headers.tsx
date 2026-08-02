@@ -1,3 +1,6 @@
+import { RotateCcw } from "lucide-react";
+import { Button } from "../button.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../tooltip.tsx";
 import { CollapseDiffButton, type PierDiffViewLabels } from "./collapse.tsx";
 import { type DiffViewInputStore, useDiffViewInput } from "./input-store.ts";
 import { fileDiffLineStats, type PierDiffCodeViewItem } from "./items.ts";
@@ -43,12 +46,15 @@ export function LiveHeaderMetadata({
   item,
   labels,
   onDiscardFile,
+  onRetryItem,
   onToggleStage,
 }: {
   readonly inputStore: DiffViewInputStore;
   readonly item: PierDiffCodeViewItem;
   readonly labels: PierDiffViewLabels;
   readonly onDiscardFile?: (itemId: string) => void;
+  /** document materialize 等 error 槽行内重试（F3 / 2026-08-02 契约） */
+  readonly onRetryItem?: (itemId: string) => void;
   readonly onToggleStage?: (itemId: string) => void;
 }): React.JSX.Element | null {
   const input = useDiffViewInput(inputStore, item.id);
@@ -69,7 +75,12 @@ export function LiveHeaderMetadata({
   const showStage = stageControl != null && onToggleStage != null;
   const stateNotice = loading ? "" : (input?.stateNotice?.trim() ?? "");
   const showNotice = stateNotice.length > 0;
-  if (!(showStats || showStage || showNotice)) {
+  const retryLabel = labels.retry?.trim() ?? "";
+  const showRetry =
+    input?.kind === "error" &&
+    onRetryItem !== undefined &&
+    retryLabel.length > 0;
+  if (!(showStats || showStage || showNotice || showRetry)) {
     return null;
   }
   // One light-DOM root so the header-metadata slot can be width:100%.
@@ -119,20 +130,41 @@ export function LiveHeaderMetadata({
           ) : null}
         </span>
       ) : null}
-      {showStage && stageControl ? (
+      {showRetry || (showStage && stageControl) ? (
         <span
-          className="ml-auto inline-flex shrink-0 items-center"
+          className="ml-auto inline-flex shrink-0 items-center gap-0.5"
           data-slot="pier-diff-header-actions"
         >
-          <DiffHeaderActions
-            canDiscard={stageControl.canDiscard === true}
-            labels={labels}
-            {...(onDiscardFile
-              ? { onDiscard: () => onDiscardFile(item.id) }
-              : {})}
-            onToggleStage={() => onToggleStage(item.id)}
-            stageControl={stageControl}
-          />
+          {showRetry ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    aria-label={retryLabel}
+                    data-testid="pier-diff-retry-button"
+                    onClick={() => onRetryItem?.(item.id)}
+                    size="icon-xs"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <RotateCcw data-icon="inline-start" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{retryLabel}</TooltipContent>
+            </Tooltip>
+          ) : null}
+          {showStage && stageControl ? (
+            <DiffHeaderActions
+              canDiscard={stageControl.canDiscard === true}
+              labels={labels}
+              {...(onDiscardFile
+                ? { onDiscard: () => onDiscardFile(item.id) }
+                : {})}
+              onToggleStage={() => onToggleStage(item.id)}
+              stageControl={stageControl}
+            />
+          ) : null}
         </span>
       ) : null}
     </span>

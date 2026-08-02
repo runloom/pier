@@ -118,6 +118,11 @@ export interface PierDiffViewProps {
   /** Open the file for a multi-diff item id (header title click). */
   readonly onOpenFile?: (itemId: string) => void;
   readonly onRenderWindowChange?: (window: PierDiffViewRenderWindow) => void;
+  /**
+   * error 槽行内重试（document materialize 失败等）；
+   * 与 `labels.retry` 同时提供时 header 显示 Retry。
+   */
+  readonly onRetryItem?: (itemId: string) => void;
   readonly onScroll?: () => void;
   /** Toggle uncommitted stage for a canonical multi-diff item id (entryKey). */
   readonly onToggleStage?: (itemId: string) => void;
@@ -142,6 +147,7 @@ export function PierDiffView({
   onItemError,
   onOpenFile,
   onRenderWindowChange,
+  onRetryItem,
   onScroll,
   onToggleStage,
   presentation,
@@ -343,6 +349,7 @@ export function PierDiffView({
     onScroll,
     ...(onDiscardFile === undefined ? {} : { onDiscardFile }),
     ...(onOpenFile === undefined ? {} : { onOpenFile }),
+    ...(onRetryItem === undefined ? {} : { onRetryItem }),
     ...(onToggleStage === undefined ? {} : { onToggleStage }),
     parsedItemIndexesRef,
     parsedItemListRef,

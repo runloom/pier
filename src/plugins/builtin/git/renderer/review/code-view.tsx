@@ -90,6 +90,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
         collapseDiff: string;
         discardChanges: string;
         expandDiff: string;
+        retry?: string;
         revertHunk?: string;
         stageChanges: string;
         stageHunk?: string;
@@ -102,6 +103,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       onHunkAction?: (event: PierHunkActionEvent) => void;
       onItemError?: (id: string, error: Error | null) => void;
       onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
+      onRetryItem?: (itemId: string) => void;
       onScroll: () => void;
       onToggleStage?: (itemId: string) => void;
       presentation?: PierDiffViewPresentation;
@@ -130,6 +132,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     onItemError,
     onMutationCommitted,
     onRenderWindowChange,
+    onRetryItem,
     onScroll,
     presentation,
     revisionBySectionId,
@@ -153,6 +156,8 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       transition?: GitReviewMutationTransition
     ) => Promise<void>;
     readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
+    /** error 槽行内重试（sectionKey → 宿主 entry retry） */
+    readonly onRetryItem?: (itemId: string) => void;
     readonly onScroll: () => void;
     readonly presentation?: PierDiffViewPresentation;
     readonly revisionBySectionId: ReadonlyMap<string, string>;
@@ -229,6 +234,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
         ),
         expandDiff: pluginText(context, "reviewExpandDiff", "Expand diff"),
         openFile: pluginText(context, "reviewTreeOpenFile", "Open File"),
+        retry: pluginText(context, "reviewRetry", "Retry"),
         revertHunk: pluginText(context, "reviewHunkRevert", "Revert"),
         stageChanges: pluginText(context, "reviewHeaderStage", "Stage"),
         stageHunk: pluginText(context, "reviewHunkStage", "Stage"),
@@ -281,6 +287,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 {...(onItemError === undefined ? {} : { onItemError })}
                 {...(gitRootPath ? { onOpenFile } : {})}
                 onRenderWindowChange={onRenderWindowChange}
+                {...(onRetryItem === undefined ? {} : { onRetryItem })}
                 onScroll={onScroll}
                 {...(canMutate
                   ? {
