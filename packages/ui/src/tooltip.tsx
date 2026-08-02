@@ -172,13 +172,13 @@ function Tooltip({
 
 function TooltipTrigger({
   onFocus,
-  openOnFocus = true,
+  openOnFocus = false,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Trigger> & {
   /**
-   * When false, focus never opens the tooltip (hover / controlled only).
-   * Use on dense chrome where programmatic or keyboard focus would flash tips
-   * (panel tabs, terminal status chips). Default keeps Radix a11y focus-open.
+   * When true, keyboard focus may open the tooltip.
+   * Focus-open is disabled by default; keep help on hover unless a caller
+   * has a verified keyboard-discovery need.
    */
   openOnFocus?: boolean;
 }) {
