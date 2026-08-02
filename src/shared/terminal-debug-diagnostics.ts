@@ -154,7 +154,8 @@ export function buildTerminalDebugIssues(
       ...buildTerminalInputRoutingIssues(
         expectedHost,
         native,
-        coordinator?.effective
+        coordinator?.effective,
+        renderer.focusRouting?.webRequestIds
       )
     );
   }

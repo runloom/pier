@@ -9,7 +9,7 @@ import type {
 export interface TerminalFocusTraceEvent {
   at: number;
   detail?: string | undefined;
-  kind: "add" | "remove" | "flip" | "sticky" | "intent";
+  kind: "add" | "remove" | "flip" | "sticky" | "intent" | "reconcile";
   seq: number;
 }
 
@@ -134,6 +134,7 @@ export interface TerminalDebugIssue {
     | "input_routing_keyboard_target_mismatch"
     | "input_routing_overlay_rect_count_mismatch"
     | "input_routing_stale"
+    | "input_routing_sticky_web_with_base_terminal"
     | "input_routing_terminal_cursor_policy_mismatch"
     | "input_routing_terminal_target_missing"
     | "input_routing_terminal_surface_focus_mismatch"

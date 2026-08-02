@@ -21,6 +21,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FocusRoutingSummary } from "./focus-routing-summary.tsx";
 import { LayoutStateView } from "./layout-view.tsx";
+import { RoutingDebugBanners } from "./routing-banners.tsx";
 import {
   type TerminalDebugRouteStatus,
   terminalDebugStatusClass,
@@ -79,6 +80,13 @@ function focusStatus(
     )
   ) {
     return "bad";
+  }
+  if (
+    snapshot.issues?.some(
+      (issue) => issue.code === "input_routing_sticky_web_with_base_terminal"
+    )
+  ) {
+    return "warn";
   }
   if (snapshot.native.window.keyboardFocusTarget.kind === "terminal") {
     return "ok";
@@ -320,6 +328,7 @@ function RoutingStateView({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
+      <RoutingDebugBanners snapshot={snapshot} />
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden border bg-card">
         <div className="flex h-9 shrink-0 items-center border-b bg-muted px-3 font-medium text-sm">
           Routing State
