@@ -35,7 +35,6 @@ import { MarkdownPreviewFontScaleControl } from "./preview-font-scale.tsx";
 import {
   type MarkdownReadingAppearance,
   useMarkdownPreviewPrefsStore,
-  writeMarkdownFontScale,
 } from "./preview-preferences.ts";
 import {
   MarkdownPreviewToc,
@@ -57,6 +56,7 @@ import {
   type MarkdownPreviewSearchLabels,
   useMarkdownPreviewSearch,
 } from "./use-preview-search.ts";
+import { useMarkdownPreviewZoom } from "./use-preview-zoom.ts";
 import "../markdown/prose.css";
 
 interface MarkdownPreviewProps {
@@ -264,6 +264,11 @@ export function MarkdownPreview({
   const effectiveAnchorRequestId = tocAnchor
     ? String(tocAnchorRequestId)
     : initialAnchorRequestId;
+  const {
+    applyFontScale,
+    handlePreviewKeyDown: handleZoomKeyDown,
+    handlePreviewWheel,
+  } = useMarkdownPreviewZoom(fontScale);
 
   useEffect(() => {
     let active = true;
@@ -375,8 +380,11 @@ export function MarkdownPreview({
       }
       data-slot="markdown-preview-root"
       onContextMenu={onContextMenu}
-      onKeyDown={search.handlePreviewKeyDown}
+      onKeyDown={(event) => {
+        handleZoomKeyDown(event, search.handlePreviewKeyDown);
+      }}
       onPointerDown={search.handlePreviewPointerDown}
+      onWheel={handlePreviewWheel}
       ref={rootRef}
     >
       {search.searchOpen ? (
@@ -483,9 +491,7 @@ export function MarkdownPreview({
         <MarkdownPreviewFontScaleControl
           fontScale={fontScale}
           labels={zoomLabels}
-          onChange={(next) => {
-            writeMarkdownFontScale(next);
-          }}
+          onChange={applyFontScale}
         />
       </div>
     </div>

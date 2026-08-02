@@ -886,6 +886,26 @@ describe("MarkdownPreview", () => {
       expect(scaled.style.getPropertyValue("--md-scale")).toBe("1.15");
     });
 
+    const previewRoot = container.querySelector(
+      '[data-slot="markdown-preview-root"]'
+    ) as HTMLElement;
+    fireEvent.keyDown(previewRoot, { key: "=", metaKey: true });
+    await waitFor(() => {
+      expect(
+        (
+          container.querySelector('[data-slot="markdown-prose"]') as HTMLElement
+        ).style.getPropertyValue("--md-scale")
+      ).toBe("1.35");
+    });
+    fireEvent.keyDown(previewRoot, { key: "0", metaKey: true });
+    await waitFor(() => {
+      expect(
+        (
+          container.querySelector('[data-slot="markdown-prose"]') as HTMLElement
+        ).style.getPropertyValue("--md-scale")
+      ).toBe("1");
+    });
+
     const { writeMarkdownMeasureMode, writeMarkdownReadingAppearance } =
       await import(
         "@plugins/builtin/files/renderer/markdown/preview-preferences.ts"
@@ -900,9 +920,6 @@ describe("MarkdownPreview", () => {
       ).toHaveAttribute("data-side", "right");
     });
 
-    const previewRoot = container.querySelector(
-      '[data-slot="markdown-preview-root"]'
-    );
     expect(previewRoot).not.toBeNull();
     expect(previewRoot).not.toHaveAttribute("data-reading-appearance");
 

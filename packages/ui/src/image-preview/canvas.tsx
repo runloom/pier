@@ -70,8 +70,8 @@ interface PanSession {
  *
  * Fit and absolute zoom share one CSS `zoom` layout so switching presets does
  * not jump layout modes. Scroll is re-anchored to the viewport center on zoom
- * changes. When zoomed past fit, navigation is map-style pan (drag / wheel /
- * arrows) with system scrollbars hidden.
+ * changes. Wheel (and Ctrl/Cmd+wheel) always zoom; when zoomed past fit,
+ * navigation is map-style pan (drag / arrows) with system scrollbars hidden.
  */
 export function ImagePreviewCanvas({
   alt,
@@ -315,9 +315,10 @@ export function ImagePreviewCanvas({
 
   const handleWheel = useCallback(
     (event: ReactWheelEvent<HTMLElement>) => {
-      if (!(event.ctrlKey || event.metaKey)) return;
-      event.preventDefault();
+      // Dedicated preview stage: plain wheel zooms (photo-viewer style).
+      // Ctrl/Cmd+wheel stays supported for trackpad pinch / habit parity.
       if (event.deltaY === 0) return;
+      event.preventDefault();
       adjustZoom(event.deltaY < 0 ? 1 : -1);
     },
     [adjustZoom]

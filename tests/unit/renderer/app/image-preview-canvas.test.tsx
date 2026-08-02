@@ -250,7 +250,7 @@ describe("ImagePreviewCanvas", () => {
     expect(viewport.scrollTop).toBe(148);
   });
 
-  it("zooms with ctrl+wheel", async () => {
+  it("zooms with plain wheel and ctrl/meta+wheel", async () => {
     render(
       <ImagePreviewCanvas
         alt="shot"
@@ -262,9 +262,11 @@ describe("ImagePreviewCanvas", () => {
     await zoomToActualSize();
     const viewport = screen.getByRole("region", { name: "Image viewer" });
 
-    fireEvent.wheel(viewport, { ctrlKey: true, deltaY: -40 });
+    fireEvent.wheel(viewport, { deltaY: -40 });
     expect(screen.getByText("125%")).toBeVisible();
-    fireEvent.wheel(viewport, { metaKey: true, deltaY: 40 });
+    fireEvent.wheel(viewport, { ctrlKey: true, deltaY: 40 });
     expect(screen.getByText("100%")).toBeVisible();
+    fireEvent.wheel(viewport, { metaKey: true, deltaY: -40 });
+    expect(screen.getByText("125%")).toBeVisible();
   });
 });

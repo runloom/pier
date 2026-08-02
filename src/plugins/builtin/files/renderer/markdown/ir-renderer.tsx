@@ -192,7 +192,8 @@ function renderBlock(
             })}
           >
             <MarkdownDiagram
-              // Remount on color mode so mermaid re-renders (facade reads store at call).
+              // CSS-var mermaid inherits paper tokens; remount keeps node ids clean
+              // when reading appearance flips the preview color mode.
               charts={context.charts}
               contentPreview={context.fileResources?.contentPreview}
               errorLabel={context.labels.diagramFailed}

@@ -28,4 +28,34 @@ describe("bakeMermaidSvgForStandalonePreview", () => {
     expect(markup).toContain("--accent:color-mix(in srgb, oklch(0.2 0 0) 45%");
     expect(markup).not.toMatch(/--border:var\(--border\)/);
   });
+
+  it("samples paper-root tokens and pins viewBox size for zoomable previews", () => {
+    const paper = document.createElement("div");
+    paper.setAttribute("data-slot", "markdown-preview-root");
+    document.body.append(paper);
+
+    vi.spyOn(window, "getComputedStyle").mockImplementation(
+      ((element: Element) =>
+        ({
+          getPropertyValue: (name: string) => {
+            if (element !== paper) return "";
+            if (name === "--background") return "oklch(0.98 0 0)";
+            if (name === "--foreground") return "oklch(0.18 0 0)";
+            if (name === "--muted-foreground") return "oklch(0.4 0 0)";
+            return "";
+          },
+        }) as CSSStyleDeclaration) as typeof getComputedStyle
+    );
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("viewBox", "0 0 240 120");
+    paper.append(svg);
+
+    const markup = bakeMermaidSvgForStandalonePreview(svg);
+    expect(markup).toContain("--bg:oklch(0.98 0 0)");
+    expect(markup).toContain("--fg:oklch(0.18 0 0)");
+    expect(markup).toContain('width="240"');
+    expect(markup).toContain('height="120"');
+    paper.remove();
+  });
 });

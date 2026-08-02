@@ -3,7 +3,7 @@ import type {
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import i18next from "i18next";
-import { officialMermaidRenderer } from "@/lib/live-modules/official-mermaid-renderer.ts";
+import { mermaidRenderer } from "@/lib/plugins/mermaid/renderer.ts";
 import {
   getShikiTheme,
   getShikiThemePair,
@@ -61,20 +61,13 @@ export function createPluginAppearanceContext(): RendererPluginContext["appearan
   };
 }
 
+/**
+ * Markdown / plugin charts use the CSS-variable Mermaid path so diagram colors
+ * inherit the surrounding document (including markdown paper appearance).
+ * Canvas visualizations keep the separate official Mermaid renderer.
+ */
 export function createPluginChartsContext(): RendererPluginContext["charts"] {
   return {
-    renderMermaid: async (source) => {
-      const result = await officialMermaidRenderer.render(
-        source,
-        useThemeStore.getState().resolvedTheme
-      );
-      if (result.ok) {
-        return { ok: true, svg: result.svg };
-      }
-      return {
-        ok: false,
-        reason: result.reason === "too-large" ? "too-large" : "render-failed",
-      };
-    },
+    renderMermaid: (source) => mermaidRenderer.render(source),
   };
 }
