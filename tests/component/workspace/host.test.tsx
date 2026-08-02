@@ -133,6 +133,9 @@ function installPierWindowApi() {
         onCommand: vi.fn(() => vi.fn()),
         resolve: vi.fn(),
       },
+      panelTransfer: {
+        bootstrap: vi.fn(async () => ({ pending: [] })),
+      },
       window: {
         getContext: vi.fn(async () => ({
           mode: "restore",
@@ -169,6 +172,9 @@ function createDockviewApi(
   let layoutChange: (() => void) | null = null;
   let currentActivePanel = activePanel;
   let maximizedGroupChange: (() => void) | null = null;
+  const didDropDisposers: ReturnType<typeof vi.fn>[] = [];
+  const willDragPanelDisposers: ReturnType<typeof vi.fn>[] = [];
+  const willDropDisposers: ReturnType<typeof vi.fn>[] = [];
   const api = {
     get activePanel() {
       return currentActivePanel;
@@ -197,10 +203,22 @@ function createDockviewApi(
       return { dispose: vi.fn() };
     }),
     onDidRemovePanel: vi.fn(() => ({ dispose: vi.fn() })),
-    onDidDrop: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidDrop: vi.fn(() => {
+      const dispose = vi.fn();
+      didDropDisposers.push(dispose);
+      return { dispose };
+    }),
     onUnhandledDragOver: vi.fn(() => ({ dispose: vi.fn() })),
-    onWillDragPanel: vi.fn(() => ({ dispose: vi.fn() })),
-    onWillDrop: vi.fn(() => ({ dispose: vi.fn() })),
+    onWillDragPanel: vi.fn(() => {
+      const dispose = vi.fn();
+      willDragPanelDisposers.push(dispose);
+      return { dispose };
+    }),
+    onWillDrop: vi.fn(() => {
+      const dispose = vi.fn();
+      willDropDisposers.push(dispose);
+      return { dispose };
+    }),
     panels,
     toJSON: vi.fn(() => ({ panels: panels.map((panel) => panel.id) })),
     totalPanels: panels.length,
@@ -226,6 +244,11 @@ function createDockviewApi(
         throw new Error("onDidLayoutChange was not registered");
       }
       layoutChange();
+    },
+    listenerDisposers: {
+      didDropDisposers,
+      willDragPanelDisposers,
+      willDropDisposers,
     },
   };
 }
@@ -284,6 +307,42 @@ describe("WorkspaceHost", () => {
       "WorkspaceHeaderRightActions"
     );
     expect(DockviewReact).toHaveBeenCalled();
+  });
+
+  it("installs and disposes tab input capture independently from panel transfer", async () => {
+    const dockview = createDockviewApi([], null);
+    const view = render(<WorkspaceHost />);
+
+    await act(async () => {
+      vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
+        api: dockview.api,
+      });
+      await Promise.resolve();
+    });
+
+    expect(dockview.api.onWillDragPanel).toHaveBeenCalledTimes(2);
+    expect(dockview.api.onDidDrop).toHaveBeenCalledTimes(2);
+    expect(dockview.api.onWillDrop).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      view.unmount();
+    });
+
+    expect(
+      dockview.listenerDisposers.willDragPanelDisposers.every(
+        (dispose) => dispose.mock.calls.length === 1
+      )
+    ).toBe(true);
+    expect(
+      dockview.listenerDisposers.didDropDisposers.every(
+        (dispose) => dispose.mock.calls.length === 1
+      )
+    ).toBe(true);
+    expect(
+      dockview.listenerDisposers.willDropDisposers.every(
+        (dispose) => dispose.mock.calls.length === 1
+      )
+    ).toBe(true);
   });
 
   it("marks lifecycle readiness only after dockview layout restoration", async () => {

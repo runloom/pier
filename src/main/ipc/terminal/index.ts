@@ -25,7 +25,7 @@ import {
   recordNativeTerminalRoute,
   recordRendererTerminalRoute,
 } from "./debug.ts";
-import { registerTerminalDebugSnapshotIpc } from "./debug-snapshot.ts";
+import { registerTerminalDiagnosticsIpc } from "./diagnostics-ipc.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
 import { forwardToWindow } from "./forwarding.ts";
 import { registerTerminalHostCopyIpc } from "./host-copy-ipc.ts";
@@ -94,7 +94,7 @@ export function registerTerminalIpc(
           taskService: deps.taskService,
         })
       : null;
-  registerTerminalDebugSnapshotIpc(ipcMain, addon);
+  registerTerminalDiagnosticsIpc(ipcMain, addon);
   registerTerminalKeybindingForward(addon);
   deps.taskService?.bindTerminalProcessController({
     forceStop: (panelId, windowId) => {

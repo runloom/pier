@@ -2,6 +2,7 @@ import { type ChildProcess, execFile } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   unlinkSync,
@@ -17,6 +18,7 @@ import {
   type Page,
   test,
 } from "@playwright/test";
+import type { TerminalInputRoutingTraceEvent } from "@shared/contracts/terminal/debug.ts";
 import {
   killAndWait,
   makeTempUserDataDir,
@@ -60,6 +62,71 @@ type PanelTransferResult =
 interface LaunchContext {
   app: ElectronApplication;
   userDataDir: string;
+}
+
+interface DiagnosticsLogLine {
+  ctx?: Record<string, unknown>;
+  level?: string;
+  scope?: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readDiagnosticsLogLines(userDataDir: string): DiagnosticsLogLine[] {
+  const diagnosticsDir = join(userDataDir, "diagnostics");
+  if (!existsSync(diagnosticsDir)) {
+    return [];
+  }
+  try {
+    return readdirSync(diagnosticsDir)
+      .filter((name) => /^app-\d{4}-\d{2}-\d{2}(?:\.\d+)?\.jsonl$/u.test(name))
+      .flatMap((name) =>
+        readFileSync(join(diagnosticsDir, name), "utf8")
+          .split("\n")
+          .flatMap((line) => {
+            if (!line) {
+              return [];
+            }
+            try {
+              const parsed: unknown = JSON.parse(line);
+              return isRecord(parsed) ? [parsed as DiagnosticsLogLine] : [];
+            } catch {
+              return [];
+            }
+          })
+      );
+  } catch {
+    return [];
+  }
+}
+
+// 同窗提交可能走 willDrop，也可能先被 capture-phase dragend 结束；不钉死 reason。
+const TAB_DRAG_COMPLETION_REASONS = new Set([
+  "dockview-did-drop",
+  "dockview-will-drop",
+  "window-dragend",
+]);
+
+function isTerminalTabDragCompletion(line: DiagnosticsLogLine): boolean {
+  return (
+    line.level === "info" &&
+    line.scope === "terminal.input-routing" &&
+    line.ctx?.action === "ended" &&
+    typeof line.ctx.reason === "string" &&
+    TAB_DRAG_COMPLETION_REASONS.has(line.ctx.reason) &&
+    line.ctx.source === "workspace-tab-drag"
+  );
+}
+
+function isWorkspaceTabDragTraceEvent(
+  event: TerminalInputRoutingTraceEvent
+): event is Extract<
+  TerminalInputRoutingTraceEvent,
+  { source: "workspace-tab-drag" }
+> {
+  return event.source === "workspace-tab-drag";
 }
 
 interface PanelInfo {
@@ -1058,6 +1125,41 @@ test.describe("Panel cross-window drag (Path B)", () => {
         await openWelcome(page);
         await reorderTabsSameWindow(page);
         await expect(page.locator(".dv-tab")).toHaveCount(2);
+        const inputRoutingEvents = await page.evaluate(async () => {
+          const snapshot = await window.pier.terminal.debugSnapshot({});
+          return snapshot.renderer?.inputRoutingTrace?.events ?? [];
+        });
+        const tabDragEvents = inputRoutingEvents.filter(
+          isWorkspaceTabDragTraceEvent
+        );
+        const dragStarts = tabDragEvents.filter(
+          (event) => event.action === "started"
+        );
+        const dragEnds = tabDragEvents.filter(
+          (event) => event.action === "ended"
+        );
+        expect(dragStarts.length).toBeGreaterThan(0);
+        expect(
+          dragEnds.some((end) =>
+            dragStarts.some((start) => start.sessionId === end.sessionId)
+          ),
+          JSON.stringify(inputRoutingEvents)
+        ).toBe(true);
+        expect(inputRoutingEvents).not.toContainEqual(
+          expect.objectContaining({
+            action: "fallback-timeout",
+            source: "workspace-tab-drag",
+          })
+        );
+        await expect
+          .poll(
+            () =>
+              readDiagnosticsLogLines(ctx.userDataDir).some(
+                isTerminalTabDragCompletion
+              ),
+            { timeout: 10_000 }
+          )
+          .toBe(true);
       } finally {
         await forceClose(ctx.app);
         removeDirectory(ctx.userDataDir);

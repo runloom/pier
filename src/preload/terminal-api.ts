@@ -3,7 +3,7 @@ import type {
   TerminalDebugRendererSnapshotResult,
 } from "@shared/contracts/terminal/debug.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
-import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer, webUtils } from "electron";
 import { subscribeIpc } from "./ipc-envelope.ts";
 
@@ -31,6 +31,8 @@ export const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:navigate-search", panelId, direction),
   reconcile: (activeIds) =>
     ipcRenderer.send("pier:terminal:reconcile", activeIds),
+  recordInputRoutingDiagnostic: (event) =>
+    ipcRenderer.send(PIER.TERMINAL_INPUT_ROUTING_DIAGNOSTIC, event),
   onContextMenuRequest: (cb) =>
     subscribeIpc("pier:terminal:request-context-menu", cb),
   onCwdChange: (cb) => subscribeIpc(PIER_BROADCAST.TERMINAL_CWD_CHANGED, cb),

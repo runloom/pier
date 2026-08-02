@@ -1,4 +1,5 @@
 import type { TerminalDebugRendererSnapshot } from "@shared/contracts/terminal/debug.ts";
+import { readTerminalInputRoutingTraceSnapshot } from "@/lib/terminal-debug/input-routing-trace.ts";
 import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import {
   hasRegisteredTerminalAnchor,
@@ -11,12 +12,14 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
   const focusRouting = getTerminalFocusRoutingDebugSnapshot();
+  const inputRoutingTrace = readTerminalInputRoutingTraceSnapshot();
   const api = useWorkspaceStore.getState().api;
   if (!api) {
     return {
       activePanelId: null,
       focusRouting,
       hasMaximizedGroup: false,
+      inputRoutingTrace,
       panelCount: 0,
       panels: [],
     };
@@ -27,6 +30,7 @@ export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
     desiredHostSnapshot: getLastTerminalHostSnapshot() ?? undefined,
     focusRouting,
     hasMaximizedGroup: api.hasMaximizedGroup(),
+    inputRoutingTrace,
     panelCount: api.panels.length,
     panels: api.panels.map((panel) => ({
       anchorFrame: readRegisteredTerminalAnchorFrame(panel.id),

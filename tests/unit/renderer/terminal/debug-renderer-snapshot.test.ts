@@ -47,6 +47,17 @@ describe("terminal debug renderer snapshot", () => {
     const { updateTerminalPanelLifecycleDebug } = await import(
       "@/panel-kits/terminal/lifecycle-debug.ts"
     );
+    const {
+      recordTerminalInputRoutingTrace,
+      resetTerminalInputRoutingTraceForTests,
+    } = await import("@/lib/terminal-debug/input-routing-trace.ts");
+    resetTerminalInputRoutingTraceForTests();
+    recordTerminalInputRoutingTrace({
+      action: "started",
+      panelId: "terminal-1",
+      sessionId: "dockview-tab-drag:1",
+      source: "workspace-tab-drag",
+    });
     const panel = terminalPanel("terminal-1");
     updateTerminalPanelLifecycleDebug("terminal-1", {
       createAttemptCount: 1,
@@ -95,6 +106,16 @@ describe("terminal debug renderer snapshot", () => {
           nativeTerminalReady: true,
           phase: "ready",
         }),
+      })
+    );
+    expect(renderer.inputRoutingTrace).toEqual(
+      expect.objectContaining({
+        events: [
+          expect.objectContaining({
+            panelId: "terminal-1",
+            source: "workspace-tab-drag",
+          }),
+        ],
       })
     );
     expect(issues).toContainEqual(
