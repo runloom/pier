@@ -1,6 +1,7 @@
 import {
   GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM,
   gitChangesPanelTabChrome,
+  gitChangesPanelTabIconId,
   gitChangesPanelTitle,
   gitLineDeltaTrailingFromSummary,
   gitReviewTabChangeSummary,
@@ -59,6 +60,23 @@ describe("gitChangesPanelTitle", () => {
   });
 });
 
+describe("gitChangesPanelTabIconId", () => {
+  it("maps review target kinds to distinct tab icon ids", () => {
+    expect(gitChangesPanelTabIconId({ kind: "uncommitted" })).toBe(
+      "pier.git.changes.uncommitted"
+    );
+    expect(
+      gitChangesPanelTabIconId({
+        kind: "commit",
+        oid: "abcdef0123456789abcdef0123456789abcdef01",
+      })
+    ).toBe("pier.git.changes.commit");
+    expect(
+      gitChangesPanelTabIconId({ kind: "branch", ref: "refs/heads/main" })
+    ).toBe("pier.git.changes.branch");
+  });
+});
+
 describe("gitChangesPanelTabChrome", () => {
   it("returns title and tooltip from params source", () => {
     const chrome = gitChangesPanelTabChrome(
@@ -79,6 +97,7 @@ describe("gitChangesPanelTabChrome", () => {
     );
 
     expect(chrome).toEqual({
+      icon: { id: "pier.git.changes.uncommitted" },
       title: "repo",
       tooltip: {
         lines: [
@@ -89,6 +108,37 @@ describe("gitChangesPanelTabChrome", () => {
         title: "Changes · repo",
       },
     });
+  });
+
+  it("sets scope-specific tab icons for commit and branch targets", () => {
+    expect(
+      gitChangesPanelTabChrome(
+        {
+          source: {
+            contextId: "worktree:repo",
+            gitRootPath: "/repo",
+            target: {
+              kind: "commit",
+              oid: "abcdef0123456789abcdef0123456789abcdef01",
+            },
+          },
+        },
+        LABELS
+      )?.icon
+    ).toEqual({ id: "pier.git.changes.commit" });
+
+    expect(
+      gitChangesPanelTabChrome(
+        {
+          source: {
+            contextId: "worktree:repo",
+            gitRootPath: "/repo",
+            target: { kind: "branch", ref: "refs/heads/main" },
+          },
+        },
+        LABELS
+      )?.icon
+    ).toEqual({ id: "pier.git.changes.branch" });
   });
 
   it("attaches git-line-delta trailing from tabChangeSummary param", () => {

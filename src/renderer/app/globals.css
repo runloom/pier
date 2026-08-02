@@ -950,8 +950,17 @@ body {
 }
 
 .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
+.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.uncommitted"],
+.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.commit"],
+.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.branch"],
 [data-slot="select-item"]:focus
-  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"] {
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.uncommitted"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.commit"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.branch"] {
   color: var(--status-success-fg);
 }
 

@@ -171,6 +171,15 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain(
       '.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"]'
     );
+    expect(css).toContain(
+      '.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.uncommitted"]'
+    );
+    expect(css).toContain(
+      '.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.commit"]'
+    );
+    expect(css).toContain(
+      '.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.branch"]'
+    );
     expect(css).toContain("color: var(--status-success-fg)");
     expect(css).toContain(
       '.pier-panel-tab-icon[data-panel-tab-icon="workbench"]'

@@ -52,7 +52,8 @@ export function gitReviewTargetTitleSuffix(
 
 /**
  * Tab 短标题：工作树/仓库目录名；非未提交目标附加 ` ·` 后缀。
- * 类型语义由绿色 Diff 图标承担，不把「变更」写进 tab。
+ * 类型语义由按 scope 区分的绿色图标承担（未提交 Diff / 提交 commit / 分支 branch），
+ * 不把「变更」写进 tab。
  */
 export function gitChangesPanelTitle(source: {
   readonly gitRootPath: string;
@@ -61,6 +62,24 @@ export function gitChangesPanelTitle(source: {
   const folder = gitRootFolderName(source.gitRootPath);
   const suffix = gitReviewTargetTitleSuffix(source.target);
   return suffix ? `${folder}${TITLE_SEPARATOR}${suffix}` : folder;
+}
+
+/** Tab leading icon id（须在 `builtinPanelTabIcons` 注册）。 */
+export type GitChangesPanelTabIconId =
+  | "pier.git.changes.branch"
+  | "pier.git.changes.commit"
+  | "pier.git.changes.uncommitted";
+
+export function gitChangesPanelTabIconId(
+  target: GitReviewTarget
+): GitChangesPanelTabIconId {
+  if (target.kind === "commit") {
+    return "pier.git.changes.commit";
+  }
+  if (target.kind === "branch") {
+    return "pier.git.changes.branch";
+  }
+  return "pier.git.changes.uncommitted";
 }
 
 export interface GitChangesTabChromeLabels {
@@ -204,6 +223,7 @@ export function gitChangesPanelTabChrome(
   );
 
   return {
+    icon: { id: gitChangesPanelTabIconId(source.target) },
     title,
     tooltip: {
       title: `${labels.typeLabel}${TITLE_SEPARATOR}${title}`,
