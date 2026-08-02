@@ -117,6 +117,29 @@ function row(model: GitStatusDropdownModel, id: string) {
 }
 
 describe("deriveGitStatusDropdownModel", () => {
+  it("offers view changes first only for a clean repository without local changes", () => {
+    const clean = derive(makeStatus());
+    const dirty = derive(
+      makeStatus({
+        counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
+      })
+    );
+    const paused = derive(
+      makeStatus({
+        repoState: { conflictCount: 0, current: 1, kind: "rebasing", total: 2 },
+      })
+    );
+
+    expect(clean.tasks.map((task) => task.id)).toEqual([
+      "viewChanges",
+      "switchBranch",
+      "switchWorktree",
+    ]);
+    expect(row(clean, "clean").action).toBeNull();
+    expect(dirty.tasks.map((task) => task.id)).not.toContain("viewChanges");
+    expect(paused.tasks.map((task) => task.id)).not.toContain("viewChanges");
+  });
+
   it("keeps the fixed task zone in every normal model", () => {
     for (const status of [
       makeStatus(),
@@ -130,7 +153,7 @@ describe("deriveGitStatusDropdownModel", () => {
     ]) {
       const model = derive(status);
       expect(model.variant).toBe("normal");
-      expect(model.tasks.map((task) => task.id)).toEqual([
+      expect(model.tasks.map((task) => task.id).slice(-2)).toEqual([
         "switchBranch",
         "switchWorktree",
       ]);

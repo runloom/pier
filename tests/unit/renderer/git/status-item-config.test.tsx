@@ -360,6 +360,55 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     expect(screen.queryByTestId("git-changes-status-trigger")).toBeNull();
   });
 
+  it("干净仓库从状态菜单查看变更会在当前组打开未提交变更", async () => {
+    const clean = {
+      ...DIRTY_STATUS,
+      changeSummary: {
+        changedFiles: 0,
+        deletions: 0,
+        excludedFiles: 0,
+        insertions: 0,
+        kind: "lineDelta" as const,
+      },
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+    };
+    const { context, openInstance, registered } = makeContext(true, () =>
+      Promise.resolve(clean)
+    );
+    registerGitStatusItem(context);
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => "group-a",
+      panelId: "panel-1",
+      title: null,
+    });
+    await screen.findByTestId("worktree-status-trigger");
+
+    fireEvent.pointerDown(screen.getByTestId("worktree-status-trigger"), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "View Changes" })
+    );
+
+    await waitFor(() => {
+      expect(openInstance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          componentId: "pier.git.changes",
+          targetGroupId: "group-a",
+          params: expect.objectContaining({
+            source: expect.objectContaining({
+              target: { kind: "uncommitted" },
+            }),
+          }),
+        })
+      );
+    });
+  });
+
   it("查看变更在点击时读取当前组，组消失时只向新当前组重试一次", async () => {
     const { context, openInstance, registered } = makeContext(true);
     let currentGroupId = "group-a";
