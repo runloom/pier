@@ -138,8 +138,16 @@ export const settingsSkills = {
   confirmContentDeleteTitle: "删除技能 {{skill}}？",
   confirmContentDeleteBody:
     "将从本项目移除该技能。关闭开关只会让智能体暂时看不到它。此操作不可撤销。",
+  confirmUnmanagedReplaceTitle: "替换 {{target}} 处已有内容？",
+  confirmUnmanagedReplaceBody:
+    "该路径已有内容，不是 Pier 当前管理的版本。继续将删除该路径上的现有内容，并改用 Pier 提供的技能链接。",
+  confirmUnmanagedReplaceAction: "替换并继续",
+  confirmSkillsStateResetTitle: "重建本项目的技能记录？",
+  confirmSkillsStateResetBody:
+    "本项目的技能列表或本机记录已损坏。继续将按你这次操作重建可用状态；无法恢复的损坏数据会被丢弃。",
+  confirmSkillsStateResetAction: "重建并继续",
   issueUnmanagedConflict:
-    "{{target}} 已有同名内容，Pier 不会覆盖。启动智能体不受影响。若要改用 Pier 提供的版本，请先在项目里移走该路径。",
+    "{{target}} 已有同名内容。启用时会请你确认是否替换为 Pier 管理的版本。",
   issueDuplicateDiscovery:
     "开启 Claude Code 后，{{agent}} 会在多个目录重复发现同名技能。关闭 Claude Code 可消除。",
   issueIdentityChanged: "项目目录已被移动或替换。请返回项目列表重新打开。",

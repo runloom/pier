@@ -209,15 +209,11 @@ export function issueLabel(
   }
 }
 
-/** Issues that actually keep apply disabled (mirrors plan.applicable). */
+/**
+ * Issues that make plan.applicable false (whole plan unusable).
+ * Path conflicts / missing content / corrupt state are confirmation-gated
+ * or non-blocking — not hard-blocks of the user action.
+ */
 export function isPlanHardBlockIssue(code: string): boolean {
-  return (
-    code === "project-identity-changed" ||
-    code === "unmanaged-conflict" ||
-    code === "missing-source" ||
-    code === "invalid-skill" ||
-    code === "ledger-corrupt" ||
-    code === "recovery-record-corrupt" ||
-    code === "recovery-blocked"
-  );
+  return code === "project-identity-changed";
 }

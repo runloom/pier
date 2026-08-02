@@ -1,4 +1,4 @@
-import { readlink, unlink } from "node:fs/promises";
+import { readlink, rm, unlink } from "node:fs/promises";
 import { join, posix } from "node:path";
 import { ensureProjectRelativeDir } from "../path-containment.ts";
 import type { OwnershipRecord, OwnershipTarget } from "../store/index.ts";
@@ -52,7 +52,7 @@ export async function reconcileTargets(
       continue;
     }
 
-    if (op.kind === "create-symlink") {
+    if (op.kind === "create-symlink" || op.kind === "replace-with-symlink") {
       const parentRelative = posix.dirname(op.relativeTarget);
       if (parentRelative !== "." && parentRelative !== "") {
         await ensureProjectRelativeDir(projectRoot, parentRelative);
@@ -77,16 +77,22 @@ export async function reconcileTargets(
             continue;
           }
         }
-        // Something else is there.
-        results.push({
-          relativeTarget: op.relativeTarget,
-          skillId: op.skillId,
-          kind: op.kind,
-          status: "failed",
-          reason: "unmanaged-conflict",
-        });
-        log.pendingIssueIds.push(`unmanaged-conflict:${op.relativeTarget}`);
-        continue;
+        if (op.kind === "create-symlink") {
+          // Something else is there and user did not ack replace.
+          results.push({
+            relativeTarget: op.relativeTarget,
+            skillId: op.skillId,
+            kind: op.kind,
+            status: "failed",
+            reason: "unmanaged-conflict",
+          });
+          log.pendingIssueIds.push(`unmanaged-conflict:${op.relativeTarget}`);
+          continue;
+        }
+        // replace-with-symlink: user-acked removal of foreign/unowned path.
+        // Parent containment already enforced via ensureProjectRelativeDir.
+        await rm(absolute, { force: true, recursive: true });
+        nextTargets.delete(op.relativeTarget);
       } catch (error) {
         if (!isErrno(error, "ENOENT")) throw error;
       }

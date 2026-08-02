@@ -8,7 +8,6 @@ import { projectSkillsManifestSchema } from "../../../../shared/contracts/projec
 import type { FsObjectIdentity } from "../fs-adapter.ts";
 import { resolveStableProjectIdentity } from "../identity.ts";
 import { ProjectSkillsCandidateUnavailableError } from "../plan.ts";
-import { REPAIR_HARD_BLOCK_CODES } from "../repair/plan-finalize.ts";
 import {
   buildNextManifest,
   candidateSourceToManifestType,
@@ -81,23 +80,16 @@ export async function prepareLog(
   }
 
   // Acknowledgements: every confirmation requirement must be covered.
+  // Missing acks always refuse the write (user cancelled or skipped) — this
+  // is the only gate; path conflicts are confirmation-gated, not hard-blocked.
   const ackIds = new Set(request.acknowledgements.map((a) => a.requirementId));
   for (const req of plan.confirmationRequirements) {
     if (!ackIds.has(req.id)) {
-      if (req.kind === "git-projection-delete") {
-        throw new ProjectSkillsApplyError(
-          "acknowledgement-required",
-          `missing git delete acknowledgement for ${req.id}`,
-          request.operationId
-        );
-      }
-      if (req.kind === "content-delete") {
-        throw new ProjectSkillsApplyError(
-          "acknowledgement-required",
-          `missing content-delete acknowledgement for ${req.id}`,
-          request.operationId
-        );
-      }
+      throw new ProjectSkillsApplyError(
+        "acknowledgement-required",
+        `missing acknowledgement for ${req.id}`,
+        request.operationId
+      );
     }
     // Content-delete acknowledgements bind to the actual tree digest the
     // user confirmed (design §4.4): the plan recomputed under lock carries
@@ -124,21 +116,25 @@ export async function prepareLog(
     }
   }
 
-  // Share the repair hard-block set plus apply-specific content blockers.
-  const hardBlock =
-    !plan.applicable ||
-    plan.blockingIssues.some(
-      (i) =>
-        REPAIR_HARD_BLOCK_CODES.includes(i.code) ||
-        i.code === "missing-source" ||
-        i.code === "recovery-blocked"
-    );
-  if (hardBlock) {
+  // Only refuse apply when the plan itself is non-applicable (e.g. project
+  // identity changed). Skills hygiene issues are confirmation-gated or
+  // non-blocking — never a silent hard-fail of the user action.
+  if (!plan.applicable) {
     throw new ProjectSkillsApplyError(
       "not-applied",
-      "plan has hard blocking issues",
+      "plan is not applicable",
       request.operationId
     );
+  }
+
+  const allowLedgerReset = plan.confirmationRequirements.some(
+    (req) =>
+      req.kind === "skills-state-reset" &&
+      req.reason === "ledger-corrupt" &&
+      ackIds.has(req.id)
+  );
+  if (allowLedgerReset) {
+    await ctx.store.resetOwnershipLedger(rootKey);
   }
 
   // Build next manifest.
@@ -147,6 +143,12 @@ export async function prepareLog(
   let previousManifestIdentity: FsObjectIdentity | null = null;
   let previousManifestDigest: string | null = null;
   let previousManifestPresent = false;
+  const allowManifestReset = plan.confirmationRequirements.some(
+    (req) =>
+      req.kind === "skills-state-reset" &&
+      req.reason === "invalid-manifest" &&
+      ackIds.has(req.id)
+  );
   try {
     const raw = await readFile(manifestPath);
     previousManifestPresent = true;
@@ -156,7 +158,15 @@ export async function prepareLog(
       JSON.parse(raw.toString("utf8")) as unknown
     );
   } catch (error) {
-    if (!isErrno(error, "ENOENT")) throw error;
+    if (isErrno(error, "ENOENT")) {
+      // Absent is fine.
+    } else if (allowManifestReset) {
+      // Corrupt bytes with user-acked rebuild: keep file identity for CAS
+      // replace, treat logical contents as empty.
+      currentManifest = null;
+    } else {
+      throw error;
+    }
   }
 
   const importEntries = new Map<

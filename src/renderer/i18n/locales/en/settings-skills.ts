@@ -154,8 +154,16 @@ export const settingsSkills = {
   confirmContentDeleteTitle: "Delete skill {{skill}}?",
   confirmContentDeleteBody:
     "Removes the skill from this project. Turning the switch off only hides it from agents. This cannot be undone.",
+  confirmUnmanagedReplaceTitle: "Replace existing content at {{target}}?",
+  confirmUnmanagedReplaceBody:
+    "That path already has content Pier does not manage. Continuing deletes what is there and installs Pier’s skill link.",
+  confirmUnmanagedReplaceAction: "Replace and continue",
+  confirmSkillsStateResetTitle: "Rebuild this project’s skill records?",
+  confirmSkillsStateResetBody:
+    "This project’s skill list or local skill records are damaged. Continuing rebuilds a usable state from this action; damaged data that cannot be recovered will be discarded.",
+  confirmSkillsStateResetAction: "Rebuild and continue",
   issueUnmanagedConflict:
-    "{{target}} already has same-named content. Pier won’t overwrite it. Starting an agent is unaffected. To use Pier’s version, move that path aside in the project first.",
+    "{{target}} already has same-named content. Enabling will ask you to confirm replacing it with Pier’s version.",
   issueDuplicateDiscovery:
     "With Claude Code delivery on, {{agent}} discovers same-named skills in multiple directories. Turn Claude Code delivery off to resolve.",
   issueIdentityChanged:

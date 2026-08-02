@@ -2,7 +2,6 @@ import { randomUUID } from "node:crypto";
 import type { AgentKind } from "../../../../shared/contracts/agent.ts";
 import type { ProjectRootRef as ContractProjectRootRef } from "../../../../shared/contracts/project-skills.ts";
 import { createSkillDiscoveryAdapterRegistry } from "../adapters.ts";
-import { buildProjectSkillsIssue } from "../health.ts";
 import {
   resolveStableProjectIdentity,
   toContractProjectRootRef,
@@ -17,16 +16,13 @@ import {
 import { continueLaunch as continueLaunchImpl } from "./continue.ts";
 
 /**
- * ManagedAgentLaunchGate (design v8 §5.2): the single hard gate for all
- * managed agent process entrypoints. v8 attempts are one-shot handles keyed
- * by high-entropy launchAttemptId (the v7 opaque challenge ceremony was
- * removed — renderer is a trusted client). The durable SPAWN_INTENT
- * at-most-once machinery is retained: it protects against double-spawn on
- * crash, which is inside the threat model.
+ * Managed agent launch skills hook: best-effort projection before spawn.
+ * Never refuses opening an agent — skills hygiene is settings-only.
+ * Durable SPAWN_INTENT at-most-once machinery is retained for crash safety
+ * on explicit continuation handshakes (legacy degrade path).
  */
 
-const ATTEMPT_TTL_MS = 120_000;
-/** Whole-correction deadline (design §5.2.3): block instead of hanging. */
+/** Whole-correction deadline: abandon skills repair, still open the agent. */
 const ENSURE_READY_TIMEOUT_MS = 10_000;
 
 export type {
@@ -66,7 +62,6 @@ export function createManagedAgentLaunchGate(
 ): ManagedAgentLaunchGate {
   const now = options.now ?? Date.now;
   const createId = options.createId ?? randomUUID;
-  const attemptTtlMs = options.attemptTtlMs ?? ATTEMPT_TTL_MS;
   const ensureReadyTimeoutMs =
     options.ensureReadyTimeoutMs ?? ENSURE_READY_TIMEOUT_MS;
   const adapters =
@@ -179,7 +174,6 @@ export function createManagedAgentLaunchGate(
     sweepMemory();
     const launchAttemptId = args.launchAttemptId ?? createId();
     const agentId = String(args.agentId);
-    const surface: LaunchGateSurface = args.surface ?? { kind: "one-shot" };
 
     // Only adapters that consume project skill projections participate.
     if (!adapters.isApplicable(agentId as AgentKind)) {
@@ -204,9 +198,9 @@ export function createManagedAgentLaunchGate(
       () => undefined
     );
 
-    // Whole-correction deadline + structured lock-busy (design §5.2.3):
-    // a hung or contended correction blocks the launch with a retryable
-    // operation-busy issue instead of hanging or leaking a raw error.
+    // Best-effort skills projection only. Opening an agent is never a skills
+    // hygiene decision: timeout / lock-busy / residual issues must not prompt
+    // or refuse spawn — the agent session does not depend on skills readiness.
     let ensure: EnsureReadyResult;
     try {
       ensure = await withTimeout(
@@ -218,63 +212,17 @@ export function createManagedAgentLaunchGate(
         error instanceof EnsureReadyTimeout ||
         (error instanceof Error && error.name === "ProjectSkillsLockBusy")
       ) {
-        return blockedFromEnsure(
-          {
-            status: "blocked",
-            launchAttemptId,
-            issueSummary: [
-              buildProjectSkillsIssue({
-                code: "operation-busy",
-                scope: "project",
-                checkedAt: now(),
-                evidence: {
-                  reason:
-                    error instanceof EnsureReadyTimeout
-                      ? "ensure-ready-timeout"
-                      : "project-lock-busy",
-                },
-              }),
-            ],
-            degradePolicySummary: "denied",
-            expiresAt: now() + attemptTtlMs,
-          },
-          launchAttemptId,
-          projectRef.realPath
-        );
+        return { status: "ready", launchAttemptId };
       }
       throw error;
     }
 
-    if (ensure.status === "ready") {
+    // ensureReady is always-ready by contract; tolerate a blocked result from
+    // older injectors without surfacing a launch dialog.
+    if (ensure.status !== "ready") {
       return { status: "ready", launchAttemptId: ensure.launchAttemptId };
     }
-
-    const expiresAt = ensure.expiresAt || now() + attemptTtlMs;
-    const record: PendingLaunchAttempt = {
-      launchAttemptId,
-      agentId,
-      projectIdentity: toIdentity(projectRef),
-      projectRef,
-      surface,
-      issueSummary: issueLines(ensure.issueSummary),
-      issueCodes: ensure.issueSummary.map((i) => i.code),
-      degradePolicySummary: ensure.degradePolicySummary,
-      launchSpecificationFingerprint: launchSpecificationFingerprint(
-        args.launchSpecification
-      ),
-      createdAt: now(),
-      expiresAt,
-      phase: SPAWN_PHASE.PENDING,
-      degraded: false,
-    };
-    pending.set(launchAttemptId, record);
-    await persistAttempt(record);
-
-    return blockedFromEnsure(
-      { ...ensure, expiresAt, launchAttemptId },
-      launchAttemptId,
-      projectRef.realPath
-    );
+    return { status: "ready", launchAttemptId: ensure.launchAttemptId };
   }
 
   async function continueLaunch(args: {

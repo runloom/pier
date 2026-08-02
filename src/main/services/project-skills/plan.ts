@@ -1,5 +1,8 @@
 import { join } from "node:path";
-import { listPierProjectionRootsForSkill } from "../../../shared/contracts/project-skills.ts";
+import {
+  listPierProjectionRootsForSkill,
+  type ProjectSkillsManifest,
+} from "../../../shared/contracts/project-skills.ts";
 import {
   createSkillDiscoveryAdapterRegistry,
   listDuplicateDiscoveryAgentKinds,
@@ -112,6 +115,7 @@ export function createProjectSkillsPlanService(
       );
       const normalizedDraft = normalizeProjectSkillsDraft(draft);
       const blockingIssues: ProjectSkillsIssue[] = [];
+      const confirmationRequirements: PlanConfirmationRequirement[] = [];
 
       if (
         live.volumeId !== claimed.volumeId ||
@@ -142,6 +146,9 @@ export function createProjectSkillsPlanService(
         ownership = await store.readOwnership(rootKey);
       } catch (error) {
         if (error instanceof ProjectSkillsLedgerCorrupt) {
+          // Damaged local ledger: plan from empty ownership after user confirms
+          // reset. Never hard-refuse the settings action.
+          ownership = null;
           blockingIssues.push(
             buildProjectSkillsIssue({
               code: error.code,
@@ -150,20 +157,22 @@ export function createProjectSkillsPlanService(
               evidence: { message: error.message },
             })
           );
-          return emptyBlockedPlan({
-            observedRevision,
-            normalizedDraft,
-            blockingIssues,
+          confirmationRequirements.push({
+            id: "confirm:skills-state-reset:ledger",
+            kind: "skills-state-reset",
+            reason: "ledger-corrupt",
           });
+        } else {
+          throw error;
         }
-        throw error;
       }
       const ownedPaths = new Set(
         (ownership?.targets ?? []).map((t) => t.relativePath)
       );
-      // Manifest three-state semantics (design §5.1): an invalid manifest is
-      // a blocked plan, never treated as empty and never a raw exception.
+      // Invalid manifest: treat as empty desired state after user confirms
+      // rebuild. Never hard-refuse the settings action.
       const manifestState = await readManifestState(live.realPath);
+      let manifest: ProjectSkillsManifest | null = null;
       if (manifestState.status === "invalid") {
         blockingIssues.push(
           buildProjectSkillsIssue({
@@ -173,14 +182,15 @@ export function createProjectSkillsPlanService(
             evidence: { reason: manifestState.reason },
           })
         );
-        return emptyBlockedPlan({
-          observedRevision,
-          normalizedDraft,
-          blockingIssues,
+        confirmationRequirements.push({
+          id: "confirm:skills-state-reset:manifest",
+          kind: "skills-state-reset",
+          reason: "invalid-manifest",
         });
+        manifest = null;
+      } else if (manifestState.status === "present") {
+        manifest = manifestState.manifest;
       }
-      const manifest =
-        manifestState.status === "present" ? manifestState.manifest : null;
       const manifestSkills = new Map(
         (manifest?.skills ?? []).map((s) => [s.id, s] as const)
       );
@@ -240,7 +250,6 @@ export function createProjectSkillsPlanService(
         claude: Boolean(manifest?.delivery.claude),
       };
       const targetOperations: PlanTargetOperation[] = [];
-      const confirmationRequirements: PlanConfirmationRequirement[] = [];
       const gitStateByTarget = new Map<string, GitFiveState>();
       // Whether any skill will actually live in BOTH projection roots —
       // only then do multi-root scanners really see duplicates.
@@ -282,9 +291,9 @@ export function createProjectSkillsPlanService(
           normalizedDraft.deliveryBySkillId[skillId] ?? entry?.delivery ?? null;
         const previousSkillDelivery = entry?.delivery ?? null;
         const previousWantEnabled = Boolean(entry?.enabled);
-        // Keeping/enabling a skill whose library directory is gone is blocked
-        // as missing-source. Disable/delete stay applicable. Disk content is
-        // authoritative — content drift is no longer a blocking concept.
+        // Library content gone: still allow the user intent (enable / save).
+        // Skip projection for this skill and surface missing-source as a
+        // non-blocking health fact — never refuse the settings action.
         if (entry && wantEnabled && !candidate) {
           const contentState = await inspectLibraryContentState(
             live.realPath,
@@ -299,6 +308,7 @@ export function createProjectSkillsPlanService(
                 checkedAt,
               })
             );
+            // Fall through: manifest enable may still apply; no projection ops.
             continue;
           }
         }
@@ -342,18 +352,27 @@ export function createProjectSkillsPlanService(
 
           if (shouldExist) {
             if (foreignish) {
-              // Preflight what apply would refuse anyway (design §5.1:
-              // unmanaged-conflict blocks plans that need this target).
-              blockingIssues.push(
-                buildProjectSkillsIssue({
-                  code: "unmanaged-conflict",
-                  scope: "skill",
-                  skillId,
-                  relativeTarget,
-                  checkedAt,
-                  evidence: { relativeTarget },
-                })
-              );
+              // Path occupied by foreign/unowned content: do not silent-
+              // overwrite. Require an explicit destructive confirmation, then
+              // replace. User action is never hard-blocked — only prompted.
+              confirmationRequirements.push({
+                id: `confirm:unmanaged-replace:${relativeTarget}`,
+                kind: "unmanaged-replace",
+                relativeTarget,
+                skillId,
+              });
+              targetOperations.push({
+                kind: "replace-with-symlink",
+                relativeTarget,
+                skillId,
+                expectedRelativeLinkTarget: expectedLinkTarget(skillId),
+              });
+              if (
+                projectionRoots.includes(AGENTS_SKILLS) &&
+                projectionRoots.includes(CLAUDE_SKILLS)
+              ) {
+                anyDualProjection = true;
+              }
               continue;
             }
             targetOperations.push({
@@ -444,18 +463,12 @@ export function createProjectSkillsPlanService(
         }
       }
 
-      // applicable: plan must not retain/expand hard blockers.
-      // - unmanaged-conflict → a required target is occupied by a foreign
-      //   object Pier must not overwrite (design §5.1).
-      // - missing-source → retained-enabled content directory is gone;
-      //   resolving plans (disable / delete) don't emit this.
-      // - duplicate-discovery is a notice (v8.2), never blocks applying the
-      //   delivery setting that causes it.
+      // applicable: only identity mismatch makes the whole plan unusable.
+      // Path conflicts become confirmation-gated replaces; missing library
+      // content is non-blocking (manifest may still change). User settings
+      // actions are never hard-refused for skills hygiene.
       const retainsHardBlocker = blockingIssues.some(
-        (i) =>
-          i.code === "project-identity-changed" ||
-          i.code === "unmanaged-conflict" ||
-          i.code === "missing-source"
+        (i) => i.code === "project-identity-changed"
       );
       const applicable = !retainsHardBlocker;
 

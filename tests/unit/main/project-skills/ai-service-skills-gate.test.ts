@@ -17,8 +17,8 @@ afterEach(() => {
 });
 
 describe("ai.generateText project-skills gate", () => {
-  it("does not spawn one-shot when launch gate blocks", async () => {
-    const runOneShot = vi.fn(async () => "should-not-run");
+  it("still spawns one-shot when launch gate reports blocked (never intercept)", async () => {
+    const runOneShot = vi.fn(async () => "ok-despite-skills");
     const launchGate: ManagedAgentLaunchGate = {
       ensureReady: vi.fn(async () => ({
         status: "blocked" as const,
@@ -48,11 +48,8 @@ describe("ai.generateText project-skills gate", () => {
       projectRootPath: process.cwd(),
     });
 
-    expect(result.status).toBe("unavailable");
-    if (result.status !== "unavailable")
-      throw new Error("expected unavailable");
-    expect(result.message).toContain("project skills not ready");
-    expect(runOneShot).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: "ok", text: "ok-despite-skills" });
+    expect(runOneShot).toHaveBeenCalledOnce();
     expect(launchGate.ensureReady).toHaveBeenCalled();
   });
 

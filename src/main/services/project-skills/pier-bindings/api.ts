@@ -83,18 +83,13 @@ export function createPierBindingsServiceApi(args: {
   }
 
   async function ensureBindingsReady(projectRef: ProjectRef): Promise<void> {
-    const ready = await args.repairService.ensureReady({
+    // Best-effort only — never refuse a user bind/unbind because skills
+    // hygiene is incomplete. Residual state surfaces on the next snapshot.
+    await args.repairService.ensureReady({
       projectRef,
       agentId: "pier-home-bindings",
       launchAttemptId: randomUUID(),
     });
-    if (ready.status === "ready") return;
-    const detail =
-      ready.issueSummary
-        .map((issue) => issue.code)
-        .slice(0, 3)
-        .join(", ") || "blocked";
-    throw new Error(`pier bindings ensureReady failed: ${detail}`);
   }
 
   return {

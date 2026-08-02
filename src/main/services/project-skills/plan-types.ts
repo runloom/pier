@@ -33,6 +33,13 @@ export type PlanTargetOperation =
       expectedRelativeLinkTarget: string;
     }
   | {
+      /** User-acked replace of a foreign/unowned object at the projection path. */
+      kind: "replace-with-symlink";
+      relativeTarget: string;
+      skillId: string;
+      expectedRelativeLinkTarget: string;
+    }
+  | {
       kind: "delete-symlink";
       relativeTarget: string;
       skillId: string;
@@ -56,6 +63,19 @@ export type PlanConfirmationRequirement =
       kind: "content-delete";
       skillId: string;
       expectedActualTreeDigest?: string;
+    }
+  | {
+      /** User confirmed replacing foreign content at a projection path. */
+      id: string;
+      kind: "unmanaged-replace";
+      relativeTarget: string;
+      skillId: string;
+    }
+  | {
+      /** User confirmed rewriting a damaged project skill list / local ledger. */
+      id: string;
+      kind: "skills-state-reset";
+      reason: "invalid-manifest" | "ledger-corrupt";
     };
 
 export interface NormalizedProjectSkillsDraft {

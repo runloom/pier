@@ -482,7 +482,7 @@ describe("project-skills plan", () => {
     ]);
   });
 
-  it("blocks with invalid-skill instead of throwing on an invalid manifest (three-state, §5.1)", async () => {
+  it("surfaces invalid-skill with a rebuild confirmation instead of hard-refusing", async () => {
     const dir = join(projectRoot, ".pier", "skills");
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, "manifest.json"), "{ not json", "utf8");
@@ -498,14 +498,19 @@ describe("project-skills plan", () => {
       "rev-bad",
       emptyDraft()
     );
-    expect(plan.applicable).toBe(false);
+    expect(plan.applicable).toBe(true);
     expect(plan.blockingIssues.some((i) => i.code === "invalid-skill")).toBe(
       true
     );
-    expect(plan.targetOperations).toEqual([]);
+    expect(
+      plan.confirmationRequirements.some(
+        (req) =>
+          req.kind === "skills-state-reset" && req.reason === "invalid-manifest"
+      )
+    ).toBe(true);
   });
 
-  it("blocks plans that keep an enabled skill whose library content is missing", async () => {
+  it("reports missing library content without refusing the plan", async () => {
     await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
@@ -540,7 +545,8 @@ describe("project-skills plan", () => {
         (i) => i.code === "missing-source" && i.skillId === "review-guide"
       )
     ).toBe(true);
-    expect(plan.applicable).toBe(false);
+    // User can still apply other intents; missing content is not a hard block.
+    expect(plan.applicable).toBe(true);
 
     const deletePlan = await service.plan(
       await projectRef(),

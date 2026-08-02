@@ -300,25 +300,12 @@ export function createAiService({
         }
         try {
           if (launchGate && request.projectRootPath?.trim()) {
-            const gate = await launchGate.ensureReady({
+            // Best-effort skills projection only — never refuse one-shot.
+            await launchGate.ensureReady({
               agentId: agent,
               projectRootPath: request.projectRootPath,
               surface: { kind: "one-shot" },
             });
-            if (gate.status === "blocked") {
-              // Design v8 §5.2: a blocked one-shot returns a structured
-              // failure to the calling business UI. Falling through to the
-              // next agent would silently bypass the gate — forbidden.
-              generateTextLog.warn("launch gate blocked one-shot", {
-                agentId: agent,
-                issues: gate.issueSummary,
-              });
-              return {
-                message: `project skills not ready: ${gate.issueSummary.join("; ") || gate.degradePolicySummary}`,
-                reason: "request_failed",
-                status: "unavailable",
-              };
-            }
           }
           const text = await runOneShot(invocation.binary, invocation.args, {
             cwd,

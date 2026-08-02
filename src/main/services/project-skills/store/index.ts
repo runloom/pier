@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lstat, readFile } from "node:fs/promises";
+import { lstat, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { createProjectSkillsPaths } from "../paths.ts";
 import type { LedgerCorruptCode } from "./errors.ts";
@@ -92,6 +92,11 @@ export interface ProjectSkillsStore {
     token: string,
     operationId: string
   ): Promise<StagingCandidateRecord>;
+  /**
+   * Clear a quarantined / PREPARED ownership isolation so a user-acked
+   * skills-state-reset can rewrite ownership from generation 0.
+   */
+  resetOwnershipLedger(rootKey: string): Promise<void>;
   writeOperation(
     rootKey: string,
     operationId: string,
@@ -292,6 +297,13 @@ export function createProjectSkillsStore(
     await writeJsonAtomic(paths.ownershipPath(rootKey), next);
   }
 
+  async function resetOwnershipLedger(rootKey: string): Promise<void> {
+    await rm(tombstonePath(rootKey), { force: true }).catch(() => undefined);
+    await rm(paths.ownershipPath(rootKey), { force: true }).catch(
+      () => undefined
+    );
+  }
+
   async function readOperation(
     rootKey: string,
     operationId: string
@@ -387,6 +399,7 @@ export function createProjectSkillsStore(
     readCandidate: staging.readCandidate,
     readOperation,
     readOwnership,
+    resetOwnershipLedger,
     releaseCandidate: staging.releaseCandidate,
     writeOperation,
   };

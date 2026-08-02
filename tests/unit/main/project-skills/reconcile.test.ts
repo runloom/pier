@@ -108,7 +108,7 @@ describe("project-skills repair / ensureReady", () => {
     expect(plan.executable).toBe(true);
   });
 
-  it("manifest three-state: invalid manifest blocks", async () => {
+  it("manifest three-state: invalid manifest blocks repair but not agent launch", async () => {
     const dir = join(projectRoot, ".pier", "skills");
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, "manifest.json"), "{not-json", "utf8");
@@ -118,6 +118,15 @@ describe("project-skills repair / ensureReady", () => {
       true
     );
     expect(plan.executable).toBe(false);
+    // Settings-only integrity: corrupt skill list must not refuse spawn.
+    const invalid = plan.blockingIssues.find((i) => i.code === "invalid-skill");
+    expect(invalid?.blockingScopes.includes("launch")).toBe(false);
+    const ready = await repair.ensureReady({
+      projectRef: await projectRef(),
+      agentId: "claude",
+      launchAttemptId: "launch-invalid-manifest",
+    });
+    expect(ready.status).toBe("ready");
   });
 
   it("manifest three-state: empty enabled set plans ownership cleanup", async () => {
