@@ -114,8 +114,10 @@ export async function createNotificationCenterService(
     const base = deps.readFocusBase?.() ?? { hasFocusedPierWindow: true };
     const agentFocus =
       deps.resolveAgentFocus?.({
-        agentRef: notification.agentRef,
-        panelId: notification.panelRef?.panelId,
+        ...(notification.agentRef ? { agentRef: notification.agentRef } : {}),
+        ...(notification.panelRef?.panelId
+          ? { panelId: notification.panelRef.panelId }
+          : {}),
       }) ?? {};
     return {
       hasFocusedPierWindow: base.hasFocusedPierWindow,
@@ -174,9 +176,10 @@ export async function createNotificationCenterService(
     }
     const runOs = async (): Promise<void> => {
       try {
-        const shown = await deps.deliverOs?.(notification, {
-          cooldownKey: key,
-        });
+        const shown = await deps.deliverOs?.(
+          notification,
+          key ? { cooldownKey: key } : {}
+        );
         if (!key) {
           return;
         }

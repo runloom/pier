@@ -16,7 +16,7 @@ const FOCUSED: DeliveryFocus = { hasFocusedPierWindow: true };
 const UNFOCUSED: DeliveryFocus = { hasFocusedPierWindow: false };
 
 function prefs(
-  overrides: Partial<DeliveryPrefs> & {
+  overrides: Omit<Partial<DeliveryPrefs>, "agentAttention"> & {
     agentAttention?: Partial<DeliveryAgentAttentionPrefs>;
   } = {}
 ): DeliveryPrefs {

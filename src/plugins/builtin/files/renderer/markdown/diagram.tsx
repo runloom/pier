@@ -199,6 +199,9 @@ function ensureSvgIntrinsicSize(clone: SVGElement, live: SVGElement): void {
     }
   }
 
+  if (!(live instanceof SVGGraphicsElement)) {
+    return;
+  }
   try {
     const box = live.getBBox();
     if (box.width > 0 && box.height > 0) {

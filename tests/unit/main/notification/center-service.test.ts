@@ -89,12 +89,14 @@ describe("notificationCenterService", () => {
       deliverToast: (notification, target) => {
         deliveries.push({ notification, target });
       },
-      deliverOs: options.deliverOs
-        ? async (notification) => {
-            osDeliveries.push(notification);
-            return true;
+      ...(options.deliverOs
+        ? {
+            deliverOs: async (notification: AppNotification) => {
+              osDeliveries.push(notification);
+              return true;
+            },
           }
-        : undefined,
+        : {}),
       history: memoryHistory(items),
       idGen: () => `id-${idSeq++}`,
       now: () => now,

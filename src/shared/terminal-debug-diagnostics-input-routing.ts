@@ -72,7 +72,8 @@ export function buildTerminalInputRoutingIssues(
       webRequestCount: expected.webRequestCount,
       webRequestIds,
     }) &&
-    expectedEffective.kind === "web"
+    expectedEffective.kind === "web" &&
+    expected.basePanel.kind === "terminal"
   ) {
     issues.push({
       code: "input_routing_sticky_web_with_base_terminal",
