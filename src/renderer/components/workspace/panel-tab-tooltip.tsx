@@ -135,9 +135,9 @@ export function tabAriaLabel(
 }
 
 /**
- * Running 态指示。
+ * Running 态指示 — soft shimmer 顶轨（与状态栏 agent 扫光同语汇）。
  * - dockview tab：视觉在外层 `.dv-tab::before`（与选中线同盒、全宽贴边）；本节点仅 a11y + 状态锚点。
- * - overflow 菜单：无 `.dv-tab`，用 `--menu` 自绘轨。
+ * - overflow 菜单：无 `.dv-tab`，本节点 `--menu` 自绘同款 shimmer（单节点，无 track/segment 子层）。
  */
 function tabRunningTopBar(
   displayLabel: string,
@@ -154,22 +154,7 @@ function tabRunningTopBar(
       data-panel-tab-state-indicator="running"
       data-tab-status="running"
       role="img"
-    >
-      {isMenu ? (
-        <>
-          <span
-            aria-hidden="true"
-            className="pier-tab-running-bar-track absolute inset-0"
-            data-panel-tab-running-track
-          />
-          <span
-            aria-hidden="true"
-            className="pier-tab-running-bar-segment absolute inset-y-0 left-0 w-1/4"
-            data-panel-tab-running-segment
-          />
-        </>
-      ) : null}
-    </span>
+    />
   );
 }
 

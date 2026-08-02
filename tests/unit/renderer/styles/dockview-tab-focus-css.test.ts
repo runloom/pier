@@ -45,29 +45,50 @@ describe("Pier dockview tab focus CSS", () => {
     expect(demoteBlock).toContain("background-color: var(--muted-foreground)");
   });
 
-  it("paints running track on outer .dv-tab::before full-bleed below selection", () => {
-    // 与选中线同盒：外层 ::before，inset-inline:0 → 100% 宽贴边
+  it("paints running soft-shimmer on true top edge (not under selection)", () => {
+    // 与选中线同盒同槽：外层 ::before top:1px，inset-inline:0 满宽
     expect(css).toContain('.dv-tab:has([data-tab-status="running"])::before');
-    expect(css).toContain("pier-tab-running-bg");
+    expect(css).toContain("pier-tab-running-shimmer");
     expect(css).toContain("--pier-tab-running-accent");
+    expect(css).toContain("--pier-tab-shimmer-base");
+    expect(css).toContain("--pier-tab-shimmer-highlight");
     expect(css).toContain("inset-inline: 0");
-    // 硬边定宽 25% 位移
-    expect(css).toContain("background-size: 25% 100%");
-    expect(css).toContain("1.15s cubic-bezier(0.45, 0.05, 0.55, 0.95)");
-    // 选中线不因 running 关掉
-    expect(css).not.toMatch(
-      /active-tab:has\(\[data-tab-status="running"\]\)::after\s*\{[^}]*display:\s*none/s
+    // soft shimmer：300% 渐变 + 单向扫光（对齐状态栏 agent 扫光语汇）
+    expect(css).toContain("background-size: 300% 100%");
+    expect(css).toContain("pier-tab-running-shimmer 1.1s linear infinite");
+    // 禁止旧硬边 bounce / 「线下一轨」叠层（running 块内不得再 top:2/3 挂在选中线下）
+    expect(css).not.toContain("pier-tab-running-bg");
+    expect(css).not.toContain("pier-tab-running-bounce");
+    expect(css).not.toContain("background-size: 25% 100%");
+    const runningBeforeStart = css.indexOf(
+      '.dv-tab:has([data-tab-status="running"])::before'
     );
-    // S1 浅顶边
-    expect(css).toContain(
-      '.dv-tab.dv-inactive-tab:has([data-tab-status="running"])::after'
+    expect(runningBeforeStart).toBeGreaterThanOrEqual(0);
+    const runningBeforeBlock = css.slice(
+      runningBeforeStart,
+      runningBeforeStart + 500
     );
-    // accent：S2 muted / S3 primary
+    expect(runningBeforeBlock).toContain("top: 1px");
+    expect(runningBeforeBlock).not.toContain("top: 2px");
+    expect(runningBeforeBlock).not.toContain("top: 3px");
+    // running 时顶缘由 shimmer 独占：关闭实心选中 ::after
+    expect(css).toMatch(
+      /:has\(\[data-tab-status="running"\]\)::after[\s\S]*?display:\s*none/
+    );
+    // accent：S2/S1 muted / S3 primary（与选中铬同色，禁止 status-info 压暗）
     expect(css).toContain("--pier-tab-running-accent: var(--muted-foreground)");
     expect(css).toContain("--pier-tab-running-accent: var(--primary)");
-    expect(css).toContain("var(--pier-tab-running-accent) 20%");
-    expect(css).toContain("var(--pier-tab-running-accent) 80%");
-    // 内层 DOM 条在 dockview 中裁成 a11y 锚点；菜单仍可见
+    expect(css).not.toContain(
+      "--pier-tab-running-accent: var(--status-info-fg)"
+    );
+    expect(css).toContain("var(--pier-tab-running-accent) 78%");
+    expect(css).toContain("var(--foreground)");
+    // S3 running 用 2px 顶缘对齐原选中权重
+    expect(css).toContain(
+      '> .dv-tab.dv-active-tab:has([data-tab-status="running"])::before'
+    );
+    expect(css).toContain("height: 2px");
+    // 内层 DOM 条在 dockview 中裁成 a11y 锚点；菜单仍可见同款 shimmer
     expect(css).toContain("pier-tab-running-bar--menu");
     expect(css).toContain(
       ".dv-tab .pier-tab-running-bar:not(.pier-tab-running-bar--menu)"
