@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1785569412708,
+  "generatedAt": 1785659250308,
   "plugins": {
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
@@ -161,7 +161,7 @@
       "description": "Manage SSH hosts and open SSH terminals from Pier.",
       "displayName": "SSH Hosts",
       "id": "pier.ssh",
-      "latest": "1.0.4",
+      "latest": "1.0.5",
       "locales": {
         "en": {
           "name": "SSH Hosts",
@@ -190,15 +190,21 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "4e74b0aa6dec7d358c33e41f6c5e93077215e95440f28cd55bacd2aab7db76d1",
           "size": 370736
+        },
+        "1.0.5": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.5/pier.ssh-1.0.5.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "7cedff30ff46bbda52ee0a60a886940201cdb44198216a1d7c40d82b96d8b189",
+          "size": 371248
         }
       }
     }
   },
-  "sequence": 25,
+  "sequence": 26,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "CPoUyZTf4Hx2WI3xvGLHJDCX2Qduxzegb5GfekwCdD2bSVC6lbGl7RFzyy/vv4pFHN722UqBYYRBQyoLObcGBw=="
+    "value": "JnhQ4V6nwMO41+TrctjBD95Vxia7eWhwvNvJ1aXnx2/QKGfQgi/xQBM1uxQP71XS1BWsnYkCI6IHi9ebiDlMAQ=="
   }
 }
