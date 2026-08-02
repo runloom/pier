@@ -18,7 +18,6 @@ import {
 import {
   type ImportComposeContext,
   prepareContentUpdate as prepareContentUpdateWith,
-  prepareDriftAcceptance as prepareDriftAcceptanceWith,
   prepareTemplate as prepareTemplateWith,
 } from "./compose.ts";
 import { defaultCallerBinding, directoryTotalBytes, isErrno } from "./fs.ts";
@@ -336,8 +335,6 @@ export function createProjectSkillsImportService(
       prepareTemplateWith(composeCtx, projectRef, args, caller),
     prepareContentUpdate: (projectRef, args, caller) =>
       prepareContentUpdateWith(composeCtx, projectRef, args, caller),
-    prepareDriftAcceptance: (projectRef, args, caller) =>
-      prepareDriftAcceptanceWith(composeCtx, projectRef, args, caller),
     discardImport,
     resolveStagingTreePath,
   };

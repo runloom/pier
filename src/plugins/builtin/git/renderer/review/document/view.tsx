@@ -161,6 +161,7 @@ export function GitReviewDocumentView({
       emptySurface,
       emptyTitle,
       ...(entries === undefined ? {} : { entries }),
+      failureSummary,
       gitRootPath,
       onItemError,
       onFeedbackChange,
@@ -168,6 +169,7 @@ export function GitReviewDocumentView({
       onMutationCommitted,
       mutationAuthorityBlocked,
       onRenderWindowChange,
+      onRetryFailure,
       onScroll,
       ...(presentation === undefined ? {} : { presentation }),
       projection,
@@ -264,6 +266,7 @@ function documentContent(options: {
   readonly emptySurface: GitReviewReadingSurface;
   readonly emptyTitle: string;
   readonly entries?: readonly GitReviewIndexEntry[];
+  readonly failureSummary: ReviewFailureSummary;
   readonly gitRootPath: string;
   readonly onItemError: (id: string, error: Error | null) => void;
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
@@ -274,6 +277,7 @@ function documentContent(options: {
   ) => Promise<void>;
   readonly mutationAuthorityBlocked: boolean;
   readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
+  readonly onRetryFailure: (entryKey: string) => void;
   readonly onScroll: () => void;
   readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
@@ -285,6 +289,21 @@ function documentContent(options: {
   readonly suppressMembershipScrollRestore?: boolean;
 }): React.JSX.Element {
   const suppress = options.suppressMembershipScrollRestore === true;
+  const handleRetryItem = (sectionKey: string) => {
+    // item.id === sectionKey；error 槽行内 Retry → loader.retry(entryKey)
+    const candidates = [
+      ...(options.entries ?? []),
+      ...options.failureSummary.visibleFailures.map(
+        (resource) => resource.entry
+      ),
+    ];
+    for (const entry of candidates) {
+      if (entry.renderSlots.some((slot) => slot.sectionKey === sectionKey)) {
+        options.onRetryFailure(entry.entryKey);
+        return;
+      }
+    }
+  };
   // generation effect 首帧前 projection 可能仍为空。
   // 冷路径：只挂 seed 量级 content estimate（禁止全 index 灰条海）。
   let displayProjection = options.projection;
@@ -344,6 +363,7 @@ function documentContent(options: {
             onItemError={options.onItemError}
             onMutationCommitted={options.onMutationCommitted}
             onRenderWindowChange={options.onRenderWindowChange}
+            onRetryItem={handleRetryItem}
             onScroll={options.onScroll}
             revisionBySectionId={displayProjection.revisionBySectionId}
             {...(options.presentation === undefined

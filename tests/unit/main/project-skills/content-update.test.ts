@@ -153,7 +153,6 @@ describe("content update / drift acceptance candidates (v8)", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -194,64 +193,6 @@ describe("content update / drift acceptance candidates (v8)", {
         })),
       })
     ).rejects.toMatchObject({ code: "token-expired" });
-  });
-
-  it("drift acceptance updates reviewed content while the skill stays disabled", async () => {
-    const digest = await writeLibrarySkill("review-guide", "Original body\n");
-    await writeManifest({
-      version: 1,
-      delivery: { agents: true, claude: false },
-      skills: [
-        {
-          id: "review-guide",
-          enabled: false,
-          contentDigest: digest,
-          source: { type: "local-import" },
-        },
-      ],
-    });
-    // Tamper outside Pier, then accept the drift via the candidate flow.
-    await writeLibrarySkill("review-guide", "Tampered body\n");
-    const { importService, planService, applyService } = buildServices();
-    const ref = await projectRef();
-    const candidate = await importService.prepareDriftAcceptance(ref, {
-      skillId: "review-guide",
-    });
-
-    const draft = {
-      deliveryAgents: true,
-      deliveryClaude: false,
-      deliveryBySkillId: {},
-      enabledBySkillId: {},
-      importTokens: [candidate.token],
-      deleteSkillIds: [],
-    };
-    const plan = await planService.plan(ref, "observed-rev-1", draft);
-    expect(plan.confirmationRequirements).toEqual([]);
-    expect(plan.blockingIssues).toEqual([]);
-    expect(plan.applicable).toBe(true);
-
-    const result = await applyService.apply({
-      projectRef: ref,
-      observedRevision: "observed-rev-1",
-      draft,
-      planDigest: plan.planDigest,
-      operationId: randomUUID(),
-      acknowledgements: [],
-    });
-    expect(result.status).toBe("converged");
-
-    const manifest = JSON.parse(
-      await readFile(
-        join(projectRoot, ".pier", "skills", "manifest.json"),
-        "utf8"
-      )
-    ) as ProjectSkillsManifest;
-    expect(manifest.skills[0]).toMatchObject({
-      id: "review-guide",
-      enabled: false,
-      contentDigest: candidate.contentDigest,
-    });
   });
 
   it("prepareContentUpdate reports risks ADDED relative to the edit base (§3.4.9)", async () => {
@@ -307,7 +248,6 @@ describe("content update / drift acceptance candidates (v8)", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -363,7 +303,6 @@ describe("content update / drift acceptance candidates (v8)", {
         "utf8"
       )
     ) as ProjectSkillsManifest;
-    expect(manifest.skills[0]?.contentDigest).toBe(candidate.contentDigest);
     expect(manifest.skills[0]?.source.type).toBe("local-import");
 
     const link = join(projectRoot, ".agents", "skills", "review-guide");
@@ -385,7 +324,6 @@ describe("content update / drift acceptance candidates (v8)", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: originalDigest,
           source: { type: "local-import" },
         },
       ],
@@ -465,7 +403,6 @@ describe("content update / drift acceptance candidates (v8)", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: originalDigest,
           source: { type: "local-import" },
         },
       ],
@@ -551,7 +488,6 @@ describe("content update / drift acceptance candidates (v8)", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: originalDigest,
           source: { type: "local-import" },
         },
       ],
@@ -623,7 +559,6 @@ describe("content update / drift acceptance candidates (v8)", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: originalDigest,
           source: { type: "local-import" },
         },
       ],
@@ -698,50 +633,5 @@ describe("content update / drift acceptance candidates (v8)", {
     await expect(
       buildServices().applyService.continueFromLog(ref, operationId)
     ).resolves.toMatchObject({ status: "converged", operationId });
-  });
-
-  it("prepareDriftAcceptance snapshots the drifted content for integrity adoption", async () => {
-    const digest = await writeLibrarySkill("review-guide", "Original body\n");
-    await writeManifest({
-      version: 1,
-      delivery: { agents: true, claude: false },
-      skills: [
-        {
-          id: "review-guide",
-          enabled: true,
-          contentDigest: digest,
-          source: { type: "git-declared" },
-        },
-      ],
-    });
-    // External drift.
-    await writeFile(
-      join(
-        projectRoot,
-        ".pier",
-        "skills",
-        "library",
-        "review-guide",
-        "SKILL.md"
-      ),
-      "---\nname: review-guide\ndescription: content update skill\n---\nDrifted body\n",
-      "utf8"
-    );
-    const driftedDigest = await computeTreeSha256V1(
-      join(projectRoot, ".pier", "skills", "library", "review-guide")
-    );
-    expect(driftedDigest).not.toBe(digest);
-
-    const { importService } = buildServices();
-    const ref = await projectRef();
-    const candidate = await importService.prepareDriftAcceptance(ref, {
-      skillId: "review-guide",
-    });
-    // Integrity adoption: the candidate is the CURRENT content; the base
-    // digest is the observed drifted digest so further concurrent change
-    // fails apply.
-    expect(candidate.sourceKind).toBe("drift-accepted");
-    expect(candidate.contentDigest).toBe(driftedDigest);
-    expect(candidate.baseContentDigest).toBe(driftedDigest);
   });
 });

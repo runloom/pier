@@ -112,7 +112,9 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
   PierDiffView: (props: {
     appearance: PierDiffViewAppearance;
     items: readonly PierDiffViewItem[];
+    labels?: { readonly retry?: string };
     onRenderWindowChange?: (window: PierDiffViewRenderWindow) => void;
+    onRetryItem?: (itemId: string) => void;
     onScroll?: () => void;
     ref?: React.Ref<PierDiffViewHandle>;
   }) => {
@@ -261,6 +263,18 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
         {renderedItems
           .map((item) => item.stateNotice ?? item.patch ?? "")
           .join("\n")}
+        {renderedItems
+          .filter((item) => item.kind === "error" && props.onRetryItem)
+          .map((item) => (
+            <button
+              data-testid="pier-diff-retry-button"
+              key={`retry-${item.id}`}
+              onClick={() => props.onRetryItem?.(item.id)}
+              type="button"
+            >
+              {props.labels?.retry ?? "Retry"}
+            </button>
+          ))}
       </output>
     );
   },
@@ -610,21 +624,6 @@ function pluginContext(input: {
     notifications: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
     panels: { openInstance: vi.fn(() => ({ kind: "opened" })) },
   } as unknown as RendererPluginContext;
-}
-
-function latestNotificationAction(
-  context: RendererPluginContext,
-  label: string
-): () => void {
-  const action = [
-    ...vi.mocked(context.notifications.error).mock.calls,
-    ...vi.mocked(context.notifications.info).mock.calls,
-  ]
-    .reverse()
-    .map(([, options]) => options?.action)
-    .find((candidate) => candidate?.label === label);
-  expect(action).toBeDefined();
-  return action?.onClick ?? (() => undefined);
 }
 
 function fileTree(container: HTMLElement): ShadowRoot {
@@ -1183,18 +1182,14 @@ describe("Git review panel", () => {
 
     act(() => notify());
     await waitForRefreshWindow();
-    await waitFor(() =>
-      expect(context.notifications.error).toHaveBeenCalledWith(
-        "Failed to refresh changes",
-        expect.objectContaining({
-          action: expect.objectContaining({ label: "Retry" }),
-        })
-      )
-    );
+    await waitFor(() => expect(getReviewIndex).toHaveBeenCalledTimes(2));
+    // 背景 index 刷新失败：零 toast；空态仍可读；下一次 watch 自愈。
+    expect(context.notifications.error).not.toHaveBeenCalled();
+    expect(context.notifications.info).not.toHaveBeenCalled();
     expect(view.queryByRole("alert")).toBeNull();
     expect(view.getByText("No changes")).toBeVisible();
 
-    act(() => latestNotificationAction(context, "Retry")());
+    act(() => notify());
     await waitForRefreshWindow();
     await waitFor(() => {
       expect(getReviewIndex).toHaveBeenCalledTimes(3);
@@ -1879,22 +1874,15 @@ describe("Git review panel", () => {
         retryable: true,
       })
     );
+    // soft-retain：旧正文仍在；背景刷新失败零 toast（2026-08-02 契约）
     await waitFor(() =>
-      expect(context.notifications.info).toHaveBeenCalledWith(
-        "Couldn't refresh this diff. The previous view is still shown.",
-        expect.objectContaining({
-          action: expect.objectContaining({ label: "Retry" }),
-        })
+      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
+        "data-item-ids",
+        expect.stringContaining("section:199")
       )
     );
-    expect(context.notifications.error).not.toHaveBeenCalledWith(
-      expect.stringMatching(/could not be displayed/iu),
-      expect.anything()
-    );
-    expect(view.getByTestId("pierre-diff")).toHaveAttribute(
-      "data-item-ids",
-      expect.stringContaining("section:199")
-    );
+    expect(context.notifications.error).not.toHaveBeenCalled();
+    expect(context.notifications.info).not.toHaveBeenCalled();
   }, 20_000);
 
   it("Pierre 渲染失败时显示错误，并可通过重试恢复正文", async () => {
@@ -1906,6 +1894,9 @@ describe("Git review panel", () => {
     await expect(
       view.findByText("Failed to render diff")
     ).resolves.toBeVisible();
+    // F1：面板内 Empty，禁止全局 toast（契约 2026-08-02）
+    expect(context.notifications.error).not.toHaveBeenCalled();
+    expect(context.notifications.info).not.toHaveBeenCalled();
     expect(view.queryByText("Pierre chunk unavailable")).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Details" }));
     expect(context.dialogs.alert).toHaveBeenCalledWith({
@@ -1916,6 +1907,7 @@ describe("Git review panel", () => {
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
     await expect(view.findByTestId("pierre-diff")).resolves.toBeVisible();
     expect(view.queryByText("Pierre chunk unavailable")).toBeNull();
+    expect(context.notifications.error).not.toHaveBeenCalled();
   });
 
   it("已加载正文经历 Pierre 失败与重挂后从 latest-map 恢复且不重复读取", async () => {
@@ -1935,6 +1927,8 @@ describe("Git review panel", () => {
     await expect(
       view.findByText("Failed to render diff")
     ).resolves.toBeVisible();
+    expect(context.notifications.error).not.toHaveBeenCalled();
+    expect(context.notifications.info).not.toHaveBeenCalled();
 
     diffViewRuntime.error = null;
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
@@ -1942,6 +1936,7 @@ describe("Git review panel", () => {
       expect(view.getByTestId("pierre-diff")).toHaveTextContent("+new")
     );
     expect(getReviewFileDocument).toHaveBeenCalledTimes(readsBeforeFailure);
+    expect(context.notifications.error).not.toHaveBeenCalled();
   });
 
   it("新代新增 staged 拓扑提交前不把新 section 发给旧 Pierre handle", async () => {
@@ -3111,38 +3106,45 @@ describe("Git review panel", () => {
     ).toHaveLength(callsAfterFirstVisibility);
   });
 
-  it("通过显式入口重试瞬时读取失败的文件并在成功后定位", async () => {
-    const getReviewFileDocument = vi
-      .fn()
-      .mockResolvedValueOnce({
-        kind: "error",
-        message: "temporary document failure",
-        reason: "internal",
-        retryable: true,
-      })
-      .mockResolvedValueOnce(documentResult(0));
+  it("文件瞬时读取失败不弹全局 toast，行内 Retry 可恢复正文并定位", async () => {
+    let documentReads = 0;
+    const getReviewFileDocument = vi.fn(async () => {
+      documentReads += 1;
+      if (documentReads === 1) {
+        return {
+          kind: "error" as const,
+          message: "temporary document failure",
+          reason: "internal" as const,
+          retryable: true,
+        };
+      }
+      return documentResult(0);
+    });
     const context = pluginContext({ getReviewFileDocument });
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
-    await waitFor(() =>
-      expect(context.notifications.error).toHaveBeenCalledWith(
-        "Could not display file-0.ts.",
-        expect.objectContaining({
-          action: expect.objectContaining({ label: "Retry" }),
-        })
-      )
-    );
+    await waitFor(() => expect(getReviewFileDocument).toHaveBeenCalled());
+    expect(context.notifications.error).not.toHaveBeenCalled();
+    expect(context.notifications.info).not.toHaveBeenCalled();
     expect(view.queryByText("temporary document failure")).toBeNull();
-    act(() => latestNotificationAction(context, "Retry")());
+
+    await waitFor(() =>
+      expect(view.getByTestId("pier-diff-retry-button")).toBeVisible()
+    );
+    fireEvent.click(view.getByTestId("pier-diff-retry-button"));
 
     await waitFor(() =>
       expect(getReviewFileDocument.mock.calls.length).toBeGreaterThanOrEqual(2)
     );
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveTextContent("+new")
+    );
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:0"));
   });
 
-  it("重试失败文件时取消离窗请求，并在旧请求结算后读取当前目标", async () => {
+  it("文件读取失败不弹 toast；watch 换代后重读目标并恢复正文", async () => {
     const entries = [0, 1, 2].map((index) => entry(index));
+    let notify: () => void = () => undefined;
     const requests = new Map<
       string,
       ReturnType<typeof deferred<GitReviewFileDocumentResult>>[]
@@ -3159,9 +3161,13 @@ describe("Git review panel", () => {
       cancelReviewRequest,
       getReviewFileDocument,
       getReviewIndex: vi.fn(async () => indexResult(entries)),
+      watch: (_gitRoot, listener) => {
+        notify = () => listener({ changeKind: "worktree", gitRoot: ROOT });
+        return () => undefined;
+      },
     });
     const Panel = createGitChangesPanel(context);
-    render(<Panel {...panelProps(createPanelHarness().api)} />);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
     await waitFor(() =>
       expect(getReviewFileDocument.mock.calls.length).toBeGreaterThanOrEqual(2)
@@ -3174,27 +3180,36 @@ describe("Git review panel", () => {
         retryable: true,
       })
     );
-    await waitFor(() => expect(getReviewFileDocument).toHaveBeenCalledTimes(3));
+    // 旁路文件结算，避免卡住 generation
+    act(() => requests.get("src/file-1.ts")?.[0]?.resolve(documentResult(1)));
+    act(() => requests.get("src/file-2.ts")?.[0]?.resolve(documentResult(2)));
     await waitFor(() =>
-      expect(context.notifications.error).toHaveBeenCalledWith(
-        "Could not display file-0.ts.",
-        expect.objectContaining({
-          action: expect.objectContaining({ label: "Retry" }),
-        })
-      )
+      expect(context.notifications.error).not.toHaveBeenCalled()
     );
-    act(() => latestNotificationAction(context, "Retry")());
-    // loading 占位不 scroll；ready 后再定位。retry 必须再读目标（并发未满时可不 cancel 旁路）。
+
+    act(() => notify());
+    await waitForRefreshWindow();
     await waitFor(() =>
       expect(requests.get("src/file-0.ts")?.length ?? 0).toBeGreaterThanOrEqual(
         2
       )
     );
-    act(() => requests.get("src/file-1.ts")?.[0]?.resolve(documentResult(1)));
-    expect(requests.get("src/file-0.ts")).toHaveLength(2);
     act(() => requests.get("src/file-0.ts")?.[1]?.resolve(documentResult(0)));
+    // 同代旁路文件可能再读
+    for (const path of ["src/file-1.ts", "src/file-2.ts"] as const) {
+      const pending = requests.get(path)?.at(-1);
+      if (pending && path === "src/file-1.ts") {
+        act(() => pending.resolve(documentResult(1)));
+      }
+      if (pending && path === "src/file-2.ts") {
+        act(() => pending.resolve(documentResult(2)));
+      }
+    }
 
-    await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:0"));
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveTextContent("+new")
+    );
+    expect(context.notifications.error).not.toHaveBeenCalled();
   });
 
   it("请求完成顺序颠倒时正文仍按 index 顺序排列", async () => {
@@ -3821,14 +3836,10 @@ describe("Git review panel", () => {
 
     act(() => notify());
     await waitForRefreshWindow();
-    await waitFor(() => {
-      expect(context.notifications.error).toHaveBeenCalledWith(
-        "Failed to refresh changes",
-        expect.objectContaining({
-          action: expect.objectContaining({ label: "Retry" }),
-        })
-      );
-    });
+    await waitFor(() => expect(getReviewIndex).toHaveBeenCalledTimes(2));
+    // 有 last-good：index 刷新失败零 toast，树与正文仍可用
+    expect(context.notifications.error).not.toHaveBeenCalled();
+    expect(context.notifications.info).not.toHaveBeenCalled();
     expect(fileTree(view.container).textContent).toContain(
       "deferred-after-failure.ts"
     );
@@ -3840,7 +3851,7 @@ describe("Git review panel", () => {
     );
   });
 
-  it("刷新失败后可重试，并恢复用户选择的窗口外文件", async () => {
+  it("刷新失败后下一次 watch 可恢复，并定位用户选择的窗口外文件", async () => {
     const entries = [
       ...Array.from({ length: 200 }, (_, index) =>
         entry(index, `src/z-file-${String(index).padStart(3, "0")}.ts`)
@@ -3882,20 +3893,15 @@ describe("Git review panel", () => {
 
     act(() => notify());
     await waitForRefreshWindow();
-    await waitFor(() =>
-      expect(context.notifications.error).toHaveBeenCalledWith(
-        "Failed to refresh changes",
-        expect.objectContaining({
-          action: expect.objectContaining({ label: "Retry" }),
-        })
-      )
-    );
+    await waitFor(() => expect(getReviewIndex).toHaveBeenCalledTimes(2));
+    expect(context.notifications.error).not.toHaveBeenCalled();
     fireEvent.click(findTreeItem(view.container, "aaa-deferred.ts"));
     await waitFor(() => expect(deferredReads).toBe(1));
     await waitFor(() =>
       expect(scrollToItem).toHaveBeenCalledWith("section:200")
     );
-    act(() => latestNotificationAction(context, "Retry")());
+    act(() => notify());
+    await waitForRefreshWindow();
 
     await waitFor(() => expect(getReviewIndex).toHaveBeenCalledTimes(3));
   }, 15_000);

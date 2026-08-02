@@ -238,17 +238,15 @@ export async function buildRepairPlan(
       skillDelivery: entry.delivery ?? null,
     });
 
-    // The manifest digest is the expected content, but the library tree may
-    // have changed underneath. Drifted or missing content is never
-    // (re)projected. Live projections surface settings-only integrity
-    // (library-drift / missing-source) without hard-blocking agent launch;
-    // once the projection is gone the skill simply stops loading.
+    // Disk content is authoritative. Missing library content is never
+    // (re)projected; a live projection of missing content surfaces
+    // settings-only integrity (missing-source) without hard-blocking agent
+    // launch — once the projection is gone the skill simply stops loading.
     const contentState = await inspectLibraryContentState(
       live.realPath,
-      entry.id,
-      entry.contentDigest
+      entry.id
     );
-    if (contentState !== "ok") {
+    if (contentState === "missing") {
       let projectionLive = false;
       for (const root of roots) {
         const relativeTarget = `${root}/${entry.id}`;
@@ -264,12 +262,10 @@ export async function buildRepairPlan(
       if (projectionLive) {
         blockingIssues.push(
           buildProjectSkillsIssue({
-            code:
-              contentState === "missing" ? "missing-source" : "library-drift",
+            code: "missing-source",
             scope: "skill",
             skillId: entry.id,
             checkedAt,
-            evidence: { expectedContentDigest: entry.contentDigest },
           })
         );
       }

@@ -2,23 +2,23 @@
 export const settingsNotifications = {
   enabled: "Notify when an agent needs you",
   enabledDesc:
-    "Deliver OS notifications when an agent is waiting for confirmation or for you to continue (title bar counts still update when off).",
+    "Alert you when an agent is waiting for confirmation or for you to continue: in-app message card while Pier is frontmost, OS notification when it is not (title bar counts still update when off).",
   turnNotifyMode: "Notify when a turn completes",
   turnNotifyModeDesc:
-    "Whether to notify after an agent finishes a turn. Default is only when the window is unfocused.",
+    "Whether to alert after an agent finishes a turn. Default is only when that agent’s window is unfocused; in-app and OS alerts are mutually exclusive.",
   turnNotifyModeOptions: {
     off: "Never",
     unfocused: "Only when window is unfocused",
     always: "Always",
   },
   error: "Notify on agent errors",
-  errorDesc: "Also notify when an agent enters an error state. Off by default.",
+  errorDesc: "Also alert when an agent enters an error state. Off by default.",
   suppress: "Suppress when focused",
   suppressDesc:
-    "Skip “Needs you” and error OS notifications when the target agent panel is already focused (turn-complete uses the three modes above).",
+    "Skip in-app message cards and OS notifications for “Needs you” and errors when the target agent panel is already focused (still recorded in Notification Center; turn-complete uses the three modes above).",
   cooldownLabel: "Cooldown per agent",
   cooldownDesc:
-    "Minimum time between OS notifications for the same agent panel.",
+    "Minimum time between OS notification banners for the same agent panel (in-app message cards are not limited by this).",
   cooldown: {
     "60000": "1 minute",
     "180000": "3 minutes",
@@ -86,13 +86,13 @@ export const settingsNotifications = {
   deliveryDesc: "Control which channels messages use to interrupt you.",
   systemGroup: "System Notifications",
   systemGroupDesc:
-    "Alerts you via the OS notification center while the window is unfocused.",
+    "Alerts you via the OS notification center when no Pier window is frontmost. While a Pier window is focused, only the in-app top-right message card is used — never both at once.",
   disturbGroup: "Interruption Control",
   disturbGroupDesc:
     "Further reduce interruptions on top of the channels above.",
   dnd: "Do Not Disturb",
   dndDesc:
-    "When on, only error messages pop up; the rest go silently to Notification Center. You can also toggle it from the title bar bell.",
+    "When on, only error-level in-app message cards pop up; the rest go silently to Notification Center. OS notifications may still appear per the agent settings above. You can also toggle it from the title bar bell.",
   sound: {
     system: "System default",
     "abstract-sound1": "Abstract Sound 1",

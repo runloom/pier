@@ -122,65 +122,58 @@ export const HEALTH_ISSUE_MAPPINGS: readonly HealthIssueMapping[] = [
   {
     code: "projection-missing",
     severity: "warning",
-    blockingScopes: ["launch"],
+    // Reported in settings; never gates agent spawn.
+    blockingScopes: EMPTY_SCOPES,
     degradePolicy: "allowed",
     repairable: true,
   },
   {
     code: "projection-stale",
     severity: "warning",
-    blockingScopes: ["launch"],
+    blockingScopes: EMPTY_SCOPES,
     degradePolicy: "allowed",
     repairable: true,
   },
   {
     code: "recovery-pending",
     severity: "warning",
-    blockingScopes: ["launch"],
+    blockingScopes: EMPTY_SCOPES,
     degradePolicy: "allowed",
     repairable: true,
   },
   {
     code: "missing-source",
     severity: "error",
-    blockingScopes: ["enable", "projection", "launch"],
-    // Integrity issues are settings-only (Use current files / delete / re-import).
-    // Launch may open settings; do not offer “launch anyway”.
+    // Settings-only integrity (delete / re-import). Opening an agent is not a
+    // skills hygiene decision — never refuse spawn for library content gaps.
+    blockingScopes: ["enable", "projection", "write"],
     degradePolicy: "denied",
     repairable: false,
   },
   {
     code: "invalid-skill",
     severity: "error",
-    blockingScopes: ["enable", "projection", "launch"],
-    degradePolicy: "denied",
-    repairable: false,
-  },
-  {
-    code: "library-drift",
-    severity: "error",
-    // Integrity still blocks enable / projection (adopt current / delete in
-    // settings). Do not hard-block managed agent launch: drift is a settings
-    // hygiene issue, not a reason to refuse opening an agent.
-    blockingScopes: ["enable", "projection"],
+    // Corrupt / unreadable project skill list (e.g. bad manifest.json).
+    // Settings can repair or reset; agent launch must not be gated on it.
+    blockingScopes: ["enable", "projection", "write"],
     degradePolicy: "denied",
     repairable: false,
   },
   {
     code: "content-conflict",
     severity: "error",
-    blockingScopes: ["enable", "projection", "launch"],
+    blockingScopes: ["enable", "projection", "write"],
     degradePolicy: "denied",
     repairable: false,
   },
   {
     code: "unmanaged-conflict",
     severity: "error",
-    // Settings-only integrity (mirror library-drift): foreign/unowned objects
-    // at a projection path block enable/projection/write, but must NOT refuse
-    // opening an agent. Launch is the user's intent — never a skills hygiene
-    // decision point. Surface the state in settings; do not auto-adopt or
-    // prompt-to-block at spawn.
+    // Settings-only integrity: foreign/unowned objects at a projection path
+    // block enable/projection/write, but must NOT refuse opening an agent.
+    // Launch is the user's intent — never a skills hygiene decision point.
+    // Surface the state in settings; do not auto-adopt or prompt-to-block at
+    // spawn.
     blockingScopes: ["enable", "projection", "write"],
     degradePolicy: "denied",
     repairable: false,
@@ -188,43 +181,46 @@ export const HEALTH_ISSUE_MAPPINGS: readonly HealthIssueMapping[] = [
   {
     code: "managed-target-modified",
     severity: "error",
-    // Launch scope declared to match the gate's hard-block behavior.
-    blockingScopes: ["enable", "projection", "write", "launch"],
+    // Same as unmanaged-conflict: settings hygiene only. Do not refuse spawn.
+    blockingScopes: ["enable", "projection", "write"],
     degradePolicy: "denied",
     repairable: false,
   },
   {
     code: "project-identity-changed",
     severity: "error",
-    blockingScopes: ["read", "write", "launch"],
+    // Identity mismatch makes skills I/O unsafe; still do not refuse spawn —
+    // the agent session itself does not depend on the skills ledger.
+    blockingScopes: ["read", "write"],
     degradePolicy: "denied",
     repairable: false,
   },
   {
     code: "ledger-corrupt",
     severity: "error",
-    blockingScopes: ["write", "launch"],
+    // Machine-local ownership ledger corrupt: block skills writes only.
+    blockingScopes: ["write"],
     degradePolicy: "denied",
     repairable: false,
   },
   {
     code: "recovery-record-corrupt",
     severity: "error",
-    blockingScopes: ["write", "launch"],
+    blockingScopes: ["write"],
     degradePolicy: "denied",
     repairable: false,
   },
   {
     code: "recovery-blocked",
     severity: "error",
-    blockingScopes: ["write", "launch"],
+    blockingScopes: ["write"],
     degradePolicy: "denied",
     repairable: false,
   },
   {
     code: "durability-unknown",
     severity: "error",
-    blockingScopes: ["write", "launch"],
+    blockingScopes: ["write"],
     degradePolicy: "denied",
     repairable: false,
   },
@@ -268,14 +264,15 @@ export const HEALTH_ISSUE_MAPPINGS: readonly HealthIssueMapping[] = [
   {
     code: "agent-version-unsupported",
     severity: "error",
-    blockingScopes: ["launch"],
+    // Skills discovery caveat only — do not refuse opening the agent.
+    blockingScopes: EMPTY_SCOPES,
     degradePolicy: "allowed",
     repairable: false,
   },
   {
     code: "unknown-agent-behavior",
     severity: "error",
-    blockingScopes: ["launch"],
+    blockingScopes: EMPTY_SCOPES,
     degradePolicy: "allowed",
     repairable: false,
   },

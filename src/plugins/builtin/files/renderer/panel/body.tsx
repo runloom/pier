@@ -5,7 +5,13 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
 import { FolderSearch } from "lucide-react";
-import { type ReactNode, useCallback, useEffect } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
 import type {
   EditorRange,
@@ -16,6 +22,10 @@ import { useFilesDocument } from "../document/use-document.ts";
 import { FileEditorAdapter } from "../editor/adapter.tsx";
 import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesTranslate } from "../i18n.ts";
+import {
+  defaultMarkdownCrossModeAnchor,
+  type MarkdownCrossModeAnchor,
+} from "../markdown/cross-mode-anchor.ts";
 import { FileImagePreview } from "../preview/image.tsx";
 import {
   createFileEditorAdapterLabels,
@@ -61,6 +71,13 @@ export function ResolvedFilePanel({
 }) {
   const documentId = controller.documentId(source);
   const document = useFilesDocument(documentId);
+  const previewCaptureRef = useRef<
+    (() => MarkdownCrossModeAnchor | null) | null
+  >(null);
+  const [previewRestoreAnchor, setPreviewRestoreAnchor] = useState<
+    MarkdownCrossModeAnchor | undefined
+  >(undefined);
+  const [previewRestoreRequestId, setPreviewRestoreRequestId] = useState(0);
   const {
     handleCopyMarkdownCode,
     handleMarkdownPreviewContextMenu,
@@ -74,6 +91,59 @@ export function ResolvedFilePanel({
     panelId,
     t,
   });
+
+  // Drop one-shot preview restore when the document identity changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: documentId is the identity trigger; body only clears state.
+  useEffect(() => {
+    setPreviewRestoreAnchor(undefined);
+  }, [documentId]);
+
+  const handleModeChange = useCallback(
+    (next: FileViewMode) => {
+      if (!onModeChange) {
+        return;
+      }
+      if (document?.language !== "markdown") {
+        setPreviewRestoreAnchor(undefined);
+        onModeChange(next);
+        return;
+      }
+      if (mode === "preview" && next === "source") {
+        const anchor =
+          previewCaptureRef.current?.() ?? defaultMarkdownCrossModeAnchor(0);
+        onModeChange("source");
+        controller.revealOffset(editorSessionId, anchor.offset, document.id);
+        return;
+      }
+      if (mode === "source" && next === "preview") {
+        const anchor =
+          controller.captureViewportAnchor(editorSessionId) ??
+          defaultMarkdownCrossModeAnchor(0);
+        setPreviewRestoreAnchor(anchor);
+        setPreviewRestoreRequestId((current) => current + 1);
+        onModeChange("preview");
+        return;
+      }
+      setPreviewRestoreAnchor(undefined);
+      onModeChange(next);
+    },
+    [
+      controller,
+      document?.id,
+      document?.language,
+      editorSessionId,
+      mode,
+      onModeChange,
+    ]
+  );
+
+  // Single mode handler for Eye/Code, diff toggle, and showSourceMode.
+  useEffect(() => {
+    if (!(panelId && onModeChange)) {
+      return;
+    }
+    return controller.registerPanelModeHandler(panelId, handleModeChange);
+  }, [controller, handleModeChange, onModeChange, panelId]);
 
   // Git 变更条：仅 source + disk 模式渲染。非源码模式清空；切回 source 时刷新。
   // attach 在 controller.attachView 时已发生，故此 effect 仅做清空/刷新。
@@ -329,7 +399,12 @@ export function ResolvedFilePanel({
               : document.language
           }
           markdownAppearance={context?.appearance}
+          markdownCaptureAnchorRef={previewCaptureRef}
           markdownCharts={context?.charts}
+          markdownContentAnchor={previewRestoreAnchor}
+          markdownContentAnchorRequestId={
+            previewRestoreAnchor ? previewRestoreRequestId : undefined
+          }
           markdownCopyCode={context ? handleCopyMarkdownCode : undefined}
           markdownErrorLabel={createMarkdownErrorLabel(t)}
           markdownFileResources={context}
@@ -346,6 +421,7 @@ export function ResolvedFilePanel({
           onJumpToSource={
             onModeChange
               ? (offset) => {
+                  // Bypass viewport capture: double-click means this block start.
                   onModeChange("source");
                   controller.revealOffset(editorSessionId, offset, document.id);
                 }

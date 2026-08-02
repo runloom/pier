@@ -49,6 +49,7 @@ export {
   safeMarkdownUrl,
 } from "./resource-elements.tsx";
 
+import type { MarkdownCrossModeAnchor } from "./cross-mode-anchor.ts";
 import type { MarkdownSearchMatch } from "./search.ts";
 import { MarkdownSearchText } from "./search-mark.tsx";
 
@@ -71,6 +72,8 @@ interface MarkdownIrRendererProps {
   codeTheme: string;
   /** Paper / app light-dark for mermaid re-render on theme switch. */
   colorMode: "dark" | "light";
+  contentAnchor?: MarkdownCrossModeAnchor | undefined;
+  contentAnchorRequestId?: string | number | undefined;
   copyCode: ((code: string) => Promise<void>) | undefined;
   fileResources: MarkdownFileResources | undefined;
   initialAnchor: string | undefined;
@@ -80,6 +83,7 @@ interface MarkdownIrRendererProps {
   onOpenExternal: (url: string) => void;
   onOpenInternal: ((target: MarkdownInternalTarget) => void) | undefined;
   pagination: MarkdownPagination;
+  scrollRoot?: HTMLElement | null | undefined;
   searchMatches: readonly MarkdownSearchMatch[];
   source: MarkdownDiskSource | undefined;
 }
@@ -87,7 +91,13 @@ interface MarkdownIrRendererProps {
 interface MarkdownRenderContext
   extends Omit<
     MarkdownIrRendererProps,
-    "initialAnchor" | "initialAnchorRequestId" | "pagination" | "searchMatches"
+    | "contentAnchor"
+    | "contentAnchorRequestId"
+    | "initialAnchor"
+    | "initialAnchorRequestId"
+    | "pagination"
+    | "scrollRoot"
+    | "searchMatches"
   > {
   onOpenAnchor(anchor: string): void;
   searchMatchesByNode: ReadonlyMap<string, readonly MarkdownSearchMatch[]>;
@@ -102,6 +112,8 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
     <MarkdownPaginationView
       activeSearchMatchId={props.activeSearchMatchId}
       activeSearchPageIndex={props.activeSearchPageIndex}
+      contentAnchor={props.contentAnchor}
+      contentAnchorRequestId={props.contentAnchorRequestId}
       initialAnchor={props.initialAnchor}
       initialAnchorRequestId={props.initialAnchorRequestId}
       pagination={props.pagination}
@@ -125,6 +137,7 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
         };
         return renderBlocks(page.blocks, context);
       }}
+      scrollRoot={props.scrollRoot ?? null}
     />
   );
 }
@@ -179,7 +192,8 @@ function renderBlock(
             })}
           >
             <MarkdownDiagram
-              // Remount on color mode so mermaid re-renders (facade reads store at call).
+              // CSS-var mermaid inherits paper tokens; remount keeps node ids clean
+              // when reading appearance flips the preview color mode.
               charts={context.charts}
               contentPreview={context.fileResources?.contentPreview}
               errorLabel={context.labels.diagramFailed}
@@ -230,7 +244,9 @@ function renderBlock(
     case "list": {
       const listChildren = block.items.map((item) => (
         <li
-          className={item.checked === null ? "md-li" : "md-li md-li-task"}
+          {...sourceBlockProps(item.range, context, {
+            className: item.checked === null ? "md-li" : "md-li md-li-task",
+          })}
           key={`${item.range.startOffset}-${item.range.endOffset}`}
         >
           {item.checked === null ? null : (
@@ -253,7 +269,9 @@ function renderBlock(
       return createElement(
         block.ordered ? "ol" : "ul",
         {
-          className: block.ordered ? "md-ol" : "md-ul",
+          ...sourceBlockProps(block.range, context, {
+            className: block.ordered ? "md-ol" : "md-ul",
+          }),
           start: block.ordered ? (block.start ?? undefined) : undefined,
         },
         listChildren
@@ -263,7 +281,11 @@ function renderBlock(
       const [header, ...body] = block.rows;
       if (!header) return null;
       return (
-        <div className="md-table-wrap">
+        <div
+          {...sourceBlockProps(block.range, context, {
+            className: "md-table-wrap",
+          })}
+        >
           <Table>
             <TableHeader>
               <TableRow>

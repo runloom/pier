@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import {
   beginTerminalPanelWebDragCapture,
+  getTerminalFocusRoutingDebugSnapshot,
   installTerminalInputRoutingBlurSuppressor,
   registerTerminalFullscreenWebOverlay,
   requestTerminalFocusIntent,
@@ -71,6 +72,20 @@ describe("terminal input routing store", () => {
     );
   });
 
+  it("exposes webRequestIds (not only count) for debug dumps", () => {
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    const releaseA = requestTerminalWebFocus("a");
+    requestTerminalWebFocus("pier.click");
+    expect(getTerminalFocusRoutingDebugSnapshot().webRequestIds).toEqual([
+      "a",
+      "pier.click",
+    ]);
+    releaseA();
+    expect(getTerminalFocusRoutingDebugSnapshot().webRequestIds).toEqual([
+      "pier.click",
+    ]);
+  });
+
   it("base panel goes into snapshot.basePanel", () => {
     setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
     expect(getLastTerminalHostSnapshot()?.basePanel).toEqual({
@@ -95,7 +110,7 @@ describe("terminal input routing store", () => {
     expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(0);
   });
 
-  it("multiple web focus requests stay until all released", () => {
+  it("multiple web focus requests stay until all released", async () => {
     const releaseA = requestTerminalWebFocus("a");
     const releaseB = requestTerminalWebFocus("b");
     expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(2);
@@ -104,6 +119,90 @@ describe("terminal input routing store", () => {
     expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(1);
     releaseB();
     expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(0);
+    await Promise.resolve();
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(0);
+  });
+
+  it("durable release clears residual pier.click when base is terminal", async () => {
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    const releaseSettings = requestTerminalWebFocus("settings-dialog");
+    requestTerminalWebFocus("pier.click");
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(2);
+
+    releaseSettings();
+    // 同步：durable 已去，pier.click 仍在（microtask 前）
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(1);
+    expect(getTerminalFocusRoutingDebugSnapshot().webRequestIds).toEqual([
+      "pier.click",
+    ]);
+
+    await Promise.resolve();
+    expect(getLastTerminalHostSnapshot()).toEqual(
+      expect.objectContaining({
+        basePanel: { kind: "terminal", panelId: "terminal-1" },
+        webRequestCount: 0,
+      })
+    );
+    expect(getTerminalFocusRoutingDebugSnapshot().effectiveKind).toBe(
+      "terminal"
+    );
+  });
+
+  it("release + restoreTerminalFocusAfterWebOverlayDismiss does not leave residual pier.click", async () => {
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    const release = requestTerminalWebFocus("notification-center");
+    requestTerminalWebFocus("pier.click");
+    applyHostSnapshot.mockClear();
+    release();
+    // 模拟 fullscreen outside cleanup 同步 restore
+    requestTerminalFocusIntent("terminal-1");
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(0);
+    const afterRestoreCalls = applyHostSnapshot.mock.calls.length;
+    await Promise.resolve();
+    // microtask reconcile 应 no-op（无 pier.click），不再 bump
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(0);
+    expect(applyHostSnapshot.mock.calls.length).toBe(afterRestoreCalls);
+  });
+
+  it("durable release after concurrent pier.click (outside-close race) restores terminal", async () => {
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    const releaseDialog = requestTerminalWebFocus("app-dialog");
+    // 模拟 outside-click：先 pointerdown 加 pier.click，再 release durable
+    requestTerminalWebFocus("pier.click");
+    releaseDialog();
+    await Promise.resolve();
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(0);
+    expect(getTerminalFocusRoutingDebugSnapshot().effectiveKind).toBe(
+      "terminal"
+    );
+  });
+
+  it("releasing one of two durables leaves web focus and pier.click", async () => {
+    setTerminalBasePanel({ kind: "terminal", panelId: "terminal-1" });
+    const releaseA = requestTerminalWebFocus("settings-dialog");
+    requestTerminalWebFocus("command-palette");
+    requestTerminalWebFocus("pier.click");
+    releaseA();
+    await Promise.resolve();
+    expect(getLastTerminalHostSnapshot()?.webRequestCount).toBe(2);
+    expect(getTerminalFocusRoutingDebugSnapshot().webRequestIds).toEqual([
+      "command-palette",
+      "pier.click",
+    ]);
+  });
+
+  it("durable release with base=web only clears pier.click noise", async () => {
+    setTerminalBasePanel({ kind: "web" });
+    const release = requestTerminalWebFocus("settings-dialog");
+    requestTerminalWebFocus("pier.click");
+    release();
+    await Promise.resolve();
+    expect(getLastTerminalHostSnapshot()).toEqual(
+      expect.objectContaining({
+        basePanel: { kind: "web" },
+        webRequestCount: 0,
+      })
+    );
   });
 
   it("duplicate web focus request is idempotent", () => {

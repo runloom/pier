@@ -129,7 +129,7 @@ const initialState = {
   errorMessage: null as string | null,
   lastApplyOperationId: null as string | null,
   lastPlan: null as ProjectSkillsPlanView | null,
-  loadStatus: "idle" as LoadStatus,
+  loadStatus: "loading" as LoadStatus,
   observedRevision: null as string | null,
   planPending: false,
   planRequestId: 0,

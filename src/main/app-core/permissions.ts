@@ -340,10 +340,6 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["skills:write"],
   },
-  "skills.import.prepareDriftAcceptance": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["skills:write"],
-  },
   "skills.import.discard": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["skills:write"],

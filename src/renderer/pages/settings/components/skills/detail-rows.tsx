@@ -115,11 +115,6 @@ export function ManagedSkillRow({
             {isSystem || isPierBound ? null : (
               <Badge variant="outline">{sourceLabel(skill, t)}</Badge>
             )}
-            {skill.issueIds.some((id) => id.startsWith("library-drift")) ? (
-              <Badge variant="destructive">
-                {t("settings.skills.driftBadge")}
-              </Badge>
-            ) : null}
             {skill.issueIds.some((id) => id.startsWith("missing-source")) ? (
               <Badge variant="destructive">
                 {t("settings.skills.missingBadge")}

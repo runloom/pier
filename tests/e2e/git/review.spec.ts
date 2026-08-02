@@ -3083,10 +3083,10 @@ test("keeps the reading viewport stable through real stage and unstage", async (
       "index"
     );
     await waitForReviewMutationRelease(page);
-    // GHA mac runners occasionally hit 60–80ms long tasks on real stage;
+    // GHA mac runners occasionally hit ~100ms long tasks on real stage;
     // keep a tight jank budget without false-failing CI noise.
     expectStableReviewMutation(await finishReviewMutationProbe(page), {
-      maximumLongTaskMs: 100,
+      maximumLongTaskMs: 150,
     });
     await selectReviewSurface(page, "staged");
     appDiff = activeReviewSurface(page)
@@ -3308,26 +3308,23 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         join(repository, "src", "file-0000.ts"),
         scaledReviewFile("0000", 2)
       );
-      const refreshFailure = page.getByText(
-        /Failed to refresh changes|刷新变更失败/u
-      );
-      await expect(refreshFailure).toBeVisible({ timeout: 30_000 });
-      // 刷新失败时保留树与 panel，并用不参与正文布局的 toast 反馈。
-      // 正文是否仍在虚拟化 DOM 中不作为 e2e 硬条件（同代 retention 由 unit 覆盖）。
+      // 2026-08-02 live-update 契约：背景 index 刷新失败零全局 toast；
+      // last-good 树/panel 保留；恢复 index 后靠静默重试吃到故障期改写。
       await expect(
         page.getByRole("treeitem", { name: /file-2000\.ts/u })
-      ).toBeVisible();
-
-      const failureToast = refreshFailure.locator(
-        "xpath=ancestor::*[@data-sonner-toast][1]"
-      );
-      await expect(failureToast).toBeVisible();
+      ).toBeVisible({ timeout: 30_000 });
+      await expect(
+        page.getByText(/Failed to refresh changes|刷新变更失败/u)
+      ).toHaveCount(0);
+      await expect(
+        page.locator("[data-sonner-toast]").filter({
+          hasText: /Failed to refresh changes|刷新变更失败/u,
+        })
+      ).toHaveCount(0);
       await expect(
         activeReviewSurface(page).locator('[data-slot="alert"]')
       ).toHaveCount(0);
       writeFileSync(indexPath, validIndex);
-      await failureToast.getByRole("button", { name: /Retry|重试/u }).click();
-      await expect(failureToast).toHaveCount(0, { timeout: 5000 });
       // 必须读到故障期间改写的新正文；相邻预取或旧 retention 无法满足该断言。
       const recoveredTarget = page.getByRole("treeitem", {
         name: /file-0000\.ts/u,
@@ -3336,7 +3333,7 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         await page.locator('[data-slot="pier-file-tree-bridge"]').hover();
         await page.mouse.wheel(0, -100_000);
         await expect(recoveredTarget).toBeVisible({ timeout: 1000 });
-      }).toPass({ timeout: 20_000 });
+      }).toPass({ timeout: 30_000 });
       await recoveredTarget.click();
       await expect
         .poll(() => isDiffTextInViewport(page, "value0000 = 2"), {

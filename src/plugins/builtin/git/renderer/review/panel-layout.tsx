@@ -354,6 +354,7 @@ export function GitReviewPanelLayout({
             visibleGroups: [],
             groupCounts: { conflict: 0, staged: 0, unstaged: 0 },
             groupLabels: {
+              committed: "",
               conflict: "",
               staged: "",
               unstaged: "",
@@ -363,6 +364,7 @@ export function GitReviewPanelLayout({
             getFileRefForTreePath: () => undefined,
             getFileRefsUnderTreePath: () => [],
             getGroupForTreePath: () => undefined,
+            getRepoRelativePath: () => null,
             mutation: { expectedIndexRevision: null, uncommitted: true },
           } satisfies ReturnType<typeof gitReviewTreeModel>)
         }

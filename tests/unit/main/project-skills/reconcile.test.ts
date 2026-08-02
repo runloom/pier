@@ -108,7 +108,7 @@ describe("project-skills repair / ensureReady", () => {
     expect(plan.executable).toBe(true);
   });
 
-  it("manifest three-state: invalid manifest blocks", async () => {
+  it("manifest three-state: invalid manifest blocks repair but not agent launch", async () => {
     const dir = join(projectRoot, ".pier", "skills");
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, "manifest.json"), "{not-json", "utf8");
@@ -118,6 +118,15 @@ describe("project-skills repair / ensureReady", () => {
       true
     );
     expect(plan.executable).toBe(false);
+    // Settings-only integrity: corrupt skill list must not refuse spawn.
+    const invalid = plan.blockingIssues.find((i) => i.code === "invalid-skill");
+    expect(invalid?.blockingScopes.includes("launch")).toBe(false);
+    const ready = await repair.ensureReady({
+      projectRef: await projectRef(),
+      agentId: "claude",
+      launchAttemptId: "launch-invalid-manifest",
+    });
+    expect(ready.status).toBe("ready");
   });
 
   it("manifest three-state: empty enabled set plans ownership cleanup", async () => {
@@ -171,7 +180,7 @@ describe("project-skills repair / ensureReady", () => {
   });
 
   it("ensureReady auto-repairs missing projection for an enabled valid skill", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -179,7 +188,6 @@ describe("project-skills repair / ensureReady", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -203,7 +211,7 @@ describe("project-skills repair / ensureReady", () => {
   });
 
   it("ensureReady does not rewrite manifest", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     const manifest: ProjectSkillsManifest = {
       version: 1,
       delivery: { agents: true, claude: false },
@@ -211,7 +219,6 @@ describe("project-skills repair / ensureReady", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -235,7 +242,7 @@ describe("project-skills repair / ensureReady", () => {
   });
 
   it("explicit repair converges missing projection", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -243,7 +250,6 @@ describe("project-skills repair / ensureReady", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -266,7 +272,7 @@ describe("project-skills repair / ensureReady", () => {
   });
 
   it("ensureReady does not adopt unmanaged existing target", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -274,7 +280,6 @@ describe("project-skills repair / ensureReady", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],

@@ -265,6 +265,14 @@ function GitChangesPanelBody({
   const treeGroupLabels = useMemo(() => {
     const labelLanguage = language;
     return {
+      // commit / branch scope: industry uses "Changed files" (GitHub / JetBrains),
+      // not a bare "Files" folder that collides with the Files panel product name.
+      committed: pluginText(
+        context,
+        "reviewTreeGroupCommitted",
+        "Changed Files",
+        { language: labelLanguage }
+      ),
       conflict: pluginText(
         context,
         "reviewTreeGroupConflict",

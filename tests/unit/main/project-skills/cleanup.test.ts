@@ -199,7 +199,7 @@ describe("project-skills library cleanup by object identity", () => {
   });
 
   it("apply deleteSkillIds cleans library only by logged identities and degrades on new files", async () => {
-    const digest = await writeLibrarySkill("doomed");
+    await writeLibrarySkill("doomed");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -207,7 +207,6 @@ describe("project-skills library cleanup by object identity", () => {
         {
           id: "doomed",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],

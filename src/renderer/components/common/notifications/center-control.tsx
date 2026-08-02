@@ -21,7 +21,9 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@pier/ui/popover.tsx";
+import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
+import { Skeleton } from "@pier/ui/skeleton.tsx";
 import {
   releaseTooltipSuppression,
   suppressTooltips,
@@ -29,6 +31,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { Bell, BellOff, Inbox } from "lucide-react";
 import {
   type ReactNode,
@@ -72,6 +75,7 @@ function NotificationCenterPopoverBody({
   onClose: () => void;
 }): ReactNode {
   const t = useT();
+  const hydrated = useNotificationCenterStore((s) => s.hydrated);
   const items = useNotificationCenterStore((s) => s.items);
   const dndEnabled = useNotificationCenterStore((s) => s.dndEnabled);
   const unreadCount = useNotificationCenterStore((s) => s.unreadCount);
@@ -90,6 +94,30 @@ function NotificationCenterPopoverBody({
 
   const visible = items.slice(0, visibleCount);
   const hasMore = visibleCount < items.length;
+  const listBody = hydrated ? null : (
+    <div
+      className="flex flex-col gap-1 p-1"
+      data-testid="notification-center-loading"
+    >
+      <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-16 w-full" />
+    </div>
+  );
+  const emptyBody =
+    hydrated && visible.length === 0 ? (
+      <Empty className="gap-2 px-4 py-8">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <Inbox />
+          </EmptyMedia>
+          <EmptyTitle>{t("notificationsCenter.empty")}</EmptyTitle>
+          <EmptyDescription>
+            {t("notificationsCenter.emptyDetail")}
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    ) : null;
 
   const onListScroll = useCallback(
     (event: UIEvent<HTMLUListElement>) => {
@@ -105,6 +133,35 @@ function NotificationCenterPopoverBody({
     },
     [hasMore, items.length]
   );
+  const itemGroupBody =
+    visible.length > 0 ? (
+      <ItemGroup
+        className={cn(
+          "max-h-[min(28rem,70vh)] overflow-y-auto p-1 data-[size=xs]:gap-1",
+          scrollFadeClassName({ fade: "vertical", profile: "short" })
+        )}
+        data-scrollbar="none"
+        data-size="xs"
+        data-testid="notification-center-list"
+        onScroll={onListScroll}
+      >
+        {visible.map((notification) => (
+          <NotificationCard
+            key={notification.id}
+            notification={notification}
+            onActionRun={onClose}
+          />
+        ))}
+        {hasMore ? (
+          <p
+            className="px-2 py-1.5 text-center text-muted-foreground text-xs"
+            data-testid="notification-center-load-more"
+          >
+            {t("notificationsCenter.loadMore")}
+          </p>
+        ) : null}
+      </ItemGroup>
+    ) : null;
 
   const runHeaderAction = useCallback(
     async (action: () => Promise<void>) => {
@@ -186,43 +243,7 @@ function NotificationCenterPopoverBody({
         </Tooltip>
       </div>
       <Separator className="opacity-50" />
-      {visible.length === 0 ? (
-        <Empty className="gap-2 px-4 py-8">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Inbox />
-            </EmptyMedia>
-            <EmptyTitle>{t("notificationsCenter.empty")}</EmptyTitle>
-            <EmptyDescription>
-              {t("notificationsCenter.emptyDetail")}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        <ItemGroup
-          className="max-h-[min(28rem,70vh)] overflow-y-auto p-1 data-[size=xs]:gap-1"
-          data-scrollbar="none"
-          data-size="xs"
-          data-testid="notification-center-list"
-          onScroll={onListScroll}
-        >
-          {visible.map((notification) => (
-            <NotificationCard
-              key={notification.id}
-              notification={notification}
-              onActionRun={onClose}
-            />
-          ))}
-          {hasMore ? (
-            <p
-              className="px-2 py-1.5 text-center text-muted-foreground text-xs"
-              data-testid="notification-center-load-more"
-            >
-              {t("notificationsCenter.loadMore")}
-            </p>
-          ) : null}
-        </ItemGroup>
-      )}
+      {listBody ?? emptyBody ?? itemGroupBody}
     </>
   );
 }

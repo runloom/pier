@@ -259,21 +259,14 @@ export async function buildProjectSnapshot(
     );
     const meta = await peekSkillMetadata(libraryDir);
     const analysis = await analyzeLibrarySkill(live.realPath, entry.id);
-    // The manifest digest is the expected library content. A mismatched or
-    // missing tree must surface on the row and detail banner, with the actual
-    // digest exposed so the UI can offer "Use current files".
-    let actualContentDigest: string | null = null;
+    // Disk content is authoritative. For project-managed skills the view
+    // digest is the current on-disk tree digest (edit-base for content-update
+    // TOCTOU). There is no separate "expected" manifest digest. Doctor owns
+    // missing-source; the snapshot only surfaces presence + the digest.
+    let contentDigest = "";
     if (!systemIds.has(entry.id)) {
-      const inspection = await inspectLibraryContent(
-        live.realPath,
-        entry.id,
-        entry.contentDigest
-      );
-      // Doctor owns missing-source / library-drift issues; snapshot only
-      // surfaces the actual digest without doubling the same issue id.
-      if (inspection.state === "drifted" || inspection.state === "unreadable") {
-        actualContentDigest = inspection.actualDigest;
-      }
+      const inspection = await inspectLibraryContent(live.realPath, entry.id);
+      contentDigest = inspection.actualDigest ?? "";
     }
     const issueIds = health.issues
       .filter((i) => i.skillId === entry.id)
@@ -292,8 +285,7 @@ export async function buildProjectSnapshot(
       delivery: entry.delivery
         ? { agents: entry.delivery.agents, claude: entry.delivery.claude }
         : null,
-      contentDigest: entry.contentDigest,
-      actualContentDigest,
+      contentDigest,
       source: entry.source,
       managedBy,
       alwaysInclude:
@@ -319,11 +311,7 @@ export async function buildProjectSnapshot(
     const analysis = await analyzeLibrarySkill(live.realPath, view.id);
     // System rows reconcile to the contribution content; the live library
     // digest IS the published digest (the channel republishes divergence).
-    const systemContent = await inspectLibraryContent(
-      live.realPath,
-      view.id,
-      view.contentDigest ?? ""
-    );
+    const systemContent = await inspectLibraryContent(live.realPath, view.id);
     // A system projection still unowned (correct link, lost ledger, or
     // foreign object at the projection path) is a skill-scoped integrity
     // issue — settings-only. Launch is never refused; the badge surfaces
@@ -340,7 +328,6 @@ export async function buildProjectSnapshot(
       enabled: view.enabled,
       delivery: null,
       contentDigest: view.contentDigest ?? systemContent.actualDigest ?? "",
-      actualContentDigest: null,
       source: { type: "local-import" },
       managedBy: "pier-system",
       alwaysInclude: false,
@@ -363,11 +350,7 @@ export async function buildProjectSnapshot(
     );
     const meta = await peekSkillMetadata(libraryDir);
     const analysis = await analyzeLibrarySkill(live.realPath, view.id);
-    const boundContent = await inspectLibraryContent(
-      live.realPath,
-      view.id,
-      view.contentDigest ?? ""
-    );
+    const boundContent = await inspectLibraryContent(live.realPath, view.id);
     skills.push({
       id: view.id,
       name: meta.name || view.name,
@@ -375,7 +358,6 @@ export async function buildProjectSnapshot(
       enabled: true,
       delivery: view.delivery,
       contentDigest: view.contentDigest ?? boundContent.actualDigest ?? "",
-      actualContentDigest: null,
       source: { type: "pier-home" },
       managedBy: "pier-bound",
       alwaysInclude: view.alwaysInclude,

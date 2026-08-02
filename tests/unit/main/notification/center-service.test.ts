@@ -1,3 +1,4 @@
+import { createOsCooldownStore } from "@main/services/notification-center/os-cooldown.ts";
 import { createNotificationCenterService } from "@main/services/notification-center/service.ts";
 import type { NotificationHistoryStore } from "@main/services/notification-center/store.ts";
 import {
@@ -6,8 +7,11 @@ import {
   type NotificationCenterSnapshot,
   type NotificationReport,
 } from "@shared/contracts/notification-center.ts";
-import type { ToastTarget } from "@shared/notification-delivery.ts";
-import { beforeEach, describe, expect, it } from "vitest";
+import {
+  DEFAULT_DELIVERY_AGENT_ATTENTION,
+  type ToastTarget,
+} from "@shared/notification-delivery.ts";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /** 内存 history stub（文件持久化由 store 单测覆盖）。 */
 function memoryHistory(
@@ -59,15 +63,25 @@ function report(
 describe("notificationCenterService", () => {
   let broadcasts: NotificationCenterSnapshot[];
   let deliveries: { notification: AppNotification; target: ToastTarget }[];
+  let osDeliveries: AppNotification[];
   let now: number;
   let idSeq: number;
+  let hasFocusedPierWindow: boolean;
+  let isTargetPanelFocused: boolean;
+  let isOwnerWindowFocused: boolean;
 
   async function makeService(
     items: AppNotification[] = [],
-    prefs = { ...DEFAULT_NOTIFICATION_CENTER_PREFS }
+    prefs = { ...DEFAULT_NOTIFICATION_CENTER_PREFS },
+    options: {
+      agentAttention?: Partial<typeof DEFAULT_DELIVERY_AGENT_ATTENTION>;
+      deliverOs?: boolean;
+    } = {}
   ) {
     broadcasts = [];
     deliveries = [];
+    osDeliveries = [];
+    const osCooldown = createOsCooldownStore();
     return createNotificationCenterService({
       broadcast: (snapshot) => {
         broadcasts.push(snapshot);
@@ -75,9 +89,27 @@ describe("notificationCenterService", () => {
       deliverToast: (notification, target) => {
         deliveries.push({ notification, target });
       },
+      ...(options.deliverOs
+        ? {
+            deliverOs: async (notification: AppNotification) => {
+              osDeliveries.push(notification);
+              return true;
+            },
+          }
+        : {}),
       history: memoryHistory(items),
       idGen: () => `id-${idSeq++}`,
       now: () => now,
+      osCooldown,
+      readFocusBase: () => ({ hasFocusedPierWindow }),
+      resolveAgentFocus: () => ({
+        isOwnerWindowFocused,
+        isTargetPanelFocused,
+      }),
+      readAgentAttentionPrefs: () => ({
+        ...DEFAULT_DELIVERY_AGENT_ATTENTION,
+        ...options.agentAttention,
+      }),
       readPrefs: async () => prefs,
       writeDnd: async (enabled) => {
         prefs.dndEnabled = enabled;
@@ -88,6 +120,9 @@ describe("notificationCenterService", () => {
   beforeEach(() => {
     now = 10_000;
     idSeq = 0;
+    hasFocusedPierWindow = true;
+    isTargetPanelFocused = false;
+    isOwnerWindowFocused = false;
   });
 
   it("ingest prepends unread item and broadcasts seq-increasing snapshot", async () => {
@@ -232,6 +267,7 @@ describe("notificationCenterService", () => {
     const service = await makeService();
     service.ingest(
       report({
+        agentRef: "a1",
         dedupeKey: "agent.attention:a1",
         kind: "agent.attention",
         severity: "warning",
@@ -239,11 +275,180 @@ describe("notificationCenterService", () => {
     );
     service.ingest(
       report({
+        agentRef: "a1",
         dedupeKey: "agent.attention:a1",
         kind: "agent.attention",
         severity: "warning",
       })
     );
     expect(deliveries).toHaveLength(2);
+  });
+
+  it("unfocused + agent.attention → OS only (no toast)", async () => {
+    hasFocusedPierWindow = false;
+    const service = await makeService([], undefined, { deliverOs: true });
+    service.ingest(
+      report({
+        agentRef: "11\0p1",
+        kind: "agent.attention",
+        severity: "warning",
+        title: "Need you",
+      })
+    );
+    expect(deliveries).toHaveLength(0);
+    // deliverOs is async fire-and-forget
+    await vi.waitFor(() => {
+      expect(osDeliveries).toHaveLength(1);
+    });
+    expect(osDeliveries[0]?.kind).toBe("agent.attention");
+  });
+
+  it("unfocused + task-run → neither toast nor OS", async () => {
+    hasFocusedPierWindow = false;
+    const service = await makeService([], undefined, { deliverOs: true });
+    service.ingest(report({ kind: "task-run.finished", severity: "success" }));
+    expect(deliveries).toHaveLength(0);
+    await Promise.resolve();
+    expect(osDeliveries).toHaveLength(0);
+  });
+
+  it("panel focused suppresses toast/OS but still records inbox", async () => {
+    isTargetPanelFocused = true;
+    const service = await makeService([], undefined, { deliverOs: true });
+    service.ingest(
+      report({
+        agentRef: "11\0p1",
+        kind: "agent.attention",
+        panelRef: { panelId: "p1" },
+        severity: "warning",
+      })
+    );
+    expect(broadcasts).toHaveLength(1);
+    expect(service.snapshot().unreadCount).toBe(1);
+    expect(deliveries).toHaveLength(0);
+    await Promise.resolve();
+    expect(osDeliveries).toHaveLength(0);
+  });
+
+  it("OS cooldown skips second OS but re-toasts when focused", async () => {
+    hasFocusedPierWindow = false;
+    const service = await makeService([], undefined, {
+      agentAttention: { cooldownMs: 180_000 },
+      deliverOs: true,
+    });
+    const payload = report({
+      agentRef: "11\0p1",
+      dedupeKey: "agent.attention:waiting:11\0p1",
+      kind: "agent.attention",
+      severity: "warning",
+    });
+    service.ingest(payload);
+    await vi.waitFor(() => {
+      expect(osDeliveries).toHaveLength(1);
+    });
+    now += 1000;
+    service.ingest(payload);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(osDeliveries).toHaveLength(1);
+
+    hasFocusedPierWindow = true;
+    now += 1000;
+    service.ingest(payload);
+    expect(deliveries.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("serializes concurrent OS delivers for the same cooldown key", async () => {
+    hasFocusedPierWindow = false;
+    let resolveFirst!: (shown: boolean) => void;
+    const firstGate = new Promise<boolean>((resolve) => {
+      resolveFirst = resolve;
+    });
+    let osAttempts = 0;
+    broadcasts = [];
+    deliveries = [];
+    osDeliveries = [];
+    const osCooldown = createOsCooldownStore();
+    const prefs = { ...DEFAULT_NOTIFICATION_CENTER_PREFS };
+    const service = await createNotificationCenterService({
+      broadcast: (snapshot) => {
+        broadcasts.push(snapshot);
+      },
+      deliverToast: (notification, target) => {
+        deliveries.push({ notification, target });
+      },
+      deliverOs: async (notification) => {
+        osAttempts += 1;
+        osDeliveries.push(notification);
+        if (osAttempts === 1) {
+          return firstGate;
+        }
+        return true;
+      },
+      history: memoryHistory(),
+      idGen: () => `id-${idSeq++}`,
+      now: () => now,
+      osCooldown,
+      readFocusBase: () => ({ hasFocusedPierWindow: false }),
+      resolveAgentFocus: () => ({
+        isOwnerWindowFocused: false,
+        isTargetPanelFocused: false,
+      }),
+      readAgentAttentionPrefs: () => ({
+        ...DEFAULT_DELIVERY_AGENT_ATTENTION,
+        cooldownMs: 180_000,
+      }),
+      readPrefs: async () => prefs,
+      writeDnd: async () => undefined,
+    });
+
+    const payload = report({
+      agentRef: "11\0p1",
+      dedupeKey: "agent.attention:waiting:11\0p1",
+      kind: "agent.attention",
+      severity: "warning",
+    });
+    service.ingest(payload);
+    service.ingest(payload);
+    await Promise.resolve();
+    expect(osAttempts).toBe(1);
+    resolveFirst(true);
+    await vi.waitFor(() => {
+      expect(osDeliveries).toHaveLength(1);
+    });
+  });
+
+  it("pruneOsCooldown clears cooldown for dead agent refs", async () => {
+    hasFocusedPierWindow = false;
+    const service = await makeService([], undefined, {
+      agentAttention: { cooldownMs: 180_000 },
+      deliverOs: true,
+    });
+    const agentRef = "11\0p1";
+    service.ingest(
+      report({
+        agentRef,
+        dedupeKey: `agent.attention:waiting:${agentRef}`,
+        kind: "agent.attention",
+        severity: "warning",
+      })
+    );
+    await vi.waitFor(() => {
+      expect(osDeliveries).toHaveLength(1);
+    });
+    service.pruneOsCooldown(new Set());
+    now += 1000;
+    service.ingest(
+      report({
+        agentRef,
+        dedupeKey: `agent.attention:waiting:${agentRef}`,
+        kind: "agent.attention",
+        severity: "warning",
+        title: "again",
+      })
+    );
+    await vi.waitFor(() => {
+      expect(osDeliveries).toHaveLength(2);
+    });
   });
 });

@@ -1,3 +1,4 @@
+import type { TerminalFocusRoutingDebugSnapshot } from "@shared/contracts/terminal/debug.ts";
 import type {
   TerminalFrame,
   TerminalKeyboardFocusTarget,
@@ -6,8 +7,14 @@ import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import {
   computeEffectiveKeyboardTarget,
   sameKeyboardFocusTarget as sameBasePanel,
+  TRANSIENT_WEB_CLICK_FOCUS_ID,
 } from "@shared/terminal-keyboard-target.ts";
 import { cssRectToContentViewRect } from "@/lib/window-zoom/coordinates.ts";
+import {
+  getTerminalFocusTraceEvents,
+  recordTerminalFocusTrace,
+  resetTerminalFocusTraceForTests,
+} from "@/lib/workspace/terminal-focus-trace.ts";
 import {
   resetTerminalHostStateForTests,
   updateTerminalHostInputFacts,
@@ -48,11 +55,52 @@ const webOverlayRects = new Map<string, TerminalFrame>();
 const webRequestIds = new Set<string>();
 /** composer 等 web 输入组件接管的面板：native 不得成 FR；pin focus + 藏绘制光标。 */
 const focusDisabledPanelIds = new Set<string>();
-const TRANSIENT_WEB_CLICK_FOCUS_ID = "pier.click";
 
 let basePanel: TerminalKeyboardFocusTarget = { kind: "web" };
 let lastEffectiveKeyboardKind: TerminalKeyboardFocusTarget["kind"] = "web";
 let webFocusHandOffArmedUntil = 0;
+
+function isTransientWebFocusId(id: string): boolean {
+  return id === TRANSIENT_WEB_CLICK_FOCUS_ID;
+}
+
+/** 除 pier.click 外仍有 web 焦点声明（设置/命令面板/composer/搜索等）。 */
+function hasDurableWebFocusRequest(): boolean {
+  for (const id of webRequestIds) {
+    if (!isTransientWebFocusId(id)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * 全局策略（所有非 pier.click 的 durable owner，不限设置）：
+ * durable 全部释放后不得只剩 pier.click 把键盘钉在 web。
+ * 只清瞬态 pier.click；不调 requestTerminalFocusIntent——
+ * - 避免与 restoreTerminalFocusAfterWebOverlayDismiss / 点 tab 的 intent reassert 双发 host snapshot
+ * - base 已是 terminal 时 count→0 即 enough 让 main 把 keyboard 还给终端
+ *
+ * Esc/X 关模态只靠本路径；fullscreen outside 仍可由 restore helper 做 yield + intent。
+ *
+ * 调用方应在 durable release 的 microtask 中调用，以排在同一次
+ * outside-click 的 pointerdown→pier.click 之后（I5）。
+ */
+function reconcileAfterDurableWebFocusRelease(): void {
+  if (hasDurableWebFocusRequest()) {
+    return;
+  }
+  if (!webRequestIds.has(TRANSIENT_WEB_CLICK_FOCUS_ID)) {
+    return;
+  }
+  const baseDetail =
+    basePanel.kind === "terminal" ? `terminal:${basePanel.panelId}` : "web";
+  recordTerminalFocusTrace(
+    "reconcile",
+    `durable-empty clear pier.click base=${baseDetail}`
+  );
+  clearTransientWebClickFocus();
+}
 
 // effective terminal→web 翻转后, main 会调 webContents.focus() 做 first responder
 // 交接 (terminal NSView → Chromium view)。该交接会给 renderer 派发一对瞬时
@@ -64,6 +112,10 @@ function frameKey(frame: TerminalFrame): string {
   return `${frame.x},${frame.y},${frame.width},${frame.height}`;
 }
 
+function sortedIds(ids: Iterable<string>): string[] {
+  return Array.from(ids).sort();
+}
+
 function applyTerminalInputRouting(): void {
   const nextEffectiveKind = computeEffectiveKeyboardTarget(
     basePanel,
@@ -72,6 +124,27 @@ function applyTerminalInputRouting(): void {
   if (lastEffectiveKeyboardKind === "terminal" && nextEffectiveKind === "web") {
     webFocusHandOffArmedUntil =
       performance.now() + WEB_FOCUS_HAND_OFF_BLUR_SUPPRESS_MS;
+  }
+  if (lastEffectiveKeyboardKind !== nextEffectiveKind) {
+    const ids = sortedIds(webRequestIds).join(",") || "-";
+    const base =
+      basePanel.kind === "terminal" ? `terminal:${basePanel.panelId}` : "web";
+    recordTerminalFocusTrace(
+      "flip",
+      `${lastEffectiveKeyboardKind}->${nextEffectiveKind} base=${base} ids=${ids}`
+    );
+    // Residual sticky only（仅 pier.click，无 durable）：经典关菜单后键回不去。
+    if (
+      nextEffectiveKind === "web" &&
+      basePanel.kind === "terminal" &&
+      !hasDurableWebFocusRequest() &&
+      webRequestIds.has(TRANSIENT_WEB_CLICK_FOCUS_ID)
+    ) {
+      recordTerminalFocusTrace(
+        "sticky",
+        `panel=${basePanel.panelId} ids=${ids}`
+      );
+    }
   }
   lastEffectiveKeyboardKind = nextEffectiveKind;
   updateTerminalHostInputFacts(
@@ -86,6 +159,19 @@ function applyTerminalInputRouting(): void {
     },
     "input-routing"
   );
+}
+
+/** Debug / dump: current renderer keyboard ownership (ids, not just count). */
+export function getTerminalFocusRoutingDebugSnapshot(): TerminalFocusRoutingDebugSnapshot {
+  return {
+    basePanel,
+    effectiveKind: computeEffectiveKeyboardTarget(basePanel, webRequestIds.size)
+      .kind,
+    events: [...getTerminalFocusTraceEvents()],
+    focusDisabledPanelIds: sortedIds(focusDisabledPanelIds),
+    webOverlayIds: sortedIds(webOverlayRects.keys()),
+    webRequestIds: sortedIds(webRequestIds),
+  };
 }
 
 /**
@@ -155,7 +241,12 @@ export function requestTerminalFocusIntent(panelId: string): void {
   if (!sameBasePanel(basePanel, target)) {
     basePanel = target;
   }
-  webRequestIds.delete(TRANSIENT_WEB_CLICK_FOCUS_ID);
+  const clearedClick = webRequestIds.delete(TRANSIENT_WEB_CLICK_FOCUS_ID);
+  recordTerminalFocusTrace(
+    "intent",
+    clearedClick ? `panel=${panelId} cleared=pier.click` : `panel=${panelId}`
+  );
+  // 同 panel 再点 tab 等路径：即使无 pier.click 也要 bump sequence 让 native reassert FR。
   applyTerminalInputRouting();
 }
 
@@ -168,22 +259,37 @@ export function clearTransientWebClickFocus(): void {
   if (!webRequestIds.delete(TRANSIENT_WEB_CLICK_FOCUS_ID)) {
     return;
   }
+  recordTerminalFocusTrace("remove", TRANSIENT_WEB_CLICK_FOCUS_ID);
   applyTerminalInputRouting();
 }
 
 /**
  * 浮在终端上的 web 元素声明一次键盘焦点意图。任意活跃请求即把 effective 拉成
  * web。返回的释放函数 idempotent —— 多次调用只在首次真正移除请求时重算。
+ *
+ * durable（非 pier.click）释放后：若已无其它 durable，则 microtask 调和掉残留
+ * pier.click，避免「关设置/菜单后 base 仍是 terminal、键却钉在 web」。
  */
 export function requestTerminalWebFocus(id: string): () => void {
   if (!webRequestIds.has(id)) {
     webRequestIds.add(id);
+    recordTerminalFocusTrace("add", id);
     applyTerminalInputRouting();
   }
   return () => {
-    if (webRequestIds.delete(id)) {
-      applyTerminalInputRouting();
+    if (!webRequestIds.delete(id)) {
+      return;
     }
+    recordTerminalFocusTrace("remove", id);
+    if (isTransientWebFocusId(id)) {
+      applyTerminalInputRouting();
+      return;
+    }
+    // 先落下 durable 计数，再 microtask 清 pier.click（排在同指针 down 之后）。
+    applyTerminalInputRouting();
+    queueMicrotask(() => {
+      reconcileAfterDurableWebFocusRelease();
+    });
   };
 }
 
@@ -355,6 +461,7 @@ export function resetTerminalInputRoutingForTests(): void {
   focusDisabledPanelIds.clear();
   basePanel = { kind: "web" };
   resetTerminalHostStateForTests();
+  resetTerminalFocusTraceForTests();
   lastEffectiveKeyboardKind = "web";
   webFocusHandOffArmedUntil = 0;
 }

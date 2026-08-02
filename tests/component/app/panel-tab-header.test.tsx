@@ -378,7 +378,7 @@ describe("PanelTabHeader", () => {
     expect(tooltip).not.toHaveClass("pier-panel-tab-tooltip");
   });
 
-  it("renders running tab state as a Ghostty-style top-edge bounce bar", () => {
+  it("renders running tab state as a soft-shimmer top-edge a11y anchor", () => {
     usePanelDescriptorStore.setState({
       activeId: null,
       descriptors: {

@@ -154,14 +154,20 @@ export const settingsSkills = {
   confirmContentDeleteTitle: "Delete skill {{skill}}?",
   confirmContentDeleteBody:
     "Removes the skill from this project. Turning the switch off only hides it from agents. This cannot be undone.",
+  confirmUnmanagedReplaceTitle: "Replace existing content at {{target}}?",
+  confirmUnmanagedReplaceBody:
+    "That path already has content Pier does not manage. Continuing deletes what is there and installs Pier’s skill link.",
+  confirmUnmanagedReplaceAction: "Replace and continue",
+  confirmSkillsStateResetTitle: "Rebuild this project’s skill records?",
+  confirmSkillsStateResetBody:
+    "This project’s skill list or local skill records are damaged. Continuing rebuilds a usable state from this action; damaged data that cannot be recovered will be discarded.",
+  confirmSkillsStateResetAction: "Rebuild and continue",
   issueUnmanagedConflict:
-    "{{target}} already has same-named content. Pier won’t overwrite it. Starting an agent is unaffected. To use Pier’s version, move that path aside in the project first.",
+    "{{target}} already has same-named content. Enabling will ask you to confirm replacing it with Pier’s version.",
   issueDuplicateDiscovery:
     "With Claude Code delivery on, {{agent}} discovers same-named skills in multiple directories. Turn Claude Code delivery off to resolve.",
   issueIdentityChanged:
     "The project directory was moved or replaced. Go back to the project list and open it again.",
-  issueLibraryDrift:
-    "The content of {{skill}} was modified outside Pier. Open the skill to use the current files, or turn it off or delete it.",
   issueMissingSource:
     "The library content of {{skill}} is missing (.pier/skills/library/{{skill}}). Delete the skill or import it again.",
   issueInvalidManifest:
@@ -172,7 +178,6 @@ export const settingsSkills = {
     "A previous skill change did not finish cleanly. Retry, or reload the project.",
   issueGeneric:
     "Agents cannot use the affected skills yet. Resolve the shown issue and retry.",
-  driftBadge: "Modified outside Pier",
   missingBadge: "Content missing",
   actionFailed: "Could not complete this action",
   actionFailedBody: "Reload the project and try again.",
@@ -193,10 +198,6 @@ export const settingsSkills = {
   editSave: "Save changes",
   editDiscard: "Discard changes",
   editFailed: "Couldn't save skill",
-  driftTitle: "This skill was changed outside Pier",
-  driftBody:
-    "Files on disk no longer match what Pier recorded. Use the current files, or delete the skill.",
-  driftUseCurrent: "Use current files",
   matrixTitle: "Which agents can use this",
   discoveryChannelsHint: "Changes apply when you save.",
   discoveryChannelsHintAdd: "Checked paths apply when you add the skill.",

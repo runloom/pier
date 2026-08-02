@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
+import { ScrollArea } from "@pier/ui/scroll-area.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import i18next from "i18next";
 import {
@@ -175,13 +176,14 @@ function ContentDialogLayerView({
               <DialogDescription>{layer.description}</DialogDescription>
             ) : null}
           </DialogHeader>
-          <div
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5"
-            data-scrollbar="stable"
+          <ScrollArea
+            className="min-h-0 min-w-0 flex-1"
             data-slot="app-content-dialog-body"
+            viewportClassName="px-6 py-5"
+            viewportFade="vertical"
           >
             <Content {...renderProps} />
-          </div>
+          </ScrollArea>
           {footer ? (
             <DialogFooter className="shrink-0 border-border/60 border-t px-6 py-4">
               {footer}

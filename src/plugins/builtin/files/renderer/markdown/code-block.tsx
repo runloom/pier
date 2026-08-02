@@ -1,4 +1,6 @@
 import { Button } from "@pier/ui/button.tsx";
+import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -105,7 +107,10 @@ export function MarkdownCodeBlock({
         ) : null}
       </div>
       <pre
-        className="max-h-[min(28rem,70vh)] overflow-auto overscroll-y-auto p-3 font-mono [overscroll-behavior:auto]"
+        className={cn(
+          "max-h-[min(28rem,70vh)] overflow-auto overscroll-y-auto p-3 font-mono [overscroll-behavior:auto]",
+          scrollFadeClassName({ fade: "vertical", profile: "short" })
+        )}
         data-scrollbar="overlay"
         onWheel={(event) => {
           // data-scrollbar 默认 overscroll-behavior:contain 会吃掉边界外滚动。

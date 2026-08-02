@@ -10,7 +10,6 @@ import type {
 import type { IDockviewPanelProps } from "dockview-react";
 import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import { resolveSkillsLaunchBlock } from "@/lib/skills/launch-block.ts";
 import { isWindowKeyFocused } from "@/lib/window-focus-attribute.ts";
 import {
   confirmTerminalLaunch,
@@ -293,9 +292,7 @@ export function useTerminalNativeLifecycle({
           createPending: true,
           phase: "creating",
         });
-        const buildCreateArgs = (
-          continuation?: string
-        ): CreateTerminalArgs => ({
+        const result = await window.pier.terminal.create({
           panelId,
           presentationId,
           frame,
@@ -309,32 +306,8 @@ export function useTerminalNativeLifecycle({
           ...(initialTab && { tab: initialTab }),
           ...(initialTask && { task: initialTask }),
           ...(initialTaskOutput && { taskOutput: initialTaskOutput }),
-          ...(continuation && { skillsLaunchContinuation: continuation }),
         });
-        let result = await window.pier.terminal.create(buildCreateArgs());
-        if (!result.ok && result.skillsLaunchBlocked && !isDisposed()) {
-          // Skills launch gate blocked this managed launch (design v8 §7.8):
-          // three-way choice, then a degrade retries with the continuation
-          // attempt id — admitted exactly once in the SPAWN_INTENT window.
-          const continuation = await resolveSkillsLaunchBlock({
-            blocked: result.skillsLaunchBlocked,
-            t: translateRef.current,
-          });
-          if (continuation && !isDisposed()) {
-            result = await window.pier.terminal.create(
-              buildCreateArgs(continuation)
-            );
-          } else {
-            // User cancelled / went to settings — show a readable panel
-            // message instead of the raw gate error (design v8 §7.8).
-            result = {
-              ok: false,
-              error: translateRef.current(
-                "settings.skills.launchCancelledPanel"
-              ),
-            };
-          }
-        }
+        // Skills never gate terminal create — no launch-block dialog.
         if (!acceptCreateResult(result)) {
           return;
         }

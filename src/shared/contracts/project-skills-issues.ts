@@ -20,7 +20,6 @@ export const PROJECT_SKILLS_ISSUE_CODES = [
   "recovery-pending",
   "missing-source",
   "invalid-skill",
-  "library-drift",
   "content-conflict",
   "unmanaged-conflict",
   "managed-target-modified",

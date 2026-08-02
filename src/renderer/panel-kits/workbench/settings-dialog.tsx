@@ -6,6 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
+import { ScrollArea } from "@pier/ui/scroll-area.tsx";
 import type { JsonValue } from "@shared/contracts/plugin/settings.ts";
 import { type ReactNode, useCallback, useLayoutEffect, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
@@ -84,10 +85,11 @@ export function WorkbenchSettingsDialog({
           </DialogDescription>
         </DialogHeader>
         {presentedWidget && SettingsComponent ? (
-          <div
-            className="min-h-0 flex-1 overflow-y-auto px-6 py-5"
-            data-scrollbar="stable"
+          <ScrollArea
+            className="min-h-0 min-w-0 flex-1"
             data-slot="workbench-widget-settings-body"
+            viewportClassName="px-6 py-5"
+            viewportFade="vertical"
           >
             <SettingsComponent
               instanceId={presentedWidget.instanceId}
@@ -95,7 +97,7 @@ export function WorkbenchSettingsDialog({
               setFooter={setFooter}
               updateParams={updateParams}
             />
-          </div>
+          </ScrollArea>
         ) : null}
         {footer ? (
           <DialogFooter

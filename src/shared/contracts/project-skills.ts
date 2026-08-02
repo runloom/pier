@@ -29,7 +29,6 @@ export const projectSkillManifestEntrySchema = z
   .object({
     id: skillIdSchema,
     enabled: z.boolean(),
-    contentDigest: contentDigestSchema,
     source: projectSkillSourceSchema,
     /**
      * Which Pier projection roots this skill uses. Omitted = inherit the
@@ -401,19 +400,6 @@ export const skillsImportPrepareContentUpdateRequestSchema = z
       .string()
       .min(1)
       .max(1024 * 1024),
-  })
-  .strict();
-
-/**
- * Drift acceptance candidate (design v9 §6.2): snapshots current drifted
- * library content for integrity adoption (“Use current files”). The base
- * digest is the observed drifted digest so apply refuses further concurrent
- * change. Not a content-approval / re-review gate.
- */
-export const skillsImportPrepareDriftAcceptanceRequestSchema = z
-  .object({
-    ...projectRefField,
-    skillId: skillIdSchema,
   })
   .strict();
 

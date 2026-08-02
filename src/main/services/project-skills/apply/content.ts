@@ -305,7 +305,6 @@ export function buildNextManifest(
     byId.set(skillId, {
       id: skillId,
       enabled: existing?.enabled ?? false,
-      contentDigest: meta.contentDigest,
       source: meta.source,
       ...(existing?.delivery ? { delivery: existing.delivery } : {}),
     });

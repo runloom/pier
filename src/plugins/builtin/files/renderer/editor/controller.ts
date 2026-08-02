@@ -263,13 +263,18 @@ export class FileEditorController extends FileEditorControllerViewFacade {
   }
 
   showSourceMode(panelId: string): void {
+    this.setPanelMode(panelId, "source");
+  }
+
+  /** Apply a panel view mode via the registered handler (capture/restore lives there). */
+  setPanelMode(panelId: string, mode: FileViewMode): void {
     const handler = this.#modeHandlers.get(panelId);
     if (handler) {
-      handler("source");
+      handler(mode);
       this.#pendingModes.delete(panelId);
       return;
     }
-    this.#pendingModes.set(panelId, "source");
+    this.#pendingModes.set(panelId, mode);
   }
 
   registerPanelSaveAsHandler(

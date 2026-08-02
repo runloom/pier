@@ -253,28 +253,3 @@ function computeRiskDelta(
     ),
   };
 }
-
-export async function prepareDriftAcceptance(
-  ctx: ImportComposeContext,
-  projectRef: ContractProjectRootRef | MainProjectRootRef,
-  args: { skillId: string },
-  caller?: ImportCallerBinding
-): Promise<ImportCandidateView> {
-  const { identity, rootKey } = await ctx.resolveProject(projectRef);
-  const libraryDir = await libraryDirFor(identity, args.skillId);
-  const info = await lstatOrThrow(libraryDir);
-  assertRealDirectory(info, libraryDir);
-  // Snapshot the CURRENT (drifted) content for integrity adoption; the
-  // observed digest becomes the base precondition so any further concurrent
-  // change fails the apply (“Use current files”).
-  const currentDigest = await computeTreeSha256V1(libraryDir);
-  return ctx.prepareFromSource({
-    identity,
-    rootKey,
-    sourcePath: libraryDir,
-    sourceDisplayPath: `.pier/skills/library/${args.skillId}`,
-    sourceKind: "drift-accepted",
-    caller: caller ?? ctx.defaultCaller,
-    base: { skillId: args.skillId, contentDigest: currentDigest },
-  });
-}

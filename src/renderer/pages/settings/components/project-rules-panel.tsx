@@ -7,6 +7,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@pier/ui/item.tsx";
+import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type {
@@ -243,7 +244,10 @@ export function ProjectRulesPanel({
       <div className="flex min-h-[280px] gap-0 overflow-hidden rounded-lg border">
         <nav
           aria-label={t("settings.projects.rulesFileListLabel")}
-          className="w-64 shrink-0 overflow-y-auto border-r p-2"
+          className={cn(
+            "w-64 shrink-0 overflow-y-auto border-r p-2",
+            scrollFadeClassName({ fade: "vertical", profile: "short" })
+          )}
         >
           <ItemGroup>
             {files.map((file) => {

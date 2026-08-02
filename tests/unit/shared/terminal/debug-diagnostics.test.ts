@@ -167,6 +167,145 @@ describe("terminal debug diagnostics", () => {
     );
   });
 
+  it("reports residual sticky only when webRequestIds are solely pier.click", () => {
+    const desired = {
+      ...desiredHostSnapshot({ kind: "terminal", panelId: "terminal-1" }, 9),
+      webRequestCount: 1,
+    };
+    const native = {
+      surfaces: [
+        {
+          alpha: 1,
+          browserWindowId: 1,
+          cursorSuppressed: true,
+          frame: { height: 93, width: 213, x: 0, y: 72 },
+          hasRouterTarget: true,
+          hostKeyboardActive: false,
+          isFirstResponder: false,
+          isHidden: false,
+          isOffscreen: false,
+          isSurfaceFocused: false,
+          nativePanelId: "1::terminal-1",
+          panelId: "terminal-1",
+          viewportFrame: { height: 93, width: 213, x: 0, y: 72 },
+        },
+      ],
+      window: {
+        activeTerminalPanelId: null,
+        keyboardFocusTarget: { kind: "web" as const },
+        nativeActiveTerminalPanelId: null,
+        terminalTargetCount: 1,
+        webOverlayRectCount: 0,
+      },
+    };
+    const coordinator = {
+      desired,
+      dirty: false,
+      effective: {
+        focusDisabledPanelIds: [] as string[],
+        keyboardTarget: { kind: "web" as const },
+        nativeApplySequence: 1,
+        reason: "input-routing" as const,
+        rendererSequence: 9,
+        terminals: desired.terminals.map((entry) => ({
+          ...entry,
+          focused: false,
+        })),
+        webOverlayRects: [] as never[],
+        windowFocused: true,
+      },
+      lastError: null,
+      lastSuccessfulNativeApplySequence: 1,
+      readyPanelIds: ["terminal-1"],
+    };
+    const panel = {
+      anchorFrame: { height: 93, width: 213, x: 0, y: 72 },
+      component: "terminal",
+      dockviewActive: true,
+      dockviewVisible: true,
+      hasAnchor: true,
+      isActivePanel: true,
+      panelId: "terminal-1",
+    };
+
+    const residual = buildTerminalDebugIssues(
+      {
+        activePanelId: "terminal-1",
+        desiredHostSnapshot: desired,
+        focusRouting: {
+          basePanel: { kind: "terminal", panelId: "terminal-1" },
+          effectiveKind: "web",
+          events: [],
+          focusDisabledPanelIds: [],
+          webOverlayIds: [],
+          webRequestIds: ["pier.click"],
+        },
+        hasMaximizedGroup: false,
+        panelCount: 1,
+        panels: [panel],
+      },
+      native,
+      coordinator
+    );
+    expect(residual).toContainEqual(
+      expect.objectContaining({
+        code: "input_routing_sticky_web_with_base_terminal",
+        panelId: "terminal-1",
+        severity: "warning",
+      })
+    );
+
+    // intentional durable (settings open) must not look like residual sticky
+    const intentional = buildTerminalDebugIssues(
+      {
+        activePanelId: "terminal-1",
+        desiredHostSnapshot: {
+          ...desired,
+          webRequestCount: 1,
+        },
+        focusRouting: {
+          basePanel: { kind: "terminal", panelId: "terminal-1" },
+          effectiveKind: "web",
+          events: [],
+          focusDisabledPanelIds: [],
+          webOverlayIds: [],
+          webRequestIds: ["settings-dialog"],
+        },
+        hasMaximizedGroup: false,
+        panelCount: 1,
+        panels: [panel],
+      },
+      native,
+      {
+        ...coordinator,
+        desired: { ...desired, webRequestCount: 1 },
+      }
+    );
+    expect(intentional).not.toContainEqual(
+      expect.objectContaining({
+        code: "input_routing_sticky_web_with_base_terminal",
+      })
+    );
+
+    // without webRequestIds: no sticky signal (avoid false positive)
+    const noIds = buildTerminalDebugIssues(
+      {
+        activePanelId: "terminal-1",
+        desiredHostSnapshot: desired,
+        hasMaximizedGroup: false,
+        panelCount: 1,
+        panels: [panel],
+      },
+      native,
+      coordinator
+    );
+    expect(noIds).not.toContainEqual(
+      expect.objectContaining({
+        code: "input_routing_sticky_web_with_base_terminal",
+      })
+    );
+  });
+
   it("reports a focused terminal surface while keyboard target is Web", () => {
     const issues = buildTerminalDebugIssues(
       {

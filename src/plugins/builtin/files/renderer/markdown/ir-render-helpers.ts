@@ -12,6 +12,7 @@ export function sourceBlockProps(
     ...extra,
     "data-source-line": range.startLine,
     "data-source-offset": range.startOffset,
+    "data-source-end-offset": range.endOffset,
     onDoubleClick: context.onJumpToSource
       ? (event: {
           stopPropagation: () => void;

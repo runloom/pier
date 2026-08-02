@@ -112,7 +112,7 @@ describe("project-skills recovery coordinator basics", {
   timeout: 30_000,
 }, () => {
   it("writes durable recovery log before first project write", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -120,7 +120,6 @@ describe("project-skills recovery coordinator basics", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -159,7 +158,7 @@ describe("project-skills recovery coordinator basics", {
   });
 
   it("recovers post-commit crash by finishing projections to terminal converged", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -167,7 +166,6 @@ describe("project-skills recovery coordinator basics", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -242,7 +240,7 @@ describe("project-skills recovery coordinator basics", {
   });
 
   it("sweepPendingOperations drives stranded in-flight apply logs to terminal (v8.2 §4.2.1)", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -250,7 +248,6 @@ describe("project-skills recovery coordinator basics", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -302,7 +299,7 @@ describe("project-skills recovery coordinator basics", {
   });
 
   it("recovers pre-commit crash as not-applied without applying projections", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -310,7 +307,6 @@ describe("project-skills recovery coordinator basics", {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],

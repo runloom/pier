@@ -1,8 +1,17 @@
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
-import { ListChecks, type LucideIcon } from "lucide-react";
+import {
+  Diff,
+  GitBranch,
+  GitCommitHorizontal,
+  ListChecks,
+  type LucideIcon,
+} from "lucide-react";
 import { panelIconOf } from "./panel-registry.ts";
 
 const builtinPanelTabIcons: Readonly<Record<string, LucideIcon>> = {
+  "pier.git.changes.branch": GitBranch,
+  "pier.git.changes.commit": GitCommitHorizontal,
+  "pier.git.changes.uncommitted": Diff,
   "pier.task": ListChecks,
 };
 

@@ -8,6 +8,7 @@ import type {
 } from "./contracts/terminal.ts";
 import {
   computeEffectiveKeyboardTarget,
+  isResidualStickyWebFocus,
   sameKeyboardFocusTarget,
 } from "./terminal-keyboard-target.ts";
 
@@ -42,7 +43,8 @@ function collectInputRoutingSurfaceState(
 export function buildTerminalInputRoutingIssues(
   expected: TerminalHostSnapshot,
   native: TerminalDebugNativeSnapshot,
-  effective?: TerminalNativeWindowState | null
+  effective?: TerminalNativeWindowState | null,
+  webRequestIds?: readonly string[] | undefined
 ): TerminalDebugIssue[] {
   const issues: TerminalDebugIssue[] = [];
   if (
@@ -62,6 +64,25 @@ export function buildTerminalInputRoutingIssues(
       expected.basePanel,
       expected.webRequestCount
     );
+  // 仅 residual sticky（只剩 pier.click，无 durable overlay）。设置打开中等
+  // intentional override 不告警；缺 webRequestIds 时也不告，避免假阳性。
+  if (
+    isResidualStickyWebFocus({
+      basePanel: expected.basePanel,
+      webRequestCount: expected.webRequestCount,
+      webRequestIds,
+    }) &&
+    expectedEffective.kind === "web" &&
+    expected.basePanel.kind === "terminal"
+  ) {
+    issues.push({
+      code: "input_routing_sticky_web_with_base_terminal",
+      message:
+        "base panel is terminal but only residual pier.click keeps keyboard on web",
+      panelId: expected.basePanel.panelId,
+      severity: "warning",
+    });
+  }
   if (
     !sameKeyboardFocusTarget(
       expectedEffective,

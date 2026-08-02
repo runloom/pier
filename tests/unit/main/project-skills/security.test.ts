@@ -165,7 +165,7 @@ afterEach(async () => {
 
 describe("project-skills security: unmanaged targets", () => {
   it("does not overwrite an unmanaged regular file at the projection path", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -173,7 +173,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -185,23 +184,26 @@ describe("project-skills security: unmanaged targets", () => {
     const service = createApplyService();
     const ref = await projectRef();
     const draft = emptyDraft({ enabledBySkillId: { guide: true } });
-    // Plan preflight surfaces the occupied target as unmanaged-conflict and
-    // refuses applicability (design §5.1) — the foreign object is never a
-    // scheduled operation, so nothing can overwrite it.
+    // Occupied target is confirmation-gated replace — never silent overwrite,
+    // never hard-refuse the user enable intent.
     const planned = await service.plan(ref, "observed-rev-1", draft);
-    expect(planned.applicable).toBe(false);
+    expect(planned.applicable).toBe(true);
     expect(
-      planned.blockingIssues.some(
-        (issue) =>
-          issue.code === "unmanaged-conflict" && issue.skillId === "guide"
+      planned.confirmationRequirements.some(
+        (req) =>
+          req.kind === "unmanaged-replace" &&
+          req.relativeTarget === ".agents/skills/guide"
       )
     ).toBe(true);
     expect(
       planned.targetOperations.some(
-        (op) => op.relativeTarget === ".agents/skills/guide"
+        (op) =>
+          op.kind === "replace-with-symlink" &&
+          op.relativeTarget === ".agents/skills/guide"
       )
-    ).toBe(false);
+    ).toBe(true);
 
+    // Without acknowledgement, apply refuses (user cancelled / skipped).
     await expect(
       service.apply({
         projectRef: ref,
@@ -211,13 +213,35 @@ describe("project-skills security: unmanaged targets", () => {
         operationId: randomUUID(),
         acknowledgements: [],
       })
-    ).rejects.toMatchObject({ code: "not-applied" });
+    ).rejects.toMatchObject({ code: "acknowledgement-required" });
     expect(await readFile(linkPath, "utf8")).toBe("user-owned content\n");
     expect((await lstat(linkPath)).isSymbolicLink()).toBe(false);
+
+    // With acknowledgement, foreign content is replaced by Pier’s link.
+    const ackReq = planned.confirmationRequirements.find(
+      (req) => req.kind === "unmanaged-replace"
+    );
+    expect(ackReq).toBeDefined();
+    const applied = await service.apply({
+      projectRef: ref,
+      observedRevision: "observed-rev-1",
+      draft,
+      planDigest: planned.planDigest,
+      operationId: randomUUID(),
+      acknowledgements: [
+        {
+          requirementId: ackReq!.id,
+          nonce: randomUUID(),
+        },
+      ],
+    });
+    expect(applied.status).toBe("converged");
+    expect((await lstat(linkPath)).isSymbolicLink()).toBe(true);
+    expect(await readlink(linkPath)).toBe("../../.pier/skills/library/guide");
   });
 
   it("does not delete an unmanaged symlink that has no ownership ledger entry", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -225,7 +249,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -243,7 +266,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -279,7 +301,7 @@ describe("project-skills security: unmanaged targets", () => {
   it("retains a rewritten symlink when ownership object identity no longer matches", {
     timeout: 20_000,
   }, async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -287,7 +309,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -339,7 +360,7 @@ describe("project-skills security: unmanaged targets", () => {
   });
 
   it("retains a recreated same-name link and does not adopt it into ownership", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -347,7 +368,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -366,23 +386,15 @@ describe("project-skills security: unmanaged targets", () => {
     await unlink(linkPath);
     await symlink("../../.pier/skills/library/guide", linkPath);
 
-    // Re-enable (already enabled in manifest after first apply) — ensureReady
-    // / repair must not overwrite or adopt the recreated link.
+    // ensureReady must not overwrite or adopt the recreated link, and must
+    // not refuse agent launch for this settings-only integrity state.
     const service = createService();
     const ready = await service.ensureReady({
       projectRef: await projectRef(),
       agentId: "codex",
       launchAttemptId: "attempt-recreate",
     });
-    expect(ready.status).toBe("blocked");
-    if (ready.status !== "blocked") return;
-    expect(
-      ready.issueSummary.some(
-        (i) =>
-          i.code === "managed-target-modified" ||
-          i.code === "unmanaged-conflict"
-      )
-    ).toBe(true);
+    expect(ready.status).toBe("ready");
 
     expect((await lstat(linkPath)).isSymbolicLink()).toBe(true);
     expect(await readlink(linkPath)).toBe("../../.pier/skills/library/guide");
@@ -395,7 +407,7 @@ describe("project-skills security: unmanaged targets", () => {
 
 describe("project-skills security: skills:read has no write side effects", () => {
   it("snapshot, doctor, and plan leave project and userData untouched", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -403,7 +415,6 @@ describe("project-skills security: skills:read has no write side effects", () =>
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "git-declared" },
         },
       ],
@@ -443,7 +454,7 @@ describe("project-skills security: skills:read has no write side effects", () =>
 
 describe("project-skills security: operation tombstone / terminal idempotency", () => {
   it("replaying a terminal apply operation returns the immutable result without re-execution", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -451,7 +462,6 @@ describe("project-skills security: operation tombstone / terminal idempotency", 
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -507,7 +517,7 @@ describe("project-skills security: operation tombstone / terminal idempotency", 
   });
 
   it("does not re-execute when a terminal tombstone-style operation record is present", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -515,7 +525,6 @@ describe("project-skills security: operation tombstone / terminal idempotency", 
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -578,7 +587,7 @@ describe("project-skills security: cross-profile isolation", () => {
   it("does not inherit ownership across dual userData stores", async () => {
     const userDataB = await mkdtemp(join(tmpdir(), "pier-ps-sec-ud-b-"));
     try {
-      const digest = await writeLibrarySkill("guide");
+      await writeLibrarySkill("guide");
       await writeManifest({
         version: 1,
         delivery: { agents: true, claude: false },
@@ -586,7 +595,6 @@ describe("project-skills security: cross-profile isolation", () => {
           {
             id: "guide",
             enabled: false,
-            contentDigest: digest,
             source: { type: "local-import" },
           },
         ],
@@ -679,7 +687,7 @@ describe("project-skills security: cross-profile isolation", () => {
     const outside = await mkdtemp(join(tmpdir(), "pier-skills-escape-"));
     try {
       await symlink(outside, join(projectRoot, ".agents"));
-      const digest = await writeLibrarySkill("guide");
+      await writeLibrarySkill("guide");
       await writeManifest({
         version: 1,
         delivery: { agents: true, claude: false },
@@ -687,7 +695,6 @@ describe("project-skills security: cross-profile isolation", () => {
           {
             id: "guide",
             enabled: false,
-            contentDigest: digest,
             source: { type: "local-import" },
           },
         ],

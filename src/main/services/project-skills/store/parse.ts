@@ -156,8 +156,7 @@ export function parseStaging(value: unknown): StagingCandidateRecord | null {
     value.sourceKind !== "local-import" &&
     value.sourceKind !== "project-discovery-import" &&
     value.sourceKind !== "git-declared" &&
-    value.sourceKind !== "content-update" &&
-    value.sourceKind !== "drift-accepted"
+    value.sourceKind !== "content-update"
   ) {
     return null;
   }

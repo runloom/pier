@@ -362,6 +362,24 @@ export async function collectAcknowledgements(args: {
           skill: requirement.skillId ?? "",
         }),
       });
+    } else if (requirement.kind === "unmanaged-replace") {
+      confirmed = await showAppConfirm({
+        body: args.t("settings.skills.confirmUnmanagedReplaceBody", {
+          target: requirement.relativeTarget ?? "",
+        }),
+        confirmLabel: args.t("settings.skills.confirmUnmanagedReplaceAction"),
+        intent: "destructive",
+        title: args.t("settings.skills.confirmUnmanagedReplaceTitle", {
+          target: requirement.relativeTarget ?? "",
+        }),
+      });
+    } else if (requirement.kind === "skills-state-reset") {
+      confirmed = await showAppConfirm({
+        body: args.t("settings.skills.confirmSkillsStateResetBody"),
+        confirmLabel: args.t("settings.skills.confirmSkillsStateResetAction"),
+        intent: "destructive",
+        title: args.t("settings.skills.confirmSkillsStateResetTitle"),
+      });
     } else {
       confirmed = await showAppConfirm({
         body: args.t("settings.skills.actionDangerConfirmBody"),

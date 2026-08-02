@@ -15,10 +15,11 @@
 | 文档 | 角色 | 与本文关系 |
 |------|------|------------|
 | **本文** | **终态唯一权威**：体感 + 加载 + 渲染 + 导航 + 失败 + 骨架 + DoD | 权威 |
+| `2026-08-02-git-review-live-update-failure-contract-design.md` | **背景刷新零打断 + 失败分级 + 反馈通道** | **live-update / 全局 toast 契约**；与本文冲突时体感仍以本文为准，**失败通道与「背景路径 toast=0」以该文为准** |
 | `2026-07-31-git-review-zed-feel-design.md` | Zed 体感与 bodyClass 骨架 | **被本文吸收**；细节冲突以本文为准 |
 | `2026-07-27-git-review-stable-ledger-design.md` | content 槽几何 / LRU | **仅**适用于本文允许进入正文的 content 槽 |
 | `2026-07-27-diffshub-full-alignment-design.md` | scroll 单写者、CodeView 单实例 | 引擎层保留；**SCM 体感不以 DiffsHub 为准** |
-| `2026-07-25-git-review-codeview-endstate-design.md` | 真正文、soft-retain、stage、failure | 仍有效；显示集以本文 bodyClass 为准 |
+| `2026-07-25-git-review-codeview-endstate-design.md` | 真正文、soft-retain、stage、failure | 仍有效；显示集以本文 bodyClass 为准；失败面细节见 2026-08-02 契约 |
 | `docs/superpowers/evidence/diffs-upstream-api-verification.md` | Pierre/DiffsHub 上游 API 冻结 | 引擎集成证据 |
 
 **实现禁令：** 未对照本文时，禁止再合「只调骨架 CSS / 只改 CodeView lineDiffType / 只调 demand 并发 / finishTerminal」类症状补丁充当终态。  

@@ -32,10 +32,6 @@ export interface PierProjectSkillsAPI {
     projectRef: ProjectRootRef,
     args: { skillId: string; baseContentDigest: string; skillMd: string }
   ): Promise<unknown>;
-  importPrepareDriftAcceptance(
-    projectRef: ProjectRootRef,
-    args: { skillId: string }
-  ): Promise<unknown>;
   importPrepareFromDiscovery(
     projectRef: ProjectRootRef,
     relativeSource: string
@@ -121,12 +117,6 @@ export const projectSkillsApi: PierProjectSkillsAPI = {
       baseContentDigest: args.baseContentDigest,
       skillMd: args.skillMd,
       type: "skills.import.prepareContentUpdate",
-    }),
-  importPrepareDriftAcceptance: (projectRef, args) =>
-    invokePierCommand({
-      projectRef,
-      skillId: args.skillId,
-      type: "skills.import.prepareDriftAcceptance",
     }),
   launchContinue: (request) =>
     invokePierCommand<SkillsLaunchContinueResult>({

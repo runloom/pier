@@ -138,13 +138,19 @@ export const settingsSkills = {
   confirmContentDeleteTitle: "删除技能 {{skill}}？",
   confirmContentDeleteBody:
     "将从本项目移除该技能。关闭开关只会让智能体暂时看不到它。此操作不可撤销。",
+  confirmUnmanagedReplaceTitle: "替换 {{target}} 处已有内容？",
+  confirmUnmanagedReplaceBody:
+    "该路径已有内容，不是 Pier 当前管理的版本。继续将删除该路径上的现有内容，并改用 Pier 提供的技能链接。",
+  confirmUnmanagedReplaceAction: "替换并继续",
+  confirmSkillsStateResetTitle: "重建本项目的技能记录？",
+  confirmSkillsStateResetBody:
+    "本项目的技能列表或本机记录已损坏。继续将按你这次操作重建可用状态；无法恢复的损坏数据会被丢弃。",
+  confirmSkillsStateResetAction: "重建并继续",
   issueUnmanagedConflict:
-    "{{target}} 已有同名内容，Pier 不会覆盖。启动智能体不受影响。若要改用 Pier 提供的版本，请先在项目里移走该路径。",
+    "{{target}} 已有同名内容。启用时会请你确认是否替换为 Pier 管理的版本。",
   issueDuplicateDiscovery:
     "开启 Claude Code 后，{{agent}} 会在多个目录重复发现同名技能。关闭 Claude Code 可消除。",
   issueIdentityChanged: "项目目录已被移动或替换。请返回项目列表重新打开。",
-  issueLibraryDrift:
-    "技能 {{skill}} 已在 Pier 外被修改。请打开该技能并采用当前文件，或关闭/删除它。",
   issueMissingSource:
     "技能 {{skill}} 的库内容缺失（.pier/skills/library/{{skill}}）。请删除该技能，或重新导入。",
   issueInvalidManifest:
@@ -153,7 +159,6 @@ export const settingsSkills = {
     "本机此项目的技能记录已损坏。请重新载入项目，或清除损坏记录后重试。",
   issueRecoveryBlocked: "上一次技能更改未干净结束。请重试，或重新载入项目。",
   issueGeneric: "智能体暂时无法使用受影响的技能。请处理显示的问题后重试。",
-  driftBadge: "内容已修改",
   missingBadge: "内容缺失",
   actionFailed: "无法完成此操作",
   actionFailedBody: "请重新载入项目后再试。",
@@ -172,10 +177,6 @@ export const settingsSkills = {
   editSave: "保存更改",
   editDiscard: "放弃更改",
   editFailed: "无法保存技能",
-  driftTitle: "此技能已在 Pier 外被修改",
-  driftBody:
-    "磁盘上的文件与 Pier 里记录的不一致。可采用当前文件，或删除该技能。",
-  driftUseCurrent: "采用当前文件",
   matrixTitle: "哪些智能体可以使用",
   discoveryChannelsHint: "勾选后需点保存才会生效。",
   discoveryChannelsHintAdd: "勾选后点添加才会生效。",

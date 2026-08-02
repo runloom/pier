@@ -15,7 +15,6 @@ import {
 } from "@main/services/project-skills/identity.ts";
 import { createProjectSkillsLock } from "@main/services/project-skills/lock.ts";
 import { createProjectSkillsService } from "@main/services/project-skills/service.ts";
-import { computeTreeSha256V1 } from "@main/services/project-skills/tree-digest.ts";
 import type { ProjectSkillsManifest } from "@shared/contracts/project-skills.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -53,7 +52,6 @@ async function writeEnabledSkill(skillId: string): Promise<void> {
       {
         id: skillId,
         enabled: true,
-        contentDigest: await computeTreeSha256V1(libraryDir),
         source: { type: "git-declared" },
       },
     ],

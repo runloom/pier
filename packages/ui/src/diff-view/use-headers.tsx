@@ -38,6 +38,7 @@ export function useDiffViewHeaders(options: {
   readonly labels: PierDiffViewLabels;
   readonly onDiscardFile?: ((itemId: string) => void) | undefined;
   readonly onOpenFile?: ((itemId: string) => void) | undefined;
+  readonly onRetryItem?: ((itemId: string) => void) | undefined;
   readonly onToggleStage?: ((itemId: string) => void) | undefined;
   readonly onScroll?: (() => void) | undefined;
   readonly parsedItemIndexesRef: RefObject<Map<string, number>>;
@@ -79,6 +80,7 @@ export function useDiffViewHeaders(options: {
     labels,
     onDiscardFile,
     onOpenFile,
+    onRetryItem,
     onToggleStage,
     onScroll,
     parsedItemIndexesRef,
@@ -305,11 +307,12 @@ export function useDiffViewHeaders(options: {
           item={item}
           labels={labels}
           {...(onDiscardFile === undefined ? {} : { onDiscardFile })}
+          {...(onRetryItem === undefined ? {} : { onRetryItem })}
           {...(onToggleStage === undefined ? {} : { onToggleStage })}
         />
       );
     },
-    [inputStore, labels, onDiscardFile, onToggleStage]
+    [inputStore, labels, onDiscardFile, onRetryItem, onToggleStage]
   );
   return {
     handleCodeViewScroll,

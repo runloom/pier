@@ -15,7 +15,6 @@ function managed(
   partial: Partial<ProjectSkillView> & { id: string }
 ): ProjectSkillView {
   return {
-    actualContentDigest: null,
     alwaysInclude: false,
     contentDigest:
       "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",

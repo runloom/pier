@@ -67,7 +67,6 @@ export async function executeProjectSkillsCommand(
       case "skills.import.prepareFromDiscovery":
       case "skills.import.prepareTemplate":
       case "skills.import.prepareContentUpdate":
-      case "skills.import.prepareDriftAcceptance":
       case "skills.import.discard":
       case "skills.plan":
       case "skills.apply":
@@ -142,15 +141,6 @@ export async function executeProjectSkillsCommand(
             skillId: request.skillId,
             baseContentDigest: request.baseContentDigest,
             skillMd: request.skillMd,
-          })
-        );
-      }
-      case "skills.import.prepareDriftAcceptance": {
-        const { type: _, ...request } = command;
-        return success(
-          requestId,
-          await skills.importPrepareDriftAcceptance(request.projectRef, {
-            skillId: request.skillId,
           })
         );
       }

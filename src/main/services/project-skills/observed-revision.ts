@@ -123,7 +123,7 @@ export function createObservedRevisionProvider(
     const rootKey = paths.rootKeyFor(identity);
 
     let manifestDigest: string | null = null;
-    let skills: ReadonlyArray<{ contentDigest: string; id: string }> = [];
+    let skills: ReadonlyArray<{ id: string }> = [];
     try {
       const bytes = await readFile(
         join(identity.realPath, ".pier", "skills", "manifest.json")
@@ -158,8 +158,7 @@ export function createObservedRevisionProvider(
     for (const entry of skills) {
       const inspection = await inspectLibraryContent(
         identity.realPath,
-        entry.id,
-        entry.contentDigest
+        entry.id
       );
       perSkillActualTreeDigests.push({
         skillId: entry.id,

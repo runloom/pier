@@ -43,8 +43,11 @@ function groupSortPrefix(group: GitReviewGroup): string {
 }
 
 export interface GitReviewTreeGroupLabels {
-  /** commit/branch scope only; falls back when omitted. */
-  readonly committed?: string;
+  /**
+   * commit/branch scope group root. Prefer product copy like "Changed Files";
+   * bare "Files" is ambiguous next to uncommitted "Changes" / "Staged Changes".
+   */
+  readonly committed: string;
   readonly conflict: string;
   readonly staged: string;
   readonly unstaged: string;
@@ -61,6 +64,12 @@ export interface GitReviewTreeModel {
   getFileRefsUnderTreePath: (path: string) => readonly GitReviewTreeFileRef[];
   /** Stable group id for a tree path under a group root (including the root). */
   getGroupForTreePath: (path: string) => GitReviewGroup | undefined;
+  /**
+   * Repo-relative path for copy/reveal. Tree rows nest under a synthetic group
+   * root (`Changed Files` / `Changes` / …); strip that prefix. Group roots
+   * themselves return null. Collision display rows resolve via fileRef.
+   */
+  getRepoRelativePath: (treePath: string) => string | null;
   groupCounts: {
     conflict: number;
     unstaged: number;
@@ -141,11 +150,7 @@ export function gitReviewTreeModel(
     }
     // Visible name = last path segment. Prefix with an invisible sort key so
     // localized labels (zh: 已暂存更改 vs 更改) cannot invert group order.
-    const baseLabel = sanitizeTreeSegment(
-      group === "committed"
-        ? (groupLabels.committed ?? "Files")
-        : groupLabels[group]
-    );
+    const baseLabel = sanitizeTreeSegment(groupLabels[group]);
     const sortPrefix = groupSortPrefix(group);
     let groupRoot = `${sortPrefix}${baseLabel}`;
     if (
@@ -250,6 +255,26 @@ export function gitReviewTreeModel(
         }
       }
       return;
+    },
+    getRepoRelativePath: (treePath: string) => {
+      // Prefer file ref: collision display paths are not real repo paths.
+      const fileRef = fileRefByTreePath.get(treePath);
+      if (fileRef) {
+        return fileRef.path;
+      }
+      for (const group of GIT_REVIEW_PRESENTATION_GROUP_ORDER) {
+        const root = groupRootByGroup.get(group);
+        if (root === undefined) {
+          continue;
+        }
+        if (treePath === root) {
+          return null;
+        }
+        if (treePath.startsWith(`${root}/`)) {
+          return treePath.slice(root.length + 1);
+        }
+      }
+      return null;
     },
     groupCounts,
     groupLabels,

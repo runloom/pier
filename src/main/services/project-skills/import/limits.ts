@@ -38,8 +38,7 @@ export const PROJECT_SKILLS_DISCOVERY_ROOTS: readonly string[] =
 export type ImportSourceKind =
   | "local-import"
   | "project-discovery-import"
-  | "content-update"
-  | "drift-accepted";
+  | "content-update";
 
 export interface ImportCallerBinding {
   clientInstanceId: string;
@@ -62,8 +61,8 @@ export interface ImportRiskSummary {
 
 /**
  * Incremental risk vs the currently recorded content: only present on
- * content-update candidates. Drift adoption and fresh imports have no
- * previous version suitable for comparison.
+ * content-update candidates. Fresh imports have no previous version
+ * suitable for comparison.
  */
 export interface ImportRiskDelta {
   newDynamicCommandTraces: string[];
@@ -160,16 +159,6 @@ export interface ProjectSkillsImportService {
     args: { skillId: string; baseContentDigest: string; skillMd: string },
     caller?: ImportCallerBinding
   ): Promise<ImportCandidateView>;
-  /**
-   * Drift acceptance candidate (design v9 §6.2): snapshots CURRENT drifted
-   * library content for integrity adoption. Base digest is the observed
-   * drifted digest so apply refuses further concurrent change.
-   */
-  prepareDriftAcceptance(
-    projectRef: ContractProjectRootRef | MainProjectRootRef,
-    args: { skillId: string },
-    caller?: ImportCallerBinding
-  ): Promise<ImportCandidateView>;
   prepareFromDiscovery(
     projectRef: ContractProjectRootRef | MainProjectRootRef,
     relativeSource: string,
@@ -215,7 +204,7 @@ export type ProjectSkillsImportPaths = ReturnType<
 
 /** Args of the service-internal source-to-candidate pipeline. */
 export interface PrepareFromSourceArgs {
-  /** Content-update / drift-acceptance base precondition. */
+  /** Content-update base precondition. */
   base?: { skillId: string; contentDigest: string };
   caller: ImportCallerBinding;
   identity: StableProjectIdentity;

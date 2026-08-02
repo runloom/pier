@@ -346,11 +346,8 @@ export function LayoutStateView({
                 return null;
               }
               const surface = surfaces.get(panel.panelId);
-              const state = panelState(
-                panel,
-                surface,
-                groupedIssues.get(panel.panelId) ?? []
-              );
+              const panelIssues = groupedIssues.get(panel.panelId) ?? [];
+              const state = panelState(panel, surface, panelIssues);
               return (
                 <div
                   className={cn(
@@ -368,42 +365,65 @@ export function LayoutStateView({
                       {state}
                     </span>
                   </div>
-                  <div className="flex h-[calc(100%-1.75rem)] min-h-9 items-end justify-between gap-2 p-2">
-                    <AlignmentDots
-                      isAligned={aligned(panel, surface)}
-                      surface={surface}
-                    />
-                    <div className="flex gap-1">
-                      {surface?.hasRouterTarget ? (
-                        <span
-                          className="size-2 bg-done"
-                          title="router target"
-                        />
-                      ) : null}
-                      {surface?.isFirstResponder ? (
-                        <span
-                          className="size-2 bg-success"
-                          title="first responder"
-                        />
-                      ) : null}
-                      {surface?.isSurfaceFocused ? (
-                        <span
-                          className="size-2 bg-info"
-                          title="surface focused"
-                        />
-                      ) : null}
-                      {surface?.hostKeyboardActive ? (
-                        <span
-                          className="size-2 bg-warning"
-                          title="host keyboard active"
-                        />
-                      ) : null}
-                      {surface?.cursorSuppressed ? (
-                        <span
-                          className="size-2 bg-muted-foreground/40"
-                          title="cursor suppressed"
-                        />
-                      ) : null}
+                  <div className="flex h-[calc(100%-1.75rem)] min-h-9 flex-col justify-end gap-1 p-2">
+                    {panelIssues.length > 0 ? (
+                      <div
+                        className={cn(
+                          "line-clamp-2 font-mono text-[9px] opacity-90",
+                          panelIssues.some(
+                            (issue) => issue.severity === "error"
+                          )
+                            ? "text-status-danger-fg"
+                            : "text-status-warning-fg"
+                        )}
+                        title={panelIssues
+                          .map((issue) => issue.code)
+                          .join("\n")}
+                      >
+                        {panelIssues
+                          .map((issue) =>
+                            issue.code.replace(/^input_routing_/, "")
+                          )
+                          .join(" · ")}
+                      </div>
+                    ) : null}
+                    <div className="flex items-end justify-between gap-2">
+                      <AlignmentDots
+                        isAligned={aligned(panel, surface)}
+                        surface={surface}
+                      />
+                      <div className="flex gap-1">
+                        {surface?.hasRouterTarget ? (
+                          <span
+                            className="size-2 bg-done"
+                            title="router target"
+                          />
+                        ) : null}
+                        {surface?.isFirstResponder ? (
+                          <span
+                            className="size-2 bg-success"
+                            title="first responder"
+                          />
+                        ) : null}
+                        {surface?.isSurfaceFocused ? (
+                          <span
+                            className="size-2 bg-info"
+                            title="surface focused"
+                          />
+                        ) : null}
+                        {surface?.hostKeyboardActive ? (
+                          <span
+                            className="size-2 bg-warning"
+                            title="host keyboard active"
+                          />
+                        ) : null}
+                        {surface?.cursorSuppressed ? (
+                          <span
+                            className="size-2 bg-muted-foreground/40"
+                            title="cursor suppressed"
+                          />
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 </div>

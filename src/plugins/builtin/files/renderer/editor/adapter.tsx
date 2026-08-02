@@ -41,7 +41,10 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
     return (
       <MarkdownPreview
         appearance={props.markdownAppearance}
+        captureAnchorRef={props.markdownCaptureAnchorRef}
         charts={props.markdownCharts}
+        contentAnchor={props.markdownContentAnchor}
+        contentAnchorRequestId={props.markdownContentAnchorRequestId}
         copyCode={props.markdownCopyCode}
         errorLabel={props.markdownErrorLabel}
         fileResources={props.markdownFileResources}

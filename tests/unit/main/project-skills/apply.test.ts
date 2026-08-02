@@ -109,7 +109,7 @@ describe("project-skills apply", () => {
   it("converges enabling a valid skill and publishes relative symlink", {
     timeout: 20_000,
   }, async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -117,7 +117,6 @@ describe("project-skills apply", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -158,7 +157,7 @@ describe("project-skills apply", () => {
   });
 
   it("returns not-applied terminal when failing before manifest commit", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -166,7 +165,6 @@ describe("project-skills apply", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -224,7 +222,7 @@ describe("project-skills apply", () => {
   });
 
   it("rejects in-place manifest edits made after the expected digest was captured", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -232,7 +230,6 @@ describe("project-skills apply", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -251,7 +248,6 @@ describe("project-skills apply", () => {
                   {
                     id: "review-guide",
                     enabled: false,
-                    contentDigest: digest,
                     source: { type: "local-import" },
                   },
                 ],
@@ -287,7 +283,7 @@ describe("project-skills apply", () => {
   });
 
   it("returns degraded when projection fails after manifest commit", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -295,7 +291,6 @@ describe("project-skills apply", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -344,7 +339,7 @@ describe("project-skills apply", () => {
   });
 
   it("is idempotent for the same operationId and requestDigest", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -352,7 +347,6 @@ describe("project-skills apply", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -387,7 +381,7 @@ describe("project-skills apply", () => {
   });
 
   it("commits the manifest before applying projections", async () => {
-    const digest = await writeLibrarySkill("fresh-skill");
+    await writeLibrarySkill("fresh-skill");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -395,7 +389,6 @@ describe("project-skills apply", () => {
         {
           id: "fresh-skill",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -429,7 +422,7 @@ describe("project-skills apply", () => {
   });
 
   it("rejects same operationId with different requestDigest", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -437,7 +430,6 @@ describe("project-skills apply", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],

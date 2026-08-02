@@ -29,10 +29,7 @@ import {
   withPanelStatusEnv,
 } from "./create-launch.ts";
 import { sendInitialTerminalInput } from "./create-post-actions.ts";
-import {
-  abandonAuthorizedSpawnAttempt,
-  resolveTerminalTransferCreateAction,
-} from "./create-transfer-guard.ts";
+import { resolveTerminalTransferCreateAction } from "./create-transfer-guard.ts";
 import { recordRendererTerminalRoute } from "./debug.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
 import {
@@ -234,10 +231,10 @@ export async function handleTerminalCreate(args: {
       terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
       return { ok: true };
     }
-    // Managed agent launches must pass project-skills gate before native spawn.
-    // Project identity comes from the main-resolved native launch cwd —
-    // never treat renderer createArgs.context as final authority (v8 §5.2).
-    let spawnedUnderAttemptId: string | null = null;
+    // Best-effort project-skills projection before native spawn. Opening an
+    // agent is never a skills hygiene decision — never refuse create or show
+    // a launch dialog. Project identity comes from the main-resolved native
+    // launch cwd — never treat renderer createArgs.context as final authority.
     if (launchGate && launch.launchAgentId) {
       const launchSurface = {
         kind: "terminal" as const,
@@ -264,94 +261,21 @@ export async function handleTerminalCreate(args: {
           : { initialInput: createArgs.initialInput }),
       };
       const projectRootPath = launchForNative?.cwd;
-      if (createArgs.skillsLaunchContinuation) {
-        // Continuation handshake (design v8 §5.2.7): admit exactly while the
-        // attempt sits in the durable SPAWN_INTENT window; no re-gating, no
-        // new attempt, no replay after consumption.
-        const authorization = await launchGate.authorizeSpawn(
-          createArgs.skillsLaunchContinuation,
-          {
-            agentId: launch.launchAgentId,
-            launchSpecification,
-            ...(projectRootPath === undefined ? {} : { projectRootPath }),
-            surface: launchSurface,
-          }
-        );
-        if (!authorization.ok) {
-          if (!restoredAgentLaunch) {
-            await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
-          }
-          foregroundActivityService.panelClosed(
-            createArgs.panelId,
-            String(win.id)
-          );
-          return {
-            ok: false,
-            error: `launch continuation rejected: ${authorization.message}`,
-          };
-        }
-        spawnedUnderAttemptId = createArgs.skillsLaunchContinuation;
-      } else {
-        const gate = await launchGate.ensureReady({
-          agentId: launch.launchAgentId,
-          launchSpecification,
-          ...(projectRootPath === undefined ? {} : { projectRootPath }),
-          surface: launchSurface,
-        });
-        if (gate.status === "blocked") {
-          if (!restoredAgentLaunch) {
-            await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
-          }
-          foregroundActivityService.panelClosed(
-            createArgs.panelId,
-            String(win.id)
-          );
-          return {
-            ok: false,
-            error: "skills-launch-blocked",
-            skillsLaunchBlocked: {
-              launchAttemptId: gate.launchAttemptId,
-              issueSummary: gate.issueSummary,
-              ...(gate.issues === undefined
-                ? {}
-                : {
-                    focusIssueIds: gate.issues.map((issue) => issue.id),
-                    issues: gate.issues.map((issue) => ({
-                      id: issue.id,
-                      code: issue.code,
-                      ...(issue.skillId === undefined
-                        ? {}
-                        : { skillId: issue.skillId }),
-                      ...(issue.adapterKind === undefined
-                        ? {}
-                        : { adapterKind: issue.adapterKind }),
-                      ...(issue.relativeTarget === undefined
-                        ? {}
-                        : { relativeTarget: issue.relativeTarget }),
-                    })),
-                  }),
-              degradePolicySummary: gate.degradePolicySummary,
-              expiresAt: gate.expiresAt,
-              ...(gate.projectRootPath === undefined
-                ? {}
-                : { projectRootPath: gate.projectRootPath }),
-            },
-          };
-        }
-      }
+      await launchGate.ensureReady({
+        agentId: launch.launchAgentId,
+        launchSpecification,
+        ...(projectRootPath === undefined ? {} : { projectRootPath }),
+        surface: launchSurface,
+      });
     }
-    // Re-check after skills-gate awaits: a cross-window drag may have entered
-    // leased/moving while ensureReady/authorizeSpawn was in flight.
+    // Re-check after skills best-effort awaits: a cross-window drag may have
+    // entered leased/moving while ensureReady was in flight.
     const transferAfterGate = resolveTerminalTransferCreateAction(
       transfer,
       runtimeWindowId,
       createArgs.panelId
     );
     if (transferAfterGate === "skip") {
-      await abandonAuthorizedSpawnAttempt({
-        attemptId: spawnedUnderAttemptId,
-        launchGate,
-      });
       if (
         !transfer?.registerTargetPresentation(
           runtimeWindowId ?? "",
@@ -364,10 +288,6 @@ export async function handleTerminalCreate(args: {
       return { ok: true };
     }
     if (transferAfterGate === "adopt") {
-      await abandonAuthorizedSpawnAttempt({
-        attemptId: spawnedUnderAttemptId,
-        launchGate,
-      });
       if (
         !transfer?.registerTargetPresentation(
           runtimeWindowId ?? "",
@@ -380,46 +300,30 @@ export async function handleTerminalCreate(args: {
       terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
       return { ok: true };
     }
-    let ok: boolean;
-    try {
-      ok = await createTerminalAndSeedResource({
-        create: () =>
-          addon.createTerminal(
-            handle,
-            nativePanelId,
-            createArgs.frame,
-            createArgs.font.family,
-            createArgs.font.size,
-            // Last-mile agent login-shell wrap (do not persist this form).
-            withPanelStatusEnv(
-              withAgentLoginShellSafeCommand(
-                launchForNative,
-                launch.launchAgentId
-              ),
-              createArgs.panelId,
-              String(win.id),
-              foregroundActivityService.hookEnv()
+    const ok = await createTerminalAndSeedResource({
+      create: () =>
+        addon.createTerminal(
+          handle,
+          nativePanelId,
+          createArgs.frame,
+          createArgs.font.family,
+          createArgs.font.size,
+          // Last-mile agent login-shell wrap (do not persist this form).
+          withPanelStatusEnv(
+            withAgentLoginShellSafeCommand(
+              launchForNative,
+              launch.launchAgentId
             ),
-            lifecycleId,
-            createArgs.presentationId ?? 0
+            createArgs.panelId,
+            String(win.id),
+            foregroundActivityService.hookEnv()
           ),
-        panelId: createArgs.panelId,
-        windowId: String(win.id),
-      });
-    } catch (error) {
-      await abandonAuthorizedSpawnAttempt({
-        attemptId: spawnedUnderAttemptId,
-        launchGate,
-      });
-      throw error;
-    }
-    if (spawnedUnderAttemptId && launchGate) {
-      // Durable SPAWN_ACCEPTED / SPAWN_FAILED after the actual spawn attempt;
-      // any replay of the same attempt is rejected from here on.
-      await launchGate
-        .recordSpawnResult(spawnedUnderAttemptId, ok)
-        .catch(() => undefined);
-    }
+          lifecycleId,
+          createArgs.presentationId ?? 0
+        ),
+      panelId: createArgs.panelId,
+      windowId: String(win.id),
+    });
     if (!ok) {
       foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));
       if (!restoredAgentLaunch) {

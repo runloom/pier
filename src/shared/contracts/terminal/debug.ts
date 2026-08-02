@@ -5,6 +5,23 @@ import type {
   TerminalKeyboardFocusTarget,
 } from "../terminal.ts";
 
+/** Minimal sticky-web dump: who owns keyboard + short breadcrumb ring. */
+export interface TerminalFocusTraceEvent {
+  at: number;
+  detail?: string | undefined;
+  kind: "add" | "remove" | "flip" | "sticky" | "intent" | "reconcile";
+  seq: number;
+}
+
+export interface TerminalFocusRoutingDebugSnapshot {
+  basePanel: TerminalKeyboardFocusTarget;
+  effectiveKind: TerminalKeyboardFocusTarget["kind"];
+  events: TerminalFocusTraceEvent[];
+  focusDisabledPanelIds: string[];
+  webOverlayIds: string[];
+  webRequestIds: string[];
+}
+
 export type TerminalDebugRoute =
   | "renderer->main->native"
   | "renderer->main->webContents"
@@ -117,6 +134,7 @@ export interface TerminalDebugIssue {
     | "input_routing_keyboard_target_mismatch"
     | "input_routing_overlay_rect_count_mismatch"
     | "input_routing_stale"
+    | "input_routing_sticky_web_with_base_terminal"
     | "input_routing_terminal_cursor_policy_mismatch"
     | "input_routing_terminal_target_missing"
     | "input_routing_terminal_surface_focus_mismatch"
@@ -173,6 +191,8 @@ export interface TerminalDebugRendererPanelSnapshot {
 export interface TerminalDebugRendererSnapshot {
   activePanelId: string | null;
   desiredHostSnapshot?: TerminalHostSnapshot | undefined;
+  /** Renderer keyboard ownership + recent focus breadcrumbs (for sticky-web dumps). */
+  focusRouting?: TerminalFocusRoutingDebugSnapshot | undefined;
   hasMaximizedGroup: boolean;
   panelCount: number;
   panels: TerminalDebugRendererPanelSnapshot[];

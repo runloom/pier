@@ -733,7 +733,12 @@ describe("settings dialog skills section", () => {
     fixtures.plan = {
       applicable: false,
       blockingIssues: [
-        { id: "i1", code: "library-drift", skillId: "review-guide" },
+        {
+          id: "i1",
+          code: "unmanaged-conflict",
+          skillId: "review-guide",
+          relativeTarget: ".agents/skills/review-guide",
+        },
       ],
       confirmationRequirements: [],
       observedRevision: "o1",
@@ -769,7 +774,9 @@ describe("settings dialog skills section", () => {
     expect(alertArgs?.title).toMatch(
       /This action cannot be completed|暂时无法完成此操作/
     );
-    expect(alertArgs?.body).toMatch(/Review Guide|review-guide/);
+    expect(alertArgs?.body).toMatch(
+      /Resolve the issue shown for this skill|请先处理此技能显示的问题/
+    );
     expect(
       screen.queryByRole("button", { name: /apply changes|应用更改/i })
     ).toBeNull();

@@ -35,28 +35,31 @@ describe("project-skills launch architecture", () => {
     expect(launchGate).toContain("SPAWN_INTENT");
     expect(launchGate).toContain("continueLaunch");
 
-    // Terminal path: gate before native createTerminal
+    // Terminal path: best-effort ensureReady before native createTerminal;
+    // never refuse spawn / never return skills-launch-blocked.
     expect(terminalHandler).toContain("launchGate");
     expect(terminalHandler).toContain("ensureReady");
+    expect(terminalHandler).not.toContain("skills-launch-blocked");
+    expect(terminalHandler).not.toContain("skillsLaunchBlocked");
     const gateIdx = terminalHandler.indexOf("launchGate.ensureReady");
     const createIdx = terminalHandler.indexOf("addon.createTerminal");
     expect(gateIdx).toBeGreaterThan(0);
     expect(createIdx).toBeGreaterThan(gateIdx);
 
-    // Transfer disposition is re-checked after skills-gate awaits so a
+    // Transfer disposition is re-checked after skills best-effort awaits so a
     // mid-flight lease cannot still spawn a competing surface.
     expect(terminalHandler).toContain("resolveTerminalTransferCreateAction");
     const transferAfterGateIdx = terminalHandler.indexOf("transferAfterGate");
     expect(transferAfterGateIdx).toBeGreaterThan(gateIdx);
     expect(createIdx).toBeGreaterThan(transferAfterGateIdx);
-    expect(terminalHandler).toContain("abandonAuthorizedSpawnAttempt");
 
     expect(terminalIpc).toContain("launchGate");
     expect(index).toContain("launchGate: appCore.services.agentLaunchGate");
 
-    // AI one-shot path
+    // AI one-shot path: best-effort only (must not abort on skills).
     expect(aiService).toContain("launchGate");
     expect(aiService).toContain("ensureReady");
+    expect(aiService).not.toContain("project skills not ready");
     const aiGateIdx = aiService.indexOf("launchGate.ensureReady");
     const runIdx = aiService.indexOf("runOneShot(invocation.binary");
     expect(aiGateIdx).toBeGreaterThan(0);
@@ -66,7 +69,8 @@ describe("project-skills launch architecture", () => {
     expect(appCore).toContain("createManagedAgentLaunchGate");
     expect(appCore).toContain("agentLaunchGate");
 
-    // continue command
+    // Legacy continue command still wired (settings/IPC surface); spawn path
+    // never depends on it for blocking.
     expect(commands).toContain("agent.launch.continue");
     expect(commands).toContain("continueLaunch");
   });

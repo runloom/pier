@@ -5,7 +5,6 @@ import {
   skillsDoctorRequestSchema,
   skillsImportDiscardRequestSchema,
   skillsImportPrepareContentUpdateRequestSchema,
-  skillsImportPrepareDriftAcceptanceRequestSchema,
   skillsImportPrepareFromDiscoveryRequestSchema,
   skillsImportPrepareRequestSchema,
   skillsImportPrepareTemplateRequestSchema,
@@ -53,11 +52,6 @@ export const skillsImportPrepareContentUpdateCommandSchema =
     type: z.literal("skills.import.prepareContentUpdate"),
   });
 
-export const skillsImportPrepareDriftAcceptanceCommandSchema =
-  skillsImportPrepareDriftAcceptanceRequestSchema.extend({
-    type: z.literal("skills.import.prepareDriftAcceptance"),
-  });
-
 export const skillsImportDiscardCommandSchema =
   skillsImportDiscardRequestSchema.extend({
     type: z.literal("skills.import.discard"),
@@ -101,7 +95,6 @@ export const projectSkillsCommandSchemas = [
   skillsImportPrepareFromDiscoveryCommandSchema,
   skillsImportPrepareTemplateCommandSchema,
   skillsImportPrepareContentUpdateCommandSchema,
-  skillsImportPrepareDriftAcceptanceCommandSchema,
   skillsImportDiscardCommandSchema,
   skillsPlanCommandSchema,
   skillsApplyCommandSchema,

@@ -2,21 +2,23 @@
 export const settingsNotifications = {
   enabled: "需要你处理时通知",
   enabledDesc:
-    "智能体在等你确认或继续时，通过本机系统通知提醒（关闭后标题栏计数仍更新）。",
+    "智能体在等你确认或继续时提醒你：Pier 在前台时用应用内消息卡片，不在前台时用系统通知（关闭后标题栏计数仍更新）。",
   turnNotifyMode: "回合完成时通知",
-  turnNotifyModeDesc: "智能体回合结束后是否提醒。默认仅在窗口未聚焦时。",
+  turnNotifyModeDesc:
+    "智能体回合结束后是否提醒。默认仅在拥有该智能体的窗口未聚焦时；前台与后台提醒互斥。",
   turnNotifyModeOptions: {
     off: "从不",
     unfocused: "仅窗口未聚焦时",
     always: "始终",
   },
   error: "出错时通知",
-  errorDesc: "智能体进入错误状态时也发送系统通知。默认关闭。",
+  errorDesc: "智能体进入错误状态时也提醒你。默认关闭。",
   suppress: "专注时抑制",
   suppressDesc:
-    "目标智能体面板已聚焦时，不发送「需要你处理」与「出错」类系统通知（回合完成由上方三档单独控制）。",
+    "目标智能体面板已聚焦时，不弹出应用内消息卡片或系统通知（仍记入消息中心；回合完成由上方三档单独控制）。",
   cooldownLabel: "同一智能体冷却",
-  cooldownDesc: "同一智能体面板两次系统通知之间的最短间隔。",
+  cooldownDesc:
+    "同一智能体面板两次系统通知横幅之间的最短间隔（应用内消息卡片不受此限）。",
   cooldown: {
     "60000": "1 分钟",
     "180000": "3 分钟",
@@ -79,12 +81,13 @@ export const settingsNotifications = {
   deliveryTitle: "提醒方式",
   deliveryDesc: "控制消息通过哪些方式打扰你。",
   systemGroup: "系统通知",
-  systemGroupDesc: "窗口未聚焦时，经系统通知中心提醒你。",
+  systemGroupDesc:
+    "没有任何 Pier 窗口在前台时，经系统通知中心提醒你。有窗口在前台时只用应用内右上角消息卡片，两者不会同时出现。",
   disturbGroup: "打扰控制",
   disturbGroupDesc: "以上通道全开时，进一步减少打扰。",
   dnd: "勿扰模式",
   dndDesc:
-    "开启后仅错误消息弹出，其余静默进入消息中心；也可从标题栏铃铛快速切换。",
+    "开启后仅错误级应用内消息卡片弹出，其余静默进入消息中心；系统通知仍可按上方智能体设置出现。也可从标题栏铃铛快速切换。",
   sound: {
     system: "系统默认",
     "abstract-sound1": "抽象音 1",

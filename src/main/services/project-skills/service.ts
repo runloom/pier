@@ -111,10 +111,6 @@ export interface ProjectSkillsService extends PierBindingsServiceApi {
     projectRef: ContractProjectRootRef | MainProjectRootRef,
     args: { skillId: string; baseContentDigest: string; skillMd: string }
   ): Promise<ImportCandidateView>;
-  importPrepareDriftAcceptance(
-    projectRef: ContractProjectRootRef | MainProjectRootRef,
-    args: { skillId: string }
-  ): Promise<ImportCandidateView>;
   importPrepareFromDiscovery(
     projectRef: ContractProjectRootRef | MainProjectRootRef,
     relativeSource: string
@@ -471,11 +467,6 @@ export function createProjectSkillsService(
     importPrepareContentUpdate(projectRef, args) {
       return importService.prepareContentUpdate(projectRef, args);
     },
-
-    importPrepareDriftAcceptance(projectRef, args) {
-      return importService.prepareDriftAcceptance(projectRef, args);
-    },
-
     importDiscard(projectRef, token) {
       return importService.discardImport(projectRef, token);
     },

@@ -1,4 +1,5 @@
 import type { EditorView, Tooltip } from "@codemirror/view";
+import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { useId, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
@@ -117,7 +118,10 @@ export function FilesLspHoverCard({
         {title}
       </div>
       <div
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
+        className={cn(
+          "flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto",
+          scrollFadeClassName({ fade: "vertical", profile: "short" })
+        )}
         data-scrollbar="stable"
         data-slot="files-lsp-hover-body"
       >

@@ -137,9 +137,7 @@ export async function publishLibraryFromStaging(
     await rm(tempDir, { force: true, recursive: true }).catch(() => undefined);
     await copyTreeNoFollow(stagingTree, tempDir);
 
-    const isReplaceCandidate =
-      candidate.sourceKind === "content-update" ||
-      candidate.sourceKind === "drift-accepted";
+    const isReplaceCandidate = candidate.sourceKind === "content-update";
     let replacementBackup:
       | {
           backupPath: string;

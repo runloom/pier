@@ -284,10 +284,6 @@ export function normalizeSnapshot(
         issueIds: Array.isArray(skill.issueIds) ? skill.issueIds : [],
         contentDigest:
           typeof skill.contentDigest === "string" ? skill.contentDigest : "",
-        actualContentDigest:
-          typeof skill.actualContentDigest === "string"
-            ? skill.actualContentDigest
-            : null,
         directorySummary: skill.directorySummary ?? null,
       })),
     unmanagedSkills: Array.isArray(record.unmanagedSkills)

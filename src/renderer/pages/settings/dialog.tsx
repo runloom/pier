@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
+import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import {
   Select,
   SelectContent,
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@pier/ui/select.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import i18next from "i18next";
 import type { ComponentType, CSSProperties } from "react";
 import { useEffect, useSyncExternalStore } from "react";
@@ -278,9 +280,18 @@ export function SettingsDialog() {
             </Select>
           </nav>
 
+          {/*
+            Native overflow owner (not ScrollArea): skills-section restores
+            scrollTop on this node, and projects sticky tabs need a real
+            overflow ancestor (Radix viewport wraps children in display:table).
+          */}
           <main
-            className="relative -mr-6 flex h-full min-h-0 w-full min-w-0 flex-1 scroll-pb-8 flex-col overflow-y-auto pb-8 md:w-auto"
+            className={cn(
+              "relative flex h-full min-h-0 w-full min-w-0 flex-1 scroll-pb-8 flex-col overflow-y-auto pb-8 md:w-auto",
+              scrollFadeClassName({ fade: "vertical" })
+            )}
             data-scrollbar="stable"
+            data-slot="settings-scroll"
           >
             {activeSection === "appearance" ? <AppearanceSection /> : null}
             {activeSection === "terminal" ? <TerminalSection /> : null}
