@@ -1,5 +1,6 @@
 import type { AgentAttentionSettings } from "@shared/contracts/agent/attention.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
+import { shouldSilenceAgentInterrupt } from "@shared/notification-delivery.ts";
 
 export type AgentNotificationEventKind = "waiting" | "ready" | "error";
 
@@ -58,7 +59,9 @@ export function classifyAgentNotificationEvent(args: {
 }
 
 /**
- * 聚焦抑制：ready 看拥有窗口 + turnNotifyMode；waiting/error 看目标 panel + suppressWhenFocused。
+ * 聚焦抑制（薄封装 → shared `shouldSilenceAgentInterrupt` 单一语义）。
+ * ready 看拥有窗口 + turnNotifyMode；waiting/error 看目标 panel + suppressWhenFocused。
+ * enabled / enableErrorAttention 由 classify 负责，此处假定事件已允许产生。
  */
 export function shouldSuppressAgentNotification(args: {
   kind: AgentNotificationEventKind;
@@ -72,15 +75,36 @@ export function shouldSuppressAgentNotification(args: {
   const { kind, settings, isTargetPanelFocused, isOwnerWindowFocused } = args;
 
   if (kind === "ready") {
-    if (settings.turnNotifyMode === "always") {
-      return false;
-    }
-    if (settings.turnNotifyMode === "unfocused") {
-      return isOwnerWindowFocused;
-    }
-    // off 应由 classify 滤掉；保守抑制。
-    return true;
+    return shouldSilenceAgentInterrupt(
+      { kind: "agent.turn-finished", severity: "info" },
+      {
+        agentAttention: {
+          cooldownMs: 0,
+          enableErrorAttention: true,
+          enabled: true,
+          suppressWhenFocused: settings.suppressWhenFocused,
+          turnNotifyMode: settings.turnNotifyMode,
+        },
+      },
+      { isOwnerWindowFocused, isTargetPanelFocused }
+    );
   }
 
-  return settings.suppressWhenFocused && isTargetPanelFocused;
+  return shouldSilenceAgentInterrupt(
+    {
+      kind: "agent.attention",
+      severity: kind === "error" ? "error" : "warning",
+    },
+    {
+      agentAttention: {
+        cooldownMs: 0,
+        // 聚焦抑制测试路径：不让 enabled 门挡住
+        enableErrorAttention: true,
+        enabled: true,
+        suppressWhenFocused: settings.suppressWhenFocused,
+        turnNotifyMode: settings.turnNotifyMode,
+      },
+    },
+    { isOwnerWindowFocused, isTargetPanelFocused }
+  );
 }

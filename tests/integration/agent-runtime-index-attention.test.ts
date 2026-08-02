@@ -1,9 +1,8 @@
 import { createAgentAttentionService } from "@main/services/agent-attention/service.ts";
 import { createAgentRuntimeIndexService } from "@main/services/agent-runtime-index/index.ts";
-import { AGENT_ATTENTION_KIND } from "@shared/contracts/agent/attention.ts";
 import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
-import type { SystemNotificationRequest } from "@shared/contracts/notification.ts";
+import type { NotificationReport } from "@shared/contracts/notification-center.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 function agent(
@@ -24,21 +23,13 @@ function agent(
 }
 
 describe("agent runtime index + attention integration", () => {
-  const showNotification = vi.fn(
-    async (_request: SystemNotificationRequest) => ({ shown: true as const })
-  );
-  const isTargetPanelFocused = vi.fn(() => false);
-  let now = 1000;
+  const ingestNotification = vi.fn<(r: NotificationReport) => void>();
 
   beforeEach(() => {
-    showNotification.mockClear();
-    showNotification.mockResolvedValue({ shown: true });
-    isTargetPanelFocused.mockReset();
-    isTargetPanelFocused.mockReturnValue(false);
-    now = 1000;
+    ingestNotification.mockClear();
   });
 
-  it("notifies on waiting, skips when focused, and focusWaiting targets same order", async () => {
+  it("ingests waiting; focusWaiting still orders needs-you first", async () => {
     const activities = [
       agent({
         panelId: "ready",
@@ -67,24 +58,20 @@ describe("agent runtime index + attention integration", () => {
     });
 
     const attention = createAgentAttentionService({
-      isTargetPanelFocused,
-      isOwnerWindowFocused: () => false,
-      now: () => now,
+      ingestNotification,
       resolveLocale: () => "en",
-      showNotification,
     });
 
     await attention.observe(null, { activities, ts: 3 });
-    expect(showNotification).toHaveBeenCalledWith(
+    expect(ingestNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         agentRef: makeAgentRef("22", "wait"),
-        kind: AGENT_ATTENTION_KIND,
-      }),
-      expect.objectContaining({ silent: expect.any(Boolean) })
+        kind: "agent.attention",
+      })
     );
 
-    showNotification.mockClear();
-    isTargetPanelFocused.mockReturnValue(true);
+    // 再次进入 waiting：仍会 ingest（打断静音由 NCS plan 负责）
+    ingestNotification.mockClear();
     await attention.observe(
       {
         activities: [
@@ -107,19 +94,16 @@ describe("agent runtime index + attention integration", () => {
         ts: 5,
       }
     );
-    expect(showNotification).not.toHaveBeenCalled();
+    expect(ingestNotification).toHaveBeenCalledTimes(1);
 
     const listed = index.listMachine({ preferredWindowId: "11" });
     expect(listed.entries[0]?.panelId).toBe("wait");
     await expect(index.focusWaiting()).resolves.toEqual({ status: "ok" });
   });
 
-  it("notifies on turn-end ready when unfocused, not on first projection or default error", async () => {
+  it("ingests turn-end ready when unfocused, not on first projection or default error", async () => {
     const attention = createAgentAttentionService({
-      isTargetPanelFocused,
-      isOwnerWindowFocused: () => false,
-      now: () => now,
-      showNotification,
+      ingestNotification,
     });
     // 首次投影（boot / 新面板）即 ready 或 error：不通知。
     await attention.observe(null, {
@@ -129,9 +113,9 @@ describe("agent runtime index + attention integration", () => {
       ],
       ts: 1,
     });
-    expect(showNotification).not.toHaveBeenCalled();
+    expect(ingestNotification).not.toHaveBeenCalled();
 
-    // 真实回合结束边沿 processing→ready：通知；error 默认关不通知。
+    // 真实回合结束边沿 processing→ready：ingest；error 默认关不 ingest。
     await attention.observe(
       {
         activities: [
@@ -148,13 +132,12 @@ describe("agent runtime index + attention integration", () => {
         ts: 3,
       }
     );
-    expect(showNotification).toHaveBeenCalledTimes(1);
-    expect(showNotification).toHaveBeenCalledWith(
+    expect(ingestNotification).toHaveBeenCalledTimes(1);
+    expect(ingestNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         agentRef: makeAgentRef("1", "r"),
-        kind: AGENT_ATTENTION_KIND,
-      }),
-      expect.objectContaining({ silent: expect.any(Boolean) })
+        kind: "agent.turn-finished",
+      })
     );
   });
 });

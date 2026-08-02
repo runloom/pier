@@ -156,14 +156,12 @@ describe("S1 top A waiting evidence", () => {
       true
     );
 
-    const showNotification = vi.fn(async () => ({ shown: true }));
+    const ingestNotification = vi.fn();
     const service = createAgentAttentionService({
-      isTargetPanelFocused: () => false,
-      isOwnerWindowFocused: () => false,
-      showNotification,
+      ingestNotification,
     });
     await service.observe(null, { activities: [activity], ts: 1 });
-    expect(showNotification).toHaveBeenCalled();
+    expect(ingestNotification).toHaveBeenCalled();
   });
 });
 

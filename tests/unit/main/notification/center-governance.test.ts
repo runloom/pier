@@ -47,4 +47,29 @@ describe("notification-center main module boundary", () => {
       ).toBe(false);
     }
   });
+
+  it("schedules interrupts via resolveDeliveryPlan (not bare resolveToastTarget only)", () => {
+    const service = readFileSync(join(MODULE_DIR, "service.ts"), "utf8");
+    expect(service).toContain("resolveDeliveryPlan");
+    expect(service).toContain("deliverOs");
+  });
+});
+
+describe("agent-attention no longer owns OS delivery", () => {
+  const ATTENTION_DIR = join(
+    ROOT,
+    "src",
+    "main",
+    "services",
+    "agent-attention"
+  );
+
+  it("service.ts does not import OS adapter or call showNotification", () => {
+    const service = readFileSync(join(ATTENTION_DIR, "service.ts"), "utf8");
+    expect(service).not.toMatch(
+      /from\s+["'][^"']*system-notification[^"']*["']/
+    );
+    expect(service).not.toMatch(/\bshowNotification\b/);
+    expect(service).toContain("ingestNotification");
+  });
 });

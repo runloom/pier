@@ -7,6 +7,7 @@ import {
   bindNotificationFocus,
   registerNotificationIpc,
 } from "./notification.ts";
+import { bindNotificationCenterRuntimeIndex } from "./notification-center.ts";
 
 export interface RegisterAgentRuntimeHostIpcArgs {
   eventBus?: PierEventBus;
@@ -19,6 +20,7 @@ export function registerAgentRuntimeHostIpc(
   args: RegisterAgentRuntimeHostIpcArgs
 ): void {
   registerAgentRuntimeIndexIpc(ipcMain, args.index);
+  bindNotificationCenterRuntimeIndex(args.index);
   registerAgentAttention({
     index: args.index,
     ...(args.eventBus ? { eventBus: args.eventBus } : {}),

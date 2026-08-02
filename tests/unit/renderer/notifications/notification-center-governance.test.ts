@@ -180,6 +180,10 @@ describe("notification center governance", () => {
       join(ROOT, "src/renderer/lib/notifications/show-notification-toast.tsx"),
       "utf8"
     );
+    const globalsCss = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
     const agentContext = readFileSync(join(ROOT, "AGENTS.md"), "utf8");
     // 默认 Toaster 必须是中间上方（确认型短提示）；禁止回退为整站 top-right。
     expect(sonner).toMatch(/position=["']top-center["']/);
@@ -188,6 +192,32 @@ describe("notification center governance", () => {
     expect(showNotification).toMatch(/position:\s*["']top-right["']/);
     expect(agentContext).toContain('position="top-center"');
     expect(agentContext).toContain('position: "top-right"');
+    // CSS 强制居中只能绑 center 轨道；裸 [data-sonner-toaster] 带 left:50% 会压扁 top-right。
+    expect(globalsCss).toMatch(
+      /\[data-sonner-toaster\]\[data-x-position=["']center["']\]/
+    );
+    const bareToasterBlock = globalsCss.match(
+      /\[data-sonner-toaster\]\s*\{[^}]*\}/
+    )?.[0];
+    expect(bareToasterBlock).toBeDefined();
+    expect(bareToasterBlock).not.toMatch(/left:\s*50%/);
+    expect(bareToasterBlock).not.toMatch(/translateX\(-50%\)/);
+  });
+
+  it("locks focus-routed delivery: resolveDeliveryPlan + NCS owns OS", () => {
+    const delivery = readFileSync(
+      join(ROOT, "src/shared/notification-delivery.ts"),
+      "utf8"
+    );
+    const agentContext = readFileSync(join(ROOT, "AGENTS.md"), "utf8");
+    expect(delivery).toContain("resolveDeliveryPlan");
+    expect(delivery).toContain("OS_ELIGIBLE_KINDS");
+    // 禁止回退「OS 恒 false」整段硬编码（osNotify 仅由 plan 按聚焦/白名单赋值）
+    expect(delivery).toContain("decision.osNotify = osEligible");
+    expect(delivery).toContain("hasFocusedPierWindow");
+    // 禁止回退「OS 发送权唯一留在 agent-attention」
+    expect(agentContext).toContain("OS 发送权唯一在 NCS");
+    expect(agentContext).not.toContain("OS 通知发送权唯一留在 agent-attention");
   });
 
   it("does not reintroduce store-subscribe toast preview bridge", () => {

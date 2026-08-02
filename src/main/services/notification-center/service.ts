@@ -1,12 +1,9 @@
 /**
  * NotificationCenterService（NCS）：统一消息流水线 main 侧唯一写入方。
  *
- * ingest → schema 校验 → dedupe 合并 → ring buffer → 广播快照 → 形态 B toast 单投。
- * 边界纪律：本模块不 import services/agents/（对齐 foreground-activity 先例）；
- * agent 事件经 agent-attention 已分类的产物输入。
- *
- * 形态 B toast 由 main `resolveToastTarget` + `deliverToast` 单窗投递；
- * renderer 不得订阅快照后自弹（见 2026-07-26 多窗投递金标准）。
+ * ingest → schema 校验 → dedupe 合并 → ring buffer → 广播快照 → DeliveryPlan 调度。
+ * 形态 B toast 与 OS 互斥：有 key 窗 toast；无 key 且白名单 OS。
+ * 边界：本模块不 import services/agents/；agent 事件经 agent-attention 已分类产物输入。
  */
 import {
   type AppNotification,
@@ -15,10 +12,15 @@ import {
   notificationReportSchema,
 } from "@shared/contracts/notification-center.ts";
 import {
-  resolveToastTarget,
+  DEFAULT_DELIVERY_AGENT_ATTENTION,
+  type DeliveryAgentAttentionPrefs,
+  type DeliveryFocus,
+  type OsTarget,
+  resolveDeliveryPlan,
   type ToastTarget,
 } from "@shared/notification-delivery.ts";
 import { decideDedupe } from "./dedupe.ts";
+import { createOsCooldownStore, type OsCooldownStore } from "./os-cooldown.ts";
 import type { NotificationHistoryStore } from "./store.ts";
 
 export interface NotificationIngestContext {
@@ -28,12 +30,33 @@ export interface NotificationIngestContext {
 
 export interface NotificationCenterServiceDeps {
   broadcast: (snapshot: NotificationCenterSnapshot) => void;
-  /** 形态 B toast 单投；target.mode=none 时可不调或 no-op。 */
+  /**
+   * OS 系统通知（进程级）；osTarget.mode=none 时不调。
+   * 返回 shown：仅 shown 时记 OS 冷却。
+   */
+  deliverOs?: (
+    notification: AppNotification,
+    meta: { cooldownKey?: string }
+  ) => boolean | Promise<boolean>;
+  /** 形态 B toast 单投；target.mode=none 时不调。 */
   deliverToast?: (notification: AppNotification, target: ToastTarget) => void;
   history: NotificationHistoryStore;
   idGen?: () => string;
   now?: () => number;
+  osCooldown?: OsCooldownStore;
+  /** agent 注意力策略切片。缺省用 delivery 默认（与产品默认对齐）。 */
+  readAgentAttentionPrefs?: () => DeliveryAgentAttentionPrefs;
+  /** 投递瞬间 key-window 是否存在。缺省 true（兼容旧单测 / 无窗管理注入）。 */
+  readFocusBase?: () => Pick<DeliveryFocus, "hasFocusedPierWindow">;
   readPrefs: () => Promise<NotificationCenterPrefs>;
+  /**
+   * agent 细粒度聚焦。NCS 不解析 agent 域；由 ipc 注入。
+   * 缺省：无 panel/owner 静音。
+   */
+  resolveAgentFocus?: (input: {
+    agentRef?: string;
+    panelId?: string;
+  }) => Pick<DeliveryFocus, "isTargetPanelFocused" | "isOwnerWindowFocused">;
   writeDnd: (enabled: boolean) => Promise<void>;
 }
 
@@ -48,6 +71,11 @@ export interface NotificationCenterService {
   markRead(id: string): void;
   /** toast 上的 action 触达时按 dedupeKey 标已读（toast 副本 id 不在历史中）。 */
   markReadByDedupeKey(dedupeKey: string): void;
+  /**
+   * 按当前存活 agentRef 剪枝 OS 冷却（面板关闭 / 会话结束）。
+   * 由 FA 发布路径调用；不进 inbox 快照。
+   */
+  pruneOsCooldown(liveAgentRefs: ReadonlySet<string>): void;
   setDnd(enabled: boolean): Promise<void>;
   snapshot(): NotificationCenterSnapshot;
   /** preferences.changed 外部写入（设置页）后同步缓存；dndEnabled 变化时广播。 */
@@ -60,6 +88,7 @@ export async function createNotificationCenterService(
   const now = deps.now ?? Date.now;
   const idGen = deps.idGen ?? crypto.randomUUID.bind(crypto);
   const prefs: NotificationCenterPrefs = await deps.readPrefs();
+  const osCooldown = deps.osCooldown ?? createOsCooldownStore();
   let seq = 0;
 
   deps.history.pruneExpired(prefs.retentionDays, now());
@@ -81,15 +110,27 @@ export async function createNotificationCenterService(
     deps.broadcast(snapshot());
   }
 
-  function scheduleToast(
+  function buildFocus(notification: AppNotification): DeliveryFocus {
+    const base = deps.readFocusBase?.() ?? { hasFocusedPierWindow: true };
+    const agentFocus =
+      deps.resolveAgentFocus?.({
+        agentRef: notification.agentRef,
+        panelId: notification.panelRef?.panelId,
+      }) ?? {};
+    return {
+      hasFocusedPierWindow: base.hasFocusedPierWindow,
+      ...agentFocus,
+    };
+  }
+
+  function scheduleDelivery(
     notification: AppNotification,
     suppressToast: boolean | undefined,
     context: NotificationIngestContext | undefined
   ): void {
-    if (!deps.deliverToast) {
-      return;
-    }
-    const target = resolveToastTarget(
+    const agentAttention =
+      deps.readAgentAttentionPrefs?.() ?? DEFAULT_DELIVERY_AGENT_ATTENTION;
+    const plan = resolveDeliveryPlan(
       {
         kind: notification.kind,
         severity: notification.severity,
@@ -97,13 +138,63 @@ export async function createNotificationCenterService(
         ...(context?.originWindowId
           ? { originWindowId: context.originWindowId }
           : {}),
+        ...(notification.agentRef ? { agentRef: notification.agentRef } : {}),
+        ...(notification.panelRef
+          ? { panelId: notification.panelRef.panelId }
+          : {}),
       },
-      { dndEnabled: prefs.dndEnabled, mutedKinds: prefs.mutedKinds }
+      {
+        agentAttention,
+        dndEnabled: prefs.dndEnabled,
+        mutedKinds: prefs.mutedKinds,
+      },
+      buildFocus(notification)
     );
-    if (target.mode === "none") {
+
+    if (plan.toastTarget.mode !== "none" && deps.deliverToast) {
+      deps.deliverToast(notification, plan.toastTarget);
+    }
+
+    scheduleOs(notification, plan.osTarget, plan.osCooldownKey, agentAttention);
+  }
+
+  function scheduleOs(
+    notification: AppNotification,
+    osTarget: OsTarget,
+    osCooldownKey: string | undefined,
+    agentAttention: DeliveryAgentAttentionPrefs
+  ): void {
+    if (osTarget.mode !== "process" || !deps.deliverOs) {
       return;
     }
-    deps.deliverToast(notification, target);
+    const key = osCooldownKey;
+    const ts = now();
+    if (key && !osCooldown.tryReserve(key, agentAttention.cooldownMs, ts)) {
+      return;
+    }
+    const runOs = async (): Promise<void> => {
+      try {
+        const shown = await deps.deliverOs?.(notification, {
+          cooldownKey: key,
+        });
+        if (!key) {
+          return;
+        }
+        if (shown) {
+          osCooldown.commit(key, ts);
+        } else {
+          osCooldown.release(key);
+        }
+      } catch (err) {
+        if (key) {
+          osCooldown.release(key);
+        }
+        console.warn("[notification-center] deliverOs failed:", err);
+      }
+    };
+    runOs().catch((err: unknown) => {
+      console.warn("[notification-center] deliverOs unexpected:", err);
+    });
   }
 
   function ingest(
@@ -138,7 +229,7 @@ export async function createNotificationCenterService(
       if (merged) {
         deps.history.pruneExpired(prefs.retentionDays, ts);
         publish();
-        scheduleToast(merged, suppressToast, context);
+        scheduleDelivery(merged, suppressToast, context);
         return merged;
       }
     }
@@ -152,7 +243,7 @@ export async function createNotificationCenterService(
     deps.history.prepend(notification);
     deps.history.pruneExpired(prefs.retentionDays, ts);
     publish();
-    scheduleToast(notification, suppressToast, context);
+    scheduleDelivery(notification, suppressToast, context);
     return notification;
   }
 
@@ -175,6 +266,9 @@ export async function createNotificationCenterService(
       if (latest && deps.history.markRead(latest.id)) {
         publish();
       }
+    },
+    pruneOsCooldown: (liveAgentRefs) => {
+      osCooldown.prune(liveAgentRefs);
     },
     setDnd: async (enabled) => {
       if (enabled === prefs.dndEnabled) {
