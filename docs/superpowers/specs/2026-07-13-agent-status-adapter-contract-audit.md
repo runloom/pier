@@ -103,7 +103,7 @@ flowchart LR
 |---|---|---|---|---|
 | aider | 退役清理器；不再安装通知 hook | `coarse` | 无现役事件；历史 notifications 配置只清理 | `none` |
 | amp | 提供方 JavaScript 插件 | `full` | `session.start→SessionStart`；`agent.start→PromptSubmit`；`tool.call→ToolStart`；`tool.result→ToolComplete`；`agent.end→Stop` | `authoritative` |
-| antigravity | 嵌套 JSON hook | `coarse` | `PreInvocation→PromptSubmit`；`PostToolUse→ToolComplete`；`Stop→Stop` | `advisory` |
+| antigravity | 命名 JSON hook | `coarse` | `PreInvocation→processing`（逐事件 `turnStartAuthority: "authoritative"`）；仅安装 `PreInvocation` 与 `Stop`；`Stop.error→error`、`Stop.fullyIdle→Stop`、`Stop.active→processing` | `advisory` |
 | aug | 嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop`；`SessionEnd→SessionEnd` | `advisory` |
 | autohand | 扁平 JSON hook 数组 | `full` | `session-start→SessionStart`；`session-end→SessionEnd`；`session-error→error`；`pre-prompt→PromptSubmit`；`stop→Stop`；`permission-request→PermissionRequest`；`pre-tool→ToolStart`；`post-tool→ToolComplete` | `advisory` |
 | claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PermissionRequest→PermissionRequest`；`PermissionDenied/PreCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名`；`SessionEnd→SessionEnd`；内部对账另补 `TurnInterrupted`（Esc/Ctrl+C 不触发 Stop hook——上游缺口, 由 transcript 主链整块中断标记补齐；正常完成不对账, 仍走 advisory Stop） | `advisory` |
