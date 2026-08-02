@@ -256,9 +256,11 @@
   --radius: 0.625rem;
 
   /* === scrollbar system ===
-     全应用一套外观。调粗细只改 --shell-scrollbar-width-legacy。
+     全应用一套外观。Chromium 走 scrollbar-width: thin + scrollbar-color 自动隐藏
+     （空闲透明 / 活动着色）；调粗细只改 --shell-scrollbar-width-legacy（webkit 回退）。
      唯一例外：data-scrollbar="none" 隐藏。
-     Shadow（trees / diffs）全局穿不进，经 packages/ui/scrollbar-system.ts 同 token。 */
+     Shadow（trees / diffs）全局穿不进，经 packages/ui/scrollbar-system.ts 同策略。 */
+
   --shell-scrollbar-width: thin;
   --shell-scrollbar-width-legacy: 6px;
   --shell-scrollbar-radius: 999px;
@@ -566,13 +568,22 @@
 
 /*
  * 系统滚动条：默认全局统一；仅 data-scrollbar="none" 可隐藏。
- * 槽位 6px（--shell-scrollbar-width-legacy）；拇指 1px 透明边 + content-box，
- * 视觉约 4px（对齐 loomdesk）。
  * data-scrollbar="stable"/"overlay" 保留 gutter，避免首次溢出布局跳动。
+ *
+ * Electron / Chromium：scrollbar-width / scrollbar-color（非 auto）会覆盖
+ * ::-webkit-scrollbar。自动隐藏必须改 thumb 的 scrollbar-color（空闲透明 →
+ * 滚动/gutter hover 着色），并始终保留 scrollbar-width: thin，避免退回经典
+ * webkit 槽位导致设置弹窗等内容区滚动条位置跳动。
+ * 无标准属性的引擎才走下方 webkit 伪元素回退。
  */
 * {
-  scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track);
+  scrollbar-color: transparent transparent;
   scrollbar-width: var(--shell-scrollbar-width);
+}
+
+*[data-scrollbar-scrolling="true"],
+*[data-scrollbar-hovering="true"] {
+  scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track);
 }
 
 :where([data-scrollbar="stable"], [data-flat-scroll], .cv-scrollbar) {
@@ -583,11 +594,12 @@
   scrollbar-gutter: auto;
 }
 
-[data-scrollbar="none"] {
+[data-scrollbar="none"],
+[data-scrollbar="none"] * {
   scrollbar-width: none;
 }
 
-@supports selector(::-webkit-scrollbar) {
+@supports not (scrollbar-color: auto) {
   *::-webkit-scrollbar {
     -webkit-appearance: none;
     width: var(--shell-scrollbar-width-legacy);
@@ -623,11 +635,6 @@
   *::-webkit-scrollbar-track,
   *::-webkit-scrollbar-corner {
     background: var(--shell-scrollbar-track);
-  }
-
-  [data-scrollbar="none"],
-  [data-scrollbar="none"] * {
-    scrollbar-width: none;
   }
 
   [data-scrollbar="none"]::-webkit-scrollbar,

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { AUTO_HIDE_SCROLLBAR_IDLE_MS } from "@pier/ui/auto-hide-scrollbar.ts";
 import { ScrollArea, scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -44,6 +45,18 @@ describe("ScrollArea viewport behavior", () => {
     ).toHaveClass("scroll-fade-x");
   });
 
+  it("defaults to scroll/auto-hide and keeps idle thumbs unmounted", () => {
+    const { container } = render(
+      <ScrollArea viewportFade="vertical">
+        <div style={{ height: 2000 }}>Tall content</div>
+      </ScrollArea>
+    );
+
+    expect(
+      container.querySelector('[data-slot="scroll-area-scrollbar"]')
+    ).toBeNull();
+  });
+
   it("keeps the custom scrollbar outside the faded viewport and on Pier tokens", () => {
     const { container } = render(
       <ScrollArea type="always" viewportFade="vertical">
@@ -55,14 +68,28 @@ describe("ScrollArea viewport behavior", () => {
     const viewport = container.querySelector(
       '[data-slot="scroll-area-viewport"]'
     );
-    const scrollbar = container.querySelector(
+    const scrollbars = container.querySelectorAll(
       '[data-slot="scroll-area-scrollbar"]'
     );
-    expect(scrollbar?.parentElement).toBe(root);
-    expect(viewport?.contains(scrollbar)).toBe(false);
-    expect(scrollbar).toHaveClass(
+    expect(scrollbars).toHaveLength(2);
+    const vertical = [...scrollbars].find(
+      (node) => node.getAttribute("data-orientation") === "vertical"
+    );
+    const horizontal = [...scrollbars].find(
+      (node) => node.getAttribute("data-orientation") === "horizontal"
+    );
+    expect(vertical?.parentElement).toBe(root);
+    expect(horizontal?.parentElement).toBe(root);
+    expect(viewport?.contains(vertical ?? null)).toBe(false);
+    expect(viewport?.contains(horizontal ?? null)).toBe(false);
+    expect(vertical).toHaveClass(
       "data-vertical:w-(--shell-scrollbar-width-legacy)"
     );
+    expect(horizontal).toHaveClass(
+      "data-horizontal:h-(--shell-scrollbar-width-legacy)"
+    );
+    expect(vertical).toHaveClass("data-[state=visible]:opacity-100");
+    expect(vertical).toHaveClass("opacity-0");
   });
 
   it("styles the Radix thumb with the shared Pier scrollbar token", () => {
@@ -72,6 +99,10 @@ describe("ScrollArea viewport behavior", () => {
     );
 
     expect(source).toContain("bg-(--shell-scrollbar-thumb)");
+    expect(source).toContain('type = "scroll"');
+    expect(source).toContain("scrollHideDelay = AUTO_HIDE_SCROLLBAR_IDLE_MS");
+    expect(source).toContain("AUTO_HIDE_SCROLLBAR_IDLE_MS");
+    expect(AUTO_HIDE_SCROLLBAR_IDLE_MS).toBe(900);
   });
 
   it("exports shared fade class helpers for native scroll owners", () => {
@@ -84,6 +115,15 @@ describe("ScrollArea viewport behavior", () => {
     expect(scrollFadeClassName({ fade: "horizontal" })).toContain(
       "scroll-fade-x"
     );
+    expect(
+      scrollFadeClassName({ fade: "vertical", profile: "bottom-only" })
+    ).toContain("scroll-fade-b");
+    expect(
+      scrollFadeClassName({ fade: "vertical", profile: "bottom-only" })
+    ).not.toContain("scroll-fade-y");
+    expect(
+      scrollFadeClassName({ fade: "vertical", profile: "bottom-only" })
+    ).not.toContain("scroll-fade-t-");
     // Profile alone must not emit size tokens without a fade axis.
     expect(scrollFadeClassName({ profile: "short" })).toBe("");
     expect(scrollFadeClassName({})).toBe("");

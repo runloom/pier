@@ -72,9 +72,11 @@ describe("markdown preview layout governance", () => {
     expect(toc).not.toContain("setTocCollapsed");
     expect(toc).not.toContain("<X");
     // Tick rail stays native + hidden scrollbar; hover title list uses ScrollArea
-    // viewportFade (short) so overflow is discoverable without permanent chrome.
+    // viewportFade (short). Explicit type="hover" is the only ScrollArea hover
+    // exception (ephemeral outline panel); product default remains type="scroll".
     expect(toc).toContain('data-scrollbar="none"');
     expect(toc).toContain("ScrollArea");
+    expect(toc).toContain('type="hover"');
     expect(toc).toContain('viewportFade="vertical"');
     expect(toc).toContain('viewportFadeProfile="short"');
     expect(toc).toContain('data-slot="scroll-area-viewport"');

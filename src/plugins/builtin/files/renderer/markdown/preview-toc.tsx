@@ -144,8 +144,10 @@ export function MarkdownPreviewToc({
       >
         {/*
           Short floating outline list: ScrollArea owns the only vertical scroll
-          owner and applies viewportFade (short) so clipped titles are discoverable
-          without permanent scrollbar chrome (type=hover).
+          owner and applies viewportFade (short). Explicit type="hover" is an
+          intentional exception — the hover panel is already an ephemeral
+          surface, so entering it implies list navigation; product default
+          remains type="scroll" (scroll/idle auto-hide, no whole-root hover).
         */}
         <div className="min-h-0 min-w-0 flex-1" ref={panelScrollRef}>
           <ScrollArea

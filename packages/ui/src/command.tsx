@@ -107,7 +107,6 @@ function CommandList({
         // Apply shared fade utilities directly — cannot nest ScrollArea here.
         "max-h-72 scroll-py-1 overflow-y-auto overflow-x-hidden outline-none",
         scrollFadeClassName({ fade: "vertical", profile: "short" }),
-        scrollbar === "none" && "no-scrollbar",
         className
       )}
       data-scrollbar={scrollbar}
