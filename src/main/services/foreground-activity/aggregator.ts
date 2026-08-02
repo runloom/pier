@@ -4,10 +4,7 @@ import {
 } from "@shared/agent-session-actor.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
-import {
-  activityStatusForAgentHookEvent,
-  isSessionCreatingAgentHookEvent,
-} from "./agent-hook-compatibility.ts";
+import { classifyAgentTurnEvent } from "./agent-turn-event-semantics.ts";
 import {
   createHookScopeCoordinator,
   isInCooldown,
@@ -34,6 +31,7 @@ import {
   logEndHookSession,
   logPtyExitedTaskRetain,
   logRouting,
+  nativeEventForLog,
 } from "./aggregator-tracing.ts";
 import {
   armHookVisibility,
@@ -60,7 +58,7 @@ import {
 } from "./entry.ts";
 import { armHookTtlTimer } from "./hook-scope-projection.ts";
 import {
-  applyTurnBookkeeping,
+  applyTurnBookkeeping as bookkeepTurn,
   nextStatusAfterTurnBookkeeping,
 } from "./turn-bookkeeping.ts";
 import type {
@@ -103,7 +101,6 @@ export function createForegroundActivityAggregator(
     return slot?.command?.kind === "agent-launch" ? slot.command.agentId : null;
   }
 
-  /** 整 slot 清除 + 冷却进指定表。返回是否确有移除（决定要不要 emit）。 */
   function closeSlot(
     key: string,
     cooldown: { map: Map<string, number>; ms: number }
@@ -136,8 +133,6 @@ export function createForegroundActivityAggregator(
     scheduleEmit,
     slots,
   });
-
-  /** SessionEnd 只清 hook 层，并用 1.5s 短冷却拦截迟到事件。 */
   function endHookSession(key: string): void {
     const slot = slots.get(key);
     const hook = slot?.hook ?? null;
@@ -170,10 +165,10 @@ export function createForegroundActivityAggregator(
     slots,
   });
 
-  /** 取得/新建 hook 层；只有正向事件可越过层级幽灵门控。 */
   function acquireHookLayer(
     key: string,
     event: AgentHookEventPayload,
+    semantics: ReturnType<typeof classifyAgentTurnEvent>,
     at: number
   ): HookLayer | null {
     const slot = slotFor(key, event.panelId);
@@ -184,7 +179,7 @@ export function createForegroundActivityAggregator(
       }
       return existing;
     }
-    if (!isSessionCreatingAgentHookEvent(event)) {
+    if (!semantics.createsSession) {
       dropSlotIfEmpty(key);
       return null;
     }
@@ -268,11 +263,11 @@ export function createForegroundActivityAggregator(
 
     ingestCommandStartHook(_event) {},
     ingestCommandFinishedHook(_event) {},
-
     ingestAgentEvent(event, options) {
       if (disposed) {
         return false;
       }
+      const semantics = classifyAgentTurnEvent(event, options);
       const key = panelKey(event.windowId, event.panelId);
       const slotBefore = slots.get(key);
       logRouting(event.event, event.agent, key, slotBefore?.hook ?? null);
@@ -309,41 +304,40 @@ export function createForegroundActivityAggregator(
       const sessionEndHandled = hookScopes.handleSessionEnd(
         key,
         event,
-        identity
+        identity,
+        semantics
       );
       if (sessionEndHandled !== null) {
         return sessionEndHandled;
       }
-      const status = activityStatusForAgentHookEvent(event);
-      if (status === null) {
-        logAgentEventDropped("status-null", key, event.event);
-        return false;
-      }
       const at = now();
-      const hook = acquireHookLayer(key, event, at);
+      const hook = acquireHookLayer(key, event, semantics, at);
       if (!hook) {
         logAgentEventDropped("ghost-rejected", key, event.event);
         return false;
       }
-      if (hookScopes.prepareSessionStartScope(hook, event, identity)) {
+      if (hookScopes.prepareSessionStartScope(hook, identity, semantics)) {
         return true;
       }
       const canUseScope =
-        hook.scopes.has(identity.key) || isSessionCreatingAgentHookEvent(event);
+        hook.scopes.has(identity.key) || semantics.createsSession;
       if (!canUseScope) {
         logAgentEventDropped("ghost-rejected", key, event.event);
         return false;
       }
       const scope = getOrCreateHookScope(hook, identity, event, at);
-      const stopAuthority = options.stopAuthority;
       const workId = identity.subagentWorkPlan?.id;
-      if (!applyTurnBookkeeping(scope, event, stopAuthority, at, workId)) {
+      const result = bookkeepTurn(scope, event, semantics, at, workId);
+      if (!result.accepted) {
         logAgentEventDropped("absorbed", key, event.event, {
+          evidenceSource: options.evidenceSource,
           ...(scope.status === undefined ? {} : { frozenStatus: scope.status }),
+          nativeEvent: nativeEventForLog(event),
+          rejectionReason: result.reason,
         });
         return false;
       }
-      const nextStatus = nextStatusAfterTurnBookkeeping(scope, event, status);
+      const nextStatus = nextStatusAfterTurnBookkeeping(scope, semantics);
       hookScopes.noteStatusEvent(
         key,
         hook,
@@ -352,13 +346,14 @@ export function createForegroundActivityAggregator(
         event,
         nextStatus,
         at,
-        stopAuthority
+        semantics,
+        result,
+        options
       );
       armHookTtlTimer(key, timerCtx);
       scheduleEmit();
       return true;
     },
-
     taskLaunched(panelId, windowId, task) {
       if (disposed) {
         return;
@@ -367,7 +362,6 @@ export function createForegroundActivityAggregator(
       panelCooldownUntil.delete(key);
       hookCooldownUntil.delete(key);
       const slot = slotFor(key, panelId);
-      // 用户显式操作优先：task 接管 pty，旧会话证据作废。
       clearSlotTimers(slot);
       slot.hook = null;
       slot.command = newTaskLayer(
@@ -413,7 +407,6 @@ export function createForegroundActivityAggregator(
         if (slot?.command?.kind !== "task") {
           continue;
         }
-        // pty 死亡 ≠ 面板关闭：task 面板仍开着呈现结果；只清 hook 证据。
         logPtyExitedTaskRetain(key);
         if (slot.hook) {
           clearHookTimers(slot.hook);

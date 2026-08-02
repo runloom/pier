@@ -1,5 +1,6 @@
 import type { AgentStatusEvidenceDimension } from "@main/services/agents/integrations/evidence/matrix.ts";
 import { getAgentHookIntegration } from "@main/services/agents/integrations/registry.ts";
+import { resolveAgentTurnStartAuthority } from "@main/services/agents/integrations/runtime-event-authority.ts";
 import { createForegroundActivityAggregator } from "@main/services/foreground-activity/aggregator.ts";
 import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import { agentHookEventSchema } from "@shared/contracts/agent/session.ts";
@@ -68,7 +69,12 @@ export async function runAgentStatusTrace(
       for (const event of actionEvents) {
         events.push(event);
         const ingested = aggregator.ingestAgentEvent(event, {
+          evidenceSource: "hook",
           stopAuthority: fixture.stopAuthority,
+          turnStartAuthority: resolveAgentTurnStartAuthority(
+            registered.runtime,
+            event
+          ),
         });
         if (action.expectedIngest === false ? ingested : !ingested) {
           throw new Error(

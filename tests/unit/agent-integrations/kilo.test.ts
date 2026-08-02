@@ -239,7 +239,11 @@ describe("buildKiloPluginSource", () => {
     const aggregator = createForegroundActivityAggregator();
     for (const row of rows) {
       if (row.kind === "agentEvent") {
-        aggregator.ingestAgentEvent(row, { stopAuthority: "authoritative" });
+        aggregator.ingestAgentEvent(row, {
+          evidenceSource: "hook",
+          stopAuthority: "authoritative",
+          turnStartAuthority: "none",
+        });
       }
     }
     expect(aggregator.snapshot().activities[0]).toMatchObject({
@@ -397,7 +401,11 @@ describe("buildKiloPluginSource", () => {
     const aggregator = createForegroundActivityAggregator();
     for (const row of rows) {
       if (row.kind === "agentEvent") {
-        aggregator.ingestAgentEvent(row, { stopAuthority: "authoritative" });
+        aggregator.ingestAgentEvent(row, {
+          evidenceSource: "hook",
+          stopAuthority: "authoritative",
+          turnStartAuthority: "none",
+        });
       }
     }
     expect(aggregator.snapshot().activities[0]).toMatchObject({
@@ -535,7 +543,9 @@ describe("buildKiloPluginSource", () => {
     for (const row of rows) {
       if (row.kind !== "agentEvent") continue;
       aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
         stopAuthority: kiloIntegration.runtime.stopAuthority,
+        turnStartAuthority: "none",
       });
       const activity = aggregator.snapshot().activities[0];
       counts.push(activity?.kind === "agent" ? activity.subagentCount : -1);

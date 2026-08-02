@@ -61,7 +61,7 @@ export interface ForegroundActivityAggregator {
    */
   ingestAgentEvent(
     event: AgentHookEventPayload,
-    options: { stopAuthority: AgentStopAuthority }
+    options: AgentEventIngestOptions
   ): boolean;
   /**
    * 前台命令退出：双层同清 + 5s 冷却（覆盖崩溃/kill 等无 SessionEnd hook

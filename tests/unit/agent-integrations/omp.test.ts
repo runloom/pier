@@ -337,7 +337,11 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       if (parsed.kind !== "agentEvent") {
         continue;
       }
-      aggregator.ingestAgentEvent(parsed, { stopAuthority: "authoritative" });
+      aggregator.ingestAgentEvent(parsed, {
+        evidenceSource: "hook",
+        stopAuthority: "authoritative",
+        turnStartAuthority: "none",
+      });
       const activity = aggregator.snapshot().activities[0];
       if (activity?.kind === "agent" && activity.status) {
         statuses.push(activity.status);
@@ -416,7 +420,9 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       const parsed = agentHookEventSchema.parse(record);
       if (parsed.kind !== "agentEvent") continue;
       aggregator.ingestAgentEvent(parsed, {
+        evidenceSource: "hook",
         stopAuthority: "authoritative",
+        turnStartAuthority: "none",
       });
     }
     expect(aggregator.snapshot().activities[0]).toMatchObject({

@@ -203,7 +203,11 @@ describe("autohandIntegration", () => {
     const statuses: string[] = [];
     for (const row of rows) {
       if (row.kind !== "agentEvent") continue;
-      aggregator.ingestAgentEvent(row, { stopAuthority: "authoritative" });
+      aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
+        stopAuthority: "authoritative",
+        turnStartAuthority: "none",
+      });
       const activity = aggregator.snapshot().activities[0];
       if (activity?.kind === "agent" && activity.status)
         statuses.push(activity.status);

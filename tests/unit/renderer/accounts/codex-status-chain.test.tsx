@@ -14,6 +14,18 @@ import {
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { createCodexTranscriptReconciler } from "../../../../src/main/services/agents/integrations/transcript/codex-reconciler.ts";
 import { createForegroundActivityAggregator } from "../../../../src/main/services/foreground-activity/aggregator.ts";
+import type { AgentEventIngestOptions } from "../../../../src/main/services/foreground-activity/types.ts";
+
+const HOOK_OPTIONS: AgentEventIngestOptions = {
+  evidenceSource: "hook",
+  stopAuthority: "advisory",
+  turnStartAuthority: "none",
+};
+const TRANSCRIPT_OPTIONS: AgentEventIngestOptions = {
+  evidenceSource: "transcript",
+  stopAuthority: "authoritative",
+  turnStartAuthority: "none",
+};
 
 describe("Codex transcript → aggregator → store → status DOM", () => {
   let dir: string;
@@ -57,6 +69,7 @@ describe("Codex transcript → aggregator → store → status DOM", () => {
 
   it.each([
     { order: "terminal-first", terminalType: "task_complete" },
+    { order: "stop-first", terminalType: "task_complete" },
     { order: "stop-first", terminalType: "turn_aborted" },
   ])("$order 的 $terminalType 最终都只由可信终态进入 ready", async (row) => {
     const aggregator = createForegroundActivityAggregator();
@@ -67,15 +80,13 @@ describe("Codex transcript → aggregator → store → status DOM", () => {
     };
     const reconciler = createCodexTranscriptReconciler({
       onTerminalEvent: (event) => {
-        aggregator.ingestAgentEvent(event, {
-          stopAuthority: "authoritative",
-        });
+        aggregator.ingestAgentEvent(event, TRANSCRIPT_OPTIONS);
         applySnapshot();
       },
       transcriptRoot: join(dir, "sessions"),
     });
     const prompt = promptEvent();
-    aggregator.ingestAgentEvent(prompt, { stopAuthority: "advisory" });
+    aggregator.ingestAgentEvent(prompt, HOOK_OPTIONS);
     await reconciler.observe(prompt);
     applySnapshot();
     const disposeStatus = registerAgentStatusItem();
@@ -91,6 +102,21 @@ describe("Codex transcript → aggregator → store → status DOM", () => {
     expect(await screen.findByTestId("agent-status-item")).toHaveAttribute(
       "data-agent-status",
       "processing"
+    );
+
+    aggregator.ingestAgentEvent(
+      {
+        ...prompt,
+        event: "ToolStart",
+        nativeEvent: "PreToolUse",
+        toolUseId: "unmatched-tool",
+      },
+      HOOK_OPTIONS
+    );
+    applySnapshot();
+    expect(screen.getByTestId("agent-status-item")).toHaveAttribute(
+      "data-agent-status",
+      "tool"
     );
 
     const stop = { ...prompt, event: "Stop" };
@@ -110,7 +136,7 @@ describe("Codex transcript → aggregator → store → status DOM", () => {
       );
     };
     if (row.order === "stop-first") {
-      aggregator.ingestAgentEvent(stop, { stopAuthority: "advisory" });
+      aggregator.ingestAgentEvent(stop, HOOK_OPTIONS);
       applySnapshot();
       expect(screen.getByTestId("agent-status-item")).toHaveAttribute(
         "data-agent-status",
@@ -128,7 +154,7 @@ describe("Codex transcript → aggregator → store → status DOM", () => {
       );
     });
     if (row.order === "terminal-first") {
-      aggregator.ingestAgentEvent(stop, { stopAuthority: "advisory" });
+      aggregator.ingestAgentEvent(stop, HOOK_OPTIONS);
       applySnapshot();
       expect(screen.getByTestId("agent-status-item")).toHaveAttribute(
         "data-agent-status",

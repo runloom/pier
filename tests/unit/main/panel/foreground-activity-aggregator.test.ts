@@ -24,6 +24,7 @@ import {
   planSubagentWork,
 } from "../../../../src/main/services/foreground-activity/subagent-work-associations.ts";
 import type {
+  AgentEventIngestOptions,
   AgentStopAuthority,
   ForegroundActivityAggregator,
   ForegroundActivityAggregatorOpts,
@@ -35,8 +36,14 @@ type TestForegroundActivityAggregator = Omit<
 > & {
   ingestAgentEvent(
     event: AgentHookEventPayload,
-    options?: { stopAuthority: AgentStopAuthority }
+    options?: Partial<AgentEventIngestOptions>
   ): boolean;
+};
+
+const DEFAULT_INGEST_OPTIONS: AgentEventIngestOptions = {
+  evidenceSource: "hook",
+  stopAuthority: "authoritative",
+  turnStartAuthority: "none",
 };
 
 function createForegroundActivityAggregator(
@@ -47,10 +54,12 @@ function createForegroundActivityAggregator(
     ...aggregator,
     ingestAgentEvent: (
       event: AgentHookEventPayload,
-      options: { stopAuthority: AgentStopAuthority } = {
-        stopAuthority: "authoritative",
-      }
-    ) => aggregator.ingestAgentEvent(event, options),
+      options: Partial<AgentEventIngestOptions> = {}
+    ) =>
+      aggregator.ingestAgentEvent(event, {
+        ...DEFAULT_INGEST_OPTIONS,
+        ...options,
+      }),
   };
 }
 
@@ -99,6 +108,22 @@ function agentHookEventV2(
     nativeEvent: args.event,
     ...args,
   };
+}
+
+function agentHookEventV3(
+  args: Partial<AgentHookEventPayloadV3> & {
+    event: AgentHookEventPayloadV3["event"];
+    nativeEvent: string;
+  }
+): AgentHookEventPayloadV3 {
+  return {
+    v: 3,
+    kind: "agentEvent",
+    agent: "claude",
+    panelId: "p1",
+    windowId: "1",
+    ...args,
+  } as AgentHookEventPayloadV3;
 }
 
 function interactionEvent(
@@ -2015,27 +2040,73 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("生命周期诊断区分 candidate/trusted/ready 且不记录正文", () => {
+  it("生命周期诊断记录转换来源与退休计数且不记录正文", () => {
     const records: LogRecord[] = [];
     setDefaultLogSink((record) => records.push(record));
     const agg = createForegroundActivityAggregator({ now });
-    const sensitive = "SENSITIVE_PROMPT_OR_TOOL_BODY";
+    const sensitivePrompt = "SENSITIVE_PROMPT";
+    const sensitiveToolId = "SENSITIVE_TOOL_ID";
+    const sensitiveTranscriptPath = "/private/transcript.jsonl";
     const base = {
-      metadataBase64: Buffer.from(sensitive).toString("base64"),
+      metadataBase64: Buffer.from(sensitivePrompt).toString("base64"),
       sessionId: "session-log",
-      transcriptPath: `/tmp/${sensitive}`,
+      transcriptPath: sensitiveTranscriptPath,
       turnId: "turn-log",
     };
-    agg.ingestAgentEvent(agentHookEvent({ ...base, event: "PromptSubmit" }), {
+    const hookOptions: AgentEventIngestOptions = {
+      evidenceSource: "hook",
       stopAuthority: "advisory",
-    });
-    agg.ingestAgentEvent(agentHookEvent({ ...base, event: "Stop" }), {
-      stopAuthority: "advisory",
-    });
-    agg.ingestAgentEvent(agentHookEvent({ ...base, event: "TurnCompleted" }), {
-      stopAuthority: "authoritative",
-    });
+      turnStartAuthority: "none",
+    };
+    agg.ingestAgentEvent(
+      agentHookEventV3({
+        ...base,
+        event: "PromptSubmit",
+        nativeEvent: "UserPromptSubmit",
+        promptSnippet: sensitivePrompt,
+      }),
+      hookOptions
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV3({ ...base, event: "Stop", nativeEvent: "Stop" }),
+      hookOptions
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV3({
+        ...base,
+        event: "ToolStart",
+        nativeEvent: "PreToolUse",
+        toolUseId: sensitiveToolId,
+      }),
+      hookOptions
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV3({
+        ...base,
+        event: "TurnCompleted",
+        nativeEvent: "codex.transcript.task_complete",
+      }),
+      {
+        evidenceSource: "transcript",
+        stopAuthority: "authoritative",
+        turnStartAuthority: "none",
+      }
+    );
 
+    const trustedRecord = records.find(
+      (record) => record.msg === "agent-terminal-trusted"
+    );
+    expect(trustedRecord?.ctx).toMatchObject({
+      category: "terminal-trusted",
+      evidenceSource: "transcript",
+      nativeEvent: "codex.transcript.task_complete",
+      transition: "terminal-trusted",
+      terminalRetiredWork: {
+        interactionCount: 0,
+        subagentCount: 0,
+        toolCount: 1,
+      },
+    });
     expect(records.map((record) => record.msg)).toEqual(
       expect.arrayContaining([
         "agent-turn-started",
@@ -2044,14 +2115,128 @@ describe("ForegroundActivityAggregator", () => {
         "agent-ready-derived",
       ])
     );
-    expect(
-      records.find((record) => record.msg === "agent-ready-derived")?.ctx
-    ).toMatchObject({
-      authority: "authoritative",
-      cause: "TurnCompleted",
-    });
-    expect(JSON.stringify(records)).not.toContain(sensitive);
+    expect(JSON.stringify(records)).not.toContain(sensitiveToolId);
+    expect(JSON.stringify(records)).not.toContain(sensitivePrompt);
+    expect(JSON.stringify(records)).not.toContain(sensitiveTranscriptPath);
     expect(JSON.stringify(records)).not.toContain(base.metadataBase64);
+    agg.dispose();
+  });
+
+  it("封账拒绝日志记录有限原因和来源且不改变快照或广播", () => {
+    const records: LogRecord[] = [];
+    const broadcasts: unknown[] = [];
+    setDefaultLogSink((record) => records.push(record));
+    const agg = createForegroundActivityAggregator({ now });
+    const options: AgentEventIngestOptions = {
+      evidenceSource: "hook",
+      stopAuthority: "authoritative",
+      turnStartAuthority: "none",
+    };
+    const unsubscribe = agg.onChange((broadcast) => broadcasts.push(broadcast));
+    agg.ingestAgentEvent(
+      agentHookEventV3({
+        event: "PromptSubmit",
+        nativeEvent: "UserPromptSubmit",
+        turnId: "turn-sealed",
+      }),
+      options
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV3({
+        event: "TurnCompleted",
+        nativeEvent: "TaskComplete",
+        turnId: "turn-sealed",
+      }),
+      options
+    );
+    advance(110);
+    const snapshotBefore = agg.snapshot();
+    const broadcastsBefore = broadcasts.length;
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV3({
+          event: "processing",
+          nativeEvent: "session.status=busy",
+        }),
+        options
+      )
+    ).toBe(false);
+    advance(110);
+
+    expect(agg.snapshot().activities).toEqual(snapshotBefore.activities);
+    expect(broadcasts).toHaveLength(broadcastsBefore);
+    expect(
+      records.find((record) => record.ctx?.reason === "sealed-turn")?.ctx
+    ).toMatchObject({
+      evidenceSource: "hook",
+      nativeEvent: "session.status=busy",
+      reason: "sealed-turn",
+    });
+    unsubscribe();
+    agg.dispose();
+  });
+
+  it("无 Stop 权威时由记账器给出有限拒绝原因", () => {
+    const records: LogRecord[] = [];
+    setDefaultLogSink((record) => records.push(record));
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+
+    expect(
+      agg.ingestAgentEvent(hookEvent("Stop"), {
+        stopAuthority: "none",
+      })
+    ).toBe(false);
+    expect(
+      records.find((record) => record.ctx?.reason === "stop-without-authority")
+        ?.ctx
+    ).toMatchObject({
+      evidenceSource: "hook",
+      nativeEvent: "Stop",
+      reason: "stop-without-authority",
+    });
+    agg.dispose();
+  });
+
+  it.each([
+    { expectedStatus: "ready", terminalEvent: "TurnCompleted" },
+    { expectedStatus: "error", terminalEvent: "error" },
+  ])("$terminalEvent 终态诊断只记录被退休工作计数，不记录工具标识", ({
+    expectedStatus,
+    terminalEvent,
+  }) => {
+    const records: LogRecord[] = [];
+    setDefaultLogSink((record) => records.push(record));
+    const agg = createForegroundActivityAggregator({ now });
+    const sensitiveToolId = "SENSITIVE_TOOL_ID";
+    const base = {
+      sessionId: "session-terminal-retirement",
+      turnId: "turn-terminal-retirement",
+    };
+    agg.ingestAgentEvent(agentHookEvent({ ...base, event: "PromptSubmit" }));
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        ...base,
+        event: "ToolStart",
+        toolUseId: sensitiveToolId,
+      })
+    );
+    agg.ingestAgentEvent(agentHookEvent({ ...base, event: terminalEvent }));
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      expectedStatus
+    );
+    expect(
+      records.find((record) => record.msg === "agent-terminal-trusted")?.ctx
+    ).toMatchObject({
+      terminalRetiredWork: {
+        interactionCount: 0,
+        subagentCount: 0,
+        toolCount: 1,
+      },
+    });
+    expect(JSON.stringify(records)).not.toContain(sensitiveToolId);
     agg.dispose();
   });
 
@@ -2107,7 +2292,9 @@ describe("ForegroundActivityAggregator", () => {
       "ready"
     );
 
-    agg.ingestAgentEvent(clineEvent("running"));
+    agg.ingestAgentEvent(clineEvent("running"), {
+      turnStartAuthority: "authoritative",
+    });
     agg.ingestAgentEvent(clineEvent("ToolStart", { toolUseId: "t2" }));
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
     agg.dispose();
@@ -2166,29 +2353,36 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("TurnCompleted 早于未完成工具时延迟 ready，工具收尾后才落 ready", () => {
+  it("TurnCompleted 到达时立即封账，并吸收未完成工具的迟到收尾", () => {
     const agg = createForegroundActivityAggregator({ now });
-    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
     agg.ingestAgentEvent(
-      agentHookEvent({ event: "ToolStart", toolUseId: "still-running" })
+      agentHookEvent({ event: "PromptSubmit", turnId: "turn-complete" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        event: "ToolStart",
+        toolUseId: "still-running",
+        turnId: "turn-complete",
+      })
     );
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
 
-    agg.ingestAgentEvent(hookEvent("TurnCompleted"));
-    // 不得在工具仍登记时谎报「等待输入」
-    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
-
     agg.ingestAgentEvent(
-      agentHookEvent({ event: "ToolComplete", toolUseId: "still-running" })
+      agentHookEvent({ event: "TurnCompleted", turnId: "turn-complete" })
     );
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
       "ready"
     );
 
-    // 密封后迟到工具吸收
-    agg.ingestAgentEvent(
-      agentHookEvent({ event: "ToolStart", toolUseId: "late" })
-    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEvent({
+          event: "ToolComplete",
+          toolUseId: "still-running",
+          turnId: "turn-complete",
+        })
+      )
+    ).toBe(false);
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
       "ready"
     );
@@ -3388,7 +3582,10 @@ describe("ForegroundActivityAggregator", () => {
       agg.dispose();
     });
 
-    it("authoritative Stop 在仍有工具时延迟 ready，工具收尾后才密封并吸收迟到事件", () => {
+    it.each<AgentStopAuthority>([
+      "authoritative",
+      "reset-only",
+    ])("%s Stop 在仍有工具时立即封账并吸收迟到事件", (stopAuthority) => {
       const agg = createForegroundActivityAggregator({ now });
       agg.ingestAgentEvent(ompEvent("PromptSubmit"));
       agg.ingestAgentEvent(
@@ -3400,32 +3597,20 @@ describe("ForegroundActivityAggregator", () => {
           windowId: "1",
         })
       );
-      // 终态早到但工具未收尾：保持 tool，不得谎报「等待输入」
-      agg.ingestAgentEvent(ompEvent("Stop"));
+      agg.ingestAgentEvent(ompEvent("Stop"), { stopAuthority });
       let a = agg.snapshot().activities[0] as AgentActivity;
-      expect(a.status).toBe("tool");
-      // 工具真正结束后才 ready
-      agg.ingestAgentEvent(
-        agentHookEvent({
-          agent: "omp",
-          event: "ToolComplete",
-          panelId: "p1",
-          toolUseId: "open-tool",
-          windowId: "1",
-        })
-      );
-      a = agg.snapshot().activities[0] as AgentActivity;
       expect(a.status).toBe("ready");
-      // 密封后的迟到工具不得推翻 ready
-      agg.ingestAgentEvent(
-        agentHookEvent({
-          agent: "omp",
-          event: "ToolStart",
-          panelId: "p1",
-          toolUseId: "late-tool",
-          windowId: "1",
-        })
-      );
+      expect(
+        agg.ingestAgentEvent(
+          agentHookEvent({
+            agent: "omp",
+            event: "ToolComplete",
+            panelId: "p1",
+            toolUseId: "open-tool",
+            windowId: "1",
+          })
+        )
+      ).toBe(false);
       a = agg.snapshot().activities[0] as AgentActivity;
       expect(a.status).toBe("ready");
       // 新一轮 PromptSubmit → processing

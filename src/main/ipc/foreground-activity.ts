@@ -17,6 +17,7 @@ import {
   installAgentHooksStack,
   uninstallAllAgentHooks,
 } from "../services/agents/integrations/registry.ts";
+import { resolveAgentTurnStartAuthority } from "../services/agents/integrations/runtime-event-authority.ts";
 import {
   type AgentTerminalReconciler,
   createAgentTerminalReconciler,
@@ -37,6 +38,7 @@ import {
   createJsonlObserver,
   type JsonlObserver,
 } from "../services/foreground-activity/jsonl-observer.ts";
+import type { AgentEventIngestOptions } from "../services/foreground-activity/types.ts";
 import { resolveOwner } from "../services/panel-transfer/terminal-hook-owner-routing.ts";
 import { readPreferences } from "../state/preferences.ts";
 import {
@@ -361,7 +363,9 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   agentTerminalReconciler = createAgentTerminalReconciler({
     onTerminalEvent: (event) => {
       foregroundActivityAggregator.ingestAgentEvent(event, {
+        evidenceSource: "transcript",
         stopAuthority: "authoritative",
+        turnStartAuthority: "none",
       });
     },
     // provider 原生会话名（`provider` 秩）：只有能从自家 transcript 读出标题的
@@ -392,11 +396,19 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
         return;
       }
       const routed = withResolvedOwner(event);
-      const accepted = foregroundActivityAggregator.ingestAgentEvent(routed, {
-        stopAuthority:
-          getAgentHookIntegration(routed.agent)?.runtime.stopAuthority ??
-          "none",
-      });
+      const integration = getAgentHookIntegration(routed.agent);
+      const options: AgentEventIngestOptions = {
+        evidenceSource: "hook",
+        stopAuthority: integration?.runtime.stopAuthority ?? "none",
+        turnStartAuthority: resolveAgentTurnStartAuthority(
+          integration?.runtime,
+          routed
+        ),
+      };
+      const accepted = foregroundActivityAggregator.ingestAgentEvent(
+        routed,
+        options
+      );
       if (!accepted) {
         return;
       }

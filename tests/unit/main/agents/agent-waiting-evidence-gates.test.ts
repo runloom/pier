@@ -22,7 +22,7 @@ import {
   isAgentStatusHooksIngestEnabled,
   setAgentStatusHooksIngestEnabled,
 } from "@main/services/agents/status-hooks-gate.ts";
-import { activityStatusForAgentHookEvent } from "@main/services/foreground-activity/agent-hook-compatibility.ts";
+import { classifyAgentTurnEvent } from "@main/services/foreground-activity/agent-turn-event-semantics.ts";
 import {
   agentIndexCounts,
   isAgentIndexNeedsYou,
@@ -71,15 +71,22 @@ describe("S1 top A waiting evidence", () => {
   it("旧 PermissionRequest 只在 v1/v2 兼容边界映射 waiting", () => {
     expect(activityStatusForHookEvent("PermissionRequest")).toBeNull();
     expect(
-      activityStatusForAgentHookEvent({
-        agent: "claude",
-        event: "PermissionRequest",
-        kind: "agentEvent",
-        nativeEvent: "PermissionRequest",
-        panelId: "p1",
-        v: 2,
-        windowId: "1",
-      })
+      classifyAgentTurnEvent(
+        {
+          agent: "claude",
+          event: "PermissionRequest",
+          kind: "agentEvent",
+          nativeEvent: "PermissionRequest",
+          panelId: "p1",
+          v: 2,
+          windowId: "1",
+        },
+        {
+          evidenceSource: "hook",
+          stopAuthority: "advisory",
+          turnStartAuthority: "none",
+        }
+      ).mappedStatus
     ).toBe("waiting");
   });
 

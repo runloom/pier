@@ -521,11 +521,17 @@ describe("codex transcript reconciler", () => {
 
     const aggregator = createForegroundActivityAggregator();
     aggregator.ingestAgentEvent(hookEvent(path, turnId), {
+      evidenceSource: "hook",
       stopAuthority: "advisory",
+      turnStartAuthority: "none",
     });
     const statuses: Array<string | undefined> = [];
     for (const event of received) {
-      aggregator.ingestAgentEvent(event, { stopAuthority: "advisory" });
+      aggregator.ingestAgentEvent(event, {
+        evidenceSource: "transcript",
+        stopAuthority: "authoritative",
+        turnStartAuthority: "none",
+      });
       statuses.push(
         (aggregator.snapshot().activities[0] as AgentActivity | undefined)
           ?.status

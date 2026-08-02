@@ -210,7 +210,7 @@ export const clineIntegration: AgentHookIntegration = {
       ({ fileName, pierEvent, turnStartAuthority }) => ({
         nativeEvent: fileName,
         pierEvent,
-        turnStartAuthority,
+        ...(turnStartAuthority ? { turnStartAuthority } : {}),
       })
     ),
     stopAuthority: "none",

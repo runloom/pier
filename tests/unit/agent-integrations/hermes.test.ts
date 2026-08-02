@@ -238,7 +238,11 @@ ctx.hooks["on_session_end"](session_id="parent", turn_id="turn-1", completed=Tru
     const statuses: string[] = [];
     for (const row of rows) {
       if (row.kind !== "agentEvent") continue;
-      aggregator.ingestAgentEvent(row, { stopAuthority: "none" });
+      aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
+        stopAuthority: "none",
+        turnStartAuthority: "none",
+      });
       const activity = aggregator.snapshot().activities[0];
       if (activity?.kind === "agent" && activity.status) {
         statuses.push(activity.status);

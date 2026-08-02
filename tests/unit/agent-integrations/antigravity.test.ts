@@ -195,7 +195,11 @@ describe("withPierAntigravityHooks", () => {
     const statuses: Array<string | undefined> = [];
     for (const row of rows) {
       if (row.kind !== "agentEvent") continue;
-      aggregator.ingestAgentEvent(row, { stopAuthority: "advisory" });
+      aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
+        stopAuthority: "advisory",
+        turnStartAuthority: "none",
+      });
       const activity = aggregator.snapshot().activities[0];
       statuses.push(activity?.kind === "agent" ? activity.status : undefined);
     }

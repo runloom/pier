@@ -8,7 +8,7 @@ import type { AgentEventIngestOptions } from "../../../../src/main/services/fore
 
 function event(
   eventName: string,
-  overrides: Partial<AgentHookEventPayload> = {}
+  overrides: Partial<Extract<AgentHookEventPayload, { v: 1 }>> = {}
 ): AgentHookEventPayload {
   return {
     v: 1,
@@ -214,9 +214,15 @@ describe("classifyAgentTurnEvent", () => {
   it.each([
     1, 2,
   ] as const)("keeps v%s PermissionRequest as legacy waiting work", (v) => {
-    expect(
-      classifyAgentTurnEvent(event("PermissionRequest", { v }), options())
-    ).toEqual({
+    const legacyEvent: AgentHookEventPayload =
+      v === 1
+        ? event("PermissionRequest")
+        : {
+            ...event("PermissionRequest"),
+            nativeEvent: "PermissionRequest",
+            v: 2,
+          };
+    expect(classifyAgentTurnEvent(legacyEvent, options())).toEqual({
       category: "work",
       createsSession: true,
       mappedStatus: "waiting",

@@ -222,9 +222,17 @@ describe("withPierCursorHooks", () => {
         v: 3,
         windowId: "w1",
       },
-      { stopAuthority: "advisory" }
+      {
+        evidenceSource: "hook",
+        stopAuthority: "advisory",
+        turnStartAuthority: "none",
+      }
     );
-    aggregator.ingestAgentEvent(event, { stopAuthority: "advisory" });
+    aggregator.ingestAgentEvent(event, {
+      evidenceSource: "hook",
+      stopAuthority: "advisory",
+      turnStartAuthority: "none",
+    });
     expect(aggregator.snapshot().activities[0]).toMatchObject({
       sessionId: "parent-conversation-1",
       subagentCount: 1,
