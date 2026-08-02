@@ -1508,8 +1508,14 @@ body {
   /* 保证落在终端 NSView 之上的命中层语义清晰；实际命中靠 webOverlayRects。 */
   pointer-events: auto;
   z-index: 100;
+}
 
-  /* 水平居中：强制 Sonner 的 center positioning 在终端/特殊上下文下也生效 */
+/*
+ * 形态 A（top-center 确认胶囊）：强制水平居中。
+ * Sonner 按 position 各渲一个 ol；禁止把 left/transform 写在裸 [data-sonner-toaster]
+ * 上，否则会把形态 B（top-right 消息卡片）也钉到中间。
+ */
+[data-sonner-toaster][data-x-position="center"] {
   display: flex !important;
   justify-content: center !important;
   align-items: flex-start !important;
@@ -1517,6 +1523,11 @@ body {
   left: 50% !important;
   transform: translateX(-50%) !important;
 }
+
+/*
+ * 形态 B（top-right 消息卡片）：交给 Sonner 的 right/top offset，
+ * 不得覆盖 left/transform（上面 center 规则已用 data-x-position 隔离）。
+ */
 
 /* ── 形态 A · 确认型胶囊（.pier-toast 默认即胶囊）────────────────────
    短反馈胶囊：反色表面、999px 圆角、单行 title、隐藏 close、pill action。

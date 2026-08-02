@@ -45,6 +45,10 @@ export class FileEditorControllerViewCommands {
     this.revealRange(editorSessionId, offset, offset, documentId);
   }
 
+  hasPendingReveal(editorSessionId: string, documentId?: string): boolean {
+    return this.#pendingReveals.hasPending(editorSessionId, documentId);
+  }
+
   revealRange(
     editorSessionId: string,
     from: number,
@@ -116,6 +120,10 @@ export class FileEditorControllerViewCommands {
 
   currentLineForSession(editorSessionId: string): number | null {
     return this.#views.getSession(editorSessionId)?.currentLine() ?? null;
+  }
+
+  captureViewportAnchor(editorSessionId: string) {
+    return this.#views.captureViewportAnchor(editorSessionId);
   }
 
   async showLspHover(
@@ -295,6 +303,10 @@ export abstract class FileEditorControllerViewFacade {
 
   currentLineForSession(editorSessionId: string): number | null {
     return this.viewCommands.currentLineForSession(editorSessionId);
+  }
+
+  captureViewportAnchor(editorSessionId: string) {
+    return this.viewCommands.captureViewportAnchor(editorSessionId);
   }
 
   async showLspHover(

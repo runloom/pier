@@ -152,7 +152,11 @@ export function SearchPanelBody(props: {
 
   let indexOffset = 0;
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea
+      className="h-full"
+      viewportFade="vertical"
+      viewportFadeProfile="short"
+    >
       <div
         aria-label={t("filePanel.contentSearch.resultsLabel", "Search results")}
         className="flex flex-col gap-1.5 p-1.5"

@@ -32,6 +32,19 @@ export class FileEditorPendingReveals {
     this.#pendingLocations.delete(editorSessionId);
   }
 
+  /** True when a range or line location is queued for this session/document. */
+  hasPending(editorSessionId: string, documentId?: string): boolean {
+    const range = this.#pending.get(editorSessionId);
+    if (range) {
+      return documentId === undefined || range.documentId === documentId;
+    }
+    const location = this.#pendingLocations.get(editorSessionId);
+    if (location) {
+      return documentId === undefined || location.documentId === documentId;
+    }
+    return false;
+  }
+
   queueLocation(
     editorSessionId: string,
     documentId: string,

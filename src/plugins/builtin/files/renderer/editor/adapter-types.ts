@@ -1,6 +1,6 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import type {
   EditorRange,
   FilesDocumentLanguage,
@@ -11,6 +11,7 @@ import type {
   FilesLspHoverInput,
   FilesLspHoverLabels,
 } from "../lsp/hover-types.ts";
+import type { MarkdownCrossModeAnchor } from "../markdown/cross-mode-anchor.ts";
 import type {
   MarkdownDiskSource,
   MarkdownFileResources,
@@ -64,7 +65,12 @@ export interface FileEditorAdapterProps {
   labels?: FileEditorAdapterLabels;
   language?: FilesDocumentLanguage | undefined;
   markdownAppearance?: RendererPluginContext["appearance"] | undefined;
+  markdownCaptureAnchorRef?:
+    | RefObject<(() => MarkdownCrossModeAnchor | null) | null>
+    | undefined;
   markdownCharts?: RendererPluginContext["charts"] | undefined;
+  markdownContentAnchor?: MarkdownCrossModeAnchor | undefined;
+  markdownContentAnchorRequestId?: string | number | undefined;
   markdownCopyCode?: ((code: string) => Promise<void>) | undefined;
   markdownErrorLabel?: string | undefined;
   markdownFileResources?: MarkdownFileResources | undefined;

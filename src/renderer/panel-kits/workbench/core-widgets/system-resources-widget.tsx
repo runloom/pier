@@ -3,6 +3,7 @@ import {
   formatPercent,
   formatRelativeTime,
 } from "@pier/ui/format.tsx";
+import { ScrollArea } from "@pier/ui/scroll-area.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import {
   WidgetEmpty,
@@ -305,48 +306,54 @@ export function SystemResourcesWidget({
               />
             </div>
           ) : (
-            <ul className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-              {sessions.map((session) => (
-                <li key={`${session.windowId}:${session.panelId}`}>
-                  <button
-                    className="flex w-full items-center justify-between gap-2 rounded-md px-0.5 py-1.5 text-left text-xs transition-colors hover:bg-accent/50"
-                    onClick={() => handleFocusSession(session.panelId)}
-                    type="button"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          sessionHotDot(session)
-                        )}
-                      />
-                      <span className="min-w-0 truncate font-medium text-foreground">
-                        {sessionTitle(
-                          session.identity,
-                          projectPathFromContext(
-                            descriptors[session.panelId]?.context
-                          ),
-                          t
-                        )}
+            <ScrollArea
+              className="min-h-0 min-w-0 flex-1"
+              viewportFade="vertical"
+              viewportFadeProfile="short"
+            >
+              <ul className="flex flex-col">
+                {sessions.map((session) => (
+                  <li key={`${session.windowId}:${session.panelId}`}>
+                    <button
+                      className="flex w-full items-center justify-between gap-2 rounded-md px-0.5 py-1.5 text-left text-xs transition-colors hover:bg-accent/50"
+                      onClick={() => handleFocusSession(session.panelId)}
+                      type="button"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            "size-1.5 shrink-0 rounded-full",
+                            sessionHotDot(session)
+                          )}
+                        />
+                        <span className="min-w-0 truncate font-medium text-foreground">
+                          {sessionTitle(
+                            session.identity,
+                            projectPathFromContext(
+                              descriptors[session.panelId]?.context
+                            ),
+                            t
+                          )}
+                        </span>
                       </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2 text-muted-foreground tabular-nums">
-                      <span>
-                        {session.memoryBytes === null
-                          ? "—"
-                          : formatBytes(session.memoryBytes, locale)}
+                      <span className="flex shrink-0 items-center gap-2 text-muted-foreground tabular-nums">
+                        <span>
+                          {session.memoryBytes === null
+                            ? "—"
+                            : formatBytes(session.memoryBytes, locale)}
+                        </span>
+                        <span className="w-10 text-right">
+                          {session.cpuPercent === null
+                            ? "—"
+                            : formatPercent(session.cpuPercent, locale)}
+                        </span>
                       </span>
-                      <span className="w-10 text-right">
-                        {session.cpuPercent === null
-                          ? "—"
-                          : formatPercent(session.cpuPercent, locale)}
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </ScrollArea>
           )}
         </div>
       ) : null}

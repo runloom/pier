@@ -1,5 +1,4 @@
 import { Button } from "@pier/ui/button.tsx";
-import { cn } from "@pier/ui/utils.ts";
 import { Minus, Plus } from "lucide-react";
 import type { MarkdownFontScale } from "./preview-preferences.ts";
 import { cycleMarkdownFontScale } from "./preview-preferences.ts";
@@ -20,12 +19,10 @@ export function MarkdownPreviewFontScaleControl({
 }) {
   return (
     <div
-      className={cn(
-        "pointer-events-none absolute z-10 flex items-center gap-0.5 rounded-md border border-border bg-background/95 p-0.5 opacity-0 shadow-sm transition-opacity",
-        "group-hover/preview:pointer-events-auto group-hover/preview:opacity-100",
-        "focus-within:pointer-events-auto focus-within:opacity-100"
-      )}
+      aria-label={`${labels.reset}: ${Math.round(fontScale * 100)}%`}
+      className="absolute z-10 flex items-center gap-0.5 rounded-md border border-border bg-background/95 p-0.5 shadow-sm"
       data-slot="markdown-font-scale"
+      role="toolbar"
       style={{
         right: MARKDOWN_PREVIEW_EDGE_INSET_PX,
         bottom: MARKDOWN_PREVIEW_EDGE_INSET_PX,

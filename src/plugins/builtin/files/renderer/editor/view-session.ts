@@ -15,6 +15,7 @@ import {
   clearFilesLspHover,
   showFilesLspHover,
 } from "../lsp/hover.ts";
+import type { MarkdownCrossModeAnchor } from "../markdown/cross-mode-anchor.ts";
 import type {
   FileEditorLspHoverResult,
   FileEditorViewPresentation,
@@ -40,7 +41,11 @@ import {
   resetEditorSearch,
   selectAllEditorMatches,
 } from "./view-operations.ts";
-import { restoreFileEditorScroll } from "./view-scroll.ts";
+import {
+  restoreFileEditorScroll,
+  revealFileEditorOffset,
+} from "./view-scroll.ts";
+import { captureEditorViewportAnchor } from "./view-viewport-anchor.ts";
 
 export type {
   FileEditorLspHoverResult,
@@ -103,9 +108,12 @@ export class FileEditorViewSession {
     this.#minimapEnabled = input.minimapEnabled;
     this.#onChange = input.onChange;
   }
-  mount(parent: HTMLElement, document: FilesDocument): void {
+  mount(
+    parent: HTMLElement,
+    document: FilesDocument,
+    options?: { restoreScroll?: boolean }
+  ): void {
     if (this.#view) {
-      // Reparent a shared mounted view before an old group can clean it up.
       if (this.#view.dom.parentElement !== parent) {
         parent.appendChild(this.#view.dom);
       }
@@ -129,10 +137,12 @@ export class FileEditorViewSession {
       });
     }
     this.#view = new EditorView({ parent, state });
-    // Match markdown preview / e2e scrollbar policy: stable gutter + thin thumb.
     this.#view.scrollDOM.dataset.scrollbar = "stable";
     this.syncDocument(document);
-    restoreFileEditorScroll(this.#view!, this.#scroll);
+    // Skip pixel restore when a content reveal is pending (mode switch / go-to).
+    if (options?.restoreScroll !== false) {
+      restoreFileEditorScroll(this.#view, this.#scroll);
+    }
   }
   updatePresentation(presentation: FileEditorViewPresentation): void {
     this.#presentation = presentation;
@@ -286,44 +296,40 @@ export class FileEditorViewSession {
     scroll?: { left: number; top: number };
   }): void {
     if (snapshot.scroll) {
-      this.#scroll = {
-        left: snapshot.scroll.left,
-        top: snapshot.scroll.top,
-      };
+      this.#scroll = { left: snapshot.scroll.left, top: snapshot.scroll.top };
     }
     const view = this.#view;
-    if (!view) {
+    if (!view) return;
+    // Selection owns vertical scroll; cross-mode content reveal resets X.
+    // Pixel restore (left+top) only for transfer / same-mode remount seed.
+    if (snapshot.selection) {
+      revealFileEditorOffset(view, snapshot.selection.anchor, {
+        head: snapshot.selection.head,
+        resetHorizontal: true,
+        y: "start",
+      });
+      this.#scroll = {
+        left: view.scrollDOM.scrollLeft,
+        top: view.scrollDOM.scrollTop,
+      };
       return;
     }
-    if (snapshot.selection) {
-      const docLength = view.state.doc.length;
-      const anchor = Math.max(
-        0,
-        Math.min(snapshot.selection.anchor, docLength)
-      );
-      const head = Math.max(0, Math.min(snapshot.selection.head, docLength));
-      view.dispatch({
-        effects: EditorView.scrollIntoView(anchor, { y: "start" }),
-        selection: { anchor, head },
-      });
-    }
-    if (snapshot.scroll) {
-      restoreFileEditorScroll(this.#view!, this.#scroll);
-    }
+    if (snapshot.scroll) restoreFileEditorScroll(view, this.#scroll);
   }
 
   revealOffset(offset: number): void {
-    this.applySnapshot({
-      selection: { anchor: offset, head: offset },
-    });
+    this.applySnapshot({ selection: { anchor: offset, head: offset } });
   }
 
   revealRange(from: number, to: number): void {
-    const anchor = Math.min(from, to);
-    const head = Math.max(from, to);
     this.applySnapshot({
-      selection: { anchor, head },
+      selection: { anchor: Math.min(from, to), head: Math.max(from, to) },
     });
+  }
+
+  /** Content anchor for exclusive source → preview (caret or focus band). */
+  captureViewportAnchor(): MarkdownCrossModeAnchor | null {
+    return this.#view ? captureEditorViewportAnchor(this.#view) : null;
   }
 
   currentLine(): number | null {

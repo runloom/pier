@@ -1,7 +1,7 @@
 import { Button } from "@pier/ui/button.tsx";
 import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
 import { Code2, Eye, ShieldCheck } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import type {
   FilesDocumentPanelSource,
   FileViewMode,
@@ -61,12 +61,8 @@ export function ResolvedFilePanelActions({
     [controller]
   );
 
-  useEffect(() => {
-    if (!panelId) {
-      return;
-    }
-    return controller.registerPanelModeHandler(panelId, onModeChange);
-  }, [controller, onModeChange, panelId]);
+  // Mode handler (with markdown content-anchor capture) is registered by
+  // ResolvedFilePanel so Eye/Code and showSourceMode share one path.
 
   if (!document) {
     return null;
@@ -105,9 +101,14 @@ export function ResolvedFilePanelActions({
               : t("filePanel.view.switchToPreview", "Switch to preview")
           }
           className="ml-1"
-          onClick={() =>
-            onModeChange(mode === "preview" ? "source" : "preview")
-          }
+          onClick={() => {
+            const next = mode === "preview" ? "source" : "preview";
+            if (panelId) {
+              controller.setPanelMode(panelId, next);
+              return;
+            }
+            onModeChange(next);
+          }}
           size="icon-xs"
           type="button"
           variant="ghost"
@@ -123,7 +124,14 @@ export function ResolvedFilePanelActions({
         <Button
           aria-label={t("filePanel.view.diff", "Diff")}
           className="ml-1"
-          onClick={() => onModeChange(mode === "diff" ? "source" : "diff")}
+          onClick={() => {
+            const next = mode === "diff" ? "source" : "diff";
+            if (panelId) {
+              controller.setPanelMode(panelId, next);
+              return;
+            }
+            onModeChange(next);
+          }}
           size="xs"
           type="button"
           variant={mode === "diff" ? "secondary" : "ghost"}

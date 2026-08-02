@@ -49,6 +49,10 @@ export class FileEditorViewCoordinator {
     this.#sessions.get(editorSessionId)?.applySnapshot(snapshot);
   }
 
+  captureViewportAnchor(editorSessionId: string) {
+    return this.#sessions.get(editorSessionId)?.captureViewportAnchor() ?? null;
+  }
+
   attach(input: {
     document: FilesDocument;
     editorPrefs: FilesEditorPrefs;
@@ -57,6 +61,8 @@ export class FileEditorViewCoordinator {
     panelContext?: PanelContext;
     parent: HTMLElement;
     presentation: FileEditorViewPresentation;
+    /** When false, skip pixel scroll restore (content reveal owns position). */
+    restoreScroll?: boolean;
   }): void {
     let session = this.#sessions.get(input.editorSessionId);
     if (session && getDocument(session.documentId)?.id !== input.document.id) {
@@ -86,7 +92,9 @@ export class FileEditorViewCoordinator {
       });
       this.#sessions.set(input.editorSessionId, session);
     }
-    session.mount(input.parent, input.document);
+    session.mount(input.parent, input.document, {
+      restoreScroll: input.restoreScroll !== false,
+    });
   }
 
   updatePresentation(

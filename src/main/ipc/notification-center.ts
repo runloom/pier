@@ -3,10 +3,12 @@
  *
  * 装配模式对齐 ipc/foreground-activity.ts（模块级单例 + registerXxxIpc）。
  * 快照经 broadcastNotificationCenterChanged 全窗广播；形态 B toast 经
- * sendMessageToastToOneWindow 单窗投递。renderer 镜像 store 以 seq 单调守卫拒收乱序。
+ * sendMessageToastToOneWindow 单窗投递；OS 经 createDeliverOs 进程级投递。
  */
 
 import { join } from "node:path";
+import { createDeliverOs } from "@main/services/notification-center/deliver-os.ts";
+import { parseAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import {
   DEFAULT_NOTIFICATION_CENTER_PREFS,
   type NotificationCenterPrefs,
@@ -20,6 +22,8 @@ import {
   broadcastNotificationCenterChanged,
   sendMessageToastToOneWindow,
 } from "../app-core/window-broadcasts.ts";
+import { getAgentAttentionSettingsCached } from "../services/agent-attention/settings-cache.ts";
+import type { AgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import {
   createNotificationCenterService,
   type NotificationCenterService,
@@ -27,18 +31,59 @@ import {
 import { createNotificationHistoryStore } from "../services/notification-center/store.ts";
 import { readPreferences, updatePreferences } from "../state/preferences.ts";
 import { findAppWindowByWebContents } from "../windows/identity.ts";
+import { windowManager } from "../windows/manager.ts";
+import { terminalFocusCoordinator } from "./terminal/focus-coordinator.ts";
 
 const log = createLogger("notification-center.ipc");
 
 export type NotificationCenterServiceHandle = NotificationCenterService;
 
 let initPromise: Promise<NotificationCenterService> | null = null;
+let runtimeIndex: AgentRuntimeIndexService | null = null;
+
+/** 在 registerAgentRuntimeHost 之后注入，供 OS click 深链。 */
+export function bindNotificationCenterRuntimeIndex(
+  index: AgentRuntimeIndexService
+): void {
+  runtimeIndex = index;
+}
+
+function isTargetPanelFocused(
+  electronWindowId: string,
+  panelId: string
+): boolean {
+  const focused = windowManager.getFocused();
+  if (!focused || focused.isDestroyed()) {
+    return false;
+  }
+  if (String(focused.id) !== electronWindowId) {
+    return false;
+  }
+  return terminalFocusCoordinator.activePanelId(focused) === panelId;
+}
+
+function isOwnerWindowFocused(electronWindowId: string): boolean {
+  const win = windowManager
+    .getAll()
+    .find((w) => String(w.id) === electronWindowId);
+  return Boolean(win && !win.isDestroyed() && win.isFocused());
+}
 
 async function init(): Promise<NotificationCenterService> {
   const history = await createNotificationHistoryStore({
     filePath: join(app.getPath("userData"), "notifications.json"),
   });
-  return createNotificationCenterService({
+
+  let serviceRef: NotificationCenterService | null = null;
+  const deliverOsImpl = createDeliverOs({
+    getAttentionSettings: () => getAgentAttentionSettingsCached(),
+    getIndex: () => runtimeIndex,
+    markReadByDedupeKey: (dedupeKey) => {
+      serviceRef?.markReadByDedupeKey(dedupeKey);
+    },
+  });
+
+  const service = await createNotificationCenterService({
     broadcast: (snapshot) => {
       try {
         broadcastNotificationCenterChanged(snapshot);
@@ -53,7 +98,36 @@ async function init(): Promise<NotificationCenterService> {
         log.warn("message toast deliver failed", { err });
       }
     },
+    deliverOs: (notification, meta) => deliverOsImpl(notification, meta),
     history,
+    readFocusBase: () => {
+      const focused = windowManager.getFocused();
+      return {
+        hasFocusedPierWindow: Boolean(focused && !focused.isDestroyed()),
+      };
+    },
+    resolveAgentFocus: ({ agentRef, panelId }) => {
+      const parsed = agentRef ? parseAgentRef(agentRef) : null;
+      const windowId = parsed?.windowId;
+      const resolvedPanelId = panelId ?? parsed?.panelId;
+      if (!(windowId && resolvedPanelId)) {
+        return {};
+      }
+      return {
+        isOwnerWindowFocused: isOwnerWindowFocused(windowId),
+        isTargetPanelFocused: isTargetPanelFocused(windowId, resolvedPanelId),
+      };
+    },
+    readAgentAttentionPrefs: () => {
+      const s = getAgentAttentionSettingsCached();
+      return {
+        cooldownMs: s.cooldownMs,
+        enableErrorAttention: s.enableErrorAttention,
+        enabled: s.enabled,
+        suppressWhenFocused: s.suppressWhenFocused,
+        turnNotifyMode: s.turnNotifyMode,
+      };
+    },
     readPrefs: async () => {
       const prefs = await readPreferences();
       return prefs.notificationCenter ?? DEFAULT_NOTIFICATION_CENTER_PREFS;
@@ -67,6 +141,9 @@ async function init(): Promise<NotificationCenterService> {
       await updatePreferences({ notificationCenter: next });
     },
   });
+
+  serviceRef = service;
+  return service;
 }
 
 /**
@@ -81,6 +158,24 @@ export function ingestHostNotification(report: NotificationReport): void {
     .then((service) => service.ingest(report))
     .catch((err) => {
       log.warn("ingest failed", { err });
+    });
+}
+
+/**
+ * FA 发布后剪枝 OS 冷却：已下线 agentRef 的占坑/冷却清掉，重开面板视为新会话。
+ */
+export function pruneNotificationOsCooldown(
+  liveAgentRefs: ReadonlySet<string>
+): void {
+  if (!initPromise) {
+    return;
+  }
+  initPromise
+    .then((service) => {
+      service.pruneOsCooldown(liveAgentRefs);
+    })
+    .catch((err) => {
+      log.warn("prune os cooldown failed", { err });
     });
 }
 

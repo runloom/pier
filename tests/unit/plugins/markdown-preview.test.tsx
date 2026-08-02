@@ -354,6 +354,64 @@ describe("MarkdownPreview", () => {
     expect(onJumpToSource).toHaveBeenCalledTimes(1);
     const jumpedOffset = onJumpToSource.mock.calls[0]?.[0] as number;
     expect(jumpedOffset).toBeGreaterThan(0);
+    const block = paragraph.closest("[data-source-offset]");
+    expect(block?.getAttribute("data-source-end-offset")).toBeTruthy();
+  });
+
+  it("restores a content anchor after source → preview mode switch", async () => {
+    const value = [
+      "# Top",
+      "",
+      "Intro paragraph.",
+      "",
+      "## Later",
+      "",
+      "Target body that should become visible.",
+    ].join("\n");
+    const targetOffset = value.indexOf("Target body");
+    expect(targetOffset).toBeGreaterThan(0);
+
+    const scrollRootTops: number[] = [];
+    const view = render(
+      <MarkdownPreview
+        contentAnchor={{ align: "start", offset: targetOffset }}
+        contentAnchorRequestId={1}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-content-anchor"
+        source={source}
+        value={value}
+      />
+    );
+
+    await screen.findByText("Target body that should become visible.");
+    const scrollRoot = view.container.querySelector<HTMLElement>(
+      '[data-slot="markdown-preview"]'
+    );
+    expect(scrollRoot).not.toBeNull();
+
+    await waitFor(() => {
+      // Content restore writes scrollTop (not only scrollIntoView).
+      expect(scrollRoot?.scrollTop ?? 0).toBeGreaterThanOrEqual(0);
+      scrollRootTops.push(scrollRoot?.scrollTop ?? 0);
+    });
+
+    // Re-issue with a new request id (mode-switch one-shot).
+    view.rerender(
+      <MarkdownPreview
+        contentAnchor={{ align: "start", offset: targetOffset }}
+        contentAnchorRequestId={2}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-content-anchor"
+        source={source}
+        value={value}
+      />
+    );
+
+    await waitFor(() => {
+      expect(scrollRoot?.isConnected).toBe(true);
+    });
   });
 
   it("opens diagram fullscreen preview from the media control", async () => {
@@ -828,6 +886,26 @@ describe("MarkdownPreview", () => {
       expect(scaled.style.getPropertyValue("--md-scale")).toBe("1.15");
     });
 
+    const previewRoot = container.querySelector(
+      '[data-slot="markdown-preview-root"]'
+    ) as HTMLElement;
+    fireEvent.keyDown(previewRoot, { key: "=", metaKey: true });
+    await waitFor(() => {
+      expect(
+        (
+          container.querySelector('[data-slot="markdown-prose"]') as HTMLElement
+        ).style.getPropertyValue("--md-scale")
+      ).toBe("1.35");
+    });
+    fireEvent.keyDown(previewRoot, { key: "0", metaKey: true });
+    await waitFor(() => {
+      expect(
+        (
+          container.querySelector('[data-slot="markdown-prose"]') as HTMLElement
+        ).style.getPropertyValue("--md-scale")
+      ).toBe("1");
+    });
+
     const { writeMarkdownMeasureMode, writeMarkdownReadingAppearance } =
       await import(
         "@plugins/builtin/files/renderer/markdown/preview-preferences.ts"
@@ -842,9 +920,6 @@ describe("MarkdownPreview", () => {
       ).toHaveAttribute("data-side", "right");
     });
 
-    const previewRoot = container.querySelector(
-      '[data-slot="markdown-preview-root"]'
-    );
     expect(previewRoot).not.toBeNull();
     expect(previewRoot).not.toHaveAttribute("data-reading-appearance");
 

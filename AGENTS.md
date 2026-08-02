@@ -123,7 +123,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 所有用户触发的动作必须有可识别的完成或失败信号，静默失败（`catch (err) { console.error(...) }` 就结束）一律禁止。选择反馈方式时按以下顺序判断，防止漏报也防止重复：
 
-- **后台/系统事件（非用户动作触发）一律经 `systemNotify()`**（`src/renderer/lib/notifications/system-notify.ts`）：上报 NCS 落档；**形态 B 消息 toast 由 main 按 `resolveToastTarget` 单窗回投**（`NOTIFICATION_CENTER_MESSAGE_TOAST`），禁止 renderer 订阅快照后自弹、禁止裸 `toast.*` 发系统事件。只落档不打扰时传 `suppressToast: true`。记录去重用 `dedupeKey`（NCS 统一合并），不在调用方手写一次性 flag。多窗：inbox 全窗同步；消息 toast / 声音进程级各一次（见 `docs/superpowers/specs/2026-07-26-multi-window-notification-delivery-design.md`）。
+- **后台/系统事件（非用户动作触发）一律经 `systemNotify()`**（`src/renderer/lib/notifications/system-notify.ts`）：上报 NCS 落档；打断由 main `resolveDeliveryPlan` 统一调度——**有 Pier key-window → 形态 B 单窗 toast**（`NOTIFICATION_CENTER_MESSAGE_TOAST`）；**无 key-window 且 kind 在 OS 白名单 → 系统通知**。禁止 renderer 订阅快照后自弹、禁止裸 `toast.*` 发系统事件、禁止业务直调 OS API。只落档不打扰时传 `suppressToast: true`。记录去重用 `dedupeKey`（NCS 统一合并）。多窗：inbox 全窗同步；消息 toast / OS / 声音进程级各一次（见 `docs/superpowers/specs/2026-08-02-notification-focus-routed-delivery-design.md`）。
 - 已经有**强自然 UI 反馈**（列表新增/删除、导航切换、Modal 关闭、面板打开、表单值即时更新等）→ **不再加 toast**；重复反馈是噪声。
 - 只有**弱 UI 反馈**（Save 按钮从 enabled → disabled、dirty 位清零等）或**完全无 UI 反馈**（写盘、无 refetch 的写请求、后台任务触发） → 成功走 `toast.success(t("..."))`。
 - 短失败（用户能从 title 理解、无技术详情）→ `toast.error(t("...Failed"))`。
@@ -145,12 +145,13 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 1. **toast 双形态**：确认型（用户动作即时反馈，不进消息中心）维持 **触发窗** sonner 反色胶囊（默认 Toaster `position="top-center"`）；消息型（系统/后台事件，进消息中心）仅经 main 单投 → `NotificationMessageToastBridge` → `lib/notifications/show-notification-toast.tsx` 标准 shadcn sonner 卡片（同 Toaster，per-call `position: "top-right"`）——**标题 + 详情（必备，必须由调用方提供友好内容：下一步/上下文/摘要；类型行回退仅为防御兜底，不得作为常态）+ ≤1 outline 操作 + 关闭 X（右上），无前置状态图标**。消息中心卡片唯一实现是 `components/common/notification-card.tsx` 的 `NotificationCard`（无前置图标；标题/详情/时间 + 未读红点 + 操作），**仅 Popover 列表使用**（无 dockview panel），禁止另写一套卡片样式。action 统一走 `lib/notifications/actions.ts` 分发（同一 id 各载体行为一致；toast 副本按 dedupeKey 标已读）。
 2. **状态图标的归属**：StatusIcon 只出现在确认型 toast（结果确认着色）与 Alert 等即时反馈中；**消息型 toast 与消息中心条目一律无前置状态图标**。severity 只驱动行为：徽标只计 warning/error 未读（`attentionUnreadCount`）、toast 时长 error 10s / warning 6s / success·info 4s、DND 仅 error 弹出。不要给 inbox 条目重新引入 severity 图标。
-3. **路由单一实现**：toast / inbox / OS 通知的投递判定只走 `src/shared/notification-delivery.ts` 的 `routeDelivery`（mutedKinds → DND（error 除外）→ suppressToast）；业务代码不得手写 DND 判断。
-4. **去重下沉**：同 `dedupeKey` 窗口（24h，`NOTIFICATION_DEDUPE_WINDOW_MS`，契约单一来源）内由 NCS 合并（`repeatCount`），调用方不维护版本/runId 级记录去重；toast 同步连发节流（会话内）是门面与调用方仅有的例外。dedupe 判定依赖镜像水合（`hydrated`），启动期未水合时门面延后判定。
-5. **agent 通知同构**：agent「需要你处理」/ 回合结束 / 出错经 agent-attention 接入 NCS（OS 通知发送权唯一留在 agent-attention，NCS 不重复发）；深链 `focus-panel` 聚焦 agent 面板并标记已读。
-6. **入口**：标题栏铃铛（mac `title-bar.tsx` 与非 mac `agent-index-chrome-bar.tsx` 必须同位同步）+ Popover 全量列表（滚动触底加载更多；**无**独立 dockview panel、**无**筛选/搜索）。命令面板 / 默认快捷键 `⌘⇧N`（`pier.notifications.open`，toggle）打开同一 Popover（`useNotificationCenterPopoverStore`）。Header「全部已读」仅在有未读时显示；全部已读 / 勿扰 **成功后**关 Popover；卡片导航 action（查看输出 / 聚焦面板 / 重启等）点击后关 Popover；失败走 `showAppAlert`（禁止 silent catch + 假关闭）。
-7. **popover 在终端上的四条例**：① 打开期间挂 `registerTerminalFullscreenWebOverlay`（否则点终端不收起）；② `requestTerminalWebFocus` 钉键盘但不 `pushBlockingScope`（否则吞全局快捷键）；③ 订阅 Dialog 打开信号自动收起；④ **终端向 outside 关闭后**才 `markWebOverlayOutsideDismissIfNeeded`（仅 `.terminal-anchor` / `body` / `html`；**排除** trigger 与其它 web 控件）→ cleanup 里 `restoreTerminalFocusAfterWebOverlayDismiss`。Dialog 让路 / Esc / 点铃铛自关不要补聚焦。新增 `+` 创建器等同款。分支状态栏 **Dropdown** 不走全屏路径（modal + blur），勿混用。
-8. **设置三卡**：通知设置页按消息生命周期排序——消息中心（记录）→ 提醒内容（类别）→ 提醒方式（通道）；权限/hooks 警示在「提醒方式」卡内顶部 StatusStack。
+3. **路由单一实现**：投递判定只走 `src/shared/notification-delivery.ts` 的 `resolveDeliveryPlan`（inbox / toast / OS 互斥；mutedKinds → DND（error 除外）→ suppressToast → 聚焦路由 → agent 细粒度静音）；业务代码不得手写 DND / 聚焦 / OS 判定。兼容薄封装 `routeDelivery` / `resolveToastTarget` 假定有 key 窗。
+4. **聚焦路由（打断互斥）**：有 Pier key-window → 仅形态 B toast（多窗只投 key 窗；`task-run.finished` 可 origin）；无 key-window → 仅 OS 且 kind ∈ `OS_ELIGIBLE_KINDS`（v1：`agent.attention` / `agent.turn-finished`）。**禁止**同一事件 toast+OS 双发。panel/owner 静音只关打断，**仍落 inbox**。
+5. **去重下沉**：同 `dedupeKey` 窗口（24h，`NOTIFICATION_DEDUPE_WINDOW_MS`，契约单一来源）内由 NCS 合并（`repeatCount`），调用方不维护版本/runId 级记录去重；OS 冷却（`cooldownMs`）仅约束系统通知横幅。dedupe 判定依赖镜像水合（`hydrated`），启动期未水合时门面延后判定。
+6. **agent 通知同构**：agent「需要你处理」/ 回合结束 / 出错经 agent-attention **只分类 + ingest**；**OS 发送权唯一在 NCS `deliverOs`**（`system-notification.ts` 为适配层）；深链 `focus-panel` 聚焦 agent 面板并标记已读。声音仅 OS `shown` 后播放。
+7. **入口**：标题栏铃铛（mac `title-bar.tsx` 与非 mac `agent-index-chrome-bar.tsx` 必须同位同步）+ Popover 全量列表（滚动触底加载更多；**无**独立 dockview panel、**无**筛选/搜索）。命令面板 / 默认快捷键 `⌘⇧N`（`pier.notifications.open`，toggle）打开同一 Popover（`useNotificationCenterPopoverStore`）。Header「全部已读」仅在有未读时显示；全部已读 / 勿扰 **成功后**关 Popover；卡片导航 action（查看输出 / 聚焦面板 / 重启等）点击后关 Popover；失败走 `showAppAlert`（禁止 silent catch + 假关闭）。
+8. **popover 在终端上的四条例**：① 打开期间挂 `registerTerminalFullscreenWebOverlay`（否则点终端不收起）；② `requestTerminalWebFocus` 钉键盘但不 `pushBlockingScope`（否则吞全局快捷键）；③ 订阅 Dialog 打开信号自动收起；④ **终端向 outside 关闭后**才 `markWebOverlayOutsideDismissIfNeeded`（仅 `.terminal-anchor` / `body` / `html`；**排除** trigger 与其它 web 控件）→ cleanup 里 `restoreTerminalFocusAfterWebOverlayDismiss`。Dialog 让路 / Esc / 点铃铛自关不要补聚焦。新增 `+` 创建器等同款。分支状态栏 **Dropdown** 不走全屏路径（modal + blur），勿混用。
+9. **设置三卡**：通知设置页按消息生命周期排序——消息中心（记录）→ 提醒内容（类别）→ 提醒方式（通道）；权限/hooks 警示在「提醒方式」卡内顶部 StatusStack。DND **只挡应用内 toast**（error 除外），不挡系统通知。
 
 检查点在 `tests/unit/renderer/notification-center-governance.test.ts` 与 `tests/unit/main/notification-center-governance.test.ts`。
 

@@ -1,7 +1,5 @@
 import type { PierEventBus } from "@main/app-core/event-bus.ts";
 import { resolveAttentionLocale } from "@main/services/agent-attention/locale.ts";
-import { maybePlayAfterShown } from "@main/services/agent-attention/notification-audio.ts";
-import { focusAgentFromNotificationClick } from "@main/services/agent-attention/notification-click-focus.ts";
 import type { AgentAttentionService } from "@main/services/agent-attention/service.ts";
 import { createAgentAttentionService } from "@main/services/agent-attention/service.ts";
 import {
@@ -9,59 +7,43 @@ import {
   initAgentAttentionSettingsCache,
 } from "@main/services/agent-attention/settings-cache.ts";
 import type { AgentRuntimeIndexService } from "@main/services/agent-runtime-index/index.ts";
+import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 import { createLogger } from "@shared/logger.ts";
-import {
-  broadcastAgentAttentionDegraded,
-  broadcastSystemNotificationPermissionChanged,
-  sendAttentionSoundPlayToOneWindow,
-} from "../app-core/window-broadcasts.ts";
-import { showSystemNotification } from "../services/system-notification.ts";
 import { readPreferences } from "../state/preferences.ts";
-import { windowManager } from "../windows/manager.ts";
 import { onForegroundActivityPublished } from "./foreground-activity.ts";
-import { ingestHostNotification } from "./notification-center.ts";
-import { terminalFocusCoordinator } from "./terminal/focus-coordinator.ts";
+import {
+  ingestHostNotification,
+  pruneNotificationOsCooldown,
+} from "./notification-center.ts";
 
 const log = createLogger("agent-attention.ipc");
 
 export interface RegisterAgentAttentionArgs {
   eventBus?: PierEventBus;
+  /** 保留 index 参数以兼容调用方；OS click 深链已迁至 NCS deliverOs。 */
   index: AgentRuntimeIndexService;
 }
 
-function isTargetPanelFocused(
-  electronWindowId: string,
-  panelId: string
-): boolean {
-  const focused = windowManager.getFocused();
-  if (!focused || focused.isDestroyed()) {
-    return false;
+function liveAgentRefsFrom(next: ForegroundActivityBroadcast): Set<string> {
+  const live = new Set<string>();
+  for (const activity of next.activities) {
+    if (activity.kind !== "agent") {
+      continue;
+    }
+    live.add(makeAgentRef(activity.windowId, activity.panelId));
   }
-  if (String(focused.id) !== electronWindowId) {
-    return false;
-  }
-  return terminalFocusCoordinator.activePanelId(focused) === panelId;
-}
-
-/** 拥有该智能体面板的 BrowserWindow 是否聚焦（ready / unfocused）。 */
-function isOwnerWindowFocused(electronWindowId: string): boolean {
-  const win = windowManager
-    .getAll()
-    .find((w) => String(w.id) === electronWindowId);
-  return Boolean(win && !win.isDestroyed() && win.isFocused());
+  return live;
 }
 
 /**
- * 挂 FA 发布钩子：Attention 消费本机 status 变迁并发系统通知。
+ * 挂 FA 发布钩子：Attention 只做边沿分类 + NCS ingest。
+ * 打断投递（toast / OS / 声音）由 NCS DeliveryPlan 调度。
  * settings 同步缓存：boot read + preferences.changed。
- * boot 完成前 enabled 强制 false，避免用默认值误弹通知。
  */
 export function registerAgentAttention(
   args: RegisterAgentAttentionArgs
 ): AgentAttentionService {
-  let degradedBroadcasted = false;
-
   initAgentAttentionSettingsCache({
     ...(args.eventBus ? { eventBus: args.eventBus } : {}),
     readPreferences,
@@ -74,46 +56,16 @@ export function registerAgentAttention(
 
   const attention = createAgentAttentionService({
     ingestNotification: ingestHostNotification,
-    isTargetPanelFocused,
-    isOwnerWindowFocused,
     resolveLocale: resolveAttentionLocale,
     settings: () => getAgentAttentionSettingsCached(),
-    showNotification: (request, audio) =>
-      showSystemNotification(request, {
-        ...(audio?.silent === undefined ? {} : { silent: audio.silent }),
-        ...(audio?.sound === undefined ? {} : { sound: audio.sound }),
-        onClick: (shown) => focusAgentFromNotificationClick(args.index, shown),
-        onPermissionChanged: (snapshot) => {
-          // 权限恢复后复位 latch：再次降级时用户仍能收到一次提示。
-          if (snapshot.status === "authorized") {
-            degradedBroadcasted = false;
-          }
-          broadcastSystemNotificationPermissionChanged(snapshot);
-        },
-        onUnavailable: (reason) => {
-          if (reason !== "denied" && reason !== "unsupported") {
-            return;
-          }
-          if (degradedBroadcasted) {
-            return;
-          }
-          degradedBroadcasted = true;
-          broadcastAgentAttentionDegraded({ reason });
-        },
-      }),
-    playAttentionSound: (decision) => {
-      maybePlayAfterShown({
-        decision,
-        force: false,
-        sendToWindow: sendAttentionSoundPlayToOneWindow,
-      });
-    },
   });
 
   let previous: ForegroundActivityBroadcast | null = null;
   onForegroundActivityPublished((next) => {
     const prior = previous;
     previous = next;
+    // 先剪枝冷却（面板已关的 agent 立即释放），再 observe 以免新边沿被旧冷却误伤。
+    pruneNotificationOsCooldown(liveAgentRefsFrom(next));
     attention.observe(prior, next).catch((err: unknown) => {
       log.error("attention observe failed", { err });
     });

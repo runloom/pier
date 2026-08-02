@@ -4,6 +4,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
+  type RefObject,
   useEffect,
   useMemo,
   useRef,
@@ -14,6 +15,10 @@ import {
   FilesSearchBar,
 } from "../search/bar.tsx";
 import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
+import {
+  captureMarkdownPreviewAnchor,
+  type MarkdownCrossModeAnchor,
+} from "./cross-mode-anchor.ts";
 import {
   type MarkdownDiskSource,
   type MarkdownFileResources,
@@ -30,7 +35,6 @@ import { MarkdownPreviewFontScaleControl } from "./preview-font-scale.tsx";
 import {
   type MarkdownReadingAppearance,
   useMarkdownPreviewPrefsStore,
-  writeMarkdownFontScale,
 } from "./preview-preferences.ts";
 import {
   MarkdownPreviewToc,
@@ -52,13 +56,24 @@ import {
   type MarkdownPreviewSearchLabels,
   useMarkdownPreviewSearch,
 } from "./use-preview-search.ts";
+import { useMarkdownPreviewZoom } from "./use-preview-zoom.ts";
 import "../markdown/prose.css";
 
 interface MarkdownPreviewProps {
   appearance?: RendererPluginContext["appearance"] | undefined;
+  /**
+   * Panel registers a capture callback used when switching preview → source.
+   * Cleared on unmount / not-ready so callers never hit a stale scroll root.
+   */
+  captureAnchorRef?:
+    | RefObject<(() => MarkdownCrossModeAnchor | null) | null>
+    | undefined;
   charts?: RendererPluginContext["charts"] | undefined;
   codeHighlighter?: MarkdownCodeHighlighter | undefined;
   codeTheme?: string | undefined;
+  /** One-shot content restore after source → preview mode switch. */
+  contentAnchor?: MarkdownCrossModeAnchor | undefined;
+  contentAnchorRequestId?: string | number | undefined;
   copyCode?: ((code: string) => Promise<void>) | undefined;
   errorLabel?: string | undefined;
   fileResources?: MarkdownFileResources | undefined;
@@ -154,9 +169,12 @@ function resolvePreviewCodeTheme(options: {
 
 export function MarkdownPreview({
   appearance,
+  captureAnchorRef,
   charts,
   codeHighlighter,
   codeTheme,
+  contentAnchor,
+  contentAnchorRequestId,
   copyCode,
   errorLabel = "Unable to render Markdown preview.",
   fileResources,
@@ -246,6 +264,11 @@ export function MarkdownPreview({
   const effectiveAnchorRequestId = tocAnchor
     ? String(tocAnchorRequestId)
     : initialAnchorRequestId;
+  const {
+    applyFontScale,
+    handlePreviewKeyDown: handleZoomKeyDown,
+    handlePreviewWheel,
+  } = useMarkdownPreviewZoom(fontScale);
 
   useEffect(() => {
     let active = true;
@@ -321,6 +344,20 @@ export function MarkdownPreview({
     );
   }, [panelId, registerSelectionSelectAllProvider]);
 
+  useEffect(() => {
+    if (!captureAnchorRef) return;
+    if (state.status === "ready" && scrollRoot) {
+      captureAnchorRef.current = () => captureMarkdownPreviewAnchor(scrollRoot);
+    } else {
+      captureAnchorRef.current = null;
+    }
+    return () => {
+      if (captureAnchorRef.current) {
+        captureAnchorRef.current = null;
+      }
+    };
+  }, [captureAnchorRef, scrollRoot, state.status]);
+
   const outlineToc = hasOutline ? (
     <MarkdownPreviewToc
       activeHeadingId={activeHeadingId}
@@ -343,8 +380,11 @@ export function MarkdownPreview({
       }
       data-slot="markdown-preview-root"
       onContextMenu={onContextMenu}
-      onKeyDown={search.handlePreviewKeyDown}
+      onKeyDown={(event) => {
+        handleZoomKeyDown(event, search.handlePreviewKeyDown);
+      }}
       onPointerDown={search.handlePreviewPointerDown}
+      onWheel={handlePreviewWheel}
       ref={rootRef}
     >
       {search.searchOpen ? (
@@ -421,6 +461,8 @@ export function MarkdownPreview({
                   codeHighlighter={codeHighlighter}
                   codeTheme={resolvedCodeTheme}
                   colorMode={previewColorMode}
+                  contentAnchor={contentAnchor}
+                  contentAnchorRequestId={contentAnchorRequestId}
                   copyCode={copyCode}
                   fileResources={fileResources}
                   initialAnchor={effectiveAnchor}
@@ -430,6 +472,7 @@ export function MarkdownPreview({
                   onOpenExternal={openExternal}
                   onOpenInternal={openInternal}
                   pagination={state.pagination}
+                  scrollRoot={scrollRoot}
                   searchMatches={search.searchMatches}
                   source={source}
                 />
@@ -448,9 +491,7 @@ export function MarkdownPreview({
         <MarkdownPreviewFontScaleControl
           fontScale={fontScale}
           labels={zoomLabels}
-          onChange={(next) => {
-            writeMarkdownFontScale(next);
-          }}
+          onChange={applyFontScale}
         />
       </div>
     </div>
