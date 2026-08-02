@@ -290,13 +290,48 @@ describe("shared account usage metrics", () => {
     );
 
     expect(screen.getByText("PRO 20x")).toHaveAttribute("data-variant", "info");
-    expect(screen.getByText("Expires in 31 days")).toBeInTheDocument();
+    // Far-away expiry stays neutral even when cancelAtPeriodEnd is true;
+    // only the dedicated "Stops renewing" badge carries warning.
+    expect(screen.getByText("Expires in 31 days")).toHaveAttribute(
+      "data-variant",
+      "neutral"
+    );
     expect(screen.getByText("Stops renewing")).toHaveAttribute(
       "data-variant",
       "warning"
     );
     expect(screen.getByText("Quota resets 2")).toBeInTheDocument();
     expect(screen.queryByText("Updated now")).not.toBeInTheDocument();
+  });
+
+  it("warns on expiry only when the period is within the attention window", () => {
+    render(
+      <accountUsageRenderer.AccountMetadataBadges
+        copy={{
+          cancelAtPeriodEnd: "Stops renewing",
+          expired: "Expired",
+          expires: (relative) => `Expires ${relative}`,
+          trialEnds: (relative) => `Trial ends ${relative}`,
+        }}
+        language="en-US"
+        membership={{
+          expiresAt: Date.parse("2026-08-02T00:00:00Z"),
+          status: "active",
+          tier: "pro",
+          updatedAt: Date.parse("2026-07-29T00:00:00Z"),
+        }}
+        membershipLabel={() => "PRO"}
+        metricLabel={() => "Quota"}
+        metrics={[]}
+        now={Date.parse("2026-07-29T00:00:00Z")}
+      />
+    );
+
+    expect(screen.getByText("Expires in 4 days")).toHaveAttribute(
+      "data-variant",
+      "warning"
+    );
+    expect(screen.queryByText("Stops renewing")).not.toBeInTheDocument();
   });
 
   it("shows provider identity only in metadata modes that retain identity", () => {

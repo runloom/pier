@@ -12,16 +12,19 @@ export interface AccountWidgetPresentation {
   showSwitcher: boolean;
 }
 
-export function membershipNeedsAttention(
+/**
+ * True when the *period* (expiry / trial end) itself needs visual emphasis.
+ *
+ * Does **not** include `cancelAtPeriodEnd`: that state has its own dedicated
+ * warning badge. Folding it into period color made far-away "expires in 35
+ * days" read as urgent even when the real signal was only "won't renew".
+ */
+export function membershipPeriodNeedsAttention(
   membership: AccountMembershipSnapshot | undefined,
   now = Date.now()
 ): boolean {
   if (!membership) return false;
-  if (
-    membership.status === "canceled" ||
-    membership.status === "expired" ||
-    membership.cancelAtPeriodEnd
-  ) {
+  if (membership.status === "expired" || membership.status === "canceled") {
     return true;
   }
   const attentionBefore = now + MEMBERSHIP_ATTENTION_WINDOW_MS;
@@ -31,6 +34,16 @@ export function membershipNeedsAttention(
     (membership.expiresAt !== undefined &&
       membership.expiresAt <= attentionBefore)
   );
+}
+
+/** True when the account row should surface attention-mode metadata. */
+export function membershipNeedsAttention(
+  membership: AccountMembershipSnapshot | undefined,
+  now = Date.now()
+): boolean {
+  if (!membership) return false;
+  if (membership.cancelAtPeriodEnd) return true;
+  return membershipPeriodNeedsAttention(membership, now);
 }
 
 /**
