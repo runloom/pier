@@ -210,7 +210,36 @@ describe("前台活动回合状态机", () => {
     aggregator.dispose();
   });
 
-  it("advisory Stop 永不生成 ready，后续真实活动取消候选", () => {
+  it.each([
+    { finish: "ToolComplete", start: "ToolStart" },
+    { finish: "InteractionResolved", start: "InteractionRequested" },
+    { finish: "SubagentStop", start: "SubagentStart" },
+  ] as const)("advisory Stop 后迟到 $finish 不取消候选", ({
+    finish,
+    start,
+  }) => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("PromptSubmit"));
+    ingest(aggregator, event(start));
+    expect(
+      ingest(aggregator, event("Stop"), { stopAuthority: "advisory" })
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBeUndefined();
+
+    expect(ingest(aggregator, event(finish))).toBe(true);
+    expect(statusOf(aggregator)).toBeUndefined();
+    aggregator.dispose();
+  });
+
+  it.each([
+    { eventName: "ToolStart", want: "tool" },
+    { eventName: "InteractionRequested", want: "waiting" },
+    { eventName: "processing", want: "processing" },
+    { eventName: "running", want: "processing" },
+  ] as const)("advisory Stop 后真实活动 $eventName 取消候选", ({
+    eventName,
+    want,
+  }) => {
     const aggregator = createForegroundActivityAggregator();
     ingest(aggregator, event("PromptSubmit"));
     expect(
@@ -218,8 +247,8 @@ describe("前台活动回合状态机", () => {
     ).toBe(true);
     expect(statusOf(aggregator)).toBeUndefined();
 
-    expect(ingest(aggregator, event("ToolStart"))).toBe(true);
-    expect(statusOf(aggregator)).toBe("tool");
+    expect(ingest(aggregator, event(eventName))).toBe(true);
+    expect(statusOf(aggregator)).toBe(want);
     aggregator.dispose();
   });
 

@@ -174,9 +174,6 @@ export function createForegroundActivityAggregator(
     const slot = slotFor(key, event.panelId);
     const existing = slot.hook;
     if (existing) {
-      if (event.event !== "SessionStart") {
-        revealHook(existing);
-      }
       return existing;
     }
     if (!semantics.createsSession) {
@@ -336,6 +333,9 @@ export function createForegroundActivityAggregator(
           rejectionReason: result.reason,
         });
         return false;
+      }
+      if (semantics.category !== "session-start") {
+        revealHook(hook);
       }
       const nextStatus = nextStatusAfterTurnBookkeeping(scope, semantics);
       hookScopes.noteStatusEvent(

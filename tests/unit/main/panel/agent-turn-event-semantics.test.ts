@@ -38,6 +38,7 @@ describe("classifyAgentTurnEvent", () => {
       event: event("PromptSubmit"),
       options: options(),
       expected: {
+        cancelsTerminalCandidate: true,
         category: "turn-start",
         createsSession: true,
         mappedStatus: "processing",
@@ -48,6 +49,7 @@ describe("classifyAgentTurnEvent", () => {
       event: event("processing", { turnId: "turn-2" }),
       options: options(),
       expected: {
+        cancelsTerminalCandidate: true,
         category: "turn-start",
         createsSession: true,
         mappedStatus: "processing",
@@ -58,6 +60,7 @@ describe("classifyAgentTurnEvent", () => {
       event: event("running"),
       options: options({ turnStartAuthority: "authoritative" }),
       expected: {
+        cancelsTerminalCandidate: true,
         category: "turn-start",
         createsSession: true,
         mappedStatus: "processing",
@@ -68,6 +71,7 @@ describe("classifyAgentTurnEvent", () => {
       event: event("processing"),
       options: options(),
       expected: {
+        cancelsTerminalCandidate: true,
         category: "progress",
         createsSession: true,
         mappedStatus: "processing",
@@ -78,6 +82,7 @@ describe("classifyAgentTurnEvent", () => {
       event: event("Stop"),
       options: options({ stopAuthority: "advisory" }),
       expected: {
+        cancelsTerminalCandidate: false,
         category: "terminal-candidate",
         createsSession: false,
         mappedStatus: undefined,
@@ -88,6 +93,7 @@ describe("classifyAgentTurnEvent", () => {
       event: event("Stop"),
       options: options({ stopAuthority: "none" }),
       expected: {
+        cancelsTerminalCandidate: false,
         category: "ignored",
         createsSession: false,
         mappedStatus: null,
@@ -98,6 +104,7 @@ describe("classifyAgentTurnEvent", () => {
       event: event("TurnCompleted"),
       options: options(),
       expected: {
+        cancelsTerminalCandidate: false,
         category: "terminal-trusted",
         createsSession: false,
         mappedStatus: "ready",
@@ -109,6 +116,7 @@ describe("classifyAgentTurnEvent", () => {
       event: event("error"),
       options: options(),
       expected: {
+        cancelsTerminalCandidate: false,
         category: "terminal-trusted",
         createsSession: false,
         mappedStatus: "error",
@@ -122,12 +130,14 @@ describe("classifyAgentTurnEvent", () => {
 
   it("keeps session lifecycle separate from turn status", () => {
     expect(classifyAgentTurnEvent(event("SessionStart"), options())).toEqual({
+      cancelsTerminalCandidate: false,
       category: "session-start",
       createsSession: true,
       mappedStatus: undefined,
       resetEvidence: "none",
     });
     expect(classifyAgentTurnEvent(event("SessionEnd"), options())).toEqual({
+      cancelsTerminalCandidate: false,
       category: "session-end",
       createsSession: false,
       mappedStatus: undefined,
@@ -137,12 +147,14 @@ describe("classifyAgentTurnEvent", () => {
 
   it("classifies tool work without inventing a session from completion", () => {
     expect(classifyAgentTurnEvent(event("ToolStart"), options())).toEqual({
+      cancelsTerminalCandidate: true,
       category: "work",
       createsSession: true,
       mappedStatus: "tool",
       resetEvidence: "none",
     });
     expect(classifyAgentTurnEvent(event("ToolComplete"), options())).toEqual({
+      cancelsTerminalCandidate: false,
       category: "work",
       createsSession: false,
       mappedStatus: "processing",
@@ -154,6 +166,7 @@ describe("classifyAgentTurnEvent", () => {
     expect(
       classifyAgentTurnEvent(event("InteractionRequested"), options())
     ).toEqual({
+      cancelsTerminalCandidate: true,
       category: "work",
       createsSession: true,
       mappedStatus: "waiting",
@@ -162,6 +175,7 @@ describe("classifyAgentTurnEvent", () => {
     expect(
       classifyAgentTurnEvent(event("InteractionResolved"), options())
     ).toEqual({
+      cancelsTerminalCandidate: false,
       category: "work",
       createsSession: false,
       mappedStatus: "processing",
@@ -171,12 +185,14 @@ describe("classifyAgentTurnEvent", () => {
 
   it("classifies subagent work without creating a parent session", () => {
     expect(classifyAgentTurnEvent(event("SubagentStart"), options())).toEqual({
+      cancelsTerminalCandidate: false,
       category: "work",
       createsSession: false,
       mappedStatus: "processing",
       resetEvidence: "none",
     });
     expect(classifyAgentTurnEvent(event("SubagentStop"), options())).toEqual({
+      cancelsTerminalCandidate: false,
       category: "work",
       createsSession: false,
       mappedStatus: "processing",
@@ -184,9 +200,26 @@ describe("classifyAgentTurnEvent", () => {
     });
   });
 
+  it.each([
+    { eventName: "ToolStart", want: true },
+    { eventName: "InteractionRequested", want: true },
+    { eventName: "processing", want: true },
+    { eventName: "running", want: true },
+    { eventName: "ToolComplete", want: false },
+    { eventName: "InteractionResolved", want: false },
+    { eventName: "SubagentStart", want: false },
+    { eventName: "SubagentStop", want: false },
+  ] as const)("$eventName 的候选取消事实为 $want", ({ eventName, want }) => {
+    expect(
+      classifyAgentTurnEvent(event(eventName), options())
+        .cancelsTerminalCandidate
+    ).toBe(want);
+  });
+
   it("treats interruption as a trusted ready terminal", () => {
     expect(classifyAgentTurnEvent(event("TurnInterrupted"), options())).toEqual(
       {
+        cancelsTerminalCandidate: false,
         category: "terminal-trusted",
         createsSession: false,
         mappedStatus: "ready",
@@ -203,6 +236,7 @@ describe("classifyAgentTurnEvent", () => {
     expect(
       classifyAgentTurnEvent(event("Stop"), options({ stopAuthority }))
     ).toEqual({
+      cancelsTerminalCandidate: false,
       category: "terminal-trusted",
       createsSession: false,
       mappedStatus: "ready",
@@ -223,6 +257,7 @@ describe("classifyAgentTurnEvent", () => {
             v: 2,
           };
     expect(classifyAgentTurnEvent(legacyEvent, options())).toEqual({
+      cancelsTerminalCandidate: false,
       category: "work",
       createsSession: true,
       mappedStatus: "waiting",
@@ -248,6 +283,7 @@ describe("classifyAgentTurnEvent", () => {
     expect(
       classifyAgentTurnEvent(event("UnknownLegacyEvent"), options())
     ).toEqual({
+      cancelsTerminalCandidate: false,
       category: "ignored",
       createsSession: false,
       mappedStatus: null,

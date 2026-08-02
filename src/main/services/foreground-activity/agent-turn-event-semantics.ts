@@ -22,6 +22,7 @@ export type TurnResetEvidence =
   | "none";
 
 export interface AgentTurnEventSemantics {
+  readonly cancelsTerminalCandidate: boolean;
   readonly category: AgentTurnEventCategory;
   readonly createsSession: boolean;
   readonly mappedStatus: ActivityStatus | null | undefined;
@@ -30,6 +31,7 @@ export interface AgentTurnEventSemantics {
 }
 
 const sessionStartSemantics: AgentTurnEventSemantics = {
+  cancelsTerminalCandidate: false,
   category: "session-start",
   createsSession: true,
   mappedStatus: undefined,
@@ -37,6 +39,7 @@ const sessionStartSemantics: AgentTurnEventSemantics = {
 };
 
 const sessionEndSemantics: AgentTurnEventSemantics = {
+  cancelsTerminalCandidate: false,
   category: "session-end",
   createsSession: false,
   mappedStatus: undefined,
@@ -44,6 +47,7 @@ const sessionEndSemantics: AgentTurnEventSemantics = {
 };
 
 const progressSemantics: AgentTurnEventSemantics = {
+  cancelsTerminalCandidate: true,
   category: "progress",
   createsSession: true,
   mappedStatus: "processing",
@@ -51,6 +55,7 @@ const progressSemantics: AgentTurnEventSemantics = {
 };
 
 const legacyWaitingSemantics: AgentTurnEventSemantics = {
+  cancelsTerminalCandidate: false,
   category: "work",
   createsSession: true,
   mappedStatus: "waiting",
@@ -58,6 +63,7 @@ const legacyWaitingSemantics: AgentTurnEventSemantics = {
 };
 
 const ignoredSemantics: AgentTurnEventSemantics = {
+  cancelsTerminalCandidate: false,
   category: "ignored",
   createsSession: false,
   mappedStatus: null,
@@ -68,6 +74,7 @@ function trustedTerminal(
   terminalStatus: "ready" | "error"
 ): AgentTurnEventSemantics {
   return {
+    cancelsTerminalCandidate: false,
     category: "terminal-trusted",
     createsSession: false,
     mappedStatus: terminalStatus,
@@ -80,6 +87,7 @@ function turnStart(
   resetEvidence: Exclude<TurnResetEvidence, "none">
 ): AgentTurnEventSemantics {
   return {
+    cancelsTerminalCandidate: true,
     category: "turn-start",
     createsSession: true,
     mappedStatus: "processing",
@@ -95,6 +103,7 @@ function stopSemantics(
   }
   if (stopAuthority === "advisory") {
     return {
+      cancelsTerminalCandidate: false,
       category: "terminal-candidate",
       createsSession: false,
       mappedStatus: undefined,
@@ -111,10 +120,12 @@ function semanticsForMappedWorkEvent(
   if (mappedStatus === null) {
     return ignoredSemantics;
   }
+  const startsWork =
+    eventName === "ToolStart" || eventName === "InteractionRequested";
   return {
+    cancelsTerminalCandidate: startsWork,
     category: "work",
-    createsSession:
-      eventName === "ToolStart" || eventName === "InteractionRequested",
+    createsSession: startsWork,
     mappedStatus,
     resetEvidence: "none",
   };

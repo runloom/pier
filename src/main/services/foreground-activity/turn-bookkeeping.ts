@@ -171,12 +171,7 @@ export function applyTurnBookkeeping(
     clearActiveWork(scope);
     return { accepted: true, transition: "terminal-candidate" };
   }
-  if (
-    scope.completionObserved &&
-    (semantics.category === "turn-start" ||
-      semantics.category === "progress" ||
-      semantics.category === "work")
-  ) {
+  if (scope.completionObserved && semantics.cancelsTerminalCandidate) {
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
   }

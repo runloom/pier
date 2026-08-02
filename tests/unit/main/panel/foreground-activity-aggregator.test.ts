@@ -298,6 +298,36 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
+  it("隐藏期被拒事件不揭示 hook，也不取消原可见性计时器", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    const broadcasts: ReturnType<typeof agg.snapshot>[] = [];
+    const unsubscribe = agg.onChange((broadcast) => {
+      broadcasts.push(broadcast);
+    });
+
+    expect(agg.ingestAgentEvent(hookEvent("SessionStart"))).toBe(true);
+    expect(agg.snapshot().activities).toHaveLength(0);
+    advance(100);
+    expect(broadcasts.at(-1)?.activities).toHaveLength(0);
+    const broadcastsBeforeRejectedEvent = broadcasts.length;
+
+    expect(
+      agg.ingestAgentEvent(hookEvent("Stop"), { stopAuthority: "none" })
+    ).toBe(false);
+    expect(agg.snapshot().activities).toHaveLength(0);
+    expect(broadcasts).toHaveLength(broadcastsBeforeRejectedEvent);
+
+    advance(150);
+    expect(agg.snapshot().activities).toHaveLength(1);
+    expect(broadcasts).toHaveLength(broadcastsBeforeRejectedEvent);
+    advance(100);
+    expect(broadcasts).toHaveLength(broadcastsBeforeRejectedEvent + 1);
+    expect(broadcasts.at(-1)?.activities).toHaveLength(1);
+
+    unsubscribe();
+    agg.dispose();
+  });
+
   it("身份只由主会话事件推进：子会话事件不得改写面板行身份", () => {
     // 标题可以不准，身份不能被猜。子会话（actorHint / parentSessionId /
     // Subagent*）的会话号不是面板主会话的身份，多 agent 调度要靠它区分。
