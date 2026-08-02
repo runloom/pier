@@ -16,7 +16,6 @@ import { AgentEffectSummary } from "@/pages/settings/components/skills/shared.ts
 import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
 
 const SKILL: ProjectSkillView = {
-  actualContentDigest: null,
   alwaysInclude: false,
   contentDigest: `sha256:${"a".repeat(64)}`,
   description: "Review changes",

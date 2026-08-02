@@ -157,16 +157,6 @@ export const HEALTH_ISSUE_MAPPINGS: readonly HealthIssueMapping[] = [
     repairable: false,
   },
   {
-    code: "library-drift",
-    severity: "error",
-    // Integrity still blocks enable / projection (adopt current / delete in
-    // settings). Do not hard-block managed agent launch: drift is a settings
-    // hygiene issue, not a reason to refuse opening an agent.
-    blockingScopes: ["enable", "projection"],
-    degradePolicy: "denied",
-    repairable: false,
-  },
-  {
     code: "content-conflict",
     severity: "error",
     blockingScopes: ["enable", "projection", "launch"],
@@ -176,11 +166,11 @@ export const HEALTH_ISSUE_MAPPINGS: readonly HealthIssueMapping[] = [
   {
     code: "unmanaged-conflict",
     severity: "error",
-    // Settings-only integrity (mirror library-drift): foreign/unowned objects
-    // at a projection path block enable/projection/write, but must NOT refuse
-    // opening an agent. Launch is the user's intent — never a skills hygiene
-    // decision point. Surface the state in settings; do not auto-adopt or
-    // prompt-to-block at spawn.
+    // Settings-only integrity: foreign/unowned objects at a projection path
+    // block enable/projection/write, but must NOT refuse opening an agent.
+    // Launch is the user's intent — never a skills hygiene decision point.
+    // Surface the state in settings; do not auto-adopt or prompt-to-block at
+    // spawn.
     blockingScopes: ["enable", "projection", "write"],
     degradePolicy: "denied",
     repairable: false,

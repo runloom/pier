@@ -8,7 +8,6 @@
     {
       "id": "publish-project",
       "enabled": true,
-      "contentDigest": "sha256:59b82dd3e13de93c983f0838ec33c643854bee9f82a580ece5afd833967b2ea4",
       "source": {
         "type": "local-import"
       },

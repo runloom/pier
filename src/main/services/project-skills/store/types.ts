@@ -9,8 +9,7 @@ export type StagingCandidateSourceKind =
   | "local-import"
   | "project-discovery-import"
   | "git-declared"
-  | "content-update"
-  | "drift-accepted";
+  | "content-update";
 
 export interface OwnershipTarget {
   createdAt: number;

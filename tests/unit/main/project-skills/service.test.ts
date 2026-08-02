@@ -141,7 +141,7 @@ describe("project-skills service facade", () => {
   });
 
   it("snapshot and doctor are read-only for an enabled valid skill", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -149,7 +149,6 @@ describe("project-skills service facade", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -170,7 +169,7 @@ describe("project-skills service facade", () => {
   });
 
   it("plan is read-only", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -178,7 +177,6 @@ describe("project-skills service facade", () => {
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -247,7 +245,7 @@ describe("project-skills service facade", () => {
   it("apply broadcasts invalidated after converge", {
     timeout: 20_000,
   }, async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -255,7 +253,6 @@ describe("project-skills service facade", () => {
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],

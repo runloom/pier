@@ -131,9 +131,6 @@ export function SkillsSkillDetail({
     preparePending;
   const isSystem = skill?.managedBy === "pier-system";
   const isPierBound = skill?.managedBy === "pier-bound";
-  const drifted = Boolean(
-    skill?.issueIds.some((id) => id.startsWith("library-drift"))
-  );
   const libraryPath = skill ? `.pier/skills/library/${skill.id}` : "";
   const saving = preparePending || applyPending || planPending;
   const projectDelivery = {
@@ -174,7 +171,7 @@ export function SkillsSkillDetail({
     return confirmDiscardSkillEditDrafts(t);
   }
 
-  const { adoptCurrentFiles, copyLibraryPath, deleteSkill, saveEdit } =
+  const { copyLibraryPath, deleteSkill, saveEdit } =
     useSkillsSkillDetailActions({
       discoveryDraft,
       discoveryDirty,
@@ -387,11 +384,9 @@ export function SkillsSkillDetail({
       ) : null}
 
       <SkillsSkillDetailPanels
-        adoptCurrentFiles={adoptCurrentFiles}
         content={content}
         copyLibraryPath={copyLibraryPath}
         description={skill.description}
-        drifted={drifted}
         editorText={editorText}
         effects={skill.effects}
         enabled={policyEnabled}

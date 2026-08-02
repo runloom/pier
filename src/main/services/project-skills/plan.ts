@@ -261,8 +261,7 @@ export function createProjectSkillsPlanService(
           // digest the user saw (design §7.3 / §4.4).
           const deleteReq = await contentDeleteRequirement(
             live.realPath,
-            skillId,
-            manifestSkills.get(skillId)?.contentDigest ?? ""
+            skillId
           );
           if (deleteReq) {
             confirmationRequirements.push(deleteReq);
@@ -270,23 +269,26 @@ export function createProjectSkillsPlanService(
         }
         const entry = manifestSkills.get(skillId);
         const wantEnabled = desiredEnabled.get(skillId) === true;
-        const contentDigest =
-          candidateBySkillId.get(skillId)?.contentDigest ??
-          entry?.contentDigest ??
-          "";
+        const candidate = candidateBySkillId.get(skillId);
+        // Disk presence drives projection: a skill projects only when its
+        // library directory exists. Content updates carry a candidate whose
+        // digest will replace the library; otherwise the on-disk tree is
+        // authoritative (no manifest digest baseline).
+        const hasLibraryContent =
+          candidate !== undefined ||
+          (await inspectLibraryContentState(live.realPath, skillId)) ===
+            "present";
         const skillDelivery =
           normalizedDraft.deliveryBySkillId[skillId] ?? entry?.delivery ?? null;
         const previousSkillDelivery = entry?.delivery ?? null;
         const previousWantEnabled = Boolean(entry?.enabled);
-        // Keeping/enabling a skill whose library content no longer matches the
-        // manifest digest is blocked as an integrity conflict. Content updates
-        // and "use current files" carry a candidate and are exempt because
-        // apply replaces or adopts the content. Disable/delete stay applicable.
-        if (entry && wantEnabled && !candidateBySkillId.has(skillId)) {
+        // Keeping/enabling a skill whose library directory is gone is blocked
+        // as missing-source. Disable/delete stay applicable. Disk content is
+        // authoritative — content drift is no longer a blocking concept.
+        if (entry && wantEnabled && !candidate) {
           const contentState = await inspectLibraryContentState(
             live.realPath,
-            skillId,
-            entry.contentDigest
+            skillId
           );
           if (contentState === "missing") {
             blockingIssues.push(
@@ -295,19 +297,6 @@ export function createProjectSkillsPlanService(
                 scope: "skill",
                 skillId,
                 checkedAt,
-                evidence: { expectedContentDigest: entry.contentDigest },
-              })
-            );
-            continue;
-          }
-          if (contentState === "drifted" || contentState === "unreadable") {
-            blockingIssues.push(
-              buildProjectSkillsIssue({
-                code: "library-drift",
-                scope: "skill",
-                skillId,
-                checkedAt,
-                evidence: { expectedContentDigest: entry.contentDigest },
               })
             );
             continue;
@@ -335,9 +324,7 @@ export function createProjectSkillsPlanService(
         for (const root of rootsToConsider) {
           const relativeTarget = `${root}/${skillId}`;
           const shouldExist =
-            wantEnabled &&
-            contentDigest.length > 0 &&
-            projectionRoots.includes(root);
+            wantEnabled && hasLibraryContent && projectionRoots.includes(root);
 
           const gitState = await inspectGitState(relativeTarget, live.realPath);
           gitStateByTarget.set(relativeTarget, gitState);
@@ -460,16 +447,14 @@ export function createProjectSkillsPlanService(
       // applicable: plan must not retain/expand hard blockers.
       // - unmanaged-conflict → a required target is occupied by a foreign
       //   object Pier must not overwrite (design §5.1).
-      // - library-drift / missing-source → retained-enabled content no longer
-      //   matches the manifest; resolving plans (disable / delete / adopt)
-      //   don't emit these.
+      // - missing-source → retained-enabled content directory is gone;
+      //   resolving plans (disable / delete) don't emit this.
       // - duplicate-discovery is a notice (v8.2), never blocks applying the
       //   delivery setting that causes it.
       const retainsHardBlocker = blockingIssues.some(
         (i) =>
           i.code === "project-identity-changed" ||
           i.code === "unmanaged-conflict" ||
-          i.code === "library-drift" ||
           i.code === "missing-source"
       );
       const applicable = !retainsHardBlocker;

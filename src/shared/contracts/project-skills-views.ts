@@ -41,15 +41,16 @@ export interface SkillEffectiveCell {
 /** Managed skill view (design v8 §3.6 ProjectSkillView). */
 export interface ProjectSkillView {
   /**
-   * Actual on-disk library tree digest when it differs from the manifest
-   * digest (drift, design §3.5); null while they match or unreadable.
-   */
-  actualContentDigest: string | null;
-  /**
    * Pier Home always-include lock. True only for `managedBy: "pier-bound"`
    * rows that cannot be unbound from the project (IA v5).
    */
   alwaysInclude: boolean;
+  /**
+   * Current on-disk library tree digest. Used as the edit-base digest for
+   * content-update TOCTOU (baseContentDigest) and, for system/pier-bound
+   * rows, version convergence. Disk content is authoritative — there is no
+   * separate "expected" manifest digest.
+   */
   contentDigest: string;
   /**
    * Explicit per-skill discovery channels when set on the manifest entry.

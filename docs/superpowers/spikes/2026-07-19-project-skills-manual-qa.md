@@ -8,7 +8,7 @@
 
 `node scripts/project-skills/qa-walkthrough.mjs`（先 `pnpm build:electron`）：Playwright 驱动真实
 Electron，对着一次性夹具（`/tmp/pier-skills-qa`：含非托管技能的 Git 项目 + 假 HOME 用户全局技能 +
-预置环境索引）走完项目列表 → 收编 → 启用/冲突阻断 → 新建模板 → 启用即投影 → 漂移完整性采用 →
+预置环境索引）走完项目列表 → 收编 → 启用/冲突阻断 → 新建模板 → 启用即投影 →
 删除确认 → 详情/编辑/筛选/空态全流程，产出约 25 张截图（`/tmp/pier-skills-qa/shots/` +
 `manifest.json`，附中文注释与 renderer 控制台错误采集），供三路审查（产品逻辑 / UI / 代码）复用。
 下面的手工清单继续覆盖自动化不可达的部分（真实 agent 安装发现、跨 profile、系统权限）。
@@ -37,8 +37,7 @@ Electron，对着一次性夹具（`/tmp/pier-skills-qa`：含非托管技能的
 8. [ ] 模拟新 clone：仅有 `.pier/skills/manifest.json` + `library/**`，清单含 `enabled: true`
 9. [ ] apply 或受管启动前 `ensureReady` 自动创建对应投影，不要求任何本机内容状态
 10. [ ] 受管启动（Claude/Codex 终端）在投影收敛后继续；不存在「未批准内容」阻断
-11. [ ] 修改库内容导致摘要变化后显示完整性漂移；不把旧摘要继续当作当前内容
-12. [ ] 点击「采用当前文件」后更新清单摘要；内容未再次变化时漂移消失，已启用技能继续投影
+11. [ ] 修改库内容后磁盘即权威；apply / `ensureReady` 按启用态重投影，无采用仪式
 
 ### C. 启动门
 

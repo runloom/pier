@@ -17,7 +17,7 @@ Pier 为当前项目提供查看、搜索、添加（本地导入 / 收编仓库
 1. **发现路径里有技能 = 智能体可用**（新会话）。Pier 托管技能：`manifest.enabled=true` → 投影 symlink → 等同业界「已安装」。
 2. **不设本机「内容批准 / 审阅门」**。不维护 `approvals.json` 授权投影或启动；Git 清单的 `enabled=true` **足以**驱动投影与 `ensureReady` 校正。
 3. **导入/新建**可展示结构与风险**提示**（对齐 asm 装前扫描），确认后写入库并默认停用或按用户选择启用——提示不是持久批准账本，也不在内容变更后强制「重批准」。
-4. **编辑保存 / 库被外部改写**：更新 `contentDigest`（或接受当前树写入清单）并按启用态重投影；不走「信任当前内容」安全仪式。
+4. **编辑保存 / 库被外部改写**：编辑保存写入库目录树并按启用态重投影；磁盘内容即权威，用户/Git 改动直接生效，无摘要基线确认仪式。
 5. **项目级默认**（不写 `~/`）对齐 `npx skills` 默认项目安装，不是「比 -g 更安全」的差异化叙事。
 6. **启动门**只保证投影与清单一致、处理冲突/损坏；**不得**因「未批准内容」阻断启动。
 
@@ -55,7 +55,7 @@ Pier 为当前项目提供查看、搜索、添加（本地导入 / 收编仓库
 | 事实 | 位置 | 作用 |
 | --- | --- | --- |
 | 期望启用集、Claude 投递开关 | `.pier/skills/manifest.json` | 唯一期望状态；**启用即授权发现** |
-| 技能正文 | `.pier/skills/library/<id>/` | 内容单源；`contentDigest` 仅完整性/并发，**非批准门** |
+| 技能正文 | `.pier/skills/library/<id>/` | 内容单源；**非批准门** |
 | 投影链接 | `.agents/skills`、`.claude/skills` | 派生状态 |
 | 非托管 / 用户全局 | 发现根真实目录 | 只读观察 + 可收编 |
 | 投影所有权 | `{userData}/.../ownership.json` | 唯一删除授权 |
@@ -96,7 +96,7 @@ Pier 为当前项目提供查看、搜索、添加（本地导入 / 收编仓库
 
 2026-07-20 按 Pier 支持的全部 AgentKind 完成覆盖审计：凡有官方技能文档的智能体均已入注册表（Gemini CLI、Antigravity CLI、Amp、GitHub Copilot CLI、Kimi、Cline、Crush、Auggie、Command Code、Rovo Dev、Pi、Devin、Kilo、Codebuff、Mistral Vibe、Autohand、OpenClaw、MiMo Code、OMP、OpenClaude 等，逐条 `officialDocsUrl` + `verifiedOn` 见 `adapter-facts.ts`）；仅扫描产品私有根（Pier 从不投影）的智能体（Kiro、Qwen Code、CodeBuddy、Qoder、Grok、Droid、Ante、Hermes）登记为 `consumesProjectSkills: false` 的事实条目，不参与启动门与矩阵；查证不到官方支持或文档不稳定的（Aider、Goose、Continue）在注册表注释中记录结论，不臆造条目。
 
-业界佐证（v9.0）：vercel-labs/skills、Cursor、Codex、Claude Code 均以**发现路径存在即加载**为主路径；Claude 社区要求的内容哈希重批准**未被官方采纳**。Pier **不再**以 direnv 式批准账本为产品目标；完整性用 `contentDigest` 做并发与漂移检测，不授权发现。
+业界佐证（v9.0）：vercel-labs/skills、Cursor、Codex、Claude Code 均以**发现路径存在即加载**为主路径；Claude 社区要求的内容哈希重批准**未被官方采纳**。Pier **不再**以 direnv 式批准账本为产品目标；并发用 `observedRevision` 做 CAS 检测，不授权发现。
 
 ### 2.3 v1 范围
 
@@ -138,7 +138,7 @@ Pier 为当前项目提供查看、搜索、添加（本地导入 / 收编仓库
 | 导入预览 | 可选展示构成与风险提示后「添加」；默认停用；**无批准账本** |
 | 启用 | 行开关直接启用并投影（含 Git 声明的已启用技能 / 新 clone） |
 | 编辑 | 「保存」更新库与摘要；已启用则重投影 |
-| 库漂移 | 「采用当前内容」或「恢复/删除」——**完整性操作**，不是重审信任 |
+| 外部修改 | 磁盘内容即权威，用户/Git 改动直接生效，无采用仪式 |
 | Claude 开关 | 「也提供给 Claude Code」 |
 
 ## 3. 状态和所有权
@@ -178,22 +178,22 @@ Pier 为当前项目提供查看、搜索、添加（本地导入 / 收编仓库
     {
       "id": "review-guide",
       "enabled": true,
-      "contentDigest": "sha256:...",
+
       "source": { "type": "local-import" }
     }
   ]
 }
 ```
 
-清单 schema 与 v7 完全一致（strict、`version=1`、三种 source 类型：`local-import` / `project-discovery-import` / `git-declared`）。新建空白技能记 `local-import`；内容更新与「采用当前内容」只更新 `contentDigest`。系统技能不进清单（第 8 节）。`content-update` / `drift-accepted` / `pier-system` **不再**写入任何批准账本。
+清单 schema 与 v7 一致（strict、`version=1`、三种 source 类型：`local-import` / `project-discovery-import` / `git-declared`）。新建空白技能记 `local-import`。系统技能不进清单（第 8 节）。`content-update` / `pier-system` **不再**写入任何批准账本。
 
 `id` 必须匹配 `^[a-z0-9]+(-[a-z0-9]+)*$` 且不超过 64 个字符；`id`、父目录名和 `SKILL.md` 的 `name` 必须一致；`description` 长度为 1 至 1024；`skills` 按 `id` 唯一。系统技能强制 `pier-` 前缀，用户技能禁止使用该前缀。
 
-技能 frontmatter 按 Agent Skills 核心字段校验。库是逻辑只读快照。每次计划/应用/修复/启动校正核验实际树摘要。`library-drift`（实际树 ≠ 清单 `contentDigest`）时：阻断对该技能的模糊「保留旧摘要继续投影」——用户须**采用当前内容**（更新清单摘要并继续按启用态投影）、恢复已知好内容、或删除。这是**完整性收敛**，不是内容批准。普通启停不隐式改 `contentDigest`；摘要更新由内容更新候选或「采用当前内容」携带。
+技能 frontmatter 按 Agent Skills 核心字段校验。库是逻辑只读快照。每次计划/应用/修复/启动校正核验实际树摘要。磁盘内容即权威：用户/Git 对库内容的改动直接生效，`ensureReady` / apply 按启用态重投影，无需确认。目录消失仍报 `missing-source`。普通启停不隐式改清单摘要。
 
 清单中的 `enabled=true` **即表示应投影并参与受管启动校正**（v9.0）。还须同时满足：库存在且结构有效；无非托管同名冲突；投影目标可安全写入或已是本机受管链接。
 
-`contentDigest` / `riskFingerprint` 仅用于展示、并发与漂移检测，**不构成授权门**。新 clone / 切分支后，清单已启用的技能由 `ensureReady` / apply **直接投影**（业界金标准）。
+`riskFingerprint` 仅用于展示，**不构成授权门**。新 clone / 切分支后，清单已启用的技能由 `ensureReady` / apply **直接投影**（业界金标准）。
 
 摘要与并发：
 
@@ -292,7 +292,7 @@ Pier 为当前项目提供查看、搜索、添加（本地导入 / 收编仓库
 
 v7 的 `skills.project.pick` 删除；「添加项目」走环境域既有命令。v8.1 起独立的 `skills.global.snapshot` 命令随全局视图一并移除：用户全局枚举只作为 `skills.snapshot` 的内部输入。`skills:read` 授权项目列表、读取、计划、健康检查，`skills:write` 授权导入、应用、丢弃和修复。desktop renderer 默认拥有读写，`cli-local` v1 只读，并只允许 main 规范化后的 CLI cwd。所有项目读命令限制在共享索引、面板上下文、CLI cwd 或有效 `ProjectRootRef`；`skills.snapshot` 内部的用户全局枚举是唯一的用户目录读取例外，其安全边界见第 6.1 节。命令统一进入现有 `PIER.COMMAND_EXECUTE`。
 
-草稿只是单次动作的瞬时协议载体：Claude 适配布尔值、既有技能 id 的期望启用态、待添加 import token（含模板与内容更新候选；同 skillId 候选表示内容更新），以及待删除技能 id。真正破坏性删除与「采用当前文件」不在 renderer 自行判定，而在 apply/repair 提交前按当前计划精确确认。漂移采用必须携带 main 提供的 `expectedActualTreeDigest` 作为并发前置条件。请求严格冻结为：
+草稿只是单次动作的瞬时协议载体：Claude 适配布尔值、既有技能 id 的期望启用态、待添加 import token（含模板与内容更新候选；同 skillId 候选表示内容更新），以及待删除技能 id。真正破坏性删除不在 renderer 自行判定，而在 apply/repair 提交前按当前计划精确确认。内容删除确认必须携带 main 提供的 `expectedActualTreeDigest` 作为并发前置条件。请求严格冻结为：
 
 - `skills.plan({ projectRef, observedRevision, draft })`；
 - `skills.apply({ projectRef, observedRevision, draft, planDigest, operationId, acknowledgements })`；
@@ -301,7 +301,7 @@ v7 的 `skills.project.pick` 删除；「添加项目」走环境域既有命令
 - `skills.operation.status({ projectRef, operationId })`；
 - `agent.launch.continue({ launchAttemptId, decision })`，`decision ∈ open-settings / degrade / cancel`。
 
-计划的每个 `confirmationRequirement` 都包含稳定 id、kind（内容删除 / Git 已跟踪投影删除 / 漂移采用等完整性操作）、精确相对目标或实际树摘要，以及计划摘要。`acknowledgements` 必须逐项精确匹配 main 要求，并记录宿主确认交互生成的高熵 nonce；计划变化使全部确认失效。它是可信客户端的可审计操作意图，不是技能正文授权，也不是对恶意 renderer 的安全证明。
+计划的每个 `confirmationRequirement` 都包含稳定 id、kind（内容删除 / Git 已跟踪投影删除等完整性操作）、精确相对目标或实际树摘要，以及计划摘要。`acknowledgements` 必须逐项精确匹配 main 要求，并记录宿主确认交互生成的高熵 nonce；计划变化使全部确认失效。它是可信客户端的可审计操作意图，不是技能正文授权，也不是对恶意 renderer 的安全证明。
 
 `planDigest` 只摘要规范化草稿、`observedRevision`、有序目标操作、逐目标 Git 五态、确认要求和安全前置条件。
 
@@ -347,7 +347,7 @@ PREPARED
 
 1. 项目库暂存与投影暂存都位于各自目标的同一父目录；暂存对象身份先写入恢复日志。
 2. 新库目录以不覆盖方式发布。若提交点前崩溃，只有恢复日志精确匹配的对象可以回滚。
-3. **库内容替换（内容更新 / 漂移采用）不引入新原语，由既有原语组合完成**：提交前重算目标库实际树摘要并要求等于候选记录的 `baseContentDigest`（编辑期间库被外部修改 → `content-conflict`，绝不把更新叠加在尚未采用的漂移之上）→ 按恢复日志记录的对象身份逐项清理旧树（复用库清理机制，禁止递归 `rm`）→ 以不覆盖方式发布新树 → 发布后复核。任一步同步结果不明归约为 `indeterminate`。
+3. **库内容替换（内容更新）不引入新原语，由既有原语组合完成**：提交前重算目标库实际树摘要并要求等于候选记录的 `baseContentDigest`（编辑期间库被外部修改 → `content-conflict`）→ 按恢复日志记录的对象身份逐项清理旧树（复用库清理机制，禁止递归 `rm`）→ 以不覆盖方式发布新树 → 发布后复核。任一步同步结果不明归约为 `indeterminate`。
 4. 清单条件前置为 `ExpectedFileState = absent | present(identity, digest)`：首次创建 no-clobber；已有清单使用“最终检查 + 原子替换 + 发布后复核”的保守模型；复核偏离进入 `indeterminate` 或阻断。
 5. v1 的投影没有“覆盖更新”：目标缺失时 `publishNoReplace` 创建；目标是账本中完全相同的链接时 no-op；其他任何现存对象都阻断。删除只允许删除账本身份完全匹配的对象。
 6. 账本提交后，才能按对象身份删除不再被引用的库内容。库清理不得递归 `rm`；目录非空则保留未知新增内容并报告 `cleanup-pending`/`degraded`。
@@ -370,7 +370,7 @@ PREPARED → MANIFEST_CONFIRMED → RECONCILING_TARGETS → OWNERSHIP_COMMITTED 
 - snapshot、doctor、plan 与项目列表读取必须等待写事务或使用前后 generation 一致性重试；不得观察“新清单 + 旧投影 + 旧账本”。
 - 只有应用、修复、启动前校正与恢复协调器可以改变磁盘；恢复不是 doctor 的隐式副作用。
 - 窗口在提交点后关闭只脱离等待，不能取消 main 事务。
-- 禁用保留库内容；删除在 apply/repair 前确认，并携带当前 `observedRevision`。漂移内容的删除或采用确认都回显 main 观察到的实际树摘要；确认后内容再变化触发 `content-conflict`。
+- 禁用保留库内容；删除在 apply/repair 前确认，并携带当前 `observedRevision`。内容删除确认回显 main 观察到的实际树摘要；确认后内容再变化触发 `content-conflict`。
 
 ## 5. 适配、健康和启动
 
@@ -390,7 +390,7 @@ PREPARED → MANIFEST_CONFIRMED → RECONCILING_TARGETS → OWNERSHIP_COMMITTED 
 | `shadowed-by-user-skill`（新增） | 提醒 | 不阻断；说明该技能对特定智能体被用户级同名遮蔽、本项目版本不生效；提供跳转全局视图 | `allowed` |
 | `new-session-recommended`、`git-visible-projection`、`git-tracked-projection`、`cleanup-pending` | 提醒 | 不阻断；tracked 目标的移除必须显式破坏性确认 | `allowed` |
 | `projection-missing`、`projection-stale`、`recovery-pending` | 警告 | 可自动修则 ensureReady 修；否则阻断受影响启动 | `allowed` |
-| `missing-source`、`invalid-skill`、`library-drift`、`content-conflict` | 错误 | 完整性：采用当前内容 / 恢复 / 删除（不叫重新批准） | `denied`（设置内处理） |
+| `missing-source`、`invalid-skill`、`content-conflict` | 错误 | 完整性：恢复 / 删除（不叫重新批准） | `denied`（设置内处理） |
 | `unmanaged-conflict`、`managed-target-modified` | 错误 | 阻断改写不确定目标的计划与启动 | `denied`（设置内处理） |
 | `project-identity-changed` | 错误 | 当前 `ProjectRootRef` 全部读写失效 | `denied` |
 | `ledger-corrupt`、`recovery-record-corrupt`、`recovery-blocked`、`durability-unknown` | 错误 | 阻断写入与启动 | `denied` |
@@ -417,7 +417,7 @@ PREPARED → MANIFEST_CONFIRMED → RECONCILING_TARGETS → OWNERSHIP_COMMITTED 
 1. main 根据 `agentId` 查适配注册表；只有声明消费项目投影的适配器参与硬门，其余返回 `not-applicable`。
 2. 公共边界生成高熵 `launchAttemptId`。`ensureReady` 在项目锁内收敛未完成事务，再按清单三态、系统技能期望态和投影账本校正；**不读取内容批准**。健康且一致时不写盘。项目身份来自 main，不信任 renderer 未校验 context。
 3. 版本探测默认 2 秒，校正默认 10 秒；超时结构化阻断。
-4. 可安全修复的投影缺失/陈旧，同一锁内同步校正；非托管冲突、未消解库漂移、ownership 损坏、未知耐久默认阻止启动。**「未批准内容」不是阻断原因。**
+4. 可安全修复的投影缺失/陈旧，同一锁内同步校正；非托管冲突、ownership 损坏、未知耐久默认阻止启动。**「未批准内容」不是阻断原因。**
 5. 阻断返回 `LaunchGateResult`；attempt 一次性消费。
 6. 用户经 `agent.launch.continue` 三选：`open-settings` / `cancel` / `degrade`（仅对仍允许降级的投影/冲突类问题）。
 7. 重试握手同前：continuation `launchAttemptId`。
@@ -443,17 +443,11 @@ PREPARED → MANIFEST_CONFIRMED → RECONCILING_TARGETS → OWNERSHIP_COMMITTED 
 - 投影只能是指向同一项目 `.pier/skills/library/<id>` 的相对目录符号链接；绝对链接和逃出项目根的链接拒绝。
 - **用户全局枚举（`skills.snapshot` 内部输入）安全边界**：根集合从适配注册表 `userDiscoveryRoots` 派生的固定白名单，不接受调用方提交路径、不做任意遍历；每根 `lstat` 核验为真实目录；仅枚举一层子目录并解析 `SKILL.md` frontmatter（复用安全解析器），不读取脚本正文、不返回文件内容；每根条目数上限（默认 500）与总大小上限；结果不进入任何授权判断，永不触发写路径。这是第 4.1 节读边界的唯一显式例外。
 
-### 6.2 导入提示、漂移完整性、覆盖和删除（v9.0）
+### 6.2 导入提示、覆盖和删除（v9.0）
 
 技能可含脚本与工具提示；Pier 不做沙箱。导入/收编时可展示构成与风险**提示**（对齐 asm），用户点「添加」即写入库——**不写入批准账本，不作为日后启用门控**。健康检查可提示风险，不声称恶意代码检测完成。
 
-**漂移（完整性）**：`library-drift` / `missing-source` 仍由实际树 vs 清单摘要判定，消费于快照徽标、计划阻断模糊保留、启动校正。消解动作文案：
-
-- **采用当前内容**（更新 `contentDigest`，已启用则继续投影）
-- 恢复 / 删除
-
-不叫「重新批准 / 信任当前内容」。`ensureReady` 不自动改写清单摘要；用户采用后才更新。
-
+`missing-source` 仍由实际目录存在性判定，消费于快照徽标、计划阻断与启动校正。磁盘内容即权威：用户/Git 对库内容的改动直接生效，`ensureReady` / apply 按启用态重投影，无需确认；目录消失则报 `missing-source`，恢复 / 删除消解。
 删除与覆盖规则不变：不静默覆盖非托管；删除必须 join ownership；不覆盖发布。
 
 ### 6.3 资源、清扫和可观测性
@@ -517,11 +511,11 @@ PREPARED → MANIFEST_CONFIRMED → RECONCILING_TARGETS → OWNERSHIP_COMMITTED 
 
 | 模式 | 何时 | 页面 |
 | --- | --- | --- |
-| **可编辑** | Pier 托管用户技能且可写 | 头部名称/来源/开关态/删除；正文 Textarea；脏时「放弃更改」+「保存」；下方「哪些智能体可以使用」；漂移横幅用 §7.12 |
+| **可编辑** | Pier 托管用户技能且可写 | 头部名称/来源/开关态/删除；正文 Textarea；脏时「放弃更改」+「保存」；下方「哪些智能体可以使用」 |
 | **只读** | 仓库内 / 本机全局 / 系统 / 项目只读 | 同壳；正文只读；说明「Pier 不会改动」；仓库内可「用 Pier 管理」 |
 
 - 主按钮「保存」；**无「编辑内容」**。
-- 漂移：「采用当前文件」；未处理前优先阻止继续保存歧义内容。
+- 磁盘内容即权威；外部修改直接生效，无需采用仪式。
 - 可写/只读共用一壳。
 
 ### 7.5 添加技能（v9.0 · 无信任门）
@@ -544,7 +538,7 @@ PREPARED → MANIFEST_CONFIRMED → RECONCILING_TARGETS → OWNERSHIP_COMMITTED 
 
 - 每次用户动作只携带一个产品意图；renderer 可用瞬时 `ProjectSkillsDraft` 作为协议载体，但界面不展示草稿、待应用更改或全局 Apply。
 - 动作先调用 `skills.plan`。无确认要求则立即 `skills.apply`；有要求则在该动作上下文中按顺序展示用户可读确认，生成 acknowledgement 后立即 apply。取消确认不改变磁盘事实。
-- 开关、投影设置等有强自然反馈的动作成功不 toast；失败回滚并用 `showAppAlert` 说明下一步。导入、采用当前文件、保存、删除成功以列表/详情变化作为完成信号，不重复 toast。
+- 开关、投影设置等有强自然反馈的动作成功不 toast；失败回滚并用 `showAppAlert` 说明下一步。导入、保存、删除成功以列表/详情变化作为完成信号，不重复 toast。
 - `degraded` 显示「技能已保存，但部分智能体尚未就绪」与「重试」；repair 作为一次性动作独立收集确认，不依赖底栏。
 - `indeterminate` 冻结写操作并显示「正在确认磁盘状态…」，按 operation id 轮询直到不可变终态；窗口关闭只脱离等待，不取消 main 事务。
 - snapshot/doctor 按请求序号，动作内 plan 按意图指纹，apply/repair/operation.status 按 operation id 拒绝迟到结果。
@@ -611,9 +605,6 @@ PREPARED → MANIFEST_CONFIRMED → RECONCILING_TARGETS → OWNERSHIP_COMMITTED 
 | 矩阵标题 | 哪些智能体可以使用 | Which agents can use this |
 | 可用 / 未开放 | 可以使用 / 未启用 | Available / Not enabled |
 | 遮蔽 | 被本机全局的同名技能挡住 | Hidden by a same-named skill on this Mac |
-| 漂移标题 | 此技能已在 Pier 外被修改 | This skill was changed outside Pier |
-| 漂移说明 | 磁盘上的文件与 Pier 里记录的不一致。可采用当前文件，或删除该技能。 | Files on disk no longer match what Pier recorded. Use the current files, or delete the skill. |
-| 漂移主按钮 | 采用当前文件 | Use current files |
 | 启动门标题 | 技能还没准备好 | Skills aren’t ready yet |
 | 启动门说明 | 请先打开技能设置处理显示的问题，或仍然启动（可能缺少技能）。 | Open skill settings to fix the issues shown, or launch anyway (skills may be missing). |
 | 部分未就绪 | 技能已保存，但有的智能体还用不了。请重试。 | Skills were saved, but some agents still can’t use them. Retry. |
@@ -627,7 +618,6 @@ PREPARED → MANIFEST_CONFIRMED → RECONCILING_TARGETS → OWNERSHIP_COMMITTED 
 - [x] 导入/新建默认关闭，且空态或导入后提示说明要开开关
 - [x] 常规 Tab 双开关配置发现路径（可全关）；主路径无「也提供给 Claude」单开关残留
 - [x] 筛选四档用 §7.12 用词
-- [x] 漂移用「采用当前文件」
 - [x] 原型与 §7.12 一致
 
 ## 8. Pier 系统技能通道
@@ -639,7 +629,7 @@ Pier 系统技能 = Pier 本体或官方受管插件**随版本携带**的能力
 | 来源与完整性 | 内容只来自 app 资源目录或官方受管插件包的不可变版本目录，绑定 `systemProvider{id,version}` + 树摘要；来源由 managed-plugins 签名管线或 app 版本证明 | 用户技能由项目 manifest + 库内容定义；两者都不写内容批准条目 |
 | 期望态存放 | 不进 Git manifest。每项目启停存本机 `system-skills.json`（`{userData}` 项目域，generation 条件替换）；默认随能力开启（如项目启用 canvas 插件即注入） | 用户技能期望态在 manifest（团队共享）；系统技能绑定本机 Pier/插件版本，进 Git 会让不同版本成员互相覆盖 |
 | 投影与清理 | 复用同一投影通道：内容快照发布进 `.pier/skills/library/<pier-id>/`，相对符号链接进 `.agents/skills`（按 targetAgents 需要时 `.claude`），ownership 照常记账；插件停用/卸载或项目停用时按对象身份精确清理 | 完全一致——删除安全、非托管不覆盖、Git 忽略建议全部继承 |
-| 版本收敛 | app/插件升级 → 内容树摘要变化 → `ensureReady` 在下次受管启动前自动重发布 + 重投影；无需额外用户动作 | 用户技能摘要变化 = 完整性漂移，须「采用当前文件」/恢复/删除；系统技能版本变化 = 正常升级 |
+| 版本收敛 | app/插件升级 → 内容树摘要变化 → `ensureReady` 在下次受管启动前自动重发布 + 重投影；无需额外用户动作 | 用户技能内容改动直接生效（磁盘即权威）；系统技能版本变化 = 正常升级 |
 | 贡献纪律链 | 与 `workbenchWidgets` 同款：plugin.json 声明 skills 贡献 → main 校验声明（`assertDeclaredContribution` 同构）→ 系统技能注册表 → 投影通道。贡献声明 `targetAgents`（全部/指定）与可选 per-agent 变体 | 只对 builtin 与官方受管插件开放；第三方插件贡献禁止（与插件边界纪律一致） |
 | 命名与呈现 | 强制 `pier-` 前缀（如 `pier-canvas`、`pier-agent-relay`）；项目详情列表「Pier 系统」徽标；开关 = 本项目启停（本机）；不可编辑、不可删除；详情显示提供方与版本 | 对齐 Claude `plugin:skill` 命名空间先例；生命周期随版本走 |
 | 多智能体互调 | 编排方（插件/宿主）为项目启动多个受管智能体前，经 `ensureReady` 确保互调协议技能已按 `targetAgents` 注入对应发现根；启动门保证注入完成才 spawn，失败默认不启动 | 无对应物 |
@@ -663,7 +653,7 @@ Pier 系统技能 = Pier 本体或官方受管插件**随版本携带**的能力
 - 设置 section 使用裸 `Alert`，或做只包 Alert 的空壳 Card。
 - 为尚未验证的智能体展示可开启投递开关，或只用颜色表示生效/健康结论。
 - 使用多层滚动容器，让固定操作栏遮住最后一项技能或错误详情。
-- 只用清单摘要作为并发 revision，或在普通应用中隐式更新 `contentDigest`。
+- 只用清单摘要作为并发 revision；并发控制必须用 `observedRevision` 做 CAS，不得隐式改写清单摘要。
 - 在目标校验后使用普通覆盖式 `rename` 发布投影；用递归 `rm` 清理或替换库目录。
 - 为技能模块另建一把不与文件服务共享的进程内锁，或把 single-instance 当成跨 profile 项目锁。
 - 把无清单、有效空清单和无效清单都当成 no-op，留下旧投影继续被发现。
@@ -679,7 +669,7 @@ Pier 系统技能 = Pier 本体或官方受管插件**随版本携带**的能力
   - A3 启动门接通：blocked 结构化返回（`CreateTerminalResult` 扩展）+ 三选弹窗 + `agent.launch.continue` + continuation 握手；`ai.generateText` blocked 返回结构化失败不 fallthrough。
 - **阶段 B**：项目详情页（统一列表、行内生效徽标、动作即提交、Claude「也提供给…」开关、收编入口）。依赖 A2。
 - **阶段 C**：添加管线（两入口菜单；外来字节构成与风险提示；`prepareTemplate` 轻确认）。manifest schema 不动。
-- **阶段 D**：技能页单页编辑（可写）/ 只读同壳；`prepareContentUpdate`；漂移「采用当前内容」；库替换事务。依赖 C。
+- **阶段 D**：技能页单页编辑（可写）/ 只读同壳；`prepareContentUpdate`；库替换事务。依赖 C。
 - **阶段 E**（v8.1 改道）：用户全局事实并入统一列表（快照加宽 `userGlobalSkills` + 只读行）；不再有独立命令与视图。依赖 A2。
 - **阶段 F**：Pier 系统技能通道（同上）。依赖 A2/C，可与 D、E 并行。
 - **阶段 G（v9.0）**：与外部安装器共存验收（项目发现根内真实目录显示为仓库内；受管 symlink 不被外部改写时不静默认领）；添加菜单与启用即投影的 UI/组件测试；Claude 开关用户文案。
@@ -700,7 +690,6 @@ Pier 系统技能 = Pier 本体或官方受管插件**随版本携带**的能力
 | 单动作提交 | 组件与路由测试 | 开关变化走完整 plan/apply 校验；仅操作风险产生确认；界面无批量草稿和全局 Apply |
 | 内容编辑 | 编辑候选测试 | renderer 字节经 main 全量限制与重算；`baseContentDigest` 失配返回 `content-conflict`；保存立即提交；本地草稿持久化与候选过期重生成 |
 | 库替换事务 | apply/cleanup 故障注入 | 替换 = 身份清理 + no-replace 发布 + 提交前摘要前置；不递归 `rm`；同步不明归约 `indeterminate` |
-| 漂移完整性采用 | apply 与内容更新测试 | 「采用当前文件」绑定 `expectedActualTreeDigest`；提交后更新 `contentDigest`，已启用技能继续投影；并发变化返回 `content-conflict` |
 | 无批准账本 | store、plan 与启动测试 | 不读写 `approvals.json`；`observedRevision`、plan 和 ensureReady 不含批准谓词；迁移期遗留文件不影响结果 |
 | 导入风险提示 | 组件与导入服务测试 | 外来字节可展示完整构成与风险；新建不进完整提示页；提示不授权启用；新技能默认停用；返回/取消 discard |
 | 非托管呈现与收编 | 组件与服务测试 | 非托管行只读；收编只读复制不动原目录；不覆盖不删除不认领 |

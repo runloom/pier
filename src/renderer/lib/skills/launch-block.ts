@@ -11,10 +11,6 @@ function launchIssueLabel(
   t: Translate
 ): string {
   switch (issue.code) {
-    case "library-drift":
-      return t("settings.skills.issueLibraryDrift", {
-        skill: issue.skillId ?? "",
-      });
     case "missing-source":
       return t("settings.skills.issueMissingSource", {
         skill: issue.skillId ?? "",

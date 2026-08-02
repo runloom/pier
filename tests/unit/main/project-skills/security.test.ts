@@ -165,7 +165,7 @@ afterEach(async () => {
 
 describe("project-skills security: unmanaged targets", () => {
   it("does not overwrite an unmanaged regular file at the projection path", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -173,7 +173,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -217,7 +216,7 @@ describe("project-skills security: unmanaged targets", () => {
   });
 
   it("does not delete an unmanaged symlink that has no ownership ledger entry", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -225,7 +224,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -243,7 +241,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -279,7 +276,7 @@ describe("project-skills security: unmanaged targets", () => {
   it("retains a rewritten symlink when ownership object identity no longer matches", {
     timeout: 20_000,
   }, async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -287,7 +284,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -339,7 +335,7 @@ describe("project-skills security: unmanaged targets", () => {
   });
 
   it("retains a recreated same-name link and does not adopt it into ownership", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -347,7 +343,6 @@ describe("project-skills security: unmanaged targets", () => {
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -395,7 +390,7 @@ describe("project-skills security: unmanaged targets", () => {
 
 describe("project-skills security: skills:read has no write side effects", () => {
   it("snapshot, doctor, and plan leave project and userData untouched", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -403,7 +398,6 @@ describe("project-skills security: skills:read has no write side effects", () =>
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "git-declared" },
         },
       ],
@@ -443,7 +437,7 @@ describe("project-skills security: skills:read has no write side effects", () =>
 
 describe("project-skills security: operation tombstone / terminal idempotency", () => {
   it("replaying a terminal apply operation returns the immutable result without re-execution", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -451,7 +445,6 @@ describe("project-skills security: operation tombstone / terminal idempotency", 
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -507,7 +500,7 @@ describe("project-skills security: operation tombstone / terminal idempotency", 
   });
 
   it("does not re-execute when a terminal tombstone-style operation record is present", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -515,7 +508,6 @@ describe("project-skills security: operation tombstone / terminal idempotency", 
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -578,7 +570,7 @@ describe("project-skills security: cross-profile isolation", () => {
   it("does not inherit ownership across dual userData stores", async () => {
     const userDataB = await mkdtemp(join(tmpdir(), "pier-ps-sec-ud-b-"));
     try {
-      const digest = await writeLibrarySkill("guide");
+      await writeLibrarySkill("guide");
       await writeManifest({
         version: 1,
         delivery: { agents: true, claude: false },
@@ -586,7 +578,6 @@ describe("project-skills security: cross-profile isolation", () => {
           {
             id: "guide",
             enabled: false,
-            contentDigest: digest,
             source: { type: "local-import" },
           },
         ],
@@ -679,7 +670,7 @@ describe("project-skills security: cross-profile isolation", () => {
     const outside = await mkdtemp(join(tmpdir(), "pier-skills-escape-"));
     try {
       await symlink(outside, join(projectRoot, ".agents"));
-      const digest = await writeLibrarySkill("guide");
+      await writeLibrarySkill("guide");
       await writeManifest({
         version: 1,
         delivery: { agents: true, claude: false },
@@ -687,7 +678,6 @@ describe("project-skills security: cross-profile isolation", () => {
           {
             id: "guide",
             enabled: false,
-            contentDigest: digest,
             source: { type: "local-import" },
           },
         ],

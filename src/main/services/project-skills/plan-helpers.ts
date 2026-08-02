@@ -106,8 +106,7 @@ export function emptyBlockedPlan(args: {
  */
 export async function contentDeleteRequirement(
   projectRoot: string,
-  skillId: string,
-  manifestContentDigest: string
+  skillId: string
 ): Promise<{
   id: string;
   kind: "content-delete";
@@ -118,11 +117,7 @@ export async function contentDeleteRequirement(
   if (!(await pathExists(libraryDir))) {
     return null;
   }
-  const inspection = await inspectLibraryContent(
-    projectRoot,
-    skillId,
-    manifestContentDigest
-  );
+  const inspection = await inspectLibraryContent(projectRoot, skillId);
   return {
     id: `confirm:content-delete:${skillId}`,
     kind: "content-delete",

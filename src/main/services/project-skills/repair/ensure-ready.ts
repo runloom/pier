@@ -203,7 +203,7 @@ export async function ensureReady(
     );
 
     // Hard blocks: only launch-scoped issues. Denied integrity without a
-    // launch scope (library-drift / unmanaged-conflict → settings-only) must
+    // launch scope (unmanaged-conflict / missing-source → settings-only) must
     // not refuse spawn — opening an agent is not a skills hygiene decision.
     const hard = plan.blockingIssues.filter(
       (i) =>
@@ -274,8 +274,8 @@ export async function ensureReady(
     } else if (actionable.length > 0 && !plan.safeAutoFixable) {
       // Needs confirmation or not safe — do not write during launch.
       // Only refuse spawn for launch-scoped issues. Settings-only integrity
-      // (e.g. library-drift) must not hard-block opening an agent; skip the
-      // non-safe repair and continue.
+      // (e.g. unmanaged-conflict / missing-source) must not hard-block opening
+      // an agent; skip the non-safe repair and continue.
       if (blockingForLaunch.length > 0) {
         return {
           status: "blocked",

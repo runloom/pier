@@ -12,7 +12,7 @@ import {
   resolveStableProjectIdentity,
   type StableProjectIdentity,
 } from "./identity.ts";
-import { inspectLibraryContent } from "./library-state.ts";
+import { inspectLibraryContentState } from "./library-state.ts";
 import { createProjectSkillsPaths } from "./paths.ts";
 import { readManifestState } from "./repair/log.ts";
 import {
@@ -148,35 +148,21 @@ export function createProjectSkillsHealthService(
       const manifest =
         manifestState.status === "present" ? manifestState.manifest : null;
       if (manifest) {
-        // Drift/missing: every non-system library entry (snapshot consumes
-        // these issues — do not re-push there).
+        // Missing-source: every non-system library entry whose directory is
+        // gone (snapshot consumes this issue — do not re-push there). Disk
+        // content is authoritative; content drift is no longer reported.
         for (const entry of manifest.skills) {
-          const inspection = await inspectLibraryContent(
+          const state = await inspectLibraryContentState(
             live.realPath,
-            entry.id,
-            entry.contentDigest
+            entry.id
           );
-          if (inspection.state === "missing") {
+          if (state === "missing") {
             issues.push(
               buildProjectSkillsIssue({
                 code: "missing-source",
                 scope: "skill",
                 skillId: entry.id,
                 checkedAt,
-                evidence: { expectedContentDigest: entry.contentDigest },
-              })
-            );
-          } else if (inspection.state !== "ok") {
-            issues.push(
-              buildProjectSkillsIssue({
-                code: "library-drift",
-                scope: "skill",
-                skillId: entry.id,
-                checkedAt,
-                evidence: {
-                  expectedContentDigest: entry.contentDigest,
-                  actualContentDigest: inspection.actualDigest,
-                },
               })
             );
           }

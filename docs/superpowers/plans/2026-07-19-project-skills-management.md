@@ -243,15 +243,12 @@ EOF
 ```ts
 // project-skills.ts
 export const skillIdSchema = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/).max(64);
-export const contentDigestSchema = z.string().regex(/^sha256:[a-f0-9]{64}$/);
-
 export const projectSkillsManifestSchema = z.object({
   version: z.literal(1),
   delivery: z.object({ claude: z.boolean() }).strict(),
   skills: z.array(z.object({
     id: skillIdSchema,
     enabled: z.boolean(),
-    contentDigest: contentDigestSchema,
     source: z.discriminatedUnion("type", [
       z.object({ type: z.literal("local-import") }).strict(),
       z.object({ type: z.literal("project-discovery-import") }).strict(),
@@ -264,7 +261,7 @@ export const projectSkillsIssueCodeSchema = z.enum([
   "disabled","adapter-disabled","agent-not-installed","not-applicable",
   "new-session-recommended","git-visible-projection","git-tracked-projection","cleanup-pending",
   "projection-missing","projection-stale","recovery-pending","approval-required",
-  "missing-source","invalid-skill","library-drift","content-conflict",
+  "missing-source","invalid-skill","content-conflict",
   "unmanaged-conflict","managed-target-modified","project-identity-changed",
   "ledger-corrupt","approval-ledger-corrupt","recovery-record-corrupt","recovery-blocked","durability-unknown",
   "filesystem-unsupported","permission-changed","insufficient-space","operation-busy",

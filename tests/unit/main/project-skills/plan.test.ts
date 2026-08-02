@@ -168,7 +168,7 @@ describe("project-skills plan", () => {
   });
 
   it("plans create-symlink for an enabled valid skill without projection", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -176,7 +176,6 @@ describe("project-skills plan", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -232,7 +231,7 @@ describe("project-skills plan", () => {
   });
 
   it("projects only the per-skill discovery channels when set", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: true },
@@ -240,7 +239,6 @@ describe("project-skills plan", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -291,7 +289,7 @@ describe("project-skills plan", () => {
   });
 
   it("keeps valid enables applicable without confirmation", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -299,7 +297,6 @@ describe("project-skills plan", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -333,7 +330,7 @@ describe("project-skills plan", () => {
   });
 
   it("allows a plan that turns Claude delivery off to clear duplicate-discovery retention", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: true },
@@ -341,7 +338,6 @@ describe("project-skills plan", () => {
         {
           id: "review-guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -397,7 +393,7 @@ describe("project-skills plan", () => {
   });
 
   it("requires destructive confirmation for tracked git projection deletes", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -405,7 +401,6 @@ describe("project-skills plan", () => {
         {
           id: "review-guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -449,7 +444,7 @@ describe("project-skills plan", () => {
   });
 
   it("includes both agents and claude targets when enabling with Claude delivery", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -457,7 +452,6 @@ describe("project-skills plan", () => {
         {
           id: "review-guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "git-declared" },
         },
       ],
@@ -488,68 +482,6 @@ describe("project-skills plan", () => {
     ]);
   });
 
-  it("blocks plans that keep a drifted skill enabled; disable plans resolve (v8 §3.5)", async () => {
-    const digest = await writeLibrarySkill("review-guide");
-    await writeManifest({
-      version: 1,
-      delivery: { agents: true, claude: false },
-      skills: [
-        {
-          id: "review-guide",
-          enabled: true,
-          contentDigest: digest,
-          source: { type: "local-import" },
-        },
-      ],
-    });
-    // Tamper the library outside Pier: manifest digest no longer matches.
-    await writeFile(
-      join(
-        projectRoot,
-        ".pier",
-        "skills",
-        "library",
-        "review-guide",
-        "SKILL.md"
-      ),
-      "---\nname: review-guide\ndescription: tampered\n---\n# tampered\n",
-      "utf8"
-    );
-
-    const service = createProjectSkillsPlanService({
-      userData,
-      getObservedRevision: async () => "rev-drift",
-      adapterRegistry: createSkillDiscoveryAdapterRegistry(),
-      inspectGitState: async () => "absent",
-    });
-
-    const keepEnabled = await service.plan(
-      await projectRef(),
-      "rev-drift",
-      emptyDraft()
-    );
-    expect(
-      keepEnabled.blockingIssues.some(
-        (i) => i.code === "library-drift" && i.skillId === "review-guide"
-      )
-    ).toBe(true);
-    expect(keepEnabled.applicable).toBe(false);
-    // Drifted content is never scheduled for projection.
-    expect(
-      keepEnabled.targetOperations.some((op) => op.kind === "create-symlink")
-    ).toBe(false);
-
-    const disablePlan = await service.plan(
-      await projectRef(),
-      "rev-drift",
-      emptyDraft({ enabledBySkillId: { "review-guide": false } })
-    );
-    expect(
-      disablePlan.blockingIssues.some((i) => i.code === "library-drift")
-    ).toBe(false);
-    expect(disablePlan.applicable).toBe(true);
-  });
-
   it("blocks with invalid-skill instead of throwing on an invalid manifest (three-state, §5.1)", async () => {
     const dir = join(projectRoot, ".pier", "skills");
     await mkdir(dir, { recursive: true });
@@ -574,7 +506,7 @@ describe("project-skills plan", () => {
   });
 
   it("blocks plans that keep an enabled skill whose library content is missing", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -582,7 +514,6 @@ describe("project-skills plan", () => {
         {
           id: "review-guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -623,7 +554,7 @@ describe("project-skills plan", () => {
   });
 
   it("plans no discovery creates when both delivery roots are off", async () => {
-    const digest = await writeLibrarySkill("review-guide");
+    await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -631,7 +562,6 @@ describe("project-skills plan", () => {
         {
           id: "review-guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],

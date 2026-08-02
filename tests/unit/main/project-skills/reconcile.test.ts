@@ -171,7 +171,7 @@ describe("project-skills repair / ensureReady", () => {
   });
 
   it("ensureReady auto-repairs missing projection for an enabled valid skill", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -179,7 +179,6 @@ describe("project-skills repair / ensureReady", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -203,7 +202,7 @@ describe("project-skills repair / ensureReady", () => {
   });
 
   it("ensureReady does not rewrite manifest", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     const manifest: ProjectSkillsManifest = {
       version: 1,
       delivery: { agents: true, claude: false },
@@ -211,7 +210,6 @@ describe("project-skills repair / ensureReady", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -235,7 +233,7 @@ describe("project-skills repair / ensureReady", () => {
   });
 
   it("explicit repair converges missing projection", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -243,7 +241,6 @@ describe("project-skills repair / ensureReady", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -266,7 +263,7 @@ describe("project-skills repair / ensureReady", () => {
   });
 
   it("ensureReady does not adopt unmanaged existing target", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -274,7 +271,6 @@ describe("project-skills repair / ensureReady", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],

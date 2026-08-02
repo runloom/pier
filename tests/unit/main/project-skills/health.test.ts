@@ -20,8 +20,6 @@ import {
 } from "@shared/contracts/project-skills.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-const DIGEST_A = `sha256:${"a".repeat(64)}`;
-
 let userData: string;
 let projectRoot: string;
 
@@ -153,14 +151,6 @@ describe("project-skills health issue mapping (§5.1)", () => {
         degradePolicy: "denied",
       },
       {
-        code: "library-drift",
-        severity: "error",
-        degradePolicy: "denied",
-        // Settings-only integrity: enable/projection blocked; launch allowed.
-        includes: ["enable", "projection"],
-        excludes: ["launch"],
-      },
-      {
         code: "content-conflict",
         severity: "error",
         degradePolicy: "denied",
@@ -267,42 +257,6 @@ describe("project-skills health issue mapping (§5.1)", () => {
 });
 
 describe("project-skills doctor drift facts (v8.2 §3.5)", () => {
-  it("reports library-drift with both digests when the tree no longer matches the manifest", async () => {
-    await writeLibrarySkill("review-guide");
-    const { computeTreeSha256V1 } = await import(
-      "@main/services/project-skills/tree-digest.ts"
-    );
-    const digest = await computeTreeSha256V1(
-      join(projectRoot, ".pier", "skills", "library", "review-guide")
-    );
-    await writeManifest({
-      version: 1,
-      delivery: { agents: true, claude: false },
-      skills: [
-        {
-          id: "review-guide",
-          enabled: true,
-          contentDigest: digest,
-          source: { type: "local-import" },
-        },
-      ],
-    });
-    // Tamper outside Pier.
-    await writeLibrarySkill("review-guide", "# tampered\n");
-
-    const health = createProjectSkillsHealthService({
-      userData,
-      adapterRegistry: createSkillDiscoveryAdapterRegistry(),
-    });
-    const snapshot = await health.doctor(await projectRef());
-    const drift = snapshot.issues.find((i) => i.code === "library-drift");
-    expect(drift).toBeDefined();
-    expect(drift?.skillId).toBe("review-guide");
-    expect(drift?.evidence.expectedContentDigest).toBe(digest);
-    expect(typeof drift?.evidence.actualContentDigest).toBe("string");
-    expect(drift?.evidence.actualContentDigest).not.toBe(digest);
-  });
-
   it("reports missing-source when the library directory is gone", async () => {
     await writeManifest({
       version: 1,
@@ -311,7 +265,6 @@ describe("project-skills doctor drift facts (v8.2 §3.5)", () => {
         {
           id: "review-guide",
           enabled: true,
-          contentDigest: DIGEST_A,
           source: { type: "local-import" },
         },
       ],
@@ -339,7 +292,6 @@ describe("project-skills doctor", () => {
         {
           id: "review-guide",
           enabled: true,
-          contentDigest: DIGEST_A,
           source: { type: "local-import" },
         },
       ],
@@ -414,7 +366,6 @@ describe("project-skills doctor", () => {
         {
           id: "review-guide",
           enabled: true,
-          contentDigest: DIGEST_A,
           source: { type: "local-import" },
         },
       ],

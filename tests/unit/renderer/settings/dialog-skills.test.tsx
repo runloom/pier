@@ -733,7 +733,12 @@ describe("settings dialog skills section", () => {
     fixtures.plan = {
       applicable: false,
       blockingIssues: [
-        { id: "i1", code: "library-drift", skillId: "review-guide" },
+        {
+          id: "i1",
+          code: "unmanaged-conflict",
+          skillId: "review-guide",
+          relativeTarget: ".agents/skills/review-guide",
+        },
       ],
       confirmationRequirements: [],
       observedRevision: "o1",

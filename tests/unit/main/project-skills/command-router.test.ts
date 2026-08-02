@@ -124,7 +124,7 @@ afterEach(async () => {
 
 describe("project-skills command router", () => {
   it("executes skills.doctor via router", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -132,7 +132,6 @@ describe("project-skills command router", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -151,7 +150,7 @@ describe("project-skills command router", () => {
   });
 
   it("skills:read doctor has no write side effects", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -159,7 +158,6 @@ describe("project-skills command router", () => {
         {
           id: "guide",
           enabled: true,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],
@@ -204,7 +202,7 @@ describe("project-skills command router", () => {
   });
 
   it("skills.snapshot and skills.plan succeed for desktop", async () => {
-    const digest = await writeLibrarySkill("guide");
+    await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,
       delivery: { agents: true, claude: false },
@@ -212,7 +210,6 @@ describe("project-skills command router", () => {
         {
           id: "guide",
           enabled: false,
-          contentDigest: digest,
           source: { type: "local-import" },
         },
       ],

@@ -193,10 +193,6 @@ export function issueLabel(
       });
     case "project-identity-changed":
       return t("settings.skills.issueIdentityChanged");
-    case "library-drift":
-      return t("settings.skills.issueLibraryDrift", {
-        skill: issue.skillId ?? "",
-      });
     case "missing-source":
       return t("settings.skills.issueMissingSource", {
         skill: issue.skillId ?? "",
@@ -218,7 +214,6 @@ export function isPlanHardBlockIssue(code: string): boolean {
   return (
     code === "project-identity-changed" ||
     code === "unmanaged-conflict" ||
-    code === "library-drift" ||
     code === "missing-source" ||
     code === "invalid-skill" ||
     code === "ledger-corrupt" ||

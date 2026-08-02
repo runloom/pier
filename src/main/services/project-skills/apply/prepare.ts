@@ -130,7 +130,6 @@ export async function prepareLog(
     plan.blockingIssues.some(
       (i) =>
         REPAIR_HARD_BLOCK_CODES.includes(i.code) ||
-        i.code === "library-drift" ||
         i.code === "missing-source" ||
         i.code === "recovery-blocked"
     );
@@ -187,15 +186,13 @@ export async function prepareLog(
         request.operationId
       );
     }
-    // Content updates / drift acceptance keep the entry's original manifest
-    // source type (manifest schema keeps its three source kinds; the ledger
+    // Content updates keep the entry's original manifest source type
+    // (manifest schema keeps its three source kinds; the ledger
     // sourceKind is recorded separately, design v8 §3.2).
     const existingSource = currentManifest?.skills.find(
       (s) => s.id === candidate.skillId
     )?.source;
-    const isUpdateKind =
-      candidate.sourceKind === "content-update" ||
-      candidate.sourceKind === "drift-accepted";
+    const isUpdateKind = candidate.sourceKind === "content-update";
     importEntries.set(candidate.skillId, {
       contentDigest: candidate.contentDigest,
       source:

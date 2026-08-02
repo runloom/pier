@@ -60,13 +60,13 @@ export async function classifyTargetShape(
 }
 
 /**
- * Library content state for a manifest entry (integrity drift, design §3.5):
- * `drifted` when the actual tree digest no longer matches the digest the
- * manifest records; `missing` when the library directory is gone;
- * `unreadable` when the tree cannot be digested (conflicting or special
- * entries) — treated as drift by callers.
+ * Library content presence for a manifest entry. Disk content is
+ * authoritative — there is no separate "expected" digest baseline, so
+ * content drift is no longer a concept. `missing` when the library
+ * directory is gone; `present` otherwise. The actual digest is returned
+ * for edit-base (content-update TOCTOU) and observed-revision CAS use.
  */
-export type LibraryContentState = "ok" | "missing" | "drifted" | "unreadable";
+export type LibraryContentState = "present" | "missing";
 
 export interface LibraryContentInspection {
   /** Actual on-disk tree digest, when computable. */
@@ -76,8 +76,7 @@ export interface LibraryContentInspection {
 
 export async function inspectLibraryContent(
   projectRoot: string,
-  skillId: string,
-  manifestContentDigest: string
+  skillId: string
 ): Promise<LibraryContentInspection> {
   const libraryDir = join(projectRoot, ".pier", "skills", "library", skillId);
   try {
@@ -88,25 +87,23 @@ export async function inspectLibraryContent(
     throw error;
   }
   try {
-    const actual = await computeTreeSha256V1(libraryDir);
     return {
-      state: actual === manifestContentDigest ? "ok" : "drifted",
-      actualDigest: actual,
+      state: "present",
+      actualDigest: await computeTreeSha256V1(libraryDir),
     };
   } catch {
-    return { state: "unreadable", actualDigest: null };
+    // Tree cannot be digested (conflicting or special entries). Disk is
+    // still authoritative; return present with no digest so callers that
+    // only need presence (missing-source) proceed, and callers that need
+    // a digest degrade gracefully.
+    return { state: "present", actualDigest: null };
   }
 }
 
 export async function inspectLibraryContentState(
   projectRoot: string,
-  skillId: string,
-  manifestContentDigest: string
+  skillId: string
 ): Promise<LibraryContentState> {
-  const inspection = await inspectLibraryContent(
-    projectRoot,
-    skillId,
-    manifestContentDigest
-  );
+  const inspection = await inspectLibraryContent(projectRoot, skillId);
   return inspection.state;
 }

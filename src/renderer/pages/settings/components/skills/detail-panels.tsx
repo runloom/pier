@@ -1,4 +1,3 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@pier/ui/card.tsx";
 import type { SkillEffectiveCell } from "@shared/contracts/project-skills.ts";
@@ -13,10 +12,8 @@ import { formatBytes, SkillMdScopeNotice, type Translate } from "./shared.tsx";
 
 /** Identity facts only — no enable/delete. */
 function SkillIdentityFields({
-  adoptCurrentFiles,
   copyLibraryPath,
   description,
-  drifted,
   fileCount,
   hasRisk,
   libraryPath,
@@ -24,12 +21,9 @@ function SkillIdentityFields({
   sourceBadge,
   t,
   totalBytes,
-  writesDisabled,
 }: {
-  adoptCurrentFiles: () => Promise<void>;
   copyLibraryPath: () => Promise<void>;
   description: string;
-  drifted: boolean;
   fileCount: number;
   hasRisk: boolean;
   libraryPath: string;
@@ -37,32 +31,9 @@ function SkillIdentityFields({
   sourceBadge?: ReactNode;
   t: Translate;
   totalBytes: number;
-  writesDisabled: boolean;
 }) {
   return (
     <>
-      {drifted ? (
-        <Alert variant="destructive">
-          <AlertTitle>{t("settings.skills.driftTitle")}</AlertTitle>
-          <AlertDescription>
-            <span className="flex flex-col gap-2">
-              {t("settings.skills.driftBody")}
-              <span className="flex justify-end">
-                <Button
-                  disabled={writesDisabled}
-                  onClick={() => {
-                    adoptCurrentFiles().catch(() => undefined);
-                  }}
-                  size="sm"
-                  type="button"
-                >
-                  {t("settings.skills.driftUseCurrent")}
-                </Button>
-              </span>
-            </span>
-          </AlertDescription>
-        </Alert>
-      ) : null}
       {description ? (
         <p className="text-muted-foreground text-sm">{description}</p>
       ) : null}
@@ -188,11 +159,9 @@ function SkillsManagedDiscoverySection({
 
 /** Form-dialog body: identity → discovery channels → content → quiet delete. */
 export function SkillsSkillDetailPanels({
-  adoptCurrentFiles,
   content,
   copyLibraryPath,
   description,
-  drifted,
   editorText,
   effects,
   enabled,
@@ -217,11 +186,9 @@ export function SkillsSkillDetailPanels({
   totalBytes,
   writesDisabled,
 }: {
-  adoptCurrentFiles: () => Promise<void>;
   content: { skillMd: string; truncated: boolean } | null;
   copyLibraryPath: () => Promise<void>;
   description: string;
-  drifted: boolean;
   editorText: string;
   effects: readonly SkillEffectiveCell[];
   enabled: boolean;
@@ -251,10 +218,8 @@ export function SkillsSkillDetailPanels({
   const plain = presentation === "dialog";
   const identity = (
     <SkillIdentityFields
-      adoptCurrentFiles={adoptCurrentFiles}
       copyLibraryPath={copyLibraryPath}
       description={description}
-      drifted={drifted}
       fileCount={fileCount}
       hasRisk={hasRisk}
       libraryPath={libraryPath}
@@ -262,7 +227,6 @@ export function SkillsSkillDetailPanels({
       sourceBadge={presentation === "dialog" ? sourceBadge : undefined}
       t={t}
       totalBytes={totalBytes}
-      writesDisabled={writesDisabled}
     />
   );
   const skillMd = (

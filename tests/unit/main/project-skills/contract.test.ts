@@ -26,7 +26,6 @@ const validManifest = {
     {
       id: "review-guide",
       enabled: true,
-      contentDigest: VALID_DIGEST,
       source: { type: "local-import" as const },
     },
   ],
@@ -145,7 +144,7 @@ describe("project-skills contract", () => {
 
   it("enumerates issue codes exhaustively", () => {
     // v8 adds shadowed-by-user-skill (layer-3 notice, never blocking).
-    expect(PROJECT_SKILLS_ISSUE_CODES).toHaveLength(30);
+    expect(PROJECT_SKILLS_ISSUE_CODES).toHaveLength(29);
     expect(PROJECT_SKILLS_ISSUE_CODES).toContain("shadowed-by-user-skill");
     expect(new Set(PROJECT_SKILLS_ISSUE_CODES).size).toBe(
       PROJECT_SKILLS_ISSUE_CODES.length
@@ -284,11 +283,6 @@ describe("project-skills contract", () => {
         skillId: "review-guide",
         baseContentDigest: `sha256:${"a".repeat(64)}`,
         skillMd: "---\nname: review-guide\ndescription: x\n---\nBody",
-      },
-      {
-        type: "skills.import.prepareDriftAcceptance",
-        projectRef: sampleProjectRef,
-        skillId: "review-guide",
       },
       {
         type: "skills.import.discard",
