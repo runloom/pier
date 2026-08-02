@@ -17,6 +17,14 @@ export type AgentStopAuthority =
 
 export type AgentTurnStartAuthority = "authoritative" | "none";
 
+export type AgentEventEvidenceSource = "hook" | "transcript";
+
+export interface AgentEventIngestOptions {
+  evidenceSource: AgentEventEvidenceSource;
+  stopAuthority: AgentStopAuthority;
+  turnStartAuthority: AgentTurnStartAuthority;
+}
+
 /**
  * Aggregator 公共 API。native callback、hook observer、task launcher 与 IPC
  * 快照全部经此接口——单入口, 状态归一。
