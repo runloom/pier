@@ -52,6 +52,36 @@ describe("agent hook runtime semantics", () => {
     }
   });
 
+  it("只有审计过的原生活动起点拥有无关联重开权威", () => {
+    const actual = AGENT_HOOK_INTEGRATIONS.flatMap((integration) =>
+      integration.runtime.emittedMappings
+        .filter((mapping) => mapping.turnStartAuthority === "authoritative")
+        .map((mapping) => ({
+          agentId: integration.id,
+          nativeEvent: mapping.nativeEvent,
+          pierEvent: mapping.pierEvent,
+        }))
+    );
+
+    expect(actual).toEqual([
+      {
+        agentId: "antigravity",
+        nativeEvent: "PreInvocation",
+        pierEvent: "processing",
+      },
+      {
+        agentId: "cline",
+        nativeEvent: "TaskResume",
+        pierEvent: "running",
+      },
+    ]);
+    expect(
+      actual.every(({ pierEvent }) =>
+        ["processing", "running"].includes(pierEvent)
+      )
+    ).toBe(true);
+  });
+
   it("launch-only agent 不伪造 hook 运行语义", () => {
     const launchOnly = ["ante", "codebuff", "continue", "rovo", "openclaw"];
     expect(

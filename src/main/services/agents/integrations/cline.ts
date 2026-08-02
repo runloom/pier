@@ -46,9 +46,14 @@ const CLINE_MARKER = pierManagedPluginMarker();
 const CLINE_EVENTS: ReadonlyArray<{
   fileName: string;
   pierEvent: string;
+  turnStartAuthority?: "authoritative";
 }> = [
   { fileName: "TaskStart", pierEvent: "SessionStart" },
-  { fileName: "TaskResume", pierEvent: "running" },
+  {
+    fileName: "TaskResume",
+    pierEvent: "running",
+    turnStartAuthority: "authoritative",
+  },
   { fileName: "UserPromptSubmit", pierEvent: "PromptSubmit" },
   { fileName: "PreToolUse", pierEvent: "ToolStart" },
   { fileName: "PostToolUse", pierEvent: "ToolComplete" },
@@ -201,10 +206,13 @@ export const clineIntegration: AgentHookIntegration = {
   detect: clineDetect,
   id: AGENT_ID,
   runtime: {
-    emittedMappings: CLINE_EVENTS.map(({ fileName, pierEvent }) => ({
-      nativeEvent: fileName,
-      pierEvent,
-    })),
+    emittedMappings: CLINE_EVENTS.map(
+      ({ fileName, pierEvent, turnStartAuthority }) => ({
+        nativeEvent: fileName,
+        pierEvent,
+        turnStartAuthority,
+      })
+    ),
     stopAuthority: "none",
   },
   install: async () => {

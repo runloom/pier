@@ -12,6 +12,7 @@ export interface AgentRuntimeSemantics {
 export interface AgentRuntimeEventMapping {
   readonly nativeEvent: string;
   readonly pierEvent: string;
+  readonly turnStartAuthority?: "authoritative";
 }
 
 /**

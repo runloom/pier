@@ -15,6 +15,8 @@ export type AgentStopAuthority =
   | "none"
   | "reset-only";
 
+export type AgentTurnStartAuthority = "authoritative" | "none";
+
 /**
  * Aggregator 公共 API。native callback、hook observer、task launcher 与 IPC
  * 快照全部经此接口——单入口, 状态归一。
