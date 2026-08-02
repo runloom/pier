@@ -126,27 +126,31 @@ case "$1" in
   agentEvent)
     _sid=$(printf '%s' "$4" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _turn=$(printf '%s' "$5" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _turn_field=
+    [ -n "$_turn" ] && _turn_field=",\\"turnId\\":\\"\${_turn}\\""
     _tool_id=$(printf '%s' "$6" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _tool_name=$(printf '%s' "$7" | head -c 256 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _agent_instance=$(printf '%s' "$8" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _agent_type=$(printf '%s' "$9" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _transcript=$(printf '%s' "\${10}" | head -c 8192 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _metadata_b64=$(printf '%s' "\${11}" | head -c 16384 | LC_ALL=C tr -cd 'A-Za-z0-9+/=')
-    printf '{"v":1,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","sessionId":"%s","turnId":"%s","toolUseId":"%s","toolName":"%s","agentInstanceId":"%s","agentType":"%s","transcriptPath":"%s","metadataBase64":"%s"}\\n' \\
-      "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_sid" "$_turn" "$_tool_id" "$_tool_name" "$_agent_instance" "$_agent_type" "$_transcript" "$_metadata_b64" >> "$PIER_AGENT_EVENT_LOG"
+    printf '{"v":1,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","sessionId":"%s"%s,"toolUseId":"%s","toolName":"%s","agentInstanceId":"%s","agentType":"%s","transcriptPath":"%s","metadataBase64":"%s"}\\n' \\
+      "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_sid" "$_turn_field" "$_tool_id" "$_tool_name" "$_agent_instance" "$_agent_type" "$_transcript" "$_metadata_b64" >> "$PIER_AGENT_EVENT_LOG"
     ;;
   agentEventV2)
     _native=$(printf '%s' "$4" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _sid=$(printf '%s' "$5" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _turn=$(printf '%s' "$6" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
+    _turn_field=
+    [ -n "$_turn" ] && _turn_field=",\\"turnId\\":\\"\${_turn}\\""
     _tool_id=$(printf '%s' "$7" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _tool_name=$(printf '%s' "$8" | head -c 256 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _agent_instance=$(printf '%s' "$9" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _agent_type=$(printf '%s' "\${10}" | head -c 128 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _transcript=$(printf '%s' "\${11}" | head -c 8192 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
     _metadata_b64=$(printf '%s' "\${12}" | head -c 16384 | LC_ALL=C tr -cd 'A-Za-z0-9+/=')
-    printf '{"v":2,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","nativeEvent":"%s","sessionId":"%s","turnId":"%s","toolUseId":"%s","toolName":"%s","agentInstanceId":"%s","agentType":"%s","transcriptPath":"%s","metadataBase64":"%s"}\\n' \\
-      "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_native" "$_sid" "$_turn" "$_tool_id" "$_tool_name" "$_agent_instance" "$_agent_type" "$_transcript" "$_metadata_b64" >> "$PIER_AGENT_EVENT_LOG"
+    printf '{"v":2,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","nativeEvent":"%s","sessionId":"%s"%s,"toolUseId":"%s","toolName":"%s","agentInstanceId":"%s","agentType":"%s","transcriptPath":"%s","metadataBase64":"%s"}\\n' \\
+      "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_native" "$_sid" "$_turn_field" "$_tool_id" "$_tool_name" "$_agent_instance" "$_agent_type" "$_transcript" "$_metadata_b64" >> "$PIER_AGENT_EVENT_LOG"
     ;;
   agentEventV3)
     _agent=$(_pier_json_string "$2" 64)

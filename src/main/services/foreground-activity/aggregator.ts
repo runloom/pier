@@ -180,7 +180,8 @@ export function createForegroundActivityAggregator(
       dropSlotIfEmpty(key);
       return null;
     }
-    const hook = newHookLayer(event, at);
+    const startsHidden = semantics.category === "session-start";
+    const hook = newHookLayer(event, at, startsHidden);
     slot.hook = hook;
     if (hook.hidden) {
       armHookVisibility(key, hook, { scheduleEmit, slots });
@@ -284,7 +285,7 @@ export function createForegroundActivityAggregator(
       if (
         isSubagentHookEvent(event) &&
         !SUBAGENT_HOOK_EVENTS.has(event.event) &&
-        event.event !== "SessionEnd"
+        semantics.category !== "session-end"
       ) {
         logAgentEventDropped("subagent-detail-ignored", key, event.event);
         return false;
@@ -295,7 +296,14 @@ export function createForegroundActivityAggregator(
         hookScopeIdentity(event)
       );
       if (!identity) return false;
-      if (!hookScopes.allowsAgentEventAfterCooldowns(key, event, identity)) {
+      if (
+        !hookScopes.allowsAgentEventAfterCooldowns(
+          key,
+          event,
+          identity,
+          semantics
+        )
+      ) {
         return false;
       }
       const sessionEndHandled = hookScopes.handleSessionEnd(

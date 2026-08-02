@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveAgentTurnStartAuthority } from "../../../../src/main/services/agents/integrations/runtime/event-authority.ts";
+import {
+  resolveAgentEventIngestOptions,
+  resolveAgentTurnStartAuthority,
+} from "../../../../src/main/services/agents/integrations/runtime/event-authority.ts";
 import type { AgentRuntimeSemantics } from "../../../../src/main/services/agents/integrations/types.ts";
 
 const runtime: AgentRuntimeSemantics = {
@@ -63,5 +66,49 @@ describe("agent runtime event authority", () => {
         windowId: "w1",
       })
     ).toBe("none");
+  });
+
+  it("hook 接入选项同时消费运行时 Stop 与逐事件起点权威", () => {
+    expect(
+      resolveAgentEventIngestOptions({
+        evidenceSource: "hook",
+        event: {
+          agent: "cline",
+          event: "running",
+          kind: "agentEvent",
+          nativeEvent: "TaskResume",
+          panelId: "p1",
+          v: 3,
+          windowId: "w1",
+        },
+        runtime,
+      })
+    ).toEqual({
+      evidenceSource: "hook",
+      stopAuthority: "none",
+      turnStartAuthority: "authoritative",
+    });
+  });
+
+  it("transcript 接入恒为可信终态来源且永远没有回合开始权威", () => {
+    expect(
+      resolveAgentEventIngestOptions({
+        evidenceSource: "transcript",
+        event: {
+          agent: "cline",
+          event: "running",
+          kind: "agentEvent",
+          nativeEvent: "TaskResume",
+          panelId: "p1",
+          v: 3,
+          windowId: "w1",
+        },
+        runtime,
+      })
+    ).toEqual({
+      evidenceSource: "transcript",
+      stopAuthority: "authoritative",
+      turnStartAuthority: "none",
+    });
   });
 });

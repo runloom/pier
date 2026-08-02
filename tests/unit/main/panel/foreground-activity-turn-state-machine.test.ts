@@ -3,6 +3,11 @@ import type {
   AgentHookEventPayloadV1,
 } from "@shared/contracts/agent/session.ts";
 import type { AgentActivity } from "@shared/contracts/foreground-activity.ts";
+import {
+  type LogRecord,
+  resetDefaultLogSinkForTests,
+  setDefaultLogSink,
+} from "@shared/logger.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createForegroundActivityAggregator } from "../../../../src/main/services/foreground-activity/aggregator.ts";
 import { HOOK_FRESH_TTL_MS } from "../../../../src/main/services/foreground-activity/entry.ts";
@@ -51,6 +56,7 @@ function statusOf(
 }
 
 afterEach(() => {
+  resetDefaultLogSinkForTests();
   vi.useRealTimers();
 });
 
@@ -132,6 +138,37 @@ describe("前台活动回合状态机", () => {
     aggregator.dispose();
   });
 
+  it("新回合替换会退休旧身份，迟到旧进展不能夺回且新终态仍可完成", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-2" }));
+
+    expect(ingest(aggregator, event("processing", { turnId: "turn-1" }))).toBe(
+      false
+    );
+    expect(statusOf(aggregator)).toBe("processing");
+    expect(
+      ingest(aggregator, event("TurnCompleted", { turnId: "turn-2" }))
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("ready");
+    aggregator.dispose();
+  });
+
+  it("旧版空 turnId 按缺失处理，终态结算当前身份且不能被旧进展重开", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
+
+    expect(ingest(aggregator, event("TurnCompleted", { turnId: "" }))).toBe(
+      true
+    );
+    expect(statusOf(aggregator)).toBe("ready");
+    expect(ingest(aggregator, event("processing", { turnId: "turn-1" }))).toBe(
+      false
+    );
+    expect(statusOf(aggregator)).toBe("ready");
+    aggregator.dispose();
+  });
+
   it("同一活跃 turnId 的重复 PromptSubmit 不清空工具账本", () => {
     const aggregator = createForegroundActivityAggregator();
     ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
@@ -184,6 +221,105 @@ describe("前台活动回合状态机", () => {
     expect(ingest(completed, event("error", { turnId: "turn-1" }))).toBe(true);
     expect(statusOf(completed)).toBe("error");
     completed.dispose();
+  });
+
+  it("终态证据只按 ready → interrupted → error 增强且重复中断幂等", () => {
+    vi.useFakeTimers();
+    const aggregator = createForegroundActivityAggregator();
+    const broadcasts: unknown[] = [];
+    const unsubscribe = aggregator.onChange((broadcast) =>
+      broadcasts.push(broadcast)
+    );
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
+    ingest(aggregator, event("TurnCompleted", { turnId: "turn-1" }));
+    vi.advanceTimersByTime(110);
+
+    expect(
+      ingest(aggregator, event("TurnInterrupted", { turnId: "turn-1" }))
+    ).toBe(true);
+    vi.advanceTimersByTime(110);
+    const broadcastsAfterInterruption = broadcasts.length;
+    expect(
+      ingest(aggregator, event("TurnInterrupted", { turnId: "turn-1" }))
+    ).toBe(false);
+    vi.advanceTimersByTime(110);
+    expect(broadcasts).toHaveLength(broadcastsAfterInterruption);
+    expect(statusOf(aggregator)).toBe("ready");
+
+    expect(ingest(aggregator, event("error", { turnId: "turn-1" }))).toBe(true);
+    expect(statusOf(aggregator)).toBe("error");
+    expect(
+      ingest(aggregator, event("TurnCompleted", { turnId: "turn-1" }))
+    ).toBe(false);
+    expect(statusOf(aggregator)).toBe("error");
+    unsubscribe();
+    aggregator.dispose();
+  });
+
+  it("缺失 ID 的更强终态可纠正当前回合", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
+    ingest(aggregator, event("TurnCompleted", { turnId: "turn-1" }));
+
+    expect(ingest(aggregator, event("error"))).toBe(true);
+    expect(statusOf(aggregator)).toBe("error");
+    aggregator.dispose();
+  });
+
+  it("旧具名终态不能纠正已完成的匿名新回合且拒绝零广播", () => {
+    vi.useFakeTimers();
+    const aggregator = createForegroundActivityAggregator();
+    const broadcasts: unknown[] = [];
+    const unsubscribe = aggregator.onChange((broadcast) =>
+      broadcasts.push(broadcast)
+    );
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-old" }));
+    ingest(aggregator, event("TurnCompleted", { turnId: "turn-old" }));
+    ingest(aggregator, event("PromptSubmit"));
+    ingest(aggregator, event("TurnCompleted"));
+    vi.advanceTimersByTime(110);
+    const snapshotBefore = aggregator.snapshot().activities;
+    const broadcastsBefore = broadcasts.length;
+
+    expect(ingest(aggregator, event("error", { turnId: "turn-old" }))).toBe(
+      false
+    );
+    vi.advanceTimersByTime(110);
+    expect(aggregator.snapshot().activities).toEqual(snapshotBefore);
+    expect(broadcasts).toHaveLength(broadcastsBefore);
+    expect(statusOf(aggregator)).toBe("ready");
+    unsubscribe();
+    aggregator.dispose();
+  });
+
+  it("已结算身份即使携带权威起点也以 settled-turn 零副作用拒绝", () => {
+    vi.useFakeTimers();
+    const records: LogRecord[] = [];
+    const broadcasts: unknown[] = [];
+    setDefaultLogSink((record) => records.push(record));
+    const aggregator = createForegroundActivityAggregator();
+    const unsubscribe = aggregator.onChange((broadcast) =>
+      broadcasts.push(broadcast)
+    );
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-settled" }));
+    ingest(aggregator, event("TurnCompleted", { turnId: "turn-settled" }));
+    vi.advanceTimersByTime(110);
+    const snapshotBefore = aggregator.snapshot().activities;
+    const broadcastsBefore = broadcasts.length;
+
+    expect(
+      ingest(aggregator, event("running", { turnId: "turn-settled" }), {
+        turnStartAuthority: "authoritative",
+      })
+    ).toBe(false);
+    vi.advanceTimersByTime(110);
+    expect(aggregator.snapshot().activities).toEqual(snapshotBefore);
+    expect(broadcasts).toHaveLength(broadcastsBefore);
+    expect(
+      records.find((record) => record.ctx?.reason === "settled-turn")?.ctx
+    ).toMatchObject({ reason: "settled-turn" });
+    unsubscribe();
+    aggregator.dispose();
   });
 
   it.each([

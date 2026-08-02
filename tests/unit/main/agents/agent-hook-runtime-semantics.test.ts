@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { agentKindSchema } from "@shared/contracts/agent.ts";
 import { describe, expect, it } from "vitest";
 import {
@@ -80,6 +82,60 @@ describe("agent hook runtime semantics", () => {
         ["processing", "running"].includes(pierEvent)
       )
     ).toBe(true);
+  });
+
+  it("审计矩阵逐行覆盖运行时映射与两类 authority", () => {
+    const audit = readFileSync(
+      join(
+        process.cwd(),
+        "docs/superpowers/specs/2026-07-13-agent-status-adapter-contract-audit.md"
+      ),
+      "utf8"
+    );
+    const rows = new Map(
+      audit
+        .split("\n")
+        .filter((line) => line.startsWith("| "))
+        .map((line) => {
+          const cells = line
+            .split("|")
+            .slice(1, -1)
+            .map((cell) => cell.trim());
+          return [cells[0], cells] as const;
+        })
+        .filter(([, cells]) => cells.length === 6)
+    );
+
+    for (const integration of AGENT_HOOK_INTEGRATIONS) {
+      const cells = rows.get(integration.id);
+      expect(cells, integration.id).toBeDefined();
+      const mappingCell = cells?.[3] ?? "";
+      for (const mapping of integration.runtime.emittedMappings) {
+        expect(
+          mappingCell,
+          `${integration.id}:${mapping.nativeEvent}`
+        ).toContain(mapping.nativeEvent);
+        expect(mappingCell, `${integration.id}:${mapping.pierEvent}`).toContain(
+          mapping.pierEvent
+        );
+      }
+      expect(cells?.[4], `${integration.id}:stopAuthority`).toBe(
+        `\`${integration.runtime.stopAuthority}\``
+      );
+      const authoritativeStarts = integration.runtime.emittedMappings.filter(
+        (mapping) => mapping.turnStartAuthority === "authoritative"
+      );
+      if (authoritativeStarts.length === 0) {
+        expect(cells?.[5], `${integration.id}:turnStartAuthority`).toBe("无");
+      } else {
+        for (const mapping of authoritativeStarts) {
+          expect(cells?.[5]).toContain(
+            `${mapping.nativeEvent}: ${mapping.turnStartAuthority}`
+          );
+        }
+      }
+    }
+    expect(audit).toContain("| `SessionStart` | 缺席 | `idle` |");
   });
 
   it("launch-only agent 不伪造 hook 运行语义", () => {

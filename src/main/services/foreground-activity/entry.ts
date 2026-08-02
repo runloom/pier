@@ -6,6 +6,7 @@ import type {
   AgentSessionTitleSource,
   ForegroundActivity,
 } from "@shared/contracts/foreground-activity.ts";
+import type { AgentTerminalEvidence } from "./agent-turn-event-semantics.ts";
 import type {
   SubagentWorkAssociation,
   SubagentWorkPlan,
@@ -132,6 +133,8 @@ export interface HookScope {
   stateStartedAt: number | undefined;
   status: ActivityStatus | undefined;
   subagentCount: number;
+  /** 当前可信终态证据；新回合重置时清空，只允许按强度单调增强。 */
+  terminalEvidence: AgentTerminalEvidence | undefined;
   toolHistoryIncomplete: boolean;
   turnEnded: boolean;
   /** 可信终态落定时刻（TurnCompleted / 权威 Stop 等）。 */
@@ -295,6 +298,7 @@ export function newHookScope(
     stateStartedAt: undefined,
     status: undefined,
     subagentCount: 0,
+    terminalEvidence: undefined,
     turnEnded: false,
     turnEndedAt: undefined,
     turnResetAt: undefined,
@@ -320,11 +324,12 @@ export function getOrCreateHookScope(
 
 export function newHookLayer(
   event: AgentHookEventPayload,
-  at: number
+  at: number,
+  startsHidden: boolean
 ): HookLayer {
   return {
     agentId: event.agent,
-    hidden: event.event === "SessionStart",
+    hidden: startsHidden,
     identity: {},
     spawnedAt: at,
     stateStartedAt: undefined,

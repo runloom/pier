@@ -294,7 +294,7 @@ it.each([
 });
 ```
 
-另写独立断言覆盖：`SessionStart` / `SessionEnd`、`ToolStart` / `ToolComplete`、成对交互、子智能体、`TurnInterrupted`、`authoritative/reset-only Stop`、v1/v2 `PermissionRequest`、严格 v3 不接受旧单边事件、未知 v1 事件。
+另写独立断言覆盖：`SessionStart` / `SessionEnd`、`ToolStart` / `ToolComplete`、成对交互、子智能体、`TurnInterrupted`、`authoritative/reset-only Stop`、v1/v2 `PermissionRequest`、严格 v3 不接受旧单边事件、未知 v1 事件；并以字面量矩阵锁定只有回合起点、普通推进、`ToolStart`、`InteractionRequested` 会取消 candidate，`ToolComplete`、`InteractionResolved`、子智能体事件和全部终态均不会取消。
 
 - [ ] **Step 2: 运行分类器测试并确认按预期失败**
 
@@ -340,6 +340,7 @@ export type TurnResetEvidence =
   | "none";
 
 export interface AgentTurnEventSemantics {
+  readonly cancelsTerminalCandidate: boolean;
   readonly category: AgentTurnEventCategory;
   readonly createsSession: boolean;
   readonly mappedStatus: ActivityStatus | null | undefined;
@@ -347,6 +348,12 @@ export interface AgentTurnEventSemantics {
   readonly terminalStatus?: "ready" | "error";
 }
 ```
+
+`cancelsTerminalCandidate` 的矩阵必须由分类器单一维护：回合起点、普通推进、
+`ToolStart`、`InteractionRequested` 为 `true`；`ToolComplete`、
+`InteractionResolved`、`SubagentStart`、`SubagentStop` 和全部终态事件为 `false`。
+前一组代表仍在发生的主回合活动，后一组是迟到收尾、子智能体活动或封账事实，不能据此
+取消 advisory terminal candidate。
 
 - [ ] **Step 4: 实现唯一分类函数**
 
@@ -660,7 +667,9 @@ ingestAgentEvent(
 ): boolean;
 ```
 
-`src/main/ipc/foreground-activity.ts` 的 transcript 路径固定传：
+在 `src/main/services/agents/integrations/runtime/event-authority.ts` 提取
+`resolveAgentEventIngestOptions`。`src/main/ipc/foreground-activity.ts` 和状态轨迹 harness
+都调用该解析器，不得手抄权威决策。解析器的 transcript 路径固定返回：
 
 ```ts
 {
@@ -670,17 +679,13 @@ ingestAgentEvent(
 }
 ```
 
-hook 路径先取注册项，再传：
+hook 路径先取注册项，再由同一解析器返回：
 
 ```ts
-const integration = getAgentHookIntegration(routed.agent);
-const options: AgentEventIngestOptions = {
+return {
   evidenceSource: "hook",
-  stopAuthority: integration?.runtime.stopAuthority ?? "none",
-  turnStartAuthority: resolveAgentTurnStartAuthority(
-    integration?.runtime,
-    routed
-  ),
+  stopAuthority: runtime?.stopAuthority ?? "none",
+  turnStartAuthority: resolveAgentTurnStartAuthority(runtime, event),
 };
 ```
 

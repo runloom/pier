@@ -1,5 +1,9 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
-import type { AgentTurnStartAuthority } from "../../../foreground-activity/types.ts";
+import type {
+  AgentEventEvidenceSource,
+  AgentEventIngestOptions,
+  AgentTurnStartAuthority,
+} from "../../../foreground-activity/types.ts";
 import type { AgentRuntimeSemantics } from "../types.ts";
 
 export function resolveAgentTurnStartAuthority(
@@ -18,4 +22,26 @@ export function resolveAgentTurnStartAuthority(
   )
     ? "authoritative"
     : "none";
+}
+
+export function resolveAgentEventIngestOptions(args: {
+  evidenceSource: AgentEventEvidenceSource;
+  event: AgentHookEventPayload;
+  runtime: AgentRuntimeSemantics | undefined;
+}): AgentEventIngestOptions {
+  if (args.evidenceSource === "transcript") {
+    return {
+      evidenceSource: "transcript",
+      stopAuthority: "authoritative",
+      turnStartAuthority: "none",
+    };
+  }
+  return {
+    evidenceSource: "hook",
+    stopAuthority: args.runtime?.stopAuthority ?? "none",
+    turnStartAuthority: resolveAgentTurnStartAuthority(
+      args.runtime,
+      args.event
+    ),
+  };
 }

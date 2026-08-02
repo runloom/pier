@@ -21,12 +21,15 @@ export type TurnResetEvidence =
   | "turn-correlatable"
   | "none";
 
+export type AgentTerminalEvidence = "ready" | "interrupted" | "error";
+
 export interface AgentTurnEventSemantics {
   readonly cancelsTerminalCandidate: boolean;
   readonly category: AgentTurnEventCategory;
   readonly createsSession: boolean;
   readonly mappedStatus: ActivityStatus | null | undefined;
   readonly resetEvidence: TurnResetEvidence;
+  readonly terminalEvidence?: AgentTerminalEvidence;
   readonly terminalStatus?: "ready" | "error";
 }
 
@@ -71,7 +74,8 @@ const ignoredSemantics: AgentTurnEventSemantics = {
 };
 
 function trustedTerminal(
-  terminalStatus: "ready" | "error"
+  terminalStatus: "ready" | "error",
+  terminalEvidence: AgentTerminalEvidence
 ): AgentTurnEventSemantics {
   return {
     cancelsTerminalCandidate: false,
@@ -79,6 +83,7 @@ function trustedTerminal(
     createsSession: false,
     mappedStatus: terminalStatus,
     resetEvidence: "none",
+    terminalEvidence,
     terminalStatus,
   };
 }
@@ -110,7 +115,14 @@ function stopSemantics(
       resetEvidence: "none",
     };
   }
-  return trustedTerminal("ready");
+  return trustedTerminal("ready", "ready");
+}
+
+/** v1/v2 允许空字符串；所有回合身份判断必须消费同一归一化结果。 */
+export function normalizeAgentTurnId(
+  turnId: string | undefined
+): string | undefined {
+  return turnId?.trim() || undefined;
 }
 
 function semanticsForMappedWorkEvent(
@@ -138,15 +150,20 @@ export function classifyAgentTurnEvent(
   if (event.event === "SessionStart") return sessionStartSemantics;
   if (event.event === "SessionEnd") return sessionEndSemantics;
   if (event.event === "Stop") return stopSemantics(options.stopAuthority);
-  if (event.event === "TurnCompleted" || event.event === "TurnInterrupted") {
-    return trustedTerminal("ready");
+  if (event.event === "TurnCompleted") {
+    return trustedTerminal("ready", "ready");
   }
-  if (event.event === "error") return trustedTerminal("error");
+  if (event.event === "TurnInterrupted") {
+    return trustedTerminal("ready", "interrupted");
+  }
+  if (event.event === "error") return trustedTerminal("error", "error");
   if (event.event === "PromptSubmit") {
     return turnStart("explicit-prompt");
   }
   if (event.event === "processing" || event.event === "running") {
-    if (event.turnId?.trim()) return turnStart("turn-correlatable");
+    if (normalizeAgentTurnId(event.turnId)) {
+      return turnStart("turn-correlatable");
+    }
     if (options.turnStartAuthority === "authoritative") {
       return turnStart("provider-authoritative");
     }

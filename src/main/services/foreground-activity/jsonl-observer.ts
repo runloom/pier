@@ -47,8 +47,13 @@ export interface JsonlObserverOpts {
   onCommandFinished: (event: CommandFinishedHookEvent) => void;
   /** commandStart kind 行的回调（emit 脚本 `commandStart` dispatch）。 */
   onCommandStart: (event: CommandStartHookEvent) => void;
-  /** 错误回调（解析失败等）——静默降级，不中断监听。 */
+  /** 错误回调（行级失败只传安全结构诊断）——静默降级，不中断监听。 */
   onError?: (err: unknown) => void;
+}
+
+interface JsonlObserverLineDiagnostic extends Record<string, unknown> {
+  code: "callback-failed" | "invalid-json" | "schema-validation-failed";
+  lineByteLength: number;
 }
 
 /**
@@ -111,6 +116,18 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
     }
   }
 
+  function reportLineFailure(
+    code: JsonlObserverLineDiagnostic["code"],
+    line: string
+  ): void {
+    const diagnostic: JsonlObserverLineDiagnostic = {
+      code,
+      lineByteLength: Buffer.byteLength(line),
+    };
+    log.warn("line-rejected", diagnostic);
+    onError?.(diagnostic);
+  }
+
   function processLine(line: string): void {
     // 已 dispose 后剩余行不派发（defense-in-depth: onFileChange/pollNow 也各有
     // disposed 门禁, 但 processChanges 分批读时 dispose 可能夹在两批之间）。
@@ -121,26 +138,28 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
     if (!trimmed) {
       return;
     }
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(trimmed);
-      const result = agentHookEventSchema.safeParse(parsed);
-      if (!result.success) {
-        log.warn("parse-failed", {
-          line: trimmed.slice(0, 200),
-          error: result.error.message,
-        });
-        onError?.(result.error);
-        return;
-      }
-      const event = enrichAgentEventFromRawPayload(result.data);
-      if (event.kind === "agentEvent") {
-        log.debug("event-line", {
-          kind: event.kind,
-          agent: event.agent,
-          event: event.event,
-          panelId: event.panelId,
-        });
-      }
+      parsed = JSON.parse(trimmed);
+    } catch {
+      reportLineFailure("invalid-json", trimmed);
+      return;
+    }
+    const result = agentHookEventSchema.safeParse(parsed);
+    if (!result.success) {
+      reportLineFailure("schema-validation-failed", trimmed);
+      return;
+    }
+    const event = enrichAgentEventFromRawPayload(result.data);
+    if (event.kind === "agentEvent") {
+      log.debug("event-line", {
+        kind: event.kind,
+        agent: event.agent,
+        event: event.event,
+        panelId: event.panelId,
+      });
+    }
+    try {
       switch (event.kind) {
         case "commandStart":
           onCommandStart(event);
@@ -157,12 +176,8 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
           throw new Error(`unreachable kind: ${String(_exhaustive)}`);
         }
       }
-    } catch (err) {
-      log.warn("process-line-exception", {
-        line: trimmed.slice(0, 200),
-        err: String(err),
-      });
-      onError?.(err);
+    } catch {
+      reportLineFailure("callback-failed", trimmed);
     }
   }
 

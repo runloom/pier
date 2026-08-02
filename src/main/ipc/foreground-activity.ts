@@ -17,7 +17,7 @@ import {
   installAgentHooksStack,
   uninstallAllAgentHooks,
 } from "../services/agents/integrations/registry.ts";
-import { resolveAgentTurnStartAuthority } from "../services/agents/integrations/runtime/event-authority.ts";
+import { resolveAgentEventIngestOptions } from "../services/agents/integrations/runtime/event-authority.ts";
 import {
   type AgentTerminalReconciler,
   createAgentTerminalReconciler,
@@ -38,7 +38,6 @@ import {
   createJsonlObserver,
   type JsonlObserver,
 } from "../services/foreground-activity/jsonl-observer.ts";
-import type { AgentEventIngestOptions } from "../services/foreground-activity/types.ts";
 import { resolveOwner } from "../services/panel-transfer/terminal-hook-owner-routing.ts";
 import { readPreferences } from "../state/preferences.ts";
 import {
@@ -362,11 +361,14 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   // (native shell integration 走 native callback 通路)，是 forward-compat 占位。
   agentTerminalReconciler = createAgentTerminalReconciler({
     onTerminalEvent: (event) => {
-      foregroundActivityAggregator.ingestAgentEvent(event, {
-        evidenceSource: "transcript",
-        stopAuthority: "authoritative",
-        turnStartAuthority: "none",
-      });
+      foregroundActivityAggregator.ingestAgentEvent(
+        event,
+        resolveAgentEventIngestOptions({
+          evidenceSource: "transcript",
+          event,
+          runtime: undefined,
+        })
+      );
     },
     // provider 原生会话名（`provider` 秩）：只有能从自家 transcript 读出标题的
     // agent 会走到这里；读不到就没有，标题退回首条 prompt 派生。
@@ -397,14 +399,11 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
       }
       const routed = withResolvedOwner(event);
       const integration = getAgentHookIntegration(routed.agent);
-      const options: AgentEventIngestOptions = {
+      const options = resolveAgentEventIngestOptions({
         evidenceSource: "hook",
-        stopAuthority: integration?.runtime.stopAuthority ?? "none",
-        turnStartAuthority: resolveAgentTurnStartAuthority(
-          integration?.runtime,
-          routed
-        ),
-      };
+        event: routed,
+        runtime: integration?.runtime,
+      });
       const accepted = foregroundActivityAggregator.ingestAgentEvent(
         routed,
         options

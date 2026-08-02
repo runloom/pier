@@ -77,7 +77,8 @@ export interface HookScopeCoordinator {
   allowsAgentEventAfterCooldowns: (
     key: string,
     event: AgentHookEventPayload,
-    identity: HookScopeIdentity
+    identity: HookScopeIdentity,
+    semantics: AgentTurnEventSemantics
   ) => boolean;
   clearCooldownsForPanel: (panelId: string) => void;
   handleSessionEnd: (
@@ -178,13 +179,14 @@ export function createHookScopeCoordinator({
   function allowsAgentEventAfterCooldowns(
     key: string,
     event: AgentHookEventPayload,
-    identity: HookScopeIdentity
+    identity: HookScopeIdentity,
+    semantics: AgentTurnEventSemantics
   ): boolean {
     if (isInCooldown(panelCooldownUntil, key, now)) {
       logAgentEventDropped("suppressed-panel-cooldown", key, event.event);
       return false;
     }
-    if (event.event === "SessionStart") {
+    if (semantics.category === "session-start") {
       hookCooldownUntil.delete(key);
       if (identity.isolated) {
         hookScopeCooldownUntil.delete(scopeCooldownKey(key, identity.key));
@@ -341,7 +343,7 @@ export function createHookScopeCoordinator({
     if (!isSubagentHookEvent(event)) {
       const facts = hookIdentityFacts(event);
       scope.identity =
-        event.event === "SessionStart"
+        semantics.category === "session-start"
           ? facts
           : { ...scope.identity, ...facts };
     }

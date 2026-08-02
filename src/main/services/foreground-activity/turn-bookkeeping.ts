@@ -1,6 +1,10 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
-import type { AgentTurnEventSemantics } from "./agent-turn-event-semantics.ts";
+import {
+  type AgentTerminalEvidence,
+  type AgentTurnEventSemantics,
+  normalizeAgentTurnId,
+} from "./agent-turn-event-semantics.ts";
 import type { HookScope } from "./entry.ts";
 
 const MAX_SETTLED_IDS_PER_KIND = 256;
@@ -36,6 +40,14 @@ const ACCEPTED_NONE: TurnBookkeepingResult = {
   transition: "none",
 };
 
+const TERMINAL_EVIDENCE_STRENGTH: Readonly<
+  Record<AgentTerminalEvidence, number>
+> = {
+  ready: 1,
+  interrupted: 2,
+  error: 3,
+};
+
 function reopenNamedWork(settledIds: Set<string>, id: string): void {
   settledIds.delete(id);
 }
@@ -68,13 +80,40 @@ function resetTurn(
   eventTurnId: string | undefined,
   at: number
 ): void {
+  const previousTurnId = normalizeAgentTurnId(scope.currentTurnId);
+  if (previousTurnId && previousTurnId !== eventTurnId) {
+    settleNamedWork(scope.recentSettledTurnIds, previousTurnId);
+  }
   scope.turnEnded = false;
   scope.turnEndedAt = undefined;
   scope.completionObserved = false;
   scope.completionObservedAt = undefined;
   scope.turnResetAt = at;
+  scope.terminalEvidence = undefined;
   clearActiveWork(scope);
   scope.currentTurnId = eventTurnId;
+}
+
+function isStrongerTerminalCorrection(
+  scope: HookScope,
+  semantics: AgentTurnEventSemantics,
+  eventTurnId: string | undefined
+): boolean {
+  if (!(scope.turnEnded && semantics.category === "terminal-trusted")) {
+    return false;
+  }
+  if (eventTurnId !== undefined && eventTurnId !== scope.currentTurnId) {
+    return false;
+  }
+  const incoming = semantics.terminalEvidence;
+  if (!incoming) {
+    return false;
+  }
+  const current = scope.terminalEvidence;
+  return (
+    TERMINAL_EVIDENCE_STRENGTH[incoming] >
+    (current ? TERMINAL_EVIDENCE_STRENGTH[current] : 0)
+  );
 }
 
 function turnStartDecision(
@@ -112,14 +151,12 @@ export function applyTurnBookkeeping(
   subagentWorkId?: string
 ): TurnBookkeepingResult {
   const eventName = event.event;
-  const eventTurnId = event.turnId?.trim();
-  const isTerminalCorrection =
-    scope.turnEnded &&
-    scope.status === "ready" &&
-    semantics.category === "terminal-trusted" &&
-    (semantics.terminalStatus === "error" || eventName === "TurnInterrupted") &&
-    (!(eventTurnId && scope.currentTurnId) ||
-      eventTurnId === scope.currentTurnId);
+  const eventTurnId = normalizeAgentTurnId(event.turnId);
+  const isTerminalCorrection = isStrongerTerminalCorrection(
+    scope,
+    semantics,
+    eventTurnId
+  );
   if (semantics.category === "ignored") {
     return reject("stop-without-authority");
   }
@@ -156,6 +193,7 @@ export function applyTurnBookkeeping(
     }
     scope.turnEnded = true;
     scope.turnEndedAt = at;
+    scope.terminalEvidence = semantics.terminalEvidence;
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
     const terminalRetiredWork = clearActiveWork(scope);
@@ -168,6 +206,7 @@ export function applyTurnBookkeeping(
   if (semantics.category === "terminal-candidate") {
     scope.completionObserved = true;
     scope.completionObservedAt = at;
+    scope.terminalEvidence = undefined;
     clearActiveWork(scope);
     return { accepted: true, transition: "terminal-candidate" };
   }
@@ -175,7 +214,7 @@ export function applyTurnBookkeeping(
     scope.completionObserved = false;
     scope.completionObservedAt = undefined;
   }
-  if (eventName === "SessionEnd") {
+  if (semantics.category === "session-end") {
     clearActiveWork(scope);
   } else if (eventName === "InteractionRequested") {
     const id =

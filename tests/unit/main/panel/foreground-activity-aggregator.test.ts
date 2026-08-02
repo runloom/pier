@@ -616,7 +616,7 @@ describe("ForegroundActivityAggregator", () => {
       event: "PromptSubmit",
       sessionId: "main-A",
     });
-    const hook = newHookLayer(mainEvent, 0);
+    const hook = newHookLayer(mainEvent, 0, false);
     const scope = newHookScope("session:main-A", 0, {
       sessionId: "main-A",
     });

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   type AgentHookEventPayload,
   agentHookEventSchema,
@@ -109,6 +111,7 @@ describe("classifyAgentTurnEvent", () => {
         createsSession: false,
         mappedStatus: "ready",
         resetEvidence: "none",
+        terminalEvidence: "ready",
         terminalStatus: "ready",
       },
     },
@@ -121,6 +124,7 @@ describe("classifyAgentTurnEvent", () => {
         createsSession: false,
         mappedStatus: "error",
         resetEvidence: "none",
+        terminalEvidence: "error",
         terminalStatus: "error",
       },
     },
@@ -201,6 +205,7 @@ describe("classifyAgentTurnEvent", () => {
   });
 
   it.each([
+    { eventName: "PromptSubmit", want: true },
     { eventName: "ToolStart", want: true },
     { eventName: "InteractionRequested", want: true },
     { eventName: "processing", want: true },
@@ -209,6 +214,10 @@ describe("classifyAgentTurnEvent", () => {
     { eventName: "InteractionResolved", want: false },
     { eventName: "SubagentStart", want: false },
     { eventName: "SubagentStop", want: false },
+    { eventName: "TurnCompleted", want: false },
+    { eventName: "TurnInterrupted", want: false },
+    { eventName: "error", want: false },
+    { eventName: "Stop", want: false },
   ] as const)("$eventName 的候选取消事实为 $want", ({ eventName, want }) => {
     expect(
       classifyAgentTurnEvent(event(eventName), options())
@@ -224,6 +233,7 @@ describe("classifyAgentTurnEvent", () => {
         createsSession: false,
         mappedStatus: "ready",
         resetEvidence: "none",
+        terminalEvidence: "interrupted",
         terminalStatus: "ready",
       }
     );
@@ -241,6 +251,7 @@ describe("classifyAgentTurnEvent", () => {
       createsSession: false,
       mappedStatus: "ready",
       resetEvidence: "none",
+      terminalEvidence: "ready",
       terminalStatus: "ready",
     });
   });
@@ -289,5 +300,39 @@ describe("classifyAgentTurnEvent", () => {
       mappedStatus: null,
       resetEvidence: "none",
     });
+  });
+
+  it.each([
+    "processing",
+    "running",
+  ])("%s 同时带 turnId 与适配器权威时仍优先分类为可关联起点", (eventName) => {
+    expect(
+      classifyAgentTurnEvent(
+        event(eventName, { turnId: "turn-correlatable" }),
+        options({ turnStartAuthority: "authoritative" })
+      )
+    ).toMatchObject({
+      category: "turn-start",
+      resetEvidence: "turn-correlatable",
+    });
+  });
+
+  it("生命周期事件名只允许分类器解释，下游只消费分类结果", () => {
+    const downstreamFiles = [
+      "aggregator.ts",
+      "aggregator-hook-scopes.ts",
+      "entry.ts",
+      "turn-bookkeeping.ts",
+    ];
+    const directLifecycleBranch =
+      /(?:event\.event|eventName)\s*[!=]==?\s*["']Session(?:Start|End)["']/;
+
+    for (const file of downstreamFiles) {
+      const source = readFileSync(
+        join(process.cwd(), "src/main/services/foreground-activity", file),
+        "utf8"
+      );
+      expect(source, file).not.toMatch(directLifecycleBranch);
+    }
   });
 });
