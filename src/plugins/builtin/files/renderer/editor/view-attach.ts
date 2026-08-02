@@ -25,6 +25,12 @@ export function attachFileEditorView(input: {
     return;
   }
   input.pathMutationGuards.syncDocument(document);
+  // Content reveal (mode switch / go-to) owns scroll; do not fight it with
+  // the previous source-mode pixel snapshot on remount.
+  const restoreScroll = !input.viewCommands.hasPendingReveal(
+    input.editorSessionId,
+    document.id
+  );
   input.views.attach({
     document,
     editorPrefs: input.editorPrefs,
@@ -33,6 +39,7 @@ export function attachFileEditorView(input: {
     ...(input.panelContext ? { panelContext: input.panelContext } : {}),
     parent: input.parent,
     presentation: input.presentation,
+    restoreScroll,
   });
   const session = input.views.getSession(input.editorSessionId);
   if (session) {

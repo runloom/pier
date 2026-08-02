@@ -1,6 +1,7 @@
 import { Button } from "@pier/ui/button.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { markdownViewportFocusY } from "./cross-mode-anchor.ts";
 import type { MarkdownHeadingSummary } from "./ir.ts";
 import {
   MARKDOWN_TOC_EDGE_INSET_PX,
@@ -206,8 +207,8 @@ export function useMarkdownHeadingScrollSpy(
       }
 
       const rootRect = root.getBoundingClientRect();
-      // Focus band near the upper quarter of the scrollport (docs-site style).
-      const focusY = rootRect.top + Math.min(96, rootRect.height * 0.22);
+      // Focus band shared with preview ↔ source content anchors.
+      const focusY = markdownViewportFocusY(rootRect);
       let bestId: string | null = null;
       let bestDelta = Number.POSITIVE_INFINITY;
       for (const element of elements) {

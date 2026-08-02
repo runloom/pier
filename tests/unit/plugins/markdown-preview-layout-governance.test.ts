@@ -131,4 +131,16 @@ describe("markdown preview layout governance", () => {
     expect(proseCss).toContain("--md-measure:");
     expect(proseCss).toContain("max-width: var(--md-measure)");
   });
+
+  it("shares viewport focus band between TOC spy and cross-mode anchors", () => {
+    const toc = readPreview("preview-toc.tsx");
+    const anchor = readPreview("cross-mode-anchor.ts");
+    const helpers = readPreview("ir-render-helpers.ts");
+    expect(anchor).toContain("export const MARKDOWN_VIEWPORT_FOCUS_BAND");
+    expect(anchor).toContain("export function markdownViewportFocusY");
+    expect(toc).toContain("markdownViewportFocusY");
+    expect(toc).not.toContain("rootRect.height * 0.22");
+    expect(helpers).toContain('"data-source-end-offset"');
+    expect(helpers).toContain('"data-source-offset"');
+  });
 });
