@@ -201,7 +201,11 @@ describe("withPierKimiHooks (TOML 注入)", () => {
     const counts: number[] = [];
     for (const row of rows) {
       if (row.kind !== "agentEvent") continue;
-      aggregator.ingestAgentEvent(row, { stopAuthority: "advisory" });
+      aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
+        stopAuthority: "advisory",
+        turnStartAuthority: "none",
+      });
       const activity = aggregator.snapshot().activities[0];
       if (activity?.kind === "agent") counts.push(activity.subagentCount);
     }

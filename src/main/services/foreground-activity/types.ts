@@ -15,6 +15,16 @@ export type AgentStopAuthority =
   | "none"
   | "reset-only";
 
+export type AgentTurnStartAuthority = "authoritative" | "none";
+
+export type AgentEventEvidenceSource = "hook" | "transcript";
+
+export interface AgentEventIngestOptions {
+  evidenceSource: AgentEventEvidenceSource;
+  stopAuthority: AgentStopAuthority;
+  turnStartAuthority: AgentTurnStartAuthority;
+}
+
 /**
  * Aggregator 公共 API。native callback、hook observer、task launcher 与 IPC
  * 快照全部经此接口——单入口, 状态归一。
@@ -51,7 +61,7 @@ export interface ForegroundActivityAggregator {
    */
   ingestAgentEvent(
     event: AgentHookEventPayload,
-    options: { stopAuthority: AgentStopAuthority }
+    options: AgentEventIngestOptions
   ): boolean;
   /**
    * 前台命令退出：双层同清 + 5s 冷却（覆盖崩溃/kill 等无 SessionEnd hook

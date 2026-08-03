@@ -310,7 +310,9 @@ describe("MiMo Code 固定提交真实载荷", () => {
     for (const row of permissionRows) {
       if (row.kind !== "agentEvent") continue;
       permissionAggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
         stopAuthority: mimoCodeIntegration.runtime.stopAuthority,
+        turnStartAuthority: "none",
       });
       const activity = permissionAggregator.snapshot().activities[0];
       permissionStatuses.push(
@@ -329,7 +331,9 @@ describe("MiMo Code 固定提交真实载荷", () => {
     for (const row of rows) {
       if (row.kind === "agentEvent") {
         aggregator.ingestAgentEvent(row, {
+          evidenceSource: "hook",
           stopAuthority: mimoCodeIntegration.runtime.stopAuthority,
+          turnStartAuthority: "none",
         });
       }
     }

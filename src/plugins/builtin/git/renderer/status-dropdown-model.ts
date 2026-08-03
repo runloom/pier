@@ -478,7 +478,13 @@ export function deriveGitStatusDropdownModel(
     contextLine: contextLine(options, status),
     operationKind,
     rows,
-    tasks: FIXED_TASKS.map((task) => ({ ...task })),
+    tasks: [
+      ...(status.repoState.kind === "clean" &&
+      status.changeSummary.changedFiles === 0
+        ? [{ id: "viewChanges" as const }]
+        : []),
+      ...FIXED_TASKS.map((task) => ({ ...task })),
+    ],
     variant: "normal",
     worktreePath: options.worktreePath,
   };

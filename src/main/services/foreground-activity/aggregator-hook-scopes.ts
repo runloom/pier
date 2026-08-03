@@ -4,9 +4,11 @@ import {
 } from "@shared/agent-session-actor.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
+import type { AgentTurnEventSemantics } from "./agent-turn-event-semantics.ts";
 import {
   logAgentEventDropped,
   logAgentLifecycleEvidence,
+  nativeEventForLog,
   refreshHookProjectionWithLog,
   setHookScopeStatusWithLog,
 } from "./aggregator-tracing.ts";
@@ -18,8 +20,6 @@ import {
   PANEL_HOOK_SCOPE_KEY,
   type PanelSlot,
   SESSION_END_COOLDOWN_MS,
-  TURN_BOUNDARY_EVENTS,
-  TURN_RESET_EVENTS,
 } from "./entry.ts";
 import {
   commitSubagentWorkPlan,
@@ -27,20 +27,20 @@ import {
   planSubagentWork,
   retireSubagentWorksForScope,
 } from "./subagent-work-associations.ts";
-import type { AgentStopAuthority } from "./types.ts";
+import type {
+  TurnBookkeepingResult,
+  TurnTransition,
+} from "./turn-bookkeeping.ts";
+import type { AgentEventIngestOptions } from "./types.ts";
 
 function updateSubagentAssociationsAfterBookkeeping(
   hook: HookLayer,
   scope: HookScope,
   event: AgentHookEventPayload,
-  identity: HookScopeIdentity
+  identity: HookScopeIdentity,
+  transition: TurnTransition
 ): void {
-  if (
-    TURN_BOUNDARY_EVENTS.has(event.event) ||
-    TURN_RESET_EVENTS.has(event.event) ||
-    event.event === "Stop" ||
-    event.event === "SessionEnd"
-  ) {
+  if (transition !== "none") {
     retireSubagentWorksForScope(hook, scope.key);
   }
   if (SUBAGENT_HOOK_EVENTS.has(event.event)) {
@@ -77,13 +77,15 @@ export interface HookScopeCoordinator {
   allowsAgentEventAfterCooldowns: (
     key: string,
     event: AgentHookEventPayload,
-    identity: HookScopeIdentity
+    identity: HookScopeIdentity,
+    semantics: AgentTurnEventSemantics
   ) => boolean;
   clearCooldownsForPanel: (panelId: string) => void;
   handleSessionEnd: (
     key: string,
     event: AgentHookEventPayload,
-    identity: HookScopeIdentity
+    identity: HookScopeIdentity,
+    semantics: AgentTurnEventSemantics
   ) => boolean | null;
   noteStatusEvent: (
     key: string,
@@ -93,12 +95,14 @@ export interface HookScopeCoordinator {
     event: AgentHookEventPayload,
     status: ActivityStatus | undefined,
     at: number,
-    stopAuthority: AgentStopAuthority
+    semantics: AgentTurnEventSemantics,
+    result: Extract<TurnBookkeepingResult, { accepted: true }>,
+    options: AgentEventIngestOptions
   ) => void;
   prepareSessionStartScope: (
     hook: HookLayer,
-    event: AgentHookEventPayload,
-    identity: HookScopeIdentity
+    identity: HookScopeIdentity,
+    semantics: AgentTurnEventSemantics
   ) => boolean;
   pruneExpiredCooldowns: () => void;
   resolveEventIdentity: (
@@ -175,13 +179,14 @@ export function createHookScopeCoordinator({
   function allowsAgentEventAfterCooldowns(
     key: string,
     event: AgentHookEventPayload,
-    identity: HookScopeIdentity
+    identity: HookScopeIdentity,
+    semantics: AgentTurnEventSemantics
   ): boolean {
     if (isInCooldown(panelCooldownUntil, key, now)) {
       logAgentEventDropped("suppressed-panel-cooldown", key, event.event);
       return false;
     }
-    if (event.event === "SessionStart") {
+    if (semantics.category === "session-start") {
       hookCooldownUntil.delete(key);
       if (identity.isolated) {
         hookScopeCooldownUntil.delete(scopeCooldownKey(key, identity.key));
@@ -209,9 +214,10 @@ export function createHookScopeCoordinator({
   function handleSessionEnd(
     key: string,
     event: AgentHookEventPayload,
-    identity: HookScopeIdentity
+    identity: HookScopeIdentity,
+    semantics: AgentTurnEventSemantics
   ): boolean | null {
-    if (event.event !== "SessionEnd") {
+    if (semantics.category !== "session-end") {
       return null;
     }
     if (isSubagentHookEvent(event)) {
@@ -230,10 +236,10 @@ export function createHookScopeCoordinator({
    */
   function prepareSessionStartScope(
     hook: HookLayer,
-    event: AgentHookEventPayload,
-    identity: HookScopeIdentity
+    identity: HookScopeIdentity,
+    semantics: AgentTurnEventSemantics
   ): boolean {
-    if (event.event !== "SessionStart") {
+    if (semantics.category !== "session-start") {
       return false;
     }
     if (identity.isolated && hook.scopes.has(identity.key)) {
@@ -319,17 +325,25 @@ export function createHookScopeCoordinator({
     event: AgentHookEventPayload,
     status: ActivityStatus | undefined,
     at: number,
-    stopAuthority: AgentStopAuthority
+    semantics: AgentTurnEventSemantics,
+    result: Extract<TurnBookkeepingResult, { accepted: true }>,
+    options: AgentEventIngestOptions
   ): void {
     hook.agentId = event.agent;
-    updateSubagentAssociationsAfterBookkeeping(hook, scope, event, identity);
+    updateSubagentAssociationsAfterBookkeeping(
+      hook,
+      scope,
+      event,
+      identity,
+      result.transition
+    );
     // 身份只由主会话事件推进；子会话事件只记数，不得改写面板行身份。
     // SessionStart 是**换会话**：同一面板 resume / clear 后会话号会变，
     // 此时整体替换，否则旧 sessionId 残留成错误身份。其余事件按事实叠加。
     if (!isSubagentHookEvent(event)) {
       const facts = hookIdentityFacts(event);
       scope.identity =
-        event.event === "SessionStart"
+        semantics.category === "session-start"
           ? facts
           : { ...scope.identity, ...facts };
     }
@@ -345,12 +359,16 @@ export function createHookScopeCoordinator({
     setHookScopeStatusWithLog(key, hook, scope, status, at, event.agent);
     logAgentLifecycleEvidence({
       agent: event.agent,
-      authority: stopAuthority,
       event: event.event,
+      nativeEvent: nativeEventForLog(event),
+      options,
       panelId: key,
       previousStatus,
       projectedStatus: hook.status,
+      semantics,
       sessionId: event.sessionId,
+      terminalRetiredWork: result.terminalRetiredWork,
+      transition: result.transition,
       turnId: event.turnId,
     });
   }

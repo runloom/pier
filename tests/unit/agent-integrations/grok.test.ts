@@ -419,7 +419,11 @@ describe("grokIntegration", () => {
       if (row.kind !== "agentEvent") {
         continue;
       }
-      aggregator.ingestAgentEvent(row, integration.runtime);
+      aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
+        stopAuthority: integration.runtime.stopAuthority,
+        turnStartAuthority: "none",
+      });
       const activity = aggregator.snapshot().activities[0];
       statuses.push(activity?.kind === "agent" ? activity.status : undefined);
     }
@@ -448,7 +452,11 @@ describe("grokIntegration", () => {
         continue;
       }
       accepted.push(
-        lifecycleAggregator.ingestAgentEvent(row, integration.runtime)
+        lifecycleAggregator.ingestAgentEvent(row, {
+          evidenceSource: "hook",
+          stopAuthority: integration.runtime.stopAuthority,
+          turnStartAuthority: "none",
+        })
       );
       const activity = lifecycleAggregator.snapshot().activities[0];
       if (activity?.kind === "agent") {

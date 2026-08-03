@@ -176,7 +176,11 @@ describe("buildVibeHookBlock / withPierVibeHooks", () => {
     const statuses: string[] = [];
     for (const event of rows) {
       if (event.kind !== "agentEvent") continue;
-      aggregator.ingestAgentEvent(event, { stopAuthority: "advisory" });
+      aggregator.ingestAgentEvent(event, {
+        evidenceSource: "hook",
+        stopAuthority: "advisory",
+        turnStartAuthority: "none",
+      });
       const activity = aggregator.snapshot().activities[0];
       if (activity?.kind === "agent" && activity.status) {
         statuses.push(activity.status);

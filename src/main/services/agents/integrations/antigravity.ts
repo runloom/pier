@@ -288,7 +288,11 @@ export const antigravityIntegration: AgentHookIntegration = {
   install: () => installAntigravityHooks(),
   runtime: {
     emittedMappings: [
-      { nativeEvent: "PreInvocation", pierEvent: "processing" },
+      {
+        nativeEvent: "PreInvocation",
+        pierEvent: "processing",
+        turnStartAuthority: "authoritative",
+      },
       { nativeEvent: "Stop.error", pierEvent: "error" },
       { nativeEvent: "Stop.fullyIdle", pierEvent: "Stop" },
       { nativeEvent: "Stop.active", pierEvent: "processing" },

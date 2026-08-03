@@ -280,13 +280,15 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     );
     expect(r.status).toBe(0);
     const line = (await readFile(logPath, "utf8")).trim();
-    expect(agentHookEventSchema.parse(JSON.parse(line))).toMatchObject({
+    const parsed = agentHookEventSchema.parse(JSON.parse(line));
+    expect(parsed).toMatchObject({
       agent: "claude",
       event: "Stop",
       kind: "agentEvent",
       panelId: "p1",
       v: 2,
     });
+    expect(parsed).not.toHaveProperty("turnId");
   });
 
   it("旧 agentEvent 位置参数继续写出可解析的 v1 行", {
@@ -329,8 +331,28 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
       event: "ToolStart",
       sessionId: "session-1",
       toolUseId: "tool-1",
+      turnId: "turn-1",
       v: 1,
     });
+
+    const blankResult = spawnSync(
+      "/bin/sh",
+      [emitScriptPath(hooksHome), "agentEvent", "claude", "Stop"],
+      {
+        env: {
+          ...process.env,
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+        },
+      }
+    );
+    expect(blankResult.status).toBe(0);
+    const blankLine = (await readFile(logPath, "utf8")).trim().split("\n")[1];
+    expect(blankLine).toBeDefined();
+    expect(
+      agentHookEventSchema.parse(JSON.parse(blankLine ?? ""))
+    ).not.toHaveProperty("turnId");
   });
 
   it("agentEventV3 spawn 写出可被严格 schema 解析的标准与交互事件", {

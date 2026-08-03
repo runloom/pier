@@ -1,12 +1,22 @@
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import { createLogger } from "@shared/logger.ts";
+import type { AgentTurnEventSemantics } from "./agent-turn-event-semantics.ts";
 import type { HookLayer, HookScope } from "./entry.ts";
 import {
   refreshHookProjection,
   setHookScopeStatus,
 } from "./hook-scope-projection.ts";
-import type { AgentStopAuthority } from "./types.ts";
+import type {
+  TerminalRetiredWork,
+  TurnBookkeepingRejectionReason,
+  TurnTransition,
+} from "./turn-bookkeeping.ts";
+import type {
+  AgentEventEvidenceSource,
+  AgentEventIngestOptions,
+} from "./types.ts";
 
 /**
  * aggregator 模块的日志辅助函数。
@@ -15,6 +25,10 @@ import type { AgentStopAuthority } from "./types.ts";
  * 日志逻辑集中在此处便于后续调整 level / ctx 字段。
  */
 const log = createLogger("foreground-activity.aggregator");
+
+export function nativeEventForLog(event: AgentHookEventPayload): string {
+  return event.v === 1 ? event.event : event.nativeEvent;
+}
 
 /** ingestAgentEvent 入口的 routing 日志。 */
 export function logRouting(
@@ -40,19 +54,24 @@ export function logAgentEventDropped(
     | "foreign-agent-hook"
     | "subagent-detail-ignored"
     | "ghost-rejected"
-    | "absorbed"
-    | "status-null",
+    | "absorbed",
   panelId: string,
   event: string,
   extra?: {
+    evidenceSource?: AgentEventEvidenceSource;
     eventAgent?: AgentKind;
     frozenStatus?: ActivityStatus;
+    nativeEvent?: string;
     ownerAgent?: AgentKind;
+    rejectionReason?: TurnBookkeepingRejectionReason;
   }
 ): void {
   const details = {
     panelId,
     event,
+    ...(extra?.evidenceSource === undefined
+      ? {}
+      : { evidenceSource: extra.evidenceSource }),
     ...(extra?.eventAgent === undefined
       ? {}
       : { eventAgent: extra.eventAgent }),
@@ -62,6 +81,12 @@ export function logAgentEventDropped(
     ...(extra?.ownerAgent === undefined
       ? {}
       : { ownerAgent: extra.ownerAgent }),
+    ...(extra?.nativeEvent === undefined
+      ? {}
+      : { nativeEvent: extra.nativeEvent }),
+    ...(extra?.rejectionReason === undefined
+      ? {}
+      : { reason: extra.rejectionReason }),
   };
   if (reason === "absorbed" || reason === "foreign-agent-hook") {
     log.warn(`ingestAgentEvent:${reason}`, details);
@@ -73,36 +98,41 @@ export function logAgentEventDropped(
 /** 只记录身份与状态词，不记录 prompt、工具参数或 transcript 正文。 */
 export function logAgentLifecycleEvidence(args: {
   agent: AgentKind;
-  authority: AgentStopAuthority;
   event: string;
+  options: AgentEventIngestOptions;
   panelId: string;
   previousStatus: ActivityStatus | undefined;
   projectedStatus: ActivityStatus | undefined;
+  nativeEvent: string;
+  semantics: AgentTurnEventSemantics;
   sessionId?: string | undefined;
+  terminalRetiredWork?: TerminalRetiredWork | undefined;
+  transition: TurnTransition;
   turnId?: string | undefined;
 }): void {
   let message: string | null = null;
-  if (args.event === "PromptSubmit") {
+  if (args.transition === "reset") {
     message = "agent-turn-started";
-  } else if (args.event === "Stop") {
-    message =
-      args.authority === "advisory"
-        ? "agent-terminal-candidate"
-        : "agent-terminal-trusted";
-  } else if (
-    args.event === "TurnCompleted" ||
-    args.event === "TurnInterrupted"
-  ) {
+  } else if (args.transition === "terminal-candidate") {
+    message = "agent-terminal-candidate";
+  } else if (args.transition === "terminal-trusted") {
     message = "agent-terminal-trusted";
   }
   if (!message) return;
   log.info(message, {
     agent: args.agent,
-    authority: args.authority,
+    authority: args.options.stopAuthority,
+    category: args.semantics.category,
+    evidenceSource: args.options.evidenceSource,
     event: args.event,
+    nativeEvent: args.nativeEvent,
     projectedStatus: args.projectedStatus,
     panelId: args.panelId,
+    transition: args.transition,
     ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+    ...(args.terminalRetiredWork
+      ? { terminalRetiredWork: args.terminalRetiredWork }
+      : {}),
     ...(args.turnId ? { turnId: args.turnId } : {}),
   });
   if (
@@ -112,8 +142,10 @@ export function logAgentLifecycleEvidence(args: {
   ) {
     log.info("agent-ready-derived", {
       agent: args.agent,
-      authority: args.authority,
+      authority: args.options.stopAuthority,
       cause: args.event,
+      evidenceSource: args.options.evidenceSource,
+      nativeEvent: args.nativeEvent,
       panelId: args.panelId,
       ...(args.sessionId ? { sessionId: args.sessionId } : {}),
       ...(args.turnId ? { turnId: args.turnId } : {}),

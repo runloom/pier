@@ -297,11 +297,19 @@ describe("withPierCopilotHooks", () => {
         v: 3,
         windowId: "w1",
       },
-      { stopAuthority: "advisory" }
+      {
+        evidenceSource: "hook",
+        stopAuthority: "advisory",
+        turnStartAuthority: "none",
+      }
     );
     const counts: number[] = [];
     for (const row of rows) {
-      aggregator.ingestAgentEvent(row, { stopAuthority: "advisory" });
+      aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
+        stopAuthority: "advisory",
+        turnStartAuthority: "none",
+      });
       counts.push(
         (aggregator.snapshot().activities[0] as AgentActivity).subagentCount
       );

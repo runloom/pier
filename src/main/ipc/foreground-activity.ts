@@ -17,6 +17,7 @@ import {
   installAgentHooksStack,
   uninstallAllAgentHooks,
 } from "../services/agents/integrations/registry.ts";
+import { resolveAgentEventIngestOptions } from "../services/agents/integrations/runtime/event-authority.ts";
 import {
   type AgentTerminalReconciler,
   createAgentTerminalReconciler,
@@ -360,9 +361,14 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   // (native shell integration 走 native callback 通路)，是 forward-compat 占位。
   agentTerminalReconciler = createAgentTerminalReconciler({
     onTerminalEvent: (event) => {
-      foregroundActivityAggregator.ingestAgentEvent(event, {
-        stopAuthority: "authoritative",
-      });
+      foregroundActivityAggregator.ingestAgentEvent(
+        event,
+        resolveAgentEventIngestOptions({
+          evidenceSource: "transcript",
+          event,
+          runtime: undefined,
+        })
+      );
     },
     // provider 原生会话名（`provider` 秩）：只有能从自家 transcript 读出标题的
     // agent 会走到这里；读不到就没有，标题退回首条 prompt 派生。
@@ -392,11 +398,16 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
         return;
       }
       const routed = withResolvedOwner(event);
-      const accepted = foregroundActivityAggregator.ingestAgentEvent(routed, {
-        stopAuthority:
-          getAgentHookIntegration(routed.agent)?.runtime.stopAuthority ??
-          "none",
+      const integration = getAgentHookIntegration(routed.agent);
+      const options = resolveAgentEventIngestOptions({
+        evidenceSource: "hook",
+        event: routed,
+        runtime: integration?.runtime,
       });
+      const accepted = foregroundActivityAggregator.ingestAgentEvent(
+        routed,
+        options
+      );
       if (!accepted) {
         return;
       }
@@ -438,10 +449,9 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
       foregroundActivityAggregator.ingestCommandStartHook(
         withResolvedOwner(event)
       ),
-    onError: (err) => {
-      // Per-line JSONL corruption is recoverable; warn keeps diagnostics visible
-      // without treating one bad hook line as a foreground-activity outage.
-      log.warn("jsonl observer parse failed", { err });
+    onError: (diagnostic) => {
+      // JSONL 行错误与文件系统失败都已在 observer 边界脱敏。
+      log.warn("jsonl observer failure", diagnostic);
     },
   });
   ipcMain.handle("pier:foreground-activity:snapshot", (event) => {

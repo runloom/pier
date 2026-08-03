@@ -311,7 +311,7 @@ export const OMP_EVENT_MAP = OMP_EVENTS;
 export const OMP_MARKER = MARKER;
 
 /**
- * Ev5 诚实结论：omp 无原生回合失败语义可映射 FA `error`。
- * 证据：2026-07-05 probe（abort 仍 `agent_end`）；映射表无独立失败事件。
+ * Ev5 诚实结论：omp 的 `agent_end` 会通过最后一条 `assistant` 消息的
+ * `stopReason` 区分 `error` / `aborted` / `completed`，可原生映射 FA `error`。
  */
 export const OMP_FA_ERROR_REACHABILITY = "native" as const;

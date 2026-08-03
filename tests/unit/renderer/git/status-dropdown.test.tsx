@@ -363,6 +363,42 @@ describe("GitStatusDropdown", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 
+  it("opens view changes from a clean menu while keeping the clean row disabled", async () => {
+    const pluginContext = makePluginContext();
+    const onViewChanges = vi.fn();
+    render(
+      <GitStatusDropdown
+        model={model({
+          tasks: [
+            { id: "viewChanges" },
+            { id: "switchBranch" },
+            { id: "switchWorktree" },
+          ],
+        })}
+        onViewChanges={onViewChanges}
+        pluginContext={pluginContext}
+      >
+        <button type="button">trigger</button>
+      </GitStatusDropdown>
+    );
+    fireEvent.pointerDown(screen.getByRole("button", { name: "trigger" }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    await screen.findByRole("menu");
+
+    expect(screen.getByTestId("git-status-row-clean")).toHaveAttribute(
+      "data-disabled"
+    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "View Changes" }));
+
+    expect(onViewChanges).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+  });
+
   it("renders Git row icons for every row icon kind", async () => {
     for (const { icon, gitIcon } of ROW_ICON_EXPECTATIONS) {
       const pluginContext = makePluginContext();

@@ -6,6 +6,7 @@ import type {
   AgentSessionTitleSource,
   ForegroundActivity,
 } from "@shared/contracts/foreground-activity.ts";
+import type { AgentTerminalEvidence } from "./agent-turn-event-semantics.ts";
 import type {
   SubagentWorkAssociation,
   SubagentWorkPlan,
@@ -39,30 +40,6 @@ export const HOOK_FRESH_TTL_MS = 30 * 60 * 1000;
 /** 新建层消抖隐藏（hook SessionStart / launch 瞬时命令不闪）。 */
 export const VISIBILITY_DEBOUNCE_MS = 250;
 
-/**
- * 回合边界事件（会话切换/错误）——之后的迟到工具事件被吸收。
- * Stop 是否属于可信边界由集成的 `stopAuthority` 决定，不在此处一刀切。
- */
-export const TURN_BOUNDARY_EVENTS = new Set([
-  "TurnCompleted",
-  "TurnInterrupted",
-  "error",
-]);
-/** 回合重置事件（新回合开始）——解除吸收 + 清 subagent 计数。 */
-export const TURN_RESET_EVENTS = new Set([
-  "PromptSubmit",
-  "processing",
-  "running",
-]);
-/** 会话创建事件——只有正向信号才能建 hook 层（幽灵门控）。 */
-export const SESSION_CREATING_EVENTS = new Set([
-  "SessionStart",
-  "PromptSubmit",
-  "ToolStart",
-  "InteractionRequested",
-  "processing",
-  "running",
-]);
 /**
  * 子代理事件只做计数, 不改父状态（防 tool→processing 闪跳）。
  * 判据单一来源是 shared/agent-session-actor.ts，本模块不复制一份。
@@ -144,7 +121,6 @@ export interface HookScope {
    */
   completionObservedAt: number | undefined;
   currentTurnId: string | undefined;
-  deferredReady: boolean;
   /** 当前 scope 的主会话身份事实；hook.identity 只是选中 scope 的镜像。 */
   identity: HookIdentityFacts;
   interactionHistoryIncomplete: boolean;
@@ -157,6 +133,8 @@ export interface HookScope {
   stateStartedAt: number | undefined;
   status: ActivityStatus | undefined;
   subagentCount: number;
+  /** 当前可信终态证据；新回合重置时清空，只允许按强度单调增强。 */
+  terminalEvidence: AgentTerminalEvidence | undefined;
   toolHistoryIncomplete: boolean;
   turnEnded: boolean;
   /** 可信终态落定时刻（TurnCompleted / 权威 Stop 等）。 */
@@ -309,7 +287,6 @@ export function newHookScope(
     completionObserved: false,
     completionObservedAt: undefined,
     currentTurnId: undefined,
-    deferredReady: false,
     identity,
     interactionHistoryIncomplete: false,
     key,
@@ -321,6 +298,7 @@ export function newHookScope(
     stateStartedAt: undefined,
     status: undefined,
     subagentCount: 0,
+    terminalEvidence: undefined,
     turnEnded: false,
     turnEndedAt: undefined,
     turnResetAt: undefined,
@@ -346,11 +324,12 @@ export function getOrCreateHookScope(
 
 export function newHookLayer(
   event: AgentHookEventPayload,
-  at: number
+  at: number,
+  startsHidden: boolean
 ): HookLayer {
   return {
     agentId: event.agent,
-    hidden: event.event === "SessionStart",
+    hidden: startsHidden,
     identity: {},
     spawnedAt: at,
     stateStartedAt: undefined,
