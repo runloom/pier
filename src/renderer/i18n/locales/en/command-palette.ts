@@ -78,6 +78,11 @@ export const commandPalette = {
     loadingTasksDetail: "Scanning supported task sources in the active project",
     startingTask: "Starting task...",
     startFailed: "Failed to start task",
+    missingDependenciesTitle: "Missing task dependencies",
+    missingDependenciesBody:
+      'Could not find dependencies for "{{task}}": {{deps}}.\n\nYou can continue without the missing ones; dependencies that still resolve will run as usual.',
+    missingDependenciesListSep: ", ",
+    runWithoutDependencies: "Continue without missing dependencies",
     startingTaskWithLabel: "Starting {{label}}...",
     noTasks: "No runnable tasks found",
     noTasksDetail:

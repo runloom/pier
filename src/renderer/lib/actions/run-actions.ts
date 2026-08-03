@@ -36,6 +36,7 @@ async function spawnTask(args: {
   inputs?: Record<string, string>;
   mode?: TaskSpawnMode;
   project: ProjectContext;
+  skipMissingDependencies?: boolean;
   terminalPanelId?: string | undefined;
   taskId: string;
 }): Promise<TaskSpawnResult> {
@@ -49,6 +50,7 @@ async function spawnTask(args: {
     ...(args.mode === "background" ? { mode: args.mode } : {}),
     placement: "active-tab",
     projectRootPath: args.project.projectRootPath,
+    ...(args.skipMissingDependencies ? { skipMissingDependencies: true } : {}),
     ...(terminalPanelId ? { terminalPanelId } : {}),
     ...(args.project.targetGroupId
       ? { targetGroupId: args.project.targetGroupId }
@@ -208,13 +210,24 @@ async function spawnTaskWithInputFlow(
   }
 ): Promise<void> {
   try {
-    const result = await spawnTaskWithInputResolution((inputs) =>
-      spawnTask({ ...(inputs ? { inputs } : {}), project, taskId, ...options })
+    const result = await spawnTaskWithInputResolution((call) =>
+      spawnTask({
+        ...(call?.inputs ? { inputs: call.inputs } : {}),
+        ...(call?.skipMissingDependencies
+          ? { skipMissingDependencies: true }
+          : {}),
+        project,
+        taskId,
+        ...options,
+      })
     );
     if (!result) {
       return;
     }
-    if (result.status === "unsupported") {
+    if (
+      result.status === "unsupported" ||
+      result.status === "missing-dependencies"
+    ) {
       await showAppAlert({
         body: result.message,
         title: i18next.t("commandPalette.run.startFailed"),

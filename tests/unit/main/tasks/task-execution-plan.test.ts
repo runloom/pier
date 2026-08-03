@@ -223,7 +223,7 @@ describe("task execution planning", () => {
     expect(plan.launches[1]?.dependsOn).toEqual([plan.launches[0]?.taskId]);
   });
 
-  it("rejects VS Code plans with missing dependencies", async () => {
+  it("reports missing dependencies without hard-fail so UI can offer skip", async () => {
     await mkdir(join(projectRoot, ".vscode"));
     await writeFile(
       join(projectRoot, ".vscode", "tasks.json"),
@@ -231,7 +231,7 @@ describe("task execution planning", () => {
         tasks: [
           {
             command: "echo verify",
-            dependsOn: ["missing"],
+            dependsOn: ["missing", "also-gone"],
             label: "verify",
             type: "shell",
           },
@@ -255,9 +255,104 @@ describe("task execution planning", () => {
         taskId: task?.id ?? "",
       })
     ).resolves.toEqual({
-      message: "任务 verify 依赖不存在: missing",
-      status: "unsupported",
+      message: "任务 verify 依赖不存在: missing, also-gone",
+      missingDependencies: ["missing", "also-gone"],
+      status: "missing-dependencies",
+      taskLabel: "verify",
     });
+  });
+
+  it("skips missing deps but still launches resolvable dependency chain when skipMissingDependencies is set", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo lint",
+            label: "lint",
+            type: "shell",
+          },
+          {
+            command: "echo verify",
+            dependsOn: ["lint", "missing"],
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({
+      projectRootPath: projectRoot,
+    });
+    const verify = listed.tasks.find(
+      (candidate) => candidate.label === "verify"
+    );
+    const lint = listed.tasks.find((candidate) => candidate.label === "lint");
+
+    const preparation = await service.prepareSpawn({
+      projectRootPath: projectRoot,
+      skipMissingDependencies: true,
+      taskId: verify?.id ?? "",
+    });
+    expect(preparation.status).toBe("ready");
+    if (preparation.status !== "ready") {
+      return;
+    }
+    expect(preparation.launches.map((launch) => launch.taskId)).toEqual([
+      lint?.id,
+      verify?.id,
+    ]);
+    expect(preparation.launches.at(-1)?.dependsOn).toEqual([lint?.id]);
+  });
+
+  it("launches only the selected task when every dependency is missing and skip is set", async () => {
+    await mkdir(join(projectRoot, ".vscode"));
+    await writeFile(
+      join(projectRoot, ".vscode", "tasks.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            command: "echo verify",
+            dependsOn: ["missing", "also-gone"],
+            label: "verify",
+            type: "shell",
+          },
+        ],
+        version: "2.0.0",
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({
+      projectRootPath: projectRoot,
+    });
+    const verify = listed.tasks.find(
+      (candidate) => candidate.label === "verify"
+    );
+
+    const preparation = await service.prepareSpawn({
+      projectRootPath: projectRoot,
+      skipMissingDependencies: true,
+      taskId: verify?.id ?? "",
+    });
+    expect(preparation.status).toBe("ready");
+    if (preparation.status !== "ready") {
+      return;
+    }
+    expect(preparation.launches.map((launch) => launch.taskId)).toEqual([
+      verify?.id,
+    ]);
+    expect(preparation.launches[0]?.dependsOn).toBeUndefined();
   });
 
   it("rejects VS Code dependency cycles", async () => {
@@ -303,7 +398,7 @@ describe("task execution planning", () => {
     });
   });
 
-  it("rejects duplicate dependency labels inside the same task source", async () => {
+  it("resolves ambiguous dependency labels with first-wins instead of blocking", async () => {
     await mkdir(join(projectRoot, ".vscode"));
     await writeFile(
       join(projectRoot, ".vscode", "tasks.json"),
@@ -338,16 +433,77 @@ describe("task execution planning", () => {
       projectRootPath: projectRoot,
     });
     const task = listed.tasks.find((candidate) => candidate.label === "verify");
+    const firstLint = listed.tasks.find(
+      (candidate) =>
+        candidate.label === "lint" &&
+        candidate.commandSpec.kind === "shell" &&
+        candidate.commandSpec.command.includes("lint-one")
+    );
 
-    await expect(
-      service.prepareSpawn({
-        projectRootPath: projectRoot,
-        taskId: task?.id ?? "",
-      })
-    ).resolves.toEqual({
-      message: "任务标签重复: vscode lint",
-      status: "unsupported",
+    const preparation = await service.prepareSpawn({
+      projectRootPath: projectRoot,
+      taskId: task?.id ?? "",
     });
+    expect(preparation.status).toBe("ready");
+    if (preparation.status !== "ready") {
+      return;
+    }
+    expect(preparation.launches.map((launch) => launch.taskId)).toEqual([
+      firstLint?.id,
+      task?.id,
+    ]);
+  });
+
+  it("still launches when history has duplicate labels for the same cwd", async () => {
+    await writeFile(
+      join(projectRoot, "package.json"),
+      JSON.stringify({
+        scripts: {
+          "setup:worktree": "node scripts/setup-worktree.mjs",
+        },
+      })
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({
+        entries: [
+          {
+            command: "pnpm run setup:worktree",
+            cwd: projectRoot,
+            label: "setup:worktree",
+            source: "history",
+            taskId: "package-script:setup%3Aworktree",
+          },
+          {
+            command: "pnpm run setup:worktree",
+            cwd: projectRoot,
+            label: "setup:worktree",
+            source: "history",
+            taskId: "history:pnpm%20run%20setup%3Aworktree",
+          },
+        ],
+        version: 1,
+      }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({
+      projectRootPath: projectRoot,
+    });
+    const historyTasks = listed.tasks.filter(
+      (candidate) => candidate.source === "history"
+    );
+    expect(historyTasks).toHaveLength(1);
+
+    const packageTask = listed.tasks.find(
+      (candidate) =>
+        candidate.source === "package-script" &&
+        candidate.label === "setup:worktree"
+    );
+    const preparation = await service.prepareSpawn({
+      projectRootPath: projectRoot,
+      taskId: packageTask?.id ?? "",
+    });
+    expect(preparation.status).toBe("ready");
   });
 
   it("prepares reusable panels only for non-concurrent running tasks", async () => {

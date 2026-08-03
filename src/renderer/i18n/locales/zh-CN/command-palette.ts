@@ -78,6 +78,11 @@ export const commandPalette = {
     loadingTasksDetail: "正在扫描当前项目支持的任务源",
     startingTask: "正在启动任务...",
     startFailed: "任务启动失败",
+    missingDependenciesTitle: "依赖任务不存在",
+    missingDependenciesBody:
+      "找不到「{{task}}」依赖的：{{deps}}。\n\n可跳过缺失依赖继续运行；仍能解析的依赖会照常执行。",
+    missingDependenciesListSep: "、",
+    runWithoutDependencies: "跳过缺失依赖并继续",
     startingTaskWithLabel: "正在启动 {{label}}...",
     noTasks: "未发现可运行任务",
     noTasksDetail:

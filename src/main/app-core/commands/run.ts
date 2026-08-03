@@ -264,9 +264,13 @@ export async function executeRunSpawnCommand(
     forceRestart: mode === "background" ? true : (command.forceRestart ?? true),
     inputs: command.inputs,
     projectRootPath: command.projectRootPath,
+    skipMissingDependencies: command.skipMissingDependencies ?? false,
     taskId: command.taskId,
   });
   if (preparation.status === "requires-input") {
+    return commandSuccess(requestId, preparation);
+  }
+  if (preparation.status === "missing-dependencies") {
     return commandSuccess(requestId, preparation);
   }
   if (preparation.status === "unsupported") {

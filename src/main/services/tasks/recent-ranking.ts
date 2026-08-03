@@ -185,6 +185,11 @@ export function sortTasksByRecentUse(
     .map((ranked) => ranked.task);
 }
 
+/** history 候选 id 前缀（`stableId(["history", command])`）。 */
+function isHistoryTaskId(taskId: string): boolean {
+  return taskId.startsWith("history:");
+}
+
 /** 判断两条 recent 是否应合并为同一记忆（package-script 按仓库共享）。 */
 export function sameRecentIdentity(
   left: {
@@ -211,19 +216,63 @@ export function sameRecentIdentity(
   ) {
     return true;
   }
-  if (left.taskId && right.taskId) {
-    return (
-      recentTaskKey(left.cwd, left.taskId) ===
+  if (
+    left.taskId &&
+    right.taskId &&
+    recentTaskKey(left.cwd, left.taskId) ===
       recentTaskKey(right.cwd, right.taskId)
-    );
+  ) {
+    return true;
   }
-  if (left.taskId || right.taskId) {
+  // 同 cwd + 同 command：仅在至少一侧无 taskId 或为 history 时合并，
+  // 避免 vscode / package-script 等同命令串被误并；history 回跑与正式任务仍合并。
+  if (
+    recentCommandKey(left.cwd, left.command) !==
+    recentCommandKey(right.cwd, right.command)
+  ) {
     return false;
   }
-  return (
-    recentCommandKey(left.cwd, left.command) ===
-    recentCommandKey(right.cwd, right.command)
+  if (!(left.taskId && right.taskId)) {
+    return true;
+  }
+  return isHistoryTaskId(left.taskId) || isHistoryTaskId(right.taskId);
+}
+
+/**
+ * 合并同身份条目时优先保留 package-script 的 taskId / gitCommonDir，
+ * 避免 history 回跑冲掉 frecency 的 package 键。
+ */
+export function preferredRecentIdentityFields(
+  next: {
+    gitCommonDir?: string | undefined;
+    taskId: string;
+  },
+  matched: readonly {
+    gitCommonDir?: string | undefined;
+    taskId?: string | undefined;
+  }[]
+): { gitCommonDir?: string; taskId: string } {
+  if (isPackageScriptTaskId(next.taskId)) {
+    return {
+      taskId: next.taskId,
+      ...(next.gitCommonDir ? { gitCommonDir: next.gitCommonDir } : {}),
+    };
+  }
+  const packageMatch = matched.find(
+    (entry) => entry.taskId && isPackageScriptTaskId(entry.taskId)
   );
+  if (packageMatch?.taskId) {
+    const gitCommonDir =
+      packageMatch.gitCommonDir ?? next.gitCommonDir ?? undefined;
+    return {
+      taskId: packageMatch.taskId,
+      ...(gitCommonDir ? { gitCommonDir } : {}),
+    };
+  }
+  return {
+    taskId: next.taskId,
+    ...(next.gitCommonDir ? { gitCommonDir: next.gitCommonDir } : {}),
+  };
 }
 
 /**

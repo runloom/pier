@@ -415,9 +415,18 @@ function historySource({
   projectRootPath,
   recentTasks = [],
 }: CollectTaskCandidatesOptions): Promise<TaskCandidate[]> {
-  const tasks = recentTasks
-    .filter((entry) => entry.cwd === projectRootPath)
-    .map((entry) =>
+  // recent 已按最近使用在前；同 label 只保留一条，避免列表与依赖表出现重复标签。
+  const seenLabels = new Set<string>();
+  const tasks: TaskCandidate[] = [];
+  for (const entry of recentTasks) {
+    if (entry.cwd !== projectRootPath) {
+      continue;
+    }
+    if (seenLabels.has(entry.label)) {
+      continue;
+    }
+    seenLabels.add(entry.label);
+    tasks.push(
       candidate({
         commandSpec: { command: entry.command, kind: "shell" },
         concurrencyPolicy: "allow-concurrent",
@@ -427,6 +436,7 @@ function historySource({
         source: "history",
       })
     );
+  }
   return Promise.resolve(tasks);
 }
 

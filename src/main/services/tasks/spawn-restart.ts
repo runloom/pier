@@ -6,7 +6,11 @@ import type {
   TaskRunSnapshot,
   TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
-import { buildTaskLaunches } from "./execution-plan.ts";
+import {
+  type BuildTaskLaunchesOptions,
+  buildTaskLaunches,
+  MissingTaskDependenciesError,
+} from "./execution-plan.ts";
 
 export interface TaskRunInstance {
   kind: "panel";
@@ -125,14 +129,28 @@ export function buildReadyPreparation(
   task: TaskCandidate,
   tasks: TaskListResult["tasks"],
   inputs: Record<string, string>,
-  projectRootPath: string
+  projectRootPath: string,
+  options: BuildTaskLaunchesOptions = {}
 ): TaskSpawnPreparation {
   try {
     return {
-      launches: buildTaskLaunches(task, { inputs, projectRootPath }, tasks),
+      launches: buildTaskLaunches(
+        task,
+        { inputs, projectRootPath },
+        tasks,
+        options
+      ),
       status: "ready",
     };
   } catch (error) {
+    if (error instanceof MissingTaskDependenciesError) {
+      return {
+        message: error.message,
+        missingDependencies: [...error.missingDependencies],
+        status: "missing-dependencies",
+        taskLabel: error.taskLabel,
+      };
+    }
     return {
       message: error instanceof Error ? error.message : String(error),
       status: "unsupported",

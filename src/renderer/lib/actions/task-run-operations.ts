@@ -125,14 +125,20 @@ async function executeRestartTaskRun(
       target.mode === "background"
         ? target.run?.originPanelId
         : (target.relaunchPanelId ?? (target.run ? undefined : target.panelId));
-    const spawn = (inputs?: Record<string, string>) =>
+    const spawn = (call?: {
+      inputs?: Record<string, string>;
+      skipMissingDependencies?: boolean;
+    }) =>
       window.pier.tasks.spawn({
         focus: target.mode !== "background",
         forceRestart: true,
-        ...(inputs ? { inputs } : {}),
+        ...(call?.inputs ? { inputs: call.inputs } : {}),
         mode: target.mode,
         placement: "active-tab",
         projectRootPath: target.projectRootPath,
+        ...(call?.skipMissingDependencies
+          ? { skipMissingDependencies: true }
+          : {}),
         taskId: target.taskId,
         ...(terminalPanelId ? { terminalPanelId } : {}),
       });
@@ -140,7 +146,10 @@ async function executeRestartTaskRun(
     if (!result) {
       return null;
     }
-    if (result.status === "unsupported") {
+    if (
+      result.status === "unsupported" ||
+      result.status === "missing-dependencies"
+    ) {
       await showAppAlert({
         body: result.message,
         title: i18next.t("terminal.runtimeControl.startFailed"),

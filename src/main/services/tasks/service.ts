@@ -368,6 +368,7 @@ export function createTaskService({
       projectRootPath,
       taskId,
       inputs = {},
+      skipMissingDependencies = false,
     }) {
       if (!forceRestart) {
         const running = alreadyRunningPreparation(projectRootPath, taskId);
@@ -400,7 +401,8 @@ export function createTaskService({
         task,
         list.tasks,
         inputs,
-        projectRootPath
+        projectRootPath,
+        { skipMissingDependencies }
       );
       if (
         preparation.status !== "ready" ||

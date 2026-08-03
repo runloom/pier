@@ -131,6 +131,8 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     mode: taskSpawnModeSchema.optional(),
     placement: pierCommandPlacementSchema.optional(),
     projectRootPath: z.string().min(1),
+    /** 依赖 label 缺失时仍只启动当前任务（及可解析依赖）。 */
+    skipMissingDependencies: z.boolean().optional(),
     taskId: z.string().min(1),
     targetGroupId: z.string().min(1).optional(),
     terminalPanelId: z.string().min(1).optional(),

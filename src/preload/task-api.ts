@@ -28,6 +28,7 @@ export interface PierTasksAPI {
       | "split-left"
       | "split-above";
     projectRootPath: string;
+    skipMissingDependencies?: boolean;
     targetGroupId?: string;
     terminalPanelId?: string;
     taskId: string;
@@ -64,6 +65,9 @@ export const tasksApi: PierTasksAPI = {
       ...(args.mode ? { mode: args.mode } : {}),
       ...(args.placement ? { placement: args.placement } : {}),
       projectRootPath: args.projectRootPath,
+      ...(args.skipMissingDependencies === undefined
+        ? {}
+        : { skipMissingDependencies: args.skipMissingDependencies }),
       ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
       ...(args.terminalPanelId
         ? { terminalPanelId: args.terminalPanelId }

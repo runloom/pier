@@ -12,6 +12,7 @@ import {
 } from "../../state/task-recent.ts";
 import {
   collapseSharedPackageScriptEntries,
+  preferredRecentIdentityFields,
   sameRecentIdentity,
   sortTasksByRecentUse,
 } from "./recent-ranking.ts";
@@ -172,15 +173,26 @@ export function createTaskRecentLauncher({
         (sum, recent) => sum + (recent.useCount ?? 0),
         0
       );
+      // history 回跑与 package-script 同 command 合并时，保留 package-script 身份，
+      // 避免 frecency 丢 byPackageScript / byTask 键。
+      const preferred = preferredRecentIdentityFields(
+        {
+          taskId: launch.taskId,
+          ...(gitCommonDir ? { gitCommonDir } : {}),
+        },
+        matched
+      );
       const entry: TaskRecentEntry = {
         command: launch.rawCommand ?? launch.command,
         cwd: launch.cwd,
         lastUsedAt: usedAt,
         label: launch.label || basename(launch.cwd),
         source: "history",
-        taskId: launch.taskId,
+        taskId: preferred.taskId,
         useCount: priorCount + 1,
-        ...(gitCommonDir ? { gitCommonDir } : {}),
+        ...(preferred.gitCommonDir
+          ? { gitCommonDir: preferred.gitCommonDir }
+          : {}),
       };
       recentTasks = [
         entry,

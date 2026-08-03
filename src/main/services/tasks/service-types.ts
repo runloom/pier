@@ -22,6 +22,8 @@ export interface TaskSpawnRequest {
   forceRestart?: boolean | undefined;
   inputs?: Record<string, string> | undefined;
   projectRootPath: string;
+  /** 依赖 label 缺失时仍只启动当前任务（及可解析依赖）。 */
+  skipMissingDependencies?: boolean | undefined;
   taskId: string;
 }
 

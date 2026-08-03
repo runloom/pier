@@ -1,5 +1,6 @@
 import {
   collapseSharedPackageScriptEntries,
+  preferredRecentIdentityFields,
   recentPackageScriptKey,
   sameRecentIdentity,
   sortTasksByRecentUse,
@@ -179,6 +180,76 @@ describe("sameRecentIdentity", () => {
         }
       )
     ).toBe(false);
+  });
+
+  it("merges package-script and history re-run that share command and cwd", () => {
+    expect(
+      sameRecentIdentity(
+        {
+          command: "pnpm run setup:worktree",
+          cwd: "/proj",
+          taskId: "package-script:setup%3Aworktree",
+        },
+        {
+          command: "pnpm run setup:worktree",
+          cwd: "/proj",
+          taskId: "history:pnpm%20run%20setup%3Aworktree",
+        }
+      )
+    ).toBe(true);
+  });
+
+  it("does not merge two non-history taskIds that only share command and cwd", () => {
+    expect(
+      sameRecentIdentity(
+        {
+          command: "pnpm run build",
+          cwd: "/proj",
+          taskId: "package-script:build",
+        },
+        {
+          command: "pnpm run build",
+          cwd: "/proj",
+          taskId: "vscode:build",
+        }
+      )
+    ).toBe(false);
+  });
+});
+
+describe("preferredRecentIdentityFields", () => {
+  it("keeps package-script taskId when history re-run merges into it", () => {
+    expect(
+      preferredRecentIdentityFields(
+        {
+          taskId: "history:pnpm%20run%20dev",
+        },
+        [
+          {
+            gitCommonDir: "/repo/.git",
+            taskId: "package-script:dev",
+          },
+        ]
+      )
+    ).toEqual({
+      gitCommonDir: "/repo/.git",
+      taskId: "package-script:dev",
+    });
+  });
+
+  it("prefers the next package-script identity when the launch is package-script", () => {
+    expect(
+      preferredRecentIdentityFields(
+        {
+          gitCommonDir: "/repo/.git",
+          taskId: "package-script:dev",
+        },
+        [{ taskId: "history:pnpm%20run%20dev" }]
+      )
+    ).toEqual({
+      gitCommonDir: "/repo/.git",
+      taskId: "package-script:dev",
+    });
   });
 });
 
