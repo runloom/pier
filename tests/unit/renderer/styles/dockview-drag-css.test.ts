@@ -97,7 +97,7 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain(`max-width: ${PANEL_TAB_GHOST_MAX_WIDTH_PX}px`);
   });
 
-  it("keeps file-kind tab titles non-bold under ghost drag !important weight", () => {
+  it("keeps file-kind tab titles medium (not 600) under ghost drag !important weight", () => {
     const css = readFileSync(
       join(process.cwd(), "src/renderer/app/globals.css"),
       "utf8"
@@ -105,7 +105,8 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain(
       '.dv-tab-ghost-drag\n  .dv-default-tab[data-pier-tab-kind="file"]\n  .dv-default-tab-content'
     );
-    expect(css).toContain("font-weight: 400 !important");
+    // 文件 kind 用 500，必须 !important 盖过 ghost 默认 600，避免拖动时文件名变粗。
+    expect(css).toContain("font-weight: 500 !important");
   });
 
   it("reserves a left gutter for the absolute active-task presence dot", () => {

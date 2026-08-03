@@ -904,7 +904,7 @@ body {
   font-weight: 600 !important;
 }
 
-/* 文件 tab：文件名等宽、非粗体（路径标识符语义；preview 斜体仍叠加）。
+/* 文件 tab：文件名等宽 + medium（路径标识符语义；仍轻于默认 600，避免 400 过细）。
  * ghost 的 600 !important 必须被文件 kind 覆盖，否则拖动时文件名变粗。 */
 .dockview-theme-pier
   .dv-tab
@@ -915,21 +915,21 @@ body {
   .dv-default-tab-content,
 .dv-tab-ghost-drag .dv-default-tab[data-pier-tab-kind="file"] .dv-default-tab-content {
   font-family: var(--font-mono);
-  font-weight: 400;
+  font-weight: 500;
 }
 
 .dv-tab-ghost-drag
   .dv-default-tab[data-pier-tab-kind="file"]
   .dv-default-tab-content {
-  font-weight: 400 !important;
+  font-weight: 500 !important;
 }
 
 /* Preview tab 视觉 —— 与 Cursor / VS Code 对齐:tab title 斜体、图标半透明,
  * 表示"这个 tab 是临时预览,再点其他文件会被替换";修改内容或双击后 params.pinned
- * 变 true,data-pier-tab-preview 消失,恢复正常 tab。 */
+ * 变 true,data-pier-tab-preview 消失,恢复正常 tab。字重与文件 kind 同 500，仅斜体区分。 */
 .dockview-theme-pier .dv-tab .dv-default-tab[data-pier-tab-preview="true"] .dv-default-tab-content {
   font-style: italic;
-  font-weight: 400;
+  font-weight: 500;
 }
 .dockview-theme-pier .dv-tab .dv-default-tab[data-pier-tab-preview="true"] .pier-panel-tab-icon {
   opacity: 0.7;

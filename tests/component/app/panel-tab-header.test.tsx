@@ -883,7 +883,7 @@ describe("PanelTabHeader", () => {
     expect(fileUpdateParameters).toHaveBeenCalledWith({ pinned: true });
   });
 
-  it("marks file tabs with data-pier-tab-kind=file for mono non-bold styling", () => {
+  it("marks file tabs with data-pier-tab-kind=file for mono medium styling", () => {
     const { container } = render(
       <PanelTabHeader
         {...createHeaderProps(
