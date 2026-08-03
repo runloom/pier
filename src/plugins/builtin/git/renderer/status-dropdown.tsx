@@ -11,6 +11,7 @@ import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   Check,
+  Diff,
   Download,
   FolderGit,
   GitBranch,
@@ -48,7 +49,7 @@ const TASK_ICONS: Record<GitStatusDropdownActionId, LucideIcon> = {
   switchBranch: GitBranch,
   switchWorktree: FolderGit,
   syncChanges: RefreshCw,
-  viewChanges: GitCompareArrows,
+  viewChanges: Diff,
 };
 
 const TASK_LABELS: Record<
@@ -95,7 +96,7 @@ const ROW_ICONS: Record<
 > = {
   abort: { Icon: X, gitIcon: "git-abort" },
   bisect: { Icon: GitCompareArrows, gitIcon: "git-compare-arrows" },
-  changed: { Icon: GitCompareArrows, gitIcon: "git-compare-arrows" },
+  changed: { Icon: Diff, gitIcon: "git-diff" },
   cherryPick: {
     Icon: GitCommitHorizontal,
     gitIcon: "git-commit-horizontal",

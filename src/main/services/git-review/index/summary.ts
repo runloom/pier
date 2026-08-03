@@ -3,10 +3,7 @@ import {
   type GitReviewGroup,
   type GitReviewIndexEntry,
 } from "../../../../shared/contracts/git/review.ts";
-import type {
-  GitChangeSummary,
-  GitChangeSummaryUnavailableReason,
-} from "../../../../shared/contracts/git.ts";
+import type { GitChangeSummary } from "../../../../shared/contracts/git.ts";
 import {
   type GitUntrackedPathStats,
   type ReadGitUntrackedPathStatsOptions,
@@ -116,8 +113,6 @@ async function summarizeSlots({
   let deletions = 0;
   let excludedFiles = 0;
   let insertions = 0;
-  let omittedFiles = 0;
-  const reasons = new Set<GitChangeSummaryUnavailableReason>();
   const stableUntrackedStatTokens = new Map<string, string>();
   const untrackedPaths: string[] = [];
 
@@ -140,12 +135,8 @@ async function summarizeSlots({
       deletions += slot.deletions;
       continue;
     }
-    if (fact?.origin === "tracked" && !fact.statsExpected) {
-      excludedFiles += 1;
-      continue;
-    }
-    omittedFiles += 1;
-    reasons.add("commandFailed");
+    // 无数可计或 stats 缺失：进 excluded，保留其余路径的准确 +/-。
+    excludedFiles += 1;
   }
 
   if (untrackedPaths.length > 0) {
@@ -156,27 +147,14 @@ async function summarizeSlots({
       ...(signal === undefined ? {} : { signal }),
     });
     insertions += untracked.insertions;
-    excludedFiles += untracked.excludedFiles;
-    omittedFiles += untracked.omittedFiles;
-    for (const reason of untracked.reasons) {
-      reasons.add(reason);
-    }
+    excludedFiles += untracked.excludedFiles + untracked.omittedFiles;
     for (const [path, token] of untracked.stableStatTokens ?? []) {
       stableUntrackedStatTokens.set(path, token);
     }
   }
 
-  if (reasons.size > 0) {
-    return {
-      stableUntrackedStatTokens,
-      summary: {
-        changedFiles: slots.length,
-        kind: "filesOnly",
-        omittedFiles,
-        reasons: [...reasons].sort(),
-      },
-    };
-  }
+  // 可计行准确汇总；不可计路径（binary / 未跟踪读失败等）进 excluded，
+  // 不因局部失败整段降级为 filesOnly（与状态栏 change-summary 同构）。
   return {
     stableUntrackedStatTokens,
     summary: {

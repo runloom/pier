@@ -271,7 +271,7 @@ describe("buildGitChangeSummary", () => {
     });
   });
 
-  it("downgrades the entire range when an untracked file is not valid UTF-8", async () => {
+  it("keeps tracked +/- when an untracked file is not valid UTF-8", async () => {
     const summary = await buildGitChangeSummary({
       cwd: "/repo",
       execGit: async () => "3\t2\tsrc/tracked.ts\0",
@@ -281,13 +281,14 @@ describe("buildGitChangeSummary", () => {
 
     expect(summary).toEqual({
       changedFiles: 2,
-      kind: "filesOnly",
-      omittedFiles: 1,
-      reasons: ["invalidEncoding"],
+      deletions: 2,
+      excludedFiles: 1,
+      insertions: 3,
+      kind: "lineDelta",
     });
   });
 
-  it("maps a test seam read rejection to filesOnly/readFailed", async () => {
+  it("maps a test seam read rejection to excluded without dropping the range", async () => {
     await expect(
       buildGitChangeSummary({
         cwd: "/repo",
@@ -299,9 +300,10 @@ describe("buildGitChangeSummary", () => {
       })
     ).resolves.toEqual({
       changedFiles: 1,
-      kind: "filesOnly",
-      omittedFiles: 1,
-      reasons: ["readFailed"],
+      deletions: 0,
+      excludedFiles: 1,
+      insertions: 0,
+      kind: "lineDelta",
     });
   });
 
@@ -323,9 +325,10 @@ describe("buildGitChangeSummary", () => {
     expect(reads).not.toContain("three.txt");
     expect(summary).toEqual({
       changedFiles: 3,
-      kind: "filesOnly",
-      omittedFiles: 1,
-      reasons: ["budgetExceeded"],
+      deletions: 0,
+      excludedFiles: 1,
+      insertions: 2,
+      kind: "lineDelta",
     });
   });
 
@@ -390,24 +393,42 @@ describe("buildGitChangeSummary", () => {
           hasHead: false,
         });
         // Security property: symlink targets are omitted, never counted as text.
-        // Reason is unsafePath when O_NOFOLLOW yields ELOOP/EPERM/…; some Linux
-        // /proc-fd open paths still surface as readFailed after the open fails.
-        expect(summary).toMatchObject({
+        // Still keep lineDelta so countable peers are not discarded.
+        expect(summary).toEqual({
           changedFiles: 1,
-          kind: "filesOnly",
-          omittedFiles: 1,
+          deletions: 0,
+          excludedFiles: 1,
+          insertions: 0,
+          kind: "lineDelta",
         });
-        expect(summary.kind === "filesOnly" ? summary.reasons : []).toEqual(
-          expect.arrayContaining([
-            expect.stringMatching(/^(unsafePath|readFailed)$/),
-          ])
-        );
       }
     } finally {
       await Promise.all([
         rm(root, { force: true, recursive: true }),
         rm(outside, { force: true, recursive: true }),
       ]);
+    }
+  });
+
+  it("excludes an untracked directory without discarding tracked +/-", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-change-summary-dir-"));
+    try {
+      await mkdir(join(root, "nested-repo"));
+      await mkdir(join(root, "nested-repo", ".git"));
+      const summary = await buildGitChangeSummary({
+        cwd: root,
+        execGit: async () => "3\t2\tsrc/tracked.ts\0",
+        files: [tracked, { ...untracked, path: "nested-repo" }],
+      });
+      expect(summary).toEqual({
+        changedFiles: 2,
+        deletions: 2,
+        excludedFiles: 1,
+        insertions: 3,
+        kind: "lineDelta",
+      });
+    } finally {
+      await rm(root, { force: true, recursive: true });
     }
   });
 

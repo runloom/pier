@@ -125,10 +125,13 @@ const EMPTY_COUNTS: GitCounts = {
 
 const LINE_DELETION_SIGN = "\u2212";
 
-function hasLineDelta(
+function hasVisibleLineDelta(
   summary: GitChangeSummary
 ): summary is Extract<GitChangeSummary, { kind: "lineDelta" }> {
-  return summary.kind === "lineDelta";
+  return (
+    summary.kind === "lineDelta" &&
+    (summary.insertions > 0 || summary.deletions > 0)
+  );
 }
 
 function operationIcon(
@@ -231,7 +234,7 @@ function isLargeChange(summary: GitChangeSummary): boolean {
     return true;
   }
   return Boolean(
-    summary.kind === "lineDelta" &&
+    hasVisibleLineDelta(summary) &&
       summary.insertions + summary.deletions >= GIT_LARGE_CHANGE_LINE_THRESHOLD
   );
 }
@@ -283,7 +286,7 @@ function changesRow(
   text: GitStatusDropdownText
 ): GitStatusDropdownRow {
   const summary = status.changeSummary;
-  const deltaValue = hasLineDelta(summary)
+  const deltaValue = hasVisibleLineDelta(summary)
     ? ` · +${summary.insertions} ${LINE_DELETION_SIGN}${summary.deletions}`
     : "";
   const large = isLargeChange(summary);
@@ -294,7 +297,7 @@ function changesRow(
     label: text.changes,
     tone: large ? "warning" : "default",
     value: `${summary.changedFiles}${deltaValue}`,
-    ...(hasLineDelta(summary)
+    ...(hasVisibleLineDelta(summary)
       ? {
           assistiveLabel: `${summary.insertions} ${text.insertions}, ${summary.deletions} ${text.deletions}`,
         }

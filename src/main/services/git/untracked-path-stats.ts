@@ -277,7 +277,8 @@ async function readSafeUntrackedFile(
       target,
     });
     const before = await deadline.race(handle.stat({ bigint: true }));
-    if (!before.isFile()) return { kind: "failure", reason: "readFailed" };
+    // 目录 / 嵌套仓 / 非普通文件：无数可计，与 binary 一样进 excluded，不触发整段失败。
+    if (!before.isFile()) return { kind: "binary" };
     if (before.size > BigInt(GIT_CHANGE_SUMMARY_FILE_BYTES))
       return { kind: "failure", reason: "tooLarge" };
     const size = Number(before.size);

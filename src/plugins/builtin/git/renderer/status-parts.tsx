@@ -29,8 +29,21 @@ export function WorktreeBadge({ name }: { name: string }): React.ReactElement {
   );
 }
 
-/** VS Code CheckoutStatusBar 同构：脏/冲突进图标，不写分项数字。 */
+/** VS Code CheckoutStatusBar 同构：脏/冲突进图标变体；语义色落在分支名文字上。 */
 export type BranchIconKind = "clean" | "conflict" | "dirty" | "staged";
+
+function branchLabelToneClass(kind: BranchIconKind): string | undefined {
+  if (kind === "conflict") {
+    return "text-status-danger-fg";
+  }
+  if (kind === "staged") {
+    return "text-success";
+  }
+  if (kind === "dirty") {
+    return "text-warning";
+  }
+  return;
+}
 
 function BranchStatusIcon({
   kind,
@@ -41,7 +54,7 @@ function BranchStatusIcon({
     return (
       <GitMergeConflict
         aria-hidden="true"
-        className="size-3 shrink-0 text-status-danger-fg"
+        className="size-3 shrink-0"
         data-git-icon="git-branch-conflicts"
       />
     );
@@ -50,7 +63,7 @@ function BranchStatusIcon({
     return (
       <GitCommitHorizontal
         aria-hidden="true"
-        className="size-3 shrink-0 text-success"
+        className="size-3 shrink-0"
         data-git-icon="git-branch-staged"
       />
     );
@@ -59,7 +72,7 @@ function BranchStatusIcon({
     return (
       <GitBranch
         aria-hidden="true"
-        className="size-3 shrink-0 text-warning"
+        className="size-3 shrink-0"
         data-git-icon="git-branch-changes"
       />
     );
@@ -84,7 +97,7 @@ export function BranchLabel({
   pluginContext,
 }: {
   branch: GitBranchInfo | null;
-  /** 脏/冲突态图标（对齐 VS Code git-branch-changes 等变体）。 */
+  /** 脏/冲突态图标变体（对齐 VS Code git-branch-changes 等；中性色）。 */
   iconKind?: BranchIconKind;
   /** 进行中仓库操作短文案，如 Merging；叠在分支名旁，不加 Badge。 */
   operationLabel?: null | string;
@@ -100,6 +113,7 @@ export function BranchLabel({
     iconKind === "dirty" || iconKind === "staged"
       ? "git-dirty-indicator"
       : undefined;
+  const labelToneClass = branchLabelToneClass(iconKind);
   const operation = operationLabel ? (
     <span
       className={cn(
@@ -119,7 +133,9 @@ export function BranchLabel({
         <span className="inline-flex shrink-0" data-testid={dirtyTestId}>
           <BranchStatusIcon kind={iconKind} />
         </span>
-        <span className="truncate">{effectiveBranch}</span>
+        <span className={cn("truncate", labelToneClass)}>
+          {effectiveBranch}
+        </span>
         {operation}
       </span>
     );
@@ -141,7 +157,7 @@ export function BranchLabel({
             <BranchStatusIcon kind={iconKind} />
           )}
         </span>
-        <span className="tabular-nums">{head}</span>
+        <span className={cn("tabular-nums", labelToneClass)}>{head}</span>
         <span className="shrink-0 text-muted-foreground">
           {pluginText(pluginContext, "detachedShort", "Detached")}
         </span>
@@ -154,7 +170,7 @@ export function BranchLabel({
       <span className="inline-flex shrink-0" data-testid={dirtyTestId}>
         <BranchStatusIcon kind={iconKind} />
       </span>
-      <span className="truncate">{worktreeFallback}</span>
+      <span className={cn("truncate", labelToneClass)}>{worktreeFallback}</span>
       {operation}
     </span>
   );

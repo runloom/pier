@@ -154,16 +154,24 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     });
   }
 
-  it("默认 true：脏态编码为分支图标（git-dirty-indicator）", async () => {
+  it("默认 true：脏态编码为分支图标变体，语义色在分支名文字上", async () => {
     await renderItem(true);
     await waitFor(() => {
       expect(screen.getByTestId("git-dirty-indicator")).toBeInTheDocument();
     });
-    expect(
-      screen
-        .getByTestId("git-dirty-indicator")
-        .querySelector('[data-git-icon="git-branch-staged"]')
-    ).toBeInTheDocument();
+    const dirtyIndicator = screen.getByTestId("git-dirty-indicator");
+    const stagedIcon = dirtyIndicator.querySelector(
+      '[data-git-icon="git-branch-staged"]'
+    );
+    expect(stagedIcon).toBeInTheDocument();
+    expect(stagedIcon).not.toHaveClass("text-success");
+    const branchTrigger = screen.getByTestId("worktree-status-trigger");
+    expect(branchTrigger.querySelector("span.truncate")).toHaveClass(
+      "text-success"
+    );
+    expect(branchTrigger.querySelector("span.truncate")).toHaveTextContent(
+      "main"
+    );
   });
 
   it("false：不编码脏图标，分支名仍保留", async () => {
@@ -226,7 +234,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     });
   });
 
-  it("行统计不完整时只显示唯一文件数，不展示部分增删行", async () => {
+  it("行统计不完整时显示带单位的文件数，不展示部分增删行", async () => {
     const filesOnly = {
       ...DIRTY_STATUS,
       changeSummary: {
@@ -253,7 +261,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     const changesTrigger = await screen.findByTestId(
       "git-changes-status-trigger"
     );
-    expect(changesTrigger).toHaveTextContent("2");
+    expect(changesTrigger).toHaveTextContent("2 files");
     expect(changesTrigger).not.toHaveTextContent("+");
     expect(changesTrigger).not.toHaveTextContent("−");
     expect(changesTrigger).toHaveAttribute(
@@ -264,6 +272,9 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       "title",
       "Line totals are incomplete. Showing the changed file count."
     );
+    expect(
+      changesTrigger.querySelector('[data-git-icon="git-changes"]')
+    ).not.toBeNull();
   });
 
   it("完整行统计始终同时显示新增和删除两侧的零值", async () => {
@@ -297,6 +308,44 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     expect(
       changesTrigger.querySelector('[data-git-delta="deletions"]')
     ).toHaveTextContent("−3");
+  });
+
+  it("全 excluded 的 lineDelta 不展示 +0 −0，改为带单位文件数", async () => {
+    const { context, registered } = makeContext(true, () =>
+      Promise.resolve({
+        ...DIRTY_STATUS,
+        changeSummary: {
+          changedFiles: 2,
+          deletions: 0,
+          excludedFiles: 2,
+          insertions: 0,
+          kind: "lineDelta" as const,
+        },
+      })
+    );
+    registerGitStatusItem(context);
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
+
+    const changesTrigger = await screen.findByTestId(
+      "git-changes-status-trigger"
+    );
+    expect(changesTrigger).toHaveTextContent("2 files");
+    expect(
+      changesTrigger.querySelector('[data-git-delta="files"]')
+    ).not.toBeNull();
+    expect(
+      changesTrigger.querySelector('[data-git-delta="insertions"]')
+    ).toBeNull();
+    expect(changesTrigger).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("2 files excluded from line totals")
+    );
   });
 
   it("showChangesStatus=false 时隐藏更改项且 isVisible 为 false", async () => {

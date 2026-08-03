@@ -201,7 +201,7 @@ const ROW_ICON_EXPECTATIONS: ReadonlyArray<{
 }> = [
   { gitIcon: "git-abort", icon: "abort" },
   { gitIcon: "git-compare-arrows", icon: "bisect" },
-  { gitIcon: "git-compare-arrows", icon: "changed" },
+  { gitIcon: "git-diff", icon: "changed" },
   { gitIcon: "git-commit-horizontal", icon: "cherryPick" },
   { gitIcon: "git-commit-horizontal", icon: "clean" },
   { gitIcon: "git-continue", icon: "continue" },

@@ -6,10 +6,26 @@ import { pluginText } from "./plugin-text.ts";
 
 const LINE_DELETION_SIGN = "\u2212";
 
-export function gitChangeSummaryHasLineDelta(
+/** 有可展示的行增量时才画 +/-；全 0（例如全是 excluded）退回文件数。 */
+export function gitChangeSummaryHasVisibleLineDelta(
   summary: GitChangeSummary
-): summary is Extract<GitChangeSummary, { kind: "lineDelta" }> {
-  return summary.kind === "lineDelta";
+): boolean {
+  return (
+    summary.kind === "lineDelta" &&
+    (summary.insertions > 0 || summary.deletions > 0)
+  );
+}
+
+function changedFilesVisibleLabel(
+  context: RendererPluginContext,
+  count: number
+): string {
+  return pluginText(
+    context,
+    count === 1 ? "changeSummaryFileVisible" : "changeSummaryFilesVisible",
+    count === 1 ? "{{count}} file" : "{{count}} files",
+    { count }
+  );
 }
 
 export function gitChangeSummaryAccessibleLabel(
@@ -36,6 +52,20 @@ export function gitChangeSummaryAccessibleLabel(
         { count: summary.omittedFiles }
       ),
     ].join(", ");
+  }
+  if (!gitChangeSummaryHasVisibleLineDelta(summary)) {
+    const parts = [files];
+    if (summary.excludedFiles > 0) {
+      parts.push(
+        pluginText(
+          context,
+          "changeSummaryExcludedAccessible",
+          "{{count}} files excluded from line totals",
+          { count: summary.excludedFiles }
+        )
+      );
+    }
+    return parts.join(", ");
   }
   const parts = [
     files,
@@ -90,19 +120,23 @@ export function gitChangeSummaryTitle(
 export function GitChangeSummaryInline({
   className,
   context,
-  filesWithUnit = false,
+  filesWithUnit = true,
   summary,
   testId,
 }: {
   readonly className?: string;
   readonly context: RendererPluginContext;
+  /** 文件数回退时是否带 “file(s)” 单位；默认 true，避免裸数字误读。 */
   readonly filesWithUnit?: boolean;
   readonly summary: GitChangeSummary;
   readonly testId?: string;
 }): React.JSX.Element {
   const accessibleLabel = gitChangeSummaryAccessibleLabel(context, summary);
   const title = gitChangeSummaryTitle(context, summary);
-  const showDelta = gitChangeSummaryHasLineDelta(summary);
+  const visibleLineDelta =
+    summary.kind === "lineDelta" && gitChangeSummaryHasVisibleLineDelta(summary)
+      ? summary
+      : null;
 
   return (
     <span
@@ -117,29 +151,20 @@ export function GitChangeSummaryInline({
         aria-hidden="true"
         className="inline-flex min-w-0 items-center gap-1"
       >
-        {showDelta ? (
+        {visibleLineDelta ? (
           <>
             <span className="text-success" data-git-delta="insertions">
-              +{summary.insertions}
+              +{visibleLineDelta.insertions}
             </span>
             <span className="text-status-danger-fg" data-git-delta="deletions">
               {LINE_DELETION_SIGN}
-              {summary.deletions}
+              {visibleLineDelta.deletions}
             </span>
           </>
         ) : (
-          <span className="truncate">
+          <span className="truncate" data-git-delta="files">
             {filesWithUnit
-              ? pluginText(
-                  context,
-                  summary.changedFiles === 1
-                    ? "changeSummaryFileVisible"
-                    : "changeSummaryFilesVisible",
-                  summary.changedFiles === 1
-                    ? "{{count}} file"
-                    : "{{count}} files",
-                  { count: summary.changedFiles }
-                )
+              ? changedFilesVisibleLabel(context, summary.changedFiles)
               : summary.changedFiles}
           </span>
         )}

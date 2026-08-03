@@ -1,9 +1,8 @@
 import { Button } from "@pier/ui/button.tsx";
 import { STATUS_BAR_ITEM_TRIGGER_CLASS } from "@pier/ui/interactive-density.ts";
-import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitCounts, GitStatus } from "@shared/contracts/git.ts";
-import { GitCompareArrows } from "lucide-react";
+import { Diff } from "lucide-react";
 import type React from "react";
 import {
   GitChangeSummaryInline,
@@ -27,7 +26,7 @@ export function gitChangesStatusHasContent(status: GitStatus): boolean {
 /**
  * 状态栏独立更改项（与分支身份、同步项并列）：
  * - 仅有本地变更时出现；干净时隐藏；
- * - 扁平 ghost：图标 + 彩色 `+N −M`（无行级统计时退回文件数）；
+ * - 扁平 ghost：Diff 图标 + 彩色 `+N −M`（无数可计时退回带单位的文件数）；
  * - 无 tooltip；单击直接打开审查 panel。
  */
 export function GitChangesStatusButton({
@@ -67,12 +66,7 @@ export function GitChangesStatusButton({
       type="button"
       variant="ghost"
     >
-      <GitCompareArrows
-        aria-hidden="true"
-        className={cn(hasConflicts && "text-status-danger-fg")}
-        data-git-icon="git-changes"
-        data-icon
-      />
+      <Diff aria-hidden="true" data-git-icon="git-changes" data-icon />
       <GitChangeSummaryInline
         context={pluginContext}
         summary={status.changeSummary}

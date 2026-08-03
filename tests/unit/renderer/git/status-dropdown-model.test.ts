@@ -501,6 +501,24 @@ describe("deriveGitStatusDropdownModel", () => {
     );
   });
 
+  it("全 excluded 的 lineDelta 下拉行不拼 +0 −0", () => {
+    const model = derive(
+      makeStatus({
+        changeSummary: {
+          changedFiles: 2,
+          deletions: 0,
+          excludedFiles: 2,
+          insertions: 0,
+          kind: "lineDelta",
+        },
+        counts: { conflict: 0, modified: 0, staged: 0, untracked: 2 },
+      })
+    );
+
+    expect(row(model, "changes").value).toBe("2");
+    expect(row(model, "changes").assistiveLabel).toBeUndefined();
+  });
+
   it("formats rows with injected localized text", () => {
     const model = derive(
       makeStatus({
