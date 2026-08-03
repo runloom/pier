@@ -21,7 +21,11 @@ import {
 import { diffMetrics } from "./geometry.ts";
 import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import { useDiffViewInputStore } from "./input-store.ts";
-import { type ParsedItemCacheEntry, toCodeViewItems } from "./items.ts";
+import {
+  type ParsedItemCacheEntry,
+  type PierDiffViewItem,
+  toCodeViewItems,
+} from "./items.ts";
 import type { DiffPointerLineHit } from "./pointer-selection.ts";
 import { useDiffRenderWatchdog } from "./render-watchdog.ts";
 import { useDiffRenderWindowReport } from "./render-window.ts";

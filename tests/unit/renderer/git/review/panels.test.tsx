@@ -150,7 +150,6 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
         .map((item) => item.id);
       props.onRenderWindowChange?.({
         bufferedItemIds,
-        collapsedItemIds: [],
         estimatedItemIds,
         visibleItemIds,
       });
@@ -189,7 +188,6 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
           if (diffViewRuntime.reportWindowOnScroll) {
             props.onRenderWindowChange?.({
               bufferedItemIds: [],
-              collapsedItemIds: [],
               estimatedItemIds: [],
               visibleItemIds: [id],
             });
