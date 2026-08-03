@@ -4,7 +4,7 @@ import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import { MENU_ITEM_DENSITY_CLASS } from "./interactive-density.ts";
-import { scrollFadeClassName } from "./scroll-area.tsx";
+import { floatingMenuScrollViewportClassName } from "./scroll-area.tsx";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -37,6 +37,7 @@ function DropdownMenuContent({
   className,
   align = "start",
   sideOffset = 4,
+  children,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
   const overlayRef = useTerminalOverlay();
@@ -47,16 +48,23 @@ function DropdownMenuContent({
       <DropdownMenuPrimitive.Content
         align={align}
         className={cn(
-          "app-no-drag data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) overflow-y-auto overflow-x-hidden rounded-2xl bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-closed:animate-out data-open:animate-in data-[state=closed]:overflow-hidden dark:ring-foreground/10",
-          scrollFadeClassName({ fade: "vertical", profile: "short" }),
+          // 外壳：实心 popover 底 + 圆角裁切。scroll-fade / overflow 归内层 viewport。
+          "app-no-drag data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 z-50 max-h-(--radix-dropdown-menu-content-available-height) w-(--radix-dropdown-menu-trigger-width) min-w-32 origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-closed:animate-out data-open:animate-in dark:ring-foreground/10",
           className
         )}
-        data-scrollbar="overlay"
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         {...props}
         ref={composedRef}
-      />
+      >
+        <div
+          className={floatingMenuScrollViewportClassName()}
+          data-scrollbar="overlay"
+          data-slot="dropdown-menu-viewport"
+        >
+          {children}
+        </div>
+      </DropdownMenuPrimitive.Content>
     </DropdownMenuPrimitive.Portal>
   );
 }

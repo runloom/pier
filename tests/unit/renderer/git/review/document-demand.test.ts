@@ -190,7 +190,10 @@ describe("mergeReviewDocumentDemand", () => {
 describe("gitReviewLookaheadEntryKeys", () => {
   it("prefetches both sides of the window demand span", () => {
     const keys = Array.from({ length: 10 }, (_, index) => `entry:${index}`);
-    // window span 0..1 → after 2,3；before 无
+    // 前沿锚在**可见**窗口（entry:0），不是 visible ∪ buffered：
+    // buffered 是上一轮 lookahead 的产物，用它当锚会让 demand 追自己的尾巴，
+    // 与投影成员 / Pierre 渲染窗口构成无滞回闭环并永久摆动。
+    // 带宽 = [minVisible-2, maxVisible+2] → 下标 1、2；entry:1 已在 demand 内。
     expect(
       gitReviewLookaheadEntryKeys(
         keys,
@@ -201,7 +204,27 @@ describe("gitReviewLookaheadEntryKeys", () => {
         },
         2
       )
-    ).toEqual(["entry:2", "entry:3"]);
+    ).toEqual(["entry:2"]);
+    // 稳定性不变量：buffered 不得推动前沿。
+    // buffered 是上一轮 lookahead 的产物，而 demand → 投影成员 → Pierre 渲染窗口
+    // → demand 是个闭环。若 buffered 参与算前沿，「全部渲染 → 前沿 +lookahead →
+    // 装不下 → 前沿回缩」会在两态间永久摆动（实测投影成员 29 ↔ 33 每帧翻转）。
+    const visibleOnly = gitReviewLookaheadEntryKeys(
+      keys,
+      new Set(),
+      { bufferedEntryKeys: [], visibleEntryKeys: ["entry:5"] },
+      2
+    );
+    const withFarBuffered = gitReviewLookaheadEntryKeys(
+      keys,
+      new Set(),
+      {
+        bufferedEntryKeys: ["entry:8", "entry:9"],
+        visibleEntryKeys: ["entry:5"],
+      },
+      2
+    );
+    expect(withFarBuffered).toEqual(visibleOnly);
     // span 仅 entry:2 → after 3,4；before 1,0（prefetch 不再过滤邻项）
     expect(
       gitReviewLookaheadEntryKeys(
@@ -410,15 +433,18 @@ describe("composeReviewDocumentDemand", () => {
     // window 已 active：seed 退居 buffered（继续水合，不 cancel）
     expect(composed.visibleEntryKeys).toEqual(["entry:5"]);
     expect(composed.visibleEntryKeys).not.toContain("entry:0");
+    // lookahead 带宽绕**可见**项（entry:5）展开 → 3،4،6،7；
+    // entry:30 只是 buffered，仍在取数单内但不再把前沿推到 entry:31。
     expect(composed.bufferedEntryKeys).toEqual(
       expect.arrayContaining([
         "entry:0",
         "entry:30",
-        "entry:31",
+        "entry:7",
         "entry:4",
         "entry:6",
       ])
     );
+    expect(composed.bufferedEntryKeys).not.toContain("entry:31");
     // 无 window 时仍 seed
     const seeded = composeReviewDocumentDemand({
       entryKeysInOrder: keys,

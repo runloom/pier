@@ -124,45 +124,12 @@ export function PierFileTree({
     () => itemsToGitStatusEntries(items),
     [items]
   );
-  const didSeedScopeRef = React.useRef<string | null>(null);
-
-  // Cold-start Git seed: write file-ancestors into authority once when empty.
-  React.useEffect(() => {
-    if (!expansionAuthority || expansionSeed !== "file-ancestors") {
-      return;
-    }
-    if (
-      didSeedScopeRef.current === expansionAuthority.scopeId ||
-      items.length === 0
-    ) {
-      return;
-    }
-    const intent = expansionAuthority.getIntent();
-    if (intent.expanded.size > 0 || intent.collapsed.size > 0) {
-      didSeedScopeRef.current = expansionAuthority.scopeId;
-      return;
-    }
-    const seeded = resolveExpandedPaths(items, intent, {
-      ...(directoryStates === undefined ? {} : { directoryStates }),
-      propagateCompactChains: true,
-      seed: "file-ancestors",
-    });
-    if (seeded.length > 0) {
-      expansionAuthority.expandPaths(seeded, "seed");
-    }
-    didSeedScopeRef.current = expansionAuthority.scopeId;
-  }, [directoryStates, expansionAuthority, expansionSeed, items]);
-
   const initialExpandedPaths = React.useMemo(() => {
     if (expansionAuthority) {
-      const intent = expansionAuthority.getIntent();
-      return resolveExpandedPaths(items, intent, {
+      return resolveExpandedPaths(items, expansionAuthority.getIntent(), {
         ...(directoryStates === undefined ? {} : { directoryStates }),
         propagateCompactChains: true,
-        seed:
-          intent.expanded.size === 0 && intent.collapsed.size === 0
-            ? expansionSeed
-            : "none",
+        seed: expansionSeed,
       });
     }
     return collectExpandedDirectoryPaths(items, directoryStates);

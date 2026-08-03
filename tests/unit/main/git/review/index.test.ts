@@ -965,7 +965,7 @@ describe("GitReviewIndexReader", () => {
     }
   });
 
-  it("未跟踪摘要从暂时 filesOnly 恢复不使 mutation revision 过期", async () => {
+  it("未跟踪摘要从 excluded 恢复不使 mutation revision 过期", async () => {
     const root = await createRepository();
     await writeFile(join(root, "notes.txt"), "note\n", "utf8");
     let reads = 0;
@@ -1012,9 +1012,10 @@ describe("GitReviewIndexReader", () => {
       groupSummaries: {
         unstaged: {
           changedFiles: 1,
-          kind: "filesOnly",
-          omittedFiles: 1,
-          reasons: ["invalidEncoding"],
+          deletions: 0,
+          excludedFiles: 1,
+          insertions: 0,
+          kind: "lineDelta",
         },
       },
       kind: "ok",
@@ -1299,7 +1300,7 @@ describe("GitReviewIndexReader", () => {
     });
   });
 
-  it("缺少本应存在的 tracked numstat 时仅降级该分组", async () => {
+  it("缺少本应存在的 tracked numstat 时将该文件计入 excluded 并保留分组摘要", async () => {
     const execGitRaw = createRecordExec((args) => ({
       records: args.includes("status")
         ? [
@@ -1319,9 +1320,10 @@ describe("GitReviewIndexReader", () => {
       groupSummaries: {
         unstaged: {
           changedFiles: 1,
-          kind: "filesOnly",
-          omittedFiles: 1,
-          reasons: ["commandFailed"],
+          deletions: 0,
+          excludedFiles: 1,
+          insertions: 0,
+          kind: "lineDelta",
         },
       },
       kind: "ok",
@@ -1433,9 +1435,10 @@ describe("GitReviewIndexReader", () => {
       groupSummaries: {
         unstaged: {
           changedFiles: 1,
-          kind: "filesOnly",
-          omittedFiles: 1,
-          reasons: ["invalidEncoding"],
+          deletions: 0,
+          excludedFiles: 1,
+          insertions: 0,
+          kind: "lineDelta",
         },
       },
       kind: "ok",

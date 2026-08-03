@@ -27,14 +27,18 @@ const ROTATE_SIZE = 10 * 1024 * 1024;
 /** watchFile 轮询间隔（ms）。 */
 const POLL_INTERVAL_MS = 250;
 const MAX_READ_BYTES = 1024 * 1024;
+type ObserverCallback<T> =
+  | ((value: T) => void)
+  | ((value: T) => PromiseLike<void>);
+const reportCallbackFailure = (): void =>
+  log.warn("observer-error-callback-failed", {
+    code: "error-callback-failed",
+  });
 
 export interface JsonlObserver {
   /** 停止监听并释放资源。 */
   dispose(): void;
-  /**
-   * 手动触发一次尾读循环（跳过 watchFile 轮询等待，供测试用；
-   * 生产环境依赖 250ms poll 自动触发即可，不必调）。
-   */
+  /** 手动触发尾读循环，供测试跳过 watchFile 轮询等待。 */
   pollNow(): Promise<void>;
 }
 
@@ -42,14 +46,32 @@ export interface JsonlObserverOpts {
   /** events.jsonl 绝对路径。 */
   filePath: string;
   /** agentEvent kind 行的回调（现役 Path B）。 */
-  onAgentEvent: (event: AgentHookEventPayload) => void;
+  onAgentEvent: ObserverCallback<AgentHookEventPayload>;
   /** commandFinished kind 行的回调（emit 脚本 `commandFinished` dispatch）。 */
-  onCommandFinished: (event: CommandFinishedHookEvent) => void;
+  onCommandFinished: ObserverCallback<CommandFinishedHookEvent>;
   /** commandStart kind 行的回调（emit 脚本 `commandStart` dispatch）。 */
-  onCommandStart: (event: CommandStartHookEvent) => void;
-  /** 错误回调（解析失败等）——静默降级，不中断监听。 */
-  onError?: (err: unknown) => void;
+  onCommandStart: ObserverCallback<CommandStartHookEvent>;
+  /** 错误回调只传安全结构诊断——静默降级，不中断监听。 */
+  onError?: ObserverCallback<JsonlObserverDiagnostic>;
 }
+
+export type JsonlObserverDiagnostic = Record<string, unknown> &
+  (
+    | {
+        code: "callback-failed" | "invalid-json" | "schema-validation-failed";
+        lineByteLength: number;
+      }
+    | {
+        code: "file-operation-failed";
+        operation: "drain" | "rotate";
+        systemCode?: string;
+      }
+    | {
+        code: "line-too-long";
+        discardedByteLength: number;
+        source: "active" | "recovery";
+      }
+  );
 
 /**
  * JSONL 尾读 observer（spec §4.4）。
@@ -111,9 +133,45 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
     }
   }
 
-  function processLine(line: string): void {
-    // 已 dispose 后剩余行不派发（defense-in-depth: onFileChange/pollNow 也各有
-    // disposed 门禁, 但 processChanges 分批读时 dispose 可能夹在两批之间）。
+  function reportDiagnostic(diagnostic: JsonlObserverDiagnostic): void {
+    log.warn("observer-failure", diagnostic);
+    try {
+      Promise.resolve(onError?.(diagnostic)).catch(reportCallbackFailure);
+    } catch {
+      reportCallbackFailure();
+    }
+  }
+
+  function reportLineFailure(
+    code: "callback-failed" | "invalid-json" | "schema-validation-failed",
+    line: string
+  ): void {
+    reportDiagnostic({
+      code,
+      lineByteLength: Buffer.byteLength(line),
+    });
+  }
+
+  function reportFileFailure(
+    operation: "drain" | "rotate",
+    error: unknown
+  ): void {
+    const rawCode =
+      error && typeof error === "object" && "code" in error
+        ? error.code
+        : undefined;
+    const systemCode =
+      typeof rawCode === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(rawCode)
+        ? rawCode
+        : undefined;
+    reportDiagnostic({
+      code: "file-operation-failed",
+      operation,
+      ...(systemCode ? { systemCode } : {}),
+    });
+  }
+
+  async function processLine(line: string): Promise<void> {
     if (disposed) {
       return;
     }
@@ -121,48 +179,45 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
     if (!trimmed) {
       return;
     }
+    let parsed: unknown;
     try {
-      const parsed = JSON.parse(trimmed);
-      const result = agentHookEventSchema.safeParse(parsed);
-      if (!result.success) {
-        log.warn("parse-failed", {
-          line: trimmed.slice(0, 200),
-          error: result.error.message,
-        });
-        onError?.(result.error);
-        return;
-      }
-      const event = enrichAgentEventFromRawPayload(result.data);
-      if (event.kind === "agentEvent") {
-        log.debug("event-line", {
-          kind: event.kind,
-          agent: event.agent,
-          event: event.event,
-          panelId: event.panelId,
-        });
-      }
+      parsed = JSON.parse(trimmed);
+    } catch {
+      reportLineFailure("invalid-json", trimmed);
+      return;
+    }
+    const result = agentHookEventSchema.safeParse(parsed);
+    if (!result.success) {
+      reportLineFailure("schema-validation-failed", trimmed);
+      return;
+    }
+    const event = enrichAgentEventFromRawPayload(result.data);
+    if (event.kind === "agentEvent") {
+      log.debug("event-line", {
+        kind: event.kind,
+        agent: event.agent,
+        event: event.event,
+        panelId: event.panelId,
+      });
+    }
+    try {
       switch (event.kind) {
         case "commandStart":
-          onCommandStart(event);
+          await onCommandStart(event);
           break;
         case "commandFinished":
-          onCommandFinished(event);
+          await onCommandFinished(event);
           break;
         case "agentEvent":
-          onAgentEvent(event);
+          await onAgentEvent(event);
           break;
         default: {
-          // discriminated union exhaustiveness——schema 已收敛，defensive branch。
           const _exhaustive: never = event;
           throw new Error(`unreachable kind: ${String(_exhaustive)}`);
         }
       }
-    } catch (err) {
-      log.warn("process-line-exception", {
-        line: trimmed.slice(0, 200),
-        err: String(err),
-      });
-      onError?.(err);
+    } catch {
+      reportLineFailure("callback-failed", trimmed);
     }
   }
 
@@ -213,7 +268,11 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
       const lastNewline = chunk.lastIndexOf(0x0a);
       if (lastNewline === -1) {
         if (chunk.length >= MAX_READ_BYTES) {
-          onError?.(new Error("JSONL line exceeds 1 MiB; discarded"));
+          reportDiagnostic({
+            code: "line-too-long",
+            discardedByteLength: chunk.length,
+            source: "active",
+          });
           offset += chunk.length;
           await persistOffset(offsetPath, offset);
           pending = true;
@@ -226,7 +285,7 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
         if (consumed[index] !== 0x0a) {
           continue;
         }
-        processLine(consumed.subarray(lineStart, index).toString("utf8"));
+        await processLine(consumed.subarray(lineStart, index).toString("utf8"));
         const lineBytes = index + 1 - lineStart;
         offset += lineBytes;
         lineStart = index + 1;
@@ -240,8 +299,8 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
       if (st.size > ROTATE_SIZE && offset >= st.size) {
         await rotate();
       }
-    } catch (err) {
-      onError?.(err);
+    } catch (error) {
+      reportFileFailure("drain", error);
     }
   }
 
@@ -267,8 +326,8 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
         path: rotatedPath,
       });
       pending = true;
-    } catch (err) {
-      onError?.(err);
+    } catch (error) {
+      reportFileFailure("rotate", error);
     } finally {
       await releaseLock();
     }
@@ -291,11 +350,13 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
           const lastNewline = bytes.lastIndexOf(0x0a);
           if (lastNewline === -1) {
             if (recoveryOffset + bytes.length < rotated.size) {
-              onError?.(
-                new Error("recovery JSONL line exceeds 1 MiB; discarded")
-              );
+              reportDiagnostic({
+                code: "line-too-long",
+                discardedByteLength: bytes.length,
+                source: "recovery",
+              });
             } else {
-              processLine(bytes.toString("utf8"));
+              await processLine(bytes.toString("utf8"));
             }
             recoveryOffset += bytes.length;
             await persistOffset(interrupted.offsetPath, recoveryOffset);
@@ -306,7 +367,9 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
               if (consumed[index] !== 0x0a) {
                 continue;
               }
-              processLine(consumed.subarray(lineStart, index).toString("utf8"));
+              await processLine(
+                consumed.subarray(lineStart, index).toString("utf8")
+              );
               recoveryOffset += index + 1 - lineStart;
               lineStart = index + 1;
               await persistOffset(interrupted.offsetPath, recoveryOffset);
@@ -316,7 +379,9 @@ export function createJsonlObserver(opts: JsonlObserverOpts): JsonlObserver {
               remainingStart < bytes.length &&
               recoveryOffset === rotated.size - (bytes.length - remainingStart)
             ) {
-              processLine(bytes.subarray(remainingStart).toString("utf8"));
+              await processLine(
+                bytes.subarray(remainingStart).toString("utf8")
+              );
               recoveryOffset += bytes.length - remainingStart;
               await persistOffset(interrupted.offsetPath, recoveryOffset);
             }

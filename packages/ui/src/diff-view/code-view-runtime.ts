@@ -6,13 +6,16 @@
  *    content update or membership churn). Pierre's own source notes this path as
  *    "technically broken". Swallow only that stale-callback case.
  *
- * 2) deferred membership flush: `render(true)` cannot run inside React 19
- *    useLayoutEffect (flushSync). Microtasks must ignore superseded generations
- *    and fully cleaned instances.
+ * 2) deferred layout flush: `render(true)` publishes through Pierre's
+ *    onSnapshotChange, which wraps flushSync. React 19 cannot flush while it is
+ *    rendering, so calling it from useLayoutEffect only warns and downgrades to
+ *    a scheduled update. Microtasks still run before paint, so the pass keeps
+ *    its pre-paint guarantee; they must ignore superseded generations and fully
+ *    cleaned instances.
  */
 
 const hardenedInstanceChanged = new WeakSet<object>();
-const membershipFlushGeneration = new WeakMap<object, number>();
+const layoutFlushGeneration = new WeakMap<object, number>();
 
 const STALE_INSTANCE_CHANGED =
   "CodeView.instanceChanged: An instance has changed that is not registered";
@@ -66,10 +69,10 @@ export function hardenCodeViewInstanceChanged(viewer: unknown): void {
 }
 
 /**
- * Queue immediate layout passes after membership/content apply.
- * Later schedules cancel earlier microtasks on the same CodeView.
+ * Queue immediate layout passes after membership/content apply or an instant
+ * scroll. Later schedules cancel earlier microtasks on the same CodeView.
  */
-export function scheduleCodeViewMembershipLayoutFlush(
+export function scheduleCodeViewLayoutFlush(
   instance: unknown,
   passes: number
 ): void {
@@ -78,10 +81,10 @@ export function scheduleCodeViewMembershipLayoutFlush(
   }
   hardenCodeViewInstanceChanged(instance);
   const target = instance;
-  const generation = (membershipFlushGeneration.get(target) ?? 0) + 1;
-  membershipFlushGeneration.set(target, generation);
+  const generation = (layoutFlushGeneration.get(target) ?? 0) + 1;
+  layoutFlushGeneration.set(target, generation);
   queueMicrotask(() => {
-    if (membershipFlushGeneration.get(target) !== generation) {
+    if (layoutFlushGeneration.get(target) !== generation) {
       return;
     }
     if (
@@ -92,7 +95,7 @@ export function scheduleCodeViewMembershipLayoutFlush(
     }
     try {
       for (let pass = 0; pass < passes; pass += 1) {
-        if (membershipFlushGeneration.get(target) !== generation) {
+        if (layoutFlushGeneration.get(target) !== generation) {
           return;
         }
         target.render(true);
@@ -104,11 +107,11 @@ export function scheduleCodeViewMembershipLayoutFlush(
 }
 
 /** Test helper: current deferred-flush generation for a CodeView instance. */
-export function codeViewMembershipFlushGenerationForTest(
+export function codeViewLayoutFlushGenerationForTest(
   instance: unknown
 ): number {
   if (!instance || typeof instance !== "object") {
     return 0;
   }
-  return membershipFlushGeneration.get(instance) ?? 0;
+  return layoutFlushGeneration.get(instance) ?? 0;
 }

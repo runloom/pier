@@ -104,7 +104,7 @@ export function ContentCard(): ReactNode {
               label: t(`settings.notifications.turnNotifyModeOptions.${mode}`),
               value: mode,
             }))}
-            triggerWidth="w-[200px]"
+            triggerWidth="w-[220px]"
             value={agentAttention.turnNotifyMode}
           />
         </FieldSet>

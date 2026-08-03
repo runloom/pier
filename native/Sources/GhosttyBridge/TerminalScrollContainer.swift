@@ -67,6 +67,8 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     private(set) var presentationId: UInt64
     private var capturedTerminalMouseButton: TerminalMouseButton?
     private var lastForwardedPresentationId: UInt64?
+    /// Sibling EventRouterView — web overlay geometry for hitTest + mouse gate.
+    weak var eventRouter: EventRouterView?
 
     var backgroundColor: NSColor = .black {
         didSet {
@@ -194,6 +196,14 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         }
         guard bounds.contains(local) else { return nil }
 
+        // Defense in depth: if hit testing fell through a transparent web
+        // layer onto this container, still refuse hits under web overlays
+        // (dialog scrim / menus). EventRouterView already prioritizes overlays
+        // when it is the top hit-test participant.
+        if isUnderWebOverlay(localPoint: local) {
+            return nil
+        }
+
         let scrollPoint = terminalScrollView.convert(local, from: self)
         if let target = terminalScrollView.hitTest(scrollPoint),
            terminalScrollView.isScrollerHitTarget(target)
@@ -202,6 +212,15 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         }
 
         return self
+    }
+
+    private func isUnderWebOverlay(localPoint: NSPoint) -> Bool {
+        guard let eventRouter else { return false }
+        return eventRouter.containsWebOverlay(atWindowPoint: convert(localPoint, to: nil))
+    }
+
+    private func isUnderWebOverlay(event: NSEvent) -> Bool {
+        eventRouter?.containsWebOverlay(atWindowPoint: event.locationInWindow) == true
     }
 
     func terminalScrollbarStateDidChange(_ state: TerminalScrollbarState) {
@@ -329,6 +348,9 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     }
 
     private func shouldForwardTerminalEvent(_ event: NSEvent) -> Bool {
+        if isUnderWebOverlay(event: event) {
+            return false
+        }
         let local = convert(event.locationInWindow, from: nil)
         guard bounds.contains(local) else { return false }
 

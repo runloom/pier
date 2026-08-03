@@ -170,6 +170,12 @@ final class EventRouterView: NSView {
         webOverlayRects.contains { $0.contains(point) }
     }
 
+    /// Window-coordinate check for terminal mouse delivery filters.
+    /// Same space as hitTest / right-mouse routing (this view is flipped).
+    func containsWebOverlay(atWindowPoint point: NSPoint) -> Bool {
+        containsWebOverlay(convert(point, from: nil))
+    }
+
     private func terminalTarget(at point: NSPoint) -> (String, Target)? {
         for (panelId, target) in targets {
             if target.rect.contains(point) {
@@ -1086,6 +1092,13 @@ final class GhosttyBridgeImpl {
             router.targets = nextTargets
             router.webOverlayRects = state.webOverlayRects.map { $0.frame.nsRect }
             router.isHidden = Self.webOverlayRectsCoverRouter(router)
+            // Keep every visible terminal's mouse filter bound to this window's
+            // router so NSTrackingArea mouseMoved cannot report through dialogs.
+            for entry in state.terminals where entry.visible {
+                guard let term = terminals[entry.panelId],
+                      term.parentWindow === parent else { continue }
+                installMouseOverlayFilter(on: term, router: router)
+            }
         }
         CATransaction.commit()
 
@@ -1213,6 +1226,21 @@ final class GhosttyBridgeImpl {
         )
         return router.webOverlayRects.contains {
             $0.contains(topLeft) && $0.contains(bottomRight)
+        }
+    }
+
+    /// Bind terminal mouse delivery to the window's web overlay rects.
+    /// Tracking-area `mouseMoved` can bypass EventRouterView hitTest under a
+    /// transparent WKWebView; this filter drops Ghostty mouse reporting when
+    /// the cursor is over a registered dialog/menu/tooltip rect.
+    private func installMouseOverlayFilter(
+        on term: Terminal,
+        router: EventRouterView?
+    ) {
+        term.containerView.eventRouter = router
+        term.terminalView.hostAllowsMouseEvent = { [weak router] event in
+            guard let router else { return true }
+            return !router.containsWebOverlay(atWindowPoint: event.locationInWindow)
         }
     }
 
@@ -1407,7 +1435,7 @@ final class GhosttyBridgeImpl {
         )
         contentView.addSubview(container, positioned: .below, relativeTo: nil)
 
-        terminals[panelId] = Terminal(
+        let created = Terminal(
             containerView: container,
             terminalView: terminalView,
             parentWindow: parent,
@@ -1415,6 +1443,8 @@ final class GhosttyBridgeImpl {
             eventDelegate: eventDelegate,
             surfaceVisible: false
         )
+        installMouseOverlayFilter(on: created, router: eventRouters[parentWindowId])
+        terminals[panelId] = created
         rememberLayout(
             panelId: panelId,
             contentView: contentView,
@@ -1755,6 +1785,11 @@ final class GhosttyBridgeImpl {
         term.eventDelegate.panelId = toNativePanelId
         term.containerView.updateBrowserWindowId(toBrowserWindowId)
         term.containerView.updatePanelId(toNativePanelId)
+        // Rebind mouse overlay filter to the target window's EventRouterView.
+        installMouseOverlayFilter(
+            on: term,
+            router: eventRouters[targetWindowId]
+        )
         windowToBrowserWindowId[targetWindowId] = toBrowserWindowId
 
         // 5) Rekey terminals + layout owner. Do not install target router hits or

@@ -1,16 +1,26 @@
-/**
- * Dockview tab / sash 拖拽期间全屏 web 输入捕获（从 terminal-input-routing-slice 拆出，控行数）。
- */
+/** Dockview sash 拖拽期间的全屏 web 输入捕获。tab 拖拽由 workspace 边界管理。 */
+import { recordTerminalInputRoutingTrace } from "@/lib/terminal-debug/input-routing-trace.ts";
 import {
+  getTerminalFocusRoutingDebugSnapshot,
   registerTerminalFullscreenWebOverlay,
   requestTerminalWebFocus,
 } from "@/stores/terminal-input-routing-slice.ts";
 
-const TAB_DRAG_FALLBACK_MS = 5000;
-const DRAG_WATCHER_CLEANUP_KEY = "__pierTerminalInputRoutingDragCleanup__";
+const SASH_DRAG_WATCHER_CLEANUP_KEY =
+  "__pierTerminalInputRoutingSashDragCleanup__";
 
-interface DragWatcherDocument extends Document {
-  [DRAG_WATCHER_CLEANUP_KEY]?: () => void;
+interface SashDragWatcherDocument extends Document {
+  [SASH_DRAG_WATCHER_CLEANUP_KEY]?: () => void;
+}
+
+type SashDragEndReason =
+  | "pointerup"
+  | "pointercancel"
+  | "window-blur"
+  | "dispose";
+
+function webOwnerCount(): number {
+  return getTerminalFocusRoutingDebugSnapshot().webRequestIds.length;
 }
 
 function beginFullscreenWebInputCapture(id: string): () => void {
@@ -22,109 +32,64 @@ function beginFullscreenWebInputCapture(id: string): () => void {
   };
 }
 
-let dragWatcherInstalled = false;
+let sashDragWatcherInstalled = false;
+let nextSashSessionSequence = 1;
 
-export function installTerminalInputRoutingDragWatcher(): void {
-  if (dragWatcherInstalled) {
+export function installTerminalInputRoutingSashDragWatcher(): void {
+  if (sashDragWatcherInstalled) {
     return;
   }
-  const watcherDocument = document as DragWatcherDocument;
-  watcherDocument[DRAG_WATCHER_CLEANUP_KEY]?.();
-  dragWatcherInstalled = true;
-
-  let dragActive = false;
-  let endDragCapture: (() => void) | null = null;
-  let dragFallbackTimer: number | null = null;
-
-  const clearDragFallback = () => {
-    if (dragFallbackTimer === null) {
-      return;
-    }
-    window.clearTimeout(dragFallbackTimer);
-    dragFallbackTimer = null;
-  };
-
-  const endTabDrag = () => {
-    if (!dragActive) {
-      return;
-    }
-    dragActive = false;
-    clearDragFallback();
-    endDragCapture?.();
-    endDragCapture = null;
-  };
-
-  const armDragFallback = () => {
-    clearDragFallback();
-    dragFallbackTimer = window.setTimeout(endTabDrag, TAB_DRAG_FALLBACK_MS);
-  };
-
-  const beginTabDrag = () => {
-    if (dragActive) {
-      return;
-    }
-    dragActive = true;
-    endDragCapture = beginFullscreenWebInputCapture("dockview-tab-drag");
-    armDragFallback();
-  };
-
-  const onDragStart = (e: DragEvent) => {
-    const t = e.target as HTMLElement | null;
-    if (!t?.closest?.(".dv-tab")) {
-      return;
-    }
-    beginTabDrag();
-  };
-
-  const onDrop = () => {
-    if (!dragActive) {
-      return;
-    }
-    window.setTimeout(endTabDrag, 0);
-  };
-
-  const onVisibilityChange = () => {
-    if (document.visibilityState === "hidden") {
-      endTabDrag();
-    }
-  };
-
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      endTabDrag();
-    }
-  };
-
-  document.addEventListener("dragstart", onDragStart, true);
-  document.addEventListener("dragend", endTabDrag, true);
-  document.addEventListener("drop", onDrop, true);
-  document.addEventListener("visibilitychange", onVisibilityChange, true);
-  window.addEventListener("blur", endTabDrag);
-  window.addEventListener("keydown", onKeyDown, true);
+  const watcherDocument = document as SashDragWatcherDocument;
+  watcherDocument[SASH_DRAG_WATCHER_CLEANUP_KEY]?.();
+  sashDragWatcherInstalled = true;
 
   let sashDragActive = false;
-  let endSashDrag: (() => void) | null = null;
+  let endSashDrag: ((reason: SashDragEndReason) => void) | null = null;
   const beginSashDrag = () => {
     if (sashDragActive) {
       return;
     }
     sashDragActive = true;
-    const endSashCapture = beginFullscreenWebInputCapture("dockview-sash-drag");
-    const cleanup = () => {
+    // sessionId 同时作为 owner id，owner-stuck 可回指具体会话。
+    const sessionId = `dockview-sash-drag:${nextSashSessionSequence}`;
+    nextSashSessionSequence += 1;
+    const startedAt = performance.now();
+    const endSashCapture = beginFullscreenWebInputCapture(sessionId);
+    recordTerminalInputRoutingTrace({
+      action: "started",
+      sessionId,
+      source: "workspace-sash-drag",
+      webOwnerCount: webOwnerCount(),
+    });
+    const cleanup = (reason: SashDragEndReason) => {
       if (!sashDragActive) {
         return;
       }
       sashDragActive = false;
       endSashCapture();
-      window.removeEventListener("pointerup", cleanup);
-      window.removeEventListener("pointercancel", cleanup);
-      window.removeEventListener("blur", cleanup);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("blur", onBlur);
       endSashDrag = null;
+      recordTerminalInputRoutingTrace({
+        action: reason === "dispose" ? "disposed" : "ended",
+        elapsedMs: Math.min(
+          60_000,
+          Math.max(0, Math.round(performance.now() - startedAt))
+        ),
+        reason,
+        sessionId,
+        source: "workspace-sash-drag",
+        webOwnerCount: webOwnerCount(),
+      });
     };
+    const onPointerUp = () => cleanup("pointerup");
+    const onPointerCancel = () => cleanup("pointercancel");
+    const onBlur = () => cleanup("window-blur");
     endSashDrag = cleanup;
-    window.addEventListener("pointerup", cleanup);
-    window.addEventListener("pointercancel", cleanup);
-    window.addEventListener("blur", cleanup);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("blur", onBlur);
   };
 
   const onPointerDown = (e: PointerEvent) => {
@@ -137,22 +102,15 @@ export function installTerminalInputRoutingDragWatcher(): void {
 
   document.addEventListener("pointerdown", onPointerDown, true);
 
-  watcherDocument[DRAG_WATCHER_CLEANUP_KEY] = () => {
-    endTabDrag();
-    endSashDrag?.();
-    clearDragFallback();
-    document.removeEventListener("dragstart", onDragStart, true);
-    document.removeEventListener("dragend", endTabDrag, true);
-    document.removeEventListener("drop", onDrop, true);
-    document.removeEventListener("visibilitychange", onVisibilityChange, true);
+  watcherDocument[SASH_DRAG_WATCHER_CLEANUP_KEY] = () => {
+    endSashDrag?.("dispose");
     document.removeEventListener("pointerdown", onPointerDown, true);
-    window.removeEventListener("blur", endTabDrag);
-    window.removeEventListener("keydown", onKeyDown, true);
-    dragWatcherInstalled = false;
-    delete watcherDocument[DRAG_WATCHER_CLEANUP_KEY];
+    sashDragWatcherInstalled = false;
+    delete watcherDocument[SASH_DRAG_WATCHER_CLEANUP_KEY];
   };
 }
 
-export function resetTerminalInputRoutingDragForTests(): void {
-  dragWatcherInstalled = false;
+export function resetTerminalInputRoutingSashDragForTests(): void {
+  sashDragWatcherInstalled = false;
+  nextSashSessionSequence = 1;
 }

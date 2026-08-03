@@ -1,5 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { GitCompareArrows } from "lucide-react";
+import { Diff } from "lucide-react";
 import {
   commandTitle,
   disabledReasonForActiveGit,
@@ -31,7 +31,7 @@ export function registerViewChangesAction(
     metadata: {
       categoryKey: "git",
       group: "2_git",
-      iconComponent: GitCompareArrows,
+      iconComponent: Diff,
       sortOrder: 4,
     },
     surfaces: ["command-palette"],

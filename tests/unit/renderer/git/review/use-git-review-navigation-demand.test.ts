@@ -160,8 +160,10 @@ describe("useGitReviewNavigation demand sync", () => {
       hook.result.current.tryPendingNavigation();
     });
     expect(scrollToItem).toHaveBeenCalledTimes(1);
+    // 显式树导航要看到正文，必须展开目标；被动恢复才禁止展开。
     expect(scrollToItem).toHaveBeenCalledWith("section:a", {
       behavior: "instant",
+      expandCollapsed: true,
     });
     acknowledgeTargetWindow(hook);
     await flushFrames();
@@ -503,6 +505,7 @@ describe("useGitReviewNavigation demand sync", () => {
     // 树导航只提交一次即时定位，不再启动动画后的纠正链。
     expect(scrollToItem).toHaveBeenCalledWith("section:s", {
       behavior: "instant",
+      expandCollapsed: true,
     });
     expect(applyNavigationDemand).toHaveBeenCalledWith("entry:a");
   });

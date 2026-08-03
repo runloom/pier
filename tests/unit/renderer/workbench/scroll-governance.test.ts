@@ -35,14 +35,14 @@ describe("workbench scroll viewport governance", () => {
     }
   });
 
-  it("records the bounded global scrollbar and viewport-fade follow-up", () => {
+  it("records the closed-out global scrollbar and viewport-fade strategy", () => {
     const design = source(DESIGN_PATH);
 
-    expect(design).toContain("## 遗留待办：全局滚动条与 viewport 渐隐优化");
+    expect(design).toContain("## 滚动条策略（已收口）");
     expect(design).toContain("light DOM");
-    expect(design).toContain("Shadow DOM");
-    expect(design).toContain("Radix ScrollArea");
-    expect(design).toContain("强制颜色模式");
-    expect(design).toContain("本次不扩张为全产品滚动条重写");
+    expect(design).toContain("Shadow");
+    expect(design).toContain("Radix `ScrollArea`");
+    expect(design).toContain("installDocumentAutoHideScrollbars");
+    expect(design).toContain('data-scrollbar="none"');
   });
 });

@@ -957,7 +957,6 @@ describe("WorkspaceHeaderActions", () => {
     });
     expect(listbox).toBeInTheDocument();
     expect(listbox).toHaveAttribute("data-scrollbar", "none");
-    expect(listbox).toHaveClass("no-scrollbar");
     expect(search.closest("[data-slot='command']")).toHaveClass(
       "p-1",
       "[&_[cmdk-item]]:rounded-2xl"

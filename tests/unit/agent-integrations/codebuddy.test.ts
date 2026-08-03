@@ -248,7 +248,11 @@ describe("codebuddyIntegration", () => {
       if (row.kind !== "agentEvent") {
         continue;
       }
-      aggregator.ingestAgentEvent(row, integration.runtime);
+      aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
+        stopAuthority: integration.runtime.stopAuthority,
+        turnStartAuthority: "none",
+      });
       const activity = aggregator.snapshot().activities[0];
       statuses.push(activity?.kind === "agent" ? activity.status : undefined);
     }

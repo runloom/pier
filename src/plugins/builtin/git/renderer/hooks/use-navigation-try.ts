@@ -1,5 +1,6 @@
 import type { PierDiffViewHandle } from "@pier/ui/diff-view/index.tsx";
 import type { RefObject } from "react";
+import type { ReviewNavigationMemberReason } from "../review/document/demand.ts";
 import type { GitReviewDocumentLoader } from "../review/document/loader.ts";
 import {
   isReviewNavigationTerminal,
@@ -23,6 +24,7 @@ export function tryGitReviewPendingNavigation(options: {
   readonly lastScrolledProjectionRevisionRef: RefObject<number>;
   readonly lastScrolledSectionRef: RefObject<string | null>;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
+  readonly navigationMemberReasonRef: RefObject<ReviewNavigationMemberReason | null>;
   readonly pendingNavigationRef: RefObject<PendingReviewNavigation | null>;
   readonly projectionRevisionRef: RefObject<number>;
   readonly requiredRenderWindowRevisionRef: RefObject<number>;
@@ -40,6 +42,7 @@ export function tryGitReviewPendingNavigation(options: {
     lastScrolledProjectionRevisionRef,
     lastScrolledSectionRef,
     loaderRef,
+    navigationMemberReasonRef,
     pendingNavigationRef,
     projectionRevisionRef,
     requiredRenderWindowRevisionRef,
@@ -112,6 +115,9 @@ export function tryGitReviewPendingNavigation(options: {
   const scrolled =
     diffHandleRef.current?.scrollToItem(target.sectionId, {
       behavior: TREE_NAV_SCROLL_BEHAVIOR,
+      // 被动恢复只把已有布局对回选中项，不改折叠态：展开会放大布局变动，
+      // 而恢复正是由布局变动（渲染窗口上报）触发的，两者会互相喂食。
+      expandCollapsed: navigationMemberReasonRef.current !== "restore",
       ...(navigation.anchorOffset === undefined
         ? {}
         : { offset: navigation.anchorOffset }),

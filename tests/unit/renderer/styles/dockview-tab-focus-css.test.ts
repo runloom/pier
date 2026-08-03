@@ -45,17 +45,18 @@ describe("Pier dockview tab focus CSS", () => {
     expect(demoteBlock).toContain("background-color: var(--muted-foreground)");
   });
 
-  it("paints running soft-shimmer on true top edge (not under selection)", () => {
+  it("paints running solid slider on true top edge (not under selection)", () => {
     // 与选中线同盒同槽：外层 ::before top:1px，inset-inline:0 满宽
     expect(css).toContain('.dv-tab:has([data-tab-status="running"])::before');
-    expect(css).toContain("pier-tab-running-shimmer");
+    expect(css).toContain("pier-tab-running-slider");
     expect(css).toContain("--pier-tab-running-accent");
-    expect(css).toContain("--pier-tab-shimmer-base");
+    expect(css).toContain("--pier-tab-shimmer-trough");
     expect(css).toContain("--pier-tab-shimmer-highlight");
+    expect(css).not.toContain("--pier-tab-shimmer-base");
     expect(css).toContain("inset-inline: 0");
-    // soft shimmer：300% 渐变 + 单向扫光（对齐状态栏 agent 扫光语汇）
-    expect(css).toContain("background-size: 300% 100%");
-    expect(css).toContain("pier-tab-running-shimmer 1.1s linear infinite");
+    // slider：稳底 trough + 纯色块 background-image
+    expect(css).toContain("background-color: var(--pier-tab-shimmer-trough)");
+    expect(css).toContain("pier-tab-running-slider 1.5s infinite ease-in-out");
     // 禁止旧硬边 bounce / 「线下一轨」叠层（running 块内不得再 top:2/3 挂在选中线下）
     expect(css).not.toContain("pier-tab-running-bg");
     expect(css).not.toContain("pier-tab-running-bounce");
@@ -83,7 +84,7 @@ describe("Pier dockview tab focus CSS", () => {
     );
     expect(css).toContain("var(--pier-tab-running-accent) 78%");
     expect(css).toContain("var(--foreground)");
-    // S3 running 用 2px 顶缘对齐原选中权重
+    // S3 running 用 2px 顶缘对齐原选中权重；mix 不在 S3 重写（亮色 :root.light 派生）
     expect(css).toContain(
       '> .dv-tab.dv-active-tab:has([data-tab-status="running"])::before'
     );
@@ -92,6 +93,26 @@ describe("Pier dockview tab focus CSS", () => {
     expect(css).toContain("pier-tab-running-bar--menu");
     expect(css).toContain(
       ".dv-tab .pier-tab-running-bar:not(.pier-tab-running-bar--menu)"
+    );
+  });
+
+  it("tunes running shimmer for light chrome (clean progress bar style)", () => {
+    expect(css).toContain(
+      ':root.light .dockview-theme-pier .dv-tab:has([data-tab-status="running"])'
+    );
+    expect(css).toContain(":root.light .pier-tab-running-bar--menu");
+    // 亮色：加深轨道 (35%) + 纯色高光，经典进度条语汇，干净清晰
+    expect(css).toContain("var(--pier-tab-running-accent) 35%");
+    expect(css).toContain(
+      "--pier-tab-shimmer-highlight: var(--pier-tab-running-accent)"
+    );
+    expect(css).toContain(':root.light:not([data-window-focused="false"])');
+    const lightS3GlowStart = css.indexOf(
+      "亮色 S3：浅色高光 glow 在浅底上几乎不可读且易发雾"
+    );
+    expect(lightS3GlowStart).toBeGreaterThanOrEqual(0);
+    expect(css.slice(lightS3GlowStart, lightS3GlowStart + 500)).toContain(
+      "box-shadow: none"
     );
   });
 });

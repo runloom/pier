@@ -68,7 +68,6 @@ describe("MentionPopup", () => {
     );
     const scrollRegion = container.querySelector("[data-scrollbar='none']");
     expect(scrollRegion).not.toBeNull();
-    expect(scrollRegion?.className).toContain("no-scrollbar");
   });
 
   it("renders file-tree icons for each path", () => {

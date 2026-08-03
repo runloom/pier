@@ -178,6 +178,28 @@ describe("shouldSuppressAgentNotification", () => {
     ).toBe(false);
   });
 
+  it("ready + panel-unfocused suppresses when target panel focused", () => {
+    expect(
+      shouldSuppressAgentNotification({
+        kind: "ready",
+        settings: settings({ turnNotifyMode: "panel-unfocused" }),
+        isTargetPanelFocused: true,
+        isOwnerWindowFocused: true,
+      })
+    ).toBe(true);
+  });
+
+  it("ready + panel-unfocused does not suppress for same-window other panel", () => {
+    expect(
+      shouldSuppressAgentNotification({
+        kind: "ready",
+        settings: settings({ turnNotifyMode: "panel-unfocused" }),
+        isTargetPanelFocused: false,
+        isOwnerWindowFocused: true,
+      })
+    ).toBe(false);
+  });
+
   it("waiting suppresses when suppressWhenFocused and panel focused", () => {
     expect(
       shouldSuppressAgentNotification({

@@ -117,6 +117,29 @@ function row(model: GitStatusDropdownModel, id: string) {
 }
 
 describe("deriveGitStatusDropdownModel", () => {
+  it("offers view changes first only for a clean repository without local changes", () => {
+    const clean = derive(makeStatus());
+    const dirty = derive(
+      makeStatus({
+        counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
+      })
+    );
+    const paused = derive(
+      makeStatus({
+        repoState: { conflictCount: 0, current: 1, kind: "rebasing", total: 2 },
+      })
+    );
+
+    expect(clean.tasks.map((task) => task.id)).toEqual([
+      "viewChanges",
+      "switchBranch",
+      "switchWorktree",
+    ]);
+    expect(row(clean, "clean").action).toBeNull();
+    expect(dirty.tasks.map((task) => task.id)).not.toContain("viewChanges");
+    expect(paused.tasks.map((task) => task.id)).not.toContain("viewChanges");
+  });
+
   it("keeps the fixed task zone in every normal model", () => {
     for (const status of [
       makeStatus(),
@@ -130,7 +153,7 @@ describe("deriveGitStatusDropdownModel", () => {
     ]) {
       const model = derive(status);
       expect(model.variant).toBe("normal");
-      expect(model.tasks.map((task) => task.id)).toEqual([
+      expect(model.tasks.map((task) => task.id).slice(-2)).toEqual([
         "switchBranch",
         "switchWorktree",
       ]);
@@ -164,7 +187,8 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(rowIds(model)).toEqual(["changes", "sync"]);
     const changes = row(model, "changes");
     expect(changes.action).toBe("viewChanges");
-    expect(changes.value).toBe("7 · +128 −42");
+    expect(changes.value).toBe("7");
+    expect(changes.lineDelta).toEqual({ deletions: 42, insertions: 128 });
     expect(changes.tone).toBe("default");
     expect(model.contextLine).toBe("pier · Remote fetched 1 min ago");
   });
@@ -495,10 +519,33 @@ describe("deriveGitStatusDropdownModel", () => {
       })
     );
 
-    expect(row(model, "changes").value).toBe("1 · +0 −3");
+    expect(row(model, "changes").value).toBe("1");
+    expect(row(model, "changes").lineDelta).toEqual({
+      deletions: 3,
+      insertions: 0,
+    });
     expect(row(model, "changes").assistiveLabel).toBe(
       "0 insertions, 3 deletions"
     );
+  });
+
+  it("全 excluded 的 lineDelta 下拉行不拼 +0 −0", () => {
+    const model = derive(
+      makeStatus({
+        changeSummary: {
+          changedFiles: 2,
+          deletions: 0,
+          excludedFiles: 2,
+          insertions: 0,
+          kind: "lineDelta",
+        },
+        counts: { conflict: 0, modified: 0, staged: 0, untracked: 2 },
+      })
+    );
+
+    expect(row(model, "changes").value).toBe("2");
+    expect(row(model, "changes").lineDelta).toBeUndefined();
+    expect(row(model, "changes").assistiveLabel).toBeUndefined();
   });
 
   it("formats rows with injected localized text", () => {
@@ -518,7 +565,9 @@ describe("deriveGitStatusDropdownModel", () => {
 
     const changes = row(model, "changes");
     expect(changes.label).toBe("更改");
-    expect(changes.value).toBe("1 · +2 −1");
+    expect(changes.value).toBe("1");
+    expect(changes.lineDelta).toEqual({ deletions: 1, insertions: 2 });
+    expect(changes.assistiveLabel).toBe("2 行新增, 1 行删除");
   });
 
   it("localizes operation rows with injected text", () => {

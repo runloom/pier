@@ -4,6 +4,17 @@ import type {
   TerminalHostSnapshot,
   TerminalKeyboardFocusTarget,
 } from "../terminal.ts";
+import type { TerminalInputRoutingDiagnosticInput } from "./input-routing-diagnostics.ts";
+
+export type TerminalInputRoutingTraceEvent =
+  TerminalInputRoutingDiagnosticInput & {
+    at: number;
+    seq: number;
+  };
+
+export interface TerminalInputRoutingTraceSnapshot {
+  events: TerminalInputRoutingTraceEvent[];
+}
 
 /** Minimal sticky-web dump: who owns keyboard + short breadcrumb ring. */
 export interface TerminalFocusTraceEvent {
@@ -194,6 +205,7 @@ export interface TerminalDebugRendererSnapshot {
   /** Renderer keyboard ownership + recent focus breadcrumbs (for sticky-web dumps). */
   focusRouting?: TerminalFocusRoutingDebugSnapshot | undefined;
   hasMaximizedGroup: boolean;
+  inputRoutingTrace?: TerminalInputRoutingTraceSnapshot | undefined;
   panelCount: number;
   panels: TerminalDebugRendererPanelSnapshot[];
   viewportFrame?: TerminalFrame | undefined;

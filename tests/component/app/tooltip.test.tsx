@@ -270,7 +270,7 @@ describe("Tooltip primitive", () => {
     expect(await findTooltipContent()).toHaveTextContent("Help");
   });
 
-  it("opens from keyboard focus after pointer interaction", async () => {
+  it("does not open from keyboard focus by default", async () => {
     const { getByRole } = render(
       <TooltipProvider delayDuration={0}>
         <Tooltip>
@@ -283,8 +283,26 @@ describe("Tooltip primitive", () => {
     );
     const trigger = getByRole("button");
 
-    fireEvent.pointerDown(trigger);
-    fireEvent.pointerUp(trigger);
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    fireEvent.focus(trigger);
+    await waitForDelay(20);
+
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+  });
+
+  it("opens from keyboard focus when explicitly enabled", async () => {
+    const { getByRole } = render(
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild openOnFocus={true}>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    const trigger = getByRole("button");
+
     fireEvent.keyDown(document.body, { key: "Tab" });
     fireEvent.focus(trigger);
 

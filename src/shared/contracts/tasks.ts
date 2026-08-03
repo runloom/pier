@@ -237,6 +237,17 @@ export const taskSpawnPreparationSchema = z.discriminatedUnion("status", [
     reusablePanels: z.record(z.string().min(1), taskPanelRefSchema).optional(),
     status: z.literal("ready"),
   }),
+  /**
+   * 依赖 label 在同 source 中找不到。可带 skipMissingDependencies 重试：
+   * 跳过缺失依赖，仍启动当前任务与可解析依赖。
+   * taskLabel / missingDependencies 供 UI 本地化；message 供日志 / CLI。
+   */
+  z.object({
+    message: z.string().min(1),
+    missingDependencies: z.array(z.string().min(1)).min(1),
+    status: z.literal("missing-dependencies"),
+    taskLabel: z.string().min(1),
+  }),
   z.object({
     message: z.string().min(1),
     status: z.literal("unsupported"),
@@ -260,6 +271,12 @@ export const taskSpawnResultSchema = z.discriminatedUnion("status", [
     runId: taskRunIdSchema.optional(),
     snapshot: taskRunSnapshotSchema.optional(),
     status: z.literal("started"),
+  }),
+  z.object({
+    message: z.string().min(1),
+    missingDependencies: z.array(z.string().min(1)).min(1),
+    status: z.literal("missing-dependencies"),
+    taskLabel: z.string().min(1),
   }),
   z.object({
     message: z.string().min(1),

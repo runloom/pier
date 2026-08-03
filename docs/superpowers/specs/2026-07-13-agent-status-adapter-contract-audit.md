@@ -35,7 +35,7 @@
 
 | 层 | 负责 | 不负责 |
 |---|---|---|
-| 提供方适配器 | 探测提供方、幂等安装/卸载 hook、把原生事件转成 Pier 规范事件、声明 `stopAuthority` | 保存统一会话历史、直接修改 UI 状态 |
+| 提供方适配器 | 探测提供方、幂等安装/卸载 hook、把原生事件转成 Pier 规范事件、声明 `stopAuthority` 与逐事件 `turnStartAuthority` | 保存统一会话历史、直接修改 UI 状态 |
 | 共享契约 | 定义 `agent/task/shell/idle`、Agent 五态、规范事件到状态和状态到 tab 的映射 | 读取提供方配置或 session 文件 |
 | `ForegroundActivity` 聚合器 | 维护面板活动、优先级、回合/工具/子代理记账、冷却、消抖和生命周期 | 理解提供方原生事件名或文件格式 |
 | Agent 终态对账边界 | 在提供方 hook 缺少可信终态时产生已验收的规范终态；当前 Codex（完成+中断）与 Claude（仅中断）使用 | 提供 Transcript 查询、过程状态、工具内容或回放 |
@@ -81,8 +81,8 @@ flowchart LR
 | `ToolComplete` | `processing` | `running` | 最后一个工具完成后返回主循环 |
 | `PermissionRequest` | `waiting` | `waiting` | 等待用户输入或授权 |
 | `error` | `error` | `failed` | 回合级失败，不把单个工具失败误报成会话失败 |
-| `SessionStart` | `ready` | `idle` | 建立有 hook 证据但尚未开始回合的活动 |
-| `Stop`（`authoritative` / `reset-only`）、`TurnCompleted`、`TurnInterrupted` | `ready` | `idle` | 只有可信终态可以结算当前回合 |
+| `SessionStart` | 缺席 | `idle` | 只建立会话生命周期；新建活动的初始 idle 不等于该事件映射出 `ready` |
+| `Stop`（`authoritative` / `reset-only`）、`TurnCompleted`、`TurnInterrupted` | `ready` | `idle` | 可信终态同步封账；未闭合工具记账不得否定终态 |
 | `Stop`（`advisory`） | 缺席 | `idle` | 只记录候选终态，不能谎报 ready；后续可信事件可恢复具体状态 |
 | `SessionEnd` | 删除当前 scope；无剩余 scope 时删除 Agent 活动 | 回到父 scope 投影或无 Agent 指示 | 聚合器在普通状态映射前处理会话结束，不把已结束会话保留为 ready |
 | `SubagentStart`、`SubagentStop` | 保持主回合推进并更新计数 | `running` | 子代理不覆盖父会话恢复信息 |
@@ -99,38 +99,38 @@ flowchart LR
 以下映射以 `src/main/services/agents/integrations/` 当前实现为准。`→` 左侧为提供方
 原生事件，右侧为 Pier 规范事件；未列出的原生事件不会参与状态投影。
 
-| Agent | 输入机制 | 档位 | 原生事件 → Pier 规范事件 | `stopAuthority` |
-|---|---|---|---|---|
-| aider | 退役清理器；不再安装通知 hook | `coarse` | 无现役事件；历史 notifications 配置只清理 | `none` |
-| amp | 提供方 JavaScript 插件 | `full` | `session.start→SessionStart`；`agent.start→PromptSubmit`；`tool.call→ToolStart`；`tool.result→ToolComplete`；`agent.end→Stop` | `authoritative` |
-| antigravity | 嵌套 JSON hook | `coarse` | `PreInvocation→PromptSubmit`；`PostToolUse→ToolComplete`；`Stop→Stop` | `advisory` |
-| aug | 嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop`；`SessionEnd→SessionEnd` | `advisory` |
-| autohand | 扁平 JSON hook 数组 | `full` | `session-start→SessionStart`；`session-end→SessionEnd`；`session-error→error`；`pre-prompt→PromptSubmit`；`stop→Stop`；`permission-request→PermissionRequest`；`pre-tool→ToolStart`；`post-tool→ToolComplete` | `advisory` |
-| claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PermissionRequest→PermissionRequest`；`PermissionDenied/PreCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名`；`SessionEnd→SessionEnd`；内部对账另补 `TurnInterrupted`（Esc/Ctrl+C 不触发 Stop hook——上游缺口, 由 transcript 主链整块中断标记补齐；正常完成不对账, 仍走 advisory Stop） | `advisory` |
-| cline | 可执行 hook 文件 | `full` | `TaskStart→SessionStart`；`TaskResume→running`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`TaskCancel/TaskComplete→Stop`；`PreCompact→processing` | `authoritative` |
-| codebuddy | Claude 兼容嵌套 JSON hook | `full` | 与 claude 相同 | `advisory` |
-| codex | Codex `hooks.json` | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PermissionRequest→PermissionRequest`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop→同名`；`Stop→Stop`；内部对账另补 `TurnCompleted/TurnInterrupted`；**`error: unsupported`**（hooks 无 `StopFailure`；`turn_aborted` 仅→`TurnInterrupted`，禁止当失败） | `advisory` |
-| command-code | 嵌套 JSON hook | `coarse` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop` | `advisory` |
-| copilot | Copilot hook 配置 | `full` | `sessionStart→SessionStart`；`sessionEnd→SessionEnd`；`userPromptSubmitted→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse→ToolComplete`；`agentStop→Stop`；`permissionRequest→PermissionRequest`；`subagentStart/subagentStop→同名`；`errorOccurred→error` | `advisory` |
-| crush | 主配置内扁平 hook | `coarse` | `PreToolUse→ToolStart`；没有可信终态 | `none` |
-| cursor | Cursor hook 配置 | `full` | `sessionStart→SessionStart`；`beforeSubmitPrompt→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse/postToolUseFailure→ToolComplete`；`subagentStart/subagentStop→同名`；`stop` 按 payload `status` 安装期分发：`completed→TurnCompleted`、`aborted→TurnInterrupted`、`error→error`、缺失/未知→`Stop`；`sessionEnd→SessionEnd`。**不装 `afterAgentResponse`**（与 stop 同刻并发落盘, 顺序无保证, 曾把终态拉回 processing 造成假"思考中"）；**不装 shell/MCP 闸门四事件**（before* 自动放行也触发→假 waiting；改映 ToolStart 则因无 tool_use_id、拒绝执行时 after* 不触发而滞留匿名计数；工具生命周期由带 id 的 preToolUse/postToolUse(-Failure) 完整覆盖） | `advisory`（仅约束 status 回落的 `Stop`） |
-| devin | JSON hook 配置 | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`Stop→Stop`；`PostCompaction→processing`；`SessionEnd→SessionEnd`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PermissionRequest→PermissionRequest` | `advisory` |
-| droid | 嵌套 JSON hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`Notification→PermissionRequest`；`Stop→Stop`；`StopFailure→error`；`PreCompact→processing`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete` | `advisory` |
-| gemini | Gemini hook 配置 | `full` | `SessionStart/SessionEnd→同名`；`BeforeAgent→PromptSubmit`；`AfterAgent→Stop`；`Notification→PermissionRequest`；`PreCompress→processing`；`BeforeTool→ToolStart`；`AfterTool→ToolComplete` | `advisory` |
-| goose | 受管理的 Goose 插件 hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`Stop→Stop` | `advisory` |
-| grok | 嵌套 JSON hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PermissionDenied/PreCompact/PostCompact→processing`；`Notification→PermissionRequest`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名` | `advisory` |
-| hermes | Python 插件和 YAML 启用项 | `coarse` | `on_session_start→SessionStart`；`pre_llm_call→processing`；`pre_tool_call→ToolStart`；`post_tool_call→ToolComplete`；`pre_approval_request→PermissionRequest`；`post_approval_response→ToolStart`；`on_session_end/on_session_finalize→SessionEnd`；`on_session_reset→Stop` | `reset-only` |
-| kilo | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.idle→Stop`；`session.error→error`；`session.deleted→SessionEnd`；`session.status busy/retry→running`、`idle→Stop`；`permission.asked→PermissionRequest`；`permission.replied→processing`；`tool.execute.before/after→ToolStart/ToolComplete` | `authoritative` |
-| kimi | TOML hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名` | `advisory` |
-| kiro | Kiro 扁平 hook 配置 | `full` | `agentSpawn→SessionStart`；`userPromptSubmit→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse→ToolComplete`；`stop→Stop` | `advisory` |
-| mimo-code | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.idle→Stop`；`session.error→error`；`session.deleted→SessionEnd`；`session.status busy/retry→running`、`idle→Stop`；`tui.command.execute(prompt.submit)→PromptSubmit`；`permission.updated→PermissionRequest`；`permission.replied→processing`；`tool.execute.before/after→ToolStart/ToolComplete` | `authoritative` |
-| mistral-vibe | 实验性 TOML hook | `coarse` | `before_tool→ToolStart`；`after_tool→ToolComplete`；`post_agent_turn→Stop` | `authoritative` |
-| omp | JavaScript 扩展 | `full` | `session_start→SessionStart`；主代理 `agent_start→PromptSubmit`、`agent_end→Stop`；子代理 `agent_start/agent_end→SubagentStart/SubagentStop`；`tool_call→ToolStart`；`tool_result→ToolComplete`；`tool_approval_requested→PermissionRequest`；`tool_approval_resolved→ToolStart`；`session_shutdown→SessionEnd`；**`error: unsupported`**（2026-07-05 probe：abort/ESC 仍 `agent_end→Stop`，无独立失败事件） | `authoritative` |
-| opencode | JavaScript 插件事件总线 | `full` | 与 mimo-code 相同 | `authoritative` |
-| openclaude | Claude 兼容嵌套 JSON hook | `full` | 与 claude 相同 | `advisory` |
-| pi | JavaScript 扩展 | `coarse` | `session_start→SessionStart`；`agent_start→PromptSubmit`；`agent_end→Stop`；`session_shutdown→SessionEnd` | `authoritative` |
-| qodercli | Claude 兼容嵌套 JSON hook | `full` | 与 claude 相同 | `advisory` |
-| qwen-code | Qwen Code hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`Stop→Stop`；`StopFailure→error`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PermissionRequest→PermissionRequest`；`PermissionDenied/PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop→同名` | `advisory` |
+| Agent | 输入机制 | 档位 | 原生事件 → Pier 规范事件 | `stopAuthority` | `turnStartAuthority` |
+|---|---|---|---|---|---|
+| aider | 退役清理器；不再安装通知 hook | `coarse` | 无 | `none` | 无 |
+| amp | 提供方 JavaScript 插件 | `full` | `session.start→SessionStart`；`agent.start→PromptSubmit`；`thread.state.running→running`；`thread.state.awaiting-approval→InteractionRequested`；`thread.state.running.resolved/thread.state.idle/thread.state.error.resolved→InteractionResolved`；`thread.state.error/agent.end.error→error`；`agent.end.done→TurnCompleted`；`agent.end.cancelled→TurnInterrupted` | `none` | 无 |
+| antigravity | 命名 JSON hook | `coarse` | `PreInvocation→processing`；`Stop.error→error`；`Stop.fullyIdle→Stop`；`Stop.active→processing` | `advisory` | `PreInvocation: authoritative` |
+| aug | 嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop/TurnInterrupted/error`；`SessionEnd→SessionEnd` | `advisory` | 无 |
+| autohand | 扁平 JSON hook 数组 | `full` | `session-start→SessionStart`；`session-end→SessionEnd`；`session-error→error`；`pre-prompt→PromptSubmit`；`stop→Stop`；`pre-tool→ToolStart`；`post-tool→ToolComplete` | `authoritative` | 无 |
+| claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
+| cline | 可执行 hook 文件 | `full` | `TaskStart→SessionStart`；`TaskResume→running`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`TaskComplete→TurnCompleted`；`TaskCancel→TurnInterrupted`；`TaskError→error`；`SessionShutdown→SessionEnd` | `none` | `TaskResume: authoritative` |
+| codebuddy | Claude 兼容嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`Elicitation→InteractionRequested`；`ElicitationResult→InteractionResolved`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
+| codex | Codex `hooks.json` | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop/SessionEnd→同名`；`Stop→Stop` | `advisory` | 无 |
+| command-code | 嵌套 JSON hook | `coarse` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop` | `advisory` | 无 |
+| copilot | Copilot hook 配置 | `full` | `sessionStart→SessionStart`；`sessionEnd→SessionEnd`；`userPromptSubmitted→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse/postToolUseFailure→ToolComplete`；`agentStop→Stop`；`preCompact/errorOccurred.recoverable→processing`；`subagentStart→SubagentStart`；`subagentStop→SubagentStop`；`errorOccurred→error` | `advisory` | 无 |
+| crush | 历史配置清理器 | `coarse` | 无 | `none` | 无 |
+| cursor | Cursor hook 配置 | `full` | `sessionStart→SessionStart`；`beforeSubmitPrompt→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse/postToolUseFailure→ToolComplete`；`subagentStart→SubagentStart`；`subagentStop→SubagentStop`；`stop.status=completed→TurnCompleted`；`stop.status=aborted→TurnInterrupted`；`stop.status=error→error`；`sessionEnd→SessionEnd` | `advisory` | 无 |
+| devin | JSON hook 配置 | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`Stop→Stop`；`PostCompaction→processing`；`SessionEnd→SessionEnd`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete` | `advisory` | 无 |
+| droid | 嵌套 JSON hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`Stop→Stop`；`PreCompact→processing`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete` | `advisory` | 无 |
+| gemini | Gemini hook 配置 | `full` | `SessionStart/SessionEnd→同名`；`BeforeAgent→PromptSubmit`；`AfterAgent→Stop`；`PreCompress→processing`；`BeforeTool→ToolStart`；`AfterTool→ToolComplete` | `advisory` | 无 |
+| goose | 受管理的 Goose 插件 hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`Stop→Stop` | `advisory` | 无 |
+| grok | 嵌套 JSON hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure/PermissionDenied→ToolComplete`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名`；`PreCompact/PostCompact→processing` | `advisory` | 无 |
+| hermes | Python 插件和 YAML 启用项 | `full` | `on_session_start/on_session_reset→SessionStart`；`pre_llm_call→PromptSubmit`；`pre_tool_call→ToolStart`；`pre_tool_call.clarify/pre_approval_request→InteractionRequested`；`post_tool_call→ToolComplete`；`post_tool_call.clarify/post_approval_response→InteractionResolved`；`on_session_end.completed→TurnCompleted`；`on_session_end.failed→error`；`on_session_end.interrupted→TurnInterrupted`；`on_session_finalize→SessionEnd`；`subagent_start→SubagentStart`；`subagent_stop→SubagentStop` | `none` | 无 |
+| kilo | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.idle/session.status=idle→Stop`；`session.error→error`；`session.deleted→SessionEnd`；`session.status=busy/session.status=retry→running`；`chat.message→PromptSubmit`；`permission.asked/question.asked.blocking/session.status=offline→InteractionRequested`；`permission.replied/question.replied/question.rejected/session.network.replied/session.network.rejected/session.network.restored/session.status=busy.offline/session.status=retry.offline→InteractionResolved`；`tool.execute.before→ToolStart`；`tool.execute.after/message.part.updated=completed/message.part.updated=error→ToolComplete`；`session.status=busy.child/session.status=retry.child→SubagentStart`；`session.status=idle.child/session.error.child/session.deleted.child→SubagentStop` | `authoritative` | 无 |
+| kimi | TOML hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名` | `advisory` | 无 |
+| kiro | 历史配置清理器 | `coarse` | 无 | `none` | 无 |
+| mimo-code | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.deleted→SessionEnd`；`chat.message→PromptSubmit`；`session.pre→running`；`session.post=completed→TurnCompleted`；`session.post=cancelled→TurnInterrupted`；`session.post=error→error`；`permission.asked/question.asked→InteractionRequested`；`permission.replied/question.replied/question.rejected→InteractionResolved`；`tool.execute.before→ToolStart`；`tool.execute.after/message.part.updated=completed/message.part.updated=error→ToolComplete` | `authoritative` | 无 |
+| mistral-vibe | 实验性 TOML hook | `coarse` | `pre_tool→processing`；`post_tool→ToolComplete`；`post_agent→Stop` | `advisory` | 无 |
+| omp | JavaScript 扩展 | `full` | `session_start→SessionStart`；`before_agent_start→PromptSubmit`；`tool_execution_start→ToolStart`；`tool_execution_end→ToolComplete`；`tool_approval_requested→InteractionRequested`；`tool_approval_resolved→InteractionResolved`；`agent_end.willContinue→processing`；`agent_end.completed→TurnCompleted`；`agent_end.error→error`；`agent_end.aborted→TurnInterrupted`；`session_stop→Stop`；`session_shutdown→SessionEnd` | `authoritative` | 无 |
+| opencode | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.idle/session.status=idle→Stop`；`session.error→error`；`session.deleted→SessionEnd`；`session.status=busy/session.status=retry→running`；`chat.message→PromptSubmit`；`permission.asked/question.asked→InteractionRequested`；`permission.replied/question.replied/question.rejected→InteractionResolved`；`tool.execute.before→ToolStart`；`tool.execute.after/message.part.updated=completed/message.part.updated=error→ToolComplete`；`session.status=busy.child/session.status=retry.child→SubagentStart`；`session.status=idle.child/session.error.child/session.deleted.child→SubagentStop` | `authoritative` | 无 |
+| openclaude | Claude 兼容嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
+| pi | JavaScript 扩展 | `coarse` | `session_start→SessionStart`；`before_agent_start→PromptSubmit`；`tool_execution_start→ToolStart`；`tool_execution_end→ToolComplete`；`agent_settled→Stop`；`session_shutdown→SessionEnd` | `authoritative` | 无 |
+| qodercli | Claude 兼容嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`Elicitation→InteractionRequested`；`ElicitationResult→InteractionResolved`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
+| qwen-code | Qwen Code hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`Stop→Stop`；`StopFailure→error`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop→同名` | `advisory` | 无 |
 
 ### 仅启动识别
 
@@ -148,12 +148,12 @@ flowchart LR
 
 | Provider | 结论 | 证据 | 代码锁 |
 |---|---|---|---|
-| omp | **B — `error: unsupported`** | 2026-07-05 probe：abort/ESC 仍发 `agent_end`；`OMP_EVENTS` 无独立失败事件；`agent_end→Stop` | `OMP_FA_ERROR_REACHABILITY`；`omp.test.ts` 断言映射表不含 `error` |
+| omp | **A — `error: native`** | `agent_end` 读取最后一条 `assistant` 消息的 `stopReason`；`agent_end.error→error`，`aborted` 仍只映射 `TurnInterrupted` | `OMP_FA_ERROR_REACHABILITY`；`omp.test.ts` 锁定 `error` / `aborted` / `completed` 分流 |
 | codex | **B — `error: unsupported`** | 发布版 hooks 全集无 `StopFailure`；transcript 对账仅 `task_complete→TurnCompleted`、`turn_aborted→TurnInterrupted` | `CODEX_FA_ERROR_REACHABILITY`；`codex.test.ts` 断言 hook 映射不含 `error` |
 | claude（对照） | **A — `StopFailure→error`** | 官方 hooks：`StopFailure` = 回合因 API 错误终止；transcript 中断对账仅→`TurnInterrupted`, 不映 `error` | `claude.ts` 映射保持不变 |
 | cursor（2026-07-20） | **A — `stop(status="error")→error`** | 官方 hooks reference：stop payload `status: completed\|aborted\|error` 是 provider 自报的回合终态；`aborted` 仅→`TurnInterrupted`, 不映 `error` | `CURSOR_FA_ERROR_REACHABILITY`；`cursor.test.ts` 断言 stop 命令分发 |
 
-`enableErrorAttention` 对 omp/codex **无 FA 入口**属预期；对仍有真实 `error` 映射的 Top A（如 claude）继续有效。
+`enableErrorAttention` 对 codex **无 FA 入口**属预期；对具有真实 `error` 映射的 omp、claude、cursor 继续有效。
 
 ## 兼容输入边界
 
@@ -190,6 +190,7 @@ flowchart LR
 - 不把提供方原生 session 路径加入 plugin API、preload 或 command router。
 - 不让 renderer 根据终端文字、标题或计时器生成第二份 Agent 状态。
 - 不让终态对账器（Codex/Claude）投影工具、processing、permission 或内容数据；它们只补可信终态。
+- 不让未配对的 `ToolStart` 否定可信终态，也不靠定时器、TTL 或补造 `ToolComplete` 延后封账。
 - 不因某家提供方事件不足而合成虚假 `Stop`、`ready` 或 `SessionStart`。
 - 不用公共 capability 包装尚不存在的服务；后续 Profile、Evidence 能力须随各自服务一起验收。
 
@@ -251,3 +252,59 @@ Ev5 表已同步：
 未处置项（显式接受）：crush 只有 `PreToolUse`，工具态直到 TTL/进程退出是能力
 上限（`stopAuthority: "none"` 已声明）；kiro/antigravity/command-code 等 coarse
 档位同理。聚合器不做超时推断——没有证据时保持现状是纪律，不是缺陷。
+
+## 增补：2026-08-02 可信终态原子封账
+
+### 根因与完成标准
+
+Codex 代码模式（code mode）的长命令可能只在后续 `write_stdin` 观察到命令完成时交付
+`PostToolUse`，工具失败路径也可能只留下 `PreToolUse`。此前聚合器把
+`TurnCompleted` 和可信 `Stop` 设为“等待工具账本排空”的软终态，导致提供方已经
+写出最终答复、transcript 已落 `task_complete` 后，未配对工具仍把状态永久压在
+`tool`。
+
+规范终态现在是当前回合的原子提交点：`TurnCompleted`、`TurnInterrupted`、`error`
+以及 `authoritative/reset-only Stop` 到达时，同步设置回合终态、退休活动工具、交互
+和子智能体记账，并投影 `ready/error`；同回合迟到事件被吸收，只有新的回合重置信号
+可以重新进入活动态。没有可信终态时，既有 TTL 仍只降低陈旧状态置信度，不生成
+`ready`。
+
+### 所有权与控制流
+
+- 提供方适配器和终态对账器只负责把已确认结束的原生事实映射为规范终态；若某个
+  原生事件可能在回合结束前出现，应修正该适配器的映射或 `stopAuthority`。
+- `ForegroundActivity` 聚合器独占回合和工作集记账，并在规范终态处完成原子封账；
+  工具账本只在活动回合内决定 `tool`，不能反向否定终态。
+- 发布层和 renderer 继续只镜像主进程快照，不读取终端画面或提供方文件补状态。
+- 终态若退休了未闭合工作，现有 `agent-terminal-trusted` 诊断只记录工具、交互、
+  子智能体数量，不记录标识符、参数或正文。
+
+控制流固定为：
+
+`原生 hook/transcript → 规范事件 → 回合身份校验 → 可信终态封账 → 清理工作集 → 状态投影 → UI`
+
+### 验收证据
+
+| 需求 | 证据 | 通过条件 |
+|---|---|---|
+| 未配对工具不能阻止完成 | `foreground-activity-aggregator.test.ts` | `ToolStart → TurnCompleted/可信 Stop` 不推进时钟即进入 `ready` |
+| 跨来源顺序收敛 | `codex-status-chain.test.tsx` | `task_complete→Stop`、`Stop→task_complete/turn_aborted` 均从真实 `tool` 收敛到 `ready` |
+| 迟到事件不复活旧回合 | `foreground-activity-aggregator.test.ts` | 迟到工具收尾被拒绝，新 `PromptSubmit` 可正常开启下一回合 |
+| 证据缺口可诊断且不泄漏内容 | 聚合器生命周期日志测试 | 只出现退休数量，不出现工具标识、输入或 transcript 正文 |
+
+## 增补：2026-08-02 回合重开语义收敛
+
+### 稳定结论
+
+`processing` / `running` 不再作为全局回合重开信号。它们在活跃回合内只是推进事实；可信终态之后，只有明确的 `PromptSubmit`、未结算的新 `turnId`，或适配器逐原生事件声明的无关联重开权威，才能开始新回合。首批逐事件权威是 Cline 的 `TaskResume` 与 Antigravity 的 `PreInvocation`。其他提供方仍须以各自带身份的 `PromptSubmit` 等证据重开，不能因普通状态快照绕过已结算身份。
+
+统一分类器由 `src/main/services/foreground-activity/agent-turn-event-semantics.ts` 拥有；它将 hook 或 transcript 的规范事件连同 `stopAuthority`、`turnStartAuthority` 分类，并以 `cancelsTerminalCandidate` 明确哪些事件足以推翻 advisory `Stop` 的完成候选。真实活动起点、普通推进以及 `ToolStart` / `InteractionRequested` 可取消候选；`ToolComplete`、`InteractionResolved`、`SubagentStart` / `SubagentStop` 等迟到收尾或非主回合活动不能伪造恢复。`src/main/services/foreground-activity/turn-bookkeeping.ts` 是唯一可变归约器，负责身份优先校验、可信终态原子封账、合法重开、已结算身份吸收及有限拒绝原因。
+
+接入层在 `src/main/ipc/foreground-activity.ts` 为每条 JSONL 事件解析运行语义；`src/main/services/agents/integrations/runtime/event-authority.ts` 只在原生事件名和规范事件同时匹配适配器映射时授予重开权威。生命周期日志记录 `evidenceSource`（`hook` / `transcript`）、`nativeEvent`、分类、转换、有限拒绝原因和退休工作数量；不记录 prompt、transcript 正文、路径、工具标识或参数。
+
+### 不变量与可复验路径
+
+- 可信终态立即封账，工作账本不得否定 `ready` / `error`：`tests/unit/main/panel/foreground-activity-aggregator.test.ts`、`tests/unit/main/panel/foreground-activity-turn-state-machine.test.ts`。
+- advisory `Stop` 后仅真实活动取消候选，迟到收尾不投影虚假的 `processing`：`tests/unit/main/panel/agent-turn-event-semantics.test.ts`、`tests/unit/main/panel/foreground-activity-aggregator.test.ts`。
+- Cline `TaskResume` 与 Antigravity `PreInvocation` 的逐事件权威，以及 IPC 的精确映射校验：`tests/unit/main/agents/agent-runtime-event-authority.test.ts`、`tests/unit/main/agents/agent-hook-runtime-semantics.test.ts`、`tests/unit/agent-integrations/agent-status-trace-e2e.test.ts`。
+- Codex hook / transcript 两种事件顺序及全部现役提供方轨迹收敛：`tests/unit/renderer/accounts/codex-status-chain.test.tsx`、`tests/unit/agent-integrations/agent-status-trace-e2e.test.ts`。

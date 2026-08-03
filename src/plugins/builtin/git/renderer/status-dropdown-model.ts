@@ -66,6 +66,12 @@ export type GitStatusDropdownRowId =
   | "sync"
   | "upstreamGone";
 
+/** 更改行 ± 行增量；与 value（文件数）分字段，组件按 diff 语义色渲染。 */
+export interface GitStatusDropdownLineDelta {
+  deletions: number;
+  insertions: number;
+}
+
 export interface GitStatusDropdownRow {
   /** null = 信息行（灰化、不可点）。 */
   action: GitStatusDropdownActionId | null;
@@ -74,10 +80,12 @@ export interface GitStatusDropdownRow {
   icon?: GitStatusDropdownRowIcon;
   id: GitStatusDropdownRowId;
   label: string;
-  /** tooltip：fetch 快照 caveat、大变更提示、拉取被本地改动阻塞的原因。 */
+  /** 可见行增量；组件渲染 `value · +ins −del` 并为 ± 上色。 */
+  lineDelta?: GitStatusDropdownLineDelta;
+  /** tooltip：fetch caveat、大变更提示、拉取被本地改动阻塞的原因。 */
   title?: string;
   tone: GitStatusDropdownRowTone;
-  /** 行尾数值（计数 / ± / ↑↓），组件层右对齐 tabular-nums。 */
+  /** 行尾数值（文件数 / ↑↓ / 冲突）；有 lineDelta 时只含文件数。 */
   value?: string;
 }
 
@@ -123,12 +131,13 @@ const EMPTY_COUNTS: GitCounts = {
   untracked: 0,
 };
 
-const LINE_DELETION_SIGN = "\u2212";
-
-function hasLineDelta(
+function hasVisibleLineDelta(
   summary: GitChangeSummary
 ): summary is Extract<GitChangeSummary, { kind: "lineDelta" }> {
-  return summary.kind === "lineDelta";
+  return (
+    summary.kind === "lineDelta" &&
+    (summary.insertions > 0 || summary.deletions > 0)
+  );
 }
 
 function operationIcon(
@@ -231,7 +240,7 @@ function isLargeChange(summary: GitChangeSummary): boolean {
     return true;
   }
   return Boolean(
-    summary.kind === "lineDelta" &&
+    hasVisibleLineDelta(summary) &&
       summary.insertions + summary.deletions >= GIT_LARGE_CHANGE_LINE_THRESHOLD
   );
 }
@@ -283,20 +292,22 @@ function changesRow(
   text: GitStatusDropdownText
 ): GitStatusDropdownRow {
   const summary = status.changeSummary;
-  const deltaValue = hasLineDelta(summary)
-    ? ` · +${summary.insertions} ${LINE_DELETION_SIGN}${summary.deletions}`
-    : "";
   const large = isLargeChange(summary);
+  const visibleDelta = hasVisibleLineDelta(summary);
   return {
     action: "viewChanges",
     icon: "changed",
     id: "changes",
     label: text.changes,
     tone: large ? "warning" : "default",
-    value: `${summary.changedFiles}${deltaValue}`,
-    ...(hasLineDelta(summary)
+    value: String(summary.changedFiles),
+    ...(visibleDelta
       ? {
           assistiveLabel: `${summary.insertions} ${text.insertions}, ${summary.deletions} ${text.deletions}`,
+          lineDelta: {
+            deletions: summary.deletions,
+            insertions: summary.insertions,
+          },
         }
       : {}),
     ...(large ? { title: text.largeChange } : {}),
@@ -475,7 +486,13 @@ export function deriveGitStatusDropdownModel(
     contextLine: contextLine(options, status),
     operationKind,
     rows,
-    tasks: FIXED_TASKS.map((task) => ({ ...task })),
+    tasks: [
+      ...(status.repoState.kind === "clean" &&
+      status.changeSummary.changedFiles === 0
+        ? [{ id: "viewChanges" as const }]
+        : []),
+      ...FIXED_TASKS.map((task) => ({ ...task })),
+    ],
     variant: "normal",
     worktreePath: options.worktreePath,
   };

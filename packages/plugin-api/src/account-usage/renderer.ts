@@ -34,5 +34,6 @@ export {
   type AccountMetadataBadgeMode,
   type AccountWidgetPresentation,
   membershipNeedsAttention,
+  membershipPeriodNeedsAttention,
   resolveAccountWidgetPresentation,
 } from "./widget-presentation.ts";

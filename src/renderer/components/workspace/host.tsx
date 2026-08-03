@@ -54,6 +54,7 @@ import {
   createPluginPanelTitleUpdaterForWorkspace,
 } from "./plugin-panel-bridge.ts";
 import { stripEphemeralLayoutParams } from "./strip-ephemeral-layout-params.ts";
+import { attachWorkspaceTerminalTabDragInputCapture } from "./terminal-tab-drag-input-capture.ts";
 import { pierTheme } from "./theme.ts";
 import { attachWorkspacePanelTransfer } from "./transfer/attach.ts";
 import {
@@ -243,6 +244,10 @@ export function WorkspaceHost() {
         registerWorkspaceLayoutFlusher(persistCurrentLayout);
       // 跨窗口 panel transfer: Dockview drag 事件 + dragend/Escape。
       const panelTransferDispose = attachWorkspacePanelTransfer(event.api);
+      // tab 输入接管与 transfer 并列订阅同一 Dockview API，互不持有对方资源。
+      const tabDragInputDispose = attachWorkspaceTerminalTabDragInputCapture(
+        event.api
+      );
 
       const syncDockviewMaximizedState = (): void => {
         const nextHasMaximizedGroup = event.api.hasMaximizedGroup();
@@ -444,6 +449,7 @@ export function WorkspaceHost() {
         activePanelSubscription?.dispose();
         terminalFocusDispose();
         newTerminalDispose();
+        tabDragInputDispose();
         panelTransferDispose();
         window.removeEventListener("beforeunload", handleBeforeUnload);
       };

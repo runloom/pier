@@ -70,12 +70,23 @@ External RendererWorkbenchWidgetRegistration.contentMode
 | 后续不回退 | `workbench-scroll-governance.test.ts` 与 `AGENTS.md` |
 | 类型和边界闭环 | `pnpm typecheck`、`pnpm depcruise` |
 
-## 遗留待办：全局滚动条与 viewport 渐隐优化
+## 滚动条策略（已收口）
 
-后续单独盘点 light DOM 原生滚动容器、Shadow DOM、Radix ScrollArea、CodeMirror、
-Dockview 和虚拟列表，统一滚动条尺寸令牌、自动隐藏时机、轨道占位、RTL、强制颜色模式
-以及 `viewportFade` 的采用策略，并移除设置页等位置仍存在的负边距贴边方案。
+产品契约：空闲隐藏拇指；滚动（及 gutter hover）时显示；idle 900ms 自动隐藏；
+明确隐藏只走 `data-scrollbar="none"`。
 
-启动条件是本次 `ScrollArea` 公共接口和工作台 `contentMode` 契约稳定。完成标准是全局
-滚动容器都有明确所有者、没有重复滚动和局部滚动条样式分叉，并具备跨主题、跨平台的视觉
-回归证据。本次不扩张为全产品滚动条重写。
+Electron 用标准 `scrollbar-width: thin` + `scrollbar-color`（空闲 transparent →
+活动 token）做自动隐藏。不能靠 `::-webkit-scrollbar` 透明拇指：标准属性会覆盖伪元素；
+若去掉 `thin` 退回经典 webkit 槽位，设置弹窗等内容区滚动条会位移。webkit 仅作无
+`scrollbar-color` 引擎回退。Shadow（目录树）同策略，从而压过 trees 自带 :hover 常显。
+
+| 通道 | 实现 | 备注 |
+|------|------|------|
+| 原生 light DOM | `globals.css` + `installDocumentAutoHideScrollbars` | 设置页、菜单、CM 等 |
+| Shadow（树 / diff） | `scrollbar-system.ts` + 按需 `installAutoHideScrollbar` | 同策略 |
+| Radix `ScrollArea` | 默认 `type="scroll"` + 同 idle；竖/横 `ScrollBar` | 禁止默认整容器 hover |
+| 终端 | AppKit overlay `autohidesScrollers` | 系统外观，不做 Pier 自绘 overlay |
+
+仍可后续增强（非阻断）：Dockview 自有 tab 溢出条与 Pier auto-hide 的视觉统一、
+跨主题截图回归。设置页滚动条贴边：DialogContent `pr-0` + `data-scrollbar="overlay"`
+（见 `dialog-scrollbar-edge.test.ts`）。

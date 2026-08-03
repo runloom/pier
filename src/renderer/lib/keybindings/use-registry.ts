@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { activeTerminalPanelId } from "@/lib/actions/renderer-action-runtime.ts";
 import type { Action } from "@/lib/actions/types.ts";
+import { recordTerminalInputRoutingTrace } from "@/lib/terminal-debug/input-routing-trace.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { isTerminalComposerOpen } from "@/stores/terminal-composer-takeover.ts";
@@ -29,6 +30,8 @@ import { shouldSuppressKeybindingForTextInput } from "./text-input-guard.ts";
 import type { KeyChord } from "./types.ts";
 
 const IME_PENDING_KEYCODE = 229;
+
+export type KeybindingDispatchRoute = "native-forward" | "web-keydown";
 
 // NSEvent.ModifierFlags raw bits (deviceIndependentFlagsMask 子集).
 const NS_FLAG_SHIFT = 0x2_00_00;
@@ -66,15 +69,57 @@ function isComposerAttachContext(panelId: string): boolean {
   );
 }
 
-function pickAction(
+function recordKeybindingDecision(
+  action:
+    | "disabled"
+    | "handler-rejected"
+    | "missing-action"
+    | "overlay-blocked"
+    | "text-input-suppressed"
+    | "dispatched",
+  commandId: string,
+  route: KeybindingDispatchRoute
+): void {
+  const scope = useKeybindingScope.getState();
+  recordTerminalInputRoutingTrace({
+    action,
+    ...(scope.activePanelComponent
+      ? { activePanelComponent: scope.activePanelComponent.slice(0, 80) }
+      : {}),
+    commandId: commandId.slice(0, 160),
+    overlayCount: Math.min(scope.overlayStack.length, 32),
+    route,
+    source: "keybinding",
+  });
+}
+
+export function resolveKeybindingAction(
   chord: KeyChord,
-  target: EventTarget | null
+  target: EventTarget | null,
+  route: KeybindingDispatchRoute
 ): Action | null {
   const scope = useKeybindingScope.getState();
   let commandId = keybindingRegistry.resolve(chord, {
     activePanelComponent: scope.activePanelComponent,
     overlayStack: scope.overlayStack,
   });
+  if (!commandId && scope.overlayStack.length > 0) {
+    const unblockedCommandId = keybindingRegistry.resolve(chord, {
+      activePanelComponent: scope.activePanelComponent,
+      overlayStack: [],
+    });
+    if (unblockedCommandId) {
+      // overlay 内输入框敲键仍属文本抑制，不要记成 overlay-blocked。
+      recordKeybindingDecision(
+        shouldSuppressKeybindingForTextInput(chord, target)
+          ? "text-input-suppressed"
+          : "overlay-blocked",
+        unblockedCommandId,
+        route
+      );
+    }
+    return null;
+  }
   // Shared ⌘⇧A: registry may hit either binding. Prefer attach only while
   // Rich Input is focused; otherwise always new agent.
   if (
@@ -92,14 +137,17 @@ function pickAction(
     return null;
   }
   if (shouldSuppressKeybindingForTextInput(chord, target)) {
+    recordKeybindingDecision("text-input-suppressed", commandId, route);
     return null;
   }
   const action = actionRegistry.get(commandId);
   if (!action) {
+    recordKeybindingDecision("missing-action", commandId, route);
     return null;
   }
   // 路径依赖等动作在菜单里禁用；快捷键仍命中并 toast 原因，避免静默无响应。
   if (action.enabled?.() === false) {
+    recordKeybindingDecision("disabled", action.id, route);
     const reason = action.disabledReason?.();
     if (reason) {
       toast(reason);
@@ -109,15 +157,21 @@ function pickAction(
   return action;
 }
 
-function runAction(action: Action): void {
+export function dispatchKeybindingAction(
+  action: Action,
+  route: KeybindingDispatchRoute
+): void {
+  recordKeybindingDecision("dispatched", action.id, route);
   try {
     const result = action.handler();
     if (result instanceof Promise) {
       result.catch((err) => {
+        recordKeybindingDecision("handler-rejected", action.id, route);
         console.error(`[keybindings] action ${action.id} rejected:`, err);
       });
     }
   } catch (err) {
+    recordKeybindingDecision("handler-rejected", action.id, route);
     console.error(`[keybindings] action ${action.id} threw:`, err);
   }
 }
@@ -213,13 +267,17 @@ export function useKeyboardShortcuts(): void {
       if (isImePending(e)) {
         return;
       }
-      const action = pickAction(chordFromEvent(e), e.target);
+      const action = resolveKeybindingAction(
+        chordFromEvent(e),
+        e.target,
+        "web-keydown"
+      );
       if (!action) {
         return;
       }
       e.preventDefault();
       e.stopPropagation();
-      runAction(action);
+      dispatchKeybindingAction(action, "web-keydown");
     };
     window.addEventListener("keydown", onKeydown, true);
 
@@ -227,11 +285,11 @@ export function useKeyboardShortcuts(): void {
     const unsubscribeForward = window.pier?.keybinding?.onForward?.(
       ({ modifierFlags, chars }) => {
         const chord = chordFromNativeForward(modifierFlags, chars);
-        // 此路径下没有真实 DOM target — 传 null, pickAction 中"输入框聚焦
+        // 此路径下没有真实 DOM target — 传 null, resolveKeybindingAction 中"输入框聚焦
         // 时跳过纯字母快捷键"的判断不会误命中 (chord 含 Cmd).
-        const action = pickAction(chord, null);
+        const action = resolveKeybindingAction(chord, null, "native-forward");
         if (action) {
-          runAction(action);
+          dispatchKeybindingAction(action, "native-forward");
         }
       }
     );

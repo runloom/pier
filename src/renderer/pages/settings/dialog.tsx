@@ -186,7 +186,7 @@ export function SettingsDialog() {
       open={open}
     >
       <DialogContent
-        className="flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1200px] flex-col sm:max-w-[1200px]"
+        className="flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1200px] flex-col overflow-hidden pr-0 sm:max-w-[1200px]"
         closeLabel={t("dialog.close")}
         onEscapeKeyDown={(event) => {
           // 设置项以 blur 作为统一提交入口。Radix 通过 Escape 卸载 Dialog 前
@@ -197,7 +197,7 @@ export function SettingsDialog() {
         }}
         showCloseButton
       >
-        <DialogHeader>
+        <DialogHeader className="pr-14">
           <DialogTitle>{t("settings.title")}</DialogTitle>
           <DialogDescription>{t("settings.description")}</DialogDescription>
         </DialogHeader>
@@ -248,7 +248,7 @@ export function SettingsDialog() {
 
           <nav
             aria-label={t("settings.title")}
-            className="w-full shrink-0 md:hidden"
+            className="w-full shrink-0 pr-6 md:hidden"
           >
             <Select onValueChange={setActiveSection} value={activeSection}>
               <SelectTrigger
@@ -284,13 +284,21 @@ export function SettingsDialog() {
             Native overflow owner (not ScrollArea): skills-section restores
             scrollTop on this node, and projects sticky tabs need a real
             overflow ancestor (Radix viewport wraps children in display:table).
+            DialogContent uses pr-0 so this scroller's thumb sits on the dialog
+            chrome edge (content keeps section px-*); overlay gutter avoids a
+            permanent empty track inset.
+            Fade profile is bottom-only: sticky project tabs sit at the start of
+            this scrollport, so a top mask band would dim strips under the tabs.
           */}
           <main
             className={cn(
               "relative flex h-full min-h-0 w-full min-w-0 flex-1 scroll-pb-8 flex-col overflow-y-auto pb-8 md:w-auto",
-              scrollFadeClassName({ fade: "vertical" })
+              scrollFadeClassName({
+                fade: "vertical",
+                profile: "bottom-only",
+              })
             )}
-            data-scrollbar="stable"
+            data-scrollbar="overlay"
             data-slot="settings-scroll"
           >
             {activeSection === "appearance" ? <AppearanceSection /> : null}

@@ -123,7 +123,12 @@ function parseNumstat(output: string): {
   return { deletions, excludedFiles, insertions };
 }
 
-/** 组装状态栏的全范围摘要；任何未跟踪路径无法完整计数时退化为 filesOnly。 */
+/**
+ * 组装状态栏的全范围摘要。
+ * 可计文本行必须准确进 +/-；binary / 目录 / 嵌套仓 / 读失败的未跟踪路径进
+ * excludedFiles，仍返回 lineDelta。filesOnly 仅用于整段不可用（numstat 失败、
+ * status/numstat 不一致等），禁止因单个不可计路径丢掉已算好的 +/-。
+ */
 export async function buildGitChangeSummary({
   cwd,
   execGit,
@@ -168,12 +173,11 @@ export async function buildGitChangeSummary({
     ...(inspectUntrackedFile === undefined ? {} : { inspectUntrackedFile }),
     ...(readUntrackedFile === undefined ? {} : { readUntrackedFile }),
   });
-  if (untracked.reasons.length > 0)
-    return filesOnly(changedFiles, untracked.omittedFiles, untracked.reasons);
   return {
     changedFiles,
     deletions: tracked.deletions,
-    excludedFiles: tracked.excludedFiles + untracked.excludedFiles,
+    excludedFiles:
+      tracked.excludedFiles + untracked.excludedFiles + untracked.omittedFiles,
     insertions: tracked.insertions + untracked.insertions,
     kind: "lineDelta",
   };

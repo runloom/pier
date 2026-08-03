@@ -7,9 +7,8 @@ export {
   reviewEntryHasBodyContent,
 } from "./body-class.ts";
 export {
-  estimateLinesForReviewSlot,
   GIT_REVIEW_ESTIMATE_CACHE_PREFIX,
-  recordReviewRenderedHeightEstimates,
+  GIT_REVIEW_ESTIMATE_SKELETON_LINES,
 } from "./estimates.ts";
 export { projectReviewLedger } from "./ledger-projection.ts";
 export {

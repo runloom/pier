@@ -401,7 +401,11 @@ describe("jsonl-observer", () => {
     await observer.pollNow();
 
     expect(received.map((event) => event.event)).toEqual(["evt-9"]);
-    expect(errors.length).toBeGreaterThan(0);
+    expect(errors).toContainEqual({
+      code: "line-too-long",
+      discardedByteLength: 1024 * 1024,
+      source: "active",
+    });
     observer.dispose();
   });
 

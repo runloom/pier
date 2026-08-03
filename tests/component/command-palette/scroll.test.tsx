@@ -158,7 +158,6 @@ describe("CommandPalette list scrolling", () => {
     expect(selected).toHaveAttribute("aria-selected", "true");
     expect(scrollIntoViewMock).toHaveBeenCalledWith({ block: "nearest" });
     expect(list).toHaveAttribute("data-scrollbar", "none");
-    expect(list).toHaveClass("no-scrollbar");
   });
 
   it("resets and reveals the selection when a new picker session opens", async () => {

@@ -13,6 +13,7 @@ import type {
 import {
   type AccountMetadataBadgeMode,
   membershipNeedsAttention,
+  membershipPeriodNeedsAttention,
 } from "./widget-presentation.ts";
 
 export interface AccountMetadataBadgesCopy {
@@ -93,11 +94,12 @@ export function AccountMetadataBadges({
       </Badge>
     );
   } else if (mode !== "tier" && membership?.expiresAt !== undefined) {
-    const expiryNeedsAttention = membershipNeedsAttention(membership, now);
+    // Period color only reflects proximity / expired / canceled — not
+    // cancelAtPeriodEnd (that is a separate warning badge below).
     let variant: "danger" | "neutral" | "warning" = "neutral";
     if (membership.status === "expired") {
       variant = "danger";
-    } else if (expiryNeedsAttention) {
+    } else if (membershipPeriodNeedsAttention(membership, now)) {
       variant = "warning";
     }
     periodBadge = (

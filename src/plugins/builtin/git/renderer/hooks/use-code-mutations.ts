@@ -18,6 +18,10 @@ import type {
   UseGitReviewCodeMutationsResult,
 } from "../review/code-mutation-types.ts";
 import { confirmGitDiscard, partitionDiscardPaths } from "../review/discard.ts";
+import {
+  alertDiscardRevisionUnavailable,
+  requestDiscardRevision,
+} from "../review/discard-revision.ts";
 import type { GitReviewMutationLease } from "../review/reading-surface.ts";
 import { useGitReviewOpenFile } from "./use-open-file.ts";
 
@@ -99,8 +103,10 @@ export function useGitReviewCodeMutations(
         itemsRef.current,
         targetSectionKey
       );
+      // 文件级 stage / unstage 是路径操作，不需要乐观并发令牌：正文可能还没读回。
+      // 有令牌就带上（让 main 能在内容确实变过时给出更准确的失败），没有也照样提交。
       const expectedRevision = revisionBySectionIdRef.current.get(itemId);
-      if (!(resolved && expectedRevision)) {
+      if (!resolved) {
         return;
       }
       const source = reviewMutationSource(
@@ -126,7 +132,7 @@ export function useGitReviewCodeMutations(
           try {
             const result = await context.git.applyReviewMutation({
               action,
-              expectedRevision,
+              ...(expectedRevision === undefined ? {} : { expectedRevision }),
               operationId: crypto.randomUUID(),
               source,
               target: { kind: "file", sectionKey: targetSectionKey },
@@ -384,8 +390,7 @@ export function useGitReviewCodeMutations(
         itemsRef.current,
         targetSectionKey
       );
-      const expectedRevision = revisionBySectionIdRef.current.get(itemId);
-      if (!(resolved && expectedRevision)) {
+      if (!resolved) {
         return;
       }
       const source = reviewMutationSource(
@@ -400,10 +405,22 @@ export function useGitReviewCodeMutations(
         paths: [resolved.entry.path],
         uniformStatus: resolved.slot?.status ?? resolved.entry.status,
       });
+      // 令牌与确认弹窗并行获取，详见 requestDiscardRevision。
+      const revisionPromise = requestDiscardRevision({
+        cachedRevision: revisionBySectionIdRef.current.get(itemId),
+        context,
+        operationId: crypto.randomUUID(),
+        source,
+      });
       // Confirm first (no busy chrome); busy only during the write.
       (async () => {
         const decision = await confirmGitDiscard(context, selection);
         if (decision.kind !== "proceed" || decision.paths.length === 0) {
+          return;
+        }
+        const expectedRevision = await revisionPromise;
+        if (expectedRevision === undefined) {
+          await alertDiscardRevisionUnavailable(context);
           return;
         }
         if (onMutationStartRef.current() === null) {

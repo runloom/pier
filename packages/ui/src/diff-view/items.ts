@@ -55,41 +55,6 @@ export type PierDiffViewItemKind =
   | "error"
   | "ready-notice";
 
-/**
- * 无行数提示时的默认估高行数。
- * 不宜为 0：冷启动 estimate→loaded 时 Δh 过大，首屏连锁水合会抖。
- * 取中等骨架（约半屏内 2–3 个文件），真高仍由 loaded 决定；校正走 Pierre 行锚。
- */
-export const PIER_DIFF_DEFAULT_ESTIMATE_LINES = 16;
-export const PIER_DIFF_MAX_ESTIMATE_BODY_LINES = 200;
-/**
- * estimate 槽绘高（与 estimate-skeleton 金标准对齐）：
- *   header 32 + padY 16 + 5×12 条 + 4×8 gap ≈ 32+16+60+32 = 140 → 144
- * seed demand / 视口估条数用此常量，避免按 numstat 虚高。
- */
-export const PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX = 144;
-
-/**
- * 无 numstat 时按文件 status 给骨架行数（缩小 estimate→loaded 典型 Δh）。
- * index 日后带行数提示时应优先用提示，再回落到此。
- */
-export function estimateLinesForFileStatus(
-  status: PierDiffViewFileDisplay["status"]
-): number {
-  switch (status) {
-    case "deleted":
-      return 4;
-    case "added":
-      return 24;
-    case "renamed":
-      return 12;
-    case "conflicted":
-      return 28;
-    default:
-      return PIER_DIFF_DEFAULT_ESTIMATE_LINES;
-  }
-}
-
 export interface PierDiffViewLineStats {
   readonly additions: number;
   readonly deletions: number;
@@ -98,8 +63,6 @@ export interface PierDiffViewLineStats {
 export interface PierDiffViewItem {
   readonly cacheKey: string;
   readonly changeControls?: readonly PierDiffViewChangeControl[];
-  /** estimate 估高行数（可选覆盖默认）。 */
-  readonly estimateLines?: number;
   readonly fileDisplay?: PierDiffViewFileDisplay;
   readonly id: string;
   /** 显式槽态；缺省则按 patch/stateNotice 推断。 */
@@ -390,11 +353,11 @@ function patchLineBuffersCoverHunks(fileDiff: FileDiffMetadata): boolean {
 }
 
 /**
- * estimate 槽：只占 header 几何，**0 正文行**。
+ * estimate 槽：FileDiff **0 正文行**（禁止假行号 / unmodified 假文件体）。
  *
- * 禁止灌 1..N 行号 / context /「unmodified lines」假文件体——用户会当成渲染坏了。
- * 列表估高仍用 input.estimateLines / 外层 CSS min-height；水合后以真 patch 为准。
- * **禁止** isPartial（见 DiffHunks null 行崩溃）。
+ * 虚拟高度唯一来源：`geometry.slotVirtualHeight`（折叠=header，未折叠=header+skeleton）。
+ * 折叠全部事务负责全表写 H，禁止靠滚动收敛。
+ * 水合后以真 patch 为准。**禁止** isPartial（见 DiffHunks null 行崩溃）。
  */
 export function estimateFileDiff(input: PierDiffViewItem): FileDiffMetadata {
   const display = input.fileDisplay;

@@ -61,7 +61,7 @@ async function makeDirtyableRepo(dir: string): Promise<void> {
 }
 
 test.describe("Git status live updates e2e", () => {
-  test("branch picker exposes an explicit create-and-switch candidate", async () => {
+  test("clean status opens changes and branch picker exposes a create-and-switch candidate", async () => {
     test.setTimeout(120_000);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-git-picker-e2e-"));
     const repo = mkdtempSync(join(tmpdir(), "pier-git-picker-repo-"));
@@ -95,6 +95,19 @@ test.describe("Git status live updates e2e", () => {
         .locator('[data-testid="worktree-status-trigger"]:visible')
         .first();
       await expect(statusTrigger).toBeVisible({ timeout: 15_000 });
+      await statusTrigger.click();
+      await win
+        .getByRole("menuitem", { name: /查看变更|View Changes/u })
+        .click();
+      const changesTab = win.locator(
+        '[data-panel-tab-id^="pier.git.changes:"]:visible'
+      );
+      await expect(changesTab).toBeVisible({ timeout: 20_000 });
+      await changesTab
+        .getByRole("button", { name: /关闭标签页|Close tab/u })
+        .click();
+      await expect(changesTab).toHaveCount(0);
+
       await statusTrigger.click();
       await win
         .getByRole("menuitem", { name: /切换分支|Switch Branch/u })

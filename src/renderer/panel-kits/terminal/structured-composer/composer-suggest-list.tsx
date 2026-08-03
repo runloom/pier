@@ -68,12 +68,13 @@ export function ComposerSuggestList({
       style={{ maxHeight: COMPOSER_SUGGEST_MAX_HEIGHT_PX }}
     >
       {/*
-        Native scroller: product contract hides chrome (no-scrollbar). cmdk-style
-        ownership is not needed, but ScrollArea would reintroduce hover thumbs.
+        Native scroller: product contract hides chrome (data-scrollbar=none).
+        Suggest lists stay chrome-free; ScrollArea default is scroll/auto-hide,
+        not a permanent or whole-container hover thumb.
       */}
       <div
         className={cn(
-          "no-scrollbar min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
+          "min-h-0 flex-1 overflow-y-auto overflow-x-hidden",
           scrollFadeClassName({ fade: "vertical", profile: "short" })
         )}
         data-scrollbar="none"

@@ -146,40 +146,42 @@ export async function resolvePanelContextForPath(
       ? dirname(openedPath)
       : openedPath;
 
-  const gitRoot = await realGitPath(
-    await safeGitPath(["rev-parse", "--show-toplevel"], cwd, execGit, control),
-    realpath
-  );
-  const gitCommonDir = await realGitPath(
-    await safeGitPath(
-      ["rev-parse", "--path-format=absolute", "--git-common-dir"],
-      cwd,
-      execGit,
-      control
-    ),
-    realpath
-  );
-  const gitDir = await realGitPath(
-    await safeGitPath(
-      ["rev-parse", "--path-format=absolute", "--git-dir"],
-      cwd,
-      execGit,
-      control
-    ),
-    realpath
-  );
-  const branch = await safeGitScalar(
-    ["branch", "--show-current"],
-    cwd,
-    execGit,
-    control
-  );
-  const head = await safeGitScalar(
-    ["rev-parse", "--verify", "HEAD"],
-    cwd,
-    execGit,
-    control
-  );
+  // 这五条查询共用同一个 cwd 且互不依赖。串行会把五次 git 进程启动延迟直接叠加，
+  // 而每个 review document 请求都要重跑一遍本解析，是大仓下单文件读取的主要固定开销。
+  const [gitRoot, gitCommonDir, gitDir, branch, head] = await Promise.all([
+    (async () =>
+      realGitPath(
+        await safeGitPath(
+          ["rev-parse", "--show-toplevel"],
+          cwd,
+          execGit,
+          control
+        ),
+        realpath
+      ))(),
+    (async () =>
+      realGitPath(
+        await safeGitPath(
+          ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+          cwd,
+          execGit,
+          control
+        ),
+        realpath
+      ))(),
+    (async () =>
+      realGitPath(
+        await safeGitPath(
+          ["rev-parse", "--path-format=absolute", "--git-dir"],
+          cwd,
+          execGit,
+          control
+        ),
+        realpath
+      ))(),
+    safeGitScalar(["branch", "--show-current"], cwd, execGit, control),
+    safeGitScalar(["rev-parse", "--verify", "HEAD"], cwd, execGit, control),
+  ]);
   const projectRoot = gitRoot ?? cwd;
   const worktreeRoot = gitRoot;
   const worktreeKey = worktreeRoot ?? projectRoot;

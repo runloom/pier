@@ -18,7 +18,7 @@
 
 1. **产品缺口**：旧 Pier 设计明确「不含完成音」；用户真实诉求是回合结束后也要可感知提醒（球回到用户手里）。  
 2. **误诊风险**：设置页「发送测试通知」已有横幅+声音时，业务路径仍静默——常被当成声音坏了，实则触发面未覆盖 `ready`。  
-3. **死开关**：`enableErrorAttention` 对 omp / codex 实际无效（适配器未映射 FA `error`）。  
+3. **适配器差异**：omp 已能把原生失败映射为 FA `error`；codex 没有原生失败事件，因此 `enableErrorAttention` 对 codex 无入口。
 4. **设置偷懒禁止**：不可只塞一个总开关糊弄；三类事件必须各自可配。
 
 ### 1.3 完成标准
@@ -29,7 +29,7 @@
 | Ev2 | 回合完成 | `turnNotifyMode=unfocused`（默认）：未聚焦时 FA `* → ready` 发通知+按声音策略出声；聚焦时不发 | 单测 + 手工 |
 | Ev3 | 回合三档 | `off` 永不发；`always` 即使聚焦也发 | 单测 |
 | Ev4 | 出错 | `enableErrorAttention=false` 默认不发；为 true 时进入 `error` 发通知 | 单测 |
-| Ev5 | 出错可达 | omp / codex（至少 Top A 相关适配器）有真实原生失败 → FA `error` 映射；开开关后能走到通知 | 映射测 + 手工 |
+| Ev5 | 出错可达 | omp 的真实原生失败可进入 FA `error`；codex 明确标记不支持，不用中断或普通结束伪造失败 | 映射测 + 手工 |
 | Ev6 | 提示音跟随 | 任一事件仅在 `shown:true` 后按 `soundEnabled`/`soundId` 决策；未 shown 不播应用音 | 既有声音测扩展 |
 | Ev7 | 迁移 | 旧磁盘无 `turnNotifyMode` 时 default=`unfocused`；其它 preferences 键不被 wipe | preferences 集成测 |
 | Ev8 | 设置页 | 三类策略分块可见、文案无实现词；保存失败用户可见 | 组件/治理测 + 手工 |
@@ -42,7 +42,7 @@
 - 偏好：新增 `turnNotifyMode`；保留并继续使用 `enabled` / `enableErrorAttention` / `suppressWhenFocused` / `cooldownMs` / `soundEnabled` / `soundId`。  
 - 设置页：通知策略分三组 + 共用提示音块。  
 - 声音：复用 `decideNotificationAudio` + 单窗 `ATTENTION_SOUND_PLAY`；darwin 品牌 OS 音 staging 为**可选增强**，失败回退 `sound: "default"`。  
-- 适配器：修 omp / codex 的 FA `error` 可达性（本切片内）。
+- 适配器：锁定 omp 的 FA `error` 原生映射，并明确 codex 不支持该入口（本切片内）。
 
 **不做：**
 
@@ -76,7 +76,8 @@
 | 触发集 | 仅 `waiting`；`error` 仅当 `enableErrorAttention`；**不含** `ready` |
 | 设置 | `enabled` / `enableErrorAttention` / `suppressWhenFocused` / `cooldownMs` / `soundEnabled` / `soundId` |
 | 声音管线 | 已实现；测试通知可验证健康 |
-| omp/codex → `error` | 无原生失败映射 → 「出错时通知」对这两家无效 |
+| omp → `error` | `agent_end.error→error`，原生可达 |
+| codex → `error` | 无原生失败映射，明确不支持 |
 | 旧设计文案 | 2026-07-19 提示音设计写明「完成音不做」——**本文件废止该边界** |
 
 ---
@@ -157,13 +158,14 @@ turnNotifyMode: z.enum(["off", "unfocused", "always"]).default("unfocused");
 
 ## 6. 出错可达性（本切片必做）
 
-依据 [`2026-07-13-agent-status-adapter-contract-audit.md`](./2026-07-13-agent-status-adapter-contract-audit.md)：omp / codex 当前无原生 → FA `error` 映射。
+依据 [`2026-07-13-agent-status-adapter-contract-audit.md`](./2026-07-13-agent-status-adapter-contract-audit.md)：omp 的 `agent_end.error` 可原生映射到 FA `error`；codex 没有可证明回合失败的原生事件。
 
 本切片要求：
 
-1. 为 omp、codex（及同档已宣称支持 error 的适配器）补**真实**失败事件 → `error` 映射；禁止假数据仅测契约。  
-2. 映射落地后，`enableErrorAttention=true` 时进入 `error` 必须能进入通知候选。  
-3. 单测锁「有映射源」；无原生失败语义的 provider 须在审计表标明「不支持 error」，不得假装 Ev5 通过。
+1. omp 的 `agent_end.error→error` 必须来自真实 `stopReason`，禁止用假数据仅测契约。
+2. `enableErrorAttention=true` 时，omp 的原生失败必须能进入通知候选。
+3. codex 维持 `error: unsupported`；不得把 `Stop`、`TurnInterrupted` 或用户中断伪装成失败。
+4. 单测同时锁定有映射源与明确不支持的提供方，防止 Ev5 假绿。
 
 ---
 
@@ -190,7 +192,7 @@ flowchart TB
 - `service.ts`：拆开 waiting/error 触发与 ready 完成路径（或等价清晰分支）。  
 - `agent-attention.ts`：schema + 默认值。  
 - `notifications-section.tsx`：三组策略 UI。  
-- 适配器目录：omp / codex error 映射。  
+- 适配器目录：omp 原生 `error` 映射与 codex 不支持结论。
 - 单测：矩阵 × 聚焦 × 迁移 × 声音跟随 shown。
 
 ---

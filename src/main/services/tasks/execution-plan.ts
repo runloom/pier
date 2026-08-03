@@ -28,30 +28,74 @@ function taskLabelKey(source: TaskSource, label: string): string {
   return `${source}\0${label}`;
 }
 
+/**
+ * 按 source+label 建依赖查找表。同 source 内 label 重复时保留先出现的条目
+ * （列表顺序稳定），不抛错——启动是按 taskId 选中的，标签只用于 dependsOn 解析；
+ * 硬拦会把 history 噪音或配置重复变成完全不可用。
+ */
 function taskBySourceLabel(
   tasks: readonly TaskCandidate[]
 ): Map<string, TaskCandidate> {
   const map = new Map<string, TaskCandidate>();
   for (const task of tasks) {
     const key = taskLabelKey(task.source, task.label);
-    if (map.has(key)) {
-      throw new Error(`任务标签重复: ${task.source} ${task.label}`);
+    if (!map.has(key)) {
+      map.set(key, task);
     }
-    map.set(key, task);
   }
   return map;
 }
 
-function dependencyTask(
+/** 同 source 内 dependsOn label 找不到时抛出；UI 可确认后 skip 仅跑当前任务。 */
+export class MissingTaskDependenciesError extends Error {
+  readonly missingDependencies: readonly string[];
+  readonly taskLabel: string;
+
+  constructor(taskLabel: string, missingDependencies: readonly string[]) {
+    const listed = missingDependencies.join(", ");
+    super(`任务 ${taskLabel} 依赖不存在: ${listed}`);
+    this.name = "MissingTaskDependenciesError";
+    this.taskLabel = taskLabel;
+    this.missingDependencies = missingDependencies;
+  }
+}
+
+export interface BuildTaskLaunchesOptions {
+  /** 为 true 时跳过找不到的 dependsOn，仍启动当前任务与可解析依赖。 */
+  skipMissingDependencies?: boolean;
+}
+
+function resolveDependency(
   task: TaskCandidate,
   dependencyLabel: string,
   labels: ReadonlyMap<string, TaskCandidate>
-): TaskCandidate {
-  const dependency = labels.get(taskLabelKey(task.source, dependencyLabel));
-  if (!dependency) {
-    throw new Error(`任务 ${task.label} 依赖不存在: ${dependencyLabel}`);
+): TaskCandidate | undefined {
+  return labels.get(taskLabelKey(task.source, dependencyLabel));
+}
+
+function dependencyTasks(
+  task: TaskCandidate,
+  labels: ReadonlyMap<string, TaskCandidate>,
+  options: BuildTaskLaunchesOptions
+): TaskCandidate[] {
+  const dependsOn = task.dependsOn ?? [];
+  if (dependsOn.length === 0) {
+    return [];
   }
-  return dependency;
+  const resolved: TaskCandidate[] = [];
+  const missing: string[] = [];
+  for (const dependencyLabel of dependsOn) {
+    const dependency = resolveDependency(task, dependencyLabel, labels);
+    if (dependency) {
+      resolved.push(dependency);
+    } else {
+      missing.push(dependencyLabel);
+    }
+  }
+  if (missing.length > 0 && !options.skipMissingDependencies) {
+    throw new MissingTaskDependenciesError(task.label, missing);
+  }
+  return resolved;
 }
 
 function inputRequestById(task: TaskCandidate): Map<string, TaskInputRequest> {
@@ -174,20 +218,21 @@ function withPresentation(command: string, task: TaskCandidate): string {
 function launchForTask(
   task: TaskCandidate,
   context: TaskExecutionContext,
-  labels: ReadonlyMap<string, TaskCandidate>
+  labels: ReadonlyMap<string, TaskCandidate>,
+  options: BuildTaskLaunchesOptions
 ): TaskLaunchPlan {
   const cwd = resolveVariables(task.cwd, context);
   const rawCommand = buildCommand(task, context);
   const command = withPresentation(rawCommand, task);
   const env = resolvedEnv(task, context);
   const sourceLabel = TASK_SOURCE_LABELS[task.source];
-  const dependsOn = task.dependsOn?.map(
-    (dependencyLabel) => dependencyTask(task, dependencyLabel, labels).id
+  const dependsOn = dependencyTasks(task, labels, options).map(
+    (dependency) => dependency.id
   );
   return {
     command,
     cwd,
-    ...(dependsOn ? { dependsOn } : {}),
+    ...(dependsOn.length > 0 ? { dependsOn } : {}),
     ...(task.dependsOrder ? { dependsOrder: task.dependsOrder } : {}),
     focus: task.presentation?.focus ?? task.presentation?.reveal !== "never",
     label: task.label,
@@ -214,18 +259,10 @@ function launchForTask(
   };
 }
 
-function dependencyTasks(
-  task: TaskCandidate,
-  labels: ReadonlyMap<string, TaskCandidate>
-): TaskCandidate[] {
-  return (task.dependsOn ?? []).map((label) =>
-    dependencyTask(task, label, labels)
-  );
-}
-
 function expandLaunchOrder(
   task: TaskCandidate,
-  labels: ReadonlyMap<string, TaskCandidate>
+  labels: ReadonlyMap<string, TaskCandidate>,
+  options: BuildTaskLaunchesOptions
 ): TaskCandidate[] {
   const visited = new Set<string>();
   const visiting: TaskCandidate[] = [];
@@ -242,7 +279,7 @@ function expandLaunchOrder(
       return;
     }
     visiting.push(current);
-    for (const dependency of dependencyTasks(current, labels)) {
+    for (const dependency of dependencyTasks(current, labels, options)) {
       visit(dependency);
     }
     visiting.pop();
@@ -262,10 +299,11 @@ export interface TaskExecutionContext {
 export function buildTaskLaunches(
   task: TaskCandidate,
   context: TaskExecutionContext,
-  tasks: readonly TaskCandidate[]
+  tasks: readonly TaskCandidate[],
+  options: BuildTaskLaunchesOptions = {}
 ): TaskLaunchPlan[] {
   const labels = taskBySourceLabel(tasks);
-  return expandLaunchOrder(task, labels).map((entry) =>
-    launchForTask(entry, context, labels)
+  return expandLaunchOrder(task, labels, options).map((entry) =>
+    launchForTask(entry, context, labels, options)
   );
 }

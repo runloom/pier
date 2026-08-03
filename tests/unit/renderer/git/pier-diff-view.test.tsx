@@ -11,7 +11,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
-import { createRef, startTransition, useState } from "react";
+import { createRef, type RefObject, startTransition, useState } from "react";
 import { flushSync } from "react-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -326,6 +326,117 @@ describe("PierDiffView", () => {
     expect(
       await screen.findByRole("button", { name: labels.expandDiff })
     ).toHaveAttribute("aria-expanded", "false");
+  });
+
+  describe("折叠全部", () => {
+    const pendingItem: PierDiffViewItem = {
+      cacheKey: "estimate:pending.ts",
+      fileDisplay: { path: "pending.ts", status: "modified" },
+      id: "pending.ts",
+      patch: null,
+    };
+    const hydratedPatch =
+      "diff --git a/pending.ts b/pending.ts\n--- a/pending.ts\n+++ b/pending.ts\n@@ -1 +1 @@\n-old\n+hydrated\n";
+
+    async function renderWithPending(
+      ref: RefObject<PierDiffViewHandle | null>
+    ) {
+      render(
+        <PierDiffView
+          appearance={appearance}
+          items={[items[0], pendingItem]}
+          labels={labels}
+          onError={vi.fn()}
+          ref={ref}
+        />
+      );
+      await waitFor(() => expect(ref.current).not.toBeNull());
+    }
+
+    it("骨架槽点击时已是折叠态，水合后的正文仍继承折叠", async () => {
+      // 回归：estimate 默认 collapsed，逐项翻转会因「已是目标态」提前返回而不留
+      // 记录，正文到达时回落解析默认（有正文即展开）→ 表现为折叠全部漏折叠。
+      const ref = createRef<PierDiffViewHandle>();
+      const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
+      await renderWithPending(ref);
+
+      act(() => ref.current?.setAllCollapsed(true));
+      updateItem.mockClear();
+
+      act(() =>
+        ref.current?.updateItems([
+          {
+            cacheKey: "document:pending.ts",
+            fileDisplay: { path: "pending.ts", status: "modified" },
+            id: "pending.ts",
+            patch: hydratedPatch,
+          },
+        ])
+      );
+
+      const hydrated = updateItem.mock.calls.at(-1)?.[0];
+      expect(hydrated?.id).toBe("pending.ts");
+      expect(hydrated?.collapsed).toBe(true);
+    });
+
+    it("折叠后才进入投影窗口的文件继承折叠缺省", async () => {
+      const ref = createRef<PierDiffViewHandle>();
+      const view = render(
+        <PierDiffView
+          appearance={appearance}
+          items={items}
+          labels={labels}
+          onError={vi.fn()}
+          ref={ref}
+        />
+      );
+      await waitFor(() => expect(ref.current).not.toBeNull());
+
+      act(() => ref.current?.setAllCollapsed(true));
+
+      view.rerender(
+        <PierDiffView
+          appearance={appearance}
+          items={[
+            items[0],
+            {
+              cacheKey: "document:arrived.ts",
+              fileDisplay: { path: "arrived.ts", status: "added" },
+              id: "arrived.ts",
+              patch:
+                "diff --git a/arrived.ts b/arrived.ts\n--- /dev/null\n+++ b/arrived.ts\n@@ -0,0 +1 @@\n+arrived\n",
+            },
+          ]}
+          labels={labels}
+          onError={vi.fn()}
+          ref={ref}
+        />
+      );
+
+      // 两个文件都应折叠：先在场的那个被逐项翻转，后到的靠缺省层继承。
+      await waitFor(() =>
+        expect(
+          screen.getAllByRole("button", { name: labels.expandDiff })
+        ).toHaveLength(2)
+      );
+      expect(
+        screen.queryByRole("button", { name: labels.collapseDiff })
+      ).toBeNull();
+    });
+
+    it("展开全部跳过 0 行正文槽，不把骨架撑成空壳", async () => {
+      const ref = createRef<PierDiffViewHandle>();
+      const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
+      await renderWithPending(ref);
+
+      act(() => ref.current?.setAllCollapsed(true));
+      updateItem.mockClear();
+      act(() => ref.current?.setAllCollapsed(false));
+
+      const touched = updateItem.mock.calls.map((call) => call[0]?.id);
+      expect(touched).toContain("file.ts");
+      expect(touched).not.toContain("pending.ts");
+    });
   });
 
   it("正文更新、折叠、Worker fallback 与导航展开保持同一官方 item 版本链", async () => {
@@ -884,7 +995,7 @@ describe("PierDiffView", () => {
     });
   });
 
-  it("instant 定位在返回前完成两阶段虚拟窗口布局", async () => {
+  it("instant 定位在 microtask 内完成两阶段虚拟窗口布局", async () => {
     const ref = createRef<PierDiffViewHandle>();
     const renderNow = vi.spyOn(PierreCodeView.prototype, "render");
     render(
@@ -898,16 +1009,69 @@ describe("PierDiffView", () => {
     );
 
     await waitFor(() => expect(ref.current).not.toBeNull());
+
+    // 已在场且不展开的目标几何不变：预测量是白刷，只会平白扰动布局。
     renderNow.mockClear();
     act(() => {
       expect(
         ref.current?.scrollToItem("file.ts", { behavior: "instant" })
       ).toBe(true);
     });
-    expect(renderNow).toHaveBeenCalledTimes(3);
-    expect(renderNow).toHaveBeenNthCalledWith(1);
-    expect(renderNow).toHaveBeenNthCalledWith(2, true);
-    expect(renderNow).toHaveBeenNthCalledWith(3, true);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(renderNow).not.toHaveBeenCalledWith(true);
+
+    // 折叠目标被展开 → 几何要变，必须预测量；但树导航从 useLayoutEffect 进来，
+    // 同步 render(true) 会在 React 渲染期触发 Pierre 的 flushSync，只告警并降级。
+    // 两阶段布局只能留到 microtask，仍在 paint 前。
+    act(() => {
+      ref.current?.setAllCollapsed(true);
+    });
+    renderNow.mockClear();
+    act(() => {
+      expect(
+        ref.current?.scrollToItem("file.ts", { behavior: "instant" })
+      ).toBe(true);
+    });
+    expect(renderNow).not.toHaveBeenCalledWith(true);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(
+      renderNow.mock.calls.filter(([immediate]) => immediate === true)
+    ).toHaveLength(2);
+  });
+
+  it("被动恢复不得展开折叠目标（expandCollapsed:false）", async () => {
+    const ref = createRef<PierDiffViewHandle>();
+    const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
+    render(
+      <PierDiffView
+        appearance={appearance}
+        items={items}
+        labels={labels}
+        onError={vi.fn()}
+        ref={ref}
+      />
+    );
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    act(() => {
+      ref.current?.setAllCollapsed(true);
+    });
+    updateItem.mockClear();
+    act(() => {
+      expect(
+        ref.current?.scrollToItem("file.ts", {
+          behavior: "instant",
+          expandCollapsed: false,
+        })
+      ).toBe(true);
+    });
+    // 没有折叠翻转写入：恢复只把布局对回选中项，
+    // 不改变用户刚表达的折叠意图，也就不制造大幅布局变动。
+    expect(updateItem).not.toHaveBeenCalled();
   });
 
   it("可见性必须同时匹配当前 cacheKey 与官方受控 version", async () => {

@@ -340,6 +340,83 @@ describe("resolveDeliveryPlan · agent fine-grained silence", () => {
     expect(result.decision.osNotify).toBe(false);
   });
 
+  it("turnNotifyMode=unfocused + same window other panel → still silence", () => {
+    // 窗口级：同窗异面板也不提醒完成。
+    const result = plan(
+      {
+        agentRef: "11:p1",
+        kind: "agent.turn-finished",
+        severity: "info",
+      },
+      {
+        hasFocusedPierWindow: true,
+        isOwnerWindowFocused: true,
+        isTargetPanelFocused: false,
+      },
+      prefs({ agentAttention: { turnNotifyMode: "unfocused" } })
+    );
+    expect(result.decision.toast).toBe(false);
+    expect(result.decision.osNotify).toBe(false);
+  });
+
+  it("turnNotifyMode=panel-unfocused + panel focused → silence", () => {
+    const result = plan(
+      {
+        agentRef: "11:p1",
+        kind: "agent.turn-finished",
+        severity: "info",
+      },
+      {
+        hasFocusedPierWindow: true,
+        isOwnerWindowFocused: true,
+        isTargetPanelFocused: true,
+      },
+      prefs({ agentAttention: { turnNotifyMode: "panel-unfocused" } })
+    );
+    expect(result.decision.toast).toBe(false);
+    expect(result.decision.osNotify).toBe(false);
+  });
+
+  it("turnNotifyMode=panel-unfocused + same window other panel → toast", () => {
+    const result = plan(
+      {
+        agentRef: "11:p1",
+        kind: "agent.turn-finished",
+        severity: "info",
+      },
+      {
+        hasFocusedPierWindow: true,
+        isOwnerWindowFocused: true,
+        isTargetPanelFocused: false,
+      },
+      prefs({ agentAttention: { turnNotifyMode: "panel-unfocused" } })
+    );
+    expect(result.decision.toast).toBe(true);
+    expect(result.decision.osNotify).toBe(false);
+  });
+
+  it("turnNotifyMode=panel-unfocused + no key → OS", () => {
+    const result = plan(
+      {
+        agentRef: "11:p1",
+        kind: "agent.turn-finished",
+        severity: "info",
+      },
+      {
+        hasFocusedPierWindow: false,
+        isOwnerWindowFocused: false,
+        isTargetPanelFocused: false,
+      },
+      prefs({ agentAttention: { turnNotifyMode: "panel-unfocused" } })
+    );
+    expect(result.decision).toEqual({
+      inbox: true,
+      osNotify: true,
+      toast: false,
+    });
+    expect(result.osCooldownKey).toBe("agent.turn-finished:11:p1");
+  });
+
   it("turnNotifyMode=always + owner focused → toast when key present", () => {
     const result = plan(
       {

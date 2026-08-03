@@ -138,6 +138,14 @@ describe("terminal native debug IPC", () => {
     return { fakeAddon, handlers, invokeHandlers, win };
   }
 
+  it("registers input-routing diagnostics with the terminal diagnostic IPC", async () => {
+    const { handlers } = await setupHarness();
+
+    expect(handlers.get("pier://terminal:input-routing-diagnostic")).toEqual(
+      expect.any(Function)
+    );
+  });
+
   it("returns native surfaces with raw panel ids and recent route events", async () => {
     const { fakeAddon, handlers, invokeHandlers, win } = await setupHarness();
     await invokeHandlers.get("pier:terminal:create")?.(

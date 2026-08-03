@@ -257,7 +257,11 @@ describe("opencode 生成插件的子会话身份继承", () => {
     const statuses: string[] = [];
     for (const row of rows) {
       if (row.kind !== "agentEvent") continue;
-      aggregator.ingestAgentEvent(row, { stopAuthority: "authoritative" });
+      aggregator.ingestAgentEvent(row, {
+        evidenceSource: "hook",
+        stopAuthority: "authoritative",
+        turnStartAuthority: "none",
+      });
       const activity = aggregator.snapshot().activities[0];
       if (activity?.kind === "agent" && activity.status) {
         statuses.push(activity.status);
@@ -385,7 +389,9 @@ describe("opencode 生成插件的子会话身份继承", () => {
         if (event.kind !== "agentEvent") continue;
         expect(event.v).toBe(3);
         aggregator.ingestAgentEvent(event, {
+          evidenceSource: "hook",
           stopAuthority: opencodeIntegration.runtime.stopAuthority,
+          turnStartAuthority: "none",
         });
         const activity = aggregator.snapshot().activities[0];
         counts.push(activity?.kind === "agent" ? activity.subagentCount : -1);

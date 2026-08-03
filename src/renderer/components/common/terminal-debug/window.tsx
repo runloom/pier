@@ -20,6 +20,7 @@ import {
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { FocusRoutingSummary } from "./focus-routing-summary.tsx";
+import { InputRoutingTraceSummary } from "./input-routing-trace-summary.tsx";
 import { LayoutStateView } from "./layout-view.tsx";
 import { RoutingDebugBanners } from "./routing-banners.tsx";
 import {
@@ -374,6 +375,9 @@ function RoutingStateView({
           </div>
         </div>
         <FocusRoutingSummary focusRouting={snapshot?.renderer?.focusRouting} />
+        <InputRoutingTraceSummary
+          trace={snapshot?.renderer?.inputRoutingTrace}
+        />
       </section>
       <aside className="shrink-0 border bg-card">
         <div className="flex h-9 items-center gap-2 border-b bg-muted px-3">

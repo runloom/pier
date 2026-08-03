@@ -48,7 +48,9 @@ describe("git review gold-standard governance", () => {
     expect(bodyClass).toContain("isReviewEntryBodyHydratable");
     expect(bodyClass).toContain("reviewContentEntryKeysInOrder");
     expect(ledger).toContain("isReviewSlotIncludedInBody(slot)");
-    expect(ledger).toContain("pendingEntryKeys");
+    // 不得再有 demand 裁剪显示集的 pendingEntryKeys 旋钮
+    expect(ledger).not.toContain("pendingEntryKeys");
+    expect(ledger).toContain("demand 不决定有无 id");
     expect(ledger).toContain("禁止");
     expect(loaderRuntime).toContain(
       "isReviewEntryBodyHydratable(resource.entry)"
@@ -111,6 +113,12 @@ describe("git review gold-standard governance", () => {
 
   it("G3: estimate skeleton geometry is single-sourced real DOM", () => {
     const skeleton = read("packages/ui/src/diff-view/estimate-skeleton.ts");
+    const geometry = read("packages/ui/src/diff-view/geometry.ts");
+    const estimateHeight = read("packages/ui/src/diff-view/layout-apply.ts");
+    const items = read("packages/ui/src/diff-view/items.ts");
+    const demand = read(
+      "src/plugins/builtin/git/renderer/review/document/demand.ts"
+    );
     const estimates = read(
       "src/plugins/builtin/git/renderer/review/document/estimates.ts"
     );
@@ -127,7 +135,9 @@ describe("git review gold-standard governance", () => {
     expect(skeleton).toContain("bar.style.height");
     expect(skeleton).toContain("bar.style.width = width");
     expect(skeleton).toContain("backgroundColor");
-    expect(estimates).toContain("GIT_REVIEW_ESTIMATE_SKELETON_LINES = 5");
+    // 骨架行数单源：ui estimate-skeleton → review re-export
+    expect(estimates).toContain("PIER_DIFF_ESTIMATE_SKELETON_LINES");
+    expect(estimates).toContain("GIT_REVIEW_ESTIMATE_SKELETON_LINES");
     expect(feedback).toContain("PIER_DIFF_ESTIMATE_SKELETON_PAD_LEFT_PX");
     expect(feedback).toContain("ReviewTreeLoading");
     // 侧栏底色 = muted：树骨架禁止 bg-muted
@@ -135,6 +145,37 @@ describe("git review gold-standard governance", () => {
     expect(feedback).not.toMatch(
       /ReviewTreeLoading[\s\S]{0,800}bg-muted(?!-)/u
     );
+    // A2：虚拟高度单源 geometry；禁止平行 144 / estimateLines 估高 / 死身份字段
+    expect(geometry).toContain("export function slotVirtualHeight");
+    expect(geometry).toContain("export function totalScrollHeight");
+    expect(geometry).toContain("export function diffMetrics");
+    expect(estimateHeight).toContain("slotVirtualHeight");
+    expect(estimateHeight).toContain("export function applyDiffVirtualHeights");
+    expect(estimateHeight).not.toMatch(/=\s*144\b/u);
+    expect(items).not.toContain("PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX");
+    expect(items).not.toContain("estimateLinesForFileStatus");
+    expect(items).not.toContain("estimateLines");
+    expect(demand).toContain("diffMetrics");
+    expect(demand).toContain("skeletonSlotHeight");
+    expect(demand).toContain("codeFontSize");
+    expect(demand).not.toMatch(/=\s*144\b/u);
+    const headers = read("packages/ui/src/diff-view/use-headers.tsx");
+    const useHandle = read("packages/ui/src/diff-view/use-handle.ts");
+    // 单槽折叠：apply + pin；collapse-all：批量不逐项 apply（避免 O(n²)）
+    expect(headers).toContain("applyDiffVirtualHeights");
+    expect(headers).toContain("pinCodeViewScrollHeight");
+    expect(headers).toContain("reconcileHeights");
+    expect(useHandle).toContain(
+      "setItemCollapsed(id, collapsed, false, false)"
+    );
+    expect(estimateHeight).toContain("isCollapseAllIntent?.() === true");
+    // emit 路径仅 collapse-all 全表 apply，普通滚动不 O(n)
+    expect(estimateHeight).toContain("普通滚动：不付 O(n) 全表代价");
+    const sessionCache = read(
+      "src/plugins/builtin/git/renderer/review/session-cache.ts"
+    );
+    expect(sessionCache).not.toContain("measuredEstimateLinesByPath");
+    expect(estimates).not.toContain("recordReviewRenderedHeightEstimates");
   });
 
   it("G4: pending_scroll boosts demand; settle is not navigation gate", () => {

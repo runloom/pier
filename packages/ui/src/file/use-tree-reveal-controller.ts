@@ -313,6 +313,11 @@ export function useFileTreeRevealController(options: {
       const nextOptions: PierFileTreeRevealOptions = {
         expandTarget: policy.expandTarget,
         intent,
+        // policy 只拥有 expandTarget / scroll；焦点归属由调用方决定，
+        // 重建 options 时必须透传，否则搜索导航仍会被 reveal 抢走焦点。
+        ...(revealOptions?.preserveFocus === undefined
+          ? {}
+          : { preserveFocus: revealOptions.preserveFocus }),
         scroll: policy.scroll,
       };
 

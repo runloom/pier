@@ -254,6 +254,21 @@ const antigravityBaseActions: AgentStatusTraceAction[] = [
     producerKey: "Stop",
     scenarios: ["error"],
   },
+  {
+    ...traceAction(
+      "PreInvocation",
+      "processing",
+      "processing",
+      { expectedStatus: "processing" },
+      {
+        conversationId: "antigravity-session-1",
+        hook_event_name: "PreInvocation",
+        invocationNum: 5,
+      },
+      true
+    ),
+    scenarios: ["error"],
+  },
 ];
 const antigravityActions = antigravityBaseActions.map((action) =>
   action.nativeEvent.startsWith("Stop.")

@@ -162,6 +162,17 @@ export interface PierFileTreeRevealOptions {
    */
   intent?: PierFileTreeRevealIntent;
   /**
+   * Keep DOM focus where it is; select + scroll without pulling the focus ring.
+   *
+   * Reveal normally focuses the row because trees only paints the ring when the
+   * row button holds DOM focus, and it re-focuses across a microtask and two
+   * frames to win against re-renders. That focus grab is correct for tree-driven
+   * reveals but wrong when the user is still typing somewhere else: the search
+   * bar navigates on Enter and stays open, so a following Escape would land on
+   * the tree instead of closing the bar.
+   */
+  preserveFocus?: boolean;
+  /**
    * Scroll alignment. Defaults from `resolveRevealPolicy(intent)` when omitted.
    * Prefer leaving unset so policy stays the single owner.
    */

@@ -1,8 +1,11 @@
 /**
- * Shadow DOM 滚动条：与 globals.css 同 token、同视觉。
+ * Shadow DOM 滚动条：与 globals.css 同策略、同 token。
  *
- * light DOM 已由 `*` 全局样式覆盖；Shadow 穿不进，只能 unsafeCSS 再挂一份。
- * 槽位 --shell-scrollbar-width-legacy；拇指 1px 透明边 + content-box。
+ * light DOM 已由全局样式覆盖；Shadow 穿不进，只能 unsafeCSS 再挂一份。
+ *
+ * Electron：用 scrollbar-color 空闲透明 / 活动着色做自动隐藏，并固定
+ * scrollbar-width: thin，避免与 @pierre/trees 自带 webkit :hover 条打架，
+ * 也避免退回经典 webkit 槽位导致 gutter 位移。
  */
 
 export const SCROLLBAR_SIZE_CSS = "var(--shell-scrollbar-width-legacy)";
@@ -18,11 +21,18 @@ export const SCROLLBAR_SYSTEM_CSS = `
 [data-file-tree-scrollbar-measure="true"],
 [data-code],
 :host {
-  scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track, transparent);
+  scrollbar-color: transparent transparent;
   scrollbar-width: var(--shell-scrollbar-width, thin);
 }
 
-@supports selector(::-webkit-scrollbar) {
+[data-file-tree-virtualized-scroll="true"][data-scrollbar-scrolling="true"],
+[data-file-tree-virtualized-scroll="true"][data-scrollbar-hovering="true"],
+[data-code][data-scrollbar-scrolling="true"],
+[data-code][data-scrollbar-hovering="true"] {
+  scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track, transparent);
+}
+
+@supports not (scrollbar-color: auto) {
   [data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar,
   [data-file-tree-scrollbar-measure="true"]::-webkit-scrollbar,
   [data-code]::-webkit-scrollbar,

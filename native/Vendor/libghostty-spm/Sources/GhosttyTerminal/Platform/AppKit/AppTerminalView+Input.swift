@@ -136,7 +136,22 @@
             return (point.x, bounds.height - point.y)
         }
 
+        /// Host filter (web overlays). Default allow when unset.
+        private func hostDeliversMouse(_ event: NSEvent) -> Bool {
+            hostAllowsMouseEvent?(event) ?? true
+        }
+
+        /// Continue button-up / drag when a press started on the terminal, even
+        /// if the pointer later enters a web overlay (avoids stuck mouse-down
+        /// in mouse-reporting TUIs).
+        private func hostDeliversMouseOrContinuesPress(_ event: NSEvent) -> Bool {
+            pointerSelectionStartPoint != nil
+                || pendingSelectionMenuPoint != nil
+                || hostDeliversMouse(event)
+        }
+
         override open func mouseDown(with event: NSEvent) {
+            guard hostDeliversMouse(event) else { return }
             if focusesOnMouseDown {
                 window?.makeFirstResponder(self)
             }
@@ -153,6 +168,7 @@
         }
 
         override open func mouseUp(with event: NSEvent) {
+            guard hostDeliversMouseOrContinuesPress(event) else { return }
             let (x, y) = mousePoint(from: event)
             let mods = TerminalInputModifiers(from: event.modifierFlags)
             surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
@@ -165,6 +181,7 @@
         }
 
         override open func rightMouseDown(with event: NSEvent) {
+            guard hostDeliversMouse(event) else { return }
             if focusesOnMouseDown {
                 window?.makeFirstResponder(self)
             }
@@ -183,6 +200,7 @@
         }
 
         override open func rightMouseUp(with event: NSEvent) {
+            guard hostDeliversMouseOrContinuesPress(event) else { return }
             let (x, y) = mousePoint(from: event)
             let mods = TerminalInputModifiers(from: event.modifierFlags)
             surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
@@ -199,6 +217,7 @@
         }
 
         override open func menu(for event: NSEvent) -> NSMenu? {
+            guard hostDeliversMouse(event) else { return nil }
             let (x, y) = mousePoint(from: event)
             guard selectionMenuPoint(at: CGPoint(x: x, y: y)) != nil else {
                 return super.menu(for: event)
@@ -207,6 +226,7 @@
         }
 
         override open func otherMouseDown(with event: NSEvent) {
+            guard hostDeliversMouse(event) else { return }
             if focusesOnMouseDown {
                 window?.makeFirstResponder(self)
             }
@@ -221,6 +241,7 @@
         }
 
         override open func otherMouseUp(with event: NSEvent) {
+            guard hostDeliversMouseOrContinuesPress(event) else { return }
             let (x, y) = mousePoint(from: event)
             let mods = TerminalInputModifiers(from: event.modifierFlags)
             surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
@@ -232,26 +253,37 @@
         }
 
         override open func mouseMoved(with event: NSEvent) {
+            guard hostDeliversMouse(event) else { return }
             let (x, y) = mousePoint(from: event)
             let mods = TerminalInputModifiers(from: event.modifierFlags)
             surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
         }
 
         override open func mouseDragged(with event: NSEvent) {
+            // Drag must continue after press even under a web overlay.
+            guard hostDeliversMouseOrContinuesPress(event) else { return }
             let (x, y) = mousePoint(from: event)
             updatePointerSelectionRect(to: CGPoint(x: x, y: y))
-            mouseMoved(with: event)
+            let mods = TerminalInputModifiers(from: event.modifierFlags)
+            surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
         }
 
         override open func rightMouseDragged(with event: NSEvent) {
-            mouseMoved(with: event)
+            guard hostDeliversMouseOrContinuesPress(event) else { return }
+            let (x, y) = mousePoint(from: event)
+            let mods = TerminalInputModifiers(from: event.modifierFlags)
+            surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
         }
 
         override open func otherMouseDragged(with event: NSEvent) {
-            mouseMoved(with: event)
+            guard hostDeliversMouseOrContinuesPress(event) else { return }
+            let (x, y) = mousePoint(from: event)
+            let mods = TerminalInputModifiers(from: event.modifierFlags)
+            surface?.sendMousePos(x: x, y: y, mods: mods.ghosttyMods)
         }
 
         override open func scrollWheel(with event: NSEvent) {
+            guard hostDeliversMouse(event) else { return }
             let scrollMods = TerminalScrollModifiers(
                 precision: event.hasPreciseScrollingDeltas,
                 momentum: TerminalScrollModifiers.momentumFrom(phase: event.momentumPhase)

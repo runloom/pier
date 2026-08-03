@@ -39,6 +39,7 @@ import type {
   TerminalDebugWindowOpenResult,
 } from "./debug.ts";
 import type { TerminalEndState } from "./end-state.ts";
+import type { TerminalInputRoutingDiagnosticInput } from "./input-routing-diagnostics.ts";
 import type { TerminalPanelSessionSnapshot } from "./panel-session.ts";
 import type { TerminalFrameCommittedEvent } from "./presentation.ts";
 
@@ -156,6 +157,13 @@ export interface TerminalAPI {
    * 调一次即可. fire-and-forget.
    */
   reconcile(activeIds: string[]): void;
+  /**
+   * 上报经过字段白名单约束的终端输入路由诊断。fire-and-forget；main 负责验证
+   * sender、补齐窗口身份并写入 diagnostics JSONL。
+   */
+  recordInputRoutingDiagnostic(
+    event: TerminalInputRoutingDiagnosticInput
+  ): void;
   resolveComposerPaths(paths: string[]): Promise<TerminalComposerPathsResult>;
   /** Reveal an attachment path in the platform file manager (Finder/Explorer). */
   revealComposerPath(path: string): Promise<void>;

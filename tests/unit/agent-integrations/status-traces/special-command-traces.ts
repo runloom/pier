@@ -244,7 +244,7 @@ const clineActions: AgentStatusTraceAction[] = [
     agent_id: "cline-agent-1",
     taskId: "cline-task-1",
   }),
-  traceAction("UserPromptSubmit", "PromptSubmit", "processing", {
+  traceAction("TaskResume", "running", "processing", {
     expectedStatus: "processing",
   }),
   terminalAction("TaskCancel", "TurnInterrupted", "interrupted", {

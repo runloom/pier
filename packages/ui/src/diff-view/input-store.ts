@@ -190,7 +190,6 @@ function sameFileInput(
   }
   return (
     previous.cacheKey === next.cacheKey &&
-    previous.estimateLines === next.estimateLines &&
     previous.fileDisplay?.path === next.fileDisplay?.path &&
     previous.fileDisplay?.previousPath === next.fileDisplay?.previousPath &&
     previous.fileDisplay?.status === next.fileDisplay?.status &&
