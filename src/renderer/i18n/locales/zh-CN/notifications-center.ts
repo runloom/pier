@@ -20,6 +20,12 @@ export const notificationsCenter = {
   },
   loadMore: "滚动加载更多…",
   repeat: "×{{count}}",
+  shellEnv: {
+    failedBody:
+      "任务和智能体可能使用与终端不同的 Node 或 PATH。请打开设置 → 终端查看状态，并确认 shell 在非交互启动时不会卡住或弹提示。",
+    failedTitle: "无法加载 shell 环境",
+    openSettings: "打开终端设置",
+  },
   source: {
     pluginDetail: "插件 {{source}}",
     agent: "智能体",

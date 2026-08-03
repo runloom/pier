@@ -1,5 +1,6 @@
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsShellEnvironment } from "./settings-shell-environment.ts";
 import { settingsSkills } from "./settings-skills.ts";
 
 export const settings = {
@@ -331,6 +332,7 @@ export const settings = {
       shellDefault: "使用 shell 默认目录",
     },
   },
+  shellEnvironment: settingsShellEnvironment,
   quitConfirmation: {
     hasActivity: "有运行中活动时确认",
     always: "总是确认",

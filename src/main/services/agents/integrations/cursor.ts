@@ -5,10 +5,11 @@ import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
-  isPierHookCommand,
+  isManagedPierHookCommand,
   pierHookCommandV3WithStdin,
   pierHookCommandV3WithStdinStatusDispatch,
   type StdinStatusDispatchCase,
+  skipHookCommandWhenEnvPresent,
   transformJsonConfig,
   transformPierHooksUnlessNewer,
 } from "./shared.ts";
@@ -16,6 +17,12 @@ import type { AgentHookIntegration } from "./types.ts";
 
 const AGENT_ID: AgentKind = "cursor";
 const TIMEOUT_SECONDS = 10;
+/**
+ * Grok 默认兼容加载 `~/.cursor/hooks.json`。Cursor 的 Pier 条目在 Grok
+ * 会话里必须以 agent=cursor 跳过，否则会双写 FA（grok + cursor）并抬高
+ * TUI `[hooks: n/m]` 失败计数。对齐 Claude 的 `skipWhenEnvPresent`。
+ */
+const CURSOR_SKIP_WHEN_ENV_PRESENT = ["GROK_HOOK_EVENT"] as const;
 
 const configPath = () => join(homedir(), ".cursor", "hooks.json");
 
@@ -142,7 +149,12 @@ function isPierCursorEntry(entry: unknown): boolean {
   if (!entry || typeof entry !== "object") {
     return false;
   }
-  return isPierHookCommand((entry as CursorHookEntry).command);
+  // emit 规范 + 遗留 PIER_AGENT_HOOK_PORT curl 一并视作 Pier 所有权。
+  return isManagedPierHookCommand((entry as CursorHookEntry).command);
+}
+
+function wrapCursorPierCommand(command: string): string {
+  return skipHookCommandWhenEnvPresent(command, CURSOR_SKIP_WHEN_ENV_PRESENT);
 }
 
 function cursorHookCommand(
@@ -151,27 +163,29 @@ function cursorHookCommand(
 ): string {
   const subagent =
     nativeEvent === "subagentStart" || nativeEvent === "subagentStop";
-  return pierHookCommandV3WithStdin({
-    ...(subagent
-      ? {
-          actorHintFromAgentId: true,
-          agentInstanceIdFields: ["subagent_id", "subagentId"],
-          agentTypeFields: ["subagent_type", "subagentType"],
-          parentSessionIdFields: [
-            "parent_conversation_id",
-            "parentConversationId",
-            "conversation_id",
-            "conversationId",
-          ],
-          sessionIdAsParent: true,
-          suppressTurnId: true,
-        }
-      : {}),
-    agentId: AGENT_ID,
-    event,
-    nativeEvent,
-    turnIdFields: ["generation_id", "generationId"],
-  });
+  return wrapCursorPierCommand(
+    pierHookCommandV3WithStdin({
+      ...(subagent
+        ? {
+            actorHintFromAgentId: true,
+            agentInstanceIdFields: ["subagent_id", "subagentId"],
+            agentTypeFields: ["subagent_type", "subagentType"],
+            parentSessionIdFields: [
+              "parent_conversation_id",
+              "parentConversationId",
+              "conversation_id",
+              "conversationId",
+            ],
+            sessionIdAsParent: true,
+            suppressTurnId: true,
+          }
+        : {}),
+      agentId: AGENT_ID,
+      event,
+      nativeEvent,
+      turnIdFields: ["generation_id", "generationId"],
+    })
+  );
 }
 
 /**
@@ -202,13 +216,15 @@ export function withPierCursorHooks(
   }
   install(
     CURSOR_STOP_NATIVE_EVENT,
-    pierHookCommandV3WithStdinStatusDispatch({
-      agentId: AGENT_ID,
-      cases: CURSOR_STOP_STATUS_CASES,
-      fallbackPierEvent: "Stop",
-      nativeEvent: CURSOR_STOP_NATIVE_EVENT,
-      turnIdFields: ["generation_id", "generationId"],
-    })
+    wrapCursorPierCommand(
+      pierHookCommandV3WithStdinStatusDispatch({
+        agentId: AGENT_ID,
+        cases: CURSOR_STOP_STATUS_CASES,
+        fallbackPierEvent: "Stop",
+        nativeEvent: CURSOR_STOP_NATIVE_EVENT,
+        turnIdFields: ["generation_id", "generationId"],
+      })
+    )
   );
   return {
     ...settings,

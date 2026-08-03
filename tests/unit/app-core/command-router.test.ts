@@ -221,6 +221,7 @@ function services(
       pathChanged: Boolean(
         request.clientEnv?.PATH ||
           request.profileEnv?.PATH ||
+          request.projectEnv?.PATH ||
           request.explicitEnv?.PATH
       ),
       shellEnvStatus: "skipped",
@@ -230,8 +231,10 @@ function services(
       ...(request.clientEnv ?? {}),
       ...(request.agentEnv ?? {}),
       ...(request.profileEnv ?? {}),
+      ...(request.projectEnv ?? {}),
       ...(request.explicitEnv ?? {}),
     },
+    shellEnv: {},
   })
 ): PierCoreServices {
   let recentContexts: PanelContext[] = [];
@@ -281,6 +284,9 @@ function services(
         makeFakePreferences({ agentStatusHooks: false, ...patch }),
     },
     processEnvironment: {
+      getHostDiagnostics: () => undefined,
+      invalidate: async () => undefined,
+      recordHostDiagnostics: () => undefined,
       resolve: resolveEnvironment,
     },
     localEnvironments: {
@@ -362,6 +368,9 @@ function services(
     },
     tasks: createTaskService({
       processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
         resolve: resolveEnvironment,
       },
       readRecentState: () => Promise.resolve({ entries: [], version: 1 }),
@@ -972,6 +981,7 @@ describe("createCommandRouter", () => {
           FROM_SHELL: "shell",
           PATH: request.explicitEnv?.PATH ?? "",
         },
+        shellEnv: { FROM_SHELL: "shell" },
       })
     );
     const fakeServices = services(
@@ -1357,6 +1367,7 @@ describe("createCommandRouter", () => {
         source: "task",
       },
       env: {},
+      shellEnv: {},
     });
   });
 
@@ -1576,6 +1587,7 @@ describe("createCommandRouter", () => {
           FROM_SHELL: "shell",
           ...(request.explicitEnv ?? {}),
         },
+        shellEnv: { FROM_SHELL: "shell" },
       })
     );
     const fakeServices = services(
@@ -3694,13 +3706,31 @@ describe("createCommandRouter", () => {
     });
   });
 
-  it("worktree.openTerminal merges bound environment env into the terminal launch", async () => {
+  it("worktree.openTerminal injects bound environment as projectEnv (not launch.env)", async () => {
     const rendererCommands: unknown[] = [];
     const terminalLaunches: unknown[] = [];
+    const resolveEnvironment = vi.fn(
+      async (
+        request: ProcessEnvironmentResolveRequest
+      ): Promise<ProcessEnvironmentResolveResult> => ({
+        diagnostics: {
+          cacheHit: false,
+          pathChanged: false,
+          shellEnvStatus: "skipped",
+          source: request.source,
+        },
+        env: {
+          ...(request.projectEnv ?? {}),
+          ...(request.explicitEnv ?? {}),
+        },
+        shellEnv: {},
+      })
+    );
     const fakeServices = services(
       rendererCommands,
       undefined,
-      terminalLaunches
+      terminalLaunches,
+      resolveEnvironment
     );
     const localEnvironments = localEnvironmentsOf(fakeServices);
     const project = pierProject({
@@ -3736,6 +3766,12 @@ describe("createCommandRouter", () => {
       requestId: "req-worktree-env-terminal",
     });
 
+    expect(resolveEnvironment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: "/repo/.worktrees/feature-a",
+        projectEnv: { PIER_ENVIRONMENT: "local" },
+      })
+    );
     expect(terminalLaunches).toEqual([
       {
         cwd: "/repo/.worktrees/feature-a",

@@ -36,6 +36,9 @@ describe("task-service background runs", () => {
     const projectRootPath = "/repo";
     const service = createTaskService({
       processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
         resolve: async () => ({
           diagnostics: {
             cacheHit: false,
@@ -44,6 +47,7 @@ describe("task-service background runs", () => {
             source: "task",
           },
           env: {},
+          shellEnv: {},
         }),
       },
       readRecentState: async () => ({ entries: [], version: 1 }),
@@ -90,6 +94,9 @@ describe("task-service background runs", () => {
     let spawned = false;
     const service = createTaskService({
       processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
         resolve: async () => ({
           diagnostics: {
             cacheHit: false,
@@ -98,6 +105,7 @@ describe("task-service background runs", () => {
             source: "task",
           },
           env: {},
+          shellEnv: {},
         }),
       },
       readRecentState: async () => ({ entries: [], version: 1 }),
@@ -139,6 +147,9 @@ describe("task-service background runs", () => {
     let exit: ((exitCode: number | null) => void) | undefined;
     const service = createTaskService({
       processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
         resolve: async () => ({
           diagnostics: {
             cacheHit: false,
@@ -147,6 +158,7 @@ describe("task-service background runs", () => {
             source: "task",
           },
           env: {},
+          shellEnv: {},
         }),
       },
       readRecentState: async () => ({ entries: [], version: 1 }),
@@ -197,6 +209,9 @@ describe("task-service background runs", () => {
     const exits = new Map<string, (exitCode: number | null) => void>();
     const service = createTaskService({
       processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
         resolve: async () => ({
           diagnostics: {
             cacheHit: false,
@@ -205,6 +220,7 @@ describe("task-service background runs", () => {
             source: "task",
           },
           env: {},
+          shellEnv: {},
         }),
       },
       readRecentState: async () => ({ entries: [], version: 1 }),
@@ -287,6 +303,9 @@ describe("task-service background runs", () => {
     >();
     const service = createTaskService({
       processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
         resolve: async () => ({
           diagnostics: {
             cacheHit: false,
@@ -295,6 +314,7 @@ describe("task-service background runs", () => {
             source: "task",
           },
           env: {},
+          shellEnv: {},
         }),
       },
       readRecentState: async () => ({ entries: [], version: 1 }),
@@ -344,6 +364,9 @@ describe("task-service background runs", () => {
     let exit: ((exitCode: number | null) => void) | undefined;
     const service = createTaskService({
       processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
         resolve: async () => ({
           diagnostics: {
             cacheHit: false,
@@ -352,6 +375,7 @@ describe("task-service background runs", () => {
             source: "task",
           },
           env: {},
+          shellEnv: {},
         }),
       },
       readRecentState: async () => ({ entries: [], version: 1 }),
@@ -385,6 +409,9 @@ describe("task-service background runs", () => {
     let interruptCalls = 0;
     const service = createTaskService({
       processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
         resolve: async () => ({
           diagnostics: {
             cacheHit: false,
@@ -393,6 +420,7 @@ describe("task-service background runs", () => {
             source: "task",
           },
           env: {},
+          shellEnv: {},
         }),
       },
       readRecentState: async () => ({ entries: [], version: 1 }),

@@ -23,6 +23,8 @@ import {
 } from "../../../src/main/services/agents/hooks-install.ts";
 import {
   createNestedJsonIntegration,
+  isLegacyPierHttpHookCommand,
+  isManagedPierHookCommand,
   isPierHookCommand,
   maxPierHookGenerationInSettings,
   type NestedHookEventSpec,
@@ -166,6 +168,49 @@ describe("pierHookCommand（JSONL emit 脚本格式）", () => {
     const oldCmd =
       '[ -n "$PIER_AGENT_HOOK_PORT" ] && curl -fsS http://127.0.0.1:$PIER_AGENT_HOOK_PORT/agent-event || true';
     expect(isPierHookCommand(oldCmd)).toBe(false);
+  });
+
+  it("isManagedPierHookCommand 覆盖 emit 与遗留 HTTP curl", () => {
+    const oldCmd =
+      '[ -n "$PIER_AGENT_HOOK_PORT" ] && curl -fsS http://127.0.0.1:$PIER_AGENT_HOOK_PORT/agent-event || true';
+    const emitCmd = pierHookCommand("claude", "Stop");
+    expect(isLegacyPierHttpHookCommand(oldCmd)).toBe(true);
+    expect(isManagedPierHookCommand(oldCmd)).toBe(true);
+    expect(isManagedPierHookCommand(emitCmd)).toBe(true);
+    expect(isManagedPierHookCommand("echo hello")).toBe(false);
+  });
+
+  it("withoutPierNestedHooks 清掉遗留 PIER_AGENT_HOOK_PORT curl", () => {
+    const dirty = {
+      hooks: {
+        PreToolUse: [
+          {
+            hooks: [
+              {
+                command:
+                  '[ -n "$PIER_AGENT_HOOK_PORT" ] && curl -fsS -m 2 -X POST "http://127.0.0.1:$PIER_AGENT_HOOK_PORT/agent-event" || true',
+                timeout: 5,
+                type: "command",
+              },
+            ],
+          },
+          {
+            hooks: [
+              {
+                command: "echo user-owned",
+                timeout: 5,
+                type: "command",
+              },
+            ],
+          },
+        ],
+      },
+    };
+    const cleaned = withoutPierNestedHooks(dirty);
+    const groups = (cleaned.hooks as { PreToolUse: unknown[] }).PreToolUse;
+    expect(groups).toHaveLength(1);
+    expect(JSON.stringify(groups)).toContain("user-owned");
+    expect(JSON.stringify(groups)).not.toContain("PIER_AGENT_HOOK_PORT");
   });
 
   it("isPierHookCommand 排除无关命令", () => {

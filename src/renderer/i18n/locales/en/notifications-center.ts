@@ -20,6 +20,12 @@ export const notificationsCenter = {
   },
   loadMore: "Scroll for more…",
   repeat: "×{{count}}",
+  shellEnv: {
+    failedBody:
+      "Tasks and agents may use a different Node or PATH than your terminal. Open Settings → Terminal to check status, or make sure your shell starts cleanly without prompts.",
+    failedTitle: "Couldn't load shell environment",
+    openSettings: "Open Terminal settings",
+  },
   source: {
     pluginDetail: "Plugin {{source}}",
     agent: "Agent",

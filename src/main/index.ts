@@ -383,6 +383,7 @@ if (gotTheLock) {
       registerBundledFonts();
       registerTerminalIpc(ipcMain, {
         launchGate: appCore.services.agentLaunchGate,
+        localEnvironments: appCore.services.localEnvironments,
         recordAgentLaunch: (agentId) =>
           appCore.services.agentUsage.recordSuccessfulLaunch(agentId),
         processEnvironment: appCore.services.processEnvironment,

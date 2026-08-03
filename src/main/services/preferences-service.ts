@@ -55,6 +55,7 @@ const PATCHABLE_KEYS = [
   "worktreeRootPath",
   "panelCloseFocusPolicy",
   "lsp",
+  "shellEnvironment",
 ] as const satisfies readonly (keyof ProjectPreferencesPatch)[];
 
 function stripUndefinedPatch(

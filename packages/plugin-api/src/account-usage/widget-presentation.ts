@@ -15,9 +15,11 @@ export interface AccountWidgetPresentation {
 /**
  * True when the *period* (expiry / trial end) itself needs visual emphasis.
  *
- * Does **not** include `cancelAtPeriodEnd`: that state has its own dedicated
- * warning badge. Folding it into period color made far-away "expires in 35
- * days" read as urgent even when the real signal was only "won't renew".
+ * Does **not** treat `cancelAtPeriodEnd` as inherently urgent: when cancel is
+ * set with a known end date, badges merge into one "cancels on …" chip whose
+ * color still follows this window (far-away = neutral, within window =
+ * warning). Folding cancel into period color used to make far-away "expires
+ * in 35 days" read as urgent even when the real signal was only "won't renew".
  */
 export function membershipPeriodNeedsAttention(
   membership: AccountMembershipSnapshot | undefined,

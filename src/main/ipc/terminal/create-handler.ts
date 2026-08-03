@@ -8,8 +8,10 @@ import type {
   CreateTerminalResult,
 } from "@shared/contracts/terminal.ts";
 import { resolveAgentResumeLaunch } from "../../services/agents/resume-adapters.ts";
+import type { LocalEnvironmentService } from "../../services/local-environments-service.ts";
 import { getTerminalPanelTransfer } from "../../services/panel-transfer/terminal.ts";
 import { createTerminalAndSeedResource } from "../../services/pier-resource/claim-login-after-create.ts";
+import { resolveProjectEnvForSpawn } from "../../services/process-environment/resolve-project-env.ts";
 import type { ProcessEnvironmentService } from "../../services/process-environment-service.ts";
 import type { ManagedAgentLaunchGate } from "../../services/project-skills/launch-gate/index.ts";
 import type { TaskService } from "../../services/tasks/service-types.ts";
@@ -57,6 +59,10 @@ export async function handleTerminalCreate(args: {
   createArgs: CreateTerminalArgs;
   loadError: string | null;
   launchGate?: ManagedAgentLaunchGate | null | undefined;
+  localEnvironments?:
+    | Pick<LocalEnvironmentService, "resolveForWorktree" | "resolveProject">
+    | null
+    | undefined;
   processEnvironment: ProcessEnvironmentService;
   recordAgentLaunch?:
     | ((agentId: AgentKind) => Promise<unknown> | unknown)
@@ -71,6 +77,7 @@ export async function handleTerminalCreate(args: {
     createArgs,
     loadError,
     launchGate,
+    localEnvironments,
     processEnvironment,
     recordAgentLaunch,
     taskLifecycle,
@@ -180,12 +187,23 @@ export async function handleTerminalCreate(args: {
         })
       : null;
     const nativeLaunchBase = resumeLaunch?.launch ?? launch.nativeLaunch;
-    const launchForNative = launch.restoredAgentLaunch
-      ? await resolveRestoredAgentLaunchEnv(
-          nativeLaunchBase,
-          processEnvironment
-        )
-      : nativeLaunchBase;
+    let launchForNative = nativeLaunchBase;
+    if (launch.restoredAgentLaunch) {
+      const projectEnv = localEnvironments
+        ? await resolveProjectEnvForSpawn({
+            cwd: nativeLaunchBase?.cwd ?? launch.context?.cwd,
+            localEnvironments,
+            projectRootPath: launch.context?.projectRootPath,
+          })
+        : undefined;
+      launchForNative = await resolveRestoredAgentLaunchEnv(
+        nativeLaunchBase,
+        processEnvironment,
+        {
+          ...(projectEnv ? { projectEnv } : {}),
+        }
+      );
+    }
     await persistInitialTerminalAgent(
       sessionScope,
       createArgs.panelId,

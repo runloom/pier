@@ -67,14 +67,18 @@ export function pierFileTreeStyle(
     "--trees-bg-override": "var(--sidebar)",
     "--trees-fg-override": "var(--sidebar-foreground)",
     "--trees-fg-muted-override": "var(--muted-foreground)",
-    "--trees-bg-muted-override": "var(--interactive-hover)",
+    // Mix against sidebar (not canvas): interactive-hover uses --background and
+    // disappears on muted sidebars; keep hover < selected hierarchy.
+    "--trees-bg-muted-override":
+      "color-mix(in oklab, var(--foreground) 10%, var(--sidebar))",
     "--trees-input-bg-override": "var(--muted)",
     "--trees-padding-inline-override": "4px",
     "--trees-border-color-override": "var(--sidebar-border)",
     "--trees-focus-ring-color-override": "var(--ring)",
     "--trees-accent-override": "var(--primary)",
-    "--trees-selected-bg-override": "var(--sidebar-accent)",
-    "--trees-selected-fg-override": "var(--sidebar-accent-foreground)",
+    "--trees-selected-bg-override":
+      "color-mix(in oklab, var(--foreground) 16%, var(--sidebar))",
+    "--trees-selected-fg-override": "var(--sidebar-foreground)",
     "--trees-search-bg-override": "var(--muted)",
     "--trees-search-fg-override": "var(--foreground)",
     "--trees-font-family-override": "var(--pier-mono-font-family)",

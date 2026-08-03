@@ -196,22 +196,11 @@ async function executeWorktreeOpenTerminalCommand(
       `path is not a known worktree for this repository: ${command.path}`
     );
   }
-  let environmentEnv: Record<string, string> = {};
-  try {
-    const binding = await services.localEnvironments.resolveForWorktree(
-      target.path
-    );
-    environmentEnv = binding?.project.env ?? {};
-  } catch (err) {
-    if (!(err instanceof LocalEnvironmentServiceError)) {
-      throw err;
-    }
-  }
-  const launchEnv =
-    Object.keys(environmentEnv).length > 0 ? { env: environmentEnv } : {};
+  // Project env is injected as projectEnv by terminal.open (resolveProjectEnvForSpawn).
+  // Do not put project KV into launch.env (that becomes agentEnv/explicit).
   const launch = command.agentId
-    ? { agentId: command.agentId, cwd: target.path, ...launchEnv }
-    : { cwd: target.path, ...launchEnv };
+    ? { agentId: command.agentId, cwd: target.path }
+    : { cwd: target.path };
   // agent 场景：taskPrompt 优先，作为 agent 首输入
   // 非 agent 场景：initialCommand 作为 shell 首输入（用于 worktree 创建后自动跑 setup 命令）
   const initialInput = command.agentId

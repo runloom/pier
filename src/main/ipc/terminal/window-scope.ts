@@ -1,9 +1,17 @@
+import type { WebContents } from "electron";
 import type { AppWindow } from "../../windows/app-window.ts";
 import {
   findAppWindowByElectronId,
+  findAppWindowByWebContents,
   findInternalWindowId,
   findWindowContext,
 } from "../../windows/identity.ts";
+
+export function windowFromWebContents(
+  webContents: WebContents
+): AppWindow | null {
+  return findAppWindowByWebContents(webContents);
+}
 
 /**
  * 窗口 → 终端 session 持久化作用域 = 窗口 record UUID（跨重启稳定）。

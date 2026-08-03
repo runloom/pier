@@ -258,11 +258,12 @@ describe("shared account usage metrics", () => {
     expect(screen.getByText("Showing data from 1h 0m ago")).toBeInTheDocument();
   });
 
-  it("renders membership, scalar metrics, and expiry without a routine freshness badge", () => {
+  it("merges cancel-at-period-end with far-away expiry into one neutral badge", () => {
     render(
       <accountUsageRenderer.AccountMetadataBadges
         copy={{
           cancelAtPeriodEnd: "Stops renewing",
+          cancelsOn: (relative) => `Cancels ${relative}`,
           expired: "Expired",
           expires: (relative) => `Expires ${relative}`,
           trialEnds: (relative) => `Trial ends ${relative}`,
@@ -290,18 +291,48 @@ describe("shared account usage metrics", () => {
     );
 
     expect(screen.getByText("PRO 20x")).toHaveAttribute("data-variant", "info");
-    // Far-away expiry stays neutral even when cancelAtPeriodEnd is true;
-    // only the dedicated "Stops renewing" badge carries warning.
-    expect(screen.getByText("Expires in 31 days")).toHaveAttribute(
+    // Time + no-renewal share one chip; far-away stays neutral (same window as expiry).
+    expect(screen.getByText("Cancels in 31 days")).toHaveAttribute(
       "data-variant",
       "neutral"
     );
-    expect(screen.getByText("Stops renewing")).toHaveAttribute(
+    expect(screen.queryByText("Expires in 31 days")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stops renewing")).not.toBeInTheDocument();
+    expect(screen.getByText("Quota resets 2")).toBeInTheDocument();
+    expect(screen.queryByText("Updated now")).not.toBeInTheDocument();
+  });
+
+  it("warns on merged cancel chip only when the period is within the attention window", () => {
+    render(
+      <accountUsageRenderer.AccountMetadataBadges
+        copy={{
+          cancelAtPeriodEnd: "Stops renewing",
+          cancelsOn: (relative) => `Cancels ${relative}`,
+          expired: "Expired",
+          expires: (relative) => `Expires ${relative}`,
+          trialEnds: (relative) => `Trial ends ${relative}`,
+        }}
+        language="en-US"
+        membership={{
+          cancelAtPeriodEnd: true,
+          expiresAt: Date.parse("2026-08-02T00:00:00Z"),
+          status: "active",
+          tier: "pro",
+          updatedAt: Date.parse("2026-07-29T00:00:00Z"),
+        }}
+        membershipLabel={() => "PRO"}
+        metricLabel={() => "Quota"}
+        metrics={[]}
+        now={Date.parse("2026-07-29T00:00:00Z")}
+      />
+    );
+
+    expect(screen.getByText("Cancels in 4 days")).toHaveAttribute(
       "data-variant",
       "warning"
     );
-    expect(screen.getByText("Quota resets 2")).toBeInTheDocument();
-    expect(screen.queryByText("Updated now")).not.toBeInTheDocument();
+    expect(screen.queryByText("Expires in 4 days")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stops renewing")).not.toBeInTheDocument();
   });
 
   it("warns on expiry only when the period is within the attention window", () => {
@@ -309,6 +340,7 @@ describe("shared account usage metrics", () => {
       <accountUsageRenderer.AccountMetadataBadges
         copy={{
           cancelAtPeriodEnd: "Stops renewing",
+          cancelsOn: (relative) => `Cancels ${relative}`,
           expired: "Expired",
           expires: (relative) => `Expires ${relative}`,
           trialEnds: (relative) => `Trial ends ${relative}`,
@@ -334,10 +366,42 @@ describe("shared account usage metrics", () => {
     expect(screen.queryByText("Stops renewing")).not.toBeInTheDocument();
   });
 
+  it("keeps cancel-only copy when end date is unknown", () => {
+    render(
+      <accountUsageRenderer.AccountMetadataBadges
+        copy={{
+          cancelAtPeriodEnd: "Stops renewing",
+          cancelsOn: (relative) => `Cancels ${relative}`,
+          expired: "Expired",
+          expires: (relative) => `Expires ${relative}`,
+          trialEnds: (relative) => `Trial ends ${relative}`,
+        }}
+        language="en-US"
+        membership={{
+          cancelAtPeriodEnd: true,
+          status: "active",
+          tier: "pro",
+          updatedAt: Date.parse("2026-07-29T00:00:00Z"),
+        }}
+        membershipLabel={() => "PRO"}
+        metricLabel={() => "Quota"}
+        metrics={[]}
+        now={Date.parse("2026-07-29T00:00:00Z")}
+      />
+    );
+
+    expect(screen.getByText("Stops renewing")).toHaveAttribute(
+      "data-variant",
+      "warning"
+    );
+    expect(screen.queryByText(/Cancels /)).not.toBeInTheDocument();
+  });
+
   it("shows provider identity only in metadata modes that retain identity", () => {
     const props = {
       copy: {
         cancelAtPeriodEnd: "Stops renewing",
+        cancelsOn: (relative: string) => `Cancels ${relative}`,
         expired: "Expired",
         expires: (relative: string) => `Expires ${relative}`,
         trialEnds: (relative: string) => `Trial ends ${relative}`,

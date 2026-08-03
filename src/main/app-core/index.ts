@@ -3,6 +3,7 @@ import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
+import { ingestHostNotification } from "../ipc/notification-center.ts";
 import {
   getTerminalTaskLifecycleForTransfer,
   getTerminalTaskOutputBindingsForTransfer,
@@ -11,19 +12,15 @@ import {
 import { registerPluginActivationIpc } from "../plugins/activation-ipc.ts";
 import {
   createExternalMainPluginRuntime,
-  type ExternalMainPluginContext,
   type ExternalMainPluginRuntime,
 } from "../plugins/external-main-runtime.ts";
-import { createExternalPluginProcessEnv } from "../plugins/external-plugin-process-env.ts";
 import {
   createMainPluginHostApi,
   type MainPluginHostApi,
 } from "../plugins/host-api.ts";
 import { createPluginRpcBus, type PluginRpcBus } from "../plugins/rpc-bus.ts";
 import { registerPluginRpcIpc } from "../plugins/rpc-ipc.ts";
-import { createPluginSecretsFacade } from "../plugins/secrets.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
-import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
 import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/detection-service.ts";
 import { createAgentUsageService } from "../services/agents/usage-service.ts";
@@ -56,7 +53,7 @@ import { createPluginService } from "../services/plugin-service.ts";
 import { createPluginSettingsService } from "../services/plugin-settings-service.ts";
 import { createDefaultPluginSources } from "../services/plugin-sources.ts";
 import { createPreferencesService } from "../services/preferences-service.ts";
-import { createProcessEnvironmentService } from "../services/process-environment-service.ts";
+import { resolveProjectEnvForSpawn } from "../services/process-environment/resolve-project-env.ts";
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createTaskService } from "../services/tasks/service.ts";
 import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
@@ -85,6 +82,7 @@ import {
   type PierCoreServices,
 } from "./command-router.ts";
 import { createPierEventBus, type PierEventBus } from "./event-bus.ts";
+import { createExternalMainPluginContextFactory } from "./external-plugin-context.ts";
 import { createLazyAppCore } from "./lazy.ts";
 import { createAppLiveModulesService } from "./live-modules-wiring.ts";
 import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
@@ -94,6 +92,7 @@ import { wireAppCorePierHomeAndSkills } from "./pier-home.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
 import { requireAppCoreInitialization } from "./readiness.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
+import { createShellEnvironmentBoot } from "./shell-environment-boot.ts";
 import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import { createWiredAppUpdateService } from "./update-wiring.ts";
 import { createAppCoreUsageData } from "./usage-data.ts";
@@ -231,6 +230,21 @@ function createPierAppCore(): PierAppCore {
   const { ready: usageDataReady, usageData } = createAppCoreUsageData(
     app.getPath("userData")
   );
+
+  // --- Shell env parity (sole hydration; before plugin activate / agent detect)
+  const { processEnvironment, waitForHostEnv } = createShellEnvironmentBoot({
+    eventBus,
+    getFocusedWindow: () => windowManager.getFocused(),
+    ingestNotification: ingestHostNotification,
+    onWindowCreate: (cb) => {
+      windowManager.onCreate(cb);
+    },
+    onWindowFocus: (cb) => {
+      windowManager.onFocus(cb);
+    },
+    readPreferences: () => preferences.read(),
+  });
+
   const pluginRpcBus: PluginRpcBus = createPluginRpcBus({
     broadcast: (payload) => {
       for (const win of windowManager.getAll()) {
@@ -240,44 +254,18 @@ function createPierAppCore(): PierAppCore {
       }
     },
   });
-  // PATH hydrate must exist before external plugins activate — GUI Electron
-  // lacks login-shell bins (e.g. ~/.grok/bin). ensurePath is memoized.
-  const agentDetection = createAgentDetectionService();
+  // Wait for host shell env (single dump); no second echo $PATH.
+  const agentDetection = createAgentDetectionService({ waitForHostEnv });
   registerPluginRpcIpc(pluginRpcBus);
   const externalMainRuntime: ExternalMainPluginRuntime =
     createExternalMainPluginRuntime({
-      createContext: (source): ExternalMainPluginContext => ({
-        events: {
-          emit: (event, payload) =>
-            pluginRpcBus.emit(source.id, event, payload),
-        },
-        lifecycle: { onBeforeQuit: () => {} },
-        ...(source.id === "pier.codex"
-          ? {
-              legacyCodexAccounts: createCodexLegacyMigrationAdapter({
-                userDataDir: app.getPath("userData"),
-              }),
-            }
-          : {}),
-        logger: createLogger(source.id),
-        paths: {
-          dataDir: managedPluginPaths.workDir,
-          workDir: join(managedPluginPaths.workDir, source.id),
-        },
-        processEnv: createExternalPluginProcessEnv(),
-        plugin: { id: source.id, version: source.version },
-        rpc: {
-          handle: (method, handler) =>
-            pluginRpcBus.handle(source.id, method, handler),
-        },
-        secrets: createPluginSecretsFacade(secrets, source.id, {
-          read: source.manifest.permissions.includes("secret:read"),
-          write: source.manifest.permissions.includes("secret:write"),
-        }),
-        usageData: usageData.createPluginFacade(
-          source.id,
-          source.manifest.permissions.includes("usage:publish")
-        ),
+      createContext: createExternalMainPluginContextFactory({
+        managedPluginWorkDir: managedPluginPaths.workDir,
+        pluginRpcBus,
+        processEnvironment,
+        secrets,
+        usageData,
+        userDataDir: app.getPath("userData"),
       }),
       recordActivationResult: (input) =>
         managedPlugins.recordActivationResult(input),
@@ -285,7 +273,7 @@ function createPierAppCore(): PierAppCore {
     });
   externalMainRuntimeReconciler = createManagedPluginRuntimeReconciler(
     externalMainRuntime,
-    { ensurePath: agentDetection.ensurePath }
+    { waitForHostEnv }
   );
   pluginHostRef = pluginHost;
   const managedPluginsReady = usageDataReady
@@ -316,7 +304,6 @@ function createPierAppCore(): PierAppCore {
         );
       }
     });
-  const processEnvironment = createProcessEnvironmentService();
   const fileDrafts = createFileDraftsService({
     userDataDir: app.getPath("userData"),
   });
@@ -382,6 +369,7 @@ function createPierAppCore(): PierAppCore {
       readAgentUsage: () => agentUsage.read(),
       readPreferences: () => preferences.read(),
       launchGate: agentLaunchGate,
+      processEnvironment,
     }),
     appUpdates: createWiredAppUpdateService(runtimeMode),
     commandPaletteMru: createCommandPaletteMruService({
@@ -411,6 +399,11 @@ function createPierAppCore(): PierAppCore {
       onTaskRunsChanged: broadcastTaskRunsSnapshot,
       onTaskActivity: createTaskActivityHandlers(foregroundActivityService),
       processEnvironment,
+      resolveProjectEnv: (input) =>
+        resolveProjectEnvForSpawn({
+          ...input,
+          localEnvironments,
+        }),
     }),
     terminalProfiles: createTerminalProfileService(),
     terminalStatusBarPrefs: {

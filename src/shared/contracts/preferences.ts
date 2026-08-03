@@ -98,6 +98,24 @@ export const DEFAULT_LSP_MAX_LOCAL_WORKSPACES = 3;
 export const DEFAULT_LSP_MAX_REMOTE_WORKSPACES = 2;
 export const DEFAULT_LSP_IDLE_RELEASE_MS = 1_800_000;
 
+/** Login-shell env dump for task/agent/plugin parity (see shell-environment-parity design). */
+export const DEFAULT_SHELL_ENVIRONMENT_TIMEOUT_MS = 10_000;
+export const shellEnvironmentPrefsSchema = z.object({
+  /** When true, skip shell dump (win32-like thin env); host shows Terminal health. */
+  disabled: z.boolean().default(false),
+  timeoutMs: z
+    .number()
+    .int()
+    .min(1000)
+    .max(120_000)
+    .default(DEFAULT_SHELL_ENVIRONMENT_TIMEOUT_MS),
+});
+export type ShellEnvironmentPrefs = z.infer<typeof shellEnvironmentPrefsSchema>;
+export const DEFAULT_SHELL_ENVIRONMENT_PREFS: ShellEnvironmentPrefs = {
+  disabled: false,
+  timeoutMs: DEFAULT_SHELL_ENVIRONMENT_TIMEOUT_MS,
+};
+
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
   stylePresetId: stylePresetIdSchema.default("pierre"),
@@ -165,6 +183,9 @@ export const projectPreferencesSchema = z.object({
     .max(120)
     .default(DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES),
   lsp: lspPolicyPrefsSchema.default(DEFAULT_LSP_POLICY_PREFS),
+  shellEnvironment: shellEnvironmentPrefsSchema.default(
+    DEFAULT_SHELL_ENVIRONMENT_PREFS
+  ),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;

@@ -69,6 +69,14 @@ export interface CreateTaskServiceOptions {
   processEnvironment?: ProcessEnvironmentService;
   readRecentState?: () => Promise<TaskRecentState>;
   recentLimit?: number;
+  /**
+   * Optional project KV lookup for background task spawn (shell-env parity).
+   * When omitted, background tasks only get shell + explicit launch env.
+   */
+  resolveProjectEnv?: (input: {
+    cwd?: string | undefined;
+    projectRootPath?: string | undefined;
+  }) => Promise<Record<string, string> | undefined>;
   spawnBackgroundTask?: SpawnBackgroundTask;
   writeRecentState?: (state: TaskRecentState) => Promise<void>;
 }

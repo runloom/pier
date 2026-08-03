@@ -245,36 +245,36 @@ describe("pier.grok provider", () => {
     expect(spawnLogin).toHaveBeenCalledOnce();
   });
 
-  it("login prefers live process PATH over stale processEnv snapshot", async () => {
+  it("login uses resolveProcessEnv host hydration for PATH", async () => {
     const credentials = memoryCredentials();
     const managedHome = join(dir, "runtime-homes", "grok", "account-path");
     await mkdir(managedHome, { recursive: true });
-    const originalPath = process.env.PATH;
-    process.env.PATH = "/live/shell/bin:/usr/bin";
-    try {
-      let seenPath: string | undefined;
-      const provider = createGrokProvider({
-        credentials,
-        processEnv: {
-          // GUI launch snapshot: missing user bin dirs like ~/.grok/bin
-          PATH: "/gui/bin:/usr/bin",
-          HOME: process.env.HOME,
+    let seenPath: string | undefined;
+    const provider = createGrokProvider({
+      credentials,
+      processEnv: {
+        // Stale activate-time snapshot must not win over resolveProcessEnv.
+        PATH: "/gui/bin:/usr/bin",
+        HOME: process.env.HOME,
+      },
+      resolveProcessEnv: async () => ({
+        env: {
+          PATH: "/live/shell/bin:/usr/bin",
+          HOME: process.env.HOME ?? "",
         },
-        realGrokHome: join(dir, "real-grok"),
-        spawnLogin: async (_cmd, _args, opts) => {
-          seenPath = opts.env.PATH;
-          await writeFile(join(managedHome, "auth.json"), AUTH, {
-            mode: 0o600,
-          });
-        },
-      });
+      }),
+      realGrokHome: join(dir, "real-grok"),
+      spawnLogin: async (_cmd, _args, opts) => {
+        seenPath = opts.env.PATH;
+        await writeFile(join(managedHome, "auth.json"), AUTH, {
+          mode: 0o600,
+        });
+      },
+    });
 
-      await provider.login(managedHome, new AbortController().signal, "oauth");
+    await provider.login(managedHome, new AbortController().signal, "oauth");
 
-      expect(seenPath).toBe("/live/shell/bin:/usr/bin");
-    } finally {
-      process.env.PATH = originalPath;
-    }
+    expect(seenPath).toBe("/live/shell/bin:/usr/bin");
   });
 
   it("reports credential read failures as transient, not session expired", async () => {

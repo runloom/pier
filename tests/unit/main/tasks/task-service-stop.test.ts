@@ -52,6 +52,9 @@ describe("task service stop policy", () => {
     const service = createTaskService({
       now: () => time,
       processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
         resolve: async () => ({
           diagnostics: {
             cacheHit: false,
@@ -60,6 +63,7 @@ describe("task service stop policy", () => {
             source: "task",
           },
           env: {},
+          shellEnv: {},
         }),
       },
       readRecentState: async () => ({ entries: [], version: 1 }),

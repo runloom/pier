@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { PIER_HOOK_COMMAND_GENERATION } from "../hooks-install.ts";
 import {
+  isManagedPierHookCommand,
   isPierHookCommand,
   pierHookCommandGeneration,
   skipHookCommandWhenEnvPresent,
@@ -14,6 +15,8 @@ import type { AgentHookIntegration, AgentRuntimeSemantics } from "./types.ts";
 export { commandExistsOnPath } from "./command-path.ts";
 // 兼容再导出：历史集成与测试从 shared 取 hook 命令原语。
 export {
+  isLegacyPierHttpHookCommand,
+  isManagedPierHookCommand,
   isPierHookCommand,
   PIER_AGENT_HOOKS_DIR_MARK,
   PIER_HOOK_GEN_MARK,
@@ -21,6 +24,7 @@ export {
   pierHookCommand,
   pierHookCommandGeneration,
   pierHookCommandV3,
+  skipHookCommandWhenEnvPresent,
 } from "./hooks/command-core.ts";
 export {
   type PierHookCommandV3WithStdinSpec,
@@ -295,7 +299,7 @@ function withoutPierNestedHandlers(entry: unknown): {
   if (!Array.isArray(hooks)) {
     return { changed: false, entry };
   }
-  const kept = hooks.filter((hook) => !isPierHookCommand(hook?.command));
+  const kept = hooks.filter((hook) => !isManagedPierHookCommand(hook?.command));
   if (kept.length === hooks.length) {
     return { changed: false, entry };
   }

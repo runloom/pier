@@ -36,7 +36,7 @@ describe("accountMembershipSummary", () => {
     expect(text).not.toContain("Expires");
   });
 
-  it("shows cancel-at-period-end for paid membership", () => {
+  it("merges cancel-at-period-end with expiry into one summary phrase", () => {
     const text = accountMembershipSummary(
       {
         kind: "oidc",
@@ -52,7 +52,8 @@ describe("accountMembershipSummary", () => {
       now
     );
     expect(text).toContain("SUPERGROK");
-    expect(text).toContain("Expires");
-    expect(text).toContain("Cancels at period end");
+    expect(text).toContain("Cancels");
+    expect(text).not.toContain("Expires");
+    expect(text).not.toContain("Cancels at period end");
   });
 });

@@ -10,6 +10,7 @@ import {
   RENDERER_COMMAND_CHANNEL,
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
+import type { ShellEnvironmentHostStatus } from "@shared/contracts/shell-environment.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import type { WindowCreateResult } from "@shared/contracts/window.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
@@ -114,6 +115,7 @@ export type {
   PierPreferencesAPI,
   PierRendererCommandAPI,
   PierSettingsAPI,
+  PierShellEnvironmentAPI,
   PierThemeAPI,
   PierWindowNsAPI,
   PierWorkspaceAPI,
@@ -133,6 +135,7 @@ import type {
   PierPreferencesAPI,
   PierRendererCommandAPI,
   PierSettingsAPI,
+  PierShellEnvironmentAPI,
   PierThemeAPI,
   PierWorkspaceAPI,
 } from "./api-types.ts";
@@ -181,6 +184,7 @@ export interface PierWindowAPI {
   rendererCommand: PierRendererCommandAPI;
   resources: PierResourceAPI;
   settings: PierSettingsAPI;
+  shellEnvironment: PierShellEnvironmentAPI;
   tasks: PierTasksAPI;
   terminal: TerminalAPI;
   terminalStatusBarPrefs: PierTerminalStatusBarPrefsAPI;
@@ -216,6 +220,17 @@ const preferencesApi: PierPreferencesAPI = {
     invokePierCommand<ProjectPreferences>({
       patch,
       type: "preferences.update",
+    }),
+};
+
+const shellEnvironmentApi: PierShellEnvironmentAPI = {
+  refresh: () =>
+    invokePierCommand<ShellEnvironmentHostStatus>({
+      type: "shellEnvironment.refresh",
+    }),
+  status: () =>
+    invokePierCommand<ShellEnvironmentHostStatus>({
+      type: "shellEnvironment.status",
     }),
 };
 
@@ -382,6 +397,7 @@ const api: PierWindowAPI = {
   plugins: pluginsApi,
   pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,
+  shellEnvironment: shellEnvironmentApi,
   projectSkills: projectSkillsApi,
   pierHomeSkills: pierHomeSkillsApi,
   pierBindings: pierBindingsApi,

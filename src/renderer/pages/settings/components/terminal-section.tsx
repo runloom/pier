@@ -10,6 +10,7 @@ import { useT } from "@/i18n/use-t.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
+import { ShellEnvironmentBlock } from "@/pages/settings/components/shell-environment-block.tsx";
 import { TerminalStatusBarBlock } from "@/pages/settings/components/terminal-status-bar-block.tsx";
 import { useAppQuitPreferencesStore } from "@/stores/app-quit-preferences.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
@@ -185,6 +186,7 @@ export function TerminalSection() {
             </FieldSet>
           </CardContent>
         </Card>
+        <ShellEnvironmentBlock />
         <TerminalStatusBarBlock />
       </div>
     </div>

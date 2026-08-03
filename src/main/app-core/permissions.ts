@@ -159,6 +159,8 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "pluginSettings.set": { capabilities: ["plugin:write"] },
   "preferences.read": { capabilities: ["preferences:read"] },
   "preferences.update": { capabilities: ["preferences:write"] },
+  "shellEnvironment.status": { capabilities: ["preferences:read"] },
+  "shellEnvironment.refresh": { capabilities: ["preferences:write"] },
   "run.cancel": { capabilities: ["workspace:open"] },
   "run.backgroundSnapshot": { capabilities: ["workspace:read"] },
   "run.runsSnapshot": { capabilities: ["workspace:read"] },

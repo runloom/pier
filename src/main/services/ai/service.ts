@@ -15,6 +15,7 @@ import type {
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import { createLogger } from "@shared/logger.ts";
 import { resolveOneShotInvocation } from "../agents/launch.ts";
+import type { ProcessEnvironmentService } from "../process-environment-service.ts";
 import type { ManagedAgentLaunchGate } from "../project-skills/launch-gate/index.ts";
 import { supportsOneShot } from "./agent-one-shot.ts";
 
@@ -45,6 +46,8 @@ export interface CreateAiServiceOptions {
    */
   launchGate?: ManagedAgentLaunchGate;
   now?: () => number;
+  /** Shell-env parity: resolve login+interactive env before one-shot spawn. */
+  processEnvironment?: ProcessEnvironmentService;
   readAgentUsage?: () => Promise<AgentUsageState>;
   readPreferences: () => Promise<ProjectPreferences>;
   /** 一次性运行 agent CLI,resolve stdout;失败抛 AgentRunError。 */
@@ -58,6 +61,7 @@ export interface CreateAiServiceOptions {
 
 export interface RunOneShotOptions {
   cwd: string;
+  env?: Record<string, string> | undefined;
   timeoutMs: number;
 }
 
@@ -129,15 +133,16 @@ function oneShotCwd(projectRootPath: string | undefined): string {
 export function defaultRunOneShot(
   binary: string,
   args: readonly string[],
-  { cwd, timeoutMs }: RunOneShotOptions
+  { cwd, env, timeoutMs }: RunOneShotOptions
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    // Class A when env is provided (host resolve); otherwise process.env (B/boot).
     const child = execFile(
       binary,
       [...args],
       {
         cwd,
-        env: process.env,
+        env: env ?? process.env,
         maxBuffer: MAX_STDOUT_BYTES,
         timeout: timeoutMs,
       },
@@ -201,6 +206,7 @@ export function createAiService({
   failureCooldownMs = DEFAULT_FAILURE_COOLDOWN_MS,
   launchGate,
   now = Date.now,
+  processEnvironment,
   readAgentUsage = async () => EMPTY_AGENT_USAGE_STATE,
   readPreferences,
   runOneShot = defaultRunOneShot,
@@ -307,8 +313,17 @@ export function createAiService({
               surface: { kind: "one-shot" },
             });
           }
+          const resolvedEnv = processEnvironment
+            ? (
+                await processEnvironment.resolve({
+                  cwd,
+                  source: "agent",
+                })
+              ).env
+            : undefined;
           const text = await runOneShot(invocation.binary, invocation.args, {
             cwd,
+            ...(resolvedEnv ? { env: resolvedEnv } : {}),
             timeoutMs: oneShotTimeout(agent, timeoutMs),
           });
           if (text.trim().length === 0) {

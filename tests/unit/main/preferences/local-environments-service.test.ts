@@ -19,6 +19,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 function fakeProcessEnvironment(): ProcessEnvironmentService {
   return {
+    getHostDiagnostics: () => undefined,
+    invalidate: async () => undefined,
+    recordHostDiagnostics: () => undefined,
     resolve: vi.fn(async ({ cwd, explicitEnv, source }) => ({
       diagnostics: {
         cacheHit: false,
@@ -28,6 +31,7 @@ function fakeProcessEnvironment(): ProcessEnvironmentService {
         source,
       },
       env: { SHELL: "/bin/sh", ...explicitEnv },
+      shellEnv: {},
     })),
   };
 }

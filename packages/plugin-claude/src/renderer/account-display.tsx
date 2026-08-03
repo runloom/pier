@@ -83,6 +83,11 @@ export function AccountBadges({
           "pier.claude.accounts.settings.cancelAtPeriodEnd",
           "Cancels at period end"
         ),
+        cancelsOn: (relative) =>
+          t(
+            "pier.claude.accounts.settings.cancelsOn",
+            "Cancels {relative}"
+          ).replace("{relative}", relative),
         expired: t("pier.claude.accounts.settings.expired", "Expired"),
         expires: (relative) =>
           `${t("pier.claude.accounts.settings.expires", "Expires")} ${relative}`,

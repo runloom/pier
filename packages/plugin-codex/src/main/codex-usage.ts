@@ -35,18 +35,25 @@ function buildRpcMessage(id: number, method: string, params?: unknown): string {
  */
 export function fetchCodexUsage(
   signal: AbortSignal,
-  opts?: { accountHomeDir?: string; spawnImpl?: SpawnFn }
+  opts?: {
+    accountHomeDir?: string;
+    /** Host-hydrated env (shell-env parity); falls back to process.env. */
+    baseEnv?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+    spawnImpl?: SpawnFn;
+  }
 ): Promise<AccountUsageResult> {
   if (signal.aborted) {
     return Promise.resolve({ status: "error", error: "Aborted", metrics: [] });
   }
   const spawnImpl = opts?.spawnImpl ?? spawn;
+  const baseEnv = opts?.baseEnv ?? process.env;
 
   return new Promise<AccountUsageResult>((resolve) => {
     let buffer = "";
     let resolved = false;
     let rpcId = 0;
 
+    // Class A: spawn codex with host-hydrated env when baseEnv is provided.
     const child = spawnImpl(
       "codex",
       ["-s", "read-only", "-a", "untrusted", "app-server"],
@@ -54,8 +61,11 @@ export function fetchCodexUsage(
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
         env: opts?.accountHomeDir
-          ? { ...process.env, CODEX_HOME: opts.accountHomeDir }
-          : process.env,
+          ? ({
+              ...baseEnv,
+              CODEX_HOME: opts.accountHomeDir,
+            } as NodeJS.ProcessEnv)
+          : (baseEnv as NodeJS.ProcessEnv),
       }
     );
 

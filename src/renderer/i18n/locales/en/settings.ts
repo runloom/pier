@@ -1,6 +1,7 @@
 import { settingsAgents } from "./settings-agents.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsShellEnvironment } from "./settings-shell-environment.ts";
 import { settingsSkills } from "./settings-skills.ts";
 
 export const settings = {
@@ -345,6 +346,7 @@ export const settings = {
       shellDefault: "Use shell default",
     },
   },
+  shellEnvironment: settingsShellEnvironment,
   quitConfirmation: {
     hasActivity: "When activity is running",
     always: "Always",

@@ -25,7 +25,23 @@ export interface MainPluginContext {
     id: string;
     version: string;
   };
+  /**
+   * Live host env slice (PATH/HOME/agent homes). Prefer `resolveProcessEnv`
+   * for production CLI spawns so login-shell dumps are fully applied.
+   */
   processEnv: Readonly<Record<string, string | undefined>>;
+  /**
+   * Full shell-env parity resolve (login+interactive dump + layers).
+   * Required for production spawn/exec of agent CLIs.
+   */
+  resolveProcessEnv(request?: { cwd?: string }): Promise<{
+    diagnostics: {
+      cacheHit: boolean;
+      error?: string | undefined;
+      shellEnvStatus: "cached" | "failed" | "resolved" | "skipped";
+    };
+    env: Record<string, string>;
+  }>;
   rpc: {
     handle(
       method: string,

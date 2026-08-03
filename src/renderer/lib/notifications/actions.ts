@@ -77,6 +77,15 @@ export function runNotificationAction(
       ).catch(() => undefined);
       break;
     }
+    case "open-settings": {
+      const section = notification.actionParams?.section ?? "terminal";
+      import("@/stores/settings-dialog.store.ts")
+        .then(({ useSettingsDialogStore }) => {
+          useSettingsDialogStore.getState().openSection(section);
+        })
+        .catch(() => undefined);
+      break;
+    }
     default:
       break;
   }

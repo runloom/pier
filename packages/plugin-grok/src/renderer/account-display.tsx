@@ -60,7 +60,16 @@ export function accountMembershipSummary(
 
   const plan = subscription.planType.toUpperCase();
   const parts: string[] = [plan];
-  if (subscription.trialEndsAt !== undefined) {
+  const periodEndAt = subscription.trialEndsAt ?? subscription.expiresAt;
+  if (subscription.cancelAtPeriodEnd && periodEndAt !== undefined) {
+    const relative = formatRelativeTime(periodEndAt, now, language);
+    parts.push(
+      t("pier.grok.accounts.settings.cancelsOn", "Cancels {relative}").replace(
+        "{relative}",
+        relative
+      )
+    );
+  } else if (subscription.trialEndsAt !== undefined) {
     parts.push(
       t("pier.grok.accounts.settings.trialEnds", "Trial ends").concat(
         " ",
@@ -74,8 +83,7 @@ export function accountMembershipSummary(
         formatRelativeTime(subscription.expiresAt, now, language)
       )
     );
-  }
-  if (subscription.cancelAtPeriodEnd) {
+  } else if (subscription.cancelAtPeriodEnd) {
     parts.push(
       t(
         "pier.grok.accounts.settings.cancelAtPeriodEnd",
@@ -109,6 +117,11 @@ export function AccountBadges({
           "pier.grok.accounts.settings.cancelAtPeriodEnd",
           "Cancels at period end"
         ),
+        cancelsOn: (relative) =>
+          t(
+            "pier.grok.accounts.settings.cancelsOn",
+            "Cancels {relative}"
+          ).replace("{relative}", relative),
         expired: t("pier.grok.accounts.settings.expired", "Expired"),
         expires: (relative) =>
           `${t("pier.grok.accounts.settings.expires", "Expires")} ${relative}`,

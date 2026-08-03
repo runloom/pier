@@ -49,6 +49,7 @@ import {
 } from "./commands/run-control.ts";
 import { executeWorktreeCommand } from "./commands/worktree.ts";
 import { authorizeCommand } from "./permissions.ts";
+import { buildShellEnvironmentHostStatus } from "./shell-environment-commands.ts";
 import { orderedWindows } from "./window-routing.ts";
 
 export type { CommandExecutionContext } from "./command-execution-context.ts";
@@ -172,6 +173,32 @@ async function executeAppStateCommand(
         }
       }
       return success(requestId, merged);
+    }
+    case "shellEnvironment.status": {
+      const prefs = await services.preferences.read();
+      return success(
+        requestId,
+        buildShellEnvironmentHostStatus({
+          diagnostics: services.processEnvironment.getHostDiagnostics(),
+          disabled: prefs.shellEnvironment.disabled,
+          timeoutMs: prefs.shellEnvironment.timeoutMs,
+        })
+      );
+    }
+    case "shellEnvironment.refresh": {
+      const diagnostics = await services.processEnvironment.invalidate({
+        reapplyHost: true,
+      });
+      const prefs = await services.preferences.read();
+      return success(
+        requestId,
+        buildShellEnvironmentHostStatus({
+          diagnostics,
+          disabled: prefs.shellEnvironment.disabled,
+          fallbackStatus: "skipped",
+          timeoutMs: prefs.shellEnvironment.timeoutMs,
+        })
+      );
     }
     case "terminalStatusBar.prefs.getAll":
       return success(requestId, await services.terminalStatusBarPrefs.getAll());

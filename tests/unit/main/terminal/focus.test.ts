@@ -389,8 +389,18 @@ describe("terminal focus restoration", () => {
 
   it("re-resolves env for restored running agents without saving it", async () => {
     const processEnvironment = {
+      getHostDiagnostics: () => undefined,
+      invalidate: async () => undefined,
+      recordHostDiagnostics: () => undefined,
       resolve: vi.fn(async () => ({
+        diagnostics: {
+          cacheHit: false,
+          pathChanged: true,
+          shellEnvStatus: "resolved" as const,
+          source: "agent" as const,
+        },
         env: { OPENAI_API_KEY: "sk-restored" },
+        shellEnv: {},
       })),
     };
     const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =

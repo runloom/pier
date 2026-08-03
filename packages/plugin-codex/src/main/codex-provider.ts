@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { existsSync, type FSWatcher, mkdirSync, watch } from "node:fs";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -8,16 +7,16 @@ import { fetchCodexUsage } from "./codex-usage.ts";
 import { fetchCodexUsageHttp } from "./codex-usage-http.ts";
 import type { AccountIdentity } from "./identity.ts";
 import { parseCodexAuthJson, readCodexIdentity } from "./identity.ts";
+import {
+  defaultSpawnLogin,
+  hostSpawnEnv,
+  type SpawnLoginFn,
+} from "./login-spawn.ts";
 import { maybeRefreshAuthJson } from "./token-refresh.ts";
 import type { AccountUsageResult, AgentAccountProvider } from "./types.ts";
 
 export const PIER_MANAGED_HOME_MARKER = ".pier-managed-home";
-
-export type SpawnLoginFn = (
-  cmd: string,
-  args: string[],
-  opts: { env: Record<string, string | undefined>; signal: AbortSignal }
-) => Promise<void>;
+export type { SpawnLoginFn } from "./login-spawn.ts";
 
 export interface CreateCodexProviderOpts {
   credentials: {
@@ -31,14 +30,28 @@ export interface CreateCodexProviderOpts {
   fetchUsageImpl?: typeof fetchCodexUsage;
   /** 可选日志器（watchExternalAuth 失败时记录原因，便于诊断漂移检测失效）。 */
   logger?: { warn(message: string, ...args: unknown[]): void };
+  /** Host processEnv slice (PATH/CODEX_HOME live getters). */
+  processEnv?: Readonly<Record<string, string | undefined>>;
   /** ~/.codex 真实路径（默认 `$HOME/.codex`）。 */
   realCodexHome: string;
+  /**
+   * Full host shell-env resolve for production CLI spawns (shell-env parity).
+   */
+  resolveProcessEnv?: (request?: {
+    cwd?: string;
+  }) => Promise<{ env: Record<string, string> }>;
   /** 可注入的 login spawn 替身（单测用）。 */
   spawnLogin?: SpawnLoginFn;
 }
 
-function defaultRealCodexHome(): string {
-  return process.env.CODEX_HOME ?? join(homedir(), ".codex");
+function defaultRealCodexHome(
+  processEnv?: Readonly<Record<string, string | undefined>>
+): string {
+  return (
+    processEnv?.CODEX_HOME ??
+    process.env.CODEX_HOME ??
+    join(homedir(), ".codex")
+  );
 }
 
 function hasQuotaMetric(result: AccountUsageResult): boolean {
@@ -66,71 +79,21 @@ function mergeHttpMetadata(
   };
 }
 
-/**
- * 默认 spawn login 实现——真 spawn `codex login`。
- * 生产环境使用；单测通过 opts.spawnLogin 替换。
- */
-function defaultSpawnLogin(
-  cmd: string,
-  args: string[],
-  opts: { env: Record<string, string | undefined>; signal: AbortSignal }
-): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    // Abort may already have fired (cancel raced ahead of the spawn); the
-    // "abort" event will never fire again, so check before spawning.
-    if (opts.signal.aborted) {
-      reject(new Error("Login cancelled"));
-      return;
-    }
-    const child = spawn(cmd, args, {
-      env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
-      // `signal` kills the child on abort even when abort fires between the
-      // aborted-check above and listener registration below.
-      signal: opts.signal,
-      stdio: "inherit",
-    });
-
-    opts.signal.addEventListener(
-      "abort",
-      () => {
-        reject(new Error("Login cancelled"));
-      },
-      { once: true }
-    );
-
-    child.on("error", (error: NodeJS.ErrnoException) => {
-      if (error.name === "AbortError") {
-        reject(new Error("Login cancelled"));
-        return;
-      }
-      if (error.code === "ENOENT") {
-        reject(new Error("Codex CLI not found on PATH"));
-        return;
-      }
-      reject(error);
-    });
-    child.on("close", (code) => {
-      if (opts.signal.aborted) {
-        reject(new Error("Login cancelled"));
-      } else if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`codex login exited with code ${code}`));
-      }
-    });
-  });
-}
-
 export function createCodexProvider(
   opts?: Partial<CreateCodexProviderOpts>
 ): AgentAccountProvider {
-  const realCodexHome = opts?.realCodexHome ?? defaultRealCodexHome();
+  const processEnv = opts?.processEnv;
+  const resolveProcessEnv = opts?.resolveProcessEnv;
+  const realCodexHome = opts?.realCodexHome ?? defaultRealCodexHome(processEnv);
   const spawnLogin = opts?.spawnLogin ?? defaultSpawnLogin;
   const fetchUsageImpl = opts?.fetchUsageImpl ?? fetchCodexUsage;
   const fetchImpl = opts?.fetchImpl;
   const credentials = opts?.credentials;
   const logger = opts?.logger;
   const credentialTails = new Map<string, Promise<void>>();
+
+  const resolveHostEnv = (overrides?: Record<string, string | undefined>) =>
+    hostSpawnEnv(resolveProcessEnv, processEnv, overrides);
 
   async function withCredentialLock<T>(
     accountHomeDir: string,
@@ -265,7 +228,7 @@ export function createCodexProvider(
 
     async login(homeDir: string, signal: AbortSignal): Promise<void> {
       await spawnLogin("codex", ["login"], {
-        env: { CODEX_HOME: homeDir },
+        env: await resolveHostEnv({ CODEX_HOME: homeDir }),
         signal,
       });
     },
@@ -422,7 +385,11 @@ export function createCodexProvider(
             return httpResult;
           }
           // Fallback to app-server JSON-RPC when HTTP fails or returns empty.
-          const fallback = await fetchUsageImpl(signal, { accountHomeDir });
+          const baseEnv = await resolveHostEnv();
+          const fallback = await fetchUsageImpl(signal, {
+            accountHomeDir,
+            baseEnv,
+          });
           return mergeHttpMetadata(fallback, httpResult);
         });
       }
@@ -444,10 +411,16 @@ export function createCodexProvider(
         } catch {
           // No auth.json — fall through to app-server.
         }
-        const fallback = await fetchUsageImpl(signal, { accountHomeDir });
+        const baseEnv = await resolveHostEnv();
+        const fallback = await fetchUsageImpl(signal, {
+          accountHomeDir,
+          baseEnv,
+        });
         return httpResult ? mergeHttpMetadata(fallback, httpResult) : fallback;
       }
+      const baseEnv = await resolveHostEnv();
       return await fetchUsageImpl(signal, {
+        baseEnv,
         ...(accountHomeDir ? { accountHomeDir } : {}),
       });
     },

@@ -41,6 +41,8 @@ export async function resolveGitCommonDir(cwd: string): Promise<string | null> {
 
 function runGit(args: readonly string[], cwd: string): Promise<string> {
   return new Promise((resolvePromise, reject) => {
+    // Class B spawn: relies on host shell-env boot apply to process.env.PATH.
+    // Not cwd-sensitive beyond git's own discovery; no second shell dump here.
     const child = spawn("git", args, {
       cwd,
       env: process.env,
