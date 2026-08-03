@@ -28,6 +28,16 @@ function hookEvent(
   };
 }
 
+/** Full-suite load can delay fs.watch; keep waits above default 1s. */
+const TRANSCRIPT_WAIT_MS = 5000;
+
+function waitForTranscript(
+  assertion: () => void,
+  timeout = TRANSCRIPT_WAIT_MS
+): Promise<void> {
+  return vi.waitFor(assertion, { timeout });
+}
+
 describe("codex transcript reconciler", () => {
   let dir: string;
   let path: string;
@@ -65,7 +75,7 @@ describe("codex transcript reconciler", () => {
       })}\n`
     );
 
-    await vi.waitFor(() => {
+    await waitForTranscript(() => {
       expect(received).toHaveLength(1);
     });
     expect(received[0]).toMatchObject({
@@ -93,7 +103,7 @@ describe("codex transcript reconciler", () => {
     })}\n`;
     appendFileSync(path, line + line);
 
-    await vi.waitFor(() => {
+    await waitForTranscript(() => {
       expect(received).toHaveLength(1);
     });
     expect(received[0]?.event).toBe("TurnCompleted");
@@ -157,7 +167,7 @@ describe("codex transcript reconciler", () => {
         .join("\n")}\n`
     );
 
-    await vi.waitFor(() => expect(received).toHaveLength(4));
+    await waitForTranscript(() => expect(received).toHaveLength(4));
     expect(received).toMatchObject([
       {
         event: "InteractionRequested",
@@ -228,7 +238,7 @@ describe("codex transcript reconciler", () => {
     })}\n`;
     appendFileSync(path, request);
     appendFileSync(secondPath, request);
-    await vi.waitFor(() =>
+    await waitForTranscript(() =>
       expect(
         received.filter((event) => event.event === "InteractionRequested")
       ).toHaveLength(2)
@@ -242,7 +252,7 @@ describe("codex transcript reconciler", () => {
       type: "response_item",
     })}\n`;
     appendFileSync(path, output);
-    await vi.waitFor(() =>
+    await waitForTranscript(() =>
       expect(
         received.filter((event) => event.event === "InteractionResolved")
       ).toHaveLength(1)
@@ -250,7 +260,7 @@ describe("codex transcript reconciler", () => {
     expect(received.at(-1)?.panelId).toBe("panel-a");
 
     appendFileSync(secondPath, output);
-    await vi.waitFor(() =>
+    await waitForTranscript(() =>
       expect(
         received.filter((event) => event.event === "InteractionResolved")
       ).toHaveLength(2)
@@ -270,7 +280,7 @@ describe("codex transcript reconciler", () => {
       path,
       '{"type":"event_msg","payload":{"call_id":"stale-call","turn_id":"turn-truncated-interaction","type":"request_user_input"}}\n'
     );
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
 
     writeFileSync(path, '{"type":"session_meta"}\n');
     await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 350));
@@ -297,7 +307,7 @@ describe("codex transcript reconciler", () => {
       path,
       '{"type":"event_msg","payload":{"call_id":"disposed-call","turn_id":"turn-disposed","type":"request_user_input"}}\n'
     );
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     reconciler.releasePanel("panel-1", "1");
 
     await reconciler.observe(hookEvent(secondPath, "turn-disposed"));
@@ -332,7 +342,9 @@ describe("codex transcript reconciler", () => {
         })
       ).join("\n")}\n`
     );
-    await vi.waitFor(() => expect(received).toHaveLength(pendingLimit + 1));
+    await waitForTranscript(() =>
+      expect(received).toHaveLength(pendingLimit + 1)
+    );
     appendFileSync(
       path,
       `${[
@@ -356,7 +368,7 @@ describe("codex transcript reconciler", () => {
         .map((line) => JSON.stringify(line))
         .join("\n")}\n`
     );
-    await vi.waitFor(() =>
+    await waitForTranscript(() =>
       expect(
         received.filter((event) => event.event === "InteractionResolved")
       ).toHaveLength(1)
@@ -505,7 +517,7 @@ describe("codex transcript reconciler", () => {
         .join("\n")}\n`
     );
 
-    await vi.waitFor(() => expect(received).toHaveLength(6));
+    await waitForTranscript(() => expect(received).toHaveLength(6));
     expect(
       received
         .filter((event) => event.event === "InteractionResolved")
@@ -585,7 +597,7 @@ describe("codex transcript reconciler", () => {
         .join("\n")}\n`
     );
 
-    await vi.waitFor(() => expect(received).toHaveLength(2));
+    await waitForTranscript(() => expect(received).toHaveLength(2));
     expect(received.map((event) => event.event)).toEqual([
       "InteractionRequested",
       "TurnInterrupted",
@@ -654,7 +666,7 @@ describe("codex transcript reconciler", () => {
           },
         })}\n`
       );
-      await vi.waitFor(() => expect(received).toHaveLength(index + 1));
+      await waitForTranscript(() => expect(received).toHaveLength(index + 1));
     }
 
     for (const event of received) {
@@ -722,7 +734,7 @@ describe("codex transcript reconciler", () => {
 
     await reconciler.observe(hookEvent(path, "turn-before-observe"));
 
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     expect(received[0]).toMatchObject({
       event: "TurnInterrupted",
       turnId: "turn-before-observe",
@@ -761,7 +773,7 @@ describe("codex transcript reconciler", () => {
         '{"type":"event_msg","payload":{"turn_id":"turn-conflict","type":"task_complete"}}\n'
     );
 
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     expect(received[0]?.event).toBe("TurnInterrupted");
     reconciler.dispose();
   });
@@ -778,10 +790,10 @@ describe("codex transcript reconciler", () => {
       type: "event_msg",
     })}\n`;
     appendFileSync(path, aborted);
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     await reconciler.observe(hookEvent(path, "turn-2"));
     appendFileSync(path, aborted);
-    await vi.waitFor(() => expect(received).toHaveLength(2));
+    await waitForTranscript(() => expect(received).toHaveLength(2));
     reconciler.dispose();
   });
 
@@ -818,7 +830,7 @@ describe("codex transcript reconciler", () => {
       path,
       '{"type":"event_msg","payload":{"turn_id":"turn-concurrent","type":"task_complete"}}\n'
     );
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
 
     reconciler.dispose();
   });
@@ -906,7 +918,7 @@ describe("codex transcript reconciler", () => {
       path,
       '{"type":"event_msg","payload":{"turn_id":"turn-a","type":"task_complete"}}\n'
     );
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
 
     expect(received[0]).toMatchObject({
       event: "TurnCompleted",
@@ -932,7 +944,7 @@ describe("codex transcript reconciler", () => {
         }
       )}\n`
     );
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
 
     expect(received[0]?.event).toBe("TurnCompleted");
     reconciler.dispose();
@@ -952,7 +964,7 @@ describe("codex transcript reconciler", () => {
       '{"type":"event_msg","payload":{"type":"task_complete"}}\n'
     );
 
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
     expect(received[0]?.event).toBe("TurnCompleted");
     reconciler.dispose();
   });
@@ -993,7 +1005,7 @@ describe("codex transcript reconciler", () => {
       latestPath,
       '{"type":"event_msg","payload":{"turn_id":"turn-39","type":"task_complete"}}\n'
     );
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await waitForTranscript(() => expect(received).toHaveLength(1));
 
     expect(received[0]).toMatchObject({
       event: "TurnCompleted",
