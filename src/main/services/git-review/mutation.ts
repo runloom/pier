@@ -59,12 +59,21 @@ export async function applyGitReviewMutation(options: {
       "The selected change no longer exists"
     );
   }
-  if (current.revision !== request.expectedRevision) {
-    return failure(
-      "staleRevision",
-      true,
-      "The file changed before the operation ran"
-    );
+  if (requiresRevisionGuard(request)) {
+    if (request.expectedRevision === undefined) {
+      return failure(
+        "staleRevision",
+        true,
+        "This operation requires a verified view of the change"
+      );
+    }
+    if (current.revision !== request.expectedRevision) {
+      return failure(
+        "staleRevision",
+        true,
+        "The file changed before the operation ran"
+      );
+    }
   }
   const section = current.sections.find(
     (candidate) => candidate.sectionKey === request.target.sectionKey
@@ -191,6 +200,18 @@ function mutationScope(request: GitReviewMutationRequest): GitReviewScope {
     gitRootPath: request.source.gitRootPath,
     target: request.source.target,
   };
+}
+
+/**
+ * 哪些写入必须校验乐观并发令牌。
+ *
+ * - hunk 级（`change`）：靠 patch evidence 应用，必须是 renderer 见过的那份内容。
+ * - 文件级 revert：破坏性，会丢掉读取之后的新编辑，陈旧即拒绝。
+ * - 文件级 stage / unstage：路径操作（`git add` / `git reset --`），与正文无关；
+ *   下方 group 一致性检查 + main 写入前的新鲜读取才是真正的守卫。
+ */
+function requiresRevisionGuard(request: GitReviewMutationRequest): boolean {
+  return request.target.kind === "change" || request.action === "revert";
 }
 
 async function mutateReviewFile(options: {

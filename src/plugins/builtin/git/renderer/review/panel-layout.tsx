@@ -17,6 +17,7 @@ import {
   gitReviewTreeExpansionScopeId,
   PierFileTree,
 } from "@pier/ui/file/tree.tsx";
+import { bindTreeExpansionPersistence } from "@pier/ui/file/tree-expansion-persist.ts";
 import type { PierFileTreeExpandAllOptions } from "@pier/ui/file/tree-types.ts";
 import { useFileTreeSearch } from "@pier/ui/file/use-tree-search.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
@@ -30,6 +31,8 @@ import { useGitReviewTreeContextMenu } from "./tree-context-menu.ts";
 import { revealGitReviewTreeSelection } from "./tree-reveal-selection.ts";
 
 const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
+const REVIEW_TREE_EXPANSION_STORAGE_PREFIX =
+  "pier.git.review.tree.expansion.v1:";
 /**
  * Review 树已全量投影，Expand Folders 用独立层数预算（勿直接复用 maxDepth 标识符）。
  * 与 absolute maxDepth 安全轨同数量级，避免默认 3 层只开浅目录。
@@ -85,6 +88,15 @@ function GitReviewTreeSidebarComponent({
         gitReviewTreeExpansionScopeId(contextId, gitRootPath)
       ),
     [contextId, gitRootPath]
+  );
+  // 展开态跨重开面板 / 重启保留；未持久化时每次进 review 都要重新折叠一遍。
+  useEffect(
+    () =>
+      bindTreeExpansionPersistence(
+        REVIEW_TREE_EXPANSION_STORAGE_PREFIX.concat(expansionAuthority.scopeId),
+        expansionAuthority
+      ),
+    [expansionAuthority]
   );
   const hasQuery = treeSearch.value.trim().length > 0;
   const searchHasNoResults =

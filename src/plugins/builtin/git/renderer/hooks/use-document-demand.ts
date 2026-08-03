@@ -59,6 +59,8 @@ export function useGitReviewDocumentDemand({
         demandPrefetchEntryKeys: demandPrefetchEntryKeysRef.current,
         windowDemand,
       });
+      // demand 同时是投影的 pending 契约与 loader 的取数单，两者必须一致：
+      // 只给 loader 收窄会让投影侧一直等正文，8s 后弹「读取变更超时」。
       currentDemandRef.current = demand;
       loader.setWindowDemand(demand);
     },

@@ -179,6 +179,12 @@ export function filterPathsUnderRoot(
 /**
  * Resolve which directories should be expanded given user intent + seed policy.
  * Priority: collapsed > expanded > seed (no intent) > default collapsed.
+ *
+ * The seed is a *per-directory* fallback, not a cold-start-only pass: it keeps
+ * applying to directories the user has never touched. Gating it on "intent is
+ * empty" would make every directory born after the first click default to
+ * collapsed — which is what a Git review sees constantly, because staging a
+ * file moves it under a different group root and mints brand new paths.
  */
 export function resolveExpandedPaths(
   items: readonly PierFileTreeItem[],
@@ -204,19 +210,12 @@ export function resolveExpandedPaths(
       const segments = stripTrailingSlash(item.path).split("/").filter(Boolean);
       for (let index = 1; index < segments.length; index += 1) {
         const ancestor = segments.slice(0, index).join("/");
+        // A collapsed ancestor hides everything below it; stop descending so
+        // the user's fold survives refreshes instead of being re-seeded open.
         if (intent.collapsed.has(ancestor)) {
           break;
         }
-        if (intent.expanded.has(ancestor)) {
-          result.add(ancestor);
-          continue;
-        }
-        // No explicit intent: seed open.
-        if (
-          !(intent.collapsed.has(ancestor) || intent.expanded.has(ancestor))
-        ) {
-          result.add(ancestor);
-        }
+        result.add(ancestor);
       }
     }
   }

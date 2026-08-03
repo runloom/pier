@@ -195,7 +195,7 @@ describe("git review gold-standard DoD (S1–S9 on Z1)", () => {
     expect(DEFAULT_MAX_CONCURRENT_DOCUMENTS).toBeGreaterThanOrEqual(8);
   });
 
-  it("pendingEntryKeys caps estimate sea; loaded still soft-retained", () => {
+  it("full content ledger mounts all estimates; demand cannot drop ids", () => {
     const many = Array.from({ length: 20 }, (_, i) =>
       entry(`f${i}.ts`, [slot(`f${i}.ts`, { additions: 2, deletions: 1 })])
     );
@@ -205,14 +205,14 @@ describe("git review gold-standard DoD (S1–S9 on Z1)", () => {
         { entry: item, kind: "idle" as const },
       ])
     );
-    const capped = projectReviewLedger({
+    const full = projectReviewLedger({
       context: context(),
       entries: many,
       locale: "en",
-      pendingEntryKeys: new Set(many.slice(0, 3).map((item) => item.entryKey)),
       resourceByEntryKey: idle,
     });
-    expect(capped.items).toHaveLength(3);
+    expect(full.items).toHaveLength(20);
+    expect(full.items.every((item) => item.kind === "estimate")).toBe(true);
   });
 
   it("S2/S5: demand lookahead over content-only order never pulls pure rename", () => {

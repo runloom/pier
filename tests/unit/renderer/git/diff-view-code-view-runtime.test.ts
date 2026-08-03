@@ -1,7 +1,7 @@
 import {
-  codeViewMembershipFlushGenerationForTest,
+  codeViewLayoutFlushGenerationForTest,
   hardenCodeViewInstanceChanged,
-  scheduleCodeViewMembershipLayoutFlush,
+  scheduleCodeViewLayoutFlush,
 } from "@pier/ui/diff-view/code-view-runtime.ts";
 import { describe, expect, it, vi } from "vitest";
 
@@ -74,7 +74,7 @@ describe("hardenCodeViewInstanceChanged", () => {
   });
 });
 
-describe("scheduleCodeViewMembershipLayoutFlush", () => {
+describe("scheduleCodeViewLayoutFlush", () => {
   it("only the latest scheduled generation flushes render", async () => {
     const render = vi.fn();
     const viewer = {
@@ -83,10 +83,10 @@ describe("scheduleCodeViewMembershipLayoutFlush", () => {
       render,
     };
 
-    scheduleCodeViewMembershipLayoutFlush(viewer, 2);
-    expect(codeViewMembershipFlushGenerationForTest(viewer)).toBe(1);
-    scheduleCodeViewMembershipLayoutFlush(viewer, 2);
-    expect(codeViewMembershipFlushGenerationForTest(viewer)).toBe(2);
+    scheduleCodeViewLayoutFlush(viewer, 2);
+    expect(codeViewLayoutFlushGenerationForTest(viewer)).toBe(1);
+    scheduleCodeViewLayoutFlush(viewer, 2);
+    expect(codeViewLayoutFlushGenerationForTest(viewer)).toBe(2);
 
     await Promise.resolve();
     expect(render).toHaveBeenCalledTimes(2);
@@ -101,7 +101,7 @@ describe("scheduleCodeViewMembershipLayoutFlush", () => {
       instanceChanged: vi.fn(),
       render,
     };
-    scheduleCodeViewMembershipLayoutFlush(viewer, 2);
+    scheduleCodeViewLayoutFlush(viewer, 2);
     await Promise.resolve();
     expect(render).not.toHaveBeenCalled();
   });

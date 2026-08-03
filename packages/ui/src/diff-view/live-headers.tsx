@@ -15,17 +15,26 @@ export function LiveHeaderPrefix({
   item,
   labels,
   onToggle,
+  userCollapsed = false,
 }: {
   readonly inputStore: DiffViewInputStore;
   readonly item: PierDiffCodeViewItem;
   readonly labels: PierDiffViewLabels;
   readonly onToggle: (item: PierDiffCodeViewItem) => void;
+  /** 用户主动收起（含「折叠全部」），区别于 estimate 的技术默认折叠。 */
+  readonly userCollapsed?: boolean;
 }): React.JSX.Element {
   const input = useDiffViewInput(inputStore, item.id);
-  const loading =
+  const hydrating =
     input !== undefined && pierDiffItemPresentation(input) === "loading";
+  // 用户已收起的槽位不按「懒加载中」呈现：正文是否到达与折叠态无关。
+  // 否则大仓折叠全部后，每个 chevron 会随正文到达从半透明+展开方向
+  // 逐个变实并转向——和暂存按钮逐个解锁是同一类问题。
+  // 未被用户收起的 estimate 仍保留 loading 视觉：首屏全是 estimate 时
+  // 若都画成 collapsed，会被误读成「列表被收起了」。
+  const loading = hydrating && !userCollapsed;
   const emptyReady =
-    !loading &&
+    !hydrating &&
     item.type === "diff" &&
     item.fileDiff.splitLineCount === 0 &&
     item.fileDiff.unifiedLineCount === 0;

@@ -340,7 +340,33 @@ describe("GitReviewService semantic mutation", () => {
     ).toEqual(expect.arrayContaining(["staged", "unstaged"]));
   });
 
-  it("rejects a stale revision before writing", async () => {
+  // 文件级 stage/unstage 是路径操作（git add / git reset --），与正文无关：
+  // 不校验内容令牌，也允许完全不带令牌（正文可能还没读回）。
+  // 对齐 VS Code / Magit / lazygit 的文件级暂存行为。
+  it("stages a file without a content revision token", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "file.txt"), "base\n", "utf8");
+    await execGit(["add", "--", "file.txt"], { cwd: root });
+    await execGit(["commit", "-m", "base"], { cwd: root });
+    await writeFile(join(root, "file.txt"), "changed\n", "utf8");
+    const service = new GitReviewService();
+    const documentSource = source(root);
+    const document = await readDocument(service, documentSource);
+    const section = document.sections[0];
+    if (section === undefined) throw new Error("missing section");
+    const result = await mutate(service, {
+      action: "stage",
+      operationId: randomUUID(),
+      source: documentSource,
+      target: { kind: "file", sectionKey: section.sectionKey },
+    });
+    expect(result).toMatchObject({ kind: "ok" });
+    expect(
+      await execGit(["diff", "--cached", "--", "file.txt"], { cwd: root })
+    ).not.toBe("");
+  });
+
+  it("ignores a stale token for file stage but still writes the current content", async () => {
     const root = await createRepository();
     await writeFile(join(root, "file.txt"), "base\n", "utf8");
     await execGit(["add", "--", "file.txt"], { cwd: root });
@@ -358,11 +384,52 @@ describe("GitReviewService semantic mutation", () => {
       source: documentSource,
       target: { kind: "file", sectionKey: section.sectionKey },
     });
+    expect(result).toMatchObject({ kind: "ok" });
+  });
+
+  // 破坏性：revert 会丢掉读取之后的新编辑，陈旧令牌必须拒绝。
+  it("rejects a stale revision before reverting a file", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "file.txt"), "base\n", "utf8");
+    await execGit(["add", "--", "file.txt"], { cwd: root });
+    await execGit(["commit", "-m", "base"], { cwd: root });
+    await writeFile(join(root, "file.txt"), "changed\n", "utf8");
+    const service = new GitReviewService();
+    const documentSource = source(root);
+    const document = await readDocument(service, documentSource);
+    const section = document.sections[0];
+    if (section === undefined) throw new Error("missing section");
+    const result = await mutate(service, {
+      action: "revert",
+      expectedRevision: `sha256:${"0".repeat(64)}`,
+      operationId: randomUUID(),
+      source: documentSource,
+      target: { kind: "file", sectionKey: section.sectionKey },
+    });
     expect(result).toMatchObject({ kind: "error", reason: "staleRevision" });
-    expect(
-      await execGit(["diff", "--cached", "--", "file.txt"], { cwd: root })
-    ).toBe("");
-    expect(section.kind).toBe("patch");
+    // 工作区内容必须保持不变（没有被 discard 掉）。
+    expect(await readFile(join(root, "file.txt"), "utf8")).toBe("changed\n");
+  });
+
+  it("rejects a file revert that carries no revision token", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "file.txt"), "base\n", "utf8");
+    await execGit(["add", "--", "file.txt"], { cwd: root });
+    await execGit(["commit", "-m", "base"], { cwd: root });
+    await writeFile(join(root, "file.txt"), "changed\n", "utf8");
+    const service = new GitReviewService();
+    const documentSource = source(root);
+    const document = await readDocument(service, documentSource);
+    const section = document.sections[0];
+    if (section === undefined) throw new Error("missing section");
+    const result = await mutate(service, {
+      action: "revert",
+      operationId: randomUUID(),
+      source: documentSource,
+      target: { kind: "file", sectionKey: section.sectionKey },
+    });
+    expect(result).toMatchObject({ kind: "error", reason: "staleRevision" });
+    expect(await readFile(join(root, "file.txt"), "utf8")).toBe("changed\n");
   });
 
   it("还原 unstaged section 时保留 index 中已暂存内容", async () => {

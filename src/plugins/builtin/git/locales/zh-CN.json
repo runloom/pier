@@ -472,6 +472,7 @@
     "ui.reviewDiscardTitleTrash": "移到废纸篓",
     "ui.reviewDiscardTitleRestore": "还原文件",
     "ui.reviewDiscardFailed": "无法放弃更改",
+    "ui.reviewDiscardRevisionUnavailableBody": "无法确认这个文件的当前状态，请重试。",
     "ui.reviewDiscardConfirmTrackedSingle": "确定放弃 {{name}} 的本地修改？此操作不可撤销。",
     "ui.reviewDiscardConfirmTrackedMulti": "确定放弃 {{count}} 个文件的本地修改？此操作不可撤销。",
     "ui.reviewDiscardConfirmRestoreSingle": "确定还原已删除的 {{name}}？",

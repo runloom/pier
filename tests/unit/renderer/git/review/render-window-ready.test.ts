@@ -7,6 +7,7 @@ describe("isReviewRenderWindowFirstPaintReady", () => {
     expect(
       isReviewRenderWindowFirstPaintReady({
         bufferedItemIds: [],
+        collapsedItemIds: [],
         estimatedItemIds: ["section:a", "section:b"],
         visibleItemIds: ["section:a", "section:b"],
       })
@@ -17,6 +18,7 @@ describe("isReviewRenderWindowFirstPaintReady", () => {
     expect(
       isReviewRenderWindowFirstPaintReady({
         bufferedItemIds: ["section:a"],
+        collapsedItemIds: [],
         estimatedItemIds: [],
         visibleItemIds: [],
       })
@@ -27,6 +29,7 @@ describe("isReviewRenderWindowFirstPaintReady", () => {
     expect(
       isReviewRenderWindowFirstPaintReady({
         bufferedItemIds: [],
+        collapsedItemIds: [],
         estimatedItemIds: [],
         visibleItemIds: ["section:a"],
       })

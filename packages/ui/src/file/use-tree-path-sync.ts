@@ -120,12 +120,7 @@ export function useFileTreePathSync({
         return resolveExpandedPaths(items, expansionAuthority.getIntent(), {
           ...(directoryStates === undefined ? {} : { directoryStates }),
           propagateCompactChains: true,
-          // After first interaction, intent is non-empty; never re-seed over it.
-          seed:
-            expansionAuthority.getIntent().expanded.size === 0 &&
-            expansionAuthority.getIntent().collapsed.size === 0
-              ? expansionSeed
-              : "none",
+          seed: expansionSeed,
         });
       }
       return collectPreservedExpandedDirectoryPaths(

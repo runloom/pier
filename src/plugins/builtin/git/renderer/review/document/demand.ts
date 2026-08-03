@@ -1,3 +1,4 @@
+import { diffMetrics } from "@pier/ui/diff-view/geometry.ts";
 import {
   isReadingProtectedMode,
   type ReviewReadingMode,
@@ -27,8 +28,9 @@ export const GIT_REVIEW_LOOKAHEAD = 4;
 export const GIT_REVIEW_SELECTION_RADIUS = 2;
 /**
  * 全量正文水合优先级选择上限（非显示账本 id cap）。
- * stable-ledger 显示集 = 全 index；此上限只约束「优先灌 loaded body」的候选序。
+ * 显示集 = 全部 content 槽（estimate 可先挂）；此上限只约束「优先灌 loaded body」的候选序。
  * pin（selected/visible/buffered demand）可短暂超过；其余按优先级截断。
+ * demand **不得**裁剪 CodeView id（折叠总高依赖全表 n×header）。
  */
 export const GIT_REVIEW_MAX_FULL_BODY_ENTRIES = 128;
 
@@ -36,10 +38,8 @@ export const GIT_REVIEW_MAX_FULL_BODY_ENTRIES = 128;
 export type ReviewNavigationMemberReason = "restore" | "tree";
 
 const DEFAULT_VIEWPORT_HEIGHT_PX = 800;
-/**
- * 与 `PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX`（packages/ui = 144）对齐：按「骨架槽」估可见条数。
- */
-const DEFAULT_ITEM_HEIGHT_PX = 144;
+/** seed 默认字号；与产品默认 code 字号一致，可被 options.codeFontSize 覆盖。 */
+const DEFAULT_CODE_FONT_SIZE = "13px";
 
 /**
  * 导航事务：只 **boost** 选中 content 到队首，禁止 exclusive 缩 demand。
@@ -99,6 +99,8 @@ export function reviewDocumentDemandForRenderWindow(
 export function gitReviewSeedEntryKeys(
   entryKeysInOrder: readonly string[],
   options?: {
+    /** 与 Diff appearance.codeFontSize 同源；驱动 skeletonSlotHeight。 */
+    readonly codeFontSize?: string;
     readonly itemHeightPx?: number;
     readonly viewportHeightPx?: number;
   }
@@ -107,7 +109,9 @@ export function gitReviewSeedEntryKeys(
     options?.viewportHeightPx ?? DEFAULT_VIEWPORT_HEIGHT_PX;
   const itemHeightPx = Math.max(
     1,
-    options?.itemHeightPx ?? DEFAULT_ITEM_HEIGHT_PX
+    options?.itemHeightPx ??
+      diffMetrics(options?.codeFontSize ?? DEFAULT_CODE_FONT_SIZE)
+        .skeletonSlotHeight
   );
   // 视口可容纳 + 1 缓冲，再夹到 [MIN, MAX]
   const estimated = Math.ceil(viewportHeightPx / itemHeightPx) + 1;
@@ -120,7 +124,16 @@ export function gitReviewSeedEntryKeys(
 }
 
 /**
- * 在 window demand 的 [min,max] 下标两侧，各取 lookahead 个不在 demand 内的槽位。
+ * 在**可见**窗口的 [min,max] 下标两侧，各取 lookahead 个不在 demand 内的槽位。
+ *
+ * 前沿必须锚在可见窗口，不能锚在 visible ∪ buffered：buffered 里正是上一轮
+ * lookahead 塞进来的槽位，用它算前沿等于让前沿追自己的尾巴——
+ * demand 决定投影成员，投影成员决定 Pierre 渲染窗口，渲染窗口又回头决定 demand，
+ * 三者成环且没有滞回，会在「全部渲染 → 前沿 +lookahead → 装不下 → 前沿回缩」
+ * 两态间永久摆动（实测投影成员在 29 ↔ 33 之间每帧翻转，滚动条持续抖动、
+ * 条目反复重渲染）。可见条数由视口决定、与投影大小无关，是唯一稳定的锚。
+ *
+ * buffered 仍然通过 window demand 进入取数单，只是不再推动前沿。
  */
 export function gitReviewLookaheadEntryKeys(
   entryKeysInOrder: readonly string[],
@@ -138,10 +151,15 @@ export function gitReviewLookaheadEntryKeys(
   if (demanded.size === 0) {
     return [];
   }
+  // 冷启动阶段可能还没有可见项（首帧只有 buffered/seed），此时退回整窗口做锚。
+  const anchor =
+    demand.visibleEntryKeys.length > 0
+      ? new Set(demand.visibleEntryKeys)
+      : demanded;
   let minIndex = Number.POSITIVE_INFINITY;
   let maxIndex = -1;
   for (const [index, entryKey] of entryKeysInOrder.entries()) {
-    if (demanded.has(entryKey)) {
+    if (anchor.has(entryKey)) {
       minIndex = Math.min(minIndex, index);
       maxIndex = Math.max(maxIndex, index);
     }

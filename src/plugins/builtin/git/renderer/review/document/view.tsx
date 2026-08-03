@@ -32,8 +32,6 @@ import type {
   GitReviewReadingSurface,
 } from "../reading-surface.ts";
 import type { gitReviewTreeModel } from "../tree.tsx";
-import { reviewContentEntryKeysInOrder } from "./body-class.ts";
-import { gitReviewSeedEntryKeys } from "./demand.ts";
 import { GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS } from "./hydrate-timeout.ts";
 import type {
   ReviewDocumentProjection,
@@ -305,7 +303,7 @@ function documentContent(options: {
     }
   };
   // generation effect 首帧前 projection 可能仍为空。
-  // 冷路径：只挂 seed 量级 content estimate（禁止全 index 灰条海）。
+  // 冷路径：全 content 槽挂 estimate，保证折叠/滚动总高 = n×header 坐标系。
   let displayProjection = options.projection;
   if (
     displayProjection.items.length === 0 &&
@@ -318,11 +316,6 @@ function documentContent(options: {
       diffBase: options.emptySurface,
       entries: options.entries,
       locale: options.appearance.locale,
-      pendingEntryKeys: new Set(
-        gitReviewSeedEntryKeys(
-          reviewContentEntryKeysInOrder(options.entries, options.emptySurface)
-        )
-      ),
       resourceByEntryKey: new Map(),
       sourceIndexGeneration: options.projection.sourceIndexGeneration,
     });

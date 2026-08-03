@@ -4,16 +4,18 @@ import type {
   GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
 import { describe, expect, it, vi } from "vitest";
+import {
+  diffMetrics,
+  totalScrollHeight,
+} from "../../../../../packages/ui/src/diff-view/geometry.ts";
 import { toCodeViewItems } from "../../../../../packages/ui/src/diff-view/items.ts";
 import {
-  estimateLinesForReviewSlot,
   indexReviewDocumentProjection,
   indexReviewEntrySections,
   indexReviewSectionEntries,
   isCodeViewMemberResource,
   projectReviewDocumentResource,
   projectReviewLedger,
-  recordReviewRenderedHeightEstimates,
 } from "../../../../../src/plugins/builtin/git/renderer/review/document/projection.ts";
 import type { GitReviewDocumentResource } from "../../../../../src/plugins/builtin/git/renderer/review/document/resource.ts";
 import { patchDocument } from "./document-fixture.ts";
@@ -285,9 +287,8 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     ]);
     expect(projection.items[0]?.kind).toBe("estimate");
     expect(projection.items[0]?.cacheKey.startsWith("estimate:")).toBe(true);
-    // 骨架固定矮行，不得灌 numstat 级假行
-    expect(projection.items[0]?.estimateLines).toBeGreaterThan(0);
-    expect(projection.items[0]?.estimateLines).toBeLessThanOrEqual(5);
+    // estimate 无正文 patch；高度由 geometry 决定，不挂 estimateLines
+    expect(projection.items[0]?.patch).toBeNull();
     expect(projection.items[2]?.patch).toContain("+new");
     expect(projection.items[2]?.kind).toBe("loaded");
     expect(projection.items[3]?.stateNotice).toBe("Unable to load this change");
@@ -301,7 +302,7 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     expect(projection.revisionBySectionId.get("section:2")).toBe("document:2");
   });
 
-  it("with pendingEntryKeys only mounts estimate for demand window (no estimate sea)", () => {
+  it("mounts all content slots as estimate (demand does not drop ledger ids)", () => {
     const entries = [entry(0), entry(1), entry(2), entry(3), entry(4)];
     const resourceByEntryKey = new Map<string, GitReviewDocumentResource>(
       entries.map((item) => [item.entryKey, { entry: item, kind: "idle" }])
@@ -310,25 +311,27 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
       context: context(),
       entries,
       locale: "en",
-      pendingEntryKeys: new Set(["entry:0", "entry:2"]),
       resourceByEntryKey,
     });
     expect(projection.items.map((item) => item.id)).toEqual([
       "section:0",
+      "section:1",
       "section:2",
+      "section:3",
+      "section:4",
     ]);
     expect(projection.items.every((item) => item.kind === "estimate")).toBe(
       true
     );
   });
 
-  it("pendingEntryKeys still keeps loaded outside demand (soft-retain)", () => {
+  it("keeps loaded body outside hydration priority (soft-retain)", () => {
     const entries = [entry(0), entry(1)];
     const projection = projectReviewLedger({
+      allowedBodyEntryKeys: new Set(["entry:0"]),
       context: context(),
       entries,
       locale: "en",
-      pendingEntryKeys: new Set(["entry:0"]),
       resourceByEntryKey: new Map([
         ["entry:0", { entry: entry(0), kind: "idle" }],
         ["entry:1", loaded(1)],
@@ -340,6 +343,23 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     ]);
     expect(projection.items[0]?.kind).toBe("estimate");
     expect(projection.items[1]?.kind).toBe("loaded");
+  });
+
+  it("collapse-all scroll height uses full content n×header (59 files)", () => {
+    const n = 59;
+    const entries = Array.from({ length: n }, (_, index) => entry(index));
+    const projection = projectReviewLedger({
+      context: context(),
+      entries,
+      locale: "en",
+      resourceByEntryKey: new Map(
+        entries.map((item) => [item.entryKey, { entry: item, kind: "idle" }])
+      ),
+    });
+    expect(projection.items).toHaveLength(n);
+    const metrics = diffMetrics("13px");
+    const heights = projection.items.map(() => metrics.headerHeight);
+    expect(totalScrollHeight(heights, metrics.gap)).toBeCloseTo(2108.25);
   });
 
   it("omits pure rename slots from CodeView body (gold standard meta)", () => {
@@ -381,7 +401,9 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
       locale: "en",
       resourceByEntryKey: new Map([[item.entryKey, resource]]),
     });
-    expect(pending.items[0]?.stageControl).toMatchObject({ busy: true });
+    // 无权威令牌时控件不禁用：stage/unstage 是路径操作，discard 点击时按需取令牌。
+    // 否则大仓折叠全部后按钮会随正文逐个解锁 / 逐个冒出来。
+    expect(pending.items[0]?.stageControl?.busy).toBeUndefined();
     expect(pending.items[0]?.changeControls?.[0]?.busy).toBeUndefined();
     expect(pending.revisionBySectionId.has("section:2")).toBe(false);
 
@@ -404,15 +426,15 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
       context: context(),
       entries: [item],
       locale: "en",
-      measuredEstimateLinesByPath: new Map([[item.path, 37]]),
       resourceByEntryKey: new Map([["entry:2", loaded(2)]]),
     });
 
     // allowedBody 只控 mutation 权威；已 loaded 必须画真正文，不能退回 estimate。
     expect(projection.items[0]?.kind).toBe("loaded");
     expect(projection.items[0]?.patch).toContain("+new");
+    // 权威之外控件不禁用（令牌只在 discard 点击时按需取）。
+    expect(projection.items[0]?.stageControl?.busy).toBeUndefined();
     expect(projection.items[0]?.stageControl).toMatchObject({
-      busy: true,
       state: "unstaged",
     });
     expect(projection.revisionBySectionId.has("section:2")).toBe(false);
@@ -471,48 +493,6 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     );
   });
 
-  it("uses fixed skeleton height for content slots (not raw numstat lines)", () => {
-    // header 仍用 lineStats 画 -12 +7；正文骨架固定 5 行，对齐 estimate-skeleton
-    expect(
-      estimateLinesForReviewSlot({
-        additions: 12,
-        binary: false,
-        deletions: 7,
-        group: "unstaged",
-        oldPath: null,
-        sectionKey: "section:stats",
-        status: "modified",
-        targetPath: "stats.ts",
-      })
-    ).toBe(5);
-    expect(
-      estimateLinesForReviewSlot({
-        additions: 200,
-        binary: false,
-        deletions: 50,
-        group: "unstaged",
-        oldPath: null,
-        sectionKey: "section:huge",
-        status: "modified",
-        targetPath: "huge.ts",
-      })
-    ).toBe(5);
-  });
-
-  it("estimates pure rename / empty as zero lines", () => {
-    expect(
-      estimateLinesForReviewSlot({
-        additions: 0,
-        deletions: 0,
-        group: "staged",
-        oldPath: "a.ts",
-        sectionKey: "section:rename",
-        status: "renamed",
-        targetPath: "b.ts",
-      })
-    ).toBe(0);
-  });
-
   it("attaches index numstat as lineStats on estimate items for first paint", () => {
     const path = "src/with-stats.ts";
     const item: GitReviewIndexEntry = {
@@ -545,43 +525,6 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
       kind: "estimate",
       lineStats: { additions: 6, deletions: 9 },
     });
-  });
-
-  it("records visible measured heights by stable repository path", () => {
-    const estimates = new Map<string, number>();
-    // PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX=144, DEFAULT_ESTIMATE_LINES=16
-    // 720/144*16 = 80
-    recordReviewRenderedHeightEstimates(
-      [entry(0)],
-      new Map([["section:0", 720]]),
-      estimates
-    );
-    expect(estimates.get("src/file-0.ts")).toBe(80);
-  });
-
-  it("records staged measured height through its section id", () => {
-    const estimates = new Map<string, number>();
-    const unstagedEntry = entry(0);
-    const stagedEntry: GitReviewIndexEntry = {
-      ...unstagedEntry,
-      renderSlots: [
-        {
-          group: "staged",
-          oldPath: null,
-          sectionKey: "staged:entry:0",
-          status: "modified",
-          targetPath: unstagedEntry.path,
-        },
-      ],
-    };
-    // 540/144*16 = 60
-    recordReviewRenderedHeightEstimates(
-      [stagedEntry],
-      new Map([["staged:entry:0", 540]]),
-      estimates,
-      "staged"
-    );
-    expect(estimates.get("src/file-0.ts")).toBe(60);
   });
 });
 

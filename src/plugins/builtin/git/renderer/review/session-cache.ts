@@ -32,8 +32,6 @@ export interface ReviewSessionCacheEntry {
   readonly anchor: PierDiffViewAnchor | null;
   readonly index: LoadedReviewIndex;
   readonly loadedByEntryKey: ReadonlyMap<string, LoadedReviewDocument>;
-  /** 旧会话快照可缺省；新写入会补为空映射。 */
-  readonly measuredEstimateLinesByPath?: ReadonlyMap<string, number>;
   readonly retainedEntryKeys: readonly string[];
   readonly selectedEntryKey: string | null;
   readonly selectedSectionKey: string | null;
@@ -200,7 +198,6 @@ function normalizeEntry(
     anchor: normalizeAnchor(entry),
     index: entry.index,
     loadedByEntryKey: trimmed.loadedByEntryKey,
-    measuredEstimateLinesByPath: entry.measuredEstimateLinesByPath ?? new Map(),
     retainedEntryKeys: trimmed.retainedEntryKeys,
     selectedEntryKey: entry.selectedEntryKey,
     selectedSectionKey: entry.selectedSectionKey,
@@ -244,8 +241,6 @@ export function patchReviewSession(
       anchor: patch.anchor ?? null,
       index,
       loadedByEntryKey: patch.loadedByEntryKey ?? new Map(),
-      measuredEstimateLinesByPath:
-        patch.measuredEstimateLinesByPath ?? new Map(),
       retainedEntryKeys: patch.retainedEntryKeys ?? [],
       selectedEntryKey: patch.selectedEntryKey ?? null,
       selectedSectionKey: patch.selectedSectionKey ?? null,
@@ -263,10 +258,6 @@ export function patchReviewSession(
       patch.loadedByEntryKey === undefined
         ? existing.loadedByEntryKey
         : patch.loadedByEntryKey,
-    measuredEstimateLinesByPath:
-      patch.measuredEstimateLinesByPath === undefined
-        ? (existing.measuredEstimateLinesByPath ?? new Map())
-        : patch.measuredEstimateLinesByPath,
     retainedEntryKeys:
       patch.retainedEntryKeys === undefined
         ? existing.retainedEntryKeys
@@ -303,11 +294,9 @@ export function reviewSurfaceSessionKey(
  */
 function mergeLoadedDocumentsForScope(scope: GitReviewScope): {
   readonly loadedByEntryKey: Map<string, LoadedReviewDocument>;
-  readonly measuredEstimateLinesByPath: Map<string, number>;
   readonly retainedEntryKeys: string[];
 } {
   const loadedByEntryKey = new Map<string, LoadedReviewDocument>();
-  const measuredEstimateLinesByPath = new Map<string, number>();
   const retainedOrder: string[] = [];
   const seenRetained = new Set<string>();
   const candidateKeys = [
@@ -329,9 +318,6 @@ function mergeLoadedDocumentsForScope(scope: GitReviewScope): {
         loadedByEntryKey.set(entryKey, resource);
       }
     }
-    for (const [path, lines] of session.measuredEstimateLinesByPath ?? []) {
-      measuredEstimateLinesByPath.set(path, lines);
-    }
     for (const entryKey of session.retainedEntryKeys) {
       if (loadedByEntryKey.has(entryKey) && !seenRetained.has(entryKey)) {
         seenRetained.add(entryKey);
@@ -346,7 +332,6 @@ function mergeLoadedDocumentsForScope(scope: GitReviewScope): {
   }
   return {
     loadedByEntryKey,
-    measuredEstimateLinesByPath,
     retainedEntryKeys: retainedOrder,
   };
 }
@@ -382,7 +367,6 @@ export function ensureReviewSurfaceSession(
           anchor: null,
           index: peer.index,
           loadedByEntryKey: merged.loadedByEntryKey,
-          measuredEstimateLinesByPath: merged.measuredEstimateLinesByPath,
           retainedEntryKeys: merged.retainedEntryKeys,
           selectedEntryKey: null,
           selectedSectionKey: null,
@@ -397,7 +381,6 @@ export function ensureReviewSurfaceSession(
     anchor: null,
     index,
     loadedByEntryKey: merged.loadedByEntryKey,
-    measuredEstimateLinesByPath: merged.measuredEstimateLinesByPath,
     retainedEntryKeys: merged.retainedEntryKeys,
     selectedEntryKey: null,
     selectedSectionKey: null,

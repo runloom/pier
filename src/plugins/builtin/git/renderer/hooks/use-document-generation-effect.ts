@@ -29,7 +29,6 @@ import {
   projectReviewLedger,
   type ReviewDocumentProjection,
   type ReviewDocumentViewState,
-  recordReviewRenderedHeightEstimates,
 } from "../review/document/projection.ts";
 import type { GitReviewDocumentResource } from "../review/document/resource.ts";
 import {
@@ -142,9 +141,6 @@ export function mountGitReviewDocumentGeneration(
   const retainPrevious = scopeKeyRef.current === scopeKey;
   scopeKeyRef.current = scopeKey;
   const session = readReviewSession(sourceKey);
-  const measuredEstimateLinesByPath = new Map(
-    session?.measuredEstimateLinesByPath ?? []
-  );
   const entryKeysInOrder = entries.map((entry) => entry.entryKey);
   const currentEntryKeys = new Set(entryKeysInOrder);
   // 金标准：seed 仅 content-bearing（pure rename 不占 document 队列）
@@ -290,11 +286,7 @@ export function mountGitReviewDocumentGeneration(
       selectedEntryKey,
     })
   );
-  // 金标准：首帧 estimate 仅 seed（禁止全 content 灰条海）
-  const initialPendingEntryKeys = new Set([
-    ...seedEntryKeys,
-    ...(selectedEntryKey === null ? [] : [selectedEntryKey]),
-  ]);
+  // 金标准：首帧即挂全 content 槽 estimate（稳定高度账本）；seed 只驱动 document 水合队列
   const initialProjection = projectReviewLedger({
     allowedBodyEntryKeys: initialAllowedBodyEntryKeys,
     authoritativeEntryKeys: controller.authoritativeEntryKeys(),
@@ -302,8 +294,6 @@ export function mountGitReviewDocumentGeneration(
     diffBase,
     entries,
     locale: projectionLocaleRef.current,
-    measuredEstimateLinesByPath,
-    pendingEntryKeys: initialPendingEntryKeys,
     resourceByEntryKey: initialResourceByEntryKey,
     sourceIndexGeneration: indexGeneration,
   });
@@ -359,7 +349,6 @@ export function mountGitReviewDocumentGeneration(
     itemCacheKeysRef,
     itemIdsRef,
     loader,
-    measuredEstimateLinesByPath,
     projectionLocaleRef,
     resourceByEntryKey,
     setProjection,
@@ -431,12 +420,6 @@ export function mountGitReviewDocumentGeneration(
   return () => {
     globalThis.clearInterval(hydrateTimer);
     hydrateWatchdog.clear();
-    recordReviewRenderedHeightEstimates(
-      entries,
-      diffHandleRef.current?.getRenderedItemHeights?.() ?? new Map(),
-      measuredEstimateLinesByPath,
-      diffBase
-    );
     const snap = controller.snapshot(loader.getRetainedEntryKeys());
     previousSnapshotRef.current = snap;
     const loaded = new Map(
@@ -455,7 +438,6 @@ export function mountGitReviewDocumentGeneration(
     publishReviewDocumentSoftCache(softCacheScopeKey, loaded);
     patchReviewSession(sourceKey, {
       loadedByEntryKey: loaded,
-      measuredEstimateLinesByPath,
       retainedEntryKeys: loader.getRetainedEntryKeys(),
       selectedEntryKey: generationCallbacksRef.current.getSelectedEntryKey(),
       selectedSectionKey:

@@ -1,6 +1,5 @@
 import type { CodeViewHandle, CodeViewItem } from "@pierre/diffs/react";
 import {
-  type Ref,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -9,74 +8,55 @@ import {
   useState,
 } from "react";
 import {
-  diffFontMetrics,
   ensurePierDiffLightDomStyles,
   pierDiffCodeViewKey,
   pierDiffRenderEnvironment,
   pierDiffThemeKey,
 } from "./appearance.ts";
-import type { PierDiffViewLabels } from "./collapse.tsx";
-import type {
-  PierHunkActionEvent,
-  PierHunkAnnotationMetadata,
-} from "./hunk-actions.tsx";
-import { useDiffViewInputStore } from "./input-store.ts";
 import {
-  type ParsedItemCacheEntry,
-  type PierDiffViewItem,
-  toCodeViewItems,
-} from "./items.ts";
+  applyCollapseIntentToItems,
+  type DiffViewCollapseAllIntent,
+  useUserCollapsedPredicate,
+} from "./collapse-intent.ts";
+import { diffMetrics } from "./geometry.ts";
+import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
+import { useDiffViewInputStore } from "./input-store.ts";
+import { type ParsedItemCacheEntry, toCodeViewItems } from "./items.ts";
 import type { DiffPointerLineHit } from "./pointer-selection.ts";
 import { useDiffRenderWatchdog } from "./render-watchdog.ts";
-import {
-  type PierDiffViewRenderWindow,
-  useDiffRenderWindowReport,
-} from "./render-window.ts";
+import { useDiffRenderWindowReport } from "./render-window.ts";
 import { stabilizeCodeViewStickyPositioning } from "./sticky-stabilize.ts";
 import {
   captureTopologyScrollRestore,
   restoreTopologyScroll,
   type TopologyScrollRestore,
 } from "./topology-scroll.ts";
+import type { PierDiffViewProps } from "./types.ts";
 import { useDiffViewCodeOptions } from "./use-code-options.ts";
 import { useDiffViewContentSelection } from "./use-content-selection.ts";
 import {
   type DiffViewCollapsedItemState,
   type DiffViewRenderItemIdentity,
-  type PierDiffViewHandle,
   useDiffViewHandle,
 } from "./use-handle.ts";
 import { useDiffViewHeaders } from "./use-headers.tsx";
 import { useDiffViewItemApply } from "./use-item-apply.ts";
 import { PierDiffViewShell } from "./view-shell.tsx";
 
-export interface PierDiffViewAppearance {
-  readonly codeFontFamily: string;
-  /** Resolved code body size, e.g. "13px" from settings `codeFontSize`. */
-  readonly codeFontSize: string;
-  /**
-   * Dual Shiki theme names for the current style preset.
-   * Pierre dual-theme mode: tokens use CSS variables; {@link colorMode}
-   * selects light/dark without re-tokenizing.
-   */
-  readonly codeThemes: {
-    readonly dark: string;
-    readonly light: string;
-  };
-  readonly colorMode: "dark" | "light";
-}
-
+export {
+  diffMetrics,
+  slotVirtualHeight,
+  totalScrollHeight,
+} from "./geometry.ts";
+export type {
+  PierHunkActionEvent,
+  PierHunkAnnotationMetadata,
+} from "./hunk-actions.tsx";
 export type {
   PierDiffViewChangeControl,
   PierDiffViewFileDisplay,
   PierDiffViewItem,
   PierDiffViewStageControl,
-} from "./items.ts";
-export {
-  estimateLinesForFileStatus,
-  PIER_DIFF_DEFAULT_ESTIMATE_LINES,
-  PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX,
-  PIER_DIFF_MAX_ESTIMATE_BODY_LINES,
 } from "./items.ts";
 export type { PierDiffViewRenderWindow } from "./render-window.ts";
 export {
@@ -84,57 +64,15 @@ export {
   selectedLinesTextFromCodeViewItem,
 } from "./selection-text.ts";
 export type {
+  PierDiffViewAppearance,
+  PierDiffViewPresentation,
+  PierDiffViewProps,
+} from "./types.ts";
+export type {
   PierDiffViewAnchor,
   PierDiffViewHandle,
   PierDiffViewUpdateOptions,
 } from "./use-handle.ts";
-export interface PierDiffViewPresentation {
-  readonly diffStyle: "split" | "unified";
-  readonly wrapLines: boolean;
-}
-export type {
-  PierHunkActionEvent,
-  PierHunkAnnotationMetadata,
-} from "./hunk-actions.tsx";
-
-export interface PierDiffViewProps {
-  readonly appearance: PierDiffViewAppearance;
-  /**
-   * 同步闸门（layout 可读）：与 pendingNavigationRef 同源，
-   * 避免仅依赖 React state 时同帧 membership apply 漏 suppress。
-   */
-  readonly getSuppressMembershipScrollRestore?: () => boolean;
-  readonly items: readonly PierDiffViewItem[];
-  readonly labels: PierDiffViewLabels;
-  /** Discard unstaged working-tree changes for a multi-diff item id. */
-  readonly onDiscardFile?: (itemId: string) => void;
-  readonly onError: (error: Error) => void;
-  /**
-   * Codex-style per-hunk Stage / Unstage / Revert (Pierre annotations +
-   * renderAnnotation). When set, items with changeControls get block toolbars.
-   */
-  readonly onHunkAction?: (event: PierHunkActionEvent) => void;
-  readonly onItemError?: (id: string, error: Error | null) => void;
-  /** Open the file for a multi-diff item id (header title click). */
-  readonly onOpenFile?: (itemId: string) => void;
-  readonly onRenderWindowChange?: (window: PierDiffViewRenderWindow) => void;
-  /**
-   * error 槽行内重试（document materialize 失败等）；
-   * 与 `labels.retry` 同时提供时 header 显示 Retry。
-   */
-  readonly onRetryItem?: (itemId: string) => void;
-  readonly onScroll?: () => void;
-  /** Toggle uncommitted stage for a canonical multi-diff item id (entryKey). */
-  readonly onToggleStage?: (itemId: string) => void;
-  /** 缺省 split + 不换行(既有行为)。变更会强制 CodeView 重建。 */
-  readonly presentation?: PierDiffViewPresentation;
-  readonly ref?: Ref<PierDiffViewHandle>;
-  /**
-   * 树导航 pending 时禁止成员变更后的 scrollTop 硬恢复，
-   * 避免与 scrollTo(target) 双意图（full-alignment K5）。
-   */
-  readonly suppressMembershipScrollRestore?: boolean;
-}
 
 const INLINE_RENDER_TIMEOUT_MS = 10_000;
 export function PierDiffView({
@@ -171,6 +109,8 @@ export function PierDiffView({
   const collapsedItemsRef = useRef(
     new Map<string, DiffViewCollapsedItemState>()
   );
+  /** 工具栏折叠全部：覆盖此后才水合 / 才进投影窗口的槽位。 */
+  const collapseAllIntentRef = useRef<DiffViewCollapseAllIntent>(null);
   const parsedItemIndexesRef = useRef(new Map<string, number>());
   const parsedItemListRef = useRef<CodeViewItem<PierHunkAnnotationMetadata>[]>(
     []
@@ -233,22 +173,14 @@ export function PierDiffView({
     ) {
       return parsedItemListRef.current;
     }
-    return parsed.items.map((item) => {
-      const collapsed = collapsedItemsRef.current.get(item.id);
-      if (!collapsed) {
-        return item;
-      }
-      return {
-        ...item,
-        collapsed: collapsed.collapsed,
-        version:
-          (typeof item.version === "number" ? item.version : 0) +
-          collapsed.revision,
-      };
-    });
+    return applyCollapseIntentToItems(
+      parsed.items,
+      collapsedItemsRef.current,
+      collapseAllIntentRef.current
+    );
   }, [inputs, itemEpoch, parsed.items]);
   const metrics = useMemo(
-    () => diffFontMetrics(appearance.codeFontSize),
+    () => diffMetrics(appearance.codeFontSize),
     [appearance.codeFontSize]
   );
   const renderMode = workerUnavailable ? "inline" : "worker";
@@ -276,7 +208,7 @@ export function PierDiffView({
       pierDiffRenderEnvironment({
         diffStyle,
         lineHeight: metrics.lineHeight,
-        metricsDiffHeaderHeight: metrics.diffHeaderHeight,
+        metricsDiffHeaderHeight: metrics.headerHeight,
         overflow,
         renderMode,
         themeKey,
@@ -297,6 +229,10 @@ export function PierDiffView({
     markRendered,
     pendingRenderKey,
   } = useDiffRenderWatchdog(renderEnvironment, codeViewItems, getRenderedItems);
+  const isUserCollapsed = useUserCollapsedPredicate(
+    collapsedItemsRef,
+    collapseAllIntentRef
+  );
   const scheduleRenderWindowReport = useDiffRenderWindowReport(
     getContainer,
     getRenderedItems,
@@ -305,10 +241,12 @@ export function PierDiffView({
   const { options, renderAnnotation, style } = useDiffViewCodeOptions({
     appearance,
     codeViewRef,
+    collapseAllIntentRef,
     diffStyle,
     fileHoverCleanupsRef,
     fileHoverHostsRef,
     inputStore,
+    isUserCollapsed,
     labels,
     markRendered,
     metrics,
@@ -342,10 +280,13 @@ export function PierDiffView({
     bumpItemEpoch,
     codeViewItems,
     codeViewRef,
+    collapseAllIntentRef,
     collapsedItemsRef,
     expectItemRender,
     inputStore,
+    isUserCollapsed,
     labels,
+    metrics,
     onScroll,
     ...(onDiscardFile === undefined ? {} : { onDiscardFile }),
     ...(onOpenFile === undefined ? {} : { onOpenFile }),
@@ -434,10 +375,13 @@ export function PierDiffView({
     auditVisibleItems,
     bumpItemEpoch,
     codeViewRef,
+    collapseAllIntentRef,
     collapsedItemsRef,
     expectItemRender,
     firstLayoutItemIdsRef,
+    isUserCollapsed,
     itemErrorIdsRef,
+    metrics,
     onItemErrorRef,
     parsedItemIndexesRef,
     parsedItemListRef,

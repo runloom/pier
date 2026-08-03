@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { PIER_DIFF_ESTIMATE_ATTR } from "./estimate-skeleton.ts";
 import { isRenderedItemVisible } from "./render-watchdog.ts";
 
 interface RenderedWindowItem {
@@ -39,7 +40,7 @@ export function useDiffRenderWindowReport(
           ? visibleItemIds
           : bufferedItemIds
         ).push(item.id);
-        if (item.element.getAttribute("data-pier-estimate") === "true") {
+        if (item.element.getAttribute(PIER_DIFF_ESTIMATE_ATTR) === "true") {
           estimatedItemIds.push(item.id);
         }
       }
