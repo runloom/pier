@@ -449,10 +449,9 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
       foregroundActivityAggregator.ingestCommandStartHook(
         withResolvedOwner(event)
       ),
-    onError: (err) => {
-      // Per-line JSONL corruption is recoverable; warn keeps diagnostics visible
-      // without treating one bad hook line as a foreground-activity outage.
-      log.warn("jsonl observer parse failed", { err });
+    onError: (diagnostic) => {
+      // JSONL 行错误与文件系统失败都已在 observer 边界脱敏。
+      log.warn("jsonl observer failure", diagnostic);
     },
   });
   ipcMain.handle("pier:foreground-activity:snapshot", (event) => {

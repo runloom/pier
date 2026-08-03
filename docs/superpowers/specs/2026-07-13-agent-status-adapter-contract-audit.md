@@ -101,18 +101,18 @@ flowchart LR
 
 | Agent | 输入机制 | 档位 | 原生事件 → Pier 规范事件 | `stopAuthority` | `turnStartAuthority` |
 |---|---|---|---|---|---|
-| aider | 退役清理器；不再安装通知 hook | `coarse` | 无现役事件；历史配置只清理 | `none` | 无 |
+| aider | 退役清理器；不再安装通知 hook | `coarse` | 无 | `none` | 无 |
 | amp | 提供方 JavaScript 插件 | `full` | `session.start→SessionStart`；`agent.start→PromptSubmit`；`thread.state.running→running`；`thread.state.awaiting-approval→InteractionRequested`；`thread.state.running.resolved/thread.state.idle/thread.state.error.resolved→InteractionResolved`；`thread.state.error/agent.end.error→error`；`agent.end.done→TurnCompleted`；`agent.end.cancelled→TurnInterrupted` | `none` | 无 |
 | antigravity | 命名 JSON hook | `coarse` | `PreInvocation→processing`；`Stop.error→error`；`Stop.fullyIdle→Stop`；`Stop.active→processing` | `advisory` | `PreInvocation: authoritative` |
-| aug | 嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop/TurnInterrupted/error`（按原生结果分发）；`SessionEnd→SessionEnd` | `advisory` | 无 |
+| aug | 嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop/TurnInterrupted/error`；`SessionEnd→SessionEnd` | `advisory` | 无 |
 | autohand | 扁平 JSON hook 数组 | `full` | `session-start→SessionStart`；`session-end→SessionEnd`；`session-error→error`；`pre-prompt→PromptSubmit`；`stop→Stop`；`pre-tool→ToolStart`；`post-tool→ToolComplete` | `authoritative` | 无 |
-| claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名`；内部对账另补 `TurnInterrupted` | `advisory` | 无 |
+| claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
 | cline | 可执行 hook 文件 | `full` | `TaskStart→SessionStart`；`TaskResume→running`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`TaskComplete→TurnCompleted`；`TaskCancel→TurnInterrupted`；`TaskError→error`；`SessionShutdown→SessionEnd` | `none` | `TaskResume: authoritative` |
 | codebuddy | Claude 兼容嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`Elicitation→InteractionRequested`；`ElicitationResult→InteractionResolved`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
-| codex | Codex `hooks.json` | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop/SessionEnd→同名`；`Stop→Stop`；内部对账另补 `TurnCompleted/TurnInterrupted`；hook 不提供 `error` | `advisory` | 无 |
+| codex | Codex `hooks.json` | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop/SessionEnd→同名`；`Stop→Stop` | `advisory` | 无 |
 | command-code | 嵌套 JSON hook | `coarse` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop` | `advisory` | 无 |
 | copilot | Copilot hook 配置 | `full` | `sessionStart→SessionStart`；`sessionEnd→SessionEnd`；`userPromptSubmitted→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse/postToolUseFailure→ToolComplete`；`agentStop→Stop`；`preCompact/errorOccurred.recoverable→processing`；`subagentStart→SubagentStart`；`subagentStop→SubagentStop`；`errorOccurred→error` | `advisory` | 无 |
-| crush | 历史配置清理器 | `coarse` | 无现役事件 | `none` | 无 |
+| crush | 历史配置清理器 | `coarse` | 无 | `none` | 无 |
 | cursor | Cursor hook 配置 | `full` | `sessionStart→SessionStart`；`beforeSubmitPrompt→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse/postToolUseFailure→ToolComplete`；`subagentStart→SubagentStart`；`subagentStop→SubagentStop`；`stop.status=completed→TurnCompleted`；`stop.status=aborted→TurnInterrupted`；`stop.status=error→error`；`sessionEnd→SessionEnd` | `advisory` | 无 |
 | devin | JSON hook 配置 | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`Stop→Stop`；`PostCompaction→processing`；`SessionEnd→SessionEnd`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete` | `advisory` | 无 |
 | droid | 嵌套 JSON hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`Stop→Stop`；`PreCompact→processing`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete` | `advisory` | 无 |
@@ -122,7 +122,7 @@ flowchart LR
 | hermes | Python 插件和 YAML 启用项 | `full` | `on_session_start/on_session_reset→SessionStart`；`pre_llm_call→PromptSubmit`；`pre_tool_call→ToolStart`；`pre_tool_call.clarify/pre_approval_request→InteractionRequested`；`post_tool_call→ToolComplete`；`post_tool_call.clarify/post_approval_response→InteractionResolved`；`on_session_end.completed→TurnCompleted`；`on_session_end.failed→error`；`on_session_end.interrupted→TurnInterrupted`；`on_session_finalize→SessionEnd`；`subagent_start→SubagentStart`；`subagent_stop→SubagentStop` | `none` | 无 |
 | kilo | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.idle/session.status=idle→Stop`；`session.error→error`；`session.deleted→SessionEnd`；`session.status=busy/session.status=retry→running`；`chat.message→PromptSubmit`；`permission.asked/question.asked.blocking/session.status=offline→InteractionRequested`；`permission.replied/question.replied/question.rejected/session.network.replied/session.network.rejected/session.network.restored/session.status=busy.offline/session.status=retry.offline→InteractionResolved`；`tool.execute.before→ToolStart`；`tool.execute.after/message.part.updated=completed/message.part.updated=error→ToolComplete`；`session.status=busy.child/session.status=retry.child→SubagentStart`；`session.status=idle.child/session.error.child/session.deleted.child→SubagentStop` | `authoritative` | 无 |
 | kimi | TOML hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名` | `advisory` | 无 |
-| kiro | 历史配置清理器 | `coarse` | 无现役事件 | `none` | 无 |
+| kiro | 历史配置清理器 | `coarse` | 无 | `none` | 无 |
 | mimo-code | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.deleted→SessionEnd`；`chat.message→PromptSubmit`；`session.pre→running`；`session.post=completed→TurnCompleted`；`session.post=cancelled→TurnInterrupted`；`session.post=error→error`；`permission.asked/question.asked→InteractionRequested`；`permission.replied/question.replied/question.rejected→InteractionResolved`；`tool.execute.before→ToolStart`；`tool.execute.after/message.part.updated=completed/message.part.updated=error→ToolComplete` | `authoritative` | 无 |
 | mistral-vibe | 实验性 TOML hook | `coarse` | `pre_tool→processing`；`post_tool→ToolComplete`；`post_agent→Stop` | `advisory` | 无 |
 | omp | JavaScript 扩展 | `full` | `session_start→SessionStart`；`before_agent_start→PromptSubmit`；`tool_execution_start→ToolStart`；`tool_execution_end→ToolComplete`；`tool_approval_requested→InteractionRequested`；`tool_approval_resolved→InteractionResolved`；`agent_end.willContinue→processing`；`agent_end.completed→TurnCompleted`；`agent_end.error→error`；`agent_end.aborted→TurnInterrupted`；`session_stop→Stop`；`session_shutdown→SessionEnd` | `authoritative` | 无 |
@@ -148,12 +148,12 @@ flowchart LR
 
 | Provider | 结论 | 证据 | 代码锁 |
 |---|---|---|---|
-| omp | **B — `error: unsupported`** | 2026-07-05 probe：abort/ESC 仍发 `agent_end`；`OMP_EVENTS` 无独立失败事件；`agent_end→Stop` | `OMP_FA_ERROR_REACHABILITY`；`omp.test.ts` 断言映射表不含 `error` |
+| omp | **A — `error: native`** | `agent_end` 读取最后一条 `assistant` 消息的 `stopReason`；`agent_end.error→error`，`aborted` 仍只映射 `TurnInterrupted` | `OMP_FA_ERROR_REACHABILITY`；`omp.test.ts` 锁定 `error` / `aborted` / `completed` 分流 |
 | codex | **B — `error: unsupported`** | 发布版 hooks 全集无 `StopFailure`；transcript 对账仅 `task_complete→TurnCompleted`、`turn_aborted→TurnInterrupted` | `CODEX_FA_ERROR_REACHABILITY`；`codex.test.ts` 断言 hook 映射不含 `error` |
 | claude（对照） | **A — `StopFailure→error`** | 官方 hooks：`StopFailure` = 回合因 API 错误终止；transcript 中断对账仅→`TurnInterrupted`, 不映 `error` | `claude.ts` 映射保持不变 |
 | cursor（2026-07-20） | **A — `stop(status="error")→error`** | 官方 hooks reference：stop payload `status: completed\|aborted\|error` 是 provider 自报的回合终态；`aborted` 仅→`TurnInterrupted`, 不映 `error` | `CURSOR_FA_ERROR_REACHABILITY`；`cursor.test.ts` 断言 stop 命令分发 |
 
-`enableErrorAttention` 对 omp/codex **无 FA 入口**属预期；对仍有真实 `error` 映射的 Top A（如 claude）继续有效。
+`enableErrorAttention` 对 codex **无 FA 入口**属预期；对具有真实 `error` 映射的 omp、claude、cursor 继续有效。
 
 ## 兼容输入边界
 
