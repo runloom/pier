@@ -58,8 +58,9 @@ const DIRTY_MODEL = model({
       icon: "changed",
       id: "changes",
       label: "Changes",
+      lineDelta: { deletions: 42, insertions: 128 },
       tone: "default",
-      value: "7 · +128 −42",
+      value: "7",
     },
     {
       action: "syncChanges",
@@ -343,12 +344,29 @@ describe("GitStatusDropdown", () => {
     const pluginContext = makePluginContext();
     await openDropdown(pluginContext, DIRTY_MODEL);
 
-    const value = screen.getByText("7 · +128 −42");
-    expect(value).toHaveClass("ml-auto", "tabular-nums");
+    const changesRow = screen.getByTestId("git-status-row-changes");
+    const value = changesRow.querySelector(".ml-auto.tabular-nums");
+    expect(value).not.toBeNull();
     expect(value).toHaveClass("text-muted-foreground");
     expect(screen.getByText("128 insertions, 42 deletions")).toHaveClass(
       "sr-only"
     );
+  });
+
+  it("colorizes change-row line delta like other diff summaries", async () => {
+    const pluginContext = makePluginContext();
+    await openDropdown(pluginContext, DIRTY_MODEL);
+
+    const changesRow = screen.getByTestId("git-status-row-changes");
+    const insertions = changesRow.querySelector(
+      '[data-git-delta="insertions"]'
+    );
+    const deletions = changesRow.querySelector('[data-git-delta="deletions"]');
+    expect(insertions).toHaveTextContent("+128");
+    expect(insertions).toHaveClass("text-success");
+    expect(deletions).toHaveTextContent("−42");
+    expect(deletions).toHaveClass("text-status-danger-fg");
+    expect(changesRow).toHaveTextContent("7");
   });
 
   it("renders informational rows as disabled menu items", async () => {

@@ -35,11 +35,15 @@ import {
 import type {
   GitStatusDropdownAction,
   GitStatusDropdownActionId,
+  GitStatusDropdownLineDelta,
   GitStatusDropdownModel,
   GitStatusDropdownRow,
   GitStatusDropdownRowIcon,
   GitStatusDropdownRowTone,
 } from "./status-dropdown-model.ts";
+
+/** 与 change-summary / panel-tab trailing 一致：减号用 Unicode minus。 */
+const LINE_DELETION_SIGN = "\u2212";
 
 const TASK_ICONS: Record<GitStatusDropdownActionId, LucideIcon> = {
   abortOperation: X,
@@ -124,6 +128,28 @@ const ROW_TONE_CLASSES: Record<GitStatusDropdownRowTone, string> = {
   warning: "text-status-warning-fg",
 };
 
+function LineDeltaValue({
+  fileCount,
+  lineDelta,
+}: {
+  fileCount: string;
+  lineDelta: GitStatusDropdownLineDelta;
+}): React.ReactElement {
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      <span>{fileCount}</span>
+      <span aria-hidden="true">·</span>
+      <span className="text-success" data-git-delta="insertions">
+        +{lineDelta.insertions}
+      </span>
+      <span className="text-status-danger-fg" data-git-delta="deletions">
+        {LINE_DELETION_SIGN}
+        {lineDelta.deletions}
+      </span>
+    </span>
+  );
+}
+
 function RowContent({
   row,
 }: {
@@ -156,7 +182,11 @@ function RowContent({
               : "text-muted-foreground"
           )}
         >
-          {row.value}
+          {row.lineDelta ? (
+            <LineDeltaValue fileCount={row.value} lineDelta={row.lineDelta} />
+          ) : (
+            row.value
+          )}
         </span>
       )}
     </>

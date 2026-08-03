@@ -187,7 +187,8 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(rowIds(model)).toEqual(["changes", "sync"]);
     const changes = row(model, "changes");
     expect(changes.action).toBe("viewChanges");
-    expect(changes.value).toBe("7 · +128 −42");
+    expect(changes.value).toBe("7");
+    expect(changes.lineDelta).toEqual({ deletions: 42, insertions: 128 });
     expect(changes.tone).toBe("default");
     expect(model.contextLine).toBe("pier · Remote fetched 1 min ago");
   });
@@ -518,7 +519,11 @@ describe("deriveGitStatusDropdownModel", () => {
       })
     );
 
-    expect(row(model, "changes").value).toBe("1 · +0 −3");
+    expect(row(model, "changes").value).toBe("1");
+    expect(row(model, "changes").lineDelta).toEqual({
+      deletions: 3,
+      insertions: 0,
+    });
     expect(row(model, "changes").assistiveLabel).toBe(
       "0 insertions, 3 deletions"
     );
@@ -539,6 +544,7 @@ describe("deriveGitStatusDropdownModel", () => {
     );
 
     expect(row(model, "changes").value).toBe("2");
+    expect(row(model, "changes").lineDelta).toBeUndefined();
     expect(row(model, "changes").assistiveLabel).toBeUndefined();
   });
 
@@ -559,7 +565,9 @@ describe("deriveGitStatusDropdownModel", () => {
 
     const changes = row(model, "changes");
     expect(changes.label).toBe("更改");
-    expect(changes.value).toBe("1 · +2 −1");
+    expect(changes.value).toBe("1");
+    expect(changes.lineDelta).toEqual({ deletions: 1, insertions: 2 });
+    expect(changes.assistiveLabel).toBe("2 行新增, 1 行删除");
   });
 
   it("localizes operation rows with injected text", () => {
