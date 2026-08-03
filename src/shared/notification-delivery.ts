@@ -12,6 +12,7 @@
  * - toast 与 OS 默认互斥；panel/owner 静音只关打断，不关 inbox。
  * - DND v1 只挡 toast（error 除外），不挡 OS。
  */
+import type { TurnNotifyMode } from "@shared/contracts/agent/attention.ts";
 import type {
   NotificationKind,
   NotificationSeverity,
@@ -55,7 +56,7 @@ export interface DeliveryAgentAttentionPrefs {
   enabled: boolean;
   enableErrorAttention: boolean;
   suppressWhenFocused: boolean;
-  turnNotifyMode: "off" | "unfocused" | "always";
+  turnNotifyMode: TurnNotifyMode;
 }
 
 export interface DeliveryPrefs {
@@ -132,7 +133,8 @@ function resolveToastTargetFromInput(input: DeliveryInput): ToastTarget {
  * agent 细粒度：是否静音打断（inbox 仍落档）。导出供 attention 事件测试 / 单点语义复用。
  * 返回 true → toast/os 全关。
  *
- * 包含：enabled / enableErrorAttention 二次保险 + 聚焦抑制（panel / owner+turnNotifyMode）。
+ * 包含：enabled / enableErrorAttention 二次保险 + 聚焦抑制
+ * （attention：panel+suppressWhenFocused；turn-finished：turnNotifyMode）。
  */
 export function shouldSilenceAgentInterrupt(
   input: Pick<DeliveryInput, "kind" | "severity">,
@@ -162,7 +164,12 @@ export function shouldSilenceAgentInterrupt(
     if (mode === "off") {
       return true;
     }
+    // 仅窗口未聚焦：拥有该智能体的窗口在前台则静音打断。
     if (mode === "unfocused" && focus.isOwnerWindowFocused === true) {
+      return true;
+    }
+    // 仅面板未聚焦：目标智能体面板已是活动面板则静音（同窗异面板仍可提醒）。
+    if (mode === "panel-unfocused" && focus.isTargetPanelFocused === true) {
       return true;
     }
     return false;

@@ -5,17 +5,18 @@ export const settingsNotifications = {
     "Alert you when an agent is waiting for confirmation or for you to continue: in-app message card while Pier is frontmost, OS notification when it is not (title bar counts still update when off).",
   turnNotifyMode: "Notify when a turn completes",
   turnNotifyModeDesc:
-    "Whether to alert after an agent finishes a turn. Default is only when that agent’s window is unfocused; in-app and OS alerts are mutually exclusive.",
+    "Whether to alert after an agent finishes a turn. Default is only when that agent’s window is unfocused; choose “Only when panel is unfocused” to still alert when you stay in the same window but switch away from that agent’s panel. In-app and OS alerts are mutually exclusive.",
   turnNotifyModeOptions: {
     off: "Never",
     unfocused: "Only when window is unfocused",
+    "panel-unfocused": "Only when panel is unfocused",
     always: "Always",
   },
   error: "Notify on agent errors",
   errorDesc: "Also alert when an agent enters an error state. Off by default.",
   suppress: "Suppress when focused",
   suppressDesc:
-    "Skip in-app message cards and OS notifications for “Needs you” and errors when the target agent panel is already focused (still recorded in Notification Center; turn-complete uses the three modes above).",
+    "Skip in-app message cards and OS notifications for “Needs you” and errors when the target agent panel is already focused (still recorded in Notification Center; applies only to those events—turn-complete uses the four modes above).",
   cooldownLabel: "Cooldown per agent",
   cooldownDesc:
     "Minimum time between OS notification banners for the same agent panel (in-app message cards are not limited by this).",

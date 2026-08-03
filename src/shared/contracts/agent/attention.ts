@@ -23,7 +23,13 @@ export const ATTENTION_SOUND_IDS = [
 ] as const;
 export type AttentionSoundId = (typeof ATTENTION_SOUND_IDS)[number];
 
-export const TURN_NOTIFY_MODES = ["off", "unfocused", "always"] as const;
+/** 由安静到更吵：从不 → 仅窗口未聚焦 → 仅面板未聚焦 → 始终。 */
+export const TURN_NOTIFY_MODES = [
+  "off",
+  "unfocused",
+  "panel-unfocused",
+  "always",
+] as const;
 export type TurnNotifyMode = (typeof TURN_NOTIFY_MODES)[number];
 
 export const agentAttentionSettingsSchema = z

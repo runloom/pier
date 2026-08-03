@@ -60,7 +60,8 @@ export function classifyAgentNotificationEvent(args: {
 
 /**
  * 聚焦抑制（薄封装 → shared `shouldSilenceAgentInterrupt` 单一语义）。
- * ready 看拥有窗口 + turnNotifyMode；waiting/error 看目标 panel + suppressWhenFocused。
+ * ready 看 turnNotifyMode（窗口 unfocused / 面板 panel-unfocused / always / off）；
+ * waiting/error 看目标 panel + suppressWhenFocused。
  * enabled / enableErrorAttention 由 classify 负责，此处假定事件已允许产生。
  */
 export function shouldSuppressAgentNotification(args: {

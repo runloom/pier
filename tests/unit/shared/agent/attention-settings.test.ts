@@ -29,6 +29,31 @@ describe("agentAttention settings", () => {
     }
   });
 
+  it("accepts all turnNotifyMode product values", () => {
+    for (const turnNotifyMode of [
+      "off",
+      "unfocused",
+      "panel-unfocused",
+      "always",
+    ] as const) {
+      expect(
+        agentAttentionSettingsSchema.safeParse({
+          ...DEFAULT_AGENT_ATTENTION_SETTINGS,
+          turnNotifyMode,
+        }).success
+      ).toBe(true);
+    }
+  });
+
+  it("rejects unknown turnNotifyMode", () => {
+    expect(
+      agentAttentionSettingsSchema.safeParse({
+        ...DEFAULT_AGENT_ATTENTION_SETTINGS,
+        turnNotifyMode: "panel",
+      }).success
+    ).toBe(false);
+  });
+
   it("rejects unknown cooldownMs", () => {
     expect(
       agentAttentionSettingsSchema.safeParse({
