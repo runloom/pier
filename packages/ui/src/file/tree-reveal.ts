@@ -122,7 +122,9 @@ export function revealFileTreePath(
     }
     // Controller focus is not enough: trees only paints the blue ring when the
     // row button holds DOM focus (`visualFocusPath` / `activeItemPath`).
-    focusRevealedRow(model, officialPath);
+    if (options?.preserveFocus !== true) {
+      focusRevealedRow(model, officialPath);
+    }
     if (!isPathSelected(model, officialPath)) {
       return false;
     }

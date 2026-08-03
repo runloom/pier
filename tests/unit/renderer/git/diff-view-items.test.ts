@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  estimateLinesForFileStatus,
   fileDiffLineStats,
   type PierDiffViewItem,
   toCodeViewItem,
@@ -27,19 +26,10 @@ describe("fileDiffLineStats", () => {
   });
 });
 
-describe("estimateLinesForFileStatus", () => {
-  it("scales skeleton by status", () => {
-    expect(estimateLinesForFileStatus("deleted")).toBe(4);
-    expect(estimateLinesForFileStatus("added")).toBe(24);
-    expect(estimateLinesForFileStatus("modified")).toBe(16);
-  });
-});
-
 describe("toCodeViewItem estimate slots", () => {
   it("builds estimate as header-only (0 body lines, collapsed, no fake gutters)", () => {
     const input: PierDiffViewItem = {
       cacheKey: "estimate:section:1",
-      estimateLines: estimateLinesForFileStatus("added"),
       fileDisplay: {
         path: "tests/unit/main/git/watch-root.test.ts",
         status: "added",

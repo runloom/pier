@@ -1,8 +1,8 @@
 import type { CodeViewHandle, SelectionSide } from "@pierre/diffs/react";
-import { DIFF_HEADER_HEIGHT_PX } from "./appearance.ts";
+import { DIFF_HEADER_MIN_HEIGHT_PX } from "./appearance.ts";
 import {
   hardenCodeViewInstanceChanged,
-  scheduleCodeViewMembershipLayoutFlush,
+  scheduleCodeViewLayoutFlush,
 } from "./code-view-runtime.ts";
 import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import {
@@ -282,7 +282,7 @@ function flushCodeViewMembershipLayout(
   // useLayoutEffect 中调用；React 19 禁止在 lifecycle 里再 flushSync。
   // 命令式 setItems 仍同步；measure 放到 microtask，同一事件循环、commit 之后。
   // 连续 apply 只保留最后一代 flush，避免对已拆/换代实例 render。
-  scheduleCodeViewMembershipLayoutFlush(instance, MEMBERSHIP_LAYOUT_PASSES);
+  scheduleCodeViewLayoutFlush(instance, MEMBERSHIP_LAYOUT_PASSES);
 }
 
 /**
@@ -356,7 +356,7 @@ function captureCodeViewItemAnchor(
 
 function codeViewHeaderHeight(instance: unknown): number {
   if (!instance || typeof instance !== "object") {
-    return DIFF_HEADER_HEIGHT_PX;
+    return DIFF_HEADER_MIN_HEIGHT_PX;
   }
   const metrics = (
     instance as {
@@ -366,7 +366,7 @@ function codeViewHeaderHeight(instance: unknown): number {
   const height = metrics?.diffHeaderHeight;
   return typeof height === "number" && Number.isFinite(height) && height > 0
     ? height
-    : DIFF_HEADER_HEIGHT_PX;
+    : DIFF_HEADER_MIN_HEIGHT_PX;
 }
 
 function scrollToResolvedAnchor(

@@ -7,13 +7,19 @@ import {
   type RefObject,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import {
   CODE_VIEW_CUSTOM_CSS,
   type DiffTypographyStyle,
 } from "./appearance.ts";
 import type { PierDiffViewLabels } from "./collapse.tsx";
-import { syncEstimateSkeleton } from "./estimate-skeleton.ts";
+import type { DiffViewCollapseAllIntent } from "./collapse-intent.ts";
+import {
+  PIER_DIFF_ESTIMATE_ATTR,
+  syncEstimateSkeleton,
+} from "./estimate-skeleton.ts";
+import type { DiffMetrics } from "./geometry.ts";
 import {
   canRevertHunkForVariant,
   type PierHunkActionEvent,
@@ -25,6 +31,7 @@ import {
   type DiffViewInputStore,
   useDiffViewChangeControl,
 } from "./input-store.ts";
+import { installDiffVirtualHeightReconciler } from "./layout-apply.ts";
 import { syncPathTitleChrome } from "./path-title-chrome.ts";
 import { PIER_DIFF_LINE_DIFF_TYPE } from "./render-profile.ts";
 import { stabilizeCodeViewStickyPositioning } from "./sticky-stabilize.ts";
@@ -57,20 +64,20 @@ export function useDiffViewCodeOptions(options: {
     readonly colorMode: "dark" | "light";
   };
   readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
+  readonly collapseAllIntentRef: RefObject<DiffViewCollapseAllIntent>;
   readonly diffStyle: "split" | "unified";
   readonly fileHoverCleanupsRef: RefObject<Map<string, () => void>>;
   readonly fileHoverHostsRef: RefObject<Map<string, HTMLElement>>;
   readonly inputStore: DiffViewInputStore;
+  /** 用户折叠意图（≠ estimate 的技术性默认折叠）。 */
+  readonly isUserCollapsed: (itemId: string) => boolean;
   readonly labels: PierDiffViewLabels;
   readonly markRendered: (
     itemId: string,
     version: number | undefined,
     element: Element
   ) => void;
-  readonly metrics: {
-    readonly diffHeaderHeight: number;
-    readonly lineHeight: number;
-  };
+  readonly metrics: DiffMetrics;
   readonly onHunkAction?: (event: PierHunkActionEvent) => void;
   readonly overflow: "wrap" | "scroll";
   readonly scheduleRenderWindowReport: () => void;
@@ -85,10 +92,12 @@ export function useDiffViewCodeOptions(options: {
   const {
     appearance,
     codeViewRef,
+    collapseAllIntentRef,
     diffStyle,
     fileHoverCleanupsRef,
     fileHoverHostsRef,
     inputStore,
+    isUserCollapsed,
     labels,
     markRendered,
     metrics,
@@ -96,6 +105,16 @@ export function useDiffViewCodeOptions(options: {
     overflow,
     scheduleRenderWindowReport,
   } = options;
+  const estimateHeightOptionsRef = useRef({
+    isCollapseAllIntent: () => collapseAllIntentRef.current === true,
+    isUserCollapsed,
+    metrics,
+  });
+  estimateHeightOptionsRef.current = {
+    isCollapseAllIntent: () => collapseAllIntentRef.current === true,
+    isUserCollapsed,
+    metrics,
+  };
   const codeViewOptions = useMemo<CodeViewOptions<PierHunkAnnotationMetadata>>(
     () => ({
       diffIndicators: "bars",
@@ -106,15 +125,23 @@ export function useDiffViewCodeOptions(options: {
       enableGutterUtility: false,
       enableLineSelection: true,
       itemMetrics: {
-        diffHeaderHeight: metrics.diffHeaderHeight,
+        diffHeaderHeight: metrics.headerHeight,
         lineHeight: metrics.lineHeight,
       },
-      layout: { gap: 1, paddingBottom: 0, paddingTop: 0 },
+      layout: {
+        gap: metrics.gap,
+        paddingBottom: 0,
+        paddingTop: 0,
+      },
       // 与 Worker 单源：PIER_DIFF_LINE_DIFF_TYPE（render-profile.ts）
       lineDiffType: PIER_DIFF_LINE_DIFF_TYPE,
       lineHoverHighlight: "number",
       onPostRender(element, _instance, phase, context) {
         const itemId = context.item.id;
+        const viewer = codeViewRef.current?.getInstance();
+        if (viewer) {
+          installDiffVirtualHeightReconciler(viewer, estimateHeightOptionsRef);
+        }
         if (phase === "unmount") {
           fileHoverCleanupsRef.current.get(itemId)?.();
           fileHoverCleanupsRef.current.delete(itemId);
@@ -139,12 +166,15 @@ export function useDiffViewCodeOptions(options: {
           const isEstimate =
             typeof cacheKey === "string" && cacheKey.startsWith("estimate:");
           if (isEstimate) {
-            element.setAttribute("data-pier-estimate", "true");
+            element.setAttribute(PIER_DIFF_ESTIMATE_ATTR, "true");
           } else {
-            element.removeAttribute("data-pier-estimate");
+            element.removeAttribute(PIER_DIFF_ESTIMATE_ATTR);
           }
-          // 真实 shadow 节点骨架（padding 可靠）；勿用 :host::after 画条
-          syncEstimateSkeleton(element, isEstimate);
+          // 真实 shadow 节点骨架（padding 可靠）；勿用 :host::after 画条。
+          // 骨架是正文的一部分，用户收起时不得继续闪——它挂在 shadowRoot 上，
+          // 是 Pierre 折叠区的兄弟节点，折叠藏不住它。
+          const showSkeleton = isEstimate && !isUserCollapsed(itemId);
+          syncEstimateSkeleton(element, showSkeleton);
           // 路径 mono + hover 下划线（shadow 内 DOM，不依赖可能过期的 unsafeCSS）
           syncPathTitleChrome(element);
           if (fileHoverHostsRef.current.get(itemId) !== element) {
@@ -163,7 +193,7 @@ export function useDiffViewCodeOptions(options: {
               element.removeEventListener("pointerleave", handlePointerLeave);
               element.removeAttribute("data-pier-file-host");
               element.removeAttribute("data-pier-file-path");
-              element.removeAttribute("data-pier-estimate");
+              element.removeAttribute(PIER_DIFF_ESTIMATE_ATTR);
               element.removeAttribute("data-pier-pointer-within");
               syncEstimateSkeleton(element, false);
               syncPathTitleChrome(element, true);
@@ -195,6 +225,7 @@ export function useDiffViewCodeOptions(options: {
       diffStyle,
       fileHoverCleanupsRef,
       fileHoverHostsRef,
+      isUserCollapsed,
       markRendered,
       metrics,
       overflow,
@@ -243,9 +274,11 @@ export function useDiffViewCodeOptions(options: {
       "--diffs-line-height": "1.75",
       "--diffs-scrollbar-gutter-override":
         "var(--shell-scrollbar-width-legacy)",
+      // 头部 CSS 高度与 itemMetrics.diffHeaderHeight 同源，避免折叠导航累积错位。
+      "--pier-diff-header-height": `${metrics.headerHeight}px`,
       height: "100%",
     }),
-    [appearance.codeFontFamily, appearance.codeFontSize]
+    [appearance.codeFontFamily, appearance.codeFontSize, metrics.headerHeight]
   );
 
   return {

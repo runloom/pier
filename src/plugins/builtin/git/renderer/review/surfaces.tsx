@@ -414,7 +414,7 @@ function ReviewDocumentsComponent(
         : { headerLeading: sharedHeaderLeading })}
       headerTrailing={
         <GitReviewToolbar
-          allCollapsed={activeChrome?.allCollapsed ?? true}
+          allCollapsed={activeChrome?.allCollapsed ?? false}
           context={props.context}
           onRefresh={props.onRetryIndex}
           onToggleCollapseAll={() => {

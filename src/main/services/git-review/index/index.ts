@@ -372,28 +372,34 @@ export class GitReviewIndexReader {
     const statsByGroup: Partial<
       Record<GitReviewGroup, GitReviewIndexStatParseResult>
     > = {};
-    for (const group of rangePathspecConflict
-      ? []
-      : (["unstaged", "staged"] as const)) {
-      const parser = new GitReviewNumstatParser(group);
-      await runGitReviewIndexParser(
-        this.#execGitRaw,
-        [
-          ...(paths === undefined ? ["--literal-pathspecs"] : []),
-          "diff",
-          ...DIFF_MACHINE_ARGS,
-          ...(group === "staged" ? ["--cached"] : []),
-          "--numstat",
-          "-z",
-          "--",
-          ...rangePathspecs,
-        ],
-        identity.canonicalRoot,
-        budget,
-        signal,
-        (record) => parser.push(record)
-      );
-      const parsed = parser.finish();
+    // unstaged / staged numstat 互不依赖，各自独占 parser。串行等于白等一次
+    // git 索引刷新——大仓下这一步就是 document 读取的主要耗时来源。
+    const statReads = await Promise.all(
+      (rangePathspecConflict ? [] : (["unstaged", "staged"] as const)).map(
+        async (group) => {
+          const parser = new GitReviewNumstatParser(group);
+          await runGitReviewIndexParser(
+            this.#execGitRaw,
+            [
+              ...(paths === undefined ? ["--literal-pathspecs"] : []),
+              "diff",
+              ...DIFF_MACHINE_ARGS,
+              ...(group === "staged" ? ["--cached"] : []),
+              "--numstat",
+              "-z",
+              "--",
+              ...rangePathspecs,
+            ],
+            identity.canonicalRoot,
+            budget,
+            signal,
+            (record) => parser.push(record)
+          );
+          return [group, parser.finish()] as const;
+        }
+      )
+    );
+    for (const [group, parsed] of statReads) {
       statsByGroup[group] = parsed;
     }
     assertGitReviewIndexExecutionActive(budget, signal);

@@ -60,6 +60,7 @@ describe("Git diff renderer governance", () => {
 
     expect(importers).toEqual([
       "src/renderer/lib/theme/register-custom-themes.ts",
+      "packages/ui/src/diff-view/handle-deps.ts",
       "packages/ui/src/diff-view/hunk-annotations.ts",
       "packages/ui/src/diff-view/index.tsx",
       "packages/ui/src/diff-view/item-sync.ts",
@@ -70,7 +71,6 @@ describe("Git diff renderer governance", () => {
       "packages/ui/src/diff-view/topology-scroll.ts",
       "packages/ui/src/diff-view/use-code-options.ts",
       "packages/ui/src/diff-view/use-content-selection.ts",
-      "packages/ui/src/diff-view/use-handle.ts",
       "packages/ui/src/diff-view/use-headers.tsx",
       "packages/ui/src/diff-view/use-item-apply.ts",
       "packages/ui/src/diff-view/view-shell.tsx",
@@ -185,8 +185,23 @@ describe("Git diff renderer governance", () => {
     expect(appearanceSource).toContain('from "../scrollbar-system.ts"');
     expect(customCss).toBeDefined();
     expect(/\$\{SCROLLBAR_SYSTEM_CSS\}/.test(customCss ?? "")).toBe(true);
-    expect(appearanceSource).toContain("DIFF_HEADER_HEIGHT_PX = 32");
+    // 头高常量唯一来源：geometry.ts；appearance re-export
+    expect(appearanceSource).toContain("DIFF_HEADER_MIN_HEIGHT_PX");
+    expect(appearanceSource).toContain('from "./geometry.ts"');
     expect(appearanceSource).toContain("min-height: 32px");
+    // 头部实际高度与喂给 Pierre 的 itemMetrics.diffHeaderHeight 必须同源
+    expect(appearanceSource).toContain(
+      "height: var(--pier-diff-header-height, 32px)"
+    );
+    const geometrySource = await readFile(
+      join(ROOT, "packages/ui/src/diff-view/geometry.ts"),
+      "utf8"
+    );
+    expect(geometrySource).toContain("DIFF_HEADER_MIN_HEIGHT_PX = 32");
+    expect(geometrySource).toContain("export function slotVirtualHeight");
+    expect(geometrySource).toContain("export function totalScrollHeight");
+    // 禁止平行 144 魔法数作为槽高
+    expect(geometrySource).not.toContain("= 144");
     // 路径 hover 权威在 path-title-chrome postRender；CSS 仅 cursor 兜底
     expect(appearanceSource).toContain("[data-header-content] [data-title]");
     expect(appearanceSource).toContain("cursor: pointer");
@@ -271,6 +286,9 @@ describe("Git diff renderer governance", () => {
         join(ROOT, "packages/ui/src/diff-view/view-shell.tsx"),
         // estimate 骨架注入 shadowRoot（金标准 pending UI）
         join(ROOT, "packages/ui/src/diff-view/estimate-skeleton.ts"),
+        // 虚拟高度施加：geometry 公式写进 CodeView 布局字段
+        join(ROOT, "packages/ui/src/diff-view/layout-apply.ts"),
+        join(ROOT, "packages/ui/src/diff-view/geometry.ts"),
         // 路径标题 mono + hover 下划线（shadow 内 [data-title]）
         join(ROOT, "packages/ui/src/diff-view/path-title-chrome.ts"),
       ].includes(file);
@@ -317,7 +335,30 @@ describe("Git diff renderer governance", () => {
     expect(adapter).toContain("getSuppressMembershipScrollRestore");
     expect(adapter).toContain("shouldRestoreMembershipScrollTop");
     expect(adapter).toContain("hardenCodeViewInstanceChanged");
-    expect(adapter).toContain("scheduleCodeViewMembershipLayoutFlush");
+    expect(adapter).toContain("scheduleCodeViewLayoutFlush");
+    // Pierre 的 render(true) 经 onSnapshotChange 走 flushSync。React 19 在渲染期
+    // 无法同步刷新，layout effect 里直调只会告警并降级成调度更新，反而拿不到这次
+    // 刷新。唯一允许的调用点是 code-view-runtime 的 microtask 调度器。
+    for (const file of [
+      "packages/ui/src/diff-view/index.tsx",
+      "packages/ui/src/diff-view/item-sync.ts",
+      "packages/ui/src/diff-view/use-handle.ts",
+      "packages/ui/src/diff-view/use-item-apply.ts",
+    ]) {
+      const offenders = (reviewSources.get(join(ROOT, file)) ?? "")
+        .split("\n")
+        .filter((line) => {
+          const code = line.trimStart();
+          return (
+            /\.render\(\s*true\s*\)/u.test(code) &&
+            !(code.startsWith("*") || code.startsWith("//"))
+          );
+        });
+      expect(
+        offenders,
+        `${file} 必须经 scheduleCodeViewLayoutFlush 延后 render(true)`
+      ).toEqual([]);
+    }
     // 宿主 wiring：pending 同步闸门接到 DiffView（state + hasPendingNavigation ref）
     const surfaceView = await readFile(
       join(ROOT, "src/plugins/builtin/git/renderer/review/surface-view.tsx"),
@@ -513,6 +554,7 @@ describe("Git diff renderer governance", () => {
         command: "git.getReviewFileDocument",
         consumers: [
           "src/plugins/builtin/git/renderer/hooks/use-document-generation-effect.ts",
+          "src/plugins/builtin/git/renderer/review/discard-revision.ts",
         ],
         method: "getReviewFileDocument",
         service: "getFileDocument",

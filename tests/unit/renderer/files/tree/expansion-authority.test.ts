@@ -300,6 +300,51 @@ describe("resolveExpandedPaths", () => {
     expect(paths).not.toContain("src/lib");
   });
 
+  it("seeds untouched directories even once intent is non-empty", () => {
+    // 回归：暂存把文件挪到另一个分组根下，铸出全新路径。seed 若只在 intent 为空时
+    // 生效，这些新目录一律默认收起 → 「一暂存目录树就全收起来了」。
+    const grouped: PierFileTreeItem[] = [
+      {
+        kind: "directory",
+        path: "staged",
+        hasChildren: true,
+        loadState: "loaded",
+      },
+      {
+        kind: "directory",
+        path: "staged/src",
+        hasChildren: true,
+        loadState: "loaded",
+      },
+      { kind: "file", path: "staged/src/a.ts" },
+      {
+        kind: "directory",
+        path: "unstaged",
+        hasChildren: true,
+        loadState: "loaded",
+      },
+      { kind: "file", path: "unstaged/b.ts" },
+    ];
+    const paths = resolveExpandedPaths(
+      grouped,
+      { expanded: new Set(["unstaged"]), collapsed: new Set() },
+      { seed: "file-ancestors", propagateCompactChains: false }
+    );
+    expect(paths).toContain("staged");
+    expect(paths).toContain("staged/src");
+  });
+
+  it("keeps one user fold folded while seeding its siblings", () => {
+    const paths = resolveExpandedPaths(
+      items,
+      { expanded: new Set(["docs"]), collapsed: new Set(["src"]) },
+      { seed: "file-ancestors", propagateCompactChains: false }
+    );
+    expect(paths).not.toContain("src");
+    expect(paths).not.toContain("src/lib");
+    expect(paths).toContain("docs");
+  });
+
   it("collectKnownDirectoryPaths includes ancestors", () => {
     const known = collectKnownDirectoryPaths(items);
     expect(known.has("src")).toBe(true);

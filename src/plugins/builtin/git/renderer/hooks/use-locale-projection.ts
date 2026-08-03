@@ -56,26 +56,13 @@ export function useGitReviewLocaleProjection({
         (resource) => [resource.entry.entryKey, resource] as const
       )
     );
-    // 仅重投影已在正文的 entry（loaded/error/loading），禁止 locale 切换灌全量 estimate 海
-    const pendingEntryKeys = new Set(
-      snapshot.resources
-        .filter(
-          (resource) =>
-            resource.kind === "loaded" ||
-            resource.kind === "error" ||
-            resource.kind === "loading" ||
-            resource.kind === "cancelling" ||
-            resource.kind === "unchanged"
-        )
-        .map((resource) => resource.entry.entryKey)
-    );
+    // 全 content 账本重投影（estimate 轻量；高度坐标系不随 locale 丢 id）
     const localized = projectReviewLedger({
       authoritativeEntryKeys: controller.authoritativeEntryKeys(),
       context,
       diffBase,
       entries,
       locale,
-      pendingEntryKeys,
       resourceByEntryKey,
       sourceIndexGeneration: indexGeneration,
     });

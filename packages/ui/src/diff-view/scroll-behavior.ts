@@ -1,5 +1,13 @@
 export interface DiffViewScrollOptions {
   readonly behavior?: "instant" | "smooth";
+  /**
+   * 目标已折叠时是否展开它。默认 true（用户显式导航要看到正文）。
+   *
+   * 被动恢复必须传 false：它由渲染窗口上报驱动，展开会制造大幅布局变动，
+   * 进而触发新的上报、再次恢复——触发信号与恢复动作互为因果。折叠全部之后
+   * 后台把文件逐个弹开也直接违背用户刚表达的意图。
+   */
+  readonly expandCollapsed?: boolean;
   readonly offset?: number;
 }
 

@@ -36,9 +36,10 @@ const REVIEW_PROJECTION_GROUP_INDEX = new Map<ReviewProjectionGroup, number>(
  * 正文表面投影：仅 content-bearing 槽（金标准 bodyClass）。
  * meta/notice/unknown 不进 CodeView。
  *
- * pending/estimate 只挂 demand 窗口（seed∪visible∪buffered∪selected），
- * **禁止**「全 content 一张假 estimate 卡」当进度条（大 staged 灰条海）。
- * loaded/error 始终保留（含 soft-retain 视口外）。
+ * 显示集 id = **全部 content 槽**（idle → estimate；loaded/error 照旧）。
+ * demand / seed 只调度 document 水合优先级（allowedBody），**不得**裁剪 id。
+ * 折叠全部总高 = n×header+(n−1)×gap，n 必须是 content 槽数。
+ * estimate 是虚拟高度占位，不是「灰条进度条海」；正文灌载仍有界。
  *
  * @see 2026-07-31-git-review-gold-standard-endstate-design.md §3–§5
  */
@@ -49,13 +50,6 @@ export function projectReviewLedger(options: {
   readonly diffBase?: GitReviewReadingSurface;
   readonly entries: readonly GitReviewIndexEntry[];
   readonly locale: string;
-  readonly measuredEstimateLinesByPath?: ReadonlyMap<string, number>;
-  /**
-   * 允许挂 estimate 骨架的 entryKey（demand/seed/pin）。
-   * 省略 = 兼容旧测：全部 content 可挂 estimate。
-   * 生产路径必须传入，避免全量 estimate 海。
-   */
-  readonly pendingEntryKeys?: ReadonlySet<string>;
   readonly resourceByEntryKey: ReadonlyMap<string, GitReviewDocumentResource>;
   readonly sourceIndexGeneration?: number;
 }): ReviewDocumentProjection {
@@ -72,13 +66,6 @@ export function projectReviewLedger(options: {
     const hasRenderableBody =
       resource !== undefined &&
       (resource.kind === "loaded" || resource.kind === "error");
-    // demand 外 idle/loading 不进正文（禁止灰条海）
-    const allowPendingEstimate =
-      options.pendingEntryKeys === undefined ||
-      options.pendingEntryKeys.has(entry.entryKey);
-    if (!(hasRenderableBody || allowPendingEstimate)) {
-      continue;
-    }
     const projected = hasRenderableBody
       ? projectReviewDocumentResource(resource, options.context, options.locale)
           .items
@@ -92,6 +79,10 @@ export function projectReviewLedger(options: {
     const slots = slotsForDiffBase(entry, options.diffBase).filter((slot) =>
       isReviewSlotIncludedInBody(slot)
     );
+    // 无 content 槽且无已渲染 body：不进 CodeView（meta/rename 海）
+    if (slots.length === 0 && !hasRenderableBody) {
+      continue;
+    }
     for (const slot of slots) {
       const fromResource = projectedById.get(slot.sectionKey);
       // 金标准：loaded 但投影无 section → error，禁止静默回落 estimate
@@ -99,18 +90,15 @@ export function projectReviewLedger(options: {
       if (resolved === undefined) {
         if (resource?.kind === "loaded") {
           resolved = projectionMissingSectionItem(slot, options.context);
-        } else if (resource?.kind !== "error" && allowPendingEstimate) {
-          resolved = estimateReviewLedgerSlot(
-            entry,
-            slot,
-            options.measuredEstimateLinesByPath
-          );
+        } else if (resource?.kind !== "error") {
+          // idle / loading / 缺资源：稳定账本挂 estimate（demand 不决定有无 id）
+          resolved = estimateReviewLedgerSlot(entry, slot);
         }
       }
       if (resolved === undefined && resource?.kind === "error") {
         // error 资源但 slot 未在 projectFailed 中（过滤 content 后仍应有）
         const forced = projectionMissingSectionItem(slot, options.context);
-        const item = gateReviewMutationControls(forced, false);
+        const item = disableReviewMutationControls(forced);
         decorated.push({ group: slot.group, item, path: entry.path });
         entryKeyBySectionId.set(item.id, entry.entryKey);
         continue;
@@ -118,7 +106,10 @@ export function projectReviewLedger(options: {
       if (resolved === undefined) {
         continue;
       }
-      const item = gateReviewMutationControls(resolved, mutationReady);
+      // 变更控件不因「正文还没读回」而禁用/隐藏：
+      // stage / unstage 是路径操作（不需要令牌），discard 在点击时按需取令牌。
+      // 否则大仓折叠全部后，几十个按钮会随正文逐个解锁 / 逐个冒出来。
+      const item = resolved;
       decorated.push({ group: slot.group, item, path: entry.path });
       entryKeyBySectionId.set(item.id, entry.entryKey);
       if (resource?.kind === "loaded" && mutationReady) {
@@ -135,18 +126,16 @@ export function projectReviewLedger(options: {
   };
 }
 
-function gateReviewMutationControls(
-  item: PierDiffViewItem,
-  mutationReady: boolean
+/** 读取失败的槽位：连路径操作都不提供，只留重试。 */
+function disableReviewMutationControls(
+  item: PierDiffViewItem
 ): PierDiffViewItem {
-  if (mutationReady) {
+  if (item.stageControl == null) {
     return item;
   }
   return {
     ...item,
-    ...(item.stageControl == null
-      ? {}
-      : { stageControl: { ...item.stageControl, busy: true } }),
+    stageControl: { ...item.stageControl, busy: true, canDiscard: false },
   };
 }
 
@@ -180,17 +169,9 @@ function slotsForDiffBase(
 
 function estimateReviewLedgerSlot(
   entry: GitReviewIndexEntry,
-  slot: ReviewSlot,
-  measuredEstimateLinesByPath: ReadonlyMap<string, number> | undefined
+  slot: ReviewSlot
 ): PierDiffViewItem {
-  if (measuredEstimateLinesByPath === undefined) {
-    return estimateReviewSlotItem({ entry, slot });
-  }
-  return estimateReviewSlotItem({
-    entry,
-    measuredEstimateLinesByPath,
-    slot,
-  });
+  return estimateReviewSlotItem({ entry, slot });
 }
 
 /** loaded 文档无匹配 section：产品 error，禁止永久 estimate 骨架。 */

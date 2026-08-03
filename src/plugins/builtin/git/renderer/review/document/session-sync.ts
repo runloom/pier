@@ -44,7 +44,6 @@ export interface ReviewDocumentSyncContext {
   readonly itemCacheKeysRef: RefObject<Map<string, string>>;
   readonly itemIdsRef: RefObject<readonly string[]>;
   readonly loader: GitReviewDocumentLoader;
-  readonly measuredEstimateLinesByPath: Map<string, number>;
   previousItemsById: Map<string, PierDiffViewItem>;
   previousMemberIds: Set<string>;
   previousRevisionBySectionId: ReadonlyMap<string, string>;
@@ -78,7 +77,6 @@ export function createReviewDocumentSyncHandler(
       itemIdsRef,
       indexGeneration,
       loader,
-      measuredEstimateLinesByPath,
       projectionLocaleRef,
       resourceByEntryKey,
       setProjection,
@@ -193,14 +191,7 @@ export function createReviewDocumentSyncHandler(
     loader.setStickyMemberEntryKeys(stickyOnly);
     ctx.previousStickyBodyEntryKeys = [...allowedBodyEntryKeys];
 
-    // estimate 仅 demand∪sticky pin；已 loaded/error 由投影自身保留
-    const pendingEntryKeys = new Set<string>([
-      ...demandPinKeys,
-      ...pinnedPrefixEntryKeys,
-      ...ctx.previousStickyBodyEntryKeys,
-    ]);
-
-    // 滚动热路径：无 body 变更时仍可能只需跳过（账本 id 随 index 固定）
+    // 显示集 = 全部 content 槽（ledger 内挂 estimate）；demand 只影响 body 水合优先级
     const nextProjection = projectReviewLedger({
       allowedBodyEntryKeys,
       authoritativeEntryKeys: controller.authoritativeEntryKeys(),
@@ -208,8 +199,6 @@ export function createReviewDocumentSyncHandler(
       diffBase,
       entries,
       locale: projectionLocaleRef.current,
-      measuredEstimateLinesByPath,
-      pendingEntryKeys,
       resourceByEntryKey,
       sourceIndexGeneration: indexGeneration,
     });
@@ -365,7 +354,6 @@ export function areReviewProjectionItemsEqual(
 ): boolean {
   return (
     left.cacheKey === right.cacheKey &&
-    left.estimateLines === right.estimateLines &&
     left.id === right.id &&
     left.kind === right.kind &&
     left.patch === right.patch &&

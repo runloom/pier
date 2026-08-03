@@ -25,7 +25,20 @@ export type GitReviewCancelRequest = z.infer<
 
 export const gitReviewMutationRequestSchema = z.strictObject({
   action: z.enum(["stage", "unstage", "revert"]),
-  expectedRevision: gitReviewRevisionSchema,
+  /**
+   * 乐观并发令牌（正文内容哈希）。
+   *
+   * 只有「需要 renderer 曾看见过确切内容」的写入才必须携带：
+   * hunk 级改写（`target.kind === "change"`，要靠 patch evidence 应用）和
+   * 文件级 revert（破坏性，会丢掉读取后的新编辑）。
+   *
+   * 文件级 stage / unstage 省略：它们是路径操作（`git add` / `git reset --`），
+   * 与正文无关；main 侧在写入前本来就会重新读一遍文档并校验 group 一致性，
+   * 安全性来自那次新鲜读取，不是 renderer 手里的令牌。业界（VS Code、Magit、
+   * lazygit 等）在文件级暂存上同样不做内容令牌校验。要求它只会让按钮在正文
+   * 读回前一直不可用——大仓折叠全部后表现为按钮逐个解锁。
+   */
+  expectedRevision: gitReviewRevisionSchema.optional(),
   operationId: gitReviewOperationIdSchema,
   source: gitReviewFileDocumentRequestSchema.shape.source,
   target: z.discriminatedUnion("kind", [

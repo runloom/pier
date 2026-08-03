@@ -1,6 +1,8 @@
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import { type RefObject, useCallback, useEffect, useRef } from "react";
 import type { PierDiffViewLabels } from "./collapse.tsx";
+import type { DiffViewCollapseAllIntent } from "./collapse-intent.ts";
+import type { DiffMetrics } from "./geometry.ts";
 import {
   composedHtmlPath,
   findHeaderFromPath,
@@ -14,6 +16,10 @@ import {
 import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import type { DiffViewInputStore } from "./input-store.ts";
 import type { ParsedItemCacheEntry, PierDiffCodeViewItem } from "./items.ts";
+import {
+  applyDiffVirtualHeights,
+  pinCodeViewScrollHeight,
+} from "./layout-apply.ts";
 import { LiveHeaderMetadata, LiveHeaderPrefix } from "./live-headers.tsx";
 import { pierDiffItemPresentation } from "./presentation.ts";
 import type {
@@ -30,12 +36,17 @@ export function useDiffViewHeaders(options: {
   readonly bumpItemEpoch: () => void;
   readonly codeViewItems: PierDiffCodeViewItem[];
   readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
+  readonly collapseAllIntentRef: RefObject<DiffViewCollapseAllIntent>;
   readonly collapsedItemsRef: RefObject<
     Map<string, DiffViewCollapsedItemState>
   >;
   readonly expectItemRender: (id: string, version: number | undefined) => void;
   readonly inputStore: DiffViewInputStore;
+  /** 用户是否主动收起了该槽（区别于 estimate 的技术默认折叠）。 */
+  readonly isUserCollapsed: (itemId: string) => boolean;
   readonly labels: PierDiffViewLabels;
+  /** 唯一几何 metrics；单槽折叠后与 collapse-all 同路径钉 H/S。 */
+  readonly metrics: DiffMetrics;
   readonly onDiscardFile?: ((itemId: string) => void) | undefined;
   readonly onOpenFile?: ((itemId: string) => void) | undefined;
   readonly onRetryItem?: ((itemId: string) => void) | undefined;
@@ -65,7 +76,8 @@ export function useDiffViewHeaders(options: {
   readonly setItemCollapsed: (
     id: string,
     nextCollapsed?: boolean,
-    preserveTopAnchor?: boolean
+    preserveTopAnchor?: boolean,
+    reconcileHeights?: boolean
   ) => boolean;
 } {
   const {
@@ -74,10 +86,13 @@ export function useDiffViewHeaders(options: {
     bumpItemEpoch,
     codeViewItems,
     codeViewRef,
+    collapseAllIntentRef,
     collapsedItemsRef,
     expectItemRender,
     inputStore,
+    isUserCollapsed,
     labels,
+    metrics,
     onDiscardFile,
     onOpenFile,
     onRetryItem,
@@ -95,7 +110,12 @@ export function useDiffViewHeaders(options: {
   > | null>(null);
 
   const setItemCollapsed = useCallback(
-    (id: string, nextCollapsed?: boolean, preserveTopAnchor = true) => {
+    (
+      id: string,
+      nextCollapsed?: boolean,
+      preserveTopAnchor = true,
+      reconcileHeights = true
+    ) => {
       const handle = codeViewRef.current;
       const viewer = handle?.getInstance();
       const item = handle?.getItem(id);
@@ -134,6 +154,9 @@ export function useDiffViewHeaders(options: {
         collapsed,
         revision: nextRevision,
       });
+      // 不把折叠 revision 写回 parsedItems.version：内容 cache 的 version 只跟
+      // patch/cacheKey 走；折叠层的 version 增量只存在于 CodeView 活体 item 与
+      // collapsedItemsRef.revision，避免 updateItems 再 +revision 时撞号/跳号。
       parsedItemListRef.current[itemIndex] = nextItem;
       renderItemIdentitiesRef.current.set(id, {
         cacheKey: parsedItem.cacheKey,
@@ -142,6 +165,17 @@ export function useDiffViewHeaders(options: {
       appliedItemsRef.current?.items.set(id, nextItem);
       expectItemRender(id, nextItem.version);
       bumpItemEpoch();
+      // 单槽切换：立即全表写 H + 钉 S。collapse-all 批量路径传 reconcileHeights=false，
+      // 循环结束后只 reconcile 一次（避免 O(n²)）。
+      if (reconcileHeights) {
+        const heightOptions = {
+          isCollapseAllIntent: () => collapseAllIntentRef.current === true,
+          isUserCollapsed,
+          metrics,
+        };
+        applyDiffVirtualHeights(viewer, heightOptions);
+        pinCodeViewScrollHeight(viewer, metrics.gap);
+      }
       if (shouldAnchor) {
         handle.scrollTo({
           align: "start",
@@ -149,8 +183,10 @@ export function useDiffViewHeaders(options: {
           type: "item",
         });
       }
-      auditVisibleItems();
-      scheduleRenderWindowReport();
+      if (reconcileHeights) {
+        auditVisibleItems();
+        scheduleRenderWindowReport();
+      }
       return true;
     },
     [
@@ -158,8 +194,11 @@ export function useDiffViewHeaders(options: {
       auditVisibleItems,
       bumpItemEpoch,
       codeViewRef,
+      collapseAllIntentRef,
       collapsedItemsRef,
       expectItemRender,
+      isUserCollapsed,
+      metrics,
       parsedItemIndexesRef,
       parsedItemListRef,
       parsedItemsRef,
@@ -291,10 +330,11 @@ export function useDiffViewHeaders(options: {
           item={item}
           labels={labels}
           onToggle={handleToggleItemCollapsed}
+          userCollapsed={isUserCollapsed(item.id)}
         />
       );
     },
-    [handleToggleItemCollapsed, inputStore, labels]
+    [handleToggleItemCollapsed, inputStore, isUserCollapsed, labels]
   );
   const renderHeaderMetadata = useCallback(
     (item: PierDiffCodeViewItem) => {

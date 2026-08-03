@@ -12,6 +12,20 @@ import {
 } from "../review/document/projection.ts";
 import type { GitReviewReadingSurface } from "../review/reading-surface.ts";
 
+function probe(name: string, ms: number): void {
+  const store = (Reflect.get(globalThis, "__pierCommitProbe") ??
+    Reflect.set(globalThis, "__pierCommitProbe", {}) ??
+    Reflect.get(globalThis, "__pierCommitProbe")) as Record<string, number>;
+  const bag = Reflect.get(globalThis, "__pierCommitProbe") as Record<
+    string,
+    number
+  >;
+  const target = bag ?? store;
+  target[name] = Math.max(target[name] ?? 0, Math.round(ms));
+  target[`${name}_n`] = (target[`${name}_n`] ?? 0) + 1;
+  target[`${name}_sum`] = (target[`${name}_sum`] ?? 0) + Math.round(ms);
+}
+
 /** 将 React 投影一次性提交给导航索引、cacheKey 索引和当前 Pierre handle。 */
 export function useGitReviewProjectionCommit({
   active,
@@ -56,24 +70,31 @@ export function useGitReviewProjectionCommit({
   readonly resumeSelectedNavigation: () => void;
   readonly tryPendingNavigation: () => void;
 }): void {
-  const projectionIndex = useMemo(
-    () => indexReviewDocumentProjection(projection),
-    [projection]
-  );
-  const entrySectionIndex = useMemo(
-    () => indexReviewEntrySections(entries, diffBase),
-    [diffBase, entries]
-  );
+  const projectionIndex = useMemo(() => {
+    const t = performance.now();
+    const value = indexReviewDocumentProjection(projection);
+    probe("projectionIndex", performance.now() - t);
+    return value;
+  }, [projection]);
+  const entrySectionIndex = useMemo(() => {
+    const t = performance.now();
+    const value = indexReviewEntrySections(entries, diffBase);
+    probe("entrySectionIndex", performance.now() - t);
+    return value;
+  }, [diffBase, entries]);
   // 全量 section→entry（含未 materialize），供 demand / failure 解析。
   const fullSectionIndex = useMemo(() => {
+    const t = performance.now();
     const merged = new Map(indexReviewSectionEntries(entries, diffBase));
     for (const [sectionId, entryKey] of projection.entryKeyBySectionId) {
       merged.set(sectionId, entryKey);
     }
+    probe("fullSectionIndex", performance.now() - t);
     return merged;
   }, [diffBase, entries, projection.entryKeyBySectionId]);
 
   useLayoutEffect(() => {
+    const tEffect = performance.now();
     committedProjectionGenerationRef.current = projectionGeneration;
     entryKeyBySectionIdRef.current = fullSectionIndex;
     // firstSection 来自全量 entries，保证 idle 树点击可解析 sectionId。
@@ -89,6 +110,7 @@ export function useGitReviewProjectionCommit({
       return;
     }
     const handle = diffHandleRef.current;
+    const tReplay = performance.now();
     if (handle) {
       replayLatestItemUpdates(
         handle,
@@ -96,10 +118,12 @@ export function useGitReviewProjectionCommit({
         projectionIndex.itemIds
       );
     }
+    probe("replay", performance.now() - tReplay);
     renderedGenerationRef.current = projectionGeneration;
     // 不调用无参 notifyProjectionChanged：会误抬 revision 触发 resume 排他 thrash。
     resumeSelectedNavigation();
     tryPendingNavigation();
+    probe("effect", performance.now() - tEffect);
   }, [
     active,
     committedProjectionGenerationRef,

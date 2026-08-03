@@ -93,22 +93,6 @@ const diffViewRuntime = vi.hoisted(() => ({
 }));
 
 vi.mock("@pier/ui/diff-view/index.tsx", () => ({
-  estimateLinesForFileStatus: (status: string) => {
-    switch (status) {
-      case "deleted":
-        return 4;
-      case "added":
-        return 24;
-      case "renamed":
-        return 12;
-      case "conflicted":
-        return 28;
-      default:
-        return 16;
-    }
-  },
-  PIER_DIFF_DEFAULT_ESTIMATE_LINES: 16,
-  PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX: 360,
   PierDiffView: (props: {
     appearance: PierDiffViewAppearance;
     items: readonly PierDiffViewItem[];
@@ -166,6 +150,7 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
         .map((item) => item.id);
       props.onRenderWindowChange?.({
         bufferedItemIds,
+        collapsedItemIds: [],
         estimatedItemIds,
         visibleItemIds,
       });
@@ -204,6 +189,7 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
           if (diffViewRuntime.reportWindowOnScroll) {
             props.onRenderWindowChange?.({
               bufferedItemIds: [],
+              collapsedItemIds: [],
               estimatedItemIds: [],
               visibleItemIds: [id],
             });
@@ -1786,13 +1772,12 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
-    // 金标准：estimate 仅 demand/seed，不是全 201 张灰卡
+    // 金标准：content 全表 estimate 账本（折叠总高 = n×header）；demand 只调度 document 读
     await waitFor(() => {
       const count = Number(
         view.getByTestId("pierre-diff").getAttribute("data-item-count")
       );
-      expect(count).toBeGreaterThan(0);
-      expect(count).toBeLessThan(201);
+      expect(count).toBe(201);
     });
     fireEvent.click(findTreeItem(view.container, "aaa-selected.ts"));
     await waitFor(() => expect(selectedReads).toBe(1));
@@ -2740,20 +2725,16 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
-    // 远文件默认不在 seed 灰卡里；点树后 boost demand 挂 estimate 再定位
+    // 全 content 账本：远文件首帧即有 estimate id，点树只 boost demand + scrollTo
     await waitFor(() => expect(view.getByTestId("pierre-diff")).toBeTruthy());
     const unmountsBefore = diffViewRuntime.unmounts;
-    expect(
-      view.getByTestId("pierre-diff").getAttribute("data-item-ids") ?? ""
-    ).not.toContain("section:79");
-
-    fireEvent.click(findTreeItem(view.container, "aaa-far.ts"));
-    // 点选后 estimate 入账 → pending_scroll；不必等 document
     await waitFor(() =>
       expect(
         view.getByTestId("pierre-diff").getAttribute("data-item-ids")
       ).toContain("section:79")
     );
+
+    fireEvent.click(findTreeItem(view.container, "aaa-far.ts"));
     await waitFor(() =>
       expect(
         scrollToItem.mock.calls.filter(([id]) => id === "section:79").length
@@ -3502,13 +3483,12 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
-    // 金标准：2000 content 不全挂 estimate；seed/demand 有界
+    // 金标准：2000 content 全挂 estimate id；document 读仍由 seed/demand 有界
     await waitFor(() => {
       const count = Number(
         view.getByTestId("pierre-diff").getAttribute("data-item-count")
       );
-      expect(count).toBeGreaterThan(0);
-      expect(count).toBeLessThan(200);
+      expect(count).toBe(2000);
     });
     await waitFor(() =>
       expect(getReviewFileDocument.mock.calls.length).toBeGreaterThan(0)

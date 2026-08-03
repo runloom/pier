@@ -1,25 +1,19 @@
-import type { CodeViewHandle } from "@pierre/diffs/react";
-import { type Ref, type RefObject, useImperativeHandle, useMemo } from "react";
+import { type Ref, useImperativeHandle, useMemo } from "react";
+import { scheduleCodeViewLayoutFlush } from "./code-view-runtime.ts";
+import { collapseAllTargetIds } from "./collapse-intent.ts";
+import { syncRenderedEstimateSkeletons } from "./estimate-skeleton.ts";
+import type { DiffViewHandleDeps } from "./handle-deps.ts";
 import type {
-  DiffViewCollapsedItemState,
-  DiffViewRenderItemIdentity,
   PierDiffViewAnchor,
   PierDiffViewHandle,
   PierDiffViewLineSelection,
-  PierDiffViewUpdateOptions,
 } from "./handle-types.ts";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
+import { createDiffViewUpdateItems } from "./handle-update-items.ts";
 import {
   captureDiffViewItemAnchor,
   captureDiffViewTopAnchor,
 } from "./item-anchor.ts";
-import { applyCodeViewItemsAnchored } from "./item-sync.ts";
-import type {
-  ParsedItemCacheEntry,
-  PierDiffCodeViewItem,
-  PierDiffViewItem,
-} from "./items.ts";
-import { toCodeViewItem } from "./items.ts";
+import { reconcileDiffVirtualHeights } from "./layout-apply.ts";
 import { isRenderedItemVisible } from "./render-watchdog.ts";
 import {
   type DiffViewScrollOptions,
@@ -43,38 +37,8 @@ export type {
 } from "./handle-types.ts";
 export { acceptDiffViewItem } from "./item-sync.ts";
 
-interface UseDiffViewHandleOptions {
-  readonly appliedItemsRef: RefObject<{
-    readonly key: string;
-    readonly items: Map<string, PierDiffCodeViewItem>;
-  } | null>;
-  readonly auditVisibleItems: () => void;
-  readonly bumpItemEpoch: () => void;
-  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
-  readonly collapsedItemsRef: RefObject<
-    Map<string, DiffViewCollapsedItemState>
-  >;
-  readonly expectItemRender: (id: string, version: number | undefined) => void;
-  readonly firstLayoutItemIdsRef: RefObject<Set<string>>;
-  readonly itemErrorIdsRef: RefObject<Set<string>>;
-  readonly onItemErrorRef: RefObject<
-    ((id: string, error: Error | null) => void) | undefined
-  >;
-  readonly parsedItemIndexesRef: RefObject<Map<string, number>>;
-  readonly parsedItemListRef: RefObject<PierDiffCodeViewItem[]>;
-  readonly parsedItemsRef: RefObject<Map<string, ParsedItemCacheEntry>>;
+interface UseDiffViewHandleOptions extends DiffViewHandleDeps {
   readonly ref: Ref<PierDiffViewHandle> | undefined;
-  readonly renderItemIdentitiesRef: RefObject<
-    Map<string, DiffViewRenderItemIdentity>
-  >;
-  readonly scheduleRenderWindowReport: () => void;
-  /** 右键前可能已清空 live selection；优先返回最近一次有效行选区文本。 */
-  readonly selectedTextRef: RefObject<string>;
-  readonly setItemCollapsed: (
-    id: string,
-    collapsed: boolean,
-    preserveTopAnchor?: boolean
-  ) => boolean;
 }
 
 export function useDiffViewHandle({
@@ -82,10 +46,13 @@ export function useDiffViewHandle({
   auditVisibleItems,
   bumpItemEpoch,
   codeViewRef,
+  collapseAllIntentRef,
   collapsedItemsRef,
   expectItemRender,
   firstLayoutItemIdsRef,
+  isUserCollapsed,
   itemErrorIdsRef,
+  metrics,
   onItemErrorRef,
   parsedItemIndexesRef,
   parsedItemListRef,
@@ -103,10 +70,13 @@ export function useDiffViewHandle({
         auditVisibleItems,
         bumpItemEpoch,
         codeViewRef,
+        collapseAllIntentRef,
         collapsedItemsRef,
         expectItemRender,
         firstLayoutItemIdsRef,
+        isUserCollapsed,
         itemErrorIdsRef,
+        metrics,
         onItemErrorRef,
         parsedItemIndexesRef,
         parsedItemListRef,
@@ -116,15 +86,19 @@ export function useDiffViewHandle({
         selectedTextRef,
         setItemCollapsed,
       }),
+    // collapsedItemsRef / isUserCollapsed 经 ref 读最新值；列入 deps 防闭包陈旧
     [
       appliedItemsRef,
       auditVisibleItems,
       bumpItemEpoch,
       codeViewRef,
+      collapseAllIntentRef,
       collapsedItemsRef,
       expectItemRender,
       firstLayoutItemIdsRef,
+      isUserCollapsed,
       itemErrorIdsRef,
+      metrics,
       onItemErrorRef,
       parsedItemIndexesRef,
       parsedItemListRef,
@@ -138,24 +112,22 @@ export function useDiffViewHandle({
   useImperativeHandle(ref, () => handle, [handle]);
 }
 
-function createDiffViewHandle({
-  appliedItemsRef,
-  auditVisibleItems,
-  bumpItemEpoch,
-  codeViewRef,
-  collapsedItemsRef,
-  expectItemRender,
-  firstLayoutItemIdsRef,
-  itemErrorIdsRef,
-  onItemErrorRef,
-  parsedItemIndexesRef,
-  parsedItemListRef,
-  parsedItemsRef,
-  renderItemIdentitiesRef,
-  scheduleRenderWindowReport,
-  selectedTextRef,
-  setItemCollapsed,
-}: Omit<UseDiffViewHandleOptions, "ref">): PierDiffViewHandle {
+function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
+  const {
+    appliedItemsRef,
+    auditVisibleItems,
+    codeViewRef,
+    collapseAllIntentRef,
+    firstLayoutItemIdsRef,
+    isUserCollapsed,
+    metrics,
+    parsedItemListRef,
+    parsedItemsRef,
+    renderItemIdentitiesRef,
+    scheduleRenderWindowReport,
+    selectedTextRef,
+    setItemCollapsed,
+  } = deps;
   const resolveScrollContainer = (): HTMLElement | null =>
     resolveCodeViewScrollElement(
       codeViewRef.current?.getInstance()?.getContainerElement()
@@ -196,6 +168,10 @@ function createDiffViewHandle({
     });
     return true;
   };
+  const updateItems = createDiffViewUpdateItems(deps, {
+    capture: captureTopAnchor,
+    restore: restoreAnchor,
+  });
   return {
     captureItemAnchor: (id) =>
       captureDiffViewItemAnchor(codeViewRef.current?.getInstance(), id),
@@ -316,16 +292,19 @@ function createDiffViewHandle({
       if (!(viewer && item)) {
         return false;
       }
-      // 显式 behavior 优先（树导航主路径恒传 instant）。
-      // 未指定时：新建/刚展开 instant，已在场 smooth（与 DiffsHub 默认一致）。
       const wasCollapsed = item.collapsed === true;
+      const expandsTarget = wasCollapsed && options?.expandCollapsed !== false;
+      // 这次定位会不会改变目标几何：刚展开，或从未渲染过（仍是虚拟估高）。
+      // 已在场且不展开的目标无需预测量——多刷一次只是平白扰动布局。
       const firstLayout =
-        wasCollapsed ||
+        expandsTarget ||
         firstLayoutItemIdsRef.current.has(id) ||
         renderItemIdentitiesRef.current.has(id) === false;
-      if (wasCollapsed && !setItemCollapsed(id, false, false)) {
+      if (expandsTarget && !setItemCollapsed(id, false, false)) {
         return false;
       }
+      // 显式 behavior 优先（树导航主路径恒传 instant）。
+      // 未指定时：新建/刚展开 instant，已在场 smooth（与 DiffsHub 默认一致）。
       const behavior =
         options?.behavior ?? (firstLayout ? "instant" : "smooth");
       viewer.scrollTo({
@@ -335,23 +314,45 @@ function createDiffViewHandle({
         ...(options?.offset === undefined ? {} : { offset: options.offset }),
         type: "item",
       });
-      if (behavior === "instant") {
+      if (behavior === "instant" && firstLayout) {
         // Distant virtual items expand their rendered line window during the
         // first CodeView pass. Flush that same semantic scroll before paint so
         // users never see the estimate-sized target followed by its measured
         // geometry one frame later.
-        const instance = viewer.getInstance();
-        for (let pass = 0; pass < INSTANT_SCROLL_LAYOUT_PASSES; pass += 1) {
-          instance?.render(true);
-        }
+        // 树导航主路径从 useLayoutEffect 进来，同步 render(true) 会在 React 渲染
+        // 期触发 Pierre 的 flushSync：只会告警并降级成调度更新，反而拿不到这次
+        // 刷新。microtask 仍在 paint 前跑，是唯一能真正兑现该保证的时机。
+        scheduleCodeViewLayoutFlush(
+          viewer.getInstance(),
+          INSTANT_SCROLL_LAYOUT_PASSES
+        );
       }
       firstLayoutItemIdsRef.current.delete(id);
       return true;
     },
     setAllCollapsed(collapsed: boolean): void {
-      for (const item of parsedItemListRef.current) {
-        setItemCollapsed(item.id, collapsed, false);
+      // 事务（O(n) 非 O(n²)）：
+      // 1) 写视图级意图 2) 批量 updateItem（不逐项 apply）3) 一次 reconcile 钉 H/S
+      // 禁止只改可见窗 / 依赖滚动 remeasure 收敛（短拇指根因）。
+      collapseAllIntentRef.current = collapsed;
+      for (const id of collapseAllTargetIds(
+        parsedItemListRef.current,
+        collapsed
+      )) {
+        setItemCollapsed(id, collapsed, false, false);
       }
+      const viewer = codeViewRef.current?.getInstance();
+      // estimate 默认已是 collapsed，翻转会 early-return，骨架只能在这里补。
+      syncRenderedEstimateSkeletons(
+        (viewer?.getRenderedItems() ?? []).map((rendered) => rendered.element),
+        !collapsed
+      );
+      // 同同步栈内用 geometry 全表写高并 pin scrollHeight（A1 不变量）。
+      reconcileDiffVirtualHeights(viewer, {
+        isCollapseAllIntent: () => collapseAllIntentRef.current === true,
+        isUserCollapsed,
+        metrics,
+      });
       auditVisibleItems();
       scheduleRenderWindowReport();
     },
@@ -393,97 +394,6 @@ function createDiffViewHandle({
       }
       return false;
     },
-    updateItems(
-      items: readonly PierDiffViewItem[],
-      options?: PierDiffViewUpdateOptions
-    ): boolean {
-      const handle = codeViewRef.current;
-      if (!handle) {
-        return false;
-      }
-      const nextItemList = [...parsedItemListRef.current];
-      const acceptedEntries: {
-        readonly input: PierDiffViewItem;
-        readonly item: PierDiffCodeViewItem;
-        readonly itemIndex: number;
-        readonly parsedItem: ParsedItemCacheEntry;
-        readonly error: Error | null;
-      }[] = [];
-      for (const input of items) {
-        const itemIndex = parsedItemIndexesRef.current.get(input.id);
-        if (itemIndex === undefined) {
-          // 稀疏更新必须全有或全无。未知 id 表示调用方持有旧拓扑，不能先提交
-          // 其余已知项再跨帧补写，否则同一次暂存会产生两个可见正文状态。
-          return false;
-        }
-        const previous = parsedItemsRef.current.get(input.id);
-        if (previous?.cacheKey === input.cacheKey) {
-          continue;
-        }
-        const parsedItem = toCodeViewItem(input, previous);
-        if (parsedItem.error && parsedItem.entry === previous) {
-          itemErrorIdsRef.current.add(input.id);
-          onItemErrorRef.current?.(input.id, parsedItem.error);
-          continue;
-        }
-        let item = parsedItem.entry.item;
-        const collapsed = collapsedItemsRef.current.get(input.id);
-        if (collapsed) {
-          item = {
-            ...item,
-            collapsed: collapsed.collapsed,
-            version:
-              (typeof item.version === "number" ? item.version : 0) +
-              collapsed.revision,
-          };
-        }
-        nextItemList[itemIndex] = item;
-        acceptedEntries.push({
-          error: parsedItem.error,
-          input,
-          item,
-          itemIndex,
-          parsedItem: parsedItem.entry,
-        });
-      }
-      if (acceptedEntries.length === 0) {
-        return true;
-      }
-      const anchor =
-        options?.preserveAnchor === true ? captureTopAnchor() : null;
-      // estimate→loaded 等正文更新必须 flush；否则可见 estimate DOM 要滚一下才换真 patch
-      const result = applyCodeViewItemsAnchored(
-        handle,
-        nextItemList,
-        parsedItemListRef.current,
-        { flushLayout: true }
-      );
-      if (!result.accepted) {
-        return false;
-      }
-      for (const entry of acceptedEntries) {
-        parsedItemsRef.current.set(entry.input.id, entry.parsedItem);
-        parsedItemListRef.current[entry.itemIndex] = entry.item;
-        renderItemIdentitiesRef.current.set(entry.input.id, {
-          cacheKey: entry.input.cacheKey,
-          version: entry.item.version ?? 0,
-        });
-        appliedItemsRef.current?.items.set(entry.input.id, entry.item);
-        if (entry.error) {
-          itemErrorIdsRef.current.add(entry.input.id);
-        } else {
-          itemErrorIdsRef.current.delete(entry.input.id);
-        }
-        onItemErrorRef.current?.(entry.input.id, entry.error);
-        expectItemRender(entry.input.id, entry.item.version);
-      }
-      bumpItemEpoch();
-      if (anchor) {
-        restoreAnchor(anchor);
-      }
-      auditVisibleItems();
-      scheduleRenderWindowReport();
-      return true;
-    },
+    updateItems,
   };
 }

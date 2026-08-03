@@ -60,6 +60,8 @@ export const PIER_TREE_SKELETON_BAR_HEIGHT_PX = 12;
 
 const SKELETON_HOST_ATTR = "data-pier-estimate-skeleton";
 const SKELETON_BAR_ATTR = "data-pier-estimate-skeleton-bar";
+/** onPostRender 打在 diffs-container 上的 estimate 标记。 */
+export const PIER_DIFF_ESTIMATE_ATTR = "data-pier-estimate";
 
 /**
  * 在 diffs-container 的 shadowRoot 内同步骨架节点。
@@ -105,4 +107,25 @@ export function syncEstimateSkeleton(
     host.appendChild(bar);
   }
   root.appendChild(host);
+}
+
+/**
+ * 折叠意图变化后批量重算骨架可见性。
+ *
+ * 骨架挂在 shadowRoot 上、是 Pierre 折叠区的兄弟节点，收起时不会被一起藏掉，
+ * 所以必须显式增删。`setAllCollapsed` 对 estimate 槽不写翻转（没有正文可展开），
+ * 那些槽不会重新 onPostRender，只能在这里补一次。只遍历已渲染项，受虚拟化约束。
+ */
+export function syncRenderedEstimateSkeletons(
+  elements: Iterable<Element>,
+  showSkeleton: boolean
+): void {
+  for (const element of elements) {
+    if (
+      element instanceof HTMLElement &&
+      element.getAttribute(PIER_DIFF_ESTIMATE_ATTR) === "true"
+    ) {
+      syncEstimateSkeleton(element, showSkeleton);
+    }
+  }
 }

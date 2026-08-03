@@ -46,6 +46,11 @@ ${SCROLLBAR_SYSTEM_CSS}
     justify-content: flex-start;
     /* Tighter than Pierre default (1lh + 3×8 ≈ 47): 32px chrome row. */
     gap: 6px;
+    /*
+     * 必须等于喂给 Pierre 的 itemMetrics.diffHeaderHeight（diffFontMetrics 推导）。
+     * Pierre 折叠项只信这个估值、不重测 DOM，实际高一点点就会在折叠导航时累积错位。
+     */
+    height: var(--pier-diff-header-height, 32px);
     min-height: 32px;
     padding-block: 4px;
     padding-inline: 12px;
@@ -212,8 +217,8 @@ ${SCROLLBAR_SYSTEM_CSS}
    * 禁止 :host::after 画条——margin/transparent-border 在 host 伪元素上
    * 经常失效，截图里左右内距「怎么改都没有」。真实 div + padding 才稳。
    *
-   * 几何与 ReviewLoading / estimate-skeleton.ts 常量对齐：
-   * pad 48/20、条高 14、gap 10、5 行错落宽度。
+   * 几何与 estimate-skeleton.ts / geometry.skeletonBody 同源：
+   * pad 12/12/8、条高 12、gap 8、5 行错落宽度。
    */
   :host([data-pier-estimate="true"]) {
     min-height: 0;
@@ -228,9 +233,8 @@ ${SCROLLBAR_SYSTEM_CSS}
     display: flex;
     box-sizing: border-box;
     flex-direction: column;
-    gap: 10px;
     width: 100%;
-    /* 与 estimate-skeleton.ts 金标准对齐：pad 12/12/8，gap 8，条高 12 */
+    /* 与 estimate-skeleton.ts / geometry 金标准对齐 */
     gap: 8px;
     padding: 8px 12px;
     --pier-skel-a: color-mix(
@@ -318,24 +322,19 @@ export interface DiffTypographyStyle extends CSSProperties {
   "--diffs-scrollbar-gutter-override": string;
   "--diffshub-annotation-border": string;
   "--diffshub-diff-separator": string;
+  "--pier-diff-header-height": string;
 }
 
-/** Multi-diff file header chrome height — keep in sync with CSS min-height: 32px. */
-export const DIFF_HEADER_HEIGHT_PX = 32;
-
-/**
- * Line metrics for multi-diff CodeView.
- * `codeFontSize` is the resolved code body size (e.g. "13px" from settings).
- */
-export function diffFontMetrics(codeFontSize: string): {
-  diffHeaderHeight: number;
-  lineHeight: number;
-} {
-  const parsed = Number.parseFloat(codeFontSize);
-  const codeSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 13;
-  const lineHeight = codeSize * 1.75;
-  return { diffHeaderHeight: DIFF_HEADER_HEIGHT_PX, lineHeight };
-}
+/** geometry 公开面：虚拟高度唯一真源。 */
+export {
+  DIFF_HEADER_MIN_HEIGHT_PX,
+  DIFF_ITEM_GAP_PX,
+  type DiffMetrics,
+  diffFontMetrics,
+  diffMetrics,
+  slotVirtualHeight,
+  totalScrollHeight,
+} from "./geometry.ts";
 
 /**
  * Dual theme pair + colorMode identity for remount / render-watchdog.

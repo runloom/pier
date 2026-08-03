@@ -5,6 +5,11 @@ import {
   type PendingReviewNavigation,
   resolveReviewSectionKey,
 } from "../review/navigation.ts";
+import {
+  EMPTY_RESTORE_NAVIGATION_BUDGET,
+  type RestoreNavigationBudget,
+  spendRestoreNavigationAttempt,
+} from "./use-navigation-restore.ts";
 import { syncGitReviewSelectedSection } from "./use-navigation-resume.ts";
 import { useGitReviewNavigationTargets } from "./use-navigation-targets.ts";
 import { tryGitReviewPendingNavigation } from "./use-navigation-try.ts";
@@ -83,6 +88,10 @@ export function useGitReviewNavigation({
   const lastScrolledCacheKeyRef = useRef<string | null>(null);
   const lastScrolledLayoutKeyRef = useRef<string | null>(null);
   const lastScrolledProjectionRevisionRef = useRef(-1);
+  /** 被动恢复预算：换目标或换文档代次自动重置。 */
+  const restoreAttemptsRef = useRef<RestoreNavigationBudget>(
+    EMPTY_RESTORE_NAVIGATION_BUDGET
+  );
   const cancelVerification = useCallback(() => {
     if (verificationCancelRef.current === null) {
       return;
@@ -181,6 +190,7 @@ export function useGitReviewNavigation({
       lastScrolledProjectionRevisionRef,
       lastScrolledSectionRef,
       loaderRef,
+      navigationMemberReasonRef,
       pendingNavigationRef,
       projectionRevisionRef,
       requiredRenderWindowRevisionRef,
@@ -244,6 +254,8 @@ export function useGitReviewNavigation({
   );
   const beginNavigation = useCallback(
     (target: { readonly entryKey: string; readonly sectionKey: string }) => {
+      // 显式导航是新的用户意图：被动恢复重新获得完整预算。
+      restoreAttemptsRef.current = EMPTY_RESTORE_NAVIGATION_BUDGET;
       armNavigation(target, "tree");
     },
     [armNavigation]
@@ -397,11 +409,20 @@ export function useGitReviewNavigation({
     if (!selectedSection) {
       return;
     }
+    const budget = spendRestoreNavigationAttempt(
+      restoreAttemptsRef.current,
+      selected,
+      documentGenerationRef.current
+    );
+    if (budget === null) {
+      return;
+    }
+    restoreAttemptsRef.current = budget;
     armNavigation(
       { entryKey: selected, sectionKey: selectedSection },
       "restore"
     );
-  }, [armNavigation, firstSectionIdByEntryKeyRef]);
+  }, [armNavigation, documentGenerationRef, firstSectionIdByEntryKeyRef]);
   const notifyRenderWindowApplied = useCallback(
     (window: PierDiffViewRenderWindow) => {
       renderWindowRevisionRef.current += 1;

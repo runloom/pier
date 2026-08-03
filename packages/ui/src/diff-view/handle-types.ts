@@ -82,7 +82,11 @@ export interface PierDiffViewHandle {
   scrollToItem(id: string, options?: DiffViewScrollOptions): boolean;
   /** 全选当前（或最近）diff/file item 的全部行。 */
   selectAll(): boolean;
-  /** 折叠/展开当前拓扑内的全部 diff item。 */
+  /**
+   * 折叠/展开全部 diff item，并记为视图级缺省：此后水合的正文与新进投影窗口的
+   * 槽位一并继承，直到下一次调用或用户单独翻转该文件。
+   * 展开不作用于 estimate / notice 等 0 行正文槽（展开只会得到空壳）。
+   */
   setAllCollapsed(collapsed: boolean): void;
   /** 写回 raw scrollTop（菜单 Freeze 用；禁止用 item scrollTo 代替）。 */
   setScrollTop(scrollTop: number): boolean;

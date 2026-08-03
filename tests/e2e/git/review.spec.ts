@@ -600,6 +600,55 @@ interface NavigationAnchorProbeResult {
   targetFrames: number;
 }
 
+/**
+ * 每帧观测目标 diff 真正进入视口的时刻，写入 `__pierGitReviewNavigationCompletedIn`。
+ *
+ * 导航耗时不可用 `expect.poll` 的返回时刻换算：poll 间隔会退避，实测会把 100–600ms
+ * 轮询延迟计进"导航耗时"，既让预算随轮询运气波动，也测不出产品真实延迟。
+ */
+async function installNavigationCompletionProbe(
+  page: Page,
+  text: string,
+  pathFragment: string
+): Promise<void> {
+  await page.evaluate(
+    ({ expectedText, fragment }) => {
+      const tick = () => {
+        const startedAt = Number(
+          Reflect.get(window, "__pierGitReviewNavigationStartedAt")
+        );
+        const host = document.querySelector<HTMLElement>(
+          `[data-pier-file-path*="${fragment}"]`
+        );
+        const scroller = document.querySelector<HTMLElement>(
+          '[data-testid="pierre-diff-root"] .cv-scrollbar'
+        );
+        if (
+          Number.isFinite(startedAt) &&
+          startedAt > 0 &&
+          host &&
+          scroller &&
+          (host.shadowRoot?.textContent ?? "").includes(expectedText)
+        ) {
+          const item = host.getBoundingClientRect();
+          const viewport = scroller.getBoundingClientRect();
+          if (item.bottom > viewport.top && item.top < viewport.bottom) {
+            Reflect.set(
+              window,
+              "__pierGitReviewNavigationCompletedIn",
+              performance.now() - startedAt
+            );
+            return;
+          }
+        }
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    },
+    { expectedText: text, fragment: pathFragment }
+  );
+}
+
 async function installNavigationAnchorProbe(
   page: Page,
   text: string,
@@ -3240,6 +3289,7 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
       await navigationHost.getAttribute("data-git-review-navigation-seq")
     );
     await installNavigationAnchorProbe(page, "value2000");
+    await installNavigationCompletionProbe(page, "value2000", "file-2000");
     await target.click();
     await expect
       .poll(
@@ -3255,10 +3305,8 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         timeout: 30_000,
       })
       .toBe(true);
-    const navigationDuration = await page.evaluate(
-      () =>
-        performance.now() -
-        Number(Reflect.get(window, "__pierGitReviewNavigationStartedAt"))
+    const navigationDuration = await page.evaluate(() =>
+      Number(Reflect.get(window, "__pierGitReviewNavigationCompletedIn"))
     );
     expect(navigationDuration).toBeLessThan(2000);
 
