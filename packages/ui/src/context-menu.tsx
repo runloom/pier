@@ -4,7 +4,7 @@ import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import { MENU_ITEM_DENSITY_CLASS } from "./interactive-density.ts";
-import { scrollFadeClassName } from "./scroll-area.tsx";
+import { floatingMenuScrollViewportClassName } from "./scroll-area.tsx";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -62,6 +62,7 @@ function ContextMenuRadioGroup({
 
 function ContextMenuContent({
   className,
+  children,
   ...props
 }: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
   side?: "top" | "right" | "bottom" | "left";
@@ -73,14 +74,22 @@ function ContextMenuContent({
     <ContextMenuPrimitive.Portal>
       <ContextMenuPrimitive.Content
         className={cn(
-          "app-no-drag data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 z-50 max-h-(--radix-context-menu-content-available-height) min-w-36 origin-(--radix-context-menu-content-transform-origin) overflow-y-auto overflow-x-hidden rounded-2xl bg-popover p-1 text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-closed:animate-out data-open:animate-in dark:ring-foreground/10",
-          scrollFadeClassName({ fade: "vertical", profile: "short" }),
+          // 外壳：实心 popover 底。scroll-fade 只挂内层 viewport，避免 mask 打穿底色。
+          "app-no-drag data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 z-50 max-h-(--radix-context-menu-content-available-height) min-w-36 origin-(--radix-context-menu-content-transform-origin) overflow-hidden rounded-2xl bg-popover text-popover-foreground shadow-lg ring-1 ring-foreground/5 duration-100 data-closed:animate-out data-open:animate-in dark:ring-foreground/10",
           className
         )}
         data-slot="context-menu-content"
         {...props}
         ref={composedRef}
-      />
+      >
+        <div
+          className={floatingMenuScrollViewportClassName()}
+          data-scrollbar="overlay"
+          data-slot="context-menu-viewport"
+        >
+          {children}
+        </div>
+      </ContextMenuPrimitive.Content>
     </ContextMenuPrimitive.Portal>
   );
 }

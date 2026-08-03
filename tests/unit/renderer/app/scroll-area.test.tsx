@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { AUTO_HIDE_SCROLLBAR_IDLE_MS } from "@pier/ui/auto-hide-scrollbar.ts";
-import { ScrollArea, scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
+import {
+  floatingMenuScrollViewportClassName,
+  ScrollArea,
+  scrollFadeClassName,
+} from "@pier/ui/scroll-area.tsx";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -127,5 +131,57 @@ describe("ScrollArea viewport behavior", () => {
     // Profile alone must not emit size tokens without a fade axis.
     expect(scrollFadeClassName({ profile: "short" })).toBe("");
     expect(scrollFadeClassName({})).toBe("");
+  });
+
+  it("floating menu viewport owns short fade + inherit max height", () => {
+    const withPad = floatingMenuScrollViewportClassName();
+    expect(withPad).toContain("max-h-[inherit]");
+    expect(withPad).toContain("overflow-y-auto");
+    expect(withPad).toContain("scroll-fade-y");
+    expect(withPad).toContain("p-1");
+    expect(
+      floatingMenuScrollViewportClassName({ padding: false })
+    ).not.toContain("p-1");
+  });
+});
+
+/**
+ * 浮层菜单：外壳 bg-popover 与 scroll-fade 必须拆层。
+ * 同节点 mask 会打穿实心底色，短下拉整板发虚（git 状态栏菜单回归）。
+ */
+describe("floating menu shell vs scroll-fade viewport", () => {
+  const uiRoot = join(process.cwd(), "packages/ui/src");
+
+  it.each([
+    {
+      file: "dropdown-menu.tsx",
+      shellSlot: 'data-slot="dropdown-menu-content"',
+      viewportSlot: 'data-slot="dropdown-menu-viewport"',
+    },
+    {
+      file: "context-menu.tsx",
+      shellSlot: 'data-slot="context-menu-content"',
+      viewportSlot: 'data-slot="context-menu-viewport"',
+    },
+    {
+      file: "select.tsx",
+      shellSlot: 'data-slot="select-content"',
+      viewportSlot: 'data-slot="select-viewport"',
+    },
+  ] as const)("$file keeps solid shell and faded viewport", ({
+    file,
+    shellSlot,
+    viewportSlot,
+  }) => {
+    const source = readFileSync(join(uiRoot, file), "utf8");
+    expect(source).toContain(shellSlot);
+    expect(source).toContain(viewportSlot);
+    expect(source).toContain("floatingMenuScrollViewportClassName");
+    // 外壳仍声明 bg-popover；渐隐 helper 只服务内层，不与 shell 同节点。
+    expect(source).toContain("bg-popover");
+    // 禁止把 scrollFadeClassName 直接铺在 Content 外壳 className 上（回归 b98ff086）。
+    expect(source).not.toMatch(
+      /bg-popover[\s\S]{0,400}scrollFadeClassName\(\{\s*fade:\s*"vertical"/
+    );
   });
 });

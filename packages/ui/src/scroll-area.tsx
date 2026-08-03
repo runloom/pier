@@ -58,6 +58,24 @@ function scrollFadeClassName(options: {
   );
 }
 
+/**
+ * 浮层菜单内层滚动视口（Select / Dropdown / Context menu）。
+ *
+ * 金标准：外壳持有 `bg-popover` / ring / shadow / 圆角裁切，**不得**挂
+ * `scroll-fade`（mask 会把实心底色打成半透明，短菜单整板发虚）。
+ * 渐隐只落在本层 overflow 视口上，与 ScrollArea `viewportFade` 同构。
+ */
+function floatingMenuScrollViewportClassName(options?: {
+  /** 默认 true：菜单项区 `p-1`；Select Viewport 自管密度时传 false。 */
+  padding?: boolean | undefined;
+}): string {
+  return cn(
+    "max-h-[inherit] overflow-y-auto overflow-x-hidden",
+    options?.padding === false ? null : "p-1",
+    scrollFadeClassName({ fade: "vertical", profile: "short" })
+  );
+}
+
 function ScrollArea({
   className,
   children,
@@ -121,6 +139,7 @@ function ScrollBar({
 }
 
 export {
+  floatingMenuScrollViewportClassName,
   ScrollArea,
   type ScrollAreaProps,
   type ScrollAreaViewportFade,
