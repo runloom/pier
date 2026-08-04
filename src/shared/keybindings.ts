@@ -174,6 +174,16 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    commandId: "pier.files.tree.toggle",
+    keys: "Mod+KeyB",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.git.review.toggleTree",
+    keys: "Mod+KeyB",
+    scope: "panel:pier.git.changes",
+  },
+  {
     commandId: "pier.files.save",
     keys: "Mod+KeyS",
     scope: "panel:pier.files.filePanel",

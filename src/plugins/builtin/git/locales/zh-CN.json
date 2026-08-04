@@ -224,14 +224,19 @@
       "description": "放弃本地修改；新增文件会移到废纸篓。",
       "title": "Git: 放弃更改"
     },
+    "pier.git.review.toggleTree": {
+      "category": "Git",
+      "description": "显示或隐藏目录树侧栏。",
+      "title": "显示/隐藏目录树"
+    },
     "pier.git.review.expandAll": {
       "category": "Git",
-      "description": "展开审查文件树中的全部文件夹。",
+      "description": "展开审查目录树中的全部文件夹。",
       "title": "展开文件夹"
     },
     "pier.git.review.collapseFolders": {
       "category": "Git",
-      "description": "折叠审查文件树中的全部文件夹。",
+      "description": "折叠审查目录树中的全部文件夹。",
       "title": "折叠文件夹"
     },
     "pier.git.review.copyPath": {
@@ -455,11 +460,12 @@
     "ui.reviewWarningPathDepthExceeded": "已跳过 {{skipped}} 个超过目录深度边界的路径。",
     "ui.reviewWarningInvalidPathEncoding": "{{skipped}} 个路径无法解码，已跳过。",
     "ui.reviewTreeLabel": "变更文件",
-    "ui.reviewTreeCollapse": "收起变更文件",
+    "ui.reviewTreeCollapse": "隐藏目录树",
     "ui.reviewTreeCollapseAll": "折叠目录",
     "ui.reviewTreeCollapseFolders": "折叠目录",
     "ui.reviewTreeExpandAll": "展开目录",
-    "ui.reviewTreeExpand": "展开变更文件",
+    "ui.reviewTreeExpand": "显示目录树",
+    "ui.reviewToggleTree": "显示/隐藏目录树",
     "ui.reviewTreeSearch": "在变更文件中查找",
     "ui.reviewTreeSearchClose": "关闭",
     "ui.reviewTreeSearchNext": "下一个匹配项",

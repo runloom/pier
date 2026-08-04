@@ -39,10 +39,9 @@ import { GitReviewScopeSwitcher } from "./review/scope-switcher.tsx";
 import { clearReviewSessionsForScope } from "./review/session-cache.ts";
 import { ReviewDocuments } from "./review/surfaces.tsx";
 import { gitReviewTreeModel } from "./review/tree.tsx";
+import { REVIEW_TREE_COLLAPSED_STORAGE_PREFIX } from "./review/tree-sidebar-preference.ts";
 import { planTabChangeSummaryWrite } from "./tab-change-summary-sync.ts";
 import { usePluginLanguage } from "./use-plugin-language.ts";
-
-const REVIEW_TREE_COLLAPSED_STORAGE_PREFIX = "pier.git.review.treeCollapsed:";
 
 /** loading/error/空态下侧栏树为空,打开路径无目标可导航。 */
 function noopOpenPath(_path: string): void {

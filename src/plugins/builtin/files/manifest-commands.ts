@@ -39,6 +39,7 @@ import {
   FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID,
   FILES_TREE_EXPAND_ALL_COMMAND_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
+  FILES_TREE_TOGGLE_COMMAND_ID,
 } from "./command-ids.ts";
 
 export const FILES_PLUGIN_COMMANDS: PluginManifest["commands"] = [
@@ -186,6 +187,12 @@ export const FILES_PLUGIN_COMMANDS: PluginManifest["commands"] = [
     id: FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID,
     permissions: [],
     title: "Collapse Folders",
+  },
+  {
+    category: "file",
+    id: FILES_TREE_TOGGLE_COMMAND_ID,
+    permissions: [],
+    title: "Toggle File Tree",
   },
   {
     category: "file",

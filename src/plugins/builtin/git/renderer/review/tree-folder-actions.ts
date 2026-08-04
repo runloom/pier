@@ -2,15 +2,37 @@ import type {
   RendererPluginActionInvocation,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
+import { gitReviewScopeSchema } from "@shared/contracts/git/review.ts";
+import { GIT_CHANGES_PANEL_ID } from "../../manifest.ts";
 import { pluginText } from "../plugin-text.ts";
 import {
   collapseGitReviewTreeFolders,
   expandGitReviewTreeFolders,
 } from "./tree-collapse-registry.ts";
+import { toggleGitReviewTreeSidebar } from "./tree-sidebar-preference.ts";
 
 export const GIT_REVIEW_COLLAPSE_FOLDERS_COMMAND_ID =
   "pier.git.review.collapseFolders";
 export const GIT_REVIEW_EXPAND_ALL_COMMAND_ID = "pier.git.review.expandAll";
+export const GIT_REVIEW_TOGGLE_TREE_COMMAND_ID = "pier.git.review.toggleTree";
+
+function activeGitReviewRootPath(
+  context: RendererPluginContext
+): string | null {
+  const panelId = context.panels.getActiveInstanceId(GIT_CHANGES_PANEL_ID);
+  if (!panelId) {
+    return null;
+  }
+  const instance = context.panels
+    .listInstances(GIT_CHANGES_PANEL_ID)
+    .find((entry) => entry.id === panelId);
+  const params = instance?.params;
+  if (!(params && typeof params === "object" && "source" in params)) {
+    return null;
+  }
+  const parsed = gitReviewScopeSchema.safeParse(params.source);
+  return parsed.success ? parsed.data.gitRootPath : null;
+}
 
 interface ExpandRootItem {
   kind: "directory" | "file";
@@ -30,7 +52,7 @@ function reviewTreeExpandRootPath(
   return slash < 0 ? undefined : item.path.slice(0, slash);
 }
 
-/** Context-menu only Expand/Collapse Folders (no toolbar, no default shortcuts). */
+/** Expand/Collapse Folders (context menu) + toggle tree sidebar (keybinding). */
 export function registerGitReviewTreeFolderActions(options: {
   context: RendererPluginContext;
   parseItem: (
@@ -40,6 +62,24 @@ export function registerGitReviewTreeFolderActions(options: {
 }): () => void {
   const { context, parseItem, surface } = options;
   const disposers = [
+    context.actions.register({
+      category: "Git",
+      enabled: () => true,
+      handler: async () => {
+        toggleGitReviewTreeSidebar(activeGitReviewRootPath(context));
+        return await Promise.resolve();
+      },
+      id: GIT_REVIEW_TOGGLE_TREE_COMMAND_ID,
+      metadata: {
+        categoryKey: "git",
+        group: "2_view",
+        sortOrder: 48,
+      },
+      // Cmd/Ctrl+B while Changes panel is active.
+      surfaces: [],
+      title: () =>
+        pluginText(context, "reviewToggleTree", "Toggle Changed Files Tree"),
+    }),
     context.actions.register({
       category: "Git",
       enabled: () => true,

@@ -7,12 +7,26 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "../resizable.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../tooltip.tsx";
 import { cn } from "../utils.ts";
 
 export { FilePanelBreadcrumb } from "./panel-breadcrumb.tsx";
 
 export const FILE_PANEL_DEFAULT_SIDEBAR_WIDTH_PX = 256;
 export const FILE_PANEL_MIN_SIDEBAR_WIDTH_PX = 170;
+
+const MAC_PLATFORM_RE = /Mac|iPhone|iPad/i;
+
+/**
+ * Default display label for Mod+KeyB (tree sidebar toggle).
+ * Matches DEFAULT_KEYMAP; does not read user remaps (plugin boundary).
+ */
+export function filePanelTreeToggleShortcutLabel(): string {
+  if (typeof navigator === "undefined") {
+    return "Ctrl+B";
+  }
+  return MAC_PLATFORM_RE.test(navigator.platform) ? "⌘B" : "Ctrl+B";
+}
 
 function readSidebarWidth(
   storageKey: string,
@@ -181,29 +195,42 @@ export function FilePanelSidebarToggleButton({
   expandLabel,
   hidden = false,
   onToggle,
+  /** User-visible shortcut (e.g. ⌘B), shown like panel maximize tooltip. */
+  shortcut,
 }: {
   collapseLabel: string;
   collapsed: boolean;
   expandLabel: string;
   hidden?: boolean;
   onToggle: () => void;
+  shortcut?: string | undefined;
 }) {
   if (hidden) {
     return null;
   }
   const label = collapsed ? expandLabel : collapseLabel;
   return (
-    <Button
-      aria-expanded={!collapsed}
-      aria-label={label}
-      onClick={onToggle}
-      size="icon-xs"
-      type="button"
-      variant="ghost"
-    >
-      <FolderTree aria-hidden="true" data-icon="inline-start" />
-      <span className="sr-only">{label}</span>
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          aria-expanded={!collapsed}
+          aria-label={label}
+          onClick={onToggle}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <FolderTree aria-hidden="true" data-icon="inline-start" />
+          <span className="sr-only">{label}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {label}
+        {shortcut ? (
+          <span className="text-background/70 tracking-wide">{shortcut}</span>
+        ) : null}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -211,22 +238,35 @@ export function FilePanelSearchButton({
   disabled = false,
   label,
   onOpenSearch,
+  shortcut,
 }: {
   disabled?: boolean;
   label: string;
   onOpenSearch: () => void;
+  /** Optional shortcut label when the action has a keybinding. */
+  shortcut?: string | undefined;
 }) {
   return (
-    <Button
-      aria-label={label}
-      disabled={disabled}
-      onClick={onOpenSearch}
-      size="icon-xs"
-      type="button"
-      variant="ghost"
-    >
-      <Search aria-hidden="true" data-icon="inline-start" />
-      <span className="sr-only">{label}</span>
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          aria-label={label}
+          disabled={disabled}
+          onClick={onOpenSearch}
+          size="icon-xs"
+          type="button"
+          variant="ghost"
+        >
+          <Search aria-hidden="true" data-icon="inline-start" />
+          <span className="sr-only">{label}</span>
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">
+        {label}
+        {shortcut ? (
+          <span className="text-background/70 tracking-wide">{shortcut}</span>
+        ) : null}
+      </TooltipContent>
+    </Tooltip>
   );
 }

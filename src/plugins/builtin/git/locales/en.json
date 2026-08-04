@@ -180,6 +180,11 @@
       "description": "Discard local changes, or move new files to Trash.",
       "title": "Git: Discard Changes"
     },
+    "pier.git.review.toggleTree": {
+      "category": "Git",
+      "description": "Show or hide the changed-files tree sidebar.",
+      "title": "Toggle Changed Files Tree"
+    },
     "pier.git.review.expandAll": {
       "category": "Git",
       "description": "Expand all folders in the review tree.",
@@ -395,11 +400,12 @@
     "ui.reviewWarningPathDepthExceeded": "{{skipped}} paths exceeded the supported directory depth and were skipped.",
     "ui.reviewWarningInvalidPathEncoding": "{{skipped}} paths could not be decoded and were skipped.",
     "ui.reviewTreeLabel": "Changed files",
-    "ui.reviewTreeCollapse": "Collapse changed files",
+    "ui.reviewTreeCollapse": "Hide changed files",
     "ui.reviewTreeCollapseAll": "Collapse Folders",
     "ui.reviewTreeCollapseFolders": "Collapse Folders",
     "ui.reviewTreeExpandAll": "Expand Folders",
-    "ui.reviewTreeExpand": "Expand changed files",
+    "ui.reviewTreeExpand": "Show changed files",
+    "ui.reviewToggleTree": "Toggle Changed Files Tree",
     "ui.reviewTreeSearch": "Find in changed files",
     "ui.reviewTreeSearchClose": "Close",
     "ui.reviewTreeSearchNext": "Next match",

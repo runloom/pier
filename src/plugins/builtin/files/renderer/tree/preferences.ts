@@ -1,4 +1,5 @@
 import {
+  togglePanelSidebarCollapsed,
   usePanelSidebarCollapsed,
   writePanelSidebarCollapsed,
 } from "@pier/ui/use-panel-sidebar-preference.tsx";
@@ -61,6 +62,13 @@ export function projectNameFromRoot(root: string): string {
 }
 export function ensureProjectFileTreeExpanded(root: string): void {
   writePanelSidebarCollapsed(TREE_COLLAPSED_STORAGE_PREFIX, root, false);
+}
+
+/** Toggle the project file tree sidebar for this root. Returns false if no root. */
+export function toggleProjectFileTree(root: string | null): boolean {
+  return (
+    togglePanelSidebarCollapsed(TREE_COLLAPSED_STORAGE_PREFIX, root) !== null
+  );
 }
 
 export function useProjectFileTreeCollapsed(

@@ -208,6 +208,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
+      id: "pier.git.review.toggleTree",
+      permissions: [],
+      title: "Toggle Changed Files Tree",
+    },
+    {
+      category: "Git",
       id: "pier.git.review.expandAll",
       permissions: [],
       title: "Expand Folders",
