@@ -2032,6 +2032,20 @@ describe("PierDiffView", () => {
     });
     root.dispatchEvent(titleClick);
     expect(onOpenFile).toHaveBeenCalledWith("file.ts");
+
+    // ⌘/Ctrl+click on the path title must still open (not a silent no-op).
+    onOpenFile.mockClear();
+    const titleMetaClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      metaKey: true,
+    });
+    Object.defineProperty(titleMetaClick, "composedPath", {
+      value: () => [title, header, host, root, document, window],
+    });
+    root.dispatchEvent(titleMetaClick);
+    expect(onOpenFile).toHaveBeenCalledWith("file.ts");
   });
 
   it("官方主题同步失败时把错误交给宿主反馈", async () => {

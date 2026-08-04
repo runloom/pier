@@ -259,13 +259,10 @@ export function useDiffViewHeaders(options: {
   }, [auditVisibleItems, codeViewItems, scheduleRenderWindowReport]);
   const handleHeaderClickCapture = useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      if (
-        event.button !== 0 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.shiftKey ||
-        event.altKey
-      ) {
+      // Primary button only. Shift/Alt reserved (range / alternate gestures).
+      // Cmd/Ctrl must still open the file from the title — silent no-op was a
+      // product bug (users treat the path as a link and hold ⌘ by habit).
+      if (event.button !== 0 || event.shiftKey || event.altKey) {
         return;
       }
       const path = composedHtmlPath(event.nativeEvent);
@@ -292,6 +289,10 @@ export function useDiffViewHeaders(options: {
         event.preventDefault();
         event.stopPropagation();
         onOpenFile(itemId);
+        return;
+      }
+      // Collapse is plain-click only; leave Cmd/Ctrl free for system habits.
+      if (event.metaKey || event.ctrlKey) {
         return;
       }
       // Title without open handler still collapses like blank chrome.
