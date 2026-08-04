@@ -8,6 +8,9 @@ import {
   releaseFilesGroupView,
 } from "./group-view-host.tsx";
 
+/** rAF retries while dockview content container is still attaching. */
+export const FILES_GROUP_VIEW_CLAIM_MAX_ATTEMPTS = 10;
+
 /**
  * Claim the shared group view host for this files panel.
  * Detached hosts are rebuilt inside groupContent.claim.
@@ -56,11 +59,19 @@ export function useFilesGroupViewClaim({
         ownerId,
         watchHub: runtimeWatchHub,
       });
-      if (claimed || attempts >= 10) {
+      if (claimed || attempts >= FILES_GROUP_VIEW_CLAIM_MAX_ATTEMPTS) {
         if (!claimed) {
           console.error(
             "[files] group view claim failed after retries:",
             groupId
+          );
+          // User-facing: shared file chrome stayed blank — do not silent-fail.
+          runtimeContext.notifications.error(
+            runtimeContext.i18n.t(
+              "filePanel.errors.groupViewClaimFailed",
+              undefined,
+              "Couldn't show the file view. Switch tabs or reopen the file."
+            )
           );
         }
         return;

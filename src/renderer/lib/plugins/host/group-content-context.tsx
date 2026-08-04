@@ -95,6 +95,8 @@ export function createHostGroupContentContext(
       const container = contentContainerForGroup(group);
 
       if (existing) {
+        // First successful mount owns the React tree; later claims only join
+        // owners / refresh visibility (re-render is not re-run).
         existing.owners.add(ownerId);
         if (existing.cleanupTimer) {
           clearTimeout(existing.cleanupTimer);

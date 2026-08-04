@@ -74,6 +74,7 @@
     "filePanel.errors.save.fallback": "Unable to save file contents.",
     "filePanel.errors.save.title": "Unable to save file",
     "filePanel.errors.unsupportedOverwrite": "This file type cannot be overwritten safely.",
+    "filePanel.errors.groupViewClaimFailed": "Couldn't show the file view. Switch tabs or reopen the file.",
     "filePanel.durability.confirm": "Confirm saved",
     "filePanel.durability.confirmFailed": "Unable to confirm that the file was saved",
     "filePanel.durability.revisionMismatch": "The file changed again after it was written. Please check it.",

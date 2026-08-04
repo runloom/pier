@@ -224,6 +224,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
           handle: handleRef.current,
           items: displayItems,
           sourcePanelComponent: GIT_CHANGES_PANEL_ID,
+          sourcePanelContext: context.panels.getActiveContext(),
           ...(sourcePanelId === undefined ? {} : { sourcePanelId }),
         });
       },

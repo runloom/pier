@@ -313,4 +313,52 @@ describe("host group content context", () => {
     expect(hosts[0]?.parentElement).toBe(container);
     expect(hosts[0]?.isConnected).toBe(true);
   });
+
+  it("rebuilds a claim when the host is connected but reparented away from the content container", () => {
+    const context = createHostGroupContentContext(pluginEntry, () => undefined);
+    const ownerId = Symbol("owner");
+    const { container, group } = createMockGroup();
+
+    expect(
+      context.claim({
+        group,
+        id: "host.test.groupView",
+        ownerId,
+        render: () => <div data-testid="group-view-v1">v1</div>,
+        visible: () => true,
+      })
+    ).toBe(true);
+    const firstHost = container.querySelector(
+      '[data-slot="host.test.groupView"]'
+    );
+    expect(firstHost).toBeInstanceOf(HTMLElement);
+
+    // Still connected to document, but no longer under .dv-content-container.
+    const stray = document.createElement("div");
+    document.body.appendChild(stray);
+    if (firstHost) {
+      stray.appendChild(firstHost);
+    }
+    expect(firstHost?.isConnected).toBe(true);
+    expect(firstHost?.parentElement).not.toBe(container);
+
+    expect(
+      context.claim({
+        group,
+        id: "host.test.groupView",
+        ownerId: Symbol("owner-reparent"),
+        render: () => <div data-testid="group-view-v2">v2</div>,
+        visible: () => true,
+      })
+    ).toBe(true);
+    const hosts = container.querySelectorAll(
+      '[data-slot="host.test.groupView"]'
+    );
+    expect(hosts).toHaveLength(1);
+    // Connected-but-wrong-parent host must not be reused.
+    expect(hosts[0]).not.toBe(firstHost);
+    expect(hosts[0]?.parentElement).toBe(container);
+    expect(hosts[0]?.isConnected).toBe(true);
+    expect(stray.contains(firstHost)).toBe(false);
+  });
 });
