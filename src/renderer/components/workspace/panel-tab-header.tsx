@@ -321,7 +321,12 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       <TooltipTrigger asChild openOnFocus={false}>
         {tabContent}
       </TooltipTrigger>
-      <TooltipContent align="center" side="bottom">
+      <TooltipContent
+        align="center"
+        // Tab paths / OSC 全文需比默认 max-w-64 更宽，避免被挤成难读片段。
+        className="max-w-[min(90vw,36rem)] break-all"
+        side="bottom"
+      >
         <span className="whitespace-pre-line">{tooltipText}</span>
       </TooltipContent>
     </Tooltip>

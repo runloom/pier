@@ -105,8 +105,16 @@ export function tabTooltipText(
     const lines = [fallback, stateLabel, shortTitle].filter(
       (line): line is string => Boolean(line && line.length > 0)
     );
-    // Dedupe when fallback === shortTitle
-    const unique = [...new Set(lines)];
+    // Dedupe when fallback === shortTitle；路径 long 已含叶子时去掉重复 short。
+    const unique = [...new Set(lines)].filter((line) => {
+      if (line !== shortTitle || !fallback || !shortTitle) {
+        return true;
+      }
+      return !(
+        fallback.endsWith(`/${shortTitle}`) ||
+        fallback.endsWith(`\\${shortTitle}`)
+      );
+    });
     return unique.length > 0 ? unique.join("\n") : null;
   }
   const lines = [

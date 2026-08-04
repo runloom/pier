@@ -70,7 +70,11 @@ import {
   TerminalStatusBar,
   useTerminalStatusBarItems,
 } from "./status-bar.tsx";
-import { basename, tabChromeFromParams } from "./tab-chrome.ts";
+import {
+  basename,
+  tabChromeFromParams,
+  tabShortFromTerminalTitle,
+} from "./tab-chrome.ts";
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
@@ -196,14 +200,20 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     selectedTaskRunId,
     taskRunsSnapshot,
   });
-  // 状态栏标题与 tab 同构：OSC → cwd basename（不吃 prompt 派生 sessionTitle）。
+  // 状态栏标题与 tab 同构：OSC（路径则叶子名）→ cwd basename（不吃 prompt 派生 sessionTitle）。
+  const statusTitleOsc = terminalTitle?.trim();
+  let statusTitle: string | null = null;
+  if (statusTitleOsc) {
+    statusTitle = tabShortFromTerminalTitle(statusTitleOsc);
+  } else if (effectiveCwd) {
+    statusTitle = basename(effectiveCwd);
+  }
   const statusContext = {
     context: effectiveContext,
     cwd: effectiveCwd,
     getGroupId,
     panelId,
-    title:
-      terminalTitle?.trim() || (effectiveCwd ? basename(effectiveCwd) : null),
+    title: statusTitle,
   };
   const hasStatusBar = shouldMountTerminalStatusBar(
     statusItems,

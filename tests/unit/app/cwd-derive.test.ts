@@ -4,6 +4,8 @@ import { resolveLong } from "@/components/common/document-title.tsx";
 import {
   activityTabChromeOverlay,
   basename,
+  pathLikeTerminalTitle,
+  tabShortFromTerminalTitle,
   terminalPanelDescriptor,
 } from "@/panel-kits/terminal/tab-chrome.ts";
 
@@ -108,8 +110,33 @@ describe("activityTabChromeOverlay", () => {
   });
 });
 
+describe("path-like OSC tab short", () => {
+  it("detects absolute / tilde / remote path titles", () => {
+    expect(pathLikeTerminalTitle("/Users/x/ABC/pier")).toBe(
+      "/Users/x/ABC/pier"
+    );
+    expect(pathLikeTerminalTitle("~/Xyz/pier.worktree/fix-bugs")).toBe(
+      "~/Xyz/pier.worktree/fix-bugs"
+    );
+    expect(pathLikeTerminalTitle("sheep@host:/Users/x/pier")).toBe(
+      "/Users/x/pier"
+    );
+    expect(pathLikeTerminalTitle("claude")).toBeNull();
+    expect(pathLikeTerminalTitle("npm run dev")).toBeNull();
+  });
+
+  it("shortens path OSC to leaf basename", () => {
+    expect(
+      tabShortFromTerminalTitle(
+        "/Users/sheep/Xyz/pier.worktree/fix-bugs-202608041348"
+      )
+    ).toBe("fix-bugs-202608041348");
+    expect(tabShortFromTerminalTitle("claude")).toBe("claude");
+  });
+});
+
 describe("terminalPanelDescriptor Ghostty-aligned titles", () => {
-  it("prefers OSC over cwd basename", () => {
+  it("prefers process OSC over cwd basename", () => {
     const descriptor = terminalPanelDescriptor({
       effectiveContext: undefined,
       effectiveCwd: "/Users/x/ABC/pier",
@@ -120,6 +147,49 @@ describe("terminalPanelDescriptor Ghostty-aligned titles", () => {
     expect(descriptor?.display.short).toBe("claude");
     expect(descriptor?.display.long).toBe("claude");
     expect(descriptor?.display.terminalTitle).toBe("claude");
+  });
+
+  it("shortens path OSC to leaf while long uses absolute cwd", () => {
+    const path = "/Users/sheep/Xyz/pier.worktree/fix-bugs-202608041348";
+    const descriptor = terminalPanelDescriptor({
+      effectiveContext: undefined,
+      effectiveCwd: path,
+      effectiveTab: undefined,
+      sessionLoaded: true,
+      terminalTitle: path,
+    });
+    expect(descriptor?.display.short).toBe("fix-bugs-202608041348");
+    expect(descriptor?.display.long).toBe(path);
+    expect(descriptor?.display.terminalTitle).toBe(path);
+  });
+
+  it("uses absolute cwd for long when path OSC is abbreviated", () => {
+    const cwd = "/Users/sheep/Xyz/pier.worktree/fix-bugs-202608041348";
+    const abbreviatedOsc = ".../Xyz/pier.worktree/fix-bugs-202608041348";
+    const descriptor = terminalPanelDescriptor({
+      effectiveContext: undefined,
+      effectiveCwd: cwd,
+      effectiveTab: undefined,
+      sessionLoaded: true,
+      terminalTitle: abbreviatedOsc,
+    });
+    expect(descriptor?.display.short).toBe("fix-bugs-202608041348");
+    expect(descriptor?.display.long).toBe(cwd);
+    // Raw OSC still recorded for diagnostics.
+    expect(descriptor?.display.terminalTitle).toBe(abbreviatedOsc);
+  });
+
+  it("uses absolute cwd for long when path OSC is tilde-expanded form", () => {
+    const cwd = "/Users/sheep/Xyz/pier.worktree/fix-bugs-202608041348";
+    const descriptor = terminalPanelDescriptor({
+      effectiveContext: undefined,
+      effectiveCwd: cwd,
+      effectiveTab: undefined,
+      sessionLoaded: true,
+      terminalTitle: "~/Xyz/pier.worktree/fix-bugs-202608041348",
+    });
+    expect(descriptor?.display.short).toBe("fix-bugs-202608041348");
+    expect(descriptor?.display.long).toBe(cwd);
   });
 
   it("falls back to cwd basename when OSC is absent", () => {
