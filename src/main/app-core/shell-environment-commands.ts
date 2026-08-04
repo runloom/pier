@@ -1,7 +1,7 @@
 /**
  * shellEnvironment.* command payload builders (file-size split from command-router).
  */
-import type { ShellEnvironmentHostStatus } from "@shared/contracts/shell-environment.ts";
+import type { ShellEnvironmentHostStatus } from "@shared/contracts/terminal/shell-environment.ts";
 import type { ProcessEnvironmentDiagnostics } from "../services/process-environment/types.ts";
 
 export function buildShellEnvironmentHostStatus(input: {

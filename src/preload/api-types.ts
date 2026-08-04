@@ -37,14 +37,14 @@ export interface PierPreferencesAPI {
   update: (patch: Partial<PreferencesSnapshot>) => Promise<PreferencesSnapshot>;
 }
 
-export type { ShellEnvironmentHostStatus } from "@shared/contracts/shell-environment.ts";
+export type { ShellEnvironmentHostStatus } from "@shared/contracts/terminal/shell-environment.ts";
 
 export interface PierShellEnvironmentAPI {
   refresh: () => Promise<
-    import("@shared/contracts/shell-environment.ts").ShellEnvironmentHostStatus
+    import("@shared/contracts/terminal/shell-environment.ts").ShellEnvironmentHostStatus
   >;
   status: () => Promise<
-    import("@shared/contracts/shell-environment.ts").ShellEnvironmentHostStatus
+    import("@shared/contracts/terminal/shell-environment.ts").ShellEnvironmentHostStatus
   >;
 }
 

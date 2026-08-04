@@ -1,5 +1,5 @@
 import type { ShellEnvironmentPrefs } from "@shared/contracts/preferences.ts";
-import type { ShellEnvironmentHostStatus } from "@shared/contracts/shell-environment.ts";
+import type { ShellEnvironmentHostStatus } from "@shared/contracts/terminal/shell-environment.ts";
 import i18next from "i18next";
 import { create } from "zustand";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";

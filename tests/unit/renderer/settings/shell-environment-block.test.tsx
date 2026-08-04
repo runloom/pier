@@ -4,7 +4,7 @@
 
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ShellEnvironmentBlock } from "@/pages/settings/components/shell-environment-block.tsx";
+import { ShellEnvironmentBlock } from "@/pages/settings/components/terminal/shell-environment-block.tsx";
 import { useShellEnvironmentStore } from "@/stores/shell-environment.store.ts";
 
 vi.mock("@/i18n/use-t.ts", () => ({

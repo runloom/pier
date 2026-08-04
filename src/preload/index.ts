@@ -10,7 +10,7 @@ import {
   RENDERER_COMMAND_CHANNEL,
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
-import type { ShellEnvironmentHostStatus } from "@shared/contracts/shell-environment.ts";
+import type { ShellEnvironmentHostStatus } from "@shared/contracts/terminal/shell-environment.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import type { WindowCreateResult } from "@shared/contracts/window.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
