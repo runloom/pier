@@ -9,12 +9,16 @@ import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
 import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const claimFilesGroupView = vi.fn(() => false);
-const releaseFilesGroupView = vi.fn();
+const claimFilesGroupView = vi.hoisted(() =>
+  vi.fn((..._args: unknown[]): boolean => false)
+);
+const releaseFilesGroupView = vi.hoisted(() =>
+  vi.fn((..._args: unknown[]): void => undefined)
+);
 
 vi.mock("@plugins/builtin/files/renderer/panel/group-view-host.tsx", () => ({
-  claimFilesGroupView: (...args: unknown[]) => claimFilesGroupView(...args),
-  releaseFilesGroupView: (...args: unknown[]) => releaseFilesGroupView(...args),
+  claimFilesGroupView,
+  releaseFilesGroupView,
 }));
 
 describe("useFilesGroupViewClaim", () => {
@@ -38,12 +42,12 @@ describe("useFilesGroupViewClaim", () => {
       notifications: { error },
     } as unknown as RendererPluginContext;
 
-    let frameCallback: FrameRequestCallback | null = null;
+    const scheduledFrames: FrameRequestCallback[] = [];
     vi.stubGlobal(
       "requestAnimationFrame",
       vi.fn((callback: FrameRequestCallback) => {
-        frameCallback = callback;
-        return 1;
+        scheduledFrames.push(callback);
+        return scheduledFrames.length;
       })
     );
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
@@ -62,9 +66,8 @@ describe("useFilesGroupViewClaim", () => {
 
     // Initial attempt + rAF retries until max.
     for (let i = 0; i < FILES_GROUP_VIEW_CLAIM_MAX_ATTEMPTS; i += 1) {
-      expect(frameCallback).not.toBeNull();
-      const next = frameCallback;
-      frameCallback = null;
+      const next = scheduledFrames.shift();
+      expect(next).toBeTypeOf("function");
       next?.(0);
     }
 

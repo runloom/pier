@@ -3,7 +3,6 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { useGitReviewOpenFile } from "@plugins/builtin/git/renderer/hooks/use-open-file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { renderHook } from "@testing-library/react";
-import type { RefObject } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 describe("useGitReviewOpenFile", () => {
@@ -34,11 +33,13 @@ describe("useGitReviewOpenFile", () => {
     const itemsRef = {
       current: [
         {
+          cacheKey: "item-1",
+          fileDisplay: { path: "src/a.ts", status: "modified" },
           id: "item-1",
-          fileDisplay: { path: "src/a.ts", title: "a.ts" },
+          patch: "",
         },
       ],
-    } as RefObject<readonly PierDiffViewItem[]>;
+    } satisfies { current: readonly PierDiffViewItem[] };
 
     const { result } = renderHook(() =>
       useGitReviewOpenFile({
@@ -80,11 +81,13 @@ describe("useGitReviewOpenFile", () => {
     const itemsRef = {
       current: [
         {
+          cacheKey: "item-1",
+          fileDisplay: { path: "src/a.ts", status: "modified" },
           id: "item-1",
-          fileDisplay: { path: "src/a.ts", title: "a.ts" },
+          patch: "",
         },
       ],
-    } as RefObject<readonly PierDiffViewItem[]>;
+    } satisfies { current: readonly PierDiffViewItem[] };
 
     const { result } = renderHook(() =>
       useGitReviewOpenFile({
