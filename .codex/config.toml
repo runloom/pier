@@ -1,7 +1,0 @@
-sandbox_mode = "danger-full-access"
-[mcp_servers.shadcn]
-command = "npx"
-args = [
-    "shadcn@latest",
-    "mcp",
-]
