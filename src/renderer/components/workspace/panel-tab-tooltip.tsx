@@ -15,7 +15,14 @@ import {
 } from "@/components/common/runtime-status-visual.ts";
 import type { useT } from "@/i18n/use-t.ts";
 
-export const PANEL_TAB_TOOLTIP_DELAY_MS = 1000;
+/** First-hover wait before a tab tooltip opens (ms). */
+export const PANEL_TAB_TOOLTIP_DELAY_MS = 400;
+/**
+ * After a tab tooltip was open, how long the user may enter another tab
+ * trigger without paying the open delay again (Radix `skipDelayDuration`).
+ * Keeps tooltip visible-feeling when sweeping across the tab strip.
+ */
+export const PANEL_TAB_TOOLTIP_SKIP_DELAY_MS = 500;
 
 function localizedTooltipLabel(
   label: string,
@@ -81,24 +88,40 @@ function localizedTooltipLine(
   });
 }
 
+/**
+ * Build hover tooltip body for a dockview tab.
+ *
+ * Gold standard: every tab shows a tooltip. Prefer structured `tab.tooltip`,
+ * then long/detail fallbacks, then the short tab title (always last resort).
+ */
 export function tabTooltipText(
   tooltip: PanelTabTooltip | undefined,
   fallback: string | undefined,
   stateLabel: string | undefined,
-  t: ReturnType<typeof useT>
+  t: ReturnType<typeof useT>,
+  shortTitle?: string | undefined
 ): string | null {
   if (!tooltip) {
-    const lines = [fallback, stateLabel].filter((line): line is string =>
-      Boolean(line)
+    const lines = [fallback, stateLabel, shortTitle].filter(
+      (line): line is string => Boolean(line && line.length > 0)
     );
-    return lines.length > 0 ? lines.join("\n") : null;
+    // Dedupe when fallback === shortTitle
+    const unique = [...new Set(lines)];
+    return unique.length > 0 ? unique.join("\n") : null;
   }
   const lines = [
     tooltip.title,
     stateLabel,
     ...(tooltip.lines ?? []).map((line) => localizedTooltipLine(line, t)),
   ].filter((line): line is string => Boolean(line));
-  return lines.length > 0 ? lines.join("\n") : (fallback ?? null);
+  if (lines.length > 0) {
+    return lines.join("\n");
+  }
+  const rest = [fallback, shortTitle].filter((line): line is string =>
+    Boolean(line && line.length > 0)
+  );
+  const unique = [...new Set(rest)];
+  return unique.length > 0 ? unique.join("\n") : null;
 }
 
 export function tabAriaLabel(
@@ -136,21 +159,14 @@ export function tabAriaLabel(
 
 /**
  * Running 态指示 — soft shimmer 顶轨（与状态栏 agent 扫光同语汇）。
- * - dockview tab：视觉在外层 `.dv-tab::before`（与选中线同盒、全宽贴边）；本节点仅 a11y + 状态锚点。
- * - overflow 菜单：无 `.dv-tab`，本节点 `--menu` 自绘同款 shimmer（单节点，无 track/segment 子层）。
+ * 仅 dockview tab：视觉在外层 `.dv-tab::before`；本节点仅 a11y 锚点。
+ * overflow 列表不得复用顶轨 loading（见 `surface: "menu"`）。
  */
-function tabRunningTopBar(
-  displayLabel: string,
-  options?: { preserveSemanticColor?: boolean }
-): ReactNode {
-  const isMenu = Boolean(options?.preserveSemanticColor);
+function tabRunningTopBar(displayLabel: string): ReactNode {
   return (
     <span
       aria-label={displayLabel}
-      className={cn(
-        "pier-tab-running-bar pointer-events-none absolute overflow-hidden",
-        isMenu && "pier-tab-running-bar--menu"
-      )}
+      className="pier-tab-running-bar pointer-events-none absolute overflow-hidden"
       data-panel-tab-state-indicator="running"
       data-tab-status="running"
       role="img"
@@ -158,21 +174,14 @@ function tabRunningTopBar(
   );
 }
 
-export function tabStatusIndicator(
-  status: PanelTabStatus,
-  label: string | undefined,
-  options?: { preserveSemanticColor?: boolean }
+function tabStatusIcon(
+  status: Exclude<PanelTabStatus, "idle">,
+  displayLabel: string,
+  importantColor: boolean
 ): ReactNode {
-  if (status === "idle") {
-    return null;
-  }
-  const displayLabel = label ?? runtimeStatusLabel(status);
-  if (status === "running") {
-    return tabRunningTopBar(displayLabel, options);
-  }
   const visual = runtimeStatusVisual(status);
   const Icon = visual.Icon;
-  const textClassName = options?.preserveSemanticColor
+  const textClassName = importantColor
     ? runtimeStatusColorClassName(status, "important")
     : visual.textClassName;
   return (
@@ -191,10 +200,30 @@ export function tabStatusIndicator(
         className={cn(
           "size-3 shrink-0",
           visual.iconClassName,
-          options?.preserveSemanticColor && textClassName
+          importantColor && textClassName
         )}
         data-panel-tab-state-icon={status}
       />
     </span>
   );
+}
+
+/**
+ * @param surface `"tab"` (default) uses strip top-shimmer for running.
+ *   `"menu"` uses a compact spinner/icon — never the tab-strip loading chrome.
+ */
+export function tabStatusIndicator(
+  status: PanelTabStatus,
+  label: string | undefined,
+  options?: { surface?: "tab" | "menu" }
+): ReactNode {
+  if (status === "idle") {
+    return null;
+  }
+  const displayLabel = label ?? runtimeStatusLabel(status);
+  const surface = options?.surface ?? "tab";
+  if (status === "running" && surface === "tab") {
+    return tabRunningTopBar(displayLabel);
+  }
+  return tabStatusIcon(status, displayLabel, surface === "menu");
 }

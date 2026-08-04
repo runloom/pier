@@ -101,29 +101,43 @@ interface TestPanel {
     exitMaximized: Mock;
     isMaximized: Mock<() => boolean>;
     maximize: Mock;
+    onDidParametersChange: Mock;
     onDidTitleChange: Mock;
     setActive: Mock;
   };
   id: string;
+  params?: {
+    dirty?: boolean;
+    pinned?: boolean;
+  };
   title: string;
   view: {
     contentComponent: string;
   };
 }
 
-function createPanel(id: string, title: string): TestPanel {
+function createPanel(
+  id: string,
+  title: string,
+  options?: {
+    contentComponent?: string;
+    params?: TestPanel["params"];
+  }
+): TestPanel {
   return {
     api: {
       exitMaximized: vi.fn(),
       isMaximized: vi.fn(() => false),
       maximize: vi.fn(),
+      onDidParametersChange: vi.fn(() => ({ dispose: vi.fn() })),
       onDidTitleChange: vi.fn(() => ({ dispose: vi.fn() })),
       setActive: vi.fn(),
     },
     id,
+    ...(options?.params ? { params: options.params } : {}),
     title,
     view: {
-      contentComponent: "terminal",
+      contentComponent: options?.contentComponent ?? "terminal",
     },
   };
 }
@@ -491,7 +505,7 @@ describe("WorkspaceHeaderActions", () => {
     );
 
     expect(
-      await screen.findByRole("combobox", { name: "Hidden tabs" })
+      await screen.findByRole("button", { name: "Hidden tabs" })
     ).toHaveTextContent("1");
 
     header.remove();
@@ -532,9 +546,12 @@ describe("WorkspaceHeaderActions", () => {
       { container: actionsContainer }
     );
 
-    expect(
-      await screen.findByRole("combobox", { name: "Hidden tabs" })
-    ).toHaveTextContent("1");
+    const overflowTrigger = await screen.findByRole("button", {
+      name: "Hidden tabs",
+    });
+    expect(overflowTrigger).toHaveTextContent("1");
+    // Prefer aria-label only; native title doubles SR / OS tooltips.
+    expect(overflowTrigger).not.toHaveAttribute("title");
 
     header.remove();
   });
@@ -575,7 +592,7 @@ describe("WorkspaceHeaderActions", () => {
     );
 
     expect(
-      await screen.findByRole("combobox", { name: "Hidden tabs" })
+      await screen.findByRole("button", { name: "Hidden tabs" })
     ).toHaveTextContent("2");
 
     header.remove();
@@ -618,7 +635,7 @@ describe("WorkspaceHeaderActions", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByRole("combobox", { name: "Hidden tabs" })
+        screen.queryByRole("button", { name: "Hidden tabs" })
       ).not.toBeInTheDocument();
     });
     const overflowAnchor = actionsContainer.querySelector(
@@ -666,7 +683,7 @@ describe("WorkspaceHeaderActions", () => {
       { container: actionsContainer }
     );
 
-    const trigger = await screen.findByRole("combobox", {
+    const trigger = await screen.findByRole("button", {
       name: "Hidden tabs",
     });
     fireEvent.pointerDown(trigger, {
@@ -675,13 +692,16 @@ describe("WorkspaceHeaderActions", () => {
       pointerType: "mouse",
     });
 
-    const item = await screen.findByRole("option", {
+    const item = await screen.findByRole("menuitem", {
       name: "Terminal 2",
     });
-    expect(item).toHaveAttribute("data-slot", "select-item");
-    expect(document.querySelector("[data-slot='select-content']")).toHaveClass(
-      "w-48"
+    expect(item).toHaveAttribute("data-slot", "dropdown-menu-item");
+    const menuContent = document.querySelector(
+      "[data-slot='panel-overflow-content']"
     );
+    expect(menuContent).toHaveClass("min-w-56", "w-max");
+    expect(menuContent).not.toHaveClass("w-48");
+    expect(menuContent?.className).toMatch(/max-w-\[min\(28rem/);
 
     fireEvent.click(item);
 
@@ -690,7 +710,7 @@ describe("WorkspaceHeaderActions", () => {
     header.remove();
   });
 
-  it("keeps a running indicator visible beside a two-line hidden tab title", async () => {
+  it("matches the tab title without truncating and shows a compact running icon", async () => {
     const header = document.createElement("div");
     const tabsContainer = document.createElement("div");
     const visibleTab = document.createElement("div");
@@ -698,7 +718,7 @@ describe("WorkspaceHeaderActions", () => {
     const overflowTab = document.createElement("div");
     const overflowContent = document.createElement("div");
     const actionsContainer = document.createElement("div");
-    const longTitle =
+    const tabTitle =
       "项目特别是刚启动的时候需要等待初始化完成才能继续执行后续操作";
 
     header.className = "dv-tabs-and-actions-container";
@@ -721,11 +741,15 @@ describe("WorkspaceHeaderActions", () => {
       activeId: null,
       descriptors: {
         "terminal-2": {
-          display: { short: longTitle },
+          display: {
+            long: "should-not-replace-tab-title-in-menu",
+            short: tabTitle,
+          },
           tab: {
             icon: { id: "agent:codex" },
             state: { label: "Running", status: "running" },
-            title: longTitle,
+            title: tabTitle,
+            tooltip: { title: "should-not-replace-tab-title-in-menu" },
           },
         },
       },
@@ -741,7 +765,7 @@ describe("WorkspaceHeaderActions", () => {
       { container: actionsContainer }
     );
 
-    const trigger = await screen.findByRole("combobox", {
+    const trigger = await screen.findByRole("button", {
       name: "Hidden tabs",
     });
     fireEvent.pointerDown(trigger, {
@@ -750,35 +774,103 @@ describe("WorkspaceHeaderActions", () => {
       pointerType: "mouse",
     });
 
-    const titleText = await screen.findByText(longTitle);
-    const item = titleText.closest('[role="option"]');
+    // Same string as tab chrome — not tooltip / long display.
+    const titleText = await screen.findByText(tabTitle);
+    expect(
+      screen.queryByText("should-not-replace-tab-title-in-menu")
+    ).not.toBeInTheDocument();
+    const item = titleText.closest('[role="menuitem"]');
     expect(item).not.toBeNull();
     const title = item?.querySelector("[data-panel-overflow-title]");
     const loading = item?.querySelector(
       '[data-panel-tab-state-indicator="running"]'
     );
 
+    // Full tab name, wrap allowed — never truncate / ellipsis in the menu.
     expect(title).toHaveClass(
       "min-w-0",
       "flex-1",
-      "line-clamp-2",
-      "whitespace-normal"
+      "whitespace-normal",
+      "break-words"
     );
-    expect(title).not.toHaveClass("truncate");
+    expect(title).not.toHaveClass("truncate", "line-clamp-2");
+    expect(title).toHaveTextContent(tabTitle);
     expect(loading).not.toBeNull();
     expect(loading).toHaveAttribute("data-tab-status", "running");
-    expect(item).toHaveClass("pr-2");
-    expect(item).not.toHaveClass("pr-8");
-    // overflow 不在 dockview 树内，用 --menu 档单节点 soft shimmer
-    expect(loading).toHaveClass(
+    // Menu surface: compact spinner icon — never tab-strip top shimmer.
+    expect(loading).not.toHaveClass(
       "pier-tab-running-bar",
       "pier-tab-running-bar--menu"
     );
-    expect(loading?.querySelector("[data-panel-tab-state-icon]")).toBeNull();
     expect(
-      loading?.querySelector("[data-panel-tab-running-segment]")
-    ).toBeNull();
-    expect(loading?.querySelector("[data-panel-tab-running-track]")).toBeNull();
+      loading?.querySelector("[data-panel-tab-state-icon='running']")
+    ).not.toBeNull();
+
+    header.remove();
+  });
+
+  it("mirrors file preview italic and dirty dot in the overflow list", async () => {
+    const header = document.createElement("div");
+    const tabsContainer = document.createElement("div");
+    const visibleTab = document.createElement("div");
+    const visibleContent = document.createElement("div");
+    const overflowTab = document.createElement("div");
+    const overflowContent = document.createElement("div");
+    const actionsContainer = document.createElement("div");
+    const overflowPanel = createPanel("file-2", "notes.md", {
+      contentComponent: "pier.files.filePanel",
+      params: { dirty: true, pinned: false },
+    });
+
+    header.className = "dv-tabs-and-actions-container";
+    tabsContainer.className = "dv-tabs-container";
+    visibleTab.className = "dv-tab";
+    overflowTab.className = "dv-tab";
+    visibleContent.dataset.panelTabId = "terminal-1";
+    overflowContent.dataset.panelTabId = "file-2";
+    visibleTab.append(visibleContent);
+    overflowTab.append(overflowContent);
+    tabsContainer.append(visibleTab, overflowTab);
+    header.append(tabsContainer, actionsContainer);
+    document.body.append(header);
+
+    setRect(tabsContainer, { bottom: 34, left: 0, right: 120, top: 0 });
+    setRect(visibleTab, { bottom: 34, left: 0, right: 80, top: 0 });
+    setRect(overflowTab, { bottom: 34, left: 120, right: 200, top: 0 });
+
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "file-2": {
+          display: { short: "notes.md" },
+          tab: {
+            icon: { id: "file:notes.md" },
+            title: "notes.md",
+          },
+        },
+      },
+    });
+
+    render(
+      <WorkspaceHeaderActions
+        {...createProps([
+          createPanel("terminal-1", "Terminal 1"),
+          overflowPanel,
+        ])}
+      />,
+      { container: actionsContainer }
+    );
+
+    fireEvent.pointerDown(
+      await screen.findByRole("button", { name: "Hidden tabs" }),
+      { button: 0, ctrlKey: false, pointerType: "mouse" }
+    );
+
+    const item = await screen.findByRole("menuitem", { name: /notes\.md/u });
+    expect(item).toHaveAttribute("data-pier-tab-preview", "true");
+    const title = item.querySelector("[data-panel-overflow-title]");
+    expect(title).toHaveClass("italic");
+    expect(item.querySelector("[data-pier-tab-dirty='true']")).not.toBeNull();
 
     header.remove();
   });
@@ -820,7 +912,7 @@ describe("WorkspaceHeaderActions", () => {
       { container: actionsContainer }
     );
 
-    const trigger = await screen.findByRole("combobox", {
+    const trigger = await screen.findByRole("button", {
       name: "Hidden tabs",
     });
     fireEvent.pointerDown(trigger, {
@@ -830,7 +922,7 @@ describe("WorkspaceHeaderActions", () => {
     });
 
     fireEvent.click(
-      await screen.findByRole("option", {
+      await screen.findByRole("menuitem", {
         name: "xyz",
       })
     );
@@ -843,7 +935,7 @@ describe("WorkspaceHeaderActions", () => {
     header.remove();
   });
 
-  it("uses the select native viewport for a long hidden tab list", async () => {
+  it("uses a dropdown scroll viewport for a long hidden tab list", async () => {
     const header = document.createElement("div");
     const tabsContainer = document.createElement("div");
     const actionsContainer = document.createElement("div");
@@ -878,7 +970,7 @@ describe("WorkspaceHeaderActions", () => {
       container: actionsContainer,
     });
 
-    const trigger = await screen.findByRole("combobox", {
+    const trigger = await screen.findByRole("button", {
       name: "Hidden tabs",
     });
     fireEvent.pointerDown(trigger, {
@@ -887,15 +979,22 @@ describe("WorkspaceHeaderActions", () => {
       pointerType: "mouse",
     });
 
-    await screen.findByRole("option", {
+    await screen.findByRole("menuitem", {
       name: "Terminal 2",
     });
-    const content = document.querySelector("[data-slot='select-content']");
-    const viewport = document.querySelector("[data-radix-select-viewport]");
+    const content = document.querySelector(
+      "[data-slot='panel-overflow-content']"
+    );
+    const viewport = document.querySelector(
+      "[data-slot='dropdown-menu-viewport']"
+    );
+    expect(content).not.toBeNull();
     expect(viewport).not.toBeNull();
-    expect(content).toHaveAttribute("data-align-trigger", "false");
-    expect(content).toHaveClass("w-48");
-    expect(viewport).toHaveAttribute("data-position", "popper");
+    expect(content).toHaveClass("min-w-56", "w-max");
+    expect(content).not.toHaveClass("w-48");
+    expect(content?.className).toMatch(/max-w-\[min\(28rem/);
+    // No Select trigger-height lock — list can show multiple full rows.
+    expect(document.querySelector("[data-radix-select-viewport]")).toBeNull();
     expect(
       document.querySelector("[data-overflow-tabs-viewport]")
     ).not.toBeInTheDocument();

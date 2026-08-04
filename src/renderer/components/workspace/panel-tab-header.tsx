@@ -38,8 +38,10 @@ import {
 import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
 import {
-  PANEL_TAB_FILE_COMPONENT_ID,
+  type PanelTabFileParams,
   panelTabKind,
+  panelTabParamsIsDirty,
+  panelTabParamsIsPreview,
 } from "./panel-tab-layout.ts";
 import { PanelTabLeadingIcon } from "./panel-tab-leading-icon.tsx";
 import {
@@ -55,43 +57,19 @@ import {
 
 export { PANEL_TAB_TOOLTIP_DELAY_MS } from "./panel-tab-tooltip.tsx";
 
-// dockview panel params 里可选 `pinned: boolean`。只有文件面板显式
-// pinned:false 才是 preview tab(Cursor / VS Code 语义:斜体 + 半透明);
-// 其他 panel 不设置 pinned 时必须按正常 tab 处理。
-interface PanelPreviewParams {
-  dirty?: unknown;
-  pinned?: unknown;
-}
-
-function paramsIsPreview(
-  component: string | undefined,
-  params: PanelPreviewParams | undefined
-): boolean {
-  return component === PANEL_TAB_FILE_COMPONENT_ID && params?.pinned === false;
-}
-
-// 文件面板未保存标记(VS Code 语义:tab 上的实心圆点)。dirty 由 files 插件
-// 经 updateParameters 写进 params,与 preview 斜体同一条数据通道。
-function paramsIsDirty(
-  component: string | undefined,
-  params: PanelPreviewParams | undefined
-): boolean {
-  return component === PANEL_TAB_FILE_COMPONENT_ID && params?.dirty === true;
-}
-
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const t = useT();
   const [title, setTitle] = useState<string>(props.api.title ?? "");
   const [isPreview, setIsPreview] = useState<boolean>(() =>
-    paramsIsPreview(
+    panelTabParamsIsPreview(
       props.api.component,
-      props.params as PanelPreviewParams | undefined
+      props.params as PanelTabFileParams | undefined
     )
   );
   const [isDirty, setIsDirty] = useState<boolean>(() =>
-    paramsIsDirty(
+    panelTabParamsIsDirty(
       props.api.component,
-      props.params as PanelPreviewParams | undefined
+      props.params as PanelTabFileParams | undefined
     )
   );
   const isPreviewRef = useRef(isPreview);
@@ -107,11 +85,13 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const displayTitle = tab?.title ?? title;
   const kind = panelTabKind(props.api.component);
   const trailingAria = panelTabTrailingAriaSuffix(tab?.trailing);
+  // Every tab must have a hover tooltip: structured chrome → long path → short title.
   const tooltipText = tabTooltipText(
     tab?.tooltip,
     descriptor?.display.long ?? descriptor?.display.terminalTitle,
     tab?.state?.label,
-    t
+    t,
+    displayTitle
   );
   const status = tab?.state?.status;
   const statusIndicator = status
@@ -137,29 +117,29 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     // params 变更时同步 preview 视觉 —— 文件面板 preview→pinned 就地 promote
     // 时通过 updateParameters 覆盖 pinned:true,tab 头收到事件后取消斜体。
     const disposable = props.api.onDidParametersChange((next) => {
-      const nextIsPreview = paramsIsPreview(
+      const nextIsPreview = panelTabParamsIsPreview(
         props.api.component,
-        next as PanelPreviewParams | undefined
+        next as PanelTabFileParams | undefined
       );
       isPreviewRef.current = nextIsPreview;
       setIsPreview(nextIsPreview);
       setIsDirty(
-        paramsIsDirty(
+        panelTabParamsIsDirty(
           props.api.component,
-          next as PanelPreviewParams | undefined
+          next as PanelTabFileParams | undefined
         )
       );
     });
-    const nextIsPreview = paramsIsPreview(
+    const nextIsPreview = panelTabParamsIsPreview(
       props.api.component,
-      props.params as PanelPreviewParams | undefined
+      props.params as PanelTabFileParams | undefined
     );
     isPreviewRef.current = nextIsPreview;
     setIsPreview(nextIsPreview);
     setIsDirty(
-      paramsIsDirty(
+      panelTabParamsIsDirty(
         props.api.component,
-        props.params as PanelPreviewParams | undefined
+        props.params as PanelTabFileParams | undefined
       )
     );
     return () => {
@@ -306,7 +286,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       ) : null}
       {statusIndicator}
       <button
-        aria-label="Close tab"
+        aria-label={t("workspace.tab.close")}
         className="dv-default-tab-action"
         onClick={(e) => {
           e.preventDefault();
@@ -335,11 +315,13 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       {/*
        * Tab 条只走 hover delay。Radix focus 会即时 open，快捷键切 tab /
        * 程序化 focus 会误弹出；tooltip 明细已并入 aria-label。
+       * Provider skipDelayDuration（workspace host）使已打开时跨 tab 滑过
+       * 跳过 delay，直接切到新 tab 文案，而不是先关再等。
        */}
       <TooltipTrigger asChild openOnFocus={false}>
         {tabContent}
       </TooltipTrigger>
-      <TooltipContent align="center" side="bottom" sideOffset={8}>
+      <TooltipContent align="center" side="bottom">
         <span className="whitespace-pre-line">{tooltipText}</span>
       </TooltipContent>
     </Tooltip>

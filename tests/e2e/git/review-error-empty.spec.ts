@@ -109,7 +109,9 @@ test("index load failure renders an Empty error state with retry", async () => {
     // Fully remove the panel so session cache clears (hide/show only toasts
     // refresh failures). Then corrupt index and cold-open for ErrorEmpty.
     const changesTab = page.locator('[data-panel-tab-id^="pier.git.changes:"]');
-    await changesTab.getByRole("button", { name: /Close tab|关闭/u }).click();
+    await changesTab
+      .getByRole("button", { name: /Close tab|关闭标签/u })
+      .click();
     await expect(
       page.locator('[data-panel-tab-id^="pier.git.changes:"]')
     ).toHaveCount(0, { timeout: 15_000 });

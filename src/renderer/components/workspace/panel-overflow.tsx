@@ -1,11 +1,11 @@
 import { Button } from "@pier/ui/button.tsx";
 import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-} from "@pier/ui/select.tsx";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@pier/ui/dropdown-menu.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { ChevronDown } from "lucide-react";
@@ -17,10 +17,16 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useT } from "@/i18n/use-t.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { panelKindOf } from "./panel-registry.ts";
-import { panelTabKind } from "./panel-tab-layout.ts";
+import {
+  type PanelTabFileParams,
+  panelTabKind,
+  panelTabParamsIsDirty,
+  panelTabParamsIsPreview,
+} from "./panel-tab-layout.ts";
 import { PanelTabLeadingIcon } from "./panel-tab-leading-icon.tsx";
 import { tabStatusIndicator } from "./panel-tab-tooltip.tsx";
 import { PanelTabTrailingView } from "./panel-tab-trailing.tsx";
@@ -29,6 +35,9 @@ const CLIP_EPSILON_PX = 1;
 const OVERFLOW_ANCHOR_CLASS = "h-full w-0 shrink-0 overflow-hidden";
 const OVERFLOW_MENU_CLASS =
   "flex h-full shrink-0 items-center justify-center px-1";
+/** Grow with titles; cap so long paths wrap instead of spanning the window. */
+const OVERFLOW_CONTENT_CLASS =
+  "min-w-56 w-max max-w-[min(28rem,var(--radix-popper-available-width,28rem))]";
 
 interface OverflowPanelLike {
   id: string;
@@ -185,28 +194,66 @@ function useOverflowPanelIds(
   return overflowPanelIds;
 }
 
-function PanelMenuItem({ panel }: { panel: HeaderPanel }) {
+/** Live file chrome (preview / dirty) so overflow mirrors the strip. */
+function usePanelFileParams(
+  panel: HeaderPanel
+): PanelTabFileParams | undefined {
+  const [params, setParams] = useState<PanelTabFileParams | undefined>(
+    () => panel.params as PanelTabFileParams | undefined
+  );
+
+  useEffect(() => {
+    setParams(panel.params as PanelTabFileParams | undefined);
+    const disposable = panel.api.onDidParametersChange((next) => {
+      setParams(next as PanelTabFileParams | undefined);
+    });
+    return () => {
+      disposable.dispose();
+    };
+  }, [panel]);
+
+  return params;
+}
+
+function PanelMenuItem({
+  onSelect,
+  panel,
+}: {
+  onSelect: (panelId: string) => void;
+  panel: HeaderPanel;
+}) {
+  const t = useT();
   const tab = usePanelDescriptorStore(
     (state) => state.descriptors[panel.id]?.tab
   );
+  const params = usePanelFileParams(panel);
   const component = panel.view.contentComponent;
-  // 与 PanelTabHeader 共用 leading 图标 + 语义色 class，避免 overflow 菜单
-  // 落到 Select 默认 foreground 而 tab 仍是 status / file-icon 色。
+  // Same label as the dockview tab strip — never swap in tooltip/long text.
   const title = tab?.title ?? panel.title ?? "Panel";
   const kind = panelTabKind(component);
+  const isPreview = panelTabParamsIsPreview(component, params);
+  const isDirty = panelTabParamsIsDirty(component, params);
+  // Menu surface: compact status icon — never the tab-strip running shimmer.
   const statusIndicator = tab?.state?.status
     ? tabStatusIndicator(tab.state.status, tab.state.label, {
-        preserveSemanticColor: true,
+        surface: "menu",
       })
     : null;
 
   return (
-    <SelectItem showIndicator={false} textValue={title} value={panel.id}>
+    <DropdownMenuItem
+      className="min-w-0 gap-2"
+      data-pier-tab-preview={isPreview ? "true" : undefined}
+      onSelect={() => {
+        onSelect(panel.id);
+      }}
+    >
       <PanelTabLeadingIcon component={component} tab={tab} />
       <span
         className={cn(
-          "line-clamp-2 min-w-0 flex-1 whitespace-normal break-words text-left",
-          kind === "file" && "font-mono font-normal"
+          "min-w-0 flex-1 whitespace-normal break-words text-left leading-5",
+          kind === "file" && "font-mono font-normal",
+          isPreview && "italic"
         )}
         data-panel-overflow-title
         data-pier-tab-kind={kind}
@@ -214,12 +261,21 @@ function PanelMenuItem({ panel }: { panel: HeaderPanel }) {
         {title}
       </span>
       <PanelTabTrailingView trailing={tab?.trailing} />
+      {isDirty ? (
+        <span
+          aria-label={t("workspace.tab.unsaved")}
+          className="size-1.5 shrink-0 rounded-full bg-warning"
+          data-pier-tab-dirty="true"
+          role="status"
+        />
+      ) : null}
       {statusIndicator}
-    </SelectItem>
+    </DropdownMenuItem>
   );
 }
 
 export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [rootElement, setRootElement] = useState<HTMLDivElement | null>(null);
   const rootRef = useMemo(
@@ -250,6 +306,7 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
   );
 
   const hasOverflowPanels = overflowPanels.length > 0;
+  const hiddenTabsLabel = t("workspace.tab.hiddenTabs");
 
   if (!hasOverflowPanels) {
     return (
@@ -268,37 +325,35 @@ export function PanelOverflowMenu(props: IDockviewHeaderActionsProps) {
       data-slot="panel-overflow"
       ref={setRootElement}
     >
-      <Select
-        onOpenChange={setOpen}
-        onValueChange={activatePanel}
-        open={open}
-        value=""
-      >
-        <SelectTrigger aria-label="Hidden tabs" asChild>
+      <DropdownMenu onOpenChange={setOpen} open={open}>
+        <DropdownMenuTrigger asChild>
           <Button
-            aria-label="Hidden tabs"
+            aria-label={hiddenTabsLabel}
             size="sm"
-            title="Hidden tabs"
             type="button"
             variant="secondary"
           >
             <ChevronDown data-icon="inline-start" />
             <span>{overflowPanels.length}</span>
           </Button>
-        </SelectTrigger>
-        <SelectContent
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
           align="end"
-          className="w-48"
-          position="popper"
+          className={OVERFLOW_CONTENT_CLASS}
+          data-slot="panel-overflow-content"
           sideOffset={6}
         >
-          <SelectGroup>
+          <DropdownMenuGroup>
             {overflowPanels.map((panel) => (
-              <PanelMenuItem key={panel.id} panel={panel} />
+              <PanelMenuItem
+                key={panel.id}
+                onSelect={activatePanel}
+                panel={panel}
+              />
             ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

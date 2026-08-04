@@ -24,6 +24,10 @@ import {
   vi,
 } from "vitest";
 import { PanelTabHeader } from "@/components/workspace/panel-tab-header.tsx";
+import {
+  PANEL_TAB_TOOLTIP_DELAY_MS,
+  PANEL_TAB_TOOLTIP_SKIP_DELAY_MS,
+} from "@/components/workspace/panel-tab-tooltip.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
@@ -151,11 +155,21 @@ describe("PanelTabHeader", () => {
   it("does not treat close-button keyboard activation as a tab focus intent", () => {
     render(<PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />);
 
-    fireEvent.keyDown(screen.getByRole("button", { name: "Close tab" }), {
-      key: "Enter",
-    });
+    fireEvent.keyDown(
+      screen.getByRole("button", { name: i18next.t("workspace.tab.close") }),
+      {
+        key: "Enter",
+      }
+    );
 
     expect(requestTerminalFocusIntent).not.toHaveBeenCalled();
+  });
+
+  it("labels the close control via i18n", () => {
+    render(<PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />);
+    expect(
+      screen.getByRole("button", { name: i18next.t("workspace.tab.close") })
+    ).toBeTruthy();
   });
 
   it("renders the icon declared by the panel kit metadata", () => {
@@ -361,7 +375,7 @@ describe("PanelTabHeader", () => {
         pointerType: "mouse",
       });
     });
-    advanceTooltipDelay(999);
+    advanceTooltipDelay(PANEL_TAB_TOOLTIP_DELAY_MS - 1);
     expect(screen.queryByRole("tooltip")).toBeNull();
 
     advanceTooltipDelay(1);
@@ -520,7 +534,7 @@ describe("PanelTabHeader", () => {
         pointerType: "mouse",
       });
     });
-    advanceTooltipDelay(1000);
+    advanceTooltipDelay(PANEL_TAB_TOOLTIP_DELAY_MS);
     expect(screen.getByRole("tooltip")).toHaveTextContent("dev");
 
     act(() => {
@@ -658,7 +672,7 @@ describe("PanelTabHeader", () => {
         pointerType: "mouse",
       });
     });
-    advanceTooltipDelay(1000);
+    advanceTooltipDelay(PANEL_TAB_TOOLTIP_DELAY_MS);
     expect(screen.getByRole("tooltip")).toHaveTextContent("one");
 
     act(() => {
@@ -676,7 +690,7 @@ describe("PanelTabHeader", () => {
     });
 
     expect(screen.queryByRole("tooltip")).toBeNull();
-    advanceTooltipDelay(999);
+    advanceTooltipDelay(PANEL_TAB_TOOLTIP_DELAY_MS - 1);
     expect(screen.queryByRole("tooltip")).toBeNull();
     advanceTooltipDelay(1);
     expect(screen.getByRole("tooltip")).toHaveTextContent("two");
@@ -699,10 +713,77 @@ describe("PanelTabHeader", () => {
     });
 
     expect(screen.queryByRole("tooltip")).toBeNull();
-    advanceTooltipDelay(999);
+    advanceTooltipDelay(PANEL_TAB_TOOLTIP_DELAY_MS - 1);
     expect(screen.queryByRole("tooltip")).toBeNull();
     advanceTooltipDelay(1);
     expect(screen.getByRole("tooltip")).toHaveTextContent("three");
+  });
+
+  it("skips open delay when sweeping tabs under workspace skipDelayDuration", () => {
+    vi.useFakeTimers();
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "terminal-1": {
+          display: { short: "one" },
+          tab: {
+            title: "one",
+            tooltip: { title: "one" },
+          },
+        },
+        "terminal-2": {
+          display: { short: "two" },
+          tab: {
+            title: "two",
+            tooltip: { title: "two" },
+          },
+        },
+      },
+    });
+
+    const { container } = renderBase(
+      <TooltipProvider skipDelayDuration={PANEL_TAB_TOOLTIP_SKIP_DELAY_MS}>
+        <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+        <PanelTabHeader
+          {...createHeaderProps(
+            "terminal",
+            "Terminal",
+            undefined,
+            "terminal-2"
+          )}
+        />
+      </TooltipProvider>
+    );
+    const [firstTab, secondTab] = Array.from(
+      container.querySelectorAll(".dv-default-tab")
+    );
+    expect(firstTab).toBeDefined();
+    expect(secondTab).toBeDefined();
+    if (!(firstTab && secondTab)) {
+      return;
+    }
+
+    act(() => {
+      fireEvent.pointerMove(firstTab, { pointerType: "mouse" });
+    });
+    advanceTooltipDelay(PANEL_TAB_TOOLTIP_DELAY_MS);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("one");
+
+    act(() => {
+      fireEvent.pointerOut(firstTab, {
+        pointerType: "mouse",
+        relatedTarget: secondTab,
+      });
+      fireEvent.pointerLeave(firstTab, {
+        pointerType: "mouse",
+        relatedTarget: secondTab,
+      });
+      fireEvent.pointerMove(secondTab, { pointerType: "mouse" });
+    });
+
+    // Within skip-delay window: second tab tooltip should open without full delay.
+    advanceTooltipDelay(1);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("two");
   });
 
   it("does not attach native title on dirty dot or status indicator", () => {

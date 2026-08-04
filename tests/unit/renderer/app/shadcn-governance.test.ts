@@ -57,7 +57,7 @@ const DETACHED_ITEM_HELPERS = new Map([
     "src/renderer/components/common/command-palette/quick-pick-view.tsx",
     "CommandGroup",
   ],
-  ["src/renderer/components/workspace/panel-overflow.tsx", "SelectGroup"],
+  ["src/renderer/components/workspace/panel-overflow.tsx", "DropdownMenuGroup"],
   ["src/plugins/builtin/git/renderer/status-dropdown.tsx", "DropdownMenuGroup"],
 ]);
 const GROUP_BY_ITEM = new Map([

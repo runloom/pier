@@ -1230,9 +1230,9 @@ body {
 
 /*
  * dockview tab 内层 DOM 条只做 a11y 锚点，视觉已迁到 .dv-tab::before。
- * overflow 菜单不在 .dv-tab 树内，仍用可见 .pier-tab-running-bar--menu（同 shimmer）。
+ * overflow 菜单 running 态用紧凑 spinner 图标，不再复用顶轨 shimmer。
  */
-.dockview-theme-pier .dv-tab .pier-tab-running-bar:not(.pier-tab-running-bar--menu) {
+.dockview-theme-pier .dv-tab .pier-tab-running-bar {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1245,57 +1245,11 @@ body {
   clip-path: inset(50%);
 }
 
-/* overflow 菜单：单节点纯色滑块，muted accent，固定可读 */
-.pier-tab-running-bar--menu {
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 1;
-  height: 1px;
-  --pier-tab-running-accent: var(--muted-foreground);
-  --pier-tab-shimmer-trough: color-mix(
-    in oklab,
-    var(--pier-tab-running-accent) 40%,
-    transparent
-  );
-  --pier-tab-shimmer-highlight: color-mix(
-    in oklab,
-    var(--pier-tab-running-accent) 78%,
-    var(--foreground)
-  );
-  background-color: var(--pier-tab-shimmer-trough);
-  background-image: linear-gradient(
-    var(--pier-tab-shimmer-highlight),
-    var(--pier-tab-shimmer-highlight)
-  );
-  background-repeat: no-repeat;
-  animation: pier-tab-running-slider 1.5s infinite ease-in-out;
-}
-
-:root.light .pier-tab-running-bar--menu {
-  --pier-tab-shimmer-trough: color-mix(
-    in oklab,
-    var(--pier-tab-running-accent) 35%,
-    transparent
-  );
-  --pier-tab-shimmer-highlight: var(--pier-tab-running-accent);
-}
-
 @media (prefers-reduced-motion: reduce) {
   .dockview-theme-pier .dv-tab:has([data-tab-status="running"])::before {
     animation: none;
     background-image: none;
     box-shadow: none;
-    background-color: color-mix(
-      in oklab,
-      var(--pier-tab-running-accent) 55%,
-      transparent
-    );
-  }
-
-  .pier-tab-running-bar--menu {
-    animation: none;
-    background-image: none;
     background-color: color-mix(
       in oklab,
       var(--pier-tab-running-accent) 55%,

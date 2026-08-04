@@ -26,7 +26,9 @@ export const workspace = {
   },
   tab: {
     activeTask: "Task running",
+    close: "Close tab",
     create: "New",
+    hiddenTabs: "Hidden tabs",
     maximize: "Maximize",
     restore: "Restore",
     unsaved: "Unsaved changes",

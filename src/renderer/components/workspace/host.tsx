@@ -49,6 +49,7 @@ import {
 } from "./layout-persistence.ts";
 import { getPanelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
+import { PANEL_TAB_TOOLTIP_SKIP_DELAY_MS } from "./panel-tab-tooltip.tsx";
 import {
   createPluginPanelCloserForWorkspace,
   createPluginPanelTitleUpdaterForWorkspace,
@@ -465,7 +466,7 @@ export function WorkspaceHost() {
       data-workspace-ready={workspaceReady ? "true" : "false"}
       ref={rootRef}
     >
-      <TooltipProvider skipDelayDuration={0}>
+      <TooltipProvider skipDelayDuration={PANEL_TAB_TOOLTIP_SKIP_DELAY_MS}>
         <DockviewReact
           components={panelComponents}
           defaultTabComponent={PanelTabHeader}
