@@ -715,6 +715,94 @@ describe("FileEditorController", () => {
     harness.watchHub.dispose();
   });
 
+  it("adopts disk text after a clean document is briefly deleted then recreated", async () => {
+    // Atomic writers often emit delete + create across debounce windows. The
+    // delete path marks the clean buffer dirty so Save can recreate; the
+    // recreate must still live-update open preview/source without conflict.
+    const harness = createHarness();
+    const release = harness.controller.acquirePanel("panel", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+    const baseline = getDocument(documentId)?.currentContents;
+    expect(baseline).toBeTruthy();
+
+    harness.readDocument.mockRejectedValueOnce(
+      Object.assign(new Error("The file no longer exists"), {
+        code: "not_found",
+      })
+    );
+    harness.watchEvent({
+      changes: [{ kind: "deleted", path: SOURCE.path }],
+      root: ROOT,
+    });
+    await vi.waitFor(() =>
+      expect(getDocument(documentId)).toMatchObject({
+        currentContents: baseline,
+        deletedOnDisk: true,
+        dirty: true,
+      })
+    );
+
+    harness.setDisk("# Atomic rewrite\n", 9);
+    harness.watchEvent({
+      changes: [{ kind: "created", path: SOURCE.path }],
+      root: ROOT,
+    });
+    await vi.waitFor(() =>
+      expect(getDocument(documentId)).toMatchObject({
+        currentContents: "# Atomic rewrite\n",
+        deletedOnDisk: false,
+        dirty: false,
+        diskConflict: false,
+        hasBackingStore: true,
+      })
+    );
+
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("keeps true local dirty after delete→recreate as conflict without adopting", async () => {
+    const harness = createHarness();
+    const release = harness.controller.acquirePanel("panel", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+    updateDocumentContents(documentId, "# Local after open\n");
+
+    harness.readDocument.mockRejectedValueOnce(
+      Object.assign(new Error("The file no longer exists"), {
+        code: "not_found",
+      })
+    );
+    harness.watchEvent({
+      changes: [{ kind: "deleted", path: SOURCE.path }],
+      root: ROOT,
+    });
+    await vi.waitFor(() =>
+      expect(getDocument(documentId)?.deletedOnDisk).toBe(true)
+    );
+
+    harness.setDisk("# External recreate\n", 11);
+    harness.watchEvent({
+      changes: [{ kind: "created", path: SOURCE.path }],
+      root: ROOT,
+    });
+    await vi.waitFor(() =>
+      expect(getDocument(documentId)).toMatchObject({
+        currentContents: "# Local after open\n",
+        deletedOnDisk: false,
+        dirty: true,
+        diskConflict: true,
+        hasBackingStore: true,
+      })
+    );
+
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
   it("recreates a deleted-on-disk file with expected absent and skips the conflict dialog", async () => {
     const harness = createHarness();
     const release = harness.controller.acquirePanel("panel", SOURCE);

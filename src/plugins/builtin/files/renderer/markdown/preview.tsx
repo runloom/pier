@@ -31,11 +31,12 @@ import {
   MarkdownPreviewOverlayRail,
   useMarkdownOutlineLayout,
 } from "./preview-article-layout.tsx";
-import { MarkdownPreviewFontScaleControl } from "./preview-font-scale.tsx";
 import {
-  type MarkdownReadingAppearance,
-  useMarkdownPreviewPrefsStore,
-} from "./preview-preferences.ts";
+  FALLBACK_DARK_CODE_THEME,
+  resolvePreviewCodeTheme,
+} from "./preview-code-theme.ts";
+import { MarkdownPreviewFontScaleControl } from "./preview-font-scale.tsx";
+import { useMarkdownPreviewPrefsStore } from "./preview-preferences.ts";
 import {
   MarkdownPreviewToc,
   selectMarkdownProseContents,
@@ -144,29 +145,6 @@ const DEFAULT_ZOOM_LABELS: MarkdownPreviewZoomLabels = {
 
 const EMPTY_HEADING_IDS: readonly string[] = [];
 
-const FALLBACK_LIGHT_CODE_THEME = "github-light";
-const FALLBACK_DARK_CODE_THEME = "github-dark";
-
-function resolvePreviewCodeTheme(options: {
-  appearanceCodeTheme: string;
-  appearanceTheme: "light" | "dark" | undefined;
-  codeTheme: string | undefined;
-  readingAppearance: MarkdownReadingAppearance;
-}): string {
-  if (options.codeTheme) return options.codeTheme;
-  if (options.readingAppearance === "light") {
-    return options.appearanceTheme === "light"
-      ? options.appearanceCodeTheme
-      : FALLBACK_LIGHT_CODE_THEME;
-  }
-  if (options.readingAppearance === "dark") {
-    return options.appearanceTheme === "dark"
-      ? options.appearanceCodeTheme
-      : FALLBACK_DARK_CODE_THEME;
-  }
-  return options.appearanceCodeTheme;
-}
-
 export function MarkdownPreview({
   appearance,
   captureAnchorRef,
@@ -274,7 +252,12 @@ export function MarkdownPreview({
     let active = true;
     revisionRef.current += 1;
     const revision = `${sessionId}:${revisionRef.current}`;
-    setState({ status: "loading" });
+    // Same-document live updates (disk reload / buffer change): keep the
+    // previous ready render while the newer revision parses. First paint and
+    // document identity remounts (see adapter key={documentId}) use skeleton.
+    setState((current) =>
+      current.status === "ready" ? current : { status: "loading" }
+    );
     runtime
       .parse({ revision, sessionId, source: value })
       .then((outcome) => {

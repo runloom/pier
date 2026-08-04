@@ -1,4 +1,8 @@
 import {
+  isDeletionOnlyDirty,
+  protectsLocalBufferFromDisk,
+} from "@plugins/builtin/files/renderer/document/disk-protection.ts";
+import {
   CORRUPT_DOCUMENT_DRAFT_STORAGE_PREFIX,
   diskDraftStorageKey,
   legacyDiskDraftStorageKey,
@@ -913,6 +917,151 @@ describe("files-document-store", () => {
       dirty: true,
       diskConflict: true,
       readOnlyReason: "binary",
+    });
+  });
+
+  it("adopts a restored image after deletion-only dirty (atomic rewrite)", () => {
+    const root = "/repo";
+    const path = "assets/photo.png";
+    const document = ensureDiskDocument({ path, root });
+    markDocumentReadResult(document.id, {
+      canonicalPath: path,
+      kind: "image",
+      mime: "image/png",
+      mtimeMs: 1,
+      path,
+      revision: "image-r1",
+      root,
+      size: 100,
+    });
+    markDocumentDeletedOnDisk(document.id);
+    expect(getDocument(document.id)).toMatchObject({
+      deletedOnDisk: true,
+      dirty: true,
+      hasBackingStore: false,
+      preview: { revision: "image-r1" },
+    });
+
+    markDocumentReadResult(document.id, {
+      canonicalPath: path,
+      kind: "image",
+      mime: "image/png",
+      mtimeMs: 2,
+      path,
+      revision: "image-r2",
+      root,
+      size: 200,
+    });
+
+    expect(getDocument(document.id)).toMatchObject({
+      deletedOnDisk: false,
+      dirty: false,
+      diskConflict: false,
+      hasBackingStore: true,
+      preview: { kind: "image", mime: "image/png", revision: "image-r2" },
+      revision: "image-r2",
+    });
+  });
+
+  it("classifies deletion-only dirty vs true local protection", () => {
+    const base = {
+      currentContents: "# same\n",
+      deletedOnDisk: true,
+      dirty: true,
+      durabilityUnknown: false,
+      savedContents: "# same\n",
+    };
+    expect(isDeletionOnlyDirty(base)).toBe(true);
+    expect(protectsLocalBufferFromDisk(base)).toBe(false);
+
+    expect(
+      isDeletionOnlyDirty({
+        ...base,
+        currentContents: "# edited\n",
+      })
+    ).toBe(false);
+    expect(
+      protectsLocalBufferFromDisk({
+        ...base,
+        currentContents: "# edited\n",
+      })
+    ).toBe(true);
+
+    expect(
+      isDeletionOnlyDirty({
+        ...base,
+        durabilityUnknown: true,
+      })
+    ).toBe(false);
+    expect(
+      protectsLocalBufferFromDisk({
+        ...base,
+        durabilityUnknown: true,
+      })
+    ).toBe(true);
+
+    // Dirty-with-equal-contents without deletedOnDisk still protects.
+    expect(
+      isDeletionOnlyDirty({
+        ...base,
+        deletedOnDisk: false,
+      })
+    ).toBe(false);
+    expect(
+      protectsLocalBufferFromDisk({
+        ...base,
+        deletedOnDisk: false,
+      })
+    ).toBe(true);
+  });
+
+  it("protects true local dirty after delete and clears deleted flags on conflict", () => {
+    const root = "/repo";
+    const path = "notes.md";
+    const document = ensureDiskDocument({ path, root });
+    markDocumentReadResult(document.id, {
+      canonicalPath: path,
+      contents: "# saved\n",
+      eol: "lf",
+      format: { bom: false, encoding: "utf8" },
+      kind: "text",
+      mode: 0o644,
+      path,
+      revision: "r1",
+      root,
+      size: 8,
+      writable: true,
+    });
+    updateDocumentContents(document.id, "# local edit\n");
+    markDocumentDeletedOnDisk(document.id);
+    expect(getDocument(document.id)).toMatchObject({
+      currentContents: "# local edit\n",
+      deletedOnDisk: true,
+      dirty: true,
+      hasBackingStore: false,
+    });
+
+    markDocumentReadResult(document.id, {
+      canonicalPath: path,
+      contents: "# external recreate\n",
+      eol: "lf",
+      format: { bom: false, encoding: "utf8" },
+      kind: "text",
+      mode: 0o644,
+      path,
+      revision: "r2",
+      root,
+      size: 20,
+      writable: true,
+    });
+
+    expect(getDocument(document.id)).toMatchObject({
+      currentContents: "# local edit\n",
+      deletedOnDisk: false,
+      dirty: true,
+      diskConflict: true,
+      hasBackingStore: true,
+      savedContents: "# saved\n",
     });
   });
 

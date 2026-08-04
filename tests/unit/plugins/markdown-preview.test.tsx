@@ -82,6 +82,185 @@ describe("MarkdownPreview", () => {
     ).toHaveLength(1);
   });
 
+  it("re-parses and shows new headings when value changes", async () => {
+    const runtime = immediateRuntime();
+    const view = render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={runtime}
+        sessionId="markdown-live-value"
+        source={source}
+        value="# Old heading"
+      />
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Old heading" })
+    ).toBeVisible();
+
+    view.rerender(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={runtime}
+        sessionId="markdown-live-value"
+        source={source}
+        value="# New heading"
+      />
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "New heading" })
+    ).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Old heading" })).toBeNull();
+    expect(runtime.parse).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not soft-keep prior ready content across document identity remounts", async () => {
+    let resolveSecond:
+      | ((outcome: {
+          document: ReturnType<typeof parseMarkdownToIr>;
+          pagination: ReturnType<typeof paginateMarkdownDocument>;
+          revision: string;
+          status: "parsed";
+        }) => void)
+      | undefined;
+    const runtime: MarkdownRuntime = {
+      closeSession: vi.fn(),
+      dispose: vi.fn(),
+      parse: vi.fn(async (input) => {
+        if (input.source.includes("Second")) {
+          return await new Promise((resolve) => {
+            resolveSecond = resolve;
+          });
+        }
+        const document = parseMarkdownToIr(input.source);
+        return {
+          document,
+          pagination: paginateMarkdownDocument(document),
+          revision: input.revision,
+          status: "parsed" as const,
+        };
+      }),
+      setSessionVisible: vi.fn(),
+    };
+
+    const view = render(
+      <MarkdownPreview
+        key="doc-a"
+        openExternal={vi.fn()}
+        runtime={runtime}
+        sessionId="markdown-doc-switch"
+        source={source}
+        value="# First"
+      />
+    );
+    expect(await screen.findByRole("heading", { name: "First" })).toBeVisible();
+
+    // Adapter remounts with key={documentId}; a new instance must not show the
+    // previous document while the next parse is in flight.
+    view.rerender(
+      <MarkdownPreview
+        key="doc-b"
+        openExternal={vi.fn()}
+        runtime={runtime}
+        sessionId="markdown-doc-switch"
+        source={source}
+        value="# Second"
+      />
+    );
+
+    expect(screen.queryByRole("heading", { name: "First" })).toBeNull();
+    expect(
+      document.querySelector('[data-slot="markdown-loading"]')
+    ).not.toBeNull();
+
+    const secondDocument = parseMarkdownToIr("# Second");
+    resolveSecond?.({
+      document: secondDocument,
+      pagination: paginateMarkdownDocument(secondDocument),
+      revision: (runtime.parse as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1
+      )?.[0].revision as string,
+      status: "parsed",
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Second" })
+    ).toBeVisible();
+  });
+
+  it("keeps the previous ready preview visible while a newer parse is in flight", async () => {
+    let resolveLatest:
+      | ((outcome: {
+          document: ReturnType<typeof parseMarkdownToIr>;
+          pagination: ReturnType<typeof paginateMarkdownDocument>;
+          revision: string;
+          status: "parsed";
+        }) => void)
+      | undefined;
+    const runtime: MarkdownRuntime = {
+      closeSession: vi.fn(),
+      dispose: vi.fn(),
+      parse: vi.fn(async (input) => {
+        if (input.source.includes("Latest")) {
+          return await new Promise((resolve) => {
+            resolveLatest = resolve;
+          });
+        }
+        const document = parseMarkdownToIr(input.source);
+        return {
+          document,
+          pagination: paginateMarkdownDocument(document),
+          revision: input.revision,
+          status: "parsed" as const,
+        };
+      }),
+      setSessionVisible: vi.fn(),
+    };
+
+    const view = render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={runtime}
+        sessionId="markdown-live-soft"
+        source={source}
+        value="# Current"
+      />
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: "Current" })
+    ).toBeVisible();
+
+    view.rerender(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={runtime}
+        sessionId="markdown-live-soft"
+        source={source}
+        value="# Latest"
+      />
+    );
+
+    // Soft live update: previous content stays while the newer revision parses.
+    expect(screen.getByRole("heading", { name: "Current" })).toBeVisible();
+    expect(document.querySelector('[data-slot="markdown-loading"]')).toBeNull();
+
+    const latestDocument = parseMarkdownToIr("# Latest");
+    resolveLatest?.({
+      document: latestDocument,
+      pagination: paginateMarkdownDocument(latestDocument),
+      revision: (runtime.parse as ReturnType<typeof vi.fn>).mock.calls.at(
+        -1
+      )?.[0].revision as string,
+      status: "parsed",
+    });
+
+    expect(
+      await screen.findByRole("heading", { name: "Latest" })
+    ).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Current" })).toBeNull();
+  });
+
   it("renders worker-highlighted code and reports copy completion", async () => {
     const copyCode = vi.fn(async () => undefined);
     const highlighter: MarkdownCodeHighlighter = {
