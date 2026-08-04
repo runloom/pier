@@ -103,6 +103,42 @@ describe("createFileWatchService", () => {
     service.dispose();
   });
 
+  it("emits events with the client-subscribed root string, not only resolve()", async () => {
+    vi.useFakeTimers();
+    const watchers: FakeWatcher[] = [];
+    const fsWatch: FsWatchFn = (_target, _options, listener) => {
+      const watcher = new FakeWatcher();
+      watchers.push(watcher);
+      watcher.on("change", (eventType: string, filename: string) => {
+        listener(eventType, filename);
+      });
+      return watcher as unknown as ReturnType<FsWatchFn>;
+    };
+    const root = await mkdtemp(join(tmpdir(), "pier-file-watch-client-root-"));
+    const clientRoot = `${root}/`;
+    const service = createFileWatchService({
+      debounceMs: 10,
+      fsWatch,
+      maxWaitMs: 50,
+      pollMs: 60_000,
+    });
+    const listener = vi.fn();
+    const stop = service.watch(clientRoot, listener);
+
+    await writeFile(join(root, "notes.md"), "# hi\n");
+    watchers[0]?.emit("change", "change", "notes.md");
+    await vi.advanceTimersByTimeAsync(30);
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: [{ kind: "changed", path: "notes.md" }],
+        root: clientRoot,
+      })
+    );
+    stop();
+    service.dispose();
+  });
+
   it("filters noise segments such as node_modules", async () => {
     vi.useFakeTimers();
     const watchers: FakeWatcher[] = [];

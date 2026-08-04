@@ -4,7 +4,10 @@ import {
   isFileMissingError,
 } from "../editor/errors.ts";
 import { waitForSettledWithAbort } from "./async-drain.ts";
-import { protectsLocalBufferFromDisk } from "./disk-protection.ts";
+import {
+  consumeDiskReplaceAuthorization,
+  protectsLocalBufferFromDisk,
+} from "./disk-protection.ts";
 import {
   getDocument,
   markDocumentDeletedOnDisk,
@@ -20,6 +23,7 @@ export class FileDocumentLoader {
   readonly #context: RendererPluginContext;
   readonly #documentEpochs = new Map<string, number>();
   readonly #operations = new Map<string, Promise<void>>();
+  /** Presence means "run another reload after the current op settles". */
   readonly #pendingReloads = new Set<string>();
   #disposed = false;
 
@@ -58,13 +62,33 @@ export class FileDocumentLoader {
     });
     this.#operations.set(document.id, operation);
     operation.finally(() => {
-      if (this.#operations.get(document.id) === operation) {
-        this.#operations.delete(document.id);
-        if (this.#pendingReloads.delete(document.id)) {
-          this.start(document.id, true);
-        }
+      if (this.#operations.get(document.id) !== operation) {
+        return;
       }
+      this.#operations.delete(document.id);
+      if (this.#pendingReloads.delete(document.id)) {
+        // Keep force-adopt authorization for the chained reload (banner while
+        // a watch reload was already in flight).
+        this.start(document.id, true);
+        return;
+      }
+      // Chain finished: drop one-shot force-adopt authorization if unused or used.
+      consumeDiskReplaceAuthorization(document.id);
     });
+  }
+
+  /**
+   * Await the current load/reload and any chained pending reloads kicked from
+   * its finally handler (required for force-adopt while a watch reload runs).
+   */
+  async waitFor(documentId: string): Promise<void> {
+    for (;;) {
+      const operation = this.#operations.get(documentId);
+      if (!operation) {
+        return;
+      }
+      await operation;
+    }
   }
 
   invalidate(documentId: string): void {
@@ -74,10 +98,17 @@ export class FileDocumentLoader {
     );
     this.#operations.delete(documentId);
     this.#pendingReloads.delete(documentId);
+    consumeDiskReplaceAuthorization(documentId);
   }
 
   dispose(): void {
     this.#disposed = true;
+    for (const documentId of this.#operations.keys()) {
+      consumeDiskReplaceAuthorization(documentId);
+    }
+    for (const documentId of this.#pendingReloads) {
+      consumeDiskReplaceAuthorization(documentId);
+    }
     this.#operations.clear();
     this.#pendingReloads.clear();
     this.#documentEpochs.clear();
@@ -109,15 +140,12 @@ export class FileDocumentLoader {
       if (this.#disposed || !this.#isCurrent(latest, input)) {
         return;
       }
-      // Atomic rewrite often surfaces as delete then create. Deletion marks the
-      // clean buffer dirty so Save can recreate — but that must not block the
-      // follow-up reload from adopting the restored disk text (preview/source
-      // live update). Only true local edits stay protected.
+      // Atomic rewrite: delete then create must not block adopt of restored
+      // disk text. Force-adopt is a one-shot id authorization (banner); protect
+      // peeks it, and start()'s finally consumes when the chain ends.
       if (input.reload && protectsLocalBufferFromDisk(latest)) {
         if (!("revision" in result && result.revision === latest.revision)) {
           markDocumentDiskConflict(latest.id);
-          // 同步捕获磁盘快照，让冲突 diff 视图能对比真实磁盘内容，而不是
-          // 停留在上一次保存的旧快照。
           if (result.kind === "text") {
             setDocumentConflictContents(latest.id, result.contents);
           }

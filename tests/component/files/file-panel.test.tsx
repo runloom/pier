@@ -18,9 +18,11 @@ import {
   createUntitledMarkdownDocument,
   ensureDiskDocument,
   getDocument,
+  markDocumentDiskConflict,
   markDocumentLoaded,
   removeDocument,
   restoreUntitledDocumentFromPanelSource,
+  setDocumentConflictContents,
   updateDocumentContents,
 } from "@plugins/builtin/files/renderer/document/store.ts";
 import type { FilesDocumentPanelSource } from "@plugins/builtin/files/renderer/document/types.ts";
@@ -313,6 +315,7 @@ function createMockContext(overrides?: {
         format: { bom: false as const, encoding: "utf8" as const },
         kind: "text" as const,
         mode: 0o644,
+        mtimeMs: metadata.mtimeMs,
         path: request.path,
         revision: `revision-${metadata.mtimeMs}`,
         root: request.root,
@@ -4450,6 +4453,60 @@ describe("Files file-panel", () => {
     expect(main.head).toBeLessThanOrEqual(restoredDoc.length);
     fireEvent.keyDown(restoredView.contentDOM, { ctrlKey: true, key: "z" });
     expect(restoredView.state.doc.toString()).toBe("# Before\n\n- draft");
+  });
+
+  it("updates markdown preview when document contents change live", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "# Initial heading\n",
+    });
+    renderFilePanel({
+      context: panelContext,
+      source: { id: document.id, kind: "untitled", name: document.name },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
+    expect(
+      await screen.findByRole("heading", { name: "Initial heading" })
+    ).toBeVisible();
+
+    act(() => {
+      updateDocumentContents(document.id, "# Live update heading\n");
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Live update heading" })
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Initial heading" })
+    ).toBeNull();
+  });
+
+  it("shows the disk conflict banner and can keep local edits", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "conflict.md",
+      root: PROJECT_ROOT,
+    };
+    ensureDiskDocument(source);
+    const documentId = ensureDiskDocument(source).id;
+    markDocumentLoaded(documentId, "# Local body\n", null);
+    updateDocumentContents(documentId, "# Local body\nedited");
+    markDocumentDiskConflict(documentId);
+    setDocumentConflictContents(documentId, "# Disk body\n");
+
+    renderFilePanel({
+      context: panelContext,
+      source,
+    });
+
+    expect(
+      await screen.findByTestId("file-disk-conflict-banner")
+    ).toBeVisible();
+    expect(screen.getByText("File changed on disk")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Keep my edits" }));
+    expect(screen.queryByTestId("file-disk-conflict-banner")).toBeNull();
+    expect(getDocument(documentId)?.currentContents).toBe(
+      "# Local body\nedited"
+    );
+    expect(getDocument(documentId)?.diskConflict).toBe(false);
   });
 
   it("preserves the view session when an open disk document is renamed", async () => {

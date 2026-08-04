@@ -47,11 +47,17 @@ export interface FileWatchService {
   ): () => void;
 }
 
+interface RootListener {
+  /** Client-provided root string; events are re-rooted so preload filters match. */
+  clientRoot: string;
+  listener: (event: FileWatchEvent) => void;
+}
+
 interface RootEntry {
   /** 额外排除段(全订阅方并集);命中即丢事件。 */
   extraExcludes: Set<string>;
   firstPendingAt: number | null;
-  listeners: Set<(event: FileWatchEvent) => void>;
+  listeners: Set<RootListener>;
   pending: Map<string, FileWatchChangeKind>;
   pollTimer: ReturnType<typeof setInterval> | null;
   timer: ReturnType<typeof setTimeout> | null;
@@ -117,7 +123,7 @@ export function createFileWatchService(
   const watchFn = options.fsWatch ?? fsWatch;
   const roots = new Map<string, RootEntry>();
 
-  function flush(root: string, entry: RootEntry): void {
+  function flush(entry: RootEntry): void {
     if (entry.timer) {
       clearTimeout(entry.timer);
       entry.timer = null;
@@ -130,13 +136,16 @@ export function createFileWatchService(
       ([path, kind]) => ({ kind, path })
     );
     entry.pending.clear();
-    const event: FileWatchEvent = { changes, root };
-    for (const listener of entry.listeners) {
-      listener(event);
+    // Emit with each subscriber's original root string. Main resolves paths for
+    // fs.watch only; renderer preload filters by the root it subscribed with
+    // (often realpath'd projectRoot). Using resolvedRoot here silently dropped
+    // every event when the two strings differed (trailing form, etc.).
+    for (const entryListener of entry.listeners) {
+      entryListener.listener({ changes, root: entryListener.clientRoot });
     }
   }
 
-  function scheduleFlush(root: string, entry: RootEntry): void {
+  function scheduleFlush(entry: RootEntry): void {
     const now = Date.now();
     entry.firstPendingAt ??= now;
     const waited = now - entry.firstPendingAt;
@@ -146,28 +155,27 @@ export function createFileWatchService(
       clearTimeout(entry.timer);
     }
     entry.timer = setTimeout(() => {
-      flush(root, entry);
+      flush(entry);
     }, delay);
   }
 
   function enqueue(
-    root: string,
     entry: RootEntry,
     path: string,
     kind: FileWatchChangeKind
   ): void {
     entry.pending.set(path, kind);
-    scheduleFlush(root, entry);
+    scheduleFlush(entry);
   }
 
-  function startPollFallback(root: string, entry: RootEntry): void {
+  function startPollFallback(entry: RootEntry): void {
     if (entry.pollTimer) {
       return;
     }
     entry.pollTimer = setInterval(() => {
       // Polling fallback cannot invent precise path ops; emit a sentinel
       // changed event on "." so renderer can reload expanded roots.
-      enqueue(root, entry, ".", "changed");
+      enqueue(entry, ".", "changed");
     }, pollMs);
   }
 
@@ -189,7 +197,7 @@ export function createFileWatchService(
           if (!path) {
             return;
           }
-          enqueue(root, entry, path, mapEventType(root, path, eventType));
+          enqueue(entry, path, mapEventType(root, path, eventType));
         }
       );
       entry.watcher.on("error", () => {
@@ -199,7 +207,7 @@ export function createFileWatchService(
           // ignore close errors during recovery
         }
         entry.watcher = null;
-        startPollFallback(root, entry);
+        startPollFallback(entry);
       });
     } catch {
       entry.watcher = null;
@@ -207,7 +215,7 @@ export function createFileWatchService(
     // 轮询只做兜底:fs.watch 正常时绝不发 "." 哨兵,否则 renderer 会每个
     // 周期无差别 reload root + 重读所有打开文档。
     if (!entry.watcher) {
-      startPollFallback(root, entry);
+      startPollFallback(entry);
     }
   }
 
@@ -249,13 +257,14 @@ export function createFileWatchService(
           entry.extraExcludes.add(exclude);
         }
       }
-      entry.listeners.add(listener);
+      const rootListener: RootListener = { clientRoot: root, listener };
+      entry.listeners.add(rootListener);
       return () => {
         const current = roots.get(resolvedRoot);
         if (!current) {
           return;
         }
-        current.listeners.delete(listener);
+        current.listeners.delete(rootListener);
         if (current.listeners.size > 0) {
           return;
         }

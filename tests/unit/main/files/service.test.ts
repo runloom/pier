@@ -62,6 +62,7 @@ describe("createFileService", () => {
     if (opened.kind !== "text") {
       throw new Error("expected text document");
     }
+    expect(opened.mtimeMs).toBeTypeOf("number");
     await expect(
       service.writeDocument({
         contents: opened.contents,

@@ -1,4 +1,5 @@
 import {
+  clearDiskReplaceAuthorizationsForTests,
   isDeletionOnlyDirty,
   protectsLocalBufferFromDisk,
 } from "@plugins/builtin/files/renderer/document/disk-protection.ts";
@@ -24,6 +25,7 @@ import {
   clearFilesDocumentStore,
   configureFilesDraftBackend,
   createUntitledMarkdownDocument,
+  dismissDocumentDiskConflict,
   ensureDiskDocument,
   getDocument,
   getDocumentForPanelSource,
@@ -146,6 +148,7 @@ function draftBackendFromMap(
 describe("files-document-store", () => {
   afterEach(() => {
     clearFilesDocumentStore();
+    clearDiskReplaceAuthorizationsForTests();
     resetFilesDraftBackendForTests();
     globalThis.localStorage?.clear();
     globalThis.sessionStorage?.clear();
@@ -349,6 +352,7 @@ describe("files-document-store", () => {
       eol: "lf",
       format: { bom: false, encoding: "utf8" },
       kind: "text",
+      mtimeMs: 1,
       mode: 0o644,
       path: "README.md",
       revision: "rev-1",
@@ -878,6 +882,7 @@ describe("files-document-store", () => {
       eol: "lf",
       format: { bom: false, encoding: "utf8" },
       kind: "text",
+      mtimeMs: 1,
       mode: 0o644,
       path,
       revision: "revision-r2",
@@ -1000,7 +1005,7 @@ describe("files-document-store", () => {
       })
     ).toBe(true);
 
-    // Dirty-with-equal-contents without deletedOnDisk still protects.
+    // Dirty with equal contents (e.g. edit then undo) must NOT block live reload.
     expect(
       isDeletionOnlyDirty({
         ...base,
@@ -1012,7 +1017,84 @@ describe("files-document-store", () => {
         ...base,
         deletedOnDisk: false,
       })
+    ).toBe(false);
+
+    // True local edit still protects.
+    expect(
+      protectsLocalBufferFromDisk({
+        currentContents: "# local\n",
+        deletedOnDisk: false,
+        dirty: true,
+        durabilityUnknown: false,
+        savedContents: "# same\n",
+      })
     ).toBe(true);
+  });
+
+  it("dismisses disk conflict chrome without changing the local buffer", () => {
+    const document = ensureDiskDocument({
+      path: "notes.md",
+      root: "/repo",
+    });
+    markDocumentReadResult(document.id, {
+      canonicalPath: "notes.md",
+      contents: "# saved\n",
+      eol: "lf",
+      format: { bom: false, encoding: "utf8" },
+      kind: "text",
+      mtimeMs: 1,
+      mode: 0o644,
+      path: "notes.md",
+      revision: "r1",
+      root: "/repo",
+      size: 8,
+      writable: true,
+    });
+    updateDocumentContents(document.id, "# local\n");
+    markDocumentDiskConflict(document.id);
+    setDocumentConflictContents(document.id, "# disk\n");
+    expect(getDocument(document.id)).toMatchObject({
+      conflictDiskContents: "# disk\n",
+      currentContents: "# local\n",
+      diskConflict: true,
+    });
+
+    dismissDocumentDiskConflict(document.id);
+    expect(getDocument(document.id)).toMatchObject({
+      conflictDiskContents: null,
+      currentContents: "# local\n",
+      dirty: true,
+      diskConflict: false,
+    });
+  });
+
+  it("clears dirty when buffer returns to savedContents so external reloads resume", () => {
+    const document = ensureDiskDocument({
+      path: "notes.md",
+      root: "/repo",
+    });
+    markDocumentReadResult(document.id, {
+      canonicalPath: "notes.md",
+      contents: "# same\n",
+      eol: "lf",
+      format: { bom: false, encoding: "utf8" },
+      kind: "text",
+      mtimeMs: 1,
+      mode: 0o644,
+      path: "notes.md",
+      revision: "r1",
+      root: "/repo",
+      size: 7,
+      writable: true,
+    });
+    updateDocumentContents(document.id, "# edited\n");
+    expect(getDocument(document.id)?.dirty).toBe(true);
+    expect(protectsLocalBufferFromDisk(getDocument(document.id)!)).toBe(true);
+
+    updateDocumentContents(document.id, "# same\n");
+    const restored = getDocument(document.id);
+    expect(restored?.dirty).toBe(false);
+    expect(protectsLocalBufferFromDisk(restored!)).toBe(false);
   });
 
   it("protects true local dirty after delete and clears deleted flags on conflict", () => {
@@ -1025,6 +1107,7 @@ describe("files-document-store", () => {
       eol: "lf",
       format: { bom: false, encoding: "utf8" },
       kind: "text",
+      mtimeMs: 1,
       mode: 0o644,
       path,
       revision: "r1",
@@ -1047,6 +1130,7 @@ describe("files-document-store", () => {
       eol: "lf",
       format: { bom: false, encoding: "utf8" },
       kind: "text",
+      mtimeMs: 1,
       mode: 0o644,
       path,
       revision: "r2",
@@ -1114,6 +1198,7 @@ describe("files-document-store", () => {
       eol: "none",
       format: { bom: false, encoding: "utf8" },
       kind: "text",
+      mtimeMs: 1,
       mode: 0o644,
       path,
       revision: "text-r2",

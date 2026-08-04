@@ -91,6 +91,7 @@ function createHarness(
         format: { bom: false as const, encoding: "utf8" as const },
         kind: "text" as const,
         mode: 0o644,
+        mtimeMs: metadata.mtimeMs,
         path: request.path,
         revision: `revision-${metadata.mtimeMs}`,
         root: request.root,
@@ -677,6 +678,88 @@ describe("FileEditorController", () => {
     expect(getDocument(documentId)?.currentContents).toBe("# Local\n");
     expect(getDocument(documentId)?.diskConflict).toBe(true);
     expect(harness.readText).toHaveBeenCalledTimes(4);
+
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("resumes live disk reload after edit-then-undo returns the buffer to saved text", async () => {
+    const harness = createHarness();
+    const release = harness.controller.acquirePanel("panel", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+    const baseline = getDocument(documentId)?.currentContents;
+    expect(baseline).toBeTruthy();
+
+    updateDocumentContents(documentId, "# temporary local edit\n");
+    expect(getDocument(documentId)?.dirty).toBe(true);
+    updateDocumentContents(documentId, baseline ?? "");
+    expect(getDocument(documentId)?.dirty).toBe(false);
+
+    harness.setDisk("# From agent\n", 8);
+    harness.watchEvent({
+      changes: [{ kind: "changed", path: SOURCE.path }],
+      root: ROOT,
+    });
+    await vi.waitFor(() =>
+      expect(getDocument(documentId)).toMatchObject({
+        currentContents: "# From agent\n",
+        dirty: false,
+        diskConflict: false,
+      })
+    );
+
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("force-adopts disk text from the conflict banner and can dismiss to keep local", async () => {
+    const harness = createHarness();
+    const release = harness.controller.acquirePanel("panel", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+
+    updateDocumentContents(documentId, "# Local keep me\n");
+    harness.setDisk("# Disk wins\n", 12);
+    harness.watchEvent({
+      changes: [{ kind: "changed", path: SOURCE.path }],
+      root: ROOT,
+    });
+    await vi.waitFor(() =>
+      expect(getDocument(documentId)).toMatchObject({
+        currentContents: "# Local keep me\n",
+        dirty: true,
+        diskConflict: true,
+      })
+    );
+
+    harness.controller.dismissDocumentDiskConflict(documentId);
+    expect(getDocument(documentId)).toMatchObject({
+      currentContents: "# Local keep me\n",
+      dirty: true,
+      diskConflict: false,
+      conflictDiskContents: null,
+    });
+
+    harness.setDisk("# Disk after dismiss\n", 13);
+    harness.watchEvent({
+      changes: [{ kind: "changed", path: SOURCE.path }],
+      root: ROOT,
+    });
+    await vi.waitFor(() =>
+      expect(getDocument(documentId)?.diskConflict).toBe(true)
+    );
+
+    await harness.controller.reloadDocumentFromDisk(documentId, {
+      forceAdopt: true,
+    });
+    expect(getDocument(documentId)).toMatchObject({
+      currentContents: "# Disk after dismiss\n",
+      dirty: false,
+      diskConflict: false,
+    });
 
     release();
     harness.controller.dispose();

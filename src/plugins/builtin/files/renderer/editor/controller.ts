@@ -210,6 +210,19 @@ export class FileEditorController extends FileEditorControllerViewFacade {
     }
     this.#documents.discardDocument(documentId);
   }
+
+  /** Re-read disk; forceAdopt replaces a dirty/protected buffer (banner action). */
+  async reloadDocumentFromDisk(
+    documentId: string,
+    options: { forceAdopt?: boolean } = {}
+  ): Promise<void> {
+    await this.#documents.reloadDocumentFromDisk(documentId, options);
+  }
+
+  /** Keep local edits and clear disk-conflict chrome. */
+  dismissDocumentDiskConflict(documentId: string): void {
+    this.#documents.dismissDocumentDiskConflict(documentId);
+  }
   async moveDiskDocumentSource(
     root: string,
     oldPath: string,

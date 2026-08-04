@@ -2,48 +2,58 @@ import type {
   FileDocumentReadResult,
   FileDocumentWriteResult,
 } from "@shared/contracts/file.ts";
-import { protectsLocalBufferFromDisk } from "./disk-protection.ts";
+import {
+  computeDocumentDirty,
+  protectsLocalBufferFromDisk,
+} from "./disk-protection.ts";
+import {
+  createdEmptyEolAfterRead,
+  DISK_SAVE_CAPABILITIES,
+  withDocumentReadResult,
+} from "./read-result.ts";
 import type { FilesDocument } from "./types.ts";
 
-const DISK_SAVE_CAPABILITIES = ["save", "saveAs"] as const;
-
-function unsupportedReadOnlyReason(
-  result: Exclude<FileDocumentReadResult, { kind: "image" | "text" }>
-): NonNullable<FilesDocument["readOnlyReason"]> {
-  if (result.kind === "binary") {
-    return "binary";
-  }
-  if (result.kind === "unsupported-encoding") {
-    return "unknown-encoding";
-  }
-  return result.kind === "too-large" ? "too-large" : "unsupported-file";
-}
-function createdEmptyEolAfterRead(
-  document: FilesDocument,
-  result: FileDocumentReadResult
-): FilesDocument["createdEmptyEol"] {
-  return document.createdEmptyEol !== null &&
-    result.kind === "text" &&
-    document.currentContents === "" &&
-    document.savedContents === "" &&
-    result.contents === "" &&
-    result.revision === document.revision
-    ? document.createdEmptyEol
-    : null;
-}
+export { withDocumentReadResult } from "./read-result.ts";
 
 export function withDocumentContents(
   document: FilesDocument,
   contents: string
 ): FilesDocument {
-  if (document.currentContents === contents) {
+  const next = {
+    ...document,
+    currentContents: contents,
+  };
+  const dirty = computeDocumentDirty(next);
+  let nextDiskConflict = document.diskConflict;
+  let nextConflictDiskContents = document.conflictDiskContents;
+  if (!dirty) {
+    // Clean buffer: keep conflict only when a divergent disk snapshot remains.
+    if (
+      document.conflictDiskContents !== null &&
+      document.conflictDiskContents !== contents
+    ) {
+      nextDiskConflict = true;
+    } else {
+      nextDiskConflict = false;
+      nextConflictDiskContents = null;
+    }
+  }
+  if (
+    document.currentContents === contents &&
+    document.dirty === dirty &&
+    document.diskConflict === nextDiskConflict &&
+    document.conflictDiskContents === nextConflictDiskContents
+  ) {
     return document;
   }
   return {
     ...document,
     currentContents: contents,
-    createdEmptyEol: null,
-    dirty: true,
+    createdEmptyEol:
+      document.currentContents === contents ? document.createdEmptyEol : null,
+    conflictDiskContents: nextConflictDiskContents,
+    dirty,
+    diskConflict: nextDiskConflict,
   };
 }
 
@@ -82,155 +92,6 @@ export function withDocumentLoaded(
     error: null,
     loadState: "loaded",
     savedContents: contents,
-  };
-}
-
-export function withDocumentReadResult(
-  document: FilesDocument,
-  result: FileDocumentReadResult
-): FilesDocument {
-  const createdEmptyEol = createdEmptyEolAfterRead(document, result);
-  if (result.kind === "image") {
-    if (protectsLocalBufferFromDisk(document)) {
-      return {
-        ...document,
-        capabilities: [],
-        createdEmptyEol,
-        deletedOnDisk: false,
-        diskConflict: true,
-        error: null,
-        hasBackingStore: true,
-        loadState: "loaded",
-        preview: null,
-        readOnly: true,
-        readOnlyReason: "binary",
-        size: result.size,
-      };
-    }
-    return {
-      ...document,
-      baseMtimeMs: result.mtimeMs,
-      capabilities: [],
-      canonicalPath: result.canonicalPath,
-      conflictDiskContents: null,
-      currentContents: "",
-      createdEmptyEol,
-      deletedOnDisk: false,
-      dirty: false,
-      diskConflict: false,
-      eol: null,
-      error: null,
-      format: null,
-      hasBackingStore: true,
-      loadState: "loaded",
-      mode: null,
-      mime: result.mime,
-      preview: {
-        kind: "image",
-        mime: result.mime,
-        revision: result.revision,
-      },
-      readOnly: true,
-      readOnlyReason: null,
-      revision: result.revision,
-      savedContents: "",
-      size: result.size,
-    };
-  }
-  if (result.kind !== "text") {
-    const readOnlyReason = unsupportedReadOnlyReason(result);
-    if (protectsLocalBufferFromDisk(document)) {
-      return {
-        ...document,
-        capabilities: [],
-        createdEmptyEol,
-        deletedOnDisk: false,
-        diskConflict: true,
-        error: null,
-        hasBackingStore: true,
-        loadState: "loaded",
-        mime: result.kind === "binary" ? result.mime : null,
-        preview: null,
-        readOnly: true,
-        readOnlyReason,
-        size: "size" in result ? result.size : document.size,
-      };
-    }
-    return {
-      ...document,
-      capabilities: [],
-      canonicalPath: null,
-      conflictDiskContents: null,
-      createdEmptyEol,
-      currentContents: "",
-      deletedOnDisk: false,
-      dirty: false,
-      diskConflict: false,
-      eol: null,
-      error: null,
-      format: null,
-      hasBackingStore: true,
-      loadState: "loaded",
-      mode: null,
-      mime: result.kind === "binary" ? result.mime : null,
-      preview: null,
-      readOnly: true,
-      readOnlyReason,
-      revision: "revision" in result ? result.revision : null,
-      savedContents: "",
-      size: "size" in result ? result.size : null,
-    };
-  }
-  let readOnlyReason: FilesDocument["readOnlyReason"] = null;
-  if (!result.writable) {
-    readOnlyReason = "not-writable";
-  } else if (result.eol === "mixed") {
-    readOnlyReason = "mixed-eol";
-  }
-  const protectedFromDiskReplacement = protectsLocalBufferFromDisk(document);
-  if (protectedFromDiskReplacement && document.revision !== result.revision) {
-    return {
-      ...document,
-      canonicalPath: result.canonicalPath,
-      createdEmptyEol,
-      deletedOnDisk: false,
-      diskConflict: true,
-      error: null,
-      hasBackingStore: true,
-      loadState: "loaded",
-      mode: result.mode,
-      size: result.size,
-    };
-  }
-  const metadata = {
-    capabilities: readOnlyReason ? [] : DISK_SAVE_CAPABILITIES,
-    createdEmptyEol,
-    canonicalPath: result.canonicalPath,
-    deletedOnDisk: false,
-    eol: createdEmptyEol ?? result.eol,
-    error: null,
-    format: result.format,
-    hasBackingStore: true,
-    loadState: "loaded" as const,
-    mode: result.mode,
-    mime: null,
-    preview: null,
-    readOnly: readOnlyReason !== null,
-    readOnlyReason,
-    revision: result.revision,
-    size: result.size,
-  };
-  if (protectedFromDiskReplacement) {
-    return { ...document, ...metadata };
-  }
-  return {
-    ...document,
-    ...metadata,
-    conflictDiskContents: null,
-    currentContents: result.contents,
-    dirty: false,
-    diskConflict: false,
-    savedContents: result.contents,
   };
 }
 
@@ -448,6 +309,20 @@ export function withDocumentDiskConflict(
     deletedOnDisk: false,
     diskConflict: true,
     hasBackingStore: true,
+  };
+}
+
+/** Keep local buffer; clear conflict chrome after the user dismisses the banner. */
+export function withDocumentDiskConflictDismissed(
+  document: FilesDocument
+): FilesDocument {
+  if (!(document.diskConflict || document.conflictDiskContents !== null)) {
+    return document;
+  }
+  return {
+    ...document,
+    conflictDiskContents: null,
+    diskConflict: false,
   };
 }
 
