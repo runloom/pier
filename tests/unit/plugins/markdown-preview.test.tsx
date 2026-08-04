@@ -4,6 +4,7 @@ import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/pars
 import { MarkdownPreview } from "@plugins/builtin/files/renderer/markdown/preview.tsx";
 import {
   type MarkdownRuntime,
+  type MarkdownRuntimeParseOutcome,
   paginateMarkdownDocument,
 } from "@plugins/builtin/files/renderer/markdown/runtime.ts";
 import { FILES_IN_FILE_SEARCH_BAR_CLASSNAME } from "@plugins/builtin/files/renderer/search/bar.tsx";
@@ -117,19 +118,14 @@ describe("MarkdownPreview", () => {
 
   it("does not soft-keep prior ready content across document identity remounts", async () => {
     let resolveSecond:
-      | ((outcome: {
-          document: ReturnType<typeof parseMarkdownToIr>;
-          pagination: ReturnType<typeof paginateMarkdownDocument>;
-          revision: string;
-          status: "parsed";
-        }) => void)
+      | ((outcome: MarkdownRuntimeParseOutcome) => void)
       | undefined;
     const runtime: MarkdownRuntime = {
       closeSession: vi.fn(),
       dispose: vi.fn(),
-      parse: vi.fn(async (input) => {
+      parse: vi.fn(async (input): Promise<MarkdownRuntimeParseOutcome> => {
         if (input.source.includes("Second")) {
-          return await new Promise((resolve) => {
+          return await new Promise<MarkdownRuntimeParseOutcome>((resolve) => {
             resolveSecond = resolve;
           });
         }
@@ -190,19 +186,14 @@ describe("MarkdownPreview", () => {
 
   it("keeps the previous ready preview visible while a newer parse is in flight", async () => {
     let resolveLatest:
-      | ((outcome: {
-          document: ReturnType<typeof parseMarkdownToIr>;
-          pagination: ReturnType<typeof paginateMarkdownDocument>;
-          revision: string;
-          status: "parsed";
-        }) => void)
+      | ((outcome: MarkdownRuntimeParseOutcome) => void)
       | undefined;
     const runtime: MarkdownRuntime = {
       closeSession: vi.fn(),
       dispose: vi.fn(),
-      parse: vi.fn(async (input) => {
+      parse: vi.fn(async (input): Promise<MarkdownRuntimeParseOutcome> => {
         if (input.source.includes("Latest")) {
-          return await new Promise((resolve) => {
+          return await new Promise<MarkdownRuntimeParseOutcome>((resolve) => {
             resolveLatest = resolve;
           });
         }

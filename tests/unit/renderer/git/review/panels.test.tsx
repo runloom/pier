@@ -180,6 +180,7 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
             cancelled = true;
           };
         },
+        resolvePointerLineHit: () => null,
         restoreAnchor,
         scrollToItem(id) {
           const result = scrollToItem(id);

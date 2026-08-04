@@ -7,9 +7,11 @@ import { describe, expect, it, vi } from "vitest";
 
 function item(path: string, id = "item-a"): PierDiffViewItem {
   return {
+    cacheKey: `${id}:0`,
+    fileDisplay: { path, status: "modified" },
     id,
-    fileDisplay: { path, title: path },
-  } as PierDiffViewItem;
+    patch: `diff --git a/${path} b/${path}\n`,
+  };
 }
 
 function handle(partial: {

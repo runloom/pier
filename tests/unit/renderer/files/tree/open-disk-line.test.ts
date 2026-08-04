@@ -9,7 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 describe("registerFilesDiskOpenLineReveal", () => {
   const showSourceMode = vi.fn();
   const documentId = vi.fn(() => "doc:1");
-  const goToLineResult = vi.fn(() => "applied" as const);
+  const goToLineResult = vi.fn(
+    (): "applied" | "queued" | "rejected" => "applied"
+  );
   const error = vi.fn();
   const t = vi.fn(
     (_key: string, _values: unknown, fallback: string) => fallback
