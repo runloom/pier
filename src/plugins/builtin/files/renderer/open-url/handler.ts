@@ -163,9 +163,9 @@ function openDiskFile(input: {
 
   input.context.panels.openInstance({
     componentId: FILES_FILE_PANEL_ID,
-    ...(existingInstance || !input.panelContext
-      ? {}
-      : { context: input.panelContext }),
+    // Always refresh when the caller has a path anchor — reusing a tab that was
+    // opened without context used to leave projectRootPath/cwd permanently empty.
+    ...(input.panelContext ? { context: input.panelContext } : {}),
     dropUnpinnedInstances: false,
     instanceId,
     params,

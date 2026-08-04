@@ -8,6 +8,10 @@ import {
   releaseFilesGroupView,
 } from "./group-view-host.tsx";
 
+/**
+ * Claim the shared group view host for this files panel.
+ * Detached hosts are rebuilt inside groupContent.claim.
+ */
 export function useFilesGroupViewClaim({
   controller,
   group,

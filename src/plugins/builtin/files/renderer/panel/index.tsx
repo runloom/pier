@@ -145,6 +145,15 @@ function FilePanelContent({
   const prefersSharedGroupView = Boolean(
     runtimeContext && group && props.api?.id && ownerIdRef.current
   );
+  useFilesGroupViewClaim({
+    controller,
+    group,
+    ownerId: ownerIdRef.current,
+    panelApiId: props.api?.id,
+    prefersSharedGroupView,
+    runtimeContext,
+    runtimeWatchHub,
+  });
   const inlineUntitledDocumentId =
     !prefersSharedGroupView && sourceFromParams?.kind === "untitled"
       ? sourceFromParams.id
@@ -157,16 +166,6 @@ function FilePanelContent({
       controller.discardDocument(inlineUntitledDocumentId);
     };
   }, [controller, inlineUntitledDocumentId]);
-
-  useFilesGroupViewClaim({
-    controller,
-    group,
-    ownerId: ownerIdRef.current,
-    panelApiId: props.api?.id,
-    prefersSharedGroupView,
-    runtimeContext,
-    runtimeWatchHub,
-  });
 
   // tab 未保存圆点:document.dirty 变化时写进 params(与 preview 斜体同通道),
   // panel-tab-header 经 onDidParametersChange 收到后渲染。dirty 同时并入
@@ -310,7 +309,7 @@ function FilePanelContent({
       treeInstanceId,
     ]
   );
-  // 共享 group 视图已接管 chrome+树+编辑器。
+  // Shared group view owns chrome + tree + editor; thin shell stays empty.
   if (prefersSharedGroupView) {
     return <div aria-hidden="true" className="h-full w-full" />;
   }

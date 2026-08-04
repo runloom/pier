@@ -1,3 +1,4 @@
+import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -245,5 +246,71 @@ describe("host group content context", () => {
     expect(
       container.querySelector('[data-slot="host.test.groupView"]')
     ).toBeNull();
+  });
+
+  it("wraps claimed content so Tooltip can mount outside the app shell", () => {
+    const context = createHostGroupContentContext(pluginEntry, () => undefined);
+    const ownerId = Symbol("owner");
+    const { container, group } = createMockGroup();
+
+    expect(() =>
+      context.claim({
+        group,
+        id: "host.test.groupView",
+        ownerId,
+        render: () => (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button type="button">tip</button>
+            </TooltipTrigger>
+            <TooltipContent>hello</TooltipContent>
+          </Tooltip>
+        ),
+        visible: () => true,
+      })
+    ).not.toThrow();
+    expect(
+      container.querySelector('[data-slot="host.test.groupView"]')
+    ).toBeInstanceOf(HTMLElement);
+  });
+
+  it("rebuilds a claim when the previous host was detached from the dockview container", () => {
+    const context = createHostGroupContentContext(pluginEntry, () => undefined);
+    const ownerId = Symbol("owner");
+    const { container, group } = createMockGroup();
+
+    expect(
+      context.claim({
+        group,
+        id: "host.test.groupView",
+        ownerId,
+        render: () => <div data-testid="group-view-v1">v1</div>,
+        visible: () => true,
+      })
+    ).toBe(true);
+    const firstHost = container.querySelector(
+      '[data-slot="host.test.groupView"]'
+    );
+    expect(firstHost).toBeInstanceOf(HTMLElement);
+    firstHost?.remove();
+    expect(firstHost?.isConnected).toBe(false);
+
+    expect(
+      context.claim({
+        group,
+        id: "host.test.groupView",
+        ownerId: Symbol("owner-retry"),
+        render: () => <div data-testid="group-view-v2">v2</div>,
+        visible: () => true,
+      })
+    ).toBe(true);
+    const hosts = container.querySelectorAll(
+      '[data-slot="host.test.groupView"]'
+    );
+    expect(hosts).toHaveLength(1);
+    // Detached host must not be reused; a fresh host is mounted under the container.
+    expect(hosts[0]).not.toBe(firstHost);
+    expect(hosts[0]?.parentElement).toBe(container);
+    expect(hosts[0]?.isConnected).toBe(true);
   });
 });

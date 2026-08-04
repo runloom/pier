@@ -240,8 +240,11 @@ describe("git review tree actions", () => {
     expect(openInEditor).toHaveBeenCalledWith({
       context: expect.objectContaining({
         contextId: "ctx",
+        cwd: "/repo",
         gitRoot: "/repo",
         projectRootPath: "/repo",
+        worktreeKey: "/repo",
+        worktreeRoot: "/repo",
       }),
       path: "src/a.ts",
       root: "/repo",

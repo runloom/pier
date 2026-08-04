@@ -135,7 +135,14 @@ export function resolveCreateTerminalLaunch(
   const context = explicitCreate
     ? (args.context ?? saved?.context)
     : (saved?.context ?? args.context);
-  const cwd = context?.cwd ?? launch?.cwd;
+  // Prefer live shell cwd; fall back to project anchors so thin contexts
+  // (e.g. Review → open file with projectRootPath only) still spawn in-repo.
+  const cwd =
+    context?.cwd ??
+    context?.worktreeRoot ??
+    context?.projectRootPath ??
+    context?.gitRoot ??
+    launch?.cwd;
   const task = explicitCreate
     ? (args.task ?? saved?.task)
     : (saved?.task ?? args.task);

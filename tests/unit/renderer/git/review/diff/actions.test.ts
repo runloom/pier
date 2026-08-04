@@ -64,10 +64,49 @@ describe("git review diff open actions", () => {
     expect(openInEditor).toHaveBeenCalledWith({
       context: expect.objectContaining({
         contextId: "ctx",
+        cwd: "/repo",
+        gitRoot: "/repo",
+        projectRootPath: "/repo",
+        worktreeKey: "/repo",
+        worktreeRoot: "/repo",
+      }),
+      line: 18,
+      path: "src/a.ts",
+      root: "/repo",
+      title: "a.ts",
+    });
+  });
+
+  it("prefers source panel context and still fills missing cwd", async () => {
+    const action = actionRegistry.get(GIT_REVIEW_OPEN_IN_EDITOR_COMMAND_ID);
+    await action?.handler({
+      metadata: {
+        contextId: "ctx",
+        gitRootPath: "/repo",
+        line: 4,
+        path: "src/a.ts",
+      },
+      sourcePanelContext: {
+        branch: "main",
+        contextId: "ctx",
+        gitRoot: "/repo",
+        projectRootPath: "/repo",
+        source: "panel",
+        updatedAt: 1,
+        worktreeKey: "/repo",
+        worktreeRoot: "/repo",
+      },
+      surface: GIT_REVIEW_DIFF_SURFACE,
+    });
+    expect(openInEditor).toHaveBeenCalledWith({
+      context: expect.objectContaining({
+        branch: "main",
+        contextId: "ctx",
+        cwd: "/repo",
         gitRoot: "/repo",
         projectRootPath: "/repo",
       }),
-      line: 18,
+      line: 4,
       path: "src/a.ts",
       root: "/repo",
       title: "a.ts",

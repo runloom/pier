@@ -7,9 +7,11 @@ import type {
   GitReviewFileStatus,
   GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import { useCallback } from "react";
 import { GIT_CHANGES_PANEL_ID } from "../../manifest.ts";
 import { pluginText } from "../plugin-text.ts";
+import { panelContextFromReviewGitRoot } from "./panel-context-from-review.ts";
 import type { GitReviewTreeModel } from "./tree.tsx";
 import { GIT_REVIEW_TREE_ITEM_SURFACE } from "./tree-actions.ts";
 import type { GitReviewTreeFileRef } from "./tree-section.ts";
@@ -210,6 +212,7 @@ interface GitReviewTreeContextMenuOptions {
   contextId: string;
   gitRootPath: string;
   mutationAuthorityBlocked: boolean;
+  sourcePanelContext?: PanelContext | null;
   sourcePanelId?: string;
   treeModel: GitReviewTreeModel;
 }
@@ -219,6 +222,7 @@ export function useGitReviewTreeContextMenu({
   contextId,
   gitRootPath,
   mutationAuthorityBlocked,
+  sourcePanelContext,
   sourcePanelId,
   treeModel,
 }: GitReviewTreeContextMenuOptions) {
@@ -275,6 +279,11 @@ export function useGitReviewTreeContextMenu({
             uncommitted: treeModel.mutation.uncommitted,
           },
           sourcePanelComponent: GIT_CHANGES_PANEL_ID,
+          sourcePanelContext: panelContextFromReviewGitRoot({
+            contextId,
+            gitRootPath,
+            ...(sourcePanelContext ? { sourcePanelContext } : {}),
+          }),
           ...(sourcePanelId ? { sourcePanelId } : {}),
         })
         .catch((error: unknown) => {
@@ -297,6 +306,7 @@ export function useGitReviewTreeContextMenu({
       contextId,
       gitRootPath,
       mutationAuthorityBlocked,
+      sourcePanelContext,
       sourcePanelId,
       treeModel,
     ]

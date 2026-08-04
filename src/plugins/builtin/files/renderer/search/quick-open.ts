@@ -112,9 +112,8 @@ function openDiskPathInGroup(input: {
 
   input.context.panels.openInstance({
     componentId: FILES_FILE_PANEL_ID,
-    ...(!existingInstance && input.panelContext
-      ? { context: input.panelContext }
-      : {}),
+    // Refresh path anchor on reuse (same as host openFilesDiskPath).
+    ...(input.panelContext ? { context: input.panelContext } : {}),
     dropUnpinnedInstances: !existingInstance,
     instanceId: existingInstance?.id ?? createFileFilePanelInstanceId(source),
     params,

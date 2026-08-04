@@ -24,6 +24,7 @@ import {
   cancelGitReviewMutationTransition,
   commitGitReviewMutationTransition,
 } from "./mutation-transitions.ts";
+import { panelContextFromReviewGitRoot } from "./panel-context-from-review.ts";
 
 const reviewTreeItemMetadataSchema = z.object({
   allDiscardTrackedDeleted: z.boolean().default(false),
@@ -91,15 +92,14 @@ export function basename(path: string): string {
 }
 
 export function panelContextFromReviewItem(
-  item: GitReviewTreeItemMetadata
+  item: GitReviewTreeItemMetadata,
+  sourcePanelContext?: PanelContext | null
 ): PanelContext {
-  return {
+  return panelContextFromReviewGitRoot({
     contextId: item.contextId,
-    gitRoot: item.gitRootPath,
-    projectRootPath: item.gitRootPath,
-    source: "panel",
-    updatedAt: Date.now(),
-  };
+    gitRootPath: item.gitRootPath,
+    ...(sourcePanelContext ? { sourcePanelContext } : {}),
+  });
 }
 
 export function canStage(item: GitReviewTreeItemMetadata | null): boolean {

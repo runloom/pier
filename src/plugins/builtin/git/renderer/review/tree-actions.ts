@@ -52,7 +52,10 @@ export function registerGitReviewTreeActions(
           return;
         }
         const opened = context.files.openInEditor({
-          context: panelContextFromReviewItem(item),
+          context: panelContextFromReviewItem(
+            item,
+            invocation?.sourcePanelContext
+          ),
           path: repoPath,
           root: item.gitRootPath,
           title: basename(repoPath),

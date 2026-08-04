@@ -43,7 +43,10 @@ export async function openGitChangesPanel(input: {
   pluginContext: RendererPluginContext;
   target?: GitReviewTarget;
 }): Promise<void> {
-  const gitRootPath = input.panelContext.gitRoot;
+  const gitRootPath =
+    input.panelContext.gitRoot ??
+    input.panelContext.worktreeRoot ??
+    input.panelContext.projectRootPath;
   if (!gitRootPath) {
     input.pluginContext.notifications.error(
       pluginText(

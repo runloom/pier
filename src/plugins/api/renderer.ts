@@ -400,6 +400,8 @@ export interface RendererPluginContext {
   git: RendererPluginGitFacade;
   groupContent: {
     claim(claim: PluginGroupContentClaim): boolean;
+    /** Drop every claimed host for this plugin (stale overlays after HMR / layout). */
+    clearAll(): void;
     release(input: { groupId: string; id: string; ownerId: symbol }): void;
   };
   i18n: {
