@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+## [0.1.16] - 2026-08-04
+
+### Fixed
+
+- **面板标签与溢出。** 标签 tooltip、溢出菜单 chrome 与关闭文案 i18n 对齐。
+- **Git Review 打开上下文。** 保留审查文件路径上下文；文件组视图认领失败时对用户可见。
+- **设置弹窗滚动。** 技能详情与 max-h 设置弹窗恢复可滚动内容区。
+- **终端 OSC 路径标签。** 路径型 OSC 标签 short 显示目录 basename，完整 cwd 进入 long/tooltip。
+- **测试稳定性。** SQLite reader 在 V8 coverage 下不再误报 closed；Cmd+P 复用已开文件标签时刷新 panel context。
+
 ## [0.1.15] - 2026-08-04
 
 ### Added
