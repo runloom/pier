@@ -1,4 +1,4 @@
-import { panelContextFromReviewGitRoot } from "@plugins/builtin/git/renderer/review/panel-context-from-review.ts";
+import { panelContextFromReviewGitRoot } from "@plugins/builtin/git/renderer/review/context/from-git-root.ts";
 import { describe, expect, it } from "vitest";
 
 describe("panelContextFromReviewGitRoot", () => {

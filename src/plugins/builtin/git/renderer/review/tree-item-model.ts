@@ -10,6 +10,7 @@ import type {
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
 import { pluginText } from "../plugin-text.ts";
+import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
 import {
   canDiscardUnstagedStatus,
   type GitDiscardSelection,
@@ -24,7 +25,6 @@ import {
   cancelGitReviewMutationTransition,
   commitGitReviewMutationTransition,
 } from "./mutation-transitions.ts";
-import { panelContextFromReviewGitRoot } from "./panel-context-from-review.ts";
 
 const reviewTreeItemMetadataSchema = z.object({
   allDiscardTrackedDeleted: z.boolean().default(false),

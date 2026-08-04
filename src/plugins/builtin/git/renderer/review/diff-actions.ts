@@ -3,7 +3,7 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import { FileText } from "lucide-react";
 import { pluginText } from "../plugin-text.ts";
 import { reviewMutationBasename } from "./code-mutation-helpers.ts";
-import { panelContextFromReviewGitRoot } from "./panel-context-from-review.ts";
+import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
 
 export const GIT_REVIEW_DIFF_SURFACE = "git/review-diff";
 export const GIT_REVIEW_OPEN_IN_EDITOR_COMMAND_ID =

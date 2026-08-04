@@ -6,12 +6,12 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { pluginText } from "../plugin-text.ts";
+import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
 import {
   GIT_REVIEW_DIFF_SURFACE,
   type GitReviewDiffOpenMetadata,
 } from "./diff-actions.ts";
 import { resolveGitReviewDiffOpenTarget } from "./diff-open-target.ts";
-import { panelContextFromReviewGitRoot } from "./panel-context-from-review.ts";
 
 export function openGitReviewDiffContextMenu(options: {
   readonly context: RendererPluginContext;

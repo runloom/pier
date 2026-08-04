@@ -11,7 +11,7 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import { useCallback } from "react";
 import { GIT_CHANGES_PANEL_ID } from "../../manifest.ts";
 import { pluginText } from "../plugin-text.ts";
-import { panelContextFromReviewGitRoot } from "./panel-context-from-review.ts";
+import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
 import type { GitReviewTreeModel } from "./tree.tsx";
 import { GIT_REVIEW_TREE_ITEM_SURFACE } from "./tree-actions.ts";
 import type { GitReviewTreeFileRef } from "./tree-section.ts";
