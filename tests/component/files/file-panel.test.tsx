@@ -786,7 +786,7 @@ describe("Files file-panel", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Expand file tree" })
+      screen.getByRole("button", { name: "Show file tree" })
     ).toBeVisible();
     expect(container.querySelector("svg")).toHaveClass("lucide-folder-tree");
   });
@@ -855,7 +855,7 @@ describe("Files file-panel", () => {
       screen.getByText("No file selected").closest('[data-slot="empty"]')
     ).not.toBeNull();
     expect(
-      screen.getByRole("button", { name: "Collapse file tree" })
+      screen.getByRole("button", { name: "Hide file tree" })
     ).toBeVisible();
     const tree = within(getFileTree(container));
     expect(tree.getByRole("treeitem", { name: "README.md" })).toBeVisible();
@@ -4069,9 +4069,9 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
     });
-    fireEvent.click(screen.getByRole("button", { name: "Collapse file tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide file tree" }));
     expect(
-      screen.getByRole("button", { name: "Expand file tree" })
+      screen.getByRole("button", { name: "Show file tree" })
     ).toBeVisible();
 
     unmount();
@@ -4080,12 +4080,12 @@ describe("Files file-panel", () => {
     renderFilePanel({ context: panelContext }, createMockContext({ list }));
 
     expect(
-      screen.getByRole("button", { name: "Expand file tree" })
+      screen.getByRole("button", { name: "Show file tree" })
     ).toBeVisible();
     expect(screen.queryByText("README.md")).not.toBeInTheDocument();
     expect(list).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand file tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show file tree" }));
     await waitFor(() => {
       expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
     });
@@ -4112,13 +4112,13 @@ describe("Files file-panel", () => {
     });
     expect(list).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Collapse file tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide file tree" }));
     expect(
-      screen.getByRole("button", { name: "Expand file tree" })
+      screen.getByRole("button", { name: "Show file tree" })
     ).toBeVisible();
     expect(screen.queryByText("README.md")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand file tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show file tree" }));
     await waitFor(() => {
       expect(
         within(getFileTree(container)).getByRole("treeitem", {

@@ -1847,7 +1847,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await reviewSeparator.focus();
     await page.keyboard.press("Enter");
     await expect(
-      page.getByRole("button", { name: /Expand changed files|展开变更文件/u })
+      page.getByRole("button", { name: /Show changed files|展开变更文件/u })
     ).toHaveAttribute("aria-expanded", "false");
     await expect(
       page.locator('file-tree-container[data-slot="pier-file-tree"]')
@@ -1855,11 +1855,11 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(reviewTreePanel).toHaveAttribute("aria-hidden", "true");
     expect(pageErrors).toEqual([]);
     await page
-      .getByRole("button", { name: /Expand changed files|展开变更文件/u })
+      .getByRole("button", { name: /Show changed files|展开变更文件/u })
       .click();
     await expect(
       page.getByRole("button", {
-        name: /Collapse changed files|收起变更文件/u,
+        name: /Hide changed files|收起变更文件/u,
       })
     ).toHaveAttribute("aria-expanded", "true");
     await expect(
@@ -1883,7 +1883,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     ).toBeVisible();
     await expect(
       page.getByRole("button", {
-        name: /Collapse changed files|收起变更文件/u,
+        name: /Hide changed files|收起变更文件/u,
       })
     ).toHaveAttribute("aria-expanded", "true");
     await expect(
@@ -1901,7 +1901,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
 
     await page
       .getByRole("button", {
-        name: /Collapse changed files|收起变更文件/u,
+        name: /Hide changed files|收起变更文件/u,
       })
       .click();
     await expect(

@@ -35,6 +35,7 @@ describe("files command-palette surface policy", () => {
       "save/all-action.ts",
       "search/actions.ts",
       "tree/actions.ts",
+      "tree/view-actions.ts",
     ] as const) {
       const source = readFileSync(join(FILES_RENDERER_ROOT, fileName), "utf8");
       expect(source).not.toMatch(COMMAND_PALETTE_SURFACE_RE);
@@ -42,8 +43,15 @@ describe("files command-palette surface policy", () => {
     const index = readFileSync(join(FILES_RENDERER_ROOT, "index.tsx"), "utf8");
     expect(index).toMatch(/id: FILES_SAVE_COMMAND_ID[\s\S]*?surfaces: \[\]/);
     expect(index).toMatch(/id: FILES_SAVE_AS_COMMAND_ID[\s\S]*?surfaces: \[\]/);
-    expect(index).toMatch(
+    const treeViewActions = readFileSync(
+      join(FILES_RENDERER_ROOT, "tree/view-actions.ts"),
+      "utf8"
+    );
+    expect(treeViewActions).toMatch(
       /id: FILES_TREE_SEARCH_COMMAND_ID[\s\S]*?surfaces: \[\]/
+    );
+    expect(treeViewActions).toMatch(
+      /id: FILES_TREE_TOGGLE_COMMAND_ID[\s\S]*?surfaces: \[\]/
     );
   });
 });

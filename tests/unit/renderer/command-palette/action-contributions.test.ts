@@ -75,6 +75,10 @@ describe("action contributions", () => {
     );
 
     expect(dockviewTabActions.map((action) => action.id)).toEqual([
+      "pier.panel.moveToNewWindow",
+      "pier.panel.copyToNewWindow",
+      "pier.panel.moveToWindow",
+      "pier.panel.copyToWindow",
       "pier.panel.copyPath",
       "pier.panel.keepOpen",
       "pier.panel.close",

@@ -31,6 +31,9 @@ const COLOR_MIX_OWNERS = new Set([
   // Diff/review estimate skeleton: shadow DOM bars use Canvas/CanvasText mixes
   // (no access to product CSS variables inside Pierre's shadow root).
   "packages/ui/src/diff-view/estimate-skeleton.ts",
+  // File tree shadow overrides: hover/selected mixes on sidebar surface
+  // (Pierre trees consume CSS variables, not Tailwind opacity utilities).
+  "packages/ui/src/file/tree-style.ts",
   // Native data-URL fallback cannot consume renderer theme tokens.
   "src/main/windows/renderer-recovery-page.ts",
   "src/plugins/builtin/files/renderer/editor/cm-theme.ts",
