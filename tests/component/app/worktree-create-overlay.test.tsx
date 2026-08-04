@@ -337,6 +337,7 @@ function createMockContext(): RendererPluginContext {
     },
     groupContent: {
       claim: unimplemented("groupContent.claim"),
+      clearAll: unimplemented("groupContent.clearAll"),
       release: unimplemented("groupContent.release"),
     },
     i18n: {

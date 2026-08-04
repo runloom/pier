@@ -4,6 +4,7 @@ import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
 import type { ComponentProps, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WorkspaceHost } from "@/components/workspace/host.tsx";
+import { PANEL_TAB_TOOLTIP_SKIP_DELAY_MS } from "@/components/workspace/panel-tab-tooltip.tsx";
 import { installWorkspaceRendererCommandListener } from "@/components/workspace/renderer-command-listener.ts";
 import { flushWorkspaceLayout } from "@/lib/workspace/layout-persistence.ts";
 import {
@@ -292,7 +293,7 @@ describe("WorkspaceHost", () => {
     );
     expect(screen.getByTestId("workspace-tooltip-provider")).toHaveAttribute(
       "data-skip-delay-duration",
-      "0"
+      String(PANEL_TAB_TOOLTIP_SKIP_DELAY_MS)
     );
     expect(screen.getByTestId("dockview")).toHaveAttribute(
       "data-disable-tabs-overflow-list",

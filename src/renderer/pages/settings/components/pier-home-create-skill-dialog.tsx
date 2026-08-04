@@ -215,6 +215,7 @@ export function openPierHomeCreateSkillDialog(
           ) : null}
           <MarkdownSourceEditor
             ariaLabel={t("settings.skills.contentTitle")}
+            autoHeight
             onChange={(next) => {
               if (writesDisabled) return;
               setContentDirty(true);

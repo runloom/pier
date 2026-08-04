@@ -6,6 +6,17 @@ import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
+/**
+ * Product gold standard for `@pier/ui` tooltips (all call sites inherit):
+ * - sideOffset 6px — avoid 0px edge collision / flip jitter on tight chrome
+ * - collisionPadding 8px — keep clear of viewport / titlebar edges
+ * - fade only (no zoom) — Floating UI already drives transform for placement
+ * - pointer-events-none — content must never steal hover from the trigger
+ * - disableHoverableContent on Provider — no sticky hover bridge
+ */
+export const TOOLTIP_SIDE_OFFSET_PX = 6;
+export const TOOLTIP_COLLISION_PADDING_PX = 8;
+
 type DismissListener = () => void;
 
 const dismissListeners = new Set<DismissListener>();
@@ -212,8 +223,9 @@ function TooltipContent({
   align = "center",
   children,
   className,
+  collisionPadding = TOOLTIP_COLLISION_PADDING_PX,
   side = "top",
-  sideOffset = 0,
+  sideOffset = TOOLTIP_SIDE_OFFSET_PX,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
   const overlayRef = useTerminalOverlay();
@@ -225,9 +237,12 @@ function TooltipContent({
       <TooltipPrimitive.Content
         align={align}
         className={cn(
-          "app-no-drag data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=delayed-open]:fade-in-0 data-[state=delayed-open]:zoom-in-95 data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 relative z-50 inline-flex w-fit max-w-64 origin-(--radix-tooltip-content-transform-origin) items-center gap-1 rounded-xl bg-foreground px-2 py-1 text-[11px] text-background leading-snug has-data-[slot=kbd]:pr-1.5 data-[state=delayed-open]:animate-in data-closed:animate-out data-open:animate-in **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-lg",
+          // Fade only: zoom/slide also use transform and fight Floating UI placement
+          // updates (visible as hover jitter on tight chrome like panel maximize).
+          "app-no-drag data-[state=delayed-open]:fade-in-0 data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none relative z-50 inline-flex w-fit max-w-64 origin-(--radix-tooltip-content-transform-origin) items-center gap-1 rounded-xl bg-foreground px-2 py-1 text-[11px] text-background leading-snug duration-100 has-data-[slot=kbd]:pr-1.5 data-[state=delayed-open]:animate-in data-closed:animate-out data-open:animate-in **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-lg",
           className
         )}
+        collisionPadding={collisionPadding}
         data-slot="tooltip-content"
         side={side}
         sideOffset={sideOffset}

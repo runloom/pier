@@ -10,6 +10,7 @@ import type {
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
 import { pluginText } from "../plugin-text.ts";
+import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
 import {
   canDiscardUnstagedStatus,
   type GitDiscardSelection,
@@ -91,15 +92,14 @@ export function basename(path: string): string {
 }
 
 export function panelContextFromReviewItem(
-  item: GitReviewTreeItemMetadata
+  item: GitReviewTreeItemMetadata,
+  sourcePanelContext?: PanelContext | null
 ): PanelContext {
-  return {
+  return panelContextFromReviewGitRoot({
     contextId: item.contextId,
-    gitRoot: item.gitRootPath,
-    projectRootPath: item.gitRootPath,
-    source: "panel",
-    updatedAt: Date.now(),
-  };
+    gitRootPath: item.gitRootPath,
+    ...(sourcePanelContext ? { sourcePanelContext } : {}),
+  });
 }
 
 export function canStage(item: GitReviewTreeItemMetadata | null): boolean {

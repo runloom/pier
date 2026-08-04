@@ -68,6 +68,29 @@ describe("source editor decoration chrome contract", () => {
  * Lint / serverDiagnostics hover chrome must match LSP hover metrics so long
  * TypeScript messages wrap and use product tokens (not CM #d11 defaults).
  */
+/**
+ * Skill / rules content dialogs use auto-height CM so the host dialog body
+ * owns vertical scroll. Nested scroller overflow must not trap wheel events.
+ */
+describe("settings source editor auto-height scroll contract", () => {
+  const themeSource = readFileSync(THEME_PATH, "utf8");
+
+  it("keeps auto-height scroller overflow visible for parent dialog scroll", () => {
+    expect(themeSource).toContain("settingsSourceEditorAutoHeightTheme");
+    const autoHeightBlock = themeSource.match(
+      /settingsSourceEditorAutoHeightTheme\s*=\s*EditorView\.theme\(\{[\s\S]*?\n\}\);/u
+    )?.[0];
+    expect(autoHeightBlock, "auto-height theme block").toBeTruthy();
+    expect(autoHeightBlock).toMatch(/height:\s*"auto"/u);
+    expect(autoHeightBlock).toMatch(/overflowY:\s*"visible"/u);
+    expect(autoHeightBlock).toMatch(/overflowX:\s*"visible"/u);
+    // Nested scrollport re-traps wheel over tall SKILL.md in content dialogs.
+    expect(autoHeightBlock).not.toMatch(
+      /overflowY:\s*"(?:hidden|auto|scroll)"/u
+    );
+  });
+});
+
 describe("source editor diagnostic tooltip contract", () => {
   const themeSource = readFileSync(THEME_PATH, "utf8");
 

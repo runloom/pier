@@ -3,6 +3,8 @@ import {
   releaseTooltipSuppression,
   resetTooltipDismissStateForTests,
   suppressTooltips,
+  TOOLTIP_COLLISION_PADDING_PX,
+  TOOLTIP_SIDE_OFFSET_PX,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -83,14 +85,23 @@ describe("Tooltip primitive", () => {
       "px-2",
       "py-1",
       "text-[11px]",
-      "leading-snug"
+      "leading-snug",
+      "pointer-events-none"
     );
     expect(tooltip).toHaveClass(
       "bg-foreground",
       "text-background",
       "rounded-xl"
     );
+    // Gold standard: fade only — zoom fights Floating UI placement transform.
+    expect(tooltip.className).not.toMatch(/zoom-in-95|zoom-out-95/);
+    expect(tooltip.className).not.toMatch(/slide-in-from-/);
     expectNoManualHorizontalArrowClasses(tooltip);
+  });
+
+  it("locks product gold-standard placement defaults", () => {
+    expect(TOOLTIP_SIDE_OFFSET_PX).toBe(6);
+    expect(TOOLTIP_COLLISION_PADDING_PX).toBe(8);
   });
 
   it.each([

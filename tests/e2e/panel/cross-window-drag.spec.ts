@@ -1072,9 +1072,8 @@ test.describe("Panel cross-window drag (Path B)", () => {
         // Close the default terminal via its tab close button so Welcome
         // (unique id, no stable-id conflict with the target) is the last tab.
         await source
-          .locator(
-            `[data-panel-tab-id="${defaultTerminalId}"] [aria-label="Close tab"]`
-          )
+          .locator(`[data-panel-tab-id="${defaultTerminalId}"]`)
+          .getByRole("button", { name: /Close tab|关闭标签/u })
           .click();
         await expectPanelGone(source, defaultTerminalId);
         await expect(source.locator("[data-panel-tab-id]")).toHaveCount(1);

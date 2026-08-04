@@ -451,6 +451,7 @@ export function openSkillsCreateSkillDialog(): Promise<null> {
           ) : null}
           <MarkdownSourceEditor
             ariaLabel={t("settings.skills.contentTitle")}
+            autoHeight
             onChange={(next) => {
               if (commitDisabled) return;
               setContentDirty(true);

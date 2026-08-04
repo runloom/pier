@@ -383,6 +383,35 @@ describe("terminal create launch options", () => {
     expect(result.nativeLaunch?.command).not.toContain("Status: running");
   });
 
+  it("falls back shell cwd to projectRootPath when context.cwd is missing", () => {
+    const launchId = terminalLaunchRegistry.register({
+      agentId: "claude",
+      command: "claude",
+    });
+    try {
+      const result = resolveCreateTerminalLaunch(
+        createArgs({
+          context: {
+            contextId: "ctx:/repo",
+            gitRoot: "/repo",
+            projectRootPath: "/repo",
+            source: "panel",
+            updatedAt: 1_772_000_000_000,
+          },
+          launchId,
+        }),
+        null
+      );
+      expect(result.nativeLaunch).toMatchObject({
+        agentId: "claude",
+        command: "claude",
+        cwd: "/repo",
+      });
+    } finally {
+      terminalLaunchRegistry.discard(launchId);
+    }
+  });
+
   it("restores a previously running agent panel by relaunching the saved agent command", () => {
     const saved = {
       agent: {

@@ -22,7 +22,9 @@ export const workspace = {
   },
   tab: {
     activeTask: "有任务正在运行",
+    close: "关闭标签",
     create: "新建",
+    hiddenTabs: "隐藏的标签",
     maximize: "最大化",
     restore: "还原",
     unsaved: "未保存的更改",

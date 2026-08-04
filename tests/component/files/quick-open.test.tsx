@@ -337,6 +337,7 @@ describe("files quick open", () => {
     expect(openInstance).toHaveBeenCalledWith(
       expect.objectContaining({
         componentId: FILES_FILE_PANEL_ID,
+        context: panelContext,
         dropUnpinnedInstances: false,
         instanceId: "existing-file-tab",
         params: {
@@ -346,7 +347,6 @@ describe("files quick open", () => {
         targetGroupId: "group-1",
       })
     );
-    expect(openInstance.mock.calls[0]?.[0]).not.toHaveProperty("context");
   });
 
   it("cancels the in-flight path query when the AbortSignal aborts", async () => {

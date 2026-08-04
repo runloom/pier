@@ -41,6 +41,59 @@ export function basename(path: string): string {
   return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
+/**
+ * 从 shell 常见 `user@host:path` / `host:path` 标题里抽出 path 段。
+ * 无匹配则返回原串（再交给路径判定）。
+ */
+function stripRemotePrefix(title: string): string {
+  // user@host:/path 或 host:~/path；避免把 `C:` 当 host（mac 无盘符主路径）。
+  const match = title.match(/^[^/\s:]*(?:@[^/\s:]+)?:(.+)$/);
+  const pathPart = match?.[1]?.trim();
+  if (pathPart && (pathPart.startsWith("/") || pathPart.startsWith("~"))) {
+    return pathPart;
+  }
+  return title;
+}
+
+/**
+ * OSC 是否是「目录标题」（shell / shell-integration 把 cwd 写进 OSC 0/2）。
+ * 进程名 / TUI 名（claude、vim、npm run dev）保持原样。
+ */
+export function pathLikeTerminalTitle(title: string): string | null {
+  const raw = title.trim();
+  if (!raw) {
+    return null;
+  }
+  const candidate = stripRemotePrefix(raw);
+  if (
+    candidate === "~" ||
+    candidate.startsWith("~/") ||
+    candidate.startsWith("/")
+  ) {
+    return candidate;
+  }
+  // 相对多段路径（无空白），避免把普通句子误判成 path。
+  if (!/\s/.test(candidate) && candidate.includes("/")) {
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(candidate)) {
+      return null;
+    }
+    return candidate;
+  }
+  return null;
+}
+
+/**
+ * OSC → tab short：路径型 OSC 收成叶子目录名（与文件 tab 一致，避免 160px 截断难辨）；
+ * 非路径 OSC 原样。完整 OSC 仍进 long / terminalTitle。
+ */
+export function tabShortFromTerminalTitle(title: string): string {
+  const pathish = pathLikeTerminalTitle(title);
+  if (!pathish) {
+    return title;
+  }
+  return basename(pathish);
+}
+
 export function tabChromeFromParams(
   params: unknown
 ): PanelTabChrome | undefined {
@@ -136,16 +189,30 @@ export function terminalPanelDescriptor(args: {
   // 显式 chrome 覆盖：任务 label、用户改名、end-state 等；不含 prompt 派生。
   const chromeTitle = args.effectiveTab?.title?.trim() || null;
   const oscTitle = truncateTerminalTitleForTooltip(args.terminalTitle);
+  const pathishOsc = oscTitle ? pathLikeTerminalTitle(oscTitle) : null;
+  // 路径型 OSC：short 用叶子名；long/titlebar/tooltip 优先绝对 cwd（OSC 7），
+  // 避免 shell 标题被 ~ 化 / 中间省略后顶栏与 hover 仍难辨。
+  let oscShort: string | null | undefined = oscTitle;
+  if (pathishOsc) {
+    oscShort = args.effectiveCwd
+      ? basename(args.effectiveCwd)
+      : tabShortFromTerminalTitle(oscTitle ?? pathishOsc);
+  }
   const cwdShort = args.effectiveCwd ? basename(args.effectiveCwd) : null;
   // Ghostty / 业界：
-  // short = 显式覆盖 → OSC → 目录名
-  // long  = OSC 优先（hover 看进程自报标题）；无 OSC 时用全路径 cwd，再退覆盖文案
-  const short = chromeTitle ?? oscTitle ?? cwdShort ?? "Terminal";
-  const long =
-    oscTitle ??
-    (args.effectiveCwd ? args.effectiveCwd : undefined) ??
-    chromeTitle ??
-    undefined;
+  // short = 显式覆盖 → OSC（路径则 basename）→ 目录名
+  // long  = 路径型优先绝对 cwd → 非路径 OSC 全文 → cwd → chrome
+  const short = chromeTitle ?? oscShort ?? cwdShort ?? "Terminal";
+  let long: string | undefined;
+  if (pathishOsc) {
+    long = args.effectiveCwd ?? oscTitle ?? chromeTitle ?? undefined;
+  } else {
+    long =
+      oscTitle ??
+      (args.effectiveCwd ? args.effectiveCwd : undefined) ??
+      chromeTitle ??
+      undefined;
+  }
   return {
     ...(args.effectiveContext ? { context: args.effectiveContext } : {}),
     display: {

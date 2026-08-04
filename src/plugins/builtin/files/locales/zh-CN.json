@@ -74,6 +74,7 @@
     "filePanel.errors.save.fallback": "无法保存文件内容。",
     "filePanel.errors.save.title": "无法保存文件",
     "filePanel.errors.unsupportedOverwrite": "无法安全覆盖这种文件类型。",
+    "filePanel.errors.groupViewClaimFailed": "无法显示文件视图。请切换标签或重新打开文件。",
     "filePanel.durability.confirm": "确认已保存",
     "filePanel.durability.confirmFailed": "无法确认文件是否已保存",
     "filePanel.durability.revisionMismatch": "保存后文件又被改动了，请重新检查。",

@@ -1,7 +1,9 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import { FileText } from "lucide-react";
 import { pluginText } from "../plugin-text.ts";
 import { reviewMutationBasename } from "./code-mutation-helpers.ts";
+import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
 
 export const GIT_REVIEW_DIFF_SURFACE = "git/review-diff";
 export const GIT_REVIEW_OPEN_IN_EDITOR_COMMAND_ID =
@@ -57,16 +59,16 @@ export function openGitReviewPathInEditor(options: {
   readonly gitRootPath: string;
   readonly line?: number;
   readonly path: string;
+  readonly sourcePanelContext?: PanelContext | null;
 }): boolean {
-  const { context, contextId, gitRootPath, line, path } = options;
+  const { context, contextId, gitRootPath, line, path, sourcePanelContext } =
+    options;
   return context.files.openInEditor({
-    context: {
+    context: panelContextFromReviewGitRoot({
       contextId,
-      gitRoot: gitRootPath,
-      projectRootPath: gitRootPath,
-      source: "panel",
-      updatedAt: Date.now(),
-    },
+      gitRootPath,
+      ...(sourcePanelContext ? { sourcePanelContext } : {}),
+    }),
     path,
     root: gitRootPath,
     title: reviewMutationBasename(path),
@@ -91,6 +93,9 @@ export function registerGitReviewDiffActions(
         gitRootPath: target.gitRootPath,
         path: target.path,
         ...(target.line === undefined ? {} : { line: target.line }),
+        ...(invocation?.sourcePanelContext
+          ? { sourcePanelContext: invocation.sourcePanelContext }
+          : {}),
       });
       if (!opened) {
         context.notifications.error(

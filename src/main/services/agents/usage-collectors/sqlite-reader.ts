@@ -100,20 +100,25 @@ export function openSqliteReader(
     );
   }
 
+  // Track lifecycle locally. Under vitest + V8 coverage, `DatabaseSync#isOpen`
+  // can spuriously report false on a freshly opened handle (own-property
+  // getter + instrumented worker). Callers only need "we already closed".
+  let closed = false;
+
   function assertOpen(): void {
-    if (!db.isOpen) {
+    if (closed) {
       throw new SqliteReaderError("database is closed", { path: options.path });
     }
   }
 
   return {
     close(): void {
-      if (db.isOpen) {
-        try {
-          db.close();
-        } catch {
-          // best-effort; multiple close is safe by node:sqlite semantics
-        }
+      if (closed) return;
+      closed = true;
+      try {
+        db.close();
+      } catch {
+        // best-effort; multiple close is safe by node:sqlite semantics
       }
     },
     describeColumns(table: string): readonly SqliteColumnInfo[] {

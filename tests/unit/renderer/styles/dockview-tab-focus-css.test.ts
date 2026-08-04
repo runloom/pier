@@ -89,18 +89,15 @@ describe("Pier dockview tab focus CSS", () => {
       '> .dv-tab.dv-active-tab:has([data-tab-status="running"])::before'
     );
     expect(css).toContain("height: 2px");
-    // 内层 DOM 条在 dockview 中裁成 a11y 锚点；菜单仍可见同款 shimmer
-    expect(css).toContain("pier-tab-running-bar--menu");
-    expect(css).toContain(
-      ".dv-tab .pier-tab-running-bar:not(.pier-tab-running-bar--menu)"
-    );
+    // 内层 DOM 条在 dockview 中裁成 a11y 锚点；overflow 菜单不再复用顶轨 shimmer
+    expect(css).not.toContain("pier-tab-running-bar--menu");
+    expect(css).toContain(".dv-tab .pier-tab-running-bar");
   });
 
   it("tunes running shimmer for light chrome (clean progress bar style)", () => {
     expect(css).toContain(
       ':root.light .dockview-theme-pier .dv-tab:has([data-tab-status="running"])'
     );
-    expect(css).toContain(":root.light .pier-tab-running-bar--menu");
     // 亮色：加深轨道 (35%) + 纯色高光，经典进度条语汇，干净清晰
     expect(css).toContain("var(--pier-tab-running-accent) 35%");
     expect(css).toContain(

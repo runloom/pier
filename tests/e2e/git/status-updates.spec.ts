@@ -104,7 +104,7 @@ test.describe("Git status live updates e2e", () => {
       );
       await expect(changesTab).toBeVisible({ timeout: 20_000 });
       await changesTab
-        .getByRole("button", { name: /关闭标签页|Close tab/u })
+        .getByRole("button", { name: /关闭标签(?:页)?|Close tab/u })
         .click();
       await expect(changesTab).toHaveCount(0);
 

@@ -3,8 +3,10 @@ import type {
   PierDiffViewItem,
 } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { pluginText } from "../plugin-text.ts";
+import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
 import {
   GIT_REVIEW_DIFF_SURFACE,
   type GitReviewDiffOpenMetadata,
@@ -19,6 +21,7 @@ export function openGitReviewDiffContextMenu(options: {
   readonly handle: PierDiffViewHandle | null | undefined;
   readonly items: readonly PierDiffViewItem[];
   readonly sourcePanelComponent?: string;
+  readonly sourcePanelContext?: PanelContext | null;
   readonly sourcePanelId?: string;
 }): void {
   const {
@@ -29,6 +32,7 @@ export function openGitReviewDiffContextMenu(options: {
     handle,
     items,
     sourcePanelComponent,
+    sourcePanelContext,
     sourcePanelId,
   } = options;
 
@@ -63,13 +67,11 @@ export function openGitReviewDiffContextMenu(options: {
         },
         ...(sourcePanelComponent ? { sourcePanelComponent } : {}),
         ...(sourcePanelId ? { sourcePanelId } : {}),
-        sourcePanelContext: {
+        sourcePanelContext: panelContextFromReviewGitRoot({
           contextId,
-          gitRoot: gitRootPath,
-          projectRootPath: gitRootPath,
-          source: "panel",
-          updatedAt: Date.now(),
-        },
+          gitRootPath,
+          ...(sourcePanelContext ? { sourcePanelContext } : {}),
+        }),
       }
     )
     .catch((err: unknown) => {

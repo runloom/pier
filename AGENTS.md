@@ -330,9 +330,9 @@ section 根节点下的裸子节点。
 
 #### 终端 tab 标题与 Agent 身份（标题 ≠ 身份）— 金标准
 
-**单一真源（对齐 Ghostty）**：终端 tab short = 进程/TUI **OSC 0/2**；无 OSC → **cwd basename**。宿主不得用 prompt 截断、catalog 占位抢 tab。入口：`terminalPanelDescriptor`。
+**单一真源（对齐 Ghostty）**：终端 tab short = 进程/TUI **OSC 0/2**；无 OSC → **cwd basename**。路径型 OSC（shell 把 cwd 写进标题）short 收成**叶子目录名**（与文件 tab 一致），全文进 long/tooltip。宿主不得用 prompt 截断、catalog 占位抢 tab。入口：`terminalPanelDescriptor`。
 
-- **tab 优先级**：显式 chrome（任务 label / **用户钉名** `source=user` / end-state）→ **OSC** → cwd basename → `"Terminal"`。long：OSC → 全路径 cwd。
+- **tab 优先级**：显式 chrome（任务 label / **用户钉名** `source=user` / end-state）→ **OSC**（路径则 basename）→ cwd basename → `"Terminal"`。long / 顶栏 / tooltip：路径型优先**绝对 cwd（OSC 7）**，非路径 OSC 用全文；禁止把 shell 缩写路径当 long。
 - **用户改名 = 钉死 tab**（`user`），优先于后续 OSC，直到再次改名；对话框初值优先当前 tab 所见（OSC/cwd）。
 - **活体 agent**：overlay 只写状态点 + icon；无 user 钉名时 `stripTabChromeTitle`，勿让旧 chrome title 压 OSC。
 - **产品 `sessionTitle`（仅 Index / 改名，≠ tab）**：枚举只有 `provider` | `user`；历史 `prompt`/`auto`/`rule`/`model` **读取期整段丢弃**；**禁止** prompt 派生与 Claude derive 双写（gen≥11 已卸，`derive.ts` 已删）。

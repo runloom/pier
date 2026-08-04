@@ -413,6 +413,11 @@ export const settingsSourceEditorTheme = EditorView.theme({
 /**
  * Stack on {@link settingsSourceEditorTheme}: grow with the document so the
  * surrounding dialog/page scrolls instead of a nested CodeMirror scrollbar.
+ *
+ * Use `overflow: visible` (not `hidden`/`auto`) on `.cm-scroller` so the editor
+ * does not create a nested scrollport. `overflowY: hidden` still makes the
+ * scroller a CSS scroll container and traps wheel events over tall skill
+ * bodies, leaving the parent content-dialog body unable to scroll.
  */
 export const settingsSourceEditorAutoHeightTheme = EditorView.theme({
   "&": {
@@ -420,6 +425,11 @@ export const settingsSourceEditorAutoHeightTheme = EditorView.theme({
     minHeight: "15rem",
   },
   ".cm-scroller": {
-    overflowY: "hidden",
+    overflowX: "visible",
+    overflowY: "visible",
+  },
+  ".cm-content": {
+    // Match auto editor height; avoid 100%-of-parent stretch fighting grow.
+    minHeight: "15rem",
   },
 });
