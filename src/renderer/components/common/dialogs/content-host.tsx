@@ -6,7 +6,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
-import { ScrollArea } from "@pier/ui/scroll-area.tsx";
+import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import i18next from "i18next";
 import {
@@ -134,8 +134,10 @@ function ContentDialogLayerView({
         <DialogContent
           className={cn(
             sizeClass(layer.size),
-            // Align workbench-settings / shadcn sticky-footer: p-0 chrome,
-            // header (+ optional footer) fixed, body is the only scroller.
+            // Sticky header/footer chrome; body is the only scroller.
+            // Use flex (overrides DialogContent default grid) + max-h so
+            // long skill/editor bodies can shrink and scroll instead of
+            // clipping under overflow-hidden.
             "flex max-h-[min(calc(90vh-2rem),880px)] min-h-0 min-w-0 flex-col gap-0 overflow-hidden p-0",
             !isTopmost && "pointer-events-none opacity-0"
           )}
@@ -176,14 +178,24 @@ function ContentDialogLayerView({
               <DialogDescription>{layer.description}</DialogDescription>
             ) : null}
           </DialogHeader>
-          <ScrollArea
-            className="min-h-0 min-w-0 flex-1"
+          {/*
+            Native overflow owner (not Radix ScrollArea): skill open dialogs
+            mount auto-height CodeMirror SKILL.md bodies that routinely exceed
+            max-h. ScrollArea's viewport + display:table content wrapper often
+            fails to establish a definite height under flex max-h, so the shell
+            clips with overflow-hidden and the body never scrolls. Settings
+            dialog uses the same native pattern for sticky/scroll restoration.
+          */}
+          <div
+            className={cn(
+              "min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-6 py-5",
+              scrollFadeClassName({ fade: "vertical" })
+            )}
+            data-scrollbar="overlay"
             data-slot="app-content-dialog-body"
-            viewportClassName="px-6 py-5"
-            viewportFade="vertical"
           >
             <Content {...renderProps} />
-          </ScrollArea>
+          </div>
           {footer ? (
             <DialogFooter className="shrink-0 border-border/60 border-t px-6 py-4">
               {footer}

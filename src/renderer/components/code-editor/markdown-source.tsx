@@ -16,8 +16,9 @@ import { useEffect, useRef } from "react";
  * YAML frontmatter + GFM + nested fenced-code; no line numbers; soft-wrap.
  *
  * `autoHeight`: grow with the document so a parent scroller (content dialog
- * body) owns vertical scroll — use in skill open dialogs. Default fills the
- * host and scrolls inside CodeMirror (Rules panel).
+ * body) owns vertical scroll — use in skill open dialogs. The auto-height
+ * theme keeps `.cm-scroller` overflow visible so wheel events reach the
+ * parent. Default fills the host and scrolls inside CodeMirror (Rules panel).
  */
 export function MarkdownSourceEditor({
   ariaLabel,

@@ -99,6 +99,26 @@ describe("dialog form governance", () => {
     expect(host).toContain("px-6 py-4");
   });
 
+  it("keeps content-dialog body as a native flex scroller (skill SKILL.md)", () => {
+    const host = source(
+      "src/renderer/components/common/dialogs/content-host.tsx"
+    );
+    // Header/footer sticky; body is the only vertical overflow owner.
+    // Native overflow (not Radix ScrollArea): auto-height CodeMirror skill
+    // bodies exceed max-h; ScrollArea display:table + flex max-h often clips
+    // without scrolling (see skill open dialogs).
+    expect(host).toContain('data-slot="app-content-dialog-body"');
+    expect(host).toContain("overflow-y-auto");
+    expect(host).toContain("min-h-0");
+    expect(host).toContain("flex-1");
+    expect(host).toContain("max-h-[min(calc(90vh-2rem),880px)]");
+    expect(host).toContain("scrollFadeClassName");
+    expect(host).toContain('data-scrollbar="overlay"');
+    // Fade helper may still import from scroll-area; body must not be ScrollArea.
+    expect(host).not.toMatch(/<ScrollArea\b/);
+    expect(host).not.toContain("viewportFade");
+  });
+
   it("keeps WorkbenchSettingsDialog as live-preference shell with optional sticky footer", () => {
     const dialog = source(
       "src/renderer/panel-kits/workbench/settings-dialog.tsx"
@@ -117,6 +137,43 @@ describe("dialog form governance", () => {
     expect(dialog).not.toContain("settingsInstanceId");
     expect(dialog).toContain("setFooterState(null)");
     expect(dialog).toMatch(/if\s*\(\s*widget\s*\)/);
+  });
+
+  it("keeps workbench settings body as a native flex scroller (max-h shell)", () => {
+    const dialog = source(
+      "src/renderer/panel-kits/workbench/settings-dialog.tsx"
+    );
+    // Same bug class as content dialog: flex max-h + ScrollArea clips tall
+    // settings (custom-card block lists). Body owns native overflow-y-auto.
+    expect(dialog).toContain('data-slot="workbench-widget-settings-body"');
+    expect(dialog).toContain("overflow-y-auto");
+    expect(dialog).toContain("min-h-0");
+    expect(dialog).toContain("flex-1");
+    expect(dialog).toContain(
+      "max-h-[min(36rem,calc(100vh-var(--app-titlebar-height)-2rem))]"
+    );
+    expect(dialog).toContain("scrollFadeClassName");
+    expect(dialog).toContain('data-scrollbar="overlay"');
+    expect(dialog).not.toMatch(/<ScrollArea\b/);
+    expect(dialog).not.toContain("viewportFade");
+  });
+
+  it("requires skill content-dialog MarkdownSourceEditor to use autoHeight", () => {
+    // Parent dialog body owns scroll; nested CM overflow traps wheel otherwise.
+    const skillDialogSources = [
+      "src/renderer/pages/settings/components/skills/content-body.tsx",
+      "src/renderer/pages/settings/components/skills/detail-content.tsx",
+      "src/renderer/pages/settings/components/skills/create-dialog.tsx",
+      "src/renderer/pages/settings/components/pier-home-skill-detail.tsx",
+      "src/renderer/pages/settings/components/pier-home-create-skill-dialog.tsx",
+    ] as const;
+    for (const file of skillDialogSources) {
+      const text = source(file);
+      expect(text, file).toContain("MarkdownSourceEditor");
+      expect(text, `${file} missing autoHeight`).toMatch(
+        /<MarkdownSourceEditor[\s\S]*?\bautoHeight\b/
+      );
+    }
   });
 
   it("requires commit-form dialogs to set sticky footer", () => {
