@@ -199,6 +199,9 @@ function cliClientServices(): PierCoreServices {
         makeFakePreferences({ agentStatusHooks: false, ...patch }),
     },
     processEnvironment: {
+      getHostDiagnostics: () => undefined,
+      invalidate: async () => undefined,
+      recordHostDiagnostics: () => undefined,
       resolve: async (request) => ({
         diagnostics: {
           cacheHit: false,
@@ -211,6 +214,7 @@ function cliClientServices(): PierCoreServices {
           ...(request.profileEnv ?? {}),
           ...(request.explicitEnv ?? {}),
         },
+        shellEnv: {},
       }),
     },
     rendererCommand: {

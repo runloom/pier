@@ -86,6 +86,8 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("preferences.update"),
     patch: projectPreferencesPatchSchema,
   }),
+  z.object({ type: z.literal("shellEnvironment.status") }),
+  z.object({ type: z.literal("shellEnvironment.refresh") }),
   z.object({
     recordId: z.string().min(1),
     type: z.literal("workspace.layout.read"),

@@ -187,6 +187,11 @@ export function AccountBadges({
           "pier.codex.accounts.settings.cancelAtPeriodEnd",
           "Cancels at period end"
         ),
+        cancelsOn: (relative) =>
+          t(
+            "pier.codex.accounts.settings.cancelsOn",
+            "Cancels {relative}"
+          ).replace("{relative}", relative),
         expired: t("pier.codex.accounts.settings.expired", "Expired"),
         expires: (relative) =>
           `${t("pier.codex.accounts.settings.expires", "Expires")} ${relative}`,

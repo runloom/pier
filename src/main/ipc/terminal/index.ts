@@ -6,17 +6,15 @@ import type {
   TerminalFont,
 } from "@shared/contracts/terminal.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
-import type { IpcMain, WebContents } from "electron";
+import type { IpcMain } from "electron";
 import type { ProcessEnvironmentService } from "../../services/process-environment-service.ts";
 import { createProcessEnvironmentService } from "../../services/process-environment-service.ts";
 import type { ManagedAgentLaunchGate } from "../../services/project-skills/launch-gate/index.ts";
 import type { TaskService } from "../../services/tasks/service.ts";
 import { readTerminalPanelSession } from "../../state/terminal-session-state.ts";
-import type { AppWindow } from "../../windows/app-window.ts";
 import {
   findAppWindowByElectronId,
   findAppWindowByInternalId,
-  findAppWindowByWebContents,
   findInternalWindowId,
 } from "../../windows/identity.ts";
 import { handleTerminalCreate } from "./create-handler.ts";
@@ -46,7 +44,7 @@ import {
   bindTerminalTransferRuntime,
   registerTerminalTransferGuardIpc,
 } from "./transfer-guards.ts";
-import { windowRecordIdFor } from "./window-scope.ts";
+import { windowFromWebContents, windowRecordIdFor } from "./window-scope.ts";
 
 export {
   getTerminalAddon,
@@ -54,18 +52,16 @@ export {
   getTerminalTaskOutputBindingsForTransfer,
   getTerminalTaskServiceForTransfer,
 } from "./transfer-guards.ts";
-
-export function windowFromWebContents(
-  webContents: WebContents
-): AppWindow | null {
-  return findAppWindowByWebContents(webContents);
-}
+export { windowFromWebContents } from "./window-scope.ts";
 
 export function registerTerminalIpc(
   ipcMain: IpcMain,
   deps: {
     launchGate?: ManagedAgentLaunchGate | null | undefined;
     loadNativeAddon?: () => ReturnType<typeof loadNativeAddon>;
+    localEnvironments?:
+      | import("../../services/local-environments-service.ts").LocalEnvironmentService
+      | undefined;
     processEnvironment?: ProcessEnvironmentService | undefined;
     recordAgentLaunch?:
       | ((agentId: AgentKind) => Promise<unknown> | unknown)
@@ -274,6 +270,7 @@ export function registerTerminalIpc(
       createArgs: args,
       loadError,
       launchGate: deps.launchGate ?? null,
+      localEnvironments: deps.localEnvironments ?? null,
       processEnvironment,
       recordAgentLaunch: deps.recordAgentLaunch,
       taskLifecycle,

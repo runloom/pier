@@ -25,8 +25,16 @@ function IconChevronSm({
 export interface PierDiffViewLabels {
   readonly collapseDiff: string;
   readonly discardChanges: string;
+  /**
+   * Chunked collapsed-context control (`CodeViewOptions.expandAllUnmodifiedLabel`).
+   * Requires patched `@pierre/diffs` (see patches/@pierre__diffs@1.2.12.patch).
+   */
+  readonly expandAllUnmodified?: string;
   readonly expandDiff: string;
-  /** Optional; when set, title click opens the file. */
+  /**
+   * Optional; file-scoped header title click (Open File).
+   * Line/selection “Jump to Source” is a separate product label at the host.
+   */
   readonly openFile?: string;
   /**
    * error 槽行内重试（document materialize 失败等）。
@@ -38,6 +46,13 @@ export interface PierDiffViewLabels {
   readonly stageChanges: string;
   readonly stageHunk?: string;
   readonly stageRemainingHunk?: string;
+  /**
+   * Collapsed context separator (`CodeViewOptions.formatUnmodifiedLines`).
+   * Templates use `{{count}}`. Singular when count === 1.
+   * Requires patched `@pierre/diffs`.
+   */
+  readonly unmodifiedLine?: string;
+  readonly unmodifiedLines?: string;
   readonly unstageChanges: string;
   readonly unstageHunk?: string;
 }

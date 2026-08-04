@@ -184,6 +184,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
+      id: "pier.git.review.openInEditor",
+      permissions: ["file:read", "panel:open"],
+      title: "Git: Jump to Source",
+    },
+    {
+      category: "Git",
       id: "pier.git.review.stageFile",
       permissions: ["git:write"],
       title: "Git: Stage",
@@ -199,6 +205,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       id: "pier.git.review.discardFile",
       permissions: ["git:write"],
       title: "Git: Discard Changes",
+    },
+    {
+      category: "Git",
+      id: "pier.git.review.toggleTree",
+      permissions: [],
+      title: "Toggle Changed Files Tree",
     },
     {
       category: "Git",

@@ -20,10 +20,14 @@ export interface ManagedPluginRuntimeReconciler {
 
 export interface CreateManagedPluginRuntimeReconcilerOptions {
   /**
-   * GUI-launched Electron often lacks login-shell PATH entries
-   * (e.g. ~/.grok/bin). Await this before activating plugins that spawn CLIs.
+   * @deprecated Use waitForHostEnv. Accepted as alias during migration.
    */
   ensurePath?: () => Promise<void>;
+  /**
+   * Await host shell-env readiness before activating plugins that spawn CLIs.
+   * Must be the same Promise as hostShellEnvReady (no second PATH dump).
+   */
+  waitForHostEnv?: () => Promise<void>;
 }
 
 export function createManagedPluginRuntimeReconciler(
@@ -31,7 +35,7 @@ export function createManagedPluginRuntimeReconciler(
   options: CreateManagedPluginRuntimeReconcilerOptions = {}
 ): ManagedPluginRuntimeReconciler {
   const activeKeys = new Map<string, string>();
-  const ensurePath = options.ensurePath;
+  const waitForHostEnv = options.waitForHostEnv ?? options.ensurePath;
 
   return {
     async reconcile(sources): Promise<void> {
@@ -50,16 +54,16 @@ export function createManagedPluginRuntimeReconciler(
         const nextKey = runtimeSourceActivationKey(source);
         const currentKey = activeKeys.get(source.id);
         if (!currentKey) {
-          if (ensurePath) {
-            await ensurePath();
+          if (waitForHostEnv) {
+            await waitForHostEnv();
           }
           await runtime.activate(source);
           activeKeys.set(source.id, nextKey);
           continue;
         }
         if (currentKey !== nextKey) {
-          if (ensurePath) {
-            await ensurePath();
+          if (waitForHostEnv) {
+            await waitForHostEnv();
           }
           await runtime.reload(source);
           activeKeys.set(source.id, nextKey);

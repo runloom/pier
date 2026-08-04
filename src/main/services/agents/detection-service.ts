@@ -17,6 +17,10 @@ function uniquePathSegments(value: string): string[] {
   });
 }
 
+/**
+ * Pure PATH merge helper (tests / diagnostics only).
+ * Product PATH hydration is owned by ProcessEnvironmentService + host apply.
+ */
 export function mergeLoginShellPath(
   currentPath: string,
   loginShellPath: string
@@ -44,76 +48,51 @@ export function probeCommand(cmd: string): Promise<boolean> {
   });
 }
 
-function defaultHydratePath(): Promise<string[]> {
-  const shell = process.env.SHELL ?? "/bin/sh";
-  return new Promise((resolve) => {
-    execFile(
-      shell,
-      ["-ilc", "echo $PATH"],
-      { timeout: 5000 },
-      (err, stdout) => {
-        if (err) {
-          resolve([]);
-          return;
-        }
-        const merged = mergeLoginShellPath(
-          process.env.PATH ?? "",
-          stdout.trim()
-        );
-        process.env.PATH = merged.path;
-        resolve(merged.added);
-      }
-    );
-  });
-}
-
 export interface AgentDetectionService {
   detect(): Promise<DetectAgentsResult>;
-  /** 幂等补齐 login-shell PATH（memoized）。GUI 启动的 Electron PATH 缺用户 bin 目录，
-   * 直接 spawn CLI 会 ENOENT；spawn 前 await 本方法即可保证 PATH 就绪。 */
+  /**
+   * Wait until host shell env is ready (boot apply / PES).
+   * Does **not** run a second `echo $PATH` dump.
+   */
   ensurePath(): Promise<void>;
   refresh(): Promise<DetectAgentsResult>;
 }
 
 export interface CreateAgentDetectionServiceArgs {
+  /**
+   * @deprecated Prefer waitForHostEnv. Kept for unit tests that simulate PATH
+   * readiness before probe; never a product shell dump.
+   */
   hydratePath?: () => Promise<string[]>;
   probe?: (cmd: string) => Promise<boolean>;
+  /**
+   * Host shell env gate (hostShellEnvReady). Defaults to resolved no-op for tests.
+   * Product wiring must inject the single boot Promise.
+   */
+  waitForHostEnv?: () => Promise<void>;
 }
 
 export function createAgentDetectionService({
-  hydratePath = defaultHydratePath,
+  hydratePath,
   probe = probeCommand,
+  waitForHostEnv,
 }: CreateAgentDetectionServiceArgs = {}): AgentDetectionService {
-  let pathHydrated = false;
-  let hydrateInFlight: Promise<string[]> | null = null;
   let cachedResult: DetectAgentsResult | null = null;
   let detectInFlight: Promise<DetectAgentsResult> | null = null;
 
-  async function hydratePathOnce(): Promise<void> {
-    if (pathHydrated) {
-      return;
+  async function ready(): Promise<string[]> {
+    if (waitForHostEnv) {
+      await waitForHostEnv();
+      return [];
     }
-    if (!hydrateInFlight) {
-      hydrateInFlight = hydratePath()
-        .then((added) => {
-          pathHydrated = true;
-          return added;
-        })
-        .finally(() => {
-          hydrateInFlight = null;
-        });
+    if (hydratePath) {
+      return await hydratePath();
     }
-    await hydrateInFlight;
-  }
-
-  async function hydratePathNow(): Promise<string[]> {
-    const added = await hydratePath();
-    pathHydrated = true;
-    return added;
+    return [];
   }
 
   async function detect(): Promise<DetectAgentsResult> {
-    await hydratePathOnce();
+    await ready();
     if (cachedResult) {
       return cachedResult;
     }
@@ -141,12 +120,14 @@ export function createAgentDetectionService({
 
   return {
     detect,
-    ensurePath: hydratePathOnce,
+    ensurePath: async () => {
+      await ready();
+    },
     async refresh() {
       if (detectInFlight) {
         await detectInFlight;
       }
-      const added = await hydratePathNow();
+      const added = await ready();
       cachedResult = null;
       const detectResult = await detect();
       return { ...detectResult, addedPathSegments: added };

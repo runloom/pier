@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { resetTreeExpansionAuthoritiesForTests } from "@pier/ui/file/tree.tsx";
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import { TerminalOverlayContext } from "@pier/ui/use-terminal-overlay.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
@@ -27,7 +28,13 @@ import {
 } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import i18next from "i18next";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+function renderWithTooltip(ui: ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
+
 import { AppDialogHost } from "@/components/common/dialogs/host.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -453,7 +460,7 @@ function renderFilesFilePanel(
         };
 
   return {
-    ...render(
+    ...renderWithTooltip(
       <FilesPanel {...makeFilesPanelProps({ context: panelContext })} />
     ),
     disposeFiles,
@@ -2580,7 +2587,7 @@ describe("git builtin plugin", () => {
         throw new Error("expected Files file-panel registration");
       }
 
-      const { container } = render(
+      const { container } = renderWithTooltip(
         <FilesPanel {...makeFilesPanelProps({ context })} />
       );
 

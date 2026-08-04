@@ -67,6 +67,14 @@ function contextFor(
     paths: { dataDir: dir, workDir: join(dir, sourceArg.id) },
     processEnv: {},
     plugin: { id: sourceArg.id, version: sourceArg.version },
+    resolveProcessEnv: async () => ({
+      diagnostics: {
+        cacheHit: false,
+        shellEnvStatus: "skipped" as const,
+      },
+      env: {},
+      shellEnv: {},
+    }),
     rpc: { handle: vi.fn() },
     secrets: { delete: vi.fn(), get: vi.fn(), set: vi.fn() },
     usageData: {

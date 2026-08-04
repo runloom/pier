@@ -11,6 +11,7 @@ import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import {
   FilePanelLayout,
   FilePanelSidebarToggleButton,
+  filePanelTreeToggleShortcutLabel,
   FilePanelSearchButton as SharedFilePanelSearchButton,
 } from "@pier/ui/file/panel-layout.tsx";
 import {
@@ -188,10 +189,11 @@ export function SidebarToggleButton({
   return (
     <FilePanelSidebarToggleButton
       collapsed={collapsed}
-      collapseLabel={t("filePanel.tree.collapse", "Collapse file tree")}
-      expandLabel={t("filePanel.tree.expand", "Expand file tree")}
+      collapseLabel={t("filePanel.tree.collapse", "Hide file tree")}
+      expandLabel={t("filePanel.tree.expand", "Show file tree")}
       hidden={hidden}
       onToggle={onToggle}
+      shortcut={filePanelTreeToggleShortcutLabel()}
     />
   );
 }
@@ -249,7 +251,7 @@ export function FilePanelSearchButton({
   onOpenSearch,
   t,
 }: {
-  /** 覆盖默认 tooltip(树可用时为「在文件树中查找」)。 */
+  /** 覆盖默认 tooltip（树可用时为「在目录树中查找」）。 */
   label?: string;
   onOpenSearch: () => void;
   t: FilesTranslate;

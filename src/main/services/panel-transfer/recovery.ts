@@ -72,11 +72,16 @@ async function recoverPostCommit(
 
   if (sourceStillOpen && record.phase === "runtime-moved") {
     try {
-      await deps.renderer.releaseSource({
-        sourcePanelId: record.offer.panel.panelId,
-        transferId: record.transferId,
-        windowId: record.source.runtimeWindowId,
-      });
+      // Copy keeps the source tab; only move releases it (parity with
+      // rollForwardAfterRuntimeMoved / commit.ts).
+      const mode = record.offer.mode ?? "move";
+      if (mode === "move") {
+        await deps.renderer.releaseSource({
+          sourcePanelId: record.offer.panel.panelId,
+          transferId: record.transferId,
+          windowId: record.source.runtimeWindowId,
+        });
+      }
       await deps.journal.upsert({
         ...record,
         phase: "source-durable",

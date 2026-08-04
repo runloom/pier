@@ -98,8 +98,18 @@ export function withResolvedEnvironment(
     let env: Readonly<Record<string, string>>;
     try {
       env = await resolveEnvironment(cwd);
-    } catch {
-      env = {};
+    } catch (error) {
+      // Never pretend success with an empty env (shell-env parity). Fall back to
+      // cleaned host process.env (post boot apply) so PATH still works.
+      console.warn("[git] resolveEnvironment failed; using process.env", {
+        cwd,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      env = Object.fromEntries(
+        Object.entries(process.env).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string"
+        )
+      );
     }
     return exec(args, cwd, {
       ...options,

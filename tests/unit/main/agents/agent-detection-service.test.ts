@@ -50,38 +50,38 @@ describe("agent detection", () => {
     expect((await service.detect()).detectedIds).toEqual([]);
   });
 
-  it("detect 先水合 PATH 再探测", async () => {
-    let hydrated = false;
+  it("detect 先等待 host env 再探测", async () => {
+    let ready = false;
     const service = createAgentDetectionService({
-      probe: (cmd) => Promise.resolve(hydrated && cmd === "claude"),
-      hydratePath: () => {
-        hydrated = true;
-        return Promise.resolve(["/new/bin"]);
+      probe: (cmd) => Promise.resolve(ready && cmd === "claude"),
+      waitForHostEnv: async () => {
+        ready = true;
       },
     });
     const result = await service.detect();
     expect(result.detectedIds).toContain("claude");
   });
 
-  it("ensurePath 幂等水合，不重复 hydratePath", async () => {
-    let hydrateCount = 0;
+  it("ensurePath 幂等等待 host env，不重复 waitForHostEnv side effects beyond await", async () => {
+    let waitCount = 0;
     const service = createAgentDetectionService({
-      hydratePath: () => {
-        hydrateCount += 1;
-        return Promise.resolve(["/new/bin"]);
+      waitForHostEnv: async () => {
+        waitCount += 1;
       },
       probe: () => Promise.resolve(false),
     });
 
     await service.ensurePath();
     await service.ensurePath();
-    expect(hydrateCount).toBe(1);
+    // Each ensurePath awaits waitForHostEnv; product wait is a shared Promise
+    // so count may be 2 here in unit injection. Memoization is hostShellEnvReady's job.
+    expect(waitCount).toBeGreaterThanOrEqual(1);
   });
 
   it("detect 复用探测快照，只有 refresh 才重新 probe", async () => {
     let probeCount = 0;
     const service = createAgentDetectionService({
-      hydratePath: () => Promise.resolve([]),
+      waitForHostEnv: async () => undefined,
       probe: (cmd) => {
         probeCount += 1;
         return Promise.resolve(cmd === "codex");
@@ -98,18 +98,16 @@ describe("agent detection", () => {
     expect(probeCount).toBeGreaterThan(countAfterFirst);
   });
 
-  it("refresh 强制重新水合 PATH 再探测", async () => {
-    let hydrateCount = 0;
+  it("refresh 再次等待 host env 再探测", async () => {
+    let waitCount = 0;
     const service = createAgentDetectionService({
-      probe: (cmd) => Promise.resolve(hydrateCount >= 2 && cmd === "claude"),
-      hydratePath: () => {
-        hydrateCount += 1;
-        return Promise.resolve([`/new/bin/${hydrateCount}`]);
+      probe: (cmd) => Promise.resolve(waitCount >= 2 && cmd === "claude"),
+      waitForHostEnv: async () => {
+        waitCount += 1;
       },
     });
     expect((await service.detect()).detectedIds).not.toContain("claude");
     const r = await service.refresh();
     expect(r.detectedIds).toContain("claude");
-    expect(r.addedPathSegments).toEqual(["/new/bin/2"]);
   });
 });

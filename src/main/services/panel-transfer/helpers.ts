@@ -140,6 +140,12 @@ export function createPanelTransferRendererPort(
         { windowId: input.windowId }
       );
     },
+    async resolveDefaultPlacement(input) {
+      return await rendererCommand.execute(
+        { type: "panelTransfer.resolveDefaultPlacement" },
+        { windowId: input.windowId }
+      );
+    },
     async resolvePlacement(input) {
       return await rendererCommand.execute(
         {

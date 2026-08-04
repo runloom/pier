@@ -21,6 +21,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { buildMenuEntries } from "./build-entries.ts";
 import { captureDomSelectionText } from "./selection-text.ts";
+import { shouldActivatePanelForContextMenu } from "./surface-profiles.ts";
 
 /**
  * useContextMenu options. IMPORTANT: 调用方若传入 options 对象, 必须用 useMemo
@@ -100,21 +101,15 @@ async function popupAndDispatch(
   invocation?: Omit<ActionInvocation, "surface">
 ): Promise<void> {
   // 先抓选区。内容区菜单不要为了 layout actions 强行 setActive，
-  // 否则 git diff 等行选区会在弹菜单前被冲掉。
+  // 否则 git diff 行选区会被冲掉，unmountWhenHidden 面板还会重挂载滚回顶。
   const sourcePanelId = invocation?.sourcePanelId;
   const selectedText =
     typeof invocation?.metadata?.selectedText === "string"
       ? invocation.metadata.selectedText
       : captureDomSelectionText(sourcePanelId);
-  // panel/content：保留选区，不抢 active。
-  // dockview-tab：菜单带 sourcePanelId，关 inactive tab 须保持当前 active
-  // （adjacent 策略下先 setActive 会错误地把焦点切到邻接 tab）。
-  // 其它 surface 若仍依赖 activePanel，在打开菜单时激活 source。
-  if (
-    sourcePanelId &&
-    surface !== "panel/content" &&
-    surface !== "dockview-tab"
-  ) {
+  // document/viewport（含 panel/content、git/review-diff、files/editor…）
+  // 与 dockview-tab：不 setActive。object 树等仍激活 source。
+  if (sourcePanelId && shouldActivatePanelForContextMenu(surface)) {
     const panel = useWorkspaceStore
       .getState()
       .api?.panels.find((candidate) => candidate.id === sourcePanelId);

@@ -3,8 +3,12 @@
 // 所有 npm script 用 `node ./scripts/dev-profile.mjs <cmd>` 调用, 不依赖 shebang.
 //
 // 每个 worktree 一份 .pier-dev/profile.json (基于分支名+路径 hash 派生 profile name),
-// 自动分配 devPort/hmrPort, 独立 Electron userData. 端口已占且 owner 不是自己 → 报错退出,
-// 永远不杀别人的进程. runtime.json 用 PID 存活检测判端口归属.
+// 自动分配 devPort/hmrPort, 独立 Electron userData.
+// 多 worktree 并行:
+//   - 忽略从「另一个 worktree 的 Pier 终端」继承的 PIER_DEV_* (靠 PIER_DEV_RUNTIME_FILE
+//     是否指向本 worktree 判断);
+//   - 端口被占且 owner 不是自己 → 自动换端口并写回 profile (显式 PIER_DEV_PORT 除外);
+//   - 永远不杀别人的进程. runtime.json 用 PID 存活检测判端口归属.
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -19,6 +23,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { createRequire } from "node:module";
+import net from "node:net";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -276,13 +281,16 @@ function reservedDevPorts(worktreeRoot, currentProfileFile) {
 
 /**
  * @param {Set<number>} reserved
+ * @param {number} [startAt]
  */
-function allocateDevPort(reserved) {
-  for (
-    let port = BASE_DEV_PORT;
-    port < BASE_DEV_PORT + PORT_SCAN_LIMIT;
-    port++
-  ) {
+function allocateDevPort(reserved, startAt = BASE_DEV_PORT) {
+  const start = Math.max(BASE_DEV_PORT, startAt);
+  for (let port = start; port < BASE_DEV_PORT + PORT_SCAN_LIMIT; port++) {
+    if (!(reserved.has(port) || reserved.has(port + 10))) {
+      return port;
+    }
+  }
+  for (let port = BASE_DEV_PORT; port < start; port++) {
     if (!(reserved.has(port) || reserved.has(port + 10))) {
       return port;
     }
@@ -291,6 +299,52 @@ function allocateDevPort(reserved) {
     BASE_DEV_PORT +
     (Number.parseInt(shortHash(process.cwd()).slice(0, 4), 16) % 1000)
   );
+}
+
+/**
+ * True when env looks like it was injected by another Pier worktree's running
+ * session (terminal inherits PIER_DEV_* from that app). Such values must not
+ * pin this worktree's ports/profile.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string} worktreeRoot
+ */
+export function isForeignDevProfileEnv(env, worktreeRoot) {
+  const runtimeFile = env.PIER_DEV_RUNTIME_FILE;
+  if (!runtimeFile) {
+    return false;
+  }
+  const expected = path.join(
+    path.resolve(worktreeRoot),
+    PROFILE_DIR_NAME,
+    RUNTIME_FILE_NAME
+  );
+  return path.resolve(runtimeFile) !== path.resolve(expected);
+}
+
+/**
+ * Drop cross-worktree inherited Pier dev bindings so multi-worktree `pnpm dev`
+ * still auto-allocates ports. Explicit user overrides remain when they are not
+ * riding along with another worktree's runtime file.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @param {string} worktreeRoot
+ * @returns {NodeJS.ProcessEnv}
+ */
+export function sanitizeInheritedDevProfileEnv(env, worktreeRoot) {
+  if (!isForeignDevProfileEnv(env, worktreeRoot)) {
+    return env;
+  }
+  const {
+    PIER_DEV_PORT: _devPort,
+    PIER_HMR_PORT: _hmrPort,
+    PIER_DEV_PROFILE: _devProfile,
+    PIER_DEV_RUNTIME_FILE: _runtimeFile,
+    ELECTRON_RENDERER_URL: _rendererUrl,
+    ELECTRON_USER_DATA_DIR: _userDataDir,
+    ...cleaned
+  } = env;
+  return cleaned;
 }
 
 /**
@@ -323,9 +377,11 @@ function allocateHmrPort(devPort, reserved) {
  */
 export function resolveDevProfile(options = {}) {
   const cwd = path.resolve(options.cwd || process.cwd());
-  const env = options.env || process.env;
   const ensure = options.ensure ?? true;
   const worktreeRoot = resolveWorktreeRoot(cwd);
+  const rawEnv = options.env || process.env;
+  // Ignore PIER_DEV_* inherited from another worktree's Pier terminal session.
+  const env = sanitizeInheritedDevProfileEnv(rawEnv, worktreeRoot);
   const profileDir = path.join(worktreeRoot, PROFILE_DIR_NAME);
   const profileFile = path.join(profileDir, PROFILE_FILE_NAME);
   const runtimeFile = path.join(profileDir, RUNTIME_FILE_NAME);
@@ -358,11 +414,14 @@ export function resolveDevProfile(options = {}) {
       : allocateHmrPort(devPort, reserved));
   const host = env.PIER_DEV_HOST || existing?.host || "127.0.0.1";
   const rendererUrl = `http://${host}:${devPort}`;
-  // electronUserDataDir 按 worktree 持久化 (切分支不丢窗口布局等状态).
-  // 仅首次无 existing 时从 profile name 派生.
+  // userData: keep existing only while profile identity is unchanged (branch /
+  // worktree). Profile name flip (incl. fixing foreign env pollution) re-derives
+  // so worktrees never share Application Support dirs by accident.
   const electronUserDataDir =
     env.ELECTRON_USER_DATA_DIR ||
-    existing?.electronUserDataDir ||
+    (existing?.profile === profile && existing?.electronUserDataDir
+      ? existing.electronUserDataDir
+      : null) ||
     defaultElectronUserDataDir(profile);
 
   /** @type {DevProfile} */
@@ -386,6 +445,127 @@ export function resolveDevProfile(options = {}) {
   }
 
   return resolved;
+}
+
+/**
+ * Whether the caller forced a port via env (after foreign-env sanitization).
+ * Used to decide if a busy port should reallocate or hard-fail.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ * @param {string} [cwd]
+ */
+export function hasExplicitDevPort(env = process.env, cwd = process.cwd()) {
+  const worktreeRoot = resolveWorktreeRoot(path.resolve(cwd));
+  const sanitized = sanitizeInheritedDevProfileEnv(env, worktreeRoot);
+  return parsePort(sanitized.PIER_DEV_PORT) != null;
+}
+
+/**
+ * Can we bind TCP listen on host:port right now?
+ *
+ * @param {number} port
+ * @param {string} [host]
+ * @returns {Promise<boolean>}
+ */
+export function isPortFreeToBind(port, host = "127.0.0.1") {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.unref();
+    server.once("error", () => resolve(false));
+    server.once("listening", () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, host);
+  });
+}
+
+/**
+ * If the resolved port is free or owned by us → return profile.
+ * If busy and not owned:
+ *   - explicit PIER_DEV_PORT → error exit
+ *   - otherwise reallocate, persist, log, return new profile
+ * If already running under this profile → error exit (do not steal).
+ *
+ * @param {DevProfile} profile
+ * @param {{ env?: NodeJS.ProcessEnv; allowReallocate?: boolean }} [options]
+ * @returns {Promise<DevProfile>}
+ */
+export async function ensureDevProfilePortAvailable(profile, options = {}) {
+  const env = options.env || process.env;
+  const allowReallocate = options.allowReallocate ?? true;
+  const free = await isPortFreeToBind(profile.devPort, profile.host);
+  if (free) {
+    return profile;
+  }
+
+  // Port bound: distinguish "our server" vs "someone else" via runtime.json
+  // (PID alive + worktree match). Avoid HTTP probe here — bind check is enough
+  // and does not hang on non-HTTP listeners.
+  const activeRuntime = readRuntime(profile.runtimeFile);
+  if (isRuntimeOwnedByProfile(profile, activeRuntime)) {
+    console.error(
+      `[dev-profile] ${profile.profile} already has a dev server on ${profile.rendererUrl} (pid ${activeRuntime.pid}).`
+    );
+    console.error(
+      "[dev-profile] Not killing it; stop that process first if you want to restart."
+    );
+    process.exit(1);
+  }
+
+  const explicit = hasExplicitDevPort(env, profile.worktreeRoot);
+  if (explicit || !allowReallocate) {
+    console.error(
+      `[dev-profile] Port ${profile.devPort} is already in use, but it is not owned by current profile ${profile.profile}.`
+    );
+    console.error(
+      "[dev-profile] Not killing unknown processes. Stop that process or unset PIER_DEV_PORT to auto-pick another port."
+    );
+    process.exit(1);
+  }
+
+  const reserved = reservedDevPorts(profile.worktreeRoot, profile.profileFile);
+  reserved.add(profile.devPort);
+  reserved.add(profile.hmrPort);
+  // Prefer ports that also pass bind check (reserved only knows peer profiles).
+  // Start near BASE_DEV_PORT so we stay in the Vite-friendly range even when
+  // the busy port was an ephemeral OS port (e.g. tests).
+  let nextDev = allocateDevPort(reserved, BASE_DEV_PORT);
+  let foundFree = false;
+  for (let attempt = 0; attempt < PORT_SCAN_LIMIT; attempt++) {
+    if (
+      !reserved.has(nextDev) &&
+      (await isPortFreeToBind(nextDev, profile.host))
+    ) {
+      foundFree = true;
+      break;
+    }
+    reserved.add(nextDev);
+    nextDev = allocateDevPort(reserved, nextDev + 1);
+  }
+  if (!(foundFree && (await isPortFreeToBind(nextDev, profile.host)))) {
+    console.error(
+      `[dev-profile] No free dev port in ${BASE_DEV_PORT}..${BASE_DEV_PORT + PORT_SCAN_LIMIT - 1} for ${profile.profile}.`
+    );
+    console.error(
+      "[dev-profile] Stop other Pier/vite instances or set PIER_DEV_PORT to an free port."
+    );
+    process.exit(1);
+  }
+  const nextHmr = allocateHmrPort(nextDev, reserved);
+  const previousUrl = profile.rendererUrl;
+  /** @type {DevProfile} */
+  const next = {
+    ...profile,
+    devPort: nextDev,
+    hmrPort: nextHmr,
+    rendererUrl: `http://${profile.host}:${nextDev}`,
+  };
+  writeJson(next.profileFile, next);
+  ensureLaunchJson(next);
+  console.log(
+    `[dev-profile] Port busy (${previousUrl}); reallocated ${next.profile} → ${next.rendererUrl}`
+  );
+  return next;
 }
 
 /**
@@ -557,7 +737,8 @@ function findNewestMtime(target) {
 }
 
 async function predev() {
-  const profile = resolveDevProfile();
+  let profile = resolveDevProfile();
+  profile = await ensureDevProfilePortAvailable(profile);
 
   // native addon 守卫: 缺了直接报错, 而不是进 Electron 后 require 才炸 (panel 内只一行不易定位).
   const nativeRoot = path.join(profile.worktreeRoot, "native");
@@ -634,28 +815,7 @@ async function predev() {
   if (runtime?.pid && !isPidAlive(runtime.pid)) {
     rmSync(profile.runtimeFile, { force: true });
   }
-
-  if (!(await isPortListening(profile.devPort, profile.host))) {
-    return;
-  }
-
-  const activeRuntime = readRuntime(profile.runtimeFile);
-  if (isRuntimeOwnedByProfile(profile, activeRuntime)) {
-    console.error(
-      `[dev-profile] ${profile.profile} already has a dev server on ${profile.rendererUrl} (pid ${activeRuntime.pid}).`
-    );
-    console.error(
-      "[dev-profile] Not killing it; stop that process first if you want to restart."
-    );
-  } else {
-    console.error(
-      `[dev-profile] Port ${profile.devPort} is already in use, but it is not owned by current profile ${profile.profile}.`
-    );
-    console.error(
-      "[dev-profile] Not killing unknown processes. Set PIER_DEV_PORT to override if needed."
-    );
-  }
-  process.exit(1);
+  // Port ownership / reallocation already handled by ensureDevProfilePortAvailable.
 }
 
 /**
@@ -822,7 +982,10 @@ function prepareMacDevElectronRuntime(profile, env) {
 }
 
 async function electronDev() {
-  const profile = resolveDevProfile();
+  let profile = resolveDevProfile();
+  profile = await ensureDevProfilePortAvailable(profile);
+  // Rebuild child env from the (possibly reallocated) profile so Vite binds the
+  // same ports we just claimed.
   const env = withDevProfileEnv(process.env, profile);
   const electronExecPath = prepareMacDevElectronRuntime(profile, env);
   if (electronExecPath) {
@@ -837,24 +1000,6 @@ async function electronDev() {
   console.log(`[dev-profile] userData: ${profile.electronUserDataDir}`);
   if (electronExecPath) {
     console.log(`[dev-profile] electron: ${electronExecPath}`);
-  }
-
-  if (await isPortListening(profile.devPort, profile.host)) {
-    const activeRuntime = readRuntime(profile.runtimeFile);
-    if (isRuntimeOwnedByProfile(profile, activeRuntime)) {
-      console.error(
-        `[dev-profile] ${profile.profile} already running on ${profile.rendererUrl} (pid ${activeRuntime.pid}).`
-      );
-      console.error("[dev-profile] Stop it first if you want to restart.");
-    } else {
-      console.error(
-        `[dev-profile] Port ${profile.devPort} is already in use, but it is not owned by current profile ${profile.profile}.`
-      );
-      console.error(
-        "[dev-profile] Not killing unknown processes. Stop that process or set PIER_DEV_PORT to override."
-      );
-    }
-    process.exit(1);
   }
 
   // electron-vite 5.x 单进程: 自带 renderer vite dev server (按 electron.vite.config.ts

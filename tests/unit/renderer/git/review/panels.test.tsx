@@ -180,6 +180,7 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
             cancelled = true;
           };
         },
+        resolvePointerLineHit: () => null,
         restoreAnchor,
         scrollToItem(id) {
           const result = scrollToItem(id);
@@ -741,7 +742,7 @@ describe("Git review panel", () => {
       })
     ).toBeNull();
     expect(
-      view.getByRole("button", { name: "Collapse changed files" })
+      view.getByRole("button", { name: "Hide changed files" })
     ).toHaveAttribute("aria-expanded", "true");
     const treeHost = view.container.querySelector(
       'file-tree-container[data-slot="pier-file-tree"]'
@@ -755,9 +756,7 @@ describe("Git review panel", () => {
     const initialDiffMounts = diffViewRuntime.mounts;
     const initialDiffUnmounts = diffViewRuntime.unmounts;
 
-    fireEvent.click(
-      view.getByRole("button", { name: "Collapse changed files" })
-    );
+    fireEvent.click(view.getByRole("button", { name: "Hide changed files" }));
     expect(
       globalThis.localStorage.getItem(`pier.git.review.treeCollapsed:${ROOT}`)
     ).toBe("true");
@@ -778,7 +777,7 @@ describe("Git review panel", () => {
     });
     expect(searchInput).toHaveFocus();
     expect(
-      view.getByRole("button", { name: "Collapse changed files" })
+      view.getByRole("button", { name: "Hide changed files" })
     ).toHaveAttribute("aria-expanded", "true");
 
     fireEvent.change(searchInput, { target: { value: "file-1" } });
@@ -817,10 +816,8 @@ describe("Git review panel", () => {
     await waitFor(() => {
       expect(view.queryByTestId("git-review-tree-search-bar")).toBeNull();
     });
-    fireEvent.click(
-      view.getByRole("button", { name: "Collapse changed files" })
-    );
-    fireEvent.click(view.getByRole("button", { name: "Expand changed files" }));
+    fireEvent.click(view.getByRole("button", { name: "Hide changed files" }));
+    fireEvent.click(view.getByRole("button", { name: "Show changed files" }));
     expect(view.queryByTestId("git-review-tree-search-bar")).toBeNull();
     expect(diffViewRuntime.mounts).toBe(initialDiffMounts);
     expect(diffViewRuntime.unmounts).toBe(initialDiffUnmounts);
@@ -954,7 +951,7 @@ describe("Git review panel", () => {
       )
     ).toBeNull();
     expect(
-      view.queryByRole("button", { name: "Collapse changed files" })
+      view.queryByRole("button", { name: "Hide changed files" })
     ).toBeNull();
     expect(
       view.queryByRole("button", { name: "Find in changed files" })
@@ -981,10 +978,10 @@ describe("Git review panel", () => {
       )
     ).toBeNull();
     expect(
-      view.queryByRole("button", { name: "Collapse changed files" })
+      view.queryByRole("button", { name: "Hide changed files" })
     ).toBeNull();
     expect(
-      view.queryByRole("button", { name: "Expand changed files" })
+      view.queryByRole("button", { name: "Show changed files" })
     ).toBeNull();
     expect(
       view.queryByRole("button", { name: "Find in changed files" })
@@ -1087,10 +1084,10 @@ describe("Git review panel", () => {
       )
     ).toBeNull();
     expect(
-      view.queryByRole("button", { name: "Collapse changed files" })
+      view.queryByRole("button", { name: "Hide changed files" })
     ).toBeNull();
     expect(
-      view.queryByRole("button", { name: "Expand changed files" })
+      view.queryByRole("button", { name: "Show changed files" })
     ).toBeNull();
     expect(
       view.queryByRole("button", { name: "Find in changed files" })
@@ -1129,7 +1126,7 @@ describe("Git review panel", () => {
       )
     ).toBeNull();
     expect(
-      view.queryByRole("button", { name: "Collapse changed files" })
+      view.queryByRole("button", { name: "Hide changed files" })
     ).toBeNull();
     expect(
       view.queryByRole("button", { name: "Find in changed files" })

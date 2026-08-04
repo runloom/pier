@@ -76,8 +76,11 @@ export async function runLocalEnvironmentLifecycle(request: {
 
   const resolved = await request.processEnvironment.resolve({
     cwd: request.cwd,
-    explicitEnv: request.project.env,
-    source: "terminal",
+    // Project KV is projectEnv (not explicit): explicit stays for one-shot overrides.
+    ...(Object.keys(request.project.env).length > 0
+      ? { projectEnv: request.project.env }
+      : {}),
+    source: "task",
   });
 
   const platform = process.platform;

@@ -29,6 +29,7 @@ function diffHandle(
       queueMicrotask(callback);
       return () => undefined;
     },
+    resolvePointerLineHit: () => null,
     restoreAnchor: () => true,
     scrollToItem: () => true,
     selectAll: () => false,

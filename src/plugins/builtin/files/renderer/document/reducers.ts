@@ -2,6 +2,7 @@ import type {
   FileDocumentReadResult,
   FileDocumentWriteResult,
 } from "@shared/contracts/file.ts";
+import { protectsLocalBufferFromDisk } from "./disk-protection.ts";
 import type { FilesDocument } from "./types.ts";
 
 const DISK_SAVE_CAPABILITIES = ["save", "saveAs"] as const;
@@ -90,13 +91,15 @@ export function withDocumentReadResult(
 ): FilesDocument {
   const createdEmptyEol = createdEmptyEolAfterRead(document, result);
   if (result.kind === "image") {
-    if (document.dirty || document.durabilityUnknown) {
+    if (protectsLocalBufferFromDisk(document)) {
       return {
         ...document,
         capabilities: [],
         createdEmptyEol,
+        deletedOnDisk: false,
         diskConflict: true,
         error: null,
+        hasBackingStore: true,
         loadState: "loaded",
         preview: null,
         readOnly: true,
@@ -109,13 +112,16 @@ export function withDocumentReadResult(
       baseMtimeMs: result.mtimeMs,
       capabilities: [],
       canonicalPath: result.canonicalPath,
+      conflictDiskContents: null,
       currentContents: "",
       createdEmptyEol,
       deletedOnDisk: false,
       dirty: false,
+      diskConflict: false,
       eol: null,
       error: null,
       format: null,
+      hasBackingStore: true,
       loadState: "loaded",
       mode: null,
       mime: result.mime,
@@ -133,13 +139,15 @@ export function withDocumentReadResult(
   }
   if (result.kind !== "text") {
     const readOnlyReason = unsupportedReadOnlyReason(result);
-    if (document.dirty || document.durabilityUnknown) {
+    if (protectsLocalBufferFromDisk(document)) {
       return {
         ...document,
         capabilities: [],
         createdEmptyEol,
+        deletedOnDisk: false,
         diskConflict: true,
         error: null,
+        hasBackingStore: true,
         loadState: "loaded",
         mime: result.kind === "binary" ? result.mime : null,
         preview: null,
@@ -152,12 +160,16 @@ export function withDocumentReadResult(
       ...document,
       capabilities: [],
       canonicalPath: null,
+      conflictDiskContents: null,
       createdEmptyEol,
       currentContents: "",
+      deletedOnDisk: false,
       dirty: false,
+      diskConflict: false,
       eol: null,
       error: null,
       format: null,
+      hasBackingStore: true,
       loadState: "loaded",
       mode: null,
       mime: result.kind === "binary" ? result.mime : null,
@@ -175,15 +187,16 @@ export function withDocumentReadResult(
   } else if (result.eol === "mixed") {
     readOnlyReason = "mixed-eol";
   }
-  const protectedFromDiskReplacement =
-    document.dirty || document.durabilityUnknown;
+  const protectedFromDiskReplacement = protectsLocalBufferFromDisk(document);
   if (protectedFromDiskReplacement && document.revision !== result.revision) {
     return {
       ...document,
       canonicalPath: result.canonicalPath,
       createdEmptyEol,
+      deletedOnDisk: false,
       diskConflict: true,
       error: null,
+      hasBackingStore: true,
       loadState: "loaded",
       mode: result.mode,
       size: result.size,
@@ -213,8 +226,10 @@ export function withDocumentReadResult(
   return {
     ...document,
     ...metadata,
+    conflictDiskContents: null,
     currentContents: result.contents,
     dirty: false,
+    diskConflict: false,
     savedContents: result.contents,
   };
 }
@@ -227,7 +242,7 @@ export function withDocumentPathReconciled(
     return withDocumentReadResult(document, result);
   }
   const createdEmptyEol = createdEmptyEolAfterRead(document, result);
-  const protectedContents = document.dirty || document.durabilityUnknown;
+  const protectedContents = protectsLocalBufferFromDisk(document);
   const diskConflict =
     protectedContents && document.savedContents !== result.contents;
   let readOnlyReason: FilesDocument["readOnlyReason"] = null;
@@ -244,14 +259,18 @@ export function withDocumentPathReconciled(
     ...(protectedContents
       ? {}
       : {
+          conflictDiskContents: null,
           currentContents: result.contents,
           dirty: false,
+          diskConflict: false,
           savedContents: result.contents,
         }),
-    diskConflict,
+    ...(protectedContents ? { diskConflict } : {}),
+    deletedOnDisk: false,
     eol: createdEmptyEol ?? result.eol,
     error: null,
     format: result.format,
+    hasBackingStore: true,
     loadState: "loaded",
     mode: result.mode,
     mime: null,
@@ -413,13 +432,22 @@ export function withDocumentConflictContents(
 export function withDocumentDiskConflict(
   document: FilesDocument
 ): FilesDocument {
-  if (document.diskConflict && document.createdEmptyEol === null) {
+  // File is present again (reload / durability mismatch). Clear deletion-only
+  // flags while preserving the local buffer under conflict.
+  if (
+    document.diskConflict &&
+    document.createdEmptyEol === null &&
+    !document.deletedOnDisk &&
+    document.hasBackingStore
+  ) {
     return document;
   }
   return {
     ...document,
     createdEmptyEol: null,
+    deletedOnDisk: false,
     diskConflict: true,
+    hasBackingStore: true,
   };
 }
 

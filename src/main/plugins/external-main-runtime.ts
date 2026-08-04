@@ -49,6 +49,14 @@ export interface ExternalMainPluginContext {
     version: string;
   };
   processEnv: Readonly<Record<string, string | undefined>>;
+  resolveProcessEnv(request?: { cwd?: string }): Promise<{
+    diagnostics: {
+      cacheHit: boolean;
+      error?: string | undefined;
+      shellEnvStatus: "cached" | "failed" | "resolved" | "skipped";
+    };
+    env: Record<string, string>;
+  }>;
   rpc: {
     handle(
       method: string,

@@ -53,6 +53,13 @@ export {
   totalScrollHeight,
 } from "./geometry.ts";
 export type {
+  PierDiffViewAnchor,
+  PierDiffViewHandle,
+  PierDiffViewLineSelection,
+  PierDiffViewPointerLineHit,
+  PierDiffViewUpdateOptions,
+} from "./handle-types.ts";
+export type {
   PierHunkActionEvent,
   PierHunkAnnotationMetadata,
 } from "./hunk-actions.tsx";
@@ -69,14 +76,10 @@ export {
 } from "./selection-text.ts";
 export type {
   PierDiffViewAppearance,
+  PierDiffViewLabels,
   PierDiffViewPresentation,
   PierDiffViewProps,
 } from "./types.ts";
-export type {
-  PierDiffViewAnchor,
-  PierDiffViewHandle,
-  PierDiffViewUpdateOptions,
-} from "./use-handle.ts";
 
 const INLINE_RENDER_TIMEOUT_MS = 10_000;
 export function PierDiffView({

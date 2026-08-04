@@ -42,7 +42,10 @@ function stubProject(
 
 function processEnvironment(): ProcessEnvironmentService {
   return {
-    resolve: vi.fn(async ({ cwd, explicitEnv, source }) => ({
+    getHostDiagnostics: () => undefined,
+    invalidate: async () => undefined,
+    recordHostDiagnostics: () => undefined,
+    resolve: vi.fn(async ({ cwd, explicitEnv, projectEnv, source }) => ({
       diagnostics: {
         cacheHit: false,
         cwd,
@@ -50,7 +53,13 @@ function processEnvironment(): ProcessEnvironmentService {
         shellEnvStatus: "skipped" as const,
         source,
       },
-      env: { PATH: "/usr/bin", SHELL: "/bin/sh", ...explicitEnv },
+      env: {
+        PATH: "/usr/bin",
+        SHELL: "/bin/sh",
+        ...projectEnv,
+        ...explicitEnv,
+      },
+      shellEnv: {},
     })),
   };
 }

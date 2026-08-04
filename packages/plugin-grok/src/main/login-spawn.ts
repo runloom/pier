@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 export type SpawnLoginFn = (
   cmd: string,
@@ -20,6 +22,29 @@ const SENSITIVE_LOGIN_OUTPUT_PATTERN =
 
 export function stripAnsi(text: string): string {
   return text.replace(ANSI_PATTERN, "");
+}
+
+export function defaultRealGrokHome(
+  processEnv?: Readonly<Record<string, string | undefined>>
+): string {
+  return (
+    processEnv?.GROK_HOME ?? process.env.GROK_HOME ?? join(homedir(), ".grok")
+  );
+}
+
+/** Merge host-resolved shell env with optional spawn overrides (Class A). */
+export async function hostSpawnEnv(
+  resolveProcessEnv:
+    | ((request?: { cwd?: string }) => Promise<{ env: Record<string, string> }>)
+    | undefined,
+  processEnv: Readonly<Record<string, string | undefined>> | undefined,
+  overrides?: Record<string, string | undefined>
+): Promise<Record<string, string | undefined>> {
+  if (resolveProcessEnv) {
+    const { env } = await resolveProcessEnv({});
+    return { ...env, ...overrides };
+  }
+  return { ...process.env, ...processEnv, ...overrides };
 }
 
 function safeLoginFailureDetail(output: string): string | null {
@@ -53,8 +78,9 @@ export function defaultSpawnLogin(
     // Capture output instead of inheriting: a GUI-launched Electron app has
     // no visible stdout, and device-code login prints the verification URL
     // and user code there.
+    // Class A: opts.env is host-hydrated (resolveProcessEnv + overrides).
     const child = spawn(cmd, args, {
-      env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
+      env: opts.env as NodeJS.ProcessEnv,
       // `signal` kills the child on abort even when abort fires between the
       // aborted-check above and listener registration below.
       signal: opts.signal,

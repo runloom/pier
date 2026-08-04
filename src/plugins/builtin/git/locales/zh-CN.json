@@ -179,10 +179,22 @@
       "title": "Git: 撤销上次提交"
     },
     "pier.git.review.openFile": {
-      "aliases": ["打开文件", "打开变更文件", "open file", "查看变更文件"],
+      "aliases": ["打开文件", "打开变更文件", "open file"],
       "category": "Git",
-      "description": "在文件面板中打开所选变更文件。",
+      "description": "在编辑器中打开此变更文件。",
       "title": "Git: 打开文件"
+    },
+    "pier.git.review.openInEditor": {
+      "aliases": [
+        "跳转到源码",
+        "在编辑器中打开",
+        "打开到行",
+        "open in editor",
+        "jump to source"
+      ],
+      "category": "Git",
+      "description": "跳转到源码编辑器中的此变更；有工作区对应行时定位到该行。",
+      "title": "Git: 跳转到源码"
     },
     "pier.git.review.stageFile": {
       "aliases": ["暂存文件", "git add", "stage"],
@@ -212,14 +224,19 @@
       "description": "放弃本地修改；新增文件会移到废纸篓。",
       "title": "Git: 放弃更改"
     },
+    "pier.git.review.toggleTree": {
+      "category": "Git",
+      "description": "显示或隐藏目录树侧栏。",
+      "title": "显示/隐藏目录树"
+    },
     "pier.git.review.expandAll": {
       "category": "Git",
-      "description": "展开审查文件树中的全部文件夹。",
+      "description": "展开审查目录树中的全部文件夹。",
       "title": "展开文件夹"
     },
     "pier.git.review.collapseFolders": {
       "category": "Git",
-      "description": "折叠审查文件树中的全部文件夹。",
+      "description": "折叠审查目录树中的全部文件夹。",
       "title": "折叠文件夹"
     },
     "pier.git.review.copyPath": {
@@ -366,6 +383,9 @@
     "ui.reviewLoading": "正在加载变更",
     "ui.reviewCollapseDiff": "折叠差异",
     "ui.reviewExpandDiff": "展开差异",
+    "ui.reviewExpandAllUnmodified": "全部展开",
+    "ui.reviewUnmodifiedLine": "{{count}} 行未修改",
+    "ui.reviewUnmodifiedLines": "{{count}} 行未修改",
     "ui.reviewHeaderRestore": "放弃更改",
     "ui.reviewHeaderStage": "暂存",
     "ui.reviewHeaderUnstage": "取消暂存",
@@ -443,11 +463,12 @@
     "ui.reviewWarningPathDepthExceeded": "已跳过 {{skipped}} 个超过目录深度边界的路径。",
     "ui.reviewWarningInvalidPathEncoding": "{{skipped}} 个路径无法解码，已跳过。",
     "ui.reviewTreeLabel": "变更文件",
-    "ui.reviewTreeCollapse": "收起变更文件",
+    "ui.reviewTreeCollapse": "隐藏目录树",
     "ui.reviewTreeCollapseAll": "折叠目录",
     "ui.reviewTreeCollapseFolders": "折叠目录",
     "ui.reviewTreeExpandAll": "展开目录",
-    "ui.reviewTreeExpand": "展开变更文件",
+    "ui.reviewTreeExpand": "显示目录树",
+    "ui.reviewToggleTree": "显示/隐藏目录树",
     "ui.reviewTreeSearch": "在变更文件中查找",
     "ui.reviewTreeSearchClose": "关闭",
     "ui.reviewTreeSearchNext": "下一个匹配项",
@@ -456,7 +477,9 @@
     "ui.reviewTreeSearchMatchAnnouncement": "匹配的变更：{{count}}",
     "ui.reviewTreeNoSearchResultsTitle": "没有匹配的变更",
     "ui.reviewTreeNoSearchResultsDescription": "请尝试其他文件名或路径。",
-    "ui.reviewTreeOpenFile": "打开文件",
+    "ui.reviewOpenFile": "打开文件",
+    "ui.reviewOpenInEditor": "跳转到源码",
+    "ui.reviewDiffContextMenuFailed": "无法打开菜单",
     "ui.reviewTreeStageFile": "暂存",
     "ui.reviewTreeStageFailed": "无法暂存",
     "ui.reviewTreeStaging": "正在暂存…",
@@ -488,7 +511,7 @@
     "ui.reviewDiscardMixedBody": "将删除 {{untracked}} 个新增文件（可从废纸篓还原），并放弃 {{tracked}} 处已有更改。此操作不可撤销。",
     "ui.reviewDiscardTrackedOnlyButton": "放弃 {{count}} 处更改",
     "ui.reviewDiscardAllFilesButton": "全部放弃 {{count}} 个",
-    "ui.reviewTreeOpenFileFailed": "无法打开文件",
+    "ui.reviewOpenFileFailed": "无法打开文件",
     "ui.reviewTreeContextMenuFailed": "无法打开菜单",
     "ui.reviewStateBinary": "二进制文件",
     "ui.reviewStateConflict": "合并冲突",

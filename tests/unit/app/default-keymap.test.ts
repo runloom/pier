@@ -141,6 +141,19 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
+  it("toggles file and git review tree sidebars with Mod+B in panel scope", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.files.tree.toggle",
+      keys: "Mod+KeyB",
+      scope: "panel:pier.files.filePanel",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.git.review.toggleTree",
+      keys: "Mod+KeyB",
+      scope: "panel:pier.git.changes",
+    });
+  });
+
   it("contains view zoom shortcuts", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.view.zoomIn",

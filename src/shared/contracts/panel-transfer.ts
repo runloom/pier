@@ -93,12 +93,38 @@ const unsupportedPanelSchema = z
   })
   .strict();
 
+/**
+ * Components that may use `mode: "copy"` (duplicate panel to another window
+ * without releasing the source). Move remains available for all movable panels.
+ * Keep this list in shared contracts so main offer validation and renderer
+ * menu gates share one source of truth.
+ */
+export const PANEL_TRANSFER_COPYABLE_COMPONENT_IDS = [
+  "pier.files.filePanel",
+] as const;
+
+export function isPanelTransferCopyableComponent(componentId: string): boolean {
+  return (PANEL_TRANSFER_COPYABLE_COMPONENT_IDS as readonly string[]).includes(
+    componentId
+  );
+}
+
+export const panelTransferModeSchema = z.enum(["move", "copy"]);
+export type PanelTransferMode = z.infer<typeof panelTransferModeSchema>;
+
 export const panelTransferOfferSchema = z.discriminatedUnion("capability", [
   z
     .object({
       version: z.literal(1),
       transferId: transferIdSchema,
       capability: z.literal("movable"),
+      /**
+       * `move` (default when omitted): ownership handoff; source tab is released
+       * after commit. `copy`: duplicate into the target; source tab stays
+       * (files only; see `isPanelTransferCopyableComponent`). Drag path omits
+       * this field (treated as move).
+       */
+      mode: panelTransferModeSchema.optional(),
       panel: movablePanelSchema,
     })
     .strict(),
@@ -320,6 +346,37 @@ export const panelTransferReadyCommandSchema = z
   })
   .strict();
 
+/**
+ * Intentional (non-drag) claim: source window asks main to claim an offered
+ * transfer into a new window or an existing managed window. Used by
+ * "Move into New Window" and related menu/command paths.
+ */
+export const panelTransferRelocateTargetSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      kind: z.literal("new-window"),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("window"),
+      windowId: z.string().min(1).max(256),
+    })
+    .strict(),
+]);
+export type PanelTransferRelocateTarget = z.infer<
+  typeof panelTransferRelocateTargetSchema
+>;
+
+export const panelTransferRelocateCommandSchema = z
+  .object({
+    type: z.literal("panelTransfer.relocate"),
+    transferId: transferIdSchema,
+    target: panelTransferRelocateTargetSchema,
+    placement: panelTransferPlacementSchema.optional(),
+  })
+  .strict();
+
 export const panelTransferPierCommandSchemas = [
   panelTransferOfferCommandSchema,
   panelTransferDropCommandSchema,
@@ -327,6 +384,7 @@ export const panelTransferPierCommandSchemas = [
   panelTransferCancelCommandSchema,
   panelTransferBootstrapCommandSchema,
   panelTransferReadyCommandSchema,
+  panelTransferRelocateCommandSchema,
 ] as const;
 
 // --- Renderer command schemas (main → renderer transaction steps) ---
@@ -377,6 +435,17 @@ export const panelTransferResolvePlacementCommandSchema = z
   })
   .strict();
 
+/**
+ * Intentional relocate into an existing window: place as a new tab at the end
+ * of the target's active group (design default). Falls back to root when no
+ * active group exists.
+ */
+export const panelTransferResolveDefaultPlacementCommandSchema = z
+  .object({
+    type: z.literal("panelTransfer.resolveDefaultPlacement"),
+  })
+  .strict();
+
 /** Lightweight readiness probe — returns quickly whether Dockview api is set. */
 export const panelTransferProbeWorkspaceCommandSchema = z
   .object({
@@ -390,5 +459,6 @@ export const panelTransferRendererCommandSchemas = [
   panelTransferReleaseSourceCommandSchema,
   panelTransferFinalizeCommandSchema,
   panelTransferResolvePlacementCommandSchema,
+  panelTransferResolveDefaultPlacementCommandSchema,
   panelTransferProbeWorkspaceCommandSchema,
 ] as const;

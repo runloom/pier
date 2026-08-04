@@ -2,6 +2,7 @@ import type {
   PanelTransferBootstrapState,
   PanelTransferOffer,
   PanelTransferPlacement,
+  PanelTransferRelocateTarget,
   PanelTransferResult,
 } from "@shared/contracts/panel-transfer.ts";
 import { invokePierCommand } from "./ipc-envelope.ts";
@@ -11,6 +12,7 @@ import { invokePierCommand } from "./ipc-envelope.ts";
  * Path B: target claim is main-mediated (`drop` / native-monitor + bounds).
  * Source may still stamp local DataTransfer for same-window Dockview / diagnostics;
  * this API does not parse foreign WebContents MIME as the claim path.
+ * Intentional menu/command moves use `relocate` (no HTML5 drag).
  */
 export interface PierPanelTransferAPI {
   bootstrap(): Promise<PanelTransferBootstrapState>;
@@ -22,6 +24,11 @@ export interface PierPanelTransferAPI {
   finishDrag(transferId: string): Promise<PanelTransferResult | null>;
   offer(input: PanelTransferOffer): Promise<{ accepted: boolean }>;
   ready(transferId: string): Promise<PanelTransferResult | null>;
+  relocate(input: {
+    transferId: string;
+    target: PanelTransferRelocateTarget;
+    placement?: PanelTransferPlacement;
+  }): Promise<PanelTransferResult>;
 }
 
 export function createPanelTransferApi(): PierPanelTransferAPI {
@@ -56,6 +63,13 @@ export function createPanelTransferApi(): PierPanelTransferAPI {
       invokePierCommand<PanelTransferResult | null>({
         transferId,
         type: "panelTransfer.ready",
+      }),
+    relocate: (input) =>
+      invokePierCommand<PanelTransferResult>({
+        placement: input.placement,
+        target: input.target,
+        transferId: input.transferId,
+        type: "panelTransfer.relocate",
       }),
   };
 }

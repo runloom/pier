@@ -36,6 +36,10 @@ export interface CreateTaskBackgroundRunsOptions {
     | undefined;
   processEnvironment?: ProcessEnvironmentService | undefined;
   recordLaunch(launch: TaskLaunchPlan): void;
+  resolveProjectEnv?: (input: {
+    cwd?: string | undefined;
+    projectRootPath?: string | undefined;
+  }) => Promise<Record<string, string> | undefined>;
   spawnBackgroundTask: SpawnBackgroundTask;
   startRun(args: {
     launches: readonly TaskLaunchPlan[];
@@ -314,11 +318,18 @@ export function createTaskBackgroundRuns(
       openTerminal: async (launch, runId) => {
         const panelId = backgroundPanelId(runId, launch.taskId);
         const processKey = panelRefKey(panelId, windowId);
+        const projectEnv = options.resolveProjectEnv
+          ? await options.resolveProjectEnv({
+              cwd: launch.cwd,
+              projectRootPath: launch.projectRootPath ?? projectRootPath,
+            })
+          : undefined;
         const environment = await processEnvironment.resolve({
           cwd: launch.cwd,
           source: "task",
           ...(clientEnv ? { clientEnv } : {}),
           ...(launch.env ? { explicitEnv: launch.env } : {}),
+          ...(projectEnv ? { projectEnv } : {}),
         });
         outputs.start({
           runId,

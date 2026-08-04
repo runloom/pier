@@ -224,7 +224,7 @@ describe("git review tree actions", () => {
     expect(enabledById.get("pier.git.review.discardFile")).toBe(false);
   });
 
-  it("opens the file in the files panel", async () => {
+  it("opens the file in the editor", async () => {
     const action = actionRegistry.get(GIT_REVIEW_OPEN_FILE_COMMAND_ID);
     expect(action).toBeDefined();
     await action?.handler({
@@ -382,7 +382,7 @@ describe("git review tree actions", () => {
     unsubscribeTransition();
   });
 
-  it("notifies when files panel is unavailable", async () => {
+  it("notifies when the editor is unavailable", async () => {
     openInEditor.mockReturnValue(false);
     const action = actionRegistry.get(GIT_REVIEW_OPEN_FILE_COMMAND_ID);
     await action?.handler({
@@ -394,7 +394,7 @@ describe("git review tree actions", () => {
       },
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
-    expect(error).toHaveBeenCalledWith("Unable to open file");
+    expect(error).toHaveBeenCalledWith("Couldn't open file");
   });
 });
 

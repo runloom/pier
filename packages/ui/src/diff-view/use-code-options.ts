@@ -36,6 +36,29 @@ import { syncPathTitleChrome } from "./path-title-chrome.ts";
 import { PIER_DIFF_LINE_DIFF_TYPE } from "./render-profile.ts";
 import { stabilizeCodeViewStickyPositioning } from "./sticky-stabilize.ts";
 
+const DEFAULT_UNMODIFIED_LINE = "{{count}} unmodified line";
+const DEFAULT_UNMODIFIED_LINES = "{{count}} unmodified lines";
+
+/**
+ * Build `CodeViewOptions.formatUnmodifiedLines` from host i18n templates.
+ *
+ * Plural selection is `count === 1` only (matches en/zh product needs). Callers
+ * that need ICU few/many/zero must pass a pre-resolved formatter themselves via
+ * `CodeViewOptions.formatUnmodifiedLines` instead of these templates.
+ */
+export function createFormatUnmodifiedLines(labels: {
+  readonly unmodifiedLine?: string | undefined;
+  readonly unmodifiedLines?: string | undefined;
+}): (lines: number) => string {
+  const singular = labels.unmodifiedLine ?? DEFAULT_UNMODIFIED_LINE;
+  const plural = labels.unmodifiedLines ?? DEFAULT_UNMODIFIED_LINES;
+  return (lines: number) => {
+    const safe = Number.isFinite(lines) && lines >= 0 ? Math.floor(lines) : 0;
+    const template = safe === 1 ? singular : plural;
+    return template.replaceAll("{{count}}", String(safe));
+  };
+}
+
 /**
  * Pierre 默认弹簧在超长列表的远距离导航中约需 0.9s 才进入目标视口。
  * 保留临界阻尼手感，同时把阅读导航收敛到约 0.4s。
@@ -115,6 +138,18 @@ export function useDiffViewCodeOptions(options: {
     isUserCollapsed,
     metrics,
   };
+  // Patched `@pierre/diffs`: formatUnmodifiedLines / expandAllUnmodifiedLabel
+  // (patches/@pierre__diffs@1.2.12.patch). Locale switch changes function
+  // identity → hasItemLayoutOptionChanged → separator re-render.
+  const formatUnmodifiedLines = useMemo(
+    () =>
+      createFormatUnmodifiedLines({
+        unmodifiedLine: labels.unmodifiedLine,
+        unmodifiedLines: labels.unmodifiedLines,
+      }),
+    [labels.unmodifiedLine, labels.unmodifiedLines]
+  );
+  const expandAllUnmodifiedLabel = labels.expandAllUnmodified;
   const codeViewOptions = useMemo<CodeViewOptions<PierHunkAnnotationMetadata>>(
     () => ({
       diffIndicators: "bars",
@@ -124,6 +159,10 @@ export function useDiffViewCodeOptions(options: {
       // No review comments — keep gutter utility off (avoids empty "+").
       enableGutterUtility: false,
       enableLineSelection: true,
+      ...(expandAllUnmodifiedLabel === undefined
+        ? {}
+        : { expandAllUnmodifiedLabel }),
+      formatUnmodifiedLines,
       itemMetrics: {
         diffHeaderHeight: metrics.headerHeight,
         lineHeight: metrics.lineHeight,
@@ -223,8 +262,10 @@ export function useDiffViewCodeOptions(options: {
       appearance.colorMode,
       codeViewRef,
       diffStyle,
+      expandAllUnmodifiedLabel,
       fileHoverCleanupsRef,
       fileHoverHostsRef,
+      formatUnmodifiedLines,
       isUserCollapsed,
       markRendered,
       metrics,

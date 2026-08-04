@@ -245,6 +245,19 @@ describe("pier.claude provider", () => {
     });
     await expect(envProvider.detectApiKeyMode()).resolves.toBe(true);
 
+    // resolveProcessEnv wins over a stale activate-time processEnv snapshot.
+    const resolveProvider = createClaudeProvider({
+      backend: createFileBackend(credentialsFilePath),
+      claudeJsonPath,
+      credentials,
+      credentialsFilePath,
+      processEnv: {},
+      resolveProcessEnv: async () => ({
+        env: { ANTHROPIC_API_KEY: "sk-from-shell" },
+      }),
+    });
+    await expect(resolveProvider.detectApiKeyMode()).resolves.toBe(true);
+
     await writeFile(
       claudeJsonPath,
       JSON.stringify({ primaryApiKey: "sk-ant-yyy" }),

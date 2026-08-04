@@ -51,6 +51,7 @@ import { initLocalEnvironments } from "./stores/local-environments.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
 import { initLspPreferences } from "./stores/lsp-preferences.store.ts";
 import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
+import { initShellEnvironmentStore } from "./stores/shell-environment.store.ts";
 import { initTaskRunsStore } from "./stores/task-runs.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
@@ -123,6 +124,7 @@ async function bootstrap() {
       initFont(),
       initZoom(),
       initTerminalPreferences(),
+      initShellEnvironmentStore(),
       initAppQuitPreferences(),
       initAgentPreferences(),
       initAgentAttentionPreferences(),

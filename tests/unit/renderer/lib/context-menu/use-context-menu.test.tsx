@@ -125,7 +125,7 @@ describe("useContextMenu", () => {
     );
   });
 
-  it("still setActive for non-tab surfaces that pass sourcePanelId", async () => {
+  it("still setActive for object / unregistered surfaces that pass sourcePanelId", async () => {
     const setActive = vi.fn();
     useWorkspaceStore.setState({
       api: {
@@ -146,5 +146,51 @@ describe("useContextMenu", () => {
     );
 
     expect(setActive).toHaveBeenCalledOnce();
+  });
+
+  it("does not setActive for document surfaces like git/review-diff", async () => {
+    const setActive = vi.fn();
+    useWorkspaceStore.setState({
+      api: {
+        panels: [
+          {
+            api: { setActive },
+            id: "git-changes-1",
+            view: { contentComponent: "pier.git.changes" },
+          },
+        ],
+      } as never,
+    });
+
+    await popupContextMenuAt(
+      "git/review-diff",
+      { x: 1, y: 2 },
+      { sourcePanelId: "git-changes-1" }
+    );
+
+    expect(setActive).not.toHaveBeenCalled();
+  });
+
+  it("does not setActive for panel/content viewport menus", async () => {
+    const setActive = vi.fn();
+    useWorkspaceStore.setState({
+      api: {
+        panels: [
+          {
+            api: { setActive },
+            id: "panel-1",
+            view: { contentComponent: "pier.git.changes" },
+          },
+        ],
+      } as never,
+    });
+
+    await popupContextMenuAt(
+      "panel/content",
+      { x: 1, y: 2 },
+      { sourcePanelId: "panel-1" }
+    );
+
+    expect(setActive).not.toHaveBeenCalled();
   });
 });

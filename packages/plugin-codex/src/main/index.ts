@@ -30,6 +30,8 @@ export const plugin: MainPluginModule = {
     const provider = createCodexProvider({
       credentials: context.secrets,
       logger: context.logger,
+      processEnv: context.processEnv,
+      resolveProcessEnv: context.resolveProcessEnv,
     });
     const managedBaseDir = join(context.paths.workDir, "runtime-homes");
     // TTL-based lease registry: renderer leases carry per-mount unique ids

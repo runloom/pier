@@ -5,7 +5,11 @@
  */
 
 export interface FilesDiskPathOpenedEvent {
+  /** 1-based column within the line; optional with `line`. */
+  column?: number;
   instanceId: string;
+  /** 1-based line to reveal after open (working-tree editor). */
+  line?: number;
   path: string;
   root: string;
 }

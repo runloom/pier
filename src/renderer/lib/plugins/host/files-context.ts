@@ -93,7 +93,9 @@ export function createPluginFilesContext(
       return openFilesDiskPath({
         path: request.path,
         root: request.root,
+        ...(request.column === undefined ? {} : { column: request.column }),
         ...(request.context ? { context: request.context } : {}),
+        ...(request.line === undefined ? {} : { line: request.line }),
         ...(request.title ? { title: request.title } : {}),
       });
     },

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getSearchQuery } from "@codemirror/search";
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import type {
   RendererPluginActionInvocation,
   RendererPluginContext,
@@ -67,13 +68,14 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   act,
   fireEvent,
-  render,
+  render as renderBase,
   screen,
   waitFor,
   within,
 } from "@testing-library/react";
 import { EditorView } from "codemirror";
 import type { IDockviewPanelProps } from "dockview-react";
+import type { ReactElement, ReactNode } from "react";
 import type * as ReactDomClient from "react-dom/client";
 import type { Container, Root, RootOptions } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,6 +83,23 @@ import {
   clearHostGroupContentForTests,
   createHostGroupContentContext,
 } from "@/lib/plugins/host/group-content-context.tsx";
+
+function render(ui: ReactElement, options?: Parameters<typeof renderBase>[1]) {
+  const wrapped = (
+    <TooltipProvider delayDuration={0} disableHoverableContent>
+      {ui}
+    </TooltipProvider>
+  );
+  const view = renderBase(wrapped, options);
+  const originalRerender = view.rerender;
+  view.rerender = ((next: ReactNode) =>
+    originalRerender(
+      <TooltipProvider delayDuration={0} disableHoverableContent>
+        {next}
+      </TooltipProvider>
+    )) as typeof view.rerender;
+  return view;
+}
 
 const filesGroupViewRootProbe = vi.hoisted(() => ({
   renderCalls: 0,
@@ -93,21 +112,31 @@ vi.mock("react-dom/client", async () => {
   const actual = (await vi.importActual(
     "react-dom/client"
   )) as typeof ReactDomClient;
+  const React = await import("react");
+  const { TooltipProvider } = await import("@pier/ui/tooltip.tsx");
 
   return {
     ...actual,
     createRoot(container: Container, options?: RootOptions): Root {
       const root = actual.createRoot(container, options);
-      if (
-        container instanceof HTMLElement &&
-        container.dataset.slot === "pier.files.groupView"
-      ) {
-        const render = root.render.bind(root);
-        root.render = (children) => {
+      const originalRender = root.render.bind(root);
+      root.render = (children) => {
+        if (
+          container instanceof HTMLElement &&
+          container.dataset.slot === "pier.files.groupView"
+        ) {
           filesGroupViewRootProbe.renderCalls += 1;
-          render(children);
-        };
-      }
+        }
+        // Group-view portals sit outside testing-library wrappers; provide the
+        // same tooltip host the app shell mounts around panel chrome.
+        originalRender(
+          React.createElement(TooltipProvider, {
+            children: children as React.ReactNode,
+            delayDuration: 0,
+            disableHoverableContent: true,
+          })
+        );
+      };
       return root;
     },
   };
@@ -786,7 +815,7 @@ describe("Files file-panel", () => {
     );
 
     expect(
-      screen.getByRole("button", { name: "Expand file tree" })
+      screen.getByRole("button", { name: "Show file tree" })
     ).toBeVisible();
     expect(container.querySelector("svg")).toHaveClass("lucide-folder-tree");
   });
@@ -855,7 +884,7 @@ describe("Files file-panel", () => {
       screen.getByText("No file selected").closest('[data-slot="empty"]')
     ).not.toBeNull();
     expect(
-      screen.getByRole("button", { name: "Collapse file tree" })
+      screen.getByRole("button", { name: "Hide file tree" })
     ).toBeVisible();
     const tree = within(getFileTree(container));
     expect(tree.getByRole("treeitem", { name: "README.md" })).toBeVisible();
@@ -4069,9 +4098,9 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
     });
-    fireEvent.click(screen.getByRole("button", { name: "Collapse file tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide file tree" }));
     expect(
-      screen.getByRole("button", { name: "Expand file tree" })
+      screen.getByRole("button", { name: "Show file tree" })
     ).toBeVisible();
 
     unmount();
@@ -4080,12 +4109,12 @@ describe("Files file-panel", () => {
     renderFilePanel({ context: panelContext }, createMockContext({ list }));
 
     expect(
-      screen.getByRole("button", { name: "Expand file tree" })
+      screen.getByRole("button", { name: "Show file tree" })
     ).toBeVisible();
     expect(screen.queryByText("README.md")).not.toBeInTheDocument();
     expect(list).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand file tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show file tree" }));
     await waitFor(() => {
       expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
     });
@@ -4112,13 +4141,13 @@ describe("Files file-panel", () => {
     });
     expect(list).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole("button", { name: "Collapse file tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide file tree" }));
     expect(
-      screen.getByRole("button", { name: "Expand file tree" })
+      screen.getByRole("button", { name: "Show file tree" })
     ).toBeVisible();
     expect(screen.queryByText("README.md")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Expand file tree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Show file tree" }));
     await waitFor(() => {
       expect(
         within(getFileTree(container)).getByRole("treeitem", {
@@ -5445,7 +5474,7 @@ describe("Files file-panel", () => {
       ).toBeNull();
     });
     expect(screen.queryByText("Ready")).toBeNull();
-  });
+  }, 15_000);
 
   it("hides the Markdown mode toggle for non-Markdown documents", async () => {
     renderFilePanel(

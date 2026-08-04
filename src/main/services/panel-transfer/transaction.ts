@@ -72,7 +72,16 @@ export async function runClaimedTransfer(
   let record = input.record;
   const transferId = record.transferId;
   const panelId = record.offer.panel.panelId;
-  const targetPanelId = panelId;
+  const mode = record.offer.mode ?? "move";
+  // Move reuses the source panel id (terminal lifecycle binding). Copy must
+  // allocate a fresh id so the source tab can remain open.
+  let targetPanelId = panelId;
+  if (mode === "copy") {
+    targetPanelId =
+      record.targetPanelId && record.targetPanelId !== panelId
+        ? record.targetPanelId
+        : crypto.randomUUID();
+  }
   const sideEffects = new Set<string>();
   const mark = (phase: PanelTransferPhase) => {
     sideEffects.add(sideEffectKey(transferId, phase));
@@ -82,7 +91,7 @@ export async function runClaimedTransfer(
     throwIfAborted(abortSignal);
     if (
       await deps.workspace.hasPanelId({
-        panelId,
+        panelId: targetPanelId,
         windowRecordId: target.windowRecordId,
       })
     ) {
@@ -119,6 +128,11 @@ export async function runClaimedTransfer(
       record.offer.panel.componentId,
       terminalLifecycleId
     );
+    if (mode === "copy" && snapshot.runtime.kind === "terminal") {
+      // Throw so catch runs rollbackBeforeCommit / finalize(abort) and
+      // clears prepare-side freeze (relocationSuppressed, frozen snapshot).
+      throw new Error("terminal panels cannot be copied across windows");
+    }
     record = await writePhase(deps.journal, record, "source-prepared", {
       snapshot,
     });
@@ -219,7 +233,7 @@ export async function runClaimedTransfer(
         record,
         source,
         target,
-        targetPanelId,
+        targetPanelId: record.targetPanelId ?? targetPanelId,
       });
     }
     return await rollbackBeforeCommit({

@@ -1,3 +1,7 @@
+import {
+  onFilesDiskPathOpened,
+  resetFilesDiskPathOpenedForTests,
+} from "@plugins/api/files-disk-path-opened.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FILES_FILE_PANEL_COMPONENT_ID,
@@ -34,6 +38,7 @@ describe("openFilesDiskPath", () => {
 
   afterEach(() => {
     useWorkspaceStore.getState().setApi(null);
+    resetFilesDiskPathOpenedForTests();
     vi.clearAllMocks();
   });
 
@@ -41,6 +46,26 @@ describe("openFilesDiskPath", () => {
     registrations.mockReturnValue(new Map() as never);
     expect(openFilesDiskPath({ path: "src/a.ts", root: "/repo" })).toBe(false);
     expect(openInstance).not.toHaveBeenCalled();
+  });
+
+  it("forwards line to the disk-path-opened bus", () => {
+    resetFilesDiskPathOpenedForTests();
+    const events: Array<{ line?: number; path: string }> = [];
+    const dispose = onFilesDiskPathOpened((event) => {
+      events.push({
+        path: event.path,
+        ...(event.line === undefined ? {} : { line: event.line }),
+      });
+    });
+    expect(
+      openFilesDiskPath({
+        line: 18,
+        path: "src/a.ts",
+        root: "/repo",
+      })
+    ).toBe(true);
+    expect(events).toEqual([{ line: 18, path: "src/a.ts" }]);
+    dispose();
   });
 
   it("opens a pinned disk file panel when files is available", () => {

@@ -126,6 +126,17 @@ export const SURFACE_PROFILES: Readonly<Record<string, SurfaceProfile>> = {
     selectionSource: "none",
     specializedEditPipeline: false,
   },
+  /**
+   * Git Changes diff body: Jump to Source + shared copy/selectAll (provider)
+   * + panel layout. Specialized line selection lives on PierDiffView.
+   */
+  "git/review-diff": {
+    mergeEdit: true,
+    mergeLayout: true,
+    role: "document",
+    selectionSource: "provider",
+    specializedEditPipeline: false,
+  },
   "git/review-tree-item": {
     mergeEdit: false,
     mergeLayout: false,
@@ -153,6 +164,29 @@ export const SURFACE_PROFILES: Readonly<Record<string, SurfaceProfile>> = {
 
 export function getSurfaceProfile(surface: string): SurfaceProfile | undefined {
   return SURFACE_PROFILES[surface];
+}
+
+/**
+ * 右键是否需要先 `panel.api.setActive()`。
+ *
+ * 故意按 role 全量判定（不只 Git）：所有 document/viewport 内容右键都不应
+ * 为 layout/edit 共享项抢 active。终端 live 在 popup 前自行 setActive；
+ * files/editor 动作靠 metadata 自洽，不依赖 active 面板。
+ *
+ * - document / viewport：用户已在内容上右键；强制 setActive 会冲掉行选区，
+ *   并对 `unmountWhenHidden` 面板（如 Git Changes）触发重挂载 → 滚动回顶。
+ * - dockview-tab：关 inactive tab 时不能先激活它（adjacent 策略会切错 active）。
+ * - object / chrome / 未登记 surface：仍激活 source，便于树行等依赖 active 的动作。
+ */
+export function shouldActivatePanelForContextMenu(surface: string): boolean {
+  if (surface === "dockview-tab") {
+    return false;
+  }
+  const profile = SURFACE_PROFILES[surface];
+  if (!profile) {
+    return true;
+  }
+  return profile.role !== "document" && profile.role !== "viewport";
 }
 
 /**

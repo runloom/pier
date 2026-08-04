@@ -176,3 +176,23 @@ export function pierHookCommandV3(spec: PierHookCommandV3Spec): string {
 export function isPierHookCommand(command: unknown): boolean {
   return typeof command === "string" && PIER_EMIT_INVOCATION_RE.test(command);
 }
+
+/**
+ * HTTP loopback 时代的 Pier hook（`PIER_AGENT_HOOK_PORT` + curl）。
+ *
+ * 自 JSONL emit 切换后 `isPierHookCommand` 故意不再匹配它们，以免把
+ * 世代探测当成“新格式”。但用户磁盘上的孤儿 curl 条目仍会在每次
+ * Pre/PostToolUse 时起子进程（环境无 PORT 时短路失败），并在 Grok 兼容
+ * 加载 Claude/Cursor hooks 时污染 `[hooks: n/m]` 注解。install / uninstall
+ * 必须能清掉这些遗留行。
+ */
+export function isLegacyPierHttpHookCommand(command: unknown): boolean {
+  return (
+    typeof command === "string" && command.includes("PIER_AGENT_HOOK_PORT")
+  );
+}
+
+/** install/uninstall 所有权：emit 规范命令 + 遗留 HTTP curl。 */
+export function isManagedPierHookCommand(command: unknown): boolean {
+  return isPierHookCommand(command) || isLegacyPierHttpHookCommand(command);
+}

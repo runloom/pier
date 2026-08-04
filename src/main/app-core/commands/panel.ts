@@ -18,6 +18,8 @@ import type {
   TerminalLaunchOptions,
 } from "@shared/contracts/terminal/launch.ts";
 import { resolveAgentLaunch } from "../../services/agents/launch.ts";
+import type { LocalEnvironmentService } from "../../services/local-environments-service.ts";
+import { resolveProjectEnvForSpawn } from "../../services/process-environment/resolve-project-env.ts";
 import type {
   ProcessEnvironmentResolveRequest,
   ProcessEnvironmentService,
@@ -37,6 +39,10 @@ import {
 import { orderedWindows, resolveCommandWindow } from "../window-routing.ts";
 
 export interface PanelCommandServices {
+  localEnvironments: Pick<
+    LocalEnvironmentService,
+    "resolveForWorktree" | "resolveProject"
+  >;
   panelContexts: {
     recordRecent(context: PanelContext): Promise<void>;
     resolveForPath(path: string): Promise<PanelContext>;
@@ -357,12 +363,21 @@ export async function executeTerminalOpenCommand(
     return commandFailure(requestId, "invalid_command", resolved.error);
   }
   const { launchBase, profile } = resolved;
+  const context = launchBase.cwd
+    ? await services.panelContexts.resolveForPath(launchBase.cwd)
+    : undefined;
+  const projectEnv = await resolveProjectEnvForSpawn({
+    cwd: launchBase.cwd,
+    localEnvironments: services.localEnvironments,
+    projectRootPath: context?.projectRootPath,
+  });
   const environmentRequest: ProcessEnvironmentResolveRequest = {
     ...(launchBase.env ? { agentEnv: launchBase.env } : {}),
     cwd: launchBase.cwd,
     ...(options.clientEnv ? { clientEnv: options.clientEnv } : {}),
     ...(rawLaunch.env ? { explicitEnv: rawLaunch.env } : {}),
     ...(profile?.env ? { profileEnv: profile.env } : {}),
+    ...(projectEnv ? { projectEnv } : {}),
     source: options.source ?? "terminal",
   };
   const resolvedEnvironment =
@@ -371,9 +386,6 @@ export async function executeTerminalOpenCommand(
     ...launchBase,
     ...optionalEnv(resolvedEnvironment.env),
   };
-  const context = launch.cwd
-    ? await services.panelContexts.resolveForPath(launch.cwd)
-    : undefined;
   const launchId = await services.terminalLaunches.register(launch);
   let result: Awaited<ReturnType<typeof services.rendererCommand.execute>>;
   try {

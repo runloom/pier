@@ -45,6 +45,18 @@ export const workspace = {
       "The tab couldn’t be moved to that window. The original tab is still open.",
     dropFailedUnknownComponentBody:
       "That tab couldn’t be moved to the other window. The original tab is still open.",
+    copyToNewWindowFailed: "Couldn’t copy into a new window",
+    copyToWindowFailed: "Couldn’t copy into that window",
+    moveToNewWindowFailed: "Couldn’t open in a new window",
+    moveToWindowFailed: "Couldn’t move into that window",
+    emptyWindowDescription: "Empty window",
+    noOtherWindows: "Open another window first, then try again.",
+    pickWindowFailed: "Couldn’t list windows",
+    pickWindowPlaceholder: "Search windows…",
+    pickWindowTitle: "Choose a Window",
+    sameNameIndex: " · {{n}}",
+    tabCount: "{{count}} tabs",
+    windowLabel: "Window {{n}}",
     unsupportedTitle: "This tab can’t be moved to another window",
     unsupportedBody:
       "This kind of tab doesn’t support cross-window moves. It’s still open in its original window.",

@@ -17,7 +17,13 @@ import {
 } from "./widget-presentation.ts";
 
 export interface AccountMetadataBadgesCopy {
+  /** Fallback when cancel-at-period-end has no usable end date. */
   cancelAtPeriodEnd: string;
+  /**
+   * Combined chip when cancel-at-period-end and a known end date.
+   * `relative` is already localized (e.g. "in 31 days" / "47天后").
+   */
+  cancelsOn: (relative: string) => string;
   expired: string;
   expires: (relative: string) => string;
   trialEnds: (relative: string) => string;
@@ -59,6 +65,12 @@ function membershipVariant(
   return "info";
 }
 
+function periodEndTimestamp(
+  membership: AccountMembershipSnapshot
+): number | undefined {
+  return membership.trialEndsAt ?? membership.expiresAt;
+}
+
 export function AccountMetadataBadges({
   copy,
   identityLabel,
@@ -84,34 +96,66 @@ export function AccountMetadataBadges({
   if (!(identityVisible || membershipVisible || visibleScalars.length > 0)) {
     return null;
   }
+
+  // cancelAtPeriodEnd + known end date → one chip (time + no renew).
+  // Color follows the same proximity window as plain expiry: far-away is
+  // neutral, within attention / expired / canceled is warning. Avoids
+  // stacking "Expires in 47 days" next to "Cancels at period end".
   let periodBadge: JSX.Element | null = null;
-  if (mode !== "tier" && membership?.trialEndsAt !== undefined) {
-    periodBadge = (
-      <Badge size="xs" variant="warning">
-        {copy.trialEnds(
-          formatRelativeTime(membership.trialEndsAt, now, language)
-        )}
-      </Badge>
-    );
-  } else if (mode !== "tier" && membership?.expiresAt !== undefined) {
-    // Period color only reflects proximity / expired / canceled — not
-    // cancelAtPeriodEnd (that is a separate warning badge below).
-    let variant: "danger" | "neutral" | "warning" = "neutral";
-    if (membership.status === "expired") {
-      variant = "danger";
-    } else if (membershipPeriodNeedsAttention(membership, now)) {
-      variant = "warning";
-    }
-    periodBadge = (
-      <Badge size="xs" variant={variant}>
-        {membership.status === "expired"
-          ? copy.expired
-          : copy.expires(
-              formatRelativeTime(membership.expiresAt, now, language)
+  let cancelBadge: JSX.Element | null = null;
+  if (mode !== "tier" && membership) {
+    const periodEndAt = periodEndTimestamp(membership);
+    const cancelAtEnd = membership.cancelAtPeriodEnd === true;
+    const isExpired = membership.status === "expired";
+
+    if (cancelAtEnd && periodEndAt !== undefined && !isExpired) {
+      const cancelVariant = membershipPeriodNeedsAttention(membership, now)
+        ? "warning"
+        : "neutral";
+      cancelBadge = (
+        <Badge size="xs" variant={cancelVariant}>
+          {copy.cancelsOn(formatRelativeTime(periodEndAt, now, language))}
+        </Badge>
+      );
+    } else {
+      if (membership.trialEndsAt !== undefined) {
+        periodBadge = (
+          <Badge size="xs" variant="warning">
+            {copy.trialEnds(
+              formatRelativeTime(membership.trialEndsAt, now, language)
             )}
-      </Badge>
-    );
+          </Badge>
+        );
+      } else if (membership.expiresAt !== undefined) {
+        // Period color: proximity / expired / canceled only.
+        let variant: "danger" | "neutral" | "warning" = "neutral";
+        if (isExpired) {
+          variant = "danger";
+        } else if (membershipPeriodNeedsAttention(membership, now)) {
+          variant = "warning";
+        }
+        periodBadge = (
+          <Badge size="xs" variant={variant}>
+            {isExpired
+              ? copy.expired
+              : copy.expires(
+                  formatRelativeTime(membership.expiresAt, now, language)
+                )}
+          </Badge>
+        );
+      }
+      if (cancelAtEnd) {
+        // No usable end date — keep warning so cancel without a date still
+        // surfaces as an attention signal.
+        cancelBadge = (
+          <Badge size="xs" variant="warning">
+            {copy.cancelAtPeriodEnd}
+          </Badge>
+        );
+      }
+    }
   }
+
   return (
     <div
       className="flex min-w-0 flex-wrap items-center gap-1.5"
@@ -128,11 +172,7 @@ export function AccountMetadataBadges({
         </Badge>
       ) : null}
       {periodBadge}
-      {mode !== "tier" && membership?.cancelAtPeriodEnd ? (
-        <Badge size="xs" variant="warning">
-          {copy.cancelAtPeriodEnd}
-        </Badge>
-      ) : null}
+      {cancelBadge}
       {visibleScalars.map((metric) => (
         <Badge key={metric.id} size="xs" variant="neutral">
           {metricLabel(metric)} {formatScalar(metric, language)}

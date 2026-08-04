@@ -10,6 +10,7 @@ import {
   FilePanelLayout,
   FilePanelSearchButton,
   FilePanelSidebarToggleButton,
+  filePanelTreeToggleShortcutLabel,
 } from "@pier/ui/file/panel-layout.tsx";
 import { FileSearchBar } from "@pier/ui/file/search-bar.tsx";
 import {
@@ -400,12 +401,12 @@ export function GitReviewPanelLayout({
                 collapseLabel={pluginText(
                   context,
                   "reviewTreeCollapse",
-                  "Collapse changed files"
+                  "Hide changed files"
                 )}
                 expandLabel={pluginText(
                   context,
                   "reviewTreeExpand",
-                  "Expand changed files"
+                  "Show changed files"
                 )}
                 hidden={!hasTree}
                 onToggle={() => {
@@ -415,6 +416,7 @@ export function GitReviewPanelLayout({
                     collapseSidebar();
                   }
                 }}
+                shortcut={filePanelTreeToggleShortcutLabel()}
               />
               {hasTree ? (
                 <FilePanelSearchButton

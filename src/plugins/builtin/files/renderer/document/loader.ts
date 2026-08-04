@@ -4,6 +4,7 @@ import {
   isFileMissingError,
 } from "../editor/errors.ts";
 import { waitForSettledWithAbort } from "./async-drain.ts";
+import { protectsLocalBufferFromDisk } from "./disk-protection.ts";
 import {
   getDocument,
   markDocumentDeletedOnDisk,
@@ -108,7 +109,11 @@ export class FileDocumentLoader {
       if (this.#disposed || !this.#isCurrent(latest, input)) {
         return;
       }
-      if (input.reload && (latest.dirty || latest.durabilityUnknown)) {
+      // Atomic rewrite often surfaces as delete then create. Deletion marks the
+      // clean buffer dirty so Save can recreate — but that must not block the
+      // follow-up reload from adopting the restored disk text (preview/source
+      // live update). Only true local edits stay protected.
+      if (input.reload && protectsLocalBufferFromDisk(latest)) {
         if (!("revision" in result && result.revision === latest.revision)) {
           markDocumentDiskConflict(latest.id);
           // 同步捕获磁盘快照，让冲突 diff 视图能对比真实磁盘内容，而不是

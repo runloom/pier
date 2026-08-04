@@ -14,6 +14,7 @@ import {
   captureDiffViewTopAnchor,
 } from "./item-anchor.ts";
 import { reconcileDiffVirtualHeights } from "./layout-apply.ts";
+import { resolveDiffPointerLineHit } from "./pointer-selection.ts";
 import { isRenderedItemVisible } from "./render-watchdog.ts";
 import {
   type DiffViewScrollOptions,
@@ -33,6 +34,7 @@ export type {
   PierDiffViewAnchor,
   PierDiffViewHandle,
   PierDiffViewLineSelection,
+  PierDiffViewPointerLineHit,
   PierDiffViewUpdateOptions,
 } from "./handle-types.ts";
 export { acceptDiffViewItem } from "./item-sync.ts";
@@ -235,6 +237,9 @@ function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
           start: selection.range.start,
         },
       };
+    },
+    resolvePointerLineHit(event) {
+      return resolveDiffPointerLineHit(event, codeViewRef.current);
     },
     getSelectedText(): string {
       const viewer = codeViewRef.current;

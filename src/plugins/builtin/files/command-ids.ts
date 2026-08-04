@@ -31,6 +31,8 @@ export const FILES_TREE_SEARCH_COMMAND_ID = "pier.files.treeSearch";
 export const FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID =
   "pier.files.tree.collapseFolders";
 export const FILES_TREE_EXPAND_ALL_COMMAND_ID = "pier.files.tree.expandAll";
+/** Show or hide the project file tree sidebar (panel chrome, not folder rows). */
+export const FILES_TREE_TOGGLE_COMMAND_ID = "pier.files.tree.toggle";
 /** Force explicit reveal of the active editor file in the project tree. */
 export const FILES_REVEAL_ACTIVE_IN_TREE_COMMAND_ID =
   "pier.files.revealActiveFileInTree";

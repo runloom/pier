@@ -129,14 +129,16 @@
   --surface-border: color-mix(in oklab, var(--foreground) 10%, transparent);
   --overlay-scrim: color-mix(in oklab, var(--foreground) 10%, transparent);
   --app-titlebar-height: 0px;
+  /* Hover / pressed wash on canvas (bg-background). 12%/16% keeps rows and
+     ghost icon buttons legible in light theme without matching selected. */
   --interactive-hover: color-mix(
     in oklab,
-    var(--foreground) 8%,
+    var(--foreground) 12%,
     var(--background)
   );
   --interactive-active: color-mix(
     in oklab,
-    var(--foreground) 12%,
+    var(--foreground) 16%,
     var(--background)
   );
   --status-neutral-bg: color-mix(in oklab, var(--muted) 64%, transparent);

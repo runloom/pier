@@ -9,6 +9,7 @@ import {
   PANEL_EDIT_SURFACE,
   PANEL_LAYOUT_SURFACE,
   SURFACE_PROFILES,
+  shouldActivatePanelForContextMenu,
 } from "@/lib/context-menu/surface-profiles.ts";
 
 const SRC_ROOT = join(process.cwd(), "src");
@@ -118,5 +119,19 @@ describe("context-menu surface profiles", () => {
       missing,
       `Unregistered context-menu surfaces (add to SURFACE_PROFILES): ${missing.join(", ")}`
     ).toEqual([]);
+  });
+
+  it("does not force setActive for document/viewport content menus", () => {
+    expect(shouldActivatePanelForContextMenu("git/review-diff")).toBe(false);
+    expect(shouldActivatePanelForContextMenu(PANEL_CONTENT_SURFACE)).toBe(
+      false
+    );
+    expect(shouldActivatePanelForContextMenu("files/editor")).toBe(false);
+    expect(shouldActivatePanelForContextMenu("terminal/content")).toBe(false);
+    expect(shouldActivatePanelForContextMenu("dockview-tab")).toBe(false);
+    expect(shouldActivatePanelForContextMenu("git/review-tree-item")).toBe(
+      true
+    );
+    expect(shouldActivatePanelForContextMenu("files/tree-item")).toBe(true);
   });
 });

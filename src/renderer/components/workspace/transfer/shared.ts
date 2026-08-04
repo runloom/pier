@@ -137,25 +137,32 @@ export function readPanelTransferId(
 }
 
 export async function showPanelTransferFailure(
-  result: Extract<PanelTransferResult, { ok: false }>
+  result: Extract<PanelTransferResult, { ok: false }>,
+  options?: { titleKey?: string }
 ): Promise<void> {
   const t = i18next.getFixedT(i18next.language);
-  const title =
-    result.code === "not_supported"
-      ? t("workspace.panelTransfer.unsupportedTitle", {
-          defaultValue: "This tab can’t move to another window",
-        })
-      : t("workspace.panelTransfer.dropFailedTitle", {
-          defaultValue: "Couldn’t move the tab",
-        });
-  const genericBody =
-    result.code === "not_supported"
-      ? t("workspace.panelTransfer.unsupportedBody", {
-          defaultValue: "This kind of tab doesn’t support cross-window moves.",
-        })
-      : t("workspace.panelTransfer.dropFailedBody", {
-          defaultValue: "The tab couldn’t be moved to that window.",
-        });
+  let title: string;
+  if (options?.titleKey) {
+    title = t(options.titleKey);
+  } else if (result.code === "not_supported") {
+    title = t("workspace.panelTransfer.unsupportedTitle", {
+      defaultValue: "This tab can’t move to another window",
+    });
+  } else {
+    title = t("workspace.panelTransfer.dropFailedTitle", {
+      defaultValue: "Couldn’t move the tab",
+    });
+  }
+  let genericBody: string;
+  if (result.code === "not_supported") {
+    genericBody = t("workspace.panelTransfer.unsupportedBody", {
+      defaultValue: "This kind of tab doesn’t support cross-window moves.",
+    });
+  } else {
+    genericBody = t("workspace.panelTransfer.dropFailedBody", {
+      defaultValue: "The tab couldn’t be moved to that window.",
+    });
+  }
   // Surface technical detail so silent race/timeout failures are diagnosable.
   const detail = result.message.trim();
   const body =

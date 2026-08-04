@@ -181,6 +181,231 @@ describe("PanelTransferService", () => {
     expect(journal.list()).toEqual([]);
   });
 
+  it("rejects copy offers for non-copyable components", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await expect(
+      service.offer(source, {
+        ...movableOffer(TRANSFER_A),
+        mode: "copy",
+      })
+    ).resolves.toEqual({ accepted: false });
+    await expect(
+      service.offer(source, {
+        capability: "movable",
+        mode: "copy",
+        panel: {
+          componentId: "pier.files.filePanel",
+          panelId: "files-1",
+          title: "a.ts",
+        },
+        transferId: TRANSFER_B,
+        version: 1,
+      })
+    ).resolves.toEqual({ accepted: true });
+  });
+
+  it("relocate new-window creates a transfer window and claims", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.relocate(source, {
+        target: { kind: "new-window" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).toHaveBeenCalledTimes(1);
+  });
+
+  it("relocate managed targets an existing window without createForTransfer", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.relocate(source, {
+        placement: { kind: "root" },
+        target: { kind: "window", windowId: "w-1" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).not.toHaveBeenCalled();
+  });
+
+  it("relocate rejects same-window targets and missing windows", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.relocate(source, {
+        target: { kind: "window", windowId: "main" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({
+      code: "invalid_offer",
+      ok: false,
+    });
+    await service.offer(source, movableOffer(TRANSFER_B));
+    await expect(
+      service.relocate(source, {
+        target: { kind: "window", windowId: "missing" },
+        transferId: TRANSFER_B,
+      })
+    ).resolves.toMatchObject({
+      code: "target_unavailable",
+      ok: false,
+    });
+  });
+
+  it("copy relocate allocates a new targetPanelId and skips releaseSource", async () => {
+    let releaseCalls = 0;
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.releaseSource") {
+        releaseCalls += 1;
+        return { data: null, ok: true, requestId: "r1" };
+      }
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "pier.files.filePanel",
+              panelId: "files-1",
+              title: "a.ts",
+            },
+            prepared: {},
+            runtimeKind: "web",
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, {
+      capability: "movable",
+      mode: "copy",
+      panel: {
+        componentId: "pier.files.filePanel",
+        panelId: "files-1",
+        title: "a.ts",
+      },
+      transferId: TRANSFER_A,
+      version: 1,
+    });
+    const result = await service.relocate(source, {
+      target: { kind: "new-window" },
+      transferId: TRANSFER_A,
+    });
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) {
+      expect(result.targetPanelId).not.toBe("files-1");
+      expect(result.targetPanelId.length).toBeGreaterThan(0);
+    }
+    expect(createForTransfer).toHaveBeenCalledTimes(1);
+    expect(releaseCalls).toBe(0);
+    expect(windows.closeAfterTransfer).not.toHaveBeenCalled();
+  });
+
+  it("relocate managed window resolves default placement when omitted", async () => {
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.resolveDefaultPlacement") {
+        return {
+          data: { groupId: "g-active", index: 2, kind: "tab" },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.relocate(source, {
+        target: { kind: "window", windowId: "w-1" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    const stageCall = rendererExecute.mock.calls.find((call) => {
+      const command = call[0];
+      return (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "panelTransfer.stageTarget"
+      );
+    });
+    expect(stageCall?.[0]).toMatchObject({
+      placement: { groupId: "g-active", index: 2, kind: "tab" },
+      type: "panelTransfer.stageTarget",
+    });
+  });
+
+  it("move relocate still releases the source panel", async () => {
+    let releaseCalls = 0;
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.releaseSource") {
+        releaseCalls += 1;
+        return { data: null, ok: true, requestId: "r1" };
+      }
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.relocate(source, {
+        target: { kind: "new-window" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(releaseCalls).toBe(1);
+  });
+
   it("tryClaim is unique; second different claim is already_claimed", async () => {
     const service = createService();
     const source = caller("main", "record-main", 1);

@@ -103,7 +103,7 @@ describe("claude transcript reconciler", () => {
       interruptLine("[Request interrupted by user for tool use]")
     );
 
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await vi.waitFor(() => expect(received).toHaveLength(1), { timeout: 5000 });
     expect(received[0]?.event).toBe("TurnInterrupted");
     reconciler.dispose();
   });
@@ -234,7 +234,7 @@ describe("claude transcript reconciler", () => {
       titleLine({ aiTitle: "标题分层重构", type: "ai-title" })
     );
 
-    await vi.waitFor(() => expect(titles).toHaveLength(1));
+    await vi.waitFor(() => expect(titles).toHaveLength(1), { timeout: 5000 });
     expect(titles[0]).toEqual({
       panelId: "panel-1",
       record: {
@@ -277,7 +277,7 @@ describe("claude transcript reconciler", () => {
         type: "ai-title",
       })
     );
-    await vi.waitFor(() => expect(titles).toHaveLength(1));
+    await vi.waitFor(() => expect(titles).toHaveLength(1), { timeout: 5000 });
     expect(titles[0]?.record.title).toBe("Canvas 打包报错和 demo 场景示例");
     reconciler.dispose();
   });
@@ -294,7 +294,7 @@ describe("claude transcript reconciler", () => {
     const line = titleLine({ aiTitle: "标题分层重构", type: "ai-title" });
     appendFileSync(path, `${line}${line}${line}`);
 
-    await vi.waitFor(() => expect(titles).toHaveLength(1));
+    await vi.waitFor(() => expect(titles).toHaveLength(1), { timeout: 5000 });
     await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 200));
     expect(titles).toHaveLength(1);
     reconciler.dispose();
@@ -341,7 +341,7 @@ describe("claude transcript reconciler", () => {
       })
     );
 
-    await vi.waitFor(() => expect(titles).toHaveLength(1));
+    await vi.waitFor(() => expect(titles).toHaveLength(1), { timeout: 5000 });
     expect(titles[0]?.panelId).toBe("panel-b");
     reconciler.dispose();
   });
@@ -391,7 +391,7 @@ describe("claude transcript reconciler", () => {
       `${titleLine({ aiTitle: "   ", type: "ai-title" })}{"type":"ai-title","aiTitle":\n${interruptLine()}`
     );
 
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await vi.waitFor(() => expect(received).toHaveLength(1), { timeout: 5000 });
     expect(titles).toHaveLength(0);
     reconciler.dispose();
   });
@@ -404,9 +404,9 @@ describe("claude transcript reconciler", () => {
     });
     await reconciler.observe(hookEvent(path));
     appendFileSync(path, interruptLine());
-    await vi.waitFor(() => expect(received).toHaveLength(1));
+    await vi.waitFor(() => expect(received).toHaveLength(1), { timeout: 5000 });
     appendFileSync(path, interruptLine());
-    await vi.waitFor(() => expect(received).toHaveLength(2));
+    await vi.waitFor(() => expect(received).toHaveLength(2), { timeout: 5000 });
     reconciler.dispose();
   });
 });

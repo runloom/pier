@@ -41,6 +41,12 @@ function parkKeyboardOnSink(sink: HTMLElement | null | undefined): void {
  *
  * resultView 以 EndState / 任务终态为准，不依赖「retain 为 true 时才订 child-exited」
  * （FA 先清、child-exited 后到时仍能 park）。
+ *
+ * 活体 agent（FA kind=agent，含 ready/processing 回合）不得钉键盘：
+ * EndState / child-exited 闩在同 panel 再次跑 agent 后可能仍残留，若继续
+ * task-result-retain 会把 effective 永久钉在 web（诊断 owner-stuck），
+ * 终端无法聚焦、TUI 快捷键失效。对齐 tab 的 agentEndView：仅 FA 非 agent 时
+ * 才进入结果查看键盘态。
  */
 export function useTaskResultKeyboardRetain(
   panelId: string,
@@ -53,13 +59,16 @@ export function useTaskResultKeyboardRetain(
 ): void {
   const hasEndState = useTerminalEndStateStore((s) => s.ends[panelId] != null);
   // 订阅 FA / TaskRuns，避免 shouldRetain 内 getState 无订阅导致 retain 卡住
-  useForegroundActivityStore((s) => s.activities[panelId]?.kind);
+  const activityKind = useForegroundActivityStore(
+    (s) => s.activities[panelId]?.kind
+  );
   useTaskRunsStore((s) => s.snapshot.version);
   const hasAgentSession = options?.hasAgentSession === true;
   const retain = shouldRetainTaskResultPanel(panelId, params, {
     hasAgentSession,
   });
   const [childExited, setChildExited] = useState(false);
+  const liveAgent = activityKind === "agent";
 
   // 整段 mount 都订 child-exited；panelId 变才复位（勿因 retain 抖动丢事件）
   useEffect(() => {
@@ -121,8 +130,22 @@ export function useTaskResultKeyboardRetain(
     }
   }, [runActive]);
 
+  // 同 panel 再次成为活体 agent 时清掉 child-exited 闩。
+  // EndState 本体由 useTerminalEndStateTab 在「非 agent → agent」上升沿清除
+  // （持续 agent 时不 clear，避免退出竞态丢掉刚写入的结果态）。
+  useEffect(() => {
+    if (liveAgent) {
+      setChildExited(false);
+    }
+  }, [liveAgent]);
+
+  // 活体 agent 时即使残留 EndState 也不得钉键盘（与 agentEndView 同口径）。
+  // EndState 上升沿清除后，FA 短暂 empty 抖动也不会因旧 hasEndState 再 pin。
   const resultView =
-    retain && !runActive && (runFinishedKnown || childExited || hasEndState);
+    retain &&
+    !runActive &&
+    !liveAgent &&
+    (runFinishedKnown || childExited || hasEndState);
 
   useEffect(() => {
     if (!(isActive && resultView)) {

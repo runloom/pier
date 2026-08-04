@@ -7,7 +7,7 @@ import type {
 } from "@shared/contracts/tasks.ts";
 import type { TerminalEndState } from "@shared/contracts/terminal/end-state.ts";
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useTerminalEndStateStore } from "@/stores/terminal-end-state.store.ts";
 import {
   activityTabChromeOverlay,
@@ -20,6 +20,12 @@ import {
 /**
  * Hydrate agent EndState from session + derive effective tab chrome.
  * Keeps terminal-panel.tsx under the file-size hard cap.
+ *
+ * EndState 生命周期：
+ * - 水合：session.agent.exited 且当前非活体 agent
+ * - 清除：panel unmount；**非 agent → agent 上升沿**（同 panel 复活）
+ * - 不在「持续 FA=agent」期间 clear：进程退出瞬间 child-exited 可能先于 FA
+ *   清空写入 EndState，若此时无脑 clear 会丢掉结果查看态
  */
 export function useTerminalEndStateTab(args: {
   activeLaunchTab: PanelTabChrome | undefined;
@@ -40,6 +46,8 @@ export function useTerminalEndStateTab(args: {
   const endState = useTerminalEndStateStore((s) => s.ends[panelId]);
   const upsertAgentEnd = useTerminalEndStateStore((s) => s.upsertAgentEnd);
   const clearEndState = useTerminalEndStateStore((s) => s.clear);
+  /** 上一帧是否 FA kind=agent；用于复活上升沿，避免退出竞态误清。 */
+  const prevLiveAgentRef = useRef(false);
 
   useEffect(() => {
     if (activity?.kind === "agent") {
@@ -67,12 +75,24 @@ export function useTerminalEndStateTab(args: {
     upsertAgentEnd,
   ]);
 
-  useEffect(
-    () => () => {
+  // panel 切换：复位上升沿哨兵 + unmount/换 id 时清本 panel EndState。
+  // 必须排在复活 clear 之前声明，保证同 commit 先 reset 再判 rising edge。
+  useEffect(() => {
+    prevLiveAgentRef.current = false;
+    return () => {
       clearEndState(panelId);
-    },
-    [clearEndState, panelId]
-  );
+    };
+  }, [clearEndState, panelId]);
+
+  // 同 panel agent 复活（非 agent → agent）：清残留 EndState，避免 FA 抖动时空窗
+  // 再被 hasEndState 钉回键盘 / 结果 chrome。持续 agent 或 agent→empty 退出不 clear。
+  useEffect(() => {
+    const liveAgent = activity?.kind === "agent";
+    if (liveAgent && !prevLiveAgentRef.current) {
+      clearEndState(panelId);
+    }
+    prevLiveAgentRef.current = liveAgent;
+  }, [activity?.kind, clearEndState, panelId]);
 
   const agentEndView = endState?.role === "agent" && activity?.kind !== "agent";
   const baseTab =

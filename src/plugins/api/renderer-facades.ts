@@ -146,7 +146,11 @@ export interface RendererPluginFilesFacade {
    * files 插件未启用/未注册时返回 false，不抛。
    */
   openInEditor(request: {
+    /** 1-based column within the line; used with `line`. */
+    column?: number;
     context?: PanelContext;
+    /** 1-based working-tree line to reveal after open. */
+    line?: number;
     path: string;
     root: string;
     title?: string;

@@ -55,6 +55,7 @@ export function createTaskService({
   processEnvironment,
   readRecentState,
   recentLimit,
+  resolveProjectEnv,
   spawnBackgroundTask: spawnBackgroundTaskOption = spawnBackgroundTask,
   writeRecentState,
 }: CreateTaskServiceOptions = {}): TaskService {
@@ -174,6 +175,7 @@ export function createTaskService({
           console.error("[tasks] record background launch failed:", err);
         });
     },
+    ...(resolveProjectEnv ? { resolveProjectEnv } : {}),
     spawnBackgroundTask: spawnBackgroundTaskOption,
     startRun: (args) => taskRuns.start(args),
   });

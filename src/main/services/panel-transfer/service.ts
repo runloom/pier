@@ -3,6 +3,7 @@ import type {
   PanelTransferPlacement,
   PanelTransferResult,
 } from "@shared/contracts/panel-transfer.ts";
+import { isPanelTransferCopyableComponent } from "@shared/contracts/panel-transfer.ts";
 import { PanelTransferJournal } from "../../state/panel-transfer-journal.ts";
 import type { RendererCommandService } from "../renderer-command-service.ts";
 import { finishPanelTransferDrag } from "./finish-drag.ts";
@@ -15,6 +16,11 @@ import {
   samePanelTransferCaller,
 } from "./helpers.ts";
 import { createPanelTransferLifecycleMethods } from "./lifecycle.ts";
+import {
+  createResolveDefaultPlacement,
+  type RelocateLiveOffer,
+  relocatePanelTransfer,
+} from "./relocate.ts";
 import {
   type PanelTransferTransactionDeps,
   runClaimedTransfer,
@@ -237,17 +243,25 @@ export function createPanelTransferService(
       const result = await args.pluginMutation(() =>
         args.windows.runExclusive(async (lease) => {
           let target = claim.target;
+          const movableOffer = live.offer as Extract<
+            PanelTransferOffer,
+            { capability: "movable" }
+          >;
+          const transferMode = movableOffer.mode ?? "move";
           let record: PanelTransferJournalRecord = {
             createdAt: now(),
-            offer: live.offer as Extract<
-              PanelTransferOffer,
-              { capability: "movable" }
-            >,
+            offer: movableOffer,
             phase: "claimed",
             placement: claim.placement,
             source: live.source,
             target,
-            targetPanelId: live.offer.panel.panelId,
+            // Copy allocates a fresh panel id in runClaimedTransfer; seed a
+            // distinct placeholder here so journal mid-flight recovery does
+            // not treat the source id as the target identity.
+            targetPanelId:
+              transferMode === "copy"
+                ? crypto.randomUUID()
+                : movableOffer.panel.panelId,
             transferId: live.transferId,
             updatedAt: now(),
           };
@@ -345,6 +359,16 @@ export function createPanelTransferService(
       const tombstone = tombstones.get(offer.transferId);
       if (tombstone) return { accepted: tombstone.result.ok };
 
+      // Copy is files-only; reject early so callers never claim a non-copyable
+      // offer. Move remains the default for all movable components.
+      if (
+        offer.capability === "movable" &&
+        offer.mode === "copy" &&
+        !isPanelTransferCopyableComponent(offer.panel.componentId)
+      ) {
+        return { accepted: false };
+      }
+
       const live: LiveOffer = {
         abort: new AbortController(),
         accepted: offer.capability === "movable",
@@ -425,6 +449,27 @@ export function createPanelTransferService(
         },
         caller,
         transferId
+      );
+    },
+
+    async relocate(caller, input) {
+      const tombstone = tombstones.get(input.transferId);
+      if (tombstone) {
+        return tombstone.result;
+      }
+      return await relocatePanelTransfer(
+        {
+          getOffer: (id) => offers.get(id) as RelocateLiveOffer | undefined,
+          pruneTombstones,
+          resolveDefaultPlacement: createResolveDefaultPlacement(renderer),
+          tryClaim: (live, target, placement) =>
+            tryClaim(live as LiveOffer, target, placement),
+          waitForOffer: async (id, timeoutMs) =>
+            (await waitForOffer(id, timeoutMs)) as RelocateLiveOffer | null,
+          windows: args.windows,
+        },
+        caller,
+        input
       );
     },
   };

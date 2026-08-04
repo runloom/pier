@@ -1,6 +1,5 @@
 import { existsSync, type FSWatcher, mkdirSync, watch } from "node:fs";
 import { mkdir, readFile, rm } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import {
@@ -10,7 +9,12 @@ import {
 } from "./grok-usage.ts";
 import type { AccountIdentity } from "./identity.ts";
 import { parseGrokAuthJson, readGrokIdentity } from "./identity.ts";
-import { defaultSpawnLogin, type SpawnLoginFn } from "./login-spawn.ts";
+import {
+  defaultRealGrokHome,
+  defaultSpawnLogin,
+  hostSpawnEnv,
+  type SpawnLoginFn,
+} from "./login-spawn.ts";
 import type { AccountUsageResult } from "./types.ts";
 
 export { type SpawnLoginFn, stripAnsi } from "./login-spawn.ts";
@@ -25,6 +29,9 @@ export interface CreateGrokProviderOpts {
   logger?: { warn(message: string, ...args: unknown[]): void };
   processEnv?: Readonly<Record<string, string | undefined>>;
   realGrokHome?: string;
+  resolveProcessEnv?: (request?: {
+    cwd?: string;
+  }) => Promise<{ env: Record<string, string> }>;
   spawnLogin?: SpawnLoginFn;
 }
 
@@ -75,18 +82,11 @@ export interface GrokAccountProvider {
   ): Promise<void>;
 }
 
-function defaultRealGrokHome(
-  processEnv?: Readonly<Record<string, string | undefined>>
-): string {
-  return (
-    processEnv?.GROK_HOME ?? process.env.GROK_HOME ?? join(homedir(), ".grok")
-  );
-}
-
 export function createGrokProvider(
   opts: CreateGrokProviderOpts
 ): GrokAccountProvider {
   const processEnv = opts.processEnv;
+  const resolveProcessEnv = opts.resolveProcessEnv;
   const realGrokHome = opts.realGrokHome ?? defaultRealGrokHome(processEnv);
   const spawnLogin = opts.spawnLogin ?? defaultSpawnLogin;
   const fetchImpl = opts.fetchImpl;
@@ -234,14 +234,9 @@ export function createGrokProvider(
       const args =
         mode === "device" ? ["login", "--device-auth"] : ["login", "--oauth"];
       await spawnLogin("grok", args, {
-        env: {
-          ...process.env,
-          ...processEnv,
-          // Keep login-shell PATH hydration (GUI Electron starts thin).
-          // processEnv may freeze activate-time PATH without ~/.grok/bin.
-          ...(process.env.PATH === undefined ? {} : { PATH: process.env.PATH }),
+        env: await hostSpawnEnv(resolveProcessEnv, processEnv, {
           GROK_HOME: homeDir,
-        },
+        }),
         ...(onOutput ? { onOutput } : {}),
         signal,
       });

@@ -19,7 +19,7 @@
       "title": "显示符号信息"
     },
     "pier.files.revealActiveFileInTree": {
-      "title": "在文件树中显示当前文件"
+      "title": "在目录树中显示当前文件"
     }
   },
   "messages": {
@@ -148,13 +148,14 @@
     "filePanel.unsupported.revealFailed": "无法在文件管理器中显示文件",
     "filePanel.unsupported.revealUnavailable": "系统文件管理器未能显示该文件。",
     "filePanel.tree.blockedByDirtyDocument": "请先保存或处理当前文件，再从目录树打开其他文件。",
-    "filePanel.tree.collapse": "折叠目录树",
+    "filePanel.tree.collapse": "隐藏目录树",
     "filePanel.tree.collapseAll": "折叠目录",
     "filePanel.tree.collapseFolders": "折叠目录",
-    "filePanel.tree.revealActiveFile": "在文件树中显示当前文件",
+    "filePanel.tree.revealActiveFile": "在目录树中显示当前文件",
     "filePanel.tree.expandAll": "展开目录",
     "filePanel.tree.expandKnownFolders": "展开目录",
-    "filePanel.tree.expand": "展开目录树",
+    "filePanel.tree.expand": "显示目录树",
+    "filePanel.tree.toggle": "显示/隐藏目录树",
     "filePanel.canvas.compileFailed": "无法编译画布",
     "filePanel.canvas.compileFailedHint": "请修复画布文件或其引用，然后重新加载。",
     "filePanel.canvas.compiling": "正在编译画布…",
@@ -242,8 +243,8 @@
     "filePanel.tree.delete.multi": "{{count}} 项",
     "filePanel.tree.moved": "已移动",
     "filePanel.tree.undo": "撤销",
-    "filePanel.tree.search": "在树中查找",
-    "filePanel.tree.action.search": "在文件树中查找",
+    "filePanel.tree.search": "在目录树中查找",
+    "filePanel.tree.action.search": "在目录树中查找",
     "filePanel.quickOpen.title": "转到文件",
     "filePanel.quickOpen.placeholder": "按路径搜索文件",
     "filePanel.quickOpen.noProject": "请先打开项目再搜索文件。",
@@ -270,7 +271,7 @@
     "filePanel.editor.action.paste": "粘贴",
     "filePanel.editor.action.selectAll": "全选",
     "filePanel.editor.clipboardFailed": "无法使用剪贴板",
-    "panel.tree.search": "在树中查找",
+    "panel.tree.search": "在目录树中查找",
     "filePanel.saveOnClose.title": "要保存对 {{name}} 的更改吗？",
     "filePanel.saveOnClose.body": "不保存将丢失这些更改。",
     "filePanel.saveOnClose.saveLabel": "保存",
@@ -355,7 +356,7 @@
   "terminalStatusItems": {
     "pier.files.project": {
       "title": "项目",
-      "description": "显示当前项目并打开其文件树。"
+      "description": "显示当前项目并打开其目录树。"
     }
   },
   "name": "文件",
@@ -435,7 +436,7 @@
       "label": "压缩文件夹"
     },
     "pier.files.tree.autoReveal": {
-      "description": "切换标签时自动在项目文件树中定位当前文件。不作用于「打开文件 / 跳转定义 / 面包屑」等主动定位（这些仍会定位）。也可随时用「在文件树中显示当前文件」。",
+      "description": "切换标签时自动在项目目录树中定位当前文件。不作用于「打开文件 / 跳转定义 / 面包屑」等主动定位（这些仍会定位）。也可随时用「在目录树中显示当前文件」。",
       "enumDescriptions": [
         "定位并在需要时滚动到可见位置",
         "仅选中，不滚动",
@@ -444,7 +445,7 @@
       "label": "自动定位当前文件"
     },
     "pier.files.tree.autoRevealExcludePatterns": {
-      "description": "切换标签自动定位时忽略这些规则命中的路径。「打开文件 / 跳转定义 / 在文件树中显示当前文件」仍会定位。每行一条规则；空行和以 # 开头的行会被忽略。",
+      "description": "切换标签自动定位时忽略这些规则命中的路径。「打开文件 / 跳转定义 / 在目录树中显示当前文件」仍会定位。每行一条规则；空行和以 # 开头的行会被忽略。",
       "label": "自动定位排除规则"
     }
   }

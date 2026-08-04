@@ -302,6 +302,57 @@ describe("withoutPierCursorHooks", () => {
     const user = { hooks: { stop: [{ command: "say done" }] } };
     expect(withoutPierCursorHooks(user)).toBe(user);
   });
+
+  it("清掉遗留 PIER_AGENT_HOOK_PORT curl（含已废弃的 shell 闸门事件）", () => {
+    const legacyPort =
+      '[ -n "$PIER_AGENT_HOOK_PORT" ] && [ -n "$PIER_PANEL_ID" ] && curl -fsS -m 2 -X POST "http://127.0.0.1:$PIER_AGENT_HOOK_PORT/agent-event" || true';
+    const dirty = {
+      hooks: {
+        beforeShellExecution: [{ command: legacyPort, timeout: 10 }],
+        preToolUse: [
+          { command: legacyPort, timeout: 10 },
+          { command: "echo user-owned", timeout: 10 },
+        ],
+      },
+      version: 1,
+    };
+    const cleaned = withoutPierCursorHooks(dirty);
+    const hooks = cleaned.hooks as Record<string, Array<{ command: string }>>;
+    expect(hooks.beforeShellExecution).toBeUndefined();
+    expect(hooks.preToolUse?.map((e) => e.command)).toEqual([
+      "echo user-owned",
+    ]);
+  });
+});
+
+describe("cursor pier hooks under Grok compat load", () => {
+  it("GROK_HOOK_EVENT 存在时跳过 emit（避免 agent=cursor 双写）", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-cursor-grok-guard-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const hooks = withPierCursorHooks({}).hooks as Record<
+      string,
+      Array<{ command: string }>
+    >;
+    const preTool = hooks.preToolUse?.[0]?.command ?? "";
+    expect(preTool).toContain("GROK_HOOK_EVENT");
+    const result = spawnSync("/bin/sh", ["-c", preTool], {
+      env: {
+        ...process.env,
+        PATH: pathForHookSpawn(process.env.PATH),
+        GROK_HOOK_EVENT: '{"hookEventName":"PreToolUse"}',
+        PIER_AGENT_EVENT_LOG: logPath,
+        PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+        PIER_PANEL_ID: "p1",
+        PIER_WINDOW_ID: "w1",
+      },
+      input: "{}",
+    });
+    expect(result.status, result.stderr.toString()).toBe(0);
+    expect(await readFile(logPath, "utf8").catch(() => "")).toBe("");
+  });
 });
 
 describe("install/uninstallCursorHooks (文件 IO)", () => {

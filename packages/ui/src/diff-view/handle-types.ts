@@ -35,6 +35,13 @@ export interface PierDiffViewUpdateOptions {
   readonly preserveAnchor?: boolean;
 }
 
+export interface PierDiffViewPointerLineHit {
+  readonly fromNumberColumn: boolean;
+  readonly id: string;
+  readonly lineNumber: number;
+  readonly side: "additions" | "deletions";
+}
+
 export interface PierDiffViewHandle {
   /** 捕获指定已渲染 item 相对视口顶部的位置；未渲染时返回 null。 */
   captureItemAnchor?(id: string): PierDiffViewAnchor | null;
@@ -70,6 +77,13 @@ export interface PierDiffViewHandle {
     stableFrames: number,
     callback: () => void
   ): () => void;
+  /**
+   * 从 pointer / contextmenu 事件解析行命中（含 shadow composedPath）。
+   * 供宿主右键「跳转到源码」落到对应行。
+   */
+  resolvePointerLineHit(
+    event: Pick<MouseEvent | PointerEvent, "composedPath" | "target">
+  ): PierDiffViewPointerLineHit | null;
   restoreAnchor(anchor: PierDiffViewAnchor): boolean;
   /**
    * 定位到 item。behavior 缺省对齐 DiffsHub：

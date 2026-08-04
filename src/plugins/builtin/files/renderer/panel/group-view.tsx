@@ -306,7 +306,7 @@ export function FilesGroupView({
       <FilePanelSearchButton
         label={
           root
-            ? t("panel.tree.search", "Find in tree")
+            ? t("filePanel.tree.action.search", "Find in File Tree")
             : t("filePanel.search", "Find in file")
         }
         onOpenSearch={handleOpenSearch}

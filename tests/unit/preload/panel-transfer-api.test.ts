@@ -31,7 +31,7 @@ describe("panelTransfer preload API", () => {
     vi.clearAllMocks();
   });
 
-  it("forwards offer/drop/finishDrag/cancel/bootstrap/ready through PierCommand", async () => {
+  it("forwards offer/drop/finishDrag/cancel/bootstrap/ready/relocate through PierCommand", async () => {
     const api = createPanelTransferApi();
 
     ipcInvokeMock.mockResolvedValueOnce({
@@ -111,6 +111,23 @@ describe("panelTransfer preload API", () => {
     expect(ipcInvokeMock).toHaveBeenLastCalledWith(PIER.COMMAND_EXECUTE, {
       type: "panelTransfer.ready",
       transferId: TRANSFER_ID,
+    });
+
+    ipcInvokeMock.mockResolvedValueOnce({
+      data: { ok: true, targetPanelId: "panel-files-1" },
+      ok: true,
+      requestId: "r7",
+    });
+    await expect(
+      api.relocate({
+        transferId: TRANSFER_ID,
+        target: { kind: "new-window" },
+      })
+    ).resolves.toEqual({ ok: true, targetPanelId: "panel-files-1" });
+    expect(ipcInvokeMock).toHaveBeenLastCalledWith(PIER.COMMAND_EXECUTE, {
+      type: "panelTransfer.relocate",
+      transferId: TRANSFER_ID,
+      target: { kind: "new-window" },
     });
   });
 

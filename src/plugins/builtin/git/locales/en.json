@@ -139,8 +139,19 @@
     "pier.git.review.openFile": {
       "aliases": ["open file", "open changed file", "review open file"],
       "category": "Git",
-      "description": "Open the selected changed file in the files panel.",
+      "description": "Open this changed file in the editor.",
       "title": "Git: Open File"
+    },
+    "pier.git.review.openInEditor": {
+      "aliases": [
+        "jump to source",
+        "open in editor",
+        "open at line",
+        "go to line"
+      ],
+      "category": "Git",
+      "description": "Jump to this change in the source editor, at the matching working-tree line when available.",
+      "title": "Git: Jump to Source"
     },
     "pier.git.review.stageFile": {
       "aliases": ["stage file", "git add", "stage changes"],
@@ -168,6 +179,11 @@
       "category": "Git",
       "description": "Discard local changes, or move new files to Trash.",
       "title": "Git: Discard Changes"
+    },
+    "pier.git.review.toggleTree": {
+      "category": "Git",
+      "description": "Show or hide the changed-files tree sidebar.",
+      "title": "Toggle Changed Files Tree"
     },
     "pier.git.review.expandAll": {
       "category": "Git",
@@ -307,6 +323,9 @@
     "ui.reviewLoading": "Loading changes",
     "ui.reviewCollapseDiff": "Collapse diff",
     "ui.reviewExpandDiff": "Expand diff",
+    "ui.reviewExpandAllUnmodified": "Expand all",
+    "ui.reviewUnmodifiedLine": "{{count}} unmodified line",
+    "ui.reviewUnmodifiedLines": "{{count}} unmodified lines",
     "ui.reviewHeaderRestore": "Discard Changes",
     "ui.reviewHeaderStage": "Stage",
     "ui.reviewHeaderUnstage": "Unstage",
@@ -384,11 +403,12 @@
     "ui.reviewWarningPathDepthExceeded": "{{skipped}} paths exceeded the supported directory depth and were skipped.",
     "ui.reviewWarningInvalidPathEncoding": "{{skipped}} paths could not be decoded and were skipped.",
     "ui.reviewTreeLabel": "Changed files",
-    "ui.reviewTreeCollapse": "Collapse changed files",
+    "ui.reviewTreeCollapse": "Hide changed files",
     "ui.reviewTreeCollapseAll": "Collapse Folders",
     "ui.reviewTreeCollapseFolders": "Collapse Folders",
     "ui.reviewTreeExpandAll": "Expand Folders",
-    "ui.reviewTreeExpand": "Expand changed files",
+    "ui.reviewTreeExpand": "Show changed files",
+    "ui.reviewToggleTree": "Toggle Changed Files Tree",
     "ui.reviewTreeSearch": "Find in changed files",
     "ui.reviewTreeSearchClose": "Close",
     "ui.reviewTreeSearchNext": "Next match",
@@ -397,8 +417,10 @@
     "ui.reviewTreeSearchMatchAnnouncement": "Matching changes: {{count}}",
     "ui.reviewTreeNoSearchResultsTitle": "No matching changes",
     "ui.reviewTreeNoSearchResultsDescription": "Try another file name or path.",
-    "ui.reviewTreeOpenFile": "Open File",
-    "ui.reviewTreeOpenFileFailed": "Couldn't open file",
+    "ui.reviewOpenFile": "Open File",
+    "ui.reviewOpenFileFailed": "Couldn't open file",
+    "ui.reviewOpenInEditor": "Jump to Source",
+    "ui.reviewDiffContextMenuFailed": "Unable to open menu",
     "ui.reviewTreeStageFile": "Stage",
     "ui.reviewTreeStageFailed": "Unable to Stage",
     "ui.reviewTreeStaging": "Staging…",

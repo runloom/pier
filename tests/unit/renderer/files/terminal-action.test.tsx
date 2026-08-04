@@ -1,3 +1,4 @@
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import type {
   RendererPluginAction,
   RendererPluginContext,
@@ -22,8 +23,12 @@ import { clearFileTreeSidebarCache } from "@plugins/builtin/files/renderer/tree/
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { cleanup, render, waitFor } from "@testing-library/react";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+function renderWithTooltip(ui: ReactElement) {
+  return render(<TooltipProvider>{ui}</TooltipProvider>);
+}
 
 const activePanelContext: PanelContext = {
   branch: "feature/files",
@@ -482,7 +487,7 @@ describe("files plugin activation", () => {
       throw new Error("expected Files file-panel registration");
     }
 
-    const rendered = render(
+    const rendered = renderWithTooltip(
       <FilesPanel {...createFilePanelProps(activePanelContext)} />
     );
     const filePanelDispose = context.captured.panelDisposers[0];
@@ -491,16 +496,14 @@ describe("files plugin activation", () => {
     });
     await waitFor(() => {
       expect(
-        document.querySelector('[aria-label="Collapse file tree"]')
+        document.querySelector('[aria-label="Hide file tree"]')
       ).not.toBeNull();
     });
 
     deactivate();
 
     expect(filePanelDispose).toHaveBeenCalledOnce();
-    expect(
-      document.querySelector('[aria-label="Collapse file tree"]')
-    ).toBeNull();
+    expect(document.querySelector('[aria-label="Hide file tree"]')).toBeNull();
   });
 
   it("allows closing a dirty disk tab without discarding the shared document while another same-source tab remains", async () => {
@@ -729,7 +732,7 @@ describe("files plugin activation", () => {
       | undefined;
     expect(FilesPanel).toBeDefined();
     if (!FilesPanel) throw new Error("expected Files panel registration");
-    render(
+    renderWithTooltip(
       <FilesPanel
         {...createFilePanelProps(activePanelContext, { panelId, source })}
       />

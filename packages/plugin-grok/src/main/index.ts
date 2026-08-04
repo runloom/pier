@@ -19,6 +19,7 @@ export const plugin: MainPluginModule = {
       credentials: context.secrets,
       logger: context.logger,
       processEnv: context.processEnv,
+      resolveProcessEnv: context.resolveProcessEnv,
       realGrokHome:
         context.processEnv.GROK_HOME ??
         process.env.GROK_HOME ??

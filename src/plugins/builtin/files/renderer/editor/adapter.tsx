@@ -50,6 +50,9 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         fileResources={props.markdownFileResources}
         initialAnchor={props.markdownInitialAnchor}
         initialAnchorRequestId={props.markdownInitialAnchorRequestId}
+        // Remount when the panel navigates to another document so soft-keep
+        // of prior ready IR cannot flash the previous file's content.
+        key={props.documentId}
         labels={props.markdownLabels}
         onContextMenu={props.onMarkdownPreviewContextMenu}
         onJumpToSource={props.onJumpToSource}

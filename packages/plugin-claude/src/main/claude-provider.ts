@@ -76,6 +76,9 @@ export interface CreateClaudeProviderOpts {
   logger?: { warn(message: string, ...args: unknown[]): void };
   /** Hydrated login-shell env from the host (mirrors the Grok provider). */
   processEnv?: Readonly<Record<string, string | undefined>>;
+  resolveProcessEnv?: (request?: {
+    cwd?: string;
+  }) => Promise<{ env: Record<string, string> }>;
 }
 
 function resolveConfigDirOverride(
@@ -216,8 +219,15 @@ export function createClaudeProvider(
 
   return {
     async detectApiKeyMode(): Promise<boolean> {
-      // The hydrated env replaces (not overlays) process.env when provided.
-      const envSource = opts.processEnv ?? process.env;
+      // Prefer live host resolve (login-shell) so ANTHROPIC_API_KEY outside the
+      // host whitelist still counts; fall back to activate-time processEnv slice.
+      let envSource: Readonly<Record<string, string | undefined>>;
+      if (opts.resolveProcessEnv) {
+        const { env } = await opts.resolveProcessEnv({});
+        envSource = env;
+      } else {
+        envSource = opts.processEnv ?? process.env;
+      }
       const envKey = envSource.ANTHROPIC_API_KEY;
       if (envKey && envKey.length > 0) {
         return true;
