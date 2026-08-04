@@ -335,13 +335,15 @@ export function sanitizeInheritedDevProfileEnv(env, worktreeRoot) {
   if (!isForeignDevProfileEnv(env, worktreeRoot)) {
     return env;
   }
-  const cleaned = { ...env };
-  delete cleaned.PIER_DEV_PORT;
-  delete cleaned.PIER_HMR_PORT;
-  delete cleaned.PIER_DEV_PROFILE;
-  delete cleaned.PIER_DEV_RUNTIME_FILE;
-  delete cleaned.ELECTRON_RENDERER_URL;
-  delete cleaned.ELECTRON_USER_DATA_DIR;
+  const {
+    PIER_DEV_PORT: _devPort,
+    PIER_HMR_PORT: _hmrPort,
+    PIER_DEV_PROFILE: _devProfile,
+    PIER_DEV_RUNTIME_FILE: _runtimeFile,
+    ELECTRON_RENDERER_URL: _rendererUrl,
+    ELECTRON_USER_DATA_DIR: _userDataDir,
+    ...cleaned
+  } = env;
   return cleaned;
 }
 
@@ -540,7 +542,7 @@ export async function ensureDevProfilePortAvailable(profile, options = {}) {
     reserved.add(nextDev);
     nextDev = allocateDevPort(reserved, nextDev + 1);
   }
-  if (!foundFree || !(await isPortFreeToBind(nextDev, profile.host))) {
+  if (!(foundFree && (await isPortFreeToBind(nextDev, profile.host)))) {
     console.error(
       `[dev-profile] No free dev port in ${BASE_DEV_PORT}..${BASE_DEV_PORT + PORT_SCAN_LIMIT - 1} for ${profile.profile}.`
     );
