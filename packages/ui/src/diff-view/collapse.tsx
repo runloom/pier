@@ -26,7 +26,10 @@ export interface PierDiffViewLabels {
   readonly collapseDiff: string;
   readonly discardChanges: string;
   readonly expandDiff: string;
-  /** Optional; when set, title click opens the file. */
+  /**
+   * Optional; file-scoped header title click (Open File).
+   * Line/selection “Jump to Source” is a separate product label at the host.
+   */
   readonly openFile?: string;
   /**
    * error 槽行内重试（document materialize 失败等）。

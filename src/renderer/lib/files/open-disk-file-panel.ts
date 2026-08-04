@@ -84,7 +84,10 @@ function cloneParamsRecord(params: unknown): Record<string, unknown> | null {
  * files 未注册 / path 非法时返回 false；已打开同 source 时复用实例。
  */
 export function openFilesDiskPath(input: {
+  column?: number;
   context?: PanelContext;
+  /** 1-based working-tree line; forwarded to files via open event. */
+  line?: number;
   path: string;
   root: string;
   title?: string;
@@ -139,6 +142,8 @@ export function openFilesDiskPath(input: {
       instanceId,
       path: source.path,
       root: source.root,
+      ...(input.column === undefined ? {} : { column: input.column }),
+      ...(input.line === undefined ? {} : { line: input.line }),
     });
   }
   return result.kind === "opened";

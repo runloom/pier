@@ -60,6 +60,7 @@ import {
   parseTreeMetadata,
 } from "./tree/action-utils.ts";
 import { createFilesTreeActions } from "./tree/actions.ts";
+import { registerFilesDiskOpenLineReveal } from "./tree/open-disk-line.ts";
 import { registerFilesDiskOpenTreeReveal } from "./tree/open-disk-reveal.ts";
 import { filePanelProjectRoot } from "./tree/preferences.ts";
 import {
@@ -473,6 +474,8 @@ export const filesRendererPlugin: RendererPluginModule = {
       }),
       // Git review / host openInEditor → project tree reveal (explicit center).
       registerFilesDiskOpenTreeReveal(context),
+      // openInEditor({ line }) → goToLine after the disk tab opens.
+      registerFilesDiskOpenLineReveal(editorController, context),
     ];
 
     return () => {

@@ -139,8 +139,19 @@
     "pier.git.review.openFile": {
       "aliases": ["open file", "open changed file", "review open file"],
       "category": "Git",
-      "description": "Open the selected changed file in the files panel.",
+      "description": "Open this changed file in the editor.",
       "title": "Git: Open File"
+    },
+    "pier.git.review.openInEditor": {
+      "aliases": [
+        "jump to source",
+        "open in editor",
+        "open at line",
+        "go to line"
+      ],
+      "category": "Git",
+      "description": "Jump to this change in the source editor, at the matching working-tree line when available.",
+      "title": "Git: Jump to Source"
     },
     "pier.git.review.stageFile": {
       "aliases": ["stage file", "git add", "stage changes"],
@@ -397,8 +408,10 @@
     "ui.reviewTreeSearchMatchAnnouncement": "Matching changes: {{count}}",
     "ui.reviewTreeNoSearchResultsTitle": "No matching changes",
     "ui.reviewTreeNoSearchResultsDescription": "Try another file name or path.",
-    "ui.reviewTreeOpenFile": "Open File",
-    "ui.reviewTreeOpenFileFailed": "Couldn't open file",
+    "ui.reviewOpenFile": "Open File",
+    "ui.reviewOpenFileFailed": "Couldn't open file",
+    "ui.reviewOpenInEditor": "Jump to Source",
+    "ui.reviewDiffContextMenuFailed": "Unable to open menu",
     "ui.reviewTreeStageFile": "Stage",
     "ui.reviewTreeStageFailed": "Unable to Stage",
     "ui.reviewTreeStaging": "Staging…",

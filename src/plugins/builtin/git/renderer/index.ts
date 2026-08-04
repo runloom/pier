@@ -8,6 +8,7 @@ import { registerGitActions } from "./actions.ts";
 import { createGitChangesPanel } from "./changes-panel.tsx";
 import { gitChangesPanelTabChrome } from "./changes-tab-title.ts";
 import { createGitPanelTransferRegistration } from "./panel-transfer.ts";
+import { registerGitReviewDiffActions } from "./review/diff-actions.ts";
 import { GitReviewMutationAuthority } from "./review/mutation-authority.ts";
 import { registerGitReviewTreeActions } from "./review/tree-actions.ts";
 import { registerGitStatusItem } from "./status-item.tsx";
@@ -65,6 +66,7 @@ export function registerGitPluginContributions(
     registerWorktreeActions(context),
     registerGitActions(context),
     registerGitReviewTreeActions(context, mutationAuthority),
+    registerGitReviewDiffActions(context),
     registerGitStatusItem(context),
   ];
   return () => {

@@ -25,9 +25,11 @@ import {
   useRef,
   useState,
 } from "react";
+import { GIT_CHANGES_PANEL_ID } from "../../manifest.ts";
 import { useGitReviewCodeMutations } from "../hooks/use-code-mutations.ts";
 import { pluginText } from "../plugin-text.ts";
 import { usePluginLanguage } from "../use-plugin-language.ts";
+import { openGitReviewDiffContextMenu } from "./diff-context-menu.ts";
 import { ReviewErrorEmpty, ReviewLoading } from "./feedback.tsx";
 import type {
   GitReviewMutationLease,
@@ -136,6 +138,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     onScroll,
     presentation,
     revisionBySectionId,
+    sourcePanelId,
     getSuppressMembershipScrollRestore,
     suppressMembershipScrollRestore = false,
   }: {
@@ -218,6 +221,25 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       [diffRef]
     );
 
+    const handleDiffContextMenu = useCallback(
+      (event: React.MouseEvent<HTMLFieldSetElement>) => {
+        if (!gitRootPath) {
+          return;
+        }
+        openGitReviewDiffContextMenu({
+          context,
+          contextId,
+          event,
+          gitRootPath,
+          handle: handleRef.current,
+          items: displayItems,
+          sourcePanelComponent: GIT_CHANGES_PANEL_ID,
+          ...(sourcePanelId === undefined ? {} : { sourcePanelId }),
+        });
+      },
+      [context, contextId, displayItems, gitRootPath, sourcePanelId]
+    );
+
     // Rebuild tooltip/aria labels when host locale switches.
     // biome-ignore lint/correctness/useExhaustiveDependencies: language drives i18n re-read
     const diffLabels = useMemo(
@@ -233,7 +255,8 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
           "Discard Changes"
         ),
         expandDiff: pluginText(context, "reviewExpandDiff", "Expand diff"),
-        openFile: pluginText(context, "reviewTreeOpenFile", "Open File"),
+        // File-scoped header title click (line/selection uses Jump to Source).
+        openFile: pluginText(context, "reviewOpenFile", "Open File"),
         retry: pluginText(context, "reviewRetry", "Retry"),
         revertHunk: pluginText(context, "reviewHunkRevert", "Revert"),
         stageChanges: pluginText(context, "reviewHeaderStage", "Stage"),
@@ -255,6 +278,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
         className="m-0 h-full min-h-0 min-w-0 border-0 p-0"
         data-git-review-mutation-blocked={mutationAuthorityBlocked}
         disabled={mutationAuthorityBlocked}
+        {...(gitRootPath ? { onContextMenu: handleDiffContextMenu } : {})}
       >
         {runtimeError ? (
           // 渲染层崩溃时正文全空白:错误就是内容本身,用 Empty 全区呈现。

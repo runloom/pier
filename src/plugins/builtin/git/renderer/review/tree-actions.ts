@@ -59,11 +59,7 @@ export function registerGitReviewTreeActions(
         });
         if (!opened) {
           context.notifications.error(
-            pluginText(
-              context,
-              "reviewTreeOpenFileFailed",
-              "Unable to open file"
-            )
+            pluginText(context, "reviewOpenFileFailed", "Couldn't open file")
           );
         }
       },
@@ -80,7 +76,8 @@ export function registerGitReviewTreeActions(
         sortOrder: 0,
       },
       surfaces: [GIT_REVIEW_TREE_ITEM_SURFACE],
-      title: () => pluginText(context, "reviewTreeOpenFile", "Open File"),
+      // File-scoped open (tree). Diff line/selection uses Jump to Source.
+      title: () => pluginText(context, "reviewOpenFile", "Open File"),
     }),
     context.actions.register({
       category: "Git",

@@ -2,8 +2,12 @@ import type { PierDiffViewItem } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { type RefObject, useCallback } from "react";
 import { pluginText } from "../plugin-text.ts";
-import { reviewMutationBasename } from "../review/code-mutation-helpers.ts";
+import { openGitReviewPathInEditor } from "../review/diff-actions.ts";
 
+/**
+ * File-scoped open from diff header title (product: Open File / 打开文件).
+ * Line/selection jumps use diff context menu → Jump to Source.
+ */
 export function useGitReviewOpenFile(options: {
   readonly context: RendererPluginContext;
   readonly contextId: string;
@@ -21,21 +25,15 @@ export function useGitReviewOpenFile(options: {
       if (!path) {
         return;
       }
-      const opened = context.files.openInEditor({
-        context: {
-          contextId,
-          gitRoot: gitRootPath,
-          projectRootPath: gitRootPath,
-          source: "panel",
-          updatedAt: Date.now(),
-        },
+      const opened = openGitReviewPathInEditor({
+        context,
+        contextId,
+        gitRootPath,
         path,
-        root: gitRootPath,
-        title: reviewMutationBasename(path),
       });
       if (!opened) {
         context.notifications.error(
-          pluginText(context, "reviewTreeOpenFileFailed", "Unable to open file")
+          pluginText(context, "reviewOpenFileFailed", "Couldn't open file")
         );
       }
     },
