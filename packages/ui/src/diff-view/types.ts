@@ -1,5 +1,8 @@
 import type { Ref } from "react";
 import type { PierDiffViewLabels } from "./collapse.tsx";
+
+export type { PierDiffViewLabels } from "./collapse.tsx";
+
 import type { PierHunkActionEvent } from "./hunk-actions.tsx";
 import type { PierDiffViewItem } from "./items.ts";
 import type { PierDiffViewRenderWindow } from "./render-window.ts";

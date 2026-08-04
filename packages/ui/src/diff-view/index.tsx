@@ -76,6 +76,7 @@ export {
 } from "./selection-text.ts";
 export type {
   PierDiffViewAppearance,
+  PierDiffViewLabels,
   PierDiffViewPresentation,
   PierDiffViewProps,
 } from "./types.ts";

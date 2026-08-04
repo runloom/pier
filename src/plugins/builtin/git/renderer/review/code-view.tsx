@@ -1,6 +1,7 @@
 import type {
   PierDiffViewHandle,
   PierDiffViewItem,
+  PierDiffViewLabels,
   PierDiffViewPresentation,
   PierDiffViewRenderWindow,
   PierHunkActionEvent,
@@ -88,18 +89,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
         colorMode: "dark" | "light";
       };
       items: readonly PierDiffViewItem[];
-      labels: {
-        collapseDiff: string;
-        discardChanges: string;
-        expandDiff: string;
-        retry?: string;
-        revertHunk?: string;
-        stageChanges: string;
-        stageHunk?: string;
-        stageRemainingHunk?: string;
-        unstageChanges: string;
-        unstageHunk?: string;
-      };
+      labels: PierDiffViewLabels;
       onDiscardFile?: (itemId: string) => void;
       onError: (error: Error) => void;
       onHunkAction?: (event: PierHunkActionEvent) => void;
@@ -254,6 +244,11 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
           "reviewHeaderRestore",
           "Discard Changes"
         ),
+        expandAllUnmodified: pluginText(
+          context,
+          "reviewExpandAllUnmodified",
+          "Expand all"
+        ),
         expandDiff: pluginText(context, "reviewExpandDiff", "Expand diff"),
         // File-scoped header title click (line/selection uses Jump to Source).
         openFile: pluginText(context, "reviewOpenFile", "Open File"),
@@ -265,6 +260,17 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
           context,
           "reviewHunkStageRemaining",
           "Stage Remaining Changes"
+        ),
+        // Patched @pierre/diffs formatUnmodifiedLines; templates use {{count}}.
+        unmodifiedLine: pluginText(
+          context,
+          "reviewUnmodifiedLine",
+          "{{count}} unmodified line"
+        ),
+        unmodifiedLines: pluginText(
+          context,
+          "reviewUnmodifiedLines",
+          "{{count}} unmodified lines"
         ),
         unstageChanges: pluginText(context, "reviewHeaderUnstage", "Unstage"),
         unstageHunk: pluginText(context, "reviewHunkUnstage", "Unstage"),
