@@ -51,14 +51,19 @@ export async function rollForwardAfterRuntimeMoved(input: {
   const panelId = record.offer.panel.panelId;
   const snapshot = record.snapshot;
 
+  const mode = record.offer.mode ?? "move";
+
   if (record.phase === "runtime-moved" || record.phase === "source-durable") {
     if (record.phase === "runtime-moved") {
-      const release = await deps.renderer.releaseSource({
-        sourcePanelId: panelId,
-        transferId,
-        windowId: source.runtimeWindowId,
-      });
-      requireOk(release, "releaseSource failed");
+      // Copy keeps the source tab and its drafts; only move removes the panel.
+      if (mode === "move") {
+        const release = await deps.renderer.releaseSource({
+          sourcePanelId: panelId,
+          transferId,
+          windowId: source.runtimeWindowId,
+        });
+        requireOk(release, "releaseSource failed");
+      }
       record = await writePhase(deps.journal, record, "source-durable");
     }
 
@@ -87,14 +92,16 @@ export async function rollForwardAfterRuntimeMoved(input: {
     record = await writePhase(deps.journal, record, "committed");
     await deps.journal.remove(transferId);
 
-    try {
-      await deps.windows.closeAfterTransfer(
-        lease,
-        source.runtimeWindowId,
-        transferId
-      );
-    } catch {
-      // Source may still have other panels.
+    if (mode === "move") {
+      try {
+        await deps.windows.closeAfterTransfer(
+          lease,
+          source.runtimeWindowId,
+          transferId
+        );
+      } catch {
+        // Source may still have other panels.
+      }
     }
 
     return { ok: true, targetPanelId };

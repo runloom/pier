@@ -26,6 +26,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelsInSameGroup } from "@/stores/workspace-panel-helpers.ts";
 import type { ActionContribution } from "./contribution-types.ts";
 import { resolvePanelCopyPath } from "./panel-copy-path.ts";
+import { PANEL_WINDOW_ACTION_CONTRIBUTIONS } from "./panel-window-contributions.ts";
 import type { ActionInvocation } from "./types.ts";
 
 const PANEL_TAB_FILE_COMPONENT_ID = "pier.files.filePanel";
@@ -77,6 +78,7 @@ async function writeClipboardText(text: string): Promise<void> {
 
 export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
   [
+    ...PANEL_WINDOW_ACTION_CONTRIBUTIONS,
     {
       categoryKey: "panel",
       group: "0_edit",

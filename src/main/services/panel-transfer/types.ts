@@ -4,6 +4,7 @@ import type {
   PanelTransferPhase,
   PanelTransferPlacement,
   PanelTransferPreparedSource,
+  PanelTransferRelocateTarget,
   PanelTransferResult,
   PanelTransferSourceSnapshot,
 } from "@shared/contracts/panel-transfer.ts";
@@ -205,6 +206,20 @@ export interface PanelTransferService {
     transferId: string
   ): Promise<PanelTransferResult | null>;
   recoverPending(): Promise<void>;
+  /**
+   * Source-initiated claim without HTML5 drag. Requires a prior accepted
+   * movable offer from the same caller. `target.kind: "new-window"` creates an
+   * internal window (same path as finishDrag outside). `target.kind: "window"`
+   * claims into an existing managed window.
+   */
+  relocate(
+    caller: PanelTransferCaller,
+    input: {
+      placement?: PanelTransferPlacement;
+      target: PanelTransferRelocateTarget;
+      transferId: string;
+    }
+  ): Promise<PanelTransferResult>;
   settleWindowBeforeClose(
     lease: WindowTransitionLease,
     windowId: string,

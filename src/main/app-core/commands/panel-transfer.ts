@@ -81,6 +81,15 @@ export async function executePanelTransferCommand(
         requestId,
         await panelTransfer.ready(caller, command.transferId)
       );
+    case "panelTransfer.relocate":
+      return commandSuccess(
+        requestId,
+        await panelTransfer.relocate(caller, {
+          transferId: command.transferId,
+          target: command.target,
+          ...(command.placement ? { placement: command.placement } : {}),
+        })
+      );
     default:
       return null;
   }

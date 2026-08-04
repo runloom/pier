@@ -72,6 +72,7 @@ function isPanelTransferRendererCommand(command: RendererCommand): boolean {
     case "panelTransfer.prepareSource":
     case "panelTransfer.probeWorkspace":
     case "panelTransfer.releaseSource":
+    case "panelTransfer.resolveDefaultPlacement":
     case "panelTransfer.resolvePlacement":
     case "panelTransfer.stageTarget":
       return true;
@@ -92,6 +93,7 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
     case "panelTransfer.prepareSource":
     case "panelTransfer.probeWorkspace":
     case "panelTransfer.releaseSource":
+    case "panelTransfer.resolveDefaultPlacement":
     case "panelTransfer.resolvePlacement":
     case "panelTransfer.stageTarget":
     case "plugin.finalizeDisable":

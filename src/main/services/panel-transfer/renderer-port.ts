@@ -22,6 +22,9 @@ export interface PanelTransferRendererPort {
     transferId: string;
     windowId: string;
   }): Promise<RendererCommandResult>;
+  resolveDefaultPlacement(input: {
+    windowId: string;
+  }): Promise<RendererCommandResult>;
   resolvePlacement(input: {
     clientX: number;
     clientY: number;

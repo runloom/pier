@@ -403,6 +403,10 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["window:control"],
   },
+  "panelTransfer.relocate": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
 };
 
 function terminalOpenCapabilities(

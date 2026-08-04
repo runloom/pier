@@ -14,6 +14,7 @@ import {
   panelTransferPrepareSourceCommandSchema,
   panelTransferProbeWorkspaceCommandSchema,
   panelTransferReleaseSourceCommandSchema,
+  panelTransferResolveDefaultPlacementCommandSchema,
   panelTransferResolvePlacementCommandSchema,
   panelTransferStageTargetCommandSchema,
 } from "./panel-transfer.ts";
@@ -115,6 +116,7 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
   panelTransferReleaseSourceCommandSchema,
   panelTransferFinalizeCommandSchema,
   panelTransferResolvePlacementCommandSchema,
+  panelTransferResolveDefaultPlacementCommandSchema,
   panelTransferProbeWorkspaceCommandSchema,
 ]);
 

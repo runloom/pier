@@ -64,6 +64,16 @@ export {
   resolvePlacementFromClientPoint,
   resolvePlacementFromDidDrop,
 } from "./placement.ts";
+export {
+  canCopyPanelToWindow,
+  canMovePanelToWindow,
+  copyPanelToNewWindow,
+  copyPanelToOtherWindow,
+  movePanelToNewWindow,
+  movePanelToOtherWindow,
+  relocatePanel,
+  resolveRelocatePanelId,
+} from "./relocate.ts";
 
 // Exported for tests.
 export const __panelTransferInternals = {

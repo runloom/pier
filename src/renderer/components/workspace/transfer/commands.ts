@@ -432,6 +432,26 @@ export async function runPanelTransferRendererCommand(
         resolve({ data: placement, ok: true });
         return true;
       }
+      case "panelTransfer.resolveDefaultPlacement": {
+        const api = requireApi();
+        const group = api.activeGroup;
+        if (group) {
+          const panels = (group as { panels?: ReadonlyArray<{ id: string }> })
+            .panels;
+          const index = Array.isArray(panels) ? panels.length : 0;
+          resolve({
+            data: {
+              groupId: group.id,
+              index,
+              kind: "tab" as const,
+            },
+            ok: true,
+          });
+          return true;
+        }
+        resolve({ data: { kind: "root" as const }, ok: true });
+        return true;
+      }
       case "panelTransfer.probeWorkspace": {
         resolve({
           data: { ready: useWorkspaceStore.getState().api !== null },
