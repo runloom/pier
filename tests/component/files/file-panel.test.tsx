@@ -130,11 +130,11 @@ vi.mock("react-dom/client", async () => {
         // Group-view portals sit outside testing-library wrappers; provide the
         // same tooltip host the app shell mounts around panel chrome.
         originalRender(
-          React.createElement(
-            TooltipProvider,
-            { delayDuration: 0, disableHoverableContent: true },
-            children as React.ReactNode
-          )
+          React.createElement(TooltipProvider, {
+            children: children as React.ReactNode,
+            delayDuration: 0,
+            disableHoverableContent: true,
+          })
         );
       };
       return root;
