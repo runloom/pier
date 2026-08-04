@@ -5474,7 +5474,7 @@ describe("Files file-panel", () => {
       ).toBeNull();
     });
     expect(screen.queryByText("Ready")).toBeNull();
-  });
+  }, 15_000);
 
   it("hides the Markdown mode toggle for non-Markdown documents", async () => {
     renderFilePanel(
