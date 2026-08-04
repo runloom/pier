@@ -3,6 +3,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS } from "./interactive-blocking-tools.ts";
+import { interactiveBlockingToolLifecycleEvents } from "./interactive-tool-lifecycle.ts";
 import {
   commandExistsOnPath,
   createNestedJsonIntegration,
@@ -34,10 +36,15 @@ function openClaudeStandardCommand(
 
 /**
  * OpenClaude hook 事件 → pier 事件名。
- * 事件集合来自 OpenClaude 当前源码的 HOOK_EVENTS；这里只消费已核验字段，
- * 不把 Claude 专属的 sessionTitle 双写复制到 OpenClaude。PermissionRequest
- * 与 Elicitation 系列不能保证稳定请求 ID 和覆盖自动应答、异常、人工允许、
- * 拒绝、取消的完整结果 hook，因此不进入 waiting。
+ * 事件集合来自 OpenClaude 当前源码的 HOOK_EVENTS：
+ * https://github.com/Gitlawb/openclaude/blob/main/src/entrypoints/sdk/coreTypes.ts
+ * 这里只消费已核验字段，不把 Claude 专属的 sessionTitle 双写复制到 OpenClaude。
+ *
+ * PermissionRequest / Elicitation 不能保证稳定请求 ID 与完整结果 hook，
+ * 因此不整类进入 waiting。waiting 仅对与 Claude 同名的阻塞工具上报：
+ * EnterPlanMode / ExitPlanMode / AskUserQuestion
+ * （源码：src/tools/ExitPlanModeTool、EnterPlanModeTool、AskUserQuestionTool；
+ * ExitPlanMode 非 teammate 路径 require user confirmation）。
  */
 const OPENCLAUDE_SPEC: NestedJsonIntegrationSpec = {
   agentId: "openclaude",
@@ -59,24 +66,12 @@ const OPENCLAUDE_SPEC: NestedJsonIntegrationSpec = {
       nativeEvent: "UserPromptSubmit",
       pierEvent: "PromptSubmit",
     },
-    {
-      buildCommand: openClaudeStandardCommand("ToolStart", "PreToolUse"),
-      nativeEvent: "PreToolUse",
-      pierEvent: "ToolStart",
-    },
-    {
-      buildCommand: openClaudeStandardCommand("ToolComplete", "PostToolUse"),
-      nativeEvent: "PostToolUse",
-      pierEvent: "ToolComplete",
-    },
-    {
-      buildCommand: openClaudeStandardCommand(
-        "ToolComplete",
-        "PostToolUseFailure"
-      ),
-      nativeEvent: "PostToolUseFailure",
-      pierEvent: "ToolComplete",
-    },
+    ...interactiveBlockingToolLifecycleEvents({
+      actorHintFromAgentId: true,
+      postToolFailureNativeStateFields: [],
+      tools: CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS,
+      turnIdFields: ["prompt_id"],
+    }),
     {
       buildCommand: openClaudeStandardCommand("processing", "PreCompact"),
       nativeEvent: "PreCompact",

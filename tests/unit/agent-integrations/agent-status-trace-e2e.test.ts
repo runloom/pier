@@ -113,7 +113,8 @@ describe("智能体状态官方轨迹跨层验收", () => {
     );
 
     expect(actualAgents.size).toBe(27);
-    expect(actualCoverage.size).toBe(149);
+    // waiting 维度：claude / grok / openclaude 由阻塞工具（plan）补齐 native
+    expect(actualCoverage.size).toBe(152);
     expect(actualCoverage).toEqual(expectedActiveCoverage());
   });
 

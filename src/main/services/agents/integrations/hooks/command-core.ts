@@ -129,6 +129,21 @@ export type PierHookCommandV3Spec = PierHookCommandV3CommonSpec &
  * InteractionRequested/Resolved；旧 `pierHookCommand` 仍固定发射 v2，供已安装
  * 配置兼容。
  */
+function formatAgentEventV3Command(
+  agentId: AgentKind,
+  event: string,
+  nativeEvent: string,
+  payloadShellExpressions: Array<string | undefined>
+): string {
+  const payloadArgs = payloadShellExpressions
+    .map((expression) => ` "${expression ?? ""}"`)
+    .join("");
+  return (
+    `[ -x "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
+    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEventV3" "${agentId}" "${event}" "${nativeEvent}"${payloadArgs} || true`
+  );
+}
+
 export function pierHookCommandV3(spec: PierHookCommandV3Spec): string {
   let interactionShellExpressions: Array<string | undefined> = [
     undefined,
@@ -148,7 +163,7 @@ export function pierHookCommandV3(spec: PierHookCommandV3Spec): string {
       spec.interactionOutcome,
     ];
   }
-  const payloadShellExpressions = [
+  return formatAgentEventV3Command(spec.agentId, spec.event, spec.nativeEvent, [
     spec.sessionId,
     spec.turnId,
     spec.toolUseId,
@@ -162,14 +177,41 @@ export function pierHookCommandV3(spec: PierHookCommandV3Spec): string {
     spec.nativeState,
     ...interactionShellExpressions,
     spec.promptSnippet,
-  ];
-  const payloadArgs = payloadShellExpressions
-    .map((expression) => ` "${expression ?? ""}"`)
-    .join("");
-  return (
-    `[ -x "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
-    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEventV3" "${spec.agentId}" "${spec.event}" "${spec.nativeEvent}"${payloadArgs} || true`
-  );
+  ]);
+}
+
+/**
+ * 安装期 shell 分发用 v3 emit：event 可以是 shell 变量（如 `$_pier_event`）。
+ *
+ * emit 脚本按展开后的事件名决定是否写入 interaction 字段；因此这里**始终**
+ * 带上 interaction 三个槽位（未命中交互工具时为空字符串）。调用方须保证
+ * 所有表达式受信任（仅固定字面量或本命令内赋值的 `$_pier_*`）。
+ */
+export function pierHookCommandV3ShellDispatched(
+  spec: PierHookCommandV3CommonSpec & {
+    event: string;
+    interactionId?: string;
+    interactionKind?: string;
+    interactionOutcome?: string;
+  }
+): string {
+  return formatAgentEventV3Command(spec.agentId, spec.event, spec.nativeEvent, [
+    spec.sessionId,
+    spec.turnId,
+    spec.toolUseId,
+    spec.toolName,
+    spec.agentInstanceId,
+    spec.agentType,
+    spec.transcriptPath,
+    spec.metadataBase64,
+    spec.parentSessionId,
+    spec.actorHint,
+    spec.nativeState,
+    spec.interactionId,
+    spec.interactionKind,
+    spec.interactionOutcome,
+    spec.promptSnippet,
+  ]);
 }
 
 /** 识别实际执行规范 emit 路径的新旧 Pier hook 命令。 */

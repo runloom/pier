@@ -24,6 +24,7 @@ export {
   pierHookCommand,
   pierHookCommandGeneration,
   pierHookCommandV3,
+  pierHookCommandV3ShellDispatched,
   skipHookCommandWhenEnvPresent,
 } from "./hooks/command-core.ts";
 export {
@@ -42,7 +43,19 @@ export {
   type StdinV3ValueDispatchSpec,
   type StdinValueDispatchCase,
 } from "./hooks/stdin-commands.ts";
-export { pierHookCommandV3WithStdinPermissionAcceptedThenToolStart } from "./hooks/stdin-sequences.ts";
+export {
+  type InteractiveToolResolveOutcome,
+  pierHookCommandV3WithStdinInteractiveToolResolve,
+  pierHookCommandV3WithStdinInteractiveToolStart,
+  pierHookCommandV3WithStdinPermissionAcceptedThenToolStart,
+  type StdinInteractiveToolDispatchSpec,
+  type StdinInteractiveToolResolveSpec,
+} from "./hooks/stdin-sequences.ts";
+export type { InteractiveBlockingToolCase } from "./interactive-blocking-tools.ts";
+export {
+  type InteractiveBlockingToolLifecycleOptions,
+  interactiveBlockingToolLifecycleEvents,
+} from "./interactive-tool-lifecycle.ts";
 export {
   pierBlockMarkers,
   pierTextBlockGeneration,

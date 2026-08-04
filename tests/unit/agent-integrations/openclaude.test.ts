@@ -112,7 +112,7 @@ describe("openclaudeIntegration", () => {
     expect(ups).not.toContain("ELECTRON_RUN_AS_NODE");
   });
 
-  it("不安装缺少完整结果闭环的 waiting，PreToolUse 只开始工具", async () => {
+  it("不装 PermissionRequest/Elicitation；普通工具 ToolStart，ExitPlanMode 进 waiting", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -124,6 +124,8 @@ describe("openclaudeIntegration", () => {
     expect(hooks.PermissionRequest).toBeUndefined();
     expect(hooks.Elicitation).toBeUndefined();
     expect(hooks.ElicitationResult).toBeUndefined();
+    expect(acceptedCommand).toContain("ExitPlanMode");
+    expect(acceptedCommand).toContain("InteractionRequested");
 
     const root = await mkdtemp(join(tmpdir(), "pier-openclaude-v3-"));
     const userData = join(root, "userData");
@@ -138,18 +140,27 @@ describe("openclaudeIntegration", () => {
       PIER_PANEL_ID: "p1",
       PIER_WINDOW_ID: "w1",
     };
-    const payload = JSON.stringify({
+    const run = (payload: Record<string, unknown>) => {
+      const result = spawnSync("/bin/sh", ["-c", acceptedCommand], {
+        env,
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    };
+    run({
       hook_event_name: "PreToolUse",
       prompt_id: "prompt-1",
       session_id: "session-1",
       tool_name: "Bash",
       tool_use_id: "tool-1",
     });
-    const acceptedResult = spawnSync("/bin/sh", ["-c", acceptedCommand], {
-      env,
-      input: payload,
+    run({
+      hook_event_name: "PreToolUse",
+      prompt_id: "prompt-2",
+      session_id: "session-1",
+      tool_name: "ExitPlanMode",
+      tool_use_id: "plan-exit-1",
     });
-    expect(acceptedResult.status, acceptedResult.stderr.toString()).toBe(0);
     const rows = (await readFile(logPath, "utf8"))
       .trim()
       .split("\n")
@@ -160,8 +171,21 @@ describe("openclaudeIntegration", () => {
         event: "ToolStart",
         nativeEvent: "PreToolUse",
         sessionId: "session-1",
+        toolName: "Bash",
         toolUseId: "tool-1",
         turnId: "prompt-1",
+        v: 3,
+      },
+      {
+        agent: "openclaude",
+        event: "InteractionRequested",
+        interactionId: "plan-exit-1",
+        interactionKind: "permission",
+        nativeEvent: "PreToolUse",
+        sessionId: "session-1",
+        toolName: "ExitPlanMode",
+        toolUseId: "plan-exit-1",
+        turnId: "prompt-2",
         v: 3,
       },
     ]);

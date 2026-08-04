@@ -44,6 +44,7 @@ function finalLifecycleAction(): AgentStatusTraceAction {
 }
 
 const claudeActions = commonTraceActions({
+  interactiveToolWaiting: { toolName: "ExitPlanMode" },
   promptNativeEvent: "UserPromptSubmit",
   subagent: true,
   toolCompleteNativeEvent: "PostToolUse",
@@ -280,6 +281,11 @@ const grokActions = commonTraceActions({
     subagentId: "subagent-1",
     subagentType: "Explore",
   },
+  interactiveToolWaiting: {
+    toolName: "exit_plan_mode",
+    toolNameField: "toolName",
+    toolUseIdField: "toolUseId",
+  },
   toolCompletePayload: {
     toolName: "Bash",
     toolUseId: "tool-1",
@@ -395,6 +401,7 @@ export const RECONCILER_STATUS_TRACES = [
       "ready",
       "processing",
       "tool",
+      "waiting",
       "error",
       "interrupted",
       "subagent",
@@ -426,6 +433,7 @@ export const RECONCILER_STATUS_TRACES = [
       "ready",
       "processing",
       "tool",
+      "waiting",
       "error",
       "completed",
       "interrupted",

@@ -70,6 +70,15 @@ export function commonTraceActions(options: {
   toolStartExpectedEventFieldsAbsent?: AgentStatusTraceAction["checkpoints"][number]["expectedEventFieldsAbsent"];
   toolStartNativeEvent: string;
   waiting?: boolean;
+  /**
+   * Pre/PostToolUse 上按 tool 名分发的阻塞等人工具（plan 审批等）。
+   * 与 Elicitation 路径互斥选用。
+   */
+  interactiveToolWaiting?: {
+    toolName: string;
+    toolNameField?: "tool_name" | "toolName";
+    toolUseIdField?: "tool_use_id" | "toolUseId";
+  };
 }): AgentStatusTraceAction[] {
   const actions: AgentStatusTraceAction[] = [
     traceAction(
@@ -144,6 +153,52 @@ export function commonTraceActions(options: {
         { expectedStatus: "processing" },
         { action: "accept", elicitation_id: "question-1" }
       )
+    );
+  }
+  if (options.interactiveToolWaiting) {
+    const nameField =
+      options.interactiveToolWaiting.toolNameField ?? "tool_name";
+    const idField =
+      options.interactiveToolWaiting.toolUseIdField ?? "tool_use_id";
+    const planPayload = {
+      [nameField]: options.interactiveToolWaiting.toolName,
+      [idField]: "plan-exit-1",
+    };
+    actions.push(
+      traceAction(
+        options.toolStartNativeEvent,
+        "InteractionRequested",
+        "waiting",
+        {
+          expectedEventFields: {
+            interactionId: "plan-exit-1",
+            interactionKind: "permission",
+            toolName: options.interactiveToolWaiting.toolName,
+            toolUseId: "plan-exit-1",
+          },
+          expectedStatus: "waiting",
+        },
+        planPayload
+      ),
+      {
+        ...traceAction(
+          options.toolCompleteNativeEvent,
+          "InteractionResolved",
+          "processing",
+          {
+            expectedEventFields: {
+              interactionId: "plan-exit-1",
+              interactionKind: "permission",
+              interactionOutcome: "completed",
+              toolName: options.interactiveToolWaiting.toolName,
+              toolUseId: "plan-exit-1",
+            },
+            expectedStatus: "processing",
+          },
+          planPayload
+        ),
+        scenarios: ["resume-after-waiting"],
+      }
     );
   }
   if (options.subagent) {
@@ -356,9 +411,10 @@ export const NESTED_HOOK_STATUS_TRACES = [
   nestedTrace(
     "openclaude",
     OPENCLAUDE_HOOK_EVENTS,
-    ["lifecycle", "processing", "tool", "error", "subagent"],
+    ["lifecycle", "processing", "tool", "waiting", "error", "subagent"],
     commonTraceActions({
       error: true,
+      interactiveToolWaiting: { toolName: "ExitPlanMode" },
       lifecycleEnd: true,
       promptNativeEvent: "UserPromptSubmit",
       subagent: true,
