@@ -23,16 +23,17 @@ export function GitSyncStatusItem({
   pluginContext: RendererPluginContext;
 }): React.ReactElement | null {
   const panelContext = context;
-  const worktreePath = panelContext?.worktreeRoot ?? panelContext?.gitRoot;
-  const statusState = useGitStatus(pluginContext, panelContext?.gitRoot);
+  // 远程动作 / busy 键统一用 gitRoot（与 palette、remoteSync 登记一致）
+  const gitRoot = panelContext?.gitRoot ?? null;
+  const statusState = useGitStatus(pluginContext, gitRoot);
   const showSyncStatus = useBooleanSetting(pluginContext, SHOW_SYNC_STATUS_KEY);
-  if (!(showSyncStatus && panelContext && worktreePath)) {
+  if (!(showSyncStatus && panelContext && gitRoot)) {
     return null;
   }
   if (statusState.kind !== "loaded") {
     return null;
   }
-  const busy = isSyncBusy(worktreePath);
+  const busy = isSyncBusy(gitRoot);
   if (!gitSyncStatusHasContent(statusState.status, { busy })) {
     return null;
   }
@@ -46,10 +47,10 @@ export function GitSyncStatusItem({
   return (
     <TooltipProvider>
       <GitSyncStatusButton
+        gitRoot={gitRoot}
         pluginContext={pluginContext}
         status={statusState.status}
         syncCaveat={syncUncertain ? syncLine : null}
-        worktreePath={worktreePath}
       />
     </TooltipProvider>
   );

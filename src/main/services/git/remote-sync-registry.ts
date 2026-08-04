@@ -2,7 +2,8 @@ import type { GitRemoteSync } from "../../../shared/contracts/git.ts";
 
 /**
  * 远端同步健康度登记表（main 进程内存态）。
- * 唯一写入方是 autofetch service（按 root 记录）；唯一读取方是 status 组装。
+ * 写入方：autofetch service + 用户触发的 git.fetch（按 root / worktree fan-out）。
+ * 读取方：status 组装。
  * 不落盘：进程重启后回到"未知"（null），下一轮 fetch 重建。
  */
 const syncByRoot = new Map<string, GitRemoteSync>();

@@ -45,7 +45,7 @@ function model(
     ],
     tasks: [{ id: "switchBranch" }, { id: "switchWorktree" }],
     variant: "normal",
-    worktreePath: "/workspace/pier",
+    gitRoot: "/workspace/pier",
     ...overrides,
   };
 }
@@ -180,13 +180,6 @@ const LIFECYCLE_MODEL = model({
     },
     {
       action: null,
-      icon: "upstreamGone",
-      id: "upstreamGone",
-      label: "upstream gone",
-      tone: "muted",
-    },
-    {
-      action: null,
       icon: "stash",
       id: "stash",
       label: "Stashes",
@@ -206,15 +199,16 @@ const ROW_ICON_EXPECTATIONS: ReadonlyArray<{
   { gitIcon: "git-commit-horizontal", icon: "cherryPick" },
   { gitIcon: "git-commit-horizontal", icon: "clean" },
   { gitIcon: "git-continue", icon: "continue" },
+  { gitIcon: "git-fetch", icon: "fetch" },
   { gitIcon: "git-merge", icon: "merge" },
   { gitIcon: "git-merge", icon: "merged" },
+  { gitIcon: "git-publish", icon: "publish" },
   { gitIcon: "git-pull", icon: "pull" },
   { gitIcon: "git-push", icon: "push" },
   { gitIcon: "git-pull-request-arrow", icon: "rebase" },
   { gitIcon: "git-commit-horizontal", icon: "revert" },
   { gitIcon: "git-stash", icon: "stash" },
   { gitIcon: "git-sync", icon: "sync" },
-  { gitIcon: "git-pull-request-closed", icon: "upstreamGone" },
 ];
 
 function singleIconModel(
@@ -373,7 +367,7 @@ describe("GitStatusDropdown", () => {
     const pluginContext = makePluginContext();
     await openDropdown(pluginContext, LIFECYCLE_MODEL);
 
-    for (const id of ["clean", "merged", "upstreamGone", "stash"]) {
+    for (const id of ["clean", "merged", "stash"]) {
       expect(screen.getByTestId(`git-status-row-${id}`)).toHaveAttribute(
         "data-disabled"
       );
@@ -508,7 +502,11 @@ describe("GitStatusDropdown", () => {
       status: "ok" as const,
     }));
     pluginContext.git.listBranches = vi.fn(async () => []);
-    pluginContext.git.checkoutBranch = vi.fn(async () => true);
+    pluginContext.git.checkoutBranch = vi.fn(async () => ({
+      localName: "main",
+      mode: "switched-local" as const,
+      remoteRef: null,
+    }));
     await openDropdown(pluginContext, model({}));
 
     fireEvent.click(screen.getByRole("menuitem", { name: "Switch Branch" }));
@@ -635,8 +633,9 @@ describe("GitStatusDropdown", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /^Push/ }));
 
     await waitFor(() => {
+      // 鉴权类失败映射为产品文案，不直出 git stderr。
       expect(pluginContext.notifications.error).toHaveBeenCalledWith(
-        "fatal: authentication failed"
+        "Could not authenticate with the remote. Check your credentials or network access, then try again."
       );
     });
   });

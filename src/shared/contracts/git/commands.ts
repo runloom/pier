@@ -93,6 +93,14 @@ export const gitCommandSchemas = [
   }),
   z.object({
     cwd: z.string().min(1),
+    type: z.literal("git.publish"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
+    type: z.literal("git.fetch"),
+  }),
+  z.object({
+    cwd: z.string().min(1),
     type: z.literal("git.pullFastForward"),
   }),
   z.object({

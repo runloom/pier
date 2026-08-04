@@ -94,16 +94,16 @@ function buildStatusAriaLabel({
 
 function pendingDropdownModel({
   context,
+  gitRoot,
   kind,
   pluginContext,
   worktreeName,
-  worktreePath,
 }: {
   context: NonNullable<RendererTerminalStatusItemContext["context"]>;
+  gitRoot: string;
   kind: "error" | "loading";
   pluginContext: RendererPluginContext;
   worktreeName: string;
-  worktreePath: string;
 }): GitStatusDropdownModel {
   const branchLabel = context.branch ?? context.head ?? worktreeName;
   const statusLabel =
@@ -121,6 +121,7 @@ function pendingDropdownModel({
   return {
     branchLabel,
     contextLine: worktreeName,
+    gitRoot,
     operationKind: null,
     rows: [
       {
@@ -132,7 +133,6 @@ function pendingDropdownModel({
     ],
     tasks: [{ id: "switchWorktree" }],
     variant: kind === "loading" ? "loading" : "unavailable",
-    worktreePath,
   };
 }
 
@@ -183,16 +183,17 @@ function GitBranchStatusItem({
   pluginContext: RendererPluginContext;
 }) {
   const panelContext = context;
-  const worktreePath = panelContext?.worktreeRoot ?? panelContext?.gitRoot;
-  const statusState = useGitStatus(pluginContext, panelContext?.gitRoot);
+  const gitRoot = panelContext?.gitRoot ?? null;
+  const displayPath = panelContext?.worktreeRoot ?? gitRoot;
+  const statusState = useGitStatus(pluginContext, gitRoot);
   const showDirtyIndicator = useBooleanSetting(
     pluginContext,
     SHOW_DIRTY_INDICATOR_KEY
   );
-  if (!(panelContext && worktreePath)) {
+  if (!(panelContext && gitRoot && displayPath)) {
     return null;
   }
-  const worktreeName = basename(worktreePath);
+  const worktreeName = basename(displayPath);
   if (!worktreeName) {
     return null;
   }
@@ -213,20 +214,21 @@ function GitBranchStatusItem({
       pluginContext,
     }).catch(() => undefined);
   };
+  // 远程动作 cwd 用 gitRoot，与 palette / busy / remoteSync 单一真源一致
   const dropdownModel =
     statusState.kind === "loaded"
       ? deriveGitStatusDropdownModel(statusState.status, panelContext, {
           fallbackWorktreeName: worktreeName,
           remoteSyncLabel: syncLine,
           text: gitStatusDropdownText(pluginContext),
-          worktreePath,
+          gitRoot,
         })
       : pendingDropdownModel({
           context: panelContext,
           kind: statusState.kind,
           pluginContext,
           worktreeName,
-          worktreePath,
+          gitRoot,
         });
 
   return (

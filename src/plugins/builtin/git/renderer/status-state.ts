@@ -218,7 +218,7 @@ function releaseSession(root: string, session: GitStatusSession): void {
  */
 export function useGitStatus(
   context: RendererPluginContext,
-  gitRoot: string | undefined
+  gitRoot: null | string | undefined
 ): GitStatusLoadState {
   const [state, setState] = useState<GitStatusLoadState>(LOADING_STATE);
 

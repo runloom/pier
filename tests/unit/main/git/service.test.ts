@@ -1883,13 +1883,96 @@ describe("createGitService", () => {
     const service = createGitService({
       execGit: (args) => {
         calls.push(args);
+        // show-ref --verify remote 失败 → 走本地 switch
+        if (args[0] === "show-ref") {
+          return Promise.reject(new Error("not a valid ref"));
+        }
         return Promise.resolve("");
       },
     });
 
-    await service.checkoutBranch("/repo", "main");
+    await expect(service.checkoutBranch("/repo", "main")).resolves.toEqual({
+      localName: "main",
+      mode: "switched-local",
+      remoteRef: null,
+    });
 
-    expect(calls[0]).toEqual(["switch", "main"]);
+    expect(calls.at(-1)).toEqual(["switch", "main"]);
+  });
+
+  it("checkoutBranch 对 remote-tracking 建本地跟踪分支", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (
+          args[0] === "show-ref" &&
+          args.includes("refs/remotes/origin/feature/x")
+        ) {
+          return Promise.resolve("");
+        }
+        if (args[0] === "show-ref" && args.includes("refs/heads/feature/x")) {
+          return Promise.reject(new Error("missing"));
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(
+      service.checkoutBranch("/repo", "origin/feature/x")
+    ).resolves.toEqual({
+      localName: "feature/x",
+      mode: "created-tracking",
+      remoteRef: "origin/feature/x",
+    });
+
+    expect(
+      calls.some(
+        (c) =>
+          c[0] === "switch" &&
+          c.includes("-c") &&
+          c.includes("feature/x") &&
+          c.includes("--track") &&
+          c.includes("origin/feature/x")
+      )
+    ).toBe(true);
+  });
+
+  it("publish 使用 push -u <remote> HEAD", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "remote") {
+          return Promise.resolve("origin\n");
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(service.publish("/repo")).resolves.toEqual({ kind: "ok" });
+    expect(calls.some((c) => c.join(" ") === "push -u origin HEAD")).toBe(true);
+  });
+
+  it("fetch 执行 fetch --prune", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await expect(service.fetch("/repo")).resolves.toEqual({ kind: "ok" });
+    expect(calls.some((c) => c[0] === "fetch" && c.includes("--prune"))).toBe(
+      true
+    );
   });
 
   it("merge 非冲突错误按 LoomDesk 返回 unavailable", async () => {
@@ -2442,6 +2525,9 @@ describe("createGitService", () => {
         if (isGitRootRequest(args)) {
           return Promise.resolve("/repo\n");
         }
+        if (args[0] === "rev-parse" && args.includes("@{upstream}")) {
+          return Promise.resolve("origin/main\n");
+        }
         return Promise.resolve("");
       },
     });
@@ -2451,14 +2537,19 @@ describe("createGitService", () => {
     });
     expect(calls).toEqual([
       ["rev-parse", "--show-toplevel"],
+      ["rev-parse", "--abbrev-ref", "@{upstream}"],
       ["pull", "--ff-only"],
     ]);
   });
 
-  it("pull 和 push 继承解析后的 shell 环境", async () => {
+  it("pull 和 push 继承解析后的 shell 环境并补 BatchMode", async () => {
     const shellEnv = {
       PATH: "/shell/bin:/usr/bin",
       SSH_AUTH_SOCK: "/tmp/pier-agent.sock",
+    };
+    const batchEnv = {
+      ...shellEnv,
+      GIT_SSH_COMMAND: "ssh -oBatchMode=yes",
     };
     const remoteCommandEnvs: Array<
       Readonly<Record<string, string>> | undefined
@@ -2471,6 +2562,9 @@ describe("createGitService", () => {
         if (isGitRootRequest(args)) {
           return Promise.resolve("/repo\n");
         }
+        if (args[0] === "rev-parse" && args.includes("@{upstream}")) {
+          return Promise.resolve("origin/main\n");
+        }
         return Promise.resolve("");
       },
       resolveEnvironment: async () => shellEnv,
@@ -2481,7 +2575,7 @@ describe("createGitService", () => {
     });
     await expect(service.push("/repo")).resolves.toEqual({ kind: "ok" });
 
-    expect(remoteCommandEnvs).toEqual([shellEnv, shellEnv]);
+    expect(remoteCommandEnvs).toEqual([batchEnv, batchEnv]);
   });
 
   it("sync 先 rebase 拉取再推送", async () => {
@@ -2492,6 +2586,9 @@ describe("createGitService", () => {
         if (isGitRootRequest(args)) {
           return Promise.resolve("/repo\n");
         }
+        if (args[0] === "rev-parse" && args.includes("@{upstream}")) {
+          return Promise.resolve("origin/main\n");
+        }
         return Promise.resolve("");
       },
     });
@@ -2499,6 +2596,7 @@ describe("createGitService", () => {
     await expect(service.sync("/repo")).resolves.toEqual({ kind: "ok" });
     expect(calls).toEqual([
       ["rev-parse", "--show-toplevel"],
+      ["rev-parse", "--abbrev-ref", "@{upstream}"],
       ["pull", "--rebase"],
       ["push"],
     ]);
@@ -2511,6 +2609,9 @@ describe("createGitService", () => {
         calls.push(args);
         if (isGitRootRequest(args)) {
           return Promise.resolve("/repo\n");
+        }
+        if (args[0] === "rev-parse" && args.includes("@{upstream}")) {
+          return Promise.resolve("origin/main\n");
         }
         if (args[0] === "pull") {
           throw new GitExecError({
@@ -2532,6 +2633,7 @@ describe("createGitService", () => {
     });
     expect(calls).toEqual([
       ["rev-parse", "--show-toplevel"],
+      ["rev-parse", "--abbrev-ref", "@{upstream}"],
       ["pull", "--rebase"],
     ]);
   });
