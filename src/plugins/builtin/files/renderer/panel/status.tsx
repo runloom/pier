@@ -98,8 +98,9 @@ export function LanguageServiceStatus({
   t: FilesTranslate;
 }) {
   const status = useFilesLanguageServiceStatus(ownerId, documentId);
-  // Ready 是安静成功态：语言 badge 已标识语言，不再叠绿 Ready 芯片。
-  if (!status || status.state === "ready") {
+  // Ready / unsupported 都是安静态：语言 badge 已标识语言，无语言服务时
+  // 不必再叠「不支持」芯片（YAML/纯文本等大量文件类型本无 provider）。
+  if (!status || status.state === "ready" || status.state === "unsupported") {
     return null;
   }
 

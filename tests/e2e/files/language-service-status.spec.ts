@@ -51,18 +51,15 @@ test("keeps real language-service, language, and save statuses independent", asy
     await expect(typescript).toHaveText("TypeScript");
 
     const unsupportedView = await fixture.openFile("unsupported.txt");
-    const unsupported = languageStatus(unsupportedView, "unsupported");
     const unsupportedSaved = saveStatus(unsupportedView);
     const plainText = languageBadge(unsupportedView, "text");
-    await expect(unsupported).toBeVisible({ timeout: 30_000 });
-    await expect(unsupported).toHaveAttribute("role", "status");
-    await expect(unsupported).toHaveAttribute("aria-live", "polite");
-    await expect(unsupported).toHaveText(/^(?:Unsupported|不支持)$/u);
+    // Unsupported is silent in the chrome (same as ready): language badge only.
+    await expect(languageStatus(unsupportedView, "unsupported")).toHaveCount(0);
+    await expect(languageStatus(unsupportedView)).toHaveCount(0);
     await expect(unsupportedSaved).toBeVisible();
     await expect(unsupportedSaved).toHaveAccessibleName(/^(?:Saved|已保存)$/u);
     await expect(plainText).toHaveText("Plain Text");
     await expect(plainText).not.toContainText(/Saved|已保存/u);
-    await expect(unsupported).not.toContainText(/Saved|已保存/u);
   } finally {
     await fixture.cleanup();
   }

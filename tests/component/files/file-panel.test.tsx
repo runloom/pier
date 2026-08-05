@@ -5257,7 +5257,7 @@ describe("Files file-panel", () => {
     const document = ensureDiskDocument(source);
     const ownerId = JSON.stringify([panelId]);
 
-    // Ready is silent; only non-ready states render a chip after the language badge.
+    // Ready / unsupported are silent; only actionable non-ready states chip.
     act(() => {
       publishFilesLanguageServiceStatus(ownerId, document.id, {
         state: "ready",
@@ -5337,24 +5337,6 @@ describe("Files file-panel", () => {
         status: { state: "disabled", reason: "worktrees-disabled" },
         tone: "neutral",
         tooltip: "Enable language services for worktrees in Settings.",
-      },
-      {
-        label: "Unsupported",
-        status: { state: "unsupported", reason: "non-disk" },
-        tone: "neutral",
-        tooltip: "Save this file to the workspace to use language features.",
-      },
-      {
-        label: "Unsupported",
-        status: { state: "unsupported", reason: "no-provider" },
-        tone: "neutral",
-        tooltip: "Install or configure the language server for this file type.",
-      },
-      {
-        label: "Unsupported",
-        status: { state: "unsupported", reason: "unsupported-root" },
-        tone: "neutral",
-        tooltip: "Open a supported local workspace to use language features.",
       },
       {
         label: "Starting",
@@ -5531,6 +5513,26 @@ describe("Files file-panel", () => {
       ).toBeNull();
     });
     expect(screen.queryByText("Ready")).toBeNull();
+
+    // Unsupported is silent (no-provider / non-disk / unsupported-root).
+    for (const reason of [
+      "no-provider",
+      "non-disk",
+      "unsupported-root",
+    ] as const) {
+      act(() => {
+        publishFilesLanguageServiceStatus(ownerId, fileDocument.id, {
+          state: "unsupported",
+          reason,
+        });
+      });
+      await waitFor(() => {
+        expect(
+          container.querySelector("[data-language-service-status]")
+        ).toBeNull();
+      });
+      expect(screen.queryByText("Unsupported")).toBeNull();
+    }
   }, 15_000);
 
   it("hides the Markdown mode toggle for non-Markdown documents", async () => {

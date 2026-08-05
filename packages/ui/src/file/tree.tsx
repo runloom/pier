@@ -259,6 +259,7 @@ export function PierFileTree({
     expandAllGenerationRef,
     expandedDirectoriesRef,
     ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
+    expansionSeed,
     items,
     itemsRef,
     model,
@@ -280,6 +281,7 @@ export function PierFileTree({
 
   useFileTreePathSync({
     activeSearchRef,
+    applyDirectoryExpansion,
     captureSnapshot,
     directoryStates,
     expandedDirectoriesRef,
@@ -342,7 +344,7 @@ export function PierFileTree({
             resolveExpandedPaths(items, expansionAuthority.getIntent(), {
               ...(directoryStates === undefined ? {} : { directoryStates }),
               propagateCompactChains: true,
-              seed: "none",
+              seed: expansionSeed,
             })
           );
           applyDirectoryExpansion(desired);
@@ -415,6 +417,7 @@ export function PierFileTree({
       directoryStates,
       expandAllDirectories,
       expansionAuthority,
+      expansionSeed,
       items,
       model,
       readRefs,
