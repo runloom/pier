@@ -156,6 +156,10 @@ describe("agent lifecycle plan", () => {
   });
 
   it("upgrades the installed cask variant (claude-code@latest ≠ claude-code)", () => {
+    // Cask upgrade is darwin-only in plan build (Linux CI has no Homebrew Cask).
+    if (process.platform !== "darwin") {
+      return;
+    }
     const plan = buildUpdatePlan(getAgentLifecycleSpec("claude"), {
       host: "posix",
       defaultBinPath:
@@ -175,11 +179,20 @@ describe("agent lifecycle plan", () => {
       defaultBinPath: "/opt/homebrew/bin/claude",
       installSource: "brew",
     });
-    expect(plan?.steps[0]).toMatchObject({
-      kind: "argv",
-      file: "brew",
-      args: expect.arrayContaining(["upgrade", "--cask"]),
-    });
+    if (process.platform === "darwin") {
+      expect(plan?.steps[0]).toMatchObject({
+        kind: "argv",
+        file: "brew",
+        args: expect.arrayContaining(["upgrade", "--cask"]),
+      });
+    } else {
+      // Non-darwin: cask channel dropped; self-update is first.
+      expect(plan?.steps[0]).toMatchObject({
+        kind: "argv",
+        file: "/opt/homebrew/bin/claude",
+        args: ["update"],
+      });
+    }
     // If cask is not actually installed, runner can fall through.
     expect(
       plan?.steps.some(
@@ -244,6 +257,9 @@ describe("agent lifecycle plan", () => {
   });
 
   it("uses brew cask upgrade for brew-sourced copilot and devin", () => {
+    if (process.platform !== "darwin") {
+      return;
+    }
     expect(
       buildUpdatePlan(getAgentLifecycleSpec("copilot"), {
         host: "posix",
@@ -259,6 +275,9 @@ describe("agent lifecycle plan", () => {
   });
 
   it("uses brew cask install as default for brew-sourced claude install cmd", () => {
+    if (process.platform !== "darwin") {
+      return;
+    }
     const plan = buildInstallPlan(getAgentLifecycleSpec("claude"), "posix", {
       installSource: "brew",
     });

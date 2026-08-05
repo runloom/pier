@@ -1,3 +1,4 @@
+import { platform } from "node:os";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { describe, expect, it } from "vitest";
 import { buildUpdatePlan } from "../../../../../src/main/services/agents/lifecycle/plan/build.ts";
@@ -6,6 +7,9 @@ import { getAgentLifecycleSpec } from "../../../../../src/main/services/agents/l
 /**
  * Table-driven primary step kind for common (agent × source) pairs.
  * Locks source-policy + specs against silent order regressions.
+ *
+ * Brew *cask* upgrades are planned only on darwin (see build.ts); Linux CI
+ * falls through to CLI self-update for the same source hint.
  */
 const MATRIX: ReadonlyArray<{
   agentId: AgentKind;
@@ -32,7 +36,10 @@ const MATRIX: ReadonlyArray<{
   {
     agentId: "claude",
     source: "brew",
-    primary: { kind: "argv", file: "brew", args0: "upgrade" },
+    primary:
+      platform() === "darwin"
+        ? { kind: "argv", file: "brew", args0: "upgrade" }
+        : { kind: "argv", fileEndsWith: "claude", args0: "update" },
   },
   {
     agentId: "kimi",
