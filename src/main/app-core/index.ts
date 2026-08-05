@@ -68,6 +68,7 @@ import {
 } from "../state/terminal-status-bar-prefs.ts";
 import { windowManager } from "../windows/manager.ts";
 import { showNativeWindowCloseFailure } from "../windows/native-close-failure.ts";
+import { createBootedAgentLifecycleService } from "./agent-lifecycle-boot.ts";
 import {
   collectBundledPluginRegistrations,
   OFFICIAL_BUNDLED_PLUGIN_SPECS,
@@ -255,7 +256,23 @@ function createPierAppCore(): PierAppCore {
     },
   });
   // Wait for host shell env (single dump); no second echo $PATH.
-  const agentDetection = createAgentDetectionService({ waitForHostEnv });
+  // Detection and lifecycle share PES env so PATH probes stay consistent.
+  const resolveAgentEnv = async () => {
+    const { env } = await processEnvironment.resolve({ source: "agent" });
+    return env;
+  };
+  const agentDetection = createAgentDetectionService({
+    waitForHostEnv,
+    getEnv: resolveAgentEnv,
+  });
+  const agentLifecycle = createBootedAgentLifecycleService({
+    waitForHostEnv,
+    getEnv: resolveAgentEnv,
+    preferences,
+    refreshDetection: async () => {
+      await agentDetection.refresh();
+    },
+  });
   registerPluginRpcIpc(pluginRpcBus);
   const externalMainRuntime: ExternalMainPluginRuntime =
     createExternalMainPluginRuntime({
@@ -359,6 +376,7 @@ function createPierAppCore(): PierAppCore {
 
   const services: PierCoreServices = {
     agentDetection,
+    agentLifecycle,
     agentRuntimeIndex,
     agentUsage,
     agentLaunchGate,

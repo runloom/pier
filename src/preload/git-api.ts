@@ -2,6 +2,7 @@ import { gitWatchLeaseSchema } from "@shared/contracts/git/watch.ts";
 import type {
   GitBranchRef,
   GitChangeEvent,
+  GitCheckoutResult,
   GitCommitSearchResult,
   GitDiffBranchesResult,
   GitDiffPatch,
@@ -72,7 +73,7 @@ export interface PierGitAPI extends PierGitReviewAPI {
   abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
   abortRevert: (cwd: string) => Promise<GitSequencerAbortResult>;
   applyStash: (cwd: string, index?: number) => Promise<GitStashApplyResult>;
-  checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
+  checkoutBranch: (cwd: string, name: string) => Promise<GitCheckoutResult>;
   cherryPick: (cwd: string, oid: string) => Promise<GitSequencerResult>;
   commit: (cwd: string, options: GitCommitOptionsValue) => Promise<boolean>;
   continueCherryPick: (cwd: string) => Promise<GitSequencerContinueResult>;
@@ -81,6 +82,7 @@ export interface PierGitAPI extends PierGitReviewAPI {
   createAndSwitchBranch: (cwd: string, name: string) => Promise<boolean>;
   discardChanges: (cwd: string, paths: string[]) => Promise<boolean>;
   dropStash: (cwd: string, index?: number) => Promise<GitStashDropResult>;
+  fetch: (cwd: string) => Promise<GitRemoteOperationResult>;
   // 读(git:read)
   getDiffPatch: (
     cwd: string,
@@ -95,6 +97,7 @@ export interface PierGitAPI extends PierGitReviewAPI {
   listStashes: (cwd: string) => Promise<GitStashListResult>;
   merge: (cwd: string, branch: string) => Promise<GitMergeResult>;
   popStash: (cwd: string, index?: number) => Promise<GitStashPopResult>;
+  publish: (cwd: string) => Promise<GitRemoteOperationResult>;
   pullFastForward: (cwd: string) => Promise<GitRemoteOperationResult>;
   push: (cwd: string) => Promise<GitRemoteOperationResult>;
   rebase: (cwd: string, branch: string) => Promise<GitRebaseResult>;
@@ -163,7 +166,7 @@ export const gitApi: PierGitAPI = {
   discardChanges: (cwd, paths) =>
     invokePierCommand<boolean>({ cwd, paths, type: "git.discardChanges" }),
   checkoutBranch: (cwd, name) =>
-    invokePierCommand<boolean>({
+    invokePierCommand<GitCheckoutResult>({
       cwd,
       name,
       type: "git.checkoutBranch",
@@ -199,6 +202,16 @@ export const gitApi: PierGitAPI = {
     invokePierCommand<GitRemoteOperationResult>({
       cwd,
       type: "git.push",
+    }),
+  publish: (cwd) =>
+    invokePierCommand<GitRemoteOperationResult>({
+      cwd,
+      type: "git.publish",
+    }),
+  fetch: (cwd) =>
+    invokePierCommand<GitRemoteOperationResult>({
+      cwd,
+      type: "git.fetch",
     }),
   pullFastForward: (cwd) =>
     invokePierCommand<GitRemoteOperationResult>({

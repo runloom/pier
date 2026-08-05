@@ -1,5 +1,7 @@
 import type { GitRemoteSync } from "../../../shared/contracts/git.ts";
+import { isAuthRemoteFailure } from "../../../shared/git-remote-failure.ts";
 import { execGit as defaultExecGit, GitExecError } from "./exec.ts";
+import { sshBatchEnv } from "./operation-helpers.ts";
 import { recordRemoteSync } from "./remote-sync-registry.ts";
 
 const HEARTBEAT_MS = 30_000;
@@ -10,13 +12,6 @@ const MAX_BACKOFF_MULTIPLIER = 8;
 const AUTH_COOLDOWN_MS = 60 * 60_000;
 /** 聚焦补跑最短间隔地板：防止连续聚焦/失焦抖动触发风暴级重试。 */
 const FOCUS_CATCHUP_FLOOR_MS = 60_000;
-/**
- * 鉴权/交互类失败：真实凭据错误才判定，进入冷却而非永久停用。
- * 裸 "permission denied"（本地文件属主/锁问题）不命中；SSH 的
- * "Permission denied (publickey" 属于凭据错误，保留命中。
- */
-const AUTH_FAILURE_RE =
-  /terminal prompts disabled|authentication failed|could not read Username|host key verification failed|permission denied \(publickey/i;
 /** roots 死路径判定：该 root 本身不是有效 git 目录，换下一个 root 重试。 */
 const DEAD_ROOT_RE = /not a git repository|no such file or directory/i;
 
@@ -87,14 +82,6 @@ export function createCommonDirResolver(
       return null;
     }
   };
-}
-
-/** 用户没配 GIT_SSH_COMMAND 时补 BatchMode，防 ssh passphrase 询问挂起。 */
-function sshBatchEnv(): Readonly<Record<string, string>> {
-  if (process.env.GIT_SSH_COMMAND) {
-    return {};
-  }
-  return { GIT_SSH_COMMAND: "ssh -oBatchMode=yes" };
 }
 
 export function createGitAutofetchService({
@@ -195,7 +182,7 @@ export function createGitAutofetchService({
       state.failureCount += 1;
       const stderr = error instanceof GitExecError ? error.stderr : "";
       const message = error instanceof Error ? error.message : String(error);
-      if (AUTH_FAILURE_RE.test(`${stderr}\n${message}`)) {
+      if (isAuthRemoteFailure(`${stderr}\n${message}`)) {
         state.authCooldownUntil = now() + AUTH_COOLDOWN_MS;
         recordRemoteSync(roots, syncSnapshot(state, "authRequired"));
         console.warn(

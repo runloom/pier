@@ -12,6 +12,7 @@ import {
   relativeExpandDepth,
   resolveExpandedPaths,
   shouldSkipExpandDueToCollapse,
+  type TreeExpansionSeed,
 } from "./tree-expansion-apply.ts";
 import type { TreeExpansionAuthority } from "./tree-expansion-authority.ts";
 import { normalizeExpansionPath } from "./tree-expansion-authority.ts";
@@ -43,6 +44,11 @@ export function useFileTreeExpandCollapse(options: {
   expandAllGenerationRef: React.MutableRefObject<number>;
   expandedDirectoriesRef: React.MutableRefObject<Map<string, boolean>>;
   expansionAuthority?: TreeExpansionAuthority | undefined;
+  /**
+   * Seed used when re-asserting after projection/load churn. Git review uses
+   * `file-ancestors` so status deltas minting new group paths still open.
+   */
+  expansionSeed?: TreeExpansionSeed | undefined;
   items: readonly PierFileTreeItem[];
   itemsRef: React.MutableRefObject<readonly PierFileTreeItem[]>;
   model: FileTreeModel;
@@ -64,6 +70,7 @@ export function useFileTreeExpandCollapse(options: {
     expandAllGenerationRef,
     expandedDirectoriesRef,
     expansionAuthority,
+    expansionSeed = "none",
     items,
     itemsRef,
     model,
@@ -409,20 +416,24 @@ export function useFileTreeExpandCollapse(options: {
 
   // After lazy loads add children (esp. compact single-child chains), re-assert
   // authority expansion so the first expand shows content, not an empty shell.
+  // Also re-apply seed (e.g. git file-ancestors) when explicit expanded is empty
+  // but new paths still need open ancestors after status churn.
   // biome-ignore lint/correctness/useExhaustiveDependencies: renderSignature re-runs after path/load projection changes without items identity churn.
   React.useEffect(() => {
     if (!expansionAuthority || activeSearchRef.current != null) {
       return;
     }
     const intent = expansionAuthority.getIntent();
-    if (intent.expanded.size === 0) {
+    // seed:none with no explicit expands is a pure no-op; seed policies may still
+    // open untouched ancestors after path remints (git stage/group moves).
+    if (intent.expanded.size === 0 && expansionSeed === "none") {
       return;
     }
     const desired = new Set(
       resolveExpandedPaths(items, intent, {
         ...(directoryStates === undefined ? {} : { directoryStates }),
         propagateCompactChains: true,
-        seed: "none",
+        seed: expansionSeed,
       })
     );
     if (desired.size === 0) {
@@ -450,6 +461,7 @@ export function useFileTreeExpandCollapse(options: {
     applyDirectoryExpansion,
     directoryStates,
     expansionAuthority,
+    expansionSeed,
     items,
     model,
     readRefs,

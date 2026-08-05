@@ -13,7 +13,6 @@ import {
 import type { FileSaveFeedback } from "../save/feedback.ts";
 import { createFileFilePanelInstanceId } from "./id.ts";
 import { hasOtherOpenFilesSourceInstance } from "./instance-utils.ts";
-import { replaceFilesNavSource } from "./nav-history.ts";
 import type { FilePanelRuntimeProps } from "./types.ts";
 
 export function useFilePanelSaveAs(input: {
@@ -42,9 +41,6 @@ export function useFilePanelSaveAs(input: {
         stableSource.path === saved.source.path
       ) {
         return;
-      }
-      if (group?.id) {
-        replaceFilesNavSource(group.id, stableSource, saved.source);
       }
       const hasOtherSourcePanel = hasOtherOpenFilesSourceInstance({
         context: runtimeContext,

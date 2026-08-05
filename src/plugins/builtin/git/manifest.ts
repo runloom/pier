@@ -154,6 +154,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
+      id: "pier.git.fetch",
+      permissions: ["git:write"],
+      title: "Git: Fetch", // i18n: commands.pier.git.fetch
+    },
+    {
+      category: "Git",
       id: "pier.git.pull",
       permissions: ["git:write"],
       title: "Git: Pull",
@@ -163,6 +169,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       id: "pier.git.push",
       permissions: ["git:write"],
       title: "Git: Push",
+    },
+    {
+      category: "Git",
+      id: "pier.git.publish",
+      permissions: ["git:write"],
+      title: "Git: Publish Branch", // i18n: commands.pier.git.publish
     },
     {
       category: "Git",

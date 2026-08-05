@@ -1,7 +1,9 @@
 import {
+  getTreeExpansionAuthority,
   PierFileTree,
   type PierFileTreeItem,
   type PierFileTreeScrollController,
+  resetTreeExpansionAuthoritiesForTests,
 } from "@pier/ui/file/tree.tsx";
 import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -117,6 +119,7 @@ beforeEach(() => {
   batchSpy.mockClear();
   resetPathsSpy.mockClear();
   setCompositionSpy.mockClear();
+  resetTreeExpansionAuthoritiesForTests();
 });
 
 describe("PierFileTree path synchronization", () => {
@@ -274,6 +277,82 @@ describe("PierFileTree path synchronization", () => {
     );
     expect(getTreeItem(container, "docs/guide.md")).toBeTruthy();
     expect(getTreeItem(container, "docs/notes.md")).toBeTruthy();
+  });
+
+  it("re-seeds file-ancestor expansion after path batch (git status churn)", async () => {
+    // Git review mints new group-root paths on stage/unstage. batch adds those
+    // dirs collapsed; without post-batch expand-only + file-ancestors seed the
+    // tree stays shut and later clicks feel like expand/collapse "does nothing".
+    const authority = getTreeExpansionAuthority("test:git-review-churn");
+    const unstaged = [
+      directory("Changes"),
+      directory("Changes/src"),
+      file("Changes/src/a.ts"),
+    ];
+    // Match git review: flatten nested chains but keep group roots (depth 1).
+    const treeProps = {
+      expansionAuthority: authority,
+      expansionSeed: "file-ancestors" as const,
+      flattenEmptyDirectories: true,
+      flattenMinDepth: 2,
+      label: "Changed files",
+    };
+    const { container, rerender } = render(
+      <PierFileTree {...treeProps} items={unstaged} />
+    );
+    await flushEffects();
+
+    expect(getTreeItem(container, "Changes/")).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+    expect(getTreeItem(container, "Changes/src/")).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+
+    // User fold must survive sibling content updates under the same roots.
+    getTreeItem(container, "Changes/src/").click();
+    expect(getTreeItem(container, "Changes/src/")).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+
+    batchSpy.mockClear();
+    rerender(
+      <PierFileTree
+        {...treeProps}
+        items={[...unstaged, file("Changes/src/b.ts")]}
+      />
+    );
+    await flushEffects();
+
+    expect(batchSpy).toHaveBeenCalled();
+    // Parent still collapsed: child row is not projected (do not query b.ts).
+    expect(getTreeItem(container, "Changes/src/")).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+
+    // Group move: old paths removed, new group paths added in one batch.
+    const staged = [
+      directory("Staged Changes"),
+      directory("Staged Changes/src"),
+      file("Staged Changes/src/a.ts"),
+    ];
+    batchSpy.mockClear();
+    rerender(<PierFileTree {...treeProps} items={staged} />);
+    await flushEffects();
+
+    expect(batchSpy).toHaveBeenCalled();
+    expect(getTreeItem(container, "Staged Changes/")).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+    expect(getTreeItem(container, "Staged Changes/src/")).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
   });
 
   it("batches multiple path additions for directory load without resetPaths", async () => {

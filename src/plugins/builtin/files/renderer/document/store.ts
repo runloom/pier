@@ -191,6 +191,7 @@ function replaceDocument(
 }
 
 export const {
+  dismissDocumentDiskConflict,
   markDocumentDeletedOnDisk,
   markDocumentDiskConflict,
   markDocumentDurabilityConfirmed,
@@ -360,6 +361,7 @@ export function recordCreatedDiskDocument(input: {
     format: input.format,
     kind: "text",
     mode: input.result.mode,
+    mtimeMs: input.result.mtimeMs,
     path: input.path,
     revision: input.result.revision,
     root: input.root,

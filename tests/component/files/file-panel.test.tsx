@@ -18,9 +18,11 @@ import {
   createUntitledMarkdownDocument,
   ensureDiskDocument,
   getDocument,
+  markDocumentDiskConflict,
   markDocumentLoaded,
   removeDocument,
   restoreUntitledDocumentFromPanelSource,
+  setDocumentConflictContents,
   updateDocumentContents,
 } from "@plugins/builtin/files/renderer/document/store.ts";
 import type { FilesDocumentPanelSource } from "@plugins/builtin/files/renderer/document/types.ts";
@@ -39,10 +41,6 @@ import {
   publishFilesLanguageServiceStatus,
   resetFilesLanguageServiceStatusForTests,
 } from "@plugins/builtin/files/renderer/panel/language-service-status.ts";
-import {
-  clearFilesNavHistory,
-  pushFilesNavEntry,
-} from "@plugins/builtin/files/renderer/panel/nav-history.ts";
 import {
   FilePanelBreadcrumb,
   SidebarToggleButton,
@@ -313,6 +311,7 @@ function createMockContext(overrides?: {
         format: { bom: false as const, encoding: "utf8" as const },
         kind: "text" as const,
         mode: 0o644,
+        mtimeMs: metadata.mtimeMs,
         path: request.path,
         revision: `revision-${metadata.mtimeMs}`,
         root: request.root,
@@ -735,7 +734,6 @@ beforeEach(() => {
   window.sessionStorage.clear();
   clearFilesDocumentStore();
   resetFilesLanguageServiceStatusForTests();
-  clearFilesNavHistory();
   clearFilesTreeStore();
   clearFileTreeSidebarCache();
   filesGroupViewRootProbe.reset();
@@ -745,7 +743,6 @@ afterEach(() => {
   clearHostGroupContentForTests();
   clearFilesDocumentStore();
   resetFilesLanguageServiceStatusForTests();
-  clearFilesNavHistory();
   clearFilesTreeStore();
   clearFileTreeSidebarCache();
   window.localStorage.clear();
@@ -1593,11 +1590,13 @@ describe("Files file-panel", () => {
       fireEvent.click(srcRow);
     }
     await waitFor(() => {
-      expect(
-        within(tree).getByRole("treeitem", {
-          name: /generated|index\.ts/u,
-        })
-      ).toBeVisible();
+      const hits = within(tree).getAllByRole("treeitem", {
+        name: /generated|index\.ts/u,
+      });
+      expect(hits.length).toBeGreaterThan(0);
+      for (const hit of hits) {
+        expect(hit).toBeVisible();
+      }
     });
     const chainRow = within(tree).queryByRole("treeitem", {
       name: /generated/u,
@@ -1783,6 +1782,51 @@ describe("Files file-panel", () => {
         }),
       })
     );
+  });
+
+  it("dispatches files/breadcrumb context menu with disk path metadata", async () => {
+    const popup = vi.fn<RendererPluginContext["contextMenu"]["popup"]>(
+      async () => {
+        /* accept without further processing */
+      }
+    );
+    const context = createMockContext({
+      readText: vi.fn(async () => "hello\n"),
+    });
+    context.contextMenu = {
+      popup,
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
+    };
+    const Panel = createFilePanel(context);
+    render(
+      <Panel
+        {...makeProps({
+          context: panelContext,
+          source: {
+            kind: "disk",
+            path: "scripts/bootstrap.sh",
+            root: PROJECT_ROOT,
+          },
+        })}
+      />
+    );
+
+    await screen.findByRole("navigation", { name: "File location" });
+    fireEvent.contextMenu(
+      screen.getByRole("navigation", { name: "File location" })
+    );
+
+    expect(popup).toHaveBeenCalledTimes(1);
+    expect(popup.mock.calls[0]?.[0]).toBe("files/breadcrumb");
+    expect(popup.mock.calls[0]?.[2]).toMatchObject({
+      metadata: {
+        path: "scripts/bootstrap.sh",
+        projectRoot: panelContext.projectRootPath,
+        root: PROJECT_ROOT,
+      },
+      sourcePanelComponent: "pier.files.filePanel",
+    });
   });
 
   it("dispatches files/editor context menu with selection ranges", async () => {
@@ -2552,79 +2596,6 @@ describe("Files file-panel", () => {
       params: existingParams,
       targetGroupId: "reuse-same-group",
       title: "README.md",
-    });
-    group.element.remove();
-  });
-
-  it("reuses an already pinned same-source tab without overwriting its source", async () => {
-    const groupId = "reuse-pinned-source-group";
-    const staleSource = {
-      id: "pier.files.untitled:shared-nav",
-      kind: "untitled",
-      name: "Old Name.md",
-    } satisfies FilesDocumentPanelSource;
-    const currentSource = {
-      ...staleSource,
-      name: "Current Name.md",
-    } satisfies FilesDocumentPanelSource;
-    const otherSource = {
-      kind: "disk",
-      path: "README.md",
-      root: PROJECT_ROOT,
-    } satisfies FilesDocumentPanelSource;
-    pushFilesNavEntry(groupId, staleSource);
-    pushFilesNavEntry(groupId, otherSource);
-
-    const existingParams = {
-      context: panelContext,
-      dirty: true,
-      pinned: true,
-      pluginComponentId: "pier.files.filePanel",
-      source: currentSource,
-    };
-    const listInstances = vi.fn<
-      RendererPluginContext["panels"]["listInstances"]
-    >(() => [
-      {
-        componentId: "pier.files.filePanel",
-        groupId,
-        id: "existing-pinned-untitled",
-        params: existingParams,
-        title: "Current Name.md",
-      },
-    ]);
-    const openInstance =
-      vi.fn<RendererPluginContext["panels"]["openInstance"]>();
-    const context = createMockContext({ listInstances, openInstance });
-    const Panel = createFilePanel(context);
-    const group = createFakeGroup(groupId);
-    const activePanel = group.makeFilesPanel("active-other-file", {
-      context: panelContext,
-      source: otherSource,
-    });
-    group.setActivePanel(activePanel);
-
-    render(
-      <Panel
-        {...makeProps(
-          { context: panelContext, source: otherSource },
-          { group, id: "active-other-file", isActive: true }
-        )}
-      />
-    );
-
-    const backButton = await screen.findByRole("button", { name: "Back" });
-    expect(backButton).toBeEnabled();
-    fireEvent.click(backButton);
-
-    expect(openInstance).toHaveBeenCalledTimes(1);
-    expect(openInstance.mock.calls[0]?.[0]).toMatchObject({
-      componentId: "pier.files.filePanel",
-      dropUnpinnedInstances: false,
-      instanceId: "existing-pinned-untitled",
-      params: existingParams,
-      targetGroupId: groupId,
-      title: "Current Name.md",
     });
     group.element.remove();
   });
@@ -4452,6 +4423,60 @@ describe("Files file-panel", () => {
     expect(restoredView.state.doc.toString()).toBe("# Before\n\n- draft");
   });
 
+  it("updates markdown preview when document contents change live", async () => {
+    const document = createUntitledMarkdownDocument({
+      contents: "# Initial heading\n",
+    });
+    renderFilePanel({
+      context: panelContext,
+      source: { id: document.id, kind: "untitled", name: document.name },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
+    expect(
+      await screen.findByRole("heading", { name: "Initial heading" })
+    ).toBeVisible();
+
+    act(() => {
+      updateDocumentContents(document.id, "# Live update heading\n");
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Live update heading" })
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("heading", { name: "Initial heading" })
+    ).toBeNull();
+  });
+
+  it("shows the disk conflict banner and can keep local edits", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "conflict.md",
+      root: PROJECT_ROOT,
+    };
+    ensureDiskDocument(source);
+    const documentId = ensureDiskDocument(source).id;
+    markDocumentLoaded(documentId, "# Local body\n", null);
+    updateDocumentContents(documentId, "# Local body\nedited");
+    markDocumentDiskConflict(documentId);
+    setDocumentConflictContents(documentId, "# Disk body\n");
+
+    renderFilePanel({
+      context: panelContext,
+      source,
+    });
+
+    expect(
+      await screen.findByTestId("file-disk-conflict-banner")
+    ).toBeVisible();
+    expect(screen.getByText("File changed on disk")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Keep my edits" }));
+    expect(screen.queryByTestId("file-disk-conflict-banner")).toBeNull();
+    expect(getDocument(documentId)?.currentContents).toBe(
+      "# Local body\nedited"
+    );
+    expect(getDocument(documentId)?.diskConflict).toBe(false);
+  });
+
   it("preserves the view session when an open disk document is renamed", async () => {
     const source = {
       kind: "disk" as const,
@@ -5200,7 +5225,7 @@ describe("Files file-panel", () => {
     const document = ensureDiskDocument(source);
     const ownerId = JSON.stringify([panelId]);
 
-    // Ready is silent; only non-ready states render a chip after the language badge.
+    // Ready / unsupported are silent; only actionable non-ready states chip.
     act(() => {
       publishFilesLanguageServiceStatus(ownerId, document.id, {
         state: "ready",
@@ -5280,24 +5305,6 @@ describe("Files file-panel", () => {
         status: { state: "disabled", reason: "worktrees-disabled" },
         tone: "neutral",
         tooltip: "Enable language services for worktrees in Settings.",
-      },
-      {
-        label: "Unsupported",
-        status: { state: "unsupported", reason: "non-disk" },
-        tone: "neutral",
-        tooltip: "Save this file to the workspace to use language features.",
-      },
-      {
-        label: "Unsupported",
-        status: { state: "unsupported", reason: "no-provider" },
-        tone: "neutral",
-        tooltip: "Install or configure the language server for this file type.",
-      },
-      {
-        label: "Unsupported",
-        status: { state: "unsupported", reason: "unsupported-root" },
-        tone: "neutral",
-        tooltip: "Open a supported local workspace to use language features.",
       },
       {
         label: "Starting",
@@ -5474,6 +5481,26 @@ describe("Files file-panel", () => {
       ).toBeNull();
     });
     expect(screen.queryByText("Ready")).toBeNull();
+
+    // Unsupported is silent (no-provider / non-disk / unsupported-root).
+    for (const reason of [
+      "no-provider",
+      "non-disk",
+      "unsupported-root",
+    ] as const) {
+      act(() => {
+        publishFilesLanguageServiceStatus(ownerId, fileDocument.id, {
+          state: "unsupported",
+          reason,
+        });
+      });
+      await waitFor(() => {
+        expect(
+          container.querySelector("[data-language-service-status]")
+        ).toBeNull();
+      });
+      expect(screen.queryByText("Unsupported")).toBeNull();
+    }
   }, 15_000);
 
   it("hides the Markdown mode toggle for non-Markdown documents", async () => {

@@ -338,6 +338,14 @@ export type GitRemoteOperationResult = z.infer<
   typeof gitRemoteOperationResultSchema
 >;
 
+/** 切换分支结果：用于 UI 诚实反馈（是否新建跟踪）。 */
+export const gitCheckoutResultSchema = z.object({
+  localName: z.string().min(1),
+  mode: z.enum(["created-tracking", "switched-existing", "switched-local"]),
+  remoteRef: z.string().nullable(),
+});
+export type GitCheckoutResult = z.infer<typeof gitCheckoutResultSchema>;
+
 export const gitMergeResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ok"), message: z.string() }),
   z.object({ kind: z.literal("already_up_to_date") }),

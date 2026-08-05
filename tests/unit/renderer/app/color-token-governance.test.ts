@@ -24,6 +24,8 @@ const RAW_COLOR_WHOLE_FILE_OWNERS = new Set([
 ]);
 const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
   ["packages/ui/src/chart.tsx", /#(?:ccc|fff)\b/gi],
+  // Scroll fade masks use opaque black stops; alpha is via transparent end, not product chrome.
+  ["packages/ui/src/scroll-area.tsx", /#000\b/gi],
   ["src/renderer/index.html", /#1e1e1e\b/gi],
 ]);
 const COLOR_MIX_OWNERS = new Set([

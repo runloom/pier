@@ -91,6 +91,13 @@ export const SURFACE_PROFILES: Readonly<Record<string, SurfaceProfile>> = {
     selectionSource: "none",
     specializedEditPipeline: false,
   },
+  "files/breadcrumb": {
+    mergeEdit: false,
+    mergeLayout: false,
+    role: "object",
+    selectionSource: "none",
+    specializedEditPipeline: false,
+  },
   "files/editor": {
     mergeEdit: false,
     mergeLayout: false,

@@ -9,7 +9,13 @@ import {
   type PierFileTreeItem,
 } from "@pier/ui/file/tree.tsx";
 import { collectPreservedExpandedDirectoryPaths } from "@pier/ui/file/tree-model.ts";
-import { TREE_SCROLLBAR_CSS } from "@pier/ui/file/tree-style.ts";
+import {
+  FILE_TREE_BRIDGE_CLASS,
+  FILE_TREE_HOST_CLASS,
+  FILE_TREE_SEARCH_SHELL_CLASS,
+  TREE_SCROLLBAR_CSS,
+  TREE_SHADOW_CSS,
+} from "@pier/ui/file/tree-style.ts";
 import {
   act,
   fireEvent,
@@ -349,14 +355,46 @@ describe("PierFileTree", () => {
       <PierFileTree items={items} label="Project files" />
     );
 
+    const bridge = container.querySelector(
+      '[data-slot="pier-file-tree-bridge"]'
+    );
+    for (const token of FILE_TREE_BRIDGE_CLASS.split(/\s+/)) {
+      expect(bridge).toHaveClass(token);
+    }
     const host = getFileTreeHost(container);
-    expect(host).toHaveClass("min-h-0", "w-full", "h-full");
+    for (const token of FILE_TREE_HOST_CLASS.split(/\s+/)) {
+      expect(host).toHaveClass(token);
+    }
     expect(host).not.toHaveClass("overflow-auto");
     expect(
       host.shadowRoot?.querySelector(
         '[data-file-tree-virtualized-scroll="true"]'
       )
     ).toBeInstanceOf(HTMLElement);
+  });
+
+  it("pairs search shell chrome with bridge inset (no double bottom gap)", () => {
+    expect(FILE_TREE_BRIDGE_CLASS).toContain("py-1");
+    expect(FILE_TREE_SEARCH_SHELL_CLASS).toContain("pt-1");
+    expect(FILE_TREE_SEARCH_SHELL_CLASS).toContain("pb-0");
+    expect(FILE_TREE_SEARCH_SHELL_CLASS).not.toMatch(/\bpy-\d/);
+  });
+
+  it("files and git review tree sidebars use the shared search shell class", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const roots = [
+      "src/plugins/builtin/files/renderer/tree/sidebar.tsx",
+      "src/plugins/builtin/git/renderer/review/panel-layout.tsx",
+    ];
+    for (const rel of roots) {
+      const source = readFileSync(join(process.cwd(), rel), "utf8");
+      expect(source).toContain("FILE_TREE_SEARCH_SHELL_CLASS");
+      expect(source).not.toMatch(/className=\{?["']shrink-0 px-2 py-1["']\}?/);
+      expect(source).not.toMatch(
+        /className=\{?["']shrink-0 px-2 pt-1 pb-0["']\}?/
+      );
+    }
   });
 
   it("maps Pier scrollbar tokens onto @pierre/trees official scrollbar variables", () => {
@@ -525,15 +563,26 @@ describe("PierFileTree", () => {
   });
 
   it("lets item names consume space left by an empty decoration lane", () => {
-    expect(TREE_SCROLLBAR_CSS).toContain(
+    expect(TREE_SHADOW_CSS).toContain(
       '[data-item-section="content"] {\n  flex: 1 1 auto;'
     );
-    expect(TREE_SCROLLBAR_CSS).toContain(
+    expect(TREE_SHADOW_CSS).toContain(
       '[data-item-section="decoration"]:empty {\n  flex: 0 0 0;'
     );
-    expect(TREE_SCROLLBAR_CSS).toContain(
+    expect(TREE_SHADOW_CSS).toContain(
       '[data-item-section="git"]:empty,\n[data-item-section="action"]:empty {\n  display: none;'
     );
+  });
+
+  it("injects short vertical scroll-fade on the virtualized scroll viewport", () => {
+    expect(TREE_SHADOW_CSS).toBe(TREE_SCROLLBAR_CSS);
+    expect(TREE_SHADOW_CSS).toContain(
+      '[data-file-tree-virtualized-scroll="true"]'
+    );
+    expect(TREE_SHADOW_CSS).toContain("scroll-fade-reveal-t");
+    expect(TREE_SHADOW_CSS).toContain("scroll-fade-reveal-b");
+    expect(TREE_SHADOW_CSS).toContain("animation-timeline: scroll(self y)");
+    expect(TREE_SHADOW_CSS).toContain("--scroll-fade-reveal: 24px");
   });
 
   it("restores the full tree after clearing or cancelling a search filter", async () => {

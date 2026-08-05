@@ -152,6 +152,8 @@ export const PIER_BROADCAST = {
   // 工作树创建的真实后台阶段。payload 只含随机操作标识与阶段，
   // 不广播项目路径、分支名或脚本输出。
   WORKTREE_CREATE_PROGRESS: "pier://worktree-create:progress",
+  // Agent CLI install/update live progress (main → all renderer).
+  AGENT_LIFECYCLE_PROGRESS: "pier://agent-lifecycle:progress",
   // 跨插件成本聚合快照增量 (main → 所有 renderer, payload UsageAggregateSnapshot).
   USAGE_DATA_CHANGED: "pier://usage-data:changed",
   // Agent Runtime Index 本机快照推送 (main → 所有 renderer, payload AgentRuntimeIndexSnapshot)。

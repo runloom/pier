@@ -720,6 +720,43 @@ describe("file-tree-actions", () => {
     expect(writeClipboardText).toHaveBeenNthCalledWith(2, "src/index.ts");
   });
 
+  it("exposes copy path actions on files/breadcrumb and copies disk paths", async () => {
+    const { context } = makeContext();
+    const writeClipboardText = installClipboard();
+    const actions = treeActions(context);
+    const absolute = actionById(actions, FILES_COPY_PATH_COMMAND_ID);
+    const relative = actionById(actions, FILES_COPY_RELATIVE_PATH_COMMAND_ID);
+
+    expect(absolute.surfaces).toContain("files/breadcrumb");
+    expect(relative.surfaces).toContain("files/breadcrumb");
+
+    await absolute.handler({
+      metadata: {
+        path: "scripts/bootstrap.sh",
+        projectRoot: ROOT,
+        root: ROOT,
+      },
+      surface: "files/breadcrumb",
+    });
+    await relative.handler({
+      metadata: {
+        path: "scripts/bootstrap.sh",
+        projectRoot: ROOT,
+        root: ROOT,
+      },
+      surface: "files/breadcrumb",
+    });
+
+    expect(writeClipboardText).toHaveBeenNthCalledWith(
+      1,
+      "/repo/scripts/bootstrap.sh"
+    );
+    expect(writeClipboardText).toHaveBeenNthCalledWith(
+      2,
+      "scripts/bootstrap.sh"
+    );
+  });
+
   it("copies editor paths with a project-relative line range", async () => {
     const { context } = makeContext();
     const writeClipboardText = installClipboard();

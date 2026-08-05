@@ -8,12 +8,16 @@ import {
   runContinuePausedOperation,
 } from "./operation-runners.ts";
 import { pluginText } from "./plugin-text.ts";
+import { remoteOperationErrorBody } from "./remote-error.ts";
+import type { RemoteSyncActionId } from "./remote-sync-policy.ts";
 import type {
   GitStatusDropdownActionId,
   GitStatusDropdownModel,
 } from "./status-dropdown-model.ts";
 import { getInFlightSync, trackSync } from "./sync-busy.ts";
 import { openWorktreeListQuickPick } from "./worktree/list-action.ts";
+
+export type GitRemoteSyncActionId = RemoteSyncActionId;
 
 export function gitStatusDropdownErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -25,7 +29,27 @@ function assertRemoteOperationOk(result: GitRemoteOperationResult): void {
   }
 }
 
-const REMOTE_ACTION_FEEDBACK = {
+const REMOTE_ACTION_FEEDBACK: Record<
+  RemoteSyncActionId,
+  {
+    loadingFallback: string;
+    loadingKey: string;
+    successFallback: string;
+    successKey: string;
+  }
+> = {
+  fetch: {
+    loadingFallback: "Fetching remote…",
+    loadingKey: "statusDropdownFetching",
+    successFallback: "Remote updated",
+    successKey: "statusDropdownFetchSuccess",
+  },
+  publish: {
+    loadingFallback: "Publishing branch…",
+    loadingKey: "statusDropdownPublishing",
+    successFallback: "Branch published",
+    successKey: "statusDropdownPublishSuccess",
+  },
   pull: {
     loadingFallback: "Pulling changes…",
     loadingKey: "statusDropdownPulling",
@@ -44,22 +68,24 @@ const REMOTE_ACTION_FEEDBACK = {
     successFallback: "Changes synced",
     successKey: "statusDropdownSyncSuccess",
   },
-} as const;
-
-export type GitRemoteSyncActionId = keyof typeof REMOTE_ACTION_FEEDBACK;
+};
 
 function remoteFacadeCall(
   pluginContext: RendererPluginContext,
-  actionId: GitRemoteSyncActionId,
-  worktreePath: string
+  actionId: RemoteSyncActionId,
+  gitRoot: string
 ): Promise<GitRemoteOperationResult> {
   switch (actionId) {
+    case "fetch":
+      return pluginContext.git.fetch(gitRoot);
+    case "publish":
+      return pluginContext.git.publish(gitRoot);
     case "pull":
-      return pluginContext.git.pullFastForward(worktreePath);
+      return pluginContext.git.pullFastForward(gitRoot);
     case "push":
-      return pluginContext.git.push(worktreePath);
+      return pluginContext.git.push(gitRoot);
     case "syncChanges":
-      return pluginContext.git.sync(worktreePath);
+      return pluginContext.git.sync(gitRoot);
     default: {
       const exhaustive: never = actionId;
       return exhaustive;
@@ -68,15 +94,15 @@ function remoteFacadeCall(
 }
 
 /**
- * 远端同步动作（浮层同步行与状态栏同步项共用）：
- * 同一工作树并发去重——已有 in-flight 时提示并复用同一 promise。
+ * 远端同步动作（浮层 / 状态栏 / 命令面板共用）。
+ * key = gitRoot：同仓多面板共享 in-flight。
  */
 export function runRemoteSyncAction(
   pluginContext: RendererPluginContext,
-  actionId: GitRemoteSyncActionId,
-  worktreePath: string
+  actionId: RemoteSyncActionId,
+  gitRoot: string
 ): Promise<void> {
-  const existing = getInFlightSync(worktreePath);
+  const existing = getInFlightSync(gitRoot);
   if (existing) {
     pluginContext.notifications.info(
       pluginText(
@@ -87,21 +113,21 @@ export function runRemoteSyncAction(
     );
     return existing;
   }
-  return trackSync(worktreePath, async () => {
+  return trackSync(gitRoot, async () => {
     const feedback = REMOTE_ACTION_FEEDBACK[actionId];
     const loading = pluginContext.notifications.loading(
       pluginText(pluginContext, feedback.loadingKey, feedback.loadingFallback)
     );
     try {
       assertRemoteOperationOk(
-        await remoteFacadeCall(pluginContext, actionId, worktreePath)
+        await remoteFacadeCall(pluginContext, actionId, gitRoot)
       );
       loading.success(
         pluginText(pluginContext, feedback.successKey, feedback.successFallback)
       );
     } catch (error) {
       loading.dismiss();
-      throw error;
+      throw new Error(remoteOperationErrorBody(pluginContext, error));
     }
   });
 }
@@ -118,9 +144,11 @@ export async function runGitStatusDropdownAction({
   if (
     actionId === "push" ||
     actionId === "pull" ||
-    actionId === "syncChanges"
+    actionId === "syncChanges" ||
+    actionId === "publish" ||
+    actionId === "fetch"
   ) {
-    await runRemoteSyncAction(pluginContext, actionId, model.worktreePath);
+    await runRemoteSyncAction(pluginContext, actionId, model.gitRoot);
     return;
   }
 
@@ -129,7 +157,7 @@ export async function runGitStatusDropdownAction({
       return;
     }
     await runAbortPausedOperation(pluginContext, {
-      cwd: model.worktreePath,
+      cwd: model.gitRoot,
       kind: model.operationKind,
       title: pluginText(
         pluginContext,
@@ -149,7 +177,7 @@ export async function runGitStatusDropdownAction({
       return;
     }
     await runContinuePausedOperation(pluginContext, {
-      cwd: model.worktreePath,
+      cwd: model.gitRoot,
       kind: model.operationKind,
       title: pluginText(
         pluginContext,
@@ -162,12 +190,12 @@ export async function runGitStatusDropdownAction({
   }
 
   if (actionId === "switchBranch") {
-    await openSwitchBranchPick(pluginContext, { cwd: model.worktreePath });
+    await openSwitchBranchPick(pluginContext, { cwd: model.gitRoot });
     return;
   }
 
   if (actionId === "switchWorktree") {
-    await openWorktreeListQuickPick(pluginContext, model.worktreePath);
+    await openWorktreeListQuickPick(pluginContext, model.gitRoot);
     return;
   }
 

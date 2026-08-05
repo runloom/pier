@@ -114,6 +114,8 @@ function createMockContext(): {
       listStashes: unimplemented("git.listStashes"),
       merge: unimplemented("git.merge"),
       popStash: unimplemented("git.popStash"),
+      fetch: unimplemented("git.fetch"),
+      publish: unimplemented("git.publish"),
       pullFastForward: unimplemented("git.pullFastForward"),
       push: unimplemented("git.push"),
       applyStash: unimplemented("git.applyStash"),

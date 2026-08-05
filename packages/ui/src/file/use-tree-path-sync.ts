@@ -21,6 +21,16 @@ import type {
 
 interface UseFileTreePathSyncInput {
   activeSearchRef: React.MutableRefObject<string | null>;
+  /**
+   * Apply resolved expansion after batch. Must run *after* path mutations so
+   * newly minted directories (git group moves, nested adds) can be opened from
+   * authority + seed. The expand-collapse re-assert effect alone is too early
+   * in the same commit (runs before this path-sync effect).
+   */
+  applyDirectoryExpansion?: (
+    desired: ReadonlySet<string>,
+    mode?: "set" | "expand-only" | "collapse-only"
+  ) => void;
   captureSnapshot: PierFileTreeScrollController["captureSnapshot"];
   directoryStates: ReadonlyMap<string, PierDirectoryLoadState> | undefined;
   expandedDirectoriesRef: React.MutableRefObject<Map<string, boolean>>;
@@ -40,6 +50,7 @@ interface UseFileTreePathSyncInput {
  */
 export function useFileTreePathSync({
   activeSearchRef,
+  applyDirectoryExpansion,
   captureSnapshot,
   directoryStates,
   expandedDirectoriesRef,
@@ -130,6 +141,7 @@ export function useFileTreePathSync({
       );
     };
 
+    let usedResetPaths = false;
     try {
       if (alreadyAppliedByModel && mutation[0]?.type === "move") {
         aheadMoves.delete(stripTrailingSlash(mutation[0].from));
@@ -150,6 +162,7 @@ export function useFileTreePathSync({
       }
     } catch {
       // batch failed — residual full replacement with search clear/replay
+      usedResetPaths = true;
       const expandedPaths = resolveExpandedForReset();
       const activeSearch = activeSearchRef.current;
       if (activeSearch != null) {
@@ -158,6 +171,27 @@ export function useFileTreePathSync({
       model.resetPaths(paths, { initialExpandedPaths: expandedPaths });
       if (activeSearch != null) {
         model.setSearch(activeSearch);
+      }
+    }
+
+    // batch 后的新目录节点默认收起；resetPaths 已带 initialExpandedPaths。
+    // 必须在 batch 之后再 expand-only 投影，否则 git status 更新铸出的新组路径
+    // 会一直合着，用户点开后下一轮 delta 又像「操作不生效」。
+    if (
+      !usedResetPaths &&
+      expansionAuthority &&
+      applyDirectoryExpansion &&
+      activeSearchRef.current == null
+    ) {
+      const desired = new Set(
+        resolveExpandedPaths(items, expansionAuthority.getIntent(), {
+          ...(directoryStates === undefined ? {} : { directoryStates }),
+          propagateCompactChains: true,
+          seed: expansionSeed,
+        })
+      );
+      if (desired.size > 0) {
+        applyDirectoryExpansion(desired, "expand-only");
       }
     }
 
@@ -171,6 +205,7 @@ export function useFileTreePathSync({
     previousRenderSignatureRef.current = renderSignature;
   }, [
     activeSearchRef,
+    applyDirectoryExpansion,
     captureSnapshot,
     directoryStates,
     expandedDirectoriesRef,

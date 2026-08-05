@@ -682,7 +682,11 @@ describe("git builtin plugin", () => {
         git: {
           abortMerge: vi.fn(async () => ({ kind: "ok" as const })),
           abortRebase: vi.fn(async () => ({ kind: "ok" as const })),
-          checkoutBranch: vi.fn(async () => true),
+          checkoutBranch: vi.fn(async () => ({
+            localName: "main",
+            mode: "switched-local" as const,
+            remoteRef: null,
+          })),
           commit: vi.fn(async () => true),
           continueRebase: vi.fn(async () => ({
             kind: "ok" as const,
@@ -729,13 +733,18 @@ describe("git builtin plugin", () => {
             entries: [],
             kind: "ok" as const,
           })),
+          fetch: vi.fn(async () => ({ kind: "ok" as const })),
           merge: vi.fn(async () => ({ kind: "ok" as const, message: "" })),
           popStash: vi.fn(async () => ({ kind: "ok" as const })),
           applyStash: vi.fn(async () => ({ kind: "ok" as const })),
           dropStash: vi.fn(async () => ({ kind: "ok" as const })),
+          publish: vi.fn(async () => ({ kind: "ok" as const })),
+          pullFastForward: vi.fn(async () => ({ kind: "ok" as const })),
+          push: vi.fn(async () => ({ kind: "ok" as const })),
           rebase: vi.fn(async () => ({ kind: "ok" as const, message: "" })),
           stage: vi.fn(async () => true),
           stash: vi.fn(async () => ({ kind: "ok" as const })),
+          sync: vi.fn(async () => ({ kind: "ok" as const })),
           unstage: vi.fn(async () => true),
           undoLastCommit: vi.fn(async () => ({ kind: "ok" as const })),
           watch: vi.fn(() => () => undefined),
@@ -1194,7 +1203,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 切换分支命令只列出本地分支并切换选中分支", async () => {
+  it("Git 切换分支命令列出本地与远端分支并切换选中分支", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 4,
@@ -1232,6 +1241,7 @@ describe("git builtin plugin", () => {
       title: "Git: Switch Branch...",
     });
     expect(quickPick?.items?.map((item) => item.id)).toEqual([
+      "refs/remotes/origin/feature/remote",
       "refs/heads/feature/local",
     ]);
     const item = quickPick?.items?.find(
@@ -1241,6 +1251,11 @@ describe("git builtin plugin", () => {
       throw new Error("expected switch branch quick pick");
     }
 
+    vi.mocked(window.pier.git.checkoutBranch).mockResolvedValueOnce({
+      localName: "feature/local",
+      mode: "switched-local",
+      remoteRef: null,
+    });
     await quickPick.onAccept(item);
 
     expect(window.pier.git.checkoutBranch).toHaveBeenCalledWith(
@@ -2155,7 +2170,7 @@ describe("git builtin plugin", () => {
       ctrlKey: false,
       pointerType: "mouse",
     });
-    expect(await screen.findByText("upstream gone")).toBeInTheDocument();
+    expect(await screen.findByText("Publish Branch Again")).toBeInTheDocument();
   });
 
   it("no upstream 时底栏用脏图标编码未跟踪，不展示 no-upstream pill", async () => {
@@ -2261,7 +2276,7 @@ describe("git builtin plugin", () => {
       pointerType: "mouse",
     });
     expect(await screen.findByText("merged")).toBeInTheDocument();
-    expect(screen.getByText("upstream gone")).toBeInTheDocument();
+    expect(screen.getByText("Publish Branch Again")).toBeInTheDocument();
   });
 
   it("工作区脏态用分支图标变体编码；更改计数在独立项", async () => {
@@ -2606,7 +2621,7 @@ describe("git builtin plugin", () => {
       );
       expect(treeBridge).toBeInstanceOf(HTMLElement);
       expect(treeBridge).toHaveClass("min-h-0", "flex-1", "w-full");
-      expect(filesTreeHost).toHaveClass("h-full", "min-h-0", "w-full");
+      expect(filesTreeHost).toHaveClass("min-h-0", "w-full", "flex-1");
       expect(
         (filesTreeHost as HTMLElement).shadowRoot?.querySelector(
           '[data-file-tree-virtualized-scroll="true"]'

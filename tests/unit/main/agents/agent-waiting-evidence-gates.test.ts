@@ -122,13 +122,14 @@ describe("S1 top A waiting evidence", () => {
     }
   });
 
-  it("Claude installed hooks do not emit unpaired interaction events", () => {
+  it("Claude installed hooks pair InteractionRequested with InteractionResolved for blocking tools", () => {
     const commands = nestedHookCommands(withPierClaudeHooks({}));
+    // Plan/Ask 等人工具经 Pre/Post toolUseId 闭环；不得只装一边。
     expect(commands.some((cmd) => cmd.includes('"InteractionRequested"'))).toBe(
-      false
+      true
     );
     expect(commands.some((cmd) => cmd.includes('"InteractionResolved"'))).toBe(
-      false
+      true
     );
   });
 

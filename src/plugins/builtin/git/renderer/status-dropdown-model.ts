@@ -5,9 +5,23 @@ import type {
   GitStatus,
 } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import {
+  isSyncUncertain,
+  type RemoteSyncBlockReason,
+  resolveRemoteSyncDecision,
+} from "./remote-sync-policy.ts";
 import type { GitStatusDropdownText } from "./status-dropdown-text.ts";
 import { DEFAULT_GIT_STATUS_DROPDOWN_TEXT } from "./status-dropdown-text.ts";
 
+export {
+  canPublishBranch,
+  isSyncUncertain,
+  type RemoteSyncActionId,
+  type RemoteSyncBlockReason,
+  resolveRemoteSyncActionId,
+  resolveRemoteSyncBlockReason,
+  resolveRemoteSyncDecision,
+} from "./remote-sync-policy.ts";
 export type { GitStatusDropdownText } from "./status-dropdown-text.ts";
 
 /**
@@ -15,12 +29,14 @@ export type { GitStatusDropdownText } from "./status-dropdown-text.ts";
  * 1. 身份区 — 分支名 + 工作树/fetch 上下文行（组件层渲染，不进 rows）。
  * 2. 情境区 rows — 只在对应事实存在时出现的行：冲突/暂停操作（置顶，
  *    含继续/中止）、更改（含大变更提级）、同步、储藏计数、生命周期灰化
- *    信息行（merged / upstream gone / no upstream）、clean 单行。
- * 3. 固定任务区 tasks — 永远存在的导航动作（切换分支 / 切换工作树）。
+ *    信息行（merged）、clean 单行。上游已删走「重新发布」主动作。
+ * 3. 固定任务区 tasks — 获取远程更新 / 切换分支 / 切换工作树。
  */
 export type GitStatusDropdownActionId =
   | "abortOperation"
   | "continueOperation"
+  | "fetch"
+  | "publish"
   | "pull"
   | "push"
   | "switchBranch"
@@ -43,15 +59,16 @@ export type GitStatusDropdownRowIcon =
   | "cherryPick"
   | "clean"
   | "continue"
+  | "fetch"
   | "merge"
   | "merged"
+  | "publish"
   | "pull"
   | "push"
   | "rebase"
   | "revert"
   | "stash"
-  | "sync"
-  | "upstreamGone";
+  | "sync";
 
 export type GitStatusDropdownRowId =
   | "abortOperation"
@@ -59,12 +76,10 @@ export type GitStatusDropdownRowId =
   | "clean"
   | "continueOperation"
   | "merged"
-  | "noUpstream"
   | "operation"
   | "stash"
   | "status"
-  | "sync"
-  | "upstreamGone";
+  | "sync";
 
 /** 更改行 ± 行增量；与 value（文件数）分字段，组件按 diff 语义色渲染。 */
 export interface GitStatusDropdownLineDelta {
@@ -102,19 +117,20 @@ export type GitStatusDropdownOperationKind = Exclude<
 export interface GitStatusDropdownModel {
   branchLabel: string;
   contextLine: string;
+  /** 远程动作 cwd：git root（与 palette / busy 一致）。 */
+  gitRoot: string;
   /** 非 null 时情境区含继续/中止行，供动作层解析 runner。 */
   operationKind: GitStatusDropdownOperationKind | null;
   rows: GitStatusDropdownRow[];
   tasks: GitStatusDropdownAction[];
   variant: GitStatusDropdownVariant;
-  worktreePath: string;
 }
 
 export interface GitStatusDropdownModelOptions {
   fallbackWorktreeName: string;
+  gitRoot: string;
   remoteSyncLabel?: null | string;
   text?: GitStatusDropdownText;
-  worktreePath: string;
 }
 
 /**
@@ -166,48 +182,6 @@ function conflictCount(repoState: GitRepoState, counts: GitCounts): number {
     return repoState.conflictCount;
   }
   return counts.conflict;
-}
-
-function canUseUpstream(status: GitStatus): boolean {
-  return (
-    status.branch.upstream !== null &&
-    !status.branch.upstreamGone &&
-    status.remoteSync?.state !== "authRequired"
-  );
-}
-
-export function isSyncUncertain(status: GitStatus): boolean {
-  return (
-    status.remoteSync?.state === "authRequired" ||
-    status.remoteSync?.lastSuccessAt === null
-  );
-}
-
-/**
- * 远端同步动作解析（状态栏同步项与浮层同步行共用）：
- * behind 且有本地改动时禁用 pull/sync（避免打断本地工作）。
- */
-export function resolveRemoteSyncActionId(
-  status: GitStatus
-): "pull" | "push" | "syncChanges" | null {
-  if (!canUseUpstream(status)) {
-    return null;
-  }
-  const { ahead, behind } = status.branch;
-  if (ahead === 0 && behind === 0) {
-    return null;
-  }
-  const hasLocalChanges = status.changeSummary.changedFiles > 0;
-  if (behind > 0 && hasLocalChanges) {
-    return null;
-  }
-  if (ahead > 0 && behind > 0) {
-    return "syncChanges";
-  }
-  if (ahead > 0) {
-    return "push";
-  }
-  return "pull";
 }
 
 function formatSyncValue(ahead: number, behind: number): string {
@@ -314,36 +288,78 @@ function changesRow(
   };
 }
 
+function blockReasonTitle(
+  reason: RemoteSyncBlockReason,
+  text: GitStatusDropdownText
+): string {
+  switch (reason) {
+    case "authRequired":
+      return text.authBlocked;
+    case "detached":
+      return text.detachedBlocked;
+    case "pullBlocked":
+      return text.pullBlocked;
+    default:
+      return text.syncUnavailable;
+  }
+}
+
+/**
+ * 同步情境行：只展示 publish / push / pull / sync 与阻塞态。
+ * 已同步时的 fetch 只走固定任务区，避免双入口。
+ */
 function syncRow(
   status: GitStatus,
   text: GitStatusDropdownText,
   remoteSyncLabel: null | string
 ): GitStatusDropdownRow | null {
   const { ahead, behind } = status.branch;
-  if (ahead === 0 && behind === 0) {
+  const decision = resolveRemoteSyncDecision(status);
+  if (decision.kind === "action" && decision.action === "publish") {
+    const republish = status.branch.upstreamGone;
+    return {
+      action: "publish",
+      icon: "publish",
+      id: "sync",
+      label: republish ? text.republish : text.publish,
+      title: republish ? text.republishDetail : text.publishDetail,
+      tone: "default",
+    };
+  }
+  // fetch 由 FIXED_TASKS 承担
+  if (decision.kind === "action" && decision.action === "fetch") {
     return null;
   }
-  const actionId = resolveRemoteSyncActionId(status);
-  const value = formatSyncValue(ahead, behind);
-  const assistiveLabel = syncAssistiveLabel(status, text);
+  const value =
+    ahead > 0 || behind > 0 ? formatSyncValue(ahead, behind) : undefined;
+  const assistiveLabel =
+    ahead > 0 || behind > 0 ? syncAssistiveLabel(status, text) : undefined;
   const caveat =
     isSyncUncertain(status) && remoteSyncLabel ? remoteSyncLabel : null;
-  if (actionId === null) {
-    const blockedByLocalChanges =
-      canUseUpstream(status) &&
-      behind > 0 &&
-      status.changeSummary.changedFiles > 0;
-    const title = blockedByLocalChanges ? text.pullBlocked : caveat;
+  if (decision.kind === "blocked") {
+    if (ahead === 0 && behind === 0) {
+      return null;
+    }
+    const title = blockReasonTitle(decision.reason, text);
     return {
       action: null,
-      assistiveLabel,
       icon: "sync",
       id: "sync",
       label: text.sync,
+      title,
       tone: "muted",
-      value,
-      ...(title ? { title } : {}),
+      ...(assistiveLabel ? { assistiveLabel } : {}),
+      ...(value ? { value } : {}),
     };
+  }
+  // publish / fetch 已提前返回
+  const actionId = decision.action;
+  if (
+    actionId !== "pull" &&
+    actionId !== "push" &&
+    actionId !== "syncChanges"
+  ) {
+    return null;
   }
   const labels = {
     pull: text.pull,
@@ -357,17 +373,17 @@ function syncRow(
   } as const satisfies Record<string, GitStatusDropdownRowIcon>;
   return {
     action: actionId,
-    assistiveLabel,
     icon: icons[actionId],
     id: "sync",
     label: labels[actionId],
     tone: "default",
-    value,
+    ...(assistiveLabel ? { assistiveLabel } : {}),
+    ...(value ? { value } : {}),
     ...(caveat ? { title: caveat } : {}),
   };
 }
 
-/** 生命周期灰化信息行：merged / upstream gone / no upstream。 */
+/** 生命周期灰化信息行：仅 merged（上游已删由「重新发布」主动作承担）。 */
 function lifecycleRows(
   status: GitStatus,
   text: GitStatusDropdownText
@@ -379,22 +395,6 @@ function lifecycleRows(
       icon: "merged",
       id: "merged",
       label: text.merged,
-      tone: "muted",
-    });
-  }
-  if (status.branch.upstreamGone) {
-    rows.push({
-      action: null,
-      icon: "upstreamGone",
-      id: "upstreamGone",
-      label: text.upstreamGone,
-      tone: "muted",
-    });
-  } else if (status.branch.branch !== null && status.branch.upstream === null) {
-    rows.push({
-      action: null,
-      id: "noUpstream",
-      label: text.noUpstream,
       tone: "muted",
     });
   }
@@ -432,6 +432,7 @@ function contextLine(
 }
 
 const FIXED_TASKS: GitStatusDropdownAction[] = [
+  { id: "fetch" },
   { id: "switchBranch" },
   { id: "switchWorktree" },
 ];
@@ -494,6 +495,6 @@ export function deriveGitStatusDropdownModel(
       ...FIXED_TASKS.map((task) => ({ ...task })),
     ],
     variant: "normal",
-    worktreePath: options.worktreePath,
+    gitRoot: options.gitRoot,
   };
 }

@@ -60,7 +60,7 @@ const KNOWN_UPSTREAM_LOCATORS = {
     kind: "source-commit",
     commit: "8b73e1a1b6b9e960304fdf9b25ea2f8cec4329a8",
   },
-  grok: { kind: "installed-version", version: "0.2.114" },
+  grok: { kind: "installed-version", version: "0.2.118" },
   hermes: {
     kind: "source-commit",
     commit: "cbecd72e976a59e4c4b8277086abaa59ab3dc510",
@@ -186,7 +186,7 @@ describe("agent status evidence matrix", () => {
     );
   });
 
-  it("Claude 系不把 PreToolUse 或无完整结果的事件伪装为 waiting", () => {
+  it("Claude 系禁止 PermissionRequest/Elicitation；waiting 仅 Pre/Post tool 工具名分发", () => {
     for (const agentId of ["claude", "openclaude"] as const) {
       const integration = AGENT_HOOK_INTEGRATIONS.find(
         (entry) => entry.id === agentId
@@ -196,18 +196,32 @@ describe("agent status evidence matrix", () => {
           (mapping) => mapping.nativeEvent === "PreToolUse"
         ),
         agentId
-      ).toEqual([{ nativeEvent: "PreToolUse", pierEvent: "ToolStart" }]);
+      ).toEqual([
+        { nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
+        { nativeEvent: "PreToolUse", pierEvent: "InteractionRequested" },
+      ]);
       expect(
-        integration?.runtime.emittedMappings.some(
-          ({ nativeEvent, pierEvent }) =>
-            ["PermissionRequest", "Elicitation", "ElicitationResult"].includes(
-              nativeEvent
-            ) ||
-            pierEvent === "InteractionRequested" ||
-            pierEvent === "InteractionResolved"
+        integration?.runtime.emittedMappings.some(({ nativeEvent }) =>
+          ["PermissionRequest", "Elicitation", "ElicitationResult"].includes(
+            nativeEvent
+          )
         ),
         agentId
       ).toBe(false);
+      // Interaction* 只允许挂在工具生命周期上（toolUseId 闭环），禁止其它原生事件。
+      for (const mapping of integration?.runtime.emittedMappings ?? []) {
+        if (
+          mapping.pierEvent === "InteractionRequested" ||
+          mapping.pierEvent === "InteractionResolved"
+        ) {
+          expect(
+            ["PreToolUse", "PostToolUse", "PostToolUseFailure"].includes(
+              mapping.nativeEvent
+            ),
+            `${agentId}:${mapping.nativeEvent}->${mapping.pierEvent}`
+          ).toBe(true);
+        }
+      }
       expect(
         integration?.runtime.emittedMappings.filter(
           (mapping) => mapping.nativeEvent === "Stop"
@@ -222,7 +236,7 @@ describe("agent status evidence matrix", () => {
         ) ?? {},
         "emittedPierEvents"
       )
-    ).toBeUndefined();
+    ).toEqual(["ToolStart", "InteractionRequested"]);
   });
 
   it("Codex waiting 只归 transcript 对账所有，hook 不重复建立权限等待", () => {

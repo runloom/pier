@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { AUTO_HIDE_SCROLLBAR_IDLE_MS } from "@pier/ui/auto-hide-scrollbar.ts";
 import {
   floatingMenuScrollViewportClassName,
+  SCROLL_FADE_REVEAL,
   ScrollArea,
   scrollFadeClassName,
+  scrollFadeUnsafeCss,
 } from "@pier/ui/scroll-area.tsx";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -116,6 +118,9 @@ describe("ScrollArea viewport behavior", () => {
     expect(
       scrollFadeClassName({ fade: "vertical", profile: "short" })
     ).toContain("scroll-fade-t-2");
+    expect(
+      scrollFadeClassName({ fade: "vertical", profile: "short" })
+    ).toContain(`[--scroll-fade-reveal:${SCROLL_FADE_REVEAL}]`);
     expect(scrollFadeClassName({ fade: "horizontal" })).toContain(
       "scroll-fade-x"
     );
@@ -131,6 +136,29 @@ describe("ScrollArea viewport behavior", () => {
     // Profile alone must not emit size tokens without a fade axis.
     expect(scrollFadeClassName({ profile: "short" })).toBe("");
     expect(scrollFadeClassName({})).toBe("");
+  });
+
+  it("emits shadow/native unsafe CSS from the same fade profile tokens", () => {
+    const shortY = scrollFadeUnsafeCss({
+      selector: "[data-test-scroll]",
+      fade: "vertical",
+      profile: "short",
+    });
+    expect(shortY).toContain("[data-test-scroll]");
+    expect(shortY).toContain("scroll-fade-reveal-t");
+    expect(shortY).toContain("scroll-fade-reveal-b");
+    expect(shortY).toContain("animation-timeline: scroll(self y)");
+    expect(shortY).toContain(`--scroll-fade-reveal: ${SCROLL_FADE_REVEAL}`);
+    expect(shortY).toContain("calc(var(--spacing, 0.25rem) * 2)");
+    expect(shortY).toContain("calc(var(--spacing, 0.25rem) * 4)");
+
+    const bottomOnly = scrollFadeUnsafeCss({
+      selector: ".end-only",
+      fade: "vertical",
+      profile: "bottom-only",
+    });
+    expect(bottomOnly).toContain("scroll-fade-reveal-b");
+    expect(bottomOnly).not.toContain("scroll-fade-reveal-t");
   });
 
   it("floating menu viewport owns short fade + inherit max height", () => {

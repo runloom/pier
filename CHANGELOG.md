@@ -4,6 +4,22 @@
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-08-05
+
+### Added
+
+- **智能体 CLI 安装与更新。** 设置页可探测、安装与更新各智能体 CLI（含 brew/npm/自更新与 fallback 链）。
+- **计划阻塞工具 waiting。** Claude / Grok / OpenClaude 等对 EnterPlanMode / ExitPlanMode / AskUserQuestion 等阻塞工具经 toolUseId 闭环上报 Interaction*。
+- **可调用技能目录。** 终端 composer 技能建议接入智能体 bundled skills 目录。
+- **Git 远端工作流收口。** 发布分支、fetch、跟踪切换与 gone upstream 再发布；差异头路径 Cmd/Ctrl+点击打开文件。
+- **文件磁盘冲突与热更新。** 打开文档实时跟磁盘；冲突横幅支持加载磁盘版/保留本地/对比。
+- **路径面包屑右键。** 复制绝对路径与相对路径（去掉文件面板前进/后退历史）。
+
+### Fixed
+
+- **文件树展开与滚动。** 路径 remint 后恢复展开；树垂直内边距与 scroll-fade 统一。
+- **CI / 类型与治理。** exactOptional 与 Linux 下 brew cask 计划测试、目录密度棘轮对齐。
+
 ## [0.1.16] - 2026-08-04
 
 ### Fixed

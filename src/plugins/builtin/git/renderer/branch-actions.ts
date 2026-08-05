@@ -49,13 +49,13 @@ function branchItem(branch: GitDiffBranchOption): BranchItem {
 
 function canUseBranchForOperation(
   branch: GitDiffBranchOption,
-  currentBranch: null | string,
-  operation: BranchOperation
+  currentBranch: null | string
 ): boolean {
   if (branch.current || branch.name === currentBranch) {
     return false;
   }
-  return operation === "switch" ? branch.kind === "local" : true;
+  // switch 允许 remote：选中后建/切本地跟踪分支（非 detached）。
+  return true;
 }
 
 function branchPickPlaceholder(
@@ -122,9 +122,7 @@ async function openBranchPick(
     return;
   }
   const items = result.items
-    .filter((branch) =>
-      canUseBranchForOperation(branch, result.currentBranch, operation)
-    )
+    .filter((branch) => canUseBranchForOperation(branch, result.currentBranch))
     .map(branchItem);
   if (items.length === 0 && operation !== "switch") {
     showInfo(
@@ -174,7 +172,7 @@ async function openBranchPick(
       if (!item) {
         return;
       }
-      await runBranchOperation(context, operation, title, cwd, item.data.name);
+      await runBranchOperation(context, operation, title, cwd, item.data);
     },
     placeholder: branchPickPlaceholder(context, operation),
     renderItem: (item) => {
@@ -205,18 +203,18 @@ async function runBranchOperation(
   operation: BranchOperation,
   title: string,
   cwd: string,
-  branch: string
+  branch: GitDiffBranchOption
 ): Promise<void> {
   try {
     if (operation === "rebase") {
-      await runRebase(context, title, cwd, branch);
+      await runRebase(context, title, cwd, branch.name);
       return;
     }
     if (operation === "switch") {
-      await runSwitchBranch(context, title, cwd, branch);
+      await runSwitchBranch(context, title, cwd, branch.name, branch.kind);
       return;
     }
-    await runMerge(context, title, cwd, branch);
+    await runMerge(context, title, cwd, branch.name);
   } catch (err) {
     await showError(context, title, err);
   }
@@ -226,24 +224,47 @@ async function runSwitchBranch(
   context: RendererPluginContext,
   title: string,
   cwd: string,
-  branch: string
+  branch: string,
+  _kind: "local" | "remote" = "local"
 ): Promise<void> {
   const loading = showLoading(
     context,
     pluginText(context, "gitLoadingSwitchBranch", "Switching branch...")
   );
   try {
-    await context.git.checkoutBranch(cwd, branch);
+    const result = await context.git.checkoutBranch(cwd, branch);
+    if (result.mode === "created-tracking" && result.remoteRef) {
+      loading.success(
+        pluginText(
+          context,
+          "gitSwitchRemoteSuccess",
+          "Switched to “{{branch}}” (tracking {{remote}})",
+          { branch: result.localName, remote: result.remoteRef }
+        )
+      );
+      return;
+    }
+    if (result.mode === "switched-existing" && result.remoteRef) {
+      // 本地已有：未改 tip/upstream，不宣称「已跟踪远程」
+      loading.success(
+        pluginText(
+          context,
+          "gitSwitchExistingLocalSuccess",
+          "Switched to local branch “{{branch}}”. It may differ from {{remote}}.",
+          { branch: result.localName, remote: result.remoteRef }
+        )
+      );
+      return;
+    }
+    loading.success(
+      pluginText(context, "gitSwitchSuccess", "Switched to branch {{branch}}", {
+        branch: result.localName,
+      })
+    );
   } catch (err) {
     loading.dismiss();
     await showError(context, title, err);
-    return;
   }
-  loading.success(
-    pluginText(context, "gitSwitchSuccess", "Switched to branch {{branch}}", {
-      branch,
-    })
-  );
 }
 
 async function runCreateAndSwitchBranch(

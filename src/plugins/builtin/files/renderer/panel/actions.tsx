@@ -19,6 +19,7 @@ import {
 
 // 顶部 chrome 的右侧信息与视图集群：状态、语言、格式和视图切换。保存由
 // Cmd+S、自动保存与关闭保护链负责，不在编辑区重复提供按钮。
+// Markdown 分屏预览不走 panel 内 split：用 dockview 多 panel 分屏即可。
 export function ResolvedFilePanelActions({
   editorSessionId,
   controller,

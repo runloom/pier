@@ -1,15 +1,22 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileWatchEvent } from "@shared/contracts/file/watch.ts";
-import {
-  FILES_AUTO_SAVE_DELAY_MS,
-  FILES_AUTO_SAVE_SETTING_KEY,
-} from "../../settings.ts";
+import { FILES_AUTO_SAVE_SETTING_KEY } from "../../settings.ts";
 import { showFileDurabilityError } from "../panel/dialog-feedback.ts";
 import type { FileSaveFeedback } from "../save/feedback.ts";
 import type { FileSaveOutcome } from "../save/outcome.ts";
 import type { FilesWatchHub } from "../watch-hub.ts";
+import { reloadDiskDocument } from "./disk-reload.ts";
 import { FilesDraftRecoveryReporter } from "./draft-recovery-reporter.ts";
+import {
+  clearAllDocumentAutoSaveTimers,
+  clearDocumentAutoSaveTimer,
+  handleDocumentStoreChangeForLiveSync,
+  handleFileWatchForLiveSync,
+  scheduleAllDirtyDocumentsForLiveSync,
+  scheduleDocumentAutoSave,
+} from "./live-sync.ts";
 import { FileDocumentLoader } from "./loader.ts";
+import { OpenDocumentReconciler } from "./open-reconcile.ts";
 import { FileDocumentPanelRegistry } from "./panel-registry.ts";
 import { isSamePathOrDescendant } from "./paths.ts";
 import { FileDocumentSaver } from "./saver.ts";
@@ -18,6 +25,7 @@ import {
   clearFilesDocumentStore,
   configureFilesDraftBackend,
   createUntitledMarkdownDocument,
+  dismissDocumentDiskConflict,
   ensureDiskDocument,
   getDocument,
   getDocumentForPanelSource,
@@ -41,11 +49,13 @@ import {
 export class FileDocumentLifecycle {
   readonly #context: RendererPluginContext;
   readonly #lastContents = new Map<string, string>();
+  readonly #lastDirty = new Map<string, boolean>();
   readonly #legacyClaims = new Map<string, Promise<void>>();
   readonly #loader: FileDocumentLoader;
   readonly #onDocumentsChanged: () => void;
   readonly #panels: FileDocumentPanelRegistry;
   readonly #draftRecoveryReporter = new FilesDraftRecoveryReporter();
+  readonly #reconciler: OpenDocumentReconciler;
   readonly #saver: FileDocumentSaver;
   readonly #saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
   #autoSaveEnabled: boolean;
@@ -74,6 +84,12 @@ export class FileDocumentLifecycle {
       onFileWatch: (event) => this.#handleFileWatch(event),
       watchHub: input.watchHub,
     });
+    this.#reconciler = new OpenDocumentReconciler({
+      context: input.context,
+      getDocumentIds: () => this.#panels.documentIds(),
+      loader: this.#loader,
+    });
+    this.#reconciler.start();
     this.#autoSaveEnabled =
       input.context.configuration.get<boolean>(FILES_AUTO_SAVE_SETTING_KEY) ===
       true;
@@ -89,7 +105,7 @@ export class FileDocumentLifecycle {
         if (this.#autoSaveEnabled) {
           this.#scheduleAllDirtyDocuments();
         } else {
-          this.#clearAllSaveTimers();
+          clearAllDocumentAutoSaveTimers(this.#saveTimers);
         }
       }
     );
@@ -178,6 +194,7 @@ export class FileDocumentLifecycle {
     });
     if (document) {
       this.#lastContents.set(document.id, document.currentContents);
+      this.#lastDirty.set(document.id, document.dirty);
       this.#scheduleAutoSave(document);
     }
     return release;
@@ -211,9 +228,27 @@ export class FileDocumentLifecycle {
     }
     this.#loader.invalidate(document.id);
     this.#saver.invalidate(document.id);
-    this.#clearSaveTimer(document.id);
+    clearDocumentAutoSaveTimer(this.#saveTimers, document.id);
     this.#lastContents.delete(document.id);
+    this.#lastDirty.delete(document.id);
     removeDocument(document.id);
+  }
+
+  async reloadDocumentFromDisk(
+    documentId: string,
+    options: { forceAdopt?: boolean } = {}
+  ): Promise<void> {
+    await reloadDiskDocument({
+      context: this.#context,
+      documentId,
+      forceAdopt: options.forceAdopt === true,
+      loader: this.#loader,
+      unavailable: this.#disposed || this.#suspending,
+    });
+  }
+
+  dismissDocumentDiskConflict(documentId: string): void {
+    dismissDocumentDiskConflict(documentId);
   }
 
   #claimLegacySource(source: FilesDocumentPanelSource): void {
@@ -238,8 +273,9 @@ export class FileDocumentLifecycle {
     this.#loader.invalidate(documentId);
     this.#saver.invalidate(documentId);
     markDocumentSaveIdle(documentId);
-    this.#clearSaveTimer(documentId);
+    clearDocumentAutoSaveTimer(this.#saveTimers, documentId);
     this.#lastContents.delete(documentId);
+    this.#lastDirty.delete(documentId);
   }
   async reconcileMovedPath(root: string, path: string): Promise<void> {
     const documents = listOpenDiskDocuments().filter(
@@ -351,7 +387,8 @@ export class FileDocumentLifecycle {
 
   async prepareSuspend(signal: AbortSignal): Promise<void> {
     this.#suspending = true;
-    this.#clearAllSaveTimers();
+    this.#reconciler.stop();
+    clearAllDocumentAutoSaveTimers(this.#saveTimers);
     try {
       await Promise.all([
         this.#loader.waitForIdle(signal),
@@ -359,6 +396,7 @@ export class FileDocumentLifecycle {
       ]);
     } catch (error) {
       this.#suspending = false;
+      this.#reconciler.start();
       this.#scheduleAllDirtyDocuments();
       throw error;
     }
@@ -366,11 +404,14 @@ export class FileDocumentLifecycle {
 
   resumeAfterSuspend(): void {
     this.#suspending = false;
+    this.#reconciler.start();
     if (this.#reloadAfterSuspend) {
       this.#reloadAfterSuspend = false;
       for (const documentId of this.#panels.documentIds()) {
         this.#loader.start(documentId, true);
       }
+    } else {
+      this.#reconciler.reconcileSoon();
     }
     this.#scheduleAllDirtyDocuments();
   }
@@ -388,7 +429,8 @@ export class FileDocumentLifecycle {
     this.#configurationDispose = null;
     this.#storeDispose?.();
     this.#storeDispose = null;
-    this.#clearAllSaveTimers();
+    clearAllDocumentAutoSaveTimers(this.#saveTimers);
+    this.#reconciler.dispose();
     this.#panels.dispose();
     this.#loader.dispose();
     this.#saver.dispose();
@@ -398,92 +440,55 @@ export class FileDocumentLifecycle {
   }
 
   #handleDocumentStoreChange(): void {
-    for (const documentId of this.#panels.documentIds()) {
-      const document = getDocument(documentId);
-      if (!document) {
-        continue;
-      }
-      const previousContents = this.#lastContents.get(document.id);
-      this.#lastContents.set(document.id, document.currentContents);
-      if (!document.dirty) {
-        this.#clearSaveTimer(document.id);
-      } else if (previousContents !== document.currentContents) {
-        this.#scheduleAutoSave(document);
-      }
-    }
+    handleDocumentStoreChangeForLiveSync({
+      autoSaveEnabled: this.#autoSaveEnabled,
+      lastContents: this.#lastContents,
+      lastDirty: this.#lastDirty,
+      loader: this.#loader,
+      panelDocumentIds: this.#panels.documentIds(),
+      panelIdForDocument: (documentId) =>
+        this.#panels.panelIdForDocument(documentId),
+      saveDocument: (documentId, panelId) =>
+        this.saveDocument(documentId, panelId),
+      saveTimers: this.#saveTimers,
+      suspending: this.#suspending,
+    });
   }
 
   #scheduleAllDirtyDocuments(): void {
-    for (const documentId of this.#panels.documentIds()) {
-      const document = getDocument(documentId);
-      if (document?.dirty) {
-        this.#scheduleAutoSave(document);
-      }
-    }
+    scheduleAllDirtyDocumentsForLiveSync({
+      autoSaveEnabled: this.#autoSaveEnabled,
+      panelDocumentIds: this.#panels.documentIds(),
+      panelIdForDocument: (documentId) =>
+        this.#panels.panelIdForDocument(documentId),
+      saveDocument: (documentId, panelId) =>
+        this.saveDocument(documentId, panelId),
+      saveTimers: this.#saveTimers,
+      suspending: this.#suspending,
+    });
   }
 
   #scheduleAutoSave(document: FilesDocument): void {
-    this.#clearSaveTimer(document.id);
-    if (
-      this.#suspending ||
-      !(this.#autoSaveEnabled && document.dirty) ||
-      document.source.kind !== "disk" ||
-      document.saveState === "saving"
-    ) {
-      return;
-    }
-    const timer = setTimeout(() => {
-      this.#saveTimers.delete(document.id);
-      this.saveDocument(
-        document.id,
-        this.#panelIdForDocument(document.id) ?? undefined
-      ).catch(() => undefined);
-    }, FILES_AUTO_SAVE_DELAY_MS);
-    this.#saveTimers.set(document.id, timer);
+    scheduleDocumentAutoSave({
+      autoSaveEnabled: this.#autoSaveEnabled,
+      document,
+      panelId: this.#panels.panelIdForDocument(document.id),
+      saveDocument: (documentId, panelId) =>
+        this.saveDocument(documentId, panelId),
+      saveTimers: this.#saveTimers,
+      suspending: this.#suspending,
+    });
   }
 
   #handleFileWatch(event: FileWatchEvent): void {
-    if (this.#suspending) {
-      this.#reloadAfterSuspend = true;
-      return;
-    }
-    const paths = event.changes.map((change) => change.path);
-    const acquired = this.#panels.documentIdsForRoot(event.root);
-    for (const document of listOpenDiskDocuments()) {
-      if (document.source.kind !== "disk" || !acquired.has(document.id)) {
-        continue;
-      }
-      const locatorPath = document.source.path;
-      const affected = paths.some(
-        (path) =>
-          path === "." ||
-          isSamePathOrDescendant(locatorPath, path) ||
-          (document.canonicalPath !== null &&
-            isSamePathOrDescendant(document.canonicalPath, path))
-      );
-      if (!affected) {
-        continue;
-      }
-      this.#loader.start(document.id, true);
-    }
-  }
-
-  #clearSaveTimer(documentId: string): void {
-    const timer = this.#saveTimers.get(documentId);
-    if (timer) {
-      clearTimeout(timer);
-      this.#saveTimers.delete(documentId);
-    }
-  }
-
-  #panelIdForDocument(documentId: string): string | null {
-    return this.#panels.panelIdForDocument(documentId);
-  }
-
-  #clearAllSaveTimers(): void {
-    for (const timer of this.#saveTimers.values()) {
-      clearTimeout(timer);
-    }
-    this.#saveTimers.clear();
+    handleFileWatchForLiveSync({
+      event,
+      loader: this.#loader,
+      markReloadAfterSuspend: () => {
+        this.#reloadAfterSuspend = true;
+      },
+      panels: this.#panels,
+      suspending: this.#suspending,
+    });
   }
 }

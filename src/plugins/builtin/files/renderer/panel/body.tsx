@@ -27,6 +27,7 @@ import {
   type MarkdownCrossModeAnchor,
 } from "../markdown/cross-mode-anchor.ts";
 import { FileImagePreview } from "../preview/image.tsx";
+import { FileDiskConflictBanner } from "./disk-conflict-banner.tsx";
 import {
   createFileEditorAdapterLabels,
   createFileSearchLabels,
@@ -40,6 +41,7 @@ import {
   ReadOnlyErrorState,
   UnsupportedFileState,
 } from "./parts.tsx";
+import { useDiskConflictActions } from "./use-disk-conflict-actions.ts";
 import { useFilePanelMarkdownChrome } from "./use-markdown-chrome.ts";
 
 export function ResolvedFilePanel({
@@ -250,6 +252,20 @@ export function ResolvedFilePanel({
     }
   }, [context, document, t]);
 
+  const {
+    handleCompareDiskConflict,
+    handleDismissDiskConflict,
+    handleLoadDiskVersion,
+  } = useDiskConflictActions({
+    controller,
+    dialogs: context?.dialogs,
+    document: document ?? null,
+    mode,
+    onModeChange,
+    panelId,
+    t,
+  });
+
   if (!document) {
     if (source.kind === "untitled") {
       return <MissingTemporaryState name={source.name} t={t} />;
@@ -376,6 +392,16 @@ export function ResolvedFilePanel({
             <AlertDescription>{document.error}</AlertDescription>
           </Alert>
         </div>
+      ) : null}
+      {document.diskConflict && document.source.kind === "disk" ? (
+        <FileDiskConflictBanner
+          canCompare={document.conflictDiskContents !== null}
+          document={document}
+          onCompare={handleCompareDiskConflict}
+          onDismiss={handleDismissDiskConflict}
+          onLoadDisk={handleLoadDiskVersion}
+          t={t}
+        />
       ) : null}
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <FileEditorAdapter

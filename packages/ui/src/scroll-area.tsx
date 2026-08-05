@@ -17,6 +17,18 @@ interface ScrollAreaProps
 }
 
 /**
+ * Shared fade token values for light-DOM Tailwind classes and Shadow/native
+ * unsafe CSS. Keep in lockstep with shadcn utilities:
+ * - short edges: `scroll-fade-t-2` / `scroll-fade-b-4` (spacing × 2 / × 4)
+ * - reveal: `[--scroll-fade-reveal:24px]`
+ */
+const SCROLL_FADE_REVEAL = "24px";
+const SCROLL_FADE_SHORT_START = "calc(var(--spacing, 0.25rem) * 2)";
+const SCROLL_FADE_SHORT_END = "calc(var(--spacing, 0.25rem) * 4)";
+const SCROLL_FADE_DEFAULT_SIZE =
+  "var(--scroll-fade-size, min(12%, calc(var(--spacing, 0.25rem) * 10)))";
+
+/**
  * Shared fade utilities for ScrollArea viewports and rare native scroll owners
  * that cannot host Radix ScrollArea (cmdk List, Radix menu content, etc.).
  * Prefer ScrollArea `viewportFade` for new product surfaces.
@@ -53,9 +65,205 @@ function scrollFadeClassName(options: {
   return cn(
     options.fade === "vertical" && "scroll-fade-y",
     options.fade === "horizontal" && "scroll-fade-x",
+    // Literals for Tailwind scan (must match SCROLL_FADE_* constants above).
     options.profile === "short" &&
       "scroll-fade-t-2 scroll-fade-b-4 [--scroll-fade-reveal:24px]"
   );
+}
+
+/**
+ * Shadow DOM / native overflow hosts cannot take Tailwind `scroll-fade-*`
+ * classes. Emit the same mask + scroll-driven animation as
+ * {@link scrollFadeClassName}, targeted at `selector`.
+ *
+ * Keyframes / `@property` stay on the document (shadcn); Shadow trees may
+ * reference them by name. Prefer this over hand-copied fade CSS in feature
+ * modules (file tree, etc.).
+ *
+ * Note: when `selector` is also the native scrollbar owner (e.g. file-tree
+ * virtualized scroll), the mask soft-fades the thumb at edges; auto-hide
+ * scrollbar policy keeps idle thumbs transparent.
+ */
+function scrollFadeUnsafeCss(options: {
+  selector: string;
+  fade: ScrollAreaViewportFade;
+  profile?: ScrollAreaViewportFadeProfile | undefined;
+}): string {
+  const { selector, fade, profile } = options;
+  if (fade === "vertical") {
+    if (profile === "bottom-only") {
+      return `
+${selector} {
+  --_scroll-fade-size-b: var(--scroll-fade-b-size, ${SCROLL_FADE_SHORT_END});
+  --scroll-fade-reveal: ${SCROLL_FADE_REVEAL};
+  --scroll-fade-mask: linear-gradient(
+    to bottom,
+    #000 0,
+    #000 calc(100% - var(--scroll-fade-b, 0px)),
+    transparent 100%
+  );
+  -webkit-mask-image: var(--scroll-fade-mask);
+  mask-image: var(--scroll-fade-mask);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+@supports (animation-timeline: scroll()) {
+  ${selector} {
+    animation: scroll-fade-reveal-b 1ms ease-in-out;
+    animation-timeline: scroll(self y);
+    animation-range: calc(100% - var(--scroll-fade-reveal, ${SCROLL_FADE_REVEAL})) 100%;
+    animation-fill-mode: both;
+  }
+}
+
+@supports not (animation-timeline: scroll()) {
+  ${selector} {
+    --scroll-fade-b: var(--_scroll-fade-size-b);
+  }
+}
+`.trim();
+    }
+
+    const sizeTDecl =
+      profile === "short"
+        ? `var(--scroll-fade-t-size, ${SCROLL_FADE_SHORT_START})`
+        : `var(--scroll-fade-t-size, ${SCROLL_FADE_DEFAULT_SIZE})`;
+    const sizeBDecl =
+      profile === "short"
+        ? `var(--scroll-fade-b-size, ${SCROLL_FADE_SHORT_END})`
+        : `var(--scroll-fade-b-size, ${SCROLL_FADE_DEFAULT_SIZE})`;
+
+    return `
+${selector} {
+  --_scroll-fade-size-t: ${sizeTDecl};
+  --_scroll-fade-size-b: ${sizeBDecl};
+  --scroll-fade-reveal: ${SCROLL_FADE_REVEAL};
+  --scroll-fade-block: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--scroll-fade-t, 0px),
+    #000 calc(100% - var(--scroll-fade-b, 0px)),
+    transparent 100%
+  );
+  -webkit-mask-image: var(--scroll-fade-mask, var(--scroll-fade-block));
+  mask-image: var(--scroll-fade-mask, var(--scroll-fade-block));
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+@supports (animation-timeline: scroll()) {
+  ${selector} {
+    animation:
+      scroll-fade-reveal-t 1ms ease-in-out,
+      scroll-fade-reveal-b 1ms ease-in-out;
+    animation-timeline: scroll(self y), scroll(self y);
+    animation-range:
+      0 var(--scroll-fade-reveal, ${SCROLL_FADE_REVEAL}),
+      calc(100% - var(--scroll-fade-reveal, ${SCROLL_FADE_REVEAL})) 100%;
+    animation-fill-mode: both;
+  }
+}
+
+@supports not (animation-timeline: scroll()) {
+  ${selector} {
+    --scroll-fade-t: var(--_scroll-fade-size-t);
+    --scroll-fade-b: var(--_scroll-fade-size-b);
+  }
+}
+`.trim();
+  }
+
+  // horizontal
+  if (profile === "bottom-only") {
+    return `
+${selector} {
+  --_scroll-fade-size-e: var(--scroll-fade-e-size, ${SCROLL_FADE_SHORT_END});
+  --scroll-fade-reveal: ${SCROLL_FADE_REVEAL};
+  --scroll-fade-mask: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--scroll-fade-e, 0px)),
+    transparent 100%
+  );
+  -webkit-mask-image: var(--scroll-fade-mask);
+  mask-image: var(--scroll-fade-mask);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+@supports (animation-timeline: scroll()) {
+  ${selector} {
+    animation: scroll-fade-reveal-e 1ms ease-in-out;
+    animation-timeline: scroll(self inline);
+    animation-range: calc(100% - var(--scroll-fade-reveal, ${SCROLL_FADE_REVEAL})) 100%;
+    animation-fill-mode: both;
+  }
+}
+
+@supports not (animation-timeline: scroll()) {
+  ${selector} {
+    --scroll-fade-e: var(--_scroll-fade-size-e);
+  }
+}
+`.trim();
+  }
+
+  const sizeS =
+    profile === "short"
+      ? `var(--scroll-fade-s-size, ${SCROLL_FADE_SHORT_START})`
+      : `var(--scroll-fade-s-size, ${SCROLL_FADE_DEFAULT_SIZE})`;
+  const sizeE =
+    profile === "short"
+      ? `var(--scroll-fade-e-size, ${SCROLL_FADE_SHORT_END})`
+      : `var(--scroll-fade-e-size, ${SCROLL_FADE_DEFAULT_SIZE})`;
+
+  return `
+${selector} {
+  --_scroll-fade-size-s: ${sizeS};
+  --_scroll-fade-size-e: ${sizeE};
+  --scroll-fade-reveal: ${SCROLL_FADE_REVEAL};
+  --scroll-fade-inline: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--scroll-fade-s, 0px),
+    #000 calc(100% - var(--scroll-fade-e, 0px)),
+    transparent 100%
+  );
+  -webkit-mask-image: var(--scroll-fade-mask, var(--scroll-fade-inline));
+  mask-image: var(--scroll-fade-mask, var(--scroll-fade-inline));
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+@supports (animation-timeline: scroll()) {
+  ${selector} {
+    animation:
+      scroll-fade-reveal-s 1ms ease-in-out,
+      scroll-fade-reveal-e 1ms ease-in-out;
+    animation-timeline: scroll(self inline), scroll(self inline);
+    animation-range:
+      0 var(--scroll-fade-reveal, ${SCROLL_FADE_REVEAL}),
+      calc(100% - var(--scroll-fade-reveal, ${SCROLL_FADE_REVEAL})) 100%;
+    animation-fill-mode: both;
+  }
+}
+
+@supports not (animation-timeline: scroll()) {
+  ${selector} {
+    --scroll-fade-s: var(--_scroll-fade-size-s);
+    --scroll-fade-e: var(--_scroll-fade-size-e);
+  }
+}
+`.trim();
 }
 
 /**
@@ -140,10 +348,12 @@ function ScrollBar({
 
 export {
   floatingMenuScrollViewportClassName,
+  SCROLL_FADE_REVEAL,
   ScrollArea,
   type ScrollAreaProps,
   type ScrollAreaViewportFade,
   type ScrollAreaViewportFadeProfile,
   ScrollBar,
   scrollFadeClassName,
+  scrollFadeUnsafeCss,
 };

@@ -11,6 +11,7 @@ import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   Check,
+  CloudDownload,
   Diff,
   Download,
   FolderGit,
@@ -19,7 +20,6 @@ import {
   GitCompareArrows,
   GitMerge,
   GitPullRequestArrow,
-  GitPullRequestClosed,
   type LucideIcon,
   RefreshCw,
   Upload,
@@ -48,6 +48,8 @@ const LINE_DELETION_SIGN = "\u2212";
 const TASK_ICONS: Record<GitStatusDropdownActionId, LucideIcon> = {
   abortOperation: X,
   continueOperation: Check,
+  fetch: CloudDownload,
+  publish: Upload,
   pull: Download,
   push: Upload,
   switchBranch: GitBranch,
@@ -67,6 +69,14 @@ const TASK_LABELS: Record<
   continueOperation: {
     fallback: "Continue",
     key: "statusRowContinueOperation",
+  },
+  fetch: {
+    fallback: "Fetch",
+    key: "statusDropdownFetch",
+  },
+  publish: {
+    fallback: "Publish Branch",
+    key: "statusDropdownPublish",
   },
   pull: {
     fallback: "Pull Changes",
@@ -107,18 +117,16 @@ const ROW_ICONS: Record<
   },
   clean: { Icon: GitCommitHorizontal, gitIcon: "git-commit-horizontal" },
   continue: { Icon: Check, gitIcon: "git-continue" },
+  fetch: { Icon: CloudDownload, gitIcon: "git-fetch" },
   merge: { Icon: GitMerge, gitIcon: "git-merge" },
   merged: { Icon: GitMerge, gitIcon: "git-merge" },
+  publish: { Icon: Upload, gitIcon: "git-publish" },
   pull: { Icon: Download, gitIcon: "git-pull" },
   push: { Icon: Upload, gitIcon: "git-push" },
   rebase: { Icon: GitPullRequestArrow, gitIcon: "git-pull-request-arrow" },
   revert: { Icon: GitCommitHorizontal, gitIcon: "git-commit-horizontal" },
   stash: { Icon: GitCommitHorizontal, gitIcon: "git-stash" },
   sync: { Icon: RefreshCw, gitIcon: "git-sync" },
-  upstreamGone: {
-    Icon: GitPullRequestClosed,
-    gitIcon: "git-pull-request-closed",
-  },
 };
 
 const ROW_TONE_CLASSES: Record<GitStatusDropdownRowTone, string> = {

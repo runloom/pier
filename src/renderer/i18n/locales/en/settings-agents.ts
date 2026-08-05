@@ -14,11 +14,20 @@ export const settingsAgents = {
     refresh: "Refresh",
     refreshSuccess: "List refreshed",
     refreshFailed: "Couldn't refresh list",
+    checkUpdates: "Check for updates",
+    checkUpdatesSuccess: "Update check finished",
+    checkUpdatesFailed: "Couldn't check for updates",
+    updateAll: "Update all",
+    updateAllDone: "Finished updating agents",
+    updateAllPartial: "Some agents could not be updated",
   },
   status: {
     detected: "Detected",
     missing: "Not installed",
     disabled: "Disabled",
+    updateAvailable: "Update available",
+    broken: "Installed but won’t run",
+    conflict: "Multiple installs",
   },
   action: {
     enable: "Enable",
@@ -30,6 +39,62 @@ export const settingsAgents = {
     websiteOpenBusy: "Another link is already opening",
     websiteOpenFailedDescription: "The agent website could not be opened.",
     websiteOpenFailedTitle: "Unable to open website",
+    install: "Install",
+    update: "Update",
+    cancel: "Cancel",
+    copyInstallCommand: "Copy install command",
+    copyInstallCommandSuccess: "Install command copied",
+    copyInstallCommandFailed: "Couldn't copy install command",
+    installFailed: "Couldn't install agent",
+    updateFailed: "Couldn't update agent",
+    installBusy: "Installing",
+    updateBusy: "Updating",
+    queueBusy: "Queued",
+    /** Multi-step only: "2/3" */
+    busyStep: "{{current}}/{{total}}",
+    /** Real tool percent only: "42%" */
+    busyPercent: "{{percent}}%",
+    rowInstallFailed: "Install failed",
+    rowInstallFailedWithStep: "Install failed ({{step}})",
+    rowUpdateFailed: "Update failed",
+    rowUpdateFailedWithStep: "Update failed ({{step}})",
+    alreadyInstalled: "Already installed",
+    conflictConfirmTitle: "Multiple installs found",
+    conflictConfirmBody:
+      "Only the install currently used by default will be updated. Other locations stay unchanged.",
+    conflictConfirmContinue: "Update default",
+  },
+  lifecycle: {
+    version: "Version",
+    latest: "Latest",
+    installGuide: "Install commands",
+    installs: "Install locations",
+    updateHint: "Update installs the latest version",
+    errors: {
+      unsupported:
+        "This agent can't be installed automatically. Use the install guide or open the website.",
+      unavailable:
+        "Install service isn't available right now. Try again later.",
+      no_command:
+        "No install command is configured for this agent on your system.",
+      command_failed:
+        "The install or update command failed. See details below.",
+      version_unchanged:
+        "The version didn't change. Another install may still be in use.",
+      not_runnable:
+        "Installed, but the command couldn't run. Check that required runtimes (for example Node.js) are set up.",
+      not_found_after_install:
+        "Install finished, but the command still wasn't found. Refresh the list or open a new terminal.",
+      already_installed: "This agent is already installed.",
+      busy: "An install or update for this agent is already running.",
+      cancelled: "Install or update was cancelled.",
+      timeout:
+        "Install or update timed out. Try again when the network is stable.",
+      env_unavailable:
+        "Couldn't prepare the shell environment. Refresh and try again.",
+      package_manager_missing:
+        "A required package manager (npm, Homebrew, pipx, or uv) was not found. Install one, then try again.",
+    },
   },
   row: {
     launchCmd: "Launch command",
@@ -39,6 +104,14 @@ export const settingsAgents = {
     commandOverrideDesc: "Override the agent binary path",
     args: "Launch args",
     argsDesc: "Args appended to the launch command",
+    installCommand: "Install command",
+    installCommandDesc:
+      "Shell command for one-click install. Leave empty to use Pier’s default (from official / package-manager channels).",
+    installCommandPlaceholder: "Leave empty for Pier’s default install steps",
+    updateCommand: "Update command",
+    updateCommandDesc:
+      "Shell command for one-click update. Leave empty to use Pier’s default (matched to how this CLI was installed).",
+    updateCommandPlaceholder: "Leave empty for Pier’s default update steps",
     env: "Launch environment",
     envDesc: "Environment variables applied to this agent",
   },

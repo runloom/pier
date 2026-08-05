@@ -17,7 +17,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       ready: "reconciled",
       processing: "native",
       tool: "native",
-      waiting: "unsupported",
+      waiting: "native",
       error: "native",
       completed: "unsupported",
       interrupted: "reconciled",
@@ -39,6 +39,10 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("processing", "PreCompact", "processing"),
       nativeFact("processing", "PostCompact", "processing"),
       nativeFact("tool", "PreToolUse", "ToolStart"),
+      // 同 Pre/Post 原生事件按 tool_name 分发；工具名单见 interactive-blocking-tools.ts
+      nativeFact("waiting", "PreToolUse", "InteractionRequested"),
+      nativeFact("waiting", "PostToolUse", "InteractionResolved"),
+      nativeFact("waiting", "PostToolUseFailure", "InteractionResolved"),
       nativeFact("error", "StopFailure", "error"),
       fact(
         "interrupted",

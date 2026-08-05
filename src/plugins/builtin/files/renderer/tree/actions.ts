@@ -238,7 +238,12 @@ function createCopyPathAction(
       group: "6_path",
       sortOrder: variant === "absolute" ? 1 : 2,
     },
-    surfaces: ["files/tree-item", "files/editor", "files/markdown-preview"],
+    surfaces: [
+      "files/tree-item",
+      "files/editor",
+      "files/markdown-preview",
+      "files/breadcrumb",
+    ],
     title: () =>
       variant === "absolute"
         ? t("filePanel.tree.action.copyPath", "Copy Path")
