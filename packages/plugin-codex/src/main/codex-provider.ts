@@ -10,6 +10,7 @@ import { parseCodexAuthJson, readCodexIdentity } from "./identity.ts";
 import {
   defaultSpawnLogin,
   hostSpawnEnv,
+  resolveClassASpawnTarget,
   type SpawnLoginFn,
 } from "./login-spawn.ts";
 import { maybeRefreshAuthJson } from "./token-refresh.ts";
@@ -40,6 +41,18 @@ export interface CreateCodexProviderOpts {
   resolveProcessEnv?: (request?: {
     cwd?: string;
   }) => Promise<{ env: Record<string, string> }>;
+  /**
+   * Host interactive-shell command resolve (absolute path when possible).
+   * Keeps plugin Class A spawns aligned with terminal functions / panel agents.
+   */
+  resolveUserCommand?: (
+    commandName: string,
+    request?: { cwd?: string }
+  ) => Promise<
+    | { kind: "absolute"; path: string }
+    | { kind: "via-shell" }
+    | { kind: "missing"; error: string }
+  >;
   /** 可注入的 login spawn 替身（单测用）。 */
   spawnLogin?: SpawnLoginFn;
 }
@@ -84,6 +97,7 @@ export function createCodexProvider(
 ): AgentAccountProvider {
   const processEnv = opts?.processEnv;
   const resolveProcessEnv = opts?.resolveProcessEnv;
+  const resolveUserCommand = opts?.resolveUserCommand;
   const realCodexHome = opts?.realCodexHome ?? defaultRealCodexHome(processEnv);
   const spawnLogin = opts?.spawnLogin ?? defaultSpawnLogin;
   const fetchUsageImpl = opts?.fetchUsageImpl ?? fetchCodexUsage;
@@ -227,8 +241,16 @@ export function createCodexProvider(
     id: "codex",
 
     async login(homeDir: string, signal: AbortSignal): Promise<void> {
-      await spawnLogin("codex", ["login"], {
-        env: await resolveHostEnv({ CODEX_HOME: homeDir }),
+      const env = await resolveHostEnv({ CODEX_HOME: homeDir });
+      const target = await resolveClassASpawnTarget(
+        "codex",
+        ["login"],
+        env,
+        resolveUserCommand,
+        homeDir
+      );
+      await spawnLogin(target.cmd, target.args, {
+        env,
         signal,
       });
     },
@@ -372,8 +394,22 @@ export function createCodexProvider(
       accountHomeDir: string | undefined,
       signal: AbortSignal
     ): Promise<AccountUsageResult> {
-      // Prefer the HTTP wham/usage endpoint over spawning a `codex
-      // app-server` child process — it is more reliable and faster.
+      const appServerFallback = async (home?: string) => {
+        const baseEnv = await resolveHostEnv();
+        const spawnTarget = await resolveClassASpawnTarget(
+          "codex",
+          ["-s", "read-only", "-a", "untrusted", "app-server"],
+          baseEnv,
+          resolveUserCommand,
+          home
+        );
+        return fetchUsageImpl(signal, {
+          baseEnv,
+          spawnTarget,
+          ...(home ? { accountHomeDir: home } : {}),
+        });
+      };
+      // Prefer HTTP wham/usage; fall back to app-server JSON-RPC.
       if (accountHomeDir && credentials) {
         return await withManagedAuth(accountHomeDir, async () => {
           const authContent = await readManagedAuth(accountHomeDir);
@@ -384,16 +420,12 @@ export function createCodexProvider(
           if (hasQuotaMetric(httpResult)) {
             return httpResult;
           }
-          // Fallback to app-server JSON-RPC when HTTP fails or returns empty.
-          const baseEnv = await resolveHostEnv();
-          const fallback = await fetchUsageImpl(signal, {
-            accountHomeDir,
-            baseEnv,
-          });
-          return mergeHttpMetadata(fallback, httpResult);
+          return mergeHttpMetadata(
+            await appServerFallback(accountHomeDir),
+            httpResult
+          );
         });
       }
-      // No managed home — try HTTP if we can read auth.json directly.
       if (accountHomeDir) {
         let httpResult: AccountUsageResult | undefined;
         try {
@@ -411,18 +443,10 @@ export function createCodexProvider(
         } catch {
           // No auth.json — fall through to app-server.
         }
-        const baseEnv = await resolveHostEnv();
-        const fallback = await fetchUsageImpl(signal, {
-          accountHomeDir,
-          baseEnv,
-        });
+        const fallback = await appServerFallback(accountHomeDir);
         return httpResult ? mergeHttpMetadata(fallback, httpResult) : fallback;
       }
-      const baseEnv = await resolveHostEnv();
-      return await fetchUsageImpl(signal, {
-        baseEnv,
-        ...(accountHomeDir ? { accountHomeDir } : {}),
-      });
+      return await appServerFallback();
     },
 
     async deleteCredential(accountHomeDir: string): Promise<void> {

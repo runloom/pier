@@ -2,9 +2,16 @@ import { execFile } from "node:child_process";
 import { platform } from "node:os";
 import { delimiter } from "node:path";
 import { AGENT_CATALOG } from "@shared/agent-catalog.ts";
-import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
+import type { DetectAgentsResult } from "@shared/contracts/agent.ts";
+import {
+  clearUserCommandResolveCache,
+  resolveAbsoluteOnPath,
+  resolveUserCommand,
+} from "../process-environment/resolve-user-command.ts";
 
 const PROBE_TIMEOUT_MS = 5000;
+/** Cap interactive escalate concurrency (PATH miss only). */
+const INTERACTIVE_ESCALATE_CONCURRENCY = 3;
 
 function uniquePathSegments(value: string): string[] {
   const seen = new Set<string>();
@@ -72,10 +79,15 @@ export interface CreateAgentDetectionServiceArgs {
   waitForHostEnv?: () => Promise<void>;
 }
 
-export function probeCommandWithEnv(
-  cmd: string,
-  env?: NodeJS.ProcessEnv
-): Promise<boolean> {
+function whichProbe(cmd: string, env?: NodeJS.ProcessEnv): Promise<boolean> {
+  // Filesystem PATH walk first (no process).
+  if (
+    env &&
+    typeof env.PATH === "string" &&
+    resolveAbsoluteOnPath(cmd, env.PATH)
+  ) {
+    return Promise.resolve(true);
+  }
   const binary = platform() === "win32" ? "where" : "which";
   return new Promise((resolve) => {
     execFile(
@@ -87,6 +99,63 @@ export function probeCommandWithEnv(
       }
     );
   });
+}
+
+/**
+ * Product detect path:
+ * 1) cheap PATH (`which` / walk)
+ * 2) only on miss: interactive resolve (functions/aliases), concurrency-capped
+ */
+export function probeCommandWithEnv(
+  cmd: string,
+  env?: NodeJS.ProcessEnv
+): Promise<boolean> {
+  return (async () => {
+    if (await whichProbe(cmd, env)) {
+      return true;
+    }
+    if (platform() === "win32" || !env) {
+      return false;
+    }
+    const stringEnv = Object.fromEntries(
+      Object.entries(env).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string"
+      )
+    );
+    const resolved = await resolveUserCommand({
+      commandName: cmd,
+      env: stringEnv,
+      shell: stringEnv.SHELL,
+      timeoutMs: PROBE_TIMEOUT_MS,
+    });
+    return resolved.kind !== "missing";
+  })();
+}
+
+async function mapPool<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function run(): Promise<void> {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      const item = items[index];
+      if (item === undefined) {
+        continue;
+      }
+      results[index] = await worker(item);
+    }
+  }
+  const runners = Array.from(
+    { length: Math.min(concurrency, Math.max(1, items.length)) },
+    () => run()
+  );
+  await Promise.all(runners);
+  return results;
 }
 
 export function createAgentDetectionService({
@@ -113,6 +182,75 @@ export function createAgentDetectionService({
     return [];
   }
 
+  async function detectOnce(): Promise<DetectAgentsResult> {
+    const env = getEnv ? await getEnv() : undefined;
+
+    // Collect unique command names across catalog.
+    const names = new Set<string>();
+    for (const entry of AGENT_CATALOG) {
+      names.add(entry.detectCmd);
+      for (const alias of entry.detectCmdAliases ?? []) {
+        names.add(alias);
+      }
+    }
+    const nameList = [...names];
+
+    // Phase 1: cheap PATH for all names (no interactive shells).
+    const pathHits = new Set<string>();
+    await Promise.all(
+      nameList.map(async (name) => {
+        if (await whichProbe(name, env)) {
+          pathHits.add(name);
+        }
+      })
+    );
+
+    // Phase 2: interactive escalate only for PATH misses (capped concurrency).
+    const misses = nameList.filter((name) => !pathHits.has(name));
+    const interactiveHits = new Set<string>();
+    if (misses.length > 0 && platform() !== "win32" && env) {
+      const stringEnv = Object.fromEntries(
+        Object.entries(env).filter(
+          (entry): entry is [string, string] => typeof entry[1] === "string"
+        )
+      );
+      await mapPool(misses, INTERACTIVE_ESCALATE_CONCURRENCY, async (name) => {
+        // Custom probe injection still goes through probeImpl for tests.
+        if (probe) {
+          if (await probeImpl(name, env)) {
+            interactiveHits.add(name);
+          }
+          return;
+        }
+        const resolved = await resolveUserCommand({
+          commandName: name,
+          env: stringEnv,
+          shell: stringEnv.SHELL,
+          timeoutMs: PROBE_TIMEOUT_MS,
+        });
+        if (resolved.kind !== "missing") {
+          interactiveHits.add(name);
+        }
+      });
+    } else if (misses.length > 0 && probe) {
+      await mapPool(misses, INTERACTIVE_ESCALATE_CONCURRENCY, async (name) => {
+        if (await probeImpl(name, env)) {
+          interactiveHits.add(name);
+        }
+      });
+    }
+
+    const present = (name: string) =>
+      pathHits.has(name) || interactiveHits.has(name);
+
+    const detectedIds = AGENT_CATALOG.filter((entry) => {
+      const cmds = [entry.detectCmd, ...(entry.detectCmdAliases ?? [])];
+      return cmds.some((c) => present(c));
+    }).map((entry) => entry.id);
+
+    return { detectedIds };
+  }
+
   async function detect(): Promise<DetectAgentsResult> {
     await ready();
     if (cachedResult) {
@@ -120,16 +258,7 @@ export function createAgentDetectionService({
     }
     if (!detectInFlight) {
       detectInFlight = (async () => {
-        const env = getEnv ? await getEnv() : undefined;
-        const checks = await Promise.all(
-          AGENT_CATALOG.map(async (entry) => {
-            const cmds = [entry.detectCmd, ...(entry.detectCmdAliases ?? [])];
-            const hits = await Promise.all(cmds.map((c) => probeImpl(c, env)));
-            return hits.some(Boolean) ? entry.id : null;
-          })
-        );
-        const detectedIds = checks.filter((id): id is AgentKind => id !== null);
-        cachedResult = { detectedIds };
+        cachedResult = await detectOnce();
         return cachedResult;
       })().finally(() => {
         detectInFlight = null;
@@ -149,6 +278,8 @@ export function createAgentDetectionService({
       }
       const added = await ready();
       cachedResult = null;
+      // Drop command-resolve cache so install → refresh sees new CLIs / functions.
+      clearUserCommandResolveCache();
       const detectResult = await detect();
       return { ...detectResult, addedPathSegments: added };
     },

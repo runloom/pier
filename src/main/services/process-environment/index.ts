@@ -25,6 +25,31 @@ export {
 } from "./notify-failure.ts";
 export type { ResolveProjectEnvForSpawnInput } from "./resolve-project-env.ts";
 export { resolveProjectEnvForSpawn } from "./resolve-project-env.ts";
+export type {
+  ResolvedUserCommand,
+  ResolveUserCommandRequest,
+} from "./resolve-user-command.ts";
+export {
+  agentShellCommandFlags,
+  buildResolvedAgentSurfaceCommand,
+  buildStickyExportPrelude,
+  buildUserCommandProbeScript,
+  clearUserCommandResolveCache,
+  DETECT_COMMAND_RESOLVE_TIMEOUT_MS,
+  extractBareCommandName,
+  extractProbeProtocolBody,
+  isAlreadyShellWrappedCommand,
+  PANEL_COMMAND_RESOLVE_TIMEOUT_MS,
+  PIER_CMD_END,
+  PIER_CMD_START,
+  parseUserCommandProbeOutput,
+  quoteShellArg,
+  resolveAbsoluteOnPath,
+  resolveManyAbsoluteOnPath,
+  resolveUserCommand,
+  resolveWrapperShell,
+  shellFamily,
+} from "./resolve-user-command.ts";
 export {
   createProcessEnvironmentService,
   stubProcessEnvironmentService,

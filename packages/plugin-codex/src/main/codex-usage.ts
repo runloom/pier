@@ -39,6 +39,11 @@ export function fetchCodexUsage(
     accountHomeDir?: string;
     /** Host-hydrated env (shell-env parity); falls back to process.env. */
     baseEnv?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+    /**
+     * Spawn target after host user-command resolve.
+     * Default: bare `codex` + app-server args.
+     */
+    spawnTarget?: { args: string[]; cmd: string };
     spawnImpl?: SpawnFn;
   }
 ): Promise<AccountUsageResult> {
@@ -47,27 +52,27 @@ export function fetchCodexUsage(
   }
   const spawnImpl = opts?.spawnImpl ?? spawn;
   const baseEnv = opts?.baseEnv ?? process.env;
+  const spawnTarget = opts?.spawnTarget ?? {
+    args: ["-s", "read-only", "-a", "untrusted", "app-server"],
+    cmd: "codex",
+  };
 
   return new Promise<AccountUsageResult>((resolve) => {
     let buffer = "";
     let resolved = false;
     let rpcId = 0;
 
-    // Class A: spawn codex with host-hydrated env when baseEnv is provided.
-    const child = spawnImpl(
-      "codex",
-      ["-s", "read-only", "-a", "untrusted", "app-server"],
-      {
-        stdio: ["pipe", "pipe", "pipe"],
-        windowsHide: true,
-        env: opts?.accountHomeDir
-          ? ({
-              ...baseEnv,
-              CODEX_HOME: opts.accountHomeDir,
-            } as NodeJS.ProcessEnv)
-          : (baseEnv as NodeJS.ProcessEnv),
-      }
-    );
+    // Class A: host-hydrated env + resolved bin / via-shell target.
+    const child = spawnImpl(spawnTarget.cmd, spawnTarget.args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+      env: opts?.accountHomeDir
+        ? ({
+            ...baseEnv,
+            CODEX_HOME: opts.accountHomeDir,
+          } as NodeJS.ProcessEnv)
+        : (baseEnv as NodeJS.ProcessEnv),
+    });
 
     let timeout: ReturnType<typeof setTimeout> | null = null;
 

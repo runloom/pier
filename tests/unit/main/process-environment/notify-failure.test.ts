@@ -33,6 +33,22 @@ describe("shell env failure notify", () => {
     expect(formatShellEnvFailureCopy("zh-CN").body.length).toBeGreaterThan(10);
   });
 
+  it("appends concrete error detail to body", () => {
+    const zh = formatShellEnvFailureCopy("zh-CN", "timed out after 10000ms");
+    expect(zh.body).toContain("原因：");
+    expect(zh.body).toContain("timed out after 10000ms");
+    const en = formatShellEnvFailureCopy("en", "exited with 1");
+    expect(en.body).toContain("Cause:");
+    expect(en.body).toContain("exited with 1");
+  });
+
+  it("truncates long failure detail", () => {
+    const long = "x".repeat(500);
+    const copy = formatShellEnvFailureCopy("en", long);
+    expect(copy.body.length).toBeLessThan(500);
+    expect(copy.body).toContain("…");
+  });
+
   it("stays pending until focused window exists, then ingests once", async () => {
     let focused: unknown | null = null;
     const ingest = vi.fn();
@@ -40,7 +56,10 @@ describe("shell env failure notify", () => {
       bootId: "boot-test",
       getFocusedWindow: () => focused,
       ingest,
-      resolveCopy: () => ({ body: "b", title: "t" }),
+      resolveCopy: (diagnostics) => ({
+        body: diagnostics.error ?? "b",
+        title: "t",
+      }),
     });
 
     controller.onShellEnvFailed({

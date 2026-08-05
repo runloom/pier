@@ -50,20 +50,29 @@ function savedRunningDevSession(): TerminalPanelSession {
 }
 
 describe("wrapAgentTerminalCommand", () => {
-  it("wraps agent binary under /bin/sh -lc for login-safe argv0", () => {
-    expect(wrapAgentTerminalCommand("copilot --yolo")).toBe(
-      "/bin/sh -lc 'copilot --yolo'"
+  it("sync fallback wraps under user shell -lic", () => {
+    expect(wrapAgentTerminalCommand("copilot --yolo", "/bin/zsh")).toBe(
+      "/bin/zsh -lic 'copilot --yolo'"
+    );
+    expect(wrapAgentTerminalCommand("codex", "/bin/zsh")).toBe(
+      "/bin/zsh -lic codex"
+    );
+    expect(wrapAgentTerminalCommand("codex", "/opt/homebrew/bin/fish")).toBe(
+      "/opt/homebrew/bin/fish -l -i -c codex"
     );
   });
 
   it("is idempotent for already-wrapped and Ghostty-prefixed commands", () => {
-    const wrapped = wrapAgentTerminalCommand("copilot --yolo");
-    expect(wrapAgentTerminalCommand(wrapped)).toBe(wrapped);
+    const wrapped = wrapAgentTerminalCommand("copilot --yolo", "/bin/zsh");
+    expect(wrapAgentTerminalCommand(wrapped, "/bin/zsh")).toBe(wrapped);
     expect(wrapAgentTerminalCommand("shell:copilot --yolo")).toBe(
       "shell:copilot --yolo"
     );
     expect(wrapAgentTerminalCommand("direct:copilot --yolo")).toBe(
       "direct:copilot --yolo"
+    );
+    expect(wrapAgentTerminalCommand("/bin/sh -c 'exec /x'", "/bin/zsh")).toBe(
+      "/bin/sh -c 'exec /x'"
     );
   });
 });
@@ -104,23 +113,23 @@ describe("terminal create launch options", () => {
     });
   });
 
-  it("last-mile wraps agent spawn command without mutating non-agent launches", () => {
-    expect(
-      withAgentLoginShellSafeCommand(
-        {
-          agentId: "copilot",
-          command: "copilot --yolo",
-          cwd: "/tmp/pier",
+  it("last-mile wraps agent spawn command without mutating non-agent launches", async () => {
+    const wrapped = await withAgentLoginShellSafeCommand(
+      {
+        agentId: "copilot",
+        command: "copilot --yolo",
+        cwd: "/tmp/pier",
+        env: {
+          PATH: "/usr/bin:/bin",
+          SHELL: "/bin/zsh",
         },
-        "copilot"
-      )
-    ).toEqual({
-      agentId: "copilot",
-      command: "/bin/sh -lc 'copilot --yolo'",
-      cwd: "/tmp/pier",
-    });
+      },
+      "copilot"
+    );
+    expect(wrapped?.command).toMatch(/^(\/bin\/sh -c |\/bin\/zsh -lic )/);
+    expect(wrapped?.cwd).toBe("/tmp/pier");
     expect(
-      withAgentLoginShellSafeCommand(
+      await withAgentLoginShellSafeCommand(
         { command: "pnpm test", cwd: "/tmp/pier" },
         undefined
       )
@@ -412,7 +421,7 @@ describe("terminal create launch options", () => {
     }
   });
 
-  it("restores a previously running agent panel by relaunching the saved agent command", () => {
+  it("restores a previously running agent panel by relaunching the saved agent command", async () => {
     const saved = {
       agent: {
         agentId: "claude",
@@ -444,9 +453,20 @@ describe("terminal create launch options", () => {
       cwd: "/tmp/pier",
     });
     // Spawn boundary still wraps for Ghostty login argv0 safety.
-    expect(
-      withAgentLoginShellSafeCommand(result.nativeLaunch, result.launchAgentId)
-        ?.command
-    ).toBe("/bin/sh -lc 'claude --dangerously-skip-permissions'");
+    const spawnCommand = (
+      await withAgentLoginShellSafeCommand(
+        {
+          ...result.nativeLaunch,
+          env: {
+            ...(result.nativeLaunch?.env ?? {}),
+            PATH: "/usr/bin:/bin",
+            SHELL: "/bin/zsh",
+          },
+        },
+        result.launchAgentId
+      )
+    )?.command;
+    expect(spawnCommand).toMatch(/^(\/bin\/sh -c |\/bin\/zsh -lic )/);
+    expect(spawnCommand).toContain("claude");
   });
 });

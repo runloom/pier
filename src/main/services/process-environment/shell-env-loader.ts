@@ -51,6 +51,42 @@ export function shellEnvCommand(): string {
   ].join("; ");
 }
 
+/**
+ * Prefer a successful marker parse over exit status.
+ * Interactive shells often leave non-zero status (setopt/zle noise, last
+ * pipeline in rc) even after env -0 printed cleanly — rejecting that caused
+ * false "无法加载 shell 环境" toasts on otherwise good dumps.
+ */
+export function tryParseShellEnvironmentOutput(
+  output: Buffer
+): Environment | null {
+  try {
+    return parseShellEnvironmentOutput(output);
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback floor after a timed-out primary so -c still gets a real attempt. */
+export const FALLBACK_TIMEOUT_FLOOR_MS = 3000;
+
+/**
+ * Primary shares the overall deadline. If almost nothing remains (typical after
+ * -lic timeout), give fallback a short independent floor so fish / broken -lic
+ * and "hung after dump" cases can still recover via -c.
+ */
+export function fallbackTimeoutMs(
+  deadlineMs: number,
+  totalTimeoutMs: number,
+  now = Date.now()
+): number {
+  const remaining = remainingTimeoutMs(deadlineMs, now);
+  if (remaining > 500) {
+    return remaining;
+  }
+  return Math.min(FALLBACK_TIMEOUT_FLOOR_MS, Math.max(1, totalTimeoutMs));
+}
+
 function runShellDump({
   args,
   baseEnv,
@@ -93,7 +129,15 @@ function runShellDump({
       clearTimeout(timer);
       reject(error);
     };
+    const collectedStdout = () => Buffer.concat(stdout);
     const timer = setTimeout(() => {
+      // Hang after dump is common; parse whatever we already have before kill.
+      const parsed = tryParseShellEnvironmentOutput(collectedStdout());
+      if (parsed) {
+        child.kill();
+        finish(parsed);
+        return;
+      }
       child.kill();
       fail(new Error(`shell environment timed out after ${timeoutMs}ms`));
     }, timeoutMs);
@@ -104,21 +148,28 @@ function runShellDump({
       if (settled) {
         return;
       }
-      if (code !== 0) {
-        const message = Buffer.concat(stderr).toString("utf8").trim();
-        fail(
-          new Error(
-            message
-              ? `shell environment exited with ${code}: ${message}`
-              : `shell environment exited with ${code}`
-          )
-        );
-        return;
-      }
+      const buf = collectedStdout();
       try {
-        finish(parseShellEnvironmentOutput(Buffer.concat(stdout)));
-      } catch (error) {
-        fail(error instanceof Error ? error : new Error(String(error)));
+        // Accept dump even when shell exit !== 0 (rc noise / zle / last status).
+        finish(parseShellEnvironmentOutput(buf));
+        return;
+      } catch (parseError) {
+        if (code !== 0 && code !== null) {
+          const message = Buffer.concat(stderr).toString("utf8").trim();
+          fail(
+            new Error(
+              message
+                ? `shell environment exited with ${code}: ${message}`
+                : `shell environment exited with ${code}`
+            )
+          );
+          return;
+        }
+        fail(
+          parseError instanceof Error
+            ? parseError
+            : new Error(String(parseError))
+        );
       }
     });
   });
@@ -157,15 +208,14 @@ export function createDefaultShellEnvironmentLoader({
         status: "resolved",
       } satisfies ShellEnvironmentLoadResult;
     } catch (primaryError) {
-      // fish / nushell / broken -lic: one non-login fallback dump.
-      // Share the same overall deadline so primary + fallback never double budget.
+      // fish / nushell / broken or timed-out -lic: one non-login fallback dump.
       try {
         const env = await runShellDump({
           args: ["-c", command],
           baseEnv,
           cwd,
           shell,
-          timeoutMs: remainingTimeoutMs(deadlineMs),
+          timeoutMs: fallbackTimeoutMs(deadlineMs, totalTimeoutMs),
         });
         return {
           dumpMode: "non-login-fallback",

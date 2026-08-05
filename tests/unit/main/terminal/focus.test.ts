@@ -518,9 +518,10 @@ describe("terminal focus restoration", () => {
       expect.anything(),
       expect.anything(),
       expect.objectContaining({
-        // Last-mile login-shell wrap; logical command stays unwrapped in session.
-        command:
-          "/bin/sh -lc 'claude --dangerously-skip-permissions --resume session-123'",
+        // Last-mile resolve: thin sh -c exec /abs or zsh -lic + sticky + command.
+        command: expect.stringMatching(
+          /claude --dangerously-skip-permissions --resume session-123/
+        ),
       }),
       expect.any(String),
       3

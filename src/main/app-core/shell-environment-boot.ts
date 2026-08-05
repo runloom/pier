@@ -61,10 +61,10 @@ export function createShellEnvironmentBoot(
     bootId: shellEnvBootId,
     getFocusedWindow: input.getFocusedWindow,
     ingest: input.ingestNotification,
-    resolveCopy: async () => {
+    resolveCopy: async (diagnostics) => {
       // Main has no i18n runtime — resolve locale at deliver time (app-update pattern).
       const locale = await resolveAppUpdateUiLocale();
-      return formatShellEnvFailureCopy(locale);
+      return formatShellEnvFailureCopy(locale, diagnostics.error);
     },
   });
   input.onWindowFocus(() => {

@@ -318,6 +318,11 @@ export async function handleTerminalCreate(args: {
       terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
       return { ok: true };
     }
+    // Last-mile agent resolve + thin wrap (do not persist this form).
+    const launchForCreate = await withAgentLoginShellSafeCommand(
+      launchForNative,
+      launch.launchAgentId
+    );
     const ok = await createTerminalAndSeedResource({
       create: () =>
         addon.createTerminal(
@@ -326,12 +331,8 @@ export async function handleTerminalCreate(args: {
           createArgs.frame,
           createArgs.font.family,
           createArgs.font.size,
-          // Last-mile agent login-shell wrap (do not persist this form).
           withPanelStatusEnv(
-            withAgentLoginShellSafeCommand(
-              launchForNative,
-              launch.launchAgentId
-            ),
+            launchForCreate,
             createArgs.panelId,
             String(win.id),
             foregroundActivityService.hookEnv()

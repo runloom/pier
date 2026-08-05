@@ -1,6 +1,8 @@
 import { userInfo } from "node:os";
+import { createLogger } from "@shared/logger.ts";
 import { applyHostProcessEnv } from "./apply-host-env.ts";
 import { cleanEnv, mergeEnv } from "./clean-env.ts";
+import { clearUserCommandResolveCache } from "./resolve-user-command.ts";
 import {
   createDefaultShellEnvironmentLoader,
   DEFAULT_SHELL_ENV_TIMEOUT_MS,
@@ -21,6 +23,7 @@ export type {
   ProcessEnvironmentService,
 } from "./types.ts";
 
+const log = createLogger("process-env");
 const NEGATIVE_CACHE_TTL_MS = 30_000;
 
 interface NegativeCacheEntry {
@@ -64,7 +67,8 @@ function warnDiagnostics(diagnostics: ProcessEnvironmentDiagnostics): void {
   if (diagnostics.shellEnvStatus !== "failed") {
     return;
   }
-  console.warn("[process-env] shell environment failed", {
+  // Structured log → diagnostics jsonl (console.warn was invisible in support).
+  log.warn("shell environment failed", {
     cwd: diagnostics.cwd,
     dumpMode: diagnostics.dumpMode,
     error: diagnostics.error,
@@ -273,6 +277,7 @@ export function createProcessEnvironmentService({
       successCache.clear();
       negativeCache.clear();
       inFlight.clear();
+      clearUserCommandResolveCache();
       if (!(opts?.reapplyHost && shell) || platform === "win32") {
         return hostDiagnostics;
       }

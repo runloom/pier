@@ -28,18 +28,41 @@ export function shellEnvFailureDedupeKey(bootId: string): string {
 }
 
 /** Match renderer `notificationsCenter.shellEnv.*` (main has no i18n runtime). */
-export function formatShellEnvFailureCopy(locale: ShellEnvUiLocale): {
+const DETAIL_MAX_CHARS = 280;
+
+function sanitizeFailureDetail(detail: string): string {
+  const oneLine = detail
+    .replaceAll("\r", " ")
+    .replaceAll("\n", " ")
+    .replaceAll("\0", "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  if (oneLine.length <= DETAIL_MAX_CHARS) {
+    return oneLine;
+  }
+  return `${oneLine.slice(0, DETAIL_MAX_CHARS - 1)}…`;
+}
+
+export function formatShellEnvFailureCopy(
+  locale: ShellEnvUiLocale,
+  detail?: string | undefined
+): {
   body: string;
   title: string;
 } {
+  const detailLine = detail?.trim() ? sanitizeFailureDetail(detail) : undefined;
   if (locale === "zh-CN") {
+    const base =
+      "任务和智能体可能使用与终端不同的 Node 或 PATH。请打开设置 → 终端查看状态，并确认 shell 在非交互启动时不会卡住或弹提示。";
     return {
-      body: "任务和智能体可能使用与终端不同的 Node 或 PATH。请打开设置 → 终端查看状态，并确认 shell 在非交互启动时不会卡住或弹提示。",
+      body: detailLine ? `${base}\n\n原因：${detailLine}` : base,
       title: "无法加载 shell 环境",
     };
   }
+  const base =
+    "Tasks and agents may use a different Node or PATH than your terminal. Open Settings → Terminal to check status, or make sure your shell starts cleanly without prompts.";
   return {
-    body: "Tasks and agents may use a different Node or PATH than your terminal. Open Settings → Terminal to check status, or make sure your shell starts cleanly without prompts.",
+    body: detailLine ? `${base}\n\nCause: ${detailLine}` : base,
     title: "Couldn't load shell environment",
   };
 }
@@ -49,8 +72,13 @@ export interface ShellEnvFailureNotifyDeps {
   bootId: string;
   getFocusedWindow: () => unknown | null;
   ingest: (report: NotificationReport) => void;
-  /** Resolved UI strings (main has no i18n; app-core supplies from prefs locale). */
-  resolveCopy: () =>
+  /**
+   * Resolved UI strings (main has no i18n; app-core supplies from prefs locale).
+   * Receives failure diagnostics so body can include the concrete error.
+   */
+  resolveCopy: (
+    diagnostics: ProcessEnvironmentDiagnostics
+  ) =>
     | { body: string; title: string }
     | Promise<{ body: string; title: string }>;
 }
@@ -105,10 +133,11 @@ export function createShellEnvFailureNotify(
     if (deps.getFocusedWindow() == null) {
       return;
     }
+    const diagnostics = pendingDiagnostics;
     delivering = true;
     Promise.resolve()
       .then(async () => {
-        const copy = await deps.resolveCopy();
+        const copy = await deps.resolveCopy(diagnostics);
         if (delivered || !pendingDiagnostics) {
           return;
         }

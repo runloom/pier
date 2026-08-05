@@ -6,6 +6,9 @@ export type SpawnLoginFn = (
   opts: { env: Record<string, string | undefined>; signal: AbortSignal }
 ) => Promise<void>;
 
+export type { ResolveUserCommandFn } from "@pier/plugin-api/resolve-class-a-command";
+export { resolveClassASpawnTarget } from "@pier/plugin-api/resolve-class-a-command";
+
 /** Merge host-resolved shell env with optional spawn overrides (Class A). */
 export async function hostSpawnEnv(
   resolveProcessEnv:
