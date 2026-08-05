@@ -353,17 +353,20 @@ function FilePanelContent({
     onSidebarAutoCollapse: () => setTreeCollapsed(true),
     sidebar,
   };
+  const breadcrumbContextMenu = filesBreadcrumbContextMenuHandler({
+    context: runtimeContext,
+    ...(props.params?.context ? { panelContext: props.params.context } : {}),
+    ...(props.api?.id ? { panelId: props.api.id } : {}),
+    source: sourceFromParams,
+    t,
+  });
   const diskBreadcrumb =
     sourceFromParams == null ? null : (
       <FilePanelBreadcrumb
         ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
-        onContextMenu={filesBreadcrumbContextMenuHandler({
-          context: runtimeContext,
-          panelContext: props.params?.context,
-          ...(props.api?.id ? { panelId: props.api.id } : {}),
-          source: sourceFromParams,
-          t,
-        })}
+        {...(breadcrumbContextMenu
+          ? { onContextMenu: breadcrumbContextMenu }
+          : {})}
         onSegmentClick={(index) =>
           handleBreadcrumbClick(index, sourceFromParams)
         }

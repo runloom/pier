@@ -188,7 +188,9 @@ export function pierHookCommandV3(spec: PierHookCommandV3Spec): string {
  * 所有表达式受信任（仅固定字面量或本命令内赋值的 `$_pier_*`）。
  */
 export function pierHookCommandV3ShellDispatched(
-  spec: PierHookCommandV3CommonSpec & {
+  spec: Omit<PierHookCommandV3CommonSpec, "actorHint"> & {
+    /** Shell 变量/字面量均可（如 `$_pier_actor_hint`）。 */
+    actorHint?: string;
     event: string;
     interactionId?: string;
     interactionKind?: string;

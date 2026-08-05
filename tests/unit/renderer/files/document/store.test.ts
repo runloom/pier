@@ -972,7 +972,6 @@ describe("files-document-store", () => {
     const base = {
       currentContents: "# same\n",
       deletedOnDisk: true,
-      dirty: true,
       durabilityUnknown: false,
       savedContents: "# same\n",
     };
@@ -1024,7 +1023,6 @@ describe("files-document-store", () => {
       protectsLocalBufferFromDisk({
         currentContents: "# local\n",
         deletedOnDisk: false,
-        dirty: true,
         durabilityUnknown: false,
         savedContents: "# same\n",
       })

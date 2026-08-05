@@ -313,7 +313,7 @@ export function FilesGroupView({
     !isDiskSourceRootAllowed(selectedSource.root, panelContext);
   const breadcrumbContextMenu = filesBreadcrumbContextMenuHandler({
     context,
-    panelContext,
+    ...(panelContext ? { panelContext } : {}),
     ...(activeTab?.panelId ? { panelId: activeTab.panelId } : {}),
     source: selectedSource,
     t,
@@ -327,7 +327,9 @@ export function FilesGroupView({
     center = (
       <FilePanelBreadcrumb
         ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
-        onContextMenu={breadcrumbContextMenu}
+        {...(breadcrumbContextMenu
+          ? { onContextMenu: breadcrumbContextMenu }
+          : {})}
         segments={breadcrumbSegmentsForSource(selectedSource, projectName)}
       />
     );
@@ -374,7 +376,9 @@ export function FilesGroupView({
     center = (
       <FilePanelBreadcrumb
         ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
-        onContextMenu={breadcrumbContextMenu}
+        {...(breadcrumbContextMenu
+          ? { onContextMenu: breadcrumbContextMenu }
+          : {})}
         onSegmentClick={handleBreadcrumbClick}
         segments={breadcrumbSegmentsForSource(selectedSource, projectName)}
       />

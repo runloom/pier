@@ -74,7 +74,7 @@ export function filesBreadcrumbContextMenuHandler(input: {
     openFilesBreadcrumbContextMenu({
       context,
       event,
-      panelContext,
+      ...(panelContext ? { panelContext } : {}),
       ...(panelId ? { panelId } : {}),
       source,
       t,

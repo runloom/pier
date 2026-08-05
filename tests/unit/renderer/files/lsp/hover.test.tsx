@@ -153,6 +153,7 @@ function textDocument(
     format: { bom: false, encoding: "utf8" },
     kind: "text",
     mode: null,
+    mtimeMs: 1,
     path: canonicalPath,
     revision: `revision-${canonicalPath}`,
     root,

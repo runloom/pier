@@ -18,6 +18,7 @@ export interface AgentStatusTraceExpectedEventFields {
   readonly nativeState?: string;
   readonly parentSessionId?: string;
   readonly sessionId?: string;
+  readonly toolName?: string;
   readonly toolUseId?: string;
   readonly turnId?: string;
 }
