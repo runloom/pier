@@ -12,10 +12,11 @@ import type {
 } from "@shared/contracts/agent/lifecycle.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { BusyError, LifecycleLocks } from "./locks.ts";
-import { planLifecycle } from "./plan.ts";
+import type { PlannedPlan } from "./plan/types.ts";
+import { planLifecycle, previewPlan } from "./plan.ts";
 import { probeAgents, probeOneAgent } from "./probe.ts";
 import { createNodeLifecycleRunner } from "./runner/node.ts";
-import type { LifecycleRunner } from "./runner/types.ts";
+import type { LifecycleRunner, LifecycleRunResult } from "./runner/types.ts";
 import { getAgentLifecycleSpec } from "./specs/index.ts";
 import { wslDistroFromPath } from "./wsl.ts";
 export interface AgentLifecycleService {
@@ -76,6 +77,9 @@ function fail(
 function hostKind(): "posix" | "win" {
   return platform() === "win32" ? "win" : "posix";
 }
+
+/** Bare package-manager bins in planned argv steps (not self CLI paths). */
+const PACKAGE_MANAGER_STEP_FILES = new Set(["npm", "brew", "pipx", "uv"]);
 
 export function createAgentLifecycleService(
   options: CreateAgentLifecycleServiceOptions
@@ -224,69 +228,105 @@ export function createAgentLifecycleService(
       return fail(agentId, action, "cancelled", { runId });
     }
 
-    const result = await runner.run(planned, {
-      env,
-      signal,
-      onProgress: (step) => {
-        options.onProgress?.({
-          action,
-          agentId,
+    // Runner stops at first exit 0. Self-upgrades (e.g. `opencode upgrade`)
+    // often exit 0 with "already installed" without bumping version — continue
+    // remaining fallbacks so npm/brew/reinstall can still apply.
+    const fullStepCount = planned.steps.length;
+    let stepOffset = 0;
+    let activePlan: PlannedPlan = planned;
+    let after = before;
+
+    for (;;) {
+      const result: LifecycleRunResult = await runner.run(activePlan, {
+        env,
+        signal,
+        onProgress: (step) => {
+          options.onProgress?.({
+            action,
+            agentId,
+            runId,
+            stepIndex: stepOffset + step.stepIndex,
+            stepCount: fullStepCount,
+            label: step.label,
+            ...(step.percent === undefined ? {} : { percent: step.percent }),
+          });
+        },
+      });
+      if (result.cancelled || signal.aborted) {
+        return fail(agentId, action, "cancelled", {
           runId,
-          stepIndex: step.stepIndex,
-          stepCount: step.stepCount,
-          label: step.label,
-          ...(step.percent === undefined ? {} : { percent: step.percent }),
+          commandPreview: planned.preview,
         });
-      },
-    });
-    if (result.cancelled || signal.aborted) {
-      return fail(agentId, action, "cancelled", {
-        runId,
-        commandPreview: planned.preview,
-      });
-    }
-    if (result.timedOut) {
-      return fail(agentId, action, "timeout", {
-        runId,
-        commandPreview: planned.preview,
-        errorDetail: result.stderr || undefined,
-      });
-    }
-    if (result.packageManagerMissing) {
-      return fail(agentId, action, "package_manager_missing", {
-        runId,
-        commandPreview: planned.preview,
-        errorDetail: result.stderr || undefined,
-      });
-    }
-    if (!result.ok) {
-      const detail = result.stderr?.trim() || planned.preview || undefined;
-      return fail(agentId, action, "command_failed", {
-        runId,
-        commandPreview: planned.preview,
-        errorDetail: detail,
-      });
-    }
+      }
+      if (result.timedOut) {
+        return fail(agentId, action, "timeout", {
+          runId,
+          commandPreview: planned.preview,
+          errorDetail: result.stderr || undefined,
+        });
+      }
+      if (result.packageManagerMissing) {
+        return fail(agentId, action, "package_manager_missing", {
+          runId,
+          commandPreview: planned.preview,
+          errorDetail: result.stderr || undefined,
+        });
+      }
+      if (!result.ok) {
+        const detail = result.stderr?.trim() || planned.preview || undefined;
+        return fail(agentId, action, "command_failed", {
+          runId,
+          commandPreview: planned.preview,
+          errorDetail: detail,
+        });
+      }
 
-    const after = await probeOne(agentId, env, {
-      deep: true,
-      checkLatest: false,
-      envDegraded: false,
-    });
-
-    if (
-      action === "update" &&
-      before.updateMode === "versioned" &&
-      before.version &&
-      after.version &&
-      before.version === after.version
-    ) {
-      return fail(agentId, action, "version_unchanged", {
-        runId,
-        softFailure: "version_unchanged",
-        version: after.version,
-        commandPreview: planned.preview,
+      after = await probeOne(agentId, env, {
+        deep: true,
+        checkLatest: false,
+        envDegraded: false,
       });
+
+      // Version unchanged after a step: versioned-mode soft "already latest".
+      // Reinstall-mode must NOT continue past a successful self-update (kiro/
+      // hermes already-latest would otherwise fall into the official script).
+      // Cursor auth exit-0 is handled by runner isSoftSuccessFailure instead.
+      const versionStuck =
+        action === "update" &&
+        before.updateMode === "versioned" &&
+        Boolean(before.version) &&
+        Boolean(after.version) &&
+        before.version === after.version;
+      const absoluteStep = stepOffset + result.stepIndex;
+      const hasMore = absoluteStep < fullStepCount - 1;
+      // Only self-upgrade no-ops continue (exit 0, version same). Package-manager
+      // success with unchanged version means that channel is already current —
+      // do not fall through to a different PM (would dual-install).
+      const succeeded = activePlan.steps[result.stepIndex];
+      const selfNoop =
+        versionStuck &&
+        succeeded?.kind === "argv" &&
+        !PACKAGE_MANAGER_STEP_FILES.has(succeeded.file);
+      if (selfNoop && hasMore) {
+        stepOffset = absoluteStep + 1;
+        const remaining = planned.steps.slice(stepOffset);
+        activePlan = {
+          steps: remaining,
+          preview: previewPlan(remaining),
+        };
+        continue;
+      }
+
+      if (versionStuck) {
+        return fail(agentId, action, "version_unchanged", {
+          runId,
+          softFailure: "version_unchanged",
+          version: after.version,
+          commandPreview: planned.preview,
+        });
+      }
+
+      break;
     }
 
     if (after.installedButBroken) {

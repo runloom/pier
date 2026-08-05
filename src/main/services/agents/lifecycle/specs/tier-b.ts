@@ -91,10 +91,11 @@ export const TIER_B_SPECS: readonly AgentLifecycleSpec[] = [
       { kind: "brew", formula: "ampcode", tap: "ampcode/tap" },
       { kind: "npm", package: "@ampcode/cli", bin: "amp" },
     ],
+    // `amp update` often shells out to `pnpm add -g` (fails if pnpm global bin is
+    // not on PATH). Prefer package-manager channels; reinstall covers script installs.
     update: [
-      { kind: "self", argv: ["update"] },
-      { kind: "brew-upgrade" },
       { kind: "npm-latest" },
+      { kind: "brew-upgrade" },
       { kind: "reinstall" },
     ],
   },
@@ -140,6 +141,9 @@ export const TIER_B_SPECS: readonly AgentLifecycleSpec[] = [
     agentId: "aider",
     expectedBins: ["aider"],
     support: "full",
+    // Aider has no --version flag (prints usage / non-zero). Use --help so the
+    // binary is treated as runnable; avoid false "installed but broken".
+    versionArgs: ["--help"],
     // Official docs prefer uv / install.sh; pipx and Homebrew as fallbacks.
     install: [
       {
@@ -235,11 +239,12 @@ export const TIER_B_SPECS: readonly AgentLifecycleSpec[] = [
       { kind: "brew", formula: "droid", cask: true },
       { kind: "npm", package: "@factory/cli", bin: "droid" },
     ],
-    // https://docs.factory.ai — `droid update` for standalone; brew/npm for PM installs
+    // `droid update` refuses npm installs ("Auto-update is not available for npm
+    // installations"). Source policy puts self before npm-latest for npm family,
+    // so omit self and use npm / brew / reinstall (script) instead.
     update: [
-      { kind: "self", argv: ["update"] },
-      { kind: "brew-upgrade" },
       { kind: "npm-latest" },
+      { kind: "brew-upgrade" },
       { kind: "reinstall" },
     ],
   },
@@ -390,6 +395,7 @@ export const TIER_B_SPECS: readonly AgentLifecycleSpec[] = [
     support: "full",
     // Official docs: install script only (Homebrew not supported for the binary).
     // https://kiro.dev/docs/cli/installation — auto-updates in background.
+    // https://kiro.dev/docs/cli/reference/cli-commands — `kiro-cli update -y`
     install: [
       {
         kind: "official-script",
@@ -402,8 +408,13 @@ export const TIER_B_SPECS: readonly AgentLifecycleSpec[] = [
         url: "https://cli.kiro.dev/install.ps1",
       },
     ],
-    // Manual repair: re-run official installer.
-    update: [{ kind: "reinstall" }],
+    // Prefer native self-update: the install script prompts on /dev/tty when
+    // `/Applications/Kiro CLI.app` already exists ("replace it? y/N"), which
+    // fails under Pier (no controlling TTY → "Device not configured").
+    update: [
+      { kind: "self", argv: ["update", "--non-interactive"] },
+      { kind: "reinstall" },
+    ],
   },
   {
     agentId: "mimo-code",
@@ -423,12 +434,10 @@ export const TIER_B_SPECS: readonly AgentLifecycleSpec[] = [
       },
       { kind: "npm", package: "@mimo-ai/cli", bin: "mimo" },
     ],
-    // https://mimo.xiaomi.com/mimocode/cli-options — `mimo upgrade`
-    update: [
-      { kind: "self", argv: ["upgrade"] },
-      { kind: "npm-latest" },
-      { kind: "reinstall" },
-    ],
+    // `mimo upgrade` auto-detects method "curl" for script installs and fails with
+    // "unsupported update channel: curl". Path policy prefers self before reinstall,
+    // so omit self; use npm-latest (npm installs) + reinstall (script installs).
+    update: [{ kind: "npm-latest" }, { kind: "reinstall" }],
   },
   {
     agentId: "antigravity",

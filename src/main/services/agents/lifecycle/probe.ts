@@ -77,7 +77,10 @@ export async function probeOneAgent(
     updateMode === "versioned" &&
     spec.support === "full"
   ) {
-    latestVersion = await fetchLatestVersion(spec, env);
+    // Match latest probe to the active install channel (brew ≠ npm lag).
+    latestVersion = await fetchLatestVersion(spec, env, {
+      installSource: defaultInstall?.source ?? null,
+    });
   }
 
   const updateAvailable =
@@ -85,15 +88,16 @@ export async function probeOneAgent(
     latestVersion !== null &&
     isAgentUpdateAvailable(version, latestVersion);
 
+  // Offer Update when:
+  // - versioned and a newer latest is known
+  // - reinstall mode (no reliable latest probe — user can force reinstall)
+  // - installed but broken (repair)
+  // Do NOT treat "latest unknown" as update-needed: brew cask probes used to
+  // return null and inflated "Update all" with false positives.
   const updateOffered =
     canInstall &&
-    ((detected &&
-      (updateMode === "reinstall" ||
-        updateAvailable ||
-        (updateMode === "versioned" &&
-          opts.checkLatest &&
-          latestVersion === null))) ||
-      installedButBroken);
+    (installedButBroken ||
+      (detected && (updateMode === "reinstall" || updateAvailable)));
 
   const defaults = defaultCommandsFor(
     agentId,

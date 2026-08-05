@@ -42,6 +42,8 @@ function npmInstallStep(
       "-g",
       `${pkg}@latest`,
       ...extraArgs,
+      // Overwrite stale bin links (e.g. nested @sourcegraph/amp → @ampcode/cli).
+      "--force",
       "--no-fund",
       "--no-audit",
       "--no-progress",
@@ -77,11 +79,19 @@ function brewUpgradeStep(
   installedToken?: string | null
 ): PlannedInvocation {
   // Prefer the actually-installed cask/formula name when known
-  // (e.g. claude-code@latest vs claude-code).
-  const name =
-    installedToken && installedToken.length > 0
-      ? installedToken
-      : brewToken(channel);
+  // (e.g. claude-code@latest vs claude-code). When Cellar reports the bare
+  // formula name but the spec has a tap, keep the tap-qualified token so
+  // third-party taps (anomalyco/tap/opencode) upgrade the right package.
+  let name = brewToken(channel);
+  if (installedToken && installedToken.length > 0) {
+    const bare = channel.formula;
+    const isBareMatch =
+      installedToken === bare || installedToken.endsWith(`/${bare}`);
+    name =
+      channel.tap && isBareMatch && !installedToken.includes("@")
+        ? brewToken(channel)
+        : installedToken;
+  }
   if (channel.cask === true) {
     return {
       kind: "argv",

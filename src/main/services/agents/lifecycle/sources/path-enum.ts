@@ -140,6 +140,14 @@ async function readVersionAtPath(
   }
 }
 
+function resolvePathKey(binPath: string): string {
+  try {
+    return realpathSync(binPath);
+  } catch {
+    return binPath;
+  }
+}
+
 export async function enumerateInstalls(options: {
   bins: readonly string[];
   env?: NodeJS.ProcessEnv;
@@ -147,14 +155,29 @@ export async function enumerateInstalls(options: {
 }): Promise<AgentInstallInfo[]> {
   const versionArgs = options.versionArgs ?? ["--version"];
   const allPaths: string[] = [];
-  const seen = new Set<string>();
+  const seenPaths = new Set<string>();
+  const seenResolved = new Set<string>();
   for (const bin of options.bins) {
     const paths = await listPathsForCommand(bin, options.env);
     for (const p of paths) {
-      if (seen.has(p)) {
+      if (seenPaths.has(p)) {
         continue;
       }
-      seen.add(p);
+      // cursor-agent + agent often symlink to the same binary; also drop
+      // unrelated `agent` CLIs (e.g. Grok) that share only the short name.
+      const resolved = resolvePathKey(p);
+      if (seenResolved.has(resolved)) {
+        continue;
+      }
+      if (
+        bin === "agent" &&
+        !/cursor-agent/i.test(resolved) &&
+        !/cursor-agent/i.test(p)
+      ) {
+        continue;
+      }
+      seenPaths.add(p);
+      seenResolved.add(resolved);
       allPaths.push(p);
     }
   }

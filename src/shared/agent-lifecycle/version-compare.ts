@@ -3,13 +3,16 @@
  * Strips common prefixes (`v`, package name noise) and compares numeric dots.
  */
 
+/** At least major.minor — avoid matching CLI flags like `[--4]` in help text. */
+const VERSION_TOKEN_RE = /\d+\.\d+(?:\.\d+){0,2}(?:[-+][0-9A-Za-z.-]+)?/;
+
 function normalizeVersionToken(raw: string): string {
   let s = raw.trim();
   if (s.startsWith("v") || s.startsWith("V")) {
     s = s.slice(1);
   }
   // Prefer first semver-ish token in noisy --version output.
-  const match = /\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?/.exec(s);
+  const match = VERSION_TOKEN_RE.exec(s);
   return match?.[0] ?? s;
 }
 
@@ -28,6 +31,11 @@ function splitParts(version: string): { nums: number[]; pre: string } {
   return { nums, pre };
 }
 
+/** Git-style build metadata (`-gabc1234`), not semver precedence. */
+function isBuildMetadataPre(pre: string): boolean {
+  return /^g[0-9a-f]{6,}$/i.test(pre);
+}
+
 /** Negative if a < b, 0 if equal, positive if a > b. */
 export function compareAgentVersions(a: string, b: string): number {
   const left = splitParts(a);
@@ -39,6 +47,14 @@ export function compareAgentVersions(a: string, b: string): number {
     if (lv !== rv) {
       return lv - rv;
     }
+  }
+  // Same numeric core.
+  if (left.pre === right.pre) {
+    return 0;
+  }
+  // amp-style `-g<sha>` is build metadata, not semver precedence.
+  if (isBuildMetadataPre(left.pre) || isBuildMetadataPre(right.pre)) {
+    return 0;
   }
   // No prerelease beats prerelease (1.0.0 > 1.0.0-beta).
   if (left.pre && !right.pre) {
@@ -67,13 +83,15 @@ export function isAgentUpdateAvailable(
 
 /** Best-effort parse of CLI --version stdout. */
 export function extractVersionFromOutput(stdout: string): string | null {
-  const line = stdout
+  const lines = stdout
     .split(/\r?\n/)
     .map((l) => l.trim())
-    .find((l) => l.length > 0);
-  if (!line) {
-    return null;
+    .filter((l) => l.length > 0);
+  for (const line of lines) {
+    const match = VERSION_TOKEN_RE.exec(line);
+    if (match?.[0]) {
+      return match[0];
+    }
   }
-  const match = /\d+(?:\.\d+){0,3}(?:[-+][0-9A-Za-z.-]+)?/.exec(line);
-  return match?.[0] ?? null;
+  return null;
 }

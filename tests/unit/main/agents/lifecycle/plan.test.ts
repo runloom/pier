@@ -109,6 +109,42 @@ describe("agent lifecycle plan", () => {
     expect(cont?.steps[0]?.kind).toBe("official-script");
   });
 
+  it("upgrades uv-sourced kimi with uv tool upgrade kimi-cli", () => {
+    const plan = buildUpdatePlan(getAgentLifecycleSpec("kimi"), {
+      host: "posix",
+      defaultBinPath: "/Users/x/.local/share/uv/tools/kimi-cli/bin/kimi",
+      installSource: "uv",
+    });
+    expect(plan?.steps[0]).toMatchObject({
+      kind: "argv",
+      file: "uv",
+      args: ["tool", "upgrade", "kimi-cli"],
+    });
+  });
+
+  it("uses npm-latest first for npm-sourced droid (self refuses npm)", () => {
+    const plan = buildUpdatePlan(getAgentLifecycleSpec("droid"), {
+      host: "posix",
+      defaultBinPath: "/Users/x/.nvm/versions/node/v24/bin/droid",
+      installSource: "npm",
+    });
+    expect(plan?.steps[0]).toMatchObject({
+      kind: "argv",
+      file: "npm",
+    });
+    expect(plan?.preview).toContain("@factory/cli@latest");
+  });
+
+  it("uses reinstall for path-sourced mimo (self curl upgrade unsupported)", () => {
+    const plan = buildUpdatePlan(getAgentLifecycleSpec("mimo-code"), {
+      host: "posix",
+      defaultBinPath: "/Users/x/.mimocode/bin/mimo",
+      installSource: "path",
+    });
+    expect(plan?.steps[0]?.kind).toBe("official-script");
+    expect(plan?.preview).toContain("mimo.xiaomi.com");
+  });
+
   it("prefers CLI self-update for path/script installs when declared", () => {
     const plan = buildUpdatePlan(getAgentLifecycleSpec("codex"), {
       host: "posix",
@@ -153,6 +189,19 @@ describe("agent lifecycle plan", () => {
       )
     ).toBe("block-goose-cli");
     expect(brewPackageTokenFromBinPath("/usr/local/bin/claude")).toBeNull();
+  });
+
+  it("upgrades tapped brew formula with tap-qualified token (opencode)", () => {
+    const plan = buildUpdatePlan(getAgentLifecycleSpec("opencode"), {
+      host: "posix",
+      defaultBinPath: "/opt/homebrew/Cellar/opencode/1.18.14/bin/opencode",
+      installSource: "brew",
+    });
+    expect(plan?.steps[0]).toMatchObject({
+      kind: "argv",
+      file: "brew",
+      args: ["upgrade", "anomalyco/tap/opencode"],
+    });
   });
 
   it("upgrades the installed cask variant (claude-code@latest ≠ claude-code)", () => {
@@ -226,34 +275,47 @@ describe("agent lifecycle plan", () => {
     });
   });
 
-  it("plans cursor update via self-update and script reinstall", () => {
+  it("plans cursor update via install script first (self needs auth)", () => {
     const plan = buildUpdatePlan(getAgentLifecycleSpec("cursor"), {
       host: "posix",
       defaultBinPath: "/Users/x/.local/bin/cursor-agent",
       installSource: "path",
     });
     expect(plan).not.toBeNull();
-    expect(plan?.steps[0]).toMatchObject({
-      kind: "argv",
-      file: "/Users/x/.local/bin/cursor-agent",
-      args: ["update"],
-    });
+    // Official script reinstall first — `agent update` exits 0 unauthenticated.
+    expect(plan?.steps[0]?.kind).toBe("official-script");
+    expect(plan?.preview).toContain("cursor.com");
     expect(
       plan?.steps.some(
-        (s) => s.kind === "official-script" && s.url.includes("cursor.com")
+        (s) =>
+          s.kind === "argv" &&
+          s.file.endsWith("cursor-agent") &&
+          s.args[0] === "update"
       )
     ).toBe(true);
   });
 
-  it("plans kiro/antigravity reinstall via official script", () => {
-    for (const id of ["kiro", "antigravity"] as const) {
-      const plan = buildUpdatePlan(getAgentLifecycleSpec(id), {
-        host: "posix",
-        installSource: "path",
-      });
-      expect(plan).not.toBeNull();
-      expect(plan?.steps.some((s) => s.kind === "official-script")).toBe(true);
-    }
+  it("plans kiro self-update then script reinstall; antigravity via script", () => {
+    const kiro = buildUpdatePlan(getAgentLifecycleSpec("kiro"), {
+      host: "posix",
+      defaultBinPath: "/Users/x/.local/bin/kiro-cli",
+      installSource: "path",
+    });
+    expect(kiro?.steps[0]).toMatchObject({
+      kind: "argv",
+      file: "/Users/x/.local/bin/kiro-cli",
+      args: ["update", "--non-interactive"],
+    });
+    expect(kiro?.steps.some((s) => s.kind === "official-script")).toBe(true);
+
+    const antigravity = buildUpdatePlan(getAgentLifecycleSpec("antigravity"), {
+      host: "posix",
+      installSource: "path",
+    });
+    expect(antigravity).not.toBeNull();
+    expect(antigravity?.steps.some((s) => s.kind === "official-script")).toBe(
+      true
+    );
   });
 
   it("uses brew cask upgrade for brew-sourced copilot and devin", () => {

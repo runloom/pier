@@ -55,16 +55,19 @@ const UPDATE_PRIORITY: Readonly<Record<string, readonly UpdateChannelKind[]>> =
   };
 
 function pathLikeOrder(channels: readonly UpdateChannel[]): UpdateChannel[] {
-  const self = channels.filter((c) => c.kind === "self");
-  const reinstall = channels.filter((c) => c.kind === "reinstall");
   const rest = channels.filter(
     (c) => c.kind !== "self" && c.kind !== "reinstall"
   );
-  if (self.length > 0) {
-    return [...self, ...reinstall, ...rest];
+  // Preserve relative order of self vs reinstall as declared on the agent
+  // spec (cursor prefers reinstall over self; kiro prefers self first).
+  const preferred: UpdateChannel[] = [];
+  for (const c of channels) {
+    if (c.kind === "self" || c.kind === "reinstall") {
+      preferred.push(c);
+    }
   }
-  if (reinstall.length > 0) {
-    return [...reinstall, ...rest];
+  if (preferred.length > 0) {
+    return [...preferred, ...rest];
   }
   return [...channels];
 }

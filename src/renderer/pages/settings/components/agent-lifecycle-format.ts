@@ -1,3 +1,4 @@
+import { isAgentUpdateAvailable } from "@shared/agent-lifecycle/version-compare.ts";
 import type {
   AgentLifecycleAction,
   AgentLifecycleProgress,
@@ -134,7 +135,7 @@ export function lifecycleBusyStatusText(
 
 /**
  * Compact version meta for the list row.
- * - Different current/latest → `1.2.3 → 1.2.4`
+ * - Semantically older current + newer latest → `1.2.3 → 1.2.4`
  * - Same or only one → single version (no redundant "latest: same")
  */
 export function formatAgentVersionMeta(
@@ -143,8 +144,12 @@ export function formatAgentVersionMeta(
 ): string | null {
   const current = version?.trim() ?? "";
   const latest = latestVersion?.trim() ?? "";
-  if (current.length > 0 && latest.length > 0 && current !== latest) {
-    return `${current} → ${latest}`;
+  if (current.length > 0 && latest.length > 0) {
+    // Semantic compare: avoid false "a → b" when tokens equal after normalize.
+    if (isAgentUpdateAvailable(current, latest)) {
+      return `${current} → ${latest}`;
+    }
+    return current;
   }
   if (current.length > 0) {
     return current;

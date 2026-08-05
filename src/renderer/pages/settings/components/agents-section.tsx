@@ -230,9 +230,10 @@ function AgentsToolbar() {
       if (
         probe &&
         !disabledSet.has(probe.agentId) &&
+        // Same eligibility as Update all (versioned newer / broken only).
+        (probe.updateAvailable === true || probe.installedButBroken === true) &&
         probe.support === "full" &&
-        probe.canInstall &&
-        probe.updateOffered
+        probe.canInstall
       ) {
         n += 1;
       }

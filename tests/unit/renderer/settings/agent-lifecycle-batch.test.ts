@@ -2,7 +2,9 @@ import type { AgentLifecycleProbe } from "@shared/contracts/agent/lifecycle.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   isLifecycleUpdateCandidate,
+  mergeProbes,
   useAgentLifecycleStore,
+  withDerivedUpdateFlags,
 } from "../../../../src/renderer/stores/agent-lifecycle.store.ts";
 
 function makeProbe(
@@ -24,26 +26,149 @@ function makeProbe(
   };
 }
 
+describe("mergeProbes / withDerivedUpdateFlags", () => {
+  it("recomputes updateAvailable when retaining previous latest (no sticky false positives)", () => {
+    const prev = {
+      gemini: makeProbe({
+        agentId: "gemini",
+        version: "0.50.0",
+        latestVersion: "0.53.1",
+        updateAvailable: true,
+        updateOffered: true,
+        updateMode: "versioned",
+      }),
+    };
+    // After upgrade: new probe has current=latest, but skipped checkLatest → no latest field.
+    const next = [
+      makeProbe({
+        agentId: "gemini",
+        version: "0.53.1",
+        latestVersion: null,
+        updateAvailable: false,
+        updateOffered: false,
+        updateMode: "versioned",
+        detected: true,
+      }),
+    ];
+    const merged = mergeProbes(prev, next);
+    expect(merged.gemini?.latestVersion).toBe("0.53.1");
+    expect(merged.gemini?.updateAvailable).toBe(false);
+    expect(merged.gemini?.updateOffered).toBe(false);
+  });
+
+  it("does not OR-sticky updateOffered from a previous reinstall/false-positive probe", () => {
+    const prev = {
+      claude: makeProbe({
+        agentId: "claude",
+        version: "2.1.222",
+        latestVersion: "2.1.222",
+        updateAvailable: false,
+        // Old bug: offered true even when already latest
+        updateOffered: true,
+        updateMode: "versioned",
+      }),
+    };
+    const next = [
+      makeProbe({
+        agentId: "claude",
+        version: "2.1.222",
+        latestVersion: null,
+        updateAvailable: false,
+        updateOffered: false,
+        updateMode: "versioned",
+        detected: true,
+      }),
+    ];
+    const merged = mergeProbes(prev, next);
+    expect(merged.claude?.updateOffered).toBe(false);
+    expect(merged.claude?.updateAvailable).toBe(false);
+  });
+
+  it("trusts a fresh latest probe from main without sticky previous flags", () => {
+    const prev = {
+      amp: makeProbe({
+        agentId: "amp",
+        version: "1.0.0",
+        latestVersion: "2.0.0",
+        updateAvailable: true,
+        updateOffered: true,
+      }),
+    };
+    const next = [
+      makeProbe({
+        agentId: "amp",
+        version: "2.0.0",
+        latestVersion: "2.0.0",
+        updateAvailable: false,
+        updateOffered: false,
+        updateMode: "versioned",
+        detected: true,
+      }),
+    ];
+    const merged = mergeProbes(prev, next);
+    expect(merged.amp?.updateAvailable).toBe(false);
+    expect(merged.amp?.updateOffered).toBe(false);
+  });
+
+  it("withDerivedUpdateFlags marks only true upgrades", () => {
+    const base = makeProbe({
+      agentId: "gemini",
+      version: "0.53.1",
+      updateMode: "versioned",
+      detected: true,
+      canInstall: true,
+    });
+    expect(withDerivedUpdateFlags(base, "0.53.1").updateAvailable).toBe(false);
+    expect(withDerivedUpdateFlags(base, "0.60.0").updateAvailable).toBe(true);
+  });
+});
+
 describe("isLifecycleUpdateCandidate", () => {
-  it("matches agents that show an Update button", () => {
+  it("counts versioned updates and broken installs for Update all", () => {
     expect(
       isLifecycleUpdateCandidate(
-        makeProbe({ agentId: "gemini", updateOffered: true })
+        makeProbe({
+          agentId: "gemini",
+          updateOffered: true,
+          updateAvailable: true,
+        })
+      )
+    ).toBe(true);
+    // reinstall-mode always offers a row button, but is not a batch candidate
+    expect(
+      isLifecycleUpdateCandidate(
+        makeProbe({
+          agentId: "cursor",
+          updateOffered: true,
+          updateAvailable: false,
+          updateMode: "reinstall",
+        })
+      )
+    ).toBe(false);
+    expect(
+      isLifecycleUpdateCandidate(
+        makeProbe({
+          agentId: "aider",
+          updateOffered: true,
+          installedButBroken: true,
+        })
       )
     ).toBe(true);
     expect(
       isLifecycleUpdateCandidate(
-        makeProbe({ agentId: "gemini", updateOffered: false })
+        makeProbe({
+          agentId: "gemini",
+          canInstall: false,
+          updateAvailable: true,
+        })
       )
     ).toBe(false);
     expect(
       isLifecycleUpdateCandidate(
-        makeProbe({ agentId: "gemini", canInstall: false, updateOffered: true })
-      )
-    ).toBe(false);
-    expect(
-      isLifecycleUpdateCandidate(
-        makeProbe({ agentId: "gemini", updateOffered: true }),
+        makeProbe({
+          agentId: "gemini",
+          updateAvailable: true,
+        }),
         { disabled: true }
       )
     ).toBe(false);

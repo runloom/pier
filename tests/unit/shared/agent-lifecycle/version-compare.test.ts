@@ -16,6 +16,15 @@ describe("agent-lifecycle version-compare", () => {
     expect(compareAgentVersions("1.0.0-beta", "1.0.0")).toBeLessThan(0);
   });
 
+  it("ignores amp-style -gSHA build ids when the numeric core matches", () => {
+    expect(
+      compareAgentVersions("0.0.1785961745-g5b1c43", "0.0.1785961745-gfab117")
+    ).toBe(0);
+    expect(
+      isAgentUpdateAvailable("0.0.1785961745-g5b1c43", "0.0.1785961745-gfab117")
+    ).toBe(false);
+  });
+
   it("detects update availability", () => {
     expect(isAgentUpdateAvailable("1.0.0", "1.0.1")).toBe(true);
     expect(isAgentUpdateAvailable("1.0.1", "1.0.0")).toBe(false);
@@ -27,5 +36,9 @@ describe("agent-lifecycle version-compare", () => {
       "2.1.221"
     );
     expect(extractVersionFromOutput("")).toBeNull();
+    // Do not treat CLI flags like [--4] as a version.
+    expect(
+      extractVersionFromOutput("usage: aider [-h] [--opus] [--4] [--sonnet]")
+    ).toBeNull();
   });
 });
