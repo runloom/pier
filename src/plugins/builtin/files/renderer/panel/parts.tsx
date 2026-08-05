@@ -1,4 +1,3 @@
-import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
   EmptyContent,
@@ -14,13 +13,7 @@ import {
   filePanelTreeToggleShortcutLabel,
   FilePanelSearchButton as SharedFilePanelSearchButton,
 } from "@pier/ui/file/panel-layout.tsx";
-import {
-  ArrowLeft,
-  ArrowRight,
-  FileQuestion,
-  FileX,
-  MousePointerClick,
-} from "lucide-react";
+import { FileQuestion, FileX, MousePointerClick } from "lucide-react";
 import type { ReactNode } from "react";
 import type { FilesTranslate } from "../i18n.ts";
 
@@ -195,51 +188,6 @@ export function SidebarToggleButton({
       onToggle={onToggle}
       shortcut={filePanelTreeToggleShortcutLabel()}
     />
-  );
-}
-
-// 目标布局参考:chrome 左侧 sidebar-toggle 与搜索之后的 ←/→ 文件导航。
-// 历史由 files-nav-history 按 group 维护;无可去方向时禁用。
-export function FilePanelNavButtons({
-  canBack,
-  canForward,
-  onBack,
-  onForward,
-  t,
-}: {
-  canBack: boolean;
-  canForward: boolean;
-  onBack: () => void;
-  onForward: () => void;
-  t: FilesTranslate;
-}) {
-  const backLabel = t("filePanel.nav.back", "Back");
-  const forwardLabel = t("filePanel.nav.forward", "Forward");
-  return (
-    <>
-      <Button
-        aria-label={backLabel}
-        disabled={!canBack}
-        onClick={onBack}
-        size="xs"
-        type="button"
-        variant="ghost"
-      >
-        <ArrowLeft aria-hidden="true" data-icon="inline-start" />
-        <span className="sr-only">{backLabel}</span>
-      </Button>
-      <Button
-        aria-label={forwardLabel}
-        disabled={!canForward}
-        onClick={onForward}
-        size="xs"
-        type="button"
-        variant="ghost"
-      >
-        <ArrowRight aria-hidden="true" data-icon="inline-start" />
-        <span className="sr-only">{forwardLabel}</span>
-      </Button>
-    </>
   );
 }
 

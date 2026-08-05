@@ -23,8 +23,8 @@
       "reason": "shadcn primitives intentionally flat; feature clusters live under diff-view/, file/, image-preview/"
     },
     "src/renderer/stores": {
-      "max": 54,
-      "reason": "debt: optional domain subfolders (terminal/workspace/agent); shell-environment store added; workspace-close split pending folder"
+      "max": 55,
+      "reason": "debt: optional domain subfolders (terminal/workspace/agent); agent-lifecycle store added; workspace-close split pending folder"
     },
     "src/shared/contracts": {
       "max": 50,
@@ -35,12 +35,12 @@
       "reason": "debt: more surface vs chrome split beyond hooks/"
     },
     "src/renderer/pages/settings/components": {
-      "max": 42,
-      "reason": "debt: section subfolders (skills/ already extracted)"
+      "max": 44,
+      "reason": "debt: section subfolders (skills/ already extracted); agent-row details/lifecycle format pending agents/ folder"
     },
     "src/main/services/agents/integrations": {
-      "max": 41,
-      "reason": "debt: provider files still flat; evidence/transcript/hooks extracted"
+      "max": 43,
+      "reason": "debt: provider files still flat; interactive-tool lifecycle helpers pending tools/ folder; evidence/transcript/hooks extracted"
     }
   }
 }

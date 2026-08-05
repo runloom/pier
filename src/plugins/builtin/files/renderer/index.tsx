@@ -38,7 +38,6 @@ import { FilesMutationSuspendedError } from "./mutation/gate.ts";
 import { registerFilesTerminalOpenUrlHandler } from "./open-url/handler.ts";
 import { createFilePanel as createFilesFilePanel } from "./panel/index.tsx";
 import { hasOtherOpenFilesSourceInstance } from "./panel/instance-utils.ts";
-import { clearFilesNavHistory } from "./panel/nav-history.ts";
 import { filesPanelTabChrome } from "./panel/tab.ts";
 import { createFilesPanelTransferRegistration } from "./panel/transfer-registration.ts";
 import { readFilesPanelViewMode } from "./panel/transfer-state.ts";
@@ -357,7 +356,6 @@ export const filesRendererPlugin: RendererPluginModule = {
       releaseFilesDraftSuspendAfterDispose();
       watchHub.dispose();
       clearFilesTreeStore();
-      clearFilesNavHistory();
       clearFileTreeSidebarCache();
       // 释放 markdown 单例 worker，避免插件重载时孤儿 Worker 累积。
       markdownRuntime.dispose();

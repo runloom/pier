@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type {
   GitApplyPatchResult,
   GitBranchRef,
+  GitCheckoutResult,
   GitCommit,
   GitCommitSearchResult,
   GitDiffBranchesResult,
@@ -58,7 +59,9 @@ import {
   continueCherryPick,
   continueRebase,
   continueRevert,
+  fetchRemotes,
   mergeBranch,
+  publishBranch,
   pullFastForward,
   pushBranch,
   rebaseBranch,
@@ -73,6 +76,7 @@ import {
   parseUnifiedDiff,
   splitNonEmptyLines,
 } from "./parsers.ts";
+import { recordUserFetchPhase } from "./remote-sync-record.ts";
 import {
   defaultExecGit,
   diffRangeArgs,
@@ -130,7 +134,7 @@ export interface GitService {
     request: GitApplyPatchRequest
   ): Promise<GitApplyPatchResult>;
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
-  checkoutBranch(cwd: string, name: string): Promise<void>;
+  checkoutBranch(cwd: string, name: string): Promise<GitCheckoutResult>;
   cherryPick(cwd: string, oid: string): Promise<GitSequencerResult>;
   commit(cwd: string, options: GitCommitOptions): Promise<void>;
   continueCherryPick(cwd: string): Promise<GitSequencerContinueResult>;
@@ -141,6 +145,7 @@ export interface GitService {
   deleteBranch(cwd: string, options: GitDeleteBranchOptions): Promise<void>;
   discardChanges(cwd: string, request: GitPathsRequest): Promise<void>;
   dropStash(cwd: string, index?: number): Promise<GitStashDropResult>;
+  fetch(cwd: string): Promise<GitRemoteOperationResult>;
   // —— 读 ——
   getCommit(cwd: string, oid: string): Promise<GitCommit>;
   getCommitPatch(cwd: string, oid: string): Promise<GitDiffPatch>;
@@ -165,6 +170,7 @@ export interface GitService {
   listTags(cwd: string): Promise<string[]>;
   merge(cwd: string, branch: string): Promise<GitMergeResult>;
   popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
+  publish(cwd: string): Promise<GitRemoteOperationResult>;
   pullFastForward(cwd: string): Promise<GitRemoteOperationResult>;
   push(cwd: string): Promise<GitRemoteOperationResult>;
   rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
@@ -382,11 +388,12 @@ export function createGitService({
       }
       await runGit(args, cwd, { timeoutMs: WRITE_TIMEOUT_MS });
     },
-    createAndSwitchBranch: (cwd, name) =>
-      switchBranch(runGit, cwd, name, {
+    createAndSwitchBranch: async (cwd, name) => {
+      await switchBranch(runGit, cwd, name, {
         create: true,
         timeoutMs: WRITE_TIMEOUT_MS,
-      }),
+      });
+    },
     deleteBranch: async (cwd, options) => {
       assertSafeBranchName(options.name);
       await runGit(["branch", options.force ? "-D" : "-d", options.name], cwd, {
@@ -402,6 +409,20 @@ export function createGitService({
     applyStash: (cwd, index) => applyStash(runGit, cwd, index),
     dropStash: (cwd, index) => dropStash(runGit, cwd, index),
     popStash: (cwd, index) => popStash(runGit, cwd, index),
+    fetch: async (cwd) => {
+      await recordUserFetchPhase(runGit, cwd, { kind: "fetching" });
+      const result = await fetchRemotes(runGit, cwd);
+      if (result.kind === "ok") {
+        await recordUserFetchPhase(runGit, cwd, { kind: "ok" });
+      } else {
+        await recordUserFetchPhase(runGit, cwd, {
+          kind: "failed",
+          message: result.message ?? "",
+        });
+      }
+      return result;
+    },
+    publish: (cwd) => publishBranch(runGit, cwd),
     pullFastForward: (cwd) => pullFastForward(runGit, cwd),
     push: (cwd) => pushBranch(runGit, cwd),
     rebase: (cwd, branch) => rebaseBranch(runGit, cwd, branch),

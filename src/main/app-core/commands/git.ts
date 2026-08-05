@@ -22,7 +22,9 @@ const GIT_WRITE_COMMANDS: Record<string, true> = {
   "git.discardChanges": true,
   "git.merge": true,
   "git.mergeAbort": true,
+  "git.fetch": true,
   "git.pullFastForward": true,
+  "git.publish": true,
   "git.push": true,
   "git.rebase": true,
   "git.rebaseAbort": true,
@@ -132,8 +134,10 @@ async function dispatchGitCommand(
       });
       return success(requestId, true);
     case "git.checkoutBranch":
-      await services.git.checkoutBranch(command.cwd, command.name);
-      return success(requestId, true);
+      return success(
+        requestId,
+        await services.git.checkoutBranch(command.cwd, command.name)
+      );
     case "git.merge":
       return success(
         requestId,
@@ -143,6 +147,10 @@ async function dispatchGitCommand(
       return success(requestId, await services.git.abortMerge(command.cwd));
     case "git.push":
       return success(requestId, await services.git.push(command.cwd));
+    case "git.publish":
+      return success(requestId, await services.git.publish(command.cwd));
+    case "git.fetch":
+      return success(requestId, await services.git.fetch(command.cwd));
     case "git.pullFastForward":
       return success(
         requestId,

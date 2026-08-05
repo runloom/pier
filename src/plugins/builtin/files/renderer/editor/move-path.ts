@@ -2,7 +2,6 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { isSamePathOrDescendant } from "../document/paths.ts";
 import type { FilesDocument } from "../document/types.ts";
 import type { FilePathMutationGuard } from "../mutation/path-guard.ts";
-import { moveFilesNavPath } from "../panel/nav-history.ts";
 
 export async function moveEditorPath(input: {
   context: Pick<RendererPluginContext, "files">;
@@ -47,7 +46,6 @@ export async function moveEditorPath(input: {
       input.newPath,
       guard.currentDocuments()
     );
-    moveFilesNavPath(input.root, input.oldPath, input.newPath);
   } finally {
     guard.release();
   }

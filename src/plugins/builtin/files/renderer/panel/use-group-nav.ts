@@ -1,7 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { useCallback } from "react";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
 import type { FilesDocumentPanelSource } from "../document/types.ts";
 import {
@@ -9,56 +9,22 @@ import {
   sameFilesDocumentPanelSource,
 } from "../document/types.ts";
 import { createFileFilePanelInstanceId } from "./id.ts";
-import {
-  filesNavBack,
-  filesNavForward,
-  getFilesNavState,
-  pushFilesNavEntry,
-  subscribeFilesNavHistory,
-} from "./nav-history.ts";
 import { sourceTitle } from "./source.ts";
 
 export function useFilesGroupNav({
   context,
   groupId,
   panelContext,
-  selectedSource,
 }: {
   context: RendererPluginContext;
   groupId: string;
   panelContext: PanelContext | undefined;
-  selectedSource: FilesDocumentPanelSource | null;
 }): {
-  canBack: boolean;
-  canForward: boolean;
-  handleNavBack: () => void;
-  handleNavForward: () => void;
   handleOpenFileFromTree: (
     entry: FileEntry,
     options?: { pinned?: boolean }
   ) => void;
-  openSourceInGroup: (
-    source: FilesDocumentPanelSource,
-    options: { pinned: boolean }
-  ) => void;
 } {
-  const navSubscribe = useCallback(
-    (listener: () => void) => subscribeFilesNavHistory(groupId, listener),
-    [groupId]
-  );
-  const navSnapshot = useCallback(
-    () => JSON.stringify(getFilesNavState(groupId)),
-    [groupId]
-  );
-  useSyncExternalStore(navSubscribe, navSnapshot, navSnapshot);
-  const { canBack, canForward } = getFilesNavState(groupId);
-
-  useEffect(() => {
-    if (selectedSource) {
-      pushFilesNavEntry(groupId, selectedSource);
-    }
-  }, [groupId, selectedSource]);
-
   const openSourceInGroup = useCallback(
     (source: FilesDocumentPanelSource, options: { pinned: boolean }) => {
       const existingInstance = context.panels
@@ -101,23 +67,6 @@ export function useFilesGroupNav({
     [context, groupId, panelContext]
   );
 
-  const openNavSource = useCallback(
-    (source: FilesDocumentPanelSource | null) => {
-      if (!source) {
-        return;
-      }
-      openSourceInGroup(source, { pinned: false });
-    },
-    [openSourceInGroup]
-  );
-
-  const handleNavBack = useCallback(() => {
-    openNavSource(filesNavBack(groupId));
-  }, [groupId, openNavSource]);
-  const handleNavForward = useCallback(() => {
-    openNavSource(filesNavForward(groupId));
-  }, [groupId, openNavSource]);
-
   const handleOpenFileFromTree = useCallback(
     (entry: FileEntry, options?: { pinned?: boolean }) => {
       const nextSource: FilesDocumentPanelSource = {
@@ -132,11 +81,6 @@ export function useFilesGroupNav({
   );
 
   return {
-    canBack,
-    canForward,
-    handleNavBack,
-    handleNavForward,
     handleOpenFileFromTree,
-    openSourceInGroup,
   };
 }

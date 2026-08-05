@@ -2,6 +2,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS } from "./interactive-blocking-tools.ts";
+import { interactiveBlockingToolLifecycleEvents } from "./interactive-tool-lifecycle.ts";
 import {
   createNestedJsonIntegration,
   type NestedJsonIntegrationSpec,
@@ -37,10 +39,12 @@ function claudeStandardCommand(
  * 依据官方 hooks reference（code.claude.com/docs/en/hooks）：
  * - 不装 PermissionRequest / Elicitation / ElicitationResult / Notification：
  *   这些事件无法保证稳定请求 ID 且覆盖自动应答、异常、允许、拒绝、取消的
- *   完整结果闭环，因此不能进入 waiting。
+ *   完整结果闭环，因此不能整类进入 waiting。
+ * - waiting 仅对 EnterPlanMode / ExitPlanMode / AskUserQuestion 经 Pre/Post
+ *   toolUseId 闭环上报（见 CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS）。
  * - StopFailure = 回合因 API 错误终止 → pier "error" → tab failed。
- * - PostToolUseFailure = 单个工具失败, 回合仍在继续 → 视为 ToolComplete
- *   （不闪 error, error 态只留给回合级失败）。
+ * - PostToolUseFailure = 单个工具失败, 回合仍在继续；普通工具 ToolComplete，
+ *   交互工具 InteractionResolved failed（不闪全局 error）。
  * - PermissionDenied 是自动权限模式分类器，不能伪装成人工拒绝结果。
  * - PreCompact：长压缩期间无其他 hook, 不装则被 30min TTL 误衰减。
  * - SessionEnd timeout：工厂默认 5s。Claude 默认预算 ~1.5s，settings 可抬高至
@@ -65,21 +69,13 @@ const CLAUDE_SPEC: NestedJsonIntegrationSpec = {
       pierEvent: "PromptSubmit",
       buildCommand: (agentId) => pierClaudeUserPromptSubmitCommandV3(agentId),
     },
-    {
-      buildCommand: claudeStandardCommand("ToolStart", "PreToolUse"),
-      nativeEvent: "PreToolUse",
-      pierEvent: "ToolStart",
-    },
-    {
-      buildCommand: claudeStandardCommand("ToolComplete", "PostToolUse"),
-      nativeEvent: "PostToolUse",
-      pierEvent: "ToolComplete",
-    },
-    {
-      buildCommand: claudeStandardCommand("ToolComplete", "PostToolUseFailure"),
-      nativeEvent: "PostToolUseFailure",
-      pierEvent: "ToolComplete",
-    },
+    ...interactiveBlockingToolLifecycleEvents({
+      actorHintFromAgentId: true,
+      // Claude PostToolUseFailure 原先不抽 error；保持空字段列表避免噪声。
+      postToolFailureNativeStateFields: [],
+      tools: CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS,
+      turnIdFields: ["prompt_id"],
+    }),
     {
       buildCommand: claudeStandardCommand("processing", "PreCompact"),
       nativeEvent: "PreCompact",

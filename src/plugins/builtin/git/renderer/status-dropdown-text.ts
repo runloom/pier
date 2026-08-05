@@ -6,24 +6,31 @@ import { pluginText } from "./plugin-text.ts";
 export interface GitStatusDropdownText {
   abortOperation: (operation: string) => string;
   ahead: string;
+  authBlocked: string;
   behind: string;
   changes: string;
   conflict: (count: number) => string;
   continueOperation: (operation: string) => string;
   deletions: string;
+  detachedBlocked: string;
+  fetch: string;
+  fetchDetail: string;
   insertions: string;
   largeChange: string;
   merged: string;
   noLocalChanges: string;
-  noUpstream: string;
   operationName: (kind: Exclude<GitRepoState["kind"], "clean">) => string;
   operationPaused: (operation: string) => string;
+  publish: string;
+  publishDetail: string;
   pull: string;
   pullBlocked: string;
   push: string;
+  republish: string;
+  republishDetail: string;
   stash: string;
   sync: string;
-  upstreamGone: string;
+  syncUnavailable: string;
 }
 
 function defaultOperationName(kind: Exclude<GitRepoState["kind"], "clean">) {
@@ -49,24 +56,33 @@ function defaultOperationName(kind: Exclude<GitRepoState["kind"], "clean">) {
 export const DEFAULT_GIT_STATUS_DROPDOWN_TEXT: GitStatusDropdownText = {
   abortOperation: (operation) => `Abort ${operation}`,
   ahead: "ahead",
+  authBlocked:
+    "Could not authenticate with the remote. Check credentials, then try again.",
   behind: "behind",
   changes: "Changes",
   conflict: (count) => `${count} ${count === 1 ? "conflict" : "conflicts"}`,
   continueOperation: (operation) => `Continue ${operation}`,
   deletions: "deletions",
+  detachedBlocked: "You are not on a branch. Switch to a branch first.",
+  fetch: "Fetch",
+  fetchDetail: "Refresh remote branch data",
   insertions: "insertions",
   largeChange: "Large change — review before syncing",
   merged: "merged",
   noLocalChanges: "No local changes",
-  noUpstream: "no upstream branch",
   operationName: defaultOperationName,
   operationPaused: (operation) => `${operation} paused`,
+  publish: "Publish Branch",
+  publishDetail: "Push to the remote and set the upstream branch",
   pull: "Pull",
   pullBlocked: "Commit or stash local changes before pulling",
   push: "Push",
+  republish: "Publish Branch Again",
+  republishDetail:
+    "The remote branch was deleted. Publish again to recreate it and set upstream.",
   stash: "Stashes",
   sync: "Sync",
-  upstreamGone: "upstream gone",
+  syncUnavailable: "Remote sync is not available right now",
 };
 
 function operationName(
@@ -119,6 +135,11 @@ export function gitStatusDropdownText(
         { operation }
       ),
     ahead: pluginText(pluginContext, "srAhead", "ahead"),
+    authBlocked: pluginText(
+      pluginContext,
+      "statusRowAuthBlocked",
+      "Could not authenticate with the remote. Check credentials, then try again."
+    ),
     behind: pluginText(pluginContext, "srBehind", "behind"),
     changes: pluginText(pluginContext, "statusRowChanges", "Changes"),
     conflict: (count) =>
@@ -138,6 +159,17 @@ export function gitStatusDropdownText(
         { operation }
       ),
     deletions: pluginText(pluginContext, "srDeletions", "deletions"),
+    detachedBlocked: pluginText(
+      pluginContext,
+      "statusRowDetachedBlocked",
+      "You are not on a branch. Switch to a branch first."
+    ),
+    fetch: pluginText(pluginContext, "statusRowFetch", "Fetch"),
+    fetchDetail: pluginText(
+      pluginContext,
+      "statusRowFetchDetail",
+      "Refresh remote branch data"
+    ),
     insertions: pluginText(pluginContext, "srInsertions", "insertions"),
     largeChange: pluginText(
       pluginContext,
@@ -150,7 +182,6 @@ export function gitStatusDropdownText(
       "statusDropdownNoLocalChanges",
       "No local changes"
     ),
-    noUpstream: pluginText(pluginContext, "noUpstream", "no upstream branch"),
     operationName: (kind) => operationName(pluginContext, kind),
     operationPaused: (operation) =>
       pluginText(
@@ -159,6 +190,12 @@ export function gitStatusDropdownText(
         "{{operation}} paused",
         { operation }
       ),
+    publish: pluginText(pluginContext, "statusRowPublish", "Publish Branch"),
+    publishDetail: pluginText(
+      pluginContext,
+      "statusRowPublishDetail",
+      "Push to the remote and set the upstream branch"
+    ),
     pull: pluginText(pluginContext, "statusRowPull", "Pull"),
     pullBlocked: pluginText(
       pluginContext,
@@ -166,8 +203,22 @@ export function gitStatusDropdownText(
       "Commit or stash local changes before pulling"
     ),
     push: pluginText(pluginContext, "statusRowPush", "Push"),
+    republish: pluginText(
+      pluginContext,
+      "statusRowRepublish",
+      "Publish Branch Again"
+    ),
+    republishDetail: pluginText(
+      pluginContext,
+      "statusRowRepublishDetail",
+      "The remote branch was deleted. Publish again to recreate it and set upstream."
+    ),
     stash: pluginText(pluginContext, "statusRowStash", "Stashes"),
     sync: pluginText(pluginContext, "statusRowSync", "Sync"),
-    upstreamGone: pluginText(pluginContext, "upstreamGone", "upstream gone"),
+    syncUnavailable: pluginText(
+      pluginContext,
+      "statusRowSyncUnavailable",
+      "Remote sync is not available right now"
+    ),
   };
 }

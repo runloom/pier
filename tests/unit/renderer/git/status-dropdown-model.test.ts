@@ -28,16 +28,19 @@ const PANEL_CONTEXT = {
 const ZH_TEXT: GitStatusDropdownText = {
   abortOperation: (operation) => `中止${operation}`,
   ahead: "领先",
+  authBlocked: "无法通过远程身份验证",
   behind: "落后",
   changes: "更改",
   conflict: (count) => `${count} 个冲突`,
   continueOperation: (operation) => `继续${operation}`,
   deletions: "行删除",
+  detachedBlocked: "当前不在任何分支上",
+  fetch: "获取远程更新",
+  fetchDetail: "刷新远程分支数据",
   insertions: "行新增",
   largeChange: "变更规模较大",
   merged: "已合并",
   noLocalChanges: "无未提交变更",
-  noUpstream: "无上游分支",
   operationName: (kind) => {
     const names = {
       bisecting: "二分查找",
@@ -49,12 +52,16 @@ const ZH_TEXT: GitStatusDropdownText = {
     return names[kind];
   },
   operationPaused: (operation) => `${operation}已暂停`,
+  publish: "发布分支",
+  publishDetail: "推送到远程并设置上游分支",
   pull: "拉取",
   pullBlocked: "本地有改动，请先提交或储藏再拉取",
   push: "推送",
+  republish: "重新发布分支",
+  republishDetail: "远程分支已删除，请重新发布",
   stash: "储藏",
   sync: "同步",
-  upstreamGone: "远端已删",
+  syncUnavailable: "当前无法进行远程同步",
 };
 
 function makeStatus(overrides: Partial<GitStatus> = {}): GitStatus {
@@ -99,7 +106,7 @@ function derive(
 ): GitStatusDropdownModel {
   return deriveGitStatusDropdownModel(status, PANEL_CONTEXT, {
     fallbackWorktreeName: "pier",
-    worktreePath: "/workspace/pier",
+    gitRoot: "/workspace/pier",
     ...options,
   });
 }
@@ -132,6 +139,7 @@ describe("deriveGitStatusDropdownModel", () => {
 
     expect(clean.tasks.map((task) => task.id)).toEqual([
       "viewChanges",
+      "fetch",
       "switchBranch",
       "switchWorktree",
     ]);
@@ -153,7 +161,8 @@ describe("deriveGitStatusDropdownModel", () => {
     ]) {
       const model = derive(status);
       expect(model.variant).toBe("normal");
-      expect(model.tasks.map((task) => task.id).slice(-2)).toEqual([
+      expect(model.tasks.map((task) => task.id).slice(-3)).toEqual([
+        "fetch",
         "switchBranch",
         "switchWorktree",
       ]);
@@ -319,7 +328,7 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(sync.value).toBe("↓2");
   });
 
-  it("does not offer sync operations without a usable upstream", () => {
+  it("offers publish when the branch has no upstream or upstream is gone", () => {
     expect(
       resolveRemoteSyncActionId(
         makeStatus({
@@ -334,7 +343,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toBeNull();
+    ).toBe("publish");
     expect(
       resolveRemoteSyncActionId(
         makeStatus({
@@ -349,7 +358,11 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toBeNull();
+    ).toBe("publish");
+  });
+
+  it("offers fetch when the branch is in sync with upstream", () => {
+    expect(resolveRemoteSyncActionId(makeStatus())).toBe("fetch");
   });
 
   it("puts paused rebase with continue and abort rows on top", () => {
@@ -440,7 +453,7 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(rowIds(model)).not.toContain("sync");
   });
 
-  it("models clean merged upstream-gone branch as muted lifecycle rows", () => {
+  it("models clean merged upstream-gone branch with republish action", () => {
     const model = derive(
       makeStatus({
         branch: {
@@ -455,13 +468,14 @@ describe("deriveGitStatusDropdownModel", () => {
       })
     );
 
-    expect(rowIds(model)).toEqual(["clean", "merged", "upstreamGone"]);
+    expect(rowIds(model)).toEqual(["clean", "sync", "merged"]);
     expect(row(model, "merged").action).toBeNull();
     expect(row(model, "merged").tone).toBe("muted");
-    expect(row(model, "upstreamGone").tone).toBe("muted");
+    expect(row(model, "sync").action).toBe("publish");
+    expect(row(model, "sync").label).toBe("Publish Branch Again");
   });
 
-  it("flags a branch without upstream as a muted info row", () => {
+  it("offers a clickable publish row when the branch has no upstream", () => {
     const model = derive(
       makeStatus({
         branch: {
@@ -476,8 +490,37 @@ describe("deriveGitStatusDropdownModel", () => {
       })
     );
 
-    expect(rowIds(model)).toEqual(["clean", "noUpstream"]);
-    expect(row(model, "noUpstream").action).toBeNull();
+    expect(rowIds(model)).toEqual(["clean", "sync"]);
+    const sync = row(model, "sync");
+    expect(sync.action).toBe("publish");
+    expect(sync.label).toBe("Publish Branch");
+    expect(sync.title).toBe("Push to the remote and set the upstream branch");
+  });
+
+  it("offers republish when upstream is gone", () => {
+    const model = derive(
+      makeStatus({
+        branch: {
+          ahead: 0,
+          behind: 0,
+          branch: "feature/gone",
+          mergedIntoDefault: null,
+          oid: "abc1234567",
+          upstream: "origin/feature/gone",
+          upstreamGone: true,
+        },
+      })
+    );
+    const sync = row(model, "sync");
+    expect(sync.action).toBe("publish");
+    expect(sync.label).toBe("Publish Branch Again");
+  });
+
+  it("does not put fetch on the sync row when already in sync (task zone owns fetch)", () => {
+    const model = derive(makeStatus());
+    expect(rowIds(model)).toEqual(["clean"]);
+    expect(model.tasks.map((t) => t.id)).toContain("fetch");
+    expect(resolveRemoteSyncActionId(makeStatus())).toBe("fetch");
   });
 
   it("shows the stash count as an informational row", () => {
@@ -501,8 +544,10 @@ describe("deriveGitStatusDropdownModel", () => {
       })
     );
 
+    // 已同步：同步行不占位；Fetch 在固定任务区
     expect(rowIds(model)).toEqual(["clean"]);
     expect(row(model, "clean").action).toBeNull();
+    expect(model.tasks.map((t) => t.id)).toContain("fetch");
   });
 
   it("完整行统计的下拉行同时保留新增和删除零值", () => {

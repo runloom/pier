@@ -1,4 +1,10 @@
 import { rankAgents } from "@shared/agent-selection.ts";
+import type {
+  AgentLifecycleAction,
+  AgentLifecycleActionResult,
+  AgentLifecycleProbe,
+  AgentLifecycleProbeRequest,
+} from "@shared/contracts/agent/lifecycle.ts";
 import type { AgentSelectionResult } from "@shared/contracts/agent/usage.ts";
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
 import type { IpcMain } from "electron";
@@ -8,6 +14,7 @@ import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
 
 export function registerAgentsIpc(ipcMain: IpcMain): void {
   const detection = appCore.services.agentDetection;
+  const lifecycle = appCore.services.agentLifecycle;
 
   ipcMain.handle(
     "pier:agents:detect",
@@ -67,6 +74,77 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
       }
       const launchId = terminalLaunchRegistry.register({ agentId, ...launch });
       return { launchId };
+    }
+  );
+
+  ipcMain.handle(
+    "pier:agents:lifecycle:probe",
+    async (
+      _e,
+      request?: AgentLifecycleProbeRequest
+    ): Promise<AgentLifecycleProbe[]> => {
+      if (!lifecycle) {
+        return [];
+      }
+      return lifecycle.probe(request);
+    }
+  );
+
+  ipcMain.handle(
+    "pier:agents:lifecycle:run",
+    async (
+      _e,
+      payload: { agentId: AgentKind; action: AgentLifecycleAction }
+    ): Promise<AgentLifecycleActionResult> => {
+      if (!lifecycle) {
+        return {
+          action: payload.action,
+          agentId: payload.agentId,
+          ok: false,
+          errorCode: "unavailable" as const,
+        };
+      }
+      return lifecycle.run(payload.agentId, payload.action);
+    }
+  );
+
+  ipcMain.handle(
+    "pier:agents:lifecycle:runMany",
+    async (
+      _e,
+      payload: {
+        agentIds: AgentKind[];
+        action: AgentLifecycleAction;
+      }
+    ): Promise<AgentLifecycleActionResult[]> => {
+      if (!lifecycle) {
+        return payload.agentIds.map((agentId) => ({
+          action: payload.action,
+          agentId,
+          ok: false,
+          errorCode: "unavailable" as const,
+        }));
+      }
+      return lifecycle.runMany(payload.agentIds, payload.action);
+    }
+  );
+
+  ipcMain.handle(
+    "pier:agents:lifecycle:cancel",
+    async (
+      _e,
+      payload: { agentId?: AgentKind; runId?: string }
+    ): Promise<boolean> => {
+      if (!lifecycle) {
+        return false;
+      }
+      if (payload.agentId) {
+        return lifecycle.cancel(payload.agentId);
+      }
+      if (payload.runId) {
+        return lifecycle.cancelRun(payload.runId);
+      }
+      return false;
     }
   );
 

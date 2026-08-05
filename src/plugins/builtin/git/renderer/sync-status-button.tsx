@@ -4,24 +4,41 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitStatus } from "@shared/contracts/git.ts";
-import { RefreshCw } from "lucide-react";
+import {
+  CloudDownload,
+  Loader2,
+  type LucideIcon,
+  RefreshCw,
+  Upload,
+} from "lucide-react";
 import type React from "react";
 import { useSyncExternalStore } from "react";
 import { confirmDialog } from "./command-helpers.ts";
 import { pluginText } from "./plugin-text.ts";
 import {
-  type GitRemoteSyncActionId,
+  chromeForAction,
+  type RemoteSyncActionId,
+  type RemoteSyncBlockReason,
+  resolveRemoteSyncActionId,
+  resolveRemoteSyncBlockReason,
+} from "./remote-sync-policy.ts";
+import {
   gitStatusDropdownErrorMessage,
   runRemoteSyncAction,
 } from "./status-dropdown-actions.ts";
-import { resolveRemoteSyncActionId } from "./status-dropdown-model.ts";
 import { SyncCounts } from "./status-parts.tsx";
 import { isSyncBusy, subscribeSyncBusy } from "./sync-busy.ts";
 
-/** VS Code confirmSync 同构：仅双向 sync 需确认，单向 push/pull 直接执行。 */
 const CONFIRM_SYNC_KEY = "pier.git.statusItem.confirmSync";
 
-/** 与底栏空壳判定共用：clean + 上游可用 +（↑↓ 非零或 busy）。 */
+const ACTION_ICONS: Record<RemoteSyncActionId, LucideIcon> = {
+  fetch: CloudDownload,
+  publish: Upload,
+  pull: RefreshCw,
+  push: RefreshCw,
+  syncChanges: RefreshCw,
+};
+
 export function gitSyncStatusHasContent(
   status: GitStatus,
   options: { busy?: boolean } = {}
@@ -29,21 +46,43 @@ export function gitSyncStatusHasContent(
   if (status.repoState.kind !== "clean") {
     return false;
   }
-  const { ahead, behind, upstream, upstreamGone } = status.branch;
-  if (upstream === null || upstreamGone) {
-    return false;
+  if (resolveRemoteSyncActionId(status) !== null) {
+    return true;
   }
-  return ahead > 0 || behind > 0 || Boolean(options.busy);
+  return Boolean(options.busy);
 }
 
-const ACTION_TOOLTIPS: Record<
-  GitRemoteSyncActionId,
-  { fallback: string; key: string }
-> = {
-  pull: { fallback: "Pull Changes", key: "statusDropdownPull" },
-  push: { fallback: "Push Changes", key: "statusDropdownPush" },
-  syncChanges: { fallback: "Sync Changes", key: "statusDropdownSync" },
-};
+function blockReasonText(
+  pluginContext: RendererPluginContext,
+  reason: RemoteSyncBlockReason
+): string {
+  switch (reason) {
+    case "authRequired":
+      return pluginText(
+        pluginContext,
+        "statusRowAuthBlocked",
+        "Could not authenticate with the remote. Check credentials, then try again."
+      );
+    case "detached":
+      return pluginText(
+        pluginContext,
+        "statusRowDetachedBlocked",
+        "You are not on a branch. Switch to a branch first."
+      );
+    case "pullBlocked":
+      return pluginText(
+        pluginContext,
+        "statusRowPullBlocked",
+        "Commit or stash local changes before pulling"
+      );
+    default:
+      return pluginText(
+        pluginContext,
+        "statusRowSyncUnavailable",
+        "Remote sync is not available right now"
+      );
+  }
+}
 
 function syncDetail(
   pluginContext: RendererPluginContext,
@@ -64,12 +103,12 @@ async function confirmAndRunSync({
   actionId,
   pluginContext,
   upstream,
-  worktreePath,
+  gitRoot,
 }: {
-  actionId: GitRemoteSyncActionId;
+  actionId: RemoteSyncActionId;
+  gitRoot: string;
   pluginContext: RendererPluginContext;
   upstream: null | string;
-  worktreePath: string;
 }): Promise<void> {
   if (
     actionId === "syncChanges" &&
@@ -92,77 +131,120 @@ async function confirmAndRunSync({
       return;
     }
   }
-  await runRemoteSyncAction(pluginContext, actionId, worktreePath);
+  await runRemoteSyncAction(pluginContext, actionId, gitRoot);
 }
 
 /**
- * 状态栏独立同步项（VS Code sync 状态栏项同构）：
- * - 仅在 repoState clean、上游可用且 ↑/↓ 非零（或同步进行中）时出现；
- * - 点击执行 push / pull / sync（双向 sync 首次经 confirmSync 设置确认）；
- * - busy 期间图标旋转、禁点，同一工作树多面板共享 busy 态并发去重；
- * - 不可执行时（behind + 本地有改动阻塞 pull）降级为可读信息态。
+ * 状态栏远程项：chrome 由 REMOTE_SYNC_CHROME 表驱动。
+ * gitRoot 为 busy / 执行 cwd 的唯一键。
  */
 export function GitSyncStatusButton({
+  gitRoot,
   pluginContext,
   status,
   syncCaveat,
-  worktreePath,
 }: {
+  gitRoot: string;
   pluginContext: RendererPluginContext;
   status: GitStatus;
-  /** Fetch 快照年龄/暂停原因（↑↓ 数字可能过期时标注）。 */
   syncCaveat: null | string;
-  worktreePath: string;
 }): React.ReactElement | null {
   const busy = useSyncExternalStore(subscribeSyncBusy, () =>
-    isSyncBusy(worktreePath)
+    isSyncBusy(gitRoot)
   );
   if (!gitSyncStatusHasContent(status, { busy })) {
     return null;
   }
-  const { ahead, behind, upstream } = status.branch;
+  const { ahead, behind, upstream, upstreamGone } = status.branch;
   const actionId = resolveRemoteSyncActionId(status);
-  const detail = syncDetail(pluginContext, ahead, behind);
-  const blockedHint =
-    actionId === null && !busy
-      ? pluginText(
-          pluginContext,
-          "statusRowPullBlocked",
-          "Commit or stash local changes before pulling"
-        )
+
+  const chrome = actionId ? chromeForAction(actionId, { upstreamGone }) : null;
+  const countsDetail = syncDetail(pluginContext, ahead, behind);
+  const detail = chrome?.detailKey
+    ? pluginText(pluginContext, chrome.detailKey, chrome.detailFallback)
+    : countsDetail;
+
+  const blockReason =
+    actionId === null && !busy ? resolveRemoteSyncBlockReason(status) : null;
+  const blockedHint = blockReason
+    ? blockReasonText(pluginContext, blockReason)
+    : null;
+  const actionHint = chrome
+    ? pluginText(pluginContext, chrome.tooltipKey, chrome.tooltipFallback)
+    : null;
+  const busyHint =
+    busy && chrome
+      ? pluginText(pluginContext, chrome.busyKey, chrome.busyFallback)
       : null;
-  const actionHint = actionId
-    ? pluginText(
-        pluginContext,
-        ACTION_TOOLTIPS[actionId].key,
-        ACTION_TOOLTIPS[actionId].fallback
-      )
-    : null;
-  const busyHint = busy
-    ? pluginText(pluginContext, "statusDropdownSyncing", "Syncing changes…")
-    : null;
-  // openOnFocus=false：动作/阻塞/caveat 并入 aria，避免键盘用户只听见泛化「同步」。
+
+  const primaryLabel = chrome
+    ? pluginText(pluginContext, chrome.labelKey, chrome.labelFallback)
+    : pluginText(pluginContext, "statusSyncLabel", "Sync changes");
+
   const ariaLabel = [
-    pluginText(pluginContext, "statusSyncLabel", "Sync changes"),
+    primaryLabel,
     detail,
     busyHint ?? actionHint ?? blockedHint,
     syncCaveat,
   ]
     .filter(Boolean)
     .join(", ");
+
   const onClick = (): void => {
     if (busy || actionId === null) {
       return;
     }
     confirmAndRunSync({
       actionId,
+      gitRoot,
       pluginContext,
       upstream,
-      worktreePath,
     }).catch((err: unknown) => {
-      pluginContext.notifications.error(gitStatusDropdownErrorMessage(err));
+      const message = gitStatusDropdownErrorMessage(err);
+      const short =
+        message.length < 160 &&
+        !message.includes("\n") &&
+        !message.includes("fatal:");
+      if (short) {
+        pluginContext.notifications.error(message);
+        return;
+      }
+      pluginContext.dialogs
+        .alert({
+          body: message,
+          title: pluginText(
+            pluginContext,
+            "statusDropdownRemoteFailed",
+            "Remote operation failed"
+          ),
+        })
+        .catch(() => undefined);
     });
   };
+
+  const spinMode = chrome?.spin ?? false;
+  const useLoader = Boolean(busy && spinMode === "loader");
+  const spinIcon = Boolean(busy && spinMode === "semantic");
+  let Icon: LucideIcon = RefreshCw;
+  if (useLoader) {
+    Icon = Loader2;
+  } else if (actionId) {
+    Icon = ACTION_ICONS[actionId];
+  }
+  const gitIcon = useLoader ? "git-busy" : (chrome?.gitIcon ?? "git-sync");
+
+  const showLabel = actionId === "publish" || actionId === "fetch";
+  const trailing = showLabel ? (
+    <span className="truncate">{primaryLabel}</span>
+  ) : (
+    <SyncCounts
+      ahead={ahead}
+      behind={behind}
+      pluginContext={pluginContext}
+      syncCaveat={syncCaveat}
+    />
+  );
+
   return (
     <Tooltip>
       <TooltipTrigger asChild openOnFocus={false}>
@@ -178,18 +260,13 @@ export function GitSyncStatusButton({
             type="button"
             variant="ghost"
           >
-            <RefreshCw
+            <Icon
               aria-hidden="true"
-              className={cn(busy && "animate-spin")}
-              data-git-icon="git-sync"
+              className={cn((useLoader || spinIcon) && "animate-spin")}
+              data-git-icon={gitIcon}
               data-icon
             />
-            <SyncCounts
-              ahead={ahead}
-              behind={behind}
-              pluginContext={pluginContext}
-              syncCaveat={syncCaveat}
-            />
+            {trailing}
           </Button>
         </span>
       </TooltipTrigger>

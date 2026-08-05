@@ -211,6 +211,7 @@ export async function readFileDocument(
     format: decoded.format,
     kind: "text",
     mode: permissionsMode(identity.stat.mode),
+    mtimeMs: identity.stat.mtimeMs,
     path: request.path,
     revision,
     root: request.root,

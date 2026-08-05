@@ -1,3 +1,4 @@
+import { listBundledSkills } from "@shared/agent-bundled-skills.ts";
 import type {
   ProjectSkillView,
   UnmanagedSkillView,
@@ -10,6 +11,15 @@ import {
   filterComposerSkillSuggestItems,
   getSkillSuggestMatch,
 } from "@/panel-kits/terminal/structured-composer/composer-skill-suggest.ts";
+
+const EMPTY_SNAPSHOT = {
+  skills: [] as ProjectSkillView[],
+  unmanagedSkills: [] as UnmanagedSkillView[],
+  userGlobalSkills: [] as UserGlobalSkillView[],
+};
+
+/** Isolate disk-layer tests from default adapter bundled table. */
+const noBundled = { bundled: [] as const };
 
 function managed(
   partial: Partial<ProjectSkillView> & { id: string }
@@ -173,7 +183,8 @@ describe("buildComposerSkillSuggestItems", () => {
           }),
         ],
       },
-      "claude"
+      "claude",
+      noBundled
     );
 
     expect(items.map((i) => i.id).sort()).toEqual([
@@ -215,7 +226,8 @@ describe("buildComposerSkillSuggestItems", () => {
         unmanagedSkills: [],
         userGlobalSkills: [],
       },
-      "claude"
+      "claude",
+      noBundled
     );
     expect(items).toEqual([
       expect.objectContaining({
@@ -245,7 +257,8 @@ describe("buildComposerSkillSuggestItems", () => {
         ],
         userGlobalSkills: [],
       },
-      "cursor"
+      "cursor",
+      noBundled
     );
     expect(items.map((i) => i.id)).toEqual(["deslop"]);
   });
@@ -267,7 +280,8 @@ describe("buildComposerSkillSuggestItems", () => {
         unmanagedSkills: [],
         userGlobalSkills: [],
       },
-      "codex"
+      "codex",
+      noBundled
     );
     expect(items).toEqual([
       expect.objectContaining({ id: "prd", invokeText: "$prd" }),
@@ -302,10 +316,61 @@ describe("buildComposerSkillSuggestItems", () => {
         unmanagedSkills: [],
         userGlobalSkills: [],
       },
-      "grok"
+      "grok",
+      noBundled
     );
     // grok has no cells → agentAbsentFromMatrix; enabled managed still listed.
     expect(items.map((i) => i.id)).toEqual(["only-claude"]);
+  });
+
+  it("lists Claude bundled skills including code-review on empty disk", () => {
+    const items = buildComposerSkillSuggestItems(EMPTY_SNAPSHOT, "claude");
+    const ids = items.map((i) => i.id);
+    expect(ids).toContain("code-review");
+    expect(items.find((i) => i.id === "code-review")).toEqual(
+      expect.objectContaining({
+        invokeText: "/code-review",
+        source: "bundled",
+      })
+    );
+    // Host/Grok-only skills must never appear via default table.
+    expect(ids).not.toContain("check-work");
+    expect(ids).not.toContain("imagine");
+  });
+
+  it("lets disk managed override bundled with same id", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "code-review",
+            name: "Project Review",
+            description: "Repo checklist",
+            effects: [
+              {
+                agentKind: "claude",
+                effect: { state: "discoverable", viaRoot: ".claude/skills" },
+              },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "claude"
+    );
+    const review = items.find((i) => i.id === "code-review");
+    expect(review?.source).toBe("project");
+    expect(review?.description).toBe("Repo checklist");
+    expect(review?.label).toBe("Project Review");
+  });
+
+  it("does not attach Claude bundled skills to codex", () => {
+    const items = buildComposerSkillSuggestItems(EMPTY_SNAPSHOT, "codex");
+    expect(items.map((i) => i.id)).not.toContain("code-review");
+    expect(listBundledSkills("codex").some((s) => s.id === "code-review")).toBe(
+      false
+    );
   });
 });
 
@@ -337,7 +402,8 @@ describe("filterComposerSkillSuggestItems", () => {
       unmanagedSkills: [],
       userGlobalSkills: [],
     },
-    "claude"
+    "claude",
+    noBundled
   );
 
   it("filters by id, label, and description", () => {
@@ -348,5 +414,15 @@ describe("filterComposerSkillSuggestItems", () => {
       filterComposerSkillSuggestItems(sample, "unit").map((i) => i.id)
     ).toEqual(["write-tests"]);
     expect(filterComposerSkillSuggestItems(sample, "").length).toBe(2);
+  });
+});
+
+describe("listBundledSkills", () => {
+  it("returns Claude table for openclaude and empty for unknown agents", () => {
+    expect(
+      listBundledSkills("openclaude").some((s) => s.id === "code-review")
+    ).toBe(true);
+    expect(listBundledSkills("unknown-agent")).toEqual([]);
+    expect(listBundledSkills(null)).toEqual([]);
   });
 });

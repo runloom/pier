@@ -18,7 +18,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       ready: "reconciled",
       processing: "native",
       tool: "native",
-      waiting: "unsupported",
+      waiting: "native",
       error: "native",
       completed: "reconciled",
       interrupted: "reconciled",
@@ -36,6 +36,11 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("tool", "PreToolUse", "ToolStart"),
+      // 同 Pre/Post/Denied 按 toolName 分发；名单见 interactive-blocking-tools.ts
+      nativeFact("waiting", "PreToolUse", "InteractionRequested"),
+      nativeFact("waiting", "PostToolUse", "InteractionResolved"),
+      nativeFact("waiting", "PostToolUseFailure", "InteractionResolved"),
+      nativeFact("waiting", "PermissionDenied", "InteractionResolved"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("processing", "PostToolUseFailure", "ToolComplete"),
       nativeFact("processing", "PermissionDenied", "ToolComplete"),
@@ -57,7 +62,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       nativeFact("subagent", "SubagentStart", "SubagentStart"),
       nativeFact("subagent", "SubagentStop", "SubagentStop")
     ),
-    upstream: installedVersion("https://x.ai/cli", "0.2.114"),
+    upstream: installedVersion("https://x.ai/cli", "0.2.118"),
   },
   "mimo-code": {
     integration: "active",

@@ -40,13 +40,13 @@ import { FileTreeSidebar } from "../tree/sidebar.tsx";
 import type { FilesWatchHub } from "../watch-hub.ts";
 import { ResolvedFilePanelActions } from "./actions.tsx";
 import { ResolvedFilePanel } from "./body.tsx";
+import { filesBreadcrumbContextMenuHandler } from "./breadcrumb-context-menu.ts";
 import { revealDiskBreadcrumbInTree } from "./breadcrumb-reveal.ts";
 import { useActiveFilesPanel } from "./group-active-panel.ts";
 import {
   EmptyFileState,
   FilePanelBreadcrumb,
   FilePanelChrome,
-  FilePanelNavButtons,
   FilePanelSearchButton,
   FilePanelShell,
   ReadOnlyErrorState,
@@ -243,17 +243,10 @@ export function FilesGroupView({
     rememberFilesPanelViewMode(panelId, mode);
   }, [activeTab?.panelId, mode, selectedDocumentId]);
 
-  const {
-    canBack,
-    canForward,
-    handleNavBack,
-    handleNavForward,
-    handleOpenFileFromTree,
-  } = useFilesGroupNav({
+  const { handleOpenFileFromTree } = useFilesGroupNav({
     context,
     groupId,
     panelContext,
-    selectedSource,
   });
 
   // chrome 🔍:树可用时切换树内搜索(折叠先展开,等挂载再聚焦);
@@ -312,19 +305,19 @@ export function FilesGroupView({
         onOpenSearch={handleOpenSearch}
         t={t}
       />
-      <FilePanelNavButtons
-        canBack={canBack}
-        canForward={canForward}
-        onBack={handleNavBack}
-        onForward={handleNavForward}
-        t={t}
-      />
     </>
   );
 
   const outsideWorkspace =
     selectedSource?.kind === "disk" &&
     !isDiskSourceRootAllowed(selectedSource.root, panelContext);
+  const breadcrumbContextMenu = filesBreadcrumbContextMenuHandler({
+    context,
+    ...(panelContext ? { panelContext } : {}),
+    ...(activeTab?.panelId ? { panelId: activeTab.panelId } : {}),
+    source: selectedSource,
+    t,
+  });
 
   let center: ReactNode;
   let trailing: ReactNode = null;
@@ -334,6 +327,9 @@ export function FilesGroupView({
     center = (
       <FilePanelBreadcrumb
         ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
+        {...(breadcrumbContextMenu
+          ? { onContextMenu: breadcrumbContextMenu }
+          : {})}
         segments={breadcrumbSegmentsForSource(selectedSource, projectName)}
       />
     );
@@ -380,6 +376,9 @@ export function FilesGroupView({
     center = (
       <FilePanelBreadcrumb
         ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
+        {...(breadcrumbContextMenu
+          ? { onContextMenu: breadcrumbContextMenu }
+          : {})}
         onSegmentClick={handleBreadcrumbClick}
         segments={breadcrumbSegmentsForSource(selectedSource, projectName)}
       />

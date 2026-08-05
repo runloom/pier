@@ -198,6 +198,21 @@ export interface PierWindowAPI {
 
 const agentsApi: PierAgentsAPI = {
   detect: () => ipcRenderer.invoke("pier:agents:detect"),
+  lifecycle: {
+    cancel: (agentId) =>
+      ipcRenderer.invoke("pier:agents:lifecycle:cancel", { agentId }),
+    onProgress: (cb) =>
+      subscribeIpc(PIER_BROADCAST.AGENT_LIFECYCLE_PROGRESS, cb),
+    probe: (request) =>
+      ipcRenderer.invoke("pier:agents:lifecycle:probe", request),
+    run: (agentId, action) =>
+      ipcRenderer.invoke("pier:agents:lifecycle:run", { agentId, action }),
+    runMany: (agentIds, action) =>
+      ipcRenderer.invoke("pier:agents:lifecycle:runMany", {
+        agentIds,
+        action,
+      }),
+  },
   prepareLaunch: (agentId: AgentKind) =>
     ipcRenderer.invoke("pier:agents:prepareLaunch", agentId),
   prepareLaunchFromSpec: (spec) =>

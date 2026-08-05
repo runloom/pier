@@ -1,3 +1,7 @@
+import {
+  type AgentBundledSkill,
+  listBundledSkills,
+} from "@shared/agent-bundled-skills.ts";
 import type {
   ProjectSkillView,
   SkillEffectiveCell,
@@ -6,8 +10,12 @@ import type {
 } from "@shared/contracts/project-skills.ts";
 import { skillInvokeText } from "@shared/skill-invoke.ts";
 
-/** Where the skill was discovered (UI badge only). */
+/**
+ * Where the skill was discovered (UI badge only).
+ * L1 invocable catalog: disk layers + adapter bundled (never host/Grok roots).
+ */
 export type ComposerSkillSource =
+  | "bundled"
   | "project"
   | "project-unmanaged"
   | "user-global";
@@ -26,6 +34,13 @@ export interface ComposerSkillSuggestSnapshotInput {
   skills: readonly ProjectSkillView[];
   unmanagedSkills: readonly UnmanagedSkillView[];
   userGlobalSkills: readonly UserGlobalSkillView[];
+}
+
+export interface BuildComposerSkillSuggestOptions {
+  /**
+   * Override bundled table (tests). Default: {@link listBundledSkills}(agentKind).
+   */
+  bundled?: readonly AgentBundledSkill[];
 }
 
 /**
@@ -75,24 +90,46 @@ function agentAbsentFromMatrix(
 }
 
 /**
- * Build skill suggestions for one agent from a skills snapshot.
+ * Build skill suggestions for one agent (L1 invocable catalog).
  *
- * Inclusion rules (product: show skills the user can insert, not only matrix
- * "healthy" cells):
- * 1. Managed + enabled → always listed (user turned them on; projection lag
- *    or Claude-only roots must not empty the picker).
- * 2. Unmanaged / user-global → only when effect is discoverable or duplicate.
- * 3. Agent not in skill adapters → fall back to enabled managed + all
- *    unmanaged + user-global (best-effort invoke prefix).
- * Same skill id: managed project > unmanaged project > user-global.
+ * Inclusion:
+ * 0. Adapter **bundled** skills (runtime built-ins; not on disk).
+ * 1. Managed + enabled → always listed (projection lag must not empty picker).
+ * 2. Unmanaged / user-global → discoverable or duplicate for this agent.
+ * 3. Agent absent from matrix → enabled managed + all unmanaged + user-global.
+ *
+ * Same id precedence (later wins): bundled < user-global < unmanaged < managed
+ * so disk / Pier-managed overrides bundled (Claude personal/project override).
+ * Host/Grok roots are never sources here.
  */
 export function buildComposerSkillSuggestItems(
   snapshot: ComposerSkillSuggestSnapshotInput,
-  agentKind: string
+  agentKind: string,
+  options?: BuildComposerSkillSuggestOptions
 ): ComposerSkillSuggestItem[] {
   const invoke = (id: string): string | null => skillInvokeText(agentKind, id);
   const byId = new Map<string, ComposerSkillSuggestItem>();
   const agentUnknown = agentAbsentFromMatrix(snapshot, agentKind);
+  const bundled = options?.bundled ?? listBundledSkills(agentKind);
+
+  for (const skill of bundled) {
+    const id = skill.id;
+    const text = invoke(id);
+    if (text == null) {
+      continue;
+    }
+    const label =
+      skill.label != null && skill.label.trim().length > 0
+        ? skill.label.trim()
+        : id;
+    byId.set(id, {
+      description: skill.description,
+      id,
+      invokeText: text,
+      label,
+      source: "bundled",
+    });
+  }
 
   for (const skill of snapshot.userGlobalSkills) {
     if (!(agentUnknown || effectInvocable(skill.effects, agentKind))) {

@@ -118,6 +118,14 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.popStash(cwd, index);
     },
+    fetch: (cwd) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.fetch(cwd);
+    },
+    publish: (cwd) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.publish(cwd);
+    },
     pullFastForward: (cwd) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.pullFastForward(cwd);

@@ -18,8 +18,11 @@ import {
   errorMessage,
   type GitOperationExec,
   hasConflicts,
+  hasUpstreamConfigured,
   looksLikeConflict,
+  NO_UPSTREAM_MESSAGE,
   resolveGitRootOrUnavailable,
+  sshBatchEnv,
   unavailable,
   WRITE_TIMEOUT_MS,
 } from "./operation-helpers.ts";
@@ -85,6 +88,31 @@ export async function abortMerge(
   }
 }
 
+/** 默认 remote：优先 origin，否则 `git remote` 第一个。 */
+export async function resolveDefaultRemote(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<null | string> {
+  try {
+    const output = await execGit(["remote"], cwd);
+    const remotes = output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (remotes.includes("origin")) {
+      return "origin";
+    }
+    return remotes[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+const remoteNetOpts = {
+  env: sshBatchEnv(),
+  timeoutMs: WRITE_TIMEOUT_MS,
+} as const;
+
 export async function pushBranch(
   execGit: GitOperationExec,
   cwd: string
@@ -94,7 +122,52 @@ export async function pushBranch(
     return target;
   }
   try {
-    await execGit(["push"], target.root, { timeoutMs: WRITE_TIMEOUT_MS });
+    await execGit(["push"], target.root, remoteNetOpts);
+    return { kind: "ok" };
+  } catch (err) {
+    return unavailable(errorMessage(err));
+  }
+}
+
+/**
+ * 首次发布 / 上游已删后重建：push -u <defaultRemote> HEAD。
+ * 无 remote 时返回 unavailable（可读 message）。
+ */
+export async function publishBranch(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitRemoteOperationResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  const remote = await resolveDefaultRemote(execGit, target.root);
+  if (remote === null) {
+    return unavailable("No remote is configured for this repository");
+  }
+  if (remote.startsWith("-")) {
+    return unavailable(`Invalid remote name: ${remote}`);
+  }
+  try {
+    // remote 已拒绝以 `-` 开头；HEAD = 当前检出。
+    await execGit(["push", "-u", remote, "HEAD"], target.root, remoteNetOpts);
+    return { kind: "ok" };
+  } catch (err) {
+    return unavailable(errorMessage(err));
+  }
+}
+
+/** 用户触发：刷新 remote-tracking refs（与 autofetch 同命令形态）。 */
+export async function fetchRemotes(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitRemoteOperationResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  try {
+    await execGit(["fetch", "--prune"], target.root, remoteNetOpts);
     return { kind: "ok" };
   } catch (err) {
     return unavailable(errorMessage(err));
@@ -109,10 +182,11 @@ export async function pullFastForward(
   if (target.kind === "unavailable") {
     return target;
   }
+  if (!(await hasUpstreamConfigured(execGit, target.root))) {
+    return unavailable(NO_UPSTREAM_MESSAGE);
+  }
   try {
-    await execGit(["pull", "--ff-only"], target.root, {
-      timeoutMs: WRITE_TIMEOUT_MS,
-    });
+    await execGit(["pull", "--ff-only"], target.root, remoteNetOpts);
     return { kind: "ok" };
   } catch (err) {
     return unavailable(errorMessage(err));
@@ -127,13 +201,14 @@ export async function syncBranch(
   if (target.kind === "unavailable") {
     return target;
   }
+  if (!(await hasUpstreamConfigured(execGit, target.root))) {
+    return unavailable(NO_UPSTREAM_MESSAGE);
+  }
   try {
     // Clean diverged sync rebases local-only commits onto upstream before push.
     // This avoids implicit merge commits while still making Sync actionable.
-    await execGit(["pull", "--rebase"], target.root, {
-      timeoutMs: WRITE_TIMEOUT_MS,
-    });
-    await execGit(["push"], target.root, { timeoutMs: WRITE_TIMEOUT_MS });
+    await execGit(["pull", "--rebase"], target.root, remoteNetOpts);
+    await execGit(["push"], target.root, remoteNetOpts);
     return { kind: "ok" };
   } catch (err) {
     return unavailable(errorMessage(err));

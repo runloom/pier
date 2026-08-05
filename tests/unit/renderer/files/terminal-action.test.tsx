@@ -52,6 +52,7 @@ function markLoadedText(documentId: string, contents: string): void {
     format: { bom: false, encoding: "utf8" },
     kind: "text",
     mode: 0o644,
+    mtimeMs: 1,
     path: "README.md",
     revision: "revision-1",
     root: PROJECT_ROOT,

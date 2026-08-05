@@ -8,6 +8,12 @@ import {
 } from "@pier/ui/field.tsx";
 import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
 import { ToggleGroup, ToggleGroupItem } from "@pier/ui/toggle-group.tsx";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { AGENT_CATALOG, getAgentCatalogEntry } from "@shared/agent-catalog.ts";
@@ -15,14 +21,15 @@ import {
   type AgentKind,
   applyPermissionMode,
 } from "@shared/contracts/agent.ts";
-import { RefreshCw } from "lucide-react";
-import { Fragment, useEffect } from "react";
+import { Loader2, RefreshCw } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { AgentRow } from "@/pages/settings/components/agent-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
+import { useAgentLifecycleStore } from "@/stores/agent-lifecycle.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
@@ -167,8 +174,6 @@ function AgentStatusHooksRow() {
 function AgentListCard() {
   const t = useT();
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
-  const isRefreshing = useAgentDetectStore((s) => s.isRefreshing);
-  const refresh = useAgentDetectStore((s) => s.refresh);
   const detectedIdSet = new Set(detectedIds);
   const orderedEntries = AGENT_CATALOG.map((entry, index) => ({
     entry,
@@ -183,33 +188,8 @@ function AgentListCard() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+      <CardHeader>
         <CardTitle>{t("settings.agents.list.title")}</CardTitle>
-        <Button
-          disabled={isRefreshing}
-          onClick={() => {
-            refresh()
-              .then(() => {
-                toast.success(t("settings.agents.list.refreshSuccess"));
-              })
-              .catch((err: unknown) => {
-                showAppAlert({
-                  title: t("settings.agents.list.refreshFailed"),
-                  body: err instanceof Error ? err.message : String(err),
-                });
-              });
-          }}
-          size="sm"
-          type="button"
-          variant="ghost"
-        >
-          <RefreshCw
-            aria-hidden
-            className={cn(isRefreshing && "animate-spin")}
-            data-icon="inline-start"
-          />
-          {t("settings.agents.list.refresh")}
-        </Button>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 px-0">
         <ItemGroup className="gap-0">
@@ -227,17 +207,156 @@ function AgentListCard() {
   );
 }
 
+/** Page-top actions — mirror plugins: Update all (default) + icon refresh. */
+function AgentsToolbar() {
+  const t = useT();
+  const isRefreshing = useAgentDetectStore((s) => s.isRefreshing);
+  const refresh = useAgentDetectStore((s) => s.refresh);
+  const isProbing = useAgentLifecycleStore((s) => s.isProbing);
+  const updatingAll = useAgentLifecycleStore((s) =>
+    Object.values(s.jobById).some((j) => j?.action === "update")
+  );
+  const probeLifecycle = useAgentLifecycleStore((s) => s.probe);
+  const runMany = useAgentLifecycleStore((s) => s.runMany);
+  // Primitive count only — never select updatableIds() (new array → infinite re-render).
+  const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
+  const disabledSet = useMemo(
+    () => new Set(disabledAgentIds),
+    [disabledAgentIds]
+  );
+  const updatableCount = useAgentLifecycleStore((s) => {
+    let n = 0;
+    for (const probe of Object.values(s.probesById)) {
+      if (
+        probe &&
+        !disabledSet.has(probe.agentId) &&
+        probe.support === "full" &&
+        probe.canInstall &&
+        probe.updateOffered
+      ) {
+        n += 1;
+      }
+    }
+    return n;
+  });
+
+  const headerBusy = isRefreshing || isProbing || updatingAll;
+  const showUpdateAll = updatableCount > 0;
+
+  const handleRefreshAndCheck = useCallback(() => {
+    // Still check latest for disabled agents so re-enable shows correct state immediately.
+    refresh()
+      .then(() => probeLifecycle(undefined, { force: true, checkLatest: true }))
+      .then(() => {
+        toast.success(t("settings.agents.list.refreshSuccess"));
+      })
+      .catch((err: unknown) => {
+        showAppAlert({
+          title: t("settings.agents.list.refreshFailed"),
+          body: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }, [probeLifecycle, refresh, t]);
+
+  const handleUpdateAll = useCallback(() => {
+    const ids = useAgentLifecycleStore.getState().updatableIds();
+    if (ids.length === 0) {
+      return;
+    }
+    runMany(ids, "update")
+      .then((results) => {
+        const failures = results.filter((r) => !r.ok);
+        if (failures.length === 0) {
+          toast.success(t("settings.agents.list.updateAllDone"));
+          return;
+        }
+        return showAppAlert({
+          title: t("settings.agents.list.updateAllPartial"),
+          body: failures
+            .map((f) => {
+              const code = f.errorCode ?? "command_failed";
+              const msg = t(`settings.agents.lifecycle.errors.${code}`);
+              const detail = f.errorDetail?.trim();
+              return detail
+                ? `${f.agentId}: ${msg} (${detail})`
+                : `${f.agentId}: ${msg}`;
+            })
+            .join("\n"),
+        });
+      })
+      .catch((err: unknown) => {
+        showAppAlert({
+          title: t("settings.agents.list.updateAllPartial"),
+          body: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }, [runMany, t]);
+
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      {showUpdateAll ? (
+        <Button
+          disabled={headerBusy}
+          onClick={handleUpdateAll}
+          size="sm"
+          type="button"
+          variant="default"
+        >
+          {updatingAll ? (
+            <Loader2
+              aria-hidden
+              className="animate-spin"
+              data-icon="inline-start"
+            />
+          ) : null}
+          {t("settings.agents.list.updateAll")}
+          {updatableCount > 0 ? ` (${updatableCount})` : ""}
+        </Button>
+      ) : null}
+      <TooltipProvider delayDuration={0} disableHoverableContent>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label={t("settings.agents.list.refresh")}
+              disabled={headerBusy}
+              onClick={handleRefreshAndCheck}
+              size="icon-sm"
+              type="button"
+              variant="outline"
+            >
+              <RefreshCw
+                aria-hidden
+                className={cn(headerBusy && !updatingAll && "animate-spin")}
+                data-icon="inline-start"
+              />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t("settings.agents.list.refresh")}</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
 export function AgentsSection() {
   const t = useT();
   const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
+  const probeLifecycle = useAgentLifecycleStore((s) => s.probe);
 
   useEffect(() => {
-    ensureDetected().catch(() => undefined);
-  }, [ensureDetected]);
+    // Check latest for all agents (including disabled) so re-enable is instant.
+    // Disabled rows hide update UI / counts only.
+    ensureDetected()
+      .then(() => probeLifecycle(undefined, { checkLatest: true }))
+      .catch(() => undefined);
+  }, [ensureDetected, probeLifecycle]);
 
   return (
     <div className="px-4 pb-4" id="agents">
-      <h1 className="mb-4 text-xl">{t("settings.section.agents")}</h1>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <h1 className="text-xl">{t("settings.section.agents")}</h1>
+        <AgentsToolbar />
+      </div>
       <div className="flex flex-col gap-4">
         <Card>
           <CardContent>

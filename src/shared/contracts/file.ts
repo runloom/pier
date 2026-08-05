@@ -275,6 +275,8 @@ export const fileDocumentReadResultSchema = z.discriminatedUnion("kind", [
     format: fileDocumentFormatSchema,
     kind: z.literal("text"),
     mode: z.number().int().nonnegative().nullable(),
+    /** Disk mtime for lightweight open-document reconcile (not content digest). */
+    mtimeMs: z.number().nonnegative(),
     revision: z.string().min(1),
     size: z.number().int().nonnegative(),
     writable: z.boolean(),

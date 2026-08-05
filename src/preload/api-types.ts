@@ -48,8 +48,37 @@ export interface PierShellEnvironmentAPI {
   >;
 }
 
+export interface PierAgentsLifecycleAPI {
+  /** Cancel in-flight install/update for this agent. */
+  cancel: (agentId: AgentKind) => Promise<boolean>;
+  /** Subscribe to live install/update progress; returns unsubscribe. */
+  onProgress: (
+    cb: (
+      progress: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleProgress
+    ) => void
+  ) => () => void;
+  probe: (
+    request?: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleProbeRequest
+  ) => Promise<
+    import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleProbe[]
+  >;
+  run: (
+    agentId: AgentKind,
+    action: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleAction
+  ) => Promise<
+    import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleActionResult
+  >;
+  runMany: (
+    agentIds: AgentKind[],
+    action: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleAction
+  ) => Promise<
+    import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleActionResult[]
+  >;
+}
+
 export interface PierAgentsAPI {
   detect: () => Promise<DetectAgentsResult>;
+  lifecycle: PierAgentsLifecycleAPI;
   prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
   prepareLaunchFromSpec: (spec: {
     agentId: AgentKind;

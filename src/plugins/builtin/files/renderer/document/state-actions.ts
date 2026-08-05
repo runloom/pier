@@ -7,6 +7,7 @@ import {
   withDocumentContents,
   withDocumentDeletedOnDisk,
   withDocumentDiskConflict,
+  withDocumentDiskConflictDismissed,
   withDocumentDurabilityConfirmed,
   withDocumentDurabilityError,
   withDocumentError,
@@ -35,6 +36,9 @@ export function createFilesDocumentStateActions(replace: ReplaceDocument) {
     },
     markDocumentDiskConflict(documentId: string): void {
       replace(documentId, withDocumentDiskConflict);
+    },
+    dismissDocumentDiskConflict(documentId: string): void {
+      replace(documentId, withDocumentDiskConflictDismissed);
     },
     markDocumentDurabilityConfirmed(
       documentId: string,

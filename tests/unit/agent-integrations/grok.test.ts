@@ -150,6 +150,16 @@ describe("grokIntegration", () => {
     expect(typedHooks.PermissionDenied?.[0]?.hooks[0]?.command).toContain(
       '"ToolComplete"'
     );
+    // plan / ask_user 阻塞工具 → Interaction*（19-plan-mode.md）
+    expect(typedHooks.PreToolUse?.[0]?.hooks[0]?.command).toContain(
+      "exit_plan_mode"
+    );
+    expect(typedHooks.PreToolUse?.[0]?.hooks[0]?.command).toContain(
+      '"InteractionRequested"'
+    );
+    expect(typedHooks.PostToolUse?.[0]?.hooks[0]?.command).toContain(
+      '"InteractionResolved"'
+    );
     expect(typedHooks.SubagentStart?.[0]?.hooks[0]?.command).toContain(
       '"SubagentStart"'
     );
@@ -163,6 +173,111 @@ describe("grokIntegration", () => {
       '"processing"'
     );
   });
+
+  it("exit_plan_mode PreToolUse 上报 InteractionRequested，普通工具仍 ToolStart", async () => {
+    const integration = await loadIntegration();
+    await integration.install();
+    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const hooks = installed.hooks as Record<
+      string,
+      Array<{ hooks: Array<{ command: string }> }>
+    >;
+    const preTool = hooks.PreToolUse?.[0]?.hooks[0]?.command ?? "";
+    const postTool = hooks.PostToolUse?.[0]?.hooks[0]?.command ?? "";
+    const root = await mkdtemp(join(tmpdir(), "pier-grok-plan-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const env = {
+      ...process.env,
+      PATH: pathForHookSpawn(process.env.PATH),
+      PIER_AGENT_EVENT_LOG: logPath,
+      PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+      PIER_PANEL_ID: "p1",
+      PIER_WINDOW_ID: "w1",
+    };
+    const common = {
+      cwd: "/repo",
+      permissionMode: "plan",
+      sessionId: "grok-plan-1",
+      timestamp: "2026-08-05T12:00:00Z",
+      workspaceRoot: "/repo",
+    };
+    for (const [cmd, payload] of [
+      [
+        preTool,
+        {
+          ...common,
+          hookEventName: "pre_tool_use",
+          toolInput: {},
+          toolInputTruncated: false,
+          toolName: "exit_plan_mode",
+          toolUseId: "plan-tool-1",
+        },
+      ],
+      [
+        postTool,
+        {
+          ...common,
+          hookEventName: "post_tool_use",
+          toolInput: {},
+          toolInputTruncated: false,
+          toolName: "exit_plan_mode",
+          toolResult: "approved",
+          toolUseId: "plan-tool-1",
+        },
+      ],
+      [
+        preTool,
+        {
+          ...common,
+          hookEventName: "pre_tool_use",
+          toolInput: { command: "ls" },
+          toolInputTruncated: false,
+          toolName: "run_terminal_command",
+          toolUseId: "shell-1",
+        },
+      ],
+    ] as const) {
+      const result = spawnSync("/bin/sh", ["-c", cmd], {
+        env,
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      {
+        agent: "grok",
+        event: "InteractionRequested",
+        interactionId: "plan-tool-1",
+        interactionKind: "permission",
+        toolName: "exit_plan_mode",
+        toolUseId: "plan-tool-1",
+        v: 3,
+      },
+      {
+        agent: "grok",
+        event: "InteractionResolved",
+        interactionId: "plan-tool-1",
+        interactionKind: "permission",
+        interactionOutcome: "completed",
+        toolName: "exit_plan_mode",
+        v: 3,
+      },
+      {
+        agent: "grok",
+        event: "ToolStart",
+        toolName: "run_terminal_command",
+        toolUseId: "shell-1",
+        v: 3,
+      },
+    ]);
+  }, 15_000);
 
   it("0.2.114 官方载荷：子智能体在父会话启动、子会话停止，并发与重复停止均闭环", async () => {
     const integration = await loadIntegration();

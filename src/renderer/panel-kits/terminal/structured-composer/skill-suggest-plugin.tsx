@@ -323,13 +323,13 @@ export function SkillSuggestPlugin({
   }
 
   const emptyProject = !projectRootPath;
+  const noAgent = !emptyProject && agentKind == null;
   const showNotSupported =
-    !emptyProject &&
-    (agentKind == null ||
-      (catalogEmpty &&
-        status === "done" &&
-        items.length === 0 &&
-        query.trim().length === 0));
+    !(emptyProject || noAgent) &&
+    catalogEmpty &&
+    status === "done" &&
+    items.length === 0 &&
+    query.trim().length === 0;
 
   return (
     <ComposerAutocompletePortal
@@ -341,6 +341,9 @@ export function SkillSuggestPlugin({
         emptyProjectBody={t("terminal.composer.skillEmptyProjectBody")}
         emptyProjectTitle={t("terminal.composer.skillEmptyProjectTitle")}
         items={items}
+        noAgent={noAgent}
+        noAgentBody={t("terminal.composer.skillNoAgentBody")}
+        noAgentTitle={t("terminal.composer.skillNoAgentTitle")}
         noResults={t("terminal.composer.skillNoResults")}
         notSupportedBody={t("terminal.composer.skillNoneAvailableBody")}
         notSupportedTitle={t("terminal.composer.skillNoneAvailableTitle")}

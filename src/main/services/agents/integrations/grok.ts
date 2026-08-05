@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { resolveGrokHome } from "../grok-paths.ts";
+import { GROK_INTERACTIVE_BLOCKING_TOOLS } from "./interactive-blocking-tools.ts";
+import { interactiveBlockingToolLifecycleEvents } from "./interactive-tool-lifecycle.ts";
 import {
   commandExistsOnPath,
   createNestedJsonIntegration,
@@ -14,10 +16,10 @@ const grokConfigPath = () => join(grokHomeDir(), "hooks", "pier-status.json");
 /**
  * Grok hook 事件 → pier 事件名。
  *
- * 运行证据固定为本机 grok v0.2.114 签名二进制及随附
- * docs/user-guide/10-hooks.md、CHANGELOG.md；事件表包含正式事件与
- * SubagentEnd 别名。公开 grok-build 仓库当前只能固定到 0.2.112
- * 源码快照，因此仅用于核验字段定义与事件调用点，不冒充 0.2.114 源码。
+ * 运行证据固定为本机 grok 签名二进制及随附
+ * docs/user-guide/10-hooks.md、19-plan-mode.md、CHANGELOG.md；事件表包含正式事件与
+ * SubagentEnd 别名。公开 grok-build 仓库源码快照仅用于核验字段定义与事件
+ * 调用点，不冒充已安装版本源码。
  * stdin 身份字段为 camelCase：sessionId / toolUseId / toolName；
  * 子智能体字段为 subagentId / subagentType，不借用其他产品的 agentId。
  *
@@ -31,12 +33,12 @@ const grokConfigPath = () => join(grokHomeDir(), "hooks", "pier-status.json");
  * 生命周期事件（SessionStart/SessionEnd/Stop/UserPromptSubmit）拒绝 matcher。
  *
  * **不装 Notification**：文档定义是「agent 发送通知」，实机 payload 以
- * "Turn complete" / "Background task completed" 为主，映 PermissionRequest
- * 会造成假 waiting / 假「需要你处理」。Grok 无独立 PermissionRequest 原生
- * 事件；waiting 证据不足时宁可不报，对齐 Claude/Kimi 纪律。
+ * "Turn complete" / "Background task completed" 为主，映成 waiting
+ * 会造成假「需要你处理」。Grok 无独立 PermissionRequest 原生事件；
+ * waiting 仅对有 toolUseId 闭环的阻塞工具（plan / ask_user_question）上报。
  *
- * PermissionDenied→ToolComplete：它是带同一 toolUseId 的工具拒绝终点，
- * 只结算该工具；不是权限请求结果，不能伪造 waiting / resolved。
+ * PermissionDenied：普通工具 → ToolComplete；交互工具 → InteractionResolved
+ * rejected（同一 toolUseId 结算）。
  * StopFailure→error：API 错误导致回合终止。
  * PreCompact/PostCompact→processing：长压缩期间无其他 hook，避免 TTL 误衰减。
  * SubagentStart/SubagentStop：聚合器仅计数不改状态。
@@ -46,15 +48,13 @@ const grokConfigPath = () => join(grokHomeDir(), "hooks", "pier-status.json");
  * updates.jsonl 的 turn_completed（cancelled / end_turn）补齐。
  *
  * SessionEnd：0.2.113 变更日志已明确修复非 leader TUI 与 headless 会话
- * 退出时不执行的问题，0.2.114 当前运行证据不再保留旧版覆盖限制。
+ * 退出时不执行的问题，当前运行证据不再保留旧版覆盖限制。
  */
 function grokCommand(
   nativeEvent: string,
   event:
     | "SessionStart"
     | "PromptSubmit"
-    | "ToolStart"
-    | "ToolComplete"
     | "processing"
     | "Stop"
     | "error"
@@ -64,13 +64,8 @@ function grokCommand(
 ): string {
   const isSubagent =
     nativeEvent === "SubagentStart" || nativeEvent === "SubagentStop";
-  const isTool =
-    nativeEvent === "PreToolUse" ||
-    nativeEvent === "PostToolUse" ||
-    nativeEvent === "PostToolUseFailure" ||
-    nativeEvent === "PermissionDenied";
   let nativeStateFields: readonly string[] | undefined;
-  if (nativeEvent === "PostToolUseFailure" || nativeEvent === "StopFailure") {
+  if (nativeEvent === "StopFailure") {
     nativeStateFields = ["error"];
   } else if (nativeEvent === "Stop" || nativeEvent === "SessionEnd") {
     nativeStateFields = ["reason"];
@@ -89,12 +84,6 @@ function grokCommand(
       : {}),
     event,
     nativeEvent,
-    ...(isTool
-      ? {
-          toolNamePaths: ["toolName"],
-          toolUseIdPaths: ["toolUseId"],
-        }
-      : {}),
     ...(nativeStateFields ? { nativeStateFields } : {}),
   });
 }
@@ -115,26 +104,12 @@ const GROK_SPEC: NestedJsonIntegrationSpec = {
       nativeEvent: "UserPromptSubmit",
       pierEvent: "PromptSubmit",
     },
-    {
-      buildCommand: () => grokCommand("PreToolUse", "ToolStart"),
-      nativeEvent: "PreToolUse",
-      pierEvent: "ToolStart",
-    },
-    {
-      buildCommand: () => grokCommand("PostToolUse", "ToolComplete"),
-      nativeEvent: "PostToolUse",
-      pierEvent: "ToolComplete",
-    },
-    {
-      buildCommand: () => grokCommand("PostToolUseFailure", "ToolComplete"),
-      nativeEvent: "PostToolUseFailure",
-      pierEvent: "ToolComplete",
-    },
-    {
-      buildCommand: () => grokCommand("PermissionDenied", "ToolComplete"),
-      nativeEvent: "PermissionDenied",
-      pierEvent: "ToolComplete",
-    },
+    ...interactiveBlockingToolLifecycleEvents({
+      includePermissionDenied: true,
+      toolNamePaths: ["toolName"],
+      toolUseIdPaths: ["toolUseId"],
+      tools: GROK_INTERACTIVE_BLOCKING_TOOLS,
+    }),
     {
       buildCommand: () => grokCommand("Stop", "Stop"),
       nativeEvent: "Stop",

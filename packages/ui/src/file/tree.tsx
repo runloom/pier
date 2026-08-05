@@ -21,7 +21,12 @@ import {
 import { FileTreeRenameSession } from "./tree-rename-session.ts";
 import { usePierFileTreeScrollController } from "./tree-scroll-controller.ts";
 import * as treeSearch from "./tree-search.ts";
-import { pierFileTreeStyle, TREE_SCROLLBAR_CSS } from "./tree-style.ts";
+import {
+  FILE_TREE_BRIDGE_CLASS,
+  FILE_TREE_HOST_CLASS,
+  pierFileTreeStyle,
+  TREE_SHADOW_CSS,
+} from "./tree-style.ts";
 import type { PierFileTreeProps } from "./tree-types.ts";
 import {
   fileTreeDragAndDropConfig,
@@ -190,7 +195,7 @@ export function PierFileTree({
     ...fileTreeContextMenuOption(onOpenItemContextMenu != null, refs),
     density: "compact",
     icons: PIER_FILE_TREE_ICONS,
-    unsafeCSS: TREE_SCROLLBAR_CSS,
+    unsafeCSS: TREE_SHADOW_CSS,
     // 只读调用方不配置模型写能力；Files 传入回调时才开启官方拖拽。
     ...(onMovePaths
       ? { dragAndDrop: fileTreeDragAndDropConfig(readRefs) }
@@ -259,6 +264,7 @@ export function PierFileTree({
     expandAllGenerationRef,
     expandedDirectoriesRef,
     ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
+    expansionSeed,
     items,
     itemsRef,
     model,
@@ -280,6 +286,7 @@ export function PierFileTree({
 
   useFileTreePathSync({
     activeSearchRef,
+    applyDirectoryExpansion,
     captureSnapshot,
     directoryStates,
     expandedDirectoriesRef,
@@ -342,7 +349,7 @@ export function PierFileTree({
             resolveExpandedPaths(items, expansionAuthority.getIntent(), {
               ...(directoryStates === undefined ? {} : { directoryStates }),
               propagateCompactChains: true,
-              seed: "none",
+              seed: expansionSeed,
             })
           );
           applyDirectoryExpansion(desired);
@@ -415,6 +422,7 @@ export function PierFileTree({
       directoryStates,
       expandAllDirectories,
       expansionAuthority,
+      expansionSeed,
       items,
       model,
       readRefs,
@@ -439,7 +447,7 @@ export function PierFileTree({
 
   return (
     <div
-      className={cn("h-full min-h-0 w-full", className)}
+      className={cn(FILE_TREE_BRIDGE_CLASS, className)}
       data-slot="pier-file-tree-bridge"
       onClickCapture={rowClickSalvage.onClickCapture}
       onPointerDownCapture={rowClickSalvage.onPointerDownCapture}
@@ -449,7 +457,7 @@ export function PierFileTree({
       <PierreFileTree
         {...props}
         aria-label={label}
-        className="h-full min-h-0 w-full"
+        className={FILE_TREE_HOST_CLASS}
         data-slot="pier-file-tree"
         model={model}
         style={fileTreeStyle}

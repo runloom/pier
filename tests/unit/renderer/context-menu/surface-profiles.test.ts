@@ -62,6 +62,7 @@ describe("context-menu surface profiles", () => {
 
   it("keeps object trees free of edit and layout merge", () => {
     for (const surface of [
+      "files/breadcrumb",
       "files/tree-item",
       "files/tree-background",
       "files/search-result",

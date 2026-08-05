@@ -1,6 +1,10 @@
 import { Zap } from "lucide-react";
+import { useT } from "@/i18n/use-t.ts";
 import type { ComposerSkillQueryStatus } from "./composer-skill-query.ts";
-import type { ComposerSkillSuggestItem } from "./composer-skill-suggest.ts";
+import type {
+  ComposerSkillSource,
+  ComposerSkillSuggestItem,
+} from "./composer-skill-suggest.ts";
 import {
   ComposerSuggestList,
   type ComposerSuggestRowModel,
@@ -14,6 +18,9 @@ export interface SkillSuggestPopupProps {
   emptyProjectBody: string;
   emptyProjectTitle: string;
   items: readonly ComposerSkillSuggestItem[];
+  noAgent: boolean;
+  noAgentBody: string;
+  noAgentTitle: string;
   noResults: string;
   notSupportedBody: string;
   notSupportedTitle: string;
@@ -24,12 +31,38 @@ export interface SkillSuggestPopupProps {
   status: ComposerSkillQueryStatus;
 }
 
+function skillSourceMetaKey(
+  source: ComposerSkillSource
+):
+  | "terminal.composer.skillSourceBundled"
+  | "terminal.composer.skillSourceGlobal"
+  | "terminal.composer.skillSourceInRepo"
+  | "terminal.composer.skillSourceProject" {
+  switch (source) {
+    case "bundled":
+      return "terminal.composer.skillSourceBundled";
+    case "user-global":
+      return "terminal.composer.skillSourceGlobal";
+    case "project-unmanaged":
+      return "terminal.composer.skillSourceInRepo";
+    case "project":
+      return "terminal.composer.skillSourceProject";
+    default: {
+      const _exhaustive: never = source;
+      return _exhaustive;
+    }
+  }
+}
+
 export function SkillSuggestPopup({
   activeIndex,
   emptyProject,
   emptyProjectBody,
   emptyProjectTitle,
   items,
+  noAgent,
+  noAgentBody,
+  noAgentTitle,
   noResults,
   notSupportedBody,
   notSupportedTitle,
@@ -39,7 +72,8 @@ export function SkillSuggestPopup({
   showNotSupported,
   status,
 }: SkillSuggestPopupProps) {
-  const showEmpty = emptyProject || showNotSupported;
+  const t = useT();
+  const showEmpty = emptyProject || noAgent || showNotSupported;
   const rows: ComposerSuggestRowModel[] = items.map((item) => {
     const description = item.description.trim();
     // Placeholder strings some skills put in frontmatter are not useful copy.
@@ -54,10 +88,9 @@ export function SkillSuggestPopup({
       detail,
       icon: <Zap aria-hidden="true" />,
       key: `${item.source}:${item.id}`,
-      // Name only — no `/` prefix or source badge in the list (insert still
-      // uses agent-native invokeText).
+      // Id as primary label; insert still uses agent-native invokeText.
       label: item.id,
-      meta: null,
+      meta: t(skillSourceMetaKey(item.source)),
     };
   });
 
@@ -66,6 +99,9 @@ export function SkillSuggestPopup({
   if (emptyProject) {
     emptyBody = emptyProjectBody;
     emptyTitle = emptyProjectTitle;
+  } else if (noAgent) {
+    emptyBody = noAgentBody;
+    emptyTitle = noAgentTitle;
   } else if (showNotSupported) {
     emptyBody = notSupportedBody;
     emptyTitle = notSupportedTitle;

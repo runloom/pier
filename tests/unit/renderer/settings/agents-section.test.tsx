@@ -186,18 +186,30 @@ describe("AgentsSection", () => {
     });
   });
 
-  it("shows detected badge for claude after detect", async () => {
+  it("omits noise badges for a healthy installed agent", async () => {
     render(<AgentsSection />);
     await waitFor(() => {
       expect(useAgentDetectStore.getState().detectedIds).toContain("claude");
     });
     useAgentPreferencesStore.setState(DEFAULT_PREFERENCES);
-    // Re-render to pick up store state
     cleanup();
     useAgentDetectStore.setState({ detectedIds: ["claude"] });
     render(<AgentsSection />);
     const claudeRow = screen.getByTestId("agent-row-claude");
-    expect(claudeRow.textContent).toContain("Detected");
+    // Healthy install: no Detected / Update available noise (version arrow + Update button carry that).
+    expect(claudeRow.textContent).not.toContain("Detected");
+    expect(claudeRow.textContent).not.toContain("Update available");
+  });
+
+  it("shows missing badge for agents not on PATH", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: makePierMock([]),
+    });
+    useAgentDetectStore.setState({ detectedIds: [] });
+    render(<AgentsSection />);
+    const codexRow = await screen.findByTestId("agent-row-codex");
+    expect(codexRow.textContent).toContain("Not installed");
   });
 
   it("expanding agent-row-claude shows launchCmd", async () => {

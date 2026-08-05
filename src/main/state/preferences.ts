@@ -53,6 +53,8 @@ const DEFAULTS: ProjectPreferences = {
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
+  agentInstallCommands: {},
+  agentUpdateCommands: {},
   worktreeRootPath: "",
   agentStatusHooks: true,
   agentAttention: { ...DEFAULT_AGENT_ATTENTION_SETTINGS },

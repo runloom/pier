@@ -66,6 +66,7 @@ import type {
 import type {
   GitBranchRef,
   GitChangeEvent,
+  GitCheckoutResult,
   GitCommitSearchResult,
   GitDiffBranchesResult,
   GitDiffPatch,
@@ -224,7 +225,7 @@ export interface RendererPluginGitFacade {
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
 
   cancelReviewRequest(request: GitReviewCancelRequest): Promise<void>;
-  checkoutBranch(cwd: string, name: string): Promise<boolean>;
+  checkoutBranch(cwd: string, name: string): Promise<GitCheckoutResult>;
   cherryPick(cwd: string, oid: string): Promise<GitSequencerResult>;
   commit(
     cwd: string,
@@ -236,6 +237,7 @@ export interface RendererPluginGitFacade {
   createAndSwitchBranch(cwd: string, name: string): Promise<boolean>;
   discardChanges(cwd: string, paths: string[]): Promise<boolean>;
   dropStash(cwd: string, index?: number): Promise<GitStashDropResult>;
+  fetch(cwd: string): Promise<GitRemoteOperationResult>;
   getDiffPatch(
     cwd: string,
     options?: {
@@ -260,6 +262,7 @@ export interface RendererPluginGitFacade {
   listStashes(cwd: string): Promise<GitStashListResult>;
   merge(cwd: string, branch: string): Promise<GitMergeResult>;
   popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
+  publish(cwd: string): Promise<GitRemoteOperationResult>;
   pullFastForward(cwd: string): Promise<GitRemoteOperationResult>;
   push(cwd: string): Promise<GitRemoteOperationResult>;
   rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
