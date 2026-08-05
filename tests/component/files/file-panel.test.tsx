@@ -1590,11 +1590,13 @@ describe("Files file-panel", () => {
       fireEvent.click(srcRow);
     }
     await waitFor(() => {
-      expect(
-        within(tree).getByRole("treeitem", {
-          name: /generated|index\.ts/u,
-        })
-      ).toBeVisible();
+      const hits = within(tree).getAllByRole("treeitem", {
+        name: /generated|index\.ts/u,
+      });
+      expect(hits.length).toBeGreaterThan(0);
+      for (const hit of hits) {
+        expect(hit).toBeVisible();
+      }
     });
     const chainRow = within(tree).queryByRole("treeitem", {
       name: /generated/u,

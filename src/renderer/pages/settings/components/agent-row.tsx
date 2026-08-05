@@ -362,17 +362,17 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
 
         {open && canExpand ? (
           <CollapsibleContent asChild forceMount>
-            <div className="w-full space-y-3 px-(--card-spacing) pb-3">
+            <div className="flex w-full flex-col gap-3 px-(--card-spacing) pb-3">
               {probe ? (
-                <div className="space-y-1 text-muted-foreground text-xs">
+                <div className="flex flex-col gap-1 text-muted-foreground text-xs">
                   {/* Version lives on the row (`a → b`); don't repeat here. */}
                   {probe.updateMode === "reinstall" && probe.detected ? (
                     <div>{t("settings.agents.lifecycle.updateHint")}</div>
                   ) : null}
                   {probe.installs.length > 0 ? (
-                    <div className="space-y-1">
+                    <div className="flex flex-col gap-1">
                       <div>{t("settings.agents.lifecycle.installs")}</div>
-                      <ul className="space-y-0.5">
+                      <ul className="flex flex-col gap-0.5">
                         {probe.installs.map((inst) => (
                           <li
                             className="truncate font-mono"

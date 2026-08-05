@@ -86,6 +86,8 @@ export function runProcess(
     let child: ChildProcess;
 
     try {
+      // Class A: caller supplies PES-resolved env; mergeLifecycleChildEnv only
+      // forces non-interactive installer flags (does not invent PATH/shell).
       child = spawn(file, [...args], {
         env: mergeLifecycleChildEnv(options.env),
         windowsHide: true,
