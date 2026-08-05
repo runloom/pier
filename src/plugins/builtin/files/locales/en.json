@@ -25,6 +25,7 @@
   "messages": {
     "filePanel.title": "File",
     "filePanel.breadcrumbLabel": "File location",
+    "filePanel.breadcrumb.contextMenuFailed": "Unable to open path menu",
     "filePanel.empty.title": "No file selected",
     "filePanel.empty.withTree.description": "Select a file from the project tree to open it in this tab.",
     "filePanel.empty.noTree.description": "Open a file to start editing.",
@@ -236,8 +237,6 @@
     "filePanel.conflict.loadDiskFailed": "Unable to load the disk version of this file.",
     "filePanel.conflict.loadDiskFailedTitle": "Couldn’t load disk version",
     "filePanel.conflict.keepLocalLabel": "Keep my edits",
-    "filePanel.nav.back": "Back",
-    "filePanel.nav.forward": "Forward",
     "filePanel.errors.tooLarge": "File is too large to open in the editor (>10 MB).",
     "filePanel.errors.binary": "Binary files cannot be opened in the text editor.",
     "filePanel.view.diff": "Diff",

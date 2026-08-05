@@ -31,6 +31,7 @@ import {
 import type { FilesWatchHub } from "../watch-hub.ts";
 import { ResolvedFilePanelActions } from "./actions.tsx";
 import { ResolvedFilePanel } from "./body.tsx";
+import { filesBreadcrumbContextMenuHandler } from "./breadcrumb-context-menu.ts";
 import { revealDiskBreadcrumbInTree } from "./breadcrumb-reveal.ts";
 import { createFileFilePanelInstanceId } from "./id.ts";
 import { hasOtherOpenFilesSourceInstance } from "./instance-utils.ts";
@@ -352,27 +353,30 @@ function FilePanelContent({
     onSidebarAutoCollapse: () => setTreeCollapsed(true),
     sidebar,
   };
+  const diskBreadcrumb =
+    sourceFromParams == null ? null : (
+      <FilePanelBreadcrumb
+        ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
+        onContextMenu={filesBreadcrumbContextMenuHandler({
+          context: runtimeContext,
+          panelContext: props.params?.context,
+          ...(props.api?.id ? { panelId: props.api.id } : {}),
+          source: sourceFromParams,
+          t,
+        })}
+        onSegmentClick={(index) =>
+          handleBreadcrumbClick(index, sourceFromParams)
+        }
+        segments={breadcrumbSegmentsForSource(sourceFromParams, projectName)}
+      />
+    );
 
   if (outsideWorkspace && sourceFromParams) {
     return (
       <FilePanelShell
         {...shellProps}
         header={
-          <FilePanelChrome
-            center={
-              <FilePanelBreadcrumb
-                ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
-                onSegmentClick={(index) =>
-                  handleBreadcrumbClick(index, sourceFromParams)
-                }
-                segments={breadcrumbSegmentsForSource(
-                  sourceFromParams,
-                  projectName
-                )}
-              />
-            }
-            leading={chromeLeading}
-          />
+          <FilePanelChrome center={diskBreadcrumb} leading={chromeLeading} />
         }
       >
         <ReadOnlyErrorState
@@ -436,18 +440,7 @@ function FilePanelContent({
       {...shellProps}
       header={
         <FilePanelChrome
-          center={
-            <FilePanelBreadcrumb
-              ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
-              onSegmentClick={(index) =>
-                handleBreadcrumbClick(index, sourceFromParams)
-              }
-              segments={breadcrumbSegmentsForSource(
-                sourceFromParams,
-                projectName
-              )}
-            />
-          }
+          center={diskBreadcrumb}
           leading={chromeLeading}
           trailing={
             <ResolvedFilePanelActions

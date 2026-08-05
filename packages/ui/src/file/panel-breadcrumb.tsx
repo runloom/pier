@@ -1,14 +1,22 @@
 import { ChevronRight } from "lucide-react";
-import { useLayoutEffect, useRef, type WheelEvent } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  useLayoutEffect,
+  useRef,
+  type WheelEvent,
+} from "react";
 import { Button } from "../button.tsx";
 import { cn } from "../utils.ts";
 
 export function FilePanelBreadcrumb({
   ariaLabel,
+  onContextMenu,
   onSegmentClick,
   segments,
 }: {
   ariaLabel: string;
+  /** 整条路径右键（复制绝对/相对路径等）。 */
+  onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void;
   onSegmentClick?: (index: number) => void;
   segments: readonly string[];
 }) {
@@ -59,10 +67,13 @@ export function FilePanelBreadcrumb({
   }
   const last = segments.length - 1;
   return (
+    // 路径条是对象型 chrome：整段可滚轮横向滚动，并可右键复制绝对/相对路径。
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: location bar is an object surface (wheel + path context menu).
     <nav
       aria-label={ariaLabel}
       className="flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden font-mono text-xs"
       data-scrollbar="none"
+      onContextMenu={onContextMenu}
       onWheel={handleWheel}
       ref={breadcrumbRef}
     >

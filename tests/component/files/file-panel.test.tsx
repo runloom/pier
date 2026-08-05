@@ -42,10 +42,6 @@ import {
   resetFilesLanguageServiceStatusForTests,
 } from "@plugins/builtin/files/renderer/panel/language-service-status.ts";
 import {
-  clearFilesNavHistory,
-  pushFilesNavEntry,
-} from "@plugins/builtin/files/renderer/panel/nav-history.ts";
-import {
   FilePanelBreadcrumb,
   SidebarToggleButton,
 } from "@plugins/builtin/files/renderer/panel/parts.tsx";
@@ -738,7 +734,6 @@ beforeEach(() => {
   window.sessionStorage.clear();
   clearFilesDocumentStore();
   resetFilesLanguageServiceStatusForTests();
-  clearFilesNavHistory();
   clearFilesTreeStore();
   clearFileTreeSidebarCache();
   filesGroupViewRootProbe.reset();
@@ -748,7 +743,6 @@ afterEach(() => {
   clearHostGroupContentForTests();
   clearFilesDocumentStore();
   resetFilesLanguageServiceStatusForTests();
-  clearFilesNavHistory();
   clearFilesTreeStore();
   clearFileTreeSidebarCache();
   window.localStorage.clear();
@@ -1788,6 +1782,51 @@ describe("Files file-panel", () => {
     );
   });
 
+  it("dispatches files/breadcrumb context menu with disk path metadata", async () => {
+    const popup = vi.fn<RendererPluginContext["contextMenu"]["popup"]>(
+      async () => {
+        /* accept without further processing */
+      }
+    );
+    const context = createMockContext({
+      readText: vi.fn(async () => "hello\n"),
+    });
+    context.contextMenu = {
+      popup,
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
+    };
+    const Panel = createFilePanel(context);
+    render(
+      <Panel
+        {...makeProps({
+          context: panelContext,
+          source: {
+            kind: "disk",
+            path: "scripts/bootstrap.sh",
+            root: PROJECT_ROOT,
+          },
+        })}
+      />
+    );
+
+    await screen.findByRole("navigation", { name: "File location" });
+    fireEvent.contextMenu(
+      screen.getByRole("navigation", { name: "File location" })
+    );
+
+    expect(popup).toHaveBeenCalledTimes(1);
+    expect(popup.mock.calls[0]?.[0]).toBe("files/breadcrumb");
+    expect(popup.mock.calls[0]?.[2]).toMatchObject({
+      metadata: {
+        path: "scripts/bootstrap.sh",
+        projectRoot: panelContext.projectRootPath,
+        root: PROJECT_ROOT,
+      },
+      sourcePanelComponent: "pier.files.filePanel",
+    });
+  });
+
   it("dispatches files/editor context menu with selection ranges", async () => {
     const popup = vi.fn<RendererPluginContext["contextMenu"]["popup"]>(
       async () => {
@@ -2555,79 +2594,6 @@ describe("Files file-panel", () => {
       params: existingParams,
       targetGroupId: "reuse-same-group",
       title: "README.md",
-    });
-    group.element.remove();
-  });
-
-  it("reuses an already pinned same-source tab without overwriting its source", async () => {
-    const groupId = "reuse-pinned-source-group";
-    const staleSource = {
-      id: "pier.files.untitled:shared-nav",
-      kind: "untitled",
-      name: "Old Name.md",
-    } satisfies FilesDocumentPanelSource;
-    const currentSource = {
-      ...staleSource,
-      name: "Current Name.md",
-    } satisfies FilesDocumentPanelSource;
-    const otherSource = {
-      kind: "disk",
-      path: "README.md",
-      root: PROJECT_ROOT,
-    } satisfies FilesDocumentPanelSource;
-    pushFilesNavEntry(groupId, staleSource);
-    pushFilesNavEntry(groupId, otherSource);
-
-    const existingParams = {
-      context: panelContext,
-      dirty: true,
-      pinned: true,
-      pluginComponentId: "pier.files.filePanel",
-      source: currentSource,
-    };
-    const listInstances = vi.fn<
-      RendererPluginContext["panels"]["listInstances"]
-    >(() => [
-      {
-        componentId: "pier.files.filePanel",
-        groupId,
-        id: "existing-pinned-untitled",
-        params: existingParams,
-        title: "Current Name.md",
-      },
-    ]);
-    const openInstance =
-      vi.fn<RendererPluginContext["panels"]["openInstance"]>();
-    const context = createMockContext({ listInstances, openInstance });
-    const Panel = createFilePanel(context);
-    const group = createFakeGroup(groupId);
-    const activePanel = group.makeFilesPanel("active-other-file", {
-      context: panelContext,
-      source: otherSource,
-    });
-    group.setActivePanel(activePanel);
-
-    render(
-      <Panel
-        {...makeProps(
-          { context: panelContext, source: otherSource },
-          { group, id: "active-other-file", isActive: true }
-        )}
-      />
-    );
-
-    const backButton = await screen.findByRole("button", { name: "Back" });
-    expect(backButton).toBeEnabled();
-    fireEvent.click(backButton);
-
-    expect(openInstance).toHaveBeenCalledTimes(1);
-    expect(openInstance.mock.calls[0]?.[0]).toMatchObject({
-      componentId: "pier.files.filePanel",
-      dropUnpinnedInstances: false,
-      instanceId: "existing-pinned-untitled",
-      params: existingParams,
-      targetGroupId: groupId,
-      title: "Current Name.md",
     });
     group.element.remove();
   });
