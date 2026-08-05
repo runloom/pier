@@ -19,8 +19,10 @@ import {
   PierFileTree,
 } from "@pier/ui/file/tree.tsx";
 import { bindTreeExpansionPersistence } from "@pier/ui/file/tree-expansion-persist.ts";
+import { FILE_TREE_SEARCH_SHELL_CLASS } from "@pier/ui/file/tree-style.ts";
 import type { PierFileTreeExpandAllOptions } from "@pier/ui/file/tree-types.ts";
 import { useFileTreeSearch } from "@pier/ui/file/use-tree-search.tsx";
+
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { SearchX } from "lucide-react";
 import { memo, type ReactNode, useCallback, useEffect, useMemo } from "react";
@@ -121,7 +123,7 @@ function GitReviewTreeSidebarComponent({
     <aside className="flex h-full min-h-0 w-full flex-col bg-sidebar">
       {sidebarHeader ?? null}
       {treeSearch.open ? (
-        <div className="shrink-0 px-2 py-1">
+        <div className={FILE_TREE_SEARCH_SHELL_CLASS}>
           <FileSearchBar
             className="w-full"
             focusSignal={treeSearch.focusSignal}

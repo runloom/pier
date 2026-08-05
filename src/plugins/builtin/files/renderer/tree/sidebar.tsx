@@ -11,7 +11,9 @@ import {
   type PierFileTreeItem,
   type PierFileTreeMove,
 } from "@pier/ui/file/tree.tsx";
+import { FILE_TREE_SEARCH_SHELL_CLASS } from "@pier/ui/file/tree-style.ts";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -422,7 +424,7 @@ export function FileTreeSidebar({
       }}
     >
       {treeSearch.open ? (
-        <div className="shrink-0 px-2 py-1">
+        <div className={FILE_TREE_SEARCH_SHELL_CLASS}>
           <FilesSearchBar
             className="w-full"
             focusSignal={treeSearch.focusSignal}

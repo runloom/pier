@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { scrollFadeUnsafeCss } from "../scroll-area.tsx";
 import { SCROLLBAR_SYSTEM_CSS } from "../scrollbar-system.ts";
 import { PIER_FILE_TREE_ICON_COLOR_OVERRIDES } from "./icon-theme.ts";
 
@@ -29,11 +30,31 @@ export type PierFileTreeStyle = React.CSSProperties & {
 };
 
 /**
- * trees Shadow unsafeCSS：
- * 1) 布局空列
- * 2) SCROLLBAR_SYSTEM_CSS（与 globals 同 token）
+ * PierFileTree outer bridge: vertical inset without changing row height.
+ * Pair with {@link FILE_TREE_SEARCH_SHELL_CLASS} (search has no bottom pad).
  */
-export const TREE_SCROLLBAR_CSS = `
+export const FILE_TREE_BRIDGE_CLASS =
+  "flex h-full min-h-0 w-full flex-col py-1";
+
+/** Host fills remaining height inside the bridge. */
+export const FILE_TREE_HOST_CLASS = "min-h-0 w-full flex-1";
+
+/**
+ * Chrome wrapping the tree search bar above {@link PierFileTree}.
+ * Bottom pad is 0 so {@link FILE_TREE_BRIDGE_CLASS} `py-1` owns the single
+ * gap between search and the first row (no double spacing).
+ */
+export const FILE_TREE_SEARCH_SHELL_CLASS = "shrink-0 px-2 pt-1 pb-0";
+
+const FILE_TREE_SCROLL_SELECTOR = '[data-file-tree-virtualized-scroll="true"]';
+
+/**
+ * trees Shadow unsafeCSS bag:
+ * 1) layout empty lanes
+ * 2) SCROLLBAR_SYSTEM_CSS (same tokens as globals)
+ * 3) short vertical scroll-fade on the virtualized scroller
+ */
+export const TREE_SHADOW_CSS = `
 [data-item-section="content"] {
   flex: 1 1 auto;
 }
@@ -57,7 +78,16 @@ export const TREE_SCROLLBAR_CSS = `
 }
 
 ${SCROLLBAR_SYSTEM_CSS}
+
+${scrollFadeUnsafeCss({
+  selector: FILE_TREE_SCROLL_SELECTOR,
+  fade: "vertical",
+  profile: "short",
+})}
 `;
+
+/** Alias of {@link TREE_SHADOW_CSS} (historical name). Prefer TREE_SHADOW_CSS in new code. */
+export const TREE_SCROLLBAR_CSS = TREE_SHADOW_CSS;
 
 export function pierFileTreeStyle(
   style: React.CSSProperties | undefined
