@@ -408,7 +408,28 @@ describe("PluginsSection", () => {
     );
   });
 
-  it("未声明 configuration 的插件行不渲染 Settings 内链", () => {
+  it("声明 settingsPages 的插件行渲染 Settings 内链（与侧栏导航同判定）", () => {
+    const withSettingsPages: PluginRegistryEntry = {
+      ...entry("pier.codex", true),
+      manifest: {
+        ...entry("pier.codex", true).manifest,
+        settingsPages: [{ id: "pier.codex.accounts" }],
+      },
+    };
+    usePluginRegistryStore.setState({
+      initialized: true,
+      plugins: [withSettingsPages],
+    });
+    render(<PluginsSection />);
+
+    fireEvent.click(screen.getByTestId("plugin-settings-link-pier.codex"));
+
+    expect(useSettingsDialogStore.getState().activeSection).toBe(
+      "plugin:pier.codex"
+    );
+  });
+
+  it("未声明 configuration / settingsPages 的插件行不渲染 Settings 内链", () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.git", true)],
@@ -420,8 +441,8 @@ describe("PluginsSection", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("runtime.enabled=false 时(即使 manifest.configuration 存在)不渲染 Settings 内链", () => {
-    const disabledWithConfiguration: PluginRegistryEntry = {
+  it("runtime.enabled=false 时(即使有 configuration / settingsPages)不渲染 Settings 内链", () => {
+    const disabledWithSettings: PluginRegistryEntry = {
       ...entry("pier.git", false),
       manifest: {
         ...entry("pier.git", false).manifest,
@@ -430,12 +451,13 @@ describe("PluginsSection", () => {
             "pier.git.example": { default: true, type: "boolean" },
           },
         },
+        settingsPages: [{ id: "pier.git.page" }],
       },
       runtime: { canToggle: true, enabled: false, kind: "builtin" },
     };
     usePluginRegistryStore.setState({
       initialized: true,
-      plugins: [disabledWithConfiguration],
+      plugins: [disabledWithSettings],
     });
     render(<PluginsSection />);
 

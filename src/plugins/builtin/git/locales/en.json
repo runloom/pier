@@ -637,6 +637,8 @@
     "ui.gitRemoteErrorAuth": "Could not authenticate with the remote. Check your credentials or network access, then try again.",
     "ui.gitRemoteErrorNetwork": "Could not reach the remote. Check your network connection and try again.",
     "ui.gitRemoteErrorRejected": "The remote rejected the update. Fetch remote updates, then pull or sync before pushing again.",
+    "ui.gitRemoteErrorTimeout": "Git ran longer than Pier allows for push, pull, or sync. This can be long local checks before push, or a stuck remote/network transfer. Check the network, run project checks in a terminal if needed, then try again.",
+    "ui.gitRemoteErrorHook": "A local Git hook rejected or stopped this operation. Open a terminal, fix the reported failure, then try again.",
     "ui.gitPublishNeedBranch": "You are not on a branch. Switch to a branch before publishing.",
     "ui.gitPublishAlreadyHasUpstream": "This branch already has an upstream. Use Push or Sync instead.",
     "ui.gitPublishUnavailable": "Cannot publish this branch right now.",

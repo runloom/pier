@@ -5,13 +5,15 @@
 export type GitRemoteFailureKind =
   | "auth"
   | "generic"
+  | "hook"
   | "network"
   | "noRemote"
   | "noUpstream"
-  | "rejected";
+  | "rejected"
+  | "timeout";
 
 const NO_UPSTREAM_RE =
-  /no tracking information|no upstream configured|There is no tracking information|No upstream is configured for the current branch/i;
+  /no tracking information|no upstream configured|There is no tracking information|No upstream is configured for the current branch|has no upstream/i;
 const NO_REMOTE_RE = /No remote is configured|no remote/i;
 const AUTH_RE =
   /terminal prompts disabled|authentication failed|could not read Username|host key verification failed|permission denied \(publickey|could not read Password|Permission denied \(publickey/i;
@@ -19,6 +21,10 @@ const NETWORK_RE =
   /Could not resolve host|Failed to connect|Connection timed out|Network is unreachable|Operation timed out|SSL_ERROR|Connection reset/i;
 const REJECTED_RE =
   /\[rejected\]|non-fast-forward|fetch first|Updates were rejected/i;
+const TIMEOUT_RE =
+  /Git operation timed out|git 执行期限已到|execution timed out/i;
+const LOCAL_HOOK_RE =
+  /A local Git hook rejected|husky - |\.husky\/|pre-push script failed|pre-commit script failed|preflight(?:-ci)?/i;
 
 export function classifyGitRemoteFailure(
   message: string
@@ -32,8 +38,14 @@ export function classifyGitRemoteFailure(
   if (AUTH_RE.test(message)) {
     return "auth";
   }
+  if (TIMEOUT_RE.test(message)) {
+    return "timeout";
+  }
   if (NETWORK_RE.test(message)) {
     return "network";
+  }
+  if (LOCAL_HOOK_RE.test(message)) {
+    return "hook";
   }
   if (REJECTED_RE.test(message)) {
     return "rejected";

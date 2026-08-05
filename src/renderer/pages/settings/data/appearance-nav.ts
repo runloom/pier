@@ -62,25 +62,30 @@ export function pluginIdFromSectionId(
 }
 
 /**
- * 插件导航项：已启用且声明 configuration 或 settingsPages 的插件；icon 经
+ * 插件是否有可打开的设置面：已启用，且声明了 declarative configuration
+ * 或 custom settingsPages。插件列表「设置 →」与侧栏插件导航共用此判定。
+ */
+export function pluginHasSettingsSection(entry: PluginRegistryEntry): boolean {
+  return (
+    entry.runtime.enabled &&
+    (Boolean(entry.manifest.configuration) ||
+      entry.manifest.settingsPages.length > 0)
+  );
+}
+
+/**
+ * 插件导航项：{@link pluginHasSettingsSection} 为真的插件；icon 经
  * {@link resolvePluginIcon}（builtin module → 官方受管品牌图 → Puzzle）。
  */
 export function pluginNavItems(
   entries: readonly PluginRegistryEntry[],
   locale: string
 ): PluginNavItem[] {
-  return entries
-    .filter(
-      (entry) =>
-        entry.runtime.enabled &&
-        (Boolean(entry.manifest.configuration) ||
-          entry.manifest.settingsPages.length > 0)
-    )
-    .map((entry) => ({
-      icon: resolvePluginIcon(entry.manifest.id),
-      id: pluginSectionId(entry.manifest.id),
-      label: resolvePluginConfigurationTitle(entry, locale),
-      pluginId: entry.manifest.id,
-      variant: "plugin" as const,
-    }));
+  return entries.filter(pluginHasSettingsSection).map((entry) => ({
+    icon: resolvePluginIcon(entry.manifest.id),
+    id: pluginSectionId(entry.manifest.id),
+    label: resolvePluginConfigurationTitle(entry, locale),
+    pluginId: entry.manifest.id,
+    variant: "plugin" as const,
+  }));
 }

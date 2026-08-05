@@ -225,7 +225,8 @@ describe("createWorktreeService", () => {
           return Promise.resolve(output.join("\0"));
         }
         if (args[0] === "worktree" && args[1] === "add") {
-          createdPath = String(args[4]);
+          // worktree add --no-track -b <branch> <path> [base]
+          createdPath = String(args[5]);
           return Promise.resolve("");
         }
         return Promise.resolve("");
@@ -256,6 +257,7 @@ describe("createWorktreeService", () => {
       args: [
         "worktree",
         "add",
+        "--no-track",
         "-b",
         "feature/a",
         "/repo.worktree/feature-a",
@@ -263,6 +265,74 @@ describe("createWorktreeService", () => {
       ],
       cwd: "/repo",
     });
+  });
+
+  it("create 用 realpath 对齐 list 路径（macOS /var vs /private/var）", async () => {
+    const logicalTarget = "/var/repo.worktree/feature-a";
+    const realTarget = "/private/var/repo.worktree/feature-a";
+    let createdPath: string | null = null;
+    const service = createWorktreeService({
+      execGit: (args) => {
+        if (args[0] === "rev-parse" && args.includes("--show-toplevel")) {
+          // add 之后 list(path=realTarget) 的 toplevel 应是新 worktree
+          if (createdPath) {
+            return Promise.resolve(`${realTarget}\n`);
+          }
+          return Promise.resolve("/private/var/repo\n");
+        }
+        if (args[0] === "worktree" && args[1] === "list") {
+          const output = createdPath
+            ? [
+                "worktree /private/var/repo",
+                "HEAD abc123",
+                "branch refs/heads/main",
+                "",
+                `worktree ${realTarget}`,
+                "HEAD def456",
+                "branch refs/heads/feature/a",
+                "",
+              ]
+            : [
+                "worktree /private/var/repo",
+                "HEAD abc123",
+                "branch refs/heads/main",
+                "",
+              ];
+          return Promise.resolve(output.join("\0"));
+        }
+        if (args[0] === "worktree" && args[1] === "add") {
+          createdPath = String(args[5]);
+          return Promise.resolve("");
+        }
+        return Promise.resolve("");
+      },
+      mkdir: () => Promise.resolve(undefined),
+      // 模拟偏好根目录落在非 canonical 的 /var 前缀
+      readPreferences: async () => ({
+        worktreeRootPath: "/var/repo.worktree",
+      }),
+      realpath: async (path) => {
+        if (path === logicalTarget || path === "/var/repo.worktree") {
+          return path.replace(/^\/var\//, "/private/var/");
+        }
+        if (path.startsWith("/var/")) {
+          return path.replace(/^\/var\//, "/private/var/");
+        }
+        return path;
+      },
+    } satisfies WorktreeServiceOptionsWithPreferences);
+
+    // list 的 mainPath 来自 git（/private/...），但偏好 root 是 /var/...
+    // 先让 list 返回 private main，再让 root 用绝对 /var 配置。
+    const result = await service.create({
+      branch: "feature/a",
+      name: "feature-a",
+      path: "/private/var/repo",
+    });
+
+    expect(createdPath).toBe(logicalTarget);
+    expect(result.targetPath).toBe(realTarget);
+    expect(result.created.path).toBe(realTarget);
   });
 
   it("create 使用配置的绝对 worktree 根目录构造 git 参数", async () => {
@@ -291,7 +361,8 @@ describe("createWorktreeService", () => {
           return Promise.resolve(output.join("\0"));
         }
         if (args[0] === "worktree" && args[1] === "add") {
-          createdPath = String(args[4]);
+          // worktree add --no-track -b <branch> <path> [base]
+          createdPath = String(args[5]);
           return Promise.resolve("");
         }
         return Promise.resolve("");
@@ -322,6 +393,7 @@ describe("createWorktreeService", () => {
       args: [
         "worktree",
         "add",
+        "--no-track",
         "-b",
         "feature/a",
         "/custom/worktrees/feature-a",
@@ -624,7 +696,8 @@ describe("createWorktreeService", () => {
       execGit: (args, cwd, options) => {
         if (args[0] === "worktree" && args[1] === "add") {
           addCallOptions.push(options);
-          createdPath = String(args[4]);
+          // worktree add --no-track -b <branch> <path> [base]
+          createdPath = String(args[5]);
           return Promise.resolve("");
         }
         if (args[0] === "rev-parse" && args.includes("--show-toplevel")) {

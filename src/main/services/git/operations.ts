@@ -26,6 +26,10 @@ import {
   unavailable,
   WRITE_TIMEOUT_MS,
 } from "./operation-helpers.ts";
+import {
+  REMOTE_WRITE_TIMEOUT_MS,
+  remoteUnavailable,
+} from "./remote-operation-error.ts";
 
 const MERGE_ALREADY_UP_TO_DATE = /^Already up[ -]to[ -]date\.?$/m;
 const PARENT_SPLIT_RE = /\s+/;
@@ -108,9 +112,10 @@ export async function resolveDefaultRemote(
   }
 }
 
+/** Remote ops may run multi-minute local hooks (pre-push); not the 60s local write cap. */
 const remoteNetOpts = {
   env: sshBatchEnv(),
-  timeoutMs: WRITE_TIMEOUT_MS,
+  timeoutMs: REMOTE_WRITE_TIMEOUT_MS,
 } as const;
 
 export async function pushBranch(
@@ -125,7 +130,7 @@ export async function pushBranch(
     await execGit(["push"], target.root, remoteNetOpts);
     return { kind: "ok" };
   } catch (err) {
-    return unavailable(errorMessage(err));
+    return remoteUnavailable(err);
   }
 }
 
@@ -153,7 +158,7 @@ export async function publishBranch(
     await execGit(["push", "-u", remote, "HEAD"], target.root, remoteNetOpts);
     return { kind: "ok" };
   } catch (err) {
-    return unavailable(errorMessage(err));
+    return remoteUnavailable(err);
   }
 }
 
@@ -170,7 +175,7 @@ export async function fetchRemotes(
     await execGit(["fetch", "--prune"], target.root, remoteNetOpts);
     return { kind: "ok" };
   } catch (err) {
-    return unavailable(errorMessage(err));
+    return remoteUnavailable(err);
   }
 }
 
@@ -189,7 +194,7 @@ export async function pullFastForward(
     await execGit(["pull", "--ff-only"], target.root, remoteNetOpts);
     return { kind: "ok" };
   } catch (err) {
-    return unavailable(errorMessage(err));
+    return remoteUnavailable(err);
   }
 }
 
@@ -211,7 +216,7 @@ export async function syncBranch(
     await execGit(["push"], target.root, remoteNetOpts);
     return { kind: "ok" };
   } catch (err) {
-    return unavailable(errorMessage(err));
+    return remoteUnavailable(err);
   }
 }
 

@@ -291,10 +291,16 @@ export function createWorktreeService({
     const rootPath = await resolveRootPath({ path: before.mainPath });
     const targetPath = join(rootPath, request.name);
     await mkdir(rootPath);
+    // 始终建新本地分支；base 只作起点 commit-ish。
+    // 显式 --no-track：即使 base 是 origin/main 等远程跟踪分支，也不把
+    // 新分支的 upstream 绑到 base（Git 默认会对 remote-tracking start-point
+    // 自动 --track，会把「从 main 拉出的 feature」误标成跟踪 origin/main）。
+    // 上游应在首次 push -u 时再建立到同名远程分支。
     await execGit(
       [
         "worktree",
         "add",
+        "--no-track",
         "-b",
         request.branch,
         targetPath,
@@ -304,23 +310,29 @@ export function createWorktreeService({
       { timeoutMs: 60_000 }
     );
 
-    const after = await list({ path: targetPath });
+    // git worktree list 输出 realpath（macOS 上 /var → /private/var）；
+    // join 出的 targetPath 可能仍是非 canonical 形式，禁止用 === 比对。
+    const realTargetPath = await safeRealpath(targetPath, realpath);
+    const after = await list({ path: realTargetPath });
     if (after.status === "unavailable") {
       serviceError(
         after.reason,
-        `created worktree is unavailable: ${targetPath}`
+        `created worktree is unavailable: ${realTargetPath}`
       );
     }
-    const created = after.worktrees.find((item) => item.path === targetPath);
+    const created = after.worktrees.find((item) =>
+      samePath(item.path, realTargetPath)
+    );
     if (!created) {
       serviceError(
         "git_unavailable",
-        `created worktree not found: ${targetPath}`
+        `created worktree not found: ${realTargetPath}`
       );
     }
     return {
       created,
-      targetPath,
+      // 对外统一返回 list/git 侧一致的 canonical 路径，避免后续 open/bind 分叉。
+      targetPath: created.path,
       worktrees: after.worktrees,
     };
   }

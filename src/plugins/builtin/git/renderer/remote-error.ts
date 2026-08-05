@@ -53,5 +53,19 @@ export function remoteOperationErrorBody(
       "The remote rejected the update. Fetch remote updates, then pull or sync before pushing again."
     );
   }
+  if (kind === "timeout") {
+    return pluginText(
+      context,
+      "gitRemoteErrorTimeout",
+      "Git ran longer than Pier allows for push, pull, or sync. This can be long local checks before push, or a stuck remote/network transfer. Check the network, run project checks in a terminal if needed, then try again."
+    );
+  }
+  if (kind === "hook") {
+    return pluginText(
+      context,
+      "gitRemoteErrorHook",
+      "A local Git hook rejected or stopped this operation. Open a terminal, fix the reported failure, then try again."
+    );
+  }
   return error instanceof Error ? error.message : String(error);
 }
