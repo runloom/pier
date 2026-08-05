@@ -28,4 +28,19 @@ describe("classifyRemoteGitError", () => {
       )
     ).toBe("rejected");
   });
+
+  it("detects host timeout and local hook prefixes", () => {
+    expect(
+      classifyRemoteGitError(
+        new Error(
+          "Git operation timed out (local checks or remote transfer may still be running)"
+        )
+      )
+    ).toBe("timeout");
+    expect(
+      classifyRemoteGitError(
+        new Error("A local Git hook rejected or stopped this operation")
+      )
+    ).toBe("hook");
+  });
 });

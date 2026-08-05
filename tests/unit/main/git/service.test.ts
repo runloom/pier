@@ -2638,6 +2638,49 @@ describe("createGitService", () => {
     ]);
   });
 
+  it("push/pull/sync 传 REMOTE_WRITE_TIMEOUT_MS（容纳 pre-push，非 60s 本地写）", async () => {
+    const { REMOTE_WRITE_TIMEOUT_MS } = await import(
+      "@main/services/git/remote-operation-error.ts"
+    );
+    const seen: Array<{
+      args: readonly string[];
+      options: { timeoutMs?: number } | undefined;
+    }> = [];
+    const service = createGitService({
+      execGit: (args, _cwd, options) => {
+        seen.push({ args, options });
+        if (isGitRootRequest(args)) {
+          return Promise.resolve("/repo\n");
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await service.push("/repo");
+    await service.pullFastForward("/repo");
+    await service.sync("/repo");
+
+    const pushCall = seen.find(
+      (entry) => entry.args[0] === "push" && entry.args.length === 1
+    );
+    const pullFf = seen.find(
+      (entry) => entry.args[0] === "pull" && entry.args.includes("--ff-only")
+    );
+    const pullRebase = seen.find(
+      (entry) => entry.args[0] === "pull" && entry.args.includes("--rebase")
+    );
+    const syncPush = seen.filter((entry) => entry.args[0] === "push");
+
+    expect(pushCall?.options?.timeoutMs).toBe(REMOTE_WRITE_TIMEOUT_MS);
+    expect(pullFf?.options?.timeoutMs).toBe(REMOTE_WRITE_TIMEOUT_MS);
+    expect(pullRebase?.options?.timeoutMs).toBe(REMOTE_WRITE_TIMEOUT_MS);
+    expect(syncPush.length).toBeGreaterThanOrEqual(2);
+    for (const entry of syncPush) {
+      expect(entry.options?.timeoutMs).toBe(REMOTE_WRITE_TIMEOUT_MS);
+    }
+    expect(REMOTE_WRITE_TIMEOUT_MS).toBe(20 * 60 * 1000);
+  });
+
   it("listTags 返回标签名数组", async () => {
     const service = createGitService({
       execGit: () => Promise.resolve("v1.0.0\nv1.0.1\nv2.0.0\n"),

@@ -364,7 +364,8 @@ export function createGitService({
         return false;
       }
     },
-    // —— 写操作:全部传 timeoutMs 60s ——
+    // —— 写操作: 本地写 (stage/commit/…) 用 WRITE_TIMEOUT_MS 60s；
+    // push/pull/sync 在 operations.ts 用 REMOTE_WRITE_TIMEOUT_MS（20min，容纳 pre-push）——
     applyPatch: (cwd, request) => runApplyPatch(runGit, cwd, request),
     stage: (cwd, request) => stagePaths(runGit, cwd, request.paths),
     unstage: (cwd, request) => unstagePaths(runGit, cwd, request.paths),

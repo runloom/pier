@@ -703,6 +703,8 @@
     "ui.gitRemoteErrorAuth": "无法通过远程身份验证。请检查登录信息或网络后重试。",
     "ui.gitRemoteErrorNetwork": "无法连接远程。请检查网络后重试。",
     "ui.gitRemoteErrorRejected": "远程拒绝了更新。请先获取远程更新，再拉取或同步后推送。",
+    "ui.gitRemoteErrorTimeout": "推送、拉取或同步的执行时间超过了 Pier 允许的上限。常见原因包括推送前本地检查较久，或远端/网络传输卡住。请检查网络，必要时在终端跑完项目检查后再试。",
+    "ui.gitRemoteErrorHook": "本地 Git 钩子（hook）拒绝或中止了这次操作。请在终端查看失败原因并修复后再试。",
     "ui.gitPublishNeedBranch": "当前不在任何分支上。请先切换到分支再发布。",
     "ui.gitPublishAlreadyHasUpstream": "当前分支已有上游。请使用推送或同步。",
     "ui.gitPublishUnavailable": "当前无法发布此分支。",
