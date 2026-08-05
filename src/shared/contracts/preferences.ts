@@ -166,6 +166,14 @@ export const projectPreferencesSchema = z.object({
   agentCommandOverrides: z
     .partialRecord(agentKindSchema, z.string())
     .default({}),
+  /**
+   * Optional shell one-liners for agent CLI install/update (empty = use Pier defaults).
+   * Same shape as agentCommandOverrides; placeholders come from lifecycle plan previews.
+   */
+  agentInstallCommands: z
+    .partialRecord(agentKindSchema, z.string())
+    .default({}),
+  agentUpdateCommands: z.partialRecord(agentKindSchema, z.string()).default({}),
   worktreeRootPath: z.string().max(1024).default(""),
   /** 是否向已安装 agent 的官方 hook 配置里注入 Pier agent 状态 hook (opt-out, 默认开; 关闭即卸载)。 */
   agentStatusHooks: z.boolean().default(true),

@@ -1,3 +1,4 @@
+import type { AgentLifecycleProgress } from "@shared/contracts/agent/lifecycle.ts";
 import type {
   AgentRuntimeFocusResult,
   AgentRuntimeIndexSnapshot,
@@ -87,6 +88,12 @@ export function broadcastWorktreeCreateProgress(
   progress: WorktreeCreateProgress
 ): void {
   broadcastToAllWindows(PIER_BROADCAST.WORKTREE_CREATE_PROGRESS, progress);
+}
+
+export function broadcastAgentLifecycleProgress(
+  progress: AgentLifecycleProgress
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.AGENT_LIFECYCLE_PROGRESS, progress);
 }
 
 export function broadcastUsageDataChanged(

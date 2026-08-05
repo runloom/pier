@@ -47,6 +47,8 @@ import type { PluginDisableTransitionCoordinator } from "./plugin-disable-transi
 export interface PierCoreServices {
   agentDetection: AgentDetectionService;
   agentLaunchGate?: ManagedAgentLaunchGate;
+  /** Agent CLI install/update lifecycle (settings). Optional for tests. */
+  agentLifecycle?: import("../services/agents/lifecycle/service.ts").AgentLifecycleService;
   agentMcpCatalog?: AgentMcpCatalogService;
   agentRules?: AgentRulesService;
   agentRuntimeIndex: AgentRuntimeIndexService;

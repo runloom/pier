@@ -5,184 +5,40 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@pier/ui/collapsible.tsx";
-import { Item, ItemActions, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
-import { Separator } from "@pier/ui/separator.tsx";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@pier/ui/item.tsx";
 import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
-  type AgentKind,
-  resolveEffectiveAgentDefaultArgs,
-  resolveEffectiveAgentDefaultEnv,
-} from "@shared/contracts/agent.ts";
-import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
+  ArrowUpCircle,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  ExternalLink,
+  Loader2,
+} from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
-import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
+import {
+  formatAgentVersionMeta,
+  formatLifecycleError,
+  formatLifecycleRowFailure,
+  isLifecycleSoftFailure,
+  lifecycleBusyStatusText,
+  resolveAgentStatusBadge,
+} from "@/pages/settings/components/agent-lifecycle-format.ts";
+import { AgentExpandedDetails } from "@/pages/settings/components/agent-row-details.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
+import { useAgentLifecycleStore } from "@/stores/agent-lifecycle.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
-import { showAppAlert } from "@/stores/app-dialog.store.ts";
-
-function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
-  const t = useT();
-  const entry = getAgentCatalogEntry(agentId);
-  const agentCommandOverrides = useAgentPreferencesStore(
-    (s) => s.agentCommandOverrides
-  );
-  const agentDefaultArgs = useAgentPreferencesStore((s) => s.agentDefaultArgs);
-  const agentDefaultEnv = useAgentPreferencesStore((s) => s.agentDefaultEnv);
-  const agentPermissionMode = useAgentPreferencesStore(
-    (s) => s.agentPermissionMode
-  );
-  const setAgentCommandOverrides = useAgentPreferencesStore(
-    (s) => s.setAgentCommandOverrides
-  );
-  const setAgentDefaultArgs = useAgentPreferencesStore(
-    (s) => s.setAgentDefaultArgs
-  );
-
-  const persistedCmd = agentCommandOverrides[agentId] ?? "";
-  const persistedArgs = resolveEffectiveAgentDefaultArgs(
-    agentId,
-    agentDefaultArgs,
-    agentPermissionMode
-  );
-  const effectiveEnv = resolveEffectiveAgentDefaultEnv(
-    agentId,
-    agentDefaultEnv,
-    agentPermissionMode
-  );
-  const envText = Object.entries(effectiveEnv)
-    .map(([key, value]) => `${key}=${value}`)
-    .join(" ");
-
-  // Local edit drafts seeded from the store. Re-sync when the persisted value
-  // changes externally while mounted (mirrors terminal-section's scrollback row)
-  // so a concurrent preference update isn't clobbered by a stale on-blur save.
-  const [cmdDraft, setCmdDraft] = useState(persistedCmd);
-  const [prevCmd, setPrevCmd] = useState(persistedCmd);
-  if (persistedCmd !== prevCmd) {
-    setPrevCmd(persistedCmd);
-    setCmdDraft(persistedCmd);
-  }
-
-  const [argsDraft, setArgsDraft] = useState(persistedArgs);
-  const [prevArgs, setPrevArgs] = useState(persistedArgs);
-  if (persistedArgs !== prevArgs) {
-    setPrevArgs(persistedArgs);
-    setArgsDraft(persistedArgs);
-  }
-
-  if (!entry) {
-    return null;
-  }
-
-  return (
-    <div className="flex basis-full flex-col gap-4 text-xs">
-      <Separator />
-      <div className="grid gap-2 sm:grid-cols-3">
-        <div className="min-w-0">
-          <div className="font-medium text-muted-foreground">
-            {t("settings.agents.row.launchCmd")}
-          </div>
-          <div className="truncate font-mono" title={entry.launchCmd}>
-            {entry.launchCmd}
-          </div>
-        </div>
-        <div className="min-w-0">
-          <div className="font-medium text-muted-foreground">
-            {t("settings.agents.row.detectCmd")}
-          </div>
-          <div className="truncate font-mono" title={entry.detectCmd}>
-            {entry.detectCmd}
-          </div>
-        </div>
-        <div className="min-w-0">
-          <div className="font-medium text-muted-foreground">
-            {t("settings.agents.row.expectedProcess")}
-          </div>
-          <div className="truncate font-mono" title={entry.expectedProcess}>
-            {entry.expectedProcess}
-          </div>
-        </div>
-      </div>
-      <div className="flex flex-col gap-3">
-        <InputRow
-          description={t("settings.agents.row.commandOverrideDesc")}
-          id={`agent-cmd-override-${agentId}`}
-          label={t("settings.agents.row.commandOverride")}
-          onBlur={(value) => {
-            const next = { ...agentCommandOverrides };
-            if (value.trim() === "") {
-              delete next[agentId];
-            } else {
-              next[agentId] = value.trim();
-            }
-            setAgentCommandOverrides(next).catch(() => undefined);
-          }}
-          onChange={setCmdDraft}
-          placeholder={entry.launchCmd}
-          value={cmdDraft}
-        />
-        <InputRow
-          description={t("settings.agents.row.argsDesc")}
-          id={`agent-default-args-${agentId}`}
-          label={t("settings.agents.row.args")}
-          onBlur={(value) => {
-            const next = { ...agentDefaultArgs };
-            if (value.trim() === "") {
-              delete next[agentId];
-            } else {
-              next[agentId] = value.trim();
-            }
-            setAgentDefaultArgs(next).catch(() => undefined);
-          }}
-          onChange={setArgsDraft}
-          value={argsDraft}
-        />
-        {envText ? (
-          <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-            <div>
-              <div className="font-medium text-sm">
-                {t("settings.agents.row.env")}
-              </div>
-              <div className="text-muted-foreground text-sm">
-                {t("settings.agents.row.envDesc")}
-              </div>
-            </div>
-            <div className="max-w-[240px] truncate rounded-md border bg-muted/40 px-3 py-1.5 font-mono text-xs">
-              {envText}
-            </div>
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function resolveStatusLabel(
-  isDisabled: boolean,
-  isDetected: boolean,
-  t: ReturnType<typeof useT>
-): string {
-  if (!isDetected) {
-    return t("settings.agents.status.missing");
-  }
-  if (isDisabled) {
-    return t("settings.agents.status.disabled");
-  }
-  return t("settings.agents.status.detected");
-}
-
-function resolveStatusVariant(
-  isDisabled: boolean,
-  isDetected: boolean
-): "secondary" | "outline" {
-  if (!isDisabled && isDetected) {
-    return "secondary";
-  }
-  return "outline";
-}
+import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 
 export function AgentRow({ agentId }: { agentId: AgentKind }) {
   const t = useT();
@@ -197,16 +53,114 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
   const setDefaultAgentId = useAgentPreferencesStore(
     (s) => s.setDefaultAgentId
   );
+  const probe = useAgentLifecycleStore((s) => s.probesById[agentId]);
+  const job = useAgentLifecycleStore((s) => s.jobById[agentId]);
+  const lifecycleFailure = useAgentLifecycleStore(
+    (s) => s.failureById[agentId]
+  );
+  const runLifecycle = useAgentLifecycleStore((s) => s.run);
+  const cancelLifecycle = useAgentLifecycleStore((s) => s.cancel);
 
   const entry = getAgentCatalogEntry(agentId);
-  const isDetected = detectedIds.includes(agentId);
+  // Prefer lifecycle probe when present (same env + version); fall back to detect.
+  const isDetected =
+    probe === undefined
+      ? detectedIds.includes(agentId)
+      : Boolean(probe.detected);
   const isDisabled = disabledAgentIds.includes(agentId);
   const isAvailable = isDetected && !isDisabled;
   const isDefault = isAvailable && defaultAgentId === agentId;
   const canExpand = isDetected;
+  // Explicit job phase — no batchIds × actionById cross-product.
+  const isBusy = Boolean(job);
+  const busyAction = job?.action;
+  const isQueued = job?.phase === "queued";
+  /** Cancel only while main is actually running this agent. */
+  const canCancelBusy = job?.phase === "running";
+  const lifecycleProgress = job?.progress;
+  const canInstall = probe?.canInstall === true;
+  const displayName = entry?.label ?? agentId;
 
-  const statusLabel = resolveStatusLabel(isDisabled, isDetected, t);
-  const statusVariant = resolveStatusVariant(isDisabled, isDetected);
+  const statusBadge = resolveAgentStatusBadge(t, {
+    broken: Boolean(probe?.installedButBroken),
+    conflict: Boolean(probe?.isConflict),
+    disabled: isDisabled,
+    detected: isDetected,
+  });
+  // Disabled: show installed version only — no latest / upgrade affordance.
+  const versionMeta = formatAgentVersionMeta(
+    probe?.version,
+    isDisabled ? null : probe?.latestVersion
+  );
+
+  const busyStatusText = lifecycleBusyStatusText(t, {
+    action: busyAction ?? undefined,
+    queued: isQueued,
+    progress: canCancelBusy ? lifecycleProgress : undefined,
+  });
+
+  const failureText = lifecycleFailure
+    ? formatLifecycleRowFailure(t, {
+        name: displayName,
+        failure: lifecycleFailure,
+      })
+    : null;
+
+  const handleLifecycle = async (action: "install" | "update") => {
+    if (action === "update" && probe?.isConflict) {
+      const confirmed = await showAppConfirm({
+        title: t("settings.agents.action.conflictConfirmTitle"),
+        body: t("settings.agents.action.conflictConfirmBody"),
+        confirmLabel: t("settings.agents.action.conflictConfirmContinue"),
+        intent: "default",
+      });
+      if (!confirmed) {
+        return;
+      }
+    }
+    try {
+      const result = await runLifecycle(agentId, action);
+      if (result.ok && result.skipped) {
+        toast.success(t("settings.agents.action.alreadyInstalled"));
+        return;
+      }
+      if (!result.ok) {
+        if (isLifecycleSoftFailure(result)) {
+          toast.error(formatLifecycleError(t, result));
+          return;
+        }
+        // Hard failure: red line on the row; details only when stderr/detail exists.
+        const detail = formatLifecycleError(t, result);
+        const short = formatLifecycleRowFailure(t, {
+          name: displayName,
+          failure: {
+            action,
+            errorCode: result.errorCode,
+            errorDetail: result.errorDetail,
+            stepLabel: lifecycleProgress?.label,
+          },
+        });
+        if (result.errorDetail?.trim() || result.commandPreview?.trim()) {
+          await showAppAlert({
+            title: short,
+            body: detail,
+          });
+        }
+      }
+    } catch (err) {
+      await showAppAlert({
+        title:
+          action === "install"
+            ? t("settings.agents.action.installFailed")
+            : t("settings.agents.action.updateFailed"),
+        body: err instanceof Error ? err.message : String(err),
+      });
+    }
+  };
+
+  const handleCancel = () => {
+    cancelLifecycle(agentId).catch(() => undefined);
+  };
 
   const toggleDisabled = () => {
     if (isDisabled) {
@@ -256,17 +210,35 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
         data-testid={`agent-row-${agentId}`}
         role="listitem"
       >
-        <ItemContent className="min-w-0">
-          <ItemTitle className="max-w-full">
+        <ItemContent className="min-w-0 gap-0.5">
+          <ItemTitle className="min-w-0 max-w-full">
             <AgentIcon agentId={agentId} size={16} />
             <span className="truncate">{entry?.label ?? agentId}</span>
-            <Badge variant={statusVariant}>{statusLabel}</Badge>
+            {statusBadge ? (
+              <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
+            ) : null}
             {isDefault ? (
               <Badge variant="secondary">
                 {t("settings.agents.action.isDefault")}
               </Badge>
             ) : null}
           </ItemTitle>
+          {versionMeta ? (
+            <ItemDescription
+              className="font-mono text-xs tabular-nums"
+              title={versionMeta}
+            >
+              {versionMeta}
+            </ItemDescription>
+          ) : null}
+          {failureText && !isBusy ? (
+            <ItemDescription
+              className="text-destructive text-xs"
+              title={lifecycleFailure?.errorDetail ?? failureText}
+            >
+              {failureText}
+            </ItemDescription>
+          ) : null}
         </ItemContent>
         <ItemActions>
           {canExpand ? (
@@ -286,19 +258,6 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
               </Button>
             </CollapsibleTrigger>
           ) : null}
-          {!isDetected && entry?.homepageUrl ? (
-            <Button asChild size="icon-sm" variant="outline">
-              <a
-                aria-label={t("settings.agents.action.website")}
-                href={entry.homepageUrl}
-                onAuxClick={handleWebsiteClick}
-                onClick={handleWebsiteClick}
-                rel="noreferrer"
-              >
-                <ExternalLink data-icon="inline-start" />
-              </a>
-            </Button>
-          ) : null}
           {isAvailable && !isDefault ? (
             <Button
               onClick={() => setDefaultAgentId(agentId).catch(() => undefined)}
@@ -307,6 +266,70 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
               variant="ghost"
             >
               {t("settings.agents.action.setDefault")}
+            </Button>
+          ) : null}
+          {isBusy && busyAction ? (
+            <Button
+              aria-label={
+                canCancelBusy
+                  ? t("settings.agents.action.cancel")
+                  : busyStatusText
+              }
+              disabled={!canCancelBusy}
+              onClick={canCancelBusy ? handleCancel : undefined}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <Loader2 className="animate-spin" data-icon="inline-start" />
+              {busyStatusText}
+            </Button>
+          ) : null}
+          {!(isDetected || probe?.installedButBroken) &&
+          canInstall &&
+          !isBusy ? (
+            <Button
+              onClick={() => {
+                handleLifecycle("install").catch(() => undefined);
+              }}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              <Download data-icon="inline-start" />
+              {t("settings.agents.action.install")}
+            </Button>
+          ) : null}
+          {/* Broken install: repair via update plan (self / reinstall / script). */}
+          {!isDisabled && probe?.installedButBroken && canInstall && !isBusy ? (
+            <Button
+              onClick={() => {
+                handleLifecycle("update").catch(() => undefined);
+              }}
+              size="sm"
+              type="button"
+              variant="default"
+            >
+              <ArrowUpCircle data-icon="inline-start" />
+              {t("settings.agents.action.update")}
+            </Button>
+          ) : null}
+          {!isDisabled &&
+          isDetected &&
+          canInstall &&
+          probe?.updateOffered &&
+          !probe.installedButBroken &&
+          !isBusy ? (
+            <Button
+              onClick={() => {
+                handleLifecycle("update").catch(() => undefined);
+              }}
+              size="sm"
+              type="button"
+              variant="default"
+            >
+              <ArrowUpCircle data-icon="inline-start" />
+              {t("settings.agents.action.update")}
             </Button>
           ) : null}
           {isDetected ? (
@@ -321,11 +344,53 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
                 : t("settings.agents.action.disable")}
             </Button>
           ) : null}
+          {/* Website is always the rightmost action when shown. */}
+          {!isDetected && entry?.homepageUrl ? (
+            <Button asChild size="icon-sm" variant="outline">
+              <a
+                aria-label={t("settings.agents.action.website")}
+                href={entry.homepageUrl}
+                onAuxClick={handleWebsiteClick}
+                onClick={handleWebsiteClick}
+                rel="noreferrer"
+              >
+                <ExternalLink data-icon="inline-start" />
+              </a>
+            </Button>
+          ) : null}
         </ItemActions>
 
         {open && canExpand ? (
           <CollapsibleContent asChild forceMount>
-            <AgentExpandedDetails agentId={agentId} />
+            <div className="w-full space-y-3 px-(--card-spacing) pb-3">
+              {probe ? (
+                <div className="space-y-1 text-muted-foreground text-xs">
+                  {/* Version lives on the row (`a → b`); don't repeat here. */}
+                  {probe.updateMode === "reinstall" && probe.detected ? (
+                    <div>{t("settings.agents.lifecycle.updateHint")}</div>
+                  ) : null}
+                  {probe.installs.length > 0 ? (
+                    <div className="space-y-1">
+                      <div>{t("settings.agents.lifecycle.installs")}</div>
+                      <ul className="space-y-0.5">
+                        {probe.installs.map((inst) => (
+                          <li
+                            className="truncate font-mono"
+                            key={inst.path}
+                            title={inst.path}
+                          >
+                            [{inst.source}] {inst.path}
+                            {inst.version ? ` (${inst.version})` : ""}
+                            {inst.isPathDefault ? " *" : ""}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              {isDetected ? <AgentExpandedDetails agentId={agentId} /> : null}
+            </div>
           </CollapsibleContent>
         ) : null}
       </Item>

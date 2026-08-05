@@ -1,3 +1,4 @@
+import { settingsAgents } from "./settings-agents.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
@@ -444,56 +445,6 @@ export const settings = {
     "zh-CN": "简体中文",
     en: "English",
   },
-  agents: {
-    permissionMode: {
-      yolo: "跳过权限确认",
-      manual: "手动确认权限",
-      mixed: "已自定义",
-    },
-    defaultPick: {
-      auto: "自动",
-      blank: "空白终端",
-    },
-    list: {
-      title: "智能体列表",
-      description: "已安装并检测到的智能体",
-      refresh: "刷新",
-      refreshSuccess: "列表已刷新",
-      refreshFailed: "无法刷新列表",
-    },
-    status: {
-      detected: "已检测",
-      missing: "未安装",
-      disabled: "已停用",
-    },
-    action: {
-      enable: "启用",
-      disable: "停用",
-      setDefault: "设为默认",
-      isDefault: "默认",
-      expand: "详情",
-      website: "官网",
-      websiteOpenBusy: "另一个链接正在打开",
-      websiteOpenFailedDescription: "无法打开该智能体官网。",
-      websiteOpenFailedTitle: "无法打开官网",
-    },
-    row: {
-      launchCmd: "启动命令",
-      detectCmd: "探测命令",
-      expectedProcess: "进程名",
-      commandOverride: "命令覆盖",
-      commandOverrideDesc: "覆盖智能体可执行路径",
-      args: "启动参数",
-      argsDesc: "追加到启动命令的参数",
-      env: "启动环境变量",
-      envDesc: "启动此智能体时附加的环境变量",
-    },
-    statusHooks: {
-      label: "智能体状态提示",
-      description:
-        "面板实时显示智能体运行或等待状态。关闭后移除 Pier 的状态上报，也不会发送「需要你处理」的系统通知。多个 Pier 版本共用本机钩子运行时，较新版本优先；退出应用不会卸掉钩子。若 Codex 等工具提示审查钩子，选择「信任全部」即可，一般只需一次。",
-      failed: "无法更新智能体状态提示",
-    },
-  },
+  agents: settingsAgents,
   notifications: settingsNotifications,
 } as const;

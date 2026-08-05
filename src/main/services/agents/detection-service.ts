@@ -40,12 +40,7 @@ export function mergeLoginShellPath(
 
 /** 用 which/where 查命令是否在 PATH 上（不 spawn binary，避免副作用）。 */
 export function probeCommand(cmd: string): Promise<boolean> {
-  const binary = platform() === "win32" ? "where" : "which";
-  return new Promise((resolve) => {
-    execFile(binary, [cmd], { timeout: PROBE_TIMEOUT_MS }, (err, stdout) => {
-      resolve(!err && stdout.trim().length > 0);
-    });
-  });
+  return probeCommandWithEnv(cmd);
 }
 
 export interface AgentDetectionService {
@@ -60,11 +55,16 @@ export interface AgentDetectionService {
 
 export interface CreateAgentDetectionServiceArgs {
   /**
+   * Optional PES env for which/where (same as lifecycle). When set, probes use
+   * this env instead of process defaults so detect matches lifecycle.
+   */
+  getEnv?: () => NodeJS.ProcessEnv | Promise<NodeJS.ProcessEnv>;
+  /**
    * @deprecated Prefer waitForHostEnv. Kept for unit tests that simulate PATH
    * readiness before probe; never a product shell dump.
    */
   hydratePath?: () => Promise<string[]>;
-  probe?: (cmd: string) => Promise<boolean>;
+  probe?: (cmd: string, env?: NodeJS.ProcessEnv) => Promise<boolean>;
   /**
    * Host shell env gate (hostShellEnvReady). Defaults to resolved no-op for tests.
    * Product wiring must inject the single boot Promise.
@@ -72,13 +72,35 @@ export interface CreateAgentDetectionServiceArgs {
   waitForHostEnv?: () => Promise<void>;
 }
 
+export function probeCommandWithEnv(
+  cmd: string,
+  env?: NodeJS.ProcessEnv
+): Promise<boolean> {
+  const binary = platform() === "win32" ? "where" : "which";
+  return new Promise((resolve) => {
+    execFile(
+      binary,
+      [cmd],
+      { timeout: PROBE_TIMEOUT_MS, env, windowsHide: true },
+      (err, stdout) => {
+        resolve(!err && stdout.trim().length > 0);
+      }
+    );
+  });
+}
+
 export function createAgentDetectionService({
   hydratePath,
-  probe = probeCommand,
+  getEnv,
+  probe,
   waitForHostEnv,
 }: CreateAgentDetectionServiceArgs = {}): AgentDetectionService {
   let cachedResult: DetectAgentsResult | null = null;
   let detectInFlight: Promise<DetectAgentsResult> | null = null;
+
+  const probeImpl =
+    probe ??
+    ((cmd: string, env?: NodeJS.ProcessEnv) => probeCommandWithEnv(cmd, env));
 
   async function ready(): Promise<string[]> {
     if (waitForHostEnv) {
@@ -97,23 +119,21 @@ export function createAgentDetectionService({
       return cachedResult;
     }
     if (!detectInFlight) {
-      detectInFlight = Promise.all(
-        AGENT_CATALOG.map(async (entry) => {
-          const cmds = [entry.detectCmd, ...(entry.detectCmdAliases ?? [])];
-          const hits = await Promise.all(cmds.map((c) => probe(c)));
-          return hits.some(Boolean) ? entry.id : null;
-        })
-      )
-        .then((checks) => {
-          const detectedIds = checks.filter(
-            (id): id is AgentKind => id !== null
-          );
-          cachedResult = { detectedIds };
-          return cachedResult;
-        })
-        .finally(() => {
-          detectInFlight = null;
-        });
+      detectInFlight = (async () => {
+        const env = getEnv ? await getEnv() : undefined;
+        const checks = await Promise.all(
+          AGENT_CATALOG.map(async (entry) => {
+            const cmds = [entry.detectCmd, ...(entry.detectCmdAliases ?? [])];
+            const hits = await Promise.all(cmds.map((c) => probeImpl(c, env)));
+            return hits.some(Boolean) ? entry.id : null;
+          })
+        );
+        const detectedIds = checks.filter((id): id is AgentKind => id !== null);
+        cachedResult = { detectedIds };
+        return cachedResult;
+      })().finally(() => {
+        detectInFlight = null;
+      });
     }
     return await detectInFlight;
   }
