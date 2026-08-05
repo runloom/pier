@@ -20,7 +20,10 @@ import {
 import { useT } from "@/i18n/use-t.ts";
 import { resolvePluginDisplay } from "@/lib/plugins/display.ts";
 import { resolvePluginIcon } from "@/lib/plugins/resolve-icon.tsx";
-import { pluginSectionId } from "@/pages/settings/data/appearance-nav.ts";
+import {
+  pluginHasSettingsSection,
+  pluginSectionId,
+} from "@/pages/settings/data/appearance-nav.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 export interface ContributionCountItem {
@@ -138,8 +141,7 @@ export function PluginRow({
         );
   const metaText = `v${entry.manifest.version} · ${entry.manifest.publisher ?? "—"}`;
   const countItems = contributionCountItems(entry, t);
-  const hasConfiguration =
-    Boolean(entry.manifest.configuration) && entry.runtime.enabled;
+  const hasSettingsSection = pluginHasSettingsSection(entry);
 
   return (
     <Item
@@ -180,7 +182,7 @@ export function PluginRow({
             ) : (
               <span>{t("settings.plugins.contributionSummary.none")}</span>
             )}
-            {hasConfiguration ? (
+            {hasSettingsSection ? (
               <Button
                 aria-label={t("settings.plugins.openSettingsPlugin", {
                   name: display.name,
