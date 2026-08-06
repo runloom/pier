@@ -111,7 +111,13 @@ export function runRemoteSyncAction(
         "Sync already in progress"
       )
     );
-    return existing;
+    // Joiners already got the "already in progress" toast. Swallow settle so
+    // secondary palette / dropdown catch handlers do not open duplicate failure
+    // UI when the shared owner promise rejects. The owner still sees the error.
+    return existing.then(
+      () => undefined,
+      () => undefined
+    );
   }
   return trackSync(gitRoot, async () => {
     const feedback = REMOTE_ACTION_FEEDBACK[actionId];

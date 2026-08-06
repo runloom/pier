@@ -43,6 +43,25 @@ async function gateExactAction(
   }
 }
 
+/**
+ * Start remote sync under loading toast without awaiting completion.
+ * Command palette closes when the handler returns; keeping await would pin
+ * the palette open for the whole network round-trip (status dropdown already
+ * dismisses first, then fire-and-forgets).
+ */
+function startRemoteSyncFromPalette(
+  context: RendererPluginContext,
+  actionId: GitRemoteSyncActionId,
+  cwd: string,
+  title: string
+): void {
+  // Fire-and-forget so the command palette closes immediately; errors surface
+  // after runRemoteSyncAction dismisses its loading toast.
+  runRemoteSyncAction(context, actionId, cwd).catch((err: unknown) => {
+    showError(context, title, err).catch(() => undefined);
+  });
+}
+
 function registerRemotePaletteAction(
   context: RendererPluginContext,
   options: {
@@ -81,11 +100,7 @@ function registerRemotePaletteAction(
           return;
         }
       }
-      try {
-        await runRemoteSyncAction(context, options.actionId, cwd);
-      } catch (err) {
-        await showError(context, title, err);
-      }
+      startRemoteSyncFromPalette(context, options.actionId, cwd, title);
     },
     id: options.commandId,
     metadata: {
@@ -122,7 +137,7 @@ function registerPushPaletteAction(context: RendererPluginContext): () => void {
           );
           return;
         }
-        await runRemoteSyncAction(context, resolved.action, cwd);
+        startRemoteSyncFromPalette(context, resolved.action, cwd, title);
       } catch (err) {
         await showError(context, title, err);
       }

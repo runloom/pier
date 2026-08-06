@@ -9,6 +9,7 @@ import {
   isSyncUncertain,
   type RemoteSyncBlockReason,
   resolveRemoteSyncDecision,
+  shouldOfferFetchTask,
 } from "./remote-sync-policy.ts";
 import type { GitStatusDropdownText } from "./status-dropdown-text.ts";
 import { DEFAULT_GIT_STATUS_DROPDOWN_TEXT } from "./status-dropdown-text.ts";
@@ -25,12 +26,12 @@ export {
 export type { GitStatusDropdownText } from "./status-dropdown-text.ts";
 
 /**
- * 浮层三区模型（v2 金标准方案）：
+ * 浮层三区模型（状态驱动）：
  * 1. 身份区 — 分支名 + 工作树/fetch 上下文行（组件层渲染，不进 rows）。
- * 2. 情境区 rows — 只在对应事实存在时出现的行：冲突/暂停操作（置顶，
- *    含继续/中止）、更改（含大变更提级）、同步、储藏计数、生命周期灰化
- *    信息行（merged）、clean 单行。上游已删走「重新发布」主动作。
- * 3. 固定任务区 tasks — 获取远程更新 / 切换分支 / 切换工作树。
+ * 2. 情境区 rows — 冲突/暂停操作、更改、同步（pull/push/sync/publish）、
+ *    储藏、merged 灰化行、clean 单行。
+ * 3. 任务区 — 切换分支/工作树固定；「获取远程更新」按 shouldOfferFetchTask
+ *    按需展示（命令面板仍保留 pier.git.fetch）。
  */
 export type GitStatusDropdownActionId =
   | "abortOperation"
@@ -304,10 +305,7 @@ function blockReasonTitle(
   }
 }
 
-/**
- * 同步情境行：只展示 publish / push / pull / sync 与阻塞态。
- * 已同步时的 fetch 只走固定任务区，避免双入口。
- */
+/** 同步情境行：publish / push / pull / sync 与阻塞；已同步 fetch 走任务区。 */
 function syncRow(
   status: GitStatus,
   text: GitStatusDropdownText,
@@ -326,7 +324,7 @@ function syncRow(
       tone: "default",
     };
   }
-  // fetch 由 FIXED_TASKS 承担
+  // fetch 由 shouldOfferFetchTask 任务区按需承担
   if (decision.kind === "action" && decision.action === "fetch") {
     return null;
   }
@@ -431,11 +429,17 @@ function contextLine(
   return [options.fallbackWorktreeName, syncLabel].filter(Boolean).join(" · ");
 }
 
-const FIXED_TASKS: GitStatusDropdownAction[] = [
-  { id: "fetch" },
-  { id: "switchBranch" },
-  { id: "switchWorktree" },
-];
+function buildTasks(status: GitStatus): GitStatusDropdownAction[] {
+  return [
+    ...(status.repoState.kind === "clean" &&
+    status.changeSummary.changedFiles === 0
+      ? [{ id: "viewChanges" as const }]
+      : []),
+    ...(shouldOfferFetchTask(status) ? [{ id: "fetch" as const }] : []),
+    { id: "switchBranch" },
+    { id: "switchWorktree" },
+  ];
+}
 
 export function deriveGitStatusDropdownModel(
   status: GitStatus,
@@ -487,13 +491,7 @@ export function deriveGitStatusDropdownModel(
     contextLine: contextLine(options, status),
     operationKind,
     rows,
-    tasks: [
-      ...(status.repoState.kind === "clean" &&
-      status.changeSummary.changedFiles === 0
-        ? [{ id: "viewChanges" as const }]
-        : []),
-      ...FIXED_TASKS.map((task) => ({ ...task })),
-    ],
+    tasks: buildTasks(status),
     variant: "normal",
     gitRoot: options.gitRoot,
   };

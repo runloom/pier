@@ -52,9 +52,72 @@ export function isSyncUncertain(status: GitStatus): boolean {
 }
 
 /**
+ * How long a successful fetch keeps the "Fetch remote" status/task chrome hidden.
+ * Aligns with VS Code-style: primary chrome is pull/push/sync; fetch only when
+ * the remote snapshot is missing, untrusted, or stale.
+ */
+export const GIT_FETCH_TASK_STALE_MS = 15 * 60 * 1000;
+
+/**
+ * Whether to surface a Fetch entry (status bar action or dropdown task).
+ * Not for pull/push/sync — those remain decision-driven.
+ */
+export function shouldOfferFetchTask(
+  status: GitStatus,
+  nowMs: number = Date.now()
+): boolean {
+  const sync = status.remoteSync;
+  // null/undefined: no autofetch record — manual fetch is the way to refresh.
+  if (sync == null) {
+    return true;
+  }
+  if (sync.state === "authRequired") {
+    return true;
+  }
+  if (sync.state === "fetching") {
+    // In-flight autofetch/manual busy — avoid a second competing entry.
+    return false;
+  }
+  if (sync.lastSuccessAt == null) {
+    return true;
+  }
+  // backoff / idle with a successful fetch: hide while still fresh.
+  return nowMs - sync.lastSuccessAt >= GIT_FETCH_TASK_STALE_MS;
+}
+
+/**
+ * Status-bar / chrome action after Model A filter:
+ * hide "fetch" when the remote snapshot is already fresh.
+ *
+ * Unlike {@link shouldOfferFetchTask}, chrome keeps fetch while a fetch is in
+ * flight (`remoteSync.state === "fetching"` or local `busy`) so the status-bar
+ * control does not lose loader / label mid-operation. Task list still hides a
+ * second competing entry via shouldOfferFetchTask alone.
+ */
+export function resolveRemoteSyncActionIdForChrome(
+  status: GitStatus,
+  nowMs: number = Date.now(),
+  options: { busy?: boolean } = {}
+): null | RemoteSyncActionId {
+  const actionId = resolveRemoteSyncActionId(status);
+  if (actionId !== "fetch") {
+    return actionId;
+  }
+  // Keep identity while fetch is running (record and/or local trackSync busy).
+  // shouldOfferFetchTask is false for state==="fetching"; that must not strip chrome.
+  if (status.remoteSync?.state === "fetching" || options.busy) {
+    return "fetch";
+  }
+  if (!shouldOfferFetchTask(status, nowMs)) {
+    return null;
+  }
+  return "fetch";
+}
+
+/**
  * 远程同步决策（单一真源）。
  * - 无上游或上游已删 → publish
- * - 已同步 → fetch（状态栏用；下拉同步行不展示，改走固定任务）
+ * - 已同步 → fetch（状态栏主按钮用；下拉不把 fetch 当情境行，任务区按需展示）
  * - 脏 + 仅 behind → blocked pull；脏 + 分叉 → push
  * - 干净分叉 → sync；仅 ahead → push；仅 behind → pull
  */

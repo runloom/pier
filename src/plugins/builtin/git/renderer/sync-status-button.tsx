@@ -19,7 +19,7 @@ import {
   chromeForAction,
   type RemoteSyncActionId,
   type RemoteSyncBlockReason,
-  resolveRemoteSyncActionId,
+  resolveRemoteSyncActionIdForChrome,
   resolveRemoteSyncBlockReason,
 } from "./remote-sync-policy.ts";
 import {
@@ -46,7 +46,13 @@ export function gitSyncStatusHasContent(
   if (status.repoState.kind !== "clean") {
     return false;
   }
-  if (resolveRemoteSyncActionId(status) !== null) {
+  // Model A: hide chrome when the only action would be a fresh "fetch".
+  // Pass busy so in-flight fetch keeps chrome identity (not a bare busy shell).
+  if (
+    resolveRemoteSyncActionIdForChrome(status, Date.now(), {
+      busy: options.busy,
+    }) !== null
+  ) {
     return true;
   }
   return Boolean(options.busy);
@@ -156,7 +162,10 @@ export function GitSyncStatusButton({
     return null;
   }
   const { ahead, behind, upstream, upstreamGone } = status.branch;
-  const actionId = resolveRemoteSyncActionId(status);
+  // Model A filter, but keep fetch chrome while busy / remoteSync is fetching.
+  const actionId = resolveRemoteSyncActionIdForChrome(status, Date.now(), {
+    busy,
+  });
 
   const chrome = actionId ? chromeForAction(actionId, { upstreamGone }) : null;
   const countsDetail = syncDetail(pluginContext, ahead, behind);

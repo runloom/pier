@@ -1,3 +1,9 @@
+import {
+  GIT_FETCH_TASK_STALE_MS,
+  resolveRemoteSyncActionId,
+  resolveRemoteSyncActionIdForChrome,
+  shouldOfferFetchTask,
+} from "@plugins/builtin/git/renderer/remote-sync-policy.ts";
 import type {
   GitStatusDropdownModel,
   GitStatusDropdownText,
@@ -6,7 +12,6 @@ import {
   deriveGitStatusDropdownModel,
   GIT_LARGE_CHANGE_FILE_THRESHOLD,
   GIT_LARGE_CHANGE_LINE_THRESHOLD,
-  resolveRemoteSyncActionId,
 } from "@plugins/builtin/git/renderer/status-dropdown-model.ts";
 import type { GitStatus } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
@@ -125,21 +130,27 @@ function row(model: GitStatusDropdownModel, id: string) {
 
 describe("deriveGitStatusDropdownModel", () => {
   it("offers view changes first only for a clean repository without local changes", () => {
-    const clean = derive(makeStatus());
+    // Fresh remote snapshot: fetch is not a permanent task.
+    const clean = derive(
+      makeStatus({
+        remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
+      })
+    );
     const dirty = derive(
       makeStatus({
         counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
+        remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
       })
     );
     const paused = derive(
       makeStatus({
+        remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
         repoState: { conflictCount: 0, current: 1, kind: "rebasing", total: 2 },
       })
     );
 
     expect(clean.tasks.map((task) => task.id)).toEqual([
       "viewChanges",
-      "fetch",
       "switchBranch",
       "switchWorktree",
     ]);
@@ -148,21 +159,24 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(paused.tasks.map((task) => task.id)).not.toContain("viewChanges");
   });
 
-  it("keeps the fixed task zone in every normal model", () => {
+  it("keeps branch/worktree navigation tasks in every normal model", () => {
     for (const status of [
-      makeStatus(),
+      makeStatus({
+        remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
+      }),
       makeStatus({
         counts: { conflict: 0, modified: 3, staged: 1, untracked: 0 },
+        remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
       }),
       makeStatus({
         counts: { conflict: 2, modified: 0, staged: 0, untracked: 0 },
+        remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
         repoState: { conflictCount: 2, current: 1, kind: "rebasing", total: 4 },
       }),
     ]) {
       const model = derive(status);
       expect(model.variant).toBe("normal");
-      expect(model.tasks.map((task) => task.id).slice(-3)).toEqual([
-        "fetch",
+      expect(model.tasks.map((task) => task.id).slice(-2)).toEqual([
         "switchBranch",
         "switchWorktree",
       ]);
@@ -361,8 +375,50 @@ describe("deriveGitStatusDropdownModel", () => {
     ).toBe("publish");
   });
 
-  it("offers fetch when the branch is in sync with upstream", () => {
+  it("maps in-sync branches to fetch decision, but chrome hides fetch when fresh", () => {
     expect(resolveRemoteSyncActionId(makeStatus())).toBe("fetch");
+    expect(
+      resolveRemoteSyncActionIdForChrome(
+        makeStatus({
+          remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
+        })
+      )
+    ).toBeNull();
+    expect(
+      resolveRemoteSyncActionIdForChrome(makeStatus({ remoteSync: null }))
+    ).toBe("fetch");
+  });
+
+  it("keeps fetch chrome while remoteSync is fetching or local busy is set", () => {
+    const now = 1_800_000_000_000;
+    const freshIdle = makeStatus({
+      remoteSync: { lastSuccessAt: now - 60_000, state: "idle" },
+    });
+    // Fresh idle: hide chrome (Model A).
+    expect(resolveRemoteSyncActionIdForChrome(freshIdle, now)).toBeNull();
+    // Same snapshot but local trackSync still busy: keep chrome identity.
+    expect(
+      resolveRemoteSyncActionIdForChrome(freshIdle, now, { busy: true })
+    ).toBe("fetch");
+
+    // In-flight remote record: task list hides a second entry, chrome keeps fetch.
+    const fetching = makeStatus({
+      remoteSync: { lastSuccessAt: null, state: "fetching" },
+    });
+    expect(shouldOfferFetchTask(fetching, now)).toBe(false);
+    expect(resolveRemoteSyncActionIdForChrome(fetching, now)).toBe("fetch");
+    expect(
+      resolveRemoteSyncActionIdForChrome(fetching, now, { busy: true })
+    ).toBe("fetch");
+
+    // Fetching with a prior success timestamp must not strip chrome either.
+    const fetchingAfterSuccess = makeStatus({
+      remoteSync: { lastSuccessAt: now - 60_000, state: "fetching" },
+    });
+    expect(shouldOfferFetchTask(fetchingAfterSuccess, now)).toBe(false);
+    expect(resolveRemoteSyncActionIdForChrome(fetchingAfterSuccess, now)).toBe(
+      "fetch"
+    );
   });
 
   it("puts paused rebase with continue and abort rows on top", () => {
@@ -516,11 +572,75 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(sync.label).toBe("Publish Branch Again");
   });
 
-  it("does not put fetch on the sync row when already in sync (task zone owns fetch)", () => {
-    const model = derive(makeStatus());
+  it("does not put fetch on the sync row when already in sync", () => {
+    const model = derive(
+      makeStatus({
+        remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
+      })
+    );
     expect(rowIds(model)).toEqual(["clean"]);
-    expect(model.tasks.map((t) => t.id)).toContain("fetch");
+    expect(model.tasks.map((t) => t.id)).not.toContain("fetch");
     expect(resolveRemoteSyncActionId(makeStatus())).toBe("fetch");
+  });
+
+  it("offers fetch task only when remote snapshot is missing, untrusted, or stale", () => {
+    const now = 1_800_000_000_000;
+    expect(shouldOfferFetchTask(makeStatus({ remoteSync: null }), now)).toBe(
+      true
+    );
+    expect(
+      shouldOfferFetchTask(
+        makeStatus({
+          remoteSync: { lastSuccessAt: null, state: "idle" },
+        }),
+        now
+      )
+    ).toBe(true);
+    expect(
+      shouldOfferFetchTask(
+        makeStatus({
+          remoteSync: { lastSuccessAt: now - 60_000, state: "authRequired" },
+        }),
+        now
+      )
+    ).toBe(true);
+    expect(
+      shouldOfferFetchTask(
+        makeStatus({
+          remoteSync: {
+            lastSuccessAt: now - GIT_FETCH_TASK_STALE_MS - 1,
+            state: "idle",
+          },
+        }),
+        now
+      )
+    ).toBe(true);
+    expect(
+      shouldOfferFetchTask(
+        makeStatus({
+          remoteSync: { lastSuccessAt: now - 60_000, state: "idle" },
+        }),
+        now
+      )
+    ).toBe(false);
+    expect(
+      shouldOfferFetchTask(
+        makeStatus({
+          remoteSync: { lastSuccessAt: now - 60_000, state: "fetching" },
+        }),
+        now
+      )
+    ).toBe(false);
+
+    const neverModel = derive(makeStatus({ remoteSync: null }));
+    expect(neverModel.tasks.map((t) => t.id)).toContain("fetch");
+
+    const freshModel = derive(
+      makeStatus({
+        remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
+      })
+    );
+    expect(freshModel.tasks.map((t) => t.id)).not.toContain("fetch");
   });
 
   it("shows the stash count as an informational row", () => {
@@ -541,13 +661,14 @@ describe("deriveGitStatusDropdownModel", () => {
           insertions: 0,
           kind: "lineDelta",
         },
+        remoteSync: { lastSuccessAt: Date.now(), state: "idle" },
       })
     );
 
-    // 已同步：同步行不占位；Fetch 在固定任务区
+    // 已同步且远程新鲜：同步行不占位；Fetch 不进任务区
     expect(rowIds(model)).toEqual(["clean"]);
     expect(row(model, "clean").action).toBeNull();
-    expect(model.tasks.map((t) => t.id)).toContain("fetch");
+    expect(model.tasks.map((t) => t.id)).not.toContain("fetch");
   });
 
   it("完整行统计的下拉行同时保留新增和删除零值", () => {
