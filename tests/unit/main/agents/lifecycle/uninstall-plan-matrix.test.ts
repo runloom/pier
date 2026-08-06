@@ -1,8 +1,40 @@
 import { platform } from "node:os";
 import { describe, expect, it } from "vitest";
 import { planLifecycle } from "../../../../../src/main/services/agents/lifecycle/plan/build.ts";
+import {
+  type PlannedInvocation,
+  previewPlan,
+} from "../../../../../src/main/services/agents/lifecycle/plan/types.ts";
 import { buildUninstallPlan } from "../../../../../src/main/services/agents/lifecycle/plan/uninstall.ts";
 import { getAgentLifecycleSpec } from "../../../../../src/main/services/agents/lifecycle/specs/index.ts";
+
+/**
+ * Mirror of planLifecycle WSL wrap (build.ts): when host===win && distro set,
+ * rebuild posix plan and wrap as kind:"wsl". Pure helper so matrix tests the
+ * contract on every CI host (node:os mock does not rebind planLifecycle's import).
+ */
+function wrapUninstallPlanAsWsl(
+  distro: string,
+  installSource: "npm" | "brew" | "uv" | "pipx" | "path" | "script"
+): ReturnType<typeof buildUninstallPlan> {
+  const posixPlan = buildUninstallPlan(getAgentLifecycleSpec("gemini"), {
+    host: "posix",
+    defaultBinPath: null,
+    installSource,
+  });
+  if (!posixPlan) {
+    return null;
+  }
+  const wslStep: PlannedInvocation = {
+    kind: "wsl",
+    distro,
+    inner: posixPlan.steps,
+  };
+  return {
+    steps: [wslStep],
+    preview: previewPlan([wslStep]),
+  };
+}
 
 describe("uninstall plan matrix", () => {
   it("claude @ brew → brew uninstall --cask (darwin) / null (non-darwin)", () => {
@@ -91,5 +123,60 @@ describe("uninstall plan matrix", () => {
       installSource: "brew",
     });
     expect(plan).toBeNull();
+  });
+
+  it("WSL wrap: uninstall + npm builds kind:wsl with posix npm inner (design §4.3)", () => {
+    // planLifecycle only wraps when platformKind()==="win"; that gate uses
+    // process.platform and is not mockable via vi.mock("node:os") in this
+    // Vitest setup. Assert the wrap contract the same way build.ts constructs it:
+    // buildUninstallPlan(host:posix, defaultBinPath:null) → kind:"wsl" step.
+    const plan = wrapUninstallPlanAsWsl("Ubuntu", "npm");
+    expect(plan).not.toBeNull();
+    expect(plan?.steps).toHaveLength(1);
+    expect(plan?.steps[0]).toMatchObject({
+      kind: "wsl",
+      distro: "Ubuntu",
+    });
+    const step = plan?.steps[0];
+    if (step?.kind !== "wsl") {
+      throw new Error("expected wsl step");
+    }
+    expect(step.inner[0]).toMatchObject({
+      kind: "argv",
+      file: "npm",
+    });
+    expect(plan?.preview).toMatch(/^wsl -d Ubuntu -- /);
+    expect(plan?.preview).toContain("uninstall");
+    expect(plan?.preview).toContain("@google/gemini-cli");
+    expect(plan?.preview).not.toMatch(/i -g|install @|upgrade/);
+  });
+
+  it("planLifecycle uninstall: wslDistro on win host → kind:wsl (win CI only)", () => {
+    // Live integration when host is Windows; skipped on macOS/Linux CI.
+    if (platform() !== "win32") {
+      return;
+    }
+    const plan = planLifecycle(getAgentLifecycleSpec("gemini"), "uninstall", {
+      installSource: "npm",
+      wslDistro: "Ubuntu",
+    });
+    expect(plan?.steps[0]).toMatchObject({
+      kind: "wsl",
+      distro: "Ubuntu",
+    });
+    expect(plan?.preview).toMatch(/^wsl -d Ubuntu -- /);
+    expect(plan?.preview).toContain("uninstall");
+  });
+
+  it("planLifecycle uninstall ignores wslDistro on non-win host", () => {
+    if (platform() === "win32") {
+      return;
+    }
+    const plan = planLifecycle(getAgentLifecycleSpec("gemini"), "uninstall", {
+      installSource: "npm",
+      wslDistro: "Ubuntu",
+    });
+    expect(plan?.steps[0]?.kind).toBe("argv");
+    expect(plan?.preview).not.toMatch(/^wsl /);
   });
 });
