@@ -121,4 +121,27 @@ describe("formatUninstallConfirmBody", () => {
     );
     expect(body).not.toContain("—");
   });
+
+  it("appends conflict note when isConflict (design §9.3)", () => {
+    const body = formatUninstallConfirmBody(t, {
+      name: "Claude Code",
+      path: "/opt/homebrew/bin/claude",
+      source: "brew",
+      isConflict: true,
+    });
+    expect(body).toContain("settings.agents.action.uninstallConfirmBody:");
+    expect(body).toContain(
+      "settings.agents.action.uninstallConfirmConflictNote"
+    );
+  });
+
+  it("does not append conflict note when isConflict is false", () => {
+    const body = formatUninstallConfirmBody(t, {
+      name: "Claude Code",
+      path: "/opt/homebrew/bin/claude",
+      source: "brew",
+      isConflict: false,
+    });
+    expect(body).not.toContain("uninstallConfirmConflictNote");
+  });
 });

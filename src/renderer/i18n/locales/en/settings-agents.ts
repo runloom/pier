@@ -73,6 +73,9 @@ export const settingsAgents = {
       "Removes the “{{name}}” command-line tool from this computer ({{source}}: {{path}}). Chat history and local settings stay. If it is still running in a terminal, that session may stop working.",
     uninstallConfirmBodyNameOnly:
       "Removes the “{{name}}” command-line tool from this computer. Chat history and local settings stay. If it is still running in a terminal, that session may stop working.",
+    /** Appended when probe.isConflict (design §9.3); mirrors update conflict tone. */
+    uninstallConfirmConflictNote:
+      "Only the install currently used by default will be removed. Other locations stay unchanged.",
     uninstallConfirmContinue: "Uninstall",
     uninstallSuccess: "Uninstalled {{name}}",
     uninstallSkipped: "Not installed",
@@ -93,7 +96,7 @@ export const settingsAgents = {
       no_command:
         "No install command is configured for this agent on your system.",
       command_failed:
-        "The install or update command failed. See details below.",
+        "The install, update, or uninstall command failed. See details below.",
       version_unchanged:
         "The version didn't change. Another install may still be in use.",
       not_runnable:
@@ -101,10 +104,10 @@ export const settingsAgents = {
       not_found_after_install:
         "Install finished, but the command still wasn't found. Refresh the list or open a new terminal.",
       already_installed: "This agent is already installed.",
-      busy: "An install or update for this agent is already running.",
-      cancelled: "Install or update was cancelled.",
+      busy: "An install, update, or uninstall for this agent is already running.",
+      cancelled: "Install, update, or uninstall was cancelled.",
       timeout:
-        "Install or update timed out. Try again when the network is stable.",
+        "Install, update, or uninstall timed out. Try again when the network is stable.",
       env_unavailable:
         "Couldn't prepare the shell environment. Refresh and try again.",
       package_manager_missing:

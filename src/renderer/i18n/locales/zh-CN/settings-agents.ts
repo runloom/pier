@@ -73,6 +73,9 @@ export const settingsAgents = {
       "将从本机移除「{{name}}」的命令行工具（{{source}}：{{path}}）。不会删除对话记录与本地配置。若它仍在终端中运行，当前会话可能无法继续。",
     uninstallConfirmBodyNameOnly:
       "将从本机移除「{{name}}」的命令行工具。不会删除对话记录与本地配置。若它仍在终端中运行，当前会话可能无法继续。",
+    /** 多处安装时追加（设计 §9.3）；语气对齐更新冲突确认。 */
+    uninstallConfirmConflictNote:
+      "只会移除当前默认使用的那一处，其余位置保持不变。",
     uninstallConfirmContinue: "卸载",
     uninstallSuccess: "已卸载 {{name}}",
     uninstallSkipped: "未安装，无需卸载",
@@ -89,16 +92,16 @@ export const settingsAgents = {
       unsupported: "此智能体无法自动安装。请使用安装指南或打开官网。",
       unavailable: "安装服务暂不可用，请稍后重试。",
       no_command: "当前系统没有为此智能体配置可用的安装命令。",
-      command_failed: "安装或更新命令执行失败，详见下方说明。",
+      command_failed: "安装、更新或卸载命令执行失败，详见下方说明。",
       version_unchanged: "版本未变化。可能仍在使用另一处安装。",
       not_runnable:
         "已安装，但命令无法运行。请确认所需运行环境（例如 Node.js）已就绪。",
       not_found_after_install:
         "安装已完成，但仍找不到命令。请刷新列表或新开终端后再试。",
       already_installed: "此智能体已安装。",
-      busy: "此智能体已有安装或更新在进行中。",
-      cancelled: "已取消安装或更新。",
-      timeout: "安装或更新超时，请在网络稳定后重试。",
+      busy: "此智能体已有安装、更新或卸载在进行中。",
+      cancelled: "已取消安装、更新或卸载。",
+      timeout: "安装、更新或卸载超时，请在网络稳定后重试。",
       env_unavailable: "无法准备终端环境，请刷新后重试。",
       package_manager_missing:
         "未找到所需的包管理器（npm、Homebrew、pipx 或 uv）。请先安装其中一种后再试。",

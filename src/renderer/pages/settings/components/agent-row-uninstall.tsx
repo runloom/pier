@@ -34,6 +34,7 @@ export function shouldShowAgentUninstall(input: {
 /**
  * Confirm body with PATH-default targets when known.
  * Never interpolates "—" — missing targets degrade to name-only copy.
+ * Multi-install (isConflict): append note that only the default location is removed (§9.3).
  */
 export function formatUninstallConfirmBody(
   t: TFunction,
@@ -41,20 +42,25 @@ export function formatUninstallConfirmBody(
     name: string;
     path?: string | null | undefined;
     source?: string | null | undefined;
+    isConflict?: boolean;
   }
 ): string {
   const path = options.path?.trim() ?? "";
   const source = options.source?.trim() ?? "";
-  if (path.length > 0 && source.length > 0) {
-    return t("settings.agents.action.uninstallConfirmBody", {
-      name: options.name,
-      path,
-      source,
-    });
+  const base =
+    path.length > 0 && source.length > 0
+      ? t("settings.agents.action.uninstallConfirmBody", {
+          name: options.name,
+          path,
+          source,
+        })
+      : t("settings.agents.action.uninstallConfirmBodyNameOnly", {
+          name: options.name,
+        });
+  if (!options.isConflict) {
+    return base;
   }
-  return t("settings.agents.action.uninstallConfirmBodyNameOnly", {
-    name: options.name,
-  });
+  return `${base} ${t("settings.agents.action.uninstallConfirmConflictNote")}`;
 }
 
 /** Uninstall button + unsupported note for expanded agent details. */
@@ -125,6 +131,7 @@ export function AgentUninstallControls({ agentId }: { agentId: AgentKind }) {
         name: displayName,
         path: probe?.uninstallTargetPath,
         source: probe?.uninstallTargetSource,
+        isConflict: probe?.isConflict === true,
       }),
       confirmLabel: t("settings.agents.action.uninstallConfirmContinue"),
       intent: "destructive",
