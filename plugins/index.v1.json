@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1786043034587,
+  "generatedAt": 1786043282220,
   "plugins": {
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
@@ -236,11 +236,11 @@
       }
     }
   },
-  "sequence": 29,
+  "sequence": 30,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "qdAvHNat+ERRe5ko2OtY/w+g+urjLSGM68TH0m7cY4kIs84V7GCSaDugIhLNktRK5CPpBXn4UdNCH+vnqyOVDg=="
+    "value": "3yc6N8eMbW24U0Bjp/+T1Ad61oQidBZAJLuCYn9FRzmuayqINU5EhjPq4NMGJG5jjqkGAQujnJbmajvDbsV3DQ=="
   }
 }
