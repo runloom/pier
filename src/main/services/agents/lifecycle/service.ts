@@ -15,10 +15,19 @@ import { BusyError, LifecycleLocks } from "./locks.ts";
 import type { PlannedPlan } from "./plan/types.ts";
 import { planLifecycle, previewPlan } from "./plan.ts";
 import { probeAgents, probeOneAgent } from "./probe.ts";
+import {
+  applyLifecycleCommandOverride,
+  emptyLifecycleCommandOverrides,
+  type LifecycleCommandOverrides,
+} from "./resolve-commands.ts";
+import { runUninstallUnlocked } from "./run-uninstall.ts";
 import { createNodeLifecycleRunner } from "./runner/node.ts";
 import type { LifecycleRunner, LifecycleRunResult } from "./runner/types.ts";
 import { getAgentLifecycleSpec } from "./specs/index.ts";
 import { wslDistroFromPath } from "./wsl.ts";
+
+export type { LifecycleCommandOverrides } from "./resolve-commands.ts";
+
 export interface AgentLifecycleService {
   /** Abort in-flight run for this agent (usable mid-run). */
   cancel(agentId: AgentKind): boolean;
@@ -35,16 +44,13 @@ export interface AgentLifecycleService {
   ): Promise<AgentLifecycleActionResult[]>;
 }
 
-export interface LifecycleCommandOverrides {
-  install: Partial<Record<AgentKind, string>>;
-  update: Partial<Record<AgentKind, string>>;
-}
-
 export interface CreateAgentLifecycleServiceOptions {
   afterInstall?: (agentId: AgentKind) => Promise<void>;
+  /** Best-effort hook cleanup + preference hygiene after successful uninstall. */
+  afterUninstall?: (agentId: AgentKind) => Promise<void>;
   /** Required in product; tests inject. No silent process.env for run. */
   getEnv: () => NodeJS.ProcessEnv | Promise<NodeJS.ProcessEnv>;
-  /** User-authored install/update shell one-liners (empty = Pier default). */
+  /** User-authored install/update/uninstall shell one-liners (empty = Pier default). */
   getLifecycleCommands?: () =>
     | LifecycleCommandOverrides
     | Promise<LifecycleCommandOverrides>;
@@ -143,6 +149,28 @@ export function createAgentLifecycleService(
     runId: string,
     signal: AbortSignal
   ): Promise<AgentLifecycleActionResult> {
+    // Uninstall must never enter install/update post-success paths.
+    if (action === "uninstall") {
+      return runUninstallUnlocked({
+        agentId,
+        runId,
+        signal,
+        runner,
+        resolveEnv,
+        probeOne,
+        ...(options.getLifecycleCommands
+          ? { getLifecycleCommands: options.getLifecycleCommands }
+          : {}),
+        ...(options.onProgress ? { onProgress: options.onProgress } : {}),
+        ...(options.refreshDetection
+          ? { refreshDetection: options.refreshDetection }
+          : {}),
+        ...(options.afterUninstall
+          ? { afterUninstall: options.afterUninstall }
+          : {}),
+      });
+    }
+
     const spec = getAgentLifecycleSpec(agentId);
     if (spec.support !== "full") {
       return fail(agentId, action, "unsupported", { runId });
@@ -205,17 +233,12 @@ export function createAgentLifecycleService(
     try {
       const cmds = options.getLifecycleCommands
         ? await options.getLifecycleCommands()
-        : { install: {}, update: {} };
-      const custom =
-        action === "install"
-          ? cmds.install[agentId]?.trim()
-          : cmds.update[agentId]?.trim();
-      if (custom && custom.length > 0) {
-        planned = {
-          steps: [{ kind: "shell", command: custom }],
-          preview: custom,
-        };
-      }
+        : emptyLifecycleCommandOverrides();
+      planned = applyLifecycleCommandOverride(action, agentId, planned, {
+        install: cmds.install ?? {},
+        update: cmds.update ?? {},
+        uninstall: cmds.uninstall ?? {},
+      });
     } catch (err) {
       console.warn("[agent-lifecycle] getLifecycleCommands failed", err);
     }

@@ -20,6 +20,8 @@ export function createBootedAgentLifecycleService(options: {
       return {
         install: prefs.agentInstallCommands ?? {},
         update: prefs.agentUpdateCommands ?? {},
+        // agentUninstallCommands wired in Task 5; empty L2 until then.
+        uninstall: {},
       };
     },
     onProgress: broadcastAgentLifecycleProgress,
