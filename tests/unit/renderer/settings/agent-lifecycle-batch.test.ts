@@ -12,6 +12,7 @@ function makeProbe(
 ): AgentLifecycleProbe {
   return {
     canInstall: true,
+    canUninstall: false,
     detected: true,
     installedButBroken: false,
     installs: [],
@@ -21,6 +22,7 @@ function makeProbe(
     updateAvailable: false,
     updateMode: "versioned",
     updateOffered: false,
+    uninstallMode: "none",
     version: "1.0.0",
     ...partial,
   };

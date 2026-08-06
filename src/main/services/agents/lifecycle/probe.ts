@@ -35,6 +35,8 @@ export async function probeOneAgent(
     return {
       agentId,
       canInstall,
+      // Safe compile defaults until Task 3 implements real canUninstall logic.
+      canUninstall: false,
       detected: false,
       envDegraded: true,
       guideCommands: guideCommandsFor(agentId),
@@ -46,6 +48,9 @@ export async function probeOneAgent(
       updateAvailable: false,
       updateMode,
       updateOffered: false,
+      uninstallMode: "none",
+      uninstallTargetPath: null,
+      uninstallTargetSource: null,
       version: null,
       ...defaults,
     };
@@ -107,6 +112,8 @@ export async function probeOneAgent(
   return {
     agentId,
     canInstall,
+    // Safe compile defaults until Task 3 implements real canUninstall logic.
+    canUninstall: false,
     detected: detected || installedButBroken,
     envDegraded: opts.envDegraded,
     guideCommands: guideCommandsFor(agentId),
@@ -118,6 +125,9 @@ export async function probeOneAgent(
     updateAvailable,
     updateMode,
     updateOffered,
+    uninstallMode: "none",
+    uninstallTargetPath: null,
+    uninstallTargetSource: null,
     version,
     ...defaults,
   };
