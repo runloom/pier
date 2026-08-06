@@ -250,6 +250,7 @@ function launchForTask(
   options: BuildTaskLaunchesOptions
 ): TaskLaunchPlan {
   let cwd = resolveVariables(task.cwd, context).trim();
+  // Class A caller: cwd/env prepared for terminal/background spawn consumers.
   // Unexpanded placeholders or empty cwd must not reach spawn (Node reports
   // misleading "spawn shell ENOENT" when cwd is missing).
   if (cwd.length === 0 || cwd.includes("$")) {

@@ -201,7 +201,7 @@ describe("new agent action", () => {
       expect(useAppDialogStore.getState().current).toMatchObject({
         body: "detect detail",
         kind: "alert",
-        title: "Couldn’t detect agents",
+        title: "Couldn't detect agents — try again",
       });
     });
     expect(prepareLaunch).not.toHaveBeenCalled();
@@ -225,7 +225,7 @@ describe("new agent action", () => {
       expect(useAppDialogStore.getState().current).toMatchObject({
         body: "launch detail",
         kind: "alert",
-        title: "无法启动智能体",
+        title: "无法启动智能体，请重试",
       });
     });
     expect(addTerminal).not.toHaveBeenCalled();
@@ -252,7 +252,7 @@ describe("new agent action", () => {
       expect(useAppDialogStore.getState().current).toMatchObject({
         body: "dock boom",
         kind: "alert",
-        title: "无法启动智能体",
+        title: "无法启动智能体，请重试",
       });
     });
     expect(addTerminal).toHaveBeenCalledWith({
@@ -281,7 +281,9 @@ describe("new agent action", () => {
 
     expect(prepareLaunch).toHaveBeenCalledWith("claude");
     expect(addTerminal).not.toHaveBeenCalled();
-    expect(toastMocks.error).toHaveBeenCalledWith("Couldn’t start agent");
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      "Couldn't start agent — try again"
+    );
   });
 
   it("来源标签组在准备期间关闭 → 显示失败且不回退到其他组", async () => {
@@ -309,7 +311,9 @@ describe("new agent action", () => {
     await pending;
 
     expect(addTerminal).not.toHaveBeenCalled();
-    expect(toastMocks.error).toHaveBeenCalledWith("Couldn’t start agent");
+    expect(toastMocks.error).toHaveBeenCalledWith(
+      "Couldn't start agent — try again"
+    );
   });
 
   it("shellDefault 策略不继承来源面板目录", async () => {

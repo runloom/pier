@@ -1,5 +1,6 @@
 /**
  * Interactive-shell probe: script build, parse, spawn (file-size split).
+ * Class A: shell spawn with PES-resolved env for command resolution only.
  */
 import { spawn } from "node:child_process";
 import { basename } from "node:path";

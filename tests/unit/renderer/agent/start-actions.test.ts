@@ -292,7 +292,9 @@ describe("agent start actions", () => {
     await pending;
 
     expect(addTerminal).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith("Couldn’t start agent");
+    expect(toast.error).toHaveBeenCalledWith(
+      "Couldn't start agent — try again"
+    );
   });
 
   it("creates the terminal in the invocation group", async () => {
@@ -327,7 +329,9 @@ describe("agent start actions", () => {
     await actionRegistry.get("pier.agent.start.claude")?.handler();
 
     expect(addTerminal).not.toHaveBeenCalled();
-    expect(toast.error).toHaveBeenCalledWith("Couldn’t start agent");
+    expect(toast.error).toHaveBeenCalledWith(
+      "Couldn't start agent — try again"
+    );
   });
 
   it("shows launch failures with the current locale and raw detail", async () => {
@@ -340,7 +344,7 @@ describe("agent start actions", () => {
       expect(useAppDialogStore.getState().current).toMatchObject({
         body: "launch detail",
         kind: "alert",
-        title: "无法启动智能体",
+        title: "无法启动智能体，请重试",
       });
     });
 

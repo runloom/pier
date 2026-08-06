@@ -36,13 +36,13 @@ const THREE_ACTIVITIES_TEXT_RE =
   /Vite dev server \(terminal\), codex-agent \(agent\), Build web \(task\) are still running\./;
 const ONE_ACTIVITY_TEXT_RE = /Vite dev server \(terminal\) is still running\./;
 const BLANK_LINE_TEXT_RE = /\n\s*\n/;
-const QUIT_TERMINATES_THEM_TEXT_RE = /Quitting Pier will terminate them\./;
-const QUIT_TERMINATES_IT_TEXT_RE = /Quitting Pier will terminate it\./;
+const QUIT_TERMINATES_THEM_TEXT_RE = /Quitting will stop them\./;
+const QUIT_TERMINATES_IT_TEXT_RE = /Quitting will stop it\./;
 const STILL_RUNNING_TEXT_RE = /still running/;
 const OLD_SERVER_TEXT_RE = /old server \(terminal\)/;
 const NEW_AGENT_TEXT_RE = /new agent \(agent\)/;
 const ZH_SINGLE_AGENT_TEXT_RE = /claude（智能体）仍在运行。/;
-const ZH_TERMINATE_SINGLE_TEXT_RE = /退出 Pier 会终止该进程。/;
+const ZH_TERMINATE_SINGLE_TEXT_RE = /退出会终止该进程。/;
 const OLD_AGENT_SUMMARY_TEXT_RE = /agent: claude/;
 
 function shellSummary(overrides: Partial<QuitActivitySummary> = {}) {
@@ -188,7 +188,7 @@ describe("AppQuitDialogBridge", () => {
     const bodyText = description.textContent ?? "";
 
     expect(bodyText).toContain("Vite dev server (terminal) is still running.");
-    expect(bodyText).toContain("Quitting Pier will terminate it.");
+    expect(bodyText).toContain("Quitting will stop it.");
     expect(bodyText).not.toContain("pnpm dev -- --host");
     expect(screen.getByText(QUIT_TERMINATES_IT_TEXT_RE)).toBeVisible();
 
@@ -232,9 +232,7 @@ describe("AppQuitDialogBridge", () => {
     expect(await screen.findByText("Quit Pier?")).toBeVisible();
     expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(
-      screen.getByText(
-        "Pier will save the current window layout before quitting."
-      )
+      screen.getByText("Window layout is saved before quitting.")
     ).toBeVisible();
     expect(screen.queryByText(STILL_RUNNING_TEXT_RE)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Quit" })).toHaveAttribute(

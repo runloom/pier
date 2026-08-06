@@ -38,7 +38,7 @@ export function ReviewCommentNavigator({
     <div
       aria-label={toolbarLabel}
       className={cn(
-        "pointer-events-auto absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-border bg-popover/95 px-1.5 py-1 text-sm shadow-md backdrop-blur-sm",
+        "pointer-events-auto absolute bottom-4 left-1/2 z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-border bg-popover px-1.5 py-1 text-sm shadow-md",
         className
       )}
       data-slot="review-comment-navigator"

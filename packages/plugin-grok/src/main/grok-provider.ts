@@ -9,6 +9,7 @@ import {
 } from "./grok-usage.ts";
 import type { AccountIdentity } from "./identity.ts";
 import { parseGrokAuthJson, readGrokIdentity } from "./identity.ts";
+// Class A: login spawn uses hostSpawnEnv / resolveProcessEnv (not bare process.env).
 import {
   defaultRealGrokHome,
   defaultSpawnLogin,

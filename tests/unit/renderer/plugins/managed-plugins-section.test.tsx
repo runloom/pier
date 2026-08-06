@@ -492,7 +492,7 @@ describe("ManagedPluginsSection", () => {
     await waitFor(() => {
       expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
         body: "network down",
-        title: "Couldn't check updates",
+        title: "Couldn't check updates — try again",
       });
     });
   });

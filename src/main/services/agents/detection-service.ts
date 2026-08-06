@@ -196,9 +196,16 @@ export function createAgentDetectionService({
     const nameList = [...names];
 
     // Phase 1: cheap PATH for all names (no interactive shells).
+    // Injected probe replaces which for tests/fakes (do not hit real PATH).
     const pathHits = new Set<string>();
     await Promise.all(
       nameList.map(async (name) => {
+        if (probe) {
+          if (await probeImpl(name, env)) {
+            pathHits.add(name);
+          }
+          return;
+        }
         if (await whichProbe(name, env)) {
           pathHits.add(name);
         }
@@ -206,22 +213,16 @@ export function createAgentDetectionService({
     );
 
     // Phase 2: interactive escalate only for PATH misses (capped concurrency).
+    // Skip when a custom probe fully owns detection (tests inject that).
     const misses = nameList.filter((name) => !pathHits.has(name));
     const interactiveHits = new Set<string>();
-    if (misses.length > 0 && platform() !== "win32" && env) {
+    if (misses.length > 0 && !probe && platform() !== "win32" && env) {
       const stringEnv = Object.fromEntries(
         Object.entries(env).filter(
           (entry): entry is [string, string] => typeof entry[1] === "string"
         )
       );
       await mapPool(misses, INTERACTIVE_ESCALATE_CONCURRENCY, async (name) => {
-        // Custom probe injection still goes through probeImpl for tests.
-        if (probe) {
-          if (await probeImpl(name, env)) {
-            interactiveHits.add(name);
-          }
-          return;
-        }
         const resolved = await resolveUserCommand({
           commandName: name,
           env: stringEnv,
@@ -229,12 +230,6 @@ export function createAgentDetectionService({
           timeoutMs: PROBE_TIMEOUT_MS,
         });
         if (resolved.kind !== "missing") {
-          interactiveHits.add(name);
-        }
-      });
-    } else if (misses.length > 0 && probe) {
-      await mapPool(misses, INTERACTIVE_ESCALATE_CONCURRENCY, async (name) => {
-        if (await probeImpl(name, env)) {
           interactiveHits.add(name);
         }
       });

@@ -157,7 +157,7 @@ describe("SettingsDialog — Workspace section owns Worktree preferences", () =>
     });
     expect(
       screen.getByText(
-        "Leave empty to use a {project}.worktree directory next to the main project."
+        "Leave empty to use {project}.worktree next to the main project."
       )
     ).toBeInTheDocument();
     expect(worktreeInput).toHaveValue("/existing/worktrees");

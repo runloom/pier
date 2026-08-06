@@ -220,7 +220,6 @@ export function useReviewCommentNavigator(options: {
   }, [context, language, targets, total, worktreeKey]);
 
   const safeIndex = total === 0 ? 0 : Math.min(activeIndex, total - 1);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: language drives i18n re-read
   const labels = useMemo(
     () => ({
       clearLabel: pluginText(

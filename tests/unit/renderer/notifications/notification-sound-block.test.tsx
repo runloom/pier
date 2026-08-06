@@ -48,12 +48,12 @@ describe("NotificationSoundBlock", () => {
     render(<NotificationSoundBlock />);
 
     const preview = screen.getByRole("button", {
-      name: "Preview selected app tone",
+      name: "Preview selected tone",
     });
     expect(preview).toBeDisabled();
     expect(
       screen.getByText(
-        "System default sound cannot be previewed in-app. Use “Send test notification” below."
+        "System default can’t be previewed here. Use “Send test notification” below."
       )
     ).toBeInTheDocument();
     fireEvent.click(preview);
@@ -72,12 +72,12 @@ describe("NotificationSoundBlock", () => {
     render(<NotificationSoundBlock />);
 
     const preview = screen.getByRole("button", {
-      name: "Preview selected app tone",
+      name: "Preview selected tone",
     });
     expect(preview).toBeEnabled();
     expect(
       screen.queryByText(
-        "System default sound cannot be previewed in-app. Use “Send test notification” below."
+        "System default can’t be previewed here. Use “Send test notification” below."
       )
     ).not.toBeInTheDocument();
 

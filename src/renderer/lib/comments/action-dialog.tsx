@@ -354,7 +354,7 @@ function CommentsActionDialogBody({
                   type="button"
                   variant="ghost"
                 >
-                  <Trash2 aria-hidden className="size-3.5" data-icon />
+                  <Trash2 aria-hidden data-icon />
                 </Button>
               </ItemActions>
             </Item>

@@ -1,3 +1,4 @@
+// Class B: version probes after host env (curl/npm/brew with optional PES env).
 import { execFile } from "node:child_process";
 import { extractVersionFromOutput } from "@shared/agent-lifecycle/version-compare.ts";
 import type { AgentLifecycleSpec } from "./specs/types.ts";

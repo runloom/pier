@@ -261,6 +261,8 @@ describe("ForegroundActivityBridge terminal status registration", () => {
 
     const item = await screen.findByTestId("agent-status-item");
     expect(item).toHaveAttribute("data-agent-status", "none");
-    expect(item.querySelector("[data-activity-badge]")).toBeNull();
+    // FA agent without hook status: show catalog label (readable), not empty icon-only.
+    const badge = item.querySelector("[data-activity-badge-text]");
+    expect(badge?.textContent?.trim().length).toBeGreaterThan(0);
   });
 });

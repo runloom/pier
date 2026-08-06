@@ -41,6 +41,8 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/panel-kits/terminal/composer-attachment-rail.tsx",
   // Shared Rich Input suggest rows (mention / attachment / skill) use raw hit targets.
   "src/renderer/panel-kits/terminal/structured-composer/composer-suggest-list.tsx",
+  // Review comment action dialog uses dense host chrome hit targets.
+  "src/renderer/lib/comments/action-dialog.tsx",
 ]);
 const ITEM_AS_CHILD_BUTTON_OWNERS = new Set([
   "src/plugins/builtin/files/renderer/search/result-row.tsx",

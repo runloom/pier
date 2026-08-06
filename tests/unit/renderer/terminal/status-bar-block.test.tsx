@@ -274,7 +274,7 @@ describe("TerminalStatusBarBlock", () => {
     render(<TerminalStatusBarBlock />);
     const pluginRow = screen.getByTestId("status-bar-row-pier.worktree.status");
     const idleResetButton = within(pluginRow).getByRole("button", {
-      name: "Reset to plugin default",
+      name: "Reset to defaults",
     });
     expect(idleResetButton).toHaveAttribute("aria-disabled", "true");
     expect(idleResetButton).not.toBeDisabled();
@@ -292,7 +292,7 @@ describe("TerminalStatusBarBlock", () => {
 
     expect(within(pluginRow).getByText("Modified")).toBeInTheDocument();
     const resetButton = within(pluginRow).getByRole("button", {
-      name: "Reset to plugin default",
+      name: "Reset to defaults",
     });
     expect(resetButton).toBe(idleResetButton);
     expect(resetButton).toHaveAttribute("aria-disabled", "false");
@@ -322,7 +322,7 @@ describe("TerminalStatusBarBlock", () => {
 
     const pluginRow = screen.getByTestId("status-bar-row-pier.worktree.status");
     const resetButton = within(pluginRow).getByRole("button", {
-      name: "Reset to plugin default",
+      name: "Reset to defaults",
     });
     resetButton.focus();
     expect(document.activeElement).toBe(resetButton);
@@ -344,7 +344,7 @@ describe("TerminalStatusBarBlock", () => {
     });
 
     expect(
-      within(pluginRow).getByRole("button", { name: "Reset to plugin default" })
+      within(pluginRow).getByRole("button", { name: "Reset to defaults" })
     ).toBe(resetButton);
     expect(resetButton).toHaveAttribute("aria-disabled", "true");
     expect(document.activeElement).toBe(resetButton);
@@ -419,7 +419,7 @@ describe("TerminalStatusBarBlock", () => {
     await waitFor(() => {
       expect(showAppAlert).toHaveBeenCalledWith({
         body: "boom",
-        title: "Failed to update status bar item",
+        title: "Couldn't update status bar — try again",
       });
     });
   });
@@ -451,7 +451,7 @@ describe("TerminalStatusBarBlock", () => {
     await waitFor(() => {
       expect(showAppAlert).toHaveBeenCalledWith({
         body: "switch boom",
-        title: "Failed to update status bar item",
+        title: "Couldn't update status bar — try again",
       });
     });
   });
