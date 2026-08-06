@@ -71,6 +71,8 @@ export const settingsAgents = {
     uninstallConfirmTitle: "Uninstall this agent?",
     uninstallConfirmBody:
       "Removes the “{{name}}” command-line tool from this computer ({{source}}: {{path}}). Chat history and local settings stay. If it is still running in a terminal, that session may stop working.",
+    uninstallConfirmBodyNameOnly:
+      "Removes the “{{name}}” command-line tool from this computer. Chat history and local settings stay. If it is still running in a terminal, that session may stop working.",
     uninstallConfirmContinue: "Uninstall",
     uninstallSuccess: "Uninstalled {{name}}",
     uninstallSkipped: "Not installed",

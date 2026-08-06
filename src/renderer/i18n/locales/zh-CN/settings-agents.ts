@@ -71,6 +71,8 @@ export const settingsAgents = {
     uninstallConfirmTitle: "卸载此智能体？",
     uninstallConfirmBody:
       "将从本机移除「{{name}}」的命令行工具（{{source}}：{{path}}）。不会删除对话记录与本地配置。若它仍在终端中运行，当前会话可能无法继续。",
+    uninstallConfirmBodyNameOnly:
+      "将从本机移除「{{name}}」的命令行工具。不会删除对话记录与本地配置。若它仍在终端中运行，当前会话可能无法继续。",
     uninstallConfirmContinue: "卸载",
     uninstallSuccess: "已卸载 {{name}}",
     uninstallSkipped: "未安装，无需卸载",
