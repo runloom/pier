@@ -235,19 +235,6 @@ export function DeliveryCard({
               });
             }}
           />
-          <SwitchRow
-            checked={agentAttention.suppressWhenFocused}
-            description={t("settings.notifications.suppressDesc")}
-            id="settings-attention-suppress"
-            label={t("settings.notifications.suppress")}
-            onCheckedChange={(checked) => {
-              patchAttention(
-                { suppressWhenFocused: checked },
-                setAgentAttention,
-                failedTitle
-              ).catch(() => undefined);
-            }}
-          />
           <SelectRow<string>
             description={t("settings.notifications.cooldownDesc")}
             id="settings-attention-cooldown"

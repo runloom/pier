@@ -14,9 +14,6 @@ export const settingsNotifications = {
   },
   error: "出错时通知",
   errorDesc: "智能体进入错误状态时也提醒你。默认关闭。",
-  suppress: "专注时抑制",
-  suppressDesc:
-    "目标智能体面板已聚焦时，不弹出应用内消息卡片或系统通知（仍记入消息中心；仅作用于「需要你处理」与「出错」，回合完成由上方四档单独控制）。",
   cooldownLabel: "同一智能体冷却",
   cooldownDesc:
     "同一智能体面板两次系统通知横幅之间的最短间隔（应用内消息卡片不受此限）。",

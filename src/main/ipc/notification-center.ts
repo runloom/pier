@@ -32,6 +32,7 @@ import { createNotificationHistoryStore } from "../services/notification-center/
 import { readPreferences, updatePreferences } from "../state/preferences.ts";
 import { findAppWindowByWebContents } from "../windows/identity.ts";
 import { windowManager } from "../windows/manager.ts";
+import { isTargetAgentPanelFocused } from "./notification-center-agent-focus.ts";
 import { terminalFocusCoordinator } from "./terminal/focus-coordinator.ts";
 
 const log = createLogger("notification-center.ipc");
@@ -54,12 +55,20 @@ function isTargetPanelFocused(
 ): boolean {
   const focused = windowManager.getFocused();
   if (!focused || focused.isDestroyed()) {
-    return false;
+    return isTargetAgentPanelFocused({
+      activeTerminalPanelId: null,
+      focusedElectronWindowId: null,
+      ownerElectronWindowId: electronWindowId,
+      panelId,
+    });
   }
-  if (String(focused.id) !== electronWindowId) {
-    return false;
-  }
-  return terminalFocusCoordinator.activePanelId(focused) === panelId;
+  return isTargetAgentPanelFocused({
+    activeTerminalPanelId:
+      terminalFocusCoordinator.activeTerminalPanelId(focused),
+    focusedElectronWindowId: String(focused.id),
+    ownerElectronWindowId: electronWindowId,
+    panelId,
+  });
 }
 
 function isOwnerWindowFocused(electronWindowId: string): boolean {
@@ -124,7 +133,6 @@ async function init(): Promise<NotificationCenterService> {
         cooldownMs: s.cooldownMs,
         enableErrorAttention: s.enableErrorAttention,
         enabled: s.enabled,
-        suppressWhenFocused: s.suppressWhenFocused,
         turnNotifyMode: s.turnNotifyMode,
       };
     },

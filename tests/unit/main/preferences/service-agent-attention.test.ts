@@ -18,7 +18,6 @@ describe("preferences-service agentAttention whitelist", () => {
     const nextAttention: AgentAttentionSettings = {
       enabled: false,
       enableErrorAttention: false,
-      suppressWhenFocused: true,
       cooldownMs: 60_000,
       soundEnabled: true,
       soundId: "system",

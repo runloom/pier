@@ -14,9 +14,6 @@ export const settingsNotifications = {
   },
   error: "Notify on agent errors",
   errorDesc: "Also alert when an agent enters an error state. Off by default.",
-  suppress: "Suppress when focused",
-  suppressDesc:
-    "Skip in-app message cards and OS notifications for “Needs you” and errors when the target agent panel is already focused (still recorded in Notification Center; applies only to those events—turn-complete uses the four modes above).",
   cooldownLabel: "Cooldown per agent",
   cooldownDesc:
     "Minimum time between OS notification banners for the same agent panel (in-app message cards are not limited by this).",

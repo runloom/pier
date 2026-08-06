@@ -242,6 +242,17 @@ export class TerminalFocusCoordinator {
     return this.records.get(win.id)?.desired?.activePanelId ?? null;
   }
 
+  /**
+   * 当前活动的终端 panel（键盘 base 为 terminal 时）；web 前台为 null。
+   * NCS `isTargetPanelFocused` / panel-unfocused 静音读此字段：agent 只在
+   * 终端上，base 为 web 时即为 null（「目标 agent 未作为活动终端」）。
+   * host reconciler 在 base=web 时也会 scrub 残留的终端 activePanelId，
+   * 使两字段在 rAF 滞后窗口保持一致。
+   */
+  activeTerminalPanelId(win: AppWindow): string | null {
+    return this.records.get(win.id)?.desired?.activeTerminalPanelId ?? null;
+  }
+
   private recordFor(win: AppWindow): WindowRecord {
     const existing = this.records.get(win.id);
     if (existing) {

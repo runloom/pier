@@ -38,7 +38,10 @@ export interface DeliveryFocus {
   hasFocusedPierWindow: boolean;
   /** agent：拥有该 agent 的 BrowserWindow 是否 focused。 */
   isOwnerWindowFocused?: boolean;
-  /** agent：目标 panel 是否已在 key 窗为活动终端 panel。 */
+  /**
+   * agent：目标 panel 是否已在 key 窗为活动**终端** panel
+   * （main 读 `activeTerminalPanelId`，切到 web 面板时为 false）。
+   */
   isTargetPanelFocused?: boolean;
 }
 
@@ -55,7 +58,6 @@ export interface DeliveryAgentAttentionPrefs {
   cooldownMs: number;
   enabled: boolean;
   enableErrorAttention: boolean;
-  suppressWhenFocused: boolean;
   turnNotifyMode: TurnNotifyMode;
 }
 
@@ -92,7 +94,6 @@ export const DEFAULT_DELIVERY_AGENT_ATTENTION: DeliveryAgentAttentionPrefs = {
   cooldownMs: 180_000,
   enableErrorAttention: false,
   enabled: true,
-  suppressWhenFocused: true,
   turnNotifyMode: "unfocused",
 };
 
@@ -134,7 +135,7 @@ function resolveToastTargetFromInput(input: DeliveryInput): ToastTarget {
  * 返回 true → toast/os 全关。
  *
  * 包含：enabled / enableErrorAttention 二次保险 + 聚焦抑制
- * （attention：panel+suppressWhenFocused；turn-finished：turnNotifyMode）。
+ * （attention：目标 panel 聚焦时产品固化静音；turn-finished：turnNotifyMode）。
  */
 export function shouldSilenceAgentInterrupt(
   input: Pick<DeliveryInput, "kind" | "severity">,
@@ -150,10 +151,8 @@ export function shouldSilenceAgentInterrupt(
     } else if (!prefs.agentAttention.enabled) {
       return true;
     }
-    if (
-      prefs.agentAttention.suppressWhenFocused &&
-      focus.isTargetPanelFocused === true
-    ) {
+    // 产品固化：盯着该智能体面板时不弹「需要你处理 / 出错」打断（仍落 inbox）。
+    if (focus.isTargetPanelFocused === true) {
       return true;
     }
     return false;
@@ -252,13 +251,13 @@ export function resolveDeliveryPlan(
 
 /**
  * 兼容薄封装用的 agent 切片：关闭一切 agent 细粒度静音，只保留 mute/DND/suppressToast。
- * （历史 routeDelivery 不感知 enabled / panel focus / turnNotifyMode。）
+ * （历史 routeDelivery 不感知 enabled / panel focus / turnNotifyMode；
+ *  focus 入参通常不带 isTargetPanelFocused，attention 面板静音不会误触发。）
  */
 const COMPAT_PASSTHROUGH_AGENT_ATTENTION: DeliveryAgentAttentionPrefs = {
   cooldownMs: DEFAULT_DELIVERY_AGENT_ATTENTION.cooldownMs,
   enableErrorAttention: true,
   enabled: true,
-  suppressWhenFocused: false,
   turnNotifyMode: "always",
 };
 

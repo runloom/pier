@@ -126,6 +126,35 @@ describe("terminal host state reconciler", () => {
 
     expect(snapshot.basePanel).toEqual({ kind: "web" });
     expect(snapshot.activeTerminalPanelId).toBeNull();
+    // presentation rAF 未到前不得把旧终端 id 留在 activePanelId，否则 NCS
+    // panel-unfocused 会把 agent 误判为仍聚焦并静音回合完成通知。
+    expect(snapshot.activePanelId).toBeNull();
+  });
+
+  it("keeps non-terminal activePanelId when basePanel is web", () => {
+    updateTerminalHostPresentationFacts({
+      activePanelId: "files-1",
+      activeTerminalPanelId: null,
+      hasMaximizedGroup: false,
+      reason: "dockview-active-panel",
+      terminals: [terminalEntry],
+    });
+
+    const snapshot = updateTerminalHostInputFacts(
+      {
+        basePanel: { kind: "web" },
+        focusDisabledPanelIds: [],
+        webOverlayRects: [],
+        webRequestCount: 0,
+      },
+      "input-routing"
+    );
+
+    expect(snapshot).toMatchObject({
+      activePanelId: "files-1",
+      activeTerminalPanelId: null,
+      basePanel: { kind: "web" },
+    });
   });
 
   it("dedups unchanged presentation geometry but still republishes input intent", () => {
