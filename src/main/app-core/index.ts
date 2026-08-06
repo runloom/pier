@@ -26,6 +26,7 @@ import { createAgentDetectionService } from "../services/agents/detection-servic
 import { createAgentUsageService } from "../services/agents/usage-service.ts";
 import { createAiService } from "../services/ai/service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
+import { createCommentsService } from "../services/comments/service.ts";
 import { createFileDraftsService } from "../services/files/drafts-service.ts";
 import { FilePathTransactionLock } from "../services/files/path-transaction-lock.ts";
 import { createFileService } from "../services/files/service.ts";
@@ -97,6 +98,7 @@ import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import { createWiredAppUpdateService } from "./update-wiring.ts";
 import { createAppCoreUsageData } from "./usage-data.ts";
 import {
+  broadcastCommentsChanged,
   broadcastEnvironmentsChanged,
   broadcastMruState,
   broadcastPluginRegistryChanged,
@@ -307,6 +309,10 @@ function createPierAppCore(): PierAppCore {
   const fileDrafts = createFileDraftsService({
     userDataDir: app.getPath("userData"),
   });
+  const comments = createCommentsService({
+    userDataDir: app.getPath("userData"),
+    broadcast: broadcastCommentsChanged,
+  });
   const runtimeMode = isDevRuntime() ? "development" : "production";
   const agentUsage = createAgentUsageService({
     userDataDir: app.getPath("userData"),
@@ -375,6 +381,7 @@ function createPierAppCore(): PierAppCore {
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),
+    comments,
     fileDrafts,
     files,
     fileWatch: createFileWatchService(),

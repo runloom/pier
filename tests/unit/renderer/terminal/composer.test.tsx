@@ -8,10 +8,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
-import {
-  resetTerminalComposerDraftsForTests,
-  TerminalComposer,
-} from "@/panel-kits/terminal/composer.tsx";
+import { TerminalComposer } from "@/panel-kits/terminal/composer.tsx";
+import { resetTerminalComposerDraftsForTests } from "@/panel-kits/terminal/composer-helpers.ts";
 import { resetTerminalEscapeShortcutForTests } from "@/panel-kits/terminal/escape-shortcut.ts";
 import { resetTerminalComposerAttachmentsForTests } from "@/panel-kits/terminal/hooks/use-composer-attachments.ts";
 import { resetComposerEditorsForTests } from "@/panel-kits/terminal/structured-composer/test-registry.ts";

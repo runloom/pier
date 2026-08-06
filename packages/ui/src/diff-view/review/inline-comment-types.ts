@@ -30,11 +30,13 @@ export interface PierInlineReviewThread {
 export interface PierInlineReviewLabels {
   readonly authorYou: string;
   readonly close: string;
-  readonly create: string;
   readonly deleteComment: string;
   readonly deleted: string;
-  readonly editComment?: string;
+  /** 编辑按钮 aria-label / title。 */
+  readonly editComment: string;
   readonly inputPlaceholder: string;
+  /** 编辑器唯一动作按钮文案（草稿与编辑态共用：「提交」）。 */
+  readonly submit: string;
   readonly title: string;
 }
 
@@ -42,9 +44,9 @@ export interface PierInlineReviewLabels {
  * 行内评论写操作回调（host 提供，卡片调用）。
  *
  * 卡片自带身份（`threadId` / `draftId` 从 annotation metadata 取），
- * 回调只管写操作；`onSubmitDraft` 返回 boolean（成功才清空输入框，失败
- * 保留用户输入）。已展开线程的收起不经卡片按钮——host 用 gutter /
- * 漂移入口 toggle 处理。
+ * 回调只管写操作；`onSubmitDraft` / `onEditComment` 返回 boolean（成功才
+ * 清空输入框 / 退出编辑态，失败保留用户输入）。已展开线程的收起不经卡片
+ * 按钮——host 用 gutter / 漂移入口 toggle 处理。
  */
 export interface PierInlineReviewHandlers {
   /** 取消草稿（移除该 draft 槽）。 */
@@ -54,7 +56,10 @@ export interface PierInlineReviewHandlers {
     threadId: string,
     commentId: string
   ) => Promise<void>;
-  /** 编辑评论 */
+  /**
+   * 原地改评论正文。未提供时展示卡不渲染编辑按钮（host 未开通编辑能力的
+   * 降级路径）。返回 true 表示已写入，卡片据此退出编辑态。
+   */
   readonly onEditComment?: (
     threadId: string,
     commentId: string,

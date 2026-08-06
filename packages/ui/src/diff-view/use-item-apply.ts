@@ -1,12 +1,12 @@
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import { type RefObject, useLayoutEffect } from "react";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import { applyCodeViewItemsAnchored } from "./item-sync.ts";
 import type {
   ParsedItemCacheEntry,
   PierDiffCodeViewItem,
   PierDiffViewItem,
 } from "./items.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 import type { DiffViewRenderItemIdentity } from "./use-handle.ts";
 
 /**
@@ -69,7 +69,7 @@ export function useDiffViewItemApply({
   readonly bumpItemEpoch: () => void;
   readonly codeViewItems: PierDiffCodeViewItem[];
   readonly codeViewKey: string;
-  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
+  readonly codeViewRef: RefObject<CodeViewHandle<PierDiffAnnotationMetadata> | null>;
   readonly firstLayoutItemIdsRef?: RefObject<Set<string>>;
   readonly getSuppressMembershipScrollRestore?: () => boolean;
   readonly inputs: readonly PierDiffViewItem[];

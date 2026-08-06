@@ -12,16 +12,18 @@ import { describe, expect, it, vi } from "vitest";
 const LABELS: PierInlineReviewLabels = {
   authorYou: "You",
   close: "Close",
-  create: "Comment",
   deleteComment: "Delete",
   deleted: "Deleted",
+  editComment: "Edit",
   inputPlaceholder: "Write a comment…",
+  submit: "Submit",
   title: "Comment",
 };
 
 const HANDLERS: PierInlineReviewHandlers = {
   onCancelDraft: vi.fn(),
   onDeleteComment: vi.fn().mockResolvedValue(undefined),
+  onEditComment: vi.fn().mockResolvedValue(true),
   onSubmitDraft: vi.fn().mockResolvedValue(true),
 };
 
@@ -43,7 +45,7 @@ function renderNode(node: ReactNode): void {
 }
 
 describe("renderReviewAnnotation", () => {
-  it("review-thread → 渲染单条评论卡（作者 + 删除）", () => {
+  it("review-thread → 渲染单条评论卡（正文 + 编辑 + 删除）", () => {
     const node = renderReviewAnnotation(
       {
         kind: "review-thread",
@@ -60,13 +62,14 @@ describe("renderReviewAnnotation", () => {
     );
     renderNode(node);
     expect(screen.getByText("hello")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reply" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Resolve" })).toBeNull();
   });
 
-  it("review-draft → 渲染草稿卡（创建按钮）", () => {
+  it("review-draft → 渲染草稿卡（提交按钮）", () => {
     const node = renderReviewAnnotation(
       {
         draftId: "d1",
@@ -77,7 +80,7 @@ describe("renderReviewAnnotation", () => {
       { handlers: HANDLERS, labels: LABELS, locale: "en" }
     );
     renderNode(node);
-    expect(screen.getByRole("button", { name: "Comment" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit" })).toBeInTheDocument();
   });
 
   it("非 review metadata（hunk-actions）→ undefined（调用方继续 hunk 逻辑）", () => {

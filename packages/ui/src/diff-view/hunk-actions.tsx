@@ -10,10 +10,15 @@
  * - Buttons: icon-xs + ghost；原生 title 避免碎片化大差异为每个按钮挂 Tooltip portal
  */
 import { Minus, Plus, RotateCcw } from "lucide-react";
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { Button } from "../button.tsx";
 import { Spinner } from "../spinner.tsx";
 import { cn } from "../utils.ts";
+import {
+  type DiffViewInputStore,
+  useDiffViewChangeControl,
+} from "./input-store.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 
 export interface PierHunkAnnotationMetadata {
   readonly canRevert?: boolean;
@@ -254,3 +259,57 @@ export function renderPierHunkAnnotation(options: {
     />
   );
 }
+
+/**
+ * Hunk annotation 的 React 包装（从 use-code-options.ts 抽离，控文件行数）。
+ *
+ * `memo` + `useDiffViewChangeControl` 把易变的控制态（busy / pendingAction /
+ * canRevert）订阅下沉到单文件粒度，避免每次账本变更重渲染整个 CodeView。
+ * annotation metadata 是正文解析时的锚点快照；按钮能力来自实时控制态，
+ * changeKey 已移除账本时不渲染旧按钮，非 hunk annotation 不渲染。
+ */
+export const LiveHunkAnnotation = memo(function LiveHunkAnnotation({
+  annotation,
+  inputStore,
+  itemId,
+  labels,
+  onHunkAction,
+}: {
+  readonly annotation: {
+    readonly metadata?: PierDiffAnnotationMetadata;
+  };
+  readonly inputStore: DiffViewInputStore;
+  readonly itemId: string;
+  readonly labels: PierHunkActionLabels;
+  readonly onHunkAction: (event: PierHunkActionEvent) => void;
+}): ReactNode {
+  const metadata = annotation.metadata;
+  const changeKey = isPierHunkAnnotationMetadata(metadata)
+    ? metadata.changeKey
+    : "";
+  const control = useDiffViewChangeControl(inputStore, itemId, changeKey);
+  // annotation 是正文解析时的锚点快照；按钮能力必须来自实时控制态。
+  // 当前账本已移除该 changeKey 时不继续渲染旧按钮；非 hunk annotation 不渲染。
+  if (!(isPierHunkAnnotationMetadata(metadata) && control)) {
+    return null;
+  }
+  const disabled = control.busy === true;
+  // 可见性由 CSS [data-pier-file-host]:hover 控制，此处只渲染 DOM。
+  return renderPierHunkAnnotation({
+    annotation: {
+      metadata: {
+        ...metadata,
+        canRevert: control.canRevert ?? canRevertHunkForVariant(control.state),
+        stageState: control.state,
+      },
+    },
+    ...(disabled ? { disabled: true } : {}),
+    itemId,
+    labels,
+    onHunkAction,
+    ...(control.pendingAction === undefined
+      ? {}
+      : { pendingAction: control.pendingAction }),
+    stageState: control.state,
+  });
+});

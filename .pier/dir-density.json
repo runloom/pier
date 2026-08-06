@@ -23,16 +23,16 @@
       "reason": "shadcn primitives intentionally flat; feature clusters live under diff-view/, file/, image-preview/"
     },
     "src/renderer/stores": {
-      "max": 54,
-      "reason": "debt: optional domain subfolders (terminal/workspace/agent); shell-environment store added; workspace-close split pending folder"
+      "max": 55,
+      "reason": "debt: optional domain subfolders (terminal/workspace/agent); shell-environment store added; workspace-close split pending folder; comments mirror store added"
     },
     "src/shared/contracts": {
       "max": 50,
       "reason": "debt: finish remaining contract domain groups"
     },
     "src/renderer/panel-kits/terminal": {
-      "max": 47,
-      "reason": "debt: more surface vs chrome split beyond hooks/"
+      "max": 48,
+      "reason": "debt: more surface vs chrome split beyond hooks/; core comments status item added"
     },
     "src/renderer/pages/settings/components": {
       "max": 42,

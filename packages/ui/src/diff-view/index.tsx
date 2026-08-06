@@ -19,7 +19,6 @@ import {
   useUserCollapsedPredicate,
 } from "./collapse-intent.ts";
 import { diffMetrics } from "./geometry.ts";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import { useDiffViewInputStore } from "./input-store.ts";
 import {
   type ParsedItemCacheEntry,
@@ -29,6 +28,8 @@ import {
 import type { DiffPointerLineHit } from "./pointer-selection.ts";
 import { useDiffRenderWatchdog } from "./render-watchdog.ts";
 import { useDiffRenderWindowReport } from "./render-window.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
+import { useDiffViewReviewAnnotationMerge } from "./review/use-review-annotation-merge.ts";
 import { stabilizeCodeViewStickyPositioning } from "./sticky-stabilize.ts";
 import {
   captureTopologyScrollRestore,
@@ -53,6 +54,10 @@ export {
   totalScrollHeight,
 } from "./geometry.ts";
 export type {
+  PierDriftCommentLabels,
+  PierGutterReviewEvent,
+} from "./gutter/gutter-comments.tsx";
+export type {
   PierDiffViewAnchor,
   PierDiffViewHandle,
   PierDiffViewLineSelection,
@@ -64,12 +69,28 @@ export type {
   PierHunkAnnotationMetadata,
 } from "./hunk-actions.tsx";
 export type {
+  PierDiffReviewCommentThread,
+  PierDiffReviewDriftThread,
   PierDiffViewChangeControl,
   PierDiffViewFileDisplay,
   PierDiffViewItem,
   PierDiffViewStageControl,
 } from "./items.ts";
 export type { PierDiffViewRenderWindow } from "./render-window.ts";
+export type { PierActiveReviewSlot } from "./review/annotation-anchors.ts";
+export type {
+  PierDiffAnnotationMetadata,
+  PierDiffReviewAnnotationMetadata,
+  PierReviewDraftAnnotationMetadata,
+  PierReviewThreadAnnotationMetadata,
+} from "./review/annotation-types.ts";
+export type {
+  PierInlineReviewComment,
+  PierInlineReviewHandlers,
+  PierInlineReviewLabels,
+  PierInlineReviewThread,
+} from "./review/inline-comment-types.ts";
+export { InlineReviewThreadCard } from "./review/inline-thread-card.tsx";
 export {
   fullSelectionRangeForCodeViewItem,
   selectedLinesTextFromCodeViewItem,
@@ -83,26 +104,36 @@ export type {
 
 const INLINE_RENDER_TIMEOUT_MS = 10_000;
 export function PierDiffView({
+  activeReviewEpoch,
+  activeReviewSlotsByItem,
   appearance,
   items: inputs,
   labels,
+  driftCommentLabels,
+  inlineReviewHandlers,
+  inlineReviewLabels,
+  inlineReviewThreadById,
+  locale,
   onDiscardFile,
+  onDriftCommentActivate,
   onError,
   onHunkAction,
   onItemError,
+  onGutterReviewActivate,
   onOpenFile,
   onRenderWindowChange,
   onRetryItem,
   onScroll,
   onToggleStage,
   presentation,
+  reviewCommentsById,
   ref,
   getSuppressMembershipScrollRestore,
   suppressMembershipScrollRestore = false,
 }: PierDiffViewProps): React.JSX.Element | null {
   const diffStyle = presentation?.diffStyle ?? "split";
   const overflow = presentation?.wrapLines === true ? "wrap" : "scroll";
-  const codeViewRef = useRef<CodeViewHandle<PierHunkAnnotationMetadata>>(null);
+  const codeViewRef = useRef<CodeViewHandle<PierDiffAnnotationMetadata>>(null);
   // Light-DOM portal pills need document CSS (shadow unsafeCSS cannot reach them).
   useEffect(() => {
     ensurePierDiffLightDomStyles();
@@ -119,20 +150,17 @@ export function PierDiffView({
   /** 工具栏折叠全部：覆盖此后才水合 / 才进投影窗口的槽位。 */
   const collapseAllIntentRef = useRef<DiffViewCollapseAllIntent>(null);
   const parsedItemIndexesRef = useRef(new Map<string, number>());
-  const parsedItemListRef = useRef<CodeViewItem<PierHunkAnnotationMetadata>[]>(
+  const parsedItemListRef = useRef<CodeViewItem<PierDiffAnnotationMetadata>[]>(
     []
   );
   const parsedInputsRef = useRef<readonly PierDiffViewItem[] | null>(null);
   const appliedItemsRef = useRef<{
     readonly key: string;
-    readonly items: Map<string, CodeViewItem<PierHunkAnnotationMetadata>>;
+    readonly items: Map<string, CodeViewItem<PierDiffAnnotationMetadata>>;
   } | null>(null);
   /** 最近一次 membership apply 新建的 item id；scrollToItem 用 instant。 */
   const firstLayoutItemIdsRef = useRef(new Set<string>());
-  /**
-   * 仅布局不变量（lineHeight/diffStyle/…）触发 remount 时恢复视口。
-   * 成员/stage 变更不 remount，不走此路径。
-   */
+  /** 仅布局不变量（lineHeight/diffStyle）remount 时恢复视口；成员/stage 变更不走此路径。 */
   const layoutScrollRestoreRef = useRef<TopologyScrollRestore | null>(null);
   const previousCodeViewKeyRef = useRef<string | null>(null);
   const [inlineRenderFailed, setInlineRenderFailed] = useState(false);
@@ -257,9 +285,16 @@ export function PierDiffView({
     labels,
     markRendered,
     metrics,
+    ...(driftCommentLabels === undefined ? {} : { driftCommentLabels }),
+    ...(onGutterReviewActivate === undefined ? {} : { onGutterReviewActivate }),
     ...(onHunkAction === undefined ? {} : { onHunkAction }),
     overflow,
+    ...(reviewCommentsById === undefined ? {} : { reviewCommentsById }),
     scheduleRenderWindowReport,
+    ...(inlineReviewHandlers === undefined ? {} : { inlineReviewHandlers }),
+    ...(inlineReviewLabels === undefined ? {} : { inlineReviewLabels }),
+    ...(inlineReviewThreadById === undefined ? {} : { inlineReviewThreadById }),
+    ...(locale === undefined ? {} : { locale }),
   });
 
   useEffect(
@@ -293,9 +328,11 @@ export function PierDiffView({
     inputStore,
     isUserCollapsed,
     labels,
+    ...(driftCommentLabels === undefined ? {} : { driftCommentLabels }),
     metrics,
     onScroll,
     ...(onDiscardFile === undefined ? {} : { onDiscardFile }),
+    ...(onDriftCommentActivate === undefined ? {} : { onDriftCommentActivate }),
     ...(onOpenFile === undefined ? {} : { onOpenFile }),
     ...(onRetryItem === undefined ? {} : { onRetryItem }),
     ...(onToggleStage === undefined ? {} : { onToggleStage }),
@@ -335,6 +372,15 @@ export function PierDiffView({
       ? {}
       : { getSuppressMembershipScrollRestore }),
     suppressMembershipScrollRestore,
+  });
+
+  // 行内评论激活态：apply 层推 base（hunk-only）后，命令式 updateItem 合并
+  // review annotation（合并 effect 见 useDiffViewReviewAnnotationMerge）。
+  useDiffViewReviewAnnotationMerge({
+    activeReviewEpoch,
+    activeReviewSlotsByItem,
+    codeViewItems,
+    codeViewRef,
   });
 
   useLayoutEffect(() => {
@@ -433,7 +479,11 @@ export function PierDiffView({
       onError={onError}
       onUnavailable={disableWorkerPool}
       options={options}
-      {...(onHunkAction ? { renderAnnotation } : {})}
+      {...(onHunkAction ||
+      inlineReviewHandlers !== undefined ||
+      onGutterReviewActivate
+        ? { renderAnnotation }
+        : {})}
       renderHeaderMetadata={renderHeaderMetadata}
       renderHeaderPrefix={renderHeaderPrefix}
       style={style}

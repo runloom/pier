@@ -24,6 +24,7 @@ import type {
 } from "./renderer-appearance.ts";
 import type { RendererPluginDialogsFacade } from "./renderer-dialogs.ts";
 import type {
+  RendererPluginCommentsFacade,
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
@@ -49,6 +50,7 @@ export type {
   RendererPluginDialogsFacade,
 } from "./renderer-dialogs.ts";
 export type {
+  RendererPluginCommentsFacade,
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
@@ -322,6 +324,8 @@ export interface RendererPluginContext {
       options?: { signal?: AbortSignal }
     ): void;
   };
+  /** 统一评论能力(对应 main CommentsService;插件按 manifest 声明 comments:read/write)。 */
+  comments: RendererPluginCommentsFacade;
   configuration: PluginConfigurationApi;
   /**
    * Host fullscreen content preview (image lightbox). Prefer this over nesting

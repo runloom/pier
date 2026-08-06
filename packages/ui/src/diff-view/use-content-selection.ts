@@ -4,7 +4,6 @@ import {
   composedHtmlPath,
   isInteractiveControlTarget,
 } from "./header-events.ts";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import type { ParsedItemCacheEntry, PierDiffCodeViewItem } from "./items.ts";
 import {
   clearBrowserTextSelection,
@@ -12,6 +11,7 @@ import {
   resolveDiffPointerLineHit,
   selectionFromPointerDrag,
 } from "./pointer-selection.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 import { selectedLinesTextFromCodeViewItem } from "./selection-text.ts";
 
 export function useDiffViewContentSelection(input: {
@@ -19,7 +19,7 @@ export function useDiffViewContentSelection(input: {
     readonly key: string;
     readonly items: Map<string, PierDiffCodeViewItem>;
   } | null>;
-  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
+  readonly codeViewRef: RefObject<CodeViewHandle<PierDiffAnnotationMetadata> | null>;
   readonly contentDragAnchorRef: RefObject<DiffPointerLineHit | null>;
   readonly parsedItemsRef: RefObject<Map<string, ParsedItemCacheEntry>>;
   readonly selectedTextRef: RefObject<string>;

@@ -6,6 +6,7 @@ import { ForegroundActivityBridge } from "@/components/common/foreground-activit
 import { initI18n } from "@/i18n/index.ts";
 import {
   CORE_AGENT_STATUS_ITEM_ID,
+  CORE_COMMENTS_STATUS_ITEM_ID,
   CORE_TERMINAL_STATUS_ITEMS,
 } from "@/panel-kits/terminal/core-terminal-status-items.ts";
 import {
@@ -49,7 +50,10 @@ describe("core terminal status items declarations", () => {
   it("keeps agent status but removes task status from the bottom bar", () => {
     const ids = CORE_TERMINAL_STATUS_ITEMS.map((item) => item.id);
 
-    expect(ids).toEqual([CORE_AGENT_STATUS_ITEM_ID]);
+    expect(ids).toEqual([
+      CORE_AGENT_STATUS_ITEM_ID,
+      CORE_COMMENTS_STATUS_ITEM_ID,
+    ]);
     expect(ids).not.toContain("core.task-status");
     expect(ids).not.toContain("core.environment-status");
   });

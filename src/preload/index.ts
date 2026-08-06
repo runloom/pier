@@ -21,6 +21,7 @@ import {
   type PierAgentRuntimeIndexAPI,
 } from "./agent-runtime-index-api.ts";
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
+import { commentsApi, type PierCommentsAPI } from "./comments-api.ts";
 import {
   environmentsApi,
   type PierEnvironmentsAPI,
@@ -153,6 +154,7 @@ export interface PierWindowAPI {
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
+  comments: PierCommentsAPI;
   createWindow: () => Promise<WindowCreateResult>;
   env: PierEnvAPI;
   environments: PierEnvironmentsAPI;
@@ -394,6 +396,7 @@ const api: PierWindowAPI = {
   clipboard: clipboardApi,
   notifications: notificationsApi,
   notificationCenter: notificationCenterApi,
+  comments: commentsApi,
   plugins: pluginsApi,
   pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,

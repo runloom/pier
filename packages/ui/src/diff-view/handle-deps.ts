@@ -11,8 +11,8 @@ import type {
   DiffViewCollapsedItemState,
   DiffViewRenderItemIdentity,
 } from "./handle-types.ts";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import type { ParsedItemCacheEntry, PierDiffCodeViewItem } from "./items.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 
 export interface DiffViewHandleDeps {
   readonly appliedItemsRef: RefObject<{
@@ -21,7 +21,7 @@ export interface DiffViewHandleDeps {
   } | null>;
   readonly auditVisibleItems: () => void;
   readonly bumpItemEpoch: () => void;
-  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
+  readonly codeViewRef: RefObject<CodeViewHandle<PierDiffAnnotationMetadata> | null>;
   readonly collapseAllIntentRef: RefObject<DiffViewCollapseAllIntent>;
   readonly collapsedItemsRef: RefObject<
     Map<string, DiffViewCollapsedItemState>

@@ -94,6 +94,22 @@ export interface PierDiffViewHandle {
    * scrollTo 同源，会把错误落点钉死（表现为首次点树偏、再点才准）。
    */
   scrollToItem(id: string, options?: DiffViewScrollOptions): boolean;
+  /**
+   * 定位到 item 内的某一行（评论 reveal、行级跳转）。
+   *
+   * - side 缺省按 additions；expandCollapsed 缺省 true（对齐 scrollToItem：
+   *   折叠 item 先展开才能定位行）。
+   * - behavior 缺省 smooth；align 固定 center（行级居中可读，区别于
+   *   scrollToItem 的 start 顶部对齐）。
+   * - 调用方负责评论 target.side（"old"|"new"）→ diff-view side
+   *   （"deletions"|"additions"）的映射。
+   */
+  scrollToLine(
+    id: string,
+    lineNumber: number,
+    side?: "additions" | "deletions",
+    options?: DiffViewScrollOptions
+  ): boolean;
   /** 全选当前（或最近）diff/file item 的全部行。 */
   selectAll(): boolean;
   /**

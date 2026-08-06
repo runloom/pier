@@ -67,6 +67,8 @@ describe("Git diff renderer governance", () => {
       "packages/ui/src/diff-view/item-transition.ts",
       "packages/ui/src/diff-view/items.ts",
       "packages/ui/src/diff-view/pointer-selection.ts",
+      "packages/ui/src/diff-view/review/annotation-anchors.ts",
+      "packages/ui/src/diff-view/review/use-review-annotation-merge.ts",
       "packages/ui/src/diff-view/selection-text.ts",
       "packages/ui/src/diff-view/topology-scroll.ts",
       "packages/ui/src/diff-view/use-code-options.ts",
@@ -125,11 +127,19 @@ describe("Git diff renderer governance", () => {
     );
     // diffStyle/overflow 由 PierDiffViewPresentation 驱动(split/unified、wrap),
     // 缺省仍是 split + scroll;其余配置保持锁定。
-    // Codex hunk stage uses annotations + renderAnnotation, not gutter utility.
-    // Keep enableGutterUtility false (no review comments → no empty "+").
-    expect(codeViewOptions).toContain("enableGutterUtility: false");
-    expect(codeViewOptions).not.toContain("onGutterUtilityClick:");
-    expect(adapterSource).toContain("renderPierHunkAnnotation");
+    // 评论 gutter 入口由 onGutterReviewActivate 门控：host 提供则开启
+    // 原生 + 按钮能力（onGutterUtilityClick），缺省关闭避免空 "+"。
+    // 有评论的行由 base review-thread annotation 常驻渲染评论卡，无折叠 badge 态；
+    // gutter 入口恒为「在这一行新建评论」，不承担展开/收起。
+    expect(codeViewOptions).toContain(
+      "enableGutterUtility: onGutterReviewActivate !== undefined"
+    );
+    expect(codeViewOptions).toContain(
+      "onGutterUtilityClick: handleGutterUtilityClick"
+    );
+    // F1-F6 把 LiveHunkAnnotation（memo 组件，内部调 renderPierHunkAnnotation）
+    // 从 use-code-options 移到 hunk-actions；adapter 经 createElement 挂载。
+    expect(adapterSource).toContain("LiveHunkAnnotation");
     expect(adapterSource).toContain("onHunkAction");
     // Codex Tn: -top-8.5 right-0.5 pill + per-file hover + icon-xs ghost.
     // Hover reveal is document-level (light DOM portals); shadow uses :host().
@@ -284,6 +294,13 @@ describe("Git diff renderer governance", () => {
         join(ROOT, "packages/ui/src/diff-view/use-item-apply.ts"),
         join(ROOT, "packages/ui/src/diff-view/use-code-options.ts"),
         join(ROOT, "packages/ui/src/diff-view/view-shell.tsx"),
+        // review annotation 合并 effect：命令式 updateItem 推 review annotation
+        join(
+          ROOT,
+          "packages/ui/src/diff-view/review/use-review-annotation-merge.ts"
+        ),
+        // review annotation builder：注释提及 updateItem（无实际调用）
+        join(ROOT, "packages/ui/src/diff-view/review/annotation-anchors.ts"),
         // estimate 骨架注入 shadowRoot（金标准 pending UI）
         join(ROOT, "packages/ui/src/diff-view/estimate-skeleton.ts"),
         // 虚拟高度施加：geometry 公式写进 CodeView 布局字段
@@ -373,10 +390,19 @@ describe("Git diff renderer governance", () => {
     expect(adapter).not.toMatch(/JSON\.stringify\(\s*codeViewItems\.map/u);
     expect(adapter).not.toContain("items={codeViewItems}");
     expect(adapter).not.toMatch(/querySelector|shadowRoot/u);
-    const changesSources = await localDependencySources([
-      "src/plugins/builtin/git/renderer/changes-panel.tsx",
-    ]);
-    expect([...changesSources.values()].join("\n")).not.toMatch(
+    // Changes 必须复用 PierFileTree：只检查 git renderer 自身源码，不含
+    // transitive 拉入的 packages/ui 共享原语（Item/ItemGroup 用 <ul> 是合规
+    // 列表原语，非自绘树；行内评论卡复用 Item 渲染评论列表）。PierFileTree
+    // import 由下个测试锁定。
+    const rendererTreeSources = await sourceFiles(
+      join(ROOT, "src/plugins/builtin/git/renderer")
+    );
+    const rendererTreeJoined = (
+      await Promise.all(
+        rendererTreeSources.map((file) => readFile(file, "utf8"))
+      )
+    ).join("\n");
+    expect(rendererTreeJoined).not.toMatch(
       /role=["']tree(?:item)?["']|<(?:li|ul)\b|@tanstack\/react-virtual/iu
     );
   });

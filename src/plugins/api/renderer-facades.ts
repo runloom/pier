@@ -1,4 +1,14 @@
 import type {
+  CommentProjectSnapshot,
+  CommentsCreateThreadRequest,
+  CommentsCreateThreadResult,
+  CommentsDeleteCommentRequest,
+  CommentsListProjectsRequest,
+  CommentsListProjectsResult,
+  CommentsUpdateCommentRequest,
+  CommentVoidMutationResult,
+} from "@shared/contracts/comments/index.ts";
+import type {
   EnvironmentSnapshotRequest,
   EnvironmentUpdateRequest,
   EnvironmentWorktreeBindingRequest,
@@ -312,4 +322,39 @@ export interface RendererPluginWorktreesFacade {
   ): Promise<WorktreeOpenTerminalResult>;
   prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
   remove(request: WorktreeRemoveRequest): Promise<WorktreeRemoveResult>;
+}
+
+/**
+ * 统一评论能力门面(对应 main 进程 CommentsService;插件按 manifest 声明的
+ * comments:read / comments:write capability 调用)。
+ *
+ * v1 瘦身(对标 Codex 单条批注):只暴露 snapshot / watch / listProjects /
+ * createThread / updateComment / deleteComment。
+ *
+ * - 读路径:snapshot + watch + listProjects 断言 comments:read。
+ * - 写路径:createThread / updateComment / deleteComment 断言 comments:read +
+ *   comments:write。
+ * - 结果透传 {kind:"ok",...} | CommentFailure 联合;snapshot 失败返回 null。
+ */
+export interface RendererPluginCommentsFacade {
+  createThread(
+    request: CommentsCreateThreadRequest
+  ): Promise<CommentsCreateThreadResult>;
+  deleteComment(
+    request: CommentsDeleteCommentRequest
+  ): Promise<CommentVoidMutationResult>;
+  listProjects(
+    request: CommentsListProjectsRequest
+  ): Promise<CommentsListProjectsResult>;
+  /** 首拉项目快照;失败返回 null(不抛,对齐 git facade 单值返回)。 */
+  snapshot(worktreeKey: string): Promise<CommentProjectSnapshot | null>;
+  /** 原地改正文;成功后 main 置 editedAt 并广播新快照。 */
+  updateComment(
+    request: CommentsUpdateCommentRequest
+  ): Promise<CommentVoidMutationResult>;
+  /** 订阅 per-worktree 评论广播;返回 disposer。listener 仅收该 worktreeKey 快照。 */
+  watch(
+    worktreeKey: string,
+    listener: (snapshot: CommentProjectSnapshot) => void
+  ): () => void;
 }

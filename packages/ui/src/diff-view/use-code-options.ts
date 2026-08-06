@@ -1,8 +1,11 @@
-import type { CodeViewOptions, SmoothScrollSettings } from "@pierre/diffs";
+import type {
+  CodeViewOptions,
+  SelectedLineRange,
+  SmoothScrollSettings,
+} from "@pierre/diffs";
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import {
   createElement,
-  memo,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -21,19 +24,27 @@ import {
 } from "./estimate-skeleton.ts";
 import type { DiffMetrics } from "./geometry.ts";
 import {
-  canRevertHunkForVariant,
+  gutterReviewThreadForLine,
+  type PierDriftCommentLabels,
+  type PierGutterReviewEvent,
+} from "./gutter/gutter-comments.tsx";
+import {
+  LiveHunkAnnotation,
   type PierHunkActionEvent,
   type PierHunkActionLabels,
-  type PierHunkAnnotationMetadata,
-  renderPierHunkAnnotation,
 } from "./hunk-actions.tsx";
-import {
-  type DiffViewInputStore,
-  useDiffViewChangeControl,
-} from "./input-store.ts";
+import type { DiffViewInputStore } from "./input-store.ts";
+import type { PierDiffReviewCommentThread } from "./items.ts";
 import { installDiffVirtualHeightReconciler } from "./layout-apply.ts";
 import { syncPathTitleChrome } from "./path-title-chrome.ts";
 import { PIER_DIFF_LINE_DIFF_TYPE } from "./render-profile.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
+import type {
+  PierInlineReviewHandlers,
+  PierInlineReviewLabels,
+  PierInlineReviewThread,
+} from "./review/inline-comment-types.ts";
+import { renderReviewAnnotation } from "./review/render-review-annotation.ts";
 import { stabilizeCodeViewStickyPositioning } from "./sticky-stabilize.ts";
 
 const DEFAULT_UNMODIFIED_LINE = "{{count}} unmodified line";
@@ -86,7 +97,7 @@ export function useDiffViewCodeOptions(options: {
     };
     readonly colorMode: "dark" | "light";
   };
-  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
+  readonly codeViewRef: RefObject<CodeViewHandle<PierDiffAnnotationMetadata> | null>;
   readonly collapseAllIntentRef: RefObject<DiffViewCollapseAllIntent>;
   readonly diffStyle: "split" | "unified";
   readonly fileHoverCleanupsRef: RefObject<Map<string, () => void>>;
@@ -101,13 +112,28 @@ export function useDiffViewCodeOptions(options: {
     element: Element
   ) => void;
   readonly metrics: DiffMetrics;
+  readonly driftCommentLabels?: PierDriftCommentLabels;
+  readonly onGutterReviewActivate?: (event: PierGutterReviewEvent) => void;
   readonly onHunkAction?: (event: PierHunkActionEvent) => void;
   readonly overflow: "wrap" | "scroll";
+  /** itemId → 该文件 diff 行内评论线程（host 投影后注入）；缺省无评论入口。 */
+  readonly reviewCommentsById?: ReadonlyMap<
+    string,
+    readonly PierDiffReviewCommentThread[]
+  >;
   readonly scheduleRenderWindowReport: () => void;
+  /** 行内评论写操作回调（host 提供）；缺省无行内卡写操作。 */
+  readonly inlineReviewHandlers?: PierInlineReviewHandlers;
+  /** 行内评论卡 i18n 文案（host 注入）。 */
+  readonly inlineReviewLabels?: PierInlineReviewLabels;
+  /** threadId → 行内线程完整数据（卡片渲染用）。 */
+  readonly inlineReviewThreadById?: ReadonlyMap<string, PierInlineReviewThread>;
+  /** 行内评论卡 locale（相对时间格式化用）。 */
+  readonly locale?: string;
 }): {
-  readonly options: CodeViewOptions<PierHunkAnnotationMetadata>;
+  readonly options: CodeViewOptions<PierDiffAnnotationMetadata>;
   readonly renderAnnotation: (
-    annotation: { readonly metadata?: PierHunkAnnotationMetadata },
+    annotation: { readonly metadata?: PierDiffAnnotationMetadata },
     item: { readonly id: string }
   ) => ReactNode;
   readonly style: DiffTypographyStyle;
@@ -124,9 +150,16 @@ export function useDiffViewCodeOptions(options: {
     labels,
     markRendered,
     metrics,
+    driftCommentLabels,
+    onGutterReviewActivate,
     onHunkAction,
     overflow,
+    reviewCommentsById,
     scheduleRenderWindowReport,
+    inlineReviewHandlers,
+    inlineReviewLabels,
+    inlineReviewThreadById,
+    locale,
   } = options;
   const estimateHeightOptionsRef = useRef({
     isCollapseAllIntent: () => collapseAllIntentRef.current === true,
@@ -150,15 +183,51 @@ export function useDiffViewCodeOptions(options: {
     [labels.unmodifiedLine, labels.unmodifiedLines]
   );
   const expandAllUnmodifiedLabel = labels.expandAllUnmodified;
-  const codeViewOptions = useMemo<CodeViewOptions<PierHunkAnnotationMetadata>>(
+  // gutter 评论入口走 `@pierre/diffs` 默认 + 按钮（onGutterUtilityClick）：
+  // 单击时 `range.start` 是行号、`range.side` 是 additions/deletions，
+  // `context.item.id` 是文件 id；查 reviewCommentsById 命中已有线程则带
+  // threadId（打开线程卡），否则 host 打开新建草稿。默认 + 按钮的 hover/显隐
+  // 由 `@pierre/diffs` 原生管理，无需自定义 renderGutterUtility 与 hover
+  // re-render。
+  const handleGutterUtilityClick = useCallback(
+    (
+      range: SelectedLineRange,
+      context: { readonly item: { readonly id: string } }
+    ) => {
+      if (onGutterReviewActivate === undefined) {
+        return;
+      }
+      const side = range.side;
+      if (side === undefined) {
+        return;
+      }
+      const lineNumber = range.start;
+      const thread = gutterReviewThreadForLine(
+        reviewCommentsById?.get(context.item.id),
+        side,
+        lineNumber
+      );
+      onGutterReviewActivate({
+        itemId: context.item.id,
+        lineNumber,
+        side,
+        ...(thread === undefined ? {} : { threadId: thread.threadId }),
+      });
+    },
+    [onGutterReviewActivate, reviewCommentsById]
+  );
+  const codeViewOptions = useMemo<CodeViewOptions<PierDiffAnnotationMetadata>>(
     () => ({
       diffIndicators: "bars",
       diffStyle,
       disableBackground: false,
       disableLineNumbers: false,
-      // No review comments — keep gutter utility off (avoids empty "+").
-      enableGutterUtility: false,
+      // 评论 gutter 入口：host 提供 onGutterReviewActivate 时启用默认 + 按钮。
+      enableGutterUtility: onGutterReviewActivate !== undefined,
       enableLineSelection: true,
+      ...(onGutterReviewActivate === undefined
+        ? {}
+        : { onGutterUtilityClick: handleGutterUtilityClick }),
       ...(expandAllUnmodifiedLabel === undefined
         ? {}
         : { expandAllUnmodifiedLabel }),
@@ -269,6 +338,8 @@ export function useDiffViewCodeOptions(options: {
       isUserCollapsed,
       markRendered,
       metrics,
+      onGutterReviewActivate,
+      handleGutterUtilityClick,
       overflow,
       scheduleRenderWindowReport,
     ]
@@ -288,10 +359,21 @@ export function useDiffViewCodeOptions(options: {
   const renderAnnotation = useCallback(
     (
       annotation: {
-        readonly metadata?: PierHunkAnnotationMetadata;
+        readonly metadata?: PierDiffAnnotationMetadata;
       },
       item: { readonly id: string }
     ): ReactNode => {
+      const metadata = annotation.metadata;
+      const reviewNode = renderReviewAnnotation(metadata, {
+        driftCommentLabels,
+        handlers: inlineReviewHandlers,
+        labels: inlineReviewLabels,
+        locale,
+        threadById: inlineReviewThreadById,
+      });
+      if (reviewNode !== undefined) {
+        return reviewNode;
+      }
       if (!onHunkAction) {
         return null;
       }
@@ -303,7 +385,16 @@ export function useDiffViewCodeOptions(options: {
         onHunkAction,
       });
     },
-    [hunkActionLabels, inputStore, onHunkAction]
+    [
+      driftCommentLabels,
+      hunkActionLabels,
+      inlineReviewHandlers,
+      inlineReviewLabels,
+      inlineReviewThreadById,
+      inputStore,
+      locale,
+      onHunkAction,
+    ]
   );
 
   const style = useMemo<DiffTypographyStyle>(
@@ -328,50 +419,3 @@ export function useDiffViewCodeOptions(options: {
     style,
   };
 }
-
-const LiveHunkAnnotation = memo(function LiveHunkAnnotation({
-  annotation,
-  inputStore,
-  itemId,
-  labels,
-  onHunkAction,
-}: {
-  readonly annotation: {
-    readonly metadata?: PierHunkAnnotationMetadata;
-  };
-  readonly inputStore: DiffViewInputStore;
-  readonly itemId: string;
-  readonly labels: PierHunkActionLabels;
-  readonly onHunkAction: (event: PierHunkActionEvent) => void;
-}): ReactNode {
-  const metadata = annotation.metadata;
-  const control = useDiffViewChangeControl(
-    inputStore,
-    itemId,
-    metadata?.changeKey ?? ""
-  );
-  // annotation 是正文解析时的锚点快照；按钮能力必须来自实时控制态。
-  // 当前账本已移除该 changeKey 时不继续渲染旧按钮。
-  if (!(metadata && control)) {
-    return null;
-  }
-  const disabled = control.busy === true;
-  // 可见性由 CSS [data-pier-file-host]:hover 控制，此处只渲染 DOM。
-  return renderPierHunkAnnotation({
-    annotation: {
-      metadata: {
-        ...metadata,
-        canRevert: control.canRevert ?? canRevertHunkForVariant(control.state),
-        stageState: control.state,
-      },
-    },
-    ...(disabled ? { disabled: true } : {}),
-    itemId,
-    labels,
-    onHunkAction,
-    ...(control.pendingAction === undefined
-      ? {}
-      : { pendingAction: control.pendingAction }),
-    stageState: control.state,
-  });
-});

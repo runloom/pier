@@ -17,6 +17,7 @@ import type { AgentDetectionService } from "../services/agents/detection-service
 import type { AgentUsageService } from "../services/agents/usage-service.ts";
 import type { AiService } from "../services/ai/service.ts";
 import type { AppUpdateService } from "../services/app-updates/service.ts";
+import type { CommentsService } from "../services/comments/service.ts";
 import type { FileDraftsService } from "../services/files/drafts-service.ts";
 import type { FileService } from "../services/files/service.ts";
 import type { FileWatchService } from "../services/files/watch-service.ts";
@@ -58,6 +59,7 @@ export interface PierCoreServices {
     read(): Promise<MruState>;
     recordUse(actionId: string): Promise<void>;
   };
+  comments: CommentsService;
   fileDrafts?: FileDraftsService;
   files?: FileService;
   fileWatch?: FileWatchService;

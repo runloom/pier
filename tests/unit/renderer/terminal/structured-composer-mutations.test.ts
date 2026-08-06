@@ -16,9 +16,14 @@ import {
 import { $deleteAdjacentMention } from "@/panel-kits/terminal/structured-composer/mention-delete-plugin.tsx";
 import {
   insertAttachmentTokenAtLexicalSelection,
+  insertOrReplaceReviewCommentsChipInLexical,
   listInvalidAttachmentRefsInLexical,
   rewriteAttachmentTokensInLexical,
 } from "@/panel-kits/terminal/structured-composer/mutations.ts";
+import {
+  $isReviewCommentsChipNode,
+  ReviewCommentsChipNode,
+} from "@/panel-kits/terminal/structured-composer/review-comments-chip-node.tsx";
 import { readLexicalPlainText } from "@/panel-kits/terminal/structured-composer/serialize.ts";
 import {
   $createWorkspacePathMentionNode,
@@ -29,10 +34,34 @@ import {
 function createMentionEditor(): LexicalEditor {
   const editor = createEditor({
     namespace: "mutation-test",
-    nodes: [WorkspacePathMentionNode, AttachmentTokenNode],
+    nodes: [
+      WorkspacePathMentionNode,
+      AttachmentTokenNode,
+      ReviewCommentsChipNode,
+    ],
   });
   editor.setRootElement(document.createElement("div"));
   return editor;
+}
+
+function countReviewChips(editor: LexicalEditor): number {
+  let count = 0;
+  editor.getEditorState().read(() => {
+    const stack: LexicalNode[] = [$getRoot()];
+    while (stack.length > 0) {
+      const node = stack.pop();
+      if (!node) {
+        continue;
+      }
+      if ($isReviewCommentsChipNode(node)) {
+        count += 1;
+      }
+      if ("getChildren" in node && typeof node.getChildren === "function") {
+        stack.push(...node.getChildren());
+      }
+    }
+  });
+  return count;
 }
 
 function countMentions(editor: LexicalEditor): number {
@@ -243,5 +272,37 @@ describe("structured-composer-mutations", () => {
     );
     expect(readLexicalPlainText(editor)).toBe("a");
     expect(countAttachmentTokens(editor)).toBe(0);
+  });
+
+  it("inserts review-comments chip and replaces on resubmit", () => {
+    const editor = createMentionEditor();
+    editor.update(
+      () => {
+        const root = $getRoot();
+        root.clear();
+        const paragraph = $createParagraphNode();
+        paragraph.append($createTextNode("note "));
+        root.append(paragraph);
+        root.selectEnd();
+      },
+      { discrete: true }
+    );
+    insertOrReplaceReviewCommentsChipInLexical(editor, {
+      count: 1,
+      label: "Comments · 1",
+      payloadText: "Please address these review comments:\n\n- `a.ts:1`: one",
+    });
+    expect(countReviewChips(editor)).toBe(1);
+    expect(readLexicalPlainText(editor)).toContain("Please address");
+    expect(countMentions(editor)).toBe(0);
+
+    insertOrReplaceReviewCommentsChipInLexical(editor, {
+      count: 2,
+      label: "Comments · 2",
+      payloadText: "Please address these review comments:\n\n- two items",
+    });
+    expect(countReviewChips(editor)).toBe(1);
+    expect(readLexicalPlainText(editor)).toContain("two items");
+    expect(readLexicalPlainText(editor)).not.toContain("`a.ts:1`");
   });
 });

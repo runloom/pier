@@ -8,7 +8,6 @@ import { useGitReviewDocumentDemand } from "../hooks/use-document-demand.ts";
 import { useGitReviewDocumentSession } from "../hooks/use-document-session.ts";
 import { useGitReviewGenerationCallbacks } from "../hooks/use-generation-callbacks.ts";
 import { useGitReviewItemReplay } from "../hooks/use-item-replay.ts";
-import { useGitReviewLocaleProjection } from "../hooks/use-locale-projection.ts";
 import { useGitReviewMutationCommit } from "../hooks/use-mutation-commit.ts";
 import { useGitReviewNavigation } from "../hooks/use-navigation.ts";
 import { useGitReviewNavigationError } from "../hooks/use-navigation-error.ts";
@@ -16,20 +15,21 @@ import { useGitReviewProjectionCommit } from "../hooks/use-projection-commit.ts"
 import { useGitReviewReadingCallbacks } from "../hooks/use-reading-callbacks.ts";
 import { useGitReviewRenderWindowReady } from "../hooks/use-render-window-ready.ts";
 import { useGitReviewRetentionSync } from "../hooks/use-retention-sync.ts";
+import { useReviewCommentsBinding } from "../hooks/use-review-comments-binding.ts";
+import { useGitReviewCommentsIntegration } from "../hooks/use-review-comments-integration.ts";
+import { useGitReviewRetryFailure } from "../hooks/use-review-retry-failure.ts";
 import { useGitReviewSurfaceNavigationHandoff } from "../hooks/use-surface-navigation-handoff.ts";
 import { useGitReviewSurfaceSessionEntries } from "../hooks/use-surface-session-entries.ts";
 import { useGitReviewTreeOpen } from "../hooks/use-tree-open.ts";
 import { useGitReviewViewportEffects } from "../hooks/use-viewport-effects.ts";
 import type { ReviewRenderFeedback } from "./code-view.tsx";
+import { ReviewCommentsChrome } from "./comments/chrome.tsx";
+import { applyReviewNavigationDemand } from "./document/apply-navigation-demand.ts";
 import { reviewEntryHasBodyContent } from "./document/body-class.ts";
-import {
-  prioritizeReviewNavigationDemand,
-  type ReviewDocumentDemand,
-} from "./document/demand.ts";
+import type { ReviewDocumentDemand } from "./document/demand.ts";
 import type { GitReviewDocumentGeneration } from "./document/generation.ts";
 import type { GitReviewDocumentLoader } from "./document/loader.ts";
 import { EMPTY_DOCUMENT_VIEW_STATE } from "./document/projection.ts";
-import { reviewTreeSectionKeyForSurface } from "./document/projection-index.ts";
 import {
   EMPTY_LOADER_SNAPSHOT,
   EMPTY_REVIEW_PROJECTION,
@@ -51,10 +51,12 @@ function ReviewSurfaceComponent({
   indexRefreshFailure,
   mutationAuthorityBlocked,
   navigationRequest,
+  pendingReveal,
   onAcquireMutationAuthority,
   onMutationCommitted,
   onMutationTransition,
   onNavigationMaterialized,
+  onPendingRevealHandled,
   onSurfaceNavigationSettled,
   onActiveChromeChange,
   onRequestTreeOpen,
@@ -114,7 +116,6 @@ function ReviewSurfaceComponent({
     onMutationCommitted,
     onMutationTransition
   );
-
   const { selectedEntryKey, selectedSectionKey, setSelectedTreeTarget } =
     useReviewSelection(scope, diffBase, treeModel);
   const getSelectedTreeEntryKey = useCallback(
@@ -138,7 +139,6 @@ function ReviewSurfaceComponent({
   useLayoutEffect(() => {
     projectionLocaleRef.current = appearance.locale;
   }, [appearance.locale]);
-  // 首屏估算正文保持隐藏时，仍需把渲染错误同步到外层，确保错误主体不会被骨架遮住。
   const updateRenderFeedback = useCallback(
     (feedback: ReviewRenderFeedback | null) => setRenderFeedback(feedback),
     []
@@ -150,49 +150,12 @@ function ReviewSurfaceComponent({
       loaderRef,
     });
   const applyNavigationDemand = useCallback((entryKey: string) => {
-    // full-alignment：boost selected，保留 window/seed（禁止 pin-only exclusive replace）
-    const current = currentDemandRef.current;
-    const loader = loaderRef.current;
-    // stage-all 等 mutation 后 window ref 可能仍含已迁走/消失的 entryKey；
-    // 只保留 loader 仍认识的键（与 setProtectedEntryKey 软丢弃一致）。
-    const known = (keys: readonly string[]): string[] =>
-      loader
-        ? keys.filter((key) => loader.getResource(key) !== undefined)
-        : [...keys];
-    const filteredCurrent = {
-      bufferedEntryKeys: known(current.bufferedEntryKeys),
-      visibleEntryKeys: known(current.visibleEntryKeys),
-    };
-    const hasWindow =
-      filteredCurrent.visibleEntryKeys.length > 0 ||
-      filteredCurrent.bufferedEntryKeys.length > 0;
-    const seedKnown = known(seedEntryKeysRef.current);
-    const entryKnown =
-      loader === null || loader.getResource(entryKey) !== undefined;
-    let seedVisibleEntryKeys: readonly string[] = [];
-    if (seedKnown.length > 0) {
-      seedVisibleEntryKeys = seedKnown;
-    } else if (entryKnown) {
-      seedVisibleEntryKeys = [entryKey];
-    }
-    const base = hasWindow
-      ? filteredCurrent
-      : {
-          bufferedEntryKeys: [] as const,
-          visibleEntryKeys: seedVisibleEntryKeys,
-        };
-    // 选中项若已不在本面（全量 stage 走光），只收敛 window，勿 pin 幽灵 key
-    const demand = entryKnown
-      ? prioritizeReviewNavigationDemand(base, entryKey, true)
-      : base;
-    currentDemandRef.current = demand;
-    // 先 demand（含 selected boost）再 protect，避免无 window 时 protect 误开读
-    loader?.setWindowDemand(demand);
-    if (entryKnown) {
-      loader?.setProtectedEntryKey(entryKey);
-    } else {
-      loader?.setProtectedEntryKey(null);
-    }
+    currentDemandRef.current = applyReviewNavigationDemand({
+      currentDemand: currentDemandRef.current,
+      entryKey,
+      loader: loaderRef.current,
+      seedEntryKeys: seedEntryKeysRef.current,
+    });
   }, []);
   const {
     beginReadingNavigating,
@@ -300,7 +263,23 @@ function ReviewSurfaceComponent({
     syncRetentionLimits,
     tryPendingNavigation,
   });
+  const { commentsIndexRef, commentsSeqRef, threads } =
+    useGitReviewCommentsIntegration({
+      context,
+      controllerRef: documentControllerRef,
+      diffBase,
+      entries: sessionEntries,
+      indexGeneration,
+      loaderRef,
+      locale: appearance.locale,
+      projectedLocaleRef,
+      recordLatestItemUpdates,
+      scope,
+      setProjection,
+    });
   useGitReviewDocumentSession({
+    commentsIndexRef,
+    commentsSeqRef,
     committedProjectionGenerationRef,
     context,
     currentDemandRef,
@@ -349,19 +328,6 @@ function ReviewSurfaceComponent({
     resumeSelectedNavigation,
     tryPendingNavigation,
   });
-  useGitReviewLocaleProjection({
-    context,
-    controllerRef: documentControllerRef,
-    diffBase,
-    entries: sessionEntries,
-    indexGeneration,
-    loaderRef,
-    locale: appearance.locale,
-    projectedLocaleRef,
-    recordLatestItemUpdates,
-    setProjection,
-  });
-
   const { setDiffHandle } = useGitReviewViewportEffects({
     active: renderUpdatesActive,
     cancelVerification,
@@ -382,16 +348,14 @@ function ReviewSurfaceComponent({
     viewState,
     viewStateRef,
   });
-
   const { isActiveOpenPath, onContextMenuSession, openTreeNode } =
     useGitReviewTreeOpen({
       beginNavigation,
       cancelVerification,
       getSelectedEntryKey: getSelectedTreeEntryKey,
       getSelectedSectionKey: getSelectedTreeSectionKey,
-      onRequestOpen: (fileRef) => {
-        onRequestTreeOpen(fileRef.entryKey, fileRef.sectionKey, fileRef.group);
-      },
+      onRequestOpen: (fileRef) =>
+        onRequestTreeOpen(fileRef.entryKey, fileRef.sectionKey, fileRef.group),
       setSelectedTreeTarget,
       treeModel,
     });
@@ -400,6 +364,7 @@ function ReviewSurfaceComponent({
     applyNavigationDemand,
     beginNavigation,
     diffBase,
+    diffHandleRef,
     hasPendingNavigation,
     navigationPending,
     navigationRequest,
@@ -408,87 +373,101 @@ function ReviewSurfaceComponent({
     projection,
     setSelectedTreeTarget,
   });
-  const retryFailure = useCallback(
-    (entryKey: string) => {
-      loaderRef.current?.retry(entryKey);
-      const retryEntry =
-        entries.find((entry) => entry.entryKey === entryKey) ??
-        sessionEntries.find((entry) => entry.entryKey === entryKey);
-      let treeSectionKey: string | null = null;
-      if (
-        selectedSectionKey &&
-        entryKeyBySectionIdRef.current.get(selectedSectionKey) === entryKey
-      ) {
-        treeSectionKey = selectedSectionKey;
-      } else if (retryEntry) {
-        treeSectionKey = reviewTreeSectionKeyForSurface(retryEntry, diffBase);
-      }
-      const itemId = firstSectionIdByEntryKeyRef.current.get(entryKey);
-      if (!(treeSectionKey && itemId)) {
-        return;
-      }
-      setSelectedTreeTarget({ entryKey, sectionKey: treeSectionKey });
-      // scroll 由 navigationPending layout 触发（子 apply 之后）
-      beginNavigation({ entryKey, sectionKey: itemId });
-    },
-    [
-      beginNavigation,
-      diffBase,
-      entries,
-      selectedSectionKey,
-      setSelectedTreeTarget,
-      sessionEntries,
-    ]
-  );
+  const retryFailure = useGitReviewRetryFailure({
+    beginNavigation,
+    diffBase,
+    entries,
+    entryKeyBySectionIdRef,
+    firstSectionIdByEntryKeyRef,
+    loaderRef,
+    selectedSectionKey,
+    sessionEntries,
+    setSelectedTreeTarget,
+  });
+  const comments = useReviewCommentsBinding({
+    context,
+    entries,
+    entryKeyBySectionIdRef,
+    locale: appearance.locale,
+    onPendingRevealHandled,
+    onRequestTreeOpen,
+    pendingReveal,
+    projection,
+    scope,
+    threads,
+  });
   return (
-    <GitReviewSurfaceView
-      active={active}
-      activeRef={activeRef}
-      activeSurface={activeSurface}
-      appearance={appearance}
-      authoritativeEmpty={
-        surfaceEntries.length === 0 ||
-        !surfaceEntries.some((entry) =>
-          reviewEntryHasBodyContent(entry, diffBase)
-        )
-      }
-      clearForUserIntent={clearForUserIntent}
-      context={context}
-      diffHandleRef={diffHandleRef}
-      entries={entries}
-      failureSummary={failureSummary}
-      handleMutationCommitted={handleMutationCommitted}
-      handleRenderWindowChange={handleRenderWindowChange}
-      hasPendingNavigation={hasPendingNavigation}
-      indexRefreshFailure={indexRefreshFailure}
-      isActiveOpenPath={isActiveOpenPath}
-      mutationAuthorityBlocked={mutationAuthorityBlocked}
-      navigationPending={navigationPending}
-      noteUserScrollReading={noteUserScrollReading}
-      {...(onActiveChromeChange === undefined ? {} : { onActiveChromeChange })}
-      onAcquireMutationAuthority={onAcquireMutationAuthority}
-      onContextMenuSession={onContextMenuSession}
-      onRetryIndex={onRetryIndex}
-      openTreeNode={openTreeNode}
-      panelId={panelId}
-      projection={projection}
-      renderFeedback={renderFeedback}
-      renderWindowReady={renderWindowReady}
-      replayFailure={replayFailure}
-      retryFailure={retryFailure}
-      retryLatestItemUpdates={retryLatestItemUpdates}
-      scope={scope}
-      setDiffHandle={setDiffHandle}
-      setSelectedTreeTarget={setSelectedTreeTarget}
-      setSidebarCollapsed={setSidebarCollapsed}
-      sidebarCollapsed={sidebarCollapsed}
-      targetSelectionPending={targetSelectionPending}
-      treeModel={treeModel}
-      updateRenderFeedback={updateRenderFeedback}
-      updateRenderItemError={updateRenderItemError}
-      viewState={viewState}
-      warnings={warnings}
-    />
+    <div className="relative h-full">
+      <GitReviewSurfaceView
+        active={active}
+        activeRef={activeRef}
+        activeReviewEpoch={comments.activeReviewEpoch}
+        activeReviewSlotsByItem={comments.activeReviewSlotsByItem}
+        activeSurface={activeSurface}
+        appearance={appearance}
+        authoritativeEmpty={
+          surfaceEntries.length === 0 ||
+          !surfaceEntries.some((entry) =>
+            reviewEntryHasBodyContent(entry, diffBase)
+          )
+        }
+        clearForUserIntent={clearForUserIntent}
+        context={context}
+        diffHandleRef={diffHandleRef}
+        driftCommentLabels={comments.driftCommentLabels}
+        entries={entries}
+        failureSummary={failureSummary}
+        handleMutationCommitted={handleMutationCommitted}
+        handleRenderWindowChange={handleRenderWindowChange}
+        hasPendingNavigation={hasPendingNavigation}
+        indexRefreshFailure={indexRefreshFailure}
+        inlineReviewHandlers={comments.inlineReviewHandlers}
+        inlineReviewLabels={comments.inlineReviewLabels}
+        inlineReviewThreadById={comments.inlineReviewThreadById}
+        isActiveOpenPath={isActiveOpenPath}
+        mutationAuthorityBlocked={mutationAuthorityBlocked}
+        navigationPending={navigationPending}
+        noteUserScrollReading={noteUserScrollReading}
+        {...(onActiveChromeChange === undefined
+          ? {}
+          : { onActiveChromeChange })}
+        onAcquireMutationAuthority={onAcquireMutationAuthority}
+        onContextMenuSession={onContextMenuSession}
+        onDriftCommentActivate={comments.openDriftThread}
+        onGutterReviewActivate={comments.handleGutterReviewActivate}
+        onRetryIndex={onRetryIndex}
+        openTreeNode={openTreeNode}
+        panelId={panelId}
+        projection={projection}
+        renderFeedback={renderFeedback}
+        renderWindowReady={renderWindowReady}
+        replayFailure={replayFailure}
+        retryFailure={retryFailure}
+        retryLatestItemUpdates={retryLatestItemUpdates}
+        reviewCommentsById={comments.reviewCommentsById}
+        scope={scope}
+        setDiffHandle={setDiffHandle}
+        setSelectedTreeTarget={setSelectedTreeTarget}
+        setSidebarCollapsed={setSidebarCollapsed}
+        sidebarCollapsed={sidebarCollapsed}
+        targetSelectionPending={targetSelectionPending}
+        treeModel={treeModel}
+        updateRenderFeedback={updateRenderFeedback}
+        updateRenderItemError={updateRenderItemError}
+        viewState={viewState}
+        warnings={warnings}
+      />
+      <ReviewCommentsChrome
+        comments={comments}
+        context={context}
+        diffBase={diffBase}
+        diffHandleRef={diffHandleRef}
+        entries={entries}
+        onRequestTreeOpen={onRequestTreeOpen}
+        threads={threads}
+        worktreeKey={scope.gitRootPath}
+      />
+    </div>
   );
 }
 

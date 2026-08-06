@@ -13,7 +13,17 @@ import {
   $isAttachmentTokenNode,
 } from "./attachment-token-node.tsx";
 import { $placeCaretAfterComposerChip } from "./composer-chip-caret.ts";
+import {
+  $createReviewCommentsChipNode,
+  $isReviewCommentsChipNode,
+} from "./review-comments-chip-node.tsx";
 import { readLexicalPlainText } from "./serialize.ts";
+
+export interface ReviewCommentsChipInsert {
+  readonly count: number;
+  readonly label: string;
+  readonly payloadText: string;
+}
 
 function nodesFromPlainText(text: string): LexicalNode[] {
   const lines = text.split("\n");
@@ -60,6 +70,59 @@ export function insertLexicalPlainTextAtSelection(
         }
         root.selectEnd();
       }
+    },
+    { discrete: true }
+  );
+}
+
+/**
+ * Insert or replace the single review-comments bundle chip.
+ * Existing review chips are removed first so resubmit does not stack.
+ */
+export function insertOrReplaceReviewCommentsChipInLexical(
+  editor: LexicalEditor,
+  input: ReviewCommentsChipInsert
+): void {
+  const payload = input.payloadText.trim();
+  if (payload.length === 0 || input.count <= 0) {
+    return;
+  }
+  editor.update(
+    () => {
+      const stack: LexicalNode[] = [$getRoot()];
+      while (stack.length > 0) {
+        const node = stack.pop();
+        if (!node) {
+          continue;
+        }
+        if ($isReviewCommentsChipNode(node)) {
+          node.remove();
+          continue;
+        }
+        if ($isElementNode(node)) {
+          stack.push(...node.getChildren());
+        }
+      }
+
+      const chip = $createReviewCommentsChipNode(
+        input.count,
+        input.label,
+        payload
+      );
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        selection.insertNodes([chip]);
+        $placeCaretAfterComposerChip(chip);
+        return;
+      }
+      const root = $getRoot();
+      const paragraph = root.getLastChild();
+      if (paragraph && $isElementNode(paragraph)) {
+        paragraph.append(chip);
+      } else {
+        root.append(chip);
+      }
+      $placeCaretAfterComposerChip(chip);
     },
     { discrete: true }
   );

@@ -1,7 +1,12 @@
 import { type FileDiffMetadata, processFile } from "@pierre/diffs";
 import type { CodeViewItem } from "@pierre/diffs/react";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import { buildHunkActionAnnotations } from "./hunk-annotations.ts";
+import {
+  buildDriftAnnotations,
+  buildInlineThreadAnnotations,
+} from "./review/annotation-anchors.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
+import { itemCacheKeyOf } from "./review/drift-cache-key.ts";
 
 export {
   buildHunkActionAnnotations,
@@ -60,9 +65,46 @@ export interface PierDiffViewLineStats {
   readonly deletions: number;
 }
 
+/**
+ * diff 行内评论线程的通用投影（packages/ui 不耦合 host 评论契约）。
+ *
+ * git 插件把 CommentThreadSnapshot.threads 映射成此类型后注入
+ * PierDiffViewItem.reviewComments：target.side "old" → "deletions"，
+ * "new" → "additions"；line 直传（1-based 文件行号）。gutter 渲染按
+ * (side, line) 查询匹配线程。v1 瘦身：每锚点一条评论，无 state/count。
+ */
+export interface PierDiffReviewCommentThread {
+  readonly line: number;
+  readonly side: "additions" | "deletions";
+  readonly threadId: string;
+}
+
+/**
+ * 文件级折叠区评论线程（漂移 + git-file 文件级），packages/ui 不耦合 host 契约。
+ *
+ * - 行内评论漂移：原 anchor `line`/`side` 保留（显示「第 X 行评论已无法定位」）；
+ *   diff-view 渲染时按 (side, line) 找不到行 → 业务层判漂移后从 reviewComments 移入。
+ * - git-file 文件级评论：无 anchor（line/side 缺省），直接显示为文件级线程。
+ * 折叠区在文件 header 下渲染（对齐 GitHub outdated 折叠在原位 = 文件）。
+ * v1 瘦身：无 state/count。
+ */
+export interface PierDiffReviewDriftThread {
+  /** 行内评论漂移后的原 anchor 行号；git-file 文件级评论为 undefined */
+  readonly line?: number;
+  /** 行内评论漂移后的原 anchor side；git-file 文件级评论为 undefined */
+  readonly side?: "additions" | "deletions";
+  readonly threadId: string;
+}
+
 export interface PierDiffViewItem {
   readonly cacheKey: string;
   readonly changeControls?: readonly PierDiffViewChangeControl[];
+  /**
+   * 文件级折叠区评论线程（漂移 + git-file 文件级）。文件 header 下折叠区
+   * 渲染；缺省无文件级评论。与 reviewComments 互斥（行内匹配的进 reviewComments，
+   * 漂移/文件级的进 driftComments）。
+   */
+  readonly driftComments?: readonly PierDiffReviewDriftThread[];
   readonly fileDisplay?: PierDiffViewFileDisplay;
   readonly id: string;
   /** 显式槽态；缺省则按 patch/stateNotice 推断。 */
@@ -77,6 +119,11 @@ export interface PierDiffViewItem {
    * loaded：非 null 文本 patch
    */
   readonly patch: string | null;
+  /**
+   * 该文件 diff 行内评论线程（git 插件投影后注入）。gutter 按
+   * (side, line) 查询渲染评论入口/计数；缺省无评论。
+   */
+  readonly reviewComments?: readonly PierDiffReviewCommentThread[];
   readonly stageControl?: PierDiffViewStageControl | null;
   /**
    * 非文本变更说明（binary / symlink / submodule…）或加载失败说明。
@@ -117,7 +164,7 @@ export function fileDiffLineStats(fileDiff: {
   return { additions, deletions };
 }
 
-export type PierDiffCodeViewItem = CodeViewItem<PierHunkAnnotationMetadata>;
+export type PierDiffCodeViewItem = CodeViewItem<PierDiffAnnotationMetadata>;
 
 export interface ParsedItemCacheEntry {
   readonly cacheKey: string;
@@ -145,10 +192,29 @@ export function toCodeViewItem(
       fileDiff = noticeFileDiff(input);
     }
     const version = (previous?.version ?? -1) + 1;
-    const annotations =
+    const hunkAnnotations =
       kind === "loaded"
         ? buildHunkActionAnnotations(fileDiff, input.changeControls)
         : undefined;
+    // 文件级 drift 折叠区 annotation（lineNumber: 0，首个 hunk 前渲染）。
+    const driftAnnotations = buildDriftAnnotations(
+      input.driftComments,
+      fileDiff.type
+    );
+    // 行内评论卡 annotation（每个线程一条 per-line；无折叠 badge 态）。
+    const inlineThreadAnnotations = buildInlineThreadAnnotations(
+      input.reviewComments
+    );
+    const annotations =
+      hunkAnnotations === undefined &&
+      driftAnnotations === undefined &&
+      inlineThreadAnnotations === undefined
+        ? undefined
+        : [
+            ...(hunkAnnotations ?? []),
+            ...(driftAnnotations ?? []),
+            ...(inlineThreadAnnotations ?? []),
+          ];
     // 无文本 diff / estimate：默认折叠；estimate 禁止展开成假行号文件体
     const emptyBody =
       kind === "ready-notice" ||
@@ -164,7 +230,7 @@ export function toCodeViewItem(
       ...(annotations === undefined ? {} : { annotations }),
     };
     return {
-      entry: { cacheKey: input.cacheKey, item, version },
+      entry: { cacheKey: itemCacheKeyOf(input), item, version },
       error: null,
     };
   } catch (error) {
@@ -193,7 +259,7 @@ export function toCodeViewItem(
       collapsed: true,
     };
     return {
-      entry: { cacheKey: input.cacheKey, item, version },
+      entry: { cacheKey: itemCacheKeyOf(input), item, version },
       error: normalized,
     };
   }
@@ -249,7 +315,7 @@ export function toCodeViewItems(
   const errors: PierDiffViewItemError[] = [];
   for (const input of inputs) {
     const previous = cache.get(input.id);
-    if (previous?.cacheKey === input.cacheKey) {
+    if (previous?.cacheKey === itemCacheKeyOf(input)) {
       items.push(previous.item);
       nextCache.set(input.id, previous);
       continue;

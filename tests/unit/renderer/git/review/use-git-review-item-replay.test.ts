@@ -32,6 +32,7 @@ function diffHandle(
     resolvePointerLineHit: () => null,
     restoreAnchor: () => true,
     scrollToItem: () => true,
+    scrollToLine: () => true,
     selectAll: () => false,
     setAllCollapsed: () => undefined,
     setScrollTop: () => false,

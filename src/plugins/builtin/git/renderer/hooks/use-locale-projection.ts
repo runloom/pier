@@ -7,6 +7,7 @@ import {
   type SetStateAction,
   useEffect,
 } from "react";
+import type { ReviewCommentIndex } from "../review/document/comment-projection.ts";
 import type { GitReviewDocumentGeneration } from "../review/document/generation.ts";
 import type { GitReviewDocumentLoader } from "../review/document/loader.ts";
 import {
@@ -16,6 +17,8 @@ import {
 import type { GitReviewReadingSurface } from "../review/reading-surface.ts";
 
 export function useGitReviewLocaleProjection({
+  commentsIndexRef,
+  commentsSeqRef,
   context,
   controllerRef,
   diffBase,
@@ -27,6 +30,8 @@ export function useGitReviewLocaleProjection({
   projectedLocaleRef,
   setProjection,
 }: {
+  readonly commentsIndexRef: RefObject<ReviewCommentIndex | null>;
+  readonly commentsSeqRef: RefObject<number>;
   readonly context: RendererPluginContext;
   readonly controllerRef: RefObject<GitReviewDocumentGeneration | null>;
   readonly diffBase: GitReviewReadingSurface;
@@ -57,8 +62,11 @@ export function useGitReviewLocaleProjection({
       )
     );
     // 全 content 账本重投影（estimate 轻量；高度坐标系不随 locale 丢 id）
+    const comments = commentsIndexRef.current;
     const localized = projectReviewLedger({
       authoritativeEntryKeys: controller.authoritativeEntryKeys(),
+      ...(comments === null ? {} : { comments }),
+      commentsSeq: commentsSeqRef.current,
       context,
       diffBase,
       entries,
@@ -69,6 +77,8 @@ export function useGitReviewLocaleProjection({
     recordLatestItemUpdates(localized.items);
     setProjection(localized);
   }, [
+    commentsIndexRef,
+    commentsSeqRef,
     context,
     controllerRef,
     diffBase,

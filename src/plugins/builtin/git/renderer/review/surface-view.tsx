@@ -32,12 +32,21 @@ import type { gitReviewTreeModel } from "./tree.tsx";
 interface GitReviewSurfaceViewProps {
   readonly active: boolean;
   readonly activeRef: React.RefObject<boolean>;
+  readonly activeReviewEpoch?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["activeReviewEpoch"];
+  readonly activeReviewSlotsByItem?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["activeReviewSlotsByItem"];
   readonly activeSurface: GitReviewReadingSurface;
   readonly appearance: ReturnType<typeof useReviewAppearance>;
   readonly authoritativeEmpty: boolean;
   readonly clearForUserIntent: () => void;
   readonly context: RendererPluginContext;
   readonly diffHandleRef: React.RefObject<PierDiffViewHandle | null>;
+  readonly driftCommentLabels?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["driftCommentLabels"];
   readonly entries: readonly GitReviewIndexEntry[];
   readonly failureSummary: ReturnType<
     typeof useReviewFailureSummary
@@ -50,6 +59,15 @@ interface GitReviewSurfaceViewProps {
   >["onRenderWindowChange"];
   readonly hasPendingNavigation: () => boolean;
   readonly indexRefreshFailure: GitReviewFailure | null;
+  readonly inlineReviewHandlers?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["inlineReviewHandlers"];
+  readonly inlineReviewLabels?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["inlineReviewLabels"];
+  readonly inlineReviewThreadById?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["inlineReviewThreadById"];
   readonly isActiveOpenPath: React.ComponentProps<
     typeof GitReviewDocumentView
   >["isActiveOpenPath"];
@@ -61,6 +79,12 @@ interface GitReviewSurfaceViewProps {
   readonly onContextMenuSession: React.ComponentProps<
     typeof GitReviewDocumentView
   >["onContextMenuSession"];
+  readonly onDriftCommentActivate?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["onDriftCommentActivate"];
+  readonly onGutterReviewActivate?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["onGutterReviewActivate"];
   readonly onRetryIndex: () => void;
   readonly openTreeNode: React.ComponentProps<
     typeof GitReviewDocumentView
@@ -72,6 +96,9 @@ interface GitReviewSurfaceViewProps {
   readonly replayFailure: Error | null;
   readonly retryFailure: (entryKey: string) => void;
   readonly retryLatestItemUpdates: () => void;
+  readonly reviewCommentsById?: React.ComponentProps<
+    typeof GitReviewDocumentView
+  >["reviewCommentsById"];
   readonly scope: GitReviewScope;
   readonly setDiffHandle: React.ComponentProps<
     typeof GitReviewDocumentView
@@ -107,6 +134,12 @@ export function GitReviewSurfaceView({
   diffHandleRef,
   entries,
   failureSummary,
+  driftCommentLabels,
+  activeReviewEpoch,
+  activeReviewSlotsByItem,
+  inlineReviewHandlers,
+  inlineReviewLabels,
+  inlineReviewThreadById,
   handleMutationCommitted,
   handleRenderWindowChange,
   hasPendingNavigation,
@@ -117,11 +150,14 @@ export function GitReviewSurfaceView({
   noteUserScrollReading,
   onActiveChromeChange,
   onContextMenuSession,
+  onGutterReviewActivate,
+  onDriftCommentActivate,
   onAcquireMutationAuthority,
   onRetryIndex,
   openTreeNode,
   panelId,
   projection,
+  reviewCommentsById,
   renderFeedback,
   renderWindowReady,
   replayFailure,
@@ -221,12 +257,19 @@ export function GitReviewSurfaceView({
       feedbackEnabled={active}
       getSuppressMembershipScrollRestore={hasPendingNavigation}
       gitRootPath={scope.gitRootPath}
+      {...(driftCommentLabels === undefined ? {} : { driftCommentLabels })}
       indexFailure={indexRefreshFailure}
       {...(isActiveOpenPath === undefined ? {} : { isActiveOpenPath })}
       {...(onContextMenuSession === undefined ? {} : { onContextMenuSession })}
       mutationAuthorityBlocked={mutationAuthorityBlocked}
       onAcquireMutationAuthority={onAcquireMutationAuthority}
       onFeedbackChange={updateRenderFeedback}
+      {...(onGutterReviewActivate === undefined
+        ? {}
+        : { onGutterReviewActivate })}
+      {...(onDriftCommentActivate === undefined
+        ? {}
+        : { onDriftCommentActivate })}
       onItemError={handleRenderItemError}
       onMutationCommitted={handleMutationCommitted}
       onOpenPath={openTreeNode}
@@ -239,6 +282,16 @@ export function GitReviewSurfaceView({
         wrapLines: viewOptions.wrapLines,
       }}
       projection={projection}
+      {...(reviewCommentsById === undefined ? {} : { reviewCommentsById })}
+      {...(activeReviewEpoch === undefined ? {} : { activeReviewEpoch })}
+      {...(activeReviewSlotsByItem === undefined
+        ? {}
+        : { activeReviewSlotsByItem })}
+      {...(inlineReviewHandlers === undefined ? {} : { inlineReviewHandlers })}
+      {...(inlineReviewLabels === undefined ? {} : { inlineReviewLabels })}
+      {...(inlineReviewThreadById === undefined
+        ? {}
+        : { inlineReviewThreadById })}
       renderFeedback={
         renderFeedback ??
         (replayFailure

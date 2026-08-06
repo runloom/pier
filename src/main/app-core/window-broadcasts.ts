@@ -4,6 +4,7 @@ import type {
 } from "@shared/contracts/agent/runtime-index.ts";
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
+import type { CommentProjectSnapshot } from "@shared/contracts/comments/index.ts";
 import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
 import type { LiveModuleEvent } from "@shared/contracts/live-modules.ts";
 import type {
@@ -200,4 +201,11 @@ export function broadcastNotificationCenterChanged(
   snapshot: NotificationCenterSnapshot
 ): void {
   broadcastToAllWindows(PIER_BROADCAST.NOTIFICATION_CENTER_CHANGED, snapshot);
+}
+
+/** 统一评论项目快照 (main → 所有 renderer, payload CommentProjectSnapshot)。 */
+export function broadcastCommentsChanged(
+  snapshot: CommentProjectSnapshot
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.COMMENTS_CHANGED, snapshot);
 }

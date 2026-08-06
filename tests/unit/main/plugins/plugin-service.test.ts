@@ -173,6 +173,8 @@ describe("pluginManifestSchema", () => {
       "git:write",
       "file:read",
       "ai:invoke",
+      "comments:read",
+      "comments:write",
     ]);
   });
 

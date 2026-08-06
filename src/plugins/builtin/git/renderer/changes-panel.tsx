@@ -12,6 +12,7 @@ import {
   type GitReviewTarget,
   gitReviewScopeSchema,
 } from "@shared/contracts/git/review.ts";
+import { GIT_REVIEW_GROUP_ORDER } from "@shared/contracts/git-review/primitives.ts";
 import {
   useCallback,
   useEffect,
@@ -21,6 +22,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { z } from "zod";
 import {
   GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM,
   gitChangesPanelTitle,
@@ -37,6 +39,7 @@ import { GitReviewMutationAuthority } from "./review/mutation-authority.ts";
 import { GitReviewPanelLayout } from "./review/panel-layout.tsx";
 import { GitReviewScopeSwitcher } from "./review/scope-switcher.tsx";
 import { clearReviewSessionsForScope } from "./review/session-cache.ts";
+import type { PendingCommentReveal } from "./review/surface-types.ts";
 import { ReviewDocuments } from "./review/surfaces.tsx";
 import { gitReviewTreeModel } from "./review/tree.tsx";
 import { REVIEW_TREE_COLLAPSED_STORAGE_PREFIX } from "./review/tree-sidebar-preference.ts";
@@ -53,6 +56,24 @@ function readSource(params: unknown): GitReviewScope | null {
     return null;
   }
   const parsed = gitReviewScopeSchema.safeParse(params.source);
+  return parsed.success ? parsed.data : null;
+}
+
+const pendingCommentRevealSchema = z.strictObject({
+  group: z.enum(GIT_REVIEW_GROUP_ORDER),
+  line: z.number().int().positive(),
+  nonce: z.number().int().nonnegative(),
+  path: z.string().min(1),
+  side: z.enum(["new", "old"]),
+});
+
+function readPendingReveal(params: unknown): PendingCommentReveal | null {
+  if (!(params && typeof params === "object" && "pendingReveal" in params)) {
+    return null;
+  }
+  const parsed = pendingCommentRevealSchema.safeParse(
+    (params as { pendingReveal: unknown }).pendingReveal
+  );
   return parsed.success ? parsed.data : null;
 }
 
@@ -80,6 +101,10 @@ export function createGitChangesPanel(
 ) {
   return function GitChangesPanel(props: IDockviewPanelProps) {
     const source = useMemo(() => readSource(props.params), [props.params]);
+    const pendingReveal = useMemo(
+      () => readPendingReveal(props.params),
+      [props.params]
+    );
     const sourceKey = source ? JSON.stringify(source) : null;
     const visible = useDockviewPanelVisible(props.api);
     const panelId = props.api.id;
@@ -151,6 +176,7 @@ export function createGitChangesPanel(
           panelApi={props.api}
           panelId={panelId}
           panelParams={props.params}
+          pendingReveal={pendingReveal}
           source={source}
           sourceKey={sourceKey}
           visible={visible}
@@ -167,6 +193,7 @@ function GitChangesPanelBody({
   panelApi,
   panelId,
   panelParams,
+  pendingReveal,
   source,
   sourceKey,
   visible,
@@ -177,6 +204,7 @@ function GitChangesPanelBody({
   readonly panelApi: IDockviewPanelProps["api"];
   readonly panelId: string;
   readonly panelParams: IDockviewPanelProps["params"];
+  readonly pendingReveal: PendingCommentReveal | null;
   readonly source: GitReviewScope | null;
   readonly sourceKey: string | null;
   readonly visible: boolean;
@@ -296,6 +324,11 @@ function GitChangesPanelBody({
     [collidingFileLabel, entries, source?.target.kind, state, treeGroupLabels]
   );
 
+  const handlePendingRevealHandled = useCallback(() => {
+    // Consume jump intent so layout restore / re-open won't re-fire.
+    panelApi.updateParameters({ pendingReveal: null });
+  }, [panelApi]);
+
   const scopeSwitcher = source ? (
     <GitReviewScopeSwitcher
       context={context}
@@ -381,9 +414,11 @@ function GitChangesPanelBody({
           mutationAuthorityBlocked={mutationAuthorityBlocked}
           onAcquireMutationAuthority={acquireMutationAuthority}
           onMutationCommitted={waitForAuthoritativeIndex}
+          onPendingRevealHandled={handlePendingRevealHandled}
           onRetryIndex={retryIndex}
           panelId={panelId}
           panelVisible={visible}
+          pendingReveal={pendingReveal}
           scope={source}
           setSidebarCollapsed={setSidebarCollapsed}
           sidebarCollapsed={sidebarCollapsed}

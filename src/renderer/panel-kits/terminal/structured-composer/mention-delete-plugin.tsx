@@ -15,6 +15,10 @@ import {
   type AttachmentTokenNode,
 } from "./attachment-token-node.tsx";
 import {
+  $isReviewCommentsChipNode,
+  type ReviewCommentsChipNode,
+} from "./review-comments-chip-node.tsx";
+import {
   $isSkillMentionNode,
   type SkillMentionNode,
 } from "./skill-mention-node.tsx";
@@ -25,6 +29,7 @@ import {
 
 type ComposerChipNode =
   | AttachmentTokenNode
+  | ReviewCommentsChipNode
   | WorkspacePathMentionNode
   | SkillMentionNode;
 
@@ -93,7 +98,8 @@ function $isComposerChipNode(
   return (
     $isWorkspacePathMentionNode(node) ||
     $isAttachmentTokenNode(node) ||
-    $isSkillMentionNode(node)
+    $isSkillMentionNode(node) ||
+    $isReviewCommentsChipNode(node)
   );
 }
 

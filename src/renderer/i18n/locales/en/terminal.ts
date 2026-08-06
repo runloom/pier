@@ -137,6 +137,44 @@ export const terminal = {
       agentStatus: {
         title: "Agent status",
       },
+      comments: {
+        chipLabel: "Comments · {{count}}",
+        clear: "Clear",
+        clearBody:
+          "This removes every comment on the current changes. You can’t undo this.",
+        clearConfirm: "Clear",
+        clearFailed: "Couldn’t clear comments",
+        clearPartialBody:
+          "Removed {{deleted}} comment(s). {{remaining}} could not be removed. Try again for the rest.",
+        clearPartialTitle: "Some comments remain",
+        clearTitle: "Clear all comments?",
+        deleteFailed: "Couldn’t delete comment",
+        deleteOne: "Delete comment",
+        dialogTitle: "Review comments",
+        empty: "No open comments",
+        emptyBody: "Add comments on the current changes to handle them here.",
+        emptyTitle: "No comments to handle",
+        failure: {
+          commentNotFound: "That comment is no longer available.",
+          internal: "Something went wrong. Try again.",
+          invalidSource: "These comments aren’t available for this project.",
+          targetImmutable: "That comment can’t be changed.",
+          threadNotFound: "That comment thread is no longer available.",
+        },
+        itemTitle: "{{path}}:{{line}}",
+        jumpFailed: "Couldn’t open changes",
+        jumpFailedBody:
+          "Open the Changes view for this project, then try jumping again.",
+        openCount: "{{count}} open comments",
+        submitAndClear: "Submit and clear",
+        submitFailed: "Couldn’t submit comments",
+        submitPartialBody:
+          "Comments were added to the composer. Removed {{deleted}} from the list; {{remaining}} could not be removed.",
+        submitPartialTitle: "Submitted with remaining comments",
+        submitUnavailableBody:
+          "Open an agent conversation first, then try again.",
+        title: "Comments",
+      },
     },
     manage: "Manage Status Bar…",
   },

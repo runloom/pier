@@ -8,6 +8,7 @@ import {
   rulesWriteRequestSchema,
 } from "./agent/assets.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
+import { commentsCommandSchemas } from "./comments/index.ts";
 import {
   environmentProjectRequestSchema,
   environmentSnapshotRequestSchema,
@@ -267,6 +268,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   ...fileCommandSchemas,
   ...gitCommandSchemas,
+  ...commentsCommandSchemas,
   // Local environment 域命令
   environmentSnapshotRequestSchema.extend({
     type: z.literal("environment.snapshot"),
