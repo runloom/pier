@@ -1,6 +1,9 @@
 /**
- * Shared L2 command override resolution for install / update / uninstall.
- * Non-empty user shell one-liner replaces the entire planned plan.
+ * User override resolution for lifecycle plans.
+ *
+ * Product rule: only **update** accepts a user shell override (settings InputRow).
+ * Install and uninstall always use project specs (L1) — prefs keys may still exist
+ * for backward compatibility but are ignored at run time.
  */
 
 import type { AgentLifecycleAction } from "@shared/contracts/agent/lifecycle.ts";
@@ -19,7 +22,10 @@ export function applyLifecycleCommandOverride(
   planned: PlannedPlan | null,
   cmds: LifecycleCommandOverrides
 ): PlannedPlan | null {
-  const custom = cmds[action][agentId]?.trim();
+  if (action !== "update") {
+    return planned;
+  }
+  const custom = cmds.update[agentId]?.trim();
   if (custom && custom.length > 0) {
     return {
       steps: [{ kind: "shell", command: custom }],

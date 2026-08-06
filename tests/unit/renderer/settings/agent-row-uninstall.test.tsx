@@ -12,40 +12,24 @@ const t = ((key: string, opts?: Record<string, unknown>) => {
 }) as never;
 
 describe("shouldShowAgentUninstall", () => {
-  it("guided + custom → false", () => {
+  it("managed canUninstall → true", () => {
     expect(
       shouldShowAgentUninstall({
         isBusy: false,
         isDetected: true,
-        support: "guided",
+        canUninstall: true,
+      })
+    ).toBe(true);
+  });
+
+  it("not managed (path/script) → false — no button, no explanation", () => {
+    expect(
+      shouldShowAgentUninstall({
+        isBusy: false,
+        isDetected: true,
         canUninstall: false,
-        hasCustomUninstallCommand: true,
       })
     ).toBe(false);
-  });
-
-  it("full + path + custom → true", () => {
-    expect(
-      shouldShowAgentUninstall({
-        isBusy: false,
-        isDetected: true,
-        support: "full",
-        canUninstall: false,
-        hasCustomUninstallCommand: true,
-      })
-    ).toBe(true);
-  });
-
-  it("full + managed canUninstall → true", () => {
-    expect(
-      shouldShowAgentUninstall({
-        isBusy: false,
-        isDetected: true,
-        support: "full",
-        canUninstall: true,
-        hasCustomUninstallCommand: false,
-      })
-    ).toBe(true);
   });
 
   it("busy → false", () => {
@@ -53,9 +37,7 @@ describe("shouldShowAgentUninstall", () => {
       shouldShowAgentUninstall({
         isBusy: true,
         isDetected: true,
-        support: "full",
         canUninstall: true,
-        hasCustomUninstallCommand: false,
       })
     ).toBe(false);
   });
@@ -65,33 +47,17 @@ describe("shouldShowAgentUninstall", () => {
       shouldShowAgentUninstall({
         isBusy: false,
         isDetected: false,
-        support: "full",
         canUninstall: true,
-        hasCustomUninstallCommand: false,
       })
     ).toBe(false);
   });
 
-  it("full + neither managed nor custom → false", () => {
+  it("canUninstall undefined → false", () => {
     expect(
       shouldShowAgentUninstall({
         isBusy: false,
         isDetected: true,
-        support: "full",
-        canUninstall: false,
-        hasCustomUninstallCommand: false,
-      })
-    ).toBe(false);
-  });
-
-  it("support none → false", () => {
-    expect(
-      shouldShowAgentUninstall({
-        isBusy: false,
-        isDetected: true,
-        support: "none",
-        canUninstall: true,
-        hasCustomUninstallCommand: true,
+        canUninstall: undefined,
       })
     ).toBe(false);
   });

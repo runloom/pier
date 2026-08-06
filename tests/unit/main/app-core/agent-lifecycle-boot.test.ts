@@ -70,7 +70,7 @@ describe("createBootedAgentLifecycleService", () => {
     return captured.options;
   }
 
-  it("wires uninstall L2 commands from preferences", async () => {
+  it("wires only update L2 commands from preferences (install/uninstall system-only)", async () => {
     const preferences: PreferencesService = {
       read: vi.fn(async () =>
         prefs({
@@ -84,9 +84,9 @@ describe("createBootedAgentLifecycleService", () => {
     const options = await bootWith(preferences);
     const cmds = await options.getLifecycleCommands?.();
     expect(cmds).toEqual({
-      install: { claude: "echo install" },
+      install: {},
       update: { claude: "echo update" },
-      uninstall: { claude: "echo uninstall-claude" },
+      uninstall: {},
     });
   });
 

@@ -139,24 +139,21 @@ describe("run uninstall service", () => {
     expect(afterInstall).not.toHaveBeenCalled();
   });
 
-  it("custom uninstall shell runs when canUninstall is false (full + path)", async () => {
+  it("ignores uninstall shell prefs when canUninstall is false (system config only)", async () => {
     const root = await mkdtemp(join(tmpdir(), "pier-uninstall-custom-"));
     cleanups.push(() => rm(root, { recursive: true, force: true }));
     // Plain path source → managed canUninstall false for claude.
     const binDir = join(root, ".local", "bin");
-    const binPath = await writeAgentBin(binDir, "claude");
+    await writeAgentBin(binDir, "claude");
 
     const runner: LifecycleRunner = {
-      run: vi.fn(async () => {
-        await unlink(binPath).catch(() => undefined);
-        return {
-          ok: true,
-          code: 0,
-          stepIndex: 0,
-          stdout: "",
-          stderr: "",
-        };
-      }),
+      run: vi.fn(async () => ({
+        ok: true,
+        code: 0,
+        stepIndex: 0,
+        stdout: "",
+        stderr: "",
+      })),
     };
 
     const svc = createAgentLifecycleService({
@@ -165,23 +162,19 @@ describe("run uninstall service", () => {
       getLifecycleCommands: async () => ({
         install: {},
         update: {},
+        // User prefs must not enable uninstall — only project managed plans.
         uninstall: { claude: "echo uninstall-claude" },
       }),
     });
 
-    // Preflight: without custom, path-sourced claude has no managed plan.
     const probes = await svc.probe({ agentIds: ["claude"], deep: true });
     expect(probes[0]?.detected).toBe(true);
     expect(probes[0]?.canUninstall).toBe(false);
 
     const result = await svc.run("claude", "uninstall");
-    expect(result.ok).toBe(true);
-    expect(runner.run).toHaveBeenCalledTimes(1);
-    const plan = vi.mocked(runner.run).mock.calls[0]?.[0];
-    expect(plan?.steps).toEqual([
-      { kind: "shell", command: "echo uninstall-claude" },
-    ]);
-    expect(plan?.preview).toBe("echo uninstall-claude");
+    expect(result.ok).toBe(false);
+    expect(result.errorCode).toBe("no_command");
+    expect(runner.run).not.toHaveBeenCalled();
   });
 
   it("support guided → unsupported", async () => {

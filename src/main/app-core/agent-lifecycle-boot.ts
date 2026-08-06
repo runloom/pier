@@ -17,10 +17,11 @@ export function createBootedAgentLifecycleService(options: {
     getEnv: options.getEnv,
     getLifecycleCommands: async () => {
       const prefs = await options.preferences.read();
+      // Only update is user-overridable; install/uninstall always use project specs.
       return {
-        install: prefs.agentInstallCommands ?? {},
+        install: {},
         update: prefs.agentUpdateCommands ?? {},
-        uninstall: prefs.agentUninstallCommands ?? {},
+        uninstall: {},
       };
     },
     onProgress: broadcastAgentLifecycleProgress,

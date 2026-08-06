@@ -32,14 +32,8 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
   );
   const agentDefaultArgs = useAgentPreferencesStore((s) => s.agentDefaultArgs);
   const agentDefaultEnv = useAgentPreferencesStore((s) => s.agentDefaultEnv);
-  const agentInstallCommands = useAgentPreferencesStore(
-    (s) => s.agentInstallCommands
-  );
   const agentUpdateCommands = useAgentPreferencesStore(
     (s) => s.agentUpdateCommands
-  );
-  const agentUninstallCommands = useAgentPreferencesStore(
-    (s) => s.agentUninstallCommands
   );
   const agentPermissionMode = useAgentPreferencesStore(
     (s) => s.agentPermissionMode
@@ -50,14 +44,8 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
   const setAgentDefaultArgs = useAgentPreferencesStore(
     (s) => s.setAgentDefaultArgs
   );
-  const setAgentInstallCommands = useAgentPreferencesStore(
-    (s) => s.setAgentInstallCommands
-  );
   const setAgentUpdateCommands = useAgentPreferencesStore(
     (s) => s.setAgentUpdateCommands
-  );
-  const setAgentUninstallCommands = useAgentPreferencesStore(
-    (s) => s.setAgentUninstallCommands
   );
   const probe = useAgentLifecycleStore((s) => s.probesById[agentId]);
 
@@ -67,17 +55,13 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
     agentDefaultArgs,
     agentPermissionMode
   );
-  const persistedInstall = agentInstallCommands[agentId] ?? "";
   const persistedUpdate = agentUpdateCommands[agentId] ?? "";
-  const persistedUninstall = agentUninstallCommands[agentId] ?? "";
-  const defaultInstall =
+  // Install/uninstall use project specs only — not user-editable.
+  // Update may use L2 override; placeholder is L1 default.
+  const defaultUpdate =
+    probe?.defaultUpdateCommand?.trim() ||
     probe?.defaultInstallCommand?.trim() ||
-    probe?.guideCommands?.[0]?.command ||
     "";
-  const defaultUpdate = probe?.defaultUpdateCommand?.trim() || "";
-  // L1 only — do not fall back to install/update defaults.
-  const defaultUninstall = probe?.defaultUninstallCommand?.trim() || "";
-  const showUninstallCommand = probe?.support === "full";
 
   const effectiveEnv = resolveEffectiveAgentDefaultEnv(
     agentId,
@@ -90,9 +74,7 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
 
   const [cmdDraft, setCmdDraft] = useDraft(persistedCmd);
   const [argsDraft, setArgsDraft] = useDraft(persistedArgs);
-  const [installDraft, setInstallDraft] = useDraft(persistedInstall);
   const [updateDraft, setUpdateDraft] = useDraft(persistedUpdate);
-  const [uninstallDraft, setUninstallDraft] = useDraft(persistedUninstall);
 
   if (!entry) {
     return null;
@@ -174,19 +156,6 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
           value={argsDraft}
         />
         <InputRow
-          description={t("settings.agents.row.installCommandDesc")}
-          id={`agent-install-cmd-${agentId}`}
-          label={t("settings.agents.row.installCommand")}
-          onBlur={(value) => {
-            saveOverride(value, agentInstallCommands, setAgentInstallCommands);
-          }}
-          onChange={setInstallDraft}
-          placeholder={
-            defaultInstall || t("settings.agents.row.installCommandPlaceholder")
-          }
-          value={installDraft}
-        />
-        <InputRow
           description={t("settings.agents.row.updateCommandDesc")}
           id={`agent-update-cmd-${agentId}`}
           label={t("settings.agents.row.updateCommand")}
@@ -195,32 +164,10 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
           }}
           onChange={setUpdateDraft}
           placeholder={
-            defaultUpdate ||
-            defaultInstall ||
-            t("settings.agents.row.updateCommandPlaceholder")
+            defaultUpdate || t("settings.agents.row.updateCommandPlaceholder")
           }
           value={updateDraft}
         />
-        {showUninstallCommand ? (
-          <InputRow
-            description={t("settings.agents.row.uninstallCommandDesc")}
-            id={`agent-uninstall-cmd-${agentId}`}
-            label={t("settings.agents.row.uninstallCommand")}
-            onBlur={(value) => {
-              saveOverride(
-                value,
-                agentUninstallCommands,
-                setAgentUninstallCommands
-              );
-            }}
-            onChange={setUninstallDraft}
-            placeholder={
-              defaultUninstall ||
-              t("settings.agents.row.uninstallCommandPlaceholder")
-            }
-            value={uninstallDraft}
-          />
-        ) : null}
         {envText ? (
           <div className="grid grid-cols-[1fr_auto] items-center gap-3">
             <div>

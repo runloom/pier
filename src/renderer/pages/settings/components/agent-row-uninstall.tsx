@@ -2,8 +2,7 @@ import { Button } from "@pier/ui/button.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { TFunction } from "i18next";
-import { ExternalLink, Trash2 } from "lucide-react";
-import type { MouseEvent } from "react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import {
@@ -12,23 +11,18 @@ import {
   isLifecycleSoftFailure,
 } from "@/pages/settings/components/agent-lifecycle-format.ts";
 import { useAgentLifecycleStore } from "@/stores/agent-lifecycle.store.ts";
-import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 
-/** K18: uninstall control only for full support + managed plan or L2 custom. */
+/**
+ * One-click uninstall only when probe.canUninstall (managed plan from project specs).
+ * No custom command path; no unsupported explanation when false — hide the button.
+ */
 export function shouldShowAgentUninstall(input: {
   isBusy: boolean;
   isDetected: boolean;
-  support: string | undefined;
   canUninstall: boolean | undefined;
-  hasCustomUninstallCommand: boolean;
 }): boolean {
-  return (
-    !input.isBusy &&
-    input.isDetected &&
-    input.support === "full" &&
-    (input.canUninstall === true || input.hasCustomUninstallCommand)
-  );
+  return !input.isBusy && input.isDetected && input.canUninstall === true;
 }
 
 /**
@@ -63,7 +57,7 @@ export function formatUninstallConfirmBody(
   return `${base} ${t("settings.agents.action.uninstallConfirmConflictNote")}`;
 }
 
-/** Uninstall button + unsupported note for expanded agent details. */
+/** Uninstall button for expanded agent details (managed one-click only). */
 export function AgentUninstallControls({ agentId }: { agentId: AgentKind }) {
   const t = useT();
   const entry = getAgentCatalogEntry(agentId);
@@ -72,57 +66,12 @@ export function AgentUninstallControls({ agentId }: { agentId: AgentKind }) {
   const probe = useAgentLifecycleStore((s) => s.probesById[agentId]);
   const job = useAgentLifecycleStore((s) => s.jobById[agentId]);
   const runLifecycle = useAgentLifecycleStore((s) => s.run);
-  const agentUninstallCommands = useAgentPreferencesStore(
-    (s) => s.agentUninstallCommands
-  );
-
-  const hasCustom = (agentUninstallCommands[agentId] ?? "").trim().length > 0;
-  const isBusy = Boolean(job);
-  const isDetected = Boolean(probe?.detected);
-  const support = probe?.support;
 
   const showUninstall = shouldShowAgentUninstall({
-    isBusy,
-    isDetected,
-    support,
+    isBusy: Boolean(job),
+    isDetected: Boolean(probe?.detected),
     canUninstall: probe?.canUninstall,
-    hasCustomUninstallCommand: hasCustom,
   });
-
-  const showUnsupported =
-    support === "full" &&
-    isDetected &&
-    probe?.uninstallMode === "none" &&
-    !hasCustom;
-
-  const handleWebsiteClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if ((event.button !== 0 && event.button !== 1) || !entry?.homepageUrl) {
-      return;
-    }
-    event.preventDefault();
-    window.pier.externalNavigation
-      .open(entry.homepageUrl)
-      .then((result) => {
-        if (result.opened) {
-          return;
-        }
-        if (result.reason === "busy") {
-          toast.info(t("settings.agents.action.websiteOpenBusy"));
-          return;
-        }
-        return showAppAlert({
-          body: t("settings.agents.action.websiteOpenFailedDescription"),
-          title: t("settings.agents.action.websiteOpenFailedTitle"),
-        });
-      })
-      .catch((error: unknown) =>
-        showAppAlert({
-          body: error instanceof Error ? error.message : String(error),
-          title: t("settings.agents.action.websiteOpenFailedTitle"),
-        })
-      )
-      .catch(() => undefined);
-  };
 
   const handleUninstall = async () => {
     const confirmed = await showAppConfirm({
@@ -179,49 +128,24 @@ export function AgentUninstallControls({ agentId }: { agentId: AgentKind }) {
     }
   };
 
-  if (!(showUninstall || showUnsupported)) {
+  if (!showUninstall) {
     return null;
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {showUnsupported ? (
-        <div className="flex flex-col gap-2 text-muted-foreground text-sm">
-          <p>{t("settings.agents.action.uninstallUnsupported")}</p>
-          {entry?.homepageUrl ? (
-            <div>
-              <Button asChild size="sm" variant="outline">
-                <a
-                  aria-label={t("settings.agents.action.website")}
-                  href={entry.homepageUrl}
-                  onAuxClick={handleWebsiteClick}
-                  onClick={handleWebsiteClick}
-                  rel="noreferrer"
-                >
-                  <ExternalLink data-icon="inline-start" />
-                  {t("settings.agents.action.website")}
-                </a>
-              </Button>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-      {showUninstall ? (
-        <div className="flex justify-end">
-          <Button
-            data-testid={`agent-uninstall-${agentId}`}
-            onClick={() => {
-              handleUninstall().catch(() => undefined);
-            }}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            <Trash2 data-icon="inline-start" />
-            {t("settings.agents.action.uninstall")}
-          </Button>
-        </div>
-      ) : null}
+    <div className="flex justify-end">
+      <Button
+        data-testid={`agent-uninstall-${agentId}`}
+        onClick={() => {
+          handleUninstall().catch(() => undefined);
+        }}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        <Trash2 data-icon="inline-start" />
+        {t("settings.agents.action.uninstall")}
+      </Button>
     </div>
   );
 }
