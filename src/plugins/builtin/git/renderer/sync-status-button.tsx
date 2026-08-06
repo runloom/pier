@@ -49,9 +49,11 @@ export function gitSyncStatusHasContent(
   // Model A: hide chrome when the only action would be a fresh "fetch".
   // Pass busy so in-flight fetch keeps chrome identity (not a bare busy shell).
   if (
-    resolveRemoteSyncActionIdForChrome(status, Date.now(), {
-      busy: options.busy,
-    }) !== null
+    resolveRemoteSyncActionIdForChrome(
+      status,
+      Date.now(),
+      options.busy === undefined ? {} : { busy: options.busy }
+    ) !== null
   ) {
     return true;
   }

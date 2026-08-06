@@ -109,7 +109,7 @@ async function fetchPypiLatest(
         `https://pypi.org/pypi/${encodeURIComponent(packageName)}/json`,
       ],
       {
-        env,
+        ...(env === undefined ? {} : { env }),
         timeout: PYPI_TIMEOUT_MS,
         windowsHide: true,
       }
@@ -139,7 +139,7 @@ async function fetchNpmLatest(
       "npm",
       ["view", packageName, "version", "--json"],
       {
-        env,
+        ...(env === undefined ? {} : { env }),
         timeout: NPM_VIEW_TIMEOUT_MS,
         windowsHide: true,
       }
@@ -186,7 +186,7 @@ async function fetchBrewLatest(
         ? (["info", "--json=v2", "--cask", name] as const)
         : (["info", "--json=v2", name] as const);
     const { stdout } = await execFileAsync("brew", [...args], {
-      env,
+      ...(env === undefined ? {} : { env }),
       timeout: BREW_INFO_TIMEOUT_MS,
       windowsHide: true,
     });

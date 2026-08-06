@@ -59,11 +59,12 @@ describe("preferences-service agentUninstallCommands whitelist", () => {
       updatePreferences,
     });
 
+    // Runtime may still pass explicit undefined; stripUndefinedPatch drops it.
+    // exactOptionalPropertyTypes forbids `key?: T` accepting undefined in the type.
     await service.update({
       agentUninstallCommands: { gemini: "echo custom-uninstall" },
-      // undefined sibling must not be forwarded (zod would default it)
       agentInstallCommands: undefined,
-    });
+    } as unknown as Partial<ProjectPreferences>);
 
     expect(updatePreferences).toHaveBeenCalledWith({
       agentUninstallCommands: { gemini: "echo custom-uninstall" },
