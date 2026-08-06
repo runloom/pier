@@ -1,6 +1,8 @@
 export const notificationsCenter = {
   action: {
-    goToAgent: "Go to agent",
+    goToAgent: "Handle now",
+    openAgent: "Open conversation",
+    viewAgentOutput: "View output",
   },
   actionFailed: "Couldn't update notifications",
   bell: {

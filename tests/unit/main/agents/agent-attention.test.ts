@@ -1,5 +1,10 @@
 import { formatAttentionNotificationCopy } from "@main/services/agent-attention/notification-copy.ts";
 import { createAgentAttentionService } from "@main/services/agent-attention/service.ts";
+import {
+  attentionPathLeaf,
+  formatAttentionIdentity,
+  formatAttentionNotificationCopy as formatShared,
+} from "@shared/agent-attention-copy.ts";
 import { DEFAULT_AGENT_ATTENTION_SETTINGS } from "@shared/contracts/agent/attention.ts";
 import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
@@ -24,17 +29,23 @@ function agent(
 }
 
 describe("formatAttentionNotificationCopy", () => {
-  it("localizes waiting and error bodies", () => {
+  it("uses event title and identity+next-step body (zh-CN / en)", () => {
     const waiting = agent({
       panelId: "p1",
       status: "waiting",
       windowId: "1",
     });
-    expect(formatAttentionNotificationCopy(waiting, "zh-CN").body).toContain(
-      "等待确认"
+    const waitingZh = formatAttentionNotificationCopy(waiting, "zh-CN");
+    expect(waitingZh.title).toBe("需要你处理");
+    expect(waitingZh.body).toBe("Claude — 等待确认或继续");
+    expect(waitingZh.actionLabelKey).toBe(
+      "notificationsCenter.action.goToAgent"
     );
-    expect(formatAttentionNotificationCopy(waiting, "en").body).toContain(
-      "awaiting confirmation"
+
+    const waitingEn = formatAttentionNotificationCopy(waiting, "en");
+    expect(waitingEn.title).toBe("Needs you");
+    expect(waitingEn.body).toBe(
+      "Claude — Awaiting confirmation or your next step"
     );
 
     const errored = agent({
@@ -42,19 +53,86 @@ describe("formatAttentionNotificationCopy", () => {
       status: "error",
       windowId: "1",
     });
-    expect(formatAttentionNotificationCopy(errored, "zh-CN").body).toContain(
-      "出错了"
+    const errorZh = formatAttentionNotificationCopy(errored, "zh-CN");
+    expect(errorZh.title).toBe("智能体出错了");
+    expect(errorZh.body).toContain("打开对话查看输出");
+    expect(errorZh.actionLabelKey).toBe(
+      "notificationsCenter.action.viewAgentOutput"
     );
+    const errorEn = formatAttentionNotificationCopy(errored, "en");
+    expect(errorEn.body).toContain("Open the conversation to view the output");
   });
 
-  it("localizes ready bodies", () => {
+  it("localizes ready with open-agent action", () => {
     const ready = agent({ panelId: "p1", status: "ready", windowId: "1" });
-    expect(formatAttentionNotificationCopy(ready, "zh-CN").body).toContain(
-      "回合已完成"
+    const zh = formatAttentionNotificationCopy(ready, "zh-CN");
+    expect(zh.title).toBe("回合已完成");
+    expect(zh.body).toBe("Claude — 可以继续输入");
+    expect(zh.actionLabelKey).toBe("notificationsCenter.action.openAgent");
+
+    const en = formatAttentionNotificationCopy(ready, "en");
+    expect(en.title).toBe("Turn finished");
+    expect(en.body).toContain("Ready for your next message");
+  });
+
+  it("includes session title and project leaf in body identity", () => {
+    const activity = agent({
+      panelId: "p1",
+      status: "waiting",
+      windowId: "1",
+      sessionTitle: "重构登录流",
+    });
+    const copy = formatAttentionNotificationCopy(activity, "zh-CN", {
+      projectRootPath: "/Users/me/ABC/pier",
+    });
+    expect(copy.title).toBe("需要你处理");
+    expect(copy.body).toBe("Claude · 重构登录流 · pier — 等待确认或继续");
+  });
+
+  it("does not put brand name alone in title", () => {
+    const copy = formatShared({ agentLabel: "Grok", status: "ready" }, "zh-CN");
+    expect(copy.title).not.toBe("Grok");
+    expect(copy.body.startsWith("Grok")).toBe(true);
+  });
+});
+
+describe("formatAttentionIdentity / attentionPathLeaf", () => {
+  it("takes path leaf and dedupes against session title", () => {
+    expect(attentionPathLeaf("/Users/me/ABC/pier")).toBe("pier");
+    expect(attentionPathLeaf("/Users/me/ABC/pier/")).toBe("pier");
+    expect(
+      formatAttentionIdentity({
+        agentLabel: "Grok",
+        sessionTitle: "pier",
+        projectRootPath: "/tmp/pier",
+      })
+    ).toBe("Grok · pier");
+  });
+
+  it("falls back to cwd leaf when projectRootPath is absent", () => {
+    expect(
+      formatAttentionIdentity({
+        agentLabel: "Grok",
+        cwd: "/tmp/feature-branch",
+      })
+    ).toBe("Grok · feature-branch");
+  });
+
+  it("prefers projectRootPath leaf over cwd", () => {
+    expect(
+      formatAttentionIdentity({
+        agentLabel: "Grok",
+        projectRootPath: "/Users/me/ABC/pier",
+        cwd: "/Users/me/ABC/pier/packages/ui",
+      })
+    ).toBe("Grok · pier");
+  });
+
+  it("uses locale-aware empty label fallback", () => {
+    expect(formatAttentionIdentity({ agentLabel: "  " }, "zh-CN")).toBe(
+      "智能体"
     );
-    expect(formatAttentionNotificationCopy(ready, "en").body).toContain(
-      "finished a turn"
-    );
+    expect(formatAttentionIdentity({ agentLabel: "" }, "en")).toBe("Agent");
   });
 });
 
@@ -66,12 +144,16 @@ describe("agent attention service (classify → NCS ingest only)", () => {
   });
 
   function createService(
-    settings: Partial<typeof DEFAULT_AGENT_ATTENTION_SETTINGS> = {}
+    settings: Partial<typeof DEFAULT_AGENT_ATTENTION_SETTINGS> = {},
+    resolveLocation?: Parameters<
+      typeof createAgentAttentionService
+    >[0]["resolveLocation"]
   ) {
     return createAgentAttentionService({
       ingestNotification,
       resolveLocale: () => "en",
       settings: () => ({ ...DEFAULT_AGENT_ATTENTION_SETTINGS, ...settings }),
+      ...(resolveLocation ? { resolveLocation } : {}),
     });
   }
 
@@ -94,13 +176,57 @@ describe("agent attention service (classify → NCS ingest only)", () => {
           },
         ],
         agentRef,
-        body: "Claude is awaiting confirmation",
+        body: "Claude — Awaiting confirmation or your next step",
         dedupeKey: `agent.attention:waiting:${agentRef}`,
         kind: "agent.attention",
         panelRef: { panelId: "p1" },
         severity: "warning",
         source: "agent-attention",
+        title: "Needs you",
         trigger: "system-event",
+      })
+    );
+  });
+
+  it("enriches body from resolveLocation project leaf", async () => {
+    const service = createService({}, () => ({
+      projectRootPath: "/Users/me/work/pier",
+    }));
+    await service.observe(null, {
+      activities: [
+        agent({
+          panelId: "p1",
+          status: "waiting",
+          windowId: "11",
+          sessionTitle: "Fix notifications",
+        }),
+      ],
+      ts: 1,
+    });
+    expect(ingestNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: "Claude · Fix notifications · pier — Awaiting confirmation or your next step",
+        title: "Needs you",
+      })
+    );
+  });
+
+  it("uses view-output action label on error", async () => {
+    const service = createService({ enableErrorAttention: true });
+    await service.observe(null, {
+      activities: [agent({ panelId: "p1", status: "error", windowId: "11" })],
+      ts: 1,
+    });
+    expect(ingestNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actions: [
+          {
+            id: "focus-panel",
+            labelKey: "notificationsCenter.action.viewAgentOutput",
+          },
+        ],
+        body: "Claude — Open the conversation to view the output",
+        title: "Agent ran into an error",
       })
     );
   });
@@ -194,7 +320,17 @@ describe("agent attention service (classify → NCS ingest only)", () => {
       }
     );
     expect(ingestNotification).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: "agent.turn-finished", severity: "info" })
+      expect.objectContaining({
+        kind: "agent.turn-finished",
+        severity: "info",
+        title: "Turn finished",
+        actions: [
+          {
+            id: "focus-panel",
+            labelKey: "notificationsCenter.action.openAgent",
+          },
+        ],
+      })
     );
   });
 

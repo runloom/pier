@@ -11,6 +11,11 @@ import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 import { createLogger } from "@shared/logger.ts";
 import { readPreferences } from "../state/preferences.ts";
+import { peekTerminalPanelContext } from "../state/terminal-session-state.ts";
+import {
+  findAppWindowByElectronId,
+  findWindowContext,
+} from "../windows/identity.ts";
 import { onForegroundActivityPublished } from "./foreground-activity.ts";
 import {
   ingestHostNotification,
@@ -21,8 +26,11 @@ const log = createLogger("agent-attention.ipc");
 
 export interface RegisterAgentAttentionArgs {
   eventBus?: PierEventBus;
-  /** 保留 index 参数以兼容调用方；OS click 深链已迁至 NCS deliverOs。 */
-  index: AgentRuntimeIndexService;
+  /**
+   * 历史参数：OS click 深链已迁至 NCS deliverOs；路径锚点直接读 panel context。
+   * 保留字段以免启动接线改签名。
+   */
+  index?: AgentRuntimeIndexService;
 }
 
 function liveAgentRefsFrom(next: ForegroundActivityBroadcast): Set<string> {
@@ -58,6 +66,30 @@ export function registerAgentAttention(
     ingestNotification: ingestHostNotification,
     resolveLocale: resolveAttentionLocale,
     settings: () => getAgentAttentionSettingsCached(),
+    resolveLocation: ({ panelId, windowId }) => {
+      const electronId = Number(windowId);
+      if (!Number.isFinite(electronId)) {
+        return null;
+      }
+      const win = findAppWindowByElectronId(electronId);
+      if (!win || win.isDestroyed()) {
+        return null;
+      }
+      const sessionScope = findWindowContext(win)?.recordId;
+      if (!sessionScope) {
+        return null;
+      }
+      const context = peekTerminalPanelContext(sessionScope, panelId);
+      if (!context) {
+        return null;
+      }
+      return {
+        ...(context.cwd ? { cwd: context.cwd } : {}),
+        ...(context.projectRootPath
+          ? { projectRootPath: context.projectRootPath }
+          : {}),
+      };
+    },
   });
 
   let previous: ForegroundActivityBroadcast | null = null;
