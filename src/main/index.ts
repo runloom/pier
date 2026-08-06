@@ -326,6 +326,7 @@ if (gotTheLock) {
       app.on("will-quit", () => {
         appUpdateScheduler.stop();
         gitAutofetch.dispose();
+        appCore.services.liveModules?.dispose();
       });
 
       if (isMac && isDev && app.dock) {

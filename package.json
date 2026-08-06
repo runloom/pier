@@ -29,6 +29,7 @@
     "build:native": "cd native && bash build.sh",
     "build:lsp-windows-job": "node ./scripts/build-lsp-windows-job.mjs",
     "build:icons": "node ./scripts/build-app-icons.mjs",
+    "canvas-sdk:generate-types": "node scripts/generate-canvas-sdk-types.mjs",
     "plugin:claude:build": "node ./scripts/run-with-clean-esbuild-env.mjs pnpm --filter @pier/plugin-claude build",
     "plugin:claude:pack": "node ./scripts/run-with-clean-esbuild-env.mjs pnpm --filter @pier/plugin-claude build:package",
     "plugin:codex:build": "node ./scripts/run-with-clean-esbuild-env.mjs pnpm --filter @pier/plugin-codex build",

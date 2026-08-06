@@ -1,0 +1,424 @@
+import { liveModuleCanvasFileScopeWrapper } from "@plugins/api/live-module-canvas-file.tsx";
+import {
+  LiveModuleMountError,
+  mountLiveModuleExport,
+} from "@plugins/api/live-module-mount.ts";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import {
+  LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY,
+  type LiveModuleDiagnostic,
+  projectLiveRootId,
+  projectLiveRootSpec,
+} from "@shared/contracts/live-modules.ts";
+import {
+  canvasDirectoryFromProjectPath,
+  detectProjectCanvasFramework,
+  projectCanvasLocation,
+} from "@shared/live-module-canvas-path.ts";
+import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
+import {
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+  useEffect,
+} from "react";
+import type { FilesTranslate } from "../i18n.ts";
+import {
+  canvasMountErrorMessage,
+  clearMountedCanvas,
+  unmountMountedCanvas,
+} from "./canvas-states.tsx";
+import { removeLiveModuleCss } from "./css-cleanup.ts";
+
+/** Only show skeleton if compile still pending after this delay (avoids flash). */
+export const CANVAS_SKELETON_DELAY_MS = 200;
+
+export interface SoftError {
+  diagnostics: LiveModuleDiagnostic[];
+  /** True for runtime crashes (uses runtimeFailed title/hint). */
+  isRuntime?: boolean;
+  message: string;
+}
+
+export type CanvasPreviewState =
+  | { kind: "pending" }
+  | { kind: "loading" }
+  | {
+      kind: "ready";
+      framework: LiveModuleFramework;
+      /** Hot-reload compile failure: keep previous mount, show banner. */
+      softError?: SoftError;
+    }
+  | {
+      kind: "error";
+      message: string;
+      diagnostics: LiveModuleDiagnostic[];
+    };
+
+function moduleIdentity(
+  root: string,
+  contentDirectory: string,
+  relPath: string,
+  framework: LiveModuleFramework
+): string {
+  return `${root}\0${contentDirectory}\0${relPath}\0${framework}`;
+}
+
+/**
+ * The compile + mount session for one canvas preview generation.
+ *
+ * - registers the project live root, compiles, imports the bundle, mounts it
+ * - hot reload keeps the previous mount until the new bundle is ready
+ * - CSS teardown ordering: previous styles are removed BEFORE `import(url)`
+ *   (the new bundle's injector tags styles with the same moduleId prefix)
+ * - manual Reload (toolbar) and stale events bump `nonce` → new generation
+ */
+export function useCanvasCompileSession(props: {
+  context: RendererPluginContext;
+  path: string;
+  root: string;
+  t: FilesTranslate;
+  nonce: number;
+  setNonce: Dispatch<SetStateAction<number>>;
+  setState: Dispatch<SetStateAction<CanvasPreviewState>>;
+  hostRef: RefObject<HTMLDivElement | null>;
+  unmountRef: RefObject<(() => void) | null>;
+  mountedIdentityRef: RefObject<string | null>;
+  mountedModuleIdRef: RefObject<string | null>;
+}): void {
+  const {
+    context,
+    path,
+    root,
+    t,
+    nonce,
+    setNonce,
+    setState,
+    hostRef,
+    unmountRef,
+    mountedIdentityRef,
+    mountedModuleIdRef,
+  } = props;
+  const liveModules = context.liveModules;
+  const canvasLocation = projectCanvasLocation(path);
+  const relPath = canvasLocation?.relPath ?? null;
+  const contentDirectory =
+    canvasLocation?.directory ?? LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY;
+  const framework = detectProjectCanvasFramework(path) ?? "react";
+
+  useEffect(() => {
+    // `nonce` re-triggers compile on file stale events and manual Reload.
+    const reloadGeneration = nonce;
+
+    if (!(relPath && liveModules)) {
+      clearMountedCanvas(
+        hostRef.current,
+        unmountRef,
+        mountedIdentityRef,
+        mountedModuleIdRef.current
+      );
+      mountedModuleIdRef.current = null;
+      setState({
+        diagnostics: [],
+        kind: "error",
+        message: t(
+          "filePanel.canvas.notUnderCanvases",
+          "Open a canvas under .pier/canvases (e.g. *.canvas.tsx)."
+        ),
+      });
+      return;
+    }
+
+    const hostEl = hostRef.current;
+    if (!hostEl) {
+      return;
+    }
+
+    const identity = moduleIdentity(root, contentDirectory, relPath, framework);
+    // Mark host with compile generation (stale / Reload bump `nonce`).
+    hostEl.dataset.pierCanvasCompile = String(reloadGeneration);
+    let cancelled = false;
+    const stillOwner = (): boolean =>
+      !cancelled &&
+      hostEl.dataset.pierCanvasCompile === String(reloadGeneration);
+
+    // Same module already on screen → keep UI until the new bundle mounts.
+    const isHotReload =
+      mountedIdentityRef.current === identity && unmountRef.current !== null;
+
+    let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const clearSkeletonTimer = () => {
+      if (skeletonTimer !== null) {
+        clearTimeout(skeletonTimer);
+        skeletonTimer = null;
+      }
+    };
+
+    if (isHotReload) {
+      // Keep ready UI + previous mount while recompiling.
+    } else {
+      // First open or different canvas: drop previous content immediately
+      // (do not show the wrong file), but delay the skeleton to avoid flash.
+      clearMountedCanvas(
+        hostEl,
+        unmountRef,
+        mountedIdentityRef,
+        mountedModuleIdRef.current
+      );
+      mountedModuleIdRef.current = null;
+      setState({ kind: "pending" });
+      skeletonTimer = setTimeout(() => {
+        if (!stillOwner()) {
+          return;
+        }
+        setState((current) =>
+          current.kind === "pending" ? { kind: "loading" } : current
+        );
+      }, CANVAS_SKELETON_DELAY_MS);
+    }
+
+    const baseRootId = projectLiveRootId(root);
+    const rootIdSuffix =
+      contentDirectory === LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY
+        ? ""
+        : `.${contentDirectory.replace(/^\./u, "").replaceAll("/", "-")}`;
+    // Must match registerRoot id — used for stale events + unregister.
+    const rootId = `${baseRootId}${rootIdSuffix}`;
+    const run = async () => {
+      try {
+        const spec = projectLiveRootSpec({
+          directory: contentDirectory,
+          // Distinct root id per content directory so alternate registered
+          // roots never clobber each other (id charset: a-z0-9._-).
+          id: rootId,
+          projectRootPath: root,
+        });
+        await liveModules.registerRoot(spec);
+        if (!stillOwner()) {
+          return;
+        }
+        if (!relPath) {
+          throw new Error(
+            t(
+              "filePanel.canvas.notUnderCanvases",
+              "Open a canvas under .pier/canvases (e.g. *.canvas.tsx)."
+            )
+          );
+        }
+        const result = await liveModules.compile(spec.id, relPath);
+        if (!stillOwner()) {
+          return;
+        }
+        if (!result.ok) {
+          if (result.superseded) {
+            // A newer compile superseded this request. Keep the previous
+            // canvas if one is mounted; otherwise retry instead of stranding
+            // the panel on a loading skeleton (e.g. two panels compiling the
+            // same module — the other panel's request wins this one).
+            if (!unmountRef.current) {
+              setNonce((value) => value + 1);
+            }
+            return;
+          }
+          clearSkeletonTimer();
+          const soft: SoftError = {
+            diagnostics: result.diagnostics,
+            message:
+              result.diagnostics[0]?.message ??
+              t("filePanel.canvas.compileFailed", "Couldn’t compile canvas"),
+          };
+          if (isHotReload && unmountRef.current) {
+            // Keep previous canvas; surface diagnostics as a banner.
+            setState((current) =>
+              current.kind === "ready"
+                ? { ...current, softError: soft }
+                : {
+                    diagnostics: soft.diagnostics,
+                    kind: "error",
+                    message: soft.message,
+                  }
+            );
+            return;
+          }
+          clearMountedCanvas(
+            hostEl,
+            unmountRef,
+            mountedIdentityRef,
+            mountedModuleIdRef.current
+          );
+          mountedModuleIdRef.current = null;
+          setState({
+            diagnostics: soft.diagnostics,
+            kind: "error",
+            message: soft.message,
+          });
+          return;
+        }
+        // Drop the PREVIOUS module's injected CSS BEFORE importing the new
+        // bundle — its injector runs at import time and tags styles with the
+        // same moduleId prefix, so prefix-based removal after import would
+        // delete the replacement's just-injected styles.
+        const previousModuleId = mountedModuleIdRef.current;
+        if (previousModuleId) {
+          removeLiveModuleCss(previousModuleId);
+        }
+        // Dynamic URL from compile ticket — specifier unknown until runtime.
+        const mod = (await import(/* @vite-ignore */ result.url)) as Record<
+          string,
+          unknown
+        >;
+        if (!stillOwner()) {
+          return;
+        }
+
+        // Atomic swap: tear down previous only once the new module is ready.
+        // stillOwner() re-check prevents a superseded generation from stealing the host.
+        // unmountMountedCanvas (not clearMountedCanvas) so the new bundle's
+        // already-injected CSS survives.
+        unmountMountedCanvas(hostEl, unmountRef, mountedIdentityRef);
+        mountedModuleIdRef.current = null;
+
+        const reportRuntimeError = (error: Error) => {
+          if (!stillOwner()) {
+            return;
+          }
+          const message = canvasMountErrorMessage(error, t);
+          if (unmountRef.current) {
+            setState((current) =>
+              current.kind === "ready"
+                ? {
+                    ...current,
+                    softError: { diagnostics: [], isRuntime: true, message },
+                  }
+                : { diagnostics: [], kind: "error", message }
+            );
+            return;
+          }
+          setState({ diagnostics: [], kind: "error", message });
+        };
+
+        const nextUnmount = await mountLiveModuleExport(
+          hostEl,
+          framework,
+          mod,
+          {
+            onError: reportRuntimeError,
+            wrap: liveModuleCanvasFileScopeWrapper({
+              directory: canvasDirectoryFromProjectPath(path) ?? "",
+              path,
+              root,
+            }),
+          }
+        );
+        if (!stillOwner()) {
+          // This generation lost the race — the new bundle's CSS was injected
+          // at import time but nothing will mount it, so drop it.
+          nextUnmount();
+          removeLiveModuleCss(relPath);
+          return;
+        }
+        clearSkeletonTimer();
+        // CSS cleanup is owned by clearMountedCanvas (error/unmount paths) and
+        // the pre-import removal above (swap path) — not by this wrapper.
+        unmountRef.current = () => {
+          nextUnmount();
+        };
+        mountedIdentityRef.current = identity;
+        mountedModuleIdRef.current = relPath;
+
+        const firstWarning = result.warnings?.[0]?.message?.trim();
+        const warningSoft: SoftError | undefined =
+          result.warnings && result.warnings.length > 0
+            ? {
+                diagnostics: result.warnings,
+                message:
+                  firstWarning && firstWarning.length > 0
+                    ? firstWarning
+                    : t(
+                        "filePanel.canvas.compiledWithWarnings",
+                        "Canvas compiled with warnings"
+                      ),
+              }
+            : undefined;
+
+        setState({
+          framework,
+          kind: "ready",
+          ...(warningSoft ? { softError: warningSoft } : {}),
+        });
+      } catch (error) {
+        if (!stillOwner()) {
+          return;
+        }
+        clearSkeletonTimer();
+        const message = canvasMountErrorMessage(error, t);
+        // Mount/runtime failures (bad exports, mount-throw) use the runtime
+        // copy; compile/import failures keep the compile copy.
+        const isRuntimeError = error instanceof LiveModuleMountError;
+        if (isHotReload && unmountRef.current) {
+          setState((current) =>
+            current.kind === "ready"
+              ? {
+                  ...current,
+                  softError: {
+                    diagnostics: [],
+                    isRuntime: isRuntimeError,
+                    message,
+                  },
+                }
+              : { diagnostics: [], kind: "error", message }
+          );
+          return;
+        }
+        clearMountedCanvas(
+          hostEl,
+          unmountRef,
+          mountedIdentityRef,
+          mountedModuleIdRef.current
+        );
+        mountedModuleIdRef.current = null;
+        setState({
+          diagnostics: [],
+          kind: "error",
+          message,
+        });
+      }
+    };
+
+    run().catch(() => undefined);
+
+    const stopWatch = liveModules.onChanged((event) => {
+      if (event.type !== "stale") {
+        return;
+      }
+      if (event.rootId !== rootId || event.moduleId !== relPath) {
+        return;
+      }
+      setNonce((value) => value + 1);
+    });
+
+    return () => {
+      cancelled = true;
+      clearSkeletonTimer();
+      stopWatch();
+      // Refcounted release — last panel for this project drops watchers/tickets.
+      liveModules.unregisterRoot(rootId).catch(() => undefined);
+    };
+  }, [
+    contentDirectory,
+    framework,
+    liveModules,
+    nonce,
+    path,
+    root,
+    t,
+    relPath,
+    hostRef,
+    unmountRef,
+    mountedIdentityRef,
+    mountedModuleIdRef,
+    setNonce,
+    setState,
+  ]);
+}

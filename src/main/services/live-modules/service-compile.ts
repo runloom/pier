@@ -10,6 +10,10 @@ import {
 } from "@shared/live-module-framework.ts";
 import { compileLiveModule } from "./compile.ts";
 import {
+  cancelCompileContext,
+  esbuildContextKey,
+} from "./compile-context-cache.ts";
+import {
   assertPathInsideRoot,
   LiveModuleFenceError,
   resolveUnderRoot,
@@ -158,6 +162,7 @@ export async function runLiveModuleCompile(
       moduleId: relPath,
       previewBarrelAbsolutePath,
       projectRoot: root.projectRoot,
+      rootId,
       tsconfigPaths: root.spec.resolve.tsconfigPaths,
     });
 
@@ -175,6 +180,21 @@ export async function runLiveModuleCompile(
           if (ctx.compileEpochs.get(key) === epoch) {
             ctx.compileEpochs.set(key, epoch + 1);
           }
+          // Cancel the in-flight esbuild rebuild so it doesn't keep consuming CPU.
+          // Key must match compileLiveModule's (options included).
+          cancelCompileContext(
+            esbuildContextKey({
+              allowNodeModules: root.spec.resolve.allowNodeModules,
+              contentRoot: root.contentRoot,
+              entryAbsolutePath: entryReal,
+              forcePreviewBarrel: root.spec.resolve.forcePreviewBarrel,
+              framework,
+              previewBarrelAbsolutePath,
+              projectRoot: root.projectRoot,
+              rootId,
+              tsconfigPaths: root.spec.resolve.tsconfigPaths,
+            })
+          ).catch(() => undefined);
           reject(new Error(`compile timed out after ${ctx.timeoutMs}ms`));
         }, ctx.timeoutMs);
       }),
@@ -191,10 +211,16 @@ export async function runLiveModuleCompile(
           },
         ],
         ok: false,
+        superseded: !timedOut,
       };
     }
 
     if (!result.ok) {
+      const absoluteGraph = (result.graph ?? []).map((rel) =>
+        join(root.projectRoot ?? root.contentRoot, rel)
+      );
+      absoluteGraph.push(entryReal);
+      ctx.graphTracker.setModuleGraph(rootId, relPath, absoluteGraph);
       ctx.emit({
         diagnostics: result.diagnostics,
         moduleId: relPath,
@@ -228,6 +254,9 @@ export async function runLiveModuleCompile(
       ok: true,
       url: artifactUrl(artifact),
     };
+    if (result.warnings && result.warnings.length > 0) {
+      success.warnings = result.warnings;
+    }
     ctx.emit({ moduleId: relPath, rootId, type: "changed" });
     return success;
   } catch (error) {
@@ -243,6 +272,9 @@ export async function runLiveModuleCompile(
           },
         ],
         ok: false,
+        superseded: !(
+          error instanceof Error && /timed out/u.test(error.message)
+        ),
       };
     }
     let message: string;

@@ -720,9 +720,20 @@ describeMockedMacOSWindowManager(
         expect(electronMock.showMessageBox).toHaveBeenCalledOnce()
       );
       expect(error).toHaveBeenCalledWith(
-        "[pier-preload-error]",
-        "/missing/preload.cjs",
-        "preload failed"
+        "[renderer.failure]",
+        "preload-error",
+        expect.objectContaining({
+          preloadPath: "/missing/preload.cjs",
+          windowId: 42,
+        })
+      );
+      expect(error).toHaveBeenCalledWith(
+        "[renderer.failure]",
+        "renderer-failure",
+        expect.objectContaining({
+          kind: "preload",
+          windowId: 42,
+        })
       );
     });
 
@@ -853,11 +864,15 @@ describeMockedMacOSWindowManager(
       await vi.waitFor(() =>
         expect(electronMock.showMessageBox).toHaveBeenCalledWith(
           expect.objectContaining({
-            detail: "crashed (exit 9)",
+            detail: expect.stringContaining("crashed (exit 9)"),
             type: "error",
           })
         )
       );
+      const prompt = electronMock.showMessageBox.mock.calls.at(-1)?.[0] as {
+        detail?: string;
+      };
+      expect(prompt.detail).toMatch(/incident: [0-9a-f]{12}/i);
     });
 
     it("destroys the unusable window when native recovery chooses close", async () => {

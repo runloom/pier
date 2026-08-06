@@ -38,14 +38,70 @@ export function findTsconfigPath(
   return existsSync(fallback) ? fallback : null;
 }
 
-function stripJsonc(raw: string): string {
-  return (
-    raw
-      .replace(/\/\*[\s\S]*?\*\//gu, "")
-      .replace(/^\s*\/\/.*$/gmu, "")
-      // Trailing commas before } or ]
-      .replace(/,(\s*[}\]])/gu, "$1")
-  );
+/**
+ * Strip JSONC comments and trailing commas without corrupting string values.
+ * The previous regex approach naively removed `//` inside string literals
+ * (e.g. `"https://..."` lost everything after `//`). This scanner respects
+ * string boundaries so paths/URLs in tsconfig survive.
+ */
+export function stripJsonc(raw: string): string {
+  let out = "";
+  let i = 0;
+  const len = raw.length;
+  while (i < len) {
+    const ch = raw[i];
+    // Block comment
+    if (ch === "/" && raw[i + 1] === "*") {
+      i += 2;
+      while (i < len && !(raw[i] === "*" && raw[i + 1] === "/")) {
+        i += 1;
+      }
+      i += 2;
+      continue;
+    }
+    // Line comment
+    if (ch === "/" && raw[i + 1] === "/") {
+      while (i < len && raw[i] !== "\n") {
+        i += 1;
+      }
+      continue;
+    }
+    // String literal (preserve as-is, including // inside and ,} / ,] sequences)
+    if (ch === '"') {
+      out += ch;
+      i += 1;
+      while (i < len) {
+        const c = raw[i];
+        out += c;
+        if (c === "\\") {
+          // Escape: copy next char verbatim
+          i += 1;
+          if (i < len) {
+            out += raw[i];
+          }
+        } else if (c === '"') {
+          i += 1;
+          break;
+        }
+        i += 1;
+      }
+      continue;
+    }
+    // Trailing comma before } or ] (string-aware: strings handled above)
+    if (ch === ",") {
+      let j = i + 1;
+      while (j < len && /\s/u.test(raw[j]!)) {
+        j += 1;
+      }
+      if (raw[j] === "}" || raw[j] === "]") {
+        i += 1;
+        continue;
+      }
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
 }
 
 interface TsconfigJson {

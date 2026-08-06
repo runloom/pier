@@ -24,7 +24,7 @@ import {
   PIER_CANVAS_VALUE_EXPORT_NAMES,
 } from "@shared/pier-canvas-export-names.ts";
 import { describe, expect, it } from "vitest";
-import { pierCanvasStubSource } from "../../../../src/main/services/live-modules/compile.ts";
+import { pierCanvasStubSource } from "../../../../src/main/services/live-modules/stub-sources.ts";
 import { pierVisualizationsStubSource } from "../../../../src/main/services/live-modules/visualizations-stub.ts";
 
 const SAMPLE_TICKET = "abcdefghijklmnopqrstuv";
