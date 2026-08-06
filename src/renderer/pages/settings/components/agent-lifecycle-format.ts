@@ -1,3 +1,4 @@
+import { isAgentUpdateAvailable } from "@shared/agent-lifecycle/version-compare.ts";
 import type {
   AgentLifecycleAction,
   AgentLifecycleProgress,
@@ -18,6 +19,8 @@ const KNOWN_ERROR_CODES = new Set([
   "timeout",
   "env_unavailable",
   "package_manager_missing",
+  /** Uninstall PM exited 0 but post-probe still detects the agent. */
+  "still_detected",
 ]);
 
 /** Soft outcomes — toast only, not a red row failure. */
@@ -97,10 +100,12 @@ export function lifecycleBusyStatusText(
     return t("settings.agents.action.queueBusy");
   }
 
-  const isInstall = action === "install";
-  const base = isInstall
-    ? t("settings.agents.action.installBusy")
-    : t("settings.agents.action.updateBusy");
+  let base = t("settings.agents.action.updateBusy");
+  if (action === "install") {
+    base = t("settings.agents.action.installBusy");
+  } else if (action === "uninstall") {
+    base = t("settings.agents.action.uninstallBusy");
+  }
 
   const stepCount = progress?.stepCount;
   const stepIndex = progress?.stepIndex;
@@ -134,7 +139,7 @@ export function lifecycleBusyStatusText(
 
 /**
  * Compact version meta for the list row.
- * - Different current/latest → `1.2.3 → 1.2.4`
+ * - Semantically older current + newer latest → `1.2.3 → 1.2.4`
  * - Same or only one → single version (no redundant "latest: same")
  */
 export function formatAgentVersionMeta(
@@ -143,8 +148,12 @@ export function formatAgentVersionMeta(
 ): string | null {
   const current = version?.trim() ?? "";
   const latest = latestVersion?.trim() ?? "";
-  if (current.length > 0 && latest.length > 0 && current !== latest) {
-    return `${current} → ${latest}`;
+  if (current.length > 0 && latest.length > 0) {
+    // Semantic compare: avoid false "a → b" when tokens equal after normalize.
+    if (isAgentUpdateAvailable(current, latest)) {
+      return `${current} → ${latest}`;
+    }
+    return current;
   }
   if (current.length > 0) {
     return current;
@@ -172,11 +181,16 @@ export function formatLifecycleRowFailure(
   }
 ): string {
   const { failure } = options;
-  const key =
-    failure.action === "install"
-      ? "settings.agents.action.rowInstallFailed"
-      : "settings.agents.action.rowUpdateFailed";
-  return t(key);
+  if (failure.action === "install") {
+    return t("settings.agents.action.rowInstallFailed");
+  }
+  if (failure.action === "uninstall") {
+    if (failure.errorCode === "still_detected") {
+      return t("settings.agents.action.rowUninstallPartial");
+    }
+    return t("settings.agents.action.rowUninstallFailed");
+  }
+  return t("settings.agents.action.rowUpdateFailed");
 }
 
 export interface AgentRowStatusBadge {

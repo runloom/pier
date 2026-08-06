@@ -5,7 +5,7 @@ export const settingsSkills = {
   emptyTitle: "No project skills",
   detailEmptyTitle: "No skills in this project yet",
   detailEmptyDescription:
-    'Import from a folder or add a new skill. New skills stay off until you check a discovery path in the skill details. Skills already installed by other tools show under "In project".',
+    'Import a folder or add a skill. Turn it on in skill details so agents can use it. Skills already on disk show under "In project".',
   emptyDescription: "Choose a project, then import a local skill directory.",
   searchPlaceholder: "Search skills",
   filterAll: "All",
@@ -22,7 +22,7 @@ export const settingsSkills = {
   policyTitle: "Policy",
   removeTitle: "Remove",
   removeBody:
-    "Deletes this skill from the project. This cannot be undone. To stop using it temporarily, uncheck the discovery paths in the skill details.",
+    "Removes this skill from the project (cannot undo). To pause it, turn off install locations in skill details.",
   removeLibraryBody:
     "Removes this skill from the Pier library on this Mac. This cannot be undone.",
 
@@ -114,7 +114,7 @@ export const settingsSkills = {
   unmanagedConflictBadge: "Path in use",
   unmanagedConflictHelpLabel: "About path in use",
   unmanagedConflictHint:
-    "{{target}} already has same-named content. Pier won’t overwrite it. Starting an agent is unaffected. To use Pier’s version, move that path aside in the project first.",
+    "{{target}} already has content. Pier won’t overwrite it. To use Pier’s copy, move that path aside first.",
   pierLibraryBadge: "Pier",
   pierBoundBadge: "Pier",
   alwaysIncludeBadge: "Always included",
@@ -129,7 +129,7 @@ export const settingsSkills = {
     "Add skills in Pier Home first, or they may already be added / always included.",
   bindAlsoClaude: "Also offer to Claude Code",
   bindAlsoClaudeHint:
-    "Creates a Claude discovery link in addition to the default Agents path. Editing the library later updates installed project copies.",
+    "Also install for Claude Code. Later library edits update project copies.",
   managedSource: {
     localImport: "Added locally",
     projectDiscoveryImport: "Imported from project",
@@ -160,7 +160,7 @@ export const settingsSkills = {
   confirmUnmanagedReplaceAction: "Replace and continue",
   confirmSkillsStateResetTitle: "Rebuild this project’s skill records?",
   confirmSkillsStateResetBody:
-    "This project’s skill list or local skill records are damaged. Continuing rebuilds a usable state from this action; damaged data that cannot be recovered will be discarded.",
+    "This project’s skill records are damaged. Continuing rebuilds a usable list; unrecoverable data is discarded.",
   confirmSkillsStateResetAction: "Rebuild and continue",
   issueUnmanagedConflict:
     "{{target}} already has same-named content. Enabling will ask you to confirm replacing it with Pier’s version.",
@@ -171,7 +171,7 @@ export const settingsSkills = {
   issueMissingSource:
     "The library content of {{skill}} is missing (.pier/skills/library/{{skill}}). Delete the skill or import it again.",
   issueInvalidManifest:
-    "This project's skill list is damaged. Fix or restore .pier/skills/manifest.json, then reload.",
+    "This project's skill list is damaged. Fix the skill config, then reload.",
   issueLedgerCorrupt:
     "Pier's local skill records for this project are damaged. Reload the project, or remove the damaged records and try again.",
   issueRecoveryBlocked:

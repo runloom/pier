@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import {
+  type ResolveUserCommandFn,
+  resolveClassASpawnTarget,
+} from "@pier/plugin-api/resolve-class-a-command";
 
 export type SpawnLoginFn = (
   cmd: string,
@@ -57,6 +61,39 @@ function safeLoginFailureDetail(output: string): string | null {
   );
   if (!detail) return null;
   return detail.slice(0, LOGIN_FAILURE_DETAIL_LIMIT);
+}
+
+/** Resolve + spawn `grok login` (Class A absolute / via-shell). */
+export async function spawnGrokLogin(input: {
+  homeDir: string;
+  mode: "oauth" | "device";
+  onOutput?: ((chunk: string) => void) | undefined;
+  processEnv: Readonly<Record<string, string | undefined>> | undefined;
+  resolveProcessEnv:
+    | ((request?: { cwd?: string }) => Promise<{ env: Record<string, string> }>)
+    | undefined;
+  resolveUserCommand?: ResolveUserCommandFn | undefined;
+  signal: AbortSignal;
+  spawnLogin?: SpawnLoginFn | undefined;
+}): Promise<void> {
+  const args =
+    input.mode === "device" ? ["login", "--device-auth"] : ["login", "--oauth"];
+  const env = await hostSpawnEnv(input.resolveProcessEnv, input.processEnv, {
+    GROK_HOME: input.homeDir,
+  });
+  const target = await resolveClassASpawnTarget(
+    "grok",
+    args,
+    env,
+    input.resolveUserCommand,
+    input.homeDir
+  );
+  const spawnLogin = input.spawnLogin ?? defaultSpawnLogin;
+  await spawnLogin(target.cmd, target.args, {
+    env,
+    ...(input.onOutput ? { onOutput: input.onOutput } : {}),
+    signal: input.signal,
+  });
 }
 
 export function defaultSpawnLogin(

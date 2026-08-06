@@ -536,7 +536,7 @@ describe("SettingsDialog — Environment section", () => {
     await waitFor(() => {
       expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
         body: "disk full",
-        title: "Save failed",
+        title: "Couldn't save — try again",
       });
     });
   });

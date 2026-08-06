@@ -56,6 +56,48 @@ describe("task run coordinator", () => {
     expect(coordinator.status(second.runId)?.status).toBe("running");
   });
 
+  it("background run with originPanelId is visible to origin presence (owner + origin)", async () => {
+    const snapshots: Array<{
+      runs: Record<
+        string,
+        {
+          originPanelId?: string | undefined;
+          ownerWindowId?: string | undefined;
+          mode?: string | undefined;
+          status?: string | undefined;
+        }
+      >;
+    }> = [];
+    const coordinator = createTaskRunCoordinator({
+      onChanged: (snapshot) => {
+        snapshots.push(snapshot);
+      },
+      openTerminal: async (_plan, runId) => ({
+        panelId: `background-task:${runId}:typecheck`,
+        windowId: "window-main",
+      }),
+    });
+
+    const result = await coordinator.start({
+      launches: [launch("typecheck", "typecheck")],
+      mode: "background",
+      originPanelId: "terminal-grok",
+      ownerWindowId: "window-main",
+      projectRootPath: "/repo",
+      rootTaskId: "typecheck",
+    });
+
+    const forWindow = coordinator.runsSnapshot("window-main");
+    expect(forWindow.runs[result.runId]).toMatchObject({
+      mode: "background",
+      originPanelId: "terminal-grok",
+      ownerWindowId: "window-main",
+      status: "running",
+    });
+    // Other windows must not see this run (broadcast filter equivalent).
+    expect(coordinator.runsSnapshot("window-other").runs).toEqual({});
+  });
+
   it("publishes a versioned control snapshot with panel ownership", async () => {
     const snapshots: unknown[] = [];
     const coordinator = createTaskRunCoordinator({

@@ -43,7 +43,7 @@ Files 插件源码编辑走 CodeMirror 6（`FileEditorViewSession` + `basicSetup
 
 - characters 显示模式、overlay 仅 hover、宽度 / 缩放自定义
 - 大文件行数阈值自动关闭
-- git 变更色点映射进 minimap gutter
+- ~~git 变更色点映射进 minimap gutter~~（已交付，见 §8）
 - preview / rich / image / 冲突 Compare（`FilesLineDiff`）模式
 - 宿主全局 preferences 或 appearance 区开关
 - 自研 canvas minimap（除非第三方包与当前 CM 版本不兼容且无法最小修补）
@@ -233,6 +233,23 @@ this.#minimapConfigDispose = context.configuration.onDidChange((event) => {
 ## 7. 后续可选（不在本 spec）
 
 - 大文件自动关闭或降采样
-- git 标记映射到 minimap gutters
-- `displayText: "characters"` 或 overlay hover 设置
+- `displayText: "characters"` 或 overlay hover 设置（当前已固定 `characters` + always overlay）
 - 编辑器右键「隐藏缩略图」快捷入口（仍写同一 configuration key）
+- overview ruler（滚动条旁细轨；有 minimap 时信息重复，不做）
+- staged / unstaged 分色、脏缓冲 live SCM（与 git gutter 非目标一致）
+
+## 8. Git 变更色点（后续交付，2026-08-06）
+
+**状态：已交付**（对齐左侧 gutter 的「双表面、单语义」终态）。
+
+| 项 | 约定 |
+|---|---|
+| 真源 | `markersFromDiffPatch` → `gitGutterField.markers` |
+| 写回 | `setGitGutterMarkers` 一次更新 gutter class + `minimapGutter` |
+| minimap | `showMinimap.compute([gitGutterField])` 注入单轨 `gutters: [minimapGutter]` |
+| 颜色 | `--diff-*-fg` 经 `getComputedStyle` 解析（canvas 不吃 `var()`）；主题 class 变化时 ViewPlugin 重解析 |
+| 删除 | 与 gutter 同锚一行红点；不按 count 撑高 |
+| 设置 | 无新开关；随 `pier.files.editor.minimap` 总开关 |
+| 基准 | 磁盘 vs HEAD（与 gutter 相同） |
+
+检查点：`tests/unit/renderer/files/editor/minimap-git-gutters.test.ts`。

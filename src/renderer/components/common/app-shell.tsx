@@ -4,6 +4,7 @@ import { AppQuitDialogBridge } from "@/components/common/app-quit-dialog-bridge.
 import { AppUpdateBridge } from "@/components/common/app-update-bridge.tsx";
 import { AttentionSoundBridge } from "@/components/common/attention-sound-bridge.tsx";
 import { CommandPalette } from "@/components/common/command-palette/index.tsx";
+import { CommentsBridge } from "@/components/common/comments-bridge.tsx";
 import { ContentPreviewHost } from "@/components/common/content-preview-host.tsx";
 import { AppContentDialogHost } from "@/components/common/dialogs/content-host.tsx";
 import { AppDialogHost } from "@/components/common/dialogs/host.tsx";
@@ -46,6 +47,7 @@ export function AppShell() {
       <ForegroundActivityBridge />
       <TerminalEndStateBridge />
       <NotificationCenterBridge />
+      <CommentsBridge />
       <NotificationMessageToastBridge />
       <AppUpdateBridge />
       <AgentRuntimeIndexBridge />

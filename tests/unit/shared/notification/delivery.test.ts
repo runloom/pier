@@ -237,7 +237,7 @@ describe("resolveDeliveryPlan · mute / DND / suppressToast", () => {
 });
 
 describe("resolveDeliveryPlan · agent fine-grained silence", () => {
-  it("suppressWhenFocused + panel focused → no toast/OS, inbox kept", () => {
+  it("attention + panel focused → no toast/OS, inbox kept (product fixed)", () => {
     const result = plan(
       {
         agentRef: "11:p1",
@@ -245,8 +245,7 @@ describe("resolveDeliveryPlan · agent fine-grained silence", () => {
         panelId: "p1",
         severity: "warning",
       },
-      { hasFocusedPierWindow: true, isTargetPanelFocused: true },
-      prefs({ agentAttention: { suppressWhenFocused: true } })
+      { hasFocusedPierWindow: true, isTargetPanelFocused: true }
     );
     expect(result.decision).toEqual({
       inbox: true,
@@ -255,15 +254,18 @@ describe("resolveDeliveryPlan · agent fine-grained silence", () => {
     });
   });
 
-  it("suppressWhenFocused false → toast even if panel focused", () => {
+  it("attention + same window other panel → toast", () => {
     const result = plan(
       {
         agentRef: "11:p1",
         kind: "agent.attention",
         severity: "warning",
       },
-      { hasFocusedPierWindow: true, isTargetPanelFocused: true },
-      prefs({ agentAttention: { suppressWhenFocused: false } })
+      {
+        hasFocusedPierWindow: true,
+        isOwnerWindowFocused: true,
+        isTargetPanelFocused: false,
+      }
     );
     expect(result.decision.toast).toBe(true);
   });

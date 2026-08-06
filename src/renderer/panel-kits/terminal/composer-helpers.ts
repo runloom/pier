@@ -16,8 +16,18 @@ const SOFT_WRAP_LINE_THRESHOLD = 1.6;
 /** Per-panel draft retained across on-demand open/close. */
 const drafts = new Map<string, string>();
 
+/** Structured review-comments chip meta for remount rehydrate (plain draft alone loses chips). */
+export interface ComposerReviewChipDraft {
+  readonly count: number;
+  readonly label: string;
+  readonly payloadText: string;
+}
+
+const reviewChipDrafts = new Map<string, ComposerReviewChipDraft>();
+
 export function resetTerminalComposerDraftsForTests(): void {
   drafts.clear();
+  reviewChipDrafts.clear();
 }
 
 export function readComposerDraft(panelId: string): string {
@@ -30,6 +40,24 @@ export function writeComposerDraft(panelId: string, value: string): void {
 
 export function clearComposerDraft(panelId: string): void {
   drafts.delete(panelId);
+  reviewChipDrafts.delete(panelId);
+}
+
+export function readReviewChipDraft(
+  panelId: string
+): ComposerReviewChipDraft | null {
+  return reviewChipDrafts.get(panelId) ?? null;
+}
+
+export function writeReviewChipDraft(
+  panelId: string,
+  value: ComposerReviewChipDraft
+): void {
+  reviewChipDrafts.set(panelId, value);
+}
+
+export function clearReviewChipDraft(panelId: string): void {
+  reviewChipDrafts.delete(panelId);
 }
 
 /**

@@ -69,6 +69,7 @@ function makeServices(): PierCoreServices {
     commandPaletteMru: trap as never,
     git: createGitService(),
     gitReview: trap as never,
+    comments: trap as never,
     gitWatch: createGitWatchService(),
     panelContexts: trap as never,
     localEnvironments: trap as never,

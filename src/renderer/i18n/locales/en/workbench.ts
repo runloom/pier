@@ -2,16 +2,16 @@ export const workbench = {
   addWidget: "Add Widget",
   context: {
     canvasLabel: "Workbench grid",
-    menuFailed: "Failed to open Workbench menu",
+    menuFailed: "Couldn't open menu — try again",
     refreshAll: "Refresh All",
   },
   empty: "Workbench is empty",
   emptyDescription:
-    "Add widgets to monitor activity and manage your workspace.",
+    "Add widgets to monitor activity and manage this workspace.",
   removeConfirmTitle: "Remove widget?",
   removeConfirmBody:
-    "This removes the widget from Workbench. You can add it again from the library.",
-  refreshAllFailed: "Couldn’t refresh some widgets",
+    "Removes this widget from Workbench. You can add it again from the library.",
+  refreshAllFailed: "Some widgets didn’t refresh — try again",
   refreshAllSuccess: "Refreshed",
   library: {
     added: "Added",
@@ -149,7 +149,7 @@ export const workbench = {
       emptyHint:
         "Start an agent or run a command in a terminal to see it here.",
       identity: {
-        subagent: "Subagent",
+        subagent: "Sub-agent",
       },
       inProgress: "Active",
       kind: {
@@ -159,13 +159,13 @@ export const workbench = {
         task: "Task",
       },
       moreRows: "{{count}} more",
-      needsYou: "Needs you",
+      needsYou: "Needs attention",
       otherWindowsAgents: "{{count}} more agents in other windows",
       panelGone: "That panel is no longer open",
       renameSession: "Rename session",
       running: "Running",
       section: {
-        needsYou: "Needs you",
+        needsYou: "Needs attention",
         other: "Other",
         running: "Running",
       },
@@ -180,7 +180,7 @@ export const workbench = {
       },
       title: "Activity Overview",
       total: "Active",
-      waiting: "Needs you",
+      waiting: "Needs attention",
     },
     customCard: {
       addBlock: "Add block",

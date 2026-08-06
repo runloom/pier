@@ -1,9 +1,12 @@
 /**
- * Shell-env resolve failure notify pipeline.
+ * Shell-env resolve soft-degrade surface.
  *
- * Ingest only when Pier has a focused key-window (matches NCS
- * `hasFocusedPierWindow` / `resolveDeliveryPlan`). Pending until first focus.
- * Process-once + per-boot dedupeKey; never expands OS_ELIGIBLE_KINDS.
+ * Industry practice (VS Code / JetBrains): dump failure must not block the app;
+ * use process.env and continue. Pier product default goes further for quiet UX:
+ * **no toast, no notification-center row** — diagnostics live in
+ * Settings → Terminal (`hostDiagnostics`) and structured logs only.
+ *
+ * Optional report builders remain for tests / future opt-in alerts.
  */
 import type { NotificationReport } from "@shared/contracts/notification-center.ts";
 import { createLogger } from "@shared/logger.ts";
@@ -28,43 +31,64 @@ export function shellEnvFailureDedupeKey(bootId: string): string {
 }
 
 /** Match renderer `notificationsCenter.shellEnv.*` (main has no i18n runtime). */
-export function formatShellEnvFailureCopy(locale: ShellEnvUiLocale): {
+const DETAIL_MAX_CHARS = 800;
+
+function sanitizeFailureDetail(detail: string): string {
+  const oneLine = detail
+    .replaceAll("\r", " ")
+    .replaceAll("\n", " ")
+    .replaceAll("\0", "")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+  if (oneLine.length <= DETAIL_MAX_CHARS) {
+    return oneLine;
+  }
+  return `${oneLine.slice(0, DETAIL_MAX_CHARS - 1)}…`;
+}
+
+export function formatShellEnvFailureCopy(
+  locale: ShellEnvUiLocale,
+  detail?: string | undefined
+): {
   body: string;
   title: string;
 } {
+  const detailLine = detail?.trim() ? sanitizeFailureDetail(detail) : undefined;
   if (locale === "zh-CN") {
+    const base =
+      "Pier 未能从登录 shell 读取完整 PATH，已改用基础环境继续运行。任务和智能体可能找不到 nvm 或 Homebrew 安装的工具。可到「设置 → 终端」查看状态并重新加载。";
     return {
-      body: "任务和智能体可能使用与终端不同的 Node 或 PATH。请打开设置 → 终端查看状态，并确认 shell 在非交互启动时不会卡住或弹提示。",
-      title: "无法加载 shell 环境",
+      body: detailLine ? `${base}\n\n详情：${detailLine}` : base,
+      title: "任务环境可能与终端不同",
     };
   }
+  const base =
+    "Pier could not read the full PATH from your login shell and is using a basic environment instead. Tasks and agents may not find tools from nvm or Homebrew. Open Settings → Terminal to check status and reload.";
   return {
-    body: "Tasks and agents may use a different Node or PATH than your terminal. Open Settings → Terminal to check status, or make sure your shell starts cleanly without prompts.",
-    title: "Couldn't load shell environment",
+    body: detailLine ? `${base}\n\nDetails: ${detailLine}` : base,
+    title: "Task environment may differ from the terminal",
   };
 }
 
 export interface ShellEnvFailureNotifyDeps {
-  /** Process-start identity so each launch is a distinct NCS health row. */
+  /** Process-start identity (logs / future opt-in dedupe). */
   bootId: string;
-  getFocusedWindow: () => unknown | null;
-  ingest: (report: NotificationReport) => void;
-  /** Resolved UI strings (main has no i18n; app-core supplies from prefs locale). */
-  resolveCopy: () =>
-    | { body: string; title: string }
-    | Promise<{ body: string; title: string }>;
 }
 
 export interface ShellEnvFailureNotifyController {
   /** Test / diagnostics. */
   isPending(): boolean;
-  /** Wire to PES `onShellEnvFailed` — only entry that schedules delivery. */
+  /** Wire to PES `onShellEnvFailed` — log once; never NCS by default. */
   onShellEnvFailed: (diagnostics: ProcessEnvironmentDiagnostics) => void;
-  /** Call on window create + focus when a key-window may exist. */
+  /** No-op; kept so boot/focus hooks stay safe if reintroduced. */
   tryDeliver: () => void;
   wasDelivered(): boolean;
 }
 
+/**
+ * Optional report shape for tests / future opt-in. Production default does not
+ * call NCS ingest (see createShellEnvFailureNotify).
+ */
 export function buildShellEnvFailureReport(
   copy: {
     body: string;
@@ -83,61 +107,44 @@ export function buildShellEnvFailureReport(
     body: copy.body,
     dedupeKey: shellEnvFailureDedupeKey(bootId),
     kind: "channel.health",
-    severity: "warning",
+    severity: "info",
     source: "host",
+    suppressToast: true,
     title: copy.title,
     titleKey: TITLE_KEY,
     trigger: "system-event",
   };
 }
 
+/**
+ * Product default: process-once structured log only.
+ * Settings → Terminal reads host diagnostics for user-facing status.
+ */
 export function createShellEnvFailureNotify(
   deps: ShellEnvFailureNotifyDeps
 ): ShellEnvFailureNotifyController {
-  let pendingDiagnostics: ProcessEnvironmentDiagnostics | null = null;
-  let delivered = false;
-  let delivering = false;
-
-  function tryDeliver(): void {
-    if (delivered || delivering || !pendingDiagnostics) {
-      return;
-    }
-    if (deps.getFocusedWindow() == null) {
-      return;
-    }
-    delivering = true;
-    Promise.resolve()
-      .then(async () => {
-        const copy = await deps.resolveCopy();
-        if (delivered || !pendingDiagnostics) {
-          return;
-        }
-        if (deps.getFocusedWindow() == null) {
-          return;
-        }
-        deps.ingest(buildShellEnvFailureReport(copy, deps.bootId));
-        delivered = true;
-        pendingDiagnostics = null;
-      })
-      .catch((err: unknown) => {
-        log.warn("shell env failure notify failed", { err });
-      })
-      .finally(() => {
-        delivering = false;
-      });
-  }
+  let logged = false;
 
   return {
     onShellEnvFailed(diagnostics) {
-      if (delivered) {
+      if (logged) {
         return;
       }
-      pendingDiagnostics = diagnostics;
-      tryDeliver();
+      logged = true;
+      log.warn("shell environment degraded; using process env", {
+        bootId: deps.bootId,
+        cwd: diagnostics.cwd,
+        dumpMode: diagnostics.dumpMode,
+        error: diagnostics.error,
+        shell: diagnostics.shell,
+        source: diagnostics.source,
+      });
     },
-    tryDeliver,
-    isPending: () => pendingDiagnostics !== null && !delivered,
-    wasDelivered: () => delivered,
+    tryDeliver() {
+      // Intentionally empty: no NCS / toast delivery in product default.
+    },
+    isPending: () => false,
+    wasDelivered: () => logged,
   };
 }
 

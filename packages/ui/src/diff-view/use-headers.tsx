@@ -3,6 +3,7 @@ import { type RefObject, useCallback, useEffect, useRef } from "react";
 import type { PierDiffViewLabels } from "./collapse.tsx";
 import type { DiffViewCollapseAllIntent } from "./collapse-intent.ts";
 import type { DiffMetrics } from "./geometry.ts";
+import type { PierDriftCommentLabels } from "./gutter/gutter-comments.tsx";
 import {
   composedHtmlPath,
   findHeaderFromPath,
@@ -13,7 +14,6 @@ import {
   USER_SCROLL_INTENT_GESTURE_MS,
   USER_SCROLL_KEYS,
 } from "./header-events.ts";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import type { DiffViewInputStore } from "./input-store.ts";
 import type { ParsedItemCacheEntry, PierDiffCodeViewItem } from "./items.ts";
 import {
@@ -22,6 +22,7 @@ import {
 } from "./layout-apply.ts";
 import { LiveHeaderMetadata, LiveHeaderPrefix } from "./live-headers.tsx";
 import { pierDiffItemPresentation } from "./presentation.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 import type {
   DiffViewCollapsedItemState,
   DiffViewRenderItemIdentity,
@@ -35,7 +36,7 @@ export function useDiffViewHeaders(options: {
   readonly auditVisibleItems: () => void;
   readonly bumpItemEpoch: () => void;
   readonly codeViewItems: PierDiffCodeViewItem[];
-  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
+  readonly codeViewRef: RefObject<CodeViewHandle<PierDiffAnnotationMetadata> | null>;
   readonly collapseAllIntentRef: RefObject<DiffViewCollapseAllIntent>;
   readonly collapsedItemsRef: RefObject<
     Map<string, DiffViewCollapsedItemState>
@@ -44,10 +45,13 @@ export function useDiffViewHeaders(options: {
   readonly inputStore: DiffViewInputStore;
   /** 用户是否主动收起了该槽（区别于 estimate 的技术默认折叠）。 */
   readonly isUserCollapsed: (itemId: string) => boolean;
+  readonly driftCommentLabels?: PierDriftCommentLabels | undefined;
   readonly labels: PierDiffViewLabels;
   /** 唯一几何 metrics；单槽折叠后与 collapse-all 同路径钉 H/S。 */
   readonly metrics: DiffMetrics;
   readonly onDiscardFile?: ((itemId: string) => void) | undefined;
+  /** drift 评论 chip 点击（host 打开线程卡，仅传 threadId）。 */
+  readonly onDriftCommentActivate?: ((threadId: string) => void) | undefined;
   readonly onOpenFile?: ((itemId: string) => void) | undefined;
   readonly onRetryItem?: ((itemId: string) => void) | undefined;
   readonly onToggleStage?: ((itemId: string) => void) | undefined;
@@ -90,10 +94,12 @@ export function useDiffViewHeaders(options: {
     collapsedItemsRef,
     expectItemRender,
     inputStore,
+    driftCommentLabels,
     isUserCollapsed,
     labels,
     metrics,
     onDiscardFile,
+    onDriftCommentActivate,
     onOpenFile,
     onRetryItem,
     onToggleStage,
@@ -347,13 +353,25 @@ export function useDiffViewHeaders(options: {
           inputStore={inputStore}
           item={item}
           labels={labels}
+          {...(driftCommentLabels === undefined ? {} : { driftCommentLabels })}
           {...(onDiscardFile === undefined ? {} : { onDiscardFile })}
+          {...(onDriftCommentActivate === undefined
+            ? {}
+            : { onDriftCommentActivate })}
           {...(onRetryItem === undefined ? {} : { onRetryItem })}
           {...(onToggleStage === undefined ? {} : { onToggleStage })}
         />
       );
     },
-    [inputStore, labels, onDiscardFile, onRetryItem, onToggleStage]
+    [
+      driftCommentLabels,
+      inputStore,
+      labels,
+      onDiscardFile,
+      onDriftCommentActivate,
+      onRetryItem,
+      onToggleStage,
+    ]
   );
   return {
     handleCodeViewScroll,

@@ -61,15 +61,12 @@ export function classifyAgentNotificationEvent(args: {
 /**
  * 聚焦抑制（薄封装 → shared `shouldSilenceAgentInterrupt` 单一语义）。
  * ready 看 turnNotifyMode（窗口 unfocused / 面板 panel-unfocused / always / off）；
- * waiting/error 看目标 panel + suppressWhenFocused。
+ * waiting/error：目标 panel 聚焦时产品固化静音。
  * enabled / enableErrorAttention 由 classify 负责，此处假定事件已允许产生。
  */
 export function shouldSuppressAgentNotification(args: {
   kind: AgentNotificationEventKind;
-  settings: Pick<
-    AgentAttentionSettings,
-    "suppressWhenFocused" | "turnNotifyMode"
-  >;
+  settings: Pick<AgentAttentionSettings, "turnNotifyMode">;
   isTargetPanelFocused: boolean;
   isOwnerWindowFocused: boolean;
 }): boolean {
@@ -83,7 +80,6 @@ export function shouldSuppressAgentNotification(args: {
           cooldownMs: 0,
           enableErrorAttention: true,
           enabled: true,
-          suppressWhenFocused: settings.suppressWhenFocused,
           turnNotifyMode: settings.turnNotifyMode,
         },
       },
@@ -102,7 +98,6 @@ export function shouldSuppressAgentNotification(args: {
         // 聚焦抑制测试路径：不让 enabled 门挡住
         enableErrorAttention: true,
         enabled: true,
-        suppressWhenFocused: settings.suppressWhenFocused,
         turnNotifyMode: settings.turnNotifyMode,
       },
     },

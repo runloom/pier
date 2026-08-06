@@ -69,6 +69,16 @@ function publish(
     }
   } else {
     activeTerminalPanelId = null;
+    // Keyboard base 已是 web，但 presentation 可能仍短暂带着旧终端 id
+    //（syncActivePanelScope 先改 basePanel，presentation 走 rAF）。
+    // 清掉残留终端 activePanelId，保持与 activeTerminalPanelId=null 一致；
+    // NCS panel-unfocused 主信号是 activeTerminalPanelId，此处为 snapshot 卫生。
+    if (
+      activePanelId !== null &&
+      terminals.some((entry) => entry.panelId === activePanelId)
+    ) {
+      activePanelId = null;
+    }
   }
 
   // Presentation-only: skip no-op geometry republishes (Enter flash). Input

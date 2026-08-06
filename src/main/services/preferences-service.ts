@@ -35,6 +35,7 @@ const PATCHABLE_KEYS = [
   "agentInstallCommands",
   "agentPermissionMode",
   "agentStatusHooks",
+  "agentUninstallCommands",
   "agentUpdateCommands",
   "defaultAgentId",
   "disabledAgentIds",

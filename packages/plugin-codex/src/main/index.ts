@@ -32,6 +32,9 @@ export const plugin: MainPluginModule = {
       logger: context.logger,
       processEnv: context.processEnv,
       resolveProcessEnv: context.resolveProcessEnv,
+      ...(context.resolveUserCommand
+        ? { resolveUserCommand: context.resolveUserCommand }
+        : {}),
     });
     const managedBaseDir = join(context.paths.workDir, "runtime-homes");
     // TTL-based lease registry: renderer leases carry per-mount unique ids

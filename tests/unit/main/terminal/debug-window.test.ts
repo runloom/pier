@@ -162,9 +162,11 @@ describe("terminal debug window IPC", () => {
       expect(electronMock.showMessageBox).toHaveBeenCalledOnce()
     );
     expect(error).toHaveBeenCalledWith(
-      "[pier-preload-error]",
-      "/missing/preload.cjs",
-      "preload failed"
+      "[renderer.failure]",
+      "preload-error",
+      expect.objectContaining({
+        preloadPath: "/missing/preload.cjs",
+      })
     );
   });
 

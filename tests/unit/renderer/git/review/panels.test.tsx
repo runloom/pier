@@ -195,6 +195,7 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
           }
           return result;
         },
+        scrollToLine: () => true,
         selectAll: () => false,
         setAllCollapsed: () => undefined,
         setScrollTop: () => false,
@@ -525,6 +526,10 @@ function pluginContext(input: {
         configured: false,
         label: "",
       })),
+    },
+    comments: {
+      snapshot: vi.fn(async () => null),
+      watch: vi.fn(() => () => undefined),
     },
     configuration: {
       get: vi.fn(() => undefined),

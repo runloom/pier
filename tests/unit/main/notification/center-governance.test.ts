@@ -55,6 +55,25 @@ describe("notification-center main module boundary", () => {
   });
 });
 
+describe("notification-center agent panel focus signal", () => {
+  it("IPC isTargetPanelFocused uses activeTerminalPanelId via pure helper", () => {
+    const ipc = readFileSync(
+      join(ROOT, "src/main/ipc/notification-center.ts"),
+      "utf8"
+    );
+    const helper = readFileSync(
+      join(ROOT, "src/main/ipc/notification-center-agent-focus.ts"),
+      "utf8"
+    );
+    expect(helper).toContain("activeTerminalPanelId === input.panelId");
+    expect(helper).not.toContain("activePanelId");
+    expect(ipc).toContain("isTargetAgentPanelFocused");
+    expect(ipc).toContain(
+      "terminalFocusCoordinator.activeTerminalPanelId(focused)"
+    );
+  });
+});
+
 describe("agent-attention no longer owns OS delivery", () => {
   const ATTENTION_DIR = join(
     ROOT,

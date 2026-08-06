@@ -58,6 +58,9 @@ describe("ShellEnvironmentBlock", () => {
     expect(
       screen.getByText("settings.shellEnvironment.status.resolved")
     ).toBeInTheDocument();
+    // 成功态不展示实现诊断（shell 路径 / 耗时 / dump 方式 / PATH 差分）。
+    expect(screen.queryByText(/\/bin\/zsh/)).toBeNull();
+    expect(screen.queryByText(/ms/i)).toBeNull();
     expect(
       screen.getByRole("button", {
         name: "settings.shellEnvironment.refresh",
@@ -65,6 +68,22 @@ describe("ShellEnvironmentBlock", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByLabelText("settings.shellEnvironment.disabled")
+    ).toBeInTheDocument();
+  });
+
+  it("shows plain-language skip reason when shell env is skipped", () => {
+    useShellEnvironmentStore.setState({
+      hostStatus: {
+        disabled: true,
+        platform: "darwin",
+        shellEnvStatus: "skipped",
+        skipReason: "disabled",
+        timeoutMs: 10_000,
+      },
+    });
+    render(<ShellEnvironmentBlock />);
+    expect(
+      screen.getByText("settings.shellEnvironment.skipReason.disabled")
     ).toBeInTheDocument();
   });
 

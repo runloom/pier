@@ -1,9 +1,13 @@
 import { userInfo } from "node:os";
+import { createLogger } from "@shared/logger.ts";
 import { applyHostProcessEnv } from "./apply-host-env.ts";
 import { cleanEnv, mergeEnv } from "./clean-env.ts";
+import { clearUserCommandResolveCache } from "./resolve-user-command.ts";
+import { isLaunchedFromCli } from "./shell-env-cli.ts";
 import {
   createDefaultShellEnvironmentLoader,
   DEFAULT_SHELL_ENV_TIMEOUT_MS,
+  resolveShellDumpCwd,
 } from "./shell-env-loader.ts";
 import type {
   CreateProcessEnvironmentServiceOptions,
@@ -14,6 +18,7 @@ import type {
   ProcessEnvironmentService,
   ShellEnvDumpMode,
   ShellEnvironmentLoadRequest,
+  ShellEnvSkipReason,
 } from "./types.ts";
 
 export type {
@@ -21,6 +26,7 @@ export type {
   ProcessEnvironmentService,
 } from "./types.ts";
 
+const log = createLogger("process-env");
 const NEGATIVE_CACHE_TTL_MS = 30_000;
 
 interface NegativeCacheEntry {
@@ -31,9 +37,11 @@ interface NegativeCacheEntry {
 interface ResolvedShellLayer {
   cacheHit: boolean;
   dumpMode?: ShellEnvDumpMode | undefined;
+  durationMs?: number | undefined;
   env: Environment;
   error?: string | undefined;
   shellEnvStatus: ProcessEnvironmentDiagnostics["shellEnvStatus"];
+  skipReason?: ShellEnvSkipReason | undefined;
 }
 
 function cacheKey(cwd: string | undefined, shell: string): string {
@@ -64,7 +72,8 @@ function warnDiagnostics(diagnostics: ProcessEnvironmentDiagnostics): void {
   if (diagnostics.shellEnvStatus !== "failed") {
     return;
   }
-  console.warn("[process-env] shell environment failed", {
+  // Structured log → diagnostics jsonl (console.warn was invisible in support).
+  log.warn("shell environment failed", {
     cwd: diagnostics.cwd,
     dumpMode: diagnostics.dumpMode,
     error: diagnostics.error,
@@ -135,6 +144,9 @@ export function createProcessEnvironmentService({
         negativeCache.delete(key);
         return {
           cacheHit: false,
+          ...(result.durationMs === undefined
+            ? {}
+            : { durationMs: result.durationMs }),
           dumpMode: result.dumpMode,
           env,
           shellEnvStatus: "resolved",
@@ -146,12 +158,14 @@ export function createProcessEnvironmentService({
         return { cacheHit: false, env: {}, shellEnvStatus: "skipped" };
       }
       const message = error instanceof Error ? error.message : String(error);
+      const durationMs = (error as Error & { durationMs?: number }).durationMs;
       negativeCache.set(key, {
         error: message,
         until: Date.now() + NEGATIVE_CACHE_TTL_MS,
       });
       const failedLayer: ResolvedShellLayer = {
         cacheHit: false,
+        ...(durationMs === undefined ? {} : { durationMs }),
         env: {},
         error: message,
         shellEnvStatus: "failed",
@@ -179,14 +193,64 @@ export function createProcessEnvironmentService({
   async function resolveShellEnv(
     request: ProcessEnvironmentResolveRequest
   ): Promise<ResolvedShellLayer> {
-    if (platform === "win32" || !shell) {
-      return { cacheHit: false, env: {}, shellEnvStatus: "skipped" };
+    if (platform === "win32") {
+      return {
+        cacheHit: false,
+        env: {},
+        shellEnvStatus: "skipped",
+        skipReason: "windows",
+      };
+    }
+    if (!shell) {
+      return {
+        cacheHit: false,
+        env: {},
+        shellEnvStatus: "skipped",
+        skipReason: "no-shell",
+      };
     }
     if (isDisabled?.()) {
-      return { cacheHit: false, env: {}, shellEnvStatus: "skipped" };
+      return {
+        cacheHit: false,
+        env: {},
+        shellEnvStatus: "skipped",
+        skipReason: "disabled",
+      };
+    }
+    // VS Code: skip dump when launched from CLI (env already complete).
+    if (isLaunchedFromCli(baseEnv)) {
+      return {
+        cacheHit: false,
+        env: {},
+        shellEnvStatus: "skipped",
+        skipReason: "cli",
+      };
     }
 
-    const key = cacheKey(request.cwd, shell);
+    // Unexpanded placeholders (`$ZED_WORKTREE_ROOT`) are not real paths;
+    // Node reports misleading "spawn shell ENOENT". Prefer HOME or omit.
+    // Loader still validates missing real directories via resolveShellDumpCwd.
+    let shellRequest = request;
+    if (shellRequest.cwd?.includes("$")) {
+      const home =
+        baseEnv.HOME ??
+        (() => {
+          try {
+            return userInfo().homedir;
+          } catch {
+            return;
+          }
+        })();
+      const safeCwd = resolveShellDumpCwd(undefined, home);
+      if (safeCwd) {
+        shellRequest = { ...shellRequest, cwd: safeCwd };
+      } else {
+        const { cwd: _drop, ...rest } = shellRequest;
+        shellRequest = rest;
+      }
+    }
+
+    const key = cacheKey(shellRequest.cwd, shell);
     const cached = successCache.get(key);
     if (cached) {
       return { cacheHit: true, env: cached, shellEnvStatus: "cached" };
@@ -208,9 +272,11 @@ export function createProcessEnvironmentService({
     const loadGeneration = generation;
     let pending = inFlight.get(key);
     if (!pending) {
-      pending = loadShellLayer(request, key, loadGeneration).finally(() => {
-        inFlight.delete(key);
-      });
+      pending = loadShellLayer(shellRequest, key, loadGeneration).finally(
+        () => {
+          inFlight.delete(key);
+        }
+      );
       inFlight.set(key, pending);
     }
 
@@ -231,12 +297,16 @@ export function createProcessEnvironmentService({
     return {
       cacheHit: shellEnv.cacheHit,
       ...(request.cwd ? { cwd: request.cwd } : {}),
+      ...(shellEnv.durationMs === undefined
+        ? {}
+        : { durationMs: shellEnv.durationMs }),
       ...(shellEnv.dumpMode ? { dumpMode: shellEnv.dumpMode } : {}),
       ...(shellEnv.error ? { error: shellEnv.error } : {}),
       ...(hostAppliedStatus ? { hostAppliedStatus } : {}),
       pathChanged: baseEnv.PATH !== env.PATH,
       ...(shell ? { shell } : {}),
       shellEnvStatus: shellEnv.shellEnvStatus,
+      ...(shellEnv.skipReason ? { skipReason: shellEnv.skipReason } : {}),
       source: request.source,
     };
   }
@@ -273,6 +343,7 @@ export function createProcessEnvironmentService({
       successCache.clear();
       negativeCache.clear();
       inFlight.clear();
+      clearUserCommandResolveCache();
       if (!(opts?.reapplyHost && shell) || platform === "win32") {
         return hostDiagnostics;
       }

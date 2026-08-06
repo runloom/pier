@@ -41,8 +41,16 @@ describe("agent lifecycle specs", () => {
     expect(
       getAgentLifecycleSpec("goose").update.some((c) => c.kind === "self")
     ).toBe(true);
+    // droid/amp/mimo: self-update exits 0 or fails for common install methods;
+    // package-manager / reinstall channels are the reliable path.
     expect(
-      getAgentLifecycleSpec("droid").update.some((c) => c.kind === "self")
+      getAgentLifecycleSpec("droid").update.every((c) => c.kind !== "self")
+    ).toBe(true);
+    expect(
+      getAgentLifecycleSpec("amp").update.every((c) => c.kind !== "self")
+    ).toBe(true);
+    expect(
+      getAgentLifecycleSpec("mimo-code").update.every((c) => c.kind !== "self")
     ).toBe(true);
     expect(
       getAgentLifecycleSpec("autohand").update.some((c) => c.kind === "self")
@@ -57,15 +65,30 @@ describe("agent lifecycle specs", () => {
       "update",
       "--self",
     ]);
-    // kimi upgrade is interactive — must not be primary automation path
+    // kimi: official is uv (kimi-cli); no interactive self-upgrade as primary
     expect(
       getAgentLifecycleSpec("kimi").update.every((c) => c.kind !== "self")
+    ).toBe(true);
+    expect(
+      getAgentLifecycleSpec("kimi").install.some(
+        (c) => c.kind === "uv" && c.package === "kimi-cli"
+      )
+    ).toBe(true);
+    expect(
+      getAgentLifecycleSpec("kimi").update.some((c) => c.kind === "uv-upgrade")
     ).toBe(true);
 
     // Official docs do not support Homebrew for kiro-cli
     expect(
       getAgentLifecycleSpec("kiro").install.every((c) => c.kind !== "brew")
     ).toBe(true);
+    // Prefer non-interactive self-update (install script needs /dev/tty to replace)
+    const kiroSelf = getAgentLifecycleSpec("kiro").update.find(
+      (c) => c.kind === "self"
+    );
+    expect(
+      kiroSelf && kiroSelf.kind === "self" ? [...kiroSelf.argv] : null
+    ).toEqual(["update", "--non-interactive"]);
     expect(
       getAgentLifecycleSpec("copilot").update.some((c) => c.kind === "self")
     ).toBe(true);
@@ -159,6 +182,8 @@ describe("agent lifecycle specs", () => {
     );
 
     const cursor = getAgentLifecycleSpec("cursor");
+    // Reinstall (script) must be primary — self update requires auth.
+    expect(cursor.update[0]?.kind).toBe("reinstall");
     expect(cursor.update.some((c) => c.kind === "self")).toBe(true);
   });
 

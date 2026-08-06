@@ -4,6 +4,7 @@ import type { PlannedPlan } from "./plan/types.ts";
 import {
   buildGuideCommands,
   buildInstallPlan,
+  buildUninstallPlan,
   buildUpdatePlan,
 } from "./plan.ts";
 import { getAgentLifecycleSpec } from "./specs/index.ts";
@@ -37,24 +38,36 @@ export function defaultCommandsFor(
   defaultBinPath?: string | null
 ): {
   defaultInstallCommand: string | null;
+  defaultUninstallCommand: string | null;
   defaultUpdateCommand: string | null;
 } {
+  const empty = {
+    defaultInstallCommand: null,
+    defaultUninstallCommand: null,
+    defaultUpdateCommand: null,
+  } as const;
   const spec = getAgentLifecycleSpec(agentId);
   if (spec.support !== "full") {
-    return { defaultInstallCommand: null, defaultUpdateCommand: null };
+    return { ...empty };
   }
   const host = hostKind();
-  // Match install/update defaults to detected install source when known.
-  const installPlan = buildInstallPlan(spec, host, {
-    ...(installSource ? { installSource } : {}),
-  });
+  // Match install/update/uninstall defaults to detected install source when known.
+  const sourceOpts = installSource ? { installSource } : {};
+  const binOpts = defaultBinPath ? { defaultBinPath } : {};
+  const installPlan = buildInstallPlan(spec, host, sourceOpts);
   const updatePlan = buildUpdatePlan(spec, {
     host,
-    ...(installSource ? { installSource } : {}),
-    ...(defaultBinPath ? { defaultBinPath } : {}),
+    ...sourceOpts,
+    ...binOpts,
+  });
+  const uninstallPlan = buildUninstallPlan(spec, {
+    host,
+    ...sourceOpts,
+    ...binOpts,
   });
   return {
     defaultInstallCommand: primaryPlanCommand(installPlan),
+    defaultUninstallCommand: primaryPlanCommand(uninstallPlan),
     defaultUpdateCommand: primaryPlanCommand(updatePlan),
   };
 }

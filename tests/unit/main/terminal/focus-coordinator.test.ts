@@ -434,6 +434,30 @@ describe("TerminalFocusCoordinator", () => {
     expect(coordinator.readDebug(win).lastError).toBeNull();
   });
 
+  it("exposes activeTerminalPanelId for NCS panel-unfocused silence", () => {
+    const { win } = createWindow();
+    const { addon } = createAddon();
+    coordinator.configureNativeAddon(addon);
+
+    expect(coordinator.activeTerminalPanelId(win)).toBeNull();
+    expect(coordinator.activePanelId(win)).toBeNull();
+
+    coordinator.acceptRendererSnapshot(win, terminalSnapshot());
+    expect(coordinator.activeTerminalPanelId(win)).toBe("terminal-1");
+    expect(coordinator.activePanelId(win)).toBe("terminal-1");
+
+    coordinator.acceptRendererSnapshot(
+      win,
+      terminalSnapshot(2, {
+        activePanelId: "files-1",
+        activeTerminalPanelId: null,
+        basePanel: { kind: "web" },
+      })
+    );
+    expect(coordinator.activeTerminalPanelId(win)).toBeNull();
+    expect(coordinator.activePanelId(win)).toBe("files-1");
+  });
+
   it("records a first invalid snapshot without installing desired state", () => {
     const { win } = createWindow();
     const { addon, applyTerminalWindowState } = createAddon();

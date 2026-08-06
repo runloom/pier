@@ -41,14 +41,17 @@ export const settingsAgents = {
     websiteOpenFailedTitle: "Unable to open website",
     install: "Install",
     update: "Update",
+    uninstall: "Uninstall",
     cancel: "Cancel",
     copyInstallCommand: "Copy install command",
     copyInstallCommandSuccess: "Install command copied",
     copyInstallCommandFailed: "Couldn't copy install command",
     installFailed: "Couldn't install agent",
     updateFailed: "Couldn't update agent",
+    uninstallFailed: "Couldn't uninstall agent",
     installBusy: "Installing",
     updateBusy: "Updating",
+    uninstallBusy: "Uninstalling",
     queueBusy: "Queued",
     /** Multi-step only: "2/3" */
     busyStep: "{{current}}/{{total}}",
@@ -58,11 +61,26 @@ export const settingsAgents = {
     rowInstallFailedWithStep: "Install failed ({{step}})",
     rowUpdateFailed: "Update failed",
     rowUpdateFailedWithStep: "Update failed ({{step}})",
+    rowUninstallFailed: "Uninstall failed",
+    rowUninstallPartial: "Default install removed; others still detected",
     alreadyInstalled: "Already installed",
     conflictConfirmTitle: "Multiple installs found",
     conflictConfirmBody:
       "Only the install currently used by default will be updated. Other locations stay unchanged.",
     conflictConfirmContinue: "Update default",
+    uninstallConfirmTitle: "Uninstall this agent?",
+    uninstallConfirmBody:
+      "Removes “{{name}}” from this Mac ({{source}}: {{path}}). Chat and local settings stay. A running terminal session may stop.",
+    uninstallConfirmBodyNameOnly:
+      "Removes “{{name}}” from this Mac. Chat and local settings stay. A running terminal session may stop.",
+    /** Appended when probe.isConflict (design §9.3); mirrors update conflict tone. */
+    uninstallConfirmConflictNote:
+      "Only the install currently used by default will be removed. Other locations stay unchanged.",
+    uninstallConfirmContinue: "Uninstall",
+    uninstallSuccess: "Uninstalled {{name}}",
+    uninstallSkipped: "Not installed",
+    uninstallUnsupported:
+      "This install method can't be uninstalled automatically. Add a custom command below, or open the website.",
   },
   lifecycle: {
     version: "Version",
@@ -78,7 +96,7 @@ export const settingsAgents = {
       no_command:
         "No install command is configured for this agent on your system.",
       command_failed:
-        "The install or update command failed. See details below.",
+        "The install, update, or uninstall command failed. See details below.",
       version_unchanged:
         "The version didn't change. Another install may still be in use.",
       not_runnable:
@@ -86,14 +104,15 @@ export const settingsAgents = {
       not_found_after_install:
         "Install finished, but the command still wasn't found. Refresh the list or open a new terminal.",
       already_installed: "This agent is already installed.",
-      busy: "An install or update for this agent is already running.",
-      cancelled: "Install or update was cancelled.",
+      busy: "An install, update, or uninstall for this agent is already running.",
+      cancelled: "Install, update, or uninstall was cancelled.",
       timeout:
-        "Install or update timed out. Try again when the network is stable.",
+        "Install, update, or uninstall timed out. Try again when the network is stable.",
       env_unavailable:
         "Couldn't prepare the shell environment. Refresh and try again.",
       package_manager_missing:
         "A required package manager (npm, Homebrew, pipx, or uv) was not found. Install one, then try again.",
+      still_detected: "Uninstall finished, but the agent is still detected.",
     },
   },
   row: {
@@ -101,30 +120,35 @@ export const settingsAgents = {
     detectCmd: "Detect command",
     expectedProcess: "Process",
     commandOverride: "Command override",
-    commandOverrideDesc: "Override the agent binary path",
+    commandOverrideDesc: "Custom executable path for this agent",
     args: "Launch args",
     argsDesc: "Args appended to the launch command",
     installCommand: "Install command",
     installCommandDesc:
-      "Shell command for one-click install. Leave empty to use Pier’s default (from official / package-manager channels).",
+      "Shell command for one-click install. Leave empty for Pier’s default.",
     installCommandPlaceholder: "Leave empty for Pier’s default install steps",
     updateCommand: "Update command",
     updateCommandDesc:
-      "Shell command for one-click update. Leave empty to use Pier’s default (matched to how this CLI was installed).",
+      "Shell command for one-click update. Leave empty for Pier’s default.",
     updateCommandPlaceholder: "Leave empty for Pier’s default update steps",
-    env: "Launch environment",
-    envDesc: "Environment variables applied to this agent",
+    uninstallCommand: "Uninstall command",
+    uninstallCommandDesc:
+      "Shell command for one-click uninstall. Leave empty for Pier’s default.",
+    uninstallCommandPlaceholder:
+      "Leave empty for Pier’s default uninstall steps",
+    env: "Extra environment variables",
+    envDesc: "Variables added when launching this agent",
   },
   sessionTitleRefine: {
     label: "Name sessions automatically",
     description:
-      "After the first exchange, rewrite the tab title into a closer task name. When off, sessions are still named from your first message — no agent is called and no quota is spent.",
+      "After the first reply, rename the tab to match the task. When off, the first message is used as the name.",
     failed: "Could not update session naming",
   },
   statusHooks: {
     label: "Agent status alerts",
     description:
-      "Show live agent run or wait status in panels. Turning this off removes Pier’s status reporting and “Needs you” system notifications. Multiple Pier versions share one on-device hook runtime (newer wins); quitting the app does not uninstall hooks. If Codex asks to review hooks, choose Trust all and continue — usually once is enough.",
+      "Show run/wait status in panels and send attention alerts. Turn off to silence both.",
     failed: "Could not update agent status alerts",
   },
 } as const;

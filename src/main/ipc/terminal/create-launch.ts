@@ -8,35 +8,53 @@ import type {
   CreateTerminalArgs,
   TerminalAgentPanelMetadata,
 } from "@shared/contracts/terminal.ts";
+import {
+  agentShellCommandFlags,
+  buildResolvedAgentSurfaceCommand,
+  extractBareCommandName,
+  isAlreadyShellWrappedCommand as isShellCommandWrapped,
+  PANEL_COMMAND_RESOLVE_TIMEOUT_MS,
+  quoteShellArg,
+  resolveUserCommand,
+  resolveWrapperShell,
+} from "../../services/process-environment/resolve-user-command.ts";
 import { terminalLaunchRegistry } from "../../state/terminal-launch-state.ts";
 import type { TerminalPanelSession } from "../../state/terminal-session-state.ts";
 
-const SHELL_SAFE_RE = /^[A-Za-z0-9_./:@%+=,-]+$/;
 const RESTORED_TASK_SHELL_FALLBACK = "/bin/zsh";
-/** Already a shell/-c invocation or Ghostty shell:/direct: prefix — do not wrap again. */
-const ALREADY_SHELL_WRAPPED_RE =
-  /^(?:shell:|direct:|\/bin\/(?:ba)?sh\s+-l?c\s+)/u;
+/** Ghostty surface prefixes — do not wrap again. */
+const GHOSTTY_COMMAND_PREFIX_RE = /^(?:shell:|direct:)/u;
 
-function shellQuote(value: string): string {
-  if (SHELL_SAFE_RE.test(value)) {
-    return value;
+export {
+  agentShellCommandFlags,
+  resolveWrapperShell as resolveAgentWrapperShell,
+} from "../../services/process-environment/resolve-user-command.ts";
+
+export function isAlreadyShellWrappedCommand(command: string): boolean {
+  const trimmed = command.trim();
+  if (!trimmed) {
+    return false;
   }
-  return `'${value.replaceAll("'", "'\\''")}'`;
+  if (GHOSTTY_COMMAND_PREFIX_RE.test(trimmed)) {
+    return true;
+  }
+  return isShellCommandWrapped(trimmed);
 }
 
 /**
- * macOS Ghostty starts surface `command` as a login shell (argv0 = "-basename").
- * That breaks some Node SEA agent CLIs (e.g. GitHub Copilot reports
- * `-copilot: bad option: -copilot`). Run the agent under `/bin/sh -lc` so the
- * login prefix applies to sh, not the agent binary. Idempotent for already-
- * wrapped commands and Ghostty `shell:` / `direct:` prefixes.
+ * Sync fallback wrap (`$SHELL -lic`). Product agent path uses async
+ * {@link withAgentLoginShellSafeCommand} (resolve absolute / via-shell + sticky).
  */
-export function wrapAgentTerminalCommand(command: string): string {
+export function wrapAgentTerminalCommand(
+  command: string,
+  shellPath?: string
+): string {
   const trimmed = command.trim();
-  if (!trimmed || ALREADY_SHELL_WRAPPED_RE.test(trimmed)) {
+  if (!trimmed || isAlreadyShellWrappedCommand(trimmed)) {
     return trimmed;
   }
-  return `/bin/sh -lc ${shellQuote(trimmed)}`;
+  const shell = shellPath ?? resolveWrapperShell();
+  return `${quoteShellArg(shell)} ${agentShellCommandFlags(shell)} ${quoteShellArg(trimmed)}`;
 }
 
 function restoredTaskResultCommand(task: TaskPanelMetadata): string {
@@ -54,11 +72,12 @@ function restoredTaskResultCommand(task: TaskPanelMetadata): string {
       ? process.env.SHELL
       : RESTORED_TASK_SHELL_FALLBACK;
   const script = [
-    ...lines.map((line) => `printf '%s\\n' ${shellQuote(line)}`),
+    ...lines.map((line) => `printf '%s\\n' ${quoteShellArg(line)}`),
     "printf '\\n'",
-    `exec ${shellQuote(restoredShell)} -l`,
+    `exec ${quoteShellArg(restoredShell)} -l`,
   ].join("; ");
-  return `/bin/sh -lc ${shellQuote(script)}`;
+  // P2: tasks stay /bin/sh -lc (env-only contract; not agent resolve path).
+  return `/bin/sh -lc ${quoteShellArg(script)}`;
 }
 
 function restoredTaskLaunchOptions(
@@ -77,8 +96,7 @@ export function nativeLaunchOptions(
   options: { restoredSession?: boolean } = {}
 ): ResolvedTerminalLaunchOptions | undefined {
   // Keep logical agent command unwrapped here: this object is also persisted
-  // for resume adapters (`agent.launch.command`). Login-shell wrap is last-mile
-  // only — see `withAgentLoginShellSafeCommand`.
+  // for resume adapters (`agent.launch.command`). Spawn wrap is last-mile only.
   const nativeLaunch = {
     ...(options.restoredSession
       ? {}
@@ -93,18 +111,54 @@ export function nativeLaunchOptions(
 }
 
 /**
- * Last-mile wrap before Ghostty create. Apply on every agent spawn (fresh,
- * restored, resume) so login argv0 is not the agent binary. Do not persist the
- * result into session/registry.
+ * Last-mile agent surface command (async, gold standard).
+ *
+ * 1. `launch.env` already has PES layers (shell → project → explicit).
+ * 2. Resolve bare name via user interactive shell (functions / aliases).
+ * 3. absolute → `/bin/sh -c 'exec /abs …'` (no second full rc for process life).
+ * 4. via-shell → `$SHELL -lic` + sticky host-apply exports after rc (L5 layers).
  */
-export function withAgentLoginShellSafeCommand(
+export async function withAgentLoginShellSafeCommand(
   launch: ResolvedTerminalLaunchOptions | undefined,
   agentId: AgentKind | undefined
-): ResolvedTerminalLaunchOptions | undefined {
+): Promise<ResolvedTerminalLaunchOptions | undefined> {
   if (!(launch && agentId && launch.command)) {
     return launch;
   }
-  const command = wrapAgentTerminalCommand(launch.command);
+  const trimmed = launch.command.trim();
+  if (!trimmed || isAlreadyShellWrappedCommand(trimmed)) {
+    return launch;
+  }
+
+  const env = launch.env ?? {};
+  const shell = resolveWrapperShell(env);
+  const bare = extractBareCommandName(trimmed);
+  let resolved: Awaited<ReturnType<typeof resolveUserCommand>>;
+  if (bare?.startsWith("/")) {
+    // Already absolute — thin exec wrap, no interactive probe.
+    resolved = { kind: "absolute", path: bare };
+  } else if (bare) {
+    resolved = await resolveUserCommand({
+      commandName: bare,
+      cwd: launch.cwd,
+      env,
+      shell,
+      timeoutMs: PANEL_COMMAND_RESOLVE_TIMEOUT_MS,
+    });
+  } else {
+    resolved = { kind: "via-shell" };
+  }
+
+  if (resolved.kind === "missing") {
+    resolved = { kind: "via-shell" };
+  }
+
+  const command = buildResolvedAgentSurfaceCommand({
+    commandLine: trimmed,
+    env,
+    resolved,
+    shell,
+  });
   if (command === launch.command) {
     return launch;
   }
@@ -135,8 +189,6 @@ export function resolveCreateTerminalLaunch(
   const context = explicitCreate
     ? (args.context ?? saved?.context)
     : (saved?.context ?? args.context);
-  // Prefer live shell cwd; fall back to project anchors so thin contexts
-  // (e.g. Review → open file with projectRootPath only) still spawn in-repo.
   const cwd =
     context?.cwd ??
     context?.worktreeRoot ??
@@ -149,10 +201,6 @@ export function resolveCreateTerminalLaunch(
   const savedAgent = explicitCreate ? undefined : saved?.agent;
   if (task && !launch) {
     if (options.taskLive) {
-      // reload 重挂路径：native 面保留（swift 对已存在 panelId 纯 reattach,
-      // 忽略 launch spec）——task 元数据原样直通, 不得把 running 强转
-      // cancelled 落盘, 否则真实退出时 patchTaskStatus 的 running 守卫失败,
-      // 终态永久丢失。
       return {
         context,
         nativeLaunch: nativeLaunchOptions(null, cwd, {
@@ -196,10 +244,7 @@ export function consumeCreateLaunch(args: CreateTerminalArgs): void {
 
 /**
  * 每个终端 PTY 注入面板级状态环境变量：PIER_WINDOW_ID + PIER_PANEL_ID 精确
- * 路由 agent hook 事件到「窗口+面板」（panelId 跨窗口不唯一, 见
- * terminal-panel-id.ts；无论 launcher 启动还是用户手敲 claude, shell 子进程
- * 都继承），PIER_AGENT_HOOKS_DIR + PIER_AGENT_EVENT_LOG 指向 JSONL 通路资源
- * (emit 脚本目录 + events.jsonl 路径, 见 hooks-install.ts)。
+ * 路由 agent hook 事件到「窗口+面板」。
  */
 export function withPanelStatusEnv(
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined,

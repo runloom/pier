@@ -7,11 +7,9 @@ export const workspace = {
       "The workspace is unavailable, so its layout could not be saved safely.",
   },
   pluginPanel: {
-    loadingDescription:
-      "The plugin is still loading. This panel will appear here when it is ready.",
+    loadingDescription: "Plugin is loading. Content will appear when ready.",
     loadingTitle: "Loading plugin panel",
-    missingRendererDescription:
-      "This plugin does not provide a displayable panel UI.",
+    missingRendererDescription: "This plugin has no displayable UI.",
     unavailableTitle: "Plugin panel unavailable",
   },
   startupError: {
@@ -34,26 +32,26 @@ export const workspace = {
     unsaved: "Unsaved changes",
   },
   addPanelMenu: {
-    actionFailed: "Couldn’t complete action",
-    detectAgentsFailed: "Couldn’t detect agents",
+    actionFailed: "Couldn't complete action — try again",
+    detectAgentsFailed: "Couldn't detect agents — try again",
     noMatches: "No matching items",
     searchPlaceholder: "Search panel types or agents…",
     title: "Create in this panel group",
-    startAgentFailed: "Couldn’t start agent",
+    startAgentFailed: "Couldn't start agent — try again",
   },
   panelTransfer: {
-    dropFailedTitle: "Couldn’t move the tab",
+    dropFailedTitle: "Couldn't move the tab",
     dropFailedBody:
-      "The tab couldn’t be moved to that window. The original tab is still open.",
+      "Couldn't move to that window. The original tab is still open.",
     dropFailedUnknownComponentBody:
-      "That tab couldn’t be moved to the other window. The original tab is still open.",
-    copyToNewWindowFailed: "Couldn’t copy into a new window",
-    copyToWindowFailed: "Couldn’t copy into that window",
-    moveToNewWindowFailed: "Couldn’t open in a new window",
-    moveToWindowFailed: "Couldn’t move into that window",
+      "Couldn't move to the other window. The original tab is still open.",
+    copyToNewWindowFailed: "Couldn't copy into a new window — try again",
+    copyToWindowFailed: "Couldn't copy into that window — try again",
+    moveToNewWindowFailed: "Couldn't open in a new window — try again",
+    moveToWindowFailed: "Couldn't move into that window — try again",
     emptyWindowDescription: "Empty window",
     noOtherWindows: "Open another window first, then try again.",
-    pickWindowFailed: "Couldn’t list windows",
+    pickWindowFailed: "Couldn't list windows — try again",
     pickWindowPlaceholder: "Search windows…",
     pickWindowTitle: "Choose a Window",
     sameNameIndex: " · {{n}}",
@@ -61,10 +59,10 @@ export const workspace = {
     windowLabel: "Window {{n}}",
     unsupportedTitle: "This tab can’t be moved to another window",
     unsupportedBody:
-      "This kind of tab doesn’t support cross-window moves. It’s still open in its original window.",
+      "This tab type can’t move between windows. It’s still open here.",
     unavailableSourceTitle: "Tab no longer available here",
     unavailableSourceBody:
-      "The tab was moved to another window, but the original couldn’t be removed from this window. Close it manually if needed.",
+      "Moved elsewhere, but the original couldn’t be closed. Close it manually if needed.",
     unavailableTargetTitle: "Tab couldn’t be restored",
     unavailableTargetBody:
       "The tab was moved to this window, but its source isn’t available here. Re-enable the related extension and reload to restore it.",

@@ -9,23 +9,22 @@ export const dialog = {
     activityName: "{{label}} ({{kind}})",
     activitySeparator: ", ",
     cancel: "Cancel",
-    noActivityDetail:
-      "Pier will save the current window layout before quitting.",
+    noActivityDetail: "Window layout is saved before quitting.",
     multipleActivityDetail:
-      "{{activities}} are still running.\nQuitting Pier will terminate them.",
+      "{{activities}} are still running.\nQuitting will stop them.",
     quit: "Quit",
-    shellFallback: "Shell command",
+    shellFallback: "Terminal command",
     singleActivityDetail:
-      "{{activity}} is still running.\nQuitting Pier will terminate it.",
+      "{{activity}} is still running.\nQuitting will stop it.",
     title: "Quit Pier?",
   },
   panelClose: {
     cancel: "Cancel",
     close: "Close Panel",
     multipleActivityDetail:
-      "{{activities}} are still running.\nClosing this panel will terminate them.",
+      "{{activities}} are still running.\nClosing this panel will stop them.",
     singleActivityDetail:
-      "{{activity}} is still running.\nClosing this panel will terminate it.",
+      "{{activity}} is still running.\nClosing this panel will stop it.",
     title: "Close panel?",
   },
   cancel: "Cancel",
@@ -37,8 +36,7 @@ export const dialog = {
     actualSize: "Actual size",
     controlsLabel: "Image controls",
     fit: "Fit to window",
-    loadFailedDescription:
-      "The image could not be loaded or changed after it was opened.",
+    loadFailedDescription: "Couldn't load the image, or it changed after open.",
     loadFailedTitle: "Unable to display image",
     loading: "Loading image",
     title: "Image preview",

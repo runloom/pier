@@ -11,7 +11,7 @@ export const pluginPermissions = {
   "panel:open": "打开面板",
   "panel:read": "读取面板状态",
   "panel:register": "注册面板",
-  "plugin:read": "读取插件清单",
+  "plugin:read": "读取插件信息",
   "plugin:write": "修改插件状态",
   "preferences:read": "读取偏好设置",
   "preferences:write": "修改偏好设置",
@@ -28,6 +28,6 @@ export const pluginPermissions = {
   "workspace:open": "打开工作区面板",
   "workspace:read": "读取工作区状态",
   "workspace:write": "修改工作区状态",
-  "worktree:read": "读取 Git 工作树信息",
+  "worktree:read": "读取 Git 工作树",
   "worktree:write": "创建或删除 Git 工作树",
 } as const;

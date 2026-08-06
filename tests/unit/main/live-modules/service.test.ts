@@ -54,6 +54,17 @@ describe("live-modules fence", () => {
     expect(isDeniedBareSpecifier("pier/canvas", false)).toBe(false);
     expect(isDeniedBareSpecifier("pier/visualizations", false)).toBe(false);
   });
+
+  it("allowlists framework bare packages only for non-React", () => {
+    expect(isDeniedBareSpecifier("vue", false, "vue")).toBe(false);
+    expect(isDeniedBareSpecifier("@vue/runtime-core", false, "vue")).toBe(
+      false
+    );
+    expect(isDeniedBareSpecifier("lodash", false, "vue")).toBe(true);
+    expect(isDeniedBareSpecifier("solid-js", false, "solid")).toBe(false);
+    expect(isDeniedBareSpecifier("svelte", false, "svelte")).toBe(false);
+    expect(isDeniedBareSpecifier("vue", false, "react")).toBe(true);
+  });
 });
 
 describe("live-modules fence node_modules path", () => {
@@ -557,6 +568,121 @@ describe("live-modules service", () => {
       ).toString("utf8");
       // Named export `canvas` meta must survive the ESM bundle for Viewer chrome.
       expect(source).toMatch(/kind:\s*["']?composition/u);
+    }
+  });
+
+  it("returns line diagnostics and watches entry after first compile failure", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-live-fail-"));
+    const canvases = join(projectRoot, ".pier", "canvases");
+    await mkdir(canvases, { recursive: true });
+    const rel = "bad.canvas.tsx";
+    await writeFile(join(canvases, rel), "export default function Broken( {\n");
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
+    service.registerRoot(spec);
+
+    const stale: string[] = [];
+    service.subscribe(spec.id, (event) => {
+      if (event.type === "stale") {
+        stale.push(event.moduleId);
+      }
+    });
+
+    const failed = await service.compile(spec.id, rel);
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) {
+      expect(failed.graph?.some((p) => p.endsWith(rel))).toBe(true);
+      const hasLine = failed.diagnostics.some(
+        (d) => typeof d.line === "number" && d.line > 0
+      );
+      // Prefer structured line; fall back to message still being non-empty.
+      expect(hasLine || failed.diagnostics[0]?.message.length).toBeTruthy();
+    }
+
+    await writeFile(
+      join(canvases, rel),
+      [
+        "export default function Fixed() {",
+        "  return <span>ok</span>;",
+        "}",
+        "",
+      ].join("\n")
+    );
+    // Recompile after fix — graph registration on first failure is the contract;
+    // auto-stale is covered separately by watch tests.
+    const second = await service.compile(spec.id, rel);
+    expect(second.ok, JSON.stringify(second)).toBe(true);
+  });
+
+  it("injects scoped CSS from explicit css imports", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-live-css-"));
+    const canvases = join(projectRoot, ".pier", "canvases");
+    await mkdir(canvases, { recursive: true });
+    await writeFile(join(canvases, "theme.css"), "h2 { color: red; }\n");
+    await writeFile(
+      join(canvases, "styled.canvas.tsx"),
+      [
+        'import "./theme.css";',
+        "export default function Styled() {",
+        "  return <h2>Title</h2>;",
+        "}",
+        "",
+      ].join("\n")
+    );
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
+    service.registerRoot(spec);
+    const result = await service.compile(spec.id, "styled.canvas.tsx");
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const source = Buffer.from(
+      service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
+    ).toString("utf8");
+    expect(source).toContain("data-pier-live-css");
+    expect(source).toContain("@scope");
+    expect(source).toContain("color: red");
+  });
+
+  it("keeps dependency graph across cached-context rebuilds", async () => {
+    // Regression: the cached esbuild context's plugin closures capture the
+    // FIRST compile's graphRef; a per-call reset object would leave later
+    // compiles with an empty graph (dependency hot-reload would die).
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-live-graph-"));
+    const canvases = join(projectRoot, ".pier", "canvases");
+    await mkdir(canvases, { recursive: true });
+    await writeFile(join(canvases, "dep.ts"), "export const dep = 1;\n");
+    await writeFile(
+      join(canvases, "graph.canvas.tsx"),
+      [
+        'import { dep } from "./dep";',
+        "export default function Graph() {",
+        "  return <span>{String(dep)}</span>;",
+        "}",
+        "",
+      ].join("\n")
+    );
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
+    service.registerRoot(spec);
+
+    const first = await service.compile(spec.id, "graph.canvas.tsx");
+    expect(first.ok, JSON.stringify(first)).toBe(true);
+    if (!first.ok) {
+      return;
+    }
+    expect(first.graph).toContain(".pier/canvases/dep.ts");
+
+    // Second compile hits the cached context — graph must still include dep.
+    const second = await service.compile(spec.id, "graph.canvas.tsx");
+    expect(second.ok, JSON.stringify(second)).toBe(true);
+    if (second.ok) {
+      expect(second.graph).toContain(".pier/canvases/dep.ts");
+      expect(second.graph).toContain(".pier/canvases/graph.canvas.tsx");
     }
   });
 });

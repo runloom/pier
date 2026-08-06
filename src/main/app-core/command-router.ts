@@ -20,6 +20,7 @@ import {
 import type { PierCoreServices } from "./command-router-services.ts";
 import { executeAgentAssetsCommand } from "./commands/agent-assets.ts";
 import { executeAiCommand } from "./commands/ai.ts";
+import { executeCommentsCommand } from "./commands/comments.ts";
 import { executeEnvironmentCommand } from "./commands/environment.ts";
 import { executeFileCommand } from "./commands/file.ts";
 import { executeGitCommand } from "./commands/git.ts";
@@ -392,6 +393,8 @@ async function executeCommandByDomain(
     (cmd: PierCommand) => executeFileCommand(requestId, cmd, services, context),
     (cmd: PierCommand) =>
       executeGitReviewCommand(requestId, cmd, services, context),
+    (cmd: PierCommand) =>
+      executeCommentsCommand(requestId, cmd, services, context),
     (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeRunCommand(requestId, cmd, services, context),
     (cmd: PierCommand) =>

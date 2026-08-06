@@ -52,6 +52,7 @@ import {
   createPluginChartsContext,
 } from "./appearance-context.ts";
 import { createPluginCommandPaletteContext } from "./command-palette-context.ts";
+import { createPluginCommentsContext } from "./comments-context.ts";
 import { createPluginConfiguration } from "./configuration-context.ts";
 import { createPluginEnvironmentsContext } from "./environments-context.ts";
 import { createPluginFilesContext } from "./files-context.ts";
@@ -491,6 +492,7 @@ export function createRendererPluginContext(
     terminals: createPluginTerminalsContext(entry, assertPluginCapability),
     worktrees: createPluginWorktreesContext(entry, assertPluginCapability),
     git: createPluginGitContext(entry, assertPluginCapability),
+    comments: createPluginCommentsContext(entry, assertPluginCapability),
     ai: createPluginAiContext(entry, assertPluginCapability),
   };
 }

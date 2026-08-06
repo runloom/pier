@@ -13,7 +13,7 @@ function settings(
   overrides: Partial<AgentAttentionSettings> = {}
 ): Pick<
   AgentAttentionSettings,
-  "enabled" | "enableErrorAttention" | "turnNotifyMode" | "suppressWhenFocused"
+  "enabled" | "enableErrorAttention" | "turnNotifyMode"
 > {
   return { ...DEFAULT_AGENT_ATTENTION_SETTINGS, ...overrides };
 }
@@ -200,11 +200,11 @@ describe("shouldSuppressAgentNotification", () => {
     ).toBe(false);
   });
 
-  it("waiting suppresses when suppressWhenFocused and panel focused", () => {
+  it("waiting suppresses when target panel focused", () => {
     expect(
       shouldSuppressAgentNotification({
         kind: "waiting",
-        settings: settings({ suppressWhenFocused: true }),
+        settings: settings(),
         isTargetPanelFocused: true,
         isOwnerWindowFocused: false,
       })
@@ -215,7 +215,7 @@ describe("shouldSuppressAgentNotification", () => {
     expect(
       shouldSuppressAgentNotification({
         kind: "waiting",
-        settings: settings({ suppressWhenFocused: true }),
+        settings: settings(),
         isTargetPanelFocused: false,
         isOwnerWindowFocused: true,
       })
@@ -226,7 +226,7 @@ describe("shouldSuppressAgentNotification", () => {
     expect(
       shouldSuppressAgentNotification({
         kind: "error",
-        settings: settings({ suppressWhenFocused: true }),
+        settings: settings(),
         isTargetPanelFocused: true,
         isOwnerWindowFocused: false,
       })

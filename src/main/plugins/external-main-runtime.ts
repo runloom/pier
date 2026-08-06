@@ -57,6 +57,18 @@ export interface ExternalMainPluginContext {
     };
     env: Record<string, string>;
   }>;
+  /**
+   * Resolve a bare CLI name the way the user's interactive shell would
+   * (PATH / alias / function). Prefer absolute path for Class A spawns.
+   */
+  resolveUserCommand?(
+    commandName: string,
+    request?: { cwd?: string }
+  ): Promise<
+    | { kind: "absolute"; path: string }
+    | { kind: "via-shell" }
+    | { kind: "missing"; error: string }
+  >;
   rpc: {
     handle(
       method: string,

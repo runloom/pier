@@ -4,7 +4,7 @@ export const settingsSkills = {
   emptyTitle: "还没有项目技能",
   detailEmptyTitle: "此项目还没有技能",
   detailEmptyDescription:
-    "从文件夹导入，或添加新技能。添加后默认关闭——在技能详情勾选发现通道后，智能体才能发现。若已用其他工具装进项目，会出现在「仓库内」。",
+    "从文件夹导入或添加技能。在详情中开启后，智能体才能使用。已在项目里的会显示在「仓库内」。",
   emptyDescription: "先选择项目，再从本地目录导入技能。",
   searchPlaceholder: "搜索技能",
   filterAll: "全部",
@@ -20,7 +20,7 @@ export const settingsSkills = {
   policyTitle: "策略",
   removeTitle: "移除",
   removeBody:
-    "删除会从本项目去掉此技能，不可撤销。若只想暂时不用，请取消详情中的发现通道勾选。",
+    "从本项目移除技能（不可撤销）。若只想暂停，在详情中关闭安装位置即可。",
   removeLibraryBody: "删除会从本机 Pier 库去掉此技能，不可撤销。",
 
   matrixNotInstalled: "另有 {{count}} 个未安装的智能体已隐藏。",
@@ -98,7 +98,7 @@ export const settingsSkills = {
   unmanagedConflictBadge: "路径占用",
   unmanagedConflictHelpLabel: "路径占用说明",
   unmanagedConflictHint:
-    "{{target}} 已有同名内容，Pier 不会覆盖。启动智能体不受影响。若要改用 Pier 提供的版本，请先在项目里移走该路径。",
+    "{{target}} 已有内容，Pier 不会覆盖。要用 Pier 的版本，请先移走该路径。",
   pierLibraryBadge: "Pier",
   pierBoundBadge: "Pier",
   alwaysIncludeBadge: "始终包含",
@@ -113,7 +113,7 @@ export const settingsSkills = {
     "请先在 Pier 技能库添加技能；已添加或「始终包含」的项不会出现在此列表。",
   bindAlsoClaude: "也提供给 Claude Code",
   bindAlsoClaudeHint:
-    "除默认 Agents 路径外，再创建 Claude 发现链接。之后在技能库中的编辑会更新已装入项目的副本。",
+    "同时提供给 Claude Code。之后在技能库中的编辑会同步到项目。",
   managedSource: {
     localImport: "本机添加",
     projectDiscoveryImport: "从仓库收编",
@@ -144,7 +144,7 @@ export const settingsSkills = {
   confirmUnmanagedReplaceAction: "替换并继续",
   confirmSkillsStateResetTitle: "重建本项目的技能记录？",
   confirmSkillsStateResetBody:
-    "本项目的技能列表或本机记录已损坏。继续将按你这次操作重建可用状态；无法恢复的损坏数据会被丢弃。",
+    "本项目技能记录已损坏。继续将重建可用列表；无法恢复的数据会丢弃。",
   confirmSkillsStateResetAction: "重建并继续",
   issueUnmanagedConflict:
     "{{target}} 已有同名内容。启用时会请你确认是否替换为 Pier 管理的版本。",
@@ -153,8 +153,7 @@ export const settingsSkills = {
   issueIdentityChanged: "项目目录已被移动或替换。请返回项目列表重新打开。",
   issueMissingSource:
     "技能 {{skill}} 的库内容缺失（.pier/skills/library/{{skill}}）。请删除该技能，或重新导入。",
-  issueInvalidManifest:
-    "此项目的技能列表已损坏。请修复或恢复 .pier/skills/manifest.json 后重新载入。",
+  issueInvalidManifest: "此项目的技能列表已损坏。请修复技能配置后重新载入。",
   issueLedgerCorrupt:
     "本机此项目的技能记录已损坏。请重新载入项目，或清除损坏记录后重试。",
   issueRecoveryBlocked: "上一次技能更改未干净结束。请重试，或重新载入项目。",

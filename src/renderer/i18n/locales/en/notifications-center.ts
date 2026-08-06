@@ -1,8 +1,10 @@
 export const notificationsCenter = {
   action: {
-    goToAgent: "Go to agent",
+    goToAgent: "Handle now",
+    openAgent: "Open conversation",
+    viewAgentOutput: "View output",
   },
-  actionFailed: "Couldn't update notifications",
+  actionFailed: "Couldn't update notifications — try again",
   bell: {
     aria: "Notifications, {{count}} unread",
     ariaEmpty: "Notifications",
@@ -22,8 +24,8 @@ export const notificationsCenter = {
   repeat: "×{{count}}",
   shellEnv: {
     failedBody:
-      "Tasks and agents may use a different Node or PATH than your terminal. Open Settings → Terminal to check status, or make sure your shell starts cleanly without prompts.",
-    failedTitle: "Couldn't load shell environment",
+      "Tool paths may not match Terminal. Open Settings → Terminal and reload.",
+    failedTitle: "Task environment may differ from the terminal",
     openSettings: "Open Terminal settings",
   },
   source: {

@@ -42,14 +42,17 @@ export const settingsAgents = {
     websiteOpenFailedTitle: "无法打开官网",
     install: "安装",
     update: "更新",
+    uninstall: "卸载",
     cancel: "取消",
     copyInstallCommand: "复制安装命令",
     copyInstallCommandSuccess: "安装命令已复制",
     copyInstallCommandFailed: "无法复制安装命令",
     installFailed: "无法安装智能体",
     updateFailed: "无法更新智能体",
+    uninstallFailed: "无法卸载智能体",
     installBusy: "安装中",
     updateBusy: "更新中",
+    uninstallBusy: "卸载中",
     queueBusy: "排队中",
     /** Multi-step only: "2/3" */
     busyStep: "{{current}}/{{total}}",
@@ -59,10 +62,25 @@ export const settingsAgents = {
     rowInstallFailedWithStep: "安装失败（{{step}}）",
     rowUpdateFailed: "更新失败",
     rowUpdateFailedWithStep: "更新失败（{{step}}）",
+    rowUninstallFailed: "卸载失败",
+    rowUninstallPartial: "默认位置已处理，仍检测到其他安装",
     alreadyInstalled: "已安装",
     conflictConfirmTitle: "检测到多处安装",
     conflictConfirmBody: "只会更新当前默认使用的那一处，其余位置保持不变。",
     conflictConfirmContinue: "更新默认位置",
+    uninstallConfirmTitle: "卸载此智能体？",
+    uninstallConfirmBody:
+      "将从本机移除「{{name}}」（{{source}}：{{path}}）。对话与本地配置保留；若仍在终端运行，会话可能中断。",
+    uninstallConfirmBodyNameOnly:
+      "将从本机移除「{{name}}」。对话与本地配置保留；若仍在终端运行，会话可能中断。",
+    /** 多处安装时追加（设计 §9.3）；语气对齐更新冲突确认。 */
+    uninstallConfirmConflictNote:
+      "只会移除当前默认使用的那一处，其余位置保持不变。",
+    uninstallConfirmContinue: "卸载",
+    uninstallSuccess: "已卸载 {{name}}",
+    uninstallSkipped: "未安装，无需卸载",
+    uninstallUnsupported:
+      "当前安装方式不支持一键卸载。可在下方填写自定义卸载命令，或打开官网查看说明。",
   },
   lifecycle: {
     version: "版本",
@@ -74,19 +92,20 @@ export const settingsAgents = {
       unsupported: "此智能体无法自动安装。请使用安装指南或打开官网。",
       unavailable: "安装服务暂不可用，请稍后重试。",
       no_command: "当前系统没有为此智能体配置可用的安装命令。",
-      command_failed: "安装或更新命令执行失败，详见下方说明。",
+      command_failed: "安装、更新或卸载命令执行失败，详见下方说明。",
       version_unchanged: "版本未变化。可能仍在使用另一处安装。",
       not_runnable:
         "已安装，但命令无法运行。请确认所需运行环境（例如 Node.js）已就绪。",
       not_found_after_install:
         "安装已完成，但仍找不到命令。请刷新列表或新开终端后再试。",
       already_installed: "此智能体已安装。",
-      busy: "此智能体已有安装或更新在进行中。",
-      cancelled: "已取消安装或更新。",
-      timeout: "安装或更新超时，请在网络稳定后重试。",
+      busy: "此智能体已有安装、更新或卸载在进行中。",
+      cancelled: "已取消安装、更新或卸载。",
+      timeout: "安装、更新或卸载超时，请在网络稳定后重试。",
       env_unavailable: "无法准备终端环境，请刷新后重试。",
       package_manager_missing:
         "未找到所需的包管理器（npm、Homebrew、pipx 或 uv）。请先安装其中一种后再试。",
+      still_detected: "卸载命令已执行，但仍检测到该智能体。",
     },
   },
   row: {
@@ -105,13 +124,17 @@ export const settingsAgents = {
     updateCommandDesc:
       "一键更新时执行的 shell 命令。留空则使用 Pier 默认（按当前安装来源选择通道）。",
     updateCommandPlaceholder: "留空则使用 Pier 默认更新步骤",
-    env: "启动环境变量",
-    envDesc: "启动此智能体时附加的环境变量",
+    uninstallCommand: "卸载命令",
+    uninstallCommandDesc:
+      "一键卸载时执行的 shell 命令。留空则使用 Pier 默认（按当前安装来源选择通道）。",
+    uninstallCommandPlaceholder: "留空则使用 Pier 默认卸载步骤",
+    env: "附加环境变量",
+    envDesc: "启动此智能体时一并注入",
   },
   statusHooks: {
     label: "智能体状态提示",
     description:
-      "面板实时显示智能体运行或等待状态。关闭后移除 Pier 的状态上报，也不会发送「需要你处理」的系统通知。多个 Pier 版本共用本机钩子运行时，较新版本优先；退出应用不会卸掉钩子。若 Codex 等工具提示审查钩子，选择「信任全部」即可，一般只需一次。",
+      "在面板显示运行/等待状态，并发送「需要你处理」提醒。关闭后两者皆停。",
     failed: "无法更新智能体状态提示",
   },
 } as const;

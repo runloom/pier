@@ -58,11 +58,13 @@ describe("agent-attention → NCS ingest", () => {
           },
         ],
         agentRef,
+        body: "Claude — Awaiting confirmation or your next step",
         dedupeKey: `agent.attention:waiting:${agentRef}`,
         kind: "agent.attention",
         panelRef: { panelId: "p1" },
         severity: "warning",
         source: "agent-attention",
+        title: "Needs you",
         trigger: "system-event",
       })
     );
@@ -85,9 +87,17 @@ describe("agent-attention → NCS ingest", () => {
     const agentRef = makeAgentRef("11", "p1");
     expect(ingestNotification).toHaveBeenCalledWith(
       expect.objectContaining({
+        actions: [
+          {
+            id: "focus-panel",
+            labelKey: "notificationsCenter.action.openAgent",
+          },
+        ],
+        body: "Claude — Ready for your next message",
         dedupeKey: `agent.turn-finished:${agentRef}`,
         kind: "agent.turn-finished",
         severity: "info",
+        title: "Turn finished",
       })
     );
   });

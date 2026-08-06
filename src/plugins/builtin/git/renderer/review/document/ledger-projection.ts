@@ -10,6 +10,7 @@ import {
   reviewGroupsForSurface,
 } from "../surface-group.ts";
 import { isReviewSlotIncludedInBody } from "./body-class.ts";
+import type { ReviewCommentIndex } from "./comment-projection.ts";
 import {
   estimateReviewSlotItem,
   lineStatsFromReviewSlot,
@@ -46,6 +47,8 @@ const REVIEW_PROJECTION_GROUP_INDEX = new Map<ReviewProjectionGroup, number>(
 export function projectReviewLedger(options: {
   readonly allowedBodyEntryKeys?: ReadonlySet<string>;
   readonly authoritativeEntryKeys?: ReadonlySet<string>;
+  readonly comments?: ReviewCommentIndex;
+  readonly commentsSeq?: number;
   readonly context: RendererPluginContext;
   readonly diffBase?: GitReviewReadingSurface;
   readonly entries: readonly GitReviewIndexEntry[];
@@ -67,8 +70,13 @@ export function projectReviewLedger(options: {
       resource !== undefined &&
       (resource.kind === "loaded" || resource.kind === "error");
     const projected = hasRenderableBody
-      ? projectReviewDocumentResource(resource, options.context, options.locale)
-          .items
+      ? projectReviewDocumentResource(
+          resource,
+          options.context,
+          options.locale,
+          options.comments,
+          options.commentsSeq
+        ).items
       : [];
     const projectedById = new Map(projected.map((item) => [item.id, item]));
     const mutationReady =

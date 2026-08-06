@@ -17,9 +17,11 @@ export function createBootedAgentLifecycleService(options: {
     getEnv: options.getEnv,
     getLifecycleCommands: async () => {
       const prefs = await options.preferences.read();
+      // Only update is user-overridable; install/uninstall always use project specs.
       return {
-        install: prefs.agentInstallCommands ?? {},
+        install: {},
         update: prefs.agentUpdateCommands ?? {},
+        uninstall: {},
       };
     },
     onProgress: broadcastAgentLifecycleProgress,
@@ -44,6 +46,36 @@ export function createBootedAgentLifecycleService(options: {
           err
         );
       }
+    },
+    afterUninstall: async (agentId: AgentKind) => {
+      try {
+        const { getAgentHookIntegration } = await import(
+          "../services/agents/integrations/registry.ts"
+        );
+        const integration = getAgentHookIntegration(agentId);
+        // No detect gate — align with uninstallAllAgentHooks.
+        if (integration) {
+          await integration.uninstall();
+        }
+      } catch (err) {
+        console.warn(
+          `[agent-lifecycle] afterUninstall hooks failed for ${agentId}`,
+          err
+        );
+      }
+      const prefs = await options.preferences.read();
+      const disabledAgentIds = prefs.disabledAgentIds.filter(
+        (id) => id !== agentId
+      );
+      const defaultAgentId =
+        prefs.defaultAgentId === agentId ? null : prefs.defaultAgentId;
+      if (
+        disabledAgentIds.length !== prefs.disabledAgentIds.length ||
+        defaultAgentId !== prefs.defaultAgentId
+      ) {
+        await options.preferences.update({ disabledAgentIds, defaultAgentId });
+      }
+      // Keep agent*Commands overrides so reinstall can reuse them.
     },
   });
 }

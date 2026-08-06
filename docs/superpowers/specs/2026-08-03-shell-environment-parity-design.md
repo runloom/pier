@@ -105,11 +105,18 @@ Pier 是本地 AI 开发工作台。用户在 Terminal.app / iTerm / Warp 中装
 | 本地环境 setup/cleanup | `services/local-environment-scripts.ts` | `terminal` | `explicitEnv: project.env`（应迁 `projectEnv`） |
 | Git（主路径） | `app-core/index.ts` → `createGitService({ resolveEnvironment })` | `plugin` | `withResolvedEnvironment` 失败时静默 `env = {}`（须修） |
 
-执行策略（正确，须保留）：
+执行策略（正确，须保留）— **双契约**（金标准 2026-08-06）：
 
-- `background-runner.ts`：`spawn("/bin/sh", ["-c", command], { env })` — **故意非 login**，避免二次 login 冲掉已 resolve 的 PATH
-- `local-environment-scripts.ts`：同样 `/bin/sh -c` + resolved env
-- 交互终端面：Ghostty 真实 login shell；agent CLI 另经 `create-launch.ts` 的 `/bin/sh -lc` 包装（避免 argv0=`-binary` 问题），与 env resolve 正交
+| 入口 | 契约 | 实现 |
+|------|------|------|
+| **Task / Git / local-env scripts** | **env-only** | PES `resolve` 叠层后 `spawn("/bin/sh", ["-c", command], { env })` — **禁止**二次 login/interactive，避免冲 PATH |
+| **面板 Agent CLI** | **name resolve + env** | PES env → `resolveUserCommand`（用户 shell `-lic` 探针：PATH / function / alias）→ absolute 则 `/bin/sh -c 'exec /abs …'`；via-shell 则 `$SHELL -lic` + **sticky** `pickHostApplyEnv` 在 rc **之后** re-export（L5 叠层） |
+| **插件 Class A**（codex login/usage） | 同上 resolve | `context.resolveUserCommand` + `resolveClassASpawnTarget` |
+| **agent detect** | 同上 resolve | `probeCommandWithEnv` → `resolveUserCommand`（函数也算 detected） |
+| **交互终端 tab** | 真会话 | Ghostty login+interactive，与 dump 正交 |
+
+Agent 包装入口：`withAgentLoginShellSafeCommand`（async，last-mile，不落盘）。  
+Dump 硬化：`shell-env-loader` marker 优先于 exit code / 超时 partial parse（P2）。
 
 #### 并行残缺路径（问题）
 

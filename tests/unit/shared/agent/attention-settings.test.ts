@@ -10,7 +10,6 @@ describe("agentAttention settings", () => {
     expect(DEFAULT_AGENT_ATTENTION_SETTINGS).toEqual({
       enabled: true,
       enableErrorAttention: false,
-      suppressWhenFocused: true,
       cooldownMs: 180_000,
       soundEnabled: true,
       soundId: "system",
@@ -89,12 +88,13 @@ describe("agentAttention settings", () => {
     expect(parsed).toEqual({
       enabled: false,
       enableErrorAttention: true,
-      suppressWhenFocused: false,
       cooldownMs: 60_000,
       soundEnabled: true,
       soundId: "system",
       turnNotifyMode: "unfocused",
     });
+    // 已下线键不得再进入运行时对象。
+    expect(parsed).not.toHaveProperty("suppressWhenFocused");
   });
 
   it("parse legacy agentAttention missing turnNotifyMode → unfocused", () => {
@@ -107,6 +107,7 @@ describe("agentAttention settings", () => {
       soundId: "system",
     });
     expect(parsed.turnNotifyMode).toBe("unfocused");
+    expect(parsed).not.toHaveProperty("suppressWhenFocused");
   });
 
   it("preferences parse keeps sibling keys when agentAttention is legacy", () => {

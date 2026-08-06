@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-
+import type * as Esbuild from "esbuild";
 /**
  * esbuild spawns a native helper binary instead of running in-process.
  *
@@ -78,7 +78,12 @@ export function withTemporaryEsbuildBinaryPath<T>(input: {
  * No-op in dev: esbuild resolves its own binary from node_modules, and the
  * platform package is not reachable from the host module graph under pnpm.
  */
-export function loadEsbuildModule(): typeof import("esbuild") {
+let loadedEsbuildModule: typeof Esbuild | null = null;
+
+export function loadEsbuildModule(): typeof Esbuild {
+  if (loadedEsbuildModule) {
+    return loadedEsbuildModule;
+  }
   const moduleRequire = createRequire(import.meta.url);
   let binaryPath: string | null = null;
   try {
@@ -95,8 +100,20 @@ export function loadEsbuildModule(): typeof import("esbuild") {
   } catch {
     // Dev layout: let esbuild resolve its own binary from node_modules.
   }
-  return withTemporaryEsbuildBinaryPath({
+  loadedEsbuildModule = withTemporaryEsbuildBinaryPath({
     binaryPath,
-    load: () => moduleRequire("esbuild") as typeof import("esbuild"),
+    load: () => moduleRequire("esbuild") as typeof Esbuild,
   });
+  return loadedEsbuildModule;
+}
+
+/** Stop the cached esbuild service worker if it was loaded. */
+export async function stopEsbuildModule(): Promise<void> {
+  const loaded = loadedEsbuildModule;
+  loadedEsbuildModule = null;
+  try {
+    await loaded?.stop?.();
+  } catch {
+    // Best-effort shutdown on app quit / service dispose.
+  }
 }

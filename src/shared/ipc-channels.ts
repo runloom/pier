@@ -81,6 +81,8 @@ export const PIER = {
   THEME_PREVIEW_VISUAL: "pier://theme:preview-visual",
   // renderer 上报终端输入路由诊断；main 校验并写入已有 diagnostics JSONL。
   TERMINAL_INPUT_ROUTING_DIAGNOSTIC: "pier://terminal:input-routing-diagnostic",
+  /** renderer → main：任务 spawn / TaskRuns / RC 诊断，写入 diagnostics JSONL。 */
+  TASK_RUNTIME_DIAGNOSTIC: "pier://task:runtime-diagnostic",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -176,6 +178,9 @@ export const PIER_BROADCAST = {
   NOTIFICATION_CENTER_CHANGED: "pier://notification-center:changed",
   // 形态 B 消息 toast：main 单窗投递（payload AppNotification）；禁止全窗广播。
   NOTIFICATION_CENTER_MESSAGE_TOAST: "pier://notification-center:message-toast",
+  // 统一评论项目快照广播 (main → 所有 renderer, payload CommentProjectSnapshot)。
+  // main CommentsService 唯一写方；renderer 镜像 store 按 worktreeKey 路由 + seq 守卫。
+  COMMENTS_CHANGED: "pier://comments:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

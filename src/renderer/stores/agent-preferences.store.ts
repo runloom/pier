@@ -46,6 +46,7 @@ interface AgentPreferenceSnapshot {
   agentInstallCommands: Partial<Record<AgentKind, string>>;
   agentPermissionMode: AgentPermissionModePreference;
   agentStatusHooks: boolean;
+  agentUninstallCommands: Partial<Record<AgentKind, string>>;
   agentUpdateCommands: Partial<Record<AgentKind, string>>;
   defaultAgentId: DefaultAgentId;
   disabledAgentIds: AgentKind[];
@@ -67,6 +68,9 @@ interface AgentPreferencesState extends AgentPreferenceSnapshot {
     mode: AgentPermissionModePreference;
   }) => Promise<void>;
   setAgentStatusHooks: (next: boolean) => Promise<void>;
+  setAgentUninstallCommands: (
+    next: Partial<Record<AgentKind, string>>
+  ) => Promise<void>;
   setAgentUpdateCommands: (
     next: Partial<Record<AgentKind, string>>
   ) => Promise<void>;
@@ -82,6 +86,7 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
     agentInstallCommands: {},
     agentPermissionMode: "manual",
     agentStatusHooks: false,
+    agentUninstallCommands: {},
     agentUpdateCommands: {},
     defaultAgentId: null,
     disabledAgentIds: [],
@@ -206,6 +211,20 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
       }
     },
 
+    async setAgentUninstallCommands(next) {
+      try {
+        const merged = await window.pier.preferences.update({
+          agentUninstallCommands: next,
+        });
+        useAgentPreferencesStore.getState()._hydrate(snapshotFrom(merged));
+      } catch (err) {
+        console.error(
+          "[agent-preferences.store] setAgentUninstallCommands failed:",
+          err
+        );
+      }
+    },
+
     async setAgentStatusHooks(next) {
       const prev = get().agentStatusHooks;
       set({ agentStatusHooks: next });
@@ -234,6 +253,7 @@ function snapshotFrom(prefs: ProjectPreferences): AgentPreferenceSnapshot {
     agentInstallCommands: prefs.agentInstallCommands ?? {},
     agentPermissionMode: prefs.agentPermissionMode,
     agentStatusHooks: prefs.agentStatusHooks,
+    agentUninstallCommands: prefs.agentUninstallCommands ?? {},
     agentUpdateCommands: prefs.agentUpdateCommands ?? {},
     defaultAgentId: prefs.defaultAgentId,
     disabledAgentIds: prefs.disabledAgentIds,

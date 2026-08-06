@@ -2,6 +2,10 @@ import { RotateCcw } from "lucide-react";
 import { Button } from "../button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../tooltip.tsx";
 import { CollapseDiffButton, type PierDiffViewLabels } from "./collapse.tsx";
+import {
+  DriftCommentChip,
+  type PierDriftCommentLabels,
+} from "./gutter/gutter-comments.tsx";
 import { type DiffViewInputStore, useDiffViewInput } from "./input-store.ts";
 import { fileDiffLineStats, type PierDiffCodeViewItem } from "./items.ts";
 import {
@@ -51,17 +55,22 @@ export function LiveHeaderPrefix({
 }
 
 export function LiveHeaderMetadata({
+  driftCommentLabels,
   inputStore,
   item,
   labels,
   onDiscardFile,
+  onDriftCommentActivate,
   onRetryItem,
   onToggleStage,
 }: {
+  readonly driftCommentLabels?: PierDriftCommentLabels;
   readonly inputStore: DiffViewInputStore;
   readonly item: PierDiffCodeViewItem;
   readonly labels: PierDiffViewLabels;
   readonly onDiscardFile?: (itemId: string) => void;
+  /** drift 评论 chip 点击（host 打开线程卡，仅传 threadId）。 */
+  readonly onDriftCommentActivate?: (threadId: string) => void;
   /** document materialize 等 error 槽行内重试（F3 / 2026-08-02 契约） */
   readonly onRetryItem?: (itemId: string) => void;
   readonly onToggleStage?: (itemId: string) => void;
@@ -89,9 +98,34 @@ export function LiveHeaderMetadata({
     input?.kind === "error" &&
     onRetryItem !== undefined &&
     retryLabel.length > 0;
-  if (!(showStats || showStage || showNotice || showRetry)) {
+  const driftComments = input?.driftComments;
+  const showDrift =
+    driftComments !== undefined &&
+    driftComments.length > 0 &&
+    driftCommentLabels !== undefined &&
+    onDriftCommentActivate !== undefined;
+  if (!(showStats || showStage || showNotice || showRetry || showDrift)) {
     return null;
   }
+  const driftSlot =
+    showDrift &&
+    driftCommentLabels !== undefined &&
+    onDriftCommentActivate !== undefined &&
+    driftComments !== undefined ? (
+      <span
+        className="inline-flex shrink-0 items-center gap-0.5"
+        data-slot="pier-diff-header-drift-comments"
+      >
+        {driftComments.map((thread) => (
+          <DriftCommentChip
+            key={thread.threadId}
+            labels={driftCommentLabels}
+            onActivate={() => onDriftCommentActivate(thread.threadId)}
+            thread={thread}
+          />
+        ))}
+      </span>
+    ) : null;
   // One light-DOM root so the header-metadata slot can be width:100%.
   // Fragment would assign multiple nodes and break far-right actions.
   return (
@@ -139,6 +173,7 @@ export function LiveHeaderMetadata({
           ) : null}
         </span>
       ) : null}
+      {driftSlot}
       {showRetry || (showStage && stageControl) ? (
         <span
           className="ml-auto inline-flex shrink-0 items-center gap-0.5"

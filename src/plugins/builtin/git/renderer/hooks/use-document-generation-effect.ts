@@ -12,6 +12,7 @@ import {
   isReviewEntryBodyHydratable,
   reviewContentEntryKeysInOrder,
 } from "../review/document/body-class.ts";
+import type { ReviewCommentIndex } from "../review/document/comment-projection.ts";
 import {
   composeReviewDocumentDemand,
   gitReviewSeedEntryKeys,
@@ -54,6 +55,8 @@ import {
 import type { GitReviewGenerationCallbacks } from "./use-document-session.ts";
 
 export interface GitReviewDocumentGenerationMountOptions {
+  readonly commentsIndexRef: RefObject<ReviewCommentIndex | null>;
+  readonly commentsSeqRef: RefObject<number>;
   readonly committedProjectionGenerationRef: RefObject<number>;
   readonly context: RendererPluginContext;
   readonly currentDemandRef: RefObject<ReviewDocumentDemand>;
@@ -95,6 +98,8 @@ export function mountGitReviewDocumentGeneration(
   options: GitReviewDocumentGenerationMountOptions
 ): () => void {
   const {
+    commentsIndexRef,
+    commentsSeqRef,
     committedProjectionGenerationRef,
     context,
     currentDemandRef,
@@ -287,9 +292,12 @@ export function mountGitReviewDocumentGeneration(
     })
   );
   // 金标准：首帧即挂全 content 槽 estimate（稳定高度账本）；seed 只驱动 document 水合队列
+  const initialComments = commentsIndexRef.current;
   const initialProjection = projectReviewLedger({
     allowedBodyEntryKeys: initialAllowedBodyEntryKeys,
     authoritativeEntryKeys: controller.authoritativeEntryKeys(),
+    ...(initialComments === null ? {} : { comments: initialComments }),
+    commentsSeq: commentsSeqRef.current,
     context,
     diffBase,
     entries,
@@ -332,6 +340,8 @@ export function mountGitReviewDocumentGeneration(
     initialProjection.items.map((item) => item.id)
   );
   const syncCtx: ReviewDocumentSyncContext = {
+    commentsIndexRef,
+    commentsSeqRef,
     committedProjectionGenerationRef,
     context,
     softCacheScopeKey,

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatAgentVersionMeta,
   formatLifecycleRowFailure,
+  isLifecycleSoftFailure,
   lifecycleBusyStatusText,
   resolveAgentStatusBadge,
 } from "../../../../src/renderer/pages/settings/components/agent-lifecycle-format.ts";
@@ -142,6 +143,20 @@ describe("lifecycleBusyStatusText", () => {
     });
     expect(noPct).not.toContain("percent");
   });
+
+  it("busy text for uninstall", () => {
+    const text = lifecycleBusyStatusText(t, {
+      action: "uninstall",
+      progress: undefined,
+    });
+    expect(text).toMatch(/卸载|Uninstall/i);
+  });
+});
+
+describe("isLifecycleSoftFailure", () => {
+  it("still_detected is not soft", () => {
+    expect(isLifecycleSoftFailure({ errorCode: "still_detected" })).toBe(false);
+  });
 });
 
 describe("formatLifecycleRowFailure", () => {
@@ -152,5 +167,23 @@ describe("formatLifecycleRowFailure", () => {
         failure: { action: "update" },
       })
     ).toBe("settings.agents.action.rowUpdateFailed");
+  });
+
+  it("uses uninstall failed key for hard uninstall failures", () => {
+    expect(
+      formatLifecycleRowFailure(t, {
+        name: "Codex",
+        failure: { action: "uninstall", errorCode: "command_failed" },
+      })
+    ).toBe("settings.agents.action.rowUninstallFailed");
+  });
+
+  it("uses partial key when still_detected after uninstall", () => {
+    expect(
+      formatLifecycleRowFailure(t, {
+        name: "Codex",
+        failure: { action: "uninstall", errorCode: "still_detected" },
+      })
+    ).toBe("settings.agents.action.rowUninstallPartial");
   });
 });

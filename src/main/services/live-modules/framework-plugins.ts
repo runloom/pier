@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
 import type * as esbuild from "esbuild";
+import { scopedCssInjectorSnippet } from "./css-inject.ts";
 import { requireProjectPackage } from "./package-resolve.ts";
 
 function scopeId(filePath: string): string {
@@ -12,17 +13,21 @@ function scopeId(filePath: string): string {
 /**
  * Framework-specific esbuild plugins.
  * Compilers load from the **project** (createRequire), not Pier host deps.
- * Injects `export function mount(el)` so the files preview host can always attach.
+ * Injects `export function mount(el, host?)` so the files preview host can attach
+ * and forward runtime errors.
  */
 export function createFrameworkCompilePlugins(input: {
+  entryAbsolutePath: string;
   entryDir: string;
   framework: LiveModuleFramework;
+  moduleId: string;
   projectRoot: string | null;
 }): esbuild.Plugin[] {
   if (!(input.projectRoot && input.framework !== "react")) {
     return [];
   }
   const projectRoot = input.projectRoot;
+  const moduleId = input.moduleId;
 
   if (input.framework === "vue") {
     return [
@@ -35,29 +40,27 @@ export function createFrameworkCompilePlugins(input: {
                 descriptor: unknown,
                 opts: unknown
               ) => { content: string };
-              compileStyle: (opts: {
-                filename: string;
-                id: string;
-                scoped?: boolean;
-                source: string;
-              }) => { code: string; errors: Error[] };
-              compileTemplate: (opts: unknown) => {
+              compileStyle: (opts: unknown) => {
                 code: string;
                 errors: Error[];
               };
+              compileTemplate: (opts: unknown) => {
+                code: string;
+                errors: Array<string | Error>;
+              };
               parse: (
                 source: string,
-                opts?: unknown
+                opts: { filename: string }
               ) => {
                 descriptor: {
-                  script: { content: string; lang?: string } | null;
-                  scriptSetup: { content: string; lang?: string } | null;
-                  template: { content: string } | null;
+                  script?: { content: string; lang?: string } | null;
+                  scriptSetup?: { content: string; lang?: string } | null;
                   styles: Array<{
                     content: string;
                     lang?: string;
                     scoped?: boolean;
                   }>;
+                  template?: { content: string } | null;
                 };
                 errors: Error[];
               };
@@ -151,32 +154,19 @@ export function createFrameworkCompilePlugins(input: {
               }
             }
             const styleText = styleChunks.join("\n");
-            // Content-hash so remount with changed CSS replaces the tag.
-            const styleHash = createHash("sha256")
-              .update(styleText)
-              .digest("hex")
-              .slice(0, 8);
             if (styleText.trim().length > 0) {
-              // Module evaluation side-effect so nested SFCs get styles even when
-              // only the entry calls mount() (Vite-style CSS inject).
-              script += `
-;(() => {
-  const key = ${JSON.stringify(`${id}:${styleHash}`)};
-  const sel = 'style[data-pier-live-vue="' + key + '"]';
-  if (document.head.querySelector(sel)) return;
-  document.head.querySelectorAll('style[data-pier-live-vue^="${id}:"]').forEach((n) => n.remove());
-  const s = document.createElement("style");
-  s.setAttribute("data-pier-live-vue", key);
-  s.textContent = ${JSON.stringify(styleText)};
-  document.head.appendChild(s);
-})();
-`;
+              script += scopedCssInjectorSnippet(styleText, moduleId, id);
             }
             script += `
 import { createApp as __pier_createApp } from "vue";
 export default __pier_sfc_main;
-export function mount(el) {
+export function mount(el, host) {
   const app = __pier_createApp(__pier_sfc_main);
+  if (host && typeof host.onError === "function") {
+    app.config.errorHandler = (err) => {
+      host.onError(err instanceof Error ? err : new Error(String(err)));
+    };
+  }
   app.mount(el);
   return () => {
     app.unmount();
@@ -212,7 +202,7 @@ export function mount(el) {
               compile: (
                 source: string,
                 opts: unknown
-              ) => { js: { code: string } };
+              ) => { css?: { code: string }; js: { code: string } };
             }>(projectRoot, "svelte/compiler");
             if (!compiler) {
               return {
@@ -225,24 +215,39 @@ export function mount(el) {
             }
             const source = readFileSync(args.path, "utf8");
             try {
+              // Prefer external CSS so we own injection + teardown tags.
               // Svelte 5: generate "client"; Svelte 4 may ignore unknown options.
-              // dev:false ensures production output — dev-mode code may emit
-              // `node:*` imports for HMR helpers that the fence would reject.
+              // dev:false avoids node:* HMR helpers the fence would reject.
               let jsCode: string;
+              let cssCode = "";
               try {
-                jsCode = compiler.compile(source, {
-                  css: "injected",
+                const compiled = compiler.compile(source, {
+                  css: "external",
                   dev: false,
                   filename: args.path,
                   generate: "client",
-                }).js.code;
+                });
+                jsCode = compiled.js.code;
+                cssCode = compiled.css?.code ?? "";
               } catch {
-                jsCode = compiler.compile(source, {
-                  css: "injected",
-                  dev: false,
-                  filename: args.path,
-                  generate: "dom",
-                }).js.code;
+                try {
+                  const compiled = compiler.compile(source, {
+                    css: false,
+                    dev: false,
+                    filename: args.path,
+                    generate: "dom",
+                  });
+                  jsCode = compiled.js.code;
+                  cssCode = compiled.css?.code ?? "";
+                } catch {
+                  // Last resort: injected CSS (no tagged teardown for that path).
+                  jsCode = compiler.compile(source, {
+                    css: "injected",
+                    dev: false,
+                    filename: args.path,
+                    generate: "dom",
+                  }).js.code;
+                }
               }
               // Svelte 5: `export default function Name($$anchor)`
               // Svelte 4: `export default Name` (class-like)
@@ -260,9 +265,16 @@ export function mount(el) {
                   ],
                 };
               }
+              const cssInject = scopedCssInjectorSnippet(
+                cssCode,
+                moduleId,
+                scopeId(args.path)
+              );
               const withMount = `${jsCode}
+${cssInject}
 import * as __pier_svelte from "svelte";
-export function mount(el) {
+export function mount(el, host) {
+  void host;
   if (typeof __pier_svelte.mount === "function") {
     const app = __pier_svelte.mount(${compName}, { target: el });
     return () => {
@@ -298,6 +310,101 @@ export function mount(el) {
     ];
   }
 
+  if (input.framework === "solid") {
+    const babel = requireProjectPackage<{
+      transformSync: (
+        code: string,
+        opts: unknown
+      ) => { code: string | null | undefined } | null;
+    }>(projectRoot, "@babel/core");
+    const solidPreset = requireProjectPackage(
+      projectRoot,
+      "babel-preset-solid"
+    );
+    const tsPreset = requireProjectPackage(
+      projectRoot,
+      "@babel/preset-typescript"
+    );
+    // babel-preset-solid transforms JSX but does not strip TypeScript; .canvas.solid.tsx
+    // needs @babel/preset-typescript alongside it. Without it, fall back to esbuild.
+    if (!(babel && solidPreset && tsPreset)) {
+      return [];
+    }
+    const entryAbsolutePath = input.entryAbsolutePath;
+    return [
+      {
+        name: "pier-live-solid",
+        setup(build) {
+          build.onLoad({ filter: /\.[jt]sx$/ }, (args) => {
+            const source = readFileSync(args.path, "utf8");
+            try {
+              const presets: unknown[] = [
+                [tsPreset],
+                [solidPreset, { generate: "dom", hydratable: false }],
+              ];
+              const transformed = babel.transformSync(source, {
+                babelrc: false,
+                configFile: false,
+                filename: args.path,
+                presets,
+                sourceMaps: false,
+              });
+              let code = transformed?.code ?? source;
+              const isEntry = args.path === entryAbsolutePath;
+              const hasMount =
+                /\bexport\s+(?:async\s+)?function\s+mount\b/u.test(code) ||
+                /\bexport\s+const\s+mount\s*=/u.test(code) ||
+                /\bexport\s+\{\s*[^}]*\bmount\b/u.test(source);
+              if (isEntry && !hasMount) {
+                const defaultFn =
+                  code.match(
+                    /export\s+default\s+function\s+([A-Za-z_$][\w$]*)/u
+                  )?.[1] ??
+                  code.match(
+                    /function\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{[\s\S]*?\}\s*export\s+default\s+\1/u
+                  )?.[1];
+                if (!defaultFn) {
+                  return {
+                    errors: [
+                      {
+                        text: "Solid canvas must default-export a named function component or export function mount(el)",
+                      },
+                    ],
+                  };
+                }
+                code += `
+import { render as __pier_solid_render } from "solid-js/web";
+export function mount(el, host) {
+  void host;
+  const dispose = __pier_solid_render(() => ${defaultFn}(), el);
+  return () => {
+    dispose();
+    el.replaceChildren();
+  };
+}
+`;
+              }
+              return {
+                contents: code,
+                loader: "js",
+                resolveDir: dirname(args.path),
+              };
+            } catch (error) {
+              return {
+                errors: [
+                  {
+                    text:
+                      error instanceof Error ? error.message : String(error),
+                  },
+                ],
+              };
+            }
+          });
+        },
+      },
+    ];
+  }
+
   return [];
 }
 
@@ -306,6 +413,7 @@ export function frameworkEsbuildJsx(
 ): Pick<esbuild.BuildOptions, "jsx" | "jsxImportSource" | "jsxDev"> {
   if (framework === "solid") {
     // solid-js ships jsx-runtime under solid-js/jsx-runtime (not solid-js root).
+    // When the solid babel plugin transforms JSX, loader is "js" and this is unused.
     return {
       jsx: "automatic",
       jsxImportSource: "solid-js",

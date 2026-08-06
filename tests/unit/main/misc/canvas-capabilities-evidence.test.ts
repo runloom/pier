@@ -1,4 +1,6 @@
 // @vitest-environment node
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   CAPABILITY_EVIDENCE,
@@ -29,6 +31,7 @@ describe("Canvas capability evidence model", () => {
     expect(verified).toHaveLength(3);
     for (const evidence of verified) {
       expect(evidence.source).toMatch(/^tests\//u);
+      expect(existsSync(resolve(process.cwd(), evidence.source))).toBe(true);
       expect(evidence.gap.length).toBeGreaterThan(0);
     }
   });

@@ -46,14 +46,35 @@ export type UpdateChannel =
   | { kind: "pipx-upgrade" }
   | { kind: "uv-upgrade" };
 
+/** Reversible package-manager uninstall channels (L1 project defaults). */
+export type UninstallChannel =
+  | { kind: "npm-uninstall"; package: string }
+  | { kind: "brew-uninstall"; formula: string; tap?: string; cask?: boolean }
+  | { kind: "pipx-uninstall"; package: string }
+  | { kind: "uv-uninstall"; package: string };
+
 export interface AgentLifecycleSpec {
   readonly agentId: AgentKind;
+  /**
+   * Optional project-default shell one-liners when channels cannot safely
+   * generate a plan (L1, not user preference).
+   */
+  readonly defaultShellCommands?: {
+    readonly install?: string;
+    readonly update?: string;
+    readonly uninstall?: string;
+  };
   readonly expectedBins: readonly string[];
   readonly guideCommands?: readonly AgentLifecycleGuideCommand[];
   readonly install: readonly InstallChannel[];
   /** npm package used for latest-version probe when install uses npm. */
   readonly npmPackageForLatest?: string;
   readonly support: AgentLifecycleSupport;
+  /**
+   * Reversible uninstall channels. Omit → derive from install[]; explicit [] →
+   * declare no managed uninstall.
+   */
+  readonly uninstall?: readonly UninstallChannel[];
   readonly update: readonly UpdateChannel[];
   /** Args passed to the binary to read version (default: ["--version"]). */
   readonly versionArgs?: readonly string[];

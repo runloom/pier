@@ -262,6 +262,21 @@ function cleanStderr(raw: string): string {
   return sanitizeProcessOutput(raw);
 }
 
+/**
+ * Exit 0 but no real success — keep trying fallbacks.
+ * Cursor Agent: "Update failed: [unauthenticated] Error"
+ */
+function isSoftSuccessFailure(output: string): boolean {
+  const s = output.toLowerCase();
+  return (
+    s.includes("update failed") ||
+    s.includes("[unauthenticated]") ||
+    s.includes("authentication required") ||
+    s.includes("not authenticated") ||
+    s.includes("error: update failed")
+  );
+}
+
 export function createNodeLifecycleRunner(): LifecycleRunner {
   return {
     async run(
@@ -322,6 +337,26 @@ export function createNodeLifecycleRunner(): LifecycleRunner {
           };
         }
         if (result.code === 0) {
+          // Self-upgrade CLIs (cursor-agent update) may exit 0 while printing a
+          // hard error — fall through only for non-package-manager argv steps.
+          const combined = `${result.stdout}\n${result.stderr}`;
+          const isSelfArgv =
+            step.kind === "argv" && !PACKAGE_MANAGER_BINS.has(step.file);
+          if (isSelfArgv && isSoftSuccessFailure(combined)) {
+            allFailuresWerePmMissing = false;
+            failureNotes.push(
+              `${label}: ${cleanStderr(result.stderr) || "reported failure with exit 0"}`
+            );
+            last = {
+              ok: false,
+              code: 1,
+              stepIndex: i,
+              stdout: result.stdout,
+              stderr: cleanStderr(result.stderr),
+              timedOut: result.timedOut,
+            };
+            continue;
+          }
           options.onProgress?.({
             stepIndex: i,
             stepCount,

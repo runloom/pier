@@ -9,15 +9,14 @@ import {
 } from "./grok-usage.ts";
 import type { AccountIdentity } from "./identity.ts";
 import { parseGrokAuthJson, readGrokIdentity } from "./identity.ts";
+// Class A: login spawn uses hostSpawnEnv / resolveProcessEnv (not bare process.env).
 import {
   defaultRealGrokHome,
   defaultSpawnLogin,
-  hostSpawnEnv,
   type SpawnLoginFn,
+  spawnGrokLogin,
 } from "./login-spawn.ts";
 import type { AccountUsageResult } from "./types.ts";
-
-export { type SpawnLoginFn, stripAnsi } from "./login-spawn.ts";
 
 export interface CreateGrokProviderOpts {
   credentials: {
@@ -32,6 +31,14 @@ export interface CreateGrokProviderOpts {
   resolveProcessEnv?: (request?: {
     cwd?: string;
   }) => Promise<{ env: Record<string, string> }>;
+  resolveUserCommand?: (
+    commandName: string,
+    request?: { cwd?: string }
+  ) => Promise<
+    | { kind: "absolute"; path: string }
+    | { kind: "via-shell" }
+    | { kind: "missing"; error: string }
+  >;
   spawnLogin?: SpawnLoginFn;
 }
 
@@ -41,11 +48,7 @@ export interface GrokAccountProvider {
   fetchUsage(options: {
     accountHomeDir?: string | undefined;
     kind: "api_key" | "oidc";
-    /**
-     * Fires after a refreshed OIDC session has been persisted to the managed
-     * credential store, with the new auth.json content. Lets the service
-     * mirror rotated tokens into the real Grok home for the active account.
-     */
+    /** Fires after OIDC session persisted; mirror tokens to real Grok home. */
     onSessionRefreshed?: ((authJson: string) => Promise<void>) | undefined;
     signal: AbortSignal;
   }): Promise<AccountUsageResult>;
@@ -87,6 +90,7 @@ export function createGrokProvider(
 ): GrokAccountProvider {
   const processEnv = opts.processEnv;
   const resolveProcessEnv = opts.resolveProcessEnv;
+  const resolveUserCommand = opts.resolveUserCommand;
   const realGrokHome = opts.realGrokHome ?? defaultRealGrokHome(processEnv);
   const spawnLogin = opts.spawnLogin ?? defaultSpawnLogin;
   const fetchImpl = opts.fetchImpl;
@@ -231,14 +235,15 @@ export function createGrokProvider(
       mode: "oauth" | "device",
       onOutput?: (chunk: string) => void
     ): Promise<void> {
-      const args =
-        mode === "device" ? ["login", "--device-auth"] : ["login", "--oauth"];
-      await spawnLogin("grok", args, {
-        env: await hostSpawnEnv(resolveProcessEnv, processEnv, {
-          GROK_HOME: homeDir,
-        }),
-        ...(onOutput ? { onOutput } : {}),
+      await spawnGrokLogin({
+        homeDir,
+        mode,
+        processEnv,
+        resolveProcessEnv,
+        resolveUserCommand,
         signal,
+        spawnLogin,
+        ...(onOutput ? { onOutput } : {}),
       });
     },
 

@@ -44,6 +44,11 @@ function memoryHistory(
       state = [item, ...state];
     },
     pruneExpired: () => undefined,
+    removeWhere: (predicate) => {
+      const before = state.length;
+      state = state.filter((item) => !predicate(item));
+      return before - state.length;
+    },
   };
 }
 

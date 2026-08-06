@@ -71,7 +71,7 @@ describe("panel window actions", () => {
         expect(useAppDialogStore.getState().current).toMatchObject({
           body: "window detail",
           kind: "alert",
-          title: "Couldn’t create window",
+          title: "Couldn't create window — try again",
         });
       });
 

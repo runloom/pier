@@ -4,7 +4,11 @@ import {
   type TaskRunControlEntry,
   type TaskRunsSnapshot,
 } from "@shared/contracts/tasks.ts";
+import { createLogger } from "@shared/logger.ts";
 import { create } from "zustand";
+import { reportTaskRuntimeDiagnostic } from "@/lib/tasks/report-runtime-diagnostic.ts";
+
+const log = createLogger("task.runs.store");
 
 interface TaskRunsState {
   apply(snapshot: TaskRunsSnapshot): void;
@@ -15,9 +19,31 @@ interface TaskRunsState {
 
 export const useTaskRunsStore = create<TaskRunsState>((set, get) => ({
   apply: (snapshot) => {
-    if (snapshot.version < get().snapshot.version) {
+    const prev = get().snapshot;
+    if (snapshot.version < prev.version) {
+      log.debug("TaskRuns apply skipped (stale version)", {
+        incoming: snapshot.version,
+        current: prev.version,
+      });
       return;
     }
+    const runSummaries = Object.values(snapshot.runs).map((run) => ({
+      mode: run.mode,
+      originPanelId: run.originPanelId,
+      ownerWindowId: run.ownerWindowId,
+      runId: run.runId,
+      status: run.status,
+    }));
+    log.debug("TaskRuns apply", {
+      runCount: runSummaries.length,
+      runs: runSummaries,
+      version: snapshot.version,
+    });
+    reportTaskRuntimeDiagnostic("task.runs.store", "TaskRuns apply", {
+      runCount: runSummaries.length,
+      runs: runSummaries,
+      version: snapshot.version,
+    });
     set({ error: null, initialized: true, snapshot });
   },
   error: null,
@@ -77,9 +103,14 @@ export function taskRunsForPanel(
 }
 
 /**
- * Tab 活跃任务 presence：RC 作用域内是否仍有任一活跃 run。
- * 与选中 run / owned-only tab chrome 无关；不跟 dismiss store。
- * 与 taskRunsForPanel 同作用域谓词，但 O(n) 短路扫描，不做排序。
+ * Tab 活跃任务蓝点：RC 作用域内是否仍有任一活跃 run
+ * （pending / running / stopping）。
+ *
+ * 与 `shouldPresentRun` 活跃分支同源：active 不看 dismiss，故
+ * `panelHasActiveTaskRun` ⇒ 任务运行条必须 mount（禁止有点无条）。
+ * 终态 RC linger 不点此蓝点（「在跑」≠「结果条」）。
+ *
+ * 与 taskRunsForPanel 同作用域；O(n) 短路扫描。
  */
 export function panelHasActiveTaskRun(
   snapshot: TaskRunsSnapshot,

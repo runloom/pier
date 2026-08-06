@@ -277,10 +277,10 @@ describe("run actions", () => {
       quickPick: {
         items: [
           {
-            detail: "Focus a project panel first",
+            detail: "Open or focus a project folder first",
             disabled: true,
             id: "task-no-context",
-            label: "No active project",
+            label: "No project open",
           },
         ],
         placeholder: "Search tasks or commands…",
@@ -365,7 +365,7 @@ describe("run actions", () => {
     expect(useAppDialogStore.getState().current).toMatchObject({
       body: "boom",
       kind: "alert",
-      title: "Failed to load tasks",
+      title: "Couldn't load tasks — try again",
     });
     expect(useCommandPaletteController.getState().open).toBe(false);
   });
@@ -497,7 +497,7 @@ describe("run actions", () => {
       expect(useAppDialogStore.getState().current).toMatchObject({
         body: "boom",
         kind: "alert",
-        title: "Failed to start task",
+        title: "Couldn't start task — try again",
       });
     });
     resetAppDialogForTests();
@@ -524,7 +524,7 @@ describe("run actions", () => {
       expect(useAppDialogStore.getState().current).toMatchObject({
         body: "Unsupported task type",
         kind: "alert",
-        title: "Failed to start task",
+        title: "Couldn't start task — try again",
       });
     });
     resetAppDialogForTests();

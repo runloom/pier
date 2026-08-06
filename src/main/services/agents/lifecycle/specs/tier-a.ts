@@ -71,10 +71,15 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
     expectedBins: ["gemini"],
     npmPackageForLatest: "@google/gemini-cli",
     support: "full",
-    // Official: npm. Homebrew gemini-cli is deprecated (sunsetting → Antigravity).
+    // Official: npm. Homebrew `gemini-cli` still exists on many machines and often
+    // wins PATH over nvm — keep brew channels so brew-sourced installs can upgrade
+    // (otherwise npm-latest updates a non-default copy and "Update all" never clears).
     // https://geminicli.com/docs/get-started/installation
-    install: [{ kind: "npm", package: "@google/gemini-cli", bin: "gemini" }],
-    update: [{ kind: "npm-latest" }],
+    install: [
+      { kind: "npm", package: "@google/gemini-cli", bin: "gemini" },
+      { kind: "brew", formula: "gemini-cli" },
+    ],
+    update: [{ kind: "brew-upgrade" }, { kind: "npm-latest" }],
   },
   {
     agentId: "grok",
@@ -171,10 +176,26 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
   },
   {
     agentId: "kimi",
-    expectedBins: ["kimi"],
+    expectedBins: ["kimi", "kimi-cli"],
+    // Official install is uv (Python): `uv tool install --python 3.13 kimi-cli`.
+    // https://moonshotai.github.io/kimi-cli/en/guides/getting-started.html
+    // Legacy npm package @moonshot-ai/kimi-code is a different version line; keep
+    // as fallback only for users who still have the npm global.
     npmPackageForLatest: "@moonshot-ai/kimi-code",
     support: "full",
     install: [
+      {
+        kind: "official-script",
+        platform: "posix",
+        // Script installs uv then `uv tool install kimi-cli`.
+        url: "https://code.kimi.com/install.sh",
+      },
+      {
+        kind: "official-script",
+        platform: "win",
+        url: "https://code.kimi.com/install.ps1",
+      },
+      // Alternate docs URL (same product family).
       {
         kind: "official-script",
         platform: "posix",
@@ -185,14 +206,20 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
         platform: "win",
         url: "https://code.kimi.com/kimi-code/install.ps1",
       },
+      { kind: "uv", package: "kimi-cli" },
       {
         kind: "npm",
         package: "@moonshot-ai/kimi-code",
         bin: "kimi",
       },
     ],
-    // Official `kimi upgrade` can be interactive — prefer non-interactive channels.
-    update: [{ kind: "npm-latest" }, { kind: "reinstall" }],
+    // Prefer uv for uv-sourced installs; npm only when detected as npm family.
+    // Self `kimi upgrade` can be interactive — avoid as primary automation path.
+    update: [
+      { kind: "uv-upgrade" },
+      { kind: "npm-latest" },
+      { kind: "reinstall" },
+    ],
   },
   {
     agentId: "copilot",
@@ -220,6 +247,8 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
   {
     agentId: "cursor",
     // Installer also links `agent`; keep cursor-agent first for detection mapping.
+    // Bare `agent` is filtered in path-enum unless it resolves into cursor-agent
+    // (avoids picking up Grok's `~/.grok/bin/agent`).
     expectedBins: ["cursor-agent", "agent"],
     support: "full",
     install: [
@@ -234,7 +263,10 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
         url: "https://cursor.com/install?win32=true",
       },
     ],
-    // https://cursor.com/docs/cli/installation — agent update
-    update: [{ kind: "self", argv: ["update"] }, { kind: "reinstall" }],
+    // `cursor-agent update` / `agent update` requires auth and exits 0 with
+    // "Update failed: [unauthenticated]" — Pier would stop and never reinstall.
+    // Official install script refreshes the package without auth (reinstall).
+    // https://cursor.com/docs/cli/installation
+    update: [{ kind: "reinstall" }, { kind: "self", argv: ["update"] }],
   },
 ];

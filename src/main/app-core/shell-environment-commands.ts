@@ -26,6 +26,9 @@ export function buildShellEnvironmentHostStatus(input: {
     ...base,
     cacheHit: diagnostics.cacheHit,
     ...(diagnostics.cwd ? { cwd: diagnostics.cwd } : {}),
+    ...(diagnostics.durationMs === undefined
+      ? {}
+      : { durationMs: diagnostics.durationMs }),
     ...(diagnostics.dumpMode ? { dumpMode: diagnostics.dumpMode } : {}),
     ...(diagnostics.error ? { error: diagnostics.error } : {}),
     ...(diagnostics.hostAppliedStatus
@@ -34,5 +37,6 @@ export function buildShellEnvironmentHostStatus(input: {
     pathChanged: diagnostics.pathChanged,
     ...(diagnostics.shell ? { shell: diagnostics.shell } : {}),
     shellEnvStatus: diagnostics.shellEnvStatus,
+    ...(diagnostics.skipReason ? { skipReason: diagnostics.skipReason } : {}),
   };
 }

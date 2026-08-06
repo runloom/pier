@@ -75,7 +75,7 @@ describe("terminal debug actions", () => {
 
       expect(dialogMock.showAppAlert).toHaveBeenCalledWith({
         body: "target window not found",
-        title: "Unable to Open Terminal Debug Window",
+        title: "Couldn't open debug window — try again",
       });
     } finally {
       dispose();

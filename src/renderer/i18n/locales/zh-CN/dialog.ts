@@ -10,11 +10,10 @@ export const dialog = {
     activitySeparator: "、",
     cancel: "取消",
     noActivityDetail: "退出前会保存当前窗口布局。",
-    multipleActivityDetail:
-      "{{activities}}仍在运行。\n退出 Pier 会终止这些进程。",
+    multipleActivityDetail: "{{activities}}仍在运行。\n退出会终止这些进程。",
     quit: "退出",
-    shellFallback: "Shell 命令",
-    singleActivityDetail: "{{activity}}仍在运行。\n退出 Pier 会终止该进程。",
+    shellFallback: "终端命令",
+    singleActivityDetail: "{{activity}}仍在运行。\n退出会终止该进程。",
     title: "退出 Pier？",
   },
   panelClose: {
@@ -34,7 +33,7 @@ export const dialog = {
     actualSize: "实际大小",
     controlsLabel: "图片控件",
     fit: "适应窗口",
-    loadFailedDescription: "无法加载该图片，或打开后文件已发生变化。",
+    loadFailedDescription: "无法加载图片，或文件已在打开后变化。",
     loadFailedTitle: "无法显示图片",
     loading: "正在加载图片",
     title: "图片预览",

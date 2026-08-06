@@ -8,6 +8,7 @@ import { createExternalPluginProcessEnv } from "../plugins/external-plugin-proce
 import type { PluginRpcBus } from "../plugins/rpc-bus.ts";
 import { createPluginSecretsFacade } from "../plugins/secrets.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
+import { resolveUserCommand } from "../services/process-environment/resolve-user-command.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import type { createSecretsStore } from "../state/secrets-store.ts";
 import type { createAppCoreUsageData } from "./usage-data.ts";
@@ -61,6 +62,18 @@ export function createExternalMainPluginContextFactory(deps: {
         },
         env: result.env,
       };
+    },
+    resolveUserCommand: async (commandName, request = {}) => {
+      const { env } = await deps.processEnvironment.resolve({
+        ...(request.cwd ? { cwd: request.cwd } : {}),
+        source: "plugin",
+      });
+      return await resolveUserCommand({
+        commandName,
+        cwd: request.cwd,
+        env,
+        shell: env.SHELL,
+      });
     },
     plugin: { id: source.id, version: source.version },
     rpc: {

@@ -5,12 +5,15 @@ const ipcInvokeMock = vi.hoisted(() => vi.fn());
 const ipcOnMock = vi.hoisted(() => vi.fn());
 const ipcOffMock = vi.hoisted(() => vi.fn());
 
+const ipcSendMock = vi.hoisted(() => vi.fn());
+
 vi.mock("electron", () => ({
   ipcRenderer: {
     getMaxListeners: () => 10,
     invoke: ipcInvokeMock,
     off: ipcOffMock,
     on: ipcOnMock,
+    send: ipcSendMock,
     setMaxListeners: vi.fn(),
   },
 }));
@@ -75,6 +78,19 @@ describe("tasks preload API", () => {
       targetGroupId: "group-source",
       taskId: "package-script:test",
       type: "run.spawn",
+    });
+  });
+
+  it("forwards runtime diagnostics to main", () => {
+    tasksApi.reportDiagnostic({
+      ctx: { panelId: "t1" },
+      msg: "RC presence",
+      scope: "task.runtime.rc",
+    });
+    expect(ipcSendMock).toHaveBeenCalledWith(PIER.TASK_RUNTIME_DIAGNOSTIC, {
+      ctx: { panelId: "t1" },
+      msg: "RC presence",
+      scope: "task.runtime.rc",
     });
   });
 });

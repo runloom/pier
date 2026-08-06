@@ -184,15 +184,13 @@ describe("PluginsSection", () => {
     expect(
       stack.querySelectorAll('[data-slot="status-stack-item"]')
     ).toHaveLength(1);
-    expect(stack).toHaveTextContent("Plugin manifest could not be read");
+    expect(stack).toHaveTextContent("Couldn't read plugin info");
     expect(stack).not.toHaveTextContent("3 reports");
     expect(within(stack).queryByText("Built-in")).toBeNull();
     expect(within(stack).queryByText("Dev Override")).toBeNull();
     expect(within(stack).queryByText("Official")).toBeNull();
     expect(screen.queryByText("invalid plugin manifest")).toBeNull();
-    expect(
-      screen.getAllByText("Plugin manifest could not be read")
-    ).toHaveLength(1);
+    expect(screen.getAllByText("Couldn't read plugin info")).toHaveLength(1);
     expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
 
@@ -227,7 +225,7 @@ describe("PluginsSection", () => {
       stack.querySelectorAll('[data-slot="status-stack-item"]')
     ).toHaveLength(1);
     expect(stack).toHaveTextContent("Plugin issues");
-    expect(stack).toHaveTextContent("Plugin manifest could not be read");
+    expect(stack).toHaveTextContent("Couldn't read plugin info");
     expect(stack).toHaveTextContent("Plugin is not supported");
     expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
@@ -274,9 +272,7 @@ describe("PluginsSection", () => {
       document.querySelectorAll('[data-slot="status-stack"]')
     ).toHaveLength(1);
     expect(stack).toHaveAttribute("data-shell-tone", "warning");
-    expect(
-      within(stack).getByText("Plugin manifest could not be read")
-    ).toBeVisible();
+    expect(within(stack).getByText("Couldn't read plugin info")).toBeVisible();
     expect(within(stack).getByText("Local development loading")).toBeVisible();
     expect(
       stack.querySelectorAll('[data-slot="status-stack-item"]').length

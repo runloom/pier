@@ -335,6 +335,35 @@ function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
       firstLayoutItemIdsRef.current.delete(id);
       return true;
     },
+    scrollToLine(
+      id: string,
+      lineNumber: number,
+      side?: "additions" | "deletions",
+      options?: DiffViewScrollOptions
+    ): boolean {
+      const viewer = codeViewRef.current;
+      const item = viewer?.getItem(id);
+      if (!(viewer && item)) {
+        return false;
+      }
+      if (
+        item.collapsed === true &&
+        options?.expandCollapsed !== false &&
+        !setItemCollapsed(id, false, false)
+      ) {
+        return false;
+      }
+      viewer.scrollTo({
+        align: "center",
+        behavior: options?.behavior ?? "smooth",
+        id,
+        lineNumber,
+        ...(options?.offset === undefined ? {} : { offset: options.offset }),
+        ...(side === undefined ? {} : { side }),
+        type: "line",
+      });
+      return true;
+    },
     setAllCollapsed(collapsed: boolean): void {
       // 事务（O(n) 非 O(n²)）：
       // 1) 写视图级意图 2) 批量 updateItem（不逐项 apply）3) 一次 reconcile 钉 H/S

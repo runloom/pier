@@ -47,19 +47,17 @@
 在仓库根执行：
 
 ```bash
-pnpm test:unit -- \
-  tests/unit/main/live-modules-contract.test.ts \
-  tests/unit/main/live-modules-service.test.ts \
-  tests/unit/main/live-modules-frameworks.test.ts \
-  tests/unit/main/live-modules-package-resolve.test.ts \
-  tests/unit/renderer/live-modules-runtime.test.ts \
+pnpm exec vitest run \
+  tests/unit/main/live-modules \
+  tests/unit/renderer/app/live-modules-runtime.test.ts \
   tests/unit/plugins/file-canvas-preview.test.tsx \
-  tests/unit/shared/live-module-canvas-path.test.ts \
-  tests/unit/shared/pier-canvas-meta.test.ts
+  tests/unit/shared/app/live-module-canvas-path.test.ts \
+  tests/unit/shared/app/pier-canvas-meta.test.ts \
+  tests/unit/main/misc/canvas-capabilities-evidence.test.ts
 ```
 
 - [ ] 全部通过  
-- [ ] service 测覆盖：`@/` Button、home 禁 paths、force 预览桶、protocol 404、smoke/blank 编译
+- [ ] service 测覆盖：`@/` Button、home 禁 paths、force 预览桶、protocol 404、smoke/blank 编译、首次失败 entry 进 graph、诊断含 line、显式 CSS → `data-pier-live-css` + `@scope`、canvas 源码 `node:fs` 必红（含非 React）
 
 **通过含义：** 契约与编译管道可信。  
 **不通过含义：** 先修测试，不要进 Electron 手工。

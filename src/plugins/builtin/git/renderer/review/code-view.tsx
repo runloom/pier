@@ -1,10 +1,12 @@
 import type {
+  PierDiffReviewCommentThread,
   PierDiffViewHandle,
   PierDiffViewItem,
-  PierDiffViewLabels,
   PierDiffViewPresentation,
+  PierDiffViewProps,
   PierDiffViewRenderWindow,
-  PierHunkActionEvent,
+  PierDriftCommentLabels,
+  PierGutterReviewEvent,
 } from "@pier/ui/diff-view/index.tsx";
 import type {
   RendererPluginAppearance,
@@ -78,31 +80,7 @@ export interface ReviewRenderFeedback {
 export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
   // 模块级 lazy：panel unmount remount 不重新 suspend 到整区 Loading。
   let sharedView: LazyExoticComponent<
-    (props: {
-      appearance: {
-        codeFontFamily: string;
-        codeFontSize: string;
-        codeThemes: {
-          dark: string;
-          light: string;
-        };
-        colorMode: "dark" | "light";
-      };
-      items: readonly PierDiffViewItem[];
-      labels: PierDiffViewLabels;
-      onDiscardFile?: (itemId: string) => void;
-      onError: (error: Error) => void;
-      onHunkAction?: (event: PierHunkActionEvent) => void;
-      onItemError?: (id: string, error: Error | null) => void;
-      onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
-      onRetryItem?: (itemId: string) => void;
-      onScroll: () => void;
-      onToggleStage?: (itemId: string) => void;
-      presentation?: PierDiffViewPresentation;
-      ref: (handle: PierDiffViewHandle | null) => void;
-      getSuppressMembershipScrollRestore?: () => boolean;
-      suppressMembershipScrollRestore?: boolean;
-    }) => React.JSX.Element | null
+    (props: PierDiffViewProps) => React.JSX.Element | null
   > | null = null;
   const getSharedView = () => {
     if (!sharedView) {
@@ -112,6 +90,12 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
   };
   return function ReviewCodeView({
     appearance,
+    driftCommentLabels,
+    activeReviewEpoch,
+    activeReviewSlotsByItem,
+    inlineReviewHandlers,
+    inlineReviewLabels,
+    inlineReviewThreadById,
     context,
     contextId,
     diffRef,
@@ -121,18 +105,22 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     mutationAuthorityBlocked,
     onFeedbackChange,
     onAcquireMutationAuthority,
+    onGutterReviewActivate,
+    onDriftCommentActivate,
     onItemError,
     onMutationCommitted,
     onRenderWindowChange,
     onRetryItem,
     onScroll,
     presentation,
+    reviewCommentsById,
     revisionBySectionId,
     sourcePanelId,
     getSuppressMembershipScrollRestore,
     suppressMembershipScrollRestore = false,
   }: {
     readonly appearance: RendererPluginAppearance;
+    readonly driftCommentLabels?: PierDriftCommentLabels;
     readonly context: RendererPluginContext;
     readonly contextId: string;
     readonly diffRef: (handle: PierDiffViewHandle | null) => void;
@@ -143,6 +131,8 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     readonly mutationAuthorityBlocked: boolean;
     readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
     readonly onAcquireMutationAuthority: () => GitReviewMutationLease | null;
+    readonly onGutterReviewActivate?: (event: PierGutterReviewEvent) => void;
+    readonly onDriftCommentActivate?: (threadId: string) => void;
     readonly onItemError?: (id: string, error: Error | null) => void;
     readonly onMutationCommitted?: (
       result: GitReviewMutationOk | null,
@@ -153,6 +143,15 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     readonly onRetryItem?: (itemId: string) => void;
     readonly onScroll: () => void;
     readonly presentation?: PierDiffViewPresentation;
+    readonly reviewCommentsById?: ReadonlyMap<
+      string,
+      readonly PierDiffReviewCommentThread[]
+    >;
+    readonly activeReviewEpoch?: PierDiffViewProps["activeReviewEpoch"];
+    readonly activeReviewSlotsByItem?: PierDiffViewProps["activeReviewSlotsByItem"];
+    readonly inlineReviewHandlers?: PierDiffViewProps["inlineReviewHandlers"];
+    readonly inlineReviewLabels?: PierDiffViewProps["inlineReviewLabels"];
+    readonly inlineReviewThreadById?: PierDiffViewProps["inlineReviewThreadById"];
     readonly revisionBySectionId: ReadonlyMap<string, string>;
     readonly sourcePanelId?: string;
     readonly getSuppressMembershipScrollRestore?: () => boolean;
@@ -314,7 +313,16 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 }}
                 items={displayItems}
                 labels={diffLabels}
+                {...(driftCommentLabels === undefined
+                  ? {}
+                  : { driftCommentLabels })}
                 onError={setRuntimeError}
+                {...(onGutterReviewActivate === undefined
+                  ? {}
+                  : { onGutterReviewActivate })}
+                {...(onDriftCommentActivate === undefined
+                  ? {}
+                  : { onDriftCommentActivate })}
                 {...(onItemError === undefined ? {} : { onItemError })}
                 {...(gitRootPath ? { onOpenFile } : {})}
                 onRenderWindowChange={onRenderWindowChange}
@@ -328,6 +336,25 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                     }
                   : {})}
                 {...(presentation === undefined ? {} : { presentation })}
+                {...(reviewCommentsById === undefined
+                  ? {}
+                  : { reviewCommentsById })}
+                {...(activeReviewEpoch === undefined
+                  ? {}
+                  : { activeReviewEpoch })}
+                {...(activeReviewSlotsByItem === undefined
+                  ? {}
+                  : { activeReviewSlotsByItem })}
+                {...(inlineReviewHandlers === undefined
+                  ? {}
+                  : { inlineReviewHandlers })}
+                {...(inlineReviewLabels === undefined
+                  ? {}
+                  : { inlineReviewLabels })}
+                {...(inlineReviewThreadById === undefined
+                  ? {}
+                  : { inlineReviewThreadById })}
+                locale={appearance.locale}
                 ref={setDiffHandle}
                 {...(getSuppressMembershipScrollRestore === undefined
                   ? {}

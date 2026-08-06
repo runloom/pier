@@ -6,6 +6,7 @@ import type {
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { defaultCommandsFor, guideCommandsFor } from "./defaults.ts";
 import { fetchLatestVersion } from "./latest.ts";
+import { resolveUninstallProbeFields } from "./plan/uninstall.ts";
 import { buildInstallPlan } from "./plan.ts";
 import { enumerateInstalls, isInstallConflict } from "./sources/path-enum.ts";
 import {
@@ -32,6 +33,7 @@ export async function probeOneAgent(
 
   if (!env) {
     const defaults = defaultCommandsFor(agentId);
+    const uninstallFields = resolveUninstallProbeFields(spec, opts.host, null);
     return {
       agentId,
       canInstall,
@@ -48,6 +50,8 @@ export async function probeOneAgent(
       updateOffered: false,
       version: null,
       ...defaults,
+      // Prefer probe-host uninstall fields over process-platform defaults.
+      ...uninstallFields,
     };
   }
 
@@ -77,7 +81,10 @@ export async function probeOneAgent(
     updateMode === "versioned" &&
     spec.support === "full"
   ) {
-    latestVersion = await fetchLatestVersion(spec, env);
+    // Match latest probe to the active install channel (brew ≠ npm lag).
+    latestVersion = await fetchLatestVersion(spec, env, {
+      installSource: defaultInstall?.source ?? null,
+    });
   }
 
   const updateAvailable =
@@ -85,20 +92,28 @@ export async function probeOneAgent(
     latestVersion !== null &&
     isAgentUpdateAvailable(version, latestVersion);
 
+  // Offer Update when:
+  // - versioned and a newer latest is known
+  // - reinstall mode (no reliable latest probe — user can force reinstall)
+  // - installed but broken (repair)
+  // Do NOT treat "latest unknown" as update-needed: brew cask probes used to
+  // return null and inflated "Update all" with false positives.
   const updateOffered =
     canInstall &&
-    ((detected &&
-      (updateMode === "reinstall" ||
-        updateAvailable ||
-        (updateMode === "versioned" &&
-          opts.checkLatest &&
-          latestVersion === null))) ||
-      installedButBroken);
+    (installedButBroken ||
+      (detected && (updateMode === "reinstall" || updateAvailable)));
 
   const defaults = defaultCommandsFor(
     agentId,
     defaultInstall?.source,
     defaultInstall?.path
+  );
+  const uninstallFields = resolveUninstallProbeFields(
+    spec,
+    opts.host,
+    defaultInstall
+      ? { path: defaultInstall.path, source: defaultInstall.source }
+      : null
   );
   return {
     agentId,
@@ -116,6 +131,8 @@ export async function probeOneAgent(
     updateOffered,
     version,
     ...defaults,
+    // Prefer probe-host uninstall fields over process-platform defaults.
+    ...uninstallFields,
   };
 }
 

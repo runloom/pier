@@ -30,7 +30,9 @@ import type {
   ReviewActiveChrome,
   ReviewSurfaceNavigationRequest,
   ReviewSurfaceProps,
+  ReviewTreeOpenReveal,
 } from "./surface-types.ts";
+import { buildActivateNavigationRequest } from "./surface-types.ts";
 import { GitReviewToolbar } from "./toolbar.tsx";
 
 type PendingMutationTransition = GitReviewMutationTransition;
@@ -130,29 +132,24 @@ function ReviewDocumentsComponent(
     userPickedSurfaceRef.current = true;
     navigationRequestRef.current = null;
     setNavigationRequest(null);
-    setMountedSurfaces((current) => {
-      if (current.has(surface)) {
-        return current;
-      }
-      return new Set([...current, surface]);
-    });
+    setMountedSurfaces((current) => addSurface(current, surface));
     setActiveSurface(surface);
     activeSurfaceRef.current = surface;
   }, []);
   const requestTreeOpen = useCallback(
-    (entryKey: string, sectionKey: string, group: GitReviewGroup) => {
+    (
+      entryKey: string,
+      sectionKey: string,
+      group: GitReviewGroup,
+      reveal?: ReviewTreeOpenReveal
+    ) => {
       userPickedSurfaceRef.current = true;
       setSelectedTreeSectionKey(sectionKey);
       const surface = reviewSurfaceForGroup(group);
       lastNavigationPathRef.current =
         props.entries.find((entry) => entry.entryKey === entryKey)?.path ??
         lastNavigationPathRef.current;
-      setMountedSurfaces((current) => {
-        if (current.has(surface)) {
-          return current;
-        }
-        return new Set([...current, surface]);
-      });
+      setMountedSurfaces((current) => addSurface(current, surface));
       // 树跨面点击：立即切面 + 立即可见新面（无旧面 handoff 叠层）。
       // 切面后由目标面 beginNavigation 做 demand/scroll。
       if (activeSurfaceRef.current !== surface) {
@@ -162,14 +159,13 @@ function ReviewDocumentsComponent(
       navigationNonceRef.current += 1;
       const nonce = navigationNonceRef.current;
       setNavigationSeq(nonce);
-      const request = {
-        activation: "activate" as const,
-        entryKey,
-        itemId: sectionKey,
+      const request = buildActivateNavigationRequest(
         nonce,
+        entryKey,
+        sectionKey,
         surface,
-        treeSectionKey: sectionKey,
-      };
+        reveal
+      );
       navigationRequestRef.current = request;
       setNavigationRequest(request);
     },
@@ -287,12 +283,9 @@ function ReviewDocumentsComponent(
       }
       return;
     }
-    setMountedSurfaces((current) => {
-      if (current.has(mutationTransition.targetSurface)) {
-        return current;
-      }
-      return new Set([...current, mutationTransition.targetSurface]);
-    });
+    setMountedSurfaces((current) =>
+      addSurface(current, mutationTransition.targetSurface)
+    );
     navigationNonceRef.current += 1;
     const nonce = navigationNonceRef.current;
     setNavigationSeq(nonce);
@@ -495,6 +488,13 @@ function ReviewDocumentsComponent(
       </div>
     </GitReviewPanelLayout>
   );
+}
+
+function addSurface(
+  set: ReadonlySet<GitReviewReadingSurface>,
+  surface: GitReviewReadingSurface
+): ReadonlySet<GitReviewReadingSurface> {
+  return set.has(surface) ? set : new Set([...set, surface]);
 }
 
 export const ReviewDocuments = memo(ReviewDocumentsComponent);

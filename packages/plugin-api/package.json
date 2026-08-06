@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./main": "./src/main.ts",
+    "./resolve-class-a-command": "./src/resolve-class-a-command.ts",
     "./renderer": "./src/renderer.ts",
     "./account-usage": "./src/account-usage/index.ts",
     "./account-usage/renderer": "./src/account-usage/renderer.ts",

@@ -220,7 +220,7 @@ describe("CommandPalette quick pick rows", () => {
       expect(useAppDialogStore.getState().current).toMatchObject({
         body: "input callback failed",
         kind: "alert",
-        title: "Unable to Submit Input",
+        title: "Couldn't submit — try again",
       });
     });
   });

@@ -42,7 +42,7 @@ export function TerminalRunSelector({
       <DropdownMenuTrigger asChild>
         <Button
           aria-label={t("terminal.runtimeControl.selectRunCurrent", { label })}
-          className="min-w-0 flex-1 justify-start px-2"
+          className="max-w-44 justify-start px-2"
           data-testid="terminal-runtime-control-run-selector"
           disabled={disabled}
           size="sm"
@@ -50,7 +50,7 @@ export function TerminalRunSelector({
           variant="ghost"
         >
           <span
-            className="min-w-0 flex-1 truncate text-left font-medium text-xs"
+            className="min-w-0 truncate text-left font-medium text-xs"
             title={label}
           >
             {label}

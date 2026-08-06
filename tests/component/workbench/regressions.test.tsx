@@ -139,7 +139,7 @@ describe("Workbench panel regressions", () => {
     openPanelContextMenu();
 
     expect(
-      await screen.findByText("Failed to open Workbench menu")
+      await screen.findByText("Couldn't open menu — try again")
     ).toBeVisible();
     expect(screen.getByText("menu bridge unavailable")).toBeVisible();
     expect(toast.error).not.toHaveBeenCalled();

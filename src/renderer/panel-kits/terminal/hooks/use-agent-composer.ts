@@ -10,10 +10,11 @@ import {
   requestTerminalFocusIntent,
   setTerminalNativeFocusDisabled,
 } from "@/stores/terminal-input-routing-slice.ts";
+import { registerComposerOpener } from "../composer-bridge.ts";
 import {
   TERMINAL_COMPOSER_GAP_PX,
   TERMINAL_COMPOSER_RESERVE_HEIGHT_PX,
-} from "../composer.tsx";
+} from "../composer-helpers.ts";
 import {
   canUseAgentComposer,
   shouldMountAgentComposer,
@@ -93,6 +94,19 @@ export function useAgentComposer({
     panelId,
     setActive: activatePanel,
   });
+
+  // External ensure-open (comments submit, etc.) — not toggle.
+  useEffect(() => {
+    if (!canUseAgentComposer({ activityKind, restored })) {
+      return;
+    }
+    return registerComposerOpener(panelId, () => {
+      setComposerOpen(true);
+      setComposerFocusRequest((value) => value + 1);
+      ensureTuiInputFocus(panelId).catch(() => undefined);
+      activatePanel();
+    });
+  }, [activatePanel, activityKind, panelId, restored]);
 
   // 资格失效（非 agent / 恢复态）时强制关闭，避免 open 位悬挂。
   useEffect(() => {

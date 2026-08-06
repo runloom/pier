@@ -55,6 +55,7 @@ import {
 } from "./ipc/notification-center.ts";
 import { registerPierResourceIpc } from "./ipc/pier-resource.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
+import { registerTaskRuntimeDiagnosticsIpc } from "./ipc/task-runtime-diagnostics.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal/debug-window.ts";
 import { registerTerminalIpc } from "./ipc/terminal/index.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
@@ -326,6 +327,7 @@ if (gotTheLock) {
       app.on("will-quit", () => {
         appUpdateScheduler.stop();
         gitAutofetch.dispose();
+        appCore.services.liveModules?.dispose();
       });
 
       if (isMac && isDev && app.dock) {
@@ -389,6 +391,7 @@ if (gotTheLock) {
         processEnvironment: appCore.services.processEnvironment,
         taskService: appCore.services.tasks,
       });
+      registerTaskRuntimeDiagnosticsIpc(ipcMain);
       registerTerminalDebugWindowIpc(ipcMain, {
         isQuitting: () => windowManager.isQuitting(),
       });

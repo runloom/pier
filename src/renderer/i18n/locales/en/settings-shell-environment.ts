@@ -2,25 +2,30 @@
 export const settingsShellEnvironment = {
   title: "Shell environment",
   description:
-    "Pier loads your login shell environment so tasks and agents use the same Node and PATH as Terminal.",
+    "Pier loads your login shell so tasks and agents find the same tools as Terminal.",
   windowsNote:
-    "On Windows, login-shell environment resolution is skipped. PATH comes from the process environment.",
+    "On Windows, login shell loading is skipped. Commands come from the process environment.",
   statusLabel: "Status:",
   status: {
-    resolved: "Loaded",
-    failed: "Failed to load",
+    resolved: "Matched to terminal",
+    failed: "Using basic environment",
     skipped: "Skipped",
     unknown: "Not available yet",
   },
-  shellLabel: "Shell: {{shell}}",
-  refresh: "Reload shell environment",
+  skipReason: {
+    cli: "Launched from a terminal; using the current environment",
+    disabled: "Login shell loading is turned off",
+    "no-shell": "No usable shell detected",
+    windows: "Windows does not resolve a login shell",
+  },
+  refresh: "Reload",
   refreshing: "Reloading…",
-  disabled: "Disable shell environment loading",
+  disabled: "Don't load login shell environment",
   disabledDesc:
-    "When on, Pier does not run your shell to load PATH and toolchains. Tasks may not find Node or other tools installed via nvm or Homebrew.",
+    "When on, Pier skips your login shell. Tasks may not find tools such as Node.",
   timeout: "Load timeout (seconds)",
-  timeoutDesc: "How long Pier waits for your shell to finish starting (1–120).",
-  statusFailed: "Couldn't load shell environment status",
-  refreshFailed: "Couldn't reload shell environment",
-  updateFailed: "Couldn't update shell environment settings",
+  timeoutDesc: "How long Pier waits for the login shell to finish (1–120).",
+  statusFailed: "Couldn't read status — try again",
+  refreshFailed: "Reload didn't finish; still using current environment",
+  updateFailed: "Couldn't update settings — try again",
 } as const;

@@ -34,7 +34,10 @@ export interface PlannedPlan {
    * Derived from steps — never a second hand-authored command source.
    */
   readonly preview: string;
-  /** Ordered fallbacks: stop at first successful step (logical ||). */
+  /**
+   * Ordered fallbacks: runner stops at first exit 0 (logical ||).
+   * Service may continue past self-upgrade no-ops when version is unchanged.
+   */
   readonly steps: readonly PlannedInvocation[];
 }
 

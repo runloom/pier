@@ -7,6 +7,7 @@ import {
 } from "@shared/contracts/agent.ts";
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { AgentUninstallControls } from "@/pages/settings/components/agent-row-uninstall.tsx";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { useAgentLifecycleStore } from "@/stores/agent-lifecycle.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
@@ -31,9 +32,6 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
   );
   const agentDefaultArgs = useAgentPreferencesStore((s) => s.agentDefaultArgs);
   const agentDefaultEnv = useAgentPreferencesStore((s) => s.agentDefaultEnv);
-  const agentInstallCommands = useAgentPreferencesStore(
-    (s) => s.agentInstallCommands
-  );
   const agentUpdateCommands = useAgentPreferencesStore(
     (s) => s.agentUpdateCommands
   );
@@ -46,9 +44,6 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
   const setAgentDefaultArgs = useAgentPreferencesStore(
     (s) => s.setAgentDefaultArgs
   );
-  const setAgentInstallCommands = useAgentPreferencesStore(
-    (s) => s.setAgentInstallCommands
-  );
   const setAgentUpdateCommands = useAgentPreferencesStore(
     (s) => s.setAgentUpdateCommands
   );
@@ -60,13 +55,13 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
     agentDefaultArgs,
     agentPermissionMode
   );
-  const persistedInstall = agentInstallCommands[agentId] ?? "";
   const persistedUpdate = agentUpdateCommands[agentId] ?? "";
-  const defaultInstall =
+  // Install/uninstall use project specs only — not user-editable.
+  // Update may use L2 override; placeholder is L1 default.
+  const defaultUpdate =
+    probe?.defaultUpdateCommand?.trim() ||
     probe?.defaultInstallCommand?.trim() ||
-    probe?.guideCommands?.[0]?.command ||
     "";
-  const defaultUpdate = probe?.defaultUpdateCommand?.trim() || "";
 
   const effectiveEnv = resolveEffectiveAgentDefaultEnv(
     agentId,
@@ -79,7 +74,6 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
 
   const [cmdDraft, setCmdDraft] = useDraft(persistedCmd);
   const [argsDraft, setArgsDraft] = useDraft(persistedArgs);
-  const [installDraft, setInstallDraft] = useDraft(persistedInstall);
   const [updateDraft, setUpdateDraft] = useDraft(persistedUpdate);
 
   if (!entry) {
@@ -162,19 +156,6 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
           value={argsDraft}
         />
         <InputRow
-          description={t("settings.agents.row.installCommandDesc")}
-          id={`agent-install-cmd-${agentId}`}
-          label={t("settings.agents.row.installCommand")}
-          onBlur={(value) => {
-            saveOverride(value, agentInstallCommands, setAgentInstallCommands);
-          }}
-          onChange={setInstallDraft}
-          placeholder={
-            defaultInstall || t("settings.agents.row.installCommandPlaceholder")
-          }
-          value={installDraft}
-        />
-        <InputRow
           description={t("settings.agents.row.updateCommandDesc")}
           id={`agent-update-cmd-${agentId}`}
           label={t("settings.agents.row.updateCommand")}
@@ -183,9 +164,7 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
           }}
           onChange={setUpdateDraft}
           placeholder={
-            defaultUpdate ||
-            defaultInstall ||
-            t("settings.agents.row.updateCommandPlaceholder")
+            defaultUpdate || t("settings.agents.row.updateCommandPlaceholder")
           }
           value={updateDraft}
         />
@@ -204,6 +183,7 @@ export function AgentExpandedDetails({ agentId }: { agentId: AgentKind }) {
             </div>
           </div>
         ) : null}
+        <AgentUninstallControls agentId={agentId} />
       </div>
     </div>
   );

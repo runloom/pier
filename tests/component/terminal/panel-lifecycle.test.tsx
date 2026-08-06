@@ -32,7 +32,7 @@ import {
   resetTerminalLaunchConfirmationsForTest,
   waitForTerminalLaunch,
 } from "@/lib/workspace/terminal-launch-confirmation.ts";
-import { TERMINAL_COMPOSER_GAP_PX } from "@/panel-kits/terminal/composer.tsx";
+import { TERMINAL_COMPOSER_GAP_PX } from "@/panel-kits/terminal/composer-helpers.ts";
 import { hasRegisteredTerminalAnchor } from "@/panel-kits/terminal/layout-coordinator.ts";
 import { TerminalPanel } from "@/panel-kits/terminal/panel.tsx";
 import {

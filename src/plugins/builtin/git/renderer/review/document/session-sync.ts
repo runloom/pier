@@ -9,6 +9,7 @@ import {
   sameStringSet,
 } from "../materialization.ts";
 import type { GitReviewReadingSurface } from "../reading-surface.ts";
+import type { ReviewCommentIndex } from "./comment-projection.ts";
 import {
   type ReviewDocumentDemand,
   selectBodyHydrationPriorityEntryKeys,
@@ -27,6 +28,8 @@ import type {
 import { publishReviewDocumentSoftCache } from "./soft-cache.ts";
 
 export interface ReviewDocumentSyncContext {
+  readonly commentsIndexRef: RefObject<ReviewCommentIndex | null>;
+  readonly commentsSeqRef: RefObject<number>;
   readonly committedProjectionGenerationRef: RefObject<number>;
   readonly context: RendererPluginContext;
   readonly controller: GitReviewDocumentGeneration;
@@ -192,9 +195,12 @@ export function createReviewDocumentSyncHandler(
     ctx.previousStickyBodyEntryKeys = [...allowedBodyEntryKeys];
 
     // 显示集 = 全部 content 槽（ledger 内挂 estimate）；demand 只影响 body 水合优先级
+    const comments = ctx.commentsIndexRef.current;
     const nextProjection = projectReviewLedger({
       allowedBodyEntryKeys,
       authoritativeEntryKeys: controller.authoritativeEntryKeys(),
+      ...(comments === null ? {} : { comments }),
+      commentsSeq: ctx.commentsSeqRef.current,
       context,
       diffBase,
       entries,

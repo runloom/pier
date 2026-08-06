@@ -1,4 +1,5 @@
 import {
+  type AttentionNotificationCopy,
   type AttentionUiLocale,
   formatAttentionNotificationCopy as formatShared,
 } from "@shared/agent-attention-copy.ts";
@@ -7,10 +8,16 @@ import type { ForegroundActivity } from "@shared/contracts/foreground-activity.t
 
 export type { AttentionUiLocale } from "@shared/agent-attention-copy.ts";
 
+export interface AttentionLocationContext {
+  cwd?: string;
+  projectRootPath?: string;
+}
+
 export function formatAttentionNotificationCopy(
   activity: Extract<ForegroundActivity, { kind: "agent" }>,
-  locale: AttentionUiLocale
-): { body: string; title: string } {
+  locale: AttentionUiLocale,
+  location?: AttentionLocationContext | null
+): AttentionNotificationCopy {
   const agentLabel =
     getAgentCatalogEntry(activity.agentId)?.label ?? activity.agentId;
   // 调用方已保证进入 waiting/ready/error；其它状态不应走到通知文案。
@@ -20,5 +27,16 @@ export function formatAttentionNotificationCopy(
     activity.status === "ready"
       ? activity.status
       : "waiting";
-  return formatShared({ agentLabel, status }, locale);
+  return formatShared(
+    {
+      agentLabel,
+      status,
+      ...(activity.sessionTitle ? { sessionTitle: activity.sessionTitle } : {}),
+      ...(location?.projectRootPath
+        ? { projectRootPath: location.projectRootPath }
+        : {}),
+      ...(location?.cwd ? { cwd: location.cwd } : {}),
+    },
+    locale
+  );
 }

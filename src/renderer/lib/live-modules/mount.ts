@@ -3,7 +3,10 @@
  * Canonical implementation lives in `@plugins/api` so builtin plugins can import it.
  */
 export {
+  LiveModuleMountError,
+  type LiveModuleMountErrorCode,
   type LiveModuleUnmount,
+  type MountLiveModuleOptions,
   mountLiveModule,
   mountLiveModuleExport,
 } from "@plugins/api/live-module-mount.ts";

@@ -31,7 +31,9 @@ import {
 import { TerminalComposerView } from "./composer-view.tsx";
 import { useTerminalComposerAttachments } from "./hooks/use-composer-attachments.ts";
 import { useTerminalComposerClose } from "./hooks/use-composer-close.ts";
+import { useComposerDraft } from "./hooks/use-composer-draft.ts";
 import { useTerminalComposerEscape } from "./hooks/use-composer-escape.ts";
+import { useComposerInserter } from "./hooks/use-composer-inserter.ts";
 import { useTerminalComposerSend } from "./hooks/use-composer-send.ts";
 import {
   requestComposerCursorProbe,
@@ -39,12 +41,6 @@ import {
 } from "./hooks/use-tui-input-focus-risk.ts";
 import type { StructuredComposerEditorHandle } from "./structured-composer/editor.tsx";
 import { registerComposerDraftSinkForTests } from "./structured-composer/test-registry.ts";
-
-export {
-  resetTerminalComposerDraftsForTests,
-  TERMINAL_COMPOSER_GAP_PX,
-  TERMINAL_COMPOSER_RESERVE_HEIGHT_PX,
-} from "./composer-helpers.ts";
 
 interface TerminalComposerProps {
   /** Foreground agent kind for skill suggest; null when unknown. */
@@ -55,13 +51,13 @@ interface TerminalComposerProps {
   disabled: boolean;
   /** Bumped when Rich Input opens so the editor receives focus. */
   focusRequest?: number;
-  /** 面板是否为当前激活 tab；切回时补聚焦。 */
+  /** Active tab; used to restore focus when switching back. */
   isActive: boolean;
-  /** Panel-owned close: Esc / send success. Terminal surface click does NOT close. */
+  /** Panel-owned close: Esc / send success (surface click does not close). */
   onClose: () => void;
   onHeightChange: (heightPx: number) => void;
   panelId: string;
-  /** Absolute project root for @ mentions; null when no workspace. */
+  /** Absolute project root for @ mentions; null without workspace. */
   projectRootPath?: string | null;
 }
 
@@ -96,11 +92,14 @@ export function TerminalComposer({
   onCloseRef.current = onClose;
   const composingRef = useRef(false);
 
-  useEffect(() => {
-    writeComposerDraft(panelId, value);
-  }, [panelId, value]);
-
+  useComposerDraft(panelId, value);
   useEffect(() => registerComposerDraftSinkForTests(setValue), []);
+  useComposerInserter({
+    editorRef,
+    onValueChange: setValue,
+    panelId,
+    valueRef,
+  });
 
   const reportAttachmentError = useCallback(
     (titleKey: string, detail: string) => {

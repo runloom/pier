@@ -126,13 +126,18 @@ export const liveModuleCompileSuccessSchema = z
     ok: z.literal(true),
     /** Opaque pier-live://module/<ticket> URL — never a filesystem path. */
     url: z.string().min(1),
+    warnings: z.array(liveModuleDiagnosticSchema).optional(),
   })
   .strict();
 
 export const liveModuleCompileFailureSchema = z
   .object({
     diagnostics: z.array(liveModuleDiagnosticSchema).min(1),
+    /** Relative paths resolved before failure (at least the entry) for watch recovery. */
+    graph: z.array(z.string().min(1)).optional(),
     ok: z.literal(false),
+    /** True when a newer compile superseded this request — renderer should ignore. */
+    superseded: z.boolean().optional(),
   })
   .strict();
 

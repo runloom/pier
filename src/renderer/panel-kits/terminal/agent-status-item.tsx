@@ -5,6 +5,7 @@ import type {
   ForegroundActivity,
 } from "@shared/contracts/foreground-activity.ts";
 import { AgentStatusLabel } from "@/components/agent-status/label.tsx";
+import { useT } from "@/i18n/use-t.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { CORE_AGENT_STATUS_ITEM_ID } from "./core-terminal-status-items.ts";
 import { terminalStatusItemRegistry } from "./status-bar.tsx";
@@ -17,51 +18,41 @@ function isAgentActivity(
 
 /**
  * 终端状态栏 agent item —— 结构对齐 loomdesk status-bar-activity-item：
- * [品牌图标(20px 容器内 12px)] [badge 文案(11px): 状态词 (+ · N 个子代理)] [sr-only agent 名]
- * 无状态点、无 agent 名可见文本、无计时（loomdesk 的 dot 属 session-manager,
- * duration 在其状态栏 badge 中被显式忽略）。文案/shimmer 走共享 AgentStatusLabel。
+ * [品牌图标(20px 容器内 12px)] [badge 文案(11px): 状态词 / 启动文案 (+ · N 个子代理)]
+ * [sr-only agent 名]
+ * FA 为 agent 时必须可见可读：有 hook 状态走五态文案；无状态时用 catalog 名，
+ * 无 catalog 时用短「启动中…」（禁止仅 icon + sr-only，也禁止直出 raw agentId）。
+ * 无状态点、无计时。文案/shimmer 走共享 AgentStatusLabel。
  */
 function AgentStatusItemView({ panelId }: { panelId: string }) {
+  const t = useT();
   const activity = useForegroundActivityStore((s) => s.activities[panelId]);
   const agent = isAgentActivity(activity) ? activity : null;
 
   if (!agent) {
     return null;
   }
-  const agentLabel =
-    getAgentCatalogEntry(agent.agentId)?.label ?? agent.agentId;
-  // 无 hook 证据（launch 先验）→ icon-only。
-  if (agent.status === undefined) {
-    return (
-      <span
-        className="inline-flex shrink-0 items-center gap-1 font-mono"
-        data-agent-status="none"
-        data-testid="agent-status-item"
-      >
-        <span className="inline-flex size-5 shrink-0 items-center justify-center">
-          <AgentIcon agentId={agent.agentId} size={12} />
-        </span>
-        <span className="sr-only">{agentLabel}</span>
-      </span>
-    );
-  }
-
+  const catalogLabel = getAgentCatalogEntry(agent.agentId)?.label;
+  const a11yName = catalogLabel ?? agent.agentId;
+  // 可见 fallback：优先 catalog 产品名；无 catalog 时用短启动文案，不直出 id。
+  const fallbackLabel = catalogLabel ?? t("terminal.agentStatus.starting");
   return (
     <span
       className="inline-flex shrink-0 items-center gap-1 font-mono"
-      data-agent-status={agent.status}
+      data-agent-status={agent.status ?? "none"}
       data-testid="agent-status-item"
     >
       <span className="inline-flex size-5 shrink-0 items-center justify-center">
         <AgentIcon agentId={agent.agentId} size={12} />
       </span>
       <AgentStatusLabel
+        fallbackLabel={fallbackLabel}
         spawnedAt={agent.spawnedAt}
         stateStartedAt={agent.stateStartedAt}
         status={agent.status}
         subagentCount={agent.subagentCount}
       />
-      <span className="sr-only">{agentLabel}</span>
+      <span className="sr-only">{a11yName}</span>
     </span>
   );
 }

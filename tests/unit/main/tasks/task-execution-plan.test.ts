@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { resolveVariables } from "@main/services/tasks/execution-plan.ts";
 import { createTaskService } from "@main/services/tasks/service.ts";
 import { TASK_EXIT_TITLE_PREFIX } from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +13,27 @@ const WORKSPACE_FOLDER_VAR = `${TASK_VAR_PREFIX}{workspaceFolder}`;
 const WORKSPACE_FOLDER_BASENAME_VAR = `${TASK_VAR_PREFIX}{workspaceFolderBasename}`;
 const DAY_MS = 86_400_000;
 const SHELL_LAUNCH_PREFIX_RE = /^\/bin\/sh -c /;
+
+describe("resolveVariables", () => {
+  const ctx = {
+    inputs: {},
+    projectRootPath: "/repo/project",
+  };
+
+  it("expands Zed bare $ZED_WORKTREE_ROOT and braced forms to project root", () => {
+    expect(resolveVariables("$ZED_WORKTREE_ROOT", ctx)).toBe("/repo/project");
+    expect(resolveVariables("$ZED_WORKTREE", ctx)).toBe("/repo/project");
+    // Brace form is intentional product syntax; build without template literals.
+    const bracedWorktree = ["$", "{ZED_WORKTREE_ROOT}"].join("");
+    const bracedWorkspace = ["$", "{workspaceFolder}"].join("");
+    expect(resolveVariables(bracedWorktree, ctx)).toBe("/repo/project");
+    expect(resolveVariables(bracedWorkspace, ctx)).toBe("/repo/project");
+  });
+
+  it("does not expand unknown bare $TOKENS (leave for shell)", () => {
+    expect(resolveVariables("$HOME/bin", ctx)).toBe("$HOME/bin");
+  });
+});
 
 describe("task execution planning", () => {
   let projectRoot = "";
@@ -27,6 +49,42 @@ describe("task execution planning", () => {
     vi.unstubAllEnvs();
     await rm(projectRoot, { force: true, recursive: true });
     await rm(homeDir, { force: true, recursive: true });
+  });
+
+  it("expands Zed task cwd $ZED_WORKTREE_ROOT so spawn never sees a literal placeholder", async () => {
+    await mkdir(join(projectRoot, ".zed"));
+    await writeFile(
+      join(projectRoot, ".zed", "tasks.json"),
+      JSON.stringify([
+        {
+          command: "echo ok",
+          cwd: "$ZED_WORKTREE_ROOT",
+          label: "echo-in-worktree",
+        },
+      ])
+    );
+    const service = createTaskService({
+      homeDir,
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      writeRecentState: async () => undefined,
+    });
+    const listed = await service.list({ projectRootPath: projectRoot });
+    const task = listed.tasks.find(
+      (candidate) =>
+        candidate.source === "zed" && candidate.label === "echo-in-worktree"
+    );
+    expect(task?.cwd).toBe("$ZED_WORKTREE_ROOT");
+
+    const plan = await service.prepareSpawn({
+      projectRootPath: projectRoot,
+      taskId: task?.id ?? "",
+    });
+    expect(plan).toMatchObject({ status: "ready" });
+    if (plan.status !== "ready") {
+      throw new Error("expected ready plan");
+    }
+    expect(plan.launches[0]?.cwd).toBe(projectRoot);
+    expect(plan.launches[0]?.cwd).not.toContain("$");
   });
 
   it("returns required input requests before building a plan", async () => {

@@ -312,6 +312,13 @@ export function createTaskBackgroundRuns(
         "TaskService requires processEnvironment for background tasks"
       );
     }
+    if (!windowId) {
+      // Without ownerWindowId, broadcastTaskRunsSnapshot drops the run for every
+      // window → renderer sees empty TaskRuns → no RC / no task tab mark.
+      throw new Error(
+        "background task requires windowId for TaskRuns ownership"
+      );
+    }
     return await options.startRun({
       launches,
       mode: "background",

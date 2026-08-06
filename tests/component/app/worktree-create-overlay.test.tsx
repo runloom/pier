@@ -221,6 +221,14 @@ function createMockContext(): RendererPluginContext {
     charts: {
       renderMermaid: unimplemented("charts.renderMermaid"),
     },
+    comments: {
+      createThread: unimplemented("comments.createThread"),
+      deleteComment: unimplemented("comments.deleteComment"),
+      listProjects: unimplemented("comments.listProjects"),
+      snapshot: unimplemented("comments.snapshot"),
+      updateComment: unimplemented("comments.updateComment"),
+      watch: unimplemented("comments.watch"),
+    },
     commandPalette: {
       openQuickPick: unimplemented("commandPalette.openQuickPick"),
       updateQuickPick: unimplemented("commandPalette.updateQuickPick"),

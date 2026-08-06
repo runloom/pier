@@ -49,7 +49,8 @@ const MATRIX: ReadonlyArray<{
   {
     agentId: "cursor",
     source: "path",
-    primary: { kind: "argv", args0: "update" },
+    // Script reinstall first (self update is auth-gated and exits 0 on failure).
+    primary: { kind: "official-script" },
   },
   {
     agentId: "gemini",

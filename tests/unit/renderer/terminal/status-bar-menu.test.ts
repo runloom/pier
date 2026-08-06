@@ -327,7 +327,7 @@ describe("openTerminalStatusBarContextMenu", () => {
 
     expect(showAppAlert).toHaveBeenCalledWith({
       body: "menu toggle boom",
-      title: "Failed to update status bar item",
+      title: "Couldn't update status bar — try again",
     });
   });
 

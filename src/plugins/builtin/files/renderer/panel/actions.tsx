@@ -1,5 +1,8 @@
 import { Button } from "@pier/ui/button.tsx";
-import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
+import {
+  isProjectCanvasPath,
+  projectCanvasLocation,
+} from "@shared/live-module-canvas-path.ts";
 import { Code2, Eye, ShieldCheck } from "lucide-react";
 import { useCallback } from "react";
 import type {
@@ -10,6 +13,7 @@ import { useFilesDocument } from "../document/use-document.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import { FilesMutationSuspendedError } from "../mutation/gate.ts";
+import { CanvasReloadButton } from "../preview/canvas-toolbar.tsx";
 import {
   DocumentFormatBadge,
   DocumentStatusDot,
@@ -77,6 +81,14 @@ export function ResolvedFilePanelActions({
     document.language === "canvas" ||
     (document.source.kind === "disk" &&
       isProjectCanvasPath(document.source.path));
+  const isCanvas =
+    document.language === "canvas" ||
+    (document.source.kind === "disk" &&
+      isProjectCanvasPath(document.source.path));
+  const canvasRelPath =
+    source.kind === "disk"
+      ? (projectCanvasLocation(source.path)?.relPath ?? null)
+      : null;
   const showDiffToggle =
     mode === "diff" || document.conflictDiskContents !== null;
 
@@ -120,6 +132,9 @@ export function ResolvedFilePanelActions({
             <Eye data-icon="inline-start" />
           )}
         </Button>
+      ) : null}
+      {isCanvas && mode === "preview" && canvasRelPath ? (
+        <CanvasReloadButton moduleId={canvasRelPath} t={t} />
       ) : null}
       {showDiffToggle ? (
         <Button

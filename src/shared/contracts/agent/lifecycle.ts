@@ -5,7 +5,11 @@ import { type AgentKind, agentKindSchema } from "../agent.ts";
 export const agentLifecycleSupportSchema = z.enum(["full", "guided", "none"]);
 export type AgentLifecycleSupport = z.infer<typeof agentLifecycleSupportSchema>;
 
-export const agentLifecycleActionSchema = z.enum(["install", "update"]);
+export const agentLifecycleActionSchema = z.enum([
+  "install",
+  "update",
+  "uninstall",
+]);
 export type AgentLifecycleAction = z.infer<typeof agentLifecycleActionSchema>;
 
 /**
@@ -21,6 +25,16 @@ export const agentLifecycleUpdateModeSchema = z.enum([
 ]);
 export type AgentLifecycleUpdateMode = z.infer<
   typeof agentLifecycleUpdateModeSchema
+>;
+
+/**
+ * How Pier can help uninstall this agent CLI.
+ * - managed: package-manager reversible uninstall plan available
+ * - none: no managed uninstall (custom command may still apply for full)
+ */
+export const agentLifecycleUninstallModeSchema = z.enum(["managed", "none"]);
+export type AgentLifecycleUninstallMode = z.infer<
+  typeof agentLifecycleUninstallModeSchema
 >;
 
 export const agentInstallInfoSchema = z.object({
@@ -47,6 +61,11 @@ export const agentLifecycleProbeSchema = z.object({
    * UI should gate Install on this, not only support===full.
    */
   canInstall: z.boolean(),
+  /**
+   * True when host can run a managed uninstall plan for PATH-default install.
+   * UI also allows custom uninstall when support===full even if false.
+   */
+  canUninstall: z.boolean(),
   detected: z.boolean(),
   /** PES/env probe degraded — installs may be empty. */
   envDegraded: z.boolean().optional(),
@@ -58,6 +77,10 @@ export const agentLifecycleProbeSchema = z.object({
    * Default shell one-liner for update (source-aware plan preview).
    */
   defaultUpdateCommand: z.string().nullable().optional(),
+  /**
+   * Default shell one-liner for uninstall (source-aware plan preview).
+   */
+  defaultUninstallCommand: z.string().nullable().optional(),
   guideCommands: z.array(agentLifecycleGuideCommandSchema).optional(),
   installedButBroken: z.boolean(),
   installs: z.array(agentInstallInfoSchema),
@@ -72,6 +95,15 @@ export const agentLifecycleProbeSchema = z.object({
    * or versioned+detected with unknown latest (still can re-run update channels).
    */
   updateOffered: z.boolean(),
+  uninstallMode: agentLifecycleUninstallModeSchema,
+  /**
+   * PATH-default install path for confirm copy (set whenever defaultInstall exists).
+   */
+  uninstallTargetPath: z.string().nullable().optional(),
+  /**
+   * PATH-default install source for confirm copy (set whenever defaultInstall exists).
+   */
+  uninstallTargetSource: z.string().nullable().optional(),
   version: z.string().nullable(),
 });
 export type AgentLifecycleProbe = z.infer<typeof agentLifecycleProbeSchema>;
@@ -90,6 +122,8 @@ export const agentLifecycleErrorCodeSchema = z.enum([
   "timeout",
   "env_unavailable",
   "package_manager_missing",
+  /** Uninstall PM exited 0 but post-probe still detects the agent. */
+  "still_detected",
 ]);
 export type AgentLifecycleErrorCode = z.infer<
   typeof agentLifecycleErrorCodeSchema

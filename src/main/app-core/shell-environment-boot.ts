@@ -1,11 +1,15 @@
 /**
- * Boot wiring for shell-env parity: prefs-gated PES, host apply, failure notify.
+ * Boot wiring for shell-env parity: prefs-gated PES, host apply, soft degrade.
  * Extracted from app-core index to keep file-size under the hard cap.
+ *
+ * Soft degrade (industry practice): dump failure does not block boot; host
+ * keeps process.env. User-facing status is Settings → Terminal only — no
+ * notification-center row and no toast by default.
  */
-import { resolveAppUpdateUiLocale } from "../services/app-updates/ui-locale.ts";
+import { getNotificationCenterService } from "../ipc/notification-center.ts";
 import {
   createShellEnvFailureNotify,
-  formatShellEnvFailureCopy,
+  SHELL_ENV_FAILURE_DEDUPE_KEY_PREFIX,
 } from "../services/process-environment/notify-failure.ts";
 import {
   createProcessEnvironmentService,
@@ -16,12 +20,6 @@ import type { PierEventBus } from "./event-bus.ts";
 
 export interface ShellEnvironmentBootInput {
   eventBus: PierEventBus;
-  getFocusedWindow: () => unknown | null;
-  ingestNotification: Parameters<
-    typeof createShellEnvFailureNotify
-  >[0]["ingest"];
-  onWindowCreate: (cb: () => void) => void;
-  onWindowFocus: (cb: () => void) => void;
   readPreferences: () => Promise<{
     shellEnvironment: { disabled: boolean; timeoutMs: number };
   }>;
@@ -57,21 +55,9 @@ export function createShellEnvironmentBoot(
   });
 
   const shellEnvBootId = `${process.pid}-${Date.now()}`;
+  // Log-only controller: no NCS ingest (settings page is the UX surface).
   const shellEnvFailureNotify = createShellEnvFailureNotify({
     bootId: shellEnvBootId,
-    getFocusedWindow: input.getFocusedWindow,
-    ingest: input.ingestNotification,
-    resolveCopy: async () => {
-      // Main has no i18n runtime — resolve locale at deliver time (app-update pattern).
-      const locale = await resolveAppUpdateUiLocale();
-      return formatShellEnvFailureCopy(locale);
-    },
-  });
-  input.onWindowFocus(() => {
-    shellEnvFailureNotify.tryDeliver();
-  });
-  input.onWindowCreate(() => {
-    shellEnvFailureNotify.tryDeliver();
   });
 
   const processEnvironment = createProcessEnvironmentService({
@@ -91,7 +77,18 @@ export function createShellEnvironmentBoot(
       const diagnostics = await processEnvironment.invalidate({
         reapplyHost: true,
       });
-      // failed: onShellEnvFailed already scheduled notify; do not double-call.
+      // failed: onShellEnvFailed already logged; do not NCS-notify.
+      // Drop legacy shell-env inbox rows (pre soft-degrade product default).
+      try {
+        const ncs = await getNotificationCenterService();
+        ncs?.removeWhere(
+          (item) =>
+            typeof item.dedupeKey === "string" &&
+            item.dedupeKey.startsWith(SHELL_ENV_FAILURE_DEDUPE_KEY_PREFIX)
+        );
+      } catch {
+        // NCS may not be ready yet; ignore.
+      }
       return (
         diagnostics ??
         processEnvironment.getHostDiagnostics() ?? {
