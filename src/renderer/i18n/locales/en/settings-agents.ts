@@ -41,14 +41,17 @@ export const settingsAgents = {
     websiteOpenFailedTitle: "Unable to open website",
     install: "Install",
     update: "Update",
+    uninstall: "Uninstall",
     cancel: "Cancel",
     copyInstallCommand: "Copy install command",
     copyInstallCommandSuccess: "Install command copied",
     copyInstallCommandFailed: "Couldn't copy install command",
     installFailed: "Couldn't install agent",
     updateFailed: "Couldn't update agent",
+    uninstallFailed: "Couldn't uninstall agent",
     installBusy: "Installing",
     updateBusy: "Updating",
+    uninstallBusy: "Uninstalling",
     queueBusy: "Queued",
     /** Multi-step only: "2/3" */
     busyStep: "{{current}}/{{total}}",
@@ -58,11 +61,21 @@ export const settingsAgents = {
     rowInstallFailedWithStep: "Install failed ({{step}})",
     rowUpdateFailed: "Update failed",
     rowUpdateFailedWithStep: "Update failed ({{step}})",
+    rowUninstallFailed: "Uninstall failed",
+    rowUninstallPartial: "Default install removed; others still detected",
     alreadyInstalled: "Already installed",
     conflictConfirmTitle: "Multiple installs found",
     conflictConfirmBody:
       "Only the install currently used by default will be updated. Other locations stay unchanged.",
     conflictConfirmContinue: "Update default",
+    uninstallConfirmTitle: "Uninstall this agent?",
+    uninstallConfirmBody:
+      "Removes the “{{name}}” command-line tool from this computer ({{source}}: {{path}}). Chat history and local settings stay. If it is still running in a terminal, that session may stop working.",
+    uninstallConfirmContinue: "Uninstall",
+    uninstallSuccess: "Uninstalled {{name}}",
+    uninstallSkipped: "Not installed",
+    uninstallUnsupported:
+      "This install method can't be uninstalled automatically. Add a custom command below, or open the website.",
   },
   lifecycle: {
     version: "Version",
@@ -94,6 +107,7 @@ export const settingsAgents = {
         "Couldn't prepare the shell environment. Refresh and try again.",
       package_manager_missing:
         "A required package manager (npm, Homebrew, pipx, or uv) was not found. Install one, then try again.",
+      still_detected: "Uninstall finished, but the agent is still detected.",
     },
   },
   row: {
@@ -112,6 +126,11 @@ export const settingsAgents = {
     updateCommandDesc:
       "Shell command for one-click update. Leave empty to use Pier’s default (matched to how this CLI was installed).",
     updateCommandPlaceholder: "Leave empty for Pier’s default update steps",
+    uninstallCommand: "Uninstall command",
+    uninstallCommandDesc:
+      "Shell command for one-click uninstall. Leave empty to use Pier’s default (matched to how this CLI was installed).",
+    uninstallCommandPlaceholder:
+      "Leave empty for Pier’s default uninstall steps",
     env: "Launch environment",
     envDesc: "Environment variables applied to this agent",
   },
