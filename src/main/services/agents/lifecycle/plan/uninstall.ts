@@ -200,3 +200,47 @@ export function buildUninstallCommand(
   }
   return { shellCommand: plan.preview, preview: plan.preview };
 }
+
+/** PATH-default install slice needed for probe uninstall fields (K19). */
+export interface UninstallProbeDefaultInstall {
+  path: string;
+  source: string;
+}
+
+export interface UninstallProbeFields {
+  canUninstall: boolean;
+  defaultUninstallCommand: string | null;
+  uninstallMode: "managed" | "none";
+  uninstallTargetPath: string | null;
+  uninstallTargetSource: string | null;
+}
+
+/**
+ * Pure probe fields for managed uninstall (unit-testable without enumerate).
+ * - canUninstall: full + buildUninstallPlan !== null
+ * - targets: always from defaultInstall when present (even if canUninstall false)
+ */
+export function resolveUninstallProbeFields(
+  spec: AgentLifecycleSpec,
+  host: "posix" | "win",
+  defaultInstall: UninstallProbeDefaultInstall | null
+): UninstallProbeFields {
+  const uninstallPlan =
+    spec.support === "full"
+      ? buildUninstallPlan(spec, {
+          host,
+          installSource: defaultInstall?.source ?? null,
+          defaultBinPath: defaultInstall?.path ?? null,
+        })
+      : null;
+
+  const canUninstall = uninstallPlan !== null;
+  const preview = uninstallPlan?.preview.trim() ?? "";
+  return {
+    canUninstall,
+    defaultUninstallCommand: preview.length > 0 ? preview : null,
+    uninstallMode: canUninstall ? "managed" : "none",
+    uninstallTargetPath: defaultInstall?.path ?? null,
+    uninstallTargetSource: defaultInstall?.source ?? null,
+  };
+}

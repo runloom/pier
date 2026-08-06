@@ -6,6 +6,7 @@ import type {
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { defaultCommandsFor, guideCommandsFor } from "./defaults.ts";
 import { fetchLatestVersion } from "./latest.ts";
+import { resolveUninstallProbeFields } from "./plan/uninstall.ts";
 import { buildInstallPlan } from "./plan.ts";
 import { enumerateInstalls, isInstallConflict } from "./sources/path-enum.ts";
 import {
@@ -32,11 +33,10 @@ export async function probeOneAgent(
 
   if (!env) {
     const defaults = defaultCommandsFor(agentId);
+    const uninstallFields = resolveUninstallProbeFields(spec, opts.host, null);
     return {
       agentId,
       canInstall,
-      // Safe compile defaults until Task 3 implements real canUninstall logic.
-      canUninstall: false,
       detected: false,
       envDegraded: true,
       guideCommands: guideCommandsFor(agentId),
@@ -48,11 +48,10 @@ export async function probeOneAgent(
       updateAvailable: false,
       updateMode,
       updateOffered: false,
-      uninstallMode: "none",
-      uninstallTargetPath: null,
-      uninstallTargetSource: null,
       version: null,
       ...defaults,
+      // Prefer probe-host uninstall fields over process-platform defaults.
+      ...uninstallFields,
     };
   }
 
@@ -109,11 +108,16 @@ export async function probeOneAgent(
     defaultInstall?.source,
     defaultInstall?.path
   );
+  const uninstallFields = resolveUninstallProbeFields(
+    spec,
+    opts.host,
+    defaultInstall
+      ? { path: defaultInstall.path, source: defaultInstall.source }
+      : null
+  );
   return {
     agentId,
     canInstall,
-    // Safe compile defaults until Task 3 implements real canUninstall logic.
-    canUninstall: false,
     detected: detected || installedButBroken,
     envDegraded: opts.envDegraded,
     guideCommands: guideCommandsFor(agentId),
@@ -125,11 +129,10 @@ export async function probeOneAgent(
     updateAvailable,
     updateMode,
     updateOffered,
-    uninstallMode: "none",
-    uninstallTargetPath: null,
-    uninstallTargetSource: null,
     version,
     ...defaults,
+    // Prefer probe-host uninstall fields over process-platform defaults.
+    ...uninstallFields,
   };
 }
 

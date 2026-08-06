@@ -16,4 +16,11 @@ export {
 export { filterUninstallChannels } from "./plan/source-policy.ts";
 export type { PlannedInvocation, PlannedPlan } from "./plan/types.ts";
 export { previewInvocation, previewPlan } from "./plan/types.ts";
-export { deriveUninstallChannels } from "./plan/uninstall.ts";
+export type {
+  UninstallProbeDefaultInstall,
+  UninstallProbeFields,
+} from "./plan/uninstall.ts";
+export {
+  deriveUninstallChannels,
+  resolveUninstallProbeFields,
+} from "./plan/uninstall.ts";
