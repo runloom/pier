@@ -102,7 +102,8 @@ describe("installRendererFailureRecovery logging", () => {
     expect(String(gone?.ctx?.incidentId ?? "")).toMatch(/^[0-9a-f]{12}$/i);
 
     await vi.waitFor(() => expect(webContents.loadURL).toHaveBeenCalled());
-    const recoveryUrl = String(webContents.loadURL.mock.calls[0]?.[0] ?? "");
+    const loadCalls = webContents.loadURL.mock.calls as unknown as string[][];
+    const recoveryUrl = String(loadCalls[0]?.[0] ?? "");
     const html = decodeURIComponent(
       recoveryUrl.replace("data:text/html;charset=utf-8,", "")
     );

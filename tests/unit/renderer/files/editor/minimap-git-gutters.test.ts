@@ -1,4 +1,4 @@
-import { EditorState, RangeSet } from "@codemirror/state";
+import { EditorState, RangeSet, type RangeValue } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import {
   clearGitGutterMarkers,
@@ -11,7 +11,7 @@ import {
 import { createMinimapExtension } from "@plugins/builtin/files/renderer/editor/minimap.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-function firstGutterFrom(ranges: RangeSet<unknown>): number | null {
+function firstGutterFrom(ranges: RangeSet<RangeValue>): number | null {
   const cursor = ranges.iter();
   if (!cursor.value) {
     return null;

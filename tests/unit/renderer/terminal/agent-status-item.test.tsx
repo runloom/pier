@@ -5,6 +5,14 @@ import { registerAgentStatusItem } from "@/panel-kits/terminal/agent-status-item
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/status-bar.tsx";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 
+const statusCtx = {
+  context: undefined,
+  cwd: null,
+  getGroupId: () => null,
+  panelId: "terminal-1",
+  title: null,
+};
+
 describe("agent status bar item", () => {
   let dispose: (() => void) | undefined;
 
@@ -13,8 +21,7 @@ describe("agent status bar item", () => {
     dispose = registerAgentStatusItem();
     useForegroundActivityStore.setState({
       activities: {},
-      hydrated: true,
-      seq: 0,
+      ts: 0,
     });
   });
 
@@ -23,12 +30,12 @@ describe("agent status bar item", () => {
     dispose = undefined;
     useForegroundActivityStore.setState({
       activities: {},
-      hydrated: false,
-      seq: 0,
+      ts: 0,
     });
   });
 
   it("is visible with readable label when FA is agent even without hook status", () => {
+    const now = Date.now();
     useForegroundActivityStore.setState({
       activities: {
         "terminal-1": {
@@ -36,23 +43,20 @@ describe("agent status bar item", () => {
           kind: "agent",
           panelId: "terminal-1",
           source: "launch",
-          // status undefined = launch 先验
+          spawnedAt: now,
+          subagentCount: 0,
+          updatedAt: now,
           windowId: "w1",
         },
       },
-      hydrated: true,
-      seq: 1,
+      ts: 1,
     });
 
     const agentItem = terminalStatusItemRegistry
       .list()
-      .find((item) =>
-        item.isVisible?.({ panelId: "terminal-1", windowId: "w1" })
-      );
+      .find((item) => item.isVisible?.(statusCtx));
     expect(agentItem).toBeDefined();
-    const { container } = render(
-      agentItem?.render({ panelId: "terminal-1", windowId: "w1" }) ?? null
-    );
+    const { container } = render(agentItem?.render(statusCtx) ?? null);
     const root = container.querySelector('[data-testid="agent-status-item"]');
     expect(root).not.toBeNull();
     // 必须有可见文案（catalog 名或状态词），不能只剩 icon

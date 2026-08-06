@@ -61,10 +61,10 @@ describe("task run coordinator", () => {
       runs: Record<
         string,
         {
-          originPanelId?: string;
-          ownerWindowId?: string;
-          mode?: string;
-          status?: string;
+          originPanelId?: string | undefined;
+          ownerWindowId?: string | undefined;
+          mode?: string | undefined;
+          status?: string | undefined;
         }
       >;
     }> = [];

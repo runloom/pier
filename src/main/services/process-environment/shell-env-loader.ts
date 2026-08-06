@@ -420,7 +420,7 @@ export function createDefaultShellEnvironmentLoader({
           });
           return finishOk(env, "non-login-fallback");
         } catch {
-          failWithDuration(primaryError);
+          return failWithDuration(primaryError);
         }
       }
     }

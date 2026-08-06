@@ -869,10 +869,11 @@ describeMockedMacOSWindowManager(
           })
         )
       );
-      const prompt = electronMock.showMessageBox.mock.calls.at(-1)?.[0] as {
-        detail?: string;
-      };
-      expect(prompt.detail).toMatch(/incident: [0-9a-f]{12}/i);
+      const boxCalls = electronMock.showMessageBox.mock.calls as unknown as [
+        { detail?: string },
+      ][];
+      const prompt = boxCalls.at(-1)?.[0];
+      expect(prompt?.detail).toMatch(/incident: [0-9a-f]{12}/i);
     });
 
     it("destroys the unusable window when native recovery chooses close", async () => {
