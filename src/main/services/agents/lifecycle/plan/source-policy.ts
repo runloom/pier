@@ -1,4 +1,8 @@
-import type { InstallChannel, UpdateChannel } from "../specs/types.ts";
+import type {
+  InstallChannel,
+  UninstallChannel,
+  UpdateChannel,
+} from "../specs/types.ts";
 
 /** Install source from path-enum (npm/brew/uv/…/path). */
 export type InstallSourceHint = string | null | undefined;
@@ -151,6 +155,35 @@ export function filterInstallChannels(
     return scripts.length > 0 ? scripts : channels;
   }
   return channels;
+}
+
+/**
+ * Source-aware uninstall: single-channel only (no multi-PM fallback).
+ * path / wsl / scoop / winget / choco / empty / unknown → no managed channels.
+ */
+export function filterUninstallChannels(
+  channels: readonly UninstallChannel[],
+  source: InstallSourceHint
+): UninstallChannel[] {
+  const s = (source ?? "").toLowerCase();
+
+  if (isPathLikeSource(s)) {
+    return [];
+  }
+  if (isNpmFamilySource(s)) {
+    return channels.filter((c) => c.kind === "npm-uninstall");
+  }
+  if (s === "brew") {
+    return channels.filter((c) => c.kind === "brew-uninstall");
+  }
+  if (s === "pipx") {
+    return channels.filter((c) => c.kind === "pipx-uninstall");
+  }
+  if (s === "uv" || s.includes("uv")) {
+    return channels.filter((c) => c.kind === "uv-uninstall");
+  }
+  // Unknown source: do not invent a managed uninstall.
+  return [];
 }
 
 /** Which reinstall steps match a source (for update reinstall expansion). */

@@ -22,9 +22,11 @@ import {
   type PlannedPlan,
   previewPlan,
 } from "./types.ts";
+import { buildUninstallPlan } from "./uninstall.ts";
 
 export { brewPackageTokenFromBinPath } from "./brew-token.ts";
 export type { InstallSourceHint } from "./source-policy.ts";
+export { buildUninstallCommand, buildUninstallPlan } from "./uninstall.ts";
 
 function platformKind(): "posix" | "win" {
   return platform() === "win32" ? "win" : "posix";
@@ -330,22 +332,24 @@ export function planLifecycle(
   } = {}
 ): PlannedPlan | null {
   const host = platformKind();
-  const plan =
-    action === "install"
-      ? buildInstallPlan(spec, host, {
-          ...(options.installSource === undefined
-            ? {}
-            : { installSource: options.installSource }),
-        })
-      : buildUpdatePlan(spec, {
-          host,
-          ...(options.defaultBinPath === undefined
-            ? {}
-            : { defaultBinPath: options.defaultBinPath }),
-          ...(options.installSource === undefined
-            ? {}
-            : { installSource: options.installSource }),
-        });
+  const sourceOpts =
+    options.installSource === undefined
+      ? {}
+      : { installSource: options.installSource };
+  const binOpts =
+    options.defaultBinPath === undefined
+      ? {}
+      : { defaultBinPath: options.defaultBinPath };
+
+  let plan: PlannedPlan | null;
+  if (action === "install") {
+    plan = buildInstallPlan(spec, host, sourceOpts);
+  } else if (action === "uninstall") {
+    plan = buildUninstallPlan(spec, { host, ...sourceOpts, ...binOpts });
+  } else {
+    // update only — never fall through from uninstall
+    plan = buildUpdatePlan(spec, { host, ...binOpts, ...sourceOpts });
+  }
 
   if (!plan) {
     return null;
@@ -358,10 +362,12 @@ export function planLifecycle(
   if (distro && host === "win") {
     let posixPlan: PlannedPlan | null;
     if (action === "install") {
-      posixPlan = buildInstallPlan(spec, "posix", {
-        ...(options.installSource === undefined
-          ? {}
-          : { installSource: options.installSource }),
+      posixPlan = buildInstallPlan(spec, "posix", sourceOpts);
+    } else if (action === "uninstall") {
+      posixPlan = buildUninstallPlan(spec, {
+        host: "posix",
+        defaultBinPath: null,
+        ...sourceOpts,
       });
     } else {
       const updateOpts: {
