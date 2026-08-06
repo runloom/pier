@@ -2,7 +2,10 @@ import { realpathSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { isAbsolute, join, normalize, relative, sep } from "node:path";
 import type { LiveRootSpec } from "@shared/contracts/live-modules.ts";
-import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
+import {
+  isFrameworkBarePackage,
+  type LiveModuleFramework,
+} from "@shared/live-module-framework.ts";
 
 export class LiveModuleFenceError extends Error {
   readonly diagnosticMessage: string;
@@ -69,9 +72,10 @@ export function isDeniedBareSpecifier(
     if (specifier.startsWith("react-dom/")) {
       return true;
     }
-    // Non-React: allow bare packages resolved from the project (framework + deps).
-    // Still deny node: / electron / DENIED_BARE above.
-    if (framework !== "react") {
+    // Framework packages (vue / solid-js / svelte) are allowlisted; other bare
+    // packages are denied for canvas source. Transitive node_modules importers
+    // bypass this check in compile.ts via importerInNodeModules.
+    if (framework !== "react" && isFrameworkBarePackage(specifier, framework)) {
       return false;
     }
     return true;

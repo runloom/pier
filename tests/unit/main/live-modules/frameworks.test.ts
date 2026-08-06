@@ -70,7 +70,7 @@ describe("live-modules multi-framework samples", () => {
     // Runtime applies the attribute only when the component options carry
     // __scopeId (compileScript + genDefaultAs does not set it for us).
     expect(source).toMatch(/__scopeId\s*=\s*["']data-v-[a-f0-9]+["']/u);
-    expect(source).toContain("data-pier-live-vue");
+    expect(source).toContain("data-pier-live-css");
   });
 
   it("react demo still compiles without framework packages in graph", async () => {
@@ -210,31 +210,23 @@ const sharedMount = mountDiagram;
     }
   });
 
-  it("stubs node: builtins for non-React frameworks instead of denying", async () => {
+  it("denies node: builtins imported from non-React canvas source", async () => {
     const { mkdir, writeFile, unlink } = await import("node:fs/promises");
-    const rel = "smoke/__node-stub.canvas.svelte";
+    const rel = "smoke/__node-deny.canvas.svelte";
     const abs = join(PROJECT_ROOT, ".pier/canvases", rel);
     await mkdir(join(PROJECT_ROOT, ".pier/canvases/smoke"), {
       recursive: true,
     });
-    // Exercise BOTH import patterns esbuild emits for CJS-interop shims:
-    //   named  — import { createRequire } from "node:module"
-    //   default — import nm from "node:module"; nm.createRequire()
-    // The stub must expose createRequire on both the named and default exports,
-    // and createRequire() must return a callable so chained access doesn't throw.
+    // Canvas source must not import node:* — only framework internals under
+    // node_modules may resolve to the no-op stub.
     await writeFile(
       abs,
       `<script module>
-export const canvas = { kind: "composition", title: "stub" };
+export const canvas = { kind: "composition", title: "deny" };
 </script>
 <script>
-  import { createRequire as namedRequire } from "node:module";
-  import nm from "node:module";
-  const require1 = namedRequire();
-  const require2 = nm.createRequire();
-  // Chained access on the returned require must not throw (dead browser path).
-  void require1("fs").readFileSync;
-  void require2("path").resolve;
+  import fs from "node:fs";
+  void fs;
   let count = $state(0);
 </script>
 <template>
@@ -250,7 +242,11 @@ export const canvas = { kind: "composition", title: "stub" };
       const spec = projectLiveRootSpec({ projectRootPath: PROJECT_ROOT });
       service.registerRoot(spec);
       const result = await service.compile(spec.id, rel);
-      expect(result.ok, JSON.stringify(result)).toBe(true);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        const text = result.diagnostics.map((d) => d.message).join("\n");
+        expect(text).toMatch(/node:fs|denied node builtin/iu);
+      }
     } finally {
       await unlink(abs).catch(() => undefined);
     }

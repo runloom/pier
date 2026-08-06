@@ -101,10 +101,29 @@ export function createLiveModuleGraphTracker(): LiveModuleGraphTracker {
           const leaf = base.includes("/")
             ? (base.split("/").at(-1) ?? base)
             : base;
+          let hit = false;
           for (const file of filesInDir) {
             const fileLeaf = file.split("/").at(-1) ?? file;
             if (fileLeaf === leaf) {
               notifyFile(file);
+              hit = true;
+            }
+          }
+          // Rename / new sibling in a watched dir: fileToModules miss still
+          // wakes every module that watches files here (broken import recovery).
+          if (!hit) {
+            const keys = new Set<ModuleKey>();
+            for (const file of filesInDir) {
+              const modules = fileToModules.get(file);
+              if (!modules) {
+                continue;
+              }
+              for (const key of modules) {
+                keys.add(key);
+              }
+            }
+            if (keys.size > 0) {
+              scheduleKeys(keys);
             }
           }
           return;

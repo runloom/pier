@@ -4,10 +4,17 @@ import type {
   LiveRootSpec,
 } from "@shared/contracts/live-modules.ts";
 import { LIVE_MODULE_COMPILE_TIMEOUT_MS } from "./compile.ts";
+import {
+  disposeAllCompileContexts,
+  disposeCompileContextsForRoot,
+} from "./compile-context-cache.ts";
+import { stopEsbuildModule } from "./esbuild-binary.ts";
 import { isPathWithinRoot } from "./fence.ts";
 import { createLiveModuleGraphTracker, toStaleEvents } from "./graph.ts";
+import { setLiveModulesService } from "./host.ts";
 import { createLiveRootRegistry } from "./root-registry.ts";
 import { runLiveModuleCompile } from "./service-compile.ts";
+
 import {
   artifactUrl,
   createLiveModuleTicketRegistry,
@@ -107,6 +114,9 @@ export function createLiveModulesService(
         compileEpochs.delete(key);
       }
     }
+    // Drop cached esbuild contexts (plugin closures + module graph) for this
+    // root so re-registration with different resolve options builds fresh.
+    disposeCompileContextsForRoot(rootId).catch(() => undefined);
   }
 
   function isSameFence(
@@ -278,6 +288,9 @@ export function createLiveModulesService(
       moduleTickets.clear();
       compileEpochs.clear();
       roots.clear();
+      stopEsbuildModule().catch(() => undefined);
+      disposeAllCompileContexts().catch(() => undefined);
+      setLiveModulesService(null);
     },
   };
 

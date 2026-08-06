@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { FileCanvasPreview } from "@plugins/builtin/files/renderer/preview/canvas.tsx";
 import {
-  CANVAS_SKELETON_DELAY_MS,
-  FileCanvasPreview,
-} from "@plugins/builtin/files/renderer/preview/canvas.tsx";
+  getCanvasChromeState,
+  requestCanvasReload,
+  unmarkCanvasActive,
+} from "@plugins/builtin/files/renderer/preview/canvas-chrome-store.ts";
+import { CANVAS_SKELETON_DELAY_MS } from "@plugins/builtin/files/renderer/preview/canvas-compile-session.ts";
 import { projectLiveRootId } from "@shared/contracts/live-modules.ts";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -185,10 +188,11 @@ describe("FileCanvasPreview", () => {
     ).toBeTruthy();
     expect(screen.getAllByText("first error").length).toBeGreaterThan(0);
     expect(screen.getByText("second error")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Reload" })).toBeTruthy();
+    const reloadButtons = screen.getAllByRole("button", { name: "Reload" });
+    expect(reloadButtons.length).toBeGreaterThan(0);
 
     await act(async () => {
-      screen.getByRole("button", { name: "Reload" }).click();
+      reloadButtons[0]?.click();
     });
     await waitFor(() => {
       expect(
@@ -394,5 +398,64 @@ describe("FileCanvasPreview", () => {
     await waitFor(() => {
       expect(compile.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
+  });
+
+  it("publishes chrome state and recompiles on toolbar reload request", async () => {
+    const url = makeModuleDataUrl(`
+      export function mount(el) {
+        el.setAttribute("data-test-canvas", "chrome");
+        return () => {};
+      }
+      export default function App() { return null; }
+    `);
+    const compile = vi.fn(async () => ({
+      graph: [],
+      moduleId: "smoke/hello.canvas.tsx",
+      ok: true as const,
+      url,
+    }));
+    const onChanged = vi.fn(() => () => undefined);
+    const registerRoot = vi.fn(async (spec: { id: string }) => ({
+      rootId: spec.id,
+    }));
+
+    // Reset module-level store for this module so the test sees fresh state.
+    act(() => {
+      unmarkCanvasActive("smoke/hello.canvas.tsx");
+    });
+
+    const { unmount } = render(
+      <FileCanvasPreview
+        context={createContext({ compile, onChanged, registerRoot })}
+        path={CANVAS_PATH}
+        root={PROJECT_ROOT}
+        t={t}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        document.querySelector("[data-test-canvas='chrome']")
+      ).toBeTruthy();
+    });
+    // Preview marked its module active for the toolbar.
+    expect(
+      getCanvasChromeState().activeByModule["smoke/hello.canvas.tsx"]
+    ).toBeGreaterThan(0);
+    const callsBeforeReload = compile.mock.calls.length;
+
+    // Toolbar Reload bumps the store; preview must recompile.
+    act(() => {
+      requestCanvasReload("smoke/hello.canvas.tsx");
+    });
+    await waitFor(() => {
+      expect(compile.mock.calls.length).toBeGreaterThan(callsBeforeReload);
+    });
+
+    unmount();
+    // Unmount deactivates the module so other panels don't show stale chrome.
+    expect(
+      getCanvasChromeState().activeByModule["smoke/hello.canvas.tsx"]
+    ).toBeUndefined();
   });
 });
