@@ -70,9 +70,9 @@ export const settingsAgents = {
     conflictConfirmContinue: "更新默认位置",
     uninstallConfirmTitle: "卸载此智能体？",
     uninstallConfirmBody:
-      "将从本机移除「{{name}}」的命令行工具（{{source}}：{{path}}）。不会删除对话记录与本地配置。若它仍在终端中运行，当前会话可能无法继续。",
+      "将从本机移除「{{name}}」（{{source}}：{{path}}）。对话与本地配置保留；若仍在终端运行，会话可能中断。",
     uninstallConfirmBodyNameOnly:
-      "将从本机移除「{{name}}」的命令行工具。不会删除对话记录与本地配置。若它仍在终端中运行，当前会话可能无法继续。",
+      "将从本机移除「{{name}}」。对话与本地配置保留；若仍在终端运行，会话可能中断。",
     /** 多处安装时追加（设计 §9.3）；语气对齐更新冲突确认。 */
     uninstallConfirmConflictNote:
       "只会移除当前默认使用的那一处，其余位置保持不变。",
@@ -128,13 +128,13 @@ export const settingsAgents = {
     uninstallCommandDesc:
       "一键卸载时执行的 shell 命令。留空则使用 Pier 默认（按当前安装来源选择通道）。",
     uninstallCommandPlaceholder: "留空则使用 Pier 默认卸载步骤",
-    env: "启动环境变量",
-    envDesc: "启动此智能体时附加的环境变量",
+    env: "附加环境变量",
+    envDesc: "启动此智能体时一并注入",
   },
   statusHooks: {
     label: "智能体状态提示",
     description:
-      "面板实时显示智能体运行或等待状态。关闭后移除 Pier 的状态上报，也不会发送「需要你处理」的系统通知。多个 Pier 版本共用本机钩子运行时，较新版本优先；退出应用不会卸掉钩子。若 Codex 等工具提示审查钩子，选择「信任全部」即可，一般只需一次。",
+      "在面板显示运行/等待状态，并发送「需要你处理」提醒。关闭后两者皆停。",
     failed: "无法更新智能体状态提示",
   },
 } as const;

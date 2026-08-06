@@ -2,12 +2,19 @@ import type { TaskRunControlEntry } from "@shared/contracts/tasks.ts";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  activeTaskRunImpliesRuntimeControl,
   currentTaskRunsByLogicalTask,
+  panelShouldMountRuntimeControl,
   RUNTIME_CONTROL_EXIT_MS,
+  shouldPresentRun,
   useTerminalRuntimeControlPresentation,
 } from "@/panel-kits/terminal/hooks/use-runtime-control-presentation.ts";
 import { useTaskRunControlDismissStore } from "@/stores/task-run-control-dismiss.store.ts";
-import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
+import {
+  panelHasActiveTaskRun,
+  taskRunsForPanel,
+  useTaskRunsStore,
+} from "@/stores/task-runs.store.ts";
 
 function run(
   status: TaskRunControlEntry["status"],
@@ -169,18 +176,13 @@ describe("terminal runtime control presentation", () => {
     expect(result.current.runs[0]?.runId).toBe("run-2");
   });
 
-  it("keeps graceful-stop dismiss while the same run stays stopping across snapshot bumps", () => {
+  it("keeps RC while stopping even if dismiss was recorded (tab dot ⇔ bar)", () => {
+    // 活跃含 stopping：dismiss 不得藏条；与 tab 蓝点同源。
     publish(run("running"));
     const { result } = renderHook(() =>
       useTerminalRuntimeControlPresentation("terminal-task")
     );
 
-    act(() => {
-      result.current.dismissRun("run-1");
-    });
-    expect(result.current.phase).toBe("exiting");
-
-    // 优雅停止后常见：同一 runId 仍为 stopping，随后又有 snapshot 版本推进。
     act(() => {
       publish(
         run("stopping", {
@@ -191,10 +193,18 @@ describe("terminal runtime control presentation", () => {
       );
     });
     act(() => {
-      vi.advanceTimersByTime(RUNTIME_CONTROL_EXIT_MS);
+      result.current.dismissRun("run-1");
     });
-    expect(result.current.mounted).toBe(false);
+    expect(result.current.mounted).toBe(true);
+    expect(result.current.runs[0]?.status).toBe("stopping");
+    expect(
+      panelHasActiveTaskRun(
+        useTaskRunsStore.getState().snapshot,
+        "terminal-task"
+      )
+    ).toBe(true);
 
+    // 进入终态后 dismiss 才生效。
     act(() => {
       publish(
         run("cancelled", {
@@ -204,7 +214,17 @@ describe("terminal runtime control presentation", () => {
         3
       );
     });
+    expect(result.current.phase).toBe("exiting");
+    act(() => {
+      vi.advanceTimersByTime(RUNTIME_CONTROL_EXIT_MS);
+    });
     expect(result.current.mounted).toBe(false);
+    expect(
+      panelHasActiveTaskRun(
+        useTaskRunsStore.getState().snapshot,
+        "terminal-task"
+      )
+    ).toBe(false);
   });
 
   it("shows only the current terminal run after repeated reruns", () => {
@@ -245,5 +265,75 @@ describe("terminal runtime control presentation", () => {
       "active-1",
       "other-task",
     ]);
+  });
+
+  it("does not hide pending/running runs behind dismiss (live process stays controllable)", () => {
+    publish(run("running"));
+    const { result } = renderHook(() =>
+      useTerminalRuntimeControlPresentation("terminal-task")
+    );
+    act(() => {
+      result.current.dismissRun("run-1");
+    });
+    // running 不可被 dismiss 藏条：仍 mounted，且与 tab presence 一致。
+    expect(result.current.mounted).toBe(true);
+    expect(result.current.runs[0]?.status).toBe("running");
+    expect(
+      panelHasActiveTaskRun(
+        useTaskRunsStore.getState().snapshot,
+        "terminal-task"
+      )
+    ).toBe(true);
+  });
+
+  it.each([
+    "pending",
+    "running",
+    "stopping",
+  ] as const)("does not hide %s behind dismiss (tab active-task ⇔ RC)", (status) => {
+    publish(run(status));
+    const { result } = renderHook(() =>
+      useTerminalRuntimeControlPresentation("terminal-task")
+    );
+    act(() => {
+      result.current.dismissRun("run-1");
+    });
+    expect(result.current.mounted).toBe(true);
+    expect(result.current.runs[0]?.status).toBe(status);
+    const snapshot = useTaskRunsStore.getState().snapshot;
+    expect(panelHasActiveTaskRun(snapshot, "terminal-task")).toBe(true);
+    const forPanel = taskRunsForPanel(snapshot, "terminal-task");
+    expect(
+      activeTaskRunImpliesRuntimeControl(true, forPanel, new Set(["run-1"]))
+    ).toBe(true);
+    expect(shouldPresentRun(run(status), new Set(["run-1"]))).toBe(true);
+  });
+
+  it("invariant: active tab presence ⇒ RC mount; pure agent panel has no RC", () => {
+    const dismissed = new Set(["run-1"]);
+    const active = run("running");
+    publish(active);
+    const forPanel = taskRunsForPanel(
+      useTaskRunsStore.getState().snapshot,
+      "terminal-task"
+    );
+    expect(panelShouldMountRuntimeControl(forPanel, dismissed)).toBe(true);
+    expect(shouldPresentRun(active, dismissed)).toBe(true);
+    expect(
+      activeTaskRunImpliesRuntimeControl(
+        panelHasActiveTaskRun(
+          useTaskRunsStore.getState().snapshot,
+          "terminal-task"
+        ),
+        forPanel,
+        dismissed
+      )
+    ).toBe(true);
+
+    // 无 TaskRun 的 panel（agent 会话典型）→ 不 mount 任务 RC、无任务蓝点。
+    expect(panelShouldMountRuntimeControl([], dismissed)).toBe(false);
+    expect(
+      panelHasActiveTaskRun(useTaskRunsStore.getState().snapshot, "agent-only")
+    ).toBe(false);
   });
 });

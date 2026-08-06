@@ -95,7 +95,7 @@
     "filePanel.saveAs.recoveryTargetChanged": "另存为中断后，目标文件已发生变化，无法自动打开；原草稿仍保留。",
     "filePanel.saveAs.targetChanged": "所选目标在写入前发生了变化。",
     "filePanel.saveAs.targetDirty": "所选目标已有未保存的更改。",
-    "filePanel.status.error": "错误",
+    "filePanel.status.error": "失败",
     "filePanel.status.durabilityUnknown": "已写入；尚未确认保存",
     "filePanel.status.deletedOnDisk": "磁盘文件已删除",
     "filePanel.status.diskConflict": "磁盘文件已更改 — 已保留未保存的编辑",
@@ -113,7 +113,7 @@
     "filePanel.languageService.state.ready": "已就绪",
     "filePanel.languageService.state.retrying": "正在重试",
     "filePanel.languageService.state.paused": "已暂停",
-    "filePanel.languageService.state.error": "错误",
+    "filePanel.languageService.state.error": "失败",
     "filePanel.languageService.description.disabled.editorDisabled": "请在“设置”中启用编辑器语言功能。",
     "filePanel.languageService.description.disabled.globallyDisabled": "请在“设置”中启用语言服务。",
     "filePanel.languageService.description.disabled.worktreesDisabled": "请在“设置”中启用工作树语言服务。",
@@ -208,7 +208,7 @@
     "filePanel.tree.createDurabilityMismatch": "新文件创建后内容又发生了变化。",
     "filePanel.tree.createNeedsProject": "请先打开项目",
     "filePanel.tree.contextMenuFailed": "无法打开菜单",
-    "filePanel.tree.directoryError": "错误",
+    "filePanel.tree.directoryError": "无法打开",
     "filePanel.tree.loadDirectoryFailed": "无法加载文件夹",
     "filePanel.tree.searchTruncated": "结果已截断为前若干匹配项",
     "filePanel.tree.searchFailed": "无法搜索文件",
@@ -437,7 +437,7 @@
       "label": "显示排除项"
     },
     "pier.files.tree.excludePatterns": {
-      "description": "未显示排除项时，从目录树中排除这些 glob 规则命中的路径。每行填写一条规则；空行和以 # 开头的行会被忽略。",
+      "description": "隐藏排除项时，目录树不显示这些路径。每行一条；# 与空行忽略。",
       "label": "排除规则"
     },
     "pier.files.tree.showGitIgnoredFiles": {
@@ -449,7 +449,7 @@
       "label": "压缩文件夹"
     },
     "pier.files.tree.autoReveal": {
-      "description": "切换标签时自动在项目目录树中定位当前文件。不作用于「打开文件 / 跳转定义 / 面包屑」等主动定位（这些仍会定位）。也可随时用「在目录树中显示当前文件」。",
+      "description": "切换标签时在项目目录树中定位当前文件。主动打开/跳转定义仍会定位。",
       "enumDescriptions": [
         "定位并在需要时滚动到可见位置",
         "仅选中，不滚动",
@@ -458,7 +458,7 @@
       "label": "自动定位当前文件"
     },
     "pier.files.tree.autoRevealExcludePatterns": {
-      "description": "切换标签自动定位时忽略这些规则命中的路径。「打开文件 / 跳转定义 / 在目录树中显示当前文件」仍会定位。每行一条规则；空行和以 # 开头的行会被忽略。",
+      "description": "自动定位时跳过这些路径。主动打开/跳转仍会定位。每行一条；# 与空行忽略。",
       "label": "自动定位排除规则"
     }
   }

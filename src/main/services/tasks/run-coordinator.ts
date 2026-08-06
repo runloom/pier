@@ -6,6 +6,7 @@ import type {
   TaskRunsSnapshot,
   TaskSpawnMode,
 } from "@shared/contracts/tasks.ts";
+import { filterTaskRunsSnapshotForWindow } from "@shared/task-runs-window-filter.ts";
 import { moveRunningOwnerWindow as moveOwnerWindow } from "./run-owner-transfer.ts";
 import {
   aggregateStatus,
@@ -108,14 +109,17 @@ export function createTaskRunCoordinator({
   const panelToRunNode = new Map<string, { runId: string; taskId: string }>();
   let sequence = 0;
   let snapshotVersion = 0;
-  const runsSnapshot = (windowId?: string | undefined): TaskRunsSnapshot => ({
-    runs: Object.fromEntries(
-      [...runs.entries()]
-        .filter(([, run]) => !windowId || run.ownerWindowId === windowId)
-        .map(([runId, run]) => [runId, controlSnapshot(run)])
-    ),
-    version: snapshotVersion,
-  });
+  // No windowId → full control map (publish / internal). With windowId →
+  // same visibility rule as broadcastTaskRunsSnapshot.
+  const runsSnapshot = (windowId?: string | undefined): TaskRunsSnapshot => {
+    const full: TaskRunsSnapshot = {
+      runs: Object.fromEntries(
+        [...runs.entries()].map(([runId, run]) => [runId, controlSnapshot(run)])
+      ),
+      version: snapshotVersion,
+    };
+    return windowId ? filterTaskRunsSnapshotForWindow(full, windowId) : full;
+  };
 
   const publish = (): void => {
     snapshotVersion += 1;

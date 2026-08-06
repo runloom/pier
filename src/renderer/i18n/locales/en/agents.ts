@@ -1,32 +1,32 @@
 export const agents = {
   focusEmpty: "Nothing needs your attention",
-  focusFailed: "Couldn't focus agent",
+  focusFailed: "Couldn't focus agent — try again",
   focusPanelGone: "Panel closed",
   focusWindowGone: "Window closed",
-  indexListFailed: "Couldn't load agent list",
+  indexListFailed: "Couldn't load agent list — try again",
   notificationPermissionDenied: "Notifications off",
   notificationPermissionDeniedDetail:
-    "Won't get agent alerts; check the list or jump shortcuts",
+    "Agent alerts won't appear. Check the agent list, or enable notifications in system settings",
   notificationUnsupported: "Notifications unsupported",
   notificationUnsupportedDetail:
-    "Won't get agent alerts; check the list or jump shortcuts",
+    "System alerts unavailable. Check status in the agent list",
   quickPick: {
     empty: "No running agents",
     emptyDetail: "Start an agent to see it here",
     emptyNew: "Start default agent",
     emptyNewDetail: "No running agents right now",
-    focusNextNeedsYou: "Jump to next that needs you",
+    focusNextNeedsYou: "Jump to next needing attention",
     placeholder: "Search agents…",
     thisWindow: "This window",
     title: "Agents",
     windowLabel: "Window {{id}}",
   },
   section: {
-    needsYou: "Needs you",
+    needsYou: "Needs attention",
     readyHint: "Awaiting input",
     running: "Running",
   },
   titleBar: {
-    countsAria: "Agents: {{needsYou}} need you, {{running}} running",
+    countsAria: "Agents: {{needsYou}} need attention, {{running}} running",
   },
 } as const;

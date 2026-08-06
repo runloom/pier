@@ -70,9 +70,9 @@ export const settingsAgents = {
     conflictConfirmContinue: "Update default",
     uninstallConfirmTitle: "Uninstall this agent?",
     uninstallConfirmBody:
-      "Removes the “{{name}}” command-line tool from this computer ({{source}}: {{path}}). Chat history and local settings stay. If it is still running in a terminal, that session may stop working.",
+      "Removes “{{name}}” from this Mac ({{source}}: {{path}}). Chat and local settings stay. A running terminal session may stop.",
     uninstallConfirmBodyNameOnly:
-      "Removes the “{{name}}” command-line tool from this computer. Chat history and local settings stay. If it is still running in a terminal, that session may stop working.",
+      "Removes “{{name}}” from this Mac. Chat and local settings stay. A running terminal session may stop.",
     /** Appended when probe.isConflict (design §9.3); mirrors update conflict tone. */
     uninstallConfirmConflictNote:
       "Only the install currently used by default will be removed. Other locations stay unchanged.",
@@ -120,35 +120,35 @@ export const settingsAgents = {
     detectCmd: "Detect command",
     expectedProcess: "Process",
     commandOverride: "Command override",
-    commandOverrideDesc: "Override the agent binary path",
+    commandOverrideDesc: "Custom executable path for this agent",
     args: "Launch args",
     argsDesc: "Args appended to the launch command",
     installCommand: "Install command",
     installCommandDesc:
-      "Shell command for one-click install. Leave empty to use Pier’s default (from official / package-manager channels).",
+      "Shell command for one-click install. Leave empty for Pier’s default.",
     installCommandPlaceholder: "Leave empty for Pier’s default install steps",
     updateCommand: "Update command",
     updateCommandDesc:
-      "Shell command for one-click update. Leave empty to use Pier’s default (matched to how this CLI was installed).",
+      "Shell command for one-click update. Leave empty for Pier’s default.",
     updateCommandPlaceholder: "Leave empty for Pier’s default update steps",
     uninstallCommand: "Uninstall command",
     uninstallCommandDesc:
-      "Shell command for one-click uninstall. Leave empty to use Pier’s default (matched to how this CLI was installed).",
+      "Shell command for one-click uninstall. Leave empty for Pier’s default.",
     uninstallCommandPlaceholder:
       "Leave empty for Pier’s default uninstall steps",
-    env: "Launch environment",
-    envDesc: "Environment variables applied to this agent",
+    env: "Extra environment variables",
+    envDesc: "Variables added when launching this agent",
   },
   sessionTitleRefine: {
     label: "Name sessions automatically",
     description:
-      "After the first exchange, rewrite the tab title into a closer task name. When off, sessions are still named from your first message — no agent is called and no quota is spent.",
+      "After the first reply, rename the tab to match the task. When off, the first message is used as the name.",
     failed: "Could not update session naming",
   },
   statusHooks: {
     label: "Agent status alerts",
     description:
-      "Show live agent run or wait status in panels. Turning this off removes Pier’s status reporting and “Needs you” system notifications. Multiple Pier versions share one on-device hook runtime (newer wins); quitting the app does not uninstall hooks. If Codex asks to review hooks, choose Trust all and continue — usually once is enough.",
+      "Show run/wait status in panels and send attention alerts. Turn off to silence both.",
     failed: "Could not update agent status alerts",
   },
 } as const;

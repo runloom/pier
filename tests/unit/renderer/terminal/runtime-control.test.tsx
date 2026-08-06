@@ -427,7 +427,7 @@ describe("terminal runtime control", () => {
 
     renderControl({ current, runs: [current, older] });
     const selector = screen.getByRole("button", {
-      name: "Switch task run, current: Test suite",
+      name: "Switch task, current: Test suite",
     });
     const restart = screen.getByRole("button", { name: "Restart task" });
     fireEvent.click(restart);
@@ -554,10 +554,12 @@ describe("terminal runtime control", () => {
     const { container } = renderControl({ current, dismissRun });
     expect(container.querySelector('[data-slot="badge"]')).toBeNull();
     expect(container.querySelector('[data-slot="separator"]')).not.toBeNull();
-    expect(screen.getByText("Test suite")).toHaveClass("flex-1", "truncate");
+    expect(screen.getByText("Test suite")).toHaveClass("truncate");
+    expect(screen.getByText("Test suite")).not.toHaveClass("flex-1");
+    // 内容定宽：禁止任何 % 宽度类。
     expect(
       screen.getByRole("group", { name: "Task run controls: Test suite" })
-    ).toHaveClass("w-full");
+    ).not.toHaveClass("w-full", "max-w-full");
     expect(screen.getByRole("status", { name: "Running" })).toBeVisible();
     expect(screen.getByLabelText("Elapsed time: 2s")).toHaveTextContent("2s");
     fireEvent.click(screen.getByRole("button", { name: "Stop task" }));
@@ -655,7 +657,7 @@ describe("terminal runtime control", () => {
       ).toBe("run-2");
     });
     const selector = screen.getByRole("button", {
-      name: "Switch task run, current: Active build",
+      name: "Switch task, current: Active build",
     });
     const separator = view.container.querySelector<HTMLElement>(
       '[data-slot="separator"]'

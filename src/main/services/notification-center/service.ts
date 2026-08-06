@@ -76,6 +76,8 @@ export interface NotificationCenterService {
    * 由 FA 发布路径调用；不进 inbox 快照。
    */
   pruneOsCooldown(liveAgentRefs: ReadonlySet<string>): void;
+  /** 按谓词删除历史项并广播（用于下线误报类消息）。 */
+  removeWhere(predicate: (item: AppNotification) => boolean): number;
   setDnd(enabled: boolean): Promise<void>;
   snapshot(): NotificationCenterSnapshot;
   /** preferences.changed 外部写入（设置页）后同步缓存；dndEnabled 变化时广播。 */
@@ -272,6 +274,13 @@ export async function createNotificationCenterService(
     },
     pruneOsCooldown: (liveAgentRefs) => {
       osCooldown.prune(liveAgentRefs);
+    },
+    removeWhere: (predicate) => {
+      const removed = deps.history.removeWhere(predicate);
+      if (removed > 0) {
+        publish();
+      }
+      return removed;
     },
     setDnd: async (enabled) => {
       if (enabled === prefs.dndEnabled) {

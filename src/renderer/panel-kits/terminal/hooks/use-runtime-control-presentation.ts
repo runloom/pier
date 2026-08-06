@@ -1,7 +1,9 @@
+import { isActiveTaskRunNodeStatus } from "@shared/contracts/task-run-status.ts";
 import type {
   TaskRunControlEntry,
   TaskRunNodeStatus,
 } from "@shared/contracts/tasks.ts";
+import { createLogger } from "@shared/logger.ts";
 import {
   useCallback,
   useEffect,
@@ -10,11 +12,15 @@ import {
   useRef,
   useState,
 } from "react";
+import { reportTaskRuntimeDiagnostic } from "@/lib/tasks/report-runtime-diagnostic.ts";
 import { useTaskRunControlDismissStore } from "@/stores/task-run-control-dismiss.store.ts";
 import {
+  panelHasActiveTaskRun,
   taskRunsForPanel,
   useTaskRunsStore,
 } from "@/stores/task-runs.store.ts";
+
+const log = createLogger("task.runtime.rc");
 
 export const RUNTIME_CONTROL_EXIT_MS = 180;
 
@@ -31,8 +37,9 @@ interface TerminalRuntimeControlPresentation {
 
 type InternalPhase = "exiting" | "hidden" | "visible";
 
+/** 与 tab 蓝点 / shared isActiveTaskRunNodeStatus 单一来源，禁止再分叉。 */
 export function isActiveTaskRunStatus(status: TaskRunNodeStatus): boolean {
-  return status === "pending" || status === "running" || status === "stopping";
+  return isActiveTaskRunNodeStatus(status);
 }
 
 /** @deprecated 终态一律 linger 后退场；保留导出供旧测试/调用方过渡。 */
@@ -99,17 +106,54 @@ export function currentTaskRunsByLogicalTask(
 }
 
 /**
- * 活跃与终态都在场；用户点「关闭」dismiss 后才退场。
- * 不自动打开输出面板；不靠消息中心兜底。
+ * 控制条是否应对该 run 在场。
+ *
+ * - **活跃**（pending / running / stopping）：始终在场，dismiss 无效。
+ *   与 tab「活跃任务」蓝点同源：有活跃 run ⇔ 必有 RC（禁止「有点无条」）。
+ * - **终态**：dismiss 后离场（重跑/关闭条，不点蓝点）。
  */
-function shouldPresentRun(
+export function shouldPresentRun(
   run: TaskRunControlEntry,
   dismissedRunIds: ReadonlySet<string>
 ): boolean {
+  if (isActiveTaskRunStatus(run.status)) {
+    return true;
+  }
   if (dismissedRunIds.has(run.runId)) {
     return false;
   }
   return true;
+}
+
+/**
+ * 不变量：RC 作用域内存在 presentable run 时，RC 应 mount。
+ * 纯函数供单测与治理锁定（agent 无 TaskRun 时返回 false）。
+ *
+ * 与 `panelHasActiveTaskRun` 的关系：
+ * - 任一活跃 run → 两者皆 true（active 不看 dismiss）
+ * - 仅终态未 dismiss → RC true、tab 蓝点 false（终态控制条，非「在跑」）
+ */
+export function panelShouldMountRuntimeControl(
+  runsForPanel: readonly TaskRunControlEntry[],
+  dismissedRunIds: ReadonlySet<string>
+): boolean {
+  const current = currentTaskRunsByLogicalTask(runsForPanel);
+  return current.some((run) => shouldPresentRun(run, dismissedRunIds));
+}
+
+/**
+ * 活跃任务 presence 是否强制 RC 在场。
+ * 供单测锁定：panelHasActiveTaskRun ⇒ RC mount（任意 dismiss 集合）。
+ */
+export function activeTaskRunImpliesRuntimeControl(
+  hasActiveTaskRun: boolean,
+  runsForPanel: readonly TaskRunControlEntry[],
+  dismissedRunIds: ReadonlySet<string>
+): boolean {
+  if (!hasActiveTaskRun) {
+    return true;
+  }
+  return panelShouldMountRuntimeControl(runsForPanel, dismissedRunIds);
 }
 
 function reducedMotionEnabled(): boolean {
@@ -157,6 +201,10 @@ export function useTerminalRuntimeControlPresentation(
     () => currentRuns.filter((run) => shouldPresentRun(run, dismissedRunIds)),
     [currentRuns, dismissedRunIds]
   );
+  const hasActiveTask = useMemo(
+    () => panelHasActiveTaskRun(snapshot, panelId),
+    [panelId, snapshot]
+  );
   const [retainedRuns, setRetainedRuns] = useState<
     readonly TaskRunControlEntry[]
   >(() => eligibleRuns);
@@ -166,6 +214,42 @@ export function useTerminalRuntimeControlPresentation(
   );
   const phaseRef = useRef<InternalPhase>(phase);
   const exitTimerRef = useRef<number | null>(null);
+  const lastPresenceLogRef = useRef<string>("");
+
+  useEffect(() => {
+    const signature = [
+      panelId,
+      hasActiveTask ? "1" : "0",
+      eligibleRuns.map((run) => `${run.runId}:${run.status}`).join(","),
+    ].join("|");
+    if (signature === lastPresenceLogRef.current) {
+      return;
+    }
+    lastPresenceLogRef.current = signature;
+    const presence = {
+      eligible: eligibleRuns.map((run) => ({
+        mode: run.mode,
+        originPanelId: run.originPanelId,
+        runId: run.runId,
+        status: run.status,
+      })),
+      hasActiveTask,
+      mounted: eligibleRuns.length > 0,
+      panelId,
+      panelRunCount: panelRuns.length,
+      snapshotRunCount: Object.keys(snapshot.runs).length,
+      snapshotVersion: snapshot.version,
+    };
+    log.debug("RC presence", presence);
+    reportTaskRuntimeDiagnostic("task.runtime.rc", "RC presence", presence);
+  }, [
+    eligibleRuns,
+    hasActiveTask,
+    panelId,
+    panelRuns.length,
+    snapshot.runs,
+    snapshot.version,
+  ]);
 
   const setPhase = useCallback((next: InternalPhase) => {
     if (phaseRef.current === next) {
@@ -185,9 +269,8 @@ export function useTerminalRuntimeControlPresentation(
     useTaskRunControlDismissStore.getState().dismiss(runId);
   }, []);
 
-  // 不在 active/stopping 时 undismiss：优雅停止后 run 仍是 stopping，
-  // 任意 TaskRuns 快照刷新都会把条拉回，抵消「停止即收条」。
-  // 重新运行会分配新 runId，天然可展示，无需 undismiss 旧 id。
+  // 活跃（含 stopping）不可 dismiss 藏条；终态 dismiss 后离场。
+  // 重新运行分配新 runId，天然可展示。
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);

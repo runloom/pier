@@ -54,14 +54,25 @@ export {
   createProcessEnvironmentService,
   stubProcessEnvironmentService,
 } from "./service.ts";
+export { isLaunchedFromCli } from "./shell-env-cli.ts";
 export {
   createDefaultShellEnvironmentLoader,
+  createShellEnvJsonMark,
   DEFAULT_SHELL_ENV_TIMEOUT_MS,
+  FALLBACK_TIMEOUT_FLOOR_MS,
+  fallbackDeadlineMs,
+  fallbackTimeoutMs,
   PIER_RESOLVING_ENVIRONMENT,
+  parseShellEnvironmentJsonOutput,
   parseShellEnvironmentOutput,
+  remainingTimeoutMs,
+  SHELL_DUMP_ARTIFACT_KEYS,
   SHELL_ENV_END,
   SHELL_ENV_START,
   shellEnvCommand,
+  shellEnvJsonCommand,
+  stripShellDumpArtifacts,
+  tryParseShellEnvironmentOutput,
 } from "./shell-env-loader.ts";
 export type {
   CreateProcessEnvironmentServiceOptions,
@@ -77,4 +88,5 @@ export type {
   ShellEnvironmentLoader,
   ShellEnvironmentLoadRequest,
   ShellEnvironmentLoadResult,
+  ShellEnvSkipReason,
 } from "./types.ts";

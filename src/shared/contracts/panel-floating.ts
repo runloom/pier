@@ -16,8 +16,9 @@ export const panelFloatingLayoutSchema = z
   .strict();
 export type PanelFloatingLayout = z.infer<typeof panelFloatingLayoutSchema>;
 
+/** 默认贴终端面板右上（与搜索浮层同角，内容定宽向左伸展）。 */
 export const DEFAULT_PANEL_FLOATING_POSITION: PanelFloatingPosition = {
-  x: 0.5,
+  x: 1,
   y: 0,
 };
 

@@ -9,6 +9,29 @@ import { commandWithArgs, projectBasename, shellQuote } from "./utils.ts";
 
 const VARIABLE_RE = /\$\{([^}]+)\}/g;
 
+/** Zed bare `$ZED_*` tokens (no braces); only known keys are expanded. */
+const ZED_BARE_VARIABLE_RE = /\$([A-Z][A-Z0-9_]*)/g;
+
+/** Map Zed / VS Code path tokens → project root. */
+function workspaceRootForToken(
+  token: string,
+  projectRootPath: string
+): string | undefined {
+  if (
+    token === "workspaceFolder" ||
+    token === "workspaceRoot" ||
+    token === "cwd" ||
+    token === "ZED_WORKTREE_ROOT" ||
+    token === "ZED_WORKTREE"
+  ) {
+    return projectRootPath;
+  }
+  if (token === "workspaceFolderBasename") {
+    return projectBasename(projectRootPath);
+  }
+  return;
+}
+
 const TASK_SOURCE_LABELS: Record<TaskSource, string> = {
   cargo: "Cargo",
   composer: "Composer",
@@ -135,22 +158,22 @@ export function requiredInputsForTask(
   });
 }
 
-function resolveVariables(
+/**
+ * Expand task string variables.
+ * - VS Code style: `${workspaceFolder}`, `${env:FOO}`, `${input:id}`
+ * - Zed style: `$ZED_WORKTREE_ROOT`, `$ZED_WORKTREE` (and braced forms)
+ */
+export function resolveVariables(
   value: string,
   context: {
     inputs: Record<string, string>;
     projectRootPath: string;
   }
 ): string {
-  return value.replace(VARIABLE_RE, (_full, token: string) => {
-    if (token === "workspaceFolder" || token === "workspaceRoot") {
-      return context.projectRootPath;
-    }
-    if (token === "workspaceFolderBasename") {
-      return projectBasename(context.projectRootPath);
-    }
-    if (token === "cwd") {
-      return context.projectRootPath;
+  const braced = value.replace(VARIABLE_RE, (_full, token: string) => {
+    const workspace = workspaceRootForToken(token, context.projectRootPath);
+    if (workspace !== undefined) {
+      return workspace;
     }
     if (token.startsWith("env:")) {
       return process.env[token.slice("env:".length)] ?? "";
@@ -166,6 +189,11 @@ function resolveVariables(
       throw new Error(`无法解析变量: \${${token}}`);
     }
     return "";
+  });
+  // Zed tasks.json commonly uses bare `$ZED_WORKTREE_ROOT` as cwd.
+  return braced.replace(ZED_BARE_VARIABLE_RE, (full, token: string) => {
+    const workspace = workspaceRootForToken(token, context.projectRootPath);
+    return workspace ?? full;
   });
 }
 
@@ -221,7 +249,12 @@ function launchForTask(
   labels: ReadonlyMap<string, TaskCandidate>,
   options: BuildTaskLaunchesOptions
 ): TaskLaunchPlan {
-  const cwd = resolveVariables(task.cwd, context);
+  let cwd = resolveVariables(task.cwd, context).trim();
+  // Unexpanded placeholders or empty cwd must not reach spawn (Node reports
+  // misleading "spawn shell ENOENT" when cwd is missing).
+  if (cwd.length === 0 || cwd.includes("$")) {
+    cwd = context.projectRootPath;
+  }
   const rawCommand = buildCommand(task, context);
   const command = withPresentation(rawCommand, task);
   const env = resolvedEnv(task, context);

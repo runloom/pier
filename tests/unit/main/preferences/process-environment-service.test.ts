@@ -223,6 +223,25 @@ describe("process environment service", () => {
     expect(onShellEnvFailed).toHaveBeenCalledTimes(2);
   });
 
+  it("skips shell dump when launched from CLI (env already inherited)", async () => {
+    const loadShellEnv = vi.fn(async () => ({
+      env: { PATH: "/shell/bin" },
+      status: "resolved" as const,
+    }));
+    const service = createProcessEnvironmentService({
+      baseEnv: { PATH: "/from/terminal/bin", PIER_CLI: "1" },
+      loadShellEnv,
+      platform: "darwin",
+      shell: "/bin/zsh",
+    });
+
+    const result = await service.resolve({ source: "plugin" });
+    expect(loadShellEnv).not.toHaveBeenCalled();
+    expect(result.diagnostics.shellEnvStatus).toBe("skipped");
+    expect(result.diagnostics.skipReason).toBe("cli");
+    expect(result.env.PATH).toBe("/from/terminal/bin");
+  });
+
   it("skips shell dump when isDisabled returns true", async () => {
     const loadShellEnv = vi.fn(async () => ({
       env: { PATH: "/shell/bin" },
@@ -337,6 +356,51 @@ describe("process environment service", () => {
         process.env.NVM_BIN = prevNvm;
       }
     }
+  });
+
+  it("rewrites unexpanded $ZED_* cwd before dump (never pass placeholder to loader)", async () => {
+    const seenCwds: Array<string | undefined> = [];
+    const service = createProcessEnvironmentService({
+      baseEnv: { HOME: "/Users/me", PATH: "/app" },
+      loadShellEnv: async (req) => {
+        seenCwds.push(req.cwd);
+        return {
+          env: { PATH: "/shell" },
+          status: "resolved" as const,
+        };
+      },
+      platform: "darwin",
+      shell: "/bin/zsh",
+    });
+
+    const result = await service.resolve({
+      cwd: "$ZED_WORKTREE_ROOT",
+      source: "task",
+    });
+    expect(result.diagnostics.shellEnvStatus).toBe("resolved");
+    expect(seenCwds).toHaveLength(1);
+    // Literal placeholder must never reach the loader as cwd.
+    expect(seenCwds[0]).not.toBe("$ZED_WORKTREE_ROOT");
+    if (seenCwds[0] !== undefined) {
+      expect(seenCwds[0]).not.toContain("$");
+    }
+  });
+
+  it("keeps normal absolute cwd unchanged for the loader", async () => {
+    const loadShellEnv = vi.fn(async () => ({
+      env: { PATH: "/shell" },
+      status: "resolved" as const,
+    }));
+    const service = createProcessEnvironmentService({
+      baseEnv: { PATH: "/app" },
+      loadShellEnv,
+      platform: "darwin",
+      shell: "/bin/zsh",
+    });
+    await service.resolve({ cwd: "/repo", source: "terminal" });
+    expect(loadShellEnv).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: "/repo", source: "terminal" })
+    );
   });
 
   it("invalidate supersedes in-flight dumps (no late cache write / notify)", async () => {

@@ -2,10 +2,10 @@
 export const settingsNotifications = {
   enabled: "需要你处理时通知",
   enabledDesc:
-    "智能体在等你确认或继续时提醒你：Pier 在前台时用应用内消息卡片，不在前台时用系统通知（关闭后标题栏计数仍更新）。",
+    "智能体等待你时提醒：前台用应用内卡片，后台用系统通知。关闭后标题栏计数仍更新。",
   turnNotifyMode: "回合完成时通知",
   turnNotifyModeDesc:
-    "智能体回合结束后是否提醒。默认仅在拥有该智能体的窗口未聚焦时；可选「仅面板未聚焦」以便同窗口内切换其它面板时仍能收到完成提醒。前台卡片与系统通知互斥。",
+    "回合结束时是否提醒。默认仅窗口未聚焦时；应用内卡片与系统通知不会同时出现。",
   turnNotifyModeOptions: {
     off: "从不",
     unfocused: "仅窗口未聚焦时",
@@ -13,10 +13,9 @@ export const settingsNotifications = {
     always: "始终",
   },
   error: "出错时通知",
-  errorDesc: "智能体进入错误状态时也提醒你。默认关闭。",
+  errorDesc: "智能体出错时也提醒。默认关闭。",
   cooldownLabel: "同一智能体冷却",
-  cooldownDesc:
-    "同一智能体面板两次系统通知横幅之间的最短间隔（应用内消息卡片不受此限）。",
+  cooldownDesc: "同一智能体两次系统通知横幅的最短间隔（应用内卡片不受限）。",
   cooldown: {
     "60000": "1 分钟",
     "180000": "3 分钟",
@@ -28,42 +27,34 @@ export const settingsNotifications = {
   testFailed: "测试通知失败",
   testFailedShort: "无法展示测试通知",
   testFailedDetail:
-    "无法投递系统通知（{{reason}}）。请到「系统设置 → 通知」允许本应用，然后重试。",
-  testHint:
-    "成功表示已按当前提示音策略交给系统。前台可能看不到横幅，可到通知中心确认。",
-  openSettingsFailed: "无法打开系统设置",
-  openSettingsManual:
-    "请手动打开系统通知设置并为 Pier 开启允许，然后发送测试通知验证。",
-  saveFailed: "无法保存通知设置",
+    "无法发送系统通知（{{reason}}）。请在「系统设置 → 通知」允许 Pier 后重试。",
+  testHint: "成功表示已交给系统。前台可能看不到横幅，可到通知中心确认。",
+  openSettingsFailed: "无法打开系统设置，请重试",
+  openSettingsManual: "请手动打开系统通知设置并允许 Pier，再发送测试通知。",
+  saveFailed: "无法保存通知设置，请重试",
   hooksOffTitle: "智能体状态提示已关闭",
-  hooksOffBody:
-    "关闭后不会发送「需要你处理」的系统通知，也不会再安装状态上报。可在「智能体」设置中重新打开。",
+  hooksOffBody: "「需要你处理」提醒已关闭。可在「设置 → 智能体」重新打开。",
   permission: {
     deniedTitle: "系统通知未授权",
-    deniedBody: "请在系统设置中为 Pier 开启通知，然后发送测试通知验证。",
+    deniedBody: "请在系统设置中为 Pier 开启通知，再发送测试通知。",
     unsupportedTitle: "系统不支持通知",
-    unsupportedBody:
-      "当前环境无法展示系统通知。请使用标题栏“需要你处理”计数与智能体列表。",
+    unsupportedBody: "无法显示系统通知。请用标题栏计数或智能体列表查看。",
     unknownTitle: "尚未确认通知权限",
-    unknownBody: "发送测试通知以检查 Pier 能否投递系统提醒。",
+    unknownBody: "发送测试通知以检查能否投递系统提醒。",
   },
   soundGroup: "提示音",
-  soundGroupDesc:
-    "系统通知成功展示时播放。标题栏「需要你处理」计数不依赖此项。",
+  soundGroupDesc: "系统通知展示时播放。标题栏计数不依赖提示音。",
   soundEnabled: "启用提示音",
-  soundEnabledDesc:
-    "关闭后仍可显示系统通知横幅，但不播放提示音（系统通知将静音）。",
+  soundEnabledDesc: "关闭后仍可显示横幅，但不播放提示音。",
   soundId: "音色",
-  soundIdDesc:
-    "系统默认跟随操作系统。内置音在应用内播放，不一定遵循系统专注模式对通知音的全部抑制。",
-  soundPreview: "试听所选应用音效",
-  soundPreviewSystemHint:
-    "系统默认音无法在应用内试听，请使用下方「发送测试通知」。",
-  soundPreviewFailed: "无法播放提示音",
+  soundIdDesc: "系统默认跟随操作系统。内置音在应用内播放。",
+  soundPreview: "试听所选音效",
+  soundPreviewSystemHint: "系统默认音无法试听，请用下方「发送测试通知」。",
+  soundPreviewFailed: "无法播放提示音，请重试",
   centerTitle: "消息中心",
-  centerDesc: "所有系统消息的统一存档，与下面的提醒开关联动。",
+  centerDesc: "系统消息存档，与下方提醒开关联动。",
   retention: "消息保留",
-  retentionDesc: "超过保留期的消息自动清理。",
+  retentionDesc: "超过保留期的消息会自动清理。",
   retentionOptions: {
     "7": "7 天",
     "30": "30 天",
@@ -75,17 +66,16 @@ export const settingsNotifications = {
   agentGroup: "智能体",
   taskSystemGroup: "系统",
   appUpdate: "应用更新提醒",
-  appUpdateDesc: "新版本下载完成后提醒你重启更新；关闭后仍记录在消息中心。",
+  appUpdateDesc: "新版本下载完成后提醒重启；关闭后仍记入消息中心。",
   deliveryTitle: "提醒方式",
-  deliveryDesc: "控制消息通过哪些方式打扰你。",
+  deliveryDesc: "控制消息如何打扰你。",
   systemGroup: "系统通知",
   systemGroupDesc:
-    "没有任何 Pier 窗口在前台时，经系统通知中心提醒你。有窗口在前台时只用应用内右上角消息卡片，两者不会同时出现。",
+    "无 Pier 窗口在前台时用系统通知；有前台窗口时只用应用内卡片。",
   disturbGroup: "打扰控制",
-  disturbGroupDesc: "以上通道全开时，进一步减少打扰。",
+  disturbGroupDesc: "在通道已开的基础上，进一步减少打扰。",
   dnd: "勿扰模式",
-  dndDesc:
-    "开启后仅错误级应用内消息卡片弹出，其余静默进入消息中心；系统通知仍可按上方智能体设置出现。也可从标题栏铃铛快速切换。",
+  dndDesc: "仅错误级应用内卡片弹出，其余进消息中心。可从标题栏铃铛切换。",
   sound: {
     system: "系统默认",
     "abstract-sound1": "抽象音 1",

@@ -11,7 +11,7 @@ export const pluginPermissions = {
   "panel:open": "Open panels",
   "panel:read": "Read panel state",
   "panel:register": "Register panels",
-  "plugin:read": "Read plugin manifests",
+  "plugin:read": "Read plugin information",
   "plugin:write": "Change plugin state",
   "preferences:read": "Read preferences",
   "preferences:write": "Change preferences",
@@ -28,6 +28,6 @@ export const pluginPermissions = {
   "workspace:open": "Open workspace panels",
   "workspace:read": "Read workspace state",
   "workspace:write": "Change workspace state",
-  "worktree:read": "Read Git worktree information",
+  "worktree:read": "Read Git worktrees",
   "worktree:write": "Create or remove Git worktrees",
 } as const;

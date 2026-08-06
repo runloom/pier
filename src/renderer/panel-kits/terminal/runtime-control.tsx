@@ -1,7 +1,6 @@
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { formatDurationShort } from "@pier/ui/format.tsx";
-import { Separator } from "@pier/ui/separator.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
@@ -175,29 +174,32 @@ export function TerminalRuntimeControl({
   return (
     <fieldset
       aria-label={t("terminal.runtimeControl.controlLabel", { label })}
-      className="flex h-9 w-full min-w-0 items-center"
+      // 禁止 w-full / max-w-full：% 相对整面板时会把胶囊撑成整行。
+      // 去 UA border/padding；minInlineSize:0 避免 fieldset 默认 min-content 撑破。
+      className="m-0 flex h-9 items-center border-0 p-0"
       data-run-id={run.runId}
       data-run-status={run.status}
       data-testid="terminal-runtime-control"
+      style={{ minInlineSize: 0 }}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-2">
-        {runs.length > 1 ? (
-          <TerminalRunSelector
-            disabled={pendingAction !== null}
-            label={label}
-            onValueChange={setSelectedRunId}
-            panelId={panelId}
-            runs={runs}
-            value={run.runId}
-          />
-        ) : (
-          <span
-            className="min-w-0 flex-1 truncate font-medium text-xs"
-            title={label}
-          >
-            {label}
-          </span>
-        )}
+      <div className="flex items-center gap-2 px-2">
+        {/* 仅标题限宽截断（rem，非 %）；状态/时长/动作一律 shrink-0 */}
+        <div className="max-w-44 shrink">
+          {runs.length > 1 ? (
+            <TerminalRunSelector
+              disabled={pendingAction !== null}
+              label={label}
+              onValueChange={setSelectedRunId}
+              panelId={panelId}
+              runs={runs}
+              value={run.runId}
+            />
+          ) : (
+            <span className="block truncate font-medium text-xs" title={label}>
+              {label}
+            </span>
+          )}
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
             <span
@@ -212,7 +214,7 @@ export function TerminalRuntimeControl({
         </Tooltip>
         <span
           aria-label={t("terminal.runtimeControl.duration", { duration })}
-          className="@[320px]:inline hidden whitespace-nowrap text-muted-foreground text-xs tabular-nums"
+          className="shrink-0 whitespace-nowrap text-muted-foreground text-xs tabular-nums"
           role="timer"
         >
           {duration}
@@ -226,7 +228,7 @@ export function TerminalRuntimeControl({
             aria-valuemax={total}
             aria-valuemin={0}
             aria-valuenow={completed}
-            className="@[380px]:inline-flex hidden tabular-nums"
+            className="shrink-0 tabular-nums"
             role="meter"
             variant="secondary"
           >
@@ -235,7 +237,11 @@ export function TerminalRuntimeControl({
         ) : null}
       </div>
 
-      <Separator className="my-2" orientation="vertical" />
+      <div
+        aria-hidden="true"
+        className="my-2 w-px shrink-0 self-stretch bg-border"
+        data-slot="separator"
+      />
       <div className="flex shrink-0 items-center gap-0.5 px-1">
         {active ? (
           <ActionButton

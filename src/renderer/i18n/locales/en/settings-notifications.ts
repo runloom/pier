@@ -1,11 +1,11 @@
 /** 设置 · 通知分区文案（从 settings.ts 拆出，规避单文件行数上限）。 */
 export const settingsNotifications = {
-  enabled: "Notify when an agent needs you",
+  enabled: "Notify when an agent needs attention",
   enabledDesc:
-    "Alert you when an agent is waiting for confirmation or for you to continue: in-app message card while Pier is frontmost, OS notification when it is not (title bar counts still update when off).",
+    "When an agent waits for you: in-app card if Pier is frontmost, OS notification otherwise. Title-bar counts still update when off.",
   turnNotifyMode: "Notify when a turn completes",
   turnNotifyModeDesc:
-    "Whether to alert after an agent finishes a turn. Default is only when that agent’s window is unfocused; choose “Only when panel is unfocused” to still alert when you stay in the same window but switch away from that agent’s panel. In-app and OS alerts are mutually exclusive.",
+    "Alert when a turn finishes. Default: only if that agent’s window is unfocused. In-app and OS alerts never both fire.",
   turnNotifyModeOptions: {
     off: "Never",
     unfocused: "Only when window is unfocused",
@@ -13,10 +13,10 @@ export const settingsNotifications = {
     always: "Always",
   },
   error: "Notify on agent errors",
-  errorDesc: "Also alert when an agent enters an error state. Off by default.",
+  errorDesc: "Also alert when an agent errors. Off by default.",
   cooldownLabel: "Cooldown per agent",
   cooldownDesc:
-    "Minimum time between OS notification banners for the same agent panel (in-app message cards are not limited by this).",
+    "Minimum gap between OS banners for the same agent (in-app cards are not limited).",
   cooldown: {
     "60000": "1 minute",
     "180000": "3 minutes",
@@ -28,69 +28,66 @@ export const settingsNotifications = {
   testFailed: "Test notification failed",
   testFailedShort: "Could not show test notification",
   testFailedDetail:
-    "Could not deliver a system notification ({{reason}}). Allow this app in System Settings → Notifications, then try again.",
+    "Could not deliver a system notification ({{reason}}). Allow Pier in System Settings → Notifications, then try again.",
   testHint:
-    "Success means delivered to the OS with the current alert-sound policy. Frontmost banners may be hidden — check Notification Center.",
-  openSettingsFailed: "Could not open system settings",
+    "Success means delivered to the OS. Frontmost banners may be hidden — check Notification Center.",
+  openSettingsFailed: "Couldn't open system settings — try again",
   openSettingsManual:
-    "Open your OS notification settings manually and allow Pier, then send a test notification.",
-  saveFailed: "Could not save notification settings",
+    "Open OS notification settings, allow Pier, then send a test notification.",
+  saveFailed: "Couldn't save notification settings — try again",
   hooksOffTitle: "Agent status alerts are off",
   hooksOffBody:
-    "“Needs you” system notifications and status reporting stay off until you re-enable Agent status alerts in Settings → Agents.",
+    "Attention alerts stay off until you re-enable them in Settings → Agents.",
   permission: {
     deniedTitle: "System notifications are blocked",
     deniedBody:
-      "Allow notifications for Pier in system settings, then send a test notification to verify.",
+      "Allow notifications for Pier in system settings, then send a test notification.",
     unsupportedTitle: "System notifications are unavailable",
     unsupportedBody:
-      "This environment cannot show OS notifications. Use the title bar “Needs you” count and the agent list instead.",
+      "OS notifications unavailable here. Use the title-bar attention count or the agent list.",
     unknownTitle: "Notification permission not verified yet",
-    unknownBody:
-      "Send a test notification to check whether Pier can deliver OS alerts.",
+    unknownBody: "Send a test notification to check OS delivery.",
   },
   soundGroup: "Alert sound",
   soundGroupDesc:
-    "Plays when an OS notification is successfully shown. The title bar “Needs you” count does not depend on this.",
+    "Plays when a system notification is shown. Title-bar counts don’t use this sound.",
   soundEnabled: "Enable alert sound",
   soundEnabledDesc:
-    "When off, system notification banners can still appear, but no alert sound plays (OS notifications are silent).",
+    "When off, banners can still appear, but no alert sound plays.",
   soundId: "Tone",
-  soundIdDesc:
-    "System default follows the OS. Built-in tones play in-app and may not honor every Focus/Do Not Disturb rule that applies to notification sounds.",
-  soundPreview: "Preview selected app tone",
+  soundIdDesc: "System default follows the OS. Built-in tones play in-app.",
+  soundPreview: "Preview selected tone",
   soundPreviewSystemHint:
-    "System default sound cannot be previewed in-app. Use “Send test notification” below.",
-  soundPreviewFailed: "Could not play alert sound",
+    "System default can’t be previewed here. Use “Send test notification” below.",
+  soundPreviewFailed: "Couldn't play alert sound — try again",
   centerTitle: "Notification Center",
-  centerDesc:
-    "The single archive for all system messages, linked to the alert switches below.",
+  centerDesc: "Archive of system messages, linked to the switches below.",
   retention: "Keep messages",
-  retentionDesc: "Messages older than this are cleaned up automatically.",
+  retentionDesc: "Older messages are cleaned up automatically.",
   retentionOptions: {
     "7": "7 days",
     "30": "30 days",
   },
   showBadge: "Show unread count in title bar",
-  showBadgeDesc: "When off, the bell no longer shows the unread badge.",
+  showBadgeDesc: "When off, the bell hides the unread badge.",
   contentTitle: "What to Alert",
   contentDesc: "Choose which events should alert you.",
   agentGroup: "Agents",
   taskSystemGroup: "System",
   appUpdate: "App update alerts",
   appUpdateDesc:
-    "Alert you to restart when a new version is downloaded; still recorded in Notification Center when off.",
+    "Alert to restart after a download; still recorded in Notification Center when off.",
   deliveryTitle: "How to Alert",
-  deliveryDesc: "Control which channels messages use to interrupt you.",
+  deliveryDesc: "Control how messages interrupt you.",
   systemGroup: "System Notifications",
   systemGroupDesc:
-    "Alerts you via the OS notification center when no Pier window is frontmost. While a Pier window is focused, only the in-app top-right message card is used — never both at once.",
+    "OS alerts only when no Pier window is frontmost; otherwise only the in-app card.",
   disturbGroup: "Interruption Control",
   disturbGroupDesc:
     "Further reduce interruptions on top of the channels above.",
   dnd: "Do Not Disturb",
   dndDesc:
-    "When on, only error-level in-app message cards pop up; the rest go silently to Notification Center. OS notifications may still appear per the agent settings above. You can also toggle it from the title bar bell.",
+    "Only error in-app cards pop up; the rest go to Notification Center. Toggle from the title-bar bell.",
   sound: {
     system: "System default",
     "abstract-sound1": "Abstract Sound 1",

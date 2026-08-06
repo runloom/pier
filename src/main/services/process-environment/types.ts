@@ -7,6 +7,8 @@ export type RawEnvironment =
 
 export type ShellEnvDumpMode = "login-interactive" | "non-login-fallback";
 
+export type ShellEnvSkipReason = "cli" | "disabled" | "no-shell" | "windows";
+
 export type HostAppliedStatus = "applied" | "not-applied" | "stale-after-fail";
 
 export interface ProcessEnvironmentResolveRequest {
@@ -24,11 +26,15 @@ export interface ProcessEnvironmentDiagnostics {
   cacheHit: boolean;
   cwd?: string | undefined;
   dumpMode?: ShellEnvDumpMode | undefined;
+  /** Wall time of the last shell dump attempt (ms). */
+  durationMs?: number | undefined;
   error?: string | undefined;
   hostAppliedStatus?: HostAppliedStatus | undefined;
   pathChanged: boolean;
   shell?: string | undefined;
   shellEnvStatus: "cached" | "failed" | "resolved" | "skipped";
+  /** Why dump was skipped when shellEnvStatus is skipped. */
+  skipReason?: ShellEnvSkipReason | undefined;
   source: ProcessEnvironmentSource;
 }
 
@@ -51,6 +57,7 @@ export interface ShellEnvironmentLoadRequest {
 
 export interface ShellEnvironmentLoadResult {
   dumpMode?: ShellEnvDumpMode | undefined;
+  durationMs?: number | undefined;
   env: Environment;
   status: "resolved" | "skipped";
 }
@@ -66,8 +73,8 @@ export interface CreateProcessEnvironmentServiceOptions {
   isDisabled?: () => boolean;
   loadShellEnv?: ShellEnvironmentLoader;
   /**
-   * Failure notify **only** entry (real dump failed; negative-cache hits do not
-   * re-fire). App-core wires this to NCS delivery in PR2.
+   * Soft-degrade hook (real dump failed; negative-cache hits do not re-fire).
+   * Product default: log only; settings read hostDiagnostics.
    */
   onShellEnvFailed?: (diagnostics: ProcessEnvironmentDiagnostics) => void;
   platform?: NodeJS.Platform;

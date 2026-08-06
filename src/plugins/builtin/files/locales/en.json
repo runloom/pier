@@ -95,7 +95,7 @@
     "filePanel.saveAs.recoveryTargetChanged": "The Save As target changed after the write was interrupted, so it could not be opened automatically. The original draft was kept.",
     "filePanel.saveAs.targetChanged": "The selected target changed before it could be written.",
     "filePanel.saveAs.targetDirty": "The selected target already has unsaved changes.",
-    "filePanel.status.error": "Error",
+    "filePanel.status.error": "Failed",
     "filePanel.status.durabilityUnknown": "Written; save not confirmed yet",
     "filePanel.status.deletedOnDisk": "Deleted on disk",
     "filePanel.status.diskConflict": "File changed on disk — unsaved edits kept",
@@ -113,7 +113,7 @@
     "filePanel.languageService.state.ready": "Ready",
     "filePanel.languageService.state.retrying": "Retrying",
     "filePanel.languageService.state.paused": "Paused",
-    "filePanel.languageService.state.error": "Error",
+    "filePanel.languageService.state.error": "Failed",
     "filePanel.languageService.description.disabled.editorDisabled": "Enable editor language features in Settings.",
     "filePanel.languageService.description.disabled.globallyDisabled": "Enable Language Services in Settings.",
     "filePanel.languageService.description.disabled.worktreesDisabled": "Enable language services for worktrees in Settings.",
@@ -208,7 +208,7 @@
     "filePanel.tree.createDurabilityMismatch": "The new file changed after it was created.",
     "filePanel.tree.createNeedsProject": "Open a project first",
     "filePanel.tree.contextMenuFailed": "Couldn't open menu",
-    "filePanel.tree.directoryError": "Error",
+    "filePanel.tree.directoryError": "Couldn't open",
     "filePanel.tree.loadDirectoryFailed": "Couldn't load folder",
     "filePanel.tree.searchTruncated": "Results truncated to top matches",
     "filePanel.tree.searchFailed": "Unable to search files",
@@ -437,7 +437,7 @@
       "label": "Show excluded files"
     },
     "pier.files.tree.excludePatterns": {
-      "description": "Glob patterns excluded from the file tree when excluded files are not shown. Enter one pattern per line; blank lines and lines beginning with # are ignored.",
+      "description": "Hide matching paths when excluded files are hidden. One pattern per line.",
       "label": "Exclude patterns"
     },
     "pier.files.tree.showGitIgnoredFiles": {
@@ -449,7 +449,7 @@
       "label": "Compact folders"
     },
     "pier.files.tree.autoReveal": {
-      "description": "When you switch tabs, automatically locate the active file in the project file tree. Does not apply to Open File / Go to Definition / breadcrumb jumps (those always locate). Use Reveal Active File in File Tree anytime.",
+      "description": "Locate the active file in the project tree when you switch tabs. Manual opens still locate.",
       "enumDescriptions": [
         "Locate and scroll into view when needed",
         "Select only, do not scroll",
@@ -458,7 +458,7 @@
       "label": "Auto-locate active file"
     },
     "pier.files.tree.autoRevealExcludePatterns": {
-      "description": "Paths matching these patterns are skipped when automatically locating the active file on tab change. Open File, Go to Definition, and Reveal Active File in File Tree still locate. One pattern per line; blank lines and lines beginning with # are ignored.",
+      "description": "Skip these paths on tab auto-locate. Manual opens still locate. One pattern per line.",
       "label": "Auto-locate exclude patterns"
     }
   }

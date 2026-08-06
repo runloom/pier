@@ -93,8 +93,9 @@ export function useTerminalPanelFloatingDrag({
         return;
       }
       event.preventDefault();
+      // point.x 是 CSS right：指针右移应减小 right。
       const desired = {
-        x: drag.startPoint.x + event.clientX - drag.startClient.x,
+        x: drag.startPoint.x - (event.clientX - drag.startClient.x),
         y: drag.startPoint.y + event.clientY - drag.startClient.y,
       };
       drag.latestDesired = desired;

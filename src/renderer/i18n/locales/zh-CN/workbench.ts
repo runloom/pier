@@ -2,14 +2,14 @@ export const workbench = {
   addWidget: "添加组件",
   context: {
     canvasLabel: "工作台网格",
-    menuFailed: "无法打开工作台菜单",
+    menuFailed: "无法打开菜单，请重试",
     refreshAll: "全部刷新",
   },
   empty: "工作台还是空的",
-  emptyDescription: "添加组件以监控活动和管理工作区。",
+  emptyDescription: "添加组件以查看活动并管理当前工作区。",
   removeConfirmTitle: "移除组件？",
-  removeConfirmBody: "此操作会从工作台移除该组件。你可以从组件库再次添加。",
-  refreshAllFailed: "部分组件未能刷新",
+  removeConfirmBody: "将从工作台移除此组件。可随时从组件库再添加。",
+  refreshAllFailed: "部分组件未刷新，请重试",
   refreshAllSuccess: "已全部刷新",
   library: {
     added: "已添加",

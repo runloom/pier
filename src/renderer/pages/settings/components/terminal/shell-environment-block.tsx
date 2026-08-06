@@ -31,6 +31,10 @@ function statusLabelKey(
   return "settings.shellEnvironment.status.unknown";
 }
 
+/**
+ * 设置页只展示用户能行动的信息：是否对齐终端、失败/跳过原因、重载与开关。
+ * dumpMode / 耗时 / PATH 差分 等实现诊断留在 main 日志与 NCS，不进前台。
+ */
 export function ShellEnvironmentBlock() {
   const t = useT();
   const disabled = useShellEnvironmentStore((s) => s.disabled);
@@ -57,6 +61,17 @@ export function ShellEnvironmentBlock() {
 
   const isWindows = hostStatus?.platform === "win32";
   const statusText = t(statusLabelKey(hostStatus?.shellEnvStatus));
+  const skipReasonKey =
+    hostStatus?.skipReason === "cli" ||
+    hostStatus?.skipReason === "disabled" ||
+    hostStatus?.skipReason === "no-shell" ||
+    hostStatus?.skipReason === "windows"
+      ? (`settings.shellEnvironment.skipReason.${hostStatus.skipReason}` as const)
+      : null;
+  const showFailureDetail =
+    hostStatus?.shellEnvStatus === "failed" && Boolean(hostStatus.error);
+  const showSkipReason =
+    hostStatus?.shellEnvStatus === "skipped" && skipReasonKey !== null;
 
   return (
     <Card>
@@ -79,15 +94,15 @@ export function ShellEnvironmentBlock() {
               </span>{" "}
               <span className="font-medium">{statusText}</span>
             </div>
-            {hostStatus?.shell ? (
+            {showSkipReason && skipReasonKey ? (
               <div className="text-muted-foreground text-sm">
-                {t("settings.shellEnvironment.shellLabel", {
-                  shell: hostStatus.shell,
-                })}
+                {t(skipReasonKey)}
               </div>
             ) : null}
-            {hostStatus?.error ? (
-              <div className="text-destructive text-sm">{hostStatus.error}</div>
+            {showFailureDetail ? (
+              <div className="whitespace-pre-wrap break-words text-muted-foreground text-sm">
+                {hostStatus?.error}
+              </div>
             ) : null}
             <div>
               <Button

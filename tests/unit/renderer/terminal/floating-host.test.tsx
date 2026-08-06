@@ -27,10 +27,22 @@ function rect(x: number, y: number, width: number, height: number): DOMRect {
   } as DOMRect;
 }
 
+const layoutFixture = {
+  itemWidth: 180,
+  pillWidth: 140,
+  rootHeight: 300,
+  rootWidth: 500,
+  search: { height: 40, width: 120, x: 360, y: 12 },
+};
+
 describe("terminal panel floating host", () => {
   beforeEach(async () => {
     await initI18n();
     resetTerminalInputRoutingForTests();
+    layoutFixture.itemWidth = 180;
+    layoutFixture.pillWidth = 140;
+    layoutFixture.rootHeight = 300;
+    layoutFixture.rootWidth = 500;
     vi.stubGlobal("ResizeObserver", ResizeObserverMock);
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -42,17 +54,22 @@ describe("terminal panel floating host", () => {
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
       function getRect(this: HTMLElement) {
         if (this.dataset.testid === "floating-host-fixture") {
-          return rect(0, 0, 500, 300);
+          return rect(0, 0, layoutFixture.rootWidth, layoutFixture.rootHeight);
         }
-        if (this.dataset.floatingItem === "runtime-controls") {
-          return rect(160, 8, 180, 32);
-        }
-        // 可见胶囊比外层 min-width 壳窄：几何必须以它为准。
-        if (this.dataset.floatingPill === "runtime-controls") {
-          return rect(160, 8, 140, 32);
+        // 单节点胶囊同时带 floating-item + floating-pill；宽度用 pillWidth。
+        if (
+          this.dataset.floatingPill === "runtime-controls" ||
+          this.dataset.floatingItem === "runtime-controls"
+        ) {
+          return rect(160, 8, layoutFixture.pillWidth, 32);
         }
         if (this.dataset.floatingItem === "terminal-search") {
-          return rect(360, 12, 120, 40);
+          return rect(
+            layoutFixture.search.x,
+            layoutFixture.search.y,
+            layoutFixture.search.width,
+            layoutFixture.search.height
+          );
         }
         return rect(0, 0, 0, 0);
       }
@@ -119,29 +136,34 @@ describe("terminal panel floating host", () => {
       '[data-floating-item="runtime-controls"]'
     );
     expect(primary).not.toBeNull();
-    expect(primary?.style.width).toBe("fit-content");
-    expect(primary?.style.minWidth).toBe("min(20rem, calc(100% - 1rem))");
-    expect(primary?.style.maxWidth).toBe("min(25rem, calc(100% - 1rem))");
-    // 初始位置按可见胶囊宽度（140）归一化还原：8 + (500 - 140 - 16) * 0.5
-    expect(primary?.style.left).toBe("180px");
-    expect(primary?.style.top).toBe("8px");
+    // 单节点：定位 + 绘制 + hit-test 同一元素；内容定宽，right 锚定。
+    expect(primary?.style.width).toBe("max-content");
+    expect(primary?.style.minWidth).toBe("");
+    expect(primary?.style.maxWidth).toBe("");
+    expect(primary?.style.left).toBe("auto");
+    // 默认 x=1：right = 8；与右上 utility 搜索相交时下移 y=60
+    // （search 在 left 系 360..480；pill width=140 在 right=8 时 left=352 重叠）
+    expect(primary?.style.right).toBe("8px");
+    expect(primary?.style.top).toBe("60px");
     expect(primary?.style.transform).toBe("");
-    // 透明外壳不接收指针事件；命中区与可见胶囊一致。
-    expect(primary).not.toHaveClass("pointer-events-auto");
-    const shell = primary?.firstElementChild;
-    expect(shell).toHaveClass(
+    expect(primary).toHaveAttribute("data-floating-pill", "runtime-controls");
+    expect(primary).toHaveClass(
       "pointer-events-auto",
+      "inline-flex",
+      "absolute",
       "rounded-full",
       "border",
       "border-border",
       "bg-popover",
       "shadow-background/40",
-      "shadow-lg",
-      "w-max",
-      "max-w-full"
+      "shadow-lg"
     );
-    expect(shell).not.toHaveClass("w-full");
-    expect(shell).not.toHaveClass("ring-1", "ring-foreground/5");
+    expect(primary).not.toHaveClass("w-full", "w-max", "max-w-full", "left-0");
+    expect(primary).not.toHaveClass("ring-1", "ring-foreground/5");
+    expect(registerElement).toHaveBeenCalledWith(
+      "terminal-floating:terminal-1:runtime-controls",
+      primary
+    );
 
     const handle = screen.getByRole("button", { name: "Move run controls" });
     expect(handle).toHaveAttribute("data-slot", "button");
@@ -150,8 +172,8 @@ describe("terminal panel floating host", () => {
     expect(primary?.querySelector('[data-slot="separator"]')).not.toBeNull();
     fireEvent.pointerDown(handle, {
       button: 0,
-      clientX: 170,
-      clientY: 20,
+      clientX: 400,
+      clientY: 70,
       pointerId: 7,
     });
     expect(primary).toHaveAttribute("data-dragging", "true");
@@ -164,46 +186,47 @@ describe("terminal panel floating host", () => {
       ],
     });
 
+    // 指针右移 → CSS right 减小 → 归一化 x 增大（更靠右）；此处从 right=8 再右移会钳在 8
+    // 指针左移 → right 增大 → 归一化 x 减小
     fireEvent.pointerMove(window, {
       buttons: 1,
-      clientX: 250,
-      clientY: 80,
+      clientX: 320,
+      clientY: 120,
       pointerId: 7,
     });
     fireEvent.pointerUp(window, {
       button: 0,
-      clientX: 250,
-      clientY: 80,
+      clientX: 320,
+      clientY: 120,
       pointerId: 7,
     });
 
     const dragCommit = commit.mock.calls.at(-1)?.[1];
-    expect(dragCommit?.x).toBeGreaterThan(0.7);
+    expect(dragCommit?.x).toBeLessThan(1);
     expect(dragCommit?.y).toBeGreaterThan(0.2);
     expect(primary).toHaveAttribute("data-dragging", "false");
     expect(getLastTerminalHostSnapshot()?.webOverlayRects).toEqual([]);
 
-    // 拖到面板右缘：右限按可见胶囊宽度计算（8 + 500 - 140 - 16 = 352），
-    // 不再被外层 320px min-width 壳提前卡住。
+    // 拖到面板右缘：right 钳到 inset（8px），归一化 x=1。
     fireEvent.pointerDown(handle, {
       button: 0,
-      clientX: 270,
-      clientY: 76,
+      clientX: 300,
+      clientY: 100,
       pointerId: 8,
     });
     fireEvent.pointerMove(window, {
       buttons: 1,
       clientX: 2000,
-      clientY: 76,
+      clientY: 100,
       pointerId: 8,
     });
     fireEvent.pointerUp(window, {
       button: 0,
       clientX: 2000,
-      clientY: 76,
+      clientY: 100,
       pointerId: 8,
     });
-    expect(primary?.style.left).toBe("352px");
+    expect(primary?.style.right).toBe("8px");
     expect(commit).toHaveBeenLastCalledWith(
       "runtime-controls",
       expect.objectContaining({ x: 1 })
@@ -211,7 +234,7 @@ describe("terminal panel floating host", () => {
 
     fireEvent.doubleClick(handle);
     expect(commit).toHaveBeenLastCalledWith("runtime-controls", {
-      x: 0.5,
+      x: 1,
       y: 0,
     });
   });
@@ -338,6 +361,56 @@ describe("terminal panel floating host", () => {
     expect(secondCallback).toHaveBeenLastCalledWith(true);
     unmount();
     expect(secondCallback).toHaveBeenLastCalledWith(false);
+  });
+
+  it("does not re-anchor when only capsule content width would change", () => {
+    const commit = vi.fn();
+    const registerElement = vi.fn(() => ({
+      dispose: vi.fn(),
+      flush: vi.fn(),
+    }));
+
+    function Fixture() {
+      const panelRootRef = useRef<HTMLDivElement>(null);
+      return (
+        <TerminalOverlayContext.Provider value={{ registerElement }}>
+          <div
+            className="relative h-[300px] w-[500px]"
+            data-testid="floating-host-fixture"
+            ref={panelRootRef}
+          >
+            <TerminalPanelFloatingHost
+              layout={{ positions: {}, version: 1 }}
+              onPositionCommit={commit}
+              panelId="terminal-1"
+              panelRootRef={panelRootRef}
+              primary={{
+                content: <span>Run test</span>,
+                id: "runtime-controls",
+              }}
+              utility={[
+                { content: <span>Search</span>, id: "terminal-search" },
+              ]}
+            />
+          </div>
+        </TerminalOverlayContext.Provider>
+      );
+    }
+
+    const { container } = render(<Fixture />);
+    const primary = container.querySelector<HTMLElement>(
+      '[data-floating-item="runtime-controls"]'
+    );
+    expect(primary).not.toBeNull();
+    // 默认 x=1 + 与搜索相交 → right 仍为 8（下移避障不改 right）
+    expect(primary?.style.right).toBe("8px");
+    commit.mockClear();
+
+    // 生产路径不 observe 胶囊：时长变宽不会触发 restore，right 保持。
+    layoutFixture.pillWidth = 180;
+    layoutFixture.itemWidth = 180;
+    expect(primary?.style.right).toBe("8px");
+    expect(commit).not.toHaveBeenCalled();
   });
 
   it("keeps content and event routing registered until the whole capsule exits", () => {

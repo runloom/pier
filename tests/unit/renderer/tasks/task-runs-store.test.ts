@@ -142,4 +142,14 @@ describe("panelHasActiveTaskRun", () => {
     };
     expect(panelHasActiveTaskRun(snapshot, "task-panel")).toBe(true);
   });
+
+  it("uses the same panel scope as RC (origin background counts)", () => {
+    const snapshot: TaskRunsSnapshot = {
+      runs: { "run-bg": backgroundRun("origin-shell", "stopping") },
+      version: 1,
+    };
+    // stopping 仍为活跃：tab 蓝点亮；RC 侧 shouldPresentRun 同步不可 dismiss 藏。
+    expect(panelHasActiveTaskRun(snapshot, "origin-shell")).toBe(true);
+    expect(taskRunsForPanel(snapshot, "origin-shell")).toHaveLength(1);
+  });
 });

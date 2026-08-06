@@ -5,6 +5,7 @@ import type {
   TaskSpawnMode,
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
+import { createLogger } from "@shared/logger.ts";
 import i18next from "i18next";
 import { List, Play } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
@@ -22,7 +23,9 @@ import type {
   QuickPickItem,
   QuickPickSection,
 } from "@/lib/command-palette/types.ts";
+import { reportTaskRuntimeDiagnostic } from "@/lib/tasks/report-runtime-diagnostic.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import {
   projectPathFromContext,
@@ -30,6 +33,8 @@ import {
 } from "@/stores/workspace-panel-helpers.ts";
 import { spawnTaskWithInputResolution } from "./task-input-flow.ts";
 import { scheduleTaskOutputPanelSync } from "./task-output-sync.ts";
+
+const log = createLogger("task.spawn.ui");
 
 async function spawnTask(args: {
   forceRestart: boolean;
@@ -209,6 +214,15 @@ async function spawnTaskWithInputFlow(
     terminalPanelId?: string | undefined;
   }
 ): Promise<void> {
+  const mode = options.mode ?? project.defaultTaskSpawnMode ?? "terminal-tab";
+  const beginCtx = {
+    mode,
+    projectRootPath: project.projectRootPath,
+    taskId,
+    terminalPanelId: options.terminalPanelId ?? project.terminalPanelId,
+  };
+  log.info("ui spawn begin", beginCtx);
+  reportTaskRuntimeDiagnostic("task.spawn.ui", "ui spawn begin", beginCtx);
   try {
     const result = await spawnTaskWithInputResolution((call) =>
       spawnTask({
@@ -222,8 +236,18 @@ async function spawnTaskWithInputFlow(
       })
     );
     if (!result) {
+      log.info("ui spawn cancelled/empty result", { taskId });
       return;
     }
+    const resultCtx = {
+      mode,
+      runId: "runId" in result ? result.runId : undefined,
+      status: result.status,
+      taskId,
+      terminalPanelId: options.terminalPanelId ?? project.terminalPanelId,
+    };
+    log.info("ui spawn result", resultCtx);
+    reportTaskRuntimeDiagnostic("task.spawn.ui", "ui spawn result", resultCtx);
     if (
       result.status === "unsupported" ||
       result.status === "missing-dependencies"
@@ -235,9 +259,30 @@ async function spawnTaskWithInputFlow(
       return;
     }
     if (result.status === "started") {
+      // Pull after IPC reply so store is not racing the broadcast for RC mount.
+      try {
+        const pull = window.pier.tasks.runsSnapshot;
+        if (typeof pull === "function") {
+          const snapshot = await pull();
+          useTaskRunsStore.getState().apply(snapshot);
+          log.info("ui spawn post-pull TaskRuns", {
+            runCount: Object.keys(snapshot.runs).length,
+            runIds: Object.keys(snapshot.runs),
+            version: snapshot.version,
+          });
+        }
+      } catch (error) {
+        log.warn("ui spawn post-pull TaskRuns failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       scheduleTaskOutputPanelSync();
     }
   } catch (error) {
+    log.warn("ui spawn threw", {
+      error: error instanceof Error ? error.message : String(error),
+      taskId,
+    });
     await showAppAlert({
       body: error instanceof Error ? error.message : String(error),
       title: i18next.t("commandPalette.run.startFailed"),

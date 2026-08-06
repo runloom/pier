@@ -85,15 +85,15 @@ export function NotificationCard({
     >
       {/* inbox 条目无前置状态图标：状态着色是 toast 专属（结果确认）；
           消息中心里只有标题/详情/时间三个信息槽位。 */}
-      <ItemContent>
-        <ItemTitle>
+      <ItemContent className="min-w-0 flex-1">
+        <ItemTitle className="line-clamp-none max-w-full flex-wrap whitespace-normal">
           {/* 标题区是整卡的语义点击面（标记已读）；action 按钮为平级兄弟，避免嵌套交互元素。 */}
           {title}
-          <span className="text-muted-foreground/50 text-xs tabular-nums">
+          <span className="shrink-0 text-muted-foreground/50 text-xs tabular-nums">
             {formatRelativeTime(notification.ts, Date.now(), i18next.language)}
           </span>
           {notification.repeatCount && notification.repeatCount > 1 ? (
-            <span className="text-muted-foreground/50 text-xs">
+            <span className="shrink-0 text-muted-foreground/50 text-xs">
               {t("notificationsCenter.repeat", {
                 count: notification.repeatCount,
               })}
@@ -101,7 +101,9 @@ export function NotificationCard({
           ) : null}
         </ItemTitle>
         {notification.body ? (
-          <ItemDescription>{notification.body}</ItemDescription>
+          <ItemDescription className="line-clamp-none max-w-full whitespace-pre-wrap break-words">
+            {notification.body}
+          </ItemDescription>
         ) : null}
       </ItemContent>
       {availableActions?.map((action, index) => (

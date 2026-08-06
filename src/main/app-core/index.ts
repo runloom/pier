@@ -3,7 +3,6 @@ import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
-import { ingestHostNotification } from "../ipc/notification-center.ts";
 import {
   getTerminalTaskLifecycleForTransfer,
   getTerminalTaskOutputBindingsForTransfer,
@@ -235,14 +234,6 @@ function createPierAppCore(): PierAppCore {
   // --- Shell env parity (sole hydration; before plugin activate / agent detect)
   const { processEnvironment, waitForHostEnv } = createShellEnvironmentBoot({
     eventBus,
-    getFocusedWindow: () => windowManager.getFocused(),
-    ingestNotification: ingestHostNotification,
-    onWindowCreate: (cb) => {
-      windowManager.onCreate(cb);
-    },
-    onWindowFocus: (cb) => {
-      windowManager.onFocus(cb);
-    },
     readPreferences: () => preferences.read(),
   });
 

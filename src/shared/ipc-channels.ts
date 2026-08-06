@@ -81,6 +81,8 @@ export const PIER = {
   THEME_PREVIEW_VISUAL: "pier://theme:preview-visual",
   // renderer 上报终端输入路由诊断；main 校验并写入已有 diagnostics JSONL。
   TERMINAL_INPUT_ROUTING_DIAGNOSTIC: "pier://terminal:input-routing-diagnostic",
+  /** renderer → main：任务 spawn / TaskRuns / RC 诊断，写入 diagnostics JSONL。 */
+  TASK_RUNTIME_DIAGNOSTIC: "pier://task:runtime-diagnostic",
 } as const;
 
 export const PIER_BROADCAST = {

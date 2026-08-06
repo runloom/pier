@@ -4,7 +4,7 @@ export const notificationsCenter = {
     openAgent: "打开对话",
     viewAgentOutput: "查看输出",
   },
-  actionFailed: "无法更新消息",
+  actionFailed: "无法更新消息，请重试",
   bell: {
     aria: "消息，{{count}} 条未读",
     ariaEmpty: "消息",
@@ -23,9 +23,8 @@ export const notificationsCenter = {
   loadMore: "滚动加载更多…",
   repeat: "×{{count}}",
   shellEnv: {
-    failedBody:
-      "任务和智能体可能使用与终端不同的 Node 或 PATH。请打开设置 → 终端查看状态，并确认 shell 在非交互启动时不会卡住或弹提示。",
-    failedTitle: "无法加载 shell 环境",
+    failedBody: "工具路径可能与终端不一致。请到「设置 → 终端」重新加载。",
+    failedTitle: "任务环境可能与终端不同",
     openSettings: "打开终端设置",
   },
   source: {

@@ -7,7 +7,8 @@ import type {
   TaskSpawnResult,
   TaskStopResult,
 } from "@shared/contracts/tasks.ts";
-import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { ipcRenderer } from "electron";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 
 export interface PierTasksAPI {
@@ -15,6 +16,12 @@ export interface PierTasksAPI {
   cancel: (args: { runId: string }) => Promise<TaskRunSnapshot>;
   list: (args: { projectRootPath: string }) => Promise<TaskListResult>;
   onRunsChanged: (cb: (snapshot: TaskRunsSnapshot) => void) => () => void;
+  /** Bridge renderer task diagnostics into main diagnostics JSONL. */
+  reportDiagnostic: (args: {
+    ctx?: Record<string, unknown>;
+    msg: string;
+    scope: string;
+  }) => void;
   runsSnapshot: () => Promise<TaskRunsSnapshot>;
   spawn: (args: {
     focus?: boolean;
@@ -47,6 +54,9 @@ export const tasksApi: PierTasksAPI = {
       runId: args.runId,
       type: "run.cancel",
     }),
+  reportDiagnostic: (args) => {
+    ipcRenderer.send(PIER.TASK_RUNTIME_DIAGNOSTIC, args);
+  },
   list: (args) =>
     invokePierCommand<TaskListResult>({
       projectRootPath: args.projectRootPath,

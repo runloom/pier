@@ -40,6 +40,8 @@ export interface NotificationHistoryStore {
   /** 新条目插入头部并裁剪上限。 */
   prepend(item: AppNotification): void;
   pruneExpired(retentionDays: NotificationRetentionDays, now: number): void;
+  /** 按谓词删除；返回删除条数。 */
+  removeWhere(predicate: (item: AppNotification) => boolean): number;
 }
 
 export async function createNotificationHistoryStore(opts: {
@@ -127,5 +129,19 @@ export async function createNotificationHistoryStore(opts: {
       }));
     },
     pruneExpired,
+    removeWhere: (predicate) => {
+      let removed = 0;
+      store.mutate((state) => {
+        const items = state.items.filter((item) => {
+          if (predicate(item)) {
+            removed += 1;
+            return false;
+          }
+          return true;
+        });
+        return removed === 0 ? state : { items };
+      });
+      return removed;
+    },
   };
 }

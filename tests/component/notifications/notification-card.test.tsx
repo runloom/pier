@@ -151,4 +151,20 @@ describe("NotificationCard", () => {
       container.querySelector("[data-slot='notification-unread-dot']")
     ).toBeNull();
   });
+
+  it("shows full multi-line body without line-clamp truncation", () => {
+    const body =
+      "第一行说明完整展示。\n第二行详情也不应被省略。\n第三行继续可见。";
+    const { container } = render(
+      <NotificationCard notification={notification({ body })} />
+    );
+    const description = container.querySelector(
+      "[data-slot='item-description']"
+    );
+    expect(description).not.toBeNull();
+    expect(description?.textContent).toBe(body);
+    expect(description?.className).toContain("line-clamp-none");
+    expect(description?.className).toContain("whitespace-pre-wrap");
+    expect(description?.className).not.toMatch(/\bline-clamp-2\b/);
+  });
 });

@@ -32,6 +32,38 @@ async function waitFor(condition: () => boolean): Promise<void> {
 }
 
 describe("task-service background runs", () => {
+  it("requires windowId so TaskRuns stay visible to the owner window", async () => {
+    const projectRootPath = "/repo";
+    const service = createTaskService({
+      processEnvironment: {
+        getHostDiagnostics: () => undefined,
+        invalidate: async () => undefined,
+        recordHostDiagnostics: () => undefined,
+        resolve: async () => ({
+          diagnostics: {
+            cacheHit: false,
+            pathChanged: false,
+            shellEnvStatus: "skipped",
+            source: "task",
+          },
+          env: {},
+          shellEnv: {},
+        }),
+      },
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      spawnBackgroundTask: () => ({ kill: () => true }),
+      writeRecentState: async () => undefined,
+    });
+
+    await expect(
+      service.startBackgroundRun({
+        launches: [taskLaunch(projectRootPath)],
+        projectRootPath,
+        rootTaskId: "package-script:test",
+      })
+    ).rejects.toThrow(/windowId/i);
+  });
+
   it("records completion for a task that exits immediately after spawn", async () => {
     const projectRootPath = "/repo";
     const service = createTaskService({

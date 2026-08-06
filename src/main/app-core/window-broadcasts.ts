@@ -22,13 +22,17 @@ import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal/status-b
 import type { UsageAggregateSnapshot } from "@shared/contracts/usage-data.ts";
 import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { createLogger } from "@shared/logger.ts";
 import type { ToastTarget } from "@shared/notification-delivery.ts";
+import { filterTaskRunsSnapshotForWindow } from "@shared/task-runs-window-filter.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import {
   findAppWindowByElectronId,
   findInternalWindowId,
 } from "../windows/identity.ts";
 import { windowManager } from "../windows/manager.ts";
+
+const taskRunsBroadcastLog = createLogger("task.runs.broadcast");
 
 function broadcastToAllWindows(channel: string, payload: unknown): void {
   for (const win of windowManager.getAll()) {
@@ -69,14 +73,17 @@ export function broadcastTaskRunsSnapshot(snapshot: TaskRunsSnapshot): void {
       continue;
     }
     const windowId = findInternalWindowId(win);
-    win.webContents.send(PIER_BROADCAST.TASKS_RUNS_CHANGED, {
-      runs: Object.fromEntries(
-        Object.entries(snapshot.runs).filter(
-          ([, run]) => windowId !== null && run.ownerWindowId === windowId
-        )
-      ),
+    // Shared filter: missing ownerWindowId is dropped (see task-runs-window-filter).
+    const filtered = filterTaskRunsSnapshotForWindow(snapshot, windowId);
+    const runIds = Object.keys(filtered.runs);
+    taskRunsBroadcastLog.debug("TaskRuns → window", {
+      filteredRunCount: runIds.length,
+      runIds,
+      sourceRunCount: Object.keys(snapshot.runs).length,
       version: snapshot.version,
-    } satisfies TaskRunsSnapshot);
+      windowId,
+    });
+    win.webContents.send(PIER_BROADCAST.TASKS_RUNS_CHANGED, filtered);
   }
 }
 

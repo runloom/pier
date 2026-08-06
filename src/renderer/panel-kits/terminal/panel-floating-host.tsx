@@ -1,5 +1,4 @@
 import { Button } from "@pier/ui/button.tsx";
-import { Separator } from "@pier/ui/separator.tsx";
 import { useTerminalOverlayRegistration } from "@pier/ui/use-terminal-overlay.tsx";
 import {
   DEFAULT_PANEL_FLOATING_POSITION,
@@ -63,6 +62,7 @@ function localRect(element: HTMLElement, root: HTMLElement): FloatingRect {
   };
 }
 
+/** 返回值加在 right/top 锚点上：右移减小 right，左移增大 right。 */
 function keyboardDelta(
   key: string,
   step: number
@@ -71,9 +71,9 @@ function keyboardDelta(
     case "ArrowDown":
       return [0, step];
     case "ArrowLeft":
-      return [-step, 0];
-    case "ArrowRight":
       return [step, 0];
+    case "ArrowRight":
+      return [-step, 0];
     case "ArrowUp":
       return [0, -step];
     default:
@@ -101,10 +101,9 @@ function DraggablePrimaryItem({
   panelRootRef: RefObject<HTMLDivElement | null>;
 }) {
   const t = useT();
-  const itemRef = useRef<HTMLDivElement | null>(null);
-  // 可见胶囊（内层 w-max）。外层容器带 min-width 视觉壳，宽度可能大于
-  // 可见内容；拖拽边界、障碍物规避与归一化都必须以用户看得见的胶囊为准。
+  // 单一胶囊节点：定位 / 测宽 / hit-test / 绘制同一元素。
   const pillRef = useRef<HTMLDivElement | null>(null);
+  // point.x = CSS right（距右缘）；默认 SAFE_INSET 即贴右上内侧，不会溢出右缘。
   const pointRef = useRef<FloatingPoint>({ x: SAFE_INSET, y: SAFE_INSET });
   const pointerInsideRef = useRef(false);
   const focusWithinRef = useRef(false);
@@ -116,9 +115,6 @@ function DraggablePrimaryItem({
     `terminal-floating:${panelId}:${id}`
   );
   const [point, setPointState] = useState(pointRef.current);
-  const itemCallbackRef = useCallback((element: HTMLDivElement | null) => {
-    itemRef.current = element;
-  }, []);
   const pillCallbackRef = useCallback(
     (element: HTMLDivElement | null) => {
       pillRef.current = element;
@@ -155,7 +151,7 @@ function DraggablePrimaryItem({
 
   const measureItemRect = useCallback(
     (root: HTMLElement): FloatingRect | null => {
-      const target = pillRef.current ?? itemRef.current;
+      const target = pillRef.current;
       return target ? localRect(target, root) : null;
     },
     []
@@ -252,10 +248,8 @@ function DraggablePrimaryItem({
     pointRef,
   });
 
-  // 拖拽会话存续期间禁止位置恢复：时长文本每秒变化会改变胶囊宽度并触发
-  // ResizeObserver，若此时按上次 commit 的归一化位置重算，会把胶囊从指针
-  // 下方弹回去。拖拽中的越界由下一次 pointermove / pointerup 的 constrain
-  // 兜底。
+  // 拖拽中禁止位置恢复（避免指针下胶囊被弹回）。空闲时面板/胶囊/障碍物
+  // 尺寸变化时按归一化位置还原（内容变宽时仍钳制左缘）。
   const restoreIfIdle = useCallback(() => {
     if (drag.dragActiveRef.current) {
       return;
@@ -281,13 +275,16 @@ function DraggablePrimaryItem({
 
   useLayoutEffect(() => {
     const root = panelRootRef.current;
-    const item = pillRef.current ?? itemRef.current;
-    if (!(root && item)) {
+    const pill = pillRef.current;
+    if (!root) {
       return;
     }
     const observer = new ResizeObserver(restoreIfIdle);
     observer.observe(root);
-    observer.observe(item);
+    // 胶囊自身变宽（时长/进度文案）也要 re-clamp；拖拽中 restoreIfIdle 会 no-op。
+    if (pill) {
+      observer.observe(pill);
+    }
     for (const obstacle of obstacles) {
       observer.observe(obstacle);
     }
@@ -306,9 +303,14 @@ function DraggablePrimaryItem({
 
   return (
     <div
-      className="@container absolute top-0 left-0"
+      // 单节点胶囊：内容定宽。禁止任何 % 宽度（max-w-full / w-full / 100%）：
+      // absolute 包含块是整面板时，% 会把胶囊撑成整行，右侧留空或像细条。
+      className={
+        "pointer-events-auto absolute inline-flex h-9 items-center rounded-full border border-border bg-popover text-popover-foreground shadow-background/40 shadow-lg transition-[opacity,transform,box-shadow] duration-[180ms] ease-in data-[phase=exiting]:pointer-events-none data-[phase=exiting]:-translate-y-1 data-[phase=exiting]:scale-[0.985] data-[phase=exiting]:opacity-0 data-[dragging=true]:shadow-xl motion-reduce:transition-none"
+      }
       data-dragging={drag.dragging ? "true" : "false"}
       data-floating-item={id}
+      data-floating-pill={id}
       data-phase={phase}
       onBlurCapture={(event) => {
         if (event.currentTarget.contains(event.relatedTarget as Node | null)) {
@@ -329,67 +331,63 @@ function DraggablePrimaryItem({
         pointerInsideRef.current = false;
         reportInteraction();
       }}
-      ref={itemCallbackRef}
+      ref={pillCallbackRef}
       style={{
-        left: point.x,
-        maxWidth: "min(25rem, calc(100% - 1rem))",
-        minWidth: "min(20rem, calc(100% - 1rem))",
         // 终端浮层位于透明 Chromium WebContentsView 与原生 Metal 终端表面的
         // 合成边界上。三维位移会把整个胶囊提升为独立 GPU 合成层，macOS 在
         // 悬停或局部重绘时可能保留旧层像素，形成跨位置残影。这里用普通
         // 绝对定位偏移量驱动同一套面板局部几何，避免强制创建合成层。
-        // 宽高必须留在 inline style；且外层 fit-content 时内层禁止再套
-        // w-full（循环百分比会按面板宽度展开，触发 native overlay 全覆盖藏终端）。
+        // right 锚定：内容变宽向左伸；left:auto 禁止被 left-0 类或默认值钉死。
+        // 只靠内容 intrinsic 定宽（禁止 % 宽）；面板内钳制由 geometry 负责。
+        left: "auto",
+        right: point.x,
         top: point.y,
-        width: "fit-content",
+        width: "max-content",
       }}
     >
-      <div
-        className="pointer-events-auto flex w-max max-w-full items-stretch overflow-hidden rounded-full border border-border bg-popover text-popover-foreground shadow-background/40 shadow-lg transition-[opacity,transform,box-shadow] duration-[180ms] ease-in data-[phase=exiting]:pointer-events-none data-[phase=exiting]:-translate-y-1 data-[phase=exiting]:scale-[0.985] data-[phase=exiting]:opacity-0 data-[dragging=true]:shadow-xl motion-reduce:transition-none"
-        data-dragging={drag.dragging ? "true" : "false"}
-        data-floating-pill={id}
-        data-phase={phase}
-        ref={pillCallbackRef}
-      >
-        <div className="flex items-center pl-1">
-          <Button
-            aria-label={t("terminal.runtimeControl.move")}
-            className="cursor-grab touch-none data-[dragging=true]:cursor-grabbing"
-            data-dragging={drag.dragging ? "true" : "false"}
-            data-testid="terminal-runtime-control-drag-handle"
-            onDoubleClick={() => {
+      <div className="flex shrink-0 items-center pl-1">
+        <Button
+          aria-label={t("terminal.runtimeControl.move")}
+          className="cursor-grab touch-none data-[dragging=true]:cursor-grabbing"
+          data-dragging={drag.dragging ? "true" : "false"}
+          data-testid="terminal-runtime-control-drag-handle"
+          onDoubleClick={() => {
+            normalizedRef.current = DEFAULT_PANEL_FLOATING_POSITION;
+            restoreFromNormalized();
+            onPositionCommit(id, DEFAULT_PANEL_FLOATING_POSITION);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Home") {
+              event.preventDefault();
               normalizedRef.current = DEFAULT_PANEL_FLOATING_POSITION;
               restoreFromNormalized();
               onPositionCommit(id, DEFAULT_PANEL_FLOATING_POSITION);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Home") {
-                event.preventDefault();
-                normalizedRef.current = DEFAULT_PANEL_FLOATING_POSITION;
-                restoreFromNormalized();
-                onPositionCommit(id, DEFAULT_PANEL_FLOATING_POSITION);
-                return;
-              }
-              const step = event.shiftKey ? 32 : 8;
-              const delta = keyboardDelta(event.key, step);
-              if (delta) {
-                event.preventDefault();
-                moveBy(delta[0], delta[1]);
-              }
-            }}
-            onPointerDown={drag.onPointerDown}
-            size="icon-sm"
-            title={t("terminal.runtimeControl.move")}
-            tone="muted"
-            type="button"
-            variant="ghost"
-          >
-            <GripVertical aria-hidden="true" data-icon="inline-start" />
-          </Button>
-        </div>
-        <Separator className="my-2" orientation="vertical" />
-        {content}
+              return;
+            }
+            const step = event.shiftKey ? 32 : 8;
+            const delta = keyboardDelta(event.key, step);
+            if (delta) {
+              event.preventDefault();
+              moveBy(delta[0], delta[1]);
+            }
+          }}
+          onPointerDown={drag.onPointerDown}
+          size="icon-sm"
+          title={t("terminal.runtimeControl.move")}
+          tone="muted"
+          type="button"
+          variant="ghost"
+        >
+          <GripVertical aria-hidden="true" data-icon="inline-start" />
+        </Button>
       </div>
+      {/* 不用 shadcn Separator：其 data-horizontal:w-full 在异常 orientation 下会拉满宽 */}
+      <div
+        aria-hidden="true"
+        className="my-2 w-px shrink-0 self-stretch bg-border"
+        data-slot="separator"
+      />
+      {content}
     </div>
   );
 }
