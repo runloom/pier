@@ -1337,7 +1337,7 @@ describe("WorkspaceHeaderActions", () => {
 
     const runTask = await findCommandItem("Run Task…");
     expect(runTask).toHaveAttribute("aria-disabled", "true");
-    expect(runTask).toHaveTextContent("Focus a project panel first");
+    expect(runTask).toHaveTextContent("Open or focus a project folder first");
     fireEvent.click(runTask);
     expect(useCommandPaletteController.getState().open).toBe(false);
 
@@ -1582,7 +1582,7 @@ describe("WorkspaceHeaderActions", () => {
         expect(useAppDialogStore.getState().current).toMatchObject({
           body: "action boom",
           kind: "alert",
-          title: "Couldn’t complete action",
+          title: "Couldn't complete action — try again",
         });
       });
     } finally {
@@ -1686,7 +1686,7 @@ describe("WorkspaceHeaderActions", () => {
       expect(useAppDialogStore.getState().current).toMatchObject({
         body: "detect boom",
         kind: "alert",
-        title: "Couldn’t detect agents",
+        title: "Couldn't detect agents — try again",
       });
     });
     expect(await findCommandItem("New Terminal")).toBeVisible();
