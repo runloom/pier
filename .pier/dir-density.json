@@ -23,19 +23,23 @@
       "reason": "shadcn primitives intentionally flat; feature clusters live under diff-view/, file/, image-preview/"
     },
     "src/renderer/stores": {
-      "max": 55,
-      "reason": "debt: optional domain subfolders (terminal/workspace/agent); agent-lifecycle store added; workspace-close split pending folder"
+      "max": 56,
+      "reason": "debt: optional domain subfolders (terminal/workspace/agent); agent-lifecycle + shell-environment + comments mirror stores; workspace-close split pending folder"
+    },
+    "src/shared": {
+      "max": 41,
+      "reason": "debt: top-level shared helpers still flat; task-runs-window-filter + domain modules pending folders"
     },
     "src/shared/contracts": {
       "max": 50,
       "reason": "debt: finish remaining contract domain groups"
     },
     "src/renderer/panel-kits/terminal": {
-      "max": 47,
-      "reason": "debt: more surface vs chrome split beyond hooks/"
+      "max": 49,
+      "reason": "debt: more surface vs chrome split beyond hooks/; core comments status item added"
     },
     "src/renderer/pages/settings/components": {
-      "max": 44,
+      "max": 45,
       "reason": "debt: section subfolders (skills/ already extracted); agent-row details/lifecycle format pending agents/ folder"
     },
     "src/main/services/agents/integrations": {

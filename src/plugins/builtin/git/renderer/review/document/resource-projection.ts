@@ -1,7 +1,14 @@
-import type { PierDiffViewItem } from "@pier/ui/diff-view/index.tsx";
+import type {
+  PierDiffReviewDriftThread,
+  PierDiffViewItem,
+} from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitReviewIndexEntry } from "@shared/contracts/git/review.ts";
 import { isReviewSlotIncludedInBody } from "./body-class.ts";
+import {
+  classifyInlineDrift,
+  type ReviewCommentIndex,
+} from "./comment-projection.ts";
 import { lineStatsFromReviewSlot, reviewStageControl } from "./estimates.ts";
 import type { ReviewDocumentResourceProjection } from "./projection-types.ts";
 import type { GitReviewDocumentResource } from "./resource.ts";
@@ -26,7 +33,9 @@ export function isCodeViewMemberResource(
 export function projectReviewDocumentResource(
   resource: GitReviewDocumentResource,
   context: RendererPluginContext,
-  locale: string
+  locale: string,
+  comments?: ReviewCommentIndex,
+  commentsSeq?: number
 ): ReviewDocumentResourceProjection {
   if (!isCodeViewMemberResource(resource)) {
     return { items: [] };
@@ -41,6 +50,7 @@ export function projectReviewDocumentResource(
   }
   // 文档可能由 IPC 在每次权威刷新后重新物化，但 revision 是内容身份。
   // 按内容身份缓存可避免未变化大文件重复 hash patch、复制数千个 change block。
+  // commentsSeq 纳入 key：评论变化（seq 递增）须失效缓存，否则行内评论不刷新。
   const projectionKey = JSON.stringify([
     locale,
     resource.document.revision,
@@ -54,6 +64,7 @@ export function projectReviewDocumentResource(
         : [section.sectionKey, section.kind, section.reason]
     ),
     resource.entry,
+    commentsSeq ?? 0,
   ]);
   const cached = projectionsByKey.get(projectionKey);
   if (cached !== undefined) {
@@ -62,7 +73,8 @@ export function projectReviewDocumentResource(
   const projection = projectLoadedReviewDocumentResource(
     resource,
     context,
-    locale
+    locale,
+    comments
   );
   projectionsByKey.set(projectionKey, projection);
   return projection;
@@ -108,7 +120,8 @@ function projectFailedReviewDocumentResource(
 function projectLoadedReviewDocumentResource(
   resource: Extract<GitReviewDocumentResource, { kind: "loaded" }>,
   context: RendererPluginContext,
-  locale: string
+  locale: string,
+  comments?: ReviewCommentIndex
 ): ReviewDocumentResourceProjection {
   const sections = new Map(
     resource.document.sections.map((section) => [section.sectionKey, section])
@@ -164,6 +177,20 @@ function projectLoadedReviewDocumentResource(
                     },
                   ]
             );
+      const inlineThreads = comments?.get(slot.group, slot.targetPath) ?? [];
+      const fileDrift = comments?.getFileDrift(slot.targetPath) ?? [];
+      // patch 为空（estimate 阶段）跳过漂移判定：全行内乐观，loaded 后重判。
+      const classified =
+        inlineThreads.length > 0 && section.patch.length > 0
+          ? classifyInlineDrift(inlineThreads, section.patch)
+          : { drift: [] as PierDiffReviewDriftThread[], inline: inlineThreads };
+      const driftThreads: PierDiffReviewDriftThread[] = [...classified.drift];
+      for (const fileThread of fileDrift) {
+        driftThreads.push(fileThread);
+      }
+      const reviewComments =
+        classified.inline.length > 0 ? classified.inline : undefined;
+      const driftComments = driftThreads.length > 0 ? driftThreads : undefined;
       return [
         {
           cacheKey: `git-review-section:${itemId}:${section.patch.length}:${fnv1a32(section.patch)}`,
@@ -173,6 +200,8 @@ function projectLoadedReviewDocumentResource(
           kind: "loaded",
           ...(lineStats === undefined ? {} : { lineStats }),
           patch: section.patch,
+          ...(reviewComments === undefined ? {} : { reviewComments }),
+          ...(driftComments === undefined ? {} : { driftComments }),
           ...(stageControl === null ? {} : { stageControl }),
         },
       ];

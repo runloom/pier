@@ -178,6 +178,9 @@ export const PIER_BROADCAST = {
   NOTIFICATION_CENTER_CHANGED: "pier://notification-center:changed",
   // 形态 B 消息 toast：main 单窗投递（payload AppNotification）；禁止全窗广播。
   NOTIFICATION_CENTER_MESSAGE_TOAST: "pier://notification-center:message-toast",
+  // 统一评论项目快照广播 (main → 所有 renderer, payload CommentProjectSnapshot)。
+  // main CommentsService 唯一写方；renderer 镜像 store 按 worktreeKey 路由 + seq 守卫。
+  COMMENTS_CHANGED: "pier://comments:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

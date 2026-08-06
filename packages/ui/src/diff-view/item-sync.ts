@@ -4,15 +4,15 @@ import {
   hardenCodeViewInstanceChanged,
   scheduleCodeViewLayoutFlush,
 } from "./code-view-runtime.ts";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import {
   hasSameCodeViewItemIdOrder,
   planDiffViewItemTransition,
   planPathAlignedIdRenames,
 } from "./item-transition.ts";
 import { isEstimateCodeViewItem, type PierDiffCodeViewItem } from "./items.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 
-export type PierCodeViewHandle = CodeViewHandle<PierHunkAnnotationMetadata>;
+export type PierCodeViewHandle = CodeViewHandle<PierDiffAnnotationMetadata>;
 
 export type { DiffViewItemTransitionPlan } from "./item-transition.ts";
 export {

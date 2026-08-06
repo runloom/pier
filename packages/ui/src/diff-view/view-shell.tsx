@@ -12,10 +12,10 @@ import type {
   ReactNode,
   RefObject,
 } from "react";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 import { PierDiffWorkerProvider } from "./worker.tsx";
 
-type PierCodeViewItem = CodeViewItem<PierHunkAnnotationMetadata>;
+type PierCodeViewItem = CodeViewItem<PierDiffAnnotationMetadata>;
 
 export const PIER_DIFF_CODE_VIEW_CLASSNAME =
   "cv-scrollbar relative h-full min-h-0 w-full min-w-0 flex-1 overflow-auto overscroll-contain border-border border-b [contain:strict] [overflow-anchor:none] [scrollbar-gutter:auto] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-x-visible [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))] [&_diffs-container]:[contain:layout_paint_style]";
@@ -24,7 +24,7 @@ export function PierDiffViewShell(props: {
   readonly codeThemes: { readonly dark: string; readonly light: string };
   readonly codeViewItems: PierCodeViewItem[];
   readonly codeViewKey: string;
-  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
+  readonly codeViewRef: RefObject<CodeViewHandle<PierDiffAnnotationMetadata> | null>;
   readonly handleCodeViewScroll: () => void;
   readonly handleHeaderClickCapture: (
     event: MouseEvent<HTMLDivElement>
@@ -36,9 +36,9 @@ export function PierDiffViewShell(props: {
   readonly handleUserScrollKey: (event: KeyboardEvent<HTMLDivElement>) => void;
   readonly onError: (error: Error) => void;
   readonly onUnavailable: () => void;
-  readonly options: CodeViewOptions<PierHunkAnnotationMetadata>;
+  readonly options: CodeViewOptions<PierDiffAnnotationMetadata>;
   readonly renderAnnotation?: (
-    annotation: { readonly metadata?: PierHunkAnnotationMetadata },
+    annotation: { readonly metadata?: PierDiffAnnotationMetadata },
     item: { readonly id: string }
   ) => ReactNode;
   readonly renderHeaderMetadata: (item: PierCodeViewItem) => ReactNode;

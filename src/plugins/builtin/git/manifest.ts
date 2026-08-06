@@ -318,7 +318,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     {
       component: GIT_CHANGES_PANEL_ID,
       id: GIT_CHANGES_PANEL_ID,
-      permissions: ["git:read"],
+      permissions: ["comments:read", "comments:write", "git:read"],
       title: "Changes",
     },
   ],
@@ -328,6 +328,8 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     "worktree:write",
     "environment:read",
     "workspace:open",
+    "comments:read",
+    "comments:write",
     "git:read",
     "git:write",
     "file:read",

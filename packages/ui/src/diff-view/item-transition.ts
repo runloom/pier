@@ -1,6 +1,6 @@
 import type { CodeViewItem } from "@pierre/diffs/react";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import type { PierDiffCodeViewItem } from "./items.ts";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 
 export type DiffViewItemTransitionPlan =
   | { readonly kind: "append" }
@@ -124,8 +124,8 @@ export function planDiffViewItemTransition(
 }
 
 export function hasSameCodeViewItemIdOrder(
-  previous: readonly CodeViewItem<PierHunkAnnotationMetadata>[],
-  next: readonly CodeViewItem<PierHunkAnnotationMetadata>[]
+  previous: readonly CodeViewItem<PierDiffAnnotationMetadata>[],
+  next: readonly CodeViewItem<PierDiffAnnotationMetadata>[]
 ): boolean {
   if (previous.length !== next.length) {
     return false;
@@ -139,8 +139,8 @@ export function hasSameCodeViewItemIdOrder(
 }
 
 function isStrictIdPrefix(
-  previous: readonly CodeViewItem<PierHunkAnnotationMetadata>[],
-  next: readonly CodeViewItem<PierHunkAnnotationMetadata>[]
+  previous: readonly CodeViewItem<PierDiffAnnotationMetadata>[],
+  next: readonly CodeViewItem<PierDiffAnnotationMetadata>[]
 ): boolean {
   if (next.length <= previous.length) {
     return false;

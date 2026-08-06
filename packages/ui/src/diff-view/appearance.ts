@@ -211,6 +211,27 @@ ${SCROLLBAR_SYSTEM_CSS}
   }
 
   /*
+   * 批注行底色压回普通代码行。
+   *
+   * Pierre 默认把批注行当「上下文块」：style.js 给 [data-line-annotation] 设
+   * --diffs-annotation-bg: var(--diffs-bg-context)（暗色 = 代码行底 + 7.5% 白），
+   * 给 [data-gutter-buffer="annotation"] 再单独设 --diffs-bg-context-gutter
+   * （只有 45% 灰）。于是行内评论行渲染成「两侧接近正常 + 中间一块灰」。
+   *
+   * 行内评论不是上下文块，是挂在这一行上的批注，底色必须与所在文件其它行完全
+   * 一致。--diffs-annotation-bg 是 pierre 那条规则里 decoration / diff-line /
+   * selected-line / line-bg 四个 computed 变量的唯一上游，所以只需改这一个：
+   * 选中蓝与 hover 混色仍按普通行的公式算，不会被拉偏。
+   *
+   * 这正是 pierre 自己在 [data-has-merge-conflict] 下压平批注行的同款做法。
+   * 卡片侧一律 bg-transparent，不要改回在卡片上铺 surface——那样会盖掉选中蓝。
+   */
+  :host([data-pier-file-host]) [data-line-annotation],
+  :host([data-pier-file-host]) [data-gutter-buffer='annotation'] {
+    --diffs-annotation-bg: var(--diffs-bg);
+  }
+
+  /*
    * estimate 槽：shadow 内真实节点 [data-pier-estimate-skeleton]
    * （由 estimate-skeleton.ts syncEstimateSkeleton 注入）。
    *

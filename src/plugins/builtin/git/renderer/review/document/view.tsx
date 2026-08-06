@@ -1,8 +1,12 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import type {
+  PierDiffReviewCommentThread,
   PierDiffViewHandle,
   PierDiffViewPresentation,
+  PierDiffViewProps,
   PierDiffViewRenderWindow,
+  PierDriftCommentLabels,
+  PierGutterReviewEvent,
 } from "@pier/ui/diff-view/index.tsx";
 import {
   Empty,
@@ -40,6 +44,8 @@ import type {
 import { projectReviewLedger } from "./projection.ts";
 
 interface GitReviewDocumentViewProps {
+  readonly activeReviewEpoch?: PierDiffViewProps["activeReviewEpoch"];
+  readonly activeReviewSlotsByItem?: PierDiffViewProps["activeReviewSlotsByItem"];
   readonly appearance: RendererPluginAppearance;
   readonly authoritativeEmpty: boolean;
   /**
@@ -50,6 +56,8 @@ interface GitReviewDocumentViewProps {
   readonly context: RendererPluginContext;
   readonly contextId: string;
   readonly diffRef: (handle: PierDiffViewHandle | null) => void;
+  /** drift 评论 chip aria/title 文案（透传 ReviewCodeView → PierDiffView）。 */
+  readonly driftCommentLabels?: PierDriftCommentLabels;
   readonly emptyDescription: string;
   readonly emptySurface: GitReviewReadingSurface;
   readonly emptyTitle: string;
@@ -63,6 +71,9 @@ interface GitReviewDocumentViewProps {
   readonly headerLeading?: React.ReactNode;
   readonly headerTrailing?: React.ReactNode;
   readonly indexFailure: GitReviewFailure | null;
+  readonly inlineReviewHandlers?: PierDiffViewProps["inlineReviewHandlers"];
+  readonly inlineReviewLabels?: PierDiffViewProps["inlineReviewLabels"];
+  readonly inlineReviewThreadById?: PierDiffViewProps["inlineReviewThreadById"];
   readonly isActiveOpenPath?: (path: string) => boolean;
   readonly mutationAuthorityBlocked: boolean;
   readonly onAcquireMutationAuthority: () => GitReviewMutationLease | null;
@@ -73,7 +84,14 @@ interface GitReviewDocumentViewProps {
       readonly path: string;
     }
   ) => void;
+  /** drift 评论 chip 点击（透传 ReviewCodeView → PierDiffView）。 */
+  readonly onDriftCommentActivate?: (threadId: string) => void;
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
+  /**
+   * Diff 行内评论 gutter 入口激活（透传 ReviewCodeView → PierDiffView）。
+   * 提供即开启原生 gutter `+` 入口（在该行新建评论草稿）。
+   */
+  readonly onGutterReviewActivate?: (event: PierGutterReviewEvent) => void;
   readonly onItemError: (id: string, error: Error | null) => void;
   readonly onMutationCommitted: (
     result: GitReviewMutationOk | null,
@@ -88,6 +106,14 @@ interface GitReviewDocumentViewProps {
   readonly projection: ReviewDocumentProjection;
   readonly renderFeedback: ReviewRenderFeedback | null;
   readonly renderWindowReady: boolean;
+  /**
+   * itemId → 该文件 diff 行内评论线程（透传 ReviewCodeView → PierDiffView）。
+   * gutter 按 (side, line) 查询渲染入口；缺省无评论入口。
+   */
+  readonly reviewCommentsById?: ReadonlyMap<
+    string,
+    readonly PierDiffReviewCommentThread[]
+  >;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
   readonly sidebarFooter?: React.ReactNode;
@@ -114,12 +140,20 @@ export function GitReviewDocumentView({
   feedbackEnabled,
   contextId,
   gitRootPath,
+  driftCommentLabels,
+  activeReviewEpoch,
+  activeReviewSlotsByItem,
+  inlineReviewHandlers,
+  inlineReviewLabels,
+  inlineReviewThreadById,
   headerCenter,
   headerLeading,
   headerTrailing,
   indexFailure,
   onItemError,
   onFeedbackChange,
+  onGutterReviewActivate,
+  onDriftCommentActivate,
   onAcquireMutationAuthority,
   onMutationCommitted,
   mutationAuthorityBlocked,
@@ -134,6 +168,7 @@ export function GitReviewDocumentView({
   projection,
   renderFeedback,
   renderWindowReady,
+  reviewCommentsById,
   sourcePanelId,
   setSidebarCollapsed,
   sidebarCollapsed,
@@ -161,8 +196,15 @@ export function GitReviewDocumentView({
       ...(entries === undefined ? {} : { entries }),
       failureSummary,
       gitRootPath,
+      ...(driftCommentLabels === undefined ? {} : { driftCommentLabels }),
       onItemError,
       onFeedbackChange,
+      ...(onGutterReviewActivate === undefined
+        ? {}
+        : { onGutterReviewActivate }),
+      ...(onDriftCommentActivate === undefined
+        ? {}
+        : { onDriftCommentActivate }),
       onAcquireMutationAuthority,
       onMutationCommitted,
       mutationAuthorityBlocked,
@@ -171,6 +213,16 @@ export function GitReviewDocumentView({
       onScroll,
       ...(presentation === undefined ? {} : { presentation }),
       projection,
+      ...(reviewCommentsById === undefined ? {} : { reviewCommentsById }),
+      ...(activeReviewEpoch === undefined ? {} : { activeReviewEpoch }),
+      ...(activeReviewSlotsByItem === undefined
+        ? {}
+        : { activeReviewSlotsByItem }),
+      ...(inlineReviewHandlers === undefined ? {} : { inlineReviewHandlers }),
+      ...(inlineReviewLabels === undefined ? {} : { inlineReviewLabels }),
+      ...(inlineReviewThreadById === undefined
+        ? {}
+        : { inlineReviewThreadById }),
       renderErrorVisible: renderFeedback !== null,
       renderWindowReady,
       settled: viewState.settled,
@@ -266,8 +318,11 @@ function documentContent(options: {
   readonly entries?: readonly GitReviewIndexEntry[];
   readonly failureSummary: ReviewFailureSummary;
   readonly gitRootPath: string;
+  readonly driftCommentLabels?: PierDriftCommentLabels;
   readonly onItemError: (id: string, error: Error | null) => void;
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
+  readonly onGutterReviewActivate?: (event: PierGutterReviewEvent) => void;
+  readonly onDriftCommentActivate?: (threadId: string) => void;
   readonly onAcquireMutationAuthority: () => GitReviewMutationLease | null;
   readonly onMutationCommitted: (
     result: GitReviewMutationOk | null,
@@ -279,6 +334,15 @@ function documentContent(options: {
   readonly onScroll: () => void;
   readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
+  readonly reviewCommentsById?: ReadonlyMap<
+    string,
+    readonly PierDiffReviewCommentThread[]
+  >;
+  readonly activeReviewEpoch?: PierDiffViewProps["activeReviewEpoch"];
+  readonly activeReviewSlotsByItem?: PierDiffViewProps["activeReviewSlotsByItem"];
+  readonly inlineReviewHandlers?: PierDiffViewProps["inlineReviewHandlers"];
+  readonly inlineReviewLabels?: PierDiffViewProps["inlineReviewLabels"];
+  readonly inlineReviewThreadById?: PierDiffViewProps["inlineReviewThreadById"];
   readonly renderErrorVisible: boolean;
   readonly renderWindowReady: boolean;
   readonly settled: boolean;
@@ -349,10 +413,43 @@ function documentContent(options: {
             {...(options.gitRootPath
               ? { gitRootPath: options.gitRootPath }
               : {})}
+            {...(options.driftCommentLabels === undefined
+              ? {}
+              : { driftCommentLabels: options.driftCommentLabels })}
             items={displayProjection.items}
+            {...(options.reviewCommentsById === undefined
+              ? {}
+              : { reviewCommentsById: options.reviewCommentsById })}
+            {...(options.activeReviewEpoch === undefined
+              ? {}
+              : { activeReviewEpoch: options.activeReviewEpoch })}
+            {...(options.activeReviewSlotsByItem === undefined
+              ? {}
+              : {
+                  activeReviewSlotsByItem: options.activeReviewSlotsByItem,
+                })}
+            {...(options.inlineReviewHandlers === undefined
+              ? {}
+              : {
+                  inlineReviewHandlers: options.inlineReviewHandlers,
+                })}
+            {...(options.inlineReviewLabels === undefined
+              ? {}
+              : { inlineReviewLabels: options.inlineReviewLabels })}
+            {...(options.inlineReviewThreadById === undefined
+              ? {}
+              : {
+                  inlineReviewThreadById: options.inlineReviewThreadById,
+                })}
             mutationAuthorityBlocked={options.mutationAuthorityBlocked}
             onAcquireMutationAuthority={options.onAcquireMutationAuthority}
             onFeedbackChange={options.onFeedbackChange}
+            {...(options.onGutterReviewActivate === undefined
+              ? {}
+              : { onGutterReviewActivate: options.onGutterReviewActivate })}
+            {...(options.onDriftCommentActivate === undefined
+              ? {}
+              : { onDriftCommentActivate: options.onDriftCommentActivate })}
             onItemError={options.onItemError}
             onMutationCommitted={options.onMutationCommitted}
             onRenderWindowChange={options.onRenderWindowChange}

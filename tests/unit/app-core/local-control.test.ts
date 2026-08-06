@@ -114,6 +114,7 @@ function cliClientServices(): PierCoreServices {
   return {
     agentDetection: {} as never,
     gitReview: {} as never,
+    comments: {} as never,
     agentRuntimeIndex: {} as never,
     agentUsage: {
       flush: async () => undefined,

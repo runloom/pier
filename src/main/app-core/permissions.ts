@@ -283,6 +283,31 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.sync": { capabilities: ["git:write"] },
   "git.undoLastCommit": { capabilities: ["git:write"] },
   "git.unstage": { capabilities: ["git:write"] },
+  // 统一评论能力：评论是桌面 UI 能力，仅 desktop-renderer 可达。
+  // v1 瘦身：只保留 list / listProjects / createThread / updateComment /
+  // deleteComment。
+  // 读命令 comments:read；写命令 comments:read + comments:write（写也要读，
+  // 因为 main 侧要校验 scope 与 worktreeKey 派生一致性）。
+  "comments.list": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["comments:read"],
+  },
+  "comments.listProjects": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["comments:read"],
+  },
+  "comments.createThread": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["comments:read", "comments:write"],
+  },
+  "comments.updateComment": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["comments:read", "comments:write"],
+  },
+  "comments.deleteComment": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["comments:read", "comments:write"],
+  },
   "plugin.catalog.list": {
     allowedClientKinds: ["desktop-renderer", "cli-local"],
     capabilities: ["plugin:read"],

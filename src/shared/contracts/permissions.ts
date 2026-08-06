@@ -46,6 +46,9 @@ export const pierCapabilitySchema = z.enum([
   "ai:invoke",
   "skills:read",
   "skills:write",
+  // 统一评论能力：读 / 写分离授权（git 插件等消费端经门面读写）。
+  "comments:read",
+  "comments:write",
 ]);
 
 export type PierClientKind = z.infer<typeof pierClientKindSchema>;
@@ -99,6 +102,9 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     // network 用于 plugin.checkUpdates / plugin.install / plugin.update
     // 拉取签名官方索引与下载 GitHub Release asset (design §5)。
     "network",
+    // 统一评论能力：桌面 renderer 直连评论服务（镜像 store 读 + 命令写）。
+    "comments:read",
+    "comments:write",
   ],
   "cli-local": [
     "app:read",

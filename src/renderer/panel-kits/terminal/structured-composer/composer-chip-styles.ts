@@ -1,5 +1,5 @@
 /**
- * Shared chrome for @ path / skill / attachment chips in Rich Input.
+ * Shared chrome for @ path / skill / attachment / review chips in Rich Input.
  *
  * Horizontal gap lives on the Lexical host via `.composer-ref-chip-host::before/::after`
  * in globals.css (not margin/padding alone — see that comment).
@@ -9,6 +9,7 @@
  * - skill         → status-success (green)
  * - attachment OK → status-done   (purple / done)
  * - attachment bad→ status-warning (amber)
+ * - review comments → destructive (red; action needed — distinct from invalid attach)
  *
  * Do not use action-accent here: --action-accent tracks --primary, which is
  * near-neutral in Pier themes and does not read as a highlighted chip.
@@ -30,3 +31,7 @@ export const COMPOSER_CHIP_TONE_ATTACHMENT =
 
 export const COMPOSER_CHIP_TONE_ATTACHMENT_INVALID =
   "border-status-warning-border bg-status-warning-bg text-status-warning-fg";
+
+/** Distinct from attachment-invalid (warning): review bundle is “needs handling”. */
+export const COMPOSER_CHIP_TONE_REVIEW =
+  "border-destructive/35 bg-destructive/10 text-destructive";

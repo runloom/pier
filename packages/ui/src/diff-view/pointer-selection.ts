@@ -1,6 +1,6 @@
 import type { CodeViewLineSelection } from "@pierre/diffs";
 import type { CodeViewHandle } from "@pierre/diffs/react";
-import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
+import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 
 type SelectionSide = "additions" | "deletions";
 
@@ -42,7 +42,7 @@ function sideFromElements(
 
 function itemIdFromPath(
   path: readonly EventTarget[],
-  viewer: CodeViewHandle<PierHunkAnnotationMetadata>
+  viewer: CodeViewHandle<PierDiffAnnotationMetadata>
 ): string | null {
   const rendered = viewer.getInstance()?.getRenderedItems() ?? [];
   if (rendered.length === 0) {
@@ -67,7 +67,7 @@ function itemIdFromPath(
  */
 export function resolveDiffPointerLineHit(
   event: Pick<PointerEvent, "composedPath" | "target">,
-  viewer: CodeViewHandle<PierHunkAnnotationMetadata> | null | undefined
+  viewer: CodeViewHandle<PierDiffAnnotationMetadata> | null | undefined
 ): DiffPointerLineHit | null {
   if (!viewer) {
     return null;

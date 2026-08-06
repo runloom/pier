@@ -26,11 +26,14 @@ import { MentionPlugin } from "./mention-plugin.tsx";
 import {
   insertAttachmentTokenAtLexicalSelection,
   insertLexicalPlainTextAtSelection,
+  insertOrReplaceReviewCommentsChipInLexical,
   listInvalidAttachmentRefsInLexical,
+  type ReviewCommentsChipInsert,
   rewriteAttachmentTokensInLexical,
 } from "./mutations.ts";
 import { OnChangePlainTextPlugin } from "./on-change-plain-text-plugin.tsx";
 import { PastePlainTextPlugin } from "./paste-plain-text-plugin.tsx";
+import { ReviewCommentsChipNode } from "./review-comments-chip-node.tsx";
 import {
   readLexicalPlainSelection,
   readLexicalPlainText,
@@ -52,6 +55,8 @@ export interface StructuredComposerEditorHandle {
   getValue: () => string;
   /** Insert an attachment chip at the caret without wiping @ mention chips. */
   insertAttachmentToken: (absolutePath: string, ordinal1Based: number) => void;
+  /** Insert/replace the review-comments bundle chip; preserves other chips. */
+  insertReviewCommentsChip: (input: ReviewCommentsChipInsert) => void;
   /** Insert plain text at the caret/selection; preserves mention chips. */
   insertTextAtSelection: (text: string) => void;
   /** True while @ / # / skill autocomplete is open. */
@@ -146,6 +151,10 @@ function EditorHandleBridge({
           absolutePath,
           ordinal1Based
         );
+        lastExternalValue.current = readLexicalPlainText(editor);
+      },
+      insertReviewCommentsChip: (input) => {
+        insertOrReplaceReviewCommentsChipInLexical(editor, input);
         lastExternalValue.current = readLexicalPlainText(editor);
       },
       insertTextAtSelection: (text: string) => {
@@ -262,7 +271,12 @@ export function StructuredComposerEditor({
     () => ({
       editable: !disabled,
       namespace: "PierTerminalComposer",
-      nodes: [WorkspacePathMentionNode, AttachmentTokenNode, SkillMentionNode],
+      nodes: [
+        WorkspacePathMentionNode,
+        AttachmentTokenNode,
+        SkillMentionNode,
+        ReviewCommentsChipNode,
+      ],
       onError: (error: Error) => {
         console.error("[structured-composer]", error);
       },

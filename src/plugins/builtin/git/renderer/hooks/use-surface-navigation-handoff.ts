@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import type { PierDiffViewHandle } from "@pier/ui/diff-view/index.tsx";
+import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
 import type { ReviewDocumentProjection } from "../review/document/projection.ts";
 import { isReviewPlaceholderCacheKey } from "../review/navigation.ts";
 import type { GitReviewReadingSurface } from "../review/reading-surface.ts";
@@ -23,6 +24,7 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
     readonly sectionKey: string;
   }) => void;
   readonly diffBase: GitReviewReadingSurface;
+  readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly hasPendingNavigation: () => boolean;
   readonly navigationPending: boolean;
   readonly navigationRequest: ReviewSurfaceNavigationRequest | null;
@@ -43,6 +45,7 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
     applyNavigationDemand,
     beginNavigation,
     diffBase,
+    diffHandleRef,
     hasPendingNavigation,
     navigationPending,
     navigationRequest,
@@ -88,11 +91,26 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
       return;
     }
     if (!(navigationPending || hasPendingNavigation())) {
+      if (navigationRequest.revealLine !== undefined) {
+        diffHandleRef.current?.scrollToLine(
+          navigationRequest.itemId,
+          navigationRequest.revealLine,
+          mapRevealSide(navigationRequest.revealSide)
+        );
+      }
       onSurfaceNavigationSettled(navigationRequest);
       return;
     }
     const request = navigationRequest;
     const timer = globalThis.setTimeout(() => {
+      // Still attempt line reveal on safety timeout (slow materialize).
+      if (request.revealLine !== undefined) {
+        diffHandleRef.current?.scrollToLine(
+          request.itemId,
+          request.revealLine,
+          mapRevealSide(request.revealSide)
+        );
+      }
       onSurfaceNavigationSettled(request);
     }, NAVIGATION_SETTLE_SAFETY_MS);
     return () => {
@@ -101,6 +119,7 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
   }, [
     active,
     diffBase,
+    diffHandleRef,
     hasPendingNavigation,
     navigationPending,
     navigationRequest,
@@ -163,4 +182,11 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
     navigationRequest,
     setSelectedTreeTarget,
   ]);
+}
+
+/** 评论 target.side（"old"|"new"）→ diff-view side（"deletions"|"additions"）。 */
+function mapRevealSide(
+  side: "new" | "old" | undefined
+): "additions" | "deletions" {
+  return side === "old" ? "deletions" : "additions";
 }

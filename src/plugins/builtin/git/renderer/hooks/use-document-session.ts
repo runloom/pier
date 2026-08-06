@@ -14,6 +14,7 @@ import {
   type SetStateAction,
   useEffect,
 } from "react";
+import type { ReviewCommentIndex } from "../review/document/comment-projection.ts";
 import type { ReviewDocumentDemand } from "../review/document/demand.ts";
 import type {
   GitReviewDocumentGeneration,
@@ -85,6 +86,8 @@ export interface GitReviewGenerationCallbacks {
 }
 
 export function useGitReviewDocumentSession(options: {
+  readonly commentsIndexRef: RefObject<ReviewCommentIndex | null>;
+  readonly commentsSeqRef: RefObject<number>;
   readonly committedProjectionGenerationRef: RefObject<number>;
   readonly context: RendererPluginContext;
   readonly currentDemandRef: RefObject<ReviewDocumentDemand>;
