@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-08-07
+
+### Added
+
+- **行内审查评论。** Git 变更预览支持行内评论、漂移提示与智能体交接回路。
+- **Shell 环境与任务运行控制。** VS Code 风格 shell dump、TaskRuns 窗口归属与终端运行条右锚定。
+
+### Fixed
+
+- **Shell dump 污染与超时。** 剥离 ELECTRON_*/PIER dump 键，fallback 共享一次超时预算。
+- **后台任务可见性。** 后台任务要求 windowId，避免运行条丢失；诊断 ctx 有界。
+- **智能体探测注入。** 测试用 probe 不再被真实 PATH which 干扰。
+
 ## [0.1.18] - 2026-08-05
 
 ### Fixed
