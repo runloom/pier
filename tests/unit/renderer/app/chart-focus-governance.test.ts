@@ -91,9 +91,10 @@ describe("focus governance", () => {
     expect(graph).toContain("nodesFocusable={keyboardSelectable}");
     expect(graph).toContain("focusable: keyboardSelectable");
     expect(graph).toContain("edgesFocusable={false}");
-    expect(graph).toContain(
-      'role={keyboardSelectable ? "application" : "img"}'
-    );
+    // Expanded chrome splits roots: application when selectable, img otherwise.
+    expect(graph).toContain('role="application"');
+    expect(graph).toContain('role="img"');
+    expect(graph).toMatch(/if \(keyboardSelectable\)/);
   });
 
   it("uses light ring tokens for workbench resize and add-highlight", () => {
