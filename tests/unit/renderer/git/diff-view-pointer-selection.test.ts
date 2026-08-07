@@ -8,6 +8,7 @@ import {
   resolveDiffPointerLineHit,
   selectionFromPointerDrag,
 } from "../../../../packages/ui/src/diff-view/pointer-selection.ts";
+import type { PierDiffAnnotationMetadata } from "../../../../packages/ui/src/diff-view/review/annotation-types.ts";
 
 function makeEvent(
   target: Element
@@ -46,7 +47,7 @@ describe("resolveDiffPointerLineHit", () => {
           },
         ],
       }),
-    } as unknown as CodeViewHandle;
+    } as unknown as CodeViewHandle<PierDiffAnnotationMetadata>;
 
     expect(resolveDiffPointerLineHit(makeEvent(line), viewer)).toEqual({
       fromNumberColumn: false,
@@ -71,7 +72,7 @@ describe("resolveDiffPointerLineHit", () => {
           },
         ],
       }),
-    } as unknown as CodeViewHandle;
+    } as unknown as CodeViewHandle<PierDiffAnnotationMetadata>;
 
     expect(resolveDiffPointerLineHit(makeEvent(number), viewer)).toEqual({
       fromNumberColumn: true,
@@ -163,13 +164,13 @@ describe("readBrowserSelectedText", () => {
           toString: () => "a\u00a0b",
           cloneContents: () => ({ textContent: "" }),
         }) as unknown as Range,
-    } as Selection);
+    } as unknown as Selection);
     expect(readBrowserSelectedText()).toBe("a b");
     getSelection.mockReturnValue({
       isCollapsed: true,
       rangeCount: 0,
       toString: () => "ignored",
-    } as Selection);
+    } as unknown as Selection);
     expect(readBrowserSelectedText()).toBe("");
     getSelection.mockRestore();
   });
@@ -188,7 +189,7 @@ describe("readBrowserSelectedText", () => {
           toString: () => "",
           cloneContents: () => fragment,
         }) as unknown as Range,
-    } as Selection);
+    } as unknown as Selection);
     expect(readBrowserSelectedText()).toBe("shadow text");
     getSelection.mockRestore();
   });
