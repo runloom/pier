@@ -4,6 +4,20 @@
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-08-07
+
+### Added
+
+- **节点图全屏展开。** 工作台 / 画布节点图支持展开到全屏表面，便于大图浏览。
+- **多智能体 CLI 金标画布。** 附带 multi-agent orchestration gold canvas 样例与数据。
+
+### Fixed
+
+- **差异选区复制。** Diff 字符选区与右键复制更可靠；指针命中支持 client 坐标回退。
+- **Git 工作树占用提示。** 切换分支时若目标在另一工作树，给出可读错误说明。
+- **Mermaid SVG 消毒。** 预览 SVG sanitize 收紧，降低恶意/畸形图风险。
+- **CI 覆盖率超时。** pier-canvas SDK 类型检查在 coverage job 下延长超时。
+
 ## [0.1.19] - 2026-08-07
 
 ### Added
