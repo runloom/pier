@@ -640,6 +640,30 @@ describe("GitStatusDropdown", () => {
     });
   });
 
+  it("opens alert with hook check output for pre-push failures", async () => {
+    const pluginContext = makePluginContext();
+    pluginContext.git.push = vi.fn(async () => ({
+      kind: "unavailable" as const,
+      message: [
+        "A local Git hook rejected or stopped this operation",
+        "",
+        "husky - pre-push script failed (code 1)",
+        "Error: typecheck failed in packages/ui",
+      ].join("\n"),
+    }));
+    await openDropdown(pluginContext, AHEAD_MODEL);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Push/ }));
+
+    await waitFor(() => {
+      expect(pluginContext.dialogs.alert).toHaveBeenCalledWith({
+        body: expect.stringContaining("typecheck failed in packages/ui"),
+        title: "Project check script blocked this action",
+      });
+    });
+    expect(pluginContext.notifications.error).not.toHaveBeenCalled();
+  });
+
   it("runs pull from a behind-only branch", async () => {
     const pluginContext = makePluginContext();
     pluginContext.git.pullFastForward = vi.fn(async () => ({

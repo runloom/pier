@@ -14,6 +14,7 @@ import {
   showUnavailable,
 } from "./command-helpers.ts";
 import { pluginText } from "./plugin-text.ts";
+import { reportRemoteOperationFailure } from "./remote-error.ts";
 import {
   mismatchMessageForCommand,
   type RemoteSyncActionId,
@@ -53,12 +54,12 @@ function startRemoteSyncFromPalette(
   context: RendererPluginContext,
   actionId: GitRemoteSyncActionId,
   cwd: string,
-  title: string
+  _title: string
 ): void {
   // Fire-and-forget so the command palette closes immediately; errors surface
   // after runRemoteSyncAction dismisses its loading toast.
   runRemoteSyncAction(context, actionId, cwd).catch((err: unknown) => {
-    showError(context, title, err).catch(() => undefined);
+    reportRemoteOperationFailure(context, err).catch(() => undefined);
   });
 }
 

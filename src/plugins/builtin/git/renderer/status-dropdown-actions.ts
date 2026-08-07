@@ -8,7 +8,6 @@ import {
   runContinuePausedOperation,
 } from "./operation-runners.ts";
 import { pluginText } from "./plugin-text.ts";
-import { remoteOperationErrorBody } from "./remote-error.ts";
 import type { RemoteSyncActionId } from "./remote-sync-policy.ts";
 import type {
   GitStatusDropdownActionId,
@@ -18,10 +17,6 @@ import { getInFlightSync, trackSync } from "./sync-busy.ts";
 import { openWorktreeListQuickPick } from "./worktree/list-action.ts";
 
 export type GitRemoteSyncActionId = RemoteSyncActionId;
-
-export function gitStatusDropdownErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 function assertRemoteOperationOk(result: GitRemoteOperationResult): void {
   if (result.kind === "unavailable") {
@@ -133,7 +128,8 @@ export function runRemoteSyncAction(
       );
     } catch (error) {
       loading.dismiss();
-      throw new Error(remoteOperationErrorBody(pluginContext, error));
+      // Keep host message (hook stderr tail etc.) for alert body presentation.
+      throw error;
     }
   });
 }
