@@ -41,9 +41,8 @@ const COLOR_MIX_OWNERS = new Set([
   "src/plugins/builtin/files/renderer/editor/cm-theme.ts",
   // Shared source-editor chrome (files + settings Rules/Skills); semantic token mixes only.
   "src/shared/source-editor/theme.ts",
-  // Mermaid SVG theme: connector/arrow/surface must derive from fg/bg so host
-  // --border/--accent chrome tokens do not wash out diagram strokes.
-  "src/plugins/builtin/files/renderer/markdown/diagram.tsx",
+  // Standalone SVG previews bake fg/bg mixes so data-URL lightbox is not black.
+  "packages/ui/src/image-preview/bake-svg-for-standalone-preview.ts",
   // Table thead chrome mirrors code-block `bg-muted/40` (Tailwind class unavailable
   // in this CSS entry without @reference).
   "src/plugins/builtin/files/renderer/markdown/prose.css",

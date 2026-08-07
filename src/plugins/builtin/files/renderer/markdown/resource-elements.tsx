@@ -1,3 +1,4 @@
+import { MediaFullscreenButton } from "@pier/ui/media-fullscreen-button.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { ImageOff } from "lucide-react";
@@ -8,7 +9,6 @@ import {
   useState,
 } from "react";
 import type { MarkdownInline } from "./ir.ts";
-import { MarkdownMediaFullscreenButton } from "./media-fullscreen-button.tsx";
 
 export interface MarkdownInternalTarget {
   fragment?: string;
@@ -285,7 +285,7 @@ export function MarkdownResourceImage({
           width={640}
         />
         {canPreview ? (
-          <MarkdownMediaFullscreenButton
+          <MediaFullscreenButton
             label={openFullscreenLabel}
             onClick={openPreview}
           />

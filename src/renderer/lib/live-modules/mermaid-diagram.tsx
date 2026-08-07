@@ -1,5 +1,8 @@
+import { bakeSvgForStandalonePreview } from "@pier/ui/image-preview/bake-svg-for-standalone-preview.ts";
+import { MediaFullscreenButton } from "@pier/ui/media-fullscreen-button.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { useEffect, useRef, useState } from "react";
+import { openImagePreview } from "@/stores/content-preview.store.ts";
 import { useThemeStore } from "@/stores/theme.store.ts";
 import { officialMermaidRenderer } from "./official-mermaid-renderer.ts";
 
@@ -8,7 +11,13 @@ export interface MermaidDiagramProps {
   className?: string;
   emptyText?: string;
   errorText?: string;
+  /**
+   * Immersive fullscreen via host content preview. Default true.
+   */
+  expandable?: boolean;
+  expandLabel?: string;
   loadingText?: string;
+  previewTitle?: string;
   source: string;
 }
 
@@ -23,7 +32,10 @@ export function MermaidDiagram({
   className,
   emptyText = "Enter Mermaid source to preview a diagram.",
   errorText = "This Mermaid diagram could not be rendered.",
+  expandable = true,
+  expandLabel = "View fullscreen",
   loadingText = "Rendering diagram…",
+  previewTitle,
   source,
 }: MermaidDiagramProps) {
   const theme = useThemeStore((state) => state.resolvedTheme);
@@ -84,12 +96,29 @@ export function MermaidDiagram({
     return () => root.replaceChildren();
   }, [state]);
 
+  const openPreview = () => {
+    if (state.status !== "ready") {
+      return;
+    }
+    const liveSvg = rootRef.current?.querySelector("svg");
+    if (!liveSvg) {
+      return;
+    }
+    const markup = bakeSvgForStandalonePreview(liveSvg);
+    const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
+    openImagePreview({
+      alt: ariaLabel,
+      source: { kind: "url", src },
+      title: previewTitle?.trim() || ariaLabel,
+    });
+  };
+
   return (
     <div
       aria-busy={state.status === "loading"}
       aria-label={ariaLabel}
       className={cn(
-        "relative grid min-h-48 min-w-0 place-items-center overflow-auto rounded-lg border bg-muted/20 p-3",
+        "group relative grid min-h-48 min-w-0 place-items-center overflow-auto rounded-lg border bg-muted/20 p-3",
         className
       )}
       data-diagram-type={
@@ -121,6 +150,9 @@ export function MermaidDiagram({
             {state.message}
           </pre>
         </div>
+      ) : null}
+      {expandable && state.status === "ready" ? (
+        <MediaFullscreenButton label={expandLabel} onClick={openPreview} />
       ) : null}
     </div>
   );

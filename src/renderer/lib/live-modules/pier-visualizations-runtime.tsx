@@ -1,4 +1,3 @@
-import { NodeGraph } from "@pier/ui/node-graph.tsx";
 import type {
   DiagramController,
   MountDiagramRequest,
@@ -6,6 +5,7 @@ import type {
 } from "@shared/contracts/visualizations.ts";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
+import { HostNodeGraph } from "./host-node-graph.tsx";
 import { MermaidDiagram } from "./mermaid-diagram.tsx";
 
 function diagramElement(request: MountDiagramRequest) {
@@ -15,7 +15,7 @@ function diagramElement(request: MountDiagramRequest) {
       source: request.document.source,
     });
   }
-  return createElement(NodeGraph, {
+  return createElement(HostNodeGraph, {
     "aria-label": request.ariaLabel,
     direction: request.document.direction,
     edges: request.document.edges,

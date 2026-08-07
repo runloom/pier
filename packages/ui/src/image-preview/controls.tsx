@@ -26,6 +26,8 @@ export interface ImagePreviewCanvasLabels {
 export function ImagePreviewControls({
   effectiveZoom,
   labels,
+  maxZoom = MAX_ZOOM,
+  minZoom = MIN_ZOOM,
   onZoomChange,
   onZoomIn,
   onZoomOut,
@@ -33,12 +35,17 @@ export function ImagePreviewControls({
 }: {
   effectiveZoom: number;
   labels: ImagePreviewCanvasLabels;
+  /** Defaults to image-preview MAX_ZOOM (8). NodeGraph stage passes 4. */
+  maxZoom?: number | undefined;
+  /** Defaults to image-preview MIN_ZOOM (0.1). NodeGraph stage passes 0.12. */
+  minZoom?: number | undefined;
   onZoomChange: (zoom: number | "fit") => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   zoom: number | "fit";
 }) {
   const zoomLabel = zoom === "fit" ? labels.fit : `${Math.round(zoom * 100)}%`;
+  const presets = PRESET_ZOOM_LEVELS.filter((level) => level <= maxZoom);
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pt-2 pb-4">
@@ -54,7 +61,7 @@ export function ImagePreviewControls({
       >
         <Button
           aria-label={labels.zoomOut}
-          disabled={effectiveZoom <= MIN_ZOOM}
+          disabled={effectiveZoom <= minZoom}
           onClick={onZoomOut}
           size="icon-sm"
           type="button"
@@ -90,7 +97,7 @@ export function ImagePreviewControls({
               <DropdownMenuRadioItem value="fit">
                 {labels.fit}
               </DropdownMenuRadioItem>
-              {PRESET_ZOOM_LEVELS.map((level) => (
+              {presets.map((level) => (
                 <DropdownMenuRadioItem key={level} value={String(level)}>
                   {level * 100}%
                   {level === 1 ? (
@@ -105,7 +112,7 @@ export function ImagePreviewControls({
         </DropdownMenu>
         <Button
           aria-label={labels.zoomIn}
-          disabled={effectiveZoom >= MAX_ZOOM}
+          disabled={effectiveZoom >= maxZoom}
           onClick={onZoomIn}
           size="icon-sm"
           type="button"

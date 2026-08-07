@@ -53,7 +53,7 @@ pnpm exec vitest run \
   tests/unit/plugins/file-canvas-preview.test.tsx \
   tests/unit/shared/app/live-module-canvas-path.test.ts \
   tests/unit/shared/app/pier-canvas-meta.test.ts \
-  tests/unit/main/misc/canvas-capabilities-evidence.test.ts
+  tests/unit/renderer/app/pier-canvas-visualizations.test.tsx
 ```
 
 - [ ] 全部通过  

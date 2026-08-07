@@ -2,15 +2,16 @@ import { useReactFlow } from "@xyflow/react";
 import { type RefObject, useEffect } from "react";
 import { FIT_VIEW_OPTIONS } from "./model.ts";
 
-const FOCUSABLE_SELECTOR =
-  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+export type FitViewOptions = typeof FIT_VIEW_OPTIONS;
 
-/** Fit after the surface has non-zero layout size (expand portal is often 0 on first frame). */
+/** Fit after the surface has non-zero layout size (stage/card first paint). */
 export function FitViewOnViewportChange({
   containerRef,
+  fitViewOptions = FIT_VIEW_OPTIONS,
   token,
 }: {
   containerRef: RefObject<HTMLElement | null>;
+  fitViewOptions?: FitViewOptions | undefined;
   token: string;
 }) {
   const { fitView } = useReactFlow();
@@ -34,12 +35,11 @@ export function FitViewOnViewportChange({
         return;
       }
       fitted = true;
-      fitView(FIT_VIEW_OPTIONS).catch(() => undefined);
+      fitView(fitViewOptions).catch(() => undefined);
       ro?.disconnect();
       ro = null;
     };
 
-    // layoutToken is in the dependency list so expand/inline re-fits after size changes.
     const layoutToken = token;
 
     outerFrame = requestAnimationFrame(() => {
@@ -63,114 +63,6 @@ export function FitViewOnViewportChange({
       cancelAnimationFrame(innerFrame);
       ro?.disconnect();
     };
-  }, [containerRef, fitView, token]);
+  }, [containerRef, fitView, fitViewOptions, token]);
   return null;
-}
-
-export function listFocusable(root: HTMLElement): HTMLElement[] {
-  return [...root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
-    (el) => {
-      if (el.getAttribute("aria-hidden") === "true") {
-        return false;
-      }
-      const style = window.getComputedStyle(el);
-      return style.visibility !== "hidden" && style.display !== "none";
-    }
-  );
-}
-
-/**
- * Body scroll lock, initial close focus, Tab trap, Escape dismiss, focus restore.
- * Only while expanded with content.
- */
-export function useNodeGraphExpandedChrome({
-  dialogRef,
-  restoreFocusRef,
-  showExpanded,
-  setExpanded,
-}: {
-  dialogRef: RefObject<HTMLDivElement | null>;
-  restoreFocusRef: RefObject<HTMLElement | null>;
-  setExpanded: (value: boolean) => void;
-  showExpanded: boolean;
-}): void {
-  useEffect(() => {
-    if (!showExpanded) {
-      return;
-    }
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    if (!(restoreFocusRef.current instanceof HTMLElement)) {
-      restoreFocusRef.current =
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null;
-    }
-
-    const focusClose = () => {
-      dialogRef.current
-        ?.querySelector<HTMLElement>("[data-node-graph-close]")
-        ?.focus();
-    };
-    let outerFrame = 0;
-    let innerFrame = 0;
-    outerFrame = requestAnimationFrame(() => {
-      innerFrame = requestAnimationFrame(focusClose);
-    });
-    const focusTimer = window.setTimeout(focusClose, 0);
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      const dialog = dialogRef.current;
-      if (!dialog) {
-        return;
-      }
-      if (event.key === "Escape") {
-        const modals = document.querySelectorAll<HTMLElement>(
-          '[aria-modal="true"]'
-        );
-        const topModal = modals.item(modals.length - 1);
-        if (topModal && topModal !== dialog) {
-          return;
-        }
-        event.preventDefault();
-        event.stopPropagation();
-        setExpanded(false);
-        return;
-      }
-      if (event.key !== "Tab") {
-        return;
-      }
-      const focusable = listFocusable(dialog);
-      if (focusable.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable.at(-1);
-      if (!(first && last)) {
-        return;
-      }
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown, true);
-    return () => {
-      cancelAnimationFrame(outerFrame);
-      cancelAnimationFrame(innerFrame);
-      window.clearTimeout(focusTimer);
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown, true);
-      const restore = restoreFocusRef.current;
-      restoreFocusRef.current = null;
-      if (restore && document.contains(restore)) {
-        restore.focus();
-      }
-    };
-  }, [dialogRef, restoreFocusRef, setExpanded, showExpanded]);
 }
