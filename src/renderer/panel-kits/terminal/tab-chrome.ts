@@ -208,24 +208,13 @@ export function terminalPanelDescriptor(args: {
   if (pathishOsc) {
     long = args.effectiveCwd ?? oscTitle ?? chromeTitle ?? undefined;
   } else {
-    // Prefer the longest informative form: full OSC, else full chrome title,
-    // else cwd. Do not prefer a short basename over a longer chrome title.
+    // Non-path: OSC full text for long/tooltip; else absolute cwd (more useful
+    // than a short task chrome title like "lint"); else chrome title.
     long =
       oscTitle ??
-      chromeTitle ??
       (args.effectiveCwd ? args.effectiveCwd : undefined) ??
+      chromeTitle ??
       undefined;
-  }
-  // When short is a path leaf but long is the same leaf, promote cwd if present
-  // so tooltip / titlebar are not stuck on a basename-only string.
-  if (
-    long &&
-    args.effectiveCwd &&
-    long === short &&
-    long === cwdShort &&
-    args.effectiveCwd !== short
-  ) {
-    long = args.effectiveCwd;
   }
   return {
     ...(args.effectiveContext ? { context: args.effectiveContext } : {}),

@@ -4556,6 +4556,8 @@ describe("Files file-panel", () => {
     const document = ensureDiskDocument(source);
     markDocumentLoaded(document.id, "before\n", 1);
     const pluginContext = createMockContext();
+    const runtime = filesRuntimeFor(pluginContext);
+    await runtime.controller.initialize();
     const { container } = renderFilePanel(
       { context: panelContext, source },
       pluginContext
@@ -4573,12 +4575,22 @@ describe("Files file-panel", () => {
       originalView.scrollDOM.scrollTop = 91;
     });
     await act(async () => {
-      await filesRuntimeFor(pluginContext).controller.moveDiskDocumentSource(
+      await runtime.controller.moveDiskDocumentSource(
         PROJECT_ROOT,
         "before.md",
         "after.md"
       );
     });
+
+    // Dirty rename may reconcile against disk and open conflict Empty.
+    // Keep local so the editor remounts with the same buffer (undo history).
+    const conflict = screen.queryByTestId("file-disk-conflict-state");
+    if (conflict) {
+      fireEvent.click(screen.getByRole("button", { name: "Keep my edits" }));
+      await waitFor(() => {
+        expect(screen.queryByTestId("file-disk-conflict-state")).toBeNull();
+      });
+    }
 
     const renamedView = findCodeMirrorView(container);
     expect(renamedView.state.doc.toString()).toBe("edited");
