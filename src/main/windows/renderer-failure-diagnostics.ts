@@ -239,7 +239,8 @@ export function formatRendererCrashDetail(input: {
 export function rendererFailureLogCtx(
   incident: RendererFailureIncident,
   snapshot: RendererFailureDiagnosticSnapshot,
-  gone?: RendererProcessGoneDetails
+  gone?: RendererProcessGoneDetails,
+  extras?: Record<string, unknown>
 ): Record<string, unknown> {
   return {
     arch: snapshot.arch,
@@ -257,6 +258,7 @@ export function rendererFailureLogCtx(
     platform: snapshot.platform,
     processCount: snapshot.processCount,
     processTypes: snapshot.processTypes,
+    ...(extras ?? {}),
     rendererOsPid: snapshot.rendererOsPid,
     rendererPid: snapshot.rendererPid,
     uptimeSec: snapshot.uptimeSec,

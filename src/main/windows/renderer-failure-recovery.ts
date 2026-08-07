@@ -1,5 +1,6 @@
 import { createLogger } from "@shared/logger.ts";
 import { app, dialog, type WebContents } from "electron";
+import { getHangBreadcrumbsForDiagnostics } from "../ipc/renderer-hang-breadcrumb-store.ts";
 import type { AppWindow } from "./app-window.ts";
 import {
   collectRendererFailureDiagnostics,
@@ -343,9 +344,15 @@ export function installRendererFailureRecovery({
     }
     const incident = incidents.beginUnresponsive();
     const snapshot = snapshotFor();
+    // Breadcrumbs flushed earlier via IPC; ring is oldest→newest. Dump the
+    // newest N only so diagnostics array sanitization cannot drop the tail.
+    const hangBreadcrumbs = getHangBreadcrumbsForDiagnostics(window.id);
     log.error(
       "renderer-unresponsive",
-      rendererFailureLogCtx(incident, snapshot)
+      rendererFailureLogCtx(incident, snapshot, undefined, {
+        hangBreadcrumbCount: hangBreadcrumbs.length,
+        hangBreadcrumbs,
+      })
     );
     try {
       // Kill the hung process so we can load a recovery document that the

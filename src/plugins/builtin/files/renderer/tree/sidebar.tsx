@@ -22,6 +22,7 @@ import {
   useMemo,
   useRef,
 } from "react";
+import { isFileMissingError } from "../editor/errors.ts";
 import { createFilesTranslate } from "../i18n.ts";
 import { FilesMutationSuspendedError } from "../mutation/gate.ts";
 import { FilesSearchBar } from "../search/bar.tsx";
@@ -152,6 +153,12 @@ export function FileTreeSidebar({
         treeVisibility.list
       );
       if (result.ok) {
+        return;
+      }
+      // Missing path: tree already marks the row error/retryable. Do not stack
+      // a host alert on top of document Empty (disk-conflict / deleted) — that
+      // double feedback is pure noise (e.g. expand of a removed skill folder).
+      if (isFileMissingError(result.error)) {
         return;
       }
       const title = t(

@@ -34,7 +34,6 @@ import { ResolvedFilePanel } from "./body.tsx";
 import { filesBreadcrumbContextMenuHandler } from "./breadcrumb-context-menu.ts";
 import { revealDiskBreadcrumbInTree } from "./breadcrumb-reveal.ts";
 import { createFileFilePanelInstanceId } from "./id.ts";
-import { hasOtherOpenFilesSourceInstance } from "./instance-utils.ts";
 import {
   EmptyFileState,
   FilePanelBreadcrumb,
@@ -54,6 +53,7 @@ import {
 } from "./source.ts";
 import type { FilePanelRuntimeProps } from "./types.ts";
 import { useFilesGroupViewClaim } from "./use-group-view-claim.ts";
+import { useFilesPanelRemoveClose } from "./use-remove-panel-close.ts";
 import { useFilePanelSaveAs } from "./use-save-as.ts";
 import { useFilesPanelTransferView } from "./use-transfer-view.ts";
 
@@ -213,9 +213,8 @@ function FilePanelContent({
     });
   }, [props.api, props.params, trackedDirty]);
 
-  useEffect(() => {
-    const panelId = props.api?.id;
-    const containerApi = (
+  useFilesPanelRemoveClose({
+    containerApi: (
       props as {
         containerApi?: {
           onDidRemovePanel?: (listener: (panel: { id?: string }) => void) => {
@@ -223,33 +222,12 @@ function FilePanelContent({
           };
         };
       }
-    ).containerApi;
-    if (!(panelId && containerApi?.onDidRemovePanel)) {
-      return;
-    }
-    const disposable = containerApi.onDidRemovePanel((panel) => {
-      if (panel?.id === panelId && stableSource) {
-        controller.closePanel({
-          hasOtherOpenInstance: hasOtherOpenFilesSourceInstance({
-            context: runtimeContext,
-            panelId,
-            source: stableSource,
-          }),
-          panelId,
-          source: stableSource,
-        });
-      }
-    });
-    return () => {
-      disposable?.dispose?.();
-    };
-  }, [
+    ).containerApi,
     controller,
-    props.api?.id,
-    props.containerApi,
+    panelId: props.api?.id,
     runtimeContext,
     stableSource,
-  ]);
+  });
 
   const handleOpenFileFromTree = useCallback(
     (entry: FileEntry, options?: { pinned?: boolean }) => {

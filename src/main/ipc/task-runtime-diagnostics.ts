@@ -4,6 +4,7 @@ import type { IpcMain } from "electron";
 import { z } from "zod";
 import { findAppWindowByWebContents } from "../windows/identity.ts";
 import { windowManager } from "../windows/manager.ts";
+import { registerRendererHangBreadcrumbIpc } from "./renderer-hang-breadcrumb.ts";
 import { sanitizeTaskRuntimeDiagnosticCtx } from "./sanitize-task-runtime-diagnostic-ctx.ts";
 
 const log = createLogger("task.runtime.renderer");
@@ -40,4 +41,7 @@ export function registerTaskRuntimeDiagnosticsIpc(ipcMain: IpcMain): void {
       windowId,
     });
   });
+  // Hang trail shares the diagnostics JSONL path; keep registration next to
+  // task runtime diagnostics so main/index stays under the file-size cap.
+  registerRendererHangBreadcrumbIpc(ipcMain);
 }

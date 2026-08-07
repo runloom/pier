@@ -27,7 +27,7 @@ import {
   type MarkdownCrossModeAnchor,
 } from "../markdown/cross-mode-anchor.ts";
 import { FileImagePreview } from "../preview/image.tsx";
-import { FileDiskConflictBanner } from "./disk-conflict-banner.tsx";
+import { FileDiskConflictState } from "./disk-conflict-banner.tsx";
 import {
   createFileEditorAdapterLabels,
   createFileSearchLabels,
@@ -286,6 +286,25 @@ export function ResolvedFilePanel({
     return <FileImagePreview context={context} document={document} t={t} />;
   }
 
+  // Full-panel Empty decision state (not a top banner). Diff mode keeps the
+  // editor so Compare can render; compact chrome stays available there.
+  if (
+    document.diskConflict &&
+    document.source.kind === "disk" &&
+    mode !== "diff"
+  ) {
+    return (
+      <FileDiskConflictState
+        canCompare={document.conflictDiskContents !== null}
+        document={document}
+        onCompare={handleCompareDiskConflict}
+        onDismiss={handleDismissDiskConflict}
+        onLoadDisk={handleLoadDiskVersion}
+        t={t}
+      />
+    );
+  }
+
   if (document.readOnlyReason) {
     let actions: ReactNode;
     if (
@@ -394,13 +413,14 @@ export function ResolvedFilePanel({
         </div>
       ) : null}
       {document.diskConflict && document.source.kind === "disk" ? (
-        <FileDiskConflictBanner
+        <FileDiskConflictState
           canCompare={document.conflictDiskContents !== null}
           document={document}
           onCompare={handleCompareDiskConflict}
           onDismiss={handleDismissDiskConflict}
           onLoadDisk={handleLoadDiskVersion}
           t={t}
+          variant="diff-chrome"
         />
       ) : null}
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">

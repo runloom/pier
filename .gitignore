@@ -92,3 +92,9 @@ playwright-report/
 
 .agents/skills/
 .claude/skills/
+
+# Pier system-skill projections (design v8 §8): published from app
+# resources/system-skills into each project at ensureReady / skills.snapshot.
+# Canonical content is resources/system-skills/<id>; never treat library as
+# the edit source. `pier-` prefix is reserved for system skills.
+.pier/skills/library/pier-*/

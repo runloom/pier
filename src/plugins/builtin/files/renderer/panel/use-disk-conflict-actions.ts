@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { FilesDocument, FileViewMode } from "../document/types.ts";
 import type { FileEditorController } from "../editor/controller.ts";
+import { noteFilesHangBreadcrumb } from "../hang-breadcrumb.ts";
 import type { FilesTranslate } from "../i18n.ts";
 
 interface DiskConflictDialogs {
@@ -8,8 +9,8 @@ interface DiskConflictDialogs {
 }
 
 /**
- * Banner actions for open-document disk conflict (load / keep / compare).
- * Kept out of body.tsx so the panel shell stays under the file-size cap.
+ * Actions for open-document disk conflict Empty / compare chrome
+ * (load / keep / compare). Kept out of body.tsx for the file-size cap.
  */
 export function useDiskConflictActions(input: {
   controller: FileEditorController;
@@ -33,10 +34,26 @@ export function useDiskConflictActions(input: {
     }
     const documentId = document.id;
     const language = document.language;
+    const path = document.source.path;
+    noteFilesHangBreadcrumb({
+      kind: "files-conflict",
+      phase: "start",
+      detail: "load-disk",
+      path,
+      dirty: document.dirty,
+      diskConflict: true,
+      mode,
+    });
     const run = async () => {
       try {
         await controller.reloadDocumentFromDisk(documentId, {
           forceAdopt: true,
+        });
+        noteFilesHangBreadcrumb({
+          kind: "files-conflict",
+          phase: "end",
+          detail: "load-disk-ok",
+          path,
         });
         if (mode === "diff" && onModeChange) {
           onModeChange(
@@ -46,6 +63,12 @@ export function useDiskConflictActions(input: {
           );
         }
       } catch (error) {
+        noteFilesHangBreadcrumb({
+          kind: "files-conflict",
+          phase: "end",
+          detail: "load-disk-failed",
+          path,
+        });
         const body =
           error instanceof Error
             ? error.message
@@ -73,19 +96,46 @@ export function useDiskConflictActions(input: {
     if (!document) {
       return;
     }
+    const path =
+      document.source.kind === "disk" ? document.source.path : document.name;
+    noteFilesHangBreadcrumb({
+      kind: "files-conflict",
+      phase: "start",
+      detail: "keep-local",
+      path,
+      dirty: document.dirty,
+      diskConflict: true,
+      mode,
+    });
     controller.dismissDocumentDiskConflict(document.id);
     if (mode === "diff" && onModeChange) {
       onModeChange("source");
     }
+    noteFilesHangBreadcrumb({
+      kind: "files-conflict",
+      phase: "end",
+      detail: "keep-local-done",
+      path,
+    });
   }, [controller, document, mode, onModeChange]);
 
   const handleCompareDiskConflict = useCallback(() => {
+    noteFilesHangBreadcrumb({
+      kind: "files-conflict",
+      phase: "start",
+      detail: "compare",
+      path:
+        document?.source.kind === "disk"
+          ? document.source.path
+          : document?.name,
+      mode,
+    });
     if (panelId) {
       controller.setPanelMode(panelId, "diff");
       return;
     }
     onModeChange?.("diff");
-  }, [controller, onModeChange, panelId]);
+  }, [controller, document, mode, onModeChange, panelId]);
 
   return {
     handleCompareDiskConflict,

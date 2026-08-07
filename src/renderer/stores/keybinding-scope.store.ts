@@ -9,6 +9,7 @@
  *   3. global scope (default fallback)
  */
 import { create } from "zustand";
+import { noteHangBreadcrumb } from "@/lib/diagnostics/hang-breadcrumb.ts";
 
 export type PanelKind = "terminal" | "web";
 
@@ -28,18 +29,37 @@ export interface KeybindingScopeState {
   ): void;
 }
 
-export const useKeybindingScope = create<KeybindingScopeState>((set) => ({
+export const useKeybindingScope = create<KeybindingScopeState>((set, get) => ({
   activePanelKind: null,
   activePanelComponent: null,
   activePanelId: null,
   overlayStack: [],
 
-  setActivePanel: (kind, component, panelId) =>
+  setActivePanel: (kind, component, panelId) => {
+    const prev = get();
+    if (
+      prev.activePanelKind === kind &&
+      prev.activePanelComponent === component &&
+      prev.activePanelId === panelId
+    ) {
+      return;
+    }
     set({
       activePanelKind: kind,
       activePanelComponent: component,
       activePanelId: panelId,
-    }),
+    });
+    // Always-on hang trail (deduped + batched on the note path).
+    if (component || panelId) {
+      noteHangBreadcrumb({
+        kind: "panel-activate",
+        phase: "state",
+        ...(component ? { activePanelComponent: component } : {}),
+        ...(panelId ? { panelId } : {}),
+        ...(kind ? { detail: kind } : {}),
+      });
+    }
+  },
 
   pushBlockingScope: (id) =>
     set((state) => ({ overlayStack: [...state.overlayStack, id] })),

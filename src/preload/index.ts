@@ -22,6 +22,7 @@ import {
 } from "./agent-runtime-index-api.ts";
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
 import { commentsApi, type PierCommentsAPI } from "./comments-api.ts";
+import { diagnosticsApi, type PierDiagnosticsAPI } from "./diagnostics-api.ts";
 import {
   environmentsApi,
   type PierEnvironmentsAPI,
@@ -156,6 +157,7 @@ export interface PierWindowAPI {
   commandPaletteMru: PierCommandPaletteMruAPI;
   comments: PierCommentsAPI;
   createWindow: () => Promise<WindowCreateResult>;
+  diagnostics: PierDiagnosticsAPI;
   env: PierEnvAPI;
   environments: PierEnvironmentsAPI;
   externalNavigation: PierExternalNavigationApi;
@@ -412,6 +414,7 @@ const api: PierWindowAPI = {
   notifications: notificationsApi,
   notificationCenter: notificationCenterApi,
   comments: commentsApi,
+  diagnostics: diagnosticsApi,
   plugins: pluginsApi,
   pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,

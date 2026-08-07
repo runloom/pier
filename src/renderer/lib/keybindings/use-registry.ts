@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { activeTerminalPanelId } from "@/lib/actions/renderer-action-runtime.ts";
 import type { Action } from "@/lib/actions/types.ts";
+import { noteHangBreadcrumb } from "@/lib/diagnostics/hang-breadcrumb.ts";
 import { recordTerminalInputRoutingTrace } from "@/lib/terminal-debug/input-routing-trace.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
@@ -162,16 +163,55 @@ export function dispatchKeybindingAction(
   route: KeybindingDispatchRoute
 ): void {
   recordKeybindingDecision("dispatched", action.id, route);
+  const scope = useKeybindingScope.getState();
+  noteHangBreadcrumb({
+    kind: "command",
+    phase: "start",
+    commandId: action.id,
+    detail: route,
+    ...(scope.activePanelComponent
+      ? { activePanelComponent: scope.activePanelComponent }
+      : {}),
+    ...(scope.activePanelId ? { panelId: scope.activePanelId } : {}),
+  });
   try {
     const result = action.handler();
     if (result instanceof Promise) {
-      result.catch((err) => {
-        recordKeybindingDecision("handler-rejected", action.id, route);
-        console.error(`[keybindings] action ${action.id} rejected:`, err);
+      result
+        .then(() => {
+          noteHangBreadcrumb({
+            kind: "command",
+            phase: "end",
+            commandId: action.id,
+            detail: "dispatched",
+          });
+        })
+        .catch((err) => {
+          recordKeybindingDecision("handler-rejected", action.id, route);
+          noteHangBreadcrumb({
+            kind: "command",
+            phase: "end",
+            commandId: action.id,
+            detail: "handler-rejected",
+          });
+          console.error(`[keybindings] action ${action.id} rejected:`, err);
+        });
+    } else {
+      noteHangBreadcrumb({
+        kind: "command",
+        phase: "end",
+        commandId: action.id,
+        detail: "dispatched",
       });
     }
   } catch (err) {
     recordKeybindingDecision("handler-rejected", action.id, route);
+    noteHangBreadcrumb({
+      kind: "command",
+      phase: "end",
+      commandId: action.id,
+      detail: "handler-threw",
+    });
     console.error(`[keybindings] action ${action.id} threw:`, err);
   }
 }

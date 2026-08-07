@@ -200,18 +200,32 @@ export function terminalPanelDescriptor(args: {
   }
   const cwdShort = args.effectiveCwd ? basename(args.effectiveCwd) : null;
   // Ghostty / 业界：
-  // short = 显式覆盖 → OSC（路径则 basename）→ 目录名
-  // long  = 路径型优先绝对 cwd → 非路径 OSC 全文 → cwd → chrome
+  // short = 显式覆盖 → OSC（路径则 basename）→ 目录名（tab CSS 视觉省略）
+  // long  = 尽量完整：路径型优先绝对 cwd → 非路径 OSC 全文 → chrome 全文 → cwd
+  //         （顶栏 / tooltip / document.title 走 resolveLong）
   const short = chromeTitle ?? oscShort ?? cwdShort ?? "Terminal";
   let long: string | undefined;
   if (pathishOsc) {
     long = args.effectiveCwd ?? oscTitle ?? chromeTitle ?? undefined;
   } else {
+    // Prefer the longest informative form: full OSC, else full chrome title,
+    // else cwd. Do not prefer a short basename over a longer chrome title.
     long =
       oscTitle ??
-      (args.effectiveCwd ? args.effectiveCwd : undefined) ??
       chromeTitle ??
+      (args.effectiveCwd ? args.effectiveCwd : undefined) ??
       undefined;
+  }
+  // When short is a path leaf but long is the same leaf, promote cwd if present
+  // so tooltip / titlebar are not stuck on a basename-only string.
+  if (
+    long &&
+    args.effectiveCwd &&
+    long === short &&
+    long === cwdShort &&
+    args.effectiveCwd !== short
+  ) {
+    long = args.effectiveCwd;
   }
   return {
     ...(args.effectiveContext ? { context: args.effectiveContext } : {}),

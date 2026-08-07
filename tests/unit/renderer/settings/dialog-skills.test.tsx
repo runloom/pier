@@ -455,7 +455,11 @@ describe("settings dialog skills section", () => {
         fileCount: 1,
         totalBytes: 100,
         riskSummary: null,
-        source: { type: "local-import" },
+        source: {
+          type: "pier-system",
+          providerId: "pier.app",
+          providerVersion: "0.0.0",
+        },
       },
     ];
     renderDialog();
@@ -485,7 +489,11 @@ describe("settings dialog skills section", () => {
         fileCount: 1,
         totalBytes: 100,
         riskSummary: null,
-        source: { type: "local-import" },
+        source: {
+          type: "pier-system",
+          providerId: "pier.app",
+          providerVersion: "0.0.0",
+        },
       },
     ];
     renderDialog();

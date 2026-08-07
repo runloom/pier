@@ -91,6 +91,8 @@ export function sourceLabel(
       return t("settings.skills.managedSource.gitDeclared");
     case "pier-home":
       return t("settings.skills.managedSource.pierHome");
+    case "pier-system":
+      return t("settings.skills.managedSource.pierSystem");
     default:
       return t("settings.skills.managedSource.localImport");
   }

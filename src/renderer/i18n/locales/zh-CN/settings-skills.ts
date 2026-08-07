@@ -119,6 +119,7 @@ export const settingsSkills = {
     projectDiscoveryImport: "从仓库收编",
     gitDeclared: "随仓库带来",
     pierHome: "从 Pier 技能库装入",
+    pierSystem: "Pier 内置",
   },
   effectDiscoverable: "可发现",
   effectNotProjected: "未启用",
