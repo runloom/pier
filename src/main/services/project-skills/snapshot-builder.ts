@@ -307,7 +307,11 @@ export async function buildProjectSnapshot(
       "library",
       view.id
     );
-    const meta = await peekSkillMetadata(libraryDir);
+    // Prefer library frontmatter when published; fall back to contribution
+    // metadata so the row stays labeled before the first reconcile.
+    const libraryMeta = await peekSkillMetadata(libraryDir);
+    const name = libraryMeta.name || view.name;
+    const description = libraryMeta.description || view.description;
     const analysis = await analyzeLibrarySkill(live.realPath, view.id);
     // System rows reconcile to the contribution content; the live library
     // digest IS the published digest (the channel republishes divergence).
@@ -323,12 +327,16 @@ export async function buildProjectSnapshot(
     });
     skills.push({
       id: view.id,
-      name: meta.name,
-      description: meta.description,
+      name,
+      description,
       enabled: view.enabled,
       delivery: null,
       contentDigest: view.contentDigest ?? systemContent.actualDigest ?? "",
-      source: { type: "local-import" },
+      source: {
+        type: "pier-system",
+        providerId: view.provider.id,
+        providerVersion: view.provider.version,
+      },
       managedBy: "pier-system",
       alwaysInclude: false,
       fileCount: analysis?.fileCount ?? 0,

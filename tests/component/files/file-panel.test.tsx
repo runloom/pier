@@ -1652,6 +1652,45 @@ describe("Files file-panel", () => {
     });
   });
 
+  it("does not alert when a directory is missing (ENOENT) — tree stays retryable", async () => {
+    const missing = Object.assign(
+      new Error("ENOENT: no such file or directory"),
+      {
+        code: "ENOENT",
+      }
+    );
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(
+      async (_root, options) => {
+        if (options?.path === "") {
+          return [
+            {
+              kind: "directory",
+              path: "gone-dir",
+              root: PROJECT_ROOT,
+            },
+          ];
+        }
+        throw missing;
+      }
+    );
+    const context = createMockContext({ list });
+    const { container } = renderFilePanel({ context: panelContext }, context);
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
+    });
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", { name: "gone-dir" })
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "gone-dir" });
+    });
+    // No host alert stacked on document Empty / tree error state.
+    expect(context.dialogs.alert).not.toHaveBeenCalled();
+    expect(context.notifications.error).not.toHaveBeenCalled();
+  });
+
   it("dispatches files/tree-item context menu with the row's data-item-path metadata", async () => {
     // 右键树某行 → @pierre/trees 先解析压缩行的真实目标并维护焦点语义，
     // Pier 桥接层再把 caller path 与类型转发给宿主原生菜单。
@@ -4447,7 +4486,7 @@ describe("Files file-panel", () => {
     ).toBeNull();
   });
 
-  it("shows the disk conflict banner and can keep local edits", async () => {
+  it("shows the disk conflict empty state and can keep local edits", async () => {
     const source = {
       kind: "disk" as const,
       path: "conflict.md",
@@ -4465,16 +4504,47 @@ describe("Files file-panel", () => {
       source,
     });
 
-    expect(
-      await screen.findByTestId("file-disk-conflict-banner")
-    ).toBeVisible();
+    expect(await screen.findByTestId("file-disk-conflict-state")).toBeVisible();
     expect(screen.getByText("File changed on disk")).toBeVisible();
+    // Dirty local buffer is peekable under Empty actions.
+    expect(
+      await screen.findByTestId("file-disk-conflict-local-peek")
+    ).toBeVisible();
+    expect(screen.getByText(/Local body/)).toBeVisible();
+    // Compare is offered when a disk snapshot is available.
+    expect(screen.getByRole("button", { name: "Compare" })).toBeVisible();
+    expect(screen.getByText(/or compare the differences/i)).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Keep my edits" }));
-    expect(screen.queryByTestId("file-disk-conflict-banner")).toBeNull();
+    expect(screen.queryByTestId("file-disk-conflict-state")).toBeNull();
     expect(getDocument(documentId)?.currentContents).toBe(
       "# Local body\nedited"
     );
     expect(getDocument(documentId)?.diskConflict).toBe(false);
+  });
+
+  it("omits compare copy and action when the disk snapshot is unavailable", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "conflict-no-snap.md",
+      root: PROJECT_ROOT,
+    };
+    ensureDiskDocument(source);
+    const documentId = ensureDiskDocument(source).id;
+    markDocumentLoaded(documentId, "# Local\n", null);
+    updateDocumentContents(documentId, "# Local\nedited");
+    markDocumentDiskConflict(documentId);
+
+    renderFilePanel({
+      context: panelContext,
+      source,
+    });
+
+    expect(await screen.findByTestId("file-disk-conflict-state")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Compare" })).toBeNull();
+    expect(screen.queryByText(/or compare/i)).toBeNull();
+    expect(
+      screen.getByText(/Keep your edits, or load the disk version/i)
+    ).toBeVisible();
   });
 
   it("preserves the view session when an open disk document is renamed", async () => {
@@ -4486,6 +4556,8 @@ describe("Files file-panel", () => {
     const document = ensureDiskDocument(source);
     markDocumentLoaded(document.id, "before\n", 1);
     const pluginContext = createMockContext();
+    const runtime = filesRuntimeFor(pluginContext);
+    await runtime.controller.initialize();
     const { container } = renderFilePanel(
       { context: panelContext, source },
       pluginContext
@@ -4503,12 +4575,22 @@ describe("Files file-panel", () => {
       originalView.scrollDOM.scrollTop = 91;
     });
     await act(async () => {
-      await filesRuntimeFor(pluginContext).controller.moveDiskDocumentSource(
+      await runtime.controller.moveDiskDocumentSource(
         PROJECT_ROOT,
         "before.md",
         "after.md"
       );
     });
+
+    // Dirty rename may reconcile against disk and open conflict Empty.
+    // Keep local so the editor remounts with the same buffer (undo history).
+    const conflict = screen.queryByTestId("file-disk-conflict-state");
+    if (conflict) {
+      fireEvent.click(screen.getByRole("button", { name: "Keep my edits" }));
+      await waitFor(() => {
+        expect(screen.queryByTestId("file-disk-conflict-state")).toBeNull();
+      });
+    }
 
     const renamedView = findCodeMirrorView(container);
     expect(renamedView.state.doc.toString()).toBe("edited");

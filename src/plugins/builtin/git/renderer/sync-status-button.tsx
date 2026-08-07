@@ -15,6 +15,7 @@ import type React from "react";
 import { useSyncExternalStore } from "react";
 import { confirmDialog } from "./command-helpers.ts";
 import { pluginText } from "./plugin-text.ts";
+import { reportRemoteOperationFailure } from "./remote-error.ts";
 import {
   chromeForAction,
   type RemoteSyncActionId,
@@ -22,10 +23,7 @@ import {
   resolveRemoteSyncActionIdForChrome,
   resolveRemoteSyncBlockReason,
 } from "./remote-sync-policy.ts";
-import {
-  gitStatusDropdownErrorMessage,
-  runRemoteSyncAction,
-} from "./status-dropdown-actions.ts";
+import { runRemoteSyncAction } from "./status-dropdown-actions.ts";
 import { SyncCounts } from "./status-parts.tsx";
 import { isSyncBusy, subscribeSyncBusy } from "./sync-busy.ts";
 
@@ -211,25 +209,7 @@ export function GitSyncStatusButton({
       pluginContext,
       upstream,
     }).catch((err: unknown) => {
-      const message = gitStatusDropdownErrorMessage(err);
-      const short =
-        message.length < 160 &&
-        !message.includes("\n") &&
-        !message.includes("fatal:");
-      if (short) {
-        pluginContext.notifications.error(message);
-        return;
-      }
-      pluginContext.dialogs
-        .alert({
-          body: message,
-          title: pluginText(
-            pluginContext,
-            "statusDropdownRemoteFailed",
-            "Remote operation failed"
-          ),
-        })
-        .catch(() => undefined);
+      reportRemoteOperationFailure(pluginContext, err).catch(() => undefined);
     });
   };
 

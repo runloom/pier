@@ -5,6 +5,7 @@ import {
   PIER_SYSTEM_SKILL_PREFIX,
   skillIdSchema,
 } from "../../../../shared/contracts/project-skills.ts";
+import { peekSkillMetadata } from "../frontmatter.ts";
 import { createProjectSkillsFileSystemAdapter } from "../fs-adapter.ts";
 import type { StableProjectIdentity } from "../identity.ts";
 import { ensureProjectRelativeDir } from "../path-containment.ts";
@@ -32,11 +33,12 @@ import {
  *    deletion safety — ownership rules are identical to user skills.
  *
  * Desired state lives machine-locally in `system-skills.json` (never in the
- * Git manifest). v1 default: a registered contribution is enabled for a
- * project when the project is under Pier skills management; a per-project
- * toggle command ships together with the first real contribution consumer
- * (the canvas capability plugin) — building the toggle before any
- * contribution exists would be dead surface.
+ * Git manifest). Default: every registered contribution is **enabled** for a
+ * project (`enabledBySkillId[id] !== false`). Enablement does **not** require
+ * a user skills manifest or “skills management” onboarding — system skills
+ * are Pier product surface, projected on ensureReady / skills.snapshot heal.
+ * Canonical content lives under app `resources/system-skills/<id>`; the
+ * project library copy is a published snapshot only.
  */
 
 export interface SystemSkillContribution {
@@ -64,8 +66,15 @@ export interface SystemSkillDesiredState {
 export interface SystemSkillView {
   /** Present after reconcile published it into the project library. */
   contentDigest: string | null;
+  /**
+   * From the immutable contribution SKILL.md (app resources / plugin package).
+   * Independent of whether the project library snapshot exists yet.
+   */
+  description: string;
   enabled: boolean;
   id: string;
+  /** From the immutable contribution SKILL.md. */
+  name: string;
   provider: { id: string; version: string };
   targetAgents: readonly string[];
 }
@@ -210,6 +219,9 @@ export function createSystemSkillsChannel(
     const desired = await readDesired(rootKey);
     const out: SystemSkillView[] = [];
     for (const contribution of contributions) {
+      // Metadata always comes from the immutable contribution tree so the
+      // settings list is readable before the first project-library publish.
+      const meta = await peekSkillMetadata(contribution.contentDir);
       out.push({
         id: contribution.id,
         provider: contribution.provider,
@@ -218,6 +230,8 @@ export function createSystemSkillsChannel(
           desired.publishedContentDigestsBySkillId[contribution.id]?.at(-1) ??
           null,
         targetAgents: contribution.targetAgents ?? [],
+        name: meta.name,
+        description: meta.description,
       });
     }
     return out;

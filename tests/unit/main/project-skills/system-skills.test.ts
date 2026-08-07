@@ -86,6 +86,29 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     expect(devChannel.list()).toHaveLength(1);
   });
 
+  it("views expose contribution metadata before project library publish", async () => {
+    const channel = createSystemSkillsChannel({
+      userData,
+      isProduction: false,
+      contributions: [contribution()],
+    });
+    const identity = await resolveStableProjectIdentity(projectRoot);
+    const paths = createProjectSkillsPaths(userData);
+    const rootKey = paths.rootKeyFor(identity);
+
+    const views = await channel.views(rootKey);
+    expect(views).toEqual([
+      expect.objectContaining({
+        id: "pier-canvas",
+        name: "pier-canvas",
+        description: "Use the Pier canvas",
+        contentDigest: null,
+        enabled: true,
+        provider: { id: "pier.canvas", version: "1.0.0" },
+      }),
+    ]);
+  });
+
   it("reconcile publishes library snapshot, digest, projection and ownership", async () => {
     const store = createProjectSkillsStore({ userData });
     const channel = createSystemSkillsChannel({

@@ -3,6 +3,7 @@ import {
   ImagePreviewCanvas,
   type ImagePreviewCanvasLabels,
 } from "@pier/ui/image-preview/canvas.tsx";
+import { NodeGraph } from "@pier/ui/node-graph.tsx";
 import { X } from "lucide-react";
 import {
   type SyntheticEvent,
@@ -151,15 +152,51 @@ function ImagePreviewBody({
   );
 }
 
+function NodeGraphPreviewBody({
+  payload,
+}: {
+  payload: Extract<ContentPreviewPayload, { type: "node-graph" }>;
+}) {
+  const labels = useImagePreviewLabels();
+  const stageControlLabels = useMemo(
+    () => ({
+      actualSize: labels.actualSize,
+      controlsLabel: labels.controlsLabel,
+      fit: labels.fit,
+      zoomIn: labels.zoomIn,
+      zoomLevel: labels.zoomLevel,
+      zoomOut: labels.zoomOut,
+    }),
+    [labels]
+  );
+
+  return (
+    <div className="flex min-h-0 w-full flex-1 flex-col bg-background">
+      <NodeGraph
+        aria-label={payload["aria-label"]}
+        direction={payload.direction}
+        edges={payload.edges}
+        expandable={false}
+        nodes={payload.nodes}
+        presentation="stage"
+        stageControlLabels={stageControlLabels}
+      />
+    </div>
+  );
+}
+
 function PreviewBody({ payload }: { payload: ContentPreviewPayload }) {
   if (payload.type === "image") {
     return <ImagePreviewBody alt={payload.alt ?? ""} source={payload.source} />;
+  }
+  if (payload.type === "node-graph") {
+    return <NodeGraphPreviewBody payload={payload} />;
   }
   return null;
 }
 
 /**
- * Fullscreen content preview host (images now; diagrams/flowcharts later).
+ * Fullscreen content preview host (images + node graphs).
  *
  * Opaque full-window stage covering the titlebar. Native Ghostty is suppressed
  * while open; EventRouter is hole-punched for the full viewport.
@@ -232,8 +269,13 @@ export function ContentPreviewHost() {
       role="dialog"
       tabIndex={-1}
     >
+      {/*
+        pt-14 reserves the floating title / close band so images, mermaid, and
+        node graphs never layout under the chrome (header is still painted on
+        top for legibility over pan/zoom edges).
+      */}
       <div
-        className="absolute inset-0 z-0 flex flex-col"
+        className="absolute inset-0 z-0 flex flex-col pt-14"
         data-testid="content-preview-stage"
       >
         <PreviewBody payload={payload} />

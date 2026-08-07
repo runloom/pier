@@ -13,7 +13,8 @@ const TITLEBAR_HEIGHT = "38px";
  *
  * 仅在 macOS 下渲染, 替代被隐藏的原生标题栏:
  * - 整条区域设为 drag region (窗口拖动手柄)
- * - 居中显示 active panel 的长形式；超长时从左侧省略，保留路径尾段
+ * - 居中显示 active panel 的**长形式**（resolveLong：完整路径 / 全文标题）
+ * - 超宽时 CSS 从左侧省略（dir=rtl），保留路径尾段；`title` 属性仍为全文
  * - 左右留白避开红绿灯与 Index / Update 芯片，标题在剩余宽度内尽量展示完全
  * - 右侧本机 Agent Index 计数（与非 mac 顶栏共用 AgentIndexCountsControl）
  */

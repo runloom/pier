@@ -50,15 +50,13 @@ export interface NodeGraphEdge {
 export interface NodeGraphProps {
   "aria-label": string;
   className?: string;
-  /** aria-label / title for collapse control and header close. */
-  collapseLabel?: string;
   direction?: NodeGraphDirection;
   edges: readonly NodeGraphEdge[];
   editable?: boolean;
   emptyText?: string;
   /**
-   * Immersive expand control (not browser fullscreen). Default true.
-   * Portal overlay fills the window under the app title bar.
+   * Top-right fullscreen control. Default true.
+   * Host canvas wires this to content preview (same shell as mermaid/image).
    */
   expandable?: boolean;
   /** aria-label / title for expand control. */
@@ -70,7 +68,14 @@ export interface NodeGraphProps {
     id: string,
     position: { x: number; y: number }
   ) => void;
+  /** Override host content-preview open (tests / custom shells). */
+  onOpenFullscreen?: () => void;
   onSelectNode?: (id: string) => void;
+  /**
+   * `card` (default) bordered inline overview; `stage` borderless fill for
+   * ContentPreviewHost with bottom zoom controls.
+   */
+  presentation?: "card" | "stage";
   selectedId?: string;
 }
 
@@ -79,7 +84,11 @@ export interface MermaidDiagramProps {
   className?: string;
   emptyText?: string;
   errorText?: string;
+  /** Top-right fullscreen into host content preview. Default true. */
+  expandable?: boolean;
+  expandLabel?: string;
   loadingText?: string;
+  previewTitle?: string;
   source: string;
 }
 

@@ -7,6 +7,7 @@ import {
   closeContentPreview,
   openContentPreview,
   openImagePreview,
+  openNodeGraphPreview,
 } from "@/stores/content-preview.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
@@ -142,6 +143,8 @@ describe("ContentPreviewHost", () => {
     expect(header).toHaveTextContent("preview.png");
     const stage = screen.getByTestId("content-preview-stage");
     expect(stage.className).toContain("inset-0");
+    // Title/close band — media must not layout under floating chrome.
+    expect(stage.className).toContain("pt-14");
     const controls = stage.querySelector(
       '[data-slot="image-preview-controls"]'
     );
@@ -185,6 +188,30 @@ describe("ContentPreviewHost", () => {
     fireEvent.click(screen.getByTestId("content-preview-close"));
     expect(nextOnClose).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId("content-preview")).not.toBeInTheDocument();
+  });
+
+  it("renders node-graph stage without card border and with image zoom strip", async () => {
+    render(<ContentPreviewHost />);
+    openNodeGraphPreview({
+      "aria-label": "任务 DAG",
+      edges: [{ source: "a", target: "b" }],
+      nodes: [
+        { id: "a", title: "A" },
+        { id: "b", title: "B" },
+      ],
+      title: "任务 DAG",
+    });
+
+    await screen.findByTestId("content-preview");
+    expect(screen.getByText("任务 DAG")).toBeInTheDocument();
+    const stage = document.querySelector('[data-slot="node-graph-stage"]');
+    expect(stage).toBeTruthy();
+    expect(stage).not.toHaveClass("border");
+    expect(stage).not.toHaveClass("rounded-lg");
+    expect(
+      document.querySelector('[data-slot="image-preview-controls"]')
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /zoom in/i })).toBeTruthy();
   });
 
   it("Esc does not dismiss preview while a dropdown menu is open", async () => {

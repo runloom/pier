@@ -662,6 +662,8 @@
     "ui.gitRemoteErrorRejected": "Remote rejected the update. Fetch, then pull or sync before pushing again.",
     "ui.gitRemoteErrorTimeout": "Push, pull, or sync timed out. Check the network, or finish project checks in a terminal, then try again.",
     "ui.gitRemoteErrorHook": "A project check script blocked this action. Fix it in a terminal, then try again.",
+    "ui.gitRemoteErrorHookTitle": "Project check script blocked this action",
+    "ui.gitRemoteErrorHookNext": "Fix the check output below in a terminal, then try again.",
     "ui.gitPublishNeedBranch": "You are not on a branch. Switch to a branch before publishing.",
     "ui.gitPublishAlreadyHasUpstream": "This branch already has an upstream. Use Push or Sync instead.",
     "ui.gitPublishUnavailable": "Cannot publish this branch right now.",

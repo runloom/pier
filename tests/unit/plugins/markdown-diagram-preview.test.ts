@@ -1,7 +1,7 @@
-import { bakeMermaidSvgForStandalonePreview } from "@plugins/builtin/files/renderer/markdown/diagram.tsx";
+import { bakeSvgForStandalonePreview } from "@pier/ui/image-preview/bake-svg-for-standalone-preview.ts";
 import { describe, expect, it, vi } from "vitest";
 
-describe("bakeMermaidSvgForStandalonePreview", () => {
+describe("bakeSvgForStandalonePreview", () => {
   it("bakes concrete theme tokens so data-URL previews are not black boxes", () => {
     vi.spyOn(window, "getComputedStyle").mockImplementation(
       ((_element: Element) =>
@@ -20,7 +20,7 @@ describe("bakeMermaidSvgForStandalonePreview", () => {
       "style",
       "--bg:var(--background);--fg:var(--foreground);--line:var(--border)"
     );
-    const markup = bakeMermaidSvgForStandalonePreview(svg);
+    const markup = bakeSvgForStandalonePreview(svg);
     expect(markup).toContain("--bg:oklch(1 0 0)");
     expect(markup).toContain("--fg:oklch(0.2 0 0)");
     expect(markup).toContain("--border:color-mix(in srgb, oklch(0.2 0 0) 22%");
@@ -51,7 +51,7 @@ describe("bakeMermaidSvgForStandalonePreview", () => {
     svg.setAttribute("viewBox", "0 0 240 120");
     paper.append(svg);
 
-    const markup = bakeMermaidSvgForStandalonePreview(svg);
+    const markup = bakeSvgForStandalonePreview(svg);
     expect(markup).toContain("--bg:oklch(0.98 0 0)");
     expect(markup).toContain("--fg:oklch(0.18 0 0)");
     expect(markup).toContain('width="240"');

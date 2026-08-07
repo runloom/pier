@@ -200,13 +200,16 @@ export function terminalPanelDescriptor(args: {
   }
   const cwdShort = args.effectiveCwd ? basename(args.effectiveCwd) : null;
   // Ghostty / 业界：
-  // short = 显式覆盖 → OSC（路径则 basename）→ 目录名
-  // long  = 路径型优先绝对 cwd → 非路径 OSC 全文 → cwd → chrome
+  // short = 显式覆盖 → OSC（路径则 basename）→ 目录名（tab CSS 视觉省略）
+  // long  = 尽量完整：路径型优先绝对 cwd → 非路径 OSC 全文 → chrome 全文 → cwd
+  //         （顶栏 / tooltip / document.title 走 resolveLong）
   const short = chromeTitle ?? oscShort ?? cwdShort ?? "Terminal";
   let long: string | undefined;
   if (pathishOsc) {
     long = args.effectiveCwd ?? oscTitle ?? chromeTitle ?? undefined;
   } else {
+    // Non-path: OSC full text for long/tooltip; else absolute cwd (more useful
+    // than a short task chrome title like "lint"); else chrome title.
     long =
       oscTitle ??
       (args.effectiveCwd ? args.effectiveCwd : undefined) ??

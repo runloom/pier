@@ -259,11 +259,11 @@ export const settings = {
   statusBar: {
     title: "Status Bar",
     description:
-      "Show, hide, and reorder terminal status items. Higher means closer to the outer edge.",
+      "Show, hide, and reorder terminal status items. Top-to-bottom matches the bar left-to-right; move up shifts an item left.",
     leftGroup: "Left",
     rightGroup: "Right",
-    moveUp: "Move up (outward)",
-    moveDown: "Move down (inward)",
+    moveUp: "Move up (further left)",
+    moveDown: "Move down (further right)",
     moveToLeft: "Move to left group",
     moveToRight: "Move to right group",
     visible: "Visible",

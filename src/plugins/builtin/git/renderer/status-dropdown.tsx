@@ -28,10 +28,8 @@ import {
 import type React from "react";
 import { useId, useState } from "react";
 import { pluginText } from "./plugin-text.ts";
-import {
-  gitStatusDropdownErrorMessage,
-  runGitStatusDropdownAction,
-} from "./status-dropdown-actions.ts";
+import { reportRemoteOperationFailure } from "./remote-error.ts";
+import { runGitStatusDropdownAction } from "./status-dropdown-actions.ts";
 import type {
   GitStatusDropdownAction,
   GitStatusDropdownActionId,
@@ -276,7 +274,7 @@ export function GitStatusDropdown({
       model,
       pluginContext,
     }).catch((err: unknown) => {
-      pluginContext.notifications.error(gitStatusDropdownErrorMessage(err));
+      reportRemoteOperationFailure(pluginContext, err).catch(() => undefined);
     });
   };
 

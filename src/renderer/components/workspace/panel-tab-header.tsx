@@ -323,11 +323,14 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       </TooltipTrigger>
       <TooltipContent
         align="center"
-        // Tab paths / OSC 全文需比默认 max-w-64 更宽，避免被挤成难读片段。
-        className="max-w-[min(90vw,36rem)] break-all"
+        // Full title for hover: wider than default max-w-64, wrap instead of
+        // single-line ellipsis (tab short may CSS-truncate; tooltip must not).
+        className="max-w-[min(92vw,40rem)] items-start whitespace-normal text-left"
         side="bottom"
       >
-        <span className="whitespace-pre-line">{tooltipText}</span>
+        <span className="block max-w-full whitespace-pre-wrap break-words">
+          {tooltipText}
+        </span>
       </TooltipContent>
     </Tooltip>
   );

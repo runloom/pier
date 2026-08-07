@@ -10,7 +10,9 @@ import {
   declaredTerminalStatusItemsById,
   mergeTerminalStatusItems,
   normalizedGroupOrders,
+  orderPatchesAfterDisplayMove,
   resolveEffectiveTerminalStatusItemConfig,
+  sortToDisplayOrder,
 } from "@/panel-kits/terminal/status-bar-merge.ts";
 
 interface Item {
@@ -239,6 +241,111 @@ describe("compareOuterFirst / normalizedGroupOrders", () => {
       y: 10,
       z: 20,
     });
+  });
+});
+
+describe("sortToDisplayOrder / orderPatchesAfterDisplayMove", () => {
+  it("left 组 display = outer-first", () => {
+    expect(
+      sortToDisplayOrder(
+        [
+          { id: "a", order: 20 },
+          { id: "b", order: 0 },
+          { id: "c", order: 10 },
+        ],
+        "left"
+      ).map((i) => i.id)
+    ).toEqual(["b", "c", "a"]);
+  });
+
+  it("right 组 display = outer-first reverse(与 merge 底栏 DOM 一致)", () => {
+    // 默认 git 右组: project(9) sync(10) changes(11) branch(12)
+    // 底栏 L→R: branch · changes · sync · project
+    expect(
+      sortToDisplayOrder(
+        [
+          { id: "pier.files.project", order: 9 },
+          { id: "pier.git.status.sync", order: 10 },
+          { id: "pier.git.status.changes", order: 11 },
+          { id: "pier.worktree.status", order: 12 },
+        ],
+        "right"
+      ).map((i) => i.id)
+    ).toEqual([
+      "pier.worktree.status",
+      "pier.git.status.changes",
+      "pier.git.status.sync",
+      "pier.files.project",
+    ]);
+  });
+
+  it("right 组上移 = 底栏更靠左,order 映射正确", () => {
+    const rows = sortToDisplayOrder(
+      [
+        { id: "pier.files.project", order: 9 },
+        { id: "pier.git.status.sync", order: 10 },
+        { id: "pier.git.status.changes", order: 11 },
+        { id: "pier.worktree.status", order: 12 },
+      ],
+      "right"
+    );
+    // display: branch, changes, sync, project — 把 changes(index 1)上移
+    const patches = orderPatchesAfterDisplayMove(rows, 1, -1, "right");
+    // display 变为 changes, branch, sync, project
+    // outer-first = reverse = project, sync, branch, changes → 0/10/20/30
+    expect(patches).toEqual({
+      "pier.worktree.status": 20,
+      "pier.git.status.changes": 30,
+      "pier.files.project": 0,
+      // sync stays 10 if already 10 — only changed keys
+    });
+    // sync order 10 unchanged → 不在 patch
+    expect(patches["pier.git.status.sync"]).toBeUndefined();
+  });
+
+  it("right 组下移 = 底栏更靠右,与对称上移 patch 一致", () => {
+    const rows = sortToDisplayOrder(
+      [
+        { id: "pier.files.project", order: 9 },
+        { id: "pier.git.status.sync", order: 10 },
+        { id: "pier.git.status.changes", order: 11 },
+        { id: "pier.worktree.status", order: 12 },
+      ],
+      "right"
+    );
+    // display: branch, changes, sync, project — branch(index 0)下移
+    // 与 changes 上移是同一对相邻交换 → 同一 outer-first 归一化
+    const downPatches = orderPatchesAfterDisplayMove(rows, 0, 1, "right");
+    const upPatches = orderPatchesAfterDisplayMove(rows, 1, -1, "right");
+    expect(downPatches).toEqual(upPatches);
+    expect(downPatches).toEqual({
+      "pier.worktree.status": 20,
+      "pier.git.status.changes": 30,
+      "pier.files.project": 0,
+    });
+  });
+
+  it("left 组上移 = 更靠左 = order 变小", () => {
+    const rows = [
+      { id: "core.agent-status", order: -10 },
+      { id: "core.comments-status", order: -5 },
+    ];
+    const patches = orderPatchesAfterDisplayMove(rows, 1, -1, "left");
+    // display: comments 与 agent 互换 → comments, agent
+    // outer-first 同 display → comments=0, agent=10
+    expect(patches).toEqual({
+      "core.comments-status": 0,
+      "core.agent-status": 10,
+    });
+  });
+
+  it("越界移动返回空 patch", () => {
+    expect(
+      orderPatchesAfterDisplayMove([{ id: "a", order: 0 }], 0, -1, "left")
+    ).toEqual({});
+    expect(
+      orderPatchesAfterDisplayMove([{ id: "a", order: 0 }], 0, 1, "right")
+    ).toEqual({});
   });
 });
 

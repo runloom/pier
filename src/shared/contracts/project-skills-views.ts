@@ -80,7 +80,20 @@ export interface ProjectSkillView {
     dynamicCommandTraces: string[];
     riskFrontmatter: Record<string, unknown>;
   } | null;
-  source: ProjectSkillSource | { type: "pier-home" };
+  /**
+   * Origin of the skill content:
+   * - user sources (`local-import` / …) for project-managed rows
+   * - `pier-home` for Pier Home library binds
+   * - `pier-system` for app/plugin-bundled system skills (provider id+version)
+   */
+  source:
+    | ProjectSkillSource
+    | { type: "pier-home" }
+    | {
+        type: "pier-system";
+        providerId: string;
+        providerVersion: string;
+      };
   totalBytes: number;
 }
 

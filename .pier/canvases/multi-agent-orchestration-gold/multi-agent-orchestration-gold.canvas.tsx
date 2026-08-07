@@ -604,7 +604,6 @@ export default function MultiAgentOrchestrationGoldCanvas() {
                 <SectionTitle>任务 DAG（点击查看验证）</SectionTitle>
                 <NodeGraph
                   aria-label="CLI 体验补丁任务 DAG"
-                  collapseLabel="退出展开"
                   direction="left-to-right"
                   edges={uxGraph.edges}
                   expandLabel="展开关系图"
@@ -1152,7 +1151,6 @@ pier terminal screen "$panel" --json`}
               <SectionTitle>节点图（点击查看验证）</SectionTitle>
               <NodeGraph
                 aria-label="实施 DAG 节点"
-                collapseLabel="退出展开"
                 direction="left-to-right"
                 edges={graph.edges}
                 expandLabel="展开关系图"

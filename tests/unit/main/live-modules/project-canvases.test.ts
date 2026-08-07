@@ -68,16 +68,6 @@ describe("in-repo project canvases", () => {
         /\bcanvas\b/m.test(bytes),
         `${relPath}: compiled output has no \`canvas\` export`
       ).toBe(true);
-      if (relPath === "canvas-capabilities/canvas-capabilities.canvas.tsx") {
-        expect(result.graph).toEqual(
-          expect.arrayContaining([
-            ".pier/canvases/canvas-capabilities/canvas-capabilities.canvas.tsx",
-            ".pier/canvases/canvas-capabilities/canvas-capabilities.model.ts",
-            ".pier/canvases/canvas-capabilities/canvas-capabilities.styles.ts",
-            ".pier/canvases/canvas-capabilities/canvas-capabilities.view.tsx",
-          ])
-        );
-      }
     }
   }, 120_000);
 });

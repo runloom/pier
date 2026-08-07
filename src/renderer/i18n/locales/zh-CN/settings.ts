@@ -250,11 +250,12 @@ export const settings = {
   },
   statusBar: {
     title: "状态栏",
-    description: "终端状态栏项的显隐与排序。列表越靠上越靠外侧。",
+    description:
+      "终端状态栏项的显隐与排序。列表从上到下与底栏从左到右一致；上移使该项更靠左。",
     leftGroup: "左侧",
     rightGroup: "右侧",
-    moveUp: "上移（向外侧）",
-    moveDown: "下移（向内侧）",
+    moveUp: "上移（更靠左）",
+    moveDown: "下移（更靠右）",
     moveToLeft: "移到左侧",
     moveToRight: "移到右侧",
     visible: "显示",
