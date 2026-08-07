@@ -2,11 +2,26 @@ import type { RendererHangBreadcrumb } from "@shared/contracts/diagnostics/hang-
 import { sanitizeHangBreadcrumbFields } from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
 
 /**
- * Files-plugin hang trail. Must not import host `src/renderer` (depcruise);
- * only the preload bridge `window.pier.diagnostics`. Events are rare
- * (close / conflict), so send immediately — no host-side batch import.
+ * Files-plugin hang trail. Must not import host renderer (depcruise) and must
+ * not call preload globals (builtin package boundary). Host binds a sink at boot
+ * (see renderer main) that forwards into the host hang runtime.
  */
+type HangBreadcrumbSink = (payload: RendererHangBreadcrumb) => void;
+
+let sink: HangBreadcrumbSink | null = null;
 let lastDedupeKey = "";
+
+/** Host installs once at renderer boot; returns unbind. */
+export function installFilesHangBreadcrumbSink(
+  next: HangBreadcrumbSink
+): () => void {
+  sink = next;
+  return () => {
+    if (sink === next) {
+      sink = null;
+    }
+  };
+}
 
 export function noteFilesHangBreadcrumb(payload: RendererHangBreadcrumb): void {
   try {
@@ -22,7 +37,7 @@ export function noteFilesHangBreadcrumb(payload: RendererHangBreadcrumb): void {
       return;
     }
     lastDedupeKey = key;
-    window.pier?.diagnostics?.hangBreadcrumb?.(crumb);
+    sink?.(crumb);
   } catch {
     // never throw from diagnostics
   }

@@ -4,7 +4,11 @@ import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./app/globals.css";
-import { installHangBreadcrumbRuntime } from "@/lib/diagnostics/hang-breadcrumb.ts";
+import { installFilesHangBreadcrumbSink } from "@plugins/builtin/files/renderer/hang-breadcrumb.ts";
+import {
+  installHangBreadcrumbRuntime,
+  noteHangBreadcrumb,
+} from "@/lib/diagnostics/hang-breadcrumb.ts";
 import { installTerminalWebOwnerRetentionWatch } from "@/lib/terminal-debug/owner-retention-watch.ts";
 import { installTerminalInputRoutingSashDragWatcher } from "@/stores/terminal-input-routing-drag.ts";
 import {
@@ -153,6 +157,7 @@ async function bootstrap() {
   installTerminalInputRoutingPointerDownListener();
   // Always-on hang trail (batched JSONL + ring); post-mortem only.
   installHangBreadcrumbRuntime();
+  installFilesHangBreadcrumbSink(noteHangBreadcrumb);
   installCommandPaletteMenuRequest();
   initCommandPaletteMru().catch(() => undefined);
 
