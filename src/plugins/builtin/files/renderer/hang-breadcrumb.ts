@@ -1,5 +1,5 @@
-import type { RendererHangBreadcrumb } from "@shared/contracts/renderer-hang-breadcrumb.ts";
-import { sanitizeHangBreadcrumbFields } from "@shared/contracts/renderer-hang-breadcrumb.ts";
+import type { RendererHangBreadcrumb } from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
+import { sanitizeHangBreadcrumbFields } from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
 
 /**
  * Files-plugin hang trail. Must not import host `src/renderer` (depcruise);

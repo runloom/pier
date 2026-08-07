@@ -3,7 +3,7 @@ import {
   rendererHangBreadcrumbSchema,
   type StoredRendererHangBreadcrumb,
   sanitizeHangBreadcrumbFields,
-} from "@shared/contracts/renderer-hang-breadcrumb.ts";
+} from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import type { IpcMain } from "electron";

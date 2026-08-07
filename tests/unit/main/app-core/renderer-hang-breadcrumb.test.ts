@@ -12,7 +12,7 @@ import {
   HANG_BREADCRUMB_DIAGNOSTICS_MAX,
   HANG_BREADCRUMB_PATH_MAX,
   rendererHangBreadcrumbSchema,
-} from "@shared/contracts/renderer-hang-breadcrumb.ts";
+} from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 afterEach(() => {

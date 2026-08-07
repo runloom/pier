@@ -1,4 +1,4 @@
-import type { RendererHangBreadcrumb } from "@shared/contracts/renderer-hang-breadcrumb.ts";
+import type { RendererHangBreadcrumb } from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 

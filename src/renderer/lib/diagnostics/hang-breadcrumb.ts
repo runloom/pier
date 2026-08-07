@@ -1,8 +1,8 @@
-import type { RendererHangBreadcrumb } from "@shared/contracts/renderer-hang-breadcrumb.ts";
+import type { RendererHangBreadcrumb } from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
 import {
   RENDERER_HANG_BREADCRUMB_IMMEDIATE_KINDS,
   sanitizeHangBreadcrumbFields,
-} from "@shared/contracts/renderer-hang-breadcrumb.ts";
+} from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
 
 /**
  * Always-on hang trail (low overhead):

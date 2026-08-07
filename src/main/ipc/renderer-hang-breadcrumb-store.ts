@@ -1,7 +1,7 @@
 import {
   HANG_BREADCRUMB_DIAGNOSTICS_MAX,
   type StoredRendererHangBreadcrumb,
-} from "@shared/contracts/renderer-hang-breadcrumb.ts";
+} from "@shared/contracts/diagnostics/hang-breadcrumb.ts";
 
 /**
  * Process-local hang-trail ring (oldest → newest). Kept free of window/identity
