@@ -1,7 +1,6 @@
 import { type Ref, useImperativeHandle, useMemo } from "react";
 import { scheduleCodeViewLayoutFlush } from "./code-view-runtime.ts";
 import { collapseAllTargetIds } from "./collapse-intent.ts";
-import { getDiffCopyStickyText, pinDiffCopyStickyText } from "./copy-sticky.ts";
 import { syncRenderedEstimateSkeletons } from "./estimate-skeleton.ts";
 import type { DiffViewHandleDeps } from "./handle-deps.ts";
 import type {
@@ -24,6 +23,10 @@ import {
   type DiffViewScrollOptions,
   resolveCodeViewScrollElement,
 } from "./scroll-behavior.ts";
+import {
+  getDiffCopyStickyText,
+  pinDiffCopyStickyText,
+} from "./selection/copy-sticky.ts";
 import {
   fullSelectionRangeForCodeViewItem,
   selectedLinesTextFromCodeViewItem,

@@ -1,9 +1,5 @@
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import { type RefObject, useCallback, useEffect, useRef } from "react";
-import {
-  clearDiffCopyStickyText,
-  pinDiffCopyStickyText,
-} from "./copy-sticky.ts";
 import type { PierGutterReviewEvent } from "./gutter/gutter-comments.tsx";
 import {
   composedHtmlPath,
@@ -20,6 +16,10 @@ import {
   resolveDiffPointerLineHit,
 } from "./pointer-selection.ts";
 import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
+import {
+  clearDiffCopyStickyText,
+  pinDiffCopyStickyText,
+} from "./selection/copy-sticky.ts";
 import { selectedLinesTextFromCodeViewItem } from "./selection-text.ts";
 
 /**

@@ -1,7 +1,7 @@
 import {
   getDiffCopyStickyText,
   isDiffCopyStickySurface,
-} from "@pier/ui/diff-view/copy-sticky.ts";
+} from "@pier/ui/diff-view/selection/copy-sticky.ts";
 import i18next from "i18next";
 import {
   ArrowDown,

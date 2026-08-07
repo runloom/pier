@@ -228,7 +228,7 @@ describe("content selection contract", () => {
     expect(CONTENT_DRAG_THRESHOLD_PX).toBeGreaterThan(0);
 
     const stickySource = await readFile(
-      join(process.cwd(), "packages/ui/src/diff-view/copy-sticky.ts"),
+      join(process.cwd(), "packages/ui/src/diff-view/selection/copy-sticky.ts"),
       "utf8"
     );
     expect(stickySource).toContain("globalThis");
@@ -239,13 +239,13 @@ describe("content selection contract", () => {
 describe("copy-sticky global store", () => {
   it("survives across import identities (globalThis)", async () => {
     const a = await import(
-      "../../../../packages/ui/src/diff-view/copy-sticky.ts"
+      "../../../../packages/ui/src/diff-view/selection/copy-sticky.ts"
     );
     a.clearDiffCopyStickyText();
     a.pinDiffCopyStickyText("hello-copy");
     expect(a.getDiffCopyStickyText()).toBe("hello-copy");
     const b = await import(
-      "../../../../packages/ui/src/diff-view/copy-sticky.ts"
+      "../../../../packages/ui/src/diff-view/selection/copy-sticky.ts"
     );
     expect(b.getDiffCopyStickyText()).toBe("hello-copy");
     expect(a.isDiffCopyStickySurface("git/review-diff")).toBe(true);

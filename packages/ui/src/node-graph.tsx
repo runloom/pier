@@ -20,7 +20,7 @@ import { Button } from "./button.tsx";
 import {
   FitViewOnViewportChange,
   useNodeGraphExpandedChrome,
-} from "./node-graph-expand.ts";
+} from "./node-graph/expand.ts";
 import {
   FIT_VIEW_OPTIONS,
   type GraphNodeData,
@@ -32,7 +32,7 @@ import {
   type NodeGraphEdge,
   type NodeGraphNode,
   TONE_CLASS,
-} from "./node-graph-model.ts";
+} from "./node-graph/model.ts";
 import { cn } from "./utils.ts";
 
 export type {
@@ -40,7 +40,7 @@ export type {
   NodeGraphEdge,
   NodeGraphNode,
   NodeGraphTone,
-} from "./node-graph-model.ts";
+} from "./node-graph/model.ts";
 
 export interface NodeGraphProps {
   "aria-label": string;

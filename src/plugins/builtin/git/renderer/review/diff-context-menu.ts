@@ -1,13 +1,14 @@
 // 模块级粘性：与 packages/ui 同构，避免 handle 为空时复制项一直灰。
-import {
-  getDiffCopyStickyText,
-  pinDiffCopyStickyText,
-} from "@pier/ui/diff-view/copy-sticky.ts";
+
 import type {
   PierDiffViewHandle,
   PierDiffViewItem,
 } from "@pier/ui/diff-view/index.tsx";
 import { readBrowserSelectedText } from "@pier/ui/diff-view/pointer-selection.ts";
+import {
+  getDiffCopyStickyText,
+  pinDiffCopyStickyText,
+} from "@pier/ui/diff-view/selection/copy-sticky.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { MouseEvent as ReactMouseEvent } from "react";

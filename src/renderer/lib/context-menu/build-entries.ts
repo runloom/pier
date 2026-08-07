@@ -12,7 +12,7 @@
 import {
   getDiffCopyStickyText,
   isDiffCopyStickySurface,
-} from "@pier/ui/diff-view/copy-sticky.ts";
+} from "@pier/ui/diff-view/selection/copy-sticky.ts";
 import type { MenuItem, MenuTemplate } from "@shared/contracts/menu.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action, ActionInvocation } from "@/lib/actions/types.ts";

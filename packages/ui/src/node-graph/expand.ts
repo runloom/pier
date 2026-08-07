@@ -1,6 +1,6 @@
 import { useReactFlow } from "@xyflow/react";
 import { type RefObject, useEffect } from "react";
-import { FIT_VIEW_OPTIONS } from "./node-graph-model.ts";
+import { FIT_VIEW_OPTIONS } from "./model.ts";
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
