@@ -1,8 +1,4 @@
-import type {
-  CodeViewOptions,
-  SelectedLineRange,
-  SmoothScrollSettings,
-} from "@pierre/diffs";
+import type { CodeViewOptions, SmoothScrollSettings } from "@pierre/diffs";
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import {
   createElement,
@@ -131,6 +127,11 @@ export function useDiffViewCodeOptions(options: {
   /** 行内评论卡 locale（相对时间格式化用）。 */
   readonly locale?: string;
 }): {
+  readonly activateGutterReview: (event: {
+    readonly itemId: string;
+    readonly lineNumber: number;
+    readonly side: "additions" | "deletions";
+  }) => void;
   readonly options: CodeViewOptions<PierDiffAnnotationMetadata>;
   readonly renderAnnotation: (
     annotation: { readonly metadata?: PierDiffAnnotationMetadata },
@@ -183,38 +184,34 @@ export function useDiffViewCodeOptions(options: {
     [labels.unmodifiedLine, labels.unmodifiedLines]
   );
   const expandAllUnmodifiedLabel = labels.expandAllUnmodified;
-  // gutter 评论入口走 `@pierre/diffs` 默认 + 按钮（onGutterUtilityClick）：
-  // 单击时 `range.start` 是行号、`range.side` 是 additions/deletions，
-  // `context.item.id` 是文件 id；查 reviewCommentsById 命中已有线程则带
-  // threadId（打开线程卡），否则 host 打开新建草稿。默认 + 按钮的 hover/显隐
-  // 由 `@pierre/diffs` 原生管理，无需自定义 renderGutterUtility 与 hover
-  // re-render。
-  const handleGutterUtilityClick = useCallback(
-    (
-      range: SelectedLineRange,
-      context: { readonly item: { readonly id: string } }
-    ) => {
+  // gutter 评论入口：只开原生 + 按钮 UI（enableGutterUtility）。
+  // 不挂 Pierre utility click 回调（会走 gutterSelecting，pointerdown 即写
+  // data-selected-line，点 + 出蓝选）。激活改由 use-content-selection capture
+  // 拦截 utility 路径后调 activateGutterReview。
+  const activateGutterReview = useCallback(
+    (event: {
+      readonly itemId: string;
+      readonly lineNumber: number;
+      readonly side: "additions" | "deletions";
+    }) => {
       if (onGutterReviewActivate === undefined) {
         return;
       }
-      const side = range.side;
-      if (side === undefined) {
-        return;
-      }
-      const lineNumber = range.start;
       const thread = gutterReviewThreadForLine(
-        reviewCommentsById?.get(context.item.id),
-        side,
-        lineNumber
+        reviewCommentsById?.get(event.itemId),
+        event.side,
+        event.lineNumber
       );
       onGutterReviewActivate({
-        itemId: context.item.id,
-        lineNumber,
-        side,
+        itemId: event.itemId,
+        lineNumber: event.lineNumber,
+        side: event.side,
         ...(thread === undefined ? {} : { threadId: thread.threadId }),
       });
+      // 防御：若他处写过行选，评论打开后清掉，避免蓝选压在草稿上。
+      codeViewRef.current?.clearSelectedLines();
     },
-    [onGutterReviewActivate, reviewCommentsById]
+    [codeViewRef, onGutterReviewActivate, reviewCommentsById]
   );
   const codeViewOptions = useMemo<CodeViewOptions<PierDiffAnnotationMetadata>>(
     () => ({
@@ -222,12 +219,9 @@ export function useDiffViewCodeOptions(options: {
       diffStyle,
       disableBackground: false,
       disableLineNumbers: false,
-      // 评论 gutter 入口：host 提供 onGutterReviewActivate 时启用默认 + 按钮。
+      // 只显示默认 +；点击激活见 activateGutterReview（不经 Pierre utility click 选区）。
       enableGutterUtility: onGutterReviewActivate !== undefined,
       enableLineSelection: true,
-      ...(onGutterReviewActivate === undefined
-        ? {}
-        : { onGutterUtilityClick: handleGutterUtilityClick }),
       ...(expandAllUnmodifiedLabel === undefined
         ? {}
         : { expandAllUnmodifiedLabel }),
@@ -339,7 +333,6 @@ export function useDiffViewCodeOptions(options: {
       markRendered,
       metrics,
       onGutterReviewActivate,
-      handleGutterUtilityClick,
       overflow,
       scheduleRenderWindowReport,
     ]
@@ -414,6 +407,7 @@ export function useDiffViewCodeOptions(options: {
   );
 
   return {
+    activateGutterReview,
     options: codeViewOptions,
     renderAnnotation,
     style,

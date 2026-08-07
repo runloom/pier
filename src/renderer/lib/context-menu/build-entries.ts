@@ -9,6 +9,10 @@
  * 快捷键 hint: 优先反查 action 自身绑定, 没有时再借用 shortcutSourceId,
  * 用 toElectronAccelerator 转 Electron 格式 (仅显示, 不绑定; 实际触发在 web keymap 路径).
  */
+import {
+  getDiffCopyStickyText,
+  isDiffCopyStickySurface,
+} from "@pier/ui/diff-view/copy-sticky.ts";
 import type { MenuItem, MenuTemplate } from "@shared/contracts/menu.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
@@ -100,20 +104,27 @@ function actionToMenuItem(a: Action, invocation?: ActionInvocation): MenuItem {
   const accelerator = binding
     ? toElectronAccelerator(binding.chord)
     : undefined;
-  const enabled = a.enabled?.(invocation) ?? true;
-  // 复制选区：把弹菜单瞬间的文本钉到菜单项，main click 时直接写剪贴板。
-  const clipboardText =
+  // 复制选区：metadata → DOM/provider；diff sticky 仅 git/review-diff 表面。
+  const copyText =
     a.id === "pier.panel.copySelection"
       ? selectedTextFromInvocation(invocation) ||
-        captureDomSelectionText(invocation?.sourcePanelId)
+        captureDomSelectionText(invocation?.sourcePanelId) ||
+        (isDiffCopyStickySurface(invocation?.surface)
+          ? getDiffCopyStickyText()
+          : "")
       : "";
+  // enabled 与 clipboardText 同源，避免「有粘性却灰掉」。
+  const enabled =
+    a.id === "pier.panel.copySelection"
+      ? copyText.length > 0
+      : (a.enabled?.(invocation) ?? true);
   return {
     type: "action",
     id: a.id,
     label: a.title(invocation),
     enabled,
     ...(accelerator !== undefined && { accelerator }),
-    ...(clipboardText.length > 0 ? { clipboardText } : {}),
+    ...(copyText.length > 0 ? { clipboardText: copyText } : {}),
   };
 }
 

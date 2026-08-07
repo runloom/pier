@@ -1,7 +1,13 @@
+// 模块级粘性：与 packages/ui 同构，避免 handle 为空时复制项一直灰。
+import {
+  getDiffCopyStickyText,
+  pinDiffCopyStickyText,
+} from "@pier/ui/diff-view/copy-sticky.ts";
 import type {
   PierDiffViewHandle,
   PierDiffViewItem,
 } from "@pier/ui/diff-view/index.tsx";
+import { readBrowserSelectedText } from "@pier/ui/diff-view/pointer-selection.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { MouseEvent as ReactMouseEvent } from "react";
@@ -36,8 +42,18 @@ export function openGitReviewDiffContextMenu(options: {
     sourcePanelId,
   } = options;
 
-  // Snapshot line selection before preventDefault so sticky copy text stays.
-  const selectedText = handle?.getSelectedText() ?? "";
+  // preventDefault 前钉住非空文本 → metadata.selectedText → 复制 enabled。
+  // live → handle（含粘性）→ 模块粘性；读选区与 sticky pin 共用 readBrowserSelectedText。
+  let selectedText = readBrowserSelectedText();
+  if (selectedText.length === 0) {
+    selectedText = handle?.getSelectedText() ?? "";
+  }
+  if (selectedText.length === 0) {
+    selectedText = getDiffCopyStickyText();
+  }
+  if (selectedText.length > 0) {
+    pinDiffCopyStickyText(selectedText);
+  }
   event.preventDefault();
   event.stopPropagation();
 

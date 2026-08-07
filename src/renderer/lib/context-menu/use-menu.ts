@@ -1,13 +1,7 @@
-/**
- * 给 React 组件提供 onContextMenu handler — 阻止浏览器默认菜单, 调 main popup,
- * dispatch 选中的 action.
- *
- * usage:
- *   const onContextMenu = useContextMenu("dockview-tab");
- *   <div onContextMenu={onContextMenu}>...</div>
- *
- * Phase 1 的 actions 都用 store.getState() 读 active panel 决策, 不需传 args.
- */
+import {
+  getDiffCopyStickyText,
+  isDiffCopyStickySurface,
+} from "@pier/ui/diff-view/copy-sticky.ts";
 import {
   releaseTooltipSuppression,
   suppressTooltips,
@@ -102,11 +96,17 @@ async function popupAndDispatch(
 ): Promise<void> {
   // 先抓选区。内容区菜单不要为了 layout actions 强行 setActive，
   // 否则 git diff 行选区会被冲掉，unmountWhenHidden 面板还会重挂载滚回顶。
+  // 空串不能当「已提供」——否则会跳过 provider/DOM 回退，复制项一直灰。
   const sourcePanelId = invocation?.sourcePanelId;
-  const selectedText =
+  const fromMeta =
     typeof invocation?.metadata?.selectedText === "string"
       ? invocation.metadata.selectedText
-      : captureDomSelectionText(sourcePanelId);
+      : "";
+  const selectedText =
+    fromMeta.length > 0
+      ? fromMeta
+      : captureDomSelectionText(sourcePanelId) ||
+        (isDiffCopyStickySurface(surface) ? getDiffCopyStickyText() : "");
   // document/viewport（含 panel/content、git/review-diff、files/editor…）
   // 与 dockview-tab：不 setActive。object 树等仍激活 source。
   if (sourcePanelId && shouldActivatePanelForContextMenu(surface)) {
