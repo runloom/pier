@@ -20,7 +20,10 @@ type DiffSide = "additions" | "deletions";
  *   (or there is no hit) and the selection is additions-only.
  */
 export function resolveGitReviewDiffOpenTarget(options: {
-  readonly event: Pick<MouseEvent | PointerEvent, "composedPath" | "target">;
+  readonly event: Pick<
+    PointerEvent,
+    "clientX" | "clientY" | "composedPath" | "target"
+  >;
   readonly handle: PierDiffViewHandle | null | undefined;
   readonly items: readonly PierDiffViewItem[];
 }): { line?: number; path: string } | null {

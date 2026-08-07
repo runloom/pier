@@ -14,6 +14,20 @@ const URL_PRESENTATION_ATTRIBUTES = new Set([
   "stroke",
 ]);
 
+/**
+ * HTML void elements Mermaid (and browsers) may emit without XML self-close.
+ * Only normalize these; never invent closers for arbitrary tags.
+ */
+const HTML_VOID_TAG_NAMES =
+  "area|base|br|col|embed|hr|img|input|link|meta|source|track|wbr";
+
+/**
+ * Attribute matching that respects quoted values so `title="a>b"` does not
+ * truncate the tag rewrite (DOMParser would otherwise see invalid markup).
+ */
+const VOID_ATTR_CHUNK =
+  "(?:\\s+[A-Za-z_:][\\w:.-]*(?:\\s*=\\s*(?:\"[^\"]*\"|'[^']*'|[^\\s\"'=<>`]+))?)";
+
 function hasUnsafeCssUrl(value: string): boolean {
   if (value.includes("\\")) {
     return true;
@@ -28,12 +42,37 @@ function hasUnsafeCssUrl(value: string): boolean {
 }
 
 /**
+ * Mermaid multi-line labels emit HTML void tags (`<br>`) inside foreignObject.
+ * `DOMParser` with `image/svg+xml` requires well-formed XML, so rewrite those
+ * void tags to self-closing form before parse. Already self-closed tags are
+ * left unchanged in effect (normalized to ` />`).
+ */
+export function normalizeMermaidSvgForXmlParse(svg: string): string {
+  const voidOpen = new RegExp(
+    `<(${HTML_VOID_TAG_NAMES})\\b(${VOID_ATTR_CHUNK}*)\\s*/?>`,
+    "giu"
+  );
+  return svg.replace(voidOpen, (_full, rawName: string, rawAttrs: string) => {
+    const name = rawName.toLowerCase();
+    const attrs = rawAttrs
+      .trim()
+      .replace(/\/\s*$/u, "")
+      .trim();
+    return attrs.length > 0 ? `<${name} ${attrs} />` : `<${name} />`;
+  });
+}
+
+/**
  * Removes executable and remote-resource SVG content before it reaches the
  * renderer. `foreignObject` remains valid because Mermaid v11 uses it for
  * plain text labels under strict security mode.
  */
 export function sanitizeMermaidSvg(svg: string): string | null {
-  const documentNode = new DOMParser().parseFromString(svg, "image/svg+xml");
+  const normalized = normalizeMermaidSvgForXmlParse(svg);
+  const documentNode = new DOMParser().parseFromString(
+    normalized,
+    "image/svg+xml"
+  );
   const root = documentNode.documentElement;
   if (
     root.localName !== "svg" ||
@@ -43,7 +82,7 @@ export function sanitizeMermaidSvg(svg: string): string | null {
     return null;
   }
 
-  let changed = false;
+  let changed = normalized !== svg;
   for (const styleElement of root.querySelectorAll("style")) {
     const original = styleElement.textContent ?? "";
     const withoutImports = original.replace(

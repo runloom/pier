@@ -31,6 +31,7 @@ import {
   readSwitchBranchQueryItem,
   switchBranchQueryItem,
 } from "./switch-branch-query.ts";
+import { handleSwitchBranchFailure } from "./switch-worktree-in-use.ts";
 
 type BranchOperation = "merge" | "rebase" | "switch";
 
@@ -263,7 +264,7 @@ async function runSwitchBranch(
     );
   } catch (err) {
     loading.dismiss();
-    await showError(context, title, err);
+    await handleSwitchBranchFailure(context, title, branch, err);
   }
 }
 

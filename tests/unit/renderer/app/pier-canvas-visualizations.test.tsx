@@ -74,6 +74,88 @@ describe("Pier Canvas visualizations", () => {
     );
   });
 
+  it("expands immersively via product control and closes with Escape", async () => {
+    render(
+      <NodeGraph
+        aria-label="实施路线"
+        collapseLabel="退出展开"
+        edges={EDGES}
+        expandLabel="展开关系图"
+        nodes={NODES}
+      />
+    );
+
+    const expand = await screen.findByRole("button", { name: "展开关系图" });
+    fireEvent.click(expand);
+
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-slot="node-graph-expanded"]')
+      ).toBeTruthy()
+    );
+    expect(screen.getByRole("dialog", { name: "实施路线" })).toBeTruthy();
+    expect(
+      document.querySelector('[data-slot="node-graph-placeholder"]')
+    ).toBeTruthy();
+    const close = document.querySelector(
+      "[data-node-graph-close]"
+    ) as HTMLElement | null;
+    expect(close).toBeTruthy();
+    await waitFor(() => expect(close).toHaveFocus());
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-slot="node-graph-expanded"]')
+      ).toBeNull()
+    );
+    expect(
+      document.querySelector('[data-slot="node-graph"] .react-flow')
+    ).toBeTruthy();
+  });
+
+  it("collapses expand state when nodes become empty", async () => {
+    const { rerender } = render(
+      <NodeGraph aria-label="实施路线" edges={EDGES} nodes={NODES} />
+    );
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Expand graph" })
+    );
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-slot="node-graph-expanded"]')
+      ).toBeTruthy()
+    );
+    expect(document.body.style.overflow).toBe("hidden");
+
+    rerender(<NodeGraph aria-label="实施路线" edges={[]} nodes={[]} />);
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-slot="node-graph-expanded"]')
+      ).toBeNull()
+    );
+    expect(document.body.style.overflow).not.toBe("hidden");
+    expect(screen.getByText("No graph nodes to display.")).toBeTruthy();
+  });
+
+  it("hides expand control when expandable is false", async () => {
+    render(
+      <NodeGraph
+        aria-label="只读图"
+        edges={EDGES}
+        expandable={false}
+        nodes={NODES}
+      />
+    );
+
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-slot="node-graph"] .react-flow')
+      ).toBeTruthy()
+    );
+    expect(screen.queryByRole("button", { name: "Expand graph" })).toBeNull();
+  });
+
   it("renders a high-level data chart without exposing Recharts to callers", () => {
     const { container } = render(
       <DataChart

@@ -43,7 +43,10 @@ export interface DiffViewHandleDeps {
     Map<string, DiffViewRenderItemIdentity>
   >;
   readonly scheduleRenderWindowReport: () => void;
-  /** 右键前可能已清空 live selection；优先返回最近一次有效行选区文本。 */
+  /**
+   * 选区文本粘性快照：右键 pointerdown 时钉住浏览器/行选文本。
+   * getSelectedText 在 live 选区塌掉后仍可读此字段（菜单复制主路径）。
+   */
   readonly selectedTextRef: RefObject<string>;
   readonly setItemCollapsed: (
     id: string,

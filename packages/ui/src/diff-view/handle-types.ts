@@ -82,7 +82,7 @@ export interface PierDiffViewHandle {
    * 供宿主右键「跳转到源码」落到对应行。
    */
   resolvePointerLineHit(
-    event: Pick<MouseEvent | PointerEvent, "composedPath" | "target">
+    event: Pick<PointerEvent, "clientX" | "clientY" | "composedPath" | "target">
   ): PierDiffViewPointerLineHit | null;
   restoreAnchor(anchor: PierDiffViewAnchor): boolean;
   /**

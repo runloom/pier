@@ -120,6 +120,8 @@ describe("bundled pier-canvas SDK types", () => {
     expect(duplicates).toEqual([]);
   });
 
+  // Full TypeScript Program construction under coverage is slower than unit
+  // default (5s); CI coverage job timed out at the default budget.
   it("type-checks every SDK declaration with skipLibCheck disabled", () => {
     const errors = sdkTypeErrors();
     const formatted = errors.map(formatDiagnostic).join("\n");
@@ -128,5 +130,5 @@ describe("bundled pier-canvas SDK types", () => {
       "SDK declarations must be self-contained under skipLibCheck:false:\n" +
         formatted
     ).toBe("");
-  });
+  }, 60_000);
 });
