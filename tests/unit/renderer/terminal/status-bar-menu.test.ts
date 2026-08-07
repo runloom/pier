@@ -32,13 +32,16 @@ vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => {
   };
 });
 
-const { declaredRows, openTerminalStatusBarContextMenu } = await import(
-  "@/panel-kits/terminal/status-bar-menu.ts"
-);
+const {
+  declaredRows,
+  menuItemsFromDeclaredRows,
+  openTerminalStatusBarContextMenu,
+} = await import("@/panel-kits/terminal/status-bar-menu.ts");
 
 function terminalStatusItemEntry(
   id: string,
   items: Array<{
+    alignment?: "left" | "right";
     id: string;
     order?: number;
     title: string;
@@ -61,6 +64,7 @@ function terminalStatusItemEntry(
       permissions: [],
       source: { kind: "builtin" },
       terminalStatusItems: items.map((item) => ({
+        alignment: item.alignment,
         id: item.id,
         order: item.order,
         permissions: [],
@@ -100,7 +104,7 @@ describe("declaredRows", () => {
       },
     ]);
 
-    expect(rows.map((row) => row.itemId)).toContain("core.foo");
+    expect(rows.map((row) => row.id)).toContain("core.foo");
   });
 
   it("同 id 时 core 优先,plugin 声明被跳过", () => {
@@ -121,7 +125,7 @@ describe("declaredRows", () => {
       ]
     );
 
-    const fooRows = rows.filter((row) => row.itemId === "core.foo");
+    const fooRows = rows.filter((row) => row.id === "core.foo");
     expect(fooRows).toHaveLength(1);
     // core 走 i18next.t,plugin 走 resolvePluginTerminalStatusItemDisplay;
     // core 优先意味着 title 精确等于 titleKey 翻译结果,而非 "Plugin Steal"
@@ -146,7 +150,7 @@ describe("declaredRows", () => {
       []
     );
 
-    expect(rows.map((row) => row.itemId)).toEqual(["enabled.item"]);
+    expect(rows.map((row) => row.id)).toEqual(["enabled.item"]);
   });
 
   it("F12:口径以 runtime.enabled 为准 —— 顶层 enabled=false 但 runtime.enabled=true 时仍纳入", () => {
@@ -163,7 +167,7 @@ describe("declaredRows", () => {
       []
     );
 
-    expect(rows.map((row) => row.itemId)).toEqual(["drift.item"]);
+    expect(rows.map((row) => row.id)).toEqual(["drift.item"]);
   });
 
   it("F12:顶层 enabled=true 但 runtime.enabled=false 时被排除", () => {
@@ -183,19 +187,81 @@ describe("declaredRows", () => {
     expect(rows).toEqual([]);
   });
 
-  it("按 title 字典序排序,与声明顺序无关", () => {
+  it("按底栏 display 序:左组 L→R 再右组 L→R(与 title 字典序无关)", () => {
     const rows = declaredRows(
       [
         terminalStatusItemEntry("pier.a", [
-          { id: "z.item", title: "Zebra" },
-          { id: "a.item", title: "Apple" },
+          { id: "z.item", title: "Zebra", order: 0 },
+          { id: "a.item", title: "Apple", order: 10 },
+          {
+            alignment: "right",
+            id: "r.high",
+            title: "Right High",
+            order: 12,
+          },
+          {
+            alignment: "right",
+            id: "r.low",
+            title: "Right Low",
+            order: 9,
+          },
         ]),
       ],
       prefsOf(),
       []
     );
 
-    expect(rows.map((row) => row.title)).toEqual(["Apple", "Zebra"]);
+    // left outer-first: z(0), a(10); right outer-first reverse: r.high(12), r.low(9)
+    expect(rows.map((row) => row.id)).toEqual([
+      "z.item",
+      "a.item",
+      "r.high",
+      "r.low",
+    ]);
+  });
+
+  it("默认 git 右组 display 与底栏一致:branch · changes · sync · project", () => {
+    const rows = declaredRows(
+      [
+        terminalStatusItemEntry("pier.git", [
+          {
+            alignment: "right",
+            id: "pier.worktree.status",
+            title: "Git Branch",
+            order: 12,
+          },
+          {
+            alignment: "right",
+            id: "pier.git.status.changes",
+            title: "Git Changes",
+            order: 11,
+          },
+          {
+            alignment: "right",
+            id: "pier.git.status.sync",
+            title: "Git Sync",
+            order: 10,
+          },
+        ]),
+        terminalStatusItemEntry("pier.files", [
+          {
+            alignment: "right",
+            id: "pier.files.project",
+            title: "Project",
+            order: 9,
+          },
+        ]),
+      ],
+      prefsOf(),
+      []
+    );
+
+    expect(rows.map((row) => row.id)).toEqual([
+      "pier.worktree.status",
+      "pier.git.status.changes",
+      "pier.git.status.sync",
+      "pier.files.project",
+    ]);
   });
 
   it("hidden 生效值 = 用户覆盖 ?? manifest 声明 ?? 默认可见", () => {
@@ -210,9 +276,85 @@ describe("declaredRows", () => {
       []
     );
 
-    const byId = new Map(rows.map((row) => [row.itemId, row.hidden]));
+    const byId = new Map(rows.map((row) => [row.id, row.hidden]));
     expect(byId.get("no.override")).toBe(false);
     expect(byId.get("hidden.override")).toBe(true);
+  });
+});
+
+describe("menuItemsFromDeclaredRows", () => {
+  beforeAll(async () => {
+    await initI18n();
+  });
+
+  it("左右组之间恰一个 separator;checkbox 序 = display 序", () => {
+    const rows = declaredRows(
+      [
+        terminalStatusItemEntry("pier.a", [
+          { id: "left.b", title: "Left B", order: 10 },
+          { id: "left.a", title: "Left A", order: 0 },
+          {
+            alignment: "right",
+            id: "right.high",
+            title: "Right High",
+            order: 12,
+          },
+          {
+            alignment: "right",
+            id: "right.low",
+            title: "Right Low",
+            order: 9,
+          },
+        ]),
+      ],
+      prefsOf(),
+      []
+    );
+    const items = menuItemsFromDeclaredRows(rows);
+    const kinds = items.map((item) =>
+      item.type === "checkbox" ? item.id.replace(/^.*:/, "") : item.type
+    );
+    // left display: left.a, left.b; right display reverse: right.high, right.low
+    expect(kinds).toEqual([
+      "left.a",
+      "left.b",
+      "separator",
+      "right.high",
+      "right.low",
+    ]);
+    expect(items.filter((item) => item.type === "separator")).toHaveLength(1);
+  });
+
+  it("仅左组或仅右组时不插入组间 separator", () => {
+    const leftOnly = menuItemsFromDeclaredRows(
+      declaredRows(
+        [
+          terminalStatusItemEntry("pier.a", [
+            { id: "only.left", title: "Only Left" },
+          ]),
+        ],
+        prefsOf(),
+        []
+      )
+    );
+    expect(leftOnly.every((item) => item.type === "checkbox")).toBe(true);
+
+    const rightOnly = menuItemsFromDeclaredRows(
+      declaredRows(
+        [
+          terminalStatusItemEntry("pier.b", [
+            {
+              alignment: "right",
+              id: "only.right",
+              title: "Only Right",
+            },
+          ]),
+        ],
+        prefsOf(),
+        []
+      )
+    );
+    expect(rightOnly.every((item) => item.type === "checkbox")).toBe(true);
   });
 });
 

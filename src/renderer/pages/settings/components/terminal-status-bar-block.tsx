@@ -4,9 +4,9 @@
  * 数据来源 = core 声明源(CORE_TERMINAL_STATUS_ITEMS)+ plugin-registry.store
  * 中已启用插件 manifest 声明的 terminalStatusItems(含当前未注册渲染的,按声明
  * 展示) × 用户覆盖镜像;同 id 时 core 优先(与右键菜单/合并层同口径)。
- * 排序交互为上移/下移按钮(首版不引入 dnd 依赖,spec §3.3);列表为外侧优先序,
- * 上移 = 向外侧。重排落库:交换后按 normalizedGroupOrders(index*10)给顺序有
- * 变化的项写 order 覆盖。
+ * 列表序 = 底栏 DOM 从左到右(sortToDisplayOrder);上移 = 更靠左、下移 = 更靠右。
+ * 重排落库:display 相邻交换后经 orderPatchesAfterDisplayMove 映射 outer-first
+ * 再 normalize(index*10)写 order 覆盖。
  */
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
@@ -30,9 +30,9 @@ import { useT } from "@/i18n/use-t.ts";
 import { resolvePluginTerminalStatusItemDisplay } from "@/lib/plugins/display.ts";
 import { CORE_TERMINAL_STATUS_ITEMS } from "@/panel-kits/terminal/core-terminal-status-items.ts";
 import {
-  compareOuterFirst,
-  normalizedGroupOrders,
+  orderPatchesAfterDisplayMove,
   resolveEffectiveTerminalStatusItemConfig,
+  sortToDisplayOrder,
 } from "@/panel-kits/terminal/status-bar-merge.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
@@ -104,40 +104,31 @@ function buildRows(
       );
     }
   }
-  left.sort(compareOuterFirst);
-  right.sort(compareOuterFirst);
-  return { left, right };
+  return {
+    left: sortToDisplayOrder(left, "left"),
+    right: sortToDisplayOrder(right, "right"),
+  };
 }
 
 /**
- * F8:交换后按 normalizedGroupOrders 给顺序有变化的项组一次批量 patch,经
- * applyOverrides 单次 IPC 原子应用(全部落盘 + 恰一次广播),取代逐项顺序
- * 调用 patchItemOverride(N 次 IPC 无原子性 —— 半途失败会留下不一致的中间态)。
+ * F8:display 序相邻交换后映射 outer-first + normalize,经 applyOverrides 单次
+ * IPC 原子应用(全部落盘 + 恰一次广播),取代逐项 patchItemOverride。
  */
 async function moveWithinGroup(
   rows: readonly StatusBarRow[],
   index: number,
-  direction: -1 | 1
+  direction: -1 | 1,
+  alignment: "left" | "right"
 ): Promise<void> {
-  const target = index + direction;
-  if (target < 0 || target >= rows.length) {
-    return;
-  }
-  const ids = rows.map((row) => row.id);
-  const moved = ids[index];
-  const other = ids[target];
-  if (moved === undefined || other === undefined) {
-    return;
-  }
-  ids[index] = other;
-  ids[target] = moved;
-  const orders = normalizedGroupOrders(ids);
+  const orderById = orderPatchesAfterDisplayMove(
+    rows,
+    index,
+    direction,
+    alignment
+  );
   const patches: TerminalStatusBarOverridePatches = {};
-  for (const row of rows) {
-    const nextOrder = orders[row.id];
-    if (nextOrder !== undefined && nextOrder !== row.order) {
-      patches[row.id] = { order: nextOrder };
-    }
+  for (const [id, order] of Object.entries(orderById)) {
+    patches[id] = { order };
   }
   if (Object.keys(patches).length === 0) {
     return;
@@ -202,7 +193,7 @@ function StatusBarRowView({
           if (index === 0) {
             return;
           }
-          moveWithinGroup(rows, index, -1).catch(reportFailure);
+          moveWithinGroup(rows, index, -1, row.alignment).catch(reportFailure);
         }}
         size="icon-sm"
         title={t("settings.statusBar.moveUp")}
@@ -218,7 +209,7 @@ function StatusBarRowView({
           if (index === rows.length - 1) {
             return;
           }
-          moveWithinGroup(rows, index, 1).catch(reportFailure);
+          moveWithinGroup(rows, index, 1, row.alignment).catch(reportFailure);
         }}
         size="icon-sm"
         title={t("settings.statusBar.moveDown")}

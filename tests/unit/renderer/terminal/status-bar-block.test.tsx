@@ -209,10 +209,10 @@ describe("TerminalStatusBarBlock", () => {
     render(<TerminalStatusBarBlock />);
     const pluginRow = screen.getByTestId("status-bar-row-pier.worktree.status");
     const upButton = within(pluginRow).getByRole("button", {
-      name: "Move up (outward)",
+      name: "Move up (further left)",
     });
     const downButton = within(pluginRow).getByRole("button", {
-      name: "Move down (inward)",
+      name: "Move down (further right)",
     });
     expect(upButton).toHaveAttribute("aria-disabled", "true");
     expect(upButton).not.toBeDisabled();
@@ -351,7 +351,7 @@ describe("TerminalStatusBarBlock", () => {
     expect(document.activeElement).not.toBe(document.body);
   });
 
-  it("上移把组内第二项与第一项交换,按 normalizedGroupOrders 以单次批量 IPC 写差异 order(F8)", async () => {
+  it("上移把组内第二项与第一项交换,按 display 序映射 outer-first 后单次批量 IPC 写差异 order(F8)", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
       // core.agent-status 恒声明在左组,两个插件项放到右组以隔离 core,
@@ -364,12 +364,11 @@ describe("TerminalStatusBarBlock", () => {
       ],
     });
     render(<TerminalStatusBarBlock />);
-    // 初始外侧优先序按 id 字典序:a.item(0), b.item(10)
-    // 直接定位 b.item 行的上移按钮(而非组内绝对下标),不受 core.agent-status
-    // 行(独立左组)插入顺序影响。
-    const bRow = screen.getByTestId("status-bar-row-b.item");
+    // 右组 outer-first: a(0), b(0) → id 字典序 a, b; display reverse: b, a
+    // 列表第二项 a.item 上移(更靠左)→ display a, b → outer b, a → a order 10
+    const aRow = screen.getByTestId("status-bar-row-a.item");
     fireEvent.click(
-      within(bRow).getByRole("button", { name: "Move up (outward)" })
+      within(aRow).getByRole("button", { name: "Move up (further left)" })
     );
 
     await waitFor(() => {
@@ -411,9 +410,10 @@ describe("TerminalStatusBarBlock", () => {
       ],
     });
     render(<TerminalStatusBarBlock />);
-    const bRow = screen.getByTestId("status-bar-row-b.item");
+    // display 序: b, a — 第二项 a 可上移触发 applyOverrides
+    const aRow = screen.getByTestId("status-bar-row-a.item");
     fireEvent.click(
-      within(bRow).getByRole("button", { name: "Move up (outward)" })
+      within(aRow).getByRole("button", { name: "Move up (further left)" })
     );
 
     await waitFor(() => {
@@ -490,23 +490,27 @@ describe("TerminalStatusBarBlock", () => {
       ],
     });
     render(<TerminalStatusBarBlock />);
-    // 直接按行(而非组内绝对下标)定位 a.item/b.item 的上下移按钮,不受
-    // core.agent-status 行(独立左组,自身也有一对上下移按钮)混入影响。
+    // 右组 display = outer-first reverse: b(左/上), a(右/下)
+    // 组首 b 上移禁用;组尾 a 下移禁用。
     const aRow = screen.getByTestId("status-bar-row-a.item");
     const bRow = screen.getByTestId("status-bar-row-b.item");
-    const aUp = within(aRow).getByRole("button", { name: "Move up (outward)" });
+    const aUp = within(aRow).getByRole("button", {
+      name: "Move up (further left)",
+    });
     const aDown = within(aRow).getByRole("button", {
-      name: "Move down (inward)",
+      name: "Move down (further right)",
     });
-    const bUp = within(bRow).getByRole("button", { name: "Move up (outward)" });
+    const bUp = within(bRow).getByRole("button", {
+      name: "Move up (further left)",
+    });
     const bDown = within(bRow).getByRole("button", {
-      name: "Move down (inward)",
+      name: "Move down (further right)",
     });
-    expect(aUp).toHaveAttribute("aria-disabled", "true");
-    expect(bDown).toHaveAttribute("aria-disabled", "true");
-    expect(aDown).toHaveAttribute("aria-disabled", "false");
-    expect(bUp).toHaveAttribute("aria-disabled", "false");
-    expect(aUp).not.toBeDisabled();
-    expect(bDown).not.toBeDisabled();
+    expect(bUp).toHaveAttribute("aria-disabled", "true");
+    expect(aDown).toHaveAttribute("aria-disabled", "true");
+    expect(bDown).toHaveAttribute("aria-disabled", "false");
+    expect(aUp).toHaveAttribute("aria-disabled", "false");
+    expect(bUp).not.toBeDisabled();
+    expect(aDown).not.toBeDisabled();
   });
 });

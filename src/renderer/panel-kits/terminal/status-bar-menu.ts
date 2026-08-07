@@ -8,6 +8,7 @@
  * manifest 声明的 terminalStatusItems(与设置页管理块一致,含当前未注册渲染
  * 的项);同 id 时 core 优先。core 标题经 i18next.t(titleKey)解析,plugin
  * 标题经 resolvePluginTerminalStatusItemDisplay i18n 解析。
+ * 列表序 = 底栏 DOM 从左到右(左组再右组,组内 sortToDisplayOrder),与设置页一致。
  */
 import type { MenuItem } from "@shared/contracts/menu.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
@@ -25,18 +26,24 @@ import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { useTerminalStatusBarPrefsStore } from "@/stores/terminal-status-bar-prefs.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { CORE_TERMINAL_STATUS_ITEMS } from "./core-terminal-status-items.ts";
-import { resolveEffectiveTerminalStatusItemConfig } from "./status-bar-merge.ts";
+import {
+  resolveEffectiveTerminalStatusItemConfig,
+  sortToDisplayOrder,
+} from "./status-bar-merge.ts";
 
 const MANAGE_ACTION_ID = "pier.terminalStatusBar.manage";
 const TOGGLE_PREFIX = "pier.terminalStatusBar.toggle:";
 
 export interface DeclaredItemRow {
+  alignment: "left" | "right";
   hidden: boolean;
-  itemId: string;
+  /** 与 sortToDisplayOrder / StatusBarRow 同字段名,便于共用排序。 */
+  id: string;
+  order: number;
   title: string;
 }
 
-/** 导出供单测直接覆盖(过滤 disabled 插件 / 按 title 排序 / hidden 生效值解析)。
+/** 导出供单测直接覆盖(过滤 disabled 插件 / display 序 / hidden 生效值解析)。
  *  Core 声明源与 plugin manifest 声明源合并,同 id 时 core 优先。 */
 export function declaredRows(
   plugins: readonly PluginRegistryEntry[],
@@ -44,20 +51,37 @@ export function declaredRows(
   coreItems: readonly CoreTerminalStatusItemDeclaration[]
 ): DeclaredItemRow[] {
   const locale = i18next.language || "en";
-  const rows: DeclaredItemRow[] = [];
+  const left: DeclaredItemRow[] = [];
+  const right: DeclaredItemRow[] = [];
   const seen = new Set<string>();
 
-  for (const item of coreItems) {
+  const pushRow = (
+    id: string,
+    declaredAlignment: "left" | "right" | undefined,
+    declaredOrder: number | undefined,
+    title: string
+  ) => {
     const config = resolveEffectiveTerminalStatusItemConfig(
-      { alignment: item.alignment, order: item.order },
-      prefs.items[item.id]
+      { alignment: declaredAlignment, order: declaredOrder },
+      prefs.items[id]
     );
-    rows.push({
+    const row: DeclaredItemRow = {
+      alignment: config.alignment,
       hidden: config.hidden,
-      itemId: item.id,
-      title: i18next.t(item.titleKey),
-    });
-    seen.add(item.id);
+      id,
+      order: config.order,
+      title,
+    };
+    if (config.alignment === "right") {
+      right.push(row);
+    } else {
+      left.push(row);
+    }
+    seen.add(id);
+  };
+
+  for (const item of coreItems) {
+    pushRow(item.id, item.alignment, item.order, i18next.t(item.titleKey));
   }
 
   for (const entry of plugins) {
@@ -70,22 +94,44 @@ export function declaredRows(
       if (seen.has(item.id)) {
         continue;
       }
-      const config = resolveEffectiveTerminalStatusItemConfig(
-        item,
-        prefs.items[item.id]
+      pushRow(
+        item.id,
+        item.alignment,
+        item.order,
+        resolvePluginTerminalStatusItemDisplay(entry.manifest, item, locale)
+          .title
       );
-      rows.push({
-        hidden: config.hidden,
-        itemId: item.id,
-        title: resolvePluginTerminalStatusItemDisplay(
-          entry.manifest,
-          item,
-          locale
-        ).title,
-      });
     }
   }
-  return rows.sort((a, b) => a.title.localeCompare(b.title));
+
+  return [
+    ...sortToDisplayOrder(left, "left"),
+    ...sortToDisplayOrder(right, "right"),
+  ];
+}
+
+/** 导出供单测覆盖:左右组 display 序 + 组间 separator。 */
+export function menuItemsFromDeclaredRows(
+  rows: readonly DeclaredItemRow[]
+): MenuItem[] {
+  const items: MenuItem[] = [];
+  let previousAlignment: "left" | "right" | undefined;
+  for (const row of rows) {
+    if (
+      previousAlignment !== undefined &&
+      previousAlignment !== row.alignment
+    ) {
+      items.push({ type: "separator" });
+    }
+    items.push({
+      checked: !row.hidden,
+      id: `${TOGGLE_PREFIX}${row.id}`,
+      label: row.title,
+      type: "checkbox",
+    });
+    previousAlignment = row.alignment;
+  }
+  return items;
 }
 
 export async function openTerminalStatusBarContextMenu(
@@ -102,14 +148,12 @@ export async function openTerminalStatusBarContextMenu(
     useTerminalStatusBarPrefsStore.getState().prefs,
     CORE_TERMINAL_STATUS_ITEMS
   );
+  const checkboxItems = menuItemsFromDeclaredRows(rows);
   const template: MenuItem[] = [
-    ...rows.map<MenuItem>((row) => ({
-      checked: !row.hidden,
-      id: `${TOGGLE_PREFIX}${row.itemId}`,
-      label: row.title,
-      type: "checkbox",
-    })),
-    ...(rows.length > 0 ? [{ type: "separator" } satisfies MenuItem] : []),
+    ...checkboxItems,
+    ...(checkboxItems.length > 0
+      ? [{ type: "separator" } satisfies MenuItem]
+      : []),
     {
       id: MANAGE_ACTION_ID,
       label: i18next.t("terminal.statusBar.manage"),
@@ -126,7 +170,7 @@ export async function openTerminalStatusBarContextMenu(
   }
   if (result.actionId.startsWith(TOGGLE_PREFIX)) {
     const itemId = result.actionId.slice(TOGGLE_PREFIX.length);
-    const row = rows.find((entry) => entry.itemId === itemId);
+    const row = rows.find((entry) => entry.id === itemId);
     if (!row) {
       return;
     }

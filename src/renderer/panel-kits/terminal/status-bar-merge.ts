@@ -1,14 +1,17 @@
 /**
  * 终端状态栏生效值合并纯函数 — 不触 registry 单例、不触 store,Vitest 单测主体。
  *
- * 语义(设计文档 §3.3,与 shared/contracts/plugin.ts 注释一致,勿改):
+ * 存储语义(设计文档 §3.3,与 shared/contracts/plugin.ts 注释一致,勿改):
  * - 生效值 = 用户覆盖 ?? manifest 声明 ?? 默认(alignment "left"、order 0、可见)。
  * - hidden 只有用户覆盖来源,默认 false;hidden 项在此层被过滤
  *   (isVisible 动态可见性在其后、组件层执行)。
  * - 同侧内 order 越小越靠外侧:left 组 order 小 → 靠左;right 组 order 小 → 靠右。
  *   同 order 按 id 字典序,字典序小者更靠外侧。
- * - 返回的 left/right 数组都是 DOM 渲染序(从左到右):left = 外侧优先升序原样;
- *   right = 外侧优先升序再 reverse(order 最小项落在 DOM 最右 = 右组最外侧)。
+ *
+ * 用户可见序(设置页 / 右键菜单 / 底栏必须一致):
+ * - 一律按底栏 DOM 从左到右展示(sortToDisplayOrder)。
+ * - left = 外侧优先升序原样;right = 外侧优先升序再 reverse。
+ * - 设置页上移 = 底栏更靠左;下移 = 更靠右(经 orderPatchesAfterDisplayMove 映射回 order)。
  */
 import type {
   PluginRegistryEntry,
@@ -98,6 +101,21 @@ export function declaredTerminalStatusItemsById(
   return byId;
 }
 
+/**
+ * 用户可见列表序 = 底栏 DOM 从左到右。
+ * left: outer-first; right: outer-first 再 reverse。
+ * merge / 设置页 / 右键菜单必须共用本函数,避免双路径漂移。
+ */
+export function sortToDisplayOrder<
+  T extends { readonly id: string; readonly order: number },
+>(items: readonly T[], alignment: "left" | "right"): T[] {
+  const sorted = [...items].sort(compareOuterFirst);
+  if (alignment === "right") {
+    sorted.reverse();
+  }
+  return sorted;
+}
+
 export function mergeTerminalStatusItems<T extends { readonly id: string }>(
   registered: readonly T[],
   declaredById: ReadonlyMap<string, DeclaredTerminalStatusItem>,
@@ -120,12 +138,9 @@ export function mergeTerminalStatusItems<T extends { readonly id: string }>(
       left.push(sortable);
     }
   }
-  left.sort(compareOuterFirst);
-  right.sort(compareOuterFirst);
-  right.reverse();
   return {
-    left: left.map((entry) => entry.item),
-    right: right.map((entry) => entry.item),
+    left: sortToDisplayOrder(left, "left").map((entry) => entry.item),
+    right: sortToDisplayOrder(right, "right").map((entry) => entry.item),
   };
 }
 
@@ -141,4 +156,44 @@ export function normalizedGroupOrders(
     orders[id] = index * 10;
   });
   return orders;
+}
+
+/**
+ * 在 display 序(上→下 = 底栏左→右)内相邻移动后,映射回 outer-first 并归一化 order。
+ * direction -1 = 更靠左(上移), +1 = 更靠右(下移)。
+ * 返回 order 有变化的 id → nextOrder(调用方包成 prefs patch)。
+ */
+export function orderPatchesAfterDisplayMove(
+  displayOrderedRows: readonly {
+    readonly id: string;
+    readonly order: number;
+  }[],
+  index: number,
+  direction: -1 | 1,
+  alignment: "left" | "right"
+): Record<string, number> {
+  const target = index + direction;
+  if (target < 0 || target >= displayOrderedRows.length) {
+    return {};
+  }
+  const displayIds = displayOrderedRows.map((row) => row.id);
+  const moved = displayIds[index];
+  const other = displayIds[target];
+  if (moved === undefined || other === undefined) {
+    return {};
+  }
+  displayIds[index] = other;
+  displayIds[target] = moved;
+
+  const outerFirstIds =
+    alignment === "right" ? [...displayIds].reverse() : displayIds;
+  const orders = normalizedGroupOrders(outerFirstIds);
+  const patches: Record<string, number> = {};
+  for (const row of displayOrderedRows) {
+    const nextOrder = orders[row.id];
+    if (nextOrder !== undefined && nextOrder !== row.order) {
+      patches[row.id] = nextOrder;
+    }
+  }
+  return patches;
 }
