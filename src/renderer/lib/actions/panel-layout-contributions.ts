@@ -1,3 +1,7 @@
+import {
+  getDiffCopyStickyText,
+  isDiffCopyStickySurface,
+} from "@pier/ui/diff-view/copy-sticky.ts";
 import i18next from "i18next";
 import {
   ArrowDown,
@@ -85,9 +89,13 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       handler: async (invocation) => {
         // 主路径：菜单项 clipboardText 已在 main click 时写入系统剪贴板。
         // 这里再写一次作为兜底（快捷键/命令面板等不经菜单的入口）。
+        const sticky = isDiffCopyStickySurface(invocation?.surface)
+          ? getDiffCopyStickyText()
+          : "";
         const text =
           selectedTextFromInvocation(invocation) ||
-          captureDomSelectionText(invocation?.sourcePanelId);
+          captureDomSelectionText(invocation?.sourcePanelId) ||
+          sticky;
         if (text.length === 0) {
           return;
         }
@@ -102,10 +110,15 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       },
       id: "pier.panel.copySelection",
       // 终端/文件编辑器自带复制，不在那些 surface 重复。
+      // build-entries 对 copy 用同源 copyText 覆盖 enabled。
       enabled: (invocation) => {
+        const sticky = isDiffCopyStickySurface(invocation?.surface)
+          ? getDiffCopyStickyText()
+          : "";
         const text =
           selectedTextFromInvocation(invocation) ||
-          captureDomSelectionText(invocation?.sourcePanelId);
+          captureDomSelectionText(invocation?.sourcePanelId) ||
+          sticky;
         return text.length > 0;
       },
       menuHidden: (invocation) =>

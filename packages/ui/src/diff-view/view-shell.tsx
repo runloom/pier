@@ -29,6 +29,9 @@ export function PierDiffViewShell(props: {
   readonly handleHeaderClickCapture: (
     event: MouseEvent<HTMLDivElement>
   ) => void;
+  readonly handleContextMenuCapture: (
+    event: MouseEvent<HTMLDivElement>
+  ) => void;
   readonly handlePointerDownCapture: (
     event: PointerEvent<HTMLDivElement>
   ) => void;
@@ -69,6 +72,7 @@ export function PierDiffViewShell(props: {
       className="h-full"
       data-testid="pierre-diff-root"
       onClickCapture={props.handleHeaderClickCapture}
+      onContextMenuCapture={props.handleContextMenuCapture}
       onKeyDownCapture={props.handleUserScrollKey}
       onPointerDownCapture={props.handlePointerDownCapture}
       onTouchMoveCapture={props.handleUserScrollIntent}

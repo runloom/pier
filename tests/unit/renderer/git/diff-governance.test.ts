@@ -127,16 +127,17 @@ describe("Git diff renderer governance", () => {
     );
     // diffStyle/overflow 由 PierDiffViewPresentation 驱动(split/unified、wrap),
     // 缺省仍是 split + scroll;其余配置保持锁定。
-    // 评论 gutter 入口由 onGutterReviewActivate 门控：host 提供则开启
-    // 原生 + 按钮能力（onGutterUtilityClick），缺省关闭避免空 "+"。
+    // 评论 gutter：host 提供 onGutterReviewActivate 时只开原生 + UI
+    // （enableGutterUtility）；点击不走 onGutterUtilityClick（会写蓝选），
+    // 改由 content-selection capture + activateGutterReview。
     // 有评论的行由 base review-thread annotation 常驻渲染评论卡，无折叠 badge 态；
     // gutter 入口恒为「在这一行新建评论」，不承担展开/收起。
     expect(codeViewOptions).toContain(
       "enableGutterUtility: onGutterReviewActivate !== undefined"
     );
-    expect(codeViewOptions).toContain(
-      "onGutterUtilityClick: handleGutterUtilityClick"
-    );
+    expect(codeViewOptions).not.toMatch(/onGutterUtilityClick\s*:\s*\w+/);
+    expect(codeOptionsSource).toContain("activateGutterReview");
+    expect(codeOptionsSource).toContain("clearSelectedLines");
     // F1-F6 把 LiveHunkAnnotation（memo 组件，内部调 renderPierHunkAnnotation）
     // 从 use-code-options 移到 hunk-actions；adapter 经 createElement 挂载。
     expect(adapterSource).toContain("LiveHunkAnnotation");
@@ -389,7 +390,14 @@ describe("Git diff renderer governance", () => {
     );
     expect(adapter).not.toMatch(/JSON\.stringify\(\s*codeViewItems\.map/u);
     expect(adapter).not.toContain("items={codeViewItems}");
-    expect(adapter).not.toMatch(/querySelector|shadowRoot/u);
+    // 全选字符视觉：use-handle 的 selectHostCodeText 可读 shadow 内 [data-code]；
+    // 其余 adapter 路径仍禁止 querySelector / shadowRoot。
+    expect(adapter).toContain("function selectHostCodeText");
+    const adapterSansSelectHost = adapter.replace(
+      /function selectHostCodeText\([\s\S]*?\n\}/u,
+      ""
+    );
+    expect(adapterSansSelectHost).not.toMatch(/querySelector|shadowRoot/u);
     // Changes 必须复用 PierFileTree：只检查 git renderer 自身源码，不含
     // transitive 拉入的 packages/ui 共享原语（Item/ItemGroup 用 <ul> 是合规
     // 列表原语，非自绘树；行内评论卡复用 Item 渲染评论列表）。PierFileTree

@@ -25,7 +25,6 @@ import {
   type PierDiffViewItem,
   toCodeViewItems,
 } from "./items.ts";
-import type { DiffPointerLineHit } from "./pointer-selection.ts";
 import { useDiffRenderWatchdog } from "./render-watchdog.ts";
 import { useDiffRenderWindowReport } from "./render-window.ts";
 import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
@@ -176,9 +175,8 @@ export function PierDiffView({
   /** 文件 host 标记 data-pier-file-host，供 CSS :hover 显示 hunk pills。 */
   const fileHoverCleanupsRef = useRef(new Map<string, () => void>());
   const fileHoverHostsRef = useRef(new Map<string, HTMLElement>());
-  // 菜单打开瞬间的 live 选区文本快照（非受控选区源；Pierre 内部才是真相）。
+  // 菜单打开瞬间的选区文本快照（浏览器字符选区优先；行选模型回退）。
   const selectedTextRef = useRef("");
-  const contentDragAnchorRef = useRef<DiffPointerLineHit | null>(null);
   const disableWorkerPool = useCallback(() => {
     setWorkerUnavailable(true);
   }, []);
@@ -273,29 +271,34 @@ export function PierDiffView({
     getRenderedItems,
     onRenderWindowChange
   );
-  const { options, renderAnnotation, style } = useDiffViewCodeOptions({
-    appearance,
-    codeViewRef,
-    collapseAllIntentRef,
-    diffStyle,
-    fileHoverCleanupsRef,
-    fileHoverHostsRef,
-    inputStore,
-    isUserCollapsed,
-    labels,
-    markRendered,
-    metrics,
-    ...(driftCommentLabels === undefined ? {} : { driftCommentLabels }),
-    ...(onGutterReviewActivate === undefined ? {} : { onGutterReviewActivate }),
-    ...(onHunkAction === undefined ? {} : { onHunkAction }),
-    overflow,
-    ...(reviewCommentsById === undefined ? {} : { reviewCommentsById }),
-    scheduleRenderWindowReport,
-    ...(inlineReviewHandlers === undefined ? {} : { inlineReviewHandlers }),
-    ...(inlineReviewLabels === undefined ? {} : { inlineReviewLabels }),
-    ...(inlineReviewThreadById === undefined ? {} : { inlineReviewThreadById }),
-    ...(locale === undefined ? {} : { locale }),
-  });
+  const { activateGutterReview, options, renderAnnotation, style } =
+    useDiffViewCodeOptions({
+      appearance,
+      codeViewRef,
+      collapseAllIntentRef,
+      diffStyle,
+      fileHoverCleanupsRef,
+      fileHoverHostsRef,
+      inputStore,
+      isUserCollapsed,
+      labels,
+      markRendered,
+      metrics,
+      ...(driftCommentLabels === undefined ? {} : { driftCommentLabels }),
+      ...(onGutterReviewActivate === undefined
+        ? {}
+        : { onGutterReviewActivate }),
+      ...(onHunkAction === undefined ? {} : { onHunkAction }),
+      overflow,
+      ...(reviewCommentsById === undefined ? {} : { reviewCommentsById }),
+      scheduleRenderWindowReport,
+      ...(inlineReviewHandlers === undefined ? {} : { inlineReviewHandlers }),
+      ...(inlineReviewLabels === undefined ? {} : { inlineReviewLabels }),
+      ...(inlineReviewThreadById === undefined
+        ? {}
+        : { inlineReviewThreadById }),
+      ...(locale === undefined ? {} : { locale }),
+    });
 
   useEffect(
     () => () => {
@@ -342,14 +345,17 @@ export function PierDiffView({
     renderItemIdentitiesRef,
     scheduleRenderWindowReport,
   });
-  const { handlePointerDownCapture } = useDiffViewContentSelection({
-    appliedItemsRef,
-    codeViewRef,
-    contentDragAnchorRef,
-    onPointerIntent: handleUserScrollIntent,
-    parsedItemsRef,
-    selectedTextRef,
-  });
+  const { handleContextMenuCapture, handlePointerDownCapture } =
+    useDiffViewContentSelection({
+      appliedItemsRef,
+      codeViewRef,
+      ...(onGutterReviewActivate === undefined
+        ? {}
+        : { onGutterLineActivate: activateGutterReview }),
+      onPointerIntent: handleUserScrollIntent,
+      parsedItemsRef,
+      selectedTextRef,
+    });
 
   // membership 拓扑变：apply 内 render(true) 同步 Pierre 行锚；禁止 item 级 scrollTo。
   useDiffViewItemApply({
@@ -472,6 +478,7 @@ export function PierDiffView({
       codeViewKey={codeViewKey}
       codeViewRef={codeViewRef}
       handleCodeViewScroll={handleCodeViewScroll}
+      handleContextMenuCapture={handleContextMenuCapture}
       handleHeaderClickCapture={handleHeaderClickCapture}
       handlePointerDownCapture={handlePointerDownCapture}
       handleUserScrollIntent={handleUserScrollIntent}

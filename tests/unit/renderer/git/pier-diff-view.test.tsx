@@ -1883,7 +1883,7 @@ describe("PierDiffView", () => {
     expect(onScroll).toHaveBeenCalledOnce();
   });
 
-  it("正文左键拖选会接管导航，右键不会", async () => {
+  it("正文左键 pointerdown 会接管导航，右键不会", async () => {
     const onScroll = vi.fn();
     const renderedElement = document.createElement("diffs-container");
     const line = document.createElement("span");

@@ -1,9 +1,10 @@
 /**
  * Diff 行内评论 gutter 文案 + 文件级 drift chip。
  *
- * gutter `+` 新建/计数入口走 `@pierre/diffs` 原生 `renderGutterUtility`
- * （由 `use-code-options.ts` 经 `gutterReviewThreadForLine` 查询 + host
- * `onGutterReviewActivate` 激活）；本模块不再自绘 gutter 按钮。保留：
+ * gutter `+` UI 走 `@pierre/diffs` 原生 `enableGutterUtility`；点击激活由
+ * `use-content-selection` capture 拦截（避免 Pierre gutterSelecting 写蓝选），
+ * 再经 `activateGutterReview` / `gutterReviewThreadForLine` 调 host
+ * `onGutterReviewActivate`。本模块不再自绘 gutter 按钮。保留：
  * ① `gutterReviewThreadForLine`（按 (side, lineNumber) 查询该行线程）；
  * ② `PierGutterReviewEvent` 事件类型；
  * ③ `DriftCommentChip`（文件 header metadata 行的 drift chip）。

@@ -9,16 +9,16 @@ export const CODE_VIEW_CUSTOM_CSS = `
 ${SCROLLBAR_SYSTEM_CSS}
 
   /*
-   * 产品选区只有 Pierre 行选（data-selected-line）。
-   * 禁止 pre/正文原生文字选区，避免截图里「行高亮 + 蓝选」两套并存。
-   * 行号栏官方已是 user-select:none；这里补正文与 pre。
+   * 正文：浏览器字符级选区（拖选文字蓝块，非整行 data-selected-line）。
+   * 行号栏 Pierre 官方已是 user-select:none + 整行选；gutter + 由
+   * use-content-selection 拦截，不写行选。
    */
   pre,
   [data-code],
   [data-line],
   [data-content] {
-    -webkit-user-select: none;
-    user-select: none;
+    -webkit-user-select: text;
+    user-select: text;
   }
 
   [data-diffs-header] {

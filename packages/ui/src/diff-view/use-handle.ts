@@ -1,6 +1,7 @@
 import { type Ref, useImperativeHandle, useMemo } from "react";
 import { scheduleCodeViewLayoutFlush } from "./code-view-runtime.ts";
 import { collapseAllTargetIds } from "./collapse-intent.ts";
+import { getDiffCopyStickyText, pinDiffCopyStickyText } from "./copy-sticky.ts";
 import { syncRenderedEstimateSkeletons } from "./estimate-skeleton.ts";
 import type { DiffViewHandleDeps } from "./handle-deps.ts";
 import type {
@@ -14,7 +15,10 @@ import {
   captureDiffViewTopAnchor,
 } from "./item-anchor.ts";
 import { reconcileDiffVirtualHeights } from "./layout-apply.ts";
-import { resolveDiffPointerLineHit } from "./pointer-selection.ts";
+import {
+  readBrowserSelectedText,
+  resolveDiffPointerLineHit,
+} from "./pointer-selection.ts";
 import { isRenderedItemVisible } from "./render-watchdog.ts";
 import {
   type DiffViewScrollOptions,
@@ -27,6 +31,30 @@ import {
 import { waitForStableViewportLayout } from "./viewport-layout.ts";
 
 const INSTANT_SCROLL_LAYOUT_PASSES = 2;
+
+/**
+ * 在 diffs-container host 的 shadow 内选中代码正文（字符级全选视觉）。
+ * 仅 adapter 层可读 shadow；失败时调用方仍靠模型文本粘性快照复制。
+ */
+function selectHostCodeText(host: Element): boolean {
+  const root = host.shadowRoot;
+  if (!root) {
+    return false;
+  }
+  const target = root.querySelector("[data-code]") ?? root.querySelector("pre");
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+  const selection = window.getSelection();
+  if (!selection) {
+    return false;
+  }
+  const range = document.createRange();
+  range.selectNodeContents(target);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return !selection.isCollapsed;
+}
 
 export type {
   DiffViewCollapsedItemState,
@@ -242,23 +270,34 @@ function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
       return resolveDiffPointerLineHit(event, codeViewRef.current);
     },
     getSelectedText(): string {
+      // Live 优先；粘性仅作菜单快照回退（折叠后短窗内有效，见 copy-sticky 生命周期）。
+      const fromBrowser = readBrowserSelectedText();
+      if (fromBrowser.length > 0) {
+        selectedTextRef.current = fromBrowser;
+        pinDiffCopyStickyText(fromBrowser);
+        return fromBrowser;
+      }
       const viewer = codeViewRef.current;
       const selection = viewer?.getSelectedLines();
-      if (!selection) {
-        // live 选区已空：清掉粘性快照，避免幽灵剪贴板串到其它面板。
-        selectedTextRef.current = "";
-        return "";
+      if (selection) {
+        const item =
+          viewer?.getItem(selection.id) ??
+          appliedItemsRef.current?.items.get(selection.id) ??
+          parsedItemsRef.current.get(selection.id)?.item;
+        const fromModel = selectedLinesTextFromCodeViewItem(
+          item,
+          selection.range
+        );
+        if (fromModel.length > 0) {
+          selectedTextRef.current = fromModel;
+          pinDiffCopyStickyText(fromModel);
+          return fromModel;
+        }
       }
-      const item =
-        viewer?.getItem(selection.id) ??
-        appliedItemsRef.current?.items.get(selection.id) ??
-        parsedItemsRef.current.get(selection.id)?.item;
-      const fromModel = selectedLinesTextFromCodeViewItem(
-        item,
-        selection.range
-      );
-      selectedTextRef.current = fromModel;
-      return fromModel;
+      // 无 live：回退粘性，并同步 ref ← global（双 store 一致）。
+      const sticky = getDiffCopyStickyText() || selectedTextRef.current;
+      selectedTextRef.current = sticky;
+      return sticky;
     },
 
     isItemVisible(id: string, cacheKey?: string): boolean {
@@ -395,12 +434,15 @@ function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
       if (!viewer) {
         return false;
       }
+      // 全选走字符级：模型文本钉粘性快照（复制可靠）+ DOM 选中代码正文（视觉对齐）。
+      // 不再 setSelectedLines 整行块选。
       const current = viewer.getSelectedLines();
       const candidateIds: string[] = [];
       if (current?.id) {
         candidateIds.push(current.id);
       }
-      for (const rendered of viewer.getInstance()?.getRenderedItems() ?? []) {
+      const renderedItems = viewer.getInstance()?.getRenderedItems() ?? [];
+      for (const rendered of renderedItems) {
         if (!candidateIds.includes(rendered.id)) {
           candidateIds.push(rendered.id);
         }
@@ -410,6 +452,11 @@ function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
           candidateIds.push(item.id);
         }
       }
+      const renderedById = new Map(
+        renderedItems.map(
+          (rendered) => [rendered.id, rendered.element] as const
+        )
+      );
       for (const id of candidateIds) {
         const item =
           viewer.getItem(id) ??
@@ -419,10 +466,16 @@ function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
         if (!(item && range)) {
           continue;
         }
-        viewer.setSelectedLines({ id, range });
         const text = selectedLinesTextFromCodeViewItem(item, range);
-        if (text.length > 0) {
-          selectedTextRef.current = text;
+        if (text.length === 0) {
+          continue;
+        }
+        selectedTextRef.current = text;
+        pinDiffCopyStickyText(text);
+        viewer.clearSelectedLines();
+        const host = renderedById.get(id);
+        if (host) {
+          selectHostCodeText(host);
         }
         return true;
       }
