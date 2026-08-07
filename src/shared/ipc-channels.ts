@@ -83,6 +83,11 @@ export const PIER = {
   TERMINAL_INPUT_ROUTING_DIAGNOSTIC: "pier://terminal:input-routing-diagnostic",
   /** renderer → main：任务 spawn / TaskRuns / RC 诊断，写入 diagnostics JSONL。 */
   TASK_RUNTIME_DIAGNOSTIC: "pier://task:runtime-diagnostic",
+  /**
+   * renderer → main：hang 排查 breadcrumb（关 panel / 磁盘冲突等）。
+   * main 落 diagnostics JSONL 并保留每窗环形缓冲，unresponsive 时一并带出。
+   */
+  RENDERER_HANG_BREADCRUMB: "pier://renderer:hang-breadcrumb",
 } as const;
 
 export const PIER_BROADCAST = {

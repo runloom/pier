@@ -38,7 +38,7 @@ import {
 import { createProjectSkillsLock, type ProjectSkillsLock } from "./lock.ts";
 import { createObservedRevisionProvider } from "./observed-revision.ts";
 import { createProjectSkillsPaths } from "./paths.ts";
-import { healPierBindingsBeforeSnapshot } from "./pier-bindings/snapshot-heal.ts";
+import { healCapabilityChannelsBeforeSnapshot } from "./pier-bindings/snapshot-heal.ts";
 import {
   createProjectSkillsPlanService,
   type ProjectSkillsPlan,
@@ -388,8 +388,10 @@ export function createProjectSkillsService(
 
     async snapshot(ref) {
       await sweepRecovery(ref);
-      return healPierBindingsBeforeSnapshot({
-        pierBindings: options.pierBindings,
+      // System skills (and pier binds) inject on snapshot so a new project
+      // gets pier-canvas without waiting for the first managed agent spawn.
+      return healCapabilityChannelsBeforeSnapshot({
+        heal: Boolean(options.systemSkills || options.pierBindings),
         projectRef: ref,
         repairService,
         buildSnapshot: () => buildProjectSnapshot(snapshotCtx, ref),

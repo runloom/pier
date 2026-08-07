@@ -1,5 +1,9 @@
 import type { DockviewApi } from "dockview-react";
 import { isWorkspaceBootstrapGateActive } from "@/components/workspace/bootstrap-gate.ts";
+import {
+  hangBreadcrumbNow,
+  noteHangBreadcrumb,
+} from "@/lib/diagnostics/hang-breadcrumb.ts";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { runPanelCloseGuards } from "@/lib/workspace/panel-close-guards.ts";
 import { activatePanelCloseSuccessor } from "@/lib/workspace/panel-close-successor.ts";
@@ -28,22 +32,50 @@ export async function closeActivePanel(
   if (!panel) {
     return false;
   }
+  const startedAt = hangBreadcrumbNow();
+  const componentId = panel.view.contentComponent;
+  noteHangBreadcrumb({
+    kind: "panel-close",
+    phase: "start",
+    commandId: "pier.panel.closeActive",
+    activePanelComponent: componentId,
+    panelId: panel.id,
+    detail: "closeActive",
+  });
   const allowed = await runPanelCloseGuards({
     closingPanelIds: [panel.id],
-    componentId: panel.view.contentComponent,
+    componentId,
     panelId: panel.id,
     params: panel.params,
   });
   if (!allowed) {
+    noteHangBreadcrumb({
+      kind: "panel-close",
+      phase: "end",
+      commandId: "pier.panel.closeActive",
+      activePanelComponent: componentId,
+      panelId: panel.id,
+      detail: "guard-rejected",
+      elapsedMs: Math.round(hangBreadcrumbNow() - startedAt),
+    });
     return false;
   }
   // 全局仅剩最后一个 panel → 关窗口 (而非删 panel 留空 group).
   if (api.totalPanels <= 1) {
-    if (panel.view.contentComponent === "terminal") {
+    if (componentId === "terminal") {
       closeNativeTerminalPanel(panel.id);
     }
     closeCurrentWindow().catch((err) => {
       console.error("[workspace] closeCurrentWindow failed:", err);
+    });
+    noteHangBreadcrumb({
+      kind: "panel-close",
+      phase: "end",
+      commandId: "pier.panel.closeActive",
+      activePanelComponent: componentId,
+      panelId: panel.id,
+      detail: "close-window-last-panel",
+      elapsedMs: Math.round(hangBreadcrumbNow() - startedAt),
     });
     return true;
   }
@@ -56,10 +88,19 @@ export async function closeActivePanel(
   });
   // 主动先发 native close IPC, 再 removePanel；不把 React unmount 当显式关闭.
   // 用 contentComponent 而非 params?.component: 前者是 dockview stable key.
-  if (panel.view.contentComponent === "terminal") {
+  if (componentId === "terminal") {
     closeNativeTerminalPanel(panel.id);
   }
   api.removePanel(panel);
+  noteHangBreadcrumb({
+    kind: "panel-close",
+    phase: "end",
+    commandId: "pier.panel.closeActive",
+    activePanelComponent: componentId,
+    panelId: panel.id,
+    detail: "removePanel",
+    elapsedMs: Math.round(hangBreadcrumbNow() - startedAt),
+  });
   return true;
 }
 
@@ -78,22 +119,51 @@ export async function closePanel(
   if (!panel) {
     return false;
   }
+  const startedAt = hangBreadcrumbNow();
+  const componentId = panel.view.contentComponent;
+  // Tab × / pier.panel.close — distinct from closeActive (⌘W).
+  noteHangBreadcrumb({
+    kind: "panel-close",
+    phase: "start",
+    commandId: "pier.panel.close",
+    activePanelComponent: componentId,
+    panelId: panel.id,
+    detail: "closePanel",
+  });
   const allowed = await runPanelCloseGuards({
     closingPanelIds: [panel.id],
-    componentId: panel.view.contentComponent,
+    componentId,
     panelId: panel.id,
     params: panel.params,
   });
   if (!allowed) {
+    noteHangBreadcrumb({
+      kind: "panel-close",
+      phase: "end",
+      commandId: "pier.panel.close",
+      activePanelComponent: componentId,
+      panelId: panel.id,
+      detail: "guard-rejected",
+      elapsedMs: Math.round(hangBreadcrumbNow() - startedAt),
+    });
     return false;
   }
   // 同 closeActivePanel: 全局仅剩最后一个 panel → 关窗口 (而非留空 group).
   if (api.totalPanels <= 1) {
-    if (panel.view.contentComponent === "terminal") {
+    if (componentId === "terminal") {
       closeNativeTerminalPanel(panel.id);
     }
     closeCurrentWindow().catch((err) => {
       console.error("[workspace] closeCurrentWindow failed:", err);
+    });
+    noteHangBreadcrumb({
+      kind: "panel-close",
+      phase: "end",
+      commandId: "pier.panel.close",
+      activePanelComponent: componentId,
+      panelId: panel.id,
+      detail: "close-window-last-panel",
+      elapsedMs: Math.round(hangBreadcrumbNow() - startedAt),
     });
     return true;
   }
@@ -104,10 +174,19 @@ export async function closePanel(
     groupPanels: panelsInSameGroup(api, panel.id),
     policy: useWorkspacePreferencesStore.getState().panelCloseFocusPolicy,
   });
-  if (panel.view.contentComponent === "terminal") {
+  if (componentId === "terminal") {
     closeNativeTerminalPanel(panel.id);
   }
   api.removePanel(panel);
+  noteHangBreadcrumb({
+    kind: "panel-close",
+    phase: "end",
+    commandId: "pier.panel.close",
+    activePanelComponent: componentId,
+    panelId: panel.id,
+    detail: "removePanel",
+    elapsedMs: Math.round(hangBreadcrumbNow() - startedAt),
+  });
   return true;
 }
 

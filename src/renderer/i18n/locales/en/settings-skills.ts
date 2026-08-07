@@ -135,6 +135,7 @@ export const settingsSkills = {
     projectDiscoveryImport: "Imported from project",
     gitDeclared: "Declared in the repository",
     pierHome: "Installed from Pier Home",
+    pierSystem: "Built into Pier",
   },
   effectDiscoverable: "Discoverable",
   effectNotProjected: "Not enabled",

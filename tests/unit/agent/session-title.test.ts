@@ -189,14 +189,32 @@ describe("normalizeAgentSessionTitle", () => {
     expect(title?.endsWith("…")).toBe(true);
   });
 
-  it("accepts 120 emoji code points and truncates only the 121st", () => {
-    const exact = normalizeAgentSessionTitle("😀".repeat(120));
-    expect(Array.from(exact ?? "")).toHaveLength(120);
-    expect(exact).toBe("😀".repeat(120));
+  it("accepts MAX emoji code points and truncates only past the safety cap", () => {
+    const exact = normalizeAgentSessionTitle(
+      "😀".repeat(MAX_AGENT_SESSION_TITLE_LENGTH)
+    );
+    expect(Array.from(exact ?? "")).toHaveLength(
+      MAX_AGENT_SESSION_TITLE_LENGTH
+    );
+    expect(exact).toBe("😀".repeat(MAX_AGENT_SESSION_TITLE_LENGTH));
 
-    const capped = normalizeAgentSessionTitle("😀".repeat(121));
-    expect(Array.from(capped ?? "")).toHaveLength(120);
+    const capped = normalizeAgentSessionTitle(
+      "😀".repeat(MAX_AGENT_SESSION_TITLE_LENGTH + 1)
+    );
+    expect(Array.from(capped ?? "")).toHaveLength(
+      MAX_AGENT_SESSION_TITLE_LENGTH
+    );
+    expect(capped?.endsWith("…")).toBe(true);
     expect(() => encodeURIComponent(capped ?? "")).not.toThrow();
+  });
+
+  it("keeps typical session titles intact (no premature ellipsis under the cap)", () => {
+    const title =
+      "pier-canvas skill scope as pier capability for agent authoring - grok";
+    expect(Array.from(title).length).toBeLessThan(
+      MAX_AGENT_SESSION_TITLE_LENGTH
+    );
+    expect(normalizeAgentSessionTitle(title)).toBe(title);
   });
 });
 

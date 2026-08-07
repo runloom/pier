@@ -1,4 +1,7 @@
-/** 写入前规范化：trim、拒换行、硬上限（超长带省略号）。 */
+/**
+ * 写入前规范化：trim、拒换行、安全上限（仅超界时硬裁，带省略号）。
+ * tab / 顶栏视觉省略由 CSS；tooltip 与 resolveLong 用同一完整存储串。
+ */
 
 import {
   MAX_AGENT_SESSION_TITLE_LENGTH,
@@ -9,13 +12,13 @@ import {
 
 const TITLE_SOFT_BREAK = /[\s，。、；：,.!?;:：]/u;
 
-function truncateAgentSessionTitle(text: string): string {
+function truncateWithSoftBreak(text: string, maxCodePoints: number): string {
   const points = Array.from(text);
-  if (points.length <= MAX_AGENT_SESSION_TITLE_LENGTH) {
+  if (points.length <= maxCodePoints) {
     return text;
   }
   const ellipsisLength = Array.from(TITLE_ELLIPSIS).length;
-  const budget = MAX_AGENT_SESSION_TITLE_LENGTH - ellipsisLength;
+  const budget = maxCodePoints - ellipsisLength;
   let cutPoints = points.slice(0, budget);
   const minKeep = Math.max(0, budget - TITLE_SOFT_BREAK_LOOKBACK);
   for (let index = cutPoints.length - 1; index >= minKeep; index -= 1) {
@@ -32,7 +35,10 @@ function truncateAgentSessionTitle(text: string): string {
   return `${cut}${TITLE_ELLIPSIS}`;
 }
 
-/** 不合法（空 / 含换行）返回 null；超长带省略号裁到硬上限。 */
+/**
+ * 不合法（空 / 含换行）返回 null。
+ * 仅超过安全上限时硬裁；正常长度原样保留，供 tooltip / 顶栏展示全文。
+ */
 export function normalizeAgentSessionTitle(
   raw: string | null | undefined
 ): string | null {
@@ -41,7 +47,7 @@ export function normalizeAgentSessionTitle(
     return null;
   }
   if (Array.from(trimmed).length > MAX_AGENT_SESSION_TITLE_LENGTH) {
-    return truncateAgentSessionTitle(trimmed);
+    return truncateWithSoftBreak(trimmed, MAX_AGENT_SESSION_TITLE_LENGTH);
   }
   return trimmed;
 }
@@ -61,7 +67,8 @@ export function truncateTerminalTitleForTooltip(
   if (points.length <= MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH) {
     return collapsed;
   }
-  return `${points
-    .slice(0, MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH - 1)
-    .join("")}${TITLE_ELLIPSIS}`;
+  return truncateWithSoftBreak(
+    collapsed,
+    MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH
+  );
 }

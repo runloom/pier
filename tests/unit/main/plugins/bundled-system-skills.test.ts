@@ -1,6 +1,8 @@
 // @vitest-environment node
+import { execFile } from "node:child_process";
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import {
   bundledSystemSkillContributions,
   PIER_CANVAS_SYSTEM_SKILL_ID,
@@ -12,6 +14,7 @@ import {
 import { assertSystemSkillContribution } from "@main/services/project-skills/system-skills/index.ts";
 import { describe, expect, it } from "vitest";
 
+const execFileAsync = promisify(execFile);
 const resourcesRoot = join(process.cwd(), "resources");
 
 describe("bundled system skills", () => {
@@ -74,5 +77,30 @@ describe("bundled system skills", () => {
         "SKILL.md"
       )
     );
+  });
+
+  it("keeps project library projections out of git (single source = resources)", async () => {
+    // System skills publish into `.pier/skills/library/pier-*` at runtime;
+    // that tree must not be a second committed source of truth.
+    const librarySkillMd = join(
+      ".pier",
+      "skills",
+      "library",
+      PIER_CANVAS_SYSTEM_SKILL_ID,
+      "SKILL.md"
+    );
+    const { stdout: ignored } = await execFileAsync(
+      "git",
+      ["check-ignore", "-v", "--", librarySkillMd],
+      { cwd: process.cwd() }
+    );
+    expect(ignored).toMatch(/pier-\*/);
+
+    const { stdout: tracked } = await execFileAsync(
+      "git",
+      ["ls-files", "--", `.pier/skills/library/${PIER_CANVAS_SYSTEM_SKILL_ID}`],
+      { cwd: process.cwd() }
+    );
+    expect(tracked.trim()).toBe("");
   });
 });

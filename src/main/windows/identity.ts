@@ -1,5 +1,6 @@
 import type { WindowContext } from "@shared/contracts/window.ts";
 import type { WebContents } from "electron";
+import { clearHangBreadcrumbsForWindow } from "../ipc/renderer-hang-breadcrumb-store.ts";
 import type { AppWindow } from "./app-window.ts";
 
 const appWindowIds = new WeakMap<AppWindow, string>();
@@ -27,6 +28,8 @@ export function forgetAppWindow(window: AppWindow): void {
   if (electronId !== undefined) {
     appWindowsByElectronId.delete(electronId);
     appWindowElectronIds.delete(window);
+    // Hang trail ring is keyed by BrowserWindow.id — drop with the window.
+    clearHangBreadcrumbsForWindow(electronId);
   }
 }
 
