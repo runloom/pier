@@ -50,10 +50,19 @@ export interface NodeGraphEdge {
 export interface NodeGraphProps {
   "aria-label": string;
   className?: string;
+  /** aria-label / title for collapse control and header close. */
+  collapseLabel?: string;
   direction?: NodeGraphDirection;
   edges: readonly NodeGraphEdge[];
   editable?: boolean;
   emptyText?: string;
+  /**
+   * Immersive expand control (not browser fullscreen). Default true.
+   * Portal overlay fills the window under the app title bar.
+   */
+  expandable?: boolean;
+  /** aria-label / title for expand control. */
+  expandLabel?: string;
   highlightedIds?: ReadonlySet<string>;
   nodes: readonly NodeGraphNode[];
   onConnectNodes?: (connection: { source: string; target: string }) => void;
