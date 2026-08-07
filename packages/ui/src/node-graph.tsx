@@ -3,8 +3,8 @@
 import {
   Background,
   BackgroundVariant,
+  ControlButton,
   Controls,
-  type Edge,
   Handle,
   type Node,
   type NodeProps,
@@ -13,41 +13,51 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from "@xyflow/react";
-import ELK from "elkjs/lib/elk.bundled.js";
-import { useEffect, useMemo, useState } from "react";
+import { Maximize2Icon, Minimize2Icon, XIcon } from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Button } from "./button.tsx";
+import {
+  FitViewOnViewportChange,
+  useNodeGraphExpandedChrome,
+} from "./node-graph-expand.ts";
+import {
+  FIT_VIEW_OPTIONS,
+  type GraphNodeData,
+  initialFlowEdges,
+  initialFlowNodes,
+  layoutNodes,
+  MIN_ZOOM,
+  type NodeGraphDirection,
+  type NodeGraphEdge,
+  type NodeGraphNode,
+  TONE_CLASS,
+} from "./node-graph-model.ts";
 import { cn } from "./utils.ts";
 
-export type NodeGraphDirection = "left-to-right" | "top-to-bottom";
-export type NodeGraphTone =
-  | "danger"
-  | "done"
-  | "info"
-  | "muted"
-  | "success"
-  | "warning";
-
-export interface NodeGraphNode {
-  id: string;
-  meta?: string;
-  position?: { x: number; y: number };
-  title: string;
-  tone?: NodeGraphTone;
-}
-
-export interface NodeGraphEdge {
-  id?: string;
-  label?: string;
-  source: string;
-  target: string;
-}
+export type {
+  NodeGraphDirection,
+  NodeGraphEdge,
+  NodeGraphNode,
+  NodeGraphTone,
+} from "./node-graph-model.ts";
 
 export interface NodeGraphProps {
   "aria-label": string;
   className?: string | undefined;
+  /** aria-label / title for collapse control and header close. */
+  collapseLabel?: string | undefined;
   direction?: NodeGraphDirection | undefined;
   edges: readonly NodeGraphEdge[];
   editable?: boolean | undefined;
   emptyText?: string | undefined;
+  /**
+   * Immersive expand control (not browser fullscreen). Default true.
+   * Portal overlay fills the window under the app title bar.
+   */
+  expandable?: boolean | undefined;
+  /** aria-label / title for expand control. */
+  expandLabel?: string | undefined;
   highlightedIds?: ReadonlySet<string> | undefined;
   nodes: readonly NodeGraphNode[];
   onConnectNodes?:
@@ -59,25 +69,6 @@ export interface NodeGraphProps {
   onSelectNode?: ((id: string) => void) | undefined;
   selectedId?: string | undefined;
 }
-
-type GraphNodeData = Record<string, unknown> &
-  NodeGraphNode & {
-    dimmed: boolean;
-  };
-
-const NODE_WIDTH = 164;
-const NODE_HEIGHT = 68;
-const elk = new ELK();
-const FIT_VIEW_OPTIONS = { maxZoom: 1, padding: 0.18 };
-
-const TONE_CLASS: Record<NodeGraphTone, string> = {
-  danger: "bg-status-danger-fg",
-  done: "bg-status-done-fg",
-  info: "bg-status-info-fg",
-  muted: "bg-muted-foreground",
-  success: "bg-status-success-fg",
-  warning: "bg-status-warning-fg",
-};
 
 function GraphNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
   const tone = data.tone ?? "muted";
@@ -116,77 +107,16 @@ function GraphNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
 
 const NODE_TYPES = { pier: GraphNode };
 
-function initialFlowNodes(
-  nodes: readonly NodeGraphNode[],
-  /** 有 onSelectNode / editable 时节点进 Tab，便于键盘选中 */
-  keyboardSelectable: boolean
-): Node<GraphNodeData>[] {
-  return nodes.map((node) => ({
-    ariaLabel: `${node.id} ${node.title}`,
-    data: { ...node, dimmed: false },
-    draggable: false,
-    focusable: keyboardSelectable,
-    id: node.id,
-    position: node.position ?? { x: 0, y: 0 },
-    selectable: true,
-    type: "pier",
-  }));
-}
-
-function initialFlowEdges(edges: readonly NodeGraphEdge[]): Edge[] {
-  return edges.map((edge, index) => ({
-    animated: false,
-    id: edge.id ?? `${edge.source}-${edge.target}-${index}`,
-    label: edge.label,
-    markerEnd: { type: "arrowclosed" },
-    source: edge.source,
-    target: edge.target,
-    type: "smoothstep",
-  }));
-}
-
-async function layoutNodes(
-  nodes: readonly NodeGraphNode[],
-  edges: readonly NodeGraphEdge[],
-  direction: NodeGraphDirection
-): Promise<Map<string, { x: number; y: number }>> {
-  const result = await elk.layout({
-    children: nodes.map((node) => ({
-      height: NODE_HEIGHT,
-      id: node.id,
-      width: NODE_WIDTH,
-    })),
-    edges: edges.map((edge, index) => ({
-      id: edge.id ?? `${edge.source}-${edge.target}-${index}`,
-      sources: [edge.source],
-      targets: [edge.target],
-    })),
-    id: "root",
-    layoutOptions: {
-      "elk.algorithm": "layered",
-      "elk.direction": direction === "left-to-right" ? "RIGHT" : "DOWN",
-      "elk.edgeRouting": "ORTHOGONAL",
-      "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "72",
-      "elk.padding": "[top=24,left=24,bottom=24,right=24]",
-      "elk.spacing.nodeNode": "28",
-    },
-  });
-  return new Map(
-    (result.children ?? []).map((node) => [
-      node.id,
-      { x: node.x ?? 0, y: node.y ?? 0 },
-    ])
-  );
-}
-
 function NodeGraphInner({
   "aria-label": ariaLabel,
   className,
+  collapseLabel = "Exit expanded graph",
   direction = "left-to-right",
   edges,
   editable = false,
   emptyText = "No graph nodes to display.",
+  expandable = true,
+  expandLabel = "Expand graph",
   highlightedIds,
   nodes,
   onConnectNodes,
@@ -194,19 +124,42 @@ function NodeGraphInner({
   onSelectNode,
   selectedId,
 }: NodeGraphProps) {
-  // 纯展示：不进 Tab。有选择/编辑合约时节点可键盘聚焦（产品 ring，非 UA 橙环）。
   const keyboardSelectable = editable || onSelectNode !== undefined;
+  const [expanded, setExpanded] = useState(false);
   const [flowNodes, setFlowNodes] = useState(() =>
     initialFlowNodes(nodes, keyboardSelectable)
   );
   const flowEdges = useMemo(() => initialFlowEdges(edges), [edges]);
   const { fitView } = useReactFlow();
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
+  const showExpanded = expanded && nodes.length > 0;
+
+  useEffect(() => {
+    if (nodes.length === 0 && expanded) {
+      setExpanded(false);
+    }
+  }, [expanded, nodes.length]);
+
+  useNodeGraphExpandedChrome({
+    dialogRef,
+    restoreFocusRef,
+    setExpanded,
+    showExpanded,
+  });
 
   useEffect(() => {
     let active = true;
     let frame: number | undefined;
     const next = initialFlowNodes(nodes, keyboardSelectable);
     setFlowNodes(next);
+    if (nodes.length === 0) {
+      return () => {
+        active = false;
+      };
+    }
     layoutNodes(nodes, edges, direction).then((positions) => {
       if (!active) {
         return;
@@ -268,18 +221,19 @@ function NodeGraphInner({
     );
   }
 
-  return (
-    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: role 在 application|img 间切换，二者均支持 aria-label
+  const expandControlLabel = showExpanded ? collapseLabel : expandLabel;
+  const surface = (
     <div
-      aria-label={ariaLabel}
       className={cn(
-        "relative h-80 min-w-0 overflow-hidden rounded-lg border bg-muted/20",
-        // xyflow 聚焦节点时用产品 ring，避免系统 UA outline
+        "relative min-w-0 overflow-hidden bg-muted/20",
         "[&_.react-flow__node:focus-visible]:ring-2 [&_.react-flow__node:focus-visible]:ring-ring/40 [&_.react-flow__node:focus]:outline-none",
-        className
+        showExpanded
+          ? "h-full min-h-0 flex-1 rounded-lg border"
+          : cn("h-80 rounded-lg border", className)
       )}
-      data-slot="node-graph"
-      role={keyboardSelectable ? "application" : "img"}
+      data-expanded={showExpanded ? "true" : "false"}
+      data-slot={showExpanded ? "node-graph-expanded-surface" : "node-graph"}
+      ref={surfaceRef}
     >
       <ReactFlow
         aria-label={ariaLabel}
@@ -290,7 +244,7 @@ function NodeGraphInner({
         elementsSelectable
         fitView
         fitViewOptions={FIT_VIEW_OPTIONS}
-        minZoom={0.35}
+        minZoom={MIN_ZOOM}
         nodes={flowNodes}
         nodesConnectable={editable}
         nodesDraggable={editable}
@@ -318,9 +272,110 @@ function NodeGraphInner({
           size={1}
           variant={BackgroundVariant.Lines}
         />
-        <Controls position="bottom-right" showInteractive={false} />
+        <Controls
+          fitViewOptions={FIT_VIEW_OPTIONS}
+          position="bottom-right"
+          showInteractive={false}
+        >
+          {expandable ? (
+            <ControlButton
+              aria-label={expandControlLabel}
+              className="react-flow__controls-expand"
+              onClick={() => {
+                if (!showExpanded) {
+                  restoreFocusRef.current =
+                    document.activeElement instanceof HTMLElement
+                      ? document.activeElement
+                      : null;
+                }
+                setExpanded((value) => !value);
+              }}
+              title={expandControlLabel}
+              type="button"
+            >
+              {showExpanded ? (
+                <Minimize2Icon aria-hidden="true" />
+              ) : (
+                <Maximize2Icon aria-hidden="true" />
+              )}
+            </ControlButton>
+          ) : null}
+        </Controls>
+        <FitViewOnViewportChange
+          containerRef={surfaceRef}
+          token={showExpanded ? "expanded" : "inline"}
+        />
       </ReactFlow>
     </div>
+  );
+
+  if (!showExpanded) {
+    if (keyboardSelectable) {
+      return (
+        <div
+          aria-label={ariaLabel}
+          className="min-w-0"
+          data-slot="node-graph-root"
+          role="application"
+        >
+          {surface}
+        </div>
+      );
+    }
+    return (
+      <div
+        aria-label={ariaLabel}
+        className="min-w-0"
+        data-slot="node-graph-root"
+        role="img"
+      >
+        {surface}
+      </div>
+    );
+  }
+
+  const overlay =
+    typeof document === "undefined"
+      ? null
+      : createPortal(
+          <div
+            aria-labelledby={titleId}
+            aria-modal="true"
+            className="app-no-drag fixed top-[var(--app-titlebar-height,0px)] right-0 bottom-0 left-0 z-50 flex flex-col gap-3 bg-background/95 p-4 backdrop-blur-sm"
+            data-slot="node-graph-expanded"
+            ref={dialogRef}
+            role="dialog"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3">
+              <span className="truncate font-medium text-sm" id={titleId}>
+                {ariaLabel}
+              </span>
+              <Button
+                aria-label={collapseLabel}
+                autoFocus
+                data-node-graph-close=""
+                onClick={() => setExpanded(false)}
+                size="icon"
+                type="button"
+                variant="outline"
+              >
+                <XIcon data-icon="inline-start" />
+              </Button>
+            </div>
+            {surface}
+          </div>,
+          document.body
+        );
+
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        className={cn("h-80 min-w-0 rounded-lg border bg-muted/20", className)}
+        data-slot="node-graph-placeholder"
+      />
+      {overlay}
+    </>
   );
 }
 

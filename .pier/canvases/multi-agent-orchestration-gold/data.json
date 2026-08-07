@@ -1,0 +1,784 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-07T14:00:00.000Z",
+  "source": "feature-comment-support gold scheme v2 — Codex review applied (有条件采纳 → 方案收敛)",
+  "data": {
+    "thesis": {
+      "title": "Pier 是可被编排的本地运行时，不是编排器",
+      "bullets": [
+        "外部脚本 / 上层协调 agent 组合工作流；Pier 不持久化 task/DAG/mailbox/gate",
+        "两层原语：agents（FA 语义状态）+ terminal（screen/read/send/wait）",
+        "寻址：panelId + 可选 --window；写操作永不猜当前终端；人类摘要与 JSON 均把 window 当一等信息",
+        "输出总政策：会话/观察型默认一行人类摘要；动作型成功静默；--json 仅 envelope 上 stdout",
+        "编排永远在外部；P1 才考虑 provider 协议级 prompt/cancel"
+      ]
+    },
+    "competitors": [
+      {
+        "id": "orca",
+        "name": "Orca",
+        "positioning": "桌面运行时 + 内建编排服务",
+        "layers": [
+          {
+            "name": "terminal 原语",
+            "detail": "list/show/read/send/wait/create/close；寻址用 runtime-issued terminal handle；wait 条件 exit | tui-idle"
+          },
+          {
+            "name": "orchestration 服务",
+            "detail": "消息（send/check/reply/inbox/ask）、task DAG（create/list/update）、dispatch、coordinator run、decision gate；runtime 全局状态 + SQLite 级持久"
+          },
+          {
+            "name": "skill 边界",
+            "detail": "orchestration skill vs orca-cli：完整所有权移交走 terminal/worktree，不注入 worker_done 义务"
+          }
+        ],
+        "take": "证明「终端原语」与「编排层」应分层。tui-idle 依赖屏幕/标题启发式——Pier 有 hook 证据，不应倒退。完整 mailbox/task/gate 超出 Pier 产品定位。"
+      },
+      {
+        "id": "cmux",
+        "name": "cmux",
+        "positioning": "libghostty 原生终端工作台 + 表面控制 CLI",
+        "layers": [
+          {
+            "name": "surface 控制",
+            "detail": "Unix socket 单行 JSON；read-screen --scrollback --lines；send / send-key；window/workspace/pane/surface 树寻址"
+          },
+          {
+            "name": "agent hooks",
+            "detail": "按 provider 安装 hooks；会话恢复、生命周期 running/idle/needsInput、Feed 审批；无统一 agents 语义 CLI"
+          },
+          {
+            "name": "teams 入口",
+            "detail": "claude-teams / codex-teams 等启动集成；编排靠外部/provider 团队能力，不在 cmux 内建 DAG"
+          }
+        ],
+        "take": "同架构先例：读屏+按键注入是 surface 能力。Pier 在此之上多一层 agents 语义投影，但读/写内容仍属 terminal。"
+      },
+      {
+        "id": "omnigent",
+        "name": "Omnigent（polly）",
+        "positioning": "server + runner + harness 的会话平台；编排是 agent 本体",
+        "layers": [
+          {
+            "name": "拓扑",
+            "detail": "server 持会话状态；runner/harness 在本机跑终端/MCP；REPL attach 不启动；run/resume/attach 分离"
+          },
+          {
+            "name": "polly",
+            "detail": "YAML 编排 agent：spawn 子会话、sys_session_send / sys_read_inbox、每任务独立 worktree + 各自开 PR；brain 不写代码"
+          },
+          {
+            "name": "native harness",
+            "detail": "claude-native / codex-native / pi 等：协议桥 + hook，不是解析 TUI"
+          }
+        ],
+        "take": "编排状态在会话平台内（inbox、conversation_id、agent YAML）。Pier 不复制 server/runner/spawn；外部 agent 可拿 Pier CLI 当运行时。"
+      }
+    ],
+    "drift": {
+      "baseline": "c085fc01 feat: add initial CLI multi-agent control plane",
+      "worktree": "/Users/xyz/ABC/pier/.worktrees/feature-agent-session-collaboration",
+      "remediationStatus": {
+        "task1": "done — shared CLI schema + parser 收紧",
+        "task2": "done — Agent Runtime Index + agents wait 变更序号",
+        "task3": "blocked — TerminalRuntimeIndex / panel-transfer / native lifecycle 第 12 轮",
+        "task4to9": "pending"
+      },
+      "items": [
+        {
+          "id": "D1",
+          "severity": "critical",
+          "title": "terminal read 用 main 侧 overlap 猜增量",
+          "evidence": "src/main/services/terminal-control/output-ledger.ts：整屏 suffix/prefix 重叠",
+          "gold": "Ghostty 核心 primary 已提交行边界事件 + HMAC cursor（研究文档 0107）"
+        },
+        {
+          "id": "D2",
+          "severity": "critical",
+          "title": "screen 非有界 viewport 快照",
+          "evidence": "scrollback 路径仍可走向完整 SCREEN 再截尾",
+          "gold": "从 viewport top 向前最多 N+1 行探测；rows/columns 恒为 active viewport"
+        },
+        {
+          "id": "D3",
+          "severity": "high",
+          "title": "退出态与 agent 会话耦合风险",
+          "evidence": "修复中引入 TerminalRuntimeIndex，但 task3 未冻结",
+          "gold": "childExited(runtimeKey) 唯一退出权威；commandFinished 不改 terminal state"
+        },
+        {
+          "id": "D4",
+          "severity": "high",
+          "title": "实现体量膨胀到 panel-transfer saga",
+          "evidence": "terminal-runtime-index 20+ 文件；progress 记 task3 第 12 轮仍 FAIL",
+          "gold": "运行时索引只服务 CLI 原语；transfer 正确性不得阻塞 M1/M2 验收路径的可交付切片"
+        },
+        {
+          "id": "D5",
+          "severity": "medium",
+          "title": "测试曾用假成功冒充闭环",
+          "evidence": "remediation design §2.5：E2E 不读 stdin、mock native",
+          "gold": "每里程碑必须有真实 native / e2e:auto 证据"
+        }
+      ]
+    },
+    "cliInventory": {
+      "existingReuse": [
+        "pier open / status / windows / panels / worktrees / tasks / plugins / preferences",
+        "pier terminal open | profiles *"
+      ],
+      "p0Agents": [
+        {
+          "cmd": "pier agents catalog [--json]",
+          "cap": "panel:read",
+          "role": "可启动目录 detect∪preferences"
+        },
+        {
+          "cmd": "pier agents list [--window] [--json]",
+          "cap": "panel:read",
+          "role": "投影 Agent Runtime Index + ts"
+        },
+        {
+          "cmd": "pier agents status <panelId> [--window] [--json]",
+          "cap": "panel:read",
+          "role": "单条投影；status 五态或 null"
+        },
+        {
+          "cmd": "pier agents wait <panelId> --until ready|waiting|error|gone[,…] [--after] [--allow-current] [--timeout-ms]",
+          "cap": "panel:read",
+          "role": "只接受新证据 / 精确接链；长轮询"
+        },
+        {
+          "cmd": "pier agents focus <panelId> [--json]",
+          "cap": "panel:control",
+          "role": "跨窗聚焦；gone → agent_gone"
+        },
+        {
+          "cmd": "pier agents start --agent <id> [--cwd|--worktree] [--prompt] [--window] [--split] [--no-focus]",
+          "cap": "workspace:open + terminal:control",
+          "role": "catalog launch + 可选 argv prompt；返回可寻址 entry"
+        }
+      ],
+      "p0Terminal": [
+        {
+          "cmd": "pier terminal list|show <panelId>",
+          "cap": "terminal:read",
+          "role": "running|exited、exitCode、outputCursor 基线"
+        },
+        {
+          "cmd": "pier terminal screen <panelId> [--scrollback-lines N]",
+          "cap": "terminal:read",
+          "role": "有界渲染网格纯文本 + cursor"
+        },
+        {
+          "cmd": "pier terminal read <panelId> [--cursor] [--limit-lines]",
+          "cap": "terminal:read",
+          "role": "已提交行事件流 + nextCursor"
+        },
+        {
+          "cmd": "pier terminal send <panelId> --text … [--submit]",
+          "cap": "terminal:control",
+          "role": "paste 队列；submit=settle+Return"
+        },
+        {
+          "cmd": "pier terminal key <panelId> --key enter|escape|… [--ctrl|--alt|--shift|--cmd]",
+          "cap": "terminal:control",
+          "role": "控制键；普通字符走 send"
+        },
+        {
+          "cmd": "pier terminal wait --until output|quiet|exit",
+          "cap": "terminal:read",
+          "role": "新行 / 静默 / child 退出；quiet≠完成"
+        },
+        {
+          "cmd": "pier terminal interrupt|close <panelId>",
+          "cap": "terminal:control",
+          "role": "Ctrl-C 按键；面板关闭生命周期"
+        }
+      ],
+      "p0Not": [
+        "agents stop/send/read/transcript",
+        "terminal focus（用 panels focus / agents focus）",
+        "opaque terminalHandle / agentHandle",
+        "内建 orchestration task/mailbox/gate",
+        "PTY 字节流 tap / 输出落盘"
+      ],
+      "p1Optional": [
+        "agents capabilities|prompt|cancel",
+        "agents permissions list|respond",
+        "按 provider capability 声明差异；ACP → Codex App Server → Claude SDK → OpenCode"
+      ]
+    },
+    "dag": {
+      "milestones": [
+        {
+          "id": "M0",
+          "name": "契约冻结",
+          "goal": "命令面与错误码不可绕过",
+          "verify": "pnpm vitest run tests/unit/shared/cli/agents.test.ts tests/unit/shared/cli/terminal.test.ts + parser 表驱动"
+        },
+        {
+          "id": "M1",
+          "name": "终端控制闭环",
+          "goal": "任意 TUI：读屏、输入、等安静/退出",
+          "verify": "真实 native screen + childExited wait；无 agent 语义依赖"
+        },
+        {
+          "id": "M2",
+          "name": "智能体语义闭环",
+          "goal": "start → wait ready → screen",
+          "verify": "§3.4 组合脚本 e2e:auto 绿；状态只来自 FA"
+        },
+        {
+          "id": "M3",
+          "name": "增量读取",
+          "goal": "cursor 翻页 + wait output",
+          "verify": "0107 矩阵：空行/重复/alt/epoch/cursor_expired"
+        },
+        {
+          "id": "M4",
+          "name": "收口",
+          "goal": "十项验收 + 门禁",
+          "verify": "研究文档 §8 证据表全绿；pnpm check；删 main overlap 回退"
+        }
+      ],
+      "nodes": [
+        {
+          "id": "A1",
+          "wave": 1,
+          "title": "共享契约 schema",
+          "deps": [],
+          "verify": "strict schema 拒绝非法组合；direct socket 同等拒绝"
+        },
+        {
+          "id": "A2",
+          "wave": 1,
+          "title": "panelId 解析器",
+          "deps": [],
+          "verify": "panel_ambiguous / panel_not_found 单测"
+        },
+        {
+          "id": "A3",
+          "wave": 2,
+          "title": "CLI parser 两域",
+          "deps": [
+            "A1"
+          ],
+          "verify": "未知 option / 多余 positional 失败；timeout 透传"
+        },
+        {
+          "id": "A4",
+          "wave": 2,
+          "title": "permissions 登记",
+          "deps": [
+            "A1"
+          ],
+          "verify": "capability 表单测；cli-local 可跑 P0"
+        },
+        {
+          "id": "F1",
+          "wave": 2,
+          "title": "长轮询骨架",
+          "deps": [
+            "A1"
+          ],
+          "verify": "socket 取消隔离；超时 wait_timeout"
+        },
+        {
+          "id": "T1",
+          "wave": 1,
+          "title": "TerminalRuntimeIndex 最小切片",
+          "deps": [],
+          "verify": "childExited→exited；跨窗 transfer 保 runtimeKey；无 WAL 膨胀也能过 M1"
+        },
+        {
+          "id": "D1",
+          "wave": 1,
+          "title": "native 有界 screen",
+          "deps": [],
+          "verify": "work probe：N 增加未请求历史时 attempt/alloc 不变"
+        },
+        {
+          "id": "B1",
+          "wave": 3,
+          "title": "agents list/status/catalog",
+          "deps": [
+            "A1",
+            "A4"
+          ],
+          "verify": "与 Runtime Index 同源 + ts"
+        },
+        {
+          "id": "B2",
+          "wave": 3,
+          "title": "agents focus",
+          "deps": [
+            "A1",
+            "A4"
+          ],
+          "verify": "agent_gone 不挑相似面板"
+        },
+        {
+          "id": "B3",
+          "wave": 3,
+          "title": "agents start",
+          "deps": [
+            "A1",
+            "A3",
+            "A4"
+          ],
+          "verify": "catalog 内 agent 可寻址返回"
+        },
+        {
+          "id": "B4",
+          "wave": 4,
+          "title": "start --prompt",
+          "deps": [
+            "B3"
+          ],
+          "verify": "argv 白名单 + 唯一输入队列 fallback；cwd 必须为目录"
+        },
+        {
+          "id": "B5",
+          "wave": 3,
+          "title": "agents wait",
+          "deps": [
+            "F1",
+            "B1"
+          ],
+          "verify": "陈旧 ready 不命中；changedAtTs 按目标"
+        },
+        {
+          "id": "C1",
+          "wave": 3,
+          "title": "terminal list/show",
+          "deps": [
+            "A1",
+            "A2",
+            "A4",
+            "T1"
+          ],
+          "verify": "shell/task 退出态正确，不读 agent session"
+        },
+        {
+          "id": "C2",
+          "wave": 3,
+          "title": "terminal send/key/interrupt",
+          "deps": [
+            "A1",
+            "A2",
+            "A4"
+          ],
+          "verify": "textDelivered 部分失败；禁止文本内拼 \\r"
+        },
+        {
+          "id": "C3",
+          "wave": 3,
+          "title": "terminal close",
+          "deps": [
+            "A1",
+            "A4"
+          ],
+          "verify": "走面板关闭确认规则"
+        },
+        {
+          "id": "E1",
+          "wave": 3,
+          "title": "terminal screen 命令",
+          "deps": [
+            "D1",
+            "A2",
+            "A4",
+            "T1"
+          ],
+          "verify": "rows/columns=viewport；非 OCR/DOM"
+        },
+        {
+          "id": "F3",
+          "wave": 3,
+          "title": "terminal wait quiet/exit",
+          "deps": [
+            "F1",
+            "T1",
+            "D1"
+          ],
+          "verify": "quiet 文案无「完成」；exit 用 childExited"
+        },
+        {
+          "id": "G1",
+          "wave": 5,
+          "title": "e2e 黄金路径",
+          "deps": [
+            "B3",
+            "B4",
+            "B5",
+            "C2",
+            "E1",
+            "F3"
+          ],
+          "verify": "pnpm test:e2e:auto -- tests/e2e/cli/multi-agent-control.spec.ts"
+        },
+        {
+          "id": "D2",
+          "wave": 6,
+          "title": "native 行历史 0107",
+          "deps": [],
+          "verify": "提交点/退出补收尾/alt/epoch 矩阵先红后绿"
+        },
+        {
+          "id": "E2",
+          "wave": 6,
+          "title": "terminal read + wait output",
+          "deps": [
+            "D2",
+            "A2",
+            "A4",
+            "T1"
+          ],
+          "verify": "HMAC cursor 已知答案；cursor_expired→earliestCursor；删 output-ledger overlap"
+        },
+        {
+          "id": "G2",
+          "wave": 7,
+          "title": "§8 十项验收收口",
+          "deps": [
+            "G1",
+            "E2"
+          ],
+          "verify": "证据表 + pnpm check + 无 main 回退"
+        }
+      ],
+      "criticalPath": "A1 → A3 → B3 → B4 → G1",
+      "parallelNative": "D1 → E1 与语义路径并行；D2 → E2 不阻塞 M1/M2"
+    },
+    "redLines": [
+      "agents status/wait 只投影 Foreground Activity，禁止屏幕启发式第二套状态机",
+      "P0 没有 turn/completed/最终答案；quiet ≠ ready",
+      "不公开 provider transcript / 统一会话库",
+      "不内建 run/task/dispatch/gate 持久化编排实体",
+      "不升级 socket 到流式 JSONL（wait 用长轮询）",
+      "send/key/interrupt/close 禁止默认当前 panel；歧义 panelId 只 hard fail",
+      "heartbeat / hint / 诊断不得进入 --json 的 stdout"
+    ],
+    "uxPatch": {
+      "version": 2,
+      "planPath": "docs/superpowers/plans/2026-08-07-cli-multi-agent-ux-patch.md",
+      "workspace": "feature-comment-support (当前 worktree)",
+      "scope": "体验补丁 v2（Codex 有条件采纳后收敛）：输出总政策 + U1–U8；含 window 一等公民、双 wait 提前教育、可执行 hint、固定 pier:heartbeat",
+      "nonGoals": [
+        "第二套 handle / 写路径默认当前 panel",
+        "合并 screen/read 或 agents/terminal wait",
+        "native screen/read、TerminalRuntimeIndex、output-ledger（另线）",
+        "内建 orchestration / mailbox / DAG",
+        "agents.read / transcript / 最终答案 API"
+      ],
+      "criticalPath": "U1 → U2 → U3 → U8",
+      "parallelNote": "U4 与 U1 同波；U5/U6/U7 依赖 U1；落地时 parser/usage/docs 与 format 同切片（Codex blocker）",
+      "findings": [
+        {
+          "id": "UX-01",
+          "severity": "high",
+          "title": "start/wait 人类模式难接龙",
+          "fix": "会话型摘要含 panel+window+ts；成功 wait 一行命中状态"
+        },
+        {
+          "id": "UX-02",
+          "severity": "high",
+          "title": "双 wait 语义易混",
+          "fix": "help + docs 对照表 + 成功/超时文案；不靠第一次超时才学会"
+        },
+        {
+          "id": "UX-03",
+          "severity": "medium",
+          "title": "长等待无反馈",
+          "fix": "stderr 固定 pier:heartbeat elapsed=… command=…"
+        },
+        {
+          "id": "UX-04",
+          "severity": "medium",
+          "title": "start 强制 cwd|worktree",
+          "fix": "parser 缺省注入 process.cwd()"
+        },
+        {
+          "id": "UX-05",
+          "severity": "medium",
+          "title": "screen/read 需学习",
+          "fix": "show 给可执行下一步，不只定义"
+        },
+        {
+          "id": "UX-06",
+          "severity": "medium",
+          "title": "list 空无下一步",
+          "fix": "引导 pier agents catalog"
+        },
+        {
+          "id": "UX-07",
+          "severity": "high",
+          "title": "输出无总政策（Codex major）",
+          "fix": "会话型摘要 vs 动作型静默写死并单测"
+        },
+        {
+          "id": "UX-08",
+          "severity": "high",
+          "title": "window 非一等公民（Codex major）",
+          "fix": "start/list/status/show 摘要与 JSON 均稳定带 windowId"
+        }
+      ],
+      "acceptance": [
+        {
+          "id": "C0",
+          "text": "输出总政策有单测：会话型有人类行、动作型成功静默、--json 无摘要/心跳"
+        },
+        {
+          "id": "C1",
+          "text": "无 --json 时 agents start 打印 started … panel=… window=… ts=…"
+        },
+        {
+          "id": "C2",
+          "text": "无 --json 时 agents wait 成功打印命中状态 + panel + window + ts"
+        },
+        {
+          "id": "C3",
+          "text": "wait_timeout message 含 last status 与下一步（--after / --allow-current / terminal wait）"
+        },
+        {
+          "id": "C4",
+          "text": "agents.start 省略 cwd/worktree → 默认 CLI cwd；二者同时仍失败"
+        },
+        {
+          "id": "C5",
+          "text": "agents list 空输出引导 pier agents catalog"
+        },
+        {
+          "id": "C6",
+          "text": "terminal show 人类 hint 含可执行下一步（screen / read --cursor）"
+        },
+        {
+          "id": "C7",
+          "text": "长 wait stderr 仅 pier:heartbeat …；stdout 与 --json 无心跳"
+        },
+        {
+          "id": "C8",
+          "text": "docs/cli.md 含输出总政策 + 双 wait 对照表 + 黄金路径"
+        },
+        {
+          "id": "C9",
+          "text": "相关 CLI 单测全绿；不扩大 allowlist"
+        },
+        {
+          "id": "C10",
+          "text": "会话型 list/status/start/show 人类与 JSON 均稳定暴露 windowId（有则必出）"
+        }
+      ],
+      "tasks": [
+        {
+          "id": "U1",
+          "wave": 1,
+          "title": "format 层 + 输出总政策",
+          "ux": "foundation UX-07",
+          "deps": [],
+          "status": "pending",
+          "files": "bin/pier-cli-format.js（新建）+ bin/pier.mjs 接线",
+          "verify": "pnpm vitest run tests/unit/cli/human-format.test.ts tests/unit/cli/output-policy.test.ts",
+          "doneWhen": "会话型/动作型/--json 矩阵锁定；format 纯函数不进 pier.mjs 分支泥球"
+        },
+        {
+          "id": "U2",
+          "wave": 2,
+          "title": "start 接龙摘要（panel+window+ts）",
+          "ux": "UX-01 UX-08",
+          "deps": [
+            "U1"
+          ],
+          "status": "pending",
+          "files": "format agents.start",
+          "verify": "pnpm vitest run tests/unit/cli/human-format.test.ts -t 'agents.start'",
+          "doneWhen": "started <agentId> panel=… window=… ts=…"
+        },
+        {
+          "id": "U3",
+          "wave": 2,
+          "title": "wait 摘要 + 双 wait 提前教育",
+          "ux": "UX-01 UX-02",
+          "deps": [
+            "U1"
+          ],
+          "status": "pending",
+          "files": "format wait；usage/help 文案；错误映射",
+          "verify": "pnpm vitest run tests/unit/cli/human-format.test.ts -t 'agents.wait' tests/unit/cli/wait-copy.test.ts",
+          "doneWhen": "成功摘要；help/docs 对照表可测字符串；timeout hint 含 terminal wait"
+        },
+        {
+          "id": "U4",
+          "wave": 1,
+          "title": "start 默认 CLI cwd",
+          "ux": "UX-04",
+          "deps": [],
+          "status": "pending",
+          "files": "bin/pier-cli-parser.js",
+          "verify": "pnpm vitest run tests/unit/shared/cli/agents.test.ts tests/unit/app-core/cli-bin.test.ts",
+          "doneWhen": "省略路径 → envelope.cwd=process.cwd()；cwd+worktree 互斥失败"
+        },
+        {
+          "id": "U5",
+          "wave": 2,
+          "title": "list 空态 → catalog",
+          "ux": "UX-06",
+          "deps": [
+            "U1"
+          ],
+          "status": "pending",
+          "files": "formatAgentList",
+          "verify": "pnpm vitest run tests/unit/cli/human-format.test.ts -t 'agents.list empty'",
+          "doneWhen": "空 list 含 pier agents catalog"
+        },
+        {
+          "id": "U6",
+          "wave": 2,
+          "title": "show 可执行 screen/read 配方",
+          "ux": "UX-05",
+          "deps": [
+            "U1"
+          ],
+          "status": "pending",
+          "files": "formatTerminalShow",
+          "verify": "pnpm vitest run tests/unit/cli/human-format.test.ts -t 'terminal.show'",
+          "doneWhen": "含 next: pier terminal screen <panel> 与 read … --cursor（有 outputCursor 时填真实值）"
+        },
+        {
+          "id": "U7",
+          "wave": 2,
+          "title": "固定 pier:heartbeat",
+          "ux": "UX-03",
+          "deps": [
+            "U1"
+          ],
+          "status": "pending",
+          "files": "bin wait heartbeat helper",
+          "verify": "pnpm vitest run tests/unit/cli/wait-heartbeat.test.ts",
+          "doneWhen": "行格式 pier:heartbeat elapsed=<ms> command=<type>；--json 默认无心跳"
+        },
+        {
+          "id": "U8",
+          "wave": 3,
+          "title": "docs + 契约切片回归",
+          "ux": "C8 C9 Codex-ROI-1",
+          "deps": [
+            "U2",
+            "U3",
+            "U4",
+            "U5",
+            "U6",
+            "U7"
+          ],
+          "status": "pending",
+          "files": "docs/cli.md；parser usage 若缺 agents 面则同切片补齐；Canvas status",
+          "verify": "docs/cli.md 审查 + CLI 单测矩阵",
+          "doneWhen": "C0–C10 全勾；本 Canvas 任务 status=done"
+        }
+      ],
+      "codexReview": {
+        "reviewedAt": "2026-08-07",
+        "model": "gpt-5.4",
+        "verdict": "有条件采纳",
+        "appliedInScheme": "v2",
+        "summary": "Codex：方向对，须落地 parser/docs/测试切片并补输出总政策后才算最佳实践。v2 已把 major 收敛进 U1/U3/U6/U7/C0/C10。",
+        "keep": [
+          "不做内建编排器",
+          "agents=语义、terminal=内容",
+          "wait 默认新证据",
+          "quiet ≠ ready",
+          "panelId + window，不抄 tmux",
+          "体验补丁不改真相源/socket/capability"
+        ],
+        "blockers": [
+          "实现时须同切片接上 parser/usage/docs/tests（方案 v2 以 U8+U1 覆盖；本仓若缺 agents 命令面则 U8 扩大为契约落地）"
+        ],
+        "majors": [
+          "已吸收：会话型 vs 动作型输出总政策 → C0/U1",
+          "已吸收：U6 可执行配方",
+          "已吸收：双 wait 提前教育 → U3",
+          "已吸收：window 一等公民 → C10/U2"
+        ],
+        "uTaskVerdicts": {
+          "U1": "keep — 升级为总政策载体",
+          "U2": "keep — 强制 window",
+          "U3": "tweak applied — help/docs 提前教育",
+          "U4": "keep",
+          "U5": "keep",
+          "U6": "tweak applied — 动作配方",
+          "U7": "tweak applied — pier:heartbeat",
+          "U8": "keep — 含契约切片回归"
+        },
+        "top3Roi": [
+          "parser + usage + docs + 测试真正接上 agents/新 terminal",
+          "会话型摘要 vs 动作型静默总政策",
+          "双 wait / screen-read 升级为下一步命令"
+        ],
+        "doNot": [
+          "Orca 式 task/mailbox/gate 持久化",
+          "quiet/标题启发式伪装 ready",
+          "写操作猜当前终端",
+          "agents.read/transcript",
+          "heartbeat/hint 进 --json stdout",
+          "tmux session 树替换 panel/window"
+        ]
+      }
+    },
+    "outputPolicy": {
+      "title": "人手 vs 脚本输出总政策（Codex major）",
+      "rules": [
+        {
+          "kind": "session",
+          "label": "会话 / 观察型",
+          "commands": "agents catalog|list|status|start|wait；terminal list|show|screen|read",
+          "human": "默认一行（或短表）摘要到 stdout；字段含 panel 与 window（若有）",
+          "json": "stdout 仅 {ok,requestId,data|error}；无额外摘要行"
+        },
+        {
+          "kind": "action",
+          "label": "动作型",
+          "commands": "agents focus；terminal send|key|interrupt|close；panels focus",
+          "human": "成功默认静默（exit 0）；失败 stderr code: message",
+          "json": "同左，仅 envelope"
+        },
+        {
+          "kind": "progress",
+          "label": "长等待",
+          "commands": "agents wait；terminal wait",
+          "human": "stderr 固定前缀 pier:heartbeat …；可用 grep -v 过滤",
+          "json": "默认无心跳（不污染 agent 管道）"
+        }
+      ]
+    },
+    "waitSemantics": {
+      "title": "两个 wait（须进 help/docs，不能只放在超时）",
+      "rows": [
+        {
+          "cmd": "agents wait --until ready|waiting|error|gone",
+          "means": "等 FA/hook 语义状态变化",
+          "not": "不等于任务成功或最终答案",
+          "next": "读内容用 terminal screen 或 read"
+        },
+        {
+          "cmd": "terminal wait --until output",
+          "means": "cursor 之后有新提交行",
+          "not": "不等于 agent ready",
+          "next": "接 terminal read --cursor"
+        },
+        {
+          "cmd": "terminal wait --until quiet",
+          "means": "屏幕/行历史连续 quiet-ms 无变化",
+          "not": "quiet ≠ ready / 完成",
+          "next": "再 screen 或 agents wait"
+        },
+        {
+          "cmd": "terminal wait --until exit",
+          "means": "子进程 childExited",
+          "not": "不等于回合完成（shell 可能仍开着）",
+          "next": "show 看 exitCode；screen 看现场"
+        }
+      ]
+    }
+  }
+}
