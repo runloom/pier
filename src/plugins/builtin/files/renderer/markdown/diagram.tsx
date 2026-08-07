@@ -1,6 +1,6 @@
 import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
 import { bakeSvgForStandalonePreview } from "@pier/ui/image-preview/bake-svg-for-standalone-preview.ts";
-import { MediaFullscreenButton } from "@pier/ui/media-fullscreen-button.tsx";
+import { MediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { useEffect, useRef, useState } from "react";

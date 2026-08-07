@@ -1,4 +1,4 @@
-import { MediaFullscreenButton } from "@pier/ui/media-fullscreen-button.tsx";
+import { MediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { ImageOff } from "lucide-react";

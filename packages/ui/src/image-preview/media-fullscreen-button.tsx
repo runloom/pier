@@ -2,7 +2,7 @@
 
 import { Maximize2 } from "lucide-react";
 import type { MouseEvent } from "react";
-import { Button } from "./button.tsx";
+import { Button } from "../button.tsx";
 
 /** Top-right overlay control for images / diagrams / graphs. */
 export function MediaFullscreenButton({

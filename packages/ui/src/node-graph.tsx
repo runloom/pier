@@ -10,7 +10,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MediaFullscreenButton } from "./media-fullscreen-button.tsx";
+import { MediaFullscreenButton } from "./image-preview/media-fullscreen-button.tsx";
 import { FitViewOnViewportChange } from "./node-graph/expand.ts";
 import {
   FIT_VIEW_OPTIONS,

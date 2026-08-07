@@ -1,2 +1,2 @@
-/** @deprecated Prefer `@pier/ui/media-fullscreen-button`. */
-export { MediaFullscreenButton as MarkdownMediaFullscreenButton } from "@pier/ui/media-fullscreen-button.tsx";
+/** @deprecated Prefer `@pier/ui/image-preview/media-fullscreen-button`. */
+export { MediaFullscreenButton as MarkdownMediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";

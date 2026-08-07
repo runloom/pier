@@ -1,5 +1,5 @@
 import { bakeSvgForStandalonePreview } from "@pier/ui/image-preview/bake-svg-for-standalone-preview.ts";
-import { MediaFullscreenButton } from "@pier/ui/media-fullscreen-button.tsx";
+import { MediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { useEffect, useRef, useState } from "react";
 import { openImagePreview } from "@/stores/content-preview.store.ts";
