@@ -249,7 +249,7 @@ export function ProjectCanvasRootsCard({
                     type="button"
                     variant="ghost"
                   >
-                    <Trash2 />
+                    <Trash2 data-icon="inline-start" />
                   </Button>
                 </div>
               );

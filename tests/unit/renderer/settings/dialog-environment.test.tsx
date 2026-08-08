@@ -601,13 +601,11 @@ describe("SettingsDialog — Environment section", () => {
 
     await waitFor(() => {
       expect(
-        screen.getByRole("button", { name: "Remove this project" })
+        screen.getByRole("button", { name: "Remove project" })
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Remove this project" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove project" }));
 
     await waitFor(() => {
       expect(appDialogMocks.showAppConfirm).toHaveBeenCalledWith(

@@ -85,12 +85,12 @@ export function ProjectGeneralPanel({
               {t("settings.projects.general.dangerDescription")}
             </CardDescription>
           </CardHeader>
-          <CardFooter className="justify-end border-t pt-3">
+          <CardContent className="flex justify-end border-t pt-3">
             <Button onClick={onDelete} type="button" variant="destructive">
               <Trash2 data-icon="inline-start" />
               {t("settings.projects.general.deleteProject")}
             </Button>
-          </CardFooter>
+          </CardContent>
         </Card>
       </div>
     </div>
