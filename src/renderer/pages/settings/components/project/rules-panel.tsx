@@ -22,14 +22,14 @@ import {
   revealUnderRoot,
 } from "@/lib/files/shell-path-actions.ts";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
-import { ProjectRulesSelectedPane } from "./project-rules-panel-detail.tsx";
+import { ProjectRulesSelectedPane } from "./rules-panel-detail.tsx";
 import {
   assetRootFor,
   isOversizeFile,
   RuleFileIcon,
   ruleFamilyLabel,
   ruleStateBadge,
-} from "./project-rules-panel-helpers.tsx";
+} from "./rules-panel-helpers.tsx";
 
 export function ProjectRulesPanel({
   discardName,

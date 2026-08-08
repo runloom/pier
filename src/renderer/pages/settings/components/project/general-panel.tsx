@@ -12,7 +12,7 @@ import { Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
-import { ProjectCanvasRootsCard } from "./project-canvas-roots-card.tsx";
+import { ProjectCanvasRootsCard } from "./canvas-roots-card.tsx";
 
 const GIT_IGNORE_LINES = [".agents/skills/", ".claude/skills/"].join("\n");
 

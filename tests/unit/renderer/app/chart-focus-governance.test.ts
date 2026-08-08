@@ -115,7 +115,7 @@ describe("focus governance", () => {
       "src/plugins/builtin/files/renderer/preview/image.tsx",
       "src/renderer/panel-kits/workbench/panel.tsx",
       "src/renderer/components/workspace/panel-tab-header.tsx",
-      "src/renderer/pages/settings/components/projects-section-list.tsx",
+      "src/renderer/pages/settings/components/project/section-list.tsx",
     ]);
 
     // 只扫产品源码；测试夹具可自由 tabIndex。

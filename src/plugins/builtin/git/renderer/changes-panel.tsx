@@ -25,6 +25,10 @@ import {
   gitChangesPanelTitle,
 } from "./changes-tab-title.ts";
 import { useGitChangesPanelIndexState } from "./hooks/use-changes-panel-index-state.ts";
+import {
+  readGitReviewScope,
+  readPendingReveal,
+} from "./pending-reveal-params.ts";
 import { pluginText } from "./plugin-text.ts";
 import {
   ReviewErrorEmpty,
@@ -34,10 +38,6 @@ import {
 } from "./review/feedback.tsx";
 import { GitReviewMutationAuthority } from "./review/mutation-authority.ts";
 import { GitReviewPanelLayout } from "./review/panel-layout.tsx";
-import {
-  readGitReviewScope,
-  readPendingReveal,
-} from "./review/pending-reveal-params.ts";
 import { GitReviewScopeSwitcher } from "./review/scope-switcher.tsx";
 import { clearReviewSessionsForScope } from "./review/session-cache.ts";
 import type { PendingCommentReveal } from "./review/surface-types.ts";

@@ -4,7 +4,7 @@ import {
 } from "@shared/contracts/git/review.ts";
 import { GIT_REVIEW_GROUP_ORDER } from "@shared/contracts/git-review/primitives.ts";
 import { z } from "zod";
-import type { PendingCommentReveal } from "./surface-types.ts";
+import type { PendingCommentReveal } from "./review/surface-types.ts";
 
 const pendingCommentRevealSchema = z
   .strictObject({

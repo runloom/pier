@@ -9,17 +9,17 @@ import type { ProjectsSettingsTab } from "@/pages/settings/data/projects-setting
 import {
   EnvironmentEditor,
   type EnvironmentEditorHandle,
-} from "./environment-editor.tsx";
-import { PierHomeSkillsPanel } from "./pier-home-skills-panel.tsx";
-import { ProjectGeneralPanel } from "./project-general-panel.tsx";
-import { ProjectMcpPanel } from "./project-mcp-panel.tsx";
+} from "../environment-editor.tsx";
+import { PierHomeSkillsPanel } from "../pier-home-skills-panel.tsx";
+import { SkillsAddMenu } from "../skills/add-menu.tsx";
+import { SkillsSection } from "../skills-section.tsx";
+import { ProjectGeneralPanel } from "./general-panel.tsx";
+import { ProjectMcpPanel } from "./mcp-panel.tsx";
 import {
   defaultTabFor,
   isTabAllowedForProject,
   projectBasename,
-} from "./projects-section-helpers.ts";
-import { SkillsAddMenu } from "./skills/add-menu.tsx";
-import { SkillsSection } from "./skills-section.tsx";
+} from "./section-helpers.ts";
 
 export function ProjectsSectionDetail({
   activeProjectRootPath,

@@ -38,10 +38,6 @@
       "max": 49,
       "reason": "debt: more surface vs chrome split beyond hooks/; core comments status item added"
     },
-    "src/renderer/pages/settings/components": {
-      "max": 45,
-      "reason": "debt: section subfolders (skills/ already extracted); agent-row details/lifecycle format pending agents/ folder"
-    },
     "src/main/services/agents/integrations": {
       "max": 43,
       "reason": "debt: provider files still flat; interactive-tool lifecycle helpers pending tools/ folder; evidence/transcript/hooks extracted"
