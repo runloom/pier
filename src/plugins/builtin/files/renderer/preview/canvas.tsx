@@ -2,9 +2,11 @@ import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   detectProjectCanvasFramework,
+  liveModuleProjectContentDirectories,
+  normalizeProjectRootKey,
   projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FilesTranslate } from "../i18n.ts";
 import {
   markCanvasActive,
@@ -24,6 +26,7 @@ import {
   CanvasUnavailableEmpty,
   clearMountedCanvas,
 } from "./canvas-states.tsx";
+import { subscribeLiveModulesProjectConfigChanged } from "./load-live-modules-config.ts";
 
 /**
  * Live Modules preview inside the files panel (same shell as Markdown preview).
@@ -48,10 +51,30 @@ export function FileCanvasPreview(props: {
   const mountedModuleIdRef = useRef<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const [state, setState] = useState<CanvasPreviewState>({ kind: "pending" });
+  /** Bump when Project → General saves content directories for this root. */
+  const [configEpoch, setConfigEpoch] = useState(0);
 
-  const canvasLocation = projectCanvasLocation(props.path);
+  useEffect(() => {
+    const rootKey = normalizeProjectRootKey(props.root);
+    return subscribeLiveModulesProjectConfigChanged((changedRoot) => {
+      if (normalizeProjectRootKey(changedRoot) !== rootKey) {
+        return;
+      }
+      setConfigEpoch((value) => value + 1);
+    });
+  }, [props.root]);
+
+  // configEpoch forces re-read of runtime roots after settings save
+  // (external module map is not a React state dep of props.root alone).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: configEpoch invalidates runtime map
+  const contentDirectories = useMemo(
+    () => liveModuleProjectContentDirectories(props.root),
+    [props.root, configEpoch]
+  );
+  const canvasLocation = projectCanvasLocation(props.path, contentDirectories);
   const relPath = canvasLocation?.relPath ?? null;
-  const framework = detectProjectCanvasFramework(props.path) ?? "react";
+  const framework =
+    detectProjectCanvasFramework(props.path, contentDirectories) ?? "react";
 
   // Tear down only when the preview component itself unmounts — not on every
   // hot-reload effect re-run (that would flash empty before recompile).

@@ -1,4 +1,7 @@
-import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
+import {
+  isProjectCanvasPath,
+  liveModuleProjectContentDirectories,
+} from "@shared/live-module-canvas-path.ts";
 import {
   useCallback,
   useEffect,
@@ -59,7 +62,13 @@ function isCanvasSource(
   if (language === "canvas") {
     return true;
   }
-  return source?.kind === "disk" && isProjectCanvasPath(source.path);
+  return (
+    source?.kind === "disk" &&
+    isProjectCanvasPath(
+      source.path,
+      liveModuleProjectContentDirectories(source.root)
+    )
+  );
 }
 
 function defaultModeForSource(

@@ -12,10 +12,15 @@ import {
 } from "@shared/contracts/live-modules.ts";
 import {
   canvasDirectoryFromProjectPath,
-  detectProjectCanvasFramework,
+  liveModuleContentRootId,
+  liveModuleProjectContentDirectories,
+  normalizeProjectRootKey,
   projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
-import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
+import {
+  detectLiveModuleFrameworkFromFileName,
+  type LiveModuleFramework,
+} from "@shared/live-module-framework.ts";
 import {
   type Dispatch,
   type RefObject,
@@ -29,6 +34,10 @@ import {
   unmountMountedCanvas,
 } from "./canvas-states.tsx";
 import { removeLiveModuleCss } from "./css-cleanup.ts";
+import {
+  ensureLiveModulesProjectConfigLoaded,
+  subscribeLiveModulesProjectConfigChanged,
+} from "./load-live-modules-config.ts";
 
 /** Only show skeleton if compile still pending after this delay (avoids flash). */
 export const CANVAS_SKELETON_DELAY_MS = 200;
@@ -100,17 +109,23 @@ export function useCanvasCompileSession(props: {
     mountedModuleIdRef,
   } = props;
   const liveModules = context.liveModules;
-  const canvasLocation = projectCanvasLocation(path);
-  const relPath = canvasLocation?.relPath ?? null;
-  const contentDirectory =
-    canvasLocation?.directory ?? LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY;
-  const framework = detectProjectCanvasFramework(path) ?? "react";
+
+  // Settings save → recompile with the new content-directory list.
+  useEffect(() => {
+    const rootKey = normalizeProjectRootKey(root);
+    return subscribeLiveModulesProjectConfigChanged((changedRoot) => {
+      if (normalizeProjectRootKey(changedRoot) !== rootKey) {
+        return;
+      }
+      setNonce((value) => value + 1);
+    });
+  }, [root, setNonce]);
 
   useEffect(() => {
     // `nonce` re-triggers compile on file stale events and manual Reload.
     const reloadGeneration = nonce;
 
-    if (!(relPath && liveModules)) {
+    if (!liveModules) {
       clearMountedCanvas(
         hostRef.current,
         unmountRef,
@@ -123,7 +138,7 @@ export function useCanvasCompileSession(props: {
         kind: "error",
         message: t(
           "filePanel.canvas.notUnderCanvases",
-          "Open a canvas under .pier/canvases (e.g. *.canvas.tsx)."
+          "This file isn’t in a canvas preview folder. Adjust folders in Settings → Projects → General."
         ),
       });
       return;
@@ -134,7 +149,6 @@ export function useCanvasCompileSession(props: {
       return;
     }
 
-    const identity = moduleIdentity(root, contentDirectory, relPath, framework);
     // Mark host with compile generation (stale / Reload bump `nonce`).
     hostEl.dataset.pierCanvasCompile = String(reloadGeneration);
     let cancelled = false;
@@ -142,11 +156,11 @@ export function useCanvasCompileSession(props: {
       !cancelled &&
       hostEl.dataset.pierCanvasCompile === String(reloadGeneration);
 
-    // Same module already on screen → keep UI until the new bundle mounts.
-    const isHotReload =
-      mountedIdentityRef.current === identity && unmountRef.current !== null;
-
     let skeletonTimer: ReturnType<typeof setTimeout> | null = null;
+    /** Filled after config + location resolve (for stale watch + cleanup). */
+    let registeredRootId: string | null = null;
+    let compileRelPath: string | null = null;
+    let isHotReload = false;
 
     const clearSkeletonTimer = () => {
       if (skeletonTimer !== null) {
@@ -155,38 +169,80 @@ export function useCanvasCompileSession(props: {
       }
     };
 
-    if (isHotReload) {
-      // Keep ready UI + previous mount while recompiling.
-    } else {
-      // First open or different canvas: drop previous content immediately
-      // (do not show the wrong file), but delay the skeleton to avoid flash.
-      clearMountedCanvas(
-        hostEl,
-        unmountRef,
-        mountedIdentityRef,
-        mountedModuleIdRef.current
-      );
-      mountedModuleIdRef.current = null;
-      setState({ kind: "pending" });
-      skeletonTimer = setTimeout(() => {
+    const run = async () => {
+      try {
+        await ensureLiveModulesProjectConfigLoaded(root);
         if (!stillOwner()) {
           return;
         }
-        setState((current) =>
-          current.kind === "pending" ? { kind: "loading" } : current
-        );
-      }, CANVAS_SKELETON_DELAY_MS);
-    }
 
-    const baseRootId = projectLiveRootId(root);
-    const rootIdSuffix =
-      contentDirectory === LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY
-        ? ""
-        : `.${contentDirectory.replace(/^\./u, "").replaceAll("/", "-")}`;
-    // Must match registerRoot id — used for stale events + unregister.
-    const rootId = `${baseRootId}${rootIdSuffix}`;
-    const run = async () => {
-      try {
+        const contentDirectories = liveModuleProjectContentDirectories(root);
+        const canvasLocation = projectCanvasLocation(path, contentDirectories);
+        const relPath = canvasLocation?.relPath ?? null;
+        const contentDirectory =
+          canvasLocation?.directory ?? LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY;
+        const framework =
+          (relPath ? detectLiveModuleFrameworkFromFileName(relPath) : null) ??
+          "react";
+        compileRelPath = relPath;
+
+        if (!relPath) {
+          clearMountedCanvas(
+            hostEl,
+            unmountRef,
+            mountedIdentityRef,
+            mountedModuleIdRef.current
+          );
+          mountedModuleIdRef.current = null;
+          setState({
+            diagnostics: [],
+            kind: "error",
+            message: t(
+              "filePanel.canvas.notUnderCanvases",
+              "This file isn’t in a canvas preview folder. Adjust folders in Settings → Projects → General."
+            ),
+          });
+          return;
+        }
+
+        const identity = moduleIdentity(
+          root,
+          contentDirectory,
+          relPath,
+          framework
+        );
+        isHotReload =
+          mountedIdentityRef.current === identity &&
+          unmountRef.current !== null;
+        if (isHotReload) {
+          // Keep ready UI + previous mount while recompiling.
+        } else {
+          clearMountedCanvas(
+            hostEl,
+            unmountRef,
+            mountedIdentityRef,
+            mountedModuleIdRef.current
+          );
+          mountedModuleIdRef.current = null;
+          setState({ kind: "pending" });
+          skeletonTimer = setTimeout(() => {
+            if (!stillOwner()) {
+              return;
+            }
+            setState((current) =>
+              current.kind === "pending" ? { kind: "loading" } : current
+            );
+          }, CANVAS_SKELETON_DELAY_MS);
+        }
+
+        // Must match registerRoot id — used for stale events + unregister.
+        // Sanitize user directory segments so liveRootSpecSchema accepts them.
+        const rootId = liveModuleContentRootId(
+          projectLiveRootId(root),
+          contentDirectory
+        );
+        registeredRootId = rootId;
+
         const spec = projectLiveRootSpec({
           directory: contentDirectory,
           // Distinct root id per content directory so alternate registered
@@ -197,14 +253,6 @@ export function useCanvasCompileSession(props: {
         await liveModules.registerRoot(spec);
         if (!stillOwner()) {
           return;
-        }
-        if (!relPath) {
-          throw new Error(
-            t(
-              "filePanel.canvas.notUnderCanvases",
-              "Open a canvas under .pier/canvases (e.g. *.canvas.tsx)."
-            )
-          );
         }
         const result = await liveModules.compile(spec.id, relPath);
         if (!stillOwner()) {
@@ -305,7 +353,8 @@ export function useCanvasCompileSession(props: {
           {
             onError: reportRuntimeError,
             wrap: liveModuleCanvasFileScopeWrapper({
-              directory: canvasDirectoryFromProjectPath(path) ?? "",
+              directory:
+                canvasDirectoryFromProjectPath(path, contentDirectories) ?? "",
               path,
               root,
             }),
@@ -392,7 +441,12 @@ export function useCanvasCompileSession(props: {
       if (event.type !== "stale") {
         return;
       }
-      if (event.rootId !== rootId || event.moduleId !== relPath) {
+      if (
+        registeredRootId === null ||
+        compileRelPath === null ||
+        event.rootId !== registeredRootId ||
+        event.moduleId !== compileRelPath
+      ) {
         return;
       }
       setNonce((value) => value + 1);
@@ -402,18 +456,17 @@ export function useCanvasCompileSession(props: {
       cancelled = true;
       clearSkeletonTimer();
       stopWatch();
-      // Refcounted release — last panel for this project drops watchers/tickets.
-      liveModules.unregisterRoot(rootId).catch(() => undefined);
+      // Refcounted release — last panel for this content root drops watchers.
+      if (registeredRootId) {
+        liveModules.unregisterRoot(registeredRootId).catch(() => undefined);
+      }
     };
   }, [
-    contentDirectory,
-    framework,
     liveModules,
     nonce,
     path,
     root,
     t,
-    relPath,
     hostRef,
     unmountRef,
     mountedIdentityRef,

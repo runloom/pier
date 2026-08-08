@@ -164,7 +164,7 @@
     "filePanel.canvas.compileFailedHint": "Fix the canvas file or its imports, then reload.",
     "filePanel.canvas.compiling": "Compiling canvas…",
     "filePanel.canvas.diagnosticsHeading": "Details",
-    "filePanel.canvas.notUnderCanvases": "Open a canvas under .pier/canvases (e.g. *.canvas.tsx / *.canvas.vue).",
+    "filePanel.canvas.notUnderCanvases": "This file isn’t in a canvas preview folder. Adjust folders in Settings → Projects → General.",
     "filePanel.canvas.reload": "Reload",
     "filePanel.canvas.unavailableTitle": "Can’t preview canvas",
     "filePanel.canvas.runtimeFailed": "Canvas crashed while rendering",

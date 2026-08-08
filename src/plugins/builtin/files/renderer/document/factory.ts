@@ -158,7 +158,7 @@ export function createDiskDocumentRecord(input: {
       format: input.draft.format ?? null,
       hasBackingStore: !deletedOnDisk,
       id: input.id,
-      language: languageForPath(input.path),
+      language: languageForPath(input.path, input.root),
       loadState: "idle",
       mode: input.draft.mode ?? null,
       mime: null,
@@ -190,7 +190,7 @@ export function createDiskDocumentRecord(input: {
     format: null,
     hasBackingStore: true,
     id: input.id,
-    language: languageForPath(input.path),
+    language: languageForPath(input.path, input.root),
     loadState: "idle",
     mode: null,
     mime: null,
@@ -214,7 +214,7 @@ export function renameDiskDocumentRecord(
   return {
     ...document,
     id: input.id,
-    language: languageForPath(input.path),
+    language: languageForPath(input.path, input.root),
     name: nameFromPath(input.path),
     source: { kind: "disk", path: input.path, root: input.root },
   };

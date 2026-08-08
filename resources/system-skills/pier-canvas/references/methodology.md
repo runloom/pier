@@ -1,0 +1,105 @@
+# Canvas methodology axes
+
+Canvas is Pier's **product-core overview**. Methodology mode makes overviews
+scannable and reproducible without inventing a second skill entry.
+
+## Three axes
+
+| Axis | Pack root | Question |
+| --- | --- | --- |
+| content | `packs/content/<id>/` | What must be written? |
+| presentation | `packs/presentation/<id>/` | How is the overview navigated? |
+| ui | `packs/ui/<id>/` | How is it drawn with `pier/canvas`? |
+
+Do not mix axes:
+
+- Content packs never prescribe Tab chrome.
+- Presentation packs never invent domain fields missing from content.
+- UI packs never change required content fields.
+
+## Defaults
+
+```text
+content      = design-doc
+presentation = primary_nav_5
+ui           = pier-default
+mode         = methodology
+```
+
+Scheme / control-plane overviews should prefer `content=closed-loop`.
+
+## Built-in packs (P0)
+
+### content
+
+- `design-doc` — goals / non-goals / design / alternatives + BLUF
+- `closed-loop` — hard constraints, loops, day-1 commands, rails, acceptance
+
+### presentation
+
+- `primary_nav_5` — ≤5 ordered tabs, primary overview
+- `one_pager` — single scroll, BLUF first
+
+### ui
+
+- `pier-default` — pier/canvas desktop-tool discipline
+
+## Resolve order
+
+1. `.pier/canvas-packs/{axis}/{id}/pack.json` (project)
+2. This skill's `packs/{axis}/{id}/pack.json` (built-in)
+
+Missing id → hard fail.
+
+## Overview obligations
+
+1. First screen answers "what did we decide?" in under ~30 seconds of reading.
+2. Exactly one primary view when using multi-view presentations.
+3. ≤5 top-level navigation entries.
+4. Implementation DAGs and research appendices are secondary.
+
+## Expression selection（方案怎么表达）
+
+Methodology overviews are **product design proposals**, not feature demos and
+not acceptance-table dumps. Choose expression by job-to-be-done:
+
+| 形态 | 何时用 | 长什么样 | 禁止 |
+| --- | --- | --- | --- |
+| **静态方案（默认）** | 决策、分层、日路径、落地 | BLUF + 对照表 + ≤1 主图 + 短配方 | 无洞见的 Play/Step、「演示感」空转 |
+| **静态对照** | before/after、Do/Don't、旧误区 vs 新默认 | 双列表 / 双卡 / 默认对照表 | 用动画假装对比 |
+| **短任务说明（可选）** | 需要「人手敲什么」 | 配方代码块 + 四命令表 | 冒充机制证明 |
+| **机制交互讲解（例外）** | **仅当**不可见机制必须逐步展开，且每帧有洞见+图变 | 播放/单步 + 结构图状态变化 | CLI 导览高亮、无 before/after 的节点走马灯 |
+
+### 硬规则
+
+1. **默认静态。** `templates/overview.canvas.tsx` 与 closed-loop 金标路径不包含交互演示壳。
+2. **不为「显得高级」加演示。** 若去掉播放控件后方案仍完整可读，就不要加播放控件。
+3. **验收表不进首页。** C0–C10 / L0–L7 放落地（或实现）页；速览只放决策与路径。
+4. **竞品与过程考古不进首页。** 附录或落地末尾。
+5. **图必须服务洞见。** Mermaid/NodeGraph 回答「分层/主环/状态」之一；禁止装饰性空图。
+
+### 与业界对齐（一句话）
+
+- Explainer 动画适合抽象机制论文页，**不是** CLI harness 方案默认形态。
+- 产品方案默认：**问题 → 决策 → 设计 → 形态 → 落地**。
+- 真 UI/CLI 录屏若需要，放在仓外或单独资产；不要用假交互冒充。
+
+## Recommended information architecture（primary_nav_5）
+
+Use this five-tab spine for scheme / closed-loop overviews (labels may localize):
+
+| Tab id | Label | Role |
+| --- | --- | --- |
+| `overview` | 速览 | insight + decision (BLUF) + three summary cards |
+| `problem` | 问题 | pains + anti-goals |
+| `design` | 设计 | layers, settled/states, identity, hard constraints |
+| `path` | 日路径 | main path diagram + day-1 commands + recipe |
+| `landing` | 落地 | defaults before→after, phases, acceptance, rails |
+
+Start from `templates/overview.canvas.tsx`. Dogfood reference:
+`.pier/canvases/multi-agent-orchestration-gold/`.
+
+## Entry
+
+Only `/pier-canvas` (or `$pier-canvas`). Packs are resources, not extra slash
+commands. CLI is not the product path for this protocol.

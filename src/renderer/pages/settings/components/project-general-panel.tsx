@@ -3,44 +3,51 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@pier/ui/card.tsx";
-import { Trash2 } from "lucide-react";
+import { Separator } from "@pier/ui/separator.tsx";
+import { Copy, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { ProjectCanvasRootsCard } from "./project-canvas-roots-card.tsx";
 
 const GIT_IGNORE_LINES = [".agents/skills/", ".claude/skills/"].join("\n");
 
 /**
- * Project-scoped options outside the skill list: gitignore hints and removing
- * the project from Pier's index. Discovery paths live on the skill detail
- * matrix (per-skill channel checkboxes).
+ * Project → General: workspace prefs (canvas roots, gitignore) then danger zone.
  */
 export function ProjectGeneralPanel({
   onDelete,
+  projectRootPath,
 }: {
   onDelete: () => void;
-  /** Kept for call-site stability; skills snapshot is no longer needed here. */
   projectRootPath: string;
 }) {
   const t = useT();
 
   return (
-    <div className="flex min-w-0 flex-col gap-4 pb-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.projects.general.gitIgnoreTitle")}</CardTitle>
-          <CardDescription>
-            {t("settings.projects.general.gitIgnoreDescription")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <pre className="overflow-x-auto rounded-lg bg-muted px-3 py-2 font-mono text-xs">
-            {GIT_IGNORE_LINES}
-          </pre>
-          <div className="flex justify-end">
+    <div className="flex min-w-0 flex-col gap-5 pb-4">
+      <div className="flex min-w-0 flex-col gap-4">
+        <ProjectCanvasRootsCard projectRootPath={projectRootPath} />
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle>
+              {t("settings.projects.general.gitIgnoreTitle")}
+            </CardTitle>
+            <CardDescription>
+              {t("settings.projects.general.gitIgnoreDescription")}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pb-3">
+            <pre className="overflow-x-auto rounded-lg border bg-muted/40 px-3 py-2.5 font-mono text-xs leading-relaxed">
+              {GIT_IGNORE_LINES}
+            </pre>
+          </CardContent>
+          <CardFooter className="justify-end border-t pt-3">
             <Button
               onClick={() => {
                 navigator.clipboard
@@ -57,37 +64,35 @@ export function ProjectGeneralPanel({
                     }).catch(() => undefined);
                   });
               }}
-              size="sm"
               type="button"
               variant="outline"
             >
+              <Copy data-icon="inline-start" />
               {t("settings.projects.general.gitIgnoreCopy")}
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardFooter>
+        </Card>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{t("settings.projects.general.dangerTitle")}</CardTitle>
-          <CardDescription>
-            {t("settings.projects.general.dangerDescription")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <div className="flex flex-col gap-3">
-            <p className="text-muted-foreground text-sm">
-              {t("settings.projects.general.deleteHint")}
-            </p>
-            <div className="flex justify-end">
-              <Button onClick={onDelete} type="button" variant="destructive">
-                <Trash2 data-icon="inline-start" />
-                {t("settings.projects.general.deleteProject")}
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex min-w-0 flex-col gap-3">
+        <Separator />
+        <Card className="border-destructive/20">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-destructive">
+              {t("settings.projects.general.dangerTitle")}
+            </CardTitle>
+            <CardDescription>
+              {t("settings.projects.general.dangerDescription")}
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="justify-end border-t pt-3">
+            <Button onClick={onDelete} type="button" variant="destructive">
+              <Trash2 data-icon="inline-start" />
+              {t("settings.projects.general.deleteProject")}
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
     </div>
   );
 }

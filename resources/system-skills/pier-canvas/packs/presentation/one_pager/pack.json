@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "one_pager",
+  "axis": "presentation",
+  "title": "One-pager BLUF",
+  "description": "Single scrolling overview: conclusion first, no multi-tab nav.",
+  "requiredContentFields": ["bluf"],
+  "views": [
+    {
+      "id": "overview",
+      "label": "总览",
+      "primary": true,
+      "shows": [
+        "bluf",
+        "goals",
+        "nonGoals",
+        "hardConstraints",
+        "mainDiagram",
+        "nextSteps"
+      ]
+    }
+  ],
+  "antiPatterns": [
+    "multiple top-level tabs",
+    "long competitor essays above the fold",
+    "more than one primary diagram",
+    "implementation DAG as the hero"
+  ],
+  "diagrams": {
+    "overviewMax": 1,
+    "preferred": ["sequence", "flowchart"]
+  },
+  "agentPrompt": "Build a single-scroll composition Canvas (no Tabs). Order: bluf → goals/non-goals or constraints → one diagram or recipe → short next steps. Details only below the fold as compact lists. pier/canvas only."
+}

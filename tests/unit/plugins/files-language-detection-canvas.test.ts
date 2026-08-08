@@ -21,11 +21,27 @@ describe("languageForPath canvas", () => {
     expect(languageForPath("src/features/checkout.canvas.tsx")).toBe(
       "typescript"
     );
-    expect(languageForPath("docs/hello.canvas.tsx")).toBe("typescript");
+    // Factory default content roots include docs.
+    expect(languageForPath("docs/hello.canvas.tsx")).toBe("canvas");
     expect(languageForPath(".pier/plans/demo/plan.canvas.tsx")).toBe(
       "typescript"
     );
     // Bare name under canvases without compound suffix.
     expect(languageForPath(".pier/canvases/helper.tsx")).toBe("typescript");
+  });
+
+  it("uses project content directories when a root is provided", () => {
+    // Without custom runtime, factory defaults apply.
+    expect(languageForPath("designs/a.canvas.tsx", "/proj")).toBe("typescript");
+  });
+
+  it("detects canvas under runtime custom content directories", async () => {
+    const { setRuntimeLiveModuleContentDirectories } = await import(
+      "../../../src/shared/live-module-canvas-path.ts"
+    );
+    setRuntimeLiveModuleContentDirectories("/proj", ["designs"]);
+    expect(languageForPath("designs/a.canvas.tsx", "/proj")).toBe("canvas");
+    expect(languageForPath("docs/a.canvas.tsx", "/proj")).toBe("typescript");
+    setRuntimeLiveModuleContentDirectories("/proj", null);
   });
 });

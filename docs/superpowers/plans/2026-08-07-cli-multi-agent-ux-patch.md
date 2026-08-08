@@ -1,7 +1,10 @@
-# Pier CLI 多智能体体验补丁实施计划（方案 v2）
+# Pier CLI 多智能体体验补丁实施计划（方案 v2 · 历史）
 
-> **版本：** v2（吸收 Codex「有条件采纳」审查）  
-> **权威展示：** `.pier/canvases/multi-agent-orchestration-gold/` →「CLI 体验」页（`data.json`：`outputPolicy` / `waitSemantics` / `uxPatch`）  
+> **状态：** **历史笔记**。产品与验收真源已迁到 v3 Canvas：  
+> `.pier/canvases/multi-agent-orchestration-gold/`（closed-loop × primary_nav_5）。  
+> **本文内 C0–C10 / U* 编号已作废**——以 Canvas「实现」页 **C0–C10** 与 **L0–L7** 为准。  
+> 本文仍可作实现过程考古；冲突时一律以 Canvas 为准。  
+> **权威展示：** 概览 / 怎么用 / 契约 / 实现 / 附录。  
 > **工作区：** 当前 worktree（`feature-comment-support`）  
 > **执行要求：** 每任务先写失败测试 → 实现 → 指定命令绿；未经用户确认不 commit。
 

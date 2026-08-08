@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "id": "design-doc",
+  "axis": "content",
+  "title": "Design Doc",
+  "description": "Google-style technical design: context, goals, non-goals, design, alternatives.",
+  "alignsWith": ["industry design doc / RFC skeleton"],
+  "required": [
+    "bluf",
+    "context",
+    "goals",
+    "nonGoals",
+    "design",
+    "alternatives"
+  ],
+  "optional": ["openQuestions", "risks", "milestones"],
+  "gates": [
+    {
+      "id": "has-bluf",
+      "require": ["bluf"],
+      "message": "Overview needs a short BLUF conclusion (≤120 words)."
+    },
+    {
+      "id": "has-goals-non-goals",
+      "require": ["goals", "nonGoals"],
+      "message": "Goals and non-goals are both required."
+    }
+  ],
+  "dataShape": {
+    "bluf": "string — accepted conclusion for scanners",
+    "context": "string — problem and scope",
+    "goals": "string[]",
+    "nonGoals": "string[]",
+    "design": "string | object — main design",
+    "alternatives": "{ name, rejectReason }[]"
+  },
+  "agentPrompt": "Fill data.json for a design-doc overview. Required: bluf (≤120 words), context, goals[], nonGoals[], design, alternatives[]. Do not invent a fake completed state. Do not write canvas layout here — content only."
+}

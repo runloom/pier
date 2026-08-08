@@ -1,7 +1,11 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
+import {
+  isProjectCanvasPath,
+  liveModuleProjectContentDirectories,
+  normalizeProjectRootKey,
+} from "@shared/live-module-canvas-path.ts";
 import {
   type ReactNode,
   useCallback,
@@ -10,6 +14,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { refreshDiskDocumentLanguagesForProject } from "../document/store.ts";
 import type {
   FilesDocumentPanelSource,
   FileViewMode,
@@ -26,6 +31,10 @@ import {
   readMarkdownOpenMode,
   writeMarkdownOpenMode,
 } from "../markdown/preview-preferences.ts";
+import {
+  ensureLiveModulesProjectConfigLoaded,
+  subscribeLiveModulesProjectConfigChanged,
+} from "../preview/load-live-modules-config.ts";
 import {
   activeFilePathForTree,
   filePanelProjectRoot,
@@ -111,6 +120,39 @@ export function FilesGroupView({
     ReadonlyMap<string, FileViewMode>
   >(() => new Map());
   const [searchRequest, setSearchRequest] = useState(0);
+  /** Bump after live-modules config loads so canvas path checks re-run. */
+  const [liveModulesConfigEpoch, setLiveModulesConfigEpoch] = useState(0);
+
+  useEffect(() => {
+    if (!root) {
+      return;
+    }
+    let cancelled = false;
+    const bump = () => {
+      if (!cancelled) {
+        setLiveModulesConfigEpoch((value) => value + 1);
+      }
+    };
+    ensureLiveModulesProjectConfigLoaded(root)
+      .then(bump)
+      .catch(() => undefined);
+    const rootKey = normalizeProjectRootKey(root);
+    const unsubscribe = subscribeLiveModulesProjectConfigChanged(
+      (changedRoot) => {
+        if (normalizeProjectRootKey(changedRoot) !== rootKey) {
+          return;
+        }
+        refreshDiskDocumentLanguagesForProject(root);
+        ensureLiveModulesProjectConfigLoaded(root)
+          .then(bump)
+          .catch(() => undefined);
+      }
+    );
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [root]);
 
   // invalid 区分:params 有 source 字段但解析失败 → 显示错误态而非空态。
   const sourceState = useMemo<
@@ -153,10 +195,15 @@ export function FilesGroupView({
     if (selectedDocument?.language === "markdown") {
       return readMarkdownOpenMode();
     }
+    // liveModulesConfigEpoch in the guard forces re-eval after config load/save.
+    if (!root || liveModulesConfigEpoch < 0) {
+      return "source";
+    }
+    const contentDirectories = liveModuleProjectContentDirectories(root);
     const isCanvas =
       selectedDocument?.language === "canvas" ||
       (selectedSource?.kind === "disk" &&
-        isProjectCanvasPath(selectedSource.path));
+        isProjectCanvasPath(selectedSource.path, contentDirectories));
     return isCanvas ? "preview" : "source";
   })();
 

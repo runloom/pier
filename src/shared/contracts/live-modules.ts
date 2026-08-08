@@ -22,7 +22,23 @@ import { assetRootRefSchema } from "./agent/assets.ts";
 /** Recommended preview barrel relative to project root (encourage, not force). */
 export const LIVE_MODULE_DEFAULT_PREVIEW_BARREL = ".pier/preview-exports.ts";
 
+/** Default write / skill output root for `/pier-canvas` methodology canvases. */
 export const LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY = ".pier/canvases";
+
+/**
+ * Factory default **preview** content roots (project-relative).
+ * Used when the project has no saved list yet.
+ * Writing via `/pier-canvas` still defaults to {@link LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY}
+ * unless the user changes the configured list and authoring paths separately.
+ */
+export const LIVE_MODULE_DEFAULT_PROJECT_CONTENT_DIRECTORIES = [
+  LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY,
+  "docs",
+] as const;
+
+/** Project config path (relative to project root). */
+export const LIVE_MODULES_PROJECT_CONFIG_PATH = ".pier/live-modules.json";
+
 export const LIVE_MODULE_DEFAULT_HOME_DIRECTORY = "canvases";
 /** Library scan glob (multi-framework entry names). */
 export const LIVE_MODULE_DEFAULT_PATTERN =
@@ -282,6 +298,32 @@ export const liveModulesGetUrlRequestSchema = z
     rootId: z.string().min(1),
   })
   .strict();
+
+/**
+ * Optional per-project Live Modules config (`.pier/live-modules.json`).
+ * `contentDirectories` is the full editable list (including former defaults).
+ * When omitted/empty, factory defaults apply at read time.
+ * `extraContentDirectories` is legacy: treated as defaults ∪ extras.
+ */
+export const liveModulesProjectConfigSchema = z
+  .object({
+    version: z.literal(1).default(1),
+    /** Full list of project-relative content roots (editable in settings). */
+    contentDirectories: z.array(relativePathSegmentSchema).max(32).optional(),
+    /**
+     * @deprecated Prefer `contentDirectories`. Kept for one-way migration:
+     * effective = factory defaults ∪ this list.
+     */
+    extraContentDirectories: z
+      .array(relativePathSegmentSchema)
+      .max(32)
+      .optional(),
+  })
+  .strict();
+
+export type LiveModulesProjectConfig = z.infer<
+  typeof liveModulesProjectConfigSchema
+>;
 
 export const liveModulesUnregisterRootRequestSchema = z
   .object({

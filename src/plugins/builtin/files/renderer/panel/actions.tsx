@@ -1,6 +1,7 @@
 import { Button } from "@pier/ui/button.tsx";
 import {
   isProjectCanvasPath,
+  liveModuleProjectContentDirectories,
   projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
 import { Code2, Eye, ShieldCheck } from "lucide-react";
@@ -76,18 +77,26 @@ export function ResolvedFilePanelActions({
     return null;
   }
 
+  const diskRoot =
+    document.source.kind === "disk" ? document.source.root : null;
+  const contentDirectories = diskRoot
+    ? liveModuleProjectContentDirectories(diskRoot)
+    : undefined;
   const supportsPreview =
     document.language === "markdown" ||
     document.language === "canvas" ||
     (document.source.kind === "disk" &&
-      isProjectCanvasPath(document.source.path));
+      isProjectCanvasPath(document.source.path, contentDirectories));
   const isCanvas =
     document.language === "canvas" ||
     (document.source.kind === "disk" &&
-      isProjectCanvasPath(document.source.path));
+      isProjectCanvasPath(document.source.path, contentDirectories));
   const canvasRelPath =
     source.kind === "disk"
-      ? (projectCanvasLocation(source.path)?.relPath ?? null)
+      ? (projectCanvasLocation(
+          source.path,
+          liveModuleProjectContentDirectories(source.root)
+        )?.relPath ?? null)
       : null;
   const showDiffToggle =
     mode === "diff" || document.conflictDiskContents !== null;

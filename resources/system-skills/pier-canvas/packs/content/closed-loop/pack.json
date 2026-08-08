@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "closed-loop",
+  "axis": "content",
+  "title": "Closed-loop runtime overview",
+  "description": "Pier-style local runtime product design: insight/decision, pains, layers, settled exits, day-1 path, defaults, acceptance.",
+  "alignsWith": ["Pier multi-agent CLI gold scheme v3 content model"],
+  "required": [
+    "bluf",
+    "hardConstraints",
+    "closedLoops",
+    "day1Commands",
+    "safetyRails",
+    "acceptance"
+  ],
+  "optional": [
+    "insight",
+    "decision",
+    "problem",
+    "goals",
+    "layers",
+    "settled",
+    "identity",
+    "dayPath",
+    "day1Recipe",
+    "mustNotTeach",
+    "defaults",
+    "phases",
+    "efficiencyDefaults",
+    "waitSemantics",
+    "outputPolicy",
+    "tasks",
+    "milestones",
+    "competitors",
+    "productNonGoals"
+  ],
+  "gates": [
+    {
+      "id": "has-bluf",
+      "require": ["bluf"],
+      "message": "Need a one-screen BLUF (or decision) for the overview."
+    },
+    {
+      "id": "day1-commands-cap",
+      "require": ["day1Commands"],
+      "message": "day1Commands must exist and stay ≤4 commands for learnability."
+    },
+    {
+      "id": "has-loops",
+      "require": ["closedLoops"],
+      "message": "At least one closed loop with steps and exit states (or equivalent settled model)."
+    }
+  ],
+  "dataShape": {
+    "bluf": "string — one-screen decision; may alias decision",
+    "insight": "string — why the design must be this way",
+    "decision": "string — optional alias of bluf for product spine",
+    "hardConstraints": "{ id, text }[]",
+    "closedLoops": "{ id, name, steps, closed, exitStates }[]",
+    "day1Commands": "{ cmd, why, userSees? }[] — max 4",
+    "day1Recipe": "string — copy-paste recipe",
+    "safetyRails": "string[]",
+    "acceptance": "{ id, text }[]",
+    "defaults": "{ surface, before, after }[]",
+    "phases": "{ wave, name, outcome, slices: { id, title }[] }[]",
+    "tasks": "{ id, title, wave, deps, doneWhen }[]",
+    "efficiencyDefaults": "{ id, name, detail }[]",
+    "competitors": "{ name, take }[]"
+  },
+  "agentPrompt": "Fill data.json for a closed-loop PRODUCT DESIGN overview. Required: bluf (or decision), hardConstraints[], closedLoops[] (or settled model), day1Commands[] (≤4), safetyRails[], acceptance[]. Prefer insight + problem pains + defaults before→after. Quiet ≠ ready; no fake completed. Default expression is STATIC (tables + diagrams). Do not invent Play/Step demos. Content only — presentation owns navigation (速览/问题/设计/日路径/落地)."
+}
