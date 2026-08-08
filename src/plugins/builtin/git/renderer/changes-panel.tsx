@@ -7,12 +7,10 @@ import {
 import { usePanelSidebarCollapsed } from "@pier/ui/use-panel-sidebar-preference.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
-import {
-  type GitReviewScope,
-  type GitReviewTarget,
-  gitReviewScopeSchema,
+import type {
+  GitReviewScope,
+  GitReviewTarget,
 } from "@shared/contracts/git/review.ts";
-import { GIT_REVIEW_GROUP_ORDER } from "@shared/contracts/git-review/primitives.ts";
 import {
   useCallback,
   useEffect,
@@ -22,7 +20,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { z } from "zod";
 import {
   GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM,
   gitChangesPanelTitle,
@@ -37,6 +34,10 @@ import {
 } from "./review/feedback.tsx";
 import { GitReviewMutationAuthority } from "./review/mutation-authority.ts";
 import { GitReviewPanelLayout } from "./review/panel-layout.tsx";
+import {
+  readGitReviewScope,
+  readPendingReveal,
+} from "./review/pending-reveal-params.ts";
 import { GitReviewScopeSwitcher } from "./review/scope-switcher.tsx";
 import { clearReviewSessionsForScope } from "./review/session-cache.ts";
 import type { PendingCommentReveal } from "./review/surface-types.ts";
@@ -49,32 +50,6 @@ import { usePluginLanguage } from "./use-plugin-language.ts";
 /** loading/error/空态下侧栏树为空,打开路径无目标可导航。 */
 function noopOpenPath(_path: string): void {
   // 空树没有可打开的条目
-}
-
-function readSource(params: unknown): GitReviewScope | null {
-  if (!(params && typeof params === "object" && "source" in params)) {
-    return null;
-  }
-  const parsed = gitReviewScopeSchema.safeParse(params.source);
-  return parsed.success ? parsed.data : null;
-}
-
-const pendingCommentRevealSchema = z.strictObject({
-  group: z.enum(GIT_REVIEW_GROUP_ORDER),
-  line: z.number().int().positive(),
-  nonce: z.number().int().nonnegative(),
-  path: z.string().min(1),
-  side: z.enum(["new", "old"]),
-});
-
-function readPendingReveal(params: unknown): PendingCommentReveal | null {
-  if (!(params && typeof params === "object" && "pendingReveal" in params)) {
-    return null;
-  }
-  const parsed = pendingCommentRevealSchema.safeParse(
-    (params as { pendingReveal: unknown }).pendingReveal
-  );
-  return parsed.success ? parsed.data : null;
 }
 
 function useDockviewPanelVisible(api: IDockviewPanelProps["api"]): boolean {
@@ -100,7 +75,10 @@ export function createGitChangesPanel(
   authority = new GitReviewMutationAuthority()
 ) {
   return function GitChangesPanel(props: IDockviewPanelProps) {
-    const source = useMemo(() => readSource(props.params), [props.params]);
+    const source = useMemo(
+      () => readGitReviewScope(props.params),
+      [props.params]
+    );
     const pendingReveal = useMemo(
       () => readPendingReveal(props.params),
       [props.params]

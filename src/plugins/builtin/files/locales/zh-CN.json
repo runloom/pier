@@ -64,6 +64,7 @@
     "filePanel.markdown.zoom.out": "缩小正文字号",
     "filePanel.markdown.zoom.reset": "重置正文字号",
     "filePanel.editor.sourceLabel": "源码编辑器",
+    "filePanel.editor.gitGutter.openChangesFailed": "无法打开变更。请先打开带 Git 的项目文件夹。",
     "filePanel.editor.contextMenuFailed": "无法打开编辑器菜单",
     "filePanel.errors.diskDocumentMissing": "无法恢复这个已保存的文件。",
     "filePanel.errors.deleted": "磁盘上的文件已不存在。",

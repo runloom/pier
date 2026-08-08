@@ -6,6 +6,7 @@
 
 - [2026-07-02-project-file-tree-design.md](2026-07-02-project-file-tree-design.md)（Files 树与项目锚点）
 - [2026-07-14-git-diff-review-polish-design.md](2026-07-14-git-diff-review-polish-design.md)（Git 插件完整 diff / review，职责不抢）
+- [2026-08-08-files-editor-git-gutter-click-research-design.md](2026-08-08-files-editor-git-gutter-click-research-design.md)（点击查看调研与选型：路径 A 只读 peek；本文件 v1 仍仅指示条）
 - 现有实现：`files-tree-git-decorations.ts`（目录树状态色）、`file-editor-view-session.ts`（CodeMirror 会话）
 
 ## 1. 背景与问题
@@ -37,7 +38,8 @@
 
 - 未保存缓冲 vs HEAD 的实时 gutter（后续可选）
 - staged / unstaged 分色或双层条
-- 点击 gutter 展开删行内容、hover 预览、跳转 Git Changes
+- 点击 gutter：打开/聚焦 Git Changes 并 `pendingReveal` 到对应行（无编辑器内 peek；见 `git-gutter-navigate.ts`）
+- hover 预览、局部 Revert 等（可选后续）
 - 完整 inline / side-by-side diff 视图（归 Git 插件 review）
 - 设置项开关（本轮默认开启；无 prefs）
 - 目录树装饰改动、Markdown preview / rich / 冲突 Compare 模式

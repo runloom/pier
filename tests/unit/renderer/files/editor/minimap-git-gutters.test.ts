@@ -8,6 +8,7 @@ import {
   resolveScmDiffColors,
   setGitGutterMarkers,
 } from "@plugins/builtin/files/renderer/editor/git-gutter.ts";
+import { createGitGutterThemeResyncPlugin } from "@plugins/builtin/files/renderer/editor/git-gutter-theme-resync.ts";
 import { createMinimapExtension } from "@plugins/builtin/files/renderer/editor/minimap.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -129,7 +130,11 @@ describe("git gutter + minimap field wiring", () => {
       parent,
       state: EditorState.create({
         doc,
-        extensions: [createGitGutterExtension(), createMinimapExtension()],
+        extensions: [
+          createGitGutterExtension(),
+          createGitGutterThemeResyncPlugin(),
+          createMinimapExtension(),
+        ],
       }),
     });
     views.push(view);
@@ -187,7 +192,7 @@ describe("git gutter + minimap field wiring", () => {
     expect(view.state).toBe(afterFirst);
   });
 
-  it("rebuilds left gutter ranges after doc edit even when marker content matches", () => {
+  it("rebuilds left gutter ranges after doc edit to keep line-number anchors", () => {
     const view = mountView("a\nb\nc\n");
     const markerPayload = { count: 1, kind: "added" as const };
     setGitGutterMarkers(view, new Map([[2, markerPayload]]));
@@ -195,13 +200,15 @@ describe("git gutter + minimap field wiring", () => {
     const fromBefore = firstGutterFrom(before);
     expect(fromBefore).toBe(view.state.doc.line(2).from);
 
-    // 插入文首行后，field 不 map RangeSet（历史行为）；重放同语义 markers 必须重建锚点。
+    // 磁盘行号语义：插入文首后仍锚在「第 2 行」起点；field 在 docChanged 时重建 RangeSet。
     view.dispatch({ changes: { from: 0, insert: "NEW\n" } });
-    expect(view.state.field(gitGutterField).gutterMarkers).toBe(before);
+    const afterEdit = view.state.field(gitGutterField).gutterMarkers;
+    expect(RangeSet.eq([before], [afterEdit])).toBe(false);
+    expect(firstGutterFrom(afterEdit)).toBe(view.state.doc.line(2).from);
 
+    // 重放同语义 markers 仍落在同一行号锚点。
     setGitGutterMarkers(view, new Map([[2, markerPayload]]));
     const after = view.state.field(gitGutterField).gutterMarkers;
-    expect(RangeSet.eq([before], [after])).toBe(false);
     expect(firstGutterFrom(after)).toBe(view.state.doc.line(2).from);
   });
 
@@ -248,7 +255,11 @@ describe("git gutter + minimap field wiring", () => {
       parent,
       state: EditorState.create({
         doc: "a\nb\n",
-        extensions: [createGitGutterExtension(), createMinimapExtension()],
+        extensions: [
+          createGitGutterExtension(),
+          createGitGutterThemeResyncPlugin(),
+          createMinimapExtension(),
+        ],
       }),
     });
     views.push(view);

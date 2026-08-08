@@ -5,6 +5,7 @@ import type {
   GitReviewIndexEntry,
   GitReviewScope,
 } from "@shared/contracts/git/review.ts";
+import { GIT_REVIEW_GROUP_ORDER } from "@shared/contracts/git/review.ts";
 import { type RefObject, useEffect, useRef } from "react";
 import type { ReviewDocumentProjection } from "../review/document/projection.ts";
 import { reviewTreeSectionKeyForSurface } from "../review/document/projection-index.ts";
@@ -15,6 +16,61 @@ import type {
 } from "../review/surface-types.ts";
 import { useGitReviewGutterBindings } from "./use-review-gutter-bindings.ts";
 import { useReviewInlineThreads } from "./use-review-inline-threads.ts";
+
+const GROUP_FALLBACK_ORDER = ["unstaged", "staged", "conflict"] as const;
+
+/**
+ * 解析 pendingReveal → (group, sectionKey)。
+ * - 评论：仅认显式 group（allowGroupFallback 假/省略）。
+ * - Gutter：allowGroupFallback 时按 entry 实际 slot 在 unstaged→staged→conflict 中取首个可用。
+ */
+export function resolvePendingRevealTarget(
+  entry: GitReviewIndexEntry,
+  pending: PendingCommentReveal
+): { group: GitReviewGroup; sectionKey: string } | null {
+  const tryGroup = (
+    group: GitReviewGroup
+  ): { group: GitReviewGroup; sectionKey: string } | null => {
+    const sectionKey = reviewTreeSectionKeyForSurface(
+      entry,
+      reviewSurfaceForGroup(group)
+    );
+    return sectionKey === null ? null : { group, sectionKey };
+  };
+
+  if (!pending.allowGroupFallback) {
+    if (pending.group === undefined) {
+      return null;
+    }
+    return tryGroup(pending.group);
+  }
+
+  const slotGroups = new Set(
+    entry.renderSlots.map((slot) => slot.group as GitReviewGroup)
+  );
+  const ordered: GitReviewGroup[] = [];
+  if (pending.group !== undefined && slotGroups.has(pending.group)) {
+    ordered.push(pending.group);
+  }
+  for (const group of GROUP_FALLBACK_ORDER) {
+    if (slotGroups.has(group) && !ordered.includes(group)) {
+      ordered.push(group);
+    }
+  }
+  // 保守：若 slot 含 committed 等，按产品 group 序补上
+  for (const group of GIT_REVIEW_GROUP_ORDER) {
+    if (slotGroups.has(group) && !ordered.includes(group)) {
+      ordered.push(group);
+    }
+  }
+  for (const group of ordered) {
+    const hit = tryGroup(group);
+    if (hit !== null) {
+      return hit;
+    }
+  }
+  return null;
+}
 
 /**
  * 评论 gutter 入口 + 行内激活态 + drift 浮层装配。
@@ -81,13 +137,12 @@ export function useReviewCommentsBinding({
     if (entry === undefined) {
       return;
     }
-    const surface = reviewSurfaceForGroup(pendingReveal.group);
-    const sectionKey = reviewTreeSectionKeyForSurface(entry, surface);
-    if (sectionKey === null) {
+    const resolved = resolvePendingRevealTarget(entry, pendingReveal);
+    if (resolved === null) {
       return;
     }
     lastRevealNonceRef.current = pendingReveal.nonce;
-    onRequestTreeOpen(entry.entryKey, sectionKey, pendingReveal.group, {
+    onRequestTreeOpen(entry.entryKey, resolved.sectionKey, resolved.group, {
       line: pendingReveal.line,
       side: pendingReveal.side,
     });

@@ -1,6 +1,8 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FilesDocument } from "../document/types.ts";
-import { markersFromDiffPatch } from "./git-markers.ts";
+import { createFilesTranslate } from "../i18n.ts";
+import { navigateGitGutterToReview } from "./git-gutter-navigate.ts";
+import { buildGitGutterModel } from "./git-markers.ts";
 import type { FileEditorViewSession } from "./view-session.ts";
 
 interface GitGutterEntry {
@@ -25,6 +27,7 @@ const REFRESH_DEBOUNCE_MS = 200;
  * 一次取整树 patch 再按 path 分发给该 root 下所有会话（合并 IPC，避免每个文件各拉一次）。
  * 按 root 订阅 `git.watch`（引用计数），watch 命中防抖刷新，root-scoped generation 丢弃
  * 过期响应。失败静默清空（不 toast）。仅 disk + source 模式生效（mode 由 controller/panel 控制）。
+ * 点击色条 → 打开/聚焦 Git Changes 并 reveal 到该行（无编辑器内 peek）。
  */
 export class FilesEditorGitGutterController {
   readonly #context: RendererPluginContext;
@@ -41,6 +44,7 @@ export class FilesEditorGitGutterController {
     session: FileEditorViewSession
   ): void {
     if (document.source.kind !== "disk") {
+      session.setGitGutterNavigate(null);
       session.clearGitGutterMarkers();
       return;
     }
@@ -54,6 +58,9 @@ export class FilesEditorGitGutterController {
       session,
     };
     this.#entries.set(editorSessionId, entry);
+    session.setGitGutterNavigate((line) => {
+      this.#navigateToReview(entry, line);
+    });
     this.#ensureWatch(root, editorSessionId);
     this.#refreshRoot(root).catch(() => undefined);
   }
@@ -63,6 +70,7 @@ export class FilesEditorGitGutterController {
     if (!entry) {
       return;
     }
+    entry.session.setGitGutterNavigate(null);
     this.#entries.delete(editorSessionId);
     const slot = this.#watches.get(entry.root);
     if (slot) {
@@ -155,7 +163,7 @@ export class FilesEditorGitGutterController {
       const byPath = new Map(patch.files.map((f) => [f.path, f]));
       for (const entry of this.#entriesForRoot(root)) {
         const filePatch = byPath.get(entry.path) ?? null;
-        entry.session.setGitGutterMarkers(markersFromDiffPatch(filePatch));
+        entry.session.setGitGutterModel(buildGitGutterModel(filePatch));
       }
     } catch {
       if (slot.rootGeneration === generation) {
@@ -174,5 +182,42 @@ export class FilesEditorGitGutterController {
       }
     }
     return result;
+  }
+
+  #navigateToReview(entry: GitGutterEntry, line: number): void {
+    const t = createFilesTranslate(this.#context);
+    const base =
+      entry.session.getPanelContext() ??
+      this.#context.panels.getActiveContext();
+    if (!base) {
+      this.#context.notifications.error(
+        t(
+          "filePanel.editor.gitGutter.openChangesFailed",
+          "Couldn't open Changes. Open a project folder with Git first."
+        )
+      );
+      return;
+    }
+    // 补齐 git 路径锚点：部分 file panel context 只有 projectRoot，无 gitRoot。
+    const panelContext = {
+      ...base,
+      gitRoot: base.gitRoot ?? entry.root,
+      projectRootPath: base.projectRootPath ?? entry.root,
+      worktreeRoot: base.worktreeRoot ?? entry.root,
+    };
+    const opened = navigateGitGutterToReview({
+      context: this.#context,
+      line,
+      panelContext,
+      path: entry.path,
+    });
+    if (!opened) {
+      this.#context.notifications.error(
+        t(
+          "filePanel.editor.gitGutter.openChangesFailed",
+          "Couldn't open Changes. Open a project folder with Git first."
+        )
+      );
+    }
   }
 }

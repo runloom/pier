@@ -67,6 +67,7 @@ import type {
   GitReviewCancelRequest,
   GitReviewFileDocumentRequest,
   GitReviewFileDocumentResult,
+  GitReviewGroup,
   GitReviewIndexRequest,
   GitReviewIndexResult,
   GitReviewMutationRequest,
@@ -271,6 +272,22 @@ export interface RendererPluginGitFacade {
   listIgnored(cwd: string): Promise<string[]>;
   listStashes(cwd: string): Promise<GitStashListResult>;
   merge(cwd: string, branch: string): Promise<GitMergeResult>;
+  /**
+   * 宿主级打开/聚焦 uncommitted Git Changes（不经 plugin panels 越权断言）。
+   * 可选 pendingReveal 滚到 path+line（与评论跳转同构）。
+   * git 插件未注册时返回 false。
+   */
+  openUncommittedChanges(input: {
+    panelContext: PanelContext;
+    pendingReveal?: {
+      /** true：group 缺失/无 section 时回退 entry 上存在的 slot（gutter 用） */
+      allowGroupFallback?: boolean;
+      group?: GitReviewGroup;
+      line: number;
+      path: string;
+      side: "new" | "old";
+    } | null;
+  }): boolean;
   popStash(cwd: string, index?: number): Promise<GitStashPopResult>;
   publish(cwd: string): Promise<GitRemoteOperationResult>;
   pullFastForward(cwd: string): Promise<GitRemoteOperationResult>;

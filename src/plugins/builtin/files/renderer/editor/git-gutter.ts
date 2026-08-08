@@ -1,26 +1,27 @@
 import {
   type Extension,
+  Facet,
   RangeSet,
   RangeSetBuilder,
   StateEffect,
   StateField,
 } from "@codemirror/state";
-import {
-  GutterMarker,
-  gutterLineClass,
-  ViewPlugin,
-  type ViewUpdate,
-} from "@codemirror/view";
+import { GutterMarker, gutter } from "@codemirror/view";
 import type { EditorView } from "codemirror";
-import type { GitGutterKind, GitGutterLineMarker } from "./git-markers.ts";
+import type {
+  GitGutterChangeRange,
+  GitGutterKind,
+  GitGutterLineMarker,
+  GitGutterModel,
+} from "./git-markers.ts";
+import { EMPTY_GIT_GUTTER_MODEL, resolveRangeAtLine } from "./git-markers.ts";
 
 /**
- * Files 插件 SCM 装饰：左侧 gutter 边条 + 右侧 minimap 色轨共用同一 markers 真源。
- * 官方 gutterLineClass 给该行 gutter 元素加 class；主题只在 first-child 画 inset 边条。
- * minimap 经 showMinimap.compute 读 minimapGutter（已解析的具体色，canvas 不吃 var()）。
+ * Files 插件 SCM 装饰：行号右侧可点 git gutter + minimap 色轨。
+ * 点击色条 → 打开/聚焦 Git Changes 并 pendingReveal 到该行（无编辑器内 peek）。
+ * 扩展顺序须在 basicSetup（lineNumbers）之后，色条才落在行号右侧。
  *
  * @see https://codemirror.net/examples/gutter/
- * @see https://codemirror.net/docs/ref/#view.gutterLineClass
  */
 
 export interface ScmDiffColors {
@@ -35,7 +36,18 @@ export interface GitGutterState {
   readonly markers: ReadonlyMap<number, GitGutterLineMarker>;
   /** minimap 单轨：行号 → 已解析 CSS 色。空对象 = 无点。 */
   readonly minimapGutter: Readonly<Record<number, string>>;
+  readonly ranges: readonly GitGutterChangeRange[];
 }
+
+/** 点击 gutter 时导航到 review（由 session / controller 注入）。 */
+export type GitGutterNavigateHandler = (lineNumber: number) => void;
+
+export const gitGutterNavigateFacet = Facet.define<
+  GitGutterNavigateHandler | null,
+  GitGutterNavigateHandler | null
+>({
+  combine: (values) => values.at(-1) ?? null,
+});
 
 const DIFF_COLOR_VARS: Record<GitGutterKind, string> = {
   added: "--diff-addition-fg",
@@ -43,11 +55,10 @@ const DIFF_COLOR_VARS: Record<GitGutterKind, string> = {
   modified: "--diff-modification-fg",
 };
 
-const EMPTY_MARKERS: ReadonlyMap<number, GitGutterLineMarker> = new Map();
-
 export const EMPTY_GIT_GUTTER_STATE: GitGutterState = {
   gutterMarkers: RangeSet.empty,
-  markers: EMPTY_MARKERS,
+  markers: EMPTY_GIT_GUTTER_MODEL.markers,
+  ranges: EMPTY_GIT_GUTTER_MODEL.ranges,
   minimapGutter: {},
 };
 
@@ -115,8 +126,6 @@ function buildGutterMarkers(
   const sorted = [...markers.entries()].sort((a, b) => a[0] - b[0]);
   const gutterBuilder = new RangeSetBuilder<GutterMarker>();
   for (const [line, marker] of sorted) {
-    // 标记基于磁盘 diff 的行号；脏缓冲可能比磁盘短（未保存的删除行）。
-    // 越界行直接跳过，避免 doc.line 抛 RangeError 导致整 root gutter 被清空。
     if (line < 1 || line > doc.lines) {
       continue;
     }
@@ -127,14 +136,15 @@ function buildGutterMarkers(
 }
 
 function buildGitGutterState(
-  markers: ReadonlyMap<number, GitGutterLineMarker>,
+  model: GitGutterModel,
   doc: { line: (n: number) => { from: number }; lines: number },
   colors: ScmDiffColors
 ): GitGutterState {
   return {
-    gutterMarkers: buildGutterMarkers(markers, doc),
-    markers,
-    minimapGutter: markersToMinimapGutter(markers, colors, {
+    gutterMarkers: buildGutterMarkers(model.markers, doc),
+    markers: model.markers,
+    ranges: model.ranges,
+    minimapGutter: markersToMinimapGutter(model.markers, colors, {
       maxLine: doc.lines,
     }),
   };
@@ -177,43 +187,79 @@ function markersContentEqual(
   return true;
 }
 
-/**
- * 短路须含 gutter RangeSet：文档变更后 marker 语义可不变，但行起点偏移，
- * 若不重建 RangeSet，左侧边条会停在旧偏移，与 minimap 行号色点脱节。
- */
+function rangesContentEqual(
+  a: readonly GitGutterChangeRange[],
+  b: readonly GitGutterChangeRange[]
+): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i += 1) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      !(x && y) ||
+      x.id !== y.id ||
+      x.kind !== y.kind ||
+      x.newLineFrom !== y.newLineFrom ||
+      x.newLineTo !== y.newLineTo
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function gitGutterStateEqual(a: GitGutterState, b: GitGutterState): boolean {
   return (
     markersContentEqual(a.markers, b.markers) &&
+    rangesContentEqual(a.ranges, b.ranges) &&
     minimapGutterEqual(a.minimapGutter, b.minimapGutter) &&
     RangeSet.eq([a.gutterMarkers], [b.gutterMarkers])
   );
 }
 
-/** SCM 装饰 field：gutter + minimap 共用。minimap 扩展依赖此 field 重算 gutters。 */
+/** SCM 装饰 field：gutter + minimap。 */
 export const gitGutterField = StateField.define<GitGutterState>({
   create: () => EMPTY_GIT_GUTTER_STATE,
   update(value, tr) {
+    let next = value;
     for (const e of tr.effects) {
       if (e.is(setGitGutterStateEffect)) {
-        return e.value;
+        next = e.value;
       }
     }
-    return value;
+    if (tr.docChanged && next.markers.size > 0) {
+      const rebuilt = buildGutterMarkers(next.markers, tr.state.doc);
+      if (!RangeSet.eq([next.gutterMarkers], [rebuilt])) {
+        next = { ...next, gutterMarkers: rebuilt };
+      }
+    }
+    return next;
   },
-  provide: (field) =>
-    gutterLineClass.from(field, (value) => value.gutterMarkers),
 });
 
 function colorScope(view: EditorView): Element {
   return view.dom.isConnected ? view.dom : document.documentElement;
 }
 
-export function setGitGutterMarkers(
+function modelFromMarkers(
+  markers: ReadonlyMap<number, GitGutterLineMarker>,
+  ranges: readonly GitGutterChangeRange[] = []
+): GitGutterModel {
+  return { markers, ranges };
+}
+
+/** 写入完整 model（markers + ranges）。 */
+export function setGitGutterModel(
   view: EditorView,
-  markers: ReadonlyMap<number, GitGutterLineMarker>
+  model: GitGutterModel
 ): void {
   const next = buildGitGutterState(
-    markers,
+    model,
     view.state.doc,
     resolveScmDiffColors(colorScope(view))
   );
@@ -226,9 +272,21 @@ export function setGitGutterMarkers(
   });
 }
 
+/** 兼容测试与仅 markers 调用：ranges 置空。 */
+export function setGitGutterMarkers(
+  view: EditorView,
+  markers: ReadonlyMap<number, GitGutterLineMarker>
+): void {
+  setGitGutterModel(view, modelFromMarkers(markers, []));
+}
+
 export function clearGitGutterMarkers(view: EditorView): void {
   const prev = view.state.field(gitGutterField);
-  if (prev.markers.size === 0 && Object.keys(prev.minimapGutter).length === 0) {
+  if (
+    prev.markers.size === 0 &&
+    prev.ranges.length === 0 &&
+    Object.keys(prev.minimapGutter).length === 0
+  ) {
     return;
   }
   view.dispatch({
@@ -237,74 +295,58 @@ export function clearGitGutterMarkers(view: EditorView): void {
 }
 
 /**
- * 主题 class（light/dark）变化时重解析 --diff-*-fg，不重拉 git。
- * 仅当已有 markers 时 dispatch。
+ * 主题切换时重解析 --diff-*-fg（保留 ranges）。
+ * 供 theme-resync 插件调用；不重拉 git。
  */
-function createThemeResyncPlugin(): Extension {
-  return ViewPlugin.fromClass(
-    class {
-      readonly #view: EditorView;
-      readonly #observer: MutationObserver;
-      #destroyed = false;
-      #themeKey: string;
-
-      constructor(view: EditorView) {
-        this.#view = view;
-        this.#themeKey = readDocumentThemeKey();
-        this.#observer = new MutationObserver(() => {
-          this.#resyncIfThemeChanged();
-        });
-        if (typeof document !== "undefined") {
-          this.#observer.observe(document.documentElement, {
-            attributeFilter: ["class"],
-            attributes: true,
-          });
-        }
-      }
-
-      update(_update: ViewUpdate): void {
-        // MutationObserver 是主题主路径；此处兜底同帧 class 已变但 observer 未跑的情况。
-        this.#resyncIfThemeChanged();
-      }
-
-      destroy(): void {
-        this.#destroyed = true;
-        this.#observer.disconnect();
-      }
-
-      #resyncIfThemeChanged(): void {
-        const key = readDocumentThemeKey();
-        if (key === this.#themeKey) {
-          return;
-        }
-        this.#themeKey = key;
-        if (this.#view.state.field(gitGutterField).markers.size === 0) {
-          return;
-        }
-        // 避免在 update 循环内同步 dispatch：推到微任务。
-        // 微任务内重读 field：中间若 clear/刷新清空，不得用捕获快照复活装饰。
-        queueMicrotask(() => {
-          if (this.#destroyed) {
-            return;
-          }
-          const { markers } = this.#view.state.field(gitGutterField);
-          if (markers.size === 0) {
-            return;
-          }
-          setGitGutterMarkers(this.#view, markers);
-        });
-      }
-    }
-  );
-}
-
-function readDocumentThemeKey(): string {
-  if (typeof document === "undefined") {
-    return "";
+export function resyncGitGutterColors(view: EditorView): void {
+  const current = view.state.field(gitGutterField);
+  if (current.markers.size === 0) {
+    return;
   }
-  return document.documentElement.className;
+  const next = buildGitGutterState(
+    {
+      markers: current.markers,
+      ranges: current.ranges,
+    },
+    view.state.doc,
+    resolveScmDiffColors(colorScope(view))
+  );
+  if (gitGutterStateEqual(current, next)) {
+    return;
+  }
+  view.dispatch({
+    effects: setGitGutterStateEffect.of(next),
+  });
 }
 
+function createGitGutterTrack(): Extension {
+  return gutter({
+    class: "cm-git-gutter",
+    markers: (view) => view.state.field(gitGutterField).gutterMarkers,
+    initialSpacer: () => new GitGutterMarkerImpl("added", 1),
+    domEventHandlers: {
+      mousedown(view, line, event) {
+        if (!(event instanceof MouseEvent) || event.button !== 0) {
+          return false;
+        }
+        const lineNumber = view.state.doc.lineAt(line.from).number;
+        const state = view.state.field(gitGutterField);
+        if (!resolveRangeAtLine(state.ranges, lineNumber)) {
+          return false;
+        }
+        const navigate = view.state.facet(gitGutterNavigateFacet);
+        if (!navigate) {
+          return false;
+        }
+        navigate(lineNumber);
+        event.preventDefault();
+        return true;
+      },
+    },
+  });
+}
+
+/** 主题 resync 见 createGitGutterThemeResyncPlugin（由 view-extensions 并列装配）。 */
 export function createGitGutterExtension(): Extension {
-  return [gitGutterField, createThemeResyncPlugin()];
+  return [gitGutterField, createGitGutterTrack()];
 }

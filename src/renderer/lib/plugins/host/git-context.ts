@@ -1,6 +1,10 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import {
+  allocateCommentRevealNonce,
+  openGitChangesForComments,
+} from "@/lib/comments/open-git-changes.ts";
 
 type AssertPluginCapability = (
   entry: PluginRegistryEntry | undefined,
@@ -113,6 +117,28 @@ export function createPluginGitContext(
     merge: (cwd, branch) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.merge(cwd, branch);
+    },
+    openUncommittedChanges: (input) => {
+      // 宿主打开 git Changes：不经 panels.openInstance 的「只能开自己声明的 panel」断言。
+      assertPluginCapability(entry, "git:read");
+      const reveal = input.pendingReveal;
+      return openGitChangesForComments({
+        context: input.panelContext,
+        ...(reveal
+          ? {
+              pendingReveal: {
+                ...(reveal.allowGroupFallback
+                  ? { allowGroupFallback: true as const }
+                  : {}),
+                ...(reveal.group === undefined ? {} : { group: reveal.group }),
+                line: reveal.line,
+                nonce: allocateCommentRevealNonce(),
+                path: reveal.path,
+                side: reveal.side,
+              },
+            }
+          : {}),
+      });
     },
     popStash: (cwd, index) => {
       assertPluginCapability(entry, "git:write");

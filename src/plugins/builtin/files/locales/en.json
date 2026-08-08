@@ -64,6 +64,7 @@
     "filePanel.markdown.zoom.out": "Decrease text size",
     "filePanel.markdown.zoom.reset": "Reset text size",
     "filePanel.editor.sourceLabel": "Source editor",
+    "filePanel.editor.gitGutter.openChangesFailed": "Couldn't open Changes. Open a project folder with Git first.",
     "filePanel.editor.contextMenuFailed": "Unable to open editor menu",
     "filePanel.errors.diskDocumentMissing": "This saved file could not be restored.",
     "filePanel.errors.deleted": "File no longer exists on disk.",
