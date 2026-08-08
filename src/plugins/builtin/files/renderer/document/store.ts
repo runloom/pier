@@ -35,6 +35,11 @@ import {
   applyHydratedDraftsToOpenDocuments,
   type PendingUntitledRestoreSource,
 } from "./hydration.ts";
+import {
+  refreshDiskDocumentLanguagesForProject as refreshLanguagesImpl,
+  scheduleLiveModulesLanguageRefresh,
+  syncLiveModulesConfigAfterDocumentWrite,
+} from "./live-modules-sync.ts";
 import { createFilesDocumentPathMutationActions } from "./path-mutations.ts";
 import { diskDocumentId } from "./paths.ts";
 import { createFilesDocumentSaveAsActions } from "./save-as.ts";
@@ -190,6 +195,7 @@ function replaceDocument(
   notify();
 }
 
+const documentStateActions = createFilesDocumentStateActions(replaceDocument);
 export const {
   dismissDocumentDiskConflict,
   markDocumentDeletedOnDisk,
@@ -205,11 +211,29 @@ export const {
   markDocumentSaveError,
   markDocumentSaveIdle,
   markDocumentSaving,
-  markDocumentWritten,
   normalizeDocumentEol,
   setDocumentConflictContents,
   updateDocumentContents,
-} = createFilesDocumentStateActions(replaceDocument);
+} = documentStateActions;
+
+export function markDocumentWritten(
+  documentId: string,
+  savedContents: string,
+  result: Extract<FileDocumentWriteResult, { kind: "written" }>
+): void {
+  documentStateActions.markDocumentWritten(documentId, savedContents, result);
+  const document = documents.get(resolveDocumentId(documentId));
+  syncLiveModulesConfigAfterDocumentWrite({ document, savedContents });
+  if (document?.source.kind === "disk") {
+    refreshDiskDocumentLanguagesForProject(document.source.root);
+  }
+}
+
+export function refreshDiskDocumentLanguagesForProject(
+  projectRootPath: string
+): void {
+  refreshLanguagesImpl({ documents, projectRootPath, replaceDocument });
+}
 
 export function createUntitledMarkdownDocument(input: {
   contents: string;
@@ -340,6 +364,10 @@ export function ensureDiskDocument(input: {
     persistDiskDraft(document);
   }
   notify();
+  scheduleLiveModulesLanguageRefresh({
+    projectRootPath: input.root,
+    refresh: refreshDiskDocumentLanguagesForProject,
+  });
   return document;
 }
 

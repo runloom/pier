@@ -26,7 +26,7 @@ export function buildSaveAsTargetDocument(input: {
     error: null,
     hasBackingStore: true,
     id: targetId,
-    language: languageForPath(input.target.path),
+    language: languageForPath(input.target.path, input.target.root),
     loadState: "loaded",
     mode: input.result.mode,
     name:

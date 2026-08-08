@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "pier-default",
+  "axis": "ui",
+  "title": "Pier Canvas default UI",
+  "description": "Desktop-tool density and pier/canvas primitives only — calm, scannable overview chrome.",
+  "rules": [
+    "Import UI only from pier/canvas",
+    "Prefer Frame + Stack + Row + Text hierarchy",
+    "Single-line controls density aligns with host 28px",
+    "Use Badge for status, not decorative emoji",
+    "Tables for commands/defaults; prose for narrative only",
+    "One primary focus per view (squint test)",
+    "Mix open sections with cards; do not wrap every block in the same card"
+  ],
+  "forbidden": [
+    "cursor/canvas imports",
+    "marketing gradients / glassmorphism / glow",
+    "rainbow status colors outside semantic Badge variants",
+    "fabricated chart data",
+    "host-private APIs (window.pier, Electron, Node)"
+  ],
+  "agentPrompt": "Apply Pier desktop-tool visual discipline. pier/canvas only. No marketing chrome. Semantic badges. Clear hierarchy. Prefer tables for inventories. See references/authoring.md and sdk/."
+}

@@ -83,14 +83,14 @@ export const settings = {
     pierHomeRevealFailed: "无法显示本机工作台",
     general: {
       dangerDescription:
-        "从 Pier 的共享索引中移除此项目。磁盘上的工作树文件夹和技能文件不会被删除。",
+        "只从 Pier 里去掉此项目，不删磁盘文件，之后还能再添加。",
       dangerTitle: "从 Pier 移除",
       deleteHint: "之后仍可再次添加该项目。",
-      deleteProject: "移除此项目",
+      deleteProject: "移除项目",
       deleteConfirmBody:
-        "从 Pier 移除 “{{name}}”？其工作树将不再运行环境脚本。",
+        "从 Pier 移除「{{name}}」？相关工作树将不再运行环境脚本。",
       deleteConfirmBoundBody:
-        "从 Pier 移除 “{{name}}”？当前有 {{count}} 个工作树绑定到该项目，删除后它们的清理脚本将不再运行。",
+        "从 Pier 移除「{{name}}」？当前有 {{count}} 个工作树绑定到该项目，移除后清理脚本不再运行。",
       deleteConfirmTitle: "从 Pier 移除此项目？",
       deliveryDescription:
         "选择已开启技能的安装位置。都不选时，智能体找不到这些技能。",
@@ -100,11 +100,26 @@ export const settings = {
       deliveryClaude: "Claude Code（.claude/skills）",
       deliveryClaudeHint:
         "Claude Code 只扫这里。需要 Claude Code 看到这些技能时再打开。",
-      gitIgnoreTitle: "建议加入 Git 忽略",
-      gitIgnoreDescription:
-        "建议不要提交技能安装链接。需要时可将下列内容复制到 .gitignore。",
-      gitIgnoreCopy: "复制忽略行",
+      gitIgnoreTitle: "Git 忽略建议",
+      gitIgnoreDescription: "技能安装产生的链接一般不必提交。",
+      gitIgnoreCopy: "复制",
       gitIgnoreCopied: "已复制",
+      canvasRootsTitle: "画布预览目录",
+      canvasRootsDescription:
+        "可预览 *.canvas.* 的项目相对路径。未改过时为 .pier/canvases 与 docs。",
+      canvasRootsPathLabel: "目录",
+      canvasRootsAdd: "添加",
+      canvasRootsRemove: "删除",
+      canvasRootsResetDefaults: "恢复默认",
+      canvasRootsSave: "保存",
+      canvasRootsSaved: "已保存",
+      canvasRootsLoading: "加载中…",
+      canvasRootsLoadFailed: "无法加载预览目录",
+      canvasRootsSaveFailed: "无法保存预览目录",
+      canvasRootsNeedOne: "请至少保留一个目录。",
+      canvasRootsInvalidPath: "请填写项目内相对路径（不能用 .. 或绝对路径）。",
+      canvasRootsMaxFolders: "最多可添加 {{max}} 个目录。",
+      canvasRootsConflict: "文件已在别处更改，请重新打开后再保存。",
     },
     tabEnvironment: "环境",
     tabRules: "规则",

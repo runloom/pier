@@ -197,4 +197,18 @@ describe("app dialog usage governance", () => {
     expect(appDialogHost).not.toContain("TriangleAlertIcon");
     expect(appDialogHost).not.toContain("AlertDialogMedia");
   });
+
+  it("keeps long alert body scrollbar flush to the dialog content edge", () => {
+    const appDialogHost = readFileSync(
+      join(ROOT, "src", "renderer", "components", "common", "dialogs/host.tsx"),
+      "utf8"
+    );
+
+    // Content shell is p-5; body scroller bleeds with -mx-5 and re-applies px-5
+    // so the thumb sits on the card edge while copy stays aligned with title.
+    expect(appDialogHost).toContain("overflow-y-auto");
+    expect(appDialogHost).toContain("-mx-5");
+    expect(appDialogHost).toContain("px-5");
+    expect(appDialogHost).toContain('data-scrollbar="overlay"');
+  });
 });

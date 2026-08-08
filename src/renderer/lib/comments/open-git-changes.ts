@@ -14,11 +14,13 @@ import { getPluginPanelRegistrations } from "../plugins/panel-registry.ts";
 export const GIT_CHANGES_PANEL_COMPONENT_ID = "pier.git.changes";
 
 /**
- * 评论 reveal 跳转意图（状态栏 → git changes 面板）。宿主侧透传结构，
+ * 评论 / 编辑器 gutter reveal 跳转意图（→ git changes 面板）。宿主侧透传结构，
  * 与 git 插件 PendingCommentReveal 同构；插件侧 readPendingReveal 校验。
  */
 export interface CommentRevealTarget {
-  readonly group: GitReviewGroup;
+  /** 见 PendingCommentReveal.allowGroupFallback */
+  readonly allowGroupFallback?: boolean;
+  readonly group?: GitReviewGroup;
   readonly line: number;
   readonly nonce: number;
   readonly path: string;

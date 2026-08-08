@@ -17,13 +17,21 @@ import type { gitReviewTreeModel } from "./tree.tsx";
 export type { UncommittedGitReviewSurface } from "./reading-surface.ts";
 
 /**
- * 评论 reveal 跳转意图（状态栏 → git changes 面板）。
+ * 评论 / 编辑器 gutter reveal 跳转意图（→ git changes 面板）。
  * 经 panel params 透传到 ReviewDocuments，反查 entryKey/sectionKey 后调
  * onRequestTreeOpen(reveal) 触发 section 导航 + 行级 scrollToLine。
  * nonce 用于去重（同 nonce 不重复触发）。
+ *
+ * - 评论：必填 group，allowGroupFallback 省略/false（只认该 group）。
+ * - Files gutter：可 omit group 并设 allowGroupFallback，按 entry 实际 slot 回退。
  */
 export interface PendingCommentReveal {
-  readonly group: GitReviewGroup;
+  /**
+   * true：group 不可用时按 unstaged → staged → conflict 回退到 entry 上存在的 slot。
+   * 评论路径必须 false/省略，避免 race 下误清 preferred group。
+   */
+  readonly allowGroupFallback?: boolean;
+  readonly group?: GitReviewGroup;
   readonly line: number;
   readonly nonce: number;
   readonly path: string;

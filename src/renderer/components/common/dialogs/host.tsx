@@ -53,7 +53,13 @@ function DialogCopy({
         // 长技术详情（git stderr / 多条目失败）不得撑破 sm 弹窗：
         // break-words 断长 token，max-h + overflow-y-auto 让正文自己滚动，
         // footer 按钮始终可见。
-        <AlertDialogDescription className="max-h-[min(calc(90vh-2rem),480px)] overflow-y-auto whitespace-pre-wrap break-words">
+        //
+        // 滚动条贴 Content 右缘：壳是 p-5，Description 用 -mx-5 横向铺满，
+        // 文案再 px-5 收回（对齐 title）；勿把横向 padding 留在壳上顶开条。
+        <AlertDialogDescription
+          className="-mx-5 max-h-[min(calc(90vh-2rem),480px)] overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words px-5"
+          data-scrollbar="overlay"
+        >
           {body}
         </AlertDialogDescription>
       ) : null}

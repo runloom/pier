@@ -87,15 +87,15 @@ export const settings = {
     pierHomeRevealFailed: "Couldn’t reveal Pier Home",
     general: {
       dangerDescription:
-        "Removes this project from Pier’s shared index. Worktree folders and skill files on disk are not deleted.",
+        "Removes the project from Pier only. Files on disk stay, and you can add it again later.",
       dangerTitle: "Remove from Pier",
       deleteHint: "You can add the project again later.",
-      deleteProject: "Remove this project",
+      deleteProject: "Remove project",
       deleteConfirmBody:
-        'Remove "{{name}}" from Pier? Environment scripts will no longer run for its worktrees.',
+        "Remove “{{name}}” from Pier? Environment scripts will stop for its worktrees.",
       deleteConfirmBoundBody:
-        'Remove "{{name}}" from Pier? {{count}} worktree(s) are bound; their cleanup scripts will no longer run on removal.',
-      deleteConfirmTitle: "Remove project from Pier?",
+        "Remove “{{name}}” from Pier? {{count}} worktree(s) are bound; cleanup scripts will stop running.",
+      deleteConfirmTitle: "Remove this project from Pier?",
       deliveryDescription:
         "Choose where enabled skills are installed. If none are selected, agents will not find them.",
       deliveryTitle: "Install locations",
@@ -107,9 +107,27 @@ export const settings = {
         "Claude Code only looks here. Turn on if Claude Code should see these skills.",
       gitIgnoreTitle: "Suggested Git ignore",
       gitIgnoreDescription:
-        "Avoid committing skill install links. Copy these lines into .gitignore if you want.",
-      gitIgnoreCopy: "Copy ignore lines",
+        "Skill install links usually shouldn’t be committed.",
+      gitIgnoreCopy: "Copy",
       gitIgnoreCopied: "Copied",
+      canvasRootsTitle: "Canvas preview folders",
+      canvasRootsDescription:
+        "Project-relative folders where *.canvas.* can preview. Defaults to .pier/canvases and docs until you change them.",
+      canvasRootsPathLabel: "Folder",
+      canvasRootsAdd: "Add",
+      canvasRootsRemove: "Remove",
+      canvasRootsResetDefaults: "Reset defaults",
+      canvasRootsSave: "Save",
+      canvasRootsSaved: "Saved",
+      canvasRootsLoading: "Loading…",
+      canvasRootsLoadFailed: "Couldn’t load preview folders",
+      canvasRootsSaveFailed: "Couldn’t save preview folders",
+      canvasRootsNeedOne: "Keep at least one folder.",
+      canvasRootsInvalidPath:
+        "Use a project-relative folder (no .. or absolute paths).",
+      canvasRootsMaxFolders: "You can add at most {{max}} folders.",
+      canvasRootsConflict:
+        "The file changed elsewhere. Open this page again, then save.",
     },
     tabEnvironment: "Environment",
     tabRules: "Rules",

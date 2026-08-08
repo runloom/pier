@@ -8,7 +8,10 @@ import { describe, expect, it, vi } from "vitest";
 function makeSession(): FileEditorViewSession {
   return {
     setGitGutterMarkers: vi.fn(),
+    setGitGutterModel: vi.fn(),
+    setGitGutterNavigate: vi.fn(),
     clearGitGutterMarkers: vi.fn(),
+    getPanelContext: vi.fn(() => undefined),
   } as unknown as FileEditorViewSession;
 }
 
@@ -49,14 +52,14 @@ describe("FilesEditorGitGutterController", () => {
     const session = makeSession();
     ctrl.attach("s1", untitledDocument("u1"), session);
     expect(
-      session.setGitGutterMarkers as ReturnType<typeof vi.fn>
+      session.setGitGutterModel as ReturnType<typeof vi.fn>
     ).not.toHaveBeenCalled();
     expect(
       session.clearGitGutterMarkers as ReturnType<typeof vi.fn>
     ).toHaveBeenCalled();
   });
 
-  it("fetches diff on attach and sets markers", async () => {
+  it("fetches diff on attach and sets model (markers + ranges)", async () => {
     const filePatch: GitDiffPatch["files"][number] = {
       binary: false,
       path: "src/a.ts",
@@ -80,10 +83,14 @@ describe("FilesEditorGitGutterController", () => {
     ctrl.attach("s1", diskDocument("/repo", "src/a.ts"), session);
     await Promise.resolve();
     await Promise.resolve();
-    const setSpy = session.setGitGutterMarkers as ReturnType<typeof vi.fn>;
+    const setSpy = session.setGitGutterModel as ReturnType<typeof vi.fn>;
     expect(setSpy).toHaveBeenCalled();
-    const markers = setSpy.mock.calls[0]?.[0] as Map<number, unknown>;
-    expect(markers.get(2)).toEqual({ count: 1, kind: "added" });
+    const model = setSpy.mock.calls[0]?.[0] as {
+      markers: Map<number, unknown>;
+      ranges: unknown[];
+    };
+    expect(model.markers.get(2)).toEqual({ count: 1, kind: "added" });
+    expect(model.ranges).toHaveLength(1);
   });
 
   it("clears markers when diff fetch fails", async () => {
@@ -121,17 +128,21 @@ describe("FilesEditorGitGutterController", () => {
     ).toHaveBeenCalled();
   });
 
-  it("empty patch files clears markers", async () => {
+  it("empty patch files clears markers via empty model", async () => {
     const { context } = makeContext(async () => ({ files: [] }));
     const ctrl = new FilesEditorGitGutterController(context);
     const session = makeSession();
     ctrl.attach("s1", diskDocument("/repo", "src/a.ts"), session);
     await Promise.resolve();
     await Promise.resolve();
-    const setSpy = session.setGitGutterMarkers as ReturnType<typeof vi.fn>;
+    const setSpy = session.setGitGutterModel as ReturnType<typeof vi.fn>;
     expect(setSpy).toHaveBeenCalledTimes(1);
-    const markers = setSpy.mock.calls[0]?.[0] as Map<number, unknown>;
-    expect(markers.size).toBe(0);
+    const model = setSpy.mock.calls[0]?.[0] as {
+      markers: Map<number, unknown>;
+      ranges: unknown[];
+    };
+    expect(model.markers.size).toBe(0);
+    expect(model.ranges).toEqual([]);
   });
 
   it("merged root fetch: one IPC call dispatches to all sessions for that root", async () => {
@@ -158,11 +169,7 @@ describe("FilesEditorGitGutterController", () => {
     for (const call of getDiffPatch.mock.calls) {
       expect(call[1]).toEqual({ from: "HEAD" });
     }
-    expect(
-      s1.setGitGutterMarkers as ReturnType<typeof vi.fn>
-    ).toHaveBeenCalled();
-    expect(
-      s2.setGitGutterMarkers as ReturnType<typeof vi.fn>
-    ).toHaveBeenCalled();
+    expect(s1.setGitGutterModel as ReturnType<typeof vi.fn>).toHaveBeenCalled();
+    expect(s2.setGitGutterModel as ReturnType<typeof vi.fn>).toHaveBeenCalled();
   });
 });

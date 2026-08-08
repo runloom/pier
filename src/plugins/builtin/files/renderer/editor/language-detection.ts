@@ -1,4 +1,7 @@
-import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
+import {
+  isProjectCanvasPath,
+  liveModuleProjectContentDirectories,
+} from "@shared/live-module-canvas-path.ts";
 import type { FilesDocumentLanguage } from "../document/types.ts";
 
 // Cursor 参考:文件面板顶部的语言标签 + syntax highlight 依赖此推断。扩展名到
@@ -54,10 +57,15 @@ const EXTENSION_TO_LANGUAGE: Readonly<Record<string, FilesDocumentLanguage>> = {
   zsh: "shell",
 };
 
-export function languageForPath(path: string): FilesDocumentLanguage {
+export function languageForPath(
+  path: string,
+  projectRootPath?: string
+): FilesDocumentLanguage {
   // Live Modules: require canvas under known project content directories
   // with a compound canvas suffix. Bare `*.tsx` outside those trees stay TS.
-  if (isProjectCanvasPath(path)) {
+  const contentDirectories =
+    liveModuleProjectContentDirectories(projectRootPath);
+  if (isProjectCanvasPath(path, contentDirectories)) {
     return "canvas";
   }
   const basename = path.split("/").filter(Boolean).at(-1) ?? "";

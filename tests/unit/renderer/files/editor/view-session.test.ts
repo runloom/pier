@@ -188,6 +188,81 @@ function findView(parent: HTMLElement): EditorView {
   return view as EditorView;
 }
 
+describe("FileEditorViewSession scroll restore", () => {
+  it("restores scrollTop after detach and remount (tab switch)", async () => {
+    const longDoc: FilesDocument = {
+      ...document,
+      currentContents: `${"line\n".repeat(200)}end\n`,
+      savedContents: `${"line\n".repeat(200)}end\n`,
+    };
+    const session = new FileEditorViewSession({
+      documentId: longDoc.id,
+      editorPrefs: initialPrefs,
+      editorSessionId: "session-scroll",
+      minimapEnabled: false,
+      onChange: vi.fn(),
+      presentation: {
+        ...viewPresentationDefaults,
+        ariaLabel: "File editor",
+      },
+    });
+    const firstParent = documentNode();
+    // jsdom 默认无几何；给 scroll 宿主固定高度以模拟可滚区域。
+    Object.defineProperty(firstParent, "clientHeight", {
+      configurable: true,
+      value: 80,
+    });
+    session.mount(firstParent, longDoc);
+    const view = findView(firstParent);
+    Object.defineProperty(view.scrollDOM, "clientHeight", {
+      configurable: true,
+      value: 80,
+    });
+    Object.defineProperty(view.scrollDOM, "scrollHeight", {
+      configurable: true,
+      value: 4000,
+    });
+    view.scrollDOM.scrollTop = 640;
+    view.scrollDOM.dispatchEvent(new Event("scroll"));
+    expect(session.captureSnapshot().scroll.top).toBe(640);
+
+    expect(session.detach(firstParent)).toBe(true);
+
+    const secondParent = documentNode();
+    session.mount(secondParent, longDoc);
+    const remounted = findView(secondParent);
+    // requestMeasure write 可能异步；多拍后断言。
+    await Promise.resolve();
+    expect(remounted.scrollDOM.scrollTop).toBe(640);
+    session.dispose();
+  });
+
+  it("keeps last non-zero scroll when orphaned remount would read 0", () => {
+    const session = new FileEditorViewSession({
+      documentId: document.id,
+      editorPrefs: initialPrefs,
+      editorSessionId: "session-scroll-orphan",
+      minimapEnabled: false,
+      onChange: vi.fn(),
+      presentation: {
+        ...viewPresentationDefaults,
+        ariaLabel: "File editor",
+      },
+    });
+    const parent = documentNode();
+    session.mount(parent, document);
+    const view = findView(parent);
+    view.scrollDOM.scrollTop = 120;
+    view.scrollDOM.dispatchEvent(new Event("scroll"));
+    // 模拟 Activity 先把节点卸下再 detach(parent) 父节点对不上。
+    view.dom.remove();
+    view.scrollDOM.scrollTop = 0;
+    expect(session.detach(parent)).toBe(true);
+    expect(session.captureSnapshot().scroll.top).toBe(120);
+    session.dispose();
+  });
+});
+
 describe("FileEditorViewSession detached preferences", () => {
   it("applies wrap and tab changes before remount without restarting disabled LSP", () => {
     const session = new FileEditorViewSession({

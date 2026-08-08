@@ -36,7 +36,7 @@ const RAW_BUTTON_OWNERS = new Set([
   // 技能项目列表同上。
   "src/renderer/pages/settings/components/skills/project-list.tsx",
   // 规则文件族列表同上。
-  "src/renderer/pages/settings/components/project-rules-panel.tsx",
+  "src/renderer/pages/settings/components/project/rules-panel.tsx",
   // Composer attachment tile is a fixed 56×56 preview surface, not a control chrome button.
   "src/renderer/panel-kits/terminal/composer-attachment-rail.tsx",
   // Shared Rich Input suggest rows (mention / attachment / skill) use raw hit targets.
@@ -48,7 +48,7 @@ const ITEM_AS_CHILD_BUTTON_OWNERS = new Set([
   "src/plugins/builtin/files/renderer/search/result-row.tsx",
   "src/renderer/pages/settings/components/environment-section.tsx",
   "src/renderer/pages/settings/components/skills/project-list.tsx",
-  "src/renderer/pages/settings/components/project-rules-panel.tsx",
+  "src/renderer/pages/settings/components/project/rules-panel.tsx",
 ]);
 const DETACHED_ITEM_HELPERS = new Map([
   [

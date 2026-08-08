@@ -123,6 +123,10 @@ export class FileEditorLanguageTools {
     return this.#lspCompartment.reconfigure(this.#lspExtension());
   }
 
+  getPanelContext(): PanelContext | undefined {
+    return this.#panelContext;
+  }
+
   setPrefs(view: EditorView | null, prefs: FilesEditorPrefs): void {
     this.#prefs = prefs;
     if (!view) {

@@ -115,7 +115,7 @@ export function CanvasUnavailableEmpty(props: { t: FilesTranslate }) {
         <EmptyDescription>
           {props.t(
             "filePanel.canvas.notUnderCanvases",
-            "Open a canvas under .pier/canvases (e.g. *.canvas.tsx)."
+            "This file isn’t in a canvas preview folder. Adjust folders in Settings → Projects → General."
           )}
         </EmptyDescription>
       </EmptyHeader>

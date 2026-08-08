@@ -44,7 +44,7 @@ import { KeybindingsSection } from "@/pages/settings/components/keybindings-sect
 import { NotificationsSection } from "@/pages/settings/components/notifications-section.tsx";
 import { PluginConfigurationSection } from "@/pages/settings/components/plugin-configuration-section.tsx";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
-import { ProjectsSection } from "@/pages/settings/components/projects-section.tsx";
+import { ProjectsSection } from "@/pages/settings/components/project/section.tsx";
 import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
 import { WorkspaceSection } from "@/pages/settings/components/worktree-section.tsx";
 import {

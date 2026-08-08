@@ -189,13 +189,17 @@ describe("AppDialogHost", () => {
     expect(
       screen.queryByRole("button", { name: "Cancel" })
     ).not.toBeInTheDocument();
-    // 长技术详情不得撑破 sm 弹窗：长 token 断行，正文超高时自己滚动。
+    // 长技术详情不得撑破 sm 弹窗：长 token 断行，正文超高时自己滚动；
+    // 滚动条贴 Content 右缘（-mx-5 铺满 + px-5 收文案，对齐 title）。
     const description = screen
       .getByRole("alertdialog")
       .querySelector('[data-slot="alert-dialog-description"]');
     expect(description?.className ?? "").toContain("break-words");
     expect(description?.className ?? "").toContain("overflow-y-auto");
     expect(description?.className ?? "").toContain("max-h-");
+    expect(description?.className ?? "").toContain("-mx-5");
+    expect(description?.className ?? "").toContain("px-5");
+    expect(description).toHaveAttribute("data-scrollbar", "overlay");
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
 
     await expect(result).resolves.toBeUndefined();

@@ -1,4 +1,8 @@
-import { markersFromDiffPatch } from "@plugins/builtin/files/renderer/editor/git-markers.ts";
+import {
+  buildGitGutterModel,
+  markersFromDiffPatch,
+  resolveRangeAtLine,
+} from "@plugins/builtin/files/renderer/editor/git-markers.ts";
 import type { GitDiffFilePatch } from "@shared/contracts/git.ts";
 import { describe, expect, it } from "vitest";
 
@@ -252,5 +256,133 @@ describe("markersFromDiffPatch", () => {
       ])
     );
     expect([...m.entries()]).toEqual([[117, { count: 1, kind: "modified" }]]);
+  });
+});
+
+describe("buildGitGutterModel", () => {
+  it("keeps markers identical to markersFromDiffPatch", () => {
+    const p = patch([
+      hunk(
+        [
+          { kind: "context", text: "a" },
+          { kind: "del", text: "old1" },
+          { kind: "del", text: "old2" },
+          { kind: "add", text: "new1" },
+          { kind: "add", text: "new2" },
+          { kind: "context", text: "z" },
+        ],
+        1
+      ),
+    ]);
+    expect([...buildGitGutterModel(p).markers.entries()]).toEqual([
+      ...markersFromDiffPatch(p).entries(),
+    ]);
+  });
+
+  it("builds a pure-add range covering all added lines", () => {
+    const model = buildGitGutterModel(
+      patch([
+        hunk(
+          [
+            { kind: "context", text: "a" },
+            { kind: "add", text: "b" },
+            { kind: "add", text: "c" },
+            { kind: "context", text: "d" },
+          ],
+          1
+        ),
+      ])
+    );
+    expect(model.ranges).toEqual([
+      {
+        id: "0:0",
+        kind: "added",
+        newLineFrom: 2,
+        newLineTo: 3,
+      },
+    ]);
+  });
+
+  it("builds a pure-delete range at the anchor line", () => {
+    const model = buildGitGutterModel(
+      patch([
+        hunk(
+          [
+            { kind: "context", text: "a" },
+            { kind: "del", text: "o1" },
+            { kind: "del", text: "o2" },
+            { kind: "context", text: "z" },
+          ],
+          1
+        ),
+      ])
+    );
+    expect(model.ranges).toEqual([
+      {
+        id: "0:0",
+        kind: "deleted",
+        newLineFrom: 2,
+        newLineTo: 2,
+      },
+    ]);
+  });
+
+  it("builds a modified range spanning the new block", () => {
+    const model = buildGitGutterModel(
+      patch([
+        hunk(
+          [
+            { kind: "del", text: "o1" },
+            { kind: "add", text: "n1" },
+          ],
+          1
+        ),
+      ])
+    );
+    expect(model.ranges).toEqual([
+      {
+        id: "0:0",
+        kind: "modified",
+        newLineFrom: 1,
+        newLineTo: 1,
+      },
+    ]);
+  });
+});
+
+describe("resolveRangeAtLine", () => {
+  it("returns null when no range covers the line", () => {
+    expect(resolveRangeAtLine([], 1)).toBeNull();
+    expect(
+      resolveRangeAtLine(
+        [
+          {
+            id: "0:0",
+            kind: "added",
+            newLineFrom: 2,
+            newLineTo: 3,
+          },
+        ],
+        1
+      )
+    ).toBeNull();
+  });
+
+  it("prefers higher-priority kind when ranges overlap", () => {
+    const ranges = [
+      {
+        id: "d",
+        kind: "deleted" as const,
+        newLineFrom: 5,
+        newLineTo: 5,
+      },
+      {
+        id: "m",
+        kind: "modified" as const,
+        newLineFrom: 5,
+        newLineTo: 6,
+      },
+    ];
+    expect(resolveRangeAtLine(ranges, 5)?.id).toBe("m");
   });
 });

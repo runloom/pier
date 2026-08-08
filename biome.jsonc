@@ -16,6 +16,7 @@
       "!src/renderer/app/globals.css",
       "!docs/**/*.html",
       "!.pier/canvases",
+      "!resources/system-skills/pier-canvas/templates",
       "!fixtures/live-modules"
     ]
   },

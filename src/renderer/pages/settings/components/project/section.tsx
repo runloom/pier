@@ -18,16 +18,16 @@ import { useLocalEnvironmentsStore } from "@/stores/local-environments.store.ts"
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
 import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
-import type { EnvironmentEditorHandle } from "./environment-editor.tsx";
-import { ProjectsSectionDetail } from "./projects-section-detail.tsx";
+import type { EnvironmentEditorHandle } from "../environment-editor.tsx";
+import { ProjectsSectionDetail } from "./section-detail.tsx";
 import {
   defaultTabFor,
   isPierHomeSkillsDirty,
   isTabAllowedForProject,
   leaveAllSkillsTransientState,
   projectBasename,
-} from "./projects-section-helpers.ts";
-import { ProjectsSectionList } from "./projects-section-list.tsx";
+} from "./section-helpers.ts";
+import { ProjectsSectionList } from "./section-list.tsx";
 
 /**
  * Unified project settings shell: shared project list, then Environment /

@@ -7,7 +7,12 @@ import { isFilesLspMultiCursorModifier } from "../lsp/pointer-modifiers.ts";
 import { filesSyntaxHighlightStyle } from "./cm-highlight-style.ts";
 import type { EditorSearchState } from "./cm-search-state.ts";
 import { EDITOR_THEME } from "./cm-theme.ts";
-import { createGitGutterExtension } from "./git-gutter.ts";
+import {
+  createGitGutterExtension,
+  type GitGutterNavigateHandler,
+  gitGutterNavigateFacet,
+} from "./git-gutter.ts";
+import { createGitGutterThemeResyncPlugin } from "./git-gutter-theme-resync.ts";
 import { createMinimapExtension } from "./minimap.ts";
 import {
   currentEditorSearchState,
@@ -21,6 +26,8 @@ interface FileEditorViewExtensionInput {
   getContextMenuHandler: () =>
     | ((event: MouseEvent, ranges: readonly EditorRange[]) => void)
     | undefined;
+  gitGutterNavigate: GitGutterNavigateHandler | null;
+  gitGutterNavigateCompartment: Compartment;
   isDocumentSyncing: () => boolean;
   languageCompartment: Compartment;
   languageExtension: Extension | null;
@@ -37,7 +44,6 @@ export function createFileEditorViewExtensions(
   input: FileEditorViewExtensionInput
 ): Extension[] {
   return [
-    createGitGutterExtension(),
     // VS Code-aligned: only Alt+Click adds multi-cursor (not Cmd/Ctrl).
     // Cmd/Ctrl+Click is reserved for Go to Definition (LSP hover controller).
     EditorView.clickAddsSelectionRange.of((event) =>
@@ -61,7 +67,13 @@ export function createFileEditorViewExtensions(
       })
     ),
     codeMirrorSearch(),
+    // lineNumbers / foldGutter 先于 git 轨：色条落在行号右侧（贴正文、远离目录拖拽缝）。
     basicSetup,
+    createGitGutterExtension(),
+    createGitGutterThemeResyncPlugin(),
+    input.gitGutterNavigateCompartment.of(
+      gitGutterNavigateFacet.of(input.gitGutterNavigate)
+    ),
     input.ariaCompartment.of(
       EditorView.contentAttributes.of({ "aria-label": input.ariaLabel })
     ),

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "id": "primary_nav_5",
+  "axis": "presentation",
+  "title": "Primary nav (≤5)",
+  "description": "Ordered navigation with one primary 速览 tab; max five top-level views. Default spine: 速览 → 问题 → 设计 → 日路径 → 落地.",
+  "requiredContentFields": ["bluf"],
+  "views": [
+    {
+      "id": "overview",
+      "label": "速览",
+      "primary": true,
+      "shows": ["insight", "decision", "bluf", "goals"]
+    },
+    {
+      "id": "problem",
+      "label": "问题",
+      "primary": false,
+      "shows": ["problem", "pains", "antiGoals"]
+    },
+    {
+      "id": "design",
+      "label": "设计",
+      "primary": false,
+      "shows": [
+        "layers",
+        "settled",
+        "identity",
+        "hardConstraints",
+        "safetyRails"
+      ]
+    },
+    {
+      "id": "path",
+      "label": "日路径",
+      "primary": false,
+      "shows": ["dayPath", "day1Commands", "day1Recipe", "mainDiagram"]
+    },
+    {
+      "id": "landing",
+      "label": "落地",
+      "primary": false,
+      "shows": ["defaults", "phases", "tasks", "acceptance", "competitors"]
+    }
+  ],
+  "antiPatterns": [
+    "more than 5 top-level tabs",
+    "equal-weight tabs with no primary",
+    "competitors or full task DAG on overview by default",
+    "teaching dual wait / cursor read on day-1 overview",
+    "Play/Step/demo chrome without per-frame insight and structural change",
+    "acceptance matrix or L0–Ln backlog on the primary view"
+  ],
+  "diagrams": {
+    "overviewMax": 1,
+    "preferred": ["sequence", "flowchart"]
+  },
+  "agentPrompt": "Build a composition Canvas with ≤5 ordered Tabs: 速览 (primary), 问题, 设计, 日路径, 落地. Default is STATIC product design (BLUF + tables + ≤1 diagram). Do NOT add Play/Step demos unless the user explicitly needs a mechanism explainer with per-frame insight. Put acceptance and implementation phases on 落地 only. Start from templates/overview.canvas.tsx. See references/methodology.md Expression selection."
+}

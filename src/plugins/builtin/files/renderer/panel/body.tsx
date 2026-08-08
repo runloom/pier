@@ -3,7 +3,6 @@ import { Button } from "@pier/ui/button.tsx";
 import { formatBytes } from "@pier/ui/format.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
 import { FolderSearch } from "lucide-react";
 import {
   type ReactNode,
@@ -27,6 +26,7 @@ import {
   type MarkdownCrossModeAnchor,
 } from "../markdown/cross-mode-anchor.ts";
 import { FileImagePreview } from "../preview/image.tsx";
+import { isCanvasDiskDoc } from "./canvas-doc.ts";
 import { FileDiskConflictState } from "./disk-conflict-banner.tsx";
 import {
   createFileEditorAdapterLabels,
@@ -426,9 +426,7 @@ export function ResolvedFilePanel({
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <FileEditorAdapter
           canvasDiskSource={
-            document.source.kind === "disk" &&
-            (document.language === "canvas" ||
-              isProjectCanvasPath(document.source.path))
+            document.source.kind === "disk" && isCanvasDiskDoc(document)
               ? { path: document.source.path, root: document.source.root }
               : undefined
           }
@@ -437,13 +435,7 @@ export function ResolvedFilePanel({
           documentId={document.id}
           editorSessionId={editorSessionId}
           labels={createFileEditorAdapterLabels(t)}
-          language={
-            document.language === "canvas" ||
-            (document.source.kind === "disk" &&
-              isProjectCanvasPath(document.source.path))
-              ? "canvas"
-              : document.language
-          }
+          language={isCanvasDiskDoc(document) ? "canvas" : document.language}
           markdownAppearance={context?.appearance}
           markdownCaptureAnchorRef={previewCaptureRef}
           markdownCharts={context?.charts}
