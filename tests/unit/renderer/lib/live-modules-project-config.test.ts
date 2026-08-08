@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   loadLiveModulesProjectConfig,
   saveLiveModulesProjectConfig,
-} from "../../../../src/renderer/lib/live-modules/project-config.ts";
+} from "../../../../src/plugins/api/live-modules-project-config.ts";
 import {
   applyLiveModulesProjectConfigAfterSave,
   ensureLiveModulesProjectConfigLoaded,
   resetLiveModulesProjectConfigCacheForTests,
   subscribeLiveModulesProjectConfigChanged,
-} from "../../../../src/renderer/lib/live-modules/project-config-cache.ts";
+} from "../../../../src/plugins/api/live-modules-project-config-cache.ts";
 import {
   clearAllRuntimeLiveModuleContentDirectories,
   liveModuleProjectContentDirectories,

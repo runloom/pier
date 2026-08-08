@@ -9,6 +9,11 @@ import {
 } from "@pier/ui/card.tsx";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
+import {
+  loadLiveModulesProjectConfig,
+  saveLiveModulesProjectConfig,
+} from "@plugins/api/live-modules-project-config.ts";
+import { applyLiveModulesProjectConfigAfterSave } from "@plugins/api/live-modules-project-config-cache.ts";
 import { LIVE_MODULE_DEFAULT_PROJECT_CONTENT_DIRECTORIES } from "@shared/contracts/live-modules.ts";
 import {
   LIVE_MODULE_MAX_CONTENT_DIRECTORIES,
@@ -19,11 +24,6 @@ import { Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
-import {
-  loadLiveModulesProjectConfig,
-  saveLiveModulesProjectConfig,
-} from "@/lib/live-modules/project-config.ts";
-import { applyLiveModulesProjectConfigAfterSave } from "@/lib/live-modules/project-config-cache.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
 let nextRowId = 0;

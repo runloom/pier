@@ -1,13 +1,13 @@
+import {
+  applyLiveModulesProjectConfigFromDiskContents,
+  ensureLiveModulesProjectConfigLoaded,
+} from "@plugins/api/live-modules-project-config-cache.ts";
 import type { FileDocumentWriteResult } from "@shared/contracts/file.ts";
 import { LIVE_MODULES_PROJECT_CONFIG_PATH } from "@shared/contracts/live-modules.ts";
 import {
   normalizeProjectRelativePath,
   normalizeProjectRootKey,
 } from "@shared/live-module-canvas-path.ts";
-import {
-  applyLiveModulesProjectConfigFromDiskContents,
-  ensureLiveModulesProjectConfigLoaded,
-} from "@/lib/live-modules/project-config-cache.ts";
 import { languageForPath } from "../editor/language-detection.ts";
 import type { FilesDocument } from "./types.ts";
 

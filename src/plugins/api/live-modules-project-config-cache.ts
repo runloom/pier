@@ -4,7 +4,7 @@ import {
   parseLiveModulesProjectConfig,
   setRuntimeLiveModuleContentDirectories,
 } from "@shared/live-module-canvas-path.ts";
-import { loadLiveModulesProjectConfig } from "./project-config.ts";
+import { loadLiveModulesProjectConfig } from "./live-modules-project-config.ts";
 
 /**
  * Per-root ensure cache. `generation` is bumped by applyAfterSave / invalidate so
