@@ -5,10 +5,11 @@
  * 区（`drifted-comments.tsx`）复用。
  *
  * v1 极简结构：无标题栏、无头像、无作者名、无时间戳——只有正文一段，
- * hover 才浮出「编辑 / 删除」两个图标按钮：命中区走 `size="icon"`（28×28
- * 标准纯图标档），glyph 在 SVG 上标 `size-3.5`（14px）——Button 的
- * `[&_svg:not([class*='size-'])]` 只给未声明尺寸的图标兜底，显式 size 是
- * 规范允许的「同 hit、略小笔形」路径（对齐 hunk-actions / stage-button）。
+ * 「编辑 / 删除」两个图标按钮持续可见（非 hover 才浮出）：命中区走
+ * `size="icon"`（28×28 标准纯图标档），glyph 在 SVG 上标 `size-3.5`
+ * （14px）——Button 的 `[&_svg:not([class*='size-'])]` 只给未声明尺寸的
+ * 图标兜底，显式 size 是规范允许的「同 hit、略小笔形」路径（对齐
+ * hunk-actions / stage-button）。
  *
  * **两态一律不铺填充色**：批注行
  * 底色由 diff 引擎画（选中行还会叠选中蓝），卡片自带任何 surface 都会盖掉
@@ -91,18 +92,18 @@ export function InlineReviewThreadCard({
 
   return (
     <div className="w-full px-2 py-1.5" data-slot="pier-review-thread">
-      <div className="group flex w-full justify-between gap-4 rounded-2xl border border-border bg-transparent px-3 py-2.5 text-sm">
+      <div className="flex w-full justify-between gap-4 rounded-2xl border border-border bg-transparent px-3 py-2.5 text-sm">
         <div className="min-w-0 flex-1">
           {isDeleted ? (
             <p className="text-muted-foreground italic">{labels.deleted}</p>
           ) : (
-            <p className="whitespace-pre-wrap break-words text-foreground/90">
+            <p className="whitespace-pre-wrap break-words py-1 text-foreground/90">
               {comment.body}
             </p>
           )}
         </div>
         {isDeleted ? null : (
-          <div className="-mt-1 flex shrink-0 items-start gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <div className="flex shrink-0 items-start gap-0.5">
             {onEditComment ? (
               <Button
                 aria-label={labels.editComment}

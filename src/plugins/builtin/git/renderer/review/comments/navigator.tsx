@@ -81,7 +81,7 @@ export function ReviewCommentNavigator({
       >
         <ChevronDown aria-hidden data-icon />
       </Button>
-      <Separator className="mx-0.5 data-vertical:h-4" orientation="vertical" />
+      <Separator className="mx-0.5 h-4 self-center" orientation="vertical" />
       <Button
         className="rounded-full px-2.5"
         onClick={onClear}
