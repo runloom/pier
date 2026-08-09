@@ -6,13 +6,22 @@ import {
   COMMAND_PRIORITY_HIGH,
   KEY_ARROW_LEFT_COMMAND,
   KEY_ARROW_RIGHT_COMMAND,
+  KEY_DOWN_COMMAND,
   type LexicalNode,
+  MOVE_TO_END,
+  MOVE_TO_START,
 } from "lexical";
 import { useEffect } from "react";
 import {
   $isComposerChipNode,
   $moveCaretAcrossComposerChip,
+  $moveCaretByWordAcrossChips,
+  $moveCaretToBlockEndAroundChips,
+  $moveCaretToBlockStartAroundChips,
   $placeCaretAfterComposerChip,
+  COMPOSER_CHIP_HOST_SELECTOR,
+  isComposerLineEdgeKey,
+  isComposerWordMoveArrow,
 } from "./composer-chip-caret.ts";
 
 const SNAP_TAG = "pier-composer-chip-snap";
@@ -20,6 +29,12 @@ const SNAP_TAG = "pier-composer-chip-snap";
 /**
  * Keep the caret outside chip interiors, and let ←/→ step across a chip
  * as one atomic unit (isKeyboardSelectable is false on chip nodes).
+ *
+ * Also owns line-edge and word-jump shortcuts that Chromium cannot land
+ * correctly past contenteditable=false decorators:
+ * - Cmd/Ctrl+←/→ → MOVE_TO_START / MOVE_TO_END (current soft line only)
+ * - Option/Alt+←/→ → word move when the block has chips (chip-local)
+ * - Home / End → same block-edge recovery as MOVE_TO_*
  */
 export function MentionAtomicSelectionPlugin(): null {
   const [editor] = useLexicalComposerContext();
@@ -62,12 +77,8 @@ export function MentionAtomicSelectionPlugin(): null {
         if (!(target instanceof Element)) {
           return false;
         }
-        if (
-          !(
-            target.closest("[data-mention-path]") ||
-            target.closest("[data-attachment-path]")
-          )
-        ) {
+        // Host class is shared by @ / skill / attachment / review chips.
+        if (!target.closest(COMPOSER_CHIP_HOST_SELECTOR)) {
           return false;
         }
         event.preventDefault();
@@ -130,11 +141,48 @@ export function MentionAtomicSelectionPlugin(): null {
       COMMAND_PRIORITY_HIGH
     );
 
+    // Cmd/Ctrl+←/→ — not KEY_ARROW_*; Lexical routes them to MOVE_TO_*.
+    const unregisterMoveStart = editor.registerCommand(
+      MOVE_TO_START,
+      (event) => $moveCaretToBlockStartAroundChips(event),
+      COMMAND_PRIORITY_HIGH
+    );
+
+    const unregisterMoveEnd = editor.registerCommand(
+      MOVE_TO_END,
+      (event) => $moveCaretToBlockEndAroundChips(event),
+      COMMAND_PRIORITY_HIGH
+    );
+
+    // Option+←/→ and Home/End never become KEY_ARROW_* / MOVE_TO_* —
+    // intercept on KEY_DOWN before Lexical's default $handleKeyDown.
+    const unregisterKeyDown = editor.registerCommand(
+      KEY_DOWN_COMMAND,
+      (event) => {
+        const wordDir = isComposerWordMoveArrow(event);
+        if (wordDir !== null) {
+          return $moveCaretByWordAcrossChips(wordDir, event);
+        }
+        const lineEdge = isComposerLineEdgeKey(event);
+        if (lineEdge === "start") {
+          return $moveCaretToBlockStartAroundChips(event);
+        }
+        if (lineEdge === "end") {
+          return $moveCaretToBlockEndAroundChips(event);
+        }
+        return false;
+      },
+      COMMAND_PRIORITY_HIGH
+    );
+
     return () => {
       unregisterUpdate();
       unregisterClick();
       unregisterLeft();
       unregisterRight();
+      unregisterMoveStart();
+      unregisterMoveEnd();
+      unregisterKeyDown();
     };
   }, [editor]);
 
