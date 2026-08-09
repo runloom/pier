@@ -162,7 +162,11 @@ export const terminal = {
         itemTitle: "{{path}}:{{line}}",
         jumpFailed: "无法打开变更",
         jumpFailedBody: "请先打开此项目的变更视图，然后再试跳转。",
+        loadingLabel: "正在加载当前变更…",
         openCount: "{{count}} 条待处理评论",
+        staleJumpBody:
+          "对应文件已提交，或不在当前工作区变更中。将移除这条评论。",
+        staleJumpTitle: "评论已不在当前变更中",
         submitAndClear: "提交并清除",
         submitFailed: "无法提交评论",
         submitPartialBody:

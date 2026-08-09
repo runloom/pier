@@ -175,7 +175,11 @@ export const terminal = {
         jumpFailed: "Couldn’t open changes",
         jumpFailedBody:
           "Open the Changes view for this project, then try jumping again.",
+        loadingLabel: "Loading current changes…",
         openCount: "{{count}} open comments",
+        staleJumpBody:
+          "That file has already been committed or is no longer in the current changes. This comment will be removed.",
+        staleJumpTitle: "Comment is no longer on current changes",
         submitAndClear: "Submit and clear",
         submitFailed: "Couldn’t submit comments",
         submitPartialBody:

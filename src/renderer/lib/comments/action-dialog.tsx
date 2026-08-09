@@ -12,6 +12,7 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@pier/ui/item.tsx";
+import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { CommentFailureReason } from "@shared/contracts/comments/primitives.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import i18next from "i18next";
@@ -30,6 +31,7 @@ import {
   ensureCommentsLoaded,
   useCommentsStore,
 } from "@/stores/comments.store.ts";
+import { useUncommittedLivePaths } from "./live-paths.ts";
 import {
   allocateCommentRevealNonce,
   openGitChangesForComments,
@@ -38,6 +40,7 @@ import {
   formatCommentsForComposer,
   listProcessableComments,
   type ProcessableCommentItem,
+  pathInLiveSet,
 } from "./processable.ts";
 
 function commentFailureTitleKey(
@@ -73,9 +76,15 @@ function CommentsActionDialogBody({
   const t = useT();
   const [busy, setBusy] = useState(false);
   const project = useCommentsStore((state) => state.projects[worktreeKey]);
+  const gitRoot =
+    context.gitRoot ?? context.worktreeRoot ?? context.projectRootPath;
+  const livePaths = useUncommittedLivePaths(gitRoot);
   const items = useMemo(
-    () => listProcessableComments(project?.threads),
-    [project?.threads]
+    () =>
+      livePaths === null
+        ? []
+        : listProcessableComments(project?.threads, { livePaths }),
+    [livePaths, project?.threads]
   );
 
   useEffect(() => {
@@ -85,32 +94,6 @@ function CommentsActionDialogBody({
   useEffect(() => {
     ensureCommentsLoaded(worktreeKey).catch(() => undefined);
   }, [worktreeKey]);
-
-  const jumpTo = async (item: ProcessableCommentItem) => {
-    if (busy) {
-      return;
-    }
-    const opened = openGitChangesForComments({
-      context,
-      ...(getGroupId ? { getGroupId } : {}),
-      pendingReveal: {
-        group: item.group,
-        line: item.line,
-        nonce: allocateCommentRevealNonce(),
-        path: item.path,
-        side: item.side,
-      },
-    });
-    if (!opened) {
-      await showAppAlert({
-        body: t("terminal.statusBar.item.comments.jumpFailedBody"),
-        title: t("terminal.statusBar.item.comments.jumpFailed"),
-      });
-      return;
-    }
-    // Close only after Changes is open so a failed jump keeps the list.
-    close("jumped");
-  };
 
   const deleteOne = async (
     item: ProcessableCommentItem,
@@ -132,6 +115,51 @@ function CommentsActionDialogBody({
       return false;
     }
     return true;
+  };
+
+  const jumpTo = async (item: ProcessableCommentItem) => {
+    if (busy) {
+      return;
+    }
+    // 对应文件已提交/不在变更中：勿打开空 Changes；提示后显式移除（非后台 prune）。
+    if (
+      livePaths !== null &&
+      !pathInLiveSet(item.path, item.oldPath, livePaths)
+    ) {
+      setBusy(true);
+      try {
+        await showAppAlert({
+          body: t("terminal.statusBar.item.comments.staleJumpBody"),
+          title: t("terminal.statusBar.item.comments.staleJumpTitle"),
+        });
+        await deleteOne(item, { alertOnError: false });
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    const opened = openGitChangesForComments({
+      context,
+      ...(getGroupId ? { getGroupId } : {}),
+      pendingReveal: {
+        // 优先原 group；stage/unstage 后槽位消失时回退 entry 上存在的 slot。
+        allowGroupFallback: true,
+        group: item.group,
+        line: item.line,
+        nonce: allocateCommentRevealNonce(),
+        path: item.path,
+        side: item.side,
+      },
+    });
+    if (!opened) {
+      await showAppAlert({
+        body: t("terminal.statusBar.item.comments.jumpFailedBody"),
+        title: t("terminal.statusBar.item.comments.jumpFailed"),
+      });
+      return;
+    }
+    // Close only after Changes is open so a failed jump keeps the list.
+    close("jumped");
   };
 
   const deleteAll = async (
@@ -292,6 +320,23 @@ function CommentsActionDialogBody({
     [busy, close, items.length, t]
   );
   useContentDialogFooter(setFooter, footer);
+
+  // status 未到 / 刷新失败：加载骨架，避免「无评论」空态闪烁。
+  if (livePaths === null) {
+    return (
+      <div
+        aria-busy="true"
+        className="flex min-h-40 flex-col gap-2"
+        role="status"
+      >
+        <span className="sr-only">
+          {t("terminal.statusBar.item.comments.loadingLabel")}
+        </span>
+        <Skeleton className="h-16 w-full rounded-lg" />
+        <Skeleton className="h-16 w-full rounded-lg" />
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
