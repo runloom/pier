@@ -200,9 +200,33 @@ describe("AppDialogHost", () => {
     expect(description?.className ?? "").toContain("-mx-5");
     expect(description?.className ?? "").toContain("px-5");
     expect(description).toHaveAttribute("data-scrollbar", "overlay");
+    // alert 无 Cancel：Radix 默认会 preventDefault 后空聚焦；host 改为聚焦 OK。
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "OK" })).toHaveFocus();
+    });
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
 
     await expect(result).resolves.toBeUndefined();
+  });
+
+  it("confirm 弹窗打开时默认聚焦取消（安全默认，不被 alert 逻辑覆盖）", async () => {
+    renderHost();
+
+    act(() => {
+      showAppConfirm({
+        confirmLabel: "Delete",
+        intent: "destructive",
+        title: "Delete file?",
+      }).catch(() => {
+        // 本用例只断言打开后的焦点，不消费 resolve。
+      });
+    });
+
+    expect(await screen.findByText("Delete file?")).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    });
+    expect(screen.getByRole("button", { name: "Delete" })).not.toHaveFocus();
   });
 
   it("choice 弹窗立即返回所选操作并独立退场", async () => {
@@ -296,6 +320,10 @@ describe("AppDialogHost", () => {
 
     const input = await screen.findByRole("textbox", { name: "Rename" });
     const dialog = screen.getByRole("alertdialog");
+    // 覆盖 Radix「聚焦 Cancel」：prompt 应直接进输入框。
+    await waitFor(() => {
+      expect(input).toHaveFocus();
+    });
     fireEvent.change(input, { target: { value: "new-name" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
