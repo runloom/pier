@@ -18,7 +18,8 @@ function activeTerminalPanelId(): string | null {
     : null;
 }
 
-function terminalPanelContext(panelId: string): PanelContext | null {
+/** Resolve terminal panel path anchors for open-url host / plugin facades. */
+export function getTerminalPanelContext(panelId: string): PanelContext | null {
   const api = useWorkspaceStore.getState().api;
   if (!api) {
     return null;
@@ -38,7 +39,7 @@ export function createPluginTerminalContext(
     activePanelId: activeTerminalPanelId,
     getPanelContext: (panelId) => {
       assertPluginCapability(entry, "terminal:read");
-      return terminalPanelContext(panelId);
+      return getTerminalPanelContext(panelId);
     },
     onOpenUrl: (cb) => {
       assertPluginCapability(entry, "terminal:read");

@@ -2,6 +2,9 @@ export const terminal = {
   closeFailed: "无法关闭终端，请重试",
   frameWaitFailed: "终端画面未显示。请重试；仍不行则重新打开该终端。",
   openPathFailed: "无法打开路径，请重试",
+  openPathInvalid: "无法打开该路径",
+  openPathRelativeWithoutCwd: "当前终端没有工作目录，无法打开相对路径。",
+  openPathUnsupportedScheme: "无法在 Pier 中打开该链接",
   agentSession: {
     coldStart: "未能恢复上次会话，已重新打开智能体。",
     endedBody: "上次会话已退出。可重新启动继续工作。",

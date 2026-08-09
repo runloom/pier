@@ -2,6 +2,12 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { addTerminalOpenUrlHandler } from "@plugins/api/terminal-open-url-handlers.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { TerminalOpenUrlEvent } from "@shared/contracts/terminal.ts";
+import { shouldNeverSystemOpen } from "@shared/system-open-guard.ts";
+import {
+  diskTargetPartsForAbsolute,
+  type TerminalDiskTargetParts,
+  withTerminalOpenAnchor,
+} from "@shared/terminal-open-disk-target.ts";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
 import {
   parseFilesDocumentPanelSource,
@@ -14,7 +20,6 @@ import { createFileFilePanelInstanceId } from "../panel/id.ts";
 import { sourceTitle } from "../panel/source.ts";
 import { openProjectFiles } from "../project/open-project.ts";
 import { revealFilesTreePath } from "../tree/registry.ts";
-import { longestCoveringAnchor, terminalOpenUrlAnchors } from "./anchors.ts";
 import { resolveTerminalLocalPathTargets } from "./resolve.ts";
 
 type SystemOpenFallbackReason = "open-instance-failed" | "open-project-failed";
@@ -23,56 +28,28 @@ type DiskOpenResult = "failed" | "missing" | "opened";
 
 const inflight = new Map<string, Promise<void>>();
 
-function toRootRelative(anchor: string, absolutePath: string): string | null {
-  const from = anchor.replace(/\\/g, "/").replace(/\/+$/, "");
-  const to = absolutePath.replace(/\\/g, "/").replace(/\/+$/, "");
-  if (to === from) {
-    return "";
-  }
-  const prefix = `${from}/`;
-  if (!to.startsWith(prefix)) {
-    return null;
-  }
-  return to.slice(prefix.length);
-}
-
-function splitAbsoluteDiskTarget(absolutePath: string): {
-  path: string;
-  root: string;
-} {
-  const normalized =
-    absolutePath.replace(/\\/g, "/").replace(/\/+$/, "") || "/";
-  if (normalized === "/") {
-    return { path: "", root: "/" };
-  }
-  const slash = normalized.lastIndexOf("/");
-  if (slash <= 0) {
-    return { path: normalized.slice(1), root: "/" };
-  }
-  return {
-    path: normalized.slice(slash + 1),
-    root: normalized.slice(0, slash),
-  };
-}
-
-function withTerminalAnchor(
-  context: PanelContext | null,
-  anchor: string
-): PanelContext | null {
-  if (!context) {
-    return null;
-  }
-  return {
-    ...context,
-    projectRootPath: anchor,
-  };
-}
-
 async function openAbsoluteWithSystem(
   context: RendererPluginContext,
   absolutePath: string,
   reason: SystemOpenFallbackReason
 ): Promise<boolean> {
+  // Source/text paths (esp. `.ts` on macOS → MPEG-TS video apps) must never
+  // fall through to the OS default opener from terminal clicks.
+  if (shouldNeverSystemOpen(absolutePath)) {
+    console.info("[files-terminal-open-url] system open blocked", {
+      path: absolutePath,
+      reason,
+      blocked: "prefer-pier-editor",
+    });
+    const t = createFilesTranslate(context);
+    context.notifications.error(
+      t(
+        "files.notifications.terminalOpenUrl.openFailed",
+        "Unable to open path."
+      )
+    );
+    return true;
+  }
   console.info("[files-terminal-open-url] system open fallback", {
     path: absolutePath,
     reason,
@@ -184,32 +161,6 @@ function openDiskFile(input: {
   }
 }
 
-interface DiskTargetParts {
-  absolutePath: string;
-  relativePath: string;
-  root: string;
-}
-
-function diskTargetPartsForAbsolute(
-  absolutePath: string,
-  panelContext: PanelContext | null
-): DiskTargetParts {
-  const anchors = terminalOpenUrlAnchors(panelContext);
-  const anchor = longestCoveringAnchor(absolutePath, anchors);
-  if (anchor) {
-    const relativePath = toRootRelative(anchor, absolutePath);
-    if (relativePath !== null) {
-      return { absolutePath, relativePath, root: anchor };
-    }
-  }
-  const fallback = splitAbsoluteDiskTarget(absolutePath);
-  return {
-    absolutePath,
-    relativePath: fallback.path,
-    root: fallback.root,
-  };
-}
-
 /**
  * Open a disk path in Pier Files.
  *
@@ -225,10 +176,10 @@ async function openDiskTarget(input: {
   controller?: FileEditorController | null | undefined;
   line?: number | undefined;
   panelContext: PanelContext | null;
-  parts: DiskTargetParts;
+  parts: TerminalDiskTargetParts;
 }): Promise<DiskOpenResult> {
   const { absolutePath, relativePath, root } = input.parts;
-  const openContext = withTerminalAnchor(input.panelContext, root);
+  const openContext = withTerminalOpenAnchor(input.panelContext, root);
 
   if (relativePath === "") {
     if (!openContext) {

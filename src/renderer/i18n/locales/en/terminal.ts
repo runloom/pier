@@ -3,6 +3,10 @@ export const terminal = {
   frameWaitFailed:
     "Terminal view didn't appear. Try again, or reopen this terminal.",
   openPathFailed: "Couldn't open path — try again",
+  openPathInvalid: "Couldn't open this path",
+  openPathRelativeWithoutCwd:
+    "This terminal has no working directory, so the relative path cannot be opened.",
+  openPathUnsupportedScheme: "Couldn't open this link in Pier",
   agentSession: {
     coldStart: "Couldn’t resume the previous session. Started a fresh agent.",
     endedBody: "The previous session has exited. Restart to continue.",

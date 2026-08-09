@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   longestCoveringAnchor,
   terminalOpenUrlAnchors,
-} from "../../../../src/plugins/builtin/files/renderer/open-url/anchors.ts";
+} from "../../../../src/shared/terminal-open-disk-target.ts";
 
 function ctx(partial: Partial<PanelContext>): PanelContext {
   return {
