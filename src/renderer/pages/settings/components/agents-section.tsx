@@ -245,7 +245,8 @@ function AgentsToolbar() {
   const showUpdateAll = updatableCount > 0;
 
   const handleRefreshAndCheck = useCallback(() => {
-    // Still check latest for disabled agents so re-enable shows correct state immediately.
+    // User-initiated hard refresh: bypass TTL, show busy, toast on success.
+    // Includes disabled agents so re-enable sees correct update state.
     refresh()
       .then(() => probeLifecycle(undefined, { force: true, checkLatest: true }))
       .then(() => {
@@ -342,15 +343,34 @@ function AgentsToolbar() {
 export function AgentsSection() {
   const t = useT();
   const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
-  const probeLifecycle = useAgentLifecycleStore((s) => s.probe);
+  const softRevalidate = useAgentLifecycleStore((s) => s.softRevalidate);
 
   useEffect(() => {
-    // Check latest for all agents (including disabled) so re-enable is instant.
-    // Disabled rows hide update UI / counts only.
-    ensureDetected()
-      .then(() => probeLifecycle(undefined, { checkLatest: true }))
-      .catch(() => undefined);
-  }, [ensureDetected, probeLifecycle]);
+    // SWR open path (not a full-page reload):
+    // 1. Keep previous detect + probesById rows immediately (store survives remount).
+    // 2. Strategy: softRevalidate — TTL may no-op; if stale, merge in background
+    //    without clearing rows (silent when cache exists).
+    // 3. Explicit toolbar refresh = force + checkLatest + toast.
+    let cancelled = false;
+    const openTask = (async () => {
+      try {
+        await ensureDetected();
+        if (cancelled) {
+          return;
+        }
+        // Await so probe failures stay in this try/catch (no unhandled rejection).
+        // openTask is not awaited by React; first paint still uses cached rows.
+        await softRevalidate();
+      } catch {
+        // Best-effort: catalog + last probes still render.
+      }
+    })();
+    // Keep the promise referenced so the runtime does not treat it as floating.
+    openTask.catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [ensureDetected, softRevalidate]);
 
   return (
     <div className="px-4 pb-4" id="agents">
