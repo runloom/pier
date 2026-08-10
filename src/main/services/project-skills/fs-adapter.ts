@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { type BigIntStats, constants, type Stats } from "node:fs";
 import {
@@ -11,15 +10,9 @@ import {
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import { promisify } from "node:util";
+import { defaultRenameExclusive } from "./fs-rename-exclusive.ts";
 import { assertProjectRelativeAncestorsReal } from "./path-containment.ts";
-
-const execFileAsync = promisify(execFile);
-
-/** macOS renamex_np flag: fail if the destination already exists. */
-const DARWIN_RENAME_EXCL = 0x00_00_00_04;
 
 export type {
   FsObjectIdentity,
@@ -37,8 +30,6 @@ import type {
   ProjectSkillsFileSystemAdapterOptions,
   PublishFileExpectedState,
 } from "./fs-adapter-types.ts";
-
-let cachedDarwinRenameExclusiveHelper: Promise<string> | undefined;
 
 function isErrno(error: unknown, code: string): error is NodeJS.ErrnoException {
   return (
@@ -113,104 +104,6 @@ async function defaultSyncDirectory(directory: string): Promise<void> {
   } finally {
     await handle.close();
   }
-}
-
-async function ensureDarwinRenameExclusiveHelper(): Promise<string> {
-  if (!cachedDarwinRenameExclusiveHelper) {
-    cachedDarwinRenameExclusiveHelper = (async () => {
-      const helperDir = tmpdir();
-      const base = `pier-renamex-excl-${process.pid}`;
-      const cPath = resolve(helperDir, `${base}.c`);
-      const binPath = resolve(helperDir, base);
-      const source = [
-        "#include <errno.h>",
-        "#include <stdio.h>",
-        "#include <unistd.h>",
-        "#ifndef RENAME_EXCL",
-        `#define RENAME_EXCL ${DARWIN_RENAME_EXCL}`,
-        "#endif",
-        "int main(int argc, char **argv) {",
-        "  if (argc != 3) return 2;",
-        "  if (renamex_np(argv[1], argv[2], RENAME_EXCL) == 0) return 0;",
-        '  fprintf(stderr, "%d\\n", errno);',
-        "  return 1;",
-        "}",
-        "",
-      ].join("\n");
-      await writeFile(cPath, source, "utf8");
-      try {
-        await execFileAsync("cc", ["-O2", "-o", binPath, cPath], {
-          timeout: 30_000,
-        });
-      } finally {
-        await rm(cPath, { force: true }).catch(() => undefined);
-      }
-      return binPath;
-    })().catch((error: unknown) => {
-      cachedDarwinRenameExclusiveHelper = undefined;
-      throw error;
-    });
-  }
-  return await cachedDarwinRenameExclusiveHelper;
-}
-
-function eexistError(source: string, target: string): NodeJS.ErrnoException {
-  const error = new Error(
-    `EEXIST: file already exists, rename '${source}' -> '${target}'`
-  ) as NodeJS.ErrnoException;
-  error.code = "EEXIST";
-  return error;
-}
-
-function stderrText(error: unknown): string {
-  if (!error || typeof error !== "object" || !("stderr" in error)) {
-    return "";
-  }
-  const stderr = error.stderr;
-  if (typeof stderr === "string") {
-    return stderr.trim();
-  }
-  if (Buffer.isBuffer(stderr)) {
-    return stderr.toString("utf8").trim();
-  }
-  return "";
-}
-
-/**
- * No-clobber directory-entry publish. On Darwin, renamex_np(RENAME_EXCL)
- * preserves the source object identity. This is not a claim of strong CAS
- * against uncooperative external writers.
- */
-async function defaultRenameExclusive(
-  source: string,
-  target: string
-): Promise<void> {
-  if (process.platform === "darwin") {
-    const helper = await ensureDarwinRenameExclusiveHelper();
-    try {
-      await execFileAsync(helper, [source, target], { timeout: 5000 });
-      return;
-    } catch (error) {
-      const errno = Number.parseInt(
-        stderrText(error).split(/\s+/).at(0) ?? "",
-        10
-      );
-      if (errno === 17) {
-        throw eexistError(source, target);
-      }
-      throw error;
-    }
-  }
-
-  try {
-    await lstat(target);
-    throw eexistError(source, target);
-  } catch (error) {
-    if (!isMissingPathError(error)) {
-      throw error;
-    }
-  }
-  await rename(source, target);
 }
 
 async function readIdentity(path: string): Promise<FsObjectIdentity> {
