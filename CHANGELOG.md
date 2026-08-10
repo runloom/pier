@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+## [0.1.24] - 2026-08-11
+
+### Added
+
+- **产品 CLI 用户手册画布 SSOT。** `pier-cli-user-manual` Canvas 为唯一 CLI 手册真源；删除双维护的 `docs/cli.md`，并加 inventory / surface 治理门禁。
+- **Local-control v2 架构闭环。** agent 控制通道 v1/v2 会话、peer 身份、凭据与 receipt 路径落地。
+- **智能体会话恢复。** Pier 重启后扩展 resume adapters 与终端会话 resume 索引，尽量接回进行中的 agent 会话。
+
+### Changed
+
+- **全区域失败态统一 ErrorEmpty。** 画布 runtime、文件面板、技能详情、传输不可用等从软 Alert 改为 ErrorEmpty/统一空态。
+- **产品 CLI 保持 cli-human。** 不把 agent-caller 绑定写进产品 CLI 主路径；agents self 在解析期拒绝。
+
+### Fixed
+
+- **应用更新下载失败可重试。** 下载失败后保留可重试错误态，而非卡死。
+- **preflight 本地 FS 稳定性。** 限制 worker、renamex 重试、生命周期升级用例超时，降低 project-skills 误红。
+
 ## [0.1.23] - 2026-08-10
 
 ### Added
