@@ -191,24 +191,27 @@ export type PierFileTreeScrollSnapshot =
       kind: "position";
     };
 
-export interface PierFileTreeScrollRestoreOptions {
-  frames?: number;
-  lock?: boolean;
-}
-
 export interface PierFileTreeScrollController {
-  /**
-   * While active, path-sync `restoreSnapshotSoon` is skipped and in-flight
-   * restore locks are cancelled so reveal/scrollToPath is not overwritten.
-   */
+  /** @deprecated Alias of beginReveal */
   beginProgrammaticScroll: () => void;
+  /**
+   * Enter reveal intent: suppress path-sync layout compensate and abort
+   * in-flight compensate so scrollToPath sticks.
+   */
+  beginReveal: () => void;
   captureSnapshot: () => PierFileTreeScrollSnapshot | null;
+  /** @deprecated Alias of endReveal */
   endProgrammaticScroll: () => void;
-  restoreSnapshot: (snapshot: PierFileTreeScrollSnapshot) => void;
-  restoreSnapshotSoon: (
+  endReveal: () => void;
+  /**
+   * Path-sync layout compensate entry (condition checked by caller via
+   * shouldCompensateScroll). Aborted by user gesture / reveal.
+   */
+  requestLayoutCompensate: (
     snapshot: PierFileTreeScrollSnapshot | null,
-    options?: PierFileTreeScrollRestoreOptions
+    options?: { readonly settleFrames?: number }
   ) => void;
+  restoreSnapshot: (snapshot: PierFileTreeScrollSnapshot) => void;
 }
 
 export interface PierFileTreeProps

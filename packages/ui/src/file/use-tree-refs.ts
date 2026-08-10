@@ -70,13 +70,15 @@ export function useFileTreeRefs(options: FileTreeRefOptions): {
     ]
   );
   React.useLayoutEffect(() => {
-    // 保留 context-menu 抑制位与 model 注入：nextRefs 重建时不能清掉。
+    // 保留 context-menu 抑制位、model 注入、menu-pin：nextRefs 重建时不能清掉。
     const suppressOpenPathFromContextMenu =
       refs.current.suppressOpenPathFromContextMenu;
     const fileTreeModel = refs.current.fileTreeModel;
+    const pinContextMenuScroll = refs.current.pinContextMenuScroll;
     refs.current = {
       ...nextRefs,
       fileTreeModel,
+      pinContextMenuScroll,
       suppressOpenPathFromContextMenu,
     };
   }, [nextRefs]);

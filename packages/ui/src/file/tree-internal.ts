@@ -6,7 +6,6 @@ import {
   stripTrailingSlash,
   toOfficialPath,
 } from "./tree-model.ts";
-import { pinFileTreeScrollDuringContextMenu } from "./tree-scroll.ts";
 import type {
   PierDirectoryLoadState,
   PierFileTreeItem,
@@ -71,6 +70,13 @@ export interface FileTreeRefs {
     | undefined;
   readonly onSelectPaths: ((paths: string[]) => void) | undefined;
   /**
+   * Owner-backed menu pin (user claim aborts). Injected by PierFileTree.
+   * Falls back to no-op when unset (tests without scroll owner).
+   */
+  pinContextMenuScroll:
+    | ((anchor: Element | null | undefined) => () => void)
+    | undefined;
+  /**
    * Command / 菜单会话期间：禁止 selection→onOpenPath。
    * 生命周期 = 菜单打开到 close settle，不是 one-shot consume。
    */
@@ -93,6 +99,7 @@ export const EMPTY_REFS: FileTreeRefs = {
   onRenamePath: undefined,
   onSelectPaths: undefined,
   onContextMenuSession: undefined,
+  pinContextMenuScroll: undefined,
   suppressOpenPathFromContextMenu: false,
 };
 
@@ -186,9 +193,9 @@ function fileTreeContextMenuComposition(refs: {
     onOpen: (item, context) => {
       // Capture before close: pierre may still scrollIntoView in a later layout
       // effect of this commit (stickyFolders + focus). Restore before paint.
-      const unpinTree = pinFileTreeScrollDuringContextMenu(
-        context.anchorElement
-      );
+      const unpinTree =
+        refs.current.pinContextMenuScroll?.(context.anchorElement) ??
+        (() => undefined);
       const snapshot = refs.current;
       const callerItem = resolveCallerItem(snapshot, item.path);
       const model = snapshot.fileTreeModel;
@@ -380,6 +387,7 @@ export function buildFileTreeRefs(
     onRenamePath: undefined,
     onSelectPaths: undefined,
     onContextMenuSession: undefined,
+    pinContextMenuScroll: undefined,
     suppressOpenPathFromContextMenu: false,
   };
 }

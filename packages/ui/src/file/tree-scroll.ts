@@ -1,7 +1,10 @@
-import type {
-  PierFileTreeScrollRestoreOptions,
-  PierFileTreeScrollSnapshot,
-} from "./tree-types.ts";
+import type { PierFileTreeScrollSnapshot } from "./tree-types.ts";
+
+/** Internal options for deprecated multi-step restore helpers. */
+interface ScrollRestoreSoonOptions {
+  readonly frames?: number;
+  readonly settleFrames?: number;
+}
 
 export const FILE_TREE_HOST_SELECTOR =
   'file-tree-container[data-slot="pier-file-tree"]';
@@ -12,13 +15,16 @@ const FILE_TREE_SCROLL_SELECTORS = [
 ] as const;
 
 export function getAnimationFrameScheduler() {
-  return typeof requestAnimationFrame === "function"
-    ? requestAnimationFrame
-    : (callback: FrameRequestCallback) =>
-        globalThis.setTimeout(
-          () => callback(globalThis.performance?.now() ?? Date.now()),
-          16
-        );
+  // Resolve rAF on each call so test spies on globalThis.requestAnimationFrame work.
+  return (callback: FrameRequestCallback) => {
+    if (typeof globalThis.requestAnimationFrame === "function") {
+      return globalThis.requestAnimationFrame(callback);
+    }
+    return globalThis.setTimeout(
+      () => callback(globalThis.performance?.now() ?? Date.now()),
+      16
+    );
+  };
 }
 
 export function fileTreeHost(
@@ -210,16 +216,30 @@ export function restoreFileTreeScrollSnapshot(
   return scrollElement.scrollTop;
 }
 
+/**
+ * @deprecated Prefer createFileTreeScrollOwner().requestLayoutCompensate.
+ * Kept for tests that drive raw multi-step restore without the owner.
+ */
 export function scrollRestoreFrameCount(
-  options: PierFileTreeScrollRestoreOptions
+  options: ScrollRestoreSoonOptions
 ): number {
-  return options.frames ?? 2;
+  if (options.settleFrames !== undefined) {
+    return options.settleFrames;
+  }
+  if (options.frames !== undefined) {
+    return options.frames;
+  }
+  return 1;
 }
 
+/**
+ * @deprecated Prefer createFileTreeScrollOwner().requestLayoutCompensate.
+ * Does not lock scroll against the user.
+ */
 export function restoreFileTreeScrollSnapshotSoon(
   host: HTMLElement | null,
   snapshot: PierFileTreeScrollSnapshot | null,
-  options: PierFileTreeScrollRestoreOptions & {
+  options: ScrollRestoreSoonOptions & {
     onFinished?: () => void;
     onRestored?: (scrollTop: number | null) => void;
     shouldContinue?: () => boolean;
@@ -229,9 +249,9 @@ export function restoreFileTreeScrollSnapshotSoon(
     return;
   }
 
-  const frameCount = scrollRestoreFrameCount(options);
+  const settleFrames = scrollRestoreFrameCount(options);
   const schedule = getAnimationFrameScheduler();
-  let remainingFrames = frameCount;
+  let remainingSettle = settleFrames;
   const restoreNextFrame = () => {
     if (options.shouldContinue && !options.shouldContinue()) {
       return;
@@ -242,12 +262,12 @@ export function restoreFileTreeScrollSnapshotSoon(
       : null;
     options.onRestored?.(restoredScrollTop);
 
-    if (remainingFrames <= 0) {
+    if (remainingSettle <= 0) {
       options.onFinished?.();
       return;
     }
 
-    remainingFrames -= 1;
+    remainingSettle -= 1;
     schedule(restoreNextFrame);
   };
 

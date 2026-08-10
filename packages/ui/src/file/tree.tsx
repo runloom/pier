@@ -19,6 +19,7 @@ import {
   treeRenderSignature,
 } from "./tree-model.ts";
 import { FileTreeRenameSession } from "./tree-rename-session.ts";
+import { fileTreeScrollElementFromNode } from "./tree-scroll.ts";
 import { usePierFileTreeScrollController } from "./tree-scroll-controller.ts";
 import * as treeSearch from "./tree-search.ts";
 import {
@@ -74,7 +75,6 @@ export type {
   PierFileTreeRevealOptions,
   PierFileTreeRevealScroll,
   PierFileTreeScrollController,
-  PierFileTreeScrollRestoreOptions,
   PierFileTreeScrollSnapshot,
   TreeExpansionAuthority,
   TreeExpansionIntent,
@@ -277,12 +277,20 @@ export function PierFileTree({
     beginProgrammaticScroll,
     captureSnapshot,
     endProgrammaticScroll,
-    restoreSnapshotSoon,
+    requestLayoutCompensate,
+    scrollOwner,
   } = usePierFileTreeScrollController({
     containerRef,
     onScrollSnapshotChange,
     scrollControllerRef,
   });
+
+  // Owner-backed menu pin (user claim aborts). Preserve across refs rebuilds.
+  refs.current = {
+    ...refs.current,
+    pinContextMenuScroll: (anchor) =>
+      scrollOwner.beginMenuPin(fileTreeScrollElementFromNode(anchor)),
+  };
 
   useFileTreePathSync({
     activeSearchRef,
@@ -292,12 +300,14 @@ export function PierFileTree({
     expandedDirectoriesRef,
     ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
     expansionSeed,
+    isRevealActive: scrollOwner.isRevealActive,
+    isUserScrolling: scrollOwner.isUserScrolling,
     items,
     model,
     modelAheadMovesRef,
     paths,
     renderSignature,
-    restoreSnapshotSoon,
+    requestLayoutCompensate,
   });
 
   // After scroll + path-sync so reveal can suppress restore during cold open.
@@ -310,11 +320,13 @@ export function PierFileTree({
     endProgrammaticScroll,
     ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
     ...(isAutoRevealExcluded === undefined ? {} : { isAutoRevealExcluded }),
+    isUserScrolling: scrollOwner.isUserScrolling,
     model,
     programmaticSelectionRef,
     readRefs,
     renderSignature,
     revealPath,
+    subscribeUserClaim: scrollOwner.subscribeUserClaim,
   });
 
   React.useImperativeHandle(

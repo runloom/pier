@@ -44,6 +44,10 @@ export function beginFilesTreeRootLoad(
     return session.rootLoadPromise ?? Promise.resolve();
   }
 
+  // Hot reload (force): keep prior entries visible while listing. Never emit an
+  // empty intermediate map — that collapses maxScrollTop and fights the user.
+  const hadLoadedEntries =
+    session.snapshot.rootLoaded && session.snapshot.entriesByPath.size > 0;
   session.snapshot = {
     ...session.snapshot,
     rootError: null,
@@ -60,7 +64,10 @@ export function beginFilesTreeRootLoad(
         emit();
         return;
       }
-      const nextEntriesByPath = force
+      // Prefer merge whenever we already had a tree: avoids wipe-on-reload and
+      // preserves expanded nested listings for dirs still present at root.
+      const useMerge = force || hadLoadedEntries;
+      const nextEntriesByPath = useMerge
         ? mergeDirectoryEntries(
             session.snapshot.entriesByPath,
             "",
@@ -75,7 +82,7 @@ export function beginFilesTreeRootLoad(
         ""
       );
       session.snapshot = {
-        directoryStatesByPath: force
+        directoryStatesByPath: useMerge
           ? pruneDirectoryStatesForMissingEntries(
               session.snapshot.directoryStatesByPath,
               nextEntriesByPath,
@@ -96,11 +103,13 @@ export function beginFilesTreeRootLoad(
         emit();
         return;
       }
+      // Keep prior entries on hot failure; only cold first-load may clear.
+      const keepPrior = force || hadLoadedEntries;
       session.snapshot = {
-        directoryStatesByPath: force
+        directoryStatesByPath: keepPrior
           ? session.snapshot.directoryStatesByPath
           : new Map(),
-        entriesByPath: force ? session.snapshot.entriesByPath : new Map(),
+        entriesByPath: keepPrior ? session.snapshot.entriesByPath : new Map(),
         rootError: toFilesTreeErrorMessage(error, fallbackError),
         rootLoaded: true,
         rootLoading: false,

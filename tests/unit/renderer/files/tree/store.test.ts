@@ -1198,4 +1198,90 @@ describe("files-tree-store", () => {
     expect(snapshot.entriesByPath.get("sibling")).toBe(siblingDirectory);
     unsubscribe();
   });
+
+  it("force root reload never emits empty entries while nested children exist (P4)", async () => {
+    await loadRoot([directory("src"), file("README.md")]);
+    await loadFilesTreeDirectory(
+      ROOT,
+      "src",
+      listFromResponses({ src: [file("src/index.ts")] })
+    );
+
+    const entryCounts: number[] = [];
+    const unsubscribe = subscribeFilesTreeSession(ROOT, () => {
+      entryCounts.push(getFilesTreeSnapshot(ROOT).entriesByPath.size);
+    });
+
+    const deferred = createDeferred<FileEntry[]>();
+    const pending = reloadFilesTreeRoot(
+      ROOT,
+      vi.fn<FilesListApi>(() => deferred.promise),
+      "Failed to load files"
+    );
+
+    expect(getFilesTreeSnapshot(ROOT).rootLoading).toBe(true);
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.size).toBeGreaterThan(0);
+    expect(
+      getFilesTreeSnapshot(ROOT).entriesByPath.get("src/index.ts")
+    ).toEqual(file("src/index.ts"));
+
+    deferred.resolve([directory("src"), file("README.md"), file("NEW.md")]);
+    await pending;
+    unsubscribe();
+
+    expect(entryCounts.every((count) => count > 0)).toBe(true);
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.rootLoading).toBe(false);
+    expect(snapshot.entriesByPath.get("NEW.md")).toEqual(file("NEW.md"));
+    expect(snapshot.entriesByPath.get("src/index.ts")).toEqual(
+      file("src/index.ts")
+    );
+  });
+
+  it("keeps prior entries when a force root reload fails (P4)", async () => {
+    await loadRoot([file("keep.ts")]);
+    const deferred = createDeferred<FileEntry[]>();
+    const pending = reloadFilesTreeRoot(
+      ROOT,
+      vi.fn<FilesListApi>(() => deferred.promise),
+      "Failed to load files"
+    );
+
+    deferred.reject(new Error("network down"));
+    await pending;
+
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.rootLoading).toBe(false);
+    expect(snapshot.rootError).toBe("network down");
+    expect(snapshot.entriesByPath.get("keep.ts")).toEqual(file("keep.ts"));
+  });
+
+  it("directory refresh merges without a loading emit when already loaded (P4)", async () => {
+    await loadRoot([directory("src")]);
+    await loadFilesTreeDirectory(
+      ROOT,
+      "src",
+      listFromResponses({ src: [file("src/a.ts")] })
+    );
+
+    const states: Array<string | undefined> = [];
+    const unsubscribe = subscribeFilesTreeSession(ROOT, () => {
+      states.push(getFilesTreeSnapshot(ROOT).directoryStatesByPath.get("src"));
+    });
+
+    await loadFilesTreeDirectory(
+      ROOT,
+      "src",
+      listFromResponses({ src: [file("src/a.ts"), file("src/b.ts")] })
+    );
+    unsubscribe();
+
+    expect(states.includes("loading")).toBe(false);
+    expect(getFilesTreeSnapshot(ROOT).entriesByPath.get("src/b.ts")).toEqual(
+      file("src/b.ts")
+    );
+    expect(getFilesTreeSnapshot(ROOT).directoryStatesByPath.get("src")).toBe(
+      "loaded"
+    );
+  });
 });
