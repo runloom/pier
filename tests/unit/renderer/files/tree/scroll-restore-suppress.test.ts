@@ -6,19 +6,22 @@ const uiFile = (relative: string) =>
   readFileSync(join(process.cwd(), "packages/ui/src/file", relative), "utf8");
 
 /**
- * Contract: while reveal holds programmatic scroll, path-sync must not pin
- * scrollTop back to the pre-mutation (root) snapshot — first-open deep paths
- * load ancestors then reveal; restore-with-lock was overwriting scrollToPath.
+ * Contract: path-sync must not fight reveal. Scroll writes go through the
+ * owner (`withProgrammaticScroll` / `requestLayoutCompensate`); user wheel
+ * claims via `claimUserScroll` when the event is not programmatic.
+ * Multi-frame lock restore is banned (see file-tree-scroll-ownership governance).
  */
 describe("file tree scroll restore suppress contract", () => {
-  it("scroll controller skips restore while suppress depth > 0", () => {
+  it("scroll controller restores only via programmatic owner writes", () => {
     const source = uiFile("tree-scroll-controller.ts");
     expect(source).toContain("beginProgrammaticScroll");
     expect(source).toContain("endProgrammaticScroll");
-    expect(source).toContain("suppressRestoreDepthRef");
-    expect(source).toMatch(
-      /if\s*\(\s*suppressRestoreDepthRef\.current\s*>\s*0\s*\)/
-    );
+    expect(source).toContain("withProgrammaticScroll");
+    expect(source).toContain("requestLayoutCompensate");
+    expect(source).toContain("isProgrammaticScrollEvent");
+    expect(source).toContain("claimUserScroll");
+    // Legacy depth-ref suppress path is retired in favor of scroll owner.
+    expect(source).not.toContain("suppressRestoreDepthRef");
   });
 
   it("reveal controller holds programmatic scroll for scrolled reveals", () => {
