@@ -205,7 +205,7 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
         shouldSkipFullCatalogProbe({
           force,
           checkLatest,
-          agentIds,
+          ...(agentIds === undefined ? {} : { agentIds }),
           lastProbeAt: state.lastProbeAt,
           lastCheckLatestAt: state.lastCheckLatestAt,
           probesById: state.probesById,
@@ -225,7 +225,7 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
           shouldSkipFullCatalogProbe({
             force,
             checkLatest,
-            agentIds,
+            ...(agentIds === undefined ? {} : { agentIds }),
             lastProbeAt: after.lastProbeAt,
             lastCheckLatestAt: after.lastCheckLatestAt,
             probesById: after.probesById,

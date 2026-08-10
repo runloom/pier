@@ -5,9 +5,21 @@ import {
   installTerminalOpenUrlHost,
   resetTerminalOpenUrlHostForTests,
 } from "../../../../src/renderer/lib/plugins/terminal-open-url-host.ts";
+import type { PanelContext } from "../../../../src/shared/contracts/panel.ts";
 
-const openFilesDiskPath = vi.fn(() => false);
-const getTerminalPanelContext = vi.fn(() => null);
+const openFilesDiskPath = vi.fn(
+  (_input: {
+    column?: number;
+    context?: PanelContext;
+    line?: number;
+    path: string;
+    root: string;
+    title?: string;
+  }): boolean => false
+);
+const getTerminalPanelContext = vi.fn(
+  (_panelId: string): PanelContext | null => null
+);
 
 vi.mock("i18next", () => ({
   default: {
@@ -24,14 +36,16 @@ vi.mock("i18next", () => ({
 }));
 
 vi.mock("@/lib/files/open-disk-file-panel.ts", () => ({
-  openFilesDiskPath: (...args: unknown[]) => openFilesDiskPath(...args),
+  openFilesDiskPath: (
+    input: Parameters<typeof openFilesDiskPath>[0]
+  ): boolean => openFilesDiskPath(input),
 }));
 
 vi.mock(
   "../../../../src/renderer/lib/plugins/host/terminal-context.ts",
   () => ({
-    getTerminalPanelContext: (...args: unknown[]) =>
-      getTerminalPanelContext(...args),
+    getTerminalPanelContext: (panelId: string): PanelContext | null =>
+      getTerminalPanelContext(panelId),
   })
 );
 

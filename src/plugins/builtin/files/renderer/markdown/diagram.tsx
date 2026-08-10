@@ -195,7 +195,8 @@ export function MarkdownDiagram({
 function readLiveIntrinsicSize(
   svg: SVGElement
 ): { height: number; width: number } | null {
-  const viewBox = svg.viewBox?.baseVal;
+  const svgEl = svg as SVGSVGElement;
+  const viewBox = svgEl.viewBox?.baseVal;
   if (viewBox && viewBox.width > 0 && viewBox.height > 0) {
     return { height: viewBox.height, width: viewBox.width };
   }
