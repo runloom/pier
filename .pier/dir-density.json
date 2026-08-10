@@ -23,20 +23,20 @@
       "reason": "shadcn primitives intentionally flat; feature clusters live under diff-view/, file/, image-preview/"
     },
     "src/renderer/stores": {
-      "max": 56,
-      "reason": "debt: optional domain subfolders (terminal/workspace/agent); agent-lifecycle + shell-environment + comments mirror stores; workspace-close split pending folder"
+      "max": 57,
+      "reason": "debt: optional domain subfolders (terminal/workspace/agent); agent-lifecycle-probe extracted beside lifecycle store; shell-environment + comments mirrors; workspace-close split pending folder"
     },
     "src/shared": {
-      "max": 41,
-      "reason": "debt: top-level shared helpers still flat; task-runs-window-filter + domain modules pending folders"
+      "max": 44,
+      "reason": "debt: top-level shared helpers still flat; terminal path/open-disk-target + system-open-guard pending terminal/ folder; task-runs-window-filter + domain modules pending folders"
     },
     "src/shared/contracts": {
       "max": 50,
       "reason": "debt: finish remaining contract domain groups"
     },
     "src/renderer/panel-kits/terminal": {
-      "max": 49,
-      "reason": "debt: more surface vs chrome split beyond hooks/; core comments status item added"
+      "max": 52,
+      "reason": "debt: more surface vs chrome split beyond hooks/; composer paste edit bridge/dialog/actions pending structured-composer/; core comments status item"
     },
     "src/main/services/agents/integrations": {
       "max": 43,
