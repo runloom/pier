@@ -56,7 +56,7 @@
 | `@` | 仅工作区 **文件 / 文件夹**；插入为 decorator chip，发送展开为绝对路径 |
 | `[#n]` | 继续支持字面 token + 着色；与 `@` chip 并存一个版本周期 |
 | 空草稿透传 | 对齐「原生输入对等」矩阵（§7）；非空草稿本地编辑 |
-| 大粘贴 | ≥ `10_000` 字符 → 自动 materialize 为 `.txt` 附件并插入 token（§6） |
+| 大粘贴 | **已修订**：粘贴分档（小全文 / 中大上轨 + 可编辑）见 [`2026-08-10-composer-paste-tiered-ux-design.md`](./2026-08-10-composer-paste-tiered-ux-design.md)；本节 §6.2 不再作实现真源 |
 | Phase C/D | `/` 建议、发送历史、围栏高亮、模式/模型入口 → **另案**，本规格不实现 |
 
 ### 3.1 对附件规格的修订
@@ -137,14 +137,17 @@ const payload = buildComposerSendText(attachments, draftText);
 - 空查询：显示最近 / MRU 若干条（若现成有；否则仅等待输入）。
 - 无项目上下文：popup 空态「未打开项目」+ 下一步文案（走 i18n）。
 
-### 6.2 大粘贴 → 附件
+### 6.2 大粘贴 → 附件（历史；已由 2026-08-10 分档规格取代）
 
-| 项 | 值 |
+> **实现真源：** [`2026-08-10-composer-paste-tiered-ux-design.md`](./2026-08-10-composer-paste-tiered-ux-design.md)  
+> 摘要：小粘贴全文插入；中/大与图片附件同轨展示，点击 content dialog 可编辑；中档发送展开正文，大档仍 path。
+
+| 项 | 历史值（Phase B 已实现基线） |
 |---|---|
 | 阈值 | 粘贴纯文本 `length >= 10_000` |
 | 行为 | `preventDefault` → main 写入 `pier-terminal-pastes/paste-<uuid>.txt` → `resolve`/`append` 附件 → 光标处插 `[#n]` |
-| 失败 | `showAppAlert`；不丢用户意图——可提供「仍插入正文」次要路径（choice：改为插入 / 取消） |
-| 与图片粘贴 | 图片仍走既有 materialize；本规则仅纯文本 |
+| 失败 | 可「仍插入正文」 |
+| 与图片粘贴 | 图片仍走既有 materialize；文本规则仅 `text/plain` |
 
 ## 7. Phase A：键盘桥
 

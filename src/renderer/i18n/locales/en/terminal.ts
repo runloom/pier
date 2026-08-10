@@ -49,6 +49,12 @@ export const terminal = {
     keyHint: "⇧⏎ newline · {{attach}} attach · Esc close",
     label: "Rich Input",
     largePasteAttachFailed: "Couldn’t attach paste — try again",
+    editPasteTitle: "Edit pasted content",
+    editPasteLabel: "Content",
+    editPasteEmptyHint: "Clearing and saving removes this paste",
+    editPasteSave: "Save",
+    editPasteSaveFailed: "Couldn’t save pasted content — try again",
+    pasteAttachmentAria: "Pasted content, attachment {{n}}",
     attachmentAutocompleteEmptyBody:
       "Add a file first, then type # to insert it here.",
     attachmentAutocompleteEmptyTitle: "No attachments yet",

@@ -10,7 +10,7 @@ import {
   PASTE_COMMAND,
 } from "lexical";
 import { useEffect } from "react";
-import { LARGE_PASTE_CHAR_THRESHOLD } from "./large-paste.ts";
+import { classifyPlainPaste } from "./paste-tiers.ts";
 
 function nodesFromPlainText(text: string): LexicalNode[] {
   const lines = text.split("\n");
@@ -41,7 +41,7 @@ function clipboardHasFilePayload(
 
 /**
  * Strip HTML formatting on paste; insert clipboard text only.
- * Large pastes are delegated to `onLargePlainPaste` (attachment materialize).
+ * Medium/large pastes are delegated to `onLargePlainPaste` (attachment).
  * File/image payloads are left to React `handleComposerPaste` so we do not
  * double-insert plain text or race attachment chips.
  */
@@ -65,7 +65,8 @@ export function PastePlainTextPlugin({
             if (typeof text !== "string") {
               return false;
             }
-            if (text.length >= LARGE_PASTE_CHAR_THRESHOLD) {
+            const tier = classifyPlainPaste(text);
+            if (tier === "medium" || tier === "large") {
               event.preventDefault();
               onLargePlainPaste(text);
               return true;

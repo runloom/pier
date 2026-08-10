@@ -74,6 +74,7 @@ export interface TerminalComposerViewProps {
   onChromeMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onDragOver: (event: DragEvent) => void;
   onDrop: (event: DragEvent) => void;
+  onEditPaste: (attachment: ComposerAttachment) => void;
   onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
   onLargePlainPaste: (text: string) => void;
   onPaste: (event: ClipboardEvent) => void;
@@ -106,6 +107,7 @@ export function TerminalComposerView({
   onKeyDown,
   onPaste,
   onLargePlainPaste,
+  onEditPaste,
   onPickFiles,
   onRemoveAttachment,
   onRevealPath,
@@ -160,6 +162,7 @@ export function TerminalComposerView({
             <TerminalComposerAttachmentRail
               attachments={attachments}
               disabled={disabled}
+              onEditPaste={onEditPaste}
               onRemove={onRemoveAttachment}
               onReveal={onRevealPath}
             />

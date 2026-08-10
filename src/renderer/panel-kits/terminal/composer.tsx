@@ -16,6 +16,8 @@ import {
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
 import { registerTerminalComposerTakeover } from "@/stores/terminal-composer-takeover.ts";
+import type { ComposerAttachment } from "./composer-attachments-model.ts";
+import { createComposerEditorMutations } from "./composer-editor-bridge.ts";
 import {
   clearComposerDraft,
   elementSoftWrapped,
@@ -28,6 +30,7 @@ import {
   type ComposerPassthroughKeyPress,
   passthroughKeyPressForKey,
 } from "./composer-passthrough.ts";
+import { runComposerPasteEdit } from "./composer-paste-edit-actions.ts";
 import { TerminalComposerView } from "./composer-view.tsx";
 import { useTerminalComposerAttachments } from "./hooks/use-composer-attachments.ts";
 import { useTerminalComposerClose } from "./hooks/use-composer-close.ts";
@@ -113,27 +116,7 @@ export function TerminalComposer({
 
   const attachments = useTerminalComposerAttachments({
     disabled,
-    editorMutations: {
-      getSelection: () =>
-        editorRef.current?.getSelection() ?? {
-          cursor: valueRef.current.length,
-          selectionEnd: valueRef.current.length,
-        },
-      getValue: () => editorRef.current?.getValue() ?? valueRef.current,
-      insertAttachmentToken: (absolutePath, ordinal1Based) => {
-        editorRef.current?.insertAttachmentToken(absolutePath, ordinal1Based);
-      },
-      insertTextAtSelection: (text) => {
-        editorRef.current?.insertTextAtSelection(text);
-      },
-      listInvalidAttachmentRefs: (atts) =>
-        editorRef.current?.listInvalidAttachmentRefs(atts) ?? [],
-      rewriteAttachmentTokensAfterRemove: (removedPath, nextAttachments) =>
-        editorRef.current?.rewriteAttachmentTokensAfterRemove(
-          removedPath,
-          nextAttachments
-        ) ?? valueRef.current,
-    },
+    editorMutations: createComposerEditorMutations({ editorRef, valueRef }),
     getDraftAndCursor: () => {
       const handle = editorRef.current;
       const draft = valueRef.current;
@@ -169,6 +152,17 @@ export function TerminalComposer({
     reportError: reportAttachmentError,
     t,
   });
+
+  const onEditPaste = useCallback(
+    (attachment: ComposerAttachment) => {
+      runComposerPasteEdit({
+        attachment,
+        removeAttachment: attachments.removeAttachment,
+        updatePasteContent: attachments.updatePasteContent,
+      }).catch(() => undefined);
+    },
+    [attachments.removeAttachment, attachments.updatePasteContent]
+  );
 
   const inputFocusRisk = useTuiInputFocusRisk(panelId, isActive);
   // 光标探针只提示风险，不禁用发送：发送时会实时恢复焦点，恢复失败再由用户确认。
@@ -478,6 +472,7 @@ export function TerminalComposer({
       onChromeMouseDown={focusInputFromChrome}
       onDragOver={attachments.onDragOver}
       onDrop={attachments.onDrop}
+      onEditPaste={onEditPaste}
       onKeyDown={onKeyDown}
       onLargePlainPaste={attachments.onLargePlainPaste}
       onPaste={attachments.onPaste}

@@ -27,6 +27,8 @@ import type {
 import type {
   TerminalComposerImageBytes,
   TerminalComposerMaterializeResult,
+  TerminalComposerPasteTextWrite,
+  TerminalComposerPasteTextWriteResult,
   TerminalComposerPathsResult,
   TerminalComposerPickResult,
   TerminalComposerTextBytes,
@@ -213,4 +215,11 @@ export interface TerminalAPI {
     input: { title: string; source: "user" }
   ): Promise<{ applied: boolean; ok: boolean }>;
   setup(): Promise<CreateTerminalResult>;
+  /**
+   * Overwrite a text paste file under pier-terminal-pastes (edit dialog save).
+   * Paths outside that directory are rejected.
+   */
+  writeComposerPasteText(
+    data: TerminalComposerPasteTextWrite
+  ): Promise<TerminalComposerPasteTextWriteResult>;
 }

@@ -503,10 +503,13 @@ describe("paste plain after failed re-attach", () => {
   });
 });
 
-describe("large plain-text paste", () => {
-  it("materializes text ≥10k as a .txt attachment with a path chip/text", async () => {
+describe("tiered plain-text paste", () => {
+  it("materializes text ≥10k as a large paste attachment with path chip", async () => {
     materializeComposerTextBytes.mockResolvedValue({
-      attachment: dtoFrom("/tmp/paste-1.txt"),
+      attachment: {
+        ...dtoFrom("/tmp/paste-1.txt"),
+        kind: "paste",
+      },
       ok: true,
     });
 
@@ -525,6 +528,38 @@ describe("large plain-text paste", () => {
       });
       expect(draftRef.current.draft).toContain("/tmp/paste-1.txt");
       expect(hook.result.current.attachments).toHaveLength(1);
+      expect(hook.result.current.attachments[0]?.kind).toBe("paste");
+      expect(hook.result.current.attachments[0]?.pasteTier).toBe("large");
+      expect(hook.result.current.attachments[0]?.pasteContent).toBe(plain);
+    });
+  });
+
+  it("materializes multi-line medium paste as attachment, not full draft text", async () => {
+    materializeComposerTextBytes.mockResolvedValue({
+      attachment: {
+        ...dtoFrom("/tmp/paste-med.txt"),
+        kind: "paste",
+      },
+      ok: true,
+    });
+
+    const { draftRef, hook } = setup({ panelId: "p-medium-paste" });
+    draftRef.current = { cursor: 0, draft: "", selectionEnd: 0 };
+
+    const plain = ["a", "b", "c", "d", "e", "f"].join("\n");
+
+    await act(async () => {
+      hook.result.current.onLargePlainPaste(plain);
+    });
+
+    await waitFor(() => {
+      expect(materializeComposerTextBytes).toHaveBeenCalledWith({
+        text: plain,
+      });
+      expect(draftRef.current.draft).toContain("/tmp/paste-med.txt");
+      expect(draftRef.current.draft).not.toContain("a\nb\nc");
+      expect(hook.result.current.attachments[0]?.pasteTier).toBe("medium");
+      expect(hook.result.current.attachments[0]?.pasteContent).toBe(plain);
     });
   });
 });

@@ -4,6 +4,8 @@
 状态：待实现（已按设计审查修订）；**编辑器 / `@` 相关非目标已由 [`2026-07-22-rich-input-structured-composer-design.md`](./2026-07-22-rich-input-structured-composer-design.md) 修订**  
 范围：按需增强输入（Rich Input）上的任意文件附件：选择、粘贴、拖拽；发送时把绝对路径交给智能体自行处理。
 
+**后续修订：** 纯文本粘贴分档（小全文 / 中大上轨 + 可编辑弹窗、中档发送展开正文）见 [`2026-08-10-composer-paste-tiered-ux-design.md`](./2026-08-10-composer-paste-tiered-ux-design.md)；实现时 `kind` 将增加 `paste`，发送序列化对中档 paste 不再只注入 path。
+
 ## 1. 背景与目标
 
 增强输入已从「智能体运行时常驻」改为按需打开。本设计补齐文件能力，使用户不必点回原生终端，也能把本地文件交给会话中的智能体。

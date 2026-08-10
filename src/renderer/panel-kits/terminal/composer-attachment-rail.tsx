@@ -98,6 +98,11 @@ function AttachmentTile({
       data-testid={`terminal-composer-attachment-${ordinal}`}
     >
       <button
+        aria-label={
+          attachment.kind === "paste"
+            ? t("terminal.composer.pasteAttachmentAria", { n: ordinal })
+            : attachment.name
+        }
         className={cn(
           "composer-attachment-surface relative size-full overflow-hidden rounded-lg",
           "border border-border/60 bg-muted/40 shadow-sm",
@@ -178,11 +183,14 @@ function AttachmentTile({
 export function TerminalComposerAttachmentRail({
   attachments,
   disabled,
+  onEditPaste,
   onRemove,
   onReveal,
 }: {
   attachments: readonly ComposerAttachment[];
   disabled: boolean;
+  /** Paste attachments open the edit dialog instead of reveal. */
+  onEditPaste: (attachment: ComposerAttachment) => void;
   onRemove: (id: string) => void;
   onReveal: (path: string) => void;
 }) {
@@ -193,6 +201,10 @@ export function TerminalComposerAttachmentRail({
   }
 
   const openAttachment = (attachment: ComposerAttachment) => {
+    if (attachment.kind === "paste") {
+      onEditPaste(attachment);
+      return;
+    }
     if (attachment.kind === "image" && !attachment.isDirectory) {
       openContentPreview({
         payload: {
