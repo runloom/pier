@@ -85,6 +85,11 @@ const ICON_CONTROL_OWNERS = new Set([
 function sourceFiles(dir: string): string[] {
   const files: string[] = [];
   for (const entry of readdirSync(dir)) {
+    // Live-modules unit fixtures write `__*.canvas.*` under smoke/ and unlink
+    // in finally — skip so parallel governance scans never race half-unlinked temps.
+    if (entry.startsWith("__")) {
+      continue;
+    }
     const filePath = join(dir, entry);
     if (statSync(filePath).isDirectory()) {
       files.push(...sourceFiles(filePath));
@@ -287,7 +292,21 @@ describe("shadcn composition governance", () => {
     ];
     for (const filePath of scanFiles) {
       const relativePath = projectRelative(filePath);
-      const source = readFileSync(filePath, "utf8");
+      let source: string;
+      try {
+        source = readFileSync(filePath, "utf8");
+      } catch (error) {
+        // Ignore transient deletes from parallel fixture cleanup.
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "ENOENT"
+        ) {
+          continue;
+        }
+        throw error;
+      }
       const sourceFile = ts.createSourceFile(
         filePath,
         source,
