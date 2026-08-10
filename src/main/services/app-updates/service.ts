@@ -87,19 +87,23 @@ export function createAppUpdateService(options: {
   });
 
   function setError(err: unknown): AppUpdateSnapshot {
-    // Keep a ready/in-flight package visible across transient check failures.
-    if (snapshot.state === "downloaded" || snapshot.state === "downloading") {
+    const message = err instanceof Error ? err.message : String(err);
+    // Ready package stays installable if a later check fails.
+    if (snapshot.state === "downloaded") {
       return setSnapshot({
         ...snapshot,
-        error: err instanceof Error ? err.message : String(err),
+        error: message,
       });
     }
+    // Download failed (or check failed): leave a retryable error so the UI can
+    // re-check / re-download. Do not stay on `downloading` — that disables both
+    // Download and Check (check early-returns while state is downloading).
     return setSnapshot({
       ...(snapshot.availableVersion
         ? { availableVersion: snapshot.availableVersion }
         : {}),
       currentVersion: options.currentVersion,
-      error: err instanceof Error ? err.message : String(err),
+      error: message,
       state: "error",
     });
   }

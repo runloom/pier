@@ -9,10 +9,12 @@
  * in params (`transferRole` + `originalDescriptor`) so a later load — once the
  * component returns — can restore the panel via
  * `panel-transfer-layout-rewrite.restoreEmbeddedTransferPanels`.
+ *
+ * Full-region primary state: ErrorEmpty (shared shell; no bespoke empty card).
  */
 
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import type { IDockviewPanelProps } from "dockview-react";
-import { AlertTriangle } from "lucide-react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import { useT } from "@/i18n/use-t.ts";
 
@@ -88,12 +90,11 @@ export function PanelTransferUnavailablePanel(
           component: originalComponent,
         });
   return (
-    <div className="flex h-full items-center justify-center bg-background p-6">
-      <div className="max-w-md text-center">
-        <AlertTriangle className="mx-auto size-8 text-warning" />
-        <h2 className="mt-3 font-semibold text-foreground text-lg">{title}</h2>
-        <p className="mt-2 text-muted-foreground text-sm">{body}</p>
-      </div>
+    <div
+      className="flex h-full min-h-0 flex-col bg-background"
+      data-slot="panel-transfer-unavailable"
+    >
+      <ErrorEmpty description={body} title={title} />
     </div>
   );
 }

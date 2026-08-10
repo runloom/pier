@@ -26,6 +26,7 @@ import {
   StatusBadge,
   SubTitle,
 } from "./shared.tsx";
+import { presentStatus } from "./status-presentation.ts";
 
 type DesignData = SchemeData["data"];
 
@@ -102,13 +103,15 @@ export function PathPage({ d }: { d: DesignData }) {
             content: (
               <Stack gap={12}>
                 <DataTable
-                  caption="完整 CLI 命令树"
-                  headers={["资源", "命令", "职责", "安全语义"]}
+                  caption="完整 CLI 命令树（含现状与交付波次）"
+                  headers={["资源", "命令", "现状", "波次", "职责", "安全语义"]}
                   rows={d.cli.commandGroups.map((row) => [
                     row.group,
                     <span className="font-mono text-xs" key={row.group}>
                       {row.commands}
                     </span>,
+                    presentStatus(row.status).label,
+                    row.wave,
                     row.responsibility,
                     row.safety,
                   ])}
@@ -198,20 +201,30 @@ export function LandingPage({ d }: { d: DesignData }) {
     (row) => row.status === "blocked" || row.status === "待实现",
   ).length;
   const deliveryDiagram = buildDeliveryDiagram(d.phases);
+  const phasesDone = d.phases.filter((row) => row.status === "done").length;
+  const phasesActive = d.phases.filter((row) => row.status === "in_progress").length;
 
   return (
     <Stack gap={20}>
       <Stack gap={6}>
         <SectionTitle>落地摘要</SectionTitle>
         <SectionLead>
-          默认从人工监督切到智能体协作；按波次交付调用身份到完整协作面，并用证据矩阵收口。下图是
+          先固定 CLI 用户手册真源（
+          <span className="font-medium text-foreground">
+            pier-cli-user-manual Canvas
+          </span>
+          ）与边界，再按智能体身份 → 双内容路径 → 宿主原语收敛 → 协作面 →
+          外部接入交付。下图是
           <span className="font-medium text-foreground">实施交付依赖</span>
-          ，不是多智能体任务 DAG。
+          ，不是多智能体任务 DAG。每一波次完成后应回写 Canvas 手册的
+          shipped / planned 清单。
         </SectionLead>
         <div className="flex flex-wrap gap-2">
           <StatusBadge label={`验收已核对 ${verified}`} tone="success" />
           <StatusBadge label={`待实现 ${planned}`} tone="warning" />
           {blocked > 0 ? <StatusBadge label={`阻塞 ${blocked}`} tone="warning" /> : null}
+          <StatusBadge label={`波次完成 ${phasesDone}`} tone="success" />
+          <StatusBadge label={`波次进行中 ${phasesActive}`} tone="info" />
           <StatusBadge label={`共 ${d.phases.length} 个交付波次`} tone="outline" />
         </div>
       </Stack>
@@ -219,12 +232,13 @@ export function LandingPage({ d }: { d: DesignData }) {
       <Stack gap={8}>
         <SectionTitle>交付波次依赖</SectionTitle>
         <MermaidDiagram
-          aria-label="从调用边界到外部发布的交付波次依赖"
+          aria-label="从文档边界到外部发布的交付波次依赖"
           previewTitle="实施交付路径 W0–W6"
           source={deliveryDiagram}
         />
         <SectionLead>
-          W1 身份就绪后，一次性 invoke（W2）与持久运行（W3）可并行推进，再汇入定位与协作面。
+          W0 文档与边界 → W1 身份；W1 后 W2（invoke）与 W3（持久
+          screen）可并行，再汇入 W4 宿主原语收敛与 docs 全表刷新。
         </SectionLead>
       </Stack>
 
@@ -244,7 +258,7 @@ export function LandingPage({ d }: { d: DesignData }) {
                     </span>
                     {phase.name}
                   </Text>
-                  <StatusBadge label="planned" />
+                  <StatusBadge label={phase.status} />
                 </div>
                 <Text className="text-sm leading-relaxed text-muted-foreground">
                   {phase.outcome}

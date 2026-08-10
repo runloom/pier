@@ -1,0 +1,728 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-11T01:20:00.000+08:00",
+  "source": "pier-cli-user-manual Canvas (canonical user manual) + industry CLI manual IA",
+  "data": {
+    "meta": {
+      "title": "Pier 本机 CLI 使用手册",
+      "subtitle": "在终端控制已打开的 Pier。先学会开工，再按任务查找，最后查命令参考。",
+      "status": "使用手册",
+      "version": "v1.1"
+    },
+    "bluf": "先启动 Pier，再运行 pier（或 pnpm --silent cli:dev）。新手路径：status → open . → panels list → agents list。脚本一律加 --json。本手册按「开始使用 → 常用任务 → 命令参考 → 智能体 → 疑难」组织；暂未实现的命令会标明，勿写入脚本依赖。",
+    "context": "面向使用 Pier 的人与脚本作者。CLI 是本机工作台控制入口，不是远程 API，也不是智能体权限系统。",
+    "goals": [
+      "60 秒内完成第一次成功调用",
+      "用任务（task）而不是实现状态找答案",
+      "命令参考按领域（窗口/终端/智能体…）分组",
+      "每条命令有可抄写的语法与输出示意",
+      "暂未实现能力可见但不误导为可用"
+    ],
+    "nonGoals": [
+      "不把工程波次 / 架构设计当作用户主路径",
+      "不把 CLI 写成权限与委派管理系统",
+      "不要求用户通读全文"
+    ],
+    "design": {
+      "readingSpine": "左目录（开始 / 任务 / 参考 / 智能体 / 疑难）+ 右正文",
+      "iaNotes": [
+        "文档壳：左 sticky 目录 + 右文章流（Stripe / MDN / GitHub Docs 同构）",
+        "顶栏仅标题与搜索，不用五段胶囊 Tab 切换整本手册",
+        "对齐 clig.dev / Stripe CLI：上手优先，命令按名词域分组",
+        "状态用页内徽标，不当一级导航"
+      ]
+    },
+    "alternatives": [
+      {
+        "name": "按已实现 / 暂未实现分 Tab",
+        "rejectReason": "这是工程状态，不是用户任务；新手会先撞上大段不可用命令"
+      },
+      {
+        "name": "纯长 Markdown 无结构",
+        "rejectReason": "难扫读、难跳转，不符合手册「按需查阅」习惯"
+      }
+    ],
+    "quickStart": {
+      "prerequisite": "必须先打开 Pier 应用（开发态：pnpm dev）。CLI 只连接本机已运行实例。",
+      "firstCommands": [
+        {
+          "title": "1. 确认连上",
+          "cmd": "pier status --json",
+          "note": "开发态：pnpm --silent cli:dev -- status --json"
+        },
+        {
+          "title": "2. 打开当前目录",
+          "cmd": "pier open . --json",
+          "note": "会打开绑定到该项目的终端面板"
+        },
+        {
+          "title": "3. 看有哪些面板",
+          "cmd": "pier panels list --json",
+          "note": "记下 panelId，便于 focus"
+        },
+        {
+          "title": "4. 看智能体运行情况",
+          "cmd": "pier agents list --json",
+          "note": "没有运行中的智能体时列表为空，属正常"
+        }
+      ],
+      "binPaths": [
+        "安装包：Pier.app/Contents/Resources/bin/pier",
+        "开发态：pnpm --silent cli:dev -- <命令…>",
+        "或：node ./bin/pier.mjs <命令…>"
+      ]
+    },
+    "globalOptions": [
+      {
+        "flag": "--json",
+        "meaning": "输出 JSON（脚本必加）"
+      },
+      {
+        "flag": "--print-envelope",
+        "meaning": "只打印请求，不执行"
+      },
+      {
+        "flag": "--no-focus",
+        "meaning": "尽量不抢窗口前台"
+      },
+      {
+        "flag": "--window <id>",
+        "meaning": "指定窗口（见 windows list）"
+      }
+    ],
+    "outputShapes": {
+      "success": "{\n  \"ok\": true,\n  \"requestId\": \"…\",\n  \"data\": { }\n}",
+      "failure": "{\n  \"ok\": false,\n  \"requestId\": \"…\",\n  \"error\": {\n    \"code\": \"…\",\n    \"message\": \"…\"\n  }\n}"
+    },
+    "tasks": [
+      {
+        "id": "check-online",
+        "title": "确认 Pier 在线",
+        "when": "第一次使用或脚本开头",
+        "steps": [
+          "启动 Pier",
+          "运行 pier status --json",
+          "看到 ok: true 即可"
+        ]
+      },
+      {
+        "id": "open-project",
+        "title": "打开项目文件夹",
+        "when": "想在 Pier 里进入某个仓库",
+        "steps": [
+          "pier open /path/to/repo --json",
+          "或 pier open . --split right --json 在当前窗口旁开"
+        ]
+      },
+      {
+        "id": "find-panel",
+        "title": "找到并聚焦某个面板",
+        "when": "多个终端/文件面板时",
+        "steps": [
+          "pier panels list --json 记下 panelId",
+          "pier panels focus <panelId> --json"
+        ]
+      },
+      {
+        "id": "new-terminal",
+        "title": "新开一个终端",
+        "when": "需要额外终端，或在终端里启动智能体 CLI",
+        "steps": [
+          "pier terminal open --cwd . --json",
+          "或 pier terminal open -- claude --json"
+        ]
+      },
+      {
+        "id": "see-agents",
+        "title": "查看智能体目录与运行中的实例",
+        "when": "想知道本机有哪些智能体、哪些面板在跑",
+        "steps": [
+          "pier agents catalog --json",
+          "pier agents list --json",
+          "pier agents get --panel <panelId> --json"
+        ]
+      },
+      {
+        "id": "shell-task",
+        "title": "运行一个 Shell 任务",
+        "when": "使用项目里配置的 build/test 等任务",
+        "steps": [
+          "pier tasks list --json",
+          "pier tasks run <taskId> --json",
+          "pier tasks status <runId> --json"
+        ]
+      },
+      {
+        "id": "worktree",
+        "title": "列出或打开 Git 工作树",
+        "when": "多工作树切换",
+        "steps": [
+          "pier worktrees list --path <仓库> --json",
+          "pier worktrees open <路径> --json"
+        ]
+      }
+    ],
+    "domains": [
+      {
+        "id": "app",
+        "label": "应用与打开",
+        "blurb": "状态检查与打开文件夹。",
+        "commands": [
+          {
+            "id": "status",
+            "name": "status",
+            "status": "shipped",
+            "synopsis": "pier status --json",
+            "description": "确认本机 Pier 是否在线，并返回简要状态。",
+            "output": "{\n  \"ok\": true,\n  \"requestId\": \"…\",\n  \"data\": {\n    \"appVersion\": \"0.1.x\",\n    \"platform\": \"darwin\"\n  }\n}"
+          },
+          {
+            "id": "open",
+            "name": "open",
+            "status": "shipped",
+            "synopsis": "pier open <路径> [--window <id>] [--split right|left|below|above] [--no-focus] --json",
+            "description": "在 Pier 中打开目录，并带上 Git 与工作树信息。",
+            "examples": [
+              "pier open . --json",
+              "pier open ~/proj --split right --json"
+            ],
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-…\",\n    \"windowId\": \"…\"\n  }\n}"
+          },
+          {
+            "id": "version",
+            "name": "version",
+            "status": "planned",
+            "synopsis": "pier version --json",
+            "description": "打印 CLI / 应用 / 协议版本。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"cliVersion\": \"0.1.x\",\n    \"appVersion\": \"0.1.x\"\n  }\n}"
+          },
+          {
+            "id": "doctor",
+            "name": "doctor",
+            "status": "planned",
+            "synopsis": "pier doctor --json",
+            "description": "本机连接与环境自检。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"socket\": \"ok\",\n    \"appRunning\": true,\n    \"issues\": []\n  }\n}"
+          },
+          {
+            "id": "app-capabilities",
+            "name": "capabilities",
+            "status": "planned",
+            "synopsis": "pier capabilities --json",
+            "description": "协议与本机 CLI 能力列表（规划；只读协商）。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"capabilities\": []\n  }\n}"
+          },
+          {
+            "id": "snapshot",
+            "name": "snapshot",
+            "status": "planned",
+            "synopsis": "pier snapshot [--include windows,panels,activity] --json",
+            "description": "多资源原子快照，供脚本对账。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"bootId\": \"…\",\n    \"windows\": [],\n    \"panels\": []\n  }\n}"
+          },
+          {
+            "id": "watch",
+            "name": "watch",
+            "status": "planned",
+            "synopsis": "pier watch [--after-revision <n>] --json",
+            "description": "全局事实流（JSONL）。游标失效时需重新 snapshot。",
+            "output": "{\"type\":\"event\",\"revision\":13,\"resource\":\"panels\"}"
+          }
+        ]
+      },
+      {
+        "id": "windows-panels",
+        "label": "窗口与面板",
+        "blurb": "发现界面位置并聚焦。",
+        "commands": [
+          {
+            "id": "windows-list",
+            "name": "windows list",
+            "status": "shipped",
+            "synopsis": "pier windows list --json",
+            "description": "列出所有窗口。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"windows\": [{ \"id\": \"main\", \"focused\": true }]\n  }\n}"
+          },
+          {
+            "id": "windows-focus",
+            "name": "windows focus",
+            "status": "shipped",
+            "synopsis": "pier windows focus <窗口id> --json",
+            "description": "聚焦指定窗口。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"windowId\": \"main\" }\n}"
+          },
+          {
+            "id": "panels-list",
+            "name": "panels list",
+            "status": "shipped",
+            "synopsis": "pier panels list [--window <id>] --json",
+            "description": "列出面板。不加 --json 时可能按窗口分组打印。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panels\": [{\n      \"panelId\": \"terminal-abc\",\n      \"windowId\": \"main\",\n      \"title\": \"Terminal\",\n      \"focused\": true\n    }]\n  }\n}"
+          },
+          {
+            "id": "panels-focus",
+            "name": "panels focus",
+            "status": "shipped",
+            "synopsis": "pier panels focus <面板id> [--window <id>] [--no-focus] --json",
+            "description": "聚焦面板。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-abc\",\n    \"windowId\": \"main\"\n  }\n}"
+          }
+        ]
+      },
+      {
+        "id": "terminal",
+        "label": "终端",
+        "blurb": "打开终端与配置档已可用；向已有终端注入按键等仍在规划中。",
+        "commands": [
+          {
+            "id": "terminal-open",
+            "name": "terminal open",
+            "status": "shipped",
+            "synopsis": "pier terminal open [--cwd <路径>] [--profile <id>] [--env KEY=VALUE] [--command <cmd> | -- <cmd…>] [--window] [--split] [--no-focus] --json",
+            "description": "打开新终端。",
+            "examples": [
+              "pier terminal open --cwd . --json",
+              "pier terminal open -- claude --json"
+            ],
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-…\",\n    \"windowId\": \"…\"\n  }\n}"
+          },
+          {
+            "id": "terminal-profiles",
+            "name": "terminal profiles list|get|set|delete",
+            "status": "shipped",
+            "synopsis": "pier terminal profiles list --json\npier terminal profiles get <id> --json\npier terminal profiles set <id> … --json\npier terminal profiles delete <id> --json",
+            "description": "管理终端配置档。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"default\": { \"cwd\": \"/Users/you/project\" }\n  }\n}"
+          },
+          {
+            "id": "terminal-list",
+            "name": "terminal list",
+            "status": "planned",
+            "synopsis": "pier terminal list [--window <id>] --json",
+            "description": "列出终端运行实例（含运行代际等）。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"terminals\": [{\n      \"panelId\": \"terminal-abc\",\n      \"cwd\": \"/Users/you/project\",\n      \"runtimeId\": \"…\",\n      \"generation\": 3\n    }]\n  }\n}"
+          },
+          {
+            "id": "terminal-get",
+            "name": "terminal get",
+            "status": "planned",
+            "synopsis": "pier terminal get --panel <id> --json",
+            "description": "查询单个终端详情。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-abc\",\n    \"alive\": true,\n    \"cwd\": \"/Users/you/project\"\n  }\n}"
+          },
+          {
+            "id": "terminal-send",
+            "name": "terminal send",
+            "status": "planned",
+            "synopsis": "pier terminal send --panel <id> --text \"…\" --json",
+            "description": "向终端发送文本。accepted 只表示已提交，不等于命令跑完。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"accepted\": true,\n    \"panelId\": \"terminal-abc\"\n  }\n}"
+          },
+          {
+            "id": "terminal-key",
+            "name": "terminal key",
+            "status": "planned",
+            "synopsis": "pier terminal key --panel <id> --key Enter --json",
+            "description": "发送按键。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"accepted\": true, \"key\": \"Enter\" }\n}"
+          },
+          {
+            "id": "terminal-interrupt",
+            "name": "terminal interrupt",
+            "status": "planned",
+            "synopsis": "pier terminal interrupt --panel <id> --json",
+            "description": "中断（如 Ctrl-C）。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"signaled\": true }\n}"
+          },
+          {
+            "id": "terminal-terminate",
+            "name": "terminal terminate",
+            "status": "planned",
+            "synopsis": "pier terminal terminate --panel <id> [--force] --json",
+            "description": "结束终端进程。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"terminated\": true }\n}"
+          },
+          {
+            "id": "terminal-wait",
+            "name": "terminal wait",
+            "status": "planned",
+            "synopsis": "pier terminal wait --panel <id> --until idle|exited [--timeout-ms 60000] --json",
+            "description": "等待终端进入某状态。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"until\": \"idle\",\n    \"reached\": true\n  }\n}"
+          },
+          {
+            "id": "terminal-watch",
+            "name": "terminal watch",
+            "status": "planned",
+            "synopsis": "pier terminal watch --panel <id> --json",
+            "description": "订阅终端相关事件流。",
+            "output": "{\"type\":\"event\",\"kind\":\"cwd.changed\",\"cwd\":\"…\"}"
+          }
+        ]
+      },
+      {
+        "id": "worktrees",
+        "label": "工作树",
+        "blurb": "Git 工作树列表、创建与打开。",
+        "commands": [
+          {
+            "id": "wt-list",
+            "name": "worktrees list",
+            "status": "shipped",
+            "synopsis": "pier worktrees list --path <仓库> --json",
+            "description": "列出仓库下的工作树。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"worktrees\": [{\n      \"path\": \"/Users/you/repo\",\n      \"branch\": \"main\"\n    }]\n  }\n}"
+          },
+          {
+            "id": "wt-create",
+            "name": "worktrees create",
+            "status": "shipped",
+            "synopsis": "pier worktrees create --path <仓库> --name <dir> --branch <b> --base <ref> --json",
+            "description": "创建新工作树。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"path\": \"/Users/you/repo.worktree/feature-x\" }\n}"
+          },
+          {
+            "id": "wt-open",
+            "name": "worktrees open",
+            "status": "shipped",
+            "synopsis": "pier worktrees open <路径> --json",
+            "description": "在 Pier 中打开工作树路径。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"path\": \"…\" }\n}"
+          },
+          {
+            "id": "wt-check",
+            "name": "worktrees check",
+            "status": "planned",
+            "synopsis": "pier worktrees check --path <路径> --json",
+            "description": "检查路径是否可作为工作树目标。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"isGit\": true,\n    \"canCreateWorktree\": true\n  }\n}"
+          },
+          {
+            "id": "wt-get",
+            "name": "worktrees get",
+            "status": "planned",
+            "synopsis": "pier worktrees get --path <路径> --json",
+            "description": "查询单个工作树详情。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"path\": \"…\",\n    \"branch\": \"feature-x\"\n  }\n}"
+          },
+          {
+            "id": "wt-register",
+            "name": "worktrees register",
+            "status": "planned",
+            "synopsis": "pier worktrees register --path <路径> --json",
+            "description": "登记已有工作树。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"registered\": true }\n}"
+          },
+          {
+            "id": "wt-remove",
+            "name": "worktrees remove",
+            "status": "planned",
+            "synopsis": "pier worktrees remove --path <路径> [--force] --json",
+            "description": "安全移除工作树。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"removed\": true }\n}"
+          }
+        ]
+      },
+      {
+        "id": "tasks",
+        "label": "Shell 任务",
+        "blurb": "项目内配置的 Shell 任务运行，不是多智能体看板。",
+        "commands": [
+          {
+            "id": "tasks-list",
+            "name": "tasks list",
+            "status": "shipped",
+            "synopsis": "pier tasks list [--path <路径>] --json",
+            "description": "列出可运行的任务定义。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"tasks\": [{\n      \"id\": \"build\",\n      \"label\": \"Build\",\n      \"command\": \"pnpm build\"\n    }]\n  }\n}"
+          },
+          {
+            "id": "tasks-run",
+            "name": "tasks run",
+            "status": "shipped",
+            "synopsis": "pier tasks run <taskId> [--path] [--input id=value] [--window] [--split] [--no-focus] --json",
+            "description": "启动一次 Shell 任务运行。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runId\": \"run-…\",\n    \"taskId\": \"build\",\n    \"status\": \"running\"\n  }\n}"
+          },
+          {
+            "id": "tasks-status",
+            "name": "tasks status",
+            "status": "shipped",
+            "synopsis": "pier tasks status <runId> --json",
+            "description": "查询运行状态。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runId\": \"run-…\",\n    \"status\": \"succeeded\",\n    \"exitCode\": 0\n  }\n}"
+          },
+          {
+            "id": "tasks-cancel",
+            "name": "tasks cancel",
+            "status": "shipped",
+            "synopsis": "pier tasks cancel <runId> [--window] --json",
+            "description": "取消运行。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runId\": \"run-…\",\n    \"status\": \"cancelled\"\n  }\n}"
+          },
+          {
+            "id": "tasks-get",
+            "name": "tasks get",
+            "status": "planned",
+            "synopsis": "pier tasks get <runId> --json",
+            "description": "更完整的单条运行详情（规划命名）。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"runId\": \"run-…\", \"status\": \"running\" }\n}"
+          },
+          {
+            "id": "tasks-watch",
+            "name": "tasks watch",
+            "status": "planned",
+            "synopsis": "pier tasks watch <runId> --json",
+            "description": "订阅运行状态直到终态。",
+            "output": "{\"type\":\"event\",\"status\":\"running\"}"
+          },
+          {
+            "id": "tasks-output",
+            "name": "tasks output",
+            "status": "planned",
+            "synopsis": "pier tasks output <runId> [--after-byte n] --json",
+            "description": "分段读取任务输出。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"chunk\": \"…\",\n    \"nextByte\": 4096,\n    \"eof\": false\n  }\n}"
+          },
+          {
+            "id": "tasks-stop-rerun",
+            "name": "tasks stop / rerun",
+            "status": "planned",
+            "synopsis": "pier tasks stop <runId> --json\npier tasks rerun <runId> --json",
+            "description": "停止或重跑（规划）。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"runId\": \"run-new-…\" }\n}"
+          }
+        ]
+      },
+      {
+        "id": "prefs-plugins",
+        "label": "偏好与插件",
+        "blurb": "只读查看；插件启停请用应用设置。",
+        "commands": [
+          {
+            "id": "prefs-read",
+            "name": "preferences read",
+            "status": "shipped",
+            "synopsis": "pier preferences read --json",
+            "description": "只读应用偏好。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"locale\": \"zh-CN\",\n    \"theme\": \"system\"\n  }\n}"
+          },
+          {
+            "id": "plugins-list",
+            "name": "plugins list",
+            "status": "shipped",
+            "synopsis": "pier plugins list --json",
+            "description": "列出插件。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"plugins\": [{\n      \"id\": \"pier.codex\",\n      \"enabled\": true\n    }]\n  }\n}"
+          },
+          {
+            "id": "plugins-inspect",
+            "name": "plugins inspect",
+            "status": "shipped",
+            "synopsis": "pier plugins inspect <id> --json",
+            "description": "查看单个插件详情。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"id\": \"pier.codex\",\n    \"version\": \"…\",\n    \"enabled\": true\n  }\n}"
+          },
+          {
+            "id": "plugins-enable",
+            "name": "plugins enable",
+            "status": "blocked",
+            "synopsis": "pier plugins enable <id> --json",
+            "description": "CLI 默认无写权限；请在应用「设置 → 插件」操作。",
+            "output": "{\n  \"ok\": false,\n  \"error\": {\n    \"code\": \"permission_denied\",\n    \"message\": \"…\"\n  }\n}"
+          },
+          {
+            "id": "plugins-disable",
+            "name": "plugins disable",
+            "status": "blocked",
+            "synopsis": "pier plugins disable <id> --json",
+            "description": "同上，请用应用设置。",
+            "output": "{\n  \"ok\": false,\n  \"error\": {\n    \"code\": \"permission_denied\",\n    \"message\": \"…\"\n  }\n}"
+          }
+        ]
+      },
+      {
+        "id": "activity-notifications-access",
+        "label": "活动 · 消息 · 外部授权",
+        "blurb": "均为规划能力；消息请先用应用内铃铛。",
+        "commands": [
+          {
+            "id": "activity-snapshot",
+            "name": "activity snapshot",
+            "status": "planned",
+            "synopsis": "pier activity snapshot --json",
+            "description": "前台活动快照（智能体 / 任务 / 终端 / 空闲）。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"activity\": {\n      \"kind\": \"agent\",\n      \"state\": \"running\"\n    }\n  }\n}"
+          },
+          {
+            "id": "activity-watch",
+            "name": "activity watch",
+            "status": "planned",
+            "synopsis": "pier activity watch --json",
+            "description": "活动变化流。",
+            "output": "{\"type\":\"event\",\"kind\":\"activity.changed\"}"
+          },
+          {
+            "id": "notifications-list",
+            "name": "notifications list",
+            "status": "planned",
+            "synopsis": "pier notifications list [--unread] --json",
+            "description": "列出消息中心条目。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"items\": [{\n      \"id\": \"n-…\",\n      \"title\": \"需要你处理\",\n      \"unread\": true\n    }]\n  }\n}"
+          },
+          {
+            "id": "notifications-rest",
+            "name": "notifications get/watch/focus/mark-read",
+            "status": "planned",
+            "synopsis": "pier notifications get|watch|focus|mark-read … --json",
+            "description": "查看、订阅、聚焦、标已读。",
+            "output": "{\n  \"ok\": true,\n  \"data\": { \"marked\": 1 }\n}"
+          },
+          {
+            "id": "access",
+            "name": "access keygen/status/request/wait/revoke",
+            "status": "planned",
+            "synopsis": "pier access keygen|status|request|wait|revoke … --json",
+            "description": "外部控制器窄授权（非日常本机使用）。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"outcome\": \"pending\",\n    \"accessRequestId\": \"…\"\n  }\n}"
+          }
+        ]
+      }
+    ],
+    "agents": {
+      "intro": "智能体相关 CLI 只做「看见」：目录与当前运行面板。不签发权限、不管理委派。启动智能体请在应用内打开对应终端/集成。",
+      "shipped": [
+        {
+          "id": "agents-catalog",
+          "name": "agents catalog",
+          "status": "shipped",
+          "synopsis": "pier agents catalog --json",
+          "description": "本机已知智能体产品目录。availability 可能为 available / unknown。",
+          "humanSample": "claude\tClaude\tavailable",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"agents\": [{\n      \"agentId\": \"claude\",\n      \"label\": \"Claude\",\n      \"availability\": \"available\"\n    }]\n  }\n}"
+        },
+        {
+          "id": "agents-list",
+          "name": "agents list",
+          "status": "shipped",
+          "synopsis": "pier agents list --json",
+          "description": "当前会话中正在运行的智能体面板。无运行时列表为空属正常。",
+          "humanSample": "claude\tpanel=terminal-abc\twindow=main",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"ts\": 1730000000000,\n    \"entries\": [{\n      \"agentId\": \"claude\",\n      \"panelId\": \"terminal-abc\",\n      \"windowId\": \"main\"\n    }]\n  }\n}"
+        },
+        {
+          "id": "agents-get",
+          "name": "agents get",
+          "status": "shipped",
+          "synopsis": "pier agents get --agent-id <id> | --agent-ref <ref> | --panel <panelId> --json",
+          "description": "查询一条运行投影。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"agent\": {\n      \"agentId\": \"claude\",\n      \"panelId\": \"terminal-abc\",\n      \"windowId\": \"main\"\n    }\n  }\n}"
+        }
+      ],
+      "planned": [
+        {
+          "id": "agents-self",
+          "name": "agents self",
+          "status": "planned",
+          "synopsis": "pier agents self --json",
+          "description": "当前调用者非秘密摘要。人类 CLI（cli-human）在解析期直接拒绝；需要 agent principal。不作为本机权限系统。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"self\": {\n      \"principalRef\": \"…\",\n      \"bootId\": \"…\"\n    }\n  }\n}"
+        },
+        {
+          "id": "agents-invoke",
+          "name": "agents invoke",
+          "status": "planned",
+          "synopsis": "pier agents invoke --agent <id> --worktree-key <key> … --json < prompt.txt",
+          "description": "一次性调用，只返回本次回复。responded ≠ 工作完成。Prompt 走 stdin/文件。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"reply\": {\n      \"status\": \"responded\",\n      \"text\": \"…\"\n    }\n  }\n}"
+        },
+        {
+          "id": "agents-start",
+          "name": "agents start",
+          "status": "planned",
+          "synopsis": "pier agents start --agent <id> --worktree-key <key> … --json",
+          "description": "启动持久智能体运行。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runtime\": {\n      \"runtimeId\": \"rt-…\",\n      \"generation\": 1,\n      \"panelId\": \"terminal-…\"\n    }\n  }\n}"
+        },
+        {
+          "id": "agents-turn",
+          "name": "agents turn",
+          "status": "planned",
+          "synopsis": "pier agents turn --runtime … --boot … --generation … --json < turn.txt",
+          "description": "向持久运行发送一轮输入。accepted ≠ 已处理完毕。",
+          "output": "{\n  \"ok\": true,\n  \"data\": { \"accepted\": true }\n}"
+        },
+        {
+          "id": "agents-screen",
+          "name": "agents screen",
+          "status": "planned",
+          "synopsis": "pier agents screen --runtime … --boot … --generation … --json",
+          "description": "当前可见区域的有界画面与路径定位，不是完整对话记录。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"screen\": {\n      \"text\": \"…\",\n      \"canonicalPath\": \"/Users/you/repo/src/main.ts\"\n    }\n  }\n}"
+        },
+        {
+          "id": "agents-wait",
+          "name": "agents wait",
+          "status": "planned",
+          "synopsis": "pier agents wait --runtime … --until ready|waiting|exited|attention --json",
+          "description": "等待运行状态。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"until\": \"ready\",\n    \"reached\": true\n  }\n}"
+        },
+        {
+          "id": "agents-watch",
+          "name": "agents watch",
+          "status": "planned",
+          "synopsis": "pier agents watch --runtime … --json",
+          "description": "运行事实 JSONL 流。",
+          "output": "{\"type\":\"event\",\"kind\":\"agent.state\",\"state\":\"waiting\"}"
+        },
+        {
+          "id": "agents-focus",
+          "name": "agents focus",
+          "status": "planned",
+          "synopsis": "pier agents focus --runtime … --json",
+          "description": "聚焦运行界面。实现前可用 panels focus。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-abc\"\n  }\n}"
+        },
+        {
+          "id": "agents-interrupt",
+          "name": "agents interrupt",
+          "status": "planned",
+          "synopsis": "pier agents interrupt --runtime … --json",
+          "description": "中断运行。",
+          "output": "{\n  \"ok\": true,\n  \"data\": { \"interrupted\": true }\n}"
+        },
+        {
+          "id": "agents-terminate",
+          "name": "agents terminate",
+          "status": "planned",
+          "synopsis": "pier agents terminate --runtime … [--force] --json",
+          "description": "结束运行。",
+          "output": "{\n  \"ok\": true,\n  \"data\": { \"terminated\": true }\n}"
+        }
+      ]
+    },
+    "faq": [
+      {
+        "q": "连不上 Pier？",
+        "a": "先打开 Pier 应用。开发态请用同一工作树目录：pnpm dev，另一终端 pnpm --silent cli:dev -- status --json。"
+      },
+      {
+        "q": "脚本如何解析？",
+        "a": "始终加 --json。人类可读摘要仅供扫一眼，格式不保证稳定。"
+      },
+      {
+        "q": "命令写了却不可用？",
+        "a": "看状态：暂未实现 / CLI 默认不可用。实现前用应用内等价能力（例如消息中心、插件设置）。"
+      },
+      {
+        "q": "MCP 怎么调用 pier？",
+        "a": "调用本机 pier 可执行文件。查找顺序：PIER_CLI_PATH → PATH → Pier.app/.../bin/pier。"
+      },
+      {
+        "q": "和「多智能体编排」是什么关系？",
+        "a": "CLI 不负责智能体之间的权限与委派，也不判定工作是否完成。只做本机打开、查看与（规划中的）控制原语。"
+      }
+    ]
+  }
+}

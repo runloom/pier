@@ -1,17 +1,56 @@
-import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, unlinkSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { PierCommandResult } from "@shared/contracts/commands.ts";
+import { classifyLocalControlFirstFrame } from "@shared/contracts/local-control/classify.ts";
+import {
+  LOCAL_CONTROL_V2_API_VERSION,
+  LOCAL_CONTROL_V2_MAX_FRAME_BYTES,
+  type LocalControlV2ErrorCode,
+} from "@shared/contracts/local-control/v2-errors.ts";
+import type { LocalControlV2ServerFrame } from "@shared/contracts/local-control/v2-frames.ts";
+import type { AgentCallerCredentialStore } from "../../services/agent-caller/credential-store.ts";
+import type { AgentsDiscovery } from "./agents-discovery.ts";
+import type { LocalControlAuthorizer } from "./local-control-authorize.ts";
+import type { EffectReceiptStore } from "./local-control-receipts.ts";
+import {
+  createLocalControlV2SessionFromHello,
+  type LocalControlV2Session,
+} from "./local-control-v2-session.ts";
+import {
+  checkLocalControlPeerIdentity,
+  type ResolvePeerUid,
+} from "./peer-identity.ts";
 
 export interface PierLocalControlServer {
+  /** 当前进程控制面 boot 标识（v2 server.hello）。 */
+  readonly bootId: string;
   close(): Promise<void>;
   start(signal?: AbortSignal): Promise<void>;
 }
 
 export interface CreatePierLocalControlServerArgs {
+  /** 统一 authorize（可替换）。 */
+  authorizer?: LocalControlAuthorizer | undefined;
+  /** 可注入测试；默认随机 UUID。 */
+  bootId?: string | undefined;
+  /** T3 凭证索引；agent hello 必需。 */
+  credentialStore?: AgentCallerCredentialStore | undefined;
+  /** T4 发现数据源。 */
+  discovery?: AgentsDiscovery | undefined;
+  /** v2 features 广告基线；agents.self 在凭证允许时由会话追加。 */
+  features?: readonly string[] | undefined;
   handleRequest(envelope: unknown): Promise<PierCommandResult>;
+  /** 写 op receipt（可替换）。 */
+  receipts?: EffectReceiptStore | undefined;
+  /** 强制要求可解析 peer UID（测试拒绝路径）。 */
+  requirePeerUid?: boolean | undefined;
+  /** T2 peer UID 解析（测试注入）。 */
+  resolvePeerUid?: ResolvePeerUid | undefined;
+  /** 跳过 peer 检查（仅测试默认路径需要时使用；生产勿开）。 */
+  skipPeerCheck?: boolean | undefined;
   socketPath: string;
 }
 
@@ -42,7 +81,7 @@ export function resolveLocalControlSocketPath(
 
 function failure(
   requestId: string,
-  code: "invalid_command" | "internal_error",
+  code: "invalid_command" | "internal_error" | "permission_denied",
   message: string
 ): PierCommandResult {
   return {
@@ -52,8 +91,23 @@ function failure(
   };
 }
 
-function writeResult(socket: Socket, result: PierCommandResult): void {
+function writeV1Result(socket: Socket, result: PierCommandResult): void {
   socket.end(`${JSON.stringify(result)}\n`);
+}
+
+function writeV2Frame(socket: Socket, frame: LocalControlV2ServerFrame): void {
+  const line = `${JSON.stringify(frame)}\n`;
+  if (Buffer.byteLength(line, "utf8") > LOCAL_CONTROL_V2_MAX_FRAME_BYTES) {
+    const err: LocalControlV2ServerFrame = {
+      apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+      type: "server.error",
+      code: "frame_too_large",
+      message: "response frame exceeds maxFrameBytes",
+    };
+    socket.write(`${JSON.stringify(err)}\n`);
+    return;
+  }
+  socket.write(line);
 }
 
 function requestIdOf(value: unknown): string {
@@ -79,15 +133,222 @@ function removeStaleSocket(socketPath: string): void {
   }
 }
 
+function hardenUnixSocketPermissions(socketPath: string): void {
+  if (process.platform === "win32") {
+    return;
+  }
+  // 只收紧 socket inode；勿 chmod 全局 tmpdir（长路径 fallback 时 parent 是共享目录）
+  try {
+    chmodSync(socketPath, 0o600);
+  } catch {
+    // ignore
+  }
+}
+
+function v2ServerError(
+  code: LocalControlV2ErrorCode,
+  message: string
+): LocalControlV2ServerFrame {
+  return {
+    apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+    type: "server.error",
+    code,
+    message,
+  };
+}
+
+type ConnectionMode = "first" | "v1" | "v2";
+
+function attachConnection(
+  socket: Socket,
+  ctx: {
+    handleRequest(envelope: unknown): Promise<PierCommandResult>;
+    bootId: string;
+    features: readonly string[];
+    credentialStore?: AgentCallerCredentialStore | undefined;
+    discovery?: AgentsDiscovery | undefined;
+    authorizer?: LocalControlAuthorizer | undefined;
+    receipts?: EffectReceiptStore | undefined;
+    resolvePeerUid?: ResolvePeerUid | undefined;
+    requirePeerUid?: boolean | undefined;
+    skipPeerCheck?: boolean | undefined;
+    socketPath: string;
+  }
+): void {
+  if (!ctx.skipPeerCheck) {
+    const peer = checkLocalControlPeerIdentity({
+      socket,
+      socketPath: ctx.socketPath,
+      resolvePeerUid: ctx.resolvePeerUid,
+      requirePeerUid: ctx.requirePeerUid,
+    });
+    if (!peer.ok) {
+      writeV2Frame(socket, v2ServerError("peer_identity_denied", peer.message));
+      socket.end();
+      return;
+    }
+  }
+
+  let buffer = "";
+  let mode: ConnectionMode = "first";
+  let v2Session: LocalControlV2Session | null = null;
+  let closed = false;
+
+  const endV1 = (result: PierCommandResult) => {
+    if (closed) {
+      return;
+    }
+    closed = true;
+    mode = "v1";
+    writeV1Result(socket, result);
+  };
+
+  socket.once("close", () => {
+    v2Session?.dispose();
+    v2Session = null;
+  });
+
+  socket.setEncoding("utf8");
+  socket.on("data", (chunk: string) => {
+    if (closed && mode === "v1") {
+      return;
+    }
+    buffer += chunk;
+
+    while (true) {
+      const nl = buffer.indexOf("\n");
+      if (nl < 0) {
+        if (
+          Buffer.byteLength(buffer, "utf8") > LOCAL_CONTROL_V2_MAX_FRAME_BYTES
+        ) {
+          writeV2Frame(
+            socket,
+            v2ServerError("frame_too_large", "frame exceeds maxFrameBytes")
+          );
+          socket.end();
+          closed = true;
+          buffer = "";
+        }
+        return;
+      }
+
+      const line = buffer.slice(0, nl);
+      buffer = buffer.slice(nl + 1);
+      const lineBytes = Buffer.byteLength(line, "utf8");
+      if (lineBytes > LOCAL_CONTROL_V2_MAX_FRAME_BYTES) {
+        writeV2Frame(
+          socket,
+          v2ServerError("frame_too_large", "frame exceeds maxFrameBytes")
+        );
+        socket.end();
+        closed = true;
+        return;
+      }
+
+      if (line.length === 0) {
+        continue;
+      }
+
+      if (mode === "first") {
+        let raw: unknown;
+        try {
+          raw = JSON.parse(line) as unknown;
+        } catch {
+          endV1(failure("unknown", "invalid_command", "invalid JSON request"));
+          return;
+        }
+
+        const classified = classifyLocalControlFirstFrame(raw);
+        if (classified.kind === "v1") {
+          mode = "v1";
+          Promise.resolve()
+            .then(() => ctx.handleRequest(classified.envelope))
+            .then((result) => endV1(result))
+            .catch((error: unknown) => {
+              endV1(
+                failure(
+                  requestIdOf(classified.envelope),
+                  "internal_error",
+                  error instanceof Error ? error.message : String(error)
+                )
+              );
+            });
+          return;
+        }
+
+        if (classified.kind === "invalid") {
+          if (
+            typeof raw === "object" &&
+            raw !== null &&
+            "apiVersion" in raw &&
+            (raw as { apiVersion: unknown }).apiVersion ===
+              LOCAL_CONTROL_V2_API_VERSION
+          ) {
+            writeV2Frame(
+              socket,
+              v2ServerError(classified.code, classified.reason)
+            );
+            socket.end();
+            closed = true;
+            return;
+          }
+          endV1(failure("unknown", "invalid_command", classified.reason));
+          return;
+        }
+
+        // v2-hello
+        const created = createLocalControlV2SessionFromHello(classified.hello, {
+          bootId: ctx.bootId,
+          features: ctx.features,
+          credentialStore: ctx.credentialStore,
+          discovery: ctx.discovery,
+          authorizer: ctx.authorizer,
+          receipts: ctx.receipts,
+          emit: (frame) => {
+            if (!closed) {
+              writeV2Frame(socket, frame);
+            }
+          },
+        });
+        if (!created.ok) {
+          writeV2Frame(socket, created.errorFrame);
+          socket.end();
+          closed = true;
+          return;
+        }
+        mode = "v2";
+        v2Session = created.session;
+        writeV2Frame(socket, created.helloFrame);
+        continue;
+      }
+
+      if (mode === "v2" && v2Session) {
+        v2Session.handleLine(line);
+      }
+    }
+  });
+}
+
 export function createPierLocalControlServer({
   handleRequest,
   socketPath,
+  bootId: bootIdArg,
+  features = [],
+  credentialStore,
+  discovery,
+  authorizer,
+  receipts,
+  resolvePeerUid,
+  requirePeerUid,
+  skipPeerCheck,
 }: CreatePierLocalControlServerArgs): PierLocalControlServer {
+  const bootId = bootIdArg ?? randomUUID();
   const sockets = new Set<Socket>();
   let server: Server | null = null;
   let closePromise: Promise<void> | null = null;
 
   return {
+    bootId,
     close() {
       if (closePromise) {
         return closePromise;
@@ -138,41 +399,23 @@ export function createPierLocalControlServer({
         server = createServer((socket) => {
           sockets.add(socket);
           socket.once("close", () => sockets.delete(socket));
-          let body = "";
-          socket.setEncoding("utf8");
-          socket.on("data", (chunk) => {
-            body += chunk;
-            if (!body.includes("\n")) {
-              return;
-            }
-            const line = body.slice(0, body.indexOf("\n"));
-            let envelope: unknown;
-            try {
-              envelope = JSON.parse(line);
-            } catch {
-              writeResult(
-                socket,
-                failure("unknown", "invalid_command", "invalid JSON request")
-              );
-              return;
-            }
-            Promise.resolve()
-              .then(() => handleRequest(envelope))
-              .then((result) => writeResult(socket, result))
-              .catch((error: unknown) => {
-                writeResult(
-                  socket,
-                  failure(
-                    requestIdOf(envelope),
-                    "internal_error",
-                    error instanceof Error ? error.message : String(error)
-                  )
-                );
-              });
+          attachConnection(socket, {
+            handleRequest,
+            bootId,
+            features,
+            credentialStore,
+            discovery,
+            authorizer,
+            receipts,
+            resolvePeerUid,
+            requirePeerUid,
+            skipPeerCheck,
+            socketPath,
           });
         });
         server.once("error", reject);
         server.listen({ path: socketPath, signal }, () => {
+          hardenUnixSocketPermissions(socketPath);
           server?.off("error", reject);
           resolve();
         });

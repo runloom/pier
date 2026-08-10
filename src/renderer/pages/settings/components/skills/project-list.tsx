@@ -10,6 +10,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import {
   Item,
   ItemActions,
@@ -88,6 +89,7 @@ export function SkillsProjectList({
     if (aCurrent !== bCurrent) return aCurrent - bCurrent;
     return a.displayPath.localeCompare(b.displayPath);
   });
+  // Non-blocking: list still has rows; soft Alert is fine.
   const loadWarning = (
     <Card>
       <CardContent>
@@ -125,8 +127,21 @@ export function SkillsProjectList({
     );
   }
 
+  // No list body to show — full Empty, not an Alert strip.
   if (loadFailed && sorted.length === 0) {
-    return loadWarning;
+    return (
+      <ErrorEmpty
+        className="min-h-60"
+        description={t("settings.skills.projectsLoadFailedBody")}
+        retryAction={{
+          label: t("settings.skills.retry"),
+          onClick: () => {
+            onProjectsChanged().catch(() => undefined);
+          },
+        }}
+        title={t("settings.skills.projectsLoadFailed")}
+      />
+    );
   }
 
   if (sorted.length === 0) {

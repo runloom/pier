@@ -1,3 +1,4 @@
+import { clearPendingAgentResume } from "./terminal-session-agent-resume.ts";
 import { ensureTerminalSessionStore } from "./terminal-session-store.ts";
 
 export interface RetainTerminalPanelSessionsOptions {
@@ -35,6 +36,7 @@ export async function retainTerminalPanelSessions(
       if (active.has(panelId) || isLeased?.(panelId)) {
         continue;
       }
+      clearPendingAgentResume(recordId, panelId);
       delete windowState.panels[panelId];
     }
     if (Object.keys(windowState.panels).length === 0) {

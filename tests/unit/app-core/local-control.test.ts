@@ -538,7 +538,12 @@ describe("local control socket", () => {
 
     const response = await sendRawRequest(
       socketPath,
-      JSON.stringify({ requestId: "req-sync-throw" })
+      JSON.stringify({
+        protocolVersion: 1,
+        requestId: "req-sync-throw",
+        clientId: "cli-local",
+        command: { type: "app.status" },
+      })
     );
 
     expect(JSON.parse(response)).toEqual({

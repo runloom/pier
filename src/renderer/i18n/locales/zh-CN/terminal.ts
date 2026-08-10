@@ -20,6 +20,8 @@ export const terminal = {
     statusEnded: "已正常结束",
     statusFailed: "异常退出",
     summaryTitle: "会话摘要",
+    tryResumeLast: "接回本目录最近会话",
+    tryResumeLastFailed: "无法接回本目录最近会话，请重试",
     unsupported: "该智能体不支持恢复上次会话，已重新打开智能体。",
   },
   agentStatus: {

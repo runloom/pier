@@ -3,6 +3,9 @@
 #import <napi.h>
 #include <cstdint>
 #include <string>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include <vector>
 
 extern "C" {
@@ -1201,6 +1204,25 @@ static Napi::Value JsApplyTerminalWindowState(const Napi::CallbackInfo& info) {
     );
 }
 
+// local-control peer UID：Unix domain socket 已连接 fd → peer euid（getpeereid）。
+// 与 Ghostty 无关的通用 OS 原语；挂在同一 .node 避免第二套 native 构建链。
+static Napi::Value JsGetUnixPeerUid(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 1 || !info[0].IsNumber()) {
+        return env.Null();
+    }
+    int fd = info[0].As<Napi::Number>().Int32Value();
+    if (fd < 0) {
+        return env.Null();
+    }
+    uid_t uid = 0;
+    gid_t gid = 0;
+    if (getpeereid(fd, &uid, &gid) != 0) {
+        return env.Null();
+    }
+    return Napi::Number::New(env, static_cast<double>(uid));
+}
+
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setupWindow",     Napi::Function::New(env, JsSetupWindow));
     exports.Set("createTerminal",  Napi::Function::New(env, JsCreateTerminal));
@@ -1245,6 +1267,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("isLeftMouseButtonDown", Napi::Function::New(env, JsIsLeftMouseButtonDown));
     exports.Set("orderedWindowNumbers", Napi::Function::New(env, JsOrderedWindowNumbers));
     exports.Set("windowNumberFor", Napi::Function::New(env, JsWindowNumberFor));
+    exports.Set("getUnixPeerUid", Napi::Function::New(env, JsGetUnixPeerUid));
     return exports;
 }
 

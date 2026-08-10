@@ -17,6 +17,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import {
   Item,
   ItemContent,
@@ -86,7 +87,11 @@ function SettingsSkeleton(): JSX.Element {
 export function AccountsSettingsPage({
   context,
 }: AccountsSettingsPageProps): JSX.Element {
-  const { error: loadError, snapshot } = useClaudeAccountsSnapshot(context);
+  const {
+    error: loadError,
+    reload: reloadSnapshot,
+    snapshot,
+  } = useClaudeAccountsSnapshot(context);
   const t: Translate = useCallback(
     (key, fallback) => context.i18n.t(key, fallback),
     [context]
@@ -242,15 +247,17 @@ export function AccountsSettingsPage({
   if (loadError) {
     return (
       <div className={SETTINGS_LAYOUT_CLASS}>
-        <Alert variant="destructive">
-          <AlertTitle>
-            {t(
-              "pier.claude.accounts.settings.loadFailed",
-              "Could not load Claude accounts"
-            )}
-          </AlertTitle>
-          <AlertDescription>{loadError}</AlertDescription>
-        </Alert>
+        <ErrorEmpty
+          description={loadError}
+          retryAction={{
+            label: t("pier.claude.accounts.settings.retry", "Retry"),
+            onClick: reloadSnapshot,
+          }}
+          title={t(
+            "pier.claude.accounts.settings.loadFailed",
+            "Could not load Claude accounts"
+          )}
+        />
       </div>
     );
   }

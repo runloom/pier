@@ -123,32 +123,31 @@ export function CanvasUnavailableEmpty(props: { t: FilesTranslate }) {
   );
 }
 
+/**
+ * Non-blocking banner while a previous successful mount is still visible
+ * (hot-reload compile failure / warnings). Not for runtime crashes — those
+ * clear the host and use {@link CanvasCompileErrorEmpty}.
+ */
 export function CanvasSoftErrorBanner(props: {
-  /** When true this is a runtime crash, not a compile failure. */
-  isRuntime?: boolean | undefined;
   message: string;
   onReload: () => void;
   t: FilesTranslate;
 }) {
-  const titleKey = props.isRuntime
-    ? "filePanel.canvas.runtimeFailed"
-    : "filePanel.canvas.compileFailed";
-  const hintKey = props.isRuntime
-    ? "filePanel.canvas.runtimeFailedHint"
-    : "filePanel.canvas.compileFailedHint";
   return (
     <div
       className="shrink-0 border-border border-b px-4 py-3"
       data-slot="file-canvas-soft-error"
     >
       <Alert variant="warning">
-        <AlertTitle>{props.t(titleKey, "Couldn’t compile canvas")}</AlertTitle>
+        <AlertTitle>
+          {props.t("filePanel.canvas.compileFailed", "Couldn’t compile canvas")}
+        </AlertTitle>
         <AlertDescription>
           <p>
             {props.message.trim().length > 0
               ? props.message
               : props.t(
-                  hintKey,
+                  "filePanel.canvas.compileFailedHint",
                   "Fix the canvas file or its imports, then reload."
                 )}
           </p>
@@ -168,27 +167,38 @@ export function CanvasSoftErrorBanner(props: {
   );
 }
 
+/**
+ * Full-region error when there is no canvas body to show (first compile fail,
+ * or runtime crash after ErrorBoundary nulls the tree).
+ */
 export function CanvasCompileErrorEmpty(props: {
   diagnostics: LiveModuleDiagnostic[];
+  /** Runtime crash uses runtimeFailed copy; compile uses compileFailed. */
+  isRuntime?: boolean | undefined;
   message: string;
   onReload: () => void;
   t: FilesTranslate;
 }) {
+  const titleKey = props.isRuntime
+    ? "filePanel.canvas.runtimeFailed"
+    : "filePanel.canvas.compileFailed";
+  const titleFallback = props.isRuntime
+    ? "Canvas crashed while rendering"
+    : "Couldn’t compile canvas";
+  const hintKey = props.isRuntime
+    ? "filePanel.canvas.runtimeFailedHint"
+    : "filePanel.canvas.compileFailedHint";
+  const hintFallback = props.isRuntime
+    ? "Fix the runtime error in the canvas, then reload."
+    : "Fix the canvas file or its imports, then reload.";
   return (
-    <Empty className="min-h-64 py-12">
+    <Empty className="min-h-64 py-12" data-slot="file-canvas-error-empty">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <FileQuestion />
         </EmptyMedia>
-        <EmptyTitle>
-          {props.t("filePanel.canvas.compileFailed", "Couldn’t compile canvas")}
-        </EmptyTitle>
-        <EmptyDescription>
-          {props.t(
-            "filePanel.canvas.compileFailedHint",
-            "Fix the canvas file or its imports, then reload."
-          )}
-        </EmptyDescription>
+        <EmptyTitle>{props.t(titleKey, titleFallback)}</EmptyTitle>
+        <EmptyDescription>{props.t(hintKey, hintFallback)}</EmptyDescription>
       </EmptyHeader>
       {props.diagnostics.length > 0 ? (
         <div

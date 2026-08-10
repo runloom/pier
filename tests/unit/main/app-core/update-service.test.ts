@@ -258,6 +258,96 @@ describe("AppUpdateService", () => {
     );
   });
 
+  it("download failure leaves retryable error with availableVersion", async () => {
+    const downloadUpdate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("net::ERR_CONNECTION_RESET"));
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      runtimeMode: "production",
+      updater: {
+        checkForUpdates: vi.fn(async () => ({
+          isUpdateAvailable: true,
+          updateInfo: { version: "0.2.0" },
+        })),
+        downloadUpdate,
+        on: vi.fn(),
+        quitAndInstall: vi.fn(),
+      },
+    });
+
+    await expect(service.check()).resolves.toMatchObject({
+      availableVersion: "0.2.0",
+      error: "net::ERR_CONNECTION_RESET",
+      state: "error",
+    });
+    expect(service.getStatus().progress).toBeUndefined();
+    expect(downloadUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows re-download after a failed download", async () => {
+    const downloadUpdate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("net::ERR_CONNECTION_RESET"))
+      .mockResolvedValueOnce([]);
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      runtimeMode: "production",
+      updater: {
+        checkForUpdates: vi.fn(async () => ({
+          isUpdateAvailable: true,
+          updateInfo: { version: "0.2.0" },
+        })),
+        downloadUpdate,
+        on: vi.fn(),
+        quitAndInstall: vi.fn(),
+      },
+    });
+
+    await expect(service.check()).resolves.toMatchObject({ state: "error" });
+    await expect(service.download()).resolves.toMatchObject({
+      availableVersion: "0.2.0",
+      state: "downloaded",
+    });
+    expect(service.getStatus().error).toBeUndefined();
+    expect(downloadUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows check to run again after a failed download", async () => {
+    const checkForUpdates = vi
+      .fn()
+      .mockResolvedValueOnce({
+        isUpdateAvailable: true,
+        updateInfo: { version: "0.2.0" },
+      })
+      .mockResolvedValueOnce({
+        isUpdateAvailable: true,
+        updateInfo: { version: "0.2.0" },
+      });
+    const downloadUpdate = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("net::ERR_CONNECTION_RESET"))
+      .mockResolvedValueOnce([]);
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      runtimeMode: "production",
+      updater: {
+        checkForUpdates,
+        downloadUpdate,
+        on: vi.fn(),
+        quitAndInstall: vi.fn(),
+      },
+    });
+
+    await expect(service.check()).resolves.toMatchObject({ state: "error" });
+    await expect(service.check()).resolves.toMatchObject({
+      availableVersion: "0.2.0",
+      state: "downloaded",
+    });
+    expect(checkForUpdates).toHaveBeenCalledTimes(2);
+    expect(downloadUpdate).toHaveBeenCalledTimes(2);
+  });
+
   it("imports electron-updater through default CommonJS interop", async () => {
     const source = await readFile(
       join(

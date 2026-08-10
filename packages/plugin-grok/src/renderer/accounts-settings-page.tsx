@@ -93,7 +93,11 @@ function SettingsSkeleton(): JSX.Element {
 export function AccountsSettingsPage({
   context,
 }: AccountsSettingsPageProps): JSX.Element {
-  const { error: loadError, snapshot } = useGrokAccountsSnapshot(context);
+  const {
+    error: loadError,
+    reload: reloadSnapshot,
+    snapshot,
+  } = useGrokAccountsSnapshot(context);
   useUsagePollingLease(context, "settings:accounts", true);
   // Stable identity: `t` feeds AddAccountDialog's effects; a per-render arrow
   // would re-run them (and re-send dialogs.update) on every render.
@@ -272,6 +276,10 @@ export function AccountsSettingsPage({
       <div className={SETTINGS_LAYOUT_CLASS}>
         <ErrorEmpty
           description={loadError}
+          retryAction={{
+            label: t("pier.grok.accounts.settings.retry", "Retry"),
+            onClick: reloadSnapshot,
+          }}
           title={t(
             "pier.grok.accounts.settings.loadFailed",
             "Could not load Grok accounts"

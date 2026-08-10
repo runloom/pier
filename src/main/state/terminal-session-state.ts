@@ -18,6 +18,10 @@ import {
 } from "@shared/contracts/terminal/end-state.ts";
 import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import {
+  clearPendingAgentResume,
+  mergePendingResumeIntoAgent,
+} from "./terminal-session-agent-resume.ts";
+import {
   type TerminalPanelSession,
   terminalAgentPanelMetadataSchema,
 } from "./terminal-session-state-schemas.ts";
@@ -26,6 +30,15 @@ import {
   ensureTerminalSessionStore,
 } from "./terminal-session-store.ts";
 
+export {
+  clearPendingAgentResume,
+  clearPendingAgentResumesForTests,
+  clearPendingAgentResumesForWindow,
+  getPendingAgentResume,
+  peekPendingAgentResumeForTests,
+  rekeyPendingAgentResume,
+  updateTerminalPanelAgentResume,
+} from "./terminal-session-agent-resume.ts";
 export {
   detachAgentsForWindow,
   detachAgentsForWindowSync,
@@ -203,61 +216,19 @@ export async function updateTerminalPanelAgent(
     const windowState = state.windows[windowId] ?? emptyWindowSession();
     state.windows[windowId] = windowState;
     const current = windowState.panels[panelId] ?? {};
+    // Apply pending in the same mutate as the agent write (no TOCTOU race).
+    const nextAgent = mergePendingResumeIntoAgent(
+      parsed.data,
+      windowId,
+      panelId
+    );
     windowState.panels[panelId] = {
       ...current,
-      agent: parsed.data,
+      agent: nextAgent,
       updatedAt: new Date().toISOString(),
     };
     return state;
   });
-}
-
-export async function updateTerminalPanelAgentResume(
-  windowId: string,
-  panelId: string,
-  resume: NonNullable<TerminalAgentPanelMetadata["resume"]> & {
-    agentId: TerminalAgentPanelMetadata["agentId"];
-  }
-): Promise<boolean> {
-  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
-    return false;
-  }
-  let patched = false;
-  const s = await ensureStore();
-  s.mutate((state) => {
-    const windowState = state.windows[windowId];
-    const current = windowState?.panels[panelId];
-    if (
-      !(
-        windowState &&
-        current?.agent &&
-        current.agent.status === "running" &&
-        current.agent.agentId === resume.agentId
-      )
-    ) {
-      return state;
-    }
-    const nextAgent = {
-      ...current.agent,
-      resume: {
-        capturedAt: resume.capturedAt,
-        sessionId: resume.sessionId,
-        source: resume.source,
-      },
-    };
-    const parsed = terminalAgentPanelMetadataSchema.safeParse(nextAgent);
-    if (!parsed.success) {
-      return state;
-    }
-    windowState.panels[panelId] = {
-      ...current,
-      agent: parsed.data,
-      updatedAt: new Date().toISOString(),
-    };
-    patched = true;
-    return state;
-  });
-  return patched;
 }
 
 export async function patchTerminalPanelAgentStatus(
@@ -323,6 +294,7 @@ export async function clearTerminalPanelAgent(
   if (windowId.trim().length === 0 || panelId.trim().length === 0) {
     return;
   }
+  clearPendingAgentResume(windowId, panelId);
   const s = await ensureStore();
   s.mutate((state) => {
     const windowState = state.windows[windowId];
@@ -460,6 +432,7 @@ export async function removeTerminalPanelSession(
   if (windowId.trim().length === 0 || panelId.trim().length === 0) {
     return;
   }
+  clearPendingAgentResume(windowId, panelId);
   const s = await ensureStore();
   s.mutate((state) => {
     const windowState = state.windows[windowId];

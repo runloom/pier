@@ -19,7 +19,9 @@ describe("preflight-ci governance", () => {
     expect(source).toContain("pnpm check:static");
     expect(source).toContain("vitest run tests/unit");
     expect(source).toContain("vitest run tests/component");
-    expect(source).toContain("pnpm test:coverage");
+    // Local preflight caps workers on coverage too (same flake surface as unit).
+    expect(source).toContain("vitest run --coverage");
+    expect(source).toContain("maxWorkers");
     expect(source).toContain("pnpm build");
   });
 
@@ -32,6 +34,7 @@ describe("preflight-ci governance", () => {
     expect(pkg.scripts["preflight:merge"]).toContain("merge");
     expect(pkg.scripts["preflight:ci"]).toContain("ci");
     expect(pkg.scripts["preflight:full"]).toContain("full");
+    // Package script remains uncapped for CI; preflight-ci.sh applies local cap.
     expect(pkg.scripts["test:coverage"]).not.toContain("no-file-parallelism");
   });
 

@@ -40,16 +40,14 @@ import {
 } from "../services/foreground-activity/jsonl-observer.ts";
 import { resolveOwner } from "../services/panel-transfer/terminal-hook-owner-routing.ts";
 import { readPreferences } from "../state/preferences.ts";
-import {
-  patchTerminalPanelAgentStatus,
-  updateTerminalPanelAgentResume,
-} from "../state/terminal-session-state.ts";
+import { patchTerminalPanelAgentStatus } from "../state/terminal-session-state.ts";
 import {
   findAppWindowByElectronId,
   findAppWindowByInternalId,
   findAppWindowByWebContents,
   listAppWindowIds,
 } from "../windows/identity.ts";
+import { recordAgentResumeSession } from "./agent-resume-persist.ts";
 import { materializeForegroundActivityPublications } from "./foreground-activity-publication.ts";
 import { broadcastAgentEndStateForPanel } from "./terminal/end-state-broadcast.ts";
 import { forwardToWindow } from "./terminal/forwarding.ts";
@@ -110,29 +108,6 @@ function markAgentSessionExited(args: {
     .catch((err) => {
       log.error("agent session exit persist failed", { err });
     });
-}
-
-function recordAgentResumeSession(args: {
-  agentId: AgentKind;
-  panelId: string;
-  sessionId: string | undefined;
-  windowId: string;
-}): void {
-  if (!args.sessionId) {
-    return;
-  }
-  const win = findAppWindowByElectronId(Number(args.windowId));
-  if (!win || win.isDestroyed()) {
-    return;
-  }
-  updateTerminalPanelAgentResume(windowRecordIdFor(win), args.panelId, {
-    agentId: args.agentId,
-    capturedAt: Date.now(),
-    sessionId: args.sessionId,
-    source: "hook",
-  }).catch((err) => {
-    log.error("agent resume metadata persist failed", { err });
-  });
 }
 
 /**
@@ -404,6 +379,17 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
         event: routed,
         runtime: integration?.runtime,
       });
+      // Resume index must not depend on FA turn bookkeeping accept: dropped
+      // tool/progress events still carry the only host-side restore key.
+      const effects = effectsForAcceptedAgentEvent(routed);
+      if (effects.persistResume) {
+        recordAgentResumeSession({
+          agentId: routed.agent,
+          panelId: routed.panelId,
+          sessionId: routed.sessionId,
+          windowId: routed.windowId,
+        });
+      }
       const accepted = foregroundActivityAggregator.ingestAgentEvent(
         routed,
         options
@@ -411,18 +397,9 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
       if (!accepted) {
         return;
       }
-      const effects = effectsForAcceptedAgentEvent(routed);
       if (effects.observeTranscript) {
         agentTerminalReconciler?.observe(routed).catch((err) => {
           log.warn("agent terminal reconciliation failed", { err });
-        });
-      }
-      if (effects.persistResume) {
-        recordAgentResumeSession({
-          agentId: routed.agent,
-          panelId: routed.panelId,
-          sessionId: routed.sessionId,
-          windowId: routed.windowId,
         });
       }
       if (effects.markPanelExited) {

@@ -30,7 +30,9 @@ type Entity = TextRow<"name" | "owner" | "identity" | "meaning">;
 type StateRule = TextRow<"state" | "source" | "meaning" | "next">;
 type StateMachine = TextRow<"entity" | "path" | "guard" | "terminal">;
 type Loop = TextRow<"id" | "name" | "steps" | "closed" | "exitStates">;
-type CommandGroup = TextRow<"group" | "commands" | "responsibility" | "safety">;
+type CommandGroup = TextRow<
+  "group" | "commands" | "responsibility" | "safety" | "status" | "wave"
+>;
 type CliLifecycle = TextRow<"stage" | "commands" | "commit" | "recovery">;
 type TransportRule = TextRow<"part" | "rule">;
 type Principal = TextRow<"principal" | "scope" | "allowed" | "forbidden">;
@@ -444,7 +446,7 @@ export function parseScheme(raw: string): SchemeData {
     [data.closedLoops, ["id", "name", "steps", "closed", "exitStates"], "data.closedLoops"],
     [
       cli.commandGroups,
-      ["group", "commands", "responsibility", "safety"],
+      ["group", "commands", "responsibility", "safety", "status", "wave"],
       "data.cli.commandGroups",
     ],
     [cli.lifecycle, ["stage", "commands", "commit", "recovery"], "data.cli.lifecycle"],
@@ -473,6 +475,18 @@ export function parseScheme(raw: string): SchemeData {
     throw new Error(
       `data.cli.commandGroups 不得开放公共 transcript/history/replay/scrollback 命令：${publicHistoryCommands.join("、")}`,
     );
+  }
+
+  const allowedCommandStatus = new Set(["shipped", "partial", "planned"]);
+  for (const row of cli.commandGroups as CommandGroup[]) {
+    if (!allowedCommandStatus.has(row.status)) {
+      throw new Error(
+        `data.cli.commandGroups[${row.group}].status 必须是 shipped | partial | planned`,
+      );
+    }
+    if (!row.wave.trim()) {
+      throw new Error(`data.cli.commandGroups[${row.group}].wave 必须是非空字符串`);
+    }
   }
 
   const ownershipRows = data.ownership as Ownership[];

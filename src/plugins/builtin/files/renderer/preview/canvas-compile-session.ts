@@ -42,10 +42,9 @@ import {
 /** Only show skeleton if compile still pending after this delay (avoids flash). */
 export const CANVAS_SKELETON_DELAY_MS = 200;
 
+/** Hot-reload compile failure / warnings while previous mount stays visible. */
 export interface SoftError {
   diagnostics: LiveModuleDiagnostic[];
-  /** True for runtime crashes (uses runtimeFailed title/hint). */
-  isRuntime?: boolean;
   message: string;
 }
 
@@ -62,6 +61,11 @@ export type CanvasPreviewState =
       kind: "error";
       message: string;
       diagnostics: LiveModuleDiagnostic[];
+      /**
+       * True when the canvas mounted then crashed (React boundary / uncaught).
+       * Content is gone — full Empty, never soft Alert banner.
+       */
+      isRuntime?: boolean;
     };
 
 function moduleIdentity(
@@ -327,23 +331,27 @@ export function useCanvasCompileSession(props: {
         unmountMountedCanvas(hostEl, unmountRef, mountedIdentityRef);
         mountedModuleIdRef.current = null;
 
+        // Runtime crash: ErrorBoundary already renders null — no body remains.
+        // Primary error state must be Empty (not soft Alert banner). Soft Alert
+        // is only for hot-reload compile failure while previous mount is kept.
         const reportRuntimeError = (error: Error) => {
           if (!stillOwner()) {
             return;
           }
           const message = canvasMountErrorMessage(error, t);
-          if (unmountRef.current) {
-            setState((current) =>
-              current.kind === "ready"
-                ? {
-                    ...current,
-                    softError: { diagnostics: [], isRuntime: true, message },
-                  }
-                : { diagnostics: [], kind: "error", message }
-            );
-            return;
-          }
-          setState({ diagnostics: [], kind: "error", message });
+          clearMountedCanvas(
+            hostEl,
+            unmountRef,
+            mountedIdentityRef,
+            mountedModuleIdRef.current
+          );
+          mountedModuleIdRef.current = null;
+          setState({
+            diagnostics: [],
+            isRuntime: true,
+            kind: "error",
+            message,
+          });
         };
 
         const nextUnmount = await mountLiveModuleExport(
@@ -402,17 +410,17 @@ export function useCanvasCompileSession(props: {
         }
         clearSkeletonTimer();
         const message = canvasMountErrorMessage(error, t);
-        // Mount/runtime failures (bad exports, mount-throw) use the runtime
-        // copy; compile/import failures keep the compile copy.
+        // Mount shape failures (bad exports) use the runtime copy; compile/import
+        // failures keep the compile copy. Soft banner only when previous mount
+        // is still on screen (import failed before atomic swap tore it down).
         const isRuntimeError = error instanceof LiveModuleMountError;
-        if (isHotReload && unmountRef.current) {
+        if (isHotReload && unmountRef.current && !isRuntimeError) {
           setState((current) =>
             current.kind === "ready"
               ? {
                   ...current,
                   softError: {
                     diagnostics: [],
-                    isRuntime: isRuntimeError,
                     message,
                   },
                 }
@@ -429,6 +437,7 @@ export function useCanvasCompileSession(props: {
         mountedModuleIdRef.current = null;
         setState({
           diagnostics: [],
+          ...(isRuntimeError ? { isRuntime: true as const } : {}),
           kind: "error",
           message,
         });

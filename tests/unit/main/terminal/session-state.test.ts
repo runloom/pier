@@ -400,7 +400,7 @@ describe("terminal session state", () => {
         sessionId: "session-123",
         source: "hook",
       })
-    ).resolves.toBe(true);
+    ).resolves.toBe("applied");
 
     await expect(
       readTerminalPanelSession("main", "terminal-1")
@@ -412,6 +412,371 @@ describe("terminal session state", () => {
           source: "hook",
         },
       },
+    });
+  });
+
+  it("stashes hook resume until agent metadata is written", async () => {
+    const {
+      clearPendingAgentResumesForTests,
+      ensureTerminalPanelSession,
+      peekPendingAgentResumeForTests,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    clearPendingAgentResumesForTests();
+
+    // Panel row must exist before stash (no ghost-panel pending).
+    await ensureTerminalPanelSession("main", "terminal-codex");
+
+    await expect(
+      updateTerminalPanelAgentResume("main", "terminal-codex", {
+        agentId: "codex",
+        capturedAt: 1_772_000_001_000,
+        sessionId: "codex-session-1",
+        source: "hook",
+      })
+    ).resolves.toBe("pending");
+    expect(
+      peekPendingAgentResumeForTests("main", "terminal-codex")?.sessionId
+    ).toBe("codex-session-1");
+
+    await updateTerminalPanelAgent("main", "terminal-codex", {
+      agentId: "codex",
+      launch: {
+        agentId: "codex",
+        command: "codex --dangerously-bypass-approvals-and-sandbox",
+        cwd: "/repo",
+      },
+      startedAt: 1_772_000_000_000,
+      status: "running",
+    });
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-codex")
+    ).resolves.toMatchObject({
+      agent: {
+        agentId: "codex",
+        resume: {
+          sessionId: "codex-session-1",
+          source: "hook",
+        },
+        status: "running",
+      },
+    });
+    expect(
+      peekPendingAgentResumeForTests("main", "terminal-codex")
+    ).toBeUndefined();
+  });
+
+  it("rejects resume stash when panel row is missing", async () => {
+    const {
+      clearPendingAgentResumesForTests,
+      peekPendingAgentResumeForTests,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    clearPendingAgentResumesForTests();
+
+    await expect(
+      updateTerminalPanelAgentResume("main", "no-such-panel", {
+        agentId: "codex",
+        capturedAt: 1,
+        sessionId: "ghost",
+        source: "hook",
+      })
+    ).resolves.toBe("rejected");
+    expect(
+      peekPendingAgentResumeForTests("main", "no-such-panel")
+    ).toBeUndefined();
+  });
+
+  it("rekeys pending from source to target on ownership transfer", async () => {
+    const {
+      clearPendingAgentResumesForTests,
+      ensureTerminalPanelSession,
+      peekPendingAgentResumeForTests,
+      readTerminalPanelSession,
+      transferPanelOwnership,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    clearPendingAgentResumesForTests();
+
+    await ensureTerminalPanelSession("src-win", "terminal-1");
+    await updateTerminalPanelAgentResume("src-win", "terminal-1", {
+      agentId: "codex",
+      capturedAt: 50,
+      sessionId: "from-source",
+      source: "hook",
+    });
+    await updateTerminalPanelAgent("src-win", "terminal-1", {
+      agentId: "codex",
+      launch: { agentId: "codex", command: "codex", cwd: "/repo" },
+      startedAt: 1,
+      status: "running",
+    });
+    // Drop resume so rekeyed pending (if any leftover) matters less; force
+    // pending by stashing after clear-path: write second pending before agent
+    // was applied already consumed it. Instead put pending on target orphan
+    // and source after agent already applied — re-stash via ensure empty resume
+    // by re-writing agent without resume then stashing again is complex.
+    // Source pending after apply is empty; stash on a panel that only has
+    // agent on source without resume:
+    await updateTerminalPanelAgent("src-win", "terminal-1", {
+      agentId: "codex",
+      launch: { agentId: "codex", command: "codex", cwd: "/repo" },
+      startedAt: 1,
+      status: "running",
+    });
+    // Agent write without resume field replaces agent — no resume, pending empty.
+    // Stash pending again for transfer migration test:
+    await updateTerminalPanelAgentResume("src-win", "terminal-1", {
+      agentId: "codex",
+      capturedAt: 99,
+      sessionId: "migrate-me",
+      source: "hook",
+    });
+    expect(
+      (await readTerminalPanelSession("src-win", "terminal-1"))?.agent?.resume
+        ?.sessionId
+    ).toBe("migrate-me");
+
+    // Put orphan pending on target key only (same panel id, different window)
+    // by ensuring a row, stashing, then removing agent without clear? Simpler:
+    // ensure target has no panel; rekey only moves source→target.
+    await transferPanelOwnership({
+      panelId: "terminal-1",
+      sourceRecordId: "src-win",
+      targetRecordId: "dst-win",
+    });
+
+    expect(
+      peekPendingAgentResumeForTests("src-win", "terminal-1")
+    ).toBeUndefined();
+    await expect(
+      readTerminalPanelSession("dst-win", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: {
+        agentId: "codex",
+        resume: { sessionId: "migrate-me" },
+        status: "running",
+      },
+    });
+  });
+
+  it("merges pending into agent on detach and clears window pending", async () => {
+    const {
+      clearPendingAgentResumesForTests,
+      detachAgentsForWindow,
+      ensureTerminalPanelSession,
+      peekPendingAgentResumeForTests,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    clearPendingAgentResumesForTests();
+
+    await ensureTerminalPanelSession("main", "terminal-1");
+    await updateTerminalPanelAgentResume("main", "terminal-1", {
+      agentId: "codex",
+      capturedAt: 10,
+      sessionId: "detach-id",
+      source: "hook",
+    });
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "codex",
+      launch: { agentId: "codex", command: "codex", cwd: "/repo" },
+      startedAt: 1,
+      status: "running",
+    });
+    // Clear resume from agent to leave only pending: re-write agent without
+    // resume then stash again
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "codex",
+      launch: { agentId: "codex", command: "codex", cwd: "/repo" },
+      startedAt: 1,
+      status: "running",
+    });
+    await updateTerminalPanelAgentResume("main", "terminal-1", {
+      agentId: "codex",
+      capturedAt: 20,
+      sessionId: "detach-id-2",
+      source: "hook",
+    });
+
+    await detachAgentsForWindow("main");
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: {
+        resume: { sessionId: "detach-id-2" },
+        status: "running",
+        restore: { detachedAt: expect.any(Number) },
+      },
+    });
+    expect(
+      peekPendingAgentResumeForTests("main", "terminal-1")
+    ).toBeUndefined();
+  });
+
+  it("does not let older pending overwrite a newer applied resume", async () => {
+    const {
+      clearPendingAgentResumesForTests,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    clearPendingAgentResumesForTests();
+
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "codex",
+      launch: { agentId: "codex", command: "codex", cwd: "/repo" },
+      startedAt: 1,
+      status: "running",
+    });
+    await expect(
+      updateTerminalPanelAgentResume("main", "terminal-1", {
+        agentId: "codex",
+        capturedAt: 2000,
+        sessionId: "newer-session",
+        source: "hook",
+      })
+    ).resolves.toBe("applied");
+
+    await expect(
+      updateTerminalPanelAgentResume("main", "terminal-1", {
+        agentId: "codex",
+        capturedAt: 1000,
+        sessionId: "older-session",
+        source: "hook",
+      })
+    ).resolves.toBe("rejected");
+
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: { resume: { sessionId: "newer-session", capturedAt: 2000 } },
+    });
+  });
+
+  it("keeps newer pending when older hook arrives first for stash", async () => {
+    const {
+      clearPendingAgentResumesForTests,
+      ensureTerminalPanelSession,
+      peekPendingAgentResumeForTests,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    clearPendingAgentResumesForTests();
+    await ensureTerminalPanelSession("main", "terminal-x");
+
+    await updateTerminalPanelAgentResume("main", "terminal-x", {
+      agentId: "codex",
+      capturedAt: 2000,
+      sessionId: "newer",
+      source: "hook",
+    });
+    await updateTerminalPanelAgentResume("main", "terminal-x", {
+      agentId: "codex",
+      capturedAt: 1000,
+      sessionId: "older",
+      source: "hook",
+    });
+    expect(
+      peekPendingAgentResumeForTests("main", "terminal-x")?.sessionId
+    ).toBe("newer");
+  });
+
+  it("clears pending when panel session is removed", async () => {
+    const {
+      clearPendingAgentResumesForTests,
+      ensureTerminalPanelSession,
+      peekPendingAgentResumeForTests,
+      removeTerminalPanelSession,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    clearPendingAgentResumesForTests();
+    await ensureTerminalPanelSession("main", "terminal-gone");
+
+    await updateTerminalPanelAgentResume("main", "terminal-gone", {
+      agentId: "codex",
+      capturedAt: 1,
+      sessionId: "orphan",
+      source: "hook",
+    });
+    expect(
+      peekPendingAgentResumeForTests("main", "terminal-gone")?.sessionId
+    ).toBe("orphan");
+
+    await removeTerminalPanelSession("main", "terminal-gone");
+    expect(
+      peekPendingAgentResumeForTests("main", "terminal-gone")
+    ).toBeUndefined();
+  });
+
+  it("clears mismatched pending when agent metadata is written for another agent", async () => {
+    const {
+      clearPendingAgentResumesForTests,
+      peekPendingAgentResumeForTests,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    clearPendingAgentResumesForTests();
+
+    await updateTerminalPanelAgentResume("main", "terminal-1", {
+      agentId: "codex",
+      capturedAt: 1,
+      sessionId: "codex-id",
+      source: "hook",
+    });
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "claude",
+      launch: { agentId: "claude", command: "claude", cwd: "/repo" },
+      startedAt: 1,
+      status: "running",
+    });
+    expect(
+      peekPendingAgentResumeForTests("main", "terminal-1")
+    ).toBeUndefined();
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.not.toHaveProperty("agent.resume");
+  });
+
+  it("treats same sessionId as applied without changing capturedAt", async () => {
+    const {
+      clearPendingAgentResumesForTests,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelAgentResume,
+    } = await loadTerminalSessionState();
+    clearPendingAgentResumesForTests();
+
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "codex",
+      launch: { agentId: "codex", command: "codex", cwd: "/repo" },
+      startedAt: 1,
+      status: "running",
+    });
+    await updateTerminalPanelAgentResume("main", "terminal-1", {
+      agentId: "codex",
+      capturedAt: 100,
+      sessionId: "same-id",
+      source: "hook",
+    });
+    await expect(
+      updateTerminalPanelAgentResume("main", "terminal-1", {
+        agentId: "codex",
+        capturedAt: 999,
+        sessionId: "same-id",
+        source: "hook",
+      })
+    ).resolves.toBe("applied");
+    await expect(
+      readTerminalPanelSession("main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: { resume: { sessionId: "same-id", capturedAt: 100 } },
     });
   });
 
@@ -440,7 +805,7 @@ describe("terminal session state", () => {
         sessionId: "wrong-agent-session",
         source: "hook",
       })
-    ).resolves.toBe(false);
+    ).resolves.toBe("rejected");
 
     await expect(
       readTerminalPanelSession("main", "terminal-1")

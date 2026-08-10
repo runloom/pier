@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { AgentKind } from "./agent.ts";
 import type { TerminalExitPresentation } from "./ghostty-host-copy.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskOutputPanelParams, TaskPanelMetadata } from "./tasks.ts";
@@ -202,11 +203,33 @@ export interface CreateTerminalArgs {
   taskOutput?: TaskOutputPanelParams | undefined;
 }
 
+export type TerminalAgentRestoreOutcome =
+  | "resumed"
+  | "cold-start"
+  | "unsupported";
+
+/** Cold-start toast action: user-triggered native "resume last / continue". */
+export interface TerminalTryResumeLastSpec {
+  agentId: AgentKind;
+  command: string;
+  cwd?: string | undefined;
+}
+
 export interface CreateTerminalResult {
+  /**
+   * 恢复 running agent 时的结果：有 sessionId 则 resumed；无 id / 缺命令为
+   * cold-start；adapter 不支持为 unsupported。非 restore 路径省略。
+   */
+  agentRestore?: TerminalAgentRestoreOutcome | undefined;
   error?: string;
   ok: boolean;
   /** 受管启动被技能门阻断时的结构化信息（renderer 弹三选）。 */
   skillsLaunchBlocked?: SkillsLaunchBlockedInfo | undefined;
+  /**
+   * cold-start 且 agent 支持「最近会话」入口时给出；renderer toast 操作可
+   * 用它 relaunch，不扫盘、不猜 session id。
+   */
+  tryResumeLast?: TerminalTryResumeLastSpec | undefined;
 }
 
 export interface RebindTaskOutputResult extends CreateTerminalResult {

@@ -1,5 +1,4 @@
 import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
@@ -16,6 +15,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import {
   Item,
   ItemActions,
@@ -170,7 +170,11 @@ function HostRow({
 export function HostsSettingsPage({
   context,
 }: HostsSettingsPageProps): JSX.Element {
-  const { error: loadError, snapshot } = useSshHostsSnapshot(context);
+  const {
+    error: loadError,
+    reload: reloadSnapshot,
+    snapshot,
+  } = useSshHostsSnapshot(context);
   const t: Translate = (key, fallback) => context.i18n.t(key, fallback);
   const [busyHostIds, setBusyHostIds] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -255,15 +259,17 @@ export function HostsSettingsPage({
   if (loadError) {
     return (
       <div className={SETTINGS_LAYOUT_CLASS}>
-        <Alert variant="destructive">
-          <AlertTitle>
-            {t(
-              "pier.ssh.hosts.settings.loadFailed",
-              "Could not load SSH hosts"
-            )}
-          </AlertTitle>
-          <AlertDescription>{loadError}</AlertDescription>
-        </Alert>
+        <ErrorEmpty
+          description={loadError}
+          retryAction={{
+            label: t("pier.ssh.hosts.settings.retry", "Retry"),
+            onClick: reloadSnapshot,
+          }}
+          title={t(
+            "pier.ssh.hosts.settings.loadFailed",
+            "Could not load SSH hosts"
+          )}
+        />
       </div>
     );
   }

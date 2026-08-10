@@ -159,7 +159,7 @@ UI / 弹窗 / 文案 / 颜色 / shadcn 治理以 [`AGENTS.md`](../AGENTS.md) 为
 
 ## 相关文档
 
-- [CLI](./cli.md)
+- [CLI 用户手册（Canvas）](../.pier/canvases/pier-cli-user-manual/)
 - [插件](./plugins.md)
 - [发布](./release.md)
 - [贡献](../CONTRIBUTING.md)

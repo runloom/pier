@@ -69,13 +69,27 @@ run_static() {
   fi
 }
 
-run_fast_tests() {
+preflight_workers() {
   # Cap workers locally: full-core parallel unit thrashing tmp FS makes
   # project-skills (renamex/symlink) and similar suites flake with false
   # timeouts / EXDEV races. CI keeps default parallelism for wall-clock.
-  local workers="${PIER_PREFLIGHT_MAX_WORKERS:-4}"
+  # Default 2 is more stable than 4 under macOS /tmp pressure.
+  echo "${PIER_PREFLIGHT_MAX_WORKERS:-2}"
+}
+
+run_fast_tests() {
+  local workers
+  workers="$(preflight_workers)"
   run "pnpm exec vitest run tests/unit --maxWorkers=${workers}"
   run "pnpm exec vitest run tests/component --maxWorkers=${workers}"
+}
+
+run_coverage() {
+  local workers
+  workers="$(preflight_workers)"
+  # Same worker cap as unit/component: uncapped coverage re-introduces the flakes
+  # that run_fast_tests already paid to avoid.
+  run "pnpm exec vitest run --coverage --maxWorkers=${workers}"
 }
 
 # --- push: default pre-push; must catch common CI unit/static failures ---
@@ -94,8 +108,8 @@ if [[ "$tier" == "merge" ]]; then
 fi
 
 # --- ci / full: coverage job shape (thresholds) + build ---
-# Re-run unit/component under coverage; integration is included by test:coverage include.
-run "pnpm test:coverage"
+# Re-run unit/component under coverage; integration is included by vitest include.
+run_coverage
 run "pnpm build"
 
 if [[ "$tier" == "full" && "$skip_native" -eq 0 ]]; then

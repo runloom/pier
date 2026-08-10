@@ -10,6 +10,7 @@ import {
   parsePierCliArgs,
   usage,
 } from "./pier-cli-parser.js";
+import { invokePierControlV2 } from "./pier-control-v2-client.js";
 
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SOCKET_FILENAME = "pier-control.sock";
@@ -259,17 +260,91 @@ function parseArgs(argv, { includeClientEnv = true } = {}) {
   };
 }
 
+function formatAgentsCatalog(data) {
+  const agents = data?.agents;
+  if (!Array.isArray(agents) || agents.length === 0) {
+    return "(no agents in catalog)\n";
+  }
+  return `${agents
+    .map((a) => `${a.agentId}\t${a.label}\t${a.availability ?? "?"}`)
+    .join("\n")}\n`;
+}
+
+function formatAgentsList(data) {
+  const entries = data?.entries;
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return "(no running agents)\n";
+  }
+  return `${entries
+    .map(
+      (e) =>
+        `${e.agentId}\tpanel=${e.panelId}\twindow=${e.windowId}\tstatus=${e.status ?? "?"}`
+    )
+    .join("\n")}\n`;
+}
+
 try {
   const rawArgv = process.argv.slice(2);
   const argv = rawArgv[0] === "--" ? rawArgv.slice(1) : rawArgv;
   const printEnvelope = hasPierCliOption(argv, "--print-envelope");
   const parsed = parseArgs(argv, { includeClientEnv: !printEnvelope });
   if (parsed.printEnvelope) {
-    console.log(
-      JSON.stringify({ envelope: parsed.envelope, json: parsed.json }, null, 2)
-    );
+    if (parsed.protocol === "v2") {
+      console.log(
+        JSON.stringify(
+          {
+            protocol: "v2",
+            requestId: parsed.requestId,
+            op: parsed.op,
+            params: parsed.params,
+            json: parsed.json,
+          },
+          null,
+          2
+        )
+      );
+    } else {
+      console.log(
+        JSON.stringify(
+          { envelope: parsed.envelope, json: parsed.json },
+          null,
+          2
+        )
+      );
+    }
     process.exit(0);
   }
+
+  if (parsed.protocol === "v2") {
+    // 本机 CLI 一律按本机用户调用，不注入 / 不解析 agent binding 或凭证。
+    const { response } = await invokePierControlV2({
+      socketPath: resolveSocketPath(),
+      requestId: parsed.requestId,
+      op: parsed.op,
+      params: parsed.params,
+      clientKind: "cli-human",
+    });
+    if (parsed.json) {
+      console.log(JSON.stringify(response, null, 2));
+    } else if (response.ok && parsed.op === "agents.catalog") {
+      process.stdout.write(formatAgentsCatalog(response.data));
+    } else if (response.ok && parsed.op === "agents.list") {
+      process.stdout.write(formatAgentsList(response.data));
+    } else if (response.ok && parsed.op === "agents.get") {
+      const agent = response.data?.agent;
+      if (agent) {
+        process.stdout.write(
+          `${agent.agentId}\tpanel=${agent.panelId}\twindow=${agent.windowId}\n`
+        );
+      }
+    } else if (!response.ok) {
+      const code = response.error?.code ?? "error";
+      const message = response.error?.message ?? "command failed";
+      console.error(`${code}: ${message}`);
+    }
+    process.exit(response.ok ? 0 : 1);
+  }
+
   const result = await request(resolveSocketPath(), parsed.envelope);
   if (parsed.json) {
     console.log(JSON.stringify(result, null, 2));

@@ -22,6 +22,9 @@ export const terminal = {
     statusEnded: "Ended normally",
     statusFailed: "Failed",
     summaryTitle: "Session summary",
+    tryResumeLast: "Resume latest in this folder",
+    tryResumeLastFailed:
+      "Couldn't resume the latest session in this folder — try again",
     unsupported:
       "This agent can’t resume the previous session. Started a fresh agent.",
   },

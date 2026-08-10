@@ -72,6 +72,7 @@
     "filePanel.errors.outsideWorkspace": "This file is outside the current workspace and cannot be restored.",
     "filePanel.errors.read.fallback": "Unable to read file contents.",
     "filePanel.errors.read.title": "Unable to read file",
+    "filePanel.errors.reload": "Reload",
     "filePanel.errors.restore.title": "Unable to restore file tab",
     "filePanel.errors.save.fallback": "Unable to save file contents.",
     "filePanel.errors.save.title": "Unable to save file",

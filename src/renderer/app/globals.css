@@ -6,6 +6,10 @@
 
 @source "../../../packages/ui/src";
 @source "../../plugins";
+/* Project Live Modules canvases: className utilities must enter the CSS
+ * bundle. Without this, arbitrary/layout classes only written under
+ * `.pier/canvases` silently no-op (e.g. docs two-column grids). */
+@source "../../../.pier/canvases";
 
 /*
  * Pier dark variant: default 是 dark（:root），加 .light class 切换到 light。

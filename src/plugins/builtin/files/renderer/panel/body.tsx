@@ -1,16 +1,6 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
-import { Button } from "@pier/ui/button.tsx";
-import { formatBytes } from "@pier/ui/format.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import { FolderSearch } from "lucide-react";
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
 import type {
   EditorRange,
@@ -37,10 +27,12 @@ import {
   createMarkdownZoomLabels,
 } from "./markdown-labels.ts";
 import {
+  FileReadErrorEmpty,
+  FileSaveErrorBanner,
   MissingTemporaryState,
   ReadOnlyErrorState,
-  UnsupportedFileState,
 } from "./parts.tsx";
+import { UnsupportedFilePanel } from "./unsupported-state.tsx";
 import { useDiskConflictActions } from "./use-disk-conflict-actions.ts";
 import { useFilePanelMarkdownChrome } from "./use-markdown-chrome.ts";
 
@@ -306,90 +298,32 @@ export function ResolvedFilePanel({
   }
 
   if (document.readOnlyReason) {
-    let actions: ReactNode;
-    if (
-      document.readOnlyReason === "binary" &&
-      context &&
-      document.source.kind === "disk"
-    ) {
-      actions = (
-        <Button
-          onClick={handleReveal}
-          size="sm"
-          type="button"
-          variant="default"
-        >
-          <FolderSearch data-icon="inline-start" />
-          {t("filePanel.unsupported.reveal", "Show in file manager")}
-        </Button>
-      );
-    } else if (document.readOnlyReason === "mixed-eol") {
-      actions = (
-        <>
-          <Button
-            onClick={() => controller.normalizeDocumentEol(document.id, "lf")}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            {t("filePanel.unsupported.normalizeLf", "Normalize to LF")}
-          </Button>
-          <Button
-            onClick={() => controller.normalizeDocumentEol(document.id, "crlf")}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
-            {t("filePanel.unsupported.normalizeCrlf", "Normalize to CRLF")}
-          </Button>
-        </>
-      );
-    }
-    let details: ReactNode;
-    if (document.readOnlyReason === "binary") {
-      const type =
-        document.mime ?? t("filePanel.unsupported.binaryType", "Binary");
-      const size =
-        document.size === null
-          ? null
-          : formatBytes(document.size, context?.i18n.language() ?? "en");
-      details = (
-        <p className="font-mono text-muted-foreground text-xs tabular-nums">
-          {size ? `${type} · ${size}` : type}
-        </p>
-      );
-    }
-    const messageByReason = {
-      binary: t(
-        "filePanel.unsupported.binary",
-        "Binary files are not opened in the text editor."
-      ),
-      "mixed-eol": t(
-        "filePanel.unsupported.mixedEol",
-        "Files with mixed line endings are read-only to avoid changing their bytes unexpectedly."
-      ),
-      "not-writable": t(
-        "filePanel.unsupported.notWritable",
-        "Pier does not have permission to write this file."
-      ),
-      "too-large": t(
-        "filePanel.unsupported.tooLarge",
-        "This file is too large to open in the editor."
-      ),
-      "unknown-encoding": t(
-        "filePanel.unsupported.unknownEncoding",
-        "This text encoding is not supported."
-      ),
-      "unsupported-file": t(
-        "filePanel.unsupported.fileType",
-        "This file type is not supported by the editor."
-      ),
-    } satisfies Record<NonNullable<typeof document.readOnlyReason>, string>;
     return (
-      <UnsupportedFileState
-        actions={actions}
-        details={details}
-        message={messageByReason[document.readOnlyReason]}
+      <UnsupportedFilePanel
+        context={context}
+        controller={controller}
+        document={document}
+        onReveal={handleReveal}
+        t={t}
+      />
+    );
+  }
+
+  // Read failed: full Empty. Save failed: soft banner with body still visible.
+  if (document.loadState === "error") {
+    return (
+      <FileReadErrorEmpty
+        message={document.error}
+        onReload={
+          document.source.kind === "disk"
+            ? () => {
+                controller
+                  .reloadDocumentFromDisk(document.id)
+                  .catch(() => undefined);
+              }
+            : undefined
+        }
+        t={t}
         title={document.name}
       />
     );
@@ -401,16 +335,7 @@ export function ResolvedFilePanel({
       <h1 className="sr-only">{document.name}</h1>
 
       {document.error ? (
-        <div className="shrink-0 px-4 py-3">
-          <Alert variant="destructive">
-            <AlertTitle>
-              {document.loadState === "error"
-                ? t("filePanel.errors.read.title", "Unable to read file")
-                : t("filePanel.errors.save.title", "Unable to save file")}
-            </AlertTitle>
-            <AlertDescription>{document.error}</AlertDescription>
-          </Alert>
-        </div>
+        <FileSaveErrorBanner message={document.error} t={t} />
       ) : null}
       {document.diskConflict && document.source.kind === "disk" ? (
         <FileDiskConflictState

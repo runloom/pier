@@ -1,7 +1,18 @@
 import { createPierCliCommandClient } from "@main/adapters/cli/local-command-client.ts";
+import type {
+  ParsedPierCliCommand,
+  ParsedPierCliV1,
+} from "@main/adapters/cli/parser.ts";
 import { parsePierCliArgs } from "@main/adapters/cli/parser.ts";
 import { resolvePierCliBin } from "@main/adapters/cli/pier-path.ts";
 import { describe, expect, it } from "vitest";
+
+function asV1(parsed: ParsedPierCliCommand): ParsedPierCliV1 {
+  if (parsed.protocol !== "v1") {
+    throw new Error(`expected v1 parse result, got ${parsed.protocol}`);
+  }
+  return parsed;
+}
 
 describe("resolvePierCliBin", () => {
   it("优先使用 PIER_CLI_PATH", () => {
@@ -120,13 +131,15 @@ describe("createPierCliCommandClient", () => {
 describe("parsePierCliArgs", () => {
   it("解析 open path 为 panel.open", () => {
     expect(
-      parsePierCliArgs(
-        ["open", ".", "--window", "main", "--split", "right", "--json"],
-        {
-          clientId: "cli-1",
-          cwd: "/Users/dev/ABC/pier",
-          requestId: "req-open",
-        }
+      asV1(
+        parsePierCliArgs(
+          ["open", ".", "--window", "main", "--split", "right", "--json"],
+          {
+            clientId: "cli-1",
+            cwd: "/Users/dev/ABC/pier",
+            requestId: "req-open",
+          }
+        )
       ).envelope.command
     ).toEqual({
       path: "/Users/dev/ABC/pier",
@@ -138,11 +151,13 @@ describe("parsePierCliArgs", () => {
 
   it("解析时保留 CLI 进程环境作为信封元数据", () => {
     expect(
-      parsePierCliArgs(["status"], {
-        clientEnv: { PATH: "/cli/bin", PIER_MODE: "dev" },
-        clientId: "cli-1",
-        requestId: "req-client-env",
-      }).envelope
+      asV1(
+        parsePierCliArgs(["status"], {
+          clientEnv: { PATH: "/cli/bin", PIER_MODE: "dev" },
+          clientId: "cli-1",
+          requestId: "req-client-env",
+        })
+      ).envelope
     ).toEqual({
       clientEnv: { PATH: "/cli/bin", PIER_MODE: "dev" },
       clientId: "cli-1",
@@ -164,11 +179,13 @@ describe("parsePierCliArgs", () => {
 
   it("解析 --no-focus", () => {
     expect(
-      parsePierCliArgs(["open", ".", "--no-focus"], {
-        clientId: "cli-1",
-        cwd: "/Users/dev/ABC/pier",
-        requestId: "req-open-background",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["open", ".", "--no-focus"], {
+          clientId: "cli-1",
+          cwd: "/Users/dev/ABC/pier",
+          requestId: "req-open-background",
+        })
+      ).envelope.command
     ).toEqual({
       focus: false,
       path: "/Users/dev/ABC/pier",
@@ -178,22 +195,28 @@ describe("parsePierCliArgs", () => {
 
   it("解析 windows 和 panels 命令", () => {
     expect(
-      parsePierCliArgs(["windows", "list", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-1",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["windows", "list", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-1",
+        })
+      ).envelope.command
     ).toEqual({ type: "window.list" });
     expect(
-      parsePierCliArgs(["panels", "list", "--window", "main", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-3",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["panels", "list", "--window", "main", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-3",
+        })
+      ).envelope.command
     ).toEqual({ type: "panel.list", windowId: "main" });
     expect(
-      parsePierCliArgs(["panels", "focus", "panel-1", "--no-focus"], {
-        clientId: "cli-1",
-        requestId: "req-panel-focus-background",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["panels", "focus", "panel-1", "--no-focus"], {
+          clientId: "cli-1",
+          requestId: "req-panel-focus-background",
+        })
+      ).envelope.command
     ).toEqual({
       focus: false,
       panelId: "panel-1",
@@ -203,45 +226,51 @@ describe("parsePierCliArgs", () => {
 
   it("解析 preferences read", () => {
     expect(
-      parsePierCliArgs(["preferences", "read", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-4",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["preferences", "read", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-4",
+        })
+      ).envelope.command
     ).toEqual({ type: "preferences.read" });
   });
 
   it("解析 worktrees list/create/open", () => {
     expect(
-      parsePierCliArgs(["worktrees", "list", "--path", ".", "--json"], {
-        clientId: "cli-1",
-        cwd: "/Users/dev/ABC/pier",
-        requestId: "req-worktree-list",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["worktrees", "list", "--path", ".", "--json"], {
+          clientId: "cli-1",
+          cwd: "/Users/dev/ABC/pier",
+          requestId: "req-worktree-list",
+        })
+      ).envelope.command
     ).toEqual({
       path: "/Users/dev/ABC/pier",
       type: "worktree.list",
     });
 
     expect(
-      parsePierCliArgs(
-        [
-          "worktrees",
-          "create",
-          "--path",
-          ".",
-          "--name",
-          "feature-a",
-          "--branch",
-          "feature/a",
-          "--base",
-          "origin/main",
-          "--json",
-        ],
-        {
-          clientId: "cli-1",
-          cwd: "/Users/dev/ABC/pier",
-          requestId: "req-worktree-create",
-        }
+      asV1(
+        parsePierCliArgs(
+          [
+            "worktrees",
+            "create",
+            "--path",
+            ".",
+            "--name",
+            "feature-a",
+            "--branch",
+            "feature/a",
+            "--base",
+            "origin/main",
+            "--json",
+          ],
+          {
+            clientId: "cli-1",
+            cwd: "/Users/dev/ABC/pier",
+            requestId: "req-worktree-create",
+          }
+        )
       ).envelope.command
     ).toEqual({
       base: "origin/main",
@@ -252,11 +281,13 @@ describe("parsePierCliArgs", () => {
     });
 
     expect(
-      parsePierCliArgs(["worktrees", "open", "../linked", "--no-focus"], {
-        clientId: "cli-1",
-        cwd: "/Users/dev/ABC/pier",
-        requestId: "req-worktree-open",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["worktrees", "open", "../linked", "--no-focus"], {
+          clientId: "cli-1",
+          cwd: "/Users/dev/ABC/pier",
+          requestId: "req-worktree-open",
+        })
+      ).envelope.command
     ).toEqual({
       focus: false,
       path: "/Users/dev/ABC/linked",
@@ -266,37 +297,45 @@ describe("parsePierCliArgs", () => {
 
   it("解析 plugins list/inspect", () => {
     expect(
-      parsePierCliArgs(["plugins", "list", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-plugin-list",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["plugins", "list", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-plugin-list",
+        })
+      ).envelope.command
     ).toEqual({ type: "plugin.list" });
 
     expect(
-      parsePierCliArgs(["plugins", "inspect", "sample.local", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-plugin-inspect",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["plugins", "inspect", "sample.local", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-plugin-inspect",
+        })
+      ).envelope.command
     ).toEqual({
       id: "sample.local",
       type: "plugin.inspect",
     });
 
     expect(
-      parsePierCliArgs(["plugins", "enable", "pier.worktree", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-plugin-enable",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["plugins", "enable", "pier.worktree", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-plugin-enable",
+        })
+      ).envelope.command
     ).toEqual({
       id: "pier.worktree",
       type: "plugin.enable",
     });
 
     expect(
-      parsePierCliArgs(["plugins", "disable", "pier.worktree", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-plugin-disable",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["plugins", "disable", "pier.worktree", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-plugin-disable",
+        })
+      ).envelope.command
     ).toEqual({
       id: "pier.worktree",
       type: "plugin.disable",
@@ -315,34 +354,36 @@ describe("parsePierCliArgs", () => {
 
   it("解析 terminal open 启动参数", () => {
     expect(
-      parsePierCliArgs(
-        [
-          "terminal",
-          "open",
-          "--cwd",
-          ".",
-          "--profile",
-          "codex",
-          "--env",
-          "PIER_MODE=dev",
-          "--env",
-          "EMPTY=",
-          "--window",
-          "main",
-          "--split",
-          "below",
-          "--no-focus",
-          "--",
-          "pnpm",
-          "test",
-          "--",
-          "watch",
-        ],
-        {
-          clientId: "cli-1",
-          cwd: "/Users/dev/ABC/pier",
-          requestId: "req-terminal-open",
-        }
+      asV1(
+        parsePierCliArgs(
+          [
+            "terminal",
+            "open",
+            "--cwd",
+            ".",
+            "--profile",
+            "codex",
+            "--env",
+            "PIER_MODE=dev",
+            "--env",
+            "EMPTY=",
+            "--window",
+            "main",
+            "--split",
+            "below",
+            "--no-focus",
+            "--",
+            "pnpm",
+            "test",
+            "--",
+            "watch",
+          ],
+          {
+            clientId: "cli-1",
+            cwd: "/Users/dev/ABC/pier",
+            requestId: "req-terminal-open",
+          }
+        )
       ).envelope.command
     ).toEqual({
       focus: false,
@@ -372,27 +413,29 @@ describe("parsePierCliArgs", () => {
   });
 
   it("-- 后的 command 参数不被解析成 Pier 选项或输出选项", () => {
-    const parsed = parsePierCliArgs(
-      [
-        "terminal",
-        "open",
-        "--cwd",
-        ".",
-        "--",
-        "env",
-        "--profile",
-        "inner",
-        "--env",
-        "INNER=value",
-        "--no-focus",
-        "--json",
-        "--print-envelope",
-      ],
-      {
-        clientId: "cli-1",
-        cwd: "/Users/dev/ABC/pier",
-        requestId: "req-terminal-open-command-flags",
-      }
+    const parsed = asV1(
+      parsePierCliArgs(
+        [
+          "terminal",
+          "open",
+          "--cwd",
+          ".",
+          "--",
+          "env",
+          "--profile",
+          "inner",
+          "--env",
+          "INNER=value",
+          "--no-focus",
+          "--json",
+          "--print-envelope",
+        ],
+        {
+          clientId: "cli-1",
+          cwd: "/Users/dev/ABC/pier",
+          requestId: "req-terminal-open-command-flags",
+        }
+      )
     );
 
     expect(parsed.json).toBe(false);
@@ -408,38 +451,44 @@ describe("parsePierCliArgs", () => {
 
   it("解析 terminal profiles 管理命令", () => {
     expect(
-      parsePierCliArgs(["terminal", "profiles", "list"], {
-        clientId: "cli-1",
-        requestId: "req-terminal-profiles-list",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["terminal", "profiles", "list"], {
+          clientId: "cli-1",
+          requestId: "req-terminal-profiles-list",
+        })
+      ).envelope.command
     ).toEqual({ type: "terminal.profile.list" });
     expect(
-      parsePierCliArgs(["terminal", "profiles", "get", "codex"], {
-        clientId: "cli-1",
-        requestId: "req-terminal-profiles-get",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["terminal", "profiles", "get", "codex"], {
+          clientId: "cli-1",
+          requestId: "req-terminal-profiles-get",
+        })
+      ).envelope.command
     ).toEqual({ profileId: "codex", type: "terminal.profile.read" });
     expect(
-      parsePierCliArgs(
-        [
-          "terminal",
-          "profiles",
-          "set",
-          "codex",
-          "--cwd",
-          ".",
-          "--env",
-          "PIER_MODE=dev",
-          "--",
-          "codex",
-          "--sandbox",
-          "workspace-write",
-        ],
-        {
-          clientId: "cli-1",
-          cwd: "/Users/dev/ABC/pier",
-          requestId: "req-terminal-profiles-set",
-        }
+      asV1(
+        parsePierCliArgs(
+          [
+            "terminal",
+            "profiles",
+            "set",
+            "codex",
+            "--cwd",
+            ".",
+            "--env",
+            "PIER_MODE=dev",
+            "--",
+            "codex",
+            "--sandbox",
+            "workspace-write",
+          ],
+          {
+            clientId: "cli-1",
+            cwd: "/Users/dev/ABC/pier",
+            requestId: "req-terminal-profiles-set",
+          }
+        )
       ).envelope.command
     ).toEqual({
       profile: {
@@ -451,31 +500,37 @@ describe("parsePierCliArgs", () => {
       type: "terminal.profile.upsert",
     });
     expect(
-      parsePierCliArgs(["terminal", "profiles", "delete", "codex"], {
-        clientId: "cli-1",
-        requestId: "req-terminal-profiles-delete",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["terminal", "profiles", "delete", "codex"], {
+          clientId: "cli-1",
+          requestId: "req-terminal-profiles-delete",
+        })
+      ).envelope.command
     ).toEqual({ profileId: "codex", type: "terminal.profile.delete" });
   });
 
   it("解析 tasks list 默认使用当前目录，也允许 --path 覆盖", () => {
     expect(
-      parsePierCliArgs(["tasks", "list", "--json"], {
-        clientId: "cli-1",
-        cwd: "/Users/dev/ABC/pier",
-        requestId: "req-tasks-list",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["tasks", "list", "--json"], {
+          clientId: "cli-1",
+          cwd: "/Users/dev/ABC/pier",
+          requestId: "req-tasks-list",
+        })
+      ).envelope.command
     ).toEqual({
       projectRootPath: "/Users/dev/ABC/pier",
       type: "run.list",
     });
 
     expect(
-      parsePierCliArgs(["tasks", "list", "--path", "../bay", "--json"], {
-        clientId: "cli-1",
-        cwd: "/Users/dev/ABC/pier",
-        requestId: "req-tasks-list-path",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["tasks", "list", "--path", "../bay", "--json"], {
+          clientId: "cli-1",
+          cwd: "/Users/dev/ABC/pier",
+          requestId: "req-tasks-list-path",
+        })
+      ).envelope.command
     ).toEqual({
       projectRootPath: "/Users/dev/ABC/bay",
       type: "run.list",
@@ -484,27 +539,29 @@ describe("parsePierCliArgs", () => {
 
   it("解析 tasks run/status/cancel", () => {
     expect(
-      parsePierCliArgs(
-        [
-          "tasks",
-          "run",
-          "package-script:test",
-          "--path",
-          ".",
-          "--input",
-          "pkg=renderer",
-          "--split",
-          "below",
-          "--window",
-          "main",
-          "--no-focus",
-          "--json",
-        ],
-        {
-          clientId: "cli-1",
-          cwd: "/Users/dev/ABC/pier",
-          requestId: "req-task-run",
-        }
+      asV1(
+        parsePierCliArgs(
+          [
+            "tasks",
+            "run",
+            "package-script:test",
+            "--path",
+            ".",
+            "--input",
+            "pkg=renderer",
+            "--split",
+            "below",
+            "--window",
+            "main",
+            "--no-focus",
+            "--json",
+          ],
+          {
+            clientId: "cli-1",
+            cwd: "/Users/dev/ABC/pier",
+            requestId: "req-task-run",
+          }
+        )
       ).envelope.command
     ).toEqual({
       focus: false,
@@ -517,22 +574,26 @@ describe("parsePierCliArgs", () => {
     });
 
     expect(
-      parsePierCliArgs(["tasks", "status", "run-1", "--json"], {
-        clientId: "cli-1",
-        requestId: "req-task-status",
-      }).envelope.command
+      asV1(
+        parsePierCliArgs(["tasks", "status", "run-1", "--json"], {
+          clientId: "cli-1",
+          requestId: "req-task-status",
+        })
+      ).envelope.command
     ).toEqual({
       runId: "run-1",
       type: "run.status",
     });
 
     expect(
-      parsePierCliArgs(
-        ["tasks", "cancel", "run-1", "--window", "main", "--json"],
-        {
-          clientId: "cli-1",
-          requestId: "req-task-cancel",
-        }
+      asV1(
+        parsePierCliArgs(
+          ["tasks", "cancel", "run-1", "--window", "main", "--json"],
+          {
+            clientId: "cli-1",
+            requestId: "req-task-cancel",
+          }
+        )
       ).envelope.command
     ).toEqual({
       runId: "run-1",

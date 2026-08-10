@@ -27,6 +27,18 @@ describe("accepted agent event effects", () => {
     });
   });
 
+  it("主会话 ToolComplete 仍应 persistResume（与 FA accept 解耦）", () => {
+    expect(
+      effectsForAcceptedAgentEvent(
+        event({
+          event: "ToolComplete",
+          nativeEvent: "PostToolUse",
+          sessionId: "codex-session",
+        })
+      ).persistResume
+    ).toBe(true);
+  });
+
   it("子会话 SessionEnd 不产生任何面板级旁路效果", () => {
     expect(
       effectsForAcceptedAgentEvent(

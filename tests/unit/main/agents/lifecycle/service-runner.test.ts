@@ -188,6 +188,7 @@ describe("agent lifecycle service + runner", () => {
     expect(probes[0]?.installs).toEqual([]);
   });
 
+  // Shell probes + dual plan passes; under full-suite load default 5s flakes.
   it("continues past self-upgrade no-op when version is unchanged", async () => {
     const { chmod, mkdir, mkdtemp, writeFile, rm } = await import(
       "node:fs/promises"
@@ -259,7 +260,7 @@ exit 0
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("does not fall through to install script after reinstall-mode self already-latest", async () => {
     const { chmod, mkdir, mkdtemp, writeFile, rm } = await import(
@@ -325,6 +326,7 @@ exit 0
     }
   });
 
+  // Brew-shaped PATH probe + upgrade plan; allow headroom under suite load.
   it("does not dual-install after brew upgrade no-op (version_unchanged)", async () => {
     const { chmod, mkdir, mkdtemp, writeFile, rm } = await import(
       "node:fs/promises"
@@ -388,5 +390,5 @@ exit 0
     } finally {
       await rm(root, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });

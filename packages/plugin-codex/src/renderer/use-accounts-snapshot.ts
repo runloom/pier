@@ -1,5 +1,5 @@
 import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
 
 interface AccountsSnapshotState {
@@ -9,6 +9,7 @@ interface AccountsSnapshotState {
 
 interface AccountsSnapshotStore {
   getSnapshot: () => AccountsSnapshotState;
+  reload: () => void;
   subscribe: (listener: () => void) => () => void;
 }
 
@@ -39,13 +40,7 @@ function createAccountsSnapshotStore(
     publish({ error: null, snapshot });
   };
 
-  const connect = (): void => {
-    if (unsubscribeRpc) return;
-    const generation = ++connectionGeneration;
-    unsubscribeRpc = context.rpc.on<CodexAccountsSnapshot>(
-      "accounts.changed",
-      acceptSnapshot
-    );
+  const fetchSnapshot = (generation: number): void => {
     context.rpc
       .invoke<CodexAccountsSnapshot>("accounts.snapshot", null)
       .then((initial) => {
@@ -60,14 +55,35 @@ function createAccountsSnapshotStore(
       });
   };
 
+  const connect = (): void => {
+    if (unsubscribeRpc) return;
+    const generation = ++connectionGeneration;
+    unsubscribeRpc = context.rpc.on<CodexAccountsSnapshot>(
+      "accounts.changed",
+      acceptSnapshot
+    );
+    fetchSnapshot(generation);
+  };
+
   const disconnect = (): void => {
     connectionGeneration += 1;
     unsubscribeRpc?.();
     unsubscribeRpc = null;
   };
 
+  const reload = (): void => {
+    if (!unsubscribeRpc) {
+      connect();
+      return;
+    }
+    const generation = ++connectionGeneration;
+    publish({ error: null, snapshot: state.snapshot });
+    fetchSnapshot(generation);
+  };
+
   return {
     getSnapshot: () => state,
+    reload,
     subscribe(listener) {
       listeners.add(listener);
       if (listeners.size === 1) connect();
@@ -92,11 +108,15 @@ function getAccountsSnapshotStore(
 /** 多个设置页／物料共享一个 RPC 订阅与首次快照请求。 */
 export function useCodexAccountsSnapshot(
   context: ExternalRendererPluginContext
-): AccountsSnapshotState {
+): AccountsSnapshotState & { reload: () => void } {
   const store = getAccountsSnapshotStore(context);
-  return useSyncExternalStore(
+  const state = useSyncExternalStore(
     store.subscribe,
     store.getSnapshot,
     store.getSnapshot
   );
+  const reload = useCallback(() => {
+    store.reload();
+  }, [store]);
+  return { ...state, reload };
 }

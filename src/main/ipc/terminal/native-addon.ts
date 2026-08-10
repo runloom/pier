@@ -50,6 +50,11 @@ export interface NativeAddon {
     runtimeMilliseconds: number
   ): boolean;
   /**
+   * Unix domain socket 已连接 fd 的 peer euid（getpeereid）。
+   * local-control peer 身份用；失败或非 Unix 返回 null。
+   */
+  getUnixPeerUid?(fd: number): number | null;
+  /**
    * Inject fully localized text into the terminal display buffer (not PTY).
    * `panelId` is the native-scoped key (`${browserWindowId}::${panelId}`).
    */
