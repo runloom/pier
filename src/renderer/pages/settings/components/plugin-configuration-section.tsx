@@ -5,7 +5,10 @@ import type {
   PluginConfigurationProperty,
   PluginRegistryEntry,
 } from "@shared/contracts/plugin.ts";
-import { effectiveConfigurationValue } from "@shared/plugin-settings.ts";
+import {
+  effectiveConfigurationValue,
+  isConfigurationPropertyVisible,
+} from "@shared/plugin-settings.ts";
 import i18next from "i18next";
 import {
   Fragment,
@@ -230,7 +233,8 @@ function PluginSettingRow({
           label: display.enumDescriptions?.[index] ?? value,
           value,
         }))}
-        triggerWidth="w-[180px]"
+        // Width follows the selected label; drop line-clamp so fit sizing works.
+        triggerWidth="w-fit max-w-full *:data-[slot=select-value]:line-clamp-none"
         value={String(effective)}
       />
     );
@@ -280,12 +284,20 @@ export function PluginConfigurationSection({ pluginId }: { pluginId: string }) {
   const entry = usePluginRegistryStore((s) =>
     s.plugins.find((item) => item.manifest.id === pluginId)
   );
+  const settingValues = usePluginSettingsStore((s) => s.values);
   const configuration = entry?.manifest.configuration;
   if (!(entry && configuration)) {
     // 插件在本 section 激活期间被禁用 — settings-dialog 的 fallback effect 会切走。
     return null;
   }
-  const keys = sortedConfigurationKeys(configuration.properties);
+  const keys = sortedConfigurationKeys(configuration.properties).filter(
+    (settingKey) =>
+      isConfigurationPropertyVisible(
+        configuration.properties,
+        settingKey,
+        settingValues
+      )
+  );
   return (
     <div className="px-4 pb-4" id={`plugin-configuration-${pluginId}`}>
       <h1 className="mb-4 text-xl">

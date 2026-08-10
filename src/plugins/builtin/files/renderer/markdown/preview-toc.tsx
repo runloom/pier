@@ -1,7 +1,13 @@
 import { Button } from "@pier/ui/button.tsx";
 import { ScrollArea } from "@pier/ui/scroll-area.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { markdownViewportFocusY } from "./cross-mode-anchor.ts";
 import type { MarkdownHeadingSummary } from "./ir.ts";
 import {
@@ -10,6 +16,9 @@ import {
   MARKDOWN_TOC_TICK_HEIGHT_PX,
   markdownTocTickWidthPx,
 } from "./preview-toc-layout.ts";
+
+/** Viewport py-1 top+bottom; keep scrollport height in sync with list measure. */
+const MARKDOWN_TOC_PANEL_Y_PAD_PX = 8;
 
 /**
  * One outline shell: Notion-style tick rail by default; hover/focus-within
@@ -34,6 +43,35 @@ export function MarkdownPreviewToc({
 }) {
   const ticksRef = useRef<HTMLElement | null>(null);
   const panelScrollRef = useRef<HTMLDivElement | null>(null);
+  const listRoRef = useRef<ResizeObserver | null>(null);
+  const [listHeightPx, setListHeightPx] = useState(0);
+
+  const listRef = useCallback((node: HTMLUListElement | null) => {
+    listRoRef.current?.disconnect();
+    listRoRef.current = null;
+    if (!node) {
+      setListHeightPx(0);
+      return;
+    }
+    const update = () => {
+      setListHeightPx(node.scrollHeight);
+    };
+    update();
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    listRoRef.current = observer;
+  }, []);
+
+  useEffect(
+    () => () => {
+      listRoRef.current?.disconnect();
+      listRoRef.current = null;
+    },
+    []
+  );
 
   useEffect(() => {
     if (!activeHeadingId) return;
@@ -55,9 +93,29 @@ export function MarkdownPreviewToc({
     return null;
   }
 
+  // Radix ScrollArea viewport is size-full; the root needs a definite height
+  // or long lists clip without scrolling. Hug content when short; cap at max.
+  const scrollAreaHeightPx =
+    maxHeightPx > 0
+      ? Math.min(
+          maxHeightPx,
+          listHeightPx > 0
+            ? listHeightPx + MARKDOWN_TOC_PANEL_Y_PAD_PX
+            : maxHeightPx
+        )
+      : undefined;
+
+  const panelMaxHeightStyle: CSSProperties | undefined =
+    maxHeightPx > 0
+      ? {
+          maxHeight: maxHeightPx,
+          ["--markdown-toc-panel-max-h" as string]: `${maxHeightPx}px`,
+        }
+      : undefined;
+
   const frameStyle: CSSProperties = {
     paddingRight: MARKDOWN_TOC_EDGE_INSET_PX,
-    ...(maxHeightPx > 0 ? { maxHeight: maxHeightPx } : {}),
+    ...panelMaxHeightStyle,
   };
 
   return (
@@ -87,9 +145,10 @@ export function MarkdownPreviewToc({
       <nav
         aria-label={labels.title}
         className={cn(
-          "pointer-events-auto flex max-h-full flex-col overflow-auto transition-opacity duration-150",
+          "pointer-events-auto flex flex-col overflow-y-auto overscroll-contain transition-opacity duration-150",
           "group-hover/toc:opacity-0",
-          "group-focus-within/toc:opacity-0"
+          "group-focus-within/toc:opacity-0",
+          maxHeightPx > 0 && "max-h-[var(--markdown-toc-panel-max-h)]"
         )}
         data-scrollbar="none"
         ref={ticksRef}
@@ -103,7 +162,7 @@ export function MarkdownPreviewToc({
               aria-current={active ? "true" : undefined}
               aria-label={heading.text}
               className={cn(
-                "flex items-center justify-end py-0.5",
+                "flex shrink-0 items-center justify-end py-0.5",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
               )}
               data-heading-id={heading.id}
@@ -139,26 +198,35 @@ export function MarkdownPreviewToc({
         )}
         style={{
           right: MARKDOWN_TOC_EDGE_INSET_PX,
-          ...(maxHeightPx > 0 ? { maxHeight: maxHeightPx } : {}),
+          ...panelMaxHeightStyle,
         }}
       >
         {/*
-          Short floating outline list: ScrollArea owns the only vertical scroll
-          owner and applies viewportFade (short). Explicit type="hover" is an
-          intentional exception — the hover panel is already an ephemeral
-          surface, so entering it implies list navigation; product default
-          remains type="scroll" (scroll/idle auto-hide, no whole-root hover).
+          Floating outline list:
+          - ScrollArea viewportFade (short) = scroll-fade edges
+          - Scrollbars fully hidden (ephemeral rail; wheel/trackpad still scrolls)
+          - Root height = min(list, maxHeight) so size-full viewport can scroll
+            when the outline exceeds the frame budget
         */}
-        <div className="min-h-0 min-w-0 flex-1" ref={panelScrollRef}>
+        <div className="min-h-0 w-full min-w-0" ref={panelScrollRef}>
           <ScrollArea
-            className="h-full min-h-0 min-w-0"
+            className={cn(
+              "min-h-0 w-full min-w-0",
+              // Hide Radix thumbs; fade + wheel/trackpad are enough for this panel.
+              "[&_[data-slot=scroll-area-scrollbar]]:hidden"
+            )}
+            style={
+              scrollAreaHeightPx == null
+                ? undefined
+                : { height: scrollAreaHeightPx }
+            }
             type="hover"
             viewportClassName="py-1"
             viewportFade="vertical"
             viewportFadeProfile="short"
           >
             <nav aria-label={labels.title}>
-              <ul className="flex flex-col gap-0.5 px-1">
+              <ul className="flex flex-col gap-0.5 px-1" ref={listRef}>
                 {headings.map((heading) => {
                   const active = heading.id === activeHeadingId;
                   return (

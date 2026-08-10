@@ -17,6 +17,12 @@ import {
   FILES_EDITOR_TAB_SIZE_SETTING_KEY,
   FILES_EDITOR_TAB_SIZE_VALUES,
   FILES_EDITOR_WORD_WRAP_SETTING_KEY,
+  FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY,
+  FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_VALUES,
+  FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
+  FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY,
+  FILES_MARKDOWN_READING_FONT_SETTING_KEY,
+  FILES_MARKDOWN_READING_FONT_VALUES,
   FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY,
   FILES_TREE_AUTO_REVEAL_SETTING_KEY,
   FILES_TREE_AUTO_REVEAL_VALUES,
@@ -157,6 +163,40 @@ export const FILES_PLUGIN_MANIFEST = {
         multiline: true,
         order: 33,
         type: "string",
+      },
+      // Markdown preview band (after tree) so height/font controls stay grouped.
+      [FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY]: {
+        default: "none",
+        description:
+          "Whether fenced code blocks and Mermaid diagrams use a max height with inner scroll in Markdown preview. Full height expands with the page.",
+        enum: [...FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_VALUES],
+        enumDescriptions: [
+          "Full height (no max height)",
+          "Limit height (scroll inside the block)",
+        ],
+        order: 40,
+        type: "string",
+      },
+      [FILES_MARKDOWN_READING_FONT_SETTING_KEY]: {
+        default: "ui",
+        description:
+          "Body font for Markdown preview. Follow interface uses the app UI font; custom uses the font family stack below. Code blocks stay monospace.",
+        enum: [...FILES_MARKDOWN_READING_FONT_VALUES],
+        enumDescriptions: ["Follow interface", "Custom"],
+        order: 41,
+        type: "string",
+      },
+      [FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY]: {
+        default: FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
+        description:
+          "Primary font for Markdown preview when the mode is Custom. Empty uses the built-in document serif fallback chain. System fonts only.",
+        order: 42,
+        placeholder: FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
+        type: "string",
+        visibleWhen: {
+          equals: "custom",
+          key: FILES_MARKDOWN_READING_FONT_SETTING_KEY,
+        },
       },
     },
   },

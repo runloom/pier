@@ -61,3 +61,44 @@ export const FILES_EDITOR_DEFAULT_EOL_SETTING_KEY =
   "pier.files.editor.defaultEol";
 export const FILES_EDITOR_LSP_ENABLED_SETTING_KEY =
   "pier.files.editor.lspEnabled";
+
+/** Markdown preview: max height for fenced code and mermaid diagrams. */
+export const FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY =
+  "pier.files.markdown.blockHeightLimit";
+export const FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_VALUES = [
+  "none",
+  "capped",
+] as const;
+export type FilesMarkdownBlockHeightLimit =
+  (typeof FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_VALUES)[number];
+
+/** Markdown preview body font mode: app UI vs custom family stack. */
+export const FILES_MARKDOWN_READING_FONT_SETTING_KEY =
+  "pier.files.markdown.readingFont";
+export const FILES_MARKDOWN_READING_FONT_VALUES = ["ui", "custom"] as const;
+export type FilesMarkdownReadingFont =
+  (typeof FILES_MARKDOWN_READING_FONT_VALUES)[number];
+
+/**
+ * Primary custom font name(s) when reading font mode is `custom`.
+ * Same interaction model as Appearance UI/mono font: user types primary
+ * family names; preview merges a document serif fallback chain.
+ */
+export const FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY =
+  "pier.files.markdown.readingFontFamily";
+/** Default primary for custom mode (Appearance-style single family name). */
+export const FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT = "Noto Serif SC";
+
+/** Fallback chain after the user's primary custom font(s). */
+export const FILES_MARKDOWN_READING_FONT_FAMILY_FALLBACK = [
+  "Noto Serif SC",
+  "Noto Serif CJK SC",
+  "Source Han Serif SC",
+  "Songti SC",
+  "STSong",
+  "SimSun",
+  "Noto Serif",
+  "Georgia",
+  "Times New Roman",
+  "serif",
+] as const;
