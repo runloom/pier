@@ -34,7 +34,7 @@ export function v2ErrorResponse(
 export function handleAgentsSelfOp(args: {
   requestId: string;
   material: AgentCallerCredentialMaterial | null;
-  principalRef?: string;
+  principalRef?: string | undefined;
   nowMs: number;
 }): LocalControlV2ServerFrame {
   const { requestId, material, principalRef, nowMs } = args;
@@ -124,7 +124,7 @@ export function handleTraceOp(args: {
   requestId: string;
   params: Record<string, unknown>;
   effectKey: string;
-  principalRef?: string;
+  principalRef?: string | undefined;
   receipts: EffectReceiptStore;
   nowMs: number;
 }): LocalControlV2ServerFrame {

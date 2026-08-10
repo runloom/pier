@@ -72,6 +72,13 @@ export function createPierCliCommandClient({
   return {
     run(argv) {
       const parsed = parsePierCliArgs(argv, parseOptions);
+      if (parsed.protocol !== "v1") {
+        return Promise.reject(
+          new Error(
+            `local command client only supports v1 envelopes (got ${parsed.protocol})`
+          )
+        );
+      }
       return transport.request(parsed.envelope);
     },
   };

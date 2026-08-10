@@ -44,14 +44,10 @@ function resumeFields(
 }
 
 function canApplyToAgent(
-  agent: TerminalAgentPanelMetadata | undefined,
+  agent: TerminalAgentPanelMetadata,
   resume: AgentResumeWriteInput
-): agent is TerminalAgentPanelMetadata {
-  return (
-    agent !== undefined &&
-    agent.status === "running" &&
-    agent.agentId === resume.agentId
-  );
+): boolean {
+  return agent.status === "running" && agent.agentId === resume.agentId;
 }
 
 /** Drop pending for one panel (panel remove / agent clear). */

@@ -39,7 +39,11 @@ export function createStaticAgentsDiscovery(
 
 export function findRunningAgent(
   snapshot: AgentRuntimeIndexSnapshot,
-  params: { agentRef?: string; agentId?: string; panelId?: string }
+  params: {
+    agentRef?: string | undefined;
+    agentId?: string | undefined;
+    panelId?: string | undefined;
+  }
 ) {
   const { agentRef, agentId, panelId } = params;
   if (agentRef) {

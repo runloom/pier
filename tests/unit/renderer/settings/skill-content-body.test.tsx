@@ -2,8 +2,9 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { SkillContentBody } from "@/pages/settings/components/skills/content-body.tsx";
+import type { Translate } from "@/pages/settings/components/skills/shared.tsx";
 
-const t = (key: string) => key;
+const t = ((key: string) => key) as Translate;
 
 describe("SkillContentBody", () => {
   it("loadFailed uses ErrorEmpty (not Alert strip)", () => {

@@ -54,18 +54,18 @@ export interface LocalControlV2Session {
   dispose(): void;
   handleLine(line: string): void;
   readonly principalKind: LocalControlV2ClientHello["clientKind"];
-  readonly principalRef?: string;
+  readonly principalRef?: string | undefined;
 }
 
 export interface CreateLocalControlV2SessionArgs {
-  authorizer?: LocalControlAuthorizer;
+  authorizer?: LocalControlAuthorizer | undefined;
   bootId: string;
-  credentialStore?: AgentCallerCredentialStore;
-  discovery?: AgentsDiscovery;
+  credentialStore?: AgentCallerCredentialStore | undefined;
+  discovery?: AgentsDiscovery | undefined;
   emit: (frame: LocalControlV2ServerFrame) => void;
-  features?: readonly string[];
-  nowMs?: () => number;
-  receipts?: EffectReceiptStore;
+  features?: readonly string[] | undefined;
+  nowMs?: (() => number) | undefined;
+  receipts?: EffectReceiptStore | undefined;
 }
 
 export type CreateSessionFromHelloResult =

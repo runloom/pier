@@ -6,6 +6,8 @@ import {
 
 export type {
   ParsedPierCliCommand,
+  ParsedPierCliV1,
+  ParsedPierCliV2,
   ParsePierCliArgsOptions,
 } from "../../../../bin/pier-cli-parser.js";
 

@@ -8,8 +8,8 @@ const prepareLaunchFromSpec = vi.fn();
 
 vi.mock("sonner", () => ({
   toast: {
-    message: (...args: unknown[]) => toastMessage(...args),
-    error: (...args: unknown[]) => toastError(...args),
+    message: toastMessage,
+    error: toastError,
   },
 }));
 
@@ -20,12 +20,11 @@ vi.mock("i18next", () => ({
 }));
 
 vi.mock("@/stores/app-dialog.store.ts", () => ({
-  showAppAlert: (...args: unknown[]) => showAppAlert(...args),
+  showAppAlert,
 }));
 
 vi.mock("@/stores/terminal-relaunch.store.ts", () => ({
-  requestTerminalRelaunch: (...args: unknown[]) =>
-    requestTerminalRelaunch(...args),
+  requestTerminalRelaunch,
 }));
 
 describe("try-resume-last", () => {

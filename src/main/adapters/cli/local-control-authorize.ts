@@ -7,12 +7,12 @@ import type { LocalControlV2ErrorCode } from "@shared/contracts/local-control/v2
 import type { LocalControlV2ClientHello } from "@shared/contracts/local-control/v2-frames.ts";
 
 export interface LocalControlAuthorizeInput {
-  effectKey?: string;
+  effectKey?: string | undefined;
   material: AgentCallerCredentialMaterial | null;
   op: string;
   params: Record<string, unknown>;
   principalKind: LocalControlV2ClientHello["clientKind"];
-  principalRef?: string;
+  principalRef?: string | undefined;
 }
 
 export type LocalControlAuthorizeResult =

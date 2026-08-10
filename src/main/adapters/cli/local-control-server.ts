@@ -33,24 +33,24 @@ export interface PierLocalControlServer {
 
 export interface CreatePierLocalControlServerArgs {
   /** 统一 authorize（可替换）。 */
-  authorizer?: LocalControlAuthorizer;
+  authorizer?: LocalControlAuthorizer | undefined;
   /** 可注入测试；默认随机 UUID。 */
-  bootId?: string;
+  bootId?: string | undefined;
   /** T3 凭证索引；agent hello 必需。 */
-  credentialStore?: AgentCallerCredentialStore;
+  credentialStore?: AgentCallerCredentialStore | undefined;
   /** T4 发现数据源。 */
-  discovery?: AgentsDiscovery;
+  discovery?: AgentsDiscovery | undefined;
   /** v2 features 广告基线；agents.self 在凭证允许时由会话追加。 */
-  features?: readonly string[];
+  features?: readonly string[] | undefined;
   handleRequest(envelope: unknown): Promise<PierCommandResult>;
   /** 写 op receipt（可替换）。 */
-  receipts?: EffectReceiptStore;
+  receipts?: EffectReceiptStore | undefined;
   /** 强制要求可解析 peer UID（测试拒绝路径）。 */
-  requirePeerUid?: boolean;
+  requirePeerUid?: boolean | undefined;
   /** T2 peer UID 解析（测试注入）。 */
-  resolvePeerUid?: ResolvePeerUid;
+  resolvePeerUid?: ResolvePeerUid | undefined;
   /** 跳过 peer 检查（仅测试默认路径需要时使用；生产勿开）。 */
-  skipPeerCheck?: boolean;
+  skipPeerCheck?: boolean | undefined;
   socketPath: string;
 }
 
@@ -165,13 +165,13 @@ function attachConnection(
     handleRequest(envelope: unknown): Promise<PierCommandResult>;
     bootId: string;
     features: readonly string[];
-    credentialStore?: AgentCallerCredentialStore;
-    discovery?: AgentsDiscovery;
-    authorizer?: LocalControlAuthorizer;
-    receipts?: EffectReceiptStore;
-    resolvePeerUid?: ResolvePeerUid;
-    requirePeerUid?: boolean;
-    skipPeerCheck?: boolean;
+    credentialStore?: AgentCallerCredentialStore | undefined;
+    discovery?: AgentsDiscovery | undefined;
+    authorizer?: LocalControlAuthorizer | undefined;
+    receipts?: EffectReceiptStore | undefined;
+    resolvePeerUid?: ResolvePeerUid | undefined;
+    requirePeerUid?: boolean | undefined;
+    skipPeerCheck?: boolean | undefined;
     socketPath: string;
   }
 ): void {

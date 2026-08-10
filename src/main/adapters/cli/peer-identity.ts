@@ -36,15 +36,15 @@ export type ResolvePeerUid = (socket: Socket) => number | null;
 
 export interface CheckPeerIdentityArgs {
   /** 期望 UID，默认 process.geteuid?.() ?? process.getuid?.() */
-  expectedUid?: number;
-  platform?: NodeJS.Platform;
+  expectedUid?: number | undefined;
+  platform?: NodeJS.Platform | undefined;
   /** 强制要求 peer UID（测试拒绝路径） */
-  requirePeerUid?: boolean;
+  requirePeerUid?: boolean | undefined;
   /** 测试或平台原生解析 peer UID；返回 null 表示不可用 */
-  resolvePeerUid?: ResolvePeerUid;
+  resolvePeerUid?: ResolvePeerUid | undefined;
   socket: Socket;
   /** Unix socket 路径，用于 fs-acl 校验所有者 */
-  socketPath?: string;
+  socketPath?: string | undefined;
 }
 
 /** 宿主可注册原生 getpeereid / SO_PEERCRED 解析器（进程级单槽）。 */
