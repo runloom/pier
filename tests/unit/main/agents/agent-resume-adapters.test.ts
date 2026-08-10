@@ -3,6 +3,7 @@ import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_RESUME_ADAPTERS,
+  resolveAgentResumeLastLaunch,
   resolveAgentResumeLaunch,
 } from "../../../../src/main/services/agents/resume-adapters.ts";
 
@@ -333,6 +334,62 @@ describe("agent resume adapters", () => {
         "codex --dangerously-bypass-approvals-and-sandbox resume session-123",
       cwd: "/repo",
     });
+  });
+
+  it("builds Codex resume --last without a stored session id", () => {
+    expect(
+      resolveAgentResumeLastLaunch({
+        agentId: "codex",
+        cwd: "/repo",
+        launch: {
+          agentId: "codex",
+          command: "codex --dangerously-bypass-approvals-and-sandbox",
+          cwd: "/repo",
+        },
+      })
+    ).toEqual({
+      agentId: "codex",
+      command: "codex --dangerously-bypass-approvals-and-sandbox resume --last",
+      cwd: "/repo",
+    });
+  });
+
+  it("builds Claude --continue for resume-last fallback", () => {
+    expect(
+      resolveAgentResumeLastLaunch({
+        agentId: "claude",
+        cwd: "/repo",
+        launch: {
+          agentId: "claude",
+          command: "claude --dangerously-skip-permissions",
+          cwd: "/repo",
+        },
+      })
+    ).toEqual({
+      agentId: "claude",
+      command: "claude --dangerously-skip-permissions --continue",
+      cwd: "/repo",
+    });
+  });
+
+  it("returns null resume-last for unverified continue agents", () => {
+    expect(
+      resolveAgentResumeLastLaunch({
+        agentId: "pi",
+        cwd: "/repo",
+        launch: { agentId: "pi", command: "pi", cwd: "/repo" },
+      })
+    ).toBeNull();
+  });
+
+  it("returns null resume-last when the agent has no last-session entry", () => {
+    expect(
+      resolveAgentResumeLastLaunch({
+        agentId: "aider",
+        cwd: "/repo",
+        launch: { agentId: "aider", command: "aider", cwd: "/repo" },
+      })
+    ).toBeNull();
   });
 
   it("builds OpenCode-family resume launches with --session", () => {

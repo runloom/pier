@@ -6,8 +6,12 @@ import {
 import type {
   CreateTerminalArgs,
   CreateTerminalResult,
+  TerminalAgentRestoreOutcome,
 } from "@shared/contracts/terminal.ts";
-import { resolveAgentResumeLaunch } from "../../services/agents/resume-adapters.ts";
+import {
+  resolveAgentResumeLastLaunch,
+  resolveAgentResumeLaunch,
+} from "../../services/agents/resume-adapters.ts";
 import type { LocalEnvironmentService } from "../../services/local-environments-service.ts";
 import { getTerminalPanelTransfer } from "../../services/panel-transfer/terminal.ts";
 import { createTerminalAndSeedResource } from "../../services/pier-resource/claim-login-after-create.ts";
@@ -180,13 +184,41 @@ export async function handleTerminalCreate(args: {
       x: createArgs.frame.x,
       y: createArgs.frame.y,
     });
+    const restoreCwd = launch.context?.cwd ?? launch.restoredAgent?.launch.cwd;
     const resumeLaunch = launch.restoredAgent
       ? resolveAgentResumeLaunch({
           agent: launch.restoredAgent,
-          cwd: launch.context?.cwd ?? launch.nativeLaunch?.cwd,
+          cwd: restoreCwd ?? launch.nativeLaunch?.cwd,
         })
       : null;
-    const nativeLaunchBase = resumeLaunch?.launch ?? launch.nativeLaunch;
+    let agentRestore: TerminalAgentRestoreOutcome | undefined;
+    // Default spawn: pin-id resume command, else original launch.
+    let nativeLaunchBase = resumeLaunch?.launch ?? launch.nativeLaunch;
+    if (resumeLaunch) {
+      if (resumeLaunch.resumed) {
+        agentRestore = "resumed";
+      } else if (resumeLaunch.reason === "unsupported-agent") {
+        agentRestore = "unsupported";
+      } else {
+        // missing-session-id / missing-launch-command: prefer agent-native
+        // folder-latest on the *first* spawn so we do not create a fresh
+        // session that becomes "latest" before the user can continue.
+        const restored = launch.restoredAgent;
+        const lastLaunch = restored
+          ? resolveAgentResumeLastLaunch({
+              agentId: restored.agentId,
+              cwd: restoreCwd ?? restored.launch.cwd,
+              launch: restored.launch,
+            })
+          : null;
+        if (lastLaunch?.command) {
+          nativeLaunchBase = lastLaunch;
+          agentRestore = "resumed";
+        } else {
+          agentRestore = "cold-start";
+        }
+      }
+    }
     let launchForNative = nativeLaunchBase;
     if (launch.restoredAgentLaunch) {
       const projectEnv = localEnvironments
@@ -409,7 +441,10 @@ export async function handleTerminalCreate(args: {
       createArgs.tab
     );
     terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
-    return { ok: true };
+    return {
+      ok: true,
+      ...(agentRestore === undefined ? {} : { agentRestore }),
+    };
   } catch (err) {
     foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));
     if (!restoredAgentLaunch) {

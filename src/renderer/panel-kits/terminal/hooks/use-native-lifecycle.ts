@@ -32,6 +32,7 @@ import {
 import { waitForRealSize } from "../native-frame-wait.ts";
 import { requestTerminalPresentation } from "../presentation-reconciler.ts";
 import { readTerminalAnchorFrame } from "../viewport.ts";
+import { notifyAgentRestoreOutcome } from "./try-resume-last.ts";
 
 const TERMINAL_FRAME_COMMIT_TIMEOUT_MS = 10_000;
 
@@ -266,6 +267,13 @@ export function useTerminalNativeLifecycle({
         markCreateFailure(result.error ?? "终端创建失败");
         return false;
       }
+      notifyAgentRestoreOutcome({
+        context: initialContext,
+        panelId,
+        result,
+        tab: initialTab,
+        t: translateRef.current,
+      });
       return true;
     };
 

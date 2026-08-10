@@ -1,4 +1,8 @@
 import {
+  clearPendingAgentResumesForWindow,
+  mergePendingResumeIntoAgent,
+} from "./terminal-session-agent-resume.ts";
+import {
   type TerminalSessionState,
   terminalAgentPanelMetadataSchema,
 } from "./terminal-session-state-schemas.ts";
@@ -22,9 +26,12 @@ function detachRunningAgentsInWindow(
       continue;
     }
     const { exitCode: _exitCode, finishedAt: _finishedAt, ...kept } = agent;
+    // Fold any stashed session id into the agent before detach so close does
+    // not drop an unapplied resume index.
+    const withResume = mergePendingResumeIntoAgent(kept, recordId, panelId);
     const parsed = terminalAgentPanelMetadataSchema.safeParse({
-      ...kept,
-      restore: { ...kept.restore, detachedAt: now },
+      ...withResume,
+      restore: { ...withResume.restore, detachedAt: now },
     });
     if (!parsed.success) {
       continue;
@@ -35,6 +42,8 @@ function detachRunningAgentsInWindow(
       updatedAt: new Date(now).toISOString(),
     };
   }
+  // Drop leftover pending (no panel / mismatched) for this window record.
+  clearPendingAgentResumesForWindow(recordId);
 }
 
 /** Keep running agent sessions restorable across window close/quit. */

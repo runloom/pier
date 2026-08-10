@@ -1,5 +1,10 @@
 /** Terminal panel ownership transfer APIs over session store records. */
 
+import {
+  getPendingAgentResume,
+  rekeyPendingAgentResume,
+  updateTerminalPanelAgentResume,
+} from "./terminal-session-agent-resume.ts";
 import { readTerminalPanelSession } from "./terminal-session-state.ts";
 import type { TerminalPanelSession } from "./terminal-session-state-schemas.ts";
 import {
@@ -131,6 +136,13 @@ export async function transferPanelOwnership(input: {
     }
     return state;
   });
+  // Pending is keyed by recordId+panelId: rekey source → target, then apply
+  // into the transferred agent when still pending (monotonic write path).
+  rekeyPendingAgentResume(sourceRecordId, targetRecordId, panelId);
+  const rekeyed = getPendingAgentResume(targetRecordId, panelId);
+  if (rekeyed) {
+    await updateTerminalPanelAgentResume(targetRecordId, panelId, rekeyed);
+  }
   await s.flush();
   return {
     panelId,

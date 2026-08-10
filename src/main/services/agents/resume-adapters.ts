@@ -386,3 +386,55 @@ export function resolveAgentResumeLaunch(args: {
     resumed: true,
   };
 }
+
+/**
+ * User-triggered fallback when Pier has no session id: agent-native
+ * "last / continue" form only. No disk scan. Null when the agent has no
+ * documented last-session entry point.
+ */
+export function resolveAgentResumeLastLaunch(args: {
+  agentId: AgentKind;
+  cwd: string | undefined;
+  launch: TerminalAgentRestoreLaunchOptions;
+}): TerminalAgentRestoreLaunchOptions | null {
+  if (AGENT_RESUME_ADAPTERS[args.agentId].support === "unsupported") {
+    return null;
+  }
+  const command = baseCommand(args.launch, args.agentId);
+  if (!command) {
+    return null;
+  }
+  const words = splitShellCommandWords(command, 64);
+  if (words.length === 0) {
+    return null;
+  }
+  if (args.agentId === "codex") {
+    const [binary, ...rest] = words;
+    const base = binary
+      ? [binary, ...stripFlags(rest, new Set(), new Set(["resume", "fork"]))]
+      : words;
+    return withCommand(args.launch, args.cwd, [...base, "resume", "--last"]);
+  }
+  if (CONTINUE_LAST_AGENTS.has(args.agentId)) {
+    const cleaned = stripEqualsPrefixed(
+      stripFlags(
+        words,
+        new Set(["--resume", "-r", "--resume-id"]),
+        new Set(["--continue", "-c", "--resume-picker"])
+      ),
+      ["--resume", "-r", "--resume-id"]
+    );
+    return withCommand(args.launch, args.cwd, [...cleaned, "--continue"]);
+  }
+  return null;
+}
+
+/**
+ * Only agents with verified cwd-scoped "continue latest" CLI docs.
+ * Broader clones (gemini/omp/pi/…) are omitted until flags are confirmed —
+ * wrong flags cause a failed relaunch worse than no toast action.
+ */
+const CONTINUE_LAST_AGENTS: ReadonlySet<AgentKind> = new Set([
+  "claude",
+  "openclaude",
+]);
