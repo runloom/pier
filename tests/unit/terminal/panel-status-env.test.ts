@@ -35,4 +35,35 @@ describe("withPanelStatusEnv", () => {
     const out = withPanelStatusEnv(undefined, "panel-3", "7", {});
     expect(out.env).toEqual({ PIER_PANEL_ID: "panel-3", PIER_WINDOW_ID: "7" });
   });
+
+  it("剥离父级 PIER_AGENT_CALLER_CREDENTIAL_FILE 并注入 agentCallerEnv", () => {
+    const out = withPanelStatusEnv(
+      {
+        command: "claude",
+        env: {
+          FOO: "1",
+          PIER_AGENT_CALLER_CREDENTIAL_FILE: "/parent/cred.json",
+        },
+      },
+      "panel-4",
+      "9",
+      hookEnv,
+      { PIER_AGENT_CALLER_CREDENTIAL_FILE: "/child/cred.json" }
+    );
+    expect(out.env?.FOO).toBe("1");
+    expect(out.env?.PIER_AGENT_CALLER_CREDENTIAL_FILE).toBe("/child/cred.json");
+    expect(out.env?.PIER_PANEL_ID).toBe("panel-4");
+  });
+
+  it("无 agentCallerEnv 时不保留父级凭证路径", () => {
+    const out = withPanelStatusEnv(
+      {
+        env: { PIER_AGENT_CALLER_CREDENTIAL_FILE: "/parent/cred.json" },
+      },
+      "panel-5",
+      "9",
+      {}
+    );
+    expect(out.env?.PIER_AGENT_CALLER_CREDENTIAL_FILE).toBeUndefined();
+  });
 });

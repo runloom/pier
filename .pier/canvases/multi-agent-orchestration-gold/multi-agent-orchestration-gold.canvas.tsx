@@ -21,7 +21,7 @@ import { StatusBadge } from "./shared.tsx";
 
 export const canvas = {
   description:
-    "协调智能体通过 Pier CLI 调用工作智能体、取得本次回复并控制持久会话的产品与技术方案。",
+    "协调智能体通过 Pier CLI 调用工作智能体：本机控制架构已闭环，发现面协议可用；invoke 与持久会话按波次补功能。",
   kind: "composition" as const,
   title: "智能体优先的多智能体调用 CLI · 产品与技术方案",
 };

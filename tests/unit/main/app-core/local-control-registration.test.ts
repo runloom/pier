@@ -27,7 +27,15 @@ describe("local control registration owner", () => {
     const closing = owner.close();
 
     expect(receivedSignals[0]?.aborted).toBe(true);
-    pending.resolve({ close, socketPath: "/tmp/pier.sock" });
+    pending.resolve({
+      bootId: "boot-test",
+      close,
+      socketPath: "/tmp/pier.sock",
+      credentialStore: {} as never,
+      issueAgentCredential: () => {
+        throw new Error("unused");
+      },
+    });
     await closing;
 
     expect(close).toHaveBeenCalledOnce();
@@ -36,8 +44,13 @@ describe("local control registration owner", () => {
   it("closes an already registered server once and ignores duplicate lifecycle calls", async () => {
     const close = vi.fn(async () => undefined);
     const register = vi.fn(async () => ({
+      bootId: "boot-test",
       close,
       socketPath: "/tmp/pier.sock",
+      credentialStore: {} as never,
+      issueAgentCredential: () => {
+        throw new Error("unused");
+      },
     }));
     const owner = createLocalControlRegistrationOwner({
       logError: vi.fn(),
@@ -66,10 +79,15 @@ describe("local control registration owner", () => {
     owner.start();
     const closing = owner.close();
     pending.resolve({
+      bootId: "boot-test",
       close: vi.fn(async () => {
         throw failure;
       }),
       socketPath: "/tmp/pier.sock",
+      credentialStore: {} as never,
+      issueAgentCredential: () => {
+        throw new Error("unused");
+      },
     });
 
     await expect(closing).rejects.toBe(failure);

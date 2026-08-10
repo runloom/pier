@@ -7,7 +7,24 @@ export interface ParsePierCliArgsOptions {
   requestId?: string;
 }
 
-export interface ParsedPierCliCommand {
+export interface ParsedPierCliV1 {
+  envelope: PierCommandEnvelope;
+  json: boolean;
+  protocol: "v1";
+}
+
+export interface ParsedPierCliV2 {
+  json: boolean;
+  op: string;
+  params: Record<string, unknown>;
+  protocol: "v2";
+  requestId: string;
+}
+
+export type ParsedPierCliCommand = ParsedPierCliV1 | ParsedPierCliV2;
+
+/** @deprecated 使用 ParsedPierCliCommand；旧代码若只认 envelope 需先判断 protocol */
+export interface ParsedPierCliCommandLegacy {
   envelope: PierCommandEnvelope;
   json: boolean;
 }

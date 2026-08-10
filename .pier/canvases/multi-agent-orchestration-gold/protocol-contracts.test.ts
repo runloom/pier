@@ -4,6 +4,10 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import {
+  collectCliDocsAvailableViolations,
+  extractMarkdownSection,
+} from "../../../tests/unit/cli/cli-docs-surface.ts";
 import type { SchemeData } from "./model.ts";
 
 async function readData(): Promise<SchemeData["data"]> {
@@ -51,7 +55,7 @@ describe("本机运行控制协议闭环", () => {
       expect(["shipped", "partial", "planned"]).toContain(row.status);
       expect(row.wave.length).toBeGreaterThan(0);
     }
-    expect(agents?.status).toBe("planned");
+    expect(["partial", "planned"]).toContain(agents?.status);
     expect(agents?.wave ?? "").toMatch(/W1|W2|W3/u);
     expect(windows?.status).toBe("partial");
     expect(data.cli.decision).toMatch(/docs\/cli\.md/u);
@@ -64,35 +68,13 @@ describe("本机运行控制协议闭环", () => {
     expect(cliDoc).toMatch(/^## 规划中的 agents 主路径/mu);
     expect(cliDoc).toMatch(/交付波次|W0–W6|W0-W6/u);
 
-    const availableMatch = cliDoc.match(
-      /^## 当前可用命令\n([\s\S]*?)(?=^## )/mu,
-    );
-    expect(availableMatch?.[1], "应能截取「当前可用命令」章节").toBeTruthy();
-    const available = availableMatch?.[1] ?? "";
-
-    // 规划主路径命令不得出现在「当前可用」代码块/示例中
-    expect(available).not.toMatch(/^\s*pier agents\b/mu);
-    expect(available).not.toMatch(/^\s*pier access\b/mu);
-    expect(available).not.toMatch(/^\s*pier snapshot\b/mu);
-    expect(available).not.toMatch(/^\s*pier watch\b/mu);
-    expect(available).not.toMatch(/^\s*pier activity\b/mu);
-    expect(available).not.toMatch(/^\s*pier notifications\b/mu);
-
-    // plugins enable/disable 默认 cli-local 无 plugin:write，不得列为当前可用示例
-    expect(available).not.toMatch(/^\s*pier plugins enable\b/mu);
-    expect(available).not.toMatch(/^\s*pier plugins disable\b/mu);
+    const available = extractMarkdownSection(cliDoc, "当前可用命令");
+    expect(collectCliDocsAvailableViolations(available)).toEqual([]);
     expect(available).toMatch(/plugin:write|cli-local/u);
 
-    // 规划章节仍应保留 agents 地图（未实现标记）
-    const plannedHeading = "## 规划中的 agents 主路径";
-    const plannedStart = cliDoc.indexOf(plannedHeading);
-    expect(plannedStart).toBeGreaterThanOrEqual(0);
-    const afterPlanned = cliDoc.slice(plannedStart + plannedHeading.length);
-    const nextSection = afterPlanned.search(/^## /mu);
-    const plannedBody =
-      nextSection === -1 ? afterPlanned : afterPlanned.slice(0, nextSection);
-    expect(plannedBody).toMatch(/pier agents self/u);
-    expect(plannedBody).toMatch(/实现前|未实现|地图/u);
+    const planned = extractMarkdownSection(cliDoc, "规划中的 agents 主路径");
+    expect(planned).toMatch(/pier agents self/u);
+    expect(planned).toMatch(/实现前|未实现|地图|规划/u);
   });
 
   it("方案 A 只返回本次结构化回复或当前 viewport，不开放公共运行历史", async () => {

@@ -245,18 +245,26 @@ export function consumeCreateLaunch(args: CreateTerminalArgs): void {
 /**
  * 每个终端 PTY 注入面板级状态环境变量：PIER_WINDOW_ID + PIER_PANEL_ID 精确
  * 路由 agent hook 事件到「窗口+面板」。
+ *
+ * 始终剥离父级 `PIER_AGENT_CALLER_CREDENTIAL_FILE`，再合并可选
+ * `agentCallerEnv`（仅 agent 启动签发的本 boot 凭证路径）。
  */
 export function withPanelStatusEnv(
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined,
   panelId: string,
   windowId: string,
-  hookEnv: Record<string, string>
+  hookEnv: Record<string, string>,
+  agentCallerEnv?: Record<string, string> | null
 ): ResolvedTerminalLaunchOptions {
+  const { PIER_AGENT_CALLER_CREDENTIAL_FILE: _parentCredential, ...baseEnv } = {
+    ...(nativeLaunch?.env ?? {}),
+  };
   return {
     ...(nativeLaunch ?? {}),
     env: {
-      ...(nativeLaunch?.env ?? {}),
+      ...baseEnv,
       ...hookEnv,
+      ...(agentCallerEnv ?? {}),
       PIER_PANEL_ID: panelId,
       PIER_WINDOW_ID: windowId,
     },

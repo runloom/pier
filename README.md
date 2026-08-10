@@ -16,7 +16,7 @@ Pier 把稳定终端、可拖拽 panel 布局、文件查看、代码变更预�
 - **工作台** — 可组装的响应式物料网格（指标、配额、成本等）
 - **多智能体可见性** — 前台活动聚合（agent / task / shell / idle），需要你处理时有明确反馈
 - **官方插件** — Claude / Codex / Grok / SSH 等经签名官方索引分发的受管理插件
-- **本机 CLI** — `pier open` / `status` / `panels` 等控制面命令，便于脚本与 MCP 调用
+- **本机 CLI** — 智能体优先的本机控制面（目标主调用者为协调智能体）；人类 / 脚本 / MCP 为可选入口，见 [`docs/cli.md`](docs/cli.md)
 
 ## 要求
 
@@ -98,6 +98,8 @@ pnpm plugins:index    # 重新生成 plugins/index.v1.json
 
 ## CLI
 
+本机控制面。**目标主调用者**是 Pier 启动的协调智能体；人类 CLI、脚本与 MCP 为并列可选入口。金标准命令面（已实现 / 规划 / 交付波次）见 [`docs/cli.md`](docs/cli.md)；产品方案 Canvas：[`.pier/canvases/multi-agent-orchestration-gold/`](.pier/canvases/multi-agent-orchestration-gold/)。
+
 安装或开发态下可用 `pier` 控制运行中的桌面实例（类似 `code .`）：
 
 ```bash
@@ -114,7 +116,7 @@ pnpm dev
 pnpm --silent cli:dev -- status --json
 ```
 
-完整命令、退出码约定与 MCP 定位顺序见 [`docs/cli.md`](docs/cli.md)。
+完整命令、退出码约定、硬边界与 MCP 定位顺序见 [`docs/cli.md`](docs/cli.md)。
 
 ## 贡献
 

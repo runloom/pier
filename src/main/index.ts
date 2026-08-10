@@ -11,6 +11,7 @@ import {
 } from "electron";
 import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control-registration.ts";
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
+import { registerPeerUidFromNativeAddon } from "./adapters/cli/register-peer-uid-native.ts";
 import { appCore } from "./app-core/index.ts";
 import {
   consumeIntentionalQuitAction,
@@ -57,7 +58,7 @@ import { registerPierResourceIpc } from "./ipc/pier-resource.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerTaskRuntimeDiagnosticsIpc } from "./ipc/task-runtime-diagnostics.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal/debug-window.ts";
-import { registerTerminalIpc } from "./ipc/terminal/index.ts";
+import { getTerminalAddon, registerTerminalIpc } from "./ipc/terminal/index.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerUsageDataIpc } from "./ipc/usage-data.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
@@ -104,7 +105,6 @@ const windowZoom = createWindowZoomController({
   readPreferences: () => appCore.services.preferences.read(),
   updatePreferences: (patch) => appCore.services.preferences.update(patch),
 });
-
 windowManager.onCreate(({ window }) => {
   windowZoom.applyPersistedZoomToWindow(window).catch((error) => {
     windowZoomLog.error("apply to new window failed", { error });
@@ -391,6 +391,7 @@ if (gotTheLock) {
         processEnvironment: appCore.services.processEnvironment,
         taskService: appCore.services.tasks,
       });
+      registerPeerUidFromNativeAddon(getTerminalAddon());
       registerTaskRuntimeDiagnosticsIpc(ipcMain);
       registerTerminalDebugWindowIpc(ipcMain, {
         isQuitting: () => windowManager.isQuitting(),
@@ -402,10 +403,7 @@ if (gotTheLock) {
       registerLspIpc();
       localControlRegistration.start();
       // Legacy terminal session keys (runtime window ids) → record UUIDs.
-      // Must run before transfer recovery / task reconcile / window restore,
-      // which all address the session store by record id. Failure must abort
-      // boot: readers now use record UUIDs; continuing on a half-migrated
-      // store would silently lose cwd/title/task session metadata.
+      // Before transfer recovery / task reconcile / window restore; failure aborts boot.
       try {
         await migrateTerminalSessionScopesToRecordIds(
           await readPreferredOpenWindowRecordIds()

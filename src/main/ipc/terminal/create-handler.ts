@@ -8,6 +8,7 @@ import type {
   CreateTerminalResult,
   TerminalAgentRestoreOutcome,
 } from "@shared/contracts/terminal.ts";
+import { tryIssueAgentCallerLaunchEnv } from "../../services/agent-caller/host-bind.ts";
 import {
   resolveAgentResumeLastLaunch,
   resolveAgentResumeLaunch,
@@ -355,6 +356,14 @@ export async function handleTerminalCreate(args: {
       launchForNative,
       launch.launchAgentId
     );
+    // 生产闭环：agent 终端签发本 boot 调用凭证；失败不阻断 spawn。
+    // 普通终端不签发，且 withPanelStatusEnv 始终剥离父级凭证 env。
+    const agentCallerEnv = launch.launchAgentId
+      ? tryIssueAgentCallerLaunchEnv({
+          callerRuntimeId: `panel_${createArgs.panelId}`,
+          allowedAgents: ["*"],
+        })
+      : null;
     const ok = await createTerminalAndSeedResource({
       create: () =>
         addon.createTerminal(
@@ -367,7 +376,8 @@ export async function handleTerminalCreate(args: {
             launchForCreate,
             createArgs.panelId,
             String(win.id),
-            foregroundActivityService.hookEnv()
+            foregroundActivityService.hookEnv(),
+            agentCallerEnv
           ),
           lifecycleId,
           createArgs.presentationId ?? 0

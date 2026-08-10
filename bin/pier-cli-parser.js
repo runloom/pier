@@ -29,6 +29,10 @@ export function usage() {
     "  pier plugins enable <id> --json",
     "  pier plugins disable <id> --json",
     "  pier preferences read --json",
+    "  pier agents self --json",
+    "  pier agents catalog --json",
+    "  pier agents list --json",
+    "  pier agents get --agent-ref <ref> | --agent-id <id> | --panel <panelId> --json",
   ].join("\n");
 }
 
@@ -109,7 +113,10 @@ function stripOptions(args) {
       arg === "--profile" ||
       arg === "--env" ||
       arg === "--input" ||
-      arg === "--command"
+      arg === "--command" ||
+      arg === "--agent-ref" ||
+      arg === "--agent-id" ||
+      arg === "--panel"
     ) {
       if (
         arg === "--window" ||
@@ -122,7 +129,10 @@ function stripOptions(args) {
         arg === "--profile" ||
         arg === "--env" ||
         arg === "--input" ||
-        arg === "--command"
+        arg === "--command" ||
+        arg === "--agent-ref" ||
+        arg === "--agent-id" ||
+        arg === "--panel"
       ) {
         index++;
       }
@@ -461,6 +471,50 @@ function parsePlugins(action, value, unexpected) {
   throw new Error("unknown pier CLI command");
 }
 
+function parseAgents(action, value, unexpected, args) {
+  if (unexpected) {
+    throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+  }
+  if (action === "self" || action === "catalog" || action === "list") {
+    if (value) {
+      throw new Error(`unexpected pier CLI argument: ${value}`);
+    }
+    return {
+      protocol: "v2",
+      op: `agents.${action}`,
+      params: {},
+    };
+  }
+  if (action === "get") {
+    const agentRef = optionValue(args, "--agent-ref");
+    const agentId = optionValue(args, "--agent-id");
+    const panelId = optionValue(args, "--panel");
+    if (value && !agentRef && !agentId && !panelId) {
+      // positional fallback: treat as agentId
+      return {
+        protocol: "v2",
+        op: "agents.get",
+        params: { agentId: requireValue(value) },
+      };
+    }
+    if (!(agentRef || agentId || panelId)) {
+      throw new Error(
+        "agents get requires --agent-ref, --agent-id, --panel, or <agentId>"
+      );
+    }
+    return {
+      protocol: "v2",
+      op: "agents.get",
+      params: {
+        ...(agentRef ? { agentRef } : {}),
+        ...(agentId ? { agentId } : {}),
+        ...(panelId ? { panelId } : {}),
+      },
+    };
+  }
+  throw new Error("unknown pier agents command (self|catalog|list|get)");
+}
+
 function parseCommand(args, cwd) {
   const [domain, action, value, extra, unexpected] = stripOptions(args);
   const route = routeOptions(args);
@@ -491,6 +545,9 @@ function parseCommand(args, cwd) {
   if (domain === "preferences" && action === "read") {
     return { type: "preferences.read" };
   }
+  if (domain === "agents") {
+    return parseAgents(action, value, unexpected, args);
+  }
   throw new Error("unknown pier CLI command");
 }
 
@@ -503,14 +560,26 @@ export function parsePierCliArgs(
     requestId = randomUUID(),
   } = {}
 ) {
+  const commandOrV2 = parseCommand(argv, cwd);
+  const json = hasPierCliOption(argv, "--json");
+  if (commandOrV2 && commandOrV2.protocol === "v2") {
+    return {
+      protocol: "v2",
+      requestId,
+      op: commandOrV2.op,
+      params: commandOrV2.params ?? {},
+      json,
+    };
+  }
   return {
+    protocol: "v1",
     envelope: {
       ...(clientEnv && Object.keys(clientEnv).length > 0 ? { clientEnv } : {}),
       clientId,
-      command: parseCommand(argv, cwd),
+      command: commandOrV2,
       protocolVersion: 1,
       requestId,
     },
-    json: hasPierCliOption(argv, "--json"),
+    json,
   };
 }

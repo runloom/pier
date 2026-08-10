@@ -15,6 +15,19 @@
 
 实现未完成前，不得把规划命令写进「当前可用命令」。
 
+### 协议分层（架构）
+
+| 版本 | 形态 | 用途 |
+|------|------|------|
+| **v1**（当前 · 长期保留） | 单次连接、一行 JSON 请求/响应（`protocolVersion: 1`） | 已实现的 open/status/windows/panels 等短控制 |
+| **v2**（传输金标准已定义 · 实现按 W1+） | 同 socket 会话、`apiVersion: "pier.control/v2"` NDJSON 多帧 + 可选事件流 | `agents` / 长调用 / wait·watch / access |
+
+v1 与 v2 **首帧分流、同连接不混用**。传输层金标准终态（帧、会话、cursor、peer、错误码）：
+
+[`docs/superpowers/specs/2026-08-10-local-control-v1-v2-design.md`](./superpowers/specs/2026-08-10-local-control-v1-v2-design.md)
+
+产品命令语义与完成权边界仍以 Canvas 为准；**未实现的 v2 命令不得写入「当前可用命令」**。
+
 ---
 
 ## 硬边界（全波次不变）
@@ -36,7 +49,7 @@
 | 命令组 | 目标职责（金标准） | 现状 | 交付波次 |
 |--------|-------------------|------|----------|
 | **顶层** `version` · `capabilities` · `doctor` · `status` · `snapshot` · `watch` | 协议协商、健康、能力列表、原子总快照、不漏事件的全局事实流 | **部分**：`status` 可用；其余未实现 | **W1** 底座扩展；**W3–W4** 与 `snapshot`/`watch` 收口 |
-| **`agents`** `self` · `catalog` · `list` · `get` · `invoke` · `start` · `turn` · `screen` · `wait` · `watch` · `focus` · `interrupt` · `terminate` | 智能体优先主路径：身份、一次性回复、持久运行控制、有界当前画面 | **未实现** | **W1** `self`/catalog 发现；**W2** `invoke`；**W3** 持久控制与 `screen`/`wait` |
+| **`agents`** `self` · `catalog` · `list` · `get` · `invoke` · `start` · `turn` · `screen` · `wait` · `watch` · `focus` · `interrupt` · `terminate` | 智能体优先主路径：身份、一次性回复、持久运行控制、有界当前画面 | **部分**：`self`/`catalog`/`list`/`get`（v2）；invoke/start/screen 等未实现 | **W1** 发现已落地；**W2** `invoke`；**W3** 持久控制与 `screen`/`wait` |
 | **`access`** `keygen` · `status` · `request` · `wait` · `revoke` | 人类确认 / 外部 Ed25519 窄授权 | **未实现** | **W6** |
 | **`terminal`** `open` · `list` · `get` · `send` · `key` · `interrupt` · `terminate` · `wait` · `watch` · `profiles …` | 精细终端原语（agents 高层之下；**不含** `screen`，画面读取在 `agents screen`） | **部分**：`open`、`profiles`；无 list/get、send/key、interrupt/terminate、wait/watch 与 RuntimeRef 写控 | **W3–W4** 与 RuntimeRef 守卫对齐 |
 | **`windows` / `panels`** `list` · `get` · `watch` · `focus` | 界面定位与聚焦；**不能**代替 RuntimeRef 写进程 | **部分**：list/focus；无 get/watch 契约 | **W4** 语义收口（写路径仍禁旁路） |
@@ -63,7 +76,7 @@
 
 | 波次 | 名称 | CLI / 文档交付物 | 可验证结果 |
 |------|------|------------------|------------|
-| **W0** | 文档与边界 | 本文件命令面地图；Canvas 边界与治理测试 | 叙事正确；禁区可测；无人把规划命令当已实现 |
+| **W0** | 文档与边界 | 本文件命令面地图；Canvas 边界；`tests/unit/cli/*-governance` 进 unit CI | **已完成（文档+门禁）**；W1 发现子集见「当前可用」 |
 | **W1** | 调用身份 | `agents self`（及 catalog/list/get 只读发现）；凭证注入与 scrub | 协调智能体无需手抄 panelId 即可自述能力 |
 | **W2** | 一次性调用 | `agents invoke`（v1 advisory-read-only） | 显式 agent + WorktreeRef → 本次回复；无公共历史 |
 | **W3** | 持久运行与画面 | `agents start/turn/screen/wait/watch` + RuntimeRef 守卫 | 父→新建子；viewport 有界；accepted ≠ handled |
@@ -97,6 +110,24 @@ W1 完成后，W2 与 W3 可并行；二者都汇入 W4 宿主原语收敛。
 - 需要机器可读结果时加 `--json`
 - 只想看解析后的命令信封时加 `--print-envelope`
 - 部分命令成功时可能有人类可读摘要；**agents 主路径落地后**将按 Canvas 固定「会话型 / 动作型 / JSON stdout」输出政策（见 Canvas `cli.commonRules`）
+
+### 智能体发现（v2 · 已实现只读子集）
+
+走 `pier.control/v2` 会话（非 v1 短请求）。人类 CLI 默认 `cli-human`；若设置 `PIER_AGENT_CALLER_CREDENTIAL_FILE` 则按 agent 主体连接。
+
+```bash
+pier agents catalog --json
+pier agents list --json
+pier agents get --agent-id <id> --json
+pier agents get --agent-ref <ref> --json
+pier agents get --panel <panelId> --json
+# 需 agent 凭证：
+pier agents self --json
+```
+
+- `catalog`：产品目录（T4 可用性多为 unknown，detection 未接全）  
+- `list` / `get`：当前 boot 运行中智能体投影（Runtime Index）  
+- `self`：调用者非秘密身份与预算（需凭证）
 
 ### 打开与状态
 
