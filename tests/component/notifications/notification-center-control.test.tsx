@@ -174,7 +174,7 @@ describe("NotificationCenterControl", () => {
     expect(screen.queryByText("Mark all as read")).toBeNull();
   });
 
-  it("mark-all-read and dnd close only after successful IPC", async () => {
+  it("keeps popover open after mark-all-read and dnd succeed", async () => {
     seed([item("a", "warning")]);
     render(
       <TooltipProvider>
@@ -188,22 +188,24 @@ describe("NotificationCenterControl", () => {
     fireEvent.click(screen.getByText("Mark all as read"));
     await vi.waitFor(() => {
       expect(markAllReadMock).toHaveBeenCalled();
-      expect(
-        document.querySelector('[data-slot="popover-content"]')
-      ).toBeNull();
     });
+    expect(
+      document.querySelector('[data-slot="popover-content"]')
+    ).toBeTruthy();
+    expect(useNotificationCenterPopoverStore.getState().open).toBe(true);
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Notifications, 1 unread" })
-    );
-    await screen.findByText("msg-a");
-    fireEvent.click(screen.getByRole("button", { name: "Do Not Disturb" }));
+    const dndButton = screen.getByRole("button", { name: "Do Not Disturb" });
+    await vi.waitFor(() => {
+      expect(dndButton).not.toBeDisabled();
+    });
+    fireEvent.click(dndButton);
     await vi.waitFor(() => {
       expect(setDndMock).toHaveBeenCalledWith(true);
-      expect(
-        document.querySelector('[data-slot="popover-content"]')
-      ).toBeNull();
     });
+    expect(
+      document.querySelector('[data-slot="popover-content"]')
+    ).toBeTruthy();
+    expect(useNotificationCenterPopoverStore.getState().open).toBe(true);
   });
 
   it("keeps popover open and alerts when mark-all-read fails", async () => {
