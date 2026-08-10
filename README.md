@@ -16,7 +16,7 @@ Pier 把稳定终端、可拖拽 panel 布局、文件查看、代码变更预�
 - **工作台** — 可组装的响应式物料网格（指标、配额、成本等）
 - **多智能体可见性** — 前台活动聚合（agent / task / shell / idle），需要你处理时有明确反馈
 - **官方插件** — Claude / Codex / Grok / SSH 等经签名官方索引分发的受管理插件
-- **本机 CLI** — 在终端控制已打开的 Pier（打开目录、窗口/面板、终端、工作树等），见 [`docs/cli.md`](docs/cli.md)
+- **本机 CLI** — 在终端控制已打开的 Pier（打开目录、窗口/面板、终端、工作树等），见 [`.pier/canvases/pier-cli-user-manual/`](.pier/canvases/pier-cli-user-manual/)
 
 ## 要求
 
@@ -74,7 +74,7 @@ pnpm build:dist       # 签名 / 公证 / 双架构 mac 分发包
 | --- | --- |
 | [`docs/README.md`](docs/README.md) | 文档索引 |
 | [`docs/development.md`](docs/development.md) | 开发环境、worktree、检查与构建 |
-| [`docs/cli.md`](docs/cli.md) | `pier` CLI 与本机控制通道 |
+| [`.pier/canvases/pier-cli-user-manual/`](.pier/canvases/pier-cli-user-manual/) | `pier` CLI 用户手册（Canvas 真源） |
 | [`docs/plugins.md`](docs/plugins.md) | 官方插件开发与校验 |
 | [`docs/release.md`](docs/release.md) | 宿主 / 插件双通道发布 |
 | [`docs/legal/licensing.md`](docs/legal/licensing.md) | 授权边界说明 |
@@ -99,7 +99,7 @@ pnpm plugins:index    # 重新生成 plugins/index.v1.json
 ## CLI
 
 在终端控制**已运行**的 Pier 桌面实例（类似 `code .`）。  
-应用内手册 Canvas：[`.pier/canvases/pier-cli-user-manual/`](.pier/canvases/pier-cli-user-manual/)；Markdown 全文见 [`docs/cli.md`](docs/cli.md)。
+用户手册（唯一真源）：[`.pier/canvases/pier-cli-user-manual/`](.pier/canvases/pier-cli-user-manual/)（应用内 DocsShell + `data.json`）。
 
 ```bash
 pier open . --json

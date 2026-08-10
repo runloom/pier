@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-10T23:30:00.000+08:00",
-  "source": "docs/cli.md + industry CLI manual IA (clig.dev, Stripe CLI, task-oriented help)",
+  "generatedAt": "2026-08-11T01:20:00.000+08:00",
+  "source": "pier-cli-user-manual Canvas (canonical user manual) + industry CLI manual IA",
   "data": {
     "meta": {
       "title": "Pier 本机 CLI 使用手册",
@@ -203,6 +203,14 @@
             "synopsis": "pier doctor --json",
             "description": "本机连接与环境自检。",
             "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"socket\": \"ok\",\n    \"appRunning\": true,\n    \"issues\": []\n  }\n}"
+          },
+          {
+            "id": "app-capabilities",
+            "name": "capabilities",
+            "status": "planned",
+            "synopsis": "pier capabilities --json",
+            "description": "协议与本机 CLI 能力列表（规划；只读协商）。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"capabilities\": []\n  }\n}"
           },
           {
             "id": "snapshot",
@@ -617,7 +625,7 @@
           "name": "agents self",
           "status": "planned",
           "synopsis": "pier agents self --json",
-          "description": "当前调用者非秘密摘要（规划；不作为本机权限系统）。",
+          "description": "当前调用者非秘密摘要。人类 CLI（cli-human）在解析期直接拒绝；需要 agent principal。不作为本机权限系统。",
           "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"self\": {\n      \"principalRef\": \"…\",\n      \"bootId\": \"…\"\n    }\n  }\n}"
         },
         {

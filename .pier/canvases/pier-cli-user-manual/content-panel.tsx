@@ -399,7 +399,8 @@ function HelpPage({
         ))}
       </Accordion>
       <Text tone="tertiary" className="text-xs">
-        脚本请始终加 --json。完整 Markdown 见仓库 docs/cli.md。
+        脚本请始终加 --json。本 Canvas（data.json）为 CLI
+        用户手册唯一真源。
       </Text>
     </Stack>
   );

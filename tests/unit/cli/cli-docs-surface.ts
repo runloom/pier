@@ -1,9 +1,18 @@
 /**
- * CLI 用户手册辅助：截取 markdown 章节，并检测「命令一览」中的违规命令行。
- * unit 与 Canvas protocol 契约共用，避免两套规则漂移。
+ * CLI 用户手册辅助：以 Canvas `.pier/canvases/pier-cli-user-manual/data.json`
+ * 为唯一真源；unit 与 multi-agent Canvas 契约共用，避免双写漂移。
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-/** 用户手册「命令一览」中禁止的规划/无写权命令。只读 agents catalog/list/get 允许。 */
+const ROOT = process.cwd();
+
+export const CLI_USER_MANUAL_DATA_PATH = join(
+  ROOT,
+  ".pier/canvases/pier-cli-user-manual/data.json"
+);
+
+/** shipped 表面禁止出现的规划/无写权命令（只读 agents catalog/list/get 允许）。 */
 const AVAILABLE_VIOLATION_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
   [
     {
@@ -19,23 +28,189 @@ const AVAILABLE_VIOLATION_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
     { id: "plugins disable", re: /^\s*pier\s+plugins\s+disable\b/mu },
   ];
 
-/** 从 `## heading` 截到下一个同级 `## `（不含）。heading 不含 `##` 前缀。 */
-export function extractMarkdownSection(
-  markdown: string,
-  heading: string
-): string {
-  const marker = `## ${heading}`;
-  const start = markdown.indexOf(marker);
-  if (start < 0) {
-    throw new Error(`missing markdown section: ${marker}`);
-  }
-  const bodyStart = start + marker.length;
-  const rest = markdown.slice(bodyStart);
-  const next = rest.search(/^## /mu);
-  return (next === -1 ? rest : rest.slice(0, next)).trim();
+/**
+ * 产品 shipped 必现清单（与 multi-agent gold「当前可用」对齐）。
+ * 名称与 Canvas `command.name` 完全一致。
+ */
+export const REQUIRED_SHIPPED_COMMAND_NAMES = [
+  "status",
+  "open",
+  "windows list",
+  "windows focus",
+  "panels list",
+  "panels focus",
+  "terminal open",
+  "terminal profiles list|get|set|delete",
+  "worktrees list",
+  "worktrees create",
+  "worktrees open",
+  "tasks list",
+  "tasks run",
+  "tasks status",
+  "tasks cancel",
+  "preferences read",
+  "plugins list",
+  "plugins inspect",
+  "agents catalog",
+  "agents list",
+  "agents get",
+] as const;
+
+/**
+ * 规划 / 实验必现清单（删 md 后防止 Canvas 静默丢命令）。
+ * 名称与 Canvas `command.name` 完全一致。
+ */
+export const REQUIRED_PLANNED_COMMAND_NAMES = [
+  "version",
+  "capabilities",
+  "doctor",
+  "snapshot",
+  "watch",
+  "terminal list",
+  "terminal get",
+  "terminal send",
+  "terminal key",
+  "terminal interrupt",
+  "terminal terminate",
+  "terminal wait",
+  "terminal watch",
+  "worktrees check",
+  "worktrees get",
+  "worktrees register",
+  "worktrees remove",
+  "tasks get",
+  "tasks watch",
+  "tasks output",
+  "tasks stop / rerun",
+  "activity snapshot",
+  "activity watch",
+  "notifications list",
+  "notifications get/watch/focus/mark-read",
+  "access keygen/status/request/wait/revoke",
+  "agents self",
+  "agents invoke",
+  "agents start",
+  "agents turn",
+  "agents screen",
+  "agents wait",
+  "agents watch",
+  "agents focus",
+  "agents interrupt",
+  "agents terminate",
+] as const;
+
+export const REQUIRED_BLOCKED_COMMAND_NAMES = [
+  "plugins enable",
+  "plugins disable",
+] as const;
+
+export interface CliManualCommand {
+  description: string;
+  examples?: string[] | undefined;
+  id: string;
+  name: string;
+  output?: string | undefined;
+  status: string;
+  synopsis: string;
 }
 
-/** 返回用户手册命令章节中违规命令 id 列表（去重、稳定顺序）。 */
+export interface CliManualData {
+  agents: {
+    intro: string;
+    shipped: CliManualCommand[];
+    planned: CliManualCommand[];
+  };
+  bluf: string;
+  context: string;
+  domains: {
+    id: string;
+    label?: string;
+    commands: CliManualCommand[];
+  }[];
+  faq: { q: string; a: string }[];
+  goals: string[];
+  meta: { title: string; subtitle: string; status: string; version: string };
+  nonGoals: string[];
+  quickStart: {
+    prerequisite: string;
+    firstCommands: { title: string; cmd: string; note: string }[];
+    binPaths: string[];
+  };
+  tasks: { id: string; title: string; steps: string[] }[];
+}
+
+export interface CliManualPayload {
+  data: CliManualData;
+  schemaVersion: number;
+}
+
+export function readCliUserManualPayload(): CliManualPayload {
+  const raw = readFileSync(CLI_USER_MANUAL_DATA_PATH, "utf8");
+  const parsed = JSON.parse(raw) as CliManualPayload;
+  if (parsed.schemaVersion !== 1 || !parsed.data?.bluf) {
+    throw new Error("invalid pier-cli-user-manual data.json");
+  }
+  return parsed;
+}
+
+export function readCliUserManualData(): CliManualData {
+  return readCliUserManualPayload().data;
+}
+
+/** 所有命令条目（domains + agents.shipped + agents.planned）。 */
+export function listCliManualCommands(data: CliManualData): CliManualCommand[] {
+  return [
+    ...data.domains.flatMap((domain) => domain.commands),
+    ...data.agents.shipped,
+    ...data.agents.planned,
+  ];
+}
+
+export function commandsByName(
+  data: CliManualData
+): Map<string, CliManualCommand> {
+  return new Map(
+    listCliManualCommands(data).map((command) => [command.name, command])
+  );
+}
+
+/**
+ * shipped 表面可抄写文本：synopsis / examples / quickStart / task steps。
+ * 用于扫描「已实现区不得出现规划命令可执行示例」。
+ */
+export function collectCliManualShippedSurfaceText(
+  data: CliManualData
+): string {
+  const chunks: string[] = [];
+  const pushCommand = (command: CliManualCommand): void => {
+    if (command.status !== "shipped") {
+      return;
+    }
+    chunks.push(command.synopsis);
+    for (const example of command.examples ?? []) {
+      chunks.push(example);
+    }
+  };
+  for (const domain of data.domains) {
+    for (const command of domain.commands) {
+      pushCommand(command);
+    }
+  }
+  for (const command of data.agents.shipped) {
+    pushCommand(command);
+  }
+  for (const first of data.quickStart.firstCommands) {
+    chunks.push(first.cmd);
+  }
+  for (const task of data.tasks) {
+    for (const step of task.steps) {
+      chunks.push(step);
+    }
+  }
+  return chunks.join("\n");
+}
+
+/** 返回用户手册 shipped 表面中违规命令 id 列表（去重、稳定顺序）。 */
 export function collectCliDocsAvailableViolations(
   availableSection: string
 ): string[] {
@@ -48,77 +223,52 @@ export function collectCliDocsAvailableViolations(
   return violations;
 }
 
-/**
- * 用户手册「第一部分：已实现」正文：从标题起到「第二部分：暂未实现」之前。
- * 未实现规划语法只应出现在第二部分，不得混入已实现区可执行示例。
- */
-export function extractImplementedCommandsSection(markdown: string): string {
-  const startMarkers = ["# 第一部分：已实现命令", "## 已实现命令"];
-  let start = -1;
-  let markerLen = 0;
-  for (const marker of startMarkers) {
-    const idx = markdown.indexOf(marker);
-    if (idx >= 0) {
-      start = idx;
-      markerLen = marker.length;
-      break;
-    }
-  }
-  if (start < 0) {
-    throw new Error("missing implemented-commands section");
-  }
-  const bodyStart = start + markerLen;
-  const rest = markdown.slice(bodyStart);
-  const end = rest.search(/^# 第二部分：暂未实现|^## 暂未实现/mu);
-  return (end === -1 ? rest : rest.slice(0, end)).trim();
-}
+/** 校验必现清单：名称存在且 status 匹配；planned/shipped 行须有 synopsis。 */
+export function collectInventoryMismatches(data: CliManualData): string[] {
+  const byName = commandsByName(data);
+  const mismatches: string[] = [];
 
-export function statusKeywordForCommandGroup(
-  status: "shipped" | "partial" | "planned" | string
-): string {
-  if (status === "shipped") {
-    return "已实现";
-  }
-  if (status === "partial") {
-    return "部分";
-  }
-  if (status === "planned") {
-    return "未实现";
-  }
-  throw new Error(`unknown command group status: ${status}`);
-}
-
-/**
- * 在能力地图正文中定位命令组对应行（表格行或加粗组名），并检查 status 关键词。
- * `顶层` 用字面「顶层」；其余优先匹配 `**\`group\`` 或 `**group**`。
- */
-export function findCommandGroupMapLine(
-  mapSection: string,
-  group: string
-): string | null {
-  const lines = mapSection.split("\n");
-  const needles =
-    group === "顶层"
-      ? ["**顶层**", "| **顶层**", "顶层"]
-      : [`**\`${group}\`**`, `**${group}**`, `\`${group}\``, group];
-
-  for (const line of lines) {
-    if (!line.includes("|")) {
+  for (const name of REQUIRED_SHIPPED_COMMAND_NAMES) {
+    const command = byName.get(name);
+    if (!command) {
+      mismatches.push(`missing shipped: ${name}`);
       continue;
     }
-    for (const needle of needles) {
-      if (line.includes(needle)) {
-        return line;
-      }
+    if (command.status !== "shipped") {
+      mismatches.push(`expected shipped, got ${command.status}: ${name}`);
+    }
+    if (!command.synopsis?.trim()) {
+      mismatches.push(`empty synopsis (shipped): ${name}`);
     }
   }
-  return null;
-}
 
-export function commandGroupStatusMatchesDocs(
-  mapLine: string,
-  status: "shipped" | "partial" | "planned" | string
-): boolean {
-  const keyword = statusKeywordForCommandGroup(status);
-  return mapLine.includes(keyword);
+  for (const name of REQUIRED_PLANNED_COMMAND_NAMES) {
+    const command = byName.get(name);
+    if (!command) {
+      mismatches.push(`missing planned: ${name}`);
+      continue;
+    }
+    if (command.status !== "planned") {
+      mismatches.push(`expected planned, got ${command.status}: ${name}`);
+    }
+    if (!command.synopsis?.trim()) {
+      mismatches.push(`empty synopsis (planned): ${name}`);
+    }
+    if (!command.output?.trim()) {
+      mismatches.push(`empty output (planned): ${name}`);
+    }
+  }
+
+  for (const name of REQUIRED_BLOCKED_COMMAND_NAMES) {
+    const command = byName.get(name);
+    if (!command) {
+      mismatches.push(`missing blocked: ${name}`);
+      continue;
+    }
+    if (command.status !== "blocked") {
+      mismatches.push(`expected blocked, got ${command.status}: ${name}`);
+    }
+  }
+
+  return mismatches;
 }

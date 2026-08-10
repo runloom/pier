@@ -6,7 +6,9 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   collectCliDocsAvailableViolations,
-  extractMarkdownSection,
+  collectCliManualShippedSurfaceText,
+  collectInventoryMismatches,
+  readCliUserManualData,
 } from "../../../tests/unit/cli/cli-docs-surface.ts";
 import type { SchemeData } from "./model.ts";
 
@@ -40,16 +42,18 @@ describe("本机运行控制协议闭环", () => {
     );
   });
 
-  it("CLI 命令组标注现状与交付波次，W0 以 docs/cli.md 为命令面地图", async () => {
+  it("CLI 命令组标注现状与交付波次，W0 以 pier-cli-user-manual 为命令面真源", async () => {
     const data = await readData();
     const w0 = data.phases.find((row) => row.wave === 0);
     const agents = data.cli.commandGroups.find((row) => row.group === "agents");
     const windows = data.cli.commandGroups.find((row) => row.group === "windows");
 
     expect(w0?.name ?? "").toMatch(/文档|边界/u);
-    expect(w0?.outcome ?? "").toMatch(/docs\/cli\.md/u);
+    expect(w0?.outcome ?? "").toMatch(/pier-cli-user-manual|Canvas/u);
     expect(["planned", "in_progress", "done"]).toContain(w0?.status);
-    expect(w0?.slices.some((s) => /docs\/cli\.md/u.test(s.title))).toBe(true);
+    expect(
+      w0?.slices.some((s) => /pier-cli-user-manual|Canvas/u.test(s.title))
+    ).toBe(true);
 
     for (const row of data.cli.commandGroups) {
       expect(["shipped", "partial", "planned"]).toContain(row.status);
@@ -58,26 +62,19 @@ describe("本机运行控制协议闭环", () => {
     expect(["partial", "planned"]).toContain(agents?.status);
     expect(agents?.wave ?? "").toMatch(/W1|W2|W3/u);
     expect(windows?.status).toBe("partial");
-    expect(data.cli.decision).toMatch(/docs\/cli\.md/u);
+    expect(data.cli.decision).toMatch(/pier-cli-user-manual|Canvas/u);
   });
 
-  it("docs/cli.md 用户手册已实现区不得把规划 agents 写成默认可执行", async () => {
-    const { extractImplementedCommandsSection } = await import(
-      "../../../tests/unit/cli/cli-docs-surface.ts"
-    );
-    const cliDocPath = new URL("../../../docs/cli.md", import.meta.url);
-    const cliDoc = await readFile(cliDocPath, "utf8");
-    expect(cliDoc).toMatch(/使用手册/u);
-    expect(cliDoc).toMatch(/第一部分：已实现命令/u);
-    expect(cliDoc).toMatch(/第二部分：暂未实现命令/u);
-    expect(cliDoc).not.toMatch(/交付波次|W0–W6|W0-W6/u);
+  it("pier-cli-user-manual 与 unit 共用 shipped/planned 清单门禁", () => {
+    const manual = readCliUserManualData();
+    expect(manual.meta.status).toMatch(/使用手册/u);
+    expect(JSON.stringify(manual)).not.toMatch(/交付波次|W0–W6|W0-W6/u);
 
-    const available = extractImplementedCommandsSection(cliDoc);
+    expect(collectInventoryMismatches(manual)).toEqual([]);
+
+    const available = collectCliManualShippedSurfaceText(manual);
     expect(collectCliDocsAvailableViolations(available)).toEqual([]);
-    expect(available).toMatch(/输出示例/u);
-    expect(cliDoc).toMatch(/### `agents invoke`/u);
-    expect(cliDoc).toMatch(/### `agents screen`/u);
-    expect(cliDoc).toMatch(/预期输出示例/u);
+    expect(available).toMatch(/agents catalog|agents list/u);
   });
 
   it("方案 A 只返回本次结构化回复或当前 viewport，不开放公共运行历史", async () => {

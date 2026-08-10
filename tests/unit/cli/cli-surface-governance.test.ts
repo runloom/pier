@@ -1,23 +1,22 @@
 /**
- * CLI 用户手册治理：docs/cli.md 为使用说明；已实现区不得把未实现主路径写成默认可执行。
+ * CLI 用户手册治理：以 pier-cli-user-manual Canvas data.json 为唯一真源；
+ * shipped 表面不得把规划/无写权主路径写成默认可执行。
  */
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  CLI_USER_MANUAL_DATA_PATH,
   collectCliDocsAvailableViolations,
-  extractImplementedCommandsSection,
-  extractMarkdownSection,
+  collectCliManualShippedSurfaceText,
+  collectInventoryMismatches,
+  readCliUserManualData,
 } from "./cli-docs-surface.ts";
 
 const ROOT = process.cwd();
 
-function readCliMd(): string {
-  return readFileSync(join(ROOT, "docs/cli.md"), "utf8");
-}
-
-function readReadme(): string {
-  return readFileSync(join(ROOT, "README.md"), "utf8");
+function readFile(rel: string): string {
+  return readFileSync(join(ROOT, rel), "utf8");
 }
 
 describe("cli-docs-surface helpers", () => {
@@ -39,72 +38,49 @@ describe("cli-docs-surface helpers", () => {
       expect(violations).toContain(id);
     }
   });
-
-  it("extractMarkdownSection slices until next h2", () => {
-    const md = ["# T", "", "## A", "body-a", "", "## B", "body-b"].join("\n");
-    expect(extractMarkdownSection(md, "A")).toBe("body-a");
-    expect(extractMarkdownSection(md, "B")).toBe("body-b");
-  });
 });
 
-describe("cli user manual governance", () => {
-  it("docs/cli.md 是使用手册而非开发波次文档", () => {
-    const md = readCliMd();
-    expect(md).toMatch(/使用手册/u);
-    expect(md).toMatch(/先启动 Pier/u);
-    expect(md).not.toMatch(/交付波次|W0–W6|W0-W6|金标准命令面/u);
-    expect(md).not.toMatch(
+describe("cli user manual governance (canvas canonical)", () => {
+  it("pier-cli-user-manual data.json 是使用手册真源而非开发波次文档", () => {
+    expect(existsSync(CLI_USER_MANUAL_DATA_PATH)).toBe(true);
+    expect(existsSync(join(ROOT, "docs/cli.md"))).toBe(false);
+
+    const data = readCliUserManualData();
+    expect(data.meta.title).toMatch(/CLI|命令行/u);
+    expect(data.meta.status).toMatch(/使用手册/u);
+    expect(data.bluf).toMatch(/先启动 Pier/u);
+    expect(data.bluf).not.toMatch(/交付波次|W0–W6|W0-W6|金标准命令面/u);
+    expect(JSON.stringify(data)).not.toMatch(
       /PIER_AGENT_CALLER_|agent-binding|effectKey|CapabilityAuthority/u
     );
-    expect(md).toMatch(
-      /不是.*多智能体编排权限|不负责.*权限|不负责.*委派|不负责.*权限签发/u
+    expect(`${data.context}\n${data.nonGoals.join("\n")}`).toMatch(
+      /不是.*权限|不把 CLI 写成权限|不负责.*权限|权限系统/u
     );
   });
 
-  it("已实现区不得把未实现 agents 主路径写成默认可执行示例", () => {
-    const available = extractImplementedCommandsSection(readCliMd());
+  it("shipped / planned / blocked 必现清单完整且字段齐全", () => {
+    const data = readCliUserManualData();
+    expect(collectInventoryMismatches(data)).toEqual([]);
+  });
+
+  it("shipped 表面不得把未实现 agents / access / 插件写权写成默认可执行", () => {
+    const data = readCliUserManualData();
+    const available = collectCliManualShippedSurfaceText(data);
     expect(collectCliDocsAvailableViolations(available)).toEqual([]);
-    expect(available).toMatch(/输出示例/u);
     expect(available).toMatch(/plugins list/u);
     expect(available).toMatch(/agents catalog/u);
+    expect(available).toMatch(/status/u);
   });
 
-  it("暂未实现章节写全 agents / 终端 / 消息 / access 等并含预期输出", () => {
-    const md = readCliMd();
-    expect(md).toMatch(/# 第二部分：暂未实现命令（完整说明）/u);
-    expect(md).toMatch(/命令总表/u);
-    for (const heading of [
-      "### `agents self`",
-      "### `agents invoke`",
-      "### `agents start`",
-      "### `agents turn`",
-      "### `agents screen`",
-      "### `agents wait`",
-      "### `agents watch`",
-      "### `agents focus`",
-      "### `agents interrupt`",
-      "### `agents terminate`",
-      "### `terminal list`",
-      "### `terminal send`",
-      "### `terminal key`",
-      "### `terminal interrupt`",
-      "### `terminal terminate`",
-      "### `terminal wait`",
-      "### `terminal watch`",
-      "### `snapshot`",
-      "### `watch`",
-      "### `activity snapshot`",
-      "### `notifications list`",
-      "### `access request`",
-    ]) {
-      expect(md, `missing ${heading}`).toContain(heading);
+  it("产品入口文档指向 Canvas 且不得再引 docs/cli.md", () => {
+    for (const path of [
+      "README.md",
+      "docs/README.md",
+      "docs/development.md",
+    ] as const) {
+      const text = readFile(path);
+      expect(text, path).toMatch(/pier-cli-user-manual/u);
+      expect(text, path).not.toMatch(/docs\/cli\.md/u);
     }
-    expect(md).toMatch(/状态：暂未实现/u);
-    expect(md).toMatch(/预期输出示例/u);
-  });
-
-  it("README CLI 入口指向 docs/cli.md 且为使用说明定位", () => {
-    const readme = readReadme();
-    expect(readme).toMatch(/docs\/cli\.md/u);
   });
 });

@@ -2,14 +2,14 @@
 
 **日期：** 2026-08-10  
 **状态：** 传输层实现仍在仓库；**产品 CLI 已收敛为「本机用户使用手册」路径——不注入 / 不要求 agent binding 或权限主体**  
-**实现水位：** 用户文档见 `docs/cli.md`（使用手册）。`pier` 默认 `cli-human`；spawn **不再**签发 binding。库内 agent-caller / authorize 代码为遗留/可选实验，**不作为产品权限系统**。  
+**实现水位：** 用户文档见 Canvas [pier-cli-user-manual](../../../.pier/canvases/pier-cli-user-manual/)（使用手册唯一真源）。`pier` 默认 `cli-human`；spawn **不再**签发 binding。库内 agent-caller / authorize 代码为遗留/可选实验，**不作为产品权限系统**。  
 **层级权威：**
 
 | 层级 | 权威 | 冲突时 |
 |------|------|--------|
 | 产品边界 / 命令语义 / 完成权 / 内容路径 | Canvas [multi-agent-orchestration-gold](../../../.pier/canvases/multi-agent-orchestration-gold/) | **以 Canvas 为准** |
 | Socket 分流、帧形状、会话状态机、cursor/流、peer 校验 | **本文** | **以本文为准** |
-| 命令面地图（已实现 vs 规划） | [`docs/cli.md`](../../cli.md) | 实现未落地不得写成可用 |
+| 命令面地图（已实现 vs 规划） | Canvas [pier-cli-user-manual](../../../.pier/canvases/pier-cli-user-manual/) | 实现未落地不得写成可用 |
 
 **相关代码（现状 v1）：**  
 `bin/pier.mjs` · `bin/pier-cli-parser.js` · `src/main/adapters/cli/local-control-server.ts` · `src/shared/contracts/commands.ts` · `src/main/app-core/command-router.ts` · `src/shared/contracts/permissions.ts`
@@ -22,7 +22,7 @@
 
 - 定义 v1/v2 共存、帧 schema、principal、流与 cursor、错误码、测试矩阵与实施波次。  
 - **不是** 产品能力金标准全文（那是 Canvas）。  
-- **不是** 已实现系统；实现按 §12 波次，未交付前 `docs/cli.md` 仍标 v2 为规划。
+- **不是** 已实现系统；实现按 §12 波次，未交付前 pier-cli-user-manual 仍将相关能力标为 planned。
 
 **一句话：** 保留 v1 短请求；在同 socket 上用 v2 会话承载智能体身份、长调用与 JSONL 观察，使 Canvas 方案 A 可诚实落地。
 
@@ -181,7 +181,7 @@ Accepted
 
 失败：单帧 error（若尚无 requestId 用 `server.error`），**禁止**附带 bootId、面板、项目路径。
 
-**实现水位：** 宿主在加载 Ghostty native 后 `registerUnixPeerUidResolver`。产品路径：**不**在 agent 终端 spawn 注入 binding——`withPanelStatusEnv` 只剥离父级 `PIER_AGENT_CALLER_*`，避免误传。库内 `issueAgentCallerCredential` / `bindAgentCallerIssuer` / v2 `agent-binding` 为遗留实验面（单测与手动 issue 仍可用），**不作为产品权限系统**。产品 CLI 恒为 `cli-human`（见 `docs/cli.md`）。
+**实现水位：** 宿主在加载 Ghostty native 后 `registerUnixPeerUidResolver`。产品路径：**不**在 agent 终端 spawn 注入 binding——`withPanelStatusEnv` 只剥离父级 `PIER_AGENT_CALLER_*`，避免误传。库内 `issueAgentCallerCredential` / `bindAgentCallerIssuer` / v2 `agent-binding` 为遗留实验面（单测与手动 issue 仍可用），**不作为产品权限系统**。产品 CLI 恒为 `cli-human`（见 pier-cli-user-manual Canvas）。
 
 ### 6.2 客户端 → 服务端帧（规范形状）
 
@@ -598,7 +598,7 @@ T1–T5 ⊆ **产品 W1**；T6⊆W2；T7⊆W3。
 | 动作成功 | 可静默 | 仅 envelope/response |
 | 长等待 | stderr 心跳（可选） | **默认无** 心跳进 stdout |
 
-禁止：摘要/heartbeat 写入 `--json` stdout。完整表随 agents 落地写入 `docs/cli.md`。
+禁止：摘要/heartbeat 写入 `--json` stdout。完整表随 agents 落地写入 pier-cli-user-manual Canvas。
 
 ---
 

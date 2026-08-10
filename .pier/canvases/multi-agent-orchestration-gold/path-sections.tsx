@@ -209,13 +209,15 @@ export function LandingPage({ d }: { d: DesignData }) {
       <Stack gap={6}>
         <SectionTitle>落地摘要</SectionTitle>
         <SectionLead>
-          先固定 CLI 命令面地图（
-          <span className="font-medium text-foreground">docs/cli.md</span>
+          先固定 CLI 用户手册真源（
+          <span className="font-medium text-foreground">
+            pier-cli-user-manual Canvas
+          </span>
           ）与边界，再按智能体身份 → 双内容路径 → 宿主原语收敛 → 协作面 →
           外部接入交付。下图是
           <span className="font-medium text-foreground">实施交付依赖</span>
-          ，不是多智能体任务 DAG。每一波次完成后应回写 docs/cli.md
-          的「当前可用」与命令组现状。
+          ，不是多智能体任务 DAG。每一波次完成后应回写 Canvas 手册的
+          shipped / planned 清单。
         </SectionLead>
         <div className="flex flex-wrap gap-2">
           <StatusBadge label={`验收已核对 ${verified}`} tone="success" />

@@ -138,7 +138,7 @@
       {
         "area": "本机 CLI",
         "owner": "bin/pier + local-control",
-        "available": "v1 短请求：open、status、windows/panels list|focus、terminal open/profiles、worktrees list|create|open、tasks list|run|status|cancel、plugins 只读、preferences；v2 会话（cli-human）：agents catalog/list/get、control.hold/trace、subscribe；docs/cli.md 与 unit 门禁已对齐；产品 CLI 不签发 binding",
+        "available": "v1 短请求：open、status、windows/panels list|focus、terminal open/profiles、worktrees list|create|open、tasks list|run|status|cancel、plugins 只读、preferences；v2 会话（cli-human）：agents catalog/list/get、control.hold/trace、subscribe；pier-cli-user-manual Canvas 与 unit 门禁已对齐；产品 CLI 不签发 binding",
         "missing": "agents invoke/start/turn/screen/wait 产品语义（W2/W3）；agents.self 产品化（需 agent principal，现为实验）；access 外部主体（W6）；顶层 snapshot/watch 与 notifications CLI；终端写控 RuntimeRef 全同构；catalog 真实 detection 可用性"
       },
       {
@@ -703,7 +703,7 @@
     ],
     "cli": {
       "namespace": "pier agents | pier snapshot/watch | pier access | pier terminal | pier windows | pier panels | pier worktrees | pier activity | pier tasks | pier notifications",
-      "decision": "CLI 是智能体优先的本地调用面：先以 docs/cli.md 固定金标准命令面地图与交付波次，再按 W1–W6 实现。协调智能体优先使用 agents 高层命令完成自述、一次性调用、持久会话控制、当前画面读取与工作树定位，再用自身文件/Git 工具读取持久内容；terminal/windows/panels/worktrees/activity/tasks 是需要精细控制时的宿主原语。人类与外部控制器复用相同 JSON/JSONL 契约，但调用方自行处理工作拆分、重试、回复验收与综合结论。",
+      "decision": "CLI 是智能体优先的本地调用面：先以 pier-cli-user-manual Canvas 固定用户命令面（shipped/planned），交付波次由本 Canvas 与 local-control 设计文档承载，再按 W1–W6 实现。协调智能体优先使用 agents 高层命令完成自述、一次性调用、持久会话控制、当前画面读取与工作树定位，再用自身文件/Git 工具读取持久内容；terminal/windows/panels/worktrees/activity/tasks 是需要精细控制时的宿主原语。人类与外部控制器复用相同 JSON/JSONL 契约，但调用方自行处理工作拆分、重试、回复验收与综合结论。",
       "commandGroups": [
         {
           "group": "顶层",
@@ -1306,12 +1306,12 @@
       {
         "wave": 0,
         "name": "文档与边界",
-        "outcome": "docs/cli.md 成为金标准命令面地图（已实现/规划/Wx）；智能体优先与方案 A 内容边界成为架构与测试硬约束；完成判断不归 Pier；unit 门禁见 tests/unit/cli/；Canvas contracts 锁定方案语义；本机控制架构闭环见 local-control 金标准文档与 architecture-loop 单测",
+        "outcome": "pier-cli-user-manual Canvas 成为用户命令面真源（shipped/planned/blocked）；智能体优先与方案 A 内容边界成为架构与测试硬约束；完成判断不归 Pier；unit 门禁见 tests/unit/cli/；Canvas contracts 锁定方案语义；本机控制架构闭环见 local-control 金标准文档与 architecture-loop 单测",
         "status": "done",
         "slices": [
           {
             "id": "W0-S1",
-            "title": "重写 docs/cli.md：主调用者、能力地图、当前可用命令、规划 agents 路径与 W0–W6 交付表"
+            "title": "建立 pier-cli-user-manual Canvas：用户命令面 shipped/planned/blocked 清单与主调用路径（交付波次表在 multi-agent gold）"
           },
           {
             "id": "W0-S2",
@@ -1319,7 +1319,7 @@
           },
           {
             "id": "W0-S3",
-            "title": "治理测试：禁止任务生命周期/公共运行历史/身份自报/事实越权；并扫描 docs/cli.md「当前可用命令」不得列出 agents/access 等规划命令与默认无写权的 plugins enable|disable"
+            "title": "治理测试：禁止任务生命周期/公共运行历史/身份自报/事实越权；并扫描 pier-cli-user-manual shipped 表面不得列出 agents/access 等规划命令与默认无写权的 plugins enable|disable"
           }
         ]
       },
@@ -1339,14 +1339,14 @@
           },
           {
             "id": "W1-S3",
-            "title": "产品路径：spawn 不签发 binding、scrub 父 PIER_AGENT_CALLER_*；issue/store/v2 agent-binding 保留为实验；docs/cli 同步用户手册"
+            "title": "产品路径：spawn 不签发 binding、scrub 父 PIER_AGENT_CALLER_*；issue/store/v2 agent-binding 保留为实验；Canvas 用户手册同步"
           }
         ]
       },
       {
         "wave": 2,
         "name": "一次性 agents invoke",
-        "outcome": "agents invoke 在可证明隔离的只读沙箱内对显式目标返回有界 InvocationReply；不建立公共历史；docs/cli.md 同步为已实现",
+        "outcome": "agents invoke 在可证明隔离的只读沙箱内对显式目标返回有界 InvocationReply；不建立公共历史；Canvas 用户手册同步为已实现",
         "status": "planned",
         "slices": [
           {
@@ -1359,7 +1359,7 @@
           },
           {
             "id": "W2-S3",
-            "title": "可信外层 auth/窄 egress、工具子进程只读挂载、无 auto-pick、共享活跃预算；更新 docs/cli.md 已实现表"
+            "title": "可信外层 auth/窄 egress、工具子进程只读挂载、无 auto-pick、共享活跃预算；更新 Canvas 用户手册已实现表"
           }
         ]
       },
@@ -1399,7 +1399,7 @@
           },
           {
             "id": "W4-S3",
-            "title": "tasks 同构为 shell-only；顶层 snapshot/watch 与 activity 便利流；docs/cli.md 全表刷新"
+            "title": "tasks 同构为 shell-only；顶层 snapshot/watch 与 activity 便利流；Canvas 用户手册全表刷新"
           },
           {
             "id": "W4-S4",
@@ -1462,7 +1462,7 @@
       {
         "id": "E1",
         "text": "Pier 新增契约、插件、持久化和 UI 中不存在多智能体 Run/WorkItem/Attempt/Gate/Result、工作 DAG、任务台账或公共运行历史",
-        "evidence": "pierOwns allowlist + ownership/entities/stateMachines 跨表门禁 + transcript/history/replay 禁止扫描 + docs/cli.md 硬边界 + tests/unit/cli 边界扫描 + tests/unit/main/adapters/local-control-architecture-loop.test.ts",
+        "evidence": "pierOwns allowlist + ownership/entities/stateMachines 跨表门禁 + transcript/history/replay 禁止扫描 + Canvas 用户手册硬边界 + tests/unit/cli 边界扫描 + tests/unit/main/adapters/local-control-architecture-loop.test.ts",
         "status": "planned"
       },
       {
