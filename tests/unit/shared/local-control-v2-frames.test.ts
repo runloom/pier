@@ -43,19 +43,29 @@ describe("classifyLocalControlFirstFrame", () => {
     expect(result.kind).toBe("v1");
   });
 
-  it("classifies v2 hello", () => {
+  it("classifies v2 hello with agent-binding", () => {
     const result = classifyLocalControlFirstFrame({
       apiVersion: LOCAL_CONTROL_V2_API_VERSION,
       type: "client.hello",
       requestId: "r1",
       clientKind: "agent",
       auth: {
-        method: "agent-credential",
-        credentialId: "cred_1",
-        secret: "s3cret-value-here",
+        method: "agent-binding",
+        bindingId: "bind_1",
       },
     });
     expect(result.kind).toBe("v2-hello");
+  });
+
+  it("parses agent-binding hello schema", () => {
+    const hello = {
+      apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+      type: "client.hello" as const,
+      requestId: "r1",
+      clientKind: "agent" as const,
+      auth: { method: "agent-binding" as const, bindingId: "bind_1" },
+    };
+    expect(localControlV2ClientHelloSchema.parse(hello)).toEqual(hello);
   });
 
   it("rejects v2 non-hello first frame", () => {

@@ -154,6 +154,9 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
 
    Optional adjacent `data.json` via `useCanvasFile`.
 6. Start from the closest thin template in `templates/`.
+   - **`docs`**: start from `templates/docs.canvas.tsx` and use **`DocsShell`**
+     for left nav + right article (do not hand-roll dual ScrollArea shells).
+   - Command inventories: one Accordion list; badge only unfinished items.
 7. Export valid `canvas` metadata.
 8. Do **not** require `instance.json` methodology fields.
 9. Run verification requirements.

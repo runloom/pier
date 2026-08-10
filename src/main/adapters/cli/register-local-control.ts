@@ -111,7 +111,8 @@ export async function registerCliLocalControl({
         "AbortError"
       );
     }
-    // 生产路径：终端 agent spawn 经 host-bind 取签发入口。
+    // 实验/单测入口：手动 issue 仍可走 host-bind。产品 spawn **不**注入 binding
+    //（见 create-handler + design 实现水位）；关闭时必须 unbind。
     bindAgentCallerIssuer(issueAgentCredential);
     return {
       close: async () => {

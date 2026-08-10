@@ -1,8 +1,8 @@
 # 本机控制通道传输金标准：v1 保留 · v2 会话
 
 **日期：** 2026-08-10  
-**状态：** **传输金标准终态（已确认路径）+ 架构能力闭环已落地（凭证签发 / authorize / receipt / subscribe / hold·cancel / spawn 注入 / peer UID）**  
-**实现水位：** T1–T5 + 架构闭环探针 + 生产接线（agent 终端 `issueAgentCredential` env、JCS receipt digest、native `getUnixPeerUid`/fs-acl peer）；产品 invoke/screen 仍待补功能  
+**状态：** 传输层实现仍在仓库；**产品 CLI 已收敛为「本机用户使用手册」路径——不注入 / 不要求 agent binding 或权限主体**  
+**实现水位：** 用户文档见 `docs/cli.md`（使用手册）。`pier` 默认 `cli-human`；spawn **不再**签发 binding。库内 agent-caller / authorize 代码为遗留/可选实验，**不作为产品权限系统**。  
 **层级权威：**
 
 | 层级 | 权威 | 冲突时 |
@@ -181,7 +181,7 @@ Accepted
 
 失败：单帧 error（若尚无 requestId 用 `server.error`），**禁止**附带 bootId、面板、项目路径。
 
-**实现水位：** 宿主在加载 Ghostty native 后 `registerUnixPeerUidResolver`；agent 终端 spawn 经 `bindAgentCallerIssuer` 注入 `PIER_AGENT_CALLER_CREDENTIAL_FILE`（并剥离父级同名 env）。
+**实现水位：** 宿主在加载 Ghostty native 后 `registerUnixPeerUidResolver`。产品路径：**不**在 agent 终端 spawn 注入 binding——`withPanelStatusEnv` 只剥离父级 `PIER_AGENT_CALLER_*`，避免误传。库内 `issueAgentCallerCredential` / `bindAgentCallerIssuer` / v2 `agent-binding` 为遗留实验面（单测与手动 issue 仍可用），**不作为产品权限系统**。产品 CLI 恒为 `cli-human`（见 `docs/cli.md`）。
 
 ### 6.2 客户端 → 服务端帧（规范形状）
 
@@ -200,7 +200,8 @@ type ClientHello = {
   requestId: string;
   clientKind: "agent" | "cli-human" | "external";
   auth:
-    | { method: "agent-credential"; credentialId: string }
+    | { method: "agent-binding"; bindingId: string } // 本机默认
+    | { method: "agent-credential"; credentialId: string; secret: string } // 可选增强
     | { method: "none" } // cli-human 只读会话
     | {
         method: "external-grant";
@@ -358,10 +359,10 @@ Challenge 消费：任意验证尝试即作废；重连新 challenge。
 
 ### 6.5 Principal
 
-| kind | 证明 | W1 | 权限来源 |
-|------|------|----|----------|
-| `agent` | credential 文件（main 注入路径；校验 owner/mode/boot/generation/credentialId） | **必做** | bootstrap/child CapabilityRef |
-| `cli-human` | PeerCheck + `auth.method: "none"` | **必做** | ≈ 今日 cli-local **只读子集**；写仍走 v1 |
+| kind | 证明 | W1 产品 | 权限来源 |
+|------|------|---------|----------|
+| `cli-human` | PeerCheck + `auth.method: "none"` | **必做**（产品 `pier` 唯一路径） | ≈ 今日 cli-local **只读子集**；写仍走 v1 |
+| `agent` | `PIER_AGENT_CALLER_BINDING` + 内存 store（bindingId/boot/过期）；可选 secret 增强 | **实验**（协议/单测保留；**不**在 spawn 注入；人类 CLI 不进 agent 主体） | bootstrap/child CapabilityRef（实验） |
 | `external` | PeerCheck + challenge + proof + grant | 帧保留，实现可 unsupported | grant clauses |
 
 禁止：`--as-agent`、panelId、焦点、可伪造环境自报主体。

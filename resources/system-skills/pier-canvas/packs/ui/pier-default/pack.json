@@ -7,9 +7,13 @@
   "rules": [
     "Import UI only from pier/canvas",
     "Prefer Frame + Stack + Row + Text hierarchy",
+    "User manuals / multi-chapter docs: use DocsShell (sticky nav + main), not hand-rolled dual ScrollArea or dual-pane grids",
+    "Command inventories: ONE expandable Accordion list (name + description on trigger; details inside). Do not render a summary Table and a second Accordion of the same commands",
+    "Status badges: only mark unfinished/blocked (暂未实现 / CLI 默认不可用). Do not badge every shipped item as 已实现",
+    "Layout-critical geometry may use DocsShell or inline style; do not rely on canvas-only arbitrary Tailwind that may not be in the host CSS bundle",
     "Single-line controls density aligns with host 28px",
     "Use Badge for status, not decorative emoji",
-    "Tables for commands/defaults; prose for narrative only",
+    "Tables for option/defaults inventories or compact matrices; prose for narrative only",
     "One primary focus per view (squint test)",
     "Mix open sections with cards; do not wrap every block in the same card"
   ],
@@ -18,7 +22,10 @@
     "marketing gradients / glassmorphism / glow",
     "rainbow status colors outside semantic Badge variants",
     "fabricated chart data",
-    "host-private APIs (window.pier, Electron, Node)"
+    "host-private APIs (window.pier, Electron, Node)",
+    "Dual command inventory (Table + Accordion of the same set)",
+    "Badge spam on every shipped command",
+    "Dual ScrollArea + vh-height fake full-page shells inside Frame"
   ],
-  "agentPrompt": "Apply Pier desktop-tool visual discipline. pier/canvas only. No marketing chrome. Semantic badges. Clear hierarchy. Prefer tables for inventories. See references/authoring.md and sdk/."
+  "agentPrompt": "Apply Pier desktop-tool visual discipline. pier/canvas only. Docs → DocsShell. Command lists → single Accordion, badge only unfinished. No dual inventory, no dual ScrollArea shells. See references/authoring.md and sdk/core.d.ts DocsShell."
 }

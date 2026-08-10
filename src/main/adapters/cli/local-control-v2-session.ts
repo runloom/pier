@@ -10,7 +10,10 @@ import {
   localControlV2ClientFrameSchema,
 } from "@shared/contracts/local-control/v2-frames.ts";
 import type { AgentCallerCredentialStore } from "../../services/agent-caller/credential-store.ts";
-import { resolveAgentCredential } from "../../services/agent-caller/credential-store.ts";
+import {
+  resolveAgentBinding,
+  resolveAgentCredential,
+} from "../../services/agent-caller/credential-store.ts";
 import {
   type AgentsDiscovery,
   createStaticAgentsDiscovery,
@@ -107,38 +110,53 @@ export function createLocalControlV2SessionFromHello(
   }
 
   if (hello.clientKind === "agent") {
-    if (hello.auth.method !== "agent-credential") {
-      return {
-        ok: false,
-        errorFrame: serverErrorFrame(
-          "auth_failed",
-          "agent clientKind requires agent-credential auth"
-        ),
-      };
-    }
     if (!store) {
       return {
         ok: false,
         errorFrame: serverErrorFrame(
           "auth_required",
-          "credential store unavailable"
+          "binding store unavailable"
         ),
       };
     }
-    const resolved = resolveAgentCredential({
-      store,
-      credentialId: hello.auth.credentialId,
-      secret: hello.auth.secret,
-      expectedBootId: args.bootId,
-      nowMs: nowMs(),
-    });
-    if (!resolved.ok) {
+    if (hello.auth.method === "agent-binding") {
+      const resolved = resolveAgentBinding({
+        store,
+        bindingId: hello.auth.bindingId,
+        expectedBootId: args.bootId,
+        nowMs: nowMs(),
+      });
+      if (!resolved.ok) {
+        return {
+          ok: false,
+          errorFrame: serverErrorFrame(resolved.code, resolved.message),
+        };
+      }
+      material = resolved.material;
+    } else if (hello.auth.method === "agent-credential") {
+      const resolved = resolveAgentCredential({
+        store,
+        credentialId: hello.auth.credentialId,
+        secret: hello.auth.secret,
+        expectedBootId: args.bootId,
+        nowMs: nowMs(),
+      });
+      if (!resolved.ok) {
+        return {
+          ok: false,
+          errorFrame: serverErrorFrame(resolved.code, resolved.message),
+        };
+      }
+      material = resolved.material;
+    } else {
       return {
         ok: false,
-        errorFrame: serverErrorFrame(resolved.code, resolved.message),
+        errorFrame: serverErrorFrame(
+          "auth_failed",
+          "agent clientKind requires agent-binding (or optional agent-credential)"
+        ),
       };
     }
-    material = resolved.material;
     principalRef = `agent:${material.bootId}:${material.callerRuntimeId}:${material.callerGeneration}:${material.credentialId}`;
   } else if (hello.clientKind === "cli-human") {
     if (hello.auth.method !== "none") {

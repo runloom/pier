@@ -15,8 +15,7 @@ describe("agent-caller host-bind", () => {
     expect(getBoundAgentCallerIssuer()).toBeNull();
     const issuer = vi.fn(() => ({
       material: {} as never,
-      credentialFilePath: "/tmp/c.json",
-      env: { PIER_AGENT_CALLER_CREDENTIAL_FILE: "/tmp/c.json" },
+      env: { PIER_AGENT_CALLER_BINDING: "bind_x" },
     }));
     bindAgentCallerIssuer(issuer);
     expect(getBoundAgentCallerIssuer()).toBe(issuer);
@@ -24,14 +23,13 @@ describe("agent-caller host-bind", () => {
     expect(getBoundAgentCallerIssuer()).toBeNull();
   });
 
-  it("tryIssueAgentCallerLaunchEnv returns env when bound", () => {
+  it("tryIssueAgentCallerLaunchEnv returns binding env when bound", () => {
     bindAgentCallerIssuer(() => ({
       material: {} as never,
-      credentialFilePath: "/tmp/c.json",
-      env: { PIER_AGENT_CALLER_CREDENTIAL_FILE: "/tmp/c.json" },
+      env: { PIER_AGENT_CALLER_BINDING: "bind_x" },
     }));
     expect(tryIssueAgentCallerLaunchEnv()).toEqual({
-      PIER_AGENT_CALLER_CREDENTIAL_FILE: "/tmp/c.json",
+      PIER_AGENT_CALLER_BINDING: "bind_x",
     });
   });
 
@@ -46,13 +44,14 @@ describe("agent-caller host-bind", () => {
     warn.mockRestore();
   });
 
-  it("scrubAgentCallerCredentialEnv strips credential path", () => {
+  it("scrub strips binding and legacy credential file env", () => {
     const env = {
       PATH: "/bin",
+      PIER_AGENT_CALLER_BINDING: "bind_parent",
       PIER_AGENT_CALLER_CREDENTIAL_FILE: "/secret.json",
     };
     const scrubbed = scrubAgentCallerCredentialEnv(env);
     expect(scrubbed).toEqual({ PATH: "/bin" });
-    expect(env.PIER_AGENT_CALLER_CREDENTIAL_FILE).toBe("/secret.json");
+    expect(env.PIER_AGENT_CALLER_BINDING).toBe("bind_parent");
   });
 });

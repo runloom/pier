@@ -1,5 +1,5 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
-import { Button } from "@pier/ui/button.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { MarkdownSourceEditor } from "@/components/code-editor/markdown-source.tsx";
 import type { Translate } from "./shared.tsx";
@@ -24,27 +24,22 @@ export function SkillContentBody({
   if (content === null && !loadFailed) {
     return <Skeleton className="min-h-60 w-full" />;
   }
+  // No SKILL.md body to show — full Empty, not an Alert strip.
   if (loadFailed) {
     return (
-      <Alert variant="warning">
-        <AlertTitle>{t("settings.skills.contentUnavailable")}</AlertTitle>
-        <AlertDescription>
-          <span className="flex flex-col gap-2">
-            {errorDetail ? (
-              <span className="break-words text-muted-foreground text-xs">
-                {errorDetail}
-              </span>
-            ) : null}
-            {onRetry ? (
-              <span className="flex justify-end">
-                <Button onClick={onRetry} size="sm" type="button">
-                  {t("settings.skills.retry")}
-                </Button>
-              </span>
-            ) : null}
-          </span>
-        </AlertDescription>
-      </Alert>
+      <ErrorEmpty
+        className="min-h-60"
+        description={errorDetail?.trim() ? errorDetail : undefined}
+        retryAction={
+          onRetry
+            ? {
+                label: t("settings.skills.retry"),
+                onClick: onRetry,
+              }
+            : undefined
+        }
+        title={t("settings.skills.contentUnavailable")}
+      />
     );
   }
   if (!content) {

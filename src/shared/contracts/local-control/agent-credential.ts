@@ -1,12 +1,16 @@
 /**
- * Agent 调用凭证材料（T3 / W1）。
- * 文件中可含 secret 字段；self 响应不得回传 secret。
+ * Agent caller binding 材料（本机纪律句柄，非安全登录）。
+ *
+ * 业界默认：宿主 spawn 注入不透明 bindingId；同 UID socket + peer/fs-acl 负责接入。
+ * secret 仅可选增强（委派收紧 / 防粗伪造），默认签发不写 secret、不写凭证文件。
+ * self 响应永不回传 secret。
  */
 import { z } from "zod";
 
 const nonEmpty = z.string().min(1);
 
 export const agentCallerCredentialMaterialSchema = z.object({
+  /** 不透明 binding id（wire/env 称 bindingId；历史字段名 credentialId） */
   credentialId: nonEmpty,
   bootId: nonEmpty,
   callerRuntimeId: nonEmpty,
@@ -22,8 +26,11 @@ export const agentCallerCredentialMaterialSchema = z.object({
   expiresAt: z.number().int().positive(),
   worktreeKey: nonEmpty.optional(),
   incarnationId: nonEmpty.optional(),
-  /** 高熵 secret；仅存文件 / 内存，hello 时校验，永不进 self 响应 */
-  secret: nonEmpty,
+  /**
+   * 可选持有证明。默认 binding 路径不签发；
+   * 仅 method: agent-credential 时校验。
+   */
+  secret: nonEmpty.optional(),
 });
 
 export type AgentCallerCredentialMaterial = z.infer<
@@ -33,6 +40,8 @@ export type AgentCallerCredentialMaterial = z.infer<
 /** agents.self 非秘密视图 */
 export const agentSelfSnapshotSchema = z.object({
   principalRef: nonEmpty,
+  /** 与 material.credentialId 相同；产品文案用 binding */
+  bindingId: nonEmpty,
   credentialId: nonEmpty,
   bootId: nonEmpty,
   callerRuntimeId: nonEmpty,
@@ -55,6 +64,7 @@ export function toAgentSelfSnapshot(
 ): AgentSelfSnapshot {
   return {
     principalRef,
+    bindingId: material.credentialId,
     credentialId: material.credentialId,
     bootId: material.bootId,
     callerRuntimeId: material.callerRuntimeId,
@@ -71,3 +81,13 @@ export function toAgentSelfSnapshot(
       : {}),
   };
 }
+
+/** 宿主注入 env 键：不透明 binding id（对齐 surface id 注入，非 secret 文件） */
+export const PIER_AGENT_CALLER_BINDING_ENV = "PIER_AGENT_CALLER_BINDING";
+
+/**
+ * 旧凭证文件路径 env（兼容读取；默认签发不再写入）。
+ * 仍 scrub，避免父进程路径泄漏到子 agent。
+ */
+export const PIER_AGENT_CALLER_CREDENTIAL_FILE_ENV =
+  "PIER_AGENT_CALLER_CREDENTIAL_FILE";

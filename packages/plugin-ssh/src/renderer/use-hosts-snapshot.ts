@@ -1,5 +1,5 @@
 import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
-import { useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { HOSTS_CHANGED_EVENT, type SshHostsSnapshot } from "../shared/hosts.ts";
 
 interface HostsSnapshotState {
@@ -9,6 +9,7 @@ interface HostsSnapshotState {
 
 interface HostsSnapshotStore {
   getSnapshot: () => HostsSnapshotState;
+  reload: () => void;
   subscribe: (listener: () => void) => () => void;
 }
 
@@ -34,15 +35,7 @@ function createHostsSnapshotStore(
     publish({ error: null, snapshot });
   };
 
-  const connect = (): void => {
-    if (unsubscribeRpc) {
-      return;
-    }
-    const generation = ++connectionGeneration;
-    unsubscribeRpc = context.rpc.on<SshHostsSnapshot>(
-      HOSTS_CHANGED_EVENT,
-      acceptSnapshot
-    );
+  const fetchSnapshot = (generation: number): void => {
     context.rpc
       .invoke<SshHostsSnapshot>("hosts.snapshot")
       .then((initial) => {
@@ -61,14 +54,37 @@ function createHostsSnapshotStore(
       });
   };
 
+  const connect = (): void => {
+    if (unsubscribeRpc) {
+      return;
+    }
+    const generation = ++connectionGeneration;
+    unsubscribeRpc = context.rpc.on<SshHostsSnapshot>(
+      HOSTS_CHANGED_EVENT,
+      acceptSnapshot
+    );
+    fetchSnapshot(generation);
+  };
+
   const disconnect = (): void => {
     connectionGeneration += 1;
     unsubscribeRpc?.();
     unsubscribeRpc = null;
   };
 
+  const reload = (): void => {
+    if (!unsubscribeRpc) {
+      connect();
+      return;
+    }
+    const generation = ++connectionGeneration;
+    publish({ error: null, snapshot: state.snapshot });
+    fetchSnapshot(generation);
+  };
+
   return {
     getSnapshot: () => state,
+    reload,
     subscribe(listener) {
       listeners.add(listener);
       if (listeners.size === 1) {
@@ -102,11 +118,15 @@ function getHostsSnapshotStore(
  */
 export function useSshHostsSnapshot(
   context: ExternalRendererPluginContext
-): HostsSnapshotState {
+): HostsSnapshotState & { reload: () => void } {
   const store = getHostsSnapshotStore(context);
-  return useSyncExternalStore(
+  const state = useSyncExternalStore(
     store.subscribe,
     store.getSnapshot,
     store.getSnapshot
   );
+  const reload = useCallback(() => {
+    store.reload();
+  }, [store]);
+  return { ...state, reload };
 }

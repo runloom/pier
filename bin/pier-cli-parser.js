@@ -29,7 +29,6 @@ export function usage() {
     "  pier plugins enable <id> --json",
     "  pier plugins disable <id> --json",
     "  pier preferences read --json",
-    "  pier agents self --json",
     "  pier agents catalog --json",
     "  pier agents list --json",
     "  pier agents get --agent-ref <ref> | --agent-id <id> | --panel <panelId> --json",
@@ -475,7 +474,14 @@ function parseAgents(action, value, unexpected, args) {
   if (unexpected) {
     throw new Error(`unexpected pier CLI argument: ${unexpected}`);
   }
-  if (action === "self" || action === "catalog" || action === "list") {
+  // Product CLI is always cli-human; agents.self needs an agent principal.
+  // Fail at parse time so users do not hit a confusing authorize rejection.
+  if (action === "self") {
+    throw new Error(
+      "pier agents self is not available from the human CLI (requires agent principal / binding). Use agents catalog|list|get instead."
+    );
+  }
+  if (action === "catalog" || action === "list") {
     if (value) {
       throw new Error(`unexpected pier CLI argument: ${value}`);
     }

@@ -1,12 +1,15 @@
 /**
  * pier.control/v2 短会话客户端：hello → 单 request → response → close。
- * Agent 主体必须携带 credentialId + secret（从凭证文件加载）。
+ * 本机默认：agent 用 PIER_AGENT_CALLER_BINDING（不透明 id，无 secret）。
+ * 可选增强：凭证文件含 secret 时走 agent-credential。
  */
 
 import { lstatSync, readFileSync } from "node:fs";
 import { createConnection } from "node:net";
 
 const API = "pier.control/v2";
+const BINDING_ENV = "PIER_AGENT_CALLER_BINDING";
+const CREDENTIAL_FILE_ENV = "PIER_AGENT_CALLER_CREDENTIAL_FILE";
 
 function readNdjsonFrames(
   socketPath,
@@ -72,6 +75,51 @@ function readNdjsonFrames(
   });
 }
 
+function resolveClientKindAndAuth(args) {
+  const clientKind =
+    args.clientKind ??
+    (args.bindingId || (args.credentialId && args.secret)
+      ? "agent"
+      : "cli-human");
+  if (clientKind !== "agent") {
+    return { clientKind, auth: { method: "none" } };
+  }
+  if (args.credentialId && args.secret) {
+    return {
+      clientKind,
+      auth: {
+        method: "agent-credential",
+        credentialId: args.credentialId,
+        secret: args.secret,
+      },
+    };
+  }
+  if (args.bindingId) {
+    return {
+      clientKind,
+      auth: { method: "agent-binding", bindingId: args.bindingId },
+    };
+  }
+  throw new Error(
+    "agent principal requires PIER_AGENT_CALLER_BINDING (or credential+secret)"
+  );
+}
+
+function assertV2Pair(helloFrame, responseFrame) {
+  if (helloFrame?.type !== "server.hello") {
+    if (helloFrame?.type === "server.error") {
+      throw new Error(`${helloFrame.code}: ${helloFrame.message}`);
+    }
+    throw new Error("expected server.hello from pier.control/v2");
+  }
+  if (responseFrame?.type !== "response") {
+    if (responseFrame?.type === "server.error") {
+      throw new Error(`${responseFrame.code}: ${responseFrame.message}`);
+    }
+    throw new Error("expected response from pier.control/v2");
+  }
+}
+
 /**
  * @param {{
  *   socketPath: string,
@@ -79,6 +127,7 @@ function readNdjsonFrames(
  *   op: string,
  *   params?: Record<string, unknown>,
  *   clientKind?: "agent" | "cli-human",
+ *   bindingId?: string,
  *   credentialId?: string,
  *   secret?: string,
  *   timeoutMs?: number,
@@ -87,23 +136,7 @@ function readNdjsonFrames(
 export async function invokePierControlV2(args) {
   const requestId = args.requestId ?? `req_${Date.now()}`;
   const helloId = `hello_${requestId}`;
-  const clientKind =
-    args.clientKind ??
-    (args.credentialId && args.secret ? "agent" : "cli-human");
-
-  let auth;
-  if (clientKind === "agent") {
-    if (!(args.credentialId && args.secret)) {
-      throw new Error("agent principal requires credentialId and secret");
-    }
-    auth = {
-      method: "agent-credential",
-      credentialId: args.credentialId,
-      secret: args.secret,
-    };
-  } else {
-    auth = { method: "none" };
-  }
+  const { clientKind, auth } = resolveClientKindAndAuth(args);
 
   const hello = {
     apiVersion: API,
@@ -128,37 +161,28 @@ export async function invokePierControlV2(args) {
 
   const helloFrame = frames[0];
   const responseFrame = frames[1];
-  if (helloFrame?.type !== "server.hello") {
-    if (helloFrame?.type === "server.error") {
-      throw new Error(`${helloFrame.code}: ${helloFrame.message}`);
-    }
-    throw new Error("expected server.hello from pier.control/v2");
-  }
-  if (responseFrame?.type !== "response") {
-    if (responseFrame?.type === "server.error") {
-      throw new Error(`${responseFrame.code}: ${responseFrame.message}`);
-    }
-    throw new Error("expected response from pier.control/v2");
-  }
+  assertV2Pair(helloFrame, responseFrame);
   return { hello: helloFrame, response: responseFrame };
 }
 
 /**
- * 从 PIER_AGENT_CALLER_CREDENTIAL_FILE 安全读取 credentialId + secret。
- * 拒绝 symlink 与 other 可读（Unix）；解析失败返回 null。
- * @returns {{ credentialId: string, secret: string } | null}
+ * 读取 agent 主体：优先 PIER_AGENT_CALLER_BINDING；
+ * 回退旧凭证文件（若含 secret 则返回 credential 增强路径）。
+ * @returns {{ bindingId?: string, credentialId?: string, secret?: string } | null}
  */
-export function readAgentCredentialFromEnv(env = process.env) {
-  const path = env.PIER_AGENT_CALLER_CREDENTIAL_FILE;
+export function readAgentCallerFromEnv(env = process.env) {
+  const binding = env[BINDING_ENV];
+  if (typeof binding === "string" && binding.length > 0) {
+    return { bindingId: binding };
+  }
+
+  const path = env[CREDENTIAL_FILE_ENV];
   if (!path || typeof path !== "string") {
     return null;
   }
   try {
     const st = lstatSync(path);
-    if (st.isSymbolicLink()) {
-      return null;
-    }
-    if (!st.isFile()) {
+    if (st.isSymbolicLink() || !st.isFile()) {
       return null;
     }
     if (process.platform !== "win32") {
@@ -171,21 +195,46 @@ export function readAgentCredentialFromEnv(env = process.env) {
     }
     const raw = JSON.parse(readFileSync(path, "utf8"));
     if (
-      raw &&
-      typeof raw.credentialId === "string" &&
-      raw.credentialId.length > 0 &&
-      typeof raw.secret === "string" &&
-      raw.secret.length > 0
+      !(
+        raw &&
+        typeof raw.credentialId === "string" &&
+        raw.credentialId.length > 0
+      )
     ) {
+      return null;
+    }
+    if (typeof raw.secret === "string" && raw.secret.length > 0) {
       return { credentialId: raw.credentialId, secret: raw.secret };
     }
+    // 文件仅有 id、无 secret → 当 binding 用
+    return { bindingId: raw.credentialId };
   } catch {
     return null;
+  }
+}
+
+/**
+ * @deprecated 使用 readAgentCallerFromEnv。
+ * 仅返回旧的 credential+secret 形状；binding-only 返回 null（勿合成空 secret）。
+ */
+export function readAgentCredentialFromEnv(env = process.env) {
+  const v = readAgentCallerFromEnv(env);
+  if (!v) {
+    return null;
+  }
+  if (
+    typeof v.credentialId === "string" &&
+    v.credentialId.length > 0 &&
+    typeof v.secret === "string" &&
+    v.secret.length > 0
+  ) {
+    return { credentialId: v.credentialId, secret: v.secret };
   }
   return null;
 }
 
-/** @deprecated 使用 readAgentCredentialFromEnv */
+/** @deprecated 使用 readAgentCallerFromEnv */
 export function readCredentialIdFromEnv(env = process.env) {
-  return readAgentCredentialFromEnv(env)?.credentialId ?? null;
+  const v = readAgentCallerFromEnv(env);
+  return v?.bindingId ?? v?.credentialId ?? null;
 }

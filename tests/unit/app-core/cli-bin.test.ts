@@ -43,6 +43,19 @@ describe("bin/pier.mjs", () => {
     expect(source).not.toContain("function parseTerminalOpen");
   });
 
+  it("rejects agents self at parse time (human CLI, no agent principal)", async () => {
+    const { parsePierCliArgs } = await import(
+      "../../../bin/pier-cli-parser.js"
+    );
+    expect(() => parsePierCliArgs(["agents", "self"])).toThrow(
+      /not available from the human CLI/u
+    );
+    expect(parsePierCliArgs(["agents", "catalog"])).toMatchObject({
+      op: "agents.catalog",
+      protocol: "v2",
+    });
+  });
+
   it("解析 status 并输出命令信封", async () => {
     const { stdout } = await execFileAsync("node", [
       "bin/pier.mjs",

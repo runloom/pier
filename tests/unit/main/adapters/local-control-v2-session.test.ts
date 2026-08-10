@@ -33,7 +33,7 @@ function sampleMaterial(
   over: Partial<AgentCallerCredentialMaterial> = {}
 ): AgentCallerCredentialMaterial {
   return {
-    credentialId: "cred_1",
+    credentialId: "bind_1",
     bootId: "boot-fixed-v2",
     callerRuntimeId: "rt_1",
     callerGeneration: 2,
@@ -47,7 +47,6 @@ function sampleMaterial(
     expiresAt: Date.now() + 120_000,
     worktreeKey: "/tmp/wt",
     incarnationId: "inc",
-    secret: "top-secret",
     ...over,
   };
 }
@@ -150,7 +149,7 @@ describe("local-control v2 session unit", () => {
     ]);
   });
 
-  it("agent hello with store enables agents.self feature and self snapshot without secret", () => {
+  it("agent-binding hello enables agents.self feature and self snapshot", () => {
     const store = createAgentCallerCredentialStore();
     store.put(sampleMaterial({ bootId: "boot-test" }));
     const emitted: unknown[] = [];
@@ -161,9 +160,8 @@ describe("local-control v2 session unit", () => {
         requestId: "h1",
         clientKind: "agent",
         auth: {
-          method: "agent-credential",
-          credentialId: "cred_1",
-          secret: "top-secret",
+          method: "agent-binding",
+          bindingId: "bind_1",
         },
       },
       {
@@ -195,12 +193,12 @@ describe("local-control v2 session unit", () => {
       data?: { self?: Record<string, unknown> };
     };
     expect(frame.ok).toBe(true);
-    expect(frame.data?.self?.credentialId).toBe("cred_1");
+    expect(frame.data?.self?.bindingId).toBe("bind_1");
+    expect(frame.data?.self?.credentialId).toBe("bind_1");
     expect(frame.data?.self).not.toHaveProperty("secret");
-    expect(JSON.stringify(frame)).not.toContain("top-secret");
   });
 
-  it("rejects agent hello with unknown credential", () => {
+  it("rejects agent hello with unknown binding", () => {
     const store = createAgentCallerCredentialStore();
     const created = createLocalControlV2SessionFromHello(
       {
@@ -209,9 +207,8 @@ describe("local-control v2 session unit", () => {
         requestId: "h1",
         clientKind: "agent",
         auth: {
-          method: "agent-credential",
-          credentialId: "missing",
-          secret: "nope",
+          method: "agent-binding",
+          bindingId: "missing",
         },
       },
       {
@@ -300,9 +297,8 @@ describe("local-control server v1/v2 split + peer + self", () => {
             requestId: "hello-1",
             clientKind: "agent",
             auth: {
-              method: "agent-credential",
-              credentialId: "cred_1",
-              secret: "top-secret",
+              method: "agent-binding",
+              bindingId: "bind_1",
             },
           }),
           JSON.stringify({
@@ -326,12 +322,18 @@ describe("local-control server v1/v2 split + peer + self", () => {
       expect(hello.features).toContain("agents.self");
       const self = JSON.parse(frames[1] ?? "{}") as {
         ok: boolean;
-        data?: { self?: { credentialId?: string; secret?: string } };
+        data?: {
+          self?: {
+            bindingId?: string;
+            credentialId?: string;
+            secret?: string;
+          };
+        };
       };
       expect(self.ok).toBe(true);
-      expect(self.data?.self?.credentialId).toBe("cred_1");
+      expect(self.data?.self?.bindingId).toBe("bind_1");
+      expect(self.data?.self?.credentialId).toBe("bind_1");
       expect(self.data?.self?.secret).toBeUndefined();
-      expect(frames[1]).not.toContain("top-secret");
     } finally {
       await server.close();
     }

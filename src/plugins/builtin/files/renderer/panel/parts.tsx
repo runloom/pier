@@ -1,3 +1,4 @@
+import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import {
   Empty,
   EmptyContent,
@@ -41,6 +42,64 @@ export function ReadOnlyErrorState({
           "Unable to restore file tab"
         )}
       />
+    </div>
+  );
+}
+
+/** Full-region Empty when disk read failed and there is no body to show. */
+export function FileReadErrorEmpty({
+  message,
+  onReload,
+  t,
+  title,
+}: {
+  message: string | null;
+  onReload?: (() => void) | undefined;
+  t: FilesTranslate;
+  title: string;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
+      <h1 className="sr-only">{title}</h1>
+      <ErrorEmpty
+        description={
+          message?.trim()
+            ? message
+            : t(
+                "filePanel.errors.read.fallback",
+                "Unable to read file contents."
+              )
+        }
+        retryAction={
+          onReload
+            ? {
+                label: t("filePanel.errors.reload", "Reload"),
+                onClick: onReload,
+              }
+            : undefined
+        }
+        title={t("filePanel.errors.read.title", "Unable to read file")}
+      />
+    </div>
+  );
+}
+
+/** Soft banner when save failed but editor body remains visible. */
+export function FileSaveErrorBanner({
+  message,
+  t,
+}: {
+  message: string;
+  t: FilesTranslate;
+}) {
+  return (
+    <div className="shrink-0 px-4 py-3">
+      <Alert variant="destructive">
+        <AlertTitle>
+          {t("filePanel.errors.save.title", "Unable to save file")}
+        </AlertTitle>
+        <AlertDescription>{message}</AlertDescription>
+      </Alert>
     </div>
   );
 }

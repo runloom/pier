@@ -22,10 +22,14 @@ export type LocalControlV2ClientKind = z.infer<
 
 export const localControlV2AuthSchema = z.discriminatedUnion("method", [
   z.object({
+    /** 本机默认：宿主 spawn 注入的 binding（无 secret） */
+    method: z.literal("agent-binding"),
+    bindingId: nonEmpty,
+  }),
+  z.object({
+    /** 可选增强：binding + secret（委派收紧时） */
     method: z.literal("agent-credential"),
-    /** 公开句柄，不可单独充当持有证明 */
     credentialId: nonEmpty,
-    /** 高熵 secret，必须与 store 中材料一致 */
     secret: nonEmpty,
   }),
   z.object({

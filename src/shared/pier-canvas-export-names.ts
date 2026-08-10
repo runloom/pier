@@ -46,6 +46,7 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "CollapsibleContent",
   "CollapsibleTrigger",
   "DataChart",
+  "DocsShell",
   "DropdownMenu",
   "DropdownMenuCheckboxItem",
   "DropdownMenuContent",

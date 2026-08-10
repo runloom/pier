@@ -1,291 +1,1775 @@
-# Pier CLI
+# Pier 本机命令行（CLI）使用手册
 
-本机控制面。**目标主调用者**是 Pier 启动的协调智能体；人类命令行、脚本、MCP 与外部控制器是并列可选入口，复用同一套命令与 JSON/JSONL 契约。
+在终端里控制**已经打开**的 Pier 应用：查看窗口与面板、打开文件夹、打开终端、管理工作树与 shell 任务，以及查看 /（规划中）控制本机智能体相关能力。
 
-| 角色 | 关系 |
-|------|------|
-| 协调智能体 | 默认主路径：`self` → `invoke` 或 `start` → `turn` / `screen` / `wait` |
-| 人类 CLI / 脚本 / MCP | 可选；当前已实现命令主要服务这一类 |
-| 外部控制器 | 可选；须经本机授权（规划中的 `access`）后同构调用 |
+> **推荐阅读（应用内）：**  
+> [`.pier/canvases/pier-cli-user-manual/`](../.pier/canvases/pier-cli-user-manual/)  
+> **文档壳 UI**：左侧目录 + 右侧正文 + 顶栏搜索（无顶栏五段胶囊）。  
+> 下文为 Markdown 全文，便于检索、diff 与离线阅读。
 
-产品与契约真源（未实现能力以它为准）：
+> 本手册面向使用 Pier 的人。  
+> - **已实现**：可直接执行，输出示例来自当前行为（示意，字段可能随版本变化）。  
+> - **暂未实现**：写全规划中的用法与**预期**输出形态，便于了解能力地图；**当前执行会失败或提示未知命令**，请勿写入脚本依赖。
 
-- Canvas：[`.pier/canvases/multi-agent-orchestration-gold/`](../.pier/canvases/multi-agent-orchestration-gold/)
-- 本文件：**已实现行为**以「当前可用命令」为准（含默认 `cli-local` 授权边界）；**规划命令**只出现在标注未实现 / 交付波次的章节，且不得省略「未实现」标记
-
-实现未完成前，不得把规划命令写进「当前可用命令」。
-
-### 协议分层（架构）
-
-| 版本 | 形态 | 用途 |
-|------|------|------|
-| **v1**（当前 · 长期保留） | 单次连接、一行 JSON 请求/响应（`protocolVersion: 1`） | 已实现的 open/status/windows/panels 等短控制 |
-| **v2**（传输金标准已定义 · 实现按 W1+） | 同 socket 会话、`apiVersion: "pier.control/v2"` NDJSON 多帧 + 可选事件流 | `agents` / 长调用 / wait·watch / access |
-
-v1 与 v2 **首帧分流、同连接不混用**。传输层金标准终态（帧、会话、cursor、peer、错误码）：
-
-[`docs/superpowers/specs/2026-08-10-local-control-v1-v2-design.md`](./superpowers/specs/2026-08-10-local-control-v1-v2-design.md)
-
-产品命令语义与完成权边界仍以 Canvas 为准；**未实现的 v2 命令不得写入「当前可用命令」**。
+脚本请始终加 `--json`，以实际返回为准。
 
 ---
 
-## 硬边界（全波次不变）
+## 使用前
 
-1. Pier **不**拥有多智能体任务生命周期、工作 DAG、任务台账、看板、自动调度或完成裁决。
-2. **不**提供公共 `transcript` / `history` / `replay` / 完整滚屏检索。
-3. `ready`、终端安静、进程退出、`accepted`、当前画面都**不是**调用方工作成功。
-4. 调用者身份不可自报：禁止把 `--as-agent`、panel 名、焦点或可伪造环境变量当凭据。
-5. 现有 `tasks` 只表示 **shell 命令运行**，不得扩展成多智能体工作项。
+1. **先启动 Pier**（菜单打开，或开发态 `pnpm dev`）。CLI 只连接正在运行的实例。
+2. 调用方式：
 
-完成权、工作拆分、重试与验收始终在调用方（协调智能体或外部控制器）。
+```bash
+# 安装包
+pier <命令…>
 
----
-
-## 能力地图：金标准命令面 × 现状 × 波次
-
-按金标准收口后的命令面如下。现状以本仓库可执行 `pier` 为准；波次对应 Canvas 落地页 W0–W6。
-
-| 命令组 | 目标职责（金标准） | 现状 | 交付波次 |
-|--------|-------------------|------|----------|
-| **顶层** `version` · `capabilities` · `doctor` · `status` · `snapshot` · `watch` | 协议协商、健康、能力列表、原子总快照、不漏事件的全局事实流 | **部分**：`status` 可用；其余未实现 | **W1** 底座扩展；**W3–W4** 与 `snapshot`/`watch` 收口 |
-| **`agents`** `self` · `catalog` · `list` · `get` · `invoke` · `start` · `turn` · `screen` · `wait` · `watch` · `focus` · `interrupt` · `terminate` | 智能体优先主路径：身份、一次性回复、持久运行控制、有界当前画面 | **部分**：`self`/`catalog`/`list`/`get`（v2）；invoke/start/screen 等未实现 | **W1** 发现已落地；**W2** `invoke`；**W3** 持久控制与 `screen`/`wait` |
-| **`access`** `keygen` · `status` · `request` · `wait` · `revoke` | 人类确认 / 外部 Ed25519 窄授权 | **未实现** | **W6** |
-| **`terminal`** `open` · `list` · `get` · `send` · `key` · `interrupt` · `terminate` · `wait` · `watch` · `profiles …` | 精细终端原语（agents 高层之下；**不含** `screen`，画面读取在 `agents screen`） | **部分**：`open`、`profiles`；无 list/get、send/key、interrupt/terminate、wait/watch 与 RuntimeRef 写控 | **W3–W4** 与 RuntimeRef 守卫对齐 |
-| **`windows` / `panels`** `list` · `get` · `watch` · `focus` | 界面定位与聚焦；**不能**代替 RuntimeRef 写进程 | **部分**：list/focus；无 get/watch 契约 | **W4** 语义收口（写路径仍禁旁路） |
-| **`worktrees`** `check` · `list` · `get` · `register` · `create` · `remove` … | 完整 `WorktreeRef` 定位与安全清理 | **部分**：list/create/open；身份 marker / 准入锁未齐 | **W4** |
-| **`activity`** `snapshot` · `watch` | 运行事实便利流 | **未实现**（内部 FA 已有，无 CLI） | **W3–W4** |
-| **`tasks`** `list` · `get` · `run` · `watch` · `output` · `stop` · `rerun` | **仅** shell TaskRuns | **部分**：list/run/status/cancel 等；命令名与金标准未完全同构 | **W4** 同构与边界锁定 |
-| **`notifications`** `list` · `get` · `watch` · `focus` · `mark-read` | 消息中心注意力，不改运行结论 | **未实现** | **W5** |
-| **`open` / `preferences` / `plugins`** | 打开路径、读偏好、插件管理（宿主便利面） | **部分**：`open`、`preferences read`、`plugins list|inspect` 可用；`plugins enable|disable` 需 `plugin:write` / 桌面宿主（默认 `cli-local` **拒绝**） | **W0** 文档归位；写插件路径保持 desktop-renderer |
-
-**双内容路径（方案 A，W2 + W3）：**
-
-| 路径 | 命令 | 返回 | 不是 |
-|------|------|------|------|
-| 一次性 | `agents invoke` | 本次有界结构化回复 `InvocationReply` | 可枚举历史；`responded` ≠ 工作完成 |
-| 持久 | `agents start` → `turn` → `screen` / `wait` | 当前可见画面 + `canonicalPath` / 完整 `WorktreeRef` | 完整 transcript；screen ≠ 语义终答 |
-
-文件与 Git **内容**由调用方本地工具读取；Pier CLI **不**新增 `files` / `git` 命令组。
-
----
-
-## 交付波次（CLI 视角）
-
-与 Canvas 落地页一致；**先文档与边界，再身份，再双内容路径，再宿主原语收敛，最后协作 UI 与外部接入**。
-
-| 波次 | 名称 | CLI / 文档交付物 | 可验证结果 |
-|------|------|------------------|------------|
-| **W0** | 文档与边界 | 本文件命令面地图；Canvas 边界；`tests/unit/cli/*-governance` 进 unit CI | **已完成（文档+门禁）**；W1 发现子集见「当前可用」 |
-| **W1** | 调用身份 | `agents self`（及 catalog/list/get 只读发现）；凭证注入与 scrub | 协调智能体无需手抄 panelId 即可自述能力 |
-| **W2** | 一次性调用 | `agents invoke`（v1 advisory-read-only） | 显式 agent + WorktreeRef → 本次回复；无公共历史 |
-| **W3** | 持久运行与画面 | `agents start/turn/screen/wait/watch` + RuntimeRef 守卫 | 父→新建子；viewport 有界；accepted ≠ handled |
-| **W4** | 宿主原语收敛 | 现有 `terminal` / `windows` / `panels` / `worktrees` / `tasks` / `status` 对齐金标准命名与 refs；补 `snapshot`/`watch`/`activity` 契约 | 与 agents 共用身份与 effect 语义；shell tasks 不越权 |
-| **W5** | 协作面与注意力 | `notifications` CLI + 协作 UI（非 agents 主路径） | 人能回到「需要你处理」的原运行；不写入完成结论 |
-| **W6** | 外部与发布 | `access`；人类确认与外部同构 JSON | 假协调智能体 + 假外部控制器端到端 |
-
-依赖（实施路径，不是任务 DAG）：
-
-```text
-W0 → W1 → W2 ┐
-         ↘    ├→ W4 → W5 → W6
-           W3 ┘
+# 开发态
+pnpm --silent cli:dev -- <命令…>
+# 或
+node ./bin/pier.mjs <命令…>
 ```
 
-W1 完成后，W2 与 W3 可并行；二者都汇入 W4 宿主原语收敛。
+macOS 安装包路径示例：`Pier.app/Contents/Resources/bin/pier`。
+
+连不上时：确认 Pier 已在运行，且与 CLI 是同一用户、同一套应用数据目录。
 
 ---
 
-## 当前可用命令
+## 通用选项
 
-下列为仓库在默认客户端 **`cli-local` 下可成功执行**的入口（以 `node ./bin/pier.mjs` / 安装包 `pier` 为准）。`cli-local`：可读状态、打开路径、聚焦；默认不能关窗、写配置、改插件状态或向终端注入键鼠。解析层若支持但授权拒绝的命令，**不算**当前可用。
+| 选项 | 说明 | 适用 |
+|------|------|------|
+| `--json` | 输出机器可读 JSON（脚本推荐） | 已实现命令均支持 |
+| `--print-envelope` | 只打印将要发送的请求，不执行 | 调试 |
+| `--no-focus` | 尽量不把 Pier 窗口抢到前台 | 打开类命令 |
+| `--window <id>` | 指定目标窗口（见 `windows list`） | 多窗口时 |
 
-可执行文件：
+---
 
-- 开发：`pnpm --silent cli:dev -- <args…>` 或 `node ./bin/pier.mjs`
-- 安装包：`Pier.app/Contents/Resources/bin/pier`
+## 通用输出约定
 
-### 约定（已实现）
+**成功（`--json`）**大致形如：
 
-- 需要机器可读结果时加 `--json`
-- 只想看解析后的命令信封时加 `--print-envelope`
-- 部分命令成功时可能有人类可读摘要；**agents 主路径落地后**将按 Canvas 固定「会话型 / 动作型 / JSON stdout」输出政策（见 Canvas `cli.commonRules`）
+```json
+{
+  "ok": true,
+  "requestId": "a1b2c3d4-…",
+  "data": {}
+}
+```
 
-### 智能体发现（v2 · 已实现只读子集）
+**失败（`--json`）**大致形如：
 
-走 `pier.control/v2` 会话（非 v1 短请求）。人类 CLI 默认 `cli-human`；若设置 `PIER_AGENT_CALLER_CREDENTIAL_FILE` 则按 agent 主体连接。
+```json
+{
+  "ok": false,
+  "requestId": "a1b2c3d4-…",
+  "error": {
+    "code": "permission_denied",
+    "message": "…"
+  }
+}
+```
+
+不加 `--json` 时，部分已实现命令会打印简短人类可读文本；**格式不保证稳定**。
+
+**暂未实现**命令若被误调用，常见表现：
+
+```text
+unknown pier CLI command
+```
+
+或 JSON：
+
+```json
+{
+  "ok": false,
+  "requestId": "…",
+  "error": {
+    "code": "invalid_command",
+    "message": "unknown pier CLI command"
+  }
+}
+```
+
+（具体文案以实现为准。）
+
+---
+
+## 命令总表
+
+| 命令组 | 命令 | 状态 |
+|--------|------|------|
+| 应用 | `status` | 已实现 |
+| 打开 | `open` | 已实现 |
+| 窗口 | `windows list` · `windows focus` | 已实现 |
+| 面板 | `panels list` · `panels focus` | 已实现 |
+| 终端 | `terminal open` · `terminal profiles …` | 已实现 |
+| 终端 | `terminal list` · `get` · `send` · `key` · `interrupt` · `terminate` · `wait` · `watch` | **暂未实现** |
+| 工作树 | `worktrees list` · `create` · `open` | 已实现 |
+| 工作树 | `worktrees check` · `get` · `register` · `remove` 等扩展 | **暂未实现**（部分能力仅应用内） |
+| Shell 任务 | `tasks list` · `run` · `status` · `cancel` | 已实现 |
+| Shell 任务 | `tasks get` · `watch` · `output` · `stop` · `rerun` | **暂未实现**（命名/能力规划） |
+| 智能体 | `agents catalog` · `list` · `get` | 已实现 |
+| 智能体 | `agents self` · `invoke` · `start` · `turn` · `screen` · `wait` · `watch` · `focus` · `interrupt` · `terminate` | **暂未实现** |
+| 偏好 | `preferences read` | 已实现 |
+| 插件 | `plugins list` · `inspect` | 已实现 |
+| 插件 | `plugins enable` · `plugins disable` | **CLI 默认不可用**（请用应用设置） |
+| 顶层 | `version` · `capabilities` · `doctor` · `snapshot` · `watch` | **暂未实现**（`status` 已实现） |
+| 活动 | `activity snapshot` · `activity watch` | **暂未实现** |
+| 消息 | `notifications list` · `get` · `watch` · `focus` · `mark-read` | **暂未实现** |
+| 外部授权 | `access keygen` · `status` · `request` · `wait` · `revoke` | **暂未实现** |
+
+下文：**先完整写已实现（含输出示例），再完整写暂未实现（含规划语法与预期输出）。**
+
+---
+
+# 第一部分：已实现命令
+
+## 应用状态
+
+```bash
+pier status --json
+```
+
+查看 Pier 是否在线及简要状态。
+
+**输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "appVersion": "0.1.x",
+    "platform": "darwin"
+  }
+}
+```
+
+---
+
+## 打开文件夹
+
+```bash
+pier open <路径> [--window <窗口id>] [--split <方向>] [--no-focus] --json
+```
+
+| 参数 | 说明 |
+|------|------|
+| `<路径>` | 要打开的目录 |
+| `--split` | `right` · `left` · `below`/`down` · `above`/`up` |
+| `--window` | 目标窗口 |
+| `--no-focus` | 不抢前台 |
+
+**示例：**
+
+```bash
+pier open . --json
+pier open ~/Projects/foo --split right --json
+```
+
+**输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "panelId": "terminal-…",
+    "windowId": "…"
+  }
+}
+```
+
+---
+
+## 窗口
+
+### `windows list`
+
+```bash
+pier windows list --json
+```
+
+**输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "windows": [
+      {
+        "id": "main",
+        "focused": true,
+        "title": "Pier"
+      }
+    ]
+  }
+}
+```
+
+### `windows focus`
+
+```bash
+pier windows focus <窗口id> --json
+```
+
+**输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": { "windowId": "main" }
+}
+```
+
+---
+
+## 面板
+
+### `panels list`
+
+```bash
+pier panels list [--window <窗口id>] --json
+```
+
+**不加 `--json` 时**可能类似：
+
+```text
+窗口 1 · 当前窗口 · 第 1 组
+  terminal-abc    Terminal    focused
+  files-xyz       Files
+```
+
+**`--json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "panels": [
+      {
+        "panelId": "terminal-abc",
+        "windowId": "main",
+        "title": "Terminal",
+        "focused": true,
+        "groupIndex": 0
+      }
+    ],
+    "errors": []
+  }
+}
+```
+
+### `panels focus`
+
+```bash
+pier panels focus <面板id> [--window <窗口id>] [--no-focus] --json
+```
+
+**输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "panelId": "terminal-abc",
+    "windowId": "main"
+  }
+}
+```
+
+---
+
+## 终端（已实现子集）
+
+### `terminal open`
+
+```bash
+pier terminal open [--cwd <路径>] [--profile <配置id>] [--env KEY=VALUE] \
+  [--command <命令> | -- <命令…>] \
+  [--window <窗口id>] [--split <方向>] [--no-focus] --json
+```
+
+**示例：**
+
+```bash
+pier terminal open --cwd . --json
+pier terminal open --profile work --json
+pier terminal open -- claude --json
+```
+
+**输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "panelId": "terminal-…",
+    "windowId": "…"
+  }
+}
+```
+
+### `terminal profiles list` / `get` / `set` / `delete`
+
+```bash
+pier terminal profiles list --json
+pier terminal profiles get <配置id> --json
+pier terminal profiles set <配置id> [--cwd <路径>] [--env KEY=VALUE] \
+  [--command <命令> | -- <命令…>] --json
+pier terminal profiles delete <配置id> --json
+```
+
+**`list` 不加 `--json` 时**可能类似：
+
+```text
+default
+  cwd: /Users/you/project
+work
+  command: claude
+  cwd: /Users/you/work
+```
+
+**`list --json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "default": { "cwd": "/Users/you/project" },
+    "work": { "command": "claude", "cwd": "/Users/you/work" }
+  }
+}
+```
+
+**`get --json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "command": "claude",
+    "cwd": "/Users/you/work",
+    "env": { "FOO": "1" }
+  }
+}
+```
+
+**`set` / `delete` 成功**时 `ok: true`；`data` 可能为空或回显配置。
+
+> 向**已有**终端注入按键、列举运行中的终端实例等：见下文「暂未实现 · 终端」。
+
+---
+
+## 工作树（已实现子集）
+
+```bash
+pier worktrees list --path <仓库路径> --json
+pier worktrees create --path <仓库> --name <目录名> --branch <分支> --base <基准ref> --json
+pier worktrees open <路径> --json
+```
+
+**`list --json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "worktrees": [
+      {
+        "path": "/Users/you/repo",
+        "branch": "main",
+        "bare": false
+      },
+      {
+        "path": "/Users/you/repo.worktree/feature-x",
+        "branch": "feature-x",
+        "bare": false
+      }
+    ]
+  }
+}
+```
+
+**`create` / `open` 成功**时返回路径相关字段（如 `path`）。扩展子命令见「暂未实现 · 工作树」。
+
+---
+
+## Shell 任务（已实现子集）
+
+这里的「任务」是 Pier 内配置的 **shell 命令运行**，不是多智能体工作项。
+
+```bash
+pier tasks list [--path <路径>] --json
+pier tasks run <任务id> [--path <路径>] [--input id=value] \
+  [--window <窗口id>] [--split <方向>] [--no-focus] --json
+pier tasks status <运行id> --json
+pier tasks cancel <运行id> [--window <窗口id>] --json
+```
+
+**`list --json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "tasks": [
+      {
+        "id": "build",
+        "label": "Build",
+        "command": "pnpm build"
+      }
+    ]
+  }
+}
+```
+
+**`run --json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "runId": "run-…",
+    "taskId": "build",
+    "status": "running"
+  }
+}
+```
+
+**`status --json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "runId": "run-…",
+    "status": "succeeded",
+    "exitCode": 0
+  }
+}
+```
+
+**`cancel --json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "runId": "run-…",
+    "status": "cancelled"
+  }
+}
+```
+
+规划中的 `get` / `watch` / `output` 等命名见「暂未实现 · Shell 任务」。
+
+---
+
+## 偏好（只读）
+
+```bash
+pier preferences read --json
+```
+
+**输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "locale": "zh-CN",
+    "theme": "system"
+  }
+}
+```
+
+---
+
+## 插件（只读）
+
+```bash
+pier plugins list --json
+pier plugins inspect <插件id> --json
+```
+
+**`list --json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "plugins": [
+      {
+        "id": "pier.codex",
+        "name": "Codex",
+        "version": "…",
+        "enabled": true
+      }
+    ]
+  }
+}
+```
+
+**`inspect --json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "id": "pier.codex",
+    "version": "…",
+    "enabled": true,
+    "manifest": {}
+  }
+}
+```
+
+启用 / 禁用：见「暂未实现 · 插件写操作」。
+
+---
+
+## 智能体（已实现：只读查看）
 
 ```bash
 pier agents catalog --json
 pier agents list --json
 pier agents get --agent-id <id> --json
-pier agents get --agent-ref <ref> --json
-pier agents get --panel <panelId> --json
-# 需 agent 凭证：
-pier agents self --json
+pier agents get --agent-ref <引用> --json
+pier agents get --panel <面板id> --json
 ```
 
-- `catalog`：产品目录（T4 可用性多为 unknown，detection 未接全）  
-- `list` / `get`：当前 boot 运行中智能体投影（Runtime Index）  
-- `self`：调用者非秘密身份与预算（需凭证）
+CLI **不负责**智能体权限签发或委派；下列只读命令无需额外凭证。
 
-### 打开与状态
+### `agents catalog` — 产品目录
 
-```bash
-pier open <path> [--window <windowId>] [--split <direction>] [--no-focus] --json
-pier status --json
-pier preferences read --json
-```
-
-- `--window`：发到指定窗口；未指定时优先当前聚焦窗口
-- `--split`：`right`、`below`/`down`、`left`、`above`/`up`；未指定则在当前 active group 内作 tab 打开
-- `--no-focus`：不把 Pier 窗口抢到前台（适合 MCP / 后台）
-
-`open` 会在 main 解析路径与 Git/worktree，形成 `PanelContext`，再经 renderer bridge 打开带上下文的 terminal panel，初始 cwd 为解析目录。
-
-### 窗口与面板
-
-```bash
-pier windows list --json
-pier windows focus <windowId> --json
-pier panels list [--window <windowId>] --json
-pier panels focus <panelId> [--window <windowId>] [--no-focus] --json
-```
-
-金标准：**PanelRef / WindowRef 只用于发现与聚焦**；进程写入必须等 W3 的 `RuntimeRef`（`bootId + runtimeId + generation`），不得用 panel 标题或焦点猜写目标。
-
-### 终端（部分）
-
-```bash
-pier terminal open [--cwd <path>] [--profile <profileId>] [--env KEY=VALUE] \
-  [--command <command> | -- <command...>] [--window <windowId>] [--split <direction>] [--no-focus] --json
-pier terminal profiles list --json
-pier terminal profiles get <profileId> --json
-pier terminal profiles set <profileId> [--cwd <path>] [--env KEY=VALUE] [--command <command> | -- <command...>] --json
-pier terminal profiles delete <profileId> --json
-```
-
-尚未实现（W3–W4）：`list`/`get` 运行实例、`send`/`key`、`interrupt`/`terminate`、`wait`/`watch`，以及与 `agents *` 同构的代际守卫。
-
-### 工作树（部分）
-
-```bash
-pier worktrees list --path <path> --json
-pier worktrees create --path <repo> --name <dir> --branch <branch> --base <ref> --json
-pier worktrees open <path> --json
-```
-
-金标准要求完整 `WorktreeRef`（含 incarnation 等）与准入锁；当前实现为过渡面，**W4** 收口。
-
-### Shell 任务（部分，非多智能体任务）
-
-```bash
-pier tasks list [--path <path>] --json
-pier tasks run <taskId> [--path <path>] [--input id=value] [--window <windowId>] [--split <direction>] [--no-focus] --json
-pier tasks status <runId> --json
-pier tasks cancel <runId> [--window <windowId>] --json
-```
-
-只表示宿主 shell TaskRuns。金标准命名（`get`/`watch`/`output`/`stop`/`rerun`）与精确 `TaskRunRef` 在 **W4** 对齐；**禁止**演化为多智能体 Run/WorkItem。
-
-### 插件（只读）
-
-```bash
-pier plugins list --json
-pier plugins inspect <id> --json
-```
-
-默认 `cli-local` 仅有 `plugin:read`。`plugins enable` / `plugins disable` 虽可被解析，但要求 `plugin:write`（通常仅桌面宿主），CLI 默认会授权失败——**不要**当作当前可用写路径。
-
-插件管理是宿主能力，**不**承担多智能体编排或任务台账。
-
----
-
-## 规划中的 agents 主路径（摘要）
-
-实现前仅作地图；细节与错误码以 Canvas 为准。
+**不加 `--json` 时**可能类似：
 
 ```text
-# W1 — 身份
+claude	Claude	available
+codex	Codex	unknown
+```
+
+**`--json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "agents": [
+      {
+        "agentId": "claude",
+        "label": "Claude",
+        "availability": "available"
+      },
+      {
+        "agentId": "codex",
+        "label": "Codex",
+        "availability": "unknown"
+      }
+    ]
+  }
+}
+```
+
+### `agents list` — 当前运行中的智能体面板
+
+**不加 `--json` 时**可能类似：
+
+```text
+claude	panel=terminal-abc	window=main	status=running
+```
+
+无运行中智能体时：
+
+```text
+(no running agents)
+```
+
+**`--json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "ts": 1730000000000,
+    "entries": [
+      {
+        "agentId": "claude",
+        "agentRef": "…",
+        "panelId": "terminal-abc",
+        "windowId": "main",
+        "source": "launch",
+        "updatedAt": 1730000000000
+      }
+    ]
+  }
+}
+```
+
+### `agents get` — 查询一条
+
+```bash
+pier agents get --agent-id claude --json
+pier agents get --panel terminal-abc --json
+```
+
+**不加 `--json` 时**可能类似：
+
+```text
+claude	panel=terminal-abc	window=main
+```
+
+**`--json` 输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "agent": {
+      "agentId": "claude",
+      "agentRef": "…",
+      "panelId": "terminal-abc",
+      "windowId": "main",
+      "source": "launch",
+      "updatedAt": 1730000000000
+    }
+  }
+}
+```
+
+未找到时：
+
+```json
+{
+  "ok": false,
+  "requestId": "…",
+  "error": {
+    "code": "not_found",
+    "message": "…"
+  }
+}
+```
+
+其余智能体命令见下文「暂未实现 · 智能体」。
+
+---
+
+# 第二部分：暂未实现命令（完整说明）
+
+> 以下命令**当前不可用**。文档写完整是为了说明产品能力地图与未来用法。  
+> 规划中的输出为**预期形态**，实现时可能调整；落地后会迁入「已实现」并改为真实示例。
+
+---
+
+## 暂未实现 · 顶层
+
+### `version` — 打印 CLI / 协议版本
+
+**状态：暂未实现**
+
+```bash
+pier version --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "cliVersion": "0.1.x",
+    "appVersion": "0.1.x",
+    "protocol": ["1", "pier.control/v2"]
+  }
+}
+```
+
+### `capabilities` — 列出当前客户端可用能力
+
+**状态：暂未实现**
+
+```bash
+pier capabilities --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "commands": ["app.status", "panel.list", "agents.catalog"],
+    "features": []
+  }
+}
+```
+
+### `doctor` — 本机连接与环境自检
+
+**状态：暂未实现**
+
+```bash
+pier doctor --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "socket": "ok",
+    "appRunning": true,
+    "issues": []
+  }
+}
+```
+
+### `snapshot` — 原子总快照（多资源）
+
+**状态：暂未实现**
+
+一次取回窗口 / 面板 / 活动等一致性快照，供脚本对账。
+
+```bash
+pier snapshot [--include windows,panels,activity] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "bootId": "…",
+    "capturedAt": 1730000000000,
+    "windows": [],
+    "panels": [],
+    "activity": null,
+    "cursor": { "bootId": "…", "revision": 12, "scope": "global" }
+  }
+}
+```
+
+### `watch` — 全局事实流（不漏事件）
+
+**状态：暂未实现**
+
+```bash
+pier watch [--after-boot <bootId> --after-revision <n>] --json
+```
+
+**预期行为：** 长连接或 JSONL 流式输出事件；断线 / 游标过期时提示重新 `snapshot`。
+
+**预期事件行示例（JSONL）：**
+
+```json
+{"type":"event","resource":"panels","revision":13,"payload":{}}
+{"type":"event","resource":"activity","revision":14,"payload":{}}
+```
+
+---
+
+## 暂未实现 · 终端（写控与观察）
+
+> 当前可用：`terminal open`、`terminal profiles …`（见上文）。
+
+### `terminal list` — 列出终端运行实例
+
+**状态：暂未实现**
+
+```bash
+pier terminal list [--window <窗口id>] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "terminals": [
+      {
+        "panelId": "terminal-abc",
+        "windowId": "main",
+        "cwd": "/Users/you/project",
+        "title": "zsh",
+        "runtimeId": "…",
+        "generation": 3
+      }
+    ]
+  }
+}
+```
+
+### `terminal get` — 查询单个终端
+
+**状态：暂未实现**
+
+```bash
+pier terminal get --panel <面板id> [--window <窗口id>] --json
+# 规划中亦可能支持按 RuntimeRef：
+# pier terminal get --runtime <id> --boot <bootId> --generation <n> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "panelId": "terminal-abc",
+    "cwd": "/Users/you/project",
+    "title": "zsh",
+    "alive": true,
+    "runtimeId": "…",
+    "generation": 3,
+    "bootId": "…"
+  }
+}
+```
+
+### `terminal send` — 向终端发送文本
+
+**状态：暂未实现**
+
+```bash
+pier terminal send --panel <面板id> --text "echo hi" --json
+# 或 stdin：
+# pier terminal send --panel <面板id> --json < payload.txt
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "accepted": true,
+    "panelId": "terminal-abc"
+  }
+}
+```
+
+> `accepted` 只表示已提交输入，**不等于**命令已执行完毕。
+
+### `terminal key` — 发送按键
+
+**状态：暂未实现**
+
+```bash
+pier terminal key --panel <面板id> --key Enter [--mods …] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": { "accepted": true, "key": "Enter" }
+}
+```
+
+### `terminal interrupt` — 中断（如 Ctrl-C）
+
+**状态：暂未实现**
+
+```bash
+pier terminal interrupt --panel <面板id> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": { "signaled": true, "panelId": "terminal-abc" }
+}
+```
+
+### `terminal terminate` — 结束终端进程 / 关闭运行
+
+**状态：暂未实现**
+
+```bash
+pier terminal terminate --panel <面板id> [--force] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": { "terminated": true, "panelId": "terminal-abc" }
+}
+```
+
+### `terminal wait` — 等待终端进入某状态
+
+**状态：暂未实现**
+
+```bash
+pier terminal wait --panel <面板id> --until idle|exited [--timeout-ms 60000] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "until": "idle",
+    "reached": true,
+    "elapsedMs": 1200
+  }
+}
+```
+
+超时预期：
+
+```json
+{
+  "ok": false,
+  "requestId": "…",
+  "error": {
+    "code": "observation_timeout",
+    "message": "…"
+  }
+}
+```
+
+### `terminal watch` — 订阅终端相关事件
+
+**状态：暂未实现**
+
+```bash
+pier terminal watch --panel <面板id> --json
+```
+
+**预期：** JSONL 事件流（标题变化、退出、cwd 变化等）。
+
+---
+
+## 暂未实现 · 工作树（扩展）
+
+> 当前可用：`worktrees list` · `create` · `open`。
+
+### `worktrees check` — 检查路径是否可作为工作树目标
+
+**状态：暂未实现**
+
+```bash
+pier worktrees check --path <路径> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "path": "/Users/you/repo",
+    "isGit": true,
+    "canCreateWorktree": true,
+    "issues": []
+  }
+}
+```
+
+### `worktrees get` — 查询单个工作树
+
+**状态：暂未实现**
+
+```bash
+pier worktrees get --path <路径> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "path": "/Users/you/repo.worktree/feature-x",
+    "branch": "feature-x",
+    "gitRoot": "/Users/you/repo",
+    "worktreeKey": "…",
+    "incarnationId": "…"
+  }
+}
+```
+
+### `worktrees register` — 登记已有工作树
+
+**状态：暂未实现**
+
+```bash
+pier worktrees register --path <路径> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "path": "/Users/you/repo.worktree/feature-x",
+    "registered": true
+  }
+}
+```
+
+### `worktrees remove` — 安全移除工作树
+
+**状态：暂未实现**
+
+```bash
+pier worktrees remove --path <路径> [--force] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "path": "/Users/you/repo.worktree/feature-x",
+    "removed": true
+  }
+}
+```
+
+---
+
+## 暂未实现 · Shell 任务（命名与扩展）
+
+> 当前可用：`tasks list` · `run` · `status` · `cancel`。  
+> 下列为规划中的同构命名（语义可能与 `status`/`cancel` 重叠，实现时再定最终别名）。
+
+### `tasks get`
+
+**状态：暂未实现**
+
+```bash
+pier tasks get <运行id> --json
+```
+
+**预期：** 与 `tasks status` 类似的单条运行详情，字段更完整。
+
+### `tasks watch`
+
+**状态：暂未实现**
+
+```bash
+pier tasks watch <运行id> --json
+```
+
+**预期：** JSONL 推送运行状态变化，直至终态。
+
+### `tasks output`
+
+**状态：暂未实现**
+
+```bash
+pier tasks output <运行id> [--after-byte <n>] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "runId": "run-…",
+    "chunk": "…",
+    "nextByte": 4096,
+    "eof": false
+  }
+}
+```
+
+### `tasks stop` / `tasks rerun`
+
+**状态：暂未实现**
+
+```bash
+pier tasks stop <运行id> --json
+pier tasks rerun <运行id> --json
+```
+
+**预期：** `stop` 类似取消；`rerun` 返回新的 `runId`。
+
+---
+
+## 暂未实现 · 智能体（完整）
+
+> 当前可用：`agents catalog` · `list` · `get`（见第一部分）。  
+> 下列命令**全部暂未实现**。实现前请用应用内方式启动智能体；CLI 仅作查看。
+
+### `agents self` — 当前调用者摘要
+
+**状态：暂未实现**（人类 CLI 在解析期直接拒绝，不会连上宿主后才报权限错误）
+
+用于查询「谁在调用 Pier」的非秘密摘要（规划/实验能力；**需要 agent principal**，**不作为本机权限系统**）。产品 `pier` 始终以 `cli-human` 连接，请用 `agents catalog|list|get`。
+
+```bash
+# 人类 CLI 会失败（预期）：
 pier agents self --json
-pier agents catalog --json
-pier agents list --json
-pier agents get <agentRef> --json
-
-# W2 — 一次性（prompt 走 stdin 或文件，不进 argv）
-pier agents invoke --agent <id> --worktree-key … --incarnation-id … \
-  --execution-deadline … --wait-timeout … --json < prompt.txt
-
-# W3 — 持久
-pier agents start --agent <id> --worktree-key … --incarnation-id … --json
-pier agents turn --runtime … --boot … --generation … --json < turn.txt
-pier agents screen --runtime … --boot … --generation … --json
-pier agents wait --runtime … --until ready|waiting|… --json
-pier agents interrupt|terminate|focus …   # 精确 RuntimeRef
+# → pier agents self is not available from the human CLI …
 ```
 
-语义要点：
+**预期输出示例：**
 
-- `invoke` → 仅本次 `InvocationReply`；无 list/history
-- `turn` → `accepted` + effect cursor，≠ 已处理
-- `screen` → 渲染后当前 viewport 单帧，有字节/行上限，无 scrollback
-- CLI 返回路径与 `WorktreeRef`；内容用调用方文件/Git 工具读
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "self": {
+      "principalRef": "…",
+      "bootId": "…",
+      "operations": ["agents.catalog", "agents.list"],
+      "expiresAt": 1730003600000
+    }
+  }
+}
+```
+
+### `agents invoke` — 一次性调用
+
+**状态：暂未实现**
+
+对指定智能体发起**单次**调用，只返回本次结构化回复，不建立可枚举历史。
+
+```bash
+pier agents invoke --agent <agentId> \
+  --worktree-key <key> [--incarnation-id <id>] \
+  [--execution-deadline-ms <n>] [--wait-timeout-ms <n>] \
+  --json < prompt.txt
+```
+
+| 参数（规划） | 说明 |
+|--------------|------|
+| `--agent` | 目标智能体 id（如 `claude`） |
+| `--worktree-key` / 工作树定位 | 约束工作目录身份 |
+| prompt | **stdin 或文件**，不进 argv |
+| `--execution-deadline-ms` | 执行截止 |
+| `--wait-timeout-ms` | 观察等待上限 |
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "reply": {
+      "agentId": "claude",
+      "status": "responded",
+      "text": "…",
+      "operationId": "…",
+      "bootId": "…",
+      "usage": { "inputTokens": 0, "outputTokens": 0 }
+    }
+  }
+}
+```
+
+**语义要点（规划）：**
+
+- `status: responded` **不等于**你的工作已完成  
+- 不提供 `invoke history` / 公共 transcript  
+- 观察超时与执行截止错误码会区分（如 `observation_timeout`）
+
+### `agents start` — 启动持久运行
+
+**状态：暂未实现**
+
+```bash
+pier agents start --agent <agentId> \
+  --worktree-key <key> [--incarnation-id <id>] \
+  [--window <窗口id>] [--split <方向>] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "runtime": {
+      "runtimeId": "rt-…",
+      "bootId": "…",
+      "generation": 1,
+      "panelId": "terminal-…",
+      "windowId": "main",
+      "agentId": "claude"
+    }
+  }
+}
+```
+
+### `agents turn` — 向持久运行发送一轮输入
+
+**状态：暂未实现**
+
+```bash
+pier agents turn \
+  --runtime <runtimeId> --boot <bootId> --generation <n> \
+  --json < turn.txt
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "accepted": true,
+    "runtimeId": "rt-…",
+    "generation": 1,
+    "effectRevision": 5
+  }
+}
+```
+
+> `accepted` 只表示输入已被接受，**不等于**智能体已处理完毕。
+
+### `agents screen` — 读取当前可见画面
+
+**状态：暂未实现**
+
+只返回**当前 viewport** 有界内容（非完整 scrollback / 非 transcript）。
+
+```bash
+pier agents screen \
+  --runtime <runtimeId> --boot <bootId> --generation <n> \
+  [--max-bytes <n>] [--max-lines <n>] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "screen": {
+      "text": "…当前可见文本…",
+      "truncated": false,
+      "canonicalPath": "/Users/you/repo/src/main.ts",
+      "worktree": {
+        "path": "/Users/you/repo",
+        "worktreeKey": "…",
+        "incarnationId": "…"
+      }
+    }
+  }
+}
+```
+
+**语义要点（规划）：**
+
+- 文件内容请用你自己的编辑器 / 本地工具读取；CLI 给路径定位  
+- 不是语义终答，也不是完整会话历史
+
+### `agents wait` — 等待运行状态
+
+**状态：暂未实现**
+
+```bash
+pier agents wait \
+  --runtime <runtimeId> --boot <bootId> --generation <n> \
+  --until ready|waiting|exited|attention \
+  [--timeout-ms 60000] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "until": "ready",
+    "reached": true,
+    "state": "ready",
+    "elapsedMs": 3400
+  }
+}
+```
+
+超时：
+
+```json
+{
+  "ok": false,
+  "requestId": "…",
+  "error": {
+    "code": "observation_timeout",
+    "message": "…"
+  }
+}
+```
+
+### `agents watch` — 订阅运行事实
+
+**状态：暂未实现**
+
+```bash
+pier agents watch \
+  --runtime <runtimeId> --boot <bootId> --generation <n> \
+  [--after-revision <n>] --json
+```
+
+**预期：** JSONL 事件流（状态变化、需要你处理等）；gap 时要求重新对齐。
+
+```json
+{"type":"event","revision":6,"kind":"agent.state","state":"waiting"}
+{"type":"event","revision":7,"kind":"agent.attention","reason":"…"}
+```
+
+### `agents focus` — 聚焦到该运行对应界面
+
+**状态：暂未实现**
+
+```bash
+pier agents focus \
+  --runtime <runtimeId> --boot <bootId> --generation <n> \
+  [--no-focus] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "panelId": "terminal-abc",
+    "windowId": "main"
+  }
+}
+```
+
+> 在实现前，可用已实现的 `panels focus <面板id>` 作界面聚焦。
+
+### `agents interrupt` — 中断当前运行
+
+**状态：暂未实现**
+
+```bash
+pier agents interrupt \
+  --runtime <runtimeId> --boot <bootId> --generation <n> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "interrupted": true,
+    "runtimeId": "rt-…",
+    "generation": 1
+  }
+}
+```
+
+### `agents terminate` — 结束运行
+
+**状态：暂未实现**
+
+```bash
+pier agents terminate \
+  --runtime <runtimeId> --boot <bootId> --generation <n> \
+  [--force] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "terminated": true,
+    "runtimeId": "rt-…",
+    "generation": 1
+  }
+}
+```
 
 ---
 
-## 开发态验证（已实现命令）
+## 暂未实现 · 活动（activity）
 
-先启动 Pier：
+### `activity snapshot`
+
+**状态：暂未实现**
 
 ```bash
-pnpm dev
+pier activity snapshot --json
 ```
 
-另一终端：
+**预期输出示例：**
 
-```bash
-pnpm --silent cli:dev -- status --json
-pnpm --silent cli:dev -- windows list --json
-pnpm --silent cli:dev -- windows focus main --json
-pnpm --silent cli:dev -- panels list --window main --json
-pnpm --silent cli:dev -- panels focus terminal-1 --window main --json
-pnpm --silent cli:dev -- open . --json
-pnpm --silent cli:dev -- open . --window main --split right --json
-pnpm --silent cli:dev -- open . --no-focus --json
-pnpm --silent cli:dev -- preferences read --json
-pnpm --silent cli:dev -- status --json --print-envelope
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "activity": {
+      "kind": "agent",
+      "label": "claude",
+      "panelId": "terminal-abc",
+      "state": "running"
+    },
+    "cursor": { "bootId": "…", "revision": 3, "scope": "resource:activity" }
+  }
+}
 ```
 
-这些命令通过 dev profile 的 userData socket 连接运行中的 main，返回 `PierCommandResult`。
+### `activity watch`
 
-相关单测：
+**状态：暂未实现**
 
 ```bash
-pnpm vitest run tests/unit/app-core/cli-bin.test.ts
-pnpm vitest run tests/unit/app-core/cli-adapter.test.ts
-pnpm vitest run tests/unit/app-core/local-control.test.ts
+pier activity watch [--after-revision <n>] --json
 ```
 
-Canvas 契约（方案与命令面门禁）：
+**预期：** 前台活动（agent / task / shell / idle）变化的 JSONL 流。
+
+---
+
+## 暂未实现 · 消息中心（notifications）
+
+> 请在应用内使用消息中心 UI。下列为规划中的 CLI 形态。
+
+### `notifications list`
+
+**状态：暂未实现**
 
 ```bash
-pnpm vitest run --config .pier/canvases/multi-agent-orchestration-gold/contracts.vitest.config.ts
+pier notifications list [--unread] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "items": [
+      {
+        "id": "n-…",
+        "title": "需要你处理",
+        "body": "…",
+        "unread": true,
+        "createdAt": 1730000000000
+      }
+    ]
+  }
+}
+```
+
+### `notifications get`
+
+**状态：暂未实现**
+
+```bash
+pier notifications get <id> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "item": {
+      "id": "n-…",
+      "title": "需要你处理",
+      "body": "…",
+      "unread": true,
+      "createdAt": 1730000000000,
+      "actions": []
+    }
+  }
+}
+```
+
+### `notifications watch`
+
+**状态：暂未实现**
+
+```bash
+pier notifications watch --json
+```
+
+**预期：** JSONL 推送新消息 / 已读变化。
+
+### `notifications focus`
+
+**状态：暂未实现**
+
+```bash
+pier notifications focus <id> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "id": "n-…",
+    "focused": true,
+    "panelId": "terminal-abc"
+  }
+}
+```
+
+### `notifications mark-read`
+
+**状态：暂未实现**
+
+```bash
+pier notifications mark-read <id> --json
+pier notifications mark-read --all --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": { "marked": 1 }
+}
 ```
 
 ---
 
-## MCP 定位 `pier` 的顺序
+## 暂未实现 · 外部授权（access）
 
-1. `PIER_CLI_PATH`
-2. `PATH` 中的 `pier`
-3. `/Applications/Pier.app/Contents/Resources/bin/pier`
-4. `$HOME/Applications/Pier.app/Contents/Resources/bin/pier`
-5. fallback 到 `pier`
+供外部控制器或人类确认场景的窄授权（规划）。**不是**本机日常 CLI 所需。
+
+### `access keygen`
+
+**状态：暂未实现**
+
+```bash
+pier access keygen --out <私钥路径> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "publicKey": "…",
+    "path": "/Users/you/.config/pier/access.pem",
+    "created": true
+  }
+}
+```
+
+### `access status`
+
+**状态：暂未实现**
+
+```bash
+pier access status --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "hasKey": false,
+    "grants": []
+  }
+}
+```
+
+### `access request`
+
+**状态：暂未实现**
+
+```bash
+pier access request --scope <scope-json-or-file> --json
+```
+
+**预期输出示例（等待宿主确认）：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "accessRequestId": "…",
+    "outcome": "pending"
+  }
+}
+```
+
+### `access wait`
+
+**状态：暂未实现**
+
+```bash
+pier access wait --request-id <id> [--timeout-ms 300000] --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "accessRequestId": "…",
+    "outcome": "approved",
+    "grantId": "grant-…"
+  }
+}
+```
+
+### `access revoke`
+
+**状态：暂未实现**
+
+```bash
+pier access revoke --grant-id <id> --json
+```
+
+**预期输出示例：**
+
+```json
+{
+  "ok": true,
+  "requestId": "…",
+  "data": {
+    "grantId": "grant-…",
+    "revoked": true
+  }
+}
+```
 
 ---
 
-## 相关
+## 暂未实现 · 插件写操作
 
-- 产品边界与架构：[`AGENTS.md`](../AGENTS.md)
-- 金标准方案 Canvas：[`multi-agent-orchestration-gold`](../.pier/canvases/multi-agent-orchestration-gold/)
-- 开发环境：[`development.md`](./development.md)
+### `plugins enable`
+
+**状态：CLI 默认不可用**（请在应用「设置 → 插件」中操作）
+
+```bash
+pier plugins enable <插件id> --json
+```
+
+**若强行调用，预期失败示例：**
+
+```json
+{
+  "ok": false,
+  "requestId": "…",
+  "error": {
+    "code": "permission_denied",
+    "message": "…"
+  }
+}
+```
+
+### `plugins disable`
+
+**状态：CLI 默认不可用**
+
+```bash
+pier plugins disable <插件id> --json
+```
+
+**预期失败示例：** 同 `plugins enable`。
+
+---
+
+## 本机 CLI 能做什么、不能做什么
+
+| 通常可以（已实现） | 通常不可以 |
+|--------------------|------------|
+| 查看状态、窗口、面板 | 关闭窗口、改多数写配置 |
+| 打开文件夹 / 终端 | 依赖上文「暂未实现」命令写脚本 |
+| 查看智能体目录与运行列表 | 智能体权限 / 委派管理 |
+| 列出插件 | 默认 CLI 启用 / 禁用插件 |
+| 跑 shell 任务 list/run/status/cancel | 把 tasks 当成多智能体看板 |
+
+Pier CLI 是本机工作台的控制与观察入口，**不是**远程 API，也**不是**多智能体编排权限系统。
+
+---
+
+## 常见问题
+
+**连不上 Pier**  
+先打开 Pier；开发态用同一 worktree 的 `pnpm dev` 与 `pnpm --silent cli:dev`。
+
+**脚本解析**  
+始终 `--json`。
+
+**手册里写了但命令不可用**  
+看是否标注 **暂未实现**；实现前请用应用内等价能力。
+
+**从 MCP 或其它工具调用**  
+调用本机 `pier`。查找顺序一般：`PIER_CLI_PATH` → `PATH` 中的 `pier` → `Pier.app/.../bin/pier`。
+
+**开发与架构**  
+见 [`development.md`](./development.md)、[`README.md`](./README.md)。

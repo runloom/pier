@@ -1,17 +1,17 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-10T22:00:00.000+08:00",
-  "source": "源码级调研：Orca / cmux / Agent Orchestrator；智能体优先本地调用面；本机控制架构闭环已落地（v1/v2 分流、凭证签发、authorize/receipt、subscribe/hold）；产品 invoke/screen 等按波次补功能",
+  "generatedAt": "2026-08-10T22:30:00.000+08:00",
+  "source": "源码级调研：Orca / cmux / Agent Orchestrator；本机 CLI 产品路径为用户手册（cli-human，无 spawn binding）；W0–W1 传输/发现/authorize 闭环已落地，agent-caller binding 为遗留实验；产品 invoke/screen 从 W2 起按波次补功能",
   "data": {
     "meta": {
       "title": "智能体优先的多智能体调用 CLI · 产品与技术方案",
-      "subtitle": "协调智能体经 Pier CLI 调用工作智能体；本机控制架构已闭环，发现面（catalog/list/get/self）协议可用；invoke 与持久 screen 等仍按波次实现",
+      "subtitle": "产品 CLI 服务本机用户（cli-human）；传输/发现 W1 已落地；agent binding 为遗留实验；invoke 与持久 screen 从 W2/W3 起实现",
       "status": "推荐方案",
-      "version": "v6.2",
+      "version": "v6.4",
       "researchCutoff": "2026-08-10",
-      "codeBaseline": "Pier local-control arch-loop + agents discovery"
+      "codeBaseline": "Pier local-control v2 + agents discovery; product CLI cli-human"
     },
-    "bluf": "Pier CLI 首先服务协调智能体：可自述身份、发现能力、并经 v2 会话调用发现类 op；本机控制已具备 v1 短请求与 v2 会话、peer 纪律、凭证签发、统一 authorize 与 receipt 插槽、subscribe 事件管道与 hold/cancel 长请求。产品级 invoke 与持久 start/turn/screen 仍待实现。调用方持有目标拆分、重试与结束判断；Pier 不建立任务生命周期。",
+    "bluf": "产品 Pier CLI 服务本机用户：默认 cli-human，不注入 / 不要求 agent binding。W1 已关账的是本机控制 v1/v2 分流、peer 纪律、authorize/receipt、subscribe/hold，以及 agents catalog/list/get 发现面。agent-caller binding、agents.self 与 spawn 自动 issue 为遗留/实验路径，不作为产品权限系统。产品级 invoke 与持久 start/turn/screen 仍待 W2/W3。调用方持有目标拆分、重试与结束判断；Pier 不建立任务生命周期。",
     "insight": "Orca 让协调智能体通过 spawn/send/read/wait 管理持久工作智能体；Agent Orchestrator 通过身份与系统提示注入，让协调智能体使用 spawn/send/session，并让 worker 主动回报，但没有 CLI 内容读取。cmux 把稳定 surface、进程代际和可配置画面读取做成自动化原语。最佳实践不是让人类控制台代替协调智能体，而是同时提供语义化的一次性 invoke 与可验证的持久运行控制，并把“已接收、已有回复、当前画面、进程状态”和调用方的工作结论严格分开。",
     "decision": "选择智能体优先、双内容路径的方案 A：高层 agents 位于主路径；本机控制传输以 docs/superpowers/specs/2026-08-10-local-control-v1-v2-design.md 为权威，架构能力闭环已落地（只补功能为主）。一次性 invoke 与持久 screen 路径按 W2/W3 补齐；默认父只控自己新建子运行；不提供公共 transcript/history/replay，也不新增任务台账、看板或自动调度。",
     "scope": {
@@ -138,14 +138,14 @@
       {
         "area": "本机 CLI",
         "owner": "bin/pier + local-control",
-        "available": "v1 短请求：open、status、windows/panels list|focus、terminal open/profiles、worktrees list|create|open、tasks list|run|status|cancel、plugins 只读、preferences；v2 会话：agents catalog/list/get、agents self（需凭证）、control.hold/trace、subscribe（resource:agents 等）；docs/cli.md 与 unit 门禁已对齐",
-        "missing": "agents invoke/start/turn/screen/wait 产品语义；access 外部主体；顶层 snapshot/watch 与 notifications CLI；终端写控 RuntimeRef 全同构；catalog 真实 detection 可用性"
+        "available": "v1 短请求：open、status、windows/panels list|focus、terminal open/profiles、worktrees list|create|open、tasks list|run|status|cancel、plugins 只读、preferences；v2 会话（cli-human）：agents catalog/list/get、control.hold/trace、subscribe；docs/cli.md 与 unit 门禁已对齐；产品 CLI 不签发 binding",
+        "missing": "agents invoke/start/turn/screen/wait 产品语义（W2/W3）；agents.self 产品化（需 agent principal，现为实验）；access 外部主体（W6）；顶层 snapshot/watch 与 notifications CLI；终端写控 RuntimeRef 全同构；catalog 真实 detection 可用性"
       },
       {
         "area": "智能体调用身份",
         "owner": "Pier 运行启动链",
-        "available": "AgentCaller 凭证内存 store + issueAgentCallerCredential（put + 私有文件 + env）；v2 hello 校验 credentialId/boot/过期；agents.self 非秘密快照；registerCliLocalControl 暴露 issueAgentCredential / credentialStore",
-        "missing": "启动链 AgentCallerService 自动绑定 RuntimeRef 并 issue；子进程启动前 scrub 父凭证；CapabilityAuthority 全量 mint/revoke 替代 default allowlist；深度/并发预算生产执行与跨项目矩阵"
+        "available": "产品路径：spawn 不注入 binding，只 scrub 父级 PIER_AGENT_CALLER_*；CLI 恒 cli-human。遗留实验：内存 store + issueAgentCallerCredential、v2 agent-binding hello/self、registerCliLocalControl 暴露 issueAgentCredential（单测/手动）；peer getpeereid 或 fs-acl",
+        "missing": "产品级 agent principal（若需要）须重新定义 spawn 注入或其它发放面；CapabilityAuthority 全量 mint/revoke；深度/并发/撤销矩阵；catalog detection 全量"
       },
       {
         "area": "一次性智能体调用",
@@ -174,8 +174,8 @@
       {
         "area": "本机控制授权",
         "owner": "main authorizeCommand（当前）",
-        "available": "v1：client-kind + capability 表；v2：LocalControlAuthorizer 可替换钩子 + 写 op effectKey + 内存 receipt/effectRevision；peer 连接校验（可注入 peer UID，Unix fs-acl 兜底）",
-        "missing": "AccessGrantService/CapabilityAuthority 唯一线性化全量实现；Ed25519 external grant 与 AccessConsentQueue；真 SO_PEERCRED/SID"
+        "available": "v1：client-kind + capability 表；v2：LocalControlAuthorizer 可替换钩子 + 写 op effectKey + JCS digest 内存 receipt/effectRevision；peer：native getUnixPeerUid（getpeereid）或 Unix fs-acl 兜底",
+        "missing": "AccessGrantService/CapabilityAuthority 唯一线性化全量实现（W4/W6）；Ed25519 external grant 与 AccessConsentQueue（W6）；Windows SID 完整 peer"
       },
       {
         "area": "工作树与 shell",
@@ -1326,20 +1326,20 @@
       {
         "wave": 1,
         "name": "调用身份与发现",
-        "outcome": "本机控制架构闭环已落地：v2 会话、凭证签发、authorize/receipt、subscribe/hold；agents catalog/list/get/self 协议可用。仍缺：启动链自动 issue、CapabilityAuthority 全量、父子预算生产矩阵",
-        "status": "in_progress",
+        "outcome": "W1 产品主路径关账：v1/v2 分流、peer、authorize/receipt/subscribe/hold 闭环；agents catalog/list/get（cli-human）可用。spawn 不注入 binding（只 scrub 父 env）；agents.self / agent principal 为遗留实验，不记入产品完成。CapabilityAuthority 全量与深度/并发/撤销矩阵不阻塞 W1，挪至 W4/W6",
+        "status": "done",
         "slices": [
           {
             "id": "W1-S1",
-            "title": "已完成：local-control v1/v2 分流、peer、凭证 store/issue、self、authorize/receipt、subscribe/hold 架构闭环与单测"
+            "title": "local-control v1/v2 分流、peer（getpeereid/fs-acl）、authorize/receipt（JCS）、subscribe/hold 架构闭环与单测"
           },
           {
             "id": "W1-S2",
-            "title": "已完成：agents catalog/list/get 只读发现（Runtime Index 注入）+ bin pier agents 走 v2"
+            "title": "agents catalog/list/get 只读发现（Runtime Index 注入）+ bin pier agents 走 v2；agents.self 解析期拒绝（人类 CLI）"
           },
           {
             "id": "W1-S3",
-            "title": "待完成：Agent 启动链自动 issueAgentCredential 与 scrub；CapabilityAuthority 替换 default authorizer；深度/并发/撤销矩阵"
+            "title": "产品路径：spawn 不签发 binding、scrub 父 PIER_AGENT_CALLER_*；issue/store/v2 agent-binding 保留为实验；docs/cli 同步用户手册"
           }
         ]
       },
@@ -1400,6 +1400,10 @@
           {
             "id": "W4-S3",
             "title": "tasks 同构为 shell-only；顶层 snapshot/watch 与 activity 便利流；docs/cli.md 全表刷新"
+          },
+          {
+            "id": "W4-S4",
+            "title": "（自 W1 挪入）CapabilityAuthority 替换 default authorizer 骨架；深度/并发预算生产执行与跨项目委派矩阵"
           }
         ]
       },
@@ -1440,6 +1444,10 @@
           {
             "id": "W6-S3",
             "title": "假外部控制器 consent→调用→reconnect→revoke；docs 与发布矩阵"
+          },
+          {
+            "id": "W6-S4",
+            "title": "（自 W1 挪入）CapabilityAuthority 全量 mint/revoke/authorize 线性化；Ed25519 external grant 与可选 withSecret 委派增强"
           }
         ]
       }
@@ -1460,8 +1468,8 @@
       {
         "id": "E2",
         "text": "AgentCallerService 只绑定 caller 并请求签发；AccessGrantService/CapabilityAuthority 是 bootstrap/child/human/external grant、AgentCallerCredential 与 CapabilityRef 唯一的 mint/revoke/authorize 点。agents self 只返回非秘密 callerRef、精确 WorktreeRef、权限和预算",
-        "evidence": "已有：credential store/issue/file、v2 hello/self、authorize 钩子与 architecture-loop 单测；仍缺：启动链 AgentCallerService 自动绑定、CapabilityAuthority 全量、Unix 0700/0600/O_NOFOLLOW 生产注入矩阵与宿主重启级联",
-        "status": "planned"
+        "evidence": "W1 已有：v1/v2 分流、peer、authorize/receipt/subscribe/hold、agents catalog/list/get（cli-human）、spawn scrub-only（不签发 binding）；实验面：issue/store/v2 agent-binding 与 architecture-loop 单测；CapabilityAuthority 全量与深度/并发矩阵见 W4-S4/W6-S4",
+        "status": "partial"
       },
       {
         "id": "E3",

@@ -165,7 +165,6 @@ export function FileCanvasPreview(props: {
     >
       {softError ? (
         <CanvasSoftErrorBanner
-          isRuntime={softError.isRuntime}
           message={softError.message}
           onReload={reload}
           t={props.t}
@@ -175,6 +174,7 @@ export function FileCanvasPreview(props: {
       {state.kind === "error" ? (
         <CanvasCompileErrorEmpty
           diagnostics={state.diagnostics}
+          isRuntime={state.isRuntime}
           message={state.message}
           onReload={reload}
           t={props.t}

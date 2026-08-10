@@ -44,6 +44,7 @@ export const {
   CollapsibleContent,
   CollapsibleTrigger,
   DataChart,
+  DocsShell,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,

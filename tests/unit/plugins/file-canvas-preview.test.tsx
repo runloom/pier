@@ -202,6 +202,55 @@ describe("FileCanvasPreview", () => {
     expect(compile).toHaveBeenCalledTimes(2);
   });
 
+  it("runtime crash uses full Empty (not soft Alert banner)", async () => {
+    // Prefer React default export (no `mount`) so LiveModuleErrorBoundary fires.
+    const compile = vi.fn(async () => ({
+      graph: [],
+      moduleId: "smoke/hello.canvas.tsx",
+      ok: true as const,
+      url: makeModuleDataUrl(`
+        export default function App() {
+          throw new Error("Cannot read properties of undefined (reading 'filter')");
+        }
+      `),
+    }));
+
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    render(
+      <FileCanvasPreview
+        context={createContext({
+          compile,
+          onChanged: vi.fn(() => () => undefined),
+          registerRoot: vi.fn(async () => undefined),
+        })}
+        path={CANVAS_PATH}
+        root={PROJECT_ROOT}
+        t={t}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        document.querySelector("[data-slot='file-canvas-error-empty']")
+      ).toBeTruthy();
+    });
+    expect(screen.getByText("Canvas crashed while rendering")).toBeTruthy();
+    expect(
+      screen.getByText("Cannot read properties of undefined (reading 'filter')")
+    ).toBeTruthy();
+    // Soft Alert banner is only for hot-reload compile while content is kept.
+    expect(
+      document.querySelector("[data-slot='file-canvas-soft-error']")
+    ).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: "Reload" })).toBeTruthy();
+
+    consoleError.mockRestore();
+  });
+
   it("hot reload compile failure keeps previous mount (soft error)", async () => {
     let generation = 0;
     const compile = vi.fn(async () => {

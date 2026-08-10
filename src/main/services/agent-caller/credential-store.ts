@@ -1,6 +1,7 @@
 /**
- * AgentCaller 凭证内存索引。
- * hello 必须同时提交 credentialId + secret；id  alone 不可冒充。
+ * Agent caller binding 内存索引。
+ * 默认路径：bindingId + boot + 未过期 即可（本机纪律）。
+ * 可选路径：material 含 secret 时 agent-credential 做持有证明。
  */
 import {
   type AgentCallerCredentialMaterial,
@@ -42,45 +43,85 @@ export type ResolveAgentCredentialResult =
   | { ok: true; material: AgentCallerCredentialMaterial }
   | { ok: false; code: "auth_failed" | "auth_required"; message: string };
 
-export function resolveAgentCredential(args: {
-  store: AgentCallerCredentialStore;
-  credentialId: string;
-  /** 持有证明；必须与 material.secret 常量时间比较意图（见实现） */
-  secret: string;
-  expectedBootId: string;
-  nowMs?: number;
-}): ResolveAgentCredentialResult {
-  const material = args.store.get(args.credentialId);
+function checkMaterialLive(
+  material: AgentCallerCredentialMaterial | undefined,
+  expectedBootId: string,
+  nowMs: number
+): ResolveAgentCredentialResult {
   if (!material) {
     return {
       ok: false,
       code: "auth_failed",
-      message: "unknown credential",
+      message: "unknown binding",
     };
   }
-  if (!(args.secret && secretsEqual(material.secret, args.secret))) {
+  if (material.bootId !== expectedBootId) {
+    return {
+      ok: false,
+      code: "auth_failed",
+      message: "binding boot mismatch",
+    };
+  }
+  if (material.expiresAt <= nowMs) {
+    return {
+      ok: false,
+      code: "auth_failed",
+      message: "binding expired",
+    };
+  }
+  return { ok: true, material };
+}
+
+/** 本机默认：仅 bindingId（宿主 store 签发过的不透明 id） */
+export function resolveAgentBinding(args: {
+  store: AgentCallerCredentialStore;
+  bindingId: string;
+  expectedBootId: string;
+  nowMs?: number;
+}): ResolveAgentCredentialResult {
+  const now = args.nowMs ?? Date.now();
+  return checkMaterialLive(
+    args.store.get(args.bindingId),
+    args.expectedBootId,
+    now
+  );
+}
+
+/**
+ * 可选增强：binding + secret。
+ * material 未签发 secret 时拒绝 agent-credential 方法。
+ */
+export function resolveAgentCredential(args: {
+  store: AgentCallerCredentialStore;
+  credentialId: string;
+  secret: string;
+  expectedBootId: string;
+  nowMs?: number;
+}): ResolveAgentCredentialResult {
+  const now = args.nowMs ?? Date.now();
+  const live = checkMaterialLive(
+    args.store.get(args.credentialId),
+    args.expectedBootId,
+    now
+  );
+  if (!live.ok) {
+    return live;
+  }
+  const expectedSecret = live.material.secret;
+  if (
+    !(
+      expectedSecret &&
+      args.secret &&
+      secretsEqual(expectedSecret, args.secret)
+    )
+  ) {
     return {
       ok: false,
       code: "auth_failed",
       message: "invalid credential secret",
     };
   }
-  if (material.bootId !== args.expectedBootId) {
-    return {
-      ok: false,
-      code: "auth_failed",
-      message: "credential boot mismatch",
-    };
-  }
-  const now = args.nowMs ?? Date.now();
-  if (material.expiresAt <= now) {
-    return {
-      ok: false,
-      code: "auth_failed",
-      message: "credential expired",
-    };
-  }
-  return { ok: true, material };
+  return live;
 }
 
 /** 避免短 secret 上的简单时序泄漏；长度不同仍立即失败。 */

@@ -92,7 +92,7 @@ function collectFrames(
 }
 
 describe("local-control architecture closed loop", () => {
-  it("issue credential → agent hello → self without secret", async () => {
+  it("issue binding → agent hello → self (no secret file)", async () => {
     const dir = await userData();
     const socketPath = resolveLocalControlSocketPath(dir);
     const store = createAgentCallerCredentialStore();
@@ -109,12 +109,13 @@ describe("local-control architecture closed loop", () => {
       const issued = issueAgentCallerCredential({
         store,
         bootId: "boot-arch",
-        directory: join(dir, "creds"),
       });
       expect(store.get(issued.material.credentialId)).toBeTruthy();
-      expect(issued.env.PIER_AGENT_CALLER_CREDENTIAL_FILE).toBe(
-        issued.credentialFilePath
+      expect(issued.material.secret).toBeUndefined();
+      expect(issued.env.PIER_AGENT_CALLER_BINDING).toBe(
+        issued.material.credentialId
       );
+      expect(issued.env.PIER_AGENT_CALLER_CREDENTIAL_FILE).toBeUndefined();
 
       const frames = await collectFrames(
         socketPath,
@@ -125,9 +126,8 @@ describe("local-control architecture closed loop", () => {
             requestId: "h1",
             clientKind: "agent",
             auth: {
-              method: "agent-credential",
-              credentialId: issued.material.credentialId,
-              secret: issued.material.secret,
+              method: "agent-binding",
+              bindingId: issued.material.credentialId,
             },
           }),
           JSON.stringify({
@@ -144,7 +144,13 @@ describe("local-control architecture closed loop", () => {
       const hello = frames[0] as { type: string; features: string[] };
       const self = frames[1] as {
         ok: boolean;
-        data?: { self?: { credentialId: string; secret?: string } };
+        data?: {
+          self?: {
+            bindingId: string;
+            credentialId: string;
+            secret?: string;
+          };
+        };
       };
       expect(hello.type).toBe("server.hello");
       expect(hello.features).toEqual(
@@ -156,9 +162,9 @@ describe("local-control architecture closed loop", () => {
         ])
       );
       expect(self.ok).toBe(true);
+      expect(self.data?.self?.bindingId).toBe(issued.material.credentialId);
       expect(self.data?.self?.credentialId).toBe(issued.material.credentialId);
       expect(self.data?.self?.secret).toBeUndefined();
-      expect(JSON.stringify(self)).not.toContain(issued.material.secret);
     } finally {
       await server.close();
     }

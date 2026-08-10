@@ -1,5 +1,7 @@
 /**
- * 签发 agent 调用凭证：内存 put + 私有文件（O_EXCL|O_NOFOLLOW）。
+ * 签发 agent caller binding：默认仅内存 put + env 注入 bindingId。
+ * 对齐业界本机默认（surface/session id 注入）；不写 secret、不写凭证文件。
+ * 可选 withSecret / writeFile 供委派增强或调试。
  */
 import { randomBytes } from "node:crypto";
 import {
@@ -13,7 +15,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentCallerCredentialMaterial } from "@shared/contracts/local-control/agent-credential.ts";
+import {
+  type AgentCallerCredentialMaterial,
+  PIER_AGENT_CALLER_BINDING_ENV,
+  PIER_AGENT_CALLER_CREDENTIAL_FILE_ENV,
+} from "@shared/contracts/local-control/agent-credential.ts";
 import type { AgentCallerCredentialStore } from "./credential-store.ts";
 
 export interface IssueAgentCallerCredentialArgs {
@@ -21,7 +27,7 @@ export interface IssueAgentCallerCredentialArgs {
   bootId: string;
   callerGeneration?: number;
   callerRuntimeId?: string;
-  /** 凭证文件目录；默认 os.tmpdir()/pier-agent-creds/<bootId> */
+  /** 仅 writeFile 时使用；默认 os.tmpdir()/pier-agent-bindings/<bootId> */
   directory?: string;
   incarnationId?: string;
   maxActiveChildren?: number;
@@ -30,13 +36,19 @@ export interface IssueAgentCallerCredentialArgs {
   store: AgentCallerCredentialStore;
   /** 默认 1h */
   ttlMs?: number;
+  /** 可选：签发 secret（agent-credential 增强路径） */
+  withSecret?: boolean;
   worktreeKey?: string;
+  /** 可选：落盘非秘密快照（调试）；默认 false */
+  writeFile?: boolean;
 }
 
 export interface IssuedAgentCallerCredential {
-  credentialFilePath: string;
+  /** writeFile 时才有路径 */
+  credentialFilePath?: string;
   env: {
-    PIER_AGENT_CALLER_CREDENTIAL_FILE: string;
+    [PIER_AGENT_CALLER_BINDING_ENV]: string;
+    [PIER_AGENT_CALLER_CREDENTIAL_FILE_ENV]?: string;
   };
   material: AgentCallerCredentialMaterial;
 }
@@ -50,14 +62,13 @@ const DEFAULT_OPS = [
   "control.trace",
 ] as const;
 
-/** ≥128-bit 不透明 id */
-function newCredentialId(): string {
-  return `cred_${randomBytes(16).toString("base64url")}`;
+/** ≥128-bit 不透明 binding id */
+function newBindingId(): string {
+  return `bind_${randomBytes(16).toString("base64url")}`;
 }
 
 /**
- * 原子创建凭证文件：O_CREAT|O_EXCL|O_WRONLY（Unix 另加 O_NOFOLLOW），mode 0600。
- * 已存在路径 / symlink 目标均失败。
+ * 原子创建文件：O_CREAT|O_EXCL|O_WRONLY（Unix 另加 O_NOFOLLOW），mode 0600。
  */
 export function writeCredentialFileExclusive(
   filePath: string,
@@ -84,10 +95,9 @@ export function writeCredentialFileExclusive(
 export function issueAgentCallerCredential(
   args: IssueAgentCallerCredentialArgs
 ): IssuedAgentCallerCredential {
-  const credentialId = newCredentialId();
-  const secret = randomBytes(32).toString("base64url");
+  const bindingId = newBindingId();
   const material: AgentCallerCredentialMaterial = {
-    credentialId,
+    credentialId: bindingId,
     bootId: args.bootId,
     callerRuntimeId:
       args.callerRuntimeId ?? `rt_${randomBytes(8).toString("hex")}`,
@@ -100,38 +110,47 @@ export function issueAgentCallerCredential(
     maxActiveChildren: args.maxActiveChildren ?? 4,
     activeChildren: 0,
     expiresAt: Date.now() + (args.ttlMs ?? 60 * 60 * 1000),
-    secret,
+    ...(args.withSecret
+      ? { secret: randomBytes(32).toString("base64url") }
+      : {}),
     ...(args.worktreeKey ? { worktreeKey: args.worktreeKey } : {}),
     ...(args.incarnationId ? { incarnationId: args.incarnationId } : {}),
   };
 
   args.store.put(material);
 
-  const dir =
-    args.directory ??
-    join(
-      tmpdir(),
-      "pier-agent-creds",
-      args.bootId.replace(/[^a-zA-Z0-9_-]/g, "")
-    );
-  mkdirSync(dir, { recursive: true, mode: 0o700 });
-  try {
-    chmodSync(dir, 0o700);
-  } catch {
-    // 共享 tmp 等不可 chmod 时忽略；文件本身仍为 0600 排他创建
-  }
+  const env: IssuedAgentCallerCredential["env"] = {
+    [PIER_AGENT_CALLER_BINDING_ENV]: bindingId,
+  };
 
-  const credentialFilePath = join(dir, `${credentialId}.json`);
-  writeCredentialFileExclusive(
-    credentialFilePath,
-    `${JSON.stringify(material, null, 2)}\n`
-  );
+  let credentialFilePath: string | undefined;
+  if (args.writeFile) {
+    const dir =
+      args.directory ??
+      join(
+        tmpdir(),
+        "pier-agent-bindings",
+        args.bootId.replace(/[^a-zA-Z0-9_-]/g, "")
+      );
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    try {
+      chmodSync(dir, 0o700);
+    } catch {
+      // 共享 tmp 等不可 chmod 时忽略
+    }
+    credentialFilePath = join(dir, `${bindingId}.json`);
+    // 落盘时去掉 secret，避免文件成为持有证明副本
+    const { secret: _secret, ...publicMaterial } = material;
+    writeCredentialFileExclusive(
+      credentialFilePath,
+      `${JSON.stringify(publicMaterial, null, 2)}\n`
+    );
+    env[PIER_AGENT_CALLER_CREDENTIAL_FILE_ENV] = credentialFilePath;
+  }
 
   return {
     material,
-    credentialFilePath,
-    env: {
-      PIER_AGENT_CALLER_CREDENTIAL_FILE: credentialFilePath,
-    },
+    ...(credentialFilePath ? { credentialFilePath } : {}),
+    env,
   };
 }

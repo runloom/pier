@@ -95,7 +95,11 @@ function errorMessage(err: unknown, t: Translate): string {
 export function AccountsSettingsPage({
   context,
 }: AccountsSettingsPageProps): JSX.Element {
-  const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
+  const {
+    error: loadError,
+    reload: reloadSnapshot,
+    snapshot,
+  } = useCodexAccountsSnapshot(context);
   useUsagePollingLease(context, "settings:accounts", true);
   // Stable identity: `t` feeds AddAccountDialog's effects; a per-render arrow
   // would re-run them (and re-send dialogs.update) on every render.
@@ -236,6 +240,10 @@ export function AccountsSettingsPage({
       <div className={SETTINGS_LAYOUT_CLASS}>
         <ErrorEmpty
           description={loadError}
+          retryAction={{
+            label: t("pier.codex.accounts.settings.retry", "Retry"),
+            onClick: reloadSnapshot,
+          }}
           title={t(
             "pier.codex.accounts.settings.loadFailed",
             "Could not load Codex accounts"

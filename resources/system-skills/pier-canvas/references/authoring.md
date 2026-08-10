@@ -58,6 +58,26 @@ stay there. Put complex calculations in pure adjacent modules.
 - Do not guess component APIs. Consult existing project Canvases, type
   diagnostics, and the templates.
 
+### Layout and CSS (common failure mode)
+
+- Host Tailwind scans `packages/ui`, plugins, and `.pier/canvases` (see
+  `src/renderer/app/globals.css` `@source`). Prefer utilities that already
+  exist in the product; for **docs two-pane layout**, always use **`DocsShell`**
+  (inline flex columns) instead of inventing arbitrary `grid-cols-[…]` shells.
+- `Frame` is a **reading column** (max-width + padding), not a full-height app
+  chrome. Do not nest dual `ScrollArea` + `70vh` fake viewports inside it.
+- Multi-line `AccordionTrigger` content must not rely on underline hover chrome;
+  the host Accordion uses a light background hover.
+
+### Docs and inventories
+
+- Multi-chapter user manuals: `DocsShell` + ≤ ~7 sidebar leaves; put tasks /
+  domains / FAQ inside the article (Accordion / Select), not 20+ nav leaves.
+- Command / API inventories: **one** expandable list. Trigger shows name +
+  short description; expand for synopsis / examples / output. **Do not** show
+  a summary table and then the same commands again in an Accordion.
+- Badge only **unfinished** or **blocked** commands. Shipped items stay plain.
+
 ## Data and state
 
 - Use local React state for state that only affects the current viewing session.

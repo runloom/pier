@@ -7,7 +7,7 @@
 | 文档 | 受众 | 内容 |
 | --- | --- | --- |
 | [development.md](./development.md) | 贡献者 | 环境、worktree、检查、构建、架构要点 |
-| [cli.md](./cli.md) | 贡献者 / 集成方 / 协调智能体 | 智能体优先的本机 CLI 命令面（已实现 / 规划 / W0–W6） |
+| [cli.md](./cli.md) | 用户 / 脚本 / MCP | Pier 本机命令行手册（Markdown 全文）；**应用内推荐** [`.pier/canvases/pier-cli-user-manual/`](../.pier/canvases/pier-cli-user-manual/) |
 | [plugins.md](./plugins.md) | 插件开发者 | 官方插件范围、打包、校验、信任模型 |
 | [release.md](./release.md) | 维护者 | 宿主与插件双通道发布总览 |
 | [app-release.md](./app-release.md) | 维护者 | 宿主 CI、secrets、本地 `build:dist` |

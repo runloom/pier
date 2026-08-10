@@ -10,10 +10,7 @@ import {
   parsePierCliArgs,
   usage,
 } from "./pier-cli-parser.js";
-import {
-  invokePierControlV2,
-  readAgentCredentialFromEnv,
-} from "./pier-control-v2-client.js";
+import { invokePierControlV2 } from "./pier-control-v2-client.js";
 
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SOCKET_FILENAME = "pier-control.sock";
@@ -319,19 +316,13 @@ try {
   }
 
   if (parsed.protocol === "v2") {
-    const agentCred = readAgentCredentialFromEnv();
+    // 本机 CLI 一律按本机用户调用，不注入 / 不解析 agent binding 或凭证。
     const { response } = await invokePierControlV2({
       socketPath: resolveSocketPath(),
       requestId: parsed.requestId,
       op: parsed.op,
       params: parsed.params,
-      ...(agentCred
-        ? {
-            clientKind: "agent",
-            credentialId: agentCred.credentialId,
-            secret: agentCred.secret,
-          }
-        : { clientKind: "cli-human" }),
+      clientKind: "cli-human",
     });
     if (parsed.json) {
       console.log(JSON.stringify(response, null, 2));
@@ -339,13 +330,6 @@ try {
       process.stdout.write(formatAgentsCatalog(response.data));
     } else if (response.ok && parsed.op === "agents.list") {
       process.stdout.write(formatAgentsList(response.data));
-    } else if (response.ok && parsed.op === "agents.self") {
-      const self = response.data?.self;
-      if (self) {
-        process.stdout.write(
-          `self credential=${self.credentialId} boot=${self.bootId} runtime=${self.callerRuntimeId}\n`
-        );
-      }
     } else if (response.ok && parsed.op === "agents.get") {
       const agent = response.data?.agent;
       if (agent) {

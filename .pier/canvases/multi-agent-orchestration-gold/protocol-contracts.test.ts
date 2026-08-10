@@ -61,20 +61,23 @@ describe("本机运行控制协议闭环", () => {
     expect(data.cli.decision).toMatch(/docs\/cli\.md/u);
   });
 
-  it("docs/cli.md 的「当前可用命令」不得把规划 agents/access 写成默认可执行", async () => {
+  it("docs/cli.md 用户手册已实现区不得把规划 agents 写成默认可执行", async () => {
+    const { extractImplementedCommandsSection } = await import(
+      "../../../tests/unit/cli/cli-docs-surface.ts"
+    );
     const cliDocPath = new URL("../../../docs/cli.md", import.meta.url);
     const cliDoc = await readFile(cliDocPath, "utf8");
-    expect(cliDoc).toMatch(/^## 当前可用命令/mu);
-    expect(cliDoc).toMatch(/^## 规划中的 agents 主路径/mu);
-    expect(cliDoc).toMatch(/交付波次|W0–W6|W0-W6/u);
+    expect(cliDoc).toMatch(/使用手册/u);
+    expect(cliDoc).toMatch(/第一部分：已实现命令/u);
+    expect(cliDoc).toMatch(/第二部分：暂未实现命令/u);
+    expect(cliDoc).not.toMatch(/交付波次|W0–W6|W0-W6/u);
 
-    const available = extractMarkdownSection(cliDoc, "当前可用命令");
+    const available = extractImplementedCommandsSection(cliDoc);
     expect(collectCliDocsAvailableViolations(available)).toEqual([]);
-    expect(available).toMatch(/plugin:write|cli-local/u);
-
-    const planned = extractMarkdownSection(cliDoc, "规划中的 agents 主路径");
-    expect(planned).toMatch(/pier agents self/u);
-    expect(planned).toMatch(/实现前|未实现|地图|规划/u);
+    expect(available).toMatch(/输出示例/u);
+    expect(cliDoc).toMatch(/### `agents invoke`/u);
+    expect(cliDoc).toMatch(/### `agents screen`/u);
+    expect(cliDoc).toMatch(/预期输出示例/u);
   });
 
   it("方案 A 只返回本次结构化回复或当前 viewport，不开放公共运行历史", async () => {

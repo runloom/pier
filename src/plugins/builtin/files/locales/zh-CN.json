@@ -72,6 +72,7 @@
     "filePanel.errors.outsideWorkspace": "这个文件不属于当前工作区，无法恢复打开。",
     "filePanel.errors.read.fallback": "无法读取文件内容。",
     "filePanel.errors.read.title": "无法读取文件",
+    "filePanel.errors.reload": "重新加载",
     "filePanel.errors.restore.title": "无法恢复文件标签页",
     "filePanel.errors.save.fallback": "无法保存文件内容。",
     "filePanel.errors.save.title": "无法保存文件",

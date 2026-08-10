@@ -168,178 +168,11 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import type { PierCanvasExportName } from "@shared/pier-canvas-export-names.ts";
-import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { createElement } from "react";
 import { useCanvasFile } from "./canvas-file-facade.ts";
+import { DocsShell, Frame, Row, Stack, Text } from "./pier-canvas-layout.ts";
 import { pierCanvasVisualizationExports } from "./pier-canvas-visualization-exports.ts";
 
 /** Host primitives and curated UI exports; keys match `PIER_CANVAS_EXPORT_NAMES`. */
-
-type TextTone = "default" | "secondary" | "tertiary";
-
-const TEXT_TONE_COLOR: Record<TextTone, string> = {
-  default: "var(--foreground)",
-  secondary: "var(--muted-foreground)",
-  // No color-mix here — color-token governance; tertiary ≈ muted.
-  tertiary: "var(--muted-foreground)",
-};
-
-const TEXT_AS_STYLE: Record<NonNullable<TextProps["as"]>, CSSProperties> = {
-  h1: {
-    fontSize: 28,
-    fontWeight: 600,
-    letterSpacing: "-0.025em",
-    lineHeight: 1.2,
-    margin: 0,
-  },
-  h2: {
-    fontSize: 20,
-    fontWeight: 600,
-    letterSpacing: "-0.015em",
-    lineHeight: 1.3,
-    margin: 0,
-  },
-  h3: {
-    fontSize: 15,
-    fontWeight: 600,
-    lineHeight: 1.35,
-    margin: 0,
-  },
-  p: {
-    fontSize: 14,
-    fontWeight: 400,
-    lineHeight: 1.6,
-    margin: 0,
-  },
-  span: {
-    fontSize: 14,
-    fontWeight: 400,
-    lineHeight: 1.5,
-  },
-  div: {
-    fontSize: 14,
-    fontWeight: 400,
-    lineHeight: 1.6,
-  },
-};
-
-export function Stack({
-  children,
-  className,
-  gap = 16,
-}: {
-  children?: ReactNode;
-  className?: string;
-  gap?: string | number;
-}) {
-  return createElement(
-    "div",
-    {
-      className,
-      style: {
-        display: "flex",
-        flexDirection: "column",
-        gap: typeof gap === "number" ? `${gap}px` : gap,
-        width: "100%",
-        minWidth: 0,
-      },
-    },
-    children
-  );
-}
-
-export function Row({
-  children,
-  className,
-  gap = 8,
-  align = "center",
-  justify = "flex-start",
-  wrap = true,
-}: {
-  align?: CSSProperties["alignItems"];
-  children?: ReactNode;
-  className?: string;
-  gap?: string | number;
-  justify?: CSSProperties["justifyContent"];
-  wrap?: boolean;
-}) {
-  return createElement(
-    "div",
-    {
-      className,
-      style: {
-        alignItems: align,
-        display: "flex",
-        flexWrap: wrap ? "wrap" : "nowrap",
-        gap: typeof gap === "number" ? `${gap}px` : gap,
-        justifyContent: justify,
-        minWidth: 0,
-        width: "100%",
-      },
-    },
-    children
-  );
-}
-
-/** Page-width frame for kit / docs / composition canvases. */
-export function Frame({
-  children,
-  className,
-  maxWidth = 880,
-}: {
-  children?: ReactNode;
-  className?: string;
-  maxWidth?: number;
-}) {
-  return createElement(
-    "div",
-    {
-      className,
-      style: {
-        boxSizing: "border-box",
-        display: "flex",
-        flexDirection: "column",
-        gap: 24,
-        marginInline: "auto",
-        maxWidth,
-        minWidth: 0,
-        paddingBlock: 8,
-        width: "100%",
-      },
-    },
-    children
-  );
-}
-
-type TextProps = {
-  as?: "p" | "span" | "div" | "h1" | "h2" | "h3";
-  children?: ReactNode;
-  className?: string;
-  tone?: TextTone;
-} & Omit<ComponentProps<"p">, "as" | "children" | "className" | "color">;
-
-export function Text({
-  children,
-  className,
-  as: Tag = "p",
-  tone = "default",
-  style,
-  ...rest
-}: TextProps) {
-  return createElement(
-    Tag,
-    {
-      ...rest,
-      className,
-      style: {
-        ...TEXT_AS_STYLE[Tag],
-        color: TEXT_TONE_COLOR[tone],
-        ...style,
-      },
-    },
-    children
-  );
-}
 
 export const pierCanvasExports = {
   Accordion,
@@ -376,6 +209,7 @@ export const pierCanvasExports = {
   CollapsibleContent,
   CollapsibleTrigger,
   ...pierCanvasVisualizationExports,
+  DocsShell,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,

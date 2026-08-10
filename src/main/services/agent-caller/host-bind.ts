@@ -1,8 +1,12 @@
 /**
- * 宿主侧 AgentCaller 凭证签发绑定。
+ * 宿主侧 AgentCaller binding 签发绑定。
  * local-control 注册成功后 bind；终端 agent 启动路径取 env 注入。
- * 未 bind（控制面未就绪 / 测试未注入）时返回 null，不阻断终端创建。
+ * 未 bind 时返回 null，不阻断终端创建。
  */
+import {
+  PIER_AGENT_CALLER_BINDING_ENV,
+  PIER_AGENT_CALLER_CREDENTIAL_FILE_ENV,
+} from "@shared/contracts/local-control/agent-credential.ts";
 import type {
   IssueAgentCallerCredentialArgs,
   IssuedAgentCallerCredential,
@@ -12,8 +16,9 @@ export type AgentCallerIssuer = (
   args?: Omit<IssueAgentCallerCredentialArgs, "store" | "bootId">
 ) => IssuedAgentCallerCredential;
 
-const PARENT_CREDENTIAL_ENV_KEYS = [
-  "PIER_AGENT_CALLER_CREDENTIAL_FILE",
+const PARENT_BINDING_ENV_KEYS = [
+  PIER_AGENT_CALLER_BINDING_ENV,
+  PIER_AGENT_CALLER_CREDENTIAL_FILE_ENV,
 ] as const;
 
 let issuer: AgentCallerIssuer | null = null;
@@ -27,8 +32,8 @@ export function getBoundAgentCallerIssuer(): AgentCallerIssuer | null {
 }
 
 /**
- * 从 env 表中剥离父进程 / 宿主残留的 agent 调用凭证路径，
- * 避免子 agent 误用父协调者凭证。
+ * 剥离父进程残留的 binding / 旧 credential 文件路径，
+ * 避免子 agent 误用父协调者身份。
  */
 export function scrubAgentCallerCredentialEnv(
   env: Record<string, string>
@@ -36,7 +41,7 @@ export function scrubAgentCallerCredentialEnv(
   let changed = false;
   const out: Record<string, string> = {};
   for (const [key, value] of Object.entries(env)) {
-    if ((PARENT_CREDENTIAL_ENV_KEYS as readonly string[]).includes(key)) {
+    if ((PARENT_BINDING_ENV_KEYS as readonly string[]).includes(key)) {
       changed = true;
       continue;
     }
@@ -46,8 +51,7 @@ export function scrubAgentCallerCredentialEnv(
 }
 
 /**
- * 签发当前 boot 下的 agent 调用凭证 env；失败或未 bind 返回 null。
- * 调用方应 best-effort：缺凭证不阻断 spawn。
+ * 签发当前 boot 下的 agent binding env；失败或未 bind 返回 null。
  */
 export function tryIssueAgentCallerLaunchEnv(
   args: Omit<IssueAgentCallerCredentialArgs, "store" | "bootId"> = {}
@@ -58,7 +62,7 @@ export function tryIssueAgentCallerLaunchEnv(
   try {
     return issuer(args).env;
   } catch (error) {
-    console.warn("[agent-caller] issue credential for launch failed:", error);
+    console.warn("[agent-caller] issue binding for launch failed:", error);
     return null;
   }
 }

@@ -1,14 +1,14 @@
 /**
- * W0 CLI 文档命令面辅助：截取 markdown 章节，并检测「当前可用」违规命令行。
+ * CLI 用户手册辅助：截取 markdown 章节，并检测「命令一览」中的违规命令行。
  * unit 与 Canvas protocol 契约共用，避免两套规则漂移。
  */
 
-/** 「当前可用」中禁止的规划命令；已实现的 agents self/catalog/list/get 允许。 */
+/** 用户手册「命令一览」中禁止的规划/无写权命令。只读 agents catalog/list/get 允许。 */
 const AVAILABLE_VIOLATION_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
   [
     {
       id: "agents.unimplemented",
-      re: /^\s*pier\s+agents\s+(invoke|start|turn|screen|wait|watch|focus|interrupt|terminate)\b/mu,
+      re: /^\s*pier\s+agents\s+(self|invoke|start|turn|screen|wait|watch|focus|interrupt|terminate)\b/mu,
     },
     { id: "access", re: /^\s*pier\s+access\b/mu },
     { id: "snapshot", re: /^\s*pier\s+snapshot\b/mu },
@@ -35,7 +35,7 @@ export function extractMarkdownSection(
   return (next === -1 ? rest : rest.slice(0, next)).trim();
 }
 
-/** 返回「当前可用」章节中违规命令 id 列表（去重、稳定顺序）。 */
+/** 返回用户手册命令章节中违规命令 id 列表（去重、稳定顺序）。 */
 export function collectCliDocsAvailableViolations(
   availableSection: string
 ): string[] {
@@ -46,6 +46,31 @@ export function collectCliDocsAvailableViolations(
     }
   }
   return violations;
+}
+
+/**
+ * 用户手册「第一部分：已实现」正文：从标题起到「第二部分：暂未实现」之前。
+ * 未实现规划语法只应出现在第二部分，不得混入已实现区可执行示例。
+ */
+export function extractImplementedCommandsSection(markdown: string): string {
+  const startMarkers = ["# 第一部分：已实现命令", "## 已实现命令"];
+  let start = -1;
+  let markerLen = 0;
+  for (const marker of startMarkers) {
+    const idx = markdown.indexOf(marker);
+    if (idx >= 0) {
+      start = idx;
+      markerLen = marker.length;
+      break;
+    }
+  }
+  if (start < 0) {
+    throw new Error("missing implemented-commands section");
+  }
+  const bodyStart = start + markerLen;
+  const rest = markdown.slice(bodyStart);
+  const end = rest.search(/^# 第二部分：暂未实现|^## 暂未实现/mu);
+  return (end === -1 ? rest : rest.slice(0, end)).trim();
 }
 
 export function statusKeywordForCommandGroup(

@@ -1,4 +1,3 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { DIALOG_FOOTER_ACTIONS_CLASS } from "@pier/ui/dialog-form-layout.ts";
@@ -8,7 +7,6 @@ import {
   FieldDescription,
   FieldLabel,
 } from "@pier/ui/field.tsx";
-import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { Switch } from "@pier/ui/switch.tsx";
 import type {
   PierBindingsConvergeResult,
@@ -38,6 +36,7 @@ import {
   normalizeSkillMutationResult,
   storedDelivery,
 } from "./pier-home-skill-detail-helpers.ts";
+import { SkillContentBody } from "./skills/content-body.tsx";
 import { SkillDetailSection } from "./skills/detail-section.tsx";
 import { SkillsDiscoveryChannelEditor } from "./skills/discovery-channel-editor.tsx";
 import { SkillMdScopeNotice } from "./skills/shared.tsx";
@@ -398,35 +397,18 @@ export function openPierHomeLibrarySkillDialog(
 
         <SkillDetailSection title={t("settings.skills.contentTitle")}>
           <SkillMdScopeNotice t={t} />
-          {content === null && !loadFailed ? (
-            <Skeleton className="min-h-60 w-full" />
-          ) : null}
-          {loadFailed ? (
-            <Alert variant="warning">
-              <AlertTitle>{t("settings.skills.contentUnavailable")}</AlertTitle>
-              <AlertDescription>
-                <span className="flex flex-col gap-2">
-                  {loadError ? (
-                    <span className="break-words text-muted-foreground text-xs">
-                      {loadError}
-                    </span>
-                  ) : null}
-                  <span className="flex justify-end">
-                    <Button
-                      onClick={() => {
-                        setRetryNonce((value) => value + 1);
-                      }}
-                      size="sm"
-                      type="button"
-                    >
-                      {t("settings.skills.retry")}
-                    </Button>
-                  </span>
-                </span>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          {content !== null && !loadFailed ? (
+          {loadFailed || content === null ? (
+            <SkillContentBody
+              content={null}
+              displayPath={displayPath}
+              errorDetail={loadError}
+              loadFailed={loadFailed}
+              onRetry={() => {
+                setRetryNonce((value) => value + 1);
+              }}
+              t={t}
+            />
+          ) : (
             <MarkdownSourceEditor
               ariaLabel={t("settings.skills.contentTitle")}
               autoHeight
@@ -440,7 +422,7 @@ export function openPierHomeLibrarySkillDialog(
               }}
               value={editorText}
             />
-          ) : null}
+          )}
         </SkillDetailSection>
       </div>
     );
