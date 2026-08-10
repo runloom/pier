@@ -12,6 +12,7 @@ import {
   CardTitle,
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -282,11 +283,13 @@ function ReferencePage({
           <SelectValue placeholder="选择领域" />
         </SelectTrigger>
         <SelectContent>
-          {data.domains.map((d) => (
-            <SelectItem key={d.id} value={d.id}>
-              {domainSelectLabel(d)}
-            </SelectItem>
-          ))}
+          <SelectGroup>
+            {data.domains.map((d) => (
+              <SelectItem key={d.id} value={d.id}>
+                {domainSelectLabel(d)}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         </SelectContent>
       </Select>
       {domain ? (

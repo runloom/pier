@@ -63,8 +63,11 @@ describe("full-region error Empty governance", () => {
       if (rel.endsWith("body.tsx") && rel.includes("files/renderer/panel")) {
         expect(
           src,
-          `${rel}: loadState === "error" must use ErrorEmpty`
-        ).toMatch(/loadState\s*===\s*["']error["'][\s\S]{0,400}<ErrorEmpty\b/);
+          `${rel}: loadState === "error" must use FileReadErrorEmpty/ErrorEmpty`
+        ).toMatch(
+          /loadState\s*===\s*["']error["'][\s\S]{0,400}<FileReadErrorEmpty\b/
+        );
+        expect(src).toMatch(/FileReadErrorEmpty/);
       }
       if (rel.endsWith("canvas-states.tsx")) {
         expect(src).toContain("CanvasCompileErrorEmpty");

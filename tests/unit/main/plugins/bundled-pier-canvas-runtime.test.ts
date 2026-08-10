@@ -66,7 +66,12 @@ describe("bundled Pier Canvas template runtime", () => {
         ? Buffer.from(artifact.bytes).toString("utf8")
         : "";
       expect(source).toContain("__PIER_LIVE_CANVAS__");
-      expect(source).toContain("getCanvas().Frame");
+      // docs template uses DocsShell; other templates use Frame layout primitives.
+      if (templateName.includes("docs")) {
+        expect(source).toMatch(/DocsShell|getCanvas\(\)\.DocsShell/);
+      } else {
+        expect(source).toContain("getCanvas().Frame");
+      }
       expect(source).not.toContain("cursor/canvas");
 
       const original = await readFile(
