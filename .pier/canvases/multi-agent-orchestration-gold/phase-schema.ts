@@ -1,0 +1,65 @@
+export type PhaseSlice = {
+  id: string;
+  title: string;
+};
+
+export type ClosedLoopPhase = {
+  wave: number;
+  name: string;
+  outcome: string;
+  slices: PhaseSlice[];
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasOnlyKeys(record: Record<string, unknown>, keys: string[]) {
+  const allowed = new Set(keys);
+  return Object.keys(record).every((key) => allowed.has(key));
+}
+
+export function parseClosedLoopPhase(input: unknown): ClosedLoopPhase {
+  if (!isRecord(input) || !hasOnlyKeys(input, ["wave", "name", "outcome", "slices"])) {
+    throw new Error("阶段必须严格使用 wave、name、outcome 与 slices");
+  }
+  if (!(Number.isSafeInteger(input.wave) && Number(input.wave) >= 0)) {
+    throw new Error("phase.wave 必须是非负整数");
+  }
+  if (!isNonEmptyString(input.name) || !isNonEmptyString(input.outcome)) {
+    throw new Error("phase.name 与 phase.outcome 必须是非空字符串");
+  }
+  if (!Array.isArray(input.slices) || input.slices.length === 0) {
+    throw new Error("phase.slices 必须是非空数组");
+  }
+
+  const slices = input.slices.map((slice, index) => {
+    if (
+      !isRecord(slice) ||
+      !hasOnlyKeys(slice, ["id", "title"]) ||
+      !isNonEmptyString(slice.id) ||
+      !isNonEmptyString(slice.title)
+    ) {
+      throw new Error(`phase.slices[${index}] 必须只包含非空 id 与 title`);
+    }
+    return { id: slice.id, title: slice.title };
+  });
+
+  return {
+    wave: Number(input.wave),
+    name: input.name,
+    outcome: input.outcome,
+    slices,
+  };
+}
+
+export function parseClosedLoopPhases(input: unknown): ClosedLoopPhase[] {
+  if (!Array.isArray(input) || input.length === 0) {
+    throw new Error("data.phases 必须是非空数组");
+  }
+  return input.map(parseClosedLoopPhase);
+}
