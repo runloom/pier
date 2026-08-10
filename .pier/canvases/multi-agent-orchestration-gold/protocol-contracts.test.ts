@@ -36,6 +36,65 @@ describe("本机运行控制协议闭环", () => {
     );
   });
 
+  it("CLI 命令组标注现状与交付波次，W0 以 docs/cli.md 为命令面地图", async () => {
+    const data = await readData();
+    const w0 = data.phases.find((row) => row.wave === 0);
+    const agents = data.cli.commandGroups.find((row) => row.group === "agents");
+    const windows = data.cli.commandGroups.find((row) => row.group === "windows");
+
+    expect(w0?.name ?? "").toMatch(/文档|边界/u);
+    expect(w0?.outcome ?? "").toMatch(/docs\/cli\.md/u);
+    expect(["planned", "in_progress", "done"]).toContain(w0?.status);
+    expect(w0?.slices.some((s) => /docs\/cli\.md/u.test(s.title))).toBe(true);
+
+    for (const row of data.cli.commandGroups) {
+      expect(["shipped", "partial", "planned"]).toContain(row.status);
+      expect(row.wave.length).toBeGreaterThan(0);
+    }
+    expect(agents?.status).toBe("planned");
+    expect(agents?.wave ?? "").toMatch(/W1|W2|W3/u);
+    expect(windows?.status).toBe("partial");
+    expect(data.cli.decision).toMatch(/docs\/cli\.md/u);
+  });
+
+  it("docs/cli.md 的「当前可用命令」不得把规划 agents/access 写成默认可执行", async () => {
+    const cliDocPath = new URL("../../../docs/cli.md", import.meta.url);
+    const cliDoc = await readFile(cliDocPath, "utf8");
+    expect(cliDoc).toMatch(/^## 当前可用命令/mu);
+    expect(cliDoc).toMatch(/^## 规划中的 agents 主路径/mu);
+    expect(cliDoc).toMatch(/交付波次|W0–W6|W0-W6/u);
+
+    const availableMatch = cliDoc.match(
+      /^## 当前可用命令\n([\s\S]*?)(?=^## )/mu,
+    );
+    expect(availableMatch?.[1], "应能截取「当前可用命令」章节").toBeTruthy();
+    const available = availableMatch?.[1] ?? "";
+
+    // 规划主路径命令不得出现在「当前可用」代码块/示例中
+    expect(available).not.toMatch(/^\s*pier agents\b/mu);
+    expect(available).not.toMatch(/^\s*pier access\b/mu);
+    expect(available).not.toMatch(/^\s*pier snapshot\b/mu);
+    expect(available).not.toMatch(/^\s*pier watch\b/mu);
+    expect(available).not.toMatch(/^\s*pier activity\b/mu);
+    expect(available).not.toMatch(/^\s*pier notifications\b/mu);
+
+    // plugins enable/disable 默认 cli-local 无 plugin:write，不得列为当前可用示例
+    expect(available).not.toMatch(/^\s*pier plugins enable\b/mu);
+    expect(available).not.toMatch(/^\s*pier plugins disable\b/mu);
+    expect(available).toMatch(/plugin:write|cli-local/u);
+
+    // 规划章节仍应保留 agents 地图（未实现标记）
+    const plannedHeading = "## 规划中的 agents 主路径";
+    const plannedStart = cliDoc.indexOf(plannedHeading);
+    expect(plannedStart).toBeGreaterThanOrEqual(0);
+    const afterPlanned = cliDoc.slice(plannedStart + plannedHeading.length);
+    const nextSection = afterPlanned.search(/^## /mu);
+    const plannedBody =
+      nextSection === -1 ? afterPlanned : afterPlanned.slice(0, nextSection);
+    expect(plannedBody).toMatch(/pier agents self/u);
+    expect(plannedBody).toMatch(/实现前|未实现|地图/u);
+  });
+
   it("方案 A 只返回本次结构化回复或当前 viewport，不开放公共运行历史", async () => {
     const data = await readData();
     const rules = data.cli.commonRules.join("\n");

@@ -648,7 +648,7 @@ describe("规范 Canvas 数据", () => {
 });
 
 describe("closed-loop 阶段契约", () => {
-  it("接受 pack 约定的 wave、name、outcome 与 slices 结构", async () => {
+  it("接受 pack 约定的 wave、name、outcome、status 与 slices 结构", async () => {
     const schema = await loadExpectedModule<PhaseSchemaModule>("./phase-schema.ts", "phase-schema");
 
     expect(schema, "需要新增纯函数模块 phase-schema.ts").toBeDefined();
@@ -660,6 +660,7 @@ describe("closed-loop 阶段契约", () => {
       wave: 1,
       name: "宿主监督边界",
       outcome: "外部编排器持有任务生命周期，Pier 仅提供运行监督能力",
+      status: "planned" as const,
       slices: [{ id: "S1", title: "建立只读运行快照" }],
     };
 
@@ -683,6 +684,7 @@ describe("closed-loop 阶段契约", () => {
         wave: 1,
         name: "混合阶段",
         outcome: "不应通过",
+        status: "planned",
         slices: [{ id: "S1", title: "正确切片" }],
         files: "src/**",
         verify: "pnpm test",
@@ -694,7 +696,17 @@ describe("closed-loop 阶段契约", () => {
         wave: 1,
         name: "不完整阶段",
         outcome: "不应通过",
+        status: "planned",
         slices: [{ id: "S1" }],
+      },
+    },
+    {
+      name: "缺少 status",
+      value: {
+        wave: 1,
+        name: "无状态阶段",
+        outcome: "不应通过",
+        slices: [{ id: "S1", title: "正确切片" }],
       },
     },
   ])("拒绝 $name", async ({ value }) => {
@@ -727,6 +739,17 @@ describe("状态展示契约", () => {
       { label: "已阻塞", tone: "warning" },
       { label: "待实现", tone: "warning" },
       { label: "已核对", tone: "success" },
+    ]);
+
+    expect(
+      ["shipped", "partial", "in_progress", "done"].map((status) =>
+        presentation.presentStatus(status),
+      ),
+    ).toEqual([
+      { label: "已实现", tone: "success" },
+      { label: "部分可用", tone: "info" },
+      { label: "进行中", tone: "info" },
+      { label: "已完成", tone: "success" },
     ]);
 
     for (const status of ["unmapped_internal_state", "future_状态"]) {
