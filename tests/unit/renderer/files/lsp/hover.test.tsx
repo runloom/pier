@@ -233,7 +233,12 @@ type HoverExtensionInput = Parameters<typeof filesLspHoverExtension>[0];
 type HoverExtensionOverrides = Partial<
   Pick<
     HoverExtensionInput,
-    "documentId" | "ownerId" | "prepareForManual" | "readDocument" | "rootPath"
+    | "documentId"
+    | "notifyError"
+    | "ownerId"
+    | "prepareForManual"
+    | "readDocument"
+    | "rootPath"
   >
 >;
 
@@ -243,6 +248,9 @@ function extensionInput(
   return {
     documentId: overrides.documentId ?? "document-main",
     getLabels: () => LABELS,
+    ...(overrides.notifyError === undefined
+      ? {}
+      : { notifyError: overrides.notifyError }),
     ownerId: overrides.ownerId ?? "editor-main",
     prepareForManual: overrides.prepareForManual ?? (() => "ready"),
     readDocument:
@@ -268,6 +276,7 @@ function mountHover(
     documentId?: string;
     doc?: string;
     extensions?: Extension[];
+    notifyError?: HoverExtensionInput["notifyError"];
     pointerPosition?: number;
     prepareForManual?: HoverExtensionInput["prepareForManual"];
     readDocument?: Parameters<typeof filesLspHoverExtension>[0]["readDocument"];
@@ -279,6 +288,9 @@ function mountHover(
       ...(options.documentId === undefined
         ? {}
         : { documentId: options.documentId }),
+      ...(options.notifyError === undefined
+        ? {}
+        : { notifyError: options.notifyError }),
       ...(options.prepareForManual === undefined
         ? {}
         : { prepareForManual: options.prepareForManual }),
@@ -435,11 +447,11 @@ describe("filesLspHoverExtension", () => {
     );
   });
 
-  // Scheme Z: Cmd/Ctrl+hover never opens a definition preview card.
+  // Scheme Z: Cmd/Ctrl+hover preflights definition (no preview card / no hover).
   it.each([
     ["darwin", { metaKey: true }],
     ["linux", { ctrlKey: true }],
-  ] as const)("does not request definition or hover on %s definition-modifier hover", async (platform, modifiers) => {
+  ] as const)("preflights definition without a card on %s definition-modifier hover", async (platform, modifiers) => {
     setPlatform(platform);
     const harness = createLspHarness();
     harness.responders.set("textDocument/definition", () =>
@@ -454,10 +466,15 @@ describe("filesLspHoverExtension", () => {
     await vi.advanceTimersByTimeAsync(300);
     await flushAsyncWork();
 
-    expect(harness.client.request).not.toHaveBeenCalled();
+    expect(harness.client.request.mock.calls.map(([method]) => method)).toEqual(
+      ["textDocument/definition"]
+    );
     expect(
       view.dom.querySelector('[data-slot="files-lsp-hover-card"]')
     ).toBeNull();
+    expect(
+      view.dom.querySelector(".cm-lsp-definition-affordance")
+    ).not.toBeNull();
   });
 
   it.each([
@@ -480,6 +497,9 @@ describe("filesLspHoverExtension", () => {
     const documentation = Promise.withResolvers<unknown>();
     const harness = createLspHarness();
     harness.responders.set("textDocument/hover", () => documentation.promise);
+    harness.responders.set("textDocument/definition", () =>
+      Promise.resolve([location("file:///repo/alpha.ts")])
+    );
     const { view } = mountHover(harness);
 
     movePointer(view);
@@ -489,12 +509,12 @@ describe("filesLspHoverExtension", () => {
 
     modifierEvent(view, "keydown", { key: "Meta", metaKey: true });
 
-    expect(harness.client.cancelRequest).toHaveBeenCalledOnce();
+    expect(harness.client.cancelRequest).toHaveBeenCalled();
     expect(harness.client.cancelRequest.mock.calls[0]?.[0]).toBe(
       documentationParams
     );
     expect(harness.client.request.mock.calls.map(([method]) => method)).toEqual(
-      ["textDocument/hover"]
+      ["textDocument/hover", "textDocument/definition"]
     );
 
     documentation.resolve(hover("Stale documentation"));
@@ -510,14 +530,20 @@ describe("filesLspHoverExtension", () => {
     harness.responders.set("textDocument/hover", () =>
       Promise.resolve(hover("late"))
     );
+    harness.responders.set("textDocument/definition", () =>
+      Promise.resolve([location("file:///repo/alpha.ts")])
+    );
     const { view } = mountHover(harness);
 
     movePointer(view);
     await vi.advanceTimersByTimeAsync(299);
     modifierEvent(view, "keydown", { key: "Meta", metaKey: true });
     await vi.advanceTimersByTimeAsync(1);
+    await flushAsyncWork();
 
-    expect(harness.client.request).not.toHaveBeenCalled();
+    expect(harness.client.request.mock.calls.map(([method]) => method)).toEqual(
+      ["textDocument/definition"]
+    );
   });
 
   it("restarts a full documentation delay when the definition modifier is released", async () => {
@@ -525,19 +551,26 @@ describe("filesLspHoverExtension", () => {
     harness.responders.set("textDocument/hover", () =>
       Promise.resolve(hover("After release"))
     );
+    harness.responders.set("textDocument/definition", () =>
+      Promise.resolve([location("file:///repo/alpha.ts")])
+    );
     const { view } = mountHover(harness);
 
     movePointer(view, { metaKey: true });
     await flushAsyncWork();
-    expect(harness.client.request).not.toHaveBeenCalled();
+    expect(harness.client.request.mock.calls.map(([method]) => method)).toEqual(
+      ["textDocument/definition"]
+    );
 
     modifierEvent(view, "keyup", { key: "Meta" });
     await vi.advanceTimersByTimeAsync(299);
-    expect(harness.client.request).not.toHaveBeenCalled();
+    expect(harness.client.request.mock.calls.map(([method]) => method)).toEqual(
+      ["textDocument/definition"]
+    );
 
     await vi.advanceTimersByTimeAsync(1);
     expect(harness.client.request.mock.calls.map(([method]) => method)).toEqual(
-      ["textDocument/hover"]
+      ["textDocument/definition", "textDocument/hover"]
     );
   });
 
@@ -561,10 +594,22 @@ describe("filesLspHoverExtension", () => {
     expect(harness.client.request).toHaveBeenCalledOnce();
   });
 
-  it("underlines the full import string on Cmd+hover, not a path word fragment", async () => {
+  it("underlines the full import string on Cmd+hover after definition preflight", async () => {
     const harness = createLspHarness();
     const doc = 'import { applyTokens } from "@/lib/theme/apply-tokens.ts";';
     const applyInPath = doc.indexOf("apply-tokens") + 2;
+    const stringFrom = doc.indexOf('"@/lib/theme/apply-tokens.ts"');
+    const stringTo = stringFrom + '"@/lib/theme/apply-tokens.ts"'.length;
+    harness.responders.set("textDocument/definition", () =>
+      Promise.resolve([
+        {
+          originSelectionRange: range(stringFrom, stringTo),
+          targetRange: range(0, 5),
+          targetSelectionRange: range(0, 5),
+          targetUri: "file:///repo/lib/theme/apply-tokens.ts",
+        },
+      ])
+    );
     const { view } = mountHover(harness, {
       doc,
       extensions: [javascript()],
@@ -583,7 +628,159 @@ describe("filesLspHoverExtension", () => {
     expect(
       view.dom.querySelector(".cm-lsp-definition-affordance-layer")
     ).not.toBeNull();
+    expect(harness.client.request.mock.calls.map(([method]) => method)).toEqual(
+      ["textDocument/definition"]
+    );
+  });
+
+  it("does not underline on Cmd+hover when definition returns empty", async () => {
+    const harness = createLspHarness();
+    harness.responders.set("textDocument/definition", () =>
+      Promise.resolve([])
+    );
+    const { view } = mountHover(harness);
+
+    movePointer(view, { metaKey: true });
+    await flushAsyncWork();
+
+    expect(harness.client.request.mock.calls.map(([method]) => method)).toEqual(
+      ["textDocument/definition"]
+    );
+    expect(view.dom.querySelector(".cm-lsp-definition-affordance")).toBeNull();
+    expect(
+      view.dom.querySelector('[data-slot="files-lsp-hover-card"]')
+    ).toBeNull();
+  });
+
+  it("does not underline on Cmd+hover without a definition provider", async () => {
+    const harness = createLspHarness();
+    harness.client.hasCapability.mockImplementation(
+      (name: string) => name !== "definitionProvider"
+    );
+    harness.responders.set("textDocument/definition", () =>
+      Promise.resolve([location("file:///repo/alpha.ts")])
+    );
+    const { view } = mountHover(harness);
+
+    movePointer(view, { metaKey: true });
+    await flushAsyncWork();
+
     expect(harness.client.request).not.toHaveBeenCalled();
+    expect(view.dom.querySelector(".cm-lsp-definition-affordance")).toBeNull();
+  });
+
+  it("does not underline on Cmd+hover when language service is absent", async () => {
+    const harness = createLspHarness();
+    harness.responders.set("textDocument/definition", () =>
+      Promise.resolve([location("file:///repo/alpha.ts")])
+    );
+    const { view } = mountHover(harness);
+    lspPluginGetMock.mockReturnValue(null);
+
+    movePointer(view, { metaKey: true });
+    await flushAsyncWork();
+
+    expect(harness.client.request).not.toHaveBeenCalled();
+    expect(view.dom.querySelector(".cm-lsp-definition-affordance")).toBeNull();
+  });
+
+  it("reuses ready preflight targets on Cmd+click without a second definition request", async () => {
+    const harness = createLspHarness();
+    const targetUri = "file:///repo/alpha.ts";
+    harness.responders.set("textDocument/definition", () =>
+      Promise.resolve([location(targetUri)])
+    );
+    const { view } = mountHover(harness);
+    const targetView = new EditorView({
+      parent: host,
+      state: EditorState.create({ doc: "export const alpha = 1;" }),
+    });
+    mountedViews.add(targetView);
+    harness.workspace.displayFile.mockResolvedValue(targetView);
+    const dispatch = vi.spyOn(targetView, "dispatch");
+
+    movePointer(view, { metaKey: true });
+    await flushAsyncWork();
+    expect(harness.client.request).toHaveBeenCalledOnce();
+    expect(
+      view.dom.querySelector(".cm-lsp-definition-affordance")
+    ).not.toBeNull();
+
+    definitionMouseDown(view);
+    await flushAsyncWork();
+
+    expect(harness.client.request).toHaveBeenCalledOnce();
+    expect(harness.client.request.mock.calls.map(([method]) => method)).toEqual(
+      ["textDocument/definition"]
+    );
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userEvent: "select.definition",
+      })
+    );
+  });
+
+  it("Cmd+click after empty preflight is a silent no-op without a second request", async () => {
+    const harness = createLspHarness();
+    const notifyError = vi.fn();
+    harness.responders.set("textDocument/definition", () =>
+      Promise.resolve([])
+    );
+    const { view } = mountHover(harness, { notifyError });
+
+    movePointer(view, { metaKey: true });
+    await flushAsyncWork();
+    expect(harness.client.request).toHaveBeenCalledOnce();
+
+    definitionMouseDown(view);
+    await flushAsyncWork();
+
+    expect(harness.client.request).toHaveBeenCalledOnce();
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(
+      view.dom.querySelector('[data-slot="files-lsp-hover-card"]')
+    ).toBeNull();
+  });
+
+  it("Cmd+click after failed preflight re-requests and reports request failure", async () => {
+    const harness = createLspHarness();
+    const notifyError = vi.fn();
+    let definitionCalls = 0;
+    harness.responders.set("textDocument/definition", () => {
+      definitionCalls += 1;
+      return Promise.reject(new Error("definition transport failed"));
+    });
+    const { view } = mountHover(harness, { notifyError });
+
+    movePointer(view, { metaKey: true });
+    await flushAsyncWork();
+    expect(definitionCalls).toBe(1);
+    expect(view.dom.querySelector(".cm-lsp-definition-affordance")).toBeNull();
+
+    definitionMouseDown(view);
+    await flushAsyncWork();
+
+    expect(definitionCalls).toBe(2);
+    expect(notifyError).toHaveBeenCalledWith(LABELS.goToDefinitionFailed);
+  });
+
+  it("cancels in-flight definition preflight when the definition modifier is released", async () => {
+    const definition = Promise.withResolvers<unknown>();
+    const harness = createLspHarness();
+    harness.responders.set("textDocument/definition", () => definition.promise);
+    const { view } = mountHover(harness);
+
+    movePointer(view, { metaKey: true });
+    await flushAsyncWork();
+    const params = requestParams(harness, "textDocument/definition");
+    expect(params).toBeDefined();
+
+    modifierEvent(view, "keyup", { key: "Meta" });
+    expect(harness.client.cancelRequest).toHaveBeenCalledWith(params);
+
+    definition.resolve([location("file:///repo/alpha.ts")]);
+    await flushAsyncWork();
+    expect(view.dom.querySelector(".cm-lsp-definition-affordance")).toBeNull();
   });
 
   it("does not clear documentation when Hover.range expands beyond the word probe", async () => {

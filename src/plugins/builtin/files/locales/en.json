@@ -437,6 +437,24 @@
       "description": "Show diagnostics, completions, and go to definition for supported files. Language services must also be enabled for the workspace.",
       "label": "Editor language features"
     },
+    "pier.files.markdown.blockHeightLimit": {
+      "description": "Whether code blocks and Mermaid diagrams in Markdown preview use a maximum height with their own scrollbar. Full height expands with the page.",
+      "enumDescriptions": [
+        "Full height (no max height)",
+        "Limit height (scroll inside the block)"
+      ],
+      "label": "Code & diagram height"
+    },
+    "pier.files.markdown.readingFont": {
+      "description": "Body font for Markdown preview. Follow interface uses the app UI font; custom uses the font family stack below. Code stays monospace.",
+      "enumDescriptions": ["Follow interface", "Custom"],
+      "label": "Markdown preview font"
+    },
+    "pier.files.markdown.readingFontFamily": {
+      "description": "Primary font for Markdown preview in Custom mode. Leave empty to use the built-in document serif fallbacks. System fonts only.",
+      "label": "Custom font",
+      "placeholder": "Noto Serif SC"
+    },
     "pier.files.tree.showExcludedFiles": {
       "description": "Show paths matched by the exclusion patterns below.",
       "label": "Show excluded files"

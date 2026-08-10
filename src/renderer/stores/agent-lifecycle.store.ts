@@ -1,6 +1,5 @@
 import { AGENT_LIFECYCLE_BATCH_CONCURRENCY } from "@shared/agent-lifecycle/batch.ts";
 import { mapPool } from "@shared/agent-lifecycle/map-pool.ts";
-import { isAgentUpdateAvailable } from "@shared/agent-lifecycle/version-compare.ts";
 import type {
   AgentLifecycleAction,
   AgentLifecycleActionResult,
@@ -12,9 +11,24 @@ import { create } from "zustand";
 import type { AgentLifecycleFailure } from "@/pages/settings/components/agent-lifecycle-format.ts";
 import { isLifecycleSoftFailure } from "@/pages/settings/components/agent-lifecycle-format.ts";
 import { useAgentDetectStore } from "./agent-detect.store.ts";
+import {
+  hasCachedProbes,
+  isLifecycleUpdateCandidate,
+  isTargetedAgentIds,
+  mergeProbes,
+  shouldSkipFullCatalogProbe,
+} from "./agent-lifecycle-probe.ts";
 import { useAgentPreferencesStore } from "./agent-preferences.store.ts";
 
-const PROBE_TTL_MS = 10 * 60 * 1000;
+export {
+  AGENT_LIFECYCLE_CHECK_LATEST_TTL_MS,
+  AGENT_LIFECYCLE_PROBE_TTL_MS,
+  isLifecycleUpdateCandidate,
+  isTargetedAgentIds,
+  mergeProbes,
+  shouldSkipFullCatalogProbe,
+  withDerivedUpdateFlags,
+} from "./agent-lifecycle-probe.ts";
 
 /** Explicit per-agent job — no cross-product of batchIds × actionById. */
 export type LifecycleJobPhase = "queued" | "running";
@@ -23,6 +37,18 @@ export interface LifecycleJob {
   readonly action: AgentLifecycleAction;
   readonly phase: LifecycleJobPhase;
   readonly progress?: AgentLifecycleProgress;
+}
+
+export interface AgentLifecycleProbeOptions {
+  /** Ask main for remote latest versions (npm/brew/…). */
+  checkLatest?: boolean;
+  /** Bypass TTL and always hit main (toolbar refresh / post install). */
+  force?: boolean;
+  /**
+   * Do not flip `isProbing` (settings open SWR path with existing rows).
+   * Failures stay silent; callers that need UI busy pass false/omit.
+   */
+  silent?: boolean;
 }
 
 interface AgentLifecycleState {
@@ -35,10 +61,13 @@ interface AgentLifecycleState {
   isProbing: boolean;
   /** agentId → active install/update job (queued or running). */
   jobById: Partial<Record<AgentKind, LifecycleJob>>;
+  /** Last successful full-catalog probe that requested checkLatest. */
+  lastCheckLatestAt: number | null;
+  /** Last successful full-catalog local probe (any checkLatest). */
   lastProbeAt: number | null;
   probe: (
     agentIds?: readonly AgentKind[],
-    options?: { force?: boolean; checkLatest?: boolean }
+    options?: AgentLifecycleProbeOptions
   ) => Promise<void>;
   probesById: Partial<Record<AgentKind, AgentLifecycleProbe>>;
   run: (
@@ -49,85 +78,21 @@ interface AgentLifecycleState {
     agentIds: readonly AgentKind[],
     action: AgentLifecycleAction
   ) => Promise<AgentLifecycleActionResult[]>;
+  /**
+   * Settings-open SWR: keep `probesById`, revalidate when TTL says stale.
+   * Silent when a previous snapshot exists so the list never looks like a
+   * full-page reload. Manual toolbar refresh must use force probe instead.
+   */
+  softRevalidate: () => Promise<void>;
   /** Ensure main→renderer progress subscription is active (idempotent). */
   startProgressSubscription: () => void;
   updatableIds: () => AgentKind[];
 }
 
-/**
- * Derive offer/available flags from a probe + optional retained latest.
- * Always recompute — never OR-sticky previous updateOffered (that inflated
- * "Update all (N)" across refreshes without re-check).
- */
-export function withDerivedUpdateFlags(
-  probe: AgentLifecycleProbe,
-  latestVersion: string | null | undefined
-): AgentLifecycleProbe {
-  const latest =
-    latestVersion === undefined || latestVersion === null
-      ? null
-      : latestVersion;
-  const updateAvailable =
-    probe.updateMode === "versioned" &&
-    latest !== null &&
-    isAgentUpdateAvailable(probe.version, latest);
-  const updateOffered =
-    probe.canInstall &&
-    (probe.installedButBroken ||
-      (probe.detected &&
-        (probe.updateMode === "reinstall" || updateAvailable)));
-  return {
-    ...probe,
-    latestVersion: latest,
-    updateAvailable,
-    updateOffered,
-  };
-}
-
-/**
- * Merge probe results. When the new probe skipped latest fetch (checkLatest
- * false), keep the last known latestVersion but **recompute** availability
- * against the newly detected install version — never freeze updateAvailable.
- */
-export function mergeProbes(
-  prev: Partial<Record<AgentKind, AgentLifecycleProbe>>,
-  next: AgentLifecycleProbe[]
-): Partial<Record<AgentKind, AgentLifecycleProbe>> {
-  const out = { ...prev };
-  for (const probe of next) {
-    const previous = out[probe.agentId];
-    const hasFreshLatest =
-      probe.latestVersion !== null && probe.latestVersion !== undefined;
-    if (hasFreshLatest) {
-      // Main already computed flags for this latest; trust the probe.
-      out[probe.agentId] = probe;
-      continue;
-    }
-    // No latest on this response: retain previous latest if any, re-derive flags.
-    const retainedLatest = previous?.latestVersion ?? null;
-    out[probe.agentId] = withDerivedUpdateFlags(probe, retainedLatest);
-  }
-  return out;
-}
-
-/**
- * Batch / "Update all" eligibility.
- * Prefer real versioned updates + broken installs — not reinstall-mode
- * always-on offers (cursor/hermes/kiro) which inflated the toolbar count.
- * Per-row Update still uses `probe.updateOffered` (includes reinstall).
- */
-export function isLifecycleUpdateCandidate(
-  probe: AgentLifecycleProbe | undefined,
-  options?: { disabled?: boolean }
-): boolean {
-  if (options?.disabled === true) {
-    return false;
-  }
-  if (!(probe && probe.support === "full" && probe.canInstall)) {
-    return false;
-  }
-  return probe.updateAvailable === true || probe.installedButBroken === true;
-}
+/** Join concurrent full-catalog probes (Strict Mode / remount / open+refresh). */
+let fullCatalogProbeInFlight: Promise<void> | null = null;
+/** Non-silent probe depth so overlapping busy probes do not clear spinner early. */
+let probingBusyDepth = 0;
 
 function failureFromResult(
   result: AgentLifecycleActionResult,
@@ -160,6 +125,7 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
     isProbing: false,
     jobById: {},
     lastProbeAt: null,
+    lastCheckLatestAt: null,
     probesById: {},
 
     clearJob(agentId) {
@@ -232,32 +198,102 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
     async probe(agentIds, options) {
       const force = options?.force === true;
       const checkLatest = options?.checkLatest === true;
-      const last = get().lastProbeAt;
+      const silent = options?.silent === true;
+      const targeted = isTargetedAgentIds(agentIds);
+      const state = get();
       if (
-        !(force || checkLatest) &&
-        last !== null &&
-        Date.now() - last < PROBE_TTL_MS &&
-        !agentIds
+        shouldSkipFullCatalogProbe({
+          force,
+          checkLatest,
+          ...(agentIds === undefined ? {} : { agentIds }),
+          lastProbeAt: state.lastProbeAt,
+          lastCheckLatestAt: state.lastCheckLatestAt,
+          probesById: state.probesById,
+        })
       ) {
         return;
       }
-      const api = window.pier?.agents?.lifecycle;
-      if (!api) {
-        return;
+
+      // Full-catalog: join an in-flight soft probe; force waits then re-runs.
+      if (!targeted && fullCatalogProbeInFlight) {
+        if (!force) {
+          return fullCatalogProbeInFlight;
+        }
+        await fullCatalogProbeInFlight.catch(() => undefined);
+        const after = get();
+        if (
+          shouldSkipFullCatalogProbe({
+            force,
+            checkLatest,
+            ...(agentIds === undefined ? {} : { agentIds }),
+            lastProbeAt: after.lastProbeAt,
+            lastCheckLatestAt: after.lastCheckLatestAt,
+            probesById: after.probesById,
+          })
+        ) {
+          return;
+        }
       }
-      set({ isProbing: true });
-      try {
-        const probes = await api.probe({
-          ...(agentIds ? { agentIds: [...agentIds] } : {}),
-          checkLatest,
+
+      const run = async (): Promise<void> => {
+        const api = window.pier?.agents?.lifecycle;
+        if (!api?.probe) {
+          return;
+        }
+        // Never clear probesById before merge — SWR keeps previous rows visible.
+        if (!silent) {
+          probingBusyDepth += 1;
+          if (probingBusyDepth === 1) {
+            set({ isProbing: true });
+          }
+        }
+        try {
+          const probes = await api.probe({
+            ...(targeted && agentIds ? { agentIds: [...agentIds] } : {}),
+            checkLatest,
+          });
+          const now = Date.now();
+          set((prev) => ({
+            probesById: mergeProbes(prev.probesById, probes),
+            // Targeted re-probes refresh rows but do not extend full-catalog TTL.
+            ...(targeted
+              ? {}
+              : {
+                  lastProbeAt: now,
+                  ...(checkLatest ? { lastCheckLatestAt: now } : {}),
+                }),
+          }));
+        } finally {
+          if (!silent) {
+            probingBusyDepth = Math.max(0, probingBusyDepth - 1);
+            if (probingBusyDepth === 0) {
+              set({ isProbing: false });
+            }
+          }
+        }
+      };
+
+      if (!targeted) {
+        const p = run().finally(() => {
+          if (fullCatalogProbeInFlight === p) {
+            fullCatalogProbeInFlight = null;
+          }
         });
-        set((state) => ({
-          probesById: mergeProbes(state.probesById, probes),
-          lastProbeAt: Date.now(),
-        }));
-      } finally {
-        set({ isProbing: false });
+        fullCatalogProbeInFlight = p;
+        return p;
       }
+
+      return run();
+    },
+
+    softRevalidate() {
+      const hasCache = hasCachedProbes(get().probesById);
+      // Open path: never force. With cache → silent background; first visit →
+      // show toolbar busy while the initial snapshot loads.
+      return get().probe(undefined, {
+        checkLatest: true,
+        silent: hasCache,
+      });
     },
 
     async run(agentId, action) {

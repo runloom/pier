@@ -408,8 +408,8 @@ describe("PierFileTree path synchronization", () => {
     rerender(
       <PierFileTree
         items={[
-          file("src/inserted-a.ts"),
-          file("src/inserted-b.ts"),
+          file("src/000-insert-a.ts"),
+          file("src/000-insert-b.ts"),
           file("src/above.ts"),
           file("src/anchor.ts"),
           file("src/below.ts"),
@@ -419,8 +419,8 @@ describe("PierFileTree path synchronization", () => {
     );
     await flushEffects();
 
-    // Path-sync schedules multi-frame restore after batch. Re-query DOM (batch may
-    // replace nodes), lock the pre-restore scroll base, then shift the anchor.
+    // Path-sync schedules layout compensate after batch (≤2 rAF, no lock).
+    // Re-query DOM and shift the anchor geometry before running those frames.
     const scrollElement = getFileTreeScrollElement(container);
     scrollElement.scrollTop = 200;
     mockRect(scrollElement, 0, 120);
@@ -434,8 +434,8 @@ describe("PierFileTree path synchronization", () => {
 
     expect(resetPathsSpy).not.toHaveBeenCalled();
     expect(batchSpy).toHaveBeenCalledWith([
-      { path: "src/inserted-a.ts", type: "add" },
-      { path: "src/inserted-b.ts", type: "add" },
+      { path: "src/000-insert-a.ts", type: "add" },
+      { path: "src/000-insert-b.ts", type: "add" },
     ]);
     // anchor moved down by 48px (24 → 72); scrollTop should increase by 48.
     expect(scrollElement.scrollTop).toBe(248);
@@ -504,19 +504,59 @@ describe("PierFileTree path synchronization", () => {
       }
     );
 
-    scrollControllerRef.current?.restoreSnapshotSoon(
+    scrollControllerRef.current?.requestLayoutCompensate(
       { fallbackScrollTop: 100, kind: "position" },
-      { frames: 1, lock: true }
+      { settleFrames: 1 }
     );
-    scrollControllerRef.current?.restoreSnapshotSoon(
+    scrollControllerRef.current?.requestLayoutCompensate(
       { fallbackScrollTop: 300, kind: "position" },
-      { frames: 1, lock: true }
+      { settleFrames: 1 }
     );
-    expect(scrollElement.scrollTop).toBe(300);
 
     frameCallbacks[0]?.(performance.now());
+    expect(scrollElement.scrollTop).toBe(0);
 
+    frameCallbacks[1]?.(performance.now());
     expect(scrollElement.scrollTop).toBe(300);
+  });
+
+  it("batches below-only path adds without layout compensate writes", async () => {
+    const treeScroll = await import("@pier/ui/file/tree-scroll.ts");
+    const restoreSpy = vi.spyOn(treeScroll, "restoreFileTreeScrollSnapshot");
+
+    const { container, rerender } = await renderMountedTree([
+      file("src/above.ts"),
+      file("src/anchor.ts"),
+      file("src/mid.ts"),
+    ]);
+
+    const scrollElement = getFileTreeScrollElement(container);
+    mockRect(scrollElement, 0, 120);
+    mockFileTreeRows(container, "src/above.ts", -32, -8);
+    mockFileTreeRows(container, "src/anchor.ts", 24, 48);
+    scrollElement.scrollTop = 200;
+
+    restoreSpy.mockClear();
+    rerender(
+      <PierFileTree
+        items={[
+          file("src/above.ts"),
+          file("src/anchor.ts"),
+          file("src/mid.ts"),
+          file("src/zz-bottom.ts"),
+        ]}
+        label="Project files"
+      />
+    );
+    await flushEffects();
+
+    expect(resetPathsSpy).not.toHaveBeenCalled();
+    expect(batchSpy).toHaveBeenCalledWith([
+      { path: "src/zz-bottom.ts", type: "add" },
+    ]);
+    // G2: 0 host compensate restores for strictly below-anchor adds.
+    expect(restoreSpy).not.toHaveBeenCalled();
+    restoreSpy.mockRestore();
   });
 });
 

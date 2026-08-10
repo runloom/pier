@@ -2,7 +2,8 @@ export interface TerminalComposerAttachmentDto {
   id: string;
   /** Directory attachment (folder). */
   isDirectory?: boolean;
-  kind: "image" | "file";
+  /** `paste` = materializeTerminalComposerTextBytes (.txt under pier-terminal-pastes). */
+  kind: "image" | "file" | "paste";
   name: string;
   path: string;
   /**
@@ -11,6 +12,16 @@ export interface TerminalComposerAttachmentDto {
    */
   previewDataUrl?: string | undefined;
 }
+
+export interface TerminalComposerPasteTextWrite {
+  /** Absolute path previously returned by text materialize (must stay under pastes dir). */
+  path: string;
+  text: string;
+}
+
+export type TerminalComposerPasteTextWriteResult =
+  | { ok: true }
+  | { ok: false; error: string };
 
 export interface TerminalComposerPathsResult {
   attachments: TerminalComposerAttachmentDto[];

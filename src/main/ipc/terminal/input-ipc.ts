@@ -8,6 +8,7 @@ import {
   pickTerminalComposerFiles,
   resolveTerminalComposerPaths,
   revealTerminalComposerPath,
+  writeTerminalComposerPasteText,
 } from "./composer-attachments.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import {
@@ -135,6 +136,14 @@ export function registerTerminalInputIpc(opts: {
     (_event, data: unknown) =>
       materializeTerminalComposerTextBytes(
         data as Parameters<typeof materializeTerminalComposerTextBytes>[0]
+      )
+  );
+
+  ipcMain.handle(
+    "pier:terminal:composer-write-paste-text",
+    (_event, data: unknown) =>
+      writeTerminalComposerPasteText(
+        data as Parameters<typeof writeTerminalComposerPasteText>[0]
       )
   );
 

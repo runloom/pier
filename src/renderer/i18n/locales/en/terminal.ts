@@ -3,6 +3,10 @@ export const terminal = {
   frameWaitFailed:
     "Terminal view didn't appear. Try again, or reopen this terminal.",
   openPathFailed: "Couldn't open path — try again",
+  openPathInvalid: "Couldn't open this path",
+  openPathRelativeWithoutCwd:
+    "This terminal has no working directory, so the relative path cannot be opened.",
+  openPathUnsupportedScheme: "Couldn't open this link in Pier",
   agentSession: {
     coldStart: "Couldn’t resume the previous session. Started a fresh agent.",
     endedBody: "The previous session has exited. Restart to continue.",
@@ -45,6 +49,12 @@ export const terminal = {
     keyHint: "⇧⏎ newline · {{attach}} attach · Esc close",
     label: "Rich Input",
     largePasteAttachFailed: "Couldn’t attach paste — try again",
+    editPasteTitle: "Edit pasted content",
+    editPasteLabel: "Content",
+    editPasteEmptyHint: "Clearing and saving removes this paste",
+    editPasteSave: "Save",
+    editPasteSaveFailed: "Couldn’t save pasted content — try again",
+    pasteAttachmentAria: "Pasted content, attachment {{n}}",
     attachmentAutocompleteEmptyBody:
       "Add a file first, then type # to insert it here.",
     attachmentAutocompleteEmptyTitle: "No attachments yet",
@@ -171,7 +181,11 @@ export const terminal = {
         jumpFailed: "Couldn’t open changes",
         jumpFailedBody:
           "Open the Changes view for this project, then try jumping again.",
+        loadingLabel: "Loading current changes…",
         openCount: "{{count}} open comments",
+        staleJumpBody:
+          "That file has already been committed or is no longer in the current changes. This comment will be removed.",
+        staleJumpTitle: "Comment is no longer on current changes",
         submitAndClear: "Submit and clear",
         submitFailed: "Couldn’t submit comments",
         submitPartialBody:

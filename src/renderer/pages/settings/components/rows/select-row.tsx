@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@pier/ui/select.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type { ReactNode } from "react";
 
 interface SelectRowOption {
@@ -26,6 +27,7 @@ export interface SelectRowProps<V extends string> {
   label: string;
   onChange: (next: V) => void;
   options: readonly SelectRowOption[];
+  /** Tailwind width utilities; default is compact for short labels. */
   triggerWidth?: string;
   value: V;
 }
@@ -42,12 +44,12 @@ export function SelectRow<V extends string>({
 }: SelectRowProps<V>) {
   return (
     <Field className="!items-center" orientation="horizontal">
-      <FieldContent>
+      <FieldContent className="min-w-0">
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {description && <FieldDescription>{description}</FieldDescription>}
       </FieldContent>
       <Select onValueChange={(v) => onChange(v as V)} value={value}>
-        <SelectTrigger className={triggerWidth} id={id}>
+        <SelectTrigger className={cn("shrink-0", triggerWidth)} id={id}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

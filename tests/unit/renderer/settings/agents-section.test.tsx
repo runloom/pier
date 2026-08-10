@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { AgentsSection } from "@/pages/settings/components/agents-section.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
+import { useAgentLifecycleStore } from "@/stores/agent-lifecycle.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import type * as AppDialogStoreModule from "@/stores/app-dialog.store.ts";
 import { makeFakePreferences } from "../../../setup/preferences-fixture.ts";
@@ -47,11 +48,41 @@ const DEFAULT_PREFERENCES = {
   disabledAgentIds: [],
 };
 
-function makePierMock(detectedIds: string[] = []) {
+function makePierMock(
+  detectedIds: string[] = [],
+  lifecycle?: {
+    probe?: ReturnType<typeof vi.fn>;
+  }
+) {
   return {
     agents: {
       detect: vi.fn(async () => ({ detectedIds })),
       refresh: vi.fn(async () => ({ detectedIds })),
+      lifecycle: {
+        cancel: vi.fn(async () => false),
+        onProgress: vi.fn(() => () => undefined),
+        probe:
+          lifecycle?.probe ??
+          vi.fn(async () => [
+            {
+              agentId: "claude",
+              canInstall: true,
+              canUninstall: false,
+              detected: true,
+              installedButBroken: false,
+              installs: [],
+              isConflict: false,
+              latestVersion: "2.0.0",
+              support: "full" as const,
+              updateAvailable: false,
+              updateMode: "versioned" as const,
+              updateOffered: false,
+              uninstallMode: "none" as const,
+              version: "2.0.0",
+            },
+          ]),
+        run: vi.fn(),
+      },
     },
     externalNavigation: {
       open: vi.fn(
@@ -87,6 +118,14 @@ describe("AgentsSection", () => {
       isRefreshing: false,
     });
     useAgentPreferencesStore.setState(DEFAULT_PREFERENCES);
+    useAgentLifecycleStore.setState({
+      failureById: {},
+      isProbing: false,
+      jobById: {},
+      lastProbeAt: null,
+      lastCheckLatestAt: null,
+      probesById: {},
+    });
 
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -104,6 +143,14 @@ describe("AgentsSection", () => {
       isRefreshing: false,
     });
     useAgentPreferencesStore.setState(DEFAULT_PREFERENCES);
+    useAgentLifecycleStore.setState({
+      failureById: {},
+      isProbing: false,
+      jobById: {},
+      lastProbeAt: null,
+      lastCheckLatestAt: null,
+      probesById: {},
+    });
   });
 
   it("renders the section heading", () => {
@@ -480,5 +527,50 @@ describe("AgentsSection", () => {
       );
       expect(separator).not.toHaveClass("data-horizontal:w-full");
     }
+  });
+
+  it("SWR: keeps previous probe snapshot and skips re-probe within TTL on re-open", async () => {
+    const probe = vi.fn(async () => [
+      {
+        agentId: "claude" as const,
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "2.0.0",
+        support: "full" as const,
+        updateAvailable: false,
+        updateMode: "versioned" as const,
+        updateOffered: false,
+        uninstallMode: "none" as const,
+        version: "2.0.0",
+      },
+    ]);
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: makePierMock(["claude"], { probe }),
+    });
+
+    const first = render(<AgentsSection />);
+    await waitFor(() => {
+      expect(probe).toHaveBeenCalledTimes(1);
+    });
+    expect(useAgentLifecycleStore.getState().probesById.claude?.version).toBe(
+      "2.0.0"
+    );
+    first.unmount();
+
+    // Remount = leave settings section and open again. Snapshot must stay.
+    render(<AgentsSection />);
+    await waitFor(() => {
+      expect(screen.getByTestId("agent-row-claude")).toBeInTheDocument();
+    });
+    expect(useAgentLifecycleStore.getState().probesById.claude?.version).toBe(
+      "2.0.0"
+    );
+    // softRevalidate + TTL → no second main probe while fresh.
+    expect(probe).toHaveBeenCalledTimes(1);
   });
 });

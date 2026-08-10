@@ -2,10 +2,14 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
   COMMAND_PRIORITY_HIGH,
   createEditor,
   KEY_ARROW_RIGHT_COMMAND,
   KEY_BACKSPACE_COMMAND,
+  KEY_DOWN_COMMAND,
+  MOVE_TO_START,
 } from "lexical";
 import type { ClipboardEvent as ReactClipboardEvent } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -14,7 +18,12 @@ import {
   $createAttachmentTokenNode,
   AttachmentTokenNode,
 } from "@/panel-kits/terminal/structured-composer/attachment-token-node.tsx";
-import { $moveCaretAcrossComposerChip } from "@/panel-kits/terminal/structured-composer/composer-chip-caret.ts";
+import {
+  $moveCaretAcrossComposerChip,
+  $moveCaretByWordAcrossChips,
+  $moveCaretToBlockStartAroundChips,
+  isComposerWordMoveArrow,
+} from "@/panel-kits/terminal/structured-composer/composer-chip-caret.ts";
 import { $deleteAdjacentComposerChip } from "@/panel-kits/terminal/structured-composer/mention-delete-plugin.tsx";
 import { clipboardHasFilePayload } from "@/panel-kits/terminal/structured-composer/paste-plain-text-plugin.tsx";
 import { WorkspacePathMentionNode } from "@/panel-kits/terminal/structured-composer/workspace-path-mention-node.tsx";
@@ -102,6 +111,115 @@ describe("Lexical chip command handlers (no nested update)", () => {
       } as unknown as KeyboardEvent)
     ).toBe(true);
     expect(preventDefault).toHaveBeenCalledOnce();
+  });
+
+  it("MOVE_TO_START parks the caret before a leading chip", () => {
+    const editor = createTestEditor();
+    let saw: { key: string; offset: number; collapsed: boolean } | null = null;
+    editor.registerCommand(
+      MOVE_TO_START,
+      (event) => {
+        const handled = $moveCaretToBlockStartAroundChips(event);
+        if (handled) {
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) {
+            saw = {
+              collapsed: selection.isCollapsed(),
+              key: selection.anchor.key,
+              offset: selection.anchor.offset,
+            };
+          }
+        }
+        return handled;
+      },
+      COMMAND_PRIORITY_HIGH
+    );
+
+    let paragraphKey = "";
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const paragraph = $createParagraphNode();
+      const chip = $createAttachmentTokenNode("/tmp/a.png", 1);
+      const after = $createTextNode("如图");
+      paragraph.append(chip, after);
+      root.append(paragraph);
+      after.select(1, 1);
+      paragraphKey = paragraph.getKey();
+    });
+
+    const preventDefault = vi.fn();
+    expect(
+      editor.dispatchCommand(MOVE_TO_START, {
+        preventDefault,
+        shiftKey: false,
+      } as unknown as KeyboardEvent)
+    ).toBe(true);
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(saw).toEqual({
+      collapsed: true,
+      key: paragraphKey,
+      offset: 0,
+    });
+  });
+
+  it("KEY_DOWN Option+Left parks the caret before an adjacent chip", () => {
+    const editor = createTestEditor();
+    let saw: { key: string; offset: number; collapsed: boolean } | null = null;
+    editor.registerCommand(
+      KEY_DOWN_COMMAND,
+      (event) => {
+        const wordDir = isComposerWordMoveArrow(event);
+        if (wordDir === null) {
+          return false;
+        }
+        const handled = $moveCaretByWordAcrossChips(wordDir, event);
+        if (handled) {
+          const selection = $getSelection();
+          if ($isRangeSelection(selection)) {
+            saw = {
+              collapsed: selection.isCollapsed(),
+              key: selection.anchor.key,
+              offset: selection.anchor.offset,
+            };
+          }
+        }
+        return handled;
+      },
+      COMMAND_PRIORITY_HIGH
+    );
+
+    let beforeKey = "";
+    editor.update(() => {
+      const root = $getRoot();
+      root.clear();
+      const paragraph = $createParagraphNode();
+      const before = $createTextNode("hi");
+      const chip = $createAttachmentTokenNode("/tmp/a.png", 1);
+      const after = $createTextNode("xy");
+      paragraph.append(before, chip, after);
+      root.append(paragraph);
+      after.select(0, 0);
+      beforeKey = before.getKey();
+    });
+
+    const preventDefault = vi.fn();
+    expect(
+      editor.dispatchCommand(KEY_DOWN_COMMAND, {
+        altKey: true,
+        ctrlKey: false,
+        key: "ArrowLeft",
+        metaKey: false,
+        preventDefault,
+        shiftKey: false,
+      } as unknown as KeyboardEvent)
+    ).toBe(true);
+    expect(preventDefault).toHaveBeenCalledOnce();
+    expect(saw).toEqual({
+      collapsed: true,
+      key: beforeKey,
+      offset: 2,
+    });
   });
 });
 

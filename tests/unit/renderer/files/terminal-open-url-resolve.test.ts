@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { PanelContext } from "../../../../src/shared/contracts/panel.ts";
 import {
   listTerminalPathResolveRoots,
   normalizeTerminalPathText,
   parseTerminalOpenUrl,
   parseTerminalPathLocation,
   resolveTerminalLocalPathTargets,
-} from "../../../../src/plugins/builtin/files/renderer/open-url/resolve.ts";
-import type { PanelContext } from "../../../../src/shared/contracts/panel.ts";
+} from "../../../../src/shared/terminal-local-path.ts";
 
 function panelContext(partial: Partial<PanelContext> = {}): PanelContext {
   return {

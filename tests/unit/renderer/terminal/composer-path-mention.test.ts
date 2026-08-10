@@ -1,10 +1,10 @@
 import { $createParagraphNode, $getRoot, createEditor } from "lexical";
 import { describe, expect, it } from "vitest";
-import { LARGE_PASTE_CHAR_THRESHOLD } from "@/panel-kits/terminal/composer-paste.ts";
 import {
   joinProjectPath,
   mentionLabelFromRelativePath,
 } from "@/panel-kits/terminal/structured-composer/composer-path-query.ts";
+import { PASTE_LARGE_MIN_CHARS } from "@/panel-kits/terminal/structured-composer/paste-tiers.ts";
 import {
   readLexicalPlainSelection,
   readLexicalPlainText,
@@ -91,7 +91,7 @@ describe("workspace-path-mention serialize", () => {
 });
 
 describe("large paste threshold", () => {
-  it("uses 10_000 characters", () => {
-    expect(LARGE_PASTE_CHAR_THRESHOLD).toBe(10_000);
+  it("uses 10_000 characters (large tier min)", () => {
+    expect(PASTE_LARGE_MIN_CHARS).toBe(10_000);
   });
 });

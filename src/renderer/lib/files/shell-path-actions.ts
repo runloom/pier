@@ -60,6 +60,10 @@ export async function revealAbsolutePath(
   }
 }
 
+/**
+ * Open with the OS default app (`shell.openPath`). Not the Pier editor —
+ * use `openAbsoluteInPierEditor` for product file viewing/editing.
+ */
 export async function openAbsolutePath(
   absolutePath: string
 ): Promise<ShellPathActionResult> {

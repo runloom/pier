@@ -198,6 +198,16 @@ const pluginConfigurationPropertyBaseSchema = z.object({
   placeholder: z.string().min(1).optional(),
   resettable: z.boolean().optional(),
   type: z.enum(["string", "number", "boolean"]),
+  /**
+   * When set, the settings UI only shows this row if the sibling setting's
+   * effective value equals `equals` (after schema defaulting).
+   */
+  visibleWhen: z
+    .object({
+      equals: z.union([z.string(), z.number(), z.boolean()]),
+      key: z.string().min(1),
+    })
+    .optional(),
 });
 
 type PluginConfigurationPropertyCandidate = z.infer<

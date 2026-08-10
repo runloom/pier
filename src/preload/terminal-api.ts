@@ -87,6 +87,8 @@ export const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:composer-materialize-image-bytes", data),
   materializeComposerTextBytes: (data) =>
     ipcRenderer.invoke("pier:terminal:composer-materialize-text-bytes", data),
+  writeComposerPasteText: (data) =>
+    ipcRenderer.invoke("pier:terminal:composer-write-paste-text", data),
   openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
   performOperation: (panelId, operation) =>
     ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),

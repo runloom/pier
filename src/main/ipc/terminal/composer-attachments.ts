@@ -1,6 +1,13 @@
-import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, isAbsolute, join, relative, resolve } from "node:path";
 import { kindFromFileName } from "@shared/composer-attachment-kind.ts";
 import type {
   TerminalComposerAttachmentDto,
@@ -19,6 +26,8 @@ import {
 } from "electron";
 
 const PASTE_RETENTION_MS = 24 * 60 * 60 * 1000;
+/** Soft ceiling well above 10k auto-attach and 64k sendText — disk dump guard. */
+export const MAX_COMPOSER_PASTE_CHARS = 2_000_000;
 const IMAGE_EXTENSIONS_BY_MIME: Readonly<Record<string, string>> = {
   "image/bmp": "bmp",
   "image/gif": "gif",
@@ -35,15 +44,28 @@ function errorMessage(error: unknown): string {
 function attachmentDto(
   path: string,
   name = basename(path),
-  previewDataUrl?: string
+  previewDataUrl?: string,
+  kindOverride?: TerminalComposerAttachmentDto["kind"]
 ): TerminalComposerAttachmentDto {
   return {
     id: crypto.randomUUID(),
-    kind: kindFromFileName(name),
+    kind: kindOverride ?? kindFromFileName(name),
     name,
     path,
     ...(previewDataUrl ? { previewDataUrl } : {}),
   };
+}
+
+function pasteDirectoryPath(): string {
+  return join(tmpdir(), "pier-terminal-pastes");
+}
+
+/** True when `filePath` is a file inside the managed pier-terminal-pastes directory. */
+export function isPierTerminalPastePath(filePath: string): boolean {
+  const root = resolve(pasteDirectoryPath());
+  const target = resolve(filePath);
+  const rel = relative(root, target);
+  return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
 /** Build a small JPEG/PNG data URL for image chips; failures return undefined. */
@@ -89,7 +111,7 @@ function attachmentDtoFromPath(
 }
 
 async function preparePasteDirectory(): Promise<string> {
-  const directory = join(tmpdir(), "pier-terminal-pastes");
+  const directory = pasteDirectoryPath();
   await mkdir(directory, { recursive: true });
   const cutoff = Date.now() - PASTE_RETENTION_MS;
   for (const name of await readdir(directory)) {
@@ -237,13 +259,10 @@ export async function materializeTerminalComposerTextBytes(data: {
     if (text.length === 0) {
       return { ok: false, error: "empty text" };
     }
-    // Soft ceiling well above the 10k auto-attach threshold and the 64k
-    // sendText limit — blocks pathological clipboard dumps from filling disk.
-    const MAX_PASTE_CHARS = 2_000_000;
-    if (text.length > MAX_PASTE_CHARS) {
+    if (text.length > MAX_COMPOSER_PASTE_CHARS) {
       return {
         ok: false,
-        error: `paste too large (${text.length} chars; max ${MAX_PASTE_CHARS})`,
+        error: `paste too large (${text.length} chars; max ${MAX_COMPOSER_PASTE_CHARS})`,
       };
     }
     const directory = await preparePasteDirectory();
@@ -254,9 +273,72 @@ export async function materializeTerminalComposerTextBytes(data: {
       ok: true,
       attachment: attachmentDto(
         path,
-        displayName.includes(".") ? displayName : `${displayName}.txt`
+        displayName.includes(".") ? displayName : `${displayName}.txt`,
+        undefined,
+        "paste"
       ),
     };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
+}
+
+/**
+ * Overwrite an existing paste file under pier-terminal-pastes.
+ * Rejects paths outside the directory, missing files, non-files, and
+ * realpath targets that escape the paste root (symlink defense).
+ *
+ * Note: macOS often has `$TMPDIR` under `/var` → `/private/var`; always compare
+ * realpath(pasteRoot) vs realpath(target), not raw resolve() strings alone.
+ */
+export async function writeTerminalComposerPasteText(data: {
+  path: string;
+  text: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const filePath = typeof data?.path === "string" ? data.path : "";
+    const text = typeof data?.text === "string" ? data.text : "";
+    if (filePath.length === 0) {
+      return { ok: false, error: "invalid path" };
+    }
+    // Cheap string-level reject before fs (still pass materialize paths that
+    // only differ after realpath via /var vs /private/var).
+    if (!isPierTerminalPastePath(filePath)) {
+      return { ok: false, error: "path outside paste directory" };
+    }
+    if (text.length > MAX_COMPOSER_PASTE_CHARS) {
+      return {
+        ok: false,
+        error: `paste too large (${text.length} chars; max ${MAX_COMPOSER_PASTE_CHARS})`,
+      };
+    }
+
+    const pasteRootCandidate = pasteDirectoryPath();
+    await mkdir(pasteRootCandidate, { recursive: true });
+    let pasteRoot: string;
+    try {
+      pasteRoot = await realpath(pasteRootCandidate);
+    } catch (error) {
+      return { ok: false, error: errorMessage(error) };
+    }
+
+    let realTarget: string;
+    try {
+      realTarget = await realpath(filePath);
+    } catch {
+      return { ok: false, error: "paste file not found" };
+    }
+    const rel = relative(pasteRoot, realTarget);
+    if (rel === "" || rel.startsWith("..") || isAbsolute(rel)) {
+      return { ok: false, error: "path outside paste directory" };
+    }
+    const info = await stat(realTarget);
+    if (!info.isFile()) {
+      return { ok: false, error: "not a file" };
+    }
+
+    await writeFile(realTarget, text, "utf8");
+    return { ok: true };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }

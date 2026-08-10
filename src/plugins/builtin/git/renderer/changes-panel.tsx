@@ -307,6 +307,17 @@ function GitChangesPanelBody({
     panelApi.updateParameters({ pendingReveal: null });
   }, [panelApi]);
 
+  // 工作区干净时不挂 ReviewDocuments，reveal 无法消费；清掉 pending 防 params 卡死。
+  useEffect(() => {
+    if (state.kind !== "loaded" || entries.length > 0) {
+      return;
+    }
+    if (pendingReveal === null) {
+      return;
+    }
+    handlePendingRevealHandled();
+  }, [entries.length, handlePendingRevealHandled, pendingReveal, state.kind]);
+
   const scopeSwitcher = source ? (
     <GitReviewScopeSwitcher
       context={context}

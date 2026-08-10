@@ -70,6 +70,7 @@ function createRefs(): FileTreeRefs {
     onContextMenuSession: undefined,
     onRenamePath: vi.fn(),
     onSelectPaths: undefined,
+    pinContextMenuScroll: undefined,
     suppressOpenPathFromContextMenu: false,
   };
 }

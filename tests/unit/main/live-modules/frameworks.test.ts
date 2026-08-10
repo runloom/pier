@@ -94,6 +94,8 @@ describe("live-modules multi-framework samples", () => {
 
   it("rejects pier/canvas import on non-React frameworks", async () => {
     const { mkdir, writeFile, unlink } = await import("node:fs/promises");
+    // Temp samples use `__` basename prefix (governance skips them) so parallel
+    // suite scans of `.pier/canvases` never open a half-unlinked file.
     const badRel = "smoke/__reject-pier-canvas.canvas.vue";
     const badAbs = join(PROJECT_ROOT, ".pier/canvases", badRel);
     await mkdir(join(PROJECT_ROOT, ".pier/canvases/smoke"), {

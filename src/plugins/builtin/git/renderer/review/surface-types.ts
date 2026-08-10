@@ -22,13 +22,15 @@ export type { UncommittedGitReviewSurface } from "./reading-surface.ts";
  * onRequestTreeOpen(reveal) 触发 section 导航 + 行级 scrollToLine。
  * nonce 用于去重（同 nonce 不重复触发）。
  *
- * - 评论：必填 group，allowGroupFallback 省略/false（只认该 group）。
+ * - 评论状态栏跳转：必填 group + 可设 allowGroupFallback（stage/unstage 后
+ *   preferred group 槽位消失时回退；解析仍优先 preferred group）。
  * - Files gutter：可 omit group 并设 allowGroupFallback，按 entry 实际 slot 回退。
+ * - index 刷新中 path/group 短暂 miss 时不消费 nonce（见 planPendingReveal）。
  */
 export interface PendingCommentReveal {
   /**
-   * true：group 不可用时按 unstaged → staged → conflict 回退到 entry 上存在的 slot。
-   * 评论路径必须 false/省略，避免 race 下误清 preferred group。
+   * true：preferred group 不可用时按 unstaged → staged → conflict 回退到 entry
+   * 上存在的 slot。始终先试 preferred group，避免无故跨 group。
    */
   readonly allowGroupFallback?: boolean;
   readonly group?: GitReviewGroup;

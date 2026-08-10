@@ -5,13 +5,62 @@ import {
   fileTreeHost,
   fileTreeScrollElement,
   restoreFileTreeScrollSnapshot,
-  restoreFileTreeScrollSnapshotSoon,
 } from "./tree-scroll.ts";
+import {
+  createFileTreeScrollOwner,
+  type FileTreeScrollOwner,
+} from "./tree-scroll-owner.ts";
 import type {
   PierFileTreeScrollController,
-  PierFileTreeScrollRestoreOptions,
   PierFileTreeScrollSnapshot,
 } from "./tree-types.ts";
+
+/** Align with @pierre/trees keyboard pre-scroll keys. */
+const FILE_TREE_SCROLL_KEYS = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+  " ",
+  "Spacebar",
+]);
+
+type ScheduledHandle =
+  | { readonly id: number; readonly kind: "raf" }
+  | { readonly id: ReturnType<typeof setTimeout>; readonly kind: "timeout" };
+
+function scheduleFrame(callback: FrameRequestCallback): ScheduledHandle {
+  if (typeof globalThis.requestAnimationFrame === "function") {
+    return {
+      kind: "raf",
+      id: globalThis.requestAnimationFrame(callback),
+    };
+  }
+  return {
+    kind: "timeout",
+    id: globalThis.setTimeout(
+      () => callback(globalThis.performance?.now() ?? Date.now()),
+      16
+    ),
+  };
+}
+
+function cancelScheduled(handle: ScheduledHandle | null): void {
+  if (!handle) {
+    return;
+  }
+  if (handle.kind === "raf") {
+    if (typeof globalThis.cancelAnimationFrame === "function") {
+      globalThis.cancelAnimationFrame(handle.id);
+    }
+    return;
+  }
+  globalThis.clearTimeout(handle.id);
+}
 
 interface PierFileTreeScrollControllerInput<TElement extends HTMLElement> {
   containerRef: React.RefObject<TElement | null>;
@@ -29,15 +78,18 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
   beginProgrammaticScroll: () => void;
   captureSnapshot: () => PierFileTreeScrollSnapshot | null;
   endProgrammaticScroll: () => void;
-  restoreSnapshotSoon: (
+  requestLayoutCompensate: (
     snapshot: PierFileTreeScrollSnapshot | null,
-    options?: PierFileTreeScrollRestoreOptions
+    options?: { readonly settleFrames?: number }
   ) => void;
+  scrollOwner: FileTreeScrollOwner;
 } {
-  const lockedScrollTopRef = React.useRef<number | null>(null);
-  const restoreRunRef = React.useRef(0);
-  /** Nested depth: path-sync restore is suppressed while > 0 (reveal in flight). */
-  const suppressRestoreDepthRef = React.useRef(0);
+  const ownerRef = React.useRef<FileTreeScrollOwner | null>(null);
+  if (ownerRef.current === null) {
+    ownerRef.current = createFileTreeScrollOwner();
+  }
+  const scrollOwner = ownerRef.current;
+
   const getHost = React.useCallback(
     () => fileTreeHost(containerRef.current),
     [containerRef]
@@ -46,81 +98,47 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
     () => captureFileTreeScrollSnapshot(getHost()),
     [getHost]
   );
-  const applySnapshot = React.useCallback(
-    (snapshot: PierFileTreeScrollSnapshot) =>
-      restoreFileTreeScrollSnapshot(getHost(), snapshot),
-    [getHost]
-  );
   const restoreSnapshot = React.useCallback(
     (snapshot: PierFileTreeScrollSnapshot) => {
-      applySnapshot(snapshot);
-    },
-    [applySnapshot]
-  );
-  const beginProgrammaticScroll = React.useCallback(() => {
-    suppressRestoreDepthRef.current += 1;
-    // Cancel in-flight multi-frame restores and drop lock so scrollToPath sticks.
-    restoreRunRef.current += 1;
-    lockedScrollTopRef.current = null;
-  }, []);
-  const endProgrammaticScroll = React.useCallback(() => {
-    suppressRestoreDepthRef.current = Math.max(
-      0,
-      suppressRestoreDepthRef.current - 1
-    );
-  }, []);
-  const restoreSnapshotSoon = React.useCallback(
-    (
-      snapshot: PierFileTreeScrollSnapshot | null,
-      options: PierFileTreeScrollRestoreOptions = {}
-    ) => {
-      if (snapshot === null) {
-        return;
-      }
-      // Reveal / explicit scroll owns the viewport — do not pin pre-mutation scroll.
-      if (suppressRestoreDepthRef.current > 0) {
-        return;
-      }
-
-      const restoreRun = restoreRunRef.current + 1;
-      restoreRunRef.current = restoreRun;
-      const lock = options.lock === true;
-
-      restoreFileTreeScrollSnapshotSoon(getHost(), snapshot, {
-        ...(options.frames === undefined ? {} : { frames: options.frames }),
-        onFinished: () => {
-          if (restoreRunRef.current === restoreRun) {
-            lockedScrollTopRef.current = null;
-          }
-        },
-        onRestored: (restoredScrollTop) => {
-          if (lock && restoredScrollTop !== null) {
-            lockedScrollTopRef.current = restoredScrollTop;
-          }
-        },
-        shouldContinue: () =>
-          restoreRunRef.current === restoreRun &&
-          suppressRestoreDepthRef.current === 0,
+      scrollOwner.withProgrammaticScroll(() => {
+        restoreFileTreeScrollSnapshot(getHost(), snapshot);
       });
     },
-    [getHost]
+    [getHost, scrollOwner]
+  );
+  const beginProgrammaticScroll = React.useCallback(() => {
+    scrollOwner.beginReveal();
+  }, [scrollOwner]);
+  const endProgrammaticScroll = React.useCallback(() => {
+    scrollOwner.endReveal();
+  }, [scrollOwner]);
+  const requestLayoutCompensate = React.useCallback(
+    (
+      snapshot: PierFileTreeScrollSnapshot | null,
+      options?: { readonly settleFrames?: number }
+    ) => {
+      scrollOwner.requestLayoutCompensate(getHost(), snapshot, options);
+    },
+    [getHost, scrollOwner]
   );
 
   React.useImperativeHandle(
     scrollControllerRef,
     () => ({
       beginProgrammaticScroll,
+      beginReveal: beginProgrammaticScroll,
       captureSnapshot,
       endProgrammaticScroll,
+      endReveal: endProgrammaticScroll,
+      requestLayoutCompensate,
       restoreSnapshot,
-      restoreSnapshotSoon,
     }),
     [
       beginProgrammaticScroll,
       captureSnapshot,
       endProgrammaticScroll,
+      requestLayoutCompensate,
       restoreSnapshot,
-      restoreSnapshotSoon,
     ]
   );
 
@@ -130,68 +148,128 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
       return;
     }
 
+    let snapshotHandle: ScheduledHandle | null = null;
     const publishSnapshot = () => {
-      const snapshot = captureFileTreeScrollSnapshot(host);
-      if (!snapshot) {
+      if (snapshotHandle != null) {
         return;
       }
+      snapshotHandle = scheduleFrame(() => {
+        snapshotHandle = null;
+        const snapshot = captureFileTreeScrollSnapshot(host);
+        if (!snapshot) {
+          return;
+        }
+        onScrollSnapshotChange?.(snapshot);
+      });
+    };
 
-      const lockedScrollTop = lockedScrollTopRef.current;
-      if (
-        lockedScrollTop !== null &&
-        Math.abs(snapshot.fallbackScrollTop - lockedScrollTop) > 0.5
-      ) {
+    const claimFromUserGesture = () => {
+      scrollOwner.claimUserScroll();
+    };
+
+    const onScroll = () => {
+      if (!scrollOwner.isProgrammaticScrollEvent()) {
+        claimFromUserGesture();
+      }
+      publishSnapshot();
+    };
+
+    const onWheel = () => {
+      claimFromUserGesture();
+    };
+
+    const onTouchMove = () => {
+      claimFromUserGesture();
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!FILE_TREE_SCROLL_KEYS.has(event.key)) {
         return;
       }
-
-      onScrollSnapshotChange?.(snapshot);
+      claimFromUserGesture();
     };
 
     let scrollElement: HTMLElement | null = null;
     let detachAutoHideScrollbar: (() => void) | null = null;
-    const syncScrollListener = () => {
-      const nextScrollElement = fileTreeScrollElement(host);
-      if (nextScrollElement === scrollElement) {
+    let observer: MutationObserver | null = null;
+
+    const bindScrollElement = (element: HTMLElement | null) => {
+      if (element === scrollElement) {
+        return;
+      }
+      scrollElement?.removeEventListener("scroll", onScroll);
+      scrollElement?.removeEventListener("wheel", onWheel);
+      scrollElement?.removeEventListener("touchmove", onTouchMove);
+      scrollElement?.removeEventListener("keydown", onKeyDown);
+      detachAutoHideScrollbar?.();
+      scrollElement = element;
+      if (!scrollElement) {
+        detachAutoHideScrollbar = null;
+        return;
+      }
+      scrollElement.addEventListener("scroll", onScroll, { passive: true });
+      scrollElement.addEventListener("wheel", onWheel, { passive: true });
+      scrollElement.addEventListener("touchmove", onTouchMove, {
+        passive: true,
+      });
+      scrollElement.addEventListener("keydown", onKeyDown);
+      detachAutoHideScrollbar = installAutoHideScrollbar(scrollElement);
+    };
+
+    /**
+     * Watch for scroller mount/replacement without following virtual-row churn:
+     * - no scroller yet → subtree observe until one appears
+     * - scroller bound → observe only its parent childList for replacement
+     */
+    const wireScrollerObserver = () => {
+      observer?.disconnect();
+      observer = null;
+      if (typeof MutationObserver !== "function" || !host.shadowRoot) {
+        bindScrollElement(fileTreeScrollElement(host));
         return;
       }
 
-      scrollElement?.removeEventListener("scroll", publishSnapshot);
-      detachAutoHideScrollbar?.();
-      scrollElement = nextScrollElement;
-      scrollElement?.addEventListener("scroll", publishSnapshot, {
-        passive: true,
+      const next = fileTreeScrollElement(host);
+      bindScrollElement(next);
+
+      if (next?.parentElement) {
+        const parent = next.parentElement;
+        observer = new MutationObserver(() => {
+          const current = fileTreeScrollElement(host);
+          if (current !== scrollElement) {
+            wireScrollerObserver();
+          }
+        });
+        observer.observe(parent, { childList: true });
+        return;
+      }
+
+      observer = new MutationObserver(() => {
+        if (fileTreeScrollElement(host)) {
+          wireScrollerObserver();
+        }
       });
-      detachAutoHideScrollbar = scrollElement
-        ? installAutoHideScrollbar(scrollElement)
-        : null;
+      observer.observe(host.shadowRoot, { childList: true, subtree: true });
     };
 
-    syncScrollListener();
-
-    if (typeof MutationObserver !== "function" || !host.shadowRoot) {
-      return () => {
-        detachAutoHideScrollbar?.();
-        scrollElement?.removeEventListener("scroll", publishSnapshot);
-      };
-    }
-
-    const observer = new MutationObserver(() => {
-      syncScrollListener();
-      publishSnapshot();
-    });
-    observer.observe(host.shadowRoot, { childList: true, subtree: true });
+    wireScrollerObserver();
 
     return () => {
-      observer.disconnect();
+      observer?.disconnect();
+      cancelScheduled(snapshotHandle);
       detachAutoHideScrollbar?.();
-      scrollElement?.removeEventListener("scroll", publishSnapshot);
+      scrollElement?.removeEventListener("scroll", onScroll);
+      scrollElement?.removeEventListener("wheel", onWheel);
+      scrollElement?.removeEventListener("touchmove", onTouchMove);
+      scrollElement?.removeEventListener("keydown", onKeyDown);
     };
-  }, [getHost, onScrollSnapshotChange]);
+  }, [getHost, onScrollSnapshotChange, scrollOwner]);
 
   return {
     beginProgrammaticScroll,
     captureSnapshot,
     endProgrammaticScroll,
-    restoreSnapshotSoon,
+    requestLayoutCompensate,
+    scrollOwner,
   };
 }

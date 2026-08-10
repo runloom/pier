@@ -5,6 +5,7 @@ import { MessageSquareIcon } from "lucide-react";
 import { useEffect } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { openCommentsActionDialog } from "@/lib/comments/action-dialog.tsx";
+import { useUncommittedLivePaths } from "@/lib/comments/live-paths.ts";
 import { processableCommentCount } from "@/lib/comments/processable.ts";
 import {
   ensureCommentsLoaded,
@@ -18,8 +19,9 @@ import { terminalStatusItemRegistry } from "./status-bar.tsx";
 /**
  * Agent 终端状态栏评论入口。
  *
- * - 仅 agent 对话 + 有 worktree 且存在可处理（未提交 diff）评论时显示。
- * - 计数 = processable（与弹窗列表一致，剔孤儿/非 uncommitted）。
+ * - 仅 agent 对话 + 有 worktree 且存在可处理（仍在未提交变更上）评论时显示。
+ * - 计数 = processable ∩ livePaths（commit 后路径离开变更则不计）。
+ * - **不**后台自动软删：stash / 临时 clean 只隐藏，避免误删；失效跳转由弹窗显式删。
  * - 点击打开 content dialog：列表跳转 + 取消 / 清除 / 提交并清除。
  */
 function CommentsStatusItemView({
@@ -34,12 +36,15 @@ function CommentsStatusItemView({
   const t = useT();
   const worktreeKey =
     context?.worktreeKey ?? context?.worktreeRoot ?? context?.gitRoot;
+  const gitRoot =
+    context?.gitRoot ?? context?.worktreeRoot ?? context?.projectRootPath;
   const project = useCommentsStore((s) =>
     worktreeKey ? s.projects[worktreeKey] : undefined
   );
   const isAgent = useForegroundActivityStore(
     (s) => s.activities[panelId]?.kind === "agent"
   );
+  const livePaths = useUncommittedLivePaths(isAgent ? gitRoot : null);
 
   useEffect(() => {
     if (worktreeKey && isAgent) {
@@ -50,7 +55,11 @@ function CommentsStatusItemView({
   if (!(worktreeKey && isAgent && context)) {
     return null;
   }
-  const count = processableCommentCount(project?.threads);
+  // 尚未拿到 status / 刷新失败：不展示，避免 commit 后短暂闪出孤儿计数。
+  if (livePaths === null) {
+    return null;
+  }
+  const count = processableCommentCount(project?.threads, { livePaths });
   if (count === 0) {
     return null;
   }

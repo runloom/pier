@@ -2,8 +2,20 @@ import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
 import { bakeSvgForStandalonePreview } from "@pier/ui/image-preview/bake-svg-for-standalone-preview.ts";
 import { MediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  applySvgDisplaySize,
+  computeNaturalCappedSize,
+  contentBoxWidthPx,
+  parseSvgIntrinsicSize,
+} from "./diagram-viewport.ts";
+import {
+  MARKDOWN_DIAGRAM_MAX_HEIGHT_CLASS,
+  useMarkdownPreviewPrefsStore,
+} from "./preview-preferences.ts";
+import { forwardWheelToMarkdownPreview } from "./scroll-handoff.ts";
 
 export function MarkdownDiagram({
   charts,
@@ -29,7 +41,43 @@ export function MarkdownDiagram({
     | { status: "error" }
     | { status: "ready"; svg: string }
   >({ status: "loading" });
+  /** Keep last successful SVG while re-rendering so the diagram does not flash empty. */
+  const lastReadySvgRef = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
+  const [shellEl, setShellEl] = useState<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const blockHeightLimit = useMarkdownPreviewPrefsStore(
+    (state) => state.blockHeightLimit
+  );
+  const heightCapped = blockHeightLimit === "capped";
+
+  const shellRef = useCallback((node: HTMLDivElement | null) => {
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
+    setShellEl(node);
+    if (!node || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const update = () => {
+      const width = contentBoxWidthPx(node);
+      if (width > 0) {
+        setContainerWidth(width);
+      }
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    resizeObserverRef.current = observer;
+  }, []);
+
+  useEffect(
+    () => () => {
+      resizeObserverRef.current?.disconnect();
+      resizeObserverRef.current = null;
+    },
+    []
+  );
 
   useEffect(() => {
     let active = true;
@@ -38,9 +86,12 @@ export function MarkdownDiagram({
       .renderMermaid(source)
       .then((result) => {
         if (!active) return;
-        setState(
-          result.ok ? { status: "ready", svg: result.svg } : { status: "error" }
-        );
+        if (result.ok) {
+          lastReadySvgRef.current = result.svg;
+          setState({ status: "ready", svg: result.svg });
+          return;
+        }
+        setState({ status: "error" });
       })
       .catch(() => {
         if (active) setState({ status: "error" });
@@ -50,20 +101,42 @@ export function MarkdownDiagram({
     };
   }, [charts, source]);
 
+  let displaySvg: string | null = null;
+  if (state.status === "ready") {
+    displaySvg = state.svg;
+  } else if (state.status === "loading") {
+    displaySvg = lastReadySvgRef.current;
+  }
+
   useEffect(() => {
     const root = rootRef.current;
-    if (!(root && state.status === "ready")) return;
-    const svg = parseSafeSvg(state.svg);
+    if (!(root && displaySvg)) return;
+    const svg = parseSafeSvg(displaySvg);
     if (!svg) {
-      setState({ status: "error" });
+      if (state.status === "ready") {
+        setState({ status: "error" });
+      }
       return;
     }
+    const intrinsic =
+      parseSvgIntrinsicSize(displaySvg) ??
+      readLiveIntrinsicSize(svg) ??
+      ({ height: 240, width: 320 } as const);
+    let slotWidth = containerWidth;
+    if (!(slotWidth > 0) && shellEl) {
+      slotWidth = contentBoxWidthPx(shellEl);
+    }
+    if (!(slotWidth > 0)) {
+      slotWidth = intrinsic.width;
+    }
+    const display = computeNaturalCappedSize(intrinsic, slotWidth, 1);
+    applySvgDisplaySize(svg, display);
     root.replaceChildren(svg);
     return () => root.replaceChildren();
-  }, [state]);
+  }, [displaySvg, containerWidth, shellEl, state.status]);
 
   const openPreview = () => {
-    if (!(contentPreview && state.status === "ready")) return;
+    if (!(contentPreview && displaySvg)) return;
     const liveSvg = rootRef.current?.querySelector("svg");
     if (!liveSvg) return;
     const markup = bakeSvgForStandalonePreview(liveSvg);
@@ -75,10 +148,7 @@ export function MarkdownDiagram({
     });
   };
 
-  if (state.status === "loading") {
-    return <Skeleton className="h-48 w-full rounded-md" />;
-  }
-  if (state.status === "error") {
+  if (state.status === "error" && !displaySvg) {
     return (
       <Alert variant="destructive">
         <AlertDescription>{errorLabel}</AlertDescription>
@@ -86,18 +156,33 @@ export function MarkdownDiagram({
     );
   }
 
+  if (state.status === "loading" && !displaySvg) {
+    return <Skeleton className="h-48 w-full rounded-md" />;
+  }
+
   return (
     <div
-      className="group relative overflow-auto rounded-md border p-3"
+      className={cn(
+        "group relative overflow-auto rounded-md border p-3",
+        heightCapped && MARKDOWN_DIAGRAM_MAX_HEIGHT_CLASS
+      )}
+      data-scrollbar={heightCapped ? "overlay" : undefined}
       data-slot="markdown-diagram"
+      onWheel={heightCapped ? forwardWheelToMarkdownPreview : undefined}
+      ref={shellRef}
     >
       <div
+        aria-busy={state.status === "loading"}
         aria-label={label}
-        className="[&>svg]:mx-auto [&>svg]:h-auto [&>svg]:max-w-full"
+        className={cn(
+          // Natural-capped: size is set in px on the SVG; do not force width 100%.
+          "flex min-w-0 justify-center [&>svg]:block",
+          state.status === "loading" && "opacity-70"
+        )}
         ref={rootRef}
         role="img"
       />
-      {contentPreview ? (
+      {contentPreview && displaySvg ? (
         <MediaFullscreenButton
           label={openFullscreenLabel}
           onClick={openPreview}
@@ -105,6 +190,22 @@ export function MarkdownDiagram({
       ) : null}
     </div>
   );
+}
+
+function readLiveIntrinsicSize(
+  svg: SVGElement
+): { height: number; width: number } | null {
+  const svgEl = svg as SVGSVGElement;
+  const viewBox = svgEl.viewBox?.baseVal;
+  if (viewBox && viewBox.width > 0 && viewBox.height > 0) {
+    return { height: viewBox.height, width: viewBox.width };
+  }
+  const width = Number(svg.getAttribute("width"));
+  const height = Number(svg.getAttribute("height"));
+  if (width > 0 && height > 0) {
+    return { height, width };
+  }
+  return null;
 }
 
 function parseSafeSvg(source: string): SVGElement | null {

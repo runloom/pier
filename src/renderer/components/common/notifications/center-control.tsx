@@ -163,6 +163,8 @@ function NotificationCenterPopoverBody({
       </ItemGroup>
     ) : null;
 
+  // Header chrome (mark-all / DND) stays open so the list can reflect the update.
+  // Card navigation actions still close via onActionRun={onClose}.
   const runHeaderAction = useCallback(
     async (action: () => Promise<void>) => {
       if (busy) {
@@ -171,7 +173,6 @@ function NotificationCenterPopoverBody({
       setBusy(true);
       try {
         await action();
-        onClose();
       } catch (error) {
         await showAppAlert({
           body: error instanceof Error ? error.message : String(error),
@@ -181,7 +182,7 @@ function NotificationCenterPopoverBody({
         setBusy(false);
       }
     },
-    [busy, onClose, t]
+    [busy, t]
   );
 
   return (

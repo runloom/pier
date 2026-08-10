@@ -24,6 +24,8 @@ export type {
   TerminalComposerAttachmentDto,
   TerminalComposerImageBytes,
   TerminalComposerMaterializeResult,
+  TerminalComposerPasteTextWrite,
+  TerminalComposerPasteTextWriteResult,
   TerminalComposerPathsResult,
   TerminalComposerPickResult,
   TerminalComposerTextBytes,

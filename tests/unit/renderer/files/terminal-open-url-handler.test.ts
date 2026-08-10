@@ -569,4 +569,52 @@ describe("handleFilesTerminalOpenUrl", () => {
       info.mockRestore();
     }
   });
+
+  it("never system-opens TypeScript when openInstance throws", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    openInstance.mockImplementation(() => {
+      throw new Error("panel not registered");
+    });
+    try {
+      await expect(
+        handleFilesTerminalOpenUrl(context, {
+          kind: "text",
+          panelId: "t1",
+          url: "/repo/src/foo.test.ts",
+        })
+      ).resolves.toBe(true);
+      expect(info).toHaveBeenCalledWith(
+        "[files-terminal-open-url] system open blocked",
+        expect.objectContaining({
+          path: "/repo/src/foo.test.ts",
+          blocked: "prefer-pier-editor",
+        })
+      );
+      expect(openPath).not.toHaveBeenCalled();
+      expect(notificationsError).toHaveBeenCalled();
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  it("opens TypeScript sources via Files without system open", async () => {
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "tests/unit/main/project-skills/system-skills-catalog.test.ts",
+      })
+    ).resolves.toBe(true);
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          source: expect.objectContaining({
+            kind: "disk",
+            path: expect.stringMatching(/\.test\.ts$/),
+          }),
+        }),
+      })
+    );
+    expect(openPath).not.toHaveBeenCalled();
+  });
 });

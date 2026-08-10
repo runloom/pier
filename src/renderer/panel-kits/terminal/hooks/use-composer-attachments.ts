@@ -10,6 +10,7 @@ import {
   buildComposerSendText,
   type ComposerAttachment,
   MAX_COMPOSER_SEND_TEXT_LENGTH,
+  updatePasteAttachmentContent,
 } from "../composer-attachments-model.ts";
 import {
   type ComposerEditorMutations,
@@ -19,8 +20,9 @@ import {
 } from "../composer-editor-mutations.ts";
 import {
   handleComposerPaste,
-  materializeLargePlainPaste,
+  materializeTieredPlainPaste,
 } from "../composer-paste.ts";
+import { classifyPlainPaste } from "../structured-composer/paste-tiers.ts";
 
 const attachmentsByPanel = new Map<string, ComposerAttachment[]>();
 
@@ -41,12 +43,21 @@ export function resetTerminalComposerAttachmentsForTests(): void {
   mergeChain = Promise.resolve();
 }
 
+/**
+ * Map main DTO → rail attachment for pick/resolve/image paths.
+ * Text paste DTOs never carry body/tier here — only `createPasteAttachment`
+ * / materializeTieredPlainPaste may create expandable medium pastes.
+ * A bare `kind: "paste"` DTO is treated as path-only (non-expandable).
+ */
 function dtoToAttachment(
   dto: TerminalComposerAttachmentDto
 ): ComposerAttachment {
   return {
     id: dto.id,
-    kind: dto.kind,
+    // Keep paste kind for rail open routing when main returns paste materialize
+    // without going through materializeTieredPlainPaste (should not happen in
+    // production); without pasteTier/content, send uses path semantics.
+    kind: dto.kind === "paste" ? "paste" : dto.kind,
     name: dto.name,
     path: dto.path,
     ...(dto.isDirectory ? { isDirectory: dto.isDirectory } : {}),
@@ -84,6 +95,7 @@ export function useTerminalComposerAttachments(input: {
   pickFiles: () => void;
   removeAttachment: (id: string) => void;
   revealPath: (path: string) => void;
+  updatePasteContent: (id: string, text: string) => void;
 } {
   const {
     disabled,
@@ -388,17 +400,33 @@ export function useTerminalComposerAttachments(input: {
 
   const onLargePlainPaste = useCallback(
     (text: string) => {
-      materializeLargePlainPaste({
+      const tier = classifyPlainPaste(text);
+      if (tier === "small") {
+        return;
+      }
+      materializeTieredPlainPaste({
         disabled,
-        dtoToAttachment,
         enqueueMerge,
         insertPlainTextAtCursor,
         mergeAttachments,
         t,
         text,
+        tier,
       });
     },
     [disabled, insertPlainTextAtCursor, mergeAttachments, t]
+  );
+
+  const updatePasteContent = useCallback(
+    (id: string, text: string) => {
+      const next = updatePasteAttachmentContent({
+        attachments: readAttachments(),
+        id,
+        text,
+      });
+      writeAttachments(next);
+    },
+    [readAttachments, writeAttachments]
   );
 
   const onDragOver = useCallback(
@@ -457,5 +485,6 @@ export function useTerminalComposerAttachments(input: {
     pickFiles,
     removeAttachment,
     revealPath,
+    updatePasteContent,
   };
 }

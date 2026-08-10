@@ -1,6 +1,7 @@
 import { LSPPlugin } from "@codemirror/lsp-client";
 import type { StateEffectType } from "@codemirror/state";
 import type { EditorView, Tooltip } from "@codemirror/view";
+import type { FilesLspDefinitionTarget } from "./definitions.ts";
 import {
   exactFilesLspDefinitionModifier,
   type FilesLspHoverCandidate,
@@ -26,6 +27,26 @@ export interface ManualHoverIntent {
 
 export interface DefinitionJumpIntent {
   candidate: FilesLspHoverCandidate;
+}
+
+/**
+ * Cmd/Ctrl+hover definition-link preflight. Affordance is shown only when
+ * status is "ready" (non-empty definition targets).
+ */
+export interface DefinitionAffordanceCache {
+  candidate: FilesLspHoverCandidate;
+  range: { from: number; to: number } | null;
+  /**
+   * - pending: definition preflight in flight
+   * - ready: non-empty targets (underline shown)
+   * - empty: server returned ok with no targets (click may no-op)
+   * - failed: request error (click must re-request / report)
+   * - unavailable: no plugin or definitionProvider
+   */
+  status: "pending" | "empty" | "ready" | "failed" | "unavailable";
+  targets: FilesLspDefinitionTarget[];
+  total: number;
+  truncated: boolean;
 }
 
 /**
@@ -56,6 +77,9 @@ export abstract class FilesLspHoverControllerBase {
   protected _manualQueued: ManualHoverIntent | null = null;
   /** Cmd/Ctrl+Click or F12 while LSP is still connecting. */
   protected _definitionJumpQueued: DefinitionJumpIntent | null = null;
+  /** Token for definition-link preflight; bumped when candidate/modifier path resets. */
+  protected _affordanceToken = 0;
+  protected _affordanceCache: DefinitionAffordanceCache | null = null;
   protected _mapping: FilesLspOwnedMapping | null = null;
   protected _mode: HoverMode | null = null;
   protected readonly _requests = new FilesLspHoverRequests();
@@ -107,23 +131,22 @@ export abstract class FilesLspHoverControllerBase {
     }
 
     if (!candidate) {
-      this._syncAffordance(null);
+      this._clearDefinitionAffordance();
       this._clear();
       return;
     }
 
-    // Scheme Z (Zed): Cmd/Ctrl+hover only shows definition-link affordance.
-    // No definition preview card — navigation is Cmd/Ctrl+Click / F12.
+    // Scheme Z: Cmd/Ctrl+hover preflights definition and underlines only when
+    // jump targets exist. No definition preview card — navigate via Click / F12.
     if (exactFilesLspDefinitionModifier(event)) {
-      this._syncAffordance(candidate);
-      // Hide documentation while the definition modifier is held.
       if (this._mode === "documentation" || this._timer !== null) {
         this._cancelDocumentationOnly();
       }
+      this._beginDefinitionAffordance(candidate);
       return;
     }
 
-    this._syncAffordance(null);
+    this._clearDefinitionAffordance();
     if (filesLspEventHasNoModifiers(event)) {
       this._begin("documentation", candidate);
       return;
@@ -140,7 +163,7 @@ export abstract class FilesLspHoverControllerBase {
       return;
     }
     this._lastPointer = null;
-    this._syncAffordance(null);
+    this._clearDefinitionAffordance();
     if (this._mode === "symbol") {
       return;
     }
@@ -180,14 +203,14 @@ export abstract class FilesLspHoverControllerBase {
     }
     if (!exactFilesLspDefinitionModifier(event)) {
       if (!filesLspEventHasNoModifiers(event) && this._mode !== "symbol") {
-        this._syncAffordance(null);
+        this._clearDefinitionAffordance();
         if (!this._sticky) {
           this._clear();
         }
       }
       return;
     }
-    // Modifier alone: affordance only (no definition card request).
+    // Modifier alone: preflight definition-link (no preview card).
     if (!this._lastPointer) {
       return;
     }
@@ -197,10 +220,10 @@ export abstract class FilesLspHoverControllerBase {
       this._lastPointer.y
     );
     if (candidate) {
-      this._syncAffordance(candidate);
       if (this._mode === "documentation" || this._timer !== null) {
         this._cancelDocumentationOnly();
       }
+      this._beginDefinitionAffordance(candidate);
     }
   };
 
@@ -218,7 +241,7 @@ export abstract class FilesLspHoverControllerBase {
     if (exactFilesLspDefinitionModifier(event)) {
       return;
     }
-    this._syncAffordance(null);
+    this._clearDefinitionAffordance();
     // Resume ordinary documentation hover when the pointer is still over a symbol.
     if (this._mode === "symbol" || this._sticky) {
       return;
@@ -245,7 +268,7 @@ export abstract class FilesLspHoverControllerBase {
         !this._card.contains(active)
       ) {
         this._lastPointer = null;
-        this._syncAffordance(null);
+        this._clearDefinitionAffordance();
         this._clear();
       }
     });
@@ -253,7 +276,7 @@ export abstract class FilesLspHoverControllerBase {
 
   protected readonly _onWindowBlur = (): void => {
     this._lastPointer = null;
-    this._syncAffordance(null);
+    this._clearDefinitionAffordance();
     this._clear();
   };
 
@@ -261,10 +284,14 @@ export abstract class FilesLspHoverControllerBase {
     mode: "definition" | "documentation" | "symbol",
     candidate: FilesLspHoverCandidate
   ): void;
+  protected abstract _beginDefinitionAffordance(
+    candidate: FilesLspHoverCandidate
+  ): void;
   protected abstract _cancelDocumentationOnly(): void;
   protected abstract _clear(dispatch?: boolean, preserveManual?: boolean): void;
+  protected abstract _clearDefinitionAffordance(): void;
   protected abstract _syncAffordance(
-    candidate: FilesLspHoverCandidate | null
+    range: { from: number; to: number } | null
   ): void;
   protected abstract _clickDefinition(
     candidate: FilesLspHoverCandidate
@@ -293,7 +320,7 @@ export abstract class FilesLspHoverControllerBase {
     this._input = input;
     this._setTooltip = setTooltip;
     this._setAffordance = setAffordance;
-    this._plugin = LSPPlugin.get(view);
+    this._plugin = LSPPlugin.get(view) ?? null;
     this._window = view.dom.ownerDocument.defaultView;
     this._card = new FilesLspHoverCardSession({
       hoverInput: input,

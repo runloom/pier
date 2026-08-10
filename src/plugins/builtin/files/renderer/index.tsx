@@ -33,6 +33,7 @@ import { FileEditorController } from "./editor/controller.ts";
 import { registerFilesLspNavigationDeps } from "./lsp/navigation.ts";
 import { markdownCodeHighlighter } from "./markdown/code-highlighter.ts";
 import { createFilesMarkdownPreviewActions } from "./markdown/preview-actions.ts";
+import { bindMarkdownSettingsFromConfiguration } from "./markdown/preview-preferences.ts";
 import { markdownRuntime } from "./markdown/runtime.ts";
 import { FilesMutationSuspendedError } from "./mutation/gate.ts";
 import { registerFilesTerminalOpenUrlHandler } from "./open-url/handler.ts";
@@ -335,6 +336,7 @@ export const filesRendererPlugin: RendererPluginModule = {
       ...createFilesMarkdownPreviewActions(context).map((action) =>
         context.actions.register(action)
       ),
+      bindMarkdownSettingsFromConfiguration(context.configuration),
       registerFilesProjectStatusItem(context),
       registerFilesTerminalOpenUrlHandler(context, editorController),
       registerFilesLspNavigationDeps({

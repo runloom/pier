@@ -1,18 +1,39 @@
 import type { TerminalComposerAttachmentDto } from "@shared/contracts/terminal.ts";
 import type { ClipboardEvent } from "react";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
-import type { ComposerAttachment } from "./composer-attachments-model.ts";
-import { LARGE_PASTE_CHAR_THRESHOLD } from "./structured-composer/large-paste.ts";
+import {
+  type ComposerAttachment,
+  createPasteAttachment,
+} from "./composer-attachments-model.ts";
+import type { PlainPasteTier } from "./structured-composer/paste-tiers.ts";
 
-export { LARGE_PASTE_CHAR_THRESHOLD } from "./structured-composer/large-paste.ts";
+export {
+  LARGE_PASTE_CHAR_THRESHOLD,
+  PASTE_LARGE_MIN_CHARS,
+  PASTE_SMALL_MAX_CHARS,
+  PASTE_SMALL_MAX_LINES,
+} from "./structured-composer/paste-tiers.ts";
+
+function attachmentFromTextMaterialize(input: {
+  dto: TerminalComposerAttachmentDto;
+  text: string;
+  tier: Exclude<PlainPasteTier, "small">;
+}): ComposerAttachment {
+  return createPasteAttachment({
+    id: input.dto.id,
+    name: input.dto.name,
+    path: input.dto.path,
+    pasteContent: input.text,
+    pasteTier: input.tier,
+  });
+}
 
 /**
- * Materialize a large plain-text paste as a .txt attachment (Phase B).
+ * Materialize a medium/large plain-text paste as a .txt attachment.
  * Owned by Lexical PastePlainTextPlugin so insert + attach cannot race.
  */
-export function materializeLargePlainPaste(input: {
+export function materializeTieredPlainPaste(input: {
   disabled: boolean;
-  dtoToAttachment: (dto: TerminalComposerAttachmentDto) => ComposerAttachment;
   enqueueMerge: (task: () => void | Promise<void>) => Promise<void>;
   insertPlainTextAtCursor: (
     text: string,
@@ -21,17 +42,18 @@ export function materializeLargePlainPaste(input: {
   mergeAttachments: (incoming: readonly ComposerAttachment[]) => boolean;
   t: (key: string) => string;
   text: string;
+  tier: Exclude<PlainPasteTier, "small">;
 }): void {
   const {
     disabled,
-    dtoToAttachment,
     enqueueMerge,
     insertPlainTextAtCursor,
     mergeAttachments,
     t,
     text,
+    tier,
   } = input;
-  if (disabled || text.length < LARGE_PASTE_CHAR_THRESHOLD) {
+  if (disabled) {
     return;
   }
   (async () => {
@@ -50,7 +72,13 @@ export function materializeLargePlainPaste(input: {
           return;
         }
         if (result.attachment) {
-          mergeAttachments([dtoToAttachment(result.attachment)]);
+          mergeAttachments([
+            attachmentFromTextMaterialize({
+              dto: result.attachment,
+              text,
+              tier,
+            }),
+          ]);
         }
       } catch (error: unknown) {
         await offerLargePasteFallback({

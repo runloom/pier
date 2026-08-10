@@ -9,6 +9,7 @@ import {
   createConfigurationChangeEvent,
   diffConfigurationValues,
   effectiveConfigurationValue,
+  isConfigurationPropertyVisible,
   matchesConfigurationPrefix,
   validateConfigurationValue,
 } from "@shared/plugin-settings.ts";
@@ -124,6 +125,52 @@ describe("effectiveConfigurationValue — 用户值 ?? default", () => {
     expect(effectiveConfigurationValue(boolProp, undefined)).toBe(true);
     expect(effectiveConfigurationValue(boolProp, false)).toBe(false);
     expect(effectiveConfigurationValue(enumProp, "stale-value")).toBe("auto");
+  });
+});
+
+describe("isConfigurationPropertyVisible", () => {
+  const mode: PluginConfigurationProperty = {
+    default: "ui",
+    enum: ["ui", "custom"],
+    type: "string",
+  };
+  const family: PluginConfigurationProperty = {
+    default: "Noto Serif SC",
+    type: "string",
+    visibleWhen: { equals: "custom", key: "mode" },
+  };
+  const properties = { mode, family };
+
+  it("shows rows without visibleWhen", () => {
+    expect(isConfigurationPropertyVisible(properties, "mode", {})).toBe(true);
+  });
+
+  it("hides when dependency effective value does not match", () => {
+    expect(isConfigurationPropertyVisible(properties, "family", {})).toBe(
+      false
+    );
+    expect(
+      isConfigurationPropertyVisible(properties, "family", { mode: "ui" })
+    ).toBe(false);
+  });
+
+  it("shows when dependency equals (including schema default)", () => {
+    expect(
+      isConfigurationPropertyVisible(properties, "family", { mode: "custom" })
+    ).toBe(true);
+  });
+
+  it("fail-closes when dependency key is missing from properties", () => {
+    const orphan: PluginConfigurationProperty = {
+      default: "x",
+      type: "string",
+      visibleWhen: { equals: "custom", key: "missing" },
+    };
+    expect(
+      isConfigurationPropertyVisible({ orphan }, "orphan", {
+        missing: "custom",
+      })
+    ).toBe(false);
   });
 });
 

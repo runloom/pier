@@ -30,6 +30,36 @@ import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.t
 
 const APP_DIALOG_OVERLAY_ID = "app-dialog";
 
+/**
+ * Radix AlertDialog 打开时默认 `preventDefault` 并聚焦 Cancel。
+ * alert 没有 Cancel，会落成「无焦点」；这里改为聚焦唯一确认按钮，
+ * Enter/Space 可直接关闭。confirm / choice 不传此 handler，保留安全默认。
+ */
+function focusAlertDialogActionOnOpen(event: Event): void {
+  event.preventDefault();
+  const content = event.currentTarget;
+  if (!(content instanceof HTMLElement)) {
+    return;
+  }
+  content
+    .querySelector<HTMLElement>('[data-slot="alert-dialog-action"]')
+    ?.focus({ preventScroll: true });
+}
+
+/**
+ * prompt 需要键盘直接进输入框；若不拦截，Radix 会抢到 Cancel。
+ */
+function focusAlertDialogPromptOnOpen(event: Event): void {
+  event.preventDefault();
+  const content = event.currentTarget;
+  if (!(content instanceof HTMLElement)) {
+    return;
+  }
+  content
+    .querySelector<HTMLElement>("#app-dialog-prompt")
+    ?.focus({ preventScroll: true });
+}
+
 function DialogCopy({
   body,
   showDangerMark = false,
@@ -197,7 +227,13 @@ function ActiveAppDialog({
       }}
       open={open}
     >
-      <AlertDialogContent size={size} terminalOverlayId={APP_DIALOG_OVERLAY_ID}>
+      <AlertDialogContent
+        {...(dialog.kind === "alert"
+          ? { onOpenAutoFocus: focusAlertDialogActionOnOpen }
+          : {})}
+        size={size}
+        terminalOverlayId={APP_DIALOG_OVERLAY_ID}
+      >
         <DialogCopy
           body={dialog.body}
           showDangerMark={isDestructive && dialog.kind === "confirm"}
@@ -286,7 +322,11 @@ function PromptDialog({
       }}
       open={open}
     >
-      <AlertDialogContent size={size} terminalOverlayId={APP_DIALOG_OVERLAY_ID}>
+      <AlertDialogContent
+        onOpenAutoFocus={focusAlertDialogPromptOnOpen}
+        size={size}
+        terminalOverlayId={APP_DIALOG_OVERLAY_ID}
+      >
         <form className="grid gap-4" onSubmit={handleSubmit}>
           <DialogCopy body={dialog.body} title={dialog.title} />
           <Field data-invalid={Boolean(error)}>
@@ -295,7 +335,6 @@ function PromptDialog({
             </FieldLabel>
             <Input
               aria-invalid={Boolean(error)}
-              autoFocus
               id="app-dialog-prompt"
               onChange={(event) => {
                 setValue(event.target.value);

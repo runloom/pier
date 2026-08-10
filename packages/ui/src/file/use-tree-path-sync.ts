@@ -13,6 +13,7 @@ import {
   samePaths,
   stripTrailingSlash,
 } from "./tree-model.ts";
+import { shouldCompensateScroll } from "./tree-scroll-compensate.ts";
 import type {
   PierDirectoryLoadState,
   PierFileTreeItem,
@@ -36,12 +37,16 @@ interface UseFileTreePathSyncInput {
   expandedDirectoriesRef: React.MutableRefObject<Map<string, boolean>>;
   expansionAuthority?: TreeExpansionAuthority | undefined;
   expansionSeed?: TreeExpansionSeed | undefined;
+  /** True while reveal owns scrollToPath (skip compensate). */
+  isRevealActive?: () => boolean;
+  /** True while user gesture claim window is open (skip compensate). */
+  isUserScrolling?: () => boolean;
   items: readonly PierFileTreeItem[];
   model: FileTree;
   modelAheadMovesRef: React.MutableRefObject<Map<string, string>>;
   paths: readonly string[];
   renderSignature: string;
-  restoreSnapshotSoon: PierFileTreeScrollController["restoreSnapshotSoon"];
+  requestLayoutCompensate: PierFileTreeScrollController["requestLayoutCompensate"];
 }
 
 /**
@@ -57,11 +62,13 @@ export function useFileTreePathSync({
   expansionAuthority,
   expansionSeed = "none",
   items,
+  isRevealActive,
+  isUserScrolling,
   model,
   modelAheadMovesRef,
   paths,
   renderSignature,
-  restoreSnapshotSoon,
+  requestLayoutCompensate,
 }: UseFileTreePathSyncInput): void {
   const didMountRef = React.useRef(false);
   const previousPathsRef = React.useRef<readonly string[]>(paths);
@@ -117,7 +124,14 @@ export function useFileTreePathSync({
     }
     previousKnownDirsRef.current = nextKnown;
 
-    const scrollSnapshot = captureSnapshot();
+    // Skip expensive row geometry capture when user/reveal already block
+    // compensate (gold §5.6). Capture must still run before batch when we may
+    // compensate so the anchor reflects pre-mutation layout.
+    const userScrolling = isUserScrolling?.() === true;
+    const revealActive = isRevealActive?.() === true;
+    const searchActive = activeSearchRef.current != null;
+    const scrollSnapshot =
+      userScrolling || revealActive || searchActive ? null : captureSnapshot();
 
     const aheadMoves = modelAheadMovesRef.current;
     const alreadyAppliedByModel =
@@ -195,11 +209,20 @@ export function useFileTreePathSync({
       }
     }
 
-    // 终态：status delta 后多锁几帧，避免 group 搬家时滚动条被 reveal 冲掉。
-    restoreSnapshotSoon(scrollSnapshot, {
-      frames: 4,
-      lock: true,
-    });
+    // Gold standard: compensate only when mutation may change layout above the
+    // viewport anchor; never multi-frame lock against the user.
+    if (
+      shouldCompensateScroll({
+        mutation,
+        snapshot: scrollSnapshot,
+        usedResetPaths,
+        searchActive,
+        revealActive,
+        userScrolling,
+      })
+    ) {
+      requestLayoutCompensate(scrollSnapshot);
+    }
 
     previousPathsRef.current = paths;
     previousRenderSignatureRef.current = renderSignature;
@@ -211,11 +234,13 @@ export function useFileTreePathSync({
     expandedDirectoriesRef,
     expansionAuthority,
     expansionSeed,
+    isRevealActive,
+    isUserScrolling,
     items,
     model,
     modelAheadMovesRef,
     paths,
     renderSignature,
-    restoreSnapshotSoon,
+    requestLayoutCompensate,
   ]);
 }

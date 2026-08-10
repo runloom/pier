@@ -4417,11 +4417,12 @@ describe("Files file-panel", () => {
       within(markdownPreview as HTMLElement).getByRole("list")
     ).toBeVisible();
     expect(screen.getByText("const value = 1;")).toBeVisible();
-    expect(container.querySelector("pre")).toHaveAttribute(
-      "data-scrollbar",
-      "overlay"
-    );
-    expect(table.parentElement).toHaveAttribute("data-scrollbar", "overlay");
+    // Default block height limit is "none": short fenced code stays uncapped
+    // (no overlay attribute). Overlay is only set when prefs are "capped".
+    const pre = container.querySelector("pre");
+    expect(pre).not.toBeNull();
+    expect(pre).not.toHaveAttribute("data-scrollbar");
+    expect(table.closest(".md-table-wrap")).not.toBeNull();
   });
 
   it("preserves document content and undo history across exclusive preview mode switches", async () => {

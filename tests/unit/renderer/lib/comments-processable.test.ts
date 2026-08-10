@@ -4,6 +4,7 @@ import {
   formatCommentsForComposer,
   listProcessableComments,
   mergeComposerText,
+  pathInLiveSet,
   processableCommentCount,
 } from "@/lib/comments/processable.ts";
 
@@ -12,6 +13,7 @@ function thread(input: {
   group?: "unstaged" | "staged";
   id: string;
   line: number;
+  oldPath?: string | null;
   path: string;
   scopeKind?: "uncommitted" | "commit";
 }): CommentThread {
@@ -32,7 +34,7 @@ function thread(input: {
       group: input.group ?? "unstaged",
       kind: "git-diff",
       line: input.line,
-      oldPath: null,
+      oldPath: input.oldPath === undefined ? null : input.oldPath,
       path: input.path,
       scope: {
         contextId: "ctx",
@@ -48,6 +50,15 @@ function thread(input: {
   };
 }
 
+describe("pathInLiveSet", () => {
+  it("matches path or oldPath", () => {
+    const live = new Set(["new.ts"]);
+    expect(pathInLiveSet("new.ts", null, live)).toBe(true);
+    expect(pathInLiveSet("old.ts", "new.ts", live)).toBe(true);
+    expect(pathInLiveSet("gone.ts", "also-gone.ts", live)).toBe(false);
+  });
+});
+
 describe("listProcessableComments", () => {
   it("keeps uncommitted git-diff threads with live bodies", () => {
     const items = listProcessableComments([
@@ -62,6 +73,7 @@ describe("listProcessableComments", () => {
     ]);
     expect(items).toHaveLength(1);
     expect(items[0]?.threadId).toBe("t1");
+    expect(items[0]?.oldPath).toBeNull();
     expect(
       processableCommentCount([
         thread({ body: "fix me", id: "t1", line: 12, path: "a.ts" }),
@@ -74,6 +86,38 @@ describe("listProcessableComments", () => {
         }),
       ])
     ).toBe(1);
+  });
+
+  it("filters out comments whose path left the uncommitted change set", () => {
+    const threads = [
+      thread({ body: "still dirty", id: "t1", line: 1, path: "live.ts" }),
+      thread({ body: "already committed", id: "t2", line: 2, path: "gone.ts" }),
+    ];
+    const livePaths = new Set(["live.ts"]);
+    const items = listProcessableComments(threads, { livePaths });
+    expect(items.map((item) => item.threadId)).toEqual(["t1"]);
+    expect(processableCommentCount(threads, { livePaths })).toBe(1);
+    expect(processableCommentCount(threads, { livePaths: new Set() })).toBe(0);
+  });
+
+  it("keeps a comment when only oldPath is still live (rename edge)", () => {
+    const threads = [
+      thread({
+        body: "on rename",
+        id: "t1",
+        line: 1,
+        oldPath: "old.ts",
+        path: "new.ts",
+      }),
+    ];
+    const viaOld = listProcessableComments(threads, {
+      livePaths: new Set(["old.ts"]),
+    });
+    expect(viaOld).toHaveLength(1);
+    expect(viaOld[0]?.oldPath).toBe("old.ts");
+    expect(
+      listProcessableComments(threads, { livePaths: new Set(["other.ts"]) })
+    ).toHaveLength(0);
   });
 
   it("sorts by path then line", () => {

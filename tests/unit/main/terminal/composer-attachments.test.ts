@@ -19,10 +19,14 @@ vi.mock("electron", () => ({
 }));
 
 import {
+  isPierTerminalPastePath,
+  MAX_COMPOSER_PASTE_CHARS,
   materializeTerminalComposerClipboardImage,
   materializeTerminalComposerImageBytes,
+  materializeTerminalComposerTextBytes,
   pickTerminalComposerFiles,
   resolveTerminalComposerPaths,
+  writeTerminalComposerPasteText,
 } from "../../../../src/main/ipc/terminal/composer-attachments.ts";
 
 const fixtures: string[] = [];
@@ -271,5 +275,70 @@ describe("materializeTerminalComposerImageBytes", () => {
     expect(await readFile(second.attachment?.path ?? "")).toEqual(
       Buffer.from([2, 2, 2])
     );
+  });
+});
+
+describe("materializeTerminalComposerTextBytes + writeTerminalComposerPasteText", () => {
+  it("materializes paste kind and write overwrites existing file only", async () => {
+    const result = await materializeTerminalComposerTextBytes({
+      text: "original",
+    });
+    expect(result.ok).toBe(true);
+    if (!(result.ok && result.attachment)) return;
+    fixtures.push(result.attachment.path);
+    expect(result.attachment.kind).toBe("paste");
+    expect(isPierTerminalPastePath(result.attachment.path)).toBe(true);
+
+    const written = await writeTerminalComposerPasteText({
+      path: result.attachment.path,
+      text: "updated",
+    });
+    expect(written).toEqual({ ok: true });
+    expect(await readFile(result.attachment.path, "utf8")).toBe("updated");
+  });
+
+  it("rejects write outside paste directory", async () => {
+    const outside = join(tmpdir(), `pier-not-pastes-${Date.now()}.txt`);
+    await writeFile(outside, "x", "utf8");
+    fixtures.push(outside);
+    const result = await writeTerminalComposerPasteText({
+      path: outside,
+      text: "nope",
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/outside paste directory/i);
+  });
+
+  it("rejects write when file does not exist", async () => {
+    const missing = join(
+      tmpdir(),
+      "pier-terminal-pastes",
+      `missing-${Date.now()}.txt`
+    );
+    // Ensure parent exists so path looks like a paste path, but file is gone.
+    await mkdir(join(tmpdir(), "pier-terminal-pastes"), { recursive: true });
+    expect(isPierTerminalPastePath(missing)).toBe(true);
+    const result = await writeTerminalComposerPasteText({
+      path: missing,
+      text: "nope",
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/not found/i);
+  });
+
+  it("rejects oversize text on materialize", async () => {
+    const result = await materializeTerminalComposerTextBytes({
+      text: "x".repeat(MAX_COMPOSER_PASTE_CHARS + 1),
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it("isPierTerminalPastePath rejects parent traversal", () => {
+    const root = join(tmpdir(), "pier-terminal-pastes");
+    expect(isPierTerminalPastePath(join(root, "ok.txt"))).toBe(true);
+    expect(isPierTerminalPastePath(join(root, "..", "escape.txt"))).toBe(false);
+    expect(isPierTerminalPastePath(root)).toBe(false);
   });
 });

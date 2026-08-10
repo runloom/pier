@@ -1,4 +1,5 @@
 import { renderMermaidSVG } from "beautiful-mermaid";
+import { optimizeMermaidSource } from "./layout.ts";
 
 interface RenderRequest {
   source: string;
@@ -181,7 +182,10 @@ export function renderMermaidInWorker(request: RenderRequest): string {
   // Derive strokes from fg/bg; set accent === line so markers match edges.
   const connector =
     "color-mix(in srgb, var(--foreground) 45%, var(--background))";
-  return renderMermaidSVG(normalizeMermaidStatements(request.source), {
+  // Viewport policy (natural-capped, never scale-up) lives in the preview shell.
+  // Direction rewrite is opt-in only (%%{pier: layout=auto-td}%%).
+  const source = optimizeMermaidSource(request.source).source;
+  return renderMermaidSVG(normalizeMermaidStatements(source), {
     accent: connector,
     bg: "var(--background)",
     border: "color-mix(in srgb, var(--foreground) 22%, var(--background))",

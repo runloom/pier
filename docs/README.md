@@ -21,9 +21,13 @@
 
 ## 设计与实现笔记
 
-`docs/superpowers/` 存放历史规格（`specs/`）与实施计划（`plans/`），按日期归档。它们是决策与实现过程的记录，**不是**现行 API 契约；以源码、`AGENTS.md` 与上表「现行文档」为准。
+| 路径 | 角色 |
+| --- | --- |
+| [`design/`](./design/) | 仍生效的专题契约（例如工作台刷新策略、LSP 策略） |
+| [`superpowers/`](./superpowers/) | **仍被引用或近期演进**的规格与计划；不是现行 API 全文 |
+| [`archive/`](./archive/) | 已落地 / 已被取代的历史 specs、plans、spikes 与专题设计 |
 
-`docs/design/` 存放少量专题设计说明（例如工作台物料）。
+归档与活文档的边界说明见 [`archive/README.md`](./archive/README.md)。**不是**现行 API 契约时，以源码、`AGENTS.md` 与上表「现行文档」为准。
 
 ## 文档约定
 
@@ -31,3 +35,4 @@
 - 长流程（CLI、发布、插件）放在 `docs/`，避免 README 膨胀
 - 用户可见产品文案走 locale，不把实现词写进前台文案（规则在 `AGENTS.md`）
 - 改行为时同步更新相关文档与 `CHANGELOG.md` 的 `[Unreleased]`
+- 已 ship 且无外部引用的过程文档迁入 `docs/archive/`，不要堆在 `superpowers/` 或 `design/` 前台

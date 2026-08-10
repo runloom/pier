@@ -8,6 +8,11 @@ import {
   type MarkdownCodeHighlightOutcome,
   markdownCodeHighlighter,
 } from "./code-highlighter.ts";
+import {
+  MARKDOWN_CODE_BLOCK_MAX_HEIGHT_CLASS,
+  useMarkdownPreviewPrefsStore,
+} from "./preview-preferences.ts";
+import { forwardWheelToMarkdownPreview } from "./scroll-handoff.ts";
 import type { MarkdownSearchMatch } from "./search.ts";
 import { MarkdownSearchText } from "./search-mark.tsx";
 
@@ -42,6 +47,10 @@ export function MarkdownCodeBlock({
   });
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<number | null>(null);
+  const blockHeightLimit = useMarkdownPreviewPrefsStore(
+    (state) => state.blockHeightLimit
+  );
+  const heightCapped = blockHeightLimit === "capped";
 
   useEffect(() => {
     let active = true;
@@ -108,33 +117,17 @@ export function MarkdownCodeBlock({
       </div>
       <pre
         className={cn(
-          "max-h-[min(28rem,70vh)] overflow-auto overscroll-y-auto p-3 font-mono [overscroll-behavior:auto]",
-          scrollFadeClassName({ fade: "vertical", profile: "short" })
+          "p-3 font-mono",
+          heightCapped
+            ? cn(
+                MARKDOWN_CODE_BLOCK_MAX_HEIGHT_CLASS,
+                "overflow-auto overscroll-y-auto [overscroll-behavior:auto]",
+                scrollFadeClassName({ fade: "vertical", profile: "short" })
+              )
+            : "overflow-x-auto"
         )}
-        data-scrollbar="overlay"
-        onWheel={(event) => {
-          // data-scrollbar 默认 overscroll-behavior:contain 会吃掉边界外滚动。
-          // 到边界时把纵向 delta 转发给页面预览容器。
-          const el = event.currentTarget;
-          const { deltaY } = event;
-          if (deltaY === 0) {
-            return;
-          }
-          const atTop = el.scrollTop <= 0;
-          const atBottom =
-            el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-          if ((deltaY < 0 && !atTop) || (deltaY > 0 && !atBottom)) {
-            return;
-          }
-          const page = el.closest<HTMLElement>(
-            '[data-slot="markdown-preview"]'
-          );
-          if (!page) {
-            return;
-          }
-          page.scrollTop += deltaY;
-          event.preventDefault();
-        }}
+        data-scrollbar={heightCapped ? "overlay" : undefined}
+        onWheel={heightCapped ? forwardWheelToMarkdownPreview : undefined}
         style={
           highlight.status === "highlighted"
             ? {

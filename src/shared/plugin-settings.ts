@@ -60,6 +60,29 @@ export function effectiveConfigurationValue(
     : property.default;
 }
 
+/**
+ * Whether a configuration row should render given sibling values.
+ * Fail-closed when `visibleWhen.key` is missing from the same properties map
+ * (avoids showing a conditional row after a typo in the manifest).
+ */
+export function isConfigurationPropertyVisible(
+  properties: Record<string, PluginConfigurationProperty>,
+  settingKey: string,
+  values: Record<string, unknown>
+): boolean {
+  const property = properties[settingKey];
+  const when = property?.visibleWhen;
+  if (!when) {
+    return true;
+  }
+  const dependency = properties[when.key];
+  if (!dependency) {
+    return false;
+  }
+  const effective = effectiveConfigurationValue(dependency, values[when.key]);
+  return effective === when.equals;
+}
+
 export function collectEnabledConfigurationProperties(
   entries: readonly PluginRegistryEntry[]
 ): ReadonlyMap<string, PluginConfigurationProperty> {

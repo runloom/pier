@@ -7,49 +7,56 @@ import {
   revealAncestorDirectoryPaths,
   revealFileTreePath,
 } from "./tree-reveal.ts";
+import { requestRevealAncestorLoads } from "./tree-reveal-ancestor-loads.ts";
 import {
   resolveRevealIntentForPath,
   resolveRevealPolicy,
 } from "./tree-reveal-policy.ts";
+import {
+  POST_SUCCESS_IDLE_RELEASE_MS,
+  POST_SUCCESS_MAX_HOLD_MS,
+  REVEAL_RETRY_DELAYS_MS,
+} from "./tree-reveal-timing.ts";
 import type {
   PierDirectoryLoadState,
   PierFileTreeAutoRevealMode,
   PierFileTreeRevealOptions,
 } from "./tree-types.ts";
+import { useTreeActiveFileReveal } from "./use-tree-active-file-reveal.ts";
 
 type FileTreeModel = ReturnType<typeof useFileTree>["model"];
-
-/** Cold first-open deep paths need several listing + layout passes. */
-const REVEAL_RETRY_DELAYS_MS = [0, 32, 80, 160, 320, 640, 1200, 2000, 3200];
-/**
- * After a successful scrolled reveal, keep path-sync restore suppressed until
- * render/list churn settles. Resets on each renderSignature while idle.
- */
-const POST_SUCCESS_IDLE_RELEASE_MS = 400;
-/** Hard cap so suppress cannot leak if idle never settles. */
-const POST_SUCCESS_MAX_HOLD_MS = 2500;
 
 /**
  * Programmatic + active-file reveal: pending retries, ancestor loads when the
  * path is not projected yet, and active-path re-try after items catch up.
  *
- * Default scroll/expand flags come from `resolveRevealPolicy` (single owner).
+ * Gold standard (scroll ownership):
+ * - active-file scrolls at most once per path change (first successful projection)
+ * - temporary path absence → pending only, no re-nearest scroll
+ * - user gesture aborts further scroll (select may still apply)
  */
 export function useFileTreeRevealController(options: {
   activeSearchRef: React.MutableRefObject<string | null>;
   autoReveal?: PierFileTreeAutoRevealMode | undefined;
-  /** Suppress path-sync scroll restore while a scrolled reveal is pending. */
+  /** Suppress path-sync layout compensate while a scrolled reveal is pending. */
   beginProgrammaticScroll?: (() => void) | undefined;
   containerRef: React.RefObject<HTMLDivElement | null>;
   directoryStates: ReadonlyMap<string, PierDirectoryLoadState> | undefined;
   endProgrammaticScroll?: (() => void) | undefined;
   expansionAuthority?: TreeExpansionAuthority | undefined;
   isAutoRevealExcluded?: ((path: string) => boolean) | undefined;
+  /** User scroll claim — forces scroll:"none" on reveal attempts. */
+  isUserScrolling?: (() => boolean) | undefined;
   model: FileTreeModel;
   programmaticSelectionRef: React.MutableRefObject<{ path: string } | null>;
   readRefs: () => FileTreeRefs;
   renderSignature: string;
   revealPath: string | null | undefined;
+  /**
+   * Subscribe to sticky user claims (owner). Permanently demotes in-flight
+   * reveal scroll until path / request generation changes.
+   */
+  subscribeUserClaim?: ((listener: () => void) => () => void) | undefined;
 }): {
   requestReveal: (path: string, options?: PierFileTreeRevealOptions) => boolean;
   suppressActiveRevealRef: React.MutableRefObject<boolean>;
@@ -63,11 +70,13 @@ export function useFileTreeRevealController(options: {
     endProgrammaticScroll,
     expansionAuthority,
     isAutoRevealExcluded,
+    isUserScrolling,
     model,
     programmaticSelectionRef,
     readRefs,
     renderSignature,
     revealPath,
+    subscribeUserClaim,
   } = options;
 
   const programmaticScrollHeldRef = React.useRef(false);
@@ -95,6 +104,16 @@ export function useFileTreeRevealController(options: {
   const suppressActiveRevealRef = React.useRef(false);
   /** Path that last won an explicit suppress (center / host open). */
   const explicitSuppressPathRef = React.useRef<string | null>(null);
+  /**
+   * Active-file path that already completed a reveal attempt (scroll or select).
+   * Temporary projection gaps must not re-nearest for this path.
+   */
+  const settledActiveFilePathRef = React.useRef<string | null>(null);
+  /**
+   * Sticky user abort for in-flight reveal scroll (survives the 150ms claim
+   * window). Cleared only when revealPath / request targets a new path.
+   */
+  const userAbortedScrollRef = React.useRef(false);
 
   const releaseIdleTimerRef = React.useRef<number | null>(null);
   const releaseHardTimerRef = React.useRef<number | null>(null);
@@ -125,9 +144,7 @@ export function useFileTreeRevealController(options: {
 
   const armPostSuccessScrollHold = React.useCallback(() => {
     clearReleaseTimers();
-    // Idle release: resets whenever renderSignature keeps churning (effect below).
     scheduleReleaseAfterIdle();
-    // Hard cap.
     releaseHardTimerRef.current = window.setTimeout(() => {
       releaseHardTimerRef.current = null;
       if (pendingRevealRef.current === null) {
@@ -137,10 +154,6 @@ export function useFileTreeRevealController(options: {
     }, POST_SUCCESS_MAX_HOLD_MS);
   }, [clearReleaseTimers, releaseProgrammaticScroll, scheduleReleaseAfterIdle]);
 
-  /**
-   * Persist expand intents before/regardless of model success so lazy list +
-   * expand-collapse effects open the parent chain on cold first open.
-   */
   const seedRevealExpansionIntent = React.useCallback(
     (path: string, revealOptions?: PierFileTreeRevealOptions) => {
       if (!expansionAuthority || activeSearchRef.current != null) {
@@ -163,9 +176,42 @@ export function useFileTreeRevealController(options: {
     [activeSearchRef, expansionAuthority, readRefs]
   );
 
+  const demotePendingScroll = React.useCallback(() => {
+    userAbortedScrollRef.current = true;
+    const pending = pendingRevealRef.current;
+    if (pending && pending.options.scroll !== "none") {
+      pendingRevealRef.current = {
+        ...pending,
+        options: { ...pending.options, scroll: "none" },
+      };
+    }
+    clearReleaseTimers();
+    releaseProgrammaticScroll();
+  }, [clearReleaseTimers, releaseProgrammaticScroll]);
+
+  React.useEffect(() => {
+    if (!subscribeUserClaim) {
+      return;
+    }
+    return subscribeUserClaim(() => {
+      demotePendingScroll();
+    });
+  }, [demotePendingScroll, subscribeUserClaim]);
+
   const runReveal = React.useCallback(
     (path: string, revealOptions?: PierFileTreeRevealOptions): boolean => {
       seedRevealExpansionIntent(path, revealOptions);
+      const scrollSuppressedByUser =
+        userAbortedScrollRef.current ||
+        (isUserScrolling?.() === true && revealOptions?.scroll !== "none");
+      if (scrollSuppressedByUser && !userAbortedScrollRef.current) {
+        // First contact with claim window — stick for remaining retries.
+        userAbortedScrollRef.current = true;
+      }
+      const effectiveOptions: PierFileTreeRevealOptions | undefined =
+        scrollSuppressedByUser || userAbortedScrollRef.current
+          ? { ...revealOptions, scroll: "none" }
+          : revealOptions;
       return revealFileTreePath(
         {
           focusNearestPath: (candidate) => model.focusNearestPath(candidate),
@@ -187,11 +233,12 @@ export function useFileTreeRevealController(options: {
         readRefs,
         programmaticSelectionRef,
         path,
-        revealOptions
+        effectiveOptions
       );
     },
     [
       containerRef,
+      isUserScrolling,
       model,
       programmaticSelectionRef,
       readRefs,
@@ -199,51 +246,9 @@ export function useFileTreeRevealController(options: {
     ]
   );
 
-  /**
-   * When reveal targets a path not yet projected, list missing ancestors via
-   * onLoadDirectory so pending retries (and the items-sync effect) can finish.
-   */
-  const requestRevealAncestorLoads = React.useCallback(
+  const loadRevealAncestors = React.useCallback(
     (path: string) => {
-      if (path.length === 0) {
-        return;
-      }
-      const onLoadDirectory = readRefs().onLoadDirectory;
-      if (!onLoadDirectory) {
-        return;
-      }
-      const itemsByPath = readRefs().itemsByPath;
-      const segments = path.split("/").filter(Boolean);
-      for (let index = 1; index < segments.length; index += 1) {
-        const ancestorPath = segments.slice(0, index).join("/");
-        const ancestorItem = itemsByPath.get(ancestorPath);
-        if (ancestorItem?.kind !== "directory") {
-          // Parent of a missing segment must be listed first.
-          if (index > 1) {
-            const parentPath = segments.slice(0, index - 1).join("/");
-            if (itemsByPath.get(parentPath)?.kind === "directory") {
-              Promise.resolve(onLoadDirectory(parentPath)).catch(
-                () => undefined
-              );
-            }
-          } else if (!ancestorItem) {
-            // Root-level directory missing from projection: list root "" if supported.
-            Promise.resolve(onLoadDirectory("")).catch(() => undefined);
-          }
-          break;
-        }
-        const prefix = `${ancestorPath}/`;
-        let hasChild = false;
-        for (const item of itemsByPath.values()) {
-          if (item.path.startsWith(prefix) && item.path !== ancestorPath) {
-            hasChild = true;
-            break;
-          }
-        }
-        if (!hasChild) {
-          Promise.resolve(onLoadDirectory(ancestorPath)).catch(() => undefined);
-        }
-      }
+      requestRevealAncestorLoads(path, readRefs);
     },
     [readRefs]
   );
@@ -251,9 +256,17 @@ export function useFileTreeRevealController(options: {
   const revealRetryGenerationRef = React.useRef(0);
 
   const markRevealSuccess = React.useCallback(
-    (scroll: PierFileTreeRevealOptions["scroll"] | undefined) => {
+    (
+      path: string,
+      scroll: PierFileTreeRevealOptions["scroll"] | undefined,
+      intent: PierFileTreeRevealOptions["intent"] | undefined
+    ) => {
       pendingRevealRef.current = null;
       revealRetryGenerationRef.current += 1;
+      if (intent === "active-file" || intent == null) {
+        // Settle even for select-only so temporary gaps do not re-nearest.
+        settledActiveFilePathRef.current = path;
+      }
       if (scroll === "none") {
         clearReleaseTimers();
         releaseProgrammaticScroll();
@@ -283,9 +296,15 @@ export function useFileTreeRevealController(options: {
         },
       });
 
+      // New reveal target clears sticky user abort for a fresh intent.
+      if (
+        pendingRevealRef.current?.path !== path &&
+        settledActiveFilePathRef.current !== path
+      ) {
+        userAbortedScrollRef.current = false;
+      }
+
       if (!policy.shouldReveal) {
-        // Skip only our own active-file pending for this path. Never tear down
-        // a concurrent explicit/search/root reveal or release its scroll hold.
         const pending = pendingRevealRef.current;
         if (
           pending &&
@@ -296,8 +315,6 @@ export function useFileTreeRevealController(options: {
           pendingRevealRef.current = null;
           revealRetryGenerationRef.current += 1;
           if (pending.options.scroll !== "none") {
-            // This pending owned the hold — release only if nothing else pending.
-            // (We just cleared the only pending.)
             clearReleaseTimers();
             releaseProgrammaticScroll();
           }
@@ -310,20 +327,29 @@ export function useFileTreeRevealController(options: {
         explicitSuppressPathRef.current = path;
       }
 
+      let scroll = policy.scroll;
+      // Already settled this active-file path: never re-scroll on churn.
+      if (
+        intent === "active-file" &&
+        settledActiveFilePathRef.current === path &&
+        scroll !== "none"
+      ) {
+        scroll = "none";
+      }
+      if (userAbortedScrollRef.current) {
+        scroll = "none";
+      }
+
       const nextOptions: PierFileTreeRevealOptions = {
         expandTarget: policy.expandTarget,
         intent,
-        // policy 只拥有 expandTarget / scroll；焦点归属由调用方决定，
-        // 重建 options 时必须透传，否则搜索导航仍会被 reveal 抢走焦点。
         ...(revealOptions?.preserveFocus === undefined
           ? {}
           : { preserveFocus: revealOptions.preserveFocus }),
-        scroll: policy.scroll,
+        scroll,
       };
 
-      // While scrolled reveal is pending, block path-sync scroll restore.
-      if (policy.scroll === "none") {
-        // Select-only: do not hold restore suppress for scroll.
+      if (nextOptions.scroll === "none") {
         if (
           pendingRevealRef.current == null ||
           pendingRevealRef.current.path === path
@@ -342,11 +368,11 @@ export function useFileTreeRevealController(options: {
       };
 
       if (runReveal(path, nextOptions)) {
-        markRevealSuccess(policy.scroll);
+        markRevealSuccess(path, nextOptions.scroll, intent);
         return true;
       }
 
-      requestRevealAncestorLoads(path);
+      loadRevealAncestors(path);
       revealRetryGenerationRef.current += 1;
       const generation = revealRetryGenerationRef.current;
       for (const delayMs of REVEAL_RETRY_DELAYS_MS) {
@@ -359,10 +385,14 @@ export function useFileTreeRevealController(options: {
             return;
           }
           if (runReveal(pending.path, pending.options)) {
-            markRevealSuccess(pending.options.scroll);
+            markRevealSuccess(
+              pending.path,
+              pending.options.scroll,
+              pending.options.intent
+            );
             return;
           }
-          requestRevealAncestorLoads(pending.path);
+          loadRevealAncestors(pending.path);
           seedRevealExpansionIntent(pending.path, pending.options);
           if (delayMs === REVEAL_RETRY_DELAYS_MS.at(-1)) {
             pendingRevealRef.current = null;
@@ -378,9 +408,9 @@ export function useFileTreeRevealController(options: {
       clearReleaseTimers,
       holdProgrammaticScroll,
       isAutoRevealExcluded,
+      loadRevealAncestors,
       markRevealSuccess,
       releaseProgrammaticScroll,
-      requestRevealAncestorLoads,
       runReveal,
       seedRevealExpansionIntent,
     ]
@@ -391,78 +421,46 @@ export function useFileTreeRevealController(options: {
   React.useEffect(() => {
     const pending = pendingRevealRef.current;
     if (!pending) {
-      // No pending: if we are still holding after success, reset idle timer on churn.
       if (programmaticScrollHeldRef.current) {
         scheduleReleaseAfterIdle();
       }
       return;
     }
     if (runReveal(pending.path, pending.options)) {
-      markRevealSuccess(pending.options.scroll);
+      markRevealSuccess(
+        pending.path,
+        pending.options.scroll,
+        pending.options.intent
+      );
       return;
     }
-    requestRevealAncestorLoads(pending.path);
+    loadRevealAncestors(pending.path);
   }, [
     directoryStates,
+    loadRevealAncestors,
     markRevealSuccess,
     model,
     renderSignature,
-    requestRevealAncestorLoads,
     runReveal,
     scheduleReleaseAfterIdle,
   ]);
 
-  // Active file: select+focus+scroll per policy; expand ancestors only (not the
-  // folder itself). Explicit/host open suppress demotion until active path
-  // changes to a different file.
-  const lastRevealRef = React.useRef<string | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: renderSignature re-triggers when items/load projection catches up for the same path.
-  React.useEffect(() => {
-    if (!revealPath) {
-      lastRevealRef.current = null;
-      suppressActiveRevealRef.current = false;
-      explicitSuppressPathRef.current = null;
-      return;
-    }
-    if (revealPath !== lastRevealRef.current) {
-      lastRevealRef.current = revealPath;
-      // Host/explicit open for this path: keep suppress, do not demote to nearest.
-      if (
-        suppressActiveRevealRef.current &&
-        (pendingRevealRef.current?.path === revealPath ||
-          explicitSuppressPathRef.current === revealPath)
-      ) {
-        return;
-      }
-      suppressActiveRevealRef.current = false;
-      explicitSuppressPathRef.current = null;
-      requestReveal(revealPath, {
-        expandTarget: false,
-        intent: "active-file",
-      });
-      return;
-    }
-    if (suppressActiveRevealRef.current) {
-      return;
-    }
-    if (pendingRevealRef.current?.path === revealPath) {
-      return;
-    }
-    const item = readRefs().itemsByPath.get(revealPath);
-    if (!item) {
-      requestReveal(revealPath, {
-        expandTarget: false,
-        intent: "active-file",
-      });
-    }
-  }, [
+  useTreeActiveFileReveal({
     autoReveal,
+    explicitSuppressPathRef,
+    holdProgrammaticScroll,
     isAutoRevealExcluded,
+    loadRevealAncestors,
+    pendingRevealRef,
     readRefs,
+    renderSignature,
     requestReveal,
     revealPath,
-    renderSignature,
-  ]);
+    seedRevealExpansionIntent,
+    settledActiveFilePathRef,
+    suppressActiveRevealRef,
+    userAbortedScrollRef,
+  });
 
   React.useEffect(
     () => () => {
