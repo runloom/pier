@@ -6,6 +6,7 @@ import {
 } from "./definition-navigate.ts";
 import type { HoverControllerHost } from "./hover-controller-actions.ts";
 import {
+  beginDefinitionAffordance,
   clickDefinition,
   requestTransient,
   runManual,
@@ -23,31 +24,44 @@ import {
   type FilesLspHoverCandidate,
   FilesLspOwnedMapping,
   filesLspHoverCandidateAtPosition,
-  preferFilesLspHoverCandidateRange,
   prepareFilesLspDefinitions,
   sameFilesLspHoverCandidate,
 } from "./hover-data.ts";
 import type { FilesLspPreparedDefinition } from "./hover-types.ts";
 
 export class FilesLspHoverController extends FilesLspHoverControllerBase {
+  /** True while ViewPlugin.update runs — affordance dispatches must defer. */
+  #inUpdate = false;
+
   update(update: ViewUpdate): void {
-    const plugin = LSPPlugin.get(this._view);
-    if (plugin !== this._plugin) {
-      this._plugin = plugin;
-      this._clear(false, true);
-      this._scheduleTooltipClear(plugin);
-    }
-    if (update.docChanged || update.selectionSet) {
-      this._lastPointer = null;
-      // Affordance clears via StateField on doc/selection transactions.
-      this._clear(false);
-      return;
-    }
-    if (plugin && this._manualQueued) {
-      this._scheduleManual(plugin, this._manualQueued);
-    }
-    if (plugin && this._definitionJumpQueued) {
-      this._scheduleDefinitionJump(plugin, this._definitionJumpQueued);
+    this.#inUpdate = true;
+    try {
+      // Normalize undefined (no plugin / mock) to null so first attach is stable.
+      const plugin = LSPPlugin.get(this._view) ?? null;
+      if (plugin !== this._plugin) {
+        const previous = this._plugin;
+        this._plugin = plugin;
+        // nullish → first plugin: attach only. Replacing/removing still resets UI.
+        const firstAttach = previous == null && plugin != null;
+        if (!firstAttach) {
+          this._clear(false, true);
+          this._scheduleTooltipClear(plugin);
+        }
+      }
+      if (update.docChanged || update.selectionSet) {
+        this._lastPointer = null;
+        // Affordance clears via StateField on doc/selection transactions.
+        this._clear(false);
+        return;
+      }
+      if (plugin && this._manualQueued) {
+        this._scheduleManual(plugin, this._manualQueued);
+      }
+      if (plugin && this._definitionJumpQueued) {
+        this._scheduleDefinitionJump(plugin, this._definitionJumpQueued);
+      }
+    } finally {
+      this.#inUpdate = false;
     }
   }
 
@@ -222,6 +236,28 @@ export class FilesLspHoverController extends FilesLspHoverControllerBase {
     return clickDefinition(this as unknown as HoverControllerHost, candidate);
   }
 
+  protected _beginDefinitionAffordance(
+    candidate: FilesLspHoverCandidate
+  ): void {
+    beginDefinitionAffordance(
+      this as unknown as HoverControllerHost,
+      candidate
+    );
+  }
+
+  protected _clearDefinitionAffordance(): void {
+    const wasPending = this._affordanceCache?.status === "pending";
+    if (this._affordanceCache !== null || this._affordanceToken !== 0) {
+      this._affordanceToken += 1;
+      this._affordanceCache = null;
+    }
+    // Stop in-flight definition preflight (token already invalidates results).
+    if (wasPending) {
+      this._requests.cancel();
+    }
+    this._syncAffordance(null);
+  }
+
   async _ensurePluginForDefinitionJump(
     candidate: FilesLspHoverCandidate
   ): Promise<boolean> {
@@ -335,24 +371,26 @@ export class FilesLspHoverController extends FilesLspHoverControllerBase {
     this._input.notifyError?.(message);
   }
 
-  protected _syncAffordance(candidate: FilesLspHoverCandidate | null): void {
+  protected _syncAffordance(range: { from: number; to: number } | null): void {
     if (this._destroyed) {
       return;
     }
-    // Prefer an already-expanded anchor (Hover.range / full string) over a
-    // smaller word probe so Cmd+hover underlines the whole specifier.
-    const range = candidate
-      ? preferFilesLspHoverCandidateRange(this._candidate, candidate)
-      : null;
-    // Never dispatch from ViewPlugin.update — queue to the next microtask.
     const effect = this._setAffordance.of(
-      range ? { from: range.from, to: range.to } : null
+      range && range.from < range.to ? range : null
     );
-    queueMicrotask(() => {
+    const apply = (): void => {
       if (!this._destroyed) {
         this._view.dispatch({ effects: effect });
       }
-    });
+    };
+    // Never dispatch re-entrantly from ViewPlugin.update (e.g. _clear).
+    // Pointer / async preflight paths apply immediately so the underline
+    // lands in the same turn as the definition response.
+    if (this.#inUpdate) {
+      queueMicrotask(apply);
+    } else {
+      apply();
+    }
   }
 
   protected _scheduleDefinitionJump(
@@ -375,6 +413,9 @@ export class FilesLspHoverController extends FilesLspHoverControllerBase {
 
   protected _clear(dispatch = true, preserveManual = false): void {
     this._epoch += 1;
+    this._affordanceToken += 1;
+    this._affordanceCache = null;
+    this._syncAffordance(null);
     if (!preserveManual) {
       this._manualQueued = null;
       this._definitionJumpQueued = null;
