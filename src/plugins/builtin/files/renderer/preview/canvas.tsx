@@ -1,3 +1,4 @@
+import { CommentNavigator } from "@pier/ui/comment-navigator.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { findCanvasCommentAnchorElement } from "@shared/comments/canvas-anchor.ts";
@@ -8,12 +9,17 @@ import {
   projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
+import {
+  useCommentNavigatorController,
+  useCommentNavigatorLabels,
+} from "../comments/use-comment-navigator.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import {
   markCanvasActive,
@@ -22,6 +28,7 @@ import {
   useCanvasChrome,
 } from "./canvas-chrome-store.ts";
 import { CanvasCommentOverlay } from "./canvas-comment-overlay.tsx";
+import type { CanvasCommentPinView } from "./canvas-comment-pins.tsx";
 import { createCanvasCommentLabels } from "./canvas-comments-button.tsx";
 import {
   clearCanvasCommentsSession,
@@ -32,11 +39,6 @@ import {
   useCanvasCompileSession,
 } from "./canvas-compile-session.ts";
 import {
-  clearCanvasPickHighlight,
-  resolveCanvasElementPick,
-  setCanvasPickHighlight,
-} from "./canvas-element-pick.ts";
-import {
   CanvasCompileErrorEmpty,
   CanvasLoadingSkeleton,
   CanvasSoftErrorBanner,
@@ -44,10 +46,82 @@ import {
   clearMountedCanvas,
 } from "./canvas-states.tsx";
 import { subscribeLiveModulesProjectConfigChanged } from "./load-live-modules-config.ts";
+import { useCanvasCommentPins } from "./use-canvas-comment-pins.ts";
 import {
+  CANVAS_PICK_DRAFT_ID,
+  type CanvasCommentThreadView,
   useCanvasHostAnchorIds,
   useCanvasPreviewComments,
 } from "./use-canvas-preview-comments.ts";
+
+interface CanvasCommentNavTarget {
+  readonly commentId: string;
+  /** Non-null only for in-preview pin-backed targets (floating n/N reveal). */
+  readonly pinKey: string | null;
+  readonly threadId: string;
+}
+
+/** Floating nav cycle: only threads that have a live pin (reveal can open). */
+function buildCanvasCommentNavTargets(
+  pins: readonly CanvasCommentPinView[]
+): CanvasCommentNavTarget[] {
+  const targets: CanvasCommentNavTarget[] = [];
+  const seen = new Set<string>();
+  for (const pin of pins) {
+    for (const thread of pin.threads) {
+      if (seen.has(thread.threadId)) {
+        continue;
+      }
+      seen.add(thread.threadId);
+      targets.push({
+        commentId: thread.comment.id,
+        pinKey: pin.key,
+        threadId: thread.threadId,
+      });
+    }
+  }
+  return targets;
+}
+
+/**
+ * Clear-all set: every live comment on this canvas path (pins + file + drift +
+ * unlocated picks). Must match status-bar processable coverage for the file.
+ */
+function buildCanvasCommentClearTargets(input: {
+  readonly driftNodeThreads: readonly CanvasCommentThreadView[];
+  readonly fileThreads: readonly CanvasCommentThreadView[];
+  readonly locateDriftThreads: readonly CanvasCommentThreadView[];
+  readonly pickedNodeThreads: readonly CanvasCommentThreadView[];
+  readonly pins: readonly CanvasCommentPinView[];
+}): CanvasCommentNavTarget[] {
+  const targets: CanvasCommentNavTarget[] = [];
+  const seen = new Set<string>();
+  const push = (thread: CanvasCommentThreadView, pinKey: string | null) => {
+    if (seen.has(thread.threadId)) {
+      return;
+    }
+    seen.add(thread.threadId);
+    targets.push({
+      commentId: thread.comment.id,
+      pinKey,
+      threadId: thread.threadId,
+    });
+  };
+  for (const pin of input.pins) {
+    for (const thread of pin.threads) {
+      push(thread, pin.key);
+    }
+  }
+  for (const thread of [
+    ...input.fileThreads,
+    ...input.driftNodeThreads,
+    ...input.pickedNodeThreads,
+    ...input.locateDriftThreads,
+  ]) {
+    push(thread, null);
+  }
+  return targets;
+}
 
 /**
  * Live Modules preview inside the files panel (same shell as Markdown preview).
@@ -61,6 +135,10 @@ export function FileCanvasPreview(props: {
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  /** Relative box for comment overlay geometry (not the outer scroll root). */
+  const [canvasShellEl, setCanvasShellEl] = useState<HTMLDivElement | null>(
+    null
+  );
   const unmountRef = useRef<(() => void) | null>(null);
   const mountedIdentityRef = useRef<string | null>(null);
   const mountedModuleIdRef = useRef<string | null>(null);
@@ -173,77 +251,90 @@ export function FileCanvasPreview(props: {
     };
   }, [comments, props.path]);
 
-  // Design Mode: capture click/hover on live host to annotate; Esc exits.
-  useEffect(() => {
-    if (!(comments.pickMode && hostEl && state.kind === "ready")) {
-      if (hostEl) {
-        clearCanvasPickHighlight(hostEl);
+  // Pins only in-preview; unlocated still clearable / status-bar processable.
+  const { driftThreads: locateDriftThreads, pins } = useCanvasCommentPins({
+    host: hostEl,
+    locatedByAnchorId: comments.locatedByAnchorId,
+    pickedNodeThreads: comments.pickedNodeThreads,
+    shell: canvasShellEl,
+    softMarkers: comments.softMarkers,
+  });
+
+  const [navOpenPinKey, setNavOpenPinKey] = useState<string | null>(null);
+  // Floating n/N is pin-centric (every step has a reveal). Clear covers full path.
+  const navTargets = useMemo(() => buildCanvasCommentNavTargets(pins), [pins]);
+  const clearTargets = useMemo(
+    () =>
+      buildCanvasCommentClearTargets({
+        driftNodeThreads: comments.driftNodeThreads,
+        fileThreads: comments.fileThreads,
+        locateDriftThreads,
+        pickedNodeThreads: comments.pickedNodeThreads,
+        pins,
+      }),
+    [
+      comments.driftNodeThreads,
+      comments.fileThreads,
+      comments.pickedNodeThreads,
+      locateDriftThreads,
+      pins,
+    ]
+  );
+  const navLabels = useCommentNavigatorLabels(props.t);
+  const onRevealNavTarget = useCallback(
+    (target: CanvasCommentNavTarget) => {
+      if (target.pinKey === null) {
+        return;
       }
+      const pin = pins.find((entry) => entry.key === target.pinKey);
+      if (!pin) {
+        return;
+      }
+      const shell = canvasShellEl ?? shellRef.current;
+      const pinEl =
+        shell?.querySelector(`[data-canvas-comment-pin="${pin.index}"]`) ??
+        null;
+      if (pinEl instanceof HTMLElement) {
+        pinEl.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+      comments.setPickMode(false);
+      setNavOpenPinKey(target.pinKey);
+    },
+    [canvasShellEl, comments, pins]
+  );
+  const commentNavigator = useCommentNavigatorController({
+    clearTargets,
+    context: props.context,
+    labels: navLabels,
+    onReveal: onRevealNavTarget,
+    targets: navTargets,
+    worktreeKey,
+  });
+
+  // Esc exits Design Mode pick (layer handles click/hover via elementFromPoint).
+  useEffect(() => {
+    if (!comments.pickMode) {
       return;
     }
-    const onMove = (event: MouseEvent) => {
-      const pick = resolveCanvasElementPick(hostEl, event);
-      if (!pick) {
-        clearCanvasPickHighlight(hostEl);
-        return;
-      }
-      // Re-resolve the element for highlight (pick is a snapshot).
-      let current: Element | null =
-        event.target instanceof Element ? event.target : null;
-      let highlight: HTMLElement | null = null;
-      while (current && current !== hostEl) {
-        if (current instanceof HTMLElement) {
-          highlight = current;
-          if (current.getAttribute("data-pier-comment-id")?.trim()) {
-            break;
-          }
-        }
-        current = current.parentElement;
-      }
-      setCanvasPickHighlight(hostEl, highlight);
-    };
-    const onLeave = () => {
-      clearCanvasPickHighlight(hostEl);
-    };
-    const onClick = (event: MouseEvent) => {
-      if (comments.draftOpen) {
-        return;
-      }
-      const pick = resolveCanvasElementPick(hostEl, event);
-      if (!pick) {
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      clearCanvasPickHighlight(hostEl);
-      comments.openPickDraft(pick);
-    };
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
+        if (comments.draftOpen) {
+          comments.handlers.onCancelDraft(CANVAS_PICK_DRAFT_ID);
+          return;
+        }
         comments.setPickMode(false);
       }
     };
-    hostEl.addEventListener("mousemove", onMove, { passive: true });
-    hostEl.addEventListener("mouseleave", onLeave);
-    hostEl.addEventListener("click", onClick, true);
     window.addEventListener("keydown", onKeyDown);
-    hostEl.style.cursor = "crosshair";
     return () => {
-      hostEl.removeEventListener("mousemove", onMove);
-      hostEl.removeEventListener("mouseleave", onLeave);
-      hostEl.removeEventListener("click", onClick, true);
       window.removeEventListener("keydown", onKeyDown);
-      hostEl.style.cursor = "";
-      clearCanvasPickHighlight(hostEl);
     };
   }, [
     comments.draftOpen,
-    comments.openPickDraft,
+    comments.handlers,
     comments.pickMode,
     comments.setPickMode,
-    hostEl,
-    state.kind,
   ]);
 
   // Reveal: scroll to anchor when panel params request it.
@@ -306,21 +397,45 @@ export function FileCanvasPreview(props: {
           !showHost && "hidden"
         )}
         data-pier-canvas-shell=""
+        ref={setCanvasShellEl}
       >
-        <div className="min-h-full w-full" ref={hostRef} />
+        <div className="relative min-h-full w-full" ref={hostRef} />
         {showHost ? (
           <CanvasCommentOverlay
             draftOpen={comments.draftOpen}
             draftPick={comments.draftPick}
+            draftPlacement={comments.draftPlacement}
             handlers={comments.handlers}
             host={hostEl}
             labels={labels}
-            locatedByAnchorId={comments.locatedByAnchorId}
+            onExitPickMode={() => {
+              comments.setPickMode(false);
+            }}
+            onPickElement={comments.openPickDraft}
+            onRequestOpenConsumed={() => {
+              setNavOpenPinKey(null);
+            }}
             pickMode={comments.pickMode}
-            shell={shellRef.current}
+            pins={pins}
+            requestOpenKey={navOpenPinKey}
+            shell={canvasShellEl}
           />
         ) : null}
       </div>
+      {commentNavigator.visible ? (
+        <CommentNavigator
+          activeIndex={commentNavigator.activeIndex}
+          clearLabel={commentNavigator.clearLabel}
+          nextLabel={commentNavigator.nextLabel}
+          onClear={commentNavigator.onClear}
+          onNext={commentNavigator.onNext}
+          onPrevious={commentNavigator.onPrevious}
+          positionLabel={commentNavigator.positionLabel}
+          previousLabel={commentNavigator.previousLabel}
+          toolbarLabel={commentNavigator.toolbarLabel}
+          total={commentNavigator.total}
+        />
+      ) : null}
     </div>
   );
 }

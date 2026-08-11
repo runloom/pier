@@ -35,6 +35,7 @@ function sessionSignature(session: CanvasCommentsSession): string {
     String(nodeCount),
     String(session.pickedNodeThreads.length),
     String(session.driftNodeThreads.length),
+    String(session.softMarkers.length),
   ].join("|");
 }
 

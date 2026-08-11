@@ -21,7 +21,7 @@ import {
 import { useFilesDocument } from "../document/use-document.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import { createFileEditorSessionId } from "../editor/session-id.ts";
-import { createFilesTranslate } from "../i18n.ts";
+import { createFilesTranslate, useFilesPluginLanguage } from "../i18n.ts";
 import {
   activeFilePathForTree,
   filePanelProjectRoot,
@@ -65,9 +65,11 @@ function FilePanelContent({
   ...props
 }: FilePanelRuntimeProps) {
   const controller = runtimeController;
+  // Locale switch must rebuild `t` so memoized children re-resolve copy.
+  const language = useFilesPluginLanguage();
   const t = useMemo(
-    () => createFilesTranslate(runtimeContext),
-    [runtimeContext]
+    () => createFilesTranslate(runtimeContext, language),
+    [language, runtimeContext]
   );
   const sourceState = useMemo(
     () => parseSourceState(props.params, t),

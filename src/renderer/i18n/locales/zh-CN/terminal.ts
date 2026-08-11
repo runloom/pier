@@ -170,6 +170,9 @@ export const terminal = {
         },
         itemTitle: "{{path}}:{{line}}",
         itemTitlePathOnly: "{{path}}",
+        sourceCanvas: "设计稿",
+        sourceGit: "diff",
+        sourceMarkdown: "文档",
         jumpFailed: "无法打开变更",
         jumpFailedBody: "请先打开此项目的变更视图，然后再试跳转。",
         jumpUnsupportedBody:

@@ -1,130 +1,79 @@
 /**
- * Design Mode–style element pick for canvas comments (Orca-like).
- * Click a live DOM node in the preview host → snapshot for createThread.
- * Optional data-pier-comment-id improves re-locate after hot reload.
+ * Design Mode element pick (Orca-like / inspector-style).
+ *
+ * Two phases (industry standard — promotion must never veto a hit):
+ * 1) Hit resolution: elementsFromPoint → geometry fallback
+ * 2) Target promotion: rank ancestors (anchor / interactive / …)
+ *
+ * Implementation is split by domain:
+ * - canvas-pick-shared / -hit / -promote / -label
  */
+
+export {
+  geometryHitTestCanvasElement,
+  hitCanvasPickChainAtPoint,
+  hitTestCanvasElement,
+  resolveCanvasPickAtPoint,
+} from "./canvas-pick-hit.ts";
+export {
+  findCanvasElementByLabel,
+  findInteractiveByExactLabel,
+} from "./canvas-pick-label.ts";
+export {
+  buildCanvasPickChain,
+  clampPickDepth,
+  defaultPickDepth,
+  pickFromCanvasElement,
+  resolveCanvasElementPick,
+  snapshotCanvasElementPick,
+} from "./canvas-pick-promote.ts";
+export type {
+  CanvasElementPick,
+  CanvasPickChain,
+  CanvasPickOverlayBox,
+} from "./canvas-pick-shared.ts";
+
+import { findCanvasCommentAnchorElement } from "@shared/comments/canvas-anchor.ts";
 import {
-  CANVAS_COMMENT_ANCHOR_ATTR,
-  findCanvasCommentAnchorElement,
-} from "@shared/comments/canvas-anchor.ts";
+  type CanvasElementPick,
+  type CanvasPickOverlayBox,
+  normalizeCanvasPickText,
+} from "./canvas-pick-shared.ts";
 
-export interface CanvasElementPick {
-  /** Declared stable id when present on the node or an ancestor. */
-  readonly anchorId?: string;
-  readonly excerpt: string;
-  readonly label: string;
-}
-
-const SKIP_CLOSEST =
-  "[data-slot='canvas-comment-overlay'],[data-slot='canvas-comment-pick-chrome'],[data-canvas-comment-badge]";
-
-function normalizeText(value: string | null | undefined, max: number): string {
-  const collapsed = (value ?? "").replace(/\s+/gu, " ").trim();
-  if (collapsed.length === 0) {
-    return "";
-  }
-  if (collapsed.length <= max) {
-    return collapsed;
-  }
-  return `${collapsed.slice(0, Math.max(1, max - 1))}…`;
-}
-
-function isIgnorableTarget(node: EventTarget | null): boolean {
-  if (!(node instanceof Element)) {
-    return true;
-  }
-  if (node.closest(SKIP_CLOSEST)) {
-    return true;
-  }
-  return false;
-}
-
-/**
- * Walk from the event target up to host (exclusive of host) and pick the
- * best annotation target: prefer an ancestor with data-pier-comment-id,
- * else the deepest interactive / labeled element, else the deepest element.
- */
-export function resolveCanvasElementPick(
-  host: HTMLElement,
-  event: MouseEvent
-): CanvasElementPick | null {
-  if (isIgnorableTarget(event.target)) {
-    return null;
-  }
-  const path: HTMLElement[] = [];
-  let current: Element | null =
-    event.target instanceof Element ? event.target : null;
-  while (current && current !== host) {
-    if (current instanceof HTMLElement) {
-      path.push(current);
-    }
-    current = current.parentElement;
-  }
-  if (path.length === 0 || !host.contains(path[0] ?? null)) {
-    return null;
-  }
-
-  let withAnchor: HTMLElement | null = null;
-  for (const el of path) {
-    const id = el.getAttribute(CANVAS_COMMENT_ANCHOR_ATTR)?.trim();
-    if (id) {
-      withAnchor = el;
-      break;
-    }
-  }
-
-  const interactive = path.find(
-    (el) =>
-      el.matches(
-        "button,a,input,textarea,select,[role='button'],[role='link'],[contenteditable='true']"
-      ) || el.tabIndex >= 0
-  );
-
-  const target = withAnchor ?? interactive ?? path[0] ?? null;
-  if (!target) {
-    return null;
-  }
-
-  const anchorId =
-    target.getAttribute(CANVAS_COMMENT_ANCHOR_ATTR)?.trim() || undefined;
-  const aria = target.getAttribute("aria-label")?.trim();
-  const text = normalizeText(target.textContent, 80);
-  const tag = target.tagName.toLowerCase();
-  const label = normalizeText(aria, 80) || text || (anchorId ? anchorId : tag);
-  const excerpt =
-    normalizeText(aria ? `${aria}${text ? ` — ${text}` : ""}` : text, 500) ||
-    label;
-
+/** Measure element box relative to shell (for overlay highlight, no DOM style writes). */
+export function measureCanvasPickBox(
+  element: HTMLElement,
+  shell: HTMLElement
+): CanvasPickOverlayBox {
+  const shellRect = shell.getBoundingClientRect();
+  const rect = element.getBoundingClientRect();
+  const tag = element.tagName.toLowerCase();
+  const aria = element.getAttribute("aria-label")?.trim();
+  const text = normalizeCanvasPickText(element.textContent, 40);
+  const label = normalizeCanvasPickText(aria, 40) || text || tag;
   return {
-    excerpt: excerpt.length > 0 ? excerpt : "…",
+    height: Math.max(0, rect.height),
     label: label.length > 0 ? label : tag,
-    ...(anchorId ? { anchorId } : {}),
+    left: rect.left - shellRect.left + shell.scrollLeft,
+    top: rect.top - shellRect.top + shell.scrollTop,
+    width: Math.max(0, rect.width),
   };
 }
 
-/** Apply/remove a temporary outline for pick hover. */
-export function setCanvasPickHighlight(
-  host: HTMLElement,
-  element: HTMLElement | null
-): void {
-  const previous = host.querySelectorAll("[data-pier-canvas-pick-highlight]");
-  for (const node of previous) {
-    node.removeAttribute("data-pier-canvas-pick-highlight");
-    if (node instanceof HTMLElement) {
-      node.style.outline = "";
-      node.style.outlineOffset = "";
-    }
-  }
-  if (!(element && host.contains(element))) {
-    return;
-  }
-  element.setAttribute("data-pier-canvas-pick-highlight", "");
-  element.style.outline = "2px solid var(--action-accent, #3b82f6)";
-  element.style.outlineOffset = "2px";
-}
-
-export function clearCanvasPickHighlight(host: HTMLElement): void {
-  setCanvasPickHighlight(host, null);
+/**
+ * Pin anchor at the element's top-right corner (shell coords).
+ * Pair with CSS translate so the disc sits half outside the corner
+ * instead of eating the tab/button right padding.
+ */
+export function pinPointFromBox(box: {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+}): { left: number; top: number } {
+  return {
+    left: Math.max(0, box.left + box.width),
+    top: Math.max(0, box.top),
+  };
 }
 
 export function scrollCanvasPickIntoView(

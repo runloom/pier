@@ -1,13 +1,20 @@
 /**
- * Markdown preview comments: hook + drift strip + IR chrome props.
+ * Markdown preview comments: hook + drift strip + IR chrome props + navigator.
  */
+import { CommentNavigator } from "@pier/ui/comment-navigator.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { ReactNode } from "react";
+import { type ReactNode, type RefObject, useCallback, useMemo } from "react";
+import {
+  useCommentNavigatorController,
+  useCommentNavigatorLabels,
+} from "../comments/use-comment-navigator.ts";
+import { createFilesTranslate } from "../i18n.ts";
 import type { MarkdownIrDocument } from "./ir.ts";
 import type { MarkdownIrCommentsChrome } from "./ir-comments-types.ts";
 import { MarkdownCommentDriftStrip } from "./preview-comment-block.tsx";
 import {
   type MarkdownCommentLabels,
+  type MarkdownCommentNavTarget,
   useMarkdownPreviewComments,
 } from "./use-preview-comments.ts";
 
@@ -63,14 +70,34 @@ function toCommentLabels(
   };
 }
 
+function revealMarkdownCommentTarget(
+  target: MarkdownCommentNavTarget,
+  scrollRoot: HTMLElement | null
+): void {
+  if (!scrollRoot) {
+    return;
+  }
+  const selector =
+    target.kind === "located" && target.blockKey !== undefined
+      ? `[data-markdown-comment-block=${JSON.stringify(target.blockKey)}]`
+      : "[data-markdown-comment-drift]";
+  const el = scrollRoot.querySelector(selector);
+  if (!(el instanceof HTMLElement)) {
+    return;
+  }
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
 export function useMarkdownPreviewCommentsLayer(input: {
   readonly commentLabels: MarkdownPreviewCommentLabels;
   readonly commentsContext: RendererPluginContext | undefined;
   readonly document: MarkdownIrDocument | undefined;
   readonly relativeCommentPath: string | undefined;
+  readonly scrollRootRef?: RefObject<HTMLElement | null> | undefined;
   readonly worktreeKey: string | undefined;
 }): {
   readonly commentsChrome: MarkdownIrCommentsChrome | undefined;
+  readonly commentNavigator: ReactNode;
   readonly driftStrip: ReactNode;
 } {
   // Require a parsed document so comment chrome never mounts on an empty shell.
@@ -89,11 +116,51 @@ export function useMarkdownPreviewCommentsLayer(input: {
     worktreeKey: input.worktreeKey,
   });
 
+  // Re-resolve on languageChanged via useCommentNavigatorLabels.
+  const filesT = useMemo(
+    () => createFilesTranslate(input.commentsContext),
+    [input.commentsContext]
+  );
+  const navLabels = useCommentNavigatorLabels(filesT);
+
+  const onReveal = useCallback(
+    (target: MarkdownCommentNavTarget) => {
+      revealMarkdownCommentTarget(target, input.scrollRootRef?.current ?? null);
+    },
+    [input.scrollRootRef]
+  );
+
+  const navigator = useCommentNavigatorController({
+    context: input.commentsContext,
+    labels: navLabels,
+    onReveal,
+    targets: comments.navTargets,
+    worktreeKey: input.worktreeKey,
+  });
+
   if (!enabled) {
-    return { commentsChrome: undefined, driftStrip: null };
+    return {
+      commentNavigator: null,
+      commentsChrome: undefined,
+      driftStrip: null,
+    };
   }
 
   return {
+    commentNavigator: navigator.visible ? (
+      <CommentNavigator
+        activeIndex={navigator.activeIndex}
+        clearLabel={navigator.clearLabel}
+        nextLabel={navigator.nextLabel}
+        onClear={navigator.onClear}
+        onNext={navigator.onNext}
+        onPrevious={navigator.onPrevious}
+        positionLabel={navigator.positionLabel}
+        previousLabel={navigator.previousLabel}
+        toolbarLabel={navigator.toolbarLabel}
+        total={navigator.total}
+      />
+    ) : null,
     commentsChrome: {
       addCommentLabel: input.commentLabels.addComment,
       draftBlockKey: comments.draftBlockKey,

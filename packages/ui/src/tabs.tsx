@@ -26,12 +26,16 @@ function Tabs({
 const tabsListVariants = cva(
   cn(
     CONTROL_HEIGHT_CLASS,
-    "group/tabs-list inline-flex w-fit items-center justify-center rounded-2xl p-[3px] text-muted-foreground data-[variant=line]:rounded-none group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col group-data-vertical/tabs:p-1"
+    "group/tabs-list inline-flex w-fit items-center justify-center rounded-2xl p-[3px] text-muted-foreground data-[variant=line]:rounded-none group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col group-data-vertical/tabs:overflow-y-auto group-data-vertical/tabs:overflow-x-hidden group-data-vertical/tabs:p-1"
   ),
   {
     variants: {
       variant: {
-        default: "bg-muted",
+        // Pin overflow-y on the default (pill) track. CSS overflow-axis pairing
+        // turns a lone overflow-x-auto into overflow-y:auto; without this, a 1px
+        // taller trigger (or overlay pin) shows a spurious vertical scrollbar.
+        // Line variant keeps y visible so the active underline (bottom-[-5px]) is not clipped.
+        default: "overflow-y-hidden bg-muted",
         line: "gap-4 bg-transparent",
       },
     },

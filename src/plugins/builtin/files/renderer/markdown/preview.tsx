@@ -1,10 +1,7 @@
 import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   type CSSProperties,
-  type MouseEvent as ReactMouseEvent,
-  type RefObject,
   useEffect,
   useMemo,
   useRef,
@@ -14,18 +11,8 @@ import {
   FILES_IN_FILE_SEARCH_BAR_CLASSNAME,
   FilesSearchBar,
 } from "../search/bar.tsx";
-import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
-import {
-  captureMarkdownPreviewAnchor,
-  type MarkdownCrossModeAnchor,
-} from "./cross-mode-anchor.ts";
-import {
-  type MarkdownDiskSource,
-  type MarkdownFileResources,
-  type MarkdownInternalTarget,
-  MarkdownIrRenderer,
-  type MarkdownRendererLabels,
-} from "./ir-renderer.tsx";
+import { captureMarkdownPreviewAnchor } from "./cross-mode-anchor.ts";
+import { MarkdownIrRenderer } from "./ir-renderer.tsx";
 import {
   MarkdownPreviewArticleLayout,
   MarkdownPreviewOverlayRail,
@@ -37,7 +24,6 @@ import {
 } from "./preview-code-theme.ts";
 import {
   DEFAULT_MARKDOWN_COMMENT_LABELS,
-  type MarkdownPreviewCommentLabels,
   useMarkdownPreviewCommentsLayer,
 } from "./preview-comments-layer.tsx";
 import {
@@ -45,8 +31,6 @@ import {
   DEFAULT_TOC_LABELS,
   DEFAULT_ZOOM_LABELS,
   EMPTY_HEADING_IDS,
-  type MarkdownPreviewTocLabels,
-  type MarkdownPreviewZoomLabels,
 } from "./preview-defaults.ts";
 import { MarkdownPreviewFontScaleControl } from "./preview-font-scale.tsx";
 import { useMarkdownPreviewPrefsStore } from "./preview-preferences.ts";
@@ -61,76 +45,23 @@ import {
   MARKDOWN_TOC_CONTENT_INSET_PX,
   MARKDOWN_TOC_INSET_PX,
 } from "./preview-toc-layout.ts";
+import type {
+  MarkdownPreviewProps,
+  MarkdownPreviewState,
+} from "./preview-types.ts";
 import { computeMarkdownReadingFontFamily } from "./reading-font.ts";
-import {
-  type MarkdownPagination,
-  type MarkdownRuntime,
-  markdownRuntime,
-} from "./runtime.ts";
+import { markdownRuntime } from "./runtime.ts";
 import {
   DEFAULT_MARKDOWN_PREVIEW_SEARCH_LABELS,
-  type MarkdownPreviewSearchLabels,
   useMarkdownPreviewSearch,
 } from "./use-preview-search.ts";
 import { useMarkdownPreviewZoom } from "./use-preview-zoom.ts";
 import "../markdown/prose.css";
 
-export type { MarkdownPreviewCommentLabels } from "./preview-comments-layer.tsx";
-
-interface MarkdownPreviewProps {
-  appearance?: RendererPluginContext["appearance"] | undefined;
-  /** Capture callback for preview → source switch; cleared when not ready. */
-  captureAnchorRef?:
-    | RefObject<(() => MarkdownCrossModeAnchor | null) | null>
-    | undefined;
-  charts?: RendererPluginContext["charts"] | undefined;
-  codeHighlighter?: MarkdownCodeHighlighter | undefined;
-  codeTheme?: string | undefined;
-  commentLabels?: MarkdownPreviewCommentLabels | undefined;
-  commentsContext?: RendererPluginContext | undefined;
-  /** One-shot content restore after source → preview mode switch. */
-  contentAnchor?: MarkdownCrossModeAnchor | undefined;
-  contentAnchorRequestId?: string | number | undefined;
-  copyCode?: ((code: string) => Promise<void>) | undefined;
-  errorLabel?: string | undefined;
-  fileResources?: MarkdownFileResources | undefined;
-  initialAnchor?: string | undefined;
-  initialAnchorRequestId?: string | undefined;
-  labels?: MarkdownRendererLabels | undefined;
-  onContextMenu?:
-    | ((event: ReactMouseEvent<HTMLDivElement>) => void)
-    | undefined;
-  onJumpToSource?: ((offset: number) => void) | undefined;
-  openExternal: (url: string) => void;
-  openInternal?: ((target: MarkdownInternalTarget) => void) | undefined;
-  /** Dockview panel instance id — used for select-all provider scope. */
-  panelId?: string | undefined;
-  registerSelectionSelectAllProvider?:
-    | RendererPluginContext["contextMenu"]["registerSelectionSelectAllProvider"]
-    | undefined;
-  relativeCommentPath?: string | undefined;
-  runtime?: MarkdownRuntime | undefined;
-  searchLabels?: MarkdownPreviewSearchLabels | undefined;
-  searchRequest?: number | undefined;
-  sessionId: string;
-  source?: MarkdownDiskSource | undefined;
-  tocLabels?: MarkdownPreviewTocLabels | undefined;
-  value: string;
-  worktreeKey?: string | undefined;
-  zoomLabels?: MarkdownPreviewZoomLabels | undefined;
-}
-
-type PreviewState =
-  | { status: "loading" }
-  | {
-      document: import("./ir.ts").MarkdownIrDocument;
-      pagination: MarkdownPagination;
-      status: "ready";
-    }
-  | { status: "error" };
-
 export { safeMarkdownUrl } from "./ir-renderer.tsx";
+export type { MarkdownPreviewCommentLabels } from "./preview-comments-layer.tsx";
 export { FILES_MARKDOWN_PREVIEW_SURFACE } from "./preview-preferences.ts";
+export type { MarkdownPreviewProps } from "./preview-types.ts";
 
 export function MarkdownPreview({
   appearance,
@@ -165,7 +96,9 @@ export function MarkdownPreview({
   worktreeKey,
   zoomLabels = DEFAULT_ZOOM_LABELS,
 }: MarkdownPreviewProps) {
-  const [state, setState] = useState<PreviewState>({ status: "loading" });
+  const [state, setState] = useState<MarkdownPreviewState>({
+    status: "loading",
+  });
   const [appearanceCodeTheme, setAppearanceCodeTheme] = useState(
     () => appearance?.current().codeTheme ?? FALLBACK_DARK_CODE_THEME
   );
@@ -245,13 +178,15 @@ export function MarkdownPreview({
     handlePreviewWheel,
   } = useMarkdownPreviewZoom(fontScale);
 
-  const { commentsChrome, driftStrip } = useMarkdownPreviewCommentsLayer({
-    commentLabels,
-    commentsContext,
-    document: state.status === "ready" ? state.document : undefined,
-    relativeCommentPath,
-    worktreeKey,
-  });
+  const { commentNavigator, commentsChrome, driftStrip } =
+    useMarkdownPreviewCommentsLayer({
+      commentLabels,
+      commentsContext,
+      document: state.status === "ready" ? state.document : undefined,
+      relativeCommentPath,
+      scrollRootRef,
+      worktreeKey,
+    });
 
   useEffect(() => {
     let active = true;
@@ -494,6 +429,7 @@ export function MarkdownPreview({
           labels={zoomLabels}
           onChange={applyFontScale}
         />
+        {commentNavigator}
       </div>
     </div>
   );

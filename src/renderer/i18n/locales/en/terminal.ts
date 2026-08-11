@@ -183,6 +183,9 @@ export const terminal = {
         },
         itemTitle: "{{path}}:{{line}}",
         itemTitlePathOnly: "{{path}}",
+        sourceCanvas: "Canvas",
+        sourceGit: "diff",
+        sourceMarkdown: "Document",
         jumpFailed: "Couldn’t open changes",
         jumpFailedBody:
           "Open the Changes view for this project, then try jumping again.",

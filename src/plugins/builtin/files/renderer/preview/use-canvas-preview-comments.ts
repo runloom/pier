@@ -11,6 +11,7 @@ import type {
 } from "@pier/ui/diff-view/review/inline-comment-types.ts";
 import {
   clearCanvasCommentSurface,
+  normalizeCanvasCommentSurfacePath,
   setCanvasCommentSurface,
 } from "@plugins/api/canvas-comment-surfaces.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
@@ -23,6 +24,15 @@ import type { CommentThread } from "@shared/contracts/comments/base.ts";
 import type { CommentProjectSnapshot } from "@shared/contracts/comments/document.ts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CanvasElementPick } from "./canvas-element-pick.ts";
+import { pinPointFromBox } from "./canvas-element-pick.ts";
+import {
+  type CanvasSoftMarker,
+  getCanvasSoftMarkers,
+  pruneCanvasSoftMarkers,
+  upsertCanvasSoftMarker,
+} from "./canvas-soft-markers.ts";
+
+export type { CanvasSoftMarker } from "./canvas-soft-markers.ts";
 
 export type CanvasCommentLabels = PierInlineReviewLabels & {
   readonly addComment: string;
@@ -30,6 +40,7 @@ export type CanvasCommentLabels = PierInlineReviewLabels & {
   readonly annotateActive: string;
   readonly createFailed: string;
   readonly deleteFailed: string;
+  readonly driftTitle: string;
   readonly empty: string;
   readonly fileLevel: string;
   readonly nodeLevel: string;
@@ -41,7 +52,14 @@ export type CanvasCommentThreadView = PierInlineReviewThread & {
   readonly label?: string;
 };
 
-export const CANVAS_FILE_DRAFT_ID = "canvas-file-draft";
+/** Draft / soft-pin geometry in canvas shell coordinates. */
+export interface CanvasDraftPlacement {
+  readonly height: number;
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+}
+
 export const CANVAS_PICK_DRAFT_ID = "canvas-pick-draft";
 
 function liveComment(thread: CommentThread) {
@@ -79,23 +97,46 @@ export function useCanvasPreviewComments(input: {
 }): {
   readonly draftOpen: boolean;
   readonly draftPick: CanvasElementPick | null;
+  readonly draftPlacement: CanvasDraftPlacement | null;
   readonly driftNodeThreads: readonly CanvasCommentThreadView[];
   readonly fileThreads: readonly CanvasCommentThreadView[];
   readonly handlers: PierInlineReviewHandlers;
   readonly locatedByAnchorId: ReadonlyMap<string, CanvasCommentThreadView[]>;
-  readonly openFileDraft: () => void;
-  readonly openPickDraft: (pick: CanvasElementPick) => void;
+  readonly openPickDraft: (
+    pick: CanvasElementPick,
+    placement?: CanvasDraftPlacement
+  ) => void;
   readonly pickMode: boolean;
-  /** Node picks without a declared anchorId (list only, no badge). */
+  /** Node picks without a declared anchorId (list + soft markers). */
   readonly pickedNodeThreads: readonly CanvasCommentThreadView[];
   readonly setPickMode: (on: boolean) => void;
+  /** Session pins for no-id comments (measured at submit). */
+  readonly softMarkers: readonly CanvasSoftMarker[];
   readonly threadsHydrated: boolean;
 } {
   const { anchorIds, context, labels, path, worktreeKey } = input;
   const [snapshot, setSnapshot] = useState<CommentProjectSnapshot | null>(null);
   const [draftOpen, setDraftOpen] = useState(false);
   const [draftPick, setDraftPick] = useState<CanvasElementPick | null>(null);
+  const [draftPlacement, setDraftPlacement] =
+    useState<CanvasDraftPlacement | null>(null);
+  const surfacePath = useMemo(
+    () => (path ? normalizeCanvasCommentSurfacePath(path) : ""),
+    [path]
+  );
+  const [softMarkers, setSoftMarkers] = useState<readonly CanvasSoftMarker[]>(
+    () => (surfacePath ? getCanvasSoftMarkers(surfacePath) : [])
+  );
   const [pickMode, setPickMode] = useState(false);
+
+  // Rehydrate path-keyed soft pins when switching canvas files.
+  useEffect(() => {
+    if (surfacePath.length === 0) {
+      setSoftMarkers([]);
+      return;
+    }
+    setSoftMarkers(getCanvasSoftMarkers(surfacePath));
+  }, [surfacePath]);
 
   useEffect(() => {
     if (!(context && worktreeKey)) {
@@ -135,20 +176,20 @@ export function useCanvasPreviewComments(input: {
   }, [context, worktreeKey]);
 
   useEffect(() => {
-    if (!path) {
+    if (surfacePath.length === 0) {
       return;
     }
     setCanvasCommentSurface(
-      path,
+      surfacePath,
       buildCanvasCommentSurface({
         anchorIds,
         filePresent: true,
       })
     );
     return () => {
-      clearCanvasCommentSurface(path);
+      clearCanvasCommentSurface(surfacePath);
     };
-  }, [anchorIds, path]);
+  }, [anchorIds, surfacePath]);
 
   const {
     fileThreads,
@@ -160,7 +201,7 @@ export function useCanvasPreviewComments(input: {
     const byAnchor = new Map<string, CanvasCommentThreadView[]>();
     const drift: CanvasCommentThreadView[] = [];
     const picked: CanvasCommentThreadView[] = [];
-    if (!(snapshot && path)) {
+    if (!(snapshot && surfacePath.length > 0)) {
       return {
         fileThreads: file,
         locatedByAnchorId: byAnchor,
@@ -169,7 +210,10 @@ export function useCanvasPreviewComments(input: {
       };
     }
     for (const thread of snapshot.threads) {
-      if (thread.target.kind !== "canvas" || thread.target.path !== path) {
+      if (
+        thread.target.kind !== "canvas" ||
+        normalizeCanvasCommentSurfacePath(thread.target.path) !== surfacePath
+      ) {
         continue;
       }
       const inline = toInlineThread(thread, labels.authorYou);
@@ -208,7 +252,7 @@ export function useCanvasPreviewComments(input: {
       driftNodeThreads: drift,
       pickedNodeThreads: picked,
     };
-  }, [anchorIds, labels.authorYou, path, snapshot]);
+  }, [anchorIds, labels.authorYou, snapshot, surfacePath]);
 
   const reportFailure = useCallback(
     (title: string, result: { message?: string | null }) => {
@@ -228,15 +272,32 @@ export function useCanvasPreviewComments(input: {
   const closeDraft = useCallback(() => {
     setDraftOpen(false);
     setDraftPick(null);
+    setDraftPlacement(null);
   }, []);
+
+  // Drop soft pins when their threads are gone (deleted / path changed).
+  useEffect(() => {
+    if (!(snapshot && surfacePath.length > 0)) {
+      return;
+    }
+    const liveIds = new Set(
+      snapshot.threads
+        .filter(
+          (thread) =>
+            thread.target.kind === "canvas" &&
+            normalizeCanvasCommentSurfacePath(thread.target.path) ===
+              surfacePath &&
+            liveComment(thread) !== undefined
+        )
+        .map((thread) => thread.id)
+    );
+    setSoftMarkers(pruneCanvasSoftMarkers(surfacePath, liveIds));
+  }, [snapshot, surfacePath]);
 
   const handlers: PierInlineReviewHandlers = useMemo(
     () => ({
       onCancelDraft: (draftId) => {
-        if (
-          draftId === CANVAS_FILE_DRAFT_ID ||
-          draftId === CANVAS_PICK_DRAFT_ID
-        ) {
+        if (draftId === CANVAS_PICK_DRAFT_ID) {
           closeDraft();
         }
       },
@@ -273,22 +334,23 @@ export function useCanvasPreviewComments(input: {
         if (
           !(context && worktreeKey && path) ||
           body.trim().length === 0 ||
-          (draftId !== CANVAS_FILE_DRAFT_ID && draftId !== CANVAS_PICK_DRAFT_ID)
+          draftId !== CANVAS_PICK_DRAFT_ID
         ) {
           return false;
         }
         const trimmed = body.trim();
-        const pick = draftId === CANVAS_PICK_DRAFT_ID ? draftPick : null;
+        const pick = draftPick;
         const excerpt =
           pick?.excerpt ??
           (trimmed.length <= 200 ? trimmed : `${trimmed.slice(0, 199)}…`);
+        const canvasPath = normalizeCanvasCommentSurfacePath(path);
         const result = await context.comments.createThread({
           author: { kind: "user" },
           body: trimmed,
           target: {
             excerpt,
             kind: "canvas",
-            path,
+            path: canvasPath,
             ...(pick?.anchorId === undefined
               ? {}
               : { anchorId: pick.anchorId }),
@@ -300,11 +362,26 @@ export function useCanvasPreviewComments(input: {
           reportFailure(labels.createFailed, result);
           return false;
         }
-        closeDraft();
-        // Keep pick mode on after node annotate so users can mark several elements.
-        if (draftId === CANVAS_FILE_DRAFT_ID) {
-          setPickMode(false);
+        // Figma/BugHerd-like: leave a pin at the selection after submit.
+        // Declared anchorId uses live DOM; only no-id picks get session soft pins.
+        if (
+          draftId === CANVAS_PICK_DRAFT_ID &&
+          draftPlacement &&
+          path &&
+          result.kind === "ok" &&
+          pick?.anchorId === undefined
+        ) {
+          // Same corner math as live pins (top-right of measured box).
+          const point = pinPointFromBox(draftPlacement);
+          const next = upsertCanvasSoftMarker(canvasPath, {
+            label: pick?.label ?? labels.title,
+            left: point.left,
+            threadId: result.threadId,
+            top: point.top,
+          });
+          setSoftMarkers(next);
         }
+        closeDraft();
         return true;
       },
     }),
@@ -312,8 +389,10 @@ export function useCanvasPreviewComments(input: {
       closeDraft,
       context,
       draftPick,
+      draftPlacement,
       labels.createFailed,
       labels.deleteFailed,
+      labels.title,
       labels.updateFailed,
       path,
       reportFailure,
@@ -321,21 +400,13 @@ export function useCanvasPreviewComments(input: {
     ]
   );
 
-  const openFileDraft = useCallback(() => {
-    if (!(path && worktreeKey)) {
-      return;
-    }
-    setDraftPick(null);
-    setDraftOpen(true);
-    setPickMode(false);
-  }, [path, worktreeKey]);
-
   const openPickDraft = useCallback(
-    (pick: CanvasElementPick) => {
+    (pick: CanvasElementPick, placement?: CanvasDraftPlacement) => {
       if (!(path && worktreeKey)) {
         return;
       }
       setDraftPick(pick);
+      setDraftPlacement(placement ?? null);
       setDraftOpen(true);
       // Keep pickMode so cancel/submit returns to annotate without re-toggling.
     },
@@ -345,15 +416,16 @@ export function useCanvasPreviewComments(input: {
   return {
     draftOpen,
     draftPick,
+    draftPlacement,
     driftNodeThreads,
     fileThreads,
     handlers,
     locatedByAnchorId,
-    openFileDraft,
     openPickDraft,
     pickMode,
     pickedNodeThreads,
     setPickMode,
+    softMarkers,
     threadsHydrated: snapshot !== null,
   };
 }

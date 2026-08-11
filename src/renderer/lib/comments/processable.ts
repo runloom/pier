@@ -10,11 +10,13 @@ import { projectComment } from "./project-thread.ts";
  * - git-diff：未提交变更面 + 存活正文 + 路径仍在 livePaths（与 uncommitted Changes 一致）
  * - markdown / canvas：存活正文即可（不依赖 git status）
  *
- * status：
- * - located / stale：有表面证据（如 gitDiffPatches）时由 projectComment 决定
- * - unverified：无证据，禁止假装 located（设计：不向 agent 输出假精确）
+ * status（定位可信度，不是「评论是否有效」）：
+ * - located：当前有 surface/patch 且投影对得上（可声称精确定位）
+ * - stale：有 surface/patch，但对不齐（漂移）
+ * - soft：锚点本身是软的（canvas 无 anchorId，仅 label/excerpt）——与预览是否打开无关
+ * - unknown：需要 live 核实却做不到（有 anchorId 但无 surface / git 无 patch）
  */
-export type ProcessableCommentStatus = "located" | "stale" | "unverified";
+export type ProcessableCommentStatus = "located" | "stale" | "soft" | "unknown";
 
 interface ProcessableBase {
   readonly body: string;
@@ -51,12 +53,12 @@ export type ProcessableCommentItem =
 export interface ListProcessableCommentsOptions {
   /**
    * Canvas 投影表面，key = 相对 worktree 的 path。
-   * 有则 located/stale；filePresent=false 则不计入；无 surface 则 unverified。
+   * 有则 located/stale/soft；filePresent=false 则不计入；无 surface 则 unknown。
    */
   readonly canvasSurfaces?: ReadonlyMap<string, CanvasCommentSurface>;
   /**
    * 当前 review section patch，key = `${group}\0${path}`。
-   * 有则投影 git status；无则 git 标 unverified。
+   * 有则投影 git status；无则 git 标 unknown。
    */
   readonly gitDiffPatches?: ReadonlyMap<string, string>;
   /**
@@ -67,7 +69,7 @@ export interface ListProcessableCommentsOptions {
   readonly livePaths?: ReadonlySet<string>;
   /**
    * Markdown 投影表面，key = 相对 worktree 的 path。
-   * 有则 located/stale；文件 missing 则不计入；无 surface 则 unverified。
+   * 有则 located/stale；文件 missing 则不计入；无 surface 则 unknown。
    */
   readonly markdownSurfaces?: ReadonlyMap<string, MarkdownCommentSurface>;
 }
@@ -133,7 +135,7 @@ function gitDiffStatus(
     gitPatchKey(thread.target.group, thread.target.path)
   );
   if (patch === undefined) {
-    return "unverified";
+    return "unknown";
   }
   const projection = projectComment(thread, { kind: "git-diff", patch });
   if (projection.status === "located") {
@@ -145,7 +147,7 @@ function gitDiffStatus(
 
 /**
  * 有 surface 时返回 status；文件 missing 返回 null（调用方跳过）；
- * 无 surface 返回 unverified。
+ * 无 surface 返回 unknown（此刻无法核实，不是锚点差）。
  */
 function markdownProcessableStatus(
   thread: CommentThread & {
@@ -155,7 +157,7 @@ function markdownProcessableStatus(
 ): ProcessableCommentStatus | null {
   const surface = surfaces?.get(thread.target.path);
   if (surface === undefined) {
-    return "unverified";
+    return "unknown";
   }
   const projection = projectComment(thread, surface);
   if (projection.status === "missing") {
@@ -167,9 +169,55 @@ function markdownProcessableStatus(
   return "stale";
 }
 
+function normalizeSurfacePath(path: string): string {
+  return path.replaceAll("\\", "/").replace(/^\.\//u, "");
+}
+
+function lookupCanvasSurface(
+  surfaces: ReadonlyMap<string, CanvasCommentSurface> | undefined,
+  path: string
+): CanvasCommentSurface | undefined {
+  if (surfaces === undefined) {
+    return;
+  }
+  const direct = surfaces.get(path);
+  if (direct) {
+    return direct;
+  }
+  const normalized = normalizeSurfacePath(path);
+  if (normalized !== path) {
+    const byNormalized = surfaces.get(normalized);
+    if (byNormalized) {
+      return byNormalized;
+    }
+  }
+  for (const [key, surface] of surfaces) {
+    if (normalizeSurfacePath(key) === normalized) {
+      return surface;
+    }
+  }
+  return;
+}
+
+function canvasHasSoftAnchor(
+  target: Extract<CommentThread["target"], { kind: "canvas" }>
+): boolean {
+  if (target.anchorId !== undefined) {
+    return false;
+  }
+  const hasLabel = target.label !== undefined && target.label.trim().length > 0;
+  const hasExcerpt =
+    target.excerpt !== undefined && target.excerpt.trim().length > 0;
+  return hasLabel || hasExcerpt;
+}
+
 /**
- * 有 surface 时返回 status；文件 missing 返回 null；
- * 无 surface 返回 unverified。
+ * Canvas status:
+ * - Soft design-mode pins (no anchorId, has label/excerpt) are always `soft`
+ *   whether or not the preview is open — soft is an anchor-kind property.
+ * - Declared anchorId needs live surface: located / stale / unknown.
+ * - File-level (no id, no soft fields): located when surface says file present.
+ * - filePresent=false → skip (null).
  */
 function canvasProcessableStatus(
   thread: CommentThread & {
@@ -177,15 +225,30 @@ function canvasProcessableStatus(
   },
   surfaces: ReadonlyMap<string, CanvasCommentSurface> | undefined
 ): ProcessableCommentStatus | null {
-  const surface = surfaces?.get(thread.target.path);
-  if (surface === undefined) {
-    return "unverified";
+  const { target } = thread;
+  const softAnchor = canvasHasSoftAnchor(target);
+  const surface = lookupCanvasSurface(surfaces, target.path);
+
+  // Soft pin does not require live surface to classify as soft.
+  if (softAnchor && surface === undefined) {
+    return "soft";
   }
+
+  if (surface === undefined) {
+    return "unknown";
+  }
+
   const projection = projectComment(thread, surface);
   if (projection.status === "missing") {
     return null;
   }
   if (projection.status === "located") {
+    if (target.anchorId !== undefined) {
+      return "located";
+    }
+    if (softAnchor) {
+      return "soft";
+    }
     return "located";
   }
   return "stale";
@@ -334,103 +397,9 @@ export function processableCommentCount(
   return listProcessableComments(threads, options).length;
 }
 
-function statusTag(status: ProcessableCommentStatus): string {
-  if (status === "stale") {
-    return "stale";
-  }
-  if (status === "unverified") {
-    return "unverified";
-  }
-  return "located";
-}
-
-function formatGitLine(
-  item: Extract<ProcessableCommentItem, { kind: "git-diff" }>
-): string {
-  return `- [${statusTag(item.status)}] \`${item.path}:${item.line}\`: ${item.body}`;
-}
-
-function formatMarkdownLine(
-  item: Extract<ProcessableCommentItem, { kind: "markdown" }>
-): string {
-  const anchor =
-    item.headingId === undefined
-      ? `${item.path}:L${item.startLine}`
-      : `${item.path}#${item.headingId}`;
-  const excerpt =
-    item.status === "stale" || item.status === "unverified"
-      ? ` excerpt «${item.excerpt}»`
-      : "";
-  return `- [${statusTag(item.status)}] \`${anchor}\`${excerpt}: ${item.body}`;
-}
-
-function formatCanvasLine(
-  item: Extract<ProcessableCommentItem, { kind: "canvas" }>
-): string {
-  let node = "";
-  if (item.anchorId !== undefined) {
-    node = ` [${item.anchorId}]`;
-  } else if (item.label !== undefined) {
-    node = ` (${item.label})`;
-  }
-  const excerpt =
-    item.excerpt !== undefined && item.excerpt.length > 0
-      ? ` excerpt «${item.excerpt}»`
-      : "";
-  return `- [${statusTag(item.status)}] \`${item.path}\`${node}${excerpt}: ${item.body}`;
-}
-
-/** 写入智能体输入框的评论块（纯文本，便于 agent 阅读）。 */
-export function formatCommentsForComposer(
-  items: readonly ProcessableCommentItem[]
-): string {
-  if (items.length === 0) {
-    return "";
-  }
-  const review = items.filter((item) => item.kind === "git-diff");
-  const document = items.filter((item) => item.kind === "markdown");
-  const canvas = items.filter((item) => item.kind === "canvas");
-  const sections: string[] = ["Please address these comments:"];
-  if (review.length > 0) {
-    sections.push("", "## Review", ...review.map(formatGitLine));
-  }
-  if (document.length > 0) {
-    sections.push("", "## Document", ...document.map(formatMarkdownLine));
-  }
-  if (canvas.length > 0) {
-    sections.push("", "## Canvas", ...canvas.map(formatCanvasLine));
-  }
-  return sections.join("\n");
-}
-
-export function mergeComposerText(existing: string, addition: string): string {
-  const add = addition.trim();
-  if (add.length === 0) {
-    return existing;
-  }
-  const base = existing.replace(/\s+$/u, "");
-  if (base.length === 0) {
-    return add;
-  }
-  return `${base}\n\n${add}`;
-}
-
-/** 列表行标题锚点文案（i18n 外的 path 片段）。 */
-export function processableItemAnchorLabel(item: ProcessableCommentItem): {
-  path: string;
-  line?: number;
-} {
-  if (item.kind === "git-diff") {
-    return { path: item.path, line: item.line };
-  }
-  if (item.kind === "markdown") {
-    if (item.headingId !== undefined) {
-      return { path: `${item.path}#${item.headingId}` };
-    }
-    return { path: item.path, line: item.startLine };
-  }
-  if (item.anchorId !== undefined) {
-    return { path: `${item.path} [${item.anchorId}]` };
-  }
-  return { path: item.path };
-}
+export {
+  formatCommentsForComposer,
+  mergeComposerText,
+  processableItemAnchorLabel,
+  processableItemLocationText,
+} from "./processable-format.ts";

@@ -1,3 +1,4 @@
+import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
@@ -5,16 +6,12 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemTitle,
-} from "@pier/ui/item.tsx";
+import { Item, ItemActions, ItemTitle } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import {
   getCanvasCommentSurfaces,
+  getCanvasCommentSurfacesRevision,
   onCanvasCommentSurfacesChanged,
 } from "@plugins/api/canvas-comment-surfaces.ts";
 import type { CommentFailureReason } from "@shared/contracts/comments/primitives.ts";
@@ -47,7 +44,7 @@ import {
   listProcessableComments,
   type ProcessableCommentItem,
   pathInLiveSet,
-  processableItemAnchorLabel,
+  processableItemLocationText,
 } from "./processable.ts";
 import { revealComment } from "./reveal.ts";
 
@@ -55,6 +52,21 @@ function commentFailureTitleKey(
   reason: CommentFailureReason
 ): `terminal.statusBar.item.comments.failure.${CommentFailureReason}` {
   return `terminal.statusBar.item.comments.failure.${reason}`;
+}
+
+function processableSourceLabelKey(
+  kind: ProcessableCommentItem["kind"]
+):
+  | "terminal.statusBar.item.comments.sourceGit"
+  | "terminal.statusBar.item.comments.sourceMarkdown"
+  | "terminal.statusBar.item.comments.sourceCanvas" {
+  if (kind === "markdown") {
+    return "terminal.statusBar.item.comments.sourceMarkdown";
+  }
+  if (kind === "canvas") {
+    return "terminal.statusBar.item.comments.sourceCanvas";
+  }
+  return "terminal.statusBar.item.comments.sourceGit";
 }
 
 export type CommentsActionDialogResult =
@@ -91,20 +103,17 @@ function CommentsActionDialogBody({
   // livePaths Set：git 路径过滤 + md/canvas。
   const canvasSurfacesRevision = useSyncExternalStore(
     onCanvasCommentSurfacesChanged,
-    () => getCanvasCommentSurfaces().size,
+    getCanvasCommentSurfacesRevision,
     () => 0
   );
-  // canvasSurfacesRevision is the bus epoch — re-read surfaces when it bumps.
+  // Always pass the current surface map (may be empty). Empty ≠ omit:
+  // omit used to mean "no options" but we still want unknown vs soft/located.
   // biome-ignore lint/correctness/useExhaustiveDependencies: revision drives re-read of module map
   const items = useMemo(() => {
     const canvasSurfaces = getCanvasCommentSurfaces();
-    const hasCanvas = canvasSurfaces.size > 0;
-    if (livePaths === null && !hasCanvas) {
-      return listProcessableComments(project?.threads);
-    }
     return listProcessableComments(project?.threads, {
+      canvasSurfaces,
       ...(livePaths === null ? {} : { livePaths }),
-      ...(hasCanvas ? { canvasSurfaces } : {}),
     });
   }, [canvasSurfacesRevision, livePaths, project?.threads]);
 
@@ -259,7 +268,16 @@ function CommentsActionDialogBody({
     }
     setBusy(true);
     try {
-      const snapshot = items;
+      // Re-project with live surfaces at handoff — do not use a stale list that
+      // was built before the canvas preview registered its surface.
+      const snapshot = listProcessableComments(project?.threads, {
+        canvasSurfaces: getCanvasCommentSurfaces(),
+        ...(livePaths === null ? {} : { livePaths }),
+      });
+      if (snapshot.length === 0) {
+        setBusy(false);
+        return;
+      }
       const payload = formatCommentsForComposer(snapshot);
       const inserted = await insertReviewCommentsIntoTerminalComposer(panelId, {
         count: snapshot.length,
@@ -370,59 +388,69 @@ function CommentsActionDialogBody({
 
   // Host content-dialog body owns scroll (overlay bar + equal px-6). Nested
   // ScrollArea would reserve a classic gutter and make left/right insets look uneven.
+  //
+  // Scheme 2: body primary; meta row is full card width so path sticks left
+  // and Badge sticks right (same right edge as the delete control).
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="flex flex-col gap-1.5">
       {items.map((item) => {
-        const anchor = processableItemAnchorLabel(item);
-        const title =
-          anchor.line === undefined
-            ? t("terminal.statusBar.item.comments.itemTitlePathOnly", {
-                path: anchor.path,
-              })
-            : t("terminal.statusBar.item.comments.itemTitle", {
-                line: anchor.line,
-                path: anchor.path,
-              });
+        const sourceLabel = t(processableSourceLabelKey(item.kind));
+        const location = processableItemLocationText(item);
+        const jump = () => {
+          jumpTo(item).catch(() => undefined);
+        };
         return (
           <li key={item.commentId}>
             <Item
-              className="w-full items-start justify-between gap-2"
+              className={cn(
+                // Item defaults to flex-wrap + items-center; force a full-width column.
+                "w-full flex-col flex-nowrap items-stretch gap-1.5",
+                "hover:bg-muted/40"
+              )}
               size="sm"
               variant="outline"
             >
+              <div className="flex w-full min-w-0 items-start justify-between gap-2">
+                <button
+                  className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  disabled={busy}
+                  onClick={jump}
+                  type="button"
+                >
+                  {/* Override ItemTitle defaults (line-clamp-1 / w-fit / font-medium). */}
+                  <ItemTitle className="line-clamp-none block w-full max-w-full whitespace-pre-wrap break-words text-left font-normal text-foreground text-sm leading-snug">
+                    {item.body}
+                  </ItemTitle>
+                </button>
+                <ItemActions className="-mt-0.5 shrink-0">
+                  <Button
+                    aria-label={t("terminal.statusBar.item.comments.deleteOne")}
+                    disabled={busy}
+                    onClick={() => {
+                      onDeleteOne(item).catch(() => undefined);
+                    }}
+                    size="icon-xs"
+                    title={t("terminal.statusBar.item.comments.deleteOne")}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2 aria-hidden data-icon />
+                  </Button>
+                </ItemActions>
+              </div>
               <button
-                className="flex min-w-0 flex-1 items-start text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="flex w-full min-w-0 items-center justify-between gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 disabled={busy}
-                onClick={() => {
-                  jumpTo(item).catch(() => undefined);
-                }}
+                onClick={jump}
                 type="button"
               >
-                <ItemContent className="min-w-0 items-start text-left">
-                  <ItemTitle className="line-clamp-none w-full max-w-full whitespace-normal break-all font-mono font-normal text-muted-foreground text-xs leading-snug">
-                    {title}
-                  </ItemTitle>
-                  <ItemDescription className="line-clamp-none whitespace-pre-wrap break-words text-left text-foreground">
-                    {item.body}
-                  </ItemDescription>
-                </ItemContent>
+                <span className="min-w-0 flex-1 break-all text-left font-mono text-[11px] text-muted-foreground leading-snug">
+                  {location}
+                </span>
+                <Badge className="shrink-0" size="xs" variant="secondary">
+                  {sourceLabel}
+                </Badge>
               </button>
-              {/* Top-right, same as diff inline comment actions. */}
-              <ItemActions className="-mt-1 shrink-0 items-start self-start">
-                <Button
-                  aria-label={t("terminal.statusBar.item.comments.deleteOne")}
-                  disabled={busy}
-                  onClick={() => {
-                    onDeleteOne(item).catch(() => undefined);
-                  }}
-                  size="icon-xs"
-                  title={t("terminal.statusBar.item.comments.deleteOne")}
-                  type="button"
-                  variant="ghost"
-                >
-                  <Trash2 aria-hidden data-icon />
-                </Button>
-              </ItemActions>
             </Item>
           </li>
         );

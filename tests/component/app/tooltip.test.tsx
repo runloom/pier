@@ -3,7 +3,11 @@ import {
   releaseTooltipSuppression,
   resetTooltipDismissStateForTests,
   suppressTooltips,
+  TOOLTIP_ARROW_PADDING_PX,
+  TOOLTIP_ARROW_WIDTH_PX,
+  TOOLTIP_COLLISION_PADDING,
   TOOLTIP_COLLISION_PADDING_PX,
+  TOOLTIP_COLLISION_PADDING_X_PX,
   TOOLTIP_SIDE_OFFSET_PX,
   Tooltip,
   TooltipContent,
@@ -102,6 +106,16 @@ describe("Tooltip primitive", () => {
   it("locks product gold-standard placement defaults", () => {
     expect(TOOLTIP_SIDE_OFFSET_PX).toBe(6);
     expect(TOOLTIP_COLLISION_PADDING_PX).toBe(8);
+    expect(TOOLTIP_COLLISION_PADDING_X_PX).toBe(6);
+    expect(TOOLTIP_COLLISION_PADDING).toEqual({
+      top: 8,
+      right: 6,
+      bottom: 8,
+      left: 6,
+    });
+    // Arrow stays inside [padding, width-padding] on the bubble edge.
+    expect(TOOLTIP_ARROW_PADDING_PX).toBe(8);
+    expect(TOOLTIP_ARROW_WIDTH_PX).toBe(10);
   });
 
   it.each([

@@ -51,6 +51,7 @@ export function MarkdownCommentBlockShell(props: {
   return (
     <div
       className="group/md-comment relative"
+      data-markdown-comment-block={props.blockKey}
       data-slot="markdown-comment-block"
     >
       <div className="relative min-w-0">
@@ -155,6 +156,7 @@ export function MarkdownCommentDriftStrip(props: {
   return (
     <div
       className="mb-4 rounded-lg border border-border bg-muted/30 px-3 py-2"
+      data-markdown-comment-drift=""
       data-slot="markdown-comment-drift"
     >
       <p className="mb-2 font-medium text-muted-foreground text-xs">

@@ -63,6 +63,14 @@ export interface MarkdownDriftComment {
   readonly threadId: string;
 }
 
+/** Ordered targets for the floating markdown comment navigator. */
+export interface MarkdownCommentNavTarget {
+  readonly blockKey?: string;
+  readonly commentId: string;
+  readonly kind: "located" | "drift";
+  readonly threadId: string;
+}
+
 function liveComment(thread: CommentThread) {
   return thread.comments.find((c) => c.deletedAt === undefined);
 }
@@ -100,6 +108,7 @@ export function useMarkdownPreviewComments(input: {
   readonly driftComments: readonly MarkdownDriftComment[];
   readonly handlers: PierInlineReviewHandlers;
   readonly locatedByBlockKey: ReadonlyMap<string, MarkdownLocatedComment>;
+  readonly navTargets: readonly MarkdownCommentNavTarget[];
   readonly openDraftForBlockKey: (blockKey: string) => void;
   readonly surfaceReady: boolean;
   readonly threadsHydrated: boolean;
@@ -379,11 +388,35 @@ export function useMarkdownPreviewComments(input: {
     [document, openDraft]
   );
 
+  /** Ordered live comments on this path (located then drift) for floating nav. */
+  const navTargets = useMemo((): MarkdownCommentNavTarget[] => {
+    const targets: MarkdownCommentNavTarget[] = [];
+    for (const entry of locatedByBlockKey.values()) {
+      for (const thread of entry.threads) {
+        targets.push({
+          blockKey: entry.blockKey,
+          commentId: thread.comment.id,
+          kind: "located",
+          threadId: thread.threadId,
+        });
+      }
+    }
+    for (const item of driftComments) {
+      targets.push({
+        commentId: item.thread.comment.id,
+        kind: "drift",
+        threadId: item.threadId,
+      });
+    }
+    return targets;
+  }, [driftComments, locatedByBlockKey]);
+
   return {
     draftBlockKey,
     driftComments,
     handlers,
     locatedByBlockKey,
+    navTargets,
     openDraftForBlockKey,
     surfaceReady: surface !== undefined,
     threadsHydrated: snapshot !== null,

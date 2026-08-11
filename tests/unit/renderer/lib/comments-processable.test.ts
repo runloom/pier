@@ -101,7 +101,7 @@ describe("listProcessableComments", () => {
     if (items[0]?.kind === "git-diff") {
       expect(items[0].oldPath).toBeNull();
     }
-    expect(items[0]?.status).toBe("unverified");
+    expect(items[0]?.status).toBe("unknown");
     expect(
       processableCommentCount(
         [
@@ -275,9 +275,38 @@ describe("listProcessableComments markdown/canvas", () => {
       target: { kind: "canvas", path: "x.canvas.tsx" },
       updatedAt: 2,
     };
-    const items = listProcessableComments([md, canvas]);
-    expect(items.map((item) => item.kind)).toEqual(["markdown", "canvas"]);
-    expect(items.every((item) => item.status === "unverified")).toBe(true);
+    const softCanvas: CommentThread = {
+      comments: [
+        {
+          author: { kind: "user" },
+          body: "22222",
+          createdAt: 1,
+          id: "cv-s",
+        },
+      ],
+      createdAt: 1,
+      id: "cv-st",
+      state: "open",
+      target: {
+        excerpt: "协调智能体经 Pier CLI",
+        kind: "canvas",
+        label: "协调智能体经 Pier CLI",
+        path: ".pier/canvases/a.canvas.tsx",
+      },
+      updatedAt: 2,
+    };
+    const items = listProcessableComments([md, canvas, softCanvas]);
+    expect(items.map((item) => item.kind)).toEqual([
+      "markdown",
+      "canvas",
+      "canvas",
+    ]);
+    expect(items[0]?.status).toBe("unknown");
+    // Sorted by path: soft (.pier/...) then file-only (x.canvas.tsx).
+    expect(items[1]?.status).toBe("soft");
+    expect(items[1]?.path).toBe(".pier/canvases/a.canvas.tsx");
+    expect(items[2]?.status).toBe("unknown");
+    expect(items[2]?.path).toBe("x.canvas.tsx");
   });
 
   it("marks markdown located/stale from markdownSurfaces", () => {
@@ -348,7 +377,7 @@ describe("listProcessableComments markdown/canvas", () => {
     expect(missing).toHaveLength(0);
   });
 
-  it("marks canvas file-level located from canvasSurfaces", () => {
+  it("marks canvas soft when surface is open but only label/excerpt (no anchor id)", () => {
     const canvas: CommentThread = {
       comments: [
         {
@@ -364,11 +393,12 @@ describe("listProcessableComments markdown/canvas", () => {
       target: {
         excerpt: "canvas note",
         kind: "canvas",
+        label: "落地",
         path: ".pier/canvases/a.canvas.tsx",
       },
       updatedAt: 2,
     };
-    const located = listProcessableComments([canvas], {
+    const soft = listProcessableComments([canvas], {
       canvasSurfaces: new Map([
         [
           ".pier/canvases/a.canvas.tsx",
@@ -380,8 +410,26 @@ describe("listProcessableComments markdown/canvas", () => {
         ],
       ]),
     });
-    expect(located).toHaveLength(1);
-    expect(located[0]?.kind).toBe("canvas");
+    expect(soft).toHaveLength(1);
+    expect(soft[0]?.kind).toBe("canvas");
+    expect(soft[0]?.status).toBe("soft");
+
+    const fileOnly: CommentThread = {
+      ...canvas,
+      target: { kind: "canvas", path: ".pier/canvases/a.canvas.tsx" },
+    };
+    const located = listProcessableComments([fileOnly], {
+      canvasSurfaces: new Map([
+        [
+          ".pier/canvases/a.canvas.tsx",
+          {
+            anchorIds: new Set(),
+            filePresent: true,
+            kind: "canvas",
+          },
+        ],
+      ]),
+    });
     expect(located[0]?.status).toBe("located");
 
     const missing = listProcessableComments([canvas], {
@@ -467,10 +515,53 @@ describe("formatCommentsForComposer", () => {
     );
     expect(text).toContain("Please address these comments:");
     expect(text).toContain("## Review");
-    expect(text).toContain("[unverified]");
+    expect(text).toContain("[unknown]");
     expect(text).toContain("`src/a.ts:4`");
     expect(text).toContain("rename helper");
     expect(text).not.toMatch(/staged|unstaged/i);
+  });
+
+  it("tags canvas design-mode picks as soft when surface is open", () => {
+    const canvas: CommentThread = {
+      comments: [
+        {
+          author: { kind: "user" },
+          body: "你好",
+          createdAt: 1,
+          id: "cv-c",
+        },
+      ],
+      createdAt: 1,
+      id: "cv-t",
+      state: "open",
+      target: {
+        excerpt: "协调智能体",
+        kind: "canvas",
+        label: "协调智能体",
+        path: ".pier/canvases/a.canvas.tsx",
+      },
+      updatedAt: 2,
+    };
+    const text = formatCommentsForComposer(
+      listProcessableComments([canvas], {
+        canvasSurfaces: new Map([
+          [
+            ".pier/canvases/a.canvas.tsx",
+            {
+              anchorIds: new Set(),
+              filePresent: true,
+              kind: "canvas",
+            },
+          ],
+        ]),
+      })
+    );
+    expect(text).toContain("## Canvas");
+    expect(text).toContain("[soft]");
+    expect(text).toContain("(协调智能体)");
+    expect(text).toContain("你好");
+    expect(text).not.toContain("[unverified]");
+    expect(text).not.toContain("[unknown]");
   });
 });
 

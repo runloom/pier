@@ -142,7 +142,7 @@ export default function MultiAgentOrchestrationCanvas() {
         </header>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto">
+          <TabsList className="flex w-full justify-start gap-1 overflow-x-auto">
             <TabsTrigger className="whitespace-nowrap" value="overview">
               速览
             </TabsTrigger>

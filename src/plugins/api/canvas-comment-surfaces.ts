@@ -1,17 +1,43 @@
 /**
  * Host ↔ files plugin bus for open canvas comment projection surfaces.
- * Processable reads this so open previews can mark canvas threads located/stale.
+ * Processable reads this so open previews can mark canvas threads located/stale/soft.
  * Lives in plugins/api so builtin plugins never import src/renderer.
+ *
+ * Store is attached to globalThis so host + plugin chunks never split into two Maps.
  */
 import type { CanvasCommentSurface } from "@shared/comments/canvas-surface.ts";
 
 export type { CanvasCommentSurface } from "@shared/comments/canvas-surface.ts";
 
-const surfacesByPath = new Map<string, CanvasCommentSurface>();
-const listeners = new Set<() => void>();
+const GLOBAL_KEY = "__pierCanvasCommentSurfacesV1__";
+
+interface SurfaceBus {
+  listeners: Set<() => void>;
+  /** Monotonic epoch — bumps on every set/clear so consumers always re-read. */
+  revision: number;
+  surfacesByPath: Map<string, CanvasCommentSurface>;
+}
+
+function getBus(): SurfaceBus {
+  const globalRef = globalThis as typeof globalThis & {
+    [GLOBAL_KEY]?: SurfaceBus;
+  };
+  let bus = globalRef[GLOBAL_KEY];
+  if (!bus) {
+    bus = {
+      listeners: new Set(),
+      revision: 0,
+      surfacesByPath: new Map(),
+    };
+    globalRef[GLOBAL_KEY] = bus;
+  }
+  return bus;
+}
 
 function notify(): void {
-  for (const listener of listeners) {
+  const bus = getBus();
+  bus.revision += 1;
+  for (const listener of bus.listeners) {
     try {
       listener();
     } catch {
@@ -20,21 +46,36 @@ function notify(): void {
   }
 }
 
+/**
+ * Normalize canvas path keys so surface lookup matches stored thread targets.
+ * - POSIX slashes
+ * - strip leading `./`
+ */
+export function normalizeCanvasCommentSurfacePath(path: string): string {
+  return path.replaceAll("\\", "/").replace(/^\.\//u, "");
+}
+
 /** Publish (or replace) the surface for a project-relative canvas path. */
 export function setCanvasCommentSurface(
   path: string,
   surface: CanvasCommentSurface
 ): void {
-  surfacesByPath.set(path, surface);
+  const key = normalizeCanvasCommentSurfacePath(path);
+  if (key.length === 0) {
+    return;
+  }
+  getBus().surfacesByPath.set(key, surface);
   notify();
 }
 
 /** Drop the surface when a canvas preview unmounts. */
 export function clearCanvasCommentSurface(path: string): void {
-  if (!surfacesByPath.has(path)) {
+  const key = normalizeCanvasCommentSurfacePath(path);
+  const bus = getBus();
+  if (!bus.surfacesByPath.has(key)) {
     return;
   }
-  surfacesByPath.delete(path);
+  bus.surfacesByPath.delete(key);
   notify();
 }
 
@@ -43,20 +84,28 @@ export function getCanvasCommentSurfaces(): ReadonlyMap<
   string,
   CanvasCommentSurface
 > {
-  return new Map(surfacesByPath);
+  return new Map(getBus().surfacesByPath);
+}
+
+/** Monotonic bus epoch for useSyncExternalStore. */
+export function getCanvasCommentSurfacesRevision(): number {
+  return getBus().revision;
 }
 
 export function onCanvasCommentSurfacesChanged(
   listener: () => void
 ): () => void {
-  listeners.add(listener);
+  const bus = getBus();
+  bus.listeners.add(listener);
   return () => {
-    listeners.delete(listener);
+    bus.listeners.delete(listener);
   };
 }
 
 /** @internal test helper */
 export function resetCanvasCommentSurfacesForTests(): void {
-  surfacesByPath.clear();
-  listeners.clear();
+  const bus = getBus();
+  bus.surfacesByPath.clear();
+  bus.revision = 0;
+  bus.listeners.clear();
 }
