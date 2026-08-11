@@ -196,7 +196,7 @@
     "filePanel.tree.action.delete": "删除",
     "filePanel.tree.action.copyPath": "复制路径",
     "filePanel.tree.action.copyRelativePath": "复制相对路径",
-    "filePanel.tree.placeholder.newFile": "example.ts",
+    "filePanel.tree.placeholder.newFile": "filename",
     "filePanel.tree.placeholder.newFolder": "components",
     "filePanel.tree.nameRequired": "请输入名称",
     "filePanel.tree.nameReserved": "该名称保留",
