@@ -5,6 +5,8 @@
  */
 
 export interface FilesDiskPathOpenedEvent {
+  /** Canvas node id (`data-pier-comment-id`) to scroll after open. */
+  canvasRevealAnchor?: string;
   /** 1-based column within the line; optional with `line`. */
   column?: number;
   instanceId: string;

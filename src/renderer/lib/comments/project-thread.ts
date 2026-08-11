@@ -61,6 +61,7 @@ export interface MarkdownProjectionSurface {
   readonly kind: "markdown";
 }
 
+/** 与 shared `CanvasCommentSurface` 同形，便于 files 插件构建后直接投影。 */
 export interface CanvasProjectionSurface {
   /** 运行时仍存在的声明式节点 id；文件级评论忽略。 */
   readonly anchorIds?: ReadonlySet<string>;

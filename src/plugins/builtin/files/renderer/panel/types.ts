@@ -5,6 +5,9 @@ import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesWatchHub } from "../watch-hub.ts";
 
 export interface FilesFilePanelParams {
+  /** Canvas node comment id to scroll after preferPreview open. */
+  canvasRevealAnchor?: string;
+  canvasRevealRequestId?: string;
   context?: PanelContext;
   // tab 未保存圆点的数据通道(panel-tab-header 读 params.dirty)。
   dirty?: boolean;

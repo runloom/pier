@@ -90,6 +90,8 @@ export function openFilesDiskPath(input: {
   line?: number;
   /** Heading id / fragment for Markdown preview scroll. */
   markdownAnchor?: string;
+  /** Canvas node comment id (`data-pier-comment-id`) to scroll after open. */
+  canvasRevealAnchor?: string;
   path: string;
   /** Prefer Markdown preview mode after open (files plugin consumes via open event). */
   preferPreview?: boolean;
@@ -126,6 +128,7 @@ export function openFilesDiskPath(input: {
   const wantsPreviewReveal =
     input.preferPreview === true &&
     (input.markdownAnchor !== undefined ||
+      input.canvasRevealAnchor !== undefined ||
       (input.line !== undefined && input.line >= 1));
   const anchorRequestId = wantsPreviewReveal
     ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -133,6 +136,7 @@ export function openFilesDiskPath(input: {
   const lineOnlyReveal =
     input.preferPreview === true &&
     input.markdownAnchor === undefined &&
+    input.canvasRevealAnchor === undefined &&
     input.line !== undefined &&
     input.line >= 1;
   const params = {
@@ -145,12 +149,21 @@ export function openFilesDiskPath(input: {
           markdownAnchor: input.markdownAnchor,
           markdownAnchorRequestId: anchorRequestId,
           markdownRevealLine: undefined,
+          canvasRevealAnchor: undefined,
         }),
     ...(lineOnlyReveal
       ? {
           markdownAnchor: undefined,
           markdownAnchorRequestId: anchorRequestId,
           markdownRevealLine: input.line,
+          canvasRevealAnchor: undefined,
+        }
+      : {}),
+    ...(input.preferPreview === true && input.canvasRevealAnchor !== undefined
+      ? {
+          canvasRevealAnchor: input.canvasRevealAnchor,
+          canvasRevealRequestId: anchorRequestId,
+          markdownRevealLine: undefined,
         }
       : {}),
   };
@@ -180,6 +193,9 @@ export function openFilesDiskPath(input: {
       ...(input.markdownAnchor === undefined
         ? {}
         : { markdownAnchor: input.markdownAnchor }),
+      ...(input.canvasRevealAnchor === undefined
+        ? {}
+        : { canvasRevealAnchor: input.canvasRevealAnchor }),
     });
   }
   return result.kind === "opened";

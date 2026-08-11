@@ -1,8 +1,10 @@
 /**
- * After host open with preferPreview, force Markdown preview mode.
+ * After host open with preferPreview, force preview mode (Markdown / Canvas).
+ * Optional canvas node reveal is applied via requestCanvasAnchorReveal.
  */
 import { onFilesDiskPathOpened } from "@plugins/api/files-disk-path-opened.ts";
 import { seedFilesPanelView } from "../panel/transfer-state.ts";
+import { requestCanvasAnchorReveal } from "../preview/canvas.tsx";
 
 export function registerFilesDiskOpenPreviewPrefer(): () => void {
   return onFilesDiskPathOpened((event) => {
@@ -13,5 +15,8 @@ export function registerFilesDiskOpenPreviewPrefer(): () => void {
       panelId: event.instanceId,
       view: { mode: "preview" },
     });
+    if (event.canvasRevealAnchor) {
+      requestCanvasAnchorReveal(event.path, event.canvasRevealAnchor);
+    }
   });
 }

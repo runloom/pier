@@ -1,3 +1,4 @@
+import type { CanvasCommentSurface } from "@shared/comments/canvas-surface.ts";
 import type { MarkdownCommentSurface } from "@shared/comments/markdown-surface.ts";
 import type { CommentThread } from "@shared/contracts/comments/base.ts";
 import type { GitReviewGroup } from "@shared/contracts/git/review.ts";
@@ -48,6 +49,11 @@ export type ProcessableCommentItem =
     });
 
 export interface ListProcessableCommentsOptions {
+  /**
+   * Canvas 投影表面，key = 相对 worktree 的 path。
+   * 有则 located/stale；filePresent=false 则不计入；无 surface 则 unverified。
+   */
+  readonly canvasSurfaces?: ReadonlyMap<string, CanvasCommentSurface>;
   /**
    * 当前 review section patch，key = `${group}\0${path}`。
    * 有则投影 git status；无则 git 标 unverified。
@@ -161,6 +167,30 @@ function markdownProcessableStatus(
   return "stale";
 }
 
+/**
+ * 有 surface 时返回 status；文件 missing 返回 null；
+ * 无 surface 返回 unverified。
+ */
+function canvasProcessableStatus(
+  thread: CommentThread & {
+    target: Extract<CommentThread["target"], { kind: "canvas" }>;
+  },
+  surfaces: ReadonlyMap<string, CanvasCommentSurface> | undefined
+): ProcessableCommentStatus | null {
+  const surface = surfaces?.get(thread.target.path);
+  if (surface === undefined) {
+    return "unverified";
+  }
+  const projection = projectComment(thread, surface);
+  if (projection.status === "missing") {
+    return null;
+  }
+  if (projection.status === "located") {
+    return "located";
+  }
+  return "stale";
+}
+
 /** 收集可交给智能体处理的评论。 */
 export function listProcessableComments(
   threads: readonly CommentThread[] | undefined,
@@ -172,6 +202,7 @@ export function listProcessableComments(
   const livePaths = options?.livePaths;
   const patches = options?.gitDiffPatches;
   const markdownSurfaces = options?.markdownSurfaces;
+  const canvasSurfaces = options?.canvasSurfaces;
   const items: ProcessableCommentItem[] = [];
   for (const thread of threads) {
     if (isUncommittedGitDiff(thread)) {
@@ -228,13 +259,17 @@ export function listProcessableComments(
     }
     if (isCanvasThread(thread)) {
       const { target } = thread;
+      const status = canvasProcessableStatus(thread, canvasSurfaces);
+      if (status === null) {
+        continue;
+      }
       pushLiveBodies(thread, (commentId, body) => {
         items.push({
           body,
           commentId,
           kind: "canvas",
           path: target.path,
-          status: "unverified",
+          status,
           threadId: thread.id,
           updatedAt: thread.updatedAt,
           ...(target.anchorId === undefined
@@ -338,7 +373,11 @@ function formatCanvasLine(
   } else if (item.label !== undefined) {
     node = ` (${item.label})`;
   }
-  return `- [${statusTag(item.status)}] \`${item.path}\`${node}: ${item.body}`;
+  const excerpt =
+    item.excerpt !== undefined && item.excerpt.length > 0
+      ? ` excerpt «${item.excerpt}»`
+      : "";
+  return `- [${statusTag(item.status)}] \`${item.path}\`${node}${excerpt}: ${item.body}`;
 }
 
 /** 写入智能体输入框的评论块（纯文本，便于 agent 阅读）。 */

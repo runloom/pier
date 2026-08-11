@@ -1,7 +1,8 @@
 /**
- * 评论跳转分发：git → Changes；markdown → 文件预览；canvas stub。
+ * 评论跳转分发：git → Changes；markdown / canvas → 文件预览。
  */
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import { openCanvasForComment } from "./open-canvas.ts";
 import {
   allocateCommentRevealNonce,
   openGitChangesForComments,
@@ -12,7 +13,6 @@ import type { ProcessableCommentItem } from "./processable.ts";
 export type RevealCommentResult =
   | { readonly kind: "opened" }
   | { readonly kind: "failed" }
-  | { readonly kind: "unsupported"; readonly targetKind: "canvas" }
   | { readonly kind: "stale-git" };
 
 export interface RevealCommentInput {
@@ -26,17 +26,34 @@ export interface RevealCommentInput {
   readonly item: ProcessableCommentItem;
 }
 
+function revealRoot(context: PanelContext): string | null {
+  return (
+    context.worktreeKey ??
+    context.worktreeRoot ??
+    context.gitRoot ??
+    context.projectRootPath ??
+    null
+  );
+}
+
 export function revealComment(input: RevealCommentInput): RevealCommentResult {
   const { item } = input;
   if (item.kind === "canvas") {
-    return { kind: "unsupported", targetKind: "canvas" };
+    const root = revealRoot(input.context);
+    if (!root) {
+      return { kind: "failed" };
+    }
+    const opened = openCanvasForComment({
+      context: input.context,
+      path: item.path,
+      root,
+      ...(item.anchorId === undefined ? {} : { anchorId: item.anchorId }),
+    });
+    allocateCommentRevealNonce();
+    return opened ? { kind: "opened" } : { kind: "failed" };
   }
   if (item.kind === "markdown") {
-    const root =
-      input.context.worktreeKey ??
-      input.context.worktreeRoot ??
-      input.context.gitRoot ??
-      input.context.projectRootPath;
+    const root = revealRoot(input.context);
     if (!root) {
       return { kind: "failed" };
     }

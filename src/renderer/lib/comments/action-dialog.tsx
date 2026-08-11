@@ -13,11 +13,21 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+import {
+  getCanvasCommentSurfaces,
+  onCanvasCommentSurfacesChanged,
+} from "@plugins/api/canvas-comment-surfaces.ts";
 import type { CommentFailureReason } from "@shared/contracts/comments/primitives.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import i18next from "i18next";
 import { Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { ContentDialogFooterActions } from "@/components/common/dialogs/footer-actions.tsx";
 import { useContentDialogFooter } from "@/components/common/dialogs/use-footer.ts";
 import { useT } from "@/i18n/use-t.ts";
@@ -79,14 +89,24 @@ function CommentsActionDialogBody({
   const livePaths = useUncommittedLivePaths(gitRoot);
   // livePaths null：仍列 md/canvas；git-diff 在 processable 内因 livePaths 省略而跳过。
   // livePaths Set：git 路径过滤 + md/canvas。
-  const items = useMemo(
-    () =>
-      listProcessableComments(
-        project?.threads,
-        livePaths === null ? undefined : { livePaths }
-      ),
-    [livePaths, project?.threads]
+  const canvasSurfacesRevision = useSyncExternalStore(
+    onCanvasCommentSurfacesChanged,
+    () => getCanvasCommentSurfaces().size,
+    () => 0
   );
+  // canvasSurfacesRevision is the bus epoch — re-read surfaces when it bumps.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: revision drives re-read of module map
+  const items = useMemo(() => {
+    const canvasSurfaces = getCanvasCommentSurfaces();
+    const hasCanvas = canvasSurfaces.size > 0;
+    if (livePaths === null && !hasCanvas) {
+      return listProcessableComments(project?.threads);
+    }
+    return listProcessableComments(project?.threads, {
+      ...(livePaths === null ? {} : { livePaths }),
+      ...(hasCanvas ? { canvasSurfaces } : {}),
+    });
+  }, [canvasSurfacesRevision, livePaths, project?.threads]);
 
   useEffect(() => {
     setTitle(t("terminal.statusBar.item.comments.dialogTitle"));
@@ -145,14 +165,7 @@ function CommentsActionDialogBody({
       }
       return;
     }
-    if (result.kind === "unsupported") {
-      await showAppAlert({
-        body: t("terminal.statusBar.item.comments.jumpUnsupportedBody"),
-        title: t("terminal.statusBar.item.comments.jumpUnsupportedTitle"),
-      });
-      return;
-    }
-    // markdown / git opened paths fall through below
+    // markdown / canvas / git opened paths fall through below
     if (result.kind === "failed") {
       await showAppAlert({
         body: t("terminal.statusBar.item.comments.jumpFailedBody"),

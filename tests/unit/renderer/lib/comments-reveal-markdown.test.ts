@@ -2,10 +2,15 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const openMarkdownForComment = vi.fn((_input?: unknown) => true);
+const openCanvasForComment = vi.fn((_input?: unknown) => true);
 const openGitChangesForComments = vi.fn((_input?: unknown) => true);
 
 vi.mock("@/lib/comments/open-markdown.ts", () => ({
   openMarkdownForComment: (input?: unknown) => openMarkdownForComment(input),
+}));
+
+vi.mock("@/lib/comments/open-canvas.ts", () => ({
+  openCanvasForComment: (input?: unknown) => openCanvasForComment(input),
 }));
 
 vi.mock("@/lib/comments/open-git-changes.ts", () => ({
@@ -23,9 +28,10 @@ const context = {
   worktreeRoot: "/repo",
 } as PanelContext;
 
-describe("revealComment markdown", () => {
+describe("revealComment", () => {
   beforeEach(() => {
     openMarkdownForComment.mockClear();
+    openCanvasForComment.mockClear();
     openGitChangesForComments.mockClear();
   });
 
@@ -57,19 +63,49 @@ describe("revealComment markdown", () => {
     expect(openGitChangesForComments).not.toHaveBeenCalled();
   });
 
-  it("returns unsupported for canvas", () => {
+  it("opens canvas via openCanvasForComment", () => {
     const result = revealComment({
       context,
       item: {
         body: "x",
         commentId: "c",
         kind: "canvas",
-        path: "x.canvas.tsx",
-        status: "unverified",
+        path: ".pier/canvases/x.canvas.tsx",
+        status: "located",
         threadId: "t",
         updatedAt: 1,
       },
     });
-    expect(result).toEqual({ kind: "unsupported", targetKind: "canvas" });
+    expect(result).toEqual({ kind: "opened" });
+    expect(openCanvasForComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: ".pier/canvases/x.canvas.tsx",
+        root: "/repo",
+      })
+    );
+    expect(openMarkdownForComment).not.toHaveBeenCalled();
+  });
+
+  it("passes canvas anchorId on reveal", () => {
+    const result = revealComment({
+      context,
+      item: {
+        anchorId: "login-submit",
+        body: "x",
+        commentId: "c",
+        kind: "canvas",
+        path: ".pier/canvases/x.canvas.tsx",
+        status: "located",
+        threadId: "t",
+        updatedAt: 1,
+      },
+    });
+    expect(result).toEqual({ kind: "opened" });
+    expect(openCanvasForComment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        anchorId: "login-submit",
+        path: ".pier/canvases/x.canvas.tsx",
+      })
+    );
   });
 });

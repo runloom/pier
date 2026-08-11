@@ -24,6 +24,12 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
             path={props.canvasDiskSource.path}
             root={props.canvasDiskSource.root}
             t={props.t}
+            worktreeKey={
+              props.panelContext?.worktreeKey ??
+              props.panelContext?.worktreeRoot ??
+              props.panelContext?.gitRoot ??
+              props.canvasDiskSource.root
+            }
           />
         );
       }

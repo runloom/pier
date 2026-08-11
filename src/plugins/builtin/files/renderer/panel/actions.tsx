@@ -14,6 +14,7 @@ import { useFilesDocument } from "../document/use-document.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import { FilesMutationSuspendedError } from "../mutation/gate.ts";
+import { CanvasCommentsButton } from "../preview/canvas-comments-button.tsx";
 import { CanvasReloadButton } from "../preview/canvas-toolbar.tsx";
 import {
   DocumentFormatBadge,
@@ -100,6 +101,10 @@ export function ResolvedFilePanelActions({
       : null;
   const showDiffToggle =
     mode === "diff" || document.conflictDiskContents !== null;
+  const canvasCommentPath =
+    document.source.kind === "disk" ? document.source.path : null;
+  const showCanvasComments =
+    isCanvas && mode === "preview" && canvasCommentPath !== null;
 
   return (
     <>
@@ -144,6 +149,9 @@ export function ResolvedFilePanelActions({
       ) : null}
       {isCanvas && mode === "preview" && canvasRelPath ? (
         <CanvasReloadButton moduleId={canvasRelPath} t={t} />
+      ) : null}
+      {showCanvasComments && canvasCommentPath ? (
+        <CanvasCommentsButton path={canvasCommentPath} t={t} />
       ) : null}
       {showDiffToggle ? (
         <Button

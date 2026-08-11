@@ -347,6 +347,107 @@ describe("listProcessableComments markdown/canvas", () => {
     });
     expect(missing).toHaveLength(0);
   });
+
+  it("marks canvas file-level located from canvasSurfaces", () => {
+    const canvas: CommentThread = {
+      comments: [
+        {
+          author: { kind: "user" },
+          body: "canvas note",
+          createdAt: 1,
+          id: "cv-c",
+        },
+      ],
+      createdAt: 1,
+      id: "cv-t",
+      state: "open",
+      target: {
+        excerpt: "canvas note",
+        kind: "canvas",
+        path: ".pier/canvases/a.canvas.tsx",
+      },
+      updatedAt: 2,
+    };
+    const located = listProcessableComments([canvas], {
+      canvasSurfaces: new Map([
+        [
+          ".pier/canvases/a.canvas.tsx",
+          {
+            anchorIds: new Set(),
+            filePresent: true,
+            kind: "canvas",
+          },
+        ],
+      ]),
+    });
+    expect(located).toHaveLength(1);
+    expect(located[0]?.kind).toBe("canvas");
+    expect(located[0]?.status).toBe("located");
+
+    const missing = listProcessableComments([canvas], {
+      canvasSurfaces: new Map([
+        [
+          ".pier/canvases/a.canvas.tsx",
+          {
+            anchorIds: new Set(),
+            filePresent: false,
+            kind: "canvas",
+          },
+        ],
+      ]),
+    });
+    expect(missing).toHaveLength(0);
+  });
+
+  it("marks canvas node stale when anchor is gone", () => {
+    const canvas: CommentThread = {
+      comments: [
+        {
+          author: { kind: "user" },
+          body: "node note",
+          createdAt: 1,
+          id: "cv-n",
+        },
+      ],
+      createdAt: 1,
+      id: "cv-nt",
+      state: "open",
+      target: {
+        anchorId: "login-submit",
+        excerpt: "node note",
+        kind: "canvas",
+        path: ".pier/canvases/a.canvas.tsx",
+      },
+      updatedAt: 2,
+    };
+    const stale = listProcessableComments([canvas], {
+      canvasSurfaces: new Map([
+        [
+          ".pier/canvases/a.canvas.tsx",
+          {
+            anchorIds: new Set(["other"]),
+            filePresent: true,
+            kind: "canvas",
+          },
+        ],
+      ]),
+    });
+    expect(stale[0]?.status).toBe("stale");
+
+    const located = listProcessableComments([canvas], {
+      canvasSurfaces: new Map([
+        [
+          ".pier/canvases/a.canvas.tsx",
+          {
+            anchorIds: new Set(["login-submit"]),
+            filePresent: true,
+            kind: "canvas",
+          },
+        ],
+      ]),
+    });
+    expect(located[0]?.status).toBe("located");
+  });
 });
 
 describe("formatCommentsForComposer", () => {
