@@ -27,8 +27,8 @@
       "reason": "debt: optional domain subfolders (terminal/workspace/agent); agent-lifecycle-probe extracted beside lifecycle store; shell-environment + comments mirrors; workspace-close split pending folder"
     },
     "src/shared": {
-      "max": 44,
-      "reason": "debt: top-level shared helpers still flat; terminal path/open-disk-target + system-open-guard pending terminal/ folder; task-runs-window-filter + domain modules pending folders"
+      "max": 45,
+      "reason": "debt: top-level shared helpers still flat; composer surfaces extracted to agent-surfaces/; terminal path/open-disk-target + system-open-guard pending terminal/ folder; task-runs-window-filter + domain modules pending folders"
     },
     "src/shared/contracts": {
       "max": 50,

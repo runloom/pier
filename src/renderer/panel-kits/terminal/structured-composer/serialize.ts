@@ -119,6 +119,23 @@ export function $readComposerPlainText(): string {
   return $projectComposerPlainLeaves($getRoot()).full;
 }
 
+/**
+ * Agent-facing plain text from document start through the collapsed caret.
+ * Used by skill/command suggest (message-start `/` only).
+ * Must run inside `editorState.read` / `editor.update`.
+ */
+export function $plainPrefixToCaret(): string | null {
+  const { full, leaves } = $projectComposerPlainLeaves($getRoot());
+  const selection = $getSelection();
+  if (!($isRangeSelection(selection) && selection.isCollapsed())) {
+    return null;
+  }
+  const cursor = plainOffsetForPoint(full.length, () =>
+    offsetForPoint(leaves, selection.anchor.key, selection.anchor.offset)
+  );
+  return full.slice(0, Math.max(0, Math.min(cursor, full.length)));
+}
+
 /** Read the full plain-text document (paragraphs joined by \\n). */
 export function readLexicalPlainText(editor: LexicalEditor): string {
   return editor.getEditorState().read(() => $readComposerPlainText());

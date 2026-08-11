@@ -23,13 +23,19 @@ import { useT } from "@/i18n/use-t.ts";
 import { ComposerAutocompletePortal } from "./composer-autocomplete-portal.tsx";
 import { $placeCaretAfterComposerChip } from "./composer-chip-caret.ts";
 import {
+  resolveComposerBundledSkillDescription,
+  resolveComposerCommandDescription,
+} from "./composer-command-i18n.ts";
+import {
   type ComposerSkillQuerySnapshot,
   createComposerSkillQueryClient,
 } from "./composer-skill-query.ts";
 import {
   type ComposerSkillSuggestItem,
   getSkillSuggestMatch,
+  getSkillSuggestNodeReplaceRange,
 } from "./composer-skill-suggest.ts";
+import { $plainPrefixToCaret } from "./serialize.ts";
 import { $createSkillMentionNode } from "./skill-mention-node.tsx";
 import {
   SKILL_SUGGEST_LISTBOX_ID,
@@ -114,15 +120,27 @@ export function SkillSuggestPlugin({
             setMatch(null);
             return;
           }
-          const found = getSkillSuggestMatch(
-            node.getTextContent(),
-            selection.anchor.offset
-          );
-          if (!found) {
+          // Message-start only on full agent plain text (chips count as content).
+          const plainPrefix = $plainPrefixToCaret();
+          if (plainPrefix == null || !getSkillSuggestMatch(plainPrefix)) {
             setOpen(false);
             setMatch(null);
             return;
           }
+          const range = getSkillSuggestNodeReplaceRange(
+            node.getTextContent(),
+            selection.anchor.offset
+          );
+          if (!range) {
+            setOpen(false);
+            setMatch(null);
+            return;
+          }
+          const found: SkillMatch = {
+            leadOffset: range.leadOffset,
+            matchingString: range.matchingString,
+            trigger: "/",
+          };
           setMatch(found);
           if (found.matchingString !== queryRef.current) {
             setActiveIndex(0);
@@ -141,20 +159,41 @@ export function SkillSuggestPlugin({
       setCatalogEmpty(false);
       return;
     }
-    if (!projectRootPath) {
-      setItems([]);
-      setStatus("done");
-      setCatalogEmpty(false);
-      return;
-    }
     if (!agentKind) {
       setItems([]);
       setStatus("done");
       setCatalogEmpty(true);
       return;
     }
+    // Commands + bundled skills do not require a skills-service project entry.
+    // Empty path still loads the static surface catalog.
     return client.search({
       agentKind,
+      mapItem: (item) => {
+        if (item.source === "builtin-command") {
+          return {
+            ...item,
+            description: resolveComposerCommandDescription(
+              t,
+              agentKind,
+              item.id,
+              item.description
+            ),
+          };
+        }
+        if (item.source === "bundled") {
+          return {
+            ...item,
+            description: resolveComposerBundledSkillDescription(
+              t,
+              agentKind,
+              item.id,
+              item.description
+            ),
+          };
+        }
+        return item;
+      },
       onUpdate: (snap) => {
         setItems(snap.items);
         setStatus(snap.status);
@@ -163,10 +202,10 @@ export function SkillSuggestPlugin({
           setCatalogEmpty(snap.items.length === 0);
         }
       },
-      projectRootPath,
+      projectRootPath: projectRootPath ?? "",
       query,
     });
-  }, [agentKind, client, open, projectRootPath, query]);
+  }, [agentKind, client, open, projectRootPath, query, t]);
 
   const selectIndex = useCallback(
     (index: number) => {
@@ -190,9 +229,14 @@ export function SkillSuggestPlugin({
         if (start < 0 || end > text.length) {
           return;
         }
-        const before = text.slice(0, start);
+        // Force-invoke should be message-start: drop leading whitespace before `/`.
+        const leading = text.slice(0, start);
+        const replaceFrom = /^\s*$/.test(leading) ? 0 : start;
+        const before = text.slice(0, replaceFrom);
         const after = text.slice(end);
-        const skill = $createSkillMentionNode(item.id, item.invokeText);
+        const skill = $createSkillMentionNode(item.id, item.invokeText, {
+          kind: item.source === "builtin-command" ? "command" : "skill",
+        });
 
         if (before.length === 0 && after.length === 0) {
           node.replace(skill);
@@ -322,10 +366,12 @@ export function SkillSuggestPlugin({
     return null;
   }
 
-  const emptyProject = !projectRootPath;
-  const noAgent = !emptyProject && agentKind == null;
+  // Skill/command catalog no longer hard-requires a project path (static
+  // surface entries). Keep emptyProject false; soft guidance lives in none-available.
+  const emptyProject = false;
+  const noAgent = agentKind == null;
   const showNotSupported =
-    !(emptyProject || noAgent) &&
+    !noAgent &&
     catalogEmpty &&
     status === "done" &&
     items.length === 0 &&

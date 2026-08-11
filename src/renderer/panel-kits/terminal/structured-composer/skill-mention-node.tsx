@@ -10,17 +10,23 @@ import {
   type SerializedLexicalNode,
   type Spread,
 } from "lexical";
-import { Zap } from "lucide-react";
+import { SquareSlash, Zap } from "lucide-react";
 import type { JSX } from "react";
 import {
   COMPOSER_CHIP_CLASS,
   COMPOSER_CHIP_HOST_CLASS,
+  COMPOSER_CHIP_TONE_COMMAND,
   COMPOSER_CHIP_TONE_SKILL,
 } from "./composer-chip-styles.ts";
+
+/** Skill package vs documented built-in slash command (list + chip affordance). */
+export type SkillMentionKind = "command" | "skill";
 
 export type SerializedSkillMentionNode = Spread<
   {
     invokeText: string;
+    /** Omitted / unknown → skill (layout history). */
+    kind?: SkillMentionKind;
     skillId: string;
     type: "skill-mention";
     version: 1;
@@ -28,12 +34,17 @@ export type SerializedSkillMentionNode = Spread<
   SerializedLexicalNode
 >;
 
+function normalizeMentionKind(value: unknown): SkillMentionKind {
+  return value === "command" ? "command" : "skill";
+}
+
 /**
- * Atomic skill chip: visual highlight (no spellcheck waves), serializes to
- * agent-native invoke text (`/id` or `$id`).
+ * Atomic skill/command chip: visual highlight (no spellcheck waves), serializes
+ * to agent-native invoke text (`/id` or `$id`).
  */
 export class SkillMentionNode extends DecoratorNode<JSX.Element> {
   __invokeText: string;
+  __kind: SkillMentionKind;
   __skillId: string;
 
   static override getType(): string {
@@ -41,13 +52,24 @@ export class SkillMentionNode extends DecoratorNode<JSX.Element> {
   }
 
   static override clone(node: SkillMentionNode): SkillMentionNode {
-    return new SkillMentionNode(node.__skillId, node.__invokeText, node.__key);
+    return new SkillMentionNode(
+      node.__skillId,
+      node.__invokeText,
+      node.__kind,
+      node.__key
+    );
   }
 
-  constructor(skillId: string, invokeText: string, key?: NodeKey) {
+  constructor(
+    skillId: string,
+    invokeText: string,
+    kind: SkillMentionKind = "skill",
+    key?: NodeKey
+  ) {
     super(key);
     this.__skillId = skillId;
     this.__invokeText = invokeText;
+    this.__kind = kind;
   }
 
   override createDOM(_config: EditorConfig): HTMLElement {
@@ -66,6 +88,7 @@ export class SkillMentionNode extends DecoratorNode<JSX.Element> {
     const element = document.createElement("span");
     element.setAttribute("data-pier-skill-id", this.__skillId);
     element.setAttribute("data-pier-skill-invoke", this.__invokeText);
+    element.setAttribute("data-pier-skill-kind", this.__kind);
     element.textContent = this.__invokeText;
     return { element };
   }
@@ -77,12 +100,15 @@ export class SkillMentionNode extends DecoratorNode<JSX.Element> {
   static override importJSON(
     serialized: SerializedSkillMentionNode
   ): SkillMentionNode {
-    return $createSkillMentionNode(serialized.skillId, serialized.invokeText);
+    return $createSkillMentionNode(serialized.skillId, serialized.invokeText, {
+      kind: normalizeMentionKind(serialized.kind),
+    });
   }
 
   override exportJSON(): SerializedSkillMentionNode {
     return {
       invokeText: this.__invokeText,
+      kind: this.__kind,
       skillId: this.__skillId,
       type: "skill-mention",
       version: 1,
@@ -95,6 +121,10 @@ export class SkillMentionNode extends DecoratorNode<JSX.Element> {
 
   getInvokeText(): string {
     return this.__invokeText;
+  }
+
+  getKind(): SkillMentionKind {
+    return this.__kind;
   }
 
   /** Agent-facing payload (prefix included). */
@@ -111,15 +141,21 @@ export class SkillMentionNode extends DecoratorNode<JSX.Element> {
   }
 
   override decorate(): JSX.Element {
+    const isCommand = this.__kind === "command";
+    const Icon = isCommand ? SquareSlash : Zap;
+    const tone = isCommand
+      ? COMPOSER_CHIP_TONE_COMMAND
+      : COMPOSER_CHIP_TONE_SKILL;
     return (
       <span
-        className={cn(COMPOSER_CHIP_CLASS, COMPOSER_CHIP_TONE_SKILL)}
+        className={cn(COMPOSER_CHIP_CLASS, tone)}
         contentEditable={false}
         data-skill-id={this.__skillId}
+        data-skill-kind={this.__kind}
         // Browser must not red-underline skill ids inside the pill.
         spellCheck={false}
       >
-        <Zap aria-hidden="true" className="size-2.5 shrink-0" />
+        <Icon aria-hidden="true" className="size-2.5 shrink-0" />
         <span className="truncate">{this.__skillId}</span>
       </span>
     );
@@ -128,9 +164,16 @@ export class SkillMentionNode extends DecoratorNode<JSX.Element> {
 
 export function $createSkillMentionNode(
   skillId: string,
-  invokeText: string
+  invokeText: string,
+  options?: { kind?: SkillMentionKind }
 ): SkillMentionNode {
-  return $applyNodeReplacement(new SkillMentionNode(skillId, invokeText));
+  return $applyNodeReplacement(
+    new SkillMentionNode(
+      skillId,
+      invokeText,
+      normalizeMentionKind(options?.kind)
+    )
+  );
 }
 
 export function $isSkillMentionNode(

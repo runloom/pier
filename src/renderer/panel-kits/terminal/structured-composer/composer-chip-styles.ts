@@ -7,6 +7,7 @@
  * Tone map (semantic tokens only — must stay distinct at a glance):
  * - @ path        → status-info   (blue)
  * - skill         → status-success (green)
+ * - builtin cmd   → status-neutral (muted; distinct from skill green)
  * - attachment OK → status-done   (purple / done)
  * - attachment bad→ status-warning (amber)
  * - review comments → destructive (red; action needed — distinct from invalid attach)
@@ -25,6 +26,10 @@ export const COMPOSER_CHIP_TONE_PATH =
 
 export const COMPOSER_CHIP_TONE_SKILL =
   "border-status-success-border bg-status-success-bg text-status-success-fg";
+
+/** Documented slash commands (distinct from skill chips). */
+export const COMPOSER_CHIP_TONE_COMMAND =
+  "border-status-neutral-border bg-status-neutral-bg text-status-neutral-fg";
 
 export const COMPOSER_CHIP_TONE_ATTACHMENT =
   "border-status-done-border bg-status-done-bg text-status-done-fg";
