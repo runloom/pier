@@ -459,9 +459,9 @@ W2+：按 Canvas 加厚 epoch/容量（`effect_window_full` 等）。
 
 ### 9.4 W4–W6
 
-- W4（主路径已关账）：`control.snapshot` / `control.watch`（顶层 `pier snapshot` / `pier watch`）、WorktreeRef + worktrees get/check/remove、terminal list/get/send/key（agent 写拒绝）、tasks get/output/stop、CapabilityAuthority 可替换骨架；E11 全量 cursor/notifications 与 CA 热路径强制归 W5/W6
-- W5：`notifications.*`
-- W6：`access.*` + challenge/proof/consent
+- W4（主路径已关账）：`control.snapshot` / `control.watch`（顶层 `pier snapshot` / `pier watch`）、WorktreeRef + worktrees get/check/remove、terminal list/get/send/key（agent 写拒绝）、tasks get/output/stop、CapabilityAuthority 可替换骨架；E11 全量 cursor 门禁与 CA 热路径强制归 W6
+- W5（主路径已关账）：`notifications.list|get|watch|focus|mark-read`（v1 短 RPC，NCS 同源；focus 同构 Runtime Index）；`control.snapshot` 含 `notifications[]` 指针 + FA 多 kind activity；协作 surface（命令面板「智能体协作」）；cursor **命名空间文档化**（`global` / agents / `notifications`，跨域 resume 强制归 W6-S5）
+- W6：`access.*` + challenge/proof/consent；资源 cursor 全量门禁；CA 热路径
 
 ### 9.5 与 PierCommand
 

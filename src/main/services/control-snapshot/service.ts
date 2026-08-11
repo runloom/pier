@@ -4,7 +4,10 @@
  * revision 仅在业务摘要 digest 变化时递增（避免 watch 轮询伪变更）。
  */
 import { createHash } from "node:crypto";
-import type { ControlSnapshotPayload } from "@shared/contracts/local-control/control-snapshot.ts";
+import {
+  CONTROL_SNAPSHOT_NOTIFICATIONS_LIMIT,
+  type ControlSnapshotPayload,
+} from "@shared/contracts/local-control/control-snapshot.ts";
 
 export interface ControlSnapshotSources {
   bootId: string;
@@ -25,6 +28,16 @@ export interface ControlSnapshotSources {
       projectRootPath?: string | undefined;
     }>;
   };
+  listNotifications?: () => Array<{
+    id: string;
+    kind: string;
+    severity: string;
+    title: string;
+    read: boolean;
+    ts: number;
+    panelId?: string | undefined;
+    agentRef?: string | undefined;
+  }>;
   listPanels: () => Promise<
     Array<{
       id: string;
@@ -61,6 +74,19 @@ export interface ControlSnapshotSources {
     }>
   >;
   nowMs?: () => number;
+}
+
+/** 未读优先，再按 ts 新→旧，截断到 snapshot 预算。 */
+export function selectSnapshotNotifications<
+  T extends { read: boolean; ts: number },
+>(items: readonly T[], limit = CONTROL_SNAPSHOT_NOTIFICATIONS_LIMIT): T[] {
+  const sorted = [...items].sort((a, b) => {
+    if (a.read !== b.read) {
+      return a.read ? 1 : -1;
+    }
+    return b.ts - a.ts;
+  });
+  return sorted.slice(0, limit);
 }
 
 export interface ControlSnapshotService {
@@ -151,6 +177,18 @@ export function createControlSnapshotService(
       ...(t.rootTaskId ? { rootTaskId: t.rootTaskId } : {}),
     }));
     const activity = sources.listActivity();
+    const notifications = selectSnapshotNotifications(
+      sources.listNotifications?.() ?? []
+    ).map((n) => ({
+      id: n.id,
+      kind: n.kind,
+      severity: n.severity,
+      title: n.title,
+      read: n.read,
+      ts: n.ts,
+      ...(n.panelId ? { panelId: n.panelId } : {}),
+      ...(n.agentRef ? { agentRef: n.agentRef } : {}),
+    }));
     const body = {
       bootId: sources.bootId,
       agents,
@@ -159,6 +197,7 @@ export function createControlSnapshotService(
       panels,
       worktrees,
       tasks,
+      notifications,
     };
     const digest = digestBody(body);
     if (lastDigest === null || digest !== lastDigest) {

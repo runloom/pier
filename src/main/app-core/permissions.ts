@@ -172,6 +172,11 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "run.status": { capabilities: ["workspace:read"] },
   "run.stop": { capabilities: ["workspace:open"] },
   "app.snapshot": { capabilities: ["app:read"] },
+  "notifications.list": { capabilities: ["notification:read"] },
+  "notifications.get": { capabilities: ["notification:read"] },
+  "notifications.watch": { capabilities: ["notification:read"] },
+  "notifications.focus": { capabilities: ["notification:write"] },
+  "notifications.mark-read": { capabilities: ["notification:write"] },
   // terminal.open 静态元数据只记基础 capabilities;launch 存在时的额外
   // 能力由 requiredCapabilitiesForCommand 动态叠加。
   "terminal.open": { capabilities: ["workspace:open"] },

@@ -32,6 +32,13 @@ import { executeGitCommand } from "./commands/git.ts";
 import { executeGitReviewCommand } from "./commands/git-review.ts";
 import { executeLiveModulesCommand } from "./commands/live-modules.ts";
 import {
+  executeNotificationsFocusCommand,
+  executeNotificationsGetCommand,
+  executeNotificationsListCommand,
+  executeNotificationsMarkReadCommand,
+  executeNotificationsWatchCommand,
+} from "./commands/notifications.ts";
+import {
   executePanelFocusCommand,
   executePanelListCommand,
   executePanelOpenCommand,
@@ -104,7 +111,8 @@ async function executeAppStateCommand(
   requestId: string,
   command: PierCommand,
   clients: PierClientRegistry,
-  services: PierCoreServices
+  services: PierCoreServices,
+  context: CommandExecutionContext = {}
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
     case "app.status":
@@ -118,6 +126,33 @@ async function executeAppStateCommand(
       });
     case "app.snapshot":
       return await executeAppSnapshotCommand(requestId, command, services);
+    case "notifications.list":
+      return await executeNotificationsListCommand(
+        requestId,
+        command,
+        services
+      );
+    case "notifications.get":
+      return await executeNotificationsGetCommand(requestId, command, services);
+    case "notifications.watch":
+      return await executeNotificationsWatchCommand(
+        requestId,
+        command,
+        services,
+        context
+      );
+    case "notifications.focus":
+      return await executeNotificationsFocusCommand(
+        requestId,
+        command,
+        services
+      );
+    case "notifications.mark-read":
+      return await executeNotificationsMarkReadCommand(
+        requestId,
+        command,
+        services
+      );
     case "appUpdate.status":
       return success(requestId, services.appUpdates.getStatus());
     case "appUpdate.check":
@@ -328,7 +363,7 @@ async function executeCommandByDomain(
     (cmd: PierCommand) =>
       executeTerminalCommand(requestId, cmd, services, context),
     (cmd: PierCommand) =>
-      executeAppStateCommand(requestId, cmd, clients, services),
+      executeAppStateCommand(requestId, cmd, clients, services, context),
     (cmd: PierCommand) =>
       executeWindowWorkspaceCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),

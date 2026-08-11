@@ -29,6 +29,7 @@ describe("cli-docs-surface helpers", () => {
     ["  pier plugins enable x", "plugins enable"],
     ["pier plugins disable foo", "plugins disable"],
     ["pier access request --json", "access"],
+    ["pier notifications list --json", null],
     ["pier status --json", null],
     ["pier open . --json", null],
     ["pier plugins list --json", null],

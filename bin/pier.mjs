@@ -284,15 +284,62 @@ function formatAgentsList(data) {
     .join("\n")}\n`;
 }
 
+function formatNotificationsHuman(type, data) {
+  if (type === "notifications.list" || type === "notifications.watch") {
+    const items = data?.items;
+    const seq = typeof data?.seq === "number" ? ` seq=${data.seq}` : "";
+    if (type === "notifications.watch") {
+      const mode = data?.mode ?? "snapshot";
+      if (mode === "timeout") {
+        return `(timeout)${seq}\n`;
+      }
+      if (mode === "cancelled") {
+        return `(cancelled)${seq}\n`;
+      }
+      if (!Array.isArray(items) || items.length === 0) {
+        return `(no notifications) mode=${mode}${seq}\n`;
+      }
+      return `${items
+        .map(
+          (item) =>
+            `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}`
+        )
+        .join("\n")}\n`;
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return `(no notifications)${seq}\n`;
+    }
+    return `${items
+      .map(
+        (item) =>
+          `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}`
+      )
+      .join("\n")}\n`;
+  }
+  if (type === "notifications.get") {
+    const item = data?.item;
+    if (!item) {
+      return "(not found)\n";
+    }
+    return `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}\n`;
+  }
+  if (type === "notifications.focus") {
+    return `focused\tstatus=${data?.status ?? "?"}\n`;
+  }
+  if (type === "notifications.mark-read") {
+    if (data?.marked === "all") {
+      return `marked=all\tunread=${data?.unreadCount ?? 0}\n`;
+    }
+    return `marked=${data?.marked ?? 0}\tid=${data?.id ?? "?"}\n`;
+  }
+  return "";
+}
+
 function exitCodeForV2Response(response) {
   if (response.ok) {
     const data = response.data;
     // wait 被 cancel：ok:true + cancelled → 0（非超时 124）
-    if (
-      data &&
-      typeof data === "object" &&
-      data.cancelled === true
-    ) {
+    if (data && typeof data === "object" && data.cancelled === true) {
       return 0;
     }
     // wait 未达成谓词仍 ok:true + reached:false → 124 便于脚本
@@ -451,9 +498,33 @@ try {
     process.exit(exitCodeForV2Response(response));
   }
 
-  const result = await request(resolveSocketPath(), parsed.envelope);
+  // notifications.watch 服务默认 30s；客户端须带传输余量
+  const v1TimeoutMs =
+    parsed.envelope.command?.type === "notifications.watch"
+      ? Math.max(
+          50_000,
+          (Number(parsed.envelope.command.timeoutMs) || 30_000) + 20_000
+        )
+      : 5000;
+  const result = await request(
+    resolveSocketPath(),
+    parsed.envelope,
+    v1TimeoutMs
+  );
   if (parsed.json) {
     console.log(JSON.stringify(result, null, 2));
+  } else if (
+    typeof parsed.envelope.command.type === "string" &&
+    parsed.envelope.command.type.startsWith("notifications.") &&
+    result.ok
+  ) {
+    const output = formatNotificationsHuman(
+      parsed.envelope.command.type,
+      result.data
+    );
+    if (output) {
+      process.stdout.write(output);
+    }
   } else if (parsed.envelope.command.type === "panel.list" && result.ok) {
     const output = formatPanelList(result.data);
     if (output) {

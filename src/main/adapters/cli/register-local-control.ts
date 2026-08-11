@@ -134,12 +134,14 @@ export async function registerCliLocalControl({
   core.services.controlBootId = bootId;
   core.services.controlSnapshot = snapshotService;
   const server: PierLocalControlServer = createPierLocalControlServer({
-    handleRequest(envelope) {
+    handleRequest(envelope, context) {
       const clientId = clientIdOf(envelope);
       if (clientId) {
         core.clients.heartbeat(clientId);
       }
-      return core.commandRouter.execute(envelope);
+      return core.commandRouter.execute(envelope, {
+        ...(context?.abortSignal ? { abortSignal: context.abortSignal } : {}),
+      });
     },
     socketPath,
     bootId,

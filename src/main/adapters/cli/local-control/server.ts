@@ -33,6 +33,10 @@ export interface PierLocalControlServer {
   start(signal?: AbortSignal): Promise<void>;
 }
 
+export interface LocalControlV1RequestContext {
+  abortSignal?: AbortSignal;
+}
+
 export interface CreatePierLocalControlServerArgs {
   /** 统一 authorize（可替换）。 */
   authorizer?: LocalControlAuthorizer | undefined;
@@ -44,7 +48,10 @@ export interface CreatePierLocalControlServerArgs {
   discovery?: AgentsDiscovery | undefined;
   /** v2 features 广告基线；agents.self 在凭证允许时由会话追加。 */
   features?: readonly string[] | undefined;
-  handleRequest(envelope: unknown): Promise<PierCommandResult>;
+  handleRequest(
+    envelope: unknown,
+    context?: LocalControlV1RequestContext
+  ): Promise<PierCommandResult>;
   /** 写 op receipt（可替换）。 */
   receipts?: EffectReceiptStore | undefined;
   /** 强制要求可解析 peer UID（测试拒绝路径）。 */
@@ -171,7 +178,10 @@ type ConnectionMode = "first" | "v1" | "session";
 function attachConnection(
   socket: Socket,
   ctx: {
-    handleRequest(envelope: unknown): Promise<PierCommandResult>;
+    handleRequest(
+      envelope: unknown,
+      context?: LocalControlV1RequestContext
+    ): Promise<PierCommandResult>;
     bootId: string;
     features: readonly string[];
     credentialStore?: AgentCallerCredentialStore | undefined;
@@ -207,6 +217,8 @@ function attachConnection(
   let mode: ConnectionMode = "first";
   let controlSession: LocalControlSession | null = null;
   let closed = false;
+  /** v1 长轮询（notifications.watch 等）在 socket 断开时 abort。 */
+  const connectionAbort = new AbortController();
 
   const endV1 = (result: PierCommandResult) => {
     if (closed) {
@@ -218,6 +230,9 @@ function attachConnection(
   };
 
   socket.once("close", () => {
+    if (!connectionAbort.signal.aborted) {
+      connectionAbort.abort();
+    }
     controlSession?.dispose();
     controlSession = null;
   });
@@ -274,7 +289,11 @@ function attachConnection(
         if (classified.kind === "v1") {
           mode = "v1";
           Promise.resolve()
-            .then(() => ctx.handleRequest(classified.envelope))
+            .then(() =>
+              ctx.handleRequest(classified.envelope, {
+                abortSignal: connectionAbort.signal,
+              })
+            )
             .then((result) => endV1(result))
             .catch((error: unknown) => {
               endV1(

@@ -5,7 +5,30 @@
 import type { ControlSnapshotPayload } from "@shared/contracts/local-control/control-snapshot.ts";
 import type { PierCoreServices } from "../../app-core/command-router-services.ts";
 import { listPanels } from "../../app-core/commands/panel.ts";
+import { peekNotificationCenterService } from "../../ipc/notification-center.ts";
 import type { ControlSnapshotSources } from "./service.ts";
+
+function mapNotificationPointer(item: {
+  id: string;
+  kind: string;
+  severity: string;
+  title: string;
+  read: boolean;
+  ts: number;
+  agentRef?: string | undefined;
+  panelRef?: { panelId: string } | undefined;
+}) {
+  return {
+    id: item.id,
+    kind: item.kind,
+    severity: item.severity,
+    title: item.title,
+    read: item.read,
+    ts: item.ts,
+    ...(item.agentRef ? { agentRef: item.agentRef } : {}),
+    ...(item.panelRef?.panelId ? { panelId: item.panelRef.panelId } : {}),
+  };
+}
 
 type WorktreeSnap = ControlSnapshotPayload["worktrees"][number];
 
@@ -117,7 +140,22 @@ export function controlSnapshotSourcesFromCore(
       }));
     },
     listActivity: () => {
-      // v1：Runtime Index 代理 agent 活动；shell/task FA 全貌属 E11 扩展（W5/W6）。
+      // W5-S4：优先 FA 全貌（agent/task/shell）；缺注入时回退 Runtime Index agent 投影。
+      try {
+        const fa = services.foregroundActivity?.snapshot();
+        if (fa) {
+          return fa.activities
+            .filter((a) => a.kind !== "idle")
+            .map((a) => ({
+              kind: a.kind,
+              ...("status" in a && a.status ? { status: a.status } : {}),
+              panelId: a.panelId,
+              windowId: a.windowId,
+            }));
+        }
+      } catch {
+        /* fall through */
+      }
       try {
         return services.agentRuntimeIndex.listMachine().entries.map((e) => ({
           kind: "agent",
@@ -125,6 +163,18 @@ export function controlSnapshotSourcesFromCore(
           panelId: e.panelId,
           windowId: e.windowId,
         }));
+      } catch {
+        return [];
+      }
+    },
+    listNotifications: () => {
+      try {
+        const ncs =
+          services.notificationCenter ?? peekNotificationCenterService();
+        if (!ncs) {
+          return [];
+        }
+        return ncs.snapshot().items.map(mapNotificationPointer);
       } catch {
         return [];
       }

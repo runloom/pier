@@ -67,6 +67,23 @@ export const controlSnapshotActivityEntrySchema = z
   })
   .strict();
 
+/** 指针级消息投影（W5-S4）；list/get 可含 body，snapshot 保持有界。 */
+export const controlSnapshotNotificationEntrySchema = z
+  .object({
+    id: nonEmpty,
+    kind: nonEmpty,
+    severity: nonEmpty,
+    title: nonEmpty,
+    read: z.boolean(),
+    ts: z.number().int().nonnegative(),
+    panelId: nonEmpty.optional(),
+    agentRef: nonEmpty.optional(),
+  })
+  .strict();
+
+/** snapshot 内 notifications 条数上限（未读优先截断后的预算）。 */
+export const CONTROL_SNAPSHOT_NOTIFICATIONS_LIMIT = 50;
+
 export const controlSnapshotPayloadSchema = z
   .object({
     bootId: nonEmpty,
@@ -78,6 +95,11 @@ export const controlSnapshotPayloadSchema = z
     panels: z.array(controlSnapshotPanelEntrySchema),
     worktrees: z.array(controlSnapshotWorktreeEntrySchema),
     tasks: z.array(controlSnapshotTaskEntrySchema),
+    /** W5-S4：NCS 指针；缺省空数组以兼容旧夹具 */
+    notifications: z
+      .array(controlSnapshotNotificationEntrySchema)
+      .max(CONTROL_SNAPSHOT_NOTIFICATIONS_LIMIT)
+      .default([]),
   })
   .strict();
 

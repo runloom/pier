@@ -50,6 +50,11 @@ export function usage() {
     "  pier agents wait --boot <id> --runtime <id> --generation <n> --until ready|waiting|exited|attention [--timeout <ms>] --json",
     "  pier agents watch --boot <id> --runtime <id> --generation <n> [--timeout <ms>] [--poll-ms <ms>] --json",
     "  pier agents focus|interrupt|terminate --boot <id> --runtime <id> --generation <n> --json",
+    "  pier notifications list [--unread] --json",
+    "  pier notifications get --id <id> --json",
+    "  pier notifications watch [--after <seq>] [--timeout <ms>] [--poll-ms <ms>] --json",
+    "  pier notifications focus --id <id> --json",
+    "  pier notifications mark-read --id <id> | --all --json",
   ].join("\n");
 }
 
@@ -157,7 +162,10 @@ function stripOptions(args) {
       arg === "--task" ||
       arg === "--force" ||
       arg === "--after" ||
-      arg === "--scope"
+      arg === "--scope" ||
+      arg === "--id" ||
+      arg === "--unread" ||
+      arg === "--all"
     ) {
       if (
         arg === "--window" ||
@@ -194,11 +202,12 @@ function stripOptions(args) {
         arg === "--key" ||
         arg === "--task" ||
         arg === "--after" ||
-        arg === "--scope"
+        arg === "--scope" ||
+        arg === "--id"
       ) {
         index++;
       }
-      // --delete-branch / --force / --stdin / --json 等布尔 flag 不吃下一参数
+      // --delete-branch / --force / --stdin / --json / --unread / --all 等布尔 flag 不吃下一参数
       continue;
     }
     if (arg) {
@@ -836,6 +845,62 @@ function parseControlTopLevel(domain, args) {
   return null;
 }
 
+function parseNotifications(action, args) {
+  if (action === "list") {
+    return {
+      type: "notifications.list",
+      ...(hasPierCliOption(args, "--unread") ? { unreadOnly: true } : {}),
+    };
+  }
+  if (action === "get") {
+    return {
+      type: "notifications.get",
+      id: requireValue(optionValue(args, "--id")),
+    };
+  }
+  if (action === "watch") {
+    const afterRaw = optionValue(args, "--after");
+    const timeoutRaw = optionValue(args, "--timeout");
+    const pollRaw = optionValue(args, "--poll-ms");
+    const command = { type: "notifications.watch" };
+    if (afterRaw !== undefined) {
+      command.after = Number(afterRaw);
+    }
+    if (timeoutRaw !== undefined) {
+      command.timeoutMs = Number(timeoutRaw);
+    }
+    if (pollRaw !== undefined) {
+      command.pollMs = Number(pollRaw);
+    }
+    return command;
+  }
+  if (action === "focus") {
+    return {
+      type: "notifications.focus",
+      id: requireValue(optionValue(args, "--id")),
+    };
+  }
+  if (action === "mark-read") {
+    const hasAll = hasPierCliOption(args, "--all");
+    const hasId = optionValue(args, "--id") !== undefined;
+    if (hasAll && hasId) {
+      throw new Error(
+        "notifications mark-read accepts either --id or --all, not both"
+      );
+    }
+    if (hasAll) {
+      return { type: "notifications.mark-read", all: true };
+    }
+    return {
+      type: "notifications.mark-read",
+      id: requireValue(optionValue(args, "--id")),
+    };
+  }
+  throw new Error(
+    "unknown pier notifications command (list|get|watch|focus|mark-read)"
+  );
+}
+
 function parseCommand(args, cwd) {
   const [domain, action, value, extra, unexpected] = stripOptions(args);
   const route = routeOptions(args);
@@ -869,6 +934,9 @@ function parseCommand(args, cwd) {
   }
   if (domain === "agents") {
     return parseAgents(action, value, unexpected, args);
+  }
+  if (domain === "notifications") {
+    return parseNotifications(action, args);
   }
   throw new Error("unknown pier CLI command");
 }

@@ -71,12 +71,23 @@ export interface PierCoreServices {
   fileDrafts?: FileDraftsService;
   files?: FileService;
   fileWatch?: FileWatchService;
+  /**
+   * FA 快照源（W5-S4 control.snapshot activity 全貌）。可选；缺省回退 Runtime Index。
+   */
+  foregroundActivity?: {
+    snapshot(): import("@shared/contracts/foreground-activity.ts").ForegroundActivityBroadcast;
+  };
   git: GitService;
   gitReview: GitReviewService;
   gitWatch: GitWatchService;
   liveModules?: LiveModulesService;
   localEnvironments: LocalEnvironmentService;
   managedPlugins: ManagedPluginInstallService;
+  /**
+   * 消息中心命令面（W5）。测试注入；生产缺省走 getNotificationCenterService()。
+   * 写路径仅 markRead / markAllRead；禁止由此写 FA / Runtime Index。
+   */
+  notificationCenter?: import("./commands/notifications.ts").NotificationCenterCommandFacade;
   panelContexts: {
     listRecent(): Promise<PanelContext[]>;
     recordRecent(context: PanelContext): Promise<void>;

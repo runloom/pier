@@ -1,17 +1,17 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-11T13:29:18.000Z",
-  "source": "W4 主路径关账审查通过（2026-08-11）：CLOSED_LOOP + GOLD_MAIN_PATH；currentState 陈旧行已 scrub；E9/E11 partial 诚实；剩余 W5-S4 / W6-S4/S5",
+  "generatedAt": "2026-08-12T00:00:00.000Z",
+  "source": "文档关账 scrub（2026-08-12）：验收矩阵刷 E1/E3/E4/E9/E14；currentState.missing 分轨（非必达 / 可选 / W6）；planned 命令仍保留防丢清单。产品代码未改。",
   "data": {
     "meta": {
       "title": "智能体优先的持久运行控制 CLI · 产品与技术方案",
-      "subtitle": "一次性用原生 agent CLI；Pier 主路径=发现+持久控制+宿主定位原语；W0–W4 主路径已关账；E11 全量字段与 CA 热路径强制归 W5/W6",
+      "subtitle": "一次性用原生 agent CLI；Pier 主路径=发现+持久控制+宿主定位原语+消息 CLI+协作面；W0–W5 主路径已关账；CA 热路径与资源 cursor 全量门禁归 W6",
       "status": "推荐方案",
       "version": "v7.0",
       "researchCutoff": "2026-08-11",
-      "codeBaseline": "W0–W4 closed on product main path: RuntimeControl + WorktreeRef + terminal list/get/send/key + control.snapshot/watch + CapabilityAuthority skeleton; cli-human; no agents.invoke"
+      "codeBaseline": "W0–W5 closed on product main path: RuntimeControl + WorktreeRef + control.snapshot/watch + notifications CLI + collab surface; cli-human; no agents.invoke"
     },
-    "bluf": "产品结论：一次性提问不经 Pier（原生 agent CLI）。Pier 做发现 + 持久运行控制 + 宿主定位原语。W0–W3 与 W4 主路径已关账：WorktreeRef、terminal list/get/send/key（agent 写拒）、control.snapshot/watch、tasks shell 扩展、CapabilityAuthority 可替换骨架。调用方持有拆分/重试/结束判断；无任务台账。E11 全量 notifications/runtimes/cursor 分域与 CA 生产热路径强制不阻塞 W4 关账，分别归 W5/W6。",
+    "bluf": "产品结论：一次性提问不经 Pier（原生 agent CLI）。Pier 做发现 + 持久运行控制 + 宿主定位原语 + 消息 CLI + 协作面。W0–W4 与 W5 主路径已关账：notifications list/get/watch/focus/mark-read（NCS 同源）、control.snapshot.notifications 指针与 FA 多 kind activity、智能体协作 surface（无 one-shot）。调用方持有拆分/重试/结束判断；无任务台账。不提供 agents invoke。CA 生产热路径与资源 cursor 全量门禁归 W6。",
     "insight": "实现纪律：核心逻辑优先，拒绝业界能力二次封装——只做依赖 Pier 宿主/运行时才能成立的能力；业界已支持的能力直接用原生入口。Orca/cmux 证明有价值的是「精确 surface/runtime + 可编程读画面/发输入」的持久控制面，不是再包一层各家 one-shot。Agent Orchestrator 偏任务池，Pier 拒绝任务台账。最佳实践：一次性用原生 agent；需要活体协作、可续聊、可看现场时才进 Pier 持久路径；运行事实与工作结论严格分开。",
     "decision": "方案收敛为单主路径：持久运行控制。一次性 = 原生 agent 能力（不实现 Pier invoke）。高层 agents 仅保留 catalog/list/get 与 start/turn/screen/wait/watch/focus/interrupt/terminate；去掉 product invoke 与 activity 独立命令组（事实流用顶层 snapshot/watch）。self 非产品主路径（实验/遗留）。terminal 写控为非 agent 终端与底层同构；agent 运行优先 agents.*。不提供公共 transcript；不新增多智能体任务台账。",
     "scope": {
@@ -143,74 +143,74 @@
       {
         "area": "本机 CLI",
         "owner": "bin/pier + local-control",
-        "available": "v1：status/open/windows/panels/worktrees(list|create|open|check|get|remove+WorktreeRef)/terminal(open|list|get|send|key|profiles)/tasks(list|run|status|get|output|stop|cancel)/plugins/preferences；v2：agents catalog/list/get/start/turn/screen/wait/watch/focus/interrupt/terminate、control.snapshot/watch、subscribe/hold；无产品 agents.invoke / files / git / activity 命令组。W4 主路径已关账（真机冒烟通过）",
-        "missing": "worktrees register；tasks watch/rerun 产品化；terminal interrupt/terminate/wait/watch；notifications CLI（W5）；E11 全量 notifications/runtimes 与 cursor 分域 + watch 门禁（W6）；CA 热路径强制（W6）"
+        "available": "v1：status/open/windows/panels/worktrees(list|create|open|check|get|remove+WorktreeRef)/terminal(open|list|get|send|key|profiles)/tasks(list|run|status|get|output|stop|cancel)/plugins/preferences；v2：agents catalog/list/get/start/turn/screen/wait/watch/focus/interrupt/terminate、control.snapshot/watch、subscribe/hold；notifications list/get/watch/focus/mark-read；无产品 agents.invoke / files / git / activity。W0–W5 主路径关账。",
+        "missing": "非必达：version/doctor/capabilities。可选：worktrees register；tasks watch/rerun；terminal interrupt/terminate/wait/watch。W6：access.*；CA 热路径；资源 cursor 全量门禁。"
       },
       {
         "area": "智能体调用身份",
         "owner": "Pier 运行启动链",
-        "available": "产品路径：cli-human，spawn 不注入 binding；v2 session authorize/receipt/effectKey；CapabilityAuthority 可替换骨架（W4 关账：authorize 委托 + 拒绝矩阵单测）",
-        "missing": "assertRuntimeAccess / tryReserveChild 挂到 start/turn 热路径；Ed25519 external grant 与 durable consent（W6）"
+        "available": "cli-human；v2 authorize/receipt/effectKey；CapabilityAuthority 可替换骨架（W4）。",
+        "missing": "W6：assertRuntimeAccess / tryReserveChild 热路径；Ed25519 external grant 与 durable consent。"
       },
       {
         "area": "持久运行控制",
         "owner": "runtime-control + agents.*",
-        "available": "RuntimeRef 闭环：start/turn/screen/wait/watch/focus/interrupt/terminate；screen 仅 viewport；turn 只 accepted；watch 运行事实≠完成",
-        "missing": "父子 CapabilityRef 生产预算与跨项目强制；live cwd/OSC7 优先于 start-cwd 的全面标注"
+        "available": "RuntimeRef 闭环 start/turn/screen/wait/watch/focus/interrupt/terminate；screen 仅 viewport；turn 只 accepted；watch≠完成。",
+        "missing": "W6：父子 CapabilityRef 生产预算与跨项目强制。可选：live cwd/OSC7 展示全面标注。"
       },
       {
         "area": "宿主原语 / WorktreeRef",
         "owner": "worktree service + terminal-control",
-        "available": "WorktreeRef+incarnationId；remove 准入；terminal list/get/send/key 与 agent 写拒绝（W4 关账）",
-        "missing": "worktrees register；identity-unknown 严格拒绝与共享线性化锁（可选增强，不阻塞 W4）"
+        "available": "WorktreeRef+incarnation；remove 准入；terminal list/get/send/key 与 agent 写拒绝（W4）。",
+        "missing": "可选：worktrees register；identity-unknown 严格拒绝与共享线性化锁（不阻塞主路径）。"
       },
       {
         "area": "顶层事实流",
         "owner": "control-snapshot + local-control",
-        "available": "pier snapshot/watch → control.snapshot/watch 同路径；digest revision + single-flight；payload：agents/activity/windows/panels/worktrees(WorktreeRef)/tasks（W4 主路径关账）",
-        "missing": "notifications 指针与协作侧展示（W5）；runtimes 独立段、资源 cursor 分命名空间、boot_changed/snapshot_required 全量（W6）"
+        "available": "control.snapshot/watch 同路径；digest revision；payload agents/activity/windows/panels/worktrees/tasks/notifications（W4+W5）。",
+        "missing": "W6：runtimes 独立段；资源 cursor 分命名空间强制；boot_changed/snapshot_required 全量。"
       },
       {
         "area": "一次性提问（非 Pier）",
         "owner": "各 agent 原生 CLI",
-        "available": "调用方直接使用 codex exec / Claude headless 等；Pier 不提供产品封装",
-        "missing": "无（刻意 non-goal）"
+        "available": "调用方原生 agent CLI；Pier 不封装 invoke。",
+        "missing": "无（刻意 non-goal / blocked）。"
       },
       {
         "area": "持久智能体运行",
         "owner": "Terminal runtime + Agent Runtime Index",
-        "available": "RuntimeRef 闭环：agents start/turn/screen/wait/watch/focus/interrupt/terminate；Runtime Index 列表/聚焦；PTY 与跨窗口列表（W3 关账）",
-        "missing": "父子 CapabilityRef 生产预算与跨项目强制（W6）；协作台对持久运行的可视化（W5）"
+        "available": "agents 持久闭环 + Runtime Index + 协作 surface（W3+W5）。",
+        "missing": "W6：父子 CapabilityRef 生产预算与跨项目强制。"
       },
       {
         "area": "持久内容读取",
         "owner": "Terminal runtime + 调用方本地工具 + 现有 Files UI",
-        "available": "agents.screen 只返回当前 viewport；CLI 给 canonicalPath/WorktreeRef 定位；调用方用自身文件/搜索/Git 工具读内容；不新增 files/git 命令组（W4）",
-        "missing": "非 agent 终端 screen 产品命令（若需要可 W5+）；scrollback/history/replay 仍为 non-goal"
+        "available": "agents.screen 当前 viewport；CLI 只给 WorktreeRef 定位；无 files/git CLI 组。",
+        "missing": "非必达/可选：非 agent 终端 screen。non-goal：scrollback/history/replay。"
       },
       {
         "area": "运行事实",
         "owner": "ForegroundActivity + Runtime Index + provider adapters",
-        "available": "ForegroundActivity + Runtime Index；v2 agents.watch 与顶层 control.snapshot/watch；digest revision 高水位（W4 主路径关账）",
-        "missing": "notifications 指针与协作侧展示（W5）；资源 cursor 分命名空间与 boot_changed/snapshot_required 全量（W6）"
+        "available": "FA + Runtime Index + agents.watch + control.snapshot/watch + notifications（W3–W5）。",
+        "missing": "W6：资源 cursor 分命名空间与 boot_changed/snapshot_required 全量。"
       },
       {
         "area": "本机控制授权",
         "owner": "main authorizeCommand（当前）",
-        "available": "v1 client-kind + capability；v2 LocalControlAuthorizer + effectKey + receipt；CapabilityAuthority 可替换骨架与拒绝矩阵单测（W4 关账）",
-        "missing": "CA 热路径 assertRuntimeAccess / tryReserveChild（W6-S4）；Ed25519 external grant 与 AccessConsentQueue（W6）"
+        "available": "v1 capability + v2 authorizer/effectKey/receipt；CA 骨架与拒绝矩阵单测（W4）。",
+        "missing": "W6-S4/S5：CA 热路径；Ed25519 external grant；AccessConsentQueue。"
       },
       {
         "area": "工作树与 shell",
         "owner": "WorktreeService + TaskRuns",
-        "available": "WorktreeRef+incarnation 定位；remove 准入；shell TaskRuns list/run/status/get/output/stop/cancel；Git 安全检查与文件变化仍走宿主 UI/调用方工具（W4）",
-        "missing": "worktrees register；tasks watch；path containment 统一策略（调用方责任为主）"
+        "available": "WorktreeRef 定位 + shell TaskRuns 主命令（W4）；无多智能体任务台账。",
+        "missing": "可选：worktrees register；tasks watch/rerun。调用方责任：path containment。"
       },
       {
         "area": "提醒与协作界面",
         "owner": "Notification Center Service + renderer",
-        "available": "统一收件箱、聚焦路由、深链和多个智能体状态",
-        "missing": "围绕持久工作智能体、当前画面与工作树的协作视图；无一次性回复进协作台"
+        "available": "NCS + 铃铛 + notifications CLI + 协作 surface（W5）。",
+        "missing": "可选：492/768/1024 截图棘轮；协调/工作 parent 关系图（现本机列表 + contentBoundary）。"
       }
     ],
     "researchSources": [
@@ -675,7 +675,7 @@
           "responsibility": "宿主健康、原子总快照与全局事实流（唯一跨资源续接）",
           "safety": "只读；snapshot/watch 同 control 路径共享 revision；无 activity 命令组",
           "status": "partial",
-          "wave": "W4 done：status/snapshot/watch 主路径；version/doctor/capabilities 非必达"
+          "wave": "主路径 shipped：status/snapshot/watch。非必达 planned：version/doctor/capabilities"
         },
         {
           "group": "agents",
@@ -683,7 +683,7 @@
           "responsibility": "发现目标；创建与控制持久工作智能体；当前画面；运行事实；精确停止",
           "safety": "无 agents invoke。start 返回 RuntimeRef；turn 只 accepted；screen 只 viewport；wait/watch 是运行事实≠完成；interrupt/terminate 精确 RuntimeRef。",
           "status": "partial",
-          "wave": "W1 发现 · W3 持久运行全命令（self 非产品主路径）"
+          "wave": "W1 发现 · W3 持久：主路径 shipped catalog/list/get + start…terminate。非产品主路径 planned：self"
         },
         {
           "group": "terminal",
@@ -691,7 +691,7 @@
           "responsibility": "非 agent 终端与底层 PTY 原语；agent 运行写控优先走 agents.*",
           "safety": "send/key 仅非 agent；agent 运行写控必须 agents.turn（RuntimeRef）",
           "status": "partial",
-          "wave": "W4 done：list/get/send/key；interrupt/wait/watch 仍 planned"
+          "wave": "主路径 shipped：open/list/get/send/key/profiles。可选 planned：interrupt/wait/watch/terminate"
         },
         {
           "group": "windows",
@@ -699,7 +699,7 @@
           "responsibility": "窗口发现与聚焦",
           "safety": "只读定位 + focus；无独立 get/watch 产品必达（可并入 list）",
           "status": "partial",
-          "wave": "W4 done：list/focus 定位"
+          "wave": "主路径 shipped：list/focus 定位（无独立 get/watch 必达）"
         },
         {
           "group": "panels",
@@ -707,7 +707,7 @@
           "responsibility": "面板发现与聚焦",
           "safety": "不开放旁路 RuntimeRef 的 panel 写控",
           "status": "partial",
-          "wave": "W4 done：list/focus 定位"
+          "wave": "主路径 shipped：list/focus 定位"
         },
         {
           "group": "worktrees",
@@ -715,7 +715,7 @@
           "responsibility": "Git 工作树准备、查看与安全清理",
           "safety": "create/remove 准入锁（活跃 runtime/TaskRun/dirty）；无 force；只返回 WorktreeRef 定位",
           "status": "partial",
-          "wave": "W4 done：list/create/open/check/get/remove + WorktreeRef；register planned"
+          "wave": "主路径 shipped：list/create/open/check/get/remove+WorktreeRef。可选 planned：register"
         },
         {
           "group": "tasks",
@@ -723,15 +723,15 @@
           "responsibility": "shell TaskRuns only",
           "safety": "shell TaskRuns only；永不扩展为多智能体任务台账；rerun 须重发 tasks run",
           "status": "partial",
-          "wave": "W4 done：list/run/status/get/output/stop/cancel；watch/rerun planned（无台账）"
+          "wave": "主路径 shipped：list/run/status/get/output/stop/cancel。可选 planned：watch/rerun（无台账）"
         },
         {
           "group": "notifications",
           "commands": "list · get · watch · focus · mark-read",
           "responsibility": "系统提醒与深链",
           "safety": "不改变 runtime 或调用方工作判断",
-          "status": "planned",
-          "wave": "W5"
+          "status": "shipped",
+          "wave": "W5 done：list/get/watch/focus/mark-read shipped"
         },
         {
           "group": "access",
@@ -739,7 +739,7 @@
           "responsibility": "外部主体窄授权（非 one-shot invoke scope）",
           "safety": "授权对象为持久 runtime-control / project-create 等，不为 agents.invoke",
           "status": "planned",
-          "wave": "W6"
+          "wave": "W6 planned：keygen/status/request/wait/revoke（外部窄授权）"
         }
       ],
       "lifecycle": [
@@ -1288,8 +1288,8 @@
       {
         "wave": 5,
         "name": "协作界面与注意力",
-        "outcome": "人能看见协调/工作智能体、当前画面与文件/Git 现场；notifications CLI 与 NCS 深链；一次性回复不进全局协作台；补齐顶层 snapshot 的 notifications 指针与协作侧事实展示（E11 展示侧）",
-        "status": "planned",
+        "outcome": "人能看见协调/工作智能体与现场；notifications CLI 与 NCS 深链；一次性回复不进全局协作台；snapshot 含 notifications 指针与 FA 全貌（E11 展示侧）；远端真机冒烟：list/watch/mark-read + snapshot.notifications 字段",
+        "status": "done",
         "slices": [
           {
             "id": "W5-S1",
@@ -1348,91 +1348,91 @@
       {
         "id": "E1",
         "text": "Pier 新增契约、插件、持久化和 UI 中不存在多智能体 Run/WorkItem/Attempt/Gate/Result、工作 DAG、任务台账或公共运行历史",
-        "evidence": "pierOwns allowlist + ownership/entities/stateMachines 跨表门禁 + transcript/history/replay 禁止扫描 + Canvas 用户手册硬边界 + tests/unit/cli 边界扫描 + tests/unit/main/adapters/local-control-architecture-loop.test.ts",
-        "status": "planned"
+        "evidence": "边界扫描 + Canvas forbiddenInPier + no-files-git/no-activity/multi-agent-boundary governance + local-control-architecture-loop；W0–W5 主路径无任务台账/DAG 产品面",
+        "status": "verified"
       },
       {
         "id": "E2",
         "text": "AgentCallerService 只绑定 caller 并请求签发；AccessGrantService/CapabilityAuthority 是 bootstrap/child/human/external grant、AgentCallerCredential 与 CapabilityRef 唯一的 mint/revoke/authorize 点。agents self 只返回非秘密 callerRef、精确 WorktreeRef、权限和预算",
-        "evidence": "W1 已有：v1/v2 分流、peer、authorize/receipt/subscribe/hold、agents catalog/list/get（cli-human）、spawn scrub-only（不签发 binding）；实验面：issue/store/v2 agent-binding 与 architecture-loop 单测；CapabilityAuthority 全量与深度/并发矩阵见 W4-S4/W6-S4",
+        "evidence": "W1/W4 骨架与 cli-human 主路径已有；CA 全量 mint/revoke 与热路径矩阵 → W6-S4",
         "status": "partial"
       },
       {
         "id": "E3",
         "text": "产品面不提供 agents invoke；一次性由原生 agent CLI 完成（文档与命令组扫描为 0 个 Pier invoke 产品入口）",
-        "evidence": "Canvas non-goals + agents 命令组 + user-manual blocked + 禁止扫描",
-        "status": "planned"
+        "evidence": "W2 cancelled；agents 命令组无 invoke；user-manual blocked；protocol-contracts + cli 禁止扫描 0 入口；产品路径用原生 agent CLI",
+        "status": "verified"
       },
       {
         "id": "E4",
         "text": "无 Pier InvocationReply 产品历史索引；持久路径不开放 transcript/history/replay",
-        "evidence": "Canvas non-goals + agents 命令组 + user-manual blocked + 禁止扫描",
-        "status": "planned"
+        "evidence": "无 InvocationReply 产品索引；agents 无 transcript/history/replay；Canvas non-goals + 禁止扫描",
+        "status": "verified"
       },
       {
         "id": "E5",
         "text": "agents start 只为父调用者新建精确子运行，并返回 AgentRef/PanelRef/RuntimeRef/最小子 CapabilityRef；starting/running child runtime 占用 maxActiveChildren 原子预留，receipt 重放不重复占额且 reap 后释放",
-        "evidence": "父子启动、环境/fd 泄漏、child self、created-child receipt 重放、start 竞争/取消未知/reap 释放测试",
+        "evidence": "主路径 start 已交付 RuntimeRef；父子 maxActiveChildren 全量矩阵与最小子 CapabilityRef 生产签发 → 对齐 W6-S4 证据门槛",
         "status": "planned"
       },
       {
         "id": "E6",
         "text": "turn 只返回 accepted 与 effect cursor；screen 只返回渲染后当前 viewport 单帧以及 capturedAt/rows/cols/truncated，不含 ANSI/control、scrollback、tail、增量内容 cursor 或跨帧拼接",
-        "evidence": "真实终端网格、控制序列清理、行/字节上限、旧代与多帧测试",
-        "status": "planned"
+        "evidence": "W3 主路径：turn accepted + screen viewport 单帧有界；全量 ANSI/多帧/旧代故障矩阵可加深",
+        "status": "partial"
       },
       {
         "id": "E7",
         "text": "默认只允许父调用者控制自己新建子；跨兄弟、父级与项目稳定拒绝。递归子能力在 agents、operations、WorktreeRef、depth、concurrency、expiry 上单调收缩，并且只能由 CapabilityAuthority 签发/撤销/校验",
-        "evidence": "单授权权威 + parent→created-child 正例 + sibling/parent/cross-project/超深度/超并发/通配缺失反例矩阵",
+        "evidence": "默认父控子纪律有骨架/单测方向；跨兄弟/项目全量拒绝矩阵与递归预算生产强制 → W6",
         "status": "planned"
       },
       {
         "id": "E8",
         "text": "start/turn/interrupt/terminate 均以 expectedBootId、独立 effect key 与规范请求摘要建立原子 effect fence；同键同摘要重放，同键异请求冲突，所有因果事实 revision>F",
-        "evidence": "响应丢失、快速 waiting/ready、重复 Ctrl-C、容量压力、撤销与宿主重启故障矩阵",
-        "status": "planned"
+        "evidence": "W3 effectKey/generation/单飞主路径已落地；响应丢失/容量/撤销全量故障矩阵可加深",
+        "status": "partial"
       },
       {
         "id": "E9",
         "text": "Pier CLI 只返回 canonicalPath/完整 WorktreeRef，不返回文件或 Git 内容；同路径重建更换 incarnationId；dirty/活跃 runtime/非终态 TaskRun 拒绝 remove。W4 主路径已验证；共享线性化锁与 identity-unknown 严格拒绝为可选增强。",
-        "evidence": "W4 关账：WorktreeRef contract + incarnation；list/get/create/remove；no-files-git governance；remove admission unit；真机 worktrees list 含 incarnationId",
-        "status": "partial"
+        "evidence": "W4 主路径：WorktreeRef+incarnation、remove 准入、no-files-git；真机 list 含 incarnationId。可选：共享线性化锁 / identity-unknown 严格拒绝",
+        "status": "verified"
       },
       {
         "id": "E10",
         "text": "responded、accepted、ready、waiting、error、quiet、screen、标题、进程/TaskRun 退出和 NCS 已读均不能替调用方生成成功、失败、取消或重试结论",
-        "evidence": "状态语义反例测试 + 调用方验收/综合端到端",
-        "status": "planned"
+        "evidence": "产品纪律 + notifications mark-read/focus 不写 FA 单测 + 文案规范；完整状态语义反例矩阵可加深",
+        "status": "partial"
       },
       {
         "id": "E11",
-        "text": "顶层 snapshot/watch 原子覆盖 agents/activity/windows/panels/worktrees/tasks 摘要；screen 无内容 cursor。notifications/runtimes 与资源 cursor 全量门禁不阻塞 W4，归 W5/W6。",
-        "evidence": "W4 关账：control.snapshot/watch + pier CLI 同路径；digest revision；payload agents/activity/windows/panels/worktrees/tasks；真机 snapshot 绿。全量 notifications/runtimes/cursor 分域 → W5/W6",
+        "text": "顶层 snapshot/watch 原子覆盖 agents/activity/windows/panels/worktrees/tasks/notifications 摘要；screen 无内容 cursor。runtimes 独立段与资源 cursor 全量门禁归 W6。",
+        "evidence": "展示侧已交付（含 notifications[] + FA 多 kind）；runtimes 段与资源 cursor 全量门禁 → W6",
         "status": "partial"
       },
       {
         "id": "E12",
         "text": "需要你处理从可信 waiting/error 进入 NCS 并聚焦原工作智能体；已读、清空或 focus 不改变运行事实和调用方结论",
-        "evidence": "NCS 投递/深链/已读回归 + 无跨域写入断言",
-        "status": "planned"
+        "evidence": "既有 NCS 深链 + notifications CLI 单测/远端冒烟",
+        "status": "verified"
       },
       {
         "id": "E13",
         "text": "持久协作 UI 明确区分协调智能体、工作智能体、当前画面、文件/Git 与运行事实；无 Pier one-shot 回复进入协作台（one-shot 在进程外原生 CLI），所有前台状态有中文标签和下一步",
-        "evidence": "五页真实挂载 + 492/768/1024 截图、持久 session-only 数据门禁、键盘与原始状态码泄漏测试",
-        "status": "planned"
+        "evidence": "协作 surface + i18n + contentBoundary；可选截图棘轮与 parent 图",
+        "status": "partial"
       },
       {
         "id": "E14",
         "text": "Day 1：原生 agent 一次提问 + Pier catalog/start/turn/screen + worktrees list（WorktreeRef）+ snapshot 配方可复制（W4 主路径）",
-        "evidence": "day1Recipe + 真机 W4 冒烟",
-        "status": "partial"
+        "evidence": "day1Recipe + W4 真机冒烟 + W5 snapshot/notifications 路径；配方可复制",
+        "status": "verified"
       },
       {
         "id": "E15",
         "text": "人类/外部复用持久控制命令；不要求 Pier one-shot / agent-invoke scope",
-        "evidence": "CLI help/JSON/JSONL、human confirm、socket/pipe ACL、Ed25519 签名挑战、持久 runtime-control grant、consent/revoke、假外部控制器与 packaged-app 测试；禁止 agents.invoke 产品面",
+        "evidence": "人类 cli-human 已复用持久命令；外部 Ed25519 access/consent/假控制器 → W6",
         "status": "planned"
       }
     ]

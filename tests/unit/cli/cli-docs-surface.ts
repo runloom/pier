@@ -21,7 +21,7 @@ const AVAILABLE_VIOLATION_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
     },
     { id: "access", re: /^\s*pier\s+access\b/mu },
     { id: "activity", re: /^\s*pier\s+activity\b/mu },
-    { id: "notifications", re: /^\s*pier\s+notifications\b/mu },
+    // notifications.* 已在 W5-S2 产品 shipped
     { id: "plugins enable", re: /^\s*pier\s+plugins\s+enable\b/mu },
     { id: "plugins disable", re: /^\s*pier\s+plugins\s+disable\b/mu },
   ];
@@ -72,6 +72,11 @@ export const REQUIRED_SHIPPED_COMMAND_NAMES = [
   "agents focus",
   "agents interrupt",
   "agents terminate",
+  "notifications list",
+  "notifications get",
+  "notifications watch",
+  "notifications focus",
+  "notifications mark-read",
 ] as const;
 
 /**
@@ -89,8 +94,6 @@ export const REQUIRED_PLANNED_COMMAND_NAMES = [
   "worktrees register",
   "tasks watch",
   "tasks rerun",
-  "notifications list",
-  "notifications get/watch/focus/mark-read",
   "access keygen/status/request/wait/revoke",
   "agents self",
 ] as const;
