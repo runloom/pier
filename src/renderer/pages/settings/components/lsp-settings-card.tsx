@@ -100,12 +100,13 @@ function LspIdleReleaseRow({
     setDraft(String(minutes));
   }
 
+  const t = useT();
   return (
     <InputRow
       description={description}
       disabled={disabled}
       id="settings-lsp-idle-release-minutes"
-      inputClassName="w-24"
+      inputClassName="w-32"
       inputMode="numeric"
       label={label}
       max={IDLE_RELEASE_MINUTES_MAX}
@@ -120,6 +121,7 @@ function LspIdleReleaseRow({
       }}
       onChange={setDraft}
       step={1}
+      suffix={t("settings.unit.minutes")}
       type="number"
       value={draft}
     />

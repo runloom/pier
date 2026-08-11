@@ -47,7 +47,7 @@ import {
   MARKDOWN_TOC_CONTENT_INSET_PX,
   MARKDOWN_TOC_INSET_PX,
 } from "./preview-toc-layout.ts";
-import { computeMarkdownReadingFontFamily } from "./reading-font.ts";
+
 import {
   type MarkdownPagination,
   type MarkdownRuntime,
@@ -188,12 +188,6 @@ export function MarkdownPreview({
   );
   const readingAppearance = useMarkdownPreviewPrefsStore(
     (state) => state.readingAppearance
-  );
-  const readingFont = useMarkdownPreviewPrefsStore(
-    (state) => state.readingFont
-  );
-  const readingFontFamily = useMarkdownPreviewPrefsStore(
-    (state) => state.readingFontFamily
   );
   const resolvedCodeTheme = resolvePreviewCodeTheme({
     appearanceCodeTheme,
@@ -437,17 +431,11 @@ export function MarkdownPreview({
               <div
                 className="markdown-prose mx-auto w-full min-w-0"
                 data-measure={measureMode}
-                data-reading-font={readingFont}
+                data-reading-surface=""
                 data-slot="markdown-prose"
                 style={
                   {
                     "--md-scale": String(fontScale),
-                    ...(readingFont === "custom"
-                      ? {
-                          fontFamily:
-                            computeMarkdownReadingFontFamily(readingFontFamily),
-                        }
-                      : {}),
                   } as CSSProperties
                 }
               >

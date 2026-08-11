@@ -23,8 +23,9 @@ export const settingsShellEnvironment = {
   disabled: "Don't load login shell environment",
   disabledDesc:
     "When on, Pier skips your login shell. Tasks may not find tools such as Node.",
-  timeout: "Load timeout (seconds)",
-  timeoutDesc: "How long Pier waits for the login shell to finish (1–120).",
+  timeout: "Load timeout",
+  timeoutDesc:
+    "How long Pier waits for the login shell to finish; range 1–120.",
   statusFailed: "Couldn't read status — try again",
   refreshFailed: "Reload didn't finish; still using current environment",
   updateFailed: "Couldn't update settings — try again",

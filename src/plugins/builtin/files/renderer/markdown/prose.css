@@ -12,11 +12,11 @@
 
   box-sizing: border-box;
   max-width: var(--md-measure);
+  /* Host Appearance → document font (`--pier-document-font-family`). */
+  font-family: var(--pier-document-font-family);
   font-size: var(--md-font-size);
   line-height: var(--md-line-height);
   color: var(--foreground);
-  /* Default / data-reading-font="ui": inherit app UI sans. */
-  /* data-reading-font="custom": font-family set inline from settings. */
 }
 
 [data-slot="markdown-prose"][data-measure="wide"] {

@@ -491,16 +491,6 @@
       "enumDescriptions": ["完整展开（不限制高度）", "限制高度（块内滚动）"],
       "label": "代码与流程图高度"
     },
-    "pier.files.markdown.readingFont": {
-      "description": "Markdown 预览正文字体。跟随界面使用应用 UI 字体；自定义使用下方字体栈。代码块仍为等宽字体。",
-      "enumDescriptions": ["跟随界面", "自定义"],
-      "label": "Markdown 预览字体"
-    },
-    "pier.files.markdown.readingFontFamily": {
-      "description": "「自定义」模式下的主字体。留空则使用内置文档衬线回落链。仅使用系统已安装字体。",
-      "label": "自定义字体",
-      "placeholder": "Noto Serif SC"
-    },
     "pier.files.tree.showExcludedFiles": {
       "description": "显示被下方排除规则命中的路径。",
       "label": "显示排除项"

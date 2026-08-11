@@ -6,9 +6,9 @@ export const settingsLspRow = {
   lspEnabled: "Run language servers",
   lspEnabledDesc:
     "When off, no completions or diagnostics processes start for any project.",
-  lspIdleReleaseMinutes: "Idle release (minutes)",
+  lspIdleReleaseMinutes: "Idle release",
   lspIdleReleaseMinutesDesc:
-    "Release idle servers after this many minutes (1–1440)",
+    "Release idle servers after this many minutes; range 1–1440",
   lspMaxLocalWorkspaces: "Local project limit",
   lspMaxLocalWorkspacesDesc:
     "Max local projects with active language servers at once",

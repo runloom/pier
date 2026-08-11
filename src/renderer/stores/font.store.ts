@@ -1,13 +1,18 @@
 /**
- * 字体偏好 store — 管理 UI / Mono 字体族与字号偏好，
+ * 字体偏好 store — 管理 UI / Mono / Document 字体族与字号偏好，
+ * 字段顺序与外观设置一致：界面 → 等宽 → 文档 → 终端/代码字号。
  * 同步写入 :root CSS 变量：
- * - --pier-ui-font-family / --pier-mono-font-family
+ * - --pier-ui-font-family / --pier-mono-font-family / --pier-document-font-family
  * - --pier-code-font-size（文件编辑 + Git Diff；终端字号不写 CSS，走 native）
  *
  * 参考 loomdesk font.svelte.ts + font-utils.ts:
  * - 用户输入空字符串 → 走内置 fallback 链
  * - 用户输入非空 → 作为 primary 插入 fallback 链头部
+ *
+ * Document font: Markdown 预览正文 + docs 类画布阅读流；
+ * composition / kit / 组件展台不使用（保持界面字体）。
  */
+import type { DocFontMode } from "@shared/contracts/preferences.ts";
 import { create } from "zustand";
 
 // ── Fallback 链 ─────────────────────────────────────────────────────────────
@@ -38,6 +43,20 @@ const MONO_TERMINAL_FALLBACK = [
   "JetBrainsMono Nerd Font Mono",
   "HarmonyOS Sans SC",
   "Menlo",
+];
+
+/** Custom document mode: serif-first reading stack (CJK + Latin). */
+const DOCUMENT_FALLBACK = [
+  "Noto Serif SC",
+  "Noto Serif CJK SC",
+  "Source Han Serif SC",
+  "Songti SC",
+  "STSong",
+  "SimSun",
+  "Noto Serif",
+  "Georgia",
+  "Times New Roman",
+  "serif",
 ];
 
 // ── 工具函数 ─────────────────────────────────────────────────────────────────
@@ -100,12 +119,51 @@ function buildFontFamily(primary: string[], fallback: string[]): string {
   return result.filter(Boolean).join(", ");
 }
 
+/**
+ * Reject CSS breakout; return trimmed user primary input or "".
+ * Empty means "fallback chain only" (same as Appearance empty UI font).
+ */
+export function sanitizeDocFontPrimary(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim().replaceAll(/\s+/gu, " ");
+  if (!trimmed) {
+    return "";
+  }
+  if (/[;{}\\]|url\s*\(|expression\s*\(|@import|<\/?[a-z]/iu.test(trimmed)) {
+    return "";
+  }
+  if (!/^[\w\s,"'\-.\u0080-\uFFFF]+$/u.test(trimmed)) {
+    return "";
+  }
+  return trimmed;
+}
+
 export function computeUiFontFamily(userInput: string): string {
   return buildFontFamily(parseUserInput(userInput), UI_FALLBACK);
 }
 
 export function computeMonoFontFamily(userInput: string): string {
   return buildFontFamily(parseUserInput(userInput), MONO_FALLBACK);
+}
+
+/**
+ * Resolved CSS font-family for document reading surfaces.
+ * `ui` mode mirrors the interface stack; `custom` uses document serif fallbacks.
+ */
+export function computeDocumentFontFamily(
+  mode: DocFontMode,
+  uiInput: string,
+  docInput: string
+): string {
+  if (mode !== "custom") {
+    return computeUiFontFamily(uiInput);
+  }
+  return buildFontFamily(
+    parseUserInput(sanitizeDocFontPrimary(docInput)),
+    DOCUMENT_FALLBACK
+  );
 }
 
 /**
@@ -142,6 +200,8 @@ export function computeMonoFontFamilyList(userInput: string): string[] {
 function syncCssVars(
   uiInput: string,
   monoInput: string,
+  docMode: DocFontMode,
+  docInput: string,
   codeFontSize: number
 ): void {
   if (typeof document === "undefined") {
@@ -153,6 +213,10 @@ function syncCssVars(
     "--pier-mono-font-family",
     computeMonoFontFamily(monoInput)
   );
+  root.style.setProperty(
+    "--pier-document-font-family",
+    computeDocumentFontFamily(docMode, uiInput, docInput)
+  );
   root.style.setProperty("--pier-code-font-size", `${codeFontSize}px`);
 }
 
@@ -160,6 +224,8 @@ function syncCssVars(
 
 interface FontSnapshot {
   codeFontSize: number;
+  docFontFamily: string;
+  docFontMode: DocFontMode;
   monoFontFamily: string;
   monoFontSize: number;
   uiFontFamily: string;
@@ -168,13 +234,21 @@ interface FontSnapshot {
 interface FontState extends FontSnapshot {
   _hydrate: (snapshot: FontSnapshot) => void;
   setCodeFontSize: (next: number) => Promise<void>;
+  setDocFontFamily: (next: string) => Promise<void>;
+  setDocFontMode: (next: DocFontMode) => Promise<void>;
   setMonoFontFamily: (next: string) => Promise<void>;
   setMonoFontSize: (next: number) => Promise<void>;
   setUiFontFamily: (next: string) => Promise<void>;
 }
 
+function normalizeDocFontMode(value: unknown): DocFontMode {
+  return value === "custom" ? "custom" : "ui";
+}
+
 function toFontSnapshot(snapshot: {
   codeFontSize?: unknown;
+  docFontFamily?: unknown;
+  docFontMode?: unknown;
   monoFontFamily?: unknown;
   monoFontSize?: unknown;
   uiFontFamily?: unknown;
@@ -186,6 +260,11 @@ function toFontSnapshot(snapshot: {
       typeof snapshot.monoFontFamily === "string"
         ? snapshot.monoFontFamily
         : "",
+    docFontMode: normalizeDocFontMode(snapshot.docFontMode),
+    docFontFamily:
+      typeof snapshot.docFontFamily === "string"
+        ? sanitizeDocFontPrimary(snapshot.docFontFamily)
+        : "",
     monoFontSize:
       typeof snapshot.monoFontSize === "number" ? snapshot.monoFontSize : 13,
     codeFontSize:
@@ -196,6 +275,8 @@ function toFontSnapshot(snapshot: {
 export const useFontStore = create<FontState>((set, get) => ({
   uiFontFamily: "",
   monoFontFamily: "",
+  docFontMode: "ui",
+  docFontFamily: "",
   monoFontSize: 13,
   codeFontSize: 13,
 
@@ -205,12 +286,20 @@ export const useFontStore = create<FontState>((set, get) => ({
     if (
       current.uiFontFamily === next.uiFontFamily &&
       current.monoFontFamily === next.monoFontFamily &&
+      current.docFontMode === next.docFontMode &&
+      current.docFontFamily === next.docFontFamily &&
       current.monoFontSize === next.monoFontSize &&
       current.codeFontSize === next.codeFontSize
     ) {
       return;
     }
-    syncCssVars(next.uiFontFamily, next.monoFontFamily, next.codeFontSize);
+    syncCssVars(
+      next.uiFontFamily,
+      next.monoFontFamily,
+      next.docFontMode,
+      next.docFontFamily,
+      next.codeFontSize
+    );
     set(next);
   },
 
@@ -222,6 +311,7 @@ export const useFontStore = create<FontState>((set, get) => ({
       useFontStore.getState()._hydrate(toFontSnapshot(merged));
     } catch (err) {
       console.error("[font.store] setUiFontFamily IPC failed:", err);
+      throw err;
     }
   },
 
@@ -233,6 +323,31 @@ export const useFontStore = create<FontState>((set, get) => ({
       useFontStore.getState()._hydrate(toFontSnapshot(merged));
     } catch (err) {
       console.error("[font.store] setMonoFontFamily IPC failed:", err);
+      throw err;
+    }
+  },
+
+  async setDocFontMode(next) {
+    try {
+      const merged = await window.pier.preferences.update({
+        docFontMode: next,
+      });
+      useFontStore.getState()._hydrate(toFontSnapshot(merged));
+    } catch (err) {
+      console.error("[font.store] setDocFontMode IPC failed:", err);
+      throw err;
+    }
+  },
+
+  async setDocFontFamily(next) {
+    try {
+      const merged = await window.pier.preferences.update({
+        docFontFamily: sanitizeDocFontPrimary(next),
+      });
+      useFontStore.getState()._hydrate(toFontSnapshot(merged));
+    } catch (err) {
+      console.error("[font.store] setDocFontFamily IPC failed:", err);
+      throw err;
     }
   },
 
@@ -244,6 +359,7 @@ export const useFontStore = create<FontState>((set, get) => ({
       useFontStore.getState()._hydrate(toFontSnapshot(merged));
     } catch (err) {
       console.error("[font.store] setMonoFontSize IPC failed:", err);
+      throw err;
     }
   },
 
@@ -255,6 +371,7 @@ export const useFontStore = create<FontState>((set, get) => ({
       useFontStore.getState()._hydrate(toFontSnapshot(merged));
     } catch (err) {
       console.error("[font.store] setCodeFontSize IPC failed:", err);
+      throw err;
     }
   },
 }));

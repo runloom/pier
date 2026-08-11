@@ -7,24 +7,13 @@ import {
   readMarkdownMeasureMode,
   readMarkdownOpenMode,
   readMarkdownReadingAppearance,
-  readMarkdownReadingFont,
-  readMarkdownReadingFontFamily,
   useMarkdownPreviewPrefsStore,
   writeMarkdownFontScale,
   writeMarkdownMeasureMode,
   writeMarkdownOpenMode,
   writeMarkdownReadingAppearance,
 } from "../../../../../src/plugins/builtin/files/renderer/markdown/preview-preferences.ts";
-import {
-  computeMarkdownReadingFontFamily,
-  sanitizeReadingFontPrimary,
-} from "../../../../../src/plugins/builtin/files/renderer/markdown/reading-font.ts";
-import {
-  FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY,
-  FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
-  FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY,
-  FILES_MARKDOWN_READING_FONT_SETTING_KEY,
-} from "../../../../../src/plugins/builtin/files/settings.ts";
+import { FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY } from "../../../../../src/plugins/builtin/files/settings.ts";
 
 describe("markdown-preview-preferences", () => {
   beforeEach(() => {
@@ -43,8 +32,6 @@ describe("markdown-preview-preferences", () => {
       fontScale: 1,
       measureMode: "comfortable",
       readingAppearance: "auto",
-      readingFont: "ui",
-      readingFontFamily: FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
     });
   });
 
@@ -88,26 +75,9 @@ describe("markdown-preview-preferences", () => {
     expect(readMarkdownReadingAppearance()).toBe("auto");
   });
 
-  it("sanitizes custom primary font names", () => {
-    expect(sanitizeReadingFontPrimary("Noto Serif SC")).toBe("Noto Serif SC");
-    expect(sanitizeReadingFontPrimary("foo; background: red")).toBe(
-      FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT
-    );
-    expect(sanitizeReadingFontPrimary("")).toBe("");
-  });
-
-  it("builds a document font stack from primary + fallbacks", () => {
-    const stack = computeMarkdownReadingFontFamily("Noto Serif SC");
-    expect(stack.startsWith('"Noto Serif SC"')).toBe(true);
-    expect(stack).toContain("Songti SC");
-    expect(stack.endsWith("serif")).toBe(true);
-  });
-
-  it("mirrors Files plugin configuration for markdown preview settings", () => {
+  it("mirrors Files plugin configuration for block height only", () => {
     const values = new Map<string, unknown>([
       [FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY, "capped"],
-      [FILES_MARKDOWN_READING_FONT_SETTING_KEY, "custom"],
-      [FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY, "Noto Serif SC"],
     ]);
     const listeners = new Set<
       (event: { affectsConfiguration: (key: string) => boolean }) => void
@@ -122,40 +92,15 @@ describe("markdown-preview-preferences", () => {
       },
     });
     expect(readMarkdownBlockHeightLimit()).toBe("capped");
-    expect(readMarkdownReadingFont()).toBe("custom");
-    expect(readMarkdownReadingFontFamily()).toBe("Noto Serif SC");
 
     values.set(FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY, "none");
-    values.set(FILES_MARKDOWN_READING_FONT_SETTING_KEY, "ui");
-    values.set(
-      FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY,
-      FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT
-    );
     for (const listener of listeners) {
       listener({
         affectsConfiguration: (key) =>
-          key === FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY ||
-          key === FILES_MARKDOWN_READING_FONT_SETTING_KEY ||
-          key === FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY,
+          key === FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY,
       });
     }
     expect(readMarkdownBlockHeightLimit()).toBe("none");
-    expect(readMarkdownReadingFont()).toBe("ui");
-    expect(readMarkdownReadingFontFamily()).toBe(
-      FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT
-    );
-    dispose();
-  });
-
-  it("migrates legacy document font mode to custom", () => {
-    const dispose = bindMarkdownSettingsFromConfiguration({
-      get: <T>(key: string) =>
-        (key === FILES_MARKDOWN_READING_FONT_SETTING_KEY
-          ? "document"
-          : undefined) as T,
-      onDidChange: () => () => undefined,
-    });
-    expect(readMarkdownReadingFont()).toBe("custom");
     dispose();
   });
 });

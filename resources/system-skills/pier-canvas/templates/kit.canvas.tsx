@@ -20,6 +20,9 @@ import { useState } from "react";
 
 /**
  * kit 起手稿：分区展示组件与状态。优先换成项目真实组件。
+ *
+ * 字体：必须界面字体 + 组件 token，展示「产品长什么样」；
+ * 禁止使用宿主「文档字体」或用户自定义阅读字。
  */
 export const canvas = {
   description: "组件目录：按用途分组，展示关键状态与变体。",

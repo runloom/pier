@@ -19,10 +19,6 @@ import {
   FILES_EDITOR_WORD_WRAP_SETTING_KEY,
   FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY,
   FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_VALUES,
-  FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
-  FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY,
-  FILES_MARKDOWN_READING_FONT_SETTING_KEY,
-  FILES_MARKDOWN_READING_FONT_VALUES,
   FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY,
   FILES_TREE_AUTO_REVEAL_SETTING_KEY,
   FILES_TREE_AUTO_REVEAL_VALUES,
@@ -189,27 +185,6 @@ export const FILES_PLUGIN_MANIFEST = {
         ],
         order: 40,
         type: "string",
-      },
-      [FILES_MARKDOWN_READING_FONT_SETTING_KEY]: {
-        default: "ui",
-        description:
-          "Body font for Markdown preview. Follow interface uses the app UI font; custom uses the font family stack below. Code blocks stay monospace.",
-        enum: [...FILES_MARKDOWN_READING_FONT_VALUES],
-        enumDescriptions: ["Follow interface", "Custom"],
-        order: 41,
-        type: "string",
-      },
-      [FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY]: {
-        default: FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
-        description:
-          "Primary font for Markdown preview when the mode is Custom. Empty uses the built-in document serif fallback chain. System fonts only.",
-        order: 42,
-        placeholder: FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
-        type: "string",
-        visibleWhen: {
-          equals: "custom",
-          key: FILES_MARKDOWN_READING_FONT_SETTING_KEY,
-        },
       },
     },
   },

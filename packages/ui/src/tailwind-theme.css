@@ -6,6 +6,8 @@
 @theme inline {
   --font-sans: var(--pier-ui-font-family);
   --font-mono: var(--pier-mono-font-family);
+  /* Document reading surfaces only (Markdown / docs canvas). */
+  --font-document: var(--pier-document-font-family);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

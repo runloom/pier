@@ -3,14 +3,8 @@ import { create } from "zustand";
 import {
   FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY,
   FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_VALUES,
-  FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
-  FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY,
-  FILES_MARKDOWN_READING_FONT_SETTING_KEY,
-  FILES_MARKDOWN_READING_FONT_VALUES,
   type FilesMarkdownBlockHeightLimit,
-  type FilesMarkdownReadingFont,
 } from "../../settings.ts";
-import { sanitizeReadingFontPrimary } from "./reading-font.ts";
 
 export type MarkdownOpenMode = "preview" | "source";
 export type MarkdownMeasureMode = "comfortable" | "wide";
@@ -22,11 +16,6 @@ export type MarkdownReadingAppearance = "auto" | "light" | "dark";
  * Default `none` = full expand with the page; `capped` = inner scroll.
  */
 export type MarkdownBlockHeightLimit = FilesMarkdownBlockHeightLimit;
-/**
- * Body font mode for Markdown preview prose.
- * `ui` = app UI stack; `custom` = user font-family stack (settings).
- */
-export type MarkdownReadingFont = FilesMarkdownReadingFont;
 
 const OPEN_MODE_KEY = "pier.files.markdown.openMode";
 const FONT_SCALE_KEY = "pier.files.markdown.fontScale";
@@ -44,9 +33,6 @@ export interface MarkdownPrefsSnapshot {
   fontScale: MarkdownFontScale;
   measureMode: MarkdownMeasureMode;
   readingAppearance: MarkdownReadingAppearance;
-  readingFont: MarkdownReadingFont;
-  /** Sanitized CSS font-family when readingFont is custom. */
-  readingFontFamily: string;
 }
 
 type PrefsListener = (snapshot: MarkdownPrefsSnapshot) => void;
@@ -108,22 +94,6 @@ function normalizeBlockHeightLimit(value: unknown): MarkdownBlockHeightLimit {
   return "none";
 }
 
-function normalizeReadingFont(value: unknown): MarkdownReadingFont {
-  // Migrate short-lived "document" preset → custom (same default stack).
-  if (value === "document") {
-    return "custom";
-  }
-  if (
-    typeof value === "string" &&
-    (FILES_MARKDOWN_READING_FONT_VALUES as readonly string[]).includes(value)
-  ) {
-    return value as MarkdownReadingFont;
-  }
-  return "ui";
-}
-
-export { sanitizeReadingFontPrimary as sanitizeReadingFontFamily } from "./reading-font.ts";
-
 function loadPrefsSnapshot(): MarkdownPrefsSnapshot {
   return {
     // Overwritten by bindMarkdownSettingsFromConfiguration on plugin activate.
@@ -131,8 +101,6 @@ function loadPrefsSnapshot(): MarkdownPrefsSnapshot {
     fontScale: readStoredFontScale(),
     measureMode: readStoredMeasureMode(),
     readingAppearance: readStoredReadingAppearance(),
-    readingFont: "ui",
-    readingFontFamily: FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT,
   };
 }
 
@@ -154,14 +122,13 @@ interface MarkdownPreviewPrefsState extends MarkdownPrefsSnapshot {
   setFontScale: (scale: MarkdownFontScale) => void;
   setMeasureMode: (mode: MarkdownMeasureMode) => void;
   setReadingAppearance: (appearance: MarkdownReadingAppearance) => void;
-  setReadingFont: (font: MarkdownReadingFont) => void;
-  setReadingFontFamily: (family: string) => void;
 }
 
 /**
  * Global markdown preview reading prefs for the files plugin.
- * Font scale / measure / appearance use localStorage; block height and
- * reading font mirror Files plugin settings (Settings → Files).
+ * Font scale / measure / appearance use localStorage; block height mirrors
+ * Files plugin settings. Document body font is host Appearance
+ * (`--pier-document-font-family`), not plugin configuration.
  */
 export const useMarkdownPreviewPrefsStore = create<MarkdownPreviewPrefsState>(
   (set, get) => ({
@@ -190,17 +157,6 @@ export const useMarkdownPreviewPrefsStore = create<MarkdownPreviewPrefsState>(
       set({ blockHeightLimit: limit });
       emitPrefsChanged(get());
     },
-
-    setReadingFont(font) {
-      // In-memory only; durable source is plugin configuration.
-      set({ readingFont: font });
-      emitPrefsChanged(get());
-    },
-
-    setReadingFontFamily(family) {
-      set({ readingFontFamily: sanitizeReadingFontPrimary(family) });
-      emitPrefsChanged(get());
-    },
   })
 );
 
@@ -211,8 +167,6 @@ function syncStoreFromStorage(): void {
   useMarkdownPreviewPrefsStore.setState({
     ...snapshot,
     blockHeightLimit: state.blockHeightLimit,
-    readingFont: state.readingFont,
-    readingFontFamily: state.readingFontFamily,
   });
   emitPrefsChanged(useMarkdownPreviewPrefsStore.getState());
 }
@@ -220,12 +174,7 @@ function syncStoreFromStorage(): void {
 if (typeof window !== "undefined") {
   window.addEventListener("storage", (event) => {
     if (!event.key?.startsWith("pier.files.markdown.")) return;
-    // Plugin settings keys also use pier.files.* but are not localStorage.
-    if (
-      event.key === FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY ||
-      event.key === FILES_MARKDOWN_READING_FONT_SETTING_KEY ||
-      event.key === FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY
-    ) {
+    if (event.key === FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY) {
       return;
     }
     syncStoreFromStorage();
@@ -246,31 +195,15 @@ export function bindMarkdownSettingsFromConfiguration(
     const limit = normalizeBlockHeightLimit(
       configuration.get(FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY)
     );
-    const font = normalizeReadingFont(
-      configuration.get(FILES_MARKDOWN_READING_FONT_SETTING_KEY)
-    );
-    const family = sanitizeReadingFontPrimary(
-      configuration.get(FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY)
-    );
     const state = useMarkdownPreviewPrefsStore.getState();
     if (state.blockHeightLimit !== limit) {
       state.setBlockHeightLimit(limit);
-    }
-    if (state.readingFont !== font) {
-      state.setReadingFont(font);
-    }
-    if (state.readingFontFamily !== family) {
-      state.setReadingFontFamily(family);
     }
   };
   apply();
   return configuration.onDidChange((event) => {
     if (
-      event.affectsConfiguration(
-        FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY
-      ) ||
-      event.affectsConfiguration(FILES_MARKDOWN_READING_FONT_SETTING_KEY) ||
-      event.affectsConfiguration(FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY)
+      event.affectsConfiguration(FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY)
     ) {
       apply();
     }
@@ -296,8 +229,6 @@ export function readMarkdownPrefsSnapshot(): MarkdownPrefsSnapshot {
     fontScale: state.fontScale,
     measureMode: state.measureMode,
     readingAppearance: state.readingAppearance,
-    readingFont: state.readingFont,
-    readingFontFamily: state.readingFontFamily,
   };
 }
 
@@ -356,14 +287,6 @@ export function writeMarkdownReadingAppearance(
 
 export function readMarkdownBlockHeightLimit(): MarkdownBlockHeightLimit {
   return useMarkdownPreviewPrefsStore.getState().blockHeightLimit;
-}
-
-export function readMarkdownReadingFont(): MarkdownReadingFont {
-  return useMarkdownPreviewPrefsStore.getState().readingFont;
-}
-
-export function readMarkdownReadingFontFamily(): string {
-  return useMarkdownPreviewPrefsStore.getState().readingFontFamily;
 }
 
 /** Shared capped heights when `blockHeightLimit === "capped"`. */

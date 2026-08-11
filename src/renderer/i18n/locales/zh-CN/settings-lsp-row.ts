@@ -5,8 +5,8 @@ export const settingsLspRow = {
     "控制是否启动语言服务器进程。文件识别与语法高亮已内建；服务器从本机 PATH 上的工具启动。缺工具时打开对应文件，编辑器状态栏会提示安装命令。上方「编辑器语言功能」只影响 Files 是否使用这些服务。",
   lspEnabled: "运行语言服务器",
   lspEnabledDesc: "关闭后所有项目都不会启动补全与诊断进程，省资源。",
-  lspIdleReleaseMinutes: "空闲释放（分钟）",
-  lspIdleReleaseMinutesDesc: "多久无编辑后释放进程（1–1440）",
+  lspIdleReleaseMinutes: "空闲释放",
+  lspIdleReleaseMinutesDesc: "多久无编辑后释放进程，范围 1–1440",
   lspMaxLocalWorkspaces: "本地项目上限",
   lspMaxLocalWorkspacesDesc:
     "同时跑语言服务的本地项目数（0 表示不限制关闭语义）",

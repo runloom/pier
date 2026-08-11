@@ -204,9 +204,12 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 检查点在 `tests/unit/plugins/markdown-preview-layout-governance.test.ts`。
 
-Markdown 预览阅读偏好（字号、舒适/宽屏）必须走
+Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 `useMarkdownPreviewPrefsStore`（`markdown-preview-preferences.ts`）：全局一份、
-`localStorage` 持久化、多预览实例共享。大纲固定右侧细轨 + hover 淡入浮层，不提供左右切换或持久收起偏好。
+`localStorage` 持久化、多预览实例共享。**正文字体**不走 Markdown 插件设置，而走宿主
+外观「文档字体」（`font.store` → `--pier-document-font-family`）；docs 类 Canvas 经
+`DocsShell` 继承同一变量，composition / kit 不得套用。大纲固定右侧细轨 + hover 淡入浮层，
+不提供左右切换或持久收起偏好。
 
 ### 交互控件密度规范
 

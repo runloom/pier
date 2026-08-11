@@ -56,7 +56,7 @@ function TerminalScrollbackRow() {
     <InputRow
       description={t("settings.row.terminalScrollbackMbDesc")}
       id="settings-terminal-scrollback-mb"
-      inputClassName="w-24"
+      inputClassName="w-28"
       inputMode="numeric"
       label={t("settings.row.terminalScrollbackMb")}
       max={SCROLLBACK_MAX}
@@ -71,6 +71,7 @@ function TerminalScrollbackRow() {
       onChange={setDraft}
       placeholder="64"
       step={1}
+      suffix={t("settings.unit.mb")}
       type="number"
       value={draft}
     />

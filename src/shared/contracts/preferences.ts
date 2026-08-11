@@ -76,6 +76,16 @@ export const stylePresetIdSchema = z.enum([
 
 export const DEFAULT_UI_FONT_FAMILY = "";
 export const DEFAULT_MONO_FONT_FAMILY = "";
+/**
+ * Document body font mode for Markdown preview and docs-kind canvases.
+ * - `ui` — follow the interface font stack
+ * - `custom` — use `docFontFamily` + document serif fallback chain
+ */
+export const docFontModeSchema = z.enum(["ui", "custom"]);
+export type DocFontMode = z.infer<typeof docFontModeSchema>;
+export const DEFAULT_DOC_FONT_MODE: DocFontMode = "ui";
+/** Primary custom document font name(s); empty uses serif fallback only. */
+export const DEFAULT_DOC_FONT_FAMILY = "";
 /** Terminal mono font size (px). Independent of code editor / diff. */
 export const DEFAULT_MONO_FONT_SIZE = 13;
 /** Code editor + Git diff mono font size (px). Independent of terminal. */
@@ -122,6 +132,8 @@ export const projectPreferencesSchema = z.object({
   language: z.enum(["system", "zh-CN", "en"]).default("system"),
   uiFontFamily: z.string().default(DEFAULT_UI_FONT_FAMILY),
   monoFontFamily: z.string().default(DEFAULT_MONO_FONT_FAMILY),
+  docFontMode: docFontModeSchema.default(DEFAULT_DOC_FONT_MODE),
+  docFontFamily: z.string().default(DEFAULT_DOC_FONT_FAMILY),
   monoFontSize: z.number().int().min(8).max(32).default(DEFAULT_MONO_FONT_SIZE),
   codeFontSize: z.number().int().min(8).max(32).default(DEFAULT_CODE_FONT_SIZE),
   terminalCursorStyle: terminalCursorStyleSchema.default(

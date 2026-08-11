@@ -294,6 +294,8 @@
   --pier-mono-font-family:
     "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular,
     "HarmonyOS Sans SC", "PingFang SC", Menlo, monospace;
+  /* Document reading (Markdown prose + docs canvas); defaults to UI stack. */
+  --pier-document-font-family: var(--pier-ui-font-family);
   /* Code editor + Git diff body size; terminal uses monoFontSize separately. */
   --pier-code-font-size: 13px;
 
@@ -303,6 +305,40 @@
   --toast-surface: oklch(0.97 0 0);
   --toast-foreground: oklch(0.18 0 0);
   --toast-action-bg: color-mix(in oklab, var(--toast-foreground) 10%, transparent);
+}
+
+/*
+ * Document reading surfaces (Markdown prose, DocsShell header/main).
+ * Prose inherits Appearance document font; interactive product controls
+ * re-assert UI font so live demos / badges stay product-true under custom
+ * document fonts (composition/kit never set data-reading-surface).
+ */
+[data-reading-surface] {
+  font-family: var(--pier-document-font-family);
+}
+
+[data-reading-surface]
+  :where(
+    button,
+    input,
+    textarea,
+    select,
+    [data-slot="button"],
+    [data-slot="input"],
+    [data-slot="textarea"],
+    [data-slot="input-group"],
+    [data-slot="select-trigger"],
+    [data-slot="toggle"],
+    [data-slot="checkbox"],
+    [data-slot="switch"],
+    [data-slot="badge"],
+    [data-slot="kbd"],
+    [role="combobox"],
+    [role="listbox"],
+    [role="menu"],
+    [role="menuitem"]
+  ) {
+  font-family: var(--pier-ui-font-family);
 }
 
 :root.light {

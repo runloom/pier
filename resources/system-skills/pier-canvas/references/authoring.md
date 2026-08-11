@@ -25,6 +25,25 @@ names or copy host source.
 Declare one primary kind per Canvas. Do not combine all three kinds in one page
 just to demonstrate capabilities.
 
+## Font roles (host Appearance — do not mix)
+
+Pier exposes three font roles. Canvases must pick the right one:
+
+| Role | CSS | When |
+|---|---|---|
+| **UI font** | default / `var(--pier-ui-font-family)` | `composition`, `kit`, chrome, controls, live component demos |
+| **Document font** | `var(--pier-document-font-family)` | **only** `kind: "docs"` reading body (via **`DocsShell`** header/main) |
+| **Monospace** | `var(--pier-mono-font-family)` | code, paths, keyboard samples |
+
+Rules:
+
+- Prefer **`DocsShell`** for docs — it applies the document font to the article
+  surface. Do not hand-set serif stacks on composition/kit pages.
+- Live examples of real components (Button, Input, …) always keep the **UI**
+  font so demos match the product.
+- Do not set `font-family` on `:root` / `body`, and do not force document font
+  onto kit catalogs or design frames.
+
 ## File structure
 
 Use one file for a simple Canvas:
