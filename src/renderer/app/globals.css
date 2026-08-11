@@ -145,6 +145,15 @@
     var(--foreground) 16%,
     var(--background)
   );
+  /* Sidebar list wash (file tree, chrome lists). Base is --sidebar (= muted),
+     already a raised surface — lower % than canvas interactive-* so light
+     themes stay clean (no chalky double-lift). Neutral fill only; never mix
+     CTA --primary into list selection. Dark defaults; :root.light retunes %. */
+  --list-hover-bg: color-mix(in oklab, var(--foreground) 8%, var(--sidebar));
+  --list-active-bg: color-mix(in oklab, var(--foreground) 14%, var(--sidebar));
+  /* Soft focus ring from product --ring (not CTA --primary). Same formula as
+     dockview tab focus; trees maps both focus + selected-focused to this. */
+  --list-focus-ring: color-mix(in oklab, var(--ring) 40%, transparent);
   --status-neutral-bg: color-mix(in oklab, var(--muted) 64%, transparent);
   --status-neutral-fg: var(--muted-foreground);
   --status-neutral-border: color-mix(
@@ -420,6 +429,10 @@
   --input: oklch(0.92 0 0);
   --ring: oklch(0.708 0 0);
   --overlay-scrim: color-mix(in oklab, var(--foreground) 22%, transparent);
+  /* List wash on already-muted sidebar: light needs lower lift than dark.
+     --list-focus-ring stays on :root (same soft --ring mix in both schemes). */
+  --list-hover-bg: color-mix(in oklab, var(--foreground) 5%, var(--sidebar));
+  --list-active-bg: color-mix(in oklab, var(--foreground) 9%, var(--sidebar));
   /* sidebar/titlebar 已在 :root 走 var(--xxx) 引用, .light 模式自动跟 --background/--foreground 翻面,
      无需在此重复定义. */
   --toast-surface: oklch(0.2 0 0);

@@ -33,9 +33,6 @@ const COLOR_MIX_OWNERS = new Set([
   // Diff/review estimate skeleton: shadow DOM bars use Canvas/CanvasText mixes
   // (no access to product CSS variables inside Pierre's shadow root).
   "packages/ui/src/diff-view/estimate-skeleton.ts",
-  // File tree shadow overrides: hover/selected mixes on sidebar surface
-  // (Pierre trees consume CSS variables, not Tailwind opacity utilities).
-  "packages/ui/src/file/tree-style.ts",
   // Native data-URL fallback cannot consume renderer theme tokens.
   "src/main/windows/renderer-recovery-page.ts",
   "src/plugins/builtin/files/renderer/editor/cm-theme.ts",
@@ -170,6 +167,80 @@ describe("color token governance", () => {
     expect(button).toContain("bg-action-accent");
     expect(button).toContain("text-action-danger");
     expect(button).not.toContain("text-status-info-fg");
+  });
+
+  it("keeps sidebar list wash tokens neutral, calibrated, and product-ring focused", () => {
+    const globals = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const themeTokens = readFileSync(
+      join(ROOT, "packages/ui/src/tailwind-theme.css"),
+      "utf8"
+    );
+    const treeStyle = readFileSync(
+      join(ROOT, "packages/ui/src/file/tree-style.ts"),
+      "utf8"
+    );
+    const dark = cssBlock(globals, ":root");
+    const light = cssBlock(globals, ":root.light");
+
+    // Dark defaults (muted sidebar needs slightly higher lift than light).
+    expect(cssVariable(dark, "list-hover-bg")).toBe(
+      "color-mix(in oklab, var(--foreground) 8%, var(--sidebar))"
+    );
+    expect(cssVariable(dark, "list-active-bg")).toBe(
+      "color-mix(in oklab, var(--foreground) 14%, var(--sidebar))"
+    );
+    // Soft --ring (dockview-aligned); never CTA --primary as focus chrome.
+    expect(cssVariable(dark, "list-focus-ring")).toBe(
+      "color-mix(in oklab, var(--ring) 40%, transparent)"
+    );
+    // Light retunes washes only; focus ring is single :root definition.
+    expect(cssVariable(light, "list-hover-bg")).toBe(
+      "color-mix(in oklab, var(--foreground) 5%, var(--sidebar))"
+    );
+    expect(cssVariable(light, "list-active-bg")).toBe(
+      "color-mix(in oklab, var(--foreground) 9%, var(--sidebar))"
+    );
+    expect(light).not.toMatch(/--list-focus-ring\s*:/);
+
+    // No planned-but-unused inactive selection token.
+    expect(globals).not.toContain("--list-inactive-bg");
+    expect(themeTokens).not.toContain("--color-list-inactive-bg");
+    // Consumed list tokens are exposed to Tailwind.
+    expect(themeTokens).toContain(
+      "--color-list-hover-bg: var(--list-hover-bg)"
+    );
+    expect(themeTokens).toContain(
+      "--color-list-active-bg: var(--list-active-bg)"
+    );
+    expect(themeTokens).toContain(
+      "--color-list-focus-ring: var(--list-focus-ring)"
+    );
+
+    // Fills stay neutral (fg@sidebar); focus ring shared across tree slots.
+    expect(dark).not.toMatch(
+      /--list-(?:hover|active)-bg:[^;]*var\(--primary\)/
+    );
+    expect(light).not.toMatch(
+      /--list-(?:hover|active)-bg:[^;]*var\(--primary\)/
+    );
+    expect(treeStyle).toContain(
+      '"--trees-bg-muted-override": "var(--list-hover-bg)"'
+    );
+    expect(treeStyle).toContain(
+      '"--trees-selected-bg-override": "var(--list-active-bg)"'
+    );
+    expect(treeStyle).toContain(
+      '"--trees-focus-ring-color-override": "var(--list-focus-ring)"'
+    );
+    expect(treeStyle).toContain(
+      '"--trees-selected-focused-border-color-override": "var(--list-focus-ring)"'
+    );
+    expect(treeStyle).not.toMatch(
+      /--trees-(?:bg-muted|selected-bg)-override":\s*"[^"]*primary/
+    );
   });
 
   it("maps quota health and cost charts to existing semantic colors", () => {
