@@ -13,15 +13,19 @@ function entry(
 ): GitReviewIndexEntry {
   return {
     entryKey: `entry:${path}`,
+    oldPaths: [],
     path,
+    status: "modified",
     renderSlots: [
       {
         group,
         oldPath: null,
         sectionKey,
+        status: "modified",
+        targetPath: path,
       },
     ],
-  } as unknown as GitReviewIndexEntry;
+  };
 }
 
 function thread(input: {
@@ -74,8 +78,9 @@ function thread(input: {
 }
 
 describe("buildReviewCommentNavTargets", () => {
-  it("orders by entry list then line and skips other surfaces/deleted/file targets", () => {
+  it("orders by tree presentation then line and skips other surfaces/deleted/file targets", () => {
     const targets = buildReviewCommentNavTargets({
+      // Index array order is b then a; tree path order is a then b.
       entries: [entry("b.ts", "sec-b"), entry("a.ts", "sec-a")],
       surface: "index",
       threads: [
@@ -88,14 +93,33 @@ describe("buildReviewCommentNavTargets", () => {
       ],
     });
     expect(targets.map((item) => item.threadId)).toEqual([
-      "t-b",
       "t-a1",
       "t-a2",
+      "t-b",
     ]);
-    expect(targets[1]).toMatchObject({
+    expect(targets[0]).toMatchObject({
       sectionKey: "sec-a",
       side: "old",
     });
+  });
+
+  it("uses collidingFileLabel so nav order matches presentation ledger", () => {
+    const entries = [entry("a", "sec-a-file"), entry("a/b", "sec-a-b")];
+    const label = (name: string) => `(file) ${name}`;
+    const targets = buildReviewCommentNavTargets({
+      collidingFileLabel: label,
+      entries,
+      surface: "index",
+      threads: [
+        thread({ id: "t-file", line: 1, path: "a" }),
+        thread({ id: "t-nested", line: 1, path: "a/b" }),
+      ],
+    });
+    // Under a/: `(file) a` before `b` by segment order.
+    expect(targets.map((item) => item.threadId)).toEqual([
+      "t-file",
+      "t-nested",
+    ]);
   });
 
   it("returns empty when threads are null", () => {

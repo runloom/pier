@@ -13,6 +13,7 @@ import { ReviewCommentNavigatorHost } from "./navigator-host.tsx";
 
 /** Diff 评论叠加层：漂移浮层 + 底部导航条。 */
 export function ReviewCommentsChrome(props: {
+  readonly collidingFileLabel?: (name: string) => string;
   readonly comments: ComponentProps<typeof ReviewDriftPanel>["comments"];
   readonly context: RendererPluginContext;
   readonly diffBase: GitReviewReadingSurface;
@@ -31,6 +32,7 @@ export function ReviewCommentsChrome(props: {
     <>
       <ReviewDriftPanel comments={props.comments} />
       <ReviewCommentNavigatorHost
+        collidingFileLabel={props.collidingFileLabel}
         context={props.context}
         diffBase={props.diffBase}
         diffHandleRef={props.diffHandleRef}

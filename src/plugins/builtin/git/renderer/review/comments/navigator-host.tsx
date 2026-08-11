@@ -13,6 +13,7 @@ import { ReviewCommentNavigator } from "./navigator.tsx";
 
 /** content 装配薄壳：有评论才挂浮动导航条。 */
 export function ReviewCommentNavigatorHost(props: {
+  readonly collidingFileLabel?: (name: string) => string;
   readonly context: RendererPluginContext;
   readonly diffBase: GitReviewReadingSurface;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;

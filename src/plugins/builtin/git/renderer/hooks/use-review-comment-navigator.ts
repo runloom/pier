@@ -13,7 +13,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { pluginText } from "../plugin-text.ts";
+import { createReviewCollidingFileLabel, pluginText } from "../plugin-text.ts";
 import {
   buildReviewCommentNavTargets,
   mapCommentSideToDiffView,
@@ -29,6 +29,7 @@ import { usePluginLanguage } from "../use-plugin-language.ts";
  * - 清除：确认后逐条 soft-delete 存活评论。
  */
 export function useReviewCommentNavigator(options: {
+  readonly collidingFileLabel?: (name: string) => string;
   readonly context: RendererPluginContext;
   readonly diffBase: GitReviewReadingSurface;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
@@ -56,6 +57,7 @@ export function useReviewCommentNavigator(options: {
   readonly visible: boolean;
 } {
   const {
+    collidingFileLabel: collidingFileLabelOption,
     context,
     diffBase,
     diffHandleRef,
@@ -66,15 +68,22 @@ export function useReviewCommentNavigator(options: {
   } = options;
   // 与其它 git UI 一致：语言切换必须驱动文案重读（context 本身稳定）。
   const language = usePluginLanguage();
+  const collidingFileLabel = useMemo(
+    () =>
+      collidingFileLabelOption ??
+      createReviewCollidingFileLabel(context, language),
+    [collidingFileLabelOption, context, language]
+  );
 
   const targets = useMemo(
     () =>
       buildReviewCommentNavTargets({
+        collidingFileLabel,
         entries,
         surface: diffBase,
         threads,
       }),
-    [diffBase, entries, threads]
+    [collidingFileLabel, diffBase, entries, threads]
   );
   const total = targets.length;
   const [activeIndex, setActiveIndex] = useState(0);

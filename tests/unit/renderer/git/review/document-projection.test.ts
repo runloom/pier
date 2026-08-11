@@ -9,15 +9,20 @@ import {
   totalScrollHeight,
 } from "../../../../../packages/ui/src/diff-view/geometry.ts";
 import { toCodeViewItems } from "../../../../../packages/ui/src/diff-view/items.ts";
+import { reviewContentEntryKeysInOrder } from "../../../../../src/plugins/builtin/git/renderer/review/document/body-class.ts";
 import {
+  compareReviewTreePaths,
+  defaultReviewCollidingFileLabel,
   indexReviewDocumentProjection,
   indexReviewEntrySections,
   indexReviewSectionEntries,
   isCodeViewMemberResource,
+  orderReviewPresentationSlots,
   projectReviewDocumentResource,
   projectReviewLedger,
 } from "../../../../../src/plugins/builtin/git/renderer/review/document/projection.ts";
 import type { GitReviewDocumentResource } from "../../../../../src/plugins/builtin/git/renderer/review/document/resource.ts";
+import { gitReviewTreeModel } from "../../../../../src/plugins/builtin/git/renderer/review/tree.tsx";
 import { patchDocument } from "./document-fixture.ts";
 
 function entry(index: number): GitReviewIndexEntry {
@@ -525,6 +530,290 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
       kind: "estimate",
       lineStats: { additions: 6, deletions: 9 },
     });
+  });
+});
+
+describe("presentation order gold standard (tree ≡ CodeView)", () => {
+  const treeLabels = {
+    committed: "Changed Files",
+    conflict: "Merge Changes",
+    staged: "Staged Changes",
+    unstaged: "Changes",
+  } as const;
+
+  function contentEntry(path: string, sectionKey: string): GitReviewIndexEntry {
+    return {
+      entryKey: `entry:${path}`,
+      oldPaths: [],
+      path,
+      renderSlots: [
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey,
+          status: "modified",
+          targetPath: path,
+        },
+      ],
+      status: "modified",
+    };
+  }
+
+  it("places root files after directories (AGENTS.md after src/…)", () => {
+    const paths = [
+      "AGENTS.md",
+      "src/main/ipc/notification-center.ts",
+      "tests/unit/main/notification/deliver-os.test.ts",
+    ];
+    expect([...paths].toSorted(compareReviewTreePaths)).toEqual([
+      "src/main/ipc/notification-center.ts",
+      "tests/unit/main/notification/deliver-os.test.ts",
+      "AGENTS.md",
+    ]);
+    // Flat localeCompare would put AGENTS.md first — that is the bug we fixed.
+    expect([...paths].toSorted((a, b) => a.localeCompare(b))[0]).toBe(
+      "AGENTS.md"
+    );
+  });
+
+  it("uses natural segment order (file2 before file10)", () => {
+    expect(compareReviewTreePaths("file2.ts", "file10.ts")).toBeLessThan(0);
+  });
+
+  it("keeps tree orderedFileRefs section order identical to CodeView ledger", () => {
+    const agents = contentEntry("AGENTS.md", "section:agents");
+    const nested = contentEntry("src/z.ts", "section:nested");
+    const entries = [agents, nested];
+    const label = defaultReviewCollidingFileLabel;
+    const tree = gitReviewTreeModel(entries, label, treeLabels);
+    const projection = projectReviewLedger({
+      collidingFileLabel: label,
+      context: context(),
+      entries,
+      locale: "en",
+      resourceByEntryKey: new Map(),
+    });
+    expect(tree.orderedFileRefs.map((ref) => ref.sectionKey)).toEqual([
+      "section:nested",
+      "section:agents",
+    ]);
+    expect(projection.items.map((item) => item.id)).toEqual(
+      tree.orderedFileRefs.map((ref) => ref.sectionKey)
+    );
+    expect(reviewContentEntryKeysInOrder(entries, undefined, label)).toEqual([
+      "entry:src/z.ts",
+      "entry:AGENTS.md",
+    ]);
+  });
+
+  it("aligns collision display paths between tree and presentation ledger", () => {
+    // File `src` collides with directory prefix of `src/child.ts`.
+    const fileAtDirName = contentEntry("src", "section:src-file");
+    const child = contentEntry("src/child.ts", "section:src-child");
+    const entries = [fileAtDirName, child];
+    const label = (name: string) => `(file) ${name}`;
+    const ordered = orderReviewPresentationSlots(entries, {
+      collidingFileLabel: label,
+    });
+    // Under `src/`, `(file) src` sorts before `child.ts` (pierre segment order).
+    expect(ordered.map((row) => row.displayPath)).toEqual([
+      "src/(file) src",
+      "src/child.ts",
+    ]);
+    const tree = gitReviewTreeModel(entries, label, treeLabels);
+    expect(tree.orderedFileRefs.map((ref) => ref.sectionKey)).toEqual(
+      ordered.map((row) => row.sectionKey)
+    );
+    const projection = projectReviewLedger({
+      collidingFileLabel: label,
+      context: context(),
+      entries,
+      locale: "en",
+      resourceByEntryKey: new Map(),
+    });
+    expect(projection.items.map((item) => item.id)).toEqual(
+      ordered.map((row) => row.sectionKey)
+    );
+  });
+
+  it("orders staged before unstaged for the same path (group ledger)", () => {
+    const half: GitReviewIndexEntry = {
+      entryKey: "entry:half",
+      oldPaths: [],
+      path: "a.ts",
+      renderSlots: [
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: "section:u",
+          status: "modified",
+          targetPath: "a.ts",
+        },
+        {
+          group: "staged",
+          oldPath: null,
+          sectionKey: "section:s",
+          status: "modified",
+          targetPath: "a.ts",
+        },
+      ],
+      status: "modified",
+    };
+    const label = defaultReviewCollidingFileLabel;
+    const tree = gitReviewTreeModel([half], label, treeLabels);
+    const projection = projectReviewLedger({
+      collidingFileLabel: label,
+      context: context(),
+      entries: [half],
+      locale: "en",
+      resourceByEntryKey: new Map(),
+    });
+    expect(tree.orderedFileRefs.map((ref) => ref.sectionKey)).toEqual([
+      "section:s",
+      "section:u",
+    ]);
+    expect(projection.items.map((item) => item.id)).toEqual([
+      "section:s",
+      "section:u",
+    ]);
+  });
+
+  it("keeps content order when meta sibling creates collision geometry", () => {
+    // Content file `pkg` + pure-rename meta under `pkg/` + root `zoo.ts`.
+    // Tree rewrites `pkg` → `pkg/File change · pkg` so zoo can sort before
+    // bare `pkg` only if collision is ignored. After full-geometry order,
+    // content subsequence must match tree content refs.
+    const pkgContent: GitReviewIndexEntry = {
+      entryKey: "entry:pkg",
+      oldPaths: [],
+      path: "pkg",
+      renderSlots: [
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: "section:pkg",
+          status: "modified",
+          targetPath: "pkg",
+        },
+      ],
+      status: "modified",
+    };
+    const metaNested: GitReviewIndexEntry = {
+      entryKey: "entry:meta",
+      oldPaths: ["pkg/old.ts"],
+      path: "pkg/deep/x.ts",
+      renderSlots: [
+        {
+          additions: 0,
+          deletions: 0,
+          group: "unstaged",
+          oldPath: "pkg/old.ts",
+          sectionKey: "section:meta",
+          status: "renamed",
+          targetPath: "pkg/deep/x.ts",
+        },
+      ],
+      status: "renamed",
+    };
+    const zoo: GitReviewIndexEntry = {
+      entryKey: "entry:zoo",
+      oldPaths: [],
+      path: "zoo.ts",
+      renderSlots: [
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: "section:zoo",
+          status: "modified",
+          targetPath: "zoo.ts",
+        },
+      ],
+      status: "modified",
+    };
+    const entries = [pkgContent, metaNested, zoo];
+    const label = defaultReviewCollidingFileLabel;
+    const full = orderReviewPresentationSlots(entries, {
+      collidingFileLabel: label,
+    });
+    const contentOnly = orderReviewPresentationSlots(entries, {
+      collidingFileLabel: label,
+      includeSlot: (slot) =>
+        slot.status === "modified" ||
+        slot.status === "added" ||
+        slot.status === "deleted" ||
+        slot.status === "conflicted" ||
+        (slot.status === "renamed" &&
+          typeof slot.additions === "number" &&
+          typeof slot.deletions === "number" &&
+          slot.additions + slot.deletions > 0),
+    });
+    // Meta still in full ledger; content filter drops pure rename.
+    expect(full.map((row) => row.sectionKey)).toContain("section:meta");
+    expect(contentOnly.map((row) => row.sectionKey)).toEqual([
+      "section:pkg",
+      "section:zoo",
+    ]);
+    // Collision rewrite puts pkg under directory — displayPath is not bare `pkg`.
+    const pkgRow = full.find((row) => row.sectionKey === "section:pkg");
+    expect(pkgRow?.displayPath.startsWith("pkg/")).toBe(true);
+
+    const tree = gitReviewTreeModel(entries, label, treeLabels);
+    const contentTreeKeys = tree.orderedFileRefs
+      .filter((ref) => ref.sectionKey !== "section:meta")
+      .map((ref) => ref.sectionKey);
+    const projection = projectReviewLedger({
+      collidingFileLabel: label,
+      context: context(),
+      entries,
+      locale: "en",
+      resourceByEntryKey: new Map(),
+    });
+    expect(projection.items.map((item) => item.id)).toEqual(contentTreeKeys);
+    expect(reviewContentEntryKeysInOrder(entries, undefined, label)).toEqual([
+      "entry:pkg",
+      "entry:zoo",
+    ]);
+  });
+
+  it("uses shared colliding label so locale-sensitive collision order matches", () => {
+    const fileAtDir = contentEntry("a", "section:a");
+    const nested = contentEntry("a/b", "section:ab");
+    const entries = [fileAtDir, nested];
+    const en = defaultReviewCollidingFileLabel;
+    const zh = (name: string) => `文件变更 · ${name}`;
+    const enOrder = orderReviewPresentationSlots(entries, {
+      collidingFileLabel: en,
+    }).map((row) => row.sectionKey);
+    const zhOrder = orderReviewPresentationSlots(entries, {
+      collidingFileLabel: zh,
+    }).map((row) => row.sectionKey);
+    // Labels differ; order must still be computed with the *same* factory on
+    // both tree and ledger (not English default on one side only).
+    const treeZh = gitReviewTreeModel(entries, zh, treeLabels);
+    const ledgerZh = projectReviewLedger({
+      collidingFileLabel: zh,
+      context: context(),
+      entries,
+      locale: "zh-CN",
+      resourceByEntryKey: new Map(),
+    });
+    expect(ledgerZh.items.map((item) => item.id)).toEqual(
+      treeZh.orderedFileRefs.map((ref) => ref.sectionKey)
+    );
+    expect(enOrder).toEqual(["section:ab", "section:a"]);
+    // zh label still sorts before `b` or after depending on first char — pin
+    // tree≡ledger regardless of absolute en/zh relative difference.
+    expect(zhOrder).toEqual(
+      treeZh.orderedFileRefs.map((ref) => ref.sectionKey)
+    );
+  });
+
+  it("pins path-store parity table (dirs-first, natural digits, case)", () => {
+    // Mirrors @pierre/trees path-store comparePreparedEntries for file leaves.
+    expect(compareReviewTreePaths("src/a.ts", "AGENTS.md")).toBeLessThan(0);
+    expect(compareReviewTreePaths("file2.ts", "file10.ts")).toBeLessThan(0);
+    expect(compareReviewTreePaths("src/A.ts", "src/a.ts")).toBeLessThan(0);
+    expect(compareReviewTreePaths("b/a.ts", "a.ts")).toBeLessThan(0);
   });
 });
 

@@ -28,6 +28,7 @@ import type {
 import { publishReviewDocumentSoftCache } from "./soft-cache.ts";
 
 export interface ReviewDocumentSyncContext {
+  readonly collidingFileLabel: (name: string) => string;
   readonly commentsIndexRef: RefObject<ReviewCommentIndex | null>;
   readonly commentsSeqRef: RefObject<number>;
   readonly committedProjectionGenerationRef: RefObject<number>;
@@ -199,6 +200,7 @@ export function createReviewDocumentSyncHandler(
     const nextProjection = projectReviewLedger({
       allowedBodyEntryKeys,
       authoritativeEntryKeys: controller.authoritativeEntryKeys(),
+      collidingFileLabel: ctx.collidingFileLabel,
       ...(comments === null ? {} : { comments }),
       commentsSeq: ctx.commentsSeqRef.current,
       context,

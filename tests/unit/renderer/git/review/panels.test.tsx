@@ -3288,9 +3288,10 @@ describe("Git review panel", () => {
     await waitFor(() => {
       expect(fileTree(view.container).textContent).toContain("File change · a");
       expect(fileTree(view.container).textContent).toContain("b");
+      // Tree DFS under `a/`: sibling `b` before collision label `File change · a`.
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-ids",
-        "section:0,section:1"
+        "section:1,section:0"
       );
     });
     fireEvent.click(findTreeItem(view.container, "File change · a"));
