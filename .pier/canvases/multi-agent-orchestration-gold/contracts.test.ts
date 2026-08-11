@@ -221,6 +221,66 @@ describe("Pier 多智能体监督范围契约", () => {
     ).toMatchObject({ valid: true, forbiddenSupportingClaims: [] });
   });
 
+  it("允许 bare multi-agent 目录昵称，仅拦截编排复合词与 PascalCase MultiAgent", async () => {
+    const contract = await loadExpectedModule<ScopeContractModule>(
+      "./scope-contract.ts",
+      "scope-contract",
+    );
+
+    expect(contract, "需要新增纯函数模块 scope-contract.ts").toBeDefined();
+    if (!contract) {
+      return;
+    }
+
+    const folderRef =
+      "建立 pier-cli-user-manual Canvas：用户命令面 shipped/planned/blocked 清单与主调用路径（交付波次表在 multi-agent gold）";
+    const canvasPathRef = "交付波次表在 multi-agent-orchestration-gold Canvas";
+
+    expect(
+      contract.validatePierArchitectureContract({
+        ownershipLayers: ["终端运行控制"],
+        ownershipClaims: ["PTY/process 与精确运行控制"],
+        entityNames: ["RuntimeRef"],
+        stateMachineEntities: ["Terminal runtime"],
+        supportingClaims: {
+          ordinary: [folderRef, canvasPathRef],
+          externalResearch: [],
+          externalOwnership: [],
+          explicitNonGoals: [],
+          antiPatterns: [],
+        },
+      }),
+    ).toMatchObject({ valid: true, forbiddenSupportingClaims: [] });
+
+    const base = {
+      ownershipLayers: ["终端运行控制"],
+      ownershipClaims: ["PTY/process 与精确运行控制"],
+      entityNames: ["RuntimeRef"] as string[],
+      stateMachineEntities: ["Terminal runtime"] as string[],
+      supportingClaims: {
+        ordinary: [] as string[],
+        externalResearch: [] as string[],
+        externalOwnership: [] as string[],
+        explicitNonGoals: [] as string[],
+        antiPatterns: [] as string[],
+      },
+    };
+
+    for (const claim of [
+      "Pier 暴露 multi-agent-task-lifecycle 与 MultiAgentRun",
+      "Pier 暴露 multi-agent run API",
+      "Pier 暴露 multi-agent-task",
+      "Pier 引入 MultiAgent 领域类型",
+    ]) {
+      const result = contract.validatePierArchitectureContract({
+        ...base,
+        supportingClaims: { ...base.supportingClaims, ordinary: [claim] },
+      });
+      expect(result.forbiddenSupportingClaims, claim).toEqual([claim]);
+      expect(result.valid, claim).toBe(false);
+    }
+  });
+
   it("否定只能豁免同一分句内紧邻的领域词，不能遮蔽后续正向声明", async () => {
     const contract = await loadExpectedModule<ScopeContractModule>(
       "./scope-contract.ts",

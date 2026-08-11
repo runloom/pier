@@ -1,11 +1,14 @@
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
   Frame,
   Row,
   Skeleton,
   Stack,
+  StatusIcon,
   Tabs,
   TabsContent,
   TabsList,
@@ -86,12 +89,21 @@ export default function MultiAgentOrchestrationCanvas() {
   if (error || !payload) {
     return (
       <Frame maxWidth={1080}>
-        <Alert variant="destructive">
-          <AlertTitle>无法加载智能体协作方案</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">
-            {error ?? "data.json 无效"}
-          </AlertDescription>
-        </Alert>
+        <Empty
+          className="min-h-64 py-12"
+          data-slot="scheme-load-error-empty"
+          role="status"
+        >
+          <EmptyHeader>
+            <EmptyMedia>
+              <StatusIcon kind="error" />
+            </EmptyMedia>
+            <EmptyTitle>无法加载智能体协作方案</EmptyTitle>
+            <EmptyDescription className="whitespace-pre-wrap text-left">
+              {error ?? "data.json 无效"}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </Frame>
     );
   }
