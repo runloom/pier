@@ -1,10 +1,17 @@
 /**
  * Dockview tab 几何与 kind 单一来源。
- * 标题槽 max-width / panel kind 标记只从这里读，禁止在 CSS/业务里再写魔法数。
+ * 标题槽限宽 / panel kind 标记只从这里读，禁止在 CSS/业务里再写魔法数。
+ *
+ * 限宽策略（金标准）：
+ * - 默认：标题槽不限宽（内容定宽；条满靠横向滚动 + 溢出菜单）
+ * - 例外：非路径 OSC 自由文案（agent/TUI）→ PANEL_TAB_OSC_TITLE_MAX_WIDTH_PX
  */
 
-/** 标题文本槽最大宽度（px）。trailing / dirty / × 不计入，始终 shrink-0 可见。 */
-export const PANEL_TAB_TITLE_MAX_WIDTH_PX = 160;
+/**
+ * 非路径 OSC 原文 tab short 的标题槽上限（px）。
+ * 路径型 OSC 已收成 basename，不受此限；文件/用户钉名不限。
+ */
+export const PANEL_TAB_OSC_TITLE_MAX_WIDTH_PX = 240;
 
 /** 拖拽 ghost 整 tab 上限（与 globals.css dragging 规则对齐）。 */
 export const PANEL_TAB_GHOST_MAX_WIDTH_PX = 220;

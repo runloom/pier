@@ -1,12 +1,17 @@
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import { describe, expect, it } from "vitest";
-import { resolveLong } from "@/components/common/document-title.tsx";
+import {
+  resolveLong,
+  resolveWindowTitlePrimary,
+  resolveWorkspaceLeaf,
+} from "@/components/common/document-title.tsx";
 import {
   activityTabChromeOverlay,
   basename,
   pathLikeTerminalTitle,
   tabShortFromTerminalTitle,
   terminalPanelDescriptor,
+  terminalTabTitleClampOsc,
 } from "@/panel-kits/terminal/tab-chrome.ts";
 
 describe("basename", () => {
@@ -41,6 +46,101 @@ describe("resolveLong", () => {
 
   it("falls back to display.short when no long", () => {
     expect(resolveLong({ display: { short: "x" } })).toBe("x");
+  });
+});
+
+describe("resolveWindowTitlePrimary", () => {
+  it("appends worktree leaf for multi-window scannability", () => {
+    expect(
+      resolveWindowTitlePrimary({
+        context: {
+          contextId: "c1",
+          projectRootPath: "/Users/dev/pier.worktree/feature-canvas",
+          updatedAt: 1,
+          worktreeRoot: "/Users/dev/pier.worktree/feature-canvas",
+        },
+        display: { short: "panel.tsx", long: "/repo/src/panel.tsx" },
+      })
+    ).toBe("/repo/src/panel.tsx — feature-canvas");
+  });
+
+  it("skips leaf when it equals the primary title", () => {
+    expect(
+      resolveWindowTitlePrimary({
+        context: {
+          contextId: "c1",
+          projectRootPath: "/Users/dev/pier",
+          updatedAt: 1,
+          worktreeRoot: "/Users/dev/pier",
+        },
+        display: { short: "pier", long: "pier" },
+      })
+    ).toBe("pier");
+  });
+
+  it("skips leaf when primary path already ends with that basename", () => {
+    expect(
+      resolveWindowTitlePrimary({
+        context: {
+          contextId: "c1",
+          projectRootPath: "/Users/dev/pier.worktree/feature-canvas",
+          updatedAt: 1,
+          worktreeRoot: "/Users/dev/pier.worktree/feature-canvas",
+        },
+        display: {
+          short: "feature-canvas",
+          long: "/Users/dev/pier.worktree/feature-canvas",
+        },
+      })
+    ).toBe("/Users/dev/pier.worktree/feature-canvas");
+  });
+
+  it("resolveWorkspaceLeaf prefers worktreeRoot", () => {
+    expect(
+      resolveWorkspaceLeaf({
+        context: {
+          contextId: "c1",
+          cwd: "/tmp",
+          projectRootPath: "/Users/dev/pier",
+          updatedAt: 1,
+          worktreeRoot: "/Users/dev/pier.worktree/feature-canvas",
+        },
+        display: { short: "x" },
+      })
+    ).toBe("feature-canvas");
+  });
+});
+
+describe("terminalTabTitleClampOsc", () => {
+  it("clamps free-form OSC titles without chrome override", () => {
+    expect(
+      terminalTabTitleClampOsc({
+        component: "terminal",
+        terminalTitle: "Claude Code",
+      })
+    ).toBe(true);
+  });
+
+  it("does not clamp path-like OSC, user chrome title, or non-terminals", () => {
+    expect(
+      terminalTabTitleClampOsc({
+        component: "terminal",
+        terminalTitle: "/Users/dev/pier/src",
+      })
+    ).toBe(false);
+    expect(
+      terminalTabTitleClampOsc({
+        component: "terminal",
+        tabChromeTitle: "lint",
+        terminalTitle: "Claude Code",
+      })
+    ).toBe(false);
+    expect(
+      terminalTabTitleClampOsc({
+        component: "pier.files.filePanel",
+        terminalTitle: "Claude Code",
+      })
+    ).toBe(false);
   });
 });
 

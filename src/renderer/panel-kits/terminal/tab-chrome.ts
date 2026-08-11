@@ -83,8 +83,8 @@ export function pathLikeTerminalTitle(title: string): string | null {
 }
 
 /**
- * OSC → tab short：路径型 OSC 收成叶子目录名（与文件 tab 一致，避免 160px 截断难辨）；
- * 非路径 OSC 原样。完整 OSC 仍进 long / terminalTitle。
+ * OSC → tab short：路径型 OSC 收成叶子目录名（与文件 tab 一致，短且可扫）；
+ * 非路径 OSC 原样（展示层可对 free-form OSC 限宽 240px）。完整 OSC 仍进 long / terminalTitle。
  */
 export function tabShortFromTerminalTitle(title: string): string {
   const pathish = pathLikeTerminalTitle(title);
@@ -92,6 +92,29 @@ export function tabShortFromTerminalTitle(title: string): string {
     return title;
   }
   return basename(pathish);
+}
+
+/**
+ * 标题槽是否对「非路径 OSC 自由文案」做 CSS clamp。
+ * 用户/任务 chrome title 覆盖、路径型 OSC、纯 cwd 短名 → 不 clamp。
+ */
+export function terminalTabTitleClampOsc(args: {
+  component: string | undefined;
+  /** effectiveTab / descriptor.tab 上的显式 title（用户钉名、任务 label 等） */
+  tabChromeTitle?: string | null | undefined;
+  terminalTitle?: string | null | undefined;
+}): boolean {
+  if (args.component !== "terminal") {
+    return false;
+  }
+  if (args.tabChromeTitle?.trim()) {
+    return false;
+  }
+  const osc = args.terminalTitle?.trim();
+  if (!osc) {
+    return false;
+  }
+  return pathLikeTerminalTitle(osc) == null;
 }
 
 export function tabChromeFromParams(
@@ -200,9 +223,10 @@ export function terminalPanelDescriptor(args: {
   }
   const cwdShort = args.effectiveCwd ? basename(args.effectiveCwd) : null;
   // Ghostty / 业界：
-  // short = 显式覆盖 → OSC（路径则 basename）→ 目录名（tab CSS 视觉省略）
+  // short = 显式覆盖 → OSC（路径则 basename）→ 目录名
+  //         非路径 OSC free-form：tab CSS clamp 240px（data-pier-tab-title-clamp=osc）
   // long  = 尽量完整：路径型优先绝对 cwd → 非路径 OSC 全文 → chrome 全文 → cwd
-  //         （顶栏 / tooltip / document.title 走 resolveLong）
+  //         顶栏/tooltip → resolveLong；OS document.title → resolveWindowTitlePrimary
   const short = chromeTitle ?? oscShort ?? cwdShort ?? "Terminal";
   let long: string | undefined;
   if (pathishOsc) {

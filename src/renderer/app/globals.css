@@ -786,8 +786,8 @@ body {
   --dv-tab-margin: 0;
   --dv-tab-border-radius: 0;
   --dv-border-radius: 0;
-  /* 标题文本槽上限；数值与 panel-tab-layout.ts PANEL_TAB_TITLE_MAX_WIDTH_PX 对齐（治理测试交叉校验） */
-  --pier-tab-title-max: 160px;
+  /* 仅非路径 OSC 自由标题限宽；与 panel-tab-layout.ts PANEL_TAB_OSC_TITLE_MAX_WIDTH_PX 对齐 */
+  --pier-tab-osc-title-max: 240px;
 
   /* — 面板 / Tab 栏底色 — */
   --dv-group-view-background-color: var(--background);
@@ -907,9 +907,10 @@ body {
   box-sizing: border-box;
   gap: 4px;
   /*
-   * Tab 仍按内容定宽（整颗 tab 不设硬顶）；标题文本槽单独 max-width +
+   * Tab 按内容定宽（整颗 tab 不设硬顶）。标题槽默认不限宽；
+   * 仅 data-pier-tab-title-clamp="osc"（非路径 OSC 自由文案）限 240px +
    * ellipsis。trailing / dirty / × 始终 shrink-0 可见。多 tab 超出时由
-   * dockview tabs 横向滚动承载。拖拽 ghost 另有 220px 整 tab 上限。
+   * dockview tabs 横向滚动 + 溢出菜单承载。拖拽 ghost 另有 220px 整 tab 上限。
    * height/width 100%：running 轨 absolute 顶边相对整颗 tab，避免落在内容垂直居中「半腰」。
    */
   height: 100%;
@@ -928,11 +929,25 @@ body {
 .dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
   font-weight: 600;
   margin-right: 0;
-  max-width: var(--pier-tab-title-max, 160px);
+  max-width: none;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 非路径 OSC（agent/TUI）自由标题：唯一默认限宽来源 */
+.dockview-theme-pier
+  .dv-tab
+  .dv-default-tab[data-pier-tab-title-clamp="osc"]
+  .dv-default-tab-content,
+.dv-tab.dv-tab-dragging
+  .dv-default-tab[data-pier-tab-title-clamp="osc"]
+  .dv-default-tab-content,
+.dv-tab-ghost-drag
+  .dv-default-tab[data-pier-tab-title-clamp="osc"]
+  .dv-default-tab-content {
+  max-width: var(--pier-tab-osc-title-max, 240px);
 }
 
 .dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {

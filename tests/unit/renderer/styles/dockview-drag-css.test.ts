@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   PANEL_TAB_GHOST_MAX_WIDTH_PX,
-  PANEL_TAB_TITLE_MAX_WIDTH_PX,
+  PANEL_TAB_OSC_TITLE_MAX_WIDTH_PX,
 } from "@/components/workspace/panel-tab-layout.ts";
 
 const SUBTLE_DROP_TARGET_BACKGROUND_RE =
@@ -67,7 +67,7 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain("font-weight: 600 !important");
   });
 
-  it("sizes idle tabs to content with a title-slot max-width (not a fixed 280px tab cap)", () => {
+  it("sizes idle tabs to content; only free-form OSC titles clamp (not a global title cap)", () => {
     const css = readFileSync(
       join(process.cwd(), "src/renderer/app/globals.css"),
       "utf8"
@@ -86,12 +86,15 @@ describe("Pier dockview drag CSS", () => {
     expect(idleTabRule).toContain("padding-inline: 6px 3px");
     expect(idleTabRule).toContain("gap: 4px");
     expect(idleTabRule).not.toContain("max-width: 280px");
-    // 标题文本槽单独限宽；与 panel-tab-layout.ts 常量交叉校验。
-    expect(css).toContain(
-      `--pier-tab-title-max: ${PANEL_TAB_TITLE_MAX_WIDTH_PX}px`
-    );
+    // 默认标题槽不限宽；仅 OSC free-form 限宽（与 panel-tab-layout 常量交叉校验）。
     const contentRule = css.slice(contentRuleStart, contentRuleStart + 400);
-    expect(contentRule).toContain("max-width: var(--pier-tab-title-max");
+    expect(contentRule).toContain("max-width: none");
+    expect(css).not.toContain("--pier-tab-title-max:");
+    expect(css).toContain(
+      `--pier-tab-osc-title-max: ${PANEL_TAB_OSC_TITLE_MAX_WIDTH_PX}px`
+    );
+    expect(css).toContain('data-pier-tab-title-clamp="osc"');
+    expect(css).toContain("max-width: var(--pier-tab-osc-title-max, 240px)");
     expect(css).toContain('data-pier-tab-kind="file"');
     expect(css).toContain("font-family: var(--font-mono)");
     expect(css).toContain(`max-width: ${PANEL_TAB_GHOST_MAX_WIDTH_PX}px`);
