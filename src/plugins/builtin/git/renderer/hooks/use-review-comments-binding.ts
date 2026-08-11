@@ -66,6 +66,13 @@ export function useReviewCommentsBinding({
     context,
     entries,
     entryKeyBySectionIdRef,
+    getSectionPatch: (sectionItemId) => {
+      const item = projection.items.find(
+        (candidate) => candidate.id === sectionItemId
+      );
+      const patch = item?.patch;
+      return typeof patch === "string" && patch.length > 0 ? patch : undefined;
+    },
     locale,
     scope,
     threads,

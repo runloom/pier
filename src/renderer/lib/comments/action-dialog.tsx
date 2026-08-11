@@ -33,15 +33,13 @@ import {
 } from "@/stores/comments.store.ts";
 import { useUncommittedLivePaths } from "./live-paths.ts";
 import {
-  allocateCommentRevealNonce,
-  openGitChangesForComments,
-} from "./open-git-changes.ts";
-import {
   formatCommentsForComposer,
   listProcessableComments,
   type ProcessableCommentItem,
   pathInLiveSet,
+  processableItemAnchorLabel,
 } from "./processable.ts";
+import { revealComment } from "./reveal.ts";
 
 function commentFailureTitleKey(
   reason: CommentFailureReason
@@ -79,11 +77,14 @@ function CommentsActionDialogBody({
   const gitRoot =
     context.gitRoot ?? context.worktreeRoot ?? context.projectRootPath;
   const livePaths = useUncommittedLivePaths(gitRoot);
+  // livePaths null：仍列 md/canvas；git-diff 在 processable 内因 livePaths 省略而跳过。
+  // livePaths Set：git 路径过滤 + md/canvas。
   const items = useMemo(
     () =>
-      livePaths === null
-        ? []
-        : listProcessableComments(project?.threads, { livePaths }),
+      listProcessableComments(
+        project?.threads,
+        livePaths === null ? undefined : { livePaths }
+      ),
     [livePaths, project?.threads]
   );
 
@@ -121,11 +122,17 @@ function CommentsActionDialogBody({
     if (busy) {
       return;
     }
-    // 对应文件已提交/不在变更中：勿打开空 Changes；提示后显式移除（非后台 prune）。
-    if (
-      livePaths !== null &&
-      !pathInLiveSet(item.path, item.oldPath, livePaths)
-    ) {
+    const gitPathLive =
+      item.kind === "git-diff" && livePaths !== null
+        ? pathInLiveSet(item.path, item.oldPath, livePaths)
+        : undefined;
+    const result = revealComment({
+      context,
+      ...(getGroupId ? { getGroupId } : {}),
+      item,
+      ...(gitPathLive === undefined ? {} : { gitPathLive }),
+    });
+    if (result.kind === "stale-git") {
       setBusy(true);
       try {
         await showAppAlert({
@@ -138,20 +145,14 @@ function CommentsActionDialogBody({
       }
       return;
     }
-    const opened = openGitChangesForComments({
-      context,
-      ...(getGroupId ? { getGroupId } : {}),
-      pendingReveal: {
-        // 优先原 group；stage/unstage 后槽位消失时回退 entry 上存在的 slot。
-        allowGroupFallback: true,
-        group: item.group,
-        line: item.line,
-        nonce: allocateCommentRevealNonce(),
-        path: item.path,
-        side: item.side,
-      },
-    });
-    if (!opened) {
+    if (result.kind === "unsupported") {
+      await showAppAlert({
+        body: t("terminal.statusBar.item.comments.jumpUnsupportedBody"),
+        title: t("terminal.statusBar.item.comments.jumpUnsupportedTitle"),
+      });
+      return;
+    }
+    if (result.kind === "failed") {
       await showAppAlert({
         body: t("terminal.statusBar.item.comments.jumpFailedBody"),
         title: t("terminal.statusBar.item.comments.jumpFailed"),
@@ -321,8 +322,8 @@ function CommentsActionDialogBody({
   );
   useContentDialogFooter(setFooter, footer);
 
-  // status 未到 / 刷新失败：加载骨架，避免「无评论」空态闪烁。
-  if (livePaths === null) {
+  // status 未到且尚无任何可展示项：骨架（避免空态闪烁）；有 md/canvas 则直接列。
+  if (livePaths === null && items.length === 0) {
     return (
       <div
         aria-busy="true"
@@ -358,10 +359,16 @@ function CommentsActionDialogBody({
   return (
     <ul className="flex flex-col gap-2">
       {items.map((item) => {
-        const title = t("terminal.statusBar.item.comments.itemTitle", {
-          line: item.line,
-          path: item.path,
-        });
+        const anchor = processableItemAnchorLabel(item);
+        const title =
+          anchor.line === undefined
+            ? t("terminal.statusBar.item.comments.itemTitlePathOnly", {
+                path: anchor.path,
+              })
+            : t("terminal.statusBar.item.comments.itemTitle", {
+                line: anchor.line,
+                path: anchor.path,
+              });
         return (
           <li key={item.commentId}>
             <Item

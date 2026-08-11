@@ -1,33 +1,67 @@
 import type { CommentThread } from "@shared/contracts/comments/base.ts";
 import type { GitReviewGroup } from "@shared/contracts/git/review.ts";
+import { projectComment } from "./project-thread.ts";
 
 /**
- * Agent 状态栏 / 评论操作弹窗可处理的行内评论。
- * 口径：git-diff + 未提交变更面 + 仍有存活正文 + 路径仍在当前工作区变更中
- * （与打开 Changes 的 uncommitted 一致；commit/discard 后不再计入）。
+ * Agent 状态栏 / 评论操作弹窗可处理的评论。
  *
- * 注意：v1 只做展示过滤，不自动软删存储中的孤儿评论（避免 stash / 临时 clean
- * 误删）。用户点失效项时由跳转路径显式删除。
+ * - git-diff：未提交变更面 + 存活正文 + 路径仍在 livePaths（与 uncommitted Changes 一致）
+ * - markdown / canvas：存活正文即可（不依赖 git status）
+ *
+ * status：
+ * - located / stale：有表面证据（如 gitDiffPatches）时由 projectComment 决定
+ * - unverified：无证据，禁止假装 located（设计：不向 agent 输出假精确）
  */
-export interface ProcessableCommentItem {
+export type ProcessableCommentStatus = "located" | "stale" | "unverified";
+
+interface ProcessableBase {
   readonly body: string;
   readonly commentId: string;
-  readonly group: GitReviewGroup;
-  readonly line: number;
-  /** git-diff oldPath；跳转 stale 判定与 path 共用 {@link pathInLiveSet}。 */
-  readonly oldPath: string | null;
-  readonly path: string;
-  readonly side: "new" | "old";
+  readonly status: ProcessableCommentStatus;
   readonly threadId: string;
   readonly updatedAt: number;
 }
 
+export type ProcessableCommentItem =
+  | (ProcessableBase & {
+      readonly kind: "git-diff";
+      readonly group: GitReviewGroup;
+      readonly line: number;
+      readonly oldPath: string | null;
+      readonly path: string;
+      readonly side: "new" | "old";
+    })
+  | (ProcessableBase & {
+      readonly kind: "markdown";
+      readonly excerpt: string;
+      readonly headingId?: string;
+      readonly path: string;
+      readonly startLine: number;
+    })
+  | (ProcessableBase & {
+      readonly kind: "canvas";
+      readonly anchorId?: string;
+      readonly excerpt?: string;
+      readonly label?: string;
+      readonly path: string;
+    });
+
 export interface ListProcessableCommentsOptions {
   /**
-   * 当前未提交变更路径（含重命名 origPath）。传入后剔除 path 已不在变更中的评论
-   * （典型：对应 diff 已 commit）。省略则不做路径过滤（单测 / 尚未拿到 status）。
+   * 当前 review section patch，key = `${group}\0${path}`。
+   * 有则投影 git status；无则 git 标 unverified。
+   */
+  readonly gitDiffPatches?: ReadonlyMap<string, string>;
+  /**
+   * 当前未提交变更路径（含重命名 origPath）。传入后剔除 path 已不在变更中的 git 评论。
+   * 省略则 git-diff 不计入（避免 status 未就绪时闪孤儿）；md/canvas 不受影响。
+   * 传空 Set 表示已就绪且无变更路径。
    */
   readonly livePaths?: ReadonlySet<string>;
+}
+
+function gitPatchKey(group: string, path: string): string {
+  return `${group}\0${path}`;
 }
 
 function isUncommittedGitDiff(
@@ -53,7 +87,39 @@ export function pathInLiveSet(
   return oldPath !== null && livePaths.has(oldPath);
 }
 
-/** 收集可交给智能体处理的评论（剔除非 uncommitted / 无存活正文 / 路径已无变更）。 */
+function pushLiveBodies(
+  thread: CommentThread,
+  push: (commentId: string, body: string) => void
+): void {
+  for (const comment of thread.comments) {
+    if (comment.deletedAt !== undefined || !comment.body.trim()) {
+      continue;
+    }
+    push(comment.id, comment.body.trim());
+  }
+}
+
+function gitDiffStatus(
+  thread: CommentThread & {
+    target: Extract<CommentThread["target"], { kind: "git-diff" }>;
+  },
+  patches: ReadonlyMap<string, string> | undefined
+): ProcessableCommentStatus {
+  const patch = patches?.get(
+    gitPatchKey(thread.target.group, thread.target.path)
+  );
+  if (patch === undefined) {
+    return "unverified";
+  }
+  const projection = projectComment(thread, { kind: "git-diff", patch });
+  if (projection.status === "located") {
+    return "located";
+  }
+  // drifted / missing → agent 仍可处理，但标 stale
+  return "stale";
+}
+
+/** 收集可交给智能体处理的评论。 */
 export function listProcessableComments(
   threads: readonly CommentThread[] | undefined,
   options?: ListProcessableCommentsOptions
@@ -62,45 +128,103 @@ export function listProcessableComments(
     return [];
   }
   const livePaths = options?.livePaths;
+  const patches = options?.gitDiffPatches;
   const items: ProcessableCommentItem[] = [];
   for (const thread of threads) {
-    if (!isUncommittedGitDiff(thread)) {
-      continue;
-    }
-    if (
-      livePaths !== undefined &&
-      !pathInLiveSet(thread.target.path, thread.target.oldPath, livePaths)
-    ) {
-      continue;
-    }
-    // One processable row per live comment (not only the first in the thread).
-    for (const comment of thread.comments) {
-      if (comment.deletedAt !== undefined || !comment.body.trim()) {
+    if (isUncommittedGitDiff(thread)) {
+      // git 需要 livePaths 就绪；省略 = 不计（status 未到）
+      if (livePaths === undefined) {
         continue;
       }
-      items.push({
-        body: comment.body.trim(),
-        commentId: comment.id,
-        group: thread.target.group,
-        line: thread.target.line,
-        oldPath: thread.target.oldPath,
-        path: thread.target.path,
-        side: thread.target.side,
-        threadId: thread.id,
-        updatedAt: thread.updatedAt,
+      if (
+        !pathInLiveSet(thread.target.path, thread.target.oldPath, livePaths)
+      ) {
+        continue;
+      }
+      const status = gitDiffStatus(thread, patches);
+      pushLiveBodies(thread, (commentId, body) => {
+        items.push({
+          body,
+          commentId,
+          group: thread.target.group,
+          kind: "git-diff",
+          line: thread.target.line,
+          oldPath: thread.target.oldPath,
+          path: thread.target.path,
+          side: thread.target.side,
+          status,
+          threadId: thread.id,
+          updatedAt: thread.updatedAt,
+        });
+      });
+      continue;
+    }
+    if (thread.target.kind === "markdown") {
+      pushLiveBodies(thread, (commentId, body) => {
+        items.push({
+          body,
+          commentId,
+          excerpt: thread.target.excerpt,
+          kind: "markdown",
+          path: thread.target.path,
+          startLine: thread.target.startLine,
+          // 步骤 1 无 IR surface：有 excerpt 可交 agent，标 unverified 精确定位
+          status: "unverified",
+          threadId: thread.id,
+          updatedAt: thread.updatedAt,
+          ...(thread.target.headingId === undefined
+            ? {}
+            : { headingId: thread.target.headingId }),
+        });
+      });
+      continue;
+    }
+    if (thread.target.kind === "canvas") {
+      pushLiveBodies(thread, (commentId, body) => {
+        items.push({
+          body,
+          commentId,
+          kind: "canvas",
+          path: thread.target.path,
+          status: "unverified",
+          threadId: thread.id,
+          updatedAt: thread.updatedAt,
+          ...(thread.target.anchorId === undefined
+            ? {}
+            : { anchorId: thread.target.anchorId }),
+          ...(thread.target.excerpt === undefined
+            ? {}
+            : { excerpt: thread.target.excerpt }),
+          ...(thread.target.label === undefined
+            ? {}
+            : { label: thread.target.label }),
+        });
       });
     }
   }
   items.sort((left, right) => {
+    const kindOrder = kindSortKey(left.kind) - kindSortKey(right.kind);
+    if (kindOrder !== 0) {
+      return kindOrder;
+    }
     const byPath = left.path.localeCompare(right.path);
     if (byPath !== 0) {
       return byPath;
     }
-    if (left.line !== right.line) {
-      return left.line - right.line;
+    if (left.kind === "git-diff" && right.kind === "git-diff") {
+      if (left.line !== right.line) {
+        return left.line - right.line;
+      }
+      if (left.side !== right.side) {
+        return left.side === "old" ? -1 : 1;
+      }
     }
-    if (left.side !== right.side) {
-      return left.side === "old" ? -1 : 1;
+    if (
+      left.kind === "markdown" &&
+      right.kind === "markdown" &&
+      left.startLine !== right.startLine
+    ) {
+      return left.startLine - right.startLine;
     }
     const byThread = left.threadId.localeCompare(right.threadId);
     if (byThread !== 0) {
@@ -111,11 +235,66 @@ export function listProcessableComments(
   return items;
 }
 
+function kindSortKey(kind: ProcessableCommentItem["kind"]): number {
+  switch (kind) {
+    case "git-diff":
+      return 0;
+    case "markdown":
+      return 1;
+    case "canvas":
+      return 2;
+    default:
+      return 9;
+  }
+}
+
 export function processableCommentCount(
   threads: readonly CommentThread[] | undefined,
   options?: ListProcessableCommentsOptions
 ): number {
   return listProcessableComments(threads, options).length;
+}
+
+function statusTag(status: ProcessableCommentStatus): string {
+  if (status === "stale") {
+    return "stale";
+  }
+  if (status === "unverified") {
+    return "unverified";
+  }
+  return "located";
+}
+
+function formatGitLine(
+  item: Extract<ProcessableCommentItem, { kind: "git-diff" }>
+): string {
+  return `- [${statusTag(item.status)}] \`${item.path}:${item.line}\`: ${item.body}`;
+}
+
+function formatMarkdownLine(
+  item: Extract<ProcessableCommentItem, { kind: "markdown" }>
+): string {
+  const anchor =
+    item.headingId === undefined
+      ? `${item.path}:L${item.startLine}`
+      : `${item.path}#${item.headingId}`;
+  const excerpt =
+    item.status === "stale" || item.status === "unverified"
+      ? ` excerpt «${item.excerpt}»`
+      : "";
+  return `- [${statusTag(item.status)}] \`${anchor}\`${excerpt}: ${item.body}`;
+}
+
+function formatCanvasLine(
+  item: Extract<ProcessableCommentItem, { kind: "canvas" }>
+): string {
+  let node = "";
+  if (item.anchorId !== undefined) {
+    node = ` [${item.anchorId}]`;
+  } else if (item.label !== undefined) {
+    node = ` (${item.label})`;
+  }
+  return `- [${statusTag(item.status)}] \`${item.path}\`${node}: ${item.body}`;
 }
 
 /** 写入智能体输入框的评论块（纯文本，便于 agent 阅读）。 */
@@ -125,11 +304,20 @@ export function formatCommentsForComposer(
   if (items.length === 0) {
     return "";
   }
-  const lines = items.map((item) => {
-    const anchor = `${item.path}:${item.line}`;
-    return `- \`${anchor}\`: ${item.body}`;
-  });
-  return ["Please address these review comments:", "", ...lines].join("\n");
+  const review = items.filter((item) => item.kind === "git-diff");
+  const document = items.filter((item) => item.kind === "markdown");
+  const canvas = items.filter((item) => item.kind === "canvas");
+  const sections: string[] = ["Please address these comments:"];
+  if (review.length > 0) {
+    sections.push("", "## Review", ...review.map(formatGitLine));
+  }
+  if (document.length > 0) {
+    sections.push("", "## Document", ...document.map(formatMarkdownLine));
+  }
+  if (canvas.length > 0) {
+    sections.push("", "## Canvas", ...canvas.map(formatCanvasLine));
+  }
+  return sections.join("\n");
 }
 
 export function mergeComposerText(existing: string, addition: string): string {
@@ -142,4 +330,24 @@ export function mergeComposerText(existing: string, addition: string): string {
     return add;
   }
   return `${base}\n\n${add}`;
+}
+
+/** 列表行标题锚点文案（i18n 外的 path 片段）。 */
+export function processableItemAnchorLabel(item: ProcessableCommentItem): {
+  path: string;
+  line?: number;
+} {
+  if (item.kind === "git-diff") {
+    return { path: item.path, line: item.line };
+  }
+  if (item.kind === "markdown") {
+    if (item.headingId !== undefined) {
+      return { path: `${item.path}#${item.headingId}` };
+    }
+    return { path: item.path, line: item.startLine };
+  }
+  if (item.anchorId !== undefined) {
+    return { path: `${item.path} [${item.anchorId}]` };
+  }
+  return { path: item.path };
 }

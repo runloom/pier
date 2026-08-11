@@ -10,10 +10,9 @@ export const commentTimestampSchema = z.number().int().nonnegative();
 /**
  * 评论锚点类型完整枚举（forward-compat）。
  *
- * schema 层（commentTargetSchema）v1 只注册 git 两种；code / markdown / canvas
- * 只在此枚举占位，待对应消费端落地时经版本迁移加入（设计文档 §9）。把枚举与
- * schema 分离，让「未来支持」的类型在类型层可见、在 zod 校验层被拒绝，
- * 避免半生不熟的 target 流入存储。
+ * schema 层（commentTargetSchema）已注册 git-diff / git-file / markdown / canvas；
+ * code 仍仅在本枚举占位，待消费端落地时再加入判别联合（设计文档 §9）。
+ * 枚举与 schema 分离：类型层可见未来 kind，zod 校验层拒绝未注册 target。
  */
 export const COMMENT_TARGET_KINDS = [
   "git-diff",

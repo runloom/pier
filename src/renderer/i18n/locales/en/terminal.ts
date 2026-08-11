@@ -160,7 +160,7 @@ export const terminal = {
         chipLabel: "Comments · {{count}}",
         clear: "Clear",
         clearBody:
-          "This removes every comment on the current changes. You can’t undo this.",
+          "This removes every comment in this list (changes, documents, and canvases). You can’t undo this.",
         clearConfirm: "Clear",
         clearFailed: "Couldn’t clear comments",
         clearPartialBody:
@@ -169,9 +169,10 @@ export const terminal = {
         clearTitle: "Clear all comments?",
         deleteFailed: "Couldn’t delete comment",
         deleteOne: "Delete comment",
-        dialogTitle: "Review comments",
+        dialogTitle: "Comments",
         empty: "No open comments",
-        emptyBody: "Add comments on the current changes to handle them here.",
+        emptyBody:
+          "Add comments on changes, documents, or canvases to handle them here.",
         emptyTitle: "No comments to handle",
         failure: {
           commentNotFound: "That comment is no longer available.",
@@ -181,9 +182,13 @@ export const terminal = {
           threadNotFound: "That comment thread is no longer available.",
         },
         itemTitle: "{{path}}:{{line}}",
+        itemTitlePathOnly: "{{path}}",
         jumpFailed: "Couldn’t open changes",
         jumpFailedBody:
           "Open the Changes view for this project, then try jumping again.",
+        jumpUnsupportedBody:
+          "Jumping to this comment type isn’t available yet. You can still submit it to the agent from this list.",
+        jumpUnsupportedTitle: "Jump not available yet",
         loadingLabel: "Loading current changes…",
         openCount: "{{count}} open comments",
         staleJumpBody:
