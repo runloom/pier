@@ -40,6 +40,8 @@ const HUMAN_ALLOWED = new Set([
   ...AGENTS_RUNTIME_OPS,
   "control.hold",
   "control.trace",
+  "control.snapshot",
+  "control.watch",
 ]);
 
 /**

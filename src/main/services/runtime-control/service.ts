@@ -190,7 +190,7 @@ export function createRuntimeControlService(
           agentId: input.agentId,
           panelId: created.panelId,
           windowId: created.windowId,
-          ...(record.cwd ? { cwd: record.cwd } : {}),
+          ...(record.cwd ? { cwd: record.cwd, canonicalPath: record.cwd } : {}),
           ...(record.worktreeKey ? { worktreeKey: record.worktreeKey } : {}),
           ...(record.incarnationId
             ? { incarnationId: record.incarnationId }
@@ -270,6 +270,9 @@ export function createRuntimeControlService(
         runtime: record.runtime,
         ...(record.cwd ? { cwd: record.cwd, canonicalPath: record.cwd } : {}),
         ...(record.worktreeKey ? { worktreeKey: record.worktreeKey } : {}),
+        ...(record.incarnationId
+          ? { incarnationId: record.incarnationId }
+          : {}),
       };
       return { ok: true, data };
     },

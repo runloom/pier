@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-11T01:20:00.000+08:00",
+  "generatedAt": "2026-08-11T13:15:36.000Z",
   "source": "pier-cli-user-manual Canvas (canonical user manual) + industry CLI manual IA",
   "data": {
     "meta": {
@@ -9,7 +9,7 @@
       "status": "使用手册",
       "version": "v1.1"
     },
-    "bluf": "先启动 Pier，再运行 pier（或 pnpm --silent cli:dev）。新手路径：status → open . → agents catalog → agents start（持久）。脚本一律加 --json。本手册按「开始使用 → 常用任务 → 命令参考 → 智能体 → 疑难」组织；暂未实现的命令会标明，勿写入脚本依赖。 一次性提问请用各 agent 原生 CLI，不提供 pier agents invoke。",
+    "bluf": "先启动 Pier，再运行 pier（或 pnpm --silent cli:dev）。新手路径：status → open . → agents catalog → agents start（持久）。定位工作树用 worktrees list/get（含 WorktreeRef）；跨资源事实用 snapshot/watch。脚本一律加 --json。一次性提问请用各 agent 原生 CLI，不提供 pier agents invoke。",
     "context": "面向使用 Pier 的人与脚本作者。CLI 是本机工作台控制入口，不是远程 API，也不是智能体权限系统。",
     "goals": [
       "60 秒内完成第一次成功调用",
@@ -216,17 +216,17 @@
           {
             "id": "snapshot",
             "name": "snapshot",
-            "status": "planned",
-            "synopsis": "pier snapshot [--include windows,panels,activity] --json",
-            "description": "多资源原子快照，供脚本对账。",
+            "status": "shipped",
+            "synopsis": "pier snapshot --json",
+            "description": "原子高水位快照：agents/windows/panels/tasks/activity 摘要；无文件内容。",
             "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"bootId\": \"…\",\n    \"windows\": [],\n    \"panels\": []\n  }\n}"
           },
           {
             "id": "watch",
             "name": "watch",
-            "status": "planned",
-            "synopsis": "pier watch [--after-revision <n>] --json",
-            "description": "全局事实流（JSONL）。游标失效时需重新 snapshot。",
+            "status": "shipped",
+            "synopsis": "pier watch [--after <rev>] [--timeout <ms>] --json",
+            "description": "顶层事实流（control.watch）；≠ 工作完成。",
             "output": "{\"type\":\"event\",\"revision\":13,\"resource\":\"panels\"}"
           }
         ]
@@ -296,36 +296,32 @@
             "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"default\": { \"cwd\": \"/Users/you/project\" }\n  }\n}"
           },
           {
-            "id": "terminal-list",
+            "id": "term-list",
             "name": "terminal list",
-            "status": "planned",
+            "status": "shipped",
             "synopsis": "pier terminal list [--window <id>] --json",
-            "description": "列出终端运行实例（含运行代际等）。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"terminals\": [{\n      \"panelId\": \"terminal-abc\",\n      \"cwd\": \"/Users/you/project\",\n      \"runtimeId\": \"…\",\n      \"generation\": 3\n    }]\n  }\n}"
+            "description": "列出终端 panel 定位（canonicalPath / role）；不含画面内容。"
           },
           {
-            "id": "terminal-get",
+            "id": "term-get",
             "name": "terminal get",
-            "status": "planned",
-            "synopsis": "pier terminal get --panel <id> --json",
-            "description": "查询单个终端详情。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-abc\",\n    \"alive\": true,\n    \"cwd\": \"/Users/you/project\"\n  }\n}"
+            "status": "shipped",
+            "synopsis": "pier terminal get --panel <panelId> --json",
+            "description": "查询单条终端定位。"
           },
           {
-            "id": "terminal-send",
+            "id": "term-send",
             "name": "terminal send",
-            "status": "planned",
-            "synopsis": "pier terminal send --panel <id> --text \"…\" --json",
-            "description": "向终端发送文本。accepted 只表示已提交，不等于命令跑完。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"accepted\": true,\n    \"panelId\": \"terminal-abc\"\n  }\n}"
+            "status": "shipped",
+            "synopsis": "pier terminal send --panel <panelId> --text <s> --json",
+            "description": "向非 agent 终端写入文本。agent 运行请用 agents.turn。"
           },
           {
-            "id": "terminal-key",
+            "id": "term-key",
             "name": "terminal key",
-            "status": "planned",
-            "synopsis": "pier terminal key --panel <id> --key Enter --json",
-            "description": "发送按键。",
-            "output": "{\n  \"ok\": true,\n  \"data\": { \"accepted\": true, \"key\": \"Enter\" }\n}"
+            "status": "shipped",
+            "synopsis": "pier terminal key --panel <panelId> --key enter|escape|tab|ctrl-c --json",
+            "description": "向非 agent 终端发送键。agent 运行请用 agents.interrupt/turn。"
           },
           {
             "id": "terminal-interrupt",
@@ -371,7 +367,7 @@
             "name": "worktrees list",
             "status": "shipped",
             "synopsis": "pier worktrees list --path <仓库> --json",
-            "description": "列出仓库下的工作树。",
+            "description": "列出仓库下的工作树。 每条含 WorktreeRef 与 canonicalPath（定位用，非文件内容）。",
             "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"worktrees\": [{\n      \"path\": \"/Users/you/repo\",\n      \"branch\": \"main\"\n    }]\n  }\n}"
           },
           {
@@ -393,18 +389,18 @@
           {
             "id": "wt-check",
             "name": "worktrees check",
-            "status": "planned",
-            "synopsis": "pier worktrees check --path <路径> --json",
-            "description": "检查路径是否可作为工作树目标。",
+            "status": "shipped",
+            "synopsis": "pier worktrees check --path <path> --json",
+            "description": "检查路径是否支持 Git 工作树能力。",
             "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"isGit\": true,\n    \"canCreateWorktree\": true\n  }\n}"
           },
           {
             "id": "wt-get",
             "name": "worktrees get",
-            "status": "planned",
-            "synopsis": "pier worktrees get --path <路径> --json",
-            "description": "查询单个工作树详情。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"path\": \"…\",\n    \"branch\": \"feature-x\"\n  }\n}"
+            "status": "shipped",
+            "synopsis": "pier worktrees get --path <path> --json",
+            "description": "查询单条工作树定位信息，返回完整 WorktreeRef（含 incarnationId）与 canonicalPath；不含文件/Git 内容。",
+            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"status\": \"found\",\n    \"canonicalPath\": \"/path/to/worktree\",\n    \"worktreeRef\": {\n      \"worktreeKey\": \"/path/to/worktree\",\n      \"rootPath\": \"/path/to/worktree\",\n      \"incarnationId\": \"…\"\n    }\n  }\n}"
           },
           {
             "id": "wt-register",
@@ -417,9 +413,9 @@
           {
             "id": "wt-remove",
             "name": "worktrees remove",
-            "status": "planned",
-            "synopsis": "pier worktrees remove --path <路径> [--force] --json",
-            "description": "安全移除工作树。",
+            "status": "shipped",
+            "synopsis": "pier worktrees remove --path <path> [--delete-branch] --json",
+            "description": "安全移除 Pier 管理的 linked 工作树。活跃智能体/任务运行或有未提交改动时拒绝；同路径重建会更换 incarnationId。",
             "output": "{\n  \"ok\": true,\n  \"data\": { \"removed\": true }\n}"
           }
         ]
@@ -464,9 +460,9 @@
           {
             "id": "tasks-get",
             "name": "tasks get",
-            "status": "planned",
+            "status": "shipped",
             "synopsis": "pier tasks get <runId> --json",
-            "description": "更完整的单条运行详情（规划命名）。",
+            "description": "查询 shell TaskRun 状态（同 status）。",
             "output": "{\n  \"ok\": true,\n  \"data\": { \"runId\": \"run-…\", \"status\": \"running\" }\n}"
           },
           {
@@ -480,18 +476,25 @@
           {
             "id": "tasks-output",
             "name": "tasks output",
-            "status": "planned",
-            "synopsis": "pier tasks output <runId> [--after-byte n] --json",
-            "description": "分段读取任务输出。",
+            "status": "shipped",
+            "synopsis": "pier tasks output <runId> [--task <taskId>] --json",
+            "description": "读取 shell 任务输出缓冲。",
             "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"chunk\": \"…\",\n    \"nextByte\": 4096,\n    \"eof\": false\n  }\n}"
           },
           {
-            "id": "tasks-stop-rerun",
-            "name": "tasks stop / rerun",
+            "id": "tasks-stop",
+            "name": "tasks stop",
+            "status": "shipped",
+            "synopsis": "pier tasks stop <runId> [--force] --json",
+            "description": "停止 shell TaskRun。"
+          },
+          {
+            "id": "tasks-rerun",
+            "name": "tasks rerun",
             "status": "planned",
-            "synopsis": "pier tasks stop <runId> --json\npier tasks rerun <runId> --json",
-            "description": "停止或重跑（规划）。",
-            "output": "{\n  \"ok\": true,\n  \"data\": { \"runId\": \"run-new-…\" }\n}"
+            "synopsis": "pier tasks rerun <runId> --json",
+            "description": "不建任务台账；请用原 taskId 重新 tasks run。",
+            "output": "{\n  \"ok\": false,\n  \"error\": { \"code\": \"unsupported\", \"message\": \"re-issue tasks run with original taskId\" }\n}"
           }
         ]
       },

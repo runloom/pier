@@ -17,6 +17,12 @@ import {
   type IssuedAgentCallerCredential,
   issueAgentCallerCredential,
 } from "../../services/agent-caller/issue-credential.ts";
+import {
+  authorizerFromCapabilityAuthority,
+  createCapabilityAuthority,
+} from "../../services/capability/authority.ts";
+import { controlSnapshotSourcesFromCore } from "../../services/control-snapshot/from-core.ts";
+import { createControlSnapshotService } from "../../services/control-snapshot/service.ts";
 import { createFakeTerminalBackend } from "../../services/runtime-control/fake-backend.ts";
 import { createHostTerminalBackend } from "../../services/runtime-control/host-backend.ts";
 import { createRuntimeControlService } from "../../services/runtime-control/service.ts";
@@ -81,7 +87,10 @@ export async function registerCliLocalControl({
   registerCliClient(core);
   const socketPath = resolveLocalControlSocketPath(userDataDir);
   const credentialStore = createAgentCallerCredentialStore();
-  const authorizer = createDefaultLocalControlAuthorizer();
+  const capabilityAuthority = createCapabilityAuthority({
+    base: createDefaultLocalControlAuthorizer(),
+  });
+  const authorizer = authorizerFromCapabilityAuthority(capabilityAuthority);
   const receipts = createEffectReceiptStore();
   const discovery = createStaticAgentsDiscovery(() =>
     core.services.agentRuntimeIndex.listMachine()
@@ -118,6 +127,12 @@ export async function registerCliLocalControl({
       return record.fact;
     },
   });
+  const snapshotService = createControlSnapshotService(
+    controlSnapshotSourcesFromCore(core.services, bootId)
+  );
+  // 与 v1 app.snapshot 共享 revision 高水位（桌面 IPC 与 CLI 对齐）
+  core.services.controlBootId = bootId;
+  core.services.controlSnapshot = snapshotService;
   const server: PierLocalControlServer = createPierLocalControlServer({
     handleRequest(envelope) {
       const clientId = clientIdOf(envelope);
@@ -133,6 +148,7 @@ export async function registerCliLocalControl({
     authorizer,
     receipts,
     runtimeControl,
+    snapshotService,
   });
   const issueAgentCredential: AgentCallerIssuer = (args = {}) =>
     issueAgentCallerCredential({
@@ -155,6 +171,9 @@ export async function registerCliLocalControl({
     return {
       close: async () => {
         bindAgentCallerIssuer(null);
+        // exactOptionalPropertyTypes：用 Reflect.deleteProperty 清可选字段
+        Reflect.deleteProperty(core.services, "controlSnapshot");
+        Reflect.deleteProperty(core.services, "controlBootId");
         await server.close();
       },
       socketPath,

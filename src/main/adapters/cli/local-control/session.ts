@@ -8,6 +8,7 @@ import {
   localControlClientFrameSchema,
 } from "@shared/contracts/local-control/frames.ts";
 import type { AgentCallerCredentialStore } from "../../../services/agent-caller/credential-store.ts";
+import type { ControlSnapshotService } from "../../../services/control-snapshot/service.ts";
 import type { RuntimeControlService } from "../../../services/runtime-control/service.ts";
 import {
   type AgentsDiscovery,
@@ -23,6 +24,11 @@ import {
   LOCAL_CONTROL_WRITE_OPS,
   type LocalControlAuthorizer,
 } from "./authorize.ts";
+import {
+  handleControlHoldOp,
+  handleControlSnapshotOp,
+  handleControlWatchOp,
+} from "./control-snapshot-ops.ts";
 import {
   controlErrorResponse,
   handleAgentsSelfOp,
@@ -40,24 +46,6 @@ import {
   handleControlSubscribe,
   type SubscriptionRecord,
 } from "./subscribe.ts";
-
-export {
-  LOCAL_CONTROL_FEATURE_AGENTS_CATALOG,
-  LOCAL_CONTROL_FEATURE_AGENTS_FOCUS,
-  LOCAL_CONTROL_FEATURE_AGENTS_GET,
-  LOCAL_CONTROL_FEATURE_AGENTS_INTERRUPT,
-  LOCAL_CONTROL_FEATURE_AGENTS_LIST,
-  LOCAL_CONTROL_FEATURE_AGENTS_SCREEN,
-  LOCAL_CONTROL_FEATURE_AGENTS_SELF,
-  LOCAL_CONTROL_FEATURE_AGENTS_START,
-  LOCAL_CONTROL_FEATURE_AGENTS_TERMINATE,
-  LOCAL_CONTROL_FEATURE_AGENTS_TURN,
-  LOCAL_CONTROL_FEATURE_AGENTS_WAIT,
-  LOCAL_CONTROL_FEATURE_AGENTS_WATCH,
-  LOCAL_CONTROL_FEATURE_CONTROL_HOLD,
-  LOCAL_CONTROL_FEATURE_CONTROL_TRACE,
-  LOCAL_CONTROL_FEATURE_SUBSCRIBE,
-} from "./features.ts";
 
 type InflightMap = Map<
   string,
@@ -83,6 +71,8 @@ export interface CreateLocalControlSessionArgs {
   receipts?: EffectReceiptStore | undefined;
   /** W3 持久运行控制；缺省则 runtime op 返回 unsupported。 */
   runtimeControl?: RuntimeControlService | undefined;
+  /** W4 顶层 snapshot/watch 聚合器。 */
+  snapshotService?: ControlSnapshotService | undefined;
 }
 
 export type CreateSessionFromHelloResult =
@@ -434,37 +424,54 @@ export function createLocalControlSessionFromHello(
       return;
     }
     if (op === "control.hold") {
-      if (inflight.has(requestId)) {
+      handleControlHoldOp({
+        requestId,
+        params,
+        inflight,
+        disposed: () => disposed,
+        emit: emitSafe,
+      });
+      return;
+    }
+    if (op === "control.snapshot") {
+      const fail = (err: unknown) =>
         emitSafe(
           controlErrorResponse(
             requestId,
-            "effect_in_progress",
-            "request already in flight"
+            "internal_error",
+            err instanceof Error ? err.message : "control.snapshot failed"
           )
         );
-        return;
-      }
-      const msRaw = params.ms;
-      const ms =
-        typeof msRaw === "number" && Number.isFinite(msRaw)
-          ? Math.min(Math.max(0, msRaw), 30_000)
-          : 50;
-      const ac = new AbortController();
-      inflight.set(requestId, { ac, kind: "hold" });
-      const timer = setTimeout(() => {
-        if (ac.signal.aborted || disposed) {
-          return;
-        }
+      // fire-and-forget；用 then/catch 避免 void 运算符
+      handleControlSnapshotOp({
+        requestId,
+        params,
+        snapshotService: args.snapshotService,
+      })
+        .then(emitSafe)
+        .catch(fail);
+      return;
+    }
+    if (op === "control.watch") {
+      const fail = (err: unknown) => {
         inflight.delete(requestId);
-        emitSafe({
-          apiVersion: LOCAL_CONTROL_API_VERSION,
-          type: "response",
-          requestId,
-          ok: true,
-          data: { heldMs: ms },
-        });
-      }, ms);
-      ac.signal.addEventListener("abort", () => clearTimeout(timer));
+        emitSafe(
+          controlErrorResponse(
+            requestId,
+            "internal_error",
+            err instanceof Error ? err.message : "control.watch failed"
+          )
+        );
+      };
+      handleControlWatchOp({
+        requestId,
+        params,
+        bootId: args.bootId,
+        snapshotService: args.snapshotService,
+        inflight,
+        disposed: () => disposed,
+        emit: emitSafe,
+      }).catch(fail);
       return;
     }
     emitSafe(

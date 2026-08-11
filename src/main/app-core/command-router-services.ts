@@ -62,6 +62,12 @@ export interface PierCoreServices {
     recordUse(actionId: string): Promise<void>;
   };
   comments: CommentsService;
+  /**
+   * local-control 注册后注入：与 CLI control.snapshot/watch 共享 revision 高水位。
+   * 未注册时 app.snapshot 降级为临时 service（仍可用，revision 从 1 起）。
+   */
+  controlBootId?: string;
+  controlSnapshot?: import("../services/control-snapshot/service.ts").ControlSnapshotService;
   fileDrafts?: FileDraftsService;
   files?: FileService;
   fileWatch?: FileWatchService;

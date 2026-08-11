@@ -12,6 +12,7 @@ import {
 } from "@shared/contracts/local-control/errors.ts";
 import type { LocalControlServerFrame } from "@shared/contracts/local-control/frames.ts";
 import type { AgentCallerCredentialStore } from "../../../services/agent-caller/credential-store.ts";
+import type { ControlSnapshotService } from "../../../services/control-snapshot/service.ts";
 import type { RuntimeControlService } from "../../../services/runtime-control/service.ts";
 import {
   checkLocalControlPeerIdentity,
@@ -54,6 +55,8 @@ export interface CreatePierLocalControlServerArgs {
   runtimeControl?: RuntimeControlService | undefined;
   /** 跳过 peer 检查（仅测试默认路径需要时使用；生产勿开）。 */
   skipPeerCheck?: boolean | undefined;
+  /** W4 顶层 snapshot/watch。 */
+  snapshotService?: ControlSnapshotService | undefined;
   socketPath: string;
 }
 
@@ -176,6 +179,7 @@ function attachConnection(
     authorizer?: LocalControlAuthorizer | undefined;
     receipts?: EffectReceiptStore | undefined;
     runtimeControl?: RuntimeControlService | undefined;
+    snapshotService?: ControlSnapshotService | undefined;
     resolvePeerUid?: ResolvePeerUid | undefined;
     requirePeerUid?: boolean | undefined;
     skipPeerCheck?: boolean | undefined;
@@ -313,6 +317,7 @@ function attachConnection(
           authorizer: ctx.authorizer,
           receipts: ctx.receipts,
           runtimeControl: ctx.runtimeControl,
+          snapshotService: ctx.snapshotService,
           emit: (frame) => {
             if (!closed) {
               writeControlFrame(socket, frame);
@@ -348,6 +353,7 @@ export function createPierLocalControlServer({
   authorizer,
   receipts,
   runtimeControl,
+  snapshotService,
   resolvePeerUid,
   requirePeerUid,
   skipPeerCheck,
@@ -418,6 +424,7 @@ export function createPierLocalControlServer({
             authorizer,
             receipts,
             runtimeControl,
+            snapshotService,
             resolvePeerUid,
             requirePeerUid,
             skipPeerCheck,

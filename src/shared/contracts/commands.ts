@@ -17,6 +17,7 @@ import {
 } from "./environment.ts";
 import { fileCommandSchemas } from "./file/commands.ts";
 import { gitCommandSchemas } from "./git/commands.ts";
+import { hostControlCommandSchemas } from "./host-control-commands.ts";
 import {
   liveModulesCompileRequestSchema,
   liveModulesGetUrlRequestSchema,
@@ -58,6 +59,7 @@ import {
   worktreeCheckRequestSchema,
   worktreeCreateRequestSchema,
   worktreeCreationDefaultsRequestSchema,
+  worktreeGetRequestSchema,
   worktreeListRequestSchema,
   worktreeOpenRequestSchema,
   worktreeOpenTerminalRequestSchema,
@@ -201,6 +203,9 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("commandPaletteMru.clear") }),
   worktreeListRequestSchema.extend({
     type: z.literal("worktree.list"),
+  }),
+  worktreeGetRequestSchema.extend({
+    type: z.literal("worktree.get"),
   }),
   worktreeCheckRequestSchema.extend({
     type: z.literal("worktree.check"),
@@ -366,6 +371,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   ...managedPluginCommandSchemas,
   ...panelTransferPierCommandSchemas,
   ...projectSkillsCommandSchemas,
+  ...hostControlCommandSchemas,
 ]);
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;

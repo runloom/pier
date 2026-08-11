@@ -165,13 +165,20 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "run.backgroundSnapshot": { capabilities: ["workspace:read"] },
   "run.runsSnapshot": { capabilities: ["workspace:read"] },
   "run.list": { capabilities: ["workspace:read"] },
+  "run.output": { capabilities: ["workspace:read"] },
   "run.recent": { capabilities: ["workspace:read"] },
+  "run.rerun": { capabilities: ["workspace:open"] },
   "run.spawn": { capabilities: ["workspace:open"] },
   "run.status": { capabilities: ["workspace:read"] },
   "run.stop": { capabilities: ["workspace:open"] },
+  "app.snapshot": { capabilities: ["app:read"] },
   // terminal.open 静态元数据只记基础 capabilities;launch 存在时的额外
   // 能力由 requiredCapabilitiesForCommand 动态叠加。
   "terminal.open": { capabilities: ["workspace:open"] },
+  "terminal.list": { capabilities: ["terminal:read"] },
+  "terminal.get": { capabilities: ["terminal:read"] },
+  "terminal.send": { capabilities: ["terminal:control"] },
+  "terminal.key": { capabilities: ["terminal:control"] },
   "terminal.profile.delete": { capabilities: ["terminal:control"] },
   "terminal.profile.list": { capabilities: ["terminal:read"] },
   "terminal.profile.read": { capabilities: ["terminal:read"] },
@@ -193,6 +200,7 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "worktree.check": { capabilities: ["worktree:read"] },
   "worktree.create": { capabilities: ["worktree:write"] },
   "worktree.creationDefaults": { capabilities: ["worktree:read"] },
+  "worktree.get": { capabilities: ["worktree:read"] },
   "worktree.list": { capabilities: ["worktree:read"] },
   "worktree.open": {
     capabilities: ["worktree:read", "workspace:open"],

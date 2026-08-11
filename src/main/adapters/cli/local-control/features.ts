@@ -25,6 +25,8 @@ export const LOCAL_CONTROL_FEATURE_AGENTS_INTERRUPT = "agents.interrupt";
 export const LOCAL_CONTROL_FEATURE_AGENTS_TERMINATE = "agents.terminate";
 export const LOCAL_CONTROL_FEATURE_CONTROL_HOLD = "control.hold";
 export const LOCAL_CONTROL_FEATURE_CONTROL_TRACE = "control.trace";
+export const LOCAL_CONTROL_FEATURE_CONTROL_SNAPSHOT = "control.snapshot";
+export const LOCAL_CONTROL_FEATURE_CONTROL_WATCH = "control.watch";
 export const LOCAL_CONTROL_FEATURE_SUBSCRIBE = "stream.subscribe";
 
 /** 持久运行 op 单一名单（authorize / session 路由 / handlers 共用）。 */
@@ -58,6 +60,8 @@ const DISCOVERY_FEATURES = [
 const CONTROL_FEATURES = [
   LOCAL_CONTROL_FEATURE_CONTROL_HOLD,
   LOCAL_CONTROL_FEATURE_CONTROL_TRACE,
+  LOCAL_CONTROL_FEATURE_CONTROL_SNAPSHOT,
+  LOCAL_CONTROL_FEATURE_CONTROL_WATCH,
   LOCAL_CONTROL_FEATURE_SUBSCRIBE,
 ] as const;
 

@@ -8,22 +8,34 @@ export function usage() {
     "Usage:",
     "  pier open <path> [--window <windowId>] [--split <direction>] [--no-focus] --json",
     "  pier terminal open [--cwd <path>] [--profile <profileId>] [--env KEY=VALUE] [--command <command> | -- <command...>] [--window <windowId>] [--split <direction>] [--no-focus] --json",
+    "  pier terminal list [--window <windowId>] --json",
+    "  pier terminal get --panel <panelId> [--window <windowId>] --json",
+    "  pier terminal send --panel <panelId> --text <s> [--window <windowId>] --json",
+    "  pier terminal key --panel <panelId> --key <name> [--window <windowId>] --json",
     "  pier terminal profiles list --json",
     "  pier terminal profiles get <profileId> --json",
     "  pier terminal profiles set <profileId> [--cwd <path>] [--env KEY=VALUE] [--command <command> | -- <command...>] --json",
     "  pier terminal profiles delete <profileId> --json",
     "  pier tasks list [--path <path>] --json",
     "  pier tasks run <taskId> [--path <path>] [--input id=value] [--window <windowId>] [--split <direction>] [--no-focus] --json",
-    "  pier tasks status <runId> --json",
+    "  pier tasks status|get <runId> --json",
+    "  pier tasks output <runId> [--task <taskId>] --json",
+    "  pier tasks stop <runId> [--force] --json",
     "  pier tasks cancel <runId> [--window <windowId>] --json",
+    "  pier tasks rerun <runId> --json",
     "  pier status --json",
+    "  pier snapshot --json",
+    "  pier watch [--after <revision>] [--timeout <ms>] [--poll-ms <ms>] --json",
     "  pier windows list --json",
     "  pier windows focus <windowId> --json",
     "  pier panels list [--window <windowId>] --json",
     "  pier panels focus <panelId> [--window <windowId>] [--no-focus] --json",
     "  pier worktrees list --path <path> --json",
+    "  pier worktrees get --path <path> --json",
+    "  pier worktrees check --path <path> --json",
     "  pier worktrees create --path <repo> --name <dir> --branch <branch> --base <ref> --json",
     "  pier worktrees open <path> --json",
+    "  pier worktrees remove --path <path> [--delete-branch] --json",
     "  pier plugins list --json",
     "  pier plugins inspect <id> --json",
     "  pier plugins enable <id> --json",
@@ -139,7 +151,13 @@ function stripOptions(args) {
       arg === "--max-bytes" ||
       arg === "--until" ||
       arg === "--timeout" ||
-      arg === "--poll-ms"
+      arg === "--poll-ms" ||
+      arg === "--key" ||
+      arg === "--delete-branch" ||
+      arg === "--task" ||
+      arg === "--force" ||
+      arg === "--after" ||
+      arg === "--scope"
     ) {
       if (
         arg === "--window" ||
@@ -172,10 +190,15 @@ function stripOptions(args) {
         arg === "--max-bytes" ||
         arg === "--until" ||
         arg === "--timeout" ||
-        arg === "--poll-ms"
+        arg === "--poll-ms" ||
+        arg === "--key" ||
+        arg === "--task" ||
+        arg === "--after" ||
+        arg === "--scope"
       ) {
         index++;
       }
+      // --delete-branch / --force / --stdin / --json 等布尔 flag 不吃下一参数
       continue;
     }
     if (arg) {
@@ -357,9 +380,54 @@ function parseTerminalProfiles(action, profileId, unexpected, args, cwd) {
   throw new Error("unknown pier CLI command");
 }
 
+function rejectUnexpectedArg(value, unexpected) {
+  if (value || unexpected) {
+    throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
+  }
+}
+
+function parseTerminalWrite(action, value, unexpected, args, route) {
+  rejectUnexpectedArg(value, unexpected);
+  const panelId = requireValue(optionValue(args, "--panel"));
+  if (action === "send") {
+    return {
+      type: "terminal.send",
+      panelId,
+      text: requireValue(optionValue(args, "--text")),
+      ...(route.windowId && { windowId: route.windowId }),
+    };
+  }
+  return {
+    type: "terminal.key",
+    panelId,
+    key: requireValue(optionValue(args, "--key")),
+    ...(route.windowId && { windowId: route.windowId }),
+  };
+}
+
 function parseTerminal(action, value, extra, unexpected, args, cwd, route) {
   if (action === "profiles") {
     return parseTerminalProfiles(value, extra, unexpected, args, cwd);
+  }
+  if (action === "list") {
+    rejectUnexpectedArg(value, unexpected);
+    return {
+      type: "terminal.list",
+      ...(route.windowId && { windowId: route.windowId }),
+    };
+  }
+  if (action === "get") {
+    if (unexpected) {
+      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+    }
+    return {
+      type: "terminal.get",
+      panelId: requireValue(optionValue(args, "--panel") ?? value),
+      ...(route.windowId && { windowId: route.windowId }),
+    };
+  }
+  if (action === "send" || action === "key") {
+    return parseTerminalWrite(action, value, unexpected, args, route);
   }
   if (unexpected) {
     throw new Error(`unexpected pier CLI argument: ${unexpected}`);
@@ -396,19 +464,15 @@ function parsePanels(action, value, route) {
 }
 
 function parseWorktrees(action, value, unexpected, args, cwd, route) {
-  if (action === "list") {
-    if (value || unexpected) {
-      throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
-    }
+  if (action === "list" || action === "check" || action === "get") {
+    rejectUnexpectedArg(value, unexpected);
     return {
       path: absolutePath(requireValue(optionValue(args, "--path")), cwd),
-      type: "worktree.list",
+      type: `worktree.${action}`,
     };
   }
   if (action === "create") {
-    if (value || unexpected) {
-      throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
-    }
+    rejectUnexpectedArg(value, unexpected);
     const base = optionValue(args, "--base");
     return {
       ...(base && { base }),
@@ -428,7 +492,19 @@ function parseWorktrees(action, value, unexpected, args, cwd, route) {
       ...route,
     };
   }
-  throw new Error("unknown pier CLI command");
+  if (action === "remove") {
+    rejectUnexpectedArg(value, unexpected);
+    return {
+      path: absolutePath(requireValue(optionValue(args, "--path")), cwd),
+      type: "worktree.remove",
+      ...(hasPierCliOption(args, "--delete-branch")
+        ? { deleteBranch: true }
+        : {}),
+    };
+  }
+  throw new Error(
+    "unknown pier worktrees command (list|get|check|create|open|remove)"
+  );
 }
 
 function projectRootOption(args, cwd) {
@@ -436,20 +512,22 @@ function projectRootOption(args, cwd) {
   return path ? absolutePath(path, cwd) : cwd;
 }
 
+function rejectUnexpectedOnly(unexpected) {
+  if (unexpected) {
+    throw new Error(`unexpected pier CLI argument: ${unexpected}`);
+  }
+}
+
 function parseTasks(action, value, unexpected, args, cwd, route) {
   if (action === "list") {
-    if (value || unexpected) {
-      throw new Error(`unexpected pier CLI argument: ${value ?? unexpected}`);
-    }
+    rejectUnexpectedArg(value, unexpected);
     return {
       projectRootPath: projectRootOption(args, cwd),
       type: "run.list",
     };
   }
   if (action === "run") {
-    if (unexpected) {
-      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
-    }
+    rejectUnexpectedOnly(unexpected);
     const inputs = parseTaskInputs(args);
     return {
       ...(route.focus !== undefined && { focus: route.focus }),
@@ -461,19 +539,38 @@ function parseTasks(action, value, unexpected, args, cwd, route) {
       type: "run.spawn",
     };
   }
-  if (action === "status") {
-    if (unexpected) {
-      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
-    }
+  if (action === "status" || action === "get") {
+    rejectUnexpectedOnly(unexpected);
+    return { runId: requireValue(value), type: "run.status" };
+  }
+  if (action === "output") {
+    rejectUnexpectedOnly(unexpected);
+    const taskId = optionValue(args, "--task");
     return {
       runId: requireValue(value),
-      type: "run.status",
+      type: "run.output",
+      ...(taskId ? { taskId } : {}),
+    };
+  }
+  if (action === "stop") {
+    rejectUnexpectedOnly(unexpected);
+    return {
+      runId: requireValue(value),
+      type: "run.stop",
+      ...(hasPierCliOption(args, "--force") ? { force: true } : {}),
+    };
+  }
+  if (action === "rerun") {
+    rejectUnexpectedOnly(unexpected);
+    return {
+      runId: requireValue(value),
+      type: "run.rerun",
+      ...(route.focus !== undefined && { focus: route.focus }),
+      ...(route.windowId && { windowId: route.windowId }),
     };
   }
   if (action === "cancel") {
-    if (unexpected) {
-      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
-    }
+    rejectUnexpectedOnly(unexpected);
     return {
       runId: requireValue(value),
       type: "run.cancel",
@@ -708,17 +805,49 @@ function parseAgents(action, value, unexpected, args) {
   );
 }
 
+function parseControlTopLevel(domain, args) {
+  if (domain === "status") {
+    return { type: "app.status" };
+  }
+  if (domain === "snapshot") {
+    const scope = optionValue(args, "--scope");
+    return {
+      protocol: "v2",
+      op: "control.snapshot",
+      params: scope ? { scope } : {},
+    };
+  }
+  if (domain === "watch") {
+    const afterRaw = optionValue(args, "--after");
+    const timeoutRaw = optionValue(args, "--timeout");
+    const pollRaw = optionValue(args, "--poll-ms");
+    const params = {};
+    if (afterRaw !== undefined) {
+      params.after = Number(afterRaw);
+    }
+    if (timeoutRaw !== undefined) {
+      params.timeoutMs = Number(timeoutRaw);
+    }
+    if (pollRaw !== undefined) {
+      params.pollMs = Number(pollRaw);
+    }
+    return { protocol: "v2", op: "control.watch", params };
+  }
+  return null;
+}
+
 function parseCommand(args, cwd) {
   const [domain, action, value, extra, unexpected] = stripOptions(args);
   const route = routeOptions(args);
+  const top = parseControlTopLevel(domain, args);
+  if (top) {
+    return top;
+  }
   if (domain === "open") {
     return parseOpen(action, value, cwd, route);
   }
   if (domain === "terminal") {
     return parseTerminal(action, value, extra, unexpected, args, cwd, route);
-  }
-  if (domain === "status") {
-    return { type: "app.status" };
   }
   if (domain === "windows") {
     return parseWindows(action, value);

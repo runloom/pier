@@ -386,7 +386,9 @@ try {
         : 0;
     // watch/wait 服务默认 30s；客户端必须带传输余量，避免贴边先掐 socket
     const serviceBudgetMs =
-      parsed.op === "agents.watch" || parsed.op === "agents.wait"
+      parsed.op === "agents.watch" ||
+      parsed.op === "agents.wait" ||
+      parsed.op === "control.watch"
         ? waitTimeoutMs > 0
           ? waitTimeoutMs
           : 30_000
@@ -409,7 +411,7 @@ try {
     });
     // watch：先按行输出 event*，再输出终态 response（JSONL 流）
     if (
-      parsed.op === "agents.watch" &&
+      (parsed.op === "agents.watch" || parsed.op === "control.watch") &&
       Array.isArray(events) &&
       events.length > 0
     ) {

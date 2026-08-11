@@ -36,6 +36,8 @@ export const agentsStartResultSchema = z
     cwd: nonEmpty.optional(),
     worktreeKey: nonEmpty.optional(),
     incarnationId: nonEmpty.optional(),
+    /** 定位用绝对路径；非文件内容。 */
+    canonicalPath: nonEmpty.optional(),
   })
   .strict();
 
@@ -115,6 +117,7 @@ export const agentsScreenResultSchema = z
     runtime: runtimeRefSchema,
     cwd: nonEmpty.optional(),
     worktreeKey: nonEmpty.optional(),
+    incarnationId: nonEmpty.optional(),
     /** 定位用绝对路径提示；非文件内容。 */
     canonicalPath: nonEmpty.optional(),
   })

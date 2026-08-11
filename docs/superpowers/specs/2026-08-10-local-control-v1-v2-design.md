@@ -459,7 +459,7 @@ W2+：按 Canvas 加厚 epoch/容量（`effect_window_full` 等）。
 
 ### 9.4 W4–W6
 
-- W4：`control.snapshot`、宿主原语同构
+- W4（主路径已关账）：`control.snapshot` / `control.watch`（顶层 `pier snapshot` / `pier watch`）、WorktreeRef + worktrees get/check/remove、terminal list/get/send/key（agent 写拒绝）、tasks get/output/stop、CapabilityAuthority 可替换骨架；E11 全量 cursor/notifications 与 CA 热路径强制归 W5/W6
 - W5：`notifications.*`
 - W6：`access.*` + challenge/proof/consent
 
