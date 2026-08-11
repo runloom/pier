@@ -301,6 +301,33 @@ export function defaultMarkdownCrossModeAnchor(
   return { align: "start", offset: Math.max(0, Math.floor(offset)) };
 }
 
+/**
+ * Map a 1-based source line number to a character offset (start of that line).
+ * Used when comment reveal has startLine but no headingId.
+ */
+export function sourceOffsetForLine(
+  source: string,
+  line1Based: number
+): number {
+  if (!(line1Based >= 1) || source.length === 0) {
+    return 0;
+  }
+  if (line1Based === 1) {
+    return 0;
+  }
+  let line = 1;
+  for (let index = 0; index < source.length; index += 1) {
+    if (source.charCodeAt(index) !== 10 /* \n */) {
+      continue;
+    }
+    line += 1;
+    if (line === line1Based) {
+      return index + 1;
+    }
+  }
+  return source.length;
+}
+
 // Attribute names exported for tests / DOM writers.
 export const MARKDOWN_SOURCE_OFFSET_ATTR = SOURCE_OFFSET_ATTR;
 export const MARKDOWN_SOURCE_END_OFFSET_ATTR = SOURCE_END_OFFSET_ATTR;

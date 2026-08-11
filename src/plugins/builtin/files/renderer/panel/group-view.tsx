@@ -89,6 +89,7 @@ export function FilesGroupView({
         context?: PanelContext;
         markdownAnchor?: string;
         markdownAnchorRequestId?: string;
+        markdownRevealLine?: number;
         pinned?: boolean;
         source?: unknown;
       }
@@ -103,6 +104,7 @@ export function FilesGroupView({
         context: activeParams?.context,
         markdownAnchor: activeParams?.markdownAnchor,
         markdownAnchorRequestId: activeParams?.markdownAnchorRequestId,
+        markdownRevealLine: activeParams?.markdownRevealLine,
         panelId: activePanel.id,
         pinned: activeParams?.pinned === true,
         source: parsedSource,
@@ -451,6 +453,7 @@ export function FilesGroupView({
         editorSessionId={editorSessionId}
         markdownAnchor={activeTab?.markdownAnchor}
         markdownAnchorRequestId={activeTab?.markdownAnchorRequestId}
+        markdownRevealLine={activeTab?.markdownRevealLine}
         mode={mode}
         onModeChange={setMode}
         panelContext={panelContext}

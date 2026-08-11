@@ -35,6 +35,19 @@ import {
   FALLBACK_DARK_CODE_THEME,
   resolvePreviewCodeTheme,
 } from "./preview-code-theme.ts";
+import {
+  DEFAULT_MARKDOWN_COMMENT_LABELS,
+  type MarkdownPreviewCommentLabels,
+  useMarkdownPreviewCommentsLayer,
+} from "./preview-comments-layer.tsx";
+import {
+  DEFAULT_RENDERER_LABELS,
+  DEFAULT_TOC_LABELS,
+  DEFAULT_ZOOM_LABELS,
+  EMPTY_HEADING_IDS,
+  type MarkdownPreviewTocLabels,
+  type MarkdownPreviewZoomLabels,
+} from "./preview-defaults.ts";
 import { MarkdownPreviewFontScaleControl } from "./preview-font-scale.tsx";
 import { useMarkdownPreviewPrefsStore } from "./preview-preferences.ts";
 import {
@@ -43,6 +56,7 @@ import {
   useMarkdownHeadingScrollSpy,
 } from "./preview-toc.tsx";
 import {
+  MARKDOWN_PREVIEW_SCROLL_PAD_LEFT_PX,
   MARKDOWN_PREVIEW_SCROLL_PAD_X_PX,
   MARKDOWN_TOC_CONTENT_INSET_PX,
   MARKDOWN_TOC_INSET_PX,
@@ -61,18 +75,19 @@ import {
 import { useMarkdownPreviewZoom } from "./use-preview-zoom.ts";
 import "../markdown/prose.css";
 
+export type { MarkdownPreviewCommentLabels } from "./preview-comments-layer.tsx";
+
 interface MarkdownPreviewProps {
   appearance?: RendererPluginContext["appearance"] | undefined;
-  /**
-   * Panel registers a capture callback used when switching preview → source.
-   * Cleared on unmount / not-ready so callers never hit a stale scroll root.
-   */
+  /** Capture callback for preview → source switch; cleared when not ready. */
   captureAnchorRef?:
     | RefObject<(() => MarkdownCrossModeAnchor | null) | null>
     | undefined;
   charts?: RendererPluginContext["charts"] | undefined;
   codeHighlighter?: MarkdownCodeHighlighter | undefined;
   codeTheme?: string | undefined;
+  commentLabels?: MarkdownPreviewCommentLabels | undefined;
+  commentsContext?: RendererPluginContext | undefined;
   /** One-shot content restore after source → preview mode switch. */
   contentAnchor?: MarkdownCrossModeAnchor | undefined;
   contentAnchorRequestId?: string | number | undefined;
@@ -93,6 +108,7 @@ interface MarkdownPreviewProps {
   registerSelectionSelectAllProvider?:
     | RendererPluginContext["contextMenu"]["registerSelectionSelectAllProvider"]
     | undefined;
+  relativeCommentPath?: string | undefined;
   runtime?: MarkdownRuntime | undefined;
   searchLabels?: MarkdownPreviewSearchLabels | undefined;
   searchRequest?: number | undefined;
@@ -100,51 +116,21 @@ interface MarkdownPreviewProps {
   source?: MarkdownDiskSource | undefined;
   tocLabels?: MarkdownPreviewTocLabels | undefined;
   value: string;
+  worktreeKey?: string | undefined;
   zoomLabels?: MarkdownPreviewZoomLabels | undefined;
-}
-
-interface MarkdownPreviewTocLabels {
-  title: string;
-}
-
-interface MarkdownPreviewZoomLabels {
-  reset: string;
-  zoomIn: string;
-  zoomOut: string;
 }
 
 type PreviewState =
   | { status: "loading" }
-  | { pagination: MarkdownPagination; status: "ready" }
+  | {
+      document: import("./ir.ts").MarkdownIrDocument;
+      pagination: MarkdownPagination;
+      status: "ready";
+    }
   | { status: "error" };
 
 export { safeMarkdownUrl } from "./ir-renderer.tsx";
 export { FILES_MARKDOWN_PREVIEW_SURFACE } from "./preview-preferences.ts";
-
-const DEFAULT_RENDERER_LABELS: MarkdownRendererLabels = {
-  copiedCode: "Copied",
-  copyCode: "Copy code",
-  completedTask: "Completed task",
-  diagramFailed: "Unable to render diagram",
-  diagramLabel: "Mermaid diagram",
-  diagramPreviewTitle: "Diagram preview",
-  imagePreviewFailed: "Unable to open image preview",
-  imagePreviewTitle: "Image",
-  incompleteTask: "Incomplete task",
-  openFullscreen: "View fullscreen",
-};
-
-const DEFAULT_TOC_LABELS: MarkdownPreviewTocLabels = {
-  title: "Outline",
-};
-
-const DEFAULT_ZOOM_LABELS: MarkdownPreviewZoomLabels = {
-  reset: "Reset text size",
-  zoomIn: "Increase text size",
-  zoomOut: "Decrease text size",
-};
-
-const EMPTY_HEADING_IDS: readonly string[] = [];
 
 export function MarkdownPreview({
   appearance,
@@ -152,6 +138,8 @@ export function MarkdownPreview({
   charts,
   codeHighlighter,
   codeTheme,
+  commentsContext,
+  commentLabels = DEFAULT_MARKDOWN_COMMENT_LABELS,
   contentAnchor,
   contentAnchorRequestId,
   copyCode,
@@ -165,6 +153,7 @@ export function MarkdownPreview({
   openExternal,
   openInternal,
   panelId,
+  relativeCommentPath,
   registerSelectionSelectAllProvider,
   runtime = markdownRuntime,
   searchLabels = DEFAULT_MARKDOWN_PREVIEW_SEARCH_LABELS,
@@ -173,6 +162,7 @@ export function MarkdownPreview({
   source,
   tocLabels = DEFAULT_TOC_LABELS,
   value,
+  worktreeKey,
   zoomLabels = DEFAULT_ZOOM_LABELS,
 }: MarkdownPreviewProps) {
   const [state, setState] = useState<PreviewState>({ status: "loading" });
@@ -255,6 +245,14 @@ export function MarkdownPreview({
     handlePreviewWheel,
   } = useMarkdownPreviewZoom(fontScale);
 
+  const { commentsChrome, driftStrip } = useMarkdownPreviewCommentsLayer({
+    commentLabels,
+    commentsContext,
+    document: state.status === "ready" ? state.document : undefined,
+    relativeCommentPath,
+    worktreeKey,
+  });
+
   useEffect(() => {
     let active = true;
     revisionRef.current += 1;
@@ -270,7 +268,11 @@ export function MarkdownPreview({
       .then((outcome) => {
         if (!(active && outcome.revision === revision)) return;
         if (outcome.status === "parsed") {
-          setState({ pagination: outcome.pagination, status: "ready" });
+          setState({
+            document: outcome.document,
+            pagination: outcome.pagination,
+            status: "ready",
+          });
         } else if (outcome.status === "error") {
           setState({ status: "error" });
         }
@@ -414,7 +416,7 @@ export function MarkdownPreview({
           data-slot="markdown-preview"
           ref={scrollRootRef}
           style={{
-            paddingLeft: MARKDOWN_PREVIEW_SCROLL_PAD_X_PX,
+            paddingLeft: MARKDOWN_PREVIEW_SCROLL_PAD_LEFT_PX,
             // Keep wide (and narrow comfortable) prose clear of the right tick rail.
             paddingRight: hasOutline
               ? MARKDOWN_TOC_CONTENT_INSET_PX
@@ -451,6 +453,7 @@ export function MarkdownPreview({
                   } as CSSProperties
                 }
               >
+                {driftStrip}
                 <MarkdownIrRenderer
                   activeSearchMatchId={search.activeSearchMatch?.id}
                   activeSearchPageIndex={search.activeSearchMatch?.pageIndex}
@@ -458,6 +461,7 @@ export function MarkdownPreview({
                   codeHighlighter={codeHighlighter}
                   codeTheme={resolvedCodeTheme}
                   colorMode={previewColorMode}
+                  {...(commentsChrome ? { comments: commentsChrome } : {})}
                   contentAnchor={contentAnchor}
                   contentAnchorRequestId={contentAnchorRequestId}
                   copyCode={copyCode}

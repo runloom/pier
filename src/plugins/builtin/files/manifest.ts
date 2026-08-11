@@ -240,6 +240,8 @@ export const FILES_PLUGIN_MANIFEST = {
     "file:read",
     "file:write",
     "git:read",
+    "comments:read",
+    "comments:write",
     "terminal:read",
     "external:open",
   ],

@@ -152,6 +152,7 @@ function CommentsActionDialogBody({
       });
       return;
     }
+    // markdown / git opened paths fall through below
     if (result.kind === "failed") {
       await showAppAlert({
         body: t("terminal.statusBar.item.comments.jumpFailedBody"),

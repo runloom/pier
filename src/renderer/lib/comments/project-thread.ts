@@ -52,6 +52,7 @@ export interface GitFileProjectionSurface {
   readonly pathPresent: boolean;
 }
 
+/** 与 shared `MarkdownCommentSurface` 同形，便于 files 插件构建后直接投影。 */
 export interface MarkdownProjectionSurface {
   /** 规范化后块文本 hash 集合。 */
   readonly blockHashes: ReadonlySet<string>;

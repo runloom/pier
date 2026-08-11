@@ -97,7 +97,10 @@ describe("listProcessableComments", () => {
     );
     expect(items).toHaveLength(1);
     expect(items[0]?.threadId).toBe("t1");
-    expect(items[0]?.oldPath).toBeNull();
+    expect(items[0]?.kind).toBe("git-diff");
+    if (items[0]?.kind === "git-diff") {
+      expect(items[0].oldPath).toBeNull();
+    }
     expect(items[0]?.status).toBe("unverified");
     expect(
       processableCommentCount(
@@ -168,7 +171,10 @@ describe("listProcessableComments", () => {
       livePaths: new Set(["old.ts"]),
     });
     expect(viaOld).toHaveLength(1);
-    expect(viaOld[0]?.oldPath).toBe("old.ts");
+    expect(viaOld[0]?.kind).toBe("git-diff");
+    if (viaOld[0]?.kind === "git-diff") {
+      expect(viaOld[0].oldPath).toBe("old.ts");
+    }
     expect(
       listProcessableComments(threads, { livePaths: new Set(["other.ts"]) })
     ).toHaveLength(0);
@@ -272,6 +278,74 @@ describe("listProcessableComments markdown/canvas", () => {
     const items = listProcessableComments([md, canvas]);
     expect(items.map((item) => item.kind)).toEqual(["markdown", "canvas"]);
     expect(items.every((item) => item.status === "unverified")).toBe(true);
+  });
+
+  it("marks markdown located/stale from markdownSurfaces", () => {
+    const md: CommentThread = {
+      comments: [
+        {
+          author: { kind: "user" },
+          body: "docs note",
+          createdAt: 1,
+          id: "md-c",
+        },
+      ],
+      createdAt: 1,
+      id: "md-t",
+      state: "open",
+      target: {
+        contentHash: "aabbccdd",
+        excerpt: "ex",
+        kind: "markdown",
+        path: "docs/a.md",
+        startLine: 2,
+      },
+      updatedAt: 2,
+    };
+    const located = listProcessableComments([md], {
+      markdownSurfaces: new Map([
+        [
+          "docs/a.md",
+          {
+            blockHashes: new Set(["aabbccdd"]),
+            filePresent: true,
+            headingIds: new Set(),
+            kind: "markdown",
+          },
+        ],
+      ]),
+    });
+    expect(located[0]?.status).toBe("located");
+
+    const stale = listProcessableComments([md], {
+      markdownSurfaces: new Map([
+        [
+          "docs/a.md",
+          {
+            blockHashes: new Set(["ffffffff"]),
+            filePresent: true,
+            headingIds: new Set(),
+            kind: "markdown",
+          },
+        ],
+      ]),
+    });
+    expect(stale[0]?.status).toBe("stale");
+
+    const missing = listProcessableComments([md], {
+      markdownSurfaces: new Map([
+        [
+          "docs/a.md",
+          {
+            blockHashes: new Set(),
+            filePresent: false,
+            headingIds: new Set(),
+            kind: "markdown",
+          },
+        ],
+      ]),
+    });
+    expect(missing).toHaveLength(0);
   });
 });
 

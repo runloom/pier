@@ -43,6 +43,8 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         appearance={props.markdownAppearance}
         captureAnchorRef={props.markdownCaptureAnchorRef}
         charts={props.markdownCharts}
+        commentLabels={props.markdownCommentLabels}
+        commentsContext={props.context}
         contentAnchor={props.markdownContentAnchor}
         contentAnchorRequestId={props.markdownContentAnchorRequestId}
         copyCode={props.markdownCopyCode}
@@ -62,12 +64,19 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         registerSelectionSelectAllProvider={
           props.registerSelectionSelectAllProvider
         }
+        relativeCommentPath={props.markdownSource?.path}
         searchLabels={props.searchLabels}
         searchRequest={props.searchRequest}
         sessionId={props.editorSessionId}
         source={props.markdownSource}
         tocLabels={props.markdownTocLabels}
         value={props.value}
+        worktreeKey={
+          props.panelContext?.worktreeKey ??
+          props.panelContext?.worktreeRoot ??
+          props.panelContext?.gitRoot ??
+          props.markdownSource?.root
+        }
         zoomLabels={props.markdownZoomLabels}
       />
     );

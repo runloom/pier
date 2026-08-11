@@ -10,6 +10,11 @@ export interface FilesFilePanelParams {
   dirty?: boolean;
   markdownAnchor?: string;
   markdownAnchorRequestId?: string;
+  /**
+   * 1-based source line for preview scroll when heading id is absent
+   * (comment reveal with startLine only).
+   */
+  markdownRevealLine?: number;
   // undefined / false 表示 preview tab(Cursor 语义:点树替换,不占位);
   // true 表示 pinned tab(用户显式 pin,或在 preview 里做过第一次修改后自动 promote)。
   pinned?: boolean;

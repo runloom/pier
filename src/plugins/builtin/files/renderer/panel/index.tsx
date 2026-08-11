@@ -443,6 +443,7 @@ function FilePanelContent({
         editorSessionId={editorSessionId}
         markdownAnchor={props.params?.markdownAnchor}
         markdownAnchorRequestId={props.params?.markdownAnchorRequestId}
+        markdownRevealLine={props.params?.markdownRevealLine}
         mode={mode}
         onModeChange={setMode}
         panelContext={props.params?.context}

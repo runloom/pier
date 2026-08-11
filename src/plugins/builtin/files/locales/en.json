@@ -370,7 +370,20 @@
     "filePanel.contentSearch.action.open": "Open",
     "filePanel.contentSearch.action.copyMatch": "Copy Match Line",
     "filePanel.contentSearch.matchCopied": "Match line copied",
-    "filePanel.contentSearch.contextMenuFailed": "Unable to open menu"
+    "filePanel.contentSearch.contextMenuFailed": "Unable to open menu",
+    "filePanel.markdown.comment.add": "Add comment",
+    "filePanel.markdown.comment.authorYou": "You",
+    "filePanel.markdown.comment.close": "Close",
+    "filePanel.markdown.comment.createFailed": "Couldn’t create comment",
+    "filePanel.markdown.comment.delete": "Delete",
+    "filePanel.markdown.comment.deleteFailed": "Couldn’t delete comment",
+    "filePanel.markdown.comment.deleted": "Deleted",
+    "filePanel.markdown.comment.driftTitle": "Comments that can no longer be located precisely",
+    "filePanel.markdown.comment.edit": "Edit",
+    "filePanel.markdown.comment.placeholder": "Write a comment…",
+    "filePanel.markdown.comment.submit": "Submit",
+    "filePanel.markdown.comment.title": "Comment",
+    "filePanel.markdown.comment.updateFailed": "Couldn’t update comment"
   },
   "terminalStatusItems": {
     "pier.files.project": {

@@ -1,3 +1,4 @@
+import type { MarkdownCommentSurface } from "@shared/comments/markdown-surface.ts";
 import type { CommentThread } from "@shared/contracts/comments/base.ts";
 import type { GitReviewGroup } from "@shared/contracts/git/review.ts";
 import { projectComment } from "./project-thread.ts";
@@ -58,6 +59,11 @@ export interface ListProcessableCommentsOptions {
    * 传空 Set 表示已就绪且无变更路径。
    */
   readonly livePaths?: ReadonlySet<string>;
+  /**
+   * Markdown 投影表面，key = 相对 worktree 的 path。
+   * 有则 located/stale；文件 missing 则不计入；无 surface 则 unverified。
+   */
+  readonly markdownSurfaces?: ReadonlyMap<string, MarkdownCommentSurface>;
 }
 
 function gitPatchKey(group: string, path: string): string {
@@ -73,6 +79,18 @@ function isUncommittedGitDiff(
     return false;
   }
   return thread.target.scope.target.kind === "uncommitted";
+}
+
+function isMarkdownThread(thread: CommentThread): thread is CommentThread & {
+  target: Extract<CommentThread["target"], { kind: "markdown" }>;
+} {
+  return thread.target.kind === "markdown";
+}
+
+function isCanvasThread(thread: CommentThread): thread is CommentThread & {
+  target: Extract<CommentThread["target"], { kind: "canvas" }>;
+} {
+  return thread.target.kind === "canvas";
 }
 
 /** path 或 oldPath 任一仍在变更集合中 → 仍可定位。 */
@@ -119,6 +137,30 @@ function gitDiffStatus(
   return "stale";
 }
 
+/**
+ * 有 surface 时返回 status；文件 missing 返回 null（调用方跳过）；
+ * 无 surface 返回 unverified。
+ */
+function markdownProcessableStatus(
+  thread: CommentThread & {
+    target: Extract<CommentThread["target"], { kind: "markdown" }>;
+  },
+  surfaces: ReadonlyMap<string, MarkdownCommentSurface> | undefined
+): ProcessableCommentStatus | null {
+  const surface = surfaces?.get(thread.target.path);
+  if (surface === undefined) {
+    return "unverified";
+  }
+  const projection = projectComment(thread, surface);
+  if (projection.status === "missing") {
+    return null;
+  }
+  if (projection.status === "located") {
+    return "located";
+  }
+  return "stale";
+}
+
 /** 收集可交给智能体处理的评论。 */
 export function listProcessableComments(
   threads: readonly CommentThread[] | undefined,
@@ -129,6 +171,7 @@ export function listProcessableComments(
   }
   const livePaths = options?.livePaths;
   const patches = options?.gitDiffPatches;
+  const markdownSurfaces = options?.markdownSurfaces;
   const items: ProcessableCommentItem[] = [];
   for (const thread of threads) {
     if (isUncommittedGitDiff(thread)) {
@@ -159,45 +202,46 @@ export function listProcessableComments(
       });
       continue;
     }
-    if (thread.target.kind === "markdown") {
+    if (isMarkdownThread(thread)) {
+      const { target } = thread;
+      const status = markdownProcessableStatus(thread, markdownSurfaces);
+      if (status === null) {
+        continue;
+      }
       pushLiveBodies(thread, (commentId, body) => {
         items.push({
           body,
           commentId,
-          excerpt: thread.target.excerpt,
+          excerpt: target.excerpt,
           kind: "markdown",
-          path: thread.target.path,
-          startLine: thread.target.startLine,
-          // 步骤 1 无 IR surface：有 excerpt 可交 agent，标 unverified 精确定位
-          status: "unverified",
+          path: target.path,
+          startLine: target.startLine,
+          status,
           threadId: thread.id,
           updatedAt: thread.updatedAt,
-          ...(thread.target.headingId === undefined
+          ...(target.headingId === undefined
             ? {}
-            : { headingId: thread.target.headingId }),
+            : { headingId: target.headingId }),
         });
       });
       continue;
     }
-    if (thread.target.kind === "canvas") {
+    if (isCanvasThread(thread)) {
+      const { target } = thread;
       pushLiveBodies(thread, (commentId, body) => {
         items.push({
           body,
           commentId,
           kind: "canvas",
-          path: thread.target.path,
+          path: target.path,
           status: "unverified",
           threadId: thread.id,
           updatedAt: thread.updatedAt,
-          ...(thread.target.anchorId === undefined
+          ...(target.anchorId === undefined
             ? {}
-            : { anchorId: thread.target.anchorId }),
-          ...(thread.target.excerpt === undefined
-            ? {}
-            : { excerpt: thread.target.excerpt }),
-          ...(thread.target.label === undefined
-            ? {}
-            : { label: thread.target.label }),
+            : { anchorId: target.anchorId }),
+          ...(target.excerpt === undefined ? {} : { excerpt: target.excerpt }),
+          ...(target.label === undefined ? {} : { label: target.label }),
         });
       });
     }

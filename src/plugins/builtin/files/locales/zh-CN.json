@@ -370,7 +370,20 @@
     "filePanel.contentSearch.action.open": "打开",
     "filePanel.contentSearch.action.copyMatch": "复制匹配行",
     "filePanel.contentSearch.matchCopied": "已复制匹配行",
-    "filePanel.contentSearch.contextMenuFailed": "无法打开菜单"
+    "filePanel.contentSearch.contextMenuFailed": "无法打开菜单",
+    "filePanel.markdown.comment.add": "添加评论",
+    "filePanel.markdown.comment.authorYou": "你",
+    "filePanel.markdown.comment.close": "关闭",
+    "filePanel.markdown.comment.createFailed": "无法创建评论",
+    "filePanel.markdown.comment.delete": "删除",
+    "filePanel.markdown.comment.deleteFailed": "无法删除评论",
+    "filePanel.markdown.comment.deleted": "已删除",
+    "filePanel.markdown.comment.driftTitle": "无法精确定位的评论",
+    "filePanel.markdown.comment.edit": "编辑",
+    "filePanel.markdown.comment.placeholder": "写下评论…",
+    "filePanel.markdown.comment.submit": "提交",
+    "filePanel.markdown.comment.title": "评论",
+    "filePanel.markdown.comment.updateFailed": "无法更新评论"
   },
   "terminalStatusItems": {
     "pier.files.project": {

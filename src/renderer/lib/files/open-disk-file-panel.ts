@@ -88,7 +88,11 @@ export function openFilesDiskPath(input: {
   context?: PanelContext;
   /** 1-based working-tree line; forwarded to files via open event. */
   line?: number;
+  /** Heading id / fragment for Markdown preview scroll. */
+  markdownAnchor?: string;
   path: string;
+  /** Prefer Markdown preview mode after open (files plugin consumes via open event). */
+  preferPreview?: boolean;
   root: string;
   title?: string;
 }): boolean {
@@ -118,9 +122,37 @@ export function openFilesDiskPath(input: {
   const existingParams = cloneParamsRecord(existing?.params);
   // Always refresh disk source on open so params match the request path even
   // when reusing an instance (identity key is path-scoped today).
+  // Preview reveal: heading id and/or line (line used when no heading).
+  const wantsPreviewReveal =
+    input.preferPreview === true &&
+    (input.markdownAnchor !== undefined ||
+      (input.line !== undefined && input.line >= 1));
+  const anchorRequestId = wantsPreviewReveal
+    ? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    : undefined;
+  const lineOnlyReveal =
+    input.preferPreview === true &&
+    input.markdownAnchor === undefined &&
+    input.line !== undefined &&
+    input.line >= 1;
   const params = {
     ...(existingParams ?? { pinned: true }),
     source,
+    // Clear stale line-only reveal when this open uses a heading anchor.
+    ...(input.markdownAnchor === undefined
+      ? {}
+      : {
+          markdownAnchor: input.markdownAnchor,
+          markdownAnchorRequestId: anchorRequestId,
+          markdownRevealLine: undefined,
+        }),
+    ...(lineOnlyReveal
+      ? {
+          markdownAnchor: undefined,
+          markdownAnchorRequestId: anchorRequestId,
+          markdownRevealLine: input.line,
+        }
+      : {}),
   };
   const identityKey = `${FILES_FILE_PANEL_COMPONENT_ID}:disk:${stableFileIdentityHash(
     `${source.root}\u0000${source.path}`
@@ -144,6 +176,10 @@ export function openFilesDiskPath(input: {
       root: source.root,
       ...(input.column === undefined ? {} : { column: input.column }),
       ...(input.line === undefined ? {} : { line: input.line }),
+      ...(input.preferPreview === true ? { preferPreview: true } : {}),
+      ...(input.markdownAnchor === undefined
+        ? {}
+        : { markdownAnchor: input.markdownAnchor }),
     });
   }
   return result.kind === "opened";

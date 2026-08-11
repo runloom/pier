@@ -69,6 +69,9 @@ export interface FileEditorAdapterProps {
     | RefObject<(() => MarkdownCrossModeAnchor | null) | null>
     | undefined;
   markdownCharts?: RendererPluginContext["charts"] | undefined;
+  markdownCommentLabels?:
+    | import("../markdown/preview-comments-layer.tsx").MarkdownPreviewCommentLabels
+    | undefined;
   markdownContentAnchor?: MarkdownCrossModeAnchor | undefined;
   markdownContentAnchorRequestId?: string | number | undefined;
   markdownCopyCode?: ((code: string) => Promise<void>) | undefined;
