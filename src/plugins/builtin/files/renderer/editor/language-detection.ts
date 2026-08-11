@@ -3,6 +3,7 @@ import {
   liveModuleProjectContentDirectories,
 } from "@shared/live-module-canvas-path.ts";
 import type { FilesDocumentLanguage } from "../document/types.ts";
+import { editorLanguageModeRegistry } from "./language-mode-registry.ts";
 
 // Cursor 参考:文件面板顶部的语言标签 + syntax highlight 依赖此推断。扩展名到
 // language id 的映射保持保守 —— 只映射存在 codemirror 语言支持或 legacy-modes
@@ -14,7 +15,7 @@ const EXTENSION_TO_LANGUAGE: Readonly<Record<string, FilesDocumentLanguage>> = {
   cjs: "javascript",
   cmd: "shell",
   cpp: "cpp",
-  cs: "cpp",
+  cs: "csharp",
   css: "css",
   cts: "typescript",
   cxx: "cpp",
@@ -36,7 +37,11 @@ const EXTENSION_TO_LANGUAGE: Readonly<Record<string, FilesDocumentLanguage>> = {
   markdown: "markdown",
   md: "markdown",
   mdx: "markdown",
+  /** Objective-C — C-like highlight (same track as C/C++). */
+  m: "cpp",
   mjs: "javascript",
+  /** Objective-C++ (e.g. native/src/addon.mm). */
+  mm: "cpp",
   mts: "typescript",
   ps1: "shell",
   py: "python",
@@ -47,10 +52,13 @@ const EXTENSION_TO_LANGUAGE: Readonly<Record<string, FilesDocumentLanguage>> = {
   scss: "css",
   sh: "shell",
   sql: "sql",
+  svelte: "svelte",
+  svg: "svg",
   swift: "swift",
   toml: "toml",
   ts: "typescript",
   tsx: "typescript",
+  vue: "vue",
   xml: "xml",
   yaml: "yaml",
   yml: "yaml",
@@ -75,5 +83,11 @@ export function languageForPath(
     return "text";
   }
   const ext = lowered.slice(dot + 1);
-  return EXTENSION_TO_LANGUAGE[ext] ?? "text";
+  const builtin = EXTENSION_TO_LANGUAGE[ext];
+  if (builtin) {
+    return builtin;
+  }
+  // Plugin / L1 language modes (display track). L0 map always wins first.
+  const dynamic = editorLanguageModeRegistry.languageIdForPath(path);
+  return dynamic ?? "text";
 }

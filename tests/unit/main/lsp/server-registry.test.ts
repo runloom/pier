@@ -32,7 +32,8 @@ describe("LspServerRegistry", () => {
     expect(registry.matchForPath("/a/b.ts")?.id).toBe("typescript");
     expect(registry.matchForPath("/a/b.tsx")?.id).toBe("typescript");
     expect(registry.matchForPath("/a/b.mjs")?.id).toBe("typescript");
-    expect(registry.matchForPath("/a/b.md")).toBeNull();
+    expect(registry.matchForPath("/a/b.md")?.id).toBe("markdown");
+    expect(registry.matchForPath("/a/Makefile")).toBeNull();
   });
 
   it("picks higher priority when multiple match", () => {

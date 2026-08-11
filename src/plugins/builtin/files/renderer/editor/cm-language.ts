@@ -6,18 +6,56 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { python } from "@codemirror/lang-python";
 import { rust } from "@codemirror/lang-rust";
+import { vue } from "@codemirror/lang-vue";
 import { xml } from "@codemirror/lang-xml";
 import { yaml } from "@codemirror/lang-yaml";
 import { StreamLanguage } from "@codemirror/language";
-import { c as clikeC, java, kotlin } from "@codemirror/legacy-modes/mode/clike";
+import {
+  c as clikeC,
+  csharp,
+  java,
+  kotlin,
+} from "@codemirror/legacy-modes/mode/clike";
 import { ruby } from "@codemirror/legacy-modes/mode/ruby";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { standardSQL } from "@codemirror/legacy-modes/mode/sql";
 import { swift } from "@codemirror/legacy-modes/mode/swift";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import type { Extension } from "@codemirror/state";
+import { svelte } from "@replit/codemirror-lang-svelte";
+import { detectLiveModuleFrameworkFromFileName } from "@shared/live-module-framework.ts";
 import { pierMarkdownLanguage } from "@shared/source-editor/markdown-language.ts";
-import type { FilesDocumentLanguage } from "../document/types.ts";
+import type {
+  BuiltinFilesDocumentLanguage,
+  FilesDocumentLanguage,
+} from "../document/types.ts";
+import { cmExtensionForHighlightPreset } from "./highlight-preset.ts";
+import { editorLanguageModeRegistry } from "./language-mode-registry.ts";
+
+function vueLanguageExtension(): Extension {
+  // Nested HTML base so <script>/<style> still get JS/CSS tokens.
+  return vue({ base: html() });
+}
+
+function svelteLanguageExtension(): Extension {
+  return svelte();
+}
+
+/**
+ * Live Modules canvas badge stays "Canvas"; highlight follows framework suffix
+ * (`.canvas.vue` ≠ React TSX).
+ */
+function canvasLanguageExtension(path?: string): Extension {
+  const framework = path ? detectLiveModuleFrameworkFromFileName(path) : null;
+  if (framework === "vue") {
+    return vueLanguageExtension();
+  }
+  if (framework === "svelte") {
+    return svelteLanguageExtension();
+  }
+  // react / solid (and unknown) → TSX
+  return javascript({ typescript: true, jsx: true });
+}
 
 // Cursor 参考:每个 language id 对应 CodeMirror 里一段“语言 extension”。
 // tsx/jsx 通过 lang-javascript 的 `jsx: true`/`typescript: true` flag 表达,
@@ -30,15 +68,21 @@ export function cmLanguageExtension(
 ): Extension | null {
   switch (language) {
     case "canvas":
-      // Canvas files are TSX; preview uses Live Modules, source uses TSX highlight.
-      return javascript({ typescript: true, jsx: true });
+      return canvasLanguageExtension(path);
     case "cpp": {
       const lower = path?.toLowerCase() ?? "";
-      if (lower.endsWith(".c") || lower.endsWith(".h")) {
+      // C and Objective-C share the clike stream parser; C++/ObjC++ use lang-cpp.
+      if (
+        lower.endsWith(".c") ||
+        lower.endsWith(".h") ||
+        lower.endsWith(".m")
+      ) {
         return StreamLanguage.define(clikeC);
       }
       return cpp();
     }
+    case "csharp":
+      return StreamLanguage.define(csharp);
     case "css":
       return css();
     case "go":
@@ -67,6 +111,11 @@ export function cmLanguageExtension(
       return StreamLanguage.define(shell);
     case "sql":
       return StreamLanguage.define(standardSQL);
+    case "svelte":
+      return svelteLanguageExtension();
+    case "svg":
+      // SVG source is XML; dedicated SVG grammar not required for v1.
+      return xml();
     case "swift":
       return StreamLanguage.define(swift);
     case "toml":
@@ -75,37 +124,62 @@ export function cmLanguageExtension(
       const isTsx = path?.toLowerCase().endsWith(".tsx") ?? false;
       return javascript({ typescript: true, jsx: isTsx });
     }
+    case "vue":
+      return vueLanguageExtension();
     case "xml":
       return xml();
     case "yaml":
       return yaml();
-    default:
+    default: {
+      // Plugin / L1 language modes: closed highlight presets only.
+      const preset =
+        editorLanguageModeRegistry.highlightForLanguageId(language);
+      if (preset) {
+        return cmExtensionForHighlightPreset(preset);
+      }
       return null;
+    }
   }
 }
 
 // 顶部语言标签的短名。文件面板右上角展示,与 Cursor 右上 `Swift`/`TypeScript` 徽章对齐。
-export const LANGUAGE_LABELS: Readonly<Record<FilesDocumentLanguage, string>> =
-  {
-    canvas: "Canvas",
-    cpp: "C++",
-    css: "CSS",
-    go: "Go",
-    html: "HTML",
-    java: "Java",
-    javascript: "JavaScript",
-    json: "JSON",
-    kotlin: "Kotlin",
-    markdown: "Markdown",
-    python: "Python",
-    ruby: "Ruby",
-    rust: "Rust",
-    shell: "Shell",
-    sql: "SQL",
-    swift: "Swift",
-    text: "Plain Text",
-    toml: "TOML",
-    typescript: "TypeScript",
-    xml: "XML",
-    yaml: "YAML",
-  };
+export const LANGUAGE_LABELS: Readonly<
+  Record<BuiltinFilesDocumentLanguage, string>
+> = {
+  canvas: "Canvas",
+  cpp: "C++",
+  csharp: "C#",
+  css: "CSS",
+  go: "Go",
+  html: "HTML",
+  java: "Java",
+  javascript: "JavaScript",
+  json: "JSON",
+  kotlin: "Kotlin",
+  markdown: "Markdown",
+  python: "Python",
+  ruby: "Ruby",
+  rust: "Rust",
+  shell: "Shell",
+  sql: "SQL",
+  svelte: "Svelte",
+  svg: "SVG",
+  swift: "Swift",
+  text: "Plain Text",
+  toml: "TOML",
+  typescript: "TypeScript",
+  vue: "Vue",
+  xml: "XML",
+  yaml: "YAML",
+};
+
+/** Badge label for builtin or dynamic (plugin / L1) language ids. */
+export function languageLabel(language: FilesDocumentLanguage): string {
+  if (Object.hasOwn(LANGUAGE_LABELS, language)) {
+    return LANGUAGE_LABELS[language as BuiltinFilesDocumentLanguage];
+  }
+  return (
+    editorLanguageModeRegistry.labelForLanguageId(language) ??
+    LANGUAGE_LABELS.text
+  );
+}

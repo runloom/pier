@@ -28,6 +28,10 @@ import {
   installLspE2eObserverGlobal,
   removeLspE2eObserverGlobal,
 } from "../services/lsp/e2e-observer.ts";
+import {
+  bindLspHostBridge,
+  unbindLspHostBridge,
+} from "../services/lsp/host-bridge.ts";
 import { applyLspPrefsToPolicy } from "../services/lsp/prefs-wiring.ts";
 import { normalizeFsRoot } from "../services/lsp/resolve-root.ts";
 import { LspSessionHost } from "../services/lsp/session-host.ts";
@@ -38,6 +42,7 @@ import {
   waitForLspTreeCleanupWithRetry,
 } from "../services/lsp/workspace-policy.ts";
 import { windowManager } from "../windows/manager.ts";
+import { registerLspCatalogIpc } from "./lsp-catalog.ts";
 import { createLspLanguageToolsRequestHandler } from "./lsp-language-tools.ts";
 import { isTrustedMainFrame } from "./trusted-main-frame.ts";
 
@@ -51,6 +56,7 @@ if (lspE2eObserver) {
   installLspE2eObserverGlobal(lspE2eObserver);
 }
 const registry = createBootstrappedLspRegistry();
+bindLspHostBridge({ host, registry });
 const policy = new WorkspaceLspPolicy({
   onIdleWorkspaces: (workspaceKeys) => {
     for (const workspaceKey of workspaceKeys) {
@@ -465,6 +471,11 @@ export function registerLspIpc(): void {
       return handleLanguageToolsRequest(event, parsed.data);
     }
   );
+
+  registerLspCatalogIpc({
+    ensureClientHasFileRead,
+    registry,
+  });
 }
 
 /** Test / shutdown seam */
@@ -474,6 +485,7 @@ export async function disposeLspIpcHost(): Promise<void> {
     await lspE2eObserver?.writeFinalReport();
   } finally {
     policy.dispose();
+    unbindLspHostBridge();
     removeLspE2eObserverGlobal(lspE2eObserver);
   }
 }

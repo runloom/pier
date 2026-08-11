@@ -1,6 +1,21 @@
 import { z } from "zod";
 import { pierCapabilitySchema } from "./permissions.ts";
+import { pluginConfigurationSchema } from "./plugin-configuration.ts";
+import { pluginLanguageModeContributionSchema } from "./plugin-language-mode.ts";
+import { pluginLanguageServerContributionSchema } from "./plugin-language-server.ts";
 import { pluginWorkbenchWidgetContributionSchema } from "./workbench.ts";
+
+export type {
+  EditorHighlightPreset,
+  PluginLanguageModeContribution,
+} from "./plugin-language-mode.ts";
+export {
+  EDITOR_HIGHLIGHT_PRESETS,
+  editorHighlightPresetSchema,
+  pluginLanguageModeContributionSchema,
+} from "./plugin-language-mode.ts";
+export type { PluginLanguageServerContribution } from "./plugin-language-server.ts";
+export { pluginLanguageServerContributionSchema } from "./plugin-language-server.ts";
 
 export const pluginSourceKindSchema = z.enum([
   "builtin",
@@ -186,142 +201,12 @@ export type PluginSettingsPageContribution = z.infer<
   typeof pluginSettingsPageContributionSchema
 >;
 
-const pluginConfigurationPropertyBaseSchema = z.object({
-  default: z.union([z.string(), z.number(), z.boolean()]),
-  description: z.string().min(1).optional(),
-  enum: z.array(z.string().min(1)).min(1).optional(),
-  enumDescriptions: z.array(z.string().min(1)).optional(),
-  maximum: z.number().optional(),
-  minimum: z.number().optional(),
-  multiline: z.boolean().optional(),
-  order: z.number().optional(),
-  placeholder: z.string().min(1).optional(),
-  resettable: z.boolean().optional(),
-  type: z.enum(["string", "number", "boolean"]),
-  /**
-   * When set, the settings UI only shows this row if the sibling setting's
-   * effective value equals `equals` (after schema defaulting).
-   */
-  visibleWhen: z
-    .object({
-      equals: z.union([z.string(), z.number(), z.boolean()]),
-      key: z.string().min(1),
-    })
-    .optional(),
-});
-
-type PluginConfigurationPropertyCandidate = z.infer<
-  typeof pluginConfigurationPropertyBaseSchema
->;
-type PluginConfigurationPropertyIssuePath =
-  | "default"
-  | "enum"
-  | "enumDescriptions"
-  | "minimum"
-  | "multiline"
-  | "placeholder";
-type AddConfigurationPropertyIssue = (
-  path: PluginConfigurationPropertyIssuePath,
-  message: string
-) => void;
-
-function validateConfigurationPropertyTypes(
-  property: PluginConfigurationPropertyCandidate,
-  addIssue: AddConfigurationPropertyIssue
-): void {
-  if (typeof property.default !== property.type) {
-    addIssue("default", `default must match type "${property.type}"`);
-  }
-  if (property.enum && property.type !== "string") {
-    addIssue("enum", 'enum is only allowed with type "string"');
-  }
-  if (property.multiline && property.type !== "string") {
-    addIssue("multiline", 'multiline is only allowed with type "string"');
-  }
-  if (property.placeholder && property.type !== "string") {
-    addIssue("placeholder", 'placeholder is only allowed with type "string"');
-  }
-  if (
-    (property.minimum !== undefined || property.maximum !== undefined) &&
-    property.type !== "number"
-  ) {
-    addIssue("minimum", 'minimum/maximum are only allowed with type "number"');
-  }
-}
-
-function validateConfigurationPropertyEnum(
-  property: PluginConfigurationPropertyCandidate,
-  addIssue: AddConfigurationPropertyIssue
-): void {
-  if (
-    property.enum &&
-    typeof property.default === "string" &&
-    !property.enum.includes(property.default)
-  ) {
-    addIssue("default", "default must be a member of enum");
-  }
-  if (property.enumDescriptions && !property.enum) {
-    addIssue("enumDescriptions", "enumDescriptions requires enum");
-  }
-  if (
-    property.enumDescriptions &&
-    property.enum &&
-    property.enumDescriptions.length !== property.enum.length
-  ) {
-    addIssue(
-      "enumDescriptions",
-      "enumDescriptions must have the same length as enum"
-    );
-  }
-}
-
-function validateConfigurationPropertyRange(
-  property: PluginConfigurationPropertyCandidate,
-  addIssue: AddConfigurationPropertyIssue
-): void {
-  if (
-    property.minimum !== undefined &&
-    property.maximum !== undefined &&
-    property.minimum > property.maximum
-  ) {
-    addIssue("minimum", "minimum must not be greater than maximum");
-  }
-  if (
-    property.type === "number" &&
-    typeof property.default === "number" &&
-    property.minimum !== undefined &&
-    property.default < property.minimum
-  ) {
-    addIssue("default", "default must be greater than or equal to minimum");
-  }
-  if (
-    property.type === "number" &&
-    typeof property.default === "number" &&
-    property.maximum !== undefined &&
-    property.default > property.maximum
-  ) {
-    addIssue("default", "default must be less than or equal to maximum");
-  }
-}
-
-export const pluginConfigurationPropertySchema =
-  pluginConfigurationPropertyBaseSchema.superRefine((property, ctx) => {
-    const addIssue: AddConfigurationPropertyIssue = (path, message) => {
-      ctx.addIssue({ code: "custom", message, path: [path] });
-    };
-    validateConfigurationPropertyTypes(property, addIssue);
-    validateConfigurationPropertyEnum(property, addIssue);
-    validateConfigurationPropertyRange(property, addIssue);
-  });
-export type PluginConfigurationProperty = z.infer<
-  typeof pluginConfigurationPropertySchema
->;
-
-export const pluginConfigurationSchema = z.object({
-  properties: z.record(z.string().min(1), pluginConfigurationPropertySchema),
-  title: z.string().min(1).optional(),
-});
-export type PluginConfiguration = z.infer<typeof pluginConfigurationSchema>;
+export {
+  type PluginConfiguration,
+  type PluginConfigurationProperty,
+  pluginConfigurationPropertySchema,
+  pluginConfigurationSchema,
+} from "./plugin-configuration.ts";
 
 const pluginManifestObjectSchema = z
   .object({
@@ -343,7 +228,18 @@ const pluginManifestObjectSchema = z
       .array(pluginWorkbenchWidgetContributionSchema)
       .default([]),
     name: z.string().min(1),
+    /**
+     * Optional so hand-written manifests/tests need not list an empty array.
+     * Runtime readers must use `manifest.languageServers ?? []`.
+     */
+    languageServers: z.array(pluginLanguageServerContributionSchema).optional(),
+    /**
+     * Editor language modes (extensions → badge + highlight preset).
+     * Runtime readers must use `manifest.languageModes ?? []`.
+     */
+    languageModes: z.array(pluginLanguageModeContributionSchema).optional(),
     panels: z.array(pluginPanelContributionSchema).default([]),
+
     permissions: z.array(pierCapabilitySchema).default([]),
     settingsPages: z
       .array(pluginSettingsPageContributionSchema)
@@ -360,6 +256,51 @@ const pluginManifestObjectSchema = z
   })
   .superRefine((manifest, ctx) => {
     const prefix = `${manifest.id}.`;
+    const languageServers = manifest.languageServers ?? [];
+    if (
+      languageServers.length > 0 &&
+      !manifest.permissions.includes("lsp:provide")
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: 'languageServers require permissions to include "lsp:provide"',
+        path: ["languageServers"],
+      });
+    }
+    const languageServerIds = new Set<string>();
+    for (const [index, contribution] of languageServers.entries()) {
+      if (languageServerIds.has(contribution.id)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `duplicate languageServer id: ${contribution.id}`,
+          path: ["languageServers", index, "id"],
+        });
+      }
+      languageServerIds.add(contribution.id);
+    }
+    const languageModes = manifest.languageModes ?? [];
+    if (
+      languageModes.length > 0 &&
+      !manifest.permissions.includes("languageMode:provide")
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          'languageModes require permissions to include "languageMode:provide"',
+        path: ["languageModes"],
+      });
+    }
+    const languageModeIds = new Set<string>();
+    for (const [index, contribution] of languageModes.entries()) {
+      if (languageModeIds.has(contribution.id)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `duplicate languageMode id: ${contribution.id}`,
+          path: ["languageModes", index, "id"],
+        });
+      }
+      languageModeIds.add(contribution.id);
+    }
     if (manifest.configuration) {
       for (const key of Object.keys(manifest.configuration.properties)) {
         if (!(key.startsWith(prefix) && key.length > prefix.length)) {

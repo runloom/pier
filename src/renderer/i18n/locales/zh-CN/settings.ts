@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
@@ -316,17 +317,7 @@ export const settings = {
     panelCloseFocusPolicy: "关闭标签后激活",
     panelCloseFocusPolicyDesc:
       "关闭当前标签后，激活相邻标签还是最近使用的标签。",
-    lspEnabled: "启用语言服务",
-    lspEnabledDesc: "诊断、补全与跳转定义",
-    lspIdleReleaseMinutes: "空闲释放（分钟）",
-    lspIdleReleaseMinutesDesc: "空闲多久后释放语言服务（1–1440）",
-    lspMaxLocalWorkspaces: "本地工作区上限",
-    lspMaxLocalWorkspacesDesc: "同时启用语言服务的本地项目数（0 表示关闭）",
-    lspMaxRemoteWorkspaces: "远程工作区上限",
-    lspMaxRemoteWorkspacesDesc: "同时启用语言服务的远程项目数（0 表示关闭）",
-    lspUpdateFailed: "无法更新语言服务设置，请重试",
-    lspWorktreesEnabled: "在工作树中启用",
-    lspWorktreesEnabledDesc: "智能体工作树是否启用语言服务（默认关，省资源）",
+    ...settingsLspRow,
     defaultAgent: "默认智能体",
     defaultAgentDesc: "「启动默认智能体」使用的程序",
     agentPermissionMode: "权限确认方式",

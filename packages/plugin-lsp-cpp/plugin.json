@@ -1,0 +1,91 @@
+{
+  "apiVersion": 1,
+  "commands": [],
+  "description": "C, C++, Objective-C, and Objective-C++ via clangd when clangd is on PATH.",
+  "engines": {
+    "pier": ">=0.1.0 <0.2.0"
+  },
+  "id": "pier.lsp-cpp",
+  "locales": {
+    "en": {
+      "name": "C/C++ Language",
+      "description": "Install for C/C++/ObjC syntax highlighting (.c, .cpp, .m, .mm, …). Put clangd on PATH for language features."
+    },
+    "zh-CN": {
+      "name": "C/C++ 语言",
+      "description": "安装后获得 C/C++/ObjC 语法高亮（含 .m / .mm）。将 clangd 装到 PATH 后还有补全与跳转。"
+    }
+  },
+  "main": "dist/main.js",
+  "name": "C/C++ Language",
+  "panels": [],
+  "permissions": ["lsp:provide", "languageMode:provide"],
+  "publisher": "Pier",
+  "renderer": "dist/renderer.js",
+  "settingsPages": [],
+  "terminalStatusItems": [],
+  "version": "1.0.1",
+  "workbenchWidgets": [],
+  "languageModes": [
+    {
+      "displayName": "C / C++ / Objective-C",
+      "extensions": [
+        ".c",
+        ".h",
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".hpp",
+        ".hxx",
+        ".hh",
+        ".m",
+        ".mm"
+      ],
+      "highlight": "cpp",
+      "id": "cpp",
+      "languageId": "cpp",
+      "priority": 70
+    }
+  ],
+  "languageServers": [
+    {
+      "args": [],
+      "command": "clangd",
+      "displayName": "C / C++ / Objective-C",
+      "extensions": [
+        ".c",
+        ".h",
+        ".cc",
+        ".cpp",
+        ".cxx",
+        ".hpp",
+        ".hxx",
+        ".hh",
+        ".m",
+        ".mm"
+      ],
+      "id": "clangd",
+      "installCommand": "brew install llvm",
+      "languageIdByExtension": {
+        ".c": "c",
+        ".cc": "cpp",
+        ".cpp": "cpp",
+        ".cxx": "cpp",
+        ".h": "c",
+        ".hh": "cpp",
+        ".hpp": "cpp",
+        ".hxx": "cpp",
+        ".m": "objective-c",
+        ".mm": "objective-cpp"
+      },
+      "languageIds": ["c", "cpp", "objective-c", "objective-cpp"],
+      "priority": 70,
+      "rootMarkers": [
+        "compile_commands.json",
+        "compile_flags.txt",
+        "CMakeLists.txt",
+        ".clangd"
+      ]
+    }
+  ]
+}

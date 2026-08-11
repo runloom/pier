@@ -1,0 +1,53 @@
+{
+  "apiVersion": 1,
+  "commands": [],
+  "description": "C# language service via csharp-ls when the server is available on PATH.",
+  "engines": {
+    "pier": ">=0.1.0 <0.2.0"
+  },
+  "id": "pier.lsp-csharp",
+  "locales": {
+    "en": {
+      "name": "C# Language",
+      "description": "Install for C# syntax highlighting. Put csharp-ls on PATH for language features."
+    },
+    "zh-CN": {
+      "name": "C# 语言",
+      "description": "安装后获得 C# 语法高亮。将 csharp-ls 装到 PATH 后还有补全与跳转。"
+    }
+  },
+  "main": "dist/main.js",
+  "name": "C# Language",
+  "panels": [],
+  "permissions": ["lsp:provide", "languageMode:provide"],
+  "publisher": "Pier",
+  "renderer": "dist/renderer.js",
+  "settingsPages": [],
+  "terminalStatusItems": [],
+  "version": "1.0.0",
+  "workbenchWidgets": [],
+  "languageModes": [
+    {
+      "displayName": "C#",
+      "extensions": [".cs"],
+      "highlight": "csharp",
+      "id": "csharp",
+      "languageId": "csharp",
+      "priority": 70
+    }
+  ],
+  "languageServers": [
+    {
+      "args": [],
+      "command": "csharp-ls",
+      "commandCandidates": ["csharp-ls", "OmniSharp"],
+      "displayName": "C#",
+      "extensions": [".cs"],
+      "id": "csharp-ls",
+      "installCommand": "dotnet tool install -g csharp-ls",
+      "languageIds": ["csharp"],
+      "priority": 70,
+      "rootMarkers": ["global.json", "Directory.Build.props", ".git"]
+    }
+  ]
+}

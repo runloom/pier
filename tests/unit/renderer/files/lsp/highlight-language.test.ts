@@ -15,6 +15,14 @@ describe("filesLspHighlightLanguage", () => {
     expect(filesLspHighlightLanguage("go")).not.toBeNull();
   });
 
+  it("resolves vue / svelte / csharp fence tags", () => {
+    expect(filesLspHighlightLanguage("vue")).not.toBeNull();
+    expect(filesLspHighlightLanguage("svelte")).not.toBeNull();
+    expect(filesLspHighlightLanguage("csharp")).not.toBeNull();
+    expect(filesLspHighlightLanguage("cs")).not.toBeNull();
+    expect(filesLspHighlightLanguage("svg")).not.toBeNull();
+  });
+
   it("returns null for unknown languages", () => {
     expect(filesLspHighlightLanguage("")).toBeNull();
     expect(filesLspHighlightLanguage("not-a-lang")).toBeNull();

@@ -1,4 +1,5 @@
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import { installEditorLanguageModeSync } from "@/lib/editor-language-mode-sync.ts";
 import {
   initPluginRegistry,
   usePluginRegistryStore,
@@ -43,6 +44,7 @@ export interface RendererPluginBootstrapHandle {
  */
 export async function bootstrapBuiltinPlugins(): Promise<RendererPluginBootstrapHandle> {
   installPluginSharedRuntime();
+  const unsubscribeLanguageModes = installEditorLanguageModeSync();
   let bootstrapping = true;
   let externalStarted = false;
   let pendingEntries: readonly PluginRegistryEntry[] | null = null;
@@ -88,6 +90,7 @@ export async function bootstrapBuiltinPlugins(): Promise<RendererPluginBootstrap
   } catch (error) {
     unsubscribeBroadcast();
     unsubscribeStore();
+    unsubscribeLanguageModes();
     await rendererPluginRuntime.dispose().catch((disposeError: unknown) => {
       console.error(
         "[renderer-plugin-bootstrap] failed bootstrap cleanup:",
@@ -100,6 +103,7 @@ export async function bootstrapBuiltinPlugins(): Promise<RendererPluginBootstrap
     async dispose() {
       unsubscribeBroadcast();
       unsubscribeStore();
+      unsubscribeLanguageModes();
       await rendererPluginRuntime.dispose();
     },
     startExternal() {

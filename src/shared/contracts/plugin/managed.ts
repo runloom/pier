@@ -4,6 +4,7 @@ import {
   normalizeLegacyWorkbenchContributionKey,
   pluginCommandContributionSchema,
   pluginConfigurationSchema,
+  pluginLanguageServerContributionSchema,
   pluginLocaleCodeSchema,
   pluginLocaleMessagesSchema,
   pluginLocalizationSchema,
@@ -12,6 +13,7 @@ import {
   pluginSettingsPageContributionSchema,
   pluginTerminalStatusItemContributionSchema,
 } from "../plugin.ts";
+import { pluginLanguageModeContributionSchema } from "../plugin-language-mode.ts";
 import { pluginWorkbenchWidgetContributionSchema } from "../workbench.ts";
 
 /**
@@ -87,39 +89,70 @@ export type ManagedPluginRendererActivationReport = z.infer<
 
 export const managedPluginPackageManifestSchema = z.preprocess(
   normalizeLegacyWorkbenchContributionKey,
-  z.object({
-    apiVersion: z.literal(1),
-    commands: z.array(pluginCommandContributionSchema).default([]),
-    configuration: pluginConfigurationSchema.optional(),
-    dataSchemas: z.record(z.string(), managedPluginDataSchemaSchema).optional(),
-    description: z.string().min(1).optional(),
-    engines: z.object({ pier: z.string().min(1) }),
-    homepage: z.string().min(1).optional(),
-    id: z.string().min(1),
-    locales: z
-      .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
-      .optional(),
-    localization: pluginLocalizationSchema.optional(),
-    main: relativePosixPathSchema,
-    workbenchWidgets: z
-      .array(pluginWorkbenchWidgetContributionSchema)
-      .default([]),
-    name: z.string().min(1),
-    panels: z.array(pluginPanelContributionSchema).default([]),
-    permissions: z.array(pierCapabilitySchema).default([]),
-    publisher: z.string().min(1).optional(),
-    settingsPages: z
-      .array(pluginSettingsPageContributionSchema)
-      .max(1)
-      .default([]),
-    renderer: relativePosixPathSchema,
-    repository: z.string().min(1).optional(),
-    runtime: pluginRuntimePolicySchema.optional(),
-    terminalStatusItems: z
-      .array(pluginTerminalStatusItemContributionSchema)
-      .default([]),
-    version: z.string().min(1),
-  })
+  z
+    .object({
+      apiVersion: z.literal(1),
+      commands: z.array(pluginCommandContributionSchema).default([]),
+      configuration: pluginConfigurationSchema.optional(),
+      dataSchemas: z
+        .record(z.string(), managedPluginDataSchemaSchema)
+        .optional(),
+      description: z.string().min(1).optional(),
+      engines: z.object({ pier: z.string().min(1) }),
+      homepage: z.string().min(1).optional(),
+      id: z.string().min(1),
+      locales: z
+        .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
+        .optional(),
+      localization: pluginLocalizationSchema.optional(),
+      main: relativePosixPathSchema,
+      workbenchWidgets: z
+        .array(pluginWorkbenchWidgetContributionSchema)
+        .default([]),
+      languageServers: z
+        .array(pluginLanguageServerContributionSchema)
+        .optional(),
+      languageModes: z.array(pluginLanguageModeContributionSchema).optional(),
+      name: z.string().min(1),
+      panels: z.array(pluginPanelContributionSchema).default([]),
+      permissions: z.array(pierCapabilitySchema).default([]),
+      publisher: z.string().min(1).optional(),
+      settingsPages: z
+        .array(pluginSettingsPageContributionSchema)
+        .max(1)
+        .default([]),
+      renderer: relativePosixPathSchema,
+      repository: z.string().min(1).optional(),
+      runtime: pluginRuntimePolicySchema.optional(),
+      terminalStatusItems: z
+        .array(pluginTerminalStatusItemContributionSchema)
+        .default([]),
+      version: z.string().min(1),
+    })
+    .superRefine((manifest, ctx) => {
+      if (
+        (manifest.languageServers?.length ?? 0) > 0 &&
+        !manifest.permissions.includes("lsp:provide")
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            'languageServers require permissions to include "lsp:provide"',
+          path: ["languageServers"],
+        });
+      }
+      if (
+        (manifest.languageModes?.length ?? 0) > 0 &&
+        !manifest.permissions.includes("languageMode:provide")
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            'languageModes require permissions to include "languageMode:provide"',
+          path: ["languageModes"],
+        });
+      }
+    })
 );
 export type ManagedPluginPackageManifest = z.infer<
   typeof managedPluginPackageManifestSchema

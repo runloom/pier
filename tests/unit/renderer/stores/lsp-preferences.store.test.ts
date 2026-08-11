@@ -50,6 +50,7 @@ describe("useLspPreferencesStore", () => {
 
   it("hydrates the full LSP policy from preferences", async () => {
     const policy = {
+      customServers: [],
       enabled: false,
       idleReleaseMs: 900_000,
       maxLocalWorkspaces: 6,
@@ -66,6 +67,7 @@ describe("useLspPreferencesStore", () => {
 
   it("preserves resource limits when toggling the global switch", async () => {
     const policy = {
+      customServers: [],
       enabled: true,
       idleReleaseMs: 900_000,
       maxLocalWorkspaces: 6,
@@ -97,6 +99,33 @@ describe("useLspPreferencesStore", () => {
 
     expect(updateMock).toHaveBeenCalledWith({ lsp: next });
     expect(useLspPreferencesStore.getState().maxLocalWorkspaces).toBe(7);
+  });
+
+  it("persists custom language servers with the complete policy", async () => {
+    const customServers = [
+      {
+        args: ["--stdio"],
+        command: "solargraph",
+        displayName: "Ruby",
+        extensions: [".rb"],
+        id: "ruby",
+        languageIds: ["ruby"],
+        priority: 50,
+        rootMarkers: ["Gemfile"],
+      },
+    ];
+    const next = {
+      ...DEFAULT_LSP_POLICY_PREFS,
+      customServers,
+    };
+    updateMock.mockResolvedValue(snapshot(next));
+
+    await useLspPreferencesStore.getState().setCustomServers(customServers);
+
+    expect(updateMock).toHaveBeenCalledWith({ lsp: next });
+    expect(useLspPreferencesStore.getState().customServers).toEqual(
+      customServers
+    );
   });
 
   it("optimistically persists the idle release timeout with the complete policy", async () => {

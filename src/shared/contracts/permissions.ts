@@ -49,6 +49,13 @@ export const pierCapabilitySchema = z.enum([
   // 统一评论能力：读 / 写分离授权（git 插件等消费端经门面读写）。
   "comments:read",
   "comments:write",
+  /** Main-side: register PATH language servers into the host LSP registry. */
+  "lsp:provide",
+  /**
+   * Contribute editor language modes (extensions → badge + highlight preset).
+   * Consumed by the Files editor language-mode registry (display track).
+   */
+  "languageMode:provide",
 ]);
 
 export type PierClientKind = z.infer<typeof pierClientKindSchema>;

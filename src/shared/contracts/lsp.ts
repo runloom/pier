@@ -56,7 +56,68 @@ export const lspDenyReasonSchema = z.enum([
 ]);
 export type LspDenyReason = z.infer<typeof lspDenyReasonSchema>;
 
+const lspCustomServerExtensionSchema = z
+  .string()
+  .min(2)
+  .regex(/^\.[A-Za-z0-9_.+-]+$/u, "extension must start with '.'");
+
+/**
+ * User-defined PATH language server (L1). Runtime provider id is `custom:{id}`.
+ */
+export const lspCustomServerSchema = z
+  .object({
+    args: z.array(z.string()).default([]),
+    command: z.string().min(1),
+    commandCandidates: z.array(z.string().min(1)).optional(),
+    displayName: z.string().min(1),
+    extensions: z.array(lspCustomServerExtensionSchema).min(1),
+    /**
+     * Editor highlight preset for the display track (see language-mode matrix).
+     * Defaults to text when omitted (backward compatible).
+     */
+    highlightPreset: z
+      .enum([
+        "text",
+        "javascript",
+        "typescript",
+        "jsx",
+        "html",
+        "xml",
+        "css",
+        "json",
+        "yaml",
+        "markdown",
+        "python",
+        "go",
+        "rust",
+        "clike",
+        "cpp",
+        "java",
+        "csharp",
+        "kotlin",
+        "shell",
+        "sql",
+        "toml",
+        "ruby",
+        "swift",
+        "vue",
+        "svelte",
+      ])
+      .default("text"),
+    id: z
+      .string()
+      .min(1)
+      .regex(/^[A-Za-z0-9._-]+$/u, "id must be a simple token"),
+    languageIdByExtension: z.record(z.string(), z.string().min(1)).optional(),
+    languageIds: z.array(z.string().min(1)).min(1),
+    priority: z.number().int().min(0).max(100).default(50),
+    rootMarkers: z.array(z.string().min(1)).default([]),
+  })
+  .strict();
+export type LspCustomServer = z.infer<typeof lspCustomServerSchema>;
+
 export const lspPolicyPrefsSchema = z.object({
+  customServers: z.array(lspCustomServerSchema).default([]),
   enabled: z.boolean().default(true),
   idleReleaseMs: z
     .number()
@@ -71,6 +132,7 @@ export const lspPolicyPrefsSchema = z.object({
 export type LspPolicyPrefs = z.infer<typeof lspPolicyPrefsSchema>;
 
 export const DEFAULT_LSP_POLICY_PREFS: LspPolicyPrefs = {
+  customServers: [],
   enabled: true,
   idleReleaseMs: 1_800_000,
   maxLocalWorkspaces: 3,

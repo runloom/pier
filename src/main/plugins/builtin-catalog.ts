@@ -18,11 +18,13 @@ export type BuiltinPluginSource = Extract<
   main: MainPluginModule;
 };
 
-function pluginPackageBaseDir(pluginId: "files" | "git"): string {
+type BuiltinPluginFolder = "files" | "git";
+
+function pluginPackageBaseDir(pluginId: BuiltinPluginFolder): string {
   const urlByPlugin = {
     files: new URL("../../plugins/builtin/files/", import.meta.url),
     git: new URL("../../plugins/builtin/git/", import.meta.url),
-  } satisfies Record<typeof pluginId, URL>;
+  } satisfies Record<BuiltinPluginFolder, URL>;
   const url = urlByPlugin[pluginId];
   if (url.protocol === "file:") {
     return fileURLToPath(url);
@@ -30,6 +32,10 @@ function pluginPackageBaseDir(pluginId: "files" | "git"): string {
   return resolve(process.cwd(), `src/plugins/builtin/${pluginId}`);
 }
 
+/**
+ * Always-on product plugins only. Optional language packs live as official
+ * managed packages under packages/plugin-lsp-* (install / uninstall in Plugins).
+ */
 export const BUILTIN_PLUGIN_SOURCES = [
   {
     baseDir: pluginPackageBaseDir("git"),
@@ -53,4 +59,4 @@ export const BUILTIN_PLUGIN_SOURCES = [
 
 export const BUILTIN_MAIN_PLUGIN_MODULES = BUILTIN_PLUGIN_SOURCES.map(
   (source) => source.main
-) satisfies readonly MainPluginModule[];
+);

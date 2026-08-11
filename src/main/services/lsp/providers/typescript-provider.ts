@@ -70,6 +70,7 @@ export function createTypescriptLspProvider(): LspServerProvider {
     displayName: "TypeScript/JavaScript",
     id: "typescript",
     priority: 100,
+    source: "core",
     rootMarkers: ROOT_MARKERS,
     selector: {
       extensions: TS_EXTENSIONS,

@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
@@ -329,21 +330,7 @@ export const settings = {
     panelCloseFocusPolicy: "After Closing a Tab",
     panelCloseFocusPolicyDesc:
       "After closing the active tab, focus a neighbor or the most recent tab.",
-    lspEnabled: "Enable Language Services",
-    lspEnabledDesc: "Diagnostics, completions, and go-to-definition",
-    lspIdleReleaseMinutes: "Idle release (minutes)",
-    lspIdleReleaseMinutesDesc:
-      "Release idle language services after this many minutes (1–1440)",
-    lspMaxLocalWorkspaces: "Local workspace limit",
-    lspMaxLocalWorkspacesDesc:
-      "Max local projects with language services (0 turns them off)",
-    lspMaxRemoteWorkspaces: "Remote workspace limit",
-    lspMaxRemoteWorkspacesDesc:
-      "Max remote projects with language services (0 turns them off)",
-    lspUpdateFailed: "Couldn't update language service settings — try again",
-    lspWorktreesEnabled: "Enable in Worktrees",
-    lspWorktreesEnabledDesc:
-      "Language services in agent worktrees (off by default to save resources)",
+    ...settingsLspRow,
     defaultAgent: "Default Agent",
     defaultAgentDesc: "Used by Start Default Agent",
     agentPermissionMode: "Permission Mode",

@@ -1,0 +1,52 @@
+{
+  "apiVersion": 1,
+  "commands": [],
+  "description": "Zig editor highlighting and language service via zls when zls is on PATH.",
+  "engines": {
+    "pier": ">=0.1.0 <0.2.0"
+  },
+  "id": "pier.lsp-zig",
+  "locales": {
+    "en": {
+      "name": "Zig Language",
+      "description": "Install for Zig syntax highlighting. Put zls on PATH for completions and go to definition."
+    },
+    "zh-CN": {
+      "name": "Zig 语言",
+      "description": "安装后获得 Zig 语法高亮。将 zls 装到 PATH 后还有补全与跳转。"
+    }
+  },
+  "main": "dist/main.js",
+  "name": "Zig Language",
+  "panels": [],
+  "permissions": ["lsp:provide", "languageMode:provide"],
+  "publisher": "Pier",
+  "renderer": "dist/renderer.js",
+  "settingsPages": [],
+  "terminalStatusItems": [],
+  "version": "1.0.0",
+  "workbenchWidgets": [],
+  "languageModes": [
+    {
+      "displayName": "Zig",
+      "extensions": [".zig", ".zon"],
+      "highlight": "clike",
+      "id": "zig",
+      "languageId": "zig",
+      "priority": 70
+    }
+  ],
+  "languageServers": [
+    {
+      "args": [],
+      "command": "zls",
+      "displayName": "Zig",
+      "extensions": [".zig", ".zon"],
+      "id": "zls",
+      "installCommand": "brew install zls",
+      "languageIds": ["zig"],
+      "priority": 70,
+      "rootMarkers": ["build.zig", "build.zig.zon", ".git"]
+    }
+  ]
+}

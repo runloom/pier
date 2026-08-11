@@ -83,6 +83,16 @@ describe("managed plugin packaging governance", () => {
     expect(builderConfig).toContain("to: plugin-packages/pier.grok");
     expect(builderConfig).toContain("from: packages/plugin-ssh/dist-pkg");
     expect(builderConfig).toContain("to: plugin-packages/pier.ssh");
+    expect(builderConfig).toContain("from: packages/plugin-lsp-zig/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.lsp-zig");
+    expect(builderConfig).toContain("from: packages/plugin-lsp-java/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.lsp-java");
+    expect(builderConfig).toContain("from: packages/plugin-lsp-cpp/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.lsp-cpp");
+    expect(builderConfig).toContain(
+      "from: packages/plugin-lsp-csharp/dist-pkg"
+    );
+    expect(builderConfig).toContain("to: plugin-packages/pier.lsp-csharp");
     expect(builderConfig).toContain("*.tgz");
     expect(builderConfig).toContain("*.tgz.sha256");
     expect(builderConfig).toContain("plugin.json");

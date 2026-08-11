@@ -30,4 +30,8 @@ describe("settings navigation metadata", () => {
       "updates",
     ]);
   });
+
+  it("does not use a host-level languages section (LSP UI lives under Files)", () => {
+    expect(NAV_ITEMS.map((item) => item.id)).not.toContain("languages");
+  });
 });

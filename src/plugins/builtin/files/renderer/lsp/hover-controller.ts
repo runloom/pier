@@ -1,5 +1,6 @@
 import { LSPPlugin } from "@codemirror/lsp-client";
 import type { ViewUpdate } from "@codemirror/view";
+import { tryNavigateCssImportAtOffset } from "./css-import-definition.ts";
 import {
   jumpToFilesLspDefinition,
   navigateFilesLspDefinition,
@@ -127,6 +128,16 @@ export class FilesLspHoverController extends FilesLspHoverControllerBase {
   async jumpToDefinition(): Promise<boolean> {
     const position = this._view.state.selection.main.head;
     const candidate = filesLspHoverCandidateAtPosition(this._view, position);
+    // CSS package @import: no language-server session required.
+    if (
+      await tryNavigateCssImportAtOffset({
+        offset: position,
+        view: this._view,
+      })
+    ) {
+      this._clear();
+      return true;
+    }
     if (!(await this._ensurePluginForDefinitionJump(candidate))) {
       return true;
     }

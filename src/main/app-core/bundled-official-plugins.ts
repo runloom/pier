@@ -47,6 +47,38 @@ export const OFFICIAL_BUNDLED_PLUGIN_SPECS: readonly OfficialBundledPluginSpec[]
       id: "pier.claude",
       prodPluginDirName: "pier.claude",
     },
+    {
+      devPackageDir: "packages/plugin-lsp-zig",
+      fallbackId: "pier.lsp-zig",
+      fallbackName: "Zig Language",
+      fallbackVersion: "1.0.0",
+      id: "pier.lsp-zig",
+      prodPluginDirName: "pier.lsp-zig",
+    },
+    {
+      devPackageDir: "packages/plugin-lsp-java",
+      fallbackId: "pier.lsp-java",
+      fallbackName: "Java Language",
+      fallbackVersion: "1.0.0",
+      id: "pier.lsp-java",
+      prodPluginDirName: "pier.lsp-java",
+    },
+    {
+      devPackageDir: "packages/plugin-lsp-cpp",
+      fallbackId: "pier.lsp-cpp",
+      fallbackName: "C/C++ Language",
+      fallbackVersion: "1.0.0",
+      id: "pier.lsp-cpp",
+      prodPluginDirName: "pier.lsp-cpp",
+    },
+    {
+      devPackageDir: "packages/plugin-lsp-csharp",
+      fallbackId: "pier.lsp-csharp",
+      fallbackName: "C# Language",
+      fallbackVersion: "1.0.0",
+      id: "pier.lsp-csharp",
+      prodPluginDirName: "pier.lsp-csharp",
+    },
   ];
 
 export function toBundledPluginRegistration(

@@ -46,14 +46,18 @@ export const FILES_EDITOR_DEFAULT_LANGUAGE_VALUES = [
   "python",
   "shell",
   "cpp",
+  "csharp",
   "go",
   "java",
   "kotlin",
   "ruby",
   "rust",
   "sql",
+  "svelte",
+  "svg",
   "swift",
   "toml",
+  "vue",
 ] as const;
 export type FilesEditorDefaultLanguage =
   (typeof FILES_EDITOR_DEFAULT_LANGUAGE_VALUES)[number];
