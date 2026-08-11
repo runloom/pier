@@ -856,6 +856,22 @@ body {
   pointer-events: none;
 }
 
+/*
+ * Tab 条横向 scroll-fade：不要在此手写 mask CSS。
+ * 单一来源 `@pier/ui/scroll-area` 的 scrollFadeUnsafeCss（horizontal + short），
+ * 由 workspace/tab-strip-scroll-fade.ts 注入（与文件树 Shadow 逃逸舱同构）。
+ * 原因：.dv-tabs-container 由 dockview 拥有，无法挂 ScrollArea / Tailwind 类。
+ */
+
+/* Tab 条自定义 thumb：空闲透明，hover/滚动时用产品 token（非默认白半透明）。 */
+.dockview-theme-pier .dv-tabs-and-actions-container .dv-scrollable {
+  --dv-scrollbar-background-color: color-mix(
+    in oklab,
+    var(--foreground) 28%,
+    transparent
+  );
+}
+
 /* — hover: 非选中 tab 微亮 — */
 .dockview-theme-pier .dv-tab.dv-inactive-tab:hover {
   background-color: color-mix(in oklab, var(--foreground) 5%, transparent);

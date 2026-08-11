@@ -15,6 +15,38 @@ describe("Pier dockview resize scrollbar CSS", () => {
     expect(css).toContain("opacity: 0");
     expect(css).toContain("pointer-events: none");
   });
+
+  it("tab strip scroll-fade comes from scrollFadeUnsafeCss (not a globals hand-copy)", () => {
+    const globals = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const fadeModule = readFileSync(
+      join(
+        process.cwd(),
+        "src/renderer/components/workspace/tab-strip-scroll-fade.ts"
+      ),
+      "utf8"
+    );
+    const host = readFileSync(
+      join(process.cwd(), "src/renderer/components/workspace/host.tsx"),
+      "utf8"
+    );
+
+    // No dual-source hand-rolled mask in globals.
+    expect(globals).toContain("tab-strip-scroll-fade.ts");
+    expect(globals).not.toContain(
+      ".dockview-theme-pier .dv-tabs-container {\n  --scroll-fade-s-size"
+    );
+
+    // Single source: @pier/ui scrollFadeUnsafeCss + dockview selector.
+    expect(fadeModule).toContain('from "@pier/ui/scroll-area.tsx"');
+    expect(fadeModule).toContain("scrollFadeUnsafeCss");
+    expect(fadeModule).toContain('fade: "horizontal"');
+    expect(fadeModule).toContain('profile: "short"');
+    expect(fadeModule).toContain(".dockview-theme-pier .dv-tabs-container");
+    expect(host).toContain("installTabStripScrollFadeStyles");
+  });
 });
 
 describe("Pier scrollbar architecture", () => {

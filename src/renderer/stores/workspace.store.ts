@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { isWorkspaceBootstrapGateActive } from "@/components/workspace/bootstrap-gate.ts";
 import { equalizeDockviewSplits } from "@/components/workspace/dockview-equalize.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { prepareTabStripScrollsForMaximizeLayoutMutation } from "@/lib/workspace/tab-strip-scroll.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import {
   clearFreshTerminalPanel,
@@ -299,6 +300,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!panel) {
       return;
     }
+    // P1: snapshot tab strips while still laid out, before dockview hide.
+    prepareTabStripScrollsForMaximizeLayoutMutation();
     if (panel.api.isMaximized()) {
       panel.api.exitMaximized();
       return;

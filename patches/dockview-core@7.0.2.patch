@@ -1,0 +1,56 @@
+diff --git a/dist/cjs/scrollbar.js b/dist/cjs/scrollbar.js
+index c75388513414f854dfce14d15aebd50097c69a56..3ef237e22aaad16f21727956ed4b726e77abde7c 100644
+--- a/dist/cjs/scrollbar.js
++++ b/dist/cjs/scrollbar.js
+@@ -159,7 +159,8 @@ var Scrollbar = /** @class */ (function (_super) {
+                 this._scrollbar.style.height = '0px';
+                 this._scrollbar.style.top = '0px';
+             }
+-            this._scrollOffset = 0;
++            // Pier patch: preserve scroll offset while non-overflowing
++            // (e.g. group size→0 during maximize). Clamp resumes when overflow returns.
+         }
+     };
+     Scrollbar.MouseWheelSpeed = 1;
+diff --git a/dist/esm/scrollbar.js b/dist/esm/scrollbar.js
+index 3a1f999edd6826bb9d3c00d027c86145c2eda62f..1ea146a52c93bf715567cbaf4f1ac5c332c96417 100644
+--- a/dist/esm/scrollbar.js
++++ b/dist/esm/scrollbar.js
+@@ -131,7 +131,8 @@ export class Scrollbar extends CompositeDisposable {
+                 this._scrollbar.style.height = '0px';
+                 this._scrollbar.style.top = '0px';
+             }
+-            this._scrollOffset = 0;
++            // Pier patch: preserve scroll offset while non-overflowing
++            // (e.g. group size→0 during maximize). Clamp resumes when overflow returns.
+         }
+     }
+ }
+diff --git a/dist/package/main.cjs.js b/dist/package/main.cjs.js
+index aa2c51060a1c2f31a87f2b43e57d81488a7f87f4..56eb89d23f955bffa7184c611aff86bc116fc4e1 100644
+--- a/dist/package/main.cjs.js
++++ b/dist/package/main.cjs.js
+@@ -6845,7 +6845,8 @@ class Scrollbar extends CompositeDisposable {
+                 this._scrollbar.style.height = '0px';
+                 this._scrollbar.style.top = '0px';
+             }
+-            this._scrollOffset = 0;
++            // Pier patch: preserve scroll offset while non-overflowing
++            // (e.g. group size→0 during maximize). Clamp resumes when overflow returns.
+         }
+     }
+ }
+diff --git a/dist/package/main.esm.mjs b/dist/package/main.esm.mjs
+index 13e69c289de428eb9129db015c36b67ae3d6018f..f517b4d8428b47d52356c638836ca4ecf7945c5a 100644
+--- a/dist/package/main.esm.mjs
++++ b/dist/package/main.esm.mjs
+@@ -6841,7 +6841,8 @@ class Scrollbar extends CompositeDisposable {
+                 this._scrollbar.style.height = '0px';
+                 this._scrollbar.style.top = '0px';
+             }
+-            this._scrollOffset = 0;
++            // Pier patch: preserve scroll offset while non-overflowing
++            // (e.g. group size→0 during maximize). Clamp resumes when overflow returns.
+         }
+     }
+ }
