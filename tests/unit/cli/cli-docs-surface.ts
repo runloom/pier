@@ -12,7 +12,7 @@ export const CLI_USER_MANUAL_DATA_PATH = join(
   ".pier/canvases/pier-cli-user-manual/data.json"
 );
 
-/** shipped 表面禁止出现的规划/无写权命令（只读 agents catalog/list/get 允许）。 */
+/** shipped 表面禁止出现的规划/无写权/已撤回命令（仅 catalog/list/get 允许）。 */
 const AVAILABLE_VIOLATION_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
   [
     {
@@ -82,13 +82,10 @@ export const REQUIRED_PLANNED_COMMAND_NAMES = [
   "tasks watch",
   "tasks output",
   "tasks stop / rerun",
-  "activity snapshot",
-  "activity watch",
   "notifications list",
   "notifications get/watch/focus/mark-read",
   "access keygen/status/request/wait/revoke",
   "agents self",
-  "agents invoke",
   "agents start",
   "agents turn",
   "agents screen",
@@ -102,6 +99,7 @@ export const REQUIRED_PLANNED_COMMAND_NAMES = [
 export const REQUIRED_BLOCKED_COMMAND_NAMES = [
   "plugins enable",
   "plugins disable",
+  "agents invoke",
 ] as const;
 
 export interface CliManualCommand {
@@ -119,7 +117,9 @@ export interface CliManualData {
     intro: string;
     shipped: CliManualCommand[];
     planned: CliManualCommand[];
+    blocked?: CliManualCommand[];
   };
+  blocked?: { commands: CliManualCommand[] };
   bluf: string;
   context: string;
   domains: {
@@ -157,12 +157,14 @@ export function readCliUserManualData(): CliManualData {
   return readCliUserManualPayload().data;
 }
 
-/** 所有命令条目（domains + agents.shipped + agents.planned）。 */
+/** 所有命令条目（domains + agents shipped/planned/blocked + 顶层 blocked）。 */
 export function listCliManualCommands(data: CliManualData): CliManualCommand[] {
   return [
     ...data.domains.flatMap((domain) => domain.commands),
     ...data.agents.shipped,
     ...data.agents.planned,
+    ...(data.agents.blocked ?? []),
+    ...(data.blocked?.commands ?? []),
   ];
 }
 

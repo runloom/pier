@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
   type PierClient,
@@ -82,6 +83,7 @@ export async function registerCliLocalControl({
   const discovery = createStaticAgentsDiscovery(() =>
     core.services.agentRuntimeIndex.listMachine()
   );
+  const bootId = randomUUID();
   const server: PierLocalControlServer = createPierLocalControlServer({
     handleRequest(envelope) {
       const clientId = clientIdOf(envelope);
@@ -91,6 +93,7 @@ export async function registerCliLocalControl({
       return core.commandRouter.execute(envelope);
     },
     socketPath,
+    bootId,
     credentialStore,
     discovery,
     authorizer,

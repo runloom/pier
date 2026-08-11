@@ -1,25 +1,24 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-10T22:30:00.000+08:00",
-  "source": "源码级调研：Orca / cmux / Agent Orchestrator；本机 CLI 产品路径为用户手册（cli-human，无 spawn binding）；W0–W1 传输/发现/authorize 闭环已落地，agent-caller binding 为遗留实验；产品 invoke/screen 从 W2 起按波次补功能",
+  "generatedAt": "2026-08-11T03:18:12.933Z",
+  "source": "源码级调研：Orca / cmux / Agent Orchestrator；产品路径：一次性用原生 agent CLI（不封装）；Pier 只做发现 + 持久运行控制（start/turn/screen）；W1 发现已落地，W2 invoke 产品撤回为 non-goal，W3 持久为主交付",
   "data": {
     "meta": {
-      "title": "智能体优先的多智能体调用 CLI · 产品与技术方案",
-      "subtitle": "产品 CLI 服务本机用户（cli-human）；传输/发现 W1 已落地；agent binding 为遗留实验；invoke 与持久 screen 从 W2/W3 起实现",
+      "title": "智能体优先的持久运行控制 CLI · 产品与技术方案",
+      "subtitle": "一次性调用直接使用各 agent 原生能力（不经 Pier 封装）；Pier CLI 主路径是 catalog/list 与 start/turn/screen/wait；agent binding 为遗留实验",
       "status": "推荐方案",
-      "version": "v6.4",
+      "version": "v7.0",
       "researchCutoff": "2026-08-10",
-      "codeBaseline": "Pier local-control v2 + agents discovery; product CLI cli-human"
+      "codeBaseline": "Pier local-control v2 + agents discovery; product CLI cli-human; no product agents.invoke"
     },
-    "bluf": "产品 Pier CLI 服务本机用户：默认 cli-human，不注入 / 不要求 agent binding。W1 已关账的是本机控制 v1/v2 分流、peer 纪律、authorize/receipt、subscribe/hold，以及 agents catalog/list/get 发现面。agent-caller binding、agents.self 与 spawn 自动 issue 为遗留/实验路径，不作为产品权限系统。产品级 invoke 与持久 start/turn/screen 仍待 W2/W3。调用方持有目标拆分、重试与结束判断；Pier 不建立任务生命周期。",
-    "insight": "Orca 让协调智能体通过 spawn/send/read/wait 管理持久工作智能体；Agent Orchestrator 通过身份与系统提示注入，让协调智能体使用 spawn/send/session，并让 worker 主动回报，但没有 CLI 内容读取。cmux 把稳定 surface、进程代际和可配置画面读取做成自动化原语。最佳实践不是让人类控制台代替协调智能体，而是同时提供语义化的一次性 invoke 与可验证的持久运行控制，并把“已接收、已有回复、当前画面、进程状态”和调用方的工作结论严格分开。",
-    "decision": "选择智能体优先、双内容路径的方案 A：高层 agents 位于主路径；本机控制传输以 docs/superpowers/specs/2026-08-10-local-control-v1-v2-design.md 为权威，架构能力闭环已落地（只补功能为主）。一次性 invoke 与持久 screen 路径按 W2/W3 补齐；默认父只控自己新建子运行；不提供公共 transcript/history/replay，也不新增任务台账、看板或自动调度。",
+    "bluf": "产品结论（明确）：一次性提问不经 Pier 封装——协调方/人直接使用 codex exec、Claude headless 等原生 CLI。Pier 不提供 agents invoke 产品面，不实现统一 InvocationReply 宿主服务作为主路径。Pier CLI 只做本机发现（catalog/list/get）与持久智能体运行控制（start/turn/screen/wait/watch/focus/interrupt/terminate），以及 worktree/terminal 等宿主原语。W1 已关账传输与发现；原 W2 invoke 产品撤回（non-goal）；主交付为 W3 持久会话。调用方持有拆分、重试与结束判断；Pier 不建立任务生命周期。",
+    "insight": "实现纪律：核心逻辑优先，拒绝业界能力二次封装——只做依赖 Pier 宿主/运行时才能成立的能力；业界已支持的能力直接用原生入口。Orca/cmux 证明有价值的是「精确 surface/runtime + 可编程读画面/发输入」的持久控制面，不是再包一层各家 one-shot。Agent Orchestrator 偏任务池，Pier 拒绝任务台账。最佳实践：一次性用原生 agent；需要活体协作、可续聊、可看现场时才进 Pier 持久路径；运行事实与工作结论严格分开。",
+    "decision": "方案收敛为单主路径：持久运行控制。一次性 = 原生 agent 能力（不实现 Pier invoke）。高层 agents 仅保留 catalog/list/get 与 start/turn/screen/wait/watch/focus/interrupt/terminate；去掉 product invoke 与 activity 独立命令组（事实流用顶层 snapshot/watch）。self 非产品主路径（实验/遗留）。terminal 写控为非 agent 终端与底层同构；agent 运行优先 agents.*。不提供公共 transcript；不新增多智能体任务台账。",
     "scope": {
       "model": "agent-facing-runtime-control",
       "completionAuthority": "caller-agent-or-external-controller",
       "pierOwns": [
-        "agent-caller-identity",
-        "one-shot-agent-invocation",
+        "agent-discovery",
         "bounded-agent-screen",
         "agent-runtime-observation",
         "terminal-control",
@@ -35,22 +34,25 @@
         "call-selection-and-delegation-policy",
         "retry-and-completion-policy",
         "result-acceptance-and-synthesis",
-        "caller-memory-or-external-ledger"
+        "caller-memory-or-external-ledger",
+        "one-shot-native-agent-invocation"
       ],
       "forbiddenInPier": [
         "多智能体任务 Run、WorkItem、Attempt、Gate、Result 状态机",
         "多智能体工作 DAG、任务台账、看板与自动调度",
         "将运行事实、通知或终端输出解释为任务完成",
-        "用官方插件绕过 Pier 不做任务生命周期的产品边界"
+        "用官方插件绕过 Pier 不做任务生命周期的产品边界",
+        "封装各家 agent 的 one-shot/headless CLI 为 Pier agents invoke",
+        "统一 InvocationReply 宿主产品面替代原生 agent 输出"
       ]
     },
     "goals": [
-      "让协调智能体通过 pier agents self 获得可信调用身份和实际可用能力",
-      "让协调智能体通过 invoke 一次性调用明确目标，并直接取得仅属于本次调用的结构化回复",
-      "让协调智能体通过 start/turn/screen/wait/watch 控制持久工作智能体，从 CLI 取得当前画面与完整 WorktreeRef，再用自身文件/Git 工具读取内容",
-      "以 bootId + runtimeId + generation、父子能力与深度/并发预算阻止误投递和无限递归",
-      "为人类 CLI 与外部控制器保留同构 JSON/JSONL 接入，同时把它们降为可选调用者",
-      "用结构门禁证明 Pier 没有新增多智能体任务生命周期或完成裁决权"
+      "让调用方通过 agents catalog/list/get 发现本机可启动/在跑的智能体与精确定位",
+      "让协调智能体通过 start/turn/screen/wait/watch 控制持久工作智能体，取得当前画面与完整 WorktreeRef，再用自身文件/Git 工具读内容",
+      "一次性提问直接使用各 agent 原生 CLI，Pier 不封装、不实现 agents invoke 产品路径",
+      "以 bootId + runtimeId + generation 防止持久路径误投递",
+      "为人类 CLI 保留同构 JSON 接入持久控制；完成判断始终在调用方",
+      "用结构门禁证明 Pier 没有多智能体任务生命周期或完成裁决权"
     ],
     "productNonGoals": [
       "不定义或持久化多智能体任务、依赖、尝试、审批、结果、重试与完成状态",
@@ -59,24 +61,27 @@
       "不把 turn/terminal send 的 accepted 包装成投递、已处理或语义回复",
       "不把 screen 当前画面当作完整回答、历史记录或工作结论",
       "不把现有 TaskRuns 的 shell 命令依赖扩展成多智能体任务模型",
+      "不为业界已成熟支持的能力再造 Pier 封装层、统一抽象或第二套产品 API（含 codex/claude one-shot → agents invoke / InvocationReply）",
+      "不实现 agents self 作为人类 CLI 产品主路径（agent principal 仅为遗留/实验）",
+      "不提供独立 activity 命令组（与顶层 snapshot/watch 重复）；事实流以顶层为准",
       "本机 capability 是防误用的工程纪律边界，不承诺隔离同一系统用户下的恶意进程",
       "不承诺远程舰队、跨机器一致性、第三方插件隔离或恶意代码安全边界"
     ],
     "successMeasures": [
       {
-        "metric": "智能体可自助调用",
-        "target": "协调智能体无需人工复制 panelId 或注入主体名称即可完成 self → invoke 与 start → turn → screen/wait",
-        "proof": "真实协调智能体进程端到端测试与命令输出快照"
+        "metric": "持久会话可自助控制",
+        "target": "协调智能体无需人工复制 panelId 即可完成 start → turn → screen/wait",
+        "proof": "真实协调智能体进程端到端与命令输出快照"
       },
       {
         "metric": "内容边界清晰",
-        "target": "invoke 只返回本次回复；screen 只返回当前画面；公共历史读取接口数量为 0",
-        "proof": "协议 schema、最大字节/行数测试与 transcript/history/replay 禁止扫描"
+        "target": "screen 只返回当前画面；公共历史读取接口数量为 0；无 Pier invoke 产品面",
+        "proof": "协议 schema、transcript/history/replay 禁止扫描、命令面无 agents invoke"
       },
       {
-        "metric": "父子权限准确",
-        "target": "默认父调用者只可读写自己新建的精确子运行；兄弟、父级、其他项目与旧代误授权为 0",
-        "proof": "caller credential、CapabilityRef、RuntimeRef 与委派矩阵"
+        "metric": "一次性不越权",
+        "target": "产品文档与命令面明确 one-shot 用原生 agent；Pier 不实现 invoke",
+        "proof": "Canvas non-goals + user-manual blocked + 命令组扫描"
       },
       {
         "metric": "运行写入精确",
@@ -85,22 +90,22 @@
       },
       {
         "metric": "调用结论不越权",
-        "target": "responded、ready、waiting、quiet、screen、exit 与提醒被解释为调用方工作完成的次数为 0",
+        "target": "ready、waiting、quiet、screen、exit 与提醒被解释为调用方工作完成的次数为 0",
         "proof": "状态语义反例测试与调用方验收端到端"
       },
       {
         "metric": "机器接口稳定",
         "target": "human、JSON、JSONL、snapshot/cursor、超时、取消和断线续接均有稳定契约",
-        "proof": "CLI help/输出快照、假协调智能体与假外部控制器端到端"
+        "proof": "CLI help/输出快照与端到端"
       }
     ],
     "mainLoop": {
-      "diagram": "flowchart TB\n  H[人类\n给出目标 · 必要时审批]\n  O[协调智能体\n主要 CLI 调用者]\n  E[外部控制器（可选）\n同构 JSON / JSONL]\n  C[Pier 智能体 CLI\nself · invoke · start · turn · screen · wait]\n  I[一次性调用\n本次结构化回复]\n  W[工作智能体\n精确 RuntimeRef]\n  P[持久定位\n当前画面 · canonicalPath · WorktreeRef]\n  L[调用方本地工具\n文件 · 搜索 · Git]\n  F[可信运行事实\nprocessing · waiting · ready · error · exited]\n  H --> O\n  O --> C\n  E -. 可选接入 .-> C\n  C --> I\n  C --> W\n  I --> O\n  W --> P\n  W --> F\n  P --> O --> L\n  L --> O\n  F --> O",
-      "caption": "Pier 闭合调用身份、一次性回复、持久运行操作、当前画面与工作树定位；协调智能体或外部控制器用自身工具读取文件/Git，并闭合工作拆分、重试、回复验收与结束判断。"
+      "diagram": "flowchart TB\n  H[人类\\n给出目标 · 必要时审批]\n  O[协调智能体\\n主要调用者]\n  E[外部控制器（可选）\\n同构 JSON]\n  N[原生 agent CLI\\n一次性 · 不经 Pier]\n  C[Pier 智能体 CLI\\ncatalog · start · turn · screen · wait]\n  W[工作智能体\\n精确 RuntimeRef]\n  P[当前画面 · WorktreeRef]\n  L[调用方本地工具\\n文件 · 搜索 · Git]\n  F[运行事实]\n  H --> O\n  O --> N\n  N --> O\n  O --> C\n  E -. 可选接入 .-> C\n  C --> W\n  W --> P\n  W --> F\n  P --> O\n  F --> O\n  O --> L\n  L --> O",
+      "caption": "一次性：协调方直接调原生 agent。Pier 只闭合发现、持久运行、当前画面与工作树定位；调用方用本地工具读文件/Git，并闭合拆分、重试、验收与结束判断。"
     },
     "problem": {
       "title": "当前 CLI 把人和外部程序放在前面，却没有闭合智能体之间的调用与取回内容",
-      "thesis": "Pier 已能承载多个智能体、终端、工作树与运行事实，但现有 CLI 仍以人类/脚本/MCP 为主要叙事：智能体无法可信自述调用身份，没有直接返回本次回复的一次性调用，也没有明确区分当前画面、文件/Git 与完整历史。需要把高层 agents CLI 置于主路径，再由精确宿主原语兜底。",
+      "thesis": "Pier 已能承载多个智能体、终端、工作树与运行事实，但现有 CLI 仍以人类/脚本/MCP 为主要叙事：协调智能体缺少可信调用身份与精确 RuntimeRef 控制面，也没有明确区分当前画面、工作树定位与完整历史。一次性提问应走各 agent 原生 CLI；Pier 主路径是发现 + 持久 start/turn/screen/wait，由精确宿主原语兜底。",
       "pains": [
         {
           "id": "P1",
@@ -110,9 +115,9 @@
         },
         {
           "id": "P2",
-          "title": "一次性回复没有产品接口",
-          "detail": "现有能力能打开终端、发送输入，却没有显式 agent、cwd、输入与有界输出的 invoke 契约。",
-          "consequence": "调用者只能抓屏或轮询终端，既不稳定，也无法分辨本次回复。"
+          "title": "一次性与持久混谈导致错误封装",
+          "detail": "把「问一句 codex」做成 Pier 宿主服务，与业界原生 CLI 重复且无界面价值。",
+          "consequence": "应用层应直接调原生 agent；Pier 只做持久运行控制。"
         },
         {
           "id": "P3",
@@ -138,20 +143,20 @@
       {
         "area": "本机 CLI",
         "owner": "bin/pier + local-control",
-        "available": "v1 短请求：open、status、windows/panels list|focus、terminal open/profiles、worktrees list|create|open、tasks list|run|status|cancel、plugins 只读、preferences；v2 会话（cli-human）：agents catalog/list/get、control.hold/trace、subscribe；pier-cli-user-manual Canvas 与 unit 门禁已对齐；产品 CLI 不签发 binding",
-        "missing": "agents invoke/start/turn/screen/wait 产品语义（W2/W3）；agents.self 产品化（需 agent principal，现为实验）；access 外部主体（W6）；顶层 snapshot/watch 与 notifications CLI；终端写控 RuntimeRef 全同构；catalog 真实 detection 可用性"
+        "available": "v1：open/status/windows/panels/terminal/worktrees/tasks/plugins/preferences；v2：agents catalog/list/get、subscribe/hold；无产品 agents invoke",
+        "missing": "agents start/turn/screen/wait（W3）；snapshot/watch 顶层；notifications；RuntimeRef 全同构"
       },
       {
         "area": "智能体调用身份",
         "owner": "Pier 运行启动链",
-        "available": "产品路径：spawn 不注入 binding，只 scrub 父级 PIER_AGENT_CALLER_*；CLI 恒 cli-human。遗留实验：内存 store + issueAgentCallerCredential、v2 agent-binding hello/self、registerCliLocalControl 暴露 issueAgentCredential（单测/手动）；peer getpeereid 或 fs-acl",
-        "missing": "产品级 agent principal（若需要）须重新定义 spawn 注入或其它发放面；CapabilityAuthority 全量 mint/revoke；深度/并发/撤销矩阵；catalog detection 全量"
+        "available": "遗留实验：binding/issue；产品 spawn 不注入",
+        "missing": "产品不依赖 agents.self；持久路径父子能力在 W3/W4"
       },
       {
-        "area": "一次性智能体调用",
-        "owner": "AiService（现有基础）",
-        "available": "现有 generateText/oneShot 证明宿主可发起提供方调用，但部分实现使用 -p、自动选择或 fallback",
-        "missing": "不可直接复用现状；需 adapter 把 provider auth/模型传输留在可信外层，并证明模型工具子进程无网络、无 userData、只读精确 repo，才能进入 advisory-read-only catalog"
+        "area": "一次性提问（非 Pier）",
+        "owner": "各 agent 原生 CLI",
+        "available": "调用方直接使用 codex exec / Claude headless 等；Pier 不提供产品封装",
+        "missing": "无（刻意 non-goal）"
       },
       {
         "area": "持久智能体运行",
@@ -187,7 +192,7 @@
         "area": "提醒与协作界面",
         "owner": "Notification Center Service + renderer",
         "available": "统一收件箱、聚焦路由、深链和多个智能体状态",
-        "missing": "围绕协调智能体、持久工作智能体、当前画面与工作树产出的协作视图；一次性回复只返回调用者，不进入全局协作台"
+        "missing": "围绕持久工作智能体、当前画面与工作树的协作视图；无一次性回复进协作台"
       }
     ],
     "researchSources": [
@@ -245,14 +250,14 @@
         "orca": "无同构 one-shot invoke；worker-read 只读取已启动的持久 Dispatch",
         "cmux": "无语义化模型回复",
         "agentOrchestrator": "固定 revision 无 output/conversation tail CLI",
-        "pierDecision": "invoke 显式目标并直接返回本次 InvocationReply"
+        "pierDecision": "一次性直接使用原生 agent CLI；Pier 不封装 invoke"
       },
       {
         "dimension": "持久会话内容",
         "orca": "worker-read 读取 provider transcript，或退化为有界终端输出",
         "cmux": "read-screen/capture-pane 默认 viewport，可选 --scrollback 与 --lines",
         "agentOrchestrator": "session 控制强，内容读取缺口明显",
-        "pierDecision": "CLI 只采用当前画面并返回 canonicalPath/完整 WorktreeRef；调用方用自身文件/Git 工具读取"
+        "pierDecision": "screen 只读当前 viewport；CLI 返回 canonicalPath/完整 WorktreeRef；文件/Git 由调用方本地工具读取；无 transcript/history/replay"
       },
       {
         "dimension": "运行身份",
@@ -266,7 +271,7 @@
         "orca": "send 与消息语义由其领域承担",
         "cmux": "queued 不等于处理完成",
         "agentOrchestrator": "ao send 写入 daemon 消息路径",
-        "pierDecision": "turn 只确认 accepted；invoke 才返回本次语义回复"
+        "pierDecision": "turn 只确认 accepted；语义回复由调用方综合 screen/文件/Git/事实，不由 Pier one-shot 代返"
       },
       {
         "dimension": "工作结束判断",
@@ -298,7 +303,7 @@
       },
       {
         "id": "H4",
-        "text": "invoke 必须显式 agent 与 cwd/worktree，输入走 stdin 或文件，直接返回本次有界结构化回复；它不创建可读取的历史记录。"
+        "text": "核心逻辑优先，拒绝业界能力二次封装：只实现依赖 Pier 宿主身份/运行时/面板才能成立的独有能力；业界已成熟支持的能力（如各 agent 原生 one-shot CLI）必须直接使用原生入口，禁止为统一抽象、第二套 API 或「便利封装」再造宿主产品面。判定启发式：去掉 Pier 后用户仍可用原生工具完成同一动作 → 不得做成 Pier 产品命令或服务。"
       },
       {
         "id": "H5",
@@ -330,191 +335,166 @@
       },
       {
         "id": "H12",
-        "text": "v1 invoke 永远是 advisory-read-only：可信 AgentInvokeService/provider adapter 在模型工具沙箱之外持有 auth，并只向选定 provider endpoint 开放窄 egress；工具子进程只挂载精确工作树 repo 与必要 Git admin 只读面和可销毁临时目录，不挂载 userData、Pier socket、凭证或密钥，也没有任意网络、连接器与持久副作用。无法隔离模型传输与工具网络时拒绝并引导调用者使用受控持久子运行。"
+        "text": "产品面禁止 agents invoke / 统一 InvocationReply / AgentInvokeService 作为完成定义；一次性提问由各家原生 agent CLI 完成。不得以「沙箱/统一回复契约」为由把业界 one-shot 再封装进 Pier。"
       }
     ],
     "architecture": {
-      "diagram": "flowchart TB\n  subgraph CALLERS[调用者]\n    CO[协调智能体\n主要调用者]\n    WA[普通工作智能体\n仅获委派能力]\n    HU[人类 CLI\n可选]\n    EX[外部控制器\n可选]\n    LOCAL[调用方本地工具\n文件 · 搜索 · Git]\n  end\n  subgraph ENTRY[Pier 智能体 CLI]\n    SELF[self / catalog / list / get]\n    INV[invoke\n本次结构化回复]\n    PERSIST[start / turn / screen / wait / watch]\n  end\n  subgraph HOST[Pier main]\n    ID[AgentCallerService\nAgentCallerBinding · 凭证注入]\n    AUTH[AccessGrantService / CapabilityAuthority\n唯一 mint · revoke · authorize]\n    AI[AgentInvokeService\n一次性显式调用]\n    RC[RuntimeControlService\n精确 RuntimeRef]\n    FACT[FA + Runtime Index + provider\n可信运行事实]\n    CONTENT[当前画面 + WorktreeRef\n有界定位面]\n  end\n  CO --> SELF\n  CO --> INV\n  CO --> PERSIST\n  CO --> LOCAL\n  WA -. 显式委派 .-> SELF\n  HU -. 宿主确认 .-> AUTH\n  EX -. Ed25519 grant .-> AUTH\n  SELF --> ID\n  ID -. 请求签发 .-> AUTH\n  SELF --> AUTH\n  INV --> AUTH --> AI --> INV\n  PERSIST --> AUTH --> RC\n  RC --> FACT --> PERSIST\n  RC --> CONTENT --> PERSIST\n  CONTENT -. canonicalPath + WorktreeRef .-> LOCAL",
+      "diagram": "flowchart TB\n  subgraph CALLERS[调用者]\n    CO[协调智能体]\n    HU[人类 CLI]\n    EX[外部可选]\n    LOCAL[本地文件/Git 工具]\n    NATIVE[原生 agent CLI\\n一次性]\n  end\n  subgraph ENTRY[Pier CLI 产品面]\n    DISC[catalog / list / get]\n    PERSIST[start / turn / screen / wait / watch]\n    STOP[focus / interrupt / terminate]\n  end\n  subgraph HOST[Pier main]\n    RC[RuntimeControl]\n    FACT[FA + Runtime Index]\n    CONTENT[viewport + WorktreeRef]\n  end\n  CO --> NATIVE\n  NATIVE --> CO\n  CO --> DISC\n  CO --> PERSIST\n  CO --> STOP\n  HU --> DISC\n  HU --> PERSIST\n  EX -. 可选 .-> PERSIST\n  PERSIST --> RC\n  STOP --> RC\n  RC --> FACT\n  RC --> CONTENT\n  CONTENT --> CO\n  FACT --> CO\n  CO --> LOCAL",
       "notes": [
+        "一次性提问不经 Pier，直接使用原生 agent CLI。",
+        "Pier 产品 agents：catalog/list/get 与 start/turn/screen/wait/watch/focus/interrupt/terminate。",
+        "无 agents invoke 产品面；无独立 activity 命令组。",
+        "screen 只当前 viewport；文件/Git 本地读；无公共 transcript。",
+        "turn 只 accepted；完成判断在调用方。",
         "AccessGrantService 内的 CapabilityAuthority 是 agent-bootstrap、child、human、external grant 与全部 AccessGrantRef/CapabilityRef 唯一的 mint/revoke/authorize 线性化点；内存 grant 不写 userData，外部授权按既有规则耐久化。",
         "AgentCallerService 只从实际 runtime 启动链绑定 caller RuntimeRef/generation、完整 WorktreeRef 与预算，并向 CapabilityAuthority 请求 AgentCallerCredential；它不创建、撤销或判定 grant/CapabilityRef。协调智能体从启动环境取得凭证后首先调用 self 查看非秘密身份与范围。",
-        "invoke 走显式 provider/agent/WorktreeRef 输入，一次调用只产生一个 InvocationReply；--execution-deadline 约束首次执行并在到期后收敛为 interrupted/error 终态，--wait-timeout 只约束观察并以 observation_timeout 返回可重附着引用，响应有 maxOutputBytes 与 truncated，不形成可枚举历史。",
-        "advisory-read-only 采用可信外层与模型工具沙箱分层：外层 adapter 持 provider auth，并只到选定 endpoint；工具子进程仅有精确 repo/Git admin 只读面与可销毁临时目录，不挂载 userData、Pier socket、调用凭证或密钥，也不开放任意网络、连接器和持久副作用。",
-        "持久路径把运行控制与内容定位分开：turn 只提交一轮输入，screen 只读当前画面，wait/watch 只读事实；CLI 只返回 canonicalPath + 完整 WorktreeRef，文件与 Git 内容由调用者用自身工具读取。",
-        "默认能力只从父调用者派生到本次新建子运行；running invoke 与 starting/running child runtime 共享 maxActiveChildren 原子预留，递归深度、允许的 agents/operations 与 sibling-read 都是显式条款。",
-        "人类 CLI 与外部控制器复用相同命令和 refs；调用 invoke 时都必须取得精确 agent-invoke scope，前者经宿主可信确认，后者走 OS 同用户校验、Ed25519 grant 与宿主确认。",
-        "本机协议的事件缓冲是有界运行事实流，不是耐久记录；renderer 可组合现有 Files UI 展示工作树变化，但 agents CLI 不新增 files/git 命令组，一次性回复只返回当前调用者。",
-        "所有本机 principal 都在同一系统用户下，CapabilityRef 只是工程纪律而不是安全隔离；调用方本地文件/Git 工具与现有 Files UI 分别负责自己的 path containment，Pier agents CLI 不替它们授权或代理内容读取。",
-        "写 capability 由宿主可信确认面批准；project-create 只绑定规范仓库与 start/open/create/run，worktree-register 绑定既有路径与 Git 身份且只允许 register，project-resource/runtime-control/task-run-control 分别绑定精确 WorktreeRef/RuntimeRef/TaskRunRef，用户全局设置与提醒各自独立，不以“项目授权”掩盖资源或全局写入。",
-        "main AccessConsentQueue 是 pending request 的单写 FIFO：每次只向当前 Pier key-window 路由一个请求；renderer 通过 openAppContentDialog 打开 AppContentDialogHost，展示客户端指纹、scopeKind、规范项目或用户级范围、精确 RuntimeRef/WorktreeRef/TaskRunRef、派生操作清单与 TTL，并用 setFooter/ContentDialogFooterActions 提供 sticky“拒绝 | 批准”。新请求不得顶替未决请求。",
-        "窗口切换会把同一 requestId 重新路由到新的 key-window；窗口关闭、请求超时、无 key-window、重复或迟到决定都由 main 以 compare-and-set 收敛为唯一结果，不允许 renderer 写 grant。",
-        "grant 与最小 access request 恢复记录共同归入用户授权偏好，并写入 safeStorage 包装的 userData 原子 JSON。request 记录只含 clientKeyHash、accessRequestKeyHash、scopeDigest、requestId、outcome、grantId?、issuedAt、expiresAt 与 retentionUntil；pending 在路由确认前先耐久提交，崩溃恢复时原子转 unavailable。retentionUntil 后记录可删除；此后同 key 无法与新 key 区分，只能按新请求重新进入宿主确认，绝不沿用旧结果。临时文件 fsync、rename 与父目录 fsync 全部完成后才响应；损坏或提交失败一律 fail-closed，不引入 SQLite 或任务台账。",
-        "宿主设置提供“本机控制授权”列表，展示指纹、scopeKind、精确目标、操作、到期时间与最近使用；用户可主动撤销父 grant，main 在耐久提交后原子级联撤销子能力并终止现有连接。外部 CLI 的 revoke 只撤销自身 grant。",
-        "WorktreeIdentityRegistry 不写 userData：incarnationId 的唯一权威是 linked worktree Git 私有 admin marker；marker 文件与 Git admin 父目录均 fsync 后才成功，WorktreeService 每次从 git worktree list --porcelain + marker 重建内存索引。所有底层 runtime/TaskRun 创建入口按完整 WorktreeRef 共用 main 侧 usage admission/remove 线性化锁，包含 agents start、terminal open、tasks run/rerun 及 v1/human/renderer 适配；删除进入 removing 后拒绝新准入。",
-        "本机 socket/pipe 在解析 hello 前先验证当前 OS 用户；共享 /tmp 根、宽权限 socket 或仅靠 Ed25519 作为本机主体认证都被拒绝。"
+        "核心逻辑优先：一次性 one-shot 不进 Pier；不实现 AgentInvokeService 产品面。",
+        "持久路径把运行控制与内容定位分开：turn 只提交一轮输入，screen 只读当前画面，wait/watch 只读事实；CLI 只返回 canonicalPath + 完整 WorktreeRef，文件与 Git 内容由调用者用自身工具读取。"
       ]
     },
     "ownership": [
       {
         "layer": "调用方编排语义",
         "owner": "协调智能体 / 外部控制器",
-        "owns": "目标、工作拆分、调用选择、委派范围、重试策略、回复验收、综合结论、结束判断与调用方记忆",
-        "mustNotOwn": "Pier 的 PTY、窗口、面板、调用凭证签发与可信运行事实"
+        "owns": "目标拆分、重试、验收、结束判断",
+        "mustNotOwn": "Pier 运行事实与面板控制"
       },
       {
-        "layer": "智能体调用身份",
-        "owner": "Pier main AgentCallerService",
-        "owns": "AgentCallerBinding：caller RuntimeRef/generation、完整 WorktreeRef、父子来源与深度/并发预算绑定，凭证材料注入和跨平台临时文件生命周期，以及向 CapabilityAuthority 提交最小凭证请求",
-        "mustNotOwn": "grant/CapabilityRef 的授权权威、目标分解、回复验收、重试状态或完成权"
-      },
-      {
-        "layer": "一次性智能体调用",
-        "owner": "Pier main AgentInvokeService",
-        "owns": "显式目标/cwd/input、单次 provider 调用、超时、取消、最大输出字节与 InvocationReply",
-        "mustNotOwn": "公共 transcript/history/replay、跨调用记忆或任务结果"
+        "layer": "一次性原生调用",
+        "owner": "各 agent 原生 CLI",
+        "owns": "headless one-shot 与其输出形状",
+        "mustNotOwn": "Pier agents invoke 产品面"
       },
       {
         "layer": "本机控制传输",
         "owner": "Pier local-control",
-        "owns": "OS 用户限定的 socket/pipe、握手、帧、取消、序号、JSON/JSONL、超时、兼容、全局事实流与当前 boot 的副作用回执 epoch",
-        "mustNotOwn": "调用方工作状态、结束策略或调用方记忆映射"
+        "owns": "v1/v2 帧与 peer 会话",
+        "mustNotOwn": "任务台账"
       },
       {
         "layer": "本机控制授权",
         "owner": "Pier main AccessGrantService",
-        "owns": "CapabilityAuthority：全部 agent-bootstrap、child、external/human grant 与 AccessGrantRef/CapabilityRef 的 mint/revoke/authorize 唯一线性化点；同时拥有 Ed25519 持钥挑战、AccessConsentQueue、safeStorage 包装的外部 grant 与 access-request 恢复记录、精确 scope、过期和级联撤销",
-        "mustNotOwn": "调用方工作身份、智能体业务角色，或对同一系统用户内恶意进程的安全隔离承诺"
+        "owns": "能力表与写 op 纪律授权",
+        "mustNotOwn": "完成裁决"
       },
       {
         "layer": "终端运行控制",
         "owner": "Pier main RuntimeControlService",
-        "owns": "PTY/process、runtimeId、generation、turn/screen/send/key/interrupt/terminate 守卫",
-        "mustNotOwn": "工作拆分、重试、回复验收或结束判断"
+        "owns": "start/turn/screen/interrupt 与 RuntimeRef",
+        "mustNotOwn": "语义工作结论"
       },
       {
         "layer": "窗口与面板",
         "owner": "Pier workspace",
-        "owns": "PanelRef、布局、移动、聚焦、打开与关闭",
-        "mustNotOwn": "进程写身份或任务状态"
+        "owns": "list/focus 定位",
+        "mustNotOwn": "agent 语义回复"
       },
       {
         "layer": "运行事实",
         "owner": "ForegroundActivity + Runtime Index + provider adapters",
-        "owns": "当前活动、可信 provider 状态、发现、排序与定位投影",
-        "mustNotOwn": "工作是否成功、是否重试或回复是否可接受的结论"
+        "owns": "waiting/ready/error/exited 投影",
+        "mustNotOwn": "任务完成状态"
       },
       {
         "layer": "工作树",
         "owner": "WorktreeService",
-        "owns": "Git 检查、创建、打开、删除保护、WorktreeRef、Git 私有 admin marker，以及按 WorktreeRef 串行的 usage admission/remove 锁；内存索引可从 Git 重建",
-        "mustNotOwn": "调用方工作租约、自动清理或合并策略"
+        "owns": "WorktreeRef 准入与清理",
+        "mustNotOwn": "文件内容代理读取"
       },
       {
         "layer": "shell 执行",
         "owner": "TaskRuns",
-        "owns": "显式 shell 命令依赖、输出、取消与退出状态",
-        "mustNotOwn": "多智能体工作项、审批或结果"
+        "owns": "shell 命令运行",
+        "mustNotOwn": "多智能体任务模型"
       },
       {
         "layer": "注意力与界面",
         "owner": "NCS + Pier renderer",
-        "owns": "提醒、已读、深链和智能体协作视图",
-        "mustNotOwn": "Gate、Result、工作看板或调用方进度镜像"
+        "owns": "提醒与聚焦",
+        "mustNotOwn": "改写调用方工作结论"
       }
     ],
     "entities": [
       {
         "name": "AgentCallerCredential",
-        "owner": "AccessGrantService/CapabilityAuthority",
-        "identity": "bootId + callerRuntimeId + callerGeneration + credentialId",
-        "meaning": "AgentCallerService 绑定实际启动链并请求后，由 AccessGrantService/CapabilityAuthority 签发的短期、不透明调用凭证；引用 grantId + parentClauseId + credentialId 与可选 childClauseId。root 来源是内存 agent-bootstrap grant，child 来源是临时派生 grant；AgentCallerService 只负责把凭证材料安全注入精确 runtime。它只证明当前 boot 的调用者及其范围，退出、换代、过期或撤销时由授权权威级联失效。"
-      },
-      {
-        "name": "InvocationReply",
-        "owner": "AgentInvokeService",
-        "identity": "bootId + principalRef + operationId",
-        "meaning": "仅表示一次 invoke 的当前回复；以统一 principalRef 隔离智能体、人类与外部控制器命名空间，其中 agent principalRef 已包含 credentialId。回复包含 agentId、reply、status=responded|interrupted|error、truncated 与 usage/elapsed 可选元数据；responded 表示已有回复，不代表调用方工作完成，响应后不提供公共枚举入口。"
+        "owner": "遗留/实验",
+        "identity": "AgentCallerCredential",
+        "meaning": "非产品主路径绑定材料"
       },
       {
         "name": "AccessGrantRef",
         "owner": "AccessGrantService",
-        "identity": "grantId + principalRef + expiresAt",
-        "meaning": "CapabilityAuthority 签发的非秘密父授权引用，统一覆盖 agent-bootstrap、child、human 与 external 来源；外部私钥仍留在客户端安全存储。每个 grant clause 都有精确 scopeKind、目标、操作与期限；不表达调用方工作身份。"
+        "identity": "AccessGrantRef",
+        "meaning": "外部窄授权引用"
       },
       {
         "name": "CapabilityRef",
-        "owner": "AccessGrantService",
-        "identity": "grantId + parentClauseId + childClauseId",
-        "meaning": "CapabilityAuthority 唯一签发并撤销的非秘密精确子能力引用，记录 childClauseId、parentClauseId、targetRef、operations、bootId 与 expiresAt。服务端每次在同一 authorize 线性化点重查父链；子能力只可由实际授权创建副作用的同一父条款派生，操作是该条款明示 derivedOperations 的交集，过期不晚于来源条款，父 grant 撤销时全部级联撤销；同一创建回执重放返回同一 childClauseId。"
+        "owner": "Authorizer",
+        "identity": "CapabilityRef",
+        "meaning": "操作能力引用（纪律）"
       },
       {
         "name": "AgentRef",
         "owner": "Runtime Index",
-        "identity": "bootId + windowId + panelId",
-        "meaning": "当前 boot 内智能体现场的位置引用，只用于发现与聚焦；不能证明调用者，也不能代替 RuntimeRef 或 AgentCallerCredential。"
+        "identity": "AgentRef",
+        "meaning": "在跑智能体投影"
       },
       {
         "name": "WindowRef",
-        "owner": "Workspace",
-        "identity": "bootId + windowId",
-        "meaning": "当前 boot 内宿主窗口位置引用，只用于发现与聚焦；重启后失效，不承担面板或进程写身份。"
+        "owner": "workspace",
+        "identity": "WindowRef",
+        "meaning": "窗口定位"
       },
       {
         "name": "PanelRef",
-        "owner": "Workspace",
-        "identity": "bootId + windowId + panelId",
-        "meaning": "当前 boot 内界面表面与布局位置；移动会更新位置，重启后失效，不承担进程写身份。"
+        "owner": "workspace",
+        "identity": "PanelRef",
+        "meaning": "面板定位"
       },
       {
         "name": "RuntimeRef",
-        "owner": "RuntimeControlService",
-        "identity": "bootId + runtimeId + generation",
-        "meaning": "持久智能体 turn/screen/interrupt/terminate 与终端写操作的唯一精确目标；PTY 重建或进程替换必须增代，宿主重启使旧引用与子能力立即失效。"
+        "owner": "RuntimeControl",
+        "identity": "RuntimeRef",
+        "meaning": "精确运行代际"
       },
       {
         "name": "ProviderSessionRef",
         "owner": "provider adapter",
-        "identity": "agentId + providerSessionId?",
-        "meaning": "提供方会话提示与恢复线索；不等于进程身份、调用者凭证或可公开读取的会话历史。"
+        "identity": "ProviderSessionRef",
+        "meaning": "提供方会话锚点"
       },
       {
         "name": "ForegroundActivitySnapshot",
-        "owner": "ForegroundActivity",
-        "identity": "bootId + revision",
-        "meaning": "当前 agent/task/shell/idle 事实快照，没有历史完成语义。"
+        "owner": "FA",
+        "identity": "ForegroundActivitySnapshot",
+        "meaning": "前台活动快照"
       },
       {
         "name": "AgentRuntimeIndexEntry",
         "owner": "Runtime Index",
-        "identity": "agentRef + snapshot revision",
-        "meaning": "运行事实的只读投影，用于列表、排序和定位。"
+        "identity": "AgentRuntimeIndexEntry",
+        "meaning": "跨窗索引条目"
       },
       {
         "name": "WorktreeRef",
         "owner": "WorktreeService",
-        "identity": "既有 worktreeKey（canonical realpath）+ incarnationId",
-        "meaning": "保留 Pier 既有 worktreeKey 路径身份，再增加每次 linked worktree 实体创建时生成的至少 128 位 incarnationId：同一实体跨 list/get 与 Pier 重启稳定，remove 或外部消失后失效，同路径重建必须得到新值；不携带任务 owner 或租约。"
+        "identity": "WorktreeRef",
+        "meaning": "工作树身份"
       },
       {
         "name": "TaskRunRef",
         "owner": "TaskRuns",
-        "identity": "bootId + runId",
-        "meaning": "当前 boot 内一次 shell TaskRun 的根引用；taskId 只与该引用组合成节点选择器，用于定位单条命令或输出。重启后旧 task-run-control CapabilityRef 失效。"
+        "identity": "TaskRunRef",
+        "meaning": "shell 任务引用"
       },
       {
         "name": "NotificationRef",
         "owner": "NCS",
-        "identity": "notificationId + dedupeKey",
-        "meaning": "提醒记录与深链；已读或清空不改变运行事实，也不替协调智能体更新工作结论。"
+        "identity": "NotificationRef",
+        "meaning": "提醒引用"
       }
     ],
     "stateRules": [
-      {
-        "state": "responded",
-        "source": "AgentInvokeService",
-        "meaning": "本次 invoke 已取得结构化回复；不表示回复已被调用方接受，也不表示调用方工作完成。",
-        "next": "协调智能体检查回复，用自身文件/Git 工具读取持久内容，再决定综合、追问或再次调用。"
-      },
       {
         "state": "accepted",
         "source": "RuntimeControlService",
@@ -584,12 +564,6 @@
         "terminal": "退出、换代、旧 boot、过期或撤销由 CapabilityAuthority 将 grant、credential 与 child CapabilityRef 原子级联失效；环境变量、panelId、名称和 --as-agent 不能重新声明主体"
       },
       {
-        "entity": "Agent invocation（一次性）",
-        "path": "accepted → running → responded | cancelling → interrupted | error | unknown",
-        "guard": "固定 advisory-read-only；显式 agentId + 完整 WorktreeRef + 安全 stdin/file + --execution-deadline + maxOutputBytes。可信 adapter 在工具沙箱外持 auth 并只连接选定 endpoint；工具子进程仅挂精确 repo/Git admin 只读面与隔离临时目录，不挂 userData/Pier socket/凭证/密钥且无网络。相同 operationId/摘要在 running 时只附着，不再次 spawn，也不重置首次执行期限或重复占用 maxActiveChildren；观察等待到期只返回 observation_timeout 与原 operationId/effectRevision/attach 提示",
-        "terminal": "执行期限到期必须确认 provider 停止并 reap，再以 execution_deadline_exceeded 收敛为 interrupted/error，禁止继续 attach；无法证明停止则返回 effect_unknown 并继续受管清理。responded 仅表示本次已有回复，不代表调用方任务完成；响应后不建立公共历史索引"
-      },
-      {
         "entity": "Access connection",
         "path": "connected → challenge_issued → key_proved → closed",
         "guard": "服务端在 challenge 消息决定 purpose；nonce/TTL/boot/clientKind/clientKeyHash/grantId 全部进入一次性签名 transcript，每次重连重新证明",
@@ -652,252 +626,155 @@
     ],
     "closedLoops": [
       {
-        "id": "L0",
-        "name": "调用者自述",
-        "steps": "智能体进程启动 → AgentCallerService 绑定 runtime → CapabilityAuthority 签发 → 私有临时文件注入 → agents self → 返回 callerRef、capabilities、depth 与并发预算",
-        "closed": "每次请求以凭证而非自报名称解析主体，并由同一 CapabilityAuthority authorize；旧代、过期、撤销和缺少凭证均有明确结果",
-        "exitStates": "identified | caller_credential_missing | caller_credential_expired | boot_changed | stale_generation"
-      },
-      {
         "id": "L1",
-        "name": "一次性调用并取得回复",
-        "steps": "catalog/list → 选择 agentId 与完整 WorktreeRef → 校验 agent-invoke scope → prompt 经 stdin/file → 进入隔离只读沙箱 → agents invoke → InvocationReply 返回协调智能体",
-        "closed": "--execution-deadline 固定首次执行期限并收敛为 interrupted/error 终态；--wait-timeout 只限制观察，observation_timeout 保持 operation running 并返回同一 operationId/effectRevision/attach 提示。每次调用最终只产生 responded/interrupted/error 之一并明确 truncated，responded 仍由调用方检查和接受",
-        "exitStates": "responded | interrupted | timeout | output_limit | provider_unavailable | error"
+        "name": "发现",
+        "steps": "catalog/list/get → 选择 agent 与工作树",
+        "closed": "显式 id/ref，不猜标题",
+        "exitStates": "selected | not_found | ambiguous"
       },
       {
         "id": "L2",
-        "name": "启动持久工作智能体",
-        "steps": "self → 选择精确 WorktreeRef → 与 running invoke 共用 maxActiveChildren 原子预留 → agents start → 返回 AgentRef/PanelRef/RuntimeRef、子 CapabilityRef 与 effect cursor",
-        "closed": "能力默认绑定“父调用者新建的这个子运行”；同 launch-key 重放不重复占预算，旧 boot 与超预算在副作用前拒绝，runtime reap 后释放",
-        "exitStates": "started | replayed | depth_exceeded | concurrency_exceeded | capability_denied | boot_changed"
+        "name": "一次性（非 Pier）",
+        "steps": "调用方执行原生 agent CLI → 取得本次输出",
+        "closed": "Pier 不参与、不封装",
+        "exitStates": "native_done | native_failed"
       },
       {
         "id": "L3",
-        "name": "持久会话继续一轮",
-        "steps": "agents turn → accepted + effect cursor → agents screen 或 wait/watch → 当前画面/可信事实 → 协调智能体决定下一步",
-        "closed": "turn 不宣称已处理；screen 标注 capturedAt/truncated 且仅为当前画面；wait/watch 以 cursor 无缺口续接",
-        "exitStates": "accepted | screen_captured | waiting | ready | error | exited | timeout | stale_generation"
-      },
-      {
-        "id": "L4",
-        "name": "读取持久产出",
-        "steps": "RuntimeRef → CLI 返回 canonicalPath + 完整 WorktreeRef → 调用方本地工具执行文件读取 / Git status-diff → 调用方结合 screen 与运行事实验收",
-        "closed": "Pier 不代理文件/Git 内容；调用方工具自行执行 path containment 并以完整 WorktreeRef 对账。screen 不替代源文件，文件变化也不自动成为工作结论",
-        "exitStates": "content_read | no_change | dirty | stale_worktree | access_denied"
-      },
-      {
-        "id": "L5",
-        "name": "受限递归委派",
-        "steps": "父调用者请求 child → 校验 allowedAgents/operations/maxDepth/maxActiveChildren → CapabilityAuthority 派生子 credential/capability → child self",
-        "closed": "默认深度 1 且只控制自己新建子；兄弟读取、子再派生和提高预算均需上游显式授权",
-        "exitStates": "delegated | depth_exceeded | concurrency_exceeded | sibling_denied | target_denied"
-      },
-      {
-        "id": "L6",
-        "name": "停止与资源保护",
-        "steps": "显式 interrupt(control-id) → wait exited → 必要时 terminate → worktree check → 以 worktreeKey + incarnationId + idempotency-key 显式 remove",
-        "closed": "每个副作用独立回执；活跃或不安全资源明确拒绝并保留",
-        "exitStates": "exited | timeout | resource_busy | retained | removed"
+        "name": "持久运行",
+        "steps": "start → turn → screen/wait/watch → focus/interrupt/terminate",
+        "closed": "RuntimeRef 精确控制；画面有界；事实≠完成",
+        "exitStates": "running | waiting | ready | exited | interrupted"
       }
     ],
     "cli": {
-      "namespace": "pier agents | pier snapshot/watch | pier access | pier terminal | pier windows | pier panels | pier worktrees | pier activity | pier tasks | pier notifications",
-      "decision": "CLI 是智能体优先的本地调用面：先以 pier-cli-user-manual Canvas 固定用户命令面（shipped/planned），交付波次由本 Canvas 与 local-control 设计文档承载，再按 W1–W6 实现。协调智能体优先使用 agents 高层命令完成自述、一次性调用、持久会话控制、当前画面读取与工作树定位，再用自身文件/Git 工具读取持久内容；terminal/windows/panels/worktrees/activity/tasks 是需要精细控制时的宿主原语。人类与外部控制器复用相同 JSON/JSONL 契约，但调用方自行处理工作拆分、重试、回复验收与综合结论。",
+      "namespace": "pier agents | pier snapshot/watch | pier access | pier terminal | pier windows | pier panels | pier worktrees | pier tasks | pier notifications",
+      "decision": "CLI 产品面（确定）：一次性 = 原生 agent，不进 pier。Pier 只交付发现（catalog/list/get）与持久运行控制（start/turn/screen/wait/watch/focus/interrupt/terminate）。self 非产品主路径（遗留/实验）。去掉独立 activity 命令组（与顶层 snapshot/watch 重复）。terminal 保留非 agent 终端与底层同构写控；agent 运行优先 agents.*。tasks 仅为 shell TaskRuns。禁止 agents invoke 与公共 transcript，也不建立多智能体任务台账。用户命令面真源 pier-cli-user-manual；波次见本 Canvas。",
       "commandGroups": [
         {
           "group": "顶层",
-          "commands": "version · capabilities · doctor · status · snapshot · watch",
-          "responsibility": "协议协商、宿主健康、能力列表、原子总快照与不漏事件的全事实流",
-          "safety": "只读；顶层 watch 是唯一可跨资源续接的全局流，逐条交付所有资源事件；doctor 不自动修复",
+          "commands": "status · snapshot · watch",
+          "responsibility": "宿主健康、原子总快照与全局事实流（唯一跨资源续接）",
+          "safety": "只读；顶层 watch 是唯一可跨资源续接的全局流；version/capabilities/doctor 非本阶段必达",
           "status": "partial",
-          "wave": "W1 扩展 · W3–W4 snapshot/watch 收口"
-        },
-        {
-          "group": "access",
-          "commands": "keygen · status · request · wait · revoke(self)",
-          "responsibility": "客户端持钥证明、宿主确认、分类型最小范围、过期与撤销",
-          "safety": "keygen 在客户端本地生成 mode 0600 的 PKCS#8 PEM Ed25519 私钥并拒绝覆盖；每次连接先完成一次性 challenge；request 要求独立 access-request-key 和最小 scope clauses；最小恢复记录先耐久提交，同 key 同 scope 恢复原 terminal result，同 key 异 scope 冲突；只有 main 队列路由的宿主内容弹窗可决定，私钥不进入 JSON、argv 或 Pier 存储",
-          "status": "planned",
-          "wave": "W6"
+          "wave": "W1 status · W3–W4 snapshot/watch"
         },
         {
           "group": "agents",
-          "commands": "self · catalog · list · get · invoke · start · turn · screen · wait · watch · focus · interrupt · terminate",
-          "responsibility": "可信自述、发现目标、一次性取得本次回复、创建与继续持久工作智能体、读取当前画面、等待事实和精确停止",
-          "safety": "v1 invoke 固定 advisory-read-only、无 --write，只有 adapter 能把 provider auth/窄 egress 留在可信外层，并证明工具子进程只读精确 repo、无 userData/网络/控制面时才可用；invoke 须精确 agent-invoke scope、--execution-deadline/--wait-timeout，并与持久子运行共享活跃预算。observation_timeout 保持 operation running 并返回 operationId/effectRevision/attach；execution_deadline_exceeded 只收敛为 interrupted/error，禁止 attach；start 绑定父调用者与新子 RuntimeRef；turn/screen/interrupt/terminate 要求精确子能力 + 完整 RuntimeRef；agents invoke/start/turn/interrupt/terminate 的回执返回 effectRevision 与 cursor；responded/ready 都不等于调用方工作成功",
+          "commands": "catalog · list · get · start · turn · screen · wait · watch · focus · interrupt · terminate",
+          "responsibility": "发现目标；创建与控制持久工作智能体；当前画面；运行事实；精确停止",
+          "safety": "无 agents invoke 产品命令。start 绑定父调用者与 RuntimeRef；turn 只返回 accepted；screen 只当前 viewport；wait/watch 是运行事实不等于工作完成；interrupt/terminate 与 terminal 同构底层 RuntimeControl，agent 运行优先用 agents.* 名称。无公共 transcript。",
           "status": "partial",
-          "wave": "W1 self/catalog/list/get 已落地 · W2 invoke · W3 持久/screen"
+          "wave": "W1 catalog/list/get 已落地 · W3 持久主交付"
         },
         {
           "group": "terminal",
-          "commands": "open · list · get · send · key · interrupt · terminate · wait · watch · profiles list|get|set|delete",
-          "responsibility": "高级终端运行控制与配置",
-          "safety": "open 要求 expectedBootId、launch-key 与 project-create CapabilityRef；send/key 要求精确 runtime 子能力 + 完整 RuntimeRef + input-id；interrupt 要求独立 control-id，不能当作目标状态重放；terminate 是受 boot/代际守卫的目标状态写；profiles set/delete 使用用户全局 CapabilityRef + idempotency-key + if-revision",
+          "commands": "open · list · get · send · key · profiles list|get|set|delete",
+          "responsibility": "非 agent 终端与底层 PTY 原语；agent 运行写控优先走 agents.*",
+          "safety": "open 要求 Worktree 准入；send/key 要求 RuntimeRef。interrupt/terminate/wait/watch 不在本产品列表重复列出（agent 用 agents.*；底层实现可共享）",
           "status": "partial",
-          "wave": "W3–W4 RuntimeRef 与写控对齐"
-        },
-        {
-          "group": "windows",
-          "commands": "list · get · watch · focus",
-          "responsibility": "宿主窗口发现、定位与聚焦",
-          "safety": "WindowRef 只用于当前 boot 的界面定位；资源 watch 返回 cursorScope=resource:windows，不得交给其他资源流",
-          "status": "partial",
-          "wave": "W4 语义收口"
-        },
-        {
-          "group": "panels",
-          "commands": "list · get · watch · focus",
-          "responsibility": "窗口/面板发现、定位与聚焦",
-          "safety": "PanelRef 只用于当前 boot 的界面定位；公共 CLI 不开放会旁路 RuntimeRef 的 panel open/close；资源 watch 的 cursor 不跨命名空间",
-          "status": "partial",
-          "wave": "W4 语义收口"
-        },
-        {
-          "group": "activity",
-          "commands": "snapshot · watch",
-          "responsibility": "FA、Runtime Index、provider 与进程事实的原子快照和增量流",
-          "safety": "这是按 activity 过滤的便利流，cursorScope=resource:activity；需要跨资源不漏事件时使用顶层 watch，gap 后重新 snapshot",
-          "status": "planned",
           "wave": "W3–W4"
         },
         {
-          "group": "worktrees",
-          "commands": "check · creation-defaults · list · get · register · create · remove",
-          "responsibility": "显式 Git 工作树准备、查看与安全清理",
-          "safety": "create 由 project-create 授权，并仅在来源条款明示 worktree.remove-created 时派生只含 remove 的 CapabilityRef；register 使用独立 worktree-register scope，绑定精确路径与 Git 身份且绝不派生删除权；remove 要求 project-resource CapabilityRef + 完整 WorktreeRef + idempotency-key，并与全部 runtime/TaskRun 创建入口共用 WorktreeRef 线性化锁；无 force，主/当前/dirty/活跃 runtime/任一非终态 TaskRun/身份不明均拒绝",
+          "group": "windows",
+          "commands": "list · focus",
+          "responsibility": "窗口发现与聚焦",
+          "safety": "只读定位 + focus；无独立 get/watch 产品必达（可并入 list）",
           "status": "partial",
-          "wave": "W4 WorktreeRef 与准入锁"
+          "wave": "W1 list/focus 已有 · W4 收口"
+        },
+        {
+          "group": "panels",
+          "commands": "list · focus",
+          "responsibility": "面板发现与聚焦",
+          "safety": "不开放旁路 RuntimeRef 的 panel 写控",
+          "status": "partial",
+          "wave": "W1 list/focus 已有 · W4 收口"
+        },
+        {
+          "group": "worktrees",
+          "commands": "list · create · open · check · get · register · remove",
+          "responsibility": "Git 工作树准备、查看与安全清理",
+          "safety": "create/remove 准入锁；无 force 破坏性捷径",
+          "status": "partial",
+          "wave": "W1 list/create/open 已有 · W4 WorktreeRef"
         },
         {
           "group": "tasks",
-          "commands": "list · get · run · watch · output · stop · rerun",
-          "responsibility": "现有 shell TaskRuns 的执行、输出与取消",
-          "safety": "run 要求 expectedBootId、project-create CapabilityRef + run-key，并在 WorktreeRef 线性化锁内取得 usage 引用后才准入；来源条款明示 task-run.control-created 与 derivedOperations 时返回精确子能力。stop/rerun 只接受 task-run-control CapabilityRef + 完整 TaskRunRef；rerun 使用新 run-key，在同一 WorktreeRef 锁内重新准入并返回新 TaskRunRef",
+          "commands": "list · run · status · cancel · get · watch · output · stop · rerun",
+          "responsibility": "shell TaskRuns only",
+          "safety": "永不扩展为多智能体任务模型",
           "status": "partial",
-          "wave": "W4 同构；永不扩展为多智能体任务"
+          "wave": "W1 list/run/status/cancel 已有 · W4 同构"
         },
         {
           "group": "notifications",
           "commands": "list · get · watch · focus · mark-read",
-          "responsibility": "系统提醒、注意力深链与已读操作",
-          "safety": "mark-read 要求 user-global-notification CapabilityRef 且可安全重放；资源 watch 的 cursor 不跨命名空间；只操作 NCS，不改变 runtime 或调用方工作判断",
+          "responsibility": "系统提醒与深链",
+          "safety": "不改变 runtime 或调用方工作判断",
           "status": "planned",
           "wave": "W5"
+        },
+        {
+          "group": "access",
+          "commands": "keygen · status · request · wait · revoke",
+          "responsibility": "外部主体窄授权（非 one-shot invoke scope）",
+          "safety": "授权对象为持久 runtime-control / project-create 等，不为 agents.invoke",
+          "status": "planned",
+          "wave": "W6"
         }
       ],
       "lifecycle": [
         {
-          "stage": "1 · 调用者自述",
-          "commands": "agents self · capabilities · doctor",
-          "commit": "AgentCallerService 从跨平台私有临时文件绑定 callerRef、bootId/generation、父子来源与预算；AccessGrantService/CapabilityAuthority 是凭证及全部 grant/CapabilityRef 的唯一签发与校验点",
-          "recovery": "凭证缺失、过期、撤销、boot_changed 或 stale_generation 明确失败；不接受 --as-agent 回退"
+          "stage": "1 · 发现",
+          "commands": "agents catalog/list/get · worktrees list",
+          "commit": "读取可启动 agent 与在跑投影、工作树；不猜 panel 标题",
+          "recovery": "重名返回多候选；调用方选显式 id/ref"
         },
         {
-          "stage": "2 · 发现与选择",
-          "commands": "agents catalog/list/get · worktrees list/get",
-          "commit": "读取可调用 agent、现有现场、精确 WorktreeRef 与当前 capability，不依赖面板标题猜测",
-          "recovery": "重名返回多候选；调用者选择显式 agentId/refs"
+          "stage": "2 · 一次性提问（非 Pier）",
+          "commands": "原生 agent CLI（codex exec / claude …）",
+          "commit": "调用方直接使用对应 agent 能力取得本次回复；Pier 不封装、不收口 JSON",
+          "recovery": "失败与重试策略由调用方与原生 CLI 决定"
         },
         {
-          "stage": "3A · 一次性调用",
-          "commands": "agents invoke",
-          "commit": "stdin/file 输入、显式 agentId/WorktreeRef、agent-invoke scope、operationId、--execution-deadline 与 maxOutputBytes 固定本次调用；--wait-timeout 只限制观察，返回唯一 InvocationReply",
-          "recovery": "只读沙箱不可证明则 provider_unavailable；deadline/interrupted/error 不隐式重试；truncated 提示调用者缩小请求或转持久路径"
-        },
-        {
-          "stage": "3B · 持久启动",
+          "stage": "3 · 持久启动",
           "commands": "agents start",
-          "commit": "完整 WorktreeRef、launch-key 与父 capability 在 WorktreeService admission 内创建新子运行；它与 running invoke 共享 maxActiveChildren 原子预留，并返回 AgentRef/PanelRef/RuntimeRef/子 CapabilityRef 与 effect cursor",
-          "recovery": "超深度/超并发在副作用前拒绝；同 key 可重放；旧 boot 先 self/snapshot 对账"
+          "commit": "WorktreeRef + launch-key 创建子运行；返回 AgentRef/PanelRef/RuntimeRef",
+          "recovery": "超限拒绝；旧 boot 先 snapshot 对账"
         },
         {
-          "stage": "4 · 继续与取回内容",
+          "stage": "4 · 继续与取回现场",
           "commands": "agents turn · screen · wait · watch",
-          "commit": "turn 返回 accepted + effect cursor；screen 返回当前可见画面与截断元数据；wait/watch 返回可信事实；CLI 返回 canonicalPath + 完整 WorktreeRef 后，文件/Git 由调用者本地工具读取",
-          "recovery": "screen 不足时读取源文件或缩小问题；cursor gap 重新 snapshot；绝不请求公共运行历史"
+          "commit": "turn=accepted；screen=当前画面；wait/watch=运行事实；文件/Git 本地读",
+          "recovery": "screen 不足则读源文件；cursor gap 重新 snapshot"
         },
         {
-          "stage": "5 · 精细控制与人类介入",
-          "commands": "agents focus/interrupt/terminate · terminal/windows/panels/activity/tasks/notifications",
-          "commit": "所有写操作使用精确 ref、子 capability、expectedBootId 与独立 effect key；需要人处理经 NCS 聚焦原现场",
-          "recovery": "SIGINT 只停当前 CLI 等待；stale/gone/boot_changed 要求重新对账，不自动追随新进程"
+          "stage": "5 · 停止与人介入",
+          "commands": "agents focus/interrupt/terminate · notifications",
+          "commit": "精确 RuntimeRef 停止；需要人处理经 NCS 聚焦",
+          "recovery": "stale/boot_changed 要求重新对账"
         },
         {
-          "stage": "6 · 外部/人类可选接入",
-          "commands": "access keygen/status/request/wait/revoke · agents invoke · snapshot/watch",
-          "commit": "人类经宿主可信确认、外部经 OS 同用户与 Ed25519 proof 后取得窄 agent-invoke/其他 AccessGrantRef；全部调用进入 CapabilityAuthority 和相同 services",
-          "recovery": "denied/expired/revoked/boot_changed 明确失败；调用方自行对账，Pier 不自动重发调用"
+          "stage": "6 · 可选外部接入",
+          "commands": "access · snapshot/watch · agents start/turn/screen",
+          "commit": "外部窄 grant 进入同一持久控制面，不为 one-shot invoke",
+          "recovery": "denied/expired 明确失败"
         }
       ],
       "commonRules": [
-        "v1 agents invoke 固定为 advisory-read-only 且无 --write：可信 AgentInvokeService 与 provider adapter 持有 provider auth，且位于工具沙箱之外；它们只向选定 provider endpoint 开放窄 egress。模型工具子进程只挂载精确 WorktreeRef 对应的 repo 与必要 Git admin 只读面，以开放只读文件、内容搜索与 Git 查询；每次调用的临时目录彼此隔离并在 provider reap 后销毁。工具子进程禁止任意网络和外部连接器，不挂载 userData、Pier socket、credential/AgentCallerCredential 或密钥，也不得产生任何持久副作用。现有 -p/argv、auto-pick 或可写 provider 路径不得直接复用；provider-native adapter 若模型传输与工具网络无法隔离，catalog 返回 provider_unavailable 并建议改用 agents start 持久子运行。",
-        "AccessGrantService 内的 CapabilityAuthority 是全部 agent-bootstrap、child、human、external grant 与 AccessGrantRef/CapabilityRef 唯一的 mint/revoke/authorize 线性化点。root agent-bootstrap grant 与临时 child grant 只存 main 内存、不写 userData；AgentCallerService 只绑定实际 caller RuntimeRef/generation、完整 WorktreeRef、允许目标/操作、深度/并发与 expiresAt，再向 CapabilityAuthority 请求签发 AgentCallerCredential，绝不自行创建、撤销或授权 grant/CapabilityRef。凭证明确引用 grantId + parentClauseId + credentialId；退出、换代、过期或撤销时 grant、credential 与全部 child CapabilityRef 级联失效。",
-        "root bootstrap grant、临时 child agent grant、human/external grant、AgentCallerCredential 与 CapabilityRef 使用同一 wire shape：{principalRef,grantId,parentClauseId,childClauseId?,credentialId?,targetRef,operations,bootId,expiresAt}；区别只在主体证据、来源与 scope，所有 mint/revoke/authorize 都经过 CapabilityAuthority，不另造全局 agent token。",
-        "runtime.control-created 明确拆分最小读写操作：read=get/screen/wait/watch/focus；write=turn/send/key/interrupt/terminate。父条款未明示的操作不能出现在 child CapabilityRef，root 与 child 都由同一 authorize/admission 路径判定。",
-        "invoke 把 --execution-deadline 与 --wait-timeout 分离：--execution-deadline 映射不可变 invokeDeadline，进入执行摘要并约束 provider 生命周期；--wait-timeout 只映射 observation wait timeout，不进入摘要且只停止当前观察。首次接受 operation 时固定 execution deadline，attach/附着、重连或重复观察都不重置、不能延长首次 execution deadline；断线只分离观察者，不取消、重启或重复 spawn provider。",
-        "execution deadline、observation timeout 与断线三者分离：--wait-timeout 到期公开稳定返回 observation_timeout（exit 124），operation 仍在 running，错误详情必须带原 operationId、effectRevision 与 attach=reuse_same_operation 提示；--execution-deadline 到期公开返回 execution_deadline_exceeded，并在确认 provider 停止/reap 后收敛为 InvocationReply.interrupted 或 error，禁止 attach 终态 operation；传输断开只移除观察者。",
-        "同 principalRef + operationId + 同摘要处于 running 时只能附着同一 operation，或返回 effect_in_progress 与重试/附着提示，绝不再次 spawn。Ctrl-C/AbortSignal 请求取消后，只有确认 provider 进程组已停止并被 reap 才返回 interrupted；无法证明时返回 effect_unknown，由 AgentInvokeService 继续监督并清理，不得留下未归属孤儿进程。",
-        "running invoke 与 starting/running child runtime 共享 caller 的 maxActiveChildren 原子 reservation：首次 spawn/start 前在同一预算线性化点预留，超额返回 concurrency_exceeded；attach 与 replay 不重复 reservation，取消未知期间继续占用，只有 provider/runtime reap 后释放。",
-        "统一 principalRef：智能体为 agent:<bootId>:<callerRuntimeId>:<callerGeneration>:<credentialId>，外部控制器为 external:<clientKeyHash>:<grantId>，人类写操作为 human:<bootId>:<consentId>。所有主体先按各自证据鉴权，再进入同一 capability、effect admission、receipt 与 effect fence 流水线。",
-        "AgentCallerCredential 必须记录来源 parentClauseId，并只携带由来源条款派生的精确 child CapabilityRef；agent principal 不能借用 external grant 的 clientKeyHash receipt，也不能把人类 consent 当通配授权。",
-        "AgentCallerCredential 在当前 boot 有效；不得通过 --as-agent、panelId、当前焦点或可伪造环境变量自报身份；self 不打印秘密；父调用凭证不传给子智能体。",
-        "默认只允许父调用者控制自己新建的精确子运行；跨同伴读取、递归调用和提高并发预算必须显式授权；递归深度和并发预算只能单调收缩。",
-        "方案 A 的内容契约：invoke 只返回本次调用的结构化回复；InvocationReply.responded 不等于任务成功；screen 只返回当前 viewport；文件/Git 由调用者自身工具读取；不提供公共 transcript；不提供 scrollback/history/replay。",
-        "invoke 必须显式 agentId，禁止默认 auto-pick、隐式 provider fallback 或从最近面板猜目标；catalog 返回不可用原因，目标不可用就明确失败。",
-        "协调智能体是 agents CLI 的主要调用者；main 通过 PIER_AGENT_CALLER_CREDENTIAL_FILE 注入跨平台私有临时文件中的不透明凭证，凭证绑定 bootId、callerRuntimeId、callerGeneration、credentialId、parentClauseId、allowedAgents/operations、maxDepth、maxActiveChildren 与 expiresAt。",
-        "agents self 只返回非秘密 callerRef、WorktreeRef、capabilities、delegationDepth/maxDepth、activeChildren/maxActiveChildren 与 expiresAt；绝不返回 credential secret、文件内容或父 grant 私钥。",
-        "父 caller credential 与凭证文件路径在启动 one-shot provider 或持久 child 进程前必须从环境、argv 与继承 fd scrub；AgentCallerService 绑定 child 的 bootId + RuntimeRef generation 后向 CapabilityAuthority 请求签发权限单调收缩的独立凭证。",
-        "agents self 只从已验证的 AgentCallerCredential 推导 callerRef 与能力；禁止 --as-agent，也不把 agent 名称、panelId、PIER_WINDOW_ID/PIER_PANEL_ID、当前焦点或 cwd 当作主体证明。",
-        "invoke 直接返回本次调用的结构化回复：{agentId,operationId,status:responded|interrupted|error,reply,truncated,elapsedMs,usage?}；responded 只表示已有回复，不代表调用方接受或工作完成。",
-        "invoke 必须显式 agentId 与 cwd/WorktreeRef；prompt 只允许 stdin 或 --prompt-file，不进入 argv、普通环境变量、日志或事件，输出受 maxOutputBytes 与 --execution-deadline 约束，观察等待单独受 --wait-timeout 约束。",
-        "invoke 的 cwd 必须同时携带 self 返回的完整 WorktreeRef（worktreeKey + incarnationId），并与 AgentCallerCredential 绑定的唯一工作树一致；只给路径、跨工作树或 stale incarnation 一律拒绝。",
-        "同 principalRef + operationId + 同规范摘要重放同一份有界、不可枚举 InvocationReply receipt；异摘要返回 idempotency_conflict，receipt epoch 无法证明是否执行过时返回 effect_unknown，禁止改用新 operationId 盲重试。",
-        "Day 1 把 BOOT_ID、operation/launch/input key 与三份规范输入摘要保存到调用方专用 PIER_AGENT_CALL_STATE_FILE，Pier 不托管：只允许原子新建或已验证为当前 owner 的 0700 私有目录与 0600 普通文件，拒绝 symlink/reparse/非私有路径且绝不 chmod 任意既有父目录；lockf/flock 独占锁贯穿整条配方，临时文件以 noclobber/O_EXCL 创建并在锁内 mv -n 不覆盖发布，rename 后 fsync 状态文件与父目录，首个 effect 前必须耐久。双进程竞争只能复用同一套 key，crash-before-rename 尚未执行 effect，crash-after-rename 从已发布状态恢复；exit/trap 释放锁但失败时保留状态。observation_timeout/effect_in_progress/transport_closed 只用同一 key + digest 重附着，execution_deadline_exceeded/provider_interrupted/provider_error 终态禁止重附着；boot_changed 保留状态并要求 snapshot，终端回复与整条配方全部成功后才清理。",
-        "screen 只返回当前可见画面，并携带 runtimeRef、capturedAt、rows/cols、maxLines/maxBytes 与 truncated；不读取滚屏、不跨代拼接，也不把画面解释成语义回复。",
-        "screen 是渲染后的当前 viewport 单帧：移除 raw ANSI/control sequence，不提供 tail、增量内容 cursor 或跨帧拼接；运行事实 cursor 只能用于 wait/watch，不能恢复画面内容。",
-        "Pier agents CLI 只返回 canonicalPath 与完整 WorktreeRef，不新增 files/git command group，也不代理文件或 Git 内容；调用方使用自身文件/Git 工具读取并复核，Day 1 的 git 命令就是调用方本地工具。screen 只用于现场诊断。",
-        "所有本机 principal 都处于同一系统用户下，capability 不是安全隔离；文件读取的 path containment 仍由调用方工具与现有 Files UI 各自负责，agents CLI 只验证并返回 WorktreeRef，不把引用扩大为内容访问授权。",
-        "不提供公共 transcript/history/replay；不存在按 session 搜索、分页、导出或回放的 CLI 命令，也不以 NCS、TaskRuns 或事件缓冲绕过该限制。",
-        "start 默认只向父调用者返回本次新建子 RuntimeRef 的最小 CapabilityRef；普通工作智能体不能读取父级或兄弟，递归调用、sibling-read、额外 agents/operations、提高 maxDepth/maxActiveChildren 均须上游显式委派。",
-        "递归派生必须在 allowedAgents、operations、WorktreeRef、depth、maxActiveChildren 与 expiresAt 六个维度对父条款做子集/不晚于约束；任何维度缺失都不继承为通配。",
-        "turn 只返回 input accepted 与固定 effect cursor；queued/accepted 不表示目标已读取、处理或回复。若需要语义化单次回复，应使用 invoke；若需要持久协作，应在 turn 后 screen/wait/watch。",
-        "agents turn --wait settled 从本次 input effect fence F 之后等待该 RuntimeRef 首个 waiting|ready|error|exited 事实；timeout 只结束观察并返回最后事实/viewport，不改变进程，也不表示工作结论。",
-        "agents interrupt/terminate 是 terminal 原语的高层同构别名，仍要求完整 RuntimeRef、精确子能力与独立 control/idempotency key；名称和当前焦点永远不能作为写目标。",
-        "invoke/start/turn/interrupt/terminate 都携带 expectedBootId 与各自独立 operation-id/launch-key/input-id/control-id/idempotency-key，并在底层副作用前与 request digest 原子建立 effect fence；响应与重放固定返回同一 fence cursor。",
-        "agent-invoke scope 精确包含 WorktreeRef + allowedAgents + agents.invoke + maximum deadline + output cap + TTL，不与 project-create 或 runtime-control 混用。协调/工作智能体只能从来源条款单调派生；人类 CLI 必须经宿主可信确认取得该 scope，外部控制器必须经 OS 同用户校验、Ed25519 grant 与宿主确认取得；三类 principal 最终进入同一 CapabilityAuthority authorize/admission，任何一方都不能冒充协调智能体或获得默认同伴读取。",
-        "调用方拥有目标与工作拆分、调用选择、重试、回复验收、综合结论、结束判断以及本地文件/Git 内容读取；Pier 只返回调用回复、当前画面、canonicalPath/refs、回执与可信运行事实。",
-        "默认输出面向人；--json 恰好输出一个 JSON；watch 使用 --jsonl，每行一个完整事件。",
-        "单次响应固定 apiVersion=pier.control/v2、requestId、ok、data/error 与 meta。",
-        "本机端点在解析 client.hello 前完成 OS 同用户校验。随后 client.hello 发送 protocolVersion、clientKind、Ed25519 raw 32-byte publicKey（base64url 无填充）与可选 grantId；服务端 challenge 返回 challengeId、bootId、server-issued purpose、CSPRNG 32-byte nonce、issuedAtMs 与不超过 30 秒的 expiresAtMs。",
-        "purpose 只能由服务端根据 hello 决定：无 grantId 为 request-grant，有 grantId 为 use-grant。nonce 是 raw 32 bytes 的 base64url 无填充字符串；clientKeyHash 固定为 'sha256:' + base64url-no-pad(SHA-256(raw public key))；publicKey 与 signature 分别是 raw 32/64 bytes 的 base64url 无填充字符串，时间字段是安全整数 Unix epoch 毫秒。",
-        "客户端用 Ed25519 对 RFC 8785 JCS 的 UTF-8 transcript 签名：{domain:'pier.control/v2/access-proof',protocolVersion:'pier.control/v2',bootId,challengeId,purpose,clientKind,grantId:null|string,clientKeyHash,nonce,issuedAtMs,expiresAtMs}。challenge 绑定当前连接，任一验证尝试即消费；重连、跨 boot/challenge/grant、改 clientKind 或过期均拒绝。proof 只证明持钥。",
-        "requestId 只追踪一次调用；access request 使用 access-request-key，start/open 使用 launch-key，turn/send/key 使用 input-id，interrupt 使用 control-id，terminate、worktrees register/create/remove 与 profiles set/delete 使用 idempotency-key，tasks run/rerun 使用 run-key。所有运行与资源副作用请求必须携带 expectedBootId，且该值进入规范请求摘要；access request 已由当前 challenge 的 bootId 绑定。",
-        "access-request-key 以 clientKeyHash + key 绑定 canonical scope digest。进入确认队列前先原子耐久提交最小恢复记录：clientKeyHash、accessRequestKeyHash、scopeDigest、requestId、outcome、grantId?、issuedAt、expiresAt、retentionUntil；崩溃恢复把遗留 pending 原子转为 unavailable。retentionUntil 前，同 key/同 digest 返回原 pending 或不可变 terminal result；approved 返回同一 grant 及其当前 active/expired/revoked 状态，denied/expired/unavailable/revoked 都不刷新 TTL、不重开确认、不生成第二 grant。保留期后记录可删除；同 key 无记录时按新请求处理并重新进入宿主确认，绝不沿用旧结果。同 key 异 digest 返回 idempotency_conflict；续期或重授权必须新 key + 新确认。",
-        "写入顺序固定为：解析并验证 principalRef（agent credential / external Ed25519 grant / human consent）→ 进入 AccessGrantService/CapabilityAuthority 的唯一 authorize 线性化点 → source parentClauseId 与 child CapabilityRef → 精确范围、operations、expiresAt、revoke 与 boot fence → receipt lookup → 未命中才 effect admission。revoke 与 admission 共用同一线性化点；撤销后即使同 key 有旧成功 receipt，也只能返回 capability_revoked。",
-        "每个可写 capability 在当前 boot 拥有 receipt epoch；已消费 key 的 receipt 或 tombstone 保留到 boot、能力到期或撤销中最早者，禁止 LRU/TTL 提前遗忘。容量满时在执行前返回 effect_window_full；epoch 已结束或服务端无法证明 key 是否执行过时返回 effect_unknown/effect_window_expired，绝不把旧请求当首次执行。",
-        "receipt 查找键由 principalRef + operation + canonical target identity + effect key 构成，并保存 SHA-256(JCS(规范化副作用请求))。摘要包含 expectedBootId、精确 refs、payload 与全部影响执行的选项；--execution-deadline 对应的 invokeDeadline 与 maxOutputBytes 必须进入 invoke 摘要，只有 --wait-timeout 对应的 observation wait timeout、requestId、输出格式与 cursor 排除。同键同摘要才重放，同键异摘要返回 idempotency_conflict。terminate/tasks stop/mark-read 是目标状态写；interrupt 是 Ctrl-C effect，只能依靠 control-id 在 receipt epoch 内去重。",
-        "幂等键必须是独立生成的至少 128 位不透明随机值；不得直接使用、拼接或可逆编码外部 task/attempt/message ID。boot 改变时旧 expectedBootId 稳定返回 boot_changed + snapshotRequired；外部对账后必须使用新 boot 与新 key，不能盲重发无法唯一对账的 send/interrupt。",
-        "WorktreeIdentityRegistry 由 WorktreeService 单写：既有 worktreeKey 继续等于 canonical realpath；create/register 以 O_EXCL 在 linked worktree 的 Git 私有 admin 目录写入至少 128 位随机 incarnationId marker，并依次 fsync marker 文件与 Git admin 父目录后才响应成功。marker 是唯一权威，不写 userData 索引。",
-        "每次 list/get 与启动恢复都从 git worktree list --porcelain + marker 重建内存索引。marker 缺失、损坏、只读或 Git 身份不匹配时返回 stale/identity_unproven；任何恢复路径都不得仅凭路径或内存缓存删除。",
-        "外部已有但无 marker 的工作树返回 identityStatus=unregistered；register 必须使用独立 worktree-register scope，绑定精确 canonical path + repoIdentity + Git gitdir，只建立身份且绝不派生 remove 能力。若随后要删除，必须再次确认并取得绑定完整 WorktreeRef 的 project-resource CapabilityRef。",
-        "agents start、terminal open、tasks run/rerun，以及 v1/human/renderer 中所有最终创建 runtime 或 TaskRun 的适配入口，都必须归一化到同一 WorktreeService admission，并在同一 WorktreeRef 线性化锁内先取得 usage 引用；引用只在对应运行或任务进入终态后释放。remove 在该锁内先进入 removing 并拒绝新准入，再验证 usage=0；pending、running、stopping 等任一非终态 TaskRun 或活跃 runtime 都返回 resource_busy。路径移动或身份变化时保守返回 stale。",
-        "grant 的项目范围按 canonical realpath + Git 仓库身份判定，不做字符串前缀匹配；派生工作树必须由 WorktreeService 证明属于该仓库。",
-        "scope clauses 不混用：agent-invoke 只允许精确 WorktreeRef + allowedAgents + agents.invoke + deadline/output cap + TTL；project-create 只允许规范仓库内 agents start、terminal open、worktrees create、tasks run，绝不隐含 invoke；worktree-register 只允许精确既有目标 register；project-resource 只允许精确 WorktreeRef 的 worktrees.remove；runtime-control 绑定精确 RuntimeRef；task-run-control 绑定精确 TaskRunRef 的 stop/rerun；用户全局设置与提醒各自独立。",
-        "created-child 没有默认大包：runtime.control-created 的 derivedOperations 只能是 agents.get/agents.screen/agents.wait/agents.watch/agents.focus 与 agents.turn/terminal.send/terminal.key/terminal.interrupt/terminal.terminate 的显式子集；worktree.remove-created 只可由 worktrees create 派生且只含 worktrees.remove；task-run.control-created 只可由 tasks run/rerun 派生，操作是 tasks.stop/tasks.rerun 的显式子集。子能力记录 childClauseId、parentClauseId、targetRef、operations、bootId、expiresAt；不得跨同一 grant 的项目条款借权。",
-        "AgentRef、WindowRef 与 PanelRef 只在当前 boot 用于发现和聚焦；RuntimeRef=bootId+runtimeId+generation，TaskRunRef=bootId+runId。宿主重启使对应精确子能力立即失效；所有原生 PTY/进程写入前再次比较 bootId 与 generation。",
-        "runtimeId 跨窗口移动和 renderer reload 保持；PTY 重建必须增代，宿主重启由 bootId 强制隔离，旧引用返回 boot_changed/stale_generation。",
-        "顶层 pier watch 是唯一全局事实流：按 bootId 内单调 revision 交付 agents、terminal runtimes、activity、windows、panels、worktrees、tasks 与 notifications 的每一条事件，cursorScope=global，可跨资源续接。agents/terminal/activity/windows/panels/tasks/notifications 的 watch/wait 是过滤后的便利流，使用 cursorScope=resource:<name>，不得交给其他资源命名空间。",
-        "access wait 使用独立 request 状态通道，只能观察该 requestId 的 pending/approved/denied/expired/unavailable，不读取也不返回运行事实 cursor；Ctrl-C 只停止本地等待，不取消 pending consent。",
-        "无 --after 的顶层 watch 原子发送 mode=snapshot 的完整当前快照与高水位 R，随后只发 revision>R；有效 global --after 发送 mode=resume、snapshot=null，再从 cursor 后一条开始。资源便利流同样声明自己的 cursorScope，不能伪装为全局序列。",
-        "resume 事件按 revision 严格递增且连接内不重复；客户端先处理后落 cursor 时可收到重放，必须按 bootId+revision 去重。boot 不匹配、gap 或过期只返回 snapshotRequired，不混发旧事件与新快照。",
-        "每个被接受的写操作在调用底层副作用前，由全局 sequencer 原子写入 effect fence revision F；同一原子切面固定 receipt.requestDigest 与 cursor(F)，所有由该 effect 触发的 runtime/provider/resource 事实必须取得 revision>F。成功响应与幂等重放都返回同一 effectRevision=F/cursor(F)，禁止返回 response-time 最新 high-water，以免跳过同步 waiting/ready。",
-        "写回执返回 global effect cursor(F)；后续跨资源观察必须从顶层 watch 续接。实现以同步 provider 回调、快速 ready、隐藏的其他资源事件与响应丢失故障测试证明不会跳过因果事实。",
-        "cursor 绑定 bootId；应用重启、缓冲溢出或 cursor 过期返回 snapshotRequired。",
-        "Ctrl-C 对 wait/watch 只关闭观察并退出 130；对 invoke 则经 AbortSignal 请求取消受管 provider，CLI 等待确认进程组停止后才返回 interrupted；持久智能体仍必须显式 agents/terminal interrupt。",
-        "wait 超时退出 124 并返回最后快照；超时、断线和退出都不是调用方工作结论。",
-        "可选外部控制器的工作 ID 不作为语义字段、effect key 或授权身份进入 Pier 契约与持久化；独立随机 key 与 work↔Pier refs 的映射只保存在调用方自己的存储。",
-        "终端输入回执只表示 pty_accepted；不表示提供方读取、执行或任务成功。"
+        "核心逻辑优先，拒绝业界能力二次封装：只做依赖 Pier 才能成立的能力；业界已支持的能力走原生入口，禁止第二套 API / 统一抽象 / 宿主便利封装。",
+        "一次性提问不经 Pier：调用方直接使用各 agent 原生 CLI（如 codex exec、Claude headless）。产品面禁止 agents invoke；不实现统一 InvocationReply 宿主服务作为主路径。",
+        "Pier agents 产品命令仅：catalog · list · get · start · turn · screen · wait · watch · focus · interrupt · terminate。无 self 产品主路径（agent principal 遗留/实验）。无独立 activity 命令组。",
+        "方案内容契约：screen 只返回当前 viewport；Pier CLI 只返回 canonicalPath 与完整 WorktreeRef 等定位引用，文件/Git 由调用者自身工具读取（path containment 仍由调用方工具与现有 Files UI 各自负责）；不提供公共 transcript；不提供 scrollback/history/replay。turn 的 accepted 不是语义回复。",
+        "turn 只返回 input accepted 与 effect cursor；queued/accepted 不表示已处理。需要语义化单次回复时使用原生 agent CLI，不使用 Pier 封装。",
+        "start 默认只向创建者返回新建子 RuntimeRef 的最小控制权；跨同伴/递归须显式条款。",
+        "agents interrupt/terminate 与 terminal 写控共享 RuntimeControl 实现，语义同一，命名上 agent 运行优先 agents.*。",
+        "顶层 pier snapshot/watch 是跨资源事实流；不另设 activity 产品命令组以免重复。",
+        "tasks 仅为 shell TaskRuns，永不扩展为多智能体任务台账。",
+        "responded/ready/waiting/quiet/screen/exit/NCS 已读均不能替调用方生成工作完成结论。",
+        "禁止 --as-agent、panelId、焦点或可伪造环境变量自报调用主体。",
+        "不提供公共 transcript/history/replay op。"
       ],
       "transport": [
         {
@@ -910,7 +787,7 @@
         },
         {
           "part": "一次性调用",
-          "rule": "invoke 是 advisory-read-only 的单次 framed request；显式 agent/完整 WorktreeRef，prompt 走安全 stdin/文件。AgentInvokeService/provider adapter 在沙箱外持 auth，只向选定 provider endpoint 窄 egress；模型工具子进程仅挂载精确 repo/Git admin 只读面和可销毁临时目录，不挂载 userData、Pier socket、credential 或密钥，也无任意网络、外部连接器和持久副作用。--execution-deadline 管首次 provider 生命周期，--wait-timeout/断线只分离观察；running operation 只附着或返回 effect_in_progress，服务端不把 InvocationReply 写入公共历史索引。"
+          "rule": "产品非目标：不经 Pier 传输层实现 agents invoke。调用方在进程外直接使用各 agent 原生 CLI；Pier socket/v2 不为 one-shot 提供 framed request、InvocationReply 或 AgentInvokeService 产品完成路径。"
         },
         {
           "part": "持久内容",
@@ -958,7 +835,7 @@
         },
         {
           "part": "取消",
-          "rule": "AbortSignal 对 wait/watch 只分离观察；对 invoke 请求 AgentInvokeService 取消受管 provider 并等待进程组停止/reap，确认后返回 interrupted，无法证明返回 effect_unknown 且继续监督清理。断线不触发取消；持久智能体仍由精确 interrupt/terminate 控制。"
+          "rule": "AbortSignal 对 wait/watch 只分离观察；断线不触发取消。持久智能体仍由精确 interrupt/terminate 控制。无 Pier invoke 产品取消语义（one-shot 取消归原生 agent CLI）。"
         },
         {
           "part": "兼容",
@@ -972,32 +849,32 @@
       "principals": [
         {
           "principal": "协调智能体",
-          "scope": "AgentCallerCredential：当前 boot 的 caller RuntimeRef/generation + 父条款 + 当前 WorktreeRef + allowedAgents/operations + maxDepth/maxActiveChildren + expiresAt；调用 invoke 还须来源条款含精确 agent-invoke",
-          "allowed": "self/catalog/list/get；在显式范围内 invoke；start 自己的新子运行；对这些子运行 turn/screen/wait/watch/focus/interrupt/terminate；取得 canonicalPath/完整 WorktreeRef 后用自身工具读取文件与 Git",
-          "forbidden": "冒充其他调用者、默认读取兄弟/父级、跨项目、越深度/并发预算，或要求 Pier 保存任务状态"
+          "scope": "AgentCallerCredential：当前 boot 的 caller RuntimeRef/generation + 父条款 + 当前 WorktreeRef + allowedAgents/operations + maxDepth/maxActiveChildren + expiresAt；start/turn 等写控须在凭证 operations 与 持久 runtime-control 条款内",
+          "allowed": "self/catalog/list/get；在显式范围内 start/turn/screen；start 自己的新子运行；对这些子运行 turn/screen/wait/watch/focus/interrupt/terminate；取得 canonicalPath/完整 WorktreeRef 后用自身工具读取文件与 Git；一次性提问在进程外直接用原生 agent CLI",
+          "forbidden": "冒充其他调用者、默认读取兄弟/父级、跨项目、越深度/并发预算、要求 Pier 保存任务状态，或要求 Pier 封装 one-shot"
         },
         {
           "principal": "普通工作智能体",
-          "scope": "自己的 AgentCallerCredential；默认只含 self、自己的 get/screen 与显式委派操作，depth=1 时不可继续派生；只有上游条款含精确 agent-invoke 才可调用允许的目标",
-          "allowed": "确认自身身份、读取自己的当前画面与工作树、按委派调用明确 agent 或向协调智能体返回本次回复",
+          "scope": "自己的 AgentCallerCredential；默认只含 self、自己的 get/screen 与显式委派操作，depth=1 时不可继续派生；只有上游条款含精确 持久 runtime-control 时才能 start 下一层",
+          "allowed": "确认自身身份、读取自己的当前画面与工作树、按委派执行显式允许的操作或向协调智能体请求补充",
           "forbidden": "控制父级或兄弟、读取其他工作树、无限递归、提高预算，或把终端状态当作工作完成"
         },
         {
           "principal": "人类 CLI",
-          "scope": "当前本机用户；默认只读/聚焦。agents invoke 必须经宿主可信确认取得 agent-invoke scope，精确绑定 WorktreeRef、allowedAgents、agents.invoke、deadline、output cap 与 TTL",
-          "allowed": "version/capabilities/doctor/status/snapshot/watch、agents/worktrees/tasks/notifications 读取与 focus；经宿主确认后以精确 CapabilityRef 执行窄写或一次性调用",
-          "forbidden": "自报智能体身份、默认写入任意 runtime、绕过工作树保护或以人类入口替代智能体主调用路径"
+          "scope": "当前本机用户；默认只读/聚焦。写持久 runtime-control 须经宿主可信确认",
+          "allowed": "version/capabilities/doctor/status/snapshot/watch、agents/worktrees/tasks/notifications 读取与 focus；经宿主确认后以精确 CapabilityRef 执行窄写（start/turn/screen/interrupt/terminate 等）；一次性提问直接用原生 agent CLI",
+          "forbidden": "自报智能体身份、默认写入任意 runtime、绕过工作树保护、以人类入口替代智能体主调用路径，或要求 Pier agents invoke"
         },
         {
           "principal": "外部控制器",
-          "scope": "OS 同用户校验后，以 Ed25519 grant 和宿主确认取得一个或多个不相互放大的 scope clause；agents invoke 另需 agent-invoke，精确绑定 WorktreeRef、allowedAgents、agents.invoke、deadline、output cap 与 TTL",
-          "allowed": "每次连接通过 OS 同用户与 Ed25519 持钥证明后调用已批准的 v2 JSON/JSONL 原语；可在自己的存储中保存 refs/cursor 与工作结论",
-          "forbidden": "自行批准/扩大 grant、冒充协调智能体、获得默认同伴读取，或要求 Pier 保存编排账本"
+          "scope": "OS 同用户校验后，以 Ed25519 grant 和宿主确认取得一个或多个不相互放大的 scope clause；写持久 runtime-control 须在 grant 内",
+          "allowed": "每次连接通过 OS 同用户与 Ed25519 持钥证明后调用已批准的 v2 JSON/JSONL 原语；可在自己的存储中保存 refs/cursor 与工作结论；one-shot 在进程外走原生 agent CLI",
+          "forbidden": "自行批准/扩大 grant、冒充协调智能体、获得默认同伴读取、要求 Pier 保存编排账本，或要求 Pier 提供 agents.invoke 产品面"
         },
         {
           "principal": "Pier 桌面界面",
           "scope": "当前 Pier key-window；接收 main AccessConsentQueue 的单个 pending request，并可打开宿主设置中的本机控制授权列表",
-          "allowed": "展示协调智能体、持久工作智能体、当前画面、文件/Git、可信事实与需要你处理；聚焦现场；确认和撤销 human/external grant；不全局展示或留存一次性回复",
+          "allowed": "展示协调智能体、持久工作智能体、当前画面、文件/Git、可信事实与需要你处理；聚焦现场；确认和撤销 human/external grant；不展示 Pier one-shot 回复（产品无此路径）",
           "forbidden": "直接写 grant/PTY fd、展示任务看板、推断工作成功，或复制一套 CLI 状态"
         }
       ],
@@ -1033,18 +910,6 @@
           "next": "进行中时附着/等待同一 operation；冲突保持原请求；窗口满或未知时停止写入并对账，不能换 key 重试可能已发生的副作用"
         },
         {
-          "family": "一次性调用观察",
-          "codes": "observation_timeout",
-          "exit": "124",
-          "next": "operation 仍在 running；读取返回的 operationId、effectRevision 与 attach 提示，以同一 key + 同一摘要重附着，不能重新 spawn"
-        },
-        {
-          "family": "一次性调用执行",
-          "codes": "execution_deadline_exceeded · provider_interrupted · provider_error",
-          "exit": "3 / 130",
-          "next": "这是 InvocationReply.interrupted/error 终态；不得 attach 或换 key 重试，先检查终态回执并由调用方决定下一步"
-        },
-        {
           "family": "资源安全",
           "codes": "worktree_dirty · stale_worktree · identity_unproven · revision_conflict · resource_busy · precondition_failed · retained",
           "exit": "16",
@@ -1058,41 +923,41 @@
         },
         {
           "family": "持久等待与本地中断",
-          "codes": "timeout · interrupted",
+          "codes": "timeout · observation_timeout · interrupted",
           "exit": "124 / 130",
-          "next": "仅适用于 wait/watch 等观察与本地中断；检查最后快照，runtime 与调用方工作判断保持不变。invoke 观察超时必须使用独立 observation_timeout"
+          "next": "仅适用于 wait/watch 等观察与本地中断；检查最后快照，runtime 与调用方工作判断保持不变。无 Pier one-shot 观察/attach 语义"
         }
       ],
-      "jsonEnvelope": "{\n  \"apiVersion\": \"pier.control/v2\",\n  \"requestId\": \"req_01\",\n  \"ok\": true,\n  \"data\": {\n    \"invocationReply\": {\n      \"operationId\": \"op_42\",\n      \"agentId\": \"codex\",\n      \"mode\": \"advisory-read-only\",\n      \"status\": \"responded\",\n      \"reply\": \"已完成接口审查，发现 2 项需修改。\",\n      \"truncated\": false,\n      \"authorizationRef\": { \"grantId\": \"agent_boot_9\", \"parentClauseId\": \"caller_coordinator\", \"childClauseId\": \"invoke_read_only\" }\n    }\n  },\n  \"error\": null,\n  \"meta\": { \"bootId\": \"boot_9\", \"effectRevision\": 812, \"cursor\": \"cur_812\", \"cursorScope\": \"global\", \"replayed\": false }\n}",
+      "jsonEnvelope": "{\n  \"apiVersion\": \"pier.control/v2\",\n  \"requestId\": \"req_01\",\n  \"ok\": true,\n  \"data\": {\n    \"screen\": {\n      \"text\": \"…当前 viewport…\",\n      \"truncated\": false,\n      \"rows\": 24,\n      \"cols\": 80\n    }\n  },\n  \"meta\": { \"bootId\": \"boot_9\", \"effectRevision\": 812 }\n}",
       "streamEnvelope": "{\"type\":\"stream.open\",\"mode\":\"snapshot\",\"bootId\":\"boot_9\",\"revision\":812,\"cursor\":\"cur_812\",\"cursorScope\":\"global\",\"snapshot\":{\"agents\":[{\"windowId\":\"win_1\",\"panelId\":\"panel_4\"}],\"runtimes\":[{\"bootId\":\"boot_9\",\"runtimeId\":\"rt_17\",\"generation\":4,\"fact\":\"processing\"}],\"activity\":{\"kind\":\"agent\"},\"windows\":[{\"windowId\":\"win_1\"}],\"panels\":[{\"windowId\":\"win_1\",\"panelId\":\"panel_4\"}],\"worktrees\":[{\"worktreeKey\":\"/repo.wt\",\"incarnationId\":\"wi_3\"}],\"tasks\":[],\"notifications\":[]}}\n{\"type\":\"fact.changed\",\"resourceType\":\"runtime\",\"bootId\":\"boot_9\",\"revision\":813,\"cursor\":\"cur_813\",\"cursorScope\":\"global\",\"runtimeRef\":{\"bootId\":\"boot_9\",\"runtimeId\":\"rt_17\",\"generation\":4},\"fact\":\"waiting\"}\n{\"type\":\"stream.end\",\"reason\":\"predicate_matched\",\"bootId\":\"boot_9\",\"revision\":813,\"cursor\":\"cur_813\",\"cursorScope\":\"global\"}"
     },
     "day1Commands": [
       {
-        "title": "自述身份",
-        "cmd": "SELF=$(pier agents self --json); BOOT_ID=$(printf '%s' \"$SELF\" | jq -r '.data.callerRef.bootId'); CWD=$(printf '%s' \"$SELF\" | jq -r '.data.worktreeRef.canonicalPath'); WT_KEY=$(printf '%s' \"$SELF\" | jq -r '.data.worktreeRef.worktreeKey'); WT_INCARNATION=$(printf '%s' \"$SELF\" | jq -r '.data.worktreeRef.incarnationId'); CALL_STATE_FILE=${PIER_AGENT_CALL_STATE_FILE:-${PIER_AGENT_CALLER_CREDENTIAL_FILE}.call-state/state.json}; OPERATION_ID=$(jq -r '.OPERATION_ID // empty' \"$CALL_STATE_FILE\" 2>/dev/null || true); LAUNCH_KEY=$(jq -r '.LAUNCH_KEY // empty' \"$CALL_STATE_FILE\" 2>/dev/null || true); INPUT_ID=$(jq -r '.INPUT_ID // empty' \"$CALL_STATE_FILE\" 2>/dev/null || true); : ${OPERATION_ID:=op_$(openssl rand -hex 16)} ${LAUNCH_KEY:=lk_$(openssl rand -hex 16)} ${INPUT_ID:=in_$(openssl rand -hex 16)}",
-        "why": "协调智能体先解析真实调用者身份与工作树；下方完整配方使用调用方专用 0700 目录、0600 文件与全程内核独占锁，锁内恢复或耐久发布唯一一套 boot、三类 effect key 与规范输入摘要",
-        "userSees": "非秘密 callerRef、canonicalPath、完整 WorktreeRef，以及 allowedAgents/operations、maxDepth、maxActiveChildren、expiresAt 权限摘要；不显示调用凭证秘密"
+        "title": "发现",
+        "cmd": "pier agents catalog --json && pier agents list --json",
+        "why": "列出可启动与在跑智能体",
+        "userSees": "agent 目录与面板列表"
       },
       {
-        "title": "一次性 invoke",
-        "cmd": "pier agents invoke codex --cwd \"$CWD\" --worktree-key \"$WT_KEY\" --incarnation-id \"$WT_INCARNATION\" --expected-boot-id \"$BOOT_ID\" --operation-id \"$OPERATION_ID\" --stdin --execution-deadline 5m --wait-timeout 30s --max-output-bytes 65536 --json < question.md",
-        "why": "对适合一次回答的问题显式选择工作智能体；输入不进 argv。observation_timeout 表示 operation 仍在运行，可按返回的 operationId/effectRevision/attach 提示用同一 key + digest 重附着；execution_deadline_exceeded/interrupted/error 已是终态，不得重附着",
-        "userSees": "InvocationReply：responded/interrupted/error、reply、truncated、elapsedMs 与 usage；没有会话历史入口"
+        "title": "一次性（原生）",
+        "cmd": "codex exec --ephemeral --skip-git-repo-check -s read-only -C \"$PWD\" - <<'Q'\n简要说明本仓库。\nQ",
+        "why": "不经 Pier 封装",
+        "userSees": "原生 CLI 输出"
       },
       {
-        "title": "启动持久子运行",
-        "cmd": "START=$(pier agents start claude --cwd \"$CWD\" --worktree-key \"$WT_KEY\" --incarnation-id \"$WT_INCARNATION\" --prompt-file task.md --no-focus --expected-boot-id \"$BOOT_ID\" --launch-key \"$LAUNCH_KEY\" --json); RID=$(printf '%s' \"$START\" | jq -r '.data.runtimeRef.runtimeId'); GEN=$(printf '%s' \"$START\" | jq -r '.data.runtimeRef.generation'); RUNTIME_CAP=$(printf '%s' \"$START\" | jq -r '.data.runtimeCapabilityRef')",
-        "why": "对需要多轮或修改文件的工作启动一个持久子运行，并保存精确 RuntimeRef 与只对该子有效的能力",
-        "userSees": "AgentRef、PanelRef、RuntimeRef、CapabilityRef、父子来源与 effect cursor"
+        "title": "持久启动（W3）",
+        "cmd": "pier agents start --agent codex --json",
+        "why": "创建可控制的持久运行",
+        "userSees": "RuntimeRef / panel（实现后）"
       },
       {
-        "title": "turn + 当前画面",
-        "cmd": "TURN=$(pier agents turn --runtime \"$RID\" --generation \"$GEN\" --capability-ref \"$RUNTIME_CAP\" --prompt-file followup.md --expected-boot-id \"$BOOT_ID\" --input-id \"$INPUT_ID\" --wait settled --include-screen --max-lines 120 --max-bytes 65536 --json); printf '%s' \"$TURN\" | jq '{effectRevision:.meta.effectRevision,cursor:.meta.cursor,fact:.data.fact,screen:.data.screen}'",
-        "why": "继续精确子运行，并在有限等待后连同当前可见画面返回；CLI 只给 canonicalPath/WorktreeRef，源文件与 Git 变化由协调智能体的本地工具读取",
-        "userSees": "input accepted、waiting/ready/error/exited 事实、capturedAt/truncated 的 viewport；不含滚屏或公共历史"
+        "title": "画面与等待（W3）",
+        "cmd": "pier agents turn … && pier agents screen …",
+        "why": "输入与有界画面",
+        "userSees": "accepted 与 viewport"
       }
     ],
-    "day1Recipe": "#!/usr/bin/env bash\nset -uo pipefail\n\n: \"${PIER_AGENT_CALLER_CREDENTIAL_FILE:?请在 Pier 启动的智能体进程中运行}\"\n: \"${QUESTION_FILE:=question.md}\"\n: \"${TASK_FILE:=task.md}\"\n: \"${FOLLOWUP_FILE:=followup.md}\"\n: \"${PIER_AGENT_CALL_STATE_FILE:=${PIER_AGENT_CALLER_CREDENTIAL_FILE}.call-state/state.json}\"\n\nCALL_STATE_FILE=$PIER_AGENT_CALL_STATE_FILE\nSTATE_DIR=$(dirname -- \"$CALL_STATE_FILE\")\nLOCK_FILE=\"$STATE_DIR/recipe.lock\"\nCURRENT_UID=$(id -u)\nLOCK_HELD=0\nSTATE_TMP=\n\nfail() {\n  local exit_code=$1\n  shift\n  printf '失败：%s\\n' \"$*\" >&2\n  exit \"$exit_code\"\n}\n\nstat_uid() {\n  if stat -f '%u' \"$1\" >/dev/null 2>&1; then\n    stat -f '%u' \"$1\"\n  else\n    stat -c '%u' \"$1\"\n  fi\n}\n\nstat_mode() {\n  if stat -f '%Lp' \"$1\" >/dev/null 2>&1; then\n    stat -f '%Lp' \"$1\"\n  else\n    stat -c '%a' \"$1\"\n  fi\n}\n\nvalidate_private_dir() {\n  local path=$1\n  [[ ! -L \"$path\" ]] || fail 13 \"调用状态目录不能是符号链接或 reparse point\"\n  [[ -d \"$path\" ]] || fail 13 \"调用状态目录不是专用目录\"\n  [[ $(stat_uid \"$path\") == \"$CURRENT_UID\" ]] || fail 13 \"调用状态目录不是当前 owner\"\n  [[ $(stat_mode \"$path\") == \"700\" ]] || fail 13 \"调用状态目录必须保持 0700，拒绝修改任意既有父目录\"\n}\n\nvalidate_private_file() {\n  local path=$1\n  [[ ! -L \"$path\" ]] || fail 13 \"调用状态或锁文件不能是符号链接或 reparse point\"\n  [[ -f \"$path\" ]] || fail 13 \"调用状态或锁路径不是普通文件\"\n  [[ $(stat_uid \"$path\") == \"$CURRENT_UID\" ]] || fail 13 \"调用状态或锁文件不是当前 owner\"\n  [[ $(stat_mode \"$path\") == \"600\" ]] || fail 13 \"调用状态或锁文件必须保持 0600\"\n}\n\nfsync_file_and_dir() {\n  node -e 'const fs=require(\"node:fs\"); for (const p of process.argv.slice(1)) { const fd=fs.openSync(p,\"r\"); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); } }' \"$1\" \"$2\"\n}\n\nfsync_dir() {\n  node -e 'const fs=require(\"node:fs\"); const fd=fs.openSync(process.argv[1],\"r\"); try { fs.fsyncSync(fd); } finally { fs.closeSync(fd); }' \"$1\"\n}\n\nrelease_lock() {\n  if [[ -n \"$STATE_TMP\" && -f \"$STATE_TMP\" && ! -L \"$STATE_TMP\" ]]; then\n    rm -f -- \"$STATE_TMP\"\n  fi\n  if (( LOCK_HELD == 1 )); then\n    exec 8>&-\n    LOCK_HELD=0\n  fi\n}\n\nsnapshot_after_boot_change() {\n  printf 'boot_changed：保留调用状态，不得换 key 重试；请先用 snapshot 对账。\\n' >&2\n  pier snapshot --json || true\n  exit 10\n}\n\ncanonical_digest() {\n  openssl dgst -sha256 -r | awk '{print $1}'\n}\n\ntest -r \"$PIER_AGENT_CALLER_CREDENTIAL_FILE\" || fail 13 \"环境调用凭证不可读\"\ntest -f \"$QUESTION_FILE\" || fail 2 \"缺少 $QUESTION_FILE\"\ntest -f \"$TASK_FILE\" || fail 2 \"缺少 $TASK_FILE\"\ntest -f \"$FOLLOWUP_FILE\" || fail 2 \"缺少 $FOLLOWUP_FILE\"\n\n# 状态必须位于调用方专用的新私有目录；既有父目录绝不 chmod。\numask 077\nif ! mkdir -m 0700 \"$STATE_DIR\" 2>/dev/null; then\n  validate_private_dir \"$STATE_DIR\"\nfi\nvalidate_private_dir \"$STATE_DIR\"\n[[ \"$CALL_STATE_FILE\" != \"$LOCK_FILE\" ]] || fail 13 \"状态文件不能复用锁路径\"\n\n# 锁文件以 noclobber/O_EXCL 创建；lockf/flock 的内核锁贯穿整条配方，正常退出由 trap 关 fd，SIGKILL 也由内核释放。锁文件保留但不按文件存在判断 stale，下一进程重新争用内核锁。\nif [[ ! -e \"$LOCK_FILE\" && ! -L \"$LOCK_FILE\" ]]; then\n  set -C\n  : > \"$LOCK_FILE\" 2>/dev/null\n  LOCK_CREATE_RC=$?\n  set +C\n  if (( LOCK_CREATE_RC != 0 )) && [[ ! -e \"$LOCK_FILE\" ]]; then\n    fail 75 \"无法以 O_EXCL 创建调用状态锁\"\n  fi\nfi\nvalidate_private_file \"$LOCK_FILE\"\nexec 8<> \"$LOCK_FILE\" || fail 75 \"无法打开调用状态锁\"\nif command -v lockf >/dev/null 2>&1; then\n  lockf -s -t 0 8 || fail 75 \"另一个协调进程正持有调用状态锁；只允许一套 effect keys\"\nelif command -v flock >/dev/null 2>&1; then\n  flock -n 8 || fail 75 \"另一个协调进程正持有调用状态锁；只允许一套 effect keys\"\nelse\n  fail 69 \"缺少 lockf/flock，不能安全运行可恢复配方\"\nfi\nLOCK_HELD=1\ntrap release_lock EXIT\ntrap 'exit 129' HUP\ntrap 'exit 130' INT\ntrap 'exit 143' TERM\n\n# 第 1 步：从环境调用凭证取得非秘密调用者身份、工作树与预算。\nSELF=$(pier agents self --json)\nSELF_RC=$?\n(( SELF_RC == 0 )) || fail \"$SELF_RC\" \"agents self 失败\"\nprintf '%s' \"$SELF\" | jq -e '.ok == true' >/dev/null || fail 13 \"agents self 未返回有效身份\"\n\nBOOT_ID=$(printf '%s' \"$SELF\" | jq -r '.data.callerRef.bootId')\nCWD=$(printf '%s' \"$SELF\" | jq -r '.data.worktreeRef.canonicalPath')\nWT_KEY=$(printf '%s' \"$SELF\" | jq -r '.data.worktreeRef.worktreeKey')\nWT_INCARNATION=$(printf '%s' \"$SELF\" | jq -r '.data.worktreeRef.incarnationId')\ntest -n \"$BOOT_ID\" || fail 13 \"缺少 bootId\"\ntest -d \"$CWD\" || fail 16 \"工作树路径不可用\"\n\n# 对三次副作用输入建立规范 JSON 摘要；恢复时必须保持同一 key + digest。\nQUESTION_DIGEST=$(jq -cnS \\\n  --arg agentId codex \\\n  --arg cwd \"$CWD\" \\\n  --arg worktreeKey \"$WT_KEY\" \\\n  --arg incarnationId \"$WT_INCARNATION\" \\\n  --arg executionDeadline 5m \\\n  --arg maxOutputBytes 65536 \\\n  --rawfile prompt \"$QUESTION_FILE\" \\\n  '{agentId:$agentId,cwd:$cwd,worktreeKey:$worktreeKey,incarnationId:$incarnationId,executionDeadline:$executionDeadline,maxOutputBytes:$maxOutputBytes,prompt:$prompt}' | canonical_digest)\nTASK_DIGEST=$(jq -cnS \\\n  --arg agentId claude \\\n  --arg cwd \"$CWD\" \\\n  --arg worktreeKey \"$WT_KEY\" \\\n  --arg incarnationId \"$WT_INCARNATION\" \\\n  --rawfile prompt \"$TASK_FILE\" \\\n  '{agentId:$agentId,cwd:$cwd,worktreeKey:$worktreeKey,incarnationId:$incarnationId,prompt:$prompt,noFocus:true}' | canonical_digest)\nFOLLOWUP_DIGEST=$(jq -cnS \\\n  --rawfile prompt \"$FOLLOWUP_FILE\" \\\n  '{prompt:$prompt,wait:\"settled\",includeScreen:true,maxLines:120,maxBytes:65536}' | canonical_digest)\ntest -n \"$QUESTION_DIGEST\" || fail 2 \"无法计算 QUESTION_DIGEST\"\ntest -n \"$TASK_DIGEST\" || fail 2 \"无法计算 TASK_DIGEST\"\ntest -n \"$FOLLOWUP_DIGEST\" || fail 2 \"无法计算 FOLLOWUP_DIGEST\"\n\n# 锁内只会复用同一状态或创建一套键；不修改任何既有文件权限。\nif [[ -e \"$CALL_STATE_FILE\" || -L \"$CALL_STATE_FILE\" ]]; then\n  validate_private_file \"$CALL_STATE_FILE\"\n  STORED_BOOT_ID=$(jq -r '.BOOT_ID // empty' \"$CALL_STATE_FILE\")\n  [[ \"$STORED_BOOT_ID\" == \"$BOOT_ID\" ]] || snapshot_after_boot_change\n\n  OPERATION_ID=$(jq -r '.OPERATION_ID // empty' \"$CALL_STATE_FILE\")\n  LAUNCH_KEY=$(jq -r '.LAUNCH_KEY // empty' \"$CALL_STATE_FILE\")\n  INPUT_ID=$(jq -r '.INPUT_ID // empty' \"$CALL_STATE_FILE\")\n  STORED_QUESTION_DIGEST=$(jq -r '.QUESTION_DIGEST // empty' \"$CALL_STATE_FILE\")\n  STORED_TASK_DIGEST=$(jq -r '.TASK_DIGEST // empty' \"$CALL_STATE_FILE\")\n  STORED_FOLLOWUP_DIGEST=$(jq -r '.FOLLOWUP_DIGEST // empty' \"$CALL_STATE_FILE\")\n\n  [[ \"$STORED_QUESTION_DIGEST\" == \"$QUESTION_DIGEST\" ]] || fail 15 \"question digest 已变化；保留旧 key 并停止\"\n  [[ \"$STORED_TASK_DIGEST\" == \"$TASK_DIGEST\" ]] || fail 15 \"task digest 已变化；保留旧 key 并停止\"\n  [[ \"$STORED_FOLLOWUP_DIGEST\" == \"$FOLLOWUP_DIGEST\" ]] || fail 15 \"follow-up digest 已变化；保留旧 key 并停止\"\n  test -n \"$OPERATION_ID\" || fail 15 \"状态文件缺少 OPERATION_ID\"\n  test -n \"$LAUNCH_KEY\" || fail 15 \"状态文件缺少 LAUNCH_KEY\"\n  test -n \"$INPUT_ID\" || fail 15 \"状态文件缺少 INPUT_ID\"\nelse\n  OPERATION_ID=\"op_$(openssl rand -hex 16)\"\n  LAUNCH_KEY=\"lk_$(openssl rand -hex 16)\"\n  INPUT_ID=\"in_$(openssl rand -hex 16)\"\n  STATE_TMP=\"$STATE_DIR/.state.tmp.$$.$RANDOM\"\n\n  # noclobber 让临时文件以 O_EXCL 创建；先 fsync 临时文件，再在独占锁内 mv -n 发布。\n  set -C\n  exec 9> \"$STATE_TMP\"\n  STATE_CREATE_RC=$?\n  set +C\n  (( STATE_CREATE_RC == 0 )) || fail 75 \"无法以 O_EXCL 创建状态临时文件\"\n  jq -n \\\n    --arg BOOT_ID \"$BOOT_ID\" \\\n    --arg OPERATION_ID \"$OPERATION_ID\" \\\n    --arg LAUNCH_KEY \"$LAUNCH_KEY\" \\\n    --arg INPUT_ID \"$INPUT_ID\" \\\n    --arg QUESTION_DIGEST \"$QUESTION_DIGEST\" \\\n    --arg TASK_DIGEST \"$TASK_DIGEST\" \\\n    --arg FOLLOWUP_DIGEST \"$FOLLOWUP_DIGEST\" \\\n    '{BOOT_ID:$BOOT_ID,OPERATION_ID:$OPERATION_ID,LAUNCH_KEY:$LAUNCH_KEY,INPUT_ID:$INPUT_ID,QUESTION_DIGEST:$QUESTION_DIGEST,TASK_DIGEST:$TASK_DIGEST,FOLLOWUP_DIGEST:$FOLLOWUP_DIGEST}' \\\n    >&9\n  STATE_WRITE_RC=$?\n  exec 9>&-\n  (( STATE_WRITE_RC == 0 )) || fail 1 \"无法写入调用状态\"\n  validate_private_file \"$STATE_TMP\"\n  fsync_file_and_dir \"$STATE_TMP\" \"$STATE_DIR\" || fail 1 \"无法 fsync 状态临时文件与父目录\"\n\n  mv -n \"$STATE_TMP\" \"$CALL_STATE_FILE\" || fail 1 \"无法原子发布调用状态\"\n  [[ ! -e \"$STATE_TMP\" ]] || fail 75 \"状态文件已存在；拒绝覆盖并保留原键\"\n  STATE_TMP=\n  validate_private_file \"$CALL_STATE_FILE\"\n  fsync_file_and_dir \"$CALL_STATE_FILE\" \"$STATE_DIR\" || fail 1 \"rename 后无法 fsync 状态文件与父目录\"\nfi\n\n# 首个 effect 只能发生在状态文件和父目录耐久化之后。\nfsync_file_and_dir \"$CALL_STATE_FILE\" \"$STATE_DIR\" || fail 1 \"调用状态尚未耐久化\"\n\nrun_invoke() {\n  pier agents invoke codex \\\n    --cwd \"$CWD\" \\\n    --worktree-key \"$WT_KEY\" \\\n    --incarnation-id \"$WT_INCARNATION\" \\\n    --expected-boot-id \"$BOOT_ID\" \\\n    --operation-id \"$OPERATION_ID\" \\\n    --stdin \\\n    --execution-deadline 5m \\\n    --wait-timeout 30s \\\n    --max-output-bytes 65536 \\\n    --json < \"$QUESTION_FILE\"\n}\n\n# 第 2 步：观察超时保持 operation running，并返回同一 operationId/effectRevision/attach 提示。\nATTACH_ATTEMPTS=0\nwhile :; do\n  INVOKE=$(run_invoke)\n  INVOKE_RC=$?\n  INVOKE_CODE=$(printf '%s' \"$INVOKE\" | jq -r '.error.code // .data.invocationReply.error.code // empty' 2>/dev/null)\n  INVOKE_STATUS=$(printf '%s' \"$INVOKE\" | jq -r '.data.invocationReply.status // empty' 2>/dev/null)\n\n  [[ \"$INVOKE_CODE\" != \"boot_changed\" ]] || snapshot_after_boot_change\n  case \"$INVOKE_CODE\" in\n    observation_timeout)\n      OBSERVATION_OPERATION_ID=$(printf '%s' \"$INVOKE\" | jq -r '.error.details.operationId // empty')\n      OBSERVATION_EFFECT_REVISION=$(printf '%s' \"$INVOKE\" | jq -r '.meta.effectRevision // .error.details.effectRevision // empty')\n      OBSERVATION_ATTACH=$(printf '%s' \"$INVOKE\" | jq -r '.error.details.attach // empty')\n      [[ \"$OBSERVATION_OPERATION_ID\" == \"$OPERATION_ID\" ]] || fail 15 \"观察超时返回了不同 operationId\"\n      test -n \"$OBSERVATION_EFFECT_REVISION\" || fail 15 \"观察超时缺少 effectRevision\"\n      [[ \"$OBSERVATION_ATTACH\" == \"reuse_same_operation\" ]] || fail 15 \"观察超时缺少 attach 提示\"\n      ATTACH_ATTEMPTS=$((ATTACH_ATTEMPTS + 1))\n      (( ATTACH_ATTEMPTS <= 6 )) || fail 17 \"重附着次数已达上限；状态文件与原 key 已保留\"\n      printf '观察超时，operation 仍在运行；使用同一 key + digest 重附着。\\n' >&2\n      sleep 1\n      continue\n      ;;\n    effect_in_progress|transport_closed)\n      ATTACH_ATTEMPTS=$((ATTACH_ATTEMPTS + 1))\n      (( ATTACH_ATTEMPTS <= 6 )) || fail 17 \"重附着次数已达上限；状态文件与原 key 已保留\"\n      printf '观察未结束（%s），使用同一 key + digest 重附着。\\n' \"$INVOKE_CODE\" >&2\n      sleep 1\n      continue\n      ;;\n    execution_deadline_exceeded|provider_interrupted|provider_error)\n      fail 15 \"执行已终止为 ${INVOKE_CODE}；不得 attach 或换 key 重试，状态文件已保留\"\n      ;;\n  esac\n\n  (( INVOKE_RC == 0 )) || fail \"$INVOKE_RC\" \"invoke 失败：${INVOKE_CODE:-unknown}；状态文件已保留\"\n  [[ \"$INVOKE_STATUS\" == \"responded\" ]] || fail 15 \"invoke 已返回 ${INVOKE_STATUS:-unknown} 终态；不得重附着\"\n  break\ndone\nprintf '%s\\n' \"$INVOKE\" | jq '{status:.data.invocationReply.status,reply:.data.invocationReply.reply,truncated:.data.invocationReply.truncated,effectRevision:.meta.effectRevision,cursor:.meta.cursor}'\n\n# 第 3 步：同一 launch-key 可在响应丢失后安全重放持久启动。\nSTART=$(pier agents start claude \\\n  --cwd \"$CWD\" \\\n  --worktree-key \"$WT_KEY\" \\\n  --incarnation-id \"$WT_INCARNATION\" \\\n  --prompt-file \"$TASK_FILE\" \\\n  --no-focus \\\n  --expected-boot-id \"$BOOT_ID\" \\\n  --launch-key \"$LAUNCH_KEY\" \\\n  --json)\nSTART_RC=$?\nSTART_CODE=$(printf '%s' \"$START\" | jq -r '.error.code // empty' 2>/dev/null)\n[[ \"$START_CODE\" != \"boot_changed\" ]] || snapshot_after_boot_change\n(( START_RC == 0 )) || fail \"$START_RC\" \"agents start 失败；状态文件已保留\"\n\nRID=$(printf '%s' \"$START\" | jq -r '.data.runtimeRef.runtimeId')\nGEN=$(printf '%s' \"$START\" | jq -r '.data.runtimeRef.generation')\nRUNTIME_CAP=$(printf '%s' \"$START\" | jq -r '.data.runtimeCapabilityRef')\ntest -n \"$RID\" || fail 15 \"start 未返回 runtimeId\"\ntest -n \"$GEN\" || fail 15 \"start 未返回 generation\"\ntest -n \"$RUNTIME_CAP\" || fail 15 \"start 未返回 runtime capability\"\nprintf '%s\\n' \"$START\" | jq '{runtimeRef:.data.runtimeRef,effectRevision:.meta.effectRevision,cursor:.meta.cursor}'\n\n# 第 4 步：同一 input-id 可重放继续一轮；只读取当前画面。\nTURN=$(pier agents turn \\\n  --runtime \"$RID\" \\\n  --generation \"$GEN\" \\\n  --capability-ref \"$RUNTIME_CAP\" \\\n  --prompt-file \"$FOLLOWUP_FILE\" \\\n  --expected-boot-id \"$BOOT_ID\" \\\n  --input-id \"$INPUT_ID\" \\\n  --wait settled \\\n  --include-screen \\\n  --max-lines 120 \\\n  --max-bytes 65536 \\\n  --json)\nTURN_RC=$?\nTURN_CODE=$(printf '%s' \"$TURN\" | jq -r '.error.code // empty' 2>/dev/null)\n[[ \"$TURN_CODE\" != \"boot_changed\" ]] || snapshot_after_boot_change\n(( TURN_RC == 0 )) || fail \"$TURN_RC\" \"agents turn 失败；状态文件已保留\"\nprintf '%s\\n' \"$TURN\" | jq '{fact:.data.fact,screen:.data.screen,effectRevision:.meta.effectRevision,cursor:.meta.cursor}'\n\n# Pier CLI 只给 canonicalPath + 完整 WorktreeRef；这里由调用方本地 Git 工具复核。\ngit -C \"$CWD\" status --short || fail 1 \"git status 失败；状态文件已保留\"\ngit -C \"$CWD\" diff --stat || fail 1 \"git diff 失败；状态文件已保留\"\n\n# 只有终端回复、持久路径和本地复核全部成功后才清理；锁仍持有。\nrm -f \"$CALL_STATE_FILE\" || fail 1 \"流程成功，但无法清理调用状态文件\"\nfsync_dir \"$STATE_DIR\" || fail 1 \"状态清理后无法 fsync 父目录\"\n",
+    "day1Recipe": "#!/usr/bin/env bash\n# Day 1（v7）：一次性用原生 agent；持久用 Pier\nset -euo pipefail\n# 1) 一次性（非 Pier）\ncodex exec --ephemeral --skip-git-repo-check -s read-only -C \"$PWD\" - <<'Q'\n用一句话说明本仓库是做什么的。\nQ\n# 2) 发现 + 持久（Pier，Pier 需在线）\npier agents catalog --json\n# pier agents start …  # W3\n# pier agents turn … ; pier agents screen …\n",
     "runtimeUi": {
       "disclaimer": "静态协作界面示例：只展示持久运行中的协调智能体、工作智能体、当前画面、工作树产出与可信运行事实；CLI 返回的结构化内容由发起方处理，不进入全局协作台。",
       "workspace": {
@@ -1180,7 +1045,7 @@
         "运行实例已更换、进程退出或位置已过期",
         "工作树有变化、活跃现场与删除被拒绝"
       ],
-      "contentBoundary": "短调用的结构化回复只返回给调用者，不进入此界面；持久会话只读取当前画面，并从明确工作树读取文件与 Git 变化。"
+      "contentBoundary": "协作界面只覆盖持久工作智能体：当前画面、WorktreeRef 定位与运行事实；一次性提问在进程外走原生 agent CLI，不进入此界面，Pier 也不提供 one-shot 结构化回复产品路径。"
     },
     "journeys": [
       {
@@ -1193,11 +1058,11 @@
       },
       {
         "id": "J2",
-        "name": "一次性调用并直接取回回复",
+        "name": "一次性提问走原生 agent CLI",
         "trigger": "协调智能体有一个边界清楚、适合单次回答的问题",
-        "system": "invoke 校验目标、完整 WorktreeRef 与 agent-invoke capability，从 stdin/file 取 prompt，在隔离只读沙箱和 --execution-deadline/maxOutputBytes 内执行；--wait-timeout 只约束当前观察",
-        "userSees": "本次 reply、responded/interrupted/error、truncated 与耗时；没有可遍历的会话历史",
-        "failure": "超时、截断或提供方不可用由协调智能体决定缩小问题、换目标或转持久路径"
+        "system": "调用方在 Pier 进程外直接执行各 agent 原生 CLI（如 codex exec）；Pier 不校验 prompt、不启沙箱、不返回结构化 one-shot 回复",
+        "userSees": "原生 CLI 的 stdout/stderr 与退出码；Pier 无 agents invoke 产品面，也不返回 one-shot 结构化回复",
+        "failure": "超时或失败由调用方在原生 CLI 侧处理；需要活体协作时改走 Pier 持久 start/turn/screen"
       },
       {
         "id": "J3",
@@ -1211,7 +1076,7 @@
         "id": "J4",
         "name": "工作智能体请求上游或受限递归",
         "trigger": "子运行需要协调智能体补充输入，或其已获明确的下一层调用权限",
-        "system": "waiting 进入 FA/NCS；普通子运行只能回到协调者。只有 maxDepth/allowedAgents/maxActiveChildren 明示时才能再 invoke/start，二者共享活跃预算并由 CapabilityAuthority 派生能力",
+        "system": "waiting 进入 FA/NCS；普通子运行只能回到协调者。只有 maxDepth/allowedAgents/maxActiveChildren 明示时才能再 start 下一层，活跃预算由 CapabilityAuthority 派生与校验",
         "userSees": "协调智能体收到来源、当前画面和深链；递归超限得到清晰拒绝",
         "failure": "兄弟读取、控制父级、跨项目或超预算均无副作用"
       },
@@ -1219,8 +1084,8 @@
         "id": "J5",
         "name": "人类或外部控制器可选接入",
         "trigger": "人要诊断现场，或外部系统需要同构自动化",
-        "system": "人类默认读/聚焦；调用 invoke 时经宿主可信确认取得精确 agent-invoke。外部经 OS 同用户、Ed25519 与宿主确认取得同构窄 grant；最终都通过 CapabilityAuthority 与同一 services",
-        "userSees": "与协调智能体一致的 refs、InvocationReply、viewport、revision/cursor 与显式错误码",
+        "system": "人类默认读/聚焦；写持久 runtime-control 经宿主可信确认。外部经 OS 同用户、Ed25519 与宿主确认取得同构窄 grant；最终都通过 CapabilityAuthority 与同一 services。one-shot 不经 Pier",
+        "userSees": "与协调智能体一致的 refs、viewport、revision/cursor 与显式错误码；无 Pier one-shot 结构化回复",
         "failure": "未确认、过期、撤销、越范围或冒充智能体时拒绝；外部自行保存工作结论"
       }
     ],
@@ -1232,8 +1097,8 @@
       },
       {
         "surface": "一次性内容",
-        "before": "发送到终端后抓屏、轮询或猜测哪段是本次回复",
-        "after": "agents invoke 显式 agentId/cwd，直接返回有界 InvocationReply"
+        "before": "用 Pier 再包一层 one-shot，或发送到终端后抓屏猜测回复",
+        "after": "直接使用各 agent 原生 CLI（如 codex exec）；Pier 不提供 agents invoke 产品面"
       },
       {
         "surface": "持久内容",
@@ -1253,31 +1118,30 @@
       {
         "surface": "运行输入",
         "before": "queued/accepted 被理解成工作智能体已经处理",
-        "after": "turn 只确认输入接受；invoke 才提供本次语义回复"
+        "after": "turn 只确认输入接受；调用方用 screen/wait/文件/Git 自行综合语义，不由 Pier one-shot 代返"
       },
       {
         "surface": "工作判断",
         "before": "responded、ready、quiet、退出或提醒被提升为工作结论",
-        "after": "Pier 返回回复、定位引用与事实；调用方用自身工具检查文件/Git 后决定接受、追问、重试或结束"
+        "after": "Pier 只返回定位引用与运行事实；调用方用自身工具检查文件/Git 后决定接受、追问、重试或结束"
       },
       {
         "surface": "UI",
         "before": "以人类运行监督台为中心，只列智能体状态",
-        "after": "以协调智能体协作为中心，只展示持久工作智能体、当前画面、文件/Git 与可信事实；短调用内容由发起方处理"
+        "after": "以协调智能体协作为中心，只展示持久工作智能体、当前画面、文件/Git 与可信事实；one-shot 内容留在原生 CLI 侧"
       }
     ],
     "safetyRails": [
       "Pier 不实现多智能体任务生命周期；契约、插件、存储、renderer 与 Canvas 都不得绕过该边界。",
+      "核心逻辑优先，拒绝业界能力二次封装：不提供 agents invoke / InvocationReply 产品面；一次性走原生 agent CLI。",
       "AgentCallerService 只绑定 caller 并请求凭证；AccessGrantService/CapabilityAuthority 是全部 grant、AgentCallerCredential 与 CapabilityRef 唯一的 mint/revoke/authorize 线性化点。",
       "AgentCallerCredential 使用 Unix 0700/0600 no-follow 原子临时文件或 Windows owner-only DACL 文件注入；self 不回秘密，父 credential 在 provider/child 启动前 scrub。",
-      "invoke 显式 agentId/完整 WorktreeRef、agent-invoke scope、stdin/file、--execution-deadline、--wait-timeout 与 maxOutputBytes；可信 adapter 在沙箱外持 auth 并只到选定 endpoint，工具子进程只读精确 repo/Git admin、不挂 userData/控制面/凭证/密钥且无任意网络、连接器与持久副作用；禁止 auto-pick/provider fallback，不增加 invocation list/get。",
-      "invoke 的 observation_timeout 以 exit 124 返回 operationId/effectRevision/attach，operation 保持 running；execution_deadline_exceeded 必须在 provider 停止/reap 后收敛为 interrupted/error 终态并禁止 attach。",
       "Day 1 状态只在调用方专用私有目录内创建或复用：不 chmod 既有父目录，拒绝 symlink/reparse/非当前 owner/非私有路径；以 lockf/flock 内核独占锁贯穿配方，SIGKILL 后内核自动释放而保留锁文件与状态，下一进程重新取得同一锁，不做危险 stale 删除；状态临时文件 O_EXCL 创建、不覆盖发布并在首个 effect 前 fsync 文件与父目录。",
-      "running invoke 与 starting/running child runtime 共享 maxActiveChildren 原子预留；attach/replay 不重复，只有 reap 后释放。",
+      "starting/running child runtime 占用 maxActiveChildren 原子预留；receipt 重放不重复占额，reap 后释放。",
       "screen 只返回渲染后的当前 viewport 单帧，无 ANSI/control、scrollback、tail、内容 cursor 或跨帧拼接。",
       "AgentRef、WindowRef 与 PanelRef 只用于发现/聚焦；持久写读必须精确匹配 RuntimeRef 的 bootId 与 generation。",
       "父到子能力在 agent、operation、WorktreeRef、depth、concurrency 与 expiry 上单调收缩；跨兄弟/父级默认拒绝。",
-      "invoke/start/turn/interrupt/terminate 使用 expectedBootId、独立 effect key、规范摘要与原子 effect fence。",
+      "start/turn/interrupt/terminate 使用 expectedBootId、独立 effect key、规范摘要与原子 effect fence。",
       "turn/terminal send 只返回输入接受，不产生 Delivery、处理确认或工作结论。",
       "provider responded/ready/waiting/error、quiet、exit、当前画面、标题和 NCS 都不产生调用方工作结论。",
       "snapshot/watch 使用有界内存事实流；不得演变为公共运行历史或耐久编排事件库。",
@@ -1286,47 +1150,47 @@
       "断线、SIGINT、renderer reload 与 Pier 重启不触发自动 relaunch、retry、terminate 或清理。"
     ],
     "antiPatterns": [
+      "为业界已支持的能力再造 Pier 封装层、统一抽象或第二套产品 API",
+      "把 Pier agents invoke 做成各家 one-shot 的封装层",
+      "仍把人类 CLI 画成唯一主调用者且忽略持久控制需求",
+      "用 --as-agent、panelId、焦点自报身份",
+      "把 screen 当完整回答或开放 transcript/history/replay",
+      "把 ready/exit/NCS 已读当成任务完成",
+      "默认跨同伴读写或无限递归",
+      "独立 activity 命令组与顶层 watch 双轨重复",
+      "把 TaskRuns 改成多智能体任务台账",
+      "在 host/plugin/Canvas 中建立多智能体 Run/DAG/Gate/Result",
       "仍把人类 CLI 或外部控制器画成唯一主调用者，让协调智能体只能被观察",
       "用全局 agent token、--as-agent、panelId、焦点或环境自报值识别调用者",
-      "invoke 自动选择最近 provider、静默 fallback，或把 prompt 放进 argv/普通环境变量",
-      "给 invoke 增加 list/get/history，或把 InvocationReply 保存成公共会话历史",
       "把 screen 做成 raw ANSI、scrollback、tail、增量内容流或 transcript 旁路",
       "把当前 viewport 当语义回答，把 queued/accepted 当 delivered/handled，把 ready/exit 当工作成功",
-      "默认允许读取兄弟、控制父级、跨项目或无限递归创建工作智能体",
-      "让子能力在 agent、operation、工作树、深度、并发或期限任一维度放大",
-      "用同一个 effect key 复用 invoke/start/turn/interrupt/terminate，或返回响应时最新 cursor 跳过因果事实",
-      "用官方插件绕过 Pier 不做任务生命周期、任务台账、看板与自动调度的产品边界",
-      "在 host、plugin、renderer store、Canvas data 或 NCS 中建立多智能体 Run/DAG/Gate/Result",
-      "把 terminal send 包装成可靠 mailbox/delivery ack，把 NCS 变成智能体消息总线",
-      "断线、关闭面板、退出进程或收到 SIGINT 后自动重启、重试或删除工作树",
-      "让 UI 与 CLI 各自计算 provider 状态、generation 或等待语义",
-      "把 TaskRuns 改名后用作多智能体工作项台账"
+      "默认允许读取兄弟、控制父级、跨项目或无限递归创建工作智能体"
     ],
     "phases": [
       {
         "wave": 0,
         "name": "文档与边界",
-        "outcome": "pier-cli-user-manual Canvas 成为用户命令面真源（shipped/planned/blocked）；智能体优先与方案 A 内容边界成为架构与测试硬约束；完成判断不归 Pier；unit 门禁见 tests/unit/cli/；Canvas contracts 锁定方案语义；本机控制架构闭环见 local-control 金标准文档与 architecture-loop 单测",
+        "outcome": "明确：一次性=原生 agent（不实现 Pier invoke）；Pier 主路径=发现+持久运行控制；pier-cli-user-manual 为命令面真源；禁止任务台账",
         "status": "done",
         "slices": [
           {
             "id": "W0-S1",
-            "title": "建立 pier-cli-user-manual Canvas：用户命令面 shipped/planned/blocked 清单与主调用路径（交付波次表在 multi-agent gold）"
+            "title": "用户手册 shipped/planned/blocked 与 Pier 主路径清单"
           },
           {
             "id": "W0-S2",
-            "title": "Canvas 锁定协调智能体主调用者、四类主体、双内容路径与完成语义边界"
+            "title": "Canvas 锁定持久主路径；one-shot 标 non-goal"
           },
           {
             "id": "W0-S3",
-            "title": "治理测试：禁止任务生命周期/公共运行历史/身份自报/事实越权；并扫描 pier-cli-user-manual shipped 表面不得列出 agents/access 等规划命令与默认无写权的 plugins enable|disable"
+            "title": "治理测试：禁止 Pier 任务生命周期；禁止产品面 agents invoke shipped"
           }
         ]
       },
       {
         "wave": 1,
-        "name": "调用身份与发现",
-        "outcome": "W1 产品主路径关账：v1/v2 分流、peer、authorize/receipt/subscribe/hold 闭环；agents catalog/list/get（cli-human）可用。spawn 不注入 binding（只 scrub 父 env）；agents.self / agent principal 为遗留实验，不记入产品完成。CapabilityAuthority 全量与深度/并发/撤销矩阵不阻塞 W1，挪至 W4/W6",
+        "name": "发现与传输",
+        "outcome": "v1/v2 分流、peer、authorize/receipt、subscribe；agents catalog/list/get（cli-human）",
         "status": "done",
         "slices": [
           {
@@ -1345,21 +1209,17 @@
       },
       {
         "wave": 2,
-        "name": "一次性 agents invoke",
-        "outcome": "agents invoke 在可证明隔离的只读沙箱内对显式目标返回有界 InvocationReply；不建立公共历史；Canvas 用户手册同步为已实现",
-        "status": "planned",
+        "name": "一次性（产品撤回）",
+        "outcome": "产品 non-goal：不实现 agents invoke 封装；调用方使用原生 agent CLI。既有实验代码不作为产品完成定义",
+        "status": "cancelled",
         "slices": [
           {
+            "id": "W2-S0",
+            "title": "文档与命令面删除 invoke 产品路径"
+          },
+          {
             "id": "W2-S1",
-            "title": "AgentInvokeService、显式 agentId/WorktreeRef、agent-invoke scope、stdin/file、执行期限/观察等待与取消"
-          },
-          {
-            "id": "W2-S2",
-            "title": "InvocationReply：bootId + principalRef + operationId；responded/interrupted/error 与无历史索引"
-          },
-          {
-            "id": "W2-S3",
-            "title": "可信外层 auth/窄 egress、工具子进程只读挂载、无 auto-pick、共享活跃预算；更新 Canvas 用户手册已实现表"
+            "title": "（原 AgentInvokeService 产品交付取消）"
           }
         ]
       },
@@ -1386,7 +1246,7 @@
       {
         "wave": 4,
         "name": "宿主原语收敛",
-        "outcome": "现有 terminal/windows/panels/worktrees/tasks/status 对齐金标准 refs 与命名；CLI 只返回定位用的 canonicalPath 与完整 WorktreeRef，文件/Git 内容由调用方本地工具读取；shell tasks 不越权；补 snapshot/watch/activity",
+        "outcome": "现有 terminal/windows/panels/worktrees/tasks/status 对齐金标准 refs 与命名；CLI 只返回定位用的 canonicalPath 与完整 WorktreeRef，文件/Git 内容由调用方本地工具读取；shell tasks 不越权；补顶层 snapshot/watch（FA 事实并入，无独立 activity 命令组）",
         "status": "planned",
         "slices": [
           {
@@ -1399,7 +1259,7 @@
           },
           {
             "id": "W4-S3",
-            "title": "tasks 同构为 shell-only；顶层 snapshot/watch 与 activity 便利流；Canvas 用户手册全表刷新"
+            "title": "tasks 同构为 shell-only；顶层 snapshot/watch 覆盖 FA 事实；Canvas 用户手册全表刷新"
           },
           {
             "id": "W4-S4",
@@ -1435,11 +1295,11 @@
         "slices": [
           {
             "id": "W6-S1",
-            "title": "access keygen/status/request/wait/revoke 与精确 agent-invoke scope"
+            "title": "access keygen/status/request/wait/revoke 与精确 持久 runtime-control / project-create grant"
           },
           {
             "id": "W6-S2",
-            "title": "假协调智能体：self→invoke 与 start→turn→screen→本地文件/Git"
+            "title": "假协调智能体：原生 one-shot + Pier catalog/self→start→turn→screen→本地文件/Git"
           },
           {
             "id": "W6-S3",
@@ -1473,20 +1333,20 @@
       },
       {
         "id": "E3",
-        "text": "协调智能体显式 agentId/完整 WorktreeRef 后，v1 invoke 仅对可分层隔离的 adapter 开放 advisory-read-only：可信外层持 auth 并只向选定 provider endpoint 窄 egress；工具子进程只读精确 repo/Git admin 与可销毁 tmp，不挂 userData/Pier socket/凭证/密钥，无任意网络/连接器/持久副作用",
-        "evidence": "假协调智能体 invoke 端到端 + repo/userData/socket/auth/network 隔离矩阵 + 只读文件/搜索/Git 查询正例 + 写文件/连接器/持久副作用拒绝 + provider-native 不可隔离时 provider_unavailable + deadline/wait/cancel/output 矩阵",
+        "text": "产品面不提供 agents invoke；一次性由原生 agent CLI 完成（文档与命令组扫描为 0 个 Pier invoke 产品入口）",
+        "evidence": "Canvas non-goals + agents 命令组 + user-manual blocked + 禁止扫描",
         "status": "planned"
       },
       {
         "id": "E4",
-        "text": "InvocationReply 以 bootId + principalRef + operationId 唯一标识；agent principalRef 自带 credentialId。responded 只表示本次已有回复；服务端不提供 invocation list/get，不持久化可枚举回复，也不从 responded 自动生成工作成功",
-        "evidence": "三类 principal 命名空间重放 + InvocationReply schema、无历史索引与调用方回复验收反例测试",
+        "text": "无 Pier InvocationReply 产品历史索引；持久路径不开放 transcript/history/replay",
+        "evidence": "Canvas non-goals + agents 命令组 + user-manual blocked + 禁止扫描",
         "status": "planned"
       },
       {
         "id": "E5",
-        "text": "agents start 只为父调用者新建精确子运行，并返回 AgentRef/PanelRef/RuntimeRef/最小子 CapabilityRef；running invoke 与 starting/running child runtime 共享 maxActiveChildren 原子预留，attach/replay 不重复且 reap 后释放",
-        "evidence": "父子启动、环境/fd 泄漏、child self、created-child receipt 重放、invoke/start 竞争/取消未知/reap 释放测试",
+        "text": "agents start 只为父调用者新建精确子运行，并返回 AgentRef/PanelRef/RuntimeRef/最小子 CapabilityRef；starting/running child runtime 占用 maxActiveChildren 原子预留，receipt 重放不重复占额且 reap 后释放",
+        "evidence": "父子启动、环境/fd 泄漏、child self、created-child receipt 重放、start 竞争/取消未知/reap 释放测试",
         "status": "planned"
       },
       {
@@ -1503,8 +1363,8 @@
       },
       {
         "id": "E8",
-        "text": "invoke/start/turn/interrupt/terminate 均以 expectedBootId、独立 effect key 与规范请求摘要建立原子 effect fence；同键同摘要重放，同键异请求冲突，所有因果事实 revision>F",
-        "evidence": "响应丢失、同步 provider callback、快速 waiting/ready、重复 Ctrl-C、容量压力、撤销与宿主重启故障矩阵",
+        "text": "start/turn/interrupt/terminate 均以 expectedBootId、独立 effect key 与规范请求摘要建立原子 effect fence；同键同摘要重放，同键异请求冲突，所有因果事实 revision>F",
+        "evidence": "响应丢失、快速 waiting/ready、重复 Ctrl-C、容量压力、撤销与宿主重启故障矩阵",
         "status": "planned"
       },
       {
@@ -1533,20 +1393,20 @@
       },
       {
         "id": "E13",
-        "text": "持久协作 UI 明确区分协调智能体、工作智能体、当前画面、文件/Git 与运行事实；一次性回复仅在 CLI 当前调用返回，不进入协作台，所有前台状态有中文标签和下一步",
+        "text": "持久协作 UI 明确区分协调智能体、工作智能体、当前画面、文件/Git 与运行事实；无 Pier one-shot 回复进入协作台（one-shot 在进程外原生 CLI），所有前台状态有中文标签和下一步",
         "evidence": "五页真实挂载 + 492/768/1024 截图、持久 session-only 数据门禁、键盘与原始状态码泄漏测试",
         "status": "planned"
       },
       {
         "id": "E14",
-        "text": "可复制 Day 1 配方在真实协调智能体环境完成 self→invoke 与 start→turn --include-screen；它在调用方专用私有目录和全程内核独占锁内，把 BOOT_ID、operation/launch/input key 与规范摘要耐久保存到 PIER_AGENT_CALL_STATE_FILE。observation_timeout 返回 operationId/effectRevision/attach 且 operation 仍在运行，只能同 key + 同摘要重附着；execution deadline 到期收敛为 interrupted/error 终态，不得重附着。effect_in_progress/transport_closed 仍复用原键；boot_changed 保留状态并要求 snapshot，只有终端回复与整条配方成功后才清理",
-        "evidence": "环境调用凭证假协调智能体端到端 + 专用目录 owner/mode/symlink/reparse 门禁 + 双进程竞争 + crash-before-rename + crash-after-rename + SIGKILL 内核解锁/状态保留 + O_EXCL/不覆盖发布/fsync-before-effect + observation_timeout attach 元数据 + execution deadline 终态 + boot_changed snapshot/保留 + prompt 进程参数/环境泄漏扫描",
+        "text": "Day 1：原生 agent 一次提问 + Pier catalog +（W3）start/turn/screen 配方可复制",
+        "evidence": "原生 CLI one-shot 文档/脚本 + 假协调智能体 Pier catalog/list/start/turn/screen 端到端 + 专用目录 owner/mode/symlink/reparse 门禁 + 双进程竞争 + crash-before-rename + crash-after-rename + SIGKILL 内核解锁/状态保留 + O_EXCL/不覆盖发布/fsync-before-effect + boot_changed snapshot/保留 + 无 Pier invoke 产品入口扫描",
         "status": "planned"
       },
       {
         "id": "E15",
-        "text": "人类 CLI 与外部控制器复用同构命令；invoke 都要求精确 agent-invoke（WorktreeRef、allowedAgents、agents.invoke、deadline、output cap、TTL），人类经宿主可信确认，外部经 OS 同用户、Ed25519 grant 与宿主确认",
-        "evidence": "CLI help/JSON/JSONL、human confirm、socket/pipe ACL、Ed25519 签名挑战、agent-invoke scope、consent/revoke、假外部控制器与 packaged-app 测试",
+        "text": "人类/外部复用持久控制命令；不要求 Pier one-shot / agent-invoke scope",
+        "evidence": "CLI help/JSON/JSONL、human confirm、socket/pipe ACL、Ed25519 签名挑战、持久 runtime-control grant、consent/revoke、假外部控制器与 packaged-app 测试；禁止 agents.invoke 产品面",
         "status": "planned"
       }
     ]

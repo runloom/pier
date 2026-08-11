@@ -1,10 +1,12 @@
 # 智能体优先 CLI Canvas 全量改稿计划
 
+> **状态：已被 v7 取代（2026-08-11）。** 产品结论：一次性 = 原生 agent CLI（不经 Pier）；Pier = 发现 + 持久 `start/turn/screen`；`agents invoke` / `InvocationReply` 为 non-goal。下文是历史改稿过程，勿再当作当前产品方向。
+
 > **执行要求：** 本计划仅更新 `.pier/canvases/multi-agent-orchestration-gold/**`。每个行为变化先写失败测试，再修改正式内容；不提交当前脏工作树。
 
 **目标：** 把 Canvas 从“人类运行监督与外部编排器接入”重写为“协调智能体通过 Pier CLI 调用、观察并读取工作智能体内容”，同时保持 Pier 不拥有任务生命周期。
 
-**架构：** Pier 启动的协调智能体是 CLI 的主要调用者；人类和外部控制器是并列的次要调用者。Pier 为每个智能体运行实例注入当前 boot 有效、最小范围的调用凭证，并提供一次性 `invoke`、持久会话 `start/turn`、有界 `screen`、运行事实 `wait/watch` 与精确停止能力。目标、任务分解、重试、结果接受和完成判断始终由调用智能体或外部控制器持有。
+**架构（历史草案，已被 v7 修正）：** Pier 启动的协调智能体是 CLI 的主要调用者；人类和外部控制器是并列的次要调用者。Pier 为每个智能体运行实例注入当前 boot 有效、最小范围的调用凭证，并提供持久会话 `start/turn`、有界 `screen`、运行事实 `wait/watch` 与精确停止能力。一次性提问不经 Pier 封装。目标、任务分解、重试、结果接受和完成判断始终由调用智能体或外部控制器持有。
 
 **技术栈：** Pier Canvas、React 19、TypeScript 严格模式、相邻 `data.json`、Vitest、Electron + Playwright。
 

@@ -36,7 +36,7 @@ export function PathPage({ d }: { d: DesignData }) {
       <Stack gap={6}>
         <SectionTitle>日路径：四步最短调用</SectionTitle>
         <SectionLead>
-          协调智能体先自述身份，再一次性 invoke；需要多轮时 start 持久子运行，并用 turn +
+          一次性用原生 agent CLI；需要多轮时 start 持久子运行，并用 turn +
           当前画面继续。完整可恢复配方见下方查阅区。
         </SectionLead>
         <Text className="font-mono text-sm font-semibold">{d.cli.namespace}</Text>
@@ -237,7 +237,7 @@ export function LandingPage({ d }: { d: DesignData }) {
           source={deliveryDiagram}
         />
         <SectionLead>
-          W0 文档与边界 → W1 身份；W1 后 W2（invoke）与 W3（持久
+          W0 文档与边界 → W1 发现；W2 一次性产品撤回；W3（持久
           screen）可并行，再汇入 W4 宿主原语收敛与 docs 全表刷新。
         </SectionLead>
       </Stack>

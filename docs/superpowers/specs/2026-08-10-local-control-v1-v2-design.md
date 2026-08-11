@@ -375,16 +375,17 @@ Challenge 消费：任意验证尝试即作废；重连新 challenge。
 
 | op 类 | effectKey | expectedBootId |
 |-------|-----------|----------------|
-| `agents.invoke/start/turn/interrupt/terminate` | **必填** ≥128bit 不透明 | 涉及 runtime 时必填 |
+| `agents.start/turn/interrupt/terminate` | **必填** ≥128bit 不透明 | 涉及 runtime 时必填 |
 | terminal 写（v2 映射后） | 必填 | 必填 |
 | 只读 self/catalog/list/get/screen/snapshot | 不强制 | 可选 |
 
-**禁止** 把外部 task/attempt/message id 直接当 effectKey。
+**禁止** 把外部 task/attempt/message id 直接当 effectKey。  
+**产品 non-goal**：不提供 `agents.invoke`（一次性走各 agent 原生 CLI）。
 
 ### 7.2 Receipt（实现下限）
 
 查找键逻辑：`principalRef + op + canonicalTarget + effectKey`  
-摘要：JCS(规范化 params + expectedBootId + 影响执行的选项)；**含** invokeDeadline/maxOutputBytes；**不含** 纯观察 wait-timeout、输出格式。
+摘要：JCS(规范化 params + expectedBootId + 影响执行的选项)；**不含** 纯观察 wait-timeout、输出格式。
 
 | 情况 | 行为 |
 |------|------|
@@ -440,11 +441,11 @@ W2+：按 Canvas 加厚 epoch/容量（`effect_window_full` 等）。
 
 传输：PeerCheck + hello + agent 凭证 + 上表 request/response。
 
-### 9.2 W2
+### 9.2 W2（产品撤回）
 
 | op | 语义 |
 |----|------|
-| `agents.invoke` | 只读沙箱一次性回复；挂起至终态 response（R1） |
+| ~~`agents.invoke`~~ | **non-goal**：不经 Pier 封装 one-shot；调用方直接用原生 agent CLI（如 `codex exec`）。协议层若收到该 op 返回 `unsupported`。 |
 
 ### 9.3 W3
 
@@ -523,8 +524,7 @@ src/main/adapters/cli/
 src/main/services/
   agent-caller/   # W1
   access-grant/   # W1 骨架 / W6
-  agent-invoke/   # W2
-  runtime-control/ # W3
+  runtime-control/ # W3（持久运行控制；无 agent-invoke 产品模块）
 
 bin/
   pier.mjs

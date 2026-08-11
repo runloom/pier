@@ -130,6 +130,8 @@ function assertV2Pair(helloFrame, responseFrame) {
  *   bindingId?: string,
  *   credentialId?: string,
  *   secret?: string,
+ *   effectKey?: string,
+ *   expectedBootId?: string,
  *   timeoutMs?: number,
  * }} args
  */
@@ -151,6 +153,8 @@ export async function invokePierControlV2(args) {
     requestId,
     op: args.op,
     params: args.params ?? {},
+    ...(args.effectKey ? { effectKey: args.effectKey } : {}),
+    ...(args.expectedBootId ? { expectedBootId: args.expectedBootId } : {}),
   };
 
   const frames = await readNdjsonFrames(

@@ -14,6 +14,8 @@ export interface ParsedPierCliV1 {
 }
 
 export interface ParsedPierCliV2 {
+  effectKey?: string;
+  expectedBootId?: string;
   json: boolean;
   op: string;
   params: Record<string, unknown>;

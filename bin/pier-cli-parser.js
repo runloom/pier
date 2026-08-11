@@ -481,6 +481,12 @@ function parseAgents(action, value, unexpected, args) {
       "pier agents self is not available from the human CLI (requires agent principal / binding). Use agents catalog|list|get instead."
     );
   }
+  // Product non-goal: one-shot via native agent CLIs, not Pier wrap.
+  if (action === "invoke") {
+    throw new Error(
+      "pier agents invoke is not a product command; use the agent native CLI for one-shot (e.g. codex exec). Pier agents: catalog|list|get"
+    );
+  }
   if (action === "catalog" || action === "list") {
     if (value) {
       throw new Error(`unexpected pier CLI argument: ${value}`);
@@ -518,7 +524,7 @@ function parseAgents(action, value, unexpected, args) {
       },
     };
   }
-  throw new Error("unknown pier agents command (self|catalog|list|get)");
+  throw new Error("unknown pier agents command (catalog|list|get)");
 }
 
 function parseCommand(args, cwd) {
@@ -575,6 +581,10 @@ export function parsePierCliArgs(
       op: commandOrV2.op,
       params: commandOrV2.params ?? {},
       json,
+      ...(commandOrV2.effectKey ? { effectKey: commandOrV2.effectKey } : {}),
+      ...(commandOrV2.expectedBootId
+        ? { expectedBootId: commandOrV2.expectedBootId }
+        : {}),
     };
   }
   return {

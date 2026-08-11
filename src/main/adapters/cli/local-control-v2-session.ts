@@ -1,7 +1,6 @@
 /**
  * pier.control/v2 会话 — 架构闭环：authorize · receipt · subscribe · hold/cancel · agents
  */
-import { randomUUID } from "node:crypto";
 import type { AgentCallerCredentialMaterial } from "@shared/contracts/local-control/agent-credential.ts";
 import { LOCAL_CONTROL_V2_API_VERSION } from "@shared/contracts/local-control/v2-errors.ts";
 import {
@@ -38,6 +37,10 @@ import {
   handleTraceOp,
   v2ErrorResponse,
 } from "./local-control-v2-ops.ts";
+import {
+  handleV2Subscribe,
+  type SubscriptionRecord,
+} from "./local-control-v2-subscribe.ts";
 
 export {
   LOCAL_CONTROL_V2_FEATURE_AGENTS_CATALOG,
@@ -48,6 +51,8 @@ export {
   LOCAL_CONTROL_V2_FEATURE_CONTROL_TRACE,
   LOCAL_CONTROL_V2_FEATURE_SUBSCRIBE,
 } from "./local-control-v2-features.ts";
+
+type InflightMap = Map<string, { ac: AbortController; kind: "hold" }>;
 
 export interface LocalControlV2Session {
   readonly bootId: string;
@@ -90,11 +95,8 @@ export function createLocalControlV2SessionFromHello(
   let material: AgentCallerCredentialMaterial | null = null;
   let principalRef: string | undefined;
   let disposed = false;
-  const inflight = new Map<string, AbortController>();
-  const subscriptions = new Map<
-    string,
-    { stream: string; requestId: string; revision: number }
-  >();
+  const inflight: InflightMap = new Map();
+  const subscriptions = new Map<string, SubscriptionRecord>();
 
   if (
     hello.clientKind === "external" ||
@@ -211,8 +213,8 @@ export function createLocalControlV2SessionFromHello(
     principalRef,
     dispose() {
       disposed = true;
-      for (const ac of inflight.values()) {
-        ac.abort();
+      for (const entry of inflight.values()) {
+        entry.ac.abort();
       }
       inflight.clear();
       subscriptions.clear();
@@ -268,8 +270,8 @@ export function createLocalControlV2SessionFromHello(
         return;
       }
       if (frame.type === "cancel") {
-        const ac = inflight.get(frame.requestId);
-        if (!ac) {
+        const entry = inflight.get(frame.requestId);
+        if (!entry) {
           emitSafe(
             v2ErrorResponse(
               frame.requestId,
@@ -279,7 +281,7 @@ export function createLocalControlV2SessionFromHello(
           );
           return;
         }
-        ac.abort();
+        entry.ac.abort();
         inflight.delete(frame.requestId);
         emitSafe({
           apiVersion: LOCAL_CONTROL_V2_API_VERSION,
@@ -291,7 +293,16 @@ export function createLocalControlV2SessionFromHello(
         return;
       }
       if (frame.type === "subscribe") {
-        handleSubscribe(frame.requestId, frame.stream, frame.after);
+        handleV2Subscribe({
+          requestId: frame.requestId,
+          stream: frame.stream,
+          ...(frame.after === undefined ? {} : { after: frame.after }),
+          bootId: args.bootId,
+          discovery,
+          subscriptions,
+          authorizeList: () => authorizeOp("agents.list", {}),
+          emit: emitSafe,
+        });
         return;
       }
       if (frame.type === "unsubscribe") {
@@ -315,81 +326,48 @@ export function createLocalControlV2SessionFromHello(
         });
         return;
       }
-      handleRequest(frame.requestId, frame.op, frame.params, frame.effectKey);
+      handleRequest(
+        frame.requestId,
+        frame.op,
+        frame.params,
+        frame.effectKey,
+        frame.expectedBootId
+      );
     },
   };
-
-  function handleSubscribe(
-    requestId: string,
-    stream: string,
-    after?: { bootId: string; revision: number }
-  ) {
-    if (
-      stream !== "resource:agents" &&
-      stream !== "resource:activity" &&
-      stream !== "global"
-    ) {
-      emitSafe(
-        v2ErrorResponse(
-          requestId,
-          "unsupported",
-          `stream not implemented: ${stream}`
-        )
-      );
-      return;
-    }
-    if (after && after.bootId !== args.bootId) {
-      emitSafe(
-        v2ErrorResponse(
-          requestId,
-          "snapshot_required",
-          "boot_changed for cursor"
-        )
-      );
-      return;
-    }
-    const auth = authorizeOp("agents.list", {});
-    if (!auth.ok) {
-      emitSafe(v2ErrorResponse(requestId, auth.code, auth.message));
-      return;
-    }
-    const subscriptionId = `sub_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
-    let revision = after?.revision ?? 0;
-    subscriptions.set(subscriptionId, { stream, requestId, revision });
-    emitSafe({
-      apiVersion: LOCAL_CONTROL_V2_API_VERSION,
-      type: "response",
-      requestId,
-      ok: true,
-      data: { subscriptionId, stream },
-    });
-    revision += 1;
-    const sub = subscriptions.get(subscriptionId);
-    if (sub) {
-      sub.revision = revision;
-    }
-    const payload =
-      stream === "resource:agents" || stream === "global"
-        ? discovery.listRunning()
-        : { activities: [], note: "activity stream stub" };
-    emitSafe({
-      apiVersion: LOCAL_CONTROL_V2_API_VERSION,
-      type: "event",
-      subscriptionId,
-      bootId: args.bootId,
-      revision,
-      cursorScope: stream === "global" ? "global" : stream,
-      mode: after ? "resume" : "snapshot",
-      payload,
-    });
-  }
 
   function handleRequest(
     requestId: string,
     op: string,
     params: Record<string, unknown>,
-    effectKey?: string
+    effectKey?: string,
+    expectedBootId?: string
   ) {
+    // 产品 non-goal：一次性走原生 agent CLI，不经 Pier 封装。
+    if (op === "agents.invoke") {
+      emitSafe(
+        v2ErrorResponse(
+          requestId,
+          "unsupported",
+          "agents.invoke is not a Pier product path; use the agent native CLI (e.g. codex exec) for one-shot"
+        )
+      );
+      return;
+    }
+    if (
+      typeof expectedBootId === "string" &&
+      expectedBootId.length > 0 &&
+      expectedBootId !== args.bootId
+    ) {
+      emitSafe(
+        v2ErrorResponse(
+          requestId,
+          "boot_changed",
+          "expectedBootId does not match current control-plane boot"
+        )
+      );
+      return;
+    }
     const auth = authorizeOp(op, params, effectKey);
     if (!auth.ok) {
       emitSafe(v2ErrorResponse(requestId, auth.code, auth.message));
@@ -469,7 +447,7 @@ export function createLocalControlV2SessionFromHello(
           ? Math.min(Math.max(0, msRaw), 30_000)
           : 50;
       const ac = new AbortController();
-      inflight.set(requestId, ac);
+      inflight.set(requestId, { ac, kind: "hold" });
       const timer = setTimeout(() => {
         if (ac.signal.aborted || disposed) {
           return;

@@ -283,6 +283,17 @@ function formatAgentsList(data) {
     .join("\n")}\n`;
 }
 
+function exitCodeForV2Response(response) {
+  if (response.ok) {
+    return 0;
+  }
+  const code = response.error?.code;
+  if (code === "observation_timeout") {
+    return 124;
+  }
+  return 1;
+}
+
 try {
   const rawArgv = process.argv.slice(2);
   const argv = rawArgv[0] === "--" ? rawArgv.slice(1) : rawArgv;
@@ -297,6 +308,8 @@ try {
             requestId: parsed.requestId,
             op: parsed.op,
             params: parsed.params,
+            effectKey: parsed.effectKey,
+            expectedBootId: parsed.expectedBootId,
             json: parsed.json,
           },
           null,
@@ -316,13 +329,17 @@ try {
   }
 
   if (parsed.protocol === "v2") {
+    const params = parsed.params ?? {};
     // 本机 CLI 一律按本机用户调用，不注入 / 不解析 agent binding 或凭证。
     const { response } = await invokePierControlV2({
       socketPath: resolveSocketPath(),
       requestId: parsed.requestId,
       op: parsed.op,
-      params: parsed.params,
+      params,
       clientKind: "cli-human",
+      effectKey: parsed.effectKey,
+      expectedBootId: parsed.expectedBootId,
+      timeoutMs: 15_000,
     });
     if (parsed.json) {
       console.log(JSON.stringify(response, null, 2));
@@ -342,7 +359,7 @@ try {
       const message = response.error?.message ?? "command failed";
       console.error(`${code}: ${message}`);
     }
-    process.exit(response.ok ? 0 : 1);
+    process.exit(exitCodeForV2Response(response));
   }
 
   const result = await request(resolveSocketPath(), parsed.envelope);

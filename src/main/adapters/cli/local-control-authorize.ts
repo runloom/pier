@@ -26,7 +26,6 @@ export interface LocalControlAuthorizer {
 /** 需要 effectKey 的写/围栏类 op（可扩展）。 */
 export const LOCAL_CONTROL_WRITE_OPS = new Set<string>([
   "control.trace",
-  "agents.invoke",
   "agents.start",
   "agents.turn",
   "agents.interrupt",

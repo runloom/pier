@@ -9,7 +9,7 @@
       "status": "使用手册",
       "version": "v1.1"
     },
-    "bluf": "先启动 Pier，再运行 pier（或 pnpm --silent cli:dev）。新手路径：status → open . → panels list → agents list。脚本一律加 --json。本手册按「开始使用 → 常用任务 → 命令参考 → 智能体 → 疑难」组织；暂未实现的命令会标明，勿写入脚本依赖。",
+    "bluf": "先启动 Pier，再运行 pier（或 pnpm --silent cli:dev）。新手路径：status → open . → panels list → agents list。脚本一律加 --json。本手册按「开始使用 → 常用任务 → 命令参考 → 智能体 → 疑难」组织；暂未实现的命令会标明，勿写入脚本依赖。 一次性提问请用各 agent 原生 CLI，不提供 pier agents invoke。",
     "context": "面向使用 Pier 的人与脚本作者。CLI 是本机工作台控制入口，不是远程 API，也不是智能体权限系统。",
     "goals": [
       "60 秒内完成第一次成功调用",
@@ -21,7 +21,8 @@
     "nonGoals": [
       "不把工程波次 / 架构设计当作用户主路径",
       "不把 CLI 写成权限与委派管理系统",
-      "不要求用户通读全文"
+      "不要求用户通读全文",
+      "不提供 pier agents invoke；一次性使用各 agent 原生能力"
     ],
     "design": {
       "readingSpine": "左目录（开始 / 任务 / 参考 / 智能体 / 疑难）+ 右正文",
@@ -547,22 +548,6 @@
         "blurb": "均为规划能力；消息请先用应用内铃铛。",
         "commands": [
           {
-            "id": "activity-snapshot",
-            "name": "activity snapshot",
-            "status": "planned",
-            "synopsis": "pier activity snapshot --json",
-            "description": "前台活动快照（智能体 / 任务 / 终端 / 空闲）。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"activity\": {\n      \"kind\": \"agent\",\n      \"state\": \"running\"\n    }\n  }\n}"
-          },
-          {
-            "id": "activity-watch",
-            "name": "activity watch",
-            "status": "planned",
-            "synopsis": "pier activity watch --json",
-            "description": "活动变化流。",
-            "output": "{\"type\":\"event\",\"kind\":\"activity.changed\"}"
-          },
-          {
             "id": "notifications-list",
             "name": "notifications list",
             "status": "planned",
@@ -590,7 +575,7 @@
       }
     ],
     "agents": {
-      "intro": "智能体相关 CLI 只做「看见」：目录与当前运行面板。不签发权限、不管理委派。启动智能体请在应用内打开对应终端/集成。",
+      "intro": "智能体 CLI：catalog/list/get 用于发现。持久会话控制（start/turn/screen/…）为规划主路径。一次性请用各 agent 原生能力，不提供 agents invoke。",
       "shipped": [
         {
           "id": "agents-catalog",
@@ -627,14 +612,6 @@
           "synopsis": "pier agents self --json",
           "description": "当前调用者非秘密摘要。人类 CLI（cli-human）在解析期直接拒绝；需要 agent principal。不作为本机权限系统。",
           "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"self\": {\n      \"principalRef\": \"…\",\n      \"bootId\": \"…\"\n    }\n  }\n}"
-        },
-        {
-          "id": "agents-invoke",
-          "name": "agents invoke",
-          "status": "planned",
-          "synopsis": "pier agents invoke --agent <id> --worktree-key <key> … --json < prompt.txt",
-          "description": "一次性调用，只返回本次回复。responded ≠ 工作完成。Prompt 走 stdin/文件。",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"reply\": {\n      \"status\": \"responded\",\n      \"text\": \"…\"\n    }\n  }\n}"
         },
         {
           "id": "agents-start",
@@ -722,7 +699,23 @@
       {
         "q": "和「多智能体编排」是什么关系？",
         "a": "CLI 不负责智能体之间的权限与委派，也不判定工作是否完成。只做本机打开、查看与（规划中的）控制原语。"
+      },
+      {
+        "q": "为什么没有 pier agents invoke？",
+        "a": "一次性提问请直接用 codex/claude 等原生 CLI。Pier 只负责发现与持久会话控制（start/turn/screen 等规划能力），不把各家 one-shot 再封装一层。"
       }
-    ]
+    ],
+    "blocked": {
+      "commands": [
+        {
+          "id": "agents-invoke",
+          "name": "agents invoke",
+          "status": "blocked",
+          "synopsis": "（不提供）请使用原生 agent CLI，例如：codex exec …",
+          "description": "产品 non-goal：一次性提问直接使用对应 agent 的能力。Pier 不封装 one-shot，不提供 pier agents invoke 产品命令。",
+          "output": "不适用"
+        }
+      ]
+    }
   }
 }

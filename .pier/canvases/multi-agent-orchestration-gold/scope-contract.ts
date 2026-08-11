@@ -1,6 +1,5 @@
 const ALLOWED_PIER_OWNERSHIP = new Set([
-  "agent-caller-identity",
-  "one-shot-agent-invocation",
+  "agent-discovery",
   "bounded-agent-screen",
   "agent-runtime-observation",
   "terminal-control",
@@ -14,8 +13,7 @@ const ALLOWED_PIER_OWNERSHIP = new Set([
 
 const ALLOWED_OWNERSHIP_LAYERS = new Set([
   "调用方编排语义",
-  "智能体调用身份",
-  "一次性智能体调用",
+  "一次性原生调用",
   "本机控制传输",
   "本机控制授权",
   "终端运行控制",
@@ -28,7 +26,6 @@ const ALLOWED_OWNERSHIP_LAYERS = new Set([
 
 const ALLOWED_ENTITY_NAMES = new Set([
   "AgentCallerCredential",
-  "InvocationReply",
   "AccessGrantRef",
   "CapabilityRef",
   "AgentRef",
@@ -46,7 +43,6 @@ const ALLOWED_ENTITY_NAMES = new Set([
 const ALLOWED_STATE_MACHINE_ENTITIES = new Set([
   "调用方任务（非 Pier）",
   "Agent caller credential",
-  "Agent invocation（一次性）",
   "Access connection",
   "Access request",
   "Access grant",

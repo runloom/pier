@@ -38,7 +38,8 @@ export function OverviewPage({ d }: { d: DesignData }) {
       {/* L1 · 30 秒 */}
       <Stack gap={8}>
         <Text className="max-w-3xl text-base font-medium leading-relaxed tracking-tight">
-          协调智能体经 Pier CLI 调用工作智能体；调用方持有拆分与结束判断，Pier 不拥有任务生命周期。
+          一次性用原生 agent；需要活体会话时经 Pier 做 start/turn/screen。调用方持有拆分与结束判断，Pier
+          不拥有任务生命周期。
         </Text>
         <SectionLead>{d.meta.subtitle}</SectionLead>
       </Stack>
@@ -62,8 +63,8 @@ export function OverviewPage({ d }: { d: DesignData }) {
               <BulletList
                 items={[
                   "主调用者：协调智能体",
-                  "可选接入：人类 CLI、外部控制器",
-                  "Pier：身份、画面、运行事实与安全边界",
+                  "一次性：直接原生 agent CLI",
+                  "Pier：发现、持久运行、画面与运行事实",
                 ]}
               />
             </Stack>
@@ -71,8 +72,8 @@ export function OverviewPage({ d }: { d: DesignData }) {
               <SubTitle>Pier 明确不做</SubTitle>
               <BulletList
                 items={[
-                  "任务台账 / 看板 / 自动调度",
-                  "完成权与结果验收",
+                  "封装 agents invoke / 统一 one-shot 回复",
+                  "任务台账 / 看板 / 自动调度 / 完成权",
                   "公共 transcript / 历史回放",
                 ]}
               />
@@ -100,9 +101,9 @@ export function OverviewPage({ d }: { d: DesignData }) {
       {/* L2 */}
       <Stack gap={8}>
         <Stack gap={4}>
-          <SectionTitle>协作台：持久现场（非一次性回复）</SectionTitle>
+          <SectionTitle>协作台：持久现场</SectionTitle>
           <SectionLead>
-            一次性 invoke 的回复只回调用者。此台只呈现持久会话的画面、工作树定位与运行事实。
+            一次性原生 agent 输出不进 Pier。此台只呈现持久会话的画面、工作树定位与运行事实。
           </SectionLead>
         </Stack>
         <AgentCollaborationPrototype ui={d.runtimeUi} />
@@ -161,8 +162,8 @@ export function ProblemPage({ d }: { d: DesignData }) {
       <Alert variant="warning">
         <AlertTitle>研究收敛</AlertTitle>
         <AlertDescription className="text-sm leading-relaxed">
-          共同结论：把 CLI 直接交给智能体，以精确调用者与目标身份串起 invoke、start、turn、screen
-          和 wait；只借鉴运行面，不复制任务台账、可靠邮箱或完成判定。
+          共同结论：一次性用原生 agent；Pier CLI 串起持久 start、turn、screen 与
+          wait。只借鉴运行面，不复制任务台账、one-shot 封装或完成判定。
         </AlertDescription>
       </Alert>
 
