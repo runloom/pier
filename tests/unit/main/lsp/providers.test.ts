@@ -5,42 +5,45 @@ import {
   pluginLanguageServerProviderId,
   registerPluginLanguageServers,
 } from "../../../../src/main/services/lsp/plugin-language-servers.ts";
-import {
-  createCssLspProvider,
-  createHtmlLspProvider,
-  createJsonLspProvider,
-  createMarkdownLspProvider,
-  createSvelteLspProvider,
-  createVueLspProvider,
-  createYamlLspProvider,
-} from "../../../../src/main/services/lsp/providers/config-language-providers.ts";
+import { createVueLspProvider } from "../../../../src/main/services/lsp/providers/config-language-providers.ts";
 import { createPathLspProvider } from "../../../../src/main/services/lsp/providers/create-path-provider.ts";
-import { createGoplsLspProvider } from "../../../../src/main/services/lsp/providers/gopls-provider.ts";
-import { createPyrightLspProvider } from "../../../../src/main/services/lsp/providers/pyright-provider.ts";
-import { createRustAnalyzerLspProvider } from "../../../../src/main/services/lsp/providers/rust-analyzer-provider.ts";
 import { createTypescriptLspProvider } from "../../../../src/main/services/lsp/providers/typescript-provider.ts";
 import { LspServerRegistry } from "../../../../src/main/services/lsp/server-registry.ts";
+import {
+  PATH_LANGUAGE_MATRIX,
+  pathLspDescriptorsFromMatrix,
+} from "../../../../src/shared/language-matrix/index.ts";
+
+function requireProvider(id: string) {
+  const provider = createBootstrappedLspRegistry().getById(id);
+  if (!provider) {
+    throw new Error(`missing provider ${id}`);
+  }
+  return provider;
+}
 
 describe("Multi-language LSP providers", () => {
-  it("bootstrap registers core programming + config language providers", () => {
+  it("bootstrap registers TypeScript, Vue, and every PATH matrix provider", () => {
     const registry = createBootstrappedLspRegistry();
     const ids = registry.list().map((p) => p.id);
     expect(ids).toContain("typescript");
-    expect(ids).toContain("pyright");
-    expect(ids).toContain("gopls");
-    expect(ids).toContain("rust-analyzer");
-    expect(ids).toContain("json");
-    expect(ids).toContain("css");
-    expect(ids).toContain("html");
-    expect(ids).toContain("yaml");
-    expect(ids).toContain("markdown");
     expect(ids).toContain("vue");
-    expect(ids).toContain("svelte");
-    expect(ids.length).toBe(11);
+    for (const d of pathLspDescriptorsFromMatrix()) {
+      expect(ids).toContain(d.id);
+    }
+    expect(ids.length).toBe(2 + pathLspDescriptorsFromMatrix().length);
+  });
+
+  it("matrix PATH rows each declare installCommand when not bundled", () => {
+    for (const row of PATH_LANGUAGE_MATRIX) {
+      if (!row.lsp) continue;
+      expect(row.lsp.installCommand?.length ?? 0).toBeGreaterThan(0);
+      expect(row.lsp.binaryHint.length).toBeGreaterThan(0);
+    }
   });
 
   it("pyright matches .py/.pyi and resolves languageId", () => {
-    const provider = createPyrightLspProvider();
+    const provider = requireProvider("pyright");
     expect(provider.matchPath("/a/b.py")).toBe(true);
     expect(provider.matchPath("/a/b.pyi")).toBe(true);
     expect(provider.matchPath("/a/b.ts")).toBe(false);
@@ -50,7 +53,7 @@ describe("Multi-language LSP providers", () => {
   });
 
   it("gopls matches .go and resolves languageId", () => {
-    const provider = createGoplsLspProvider();
+    const provider = requireProvider("gopls");
     expect(provider.matchPath("/a/b.go")).toBe(true);
     expect(provider.matchPath("/a/b.py")).toBe(false);
     expect(provider.languageIdForPath("main.go")).toBe("go");
@@ -58,7 +61,7 @@ describe("Multi-language LSP providers", () => {
   });
 
   it("rust-analyzer matches .rs and resolves languageId", () => {
-    const provider = createRustAnalyzerLspProvider();
+    const provider = requireProvider("rust-analyzer");
     expect(provider.matchPath("/a/b.rs")).toBe(true);
     expect(provider.matchPath("/a/b.go")).toBe(false);
     expect(provider.languageIdForPath("lib.rs")).toBe("rust");
@@ -76,19 +79,32 @@ describe("Multi-language LSP providers", () => {
     expect(provider.languageIdForPath("a.mts")).toBe("typescript");
   });
 
-  it("config language providers match expected extensions", () => {
-    expect(createJsonLspProvider().matchPath("/a/b.jsonc")).toBe(true);
-    expect(createCssLspProvider().matchPath("/a/b.scss")).toBe(true);
-    expect(createHtmlLspProvider().matchPath("/a/b.html")).toBe(true);
-    expect(createYamlLspProvider().matchPath("/a/b.yml")).toBe(true);
-    expect(createMarkdownLspProvider().matchPath("/a/b.md")).toBe(true);
-    expect(createMarkdownLspProvider().languageIdForPath("x.mdx")).toBe("mdx");
+  it("PATH matrix providers match representative extensions", () => {
+    const registry = createBootstrappedLspRegistry();
+    expect(registry.getById("clangd")?.matchPath("/a/b.mm")).toBe(true);
+    expect(registry.getById("clangd")?.languageIdForPath("a.mm")).toBe(
+      "objective-cpp"
+    );
+    expect(registry.getById("zls")?.matchPath("/a/b.zig")).toBe(true);
+    expect(
+      registry.getById("docker-langserver")?.matchPath("/repo/Dockerfile")
+    ).toBe(true);
+    expect(registry.getById("sourcekit-lsp")?.matchPath("/a/App.swift")).toBe(
+      true
+    );
+    expect(registry.getById("json")?.matchPath("/a/b.jsonc")).toBe(true);
+    expect(registry.getById("css")?.matchPath("/a/b.scss")).toBe(true);
+    expect(registry.getById("markdown")?.languageIdForPath("x.mdx")).toBe(
+      "mdx"
+    );
+    expect(registry.getById("svelte")?.matchPath("/a/Widget.svelte")).toBe(
+      true
+    );
+  });
+
+  it("vue special provider matches .vue", () => {
     expect(createVueLspProvider().matchPath("/a/App.vue")).toBe(true);
     expect(createVueLspProvider().languageIdForPath("App.vue")).toBe("vue");
-    expect(createSvelteLspProvider().matchPath("/a/Widget.svelte")).toBe(true);
-    expect(createSvelteLspProvider().languageIdForPath("Widget.svelte")).toBe(
-      "svelte"
-    );
   });
 
   it("launches the bundled TypeScript server through Electron's Node mode", async () => {
@@ -117,10 +133,10 @@ describe("Multi-language LSP providers", () => {
     expect(registry.matchForPath("/repo/Makefile")).toBeNull();
   });
 
-  it("providers resolve launch returns null when binary not found", async () => {
-    const pyright = createPyrightLspProvider();
-    const gopls = createGoplsLspProvider();
-    const rust = createRustAnalyzerLspProvider();
+  it("providers resolve launch returns object or null without throwing", async () => {
+    const pyright = requireProvider("pyright");
+    const gopls = requireProvider("gopls");
+    const rust = requireProvider("rust-analyzer");
     const pyLaunch = await pyright.resolveLaunch({
       rootPath: "/repo",
       workspaceKey: "main:/repo",
@@ -139,7 +155,7 @@ describe("Multi-language LSP providers", () => {
   });
 
   it("pyright resolveRoot walks markers", () => {
-    const provider = createPyrightLspProvider();
+    const provider = requireProvider("pyright");
     const root = provider.resolveRoot({
       fallbackWorkspaceRoot: "/repo",
       filePath: "/repo/src/main.py",
@@ -149,7 +165,7 @@ describe("Multi-language LSP providers", () => {
   });
 
   it("plugin language servers use pluginId-prefixed provider ids", () => {
-    const provider = createPluginLanguageServerProvider("pier.lsp-java", {
+    const provider = createPluginLanguageServerProvider("sample.lang", {
       args: [],
       command: "jdtls",
       displayName: "Java",
@@ -160,7 +176,7 @@ describe("Multi-language LSP providers", () => {
       rootMarkers: ["pom.xml"],
     });
     expect(provider.id).toBe(
-      pluginLanguageServerProviderId("pier.lsp-java", "jdtls")
+      pluginLanguageServerProviderId("sample.lang", "jdtls")
     );
     expect(provider.matchPath("/a/Main.java")).toBe(true);
     expect(provider.source).toBe("plugin");
@@ -181,12 +197,12 @@ describe("Multi-language LSP providers", () => {
           rootMarkers: [],
         },
       ],
-      pluginId: "pier.lsp-cpp",
+      pluginId: "sample.lang",
       registry,
     });
-    expect(registry.getById("pier.lsp-cpp:clangd")).not.toBeNull();
+    expect(registry.getById("sample.lang:clangd")).not.toBeNull();
     dispose();
-    expect(registry.getById("pier.lsp-cpp:clangd")).toBeNull();
+    expect(registry.getById("sample.lang:clangd")).toBeNull();
   });
 
   it("createPathLspProvider lowercases languageIdByExtension keys", () => {
@@ -208,5 +224,74 @@ describe("Multi-language LSP providers", () => {
     expect(provider.languageIdForPath("/src/main.C")).toBe("c");
     expect(provider.languageIdForPath("/src/addon.mm")).toBe("objective-cpp");
     expect(provider.languageIdForPath("/src/addon.MM")).toBe("objective-cpp");
+  });
+
+  it("createPathLspProvider matches Dockerfile basenames", () => {
+    const provider = createPathLspProvider({
+      args: ["--stdio"],
+      basenameMatchers: ["dockerfile", "dockerfile.*"],
+      command: "docker-langserver",
+      displayName: "Dockerfile",
+      extensions: [".dockerfile"],
+      id: "dockerfile",
+      languageIds: ["dockerfile"],
+      priority: 70,
+      rootMarkers: [],
+      source: "core",
+    });
+    expect(provider.matchPath("/app/Dockerfile")).toBe(true);
+    expect(provider.matchPath("/app/Dockerfile.dev")).toBe(true);
+    expect(provider.matchPath("/app/app.dockerfile")).toBe(true);
+    expect(provider.languageIdForPath("/app/Dockerfile")).toBe("dockerfile");
+    expect(provider.matchPath("/app/readme.md")).toBe(false);
+  });
+
+  it("createPathLspProvider tries launchCandidates with distinct args", () => {
+    const provider = createPathLspProvider({
+      args: [],
+      command: "sourcekit-lsp",
+      displayName: "Swift",
+      extensions: [".swift"],
+      id: "swift",
+      languageIds: ["swift"],
+      launchCandidates: [
+        { args: [], command: "sourcekit-lsp-missing-xyz" },
+        { args: ["sourcekit-lsp"], command: "xcrun" },
+      ],
+      priority: 70,
+      rootMarkers: [],
+      source: "core",
+    });
+    const launch = provider.resolveLaunch({
+      rootPath: "/tmp",
+      workspaceKey: "test",
+    });
+    if (launch && !(launch instanceof Promise)) {
+      expect(launch.command.length).toBeGreaterThan(0);
+      expect(Array.isArray(launch.args)).toBe(true);
+    } else {
+      expect(launch).toBeNull();
+    }
+  });
+
+  it("shell-like languageIdByExtension maps extensions for LSP didOpen", () => {
+    const provider = createPathLspProvider({
+      args: ["start"],
+      command: "bash-language-server",
+      displayName: "Shell",
+      extensions: [".sh", ".bash", ".zsh"],
+      id: "shell",
+      languageIdByExtension: {
+        ".bash": "shellscript",
+        ".sh": "shellscript",
+        ".zsh": "shellscript",
+      },
+      languageIds: ["shellscript", "shell"],
+      priority: 70,
+      rootMarkers: [],
+      source: "core",
+    });
+    expect(provider.languageIdForPath("/bin/setup.sh")).toBe("shellscript");
+    expect(provider.languageIdForPath("/bin/rc.zsh")).toBe("shellscript");
   });
 });

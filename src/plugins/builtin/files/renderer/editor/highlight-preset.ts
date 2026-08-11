@@ -16,10 +16,15 @@ import { yaml } from "@codemirror/lang-yaml";
 import { StreamLanguage } from "@codemirror/language";
 import {
   c as clikeC,
+  dart as clikeDart,
+  scala as clikeScala,
   csharp,
   java,
   kotlin,
 } from "@codemirror/legacy-modes/mode/clike";
+import { dockerFile } from "@codemirror/legacy-modes/mode/dockerfile";
+import { lua } from "@codemirror/legacy-modes/mode/lua";
+import { r as rMode } from "@codemirror/legacy-modes/mode/r";
 import { ruby } from "@codemirror/legacy-modes/mode/ruby";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { standardSQL } from "@codemirror/legacy-modes/mode/sql";
@@ -84,6 +89,22 @@ export function cmExtensionForHighlightPreset(
       return vue({ base: html() });
     case "svelte":
       return svelte();
+    case "php":
+      // No dedicated PHP stream mode in legacy-modes — approximate with C-like.
+      return StreamLanguage.define(clikeC);
+    case "dart":
+      return StreamLanguage.define(clikeDart);
+    case "lua":
+      return StreamLanguage.define(lua);
+    case "dockerfile":
+      return StreamLanguage.define(dockerFile);
+    case "r":
+      return StreamLanguage.define(rMode);
+    case "scala":
+      return StreamLanguage.define(clikeScala);
+    case "elixir":
+      // No dedicated Elixir mode — approximate with Ruby.
+      return StreamLanguage.define(ruby);
     default: {
       const _exhaustive: never = preset;
       return _exhaustive;

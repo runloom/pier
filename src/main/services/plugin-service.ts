@@ -11,7 +11,6 @@ import type {
   PluginRegistryListResult,
   PluginRegistryState,
 } from "@shared/contracts/plugin.ts";
-import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import {
   readPluginState,
   setPluginEnabledState,
@@ -24,21 +23,14 @@ import {
   findWorkbenchWidgetIdConflict,
 } from "./plugin-contribution-conflicts.ts";
 import { loadManifestLocaleFiles } from "./plugin-localization.ts";
+import {
+  parsePluginManifest,
+  readLocalPluginManifest,
+} from "./plugin-manifest-parse.ts";
+import { PluginServiceError } from "./plugin-service-error.ts";
 
-export type PluginServiceErrorCode =
-  | "invalid_manifest"
-  | "not_found"
-  | "unsupported";
-
-export class PluginServiceError extends Error {
-  readonly code: PluginServiceErrorCode;
-
-  constructor(code: PluginServiceErrorCode, message: string) {
-    super(message);
-    this.name = "PluginServiceError";
-    this.code = code;
-  }
-}
+export type { PluginServiceErrorCode } from "./plugin-service-error.ts";
+export { PluginServiceError } from "./plugin-service-error.ts";
 
 export type PluginDiscoverySource =
   | {
@@ -166,7 +158,12 @@ function diagnosticSource(
 ): PluginRegistryDiagnosticSource {
   switch (source.kind) {
     case "builtin":
-      return { kind: "builtin" };
+      return {
+        kind: "builtin",
+        ...(typeof source.baseDir === "string" && source.baseDir.length > 0
+          ? { path: source.baseDir }
+          : {}),
+      };
     case "local":
       return { kind: "local", path: source.path };
     case "git":
@@ -201,14 +198,6 @@ function diagnosticFromError(
   };
 }
 
-function parseManifest(raw: unknown): PluginManifest {
-  const parsed = pluginManifestSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new PluginServiceError("invalid_manifest", "invalid plugin manifest");
-  }
-  return parsed.data;
-}
-
 function localeBaseDir(source: PluginDiscoverySource): string | null {
   switch (source.kind) {
     case "builtin":
@@ -225,29 +214,15 @@ function localeBaseDir(source: PluginDiscoverySource): string | null {
   }
 }
 
-async function readLocalManifest(
-  path: string,
-  readTextFile: (path: string) => Promise<string>
-): Promise<PluginManifest> {
-  try {
-    return parseManifest(JSON.parse(await readTextFile(path)));
-  } catch (err) {
-    if (err instanceof PluginServiceError) {
-      throw err;
-    }
-    throw new PluginServiceError("invalid_manifest", "invalid plugin manifest");
-  }
-}
-
 async function readSourceManifest(
   source: PluginDiscoverySource,
   readTextFile: (path: string) => Promise<string>
 ): Promise<PluginManifest> {
   switch (source.kind) {
     case "builtin":
-      return parseManifest(source.manifest);
+      return parsePluginManifest(source.manifest);
     case "local":
-      return await readLocalManifest(source.path, readTextFile);
+      return await readLocalPluginManifest(source.path, readTextFile);
     case "git":
     case "registry":
       throw new PluginServiceError(

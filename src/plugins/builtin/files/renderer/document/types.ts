@@ -15,16 +15,23 @@ export type BuiltinFilesDocumentLanguage =
   | "cpp"
   | "csharp"
   | "css"
+  | "dart"
+  | "dockerfile"
+  | "elixir"
   | "go"
   | "html"
   | "java"
   | "javascript"
   | "json"
   | "kotlin"
+  | "lua"
   | "markdown"
+  | "php"
   | "python"
+  | "r"
   | "ruby"
   | "rust"
+  | "scala"
   | "shell"
   | "sql"
   | "svelte"
@@ -35,10 +42,11 @@ export type BuiltinFilesDocumentLanguage =
   | "typescript"
   | "vue"
   | "xml"
-  | "yaml";
+  | "yaml"
+  | "zig";
 
 /**
- * Document language id: L0 builtins or dynamic plugin/L1 mode ids (e.g. zig).
+ * Document language id: L0 builtins or dynamic plugin/L1 mode ids.
  */
 export type FilesDocumentLanguage =
   | BuiltinFilesDocumentLanguage

@@ -2,6 +2,7 @@ import { Card, CardContent } from "@pier/ui/card.tsx";
 import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { LspToolsStatusList } from "@/pages/settings/components/lsp-tools-status-list.tsx";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
@@ -126,9 +127,8 @@ function LspIdleReleaseRow({
 }
 
 /**
- * Host language-service policy only (enable + resource limits).
- * Language coverage is plugins + editor status chip — not a settings inventory
- * or user-authored server form.
+ * Host language-service policy + read-only local tool probe.
+ * Language coverage is L0 (Files + PATH matrix), not installable language packs.
  */
 export function LspSettingsCard() {
   const t = useT();
@@ -163,7 +163,7 @@ export function LspSettingsCard() {
     <Card>
       <CardContent>
         <FieldSet>
-          <div className="space-y-1">
+          <div className="flex flex-col gap-1">
             <p className="font-medium text-sm">
               {t("settings.row.lspHostSectionTitle")}
             </p>
@@ -191,7 +191,19 @@ export function LspSettingsCard() {
             }}
           />
           <FieldSeparator />
-          <div className="space-y-1">
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
+              <p className="font-medium text-sm">
+                {t("settings.row.lspToolsTitle")}
+              </p>
+              <p className="text-muted-foreground text-sm">
+                {t("settings.row.lspToolsDesc")}
+              </p>
+            </div>
+            <LspToolsStatusList />
+          </div>
+          <FieldSeparator />
+          <div className="flex flex-col gap-1">
             <p className="font-medium text-sm">
               {t("settings.row.lspAdvancedTitle")}
             </p>

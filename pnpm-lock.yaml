@@ -458,46 +458,6 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
-  packages/plugin-lsp-cpp:
-    dependencies:
-      '@pier/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
-    devDependencies:
-      '@types/node':
-        specifier: 24.13.3
-        version: 24.13.3
-
-  packages/plugin-lsp-csharp:
-    dependencies:
-      '@pier/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
-    devDependencies:
-      '@types/node':
-        specifier: 24.13.3
-        version: 24.13.3
-
-  packages/plugin-lsp-java:
-    dependencies:
-      '@pier/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
-    devDependencies:
-      '@types/node':
-        specifier: 24.13.3
-        version: 24.13.3
-
-  packages/plugin-lsp-zig:
-    dependencies:
-      '@pier/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
-    devDependencies:
-      '@types/node':
-        specifier: 24.13.3
-        version: 24.13.3
-
   packages/plugin-ssh:
     dependencies:
       '@pier/plugin-api':

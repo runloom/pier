@@ -41,6 +41,15 @@ export const EDITOR_HIGHLIGHT_PRESETS = [
   "swift",
   "vue",
   "svelte",
+  /** Approximate (no dedicated grammar): PHP uses clike. */
+  "php",
+  "dart",
+  "lua",
+  "dockerfile",
+  "r",
+  "scala",
+  /** Approximate: Elixir uses ruby stream parser. */
+  "elixir",
 ] as const;
 
 export const editorHighlightPresetSchema = z.enum(EDITOR_HIGHLIGHT_PRESETS);

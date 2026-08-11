@@ -50,6 +50,9 @@ export function catalogRowsFromRegistry(
       id: provider.id,
       source: provider.source ?? "plugin",
       status: resolved ? "available" : "missing",
+      ...(provider.installCommand
+        ? { installCommand: provider.installCommand }
+        : {}),
     });
   }
   return rows;

@@ -19,37 +19,26 @@ const t = (
 
 describe("languageServicePresentation", () => {
   beforeEach(() => {
-    syncLspInstallGuides({
-      plugins: [
-        {
-          manifest: {
-            apiVersion: 1,
-            commands: [],
-            engines: { pier: ">=0.1.0" },
-            id: "pier.lsp-zig",
-            languageServers: [
-              {
-                command: "zls",
-                displayName: "Zig",
-                extensions: [".zig"],
-                id: "zls",
-                installCommand: "brew install zls",
-                languageIds: ["zig"],
-              },
-            ],
-            name: "Zig",
-            panels: [],
-            permissions: ["lsp:provide"],
-            settingsPages: [],
-            source: { kind: "builtin" },
-            terminalStatusItems: [],
-            version: "0.1.0",
-            workbenchWidgets: [],
-          },
-          runtime: { enabled: true, kind: "builtin", updatedAt: 0 },
-        } as never,
-      ],
-    });
+    // Default core catalog = full L0 matrix (scheme A). No language plugins.
+    syncLspInstallGuides({});
+  });
+
+  it("sync with empty input still registers matrix install guides", () => {
+    expect(lspInstallGuideRegistry.get("pyright")?.installCommand).toBe(
+      "npm i -g pyright"
+    );
+    expect(lspInstallGuideRegistry.get("css")?.installCommand).toBe(
+      "npm i -g vscode-langservers-extracted"
+    );
+    expect(lspInstallGuideRegistry.get("clangd")?.installCommand).toBe(
+      "brew install llvm"
+    );
+    expect(lspInstallGuideRegistry.get("zls")?.installCommand).toBe(
+      "brew install zls"
+    );
+    expect(lspInstallGuideRegistry.get("svelte")?.installCommand).toBe(
+      "npm i -g svelte-language-server"
+    );
   });
 
   it("explains missing CSS server with install command", () => {
@@ -134,15 +123,15 @@ describe("languageServicePresentation", () => {
     expect(presentation.title).toContain("Svelte");
   });
 
-  it("reads Zig install command from plugin guide, not Files hardcoding", () => {
-    const guide = lspInstallGuideRegistry.get("pier.lsp-zig:zls");
+  it("reads Zig install command from core matrix guide id zls", () => {
+    const guide = lspInstallGuideRegistry.get("zls");
     expect(guide?.installCommand).toBe("brew install zls");
     expect(guide?.displayName).toBe("Zig");
 
     const presentation = languageServicePresentation(
       {
         reason: "server-unavailable",
-        serverId: "pier.lsp-zig:zls",
+        serverId: "zls",
         state: "error",
       },
       t
@@ -153,10 +142,12 @@ describe("languageServicePresentation", () => {
     expect(presentation.nextStep).toMatch(
       /Install|terminal|restart|终端|重启/i
     );
-    expect(presentation.nextStep).not.toMatch(/custom server|自定义语言服务/i);
+    expect(presentation.nextStep).not.toMatch(
+      /custom server|自定义语言服务|Plugins|插件/i
+    );
   });
 
-  it("points no-provider next step at Plugins only (no custom-server UI)", () => {
+  it("points no-provider next step at PATH tools, not plugins", () => {
     const presentation = languageServicePresentation(
       {
         reason: "no-provider",
@@ -164,9 +155,23 @@ describe("languageServicePresentation", () => {
       },
       t
     );
-    expect(presentation.nextStep).toMatch(/Plugins|插件/i);
+    expect(presentation.nextStep).toMatch(/PATH|language server|语言服务器/i);
     expect(presentation.nextStep).not.toMatch(
-      /custom server|自定义语言服务|Settings → Files|设置 → Files/i
+      /custom server|自定义语言服务|Plugins|插件/i
     );
+  });
+
+  it("server-unavailable without guide still avoids Plugins copy", () => {
+    const presentation = languageServicePresentation(
+      {
+        reason: "server-unavailable",
+        serverId: "unknown-core-server",
+        state: "error",
+      },
+      t
+    );
+    expect(presentation.command).toBeUndefined();
+    expect(presentation.nextStep).toMatch(/PATH|Local tools|本机工具|Files/i);
+    expect(presentation.nextStep).not.toMatch(/Plugins|插件/i);
   });
 });

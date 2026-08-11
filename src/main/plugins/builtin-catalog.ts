@@ -33,8 +33,8 @@ function pluginPackageBaseDir(pluginId: BuiltinPluginFolder): string {
 }
 
 /**
- * Always-on product plugins only. Optional language packs live as official
- * managed packages under packages/plugin-lsp-* (install / uninstall in Plugins).
+ * Always-on product plugins only. Language modes and PATH language servers
+ * are L0 (Files editor + main LSP bootstrap), not separate installable packs.
  */
 export const BUILTIN_PLUGIN_SOURCES = [
   {

@@ -13,6 +13,7 @@ import {
 import type { ManagedPluginOperationLogRecord } from "./operation-log.ts";
 import { computePackageContentHash } from "./package-content-hash.ts";
 import type { ManagedPluginPaths } from "./paths.ts";
+import { isRetiredManagedPluginId } from "./retired-plugins.ts";
 
 /**
  * Individual operation implementations for the managed plugin install service.
@@ -83,6 +84,15 @@ export async function performInstall(
   ctx: OperationsContext,
   id: string
 ): Promise<ManagedPluginOperationResult> {
+  if (isRetiredManagedPluginId(id)) {
+    return {
+      error: {
+        code: "not_found" as const,
+        message: `plugin ${id} has been retired (language support is built into Pier)`,
+      },
+      ok: false as const,
+    };
+  }
   const bundled = ctx.bundledPlugins.find((entry) => entry.id === id);
   if (!bundled) {
     return {

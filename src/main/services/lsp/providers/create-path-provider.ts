@@ -4,10 +4,12 @@ import type {
 } from "@shared/contracts/lsp-provider.ts";
 import {
   launchSpecForResolvedBinary,
-  resolveFirstCommandOnPath,
+  resolveCommandOnPath,
 } from "../resolve-command.ts";
 import {
+  basenameOfPath,
   extensionOfPath,
+  matchBasenameMatchers,
   matchPathExtensions,
   normalizeFsRoot,
   resolveRootByMarkers,
@@ -39,6 +41,27 @@ function languageIdMap(
   return map;
 }
 
+interface LaunchAttempt {
+  args: readonly string[];
+  command: string;
+}
+
+function launchAttemptsForDescriptor(
+  descriptor: LspProviderDescriptor
+): LaunchAttempt[] {
+  if (descriptor.launchCandidates && descriptor.launchCandidates.length > 0) {
+    return descriptor.launchCandidates.map((entry) => ({
+      args: entry.args ?? [],
+      command: entry.command,
+    }));
+  }
+  const candidates = descriptor.commandCandidates?.length
+    ? descriptor.commandCandidates
+    : [descriptor.command];
+  const args = descriptor.args ?? [];
+  return candidates.map((command) => ({ args, command }));
+}
+
 /**
  * Build a PATH-discovered (or absolute-command) LspServerProvider from a
  * serializable descriptor. Shared by L0 config languages, L1 custom, L2 plugins.
@@ -48,10 +71,9 @@ export function createPathLspProvider(
 ): LspServerProvider {
   const extensions = descriptor.extensions.map((ext) => ext.toLowerCase());
   const idByExt = languageIdMap(descriptor);
-  const candidates = descriptor.commandCandidates?.length
-    ? descriptor.commandCandidates
-    : [descriptor.command];
-  const args = descriptor.args ?? [];
+  const basenameMatchers = descriptor.basenameMatchers ?? [];
+  const primaryLanguageId = descriptor.languageIds[0] ?? null;
+  const attempts = launchAttemptsForDescriptor(descriptor);
 
   return {
     displayName: descriptor.displayName,
@@ -68,28 +90,43 @@ export function createPathLspProvider(
     },
     languageIdForPath(path) {
       const ext = extensionOfPath(path);
-      if (!ext) {
-        return null;
+      if (ext && idByExt[ext]) {
+        return idByExt[ext] ?? null;
       }
-      return idByExt[ext] ?? null;
+      if (
+        basenameMatchers.length > 0 &&
+        matchBasenameMatchers(basenameOfPath(path), basenameMatchers)
+      ) {
+        return primaryLanguageId;
+      }
+      return null;
     },
     matchPath(path) {
-      return matchPathExtensions(path, extensions);
+      if (matchPathExtensions(path, extensions)) {
+        return true;
+      }
+      if (basenameMatchers.length === 0) {
+        return false;
+      }
+      return matchBasenameMatchers(basenameOfPath(path), basenameMatchers);
     },
     resolveLaunch({ rootPath }) {
-      const binary = resolveFirstCommandOnPath(candidates);
-      if (!binary) {
-        return null;
+      for (const attempt of attempts) {
+        const binary = resolveCommandOnPath(attempt.command);
+        if (!binary) {
+          continue;
+        }
+        const launch = launchSpecForResolvedBinary(binary, attempt.args);
+        if (!launch) {
+          continue;
+        }
+        return {
+          args: launch.args,
+          command: launch.command,
+          cwd: normalizeFsRoot(rootPath),
+        };
       }
-      const launch = launchSpecForResolvedBinary(binary, args);
-      if (!launch) {
-        return null;
-      }
-      return {
-        args: launch.args,
-        command: launch.command,
-        cwd: normalizeFsRoot(rootPath),
-      };
+      return null;
     },
     resolveRoot(input) {
       return resolveRootByMarkers({

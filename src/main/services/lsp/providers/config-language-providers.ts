@@ -1,3 +1,8 @@
+/**
+ * Non-PATH L0 language servers that need custom launch logic.
+ * Plain PATH languages live in the shared language matrix.
+ */
+
 import type { LspServerProvider } from "@shared/contracts/lsp-provider.ts";
 import { normalizeFsRoot, resolveRootByMarkers } from "../resolve-root.ts";
 import {
@@ -11,102 +16,6 @@ import {
 } from "./typescript-provider.ts";
 
 const PACKAGE_ROOT_MARKERS = ["package.json"] as const;
-const WORKSPACE_ROOT_MARKERS = [
-  "package.json",
-  ".git",
-  "pnpm-workspace.yaml",
-] as const;
-
-export function createJsonLspProvider(): LspServerProvider {
-  return createPathLspProvider({
-    args: ["--stdio"],
-    command: "vscode-json-language-server",
-    displayName: "JSON",
-    extensions: [".json", ".jsonc"],
-    id: "json",
-    installCommand: "npm i -g vscode-langservers-extracted",
-    languageIdByExtension: {
-      ".json": "json",
-      ".jsonc": "jsonc",
-    },
-    languageIds: ["json", "jsonc"],
-    priority: 80,
-    rootMarkers: [...PACKAGE_ROOT_MARKERS],
-    source: "core",
-  });
-}
-
-export function createCssLspProvider(): LspServerProvider {
-  return createPathLspProvider({
-    args: ["--stdio"],
-    command: "vscode-css-language-server",
-    displayName: "CSS / SCSS",
-    extensions: [".css", ".scss"],
-    id: "css",
-    installCommand: "npm i -g vscode-langservers-extracted",
-    languageIdByExtension: {
-      ".css": "css",
-      ".scss": "scss",
-    },
-    languageIds: ["css", "scss"],
-    priority: 80,
-    rootMarkers: [...PACKAGE_ROOT_MARKERS],
-    source: "core",
-  });
-}
-
-export function createHtmlLspProvider(): LspServerProvider {
-  return createPathLspProvider({
-    args: ["--stdio"],
-    command: "vscode-html-language-server",
-    displayName: "HTML",
-    extensions: [".html", ".htm"],
-    id: "html",
-    installCommand: "npm i -g vscode-langservers-extracted",
-    languageIds: ["html"],
-    priority: 80,
-    rootMarkers: [...PACKAGE_ROOT_MARKERS],
-    source: "core",
-  });
-}
-
-export function createYamlLspProvider(): LspServerProvider {
-  return createPathLspProvider({
-    args: ["--stdio"],
-    command: "yaml-language-server",
-    displayName: "YAML",
-    extensions: [".yaml", ".yml"],
-    id: "yaml",
-    installCommand: "npm i -g yaml-language-server",
-    languageIds: ["yaml"],
-    priority: 80,
-    rootMarkers: [...WORKSPACE_ROOT_MARKERS],
-    source: "core",
-  });
-}
-
-/**
- * Marksman: `marksman server` for LSP over stdio.
- * @see https://github.com/artempyanykh/marksman
- */
-export function createMarkdownLspProvider(): LspServerProvider {
-  return createPathLspProvider({
-    args: ["server"],
-    command: "marksman",
-    displayName: "Markdown",
-    extensions: [".md", ".mdx"],
-    id: "markdown",
-    installCommand: "brew install marksman",
-    languageIdByExtension: {
-      ".md": "markdown",
-      ".mdx": "mdx",
-    },
-    languageIds: ["markdown", "mdx"],
-    priority: 80,
-    rootMarkers: [...WORKSPACE_ROOT_MARKERS],
-    source: "core",
-  });
-}
 
 /**
  * Vue language service for go-to-definition / hover in `<script>` and imports.
@@ -182,7 +91,6 @@ export function createVueLspProvider(): LspServerProvider {
         };
       }
 
-      // Fallback: bare Vue LS (no hybrid bridge) + compatible tsdk.
       const launch = pathFallback.resolveLaunch({
         rootPath,
         workspaceKey: "vue-fallback",
@@ -200,37 +108,4 @@ export function createVueLspProvider(): LspServerProvider {
       };
     },
   };
-}
-
-/**
- * Svelte language server (`svelte-language-server`).
- * Binary: `svelteserver --stdio`
- * @see https://github.com/sveltejs/language-tools
- */
-export function createSvelteLspProvider(): LspServerProvider {
-  return createPathLspProvider({
-    args: ["--stdio"],
-    command: "svelteserver",
-    commandCandidates: ["svelteserver", "svelte-language-server"],
-    displayName: "Svelte",
-    extensions: [".svelte"],
-    id: "svelte",
-    installCommand: "npm i -g svelte-language-server",
-    languageIds: ["svelte"],
-    priority: 90,
-    rootMarkers: [...PACKAGE_ROOT_MARKERS],
-    source: "core",
-  });
-}
-
-export function createConfigLanguageLspProviders(): LspServerProvider[] {
-  return [
-    createJsonLspProvider(),
-    createCssLspProvider(),
-    createHtmlLspProvider(),
-    createYamlLspProvider(),
-    createMarkdownLspProvider(),
-    createVueLspProvider(),
-    createSvelteLspProvider(),
-  ];
 }

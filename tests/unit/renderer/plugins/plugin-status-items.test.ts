@@ -6,11 +6,14 @@ import { buildPluginStatusItems } from "@/pages/settings/components/plugin-statu
 const t = ((key: string) => key) as unknown as TFunction;
 
 function registryDiagnostic(
-  partial: Pick<PluginRegistryDiagnostic, "code" | "message">
+  partial: Pick<PluginRegistryDiagnostic, "code" | "message"> & {
+    source?: PluginRegistryDiagnostic["source"];
+  }
 ): PluginRegistryDiagnostic {
   return {
-    ...partial,
-    source: { kind: "local", path: "/tmp/plugin" },
+    code: partial.code,
+    message: partial.message,
+    source: partial.source ?? { kind: "local", path: "/tmp/plugin" },
   };
 }
 
@@ -108,19 +111,24 @@ describe("buildPluginStatusItems", () => {
         id: "plugins-diagnostics",
         tone: "warning",
         title: "settings.plugins.diagnostics.unsupported",
-        description: "needs newer host",
+        description: "/tmp/plugin\nneeds newer host",
       },
     ]);
   });
 
-  it("omits description when the sole diagnostic has no detail", () => {
+  it("surfaces source path and parse detail for invalid_manifest", () => {
     const items = buildPluginStatusItems({
       pageError: null,
       catalogError: null,
       diagnostics: [
         registryDiagnostic({
           code: "invalid_manifest",
-          message: "invalid plugin manifest",
+          message:
+            "invalid plugin manifest (pier.files): configuration.properties.pier.files.editor.defaultLanguage.enumDescriptions: enumDescriptions must have the same length as enum",
+          source: {
+            kind: "builtin",
+            path: "/app/src/plugins/builtin/files",
+          },
         }),
       ],
       runtimeDiagnostics: [],
@@ -133,6 +141,8 @@ describe("buildPluginStatusItems", () => {
         id: "plugins-diagnostics",
         tone: "warning",
         title: "settings.plugins.diagnostics.invalidManifest",
+        description:
+          "/app/src/plugins/builtin/files\ninvalid plugin manifest (pier.files): configuration.properties.pier.files.editor.defaultLanguage.enumDescriptions: enumDescriptions must have the same length as enum",
       },
     ]);
   });
@@ -144,7 +154,8 @@ describe("buildPluginStatusItems", () => {
       diagnostics: [
         registryDiagnostic({
           code: "invalid_manifest",
-          message: "invalid plugin manifest",
+          message: "invalid plugin manifest (pier.files): id: too small",
+          source: { kind: "builtin", path: "/app/files" },
         }),
         registryDiagnostic({
           code: "unsupported",
@@ -164,9 +175,9 @@ describe("buildPluginStatusItems", () => {
       tone: "warning",
       title: "settings.plugins.diagnostics.summaryTitle",
       description: [
-        "settings.plugins.diagnostics.invalidManifest",
-        "settings.plugins.diagnostics.unsupported: needs newer host",
-        "settings.plugins.diagnostics.runtime: renderer load timed out",
+        "settings.plugins.diagnostics.invalidManifest: /app/files\ninvalid plugin manifest (pier.files): id: too small",
+        "settings.plugins.diagnostics.unsupported: /tmp/plugin\nneeds newer host",
+        "settings.plugins.diagnostics.runtime: pier.external\nrenderer load timed out",
       ].join("\n"),
     });
   });
@@ -216,8 +227,8 @@ describe("buildPluginStatusItems", () => {
     expect(items[1]?.title).toBe("settings.plugins.diagnostics.summaryTitle");
     expect(items[1]?.description).toBe(
       [
-        "settings.plugins.diagnostics.unsupported: needs newer host",
-        "settings.plugins.diagnostics.runtime: renderer load timed out",
+        "settings.plugins.diagnostics.unsupported: /tmp/plugin\nneeds newer host",
+        "settings.plugins.diagnostics.runtime: pier.external\nrenderer load timed out",
       ].join("\n")
     );
   });

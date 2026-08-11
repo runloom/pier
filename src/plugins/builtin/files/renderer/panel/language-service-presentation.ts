@@ -173,8 +173,8 @@ export function languageServicePresentation(
         ),
         label: t("filePanel.languageService.state.unsupported", "Unsupported"),
         nextStep: t(
-          "filePanel.languageService.nextStep.installLanguagePlugin",
-          "Install or enable an official language pack under Settings → Plugins."
+          "filePanel.languageService.nextStep.installLanguageTool",
+          "Install a language server for this file type on your machine (PATH), or open another file type Pier supports."
         ),
         title: t(
           "filePanel.languageService.title.unsupported.noProvider",
@@ -337,7 +337,7 @@ function errorPresentation(
           )
         : t(
             "filePanel.languageService.nextStep.installOfficialTools",
-            "Install the language tools for this language (see the language plugin description under Settings → Plugins), then restart Pier."
+            "Install the language server for this file type on your PATH (see Settings → Files → Local tools), then restart Pier."
           ),
       title: t(
         "filePanel.languageService.title.error.serverUnavailable",

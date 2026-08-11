@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { managedPluginPackageManifestSchema } from "@shared/contracts/plugin/managed.ts";
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
@@ -7,8 +5,8 @@ import { describe, expect, it } from "vitest";
 const base = {
   apiVersion: 1 as const,
   engines: { pier: ">=0.1.0" },
-  id: "pier.lsp-java",
-  name: "Java Language Service",
+  id: "sample.language-plugin",
+  name: "Sample Language Plugin",
   source: { kind: "builtin" as const },
   version: "0.1.0",
 };
@@ -70,24 +68,40 @@ describe("plugin languageServers contribution", () => {
 });
 
 describe("plugin languageModes contribution", () => {
-  it("parses managed pier.lsp-zig package modes + servers pack", () => {
-    const raw = JSON.parse(
-      readFileSync(
-        join(process.cwd(), "packages/plugin-lsp-zig/plugin.json"),
-        "utf8"
-      )
-    ) as unknown;
-    const parsed = managedPluginPackageManifestSchema.safeParse(raw);
+  it("accepts managed package modes + servers (optional plugin contribution)", () => {
+    const parsed = managedPluginPackageManifestSchema.safeParse({
+      apiVersion: 1,
+      engines: { pier: ">=0.1.0 <0.2.0" },
+      id: "sample.language-plugin",
+      languageModes: [
+        {
+          displayName: "Zig",
+          extensions: [".zig"],
+          highlight: "clike",
+          id: "zig",
+          languageId: "zig",
+        },
+      ],
+      languageServers: [
+        {
+          command: "zls",
+          displayName: "Zig",
+          extensions: [".zig"],
+          id: "zls",
+          languageIds: ["zig"],
+        },
+      ],
+      main: "dist/main.js",
+      name: "Sample Language Plugin",
+      permissions: ["lsp:provide", "languageMode:provide"],
+      renderer: "dist/renderer.js",
+      version: "1.0.0",
+    });
     expect(parsed.success).toBe(true);
-    if (!parsed.success) {
-      return;
+    if (parsed.success) {
+      expect(parsed.data.languageModes ?? []).toHaveLength(1);
+      expect(parsed.data.languageServers ?? []).toHaveLength(1);
     }
-    expect(parsed.data.id).toBe("pier.lsp-zig");
-    expect(parsed.data.languageModes ?? []).toHaveLength(1);
-    expect(parsed.data.languageServers ?? []).toHaveLength(1);
-    expect(parsed.data.permissions).toEqual(
-      expect.arrayContaining(["lsp:provide", "languageMode:provide"])
-    );
   });
 
   it("accepts languageModes when languageMode:provide is granted", () => {

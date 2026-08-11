@@ -50,6 +50,39 @@ export function extensionOfPath(path: string): string {
   return name.slice(dot).toLowerCase();
 }
 
+/** File basename only (lowercase, no directory). */
+export function basenameOfPath(path: string): string {
+  const base = path.replace(/\\/g, "/");
+  const slash = base.lastIndexOf("/");
+  const name = slash >= 0 ? base.slice(slash + 1) : base;
+  return name.toLowerCase();
+}
+
+/**
+ * Match basename against exact names or a single trailing `.*` form
+ * (`dockerfile.*` → `Dockerfile` or `Dockerfile.dev`).
+ */
+export function matchBasenameMatchers(
+  basename: string,
+  matchers: readonly string[]
+): boolean {
+  const name = basename.toLowerCase();
+  for (const raw of matchers) {
+    const matcher = raw.toLowerCase();
+    if (matcher.endsWith(".*")) {
+      const stem = matcher.slice(0, -2);
+      if (name === stem || name.startsWith(`${stem}.`)) {
+        return true;
+      }
+      continue;
+    }
+    if (name === matcher) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function matchPathExtensions(
   path: string,
   extensions: readonly string[]

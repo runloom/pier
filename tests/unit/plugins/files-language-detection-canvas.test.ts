@@ -35,6 +35,25 @@ describe("languageForPath objective-c", () => {
   });
 });
 
+describe("languageForPath P0–P2 extensions", () => {
+  it("maps new language extensions and Dockerfile basenames", () => {
+    expect(languageForPath("src/main.php")).toBe("php");
+    expect(languageForPath("lib/app.dart")).toBe("dart");
+    expect(languageForPath("script.lua")).toBe("lua");
+    expect(languageForPath("analysis.R")).toBe("r");
+    expect(languageForPath("Main.scala")).toBe("scala");
+    expect(languageForPath("lib/mix.ex")).toBe("elixir");
+    expect(languageForPath("lib/mix.exs")).toBe("elixir");
+    expect(languageForPath("Dockerfile")).toBe("dockerfile");
+    expect(languageForPath("Dockerfile.dev")).toBe("dockerfile");
+    expect(languageForPath("app.dockerfile")).toBe("dockerfile");
+    expect(languageForPath("src/main.zig")).toBe("zig");
+    expect(languageForPath("build.zig.zon")).toBe("zig");
+    expect(languageForPath("pkg.gemspec")).toBe("ruby");
+    expect(languageForPath("include/header.hh")).toBe("cpp");
+  });
+});
+
 describe("languageForPath canvas", () => {
   it("treats multi-framework entries under .pier/canvases as canvas", () => {
     expect(languageForPath(".pier/canvases/smoke/hello.canvas.tsx")).toBe(

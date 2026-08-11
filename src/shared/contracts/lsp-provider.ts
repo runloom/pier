@@ -66,12 +66,23 @@ const extensionSchema = z
 /**
  * Serializable provider recipe used by L0 factories, L1 custom prefs, and L2 plugins.
  */
+const lspLaunchCandidateSchema = z
+  .object({
+    args: z.array(z.string()).default([]),
+    command: z.string().min(1),
+  })
+  .strict();
+
 export const lspProviderDescriptorSchema = z
   .object({
     args: z.array(z.string()).default([]),
     command: z.string().min(1),
     /** Alternate bare names tried on PATH when `command` is missing. */
     commandCandidates: z.array(z.string().min(1)).optional(),
+    /**
+     * Ordered launch attempts with distinct args (Swift: sourcekit-lsp, xcrun …).
+     */
+    launchCandidates: z.array(lspLaunchCandidateSchema).min(1).optional(),
     displayName: z.string().min(1),
     extensions: z.array(extensionSchema).min(1),
     id: z.string().min(1),
@@ -84,6 +95,11 @@ export const lspProviderDescriptorSchema = z
      */
     languageIdByExtension: z.record(z.string(), z.string().min(1)).optional(),
     languageIds: z.array(z.string().min(1)).min(1),
+    /**
+     * Basename matchers (case-insensitive). Supports exact names or a single
+     * trailing `.*` prefix form (`dockerfile.*` → Dockerfile / Dockerfile.dev).
+     */
+    basenameMatchers: z.array(z.string().min(1)).optional(),
     pluginId: z.string().min(1).optional(),
     priority: z.number().int().min(0).max(100).default(50),
     rootMarkers: z.array(z.string().min(1)).default([]),
@@ -121,6 +137,7 @@ export const lspCatalogStatusRowSchema = z
     displayName: z.string().min(1),
     extensions: z.array(z.string().min(1)),
     id: z.string().min(1),
+    installCommand: z.string().min(1).optional(),
     source: lspProviderSourceSchema,
     status: lspBinaryStatusSchema,
   })

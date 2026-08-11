@@ -148,29 +148,28 @@ describe("PluginsSection", () => {
     const stack = await screen.findByTestId("plugins-status-stack");
     expect(stack).toHaveAttribute("data-slot", "status-stack");
     expect(within(stack).getByText("Plugin failed to load")).toBeVisible();
-    expect(
-      within(stack).getByText("renderer plugin load timed out")
-    ).toBeVisible();
-    expect(within(stack).queryByText("pier.external")).toBeNull();
+    expect(stack).toHaveTextContent("pier.external");
+    expect(stack).toHaveTextContent("renderer plugin load timed out");
     expect(stack.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
 
-  it("groups repeated registry diagnostics into one compact status item", async () => {
+  it("keeps identical invalid_manifest rows distinct when sources differ", async () => {
     usePluginRegistryStore.setState({
       diagnostics: [
         {
           code: "invalid_manifest",
-          message: "invalid plugin manifest",
-          source: { kind: "builtin" },
+          message:
+            "invalid plugin manifest (pier.files): enumDescriptions length",
+          source: { kind: "builtin", path: "/app/files" },
         },
         {
           code: "invalid_manifest",
-          message: "invalid plugin manifest",
-          source: { kind: "devOverride" },
+          message: "invalid plugin manifest (pier.extra): missing source",
+          source: { kind: "devOverride", path: "/tmp/extra" },
         },
         {
           code: "invalid_manifest",
-          message: "invalid plugin manifest",
+          message: "invalid plugin manifest (pier.codex): bad engines",
           source: { kind: "official" },
         },
       ],
@@ -184,13 +183,13 @@ describe("PluginsSection", () => {
     expect(
       stack.querySelectorAll('[data-slot="status-stack-item"]')
     ).toHaveLength(1);
+    expect(stack).toHaveTextContent("Plugin issues");
     expect(stack).toHaveTextContent("Couldn't read plugin info");
-    expect(stack).not.toHaveTextContent("3 reports");
-    expect(within(stack).queryByText("Built-in")).toBeNull();
-    expect(within(stack).queryByText("Dev Override")).toBeNull();
-    expect(within(stack).queryByText("Official")).toBeNull();
-    expect(screen.queryByText("invalid plugin manifest")).toBeNull();
-    expect(screen.getAllByText("Couldn't read plugin info")).toHaveLength(1);
+    expect(stack).toHaveTextContent("pier.files");
+    expect(stack).toHaveTextContent("/app/files");
+    expect(stack).toHaveTextContent("pier.extra");
+    expect(stack).toHaveTextContent("/tmp/extra");
+    expect(stack).toHaveTextContent("pier.codex");
     expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
 
@@ -199,8 +198,9 @@ describe("PluginsSection", () => {
       diagnostics: [
         {
           code: "invalid_manifest",
-          message: "invalid plugin manifest",
-          source: { kind: "builtin" },
+          message:
+            "invalid plugin manifest (pier.files): enumDescriptions length",
+          source: { kind: "builtin", path: "/app/files" },
         },
         {
           code: "unsupported",
@@ -226,6 +226,7 @@ describe("PluginsSection", () => {
     ).toHaveLength(1);
     expect(stack).toHaveTextContent("Plugin issues");
     expect(stack).toHaveTextContent("Couldn't read plugin info");
+    expect(stack).toHaveTextContent("pier.files");
     expect(stack).toHaveTextContent("Plugin is not supported");
     expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
@@ -257,8 +258,9 @@ describe("PluginsSection", () => {
       diagnostics: [
         {
           code: "invalid_manifest",
-          message: "invalid plugin manifest",
-          source: { kind: "builtin" },
+          message:
+            "invalid plugin manifest (pier.files): configuration.properties.x: bad",
+          source: { kind: "builtin", path: "/app/files" },
         },
       ],
       initialized: true,
@@ -273,6 +275,7 @@ describe("PluginsSection", () => {
     ).toHaveLength(1);
     expect(stack).toHaveAttribute("data-shell-tone", "warning");
     expect(within(stack).getByText("Couldn't read plugin info")).toBeVisible();
+    expect(stack).toHaveTextContent("pier.files");
     expect(within(stack).getByText("Local development loading")).toBeVisible();
     expect(
       stack.querySelectorAll('[data-slot="status-stack-item"]').length

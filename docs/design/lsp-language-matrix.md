@@ -1,39 +1,37 @@
-# 语言支持矩阵与三层扩展
+# 语言支持矩阵（方案 A 终态）
 
 **日期**：2026-08-11  
-**状态**：现行（阶段 1 双轨扩展已落地契约与 Files 注册表）  
+**状态**：现行终态 — **L0 双轨 + PATH 工具**；不设可安装语言包  
 **相关**：[`workspace-lsp-policy.md`](./workspace-lsp-policy.md)（会话策略、hover、进程生命周期）
 
 ## 1. 原则
 
 ### 1.1 完整「语言支持」= 展示 + 服务（双轨）
 
-要**覆盖任意语言**（Zig、Julia、Fortran…），不能只扩展语言服务。业界金标准与 Pier 目标一致：
-
 | 轨道 | 职责 | 用户可见 | 可缺省？ |
 |------|------|----------|----------|
-| **句法 / 展示** | 扩展名识别、语言徽章、语法高亮（及后续折叠/大纲等） | 打开文件即有 | 可仅展示无服务 |
-| **语义 / 服务** | 补全、跳转、诊断、hover 等（LSP） | 装 server 或插件后 | 可仅服务无精美高亮（体验差） |
+| **句法 / 展示** | 扩展名识别、语言徽章、语法高亮 | 打开文件即有 | 可仅展示无服务 |
+| **语义 / 服务** | 补全、跳转、诊断、hover（LSP） | 本机 PATH 有 server 时 | 可仅服务无精美高亮 |
 
-**硬结论**：
+**硬结论（方案 A）**：
 
-1. **高亮与 LSP 都必须能被插件（及 L1）扩展**，否则长尾永远「Plain Text + 无跳转」或「有跳转但像纯文本」。
-2. 两轨**正交**：可只贡献展示、只贡献服务、或同插件一次声明两者。
-3. L0 只收**高频默认**；「支持所有语言」靠 **L1 + L2 双轨扩展**，不靠把所有 grammar 打进 dmg。
+1. **官方语言矩阵在 L0 内建**，单一真源：`src/shared/language-matrix/`（派生 Files 扩展名映射、PATH providers、`CORE_LSP_CATALOG`）。
+2. 两轨**正交**：可只高亮、只服务、或两者皆有。
+3. **不**把 jdtls/clangd 等打进 dmg；**不**为每种语言做 `packages/plugin-lsp-*`。
+4. 插件契约 `languageModes` / `languageServers` **保留**给真插件（Agent 等）可选贡献，**官方矩阵不依赖**。
+5. 特殊工厂仅 TypeScript（bundled）与 Vue（hybrid）；其余 PATH 走矩阵。
 
-### 1.2 三层所有权
+### 1.2 所有权
 
-| 层级 | 所有者 | 展示（高亮 / 身份） | 服务（LSP） |
-|------|--------|---------------------|-------------|
-| **L0 核心默认** | 宿主 + Files 编辑器 | 内置 `FilesDocumentLanguage` / CM 包 | `providers/*` 注册 |
-| **L1 用户自定义** | 偏好 | **目标**：扩展名 + 显示名 + 高亮预设 | `customServers[]`（已有） |
-| **L2 官方插件** | builtin / managed | **目标**：`languageModes`（或等价贡献） | `languageServers`（已有） |
+| 层级 | 所有者 | 展示 | 服务 |
+|------|--------|------|------|
+| **L0** | 宿主 + Files | 矩阵 → detection / CM | 矩阵 → bootstrap PATH + 特殊工厂 |
+| **L1（高级，非主路径）** | 偏好 | 可选自定义 | 可选 customServers |
+| **插件** | 官方 managed | 可选 languageModes | 可选 languageServers |
 
-- 宿主做厚（SessionHost、Policy、Registry、**语言模式注册表**）；语言做尖（默认少而稳）。
-- **不**复制 VS Code 任意第三方扩展市场；插件通道仅 builtin + 官方 managed。
-- spawn 只在 main；renderer / Agent 永不直接起语言服务器。
-- 同文件 LSP 仍 **priority 单 winner**（多 server 并行不在本期）。
-- 同扩展名多展示贡献时：L0 固定映射优先，再按插件 priority / 启用态解析（细则见 §8）。
+- 用户主路径：打开文件 → 高亮；PATH 有工具 → 连 LSP；缺工具 → 芯片 / 设置「本机工具」提示 `installCommand`。
+- spawn 只在 main；Agent 经 LanguageTools 同源，不平行起 server。
+- 同 path 多匹配仍 **priority 单 winner**。
 
 ## 2. L0 默认矩阵
 
@@ -79,21 +77,21 @@ brew install marksman   # 或 GitHub release
 | `.canvas.vue` 等 | `canvas` / Canvas | 按框架后缀选 Vue/Svelte/TSX | 仍按扩展匹配上表 provider |
 | `.svg` | `svg` / SVG | XML（`lang-xml`） | **无**独立 SVG LSP（源码编辑，非位图预览） |
 | `.scss` | 展示 id `css` | CSS | CSS LS，`languageId=scss` |
-| `.cs` | `csharp` / C# | legacy clike csharp | **仅** L2 `pier.lsp-csharp` 启用后 |
+| `.cs` | `csharp` / C# | legacy clike csharp | L0 PATH `csharp-ls` / OmniSharp |
 
-### 2.3 明确不进 L0
+### 2.3 扩展语言（L0 内建声明，工具在本机 PATH）
 
-| 语言 | 原因 | 通道 |
-|------|------|------|
-| Java | jdtls + JDK 体积与版本碎片 | L2 `pier.lsp-java` |
-| C / C++ | clangd / 工具链重 | L2 `pier.lsp-cpp` |
-| C# | OmniSharp / csharp-ls + SDK | L2 `pier.lsp-csharp`（展示层已识别 `.cs`） |
-| SQL / PHP / Ruby / … | 长尾 | L1 custom 或后续官方插件 |
+Java / C/C++ / C# / Swift / Kotlin / Ruby / PHP / Dart / Lua / SQL / Shell / TOML / Dockerfile / R / Scala / Elixir / Zig 等：
+
+- **展示**：Files `language-detection` + CM 高亮（内建）
+- **服务**：main `path-matrix-providers`（由 `PATH_LANGUAGE_MATRIX` 派生）PATH 发现；`installCommand` 仅作芯片提示
+- **不**做成可安装语言包插件；**不**把 jdtls / clangd / OmniSharp 等二进制打进 dmg
 
 ### 2.4 非目标
 
-- 不把 jdtls / clangd / OmniSharp 打进安装包。
+- 不把重型语言服务器打进安装包。
 - 不开放任意第三方上传 LSP 插件。
+- 不为每种语言维护 `packages/plugin-lsp-*` 薄包（已收敛到 L0 表）。
 
 ### 2.5 CSS `@import` 包跳转（已支持）
 
@@ -124,7 +122,7 @@ Pier Files 编辑器对 `.css` / `.scss` 等：
 偏好字段：`preferences.lsp.customServers[]`。
 
 - 设置 → **Files（插件设置）** → 编辑器偏好 + **语言服务（宿主）** 策略、工具链状态、自定义 server（高级）。
-- 设置 → **插件** → 启用官方语言包（Zig / Java / …），主路径。
+- 打开对应文件即可；PATH 上有 server 则连，无则芯片提示本机安装命令。
 - **不**再单独设「语言」宿主分区；工作区只保留工作树路径等壳偏好。
 - 运行时 provider id：`custom:{id}`，priority 默认 50。
 - prefs 变更时 `syncCustomLanguageServers` 差量替换注册。
@@ -217,27 +215,39 @@ Pier Files 编辑器对 `.css` / `.scss` 等：
 
 ### 5.3 用户主路径：启用语言插件（不是填表）
 
-**产品默认**：用户只需 **设置 → 插件 → 启用「Zig 语言」等**。插件内自带 `languageModes` + `languageServers`。
+**产品默认（方案 A）**：语言矩阵在 **Files 编辑器 + main L0 providers** 内建，**不**再做成可安装语言包。
 
 | 用户动作 | 得到 |
 |----------|------|
-| 启用插件 | 扩展名识别、徽章、语法高亮（预设） |
-| 本机 PATH 有对应 server（如 zls） | 补全 / 跳转 / 诊断 |
-| PATH 无 server | 仍有高亮；芯片展示插件声明的 `installCommand`（如 `brew install zls`） |
+| 打开已知扩展名文件 | 徽章 + 语法高亮（L0） |
+| 本机 PATH 有对应 server（如 zls / clangd） | 补全 / 跳转 / 诊断 |
+| PATH 无 server | 仍有高亮；状态芯片展示 L0 声明的 `installCommand` |
 
-**安装提示归属**：`languageServers[].installCommand` 由**语言插件 manifest** 声明；Files 只聚合进 `lspInstallGuideRegistry` 展示，**禁止**在 Files 内写死各语言安装命令。
-**L1 自定义语言服务** 仅逃生舱（未知语言、企业内私服），**不要**作为 Zig/Java 等官方语言的正常路径——用户不知道扩展名、languageId、高亮预设怎么填。
+**安装提示归属**：`CORE_LSP_CATALOG` / provider 的 `installCommand`（宿主 core）；可选插件仍可贡献 `languageServers` / `languageModes`（契约保留，官方矩阵不依赖）。
+**L1 自定义语言服务** 仅逃生舱（未知语言、企业内私服），不是官方语言主路径。
 
-### 5.4 首批官方语言包（managed，可安装 / 卸载）
+### 5.4 扩展语言落点（L0 表，非插件包）
 
-| 插件 id | 语言 | 二进制 | 用户动作 | 展示 + 服务 |
-|---------|------|--------|----------|-------------|
-| `pier.lsp-java` | Java | jdtls | 设置 → 插件 → 安装 | `languageModes` + `languageServers` |
-| `pier.lsp-cpp` | C / C++ | clangd | 同上 | 同上 |
-| `pier.lsp-csharp` | C# | csharp-ls / OmniSharp | 同上 | 同上 |
-| `pier.lsp-zig` | Zig | zls | 同上 | 同上（长尾示范） |
+| 区域 | 落点 |
+|------|------|
+| 扩展名 / 徽章 / 高亮 | Files `language-detection` / `cm-language` / `highlight-preset` |
+| PATH LSP | `path-matrix-providers.ts` + `bootstrap-providers` + `CORE_LSP_CATALOG`（真源：`src/shared/language-matrix/`） |
+| 设置 UI 工具链列表 | core catalog（探测可用性） |
 
-落点：`packages/plugin-lsp-{java,cpp,csharp,zig}/`（官方 managed 包，与 `pier.codex` 同管线）。均为 adapter + PATH；不附带工具链。安装并启用后宿主按 manifest 注册 modes（renderer 注册表）与 servers（main Registry）。
+覆盖：Java、C/C++/ObjC、C#、Swift、Kotlin、Ruby、PHP、Dart、Lua、SQL、Shell、TOML、Dockerfile、R、Scala、Elixir、Zig 等（详见 §2.3）。
+
+### 5.5 金标准验收（L0 矩阵）
+
+| 门禁 | 要求 |
+|------|------|
+| 双轨 | 展示轨（Files）与服务轨（PATH provider）齐全；可仅高亮、可仅服务 |
+| 启动 | 支持 `launchCandidates`（Swift / Ruby / Elixir 等多二进制） |
+| 匹配 | Dockerfile `basenameMatchers`；扩展名大小写规范化 |
+| 高亮 | 无专用 grammar 时允许近似（php/elixir/zig→clike） |
+| 体积 | **不**把 jdtls/clangd/sourcekit/metals 打进 dmg |
+| 反模式 | **禁止**再为单语言加 `packages/plugin-lsp-*` 薄包 |
+
+**非金标准（明确不做）**：开放第三方 LSP 市场；设置页手填自定义 server 作官方语言主路径。
 
 ## 6. Priority 约定（LSP）
 

@@ -2,7 +2,7 @@
 export const settingsLspRow = {
   lspHostSectionTitle: "Language services (host)",
   lspHostSectionDesc:
-    "Whether Pier starts language-server processes. Optional languages (Zig, Java, C/C++, C#, …) are installable language packs under Plugins. If a tool is missing, open a matching file — the editor status chip shows the install command. The “Editor language features” toggle above only controls whether the Files editor uses these services.",
+    "Whether Pier starts language-server processes. Language recognition and highlighting are built in; servers run from tools on your PATH. If a tool is missing, open a matching file — the editor status chip shows the install command. “Editor language features” above only controls whether the Files editor uses these services.",
   lspEnabled: "Run language servers",
   lspEnabledDesc:
     "When off, no completions or diagnostics processes start for any project.",
@@ -21,4 +21,13 @@ export const settingsLspRow = {
     "Agent worktrees are off by default to save resources",
   lspAdvancedTitle: "Resources and limits",
   lspAdvancedDesc: "Defaults are fine for most setups.",
+  lspToolsTitle: "Local tools",
+  lspToolsDesc:
+    "Read-only check of language servers on this machine. Install missing tools yourself (PATH); Pier does not download them.",
+  lspToolsLoading: "Checking local tools…",
+  lspToolsEmpty: "Could not load tool status.",
+  lspToolsStatusBundled: "Built-in",
+  lspToolsStatusAvailable: "On PATH",
+  lspToolsStatusMissing: "Not found",
+  lspToolsInstallHint: "Install: {{command}}",
 } as const;

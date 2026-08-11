@@ -58,30 +58,6 @@ extraResources:
       - '*.tgz'
       - '*.tgz.sha256'
       - 'plugin.json'
-  - from: packages/plugin-lsp-zig/dist-pkg
-    to: plugin-packages/pier.lsp-zig
-    filter:
-      - '*.tgz'
-      - '*.tgz.sha256'
-      - 'plugin.json'
-  - from: packages/plugin-lsp-java/dist-pkg
-    to: plugin-packages/pier.lsp-java
-    filter:
-      - '*.tgz'
-      - '*.tgz.sha256'
-      - 'plugin.json'
-  - from: packages/plugin-lsp-cpp/dist-pkg
-    to: plugin-packages/pier.lsp-cpp
-    filter:
-      - '*.tgz'
-      - '*.tgz.sha256'
-      - 'plugin.json'
-  - from: packages/plugin-lsp-csharp/dist-pkg
-    to: plugin-packages/pier.lsp-csharp
-    filter:
-      - '*.tgz'
-      - '*.tgz.sha256'
-      - 'plugin.json'
 
 asar: true
 asarUnpack:

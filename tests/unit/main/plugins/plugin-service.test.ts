@@ -685,16 +685,17 @@ describe("createPluginService", () => {
       state: emptyState,
     });
 
-    await expect(service.list()).resolves.toMatchObject({
-      diagnostics: [
-        {
-          code: "invalid_manifest",
-          message: "invalid plugin manifest",
-          source: { kind: "local", path: badPath },
-        },
-      ],
-      entries: [{ manifest: { id: "sample.builtin" } }],
+    const listed = await service.list();
+    expect(listed.entries).toMatchObject([
+      { manifest: { id: "sample.builtin" } },
+    ]);
+    expect(listed.diagnostics).toHaveLength(1);
+    expect(listed.diagnostics[0]).toMatchObject({
+      code: "invalid_manifest",
+      source: { kind: "local", path: badPath },
     });
+    expect(listed.diagnostics[0]?.message).toContain("invalid plugin manifest");
+    expect(listed.diagnostics[0]?.message).toMatch(/id:/);
   });
 
   it("git 和 registry source 返回明确 unsupported 诊断", async () => {

@@ -34,7 +34,7 @@ class LspInstallGuideRegistryImpl {
     if (exact) {
       return exact;
     }
-    // Plugin providers: pier.lsp-zig:zls → also try leaf "zls"
+    // Plugin providers use `{pluginId}:{contributionId}`; also try leaf id.
     if (serverId.includes(":")) {
       const leaf = serverId.split(":").at(-1);
       if (leaf) {

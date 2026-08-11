@@ -11,7 +11,7 @@ vi.mock("node:child_process", async (importOriginal) => {
   };
 });
 
-import { createPyrightLspProvider } from "../../../../src/main/services/lsp/providers/pyright-provider.ts";
+import { createBootstrappedLspRegistry } from "../../../../src/main/services/lsp/bootstrap-providers.ts";
 
 afterEach(() => {
   spawnSyncMock.mockReset();
@@ -26,7 +26,9 @@ describe("Pyright LSP provider", () => {
       stdout: "C:\\Users\\me\\bin\\pyright-langserver.cmd\r\n",
     });
 
-    const launch = await createPyrightLspProvider().resolveLaunch({
+    const provider = createBootstrappedLspRegistry().getById("pyright");
+    expect(provider).not.toBeNull();
+    const launch = await provider!.resolveLaunch({
       rootPath: "C:\\repo",
       workspaceKey: "main:C:/repo",
     });

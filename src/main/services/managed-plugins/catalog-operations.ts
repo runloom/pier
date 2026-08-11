@@ -5,6 +5,7 @@ import type {
   ManagedPluginInstallIndexEntry,
 } from "@shared/contracts/plugin/managed.ts";
 import type { OperationsContext } from "./install-operations.ts";
+import { isRetiredManagedPluginId } from "./retired-plugins.ts";
 import { selectNewestVersion } from "./version.ts";
 
 /**
@@ -20,6 +21,10 @@ export async function performListCatalogSnapshot(
   const plugins: ManagedPluginCatalogRow[] = [];
   const seen = new Set<string>();
   for (const [pluginId, entry] of Object.entries(state.plugins)) {
+    // Retired language packs (etc.) must not appear even if index still has them.
+    if (isRetiredManagedPluginId(pluginId)) {
+      continue;
+    }
     seen.add(pluginId);
     const source =
       entry.source.kind === "devOverride" ? "devOverride" : "official";
@@ -83,7 +88,7 @@ export async function performListCatalogSnapshot(
   }
   if (officialIndex) {
     for (const [id, officialEntry] of Object.entries(officialIndex.plugins)) {
-      if (seen.has(id)) {
+      if (seen.has(id) || isRetiredManagedPluginId(id)) {
         continue;
       }
       seen.add(id);
@@ -112,7 +117,7 @@ export async function performListCatalogSnapshot(
   }
   // Bundled but not yet installed — user must click Install.
   for (const bundled of ctx.bundledPlugins) {
-    if (seen.has(bundled.id)) {
+    if (seen.has(bundled.id) || isRetiredManagedPluginId(bundled.id)) {
       continue;
     }
     plugins.push({

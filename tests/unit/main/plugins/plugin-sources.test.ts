@@ -212,4 +212,17 @@ describe("createDefaultPluginSources", () => {
     );
     expect(sources.every((source) => source.kind === "builtin")).toBe(true);
   });
+
+  it("default sources list without invalid_manifest diagnostics", async () => {
+    const service = createPluginService({
+      sources: createDefaultPluginSources,
+      state: emptyState,
+    });
+    const result = await service.list();
+    expect(result.diagnostics).toEqual([]);
+    expect(result.entries.map((entry) => entry.manifest.id).sort()).toEqual([
+      FILES_PLUGIN_ID,
+      GIT_PLUGIN_ID,
+    ]);
+  });
 });

@@ -15,7 +15,8 @@ function pushSnapshot(): void {
     customServers,
     plugins,
   });
-  // Install commands come from language plugins (and core catalog defaults).
+  // Install commands: L0 language matrix (default core catalog) + optional
+  // plugin languageServers contributions.
   syncLspInstallGuides({ plugins });
 }
 

@@ -12,10 +12,15 @@ import { yaml } from "@codemirror/lang-yaml";
 import { StreamLanguage } from "@codemirror/language";
 import {
   c as clikeC,
+  dart as clikeDart,
+  scala as clikeScala,
   csharp,
   java,
   kotlin,
 } from "@codemirror/legacy-modes/mode/clike";
+import { dockerFile } from "@codemirror/legacy-modes/mode/dockerfile";
+import { lua } from "@codemirror/legacy-modes/mode/lua";
+import { r as rMode } from "@codemirror/legacy-modes/mode/r";
 import { ruby } from "@codemirror/legacy-modes/mode/ruby";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { standardSQL } from "@codemirror/legacy-modes/mode/sql";
@@ -85,6 +90,12 @@ export function cmLanguageExtension(
       return StreamLanguage.define(csharp);
     case "css":
       return css();
+    case "dart":
+      return StreamLanguage.define(clikeDart);
+    case "dockerfile":
+      return StreamLanguage.define(dockerFile);
+    case "elixir":
+      return StreamLanguage.define(ruby);
     case "go":
       return go();
     case "html":
@@ -99,14 +110,22 @@ export function cmLanguageExtension(
       return json();
     case "kotlin":
       return StreamLanguage.define(kotlin);
+    case "lua":
+      return StreamLanguage.define(lua);
     case "markdown":
       return pierMarkdownLanguage();
+    case "php":
+      return StreamLanguage.define(clikeC);
     case "python":
       return python();
+    case "r":
+      return StreamLanguage.define(rMode);
     case "ruby":
       return StreamLanguage.define(ruby);
     case "rust":
       return rust();
+    case "scala":
+      return StreamLanguage.define(clikeScala);
     case "shell":
       return StreamLanguage.define(shell);
     case "sql":
@@ -130,6 +149,9 @@ export function cmLanguageExtension(
       return xml();
     case "yaml":
       return yaml();
+    case "zig":
+      // No dedicated Zig grammar; C-like is a reasonable approximate.
+      return StreamLanguage.define(clikeC);
     default: {
       // Plugin / L1 language modes: closed highlight presets only.
       const preset =
@@ -150,16 +172,23 @@ export const LANGUAGE_LABELS: Readonly<
   cpp: "C++",
   csharp: "C#",
   css: "CSS",
+  dart: "Dart",
+  dockerfile: "Dockerfile",
+  elixir: "Elixir",
   go: "Go",
   html: "HTML",
   java: "Java",
   javascript: "JavaScript",
   json: "JSON",
   kotlin: "Kotlin",
+  lua: "Lua",
   markdown: "Markdown",
+  php: "PHP",
   python: "Python",
+  r: "R",
   ruby: "Ruby",
   rust: "Rust",
+  scala: "Scala",
   shell: "Shell",
   sql: "SQL",
   svelte: "Svelte",
@@ -171,6 +200,7 @@ export const LANGUAGE_LABELS: Readonly<
   vue: "Vue",
   xml: "XML",
   yaml: "YAML",
+  zig: "Zig",
 };
 
 /** Badge label for builtin or dynamic (plugin / L1) language ids. */

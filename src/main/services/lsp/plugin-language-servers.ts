@@ -23,6 +23,9 @@ export function descriptorFromPluginContribution(
     ...(contribution.commandCandidates
       ? { commandCandidates: contribution.commandCandidates }
       : {}),
+    ...(contribution.launchCandidates
+      ? { launchCandidates: contribution.launchCandidates }
+      : {}),
     displayName: contribution.displayName,
     extensions: contribution.extensions,
     id: pluginLanguageServerProviderId(pluginId, contribution.id),
@@ -33,6 +36,9 @@ export function descriptorFromPluginContribution(
       ? { languageIdByExtension: contribution.languageIdByExtension }
       : {}),
     languageIds: contribution.languageIds,
+    ...(contribution.basenameMatchers
+      ? { basenameMatchers: contribution.basenameMatchers }
+      : {}),
     pluginId,
     priority: contribution.priority ?? 70,
     rootMarkers: contribution.rootMarkers ?? [],

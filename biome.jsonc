@@ -42,8 +42,6 @@
         "packages/plugin-ssh/vite.config.*.ts",
         "packages/plugin-claude/src/**",
         "packages/plugin-claude/vite.config.*.ts",
-        "packages/plugin-lsp-*/src/**",
-        "packages/plugin-lsp-*/vite.config.*.ts",
         "electron.vite.config.ts",
         "vitest.config.ts",
         "tailwind.config.ts",
