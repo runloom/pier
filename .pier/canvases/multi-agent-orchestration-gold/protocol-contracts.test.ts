@@ -38,6 +38,13 @@ describe("本机运行控制协议闭环（v7）", () => {
     ]);
     expect(commands).not.toContain("invoke");
     expect(commands).not.toContain("self");
+    expect(data.phases.find((p) => p.wave === 3)?.status).toBe("done");
+    expect(data.phases.find((p) => p.wave === 3)?.outcome ?? "").toMatch(
+      /watch/u
+    );
+    expect(data.phases.find((p) => p.wave === 3)?.outcome ?? "").not.toMatch(
+      /watch 仍 planned/u
+    );
   });
 
   it("无独立 activity 命令组；事实流归顶层 snapshot/watch", async () => {
@@ -50,13 +57,14 @@ describe("本机运行控制协议闭环（v7）", () => {
     expect(top?.commands ?? "").toMatch(/watch/u);
   });
 
-  it("W2 产品撤回；W0/W1 done；W3 为持久主交付", async () => {
+  it("W2 产品撤回；W0/W1/W3 done", async () => {
     const data = await readData();
     for (const phase of data.phases) {
       expect(() => parseClosedLoopPhase(phase)).not.toThrow();
     }
     expect(data.phases.find((p) => p.wave === 2)?.status).toBe("cancelled");
     expect(data.phases.find((p) => p.wave === 1)?.status).toBe("done");
+    expect(data.phases.find((p) => p.wave === 3)?.status).toBe("done");
     expect(data.phases.find((p) => p.wave === 3)?.name ?? "").toMatch(/持久/u);
   });
 

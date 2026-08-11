@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import {
   createPierLocalControlServer,
   resolveLocalControlSocketPath,
-} from "@main/adapters/cli/local-control-server.ts";
+} from "@main/adapters/cli/local-control/server.ts";
 import { pierCommandEnvelopeSchema } from "@shared/contracts/commands.ts";
 import { afterEach, describe, expect, it } from "vitest";
 

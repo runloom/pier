@@ -85,6 +85,8 @@ export interface NativeAddon {
    */
   readCursorVisible(panelId: string): number;
   readSelectionText(panelId: string): string | null;
+  /** 当前 viewport 文本（无 scrollback）；surface 缺失时 null。 */
+  readViewportText?(panelId: string): string | null;
   /**
    * 孤儿清理:关掉该 window 下不在 activeIds 集合的 terminal NSView. C 方案
    * reload 零销毁路径上, renderer 重建后报告"我现在还需要这些 panelId",

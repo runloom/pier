@@ -1,4 +1,4 @@
-import { createLocalControlRegistrationOwner } from "@main/adapters/cli/local-control-registration.ts";
+import { createLocalControlRegistrationOwner } from "@main/adapters/cli/local-control/registration.ts";
 import type { RegisteredLocalControl } from "@main/adapters/cli/register-local-control.ts";
 import { describe, expect, it, vi } from "vitest";
 

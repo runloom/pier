@@ -11,9 +11,14 @@ export interface EffectReceipt {
   digest: string;
   effectKey: string;
   effectRevision: number;
+  /** ok=false 时的错误 */
+  error?: { code: string; message: string } | undefined;
+  /** 成功时 true；失败终态也登记以防同 key 双执行 */
+  ok: boolean;
   op: string;
   principalRef: string;
-  responseData: unknown;
+  /** ok=true 时的响应 data */
+  responseData?: unknown;
 }
 
 export interface EffectReceiptStore {

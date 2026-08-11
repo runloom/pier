@@ -1,4 +1,4 @@
-import type { RegisteredLocalControl } from "./register-local-control.ts";
+import type { RegisteredLocalControl } from "../register-local-control.ts";
 
 export interface LocalControlRegistrationOwner {
   close(): Promise<void>;

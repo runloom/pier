@@ -1,89 +1,101 @@
-/**
- * pier.control/v2 会话 — 架构闭环：authorize · receipt · subscribe · hold/cancel · agents
- */
-import type { AgentCallerCredentialMaterial } from "@shared/contracts/local-control/agent-credential.ts";
-import { LOCAL_CONTROL_V2_API_VERSION } from "@shared/contracts/local-control/v2-errors.ts";
 import {
-  type LocalControlV2ClientHello,
-  type LocalControlV2ServerFrame,
-  localControlV2ClientFrameSchema,
-} from "@shared/contracts/local-control/v2-frames.ts";
-import type { AgentCallerCredentialStore } from "../../services/agent-caller/credential-store.ts";
+  LOCAL_CONTROL_API_VERSION,
+  type LocalControlErrorCode,
+} from "@shared/contracts/local-control/errors.ts";
 import {
-  resolveAgentBinding,
-  resolveAgentCredential,
-} from "../../services/agent-caller/credential-store.ts";
+  type LocalControlClientHello,
+  type LocalControlServerFrame,
+  localControlClientFrameSchema,
+} from "@shared/contracts/local-control/frames.ts";
+import type { AgentCallerCredentialStore } from "../../../services/agent-caller/credential-store.ts";
+import type { RuntimeControlService } from "../../../services/runtime-control/service.ts";
 import {
   type AgentsDiscovery,
   createStaticAgentsDiscovery,
 } from "./agents-discovery.ts";
 import {
+  dispatchAgentsRuntimeRequest,
+  isAgentsRuntimeOp,
+} from "./agents-runtime.ts";
+import {
   createDefaultLocalControlAuthorizer,
+  isStrongEffectKey,
   LOCAL_CONTROL_WRITE_OPS,
   type LocalControlAuthorizer,
-} from "./local-control-authorize.ts";
+} from "./authorize.ts";
+import {
+  controlErrorResponse,
+  handleAgentsSelfOp,
+  handleDiscoveryOp,
+  handleTraceOp,
+} from "./discovery.ts";
+import { buildLocalControlFeatures, serverErrorFrame } from "./features.ts";
+import { resolveHelloPrincipal } from "./hello-auth.ts";
 import {
   createEffectReceiptStore,
   digestRequestParams,
   type EffectReceiptStore,
-} from "./local-control-receipts.ts";
+} from "./receipts.ts";
 import {
-  buildLocalControlV2Features,
-  serverErrorFrame,
-} from "./local-control-v2-features.ts";
-import {
-  handleAgentsSelfOp,
-  handleDiscoveryOp,
-  handleTraceOp,
-  v2ErrorResponse,
-} from "./local-control-v2-ops.ts";
-import {
-  handleV2Subscribe,
+  handleControlSubscribe,
   type SubscriptionRecord,
-} from "./local-control-v2-subscribe.ts";
+} from "./subscribe.ts";
 
 export {
-  LOCAL_CONTROL_V2_FEATURE_AGENTS_CATALOG,
-  LOCAL_CONTROL_V2_FEATURE_AGENTS_GET,
-  LOCAL_CONTROL_V2_FEATURE_AGENTS_LIST,
-  LOCAL_CONTROL_V2_FEATURE_AGENTS_SELF,
-  LOCAL_CONTROL_V2_FEATURE_CONTROL_HOLD,
-  LOCAL_CONTROL_V2_FEATURE_CONTROL_TRACE,
-  LOCAL_CONTROL_V2_FEATURE_SUBSCRIBE,
-} from "./local-control-v2-features.ts";
+  LOCAL_CONTROL_FEATURE_AGENTS_CATALOG,
+  LOCAL_CONTROL_FEATURE_AGENTS_FOCUS,
+  LOCAL_CONTROL_FEATURE_AGENTS_GET,
+  LOCAL_CONTROL_FEATURE_AGENTS_INTERRUPT,
+  LOCAL_CONTROL_FEATURE_AGENTS_LIST,
+  LOCAL_CONTROL_FEATURE_AGENTS_SCREEN,
+  LOCAL_CONTROL_FEATURE_AGENTS_SELF,
+  LOCAL_CONTROL_FEATURE_AGENTS_START,
+  LOCAL_CONTROL_FEATURE_AGENTS_TERMINATE,
+  LOCAL_CONTROL_FEATURE_AGENTS_TURN,
+  LOCAL_CONTROL_FEATURE_AGENTS_WAIT,
+  LOCAL_CONTROL_FEATURE_AGENTS_WATCH,
+  LOCAL_CONTROL_FEATURE_CONTROL_HOLD,
+  LOCAL_CONTROL_FEATURE_CONTROL_TRACE,
+  LOCAL_CONTROL_FEATURE_SUBSCRIBE,
+} from "./features.ts";
 
-type InflightMap = Map<string, { ac: AbortController; kind: "hold" }>;
+type InflightMap = Map<
+  string,
+  { ac: AbortController; kind: "hold" | "wait" | "watch" }
+>;
 
-export interface LocalControlV2Session {
+export interface LocalControlSession {
   readonly bootId: string;
   dispose(): void;
   handleLine(line: string): void;
-  readonly principalKind: LocalControlV2ClientHello["clientKind"];
+  readonly principalKind: LocalControlClientHello["clientKind"];
   readonly principalRef?: string | undefined;
 }
 
-export interface CreateLocalControlV2SessionArgs {
+export interface CreateLocalControlSessionArgs {
   authorizer?: LocalControlAuthorizer | undefined;
   bootId: string;
   credentialStore?: AgentCallerCredentialStore | undefined;
   discovery?: AgentsDiscovery | undefined;
-  emit: (frame: LocalControlV2ServerFrame) => void;
+  emit: (frame: LocalControlServerFrame) => void;
   features?: readonly string[] | undefined;
   nowMs?: (() => number) | undefined;
   receipts?: EffectReceiptStore | undefined;
+  /** W3 持久运行控制；缺省则 runtime op 返回 unsupported。 */
+  runtimeControl?: RuntimeControlService | undefined;
 }
 
 export type CreateSessionFromHelloResult =
   | {
       ok: true;
-      session: LocalControlV2Session;
-      helloFrame: LocalControlV2ServerFrame;
+      session: LocalControlSession;
+      helloFrame: LocalControlServerFrame;
     }
-  | { ok: false; errorFrame: LocalControlV2ServerFrame };
+  | { ok: false; errorFrame: LocalControlServerFrame };
 
-export function createLocalControlV2SessionFromHello(
-  hello: LocalControlV2ClientHello,
-  args: CreateLocalControlV2SessionArgs
+export function createLocalControlSessionFromHello(
+  hello: LocalControlClientHello,
+  args: CreateLocalControlSessionArgs
 ): CreateSessionFromHelloResult {
   const nowMs = args.nowMs ?? (() => Date.now());
   const store = args.credentialStore;
@@ -92,94 +104,28 @@ export function createLocalControlV2SessionFromHello(
   const receipts = args.receipts ?? createEffectReceiptStore();
   const { emit } = args;
 
-  let material: AgentCallerCredentialMaterial | null = null;
-  let principalRef: string | undefined;
   let disposed = false;
   const inflight: InflightMap = new Map();
   const subscriptions = new Map<string, SubscriptionRecord>();
 
-  if (
-    hello.clientKind === "external" ||
-    hello.auth.method === "external-grant"
-  ) {
-    return {
-      ok: false,
-      errorFrame: serverErrorFrame(
-        "unsupported",
-        "external principal is not implemented in this build"
-      ),
-    };
+  const principal = resolveHelloPrincipal({
+    hello,
+    bootId: args.bootId,
+    store,
+    nowMs: nowMs(),
+  });
+  if (!principal.ok) {
+    return { ok: false, errorFrame: principal.errorFrame };
   }
+  const { material, principalRef } = principal;
 
-  if (hello.clientKind === "agent") {
-    if (!store) {
-      return {
-        ok: false,
-        errorFrame: serverErrorFrame(
-          "auth_required",
-          "binding store unavailable"
-        ),
-      };
-    }
-    if (hello.auth.method === "agent-binding") {
-      const resolved = resolveAgentBinding({
-        store,
-        bindingId: hello.auth.bindingId,
-        expectedBootId: args.bootId,
-        nowMs: nowMs(),
-      });
-      if (!resolved.ok) {
-        return {
-          ok: false,
-          errorFrame: serverErrorFrame(resolved.code, resolved.message),
-        };
-      }
-      material = resolved.material;
-    } else if (hello.auth.method === "agent-credential") {
-      const resolved = resolveAgentCredential({
-        store,
-        credentialId: hello.auth.credentialId,
-        secret: hello.auth.secret,
-        expectedBootId: args.bootId,
-        nowMs: nowMs(),
-      });
-      if (!resolved.ok) {
-        return {
-          ok: false,
-          errorFrame: serverErrorFrame(resolved.code, resolved.message),
-        };
-      }
-      material = resolved.material;
-    } else {
-      return {
-        ok: false,
-        errorFrame: serverErrorFrame(
-          "auth_failed",
-          "agent clientKind requires agent-binding (or optional agent-credential)"
-        ),
-      };
-    }
-    principalRef = `agent:${material.bootId}:${material.callerRuntimeId}:${material.callerGeneration}:${material.credentialId}`;
-  } else if (hello.clientKind === "cli-human") {
-    if (hello.auth.method !== "none") {
-      return {
-        ok: false,
-        errorFrame: serverErrorFrame(
-          "auth_failed",
-          "cli-human requires auth.method none"
-        ),
-      };
-    }
-    principalRef = "human:peer";
-  }
-
-  const helloFrame: LocalControlV2ServerFrame = {
-    apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+  const helloFrame: LocalControlServerFrame = {
+    apiVersion: LOCAL_CONTROL_API_VERSION,
     type: "server.hello",
     requestId: hello.requestId,
     bootId: args.bootId,
     serverTimeMs: nowMs(),
-    features: buildLocalControlV2Features(
+    features: buildLocalControlFeatures(
       args.features ?? [],
       material,
       hello.clientKind
@@ -187,7 +133,7 @@ export function createLocalControlV2SessionFromHello(
     ...(principalRef ? { principalRef } : {}),
   };
 
-  const emitSafe = (frame: LocalControlV2ServerFrame) => {
+  const emitSafe = (frame: LocalControlServerFrame) => {
     if (!disposed) {
       emit(frame);
     }
@@ -207,7 +153,7 @@ export function createLocalControlV2SessionFromHello(
       effectKey,
     });
 
-  const session: LocalControlV2Session = {
+  const session: LocalControlSession = {
     bootId: args.bootId,
     principalKind: hello.clientKind,
     principalRef,
@@ -230,7 +176,7 @@ export function createLocalControlV2SessionFromHello(
         emitSafe(serverErrorFrame("invalid_command", "invalid JSON frame"));
         return;
       }
-      const parsed = localControlV2ClientFrameSchema.safeParse(raw);
+      const parsed = localControlClientFrameSchema.safeParse(raw);
       if (!parsed.success) {
         const requestId =
           typeof raw === "object" &&
@@ -240,7 +186,7 @@ export function createLocalControlV2SessionFromHello(
             ? (raw as { requestId: string }).requestId
             : "unknown";
         emitSafe(
-          v2ErrorResponse(
+          controlErrorResponse(
             requestId,
             "invalid_command",
             parsed.error.issues[0]?.message ?? "invalid v2 frame"
@@ -251,7 +197,7 @@ export function createLocalControlV2SessionFromHello(
       const frame = parsed.data;
       if (frame.type === "client.hello") {
         emitSafe(
-          v2ErrorResponse(
+          controlErrorResponse(
             frame.requestId,
             "protocol_unsupported",
             "client.hello only allowed as first frame"
@@ -261,7 +207,7 @@ export function createLocalControlV2SessionFromHello(
       }
       if (frame.type === "client.auth-proof") {
         emitSafe(
-          v2ErrorResponse(
+          controlErrorResponse(
             frame.requestId,
             "unsupported",
             "auth-proof is not implemented yet"
@@ -273,7 +219,7 @@ export function createLocalControlV2SessionFromHello(
         const entry = inflight.get(frame.requestId);
         if (!entry) {
           emitSafe(
-            v2ErrorResponse(
+            controlErrorResponse(
               frame.requestId,
               "not_found",
               "no in-flight request to cancel"
@@ -281,10 +227,15 @@ export function createLocalControlV2SessionFromHello(
           );
           return;
         }
+        if (entry.kind === "wait" || entry.kind === "watch") {
+          // 终态由 wait/watch 响应帧返回
+          entry.ac.abort();
+          return;
+        }
         entry.ac.abort();
         inflight.delete(frame.requestId);
         emitSafe({
-          apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+          apiVersion: LOCAL_CONTROL_API_VERSION,
           type: "response",
           requestId: frame.requestId,
           ok: true,
@@ -293,7 +244,7 @@ export function createLocalControlV2SessionFromHello(
         return;
       }
       if (frame.type === "subscribe") {
-        handleV2Subscribe({
+        handleControlSubscribe({
           requestId: frame.requestId,
           stream: frame.stream,
           ...(frame.after === undefined ? {} : { after: frame.after }),
@@ -308,7 +259,7 @@ export function createLocalControlV2SessionFromHello(
       if (frame.type === "unsubscribe") {
         if (!subscriptions.has(frame.subscriptionId)) {
           emitSafe(
-            v2ErrorResponse(
+            controlErrorResponse(
               frame.requestId,
               "not_found",
               "unknown subscriptionId"
@@ -318,7 +269,7 @@ export function createLocalControlV2SessionFromHello(
         }
         subscriptions.delete(frame.subscriptionId);
         emitSafe({
-          apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+          apiVersion: LOCAL_CONTROL_API_VERSION,
           type: "response",
           requestId: frame.requestId,
           ok: true,
@@ -346,7 +297,7 @@ export function createLocalControlV2SessionFromHello(
     // 产品 non-goal：一次性走原生 agent CLI，不经 Pier 封装。
     if (op === "agents.invoke") {
       emitSafe(
-        v2ErrorResponse(
+        controlErrorResponse(
           requestId,
           "unsupported",
           "agents.invoke is not a Pier product path; use the agent native CLI (e.g. codex exec) for one-shot"
@@ -360,7 +311,7 @@ export function createLocalControlV2SessionFromHello(
       expectedBootId !== args.bootId
     ) {
       emitSafe(
-        v2ErrorResponse(
+        controlErrorResponse(
           requestId,
           "boot_changed",
           "expectedBootId does not match current control-plane boot"
@@ -368,18 +319,44 @@ export function createLocalControlV2SessionFromHello(
       );
       return;
     }
+    // 协议边界：写 op effectKey 强度在 session 无条件执行，不可被 authorizer 旁路
+    if (
+      LOCAL_CONTROL_WRITE_OPS.has(op) &&
+      !(effectKey && isStrongEffectKey(effectKey))
+    ) {
+      emitSafe(
+        controlErrorResponse(
+          requestId,
+          "invalid_command",
+          "write op requires effectKey (>=128-bit opaque, base64url/hex, len>=22)"
+        )
+      );
+      return;
+    }
     const auth = authorizeOp(op, params, effectKey);
     if (!auth.ok) {
-      emitSafe(v2ErrorResponse(requestId, auth.code, auth.message));
+      emitSafe(controlErrorResponse(requestId, auth.code, auth.message));
       return;
     }
     if (LOCAL_CONTROL_WRITE_OPS.has(op) && effectKey && principalRef) {
-      const digest = digestRequestParams(params);
+      let digest: string;
+      try {
+        digest = digestRequestParams(params);
+      } catch (error) {
+        emitSafe(
+          controlErrorResponse(
+            requestId,
+            "invalid_command",
+            error instanceof Error ? error.message : "invalid params digest"
+          )
+        );
+        return;
+      }
       const existing = receipts.lookup({ principalRef, op, effectKey });
       if (existing) {
         if (existing.digest !== digest) {
           emitSafe(
-            v2ErrorResponse(
+            controlErrorResponse(
               requestId,
               "idempotency_conflict",
               "effectKey reused with different params"
@@ -387,14 +364,24 @@ export function createLocalControlV2SessionFromHello(
           );
           return;
         }
-        emitSafe({
-          apiVersion: LOCAL_CONTROL_V2_API_VERSION,
-          type: "response",
-          requestId,
-          ok: true,
-          data: existing.responseData,
-          meta: { effectRevision: existing.effectRevision },
-        });
+        if (existing.ok) {
+          emitSafe({
+            apiVersion: LOCAL_CONTROL_API_VERSION,
+            type: "response",
+            requestId,
+            ok: true,
+            data: existing.responseData,
+            meta: { effectRevision: existing.effectRevision },
+          });
+          return;
+        }
+        emitSafe(
+          controlErrorResponse(
+            requestId,
+            (existing.error?.code as LocalControlErrorCode) ?? "internal_error",
+            existing.error?.message ?? "replayed failed effect"
+          )
+        );
         return;
       }
     }
@@ -417,6 +404,22 @@ export function createLocalControlV2SessionFromHello(
       emitSafe(handleDiscoveryOp({ requestId, op, params, discovery }));
       return;
     }
+    if (isAgentsRuntimeOp(op)) {
+      dispatchAgentsRuntimeRequest({
+        requestId,
+        op,
+        params,
+        effectKey,
+        principalRef,
+        bootId: args.bootId,
+        runtimeControl: args.runtimeControl,
+        receipts,
+        inflight,
+        disposed: () => disposed,
+        emit: emitSafe,
+      });
+      return;
+    }
     if (op === "control.trace") {
       emitSafe(
         handleTraceOp({
@@ -433,7 +436,7 @@ export function createLocalControlV2SessionFromHello(
     if (op === "control.hold") {
       if (inflight.has(requestId)) {
         emitSafe(
-          v2ErrorResponse(
+          controlErrorResponse(
             requestId,
             "effect_in_progress",
             "request already in flight"
@@ -454,7 +457,7 @@ export function createLocalControlV2SessionFromHello(
         }
         inflight.delete(requestId);
         emitSafe({
-          apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+          apiVersion: LOCAL_CONTROL_API_VERSION,
           type: "response",
           requestId,
           ok: true,
@@ -465,7 +468,11 @@ export function createLocalControlV2SessionFromHello(
       return;
     }
     emitSafe(
-      v2ErrorResponse(requestId, "unsupported", `op not implemented: ${op}`)
+      controlErrorResponse(
+        requestId,
+        "unsupported",
+        `op not implemented: ${op}`
+      )
     );
   }
 

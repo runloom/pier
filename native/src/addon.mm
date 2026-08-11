@@ -47,6 +47,7 @@ extern "C" {
     bool ghostty_bridge_send_text(const char* panelId, const char* text);
     bool ghostty_bridge_send_key_press(const char* panelId, uint32_t keycode, uint32_t mods, const char* text);
     char* ghostty_bridge_read_selection_text(const char* panelId);
+    char* ghostty_bridge_read_viewport_text(const char* panelId);
     int32_t ghostty_bridge_read_cursor_visible(const char* panelId);
     void ghostty_bridge_close_all(void* nsWindow);
     // 孤儿清理:关该 window 下不在 activeIds 中的 NSView. C 方案 reload 零销毁
@@ -425,6 +426,15 @@ static Napi::Value JsSendKeyPress(const Napi::CallbackInfo& info) {
 static Napi::Value JsReadSelectionText(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
     char* value = ghostty_bridge_read_selection_text(panelId.c_str());
+    if (!value) return info.Env().Null();
+    std::string text(value);
+    ghostty_bridge_free_string(value);
+    return Napi::String::New(info.Env(), text);
+}
+
+static Napi::Value JsReadViewportText(const Napi::CallbackInfo& info) {
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    char* value = ghostty_bridge_read_viewport_text(panelId.c_str());
     if (!value) return info.Env().Null();
     std::string text(value);
     ghostty_bridge_free_string(value);
@@ -1237,6 +1247,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("finishTerminalOutput", Napi::Function::New(env, JsFinishTerminalOutput));
     exports.Set("resetTerminalOutput", Napi::Function::New(env, JsResetTerminalOutput));
     exports.Set("readSelectionText", Napi::Function::New(env, JsReadSelectionText));
+    exports.Set("readViewportText", Napi::Function::New(env, JsReadViewportText));
     exports.Set("readCursorVisible", Napi::Function::New(env, JsReadCursorVisible));
     exports.Set("closeAllTerminals", Napi::Function::New(env, JsCloseAll));
     exports.Set("reconcileTerminals", Napi::Function::New(env, JsReconcile));

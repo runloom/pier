@@ -9,7 +9,7 @@
       "status": "使用手册",
       "version": "v1.1"
     },
-    "bluf": "先启动 Pier，再运行 pier（或 pnpm --silent cli:dev）。新手路径：status → open . → panels list → agents list。脚本一律加 --json。本手册按「开始使用 → 常用任务 → 命令参考 → 智能体 → 疑难」组织；暂未实现的命令会标明，勿写入脚本依赖。 一次性提问请用各 agent 原生 CLI，不提供 pier agents invoke。",
+    "bluf": "先启动 Pier，再运行 pier（或 pnpm --silent cli:dev）。新手路径：status → open . → agents catalog → agents start（持久）。脚本一律加 --json。本手册按「开始使用 → 常用任务 → 命令参考 → 智能体 → 疑难」组织；暂未实现的命令会标明，勿写入脚本依赖。 一次性提问请用各 agent 原生 CLI，不提供 pier agents invoke。",
     "context": "面向使用 Pier 的人与脚本作者。CLI 是本机工作台控制入口，不是远程 API，也不是智能体权限系统。",
     "goals": [
       "60 秒内完成第一次成功调用",
@@ -602,6 +602,70 @@
           "synopsis": "pier agents get --agent-id <id> | --agent-ref <ref> | --panel <panelId> --json",
           "description": "查询一条运行投影。",
           "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"agent\": {\n      \"agentId\": \"claude\",\n      \"panelId\": \"terminal-abc\",\n      \"windowId\": \"main\"\n    }\n  }\n}"
+        },
+        {
+          "id": "agents-start",
+          "name": "agents start",
+          "status": "shipped",
+          "synopsis": "pier agents start --agent <id> [--cwd <path>] [--window <id>] --json",
+          "description": "启动持久智能体运行，返回 RuntimeRef（boot/runtime/generation）与 panel。需 Pier 已打开。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runtime\": {\n      \"runtimeId\": \"rt-…\",\n      \"generation\": 1,\n      \"panelId\": \"terminal-…\"\n    }\n  }\n}"
+        },
+        {
+          "id": "agents-turn",
+          "name": "agents turn",
+          "status": "shipped",
+          "synopsis": "pier agents turn --boot … --runtime … --generation … [--text …|--text-file …|--stdin] --json",
+          "description": "向持久运行发送一轮输入。accepted 不等于已处理完毕。",
+          "output": "{\n  \"ok\": true,\n  \"data\": { \"accepted\": true }\n}"
+        },
+        {
+          "id": "agents-screen",
+          "name": "agents screen",
+          "status": "shipped",
+          "synopsis": "pier agents screen --boot … --runtime … --generation … --json",
+          "description": "当前可见区域的有界画面，不是完整对话记录。需 native readViewportText。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"screen\": {\n      \"text\": \"…\",\n      \"canonicalPath\": \"/Users/you/repo/src/main.ts\"\n    }\n  }\n}"
+        },
+        {
+          "id": "agents-wait",
+          "name": "agents wait",
+          "status": "shipped",
+          "synopsis": "pier agents wait --boot … --runtime … --generation … --until ready|waiting|exited|attention [--timeout ms] --json",
+          "description": "等待运行状态。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"until\": \"ready\",\n    \"reached\": true\n  }\n}"
+        },
+        {
+          "id": "agents-focus",
+          "name": "agents focus",
+          "status": "shipped",
+          "synopsis": "pier agents focus --boot <id> --runtime <id> --generation <n> --json",
+          "description": "聚焦运行界面。实现前可用 panels focus。",
+          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-abc\"\n  }\n}"
+        },
+        {
+          "id": "agents-interrupt",
+          "name": "agents interrupt",
+          "status": "shipped",
+          "synopsis": "pier agents interrupt --boot <id> --runtime <id> --generation <n> --json",
+          "description": "中断运行。",
+          "output": "{\n  \"ok\": true,\n  \"data\": { \"interrupted\": true }\n}"
+        },
+        {
+          "id": "agents-terminate",
+          "name": "agents terminate",
+          "status": "shipped",
+          "synopsis": "pier agents terminate --boot <id> --runtime <id> --generation <n> --json",
+          "description": "结束运行。",
+          "output": "{\n  \"ok\": true,\n  \"data\": { \"terminated\": true }\n}"
+        },
+        {
+          "id": "agents-watch",
+          "name": "agents watch",
+          "status": "shipped",
+          "synopsis": "pier agents watch --boot … --runtime … --generation … [--timeout ms] --json",
+          "description": "运行事实流（JSONL event + 终态 response）。事实不等于工作完成。",
+          "output": "{\"type\":\"event\",\"kind\":\"agent.state\",\"state\":\"waiting\"}"
         }
       ],
       "planned": [
@@ -612,70 +676,6 @@
           "synopsis": "pier agents self --json",
           "description": "当前调用者非秘密摘要。人类 CLI（cli-human）在解析期直接拒绝；需要 agent principal。不作为本机权限系统。",
           "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"self\": {\n      \"principalRef\": \"…\",\n      \"bootId\": \"…\"\n    }\n  }\n}"
-        },
-        {
-          "id": "agents-start",
-          "name": "agents start",
-          "status": "planned",
-          "synopsis": "pier agents start --agent <id> --worktree-key <key> … --json",
-          "description": "启动持久智能体运行。",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runtime\": {\n      \"runtimeId\": \"rt-…\",\n      \"generation\": 1,\n      \"panelId\": \"terminal-…\"\n    }\n  }\n}"
-        },
-        {
-          "id": "agents-turn",
-          "name": "agents turn",
-          "status": "planned",
-          "synopsis": "pier agents turn --runtime … --boot … --generation … --json < turn.txt",
-          "description": "向持久运行发送一轮输入。accepted ≠ 已处理完毕。",
-          "output": "{\n  \"ok\": true,\n  \"data\": { \"accepted\": true }\n}"
-        },
-        {
-          "id": "agents-screen",
-          "name": "agents screen",
-          "status": "planned",
-          "synopsis": "pier agents screen --runtime … --boot … --generation … --json",
-          "description": "当前可见区域的有界画面与路径定位，不是完整对话记录。",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"screen\": {\n      \"text\": \"…\",\n      \"canonicalPath\": \"/Users/you/repo/src/main.ts\"\n    }\n  }\n}"
-        },
-        {
-          "id": "agents-wait",
-          "name": "agents wait",
-          "status": "planned",
-          "synopsis": "pier agents wait --runtime … --until ready|waiting|exited|attention --json",
-          "description": "等待运行状态。",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"until\": \"ready\",\n    \"reached\": true\n  }\n}"
-        },
-        {
-          "id": "agents-watch",
-          "name": "agents watch",
-          "status": "planned",
-          "synopsis": "pier agents watch --runtime … --json",
-          "description": "运行事实 JSONL 流。",
-          "output": "{\"type\":\"event\",\"kind\":\"agent.state\",\"state\":\"waiting\"}"
-        },
-        {
-          "id": "agents-focus",
-          "name": "agents focus",
-          "status": "planned",
-          "synopsis": "pier agents focus --runtime … --json",
-          "description": "聚焦运行界面。实现前可用 panels focus。",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-abc\"\n  }\n}"
-        },
-        {
-          "id": "agents-interrupt",
-          "name": "agents interrupt",
-          "status": "planned",
-          "synopsis": "pier agents interrupt --runtime … --json",
-          "description": "中断运行。",
-          "output": "{\n  \"ok\": true,\n  \"data\": { \"interrupted\": true }\n}"
-        },
-        {
-          "id": "agents-terminate",
-          "name": "agents terminate",
-          "status": "planned",
-          "synopsis": "pier agents terminate --runtime … [--force] --json",
-          "description": "结束运行。",
-          "output": "{\n  \"ok\": true,\n  \"data\": { \"terminated\": true }\n}"
         }
       ]
     },

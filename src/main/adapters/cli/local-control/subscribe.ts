@@ -2,11 +2,11 @@
  * v2 subscribe / unsubscribe 处理（从 session 拆出以控制文件行数）。
  */
 import { randomUUID } from "node:crypto";
-import { LOCAL_CONTROL_V2_API_VERSION } from "@shared/contracts/local-control/v2-errors.ts";
-import type { LocalControlV2ServerFrame } from "@shared/contracts/local-control/v2-frames.ts";
+import { LOCAL_CONTROL_API_VERSION } from "@shared/contracts/local-control/errors.ts";
+import type { LocalControlServerFrame } from "@shared/contracts/local-control/frames.ts";
 import type { AgentsDiscovery } from "./agents-discovery.ts";
-import type { LocalControlAuthorizeResult } from "./local-control-authorize.ts";
-import { v2ErrorResponse } from "./local-control-v2-ops.ts";
+import type { LocalControlAuthorizeResult } from "./authorize.ts";
+import { controlErrorResponse } from "./discovery.ts";
 
 export interface SubscriptionRecord {
   requestId: string;
@@ -14,7 +14,7 @@ export interface SubscriptionRecord {
   stream: string;
 }
 
-export function handleV2Subscribe(args: {
+export function handleControlSubscribe(args: {
   requestId: string;
   stream: string;
   after?: { bootId: string; revision: number };
@@ -22,7 +22,7 @@ export function handleV2Subscribe(args: {
   discovery: AgentsDiscovery;
   subscriptions: Map<string, SubscriptionRecord>;
   authorizeList: () => LocalControlAuthorizeResult;
-  emit: (frame: LocalControlV2ServerFrame) => void;
+  emit: (frame: LocalControlServerFrame) => void;
 }): void {
   const {
     requestId,
@@ -41,7 +41,7 @@ export function handleV2Subscribe(args: {
     stream !== "global"
   ) {
     emit(
-      v2ErrorResponse(
+      controlErrorResponse(
         requestId,
         "unsupported",
         `stream not implemented: ${stream}`
@@ -51,20 +51,24 @@ export function handleV2Subscribe(args: {
   }
   if (after && after.bootId !== bootId) {
     emit(
-      v2ErrorResponse(requestId, "snapshot_required", "boot_changed for cursor")
+      controlErrorResponse(
+        requestId,
+        "snapshot_required",
+        "boot_changed for cursor"
+      )
     );
     return;
   }
   const auth = authorizeList();
   if (!auth.ok) {
-    emit(v2ErrorResponse(requestId, auth.code, auth.message));
+    emit(controlErrorResponse(requestId, auth.code, auth.message));
     return;
   }
   const subscriptionId = `sub_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
   let revision = after?.revision ?? 0;
   subscriptions.set(subscriptionId, { stream, requestId, revision });
   emit({
-    apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+    apiVersion: LOCAL_CONTROL_API_VERSION,
     type: "response",
     requestId,
     ok: true,
@@ -80,7 +84,7 @@ export function handleV2Subscribe(args: {
       ? discovery.listRunning()
       : { activities: [], note: "activity stream stub" };
   emit({
-    apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+    apiVersion: LOCAL_CONTROL_API_VERSION,
     type: "event",
     subscriptionId,
     bootId,

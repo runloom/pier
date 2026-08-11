@@ -24,6 +24,8 @@ describe("cli-docs-surface helpers", () => {
     ["pier agents catalog --json", null],
     ["pier agents list --json", null],
     ["pier agents invoke --json", "agents.unimplemented"],
+    ["pier agents start --agent codex --json", null],
+    ["pier agents watch --json", null],
     ["  pier plugins enable x", "plugins enable"],
     ["pier plugins disable foo", "plugins disable"],
     ["pier access request --json", "access"],

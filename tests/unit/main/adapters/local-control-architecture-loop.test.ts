@@ -12,10 +12,10 @@ import { join } from "node:path";
 import {
   createPierLocalControlServer,
   resolveLocalControlSocketPath,
-} from "@main/adapters/cli/local-control-server.ts";
+} from "@main/adapters/cli/local-control/server.ts";
 import { createAgentCallerCredentialStore } from "@main/services/agent-caller/credential-store.ts";
 import { issueAgentCallerCredential } from "@main/services/agent-caller/issue-credential.ts";
-import { LOCAL_CONTROL_V2_API_VERSION } from "@shared/contracts/local-control/v2-errors.ts";
+import { LOCAL_CONTROL_API_VERSION } from "@shared/contracts/local-control/errors.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
@@ -121,7 +121,7 @@ describe("local-control architecture closed loop", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "agent",
@@ -131,7 +131,7 @@ describe("local-control architecture closed loop", () => {
             },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "s1",
             op: "agents.self",
@@ -188,14 +188,14 @@ describe("local-control architecture closed loop", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "t1",
             op: "control.trace",
@@ -203,7 +203,7 @@ describe("local-control architecture closed loop", () => {
             effectKey: key,
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "t2",
             op: "control.trace",
@@ -211,7 +211,7 @@ describe("local-control architecture closed loop", () => {
             effectKey: key,
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "t3",
             op: "control.trace",
@@ -260,14 +260,14 @@ describe("local-control architecture closed loop", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "j1",
             op: "control.trace",
@@ -276,7 +276,7 @@ describe("local-control architecture closed loop", () => {
           }),
           // 语义相同、键序不同 → 应重放同一 effectRevision
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "j2",
             op: "control.trace",
@@ -335,14 +335,14 @@ describe("local-control architecture closed loop", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "subscribe",
             requestId: "sub1",
             stream: "resource:agents",
@@ -382,21 +382,21 @@ describe("local-control architecture closed loop", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "hold1",
             op: "control.hold",
             params: { ms: 5000 },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "cancel",
             requestId: "hold1",
           }),

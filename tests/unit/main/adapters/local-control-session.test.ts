@@ -5,11 +5,11 @@ import { join } from "node:path";
 import {
   createPierLocalControlServer,
   resolveLocalControlSocketPath,
-} from "@main/adapters/cli/local-control-server.ts";
-import { createLocalControlV2SessionFromHello } from "@main/adapters/cli/local-control-v2-session.ts";
+} from "@main/adapters/cli/local-control/server.ts";
+import { createLocalControlSessionFromHello } from "@main/adapters/cli/local-control/session.ts";
 import { createAgentCallerCredentialStore } from "@main/services/agent-caller/credential-store.ts";
 import type { AgentCallerCredentialMaterial } from "@shared/contracts/local-control/agent-credential.ts";
-import { LOCAL_CONTROL_V2_API_VERSION } from "@shared/contracts/local-control/v2-errors.ts";
+import { LOCAL_CONTROL_API_VERSION } from "@shared/contracts/local-control/errors.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
@@ -100,11 +100,11 @@ function sendLines(
 }
 
 describe("local-control v2 session unit", () => {
-  it("cli-human hello then unsupported op", () => {
+  it("cli-human hello then permission_denied for non-product op", async () => {
     const emitted: unknown[] = [];
-    const created = createLocalControlV2SessionFromHello(
+    const created = createLocalControlSessionFromHello(
       {
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "client.hello",
         requestId: "h1",
         clientKind: "cli-human",
@@ -128,18 +128,20 @@ describe("local-control v2 session unit", () => {
         "agents.catalog",
         "agents.list",
         "agents.get",
+        "agents.start",
         "stream.subscribe",
       ]),
     });
     created.session.handleLine(
       JSON.stringify({
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "request",
         requestId: "r1",
-        op: "agents.screen",
+        op: "agents.not-a-product-op",
         params: {},
       })
     );
+    await new Promise((r) => setTimeout(r, 10));
     expect(emitted).toEqual([
       expect.objectContaining({
         type: "response",
@@ -153,9 +155,9 @@ describe("local-control v2 session unit", () => {
     const store = createAgentCallerCredentialStore();
     store.put(sampleMaterial({ bootId: "boot-test" }));
     const emitted: unknown[] = [];
-    const created = createLocalControlV2SessionFromHello(
+    const created = createLocalControlSessionFromHello(
       {
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "client.hello",
         requestId: "h1",
         clientKind: "agent",
@@ -180,7 +182,7 @@ describe("local-control v2 session unit", () => {
     });
     created.session.handleLine(
       JSON.stringify({
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "request",
         requestId: "self-1",
         op: "agents.self",
@@ -200,9 +202,9 @@ describe("local-control v2 session unit", () => {
 
   it("rejects agent hello with unknown binding", () => {
     const store = createAgentCallerCredentialStore();
-    const created = createLocalControlV2SessionFromHello(
+    const created = createLocalControlSessionFromHello(
       {
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "client.hello",
         requestId: "h1",
         clientKind: "agent",
@@ -292,7 +294,7 @@ describe("local-control server v1/v2 split + peer + self", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "hello-1",
             clientKind: "agent",
@@ -302,7 +304,7 @@ describe("local-control server v1/v2 split + peer + self", () => {
             },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "op-1",
             op: "agents.self",
@@ -411,14 +413,14 @@ describe("local-control server v1/v2 split + peer + self", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "c1",
             op: "agents.catalog",
@@ -438,14 +440,14 @@ describe("local-control server v1/v2 split + peer + self", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h2",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "l1",
             op: "agents.list",
@@ -480,7 +482,7 @@ describe("local-control server v1/v2 split + peer + self", () => {
     try {
       const frames = await sendLines(socketPath, [
         JSON.stringify({
-          apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+          apiVersion: LOCAL_CONTROL_API_VERSION,
           type: "request",
           requestId: "r1",
           op: "agents.self",

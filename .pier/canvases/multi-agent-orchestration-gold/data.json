@@ -9,7 +9,7 @@
       "status": "推荐方案",
       "version": "v7.0",
       "researchCutoff": "2026-08-10",
-      "codeBaseline": "Pier local-control v2 + agents discovery; product CLI cli-human; no product agents.invoke"
+      "codeBaseline": "adapters/cli/local-control/ (session apiVersion pier.control/v2) + runtime-control service; product CLI cli-human; no product agents.invoke"
     },
     "bluf": "产品结论（明确）：一次性提问不经 Pier 封装——协调方/人直接使用 codex exec、Claude headless 等原生 CLI。Pier 不提供 agents invoke 产品面，不实现统一 InvocationReply 宿主服务作为主路径。Pier CLI 只做本机发现（catalog/list/get）与持久智能体运行控制（start/turn/screen/wait/watch/focus/interrupt/terminate），以及 worktree/terminal 等宿主原语。W1 已关账传输与发现；原 W2 invoke 产品撤回（non-goal）；主交付为 W3 持久会话。调用方持有拆分、重试与结束判断；Pier 不建立任务生命周期。",
     "insight": "实现纪律：核心逻辑优先，拒绝业界能力二次封装——只做依赖 Pier 宿主/运行时才能成立的能力；业界已支持的能力直接用原生入口。Orca/cmux 证明有价值的是「精确 surface/runtime + 可编程读画面/发输入」的持久控制面，不是再包一层各家 one-shot。Agent Orchestrator 偏任务池，Pier 拒绝任务台账。最佳实践：一次性用原生 agent；需要活体协作、可续聊、可看现场时才进 Pier 持久路径；运行事实与工作结论严格分开。",
@@ -663,9 +663,9 @@
           "group": "agents",
           "commands": "catalog · list · get · start · turn · screen · wait · watch · focus · interrupt · terminate",
           "responsibility": "发现目标；创建与控制持久工作智能体；当前画面；运行事实；精确停止",
-          "safety": "无 agents invoke 产品命令。start 绑定父调用者与 RuntimeRef；turn 只返回 accepted；screen 只当前 viewport；wait/watch 是运行事实不等于工作完成；interrupt/terminate 与 terminal 同构底层 RuntimeControl，agent 运行优先用 agents.* 名称。无公共 transcript。",
+          "safety": "无 agents invoke。start 返回 RuntimeRef；turn 只 accepted；screen 只 viewport；wait/watch 是运行事实≠完成；interrupt/terminate 精确 RuntimeRef。",
           "status": "partial",
-          "wave": "W1 catalog/list/get 已落地 · W3 持久主交付"
+          "wave": "W1 发现 · W3 持久运行全命令（self 非产品主路径）"
         },
         {
           "group": "terminal",
@@ -946,18 +946,18 @@
       },
       {
         "title": "持久启动（W3）",
-        "cmd": "pier agents start --agent codex --json",
+        "cmd": "pier agents start --agent codex --cwd \"$PWD\" --json",
         "why": "创建可控制的持久运行",
         "userSees": "RuntimeRef / panel（实现后）"
       },
       {
         "title": "画面与等待（W3）",
-        "cmd": "pier agents turn … && pier agents screen …",
+        "cmd": "pier agents turn --boot \"$BOOT\" --runtime \"$RT\" --generation 1 --text \"hello\" --json && pier agents screen --boot \"$BOOT\" --runtime \"$RT\" --generation 1 --json",
         "why": "输入与有界画面",
         "userSees": "accepted 与 viewport"
       }
     ],
-    "day1Recipe": "#!/usr/bin/env bash\n# Day 1（v7）：一次性用原生 agent；持久用 Pier\nset -euo pipefail\n# 1) 一次性（非 Pier）\ncodex exec --ephemeral --skip-git-repo-check -s read-only -C \"$PWD\" - <<'Q'\n用一句话说明本仓库是做什么的。\nQ\n# 2) 发现 + 持久（Pier，Pier 需在线）\npier agents catalog --json\n# pier agents start …  # W3\n# pier agents turn … ; pier agents screen …\n",
+    "day1Recipe": "#!/usr/bin/env bash\n# Day 1（v7）：一次性用原生 agent；持久用 Pier\nset -euo pipefail\n# 1) 一次性（非 Pier）\ncodex exec --ephemeral --skip-git-repo-check -s read-only -C \"$PWD\" - <<'Q'\n用一句话说明本仓库是做什么的。\nQ\n# 2) 发现 + 持久（Pier，Pier 需在线）\npier agents catalog --json\npier agents start --agent codex --cwd \"$PWD\" --json\n# then: pier agents turn --boot … --runtime … --generation … --text \"…\" --json\n# pier agents screen --boot … --runtime … --generation … --json screen …\n",
     "runtimeUi": {
       "disclaimer": "静态协作界面示例：只展示持久运行中的协调智能体、工作智能体、当前画面、工作树产出与可信运行事实；CLI 返回的结构化内容由发起方处理，不进入全局协作台。",
       "workspace": {
@@ -1226,8 +1226,8 @@
       {
         "wave": 3,
         "name": "持久运行与 screen",
-        "outcome": "agents start/turn/screen/wait/watch 形成精确父子运行闭环；screen 只给当前 viewport；turn 只确认 accepted",
-        "status": "planned",
+        "outcome": "agents start/turn/screen/wait/watch/focus/interrupt/terminate 形成精确 RuntimeRef 闭环；screen 只给当前 viewport；turn 只确认 accepted；watch 输出运行事实流（≠工作完成）",
+        "status": "done",
         "slices": [
           {
             "id": "W3-S1",

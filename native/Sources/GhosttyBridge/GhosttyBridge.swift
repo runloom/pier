@@ -1861,6 +1861,11 @@ final class GhosttyBridgeImpl {
         return term.terminalView.readSelectionText()
     }
 
+    func readViewportText(panelId: String) -> String? {
+        guard let term = terminals[panelId] else { return nil }
+        return term.terminalView.readViewportText()
+    }
+
     /// TUI 输入聚焦探针：1=visible，0=hidden，-1=surface 不存在。
     func readCursorVisible(panelId: String) -> Int32 {
         guard let term = terminals[panelId],
@@ -2536,6 +2541,16 @@ public func ghosttyBridgeReadSelectionText(
 ) -> UnsafeMutablePointer<CChar>? {
     let text = MainActor.assumeIsolated {
         GhosttyBridgeImpl.shared.readSelectionText(panelId: String(cString: panelId))
+    }
+    return text?.withCString { strdup($0) }
+}
+
+@_cdecl("ghostty_bridge_read_viewport_text")
+public func ghosttyBridgeReadViewportText(
+    _ panelId: UnsafePointer<CChar>
+) -> UnsafeMutablePointer<CChar>? {
+    let text = MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.readViewportText(panelId: String(cString: panelId))
     }
     return text?.withCString { strdup($0) }
 }

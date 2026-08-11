@@ -8,7 +8,7 @@ import { createLocalControlTransport } from "@main/adapters/cli/local-command-cl
 import {
   createPierLocalControlServer,
   resolveLocalControlSocketPath,
-} from "@main/adapters/cli/local-control-server.ts";
+} from "@main/adapters/cli/local-control/server.ts";
 import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import {
   createCommandRouter,

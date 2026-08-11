@@ -130,15 +130,16 @@ EOS
 VITEST_ARGS=("$@")
 if [ "${#VITEST_ARGS[@]}" -eq 0 ]; then
   VITEST_ARGS=(
-    tests/unit/main/adapters/local-control-invoke-socket.test.ts
-    tests/unit/main/adapters/local-control-invoke.test.ts
+    tests/unit/main/adapters/local-control-session.test.ts
     tests/unit/main/adapters/local-control-architecture-loop.test.ts
-    tests/unit/main/adapters/local-control-v2-session.test.ts
-    tests/unit/main/services/agent-invoke-service.test.ts
-    tests/unit/main/services/agent-invoke-isolation.test.ts
-    tests/unit/main/services/agent-invoke-codex.test.ts
-    tests/unit/shared/local-control-invocation.test.ts
+    tests/unit/main/adapters/local-control-runtime-ops.test.ts
+    tests/unit/main/adapters/local-control-runtime-socket.test.ts
+    tests/unit/main/adapters/local-control-invoke-withdrawn.test.ts
+    tests/unit/main/services/runtime-control
+    tests/unit/shared/local-control-frames.test.ts
+    tests/unit/shared/local-control-runtime-ref.test.ts
     tests/unit/cli/cli-surface-governance.test.ts
+    tests/unit/cli/multi-agent-boundary-governance.test.ts
   )
 fi
 args_b64="$(printf '%q ' "${VITEST_ARGS[@]}" | base64 | tr -d '\n')"

@@ -6,23 +6,24 @@ import { dirname, join } from "node:path";
 import type { PierCommandResult } from "@shared/contracts/commands.ts";
 import { classifyLocalControlFirstFrame } from "@shared/contracts/local-control/classify.ts";
 import {
-  LOCAL_CONTROL_V2_API_VERSION,
-  LOCAL_CONTROL_V2_MAX_FRAME_BYTES,
-  type LocalControlV2ErrorCode,
-} from "@shared/contracts/local-control/v2-errors.ts";
-import type { LocalControlV2ServerFrame } from "@shared/contracts/local-control/v2-frames.ts";
-import type { AgentCallerCredentialStore } from "../../services/agent-caller/credential-store.ts";
-import type { AgentsDiscovery } from "./agents-discovery.ts";
-import type { LocalControlAuthorizer } from "./local-control-authorize.ts";
-import type { EffectReceiptStore } from "./local-control-receipts.ts";
-import {
-  createLocalControlV2SessionFromHello,
-  type LocalControlV2Session,
-} from "./local-control-v2-session.ts";
+  LOCAL_CONTROL_API_VERSION,
+  LOCAL_CONTROL_MAX_FRAME_BYTES,
+  type LocalControlErrorCode,
+} from "@shared/contracts/local-control/errors.ts";
+import type { LocalControlServerFrame } from "@shared/contracts/local-control/frames.ts";
+import type { AgentCallerCredentialStore } from "../../../services/agent-caller/credential-store.ts";
+import type { RuntimeControlService } from "../../../services/runtime-control/service.ts";
 import {
   checkLocalControlPeerIdentity,
   type ResolvePeerUid,
-} from "./peer-identity.ts";
+} from "../peer-identity.ts";
+import type { AgentsDiscovery } from "./agents-discovery.ts";
+import type { LocalControlAuthorizer } from "./authorize.ts";
+import type { EffectReceiptStore } from "./receipts.ts";
+import {
+  createLocalControlSessionFromHello,
+  type LocalControlSession,
+} from "./session.ts";
 
 export interface PierLocalControlServer {
   /** 当前进程控制面 boot 标识（v2 server.hello）。 */
@@ -49,6 +50,8 @@ export interface CreatePierLocalControlServerArgs {
   requirePeerUid?: boolean | undefined;
   /** T2 peer UID 解析（测试注入）。 */
   resolvePeerUid?: ResolvePeerUid | undefined;
+  /** W3 持久运行控制。 */
+  runtimeControl?: RuntimeControlService | undefined;
   /** 跳过 peer 检查（仅测试默认路径需要时使用；生产勿开）。 */
   skipPeerCheck?: boolean | undefined;
   socketPath: string;
@@ -95,11 +98,14 @@ function writeV1Result(socket: Socket, result: PierCommandResult): void {
   socket.end(`${JSON.stringify(result)}\n`);
 }
 
-function writeV2Frame(socket: Socket, frame: LocalControlV2ServerFrame): void {
+function writeControlFrame(
+  socket: Socket,
+  frame: LocalControlServerFrame
+): void {
   const line = `${JSON.stringify(frame)}\n`;
-  if (Buffer.byteLength(line, "utf8") > LOCAL_CONTROL_V2_MAX_FRAME_BYTES) {
-    const err: LocalControlV2ServerFrame = {
-      apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+  if (Buffer.byteLength(line, "utf8") > LOCAL_CONTROL_MAX_FRAME_BYTES) {
+    const err: LocalControlServerFrame = {
+      apiVersion: LOCAL_CONTROL_API_VERSION,
       type: "server.error",
       code: "frame_too_large",
       message: "response frame exceeds maxFrameBytes",
@@ -145,19 +151,19 @@ function hardenUnixSocketPermissions(socketPath: string): void {
   }
 }
 
-function v2ServerError(
-  code: LocalControlV2ErrorCode,
+function controlServerError(
+  code: LocalControlErrorCode,
   message: string
-): LocalControlV2ServerFrame {
+): LocalControlServerFrame {
   return {
-    apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+    apiVersion: LOCAL_CONTROL_API_VERSION,
     type: "server.error",
     code,
     message,
   };
 }
 
-type ConnectionMode = "first" | "v1" | "v2";
+type ConnectionMode = "first" | "v1" | "session";
 
 function attachConnection(
   socket: Socket,
@@ -169,6 +175,7 @@ function attachConnection(
     discovery?: AgentsDiscovery | undefined;
     authorizer?: LocalControlAuthorizer | undefined;
     receipts?: EffectReceiptStore | undefined;
+    runtimeControl?: RuntimeControlService | undefined;
     resolvePeerUid?: ResolvePeerUid | undefined;
     requirePeerUid?: boolean | undefined;
     skipPeerCheck?: boolean | undefined;
@@ -183,7 +190,10 @@ function attachConnection(
       requirePeerUid: ctx.requirePeerUid,
     });
     if (!peer.ok) {
-      writeV2Frame(socket, v2ServerError("peer_identity_denied", peer.message));
+      writeControlFrame(
+        socket,
+        controlServerError("peer_identity_denied", peer.message)
+      );
       socket.end();
       return;
     }
@@ -191,7 +201,7 @@ function attachConnection(
 
   let buffer = "";
   let mode: ConnectionMode = "first";
-  let v2Session: LocalControlV2Session | null = null;
+  let controlSession: LocalControlSession | null = null;
   let closed = false;
 
   const endV1 = (result: PierCommandResult) => {
@@ -204,8 +214,8 @@ function attachConnection(
   };
 
   socket.once("close", () => {
-    v2Session?.dispose();
-    v2Session = null;
+    controlSession?.dispose();
+    controlSession = null;
   });
 
   socket.setEncoding("utf8");
@@ -218,12 +228,10 @@ function attachConnection(
     while (true) {
       const nl = buffer.indexOf("\n");
       if (nl < 0) {
-        if (
-          Buffer.byteLength(buffer, "utf8") > LOCAL_CONTROL_V2_MAX_FRAME_BYTES
-        ) {
-          writeV2Frame(
+        if (Buffer.byteLength(buffer, "utf8") > LOCAL_CONTROL_MAX_FRAME_BYTES) {
+          writeControlFrame(
             socket,
-            v2ServerError("frame_too_large", "frame exceeds maxFrameBytes")
+            controlServerError("frame_too_large", "frame exceeds maxFrameBytes")
           );
           socket.end();
           closed = true;
@@ -235,10 +243,10 @@ function attachConnection(
       const line = buffer.slice(0, nl);
       buffer = buffer.slice(nl + 1);
       const lineBytes = Buffer.byteLength(line, "utf8");
-      if (lineBytes > LOCAL_CONTROL_V2_MAX_FRAME_BYTES) {
-        writeV2Frame(
+      if (lineBytes > LOCAL_CONTROL_MAX_FRAME_BYTES) {
+        writeControlFrame(
           socket,
-          v2ServerError("frame_too_large", "frame exceeds maxFrameBytes")
+          controlServerError("frame_too_large", "frame exceeds maxFrameBytes")
         );
         socket.end();
         closed = true;
@@ -282,11 +290,11 @@ function attachConnection(
             raw !== null &&
             "apiVersion" in raw &&
             (raw as { apiVersion: unknown }).apiVersion ===
-              LOCAL_CONTROL_V2_API_VERSION
+              LOCAL_CONTROL_API_VERSION
           ) {
-            writeV2Frame(
+            writeControlFrame(
               socket,
-              v2ServerError(classified.code, classified.reason)
+              controlServerError(classified.code, classified.reason)
             );
             socket.end();
             closed = true;
@@ -296,34 +304,35 @@ function attachConnection(
           return;
         }
 
-        // v2-hello
-        const created = createLocalControlV2SessionFromHello(classified.hello, {
+        // session-hello
+        const created = createLocalControlSessionFromHello(classified.hello, {
           bootId: ctx.bootId,
           features: ctx.features,
           credentialStore: ctx.credentialStore,
           discovery: ctx.discovery,
           authorizer: ctx.authorizer,
           receipts: ctx.receipts,
+          runtimeControl: ctx.runtimeControl,
           emit: (frame) => {
             if (!closed) {
-              writeV2Frame(socket, frame);
+              writeControlFrame(socket, frame);
             }
           },
         });
         if (!created.ok) {
-          writeV2Frame(socket, created.errorFrame);
+          writeControlFrame(socket, created.errorFrame);
           socket.end();
           closed = true;
           return;
         }
-        mode = "v2";
-        v2Session = created.session;
-        writeV2Frame(socket, created.helloFrame);
+        mode = "session";
+        controlSession = created.session;
+        writeControlFrame(socket, created.helloFrame);
         continue;
       }
 
-      if (mode === "v2" && v2Session) {
-        v2Session.handleLine(line);
+      if (mode === "session" && controlSession) {
+        controlSession.handleLine(line);
       }
     }
   });
@@ -338,6 +347,7 @@ export function createPierLocalControlServer({
   discovery,
   authorizer,
   receipts,
+  runtimeControl,
   resolvePeerUid,
   requirePeerUid,
   skipPeerCheck,
@@ -407,6 +417,7 @@ export function createPierLocalControlServer({
             discovery,
             authorizer,
             receipts,
+            runtimeControl,
             resolvePeerUid,
             requirePeerUid,
             skipPeerCheck,

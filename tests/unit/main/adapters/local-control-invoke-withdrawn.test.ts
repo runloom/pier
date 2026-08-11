@@ -3,12 +3,12 @@
  */
 
 import {
-  LOCAL_CONTROL_V2_FEATURE_AGENTS_CATALOG,
-  LOCAL_CONTROL_V2_FEATURE_AGENTS_GET,
-  LOCAL_CONTROL_V2_FEATURE_AGENTS_LIST,
-} from "@main/adapters/cli/local-control-v2-features.ts";
-import { createLocalControlV2SessionFromHello } from "@main/adapters/cli/local-control-v2-session.ts";
-import { LOCAL_CONTROL_V2_API_VERSION } from "@shared/contracts/local-control/v2-errors.ts";
+  LOCAL_CONTROL_FEATURE_AGENTS_CATALOG,
+  LOCAL_CONTROL_FEATURE_AGENTS_GET,
+  LOCAL_CONTROL_FEATURE_AGENTS_LIST,
+} from "@main/adapters/cli/local-control/features.ts";
+import { createLocalControlSessionFromHello } from "@main/adapters/cli/local-control/session.ts";
+import { LOCAL_CONTROL_API_VERSION } from "@shared/contracts/local-control/errors.ts";
 import { describe, expect, it } from "vitest";
 import { parsePierCliArgs } from "../../../../bin/pier-cli-parser.js";
 
@@ -28,9 +28,9 @@ describe("agents.invoke product withdrawal", () => {
 
   it("v2 features do not advertise agents.invoke", () => {
     const frames: unknown[] = [];
-    const created = createLocalControlV2SessionFromHello(
+    const created = createLocalControlSessionFromHello(
       {
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "client.hello",
         requestId: "h1",
         clientKind: "cli-human",
@@ -49,9 +49,9 @@ describe("agents.invoke product withdrawal", () => {
     const hello = created.helloFrame as {
       features?: string[];
     };
-    expect(hello.features).toContain(LOCAL_CONTROL_V2_FEATURE_AGENTS_CATALOG);
-    expect(hello.features).toContain(LOCAL_CONTROL_V2_FEATURE_AGENTS_LIST);
-    expect(hello.features).toContain(LOCAL_CONTROL_V2_FEATURE_AGENTS_GET);
+    expect(hello.features).toContain(LOCAL_CONTROL_FEATURE_AGENTS_CATALOG);
+    expect(hello.features).toContain(LOCAL_CONTROL_FEATURE_AGENTS_LIST);
+    expect(hello.features).toContain(LOCAL_CONTROL_FEATURE_AGENTS_GET);
     expect(hello.features).not.toContain("agents.invoke");
   });
 
@@ -61,9 +61,9 @@ describe("agents.invoke product withdrawal", () => {
       ok?: boolean;
       error?: { code?: string; message?: string };
     }> = [];
-    const created = createLocalControlV2SessionFromHello(
+    const created = createLocalControlSessionFromHello(
       {
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "client.hello",
         requestId: "h1",
         clientKind: "cli-human",
@@ -81,7 +81,7 @@ describe("agents.invoke product withdrawal", () => {
     }
     created.session.handleLine(
       JSON.stringify({
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "request",
         requestId: "r1",
         op: "agents.invoke",
@@ -102,9 +102,9 @@ describe("agents.invoke product withdrawal", () => {
       ok?: boolean;
       error?: { code?: string };
     }> = [];
-    const created = createLocalControlV2SessionFromHello(
+    const created = createLocalControlSessionFromHello(
       {
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "client.hello",
         requestId: "h1",
         clientKind: "cli-human",
@@ -122,7 +122,7 @@ describe("agents.invoke product withdrawal", () => {
     }
     created.session.handleLine(
       JSON.stringify({
-        apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+        apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "request",
         requestId: "r-boot",
         op: "agents.catalog",

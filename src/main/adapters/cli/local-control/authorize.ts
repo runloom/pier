@@ -3,33 +3,31 @@
  * 后续 CapabilityAuthority 可替换 default 实现，session 不必改分支。
  */
 import type { AgentCallerCredentialMaterial } from "@shared/contracts/local-control/agent-credential.ts";
-import type { LocalControlV2ErrorCode } from "@shared/contracts/local-control/v2-errors.ts";
-import type { LocalControlV2ClientHello } from "@shared/contracts/local-control/v2-frames.ts";
+import type { LocalControlErrorCode } from "@shared/contracts/local-control/errors.ts";
+import type { LocalControlClientHello } from "@shared/contracts/local-control/frames.ts";
+import { AGENTS_RUNTIME_OPS, AGENTS_RUNTIME_WRITE_OPS } from "./features.ts";
 
 export interface LocalControlAuthorizeInput {
   effectKey?: string | undefined;
   material: AgentCallerCredentialMaterial | null;
   op: string;
   params: Record<string, unknown>;
-  principalKind: LocalControlV2ClientHello["clientKind"];
+  principalKind: LocalControlClientHello["clientKind"];
   principalRef?: string | undefined;
 }
 
 export type LocalControlAuthorizeResult =
   | { ok: true }
-  | { ok: false; code: LocalControlV2ErrorCode; message: string };
+  | { ok: false; code: LocalControlErrorCode; message: string };
 
 export interface LocalControlAuthorizer {
   authorize(input: LocalControlAuthorizeInput): LocalControlAuthorizeResult;
 }
 
-/** 需要 effectKey 的写/围栏类 op（可扩展）。 */
+/** 需要 effectKey 的写/围栏类 op（control.trace + 持久运行写集）。 */
 export const LOCAL_CONTROL_WRITE_OPS = new Set<string>([
   "control.trace",
-  "agents.start",
-  "agents.turn",
-  "agents.interrupt",
-  "agents.terminate",
+  ...AGENTS_RUNTIME_WRITE_OPS,
 ]);
 
 /** agent 默认可调用的 control 探针（非 control.* 前缀通配）。 */
@@ -39,6 +37,7 @@ const HUMAN_ALLOWED = new Set([
   "agents.catalog",
   "agents.list",
   "agents.get",
+  ...AGENTS_RUNTIME_OPS,
   "control.hold",
   "control.trace",
 ]);
@@ -60,9 +59,9 @@ function isDiscovery(op: string): boolean {
 
 /**
  * 默认授权：
- * - cli-human：发现 + 架构探针（hold/trace）
+ * - cli-human：发现 + 持久运行读/写（AGENTS_RUNTIME_OPS）+ hold/trace
  * - agent：显式 control 探针 + 凭证 operations + 只读发现
- * - 写 op 必须带 ≥128-bit effectKey
+ * - 写 op effectKey 强度：session 层无条件执行；此处为防御性双检
  */
 export function createDefaultLocalControlAuthorizer(): LocalControlAuthorizer {
   return {

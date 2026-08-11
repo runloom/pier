@@ -1,5 +1,6 @@
 /**
- * pier.control/v2 短会话客户端：hello → 单 request → response → close。
+ * pier.control/v2 短会话客户端：hello → request →（可选 event*）→ response → close。
+ * watch 等会在终态 response 前推送 event；客户端须等到 response，不能按帧数=2 截断。
  * 本机默认：agent 用 PIER_AGENT_CALLER_BINDING（不透明 id，无 secret）。
  * 可选增强：凭证文件含 secret 时走 agent-credential。
  */
@@ -11,10 +12,39 @@ const API = "pier.control/v2";
 const BINDING_ENV = "PIER_AGENT_CALLER_BINDING";
 const CREDENTIAL_FILE_ENV = "PIER_AGENT_CALLER_CREDENTIAL_FILE";
 
+/**
+ * @param {string} socketPath
+ * @param {string[]} writeLines
+ * @param {{ timeoutMs?: number, untilTerminal?: boolean, minFrames?: number }} [opts]
+ *   untilTerminal: 等到 response|server.error（中间可穿插 event）；否则按 minFrames
+ */
+function shouldStopReading(frames, untilTerminal, minFrames) {
+  if (untilTerminal) {
+    const last = frames.at(-1);
+    return last?.type === "server.error" || last?.type === "response";
+  }
+  return frames.length >= minFrames;
+}
+
+function appendNdjsonLines(body, chunk, onLine) {
+  let next = body + chunk;
+  while (true) {
+    const nl = next.indexOf("\n");
+    if (nl < 0) {
+      return next;
+    }
+    const line = next.slice(0, nl);
+    next = next.slice(nl + 1);
+    if (line) {
+      onLine(line);
+    }
+  }
+}
+
 function readNdjsonFrames(
   socketPath,
   writeLines,
-  { minFrames = 1, timeoutMs = 15_000 } = {}
+  { minFrames = 1, timeoutMs = 15_000, untilTerminal = false } = {}
 ) {
   return new Promise((resolve, reject) => {
     const socket = createConnection(socketPath);
@@ -39,6 +69,19 @@ function readNdjsonFrames(
       resolve(frames);
     };
 
+    const onLine = (line) => {
+      try {
+        frames.push(JSON.parse(line));
+      } catch (error) {
+        finish(error);
+        return;
+      }
+      if (shouldStopReading(frames, untilTerminal, minFrames)) {
+        socket.end();
+        finish();
+      }
+    };
+
     socket.setEncoding("utf8");
     socket.on("connect", () => {
       for (const line of writeLines) {
@@ -46,29 +89,7 @@ function readNdjsonFrames(
       }
     });
     socket.on("data", (chunk) => {
-      body += chunk;
-      while (true) {
-        const nl = body.indexOf("\n");
-        if (nl < 0) {
-          break;
-        }
-        const line = body.slice(0, nl);
-        body = body.slice(nl + 1);
-        if (!line) {
-          continue;
-        }
-        try {
-          frames.push(JSON.parse(line));
-        } catch (error) {
-          finish(error);
-          return;
-        }
-        if (frames.length >= minFrames) {
-          socket.end();
-          finish();
-          return;
-        }
-      }
+      body = appendNdjsonLines(body, chunk, onLine);
     });
     socket.on("error", (error) => finish(error));
     socket.on("end", () => finish());
@@ -105,16 +126,36 @@ function resolveClientKindAndAuth(args) {
   );
 }
 
-function assertV2Pair(helloFrame, responseFrame) {
+function formatServerError(frame) {
+  const code =
+    typeof frame?.code === "string" && frame.code.length > 0
+      ? frame.code
+      : "server_error";
+  const message =
+    typeof frame?.message === "string" && frame.message.length > 0
+      ? frame.message
+      : "control session error";
+  return `${code}: ${message}`;
+}
+
+function assertV2Pair(helloFrame, responseFrame, frames = []) {
+  // 无 hello：常见为首帧/任意帧 server.error（peer deny、invalid hello）
   if (helloFrame?.type !== "server.hello") {
-    if (helloFrame?.type === "server.error") {
-      throw new Error(`${helloFrame.code}: ${helloFrame.message}`);
+    const err =
+      (helloFrame?.type === "server.error" ? helloFrame : null) ||
+      frames.find((f) => f?.type === "server.error");
+    if (err) {
+      throw new Error(formatServerError(err));
     }
     throw new Error("expected server.hello from pier.control/v2");
   }
   if (responseFrame?.type !== "response") {
     if (responseFrame?.type === "server.error") {
-      throw new Error(`${responseFrame.code}: ${responseFrame.message}`);
+      throw new Error(formatServerError(responseFrame));
+    }
+    const err = frames.find((f) => f?.type === "server.error");
+    if (err) {
+      throw new Error(formatServerError(err));
     }
     throw new Error("expected response from pier.control/v2");
   }
@@ -135,7 +176,7 @@ function assertV2Pair(helloFrame, responseFrame) {
  *   timeoutMs?: number,
  * }} args
  */
-export async function invokePierControlV2(args) {
+export async function invokePierControl(args) {
   const requestId = args.requestId ?? `req_${Date.now()}`;
   const helloId = `hello_${requestId}`;
   const { clientKind, auth } = resolveClientKindAndAuth(args);
@@ -160,13 +201,20 @@ export async function invokePierControlV2(args) {
   const frames = await readNdjsonFrames(
     args.socketPath,
     [JSON.stringify(hello), JSON.stringify(request)],
-    { minFrames: 2, timeoutMs: args.timeoutMs ?? 15_000 }
+    {
+      // watch 等会在 response 前推送 event；必须等到终态帧
+      untilTerminal: true,
+      timeoutMs: args.timeoutMs ?? 15_000,
+    }
   );
 
-  const helloFrame = frames[0];
-  const responseFrame = frames[1];
-  assertV2Pair(helloFrame, responseFrame);
-  return { hello: helloFrame, response: responseFrame };
+  const helloFrame = frames.find((f) => f?.type === "server.hello");
+  const responseFrame =
+    frames.find((f) => f?.type === "response") ??
+    frames.find((f) => f?.type === "server.error");
+  const events = frames.filter((f) => f?.type === "event");
+  assertV2Pair(helloFrame, responseFrame, frames);
+  return { hello: helloFrame, response: responseFrame, events };
 }
 
 /**

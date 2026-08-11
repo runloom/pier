@@ -1,29 +1,26 @@
 /**
- * v2 会话内同步 op 处理（发现 / self / trace）。
+ * v2 会话：发现类与探针 op（catalog / list / get / self / trace）。
  */
 import {
   type AgentCallerCredentialMaterial,
   toAgentSelfSnapshot,
 } from "@shared/contracts/local-control/agent-credential.ts";
 import {
-  LOCAL_CONTROL_V2_API_VERSION,
-  type LocalControlV2ErrorCode,
-} from "@shared/contracts/local-control/v2-errors.ts";
-import type { LocalControlV2ServerFrame } from "@shared/contracts/local-control/v2-frames.ts";
+  LOCAL_CONTROL_API_VERSION,
+  type LocalControlErrorCode,
+} from "@shared/contracts/local-control/errors.ts";
+import type { LocalControlServerFrame } from "@shared/contracts/local-control/frames.ts";
 import type { AgentsDiscovery } from "./agents-discovery.ts";
 import { findRunningAgent } from "./agents-discovery.ts";
-import {
-  digestRequestParams,
-  type EffectReceiptStore,
-} from "./local-control-receipts.ts";
+import { digestRequestParams, type EffectReceiptStore } from "./receipts.ts";
 
-export function v2ErrorResponse(
+export function controlErrorResponse(
   requestId: string,
-  code: LocalControlV2ErrorCode,
+  code: LocalControlErrorCode,
   message: string
-): LocalControlV2ServerFrame {
+): LocalControlServerFrame {
   return {
-    apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+    apiVersion: LOCAL_CONTROL_API_VERSION,
     type: "response",
     requestId,
     ok: false,
@@ -36,20 +33,20 @@ export function handleAgentsSelfOp(args: {
   material: AgentCallerCredentialMaterial | null;
   principalRef?: string | undefined;
   nowMs: number;
-}): LocalControlV2ServerFrame {
+}): LocalControlServerFrame {
   const { requestId, material, principalRef, nowMs } = args;
   if (!(material && principalRef)) {
-    return v2ErrorResponse(
+    return controlErrorResponse(
       requestId,
       "permission_denied",
       "agents.self requires authenticated agent principal"
     );
   }
   if (material.expiresAt <= nowMs) {
-    return v2ErrorResponse(requestId, "auth_failed", "credential expired");
+    return controlErrorResponse(requestId, "auth_failed", "credential expired");
   }
   return {
-    apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+    apiVersion: LOCAL_CONTROL_API_VERSION,
     type: "response",
     requestId,
     ok: true,
@@ -62,11 +59,11 @@ export function handleDiscoveryOp(args: {
   op: string;
   params: Record<string, unknown>;
   discovery: AgentsDiscovery;
-}): LocalControlV2ServerFrame {
+}): LocalControlServerFrame {
   const { requestId, op, params, discovery } = args;
   if (op === "agents.catalog") {
     return {
-      apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+      apiVersion: LOCAL_CONTROL_API_VERSION,
       type: "response",
       requestId,
       ok: true,
@@ -76,7 +73,7 @@ export function handleDiscoveryOp(args: {
   if (op === "agents.list") {
     const snapshot = discovery.listRunning();
     return {
-      apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+      apiVersion: LOCAL_CONTROL_API_VERSION,
       type: "response",
       requestId,
       ok: true,
@@ -90,7 +87,7 @@ export function handleDiscoveryOp(args: {
   const panelId =
     typeof params.panelId === "string" ? params.panelId : undefined;
   if (!(agentRef || agentId || panelId)) {
-    return v2ErrorResponse(
+    return controlErrorResponse(
       requestId,
       "invalid_command",
       "agents.get requires agentRef, agentId, or panelId"
@@ -102,17 +99,17 @@ export function handleDiscoveryOp(args: {
     panelId,
   });
   if (found && "ambiguous" in found && found.ambiguous) {
-    return v2ErrorResponse(
+    return controlErrorResponse(
       requestId,
       "invalid_command",
       "multiple agents match agentId; pass agentRef"
     );
   }
   if (!found) {
-    return v2ErrorResponse(requestId, "not_found", "agent not found");
+    return controlErrorResponse(requestId, "not_found", "agent not found");
   }
   return {
-    apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+    apiVersion: LOCAL_CONTROL_API_VERSION,
     type: "response",
     requestId,
     ok: true,
@@ -127,7 +124,7 @@ export function handleTraceOp(args: {
   principalRef?: string | undefined;
   receipts: EffectReceiptStore;
   nowMs: number;
-}): LocalControlV2ServerFrame {
+}): LocalControlServerFrame {
   const { requestId, params, effectKey, principalRef, receipts, nowMs } = args;
   const effectRevision = receipts.nextRevision();
   const responseData = {
@@ -142,11 +139,12 @@ export function handleTraceOp(args: {
       principalRef,
       digest: digestRequestParams(params),
       effectRevision,
+      ok: true,
       responseData,
     });
   }
   return {
-    apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+    apiVersion: LOCAL_CONTROL_API_VERSION,
     type: "response",
     requestId,
     ok: true,

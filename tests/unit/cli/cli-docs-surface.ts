@@ -12,12 +12,12 @@ export const CLI_USER_MANUAL_DATA_PATH = join(
   ".pier/canvases/pier-cli-user-manual/data.json"
 );
 
-/** shipped 表面禁止出现的规划/无写权/已撤回命令（仅 catalog/list/get 允许）。 */
+/** shipped 表面禁止出现的规划/无写权/已撤回命令。 */
 const AVAILABLE_VIOLATION_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
   [
     {
       id: "agents.unimplemented",
-      re: /^\s*pier\s+agents\s+(self|invoke|start|turn|screen|wait|watch|focus|interrupt|terminate)\b/mu,
+      re: /^\s*pier\s+agents\s+(self|invoke)\b/mu,
     },
     { id: "access", re: /^\s*pier\s+access\b/mu },
     { id: "snapshot", re: /^\s*pier\s+snapshot\b/mu },
@@ -54,6 +54,14 @@ export const REQUIRED_SHIPPED_COMMAND_NAMES = [
   "agents catalog",
   "agents list",
   "agents get",
+  "agents start",
+  "agents turn",
+  "agents screen",
+  "agents wait",
+  "agents watch",
+  "agents focus",
+  "agents interrupt",
+  "agents terminate",
 ] as const;
 
 /**
@@ -86,14 +94,6 @@ export const REQUIRED_PLANNED_COMMAND_NAMES = [
   "notifications get/watch/focus/mark-read",
   "access keygen/status/request/wait/revoke",
   "agents self",
-  "agents start",
-  "agents turn",
-  "agents screen",
-  "agents wait",
-  "agents watch",
-  "agents focus",
-  "agents interrupt",
-  "agents terminate",
 ] as const;
 
 export const REQUIRED_BLOCKED_COMMAND_NAMES = [

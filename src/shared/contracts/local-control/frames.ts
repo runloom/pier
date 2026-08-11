@@ -4,23 +4,23 @@
  */
 import { z } from "zod";
 import {
-  LOCAL_CONTROL_V2_API_VERSION,
-  LOCAL_CONTROL_V2_ERROR_CODES,
-} from "./v2-errors.ts";
+  LOCAL_CONTROL_API_VERSION,
+  LOCAL_CONTROL_ERROR_CODES,
+} from "./errors.ts";
 
-const apiVersionSchema = z.literal(LOCAL_CONTROL_V2_API_VERSION);
+const apiVersionSchema = z.literal(LOCAL_CONTROL_API_VERSION);
 const nonEmpty = z.string().min(1);
 
-export const localControlV2ClientKindSchema = z.enum([
+export const localControlClientKindSchema = z.enum([
   "agent",
   "cli-human",
   "external",
 ]);
-export type LocalControlV2ClientKind = z.infer<
-  typeof localControlV2ClientKindSchema
+export type LocalControlClientKind = z.infer<
+  typeof localControlClientKindSchema
 >;
 
-export const localControlV2AuthSchema = z.discriminatedUnion("method", [
+export const localControlAuthSchema = z.discriminatedUnion("method", [
   z.object({
     /** 本机默认：宿主 spawn 注入的 binding（无 secret） */
     method: z.literal("agent-binding"),
@@ -42,18 +42,18 @@ export const localControlV2AuthSchema = z.discriminatedUnion("method", [
   }),
 ]);
 
-export const localControlV2ClientHelloSchema = z.object({
+export const localControlClientHelloSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("client.hello"),
   requestId: nonEmpty,
-  clientKind: localControlV2ClientKindSchema,
-  auth: localControlV2AuthSchema,
+  clientKind: localControlClientKindSchema,
+  auth: localControlAuthSchema,
 });
-export type LocalControlV2ClientHello = z.infer<
-  typeof localControlV2ClientHelloSchema
+export type LocalControlClientHello = z.infer<
+  typeof localControlClientHelloSchema
 >;
 
-export const localControlV2ClientAuthProofSchema = z.object({
+export const localControlClientAuthProofSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("client.auth-proof"),
   requestId: nonEmpty,
@@ -61,7 +61,7 @@ export const localControlV2ClientAuthProofSchema = z.object({
   signature: nonEmpty,
 });
 
-export const localControlV2ClientRequestSchema = z.object({
+export const localControlClientRequestSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("request"),
   requestId: nonEmpty,
@@ -71,11 +71,11 @@ export const localControlV2ClientRequestSchema = z.object({
   effectKey: z.string().min(1).optional(),
   expectedBootId: z.string().min(1).optional(),
 });
-export type LocalControlV2ClientRequest = z.infer<
-  typeof localControlV2ClientRequestSchema
+export type LocalControlClientRequest = z.infer<
+  typeof localControlClientRequestSchema
 >;
 
-export const localControlV2ClientSubscribeSchema = z.object({
+export const localControlClientSubscribeSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("subscribe"),
   requestId: nonEmpty,
@@ -88,45 +88,45 @@ export const localControlV2ClientSubscribeSchema = z.object({
     .optional(),
 });
 
-export const localControlV2ClientUnsubscribeSchema = z.object({
+export const localControlClientUnsubscribeSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("unsubscribe"),
   requestId: nonEmpty,
   subscriptionId: nonEmpty,
 });
 
-export const localControlV2ClientCancelSchema = z.object({
+export const localControlClientCancelSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("cancel"),
   requestId: nonEmpty,
 });
 
-export const localControlV2ClientFrameSchema = z.discriminatedUnion("type", [
-  localControlV2ClientHelloSchema,
-  localControlV2ClientAuthProofSchema,
-  localControlV2ClientRequestSchema,
-  localControlV2ClientSubscribeSchema,
-  localControlV2ClientUnsubscribeSchema,
-  localControlV2ClientCancelSchema,
+export const localControlClientFrameSchema = z.discriminatedUnion("type", [
+  localControlClientHelloSchema,
+  localControlClientAuthProofSchema,
+  localControlClientRequestSchema,
+  localControlClientSubscribeSchema,
+  localControlClientUnsubscribeSchema,
+  localControlClientCancelSchema,
 ]);
-export type LocalControlV2ClientFrame = z.infer<
-  typeof localControlV2ClientFrameSchema
+export type LocalControlClientFrame = z.infer<
+  typeof localControlClientFrameSchema
 >;
 
-export const localControlV2CursorSchema = z.object({
+export const localControlCursorSchema = z.object({
   bootId: nonEmpty,
   revision: z.number().int().nonnegative(),
   scope: nonEmpty,
 });
 
-export const localControlV2ResponseMetaSchema = z.object({
+export const localControlResponseMetaSchema = z.object({
   effectRevision: z.number().int().nonnegative().optional(),
-  cursor: localControlV2CursorSchema.optional(),
+  cursor: localControlCursorSchema.optional(),
   truncated: z.boolean().optional(),
   attach: z.literal("reuse_same_operation").optional(),
 });
 
-export const localControlV2ServerHelloSchema = z.object({
+export const localControlServerHelloSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("server.hello"),
   requestId: nonEmpty,
@@ -135,11 +135,11 @@ export const localControlV2ServerHelloSchema = z.object({
   features: z.array(z.string()),
   principalRef: z.string().min(1).optional(),
 });
-export type LocalControlV2ServerHello = z.infer<
-  typeof localControlV2ServerHelloSchema
+export type LocalControlServerHello = z.infer<
+  typeof localControlServerHelloSchema
 >;
 
-export const localControlV2ServerChallengeSchema = z.object({
+export const localControlServerChallengeSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("server.challenge"),
   requestId: nonEmpty,
@@ -151,31 +151,31 @@ export const localControlV2ServerChallengeSchema = z.object({
   bootId: nonEmpty,
 });
 
-export const localControlV2ErrorBodySchema = z.object({
-  code: z.enum(LOCAL_CONTROL_V2_ERROR_CODES),
+export const localControlErrorBodySchema = z.object({
+  code: z.enum(LOCAL_CONTROL_ERROR_CODES),
   message: nonEmpty,
   details: z.unknown().optional(),
 });
 
-export const localControlV2ServerResponseSchema = z.discriminatedUnion("ok", [
+export const localControlServerResponseSchema = z.discriminatedUnion("ok", [
   z.object({
     apiVersion: apiVersionSchema,
     type: z.literal("response"),
     requestId: nonEmpty,
     ok: z.literal(true),
     data: z.unknown(),
-    meta: localControlV2ResponseMetaSchema.optional(),
+    meta: localControlResponseMetaSchema.optional(),
   }),
   z.object({
     apiVersion: apiVersionSchema,
     type: z.literal("response"),
     requestId: nonEmpty,
     ok: z.literal(false),
-    error: localControlV2ErrorBodySchema,
+    error: localControlErrorBodySchema,
   }),
 ]);
 
-export const localControlV2ServerEventSchema = z.object({
+export const localControlServerEventSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("event"),
   subscriptionId: nonEmpty,
@@ -186,23 +186,23 @@ export const localControlV2ServerEventSchema = z.object({
   payload: z.unknown(),
 });
 
-export const localControlV2ServerErrorSchema = z.object({
+export const localControlServerErrorSchema = z.object({
   apiVersion: apiVersionSchema,
   type: z.literal("server.error"),
-  code: z.enum(LOCAL_CONTROL_V2_ERROR_CODES),
+  code: z.enum(LOCAL_CONTROL_ERROR_CODES),
   message: nonEmpty,
 });
-export type LocalControlV2ServerError = z.infer<
-  typeof localControlV2ServerErrorSchema
+export type LocalControlServerError = z.infer<
+  typeof localControlServerErrorSchema
 >;
 
-export const localControlV2ServerFrameSchema = z.union([
-  localControlV2ServerHelloSchema,
-  localControlV2ServerChallengeSchema,
-  localControlV2ServerResponseSchema,
-  localControlV2ServerEventSchema,
-  localControlV2ServerErrorSchema,
+export const localControlServerFrameSchema = z.union([
+  localControlServerHelloSchema,
+  localControlServerChallengeSchema,
+  localControlServerResponseSchema,
+  localControlServerEventSchema,
+  localControlServerErrorSchema,
 ]);
-export type LocalControlV2ServerFrame = z.infer<
-  typeof localControlV2ServerFrameSchema
+export type LocalControlServerFrame = z.infer<
+  typeof localControlServerFrameSchema
 >;

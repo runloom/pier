@@ -17,14 +17,17 @@ import {
   type IssuedAgentCallerCredential,
   issueAgentCallerCredential,
 } from "../../services/agent-caller/issue-credential.ts";
-import { createStaticAgentsDiscovery } from "./agents-discovery.ts";
-import { createDefaultLocalControlAuthorizer } from "./local-control-authorize.ts";
-import { createEffectReceiptStore } from "./local-control-receipts.ts";
+import { createFakeTerminalBackend } from "../../services/runtime-control/fake-backend.ts";
+import { createHostTerminalBackend } from "../../services/runtime-control/host-backend.ts";
+import { createRuntimeControlService } from "../../services/runtime-control/service.ts";
+import { createStaticAgentsDiscovery } from "./local-control/agents-discovery.ts";
+import { createDefaultLocalControlAuthorizer } from "./local-control/authorize.ts";
+import { createEffectReceiptStore } from "./local-control/receipts.ts";
 import {
   createPierLocalControlServer,
   type PierLocalControlServer,
   resolveLocalControlSocketPath,
-} from "./local-control-server.ts";
+} from "./local-control/server.ts";
 
 export interface RegisteredLocalControl {
   bootId: string;
@@ -84,6 +87,37 @@ export async function registerCliLocalControl({
     core.services.agentRuntimeIndex.listMachine()
   );
   const bootId = randomUUID();
+  // 仅 dev/test 允许 fake；打包产物忽略 PIER_RUNTIME_CONTROL_FAKE，避免静默假后端。
+  const wantFake =
+    process.env.PIER_RUNTIME_CONTROL_FAKE === "1" ||
+    process.env.PIER_RUNTIME_CONTROL_FAKE === "true";
+  const useFakeBackend = wantFake && !app.isPackaged;
+  const runtimeControl = createRuntimeControlService({
+    bootId,
+    backend: useFakeBackend
+      ? createFakeTerminalBackend()
+      : createHostTerminalBackend({
+          executeCommand: (envelope) => core.commandRouter.execute(envelope),
+        }),
+    // wait 谓词：从 Runtime Index / FA 投影状态（无则回落 registry fact）
+    resolveFact: (record) => {
+      if (record.closed) {
+        return "exited";
+      }
+      try {
+        const snap = core.services.agentRuntimeIndex.listMachine();
+        const hit = snap.entries.find(
+          (e) => e.panelId === record.panelId && e.windowId === record.windowId
+        );
+        if (hit?.status) {
+          return hit.status;
+        }
+      } catch {
+        /* FA 未就绪时忽略 */
+      }
+      return record.fact;
+    },
+  });
   const server: PierLocalControlServer = createPierLocalControlServer({
     handleRequest(envelope) {
       const clientId = clientIdOf(envelope);
@@ -98,6 +132,7 @@ export async function registerCliLocalControl({
     discovery,
     authorizer,
     receipts,
+    runtimeControl,
   });
   const issueAgentCredential: AgentCallerIssuer = (args = {}) =>
     issueAgentCallerCredential({
