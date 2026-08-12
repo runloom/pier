@@ -91,6 +91,49 @@ export type GitReviewMutationResult = z.infer<
   typeof gitReviewMutationResultSchema
 >;
 
+/**
+ * Resolve an unmerged path from review:
+ * - write: host wrote conflict-free contents (after UnresolvedFile Accept)
+ * - ours / theirs: git checkout --ours|--theirs then stage
+ */
+export const gitReviewConflictResolveRequestSchema = z
+  .strictObject({
+    action: z.enum(["ours", "theirs", "write"]),
+    /**
+     * Worktree content digest (sha256:…) observed by the client.
+     * Required for write; optional for ours/theirs (still re-validates unmerged).
+     */
+    expectedContentsDigest: gitReviewRevisionSchema.optional(),
+    operationId: gitReviewOperationIdSchema,
+    /** UTF-8 body after resolution; required when action is write. */
+    resolvedContents: z
+      .string()
+      .max(8 * 1024 * 1024)
+      .optional(),
+    source: gitReviewFileDocumentRequestSchema.shape.source,
+  })
+  .superRefine((request, context) => {
+    if (request.action === "write") {
+      if (request.resolvedContents === undefined) {
+        context.addIssue({
+          code: "custom",
+          message: "write requires resolvedContents",
+          path: ["resolvedContents"],
+        });
+      }
+      if (request.expectedContentsDigest === undefined) {
+        context.addIssue({
+          code: "custom",
+          message: "write requires expectedContentsDigest",
+          path: ["expectedContentsDigest"],
+        });
+      }
+    }
+  });
+export type GitReviewConflictResolveRequest = z.infer<
+  typeof gitReviewConflictResolveRequestSchema
+>;
+
 export const gitReviewCommandSchemas = [
   z.object({
     request: gitReviewIndexRequestSchema,
@@ -111,5 +154,9 @@ export const gitReviewCommandSchemas = [
   z.object({
     request: gitReviewPathMutationRequestSchema,
     type: z.literal("git.applyReviewPathMutation"),
+  }),
+  z.object({
+    request: gitReviewConflictResolveRequestSchema,
+    type: z.literal("git.resolveReviewConflict"),
   }),
 ] as const;

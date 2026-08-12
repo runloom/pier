@@ -42,21 +42,27 @@ export function gitReviewDocumentMetrics(
   if (cached) {
     return cached;
   }
-  const patches = document.sections.flatMap((section) =>
-    section.kind === "patch" ? [section.patch] : []
-  );
+  const bodies = document.sections.flatMap((section) => {
+    if (section.kind === "patch") {
+      return [section.patch];
+    }
+    if (section.kind === "conflict" && section.contents !== null) {
+      return [section.contents];
+    }
+    return [];
+  });
   const bytes = Math.max(
     GIT_REVIEW_DOCUMENT_STRUCTURE_BYTES,
-    patches.reduce((total, patch) => total + patch.length * 2, 0)
+    bodies.reduce((total, body) => total + body.length * 2, 0)
   );
   let lines = 0;
-  for (const patch of patches) {
-    for (let index = 0; index < patch.length; index += 1) {
-      if (patch.charCodeAt(index) === 10) {
+  for (const body of bodies) {
+    for (let index = 0; index < body.length; index += 1) {
+      if (body.charCodeAt(index) === 10) {
         lines += 1;
       }
     }
-    if (!patch.endsWith("\n")) {
+    if (!body.endsWith("\n")) {
       lines += 1;
     }
   }

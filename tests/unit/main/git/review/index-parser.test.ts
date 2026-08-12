@@ -62,9 +62,15 @@ describe("Git review index byte protocol", () => {
       {
         groupFacts: {
           conflict: {
-            sourceOid: null,
+            conflict: {
+              baseOid: sha1,
+              oursOid: sha1,
+              theirsOid: sha1,
+              xy: "UU",
+            },
+            sourceOid: sha1,
             status: "conflicted",
-            targetOid: null,
+            targetOid: sha1,
           },
         },
         path: "conflict.ts",

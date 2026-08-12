@@ -4,13 +4,18 @@ export type PierDiffItemPresentation = "loading" | "ready";
 export function pierDiffItemPresentation(input: {
   readonly patch: string | null;
   readonly stateNotice?: string;
-  readonly kind?: "estimate" | "loaded" | "error" | "ready-notice";
+  readonly kind?: "estimate" | "loaded" | "error" | "ready-notice" | "conflict";
 }): PierDiffItemPresentation {
   // estimate = 正文未水合：header 显示 loading，禁止当成「已就绪的空文件」
   if (input.kind === "estimate") {
     return "loading";
   }
-  if (input.kind === "error" || input.kind === "ready-notice") {
+  // conflict / ready-notice / error：宿主另有正文表面，header 视为就绪
+  if (
+    input.kind === "error" ||
+    input.kind === "ready-notice" ||
+    input.kind === "conflict"
+  ) {
     return "ready";
   }
   if (input.stateNotice) {

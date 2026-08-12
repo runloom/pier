@@ -666,6 +666,7 @@ describe("GitReviewService semantic mutation", () => {
             staged: {
               movement: "rename",
               oldPath: "old.txt",
+              conflict: null,
               origin: "tracked",
               sourceOid: "a".repeat(40),
               statsExpected: true,
@@ -676,6 +677,7 @@ describe("GitReviewService semantic mutation", () => {
             unstaged: {
               movement: null,
               oldPath: null,
+              conflict: null,
               origin: "tracked",
               sourceOid: "b".repeat(40),
               statsExpected: true,
@@ -781,6 +783,7 @@ describe("GitReviewService semantic mutation", () => {
             unstaged: {
               movement: "copy",
               oldPath: "source.txt",
+              conflict: null,
               origin: "tracked",
               sourceOid: "a".repeat(40),
               statsExpected: true,

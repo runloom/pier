@@ -38,6 +38,11 @@ const patchSectionSchema = z.strictObject({
   patch: z.string().min(1),
 });
 
+/**
+ * Legacy empty conflict placeholder. New materialize path emits
+ * {@link conflictSectionSchema}; keep for one transition until UnresolvedFile
+ * host lands (see 2026-08-12-git-review-merge-conflict-unresolved-file-design).
+ */
 const gitReviewStateSectionSchema = z.strictObject({
   ...gitReviewSectionBaseShape,
   kind: z.literal("state"),
@@ -55,9 +60,92 @@ const gitReviewStateSectionSchema = z.strictObject({
   targetPath: gitReviewRelativePathSchema,
 });
 
+/** Porcelain v2 unmerged XY codes (git status --porcelain=v2). */
+export const GIT_REVIEW_CONFLICT_XY = [
+  "DD",
+  "AU",
+  "UD",
+  "UA",
+  "DU",
+  "AA",
+  "UU",
+] as const;
+export const gitReviewConflictXySchema = z.enum(GIT_REVIEW_CONFLICT_XY);
+export type GitReviewConflictXy = z.infer<typeof gitReviewConflictXySchema>;
+
+/**
+ * How renderer should present a conflict section.
+ * - markers-text: worktree has complete <<<<<<< / ======= / >>>>>>> markers
+ * - file-level: unmerged without reliable markers (DD, modify/delete, …)
+ * - binary / tooLarge / invalidEncoding / readError: non-text or unreadable
+ */
+export const GIT_REVIEW_CONFLICT_PRESENTATIONS = [
+  "markers-text",
+  "file-level",
+  "binary",
+  "tooLarge",
+  "invalidEncoding",
+  "readError",
+] as const;
+export const gitReviewConflictPresentationSchema = z.enum(
+  GIT_REVIEW_CONFLICT_PRESENTATIONS
+);
+export type GitReviewConflictPresentation = z.infer<
+  typeof gitReviewConflictPresentationSchema
+>;
+
+const conflictSectionSchema = z.strictObject({
+  ...gitReviewSectionBaseShape,
+  /**
+   * Worktree UTF-8 text when presentation is markers-text; otherwise null
+   * (avoids shipping large non-renderable bodies over IPC).
+   */
+  contents: z.string().nullable(),
+  /** sha256:… of worktree bytes when readable; synthetic digest otherwise. */
+  contentsDigest: z.string().min(1).max(128),
+  kind: z.literal("conflict"),
+  oldPath: z.null(),
+  presentation: gitReviewConflictPresentationSchema,
+  stages: z.strictObject({
+    baseOid: z.string().nullable(),
+    oursOid: z.string().nullable(),
+    theirsOid: z.string().nullable(),
+  }),
+  status: z.literal("conflicted"),
+  targetPath: gitReviewRelativePathSchema,
+  xy: gitReviewConflictXySchema,
+});
+
 export const gitReviewFileSectionSchema = z
-  .discriminatedUnion("kind", [patchSectionSchema, gitReviewStateSectionSchema])
+  .discriminatedUnion("kind", [
+    patchSectionSchema,
+    gitReviewStateSectionSchema,
+    conflictSectionSchema,
+  ])
   .superRefine((section, context) => {
+    if (section.kind === "conflict") {
+      if (
+        section.presentation === "markers-text" &&
+        (section.contents === null || section.contents.length === 0)
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "markers-text conflict requires non-empty contents",
+          path: ["contents"],
+        });
+      }
+      if (
+        section.presentation !== "markers-text" &&
+        section.contents !== null
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Only markers-text conflict may carry worktree contents",
+          path: ["contents"],
+        });
+      }
+      return;
+    }
     if (section.kind !== "state") {
       return;
     }

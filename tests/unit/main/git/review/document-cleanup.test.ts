@@ -70,6 +70,7 @@ async function createOptions(
       fact: {
         movement: null,
         oldPath: null,
+        conflict: null,
         origin: "untracked",
         sourceOid: null,
         statsExpected: true,

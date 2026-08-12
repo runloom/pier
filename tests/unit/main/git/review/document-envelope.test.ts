@@ -26,6 +26,7 @@ function options(
     fact: {
       movement: null,
       oldPath: null,
+      conflict: null,
       origin: "tracked",
       sourceOid: null,
       statsExpected: true,
@@ -206,6 +207,7 @@ describe("Git Review patch envelope", () => {
           fact: {
             movement: "rename",
             oldPath: "old.ts",
+            conflict: null,
             origin: "tracked",
             sourceOid: null,
             statsExpected: true,
@@ -223,6 +225,7 @@ describe("Git Review patch envelope", () => {
           fact: {
             movement: "rename",
             oldPath: "different.ts",
+            conflict: null,
             origin: "tracked",
             sourceOid: null,
             statsExpected: true,

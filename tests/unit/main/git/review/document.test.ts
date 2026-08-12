@@ -822,12 +822,22 @@ describe("GitReviewService document", () => {
       request(source(conflictRoot, "conflict.ts"))
     );
     expectOk(conflict);
-    expect(contents(conflict)).toEqual([
-      expect.objectContaining({
-        kind: "state",
-        reason: "conflict",
-      }),
-    ]);
+    const conflictSection = contents(conflict).find(
+      (section) => section.kind === "conflict"
+    );
+    expect(conflictSection).toMatchObject({
+      kind: "conflict",
+      presentation: "markers-text",
+      status: "conflicted",
+      targetPath: "conflict.ts",
+      xy: "UU",
+    });
+    expect(
+      conflictSection?.kind === "conflict" && conflictSection.contents
+    ).toEqual(expect.stringContaining("<<<<<<<"));
+    expect(
+      conflictSection?.kind === "conflict" && conflictSection.contents
+    ).toEqual(expect.stringContaining(">>>>>>>"));
   });
 
   it("submodule 不伪造文本统计", async () => {

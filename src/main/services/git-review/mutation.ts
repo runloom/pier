@@ -281,7 +281,7 @@ function fileMutationPaths(
     }
     return groupFact.oldPath === null ? [groupFact.targetPath] : null;
   }
-  if (section.kind === "state") {
+  if (section.kind === "state" || section.kind === "conflict") {
     return section.oldPath === null ? [section.targetPath] : null;
   }
   return null;

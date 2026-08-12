@@ -88,6 +88,14 @@ export async function executeGitReviewCommand(
       );
       return success(requestId, result);
     }
+    case "git.resolveReviewConflict": {
+      const result = await services.gitReview.resolveConflict(command.request, {
+        ...options,
+        onCommitted: (gitRootPath) => services.gitWatch.pulse(gitRootPath),
+        writer: services.git,
+      });
+      return success(requestId, result);
+    }
     default: {
       const exhaustive: never = command;
       return exhaustive;
@@ -103,7 +111,8 @@ function isGitReviewCommand(command: PierCommand): command is Extract<
       | "git.applyReviewMutation"
       | "git.applyReviewPathMutation"
       | "git.getReviewFileDocument"
-      | "git.getReviewIndex";
+      | "git.getReviewIndex"
+      | "git.resolveReviewConflict";
   }
 > {
   return (
@@ -111,7 +120,8 @@ function isGitReviewCommand(command: PierCommand): command is Extract<
     command.type === "git.applyReviewMutation" ||
     command.type === "git.applyReviewPathMutation" ||
     command.type === "git.getReviewFileDocument" ||
-    command.type === "git.getReviewIndex"
+    command.type === "git.getReviewIndex" ||
+    command.type === "git.resolveReviewConflict"
   );
 }
 

@@ -12,7 +12,7 @@ import {
 import { lineStatsFromReviewSlot, reviewStageControl } from "./estimates.ts";
 import type { ReviewDocumentResourceProjection } from "./projection-types.ts";
 import type { GitReviewDocumentResource } from "./resource.ts";
-import { stateSectionText } from "./state-text.ts";
+import { conflictSectionText, stateSectionText } from "./state-text.ts";
 
 const loadedResourceProjectionCache = new WeakMap<
   object,
@@ -54,15 +54,25 @@ export function projectReviewDocumentResource(
   const projectionKey = JSON.stringify([
     locale,
     resource.document.revision,
-    resource.document.sections.map((section) =>
-      section.kind === "patch"
-        ? [
-            section.sectionKey,
-            section.patch.length,
-            section.changeBlocks.length,
-          ]
-        : [section.sectionKey, section.kind, section.reason]
-    ),
+    resource.document.sections.map((section) => {
+      if (section.kind === "patch") {
+        return [
+          section.sectionKey,
+          section.patch.length,
+          section.changeBlocks.length,
+        ];
+      }
+      if (section.kind === "conflict") {
+        return [
+          section.sectionKey,
+          section.kind,
+          section.presentation,
+          section.contentsDigest,
+          section.xy,
+        ];
+      }
+      return [section.sectionKey, section.kind, section.reason];
+    }),
     resource.entry,
     commentsSeq ?? 0,
   ]);
@@ -158,6 +168,36 @@ function projectLoadedReviewDocumentResource(
             patch: null,
             ...(stageControl === null ? {} : { stageControl }),
             stateNotice: stateText,
+          },
+        ];
+      }
+      if (section.kind === "conflict") {
+        const notice = conflictSectionText(context, section, locale);
+        return [
+          {
+            cacheKey: JSON.stringify([
+              itemId,
+              locale,
+              section.kind,
+              section.presentation,
+              section.contentsDigest,
+              section.xy,
+              notice,
+            ]),
+            conflict: {
+              contents: section.contents,
+              contentsDigest: section.contentsDigest,
+              presentation: section.presentation,
+              stages: section.stages,
+              xy: section.xy,
+            },
+            fileDisplay: fileDisplayForSlot(slot),
+            id: itemId,
+            kind: "conflict",
+            ...(lineStats === undefined ? {} : { lineStats }),
+            patch: null,
+            ...(stageControl === null ? {} : { stageControl }),
+            stateNotice: notice,
           },
         ];
       }

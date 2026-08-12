@@ -194,6 +194,7 @@ describe("GitReviewService boundary", () => {
             unstaged: {
               movement: null,
               oldPath: null,
+              conflict: null,
               origin: "tracked",
               sourceOid: null,
               statsExpected: true,

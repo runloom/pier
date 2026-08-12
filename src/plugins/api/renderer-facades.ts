@@ -65,6 +65,7 @@ import type {
 } from "@shared/contracts/file.ts";
 import type {
   GitReviewCancelRequest,
+  GitReviewConflictResolveRequest,
   GitReviewFileDocumentRequest,
   GitReviewFileDocumentResult,
   GitReviewGroup,
@@ -293,6 +294,9 @@ export interface RendererPluginGitFacade {
   pullFastForward(cwd: string): Promise<GitRemoteOperationResult>;
   push(cwd: string): Promise<GitRemoteOperationResult>;
   rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
+  resolveReviewConflict(
+    request: GitReviewConflictResolveRequest
+  ): Promise<GitReviewMutationResult>;
   revert(cwd: string, oid: string): Promise<GitSequencerResult>;
   searchBranches(
     cwd: string,

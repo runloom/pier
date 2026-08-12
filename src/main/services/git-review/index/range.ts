@@ -249,6 +249,7 @@ export class GitReviewCommittedRawParser {
     this.#entries.push({
       groupFacts: {
         committed: Object.freeze({
+          conflict: null,
           movement: pending.movement,
           oldPath: status === "renamed" ? oldPath : null,
           origin: "tracked" as const,

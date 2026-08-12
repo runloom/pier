@@ -1,5 +1,6 @@
 import type {
   GitReviewCancelRequest,
+  GitReviewConflictResolveRequest,
   GitReviewFileDocumentRequest,
   GitReviewFileDocumentResult,
   GitReviewIndexRequest,
@@ -24,6 +25,9 @@ export interface PierGitReviewAPI {
   getReviewIndex: (
     request: GitReviewIndexRequest
   ) => Promise<GitReviewIndexResult>;
+  resolveReviewConflict: (
+    request: GitReviewConflictResolveRequest
+  ) => Promise<GitReviewMutationResult>;
 }
 
 export const gitReviewApi: PierGitReviewAPI = {
@@ -51,5 +55,10 @@ export const gitReviewApi: PierGitReviewAPI = {
     invokePierCommand<GitReviewIndexResult>({
       request,
       type: "git.getReviewIndex",
+    }),
+  resolveReviewConflict: (request) =>
+    invokePierCommand<GitReviewMutationResult>({
+      request,
+      type: "git.resolveReviewConflict",
     }),
 };
