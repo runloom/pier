@@ -56,6 +56,9 @@ export const pierCapabilitySchema = z.enum([
    * Consumed by the Files editor language-mode registry (display track).
    */
   "languageMode:provide",
+  // 消息中心：CLI/宿主 list·get·watch 读；mark-read·focus 写（focus 不改 runtime 事实）。
+  "notification:read",
+  "notification:write",
 ]);
 
 export type PierClientKind = z.infer<typeof pierClientKindSchema>;
@@ -112,6 +115,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     // 统一评论能力：桌面 renderer 直连评论服务（镜像 store 读 + 命令写）。
     "comments:read",
     "comments:write",
+    "notification:read",
+    "notification:write",
   ],
   "cli-local": [
     "app:read",
@@ -130,6 +135,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "plugin:read",
     "git:read",
     "skills:read",
+    "notification:read",
+    "notification:write",
   ],
   "mcp-local": [
     "app:read",
@@ -144,6 +151,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "terminal:read",
     "terminal:control",
     "git:read",
+    "notification:read",
   ],
   "mobile-paired": [
     "app:read",
@@ -159,5 +167,6 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "panel:control",
     "terminal:read",
     "terminal:control",
+    "notification:read",
   ],
 };

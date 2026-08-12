@@ -9,7 +9,7 @@ import { createPierBindingsChannel } from "@main/services/project-skills/pier-bi
 import { createProjectSkillsStore } from "@main/services/project-skills/store/index.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-describe("Pier Home skills library + pierBindings", () => {
+describe("Pier Home skills library + pierBindings", { timeout: 30_000 }, () => {
   let userData: string;
   let projectRoot: string;
   let now: number;

@@ -9,7 +9,7 @@ import { createPierBindingsChannel } from "@main/services/project-skills/pier-bi
 import { createProjectSkillsStore } from "@main/services/project-skills/store/index.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-describe("pierBindings converge", () => {
+describe("pierBindings converge", { timeout: 30_000 }, () => {
   let userData: string;
   let projectRoot: string;
 

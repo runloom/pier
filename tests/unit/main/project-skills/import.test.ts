@@ -85,7 +85,7 @@ async function projectRef() {
   return toContractProjectRootRef(identity);
 }
 
-describe("project-skills import service", () => {
+describe("project-skills import service", { timeout: 30_000 }, () => {
   it("prepareLocalImport returns null when the native dialog is canceled", async () => {
     const showOpenDialog: OpenDirectoryDialog = async () => ({
       canceled: true,

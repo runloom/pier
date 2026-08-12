@@ -31,8 +31,8 @@
       "reason": "debt: top-level shared helpers still flat; composer surfaces extracted to agent-surfaces/; terminal path/open-disk-target + system-open-guard pending terminal/ folder; task-runs-window-filter + domain modules pending folders"
     },
     "src/shared/contracts": {
-      "max": 50,
-      "reason": "debt: finish remaining contract domain groups"
+      "max": 51,
+      "reason": "debt: finish remaining contract domain groups; host-control + local-control contract surface"
     },
     "src/renderer/panel-kits/terminal": {
       "max": 52,

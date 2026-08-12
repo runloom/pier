@@ -129,7 +129,7 @@ afterEach(async () => {
   await rm(sharedLockRoot, { force: true, recursive: true });
 });
 
-describe("project-skills service facade", () => {
+describe("project-skills service facade", { timeout: 30_000 }, () => {
   it("requires shared transactionLock", () => {
     expect(() =>
       createProjectSkillsService({

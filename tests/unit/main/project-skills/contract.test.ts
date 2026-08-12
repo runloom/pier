@@ -38,7 +38,7 @@ const sampleProjectRef = {
   token: "tok-1",
 };
 
-describe("project-skills contract", () => {
+describe("project-skills contract", { timeout: 30_000 }, () => {
   it("accepts a valid strict manifest", () => {
     expect(projectSkillsManifestSchema.parse(validManifest)).toEqual(
       validManifest

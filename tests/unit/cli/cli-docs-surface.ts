@@ -12,18 +12,17 @@ export const CLI_USER_MANUAL_DATA_PATH = join(
   ".pier/canvases/pier-cli-user-manual/data.json"
 );
 
-/** shipped 表面禁止出现的规划/无写权命令（只读 agents catalog/list/get 允许）。 */
+/** shipped 表面禁止出现的规划/无写权/已撤回命令。 */
 const AVAILABLE_VIOLATION_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
   [
     {
       id: "agents.unimplemented",
-      re: /^\s*pier\s+agents\s+(self|invoke|start|turn|screen|wait|watch|focus|interrupt|terminate)\b/mu,
+      re: /^\s*pier\s+agents\s+(self|invoke)\b/mu,
     },
+    // access.* 已删除：不得出现在 shipped 可抄写表面
     { id: "access", re: /^\s*pier\s+access\b/mu },
-    { id: "snapshot", re: /^\s*pier\s+snapshot\b/mu },
-    { id: "watch", re: /^\s*pier\s+watch\b/mu },
     { id: "activity", re: /^\s*pier\s+activity\b/mu },
-    { id: "notifications", re: /^\s*pier\s+notifications\b/mu },
+    // notifications.* 已在 W5 产品 shipped
     { id: "plugins enable", re: /^\s*pier\s+plugins\s+enable\b/mu },
     { id: "plugins disable", re: /^\s*pier\s+plugins\s+disable\b/mu },
   ];
@@ -40,20 +39,45 @@ export const REQUIRED_SHIPPED_COMMAND_NAMES = [
   "panels list",
   "panels focus",
   "terminal open",
+  "terminal list",
+  "terminal get",
+  "terminal send",
+  "terminal key",
   "terminal profiles list|get|set|delete",
   "worktrees list",
   "worktrees create",
   "worktrees open",
+  "worktrees check",
+  "worktrees get",
+  "worktrees remove",
   "tasks list",
   "tasks run",
   "tasks status",
+  "tasks get",
+  "tasks output",
+  "tasks stop",
   "tasks cancel",
+  "snapshot",
+  "watch",
   "preferences read",
   "plugins list",
   "plugins inspect",
   "agents catalog",
   "agents list",
   "agents get",
+  "agents start",
+  "agents turn",
+  "agents screen",
+  "agents wait",
+  "agents watch",
+  "agents focus",
+  "agents interrupt",
+  "agents terminate",
+  "notifications list",
+  "notifications get",
+  "notifications watch",
+  "notifications focus",
+  "notifications mark-read",
 ] as const;
 
 /**
@@ -64,44 +88,20 @@ export const REQUIRED_PLANNED_COMMAND_NAMES = [
   "version",
   "capabilities",
   "doctor",
-  "snapshot",
-  "watch",
-  "terminal list",
-  "terminal get",
-  "terminal send",
-  "terminal key",
   "terminal interrupt",
   "terminal terminate",
   "terminal wait",
   "terminal watch",
-  "worktrees check",
-  "worktrees get",
   "worktrees register",
-  "worktrees remove",
-  "tasks get",
   "tasks watch",
-  "tasks output",
-  "tasks stop / rerun",
-  "activity snapshot",
-  "activity watch",
-  "notifications list",
-  "notifications get/watch/focus/mark-read",
-  "access keygen/status/request/wait/revoke",
-  "agents self",
-  "agents invoke",
-  "agents start",
-  "agents turn",
-  "agents screen",
-  "agents wait",
-  "agents watch",
-  "agents focus",
-  "agents interrupt",
-  "agents terminate",
+  "tasks rerun",
 ] as const;
 
 export const REQUIRED_BLOCKED_COMMAND_NAMES = [
   "plugins enable",
   "plugins disable",
+  "agents invoke",
+  "agents self",
 ] as const;
 
 export interface CliManualCommand {
@@ -119,7 +119,9 @@ export interface CliManualData {
     intro: string;
     shipped: CliManualCommand[];
     planned: CliManualCommand[];
+    blocked?: CliManualCommand[];
   };
+  blocked?: { commands: CliManualCommand[] };
   bluf: string;
   context: string;
   domains: {
@@ -157,12 +159,14 @@ export function readCliUserManualData(): CliManualData {
   return readCliUserManualPayload().data;
 }
 
-/** 所有命令条目（domains + agents.shipped + agents.planned）。 */
+/** 所有命令条目（domains + agents shipped/planned/blocked + 顶层 blocked）。 */
 export function listCliManualCommands(data: CliManualData): CliManualCommand[] {
   return [
     ...data.domains.flatMap((domain) => domain.commands),
     ...data.agents.shipped,
     ...data.agents.planned,
+    ...(data.agents.blocked ?? []),
+    ...(data.blocked?.commands ?? []),
   ];
 }
 

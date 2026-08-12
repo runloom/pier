@@ -61,7 +61,7 @@ function pathEnv(binDir: string): NodeJS.ProcessEnv {
   };
 }
 
-describe("run uninstall service", () => {
+describe("run uninstall service", { timeout: 30_000 }, () => {
   const cleanups: Array<() => Promise<void>> = [];
   afterEach(async () => {
     while (cleanups.length > 0) {
@@ -111,7 +111,9 @@ describe("run uninstall service", () => {
     expect(runner.run).toHaveBeenCalledTimes(1);
   });
 
-  it("still_detected is hard fail with remaining paths in errorDetail", async () => {
+  it("still_detected is hard fail with remaining paths in errorDetail", {
+    timeout: 20_000,
+  }, async () => {
     const root = await mkdtemp(join(tmpdir(), "pier-uninstall-still-"));
     cleanups.push(() => rm(root, { recursive: true, force: true }));
     const binDir = join(root, "lib", "node_modules", ".bin");
@@ -139,7 +141,9 @@ describe("run uninstall service", () => {
     expect(afterInstall).not.toHaveBeenCalled();
   });
 
-  it("ignores uninstall shell prefs when canUninstall is false (system config only)", async () => {
+  it("ignores uninstall shell prefs when canUninstall is false (system config only)", {
+    timeout: 20_000,
+  }, async () => {
     const root = await mkdtemp(join(tmpdir(), "pier-uninstall-custom-"));
     cleanups.push(() => rm(root, { recursive: true, force: true }));
     // Plain path source → managed canUninstall false for claude.

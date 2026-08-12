@@ -1,15 +1,15 @@
 /**
  * 本机控制首帧分流：v1 短请求 vs v2 会话。
  */
-import { LOCAL_CONTROL_V2_API_VERSION } from "./v2-errors.ts";
+import { LOCAL_CONTROL_API_VERSION } from "./errors.ts";
 import {
-  type LocalControlV2ClientHello,
-  localControlV2ClientHelloSchema,
-} from "./v2-frames.ts";
+  type LocalControlClientHello,
+  localControlClientHelloSchema,
+} from "./frames.ts";
 
 export type LocalControlFirstFrame =
   | { kind: "v1"; envelope: unknown }
-  | { kind: "v2-hello"; hello: LocalControlV2ClientHello }
+  | { kind: "session-hello"; hello: LocalControlClientHello }
   | {
       kind: "invalid";
       reason: string;
@@ -36,7 +36,7 @@ export function classifyLocalControlFirstFrame(
     };
   }
 
-  if (value.apiVersion === LOCAL_CONTROL_V2_API_VERSION) {
+  if (value.apiVersion === LOCAL_CONTROL_API_VERSION) {
     if (value.type !== "client.hello") {
       return {
         kind: "invalid",
@@ -44,7 +44,7 @@ export function classifyLocalControlFirstFrame(
         code: "protocol_unsupported",
       };
     }
-    const parsed = localControlV2ClientHelloSchema.safeParse(value);
+    const parsed = localControlClientHelloSchema.safeParse(value);
     if (!parsed.success) {
       return {
         kind: "invalid",
@@ -52,7 +52,7 @@ export function classifyLocalControlFirstFrame(
         code: "invalid_command",
       };
     }
-    return { kind: "v2-hello", hello: parsed.data };
+    return { kind: "session-hello", hello: parsed.data };
   }
 
   if (value.protocolVersion === 1 && "command" in value) {

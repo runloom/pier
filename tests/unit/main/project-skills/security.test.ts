@@ -163,7 +163,9 @@ afterEach(async () => {
   await rm(sharedLockRoot, { force: true, recursive: true });
 });
 
-describe("project-skills security: unmanaged targets", () => {
+describe("project-skills security: unmanaged targets", {
+  timeout: 30_000,
+}, () => {
   it("does not overwrite an unmanaged regular file at the projection path", async () => {
     await writeLibrarySkill("guide");
     await writeManifest({

@@ -43,11 +43,14 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/panel-kits/terminal/structured-composer/composer-suggest-list.tsx",
   // Review comment action dialog uses dense host chrome hit targets.
   "src/renderer/lib/comments/action-dialog.tsx",
+  // Agent collaboration session rows: Item asChild full-row select hit target.
+  "src/renderer/lib/agent-runtime/collaboration-dialog.tsx",
 ]);
 const ITEM_AS_CHILD_BUTTON_OWNERS = new Set([
   "src/plugins/builtin/files/renderer/search/result-row.tsx",
   "src/renderer/pages/settings/components/environment-section.tsx",
   "src/renderer/pages/settings/components/skills/project-list.tsx",
+  "src/renderer/lib/agent-runtime/collaboration-dialog.tsx",
   "src/renderer/pages/settings/components/project/rules-panel.tsx",
 ]);
 const DETACHED_ITEM_HELPERS = new Map([

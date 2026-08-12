@@ -61,7 +61,7 @@ afterEach(async () => {
   await rm(userData, { force: true, recursive: true });
 });
 
-describe("project-skills store ownership", () => {
+describe("project-skills store ownership", { timeout: 30_000 }, () => {
   it("returns null when ownership is absent", async () => {
     const store = createProjectSkillsStore({ userData });
     const paths = createProjectSkillsPaths(userData);

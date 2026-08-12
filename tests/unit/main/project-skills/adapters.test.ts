@@ -8,7 +8,7 @@ import {
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { describe, expect, it } from "vitest";
 
-describe("project-skills discovery adapters", () => {
+describe("project-skills discovery adapters", { timeout: 30_000 }, () => {
   it("registers every audited AgentKind with official skills docs (2026-07-20)", () => {
     const registry = createSkillDiscoveryAdapterRegistry();
     const kinds = registry

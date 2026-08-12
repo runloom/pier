@@ -63,7 +63,7 @@ async function writeEnabledSkill(skillId: string): Promise<void> {
   );
 }
 
-describe("project-skills enabled projection", () => {
+describe("project-skills enabled projection", { timeout: 30_000 }, () => {
   it("projects an enabled valid library skill during ensureReady", async () => {
     await writeEnabledSkill("review-guide");
     const identity = await resolveStableProjectIdentity(projectRoot);

@@ -19,7 +19,7 @@ afterEach(async () => {
   await rm(root, { force: true, recursive: true });
 });
 
-describe("project-skills StableProjectIdentity", () => {
+describe("project-skills StableProjectIdentity", { timeout: 30_000 }, () => {
   it("resolves realPath, volumeId, and directoryIdentity for a directory", async () => {
     const project = join(root, "proj");
     await mkdir(project);

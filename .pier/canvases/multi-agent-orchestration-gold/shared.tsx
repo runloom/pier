@@ -177,19 +177,19 @@ export function DualPathCards() {
       <Card className="min-w-0" size="sm">
         <CardHeader className="gap-2">
           <Row align="center" gap={8} wrap>
-            <Badge size="xs" variant="info">
+            <Badge size="xs" variant="secondary">
               一次性
             </Badge>
-            <CardTitle className="text-sm">self → invoke</CardTitle>
+            <CardTitle className="text-sm">原生 agent CLI（不经 Pier）</CardTitle>
           </Row>
         </CardHeader>
         <CardContent>
           <Stack gap={4}>
             <Text className="text-sm leading-relaxed">
-              直接取得仅属于本次调用的结构化回复。
+              直接使用 codex / claude 等 headless 能力取得本次回复。
             </Text>
             <Text tone="tertiary" className="text-xs leading-relaxed">
-              回复只返回调用者，不进入协作台 UI。
+              Pier 不封装、不实现 agents invoke；不进协作台 UI。
             </Text>
           </Stack>
         </CardContent>
@@ -197,8 +197,8 @@ export function DualPathCards() {
       <Card className="min-w-0" size="sm">
         <CardHeader className="gap-2">
           <Row align="center" gap={8} wrap>
-            <Badge size="xs" variant="secondary">
-              持久会话
+            <Badge size="xs" variant="info">
+              持久会话 · 主路径
             </Badge>
             <CardTitle className="text-sm">start → turn → screen / wait</CardTitle>
           </Row>

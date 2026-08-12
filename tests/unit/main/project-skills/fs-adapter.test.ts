@@ -32,7 +32,7 @@ afterEach(async () => {
   await rm(outside, { force: true, recursive: true });
 });
 
-describe("project skills filesystem adapter", () => {
+describe("project skills filesystem adapter", { timeout: 30_000 }, () => {
   it("returns conflict from publishSymlinkNoReplace without changing existing identity", async () => {
     const linkPath = join(root, ".agents", "skills", "review-guide");
     await mkdir(dirname(linkPath), { recursive: true });

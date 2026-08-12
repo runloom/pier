@@ -106,6 +106,11 @@
             return text
         }
 
+        /// Current viewport text (no scrollback). nil when surface missing.
+        public func readViewportText() -> String? {
+            surface?.readViewportText()
+        }
+
         /// TUI 输入聚焦探针：应用设置的 DECTCEM(?25) 光标模式位。
         /// surface 未创建返回 nil（调用方映射 unknown，禁止当作「失焦」）。
         public func cursorVisibleProbe() -> Bool? {

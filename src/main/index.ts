@@ -9,7 +9,7 @@ import {
   nativeImage,
   shell,
 } from "electron";
-import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control-registration.ts";
+import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control/registration.ts";
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { registerPeerUidFromNativeAddon } from "./adapters/cli/register-peer-uid-native.ts";
 import { appCore } from "./app-core/index.ts";

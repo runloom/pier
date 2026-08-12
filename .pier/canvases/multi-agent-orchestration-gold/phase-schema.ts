@@ -3,7 +3,7 @@ export type PhaseSlice = {
   title: string;
 };
 
-export type PhaseStatus = "planned" | "in_progress" | "done";
+export type PhaseStatus = "planned" | "in_progress" | "done" | "cancelled";
 
 export type ClosedLoopPhase = {
   wave: number;
@@ -14,7 +14,12 @@ export type ClosedLoopPhase = {
   slices: PhaseSlice[];
 };
 
-const PHASE_STATUSES = new Set<PhaseStatus>(["planned", "in_progress", "done"]);
+const PHASE_STATUSES = new Set<PhaseStatus>([
+  "planned",
+  "in_progress",
+  "done",
+  "cancelled",
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -43,7 +48,9 @@ export function parseClosedLoopPhase(input: unknown): ClosedLoopPhase {
     throw new Error("phase.name 与 phase.outcome 必须是非空字符串");
   }
   if (!isNonEmptyString(input.status) || !PHASE_STATUSES.has(input.status as PhaseStatus)) {
-    throw new Error("phase.status 必须是 planned | in_progress | done");
+    throw new Error(
+      "phase.status 必须是 planned | in_progress | done | cancelled"
+    );
   }
   if (!Array.isArray(input.slices) || input.slices.length === 0) {
     throw new Error("phase.slices 必须是非空数组");

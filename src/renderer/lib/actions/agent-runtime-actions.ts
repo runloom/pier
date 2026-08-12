@@ -1,7 +1,8 @@
-import { Bot, HandHelping } from "lucide-react";
+import { Bot, HandHelping, Users } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
+import { openCollaborationView } from "@/lib/agent-runtime/collaboration-dialog.tsx";
 import { invokeAgentRuntimeFocusWaiting } from "@/lib/agent-runtime/focus-feedback.ts";
 import { openAgentIndexQuickPick } from "@/lib/agent-runtime/open-agent-index-quickpick.tsx";
 import { preferredAgentIndexSortOptions } from "@/lib/agent-runtime/preferred-sort-options.ts";
@@ -17,6 +18,10 @@ async function handleFocusWaitingAgent(): Promise<void> {
   await invokeAgentRuntimeFocusWaiting(preferredAgentIndexSortOptions());
 }
 
+function handleOpenCollaboration(): void {
+  openCollaborationView();
+}
+
 export const AGENT_RUNTIME_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
   [
     {
@@ -28,6 +33,16 @@ export const AGENT_RUNTIME_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       sortOrder: 10,
       surfaces: ["command-palette"],
       titleKey: "commandPalette.action.listAgents",
+    },
+    {
+      categoryKey: "run",
+      group: "2_agents",
+      handler: handleOpenCollaboration,
+      iconComponent: Users,
+      id: "pier.agents.collaboration",
+      sortOrder: 12,
+      surfaces: ["command-palette"],
+      titleKey: "commandPalette.action.openCollaboration",
     },
     {
       categoryKey: "run",

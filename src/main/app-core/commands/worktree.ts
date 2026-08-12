@@ -28,6 +28,7 @@ import {
   executePanelOpenCommand,
   executeTerminalOpenCommand,
 } from "./panel.ts";
+import { admitWorktreeRemove } from "./worktree-remove-admission.ts";
 
 const worktreeCreateLog = createLogger("worktree.create");
 
@@ -336,6 +337,8 @@ export async function executeWorktreeCommand(
   switch (command.type) {
     case "worktree.check":
       return success(requestId, await services.worktrees.check(command));
+    case "worktree.get":
+      return success(requestId, await services.worktrees.get(command));
     case "worktree.list":
       return success(requestId, await services.worktrees.list(command));
     case "worktree.create":
@@ -364,6 +367,10 @@ export async function executeWorktreeCommand(
         services
       );
     case "worktree.remove": {
+      const admission = await admitWorktreeRemove(services, command.path);
+      if (admission.blocked) {
+        return failure(requestId, "invalid_command", admission.message);
+      }
       const removed = await services.worktrees.remove(command, {
         beforeRemove: async ({ targetPath }) => {
           const binding =

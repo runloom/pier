@@ -12,10 +12,8 @@ import { join } from "node:path";
 import {
   createPierLocalControlServer,
   resolveLocalControlSocketPath,
-} from "@main/adapters/cli/local-control-server.ts";
-import { createAgentCallerCredentialStore } from "@main/services/agent-caller/credential-store.ts";
-import { issueAgentCallerCredential } from "@main/services/agent-caller/issue-credential.ts";
-import { LOCAL_CONTROL_V2_API_VERSION } from "@shared/contracts/local-control/v2-errors.ts";
+} from "@main/adapters/cli/local-control/server.ts";
+import { LOCAL_CONTROL_API_VERSION } from "@shared/contracts/local-control/errors.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const tempDirs: string[] = [];
@@ -92,79 +90,57 @@ function collectFrames(
 }
 
 describe("local-control architecture closed loop", () => {
-  it("issue binding → agent hello → self (no secret file)", async () => {
+  it("cli-human hello → agents.catalog (product path)", async () => {
     const dir = await userData();
     const socketPath = resolveLocalControlSocketPath(dir);
-    const store = createAgentCallerCredentialStore();
     const server = createPierLocalControlServer({
       bootId: "boot-arch",
       socketPath,
-      credentialStore: store,
       handleRequest: async () => {
         throw new Error("v1 unused");
       },
     });
     await server.start();
     try {
-      const issued = issueAgentCallerCredential({
-        store,
-        bootId: "boot-arch",
-      });
-      expect(store.get(issued.material.credentialId)).toBeTruthy();
-      expect(issued.material.secret).toBeUndefined();
-      expect(issued.env.PIER_AGENT_CALLER_BINDING).toBe(
-        issued.material.credentialId
-      );
-      expect(issued.env.PIER_AGENT_CALLER_CREDENTIAL_FILE).toBeUndefined();
-
       const frames = await collectFrames(
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
-            clientKind: "agent",
-            auth: {
-              method: "agent-binding",
-              bindingId: issued.material.credentialId,
-            },
+            clientKind: "cli-human",
+            auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "s1",
-            op: "agents.self",
+            op: "agents.catalog",
             params: {},
           }),
         ],
         2
       );
 
-      const hello = frames[0] as { type: string; features: string[] };
-      const self = frames[1] as {
-        ok: boolean;
-        data?: {
-          self?: {
-            bindingId: string;
-            credentialId: string;
-            secret?: string;
-          };
-        };
+      const hello = frames[0] as {
+        type: string;
+        features: string[];
+        principalRef?: string;
       };
+      const catalog = frames[1] as { ok: boolean; type: string };
       expect(hello.type).toBe("server.hello");
+      expect(hello.principalRef).toBe("human:peer");
       expect(hello.features).toEqual(
         expect.arrayContaining([
-          "agents.self",
+          "agents.catalog",
           "stream.subscribe",
           "control.hold",
           "control.trace",
         ])
       );
-      expect(self.ok).toBe(true);
-      expect(self.data?.self?.bindingId).toBe(issued.material.credentialId);
-      expect(self.data?.self?.credentialId).toBe(issued.material.credentialId);
-      expect(self.data?.self?.secret).toBeUndefined();
+      expect(hello.features).not.toContain("agents.self");
+      expect(catalog.ok).toBe(true);
     } finally {
       await server.close();
     }
@@ -188,14 +164,14 @@ describe("local-control architecture closed loop", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "t1",
             op: "control.trace",
@@ -203,7 +179,7 @@ describe("local-control architecture closed loop", () => {
             effectKey: key,
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "t2",
             op: "control.trace",
@@ -211,7 +187,7 @@ describe("local-control architecture closed loop", () => {
             effectKey: key,
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "t3",
             op: "control.trace",
@@ -260,14 +236,14 @@ describe("local-control architecture closed loop", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "j1",
             op: "control.trace",
@@ -276,7 +252,7 @@ describe("local-control architecture closed loop", () => {
           }),
           // 语义相同、键序不同 → 应重放同一 effectRevision
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "j2",
             op: "control.trace",
@@ -335,14 +311,14 @@ describe("local-control architecture closed loop", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "subscribe",
             requestId: "sub1",
             stream: "resource:agents",
@@ -382,21 +358,21 @@ describe("local-control architecture closed loop", () => {
         socketPath,
         [
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "h1",
             clientKind: "cli-human",
             auth: { method: "none" },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "hold1",
             op: "control.hold",
             params: { ms: 5000 },
           }),
           JSON.stringify({
-            apiVersion: LOCAL_CONTROL_V2_API_VERSION,
+            apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "cancel",
             requestId: "hold1",
           }),

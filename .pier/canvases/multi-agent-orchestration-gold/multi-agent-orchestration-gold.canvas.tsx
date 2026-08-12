@@ -24,9 +24,9 @@ import { StatusBadge } from "./shared.tsx";
 
 export const canvas = {
   description:
-    "产品 CLI 服务本机用户（cli-human）：W0–W1 传输/发现已关账；agent binding 为遗留实验；invoke 与持久会话从 W2/W3 起实现。",
+    "一次性用原生 agent（不封装 invoke）；Pier 主路径是发现 + 持久 start/turn/screen；W1 发现已落地，W2 产品撤回，W3 为主交付。",
   kind: "composition" as const,
-  title: "智能体优先的多智能体调用 CLI · 产品与技术方案",
+  title: "智能体优先的持久运行控制 CLI · 产品与技术方案",
 };
 
 export default function MultiAgentOrchestrationCanvas() {

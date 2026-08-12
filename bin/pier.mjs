@@ -5,12 +5,13 @@ import { readFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { stdin as stdinStream } from "node:process";
 import {
   hasPierCliOption,
   parsePierCliArgs,
   usage,
 } from "./pier-cli-parser.js";
-import { invokePierControlV2 } from "./pier-control-v2-client.js";
+import { invokePierControl } from "./pier-control-client.js";
 
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SOCKET_FILENAME = "pier-control.sock";
@@ -283,6 +284,106 @@ function formatAgentsList(data) {
     .join("\n")}\n`;
 }
 
+function formatNotificationsHuman(type, data) {
+  if (type === "notifications.list" || type === "notifications.watch") {
+    const items = data?.items;
+    const seq = typeof data?.seq === "number" ? ` seq=${data.seq}` : "";
+    if (type === "notifications.watch") {
+      const mode = data?.mode ?? "snapshot";
+      if (mode === "timeout") {
+        return `(timeout)${seq}\n`;
+      }
+      if (mode === "cancelled") {
+        return `(cancelled)${seq}\n`;
+      }
+      if (!Array.isArray(items) || items.length === 0) {
+        return `(no notifications) mode=${mode}${seq}\n`;
+      }
+      return `${items
+        .map(
+          (item) =>
+            `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}`
+        )
+        .join("\n")}\n`;
+    }
+    if (!Array.isArray(items) || items.length === 0) {
+      return `(no notifications)${seq}\n`;
+    }
+    return `${items
+      .map(
+        (item) =>
+          `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}`
+      )
+      .join("\n")}\n`;
+  }
+  if (type === "notifications.get") {
+    const item = data?.item;
+    if (!item) {
+      return "(not found)\n";
+    }
+    return `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}\n`;
+  }
+  if (type === "notifications.focus") {
+    return `focused\tstatus=${data?.status ?? "?"}\n`;
+  }
+  if (type === "notifications.mark-read") {
+    if (data?.marked === "all") {
+      return `marked=all\tunread=${data?.unreadCount ?? 0}\n`;
+    }
+    return `marked=${data?.marked ?? 0}\tid=${data?.id ?? "?"}\n`;
+  }
+  return "";
+}
+
+function exitCodeForV2Response(response) {
+  if (response.ok) {
+    const data = response.data;
+    // wait 被 cancel：ok:true + cancelled → 0（非超时 124）
+    if (data && typeof data === "object" && data.cancelled === true) {
+      return 0;
+    }
+    // wait 未达成谓词仍 ok:true + reached:false → 124 便于脚本
+    if (
+      data &&
+      typeof data === "object" &&
+      "reached" in data &&
+      data.reached === false
+    ) {
+      return 124;
+    }
+    return 0;
+  }
+  const code = response.error?.code;
+  if (code === "observation_timeout" || code === "timeout") {
+    return 124;
+  }
+  return 1;
+}
+
+async function readTextSource(source) {
+  if (!source) {
+    return null;
+  }
+  if (source.kind === "inline") {
+    return source.text;
+  }
+  if (source.kind === "file") {
+    return readFileSync(source.path, "utf8");
+  }
+  if (stdinStream.isTTY) {
+    throw new Error(
+      "agents turn needs text via --text, --text-file, or stdin redirect (--stdin)"
+    );
+  }
+  const chunks = [];
+  for await (const chunk of stdinStream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(
+    chunks.map((c) => (typeof c === "string" ? Buffer.from(c) : c))
+  ).toString("utf8");
+}
+
 try {
   const rawArgv = process.argv.slice(2);
   const argv = rawArgv[0] === "--" ? rawArgv.slice(1) : rawArgv;
@@ -297,6 +398,8 @@ try {
             requestId: parsed.requestId,
             op: parsed.op,
             params: parsed.params,
+            effectKey: parsed.effectKey,
+            expectedBootId: parsed.expectedBootId,
             json: parsed.json,
           },
           null,
@@ -316,14 +419,53 @@ try {
   }
 
   if (parsed.protocol === "v2") {
+    let params = parsed.params ?? {};
+    if (parsed.op === "agents.turn") {
+      const text = await readTextSource(parsed.textSource);
+      if (!text || text.length === 0) {
+        throw new Error("agents turn text is empty");
+      }
+      params = { ...params, text };
+    }
+    const waitTimeoutMs =
+      typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
+        ? params.timeoutMs
+        : 0;
+    // watch/wait 服务默认 30s；客户端必须带传输余量，避免贴边先掐 socket
+    const serviceBudgetMs =
+      parsed.op === "agents.watch" ||
+      parsed.op === "agents.wait" ||
+      parsed.op === "control.watch"
+        ? waitTimeoutMs > 0
+          ? waitTimeoutMs
+          : 30_000
+        : 0;
+    const clientTimeoutMs = Math.max(
+      30_000,
+      serviceBudgetMs + 20_000,
+      parsed.op === "agents.start" ? 60_000 : 0
+    );
     // 本机 CLI 一律按本机用户调用，不注入 / 不解析 agent binding 或凭证。
-    const { response } = await invokePierControlV2({
+    const { response, events } = await invokePierControl({
       socketPath: resolveSocketPath(),
       requestId: parsed.requestId,
       op: parsed.op,
-      params: parsed.params,
+      params,
       clientKind: "cli-human",
+      effectKey: parsed.effectKey,
+      expectedBootId: parsed.expectedBootId,
+      timeoutMs: clientTimeoutMs,
     });
+    // watch：先按行输出 event*，再输出终态 response（JSONL 流）
+    if (
+      (parsed.op === "agents.watch" || parsed.op === "control.watch") &&
+      Array.isArray(events) &&
+      events.length > 0
+    ) {
+      for (const ev of events) {
+        console.log(JSON.stringify(ev));
+      }
+    }
     if (parsed.json) {
       console.log(JSON.stringify(response, null, 2));
     } else if (response.ok && parsed.op === "agents.catalog") {
@@ -337,17 +479,52 @@ try {
           `${agent.agentId}\tpanel=${agent.panelId}\twindow=${agent.windowId}\n`
         );
       }
+    } else if (response.ok && parsed.op === "agents.start") {
+      const rt = response.data?.runtime;
+      if (rt) {
+        process.stdout.write(
+          `boot=${rt.bootId}\truntime=${rt.runtimeId}\tgeneration=${rt.generation}\tpanel=${response.data.panelId}\n`
+        );
+      }
+    } else if (response.ok && parsed.op === "agents.screen") {
+      process.stdout.write(`${response.data?.screen?.text ?? ""}\n`);
+    } else if (response.ok && parsed.op === "agents.turn") {
+      process.stdout.write("accepted\n");
     } else if (!response.ok) {
       const code = response.error?.code ?? "error";
       const message = response.error?.message ?? "command failed";
       console.error(`${code}: ${message}`);
     }
-    process.exit(response.ok ? 0 : 1);
+    process.exit(exitCodeForV2Response(response));
   }
 
-  const result = await request(resolveSocketPath(), parsed.envelope);
+  // notifications.watch 服务默认 30s；客户端须带传输余量
+  const v1TimeoutMs =
+    parsed.envelope.command?.type === "notifications.watch"
+      ? Math.max(
+          50_000,
+          (Number(parsed.envelope.command.timeoutMs) || 30_000) + 20_000
+        )
+      : 5000;
+  const result = await request(
+    resolveSocketPath(),
+    parsed.envelope,
+    v1TimeoutMs
+  );
   if (parsed.json) {
     console.log(JSON.stringify(result, null, 2));
+  } else if (
+    typeof parsed.envelope.command.type === "string" &&
+    parsed.envelope.command.type.startsWith("notifications.") &&
+    result.ok
+  ) {
+    const output = formatNotificationsHuman(
+      parsed.envelope.command.type,
+      result.data
+    );
+    if (output) {
+      process.stdout.write(output);
+    }
   } else if (parsed.envelope.command.type === "panel.list" && result.ok) {
     const output = formatPanelList(result.data);
     if (output) {

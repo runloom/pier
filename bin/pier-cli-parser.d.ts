@@ -14,11 +14,17 @@ export interface ParsedPierCliV1 {
 }
 
 export interface ParsedPierCliV2 {
+  effectKey?: string;
+  expectedBootId?: string;
   json: boolean;
   op: string;
   params: Record<string, unknown>;
   protocol: "v2";
   requestId: string;
+  textSource?:
+    | { kind: "inline"; text: string }
+    | { kind: "file"; path: string }
+    | { kind: "stdin" };
 }
 
 export type ParsedPierCliCommand = ParsedPierCliV1 | ParsedPierCliV2;

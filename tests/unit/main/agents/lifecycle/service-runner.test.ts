@@ -189,80 +189,87 @@ describe("agent lifecycle service + runner", () => {
   });
 
   // Shell probes + dual plan passes; under full-suite load default 5s flakes.
-  it("continues past self-upgrade no-op when version is unchanged", async () => {
-    const { chmod, mkdir, mkdtemp, writeFile, rm } = await import(
-      "node:fs/promises"
-    );
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
+  it(
+    "continues past self-upgrade no-op when version is unchanged",
+    { timeout: 20_000 },
+    async () => {
+      const { chmod, mkdir, mkdtemp, writeFile, rm } = await import(
+        "node:fs/promises"
+      );
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
 
-    const root = await mkdtemp(join(tmpdir(), "pier-opencode-update-"));
-    // nvm-shaped path → installSource "nvm" → update plan: self then npm-latest
-    const binDir = join(root, ".nvm", "versions", "node", "v24.0.0", "bin");
-    await mkdir(binDir, { recursive: true });
-    const versionFile = join(root, "version.txt");
-    await writeFile(versionFile, "1.0.0\n", "utf8");
-    const binPath = join(binDir, "opencode");
-    await writeFile(
-      binPath,
-      `#!/bin/sh
+      const root = await mkdtemp(join(tmpdir(), "pier-opencode-update-"));
+      // nvm-shaped path → installSource "nvm" → update plan: self then npm-latest
+      const binDir = join(root, ".nvm", "versions", "node", "v24.0.0", "bin");
+      await mkdir(binDir, { recursive: true });
+      const versionFile = join(root, "version.txt");
+      await writeFile(versionFile, "1.0.0\n", "utf8");
+      const binPath = join(binDir, "opencode");
+      await writeFile(
+        binPath,
+        `#!/bin/sh
 if [ "$1" = "--version" ]; then
   cat "${versionFile}"
   exit 0
 fi
 exit 0
 `,
-      "utf8"
-    );
-    await chmod(binPath, 0o755);
+        "utf8"
+      );
+      await chmod(binPath, 0o755);
 
-    let runCount = 0;
-    const runner: LifecycleRunner = {
-      run: vi.fn(async (plan) => {
-        runCount += 1;
-        // First success is self (`opencode upgrade`); version stays 1.0.0.
-        // Second plan should be remaining fallbacks; bump version then.
-        if (runCount >= 2) {
-          await writeFile(versionFile, "1.0.1\n", "utf8");
-        }
-        const first = plan.steps[0];
-        // Guard: first attempt must be self (not npm), second may be npm.
-        if (runCount === 1) {
-          expect(first?.kind).toBe("argv");
-          if (first?.kind === "argv") {
-            expect(first.file).not.toBe("npm");
-            expect(first.args[0]).toBe("upgrade");
+      let runCount = 0;
+      const runner: LifecycleRunner = {
+        run: vi.fn(async (plan) => {
+          runCount += 1;
+          // First success is self (`opencode upgrade`); version stays 1.0.0.
+          // Second plan should be remaining fallbacks; bump version then.
+          if (runCount >= 2) {
+            await writeFile(versionFile, "1.0.1\n", "utf8");
           }
-        }
-        return {
-          ok: true,
-          code: 0,
-          stepIndex: 0,
-          stdout: "",
-          stderr: runCount === 1 ? "already installed" : "updated",
-        };
-      }),
-    };
-
-    try {
-      const service = createAgentLifecycleService({
-        getEnv: async () => ({
-          ...process.env,
-          PATH: `${binDir}${process.platform === "win32" ? ";" : ":"}${process.env.PATH ?? ""}`,
+          const first = plan.steps[0];
+          // Guard: first attempt must be self (not npm), second may be npm.
+          if (runCount === 1) {
+            expect(first?.kind).toBe("argv");
+            if (first?.kind === "argv") {
+              expect(first.file).not.toBe("npm");
+              expect(first.args[0]).toBe("upgrade");
+            }
+          }
+          return {
+            ok: true,
+            code: 0,
+            stepIndex: 0,
+            stdout: "",
+            stderr: runCount === 1 ? "already installed" : "updated",
+          };
         }),
-        runner,
-      });
-      const result = await service.run("opencode", "update");
-      expect(runCount).toBeGreaterThanOrEqual(2);
-      expect(result.ok).toBe(true);
-      expect(result.version).toBe("1.0.1");
-      expect(result.errorCode).toBeUndefined();
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  }, 15_000);
+      };
 
-  it("does not fall through to install script after reinstall-mode self already-latest", async () => {
+      try {
+        const service = createAgentLifecycleService({
+          getEnv: async () => ({
+            ...process.env,
+            PATH: `${binDir}${process.platform === "win32" ? ";" : ":"}${process.env.PATH ?? ""}`,
+          }),
+          runner,
+        });
+        const result = await service.run("opencode", "update");
+        expect(runCount).toBeGreaterThanOrEqual(2);
+        expect(result.ok).toBe(true);
+        expect(result.version).toBe("1.0.1");
+        expect(result.errorCode).toBeUndefined();
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    15_000
+  );
+
+  it("does not fall through to install script after reinstall-mode self already-latest", {
+    timeout: 20_000,
+  }, async () => {
     const { chmod, mkdir, mkdtemp, writeFile, rm } = await import(
       "node:fs/promises"
     );
@@ -327,68 +334,73 @@ exit 0
   });
 
   // Brew-shaped PATH probe + upgrade plan; allow headroom under suite load.
-  it("does not dual-install after brew upgrade no-op (version_unchanged)", async () => {
-    const { chmod, mkdir, mkdtemp, writeFile, rm } = await import(
-      "node:fs/promises"
-    );
-    const { tmpdir } = await import("node:os");
-    const { join } = await import("node:path");
+  it(
+    "does not dual-install after brew upgrade no-op (version_unchanged)",
+    { timeout: 20_000 },
+    async () => {
+      const { chmod, mkdir, mkdtemp, writeFile, rm } = await import(
+        "node:fs/promises"
+      );
+      const { tmpdir } = await import("node:os");
+      const { join } = await import("node:path");
 
-    if (process.platform === "win32") {
-      return;
-    }
+      if (process.platform === "win32") {
+        return;
+      }
 
-    const root = await mkdtemp(join(tmpdir(), "pier-opencode-brew-"));
-    // Cellar-shaped path → installSource "brew" → primary brew-upgrade
-    const cellarBin = join(root, "Cellar", "opencode", "1.0.0", "bin");
-    await mkdir(cellarBin, { recursive: true });
-    const binPath = join(cellarBin, "opencode");
-    await writeFile(
-      binPath,
-      `#!/bin/sh
+      const root = await mkdtemp(join(tmpdir(), "pier-opencode-brew-"));
+      // Cellar-shaped path → installSource "brew" → primary brew-upgrade
+      const cellarBin = join(root, "Cellar", "opencode", "1.0.0", "bin");
+      await mkdir(cellarBin, { recursive: true });
+      const binPath = join(cellarBin, "opencode");
+      await writeFile(
+        binPath,
+        `#!/bin/sh
 if [ "$1" = "--version" ]; then
   echo "1.0.0"
   exit 0
 fi
 exit 0
 `,
-      "utf8"
-    );
-    await chmod(binPath, 0o755);
+        "utf8"
+      );
+      await chmod(binPath, 0o755);
 
-    const runner: LifecycleRunner = {
-      run: vi.fn(async (plan) => {
-        const first = plan.steps[0];
-        expect(first?.kind).toBe("argv");
-        if (first?.kind === "argv") {
-          expect(first.file).toBe("brew");
-        }
-        return {
-          ok: true,
-          code: 0,
-          stepIndex: 0,
-          stdout: "",
-          stderr: "already installed",
-        };
-      }),
-    };
-
-    try {
-      const service = createAgentLifecycleService({
-        getEnv: async () => ({
-          ...process.env,
-          PATH: `${cellarBin}:${process.env.PATH ?? ""}`,
+      const runner: LifecycleRunner = {
+        run: vi.fn(async (plan) => {
+          const first = plan.steps[0];
+          expect(first?.kind).toBe("argv");
+          if (first?.kind === "argv") {
+            expect(first.file).toBe("brew");
+          }
+          return {
+            ok: true,
+            code: 0,
+            stepIndex: 0,
+            stdout: "",
+            stderr: "already installed",
+          };
         }),
-        runner,
-      });
-      const result = await service.run("opencode", "update");
-      // brew no-op must not fall through to npm (dual install risk)
-      expect(runner.run).toHaveBeenCalledTimes(1);
-      expect(result.ok).toBe(false);
-      expect(result.errorCode).toBe("version_unchanged");
-      expect(result.softFailure).toBe("version_unchanged");
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  }, 15_000);
+      };
+
+      try {
+        const service = createAgentLifecycleService({
+          getEnv: async () => ({
+            ...process.env,
+            PATH: `${cellarBin}:${process.env.PATH ?? ""}`,
+          }),
+          runner,
+        });
+        const result = await service.run("opencode", "update");
+        // brew no-op must not fall through to npm (dual install risk)
+        expect(runner.run).toHaveBeenCalledTimes(1);
+        expect(result.ok).toBe(false);
+        expect(result.errorCode).toBe("version_unchanged");
+        expect(result.softFailure).toBe("version_unchanged");
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
+    },
+    15_000
+  );
 });

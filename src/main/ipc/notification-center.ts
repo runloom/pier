@@ -40,6 +40,8 @@ const log = createLogger("notification-center.ipc");
 export type NotificationCenterServiceHandle = NotificationCenterService;
 
 let initPromise: Promise<NotificationCenterService> | null = null;
+/** 初始化完成后的同步句柄（control.snapshot / 命令面热路径只读）。 */
+let readyService: NotificationCenterService | null = null;
 let runtimeIndex: AgentRuntimeIndexService | null = null;
 
 /** 在 registerAgentRuntimeHost 之后注入，供 OS click 深链。 */
@@ -151,6 +153,7 @@ async function init(): Promise<NotificationCenterService> {
   });
 
   serviceRef = service;
+  readyService = service;
   return service;
 }
 
@@ -200,6 +203,11 @@ export async function getNotificationCenterService(): Promise<NotificationCenter
   } catch {
     return null;
   }
+}
+
+/** 同步窥视已就绪 NCS；未 init 或失败返回 null（不 await）。 */
+export function peekNotificationCenterService(): NotificationCenterServiceHandle | null {
+  return readyService;
 }
 
 export async function flushNotificationCenterHistory(): Promise<void> {

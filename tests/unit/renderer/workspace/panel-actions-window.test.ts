@@ -18,12 +18,14 @@ vi.mock("@/lib/ipc/window-ipc.ts", () => ({
 
 describe("panel window actions", () => {
   beforeEach(async () => {
+    actionRegistry.clearForTests();
     await initI18n();
     await i18next.changeLanguage("en");
     resetAppDialogForTests();
   });
 
   afterEach(async () => {
+    actionRegistry.clearForTests();
     vi.clearAllMocks();
     resetAppDialogForTests();
     await i18next.changeLanguage("en");

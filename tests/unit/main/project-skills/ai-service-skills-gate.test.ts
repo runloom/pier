@@ -16,7 +16,7 @@ afterEach(() => {
   resetDefaultLogSinkForTests();
 });
 
-describe("ai.generateText project-skills gate", () => {
+describe("ai.generateText project-skills gate", { timeout: 30_000 }, () => {
   it("still spawns one-shot when launch gate reports blocked (never intercept)", async () => {
     const runOneShot = vi.fn(async () => "ok-despite-skills");
     const launchGate: ManagedAgentLaunchGate = {

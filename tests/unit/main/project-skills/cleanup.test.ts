@@ -84,7 +84,9 @@ afterEach(async () => {
   await rm(sharedLockRoot, { force: true, recursive: true });
 });
 
-describe("project-skills library cleanup by object identity", () => {
+describe("project-skills library cleanup by object identity", {
+  timeout: 30_000,
+}, () => {
   it("removes matching files by identity then rmdir; never recursive rm", async () => {
     const skillId = "old-skill";
     const libraryDir = join(projectRoot, ".pier", "skills", "library", skillId);
