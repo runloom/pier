@@ -1,4 +1,7 @@
-import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
+import type {
+  ActivityStatus,
+  ForegroundActivity,
+} from "@shared/contracts/foreground-activity.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { registerTerminalAgentEscapeCancel } from "../../../../src/main/ipc/terminal/agent-escape-cancel.ts";
 import type { NativeAddon } from "../../../../src/main/ipc/terminal/native-addon.ts";
@@ -20,9 +23,7 @@ vi.mock("../../../../src/main/ipc/foreground-activity.ts", () => ({
   },
 }));
 
-function agentActivity(
-  status: "processing" | "ready" | "waiting" | "tool" | "running"
-): ForegroundActivity {
+function agentActivity(status: ActivityStatus | undefined): ForegroundActivity {
   return {
     agentId: "claude",
     kind: "agent",
@@ -37,20 +38,27 @@ function agentActivity(
   };
 }
 
+function snapshotPayload(activities: ForegroundActivity[]) {
+  return {
+    activities,
+    ts: Date.now(),
+    version: 1,
+  };
+}
+
+type EscapeCallback = (browserWindowId: number, nativePanelId: string) => void;
+
 describe("registerTerminalAgentEscapeCancel", () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
   it("busy agent → ingest TurnInterrupted with authoritative stop", () => {
-    let callback:
-      | ((browserWindowId: number, nativePanelId: string) => void)
-      | null = null;
+    const held: { callback: EscapeCallback | null } = { callback: null };
     const ingestAgentEvent = vi.fn(() => true);
-    const snapshot = vi.fn(() => ({
-      activities: [agentActivity("processing")],
-      version: 1,
-    }));
+    const snapshot = vi.fn(() =>
+      snapshotPayload([agentActivity("processing")])
+    );
     findAppWindowByElectronId.mockReturnValue({
       id: 7,
       isDestroyed: () => false,
@@ -58,15 +66,15 @@ describe("registerTerminalAgentEscapeCancel", () => {
 
     registerTerminalAgentEscapeCancel({
       addon: {
-        setBareEscapeForwardCallback: (cb) => {
-          callback = cb;
+        setBareEscapeForwardCallback: (cb: EscapeCallback) => {
+          held.callback = cb;
         },
       } as unknown as NativeAddon,
       host: { ingestAgentEvent, snapshot },
     });
 
-    expect(callback).toBeTypeOf("function");
-    callback?.(42, "7::terminal-1");
+    expect(held.callback).toBeTypeOf("function");
+    held.callback?.(42, "7::terminal-1");
 
     expect(snapshot).toHaveBeenCalledWith("7");
     expect(ingestAgentEvent).toHaveBeenCalledWith(
@@ -88,14 +96,9 @@ describe("registerTerminalAgentEscapeCancel", () => {
   });
 
   it("ready/waiting/shell 与 destroyed window 不 ingest", () => {
-    let callback:
-      | ((browserWindowId: number, nativePanelId: string) => void)
-      | null = null;
+    const held: { callback: EscapeCallback | null } = { callback: null };
     const ingestAgentEvent = vi.fn(() => true);
-    const snapshot = vi.fn(() => ({
-      activities: [agentActivity("ready")],
-      version: 1,
-    }));
+    const snapshot = vi.fn(() => snapshotPayload([agentActivity("ready")]));
     findAppWindowByElectronId.mockReturnValue({
       id: 7,
       isDestroyed: () => false,
@@ -103,48 +106,40 @@ describe("registerTerminalAgentEscapeCancel", () => {
 
     registerTerminalAgentEscapeCancel({
       addon: {
-        setBareEscapeForwardCallback: (cb) => {
-          callback = cb;
+        setBareEscapeForwardCallback: (cb: EscapeCallback) => {
+          held.callback = cb;
         },
       } as unknown as NativeAddon,
       host: { ingestAgentEvent, snapshot },
     });
 
-    callback?.(42, "7::terminal-1");
+    held.callback?.(42, "7::terminal-1");
     expect(ingestAgentEvent).not.toHaveBeenCalled();
 
-    snapshot.mockReturnValue({
-      activities: [agentActivity("waiting")],
-      version: 1,
-    });
-    callback?.(42, "7::terminal-1");
+    snapshot.mockReturnValue(snapshotPayload([agentActivity("waiting")]));
+    held.callback?.(42, "7::terminal-1");
     expect(ingestAgentEvent).not.toHaveBeenCalled();
 
-    snapshot.mockReturnValue({
-      activities: [
+    snapshot.mockReturnValue(
+      snapshotPayload([
         {
           kind: "shell",
           panelId: "terminal-1",
-          source: "command",
           spawnedAt: 1,
           updatedAt: 2,
           windowId: "1",
         },
-      ],
-      version: 1,
-    });
-    callback?.(42, "7::terminal-1");
+      ])
+    );
+    held.callback?.(42, "7::terminal-1");
     expect(ingestAgentEvent).not.toHaveBeenCalled();
 
     findAppWindowByElectronId.mockReturnValue({
       id: 7,
       isDestroyed: () => true,
     });
-    snapshot.mockReturnValue({
-      activities: [agentActivity("processing")],
-      version: 1,
-    });
-    callback?.(42, "7::terminal-1");
+    snapshot.mockReturnValue(snapshotPayload([agentActivity("processing")]));
+    held.callback?.(42, "7::terminal-1");
     expect(ingestAgentEvent).not.toHaveBeenCalled();
   });
 
@@ -158,7 +153,9 @@ describe("registerTerminalAgentEscapeCancel", () => {
       host,
     });
     registerTerminalAgentEscapeCancel({
-      addon: null,
+      addon: {
+        setBareEscapeForwardCallback: undefined,
+      } as unknown as NativeAddon,
       host,
     });
     expect(host.ingestAgentEvent).not.toHaveBeenCalled();

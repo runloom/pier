@@ -36,7 +36,12 @@ function commitFixture(overrides: Partial<GitCommit> = {}): GitCommit {
   };
 }
 
-function comboboxContext(searchCommits: () => Promise<GitCommitSearchResult>) {
+function comboboxContext(
+  searchCommits: (
+    cwd: string,
+    options?: { query?: string }
+  ) => Promise<GitCommitSearchResult>
+) {
   return {
     git: { searchCommits },
     i18n: {

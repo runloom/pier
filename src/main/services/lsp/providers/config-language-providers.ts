@@ -70,7 +70,7 @@ export function createVueLspProvider(): LspServerProvider {
         markers: PACKAGE_ROOT_MARKERS,
       });
     },
-    resolveLaunch({ rootPath }) {
+    async resolveLaunch({ rootPath }) {
       const pluginLocation = resolveVueTypescriptPluginLocation(rootPath);
       const bundled = resolveBundledTypescriptLanguageServer();
       if (pluginLocation && bundled) {
@@ -91,7 +91,7 @@ export function createVueLspProvider(): LspServerProvider {
         };
       }
 
-      const launch = pathFallback.resolveLaunch({
+      const launch = await pathFallback.resolveLaunch({
         rootPath,
         workspaceKey: "vue-fallback",
       });

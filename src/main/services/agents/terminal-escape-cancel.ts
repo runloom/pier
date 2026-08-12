@@ -5,11 +5,7 @@ import type {
 } from "@shared/contracts/foreground-activity.ts";
 
 /** 这些 activity 状态下用户 Esc 视为取消当前智能体回合。 */
-const ESCAPE_CANCEL_STATUSES = new Set<ActivityStatus>([
-  "processing",
-  "tool",
-  "running",
-]);
+const ESCAPE_CANCEL_STATUSES = new Set<ActivityStatus>(["processing", "tool"]);
 
 /** 与证据矩阵 / FA 摄入一致的 nativeEvent 字面量。 */
 export const PIER_TERMINAL_USER_ESCAPE = "pier.terminal.user_escape";

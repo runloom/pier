@@ -239,11 +239,19 @@ export function createLocalControlSessionFromHello(
         return;
       }
       if (frame.type !== "request") {
+        const unknownFrame = frame as {
+          readonly requestId?: unknown;
+          readonly type: string;
+        };
+        const requestId =
+          typeof unknownFrame.requestId === "string"
+            ? unknownFrame.requestId
+            : "unknown";
         emitSafe(
           controlErrorResponse(
-            "requestId" in frame ? frame.requestId : "unknown",
+            requestId,
             "unsupported",
-            `frame type not supported: ${(frame as { type: string }).type}`
+            `frame type not supported: ${unknownFrame.type}`
           )
         );
         return;

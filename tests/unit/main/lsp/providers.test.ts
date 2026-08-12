@@ -207,6 +207,7 @@ describe("Multi-language LSP providers", () => {
 
   it("createPathLspProvider lowercases languageIdByExtension keys", () => {
     const provider = createPathLspProvider({
+      args: [],
       command: "clangd",
       displayName: "C / C++",
       extensions: [".c", ".C", ".mm"],

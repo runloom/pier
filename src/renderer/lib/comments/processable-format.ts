@@ -121,7 +121,8 @@ export function processableItemAnchorLabel(item: ProcessableCommentItem): {
   if (item.kind === "canvas") {
     return { path: item.path };
   }
-  return { path: item.path };
+  const _exhaustive: never = item;
+  return _exhaustive;
 }
 
 /** Tooltip / aria：完整路径 + 行号或细节。 */

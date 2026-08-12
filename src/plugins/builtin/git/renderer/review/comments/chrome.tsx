@@ -32,7 +32,9 @@ export function ReviewCommentsChrome(props: {
     <>
       <ReviewDriftPanel comments={props.comments} />
       <ReviewCommentNavigatorHost
-        collidingFileLabel={props.collidingFileLabel}
+        {...(props.collidingFileLabel === undefined
+          ? {}
+          : { collidingFileLabel: props.collidingFileLabel })}
         context={props.context}
         diffBase={props.diffBase}
         diffHandleRef={props.diffHandleRef}

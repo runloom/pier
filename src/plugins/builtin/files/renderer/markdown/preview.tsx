@@ -171,13 +171,16 @@ export function MarkdownPreview({
     handlePreviewWheel,
   } = useMarkdownPreviewZoom(fontScale);
 
+  // Outline layout exposes a callback ref; comments layer needs RefObject.current.
+  const commentsScrollRootRef = useRef<HTMLElement | null>(null);
+  commentsScrollRootRef.current = scrollRoot;
   const { commentNavigator, commentsChrome, driftStrip } =
     useMarkdownPreviewCommentsLayer({
       commentLabels,
       commentsContext,
       document: state.status === "ready" ? state.document : undefined,
       relativeCommentPath,
-      scrollRootRef,
+      scrollRootRef: commentsScrollRootRef,
       worktreeKey,
     });
 

@@ -269,20 +269,22 @@ describe("Git review shared contract", () => {
         xy: "UU",
       }).success
     ).toBe(false);
-    expect(
-      gitReviewFileSectionSchema.parse({
-        contents: null,
-        contentsDigest: "sha256:abc",
-        kind: "conflict",
-        oldPath: null,
-        presentation: "file-level",
-        sectionKey: "section:conflict-file",
-        stages: { baseOid: null, oursOid: null, theirsOid: null },
-        status: "conflicted",
-        targetPath: "src/app.ts",
-        xy: "DD",
-      }).presentation
-    ).toBe("file-level");
+    const conflictSection = gitReviewFileSectionSchema.parse({
+      contents: null,
+      contentsDigest: "sha256:abc",
+      kind: "conflict",
+      oldPath: null,
+      presentation: "file-level",
+      sectionKey: "section:conflict-file",
+      stages: { baseOid: null, oursOid: null, theirsOid: null },
+      status: "conflicted",
+      targetPath: "src/app.ts",
+      xy: "DD",
+    });
+    expect(conflictSection.kind).toBe("conflict");
+    if (conflictSection.kind === "conflict") {
+      expect(conflictSection.presentation).toBe("file-level");
+    }
     const validState = {
       kind: "state" as const,
       oldPath: null,

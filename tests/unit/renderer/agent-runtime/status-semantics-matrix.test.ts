@@ -99,7 +99,7 @@ describe("E10 status semantics matrix", () => {
   it("NCS read flag is orthogonal to runtime status (matrix comment lock)", () => {
     // 产品纪律：mark-read / focus 不改 FA 运行事实。
     // 此处用形状锁：运行状态与 notification.read 是独立维度。
-    const runtimeStatus = "waiting";
+    const runtimeStatus = "waiting" as string;
     const notificationRead = true;
     expect(runtimeStatus).not.toBe("success");
     expect(notificationRead).toBe(true);

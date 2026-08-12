@@ -326,7 +326,9 @@ export function createLspSessionRuntime(
       ) {
         phase = "ready";
       }
-      documents.observeOutbound(value);
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        documents.observeOutbound(value as Record<string, unknown>);
+      }
       return true;
     } catch (error) {
       logger.error("[lsp] failed to write to session", {

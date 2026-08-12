@@ -9,6 +9,12 @@ import {
  * PATH rows come from the language matrix; TypeScript / Vue are special factories.
  */
 export const CORE_LSP_CATALOG: readonly LspCatalogEntry[] = [
-  ...SPECIAL_LSP_CATALOG_ENTRIES,
-  ...pathCatalogFromMatrix(),
+  ...SPECIAL_LSP_CATALOG_ENTRIES.map((entry) => ({
+    ...entry,
+    extensions: [...entry.extensions],
+  })),
+  ...pathCatalogFromMatrix().map((entry) => ({
+    ...entry,
+    extensions: [...entry.extensions],
+  })),
 ];

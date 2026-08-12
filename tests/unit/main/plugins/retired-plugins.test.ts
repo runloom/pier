@@ -31,6 +31,7 @@ describe("retired managed plugins", () => {
           activeVersion: "1.0.0",
           devOverride: {
             path: "/tmp/plugin-lsp-cpp",
+            registeredAt: 0,
             version: "1.0.0",
           },
           effectiveAtStartup: {

@@ -277,6 +277,7 @@ function createMockContext(): RendererPluginContext {
       applyReviewPathMutation: unimplemented("git.applyReviewPathMutation"),
       applyReviewMutation: unimplemented("git.applyReviewMutation"),
       cancelReviewRequest: unimplemented("git.cancelReviewRequest"),
+      resolveReviewConflict: unimplemented("git.resolveReviewConflict"),
       checkoutBranch: unimplemented("git.checkoutBranch"),
       createAndSwitchBranch: unimplemented("git.createAndSwitchBranch"),
       continueRebase: unimplemented("git.continueRebase"),

@@ -1,16 +1,15 @@
 import { agentHookEventSchema } from "@shared/contracts/agent/session.ts";
-import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
+import type {
+  ActivityStatus,
+  ForegroundActivity,
+} from "@shared/contracts/foreground-activity.ts";
 import { describe, expect, it } from "vitest";
 import {
   buildTerminalEscapeCancelEvent,
   shouldCancelAgentOnTerminalEscape,
 } from "../../../../src/main/services/agents/terminal-escape-cancel.ts";
 
-function agentActivity(
-  status: ForegroundActivity extends { kind: "agent"; status?: infer S }
-    ? S
-    : never
-): ForegroundActivity {
+function agentActivity(status: ActivityStatus | undefined): ForegroundActivity {
   return {
     agentId: "claude",
     kind: "agent",
@@ -26,17 +25,14 @@ function agentActivity(
 }
 
 describe("terminal escape cancel", () => {
-  it("processing/tool/running 可取消", () => {
+  it("processing/tool 可取消", () => {
     expect(shouldCancelAgentOnTerminalEscape(agentActivity("processing"))).toBe(
       true
     );
     expect(shouldCancelAgentOnTerminalEscape(agentActivity("tool"))).toBe(true);
-    expect(shouldCancelAgentOnTerminalEscape(agentActivity("running"))).toBe(
-      true
-    );
   });
 
-  it("ready/waiting/idle 不取消", () => {
+  it("ready/waiting/shell 不取消", () => {
     expect(shouldCancelAgentOnTerminalEscape(agentActivity("ready"))).toBe(
       false
     );
@@ -47,7 +43,6 @@ describe("terminal escape cancel", () => {
       shouldCancelAgentOnTerminalEscape({
         kind: "shell",
         panelId: "terminal-1",
-        source: "command",
         spawnedAt: 1,
         updatedAt: 2,
         windowId: "1",

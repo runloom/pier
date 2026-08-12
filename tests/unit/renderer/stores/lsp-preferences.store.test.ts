@@ -108,6 +108,7 @@ describe("useLspPreferencesStore", () => {
         command: "solargraph",
         displayName: "Ruby",
         extensions: [".rb"],
+        highlightPreset: "text" as const,
         id: "ruby",
         languageIds: ["ruby"],
         priority: 50,
