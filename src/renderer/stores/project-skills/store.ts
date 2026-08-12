@@ -5,11 +5,7 @@ import type {
 } from "@shared/contracts/project-skills.ts";
 import { create } from "zustand";
 
-import {
-  runApply,
-  runPlanDraft,
-  runPollOperation,
-} from "./project-skills-mutations.ts";
+import { runApply, runPlanDraft, runPollOperation } from "./mutations.ts";
 
 export {
   draftFingerprint,
@@ -25,7 +21,7 @@ export {
   type SkillDetailTarget,
   type SkillsUiDraft,
   type SkillsViewMode,
-} from "./project-skills-model.ts";
+} from "./model.ts";
 
 import {
   draftIsDirty,
@@ -39,7 +35,7 @@ import {
   type ProjectSkillsSnapshotView,
   type SkillsUiDraft,
   type SkillsViewMode,
-} from "./project-skills-model.ts";
+} from "./model.ts";
 
 type LoadStatus = "idle" | "loading" | "ready" | "error";
 

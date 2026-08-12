@@ -48,7 +48,7 @@ describe("bin/pier.mjs", () => {
       "../../../bin/pier-cli-parser.js"
     );
     expect(() => parsePierCliArgs(["agents", "self"])).toThrow(
-      /not available from the human CLI/u
+      /not a product command/u
     );
     expect(parsePierCliArgs(["agents", "catalog"])).toMatchObject({
       op: "agents.catalog",

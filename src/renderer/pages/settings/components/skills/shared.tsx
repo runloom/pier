@@ -8,7 +8,7 @@ import type {
 import type { TFunction } from "i18next";
 import { toast } from "sonner";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
-import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
+import { useProjectSkillsStore } from "@/stores/project-skills/store.ts";
 import { discardActiveImportReview } from "./candidate-lifecycle.ts";
 
 export type Translate = TFunction;

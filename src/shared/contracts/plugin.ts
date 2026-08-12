@@ -1,21 +1,21 @@
 import { z } from "zod";
 import { pierCapabilitySchema } from "./permissions.ts";
-import { pluginConfigurationSchema } from "./plugin-configuration.ts";
-import { pluginLanguageModeContributionSchema } from "./plugin-language-mode.ts";
-import { pluginLanguageServerContributionSchema } from "./plugin-language-server.ts";
+import { pluginConfigurationSchema } from "./plugin/configuration.ts";
+import { pluginLanguageModeContributionSchema } from "./plugin/language-mode.ts";
+import { pluginLanguageServerContributionSchema } from "./plugin/language-server.ts";
 import { pluginWorkbenchWidgetContributionSchema } from "./workbench.ts";
 
 export type {
   EditorHighlightPreset,
   PluginLanguageModeContribution,
-} from "./plugin-language-mode.ts";
+} from "./plugin/language-mode.ts";
 export {
   EDITOR_HIGHLIGHT_PRESETS,
   editorHighlightPresetSchema,
   pluginLanguageModeContributionSchema,
-} from "./plugin-language-mode.ts";
-export type { PluginLanguageServerContribution } from "./plugin-language-server.ts";
-export { pluginLanguageServerContributionSchema } from "./plugin-language-server.ts";
+} from "./plugin/language-mode.ts";
+export type { PluginLanguageServerContribution } from "./plugin/language-server.ts";
+export { pluginLanguageServerContributionSchema } from "./plugin/language-server.ts";
 
 export const pluginSourceKindSchema = z.enum([
   "builtin",
@@ -206,7 +206,7 @@ export {
   type PluginConfigurationProperty,
   pluginConfigurationPropertySchema,
   pluginConfigurationSchema,
-} from "./plugin-configuration.ts";
+} from "./plugin/configuration.ts";
 
 const pluginManifestObjectSchema = z
   .object({

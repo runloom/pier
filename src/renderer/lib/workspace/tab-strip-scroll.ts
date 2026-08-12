@@ -299,7 +299,11 @@ export function createTabStripScrollMemory(options: {
   };
 
   const attachScrollListeners = (): void => {
-    for (const group of options.getGroups()) {
+    const groups = options.getGroups();
+    if (!groups) {
+      return;
+    }
+    for (const group of groups) {
       const tabsContainer = findTabsContainer(group.element);
       if (!tabsContainer || listened.has(tabsContainer)) {
         continue;

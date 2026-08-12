@@ -13,7 +13,7 @@ import { ManagedSkillRow } from "@/pages/settings/components/skills/detail-rows.
 import { SkillsListToolbar } from "@/pages/settings/components/skills/detail-toolbar.tsx";
 import { SkillsImportReview } from "@/pages/settings/components/skills/import-review.tsx";
 import { AgentEffectSummary } from "@/pages/settings/components/skills/shared.tsx";
-import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
+import { useProjectSkillsStore } from "@/stores/project-skills/store.ts";
 
 const SKILL: ProjectSkillView = {
   alwaysInclude: false,

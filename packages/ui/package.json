@@ -16,7 +16,8 @@
     "./file/*": "./src/file/*",
     "./image-preview/*": "./src/image-preview/*",
     "./diff-view": "./src/diff-view/index.tsx",
-    "./diff-view.tsx": "./src/diff-view/index.tsx"
+    "./diff-view.tsx": "./src/diff-view/index.tsx",
+    "./comments/*": "./src/comments/*"
   },
   "dependencies": {
     "@pierre/diffs": "1.2.12",

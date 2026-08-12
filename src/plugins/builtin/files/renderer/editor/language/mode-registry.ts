@@ -3,7 +3,7 @@
  * L0 builtin extension maps stay in language-detection.ts and always win first.
  */
 
-import type { EditorHighlightPreset } from "@shared/contracts/plugin-language-mode.ts";
+import type { EditorHighlightPreset } from "@shared/contracts/plugin/language-mode.ts";
 
 export type EditorLanguageModeSource = "custom" | "plugin";
 

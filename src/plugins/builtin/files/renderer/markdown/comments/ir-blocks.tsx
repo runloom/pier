@@ -2,10 +2,10 @@
  * Wrap IR block trees with optional comment chrome.
  */
 import { Fragment, type ReactNode } from "react";
-import { blockCommentKey, contentHashForBlock } from "./comment-target.ts";
-import type { MarkdownBlock } from "./ir.ts";
-import type { MarkdownIrCommentsChrome } from "./ir-comments-types.ts";
-import { MarkdownCommentBlockShell } from "./preview-comment-block.tsx";
+import type { MarkdownBlock } from "../ir.ts";
+import type { MarkdownIrCommentsChrome } from "./ir-types.ts";
+import { MarkdownCommentBlockShell } from "./preview-block.tsx";
+import { blockCommentKey, contentHashForBlock } from "./target.ts";
 
 export function wrapBlocksWithComments(
   blocks: readonly MarkdownBlock[],

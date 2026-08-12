@@ -16,7 +16,6 @@ import {
   SelectValue,
 } from "@pier/ui/select.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { FILES_PLUGIN_ID } from "@plugins/builtin/files/manifest.ts";
 import i18next from "i18next";
 import type { ComponentType, CSSProperties } from "react";
 import { useEffect, useSyncExternalStore } from "react";
@@ -118,7 +117,9 @@ function PluginSettingsSection({ pluginId }: { pluginId: string }) {
   }
   // Files owns the code editor surface: host language-service policy UI lives
   // under Files settings (not a separate host "Languages" section).
-  if (pluginId === FILES_PLUGIN_ID) {
+  // Id is a product constant (not imported from the plugin package) so host
+  // stays free of direct builtin imports outside builtin-catalog.
+  if (pluginId === "pier.files") {
     return (
       <>
         <PluginConfigurationSection pluginId={pluginId} />

@@ -6,8 +6,8 @@ import {
   markdownCommentExcerpt,
 } from "@shared/comments/markdown-hash.ts";
 import type { MarkdownCommentTarget } from "@shared/contracts/comments/base.ts";
-import { markdownBlockPlainText } from "./comment-block-text.ts";
-import type { MarkdownBlock } from "./ir.ts";
+import type { MarkdownBlock } from "../ir.ts";
+import { markdownBlockPlainText } from "./block-text.ts";
 
 export function buildMarkdownCommentTarget(input: {
   readonly block: MarkdownBlock;

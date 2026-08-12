@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { pierCapabilitySchema } from "../permissions.ts";
+import { pluginLanguageModeContributionSchema } from "../plugin/language-mode.ts";
 import {
   normalizeLegacyWorkbenchContributionKey,
   pluginCommandContributionSchema,
@@ -13,7 +14,6 @@ import {
   pluginSettingsPageContributionSchema,
   pluginTerminalStatusItemContributionSchema,
 } from "../plugin.ts";
-import { pluginLanguageModeContributionSchema } from "../plugin-language-mode.ts";
 import { pluginWorkbenchWidgetContributionSchema } from "../workbench.ts";
 
 /**

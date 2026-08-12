@@ -32,7 +32,7 @@ import { swift } from "@codemirror/legacy-modes/mode/swift";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import type { Extension } from "@codemirror/state";
 import { svelte } from "@replit/codemirror-lang-svelte";
-import type { EditorHighlightPreset } from "@shared/contracts/plugin-language-mode.ts";
+import type { EditorHighlightPreset } from "@shared/contracts/plugin/language-mode.ts";
 import { pierMarkdownLanguage } from "@shared/source-editor/markdown-language.ts";
 
 export function cmExtensionForHighlightPreset(

@@ -34,8 +34,8 @@ import type {
   BuiltinFilesDocumentLanguage,
   FilesDocumentLanguage,
 } from "../document/types.ts";
-import { cmExtensionForHighlightPreset } from "./highlight-preset.ts";
-import { editorLanguageModeRegistry } from "./language-mode-registry.ts";
+import { cmExtensionForHighlightPreset } from "./language/highlight-preset.ts";
+import { editorLanguageModeRegistry } from "./language/mode-registry.ts";
 
 function vueLanguageExtension(): Extension {
   // Nested HTML base so <script>/<style> still get JS/CSS tokens.

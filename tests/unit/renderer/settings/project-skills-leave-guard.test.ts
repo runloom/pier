@@ -32,7 +32,7 @@ vi.mock("sonner", () => ({
   toast: toastMocks,
 }));
 
-vi.mock("@/stores/project-skills.store.ts", () => ({
+vi.mock("@/stores/project-skills/store.ts", () => ({
   useProjectSkillsStore: {
     getState: () => storeState.current,
   },

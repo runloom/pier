@@ -13,7 +13,7 @@ import {
   type PlanIssueView,
   type ProjectSkillsPlanView,
   type SkillsUiDraft,
-} from "./project-skills-model.ts";
+} from "./model.ts";
 
 /** Minimal store surface used by plan / apply / poll helpers. */
 export interface ProjectSkillsMutationApi {

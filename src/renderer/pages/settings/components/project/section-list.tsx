@@ -11,7 +11,7 @@ import {
 } from "@pier/ui/item.tsx";
 import { ChevronRight, Folder, FolderPlus, House } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
-import type { ProjectSkillsProjectSummary } from "@/stores/project-skills.store.ts";
+import type { ProjectSkillsProjectSummary } from "@/stores/project-skills/store.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
 

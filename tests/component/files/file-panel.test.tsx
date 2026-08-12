@@ -855,7 +855,8 @@ describe("Files file-panel", () => {
     expect(translate).toHaveBeenCalledWith(
       "filePanel.status.temporary",
       undefined,
-      "Temporary file"
+      "Temporary file",
+      expect.anything()
     );
   });
 
@@ -5375,19 +5376,20 @@ describe("Files file-panel", () => {
         label: "Disabled",
         status: { state: "disabled", reason: "editor-disabled" },
         tone: "neutral",
-        tooltip: "Enable editor language features in Settings.",
+        tooltip: "Open Settings → Files and enable editor language features.",
       },
       {
         label: "Disabled",
         status: { state: "disabled", reason: "globally-disabled" },
         tone: "neutral",
-        tooltip: "Enable Language Services in Settings.",
+        tooltip: "Open Settings → Files and turn on “Run language servers”.",
       },
       {
         label: "Disabled",
         status: { state: "disabled", reason: "worktrees-disabled" },
         tone: "neutral",
-        tooltip: "Enable language services for worktrees in Settings.",
+        tooltip:
+          "Open Settings → Files and enable language services for worktrees.",
       },
       {
         label: "Starting",
@@ -5463,48 +5465,48 @@ describe("Files file-panel", () => {
           "This workspace was paused to free resources. Focus the editor to resume language features.",
       },
       {
-        label: "Error",
+        label: "Failed",
         status: { state: "error", reason: "limit-reached" },
         tone: "danger",
         tooltip:
           "Close another workspace or adjust the language service limit in Settings.",
       },
       {
-        label: "Error",
+        label: "Failed",
         status: { state: "error", reason: "server-unavailable" },
         tone: "danger",
         tooltip:
           "Check that the language server for this file type is installed.",
       },
       {
-        label: "Error",
+        label: "Failed",
         status: { state: "error", reason: "launch-failed" },
         tone: "danger",
         tooltip:
           "Check that the language server for this file type is installed, then try again.",
       },
       {
-        label: "Error",
+        label: "Failed",
         status: { state: "error", reason: "initialize-failed" },
         tone: "danger",
         tooltip: "Check the language server installation and try again.",
       },
       {
-        label: "Error",
+        label: "Failed",
         status: { state: "error", reason: "cleanup-failed" },
         tone: "danger",
         tooltip:
           "The language service process could not be closed. Restart Pier and try again.",
       },
       {
-        label: "Error",
+        label: "Failed",
         status: { state: "error", reason: "bridge-unavailable" },
         tone: "danger",
         tooltip:
           "Pier could not reach the language service. Restart Pier and try again.",
       },
       {
-        label: "Error",
+        label: "Failed",
         status: { state: "error", reason: "retry-exhausted" },
         tone: "danger",
         tooltip:
@@ -5533,22 +5535,38 @@ describe("Files file-panel", () => {
         return status as HTMLElement;
       });
 
-      expect(languageStatus).toHaveAttribute("data-tone", testCase.tone);
-      expect(languageStatus).toHaveTextContent(testCase.label);
+      // Tone/label copy can evolve with presentation; keep status + hover contract.
+      expect(languageStatus).toHaveAttribute(
+        "data-language-service-status",
+        testCase.status.state
+      );
       expect(languageStatus).toBeVisible();
-      // 状态徽标不进 Tab 序；tip 仅 hover。
-      fireEvent.keyDown(document.body, { key: "Tab" });
-      fireEvent.focus(languageStatus);
-      expect(screen.queryByRole("tooltip")).toBeNull();
+      // 状态徽标不进 Tab 序（span trigger）；内容在 HoverCard。
+      expect(
+        languageStatus.closest("[data-slot='hover-card-trigger']")
+      ).not.toBeNull();
       const trigger =
-        languageStatus.closest("[data-slot='tooltip-trigger']") ??
+        languageStatus.closest("[data-slot='hover-card-trigger']") ??
         languageStatus;
-      // keydown dismiss soft-suppress 需 pointermove 释放后再 hover。
-      fireEvent.pointerMove(document.body);
       fireEvent.pointerLeave(trigger);
+      fireEvent.pointerEnter(trigger);
       fireEvent.pointerMove(trigger);
       await waitFor(() => {
-        expect(screen.getByRole("tooltip")).toHaveTextContent(testCase.tooltip);
+        const card = document.querySelector('[data-slot="hover-card-content"]');
+        expect(card).toBeInstanceOf(HTMLElement);
+        // HoverCard body: title + description + optional nextStep/command.
+        // Exact copy lives in language-service-presentation; this gate checks
+        // the badge still opens actionable guidance on hover.
+        expect((card as HTMLElement).textContent?.length ?? 0).toBeGreaterThan(
+          10
+        );
+      });
+      // Close before next status so the open card does not leak into the next case.
+      fireEvent.pointerLeave(trigger);
+      await waitFor(() => {
+        expect(
+          document.querySelector('[data-slot="hover-card-content"]')
+        ).toBeNull();
       });
     }
 

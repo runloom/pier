@@ -7,7 +7,7 @@ import {
   liveModuleProjectContentDirectories,
 } from "@shared/live-module-canvas-path.ts";
 import type { FilesDocumentLanguage } from "../document/types.ts";
-import { editorLanguageModeRegistry } from "./language-mode-registry.ts";
+import { editorLanguageModeRegistry } from "./language/mode-registry.ts";
 
 /**
  * L0 extension → language map from the shared language matrix, plus box

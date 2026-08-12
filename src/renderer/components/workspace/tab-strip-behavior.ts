@@ -29,7 +29,8 @@ export function attachWorkspaceTabStripBehavior(
   }
 
   const scrollMemory = createTabStripScrollMemory({
-    getGroups: () => api.groups,
+    // Tests and early dockview ready may omit groups; never throw in attach.
+    getGroups: () => api.groups ?? [],
     root,
   });
   setActiveTabStripScrollMemory(scrollMemory);
@@ -52,24 +53,41 @@ export function attachWorkspaceTabStripBehavior(
     scheduleRevealDockviewTabByPanelId(panelId, root);
   };
 
-  const maximizedSubscription = api.onDidMaximizedGroupChange((event) => {
-    if (event.isMaximized) {
-      // Fallback freeze if action path skipped prepareForMaximizeLayoutMutation.
-      scrollMemory.freeze();
-      return;
-    }
-    scrollMemory.scheduleRestoreAndUnfreeze();
-  });
+  const noopDispose = { dispose: () => undefined };
+  const asDisposable = (
+    value: { dispose: () => void } | null | undefined
+  ): { dispose: () => void } => value ?? noopDispose;
 
-  const activeGroupSubscription = api.onDidActiveGroupChange((group) => {
-    scrollMemory.rememberVisible();
-    revealActiveGroupTab(group);
-  });
+  const maximizedSubscription = asDisposable(
+    typeof api.onDidMaximizedGroupChange === "function"
+      ? api.onDidMaximizedGroupChange((event) => {
+          if (event.isMaximized) {
+            // Fallback freeze if action path skipped prepareForMaximizeLayoutMutation.
+            scrollMemory.freeze();
+            return;
+          }
+          scrollMemory.scheduleRestoreAndUnfreeze();
+        })
+      : undefined
+  );
+
+  const activeGroupSubscription = asDisposable(
+    typeof api.onDidActiveGroupChange === "function"
+      ? api.onDidActiveGroupChange((group) => {
+          scrollMemory.rememberVisible();
+          revealActiveGroupTab(group);
+        })
+      : undefined
+  );
 
   // New groups / splits: bind scroll listeners; prune memory for removed groups.
-  const layoutSubscription = api.onDidLayoutChange(() => {
-    scrollMemory.rememberVisible();
-  });
+  const layoutSubscription = asDisposable(
+    typeof api.onDidLayoutChange === "function"
+      ? api.onDidLayoutChange(() => {
+          scrollMemory.rememberVisible();
+        })
+      : undefined
+  );
 
   return () => {
     maximizedSubscription.dispose();

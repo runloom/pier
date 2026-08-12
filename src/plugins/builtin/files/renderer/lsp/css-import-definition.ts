@@ -26,6 +26,7 @@ import {
   openFilesLspAbsolutePath,
   rootPathForFilesLspEditorView,
 } from "./navigation.ts";
+import { getLspFacade, type LspFacade } from "./session-coordinator.ts";
 
 function zeroRangeTarget(uri: string): FilesLspDefinitionTarget {
   return {
@@ -79,7 +80,18 @@ async function resolveCssImport(input: {
   fromFilePath: string;
   specifier: string;
 }): Promise<{ isDirectory: boolean; path: string } | null> {
-  const resolve = window.pier?.lsp?.resolveCssImport;
+  // Prefer getLspFacade() (same as session-coordinator) so this module stays
+  // free of preload globals — builtin package boundary requirement.
+  const facade = getLspFacade() as
+    | (LspFacade & {
+        resolveCssImport?: (request: {
+          allowDirectory: boolean;
+          fromFilePath: string;
+          specifier: string;
+        }) => Promise<{ isDirectory: boolean; path: string } | null>;
+      })
+    | null;
+  const resolve = facade?.resolveCssImport;
   if (!resolve) {
     return null;
   }

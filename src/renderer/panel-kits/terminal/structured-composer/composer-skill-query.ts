@@ -2,7 +2,7 @@ import type { ProjectRootRef } from "@shared/contracts/project-skills.ts";
 import {
   isProjectSummary,
   normalizeSnapshot,
-} from "@/stores/project-skills-model.ts";
+} from "@/stores/project-skills/model.ts";
 import {
   buildComposerSkillSuggestItems,
   type ComposerSkillSuggestItem,

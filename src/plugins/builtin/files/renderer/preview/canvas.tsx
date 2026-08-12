@@ -1,4 +1,4 @@
-import { CommentNavigator } from "@pier/ui/comment-navigator.tsx";
+import { CommentNavigator } from "@pier/ui/comments/navigator.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { findCanvasCommentAnchorElement } from "@shared/comments/canvas-anchor.ts";

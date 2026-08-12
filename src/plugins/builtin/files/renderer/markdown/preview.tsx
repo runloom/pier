@@ -11,6 +11,10 @@ import {
   FILES_IN_FILE_SEARCH_BAR_CLASSNAME,
   FilesSearchBar,
 } from "../search/bar.tsx";
+import {
+  DEFAULT_MARKDOWN_COMMENT_LABELS,
+  useMarkdownPreviewCommentsLayer,
+} from "./comments/preview-layer.tsx";
 import { captureMarkdownPreviewAnchor } from "./cross-mode-anchor.ts";
 import { MarkdownIrRenderer } from "./ir-renderer.tsx";
 import {
@@ -22,10 +26,6 @@ import {
   FALLBACK_DARK_CODE_THEME,
   resolvePreviewCodeTheme,
 } from "./preview-code-theme.ts";
-import {
-  DEFAULT_MARKDOWN_COMMENT_LABELS,
-  useMarkdownPreviewCommentsLayer,
-} from "./preview-comments-layer.tsx";
 import {
   DEFAULT_RENDERER_LABELS,
   DEFAULT_TOC_LABELS,
@@ -57,8 +57,8 @@ import {
 import { useMarkdownPreviewZoom } from "./use-preview-zoom.ts";
 import "../markdown/prose.css";
 
+export type { MarkdownPreviewCommentLabels } from "./comments/preview-layer.tsx";
 export { safeMarkdownUrl } from "./ir-renderer.tsx";
-export type { MarkdownPreviewCommentLabels } from "./preview-comments-layer.tsx";
 export { FILES_MARKDOWN_PREVIEW_SURFACE } from "./preview-preferences.ts";
 export type { MarkdownPreviewProps } from "./preview-types.ts";
 

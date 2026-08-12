@@ -1,4 +1,4 @@
 export {
   CommentNavigator,
   ReviewCommentNavigator,
-} from "@pier/ui/comment-navigator.tsx";
+} from "@pier/ui/comments/navigator.tsx";

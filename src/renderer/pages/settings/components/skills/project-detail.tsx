@@ -10,7 +10,7 @@ import {
   type ImportCandidateView,
   type SkillDetailTarget,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
+} from "@/stores/project-skills/store.ts";
 import { runRepair } from "./apply-flow.ts";
 import { buildSkillsProjectStatusItems } from "./build-project-status-items.ts";
 import {

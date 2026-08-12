@@ -11,15 +11,15 @@ import type { MarkdownCommentSurface } from "@shared/comments/markdown-surface.t
 import type { CommentThread } from "@shared/contracts/comments/base.ts";
 import type { CommentProjectSnapshot } from "@shared/contracts/comments/document.ts";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { buildMarkdownCommentSurfaceFromIr } from "./comment-surface.ts";
+import type { MarkdownBlock, MarkdownIrDocument } from "../ir.ts";
+import { buildMarkdownCommentSurfaceFromIr } from "./surface.ts";
 import {
   blockCommentKey,
   buildMarkdownCommentTarget,
   contentHashForBlock,
   nearestHeadingIdsByBlockIndex,
   resolveMarkdownCommentBlockKey,
-} from "./comment-target.ts";
-import type { MarkdownBlock, MarkdownIrDocument } from "./ir.ts";
+} from "./target.ts";
 
 function projectMarkdownThread(
   thread: CommentThread,

@@ -16,7 +16,7 @@ import {
 } from "@/components/common/dialogs/use-footer.ts";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
-import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
+import { useProjectSkillsStore } from "@/stores/project-skills/store.ts";
 import {
   liveDiscoveryDraft,
   useSkillsSkillDetailActions,

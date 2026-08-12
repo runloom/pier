@@ -21,7 +21,7 @@ vi.mock("@/pages/settings/data/projects-settings-nav.ts", () => ({
   openProjectsSettings: vi.fn(),
 }));
 
-vi.mock("@/stores/project-skills.store.ts", () => ({
+vi.mock("@/stores/project-skills/store.ts", () => ({
   useProjectSkillsStore: {
     getState: () => ({ requestOpenProject }),
   },

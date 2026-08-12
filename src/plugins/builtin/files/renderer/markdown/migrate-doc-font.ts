@@ -3,7 +3,7 @@
  * host Appearance document font (`docFontMode` / `docFontFamily`).
  *
  * Lives in the files plugin (reads old plugin configuration keys). Does not
- * import host stores — only `window.pier.preferences` IPC.
+ * import host stores — only the host preferences IPC facade.
  */
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {

@@ -2,7 +2,7 @@
  * 从 Markdown IR 块提取用于评论指纹 / excerpt 的纯文本。
  * 粒度：top-level block（list 整块一起；不拆 item）。
  */
-import type { MarkdownBlock, MarkdownInline } from "./ir.ts";
+import type { MarkdownBlock, MarkdownInline } from "../ir.ts";
 
 function inlinesToText(inlines: readonly MarkdownInline[]): string {
   const parts: string[] = [];

@@ -17,7 +17,7 @@ import {
 } from "./environment.ts";
 import { fileCommandSchemas } from "./file/commands.ts";
 import { gitCommandSchemas } from "./git/commands.ts";
-import { hostControlCommandSchemas } from "./host-control-commands.ts";
+import { hostControlCommandSchemas } from "./host/control-commands.ts";
 import {
   liveModulesCompileRequestSchema,
   liveModulesGetUrlRequestSchema,

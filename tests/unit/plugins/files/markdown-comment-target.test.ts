@@ -4,7 +4,7 @@ import {
   contentHashForBlock,
   nearestHeadingIdsByBlockIndex,
   resolveMarkdownCommentBlockKey,
-} from "@plugins/builtin/files/renderer/markdown/comment-target.ts";
+} from "@plugins/builtin/files/renderer/markdown/comments/target.ts";
 import type { MarkdownBlock } from "@plugins/builtin/files/renderer/markdown/ir.ts";
 import { markdownBlockContentHash } from "@shared/comments/markdown-hash.ts";
 import { describe, expect, it } from "vitest";

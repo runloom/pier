@@ -4,8 +4,8 @@ import type {
 } from "../editor/adapter-types.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import type { FilesLspHoverLabels } from "../lsp/hover-types.ts";
+import type { MarkdownPreviewCommentLabels } from "../markdown/comments/preview-layer.tsx";
 import type { MarkdownRendererLabels } from "../markdown/ir-renderer.tsx";
-import type { MarkdownPreviewCommentLabels } from "../markdown/preview-comments-layer.tsx";
 
 export const DEFAULT_FILES_LSP_HOVER_LABELS: FilesLspHoverLabels = {
   contentTruncated: "Documentation was truncated",

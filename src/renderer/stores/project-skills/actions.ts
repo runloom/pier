@@ -1,6 +1,6 @@
 import type { ProjectSkillsInvalidatedEvent } from "@shared/contracts/project-skills.ts";
-import { useProjectSkillsStore } from "./project-skills.store.ts";
-import { draftIsDirty } from "./project-skills-model.ts";
+import { draftIsDirty } from "./model.ts";
+import { useProjectSkillsStore } from "./store.ts";
 
 let invalidateAttached = false;
 let detachInvalidate: (() => void) | null = null;

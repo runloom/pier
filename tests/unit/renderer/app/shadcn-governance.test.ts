@@ -13,6 +13,8 @@ const SOURCE_ROOTS = [
 const RAW_BUTTON_OWNERS = new Set([
   // Markdown outline tick / hover list uses raw buttons for Notion-style rail geometry.
   "src/plugins/builtin/files/renderer/markdown/preview-toc.tsx",
+  // Canvas soft comment pins use raw buttons for dense overlay hit targets.
+  "src/plugins/builtin/files/renderer/preview/canvas-comment-pins.tsx",
   // LSP hover card action chips use raw buttons for dense tooltip chrome.
   "src/plugins/builtin/files/renderer/lsp/hover-card-parts.tsx",
   // Content-search hit rows use Item asChild for full-row hit targets.

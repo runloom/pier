@@ -2,7 +2,7 @@ import type { ProjectRootRef } from "@shared/contracts/project-skills.ts";
 import {
   type ImportCandidateView,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
+} from "@/stores/project-skills/store.ts";
 
 export async function discardPreparedCandidate(
   projectRef: ProjectRootRef,

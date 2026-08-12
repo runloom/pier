@@ -4,6 +4,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
+import type { MarkdownPreviewCommentLabels } from "./comments/preview-layer.tsx";
 import type { MarkdownCrossModeAnchor } from "./cross-mode-anchor.ts";
 import type { MarkdownIrDocument } from "./ir.ts";
 import type {
@@ -12,7 +13,6 @@ import type {
   MarkdownInternalTarget,
   MarkdownRendererLabels,
 } from "./ir-renderer.tsx";
-import type { MarkdownPreviewCommentLabels } from "./preview-comments-layer.tsx";
 import type {
   MarkdownPreviewTocLabels,
   MarkdownPreviewZoomLabels,

@@ -15,7 +15,7 @@ import { resetAppContentDialogForTests } from "@/stores/app-content-dialog.store
 import { useLocalEnvironmentsStore } from "@/stores/local-environments.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
-import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
+import { useProjectSkillsStore } from "@/stores/project-skills/store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { makeFakePreferences } from "../../../setup/preferences-fixture.ts";

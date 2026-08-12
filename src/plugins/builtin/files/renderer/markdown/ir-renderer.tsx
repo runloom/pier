@@ -49,13 +49,13 @@ export {
   safeMarkdownUrl,
 } from "./resource-elements.tsx";
 
+import { wrapBlocksWithComments } from "./comments/ir-blocks.tsx";
+import type { MarkdownIrCommentsChrome } from "./comments/ir-types.ts";
 import type { MarkdownCrossModeAnchor } from "./cross-mode-anchor.ts";
-import { wrapBlocksWithComments } from "./ir-comment-blocks.tsx";
-import type { MarkdownIrCommentsChrome } from "./ir-comments-types.ts";
 import type { MarkdownSearchMatch } from "./search.ts";
 import { MarkdownSearchText } from "./search-mark.tsx";
 
-export type { MarkdownIrCommentsChrome } from "./ir-comments-types.ts";
+export type { MarkdownIrCommentsChrome } from "./comments/ir-types.ts";
 
 export interface MarkdownRendererLabels extends MarkdownCodeBlockLabels {
   completedTask: string;

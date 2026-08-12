@@ -4,16 +4,16 @@
  */
 
 import type { LspCustomServer } from "@shared/contracts/lsp.ts";
-import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   type EditorHighlightPreset,
   editorHighlightPresetSchema,
   type PluginLanguageModeContribution,
-} from "@shared/contracts/plugin-language-mode.ts";
+} from "@shared/contracts/plugin/language-mode.ts";
+import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   type EditorLanguageModeEntry,
   editorLanguageModeRegistry,
-} from "./language-mode-registry.ts";
+} from "./mode-registry.ts";
 
 function parseHighlight(raw: unknown): EditorHighlightPreset {
   const parsed = editorHighlightPresetSchema.safeParse(raw ?? "text");

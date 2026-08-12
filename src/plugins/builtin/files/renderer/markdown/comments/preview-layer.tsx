@@ -1,22 +1,22 @@
 /**
  * Markdown preview comments: hook + drift strip + IR chrome props + navigator.
  */
-import { CommentNavigator } from "@pier/ui/comment-navigator.tsx";
+import { CommentNavigator } from "@pier/ui/comments/navigator.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { type ReactNode, type RefObject, useCallback, useMemo } from "react";
 import {
   useCommentNavigatorController,
   useCommentNavigatorLabels,
-} from "../comments/use-comment-navigator.ts";
-import { createFilesTranslate } from "../i18n.ts";
-import type { MarkdownIrDocument } from "./ir.ts";
-import type { MarkdownIrCommentsChrome } from "./ir-comments-types.ts";
-import { MarkdownCommentDriftStrip } from "./preview-comment-block.tsx";
+} from "../../comments/use-comment-navigator.ts";
+import { createFilesTranslate } from "../../i18n.ts";
+import type { MarkdownIrDocument } from "../ir.ts";
+import type { MarkdownIrCommentsChrome } from "./ir-types.ts";
+import { MarkdownCommentDriftStrip } from "./preview-block.tsx";
 import {
   type MarkdownCommentLabels,
   type MarkdownCommentNavTarget,
   useMarkdownPreviewComments,
-} from "./use-preview-comments.ts";
+} from "./use-preview.ts";
 
 export interface MarkdownPreviewCommentLabels {
   addComment: string;

@@ -70,7 +70,7 @@ export interface FileEditorAdapterProps {
     | undefined;
   markdownCharts?: RendererPluginContext["charts"] | undefined;
   markdownCommentLabels?:
-    | import("../markdown/preview-comments-layer.tsx").MarkdownPreviewCommentLabels
+    | import("../markdown/comments/preview-layer.tsx").MarkdownPreviewCommentLabels
     | undefined;
   markdownContentAnchor?: MarkdownCrossModeAnchor | undefined;
   markdownContentAnchorRequestId?: string | number | undefined;

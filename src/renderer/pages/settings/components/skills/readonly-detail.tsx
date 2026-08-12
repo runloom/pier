@@ -13,7 +13,7 @@ import {
   useContentDialogFooter,
 } from "@/components/common/dialogs/use-footer.ts";
 import { useT } from "@/i18n/use-t.ts";
-import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
+import { useProjectSkillsStore } from "@/stores/project-skills/store.ts";
 import { SkillContentBody } from "./content-body.tsx";
 import { SkillDetailSection } from "./detail-section.tsx";
 import { SkillsEffectMatrixCard } from "./effect-matrix-card.tsx";

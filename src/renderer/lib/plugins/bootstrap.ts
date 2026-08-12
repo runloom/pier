@@ -1,9 +1,9 @@
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { installEditorLanguageModeSync } from "@/lib/editor-language-mode-sync.ts";
 import {
   initPluginRegistry,
   usePluginRegistryStore,
 } from "@/stores/plugin-registry.store.ts";
+import { installEditorLanguageModeSync } from "./builtin-catalog.ts";
 import { rendererPluginRuntime } from "./runtime/index.ts";
 import { installPluginSharedRuntime } from "./shared-runtime.ts";
 

@@ -1,12 +1,12 @@
 import { LanguageSupport } from "@codemirror/language";
 import { cmLanguageExtension } from "@plugins/builtin/files/renderer/editor/cm-language.ts";
-import { languageForPath } from "@plugins/builtin/files/renderer/editor/language-detection.ts";
-import { editorLanguageModeRegistry } from "@plugins/builtin/files/renderer/editor/language-mode-registry.ts";
+import { editorLanguageModeRegistry } from "@plugins/builtin/files/renderer/editor/language/mode-registry.ts";
 import {
   modesFromCustomServers,
   modesFromPluginRegistry,
   syncEditorLanguageModes,
-} from "@plugins/builtin/files/renderer/editor/sync-language-modes.ts";
+} from "@plugins/builtin/files/renderer/editor/language/sync-modes.ts";
+import { languageForPath } from "@plugins/builtin/files/renderer/editor/language-detection.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { beforeEach, describe, expect, it } from "vitest";
 

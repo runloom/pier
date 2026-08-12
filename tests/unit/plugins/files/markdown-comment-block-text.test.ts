@@ -1,8 +1,8 @@
 import {
   markdownBlockPlainText,
   markdownDocumentBlockTexts,
-} from "@plugins/builtin/files/renderer/markdown/comment-block-text.ts";
-import { buildMarkdownCommentSurfaceFromIr } from "@plugins/builtin/files/renderer/markdown/comment-surface.ts";
+} from "@plugins/builtin/files/renderer/markdown/comments/block-text.ts";
+import { buildMarkdownCommentSurfaceFromIr } from "@plugins/builtin/files/renderer/markdown/comments/surface.ts";
 import type { MarkdownIrDocument } from "@plugins/builtin/files/renderer/markdown/ir.ts";
 import { markdownBlockContentHash } from "@shared/comments/markdown-hash.ts";
 import type { CommentThread } from "@shared/contracts/comments/base.ts";

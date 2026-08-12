@@ -26,7 +26,7 @@ import { useRef, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useLocalEnvironmentsStore } from "@/stores/local-environments.store.ts";
-import type { ProjectSkillsProjectSummary } from "@/stores/project-skills.store.ts";
+import type { ProjectSkillsProjectSummary } from "@/stores/project-skills/store.ts";
 import { projectBasename } from "./shared.tsx";
 
 /**
