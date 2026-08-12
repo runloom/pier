@@ -37,6 +37,7 @@ import type { ProcessEnvironmentService } from "../services/process-environment-
 import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate/index.ts";
 import type { PierBindingsChannel } from "../services/project-skills/pier-bindings/index.ts";
 import type { ProjectSkillsService } from "../services/project-skills/service.ts";
+import type { SystemSkillsChannel } from "../services/project-skills/system-skills/index.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { TaskService } from "../services/tasks/service.ts";
 import type { UsageDataService } from "../services/usage-data/service.ts";
@@ -125,6 +126,8 @@ export interface PierCoreServices {
   projectSkills?: ProjectSkillsService;
   rendererCommand: RendererCommandService;
   secrets: SecretsStore;
+  /** Bundled Pier system skills (pier-canvas, …). Optional for tests. */
+  systemSkills?: SystemSkillsChannel;
   tasks: TaskService;
   terminalLaunches: {
     consume(

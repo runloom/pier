@@ -34,6 +34,8 @@ export interface UnmanagedEnumerationEntry {
   kind: "real-directory" | "foreign-symlink";
   name: string;
   root: string;
+  /** From SKILL.md `user-invocable`; default true when unknown. */
+  userInvocable: boolean;
 }
 
 export interface ProjectionPresence {
@@ -129,6 +131,7 @@ export async function enumerateProjectDiscoveryRoots(args: {
           kind: "foreign-symlink",
           name: "",
           description: "",
+          userInvocable: true,
         });
         continue;
       }
@@ -136,13 +139,14 @@ export async function enumerateProjectDiscoveryRoots(args: {
       if (info.isDirectory()) {
         const meta = withMetadata
           ? await peekSkillMetadata(absoluteChild)
-          : { name: "", description: "" };
+          : { name: "", description: "", userInvocable: true };
         unmanaged.push({
           root,
           directoryName: child,
           kind: "real-directory",
           name: meta.name,
           description: meta.description,
+          userInvocable: meta.userInvocable,
         });
       }
     }
@@ -159,6 +163,8 @@ export interface UserGlobalSkillEntry {
   readByAgents: AgentKind[];
   /** `~`-relative user root, e.g. `~/.claude/skills`. */
   root: string;
+  /** From SKILL.md `user-invocable`; default true when unknown. */
+  userInvocable: boolean;
 }
 
 /** Per-root presence facts (internal to main; not a renderer contract). */
@@ -237,13 +243,14 @@ export async function enumerateUserGlobalSkills(args: {
         count += 1;
         const meta = withMetadata
           ? await peekSkillMetadata(absoluteChild)
-          : { name: "", description: "" };
+          : { name: "", description: "", userInvocable: true };
         const entry: UserGlobalSkillEntry = {
           root,
           directoryName: child,
           name: meta.name,
           description: meta.description,
           readByAgents: [...readByAgents],
+          userInvocable: meta.userInvocable,
         };
         entries.push(entry);
         flat.push(entry);

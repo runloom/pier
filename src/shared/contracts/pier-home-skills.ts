@@ -67,6 +67,38 @@ export type PierHomeUserGlobalSkillView = Omit<
   effects: SkillEffectiveCell[];
 };
 
+/**
+ * Bundled Pier system skills (e.g. pier-canvas). Read-only inventory on the
+ * Home skills tab — not part of the user library; auto-injected per project.
+ */
+export const pierHomeSystemSkillViewSchema = z
+  .object({
+    description: z.string(),
+    id: skillIdSchema,
+    name: z.string(),
+    providerId: z.string().min(1),
+    providerVersion: z.string().min(1),
+  })
+  .strict();
+export type PierHomeSystemSkillView = z.infer<
+  typeof pierHomeSystemSkillViewSchema
+>;
+
+export const pierHomeSkillsSnapshotSchema = z
+  .object({
+    library: z.array(pierHomeSkillViewSchema),
+    systemSkills: z.array(pierHomeSystemSkillViewSchema),
+    userGlobal: z.array(pierHomeUserGlobalSkillViewSchema),
+  })
+  .strict();
+export type PierHomeSkillsSnapshot = Omit<
+  z.infer<typeof pierHomeSkillsSnapshotSchema>,
+  "library" | "userGlobal"
+> & {
+  library: PierHomeSkillView[];
+  userGlobal: PierHomeUserGlobalSkillView[];
+};
+
 export const pierHomeSkillsSnapshotRequestSchema = z.object({}).strict();
 
 export const pierHomeSkillsListRequestSchema = z.object({}).strict();
@@ -98,8 +130,9 @@ export const pierHomeSkillsCreateRequestSchema = z
   .strict();
 
 /**
- * Library skillId, agent-global discovery ref (root + directoryName), or
- * absolutePath under a whitelisted root (compat / reveal-aligned).
+ * Library skillId, agent-global discovery ref (root + directoryName),
+ * absolutePath under a whitelisted root, or systemSkillId (bundled product
+ * skill SKILL.md — read-only).
  */
 export const pierHomeSkillsReadRequestSchema = z
   .object({
@@ -107,6 +140,8 @@ export const pierHomeSkillsReadRequestSchema = z
     directoryName: z.string().min(1).optional(),
     root: z.string().min(1).optional(),
     skillId: skillIdSchema.optional(),
+    /** Bundled Pier system skill id (e.g. pier-canvas). */
+    systemSkillId: skillIdSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -114,12 +149,13 @@ export const pierHomeSkillsReadRequestSchema = z
     const hasPath = typeof value.absolutePath === "string";
     const hasRef =
       typeof value.root === "string" && typeof value.directoryName === "string";
-    const modes = [hasSkill, hasPath, hasRef].filter(Boolean).length;
+    const hasSystem = typeof value.systemSkillId === "string";
+    const modes = [hasSkill, hasPath, hasRef, hasSystem].filter(Boolean).length;
     if (modes !== 1) {
       ctx.addIssue({
         code: "custom",
         message:
-          "provide exactly one of skillId, {root,directoryName}, or absolutePath",
+          "provide exactly one of skillId, systemSkillId, {root,directoryName}, or absolutePath",
       });
     }
   });

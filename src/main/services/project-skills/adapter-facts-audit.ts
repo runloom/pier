@@ -65,33 +65,8 @@ export const AUDIT_ONLY_SKILL_DISCOVERY_ADAPTERS: readonly SkillDiscoveryAdapter
       officialDocsUrl: "https://docs.qoder.com/en/cli/Skills",
       verifiedOn: "2026-07-20",
     },
-    {
-      agentKind: "grok",
-      discoveryRoots: [".grok/skills"],
-      userDiscoveryRoots: ["~/.grok/skills", "~/.agents/skills"],
-      walkUpToRepoRoot: true,
-      consumesProjectSkills: false,
-      duplicateSemantics: "multi-root-scan",
-      duplicatePolicy: "report",
-      sessionRefresh: "new-session-recommended",
-      probeCaveats: [],
-      officialDocsUrl:
-        "https://docs.x.ai/build/features/skills-plugins-marketplaces",
-      verifiedOn: "2026-07-20",
-    },
-    {
-      agentKind: "droid",
-      discoveryRoots: [".factory/skills"],
-      userDiscoveryRoots: ["~/.factory/skills"],
-      walkUpToRepoRoot: false,
-      consumesProjectSkills: false,
-      duplicateSemantics: "multi-root-scan",
-      duplicatePolicy: "report",
-      sessionRefresh: "new-session-recommended",
-      probeCaveats: [],
-      officialDocsUrl: "https://docs.factory.ai/cli/configuration/skills",
-      verifiedOn: "2026-07-20",
-    },
+    // droid promoted to consuming adapter (scans .agents/.factory); see
+    // adapter-facts.ts — no longer audit-only private-root evidence.
     {
       agentKind: "ante",
       discoveryRoots: [".ante/skills"],

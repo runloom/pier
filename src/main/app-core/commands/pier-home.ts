@@ -96,7 +96,27 @@ export async function executePierHomeCommand(
             installedAgents === undefined ? {} : { installedAgents }
           ),
         ]);
-        return success(requestId, { library, userGlobal });
+        // Bundled product skills (pier-canvas, …) — not user library; listed
+        // so Home explains what Pier injects into every project.
+        const systemSkills = services.systemSkills
+          ? await services.systemSkills.views(
+              // Views only need a rootKey for enablement flags; use a stable
+              // empty key when no project context — list() contributions are
+              // still returned with default-enabled metadata.
+              "pier-home"
+            )
+          : [];
+        return success(requestId, {
+          library,
+          userGlobal,
+          systemSkills: systemSkills.map((s) => ({
+            description: s.description,
+            id: s.id,
+            name: s.name,
+            providerId: s.provider.id,
+            providerVersion: s.provider.version,
+          })),
+        });
       }
       case "pierHome.skills.create": {
         await home.ensure();
@@ -122,6 +142,22 @@ export async function executePierHomeCommand(
             skillMd: await home.skills.readSkillMd(command.skillId),
           });
         }
+        if (command.systemSkillId) {
+          const contribution = services.systemSkills
+            ?.list()
+            .find((entry) => entry.id === command.systemSkillId);
+          if (!contribution) {
+            throw new Error(`unknown system skill: ${command.systemSkillId}`);
+          }
+          const skillMd = await readFile(
+            join(contribution.contentDir, "SKILL.md"),
+            "utf8"
+          );
+          return success(requestId, {
+            systemSkillId: command.systemSkillId,
+            skillMd,
+          });
+        }
         if (command.root && command.directoryName) {
           const content = await readUserGlobalSkillContent({
             root: command.root,
@@ -135,7 +171,9 @@ export async function executePierHomeCommand(
           });
         }
         if (!command.absolutePath) {
-          throw new Error("provide skillId, discovery ref, or absolutePath");
+          throw new Error(
+            "provide skillId, systemSkillId, discovery ref, or absolutePath"
+          );
         }
         const allowed = await assertRevealAllowed(
           command.absolutePath,

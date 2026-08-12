@@ -47,18 +47,17 @@ export const settings = {
     pierHomeTitle: "本机工作台",
     pierHomeBadge: "本机",
     pierHomePathHint: "跨项目的技能、MCP 放这里，不绑定某个仓库",
-    pierHomeLibraryTitle: "Pier 技能库",
-    pierHomeLibraryDescription: "由 Pier 持有的技能。需要时再装入各个项目。",
     pierHomeLibraryAdd: "添加技能",
-    pierHomeLibraryEmptyTitle: "库中还没有技能",
-    pierHomeLibraryEmptyDescription:
-      "在此添加技能后，可到项目的「技能」页从 Pier 技能库添加。",
-    pierHomeGlobalTitle: "各智能体全局技能",
-    pierHomeGlobalDescription:
-      "各智能体自己的全局配置目录中的技能。Pier 只读打开，不会在此编辑或删除。",
-    pierHomeGlobalEmptyTitle: "未发现智能体全局技能",
-    pierHomeGlobalEmptyDescription:
-      "智能体在各自主目录下安装技能后，会显示在这里。",
+    pierHomeSkillsListTitle: "技能",
+    pierHomeSkillsListDescription:
+      "系统技能、Pier 技能库与各智能体全局技能列在一起，用标识区分。系统与全局技能可打开查看，不能在此编辑。",
+    pierHomeSkillsListEmptyTitle: "还没有技能",
+    pierHomeSkillsListEmptyDescription:
+      "可添加 Pier 技能库技能；系统技能随应用提供，智能体全局技能在各自目录安装后显示。",
+    pierHomeSystemBadge: "系统",
+    /** Display label for provider id `pier.app` (never show raw id). */
+    pierHomeSystemProviderApp: "Pier",
+    pierHomeSystemProvider: "{{provider}} · {{version}}",
     pierHomeSkillsLoadFailed: "无法加载本机工作台技能",
     pierHomeSkillsCreateFailed: "无法添加库中的技能",
     pierHomeSkillsDeleteTitle: "删除库中的技能？",

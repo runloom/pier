@@ -119,6 +119,20 @@ function isErrno(error: unknown, code: string): boolean {
   );
 }
 
+/**
+ * Pier projection roots for system skills (design v8 §8): always both
+ * shared `.agents` and Claude-compat `.claude` so agents that only scan
+ * one root still receive pier-canvas and other product skills.
+ * Relative link depth is the same for both (`../../.pier/skills/library/…`).
+ */
+export const SYSTEM_SKILL_PROJECTION_ROOTS = [
+  ".agents/skills",
+  ".claude/skills",
+] as const;
+
+export type SystemSkillProjectionRoot =
+  (typeof SYSTEM_SKILL_PROJECTION_ROOTS)[number];
+
 export function assertSystemSkillContribution(
   contribution: SystemSkillContribution
 ): void {
@@ -287,73 +301,65 @@ export function createSystemSkillsChannel(
       }
       published.push(contribution.id);
 
-      const relativeTarget = `.agents/skills/${contribution.id}`;
+      // Dual-root: SYSTEM_SKILL_PROJECTION_ROOTS; ownership red line 2.
       const expected = `../../.pier/skills/library/${contribution.id}`;
-      desiredProjections.push({
-        skillId: contribution.id,
-        relativeTarget,
-        expectedRelativeLinkTarget: expected,
-      });
-      // Projection publish (no-replace; existing correct link is a no-op;
-      // foreign objects are left untouched — deletion safety identical to
-      // user skills). Ancestors must be real directories (§6.1).
-      const absolute = join(projectRoot, ".agents", "skills", contribution.id);
-      try {
-        const info = await lstat(absolute);
-        if (info.isSymbolicLink()) {
-          // Existing link (owned or foreign) — never replace here. Launch
-          // must not decide ownership either; settings surfaces the state.
+      for (const root of SYSTEM_SKILL_PROJECTION_ROOTS) {
+        const relativeTarget = `${root}/${contribution.id}`;
+        desiredProjections.push({
+          skillId: contribution.id,
+          relativeTarget,
+          expectedRelativeLinkTarget: expected,
+        });
+        const absolute = join(projectRoot, ...root.split("/"), contribution.id);
+        try {
+          await lstat(absolute);
+          continue; // Exists (link or dir) — never replace.
+        } catch (error) {
+          if (!isErrno(error, "ENOENT")) continue;
+        }
+        try {
+          await ensureProjectRelativeDir(projectRoot, root);
+        } catch {
           continue;
         }
-        continue; // Unmanaged real entry — never overwrite.
-      } catch (error) {
-        if (!isErrno(error, "ENOENT")) continue;
-      }
-      try {
-        await ensureProjectRelativeDir(projectRoot, ".agents/skills");
-      } catch {
-        continue;
-      }
-      const publishedLink = await fs.publishSymlinkNoReplace({
-        linkPath: absolute,
-        relativeTarget: expected,
-        projectRoot,
-      });
-      if (publishedLink.status !== "created") {
-        continue;
-      }
-      // Ownership recording — deletion safety identical to user skills (red
-      // line 2): only ledger-recorded identities may ever be deleted.
-      try {
-        const ownership = await store.readOwnership(args.rootKey);
-        const generation = ownership?.generation ?? 0;
-        const targets = (ownership?.targets ?? []).filter(
-          (t) => t.relativePath !== relativeTarget
-        );
-        targets.push({
-          relativePath: relativeTarget,
-          skillId: contribution.id,
-          expectedRelativeLinkTarget: expected,
-          objectIdentity: {
-            dev: publishedLink.identity.dev,
-            ino: publishedLink.identity.ino,
-            mode: publishedLink.identity.mode,
-            nlink: publishedLink.identity.nlink,
-            isDirectory: publishedLink.identity.isDirectory,
-            isSymbolicLink: publishedLink.identity.isSymbolicLink,
-          },
-          createdByOperationId: `system-skills:${contribution.provider.id}@${contribution.provider.version}`,
-          createdAt: now(),
+        const publishedLink = await fs.publishSymlinkNoReplace({
+          linkPath: absolute,
+          relativeTarget: expected,
+          projectRoot,
         });
-        await store.commitOwnership(args.rootKey, generation, {
-          schemaVersion: 1,
-          generation: generation + 1,
-          projectIdentity: args.projectIdentity,
-          targets,
-        });
-      } catch {
-        // Ownership write failure leaves an unowned link that the next
-        // reconcile will re-record; never delete without a ledger entry.
+        if (publishedLink.status !== "created") {
+          continue;
+        }
+        try {
+          const ownership = await store.readOwnership(args.rootKey);
+          const generation = ownership?.generation ?? 0;
+          const targets = (ownership?.targets ?? []).filter(
+            (t) => t.relativePath !== relativeTarget
+          );
+          targets.push({
+            relativePath: relativeTarget,
+            skillId: contribution.id,
+            expectedRelativeLinkTarget: expected,
+            objectIdentity: {
+              dev: publishedLink.identity.dev,
+              ino: publishedLink.identity.ino,
+              mode: publishedLink.identity.mode,
+              nlink: publishedLink.identity.nlink,
+              isDirectory: publishedLink.identity.isDirectory,
+              isSymbolicLink: publishedLink.identity.isSymbolicLink,
+            },
+            createdByOperationId: `system-skills:${contribution.provider.id}@${contribution.provider.version}`,
+            createdAt: now(),
+          });
+          await store.commitOwnership(args.rootKey, generation, {
+            schemaVersion: 1,
+            generation: generation + 1,
+            projectIdentity: args.projectIdentity,
+            targets,
+          });
+        } catch {
+          // Next reconcile re-records; never delete without ledger entry.
+        }
       }
     }
 

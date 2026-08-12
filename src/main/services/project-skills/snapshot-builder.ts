@@ -35,25 +35,26 @@ import type { createProjectSkillsPaths } from "./paths.ts";
 import type { PierBindingsChannel } from "./pier-bindings/index.ts";
 import { analyzeLibrarySkill } from "./risk.ts";
 import type { ProjectSkillsStore } from "./store/index.ts";
-import type { SystemSkillsChannel } from "./system-skills/index.ts";
+import {
+  SYSTEM_SKILL_PROJECTION_ROOTS,
+  type SystemSkillsChannel,
+} from "./system-skills/index.ts";
 
 /**
- * Skill-scoped issue ids for a system row: the projection is unowned when
- * the ledger has no record for it under any discovery root (correct link
- * with a lost ledger, or a foreign object at the projection path). Mirror
- * of the repair planner's unmanaged-conflict id for the same target.
- * Settings-only: launch is never refused for this state.
+ * Skill-scoped issue ids for a system row: unowned projection under any
+ * system root (`.agents` / `.claude`). Settings-only integrity badge.
  */
-function systemProjectionIssueIds(args: {
+export function systemProjectionIssueIds(args: {
   ownedRoots: readonly string[];
   presence: ProjectionPresence;
   skillId: string;
 }): string[] {
   const { ownedRoots, presence, skillId } = args;
+  const systemRoots = new Set<string>(SYSTEM_SKILL_PROJECTION_ROOTS);
   const unownedRoots = presence.unmanaged.filter(
     (entry) =>
       entry.directoryName === skillId &&
-      entry.root === ".agents/skills" &&
+      systemRoots.has(entry.root) &&
       !ownedRoots.some((root) => root === entry.root)
   );
   return unownedRoots.map((entry) =>
@@ -209,8 +210,17 @@ export async function buildProjectSnapshot(
 
   const matrixManaged: MatrixManagedSkill[] = [];
   for (const entry of manifestEntries) {
+    const libraryDir = join(
+      live.realPath,
+      ".pier",
+      "skills",
+      "library",
+      entry.id
+    );
+    const meta = await peekSkillMetadata(libraryDir);
     matrixManaged.push({
       skillId: entry.id,
+      skillName: meta.name || entry.id,
       enabled: entry.enabled,
       projectedRoots: presence.ownedProjectedRoots.get(entry.id) ?? [],
     });
@@ -219,6 +229,7 @@ export async function buildProjectSnapshot(
     if (manifestEntries.some((e) => e.id === view.id)) continue;
     matrixManaged.push({
       skillId: view.id,
+      skillName: view.name || view.id,
       enabled: view.enabled,
       projectedRoots: presence.ownedProjectedRoots.get(view.id) ?? [],
     });
@@ -228,20 +239,29 @@ export async function buildProjectSnapshot(
     if (systemIds.has(view.id)) continue;
     matrixManaged.push({
       skillId: view.id,
+      skillName: view.name || view.id,
       enabled: true,
       projectedRoots: presence.ownedProjectedRoots.get(view.id) ?? [],
     });
   }
 
   const matrixUnmanaged: MatrixUnmanagedSkill[] = presence.unmanaged.map(
-    (u) => ({ root: u.root, directoryName: u.directoryName })
+    (u) => ({
+      root: u.root,
+      directoryName: u.directoryName,
+      skillName: u.name || undefined,
+    })
   );
 
   const matrix = deriveEffectiveMatrix({
     registry,
     managed: matrixManaged,
     unmanaged: matrixUnmanaged,
-    userGlobal: userGlobal.entries,
+    userGlobal: userGlobal.entries.map((entry) => ({
+      root: entry.root,
+      directoryName: entry.directoryName,
+      skillName: entry.name || undefined,
+    })),
     ...(installedAgents === undefined ? {} : { installedAgents }),
   });
 
@@ -281,6 +301,7 @@ export async function buildProjectSnapshot(
       id: entry.id,
       name: meta.name,
       description: meta.description,
+      userInvocable: meta.userInvocable,
       enabled: entry.enabled,
       delivery: entry.delivery
         ? { agents: entry.delivery.agents, claude: entry.delivery.claude }
@@ -329,6 +350,7 @@ export async function buildProjectSnapshot(
       id: view.id,
       name,
       description,
+      userInvocable: libraryMeta.userInvocable,
       enabled: view.enabled,
       delivery: null,
       contentDigest: view.contentDigest ?? systemContent.actualDigest ?? "",
@@ -363,6 +385,7 @@ export async function buildProjectSnapshot(
       id: view.id,
       name: meta.name || view.name,
       description: meta.description || view.description,
+      userInvocable: meta.userInvocable,
       enabled: true,
       delivery: view.delivery,
       contentDigest: view.contentDigest ?? boundContent.actualDigest ?? "",
@@ -384,6 +407,7 @@ export async function buildProjectSnapshot(
     name: u.name,
     description: u.description,
     kind: u.kind,
+    userInvocable: u.userInvocable ?? true,
     effects:
       matrix.unmanagedEffects.get(unmanagedKey(u.root, u.directoryName)) ??
       ([] as SkillEffectiveCell[]),
@@ -395,10 +419,12 @@ export async function buildProjectSnapshot(
       directoryName: entry.directoryName,
       name: entry.name,
       description: entry.description,
+      userInvocable: entry.userInvocable,
       effects: deriveUserGlobalEffects({
         registry,
         root: entry.root,
         directoryName: entry.directoryName,
+        skillName: entry.name || undefined,
         managed: matrixManaged,
         unmanaged: matrixUnmanaged,
         installedAgents,

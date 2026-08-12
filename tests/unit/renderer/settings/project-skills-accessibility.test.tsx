@@ -31,6 +31,7 @@ const SKILL: ProjectSkillView = {
   riskSummary: null,
   source: { type: "local-import" },
   totalBytes: 100,
+  userInvocable: true,
 };
 
 describe("project skills accessibility", () => {

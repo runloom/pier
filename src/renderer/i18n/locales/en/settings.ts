@@ -48,19 +48,17 @@ export const settings = {
     pierHomeBadge: "Home",
     pierHomePathHint:
       "Cross-project skills and MCP live here — not tied to one repo",
-    pierHomeLibraryTitle: "Pier library",
-    pierHomeLibraryDescription:
-      "Skills Pier owns. Add them to projects when you need them.",
     pierHomeLibraryAdd: "Add skill",
-    pierHomeLibraryEmptyTitle: "No library skills yet",
-    pierHomeLibraryEmptyDescription:
-      "Add a skill here, then add it to a project from that project’s Skills tab (Add from Pier library).",
-    pierHomeGlobalTitle: "Agent global skills",
-    pierHomeGlobalDescription:
-      "Skills each agent keeps under its own home folders. Pier opens them read-only and does not edit or delete them.",
-    pierHomeGlobalEmptyTitle: "No agent global skills found",
-    pierHomeGlobalEmptyDescription:
-      "When agents install skills under their usual home folders, they appear here.",
+    pierHomeSkillsListTitle: "Skills",
+    pierHomeSkillsListDescription:
+      "System skills, Pier library skills, and agent global skills share one list. Badges mark the type. System and agent-global skills open read-only.",
+    pierHomeSkillsListEmptyTitle: "No skills yet",
+    pierHomeSkillsListEmptyDescription:
+      "Add a Pier library skill, or wait for system skills from the app and agent-global skills under each agent’s home folders.",
+    pierHomeSystemBadge: "System",
+    /** Display label for provider id `pier.app` (never show raw id). */
+    pierHomeSystemProviderApp: "Pier",
+    pierHomeSystemProvider: "{{provider}} · {{version}}",
     pierHomeSkillsLoadFailed: "Couldn’t load Home skills",
     pierHomeSkillsCreateFailed: "Couldn’t add library skill",
     pierHomeSkillsDeleteTitle: "Delete skill from library?",

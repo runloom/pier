@@ -12,10 +12,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveStableProjectIdentity } from "@main/services/project-skills/identity.ts";
 import { createProjectSkillsPaths } from "@main/services/project-skills/paths.ts";
+import { systemProjectionIssueIds } from "@main/services/project-skills/snapshot-builder.ts";
 import { createProjectSkillsStore } from "@main/services/project-skills/store/index.ts";
 import {
   assertSystemSkillContribution,
   createSystemSkillsChannel,
+  SYSTEM_SKILL_PROJECTION_ROOTS,
 } from "@main/services/project-skills/system-skills/index.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -52,6 +54,33 @@ function contribution(overrides?: Record<string, unknown>) {
 }
 
 describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
+  it("systemProjectionIssueIds covers every system projection root", () => {
+    expect([...SYSTEM_SKILL_PROJECTION_ROOTS]).toEqual([
+      ".agents/skills",
+      ".claude/skills",
+    ]);
+    const issueIds = systemProjectionIssueIds({
+      ownedRoots: [".agents/skills"],
+      presence: {
+        ownedProjectedRoots: new Map(),
+        unmanaged: [
+          {
+            root: ".claude/skills",
+            directoryName: "pier-canvas",
+            kind: "foreign-symlink",
+            name: "",
+            description: "",
+            userInvocable: true,
+          },
+        ],
+      },
+      skillId: "pier-canvas",
+    });
+    expect(issueIds).toEqual([
+      "unmanaged-conflict:pier-canvas::.claude/skills/pier-canvas",
+    ]);
+  });
+
   it("enforces the pier- prefix and provider identity", () => {
     expect(() =>
       assertSystemSkillContribution({
@@ -150,14 +179,31 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
       expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
     ]);
 
-    // Relative projection + ownership record (deletion safety identical).
-    const link = join(projectRoot, ".agents", "skills", "pier-canvas");
-    expect((await lstat(link)).isSymbolicLink()).toBe(true);
-    expect(await readlink(link)).toBe("../../.pier/skills/library/pier-canvas");
+    // Dual-root projection + ownership (agents + claude) for Claude L1/TUI.
+    const agentsLink = join(projectRoot, ".agents", "skills", "pier-canvas");
+    const claudeLink = join(projectRoot, ".claude", "skills", "pier-canvas");
+    expect((await lstat(agentsLink)).isSymbolicLink()).toBe(true);
+    expect((await lstat(claudeLink)).isSymbolicLink()).toBe(true);
+    expect(await readlink(agentsLink)).toBe(
+      "../../.pier/skills/library/pier-canvas"
+    );
+    expect(await readlink(claudeLink)).toBe(
+      "../../.pier/skills/library/pier-canvas"
+    );
+    expect(
+      result.desiredProjections.map((p) => p.relativeTarget).sort()
+    ).toEqual(
+      [".agents/skills/pier-canvas", ".claude/skills/pier-canvas"].sort()
+    );
     const ownership = await store.readOwnership(rootKey);
     expect(
       ownership?.targets.some(
         (t) => t.relativePath === ".agents/skills/pier-canvas"
+      )
+    ).toBe(true);
+    expect(
+      ownership?.targets.some(
+        (t) => t.relativePath === ".claude/skills/pier-canvas"
       )
     ).toBe(true);
   });
