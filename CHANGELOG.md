@@ -4,6 +4,26 @@
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-08-12
+
+### Added
+
+- **Git 审查冲突接受。** 合并冲突文件走 UnresolvedFile 宿主：Accept 写回磁盘、stage 与 digest 对齐，冲突标记文案可 i18n。
+- **Local-control 终态收口。** 人类 CLI 控制平面（会话/快照/runtime fence）与终端/工作树/通知命令面落地；`agents self` 产品路径明确拒绝。
+- **语言服务 L0 矩阵与双轨 language modes。** PATH 工具目录 + 插件 languageModes/languageServers 贡献；Files 设置下挂语言服务策略。
+- **评论与 Markdown 预览。** 多 kind 锚点、blob 防挂死、HoverCard 语言服务态、大纲与阅读偏好复用。
+- **Tab 条滚动所有权。** dockview 最大化后保留横向滚动；文件 tab 重名消歧。
+
+### Changed
+
+- **宿主/内置插件边界。** 语言模式与 LSP 安装指引同步只经 builtin-catalog；设置 Files 段不再直接 import 插件 manifest。
+- **目录密度。** project-skills store、markdown comments、editor language、contracts 等领域按 feature 分子目录。
+
+### Fixed
+
+- **合并后 preflight。** typecheck/lint/depcruise/组件测与治理单测对齐合并债，保证一次绿合 main。
+- **终端 Esc。** 忙态智能体裸 Esc 清 busy 并对账为中断。
+
 ## [0.1.24] - 2026-08-11
 
 ### Added
