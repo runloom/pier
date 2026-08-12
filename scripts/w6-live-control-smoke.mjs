@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from "node:child_process";
 /**
  * local-control 冒烟（需 Pier 已起 + socket）：
  * status/snapshot → cli-human agents.start/turn/screen → snapshot.runtimes
@@ -10,11 +11,10 @@
  *
  *   node scripts/w6-live-control-smoke.mjs
  */
-import { randomBytes, createHash as hash } from "node:crypto";
-import { spawnSync } from "node:child_process";
+import { createHash as hash, randomBytes } from "node:crypto";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { tmpdir } from "node:os";
 
 const ROOT = process.env.PIER_ROOT || process.cwd();
 
@@ -48,26 +48,22 @@ function b64urlEncode(buf) {
     .replace(/=+$/u, "");
 }
 
-function effectKey(seed) {
+function effectKey(_seed) {
   return b64urlEncode(randomBytes(24));
 }
 
 function pierCli(args) {
-  const r = spawnSync(
-    process.execPath,
-    [join(ROOT, "bin/pier.mjs"), ...args],
-    {
-      cwd: ROOT,
-      encoding: "utf8",
-      env: {
-        ...process.env,
-        ...(process.env.PIER_USER_DATA_DIR
-          ? { PIER_USER_DATA_DIR: process.env.PIER_USER_DATA_DIR }
-          : {}),
-      },
-      maxBuffer: 8 * 1024 * 1024,
-    }
-  );
+  const r = spawnSync(process.execPath, [join(ROOT, "bin/pier.mjs"), ...args], {
+    cwd: ROOT,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ...(process.env.PIER_USER_DATA_DIR
+        ? { PIER_USER_DATA_DIR: process.env.PIER_USER_DATA_DIR }
+        : {}),
+    },
+    maxBuffer: 8 * 1024 * 1024,
+  });
   return {
     code: r.status ?? 1,
     out: `${r.stdout || ""}${r.stderr || ""}`,
@@ -113,8 +109,7 @@ async function main() {
   {
     const { code, out } = pierCli(["snapshot", "--json"]);
     const j = parseLastJson(out);
-    const hasRuntimes =
-      j?.ok && j.data && Array.isArray(j.data.runtimes);
+    const hasRuntimes = j?.ok && j.data && Array.isArray(j.data.runtimes);
     record(
       results,
       "snapshot.has_runtimes_field",
@@ -254,7 +249,12 @@ async function main() {
       j?.ok === false &&
       (j?.error?.code === "snapshot_required" ||
         /boot_changed|snapshot_required/i.test(JSON.stringify(j)));
-    record(results, "watch.wrong_boot_snapshot_required", ok, out.slice(0, 180));
+    record(
+      results,
+      "watch.wrong_boot_snapshot_required",
+      ok,
+      out.slice(0, 180)
+    );
   }
 
   try {

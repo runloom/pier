@@ -284,44 +284,52 @@ function formatAgentsList(data) {
     .join("\n")}\n`;
 }
 
+function formatNotificationItemLine(item) {
+  return `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}`;
+}
+
+function formatNotificationItems(items, emptyLabel) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return `${emptyLabel}\n`;
+  }
+  return `${items.map(formatNotificationItemLine).join("\n")}\n`;
+}
+
+function formatNotificationsWatchHuman(data) {
+  const items = data?.items;
+  const seq = typeof data?.seq === "number" ? ` seq=${data.seq}` : "";
+  const mode = data?.mode ?? "snapshot";
+  if (mode === "timeout") {
+    return `(timeout)${seq}\n`;
+  }
+  if (mode === "cancelled") {
+    return `(cancelled)${seq}\n`;
+  }
+  return formatNotificationItems(
+    items,
+    `(no notifications) mode=${mode}${seq}`
+  );
+}
+
+function formatNotificationsListHuman(data) {
+  const items = data?.items;
+  const seq = typeof data?.seq === "number" ? ` seq=${data.seq}` : "";
+  return formatNotificationItems(items, `(no notifications)${seq}`);
+}
+
 function formatNotificationsHuman(type, data) {
-  if (type === "notifications.list" || type === "notifications.watch") {
-    const items = data?.items;
-    const seq = typeof data?.seq === "number" ? ` seq=${data.seq}` : "";
-    if (type === "notifications.watch") {
-      const mode = data?.mode ?? "snapshot";
-      if (mode === "timeout") {
-        return `(timeout)${seq}\n`;
-      }
-      if (mode === "cancelled") {
-        return `(cancelled)${seq}\n`;
-      }
-      if (!Array.isArray(items) || items.length === 0) {
-        return `(no notifications) mode=${mode}${seq}\n`;
-      }
-      return `${items
-        .map(
-          (item) =>
-            `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}`
-        )
-        .join("\n")}\n`;
-    }
-    if (!Array.isArray(items) || items.length === 0) {
-      return `(no notifications)${seq}\n`;
-    }
-    return `${items
-      .map(
-        (item) =>
-          `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}`
-      )
-      .join("\n")}\n`;
+  if (type === "notifications.watch") {
+    return formatNotificationsWatchHuman(data);
+  }
+  if (type === "notifications.list") {
+    return formatNotificationsListHuman(data);
   }
   if (type === "notifications.get") {
     const item = data?.item;
     if (!item) {
       return "(not found)\n";
     }
-    return `${item.id}\t${item.title ?? ""}\t${item.read ? "read" : "unread"}\n`;
+    return `${formatNotificationItemLine(item)}\n`;
   }
   if (type === "notifications.focus") {
     return `focused\tstatus=${data?.status ?? "?"}\n`;
@@ -432,14 +440,14 @@ try {
         ? params.timeoutMs
         : 0;
     // watch/wait 服务默认 30s；客户端必须带传输余量，避免贴边先掐 socket
-    const serviceBudgetMs =
+    const isWatchOrWait =
       parsed.op === "agents.watch" ||
       parsed.op === "agents.wait" ||
-      parsed.op === "control.watch"
-        ? waitTimeoutMs > 0
-          ? waitTimeoutMs
-          : 30_000
-        : 0;
+      parsed.op === "control.watch";
+    let serviceBudgetMs = 0;
+    if (isWatchOrWait) {
+      serviceBudgetMs = waitTimeoutMs > 0 ? waitTimeoutMs : 30_000;
+    }
     const clientTimeoutMs = Math.max(
       30_000,
       serviceBudgetMs + 20_000,
