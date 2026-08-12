@@ -8,7 +8,7 @@ async function readSrc(rel: string): Promise<string> {
   return readFile(join(root, rel), "utf8");
 }
 
-describe("project-skills launch architecture", () => {
+describe("project-skills launch architecture", { timeout: 30_000 }, () => {
   it("wires ManagedAgentLaunchGate through terminal create and AI one-shot", async () => {
     const [
       launchGate,

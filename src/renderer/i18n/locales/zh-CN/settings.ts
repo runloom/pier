@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
@@ -291,18 +292,28 @@ export const settings = {
     monoFontFamily: "等宽字体",
     monoFontFamilyDesc: "终端与代码编辑器字体",
     monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",
+    docFontMode: "文档字体",
+    docFontModeDesc:
+      "Markdown 预览与文档类画布的正文字体；代码块仍用等宽字体。",
+    docFontModeUi: "跟随界面",
+    docFontModeCustom: "自定义",
+    docFontFamily: "自定义文档字体",
+    docFontFamilyDesc:
+      "自定义模式下的主字体。留空则使用内置文档衬线回落链。仅使用系统已安装字体。",
+    docFontFamilyPlaceholder: "Noto Serif SC",
     monoFontSize: "终端字号",
-    monoFontSizeDesc: "终端字号（px，8–32）",
+    monoFontSizeDesc: "范围 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "代码字号",
-    codeFontSizeDesc: "文件编辑与 Git 对比字号（px，8–32）",
+    codeFontSizeDesc: "文件编辑与 Git 对比；范围 8–32",
     codeFontSizePlaceholder: "13",
+    fontUpdateFailed: "无法更新字体设置",
     terminalCursorStyle: "光标样式",
     terminalCursorStyleDesc: "终端输入光标形状",
     terminalCursorBlink: "光标闪烁",
     terminalCursorBlinkDesc: "终端光标是否周期性闪烁",
     terminalScrollbackMb: "滚动历史上限",
-    terminalScrollbackMbDesc: "终端历史大小（MB，10–512）",
+    terminalScrollbackMbDesc: "终端历史缓冲区大小，范围 10–512",
     terminalScrollbackRuntimeNote: "仅对新开终端生效。",
     terminalPasteProtection: "粘贴保护",
     terminalPasteProtectionDesc: "粘贴可能立即执行的内容前先确认",
@@ -316,17 +327,7 @@ export const settings = {
     panelCloseFocusPolicy: "关闭标签后激活",
     panelCloseFocusPolicyDesc:
       "关闭当前标签后，激活相邻标签还是最近使用的标签。",
-    lspEnabled: "启用语言服务",
-    lspEnabledDesc: "诊断、补全与跳转定义",
-    lspIdleReleaseMinutes: "空闲释放（分钟）",
-    lspIdleReleaseMinutesDesc: "空闲多久后释放语言服务（1–1440）",
-    lspMaxLocalWorkspaces: "本地工作区上限",
-    lspMaxLocalWorkspacesDesc: "同时启用语言服务的本地项目数（0 表示关闭）",
-    lspMaxRemoteWorkspaces: "远程工作区上限",
-    lspMaxRemoteWorkspacesDesc: "同时启用语言服务的远程项目数（0 表示关闭）",
-    lspUpdateFailed: "无法更新语言服务设置，请重试",
-    lspWorktreesEnabled: "在工作树中启用",
-    lspWorktreesEnabledDesc: "智能体工作树是否启用语言服务（默认关，省资源）",
+    ...settingsLspRow,
     defaultAgent: "默认智能体",
     defaultAgentDesc: "「启动默认智能体」使用的程序",
     agentPermissionMode: "权限确认方式",
@@ -344,6 +345,13 @@ export const settings = {
     },
   },
   shellEnvironment: settingsShellEnvironment,
+  /** Numeric InputRow trailing units (shadcn InputGroupAddon). */
+  unit: {
+    px: "px",
+    mb: "MB",
+    seconds: "秒",
+    minutes: "分钟",
+  },
   quitConfirmation: {
     hasActivity: "有运行中活动时确认",
     always: "总是确认",

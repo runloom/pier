@@ -2,11 +2,13 @@ import type { EditorView } from "@codemirror/view";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileEditorController } from "@plugins/builtin/files/renderer/editor/controller.ts";
 import {
+  absolutePathForFilesLspEditorView,
   getFilesLspEditorView,
   openFilesLspAbsolutePath,
   registerFilesLspEditorView,
   registerFilesLspNavigationDeps,
   resetFilesLspNavigationForTests,
+  rootPathForFilesLspEditorView,
 } from "@plugins/builtin/files/renderer/lsp/navigation.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +16,21 @@ describe("files LSP navigation", () => {
   afterEach(() => {
     resetFilesLspNavigationForTests();
     vi.useRealTimers();
+  });
+
+  it("reverse-looks up absolute path and root without an LSP connection", () => {
+    const view = { focus: vi.fn() } as unknown as EditorView;
+    const unregister = registerFilesLspEditorView(
+      "/repo/src/renderer/app/globals.css",
+      view,
+      "/repo"
+    );
+    expect(absolutePathForFilesLspEditorView(view)).toBe(
+      "/repo/src/renderer/app/globals.css"
+    );
+    expect(rootPathForFilesLspEditorView(view)).toBe("/repo");
+    unregister();
+    expect(absolutePathForFilesLspEditorView(view)).toBeNull();
   });
 
   it("keeps another registered view when one URI is mounted twice", () => {

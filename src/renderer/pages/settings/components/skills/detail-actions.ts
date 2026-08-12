@@ -8,7 +8,7 @@ import {
   type ApplyOutcome,
   emptyDraft,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
+} from "@/stores/project-skills/store.ts";
 import { commitSkillsIntent } from "./apply-flow.ts";
 import { discardPreparedCandidate } from "./candidate-lifecycle.ts";
 import { skillsErrorMessage } from "./error-copy.ts";

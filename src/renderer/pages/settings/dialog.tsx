@@ -41,6 +41,7 @@ import { AgentsSection } from "@/pages/settings/components/agents-section.tsx";
 import { AppUpdateSection } from "@/pages/settings/components/app-update-section.tsx";
 import { AppearanceSection } from "@/pages/settings/components/appearance-section.tsx";
 import { KeybindingsSection } from "@/pages/settings/components/keybindings-section.tsx";
+import { LspSettingsCard } from "@/pages/settings/components/lsp-settings-card.tsx";
 import { NotificationsSection } from "@/pages/settings/components/notifications-section.tsx";
 import { PluginConfigurationSection } from "@/pages/settings/components/plugin-configuration-section.tsx";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
@@ -113,6 +114,20 @@ function PluginSettingsSection({ pluginId }: { pluginId: string }) {
   const CustomSettingsPageComponent = customSettingsPage?.component;
   if (CustomSettingsPageComponent) {
     return <CustomSettingsPageComponent />;
+  }
+  // Files owns the code editor surface: host language-service policy UI lives
+  // under Files settings (not a separate host "Languages" section).
+  // Id is a product constant (not imported from the plugin package) so host
+  // stays free of direct builtin imports outside builtin-catalog.
+  if (pluginId === "pier.files") {
+    return (
+      <>
+        <PluginConfigurationSection pluginId={pluginId} />
+        <div className="mt-4 px-4 pb-4">
+          <LspSettingsCard />
+        </div>
+      </>
+    );
   }
   return <PluginConfigurationSection pluginId={pluginId} />;
 }

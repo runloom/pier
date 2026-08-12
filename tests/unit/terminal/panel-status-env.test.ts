@@ -36,7 +36,7 @@ describe("withPanelStatusEnv", () => {
     expect(out.env).toEqual({ PIER_PANEL_ID: "panel-3", PIER_WINDOW_ID: "7" });
   });
 
-  it("剥离父级 binding 并注入 agentCallerEnv", () => {
+  it("剥离父级历史 PIER_AGENT_CALLER_* 且不重新注入", () => {
     const out = withPanelStatusEnv(
       {
         command: "claude",
@@ -48,28 +48,11 @@ describe("withPanelStatusEnv", () => {
       },
       "panel-4",
       "9",
-      hookEnv,
-      { PIER_AGENT_CALLER_BINDING: "bind_child" }
+      hookEnv
     );
     expect(out.env?.FOO).toBe("1");
-    expect(out.env?.PIER_AGENT_CALLER_BINDING).toBe("bind_child");
-    expect(out.env?.PIER_AGENT_CALLER_CREDENTIAL_FILE).toBeUndefined();
-    expect(out.env?.PIER_PANEL_ID).toBe("panel-4");
-  });
-
-  it("无 agentCallerEnv 时不保留父级 binding", () => {
-    const out = withPanelStatusEnv(
-      {
-        env: {
-          PIER_AGENT_CALLER_BINDING: "bind_parent",
-          PIER_AGENT_CALLER_CREDENTIAL_FILE: "/parent/cred.json",
-        },
-      },
-      "panel-5",
-      "9",
-      {}
-    );
     expect(out.env?.PIER_AGENT_CALLER_BINDING).toBeUndefined();
     expect(out.env?.PIER_AGENT_CALLER_CREDENTIAL_FILE).toBeUndefined();
+    expect(out.env?.PIER_PANEL_ID).toBe("panel-4");
   });
 });

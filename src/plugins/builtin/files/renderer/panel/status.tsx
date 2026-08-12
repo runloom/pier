@@ -1,11 +1,10 @@
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@pier/ui/tooltip.tsx";
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@pier/ui/hover-card.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { useSyncExternalStore } from "react";
 import { filesDraftProtectionForDocument } from "../document/draft-protection.ts";
@@ -14,12 +13,10 @@ import {
   subscribeFilesDraftProtection,
 } from "../document/drafts.ts";
 import type { FilesDocument } from "../document/types.ts";
-import { LANGUAGE_LABELS } from "../editor/cm-language.ts";
+import { languageLabel } from "../editor/cm-language.ts";
 import type { FilesTranslate } from "../i18n.ts";
-import {
-  type FilesLanguageServiceStatus,
-  useFilesLanguageServiceStatus,
-} from "./language-service-status.ts";
+import { languageServicePresentation } from "./language-service-presentation.ts";
+import { useFilesLanguageServiceStatus } from "./language-service-status.ts";
 import {
   statusTextForDocument,
   statusToneForDocument,
@@ -68,7 +65,7 @@ export function LanguageBadge({
   document: FilesDocument;
   t: FilesTranslate;
 }) {
-  const label = LANGUAGE_LABELS[document.language] ?? LANGUAGE_LABELS.text;
+  const label = languageLabel(document.language);
   return (
     <Badge
       className="font-mono uppercase tracking-wide"
@@ -80,13 +77,6 @@ export function LanguageBadge({
     </Badge>
   );
 }
-
-type LanguageServiceTone =
-  | "danger"
-  | "info"
-  | "neutral"
-  | "success"
-  | "warning";
 
 export function LanguageServiceStatus({
   documentId,
@@ -104,240 +94,58 @@ export function LanguageServiceStatus({
     return null;
   }
 
-  const { label, tone } = languageServiceStatePresentation(status, t);
-  const description = languageServiceDescription(status, t);
-  // 徽标不进 Tab；span 做 trigger；openOnFocus=false 防 focus 误弹。
+  const presentation = languageServicePresentation(status, t);
+  const ariaParts = [
+    presentation.label,
+    presentation.title,
+    presentation.description,
+    presentation.nextStep,
+    presentation.command,
+  ].filter((part): part is string => Boolean(part && part.length > 0));
+  // 徽标不进 Tab；span 做 trigger。HoverCard 承载「发生了什么 + 下一步」。
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild openOnFocus={false}>
-          <span className="inline-flex">
-            <Badge
-              aria-label={`${label}. ${description}`}
-              aria-live="polite"
-              data-language-service-status={status.state}
-              data-tone={tone}
-              role="status"
-              size="xs"
-              variant={tone}
+    <HoverCard closeDelay={100} openDelay={200}>
+      <HoverCardTrigger asChild>
+        <span className="inline-flex">
+          <Badge
+            aria-label={ariaParts.join(". ")}
+            aria-live="polite"
+            data-language-service-reason={
+              "reason" in status ? status.reason : undefined
+            }
+            data-language-service-status={status.state}
+            data-tone={presentation.tone}
+            role="status"
+            size="xs"
+            variant={presentation.tone}
+          >
+            {presentation.label}
+          </Badge>
+        </span>
+      </HoverCardTrigger>
+      <HoverCardContent align="end" className="w-80" side="bottom">
+        <div className="flex flex-col gap-2">
+          <p className="font-medium text-sm leading-snug">
+            {presentation.title}
+          </p>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            {presentation.description}
+          </p>
+          {presentation.nextStep ? (
+            <p className="text-sm leading-relaxed">{presentation.nextStep}</p>
+          ) : null}
+          {presentation.command ? (
+            <p
+              className="rounded-md bg-muted px-2 py-1.5 font-mono text-xs leading-relaxed"
+              data-slot="language-service-install-command"
             >
-              {label}
-            </Badge>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{description}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+              {presentation.command}
+            </p>
+          ) : null}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
   );
-}
-
-function languageServiceStatePresentation(
-  status: FilesLanguageServiceStatus,
-  t: FilesTranslate
-): { label: string; tone: LanguageServiceTone } {
-  switch (status.state) {
-    case "disabled":
-      return {
-        label: t("filePanel.languageService.state.disabled", "Disabled"),
-        tone: "neutral",
-      };
-    case "unsupported":
-      return {
-        label: t("filePanel.languageService.state.unsupported", "Unsupported"),
-        tone: "neutral",
-      };
-    case "starting":
-      return {
-        label: t("filePanel.languageService.state.starting", "Starting"),
-        tone: "info",
-      };
-    case "ready":
-      return {
-        label: t("filePanel.languageService.state.ready", "Ready"),
-        tone: "success",
-      };
-    case "retrying":
-      return {
-        label: t("filePanel.languageService.state.retrying", "Retrying"),
-        tone: "warning",
-      };
-    case "paused":
-      return {
-        label: t("filePanel.languageService.state.paused", "Paused"),
-        tone: "neutral",
-      };
-    case "error":
-      return {
-        label: t("filePanel.languageService.state.error", "Error"),
-        tone: "danger",
-      };
-    default: {
-      const exhaustiveStatus: never = status;
-      return exhaustiveStatus;
-    }
-  }
-}
-
-function languageServiceDescription(
-  status: FilesLanguageServiceStatus,
-  t: FilesTranslate
-): string {
-  switch (status.state) {
-    case "disabled": {
-      const { reason } = status;
-      switch (reason) {
-        case "editor-disabled":
-          return t(
-            "filePanel.languageService.description.disabled.editorDisabled",
-            "Enable editor language features in Settings."
-          );
-        case "globally-disabled":
-          return t(
-            "filePanel.languageService.description.disabled.globallyDisabled",
-            "Enable Language Services in Settings."
-          );
-        case "worktrees-disabled":
-          return t(
-            "filePanel.languageService.description.disabled.worktreesDisabled",
-            "Enable language services for worktrees in Settings."
-          );
-        default: {
-          const exhaustiveReason: never = reason;
-          return exhaustiveReason;
-        }
-      }
-    }
-    case "unsupported": {
-      const { reason } = status;
-      switch (reason) {
-        case "non-disk":
-          return t(
-            "filePanel.languageService.description.unsupported.nonDisk",
-            "Save this file to the workspace to use language features."
-          );
-        case "no-provider":
-          return t(
-            "filePanel.languageService.description.unsupported.noProvider",
-            "Install or configure the language server for this file type."
-          );
-        case "unsupported-root":
-          return t(
-            "filePanel.languageService.description.unsupported.unsupportedRoot",
-            "Open a supported local workspace to use language features."
-          );
-        default: {
-          const exhaustiveReason: never = reason;
-          return exhaustiveReason;
-        }
-      }
-    }
-    case "starting":
-      return t(
-        "filePanel.languageService.description.starting",
-        "Language features are starting."
-      );
-    case "ready":
-      return t(
-        "filePanel.languageService.description.ready",
-        "Language features are ready."
-      );
-    case "retrying": {
-      const { reason } = status;
-      switch (reason) {
-        case "exited":
-          return t(
-            "filePanel.languageService.description.retrying.exited",
-            "The language server exited. Pier will retry automatically."
-          );
-        case "failed":
-          return t(
-            "filePanel.languageService.description.retrying.failed",
-            "The language server failed. Pier will retry automatically."
-          );
-        case "send-failed":
-          return t(
-            "filePanel.languageService.description.retrying.sendFailed",
-            "Pier could not contact the language server. Pier will retry automatically."
-          );
-        case "initialize-failed":
-          return t(
-            "filePanel.languageService.description.retrying.initializeFailed",
-            "The language server could not initialize. Pier will retry automatically."
-          );
-        default: {
-          const exhaustiveReason: never = reason;
-          return exhaustiveReason;
-        }
-      }
-    }
-    case "paused": {
-      const { reason } = status;
-      switch (reason) {
-        case "idle-release":
-          return t(
-            "filePanel.languageService.description.paused.idleRelease",
-            "Focus the editor to resume language features."
-          );
-        case "workspace-evicted":
-          return t(
-            "filePanel.languageService.description.paused.workspaceEvicted",
-            "This workspace was paused to free resources. Focus the editor to resume language features."
-          );
-        default: {
-          const exhaustiveReason: never = reason;
-          return exhaustiveReason;
-        }
-      }
-    }
-    case "error": {
-      const { reason } = status;
-      switch (reason) {
-        case "limit-reached":
-          return t(
-            "filePanel.languageService.description.error.limitReached",
-            "Close another workspace or adjust the language service limit in Settings."
-          );
-        case "server-unavailable":
-          return t(
-            "filePanel.languageService.description.error.serverUnavailable",
-            "Check that the language server for this file type is installed."
-          );
-        case "launch-failed":
-          return t(
-            "filePanel.languageService.description.error.launchFailed",
-            "Check that the language server for this file type is installed, then try again."
-          );
-        case "initialize-failed":
-          return t(
-            "filePanel.languageService.description.error.initializeFailed",
-            "Check the language server installation and try again."
-          );
-        case "cleanup-failed":
-          return t(
-            "filePanel.languageService.description.error.cleanupFailed",
-            "The language service process could not be closed. Restart Pier and try again."
-          );
-        case "bridge-unavailable":
-          return t(
-            "filePanel.languageService.description.error.bridgeUnavailable",
-            "Pier could not reach the language service. Restart Pier and try again."
-          );
-        case "retry-exhausted":
-          return t(
-            "filePanel.languageService.description.error.retryExhausted",
-            "The language server stopped repeatedly. Restart Pier, then check the language server installation if the problem continues."
-          );
-        default: {
-          const exhaustiveReason: never = reason;
-          return exhaustiveReason;
-        }
-      }
-    }
-    default: {
-      const exhaustiveStatus: never = status;
-      return exhaustiveStatus;
-    }
-  }
 }
 
 export function DocumentFormatBadge({ document }: { document: FilesDocument }) {

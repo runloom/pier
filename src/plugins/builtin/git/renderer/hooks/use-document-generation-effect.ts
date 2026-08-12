@@ -55,6 +55,7 @@ import {
 import type { GitReviewGenerationCallbacks } from "./use-document-session.ts";
 
 export interface GitReviewDocumentGenerationMountOptions {
+  readonly collidingFileLabel: (name: string) => string;
   readonly commentsIndexRef: RefObject<ReviewCommentIndex | null>;
   readonly commentsSeqRef: RefObject<number>;
   readonly committedProjectionGenerationRef: RefObject<number>;
@@ -98,6 +99,7 @@ export function mountGitReviewDocumentGeneration(
   options: GitReviewDocumentGenerationMountOptions
 ): () => void {
   const {
+    collidingFileLabel,
     commentsIndexRef,
     commentsSeqRef,
     committedProjectionGenerationRef,
@@ -128,7 +130,6 @@ export function mountGitReviewDocumentGeneration(
     demandPrefetchEntryKeysRef,
     viewStateRef,
   } = options;
-
   generationCallbacksRef.current.beginReadingRefresh();
   const generation = Math.max(
     documentGenerationRef.current + 1,
@@ -149,9 +150,11 @@ export function mountGitReviewDocumentGeneration(
   const entryKeysInOrder = entries.map((entry) => entry.entryKey);
   const currentEntryKeys = new Set(entryKeysInOrder);
   // 金标准：seed 仅 content-bearing（pure rename 不占 document 队列）
+  // 与侧栏树共用 collidingFileLabel，碰撞 displayPath 序一致。
   const contentEntryKeysInOrder = reviewContentEntryKeysInOrder(
     entries,
-    diffBase
+    diffBase,
+    collidingFileLabel
   );
   const seedEntryKeys = gitReviewSeedEntryKeys(contentEntryKeysInOrder);
   seedEntryKeysRef.current = seedEntryKeys;
@@ -296,6 +299,7 @@ export function mountGitReviewDocumentGeneration(
   const initialProjection = projectReviewLedger({
     allowedBodyEntryKeys: initialAllowedBodyEntryKeys,
     authoritativeEntryKeys: controller.authoritativeEntryKeys(),
+    collidingFileLabel,
     ...(initialComments === null ? {} : { comments: initialComments }),
     commentsSeq: commentsSeqRef.current,
     context,
@@ -340,6 +344,7 @@ export function mountGitReviewDocumentGeneration(
     initialProjection.items.map((item) => item.id)
   );
   const syncCtx: ReviewDocumentSyncContext = {
+    collidingFileLabel,
     commentsIndexRef,
     commentsSeqRef,
     committedProjectionGenerationRef,

@@ -12,6 +12,12 @@ export {
 } from "./estimates.ts";
 export { projectReviewLedger } from "./ledger-projection.ts";
 export {
+  defaultReviewCollidingFileLabel,
+  orderReviewPresentationSlots,
+  type ReviewPresentationSlot,
+  reviewPresentationEntryKeysInOrder,
+} from "./presentation-order.ts";
+export {
   indexReviewDocumentProjection,
   indexReviewEntrySections,
   indexReviewSectionEntries,
@@ -29,3 +35,4 @@ export {
   isCodeViewMemberResource,
   projectReviewDocumentResource,
 } from "./resource-projection.ts";
+export { compareReviewTreePaths } from "./tree-path-order.ts";

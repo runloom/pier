@@ -28,6 +28,7 @@ import type { GitReviewReadingSurface } from "../review/reading-surface.ts";
  * 结果一致；seq 未变（projectedCommentsSeqRef 去重）或 controller/loader 未就绪时跳过。
  */
 export function useGitReviewCommentsProjection({
+  collidingFileLabel,
   commentsIndexRef,
   commentsSeq,
   commentsSeqRef,
@@ -41,6 +42,7 @@ export function useGitReviewCommentsProjection({
   recordLatestItemUpdates,
   setProjection,
 }: {
+  readonly collidingFileLabel: (name: string) => string;
   readonly commentsIndexRef: RefObject<ReviewCommentIndex | null>;
   /** 评论 per-project seq（state，触发重投影）；未变则跳过。 */
   readonly commentsSeq: number;
@@ -79,6 +81,7 @@ export function useGitReviewCommentsProjection({
     const comments = commentsIndexRef.current;
     const reprojected = projectReviewLedger({
       authoritativeEntryKeys: controller.authoritativeEntryKeys(),
+      collidingFileLabel,
       ...(comments === null ? {} : { comments }),
       commentsSeq,
       context,
@@ -91,6 +94,7 @@ export function useGitReviewCommentsProjection({
     recordLatestItemUpdates(reprojected.items);
     setProjection(reprojected);
   }, [
+    collidingFileLabel,
     commentsIndexRef,
     commentsSeq,
     commentsSeqRef,

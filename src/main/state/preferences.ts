@@ -5,6 +5,8 @@ import { DEFAULT_LSP_POLICY_PREFS } from "@shared/contracts/lsp.ts";
 import { DEFAULT_NOTIFICATION_CENTER_PREFS } from "@shared/contracts/notification-center.ts";
 import {
   DEFAULT_APP_QUIT_CONFIRMATION_MODE,
+  DEFAULT_DOC_FONT_FAMILY,
+  DEFAULT_DOC_FONT_MODE,
   DEFAULT_GIT_AUTO_FETCH_ENABLED,
   DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
   DEFAULT_PANEL_CLOSE_FOCUS_POLICY,
@@ -36,6 +38,8 @@ const DEFAULTS: ProjectPreferences = {
   language: "system",
   uiFontFamily: "",
   monoFontFamily: "",
+  docFontMode: DEFAULT_DOC_FONT_MODE,
+  docFontFamily: DEFAULT_DOC_FONT_FAMILY,
   monoFontSize: 13,
   codeFontSize: 13,
   terminalCursorStyle: DEFAULT_TERMINAL_CURSOR_STYLE,

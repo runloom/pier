@@ -64,13 +64,16 @@ flowchart LR
     K --> L["tab、状态栏、标题栏"]
 ```
 
-提供方 session 文件不在这条数据流中向外传播。Codex 对账器只把
-`event_msg/task_complete` 转为 `TurnCompleted`、把 reason 为 `interrupted` 的
-`event_msg/turn_aborted` 转为 `TurnInterrupted`；Claude 对账器（2026-07-20）只把
-主链整块中断标记（`[Request interrupted by user]` / `... for tool use]`）转为
-`TurnInterrupted`（Claude 的 Stop hook 在 Esc/Ctrl+C 中断时不触发, 这是唯一的
-上游中断事实）。两者共用 `transcript-tail-reconciler.ts` 机械层（watch/增量
-读取/owner 生命周期）, 格式知识各自私有, 产出仍经聚合器进入同一状态源。
+提供方 session 文件不在这条数据流中向外传播。对账器清单与缺口结案见
+[`2026-08-12-agent-status-gap-remediation.md`](./2026-08-12-agent-status-gap-remediation.md)。
+
+Codex：`task_complete`→`TurnCompleted`，`turn_aborted`→`TurnInterrupted`。
+Claude 族（Claude / Qoder / Codebuddy）：主链
+`[Request interrupted by user]` 标记→`TurnInterrupted`（Esc 常不发 Stop）。
+Copilot：`abort` user*→`TurnInterrupted`，`assistant.turn_end`→`TurnCompleted`。
+Kimi：`wire.jsonl` `TurnEnd`→`TurnCompleted`。
+Grok：`turn_completed` cancelled/end_turn。
+共用 `transcript/tail-reconciler.ts` 机械层；格式知识各自私有。
 
 ## 规范状态真值表
 
@@ -106,7 +109,7 @@ flowchart LR
 | antigravity | 命名 JSON hook | `coarse` | `PreInvocation→processing`；`Stop.error→error`；`Stop.fullyIdle→Stop`；`Stop.active→processing` | `advisory` | `PreInvocation: authoritative` |
 | aug | 嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop/TurnInterrupted/error`；`SessionEnd→SessionEnd` | `advisory` | 无 |
 | autohand | 扁平 JSON hook 数组 | `full` | `session-start→SessionStart`；`session-end→SessionEnd`；`session-error→error`；`pre-prompt→PromptSubmit`；`stop→Stop`；`pre-tool→ToolStart`；`post-tool→ToolComplete` | `authoritative` | 无 |
-| claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart/InteractionRequested`；`PostToolUse→ToolComplete/InteractionResolved`；`PostToolUseFailure→ToolComplete/InteractionResolved`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
+| claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart/InteractionRequested`；`PostToolUse→ToolComplete/InteractionResolved`；`PostToolUseFailure→ToolComplete/InteractionResolved`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`Notification→TurnCompleted`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
 | cline | 可执行 hook 文件 | `full` | `TaskStart→SessionStart`；`TaskResume→running`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`TaskComplete→TurnCompleted`；`TaskCancel→TurnInterrupted`；`TaskError→error`；`SessionShutdown→SessionEnd` | `none` | `TaskResume: authoritative` |
 | codebuddy | Claude 兼容嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`Elicitation→InteractionRequested`；`ElicitationResult→InteractionResolved`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
 | codex | Codex `hooks.json` | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop/SessionEnd→同名`；`Stop→Stop` | `advisory` | 无 |

@@ -1,5 +1,5 @@
 import { LanguageSupport, StreamLanguage } from "@codemirror/language";
-import type { FilesDocumentLanguage } from "@plugins/builtin/files/renderer/document/types.ts";
+import type { BuiltinFilesDocumentLanguage } from "@plugins/builtin/files/renderer/document/types.ts";
 import { filesSyntaxHighlightStyle } from "@plugins/builtin/files/renderer/editor/cm-highlight-style.ts";
 import {
   cmLanguageExtension,
@@ -17,6 +17,7 @@ function isLanguageExtension(value: unknown): boolean {
 const ALL_LANGUAGE_IDS = [
   "canvas",
   "cpp",
+  "csharp",
   "css",
   "go",
   "html",
@@ -30,12 +31,15 @@ const ALL_LANGUAGE_IDS = [
   "rust",
   "shell",
   "sql",
+  "svelte",
+  "svg",
   "swift",
   "toml",
   "typescript",
+  "vue",
   "xml",
   "yaml",
-] as const satisfies readonly Exclude<FilesDocumentLanguage, "text">[];
+] as const satisfies readonly Exclude<BuiltinFilesDocumentLanguage, "text">[];
 
 describe("cmLanguageExtension", () => {
   it("returns a CodeMirror language extension for every supported language id", () => {
@@ -72,14 +76,36 @@ describe("cmLanguageExtension", () => {
     expect(cSource).toBeInstanceOf(StreamLanguage);
     expect(cppSource).toBeInstanceOf(LanguageSupport);
   });
+
+  it("routes canvas frameworks to matching SFC/TSX highlighters via path", () => {
+    const vueCanvas = cmLanguageExtension(
+      "canvas",
+      ".pier/canvases/smoke/hello.canvas.vue"
+    );
+    const svelteCanvas = cmLanguageExtension(
+      "canvas",
+      ".pier/canvases/a.canvas.svelte"
+    );
+    const tsxCanvas = cmLanguageExtension(
+      "canvas",
+      ".pier/canvases/a.canvas.tsx"
+    );
+    const plainVue = cmLanguageExtension("vue", "src/App.vue");
+    expect(vueCanvas).toBeInstanceOf(LanguageSupport);
+    expect(svelteCanvas).toBeInstanceOf(LanguageSupport);
+    expect(tsxCanvas).toBeInstanceOf(LanguageSupport);
+    expect(plainVue).toBeInstanceOf(LanguageSupport);
+    // Vue canvas must not share the React TSX extension instance.
+    expect(vueCanvas).not.toBe(tsxCanvas);
+  });
 });
 
 describe("LANGUAGE_LABELS", () => {
-  it("provides a display label for every FilesDocumentLanguage", () => {
+  it("provides a display label for every builtin language", () => {
     const allLanguageIds = [
       ...ALL_LANGUAGE_IDS,
       "text",
-    ] satisfies readonly FilesDocumentLanguage[];
+    ] satisfies readonly BuiltinFilesDocumentLanguage[];
     for (const id of allLanguageIds) {
       expect(LANGUAGE_LABELS[id]).toBeTypeOf("string");
       expect(LANGUAGE_LABELS[id].length).toBeGreaterThan(0);

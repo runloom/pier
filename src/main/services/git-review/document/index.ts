@@ -23,6 +23,10 @@ import type {
 import type { GitReviewIndexMetadata } from "../index/index.ts";
 import { createGitReviewSectionKey } from "../section-key.ts";
 import {
+  readGitReviewConflictMaterial,
+  sectionFromConflictMaterial,
+} from "./conflict.ts";
+import {
   GitReviewDocumentStaleError,
   type GitReviewPatchMaterial,
   type GitReviewRenderableGroup,
@@ -78,15 +82,20 @@ export async function buildGitReviewDocumentWithEvidence(
       fact.targetPath
     );
     if (group === "conflict") {
-      sections.push({
-        kind: "state",
-        oldPath: null,
-        reason: "conflict",
-        sectionKey,
-        status: "conflicted",
-        targetPath: fact.targetPath,
+      const material = await readGitReviewConflictMaterial({
+        budget: options.budget,
+        fact,
+        gitRootPath: options.metadata.canonicalRoot,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
       });
-      revisions.push(options.metadata.indexRevision);
+      sections.push(
+        sectionFromConflictMaterial({
+          material,
+          sectionKey,
+          targetPath: fact.targetPath,
+        })
+      );
+      revisions.push(material.sourceRevision);
       continue;
     }
     if (!(isRenderableGroup(group) && isRenderableFact(fact))) {
@@ -345,6 +354,7 @@ function createWorkingFact(
     return null;
   }
   return {
+    conflict: null,
     movement: staged?.movement ?? unstaged?.movement ?? null,
     oldPath: staged?.oldPath ?? unstaged?.oldPath ?? null,
     origin:

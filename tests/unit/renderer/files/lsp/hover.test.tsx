@@ -507,7 +507,17 @@ describe("filesLspHoverExtension", () => {
     const documentationParams = requestParams(harness, "textDocument/hover");
     expect(documentationParams).toBeDefined();
 
-    modifierEvent(view, "keydown", { key: "Meta", metaKey: true });
+    // Capture-phase listener is on window (same as product); contentDOM alone
+    // is not enough in jsdom for the definition-modifier preflight path.
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Meta",
+        metaKey: true,
+      })
+    );
+    await flushAsyncWork();
 
     expect(harness.client.cancelRequest).toHaveBeenCalled();
     expect(harness.client.cancelRequest.mock.calls[0]?.[0]).toBe(

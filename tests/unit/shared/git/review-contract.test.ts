@@ -232,11 +232,59 @@ describe("Git review shared contract", () => {
         kind: "state",
         oldPath: null,
         reason: "conflict",
-        sectionKey: "section:conflict",
+        sectionKey: "section:conflict-legacy",
         status: "conflicted",
         targetPath: "src/app.ts",
       }).kind
     ).toBe("state");
+    expect(
+      gitReviewFileSectionSchema.parse({
+        contents: "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> other\n",
+        contentsDigest: "sha256:abc",
+        kind: "conflict",
+        oldPath: null,
+        presentation: "markers-text",
+        sectionKey: "section:conflict",
+        stages: {
+          baseOid: "1".repeat(40),
+          oursOid: "2".repeat(40),
+          theirsOid: "3".repeat(40),
+        },
+        status: "conflicted",
+        targetPath: "src/app.ts",
+        xy: "UU",
+      }).kind
+    ).toBe("conflict");
+    expect(
+      gitReviewFileSectionSchema.safeParse({
+        contents: null,
+        contentsDigest: "sha256:abc",
+        kind: "conflict",
+        oldPath: null,
+        presentation: "markers-text",
+        sectionKey: "section:conflict-empty",
+        stages: { baseOid: null, oursOid: null, theirsOid: null },
+        status: "conflicted",
+        targetPath: "src/app.ts",
+        xy: "UU",
+      }).success
+    ).toBe(false);
+    const conflictSection = gitReviewFileSectionSchema.parse({
+      contents: null,
+      contentsDigest: "sha256:abc",
+      kind: "conflict",
+      oldPath: null,
+      presentation: "file-level",
+      sectionKey: "section:conflict-file",
+      stages: { baseOid: null, oursOid: null, theirsOid: null },
+      status: "conflicted",
+      targetPath: "src/app.ts",
+      xy: "DD",
+    });
+    expect(conflictSection.kind).toBe("conflict");
+    if (conflictSection.kind === "conflict") {
+      expect(conflictSection.presentation).toBe("file-level");
+    }
     const validState = {
       kind: "state" as const,
       oldPath: null,

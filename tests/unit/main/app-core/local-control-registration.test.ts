@@ -1,4 +1,4 @@
-import { createLocalControlRegistrationOwner } from "@main/adapters/cli/local-control-registration.ts";
+import { createLocalControlRegistrationOwner } from "@main/adapters/cli/local-control/registration.ts";
 import type { RegisteredLocalControl } from "@main/adapters/cli/register-local-control.ts";
 import { describe, expect, it, vi } from "vitest";
 
@@ -31,10 +31,6 @@ describe("local control registration owner", () => {
       bootId: "boot-test",
       close,
       socketPath: "/tmp/pier.sock",
-      credentialStore: {} as never,
-      issueAgentCredential: () => {
-        throw new Error("unused");
-      },
     });
     await closing;
 
@@ -47,10 +43,6 @@ describe("local control registration owner", () => {
       bootId: "boot-test",
       close,
       socketPath: "/tmp/pier.sock",
-      credentialStore: {} as never,
-      issueAgentCredential: () => {
-        throw new Error("unused");
-      },
     }));
     const owner = createLocalControlRegistrationOwner({
       logError: vi.fn(),
@@ -84,10 +76,6 @@ describe("local control registration owner", () => {
         throw failure;
       }),
       socketPath: "/tmp/pier.sock",
-      credentialStore: {} as never,
-      issueAgentCredential: () => {
-        throw new Error("unused");
-      },
     });
 
     await expect(closing).rejects.toBe(failure);

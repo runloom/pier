@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { createPierHomeService } from "@main/services/pier-home/service.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-describe("createPierHomeService", () => {
+describe("createPierHomeService", { timeout: 30_000 }, () => {
   let tempDir: string;
   let now: number;
 

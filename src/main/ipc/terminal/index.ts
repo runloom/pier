@@ -17,6 +17,7 @@ import {
   findAppWindowByInternalId,
   findInternalWindowId,
 } from "../../windows/identity.ts";
+import { wireTerminalAgentEscapeCancel } from "./agent-escape-cancel.ts";
 import { handleTerminalCreate } from "./create-handler.ts";
 import { handleTerminalCwdChange } from "./cwd-forwarding.ts";
 import {
@@ -92,6 +93,7 @@ export function registerTerminalIpc(
       : null;
   registerTerminalDiagnosticsIpc(ipcMain, addon);
   registerTerminalKeybindingForward(addon);
+  wireTerminalAgentEscapeCancel(addon);
   deps.taskService?.bindTerminalProcessController({
     forceStop: (panelId, windowId) => {
       const win = windowId ? findAppWindowByInternalId(windowId) : null;

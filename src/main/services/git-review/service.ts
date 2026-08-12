@@ -1,5 +1,6 @@
 import {
   type GitReviewCancelRequest,
+  type GitReviewConflictResolveRequest,
   type GitReviewFailure,
   type GitReviewFileDocumentRequest,
   type GitReviewFileDocumentResult,
@@ -38,6 +39,7 @@ import {
   rememberGitReviewMutationResult,
   settleGitReviewServiceLease as settleReadLease,
 } from "./service-helpers.ts";
+import { runGitReviewConflictResolve } from "./service-resolve-conflict.ts";
 
 type GitReviewServiceScheduler = Pick<
   GitReviewScheduler,
@@ -424,6 +426,23 @@ export class GitReviewService {
       result
     );
     return result;
+  }
+
+  async resolveConflict(
+    input: GitReviewConflictResolveRequest,
+    options: GitReviewRequestOptions & {
+      readonly onCommitted?: (canonicalGitRootPath: string) => void;
+      readonly writer: GitReviewMutationWriter;
+    }
+  ): Promise<GitReviewMutationResult> {
+    return runGitReviewConflictResolve({
+      completedMutations: this.#completedMutations,
+      indexReader: this.#indexReader,
+      input,
+      repositoryCoordinator: this.#repositoryCoordinator,
+      requestOptions: options,
+      scheduler: this.#scheduler,
+    });
   }
 
   cancelReviewRequest(

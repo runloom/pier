@@ -58,7 +58,17 @@ export type PierDiffViewItemKind =
   | "estimate"
   | "loaded"
   | "error"
-  | "ready-notice";
+  | "ready-notice"
+  /** Merge conflict body; render via PierUnresolvedConflictView, not CodeView. */
+  | "conflict";
+
+import type { PierDiffViewConflictBody } from "./types.ts";
+
+export type {
+  PierDiffViewConflictBody,
+  PierDiffViewConflictPresentation,
+  PierDiffViewConflictXy,
+} from "./types.ts";
 
 export interface PierDiffViewLineStats {
   readonly additions: number;
@@ -74,6 +84,11 @@ export interface PierDiffViewLineStats {
  * (side, line) 查询匹配线程。v1 瘦身：每锚点一条评论，无 state/count。
  */
 export interface PierDiffReviewCommentThread {
+  /**
+   * 创建时的文件 blob OID（可选）。宿主投影用其与当前 patch index 比对；
+   * 不一致则不得原位展示（防空挂）。UI 层可不消费。
+   */
+  readonly blobOid?: string;
   readonly line: number;
   readonly side: "additions" | "deletions";
   readonly threadId: string;
@@ -99,44 +114,33 @@ export interface PierDiffReviewDriftThread {
 export interface PierDiffViewItem {
   readonly cacheKey: string;
   readonly changeControls?: readonly PierDiffViewChangeControl[];
-  /**
-   * 文件级折叠区评论线程（漂移 + git-file 文件级）。文件 header 下折叠区
-   * 渲染；缺省无文件级评论。与 reviewComments 互斥（行内匹配的进 reviewComments，
-   * 漂移/文件级的进 driftComments）。
-   */
+  /** Conflict body for PierUnresolvedConflictView (not CodeView). */
+  readonly conflict?: PierDiffViewConflictBody;
+  /** File-level / drifted threads under the file header. */
   readonly driftComments?: readonly PierDiffReviewDriftThread[];
   readonly fileDisplay?: PierDiffViewFileDisplay;
   readonly id: string;
-  /** 显式槽态；缺省则按 patch/stateNotice 推断。 */
+  /** Explicit slot kind; else inferred from patch/stateNotice. */
   readonly kind?: PierDiffViewItemKind;
-  /**
-   * index/numstat 行统计（首屏即可展示 +N −M，不必等 patch materialize）。
-   * header 优先用已解析 hunk 统计，缺省再回落此值。
-   */
+  /** index/numstat stats for header before patch hydrate. */
   readonly lineStats?: PierDiffViewLineStats;
-  /**
-   * estimate / error / ready-notice：null
-   * loaded：非 null 文本 patch
-   */
+  /** loaded: patch text; estimate/error/ready-notice/conflict: null */
   readonly patch: string | null;
-  /**
-   * 该文件 diff 行内评论线程（git 插件投影后注入）。gutter 按
-   * (side, line) 查询渲染评论入口/计数；缺省无评论。
-   */
+  /** Inline review threads for gutter (side, line). */
   readonly reviewComments?: readonly PierDiffReviewCommentThread[];
   readonly stageControl?: PierDiffViewStageControl | null;
-  /**
-   * 非文本变更说明（binary / symlink / submodule…）或加载失败说明。
-   * ready-notice / error：有 notice；estimate 通常无。
-   */
+  /** Non-text or load-failure notice for ready-notice / error. */
   readonly stateNotice?: string;
 }
 
 export function resolvePierDiffViewItemKind(
-  input: Pick<PierDiffViewItem, "kind" | "patch" | "stateNotice">
+  input: Pick<PierDiffViewItem, "kind" | "patch" | "stateNotice" | "conflict">
 ): PierDiffViewItemKind {
   if (input.kind !== undefined) {
     return input.kind;
+  }
+  if (input.conflict !== undefined) {
+    return "conflict";
   }
   if (input.stateNotice !== undefined && input.stateNotice.length > 0) {
     return "ready-notice";
@@ -189,6 +193,8 @@ export function toCodeViewItem(
     } else if (kind === "estimate") {
       fileDiff = estimateFileDiff(input);
     } else {
+      // ready-notice / error / conflict：CodeView 只作占位；冲突真体由
+      // PierUnresolvedConflictView 渲染，禁止误把 conflict 当 patch。
       fileDiff = noticeFileDiff(input);
     }
     const version = (previous?.version ?? -1) + 1;
@@ -220,6 +226,7 @@ export function toCodeViewItem(
       kind === "ready-notice" ||
       kind === "error" ||
       kind === "estimate" ||
+      kind === "conflict" ||
       (fileDiff.splitLineCount === 0 && fileDiff.unifiedLineCount === 0);
     const item: PierDiffCodeViewItem = {
       fileDiff,

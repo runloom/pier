@@ -1,7 +1,9 @@
 import {
+  type AgentBuiltinCommand,
   type AgentBundledSkill,
+  listBuiltinCommands,
   listBundledSkills,
-} from "@shared/agent-bundled-skills.ts";
+} from "@shared/agent-surfaces/index.ts";
 import type {
   ProjectSkillView,
   SkillEffectiveCell,
@@ -11,10 +13,12 @@ import type {
 import { skillInvokeText } from "@shared/skill-invoke.ts";
 
 /**
- * Where the skill was discovered (UI badge only).
- * L1 invocable catalog: disk layers + adapter bundled (never host/Grok roots).
+ * Where the entry was discovered (UI badge only).
+ * L1 invocable catalog: disk layers + adapter bundled + documented
+ * built-in commands (never host/Grok roots).
  */
 export type ComposerSkillSource =
+  | "builtin-command"
   | "bundled"
   | "project"
   | "project-unmanaged"
@@ -38,17 +42,23 @@ export interface ComposerSkillSuggestSnapshotInput {
 
 export interface BuildComposerSkillSuggestOptions {
   /**
+   * Override built-in command table (tests).
+   * Default: {@link listBuiltinCommands}(agentKind).
+   */
+  builtinCommands?: readonly AgentBuiltinCommand[];
+  /**
    * Override bundled table (tests). Default: {@link listBundledSkills}(agentKind).
    */
   bundled?: readonly AgentBundledSkill[];
 }
 
 /**
- * States where the agent can still invoke the skill by name.
- * - discoverable: unique visible copy
+ * States where this agent can force-invoke the skill by name right now.
+ * - discoverable: unique visible copy under an agent-readable root
  * - duplicate: multiple copies, but `/name` / `$name` still works
  *
- * Shadowed / not-projected / not-applicable are excluded for discovered rows.
+ * Strict L1 excludes shadowed / not-projected / not-applicable so Pier does
+ * not list skills the foreground agent cannot actually load.
  */
 function effectInvocable(
   effects: readonly SkillEffectiveCell[],
@@ -66,37 +76,19 @@ function effectInvocable(
   return false;
 }
 
-/** True when this agent has no matrix cells at all (not in skill adapters). */
-function agentAbsentFromMatrix(
-  snapshot: ComposerSkillSuggestSnapshotInput,
-  agentKind: string
-): boolean {
-  for (const skill of snapshot.skills) {
-    if (skill.effects.some((cell) => cell.agentKind === agentKind)) {
-      return false;
-    }
-  }
-  for (const skill of snapshot.unmanagedSkills) {
-    if (skill.effects.some((cell) => cell.agentKind === agentKind)) {
-      return false;
-    }
-  }
-  for (const skill of snapshot.userGlobalSkills) {
-    if (skill.effects.some((cell) => cell.agentKind === agentKind)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 /**
  * Build skill suggestions for one agent (L1 invocable catalog).
  *
- * Inclusion:
- * 0. Adapter **bundled** skills (runtime built-ins; not on disk).
- * 1. Managed + enabled → always listed (projection lag must not empty picker).
- * 2. Unmanaged / user-global → discoverable or duplicate for this agent.
- * 3. Agent absent from matrix → enabled managed + all unmanaged + user-global.
+ * Inclusion (strict — list only what this agent can force-invoke):
+ * 0. Adapter **bundled** skills (host surface table for this kind).
+ * 1. Managed → **enabled** and matrix **discoverable/duplicate** for this agent
+ *    (not-projected / disabled / absent-from-matrix are excluded).
+ * 2. Unmanaged / user-global → discoverable or duplicate for this agent only.
+ * 3. Documented **built-in commands** (agent-surfaces/<kind>); insert text is
+ *    the literal `/id`; disk/bundled skills with the same invoke text win.
+ *
+ * No wide dump when the agent has zero matrix cells — only surface bundled +
+ * commands remain (avoids “Pier lists it, agent ignores it”).
  *
  * Same id precedence (later wins): bundled < user-global < unmanaged < managed
  * so disk / Pier-managed overrides bundled (Claude personal/project override).
@@ -109,7 +101,6 @@ export function buildComposerSkillSuggestItems(
 ): ComposerSkillSuggestItem[] {
   const invoke = (id: string): string | null => skillInvokeText(agentKind, id);
   const byId = new Map<string, ComposerSkillSuggestItem>();
-  const agentUnknown = agentAbsentFromMatrix(snapshot, agentKind);
   const bundled = options?.bundled ?? listBundledSkills(agentKind);
 
   for (const skill of bundled) {
@@ -132,7 +123,7 @@ export function buildComposerSkillSuggestItems(
   }
 
   for (const skill of snapshot.userGlobalSkills) {
-    if (!(agentUnknown || effectInvocable(skill.effects, agentKind))) {
+    if (!effectInvocable(skill.effects, agentKind)) {
       continue;
     }
     const id = skill.directoryName;
@@ -150,7 +141,7 @@ export function buildComposerSkillSuggestItems(
   }
 
   for (const skill of snapshot.unmanagedSkills) {
-    if (!(agentUnknown || effectInvocable(skill.effects, agentKind))) {
+    if (!effectInvocable(skill.effects, agentKind)) {
       continue;
     }
     const id = skill.directoryName;
@@ -168,10 +159,11 @@ export function buildComposerSkillSuggestItems(
   }
 
   for (const skill of snapshot.skills) {
-    // Enabled managed always listed (user turned them on). Also list when
-    // matrix says discoverable/duplicate even if disabled (edge cases).
-    const invocable = effectInvocable(skill.effects, agentKind);
-    if (!(skill.enabled === true || invocable)) {
+    // Strict: must be enabled AND projected as invocable for this agent.
+    if (skill.enabled !== true) {
+      continue;
+    }
+    if (!effectInvocable(skill.effects, agentKind)) {
       continue;
     }
     const id = skill.id;
@@ -188,7 +180,37 @@ export function buildComposerSkillSuggestItems(
     });
   }
 
-  return [...byId.values()].sort((a, b) => a.id.localeCompare(b.id));
+  const skills = [...byId.values()];
+  const usedInvokeText = new Set(skills.map((item) => item.invokeText));
+  const commands: ComposerSkillSuggestItem[] = [];
+  const builtinCommands =
+    options?.builtinCommands ?? listBuiltinCommands(agentKind);
+  for (const command of builtinCommands) {
+    // Commands are always the agent's literal slash syntax (Codex included:
+    // `$` is skill-only). Disk/bundled skills with the same invoke text win.
+    const text = `/${command.id}`;
+    if (command.id.length === 0 || usedInvokeText.has(text)) {
+      continue;
+    }
+    usedInvokeText.add(text);
+    commands.push({
+      description: command.description,
+      id: command.id,
+      invokeText: text,
+      label: command.id,
+      source: "builtin-command",
+    });
+  }
+
+  // Commands first (system slash surface), then skills — each group by id.
+  // Interleaving by id alone mixes SquareSlash and Zap rows and feels chaotic.
+  const byIdLocale = (
+    a: ComposerSkillSuggestItem,
+    b: ComposerSkillSuggestItem
+  ) => a.id.localeCompare(b.id);
+  commands.sort(byIdLocale);
+  skills.sort(byIdLocale);
+  return [...commands, ...skills];
 }
 
 /** Case-insensitive filter over id / label / description. */
@@ -215,25 +237,52 @@ export function filterComposerSkillSuggestItems(
 }
 
 /**
- * Match `/` skill trigger before the caret.
+ * Match `/` skill/command trigger for Enhanced Input.
+ *
+ * **Message-start only** (optional leading whitespace). Agent TUIs force-invoke
+ * `/cmd` and skills at the start of a turn; mid-message `use /plan` is free text
+ * and must not open the catalog.
+ *
+ * Pass the agent-facing plain-text prefix from composer start through the caret
+ * (not a mid-node fragment alone). `$` never opens the picker (Codex still
+ * **inserts** `$id` after pick).
+ *
  * Selection inserts agent-correct invokeText via skillInvokeText()
- * (`/id` or `$id` depending on the foreground agent).
+ * (`/id` or `$id` depending on the foreground agent) — never a library path.
  */
 export function getSkillSuggestMatch(
-  text: string,
-  cursor: number
-): { leadOffset: number; matchingString: string; trigger: "/" } | null {
-  const before = text.slice(0, cursor);
-  // Slash only; do not treat mid-path segments (e.g. foo/bar) as triggers —
-  // require whitespace/start/( boundary before `/`.
-  const match = before.match(/(^|[\s([{])\/([a-z0-9-]*)$/i);
-  if (!match || match.index === undefined) {
+  plainPrefix: string
+): { matchingString: string; trigger: "/" } | null {
+  const match = plainPrefix.match(/^\s*\/([a-z0-9-]*)$/i);
+  if (!match) {
     return null;
   }
-  const leadOffset = match.index + (match[1] ?? "").length;
   return {
-    leadOffset,
-    matchingString: match[2] ?? "",
+    matchingString: match[1] ?? "",
     trigger: "/",
+  };
+}
+
+/**
+ * Node-local slash span for replacement after {@link getSkillSuggestMatch} hits.
+ * Returns null when the current text node is not the whole leading slash token
+ * (e.g. caret not on that node).
+ */
+export function getSkillSuggestNodeReplaceRange(
+  nodeText: string,
+  cursorInNode: number
+): { leadOffset: number; endOffset: number; matchingString: string } | null {
+  const before = nodeText.slice(0, cursorInNode);
+  const match = before.match(/^(\s*)\/([a-z0-9-]*)$/i);
+  if (!match) {
+    return null;
+  }
+  const ws = match[1] ?? "";
+  const query = match[2] ?? "";
+  const leadOffset = ws.length;
+  return {
+    endOffset: leadOffset + 1 + query.length,
+    leadOffset,
+    matchingString: query,
   };
 }

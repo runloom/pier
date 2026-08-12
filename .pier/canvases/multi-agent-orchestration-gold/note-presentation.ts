@@ -34,9 +34,8 @@ const TOPIC_RULES: Array<{ topic: string; pattern: RegExp; weight: number }> = [
     weight: 4,
   },
   {
-    topic: "一次性调用",
-    pattern:
-      /InvocationReply|execution-deadline|observation_timeout|advisory-read-only|maxOutputBytes|沙箱|provider auth|一次调用只产生/u,
+    topic: "一次性（原生）",
+    pattern: /原生 agent|不封装|non-goal|codex exec|headless|不经 Pier/u,
     weight: 4,
   },
   {
@@ -45,9 +44,8 @@ const TOPIC_RULES: Array<{ topic: string; pattern: RegExp; weight: number }> = [
     weight: 3,
   },
   {
-    // 宽规则：仅作兜底，权重低
-    topic: "一次性调用",
-    pattern: /\binvoke\b/u,
+    topic: "持久路径与内容",
+    pattern: /\bstart\b|\bturn\b|\bscreen\b/u,
     weight: 1,
   },
 ];
@@ -109,8 +107,7 @@ export function groupNotes(items: string[]): GroupedNotes[] {
 }
 
 export const SCOPE_LABELS: Record<string, string> = {
-  "agent-caller-identity": "调用身份",
-  "one-shot-agent-invocation": "一次性调用",
+  "agent-discovery": "智能体发现",
   "bounded-agent-screen": "有界画面",
   "agent-runtime-observation": "运行观察",
   "terminal-control": "终端控制",
@@ -125,6 +122,7 @@ export const SCOPE_LABELS: Record<string, string> = {
   "retry-and-completion-policy": "重试与结束",
   "result-acceptance-and-synthesis": "结果验收",
   "caller-memory-or-external-ledger": "调用方台账",
+  "one-shot-native-agent-invocation": "原生一次性调用",
 };
 
 /** 映射为中文短标签；未知 slug 原样全文，永不截断。 */
@@ -146,11 +144,11 @@ export function presentScopeModel(value: string): string {
   return `范围模型：${value}`;
 }
 
+/** W2 产品撤回：主链 W1→W3；W2 仅作文档节点挂在 W1 后，不进入主交付。 */
 const PREFERRED_DELIVERY_EDGES: Array<[number, number]> = [
   [0, 1],
   [1, 2],
   [1, 3],
-  [2, 4],
   [3, 4],
   [4, 5],
   [5, 6],

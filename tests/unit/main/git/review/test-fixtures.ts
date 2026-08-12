@@ -51,6 +51,14 @@ export class TestGitReviewService extends GitReviewService {
     const defaults = gitReviewRequestOptions(options?.budget);
     return super.getFileDocument(input, { ...defaults, ...options });
   }
+
+  override resolveConflict(
+    input: Parameters<GitReviewService["resolveConflict"]>[0],
+    options: Parameters<GitReviewService["resolveConflict"]>[1]
+  ): ReturnType<GitReviewService["resolveConflict"]> {
+    const defaults = gitReviewRequestOptions(options.budget);
+    return super.resolveConflict(input, { ...defaults, ...options });
+  }
 }
 
 /** IndexReader 是 main 内部层；单测在这里显式创建独立请求预算。 */

@@ -124,7 +124,8 @@ describe("Files Show Hover action declaration", () => {
     expect(harness.context.t).toHaveBeenCalledWith(
       "filePanel.editor.showHover.title",
       undefined,
-      "Show Symbol Information"
+      "Show Symbol Information",
+      undefined
     );
   });
 });
@@ -187,7 +188,8 @@ describe("Files Show Hover action routing", () => {
     expect(harness.context.t).toHaveBeenCalledWith(
       "filePanel.editor.showHover.noActiveFile",
       undefined,
-      "Open a file in the editor first."
+      "Open a file in the editor first.",
+      undefined
     );
     expect(harness.context.notifications.error).toHaveBeenCalledOnce();
     expect(harness.context.notifications.error).toHaveBeenCalledWith(
@@ -210,7 +212,8 @@ describe("Files Show Hover action routing", () => {
     expect(harness.context.t).toHaveBeenCalledWith(
       "filePanel.editor.showHover.unavailable",
       undefined,
-      "Symbol information is unavailable here."
+      "Symbol information is unavailable here.",
+      undefined
     );
     expect(harness.context.notifications.error).toHaveBeenCalledOnce();
     expect(harness.context.notifications.error).toHaveBeenCalledWith(

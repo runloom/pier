@@ -1,15 +1,18 @@
 import {
   DEFAULT_LSP_POLICY_PREFS,
+  type LspCustomServer,
   type LspPolicyPrefs,
 } from "@shared/contracts/lsp.ts";
 import { create } from "zustand";
 
 interface LspPreferencesState {
   _hydrate: (prefs: LspPolicyPrefs) => void;
+  customServers: LspCustomServer[];
   enabled: boolean;
   idleReleaseMs: number;
   maxLocalWorkspaces: number;
   maxRemoteWorkspaces: number;
+  setCustomServers: (customServers: LspCustomServer[]) => Promise<void>;
   setEnabled: (enabled: boolean) => Promise<void>;
   setIdleReleaseMs: (idleReleaseMs: number) => Promise<void>;
   setMaxLocalWorkspaces: (maxLocalWorkspaces: number) => Promise<void>;
@@ -24,6 +27,22 @@ export const useLspPreferencesStore = create<LspPreferencesState>(
 
     _hydrate(prefs) {
       set(prefs);
+    },
+
+    async setCustomServers(customServers) {
+      const previous = get().customServers;
+      set({ customServers });
+      try {
+        const merged = await window.pier.preferences.update({
+          lsp: { ...lspPrefsFromState(get()), customServers },
+        });
+        get()._hydrate(merged.lsp);
+      } catch (error) {
+        if (get().customServers === customServers) {
+          set({ customServers: previous });
+        }
+        throw error;
+      }
     },
 
     async setEnabled(enabled) {
@@ -110,6 +129,7 @@ export const useLspPreferencesStore = create<LspPreferencesState>(
 
 function lspPrefsFromState(state: LspPreferencesState): LspPolicyPrefs {
   return {
+    customServers: state.customServers ?? [],
     enabled: state.enabled,
     idleReleaseMs: state.idleReleaseMs,
     maxLocalWorkspaces: state.maxLocalWorkspaces,

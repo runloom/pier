@@ -13,6 +13,9 @@ import { useState } from "react";
 /**
  * docs 起手稿：DocsShell（左目录 + 右正文）+ 章节内容。
  * 布局用宿主 DocsShell（inline flex），勿手写双 ScrollArea / 任意 grid 当命脉。
+ *
+ * 字体：DocsShell 正文/标题走宿主「文档字体」；侧栏控件与活示例里的真实组件
+ * 保持界面字体（不要给 Button/Input 等套文档衬线）。
  */
 export const canvas = {
   description: "说明文档：DocsShell 章节导航 + 正文。",

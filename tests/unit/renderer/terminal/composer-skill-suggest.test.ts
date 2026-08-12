@@ -1,15 +1,31 @@
-import { listBundledSkills } from "@shared/agent-bundled-skills.ts";
+import {
+  getAgentComposerSurface,
+  listBuiltinCommands,
+  listBundledSkills,
+} from "@shared/agent-surfaces/index.ts";
 import type {
   ProjectSkillView,
   UnmanagedSkillView,
   UserGlobalSkillView,
 } from "@shared/contracts/project-skills.ts";
 import { skillInvokePrefix, skillInvokeText } from "@shared/skill-invoke.ts";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  composerBundledSkillDescKey,
+  composerCommandDescKey,
+  resolveComposerBundledSkillDescription,
+  resolveComposerCommandDescription,
+} from "@/panel-kits/terminal/structured-composer/composer-command-i18n.ts";
+import {
+  type ComposerSkillQuerySnapshot,
+  createComposerSkillQueryClient,
+  resetComposerSkillQueryCacheForTests,
+} from "@/panel-kits/terminal/structured-composer/composer-skill-query.ts";
 import {
   buildComposerSkillSuggestItems,
   filterComposerSkillSuggestItems,
   getSkillSuggestMatch,
+  getSkillSuggestNodeReplaceRange,
 } from "@/panel-kits/terminal/structured-composer/composer-skill-suggest.ts";
 
 const EMPTY_SNAPSHOT = {
@@ -18,8 +34,8 @@ const EMPTY_SNAPSHOT = {
   userGlobalSkills: [] as UserGlobalSkillView[],
 };
 
-/** Isolate disk-layer tests from default adapter bundled table. */
-const noBundled = { bundled: [] as const };
+/** Isolate disk-layer tests from default adapter bundled/command tables. */
+const noBundled = { builtinCommands: [] as const, bundled: [] as const };
 
 function managed(
   partial: Partial<ProjectSkillView> & { id: string }
@@ -70,7 +86,7 @@ function userGlobal(
 }
 
 describe("skillInvokePrefix", () => {
-  it("uses $ for codex and / for claude and cursor", () => {
+  it("uses $ for codex and / for verified slash skill agents", () => {
     expect(skillInvokePrefix("codex")).toBe("$");
     expect(skillInvokePrefix("claude")).toBe("/");
     expect(skillInvokePrefix("cursor")).toBe("/");
@@ -78,37 +94,66 @@ describe("skillInvokePrefix", () => {
     expect(skillInvokeText("claude", "code-review")).toBe("/code-review");
   });
 
-  it("returns null for missing agent or empty id", () => {
+  it("returns null for missing agent, empty id, or unsupported agents", () => {
     expect(skillInvokePrefix(null)).toBeNull();
     expect(skillInvokeText("claude", "")).toBeNull();
+    expect(skillInvokePrefix("aider")).toBeNull();
+    expect(skillInvokeText("aider", "anything")).toBeNull();
+    expect(skillInvokePrefix("unknown")).toBeNull();
   });
 });
 
 describe("getSkillSuggestMatch", () => {
-  it("matches / trigger only; $ does not open skills", () => {
-    expect(getSkillSuggestMatch("/", 1)).toEqual({
-      leadOffset: 0,
+  it("matches / only at message start (optional leading whitespace)", () => {
+    expect(getSkillSuggestMatch("/")).toEqual({
       matchingString: "",
       trigger: "/",
     });
-    expect(getSkillSuggestMatch("/prd", 4)).toEqual({
-      leadOffset: 0,
+    expect(getSkillSuggestMatch("/prd")).toEqual({
       matchingString: "prd",
       trigger: "/",
     });
-    expect(getSkillSuggestMatch("use /code", 9)).toEqual({
-      leadOffset: 4,
+    expect(getSkillSuggestMatch("  /code")).toEqual({
       matchingString: "code",
       trigger: "/",
     });
-    expect(getSkillSuggestMatch("$", 1)).toBeNull();
-    expect(getSkillSuggestMatch("use $code", 9)).toBeNull();
+    // Mid-message slash is free text — agent force-invoke is turn-start only.
+    expect(getSkillSuggestMatch("use /code")).toBeNull();
+    expect(getSkillSuggestMatch("hello\n/plan")).toBeNull();
+    expect(getSkillSuggestMatch("$")).toBeNull();
+    expect(getSkillSuggestMatch("use $code")).toBeNull();
   });
 
   it("does not match mid-path or @/# triggers", () => {
-    expect(getSkillSuggestMatch("foo/bar", 7)).toBeNull();
-    expect(getSkillSuggestMatch("@file", 5)).toBeNull();
-    expect(getSkillSuggestMatch("#1", 2)).toBeNull();
+    expect(getSkillSuggestMatch("foo/bar")).toBeNull();
+    expect(getSkillSuggestMatch("@file")).toBeNull();
+    expect(getSkillSuggestMatch("#1")).toBeNull();
+  });
+});
+
+describe("getSkillSuggestNodeReplaceRange", () => {
+  it("maps leading whitespace + slash query to a replace span", () => {
+    expect(getSkillSuggestNodeReplaceRange("  /plan", 7)).toEqual({
+      endOffset: 7,
+      leadOffset: 2,
+      matchingString: "plan",
+    });
+    expect(getSkillSuggestNodeReplaceRange("/", 1)).toEqual({
+      endOffset: 1,
+      leadOffset: 0,
+      matchingString: "",
+    });
+  });
+
+  it("rejects mid-token caret and non-start slash tokens", () => {
+    // Caret in the middle of "plan" → before is "/pl", not a complete token match end.
+    expect(getSkillSuggestNodeReplaceRange("/plan", 3)).toEqual({
+      endOffset: 3,
+      leadOffset: 0,
+      matchingString: "pl",
+    });
+    expect(getSkillSuggestNodeReplaceRange("use /plan", 9)).toBeNull();
+    expect(getSkillSuggestNodeReplaceRange("x/plan", 6)).toBeNull();
   });
 });
 
@@ -205,9 +250,9 @@ describe("buildComposerSkillSuggestItems", () => {
     expect(mac?.source).toBe("user-global");
   });
 
-  it("lists enabled managed skills even when not-projected for this agent", () => {
-    // Real pier case: project delivery.claude=false → Claude matrix not-projected
-    // but user still has the skill turned on and expects to pick it.
+  it("excludes enabled managed skills that are not-projected for this agent", () => {
+    // delivery.claude=false → Claude cell is not-projected; L1 must not list
+    // a skill the foreground agent cannot load (strict invocable catalog).
     const items = buildComposerSkillSuggestItems(
       {
         skills: [
@@ -229,12 +274,61 @@ describe("buildComposerSkillSuggestItems", () => {
       "claude",
       noBundled
     );
+    expect(items.map((i) => i.id)).not.toContain("publish-project");
+  });
+
+  it("still lists the same skill for the agent where it is discoverable", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "publish-project",
+            enabled: true,
+            effects: [
+              {
+                agentKind: "codex",
+                effect: { state: "discoverable", viaRoot: ".agents/skills" },
+              },
+              { agentKind: "claude", effect: { state: "not-projected" } },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "codex",
+      noBundled
+    );
     expect(items).toEqual([
       expect.objectContaining({
         id: "publish-project",
-        invokeText: "/publish-project",
+        invokeText: "$publish-project",
       }),
     ]);
+  });
+
+  it("excludes disabled managed skills even when discoverable", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "turned-off",
+            enabled: false,
+            effects: [
+              {
+                agentKind: "claude",
+                effect: { state: "discoverable", viaRoot: ".claude/skills" },
+              },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "claude",
+      noBundled
+    );
+    expect(items.map((i) => i.id)).not.toContain("turned-off");
   });
 
   it("includes duplicate matrix state as invocable", () => {
@@ -288,7 +382,32 @@ describe("buildComposerSkillSuggestItems", () => {
     ]);
   });
 
-  it("falls back to enabled managed when agent has no matrix cells", () => {
+  it("lists commands but never skills for agents without force-invoke support", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "should-not-appear",
+            enabled: true,
+            effects: [
+              {
+                agentKind: "aider",
+                effect: { state: "discoverable", viaRoot: ".agents/skills" },
+              },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "aider"
+    );
+    expect(items.every((i) => i.source === "builtin-command")).toBe(true);
+    expect(items.map((i) => i.id)).not.toContain("should-not-appear");
+    expect(items.some((i) => i.id === "architect")).toBe(true);
+  });
+
+  it("does not dump other agents' skills when this agent has no matrix cells", () => {
     const items = buildComposerSkillSuggestItems(
       {
         skills: [
@@ -302,25 +421,27 @@ describe("buildComposerSkillSuggestItems", () => {
               },
             ],
           }),
-          managed({
-            id: "off",
-            enabled: false,
+        ],
+        unmanagedSkills: [
+          unmanaged({
+            directoryName: "repo-skill",
             effects: [
               {
                 agentKind: "claude",
-                effect: { state: "not-projected" },
+                effect: { state: "discoverable", viaRoot: ".agents/skills" },
               },
             ],
           }),
         ],
-        unmanagedSkills: [],
         userGlobalSkills: [],
       },
       "grok",
       noBundled
     );
-    // grok has no cells → agentAbsentFromMatrix; enabled managed still listed.
-    expect(items.map((i) => i.id)).toEqual(["only-claude"]);
+    // Strict L1: no wide dump. Grok only gets its surface commands (if any).
+    expect(items.map((i) => i.id)).not.toContain("only-claude");
+    expect(items.map((i) => i.id)).not.toContain("repo-skill");
+    expect(items.every((i) => i.source === "builtin-command")).toBe(true);
   });
 
   it("lists Claude bundled skills including code-review on empty disk", () => {
@@ -424,5 +545,480 @@ describe("listBundledSkills", () => {
     ).toBe(true);
     expect(listBundledSkills("unknown-agent")).toEqual([]);
     expect(listBundledSkills(null)).toEqual([]);
+  });
+});
+
+describe("builtin command catalog", () => {
+  it("lists documented commands per agent and none for unknown agents", () => {
+    expect(listBuiltinCommands("copilot").some((c) => c.id === "plan")).toBe(
+      true
+    );
+    expect(listBuiltinCommands("codex").some((c) => c.id === "btw")).toBe(true);
+    expect(listBuiltinCommands("openclaude").some((c) => c.id === "plan")).toBe(
+      true
+    );
+    expect(listBuiltinCommands("unknown-agent")).toEqual([]);
+    expect(listBuiltinCommands(null)).toEqual([]);
+  });
+
+  it("covers the wider agent ecosystem with evidence-backed tables", () => {
+    expect(listBuiltinCommands("gemini").some((c) => c.id === "compress")).toBe(
+      true
+    );
+    expect(
+      listBuiltinCommands("qwen-code").some((c) => c.id === "review")
+    ).toBe(true);
+    expect(listBuiltinCommands("aider").some((c) => c.id === "architect")).toBe(
+      true
+    );
+    expect(listBuiltinCommands("goose").some((c) => c.id === "endplan")).toBe(
+      true
+    );
+    expect(listBuiltinCommands("kimi").some((c) => c.id === "btw")).toBe(true);
+    expect(listBuiltinCommands("grok").some((c) => c.id === "compact")).toBe(
+      true
+    );
+    expect(listBuiltinCommands("cline").some((c) => c.id === "undo")).toBe(
+      true
+    );
+    expect(listBuiltinCommands("continue").some((c) => c.id === "init")).toBe(
+      true
+    );
+    expect(
+      listBuiltinCommands("cursor").some((c) => c.id === "summarize")
+    ).toBe(true);
+    expect(listBuiltinCommands("droid").some((c) => c.id === "btw")).toBe(true);
+    expect(listBuiltinCommands("codebuddy").some((c) => c.id === "btw")).toBe(
+      true
+    );
+  });
+
+  it("kilo inherits the opencode table plus its own review command", () => {
+    const opencodeIds = listBuiltinCommands("opencode").map((c) => c.id);
+    const kiloIds = listBuiltinCommands("kilo").map((c) => c.id);
+    for (const id of opencodeIds) {
+      expect(kiloIds).toContain(id);
+    }
+    expect(kiloIds).toContain("review");
+    expect(opencodeIds).not.toContain("review");
+  });
+
+  it("agents without a slash system stay absent (palette-driven CLIs)", () => {
+    expect(listBuiltinCommands("amp")).toEqual([]);
+    expect(listBuiltinCommands("crush")).toEqual([]);
+    expect(getAgentComposerSurface("amp")).toEqual({
+      builtinCommands: [],
+      bundledSkills: [],
+    });
+  });
+
+  it("exposes commands and bundled skills on the same per-agent surface", () => {
+    const claude = getAgentComposerSurface("claude");
+    expect(claude.builtinCommands.some((c) => c.id === "plan")).toBe(true);
+    expect(claude.bundledSkills.some((s) => s.id === "code-review")).toBe(true);
+    expect(getAgentComposerSurface("openclaude")).toBe(claude);
+
+    const codex = getAgentComposerSurface("codex");
+    expect(codex.builtinCommands.some((c) => c.id === "plan")).toBe(true);
+    expect(codex.bundledSkills.some((s) => s.id === "skill-creator")).toBe(
+      true
+    );
+  });
+
+  it("lists copilot /plan on empty disk with command badge", () => {
+    const items = buildComposerSkillSuggestItems(EMPTY_SNAPSHOT, "copilot");
+    expect(items.find((i) => i.id === "plan")).toEqual(
+      expect.objectContaining({
+        invokeText: "/plan",
+        source: "builtin-command",
+      })
+    );
+  });
+
+  it("lists built-in commands before skills, each group sorted by id", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "aaa-skill",
+            effects: [
+              {
+                agentKind: "grok",
+                effect: { state: "discoverable", viaRoot: ".agents/skills" },
+              },
+            ],
+          }),
+          managed({
+            id: "zzz-skill",
+            effects: [
+              {
+                agentKind: "grok",
+                effect: { state: "discoverable", viaRoot: ".agents/skills" },
+              },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "grok"
+    );
+    const sources = items.map((i) => i.source);
+    const firstSkill = sources.indexOf("project");
+    expect(firstSkill).toBeGreaterThan(0);
+    expect(
+      sources.slice(0, firstSkill).every((s) => s === "builtin-command")
+    ).toBe(true);
+    expect(
+      sources.slice(firstSkill).every((s) => s !== "builtin-command")
+    ).toBe(true);
+    const commandIds = items
+      .filter((i) => i.source === "builtin-command")
+      .map((i) => i.id);
+    expect(commandIds).toEqual(
+      [...commandIds].sort((a, b) => a.localeCompare(b))
+    );
+    const skillIds = items
+      .filter((i) => i.source !== "builtin-command")
+      .map((i) => i.id);
+    expect(skillIds).toEqual(["aaa-skill", "zzz-skill"]);
+  });
+
+  it("uses literal slash for codex commands while skills keep $", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "plan",
+            effects: [
+              {
+                agentKind: "codex",
+                effect: { state: "discoverable", viaRoot: ".agents/skills" },
+              },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "codex"
+    );
+    // $plan (disk skill) and /plan (built-in command) do not collide.
+    const plans = items.filter((i) => i.id === "plan");
+    expect(plans.map((i) => i.invokeText).sort()).toEqual(["$plan", "/plan"]);
+    expect(plans.find((i) => i.invokeText === "/plan")?.source).toBe(
+      "builtin-command"
+    );
+  });
+
+  it("drops a command when a skill claims the same invoke text", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "plan",
+            name: "Repo Plan",
+            effects: [
+              {
+                agentKind: "claude",
+                effect: { state: "discoverable", viaRoot: ".claude/skills" },
+              },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "claude"
+    );
+    const plans = items.filter((i) => i.invokeText === "/plan");
+    expect(plans).toHaveLength(1);
+    expect(plans[0]?.source).toBe("project");
+  });
+});
+
+describe("createComposerSkillQueryClient", () => {
+  const projectRef = {
+    realPath: "/tmp/proj",
+    worktreeKey: "wt-1",
+  };
+
+  function installPier(api: {
+    projectsSnapshot?: (path: string) => Promise<unknown>;
+    snapshot?: (ref: unknown) => Promise<unknown>;
+  }) {
+    const projectsSnapshot =
+      api.projectsSnapshot ?? vi.fn(async () => [] as unknown[]);
+    const snapshot = api.snapshot ?? vi.fn(async () => null);
+    Object.assign(window, {
+      pier: {
+        projectSkills: {
+          projectsSnapshot,
+          snapshot,
+        },
+      },
+    });
+    return { projectsSnapshot, snapshot };
+  }
+
+  async function collectSearch(args: {
+    agentKind: string;
+    projectRootPath: string;
+    query?: string;
+  }): Promise<ComposerSkillQuerySnapshot[]> {
+    const client = createComposerSkillQueryClient();
+    const updates: ComposerSkillQuerySnapshot[] = [];
+    const done = new Promise<void>((resolve) => {
+      client.search({
+        agentKind: args.agentKind,
+        onUpdate: (snap) => {
+          updates.push(snap);
+          if (snap.status === "done" || snap.status === "error") {
+            resolve();
+          }
+        },
+        projectRootPath: args.projectRootPath,
+        query: args.query ?? "",
+      });
+    });
+    await vi.advanceTimersByTimeAsync(100);
+    await done;
+    client.dispose();
+    return updates;
+  }
+
+  beforeEach(() => {
+    resetComposerSkillQueryCacheForTests();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    resetComposerSkillQueryCacheForTests();
+    vi.useRealTimers();
+    // Drop test pier stub so later suites do not see a partial window.pier.
+    (window as { pier?: unknown }).pier = undefined;
+  });
+
+  it("loads surface commands when projects list is empty", async () => {
+    const { projectsSnapshot, snapshot } = installPier({
+      projectsSnapshot: vi.fn(async () => []),
+    });
+    const updates = await collectSearch({
+      agentKind: "copilot",
+      projectRootPath: "/tmp/proj",
+    });
+    const last = updates.at(-1);
+    expect(last?.status).toBe("done");
+    expect(
+      last?.items.some((i) => i.id === "plan" && i.source === "builtin-command")
+    ).toBe(true);
+    expect(projectsSnapshot).toHaveBeenCalled();
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+
+  it("does not TTL-cache empty-projects surface fallback for a real path", async () => {
+    const projectsSnapshot = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          displayPath: "/tmp/proj",
+          skillCount: 1,
+          projectRef,
+        },
+      ]);
+    const snapshot = vi.fn(async () => ({
+      observedRevision: "1",
+      skills: [
+        managed({
+          id: "repo-skill",
+          effects: [
+            {
+              agentKind: "claude",
+              effect: { state: "discoverable", viaRoot: ".claude/skills" },
+            },
+          ],
+        }),
+      ],
+      unmanagedSkills: [],
+      userGlobalSkills: [],
+    }));
+    installPier({ projectsSnapshot, snapshot });
+
+    const first = await collectSearch({
+      agentKind: "claude",
+      projectRootPath: "/tmp/proj",
+    });
+    expect(first.at(-1)?.items.some((i) => i.id === "repo-skill")).toBe(false);
+    expect(projectsSnapshot).toHaveBeenCalledTimes(1);
+
+    const second = await collectSearch({
+      agentKind: "claude",
+      projectRootPath: "/tmp/proj",
+    });
+    // Must re-resolve projects (no 30s pin of empty list).
+    expect(projectsSnapshot).toHaveBeenCalledTimes(2);
+    expect(second.at(-1)?.items.some((i) => i.id === "repo-skill")).toBe(true);
+  });
+
+  it("still surfaces commands when skills IPC throws", async () => {
+    installPier({
+      projectsSnapshot: vi.fn(async () => {
+        throw new Error("ipc down");
+      }),
+    });
+    const updates = await collectSearch({
+      agentKind: "copilot",
+      projectRootPath: "/tmp/proj",
+    });
+    const last = updates.at(-1);
+    expect(last?.status).toBe("done");
+    expect(
+      last?.items.some((i) => i.id === "plan" && i.source === "builtin-command")
+    ).toBe(true);
+  });
+
+  it("loads surface catalog without calling skills IPC when path is empty", async () => {
+    const { projectsSnapshot, snapshot } = installPier({});
+    const updates = await collectSearch({
+      agentKind: "claude",
+      projectRootPath: "",
+    });
+    const last = updates.at(-1);
+    expect(last?.status).toBe("done");
+    expect(
+      last?.items.some(
+        (i) => i.source === "builtin-command" || i.source === "bundled"
+      )
+    ).toBe(true);
+    expect(projectsSnapshot).not.toHaveBeenCalled();
+    expect(snapshot).not.toHaveBeenCalled();
+  });
+
+  it("falls back to surface catalog when snapshot is malformed", async () => {
+    installPier({
+      projectsSnapshot: vi.fn(async () => [
+        {
+          displayPath: "/tmp/proj",
+          skillCount: 0,
+          projectRef,
+        },
+      ]),
+      // Missing observedRevision / skills → normalizeSnapshot returns null.
+      snapshot: vi.fn(async () => ({})),
+    });
+    const updates = await collectSearch({
+      agentKind: "copilot",
+      projectRootPath: "/tmp/proj",
+    });
+    const last = updates.at(-1);
+    expect(last?.status).toBe("done");
+    expect(last?.items.some((i) => i.id === "plan")).toBe(true);
+  });
+
+  it("merges managed skills from a valid snapshot and caches by agent", async () => {
+    const projectsSnapshot = vi.fn(async () => [
+      {
+        displayPath: "/tmp/proj",
+        skillCount: 1,
+        projectRef,
+      },
+    ]);
+    const snapshot = vi.fn(async () => ({
+      observedRevision: "1",
+      skills: [
+        managed({
+          id: "repo-skill",
+          effects: [
+            {
+              agentKind: "claude",
+              effect: { state: "discoverable", viaRoot: ".claude/skills" },
+            },
+          ],
+        }),
+      ],
+      unmanagedSkills: [],
+      userGlobalSkills: [],
+    }));
+    installPier({ projectsSnapshot, snapshot });
+
+    const first = await collectSearch({
+      agentKind: "claude",
+      projectRootPath: "/tmp/proj",
+    });
+    expect(first.at(-1)?.items.some((i) => i.id === "repo-skill")).toBe(true);
+    expect(snapshot).toHaveBeenCalledTimes(1);
+
+    const second = await collectSearch({
+      agentKind: "claude",
+      projectRootPath: "/tmp/proj",
+    });
+    expect(second.at(-1)?.items.some((i) => i.id === "repo-skill")).toBe(true);
+    // TTL cache should skip a second snapshot fetch for the same agent/path.
+    expect(snapshot).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("composer command i18n", () => {
+  it("maps openclaude to claude locale keys", () => {
+    expect(composerCommandDescKey("openclaude", "plan")).toBe(
+      "terminal.composer.commandDesc.claude.plan"
+    );
+    expect(composerCommandDescKey("grok", "btw")).toBe(
+      "terminal.composer.commandDesc.grok.btw"
+    );
+    expect(composerBundledSkillDescKey("openclaude", "code-review")).toBe(
+      "terminal.composer.skillDesc.claude.code-review"
+    );
+  });
+
+  it("prefers translated copy and falls back to English surface text", () => {
+    const t = ((key: string, opts?: { defaultValue?: string }) => {
+      if (key === "terminal.composer.commandDesc.grok.plan") {
+        return "切换到计划模式";
+      }
+      if (key === "terminal.composer.skillDesc.claude.code-review") {
+        return "审查代码改动";
+      }
+      return opts?.defaultValue ?? "";
+    }) as import("i18next").TFunction;
+
+    expect(
+      resolveComposerCommandDescription(
+        t,
+        "grok",
+        "plan",
+        "Switch to plan mode"
+      )
+    ).toBe("切换到计划模式");
+    expect(
+      resolveComposerCommandDescription(
+        t,
+        "grok",
+        "btw",
+        "Ask a quick side question"
+      )
+    ).toBe("Ask a quick side question");
+    expect(
+      resolveComposerBundledSkillDescription(
+        t,
+        "claude",
+        "code-review",
+        "Review code changes"
+      )
+    ).toBe("审查代码改动");
+  });
+
+  it("falls back kilo missing keys to opencode", () => {
+    const t = ((key: string, opts?: { defaultValue?: string }) => {
+      if (key === "terminal.composer.commandDesc.opencode.new") {
+        return "开始新会话";
+      }
+      return opts?.defaultValue ?? "";
+    }) as import("i18next").TFunction;
+
+    expect(
+      resolveComposerCommandDescription(t, "kilo", "new", "Start a new session")
+    ).toBe("开始新会话");
   });
 });

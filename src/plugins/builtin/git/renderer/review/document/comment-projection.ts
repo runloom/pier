@@ -2,6 +2,11 @@ import type {
   PierDiffReviewCommentThread,
   PierDiffReviewDriftThread,
 } from "@pier/ui/diff-view/index.tsx";
+import {
+  lineInHunkRanges,
+  parseHunkLineRanges,
+} from "@shared/comments/hunk-ranges.ts";
+import { parseBlobOidForSide } from "@shared/comments/patch-blob.ts";
 import type { CommentThread } from "@shared/contracts/comments/base.ts";
 import type { GitReviewGroup } from "@shared/contracts/git-review/primitives.ts";
 
@@ -64,6 +69,7 @@ export function indexReviewComments(
     if (thread.target.kind === "git-diff") {
       const target = thread.target;
       const entry: PierDiffReviewCommentThread = {
+        ...(target.blobOid === undefined ? {} : { blobOid: target.blobOid }),
         line: target.line,
         side: target.side === "old" ? "deletions" : "additions",
         threadId: thread.id,
@@ -87,51 +93,14 @@ export function indexReviewComments(
   };
 }
 
-/** patch hunk header 行范围（闭区间 [start, end]）。 */
-type LineRange = readonly [number, number];
-
-/** hunk 行范围集合（old/new 两侧），漂移判定与范围查询共享。 */
-interface HunkLineRanges {
-  readonly new: readonly LineRange[];
-  readonly old: readonly LineRange[];
-}
-
-const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm;
+/** Re-export shared hunk parser for existing tests / call sites. */
+export { parseHunkLineRanges } from "@shared/comments/hunk-ranges.ts";
 
 /**
- * 解析 patch 的 hunk headers 得到 old/new 行范围集合（git hunk 格式：
- * `@@ -oldStart,oldLen +newStart,newLen @@`，len 缺省为 1）。
- *
- * 行内评论 anchor.line 在对应 side 的任一 hunk 范围内 → 匹配；否则漂移。
- * 注意 hunk 范围含 context 行（评论可锚 context 行）；hunk 之间的 unchanged
- * 行不进 diff-view 渲染，锚这些行的评论也判漂移。
- */
-export function parseHunkLineRanges(patch: string): HunkLineRanges {
-  const oldRanges: LineRange[] = [];
-  const newRanges: LineRange[] = [];
-  for (const match of patch.matchAll(HUNK_HEADER)) {
-    const oldStart = Number(match[1]);
-    const oldLen = match[2] === undefined ? 1 : Number(match[2]);
-    const newStart = Number(match[3]);
-    const newLen = match[4] === undefined ? 1 : Number(match[4]);
-    oldRanges.push([oldStart, oldStart + oldLen - 1]);
-    newRanges.push([newStart, newStart + newLen - 1]);
-  }
-  return { new: newRanges, old: oldRanges };
-}
-
-function lineInRange(
-  line: number,
-  side: "additions" | "deletions",
-  ranges: HunkLineRanges
-): boolean {
-  const rangesForSide = side === "deletions" ? ranges.old : ranges.new;
-  return rangesForSide.some(([start, end]) => line >= start && line <= end);
-}
-
-/**
- * 分类 git-diff 行内候选：patch hunk 范围内 → inline（行内 reviewComments）；
- * 范围外 → drift（漂移 driftComments，带原 line/side）。
+ * 分类 git-diff 行内候选：
+ * - hunk 范围内且（无 blobOid，或当前 patch 可解析且与存储一致）→ inline
+ * - 有存储 blobOid 但当前 index 不可解 → drift（不可验证 = 不空挂）
+ * - 否则 → drift（out-of-range / blob-mismatch）
  *
  * 空输入直接返回（避免空 patch 误判全漂移：estimate 阶段 patch 为空时
  * 调用方应跳过分类，全行内乐观——见 resource-projection 装配）。
@@ -150,15 +119,28 @@ export function classifyInlineDrift(
   const matched: PierDiffReviewCommentThread[] = [];
   const drift: PierDiffReviewDriftThread[] = [];
   for (const thread of inline) {
-    if (lineInRange(thread.line, thread.side, ranges)) {
-      matched.push(thread);
-    } else {
+    if (!lineInHunkRanges(thread.line, thread.side, ranges)) {
       drift.push({
         line: thread.line,
         side: thread.side,
         threadId: thread.threadId,
       });
+      continue;
     }
+    if (thread.blobOid !== undefined) {
+      const side = thread.side === "deletions" ? "old" : "new";
+      const current = parseBlobOidForSide(patch, side);
+      // Stored fingerprint without a verifiable current blob is not a match.
+      if (current === undefined || current !== thread.blobOid) {
+        drift.push({
+          line: thread.line,
+          side: thread.side,
+          threadId: thread.threadId,
+        });
+        continue;
+      }
+    }
+    matched.push(thread);
   }
   return { drift, inline: matched };
 }

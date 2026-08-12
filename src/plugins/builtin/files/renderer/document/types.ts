@@ -9,28 +9,48 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
 import { absoluteDiskSourcePath, diskDocumentId } from "./paths.ts";
 
-export type FilesDocumentLanguage =
+/** Built-in Files editor languages (L0). Plugin / L1 modes use additional string ids. */
+export type BuiltinFilesDocumentLanguage =
   | "canvas"
   | "cpp"
+  | "csharp"
   | "css"
+  | "dart"
+  | "dockerfile"
+  | "elixir"
   | "go"
   | "html"
   | "java"
   | "javascript"
   | "json"
   | "kotlin"
+  | "lua"
   | "markdown"
+  | "php"
   | "python"
+  | "r"
   | "ruby"
   | "rust"
+  | "scala"
   | "shell"
   | "sql"
+  | "svelte"
+  | "svg"
   | "swift"
   | "text"
   | "toml"
   | "typescript"
+  | "vue"
   | "xml"
-  | "yaml";
+  | "yaml"
+  | "zig";
+
+/**
+ * Document language id: L0 builtins or dynamic plugin/L1 mode ids.
+ */
+export type FilesDocumentLanguage =
+  | BuiltinFilesDocumentLanguage
+  | (string & {});
 
 export interface FilesDocumentOrigin {
   panelId?: string;

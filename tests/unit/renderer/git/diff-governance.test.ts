@@ -62,7 +62,6 @@ describe("Git diff renderer governance", () => {
       "src/renderer/lib/theme/register-custom-themes.ts",
       "packages/ui/src/diff-view/handle-deps.ts",
       "packages/ui/src/diff-view/hunk-annotations.ts",
-      "packages/ui/src/diff-view/index.tsx",
       "packages/ui/src/diff-view/item-sync.ts",
       "packages/ui/src/diff-view/item-transition.ts",
       "packages/ui/src/diff-view/items.ts",
@@ -71,10 +70,12 @@ describe("Git diff renderer governance", () => {
       "packages/ui/src/diff-view/review/use-review-annotation-merge.ts",
       "packages/ui/src/diff-view/selection-text.ts",
       "packages/ui/src/diff-view/topology-scroll.ts",
+      "packages/ui/src/diff-view/unresolved-conflict/markers-body.tsx",
       "packages/ui/src/diff-view/use-code-options.ts",
       "packages/ui/src/diff-view/use-content-selection.ts",
       "packages/ui/src/diff-view/use-headers.tsx",
       "packages/ui/src/diff-view/use-item-apply.ts",
+      "packages/ui/src/diff-view/view/pier-diff-view.tsx",
       "packages/ui/src/diff-view/view-shell.tsx",
       "packages/ui/src/diff-view/worker.tsx",
     ]);
@@ -112,7 +113,11 @@ describe("Git diff renderer governance", () => {
     const codeViewOptions = codeOptionsSource.match(
       /useMemo<CodeViewOptions<[^>]+>>\(\n\s+\(\) => \(\{([\s\S]*?)\n\s+\}\),\n\s+\[[\s\S]*?\n\s+\]\n\s+\);/u
     )?.[1];
-    const adapterSource = `${source}\n${shellSource}\n${codeOptionsSource}`;
+    const pierDiffViewSource = await readFile(
+      join(ROOT, "packages/ui/src/diff-view/view/pier-diff-view.tsx"),
+      "utf8"
+    );
+    const adapterSource = `${source}\n${shellSource}\n${codeOptionsSource}\n${pierDiffViewSource}`;
 
     expect(uiFiles.map((file) => relative(ROOT, file))).not.toContain(
       "packages/ui/src/diff-view/diff-view-profile.ts"
@@ -144,6 +149,7 @@ describe("Git diff renderer governance", () => {
     expect(adapterSource).toContain("onHunkAction");
     // Codex Tn: -top-8.5 right-0.5 pill + per-file hover + icon-xs ghost.
     // Hover reveal is document-level (light DOM portals); shadow uses :host().
+    // Light-DOM styles + host attrs live on PierDiffView / use-code-options.
     expect(adapterSource).toContain("data-pier-file-host");
     expect(adapterSource).toContain("ensurePierDiffLightDomStyles");
     expect(appearanceSource).toContain(
@@ -185,10 +191,10 @@ describe("Git diff renderer governance", () => {
     expect(codeViewOptions).toContain("stickyHeaders: true");
     expect(codeViewOptions).toContain("unsafeCSS: CODE_VIEW_CUSTOM_CSS");
 
-    expect(source).toContain(
+    expect(pierDiffViewSource).toContain(
       'const diffStyle = presentation?.diffStyle ?? "split";'
     );
-    expect(source).toContain(
+    expect(pierDiffViewSource).toContain(
       'const overflow = presentation?.wrapLines === true ? "wrap" : "scroll";'
     );
     expect(adapterSource.match(/unsafeCSS:/gu)).toHaveLength(1);
@@ -220,12 +226,27 @@ describe("Git diff renderer governance", () => {
       "[data-header-content] [data-title]:hover bdi"
     );
     expect(adapterSource).toContain('from "./sticky-stabilize.ts"');
-    // 挂载 layout 会 reapply；onPostRender 热路径 reapply:false 只 patch
-    expect(adapterSource).toContain("stabilizeCodeViewStickyPositioning(");
+    // codeViewKey remount reapply；items 变更 / onPostRender 热路径 reapply:false
+    // （禁止内容更新后把 stale stickyOffset 再写回，否则滚不到顶部）
+    expect(adapterSource).toContain("useDiffViewStickyStabilize");
     expect(adapterSource).toContain("reapply: false");
+    const stickyStabilizeSource = await readFile(
+      join(ROOT, "packages/ui/src/diff-view/sticky-stabilize.ts"),
+      "utf8"
+    );
+    expect(stickyStabilizeSource).toContain("useDiffViewStickyStabilize");
+    expect(stickyStabilizeSource).toContain("reapply: false");
+    expect(stickyStabilizeSource).toContain("[codeViewKey]");
+    const runtimeSource = await readFile(
+      join(ROOT, "packages/ui/src/diff-view/code-view-runtime.ts"),
+      "utf8"
+    );
+    expect(runtimeSource).toContain("resyncDiffStickyScaffolding");
     expect(customCss).toContain("[data-diffs-header]");
     expect(customCss).toContain("[data-metadata] > [data-deletions-count]");
-    expect(source).toContain("renderHeaderMetadata={renderHeaderMetadata}");
+    expect(pierDiffViewSource).toContain(
+      "renderHeaderMetadata={renderHeaderMetadata}"
+    );
     const codeViewClassName = shellSource.match(
       /export const PIER_DIFF_CODE_VIEW_CLASSNAME =\s*\n?\s*"([^"]+)"/u
     )?.[1];
@@ -309,6 +330,8 @@ describe("Git diff renderer governance", () => {
         join(ROOT, "packages/ui/src/diff-view/geometry.ts"),
         // 路径标题 mono + hover 下划线（shadow 内 [data-title]）
         join(ROOT, "packages/ui/src/diff-view/path-title-chrome.ts"),
+        // PierDiffView 壳：light-DOM styles + file host attrs
+        join(ROOT, "packages/ui/src/diff-view/view/pier-diff-view.tsx"),
       ].includes(file);
       if (
         // 成员同步 API 仅适配层可用（\.setItems 避免误伤 React useState setItems）。
@@ -415,7 +438,7 @@ describe("Git diff renderer governance", () => {
     );
   });
 
-  it("冻结五个 Review 命令并要求 Changes 继续复用 PierFileTree", async () => {
+  it("冻结六个 Review 命令并要求 Changes 继续复用 PierFileTree", async () => {
     const operations = await readFile(
       join(ROOT, "src/shared/contracts/git-review/operations.ts"),
       "utf8"
@@ -429,6 +452,7 @@ describe("Git diff renderer governance", () => {
       "git.cancelReviewRequest",
       "git.applyReviewMutation",
       "git.applyReviewPathMutation",
+      "git.resolveReviewConflict",
     ]);
 
     const reviewContent = await readFile(

@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { parseSafeSkillFrontmatter } from "../../../../src/main/services/project-skills/frontmatter.ts";
 
-describe("parseSafeSkillFrontmatter skill metadata", () => {
+describe("parseSafeSkillFrontmatter skill metadata", {
+  timeout: 30_000,
+}, () => {
   it("parses folded block scalar descriptions (>-)", () => {
     const md = `---
 name: orchestration

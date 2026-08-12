@@ -1,6 +1,7 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   type AgentStatusEvidence,
+  fact,
   facts,
   installedVersion,
   nativeFact,
@@ -165,22 +166,28 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_2 = {
   },
   codebuddy: {
     integration: "active",
-    transport: ["hook-command"],
+    transport: ["hook-command", "transcript-reconciler"],
     evidence: {
       lifecycle: "native",
-      ready: "unsupported",
+      ready: "reconciled",
       processing: "native",
       tool: "native",
       waiting: "native",
       error: "native",
       completed: "unsupported",
-      interrupted: "unsupported",
+      interrupted: "reconciled",
       subagent: "native",
     },
     eventMappings: facts(
       nativeFact("lifecycle", "SessionStart", "SessionStart"),
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
       nativeFact("control", "Stop", "Stop"),
+      fact(
+        "ready",
+        "reconciled",
+        "codebuddy.transcript.user_interrupt",
+        "TurnInterrupted"
+      ),
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("processing", "PostToolUseFailure", "ToolComplete"),
@@ -190,6 +197,12 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_2 = {
       nativeFact("waiting", "Elicitation", "InteractionRequested"),
       nativeFact("waiting", "ElicitationResult", "InteractionResolved"),
       nativeFact("error", "StopFailure", "error"),
+      fact(
+        "interrupted",
+        "reconciled",
+        "codebuddy.transcript.user_interrupt",
+        "TurnInterrupted"
+      ),
       nativeFact("subagent", "SubagentStart", "SubagentStart"),
       nativeFact("subagent", "SubagentStop", "SubagentStop")
     ),
@@ -200,22 +213,28 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_2 = {
   },
   qodercli: {
     integration: "active",
-    transport: ["hook-command"],
+    transport: ["hook-command", "transcript-reconciler"],
     evidence: {
       lifecycle: "native",
-      ready: "unsupported",
+      ready: "reconciled",
       processing: "native",
       tool: "native",
       waiting: "native",
       error: "native",
       completed: "unsupported",
-      interrupted: "unsupported",
+      interrupted: "reconciled",
       subagent: "native",
     },
     eventMappings: facts(
       nativeFact("lifecycle", "SessionStart", "SessionStart"),
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
       nativeFact("control", "Stop", "Stop"),
+      fact(
+        "ready",
+        "reconciled",
+        "qoder.transcript.user_interrupt",
+        "TurnInterrupted"
+      ),
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("processing", "PostToolUseFailure", "ToolComplete"),
@@ -225,6 +244,12 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_2 = {
       nativeFact("waiting", "Elicitation", "InteractionRequested"),
       nativeFact("waiting", "ElicitationResult", "InteractionResolved"),
       nativeFact("error", "StopFailure", "error"),
+      fact(
+        "interrupted",
+        "reconciled",
+        "qoder.transcript.user_interrupt",
+        "TurnInterrupted"
+      ),
       nativeFact("subagent", "SubagentStart", "SubagentStart"),
       nativeFact("subagent", "SubagentStop", "SubagentStop")
     ),

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { reportFontPreferenceUpdateFailure } from "@/pages/settings/components/rows/font-update-error.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 
@@ -19,6 +20,7 @@ export function CodeFontSizeRow() {
   const persisted = useFontStore((s) => s.codeFontSize);
   const setCodeFontSize = useFontStore((s) => s.setCodeFontSize);
   const [draft, setDraft] = useState(String(persisted));
+  const failedTitle = t("settings.row.fontUpdateFailed");
 
   const [prev, setPrev] = useState(persisted);
   if (persisted !== prev) {
@@ -30,7 +32,7 @@ export function CodeFontSizeRow() {
     <InputRow
       description={t("settings.row.codeFontSizeDesc")}
       id="settings-code-font-size"
-      inputClassName="w-24"
+      inputClassName="w-28"
       inputMode="numeric"
       label={t("settings.row.codeFontSize")}
       max={MAX}
@@ -39,12 +41,15 @@ export function CodeFontSizeRow() {
         const next = clampToValid(raw, persisted);
         setDraft(String(next));
         if (next !== persisted) {
-          setCodeFontSize(next).catch(() => undefined);
+          setCodeFontSize(next).catch((err) => {
+            reportFontPreferenceUpdateFailure(failedTitle, err);
+          });
         }
       }}
       onChange={setDraft}
       placeholder={t("settings.row.codeFontSizePlaceholder")}
       step={1}
+      suffix={t("settings.unit.px")}
       type="number"
       value={draft}
     />

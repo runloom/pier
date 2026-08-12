@@ -7,7 +7,7 @@ import { useT } from "@/i18n/use-t.ts";
 import {
   type ImportCandidateView,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
+} from "@/stores/project-skills/store.ts";
 import { buildSkillsImportStatusItems } from "./build-import-status-items.ts";
 import { SkillContentBody } from "./readonly-detail.tsx";
 import { formatBytes, type Translate } from "./shared.tsx";

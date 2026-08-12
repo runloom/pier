@@ -3,12 +3,12 @@ import type {
   ProjectRootRef,
 } from "@shared/contracts/project-skills.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { initProjectSkillsBridge } from "@/stores/project-skills/actions.ts";
 import {
   draftIsDirty,
   type SkillsUiDraft,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
-import { initProjectSkillsBridge } from "@/stores/project-skills-actions.ts";
+} from "@/stores/project-skills/store.ts";
 
 function ref(path = "/tmp/proj"): ProjectRootRef {
   return {

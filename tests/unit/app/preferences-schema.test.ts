@@ -17,6 +17,32 @@ describe("projectPreferencesSchema — language", () => {
   });
 });
 
+describe("projectPreferencesSchema — docFontMode / docFontFamily", () => {
+  it("defaults to ui mode and empty family", () => {
+    const parsed = projectPreferencesSchema.parse({});
+    expect(parsed.docFontMode).toBe("ui");
+    expect(parsed.docFontFamily).toBe("");
+  });
+
+  it("accepts custom mode and a family string", () => {
+    const parsed = projectPreferencesSchema.parse({
+      docFontMode: "custom",
+      docFontFamily: "Noto Serif SC",
+    });
+    expect(parsed.docFontMode).toBe("custom");
+    expect(parsed.docFontFamily).toBe("Noto Serif SC");
+  });
+
+  it("rejects invalid modes", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ docFontMode: "document" })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ docFontMode: "serif" })
+    ).toThrow();
+  });
+});
+
 describe("projectPreferencesSchema — monoFontSize / codeFontSize", () => {
   it("默认值都是 13", () => {
     const parsed = projectPreferencesSchema.parse({});

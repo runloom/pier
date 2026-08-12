@@ -7,6 +7,7 @@ import {
 import { GitReviewPathError } from "./contract.ts";
 
 interface OpenGitReviewFileOptions {
+  readonly access?: "read" | "write";
   readonly budget?: GitExecExecutionBudget;
   readonly canonicalRoot: string;
   readonly segments: readonly string[];
@@ -20,6 +21,7 @@ export async function openGitReviewFileNoSymlinks(
 ): Promise<FileHandle> {
   try {
     return await openGitPathNoSymlinks({
+      ...(options.access === undefined ? {} : { access: options.access }),
       canonicalRoot: options.canonicalRoot,
       onDetachedOperation: (operation) =>
         options.budget?.trackDetachedOperation?.(operation),

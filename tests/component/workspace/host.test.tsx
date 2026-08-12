@@ -173,6 +173,7 @@ function createDockviewApi(
   let layoutChange: (() => void) | null = null;
   let currentActivePanel = activePanel;
   let maximizedGroupChange: (() => void) | null = null;
+  let activeGroupChange: ((group: unknown) => void) | null = null;
   const didDropDisposers: ReturnType<typeof vi.fn>[] = [];
   const willDragPanelDisposers: ReturnType<typeof vi.fn>[] = [];
   const willDropDisposers: ReturnType<typeof vi.fn>[] = [];
@@ -182,7 +183,13 @@ function createDockviewApi(
     },
     addPanel: vi.fn(),
     fromJSON: vi.fn(),
+    // Tab-strip scroll memory iterates groups; empty is fine for host tests.
+    groups: [],
     hasMaximizedGroup: vi.fn((_reason?: string) => true),
+    onDidActiveGroupChange: vi.fn((cb: (group: unknown) => void) => {
+      activeGroupChange = cb;
+      return { dispose: vi.fn() };
+    }),
     onDidActivePanelChange: vi.fn(
       (
         cb: (change: {
@@ -227,6 +234,12 @@ function createDockviewApi(
 
   return {
     api,
+    emitActiveGroupChange: (group: unknown = null) => {
+      if (!activeGroupChange) {
+        throw new Error("onDidActiveGroupChange was not registered");
+      }
+      activeGroupChange(group);
+    },
     emitActivePanelChange: (panel: ReturnType<typeof createPanel> | null) => {
       if (!activePanelChange) {
         throw new Error("onDidActivePanelChange was not registered");

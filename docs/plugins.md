@@ -8,7 +8,7 @@
 Pier 当前只接受两类插件：
 
 - 内置插件：位于 `src/plugins/builtin/*`，随 Pier 一起构建。
-- 官方受管理外部插件：位于 `packages/plugin-*`，通过签名官方索引、包校验、不可变版本目录和启动时运行态快照加载，例如 `pier.claude`、`pier.codex`、`pier.grok`。
+- 官方受管理外部插件：位于 `packages/plugin-*`，通过签名官方索引、包校验、不可变版本目录和启动时运行态快照加载，例如 `pier.claude`、`pier.codex`、`pier.grok`、`pier.ssh`。语言高亮与 PATH 语言服务在 Files / 宿主 L0 内建，不走独立语言包插件。
 
 当前不支持第三方插件、任意 local / git / registry 来源、自建索引或 marketplace。源码中的预留枚举不等于产品已经开放对应安装路径。
 

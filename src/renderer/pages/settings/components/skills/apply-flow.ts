@@ -6,7 +6,7 @@ import {
   type PlanConfirmationView,
   type SkillsUiDraft,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
+} from "@/stores/project-skills/store.ts";
 import { skillsErrorMessage } from "./error-copy.ts";
 import { isPlanHardBlockIssue, issueLabel, type Translate } from "./shared.tsx";
 

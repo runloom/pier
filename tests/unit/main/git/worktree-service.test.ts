@@ -774,3 +774,53 @@ describe("createWorktreeService", () => {
     });
   });
 });
+
+describe("WorktreeRef attachment (W4-S1)", () => {
+  it("list/create attach worktreeRef; mint changes incarnation on recreate path", async () => {
+    const repo = await initRepo();
+    const service = createWorktreeService();
+    const listed = await service.list({ path: repo });
+    expect(listed.status).toBe("available");
+    if (listed.status !== "available") {
+      return;
+    }
+    for (const item of listed.worktrees) {
+      expect(item.worktreeRef?.incarnationId).toBeTruthy();
+      expect(item.canonicalPath).toBe(item.path);
+      expect(item.worktreeRef?.worktreeKey).toBe(item.path);
+    }
+    const mainInc = listed.worktrees.find((w) => w.isMain)?.worktreeRef
+      ?.incarnationId;
+    expect(mainInc).toBeTruthy();
+
+    const created = await service.create({
+      path: repo,
+      name: "feat-ref",
+      branch: "feat-ref",
+      base: "main",
+    });
+    expect(created.worktreeRef?.incarnationId).toBeTruthy();
+    expect(created.created.worktreeRef?.incarnationId).toBe(
+      created.worktreeRef?.incarnationId
+    );
+    const firstId = created.worktreeRef?.incarnationId ?? "";
+
+    await service.remove({ path: created.targetPath });
+    const recreated = await service.create({
+      path: repo,
+      name: "feat-ref",
+      branch: "feat-ref-2",
+      base: "main",
+    });
+    expect(recreated.worktreeRef?.incarnationId).toBeTruthy();
+    expect(recreated.worktreeRef?.incarnationId).not.toBe(firstId);
+
+    const got = await service.get({ path: recreated.targetPath });
+    expect(got.status).toBe("found");
+    if (got.status === "found") {
+      expect(got.worktreeRef.incarnationId).toBe(
+        recreated.worktreeRef?.incarnationId
+      );
+    }
+  });
+});

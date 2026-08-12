@@ -35,6 +35,10 @@ export const PIER = {
   LSP_SESSION_MESSAGE: "pier://lsp:session-message",
   LSP_POLICY_CHANGED: "pier://lsp:policy-changed",
   LSP_LANGUAGE_TOOLS_REQUEST: "pier://lsp:language-tools-request",
+  /** Settings: core + dynamic provider binary discovery status. */
+  LSP_CATALOG_STATUS: "pier://lsp:catalog-status",
+  /** Resolve CSS @import package/relative specifier for Go to Definition. */
+  LSP_RESOLVE_CSS_IMPORT: "pier://lsp:resolve-css-import",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",

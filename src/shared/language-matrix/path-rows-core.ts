@@ -1,0 +1,168 @@
+/**
+ * Core + config PATH language matrix rows (high / mid priority).
+ */
+
+import type { LanguageMatrixRow } from "./types.ts";
+
+const PKG = ["package.json"] as const;
+const WORKSPACE = ["package.json", ".git", "pnpm-workspace.yaml"] as const;
+
+export const CORE_PATH_LANGUAGE_MATRIX: readonly LanguageMatrixRow[] = [
+  // --- Core programming (high priority) ---
+  {
+    editorLanguageId: "python",
+    extensions: [".py", ".pyi", ".pyw"],
+    id: "python",
+    lsp: {
+      args: ["--stdio"],
+      binaryHint: "pyright-langserver",
+      command: "pyright-langserver",
+      commandCandidates: ["pyright-langserver", "basedpyright-langserver"],
+      displayName: "Python",
+      extensions: [".py", ".pyi"],
+      id: "pyright",
+      installCommand: "npm i -g pyright",
+      languageIds: ["python"],
+      priority: 90,
+      rootMarkers: [
+        "pyproject.toml",
+        "pyrightconfig.json",
+        "setup.cfg",
+        "setup.py",
+      ],
+    },
+  },
+  {
+    editorLanguageId: "go",
+    extensions: [".go"],
+    id: "go",
+    lsp: {
+      binaryHint: "gopls",
+      command: "gopls",
+      displayName: "Go",
+      id: "gopls",
+      installCommand: "go install golang.org/x/tools/gopls@latest",
+      languageIds: ["go"],
+      priority: 90,
+      rootMarkers: ["go.mod", "go.work"],
+    },
+  },
+  {
+    editorLanguageId: "rust",
+    extensions: [".rs"],
+    id: "rust",
+    lsp: {
+      binaryHint: "rust-analyzer",
+      command: "rust-analyzer",
+      displayName: "Rust",
+      id: "rust-analyzer",
+      installCommand: "rustup component add rust-analyzer",
+      languageIds: ["rust"],
+      priority: 90,
+      rootMarkers: ["Cargo.toml"],
+    },
+  },
+  {
+    editorLanguageId: "svelte",
+    extensions: [".svelte"],
+    id: "svelte",
+    lsp: {
+      args: ["--stdio"],
+      binaryHint: "svelteserver|svelte-language-server",
+      command: "svelteserver",
+      commandCandidates: ["svelteserver", "svelte-language-server"],
+      displayName: "Svelte",
+      id: "svelte",
+      installCommand: "npm i -g svelte-language-server",
+      languageIds: ["svelte"],
+      priority: 90,
+      rootMarkers: [...PKG],
+    },
+  },
+  // --- Config / docs ---
+  {
+    editorLanguageId: "json",
+    extensions: [".json", ".jsonc", ".json5"],
+    id: "json",
+    lsp: {
+      args: ["--stdio"],
+      binaryHint: "vscode-json-language-server",
+      command: "vscode-json-language-server",
+      displayName: "JSON",
+      extensions: [".json", ".jsonc"],
+      id: "json",
+      installCommand: "npm i -g vscode-langservers-extracted",
+      languageIdByExtension: { ".json": "json", ".jsonc": "jsonc" },
+      languageIds: ["json", "jsonc"],
+      priority: 80,
+      rootMarkers: [...PKG],
+    },
+  },
+  {
+    editorLanguageId: "css",
+    extensions: [".css", ".scss"],
+    id: "css",
+    lsp: {
+      args: ["--stdio"],
+      binaryHint: "vscode-css-language-server",
+      command: "vscode-css-language-server",
+      displayName: "CSS / SCSS",
+      id: "css",
+      installCommand: "npm i -g vscode-langservers-extracted",
+      languageIdByExtension: { ".css": "css", ".scss": "scss" },
+      languageIds: ["css", "scss"],
+      priority: 80,
+      rootMarkers: [...PKG],
+    },
+  },
+  {
+    editorLanguageId: "html",
+    extensions: [".html", ".htm"],
+    id: "html",
+    lsp: {
+      args: ["--stdio"],
+      binaryHint: "vscode-html-language-server",
+      command: "vscode-html-language-server",
+      displayName: "HTML",
+      id: "html",
+      installCommand: "npm i -g vscode-langservers-extracted",
+      languageIds: ["html"],
+      priority: 80,
+      rootMarkers: [...PKG],
+    },
+  },
+  {
+    editorLanguageId: "yaml",
+    extensions: [".yaml", ".yml"],
+    id: "yaml",
+    lsp: {
+      args: ["--stdio"],
+      binaryHint: "yaml-language-server",
+      command: "yaml-language-server",
+      displayName: "YAML",
+      id: "yaml",
+      installCommand: "npm i -g yaml-language-server",
+      languageIds: ["yaml"],
+      priority: 80,
+      rootMarkers: [...WORKSPACE],
+    },
+  },
+  {
+    editorLanguageId: "markdown",
+    extensions: [".md", ".mdx", ".markdown"],
+    id: "markdown",
+    lsp: {
+      args: ["server"],
+      binaryHint: "marksman",
+      command: "marksman",
+      displayName: "Markdown",
+      extensions: [".md", ".mdx"],
+      id: "markdown",
+      installCommand: "brew install marksman",
+      languageIdByExtension: { ".md": "markdown", ".mdx": "mdx" },
+      languageIds: ["markdown", "mdx"],
+      priority: 80,
+      rootMarkers: [...WORKSPACE],
+    },
+  },
+] as const;

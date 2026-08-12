@@ -160,6 +160,11 @@ export interface DocsShellNavItem {
  * Docs reading shell: optional header + sticky left nav + main article.
  * Column layout uses inline flex so two-pane docs do not depend on
  * canvas-only arbitrary Tailwind grid classes.
+ *
+ * Header + main mark `data-reading-surface` so host CSS applies the Appearance
+ * **document font** to prose. Interactive product controls under that surface
+ * are reset to the **UI font** (see globals.css) so live Button/Input demos
+ * stay product-true. Nav chrome is outside the reading surface.
  */
 export function DocsShell({
   children,
@@ -192,7 +197,15 @@ export function DocsShell({
     createElement(
       Stack,
       { gap: 16 },
-      header ?? null,
+      header
+        ? createElement(
+            "div",
+            {
+              "data-reading-surface": "",
+            },
+            header
+          )
+        : null,
       header ? createElement(Separator) : null,
       createElement(
         "div",
@@ -264,7 +277,17 @@ export function DocsShell({
             })
           )
         ),
-        createElement("main", { style: { flex: 1, minWidth: 0 } }, children)
+        createElement(
+          "main",
+          {
+            "data-reading-surface": "",
+            style: {
+              flex: 1,
+              minWidth: 0,
+            },
+          },
+          children
+        )
       )
     )
   );

@@ -19,6 +19,10 @@ import {
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import {
+  selectDisambiguatedFileTabTitle,
+  useFileTabLabelsStore,
+} from "@/stores/file-tab-labels.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { panelKindOf } from "./panel-registry.ts";
 import {
@@ -226,10 +230,13 @@ function PanelMenuItem({
   const tab = usePanelDescriptorStore(
     (state) => state.descriptors[panel.id]?.tab
   );
+  const disambiguatedFileTitle = useFileTabLabelsStore((state) =>
+    selectDisambiguatedFileTabTitle(state, panel.id)
+  );
   const params = usePanelFileParams(panel);
   const component = panel.view.contentComponent;
-  // Same label as the dockview tab strip — never swap in tooltip/long text.
-  const title = tab?.title ?? panel.title ?? "Panel";
+  // Same label as the dockview tab strip (incl. file conflict disambiguation).
+  const title = disambiguatedFileTitle ?? tab?.title ?? panel.title ?? "Panel";
   const kind = panelTabKind(component);
   const isPreview = panelTabParamsIsPreview(component, params);
   const isDirty = panelTabParamsIsDirty(component, params);

@@ -53,7 +53,7 @@ describe("NotificationSoundBlock", () => {
     expect(preview).toBeDisabled();
     expect(
       screen.getByText(
-        "System default can’t be previewed here. Use “Send test notification” below."
+        "The system tone can’t be previewed here. Switch to another app, then use “Send test notification” below."
       )
     ).toBeInTheDocument();
     fireEvent.click(preview);
@@ -77,7 +77,7 @@ describe("NotificationSoundBlock", () => {
     expect(preview).toBeEnabled();
     expect(
       screen.queryByText(
-        "System default can’t be previewed here. Use “Send test notification” below."
+        "The system tone can’t be previewed here. Switch to another app, then use “Send test notification” below."
       )
     ).not.toBeInTheDocument();
 

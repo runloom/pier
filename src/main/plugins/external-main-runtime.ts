@@ -1,5 +1,6 @@
 import { pathToFileURL } from "node:url";
 import type { MainPluginUsageData } from "@pier/plugin-api/main";
+import { attachPluginLanguageServers } from "../services/lsp/host-bridge.ts";
 import type { ManagedPluginRuntimeSource } from "../services/managed-plugins/install-runtime.ts";
 import type { PluginRpcBus } from "./rpc-bus.ts";
 
@@ -164,6 +165,24 @@ export function createExternalMainPluginRuntime(options: {
     delete flushCallbacks[pluginId];
   }
 
+  function attachExternalLanguageServers(
+    source: ManagedPluginRuntimeSource
+  ): () => void {
+    const contributions = source.manifest.languageServers ?? [];
+    if (contributions.length === 0) {
+      return () => undefined;
+    }
+    if (!source.manifest.permissions.includes("lsp:provide")) {
+      throw new Error(
+        `plugin ${source.id} declares languageServers without lsp:provide`
+      );
+    }
+    return attachPluginLanguageServers({
+      contributions,
+      pluginId: source.id,
+    });
+  }
+
   function moduleUrlForSource(source: ManagedPluginRuntimeSource): string {
     const moduleUrl = pathToFileURL(source.mainEntryPath);
     if (source.sourceRevision) {
@@ -222,7 +241,22 @@ export function createExternalMainPluginRuntime(options: {
         // Narrowing above proves shape — this is a well-known contract, not raw input.
         const plugin = pluginExport as ExternalMainPluginModule;
         activatedDisposer = await plugin.activate(contextWithLifecycle);
-        disposers[source.id] = activatedDisposer;
+        let disposeLsp: (() => void) | null = null;
+        try {
+          disposeLsp = attachExternalLanguageServers(source);
+        } catch (lspError) {
+          try {
+            activatedDisposer?.();
+          } catch {
+            // ignore nested cleanup errors
+          }
+          activatedDisposer = null;
+          throw lspError;
+        }
+        disposers[source.id] = () => {
+          disposeLsp?.();
+          activatedDisposer?.();
+        };
         flushCallbacks[source.id] = collectedFlushers;
         reportActivation(context, {
           ok: true,

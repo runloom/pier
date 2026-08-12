@@ -8,6 +8,7 @@
 
 import { join } from "node:path";
 import { createDeliverOs } from "@main/services/notification-center/deliver-os.ts";
+import { createDeliverToast } from "@main/services/notification-center/deliver-toast.ts";
 import { parseAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import {
   DEFAULT_NOTIFICATION_CENTER_PREFS,
@@ -20,6 +21,7 @@ import { app, type IpcMain, type IpcMainInvokeEvent } from "electron";
 import type { PierEventBus } from "../app-core/event-bus.ts";
 import {
   broadcastNotificationCenterChanged,
+  sendAttentionSoundPlayToOneWindow,
   sendMessageToastToOneWindow,
 } from "../app-core/window-broadcasts.ts";
 import { getAgentAttentionSettingsCached } from "../services/agent-attention/settings-cache.ts";
@@ -40,6 +42,8 @@ const log = createLogger("notification-center.ipc");
 export type NotificationCenterServiceHandle = NotificationCenterService;
 
 let initPromise: Promise<NotificationCenterService> | null = null;
+/** 初始化完成后的同步句柄（control.snapshot / 命令面热路径只读）。 */
+let readyService: NotificationCenterService | null = null;
 let runtimeIndex: AgentRuntimeIndexService | null = null;
 
 /** 在 registerAgentRuntimeHost 之后注入，供 OS click 深链。 */
@@ -91,6 +95,11 @@ async function init(): Promise<NotificationCenterService> {
       serviceRef?.markReadByDedupeKey(dedupeKey);
     },
   });
+  const deliverToastImpl = createDeliverToast({
+    getAttentionSettings: () => getAgentAttentionSettingsCached(),
+    sendToast: sendMessageToastToOneWindow,
+    sendSoundToWindow: sendAttentionSoundPlayToOneWindow,
+  });
 
   const service = await createNotificationCenterService({
     broadcast: (snapshot) => {
@@ -102,7 +111,7 @@ async function init(): Promise<NotificationCenterService> {
     },
     deliverToast: (notification, target) => {
       try {
-        sendMessageToastToOneWindow(notification, target);
+        deliverToastImpl(notification, target);
       } catch (err) {
         log.warn("message toast deliver failed", { err });
       }
@@ -151,6 +160,7 @@ async function init(): Promise<NotificationCenterService> {
   });
 
   serviceRef = service;
+  readyService = service;
   return service;
 }
 
@@ -200,6 +210,11 @@ export async function getNotificationCenterService(): Promise<NotificationCenter
   } catch {
     return null;
   }
+}
+
+/** 同步窥视已就绪 NCS；未 init 或失败返回 null（不 await）。 */
+export function peekNotificationCenterService(): NotificationCenterServiceHandle | null {
+  return readyService;
 }
 
 export async function flushNotificationCenterHistory(): Promise<void> {

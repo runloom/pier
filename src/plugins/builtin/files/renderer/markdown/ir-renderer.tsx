@@ -49,9 +49,13 @@ export {
   safeMarkdownUrl,
 } from "./resource-elements.tsx";
 
+import { wrapBlocksWithComments } from "./comments/ir-blocks.tsx";
+import type { MarkdownIrCommentsChrome } from "./comments/ir-types.ts";
 import type { MarkdownCrossModeAnchor } from "./cross-mode-anchor.ts";
 import type { MarkdownSearchMatch } from "./search.ts";
 import { MarkdownSearchText } from "./search-mark.tsx";
+
+export type { MarkdownIrCommentsChrome } from "./comments/ir-types.ts";
 
 export interface MarkdownRendererLabels extends MarkdownCodeBlockLabels {
   completedTask: string;
@@ -72,6 +76,7 @@ interface MarkdownIrRendererProps {
   codeTheme: string;
   /** Paper / app light-dark for mermaid re-render on theme switch. */
   colorMode: "dark" | "light";
+  comments?: MarkdownIrCommentsChrome | undefined;
   contentAnchor?: MarkdownCrossModeAnchor | undefined;
   contentAnchorRequestId?: string | number | undefined;
   copyCode: ((code: string) => Promise<void>) | undefined;
@@ -91,6 +96,7 @@ interface MarkdownIrRendererProps {
 interface MarkdownRenderContext
   extends Omit<
     MarkdownIrRendererProps,
+    | "comments"
     | "contentAnchor"
     | "contentAnchorRequestId"
     | "initialAnchor"
@@ -99,6 +105,7 @@ interface MarkdownRenderContext
     | "scrollRoot"
     | "searchMatches"
   > {
+  comments?: MarkdownIrCommentsChrome | undefined;
   onOpenAnchor(anchor: string): void;
   searchMatchesByNode: ReadonlyMap<string, readonly MarkdownSearchMatch[]>;
 }
@@ -125,6 +132,7 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
           codeHighlighter: props.codeHighlighter,
           codeTheme: props.codeTheme,
           colorMode: props.colorMode,
+          ...(props.comments ? { comments: props.comments } : {}),
           copyCode: props.copyCode,
           fileResources: props.fileResources,
           labels: props.labels,
@@ -135,7 +143,8 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
           searchMatchesByNode,
           source: props.source,
         };
-        return renderBlocks(page.blocks, context);
+        // Top-level only: nested list/quote blocks must not get comment chrome.
+        return renderBlocks(page.blocks, context, true);
       }}
       scrollRoot={props.scrollRoot ?? null}
     />
@@ -144,15 +153,14 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
 
 function renderBlocks(
   blocks: readonly MarkdownBlock[],
-  context: MarkdownRenderContext
+  context: MarkdownRenderContext,
+  wrapComments = false
 ): ReactNode[] {
-  return blocks.map((block) => (
-    <Fragment
-      key={`${block.kind}-${block.range.startOffset}-${block.range.endOffset}`}
-    >
-      {renderBlock(block, context)}
-    </Fragment>
-  ));
+  return wrapBlocksWithComments(
+    blocks,
+    (block) => renderBlock(block, context),
+    wrapComments ? context.comments : undefined
+  );
 }
 
 function renderBlock(

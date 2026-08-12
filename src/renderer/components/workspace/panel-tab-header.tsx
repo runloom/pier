@@ -29,7 +29,13 @@ import {
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-menu.ts";
+import { parseFilesDiskSourceFromParams } from "@/lib/files/disk-source.ts";
+import { terminalTabTitleClampOsc } from "@/panel-kits/terminal/tab-chrome.ts";
 import { ensureTuiInputFocus } from "@/panel-kits/terminal/tui-input-focus.ts";
+import {
+  selectDisambiguatedFileTabTitle,
+  useFileTabLabelsStore,
+} from "@/stores/file-tab-labels.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {
   panelHasActiveTaskRun,
@@ -72,6 +78,18 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       props.params as PanelTabFileParams | undefined
     )
   );
+  // 真 group id；禁止回退 panel.id（否则同组路径消歧永远不触发）。
+  const [groupId, setGroupId] = useState<string | null>(
+    () => props.api.group?.id ?? null
+  );
+  // disk 身份本地状态：与 dirty/preview 一样跟 onDidParametersChange，避免 Save As 陈旧。
+  const initialDisk = parseFilesDiskSourceFromParams(props.params);
+  const [diskPath, setDiskPath] = useState<string | null>(
+    () => initialDisk?.path ?? null
+  );
+  const [diskRoot, setDiskRoot] = useState<string | null>(
+    () => initialDisk?.root ?? null
+  );
   const isPreviewRef = useRef(isPreview);
   const suppressNextDoubleClickRef = useRef(false);
   const wasActiveOnPointerDownRef = useRef(false);
@@ -81,9 +99,33 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const showActiveTaskDot = useTaskRunsStore((state) =>
     panelHasActiveTaskRun(state.snapshot, props.api.id)
   );
+  const registeredIdentity = useFileTabLabelsStore(
+    (state) => state.byId[props.api.id]
+  );
+  const disambiguatedFileTitle = useFileTabLabelsStore((state) =>
+    selectDisambiguatedFileTabTitle(state, props.api.id)
+  );
+  const registerFileTab = useFileTabLabelsStore((state) => state.register);
+  const unregisterFileTab = useFileTabLabelsStore((state) => state.unregister);
   const tab = descriptor?.tab;
-  const displayTitle = tab?.title ?? title;
   const kind = panelTabKind(props.api.component);
+  const baseTitle = tab?.title ?? title;
+  // store 身份与 live disk 一致时才用消歧标题，避免 rename 后陈旧后缀盖住 basename。
+  const storeMatchesLive =
+    registeredIdentity !== undefined &&
+    diskPath !== null &&
+    diskRoot !== null &&
+    registeredIdentity.path === diskPath &&
+    registeredIdentity.root === diskRoot;
+  const displayTitle =
+    storeMatchesLive && disambiguatedFileTitle
+      ? disambiguatedFileTitle
+      : baseTitle;
+  const titleClampOsc = terminalTabTitleClampOsc({
+    component: props.api.component,
+    tabChromeTitle: tab?.title,
+    terminalTitle: descriptor?.display.terminalTitle,
+  });
   const trailingAria = panelTabTrailingAriaSuffix(tab?.trailing);
   // Every tab must have a hover tooltip: structured chrome → long path → short title.
   const tooltipText = tabTooltipText(
@@ -114,38 +156,76 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   }, [props.api]);
 
   useEffect(() => {
-    // params 变更时同步 preview 视觉 —— 文件面板 preview→pinned 就地 promote
-    // 时通过 updateParameters 覆盖 pinned:true,tab 头收到事件后取消斜体。
-    const disposable = props.api.onDidParametersChange((next) => {
+    setGroupId(props.api.group?.id ?? null);
+    // 测试 mock / 旧 api 可能无 onDidGroupChange；运行时 dockview 必有。
+    const onDidGroupChange = props.api.onDidGroupChange?.bind(props.api);
+    if (!onDidGroupChange) {
+      return;
+    }
+    const disposable = onDidGroupChange(() => {
+      setGroupId(props.api.group?.id ?? null);
+    });
+    return () => {
+      disposable.dispose();
+    };
+  }, [props.api]);
+
+  useEffect(() => {
+    // params 变更：preview / dirty / disk source（Save As、rename）同一管道。
+    const applyParams = (params: unknown) => {
       const nextIsPreview = panelTabParamsIsPreview(
         props.api.component,
-        next as PanelTabFileParams | undefined
+        params as PanelTabFileParams | undefined
       );
       isPreviewRef.current = nextIsPreview;
       setIsPreview(nextIsPreview);
       setIsDirty(
         panelTabParamsIsDirty(
           props.api.component,
-          next as PanelTabFileParams | undefined
+          params as PanelTabFileParams | undefined
         )
       );
+      const disk = parseFilesDiskSourceFromParams(params);
+      setDiskPath(disk?.path ?? null);
+      setDiskRoot(disk?.root ?? null);
+    };
+    applyParams(props.params);
+    const disposable = props.api.onDidParametersChange((next) => {
+      applyParams(next);
     });
-    const nextIsPreview = panelTabParamsIsPreview(
-      props.api.component,
-      props.params as PanelTabFileParams | undefined
-    );
-    isPreviewRef.current = nextIsPreview;
-    setIsPreview(nextIsPreview);
-    setIsDirty(
-      panelTabParamsIsDirty(
-        props.api.component,
-        props.params as PanelTabFileParams | undefined
-      )
-    );
     return () => {
       disposable.dispose();
     };
   }, [props.api, props.params]);
+
+  // 注册：身份变化只 register（store sameIdentity 短路），禁止 cleanup unregister 闪 peer 标题。
+  useEffect(() => {
+    if (kind !== "file" || !(diskPath && diskRoot && groupId)) {
+      unregisterFileTab(props.api.id);
+      return;
+    }
+    registerFileTab(props.api.id, {
+      groupId,
+      path: diskPath,
+      root: diskRoot,
+    });
+  }, [
+    diskPath,
+    diskRoot,
+    groupId,
+    kind,
+    props.api.id,
+    registerFileTab,
+    unregisterFileTab,
+  ]);
+
+  // 卸载才从消歧表移除。
+  useEffect(() => {
+    const panelId = props.api.id;
+    return () => {
+      unregisterFileTab(panelId);
+    };
+  }, [props.api.id, unregisterFileTab]);
 
   const contextMenuOptions = useMemo(
     () => ({
@@ -255,6 +335,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       data-pier-tab-has-active-task={showActiveTaskDot ? "true" : undefined}
       data-pier-tab-kind={kind}
       data-pier-tab-preview={isPreview ? "true" : undefined}
+      data-pier-tab-title-clamp={titleClampOsc ? "osc" : undefined}
       data-tab-state-label={tab?.state?.label}
       data-tab-status={status}
       onClick={onClick}

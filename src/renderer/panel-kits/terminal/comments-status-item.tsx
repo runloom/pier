@@ -19,8 +19,9 @@ import { terminalStatusItemRegistry } from "./status-bar.tsx";
 /**
  * Agent 终端状态栏评论入口。
  *
- * - 仅 agent 对话 + 有 worktree 且存在可处理（仍在未提交变更上）评论时显示。
- * - 计数 = processable ∩ livePaths（commit 后路径离开变更则不计）。
+ * - 仅 agent 对话 + 有 worktree 且存在可处理评论时显示。
+ * - git：processable ∩ livePaths；md/canvas：不依赖 git status。
+ * - livePaths 未就绪时仍可显示纯 md/canvas 计数；git 项待 status 到后再计入。
  * - **不**后台自动软删：stash / 临时 clean 只隐藏，避免误删；失效跳转由弹窗显式删。
  * - 点击打开 content dialog：列表跳转 + 取消 / 清除 / 提交并清除。
  */
@@ -55,11 +56,10 @@ function CommentsStatusItemView({
   if (!(worktreeKey && isAgent && context)) {
     return null;
   }
-  // 尚未拿到 status / 刷新失败：不展示，避免 commit 后短暂闪出孤儿计数。
-  if (livePaths === null) {
-    return null;
-  }
-  const count = processableCommentCount(project?.threads, { livePaths });
+  const count = processableCommentCount(
+    project?.threads,
+    livePaths === null ? undefined : { livePaths }
+  );
   if (count === 0) {
     return null;
   }

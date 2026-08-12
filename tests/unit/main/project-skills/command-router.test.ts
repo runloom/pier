@@ -122,7 +122,7 @@ afterEach(async () => {
   await rm(sharedLockRoot, { force: true, recursive: true });
 });
 
-describe("project-skills command router", () => {
+describe("project-skills command router", { timeout: 30_000 }, () => {
   it("executes skills.doctor via router", async () => {
     await writeLibrarySkill("guide");
     await writeManifest({

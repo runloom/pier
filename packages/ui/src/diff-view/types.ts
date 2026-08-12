@@ -129,3 +129,33 @@ export interface PierDiffViewProps {
    */
   readonly suppressMembershipScrollRestore?: boolean;
 }
+
+export type PierDiffViewConflictPresentation =
+  | "markers-text"
+  | "file-level"
+  | "binary"
+  | "tooLarge"
+  | "invalidEncoding"
+  | "readError";
+
+export type PierDiffViewConflictXy =
+  | "DD"
+  | "AU"
+  | "UD"
+  | "UA"
+  | "DU"
+  | "AA"
+  | "UU";
+
+/** Conflict payload for review host (not consumed by CodeView). */
+export interface PierDiffViewConflictBody {
+  readonly contents: string | null;
+  readonly contentsDigest: string;
+  readonly presentation: PierDiffViewConflictPresentation;
+  readonly stages: {
+    readonly baseOid: string | null;
+    readonly oursOid: string | null;
+    readonly theirsOid: string | null;
+  };
+  readonly xy: PierDiffViewConflictXy;
+}

@@ -274,4 +274,50 @@ describe("classifyInlineDrift", () => {
     expect(result.inline).toEqual([]);
     expect(result.drift).toHaveLength(1);
   });
+
+  it("drifts in-range threads when blobOid mismatches current patch", () => {
+    const oldOid = "a".repeat(40);
+    const newOid = "b".repeat(40);
+    const other = "c".repeat(40);
+    const patch = `index ${oldOid}..${newOid}\n@@ -10,5 +20,5 @@\n line\n`;
+    const result = classifyInlineDrift(
+      [
+        {
+          blobOid: other,
+          line: 22,
+          side: "additions",
+          threadId: "stale-blob",
+        },
+        {
+          blobOid: newOid,
+          line: 21,
+          side: "additions",
+          threadId: "fresh",
+        },
+      ],
+      patch
+    );
+    expect(result.inline.map((thread) => thread.threadId)).toEqual(["fresh"]);
+    expect(result.drift.map((thread) => thread.threadId)).toEqual([
+      "stale-blob",
+    ]);
+  });
+
+  it("drifts when stored blobOid cannot be verified (no index line)", () => {
+    const result = classifyInlineDrift(
+      [
+        {
+          blobOid: "a".repeat(40),
+          line: 22,
+          side: "additions",
+          threadId: "unknown-blob",
+        },
+      ],
+      "@@ -10,5 +20,5 @@\n line\n"
+    );
+    expect(result.inline).toEqual([]);
+    expect(result.drift.map((thread) => thread.threadId)).toEqual([
+      "unknown-blob",
+    ]);
+  });
 });

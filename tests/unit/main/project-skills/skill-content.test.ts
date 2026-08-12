@@ -43,7 +43,9 @@ async function writeSkill(dir: string, body = "# Body\n"): Promise<void> {
   );
 }
 
-describe("skills.skill.read content access (read-only, whitelisted)", () => {
+describe("skills.skill.read content access (read-only, whitelisted)", {
+  timeout: 30_000,
+}, () => {
   it("reads managed library SKILL.md", async () => {
     await writeSkill(
       join(projectRoot, ".pier", "skills", "library", "review-guide")

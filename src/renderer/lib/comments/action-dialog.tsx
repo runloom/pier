@@ -1,3 +1,4 @@
+import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
@@ -5,19 +6,25 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemTitle,
-} from "@pier/ui/item.tsx";
+import { Item, ItemActions, ItemTitle } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+import { cn } from "@pier/ui/utils.ts";
+import {
+  getCanvasCommentSurfaces,
+  getCanvasCommentSurfacesRevision,
+  onCanvasCommentSurfacesChanged,
+} from "@plugins/api/canvas-comment-surfaces.ts";
 import type { CommentFailureReason } from "@shared/contracts/comments/primitives.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import i18next from "i18next";
 import { Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { ContentDialogFooterActions } from "@/components/common/dialogs/footer-actions.tsx";
 import { useContentDialogFooter } from "@/components/common/dialogs/use-footer.ts";
 import { useT } from "@/i18n/use-t.ts";
@@ -33,20 +40,33 @@ import {
 } from "@/stores/comments.store.ts";
 import { useUncommittedLivePaths } from "./live-paths.ts";
 import {
-  allocateCommentRevealNonce,
-  openGitChangesForComments,
-} from "./open-git-changes.ts";
-import {
   formatCommentsForComposer,
   listProcessableComments,
   type ProcessableCommentItem,
   pathInLiveSet,
+  processableItemLocationText,
 } from "./processable.ts";
+import { revealComment } from "./reveal.ts";
 
 function commentFailureTitleKey(
   reason: CommentFailureReason
 ): `terminal.statusBar.item.comments.failure.${CommentFailureReason}` {
   return `terminal.statusBar.item.comments.failure.${reason}`;
+}
+
+function processableSourceLabelKey(
+  kind: ProcessableCommentItem["kind"]
+):
+  | "terminal.statusBar.item.comments.sourceGit"
+  | "terminal.statusBar.item.comments.sourceMarkdown"
+  | "terminal.statusBar.item.comments.sourceCanvas" {
+  if (kind === "markdown") {
+    return "terminal.statusBar.item.comments.sourceMarkdown";
+  }
+  if (kind === "canvas") {
+    return "terminal.statusBar.item.comments.sourceCanvas";
+  }
+  return "terminal.statusBar.item.comments.sourceGit";
 }
 
 export type CommentsActionDialogResult =
@@ -79,13 +99,23 @@ function CommentsActionDialogBody({
   const gitRoot =
     context.gitRoot ?? context.worktreeRoot ?? context.projectRootPath;
   const livePaths = useUncommittedLivePaths(gitRoot);
-  const items = useMemo(
-    () =>
-      livePaths === null
-        ? []
-        : listProcessableComments(project?.threads, { livePaths }),
-    [livePaths, project?.threads]
+  // livePaths null：仍列 md/canvas；git-diff 在 processable 内因 livePaths 省略而跳过。
+  // livePaths Set：git 路径过滤 + md/canvas。
+  const canvasSurfacesRevision = useSyncExternalStore(
+    onCanvasCommentSurfacesChanged,
+    getCanvasCommentSurfacesRevision,
+    () => 0
   );
+  // Always pass the current surface map (may be empty). Empty ≠ omit:
+  // omit used to mean "no options" but we still want unknown vs soft/located.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: revision drives re-read of module map
+  const items = useMemo(() => {
+    const canvasSurfaces = getCanvasCommentSurfaces();
+    return listProcessableComments(project?.threads, {
+      canvasSurfaces,
+      ...(livePaths === null ? {} : { livePaths }),
+    });
+  }, [canvasSurfacesRevision, livePaths, project?.threads]);
 
   useEffect(() => {
     setTitle(t("terminal.statusBar.item.comments.dialogTitle"));
@@ -121,11 +151,17 @@ function CommentsActionDialogBody({
     if (busy) {
       return;
     }
-    // 对应文件已提交/不在变更中：勿打开空 Changes；提示后显式移除（非后台 prune）。
-    if (
-      livePaths !== null &&
-      !pathInLiveSet(item.path, item.oldPath, livePaths)
-    ) {
+    const gitPathLive =
+      item.kind === "git-diff" && livePaths !== null
+        ? pathInLiveSet(item.path, item.oldPath, livePaths)
+        : undefined;
+    const result = revealComment({
+      context,
+      ...(getGroupId ? { getGroupId } : {}),
+      item,
+      ...(gitPathLive === undefined ? {} : { gitPathLive }),
+    });
+    if (result.kind === "stale-git") {
       setBusy(true);
       try {
         await showAppAlert({
@@ -138,20 +174,8 @@ function CommentsActionDialogBody({
       }
       return;
     }
-    const opened = openGitChangesForComments({
-      context,
-      ...(getGroupId ? { getGroupId } : {}),
-      pendingReveal: {
-        // 优先原 group；stage/unstage 后槽位消失时回退 entry 上存在的 slot。
-        allowGroupFallback: true,
-        group: item.group,
-        line: item.line,
-        nonce: allocateCommentRevealNonce(),
-        path: item.path,
-        side: item.side,
-      },
-    });
-    if (!opened) {
+    // markdown / canvas / git opened paths fall through below
+    if (result.kind === "failed") {
       await showAppAlert({
         body: t("terminal.statusBar.item.comments.jumpFailedBody"),
         title: t("terminal.statusBar.item.comments.jumpFailed"),
@@ -244,7 +268,16 @@ function CommentsActionDialogBody({
     }
     setBusy(true);
     try {
-      const snapshot = items;
+      // Re-project with live surfaces at handoff — do not use a stale list that
+      // was built before the canvas preview registered its surface.
+      const snapshot = listProcessableComments(project?.threads, {
+        canvasSurfaces: getCanvasCommentSurfaces(),
+        ...(livePaths === null ? {} : { livePaths }),
+      });
+      if (snapshot.length === 0) {
+        setBusy(false);
+        return;
+      }
       const payload = formatCommentsForComposer(snapshot);
       const inserted = await insertReviewCommentsIntoTerminalComposer(panelId, {
         count: snapshot.length,
@@ -321,8 +354,8 @@ function CommentsActionDialogBody({
   );
   useContentDialogFooter(setFooter, footer);
 
-  // status 未到 / 刷新失败：加载骨架，避免「无评论」空态闪烁。
-  if (livePaths === null) {
+  // status 未到且尚无任何可展示项：骨架（避免空态闪烁）；有 md/canvas 则直接列。
+  if (livePaths === null && items.length === 0) {
     return (
       <div
         aria-busy="true"
@@ -355,53 +388,69 @@ function CommentsActionDialogBody({
 
   // Host content-dialog body owns scroll (overlay bar + equal px-6). Nested
   // ScrollArea would reserve a classic gutter and make left/right insets look uneven.
+  //
+  // Scheme 2: body primary; meta row is full card width so path sticks left
+  // and Badge sticks right (same right edge as the delete control).
   return (
-    <ul className="flex flex-col gap-2">
+    <ul className="flex flex-col gap-1.5">
       {items.map((item) => {
-        const title = t("terminal.statusBar.item.comments.itemTitle", {
-          line: item.line,
-          path: item.path,
-        });
+        const sourceLabel = t(processableSourceLabelKey(item.kind));
+        const location = processableItemLocationText(item);
+        const jump = () => {
+          jumpTo(item).catch(() => undefined);
+        };
         return (
           <li key={item.commentId}>
             <Item
-              className="w-full items-start justify-between gap-2"
+              className={cn(
+                // Item defaults to flex-wrap + items-center; force a full-width column.
+                "w-full flex-col flex-nowrap items-stretch gap-1.5",
+                "hover:bg-muted/40"
+              )}
               size="sm"
               variant="outline"
             >
+              <div className="flex w-full min-w-0 items-start justify-between gap-2">
+                <button
+                  className="min-w-0 flex-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  disabled={busy}
+                  onClick={jump}
+                  type="button"
+                >
+                  {/* Override ItemTitle defaults (line-clamp-1 / w-fit / font-medium). */}
+                  <ItemTitle className="line-clamp-none block w-full max-w-full whitespace-pre-wrap break-words text-left font-normal text-foreground text-sm leading-snug">
+                    {item.body}
+                  </ItemTitle>
+                </button>
+                <ItemActions className="-mt-0.5 shrink-0">
+                  <Button
+                    aria-label={t("terminal.statusBar.item.comments.deleteOne")}
+                    disabled={busy}
+                    onClick={() => {
+                      onDeleteOne(item).catch(() => undefined);
+                    }}
+                    size="icon-xs"
+                    title={t("terminal.statusBar.item.comments.deleteOne")}
+                    type="button"
+                    variant="ghost"
+                  >
+                    <Trash2 aria-hidden data-icon />
+                  </Button>
+                </ItemActions>
+              </div>
               <button
-                className="flex min-w-0 flex-1 items-start text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                className="flex w-full min-w-0 items-center justify-between gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                 disabled={busy}
-                onClick={() => {
-                  jumpTo(item).catch(() => undefined);
-                }}
+                onClick={jump}
                 type="button"
               >
-                <ItemContent className="min-w-0 items-start text-left">
-                  <ItemTitle className="line-clamp-none w-full max-w-full whitespace-normal break-all font-mono font-normal text-muted-foreground text-xs leading-snug">
-                    {title}
-                  </ItemTitle>
-                  <ItemDescription className="line-clamp-none whitespace-pre-wrap break-words text-left text-foreground">
-                    {item.body}
-                  </ItemDescription>
-                </ItemContent>
+                <span className="min-w-0 flex-1 break-all text-left font-mono text-[11px] text-muted-foreground leading-snug">
+                  {location}
+                </span>
+                <Badge className="shrink-0" size="xs" variant="secondary">
+                  {sourceLabel}
+                </Badge>
               </button>
-              {/* Top-right, same as diff inline comment actions. */}
-              <ItemActions className="-mt-1 shrink-0 items-start self-start">
-                <Button
-                  aria-label={t("terminal.statusBar.item.comments.deleteOne")}
-                  disabled={busy}
-                  onClick={() => {
-                    onDeleteOne(item).catch(() => undefined);
-                  }}
-                  size="icon-xs"
-                  title={t("terminal.statusBar.item.comments.deleteOne")}
-                  type="button"
-                  variant="ghost"
-                >
-                  <Trash2 aria-hidden data-icon />
-                </Button>
-              </ItemActions>
             </Item>
           </li>
         );

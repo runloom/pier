@@ -31,26 +31,37 @@
 import { Pencil, Trash2 } from "lucide-react";
 import { type ReactNode, useCallback, useState } from "react";
 import { Button } from "../../button.tsx";
+import { cn } from "../../utils.ts";
 import { InlineReviewCommentEditor } from "./inline-comment-editor.tsx";
 import type {
+  PierInlineReviewChrome,
   PierInlineReviewHandlers,
   PierInlineReviewLabels,
   PierInlineReviewThread,
 } from "./inline-comment-types.ts";
 
 export function InlineReviewThreadCard({
+  chrome = "card",
   handlers,
+  initialEditing = false,
   labels,
   thread,
 }: {
+  /** @see PierInlineReviewChrome */
+  readonly chrome?: PierInlineReviewChrome;
   readonly handlers: PierInlineReviewHandlers;
+  /** Open directly in edit mode (e.g. Design Mode re-pick of same target). */
+  readonly initialEditing?: boolean;
   readonly labels: PierInlineReviewLabels;
   readonly thread: PierInlineReviewThread;
 }): ReactNode {
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(
+    () => initialEditing && handlers.onEditComment !== undefined
+  );
   const comment = thread.comment;
   const isDeleted = comment.deletedAt !== undefined;
   const onEditComment = handlers.onEditComment;
+  const plain = chrome === "plain";
 
   const handleDelete = useCallback(() => {
     handlers.onDeleteComment(thread.threadId, comment.id).catch(console.error);
@@ -78,8 +89,12 @@ export function InlineReviewThreadCard({
 
   if (editing && onEditComment) {
     return (
-      <div className="w-full px-2 py-1.5" data-slot="pier-review-thread">
+      <div
+        className={cn("w-full", plain ? "p-0" : "px-2 py-1.5")}
+        data-slot="pier-review-thread"
+      >
         <InlineReviewCommentEditor
+          chrome={chrome}
           initialBody={comment.body}
           labels={labels}
           onCancel={() => setEditing(false)}
@@ -91,13 +106,28 @@ export function InlineReviewThreadCard({
   }
 
   return (
-    <div className="w-full px-2 py-1.5" data-slot="pier-review-thread">
-      <div className="flex w-full justify-between gap-4 rounded-2xl border border-border bg-transparent px-3 py-2.5 text-sm">
+    <div
+      className={cn("w-full", plain ? "p-0" : "px-2 py-1.5")}
+      data-slot="pier-review-thread"
+    >
+      <div
+        className={cn(
+          "flex w-full justify-between gap-3 text-sm",
+          plain
+            ? "bg-transparent px-0.5 py-0.5"
+            : "gap-4 rounded-2xl border border-border bg-transparent px-3 py-2.5"
+        )}
+      >
         <div className="min-w-0 flex-1">
           {isDeleted ? (
             <p className="text-muted-foreground italic">{labels.deleted}</p>
           ) : (
-            <p className="whitespace-pre-wrap break-words py-1 text-foreground/90">
+            <p
+              className={cn(
+                "whitespace-pre-wrap break-words text-foreground/90",
+                plain ? "py-0.5" : "py-1"
+              )}
+            >
               {comment.body}
             </p>
           )}

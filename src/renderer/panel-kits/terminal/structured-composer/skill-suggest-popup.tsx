@@ -1,4 +1,4 @@
-import { Zap } from "lucide-react";
+import { SquareSlash, Zap } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
 import type { ComposerSkillQueryStatus } from "./composer-skill-query.ts";
 import type {
@@ -35,10 +35,13 @@ function skillSourceMetaKey(
   source: ComposerSkillSource
 ):
   | "terminal.composer.skillSourceBundled"
+  | "terminal.composer.skillSourceCommand"
   | "terminal.composer.skillSourceGlobal"
   | "terminal.composer.skillSourceInRepo"
   | "terminal.composer.skillSourceProject" {
   switch (source) {
+    case "builtin-command":
+      return "terminal.composer.skillSourceCommand";
     case "bundled":
       return "terminal.composer.skillSourceBundled";
     case "user-global":
@@ -75,6 +78,8 @@ export function SkillSuggestPopup({
   const t = useT();
   const showEmpty = emptyProject || noAgent || showNotSupported;
   const rows: ComposerSuggestRowModel[] = items.map((item) => {
+    // Command descriptions are localized in the query path (mapItem) so
+    // filter matches zh-CN detail text; skills keep frontmatter as-is.
     const description = item.description.trim();
     // Placeholder strings some skills put in frontmatter are not useful copy.
     const detail =
@@ -86,7 +91,12 @@ export function SkillSuggestPopup({
         : null;
     return {
       detail,
-      icon: <Zap aria-hidden="true" />,
+      icon:
+        item.source === "builtin-command" ? (
+          <SquareSlash aria-hidden="true" />
+        ) : (
+          <Zap aria-hidden="true" />
+        ),
       key: `${item.source}:${item.id}`,
       // Id as primary label; insert still uses agent-native invokeText.
       label: item.id,

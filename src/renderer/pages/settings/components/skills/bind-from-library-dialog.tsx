@@ -33,7 +33,7 @@ import {
   openAppContentDialog,
 } from "@/stores/app-content-dialog.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
-import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
+import { useProjectSkillsStore } from "@/stores/project-skills/store.ts";
 
 export function openBindFromLibraryDialog(
   projectRef: ProjectRootRef,

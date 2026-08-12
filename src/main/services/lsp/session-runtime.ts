@@ -1,13 +1,11 @@
 import {
   LSP_MAX_MESSAGE_BYTES,
   type LspSessionCloseCause,
-  type LspSessionClosedEvent,
 } from "@shared/contracts/lsp.ts";
 import {
   cancellableDelay as delay,
   isValidJsonRpcMessage,
   JSON_RPC_OBJECT_SCHEMA,
-  type JsonRpcErrorShape,
   parseErrorShape,
 } from "./json-rpc.ts";
 import { LspLanguageToolsDocuments } from "./language-tools-documents.ts";
@@ -16,33 +14,35 @@ import {
   LspFramingError,
   LspMessageReader,
 } from "./message-codec.ts";
-import type {
-  LspChildProcess,
-  ProcessTreeHandle,
-} from "./process-termination.ts";
+import {
+  type LanguageToolsTextDocument,
+  LSP_REQUEST_TIMEOUT_MS,
+  LSP_SHUTDOWN_RESPONSE_TIMEOUT_MS,
+  LSP_STDERR_LOG_CHUNK_BYTES,
+  LSP_STDERR_LOG_SESSION_BYTES,
+  LspResponseError,
+  type LspSessionPhase,
+  type LspSessionRuntime,
+  type LspSessionRuntimeOptions,
+} from "./session-runtime-types.ts";
 import { LspSessionTerminationController } from "./session-termination-controller.ts";
 import { LspStderrLogger } from "./stderr-logger.ts";
 
-export const LSP_REQUEST_TIMEOUT_MS = 30_000;
-export const LSP_SHUTDOWN_RESPONSE_TIMEOUT_MS = 2000;
-export const LSP_STDERR_LOG_CHUNK_BYTES = 8 * 1024;
-export const LSP_STDERR_LOG_SESSION_BYTES = 64 * 1024;
-
-export type LspSessionPhase =
-  | "running"
-  | "initializing"
-  | "ready"
-  | "shutting-down"
-  | "exit-sent"
-  | "terminating"
-  | "closed";
-
-export type LspSessionClientRole = "editor" | "language-tools";
-
-export interface LanguageToolsTextDocument {
-  languageId: string;
-  uri: string;
-}
+export type {
+  LanguageToolsTextDocument,
+  LspSessionClientRole,
+  LspSessionPhase,
+  LspSessionRuntime,
+  LspSessionRuntimeOptions,
+  RuntimeLogger,
+} from "./session-runtime-types.ts";
+export {
+  LSP_REQUEST_TIMEOUT_MS,
+  LSP_SHUTDOWN_RESPONSE_TIMEOUT_MS,
+  LSP_STDERR_LOG_CHUNK_BYTES,
+  LSP_STDERR_LOG_SESSION_BYTES,
+  LspResponseError,
+} from "./session-runtime-types.ts";
 
 interface PendingLspRequest {
   reject: (reason: Error) => void;
@@ -50,65 +50,10 @@ interface PendingLspRequest {
   timeout: NodeJS.Timeout;
 }
 
-export interface RuntimeLogger {
-  error(...values: unknown[]): void;
-  warn(...values: unknown[]): void;
-}
-
-export interface LspSessionRuntimeOptions {
-  child: LspChildProcess;
-  clientRole: LspSessionClientRole;
-  logger?: RuntimeLogger;
-  onMessage: (sessionId: string, jsonBody: string) => void;
-  onOutcome: (event: LspSessionClosedEvent) => void;
-  processTree: ProcessTreeHandle;
-  rootPath: string;
-  serverId: string;
-  sessionId: string;
-  webContentsId: number;
-  workspaceKey: string;
-}
-
 interface Deferred<T> {
   promise: Promise<T>;
   reject(reason?: unknown): void;
   resolve(value: T | PromiseLike<T>): void;
-}
-
-export class LspResponseError extends Error {
-  readonly code: number;
-  readonly data: unknown;
-
-  constructor(error: JsonRpcErrorShape) {
-    super(error.message);
-    this.name = "LspResponseError";
-    this.code = error.code;
-    this.data = error.data;
-  }
-}
-
-export interface LspSessionRuntime {
-  readonly child: LspChildProcess;
-  readonly clientRole: LspSessionClientRole;
-  close(cause: LspSessionCloseCause): Promise<void>;
-  ensureInitialized(params: Record<string, unknown>): Promise<void>;
-  ensureLanguageToolsDocumentOpen(
-    document: LanguageToolsTextDocument,
-    readText: () => Promise<string>
-  ): Promise<void>;
-  readonly phase: LspSessionPhase;
-  readonly processTree: ProcessTreeHandle;
-  request(method: string, params: unknown): Promise<unknown>;
-  readonly requestedCloseCause: LspSessionCloseCause | null;
-  retryTermination(): Promise<void>;
-  readonly rootPath: string;
-  send(jsonBody: string): boolean;
-  readonly serverId: string;
-  readonly sessionId: string;
-  readonly terminal: Promise<void>;
-  readonly terminationAttempt: Promise<void> | null;
-  readonly webContentsId: number;
-  readonly workspaceKey: string;
 }
 
 export function createLspSessionRuntime(
@@ -309,6 +254,24 @@ export function createLspSessionRuntime(
     termination.beginAbnormal("failed");
   });
 
+  const mergeInitializationOptions = (
+    params: Record<string, unknown>
+  ): Record<string, unknown> => {
+    const extra = options.initializationOptions;
+    if (!extra || Object.keys(extra).length === 0) {
+      return params;
+    }
+    const existing = params.initializationOptions;
+    const base =
+      existing && typeof existing === "object" && !Array.isArray(existing)
+        ? (existing as Record<string, unknown>)
+        : {};
+    return {
+      ...params,
+      initializationOptions: { ...base, ...extra },
+    };
+  };
+
   const send = (jsonBody: string): boolean => {
     if (
       !isWritable() ||
@@ -325,12 +288,47 @@ export function createLspSessionRuntime(
     if (!isValidJsonRpcMessage(value)) {
       return false;
     }
+    let outbound = jsonBody;
+    if (
+      value &&
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      "method" in value &&
+      (value as { method?: unknown }).method === "initialize" &&
+      options.initializationOptions
+    ) {
+      const message = value as {
+        id?: unknown;
+        jsonrpc?: unknown;
+        method: string;
+        params?: unknown;
+      };
+      const rawParams =
+        message.params &&
+        typeof message.params === "object" &&
+        !Array.isArray(message.params)
+          ? (message.params as Record<string, unknown>)
+          : {};
+      message.params = mergeInitializationOptions(rawParams);
+      outbound = JSON.stringify(message);
+      value = message;
+    }
+    if (Buffer.byteLength(outbound, "utf8") > LSP_MAX_MESSAGE_BYTES) {
+      return false;
+    }
     try {
-      options.child.stdin.write(encodeLspMessage(jsonBody));
-      if (value.method === "initialized") {
+      options.child.stdin.write(encodeLspMessage(outbound));
+      if (
+        value &&
+        typeof value === "object" &&
+        "method" in value &&
+        (value as { method?: unknown }).method === "initialized"
+      ) {
         phase = "ready";
       }
-      documents.observeOutbound(value);
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        documents.observeOutbound(value as Record<string, unknown>);
+      }
       return true;
     } catch (error) {
       logger.error("[lsp] failed to write to session", {
@@ -383,7 +381,7 @@ export function createLspSessionRuntime(
     }
     phase = "initializing";
     initializationPromise = (async () => {
-      await request("initialize", params);
+      await request("initialize", mergeInitializationOptions(params));
       if (
         !send(
           JSON.stringify({ jsonrpc: "2.0", method: "initialized", params: {} })

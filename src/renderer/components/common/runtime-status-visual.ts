@@ -3,6 +3,7 @@ import type { TaskRunNodeStatus } from "@shared/contracts/tasks.ts";
 import {
   BanIcon,
   CircleCheckIcon,
+  CirclePauseIcon,
   Loader2Icon,
   type LucideIcon,
   OctagonXIcon,
@@ -96,7 +97,14 @@ export function runtimeStatusVisual(
         iconClassName: "",
         textClassName: runtimeStatusColorClassName(status),
       };
+    // waiting = 等用户确认/下一步（amber 注意力色 + 暂停，非告警三角）
     case "waiting":
+      return {
+        Icon: CirclePauseIcon,
+        iconClassName: "",
+        textClassName: runtimeStatusColorClassName(status),
+      };
+    // blocked = 卡住/不可继续，保留 caution 三角
     case "blocked":
       return {
         Icon: TriangleAlertIcon,

@@ -156,6 +156,11 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
 6. Start from the closest thin template in `templates/`.
    - **`docs`**: start from `templates/docs.canvas.tsx` and use **`DocsShell`**
      for left nav + right article (do not hand-roll dual ScrollArea shells).
+     Body text uses the host **document font**; live component demos inside
+     the article keep the **UI font**.
+   - **`composition` / `kit`**: use the **UI font** only — never the host
+     document font or a custom reading serif (design frames and component
+     catalogs must look like product UI).
    - Command inventories: one Accordion list; badge only unfinished items.
 7. Export valid `canvas` metadata.
 8. Do **not** require `instance.json` methodology fields.

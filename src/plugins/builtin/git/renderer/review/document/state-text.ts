@@ -3,6 +3,10 @@ import type { GitReviewFileSection } from "@shared/contracts/git/review.ts";
 import { pluginText } from "../../plugin-text.ts";
 
 type ReviewStateSection = Extract<GitReviewFileSection, { kind: "state" }>;
+type ReviewConflictSection = Extract<
+  GitReviewFileSection,
+  { kind: "conflict" }
+>;
 
 const STATE_SECTION_TEXT = {
   binary: { fallback: "Binary file", key: "reviewStateBinary" },
@@ -22,6 +26,68 @@ const STATE_SECTION_TEXT = {
   ReviewStateSection["reason"],
   { readonly fallback: string; readonly key: string }
 >;
+
+/** Localized conflict body copy for section notices / file-level cards. */
+export function conflictSectionText(
+  context: RendererPluginContext,
+  section: ReviewConflictSection,
+  locale: string
+): string {
+  switch (section.presentation) {
+    case "markers-text":
+      return pluginText(
+        context,
+        "reviewStateConflictMarkersDetail",
+        "Merge conflict — accept current, incoming, or both below. When all regions are accepted, Pier saves and stages the file.",
+        undefined,
+        locale
+      );
+    case "file-level":
+      return pluginText(
+        context,
+        "reviewStateConflictFileLevelDetail",
+        "Merge conflict without markers — keep one side or open the file.",
+        undefined,
+        locale
+      );
+    case "binary":
+      return pluginText(
+        context,
+        "reviewStateConflictBinaryDetail",
+        "Binary merge conflict — keep one side or open the file.",
+        undefined,
+        locale
+      );
+    case "tooLarge":
+      return pluginText(
+        context,
+        "reviewStateConflictTooLargeDetail",
+        "Conflict file is too large to preview — open the file or keep one side.",
+        undefined,
+        locale
+      );
+    case "invalidEncoding":
+      return pluginText(
+        context,
+        "reviewStateConflictInvalidEncodingDetail",
+        "Conflict file has unsupported encoding — open the file or keep one side.",
+        undefined,
+        locale
+      );
+    case "readError":
+      return pluginText(
+        context,
+        "reviewStateConflictReadErrorDetail",
+        "Conflict file could not be read — open the file to resolve.",
+        undefined,
+        locale
+      );
+    default: {
+      const exhaustive: never = section.presentation;
+      return exhaustive;
+    }
+  }
+}
 
 export function stateSectionText(
   context: RendererPluginContext,

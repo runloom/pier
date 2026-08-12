@@ -27,6 +27,7 @@ export type PierFileTreeStyle = React.CSSProperties & {
   "--trees-search-fg-override"?: string;
   "--trees-selected-bg-override"?: string;
   "--trees-selected-fg-override"?: string;
+  "--trees-selected-focused-border-color-override"?: string;
 };
 
 /**
@@ -97,17 +98,18 @@ export function pierFileTreeStyle(
     "--trees-bg-override": "var(--sidebar)",
     "--trees-fg-override": "var(--sidebar-foreground)",
     "--trees-fg-muted-override": "var(--muted-foreground)",
-    // Mix against sidebar (not canvas): interactive-hover uses --background and
-    // disappears on muted sidebars; keep hover < selected hierarchy.
-    "--trees-bg-muted-override":
-      "color-mix(in oklab, var(--foreground) 10%, var(--sidebar))",
+    // Sidebar list wash tokens (globals.css): calibrated for muted chrome,
+    // light/dark split. Do not reuse canvas --interactive-* (wrong base).
+    "--trees-bg-muted-override": "var(--list-hover-bg)",
     "--trees-input-bg-override": "var(--muted)",
     "--trees-padding-inline-override": "4px",
     "--trees-border-color-override": "var(--sidebar-border)",
-    "--trees-focus-ring-color-override": "var(--ring)",
+    // Soft product --ring via --list-focus-ring; both slots same token so
+    // selected+focused never falls back to trees accent/primary outline.
+    "--trees-focus-ring-color-override": "var(--list-focus-ring)",
+    "--trees-selected-focused-border-color-override": "var(--list-focus-ring)",
     "--trees-accent-override": "var(--primary)",
-    "--trees-selected-bg-override":
-      "color-mix(in oklab, var(--foreground) 16%, var(--sidebar))",
+    "--trees-selected-bg-override": "var(--list-active-bg)",
     "--trees-selected-fg-override": "var(--sidebar-foreground)",
     "--trees-search-bg-override": "var(--muted)",
     "--trees-search-fg-override": "var(--foreground)",

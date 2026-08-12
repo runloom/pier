@@ -29,21 +29,32 @@ import {
   useRef,
   useState,
 } from "react";
+import { Button } from "../../button.tsx";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupTextarea,
 } from "../../input-group.tsx";
-import type { PierInlineReviewLabels } from "./inline-comment-types.ts";
+import { Textarea } from "../../textarea.tsx";
+import type {
+  PierInlineReviewChrome,
+  PierInlineReviewLabels,
+} from "./inline-comment-types.ts";
 
 export function InlineReviewCommentEditor({
+  chrome = "card",
   initialBody = "",
   labels,
   onCancel,
   onEmptyDismiss,
   onSubmit,
 }: {
+  /**
+   * `card` — Diff 槽：InputGroup 一体（字段+提交角标）。
+   * `plain` — Popover 面板：shadcn 表单 = 带边框 Textarea + 下方提交。
+   */
+  readonly chrome?: PierInlineReviewChrome;
   readonly initialBody?: string;
   readonly labels: PierInlineReviewLabels;
   readonly onCancel: () => void;
@@ -54,6 +65,7 @@ export function InlineReviewCommentEditor({
   readonly onEmptyDismiss?: () => void;
   readonly onSubmit: (body: string) => Promise<boolean>;
 }): ReactNode {
+  const plain = chrome === "plain";
   const [body, setBody] = useState(initialBody);
   const [submitting, setSubmitting] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -119,31 +131,68 @@ export function InlineReviewCommentEditor({
     }
   }, [body, onSubmit, submitting]);
 
+  const onBlurField = (event: React.FocusEvent<HTMLTextAreaElement>): void => {
+    const movingWithinEditor = containerRef.current?.contains(
+      event.relatedTarget as Node
+    );
+    if (movingWithinEditor === true) {
+      return;
+    }
+    dismissIfEmpty();
+  };
+
+  const onKeyDownField = (
+    event: React.KeyboardEvent<HTMLTextAreaElement>
+  ): void => {
+    if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+      event.preventDefault();
+      handleSubmit().catch(console.error);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      onCancel();
+    }
+  };
+
+  // Popover/Dialog: shadcn form pattern — bordered field, actions on the next row.
+  // Popover is the panel; Textarea keeps normal control chrome (border + focus ring).
+  if (plain) {
+    return (
+      <div className="flex w-full flex-col gap-2" ref={containerRef}>
+        <Textarea
+          aria-label={labels.title}
+          className="field-sizing-content min-h-16 resize-none"
+          onBlur={onBlurField}
+          onChange={(event) => setBody(event.target.value)}
+          onKeyDown={onKeyDownField}
+          placeholder={labels.inputPlaceholder}
+          ref={textareaRef}
+          value={body}
+        />
+        <div className="flex justify-end">
+          <Button
+            disabled={!canSubmit}
+            onClick={() => {
+              handleSubmit().catch(console.error);
+            }}
+            type="button"
+            variant="default"
+          >
+            {labels.submit}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full" ref={containerRef}>
       <InputGroup className="border-border bg-transparent">
         <InputGroupTextarea
           aria-label={labels.title}
           className="field-sizing-content min-h-16 px-3 py-2.5"
-          onBlur={(event) => {
-            const movingWithinEditor = containerRef.current?.contains(
-              event.relatedTarget as Node
-            );
-            if (movingWithinEditor === true) {
-              return;
-            }
-            dismissIfEmpty();
-          }}
+          onBlur={onBlurField}
           onChange={(event) => setBody(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-              event.preventDefault();
-              handleSubmit().catch(console.error);
-            } else if (event.key === "Escape") {
-              event.preventDefault();
-              onCancel();
-            }
-          }}
+          onKeyDown={onKeyDownField}
           placeholder={labels.inputPlaceholder}
           ref={textareaRef}
           value={body}

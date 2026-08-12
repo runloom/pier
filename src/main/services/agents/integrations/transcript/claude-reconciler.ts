@@ -1,20 +1,31 @@
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import {
+  classifyClaudeStyleAiTitleLine,
+  classifyClaudeTranscriptTerminalLine,
+} from "./claude-style-interrupt.ts";
+import { wrapClaudeFamilyProjectsPathResolve } from "./projects-jsonl-path.ts";
+import {
   createTranscriptTailReconciler,
   type TranscriptTailReconciler,
-  type TranscriptTerminalRecord,
   type TranscriptTitleListener,
-  type TranscriptTitleRecord,
 } from "./tail-reconciler.ts";
 
 export type ClaudeTranscriptReconciler = TranscriptTailReconciler;
 
-/** Claude transcript supplies only the Esc/Ctrl+C interruption terminal fact. */
+/**
+ * Claude transcript 终态证据：
+ * - 用户中断标记 → TurnInterrupted
+ * - assistant stop_reason 终态 → TurnCompleted（补 Stop hook 漏报）
+ */
 export const CLAUDE_TRANSCRIPT_TERMINAL_EVIDENCE = [
   {
     nativeEvent: "claude.transcript.user_interrupt",
-    pierEvent: "TurnInterrupted",
+    pierEvent: "TurnInterrupted" as const,
+  },
+  {
+    nativeEvent: "claude.transcript.assistant_stop",
+    pierEvent: "TurnCompleted" as const,
   },
 ] as const;
 
@@ -27,134 +38,61 @@ interface ClaudeTranscriptReconcilerOpts {
 }
 
 /**
- * Claude Code 兼容性中断对账器。
+ * Claude Code 兼容性终态对账器。
  *
- * Claude 的 Stop hook 在用户 Esc/Ctrl+C 中断时**不触发**（上游缺口），
- * hook 面板会滞留在 processing/tool 直到 TTL。中断时 CLI 会向 transcript
- * 追加一条主链 user 记录，content 恰为单一 text block
- * `[Request interrupted by user]`（工具中中断为 `... for tool use]`）——
- * 这是 CLI 自己写入的结构化标记，不是模型或用户产出。
+ * Claude 的 Stop hook 在 Esc/Ctrl+C 时**不触发**，且实机正常完成也经常
+ * 漏报 Stop（PierDev 会话可连续只有 PromptSubmit 无 Stop）。对账两条主链：
+ * 1. 中断标记 `[Request interrupted by user]` → TurnInterrupted
+ * 2. assistant `stop_reason` ∈ end_turn|stop_sequence|max_tokens →
+ *    TurnCompleted（tool_use 不算）
  *
  * 纪律边界：
  * - 只消费**增量区间**（watcher 建立后追加的行）且 owner 唯一时才派发；
- *   历史记录、resume 注入的长 summary（内嵌该字符串但非整块相等）、
+ *   历史记录、resume 注入的长 summary（内嵌中断子串但非整块相等）、
  *   sidechain（子代理链）一律不算。
- * - 只补 `TurnInterrupted`（→ready）。正常完成仍走 Stop hook 的 advisory
- *   语义；transcript 的 `stop_reason: end_turn` 不用作完成对账
- *   （sidechain/中间消息噪声大, Stop hook 已覆盖该路径）。
- * - CLAUDE_CONFIG_DIR 自定义目录不在根内 → 静默不生效, 退化为现状。
+ * - 只补可信终态（→ready）。不投影 tool / waiting / 内容。
+ * - hook 常只带 sessionId、不带 transcriptPath：按
+ *   `~/.claude/projects/<cwd-enc>/<sessionId>.jsonl` 扫描补路径
+ *   （与 Qoder/Codebuddy 同布局）。
+ * - `CLAUDE_CONFIG_DIR` 自定义目录时通过 `transcriptRoot` / 环境变量根解析。
  */
 export function createClaudeTranscriptReconciler(
   opts: ClaudeTranscriptReconcilerOpts
 ): ClaudeTranscriptReconciler {
-  return createTranscriptTailReconciler({
+  const transcriptRoot = resolve(
+    opts.transcriptRoot ?? defaultClaudeProjectsRoot()
+  );
+  const pathCache = new Map<string, string>();
+  const inner = createTranscriptTailReconciler({
     agent: "claude",
-    classifyLine: classifyClaudeTranscriptLine,
-    classifyTitleLine: classifyClaudeTranscriptTitleLine,
+    classifyLine: (line) =>
+      classifyClaudeTranscriptTerminalLine(
+        line,
+        CLAUDE_TRANSCRIPT_TERMINAL_EVIDENCE[0].nativeEvent,
+        CLAUDE_TRANSCRIPT_TERMINAL_EVIDENCE[1].nativeEvent
+      ),
+    classifyTitleLine: (line) =>
+      classifyClaudeStyleAiTitleLine(line, "claude.transcript.ai_title"),
     onTerminalEvent: opts.onTerminalEvent,
     ...(opts.onTitleRecord ? { onTitleRecord: opts.onTitleRecord } : {}),
-    transcriptRoot:
-      opts.transcriptRoot ?? resolve(join(homedir(), ".claude", "projects")),
+    transcriptRoot,
+  });
+
+  return wrapClaudeFamilyProjectsPathResolve({
+    agent: "claude",
+    inner,
+    pathCache,
+    projectsRoot: transcriptRoot,
   });
 }
 
-/**
- * Claude Code 自己写进 transcript 的会话名——这就是「尽量用 agent 自身能力」
- * 的正确形态：不起进程、不花 token、不需要标题专用模型入口。
- *
- * **只收 `ai-title`**——CLI 自己生成的摘要，是这里唯一真正属于 agent 的标题。
- *
- * `custom-title` / `agent-name` 明确**不收**：实测它们装的是 Pier 自己经
- * `derive-claude-session-title` 双写回去的 `hookSpecificOutput.sessionTitle`，
- * 值与我方派生逐字相同（含 `…` 截断标记，也含 `·` / `继续` / 裸临时路径 /
- * `<task-notification>` 这类只有我方截断器会产出的退化值），两者之间也彼此同值。
- * 收下等于把自己的 prompt 截断洗成更高的 provider 秩；又因为它们**先到**
- * （实测 79 个会话里 71 个先出现 custom-title），同秩不覆盖会把随后真正的
- * `ai-title` 永久挡在门外——比不接 provider 秩更糟。
- *
- * 纪律边界：这里只做 provider 秩（介于 prompt 与 user 之间），仍然低于 Pier 侧
- * 用户改名；同秩不覆盖，所以 `ai-title` 反复重算不会让标题一直抖动。
- * 格式变化 / 上游删字段 → 静默失效，标题退回首条 prompt 派生。
- */
-function classifyClaudeTranscriptTitleLine(
-  line: string
-): TranscriptTitleRecord | null {
-  // 廉价预筛：与终态分类同理，避免逐行全量 JSON.parse。
-  if (!line.includes("ai-title")) {
-    return null;
+/** `CLAUDE_CONFIG_DIR/projects` 或默认 `~/.claude/projects`。 */
+export function defaultClaudeProjectsRoot(
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const configDir = env.CLAUDE_CONFIG_DIR?.trim();
+  if (configDir) {
+    return join(configDir, "projects");
   }
-  const parsed = JSON.parse(line) as {
-    aiTitle?: unknown;
-    sessionId?: unknown;
-    type?: unknown;
-  };
-  if (!(parsed.type === "ai-title" && typeof parsed.aiTitle === "string")) {
-    return null;
-  }
-  return titleRecord(
-    "claude.transcript.ai_title",
-    typeof parsed.sessionId === "string" ? parsed.sessionId.trim() : "",
-    parsed.aiTitle
-  );
-}
-
-function titleRecord(
-  nativeEvent: string,
-  sessionId: string,
-  raw: string
-): TranscriptTitleRecord | null {
-  const title = raw.trim();
-  if (!title) {
-    return null;
-  }
-  return { nativeEvent, sessionId, title };
-}
-
-const INTERRUPT_MARKERS = new Set([
-  "[Request interrupted by user]",
-  "[Request interrupted by user for tool use]",
-]);
-
-function classifyClaudeTranscriptLine(
-  line: string
-): TranscriptTerminalRecord | null {
-  // 廉价预筛：claude transcript 行高频且可达数 MB，避免逐行全量 JSON.parse。
-  if (!line.includes("[Request interrupted by user")) {
-    return null;
-  }
-  const parsed = JSON.parse(line) as {
-    isSidechain?: unknown;
-    message?: { content?: unknown };
-    type?: unknown;
-  };
-  if (parsed.type !== "user" || parsed.isSidechain === true) {
-    return null;
-  }
-  const content = parsed.message?.content;
-  if (!isExactInterruptMarker(content)) {
-    return null;
-  }
-  return {
-    ...CLAUDE_TRANSCRIPT_TERMINAL_EVIDENCE[0],
-    turnId: "",
-  };
-}
-
-/**
- * 整块相等才算中断标记：resume/compact 注入的 user 消息可能把该字符串
- * 内嵌进长文本（实测存在），子串匹配会伪造中断终态。
- */
-function isExactInterruptMarker(content: unknown): boolean {
-  if (typeof content === "string") {
-    return INTERRUPT_MARKERS.has(content);
-  }
-  if (!Array.isArray(content) || content.length !== 1) {
-    return false;
-  }
-  const block = content[0] as { text?: unknown; type?: unknown };
-  return (
-    block?.type === "text" &&
-    typeof block.text === "string" &&
-    INTERRUPT_MARKERS.has(block.text)
-  );
+  return join(homedir(), ".claude", "projects");
 }

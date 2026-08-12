@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  computeDocumentFontFamily,
   computeMonoFontFamily,
   computeMonoFontFamilyList,
   detachFontListener,
   initFont,
+  sanitizeDocFontPrimary,
   useFontStore,
 } from "@/stores/font.store.ts";
 
@@ -13,6 +15,8 @@ describe("font.store — monoFontSize / codeFontSize", () => {
     useFontStore.setState({
       uiFontFamily: "",
       monoFontFamily: "",
+      docFontMode: "ui",
+      docFontFamily: "",
       monoFontSize: 13,
       codeFontSize: 13,
     });
@@ -31,6 +35,8 @@ describe("font.store — monoFontSize / codeFontSize", () => {
     useFontStore.getState()._hydrate({
       uiFontFamily: "",
       monoFontFamily: "Fira Code",
+      docFontMode: "ui",
+      docFontFamily: "",
       monoFontSize: 16,
       codeFontSize: 15,
     });
@@ -43,12 +49,30 @@ describe("font.store — monoFontSize / codeFontSize", () => {
     ).toBe("15px");
   });
 
+  it("_hydrate custom document font 写入 --pier-document-font-family", () => {
+    useFontStore.getState()._hydrate({
+      uiFontFamily: "HarmonyOS Sans SC",
+      monoFontFamily: "",
+      docFontMode: "custom",
+      docFontFamily: "Noto Serif SC",
+      monoFontSize: 13,
+      codeFontSize: 13,
+    });
+    const doc = document.documentElement.style.getPropertyValue(
+      "--pier-document-font-family"
+    );
+    expect(doc.startsWith('"Noto Serif SC"')).toBe(true);
+    expect(doc).toContain("serif");
+  });
+
   it("setMonoFontSize 调 IPC update 并写回 state", async () => {
     const updateMock = vi.fn(async (patch: { monoFontSize?: number }) => ({
       monoFontSize: patch.monoFontSize ?? 13,
       codeFontSize: 13,
       monoFontFamily: "",
       uiFontFamily: "",
+      docFontMode: "ui",
+      docFontFamily: "",
       stylePresetId: "pierre",
       theme: "system",
       language: "system",
@@ -72,6 +96,8 @@ describe("font.store — monoFontSize / codeFontSize", () => {
       codeFontSize: patch.codeFontSize ?? 13,
       monoFontFamily: "",
       uiFontFamily: "",
+      docFontMode: "ui",
+      docFontFamily: "",
       stylePresetId: "pierre",
       theme: "system",
       language: "system",
@@ -95,6 +121,8 @@ describe("font.store — monoFontSize / codeFontSize", () => {
   it("initFont 订阅 preferences.onChanged 并跨窗同步 codeFontSize", async () => {
     interface FontPrefsSlice {
       codeFontSize: number;
+      docFontFamily: string;
+      docFontMode: "ui" | "custom";
       monoFontFamily: string;
       monoFontSize: number;
       uiFontFamily: string;
@@ -104,6 +132,8 @@ describe("font.store — monoFontSize / codeFontSize", () => {
       async (): Promise<FontPrefsSlice> => ({
         uiFontFamily: "",
         monoFontFamily: "",
+        docFontMode: "ui",
+        docFontFamily: "",
         monoFontSize: 13,
         codeFontSize: 13,
       })
@@ -133,6 +163,8 @@ describe("font.store — monoFontSize / codeFontSize", () => {
     changed?.({
       uiFontFamily: "",
       monoFontFamily: "",
+      docFontMode: "ui",
+      docFontFamily: "",
       monoFontSize: 13,
       codeFontSize: 18,
     });
@@ -140,6 +172,26 @@ describe("font.store — monoFontSize / codeFontSize", () => {
     expect(
       document.documentElement.style.getPropertyValue("--pier-code-font-size")
     ).toBe("18px");
+  });
+});
+
+describe("computeDocumentFontFamily", () => {
+  it("ui 模式跟随界面字体栈", () => {
+    const ui = computeDocumentFontFamily("ui", "HarmonyOS Sans SC", "");
+    expect(ui.startsWith('"HarmonyOS Sans SC"')).toBe(true);
+    expect(ui).toContain("sans-serif");
+  });
+
+  it("custom 模式使用文档衬线回落链", () => {
+    const doc = computeDocumentFontFamily("custom", "", "Noto Serif SC");
+    expect(doc.startsWith('"Noto Serif SC"')).toBe(true);
+    expect(doc).toContain("Songti SC");
+    expect(doc.endsWith("serif")).toBe(true);
+  });
+
+  it("sanitize 拒绝 CSS 注入", () => {
+    expect(sanitizeDocFontPrimary("foo; background: red")).toBe("");
+    expect(sanitizeDocFontPrimary("Noto Serif SC")).toBe("Noto Serif SC");
   });
 });
 

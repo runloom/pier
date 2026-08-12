@@ -37,6 +37,9 @@ coverage/
 test-results/
 playwright-report/
 
+# Agent cancel capture scratch (remote/local Esc 语料)
+.tmp-cancel-capture/
+
 # Editor / OS
 .idea/
 .vscode/
@@ -98,3 +101,8 @@ playwright-report/
 # Canonical content is resources/system-skills/<id>; never treat library as
 # the edit source. `pier-` prefix is reserved for system skills.
 .pier/skills/library/pier-*/
+
+# Worktree incarnation registry (runtime local state; path → UUID).
+# Written by worktree identity services; never commit.
+.pier/worktree-incarnations.json
+

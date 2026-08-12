@@ -4,7 +4,7 @@ import {
   emptyDraft,
   type ImportCandidateView,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
+} from "@/stores/project-skills/store.ts";
 import { commitSkillsIntent } from "./apply-flow.ts";
 import {
   discardPreparedCandidate,
@@ -27,10 +27,10 @@ export function useSkillsSectionActions(args: {
   selectProject: (projectRef: ProjectSummary["projectRef"] | null) => void;
   setAdoptPending: (pending: boolean) => void;
   setDraft: (
-    draft: import("@/stores/project-skills.store.ts").SkillsUiDraft | null
+    draft: import("@/stores/project-skills/store.ts").SkillsUiDraft | null
   ) => void;
   setMode: (
-    mode: import("@/stores/project-skills.store.ts").SkillsViewMode
+    mode: import("@/stores/project-skills/store.ts").SkillsViewMode
   ) => void;
   snapshot: ReturnType<typeof useProjectSkillsStore.getState>["snapshot"];
 }) {

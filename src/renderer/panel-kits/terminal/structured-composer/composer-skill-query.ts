@@ -2,7 +2,7 @@ import type { ProjectRootRef } from "@shared/contracts/project-skills.ts";
 import {
   isProjectSummary,
   normalizeSnapshot,
-} from "@/stores/project-skills-model.ts";
+} from "@/stores/project-skills/model.ts";
 import {
   buildComposerSkillSuggestItems,
   type ComposerSkillSuggestItem,
@@ -70,34 +70,20 @@ async function resolveProjectRef(
   return exact?.projectRef ?? list[0]?.projectRef ?? null;
 }
 
-async function loadItemsForAgent(
+/** Empty disk layers — still exposes bundled skills + built-in commands. */
+function surfaceOnlyItems(agentKind: string): ComposerSkillSuggestItem[] {
+  return buildComposerSkillSuggestItems(
+    { skills: [], unmanagedSkills: [], userGlobalSkills: [] },
+    agentKind
+  );
+}
+
+function rememberItems(
   projectRootPath: string,
-  agentKind: string
-): Promise<ComposerSkillSuggestItem[]> {
-  ensureInvalidationListener();
-  const now = Date.now();
-  if (
-    cache &&
-    cache.projectRootPath === projectRootPath &&
-    now - cache.loadedAt < CACHE_TTL_MS
-  ) {
-    const hit = cache.itemsByAgent.get(agentKind);
-    if (hit) {
-      return hit;
-    }
-  }
-
-  const projectRef = await resolveProjectRef(projectRootPath);
-  if (!projectRef) {
-    return [];
-  }
-  const raw = await window.pier.projectSkills.snapshot(projectRef);
-  const snapshot = normalizeSnapshot(raw);
-  if (!snapshot) {
-    return [];
-  }
-
-  const items = buildComposerSkillSuggestItems(snapshot, agentKind);
+  agentKind: string,
+  items: ComposerSkillSuggestItem[],
+  now: number
+): ComposerSkillSuggestItem[] {
   if (
     !(
       cache &&
@@ -115,6 +101,50 @@ async function loadItemsForAgent(
   return items;
 }
 
+async function loadItemsForAgent(
+  projectRootPath: string,
+  agentKind: string
+): Promise<ComposerSkillSuggestItem[]> {
+  ensureInvalidationListener();
+  const now = Date.now();
+  if (
+    cache &&
+    cache.projectRootPath === projectRootPath &&
+    now - cache.loadedAt < CACHE_TTL_MS
+  ) {
+    const hit = cache.itemsByAgent.get(agentKind);
+    if (hit) {
+      return hit;
+    }
+  }
+
+  // No workspace path — pure surface catalog; safe to cache (no disk to retry).
+  if (!projectRootPath) {
+    return rememberItems(
+      projectRootPath,
+      agentKind,
+      surfaceOnlyItems(agentKind),
+      now
+    );
+  }
+
+  const projectRef = await resolveProjectRef(projectRootPath);
+  if (!projectRef) {
+    // Warm-up / empty projects list: still surface commands+bundled, but do
+    // **not** TTL-cache — next open should re-resolve so disk skills appear.
+    return surfaceOnlyItems(agentKind);
+  }
+  const raw = await window.pier.projectSkills.snapshot(projectRef);
+  const snapshot = normalizeSnapshot(raw);
+  if (!snapshot) {
+    // Malformed snapshot: surface fallback without pinning a 30s empty-disk cache.
+    return surfaceOnlyItems(agentKind);
+  }
+
+  const items = buildComposerSkillSuggestItems(snapshot, agentKind);
+  return rememberItems(projectRootPath, agentKind, items, now);
+}
+
 /**
  * Debounced skill list client for the composer skill popup.
  * Mirrors composer-path-query: search() returns a cancel function.
@@ -123,6 +153,11 @@ export function createComposerSkillQueryClient(): {
   dispose: () => void;
   search: (args: {
     agentKind: string;
+    /**
+     * Optional map before filter (e.g. localize command descriptions so
+     * query matches zh-CN detail text).
+     */
+    mapItem?: (item: ComposerSkillSuggestItem) => ComposerSkillSuggestItem;
     onUpdate: (snap: ComposerSkillQuerySnapshot) => void;
     projectRootPath: string;
     query: string;
@@ -140,7 +175,7 @@ export function createComposerSkillQueryClient(): {
         timer = null;
       }
     },
-    search: ({ agentKind, onUpdate, projectRootPath, query }) => {
+    search: ({ agentKind, mapItem, onUpdate, projectRootPath, query }) => {
       if (timer != null) {
         clearTimeout(timer);
         timer = null;
@@ -155,14 +190,20 @@ export function createComposerSkillQueryClient(): {
             if (disposed || id !== requestId) {
               return;
             }
-            const items = filterComposerSkillSuggestItems(all, query);
+            const prepared = mapItem ? all.map(mapItem) : all;
+            const items = filterComposerSkillSuggestItems(prepared, query);
             onUpdate({ items, status: "done" });
           })
           .catch(() => {
             if (disposed || id !== requestId) {
               return;
             }
-            onUpdate({ items: [], status: "error" });
+            // Skills IPC failed — still offer static surface catalog (no disk).
+            const prepared = mapItem
+              ? surfaceOnlyItems(agentKind).map(mapItem)
+              : surfaceOnlyItems(agentKind);
+            const items = filterComposerSkillSuggestItems(prepared, query);
+            onUpdate({ items, status: "done" });
           });
       }, 80);
 

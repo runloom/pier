@@ -11,15 +11,22 @@ import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { python } from "@codemirror/lang-python";
 import { rust } from "@codemirror/lang-rust";
+import { vue } from "@codemirror/lang-vue";
 import { xml } from "@codemirror/lang-xml";
 import { yaml } from "@codemirror/lang-yaml";
 import { type Language, StreamLanguage } from "@codemirror/language";
-import { c as clikeC, java, kotlin } from "@codemirror/legacy-modes/mode/clike";
+import {
+  c as clikeC,
+  csharp,
+  java,
+  kotlin,
+} from "@codemirror/legacy-modes/mode/clike";
 import { ruby } from "@codemirror/legacy-modes/mode/ruby";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { standardSQL } from "@codemirror/legacy-modes/mode/sql";
 import { swift } from "@codemirror/legacy-modes/mode/swift";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
+import { svelte } from "@replit/codemirror-lang-svelte";
 
 function languageSupportLanguage(
   support: { language: Language } | Language
@@ -78,6 +85,10 @@ export function filesLspHighlightLanguage(name: string): Language | null {
     case "html":
     case "htm":
       return languageSupportLanguage(html());
+    case "vue":
+      return languageSupportLanguage(vue({ base: html() }));
+    case "svelte":
+      return languageSupportLanguage(svelte());
     case "xml":
     case "svg":
       return languageSupportLanguage(xml());
@@ -93,6 +104,10 @@ export function filesLspHighlightLanguage(name: string): Language | null {
     case "c++":
     case "hpp":
       return languageSupportLanguage(cpp());
+    case "cs":
+    case "csharp":
+    case "c#":
+      return StreamLanguage.define(csharp);
     case "java":
       return StreamLanguage.define(java);
     case "kt":

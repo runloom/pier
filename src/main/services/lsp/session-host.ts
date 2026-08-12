@@ -206,6 +206,9 @@ export class LspSessionHost {
     runtime = createLspSessionRuntime({
       child,
       clientRole: input.clientRole,
+      ...(input.launch.initializationOptions
+        ? { initializationOptions: input.launch.initializationOptions }
+        : {}),
       onMessage: input.onMessage,
       onOutcome: (event) => {
         this.#acceptOutcome(runtime, ownerKey, event, input.onClose);
@@ -337,6 +340,32 @@ export class LspSessionHost {
       webContentsId: runtime.webContentsId,
       workspaceKey: runtime.workspaceKey,
     };
+  }
+
+  /** Session ids currently bound to a provider (exact serverId match). */
+  listSessionIdsForServer(serverId: string): string[] {
+    const ids: string[] = [];
+    for (const [sessionId, runtime] of this.#bySessionId) {
+      if (runtime.serverId === serverId) {
+        ids.push(sessionId);
+      }
+    }
+    return ids;
+  }
+
+  /** Sessions whose serverId equals id or is prefixed with `${pluginId}:`. */
+  listSessionIdsForPlugin(pluginId: string): string[] {
+    const prefix = `${pluginId}:`;
+    const ids: string[] = [];
+    for (const [sessionId, runtime] of this.#bySessionId) {
+      if (
+        runtime.serverId === pluginId ||
+        runtime.serverId.startsWith(prefix)
+      ) {
+        ids.push(sessionId);
+      }
+    }
+    return ids;
   }
 
   ensureInitialized(

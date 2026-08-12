@@ -98,6 +98,11 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:read");
       return window.pier.git.getReviewIndex(request);
     },
+    resolveReviewConflict: (request) => {
+      assertPluginCapability(entry, "git:read");
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.resolveReviewConflict(request);
+    },
     getStatus: (cwd) => {
       assertPluginCapability(entry, "git:read");
       return window.pier.git.getStatus(cwd);

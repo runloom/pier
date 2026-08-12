@@ -13,22 +13,35 @@ import {
 } from "../document/types.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 
-const viewsByUri = new Map<string, Set<EditorView>>();
+interface RegisteredEditorViews {
+  absolutePath: string;
+  rootPath: string;
+  views: Set<EditorView>;
+}
+
+const viewsByUri = new Map<string, RegisteredEditorViews>();
 
 export function registerFilesLspEditorView(
   absolutePath: string,
-  view: EditorView
+  view: EditorView,
+  rootPath = ""
 ): () => void {
   const uri = fileUriFromAbsolutePath(absolutePath);
-  let views = viewsByUri.get(uri);
-  if (!views) {
-    views = new Set();
-    viewsByUri.set(uri, views);
+  let entry = viewsByUri.get(uri);
+  if (!entry) {
+    entry = {
+      absolutePath,
+      rootPath,
+      views: new Set(),
+    };
+    viewsByUri.set(uri, entry);
+  } else if (rootPath) {
+    entry.rootPath = rootPath;
   }
-  views.add(view);
+  entry.views.add(view);
   return () => {
-    views.delete(view);
-    if (views.size === 0 && viewsByUri.get(uri) === views) {
+    entry?.views.delete(view);
+    if (entry && entry.views.size === 0 && viewsByUri.get(uri) === entry) {
       viewsByUri.delete(uri);
     }
   };
@@ -40,7 +53,29 @@ export function getFilesLspEditorView(
   const uri = absolutePathOrUri.startsWith("file:")
     ? absolutePathOrUri
     : fileUriFromAbsolutePath(absolutePathOrUri);
-  return viewsByUri.get(uri)?.values().next().value ?? null;
+  return viewsByUri.get(uri)?.views.values().next().value ?? null;
+}
+
+/** Reverse lookup: which disk path registered this EditorView (if any). */
+export function absolutePathForFilesLspEditorView(
+  view: EditorView
+): string | null {
+  for (const entry of viewsByUri.values()) {
+    if (entry.views.has(view)) {
+      return entry.absolutePath;
+    }
+  }
+  return null;
+}
+
+/** Workspace/project root associated with a registered editor view. */
+export function rootPathForFilesLspEditorView(view: EditorView): string | null {
+  for (const entry of viewsByUri.values()) {
+    if (entry.views.has(view)) {
+      return entry.rootPath.length > 0 ? entry.rootPath : null;
+    }
+  }
+  return null;
 }
 
 function splitAbsoluteToSource(
@@ -81,6 +116,10 @@ let deps: {
 export function resetFilesLspNavigationForTests(): void {
   viewsByUri.clear();
   deps = null;
+}
+
+export function getFilesLspNavigationContext(): RendererPluginContext | null {
+  return deps?.context ?? null;
 }
 
 export function registerFilesLspNavigationDeps(input: {

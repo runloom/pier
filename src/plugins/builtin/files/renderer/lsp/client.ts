@@ -99,11 +99,19 @@ export function filesLspEditorExtensions(input: {
 
         constructor(view: EditorView) {
           this.view = view;
+          // Register path immediately so Go to Definition (including CSS
+          // package @import without a language server) can resolve this view.
+          // Must not wait for LSP connect — CSS LS is often missing.
+          this.#unregisterNavigation = registerFilesLspEditorView(
+            absolutePath,
+            this.view,
+            rootPath
+          );
           this.#lifecycle = new FilesLspAttachmentLifecycle({
             attachment: {
               absolutePath,
               connect: (client, languageId) => {
-                this.#disconnect();
+                this.#disconnectLsp();
                 if (this.#destroyed) {
                   return;
                 }
@@ -113,13 +121,9 @@ export function filesLspEditorExtensions(input: {
                   ),
                 });
                 this.#connected = true;
-                this.#unregisterNavigation = registerFilesLspEditorView(
-                  absolutePath,
-                  this.view
-                );
               },
               disconnect: () => {
-                this.#disconnect();
+                this.#disconnectLsp();
               },
               documentId: input.documentId,
               ownerId: input.ownerId,
@@ -158,9 +162,8 @@ export function filesLspEditorExtensions(input: {
           this.#lifecycle.resume();
         };
 
-        #disconnect(): void {
-          this.#unregisterNavigation?.();
-          this.#unregisterNavigation = null;
+        /** Detach language-server plugin only; keep path registration for navigation. */
+        #disconnectLsp(): void {
           if (!this.#connected) {
             return;
           }
@@ -178,7 +181,9 @@ export function filesLspEditorExtensions(input: {
           this.view.dom.removeEventListener("focusin", this.#resumeOnFocus);
           this.#unsubscribePolicy();
           this.#lifecycle.destroy();
-          this.#disconnect();
+          this.#disconnectLsp();
+          this.#unregisterNavigation?.();
+          this.#unregisterNavigation = null;
         }
       }
     ),

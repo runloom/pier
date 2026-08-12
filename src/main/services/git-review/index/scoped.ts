@@ -127,6 +127,7 @@ export function applyScopedMovements(
     }
     acceptedTargets.add(movement.targetPath);
     target.groupFacts[group] = Object.freeze({
+      conflict: null,
       movement: movement.movement,
       oldPath: movement.oldPath,
       origin: "tracked",
@@ -293,7 +294,23 @@ function sameGitReviewGroupFact(
     left.statsExpected === right.statsExpected &&
     left.status === right.status &&
     left.targetOid === right.targetOid &&
-    left.targetPath === right.targetPath
+    left.targetPath === right.targetPath &&
+    sameGitReviewConflictStages(left.conflict, right.conflict)
+  );
+}
+
+function sameGitReviewConflictStages(
+  left: GitReviewIndexGroupFact["conflict"],
+  right: GitReviewIndexGroupFact["conflict"]
+): boolean {
+  if (left === null || right === null) {
+    return left === right;
+  }
+  return (
+    left.xy === right.xy &&
+    left.baseOid === right.baseOid &&
+    left.oursOid === right.oursOid &&
+    left.theirsOid === right.theirsOid
   );
 }
 

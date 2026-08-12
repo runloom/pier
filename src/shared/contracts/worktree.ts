@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { agentKindSchema } from "./agent.ts";
+import { worktreeRefSchema } from "./local-control/worktree-ref.ts";
 import { panelContextSchema } from "./panel.ts";
 
 export const worktreeUnavailableReasonSchema = z.enum([
@@ -32,6 +33,8 @@ export type WorktreeOperationErrorReason = z.infer<
 export const worktreeItemSchema = z.object({
   bare: z.boolean(),
   branch: z.string().min(1).nullable(),
+  /** CLI 定位用绝对路径；与 path 对齐（canonical） */
+  canonicalPath: z.string().min(1).optional(),
   detached: z.boolean(),
   head: z.string().min(1).nullable(),
   isCurrent: z.boolean(),
@@ -41,6 +44,8 @@ export const worktreeItemSchema = z.object({
   path: z.string().min(1),
   prunable: z.boolean(),
   prunableReason: z.string().min(1).nullable(),
+  /** W4-S1：完整 WorktreeRef（定位，非内容） */
+  worktreeRef: worktreeRefSchema.optional(),
 });
 export type WorktreeItem = z.infer<typeof worktreeItemSchema>;
 
@@ -145,8 +150,35 @@ export const worktreeCreateResultSchema = z.object({
    */
   pendingSetupCommand: z.string().min(1).optional(),
   targetPath: z.string().min(1),
+  /** 创建结果上的定位引用（与 created.worktreeRef 一致） */
+  worktreeRef: worktreeRefSchema.optional(),
   worktrees: z.array(worktreeItemSchema),
 });
+
+/** worktree.get：单条定位查询 */
+export const worktreeGetRequestSchema = z.object({
+  path: z.string().min(1),
+});
+export type WorktreeGetRequest = z.infer<typeof worktreeGetRequestSchema>;
+
+export const worktreeGetResultSchema = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("found"),
+    item: worktreeItemSchema,
+    worktreeRef: worktreeRefSchema,
+    canonicalPath: z.string().min(1),
+  }),
+  z.object({
+    status: z.literal("not_found"),
+    path: z.string().min(1),
+  }),
+  z.object({
+    status: z.literal("unavailable"),
+    path: z.string().min(1),
+    reason: worktreeUnavailableReasonSchema,
+  }),
+]);
+export type WorktreeGetResult = z.infer<typeof worktreeGetResultSchema>;
 export type WorktreeCreateResult = z.infer<typeof worktreeCreateResultSchema>;
 
 export const worktreeRemoveResultSchema = z.object({

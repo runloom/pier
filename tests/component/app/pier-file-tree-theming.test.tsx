@@ -14,14 +14,13 @@ const EXPECTED_OVERRIDES: Readonly<Record<string, string>> = {
   "--trees-bg-override": "var(--sidebar)",
   "--trees-fg-override": "var(--sidebar-foreground)",
   "--trees-fg-muted-override": "var(--muted-foreground)",
-  "--trees-bg-muted-override":
-    "color-mix(in oklab, var(--foreground) 10%, var(--sidebar))",
+  "--trees-bg-muted-override": "var(--list-hover-bg)",
   "--trees-input-bg-override": "var(--muted)",
   "--trees-border-color-override": "var(--sidebar-border)",
-  "--trees-focus-ring-color-override": "var(--ring)",
+  "--trees-focus-ring-color-override": "var(--list-focus-ring)",
+  "--trees-selected-focused-border-color-override": "var(--list-focus-ring)",
   "--trees-accent-override": "var(--primary)",
-  "--trees-selected-bg-override":
-    "color-mix(in oklab, var(--foreground) 16%, var(--sidebar))",
+  "--trees-selected-bg-override": "var(--list-active-bg)",
   "--trees-selected-fg-override": "var(--sidebar-foreground)",
   "--trees-search-bg-override": "var(--muted)",
   "--trees-search-fg-override": "var(--foreground)",
@@ -49,5 +48,20 @@ describe("PierFileTree theming", () => {
         `${name}: ${value}`
       );
     }
+
+    // Focus ring and selected-focused border must share one soft list token
+    // (trees defaults selected-focused to accent if the border override is omitted).
+    expect(EXPECTED_OVERRIDES["--trees-focus-ring-color-override"]).toBe(
+      EXPECTED_OVERRIDES["--trees-selected-focused-border-color-override"]
+    );
+    expect(EXPECTED_OVERRIDES["--trees-focus-ring-color-override"]).toBe(
+      "var(--list-focus-ring)"
+    );
+    expect(EXPECTED_OVERRIDES["--trees-selected-bg-override"]).toBe(
+      "var(--list-active-bg)"
+    );
+    expect(EXPECTED_OVERRIDES["--trees-bg-muted-override"]).toBe(
+      "var(--list-hover-bg)"
+    );
   });
 });

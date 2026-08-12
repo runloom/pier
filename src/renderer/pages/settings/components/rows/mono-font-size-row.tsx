@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { reportFontPreferenceUpdateFailure } from "@/pages/settings/components/rows/font-update-error.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 
@@ -19,6 +20,7 @@ export function MonoFontSizeRow() {
   const persisted = useFontStore((s) => s.monoFontSize);
   const setMonoFontSize = useFontStore((s) => s.setMonoFontSize);
   const [draft, setDraft] = useState(String(persisted));
+  const failedTitle = t("settings.row.fontUpdateFailed");
 
   const [prev, setPrev] = useState(persisted);
   if (persisted !== prev) {
@@ -30,7 +32,7 @@ export function MonoFontSizeRow() {
     <InputRow
       description={t("settings.row.monoFontSizeDesc")}
       id="settings-mono-font-size"
-      inputClassName="w-24"
+      inputClassName="w-28"
       inputMode="numeric"
       label={t("settings.row.monoFontSize")}
       max={MAX}
@@ -39,12 +41,15 @@ export function MonoFontSizeRow() {
         const next = clampToValid(raw, persisted);
         setDraft(String(next));
         if (next !== persisted) {
-          setMonoFontSize(next).catch(() => undefined);
+          setMonoFontSize(next).catch((err) => {
+            reportFontPreferenceUpdateFailure(failedTitle, err);
+          });
         }
       }}
       onChange={setDraft}
       placeholder={t("settings.row.monoFontSizePlaceholder")}
       step={1}
+      suffix={t("settings.unit.px")}
       type="number"
       value={draft}
     />

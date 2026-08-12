@@ -1,11 +1,14 @@
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
   Frame,
   Row,
   Skeleton,
   Stack,
+  StatusIcon,
   Tabs,
   TabsContent,
   TabsList,
@@ -21,9 +24,9 @@ import { StatusBadge } from "./shared.tsx";
 
 export const canvas = {
   description:
-    "产品 CLI 服务本机用户（cli-human）：W0–W1 传输/发现已关账；agent binding 为遗留实验；invoke 与持久会话从 W2/W3 起实现。",
+    "一次性用原生 agent（不封装 invoke）；Pier 主路径是发现 + 持久 start/turn/screen；W1 发现已落地，W2 产品撤回，W3 为主交付。",
   kind: "composition" as const,
-  title: "智能体优先的多智能体调用 CLI · 产品与技术方案",
+  title: "智能体优先的持久运行控制 CLI · 产品与技术方案",
 };
 
 export default function MultiAgentOrchestrationCanvas() {
@@ -86,12 +89,21 @@ export default function MultiAgentOrchestrationCanvas() {
   if (error || !payload) {
     return (
       <Frame maxWidth={1080}>
-        <Alert variant="destructive">
-          <AlertTitle>无法加载智能体协作方案</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">
-            {error ?? "data.json 无效"}
-          </AlertDescription>
-        </Alert>
+        <Empty
+          className="min-h-64 py-12"
+          data-slot="scheme-load-error-empty"
+          role="status"
+        >
+          <EmptyHeader>
+            <EmptyMedia>
+              <StatusIcon kind="error" />
+            </EmptyMedia>
+            <EmptyTitle>无法加载智能体协作方案</EmptyTitle>
+            <EmptyDescription className="whitespace-pre-wrap text-left">
+              {error ?? "data.json 无效"}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </Frame>
     );
   }
@@ -130,7 +142,7 @@ export default function MultiAgentOrchestrationCanvas() {
         </header>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="flex h-auto w-full justify-start gap-1 overflow-x-auto">
+          <TabsList className="flex w-full justify-start gap-1 overflow-x-auto">
             <TabsTrigger className="whitespace-nowrap" value="overview">
               速览
             </TabsTrigger>

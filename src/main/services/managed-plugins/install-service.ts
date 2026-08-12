@@ -3,7 +3,6 @@ import { join } from "node:path";
 import type {
   ManagedPluginCatalogSnapshot,
   ManagedPluginInstallIndex,
-  ManagedPluginInstallIndexEntry,
   ManagedPluginOperationResult,
   OfficialPluginIndex,
 } from "@shared/contracts/plugin/managed.ts";
@@ -17,6 +16,7 @@ import {
   performSetDevOverride,
 } from "./dev-override-operations.ts";
 import type { ManagedPluginIndexStore } from "./index-state.ts";
+import { runManagedPluginInstallBoot } from "./install-boot.ts";
 import {
   type AssetFetcher,
   type BundledPluginRegistration,
@@ -459,27 +459,14 @@ export function createManagedPluginInstallService(
       await mkdir(paths.stagingDir, { recursive: true });
       await mkdir(paths.workDir, { recursive: true });
       await store.init();
-      await cleanupStalePromotionTemps(paths.installedDir);
-      await repairMissingContentHashes();
-      if (!isDevRuntime) {
-        const state = store.get();
-        let mutated = false;
-        const filteredPlugins: Record<string, ManagedPluginInstallIndexEntry> =
-          {};
-        for (const [id, entry] of Object.entries(state.plugins)) {
-          if (entry.devOverride) {
-            filteredPlugins[id] = { ...entry, devOverride: null };
-            mutated = true;
-          } else {
-            filteredPlugins[id] = entry;
-          }
-        }
-        if (mutated) {
-          store.mutate((s) => ({ ...s, plugins: filteredPlugins }));
-          await store.flush();
-        }
-      }
-      await performSimulateRestartForTests();
+      await runManagedPluginInstallBoot({
+        afterBoot: performSimulateRestartForTests,
+        cleanupStaleTemps: () => cleanupStalePromotionTemps(paths.installedDir),
+        isDevRuntime,
+        paths,
+        repairHashes: repairMissingContentHashes,
+        store,
+      });
     },
     listCatalogSnapshot: () => performListCatalogSnapshot(ctx),
     getRuntimeSources: () => runtimeSourcesSnapshot,

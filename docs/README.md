@@ -23,7 +23,7 @@
 
 | 路径 | 角色 |
 | --- | --- |
-| [`design/`](./design/) | 仍生效的专题契约（例如工作台刷新策略、LSP 策略） |
+| [`design/`](./design/) | 仍生效的专题契约（例如工作台刷新策略、[LSP 语言矩阵](./design/lsp-language-matrix.md)、[LSP 会话策略](./design/workspace-lsp-policy.md)） |
 | [`superpowers/`](./superpowers/) | **仍被引用或近期演进**的规格与计划；不是现行 API 全文 |
 | [`archive/`](./archive/) | 已落地 / 已被取代的历史 specs、plans、spikes 与专题设计 |
 

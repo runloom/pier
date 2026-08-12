@@ -5,6 +5,10 @@
 import { LSPPlugin, type WorkspaceMapping } from "@codemirror/lsp-client";
 import type { EditorView } from "@codemirror/view";
 import {
+  cssImportDefinitionsForOffset,
+  tryNavigateCssImportAtOffset,
+} from "./css-import-definition.ts";
+import {
   type FilesLspDefinitionRange,
   type FilesLspDefinitionTarget,
   parseFilesLspDefinitions,
@@ -105,39 +109,80 @@ export async function navigateFilesLspDefinition(input: {
 export async function jumpToFilesLspDefinition(
   view: EditorView
 ): Promise<FilesLspJumpToDefinitionResult> {
+  const position = view.state.selection.main.head;
   const plugin = LSPPlugin.get(view);
+
+  // CSS package @import: resolve even when CSS LS is missing or returns empty.
   if (!plugin) {
-    return { ok: false, reason: "unavailable" };
+    const navigated = await tryNavigateCssImportAtOffset({
+      offset: position,
+      view,
+    });
+    return navigated
+      ? { ok: true, multi: false }
+      : { ok: false, reason: "unavailable" };
   }
+
   const hasCapability = (
     plugin.client as { hasCapability?: (name: string) => boolean }
   ).hasCapability;
-  if (
-    typeof hasCapability === "function" &&
-    hasCapability.call(plugin.client, "definitionProvider") === false
-  ) {
-    return { ok: false, reason: "unavailable" };
-  }
+  const definitionEnabled =
+    typeof hasCapability !== "function" ||
+    hasCapability.call(plugin.client, "definitionProvider") !== false;
 
-  plugin.client.sync();
-  const position = view.state.selection.main.head;
-  const params = {
-    position: plugin.toPosition(position),
-    textDocument: { uri: plugin.uri },
+  let definitions = {
+    targets: [] as FilesLspDefinitionTarget[],
+    total: 0,
+    truncated: false,
   };
-  const mapping = plugin.client.workspaceMapping();
-  let response: unknown;
-  try {
-    response = await plugin.client.request("textDocument/definition", params);
-  } catch {
-    mapping.destroy();
-    return { ok: false, reason: "request-failed" };
+  let mapping: WorkspaceMapping | null = null;
+
+  if (definitionEnabled) {
+    plugin.client.sync();
+    const params = {
+      position: plugin.toPosition(position),
+      textDocument: { uri: plugin.uri },
+    };
+    mapping = plugin.client.workspaceMapping();
+    try {
+      const response = await plugin.client.request(
+        "textDocument/definition",
+        params
+      );
+      definitions = parseFilesLspDefinitions(response);
+    } catch {
+      mapping.destroy();
+      mapping = null;
+      // Fall through to CSS import resolution.
+    }
   }
 
-  const definitions = parseFilesLspDefinitions(response);
   if (definitions.targets.length === 0) {
-    mapping.destroy();
-    return { ok: false, reason: "empty" };
+    mapping?.destroy();
+    const cssTargets = await cssImportDefinitionsForOffset({
+      offset: position,
+      view,
+    });
+    if (cssTargets.length === 1 && cssTargets[0]) {
+      // Navigate without LSP mapping — openFiles path via uri file://
+      const navigated = await tryNavigateCssImportAtOffset({
+        offset: position,
+        view,
+      });
+      return navigated
+        ? { ok: true, multi: false }
+        : { ok: false, reason: "open-failed" };
+    }
+    if (cssTargets.length === 0) {
+      return {
+        ok: false,
+        reason: definitionEnabled ? "empty" : "unavailable",
+      };
+    }
+  }
+
+  if (!mapping) {
+    mapping = plugin.client.workspaceMapping();
   }
 
   if (definitions.targets.length === 1) {

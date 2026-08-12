@@ -17,9 +17,14 @@ import {
   commandFailure as failure,
   commandSuccess as success,
 } from "./command-results.ts";
+import {
+  executeRunCommand,
+  executeTerminalCommand,
+} from "./command-router-run-terminal.ts";
 import type { PierCoreServices } from "./command-router-services.ts";
 import { executeAgentAssetsCommand } from "./commands/agent-assets.ts";
 import { executeAiCommand } from "./commands/ai.ts";
+import { executeAppSnapshotCommand } from "./commands/app-snapshot.ts";
 import { executeCommentsCommand } from "./commands/comments.ts";
 import { executeEnvironmentCommand } from "./commands/environment.ts";
 import { executeFileCommand } from "./commands/file.ts";
@@ -27,27 +32,21 @@ import { executeGitCommand } from "./commands/git.ts";
 import { executeGitReviewCommand } from "./commands/git-review.ts";
 import { executeLiveModulesCommand } from "./commands/live-modules.ts";
 import {
+  executeNotificationsFocusCommand,
+  executeNotificationsGetCommand,
+  executeNotificationsListCommand,
+  executeNotificationsMarkReadCommand,
+  executeNotificationsWatchCommand,
+} from "./commands/notifications.ts";
+import {
   executePanelFocusCommand,
   executePanelListCommand,
   executePanelOpenCommand,
-  executeTerminalOpenCommand,
 } from "./commands/panel.ts";
 import { executePanelTransferCommand } from "./commands/panel-transfer.ts";
 import { executePierHomeCommand } from "./commands/pier-home.ts";
 import { executePluginCommand } from "./commands/plugin.ts";
 import { executeProjectSkillsCommand } from "./commands/project-skills.ts";
-import {
-  executeRunCancelCommand,
-  executeRunListCommand,
-  executeRunRecentCommand,
-  executeRunSpawnCommand,
-  executeRunStatusCommand,
-} from "./commands/run.ts";
-import {
-  executeRunBackgroundSnapshotCommand,
-  executeRunRunsSnapshotCommand,
-  executeRunStopCommand,
-} from "./commands/run-control.ts";
 import { executeWorktreeCommand } from "./commands/worktree.ts";
 import { authorizeCommand } from "./permissions.ts";
 import { buildShellEnvironmentHostStatus } from "./shell-environment-commands.ts";
@@ -112,7 +111,8 @@ async function executeAppStateCommand(
   requestId: string,
   command: PierCommand,
   clients: PierClientRegistry,
-  services: PierCoreServices
+  services: PierCoreServices,
+  context: CommandExecutionContext = {}
 ): Promise<PierCommandResult | null> {
   switch (command.type) {
     case "app.status":
@@ -124,6 +124,35 @@ async function executeAppStateCommand(
         },
         protocolVersion: 1,
       });
+    case "app.snapshot":
+      return await executeAppSnapshotCommand(requestId, command, services);
+    case "notifications.list":
+      return await executeNotificationsListCommand(
+        requestId,
+        command,
+        services
+      );
+    case "notifications.get":
+      return await executeNotificationsGetCommand(requestId, command, services);
+    case "notifications.watch":
+      return await executeNotificationsWatchCommand(
+        requestId,
+        command,
+        services,
+        context
+      );
+    case "notifications.focus":
+      return await executeNotificationsFocusCommand(
+        requestId,
+        command,
+        services
+      );
+    case "notifications.mark-read":
+      return await executeNotificationsMarkReadCommand(
+        requestId,
+        command,
+        services
+      );
     case "appUpdate.status":
       return success(requestId, services.appUpdates.getStatus());
     case "appUpdate.check":
@@ -295,72 +324,6 @@ async function executePanelCommand(
   }
 }
 
-async function executeRunCommand(
-  requestId: string,
-  command: PierCommand,
-  services: PierCoreServices,
-  context: CommandExecutionContext
-): Promise<PierCommandResult | null> {
-  switch (command.type) {
-    case "run.backgroundSnapshot":
-      return executeRunBackgroundSnapshotCommand(requestId, services);
-    case "run.runsSnapshot":
-      return executeRunRunsSnapshotCommand(requestId, command, services);
-    case "run.list":
-      return await executeRunListCommand(requestId, command, services);
-    case "run.spawn":
-      return await executeRunSpawnCommand(requestId, command, services, {
-        clientEnv: context.clientEnv,
-      });
-    case "run.status":
-      return executeRunStatusCommand(requestId, command, services);
-    case "run.cancel":
-      return executeRunCancelCommand(requestId, command, services);
-    case "run.stop":
-      return executeRunStopCommand(requestId, command, services);
-    case "run.recent":
-      return executeRunRecentCommand(requestId, services);
-    default:
-      return null;
-  }
-}
-
-async function executeTerminalCommand(
-  requestId: string,
-  command: PierCommand,
-  services: PierCoreServices,
-  context: CommandExecutionContext
-): Promise<PierCommandResult | null> {
-  switch (command.type) {
-    case "terminal.open":
-      return await executeTerminalOpenCommand(requestId, command, services, {
-        clientEnv: context.clientEnv,
-      });
-    case "terminal.profile.delete":
-      return success(
-        requestId,
-        await services.terminalProfiles.delete(command.profileId)
-      );
-    case "terminal.profile.list":
-      return success(requestId, await services.terminalProfiles.list());
-    case "terminal.profile.read":
-      return success(
-        requestId,
-        await services.terminalProfiles.read(command.profileId)
-      );
-    case "terminal.profile.upsert":
-      return success(
-        requestId,
-        await services.terminalProfiles.upsert(
-          command.profileId,
-          command.profile
-        )
-      );
-    default:
-      return null;
-  }
-}
-
 async function executeCommandByDomain(
   requestId: string,
   command: PierCommand,
@@ -400,7 +363,7 @@ async function executeCommandByDomain(
     (cmd: PierCommand) =>
       executeTerminalCommand(requestId, cmd, services, context),
     (cmd: PierCommand) =>
-      executeAppStateCommand(requestId, cmd, clients, services),
+      executeAppStateCommand(requestId, cmd, clients, services, context),
     (cmd: PierCommand) =>
       executeWindowWorkspaceCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),

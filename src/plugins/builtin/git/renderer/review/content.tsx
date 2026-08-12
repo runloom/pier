@@ -3,7 +3,14 @@ import type {
   PierDiffViewItem,
   PierDiffViewRenderWindow,
 } from "@pier/ui/diff-view/index.tsx";
-import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useGitReviewDocumentDemand } from "../hooks/use-document-demand.ts";
 import { useGitReviewDocumentSession } from "../hooks/use-document-session.ts";
 import { useGitReviewGenerationCallbacks } from "../hooks/use-generation-callbacks.ts";
@@ -22,6 +29,7 @@ import { useGitReviewSurfaceNavigationHandoff } from "../hooks/use-surface-navig
 import { useGitReviewSurfaceSessionEntries } from "../hooks/use-surface-session-entries.ts";
 import { useGitReviewTreeOpen } from "../hooks/use-tree-open.ts";
 import { useGitReviewViewportEffects } from "../hooks/use-viewport-effects.ts";
+import { createReviewCollidingFileLabel } from "../plugin-text.ts";
 import type { ReviewRenderFeedback } from "./code-view.tsx";
 import { ReviewCommentsChrome } from "./comments/chrome.tsx";
 import { applyReviewNavigationDemand } from "./document/apply-navigation-demand.ts";
@@ -79,6 +87,13 @@ function ReviewSurfaceComponent({
       navigationRequest,
     });
   const appearance = useReviewAppearance(context, entries.length > 0);
+  // Same factory as changes-panel tree model so collision displayPath order
+  // matches sidebar / CodeView / demand / comment nav.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable
+  const collidingFileLabel = useMemo(
+    () => createReviewCollidingFileLabel(context, appearance.locale),
+    [appearance.locale]
+  );
   const documentControllerRef = useRef<GitReviewDocumentGeneration | null>(
     null
   );
@@ -266,6 +281,7 @@ function ReviewSurfaceComponent({
   });
   const { commentsIndexRef, commentsSeqRef, threads } =
     useGitReviewCommentsIntegration({
+      collidingFileLabel,
       context,
       controllerRef: documentControllerRef,
       diffBase,
@@ -279,6 +295,7 @@ function ReviewSurfaceComponent({
       setProjection,
     });
   useGitReviewDocumentSession({
+    collidingFileLabel,
     commentsIndexRef,
     commentsSeqRef,
     committedProjectionGenerationRef,
@@ -414,6 +431,7 @@ function ReviewSurfaceComponent({
           )
         }
         clearForUserIntent={clearForUserIntent}
+        collidingFileLabel={collidingFileLabel}
         context={context}
         diffHandleRef={diffHandleRef}
         driftCommentLabels={comments.driftCommentLabels}
@@ -460,6 +478,7 @@ function ReviewSurfaceComponent({
         warnings={warnings}
       />
       <ReviewCommentsChrome
+        collidingFileLabel={collidingFileLabel}
         comments={comments}
         context={context}
         diffBase={diffBase}

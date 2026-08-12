@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
@@ -302,18 +303,28 @@ export const settings = {
     monoFontFamily: "Monospace Font",
     monoFontFamilyDesc: "Terminal and code editor font",
     monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",
+    docFontMode: "Document Font",
+    docFontModeDesc:
+      "Body font for Markdown preview and docs canvases; code blocks stay monospace.",
+    docFontModeUi: "Follow interface",
+    docFontModeCustom: "Custom",
+    docFontFamily: "Custom Document Font",
+    docFontFamilyDesc:
+      "Primary font when Document Font is Custom. Empty uses the built-in document serif fallback. System fonts only.",
+    docFontFamilyPlaceholder: "Noto Serif SC",
     monoFontSize: "Terminal Font Size",
-    monoFontSizeDesc: "Terminal font size (px, 8–32)",
+    monoFontSizeDesc: "Range 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "Code Font Size",
-    codeFontSizeDesc: "Editor and Git diff font size (px, 8–32)",
+    codeFontSizeDesc: "Editor and Git diff; range 8–32",
     codeFontSizePlaceholder: "13",
+    fontUpdateFailed: "Couldn't update font settings",
     terminalCursorStyle: "Cursor Style",
     terminalCursorStyleDesc: "Terminal cursor shape",
     terminalCursorBlink: "Cursor Blink",
     terminalCursorBlinkDesc: "Blink the terminal cursor",
     terminalScrollbackMb: "Scrollback Limit",
-    terminalScrollbackMbDesc: "Terminal history size (MB, 10–512)",
+    terminalScrollbackMbDesc: "Terminal history buffer size, range 10–512",
     terminalScrollbackRuntimeNote: "Applies to new terminals only.",
     terminalPasteProtection: "Paste Protection",
     terminalPasteProtectionDesc:
@@ -329,21 +340,7 @@ export const settings = {
     panelCloseFocusPolicy: "After Closing a Tab",
     panelCloseFocusPolicyDesc:
       "After closing the active tab, focus a neighbor or the most recent tab.",
-    lspEnabled: "Enable Language Services",
-    lspEnabledDesc: "Diagnostics, completions, and go-to-definition",
-    lspIdleReleaseMinutes: "Idle release (minutes)",
-    lspIdleReleaseMinutesDesc:
-      "Release idle language services after this many minutes (1–1440)",
-    lspMaxLocalWorkspaces: "Local workspace limit",
-    lspMaxLocalWorkspacesDesc:
-      "Max local projects with language services (0 turns them off)",
-    lspMaxRemoteWorkspaces: "Remote workspace limit",
-    lspMaxRemoteWorkspacesDesc:
-      "Max remote projects with language services (0 turns them off)",
-    lspUpdateFailed: "Couldn't update language service settings — try again",
-    lspWorktreesEnabled: "Enable in Worktrees",
-    lspWorktreesEnabledDesc:
-      "Language services in agent worktrees (off by default to save resources)",
+    ...settingsLspRow,
     defaultAgent: "Default Agent",
     defaultAgentDesc: "Used by Start Default Agent",
     agentPermissionMode: "Permission Mode",
@@ -362,6 +359,13 @@ export const settings = {
     },
   },
   shellEnvironment: settingsShellEnvironment,
+  /** Numeric InputRow trailing units (shadcn InputGroupAddon). */
+  unit: {
+    px: "px",
+    mb: "MB",
+    seconds: "s",
+    minutes: "min",
+  },
   quitConfirmation: {
     hasActivity: "When activity is running",
     always: "Always",

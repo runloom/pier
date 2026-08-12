@@ -6,6 +6,8 @@ export const pluginPermissions = {
   "file:read": "Read files",
   "git:read": "Read Git state",
   "git:write": "Write Git state",
+  "lsp:provide": "Provide language servers",
+  "languageMode:provide": "Provide editor language modes",
   network: "Use network access",
   "panel:control": "Control panels",
   "panel:open": "Open panels",

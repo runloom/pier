@@ -26,6 +26,13 @@ export interface PierInlineReviewThread {
   readonly threadId: string;
 }
 
+/**
+ * 评论 chrome：
+ * - `card` = Diff 注解槽：InputGroup 一体（正文+提交）自带边框
+ * - `plain` = Popover 等面板：标准表单 = 带边框 Textarea + 下方独立提交按钮
+ */
+export type PierInlineReviewChrome = "card" | "plain";
+
 /** 行内评论卡 i18n 文案（host 注入，禁止卡片内联用户串）。 */
 export interface PierInlineReviewLabels {
   readonly authorYou: string;

@@ -11,6 +11,7 @@
  * 虚拟化 onPostRender 应传 `reapply: false`——只 patch 一次，避免每帧写 style 造成滚动卡顿。
  */
 
+import { type RefObject, useLayoutEffect } from "react";
 import { hardenCodeViewInstanceChanged } from "./code-view-runtime.ts";
 
 interface StickyBounds {
@@ -88,4 +89,27 @@ export function stabilizeCodeViewStickyPositioning(
   if (stickyTop !== -1 && stickyBottom !== -1) {
     viewer.applyStickyPositioning({ stickyBottom, stickyTop });
   }
+}
+
+/**
+ * Layout-time sticky patch install for PierDiffView.
+ * - codeViewKey remount: reapply bounds (replace Pierre random jitter)
+ * - items change: patch/harden only — never re-stamp stale stickyTop
+ */
+export function useDiffViewStickyStabilize(
+  codeViewRef: RefObject<{ getInstance: () => unknown } | null>,
+  codeViewKey: string,
+  // revision token only; identity not read inside the effect body
+  _codeViewItems: unknown
+): void {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: codeViewKey remount trigger; ref is stable
+  useLayoutEffect(() => {
+    stabilizeCodeViewStickyPositioning(codeViewRef.current?.getInstance());
+  }, [codeViewKey]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: items revision re-runs patch only
+  useLayoutEffect(() => {
+    stabilizeCodeViewStickyPositioning(codeViewRef.current?.getInstance(), {
+      reapply: false,
+    });
+  }, [_codeViewItems]);
 }

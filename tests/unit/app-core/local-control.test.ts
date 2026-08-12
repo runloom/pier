@@ -8,7 +8,7 @@ import { createLocalControlTransport } from "@main/adapters/cli/local-command-cl
 import {
   createPierLocalControlServer,
   resolveLocalControlSocketPath,
-} from "@main/adapters/cli/local-control-server.ts";
+} from "@main/adapters/cli/local-control/server.ts";
 import { createClientRegistry } from "@main/app-core/client-registry.ts";
 import {
   createCommandRouter,
@@ -115,7 +115,9 @@ function cliClientServices(): PierCoreServices {
     agentDetection: {} as never,
     gitReview: {} as never,
     comments: {} as never,
-    agentRuntimeIndex: {} as never,
+    agentRuntimeIndex: {
+      listMachine: () => ({ entries: [], version: 1 }),
+    } as never,
     agentUsage: {
       flush: async () => undefined,
       read: async () => ({ entries: [], version: 1 }),

@@ -1,4 +1,5 @@
 import {
+  canvasCommentTargetSchema,
   commentAuthorSchema,
   commentFailureSchema,
   commentProjectStoreSchema,
@@ -8,6 +9,7 @@ import {
   commentThreadSchema,
   gitDiffCommentTargetSchema,
   gitFileCommentTargetSchema,
+  markdownCommentTargetSchema,
 } from "@shared/contracts/comments/index.ts";
 import { describe, expect, it } from "vitest";
 
@@ -115,6 +117,68 @@ describe("comments contract schemas", () => {
     });
   });
 
+  describe("markdownCommentTargetSchema", () => {
+    const validMd = {
+      contentHash: "abc123",
+      excerpt: "some paragraph",
+      headingId: "api",
+      kind: "markdown",
+      path: "docs/a.md",
+      startLine: 10,
+      endLine: 12,
+    } as const;
+    it("accepts a valid markdown anchor", () => {
+      expect(markdownCommentTargetSchema.safeParse(validMd).success).toBe(true);
+    });
+    it("rejects missing contentHash", () => {
+      const { contentHash: _c, ...rest } = validMd;
+      expect(markdownCommentTargetSchema.safeParse(rest).success).toBe(false);
+    });
+    it("rejects missing excerpt", () => {
+      const { excerpt: _e, ...rest } = validMd;
+      expect(markdownCommentTargetSchema.safeParse(rest).success).toBe(false);
+    });
+    it("rejects endLine < startLine", () => {
+      expect(
+        markdownCommentTargetSchema.safeParse({
+          ...validMd,
+          endLine: 5,
+          startLine: 10,
+        }).success
+      ).toBe(false);
+    });
+    it("rejects absolute path", () => {
+      expect(
+        markdownCommentTargetSchema.safeParse({
+          ...validMd,
+          path: "/abs/a.md",
+        }).success
+      ).toBe(false);
+    });
+  });
+
+  describe("canvasCommentTargetSchema", () => {
+    it("accepts file-level canvas anchor", () => {
+      expect(
+        canvasCommentTargetSchema.safeParse({
+          kind: "canvas",
+          path: "design/login.canvas.tsx",
+        }).success
+      ).toBe(true);
+    });
+    it("accepts node-level canvas anchor", () => {
+      expect(
+        canvasCommentTargetSchema.safeParse({
+          anchorId: "login-submit",
+          excerpt: "primary button",
+          kind: "canvas",
+          label: "Login",
+          path: "design/login.canvas.tsx",
+        }).success
+      ).toBe(true);
+    });
+  });
+
   describe("commentTargetSchema", () => {
     it("dispatches by kind", () => {
       expect(commentTargetSchema.safeParse(validDiffTarget).success).toBe(true);
@@ -123,6 +187,21 @@ describe("comments contract schemas", () => {
           kind: "git-file",
           path: "src/a.ts",
           scope: SCOPE,
+        }).success
+      ).toBe(true);
+      expect(
+        commentTargetSchema.safeParse({
+          contentHash: "h1",
+          excerpt: "ex",
+          kind: "markdown",
+          path: "docs/a.md",
+          startLine: 1,
+        }).success
+      ).toBe(true);
+      expect(
+        commentTargetSchema.safeParse({
+          kind: "canvas",
+          path: "x.canvas.tsx",
         }).success
       ).toBe(true);
     });

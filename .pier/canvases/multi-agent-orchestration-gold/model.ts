@@ -178,8 +178,7 @@ function hasExactStringSet(value: string[], expected: readonly string[]): boolea
 }
 
 const EXPECTED_PIER_OWNS = [
-  "agent-caller-identity",
-  "one-shot-agent-invocation",
+  "agent-discovery",
   "bounded-agent-screen",
   "agent-runtime-observation",
   "terminal-control",
@@ -197,6 +196,7 @@ const EXPECTED_CALLER_OWNS = [
   "retry-and-completion-policy",
   "result-acceptance-and-synthesis",
   "caller-memory-or-external-ledger",
+  "one-shot-native-agent-invocation",
 ] as const;
 
 const EXPECTED_FORBIDDEN_IN_PIER = [
@@ -204,14 +204,15 @@ const EXPECTED_FORBIDDEN_IN_PIER = [
   "多智能体工作 DAG、任务台账、看板与自动调度",
   "将运行事实、通知或终端输出解释为任务完成",
   "用官方插件绕过 Pier 不做任务生命周期的产品边界",
+  "封装各家 agent 的 one-shot/headless CLI 为 Pier agents invoke",
+  "统一 InvocationReply 宿主产品面替代原生 agent 输出",
 ] as const;
 
 const EXPECTED_OWNERS = new Map([
-  ["调用方编排语义", "协调智能体 / 外部控制器"],
-  ["智能体调用身份", "Pier main AgentCallerService"],
-  ["一次性智能体调用", "Pier main AgentInvokeService"],
+  ["调用方编排语义", "协调智能体 / 人类（经 pier CLI）"],
+  ["一次性原生调用", "各 agent 原生 CLI"],
   ["本机控制传输", "Pier local-control"],
-  ["本机控制授权", "Pier main AccessGrantService"],
+  ["本机控制授权", "Pier main local-control authorizer"],
   ["终端运行控制", "Pier main RuntimeControlService"],
   ["窗口与面板", "Pier workspace"],
   ["运行事实", "ForegroundActivity + Runtime Index + provider adapters"],
@@ -221,9 +222,6 @@ const EXPECTED_OWNERS = new Map([
 ]);
 
 const EXPECTED_ENTITIES = [
-  "AgentCallerCredential",
-  "InvocationReply",
-  "AccessGrantRef",
   "CapabilityRef",
   "AgentRef",
   "WindowRef",
@@ -239,11 +237,7 @@ const EXPECTED_ENTITIES = [
 
 const EXPECTED_STATE_MACHINES = [
   "调用方任务（非 Pier）",
-  "Agent caller credential",
-  "Agent invocation（一次性）",
-  "Access connection",
-  "Access request",
-  "Access grant",
+  "Local control session",
   "Agent activity projection",
   "Terminal runtime",
   "Window surface",

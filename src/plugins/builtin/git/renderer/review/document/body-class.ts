@@ -1,6 +1,10 @@
 import type { GitReviewIndexEntry } from "@shared/contracts/git/review.ts";
 import type { GitReviewReadingSurface } from "../reading-surface.ts";
 import { reviewGroupsForSurface } from "../surface-group.ts";
+import {
+  orderReviewPresentationSlots,
+  reviewPresentationEntryKeysInOrder,
+} from "./presentation-order.ts";
 
 /**
  * 槽位正文资格（金标准 bodyClass）。
@@ -98,9 +102,20 @@ export function isReviewEntryBodyHydratable(
 /** 当前面下 content-bearing entryKey 序（seed / demand 主路径）。 */
 export function reviewContentEntryKeysInOrder(
   entries: readonly GitReviewIndexEntry[],
-  diffBase?: GitReviewReadingSurface
+  diffBase?: GitReviewReadingSurface,
+  /**
+   * Same factory as the sidebar tree. Prefer always passing it so collision
+   * displayPath order matches CodeView under non-en locales.
+   */
+  collidingFileLabel?: (name: string) => string
 ): string[] {
-  return entries
-    .filter((entry) => isReviewEntryBodyHydratable(entry, diffBase))
-    .map((entry) => entry.entryKey);
+  const groups =
+    diffBase === undefined ? undefined : reviewGroupsForSurface(diffBase);
+  // includeSlot filters after full-group collision geometry (presentation-order).
+  const ordered = orderReviewPresentationSlots(entries, {
+    ...(collidingFileLabel === undefined ? {} : { collidingFileLabel }),
+    ...(groups === undefined ? {} : { groups }),
+    includeSlot: isReviewSlotIncludedInBody,
+  });
+  return reviewPresentationEntryKeysInOrder(ordered);
 }

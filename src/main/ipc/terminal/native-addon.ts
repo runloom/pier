@@ -85,6 +85,8 @@ export interface NativeAddon {
    */
   readCursorVisible(panelId: string): number;
   readSelectionText(panelId: string): string | null;
+  /** 当前 viewport 文本（无 scrollback）；surface 缺失时 null。 */
+  readViewportText?(panelId: string): string | null;
   /**
    * 孤儿清理:关掉该 window 下不在 activeIds 集合的 terminal NSView. C 方案
    * reload 零销毁路径上, renderer 重建后报告"我现在还需要这些 panelId",
@@ -117,6 +119,14 @@ export interface NativeAddon {
   ): boolean;
   sendText(panelId: string, text: string): boolean;
   setAppShortcutKeys(keys: string[]): void;
+  /**
+   * 裸 Esc 观察（不消费）：terminal 焦点下 keyCode Escape 旁路通知。
+   * 签名 (browserWindowId, panelId)。可选——旧 addon 无此方法时 agent Esc
+   * 对账退化为仅 transcript。
+   */
+  setBareEscapeForwardCallback?(
+    cb: ((browserWindowId: number, panelId: string) => void) | null
+  ): void;
   setChildExitedForwardCallback?(
     cb:
       | ((

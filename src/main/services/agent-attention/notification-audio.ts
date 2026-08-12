@@ -7,7 +7,23 @@ export interface NotificationAudioDecision {
   silent: boolean;
   /** darwin + system + soundEnabled 时为 "default"；否则 undefined */
   sound?: "default";
+  /**
+   * `soundId=system` 且 soundEnabled：OS 路径用横幅默认音；
+   * toast 路径用 {@link TOAST_SYSTEM_SOUND_FALLBACK}（见 resolveInterruptAppSoundId）。
+   * 禁止用 `silent===false && appSoundId==null` 反推 system。
+   */
+  usesOsDefaultTone: boolean;
 }
+
+/** 打断播音通道：与 toast / OS 互斥投递对齐。 */
+export type InterruptSoundChannel = "os" | "toast";
+
+/**
+ * toast 无系统横幅音轨时，`soundId=system` 的应用内回退音色。
+ * OS 路径仍走 Notification 默认音，不经过此 id。
+ */
+export const TOAST_SYSTEM_SOUND_FALLBACK: AttentionBuiltinSoundId =
+  "abstract-sound1";
 
 /** 业务路径全局播音最小间隔；试听/测试 force 可绕过。 */
 export const ATTENTION_SOUND_SPACING_MS = 1000;
@@ -34,20 +50,53 @@ export function decideNotificationAudio(
   platform: NodeJS.Platform = process.platform
 ): NotificationAudioDecision {
   if (!settings.soundEnabled) {
-    return { silent: true, appSoundId: null };
+    return { silent: true, appSoundId: null, usesOsDefaultTone: false };
   }
   if (settings.soundId === "system") {
     return platform === "darwin"
-      ? { silent: false, sound: "default", appSoundId: null }
-      : { silent: false, appSoundId: null };
+      ? {
+          silent: false,
+          sound: "default",
+          appSoundId: null,
+          usesOsDefaultTone: true,
+        }
+      : { silent: false, appSoundId: null, usesOsDefaultTone: true };
   }
-  return { silent: true, appSoundId: settings.soundId };
+  return {
+    silent: true,
+    appSoundId: settings.soundId,
+    usesOsDefaultTone: false,
+  };
 }
 
 /**
- * shown:true 后尝试应用侧播音。仅当 decision.appSoundId 非空。
- * spacing 仅约束业务路径（force=false）。
- * 生产路径由 registerAgentAttention 注入 sendToWindow（单窗）。
+ * 解析打断通道上需要应用侧播放的内置 id。
+ * - 内置音色：两通道相同
+ * - system（usesOsDefaultTone）：OS 交给横幅默认音（null）；toast 用 fallback
+ * - soundEnabled=false：null
+ */
+export function resolveInterruptAppSoundId(
+  decision: NotificationAudioDecision,
+  channel: InterruptSoundChannel
+): AttentionBuiltinSoundId | null {
+  if (decision.appSoundId != null) {
+    return decision.appSoundId;
+  }
+  if (channel === "toast" && decision.usesOsDefaultTone) {
+    return TOAST_SYSTEM_SOUND_FALLBACK;
+  }
+  return null;
+}
+
+export type AttentionSoundPlayResult =
+  | "played"
+  | "skipped-no-app-sound"
+  | "skipped-spacing"
+  | "skipped-no-window";
+
+/**
+ * 应用侧播音（内置 id）。spacing 仅约束业务路径（force=false）。
+ * 生产路径注入 sendToWindow（单窗）。
  */
 export function maybePlayAfterShown(args: {
   decision: NotificationAudioDecision;
@@ -55,11 +104,7 @@ export function maybePlayAfterShown(args: {
   force?: boolean;
   now?: () => number;
   sendToWindow?: (payload: { soundId: string }) => boolean;
-}):
-  | "played"
-  | "skipped-no-app-sound"
-  | "skipped-spacing"
-  | "skipped-no-window" {
+}): AttentionSoundPlayResult {
   const {
     decision,
     force = false,
@@ -92,4 +137,26 @@ export function maybePlayAfterShown(args: {
   // force 路径也刷新时间戳，避免紧随的业务 play 叠响
   lastBusinessPlayAtMs = ts;
   return "played";
+}
+
+/**
+ * 打断成功后尝试应用侧播音（toast 投递成功 / OS shown）。
+ * 与通道解析同一套 decision；system@toast 走内置回退。
+ */
+export function maybePlayInterruptSound(args: {
+  channel: InterruptSoundChannel;
+  decision: NotificationAudioDecision;
+  force?: boolean;
+  now?: () => number;
+  sendToWindow?: (payload: { soundId: string }) => boolean;
+}): AttentionSoundPlayResult {
+  const appSoundId = resolveInterruptAppSoundId(args.decision, args.channel);
+  return maybePlayAfterShown({
+    decision: { ...args.decision, appSoundId },
+    ...(args.force === undefined ? {} : { force: args.force }),
+    ...(args.now === undefined ? {} : { now: args.now }),
+    ...(args.sendToWindow === undefined
+      ? {}
+      : { sendToWindow: args.sendToWindow }),
+  });
 }

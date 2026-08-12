@@ -88,6 +88,10 @@ import { createLazyAppCore } from "./lazy.ts";
 import { createAppLiveModulesService } from "./live-modules-wiring.ts";
 import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
+import {
+  createForegroundActivityFacade,
+  createNotificationCenterCommandFacade,
+} from "./notification-center-facade.ts";
 import { wireAppCoreWindowAndPanelTransfer } from "./panel-transfer.ts";
 import { wireAppCorePierHomeAndSkills } from "./pier-home.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
@@ -370,11 +374,12 @@ function createPierAppCore(): PierAppCore {
       reportCloseFailureFallback: showNativeWindowCloseFailure,
       workspace: workspaceService,
     });
-
   const services: PierCoreServices = {
     agentDetection,
     agentLifecycle,
     agentRuntimeIndex,
+    foregroundActivity: createForegroundActivityFacade(),
+    notificationCenter: createNotificationCenterCommandFacade(),
     agentUsage,
     agentLaunchGate,
     agentMcpCatalog,
@@ -453,9 +458,8 @@ function createPierAppCore(): PierAppCore {
     worktrees: createWorktreeService({
       readPreferences: () => preferences.read(),
     }),
+    // git+gitWatch 一体绑 getStatus（watch 广播需 status；多订阅共享）
     ...(() => {
-      // git 与 gitWatch 一体：watch 广播需带 status snapshot（多订阅共享 + 免竞态），
-      // 所以在这里显式绑 getStatus，避免拆构造顺序
       const git = createGitService({
         resolveEnvironment: async (cwd) =>
           (await processEnvironment.resolve({ cwd, source: "plugin" })).env,
@@ -466,7 +470,6 @@ function createPierAppCore(): PierAppCore {
         gitWatch: createGitWatchService({
           getStatus: (gitRoot, prefetched) =>
             git.getStatus(gitRoot, prefetched),
-          // poll 仅在有窗口聚焦时执行；后台错过的 poll 由聚焦补课 pulse 弥补（index.ts）
           isPollActive: () => windowManager.getFocused() !== null,
         }),
       };

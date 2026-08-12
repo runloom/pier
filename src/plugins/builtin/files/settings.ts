@@ -46,14 +46,26 @@ export const FILES_EDITOR_DEFAULT_LANGUAGE_VALUES = [
   "python",
   "shell",
   "cpp",
+  "csharp",
+  "dart",
+  "dockerfile",
+  "elixir",
   "go",
   "java",
   "kotlin",
+  "lua",
+  "php",
+  "r",
   "ruby",
   "rust",
+  "scala",
   "sql",
+  "svelte",
+  "svg",
   "swift",
   "toml",
+  "vue",
+  "zig",
 ] as const;
 export type FilesEditorDefaultLanguage =
   (typeof FILES_EDITOR_DEFAULT_LANGUAGE_VALUES)[number];
@@ -72,33 +84,15 @@ export const FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_VALUES = [
 export type FilesMarkdownBlockHeightLimit =
   (typeof FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_VALUES)[number];
 
-/** Markdown preview body font mode: app UI vs custom family stack. */
+/**
+ * Legacy keys only. Removed from Files settings UI; migration reads leftover
+ * plugin configuration into host Appearance document font.
+ * Prefer host `docFontMode` / `docFontFamily`.
+ */
 export const FILES_MARKDOWN_READING_FONT_SETTING_KEY =
   "pier.files.markdown.readingFont";
-export const FILES_MARKDOWN_READING_FONT_VALUES = ["ui", "custom"] as const;
-export type FilesMarkdownReadingFont =
-  (typeof FILES_MARKDOWN_READING_FONT_VALUES)[number];
-
-/**
- * Primary custom font name(s) when reading font mode is `custom`.
- * Same interaction model as Appearance UI/mono font: user types primary
- * family names; preview merges a document serif fallback chain.
- */
 export const FILES_MARKDOWN_READING_FONT_FAMILY_SETTING_KEY =
   "pier.files.markdown.readingFontFamily";
-/** Default primary for custom mode (Appearance-style single family name). */
-export const FILES_MARKDOWN_READING_FONT_FAMILY_DEFAULT = "Noto Serif SC";
-
-/** Fallback chain after the user's primary custom font(s). */
-export const FILES_MARKDOWN_READING_FONT_FAMILY_FALLBACK = [
-  "Noto Serif SC",
-  "Noto Serif CJK SC",
-  "Source Han Serif SC",
-  "Songti SC",
-  "STSong",
-  "SimSun",
-  "Noto Serif",
-  "Georgia",
-  "Times New Roman",
-  "serif",
-] as const;
+/** Primary used when promoting empty legacy custom family → host document font. */
+export const FILES_MARKDOWN_READING_FONT_FAMILY_LEGACY_PRIMARY =
+  "Noto Serif SC";

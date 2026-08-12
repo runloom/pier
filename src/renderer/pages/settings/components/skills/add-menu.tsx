@@ -13,7 +13,7 @@ import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
   type ImportCandidateView,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
+} from "@/stores/project-skills/store.ts";
 import { openBindFromLibraryDialog } from "./bind-from-library-dialog.tsx";
 import { discardPreparedCandidate } from "./candidate-lifecycle.ts";
 import { openSkillsCreateSkillDialog } from "./create-dialog.tsx";

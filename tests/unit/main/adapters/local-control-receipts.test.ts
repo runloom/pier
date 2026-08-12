@@ -2,7 +2,7 @@ import {
   canonicalizeJson,
   createEffectReceiptStore,
   digestRequestParams,
-} from "@main/adapters/cli/local-control-receipts.ts";
+} from "@main/adapters/cli/local-control/receipts.ts";
 import { describe, expect, it } from "vitest";
 
 describe("canonicalizeJson / digestRequestParams (JCS-like)", () => {
@@ -61,7 +61,8 @@ describe("createEffectReceiptStore", () => {
       principalRef: "cli-human",
       digest: "abc",
       effectRevision: r1,
-      responseData: { ok: true },
+      ok: true,
+      responseData: { traced: true },
     });
     const hit = store.lookup({
       principalRef: "cli-human",

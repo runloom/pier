@@ -1,4 +1,8 @@
-import type { GitReviewGroup } from "../../../../shared/contracts/git/review.ts";
+import {
+  type GitReviewConflictXy,
+  type GitReviewGroup,
+  gitReviewConflictXySchema,
+} from "../../../../shared/contracts/git/review.ts";
 import {
   type GitReviewIndexGroupFact,
   type GitReviewIndexPrimaryEntry,
@@ -120,6 +124,7 @@ export class GitReviewPorcelainV2Parser {
     );
     if (stagedStatus !== null) {
       groupFacts.staged = {
+        conflict: null,
         movement: movementFromStatusCode(xy[0] ?? ""),
         oldPath: null,
         origin: "tracked",
@@ -131,6 +136,7 @@ export class GitReviewPorcelainV2Parser {
     }
     if (unstagedStatus !== null) {
       groupFacts.unstaged = {
+        conflict: null,
         movement: movementFromStatusCode(xy[1] ?? ""),
         oldPath: null,
         origin: "tracked",
@@ -158,18 +164,38 @@ export class GitReviewPorcelainV2Parser {
     record: Buffer
   ): "continue" | "stop" {
     validatePorcelainFields(fields, "u");
+    const xyRaw = fields[1]?.toString("ascii") ?? "";
+    const xyParsed = gitReviewConflictXySchema.safeParse(xyRaw);
+    if (!xyParsed.success) {
+      throw new GitReviewIndexProtocolError(
+        "porcelain v2 conflict XY 字段非法"
+      );
+    }
+    const xy: GitReviewConflictXy = xyParsed.data;
+    // u <xy> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
+    const baseOid = porcelainOidOrNull(fields[7]);
+    const oursOid = porcelainOidOrNull(fields[8]);
+    const theirsOid = porcelainOidOrNull(fields[9]);
     return this.#acceptLogical(
       pathBytes,
       null,
       {
         conflict: {
+          conflict: {
+            baseOid,
+            oursOid,
+            theirsOid,
+            xy,
+          },
           movement: null,
           oldPath: null,
           origin: "conflict",
-          sourceOid: null,
+          // Align with ordinary unstaged: source = ours (stage 2).
+          sourceOid: oursOid,
           statsExpected: false,
           status: "conflicted",
-          targetOid: null,
+          // Incoming side for unmerged both-modified.
+          targetOid: theirsOid,
         },
       },
       [record],
@@ -183,6 +209,7 @@ export class GitReviewPorcelainV2Parser {
       null,
       {
         unstaged: {
+          conflict: null,
           movement: null,
           oldPath: null,
           origin: "untracked",
@@ -317,6 +344,17 @@ function validatePorcelainFields(
       );
     }
   }
+}
+
+function porcelainOidOrNull(field: Buffer | undefined): string | null {
+  if (field === undefined) {
+    return null;
+  }
+  const oid = field.toString("ascii");
+  if (oid.length === 0 || /^0+$/u.test(oid)) {
+    return null;
+  }
+  return oid;
 }
 
 function createPorcelainGroupProjection(

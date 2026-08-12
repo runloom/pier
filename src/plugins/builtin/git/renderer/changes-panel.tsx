@@ -29,7 +29,7 @@ import {
   readGitReviewScope,
   readPendingReveal,
 } from "./pending-reveal-params.ts";
-import { pluginText } from "./plugin-text.ts";
+import { createReviewCollidingFileLabel, pluginText } from "./plugin-text.ts";
 import {
   ReviewErrorEmpty,
   ReviewFailureEmpty,
@@ -253,19 +253,11 @@ function GitChangesPanelBody({
   }, [panelApi, panelParams, source, sourceKey, state]);
   const language = usePluginLanguage();
   // language 驱动文案；context 在 panel 生命周期内稳定。
-  // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable for the factory instance
-  const collidingFileLabel = useMemo(() => {
-    const labelLanguage = language;
-    return (name: string) => {
-      return pluginText(
-        context,
-        "reviewFilePathCollision",
-        "File change · {{name}}",
-        // language 让 memo 依赖显式化；翻译器忽略模板未引用的值。
-        { language: labelLanguage, name }
-      );
-    };
-  }, [language]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable
+  const collidingFileLabel = useMemo(
+    () => createReviewCollidingFileLabel(context, language),
+    [language]
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable for the factory instance
   const treeGroupLabels = useMemo(() => {
     const labelLanguage = language;

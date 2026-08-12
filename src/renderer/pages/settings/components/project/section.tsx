@@ -16,7 +16,7 @@ import type { ProjectsSettingsTab } from "@/pages/settings/data/projects-setting
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { useLocalEnvironmentsStore } from "@/stores/local-environments.store.ts";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
-import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
+import { useProjectSkillsStore } from "@/stores/project-skills/store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import type { EnvironmentEditorHandle } from "../environment-editor.tsx";
 import { ProjectsSectionDetail } from "./section-detail.tsx";

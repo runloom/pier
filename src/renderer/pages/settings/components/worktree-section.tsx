@@ -7,7 +7,6 @@ import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { useWorkspacePreferencesStore } from "@/stores/workspace-preferences.store.ts";
 import { useWorktreePreferencesStore } from "@/stores/worktree-preferences.store.ts";
-import { LspSettingsCard } from "./lsp-settings-card.tsx";
 
 const PANEL_CLOSE_FOCUS_POLICY_OPTIONS = [
   "adjacent",
@@ -75,8 +74,8 @@ function PanelCloseFocusPolicyRow() {
 }
 
 /**
- * 工作区 section: 承载宿主级工作区偏好(worktree 目录、关标签聚焦等)。它是 host
- * preferences 而非插件设置, 因此不走 PluginConfigurationSection。
+ * 工作区 section: 宿主级工作区壳偏好（工作树目录、关标签聚焦）。
+ * 语言服务策略在独立的 LanguagesSection，不混在此页。
  */
 export function WorkspaceSection() {
   const t = useT();
@@ -92,9 +91,6 @@ export function WorkspaceSection() {
           </FieldSet>
         </CardContent>
       </Card>
-      <div className="mt-4">
-        <LspSettingsCard />
-      </div>
     </div>
   );
 }

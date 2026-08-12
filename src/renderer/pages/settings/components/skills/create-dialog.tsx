@@ -25,7 +25,7 @@ import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
   emptyDraft,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
+} from "@/stores/project-skills/store.ts";
 import { commitSkillsIntent } from "./apply-flow.ts";
 import { blankSkillMd, isValidSkillId } from "./blank-md.ts";
 import { discardPreparedCandidate } from "./candidate-lifecycle.ts";

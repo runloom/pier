@@ -2,16 +2,19 @@
  * 用户手册 · DocsShell（左 5 叶 + 右正文）
  */
 import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
   Badge,
   Button,
   DocsShell,
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
   Input,
   Row,
   Skeleton,
   Stack,
+  StatusIcon,
   Text,
   useCanvasFile,
 } from "pier/canvas";
@@ -271,12 +274,21 @@ export default function PierCliUserManualCanvas() {
         navId={DEFAULT_NAV_ID}
         onNavChange={() => undefined}
       >
-        <Alert variant="destructive">
-          <AlertTitle>无法加载使用手册</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap">
-            {error ?? "data.json 无效"}
-          </AlertDescription>
-        </Alert>
+        <Empty
+          className="min-h-64 py-12"
+          data-slot="manual-load-error-empty"
+          role="status"
+        >
+          <EmptyHeader>
+            <EmptyMedia>
+              <StatusIcon kind="error" />
+            </EmptyMedia>
+            <EmptyTitle>无法加载使用手册</EmptyTitle>
+            <EmptyDescription className="whitespace-pre-wrap text-left">
+              {error ?? "data.json 无效"}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </DocsShell>
     );
   }

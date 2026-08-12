@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { reportFontPreferenceUpdateFailure } from "@/pages/settings/components/rows/font-update-error.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 
@@ -8,6 +9,7 @@ export function MonoFontRow() {
   const persisted = useFontStore((s) => s.monoFontFamily);
   const setMonoFontFamily = useFontStore((s) => s.setMonoFontFamily);
   const [draft, setDraft] = useState(persisted);
+  const failedTitle = t("settings.row.fontUpdateFailed");
 
   const [prev, setPrev] = useState(persisted);
   if (persisted !== prev) {
@@ -22,7 +24,9 @@ export function MonoFontRow() {
       label={t("settings.row.monoFontFamily")}
       onBlur={() => {
         if (draft !== persisted) {
-          setMonoFontFamily(draft).catch(() => undefined);
+          setMonoFontFamily(draft).catch((err) => {
+            reportFontPreferenceUpdateFailure(failedTitle, err);
+          });
         }
       }}
       onChange={setDraft}

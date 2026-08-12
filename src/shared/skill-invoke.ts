@@ -1,32 +1,71 @@
 /**
- * Agent-native skill invocation text for Rich Input insertion.
+ * Agent-native skill force-invoke text for Rich Input insertion.
  *
- * UI always opens the picker with `$` (Codex App habit). What we **insert**
- * is not always `/name` — it depends on the foreground agent TUI:
+ * | Agent family | Insert form | Notes |
+ * |--------------|-------------|--------|
+ * | Codex        | `$skill-id` | CLI custom skills; `/` is for commands |
+ * | Claude / most skill TUIs | `/skill-id` | Official slash invoke |
  *
- * | Agent family | Insert form   | Notes |
- * |--------------|---------------|--------|
- * | Codex        | `$skill-id`   | CLI custom skills; `/` often ignored |
- * | Claude Code  | `/skill-id`   | Official slash invoke |
- * | Cursor / most slash TUIs | `/skill-id` | Slash menus |
+ * Only agents with **verified** skill force-invoke support get a prefix.
+ * Others return null so L1 never inserts a fake `/skill` for agents that
+ * cannot force-invoke (e.g. aider — skills only via manual context).
  *
- * Skills themselves are just ids + SKILL.md; the prefix is the **agent’s**
- * force-invoke syntax, not part of the skill file. Auto-invocation needs no
- * prefix (user free-text); this path is for explicit pick → send.
- *
- * Host never loads SKILL.md body into the message.
+ * Commands always use literal `/id` in the suggest builder (not this helper).
+ * Host never loads SKILL.md body into the message — agents resolve id under
+ * their discovery roots after Pier projection.
  */
 
 export type SkillInvokePrefix = "/" | "$";
 
 /**
- * Agents whose TUI force-invokes skills with `$name` (not `/name`).
+ * Agents that force-invoke skills with `$name`.
  * Keep tight: only verified dollar invokers.
  */
 const DOLLAR_INVOKE_AGENTS = new Set<string>(["codex"]);
 
 /**
- * Prefix for the running agent. Unknown/missing agent → null (caller skips).
+ * Agents with verified slash-style skill force-invoke (`/id`).
+ * Mirrors project-skills skill discovery adapters (runtime + audit with
+ * non-empty roots). Palette-driven CLIs (amp/crush) still discover skills
+ * but do not expose a text slash catalog — exclude from force-invoke insert.
+ *
+ * Intentionally absent (no native force-invoke catalog):
+ * aider, goose, continue, hermes, and any unknown kind.
+ */
+const SLASH_INVOKE_AGENTS = new Set<string>([
+  "ante",
+  "antigravity",
+  "aug",
+  "autohand",
+  "claude",
+  "cline",
+  "codebuddy",
+  "codebuff",
+  "command-code",
+  "copilot",
+  "cursor",
+  "devin",
+  "droid",
+  "gemini",
+  "grok",
+  "kilo",
+  "kimi",
+  "kiro",
+  "mimo-code",
+  "mistral-vibe",
+  "omp",
+  "openclaude",
+  "openclaw",
+  "opencode",
+  "pi",
+  "qodercli",
+  "qwen-code",
+  "rovo",
+]);
+
+/**
+ * Prefix for the running agent. Unknown / unsupported / missing → null
+ * (caller skips skill rows; commands use a separate path).
  */
 export function skillInvokePrefix(
   agentKind: string | null | undefined
@@ -37,8 +76,17 @@ export function skillInvokePrefix(
   if (DOLLAR_INVOKE_AGENTS.has(agentKind)) {
     return "$";
   }
-  // Claude, Cursor, OpenCode, Gemini, …: slash-style invoke is the default.
-  return "/";
+  if (SLASH_INVOKE_AGENTS.has(agentKind)) {
+    return "/";
+  }
+  return null;
+}
+
+/** True when this agent can force-invoke skills by id in Enhanced Input. */
+export function agentSupportsSkillForceInvoke(
+  agentKind: string | null | undefined
+): boolean {
+  return skillInvokePrefix(agentKind) != null;
 }
 
 /** Full invoke text, e.g. `/code-review` or `$prd`. */

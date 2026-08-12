@@ -226,7 +226,7 @@ function resolveTerminalOpenTarget(
   });
 }
 
-async function listPanels(
+export async function listPanels(
   command: Extract<PierCommand, { type: "panel.list" }>,
   services: PanelCommandServices
 ): Promise<PanelListSnapshot> {

@@ -5,7 +5,14 @@ import {
   FieldLabel,
 } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
-import type { KeyboardEvent, ReactNode } from "react";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@pier/ui/input-group.tsx";
+import { cn } from "@pier/ui/utils.ts";
+import type { ChangeEvent, FocusEvent, KeyboardEvent, ReactNode } from "react";
 
 export interface InputRowProps {
   description?: ReactNode;
@@ -20,6 +27,8 @@ export interface InputRowProps {
   onChange?: (value: string) => void;
   placeholder?: string;
   step?: number;
+  /** Trailing unit/label inside the control (shadcn InputGroupAddon). */
+  suffix?: string;
   type?: "text" | "number";
   value: string;
 }
@@ -35,6 +44,7 @@ export function InputRow({
   min,
   placeholder,
   step,
+  suffix,
   type = "text",
   value,
   onChange,
@@ -46,27 +56,50 @@ export function InputRow({
       e.currentTarget.blur();
     }
   };
+
+  const descriptionId = description ? `${id}-description` : undefined;
+  const unitId = suffix ? `${id}-unit` : undefined;
+  const describedBy =
+    [descriptionId, unitId].filter(Boolean).join(" ") || undefined;
+
+  const inputProps = {
+    "aria-describedby": describedBy,
+    disabled,
+    id,
+    inputMode,
+    max,
+    min,
+    onBlur: (e: FocusEvent<HTMLInputElement>) =>
+      onBlur?.(e.currentTarget.value),
+    onChange: (e: ChangeEvent<HTMLInputElement>) =>
+      onChange?.(e.currentTarget.value),
+    onKeyDown: handleKeyDown,
+    placeholder,
+    step,
+    type,
+    value,
+  } as const;
+
+  const control = suffix ? (
+    <InputGroup className={cn("shrink-0", inputClassName)}>
+      <InputGroupInput {...inputProps} />
+      <InputGroupAddon align="inline-end">
+        <InputGroupText id={unitId}>{suffix}</InputGroupText>
+      </InputGroupAddon>
+    </InputGroup>
+  ) : (
+    <Input className={inputClassName} {...inputProps} />
+  );
+
   return (
     <Field className="!items-center" orientation="horizontal">
       <FieldContent>
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
-        {description && <FieldDescription>{description}</FieldDescription>}
+        {description ? (
+          <FieldDescription id={descriptionId}>{description}</FieldDescription>
+        ) : null}
       </FieldContent>
-      <Input
-        className={inputClassName}
-        disabled={disabled}
-        id={id}
-        inputMode={inputMode}
-        max={max}
-        min={min}
-        onBlur={(e) => onBlur?.(e.currentTarget.value)}
-        onChange={(e) => onChange?.(e.currentTarget.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        step={step}
-        type={type}
-        value={value}
-      />
+      {control}
     </Field>
   );
 }

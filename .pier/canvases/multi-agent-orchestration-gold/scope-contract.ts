@@ -1,6 +1,5 @@
 const ALLOWED_PIER_OWNERSHIP = new Set([
-  "agent-caller-identity",
-  "one-shot-agent-invocation",
+  "agent-discovery",
   "bounded-agent-screen",
   "agent-runtime-observation",
   "terminal-control",
@@ -14,8 +13,7 @@ const ALLOWED_PIER_OWNERSHIP = new Set([
 
 const ALLOWED_OWNERSHIP_LAYERS = new Set([
   "调用方编排语义",
-  "智能体调用身份",
-  "一次性智能体调用",
+  "一次性原生调用",
   "本机控制传输",
   "本机控制授权",
   "终端运行控制",
@@ -27,9 +25,6 @@ const ALLOWED_OWNERSHIP_LAYERS = new Set([
 ]);
 
 const ALLOWED_ENTITY_NAMES = new Set([
-  "AgentCallerCredential",
-  "InvocationReply",
-  "AccessGrantRef",
   "CapabilityRef",
   "AgentRef",
   "WindowRef",
@@ -45,11 +40,7 @@ const ALLOWED_ENTITY_NAMES = new Set([
 
 const ALLOWED_STATE_MACHINE_ENTITIES = new Set([
   "调用方任务（非 Pier）",
-  "Agent caller credential",
-  "Agent invocation（一次性）",
-  "Access connection",
-  "Access request",
-  "Access grant",
+  "Local control session",
   "Agent activity projection",
   "Terminal runtime",
   "Window surface",
@@ -59,11 +50,27 @@ const ALLOWED_STATE_MACHINE_ENTITIES = new Set([
   "Notification",
 ]);
 
-const FORBIDDEN_OWNERSHIP_CLAIM =
-  /MultiAgent|multi-agent|task-ledger|task-lifecycle|task-dag|task-board|task-orchestration|task-scheduler|orchestration-ledger|orchestration-database|completion-authority|auto-schedul|WorkItem|Attempt|Gate|Result|多智能体任务|任务生命周期|任务状态机|任务台账|任务队列|任务调度|目标分解|重试状态|工作看板|工作 DAG|编排数据库|编排账本|审批中心|自动调度|完成权/u;
+/**
+ * English multi-agent product-boundary tokens:
+ * - PascalCase `MultiAgent` / `MultiAgentRun` / … (`(?![a-z])` keeps CamelCase types)
+ * - lowercase only as orchestration compounds with an explicit separator
+ *   (`multi-agent run`, `multi-agent-task`, …)
+ * Bare nicknames / canvas paths stay clean: `multi-agent gold`,
+ * `multi-agent-orchestration-gold` (`gold` / `orchestration` are not domain
+ * suffixes). Separate tokens still cover task-orchestration / orchestration-ledger.
+ */
+const FORBIDDEN_MULTI_AGENT_EN =
+  String.raw`MultiAgent(?![a-z])|multi-agent(?:[-_]+|\s+)(?:task|run|schedul|ledger|board|dag|lifecycle|work-?item)`;
 
-const FORBIDDEN_DOMAIN =
-  /MultiAgent|multi-agent|task-ledger|task-lifecycle|task-dag|task-board|task-orchestration|task-scheduler|orchestration-ledger|orchestration-database|completion-authority|auto-schedul|kanban|WorkItem|Attempt|Gate|Delivery|Result|多智能体任务(?:生命周期|台账|工作项)?|任务生命周期|任务状态机|任务台账|任务队列|任务调度|目标分解|任务依赖|重试状态|工作看板|工作 DAG|编排数据库|编排账本|审批中心|自动调度|完成权/gu;
+const FORBIDDEN_OWNERSHIP_CLAIM = new RegExp(
+  `${FORBIDDEN_MULTI_AGENT_EN}|task-ledger|task-lifecycle|task-dag|task-board|task-orchestration|task-scheduler|orchestration-ledger|orchestration-database|completion-authority|auto-schedul|WorkItem|Attempt|Gate|Result|多智能体任务|任务生命周期|任务状态机|任务台账|任务队列|任务调度|目标分解|重试状态|工作看板|工作 DAG|编排数据库|编排账本|审批中心|自动调度|完成权`,
+  "u",
+);
+
+const FORBIDDEN_DOMAIN = new RegExp(
+  `${FORBIDDEN_MULTI_AGENT_EN}|task-ledger|task-lifecycle|task-dag|task-board|task-orchestration|task-scheduler|orchestration-ledger|orchestration-database|completion-authority|auto-schedul|kanban|WorkItem|Attempt|Gate|Delivery|Result|多智能体任务(?:生命周期|台账|工作项)?|任务生命周期|任务状态机|任务台账|任务队列|任务调度|目标分解|任务依赖|重试状态|工作看板|工作 DAG|编排数据库|编排账本|审批中心|自动调度|完成权`,
+  "gu",
+);
 
 const PIER_SUBJECT_ALIAS_SOURCE = String.raw`(?:Pier|宿主|本产品)`;
 const PIER_SUBJECT_ALIAS = new RegExp(PIER_SUBJECT_ALIAS_SOURCE, "u");

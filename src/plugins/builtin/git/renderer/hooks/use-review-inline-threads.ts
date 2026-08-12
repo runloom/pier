@@ -6,6 +6,7 @@ import type {
   PierInlineReviewThread,
 } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { parseBlobOidForSide } from "@shared/comments/patch-blob.ts";
 import type {
   CommentItem,
   CommentThread,
@@ -32,13 +33,14 @@ function authorLabelOf(author: CommentAuthor, you: string): string {
  * itemId 是 section id → `entryKeyBySectionId` 得 entryKey → entry →
  * `renderSlots[sectionKey=itemId]` 得 slot.group / slot.oldPath；entry.path
  * 是当前路径。scope 复用 GitReviewScope（contextId + gitRootPath + target），
- * 与 review 文档身份同源。blobOid 留里程碑 4 回填（v1 创建不带版本指纹）。
+ * 与 review 文档身份同源。blobOid 从当前 section patch 的 full-index 行解析（可选）。
  */
 function buildDiffTarget(
   event: PierGutterReviewEvent,
   entries: readonly GitReviewIndexEntry[],
   entryKeyBySectionId: ReadonlyMap<string, string>,
-  scope: GitReviewScope
+  scope: GitReviewScope,
+  sectionPatch: string | undefined
 ): GitDiffCommentTarget | null {
   const entryKey = entryKeyBySectionId.get(event.itemId);
   if (entryKey === undefined) {
@@ -54,6 +56,11 @@ function buildDiffTarget(
   if (slot === undefined) {
     return null;
   }
+  const side = event.side === "additions" ? "new" : "old";
+  const blobOid =
+    sectionPatch === undefined
+      ? undefined
+      : parseBlobOidForSide(sectionPatch, side);
   return {
     kind: "git-diff",
     group: slot.group,
@@ -61,7 +68,8 @@ function buildDiffTarget(
     oldPath: slot.oldPath,
     path: entry.path,
     scope,
-    side: event.side === "additions" ? "new" : "old",
+    side,
+    ...(blobOid === undefined ? {} : { blobOid }),
   };
 }
 
@@ -86,6 +94,7 @@ export function useReviewInlineThreads({
   context,
   entries,
   entryKeyBySectionIdRef,
+  getSectionPatch,
   locale,
   scope,
   threads,
@@ -93,6 +102,8 @@ export function useReviewInlineThreads({
   readonly context: RendererPluginContext;
   readonly entries: readonly GitReviewIndexEntry[];
   readonly entryKeyBySectionIdRef: RefObject<ReadonlyMap<string, string>>;
+  /** 当前已加载 section 的 patch 正文，用于创建时写入 blobOid。 */
+  readonly getSectionPatch?: (sectionItemId: string) => string | undefined;
   readonly locale: string;
   readonly scope: GitReviewScope;
   readonly threads: readonly CommentThread[] | null;
@@ -113,7 +124,10 @@ export function useReviewInlineThreads({
   const [slots, setSlots] = useState<ReadonlyMap<string, SlotEntry>>(new Map());
   const [epoch, setEpoch] = useState(0);
   const [driftThreadId, setDriftThreadId] = useState<string | null>(null);
-  const draftTargetRef = useRef(new Map<string, GitDiffCommentTarget>());
+  /** draftId → target + section itemId（提交时重解析 blobOid）。 */
+  const draftTargetRef = useRef(
+    new Map<string, { itemId: string; target: GitDiffCommentTarget }>()
+  );
 
   const bumpEpoch = useCallback(() => setEpoch((e) => e + 1), []);
 
@@ -191,7 +205,8 @@ export function useReviewInlineThreads({
         event,
         entries,
         entryKeyBySectionIdRef.current,
-        scope
+        scope,
+        getSectionPatch?.(event.itemId)
       );
       if (target === null) {
         context.dialogs.alert({
@@ -213,7 +228,10 @@ export function useReviewInlineThreads({
         return;
       }
       const draftId = `draft-${event.itemId}-${event.side}-${event.lineNumber}`;
-      draftTargetRef.current.set(draftId, target);
+      draftTargetRef.current.set(draftId, {
+        itemId: event.itemId,
+        target,
+      });
       setSlots((prev) => {
         if (prev.has(draftId)) {
           return prev;
@@ -232,7 +250,14 @@ export function useReviewInlineThreads({
       });
       bumpEpoch();
     },
-    [bumpEpoch, context, entries, entryKeyBySectionIdRef, scope]
+    [
+      bumpEpoch,
+      context,
+      entries,
+      entryKeyBySectionIdRef,
+      getSectionPatch,
+      scope,
+    ]
   );
 
   const onCancelDraft = useCallback(
@@ -253,10 +278,21 @@ export function useReviewInlineThreads({
 
   const onSubmitDraft = useCallback(
     async (draftId: string, body: string): Promise<boolean> => {
-      const target = draftTargetRef.current.get(draftId);
-      if (target === undefined || body.trim().length === 0) {
+      const draft = draftTargetRef.current.get(draftId);
+      if (draft === undefined || body.trim().length === 0) {
         return false;
       }
+      // Re-resolve blob at submit: activate may run before section patch loads.
+      const { blobOid: _activateBlob, ...baseTarget } = draft.target;
+      const patch = getSectionPatch?.(draft.itemId);
+      const blobOid =
+        patch === undefined
+          ? undefined
+          : parseBlobOidForSide(patch, draft.target.side);
+      const target: GitDiffCommentTarget = {
+        ...baseTarget,
+        ...(blobOid === undefined ? {} : { blobOid }),
+      };
       const result = await context.comments.createThread({
         author: { kind: "user" },
         body,
@@ -294,7 +330,7 @@ export function useReviewInlineThreads({
       bumpEpoch();
       return true;
     },
-    [bumpEpoch, context, reportFailure, worktreeKey]
+    [bumpEpoch, context, getSectionPatch, reportFailure, worktreeKey]
   );
 
   const onEditComment = useCallback(

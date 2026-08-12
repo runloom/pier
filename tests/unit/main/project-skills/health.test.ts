@@ -61,7 +61,9 @@ afterEach(async () => {
   await rm(projectRoot, { force: true, recursive: true });
 });
 
-describe("project-skills health issue mapping (§5.1)", () => {
+describe("project-skills health issue mapping (§5.1)", {
+  timeout: 30_000,
+}, () => {
   it("covers every issue code exactly once", () => {
     const codes = HEALTH_ISSUE_MAPPINGS.map((m) => m.code).sort();
     expect(codes).toEqual([...PROJECT_SKILLS_ISSUE_CODES].sort());

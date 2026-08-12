@@ -1,17 +1,13 @@
 import { mkdir as fsMkdir, realpath as fsRealpath } from "node:fs/promises";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-} from "node:path";
+import { join } from "node:path";
 import type {
   WorktreeCheckRequest,
   WorktreeCheckResult,
   WorktreeCreateRequest,
   WorktreeCreateResult,
+  WorktreeGetRequest,
+  WorktreeGetResult,
+  WorktreeItem,
   WorktreeListRequest,
   WorktreeListResult,
   WorktreeOperationErrorReason,
@@ -20,7 +16,22 @@ import type {
   WorktreeRemoveResult,
 } from "@shared/contracts/worktree.ts";
 import { execGit } from "../exec.ts";
+import { attachWorktreeRefs } from "./enrich.ts";
+import {
+  createWorktreeIncarnationStore,
+  type WorktreeIncarnationStore,
+} from "./incarnation-store.ts";
 import { parseGitWorktreeListPorcelainZ } from "./parser.ts";
+import {
+  defaultWorktreeRoot,
+  isInsideDirectory,
+  resolveWorktreeRootPath,
+  safeRealpath,
+  samePath,
+  uniquePaths,
+} from "./paths.ts";
+
+export { resolveWorktreeRootPath } from "./paths.ts";
 
 const SAFE_WORKTREE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 
@@ -38,6 +49,7 @@ export interface WorktreeRemoveHooks {
 export interface WorktreeService {
   check(request: WorktreeCheckRequest): Promise<WorktreeCheckResult>;
   create(request: WorktreeCreateRequest): Promise<WorktreeCreateResult>;
+  get(request: WorktreeGetRequest): Promise<WorktreeGetResult>;
   list(request: WorktreeListRequest): Promise<WorktreeListResult>;
   prune(request: WorktreePruneRequest): Promise<WorktreeListResult>;
   remove(
@@ -53,6 +65,8 @@ export interface CreateWorktreeServiceOptions {
     cwd: string,
     options?: { timeoutMs?: number }
   ) => Promise<string>;
+  /** 测试可注入内存 incarnation store 工厂 */
+  incarnationStoreForMain?: (mainPath: string) => WorktreeIncarnationStore;
   mkdir?: (path: string) => Promise<void>;
   readPreferences?: () => Promise<WorktreeRootPreferences>;
   realpath?: (path: string) => Promise<string>;
@@ -76,17 +90,6 @@ function defaultExecGit(
   return execGit(args, { cwd, ...options });
 }
 
-async function safeRealpath(
-  path: string,
-  realpath: (path: string) => Promise<string>
-): Promise<string> {
-  try {
-    return await realpath(path);
-  } catch {
-    return path;
-  }
-}
-
 function safeDirectoryName(name: string): boolean {
   return (
     name !== "." &&
@@ -103,49 +106,13 @@ function serviceError(
   throw new WorktreeServiceError(reason, message);
 }
 
-function samePath(a: string, b: string): boolean {
-  return resolve(a) === resolve(b);
-}
-
-function isInsideDirectory(child: string, parent: string): boolean {
-  const childPath = resolve(child);
-  const parentPath = resolve(parent);
-  const relativePath = relative(parentPath, childPath);
-  return (
-    relativePath.length > 0 &&
-    !relativePath.startsWith("..") &&
-    !isAbsolute(relativePath)
-  );
-}
-
-function defaultWorktreeRoot(mainPath: string): string {
-  return join(dirname(mainPath), `${basename(mainPath)}.worktree`);
-}
-
-export function resolveWorktreeRootPath(
-  mainPath: string,
-  configuredRootPath: string
-): string {
-  const rootPath = configuredRootPath.trim();
-  if (rootPath.length === 0) {
-    return defaultWorktreeRoot(mainPath);
-  }
-  return isAbsolute(rootPath)
-    ? resolve(rootPath)
-    : resolve(dirname(mainPath), rootPath);
-}
-
-function uniquePaths(paths: readonly string[]): string[] {
-  return [...new Set(paths.map((path) => resolve(path)))];
-}
-
 async function validateBranchName(
   branch: string,
   cwd: string,
-  execGit: (args: readonly string[], cwd: string) => Promise<string>
+  runGit: (args: readonly string[], cwd: string) => Promise<string>
 ): Promise<void> {
   try {
-    await execGit(["check-ref-format", "--branch", branch], cwd);
+    await runGit(["check-ref-format", "--branch", branch], cwd);
   } catch {
     serviceError("invalid_branch", `invalid worktree branch: ${branch}`);
   }
@@ -158,7 +125,25 @@ export function createWorktreeService({
   },
   readPreferences = async () => ({ worktreeRootPath: "" }),
   realpath = fsRealpath,
+  incarnationStoreForMain = createWorktreeIncarnationStore(),
 }: CreateWorktreeServiceOptions = {}): WorktreeService {
+  async function attachRefs(
+    mainPath: string,
+    items: readonly WorktreeItem[],
+    mode: "ensure" | "mint",
+    mintPath?: string
+  ): Promise<WorktreeItem[]> {
+    const mainKey = await safeRealpath(mainPath, realpath);
+    return attachWorktreeRefs({
+      mainPath: mainKey,
+      items,
+      store: incarnationStoreForMain(mainKey),
+      mode,
+      mintPath,
+      realpath: (p) => safeRealpath(p, realpath),
+    });
+  }
+
   async function check({
     path,
   }: WorktreeCheckRequest): Promise<WorktreeCheckResult> {
@@ -216,8 +201,11 @@ export function createWorktreeService({
       };
     }
 
-    const worktrees = parseGitWorktreeListPorcelainZ(output, realCurrentPath);
-    const mainPath = worktrees[0]?.path;
+    const rawWorktrees = parseGitWorktreeListPorcelainZ(
+      output,
+      realCurrentPath
+    );
+    const mainPath = rawWorktrees[0]?.path;
     if (!mainPath) {
       return {
         path: resolvedPath,
@@ -227,12 +215,35 @@ export function createWorktreeService({
       };
     }
 
+    const worktrees = await attachRefs(mainPath, rawWorktrees, "ensure");
     return {
       currentPath: realCurrentPath,
       mainPath,
       path: resolvedPath,
       status: "available",
       worktrees,
+    };
+  }
+
+  async function get({ path }: WorktreeGetRequest): Promise<WorktreeGetResult> {
+    const resolvedPath = await safeRealpath(path, realpath);
+    const result = await list({ path: resolvedPath });
+    if (result.status === "unavailable") {
+      return {
+        status: "unavailable",
+        path: resolvedPath,
+        reason: result.reason,
+      };
+    }
+    const item = result.worktrees.find((w) => samePath(w.path, resolvedPath));
+    if (!item?.worktreeRef) {
+      return { status: "not_found", path: resolvedPath };
+    }
+    return {
+      status: "found",
+      item,
+      worktreeRef: item.worktreeRef,
+      canonicalPath: item.canonicalPath ?? item.path,
     };
   }
 
@@ -320,7 +331,17 @@ export function createWorktreeService({
         `created worktree is unavailable: ${realTargetPath}`
       );
     }
-    const created = after.worktrees.find((item) =>
+    // create：list 已 ensure；对目标路径再 mint 覆盖，保证重建换代
+    const mintPath = after.worktrees.find((item) =>
+      samePath(item.path, realTargetPath)
+    )?.path;
+    const worktrees = await attachRefs(
+      after.mainPath,
+      after.worktrees,
+      "mint",
+      mintPath ?? realTargetPath
+    );
+    const created = worktrees.find((item) =>
       samePath(item.path, realTargetPath)
     );
     if (!created) {
@@ -333,7 +354,8 @@ export function createWorktreeService({
       created,
       // 对外统一返回 list/git 侧一致的 canonical 路径，避免后续 open/bind 分叉。
       targetPath: created.path,
-      worktrees: after.worktrees,
+      worktrees,
+      ...(created.worktreeRef ? { worktreeRef: created.worktreeRef } : {}),
     };
   }
 
@@ -408,6 +430,10 @@ export function createWorktreeService({
       }
     }
 
+    const mainKey = await safeRealpath(before.mainPath, realpath);
+    const store = incarnationStoreForMain(mainKey);
+    await store.forget(target.path);
+
     const after = await list({ path: before.mainPath });
     if (after.status === "unavailable") {
       serviceError(after.reason, "removed worktree but list failed");
@@ -432,5 +458,5 @@ export function createWorktreeService({
     return await list({ path: before.mainPath });
   }
 
-  return { check, create, list, prune, remove, resolveRootPath };
+  return { check, create, get, list, prune, remove, resolveRootPath };
 }

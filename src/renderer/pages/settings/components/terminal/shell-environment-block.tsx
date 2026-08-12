@@ -133,7 +133,7 @@ export function ShellEnvironmentBlock() {
           <InputRow
             description={t("settings.shellEnvironment.timeoutDesc")}
             id="settings-shell-env-timeout"
-            inputClassName="w-24"
+            inputClassName="w-28"
             inputMode="numeric"
             label={t("settings.shellEnvironment.timeout")}
             max={120}
@@ -152,6 +152,7 @@ export function ShellEnvironmentBlock() {
             }}
             onChange={setTimeoutDraft}
             step={1}
+            suffix={t("settings.unit.seconds")}
             type="number"
             value={timeoutDraft}
           />

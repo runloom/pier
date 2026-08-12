@@ -32,6 +32,7 @@ import { createFilesEditorActions } from "./editor/actions.ts";
 import { FileEditorController } from "./editor/controller.ts";
 import { registerFilesLspNavigationDeps } from "./lsp/navigation.ts";
 import { markdownCodeHighlighter } from "./markdown/code-highlighter.ts";
+import { migrateLegacyMarkdownReadingFontToDocumentFont } from "./markdown/migrate-doc-font.ts";
 import { createFilesMarkdownPreviewActions } from "./markdown/preview-actions.ts";
 import { bindMarkdownSettingsFromConfiguration } from "./markdown/preview-preferences.ts";
 import { markdownRuntime } from "./markdown/runtime.ts";
@@ -54,6 +55,7 @@ import { createFilesContentSearchPanel } from "./search/panel.tsx";
 import { createFilesQuickOpenAction } from "./search/quick-open.ts";
 import { createFilesTreeActions } from "./tree/actions.ts";
 import { registerFilesDiskOpenLineReveal } from "./tree/open-disk-line.ts";
+import { registerFilesDiskOpenPreviewPrefer } from "./tree/open-disk-preview.ts";
 import { registerFilesDiskOpenTreeReveal } from "./tree/open-disk-reveal.ts";
 import { clearFileTreeSidebarCache } from "./tree/registry.ts";
 import { createRevealActiveFileInTreeAction } from "./tree/reveal-active-action.ts";
@@ -337,6 +339,10 @@ export const filesRendererPlugin: RendererPluginModule = {
         context.actions.register(action)
       ),
       bindMarkdownSettingsFromConfiguration(context.configuration),
+      (() => {
+        migrateLegacyMarkdownReadingFontToDocumentFont(context.configuration);
+        return () => undefined;
+      })(),
       registerFilesProjectStatusItem(context),
       registerFilesTerminalOpenUrlHandler(context, editorController),
       registerFilesLspNavigationDeps({
@@ -347,6 +353,8 @@ export const filesRendererPlugin: RendererPluginModule = {
       registerFilesDiskOpenTreeReveal(context),
       // openInEditor({ line }) → goToLine after the disk tab opens.
       registerFilesDiskOpenLineReveal(editorController, context),
+      // Comment jump / preferPreview → seed preview mode.
+      registerFilesDiskOpenPreviewPrefer(),
     ];
 
     return () => {

@@ -777,7 +777,7 @@
     "ui.reviewStateSubmoduleDetail": "Submodule commit changed",
     "ui.reviewStateTooLargeDetail": "File is too large to display a text diff",
     "ui.reviewStateInvalidEncodingDetail": "Unsupported text encoding. Open the file to inspect.",
-    "ui.reviewStateConflictDetail": "Merge conflict. Resolve it in the editor.",
+    "ui.reviewStateConflictDetail": "Merge conflict — open the file if the conflict view is unavailable.",
     "ui.reviewTreeCopyPath": "Copy Path",
     "ui.reviewTreeCopyRelativePath": "Copy Relative Path",
     "ui.reviewTreePathCopied": "Path copied",
@@ -795,7 +795,22 @@
     "ui.reviewCommentClearConfirm": "Clear",
     "ui.reviewCommentClearFailed": "Couldn’t clear comments.",
     "ui.reviewCommentPrevious": "Previous comment",
-    "ui.reviewCommentNext": "Next comment"
+    "ui.reviewCommentNext": "Next comment",
+    "ui.reviewConflictAcceptBoth": "Accept Both Changes",
+    "ui.reviewConflictAcceptCurrent": "Accept Current Change",
+    "ui.reviewConflictAcceptIncoming": "Accept Incoming Change",
+    "ui.reviewConflictCurrentChange": "(Current Change)",
+    "ui.reviewConflictIncomingChange": "(Incoming Change)",
+    "ui.reviewConflictKeepOurs": "Keep Ours",
+    "ui.reviewConflictKeepTheirs": "Keep Theirs",
+    "ui.reviewConflictResolving": "Resolving…",
+    "ui.reviewConflictResolveFailed": "Could not resolve conflict",
+    "ui.reviewStateConflictMarkersDetail": "Merge conflict — accept current, incoming, or both below. When all regions are accepted, Pier saves and stages the file.",
+    "ui.reviewStateConflictFileLevelDetail": "Merge conflict without markers — keep one side or open the file.",
+    "ui.reviewStateConflictBinaryDetail": "Binary merge conflict — keep one side or open the file.",
+    "ui.reviewStateConflictTooLargeDetail": "Conflict file is too large to preview — open the file or keep one side.",
+    "ui.reviewStateConflictInvalidEncodingDetail": "Conflict file has unsupported encoding — open the file or keep one side.",
+    "ui.reviewStateConflictReadErrorDetail": "Conflict file could not be read — open the file to resolve."
   },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {

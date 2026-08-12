@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
-import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
-import { initProjectSkillsBridge } from "@/stores/project-skills-actions.ts";
-import type { SkillDetailTarget } from "@/stores/project-skills-model.ts";
+import { initProjectSkillsBridge } from "@/stores/project-skills/actions.ts";
+import type { SkillDetailTarget } from "@/stores/project-skills/model.ts";
+import { useProjectSkillsStore } from "@/stores/project-skills/store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { discardReviewCandidate } from "./skills/candidate-lifecycle.ts";
 import {

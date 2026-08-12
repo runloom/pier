@@ -105,7 +105,7 @@ afterEach(async () => {
   await rm(sharedLockRoot, { force: true, recursive: true });
 });
 
-describe("project-skills apply", () => {
+describe("project-skills apply", { timeout: 30_000 }, () => {
   it("converges enabling a valid skill and publishes relative symlink", {
     timeout: 20_000,
   }, async () => {

@@ -18,10 +18,12 @@ import type {
   LspRequestCommand,
   LspRequestResult,
 } from "@shared/contracts/lsp-language-tools.ts";
+import type { LspCatalogStatusRow } from "@shared/contracts/lsp-provider.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { type IpcRendererEvent, ipcRenderer } from "electron";
 
 export interface PierLspAPI {
+  catalogStatus(): Promise<LspCatalogStatusRow[]>;
   close(sessionId: string): Promise<boolean>;
   ensureSession(
     request: LspSessionEnsureRequest
@@ -30,6 +32,14 @@ export interface PierLspAPI {
   onClosed(listener: (event: LspSessionClosedEvent) => void): () => void;
   onMessage(listener: (event: LspSessionMessageEvent) => void): () => void;
   onPolicyChanged(listener: (prefs: LspPolicyPrefs) => void): () => void;
+  /**
+   * Resolve a CSS @import / @source package or relative specifier for definition.
+   */
+  resolveCssImport(input: {
+    allowDirectory?: boolean;
+    fromFilePath: string;
+    specifier: string;
+  }): Promise<{ isDirectory: boolean; path: string } | null>;
   send(sessionId: string, message: string): Promise<boolean>;
 }
 
@@ -97,7 +107,19 @@ function isEnsureResult(value: unknown): value is LspSessionEnsureResult {
   return false;
 }
 
+function isCatalogStatus(value: unknown): value is LspCatalogStatusRow[] {
+  return Array.isArray(value);
+}
+
 export const lspApi: PierLspAPI = {
+  catalogStatus: async () => {
+    try {
+      const result = await ipcRenderer.invoke(PIER.LSP_CATALOG_STATUS);
+      return isCatalogStatus(result) ? result : [];
+    } catch {
+      return [];
+    }
+  },
   close: async (sessionId) => {
     try {
       return (
@@ -143,6 +165,36 @@ export const lspApi: PierLspAPI = {
     return () => {
       listeners.delete(listener);
     };
+  },
+  resolveCssImport: async (input) => {
+    try {
+      const result = await ipcRenderer.invoke(
+        PIER.LSP_RESOLVE_CSS_IMPORT,
+        input
+      );
+      if (
+        result &&
+        typeof result === "object" &&
+        typeof (result as { path?: unknown }).path === "string" &&
+        typeof (result as { isDirectory?: unknown }).isDirectory === "boolean"
+      ) {
+        return result as { isDirectory: boolean; path: string };
+      }
+      // Backward-compat if an older main only returned { path }.
+      if (
+        result &&
+        typeof result === "object" &&
+        typeof (result as { path?: unknown }).path === "string"
+      ) {
+        return {
+          isDirectory: false,
+          path: (result as { path: string }).path,
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
   },
   send: async (sessionId, message) => {
     try {

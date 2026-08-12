@@ -20,6 +20,11 @@ export class GitSafePathOpenError extends Error {
 }
 
 export interface OpenGitPathNoSymlinksOptions {
+  /**
+   * Open mode. `write` truncates and opens for writing; default `read`.
+   * Both modes refuse symlink races (darwin `O_NOFOLLOW_ANY`, linux fd walk).
+   */
+  readonly access?: "read" | "write";
   readonly canonicalRoot: string;
   readonly onDetachedOperation?: (operation: Promise<unknown>) => void;
   readonly segments: readonly string[];
@@ -34,23 +39,25 @@ export interface OpenGitPathNoSymlinksOptions {
 export async function openGitPathNoSymlinks(
   options: OpenGitPathNoSymlinksOptions
 ): Promise<FileHandle> {
+  const access = options.access ?? "read";
   if (process.platform === "darwin") {
     return racePathOpen(
-      () => fsOpen(options.target, fileFlags(DARWIN_O_NOFOLLOW_ANY)),
+      () => fsOpen(options.target, fileFlags(access, DARWIN_O_NOFOLLOW_ANY)),
       options
     );
   }
   if (process.platform === "linux") {
-    return openLinuxAnchored(options);
+    return openLinuxAnchored(options, access);
   }
   throw new GitSafePathOpenError(
     "unsupported",
-    "当前平台不支持无符号链接竞态的安全工作树读取"
+    "当前平台不支持无符号链接竞态的安全工作树读写"
   );
 }
 
 async function openLinuxAnchored(
-  options: OpenGitPathNoSymlinksOptions
+  options: OpenGitPathNoSymlinksOptions,
+  access: "read" | "write"
 ): Promise<FileHandle> {
   const fileName = options.segments.at(-1);
   if (fileName === undefined) {
@@ -72,7 +79,8 @@ async function openLinuxAnchored(
       directory = next;
     }
     const target = await racePathOpen(
-      () => fsOpen(procChild(directory as FileHandle, fileName), fileFlags()),
+      () =>
+        fsOpen(procChild(directory as FileHandle, fileName), fileFlags(access)),
       options
     );
     closeInBackground(directory, options.onDetachedOperation);
@@ -99,7 +107,15 @@ function directoryFlags(): number {
   );
 }
 
-function fileFlags(noFollow = constants.O_NOFOLLOW): number {
+function fileFlags(
+  access: "read" | "write",
+  noFollow = constants.O_NOFOLLOW
+): number {
+  if (access === "write") {
+    return (
+      constants.O_WRONLY + constants.O_TRUNC + constants.O_NONBLOCK + noFollow
+    );
+  }
   return constants.O_RDONLY + constants.O_NONBLOCK + noFollow;
 }
 

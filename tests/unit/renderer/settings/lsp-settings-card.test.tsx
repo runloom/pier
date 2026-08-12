@@ -43,9 +43,10 @@ describe("LspSettingsCard", () => {
     render(<LspSettingsCard />);
 
     const input = screen.getByRole("spinbutton", {
-      name: "Idle release (minutes)",
+      name: "Idle release",
     });
     expect(input).toHaveValue(30);
+    expect(screen.getByText("min")).toBeTruthy();
 
     fireEvent.change(input, { target: { value: "45" } });
     fireEvent.blur(input);

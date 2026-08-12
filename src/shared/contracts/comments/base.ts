@@ -59,13 +59,52 @@ export const gitFileCommentTargetSchema = z.strictObject({
 export type GitFileCommentTarget = z.infer<typeof gitFileCommentTargetSchema>;
 
 /**
- * 评论锚点判别联合。v1 schema 只注册 git 两种；code / markdown / canvas
- * 在 commentTargetKindSchema 占位，待消费端落地时经版本迁移新增判别成员
- * （设计文档 §9：新增成员是新增而非改写，存量线程无需迁移）。
+ * Markdown 预览块锚点（设计 2026-08-11）。
+ * contentHash + excerpt 创建时必填；headingId 可选；行号不可单独当精确附着证据。
+ */
+export const markdownCommentTargetSchema = z
+  .strictObject({
+    kind: z.literal("markdown"),
+    path: gitReviewRelativePathSchema,
+    headingId: z.string().min(1).max(256).optional(),
+    startLine: z.number().int().positive(),
+    endLine: z.number().int().positive().optional(),
+    contentHash: z.string().min(1).max(128),
+    excerpt: z.string().min(1).max(500),
+  })
+  .superRefine((target, context) => {
+    if (target.endLine !== undefined && target.endLine < target.startLine) {
+      context.addIssue({
+        code: "custom",
+        message: "endLine must be >= startLine",
+        path: ["endLine"],
+      });
+    }
+  });
+export type MarkdownCommentTarget = z.infer<typeof markdownCommentTargetSchema>;
+
+/**
+ * Canvas 预览锚点：无 anchorId = 文件级；有 anchorId = 声明式节点级。
+ * excerpt/label 可选（步骤 3 消费端可再收紧）。
+ */
+export const canvasCommentTargetSchema = z.strictObject({
+  kind: z.literal("canvas"),
+  path: gitReviewRelativePathSchema,
+  anchorId: z.string().min(1).max(256).optional(),
+  label: z.string().min(1).max(256).optional(),
+  excerpt: z.string().min(1).max(500).optional(),
+});
+export type CanvasCommentTarget = z.infer<typeof canvasCommentTargetSchema>;
+
+/**
+ * 评论锚点判别联合。
+ * git-diff / git-file / markdown / canvas 已注册；code 仍仅在 kind 枚举占位。
  */
 export const commentTargetSchema = z.discriminatedUnion("kind", [
   gitDiffCommentTargetSchema,
   gitFileCommentTargetSchema,
+  markdownCommentTargetSchema,
+  canvasCommentTargetSchema,
 ]);
 export type CommentTarget = z.infer<typeof commentTargetSchema>;
 

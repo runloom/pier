@@ -5,7 +5,7 @@ import {
   type ImportCandidateView,
   type SkillsUiDraft,
   useProjectSkillsStore,
-} from "@/stores/project-skills.store.ts";
+} from "@/stores/project-skills/store.ts";
 import { commitSkillsIntent, runRepair } from "./apply-flow.ts";
 import { discardPreparedCandidate } from "./candidate-lifecycle.ts";
 import { skillsErrorMessage } from "./error-copy.ts";

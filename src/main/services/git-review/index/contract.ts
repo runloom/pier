@@ -1,4 +1,5 @@
 import type {
+  GitReviewConflictXy,
   GitReviewFileStatus,
   GitReviewGroup,
 } from "../../../../shared/contracts/git/review.ts";
@@ -8,7 +9,22 @@ export const GIT_REVIEW_INDEX_TREE_MAX_SEGMENTS = 128;
 
 export type GitReviewIndexExecutionBudget = GitExecExecutionBudget;
 
+/**
+ * Porcelain v2 unmerged stages (only when origin is conflict).
+ * base = stage 1, ours = stage 2, theirs = stage 3.
+ */
+export interface GitReviewIndexConflictStages {
+  readonly baseOid: string | null;
+  readonly oursOid: string | null;
+  readonly theirsOid: string | null;
+  readonly xy: GitReviewConflictXy;
+}
+
 export interface GitReviewIndexGroupFact {
+  /**
+   * Unmerged metadata; non-null only when {@link origin} is `"conflict"`.
+   */
+  readonly conflict: GitReviewIndexConflictStages | null;
   readonly movement: "copy" | "rename" | null;
   readonly oldPath: string | null;
   readonly origin: "conflict" | "tracked" | "untracked";

@@ -47,6 +47,7 @@ export const commandPalette = {
     openCreatePanel: "新建面板...",
     newAgent: "启动默认智能体",
     listAgents: "智能体列表…",
+    openCollaboration: "智能体协作…",
     startAgent: "启动 {{agent}}",
     newWorkbench: "新建工作台",
     runTask: "运行任务…",

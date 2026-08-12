@@ -17,6 +17,7 @@ import {
 import type { GitReviewReadingSurface } from "../review/reading-surface.ts";
 
 export function useGitReviewLocaleProjection({
+  collidingFileLabel,
   commentsIndexRef,
   commentsSeqRef,
   context,
@@ -30,6 +31,7 @@ export function useGitReviewLocaleProjection({
   projectedLocaleRef,
   setProjection,
 }: {
+  readonly collidingFileLabel: (name: string) => string;
   readonly commentsIndexRef: RefObject<ReviewCommentIndex | null>;
   readonly commentsSeqRef: RefObject<number>;
   readonly context: RendererPluginContext;
@@ -65,6 +67,7 @@ export function useGitReviewLocaleProjection({
     const comments = commentsIndexRef.current;
     const localized = projectReviewLedger({
       authoritativeEntryKeys: controller.authoritativeEntryKeys(),
+      collidingFileLabel,
       ...(comments === null ? {} : { comments }),
       commentsSeq: commentsSeqRef.current,
       context,
@@ -77,6 +80,7 @@ export function useGitReviewLocaleProjection({
     recordLatestItemUpdates(localized.items);
     setProjection(localized);
   }, [
+    collidingFileLabel,
     commentsIndexRef,
     commentsSeqRef,
     context,

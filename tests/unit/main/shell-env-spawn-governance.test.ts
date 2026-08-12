@@ -34,9 +34,10 @@ const ALLOWLIST_RELATIVE = new Set([
   // B: LSP session / providers use process.env after boot apply (workspace
   // resolve path is PR3 optional; marked B until full workspace resolve)
   "src/main/services/lsp/session-host.ts",
-  "src/main/services/lsp/providers/gopls-provider.ts",
-  "src/main/services/lsp/providers/pyright-provider.ts",
-  "src/main/services/lsp/providers/rust-analyzer-provider.ts",
+  "src/main/services/lsp/providers/path-matrix-providers.ts",
+  "src/main/services/lsp/providers/create-path-provider.ts",
+  // B: PATH binary probe for L0 language matrix providers
+  "src/main/services/lsp/resolve-command.ts",
   // B: git exec uses resolveEnvironment when wired (fallback process.env)
   "src/main/services/git/exec-raw.ts",
   // C/B: CLI path bootstrap, resource process table, ledger bookkeeping

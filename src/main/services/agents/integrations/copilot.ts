@@ -17,7 +17,12 @@ const TIMEOUT_SECONDS = 5;
 /** 专用文件（loomdesk codeisland.json 同模式）。 */
 const configPath = () => join(homedir(), ".copilot", "hooks", "pier.json");
 
-/** Copilot CLI 已核验的原生事实 → Pier 规范事件名。 */
+/**
+ * Copilot CLI 已核验的原生事实 → Pier 规范事件名。
+ * Esc 取消常写入 session-state `events.jsonl` 的 `type: abort`
+ * （reason 含 user），**不一定**触发 agentStop；终态对账见
+ * `transcript/copilot-reconciler.ts`。
+ */
 export const COPILOT_EVENTS: ReadonlyArray<{
   nativeEvent: string;
   pierEvent: string;

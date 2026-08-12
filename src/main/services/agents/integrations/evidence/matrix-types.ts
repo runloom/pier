@@ -32,6 +32,8 @@ export type AgentStatusTransport =
   | "hook-command"
   | "hosted-plugin"
   | "transcript-reconciler"
+  /** 终端裸 Esc 旁路观察 → `pier.terminal.user_escape`（main FA 注入）。 */
+  | "host-terminal-escape"
   | "none";
 
 export interface AgentStatusEventMapping {

@@ -1,68 +1,64 @@
 import {
+  editorBasenameRulesFromMatrix,
+  editorExtensionMapFromMatrix,
+} from "@shared/language-matrix/index.ts";
+import {
   isProjectCanvasPath,
   liveModuleProjectContentDirectories,
 } from "@shared/live-module-canvas-path.ts";
 import type { FilesDocumentLanguage } from "../document/types.ts";
+import { editorLanguageModeRegistry } from "./language/mode-registry.ts";
 
-// Cursor 参考:文件面板顶部的语言标签 + syntax highlight 依赖此推断。扩展名到
-// language id 的映射保持保守 —— 只映射存在 codemirror 语言支持或 legacy-modes
-// 覆盖的文件类型;未识别时回落 "text",走 basicSetup 默认高亮,不阻断编辑。
-const EXTENSION_TO_LANGUAGE: Readonly<Record<string, FilesDocumentLanguage>> = {
-  bash: "shell",
-  c: "cpp",
-  cc: "cpp",
+/**
+ * L0 extension → language map from the shared language matrix, plus box
+ * languages that are not PATH rows (JS/TS/Vue live in special factories).
+ */
+const MATRIX_EXTENSION_TO_LANGUAGE = editorExtensionMapFromMatrix();
+
+const BOX_EXTENSION_TO_LANGUAGE: Readonly<
+  Record<string, FilesDocumentLanguage>
+> = {
   cjs: "javascript",
-  cmd: "shell",
-  cpp: "cpp",
-  cs: "cpp",
-  css: "css",
   cts: "typescript",
-  cxx: "cpp",
-  fish: "shell",
-  go: "go",
-  h: "cpp",
-  hpp: "cpp",
-  htm: "html",
-  html: "html",
-  hxx: "cpp",
-  java: "java",
   js: "javascript",
-  json: "json",
-  json5: "json",
-  jsonc: "json",
   jsx: "javascript",
-  kt: "kotlin",
-  kts: "kotlin",
-  markdown: "markdown",
-  md: "markdown",
-  mdx: "markdown",
   mjs: "javascript",
   mts: "typescript",
-  ps1: "shell",
-  py: "python",
-  pyi: "python",
-  pyw: "python",
-  rb: "ruby",
-  rs: "rust",
-  scss: "css",
-  sh: "shell",
-  sql: "sql",
-  swift: "swift",
-  toml: "toml",
   ts: "typescript",
   tsx: "typescript",
-  xml: "xml",
-  yaml: "yaml",
-  yml: "yaml",
-  zsh: "shell",
+  vue: "vue",
 };
+
+const EXTENSION_TO_LANGUAGE: Readonly<Record<string, FilesDocumentLanguage>> = {
+  ...MATRIX_EXTENSION_TO_LANGUAGE,
+  ...BOX_EXTENSION_TO_LANGUAGE,
+};
+
+const BASENAME_RULES = editorBasenameRulesFromMatrix();
+
+function matchBasenameLanguage(
+  loweredName: string
+): FilesDocumentLanguage | null {
+  for (const rule of BASENAME_RULES) {
+    for (const matcher of rule.matchers) {
+      const m = matcher.toLowerCase();
+      if (m.endsWith(".*")) {
+        const prefix = m.slice(0, -2);
+        if (loweredName === prefix || loweredName.startsWith(`${prefix}.`)) {
+          return rule.editorLanguageId as FilesDocumentLanguage;
+        }
+      } else if (loweredName === m) {
+        return rule.editorLanguageId as FilesDocumentLanguage;
+      }
+    }
+  }
+  return null;
+}
 
 export function languageForPath(
   path: string,
   projectRootPath?: string
 ): FilesDocumentLanguage {
-  // Live Modules: require canvas under known project content directories
-  // with a compound canvas suffix. Bare `*.tsx` outside those trees stay TS.
   const contentDirectories =
     liveModuleProjectContentDirectories(projectRootPath);
   if (isProjectCanvasPath(path, contentDirectories)) {
@@ -70,10 +66,20 @@ export function languageForPath(
   }
   const basename = path.split("/").filter(Boolean).at(-1) ?? "";
   const lowered = basename.toLowerCase();
+  const byBasename = matchBasenameLanguage(lowered);
+  if (byBasename) {
+    return byBasename;
+  }
   const dot = lowered.lastIndexOf(".");
   if (dot < 0 || dot === lowered.length - 1) {
-    return "text";
+    const dynamicBare = editorLanguageModeRegistry.languageIdForPath(path);
+    return dynamicBare ?? "text";
   }
   const ext = lowered.slice(dot + 1);
-  return EXTENSION_TO_LANGUAGE[ext] ?? "text";
+  const builtin = EXTENSION_TO_LANGUAGE[ext];
+  if (builtin) {
+    return builtin;
+  }
+  const dynamic = editorLanguageModeRegistry.languageIdForPath(path);
+  return dynamic ?? "text";
 }

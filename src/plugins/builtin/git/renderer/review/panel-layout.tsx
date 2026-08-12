@@ -380,6 +380,7 @@ export function GitReviewPanelLayout({
             getFileRefsUnderTreePath: () => [],
             getGroupForTreePath: () => undefined,
             getRepoRelativePath: () => null,
+            orderedFileRefs: [],
             mutation: { expectedIndexRevision: null, uncommitted: true },
           } satisfies ReturnType<typeof gitReviewTreeModel>)
         }

@@ -12,11 +12,11 @@
 
   box-sizing: border-box;
   max-width: var(--md-measure);
+  /* Host Appearance → document font (`--pier-document-font-family`). */
+  font-family: var(--pier-document-font-family);
   font-size: var(--md-font-size);
   line-height: var(--md-line-height);
   color: var(--foreground);
-  /* Default / data-reading-font="ui": inherit app UI sans. */
-  /* data-reading-font="custom": font-family set inline from settings. */
 }
 
 [data-slot="markdown-prose"][data-measure="wide"] {
@@ -47,8 +47,52 @@
   line-height: 1.25;
 }
 
-[data-slot="markdown-prose"] .md-h1:first-child {
+[data-slot="markdown-prose"] .md-h1:first-child,
+/* Comment chrome wraps top-level blocks; keep first heading flush. */
+  [data-slot="markdown-prose"]
+  [data-slot="markdown-comment-block"]:first-child
+  .md-h1 {
   margin-block-start: 0;
+}
+
+/*
+ * Left comment affordance: absolute outside the block (no layout shift).
+ * Height matches the block's first-line box so the icon centers on the title /
+ * first line (not the content-box top). em is the prose root font-size.
+ */
+[data-slot="markdown-comment-gutter"] {
+  height: calc(var(--md-line-height, 1.7) * 1em);
+  user-select: none;
+}
+
+[data-slot="markdown-comment-block"]:has(.md-h1)
+  > .relative
+  > [data-slot="markdown-comment-gutter"] {
+  height: calc(1.75 * 1.25 * 1em);
+}
+
+[data-slot="markdown-comment-block"]:has(.md-h2)
+  > .relative
+  > [data-slot="markdown-comment-gutter"] {
+  height: calc(1.4 * 1.3 * 1em);
+}
+
+[data-slot="markdown-comment-block"]:has(.md-h3)
+  > .relative
+  > [data-slot="markdown-comment-gutter"] {
+  height: calc(1.15 * 1.35 * 1em);
+}
+
+[data-slot="markdown-comment-block"]:has(.md-h4)
+  > .relative
+  > [data-slot="markdown-comment-gutter"],
+[data-slot="markdown-comment-block"]:has(.md-h5)
+  > .relative
+  > [data-slot="markdown-comment-gutter"],
+[data-slot="markdown-comment-block"]:has(.md-h6)
+  > .relative
+  > [data-slot="markdown-comment-gutter"] {
+  height: calc(1 * 1.4 * 1em);
 }
 
 [data-slot="markdown-prose"] .md-h2 {

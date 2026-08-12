@@ -243,7 +243,9 @@ function services(
     agentDetection: {} as never,
     gitReview: {} as never,
     comments: {} as never,
-    agentRuntimeIndex: {} as never,
+    agentRuntimeIndex: {
+      listMachine: () => ({ entries: [], version: 1 }),
+    } as never,
     agentUsage: {
       flush: async () => undefined,
       read: async () => ({ entries: [], version: 1 }),
@@ -443,6 +445,10 @@ function services(
         },
         targetPath: `/repo/.worktrees/${args.name}`,
         worktrees: [],
+      }),
+      get: async (args) => ({
+        path: args.path,
+        status: "not_found" as const,
       }),
       list: async (args) => ({
         currentPath: args.path,

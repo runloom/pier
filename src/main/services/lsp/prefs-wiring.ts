@@ -3,6 +3,7 @@
  * Imported by the LSP IPC module (not command-router) to avoid circular deps.
  */
 import type { LspPolicyPrefs } from "@shared/contracts/lsp.ts";
+import { syncCustomLanguageServers } from "./host-bridge.ts";
 import type { WorkspaceLspPolicy } from "./workspace-policy.ts";
 
 export function applyLspPrefsToPolicy(
@@ -16,4 +17,5 @@ export function applyLspPrefsToPolicy(
     maxRemoteWorkspaces: prefs.maxRemoteWorkspaces,
     worktreesEnabled: prefs.worktreesEnabled,
   });
+  syncCustomLanguageServers(prefs.customServers ?? []);
 }

@@ -6,6 +6,8 @@ export const pluginPermissions = {
   "file:read": "读取文件",
   "git:read": "读取 Git 状态",
   "git:write": "写入 Git 状态",
+  "lsp:provide": "提供语言服务",
+  "languageMode:provide": "提供编辑器语言模式",
   network: "访问网络",
   "panel:control": "控制面板",
   "panel:open": "打开面板",

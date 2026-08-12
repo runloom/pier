@@ -1,5 +1,6 @@
 import { LSPPlugin } from "@codemirror/lsp-client";
 import type { EditorView } from "@codemirror/view";
+import { tryNavigateCssImportAtOffset } from "./css-import-definition.ts";
 import { navigateFilesLspDefinition } from "./definition-navigate.ts";
 import {
   type FilesLspDefinitionTarget,
@@ -23,6 +24,8 @@ import type {
   FilesLspPreparedDefinition,
 } from "./hover-types.ts";
 import { filesLspHoverModelHasContent } from "./hover-types.ts";
+
+export { beginDefinitionAffordance } from "./hover-definition-affordance.ts";
 
 export interface HoverControllerHost {
   _activateDefinition(target: FilesLspPreparedDefinition): Promise<void>;
@@ -61,139 +64,6 @@ export interface HoverControllerHost {
   _sticky: boolean;
   _syncAffordance(range: { from: number; to: number } | null): void;
   _view: EditorView;
-}
-
-function affordanceRangeForDefinitions(
-  host: HoverControllerHost,
-  plugin: LSPPlugin,
-  candidate: FilesLspHoverCandidate,
-  targets: FilesLspDefinitionTarget[]
-): { from: number; to: number } | null {
-  for (const target of targets) {
-    if (!target.originSelectionRange) {
-      continue;
-    }
-    const mapped = host._candidateFromLspRange(
-      plugin,
-      target.originSelectionRange,
-      candidate.position
-    );
-    if (mapped.from < mapped.to) {
-      return { from: mapped.from, to: mapped.to };
-    }
-  }
-  if (candidate.from < candidate.to) {
-    return { from: candidate.from, to: candidate.to };
-  }
-  return null;
-}
-
-function setAffordanceCache(
-  host: HoverControllerHost,
-  candidate: FilesLspHoverCandidate,
-  status: DefinitionAffordanceCache["status"],
-  fields?: {
-    range?: { from: number; to: number } | null;
-    targets?: FilesLspDefinitionTarget[];
-    total?: number;
-    truncated?: boolean;
-  }
-): void {
-  host._affordanceCache = {
-    candidate,
-    range: fields?.range ?? null,
-    status,
-    targets: fields?.targets ?? [],
-    total: fields?.total ?? 0,
-    truncated: fields?.truncated ?? false,
-  };
-}
-
-/**
- * Cmd/Ctrl+hover: request definition and underline only when targets exist.
- * Does not open a definition card (Scheme Z).
- */
-export function beginDefinitionAffordance(
-  host: HoverControllerHost,
-  candidate: FilesLspHoverCandidate
-): void {
-  const existing = host._affordanceCache;
-  if (existing && sameFilesLspHoverCandidate(existing.candidate, candidate)) {
-    if (existing.status === "pending") {
-      return;
-    }
-    if (existing.status === "ready" && existing.range) {
-      host._syncAffordance(existing.range);
-      return;
-    }
-    // empty / failed / unavailable: keep no underline; do not re-hammer.
-    host._syncAffordance(null);
-    return;
-  }
-
-  host._affordanceToken += 1;
-  const token = host._affordanceToken;
-  host._requests.cancel();
-  setAffordanceCache(host, candidate, "pending");
-  host._syncAffordance(null);
-
-  const plugin = LSPPlugin.get(host._view);
-  if (!(plugin && clientHasCapability(plugin.client, "definitionProvider"))) {
-    setAffordanceCache(host, candidate, "unavailable");
-    return;
-  }
-
-  runDefinitionAffordancePreflight(host, plugin, candidate, token).catch(
-    () => undefined
-  );
-}
-
-async function runDefinitionAffordancePreflight(
-  host: HoverControllerHost,
-  plugin: LSPPlugin,
-  candidate: FilesLspHoverCandidate,
-  token: number
-): Promise<void> {
-  plugin.client.sync();
-  const params = filesLspHoverParams(plugin, candidate.position);
-  const result = await host._requests.request(
-    plugin.client,
-    "textDocument/definition",
-    params
-  );
-  if (
-    host._destroyed ||
-    token !== host._affordanceToken ||
-    !host._affordanceCache ||
-    !sameFilesLspHoverCandidate(host._affordanceCache.candidate, candidate)
-  ) {
-    return;
-  }
-  if (!result.ok) {
-    // Distinct from empty: click must re-request and can report failure.
-    setAffordanceCache(host, candidate, "failed");
-    host._syncAffordance(null);
-    return;
-  }
-  const definitions = parseFilesLspDefinitions(result.value);
-  if (definitions.targets.length === 0) {
-    setAffordanceCache(host, candidate, "empty");
-    host._syncAffordance(null);
-    return;
-  }
-  const range = affordanceRangeForDefinitions(
-    host,
-    plugin,
-    candidate,
-    definitions.targets
-  );
-  setAffordanceCache(host, candidate, "ready", {
-    range,
-    targets: definitions.targets,
-    total: definitions.total,
-    truncated: definitions.truncated,
-  });
-  host._syncAffordance(range);
 }
 
 export async function requestTransient(
@@ -369,6 +239,16 @@ export async function clickDefinition(
   host: HoverControllerHost,
   candidate: FilesLspHoverCandidate
 ): Promise<void> {
+  // CSS package @import: works without a CSS language server session.
+  const cssNavigated = await tryNavigateCssImportAtOffset({
+    offset: candidate.position,
+    view: host._view,
+  });
+  if (cssNavigated) {
+    host._clear();
+    return;
+  }
+
   if (!(await host._ensurePluginForDefinitionJump(candidate))) {
     return;
   }

@@ -21,7 +21,7 @@ export function joinFilesTreeRelativePath(
 }
 
 export function defaultFilesTreeBaseName(kind: FilesPendingCreateKind): string {
-  return kind === "file" ? "untitled.ts" : "New Folder";
+  return kind === "file" ? "untitled" : "New Folder";
 }
 
 function kindLooksLikeFileBase(base: string): boolean {

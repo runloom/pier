@@ -1,5 +1,6 @@
 import type { MainPluginContext, MainPluginModule } from "@plugins/api/main.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import { attachPluginLanguageServers } from "../services/lsp/host-bridge.ts";
 
 export type MainPluginContextFactory = (
   entry: PluginRegistryEntry,
@@ -10,6 +11,22 @@ function indexModules(
   modules: readonly MainPluginModule[]
 ): ReadonlyMap<string, MainPluginModule> {
   return new Map(modules.map((module) => [module.id, module]));
+}
+
+function attachBuiltinLanguageServers(entry: PluginRegistryEntry): () => void {
+  const contributions = entry.manifest.languageServers ?? [];
+  if (contributions.length === 0) {
+    return () => undefined;
+  }
+  if (!entry.manifest.permissions.includes("lsp:provide")) {
+    throw new Error(
+      `plugin ${entry.manifest.id} declares languageServers without lsp:provide`
+    );
+  }
+  return attachPluginLanguageServers({
+    contributions,
+    pluginId: entry.manifest.id,
+  });
 }
 
 export class MainPluginRuntime {
@@ -53,10 +70,14 @@ export class MainPluginRuntime {
       }
       // 按插件创建 context — set/reset 的所有权断言需要插件身份。
       // getEntries 是活引用：已激活插件的 context 在后续 refresh 后仍能现算最新 registry。
-      this.disposers.set(
-        entry.manifest.id,
-        module.activate(this.createContext(entry, getEntries))
+      const disposeActivate = module.activate(
+        this.createContext(entry, getEntries)
       );
+      const disposeLsp = attachBuiltinLanguageServers(entry);
+      this.disposers.set(entry.manifest.id, () => {
+        disposeLsp();
+        disposeActivate();
+      });
     }
 
     for (const [id, dispose] of this.disposers) {

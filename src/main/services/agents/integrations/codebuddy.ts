@@ -26,6 +26,9 @@ const codebuddyConfigPath = () =>
  *   因此二者均不安装。
  * - 子智能体使用 agent_id / agent_type，session_id 只作父会话锚点。
  * - Stop 可阻止智能体结束，保持 advisory；StopFailure 才是全局错误。
+ * - Esc/用户取消可能不触发 Stop（对齐 Claude/Qoder 族）。中断终态由
+ *   `transcript/codebuddy-reconciler.ts` 读 projects 下 session JSONL 的
+ *   Claude 同款中断标记，派发 TurnInterrupted。
  */
 function codebuddyCommand(
   nativeEvent: string,

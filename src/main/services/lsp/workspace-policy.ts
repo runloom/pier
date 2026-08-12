@@ -3,6 +3,7 @@ import type {
   LspPolicyPrefs,
   LspWorkspaceKind,
 } from "@shared/contracts/lsp.ts";
+import { DEFAULT_WORKSPACE_LSP_POLICY_PREFS } from "./default-policy-prefs.ts";
 import { normalizeFsRoot } from "./resolve-root.ts";
 import { LSP_TREE_CLEANUP_WAIT_MS } from "./workspace-tree-cleanup.ts";
 
@@ -32,16 +33,8 @@ export type LspEnsureDecision =
       workspaceKey: string;
     };
 
-const DEFAULT_PREFS: LspPolicyPrefs = {
-  enabled: true,
-  idleReleaseMs: 1_800_000,
-  maxLocalWorkspaces: 3,
-  maxRemoteWorkspaces: 2,
-  worktreesEnabled: false,
-};
-
 export function defaultLspPolicyPrefs(): LspPolicyPrefs {
-  return { ...DEFAULT_PREFS };
+  return { ...DEFAULT_WORKSPACE_LSP_POLICY_PREFS };
 }
 
 export class WorkspaceLspPolicy {
@@ -65,7 +58,7 @@ export class WorkspaceLspPolicy {
     prefs?: Partial<LspPolicyPrefs>;
     startIdleTimer?: boolean;
   }) {
-    this.#prefs = { ...DEFAULT_PREFS, ...input?.prefs };
+    this.#prefs = { ...DEFAULT_WORKSPACE_LSP_POLICY_PREFS, ...input?.prefs };
     this.#now = input?.now ?? Date.now;
     this.#onIdleWorkspaces = input?.onIdleWorkspaces ?? (() => undefined);
     if (input?.startIdleTimer !== false) {

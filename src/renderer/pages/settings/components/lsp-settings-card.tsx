@@ -1,7 +1,8 @@
 import { Card, CardContent } from "@pier/ui/card.tsx";
-import { FieldSet } from "@pier/ui/field.tsx";
+import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { LspToolsStatusList } from "@/pages/settings/components/lsp-tools-status-list.tsx";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
@@ -91,34 +92,36 @@ function LspIdleReleaseRow({
   onChange: (value: number) => Promise<void>;
   value: number;
 }) {
-  const minutes = value / MINUTE_MS;
+  const minutes = Math.round(value / MINUTE_MS);
   const [draft, setDraft] = useState(String(minutes));
-  const [previous, setPrevious] = useState(value);
-  if (value !== previous) {
-    setPrevious(value);
+  const [previous, setPrevious] = useState(minutes);
+  if (minutes !== previous) {
+    setPrevious(minutes);
     setDraft(String(minutes));
   }
 
+  const t = useT();
   return (
     <InputRow
       description={description}
       disabled={disabled}
       id="settings-lsp-idle-release-minutes"
-      inputClassName="w-24"
+      inputClassName="w-32"
       inputMode="numeric"
       label={label}
       max={IDLE_RELEASE_MINUTES_MAX}
       min={IDLE_RELEASE_MINUTES_MIN}
       onBlur={(raw) => {
         const nextMinutes = normalizeIdleReleaseMinutes(raw, minutes);
-        const next = nextMinutes * MINUTE_MS;
         setDraft(String(nextMinutes));
-        if (next !== value) {
-          onChange(next).catch(() => undefined);
+        const nextMs = nextMinutes * MINUTE_MS;
+        if (nextMs !== value) {
+          onChange(nextMs).catch(() => undefined);
         }
       }}
       onChange={setDraft}
       step={1}
+      suffix={t("settings.unit.minutes")}
       type="number"
       value={draft}
     />
@@ -126,9 +129,8 @@ function LspIdleReleaseRow({
 }
 
 /**
- * LSP settings card: language server policy toggles.
- * Lives in WorkspaceSection because these are host preferences, not plugin
- * configuration.
+ * Host language-service policy + read-only local tool probe.
+ * Language coverage is L0 (Files + PATH matrix), not installable language packs.
  */
 export function LspSettingsCard() {
   const t = useT();
@@ -163,6 +165,14 @@ export function LspSettingsCard() {
     <Card>
       <CardContent>
         <FieldSet>
+          <div className="flex flex-col gap-1">
+            <p className="font-medium text-sm">
+              {t("settings.row.lspHostSectionTitle")}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {t("settings.row.lspHostSectionDesc")}
+            </p>
+          </div>
           <SwitchRow
             checked={enabled}
             description={t("settings.row.lspEnabledDesc")}
@@ -182,6 +192,27 @@ export function LspSettingsCard() {
               setWorktreesEnabled(next).catch(reportUpdateFailure);
             }}
           />
+          <FieldSeparator />
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1">
+              <p className="font-medium text-sm">
+                {t("settings.row.lspToolsTitle")}
+              </p>
+              <p className="text-muted-foreground text-sm">
+                {t("settings.row.lspToolsDesc")}
+              </p>
+            </div>
+            <LspToolsStatusList />
+          </div>
+          <FieldSeparator />
+          <div className="flex flex-col gap-1">
+            <p className="font-medium text-sm">
+              {t("settings.row.lspAdvancedTitle")}
+            </p>
+            <p className="text-muted-foreground text-sm">
+              {t("settings.row.lspAdvancedDesc")}
+            </p>
+          </div>
           <LspIdleReleaseRow
             description={t("settings.row.lspIdleReleaseMinutesDesc")}
             disabled={!enabled}

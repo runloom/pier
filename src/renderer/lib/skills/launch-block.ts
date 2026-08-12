@@ -2,7 +2,7 @@ import type { SkillsLaunchBlockedInfo } from "@shared/contracts/terminal.ts";
 import type { TFunction } from "i18next";
 import { openProjectsSettings } from "@/pages/settings/data/projects-settings-nav.ts";
 import { showAppChoice, showAppConfirm } from "@/stores/app-dialog.store.ts";
-import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
+import { useProjectSkillsStore } from "@/stores/project-skills/store.ts";
 
 type Translate = TFunction;
 
