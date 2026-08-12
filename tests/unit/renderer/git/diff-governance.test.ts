@@ -220,9 +220,22 @@ describe("Git diff renderer governance", () => {
       "[data-header-content] [data-title]:hover bdi"
     );
     expect(adapterSource).toContain('from "./sticky-stabilize.ts"');
-    // 挂载 layout 会 reapply；onPostRender 热路径 reapply:false 只 patch
-    expect(adapterSource).toContain("stabilizeCodeViewStickyPositioning(");
+    // codeViewKey remount reapply；items 变更 / onPostRender 热路径 reapply:false
+    // （禁止内容更新后把 stale stickyOffset 再写回，否则滚不到顶部）
+    expect(adapterSource).toContain("useDiffViewStickyStabilize");
     expect(adapterSource).toContain("reapply: false");
+    const stickyStabilizeSource = await readFile(
+      join(ROOT, "packages/ui/src/diff-view/sticky-stabilize.ts"),
+      "utf8"
+    );
+    expect(stickyStabilizeSource).toContain("useDiffViewStickyStabilize");
+    expect(stickyStabilizeSource).toContain("reapply: false");
+    expect(stickyStabilizeSource).toContain("[codeViewKey]");
+    const runtimeSource = await readFile(
+      join(ROOT, "packages/ui/src/diff-view/code-view-runtime.ts"),
+      "utf8"
+    );
+    expect(runtimeSource).toContain("resyncDiffStickyScaffolding");
     expect(customCss).toContain("[data-diffs-header]");
     expect(customCss).toContain("[data-metadata] > [data-deletions-count]");
     expect(source).toContain("renderHeaderMetadata={renderHeaderMetadata}");
