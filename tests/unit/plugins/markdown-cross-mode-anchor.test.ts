@@ -9,6 +9,7 @@ import {
   markdownPagesToForceForOffset,
   markdownViewportFocusY,
   offsetWithinBlockRange,
+  sourceOffsetForLine,
 } from "@plugins/builtin/files/renderer/markdown/cross-mode-anchor.ts";
 import { scheduleMarkdownPreviewAnchorReflow } from "@plugins/builtin/files/renderer/markdown/cross-mode-anchor-reflow.ts";
 import { describe, expect, it } from "vitest";
@@ -231,5 +232,14 @@ describe("markdown cross-mode anchor", () => {
       align: "start",
       offset: 42,
     });
+  });
+
+  it("maps 1-based lines to character offsets", () => {
+    const source = "line1\nline2\nline3";
+    expect(sourceOffsetForLine(source, 1)).toBe(0);
+    expect(sourceOffsetForLine(source, 2)).toBe(6);
+    expect(sourceOffsetForLine(source, 3)).toBe(12);
+    expect(sourceOffsetForLine(source, 99)).toBe(source.length);
+    expect(sourceOffsetForLine("", 1)).toBe(0);
   });
 });

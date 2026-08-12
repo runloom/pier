@@ -27,7 +27,7 @@ import {
   commentFailureSchema,
 } from "@shared/contracts/comments/index.ts";
 import type { DebouncedJsonStore } from "../../state/debounced-store.ts";
-import { assertCommentScope } from "./identity.ts";
+import { assertCommentTarget } from "./identity.ts";
 import { createCommentProjectStore, listCommentProjectFiles } from "./store.ts";
 
 export interface CommentsService {
@@ -140,12 +140,12 @@ export function createCommentsService(
     },
 
     createThread: async (request) => {
-      const scopeError = assertCommentScope(
+      const targetError = assertCommentTarget(
         request.worktreeKey,
-        request.target.scope
+        request.target
       );
-      if (scopeError) {
-        return scopeError;
+      if (targetError) {
+        return targetError;
       }
       const store = await ensureStore(request.worktreeKey);
       const ts = now();

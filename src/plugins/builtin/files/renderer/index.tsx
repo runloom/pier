@@ -55,6 +55,7 @@ import { createFilesContentSearchPanel } from "./search/panel.tsx";
 import { createFilesQuickOpenAction } from "./search/quick-open.ts";
 import { createFilesTreeActions } from "./tree/actions.ts";
 import { registerFilesDiskOpenLineReveal } from "./tree/open-disk-line.ts";
+import { registerFilesDiskOpenPreviewPrefer } from "./tree/open-disk-preview.ts";
 import { registerFilesDiskOpenTreeReveal } from "./tree/open-disk-reveal.ts";
 import { clearFileTreeSidebarCache } from "./tree/registry.ts";
 import { createRevealActiveFileInTreeAction } from "./tree/reveal-active-action.ts";
@@ -352,6 +353,8 @@ export const filesRendererPlugin: RendererPluginModule = {
       registerFilesDiskOpenTreeReveal(context),
       // openInEditor({ line }) → goToLine after the disk tab opens.
       registerFilesDiskOpenLineReveal(editorController, context),
+      // Comment jump / preferPreview → seed preview mode.
+      registerFilesDiskOpenPreviewPrefer(),
     ];
 
     return () => {

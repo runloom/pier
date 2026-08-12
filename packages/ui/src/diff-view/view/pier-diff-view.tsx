@@ -29,7 +29,7 @@ import { useDiffRenderWatchdog } from "../render-watchdog.ts";
 import { useDiffRenderWindowReport } from "../render-window.ts";
 import type { PierDiffAnnotationMetadata } from "../review/annotation-types.ts";
 import { useDiffViewReviewAnnotationMerge } from "../review/use-review-annotation-merge.ts";
-import { stabilizeCodeViewStickyPositioning } from "../sticky-stabilize.ts";
+import { useDiffViewStickyStabilize } from "../sticky-stabilize.ts";
 import {
   captureTopologyScrollRestore,
   restoreTopologyScroll,
@@ -335,11 +335,7 @@ export function PierDiffView({
     codeViewRef,
   });
 
-  useLayoutEffect(() => {
-    if (codeViewKey.length >= 0 && codeViewItems.length >= 0) {
-      stabilizeCodeViewStickyPositioning(codeViewRef.current?.getInstance());
-    }
-  }, [codeViewItems, codeViewKey]);
+  useDiffViewStickyStabilize(codeViewRef, codeViewKey, codeViewItems);
 
   useLayoutEffect(() => {
     restoreTopologyScroll({

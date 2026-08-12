@@ -54,8 +54,18 @@ export const MARKDOWN_TOC_EDGE_INSET_PX = 28;
  */
 export const MARKDOWN_TOC_BOTTOM_RESERVE_PX = 56;
 
-/** Horizontal padding on the markdown scrollport (`px-6` = 24px). */
+/**
+ * Default horizontal padding on the markdown scrollport (right when no outline).
+ * Kept for TOC geometry helpers that only need a symmetric edge reserve.
+ */
 export const MARKDOWN_PREVIEW_SCROLL_PAD_X_PX = 24;
+
+/**
+ * Left padding of the markdown scrollport.
+ * Slightly wider than the right pad (24) so the comment gutter icon sits
+ * outside prose without feeling cramped against the panel edge.
+ */
+export const MARKDOWN_PREVIEW_SCROLL_PAD_LEFT_PX = 28;
 
 /**
  * Extra gap between prose and the tick rail (beyond edge inset + tick width).

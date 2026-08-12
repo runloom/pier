@@ -1,4 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import {
   isProjectCanvasPath,
   liveModuleProjectContentDirectories,
@@ -14,6 +15,7 @@ import { useFilesDocument } from "../document/use-document.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import { FilesMutationSuspendedError } from "../mutation/gate.ts";
+import { CanvasCommentsButton } from "../preview/canvas-comments-button.tsx";
 import { CanvasReloadButton } from "../preview/canvas-toolbar.tsx";
 import {
   DocumentFormatBadge,
@@ -100,6 +102,10 @@ export function ResolvedFilePanelActions({
       : null;
   const showDiffToggle =
     mode === "diff" || document.conflictDiskContents !== null;
+  const canvasCommentPath =
+    document.source.kind === "disk" ? document.source.path : null;
+  const showCanvasComments =
+    isCanvas && mode === "preview" && canvasCommentPath !== null;
 
   return (
     <>
@@ -115,35 +121,53 @@ export function ResolvedFilePanelActions({
         t={t}
       />
       <DocumentFormatBadge document={document} />
-      {supportsPreview ? (
-        <Button
-          aria-label={
-            mode === "preview"
-              ? t("filePanel.view.switchToSource", "Switch to source")
-              : t("filePanel.view.switchToPreview", "Switch to preview")
-          }
-          className="ml-1"
-          onClick={() => {
-            const next = mode === "preview" ? "source" : "preview";
-            if (panelId) {
-              controller.setPanelMode(panelId, next);
-              return;
-            }
-            onModeChange(next);
-          }}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          {mode === "preview" ? (
-            <Code2 data-icon="inline-start" />
-          ) : (
-            <Eye data-icon="inline-start" />
-          )}
-        </Button>
+      {/* Canvas preview: annotate → reload → source toggle. */}
+      {showCanvasComments && canvasCommentPath ? (
+        <CanvasCommentsButton path={canvasCommentPath} t={t} />
       ) : null}
       {isCanvas && mode === "preview" && canvasRelPath ? (
         <CanvasReloadButton moduleId={canvasRelPath} t={t} />
+      ) : null}
+      {supportsPreview ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              aria-label={
+                mode === "preview"
+                  ? t("filePanel.view.switchToSource", "Switch to source")
+                  : t("filePanel.view.switchToPreview", "Switch to preview")
+              }
+              className={
+                // Spacing: first control after format badge when no canvas tools.
+                showCanvasComments || (isCanvas && mode === "preview")
+                  ? undefined
+                  : "ml-1"
+              }
+              onClick={() => {
+                const next = mode === "preview" ? "source" : "preview";
+                if (panelId) {
+                  controller.setPanelMode(panelId, next);
+                  return;
+                }
+                onModeChange(next);
+              }}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              {mode === "preview" ? (
+                <Code2 data-icon="inline-start" />
+              ) : (
+                <Eye data-icon="inline-start" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {mode === "preview"
+              ? t("filePanel.view.switchToSource", "Switch to source")
+              : t("filePanel.view.switchToPreview", "Switch to preview")}
+          </TooltipContent>
+        </Tooltip>
       ) : null}
       {showDiffToggle ? (
         <Button

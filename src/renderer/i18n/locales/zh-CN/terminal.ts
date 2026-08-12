@@ -269,7 +269,8 @@ export const terminal = {
       },
       comments: {
         clear: "清除",
-        clearBody: "将删除当前变更上的全部评论，且无法撤销。",
+        clearBody:
+          "将删除本列表中的全部评论（变更、文档与设计稿），且无法撤销。",
         clearConfirm: "清除",
         clearFailed: "无法清除评论",
         clearPartialBody:
@@ -281,7 +282,7 @@ export const terminal = {
         deleteOne: "删除评论",
         dialogTitle: "待处理评论",
         empty: "没有未解决评论",
-        emptyBody: "在当前变更上添加评论后，可在此处理。",
+        emptyBody: "在变更、文档或设计稿上添加评论后，可在此处理。",
         emptyTitle: "没有可处理的评论",
         failure: {
           commentNotFound: "这条评论已不存在。",
@@ -291,8 +292,15 @@ export const terminal = {
           threadNotFound: "该评论线程已不存在。",
         },
         itemTitle: "{{path}}:{{line}}",
+        itemTitlePathOnly: "{{path}}",
+        sourceCanvas: "设计稿",
+        sourceGit: "diff",
+        sourceMarkdown: "文档",
         jumpFailed: "无法打开变更",
         jumpFailedBody: "请先打开此项目的变更视图，然后再试跳转。",
+        jumpUnsupportedBody:
+          "这类评论的跳转尚未支持。你仍可从本列表提交给智能体处理。",
+        jumpUnsupportedTitle: "暂不支持跳转",
         loadingLabel: "正在加载当前变更…",
         openCount: "{{count}} 条待处理评论",
         staleJumpBody:

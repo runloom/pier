@@ -84,6 +84,11 @@ export interface PierDiffViewLineStats {
  * (side, line) 查询匹配线程。v1 瘦身：每锚点一条评论，无 state/count。
  */
 export interface PierDiffReviewCommentThread {
+  /**
+   * 创建时的文件 blob OID（可选）。宿主投影用其与当前 patch index 比对；
+   * 不一致则不得原位展示（防空挂）。UI 层可不消费。
+   */
+  readonly blobOid?: string;
   readonly line: number;
   readonly side: "additions" | "deletions";
   readonly threadId: string;

@@ -5,6 +5,7 @@ import type {
 import type { FilesTranslate } from "../i18n.ts";
 import type { FilesLspHoverLabels } from "../lsp/hover-types.ts";
 import type { MarkdownRendererLabels } from "../markdown/ir-renderer.tsx";
+import type { MarkdownPreviewCommentLabels } from "../markdown/preview-comments-layer.tsx";
 
 export const DEFAULT_FILES_LSP_HOVER_LABELS: FilesLspHoverLabels = {
   contentTruncated: "Documentation was truncated",
@@ -153,4 +154,39 @@ export function createMarkdownErrorLabel(t: FilesTranslate): string {
     "filePanel.markdown.renderFailed",
     "Unable to render Markdown preview."
   );
+}
+
+export function createMarkdownCommentLabels(
+  t: FilesTranslate
+): MarkdownPreviewCommentLabels {
+  return {
+    addComment: t("filePanel.markdown.comment.add", "Add comment"),
+    authorYou: t("filePanel.markdown.comment.authorYou", "You"),
+    close: t("filePanel.markdown.comment.close", "Close"),
+    createFailed: t(
+      "filePanel.markdown.comment.createFailed",
+      "Couldn’t create comment"
+    ),
+    deleteComment: t("filePanel.markdown.comment.delete", "Delete"),
+    deleteFailed: t(
+      "filePanel.markdown.comment.deleteFailed",
+      "Couldn’t delete comment"
+    ),
+    deleted: t("filePanel.markdown.comment.deleted", "Deleted"),
+    driftTitle: t(
+      "filePanel.markdown.comment.driftTitle",
+      "Comments that can no longer be located precisely"
+    ),
+    editComment: t("filePanel.markdown.comment.edit", "Edit"),
+    inputPlaceholder: t(
+      "filePanel.markdown.comment.placeholder",
+      "Write a comment…"
+    ),
+    submit: t("filePanel.markdown.comment.submit", "Submit"),
+    title: t("filePanel.markdown.comment.title", "Comment"),
+    updateFailed: t(
+      "filePanel.markdown.comment.updateFailed",
+      "Couldn’t update comment"
+    ),
+  };
 }

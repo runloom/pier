@@ -1,6 +1,6 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
 import type {
   EditorRange,
@@ -14,6 +14,7 @@ import type { FilesTranslate } from "../i18n.ts";
 import {
   defaultMarkdownCrossModeAnchor,
   type MarkdownCrossModeAnchor,
+  sourceOffsetForLine,
 } from "../markdown/cross-mode-anchor.ts";
 import { FileImagePreview } from "../preview/image.tsx";
 import { isCanvasDiskDoc } from "./canvas-doc.ts";
@@ -21,6 +22,7 @@ import { FileDiskConflictState } from "./disk-conflict-banner.tsx";
 import {
   createFileEditorAdapterLabels,
   createFileSearchLabels,
+  createMarkdownCommentLabels,
   createMarkdownErrorLabel,
   createMarkdownRendererLabels,
   createMarkdownTocLabels,
@@ -40,6 +42,7 @@ export function ResolvedFilePanel({
   context,
   markdownAnchor,
   markdownAnchorRequestId,
+  markdownRevealLine,
   controller,
   editorSessionId,
   mode,
@@ -53,6 +56,8 @@ export function ResolvedFilePanel({
   context: RendererPluginContext | undefined;
   markdownAnchor?: string | undefined;
   markdownAnchorRequestId?: string | undefined;
+  /** 1-based line when comment jump has no headingId. */
+  markdownRevealLine?: number | undefined;
   controller: FileEditorController;
   editorSessionId: string;
   mode: FileViewMode;
@@ -91,6 +96,29 @@ export function ResolvedFilePanel({
   useEffect(() => {
     setPreviewRestoreAnchor(undefined);
   }, [documentId]);
+
+  // Comment jump without headingId: map startLine → content offset for preview scroll.
+  const lineRevealAnchor = useMemo((): MarkdownCrossModeAnchor | undefined => {
+    if (
+      markdownRevealLine === undefined ||
+      markdownRevealLine < 1 ||
+      !document ||
+      document.language !== "markdown"
+    ) {
+      return;
+    }
+    return defaultMarkdownCrossModeAnchor(
+      sourceOffsetForLine(document.currentContents, markdownRevealLine)
+    );
+  }, [document, markdownRevealLine]);
+
+  const previewContentAnchor = previewRestoreAnchor ?? lineRevealAnchor;
+  let previewContentAnchorRequestId: string | number | undefined;
+  if (previewRestoreAnchor) {
+    previewContentAnchorRequestId = previewRestoreRequestId;
+  } else if (markdownRevealLine !== undefined) {
+    previewContentAnchorRequestId = markdownAnchorRequestId;
+  }
 
   const handleModeChange = useCallback(
     (next: FileViewMode) => {
@@ -364,10 +392,9 @@ export function ResolvedFilePanel({
           markdownAppearance={context?.appearance}
           markdownCaptureAnchorRef={previewCaptureRef}
           markdownCharts={context?.charts}
-          markdownContentAnchor={previewRestoreAnchor}
-          markdownContentAnchorRequestId={
-            previewRestoreAnchor ? previewRestoreRequestId : undefined
-          }
+          markdownCommentLabels={createMarkdownCommentLabels(t)}
+          markdownContentAnchor={previewContentAnchor}
+          markdownContentAnchorRequestId={previewContentAnchorRequestId}
           markdownCopyCode={context ? handleCopyMarkdownCode : undefined}
           markdownErrorLabel={createMarkdownErrorLabel(t)}
           markdownFileResources={context}

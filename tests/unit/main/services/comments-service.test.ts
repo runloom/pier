@@ -89,6 +89,43 @@ describe("CommentsService", () => {
     }
   });
 
+  it("creates a markdown thread without git scope", async () => {
+    const { service } = makeService(dir);
+    const created = await service.createThread({
+      author: { kind: "user" },
+      body: "fix docs",
+      target: {
+        contentHash: "hash1",
+        excerpt: "paragraph",
+        kind: "markdown",
+        path: "docs/plan.md",
+        startLine: 4,
+      },
+      worktreeKey: WORKTREE_KEY,
+    });
+    expect(created.kind).toBe("ok");
+    const list = await service.list({ worktreeKey: WORKTREE_KEY });
+    expect(list.kind).toBe("ok");
+    if (list.kind !== "ok") {
+      return;
+    }
+    expect(list.snapshot.threads[0]?.target.kind).toBe("markdown");
+  });
+
+  it("creates a canvas file-level thread", async () => {
+    const { service } = makeService(dir);
+    const created = await service.createThread({
+      author: { kind: "user" },
+      body: "fix canvas",
+      target: {
+        kind: "canvas",
+        path: "design/a.canvas.tsx",
+      },
+      worktreeKey: WORKTREE_KEY,
+    });
+    expect(created.kind).toBe("ok");
+  });
+
   it("deletes a single-comment thread entirely", async () => {
     const { service } = makeService(dir);
     const created = await service.createThread({

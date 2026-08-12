@@ -1,12 +1,25 @@
+import { CommentNavigator } from "@pier/ui/comment-navigator.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { findCanvasCommentAnchorElement } from "@shared/comments/canvas-anchor.ts";
 import {
   detectProjectCanvasFramework,
   liveModuleProjectContentDirectories,
   normalizeProjectRootKey,
   projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import {
+  useCommentNavigatorController,
+  useCommentNavigatorLabels,
+} from "../comments/use-comment-navigator.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import {
   markCanvasActive,
@@ -14,8 +27,14 @@ import {
   unmarkCanvasActive,
   useCanvasChrome,
 } from "./canvas-chrome-store.ts";
+import { CanvasCommentOverlay } from "./canvas-comment-overlay.tsx";
+import type { CanvasCommentPinView } from "./canvas-comment-pins.tsx";
+import { createCanvasCommentLabels } from "./canvas-comments-button.tsx";
 import {
-  CANVAS_SKELETON_DELAY_MS,
+  clearCanvasCommentsSession,
+  publishCanvasCommentsSession,
+} from "./canvas-comments-session.ts";
+import {
   type CanvasPreviewState,
   useCanvasCompileSession,
 } from "./canvas-compile-session.ts";
@@ -27,32 +46,106 @@ import {
   clearMountedCanvas,
 } from "./canvas-states.tsx";
 import { subscribeLiveModulesProjectConfigChanged } from "./load-live-modules-config.ts";
+import { useCanvasCommentPins } from "./use-canvas-comment-pins.ts";
+import {
+  CANVAS_PICK_DRAFT_ID,
+  type CanvasCommentThreadView,
+  useCanvasHostAnchorIds,
+  useCanvasPreviewComments,
+} from "./use-canvas-preview-comments.ts";
+
+interface CanvasCommentNavTarget {
+  readonly commentId: string;
+  /** Non-null only for in-preview pin-backed targets (floating n/N reveal). */
+  readonly pinKey: string | null;
+  readonly threadId: string;
+}
+
+/** Floating nav cycle: only threads that have a live pin (reveal can open). */
+function buildCanvasCommentNavTargets(
+  pins: readonly CanvasCommentPinView[]
+): CanvasCommentNavTarget[] {
+  const targets: CanvasCommentNavTarget[] = [];
+  const seen = new Set<string>();
+  for (const pin of pins) {
+    for (const thread of pin.threads) {
+      if (seen.has(thread.threadId)) {
+        continue;
+      }
+      seen.add(thread.threadId);
+      targets.push({
+        commentId: thread.comment.id,
+        pinKey: pin.key,
+        threadId: thread.threadId,
+      });
+    }
+  }
+  return targets;
+}
+
+/**
+ * Clear-all set: every live comment on this canvas path (pins + file + drift +
+ * unlocated picks). Must match status-bar processable coverage for the file.
+ */
+function buildCanvasCommentClearTargets(input: {
+  readonly driftNodeThreads: readonly CanvasCommentThreadView[];
+  readonly fileThreads: readonly CanvasCommentThreadView[];
+  readonly locateDriftThreads: readonly CanvasCommentThreadView[];
+  readonly pickedNodeThreads: readonly CanvasCommentThreadView[];
+  readonly pins: readonly CanvasCommentPinView[];
+}): CanvasCommentNavTarget[] {
+  const targets: CanvasCommentNavTarget[] = [];
+  const seen = new Set<string>();
+  const push = (thread: CanvasCommentThreadView, pinKey: string | null) => {
+    if (seen.has(thread.threadId)) {
+      return;
+    }
+    seen.add(thread.threadId);
+    targets.push({
+      commentId: thread.comment.id,
+      pinKey,
+      threadId: thread.threadId,
+    });
+  };
+  for (const pin of input.pins) {
+    for (const thread of pin.threads) {
+      push(thread, pin.key);
+    }
+  }
+  for (const thread of [
+    ...input.fileThreads,
+    ...input.driftNodeThreads,
+    ...input.pickedNodeThreads,
+    ...input.locateDriftThreads,
+  ]) {
+    push(thread, null);
+  }
+  return targets;
+}
 
 /**
  * Live Modules preview inside the files panel (same shell as Markdown preview).
- *
- * The compile + mount lifecycle lives in `useCanvasCompileSession`; this
- * component owns the refs, the toolbar chrome store, and the state rendering
- * (pending / loading / ready / error + hot-reload soft-error banner).
- *
- * - First open / path change: blank host; skeleton only if still pending after
- *   {@link CANVAS_SKELETON_DELAY_MS}.
  */
 export function FileCanvasPreview(props: {
   context: RendererPluginContext;
   path: string;
   root: string;
   t: FilesTranslate;
+  worktreeKey?: string | undefined;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  /** Relative box for comment overlay geometry (not the outer scroll root). */
+  const [canvasShellEl, setCanvasShellEl] = useState<HTMLDivElement | null>(
+    null
+  );
   const unmountRef = useRef<(() => void) | null>(null);
-  /** Identity of the module currently mounted in the host (hot-reload match key). */
   const mountedIdentityRef = useRef<string | null>(null);
   const mountedModuleIdRef = useRef<string | null>(null);
   const [nonce, setNonce] = useState(0);
   const [state, setState] = useState<CanvasPreviewState>({ kind: "pending" });
-  /** Bump when Project → General saves content directories for this root. */
   const [configEpoch, setConfigEpoch] = useState(0);
+  const [hostEl, setHostEl] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const rootKey = normalizeProjectRootKey(props.root);
@@ -64,8 +157,6 @@ export function FileCanvasPreview(props: {
     });
   }, [props.root]);
 
-  // configEpoch forces re-read of runtime roots after settings save
-  // (external module map is not a React state dep of props.root alone).
   // biome-ignore lint/correctness/useExhaustiveDependencies: configEpoch invalidates runtime map
   const contentDirectories = useMemo(
     () => liveModuleProjectContentDirectories(props.root),
@@ -76,8 +167,6 @@ export function FileCanvasPreview(props: {
   const framework =
     detectProjectCanvasFramework(props.path, contentDirectories) ?? "react";
 
-  // Tear down only when the preview component itself unmounts — not on every
-  // hot-reload effect re-run (that would flash empty before recompile).
   useEffect(
     () => () => {
       clearMountedCanvas(
@@ -105,9 +194,6 @@ export function FileCanvasPreview(props: {
     unmountRef,
   });
 
-  // Panel toolbar visibility: while this preview is mounted, the toolbar's
-  // Reload button for this module shows. Cleanup runs on relPath change and
-  // on component unmount (refcounted, so multi-panel stays correct).
   useEffect(() => {
     if (!relPath) {
       return;
@@ -118,9 +204,6 @@ export function FileCanvasPreview(props: {
     };
   }, [relPath]);
 
-  // Toolbar Reload (header trailing slot) bumps the per-module counter; we
-  // recompile here. Baseline on first mount so a stale counter from a previous
-  // session of this module doesn't trigger an immediate duplicate compile.
   const chrome = useCanvasChrome(relPath ?? "");
   const lastReloadRef = useRef<number | null>(null);
   useEffect(() => {
@@ -134,7 +217,6 @@ export function FileCanvasPreview(props: {
     }
   }, [chrome.reloadRequest]);
 
-  // Publish busy state for the toolbar Reload disabled state.
   useEffect(() => {
     if (!relPath) {
       return;
@@ -144,6 +226,126 @@ export function FileCanvasPreview(props: {
       state.kind === "pending" || state.kind === "loading"
     );
   }, [relPath, state]);
+
+  // Host element for anchor scan (ready + host mounted after compile).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rebind when canvas remounts
+  useEffect(() => {
+    setHostEl(hostRef.current);
+  }, [state.kind, nonce]);
+
+  const anchorIds = useCanvasHostAnchorIds(hostEl);
+  const worktreeKey = props.worktreeKey ?? props.root;
+  const labels = useMemo(() => createCanvasCommentLabels(props.t), [props.t]);
+  const comments = useCanvasPreviewComments({
+    anchorIds,
+    context: props.context,
+    labels,
+    path: props.path,
+    worktreeKey,
+  });
+
+  useEffect(() => {
+    publishCanvasCommentsSession(props.path, comments);
+    return () => {
+      clearCanvasCommentsSession(props.path);
+    };
+  }, [comments, props.path]);
+
+  // Pins only in-preview; unlocated still clearable / status-bar processable.
+  const { driftThreads: locateDriftThreads, pins } = useCanvasCommentPins({
+    host: hostEl,
+    locatedByAnchorId: comments.locatedByAnchorId,
+    pickedNodeThreads: comments.pickedNodeThreads,
+    shell: canvasShellEl,
+    softMarkers: comments.softMarkers,
+  });
+
+  const [navOpenPinKey, setNavOpenPinKey] = useState<string | null>(null);
+  // Floating n/N is pin-centric (every step has a reveal). Clear covers full path.
+  const navTargets = useMemo(() => buildCanvasCommentNavTargets(pins), [pins]);
+  const clearTargets = useMemo(
+    () =>
+      buildCanvasCommentClearTargets({
+        driftNodeThreads: comments.driftNodeThreads,
+        fileThreads: comments.fileThreads,
+        locateDriftThreads,
+        pickedNodeThreads: comments.pickedNodeThreads,
+        pins,
+      }),
+    [
+      comments.driftNodeThreads,
+      comments.fileThreads,
+      comments.pickedNodeThreads,
+      locateDriftThreads,
+      pins,
+    ]
+  );
+  const navLabels = useCommentNavigatorLabels(props.t);
+  const onRevealNavTarget = useCallback(
+    (target: CanvasCommentNavTarget) => {
+      if (target.pinKey === null) {
+        return;
+      }
+      const pin = pins.find((entry) => entry.key === target.pinKey);
+      if (!pin) {
+        return;
+      }
+      const shell = canvasShellEl ?? shellRef.current;
+      const pinEl =
+        shell?.querySelector(`[data-canvas-comment-pin="${pin.index}"]`) ??
+        null;
+      if (pinEl instanceof HTMLElement) {
+        pinEl.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+      comments.setPickMode(false);
+      setNavOpenPinKey(target.pinKey);
+    },
+    [canvasShellEl, comments, pins]
+  );
+  const commentNavigator = useCommentNavigatorController({
+    clearTargets,
+    context: props.context,
+    labels: navLabels,
+    onReveal: onRevealNavTarget,
+    targets: navTargets,
+    worktreeKey,
+  });
+
+  // Esc exits Design Mode pick (layer handles click/hover via elementFromPoint).
+  useEffect(() => {
+    if (!comments.pickMode) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (comments.draftOpen) {
+          comments.handlers.onCancelDraft(CANVAS_PICK_DRAFT_ID);
+          return;
+        }
+        comments.setPickMode(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [
+    comments.draftOpen,
+    comments.handlers,
+    comments.pickMode,
+    comments.setPickMode,
+  ]);
+
+  // Reveal: scroll to anchor when panel params request it.
+  const revealAnchor = useCanvasRevealAnchor(props.path);
+  useEffect(() => {
+    if (!(revealAnchor && hostEl && state.kind === "ready")) {
+      return;
+    }
+    const el = findCanvasCommentAnchorElement(hostEl, revealAnchor);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [hostEl, revealAnchor, state.kind]);
 
   if (!relPath) {
     return <CanvasUnavailableEmpty t={props.t} />;
@@ -159,9 +361,11 @@ export function FileCanvasPreview(props: {
   return (
     <div
       aria-busy={isBusy ? true : undefined}
-      className="flex min-h-0 flex-1 flex-col overflow-auto bg-background"
+      className="relative flex min-h-0 flex-1 flex-col overflow-auto bg-background"
       data-framework={framework}
+      data-pick-mode={comments.pickMode ? "" : undefined}
       data-slot="file-canvas-preview"
+      ref={shellRef}
     >
       {softError ? (
         <CanvasSoftErrorBanner
@@ -187,15 +391,78 @@ export function FileCanvasPreview(props: {
         />
       ) : null}
 
-      {/* Host stays mounted (incl. error) so Reload / remount always has a node. */}
       <div
         className={cn(
-          "mx-auto min-h-full w-full max-w-5xl px-6 py-5",
+          "relative mx-auto min-h-full w-full max-w-5xl px-6 py-5",
           !showHost && "hidden"
         )}
         data-pier-canvas-shell=""
-        ref={hostRef}
-      />
+        ref={setCanvasShellEl}
+      >
+        <div className="relative min-h-full w-full" ref={hostRef} />
+        {showHost ? (
+          <CanvasCommentOverlay
+            draftOpen={comments.draftOpen}
+            draftPick={comments.draftPick}
+            draftPlacement={comments.draftPlacement}
+            handlers={comments.handlers}
+            host={hostEl}
+            labels={labels}
+            onExitPickMode={() => {
+              comments.setPickMode(false);
+            }}
+            onPickElement={comments.openPickDraft}
+            onRequestOpenConsumed={() => {
+              setNavOpenPinKey(null);
+            }}
+            pickMode={comments.pickMode}
+            pins={pins}
+            requestOpenKey={navOpenPinKey}
+            shell={canvasShellEl}
+          />
+        ) : null}
+      </div>
+      {commentNavigator.visible ? (
+        <CommentNavigator
+          activeIndex={commentNavigator.activeIndex}
+          clearLabel={commentNavigator.clearLabel}
+          nextLabel={commentNavigator.nextLabel}
+          onClear={commentNavigator.onClear}
+          onNext={commentNavigator.onNext}
+          onPrevious={commentNavigator.onPrevious}
+          positionLabel={commentNavigator.positionLabel}
+          previousLabel={commentNavigator.previousLabel}
+          toolbarLabel={commentNavigator.toolbarLabel}
+          total={commentNavigator.total}
+        />
+      ) : null}
     </div>
+  );
+}
+
+/** Panel-params reveal bus for canvas anchor scroll. */
+const revealByPath = new Map<string, string>();
+const revealListeners = new Set<() => void>();
+
+export function requestCanvasAnchorReveal(
+  path: string,
+  anchorId: string
+): void {
+  revealByPath.set(path, anchorId);
+  for (const listener of revealListeners) {
+    listener();
+  }
+}
+
+function useCanvasRevealAnchor(path: string): string | null {
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      revealListeners.add(onStoreChange);
+      return () => {
+        revealListeners.delete(onStoreChange);
+      };
+    },
+    () => revealByPath.get(path) ?? null,
+    () => null
   );
 }

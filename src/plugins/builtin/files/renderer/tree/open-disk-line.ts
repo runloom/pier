@@ -14,6 +14,10 @@ export function registerFilesDiskOpenLineReveal(
   context: RendererPluginContext
 ): () => void {
   return onFilesDiskPathOpened((event) => {
+    // Comment jumps prefer preview; do not force source goToLine.
+    if (event.preferPreview === true) {
+      return;
+    }
     if (event.line == null || event.line < 1) {
       return;
     }

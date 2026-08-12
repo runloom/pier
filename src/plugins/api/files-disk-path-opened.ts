@@ -5,12 +5,18 @@
  */
 
 export interface FilesDiskPathOpenedEvent {
+  /** Canvas node id (`data-pier-comment-id`) to scroll after open. */
+  canvasRevealAnchor?: string;
   /** 1-based column within the line; optional with `line`. */
   column?: number;
   instanceId: string;
   /** 1-based line to reveal after open (working-tree editor). */
   line?: number;
+  /** Markdown heading id for preview scroll (with preferPreview). */
+  markdownAnchor?: string;
   path: string;
+  /** Switch file panel to Markdown preview mode when applicable. */
+  preferPreview?: boolean;
   root: string;
 }
 

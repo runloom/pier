@@ -8,8 +8,8 @@
  * - operations：CRUD 命令 request / result schema + commentsCommandSchemas
  *
  * main 侧 CommentsService 是唯一写入方；renderer 镜像 store 只读快照；
- * 插件经 RendererPluginContext.comments 门面读写。v1 schema 只注册 git 两种
- * 锚点（git-diff / git-file），code / markdown / canvas 在 target kind 枚举占位。
+ * 插件经 RendererPluginContext.comments 门面读写。
+ * schema 已注册 git-diff / git-file / markdown / canvas；code 仍仅在 kind 枚举占位。
  */
 
 export * from "./base.ts";
