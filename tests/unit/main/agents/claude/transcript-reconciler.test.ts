@@ -91,6 +91,33 @@ describe("claude transcript reconciler", () => {
     reconciler.dispose();
   });
 
+  it("无 transcriptPath 时按 sessionId 扫描 projects 布局", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const cwdDir = join(transcriptRoot, "-Users-test-project");
+    await mkdir(cwdDir, { recursive: true });
+    const sessionPath = join(cwdDir, "session-1.jsonl");
+    writeFileSync(sessionPath, '{"type":"summary"}\n');
+    const reconciler = createClaudeTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe({
+      agent: "claude",
+      event: "PromptSubmit",
+      kind: "agentEvent",
+      panelId: "panel-1",
+      sessionId: "session-1",
+      v: 1,
+      windowId: "1",
+    });
+    appendFileSync(sessionPath, interruptLine());
+    await vi.waitFor(() => {
+      expect(received).toHaveLength(1);
+    });
+    expect(received[0]?.event).toBe("TurnInterrupted");
+    reconciler.dispose();
+  });
+
   it("工具中中断变体（for tool use）同样对账", async () => {
     const received: AgentHookEventPayload[] = [];
     const reconciler = createClaudeTranscriptReconciler({
@@ -105,6 +132,60 @@ describe("claude transcript reconciler", () => {
 
     await vi.waitFor(() => expect(received).toHaveLength(1), { timeout: 5000 });
     expect(received[0]?.event).toBe("TurnInterrupted");
+    reconciler.dispose();
+  });
+
+  it("assistant stop_reason=end_turn 对账为 TurnCompleted（补 Stop 漏报）", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createClaudeTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path));
+    appendFileSync(
+      path,
+      `${JSON.stringify({
+        isSidechain: false,
+        message: {
+          content: [{ text: "你好。", type: "text" }],
+          role: "assistant",
+          stop_reason: "end_turn",
+        },
+        type: "assistant",
+      })}\n`
+    );
+    await vi.waitFor(() => expect(received).toHaveLength(1), { timeout: 5000 });
+    expect(received[0]).toMatchObject({
+      event: "TurnCompleted",
+      nativeEvent: "claude.transcript.assistant_stop.end_turn",
+      panelId: "panel-1",
+      sessionId: "session-1",
+    });
+    expect(agentHookEventSchema.safeParse(received[0]).success).toBe(true);
+    reconciler.dispose();
+  });
+
+  it("assistant stop_reason=tool_use 不算完成", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createClaudeTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path));
+    appendFileSync(
+      path,
+      `${JSON.stringify({
+        isSidechain: false,
+        message: {
+          content: [{ id: "t1", name: "Bash", type: "tool_use" }],
+          role: "assistant",
+          stop_reason: "tool_use",
+        },
+        type: "assistant",
+      })}\n`
+    );
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 300));
+    expect(received).toHaveLength(0);
     reconciler.dispose();
   });
 

@@ -1,4 +1,5 @@
 import type { DockviewApi } from "dockview-react";
+import { prepareTabStripScrollsForMaximizeLayoutMutation } from "@/lib/workspace/tab-strip-scroll.ts";
 
 interface DockviewSplitviewLike {
   readonly contentSize?: number;
@@ -126,6 +127,8 @@ function equalizeDockviewBranchLive(node: unknown): boolean {
 
 export function equalizeDockviewSplits(api: DockviewApi): boolean {
   if (api.hasMaximizedGroup()) {
+    // Same P1 entry as toggle maximize: snapshot before exitMaximizedGroup.
+    prepareTabStripScrollsForMaximizeLayoutMutation();
     api.exitMaximizedGroup();
   }
   return equalizeDockviewBranchLive(assertInternalDockviewEqualizeApi(api));

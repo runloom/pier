@@ -8,12 +8,24 @@ const ipcMocks = vi.hoisted(() => ({
     recordId: "record-new",
     windowId: "w-1",
   })),
+  prepareTabStrip: vi.fn(),
 }));
 
 vi.mock("@/lib/ipc/window-ipc.ts", () => ({
   closeCurrentWindow: ipcMocks.closeCurrentWindow,
   createWindow: ipcMocks.createWindow,
 }));
+
+vi.mock("@/lib/workspace/tab-strip-scroll.ts", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@/lib/workspace/tab-strip-scroll.ts")
+    >();
+  return {
+    ...actual,
+    prepareTabStripScrollsForMaximizeLayoutMutation: ipcMocks.prepareTabStrip,
+  };
+});
 
 function activePanel() {
   return {
@@ -36,6 +48,7 @@ describe("panel maximize action", () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+    ipcMocks.prepareTabStrip.mockClear();
     useWorkspaceStore.getState().setApi(null);
   });
 
@@ -63,7 +76,13 @@ describe("panel maximize action", () => {
 
       action?.handler();
 
+      expect(ipcMocks.prepareTabStrip).toHaveBeenCalledOnce();
       expect(panel.api.maximize).toHaveBeenCalledOnce();
+      // Snapshot must run before dockview mutates visibility.
+      expect(ipcMocks.prepareTabStrip.mock.invocationCallOrder[0]).toBeLessThan(
+        panel.api.maximize.mock.invocationCallOrder[0] ??
+          Number.POSITIVE_INFINITY
+      );
     } finally {
       dispose();
     }

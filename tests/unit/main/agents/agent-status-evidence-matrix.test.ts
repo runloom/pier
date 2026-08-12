@@ -13,11 +13,15 @@ import { AGENT_STATUS_EVIDENCE_ROWS_A } from "../../../../src/main/services/agen
 import { AGENT_STATUS_EVIDENCE_ROWS_B } from "../../../../src/main/services/agents/integrations/evidence/matrix-rows-b.ts";
 import { AGENT_HOOK_INTEGRATIONS } from "../../../../src/main/services/agents/integrations/registry.ts";
 import { CLAUDE_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/claude-reconciler.ts";
+import { CODEBUDDY_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/codebuddy-reconciler.ts";
 import {
   CODEX_TRANSCRIPT_INTERACTION_EVIDENCE,
   CODEX_TRANSCRIPT_TERMINAL_EVIDENCE,
 } from "../../../../src/main/services/agents/integrations/transcript/codex-reconciler.ts";
+import { COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/copilot-reconciler.ts";
 import { GROK_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/grok-reconciler.ts";
+import { KIMI_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/kimi-reconciler.ts";
+import { QODER_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/qoder-reconciler.ts";
 
 const ALL_EVIDENCE_DIMENSIONS: readonly AgentStatusEvidenceDimension[] = [
   "lifecycle",
@@ -145,10 +149,47 @@ describe("agent status evidence matrix", () => {
     expect(AGENT_STATUS_EVIDENCE.claude.transport).toEqual([
       "hook-command",
       "transcript-reconciler",
+      "host-terminal-escape",
     ]);
+    expect(AGENT_STATUS_EVIDENCE.claude.eventMappings).toContainEqual(
+      expect.objectContaining({
+        level: "reconciled",
+        nativeEvent: "pier.terminal.user_escape",
+        pierEvent: "TurnInterrupted",
+      })
+    );
   });
 
-  it("aligns Claude facts with its installed hook map and sole reconciled interrupt", () => {
+  it("host 裸 Esc 自动挂到所有可 processing 的 active agent", () => {
+    for (const [agentId, evidence] of Object.entries(AGENT_STATUS_EVIDENCE)) {
+      if (evidence.integration !== "active") {
+        expect(
+          evidence.transport.includes("host-terminal-escape"),
+          agentId
+        ).toBe(false);
+        continue;
+      }
+      if (evidence.evidence.processing === "unsupported") {
+        expect(
+          evidence.transport.includes("host-terminal-escape"),
+          agentId
+        ).toBe(false);
+        continue;
+      }
+      expect(evidence.transport, agentId).toContain("host-terminal-escape");
+      expect(evidence.evidence.interrupted, agentId).not.toBe("unsupported");
+      expect(evidence.evidence.ready, agentId).not.toBe("unsupported");
+      expect(evidence.eventMappings, agentId).toContainEqual(
+        expect.objectContaining({
+          level: "reconciled",
+          nativeEvent: "pier.terminal.user_escape",
+          pierEvent: "TurnInterrupted",
+        })
+      );
+    }
+  });
+
+  it("aligns Claude facts with idle_prompt ready and sole reconciled interrupt", () => {
     const claude = AGENT_STATUS_EVIDENCE.claude;
     const declaredHookMappings = CLAUDE_HOOK_EVENTS.flatMap((event) =>
       (event.emittedPierEvents ?? [event.pierEvent]).map((pierEvent) => ({
@@ -156,10 +197,15 @@ describe("agent status evidence matrix", () => {
         pierEvent,
       }))
     );
-    expect(claude.evidence.completed).toBe("unsupported");
+    expect(claude.evidence.completed).toBe("native");
+    expect(claude.evidence.ready).toBe("native");
     expect(claude.evidence.interrupted).toBe("reconciled");
-    expect(claude.eventMappings).not.toContainEqual(
-      expect.objectContaining({ pierEvent: "TurnCompleted" })
+    expect(claude.eventMappings).toContainEqual(
+      expect.objectContaining({
+        level: "native",
+        nativeEvent: "Notification",
+        pierEvent: "TurnCompleted",
+      })
     );
     for (const mapping of claude.eventMappings.filter(
       (entry) => entry.level === "native"
@@ -176,12 +222,23 @@ describe("agent status evidence matrix", () => {
         nativeEvent: "claude.transcript.user_interrupt",
         pierEvent: "TurnInterrupted",
       },
+      {
+        nativeEvent: "claude.transcript.assistant_stop",
+        pierEvent: "TurnCompleted",
+      },
     ]);
     expect(claude.eventMappings).toContainEqual(
       expect.objectContaining({
         level: "reconciled",
         nativeEvent: "claude.transcript.user_interrupt",
         pierEvent: "TurnInterrupted",
+      })
+    );
+    expect(claude.eventMappings).toContainEqual(
+      expect.objectContaining({
+        level: "reconciled",
+        nativeEvent: "claude.transcript.assistant_stop",
+        pierEvent: "TurnCompleted",
       })
     );
   });
@@ -380,6 +437,18 @@ describe("agent status evidence matrix", () => {
     expect(AGENT_STATUS_EVIDENCE.grok.transport).toContain(
       "transcript-reconciler"
     );
+    expect(AGENT_STATUS_EVIDENCE.qodercli.transport).toContain(
+      "transcript-reconciler"
+    );
+    expect(AGENT_STATUS_EVIDENCE.codebuddy.transport).toContain(
+      "transcript-reconciler"
+    );
+    expect(AGENT_STATUS_EVIDENCE.copilot.transport).toContain(
+      "transcript-reconciler"
+    );
+    expect(AGENT_STATUS_EVIDENCE.kimi.transport).toContain(
+      "transcript-reconciler"
+    );
     for (const [agentId, emittedMappings] of [
       [
         "codex",
@@ -389,11 +458,19 @@ describe("agent status evidence matrix", () => {
         ],
       ],
       ["grok", GROK_TRANSCRIPT_TERMINAL_EVIDENCE],
+      ["qodercli", QODER_TRANSCRIPT_TERMINAL_EVIDENCE],
+      ["codebuddy", CODEBUDDY_TRANSCRIPT_TERMINAL_EVIDENCE],
+      ["copilot", COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE],
+      ["kimi", KIMI_TRANSCRIPT_TERMINAL_EVIDENCE],
     ] as const) {
+      // host Esc 是独立 transport，不计入 transcript 对账集合
       const reconciledMappings = [
         ...new Map(
           AGENT_STATUS_EVIDENCE[agentId].eventMappings
             .filter((entry) => entry.level === "reconciled")
+            .filter(
+              (entry) => entry.nativeEvent !== "pier.terminal.user_escape"
+            )
             .map(({ nativeEvent, pierEvent }) => [
               `${nativeEvent}\0${pierEvent}`,
               { nativeEvent, pierEvent },

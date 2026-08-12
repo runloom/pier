@@ -1075,4 +1075,301 @@ test.describe("Native terminal focus e2e", () => {
       rmSync(markerDir, { recursive: true, force: true });
     }
   });
+
+  /**
+   * Open terminals via CLI so these cases do not depend on System Events /
+   * Accessibility (Meta+T / paste probe). Prefer UI maximize button over ⌘⇧M.
+   */
+  async function openTerminalViaCli(
+    userDataDir: string,
+    options: { split?: "right"; windowId?: string } = {}
+  ): Promise<{ panelId: string; windowId: string }> {
+    const args = ["terminal", "open"];
+    if (options.split === "right") {
+      args.push("--split", "right");
+    }
+    if (options.windowId) {
+      args.push("--window", options.windowId);
+    }
+    const data = await runPierCliJson<{
+      panelId?: string;
+      panelIds?: string[];
+      windowId?: string;
+    }>(userDataDir, args);
+    const panelId = data.panelId ?? data.panelIds?.[0];
+    const windowId = data.windowId;
+    if (!(panelId && windowId)) {
+      throw new Error(`terminal open missing ids: ${JSON.stringify(data)}`);
+    }
+    return { panelId, windowId };
+  }
+
+  async function openTerminalTabsViaCli(
+    userDataDir: string,
+    windowId: string,
+    totalCount: number
+  ): Promise<CliPanelList> {
+    let snapshot = await panelList(userDataDir);
+    while (terminalPanels(snapshot).length < totalCount) {
+      await openTerminalViaCli(userDataDir, { windowId });
+      snapshot = await waitForTerminalPanelCount(
+        userDataDir,
+        terminalPanels(snapshot).length + 1
+      );
+    }
+    return snapshot;
+  }
+
+  async function dockviewMaximized(win: Page): Promise<boolean> {
+    return win.evaluate(() => {
+      const host = document.querySelector("[data-dockview-maximized]");
+      return host?.getAttribute("data-dockview-maximized") === "true";
+    });
+  }
+
+  async function clickPanelMaximizeToggle(
+    win: Page,
+    order: "left" | "right",
+    options: { expectMaximized?: boolean } = {}
+  ) {
+    const before = await dockviewMaximized(win);
+    const buttons = win.getByRole("button", {
+      name: /^(Maximize|Restore|最大化|还原)$/u,
+    });
+    const count = await buttons.count();
+    if (count <= 0) {
+      throw new Error("maximize/restore button not found");
+    }
+    // With 2 groups both may show Maximize; left is first in DOM reading order.
+    const index = order === "left" ? 0 : Math.max(0, count - 1);
+    await buttons.nth(index).click();
+    const expectMaximized = options.expectMaximized ?? !before;
+    await expect
+      .poll(() => dockviewMaximized(win), { timeout: 10_000 })
+      .toBe(expectMaximized);
+  }
+
+  /** Activate a group without changing its active panel (avoid hitting a tab). */
+  async function clickGroupHeaderVoid(win: Page, order: "left" | "right") {
+    const point = await win.evaluate((side) => {
+      const groups = [
+        ...document.querySelectorAll<HTMLElement>(".dv-groupview"),
+      ]
+        .map((group) => {
+          const rect = group.getBoundingClientRect();
+          return { group, x: rect.x };
+        })
+        .sort((a, b) => a.x - b.x);
+      const target = side === "left" ? groups[0]?.group : groups.at(-1)?.group;
+      if (!target) {
+        throw new Error(`group not found: ${side}`);
+      }
+      const voidEl = target.querySelector<HTMLElement>(".dv-void-container");
+      if (voidEl) {
+        const rect = voidEl.getBoundingClientRect();
+        if (rect.width > 4 && rect.height > 4) {
+          return {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+          };
+        }
+      }
+      const header = target.querySelector<HTMLElement>(
+        ".dv-tabs-and-actions-container"
+      );
+      if (!header) {
+        throw new Error("tab header missing");
+      }
+      const rect = header.getBoundingClientRect();
+      // Just left of right-side header actions (maximize / overflow).
+      return {
+        x: Math.max(rect.left + 8, rect.right - 72),
+        y: rect.top + rect.height / 2,
+      };
+    }, order);
+    await win.mouse.click(point.x, point.y);
+  }
+
+  /**
+   * G3 — tab strip scroll ownership gold standard.
+   * Maximize another group must not reset this group's remembered scrollLeft.
+   */
+  test("maximize restore keeps the other group's tab strip scrollLeft", async () => {
+    test.setTimeout(120_000);
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
+      });
+      await waitForPierCli(userDataDir);
+      const initial = await waitForTerminalPanelCount(userDataDir, 1);
+      const first = terminalPanels(initial)[0];
+      if (!first) {
+        throw new Error("initial terminal missing");
+      }
+
+      await openTerminalViaCli(userDataDir, {
+        split: "right",
+        windowId: first.windowId,
+      });
+      await waitForTerminalPanelCount(userDataDir, 2);
+
+      // Focus right group then fill tabs via CLI (active-tab placement).
+      await clickTerminalByHorizontalOrder(win, "right");
+      const rightSeed = terminalPanels(await panelList(userDataDir)).find(
+        (session) => session.active
+      );
+      if (!rightSeed) {
+        throw new Error("right seed terminal not active");
+      }
+      await runPierCliJson(userDataDir, [
+        "panels",
+        "focus",
+        rightSeed.id,
+        "--window",
+        rightSeed.windowId,
+      ]);
+      const snapshot = await openTerminalTabsViaCli(
+        userDataDir,
+        rightSeed.windowId,
+        10
+      );
+      const rightActive = terminalPanels(snapshot).find(
+        (session) => session.active
+      );
+      if (!rightActive) {
+        throw new Error("right active terminal not found");
+      }
+
+      await setTabStripScrollLeftForPanel(win, rightActive.id, 0);
+      await expect
+        .poll(async () => (await tabVisibility(win, rightActive.id))?.visible)
+        .toBe(false);
+
+      const scrolled = await win.evaluate((panelId) => {
+        const contentElement = [
+          ...document.querySelectorAll<HTMLElement>("[data-panel-tab-id]"),
+        ].find((element) => element.dataset.panelTabId === panelId);
+        const tabsContainer =
+          contentElement
+            ?.closest<HTMLElement>(".dv-tab")
+            ?.closest<HTMLElement>(".dv-tabs-container") ?? null;
+        if (!tabsContainer) {
+          throw new Error(`tab strip not found for ${panelId}`);
+        }
+        const max = Math.max(
+          0,
+          tabsContainer.scrollWidth - tabsContainer.clientWidth
+        );
+        const next = Math.max(80, Math.floor(max * 0.5));
+        tabsContainer.scrollLeft = next;
+        tabsContainer.dispatchEvent(new Event("scroll"));
+        return tabsContainer.scrollLeft;
+      }, rightActive.id);
+      expect(scrolled).toBeGreaterThan(0);
+
+      await clickTerminalByHorizontalOrder(win, "left");
+      await clickPanelMaximizeToggle(win, "left", { expectMaximized: true });
+      await clickPanelMaximizeToggle(win, "left", { expectMaximized: false });
+
+      await expect
+        .poll(
+          async () => {
+            const after = await tabVisibility(win, rightActive.id);
+            return after?.scrollLeft ?? -1;
+          },
+          { timeout: 10_000 }
+        )
+        .toBe(scrolled);
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * G4 — focusing another group (not terminal surface click) reveals that
+   * group's active tab. Uses pier.panel.focusRight (Ctrl+Shift+ArrowRight),
+   * which runs activateWorkspacePanel({ reveal: "always" }).
+   */
+  test("group focus navigation reveals the active tab", async () => {
+    test.setTimeout(120_000);
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-terminal-e2e-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await app.evaluate(({ BrowserWindow }) => {
+        BrowserWindow.getAllWindows()[0]?.setSize(820, 520);
+      });
+      await waitForPierCli(userDataDir);
+      const initial = await waitForTerminalPanelCount(userDataDir, 1);
+      const first = terminalPanels(initial)[0];
+      if (!first) {
+        throw new Error("initial terminal missing");
+      }
+
+      await openTerminalViaCli(userDataDir, {
+        split: "right",
+        windowId: first.windowId,
+      });
+      await waitForTerminalPanelCount(userDataDir, 2);
+      await clickTerminalByHorizontalOrder(win, "right");
+      const rightSeed = terminalPanels(await panelList(userDataDir)).find(
+        (session) => session.active
+      );
+      if (!rightSeed) {
+        throw new Error("right seed terminal not active");
+      }
+      await runPierCliJson(userDataDir, [
+        "panels",
+        "focus",
+        rightSeed.id,
+        "--window",
+        rightSeed.windowId,
+      ]);
+      const snapshot = await openTerminalTabsViaCli(
+        userDataDir,
+        rightSeed.windowId,
+        10
+      );
+      const rightActive = terminalPanels(snapshot).find(
+        (session) => session.active
+      );
+      if (!rightActive) {
+        throw new Error("right active terminal not found");
+      }
+
+      await setTabStripScrollLeftForPanel(win, rightActive.id, 0);
+      await expect
+        .poll(async () => (await tabVisibility(win, rightActive.id))?.visible)
+        .toBe(false);
+
+      // Leave right group; terminal surface path must not reveal.
+      await clickTerminalByHorizontalOrder(win, "left");
+      await expect
+        .poll(async () => (await tabVisibility(win, rightActive.id))?.visible)
+        .toBe(false);
+
+      // Chord needs web routing: click left header void, then focus right group.
+      await clickGroupHeaderVoid(win, "left");
+      await win.keyboard.press("Control+Shift+ArrowRight");
+
+      await expect
+        .poll(async () => (await tabVisibility(win, rightActive.id))?.visible, {
+          timeout: 10_000,
+        })
+        .toBe(true);
+    } finally {
+      await app.close();
+      rmSync(userDataDir, { recursive: true, force: true });
+    }
+  });
 });

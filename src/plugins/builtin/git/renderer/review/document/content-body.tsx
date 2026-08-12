@@ -1,4 +1,5 @@
 import type {
+  PierDiffReviewCommentThread,
   PierDiffViewHandle,
   PierDiffViewPresentation,
   PierDiffViewProps,
@@ -23,7 +24,11 @@ import type {
 import { ReviewCodeView, type ReviewRenderFeedback } from "../code-view.tsx";
 import type { ReviewFailureSummary } from "../failure-state.ts";
 import { ReviewLoading } from "../feedback.tsx";
-import type { GitReviewReadingSurface } from "../reading-surface.ts";
+import type {
+  GitReviewMutationLease,
+  GitReviewMutationTransition,
+  GitReviewReadingSurface,
+} from "../reading-surface.ts";
 import { ReviewConflictView } from "./conflict-view.tsx";
 import type { ReviewDocumentProjection } from "./projection.ts";
 import { projectReviewLedger } from "./projection.ts";
@@ -31,6 +36,7 @@ import { projectReviewLedger } from "./projection.ts";
 export function documentContent(options: {
   readonly appearance: RendererPluginAppearance;
   readonly authoritativeEmpty: boolean;
+  readonly collidingFileLabel?: (name: string) => string;
   readonly context: RendererPluginContext;
   readonly contextId: string;
   readonly diffRef: (handle: PierDiffViewHandle | null) => void;
@@ -98,6 +104,9 @@ export function documentContent(options: {
     !options.authoritativeEmpty
   ) {
     displayProjection = projectReviewLedger({
+      ...(options.collidingFileLabel === undefined
+        ? {}
+        : { collidingFileLabel: options.collidingFileLabel }),
       context: options.context,
       diffBase: options.emptySurface,
       entries: options.entries,

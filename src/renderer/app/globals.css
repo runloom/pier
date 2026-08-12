@@ -145,6 +145,15 @@
     var(--foreground) 16%,
     var(--background)
   );
+  /* Sidebar list wash (file tree, chrome lists). Base is --sidebar (= muted),
+     already a raised surface — lower % than canvas interactive-* so light
+     themes stay clean (no chalky double-lift). Neutral fill only; never mix
+     CTA --primary into list selection. Dark defaults; :root.light retunes %. */
+  --list-hover-bg: color-mix(in oklab, var(--foreground) 8%, var(--sidebar));
+  --list-active-bg: color-mix(in oklab, var(--foreground) 14%, var(--sidebar));
+  /* Soft focus ring from product --ring (not CTA --primary). Same formula as
+     dockview tab focus; trees maps both focus + selected-focused to this. */
+  --list-focus-ring: color-mix(in oklab, var(--ring) 40%, transparent);
   --status-neutral-bg: color-mix(in oklab, var(--muted) 64%, transparent);
   --status-neutral-fg: var(--muted-foreground);
   --status-neutral-border: color-mix(
@@ -456,6 +465,10 @@
   --input: oklch(0.92 0 0);
   --ring: oklch(0.708 0 0);
   --overlay-scrim: color-mix(in oklab, var(--foreground) 22%, transparent);
+  /* List wash on already-muted sidebar: light needs lower lift than dark.
+     --list-focus-ring stays on :root (same soft --ring mix in both schemes). */
+  --list-hover-bg: color-mix(in oklab, var(--foreground) 5%, var(--sidebar));
+  --list-active-bg: color-mix(in oklab, var(--foreground) 9%, var(--sidebar));
   /* sidebar/titlebar 已在 :root 走 var(--xxx) 引用, .light 模式自动跟 --background/--foreground 翻面,
      无需在此重复定义. */
   --toast-surface: oklch(0.2 0 0);
@@ -809,8 +822,8 @@ body {
   --dv-tab-margin: 0;
   --dv-tab-border-radius: 0;
   --dv-border-radius: 0;
-  /* 标题文本槽上限；数值与 panel-tab-layout.ts PANEL_TAB_TITLE_MAX_WIDTH_PX 对齐（治理测试交叉校验） */
-  --pier-tab-title-max: 160px;
+  /* 仅非路径 OSC 自由标题限宽；与 panel-tab-layout.ts PANEL_TAB_OSC_TITLE_MAX_WIDTH_PX 对齐 */
+  --pier-tab-osc-title-max: 240px;
 
   /* — 面板 / Tab 栏底色 — */
   --dv-group-view-background-color: var(--background);
@@ -892,6 +905,22 @@ body {
   pointer-events: none;
 }
 
+/*
+ * Tab 条横向 scroll-fade：不要在此手写 mask CSS。
+ * 单一来源 `@pier/ui/scroll-area` 的 scrollFadeUnsafeCss（horizontal + short），
+ * 由 workspace/tab-strip-scroll-fade.ts 注入（与文件树 Shadow 逃逸舱同构）。
+ * 原因：.dv-tabs-container 由 dockview 拥有，无法挂 ScrollArea / Tailwind 类。
+ */
+
+/* Tab 条自定义 thumb：空闲透明，hover/滚动时用产品 token（非默认白半透明）。 */
+.dockview-theme-pier .dv-tabs-and-actions-container .dv-scrollable {
+  --dv-scrollbar-background-color: color-mix(
+    in oklab,
+    var(--foreground) 28%,
+    transparent
+  );
+}
+
 /* — hover: 非选中 tab 微亮 — */
 .dockview-theme-pier .dv-tab.dv-inactive-tab:hover {
   background-color: color-mix(in oklab, var(--foreground) 5%, transparent);
@@ -914,9 +943,10 @@ body {
   box-sizing: border-box;
   gap: 4px;
   /*
-   * Tab 仍按内容定宽（整颗 tab 不设硬顶）；标题文本槽单独 max-width +
+   * Tab 按内容定宽（整颗 tab 不设硬顶）。标题槽默认不限宽；
+   * 仅 data-pier-tab-title-clamp="osc"（非路径 OSC 自由文案）限 240px +
    * ellipsis。trailing / dirty / × 始终 shrink-0 可见。多 tab 超出时由
-   * dockview tabs 横向滚动承载。拖拽 ghost 另有 220px 整 tab 上限。
+   * dockview tabs 横向滚动 + 溢出菜单承载。拖拽 ghost 另有 220px 整 tab 上限。
    * height/width 100%：running 轨 absolute 顶边相对整颗 tab，避免落在内容垂直居中「半腰」。
    */
   height: 100%;
@@ -935,11 +965,25 @@ body {
 .dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
   font-weight: 600;
   margin-right: 0;
-  max-width: var(--pier-tab-title-max, 160px);
+  max-width: none;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 非路径 OSC（agent/TUI）自由标题：唯一默认限宽来源 */
+.dockview-theme-pier
+  .dv-tab
+  .dv-default-tab[data-pier-tab-title-clamp="osc"]
+  .dv-default-tab-content,
+.dv-tab.dv-tab-dragging
+  .dv-default-tab[data-pier-tab-title-clamp="osc"]
+  .dv-default-tab-content,
+.dv-tab-ghost-drag
+  .dv-default-tab[data-pier-tab-title-clamp="osc"]
+  .dv-default-tab-content {
+  max-width: var(--pier-tab-osc-title-max, 240px);
 }
 
 .dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {

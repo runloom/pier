@@ -24,6 +24,7 @@ describe("runAttentionTestNotification", () => {
         decision: expect.objectContaining({
           silent: true,
           appSoundId: "rooster",
+          usesOsDefaultTone: false,
         }),
       })
     );
@@ -65,7 +66,10 @@ describe("runAttentionTestNotification", () => {
     expect(play).toHaveBeenCalledWith(
       expect.objectContaining({
         force: true,
-        decision: expect.objectContaining({ appSoundId: null }),
+        decision: expect.objectContaining({
+          appSoundId: null,
+          usesOsDefaultTone: true,
+        }),
       })
     );
   });

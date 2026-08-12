@@ -3,9 +3,13 @@ import type {
   GitReviewGroup,
   GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
+import { orderReviewPresentationSlots } from "../document/presentation-order.ts";
 import { reviewTreeSectionKeyForSurface } from "../document/projection-index.ts";
 import type { GitReviewReadingSurface } from "../reading-surface.ts";
-import { reviewSurfaceForGroup } from "../surface-group.ts";
+import {
+  reviewGroupsForSurface,
+  reviewSurfaceForGroup,
+} from "../surface-group.ts";
 
 /**
  * 行内评论导航目标（仅 git-diff 且仍有存活评论）。
@@ -27,6 +31,7 @@ export interface ReviewCommentNavTarget {
  * 解析不到 section 的线程跳过（入口文件已不在 index）。
  */
 export function buildReviewCommentNavTargets(options: {
+  readonly collidingFileLabel?: (name: string) => string;
   readonly entries: readonly GitReviewIndexEntry[];
   readonly surface: GitReviewReadingSurface;
   readonly threads: readonly CommentThread[] | null;
@@ -37,8 +42,15 @@ export function buildReviewCommentNavTargets(options: {
   const entryByPath = new Map(
     options.entries.map((entry) => [entry.path, entry] as const)
   );
-  const entryOrder = new Map(
-    options.entries.map((entry, index) => [entry.path, index] as const)
+  // Same presentation ledger as tree / CodeView (displayPath + group order).
+  const orderedSlots = orderReviewPresentationSlots(options.entries, {
+    ...(options.collidingFileLabel === undefined
+      ? {}
+      : { collidingFileLabel: options.collidingFileLabel }),
+    groups: reviewGroupsForSurface(options.surface),
+  });
+  const sectionOrder = new Map(
+    orderedSlots.map((slot, index) => [slot.sectionKey, index] as const)
   );
   const targets: ReviewCommentNavTarget[] = [];
   for (const thread of options.threads) {
@@ -74,8 +86,10 @@ export function buildReviewCommentNavTargets(options: {
     });
   }
   targets.sort((left, right) => {
-    const leftOrder = entryOrder.get(left.path) ?? Number.MAX_SAFE_INTEGER;
-    const rightOrder = entryOrder.get(right.path) ?? Number.MAX_SAFE_INTEGER;
+    const leftOrder =
+      sectionOrder.get(left.sectionKey) ?? Number.MAX_SAFE_INTEGER;
+    const rightOrder =
+      sectionOrder.get(right.sectionKey) ?? Number.MAX_SAFE_INTEGER;
     if (leftOrder !== rightOrder) {
       return leftOrder - rightOrder;
     }

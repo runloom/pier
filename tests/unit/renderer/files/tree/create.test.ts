@@ -152,11 +152,20 @@ afterEach(() => {
 describe("allocateUniqueChildName", () => {
   it("returns the base name when free, then increments on conflict", async () => {
     const { files } = makeContext({
-      existsPaths: new Set(["untitled.ts"]),
+      existsPaths: new Set(["untitled"]),
     });
     await expect(
-      allocateUniqueChildName(ROOT, "", "untitled.ts", files.exists)
-    ).resolves.toBe("untitled 2.ts");
+      allocateUniqueChildName(ROOT, "", "untitled", files.exists)
+    ).resolves.toBe("untitled 2");
+  });
+
+  it("keeps the extension when incrementing a dotted base name", async () => {
+    const { files } = makeContext({
+      existsPaths: new Set(["notes.md"]),
+    });
+    await expect(
+      allocateUniqueChildName(ROOT, "", "notes.md", files.exists)
+    ).resolves.toBe("notes 2.md");
   });
 });
 

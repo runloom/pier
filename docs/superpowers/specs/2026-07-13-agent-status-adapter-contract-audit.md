@@ -64,13 +64,16 @@ flowchart LR
     K --> L["tab、状态栏、标题栏"]
 ```
 
-提供方 session 文件不在这条数据流中向外传播。Codex 对账器只把
-`event_msg/task_complete` 转为 `TurnCompleted`、把 reason 为 `interrupted` 的
-`event_msg/turn_aborted` 转为 `TurnInterrupted`；Claude 对账器（2026-07-20）只把
-主链整块中断标记（`[Request interrupted by user]` / `... for tool use]`）转为
-`TurnInterrupted`（Claude 的 Stop hook 在 Esc/Ctrl+C 中断时不触发, 这是唯一的
-上游中断事实）。两者共用 `transcript-tail-reconciler.ts` 机械层（watch/增量
-读取/owner 生命周期）, 格式知识各自私有, 产出仍经聚合器进入同一状态源。
+提供方 session 文件不在这条数据流中向外传播。对账器清单与缺口结案见
+[`2026-08-12-agent-status-gap-remediation.md`](./2026-08-12-agent-status-gap-remediation.md)。
+
+Codex：`task_complete`→`TurnCompleted`，`turn_aborted`→`TurnInterrupted`。
+Claude 族（Claude / Qoder / Codebuddy）：主链
+`[Request interrupted by user]` 标记→`TurnInterrupted`（Esc 常不发 Stop）。
+Copilot：`abort` user*→`TurnInterrupted`，`assistant.turn_end`→`TurnCompleted`。
+Kimi：`wire.jsonl` `TurnEnd`→`TurnCompleted`。
+Grok：`turn_completed` cancelled/end_turn。
+共用 `transcript/tail-reconciler.ts` 机械层；格式知识各自私有。
 
 ## 规范状态真值表
 

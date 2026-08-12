@@ -55,6 +55,8 @@ import {
   createPluginPanelTitleUpdaterForWorkspace,
 } from "./plugin-panel-bridge.ts";
 import { stripEphemeralLayoutParams } from "./strip-ephemeral-layout-params.ts";
+import { attachWorkspaceTabStripBehavior } from "./tab-strip-behavior.ts";
+import { installTabStripScrollFadeStyles } from "./tab-strip-scroll-fade.ts";
 import { attachWorkspaceTerminalTabDragInputCapture } from "./terminal-tab-drag-input-capture.ts";
 import { pierTheme } from "./theme.ts";
 import { attachWorkspacePanelTransfer } from "./transfer/attach.ts";
@@ -145,6 +147,9 @@ export function WorkspaceHost() {
       setDockviewTabRevealRoot(null);
     };
   }, []);
+
+  // Tab strip edge fade: scrollFadeUnsafeCss → injected <style> (dockview-owned DOM).
+  useEffect(() => installTabStripScrollFadeStyles(), []);
 
   useEffect(
     () => setTerminalLayoutPresentationScheduler(requestTerminalPresentation),
@@ -248,6 +253,11 @@ export function WorkspaceHost() {
       // tab 输入接管与 transfer 并列订阅同一 Dockview API，互不持有对方资源。
       const tabDragInputDispose = attachWorkspaceTerminalTabDragInputCapture(
         event.api
+      );
+      // tab 条滚动记忆（maximize 恢复）+ 分组聚焦时 reveal active tab。
+      const tabStripBehaviorDispose = attachWorkspaceTabStripBehavior(
+        event.api,
+        rootRef.current
       );
 
       const syncDockviewMaximizedState = (): void => {
@@ -451,6 +461,7 @@ export function WorkspaceHost() {
         terminalFocusDispose();
         newTerminalDispose();
         tabDragInputDispose();
+        tabStripBehaviorDispose();
         panelTransferDispose();
         window.removeEventListener("beforeunload", handleBeforeUnload);
       };

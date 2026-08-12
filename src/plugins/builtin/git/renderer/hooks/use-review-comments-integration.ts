@@ -35,6 +35,7 @@ import { useReviewComments } from "./use-review-comments.ts";
  * projection 由 generation 内 projectReviewLedger 带评论生成。
  */
 export function useGitReviewCommentsIntegration({
+  collidingFileLabel,
   context,
   scope,
   controllerRef,
@@ -47,6 +48,7 @@ export function useGitReviewCommentsIntegration({
   recordLatestItemUpdates,
   setProjection,
 }: {
+  readonly collidingFileLabel: (name: string) => string;
   readonly context: RendererPluginContext;
   readonly scope: GitReviewScope;
   readonly controllerRef: RefObject<GitReviewDocumentGeneration | null>;
@@ -76,6 +78,7 @@ export function useGitReviewCommentsIntegration({
   commentsIndexRef.current = commentsIndex;
   commentsSeqRef.current = commentsSeq;
   useGitReviewLocaleProjection({
+    collidingFileLabel,
     commentsIndexRef,
     commentsSeqRef,
     context,
@@ -90,6 +93,7 @@ export function useGitReviewCommentsIntegration({
     setProjection,
   });
   useGitReviewCommentsProjection({
+    collidingFileLabel,
     commentsIndexRef,
     commentsSeq,
     commentsSeqRef,

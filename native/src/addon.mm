@@ -63,6 +63,8 @@ extern "C" {
     // BrowserWindow.id, 让 main 端按 window id 路由 (多窗口下 getFocusedWindow 不准).
     typedef void (*KeyboardForwardFn)(long browserWindowId, unsigned long modifiers, const char* chars);
     void ghostty_bridge_set_keyboard_forward_callback(KeyboardForwardFn cb);
+    typedef void (*BareEscapeForwardFn)(long browserWindowId, const char* panelId);
+    void ghostty_bridge_set_bare_escape_forward_callback(BareEscapeForwardFn cb);
     typedef void (*ModifierForwardFn)(long browserWindowId, unsigned long modifiers);
     void ghostty_bridge_set_modifier_forward_callback(ModifierForwardFn cb);
     void ghostty_bridge_set_app_shortcut_keys(const char** keys, long count);
@@ -579,6 +581,27 @@ static Napi::Value JsSetKeyboardForwardCallback(const Napi::CallbackInfo& info) 
     return JsSetForwardCallback(info, g_keyboardChannel,
                                 ghostty_bridge_set_keyboard_forward_callback,
                                 &g_keyForwardTrampoline);
+}
+
+// ---- Bare Escape observe (terminal focus Esc → agent cancel, 不吞事件) ----
+struct BareEscapeForwardPayload {
+    long windowId;
+    std::string panelId;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+        });
+    }
+};
+static ForwardChannel<BareEscapeForwardPayload> g_bareEscapeChannel("PierBareEscape");
+static void g_bareEscapeTrampoline(long windowId, const char* panelId) {
+    g_bareEscapeChannel.emit({ windowId, std::string(panelId) });
+}
+static Napi::Value JsSetBareEscapeForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_bareEscapeChannel,
+                                ghostty_bridge_set_bare_escape_forward_callback,
+                                &g_bareEscapeTrampoline);
 }
 
 // ---- Modifier forward (terminal focus 下纯 Cmd 状态转 renderer) ----
@@ -1254,6 +1277,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("detachWindow",    Napi::Function::New(env, JsDetachWindow));
     exports.Set("debugSnapshot", Napi::Function::New(env, JsDebugSnapshot));
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
+    exports.Set("setBareEscapeForwardCallback", Napi::Function::New(env, JsSetBareEscapeForwardCallback));
     exports.Set("setModifierForwardCallback", Napi::Function::New(env, JsSetModifierForwardCallback));
     exports.Set("setAppShortcutKeys", Napi::Function::New(env, JsSetAppShortcutKeys));
     exports.Set("setHostLanguage", Napi::Function::New(env, JsSetHostLanguage));

@@ -42,6 +42,7 @@ interface GitReviewSurfaceViewProps {
   readonly appearance: ReturnType<typeof useReviewAppearance>;
   readonly authoritativeEmpty: boolean;
   readonly clearForUserIntent: () => void;
+  readonly collidingFileLabel?: (name: string) => string;
   readonly context: RendererPluginContext;
   readonly diffHandleRef: React.RefObject<PierDiffViewHandle | null>;
   readonly driftCommentLabels?: React.ComponentProps<
@@ -130,6 +131,7 @@ export function GitReviewSurfaceView({
   appearance,
   authoritativeEmpty,
   clearForUserIntent,
+  collidingFileLabel,
   context,
   diffHandleRef,
   entries,
@@ -245,6 +247,7 @@ export function GitReviewSurfaceView({
     <GitReviewDocumentView
       appearance={appearance}
       authoritativeEmpty={authoritativeEmpty}
+      {...(collidingFileLabel === undefined ? {} : { collidingFileLabel })}
       contentOnly
       context={context}
       contextId={scope.contextId}

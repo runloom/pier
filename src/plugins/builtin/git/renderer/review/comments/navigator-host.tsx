@@ -9,10 +9,11 @@ import type { JSX, RefObject } from "react";
 import { useReviewCommentNavigator } from "../../hooks/use-review-comment-navigator.ts";
 import type { GitReviewReadingSurface } from "../reading-surface.ts";
 import type { ReviewTreeOpenReveal } from "../surface-types.ts";
-import { ReviewCommentNavigator } from "./navigator.tsx";
+import { CommentNavigator } from "./navigator.tsx";
 
 /** content 装配薄壳：有评论才挂浮动导航条。 */
 export function ReviewCommentNavigatorHost(props: {
+  readonly collidingFileLabel?: (name: string) => string;
   readonly context: RendererPluginContext;
   readonly diffBase: GitReviewReadingSurface;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
@@ -31,7 +32,7 @@ export function ReviewCommentNavigatorHost(props: {
     return null;
   }
   return (
-    <ReviewCommentNavigator
+    <CommentNavigator
       activeIndex={navigator.activeIndex}
       clearLabel={navigator.clearLabel}
       nextLabel={navigator.nextLabel}

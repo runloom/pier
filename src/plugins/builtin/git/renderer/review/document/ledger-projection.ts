@@ -1,14 +1,9 @@
 import type { PierDiffViewItem } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type {
-  GitReviewGroup,
-  GitReviewIndexEntry,
-} from "@shared/contracts/git/review.ts";
+import type { GitReviewIndexEntry } from "@shared/contracts/git/review.ts";
+import { createReviewCollidingFileLabel } from "../../plugin-text.ts";
 import type { GitReviewReadingSurface } from "../reading-surface.ts";
-import {
-  GIT_REVIEW_PRESENTATION_GROUP_ORDER,
-  reviewGroupsForSurface,
-} from "../surface-group.ts";
+import { reviewGroupsForSurface } from "../surface-group.ts";
 import { isReviewSlotIncludedInBody } from "./body-class.ts";
 import type { ReviewCommentIndex } from "./comment-projection.ts";
 import {
@@ -16,22 +11,12 @@ import {
   lineStatsFromReviewSlot,
   reviewStageControl,
 } from "./estimates.ts";
+import { orderReviewPresentationSlots } from "./presentation-order.ts";
 import type { ReviewDocumentProjection } from "./projection-types.ts";
 import type { GitReviewDocumentResource } from "./resource.ts";
 import { projectReviewDocumentResource } from "./resource-projection.ts";
 
-type ReviewProjectionGroup = GitReviewGroup;
 type ReviewSlot = GitReviewIndexEntry["renderSlots"][number];
-
-interface ProjectedRow {
-  readonly group: ReviewProjectionGroup;
-  readonly item: PierDiffViewItem;
-  readonly path: string;
-}
-
-const REVIEW_PROJECTION_GROUP_INDEX = new Map<ReviewProjectionGroup, number>(
-  GIT_REVIEW_PRESENTATION_GROUP_ORDER.map((group, index) => [group, index])
-);
 
 /**
  * 正文表面投影：仅 content-bearing 槽（金标准 bodyClass）。
@@ -42,11 +27,18 @@ const REVIEW_PROJECTION_GROUP_INDEX = new Map<ReviewProjectionGroup, number>(
  * 折叠全部总高 = n×header+(n−1)×gap，n 必须是 content 槽数。
  * estimate 是虚拟高度占位，不是「灰条进度条海」；正文灌载仍有界。
  *
+ * 文件顺序 = `orderReviewPresentationSlots`（与侧栏树同一套 displayPath 序）。
+ *
  * @see 2026-07-31-git-review-gold-standard-endstate-design.md §3–§5
  */
 export function projectReviewLedger(options: {
   readonly allowedBodyEntryKeys?: ReadonlySet<string>;
   readonly authoritativeEntryKeys?: ReadonlySet<string>;
+  /**
+   * Must match sidebar tree collision labels. Defaults to
+   * `createReviewCollidingFileLabel(context, locale)`.
+   */
+  readonly collidingFileLabel?: (name: string) => string;
   readonly comments?: ReviewCommentIndex;
   readonly commentsSeq?: number;
   readonly context: RendererPluginContext;
@@ -58,7 +50,12 @@ export function projectReviewLedger(options: {
 }): ReviewDocumentProjection {
   const entryKeyBySectionId = new Map<string, string>();
   const revisionBySectionId = new Map<string, string>();
-  const decorated: ProjectedRow[] = [];
+  const itemsBySectionKey = new Map<string, PierDiffViewItem>();
+
+  const collidingFileLabel =
+    options.collidingFileLabel ??
+    createReviewCollidingFileLabel(options.context, options.locale);
+
   for (const entry of options.entries) {
     const resource = options.resourceByEntryKey.get(entry.entryKey);
     // allowedBody 只约束「优先灌 body / mutation 权威」，不得把已 loaded 盖回 estimate。
@@ -105,11 +102,9 @@ export function projectReviewLedger(options: {
       }
       if (resolved === undefined && resource?.kind === "error") {
         // error 资源但 slot 未在 projectFailed 中（过滤 content 后仍应有）
-        const forced = projectionMissingSectionItem(slot, options.context);
-        const item = disableReviewMutationControls(forced);
-        decorated.push({ group: slot.group, item, path: entry.path });
-        entryKeyBySectionId.set(item.id, entry.entryKey);
-        continue;
+        resolved = disableReviewMutationControls(
+          projectionMissingSectionItem(slot, options.context)
+        );
       }
       if (resolved === undefined) {
         continue;
@@ -117,18 +112,36 @@ export function projectReviewLedger(options: {
       // 变更控件不因「正文还没读回」而禁用/隐藏：
       // stage / unstage 是路径操作（不需要令牌），discard 在点击时按需取令牌。
       // 否则大仓折叠全部后，几十个按钮会随正文逐个解锁 / 逐个冒出来。
-      const item = resolved;
-      decorated.push({ group: slot.group, item, path: entry.path });
-      entryKeyBySectionId.set(item.id, entry.entryKey);
+      itemsBySectionKey.set(slot.sectionKey, resolved);
+      entryKeyBySectionId.set(resolved.id, entry.entryKey);
       if (resource?.kind === "loaded" && mutationReady) {
         revisionBySectionId.set(slot.sectionKey, resource.document.revision);
       }
     }
   }
-  decorated.sort(compareProjectedRows);
+
+  const surfaceGroups =
+    options.diffBase === undefined
+      ? undefined
+      : reviewGroupsForSurface(options.diffBase);
+  const orderedSlots = orderReviewPresentationSlots(options.entries, {
+    collidingFileLabel,
+    ...(surfaceGroups === undefined ? {} : { groups: surfaceGroups }),
+    includeSlot: isReviewSlotIncludedInBody,
+  });
+
+  const items: PierDiffViewItem[] = [];
+  for (const row of orderedSlots) {
+    const item = itemsBySectionKey.get(row.sectionKey);
+    if (item === undefined) {
+      continue;
+    }
+    items.push(item);
+  }
+
   return {
     entryKeyBySectionId,
-    items: decorated.map((row) => row.item),
+    items,
     revisionBySectionId,
     sourceIndexGeneration: options.sourceIndexGeneration ?? 0,
   };
@@ -145,23 +158,6 @@ function disableReviewMutationControls(
     ...item,
     stageControl: { ...item.stageControl, busy: true, canDiscard: false },
   };
-}
-
-function compareProjectedRows(left: ProjectedRow, right: ProjectedRow): number {
-  return (
-    reviewProjectionGroupIndex(left.group) -
-      reviewProjectionGroupIndex(right.group) ||
-    left.path.localeCompare(right.path) ||
-    left.item.id.localeCompare(right.item.id)
-  );
-}
-
-function reviewProjectionGroupIndex(group: ReviewProjectionGroup): number {
-  const index = REVIEW_PROJECTION_GROUP_INDEX.get(group);
-  if (index === undefined) {
-    throw new Error(`Missing Git review projection order for ${group}`);
-  }
-  return index;
 }
 
 function slotsForDiffBase(

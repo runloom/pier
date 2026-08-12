@@ -7,7 +7,7 @@ import type { AppNotification } from "@shared/contracts/notification-center.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const showSystemNotification = vi.fn();
-const maybePlayAfterShown = vi.fn();
+const maybePlayInterruptSound = vi.fn();
 const focusAgentFromNotificationClick = vi.fn();
 const broadcastAgentAttentionDegraded = vi.fn();
 const broadcastSystemNotificationPermissionChanged = vi.fn();
@@ -21,8 +21,10 @@ vi.mock("@main/services/agent-attention/notification-audio.ts", () => ({
   decideNotificationAudio: () => ({
     appSoundId: "abstract-sound1",
     silent: true,
+    usesOsDefaultTone: false,
   }),
-  maybePlayAfterShown: (...args: unknown[]) => maybePlayAfterShown(...args),
+  maybePlayInterruptSound: (...args: unknown[]) =>
+    maybePlayInterruptSound(...args),
   toShowAudio: (d: { silent: boolean }) => ({ silent: d.silent }),
 }));
 
@@ -70,7 +72,7 @@ describe("createDeliverOs", () => {
   beforeEach(() => {
     resetDeliverOsDegradedLatchForTests();
     showSystemNotification.mockReset();
-    maybePlayAfterShown.mockReset();
+    maybePlayInterruptSound.mockReset();
     focusAgentFromNotificationClick.mockReset();
     broadcastAgentAttentionDegraded.mockReset();
     broadcastSystemNotificationPermissionChanged.mockReset();
@@ -84,15 +86,18 @@ describe("createDeliverOs", () => {
     });
     await expect(deliver(notification(), {})).resolves.toBe(true);
     expect(showSystemNotification).toHaveBeenCalledTimes(1);
-    expect(maybePlayAfterShown).toHaveBeenCalledTimes(1);
+    expect(maybePlayInterruptSound).toHaveBeenCalledTimes(1);
+    expect(maybePlayInterruptSound).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: "os" })
+    );
 
     showSystemNotification.mockResolvedValue({
       reason: "denied",
       shown: false,
     });
-    maybePlayAfterShown.mockClear();
+    maybePlayInterruptSound.mockClear();
     await expect(deliver(notification({ id: "n2" }), {})).resolves.toBe(false);
-    expect(maybePlayAfterShown).not.toHaveBeenCalled();
+    expect(maybePlayInterruptSound).not.toHaveBeenCalled();
   });
 
   it("still shows when runtime index is unbound", async () => {

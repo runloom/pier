@@ -6,7 +6,7 @@
  */
 import {
   decideNotificationAudio,
-  maybePlayAfterShown,
+  maybePlayInterruptSound,
 } from "@main/services/agent-attention/notification-audio.ts";
 import { focusAgentFromNotificationClick } from "@main/services/agent-attention/notification-click-focus.ts";
 import type { AgentRuntimeIndexService } from "@main/services/agent-runtime-index/index.ts";
@@ -116,7 +116,8 @@ export function createDeliverOs(args: CreateDeliverOsArgs) {
       );
 
       if (result.shown) {
-        maybePlayAfterShown({
+        maybePlayInterruptSound({
+          channel: "os",
           decision: audioDecision,
           force: false,
           sendToWindow: sendAttentionSoundPlayToOneWindow,

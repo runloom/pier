@@ -50,15 +50,14 @@ export const settingsNotifications = {
   },
   soundGroup: "Alert sound",
   soundGroupDesc:
-    "Plays when a system notification is shown. Title-bar counts don’t use this sound.",
-  soundEnabled: "Enable alert sound",
-  soundEnabledDesc:
-    "When off, banners can still appear, but no alert sound plays.",
+    "Plays when an agent alert pops up. Silent when a message is only saved to Notification Center.",
+  soundEnabled: "Play alert sound",
+  soundEnabledDesc: "When off, alerts still appear — without sound.",
   soundId: "Tone",
-  soundIdDesc: "System default follows the OS. Built-in tones play in-app.",
+  soundIdDesc: "Use the system notification sound or a Pier built-in tone.",
   soundPreview: "Preview selected tone",
   soundPreviewSystemHint:
-    "System default can’t be previewed here. Use “Send test notification” below.",
+    "The system tone can’t be previewed here. Switch to another app, then use “Send test notification” below.",
   soundPreviewFailed: "Couldn't play alert sound — try again",
   centerTitle: "Notification Center",
   centerDesc: "Archive of system messages, linked to the switches below.",

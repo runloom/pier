@@ -415,7 +415,7 @@ export async function createViaPrompt(options: {
         : t("filePanel.tree.action.newFolder", "New Folder..."),
     placeholder:
       kind === "file"
-        ? t("filePanel.tree.placeholder.newFile", "example.ts")
+        ? t("filePanel.tree.placeholder.newFile", "filename")
         : t("filePanel.tree.placeholder.newFolder", "components"),
     initialValue: defaultFilesTreeBaseName(kind),
     validate: async (value) => {

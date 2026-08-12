@@ -252,7 +252,7 @@
     "filePanel.tree.action.delete": "Delete",
     "filePanel.tree.action.copyPath": "Copy Path",
     "filePanel.tree.action.copyRelativePath": "Copy Relative Path",
-    "filePanel.tree.placeholder.newFile": "example.ts",
+    "filePanel.tree.placeholder.newFile": "filename",
     "filePanel.tree.placeholder.newFolder": "components",
     "filePanel.tree.nameRequired": "Enter a name",
     "filePanel.tree.nameReserved": "Reserved name",

@@ -1,7 +1,10 @@
 import {
   decideNotificationAudio,
   maybePlayAfterShown,
+  maybePlayInterruptSound,
   resetAttentionSoundPlaybackStateForTests,
+  resolveInterruptAppSoundId,
+  TOAST_SYSTEM_SOUND_FALLBACK,
 } from "@main/services/agent-attention/notification-audio.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,7 +15,12 @@ describe("decideNotificationAudio", () => {
         { soundEnabled: true, soundId: "system" },
         "darwin"
       )
-    ).toEqual({ silent: false, sound: "default", appSoundId: null });
+    ).toEqual({
+      silent: false,
+      sound: "default",
+      appSoundId: null,
+      usesOsDefaultTone: true,
+    });
   });
 
   it("system + enabled on win32 omits sound name", () => {
@@ -21,7 +29,11 @@ describe("decideNotificationAudio", () => {
         { soundEnabled: true, soundId: "system" },
         "win32"
       )
-    ).toEqual({ silent: false, appSoundId: null });
+    ).toEqual({
+      silent: false,
+      appSoundId: null,
+      usesOsDefaultTone: true,
+    });
   });
 
   it("builtin enables app sound and silences OS", () => {
@@ -30,7 +42,11 @@ describe("decideNotificationAudio", () => {
         { soundEnabled: true, soundId: "abstract-sound2" },
         "darwin"
       )
-    ).toEqual({ silent: true, appSoundId: "abstract-sound2" });
+    ).toEqual({
+      silent: true,
+      appSoundId: "abstract-sound2",
+      usesOsDefaultTone: false,
+    });
   });
 
   it("soundEnabled false silences OS and app", () => {
@@ -39,7 +55,55 @@ describe("decideNotificationAudio", () => {
         { soundEnabled: false, soundId: "rooster" },
         "darwin"
       )
-    ).toEqual({ silent: true, appSoundId: null });
+    ).toEqual({
+      silent: true,
+      appSoundId: null,
+      usesOsDefaultTone: false,
+    });
+  });
+});
+
+describe("resolveInterruptAppSoundId", () => {
+  it("uses builtin on both channels", () => {
+    const decision = {
+      silent: true,
+      appSoundId: "rooster" as const,
+      usesOsDefaultTone: false,
+    };
+    expect(resolveInterruptAppSoundId(decision, "os")).toBe("rooster");
+    expect(resolveInterruptAppSoundId(decision, "toast")).toBe("rooster");
+  });
+
+  it("system stays OS-only on os channel; toast uses fallback", () => {
+    const decision = {
+      silent: false,
+      sound: "default" as const,
+      appSoundId: null,
+      usesOsDefaultTone: true,
+    };
+    expect(resolveInterruptAppSoundId(decision, "os")).toBeNull();
+    expect(resolveInterruptAppSoundId(decision, "toast")).toBe(
+      TOAST_SYSTEM_SOUND_FALLBACK
+    );
+  });
+
+  it("sound disabled never resolves app sound", () => {
+    const decision = {
+      silent: true,
+      appSoundId: null,
+      usesOsDefaultTone: false,
+    };
+    expect(resolveInterruptAppSoundId(decision, "os")).toBeNull();
+    expect(resolveInterruptAppSoundId(decision, "toast")).toBeNull();
+  });
+
+  it("does not treat silent=false alone as system (needs usesOsDefaultTone)", () => {
+    const decision = {
+      silent: false,
+      appSoundId: null,
+      usesOsDefaultTone: false,
+    };
+    expect(resolveInterruptAppSoundId(decision, "toast")).toBeNull();
   });
 });
 
@@ -54,6 +118,7 @@ describe("maybePlayAfterShown", () => {
     const decision = {
       silent: true,
       appSoundId: "abstract-sound1" as const,
+      usesOsDefaultTone: false,
     };
     expect(
       maybePlayAfterShown({ decision, now: () => t, sendToWindow: send })
@@ -76,6 +141,7 @@ describe("maybePlayAfterShown", () => {
     const decision = {
       silent: true,
       appSoundId: "rooster" as const,
+      usesOsDefaultTone: false,
     };
     expect(
       maybePlayAfterShown({ decision, now: () => t, sendToWindow: send })
@@ -96,7 +162,12 @@ describe("maybePlayAfterShown", () => {
     const send = vi.fn(() => true);
     expect(
       maybePlayAfterShown({
-        decision: { silent: false, sound: "default", appSoundId: null },
+        decision: {
+          silent: false,
+          sound: "default",
+          appSoundId: null,
+          usesOsDefaultTone: true,
+        },
         sendToWindow: send,
       })
     ).toBe("skipped-no-app-sound");
@@ -106,7 +177,11 @@ describe("maybePlayAfterShown", () => {
   it("does not advance spacing when send returns false", () => {
     const send = vi.fn(() => false);
     let t = 0;
-    const decision = { silent: true, appSoundId: "abstract-sound2" as const };
+    const decision = {
+      silent: true,
+      appSoundId: "abstract-sound2" as const,
+      usesOsDefaultTone: false,
+    };
     // 第一次 send 失败：不应记 spacing
     expect(
       maybePlayAfterShown({ decision, now: () => t, sendToWindow: send })
@@ -118,5 +193,47 @@ describe("maybePlayAfterShown", () => {
       maybePlayAfterShown({ decision, now: () => t, sendToWindow: send })
     ).toBe("played");
     expect(send).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("maybePlayInterruptSound", () => {
+  beforeEach(() => {
+    resetAttentionSoundPlaybackStateForTests();
+  });
+
+  it("toast + system plays fallback app sound", () => {
+    const send = vi.fn(() => true);
+    expect(
+      maybePlayInterruptSound({
+        channel: "toast",
+        decision: {
+          silent: false,
+          sound: "default",
+          appSoundId: null,
+          usesOsDefaultTone: true,
+        },
+        sendToWindow: send,
+      })
+    ).toBe("played");
+    expect(send).toHaveBeenCalledWith({
+      soundId: TOAST_SYSTEM_SOUND_FALLBACK,
+    });
+  });
+
+  it("os + system does not play app sound", () => {
+    const send = vi.fn(() => true);
+    expect(
+      maybePlayInterruptSound({
+        channel: "os",
+        decision: {
+          silent: false,
+          sound: "default",
+          appSoundId: null,
+          usesOsDefaultTone: true,
+        },
+        sendToWindow: send,
+      })
+    ).toBe("skipped-no-app-sound");
+    expect(send).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,17 @@
+import { withProgrammaticTabStripScroll } from "./tab-strip-scroll.ts";
+
 const REVEAL_PADDING_PX = 8;
 let dockviewTabRevealRoot: ParentNode | null = null;
+let cancelScheduledReveal: (() => void) | null = null;
 
 export function setDockviewTabRevealRoot(root: ParentNode | null): void {
   dockviewTabRevealRoot = root;
+}
+
+/** Abort a pending rAF reveal (user scroll wins; K3). */
+export function abortScheduledDockviewTabReveal(): void {
+  cancelScheduledReveal?.();
+  cancelScheduledReveal = null;
 }
 
 export function revealElementWithinScrollContainer(
@@ -10,29 +19,34 @@ export function revealElementWithinScrollContainer(
   element: HTMLElement,
   padding = REVEAL_PADDING_PX
 ): void {
-  const containerRect = container.getBoundingClientRect();
-  const elementRect = element.getBoundingClientRect();
+  withProgrammaticTabStripScroll(() => {
+    const containerRect = container.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
 
-  const leftDelta = elementRect.left - containerRect.left;
-  const rightDelta = elementRect.right - containerRect.right;
+    const leftDelta = elementRect.left - containerRect.left;
+    const rightDelta = elementRect.right - containerRect.right;
 
-  if (leftDelta < padding) {
-    container.scrollLeft = Math.max(
-      0,
-      container.scrollLeft + leftDelta - padding
-    );
-  } else if (rightDelta > -padding) {
-    container.scrollLeft += rightDelta + padding;
-  }
+    if (leftDelta < padding) {
+      container.scrollLeft = Math.max(
+        0,
+        container.scrollLeft + leftDelta - padding
+      );
+    } else if (rightDelta > -padding) {
+      container.scrollLeft += rightDelta + padding;
+    }
 
-  const topDelta = elementRect.top - containerRect.top;
-  const bottomDelta = elementRect.bottom - containerRect.bottom;
+    const topDelta = elementRect.top - containerRect.top;
+    const bottomDelta = elementRect.bottom - containerRect.bottom;
 
-  if (topDelta < 0) {
-    container.scrollTop = Math.max(0, container.scrollTop + topDelta - padding);
-  } else if (bottomDelta > 0) {
-    container.scrollTop += bottomDelta + padding;
-  }
+    if (topDelta < 0) {
+      container.scrollTop = Math.max(
+        0,
+        container.scrollTop + topDelta - padding
+      );
+    } else if (bottomDelta > 0) {
+      container.scrollTop += bottomDelta + padding;
+    }
+  });
 }
 
 export function revealDockviewTabElement(tabContentElement: HTMLElement): void {
@@ -72,12 +86,23 @@ export function scheduleRevealDockviewTabByPanelId(
   if (!targetRoot) {
     return;
   }
-  const reveal = () => {
-    revealDockviewTabByPanelId(panelId, targetRoot);
-  };
+  abortScheduledDockviewTabReveal();
   if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(reveal);
+    let cancelled = false;
+    const frame = requestAnimationFrame(() => {
+      if (cancelled) {
+        return;
+      }
+      cancelScheduledReveal = null;
+      revealDockviewTabByPanelId(panelId, targetRoot);
+    });
+    cancelScheduledReveal = () => {
+      cancelled = true;
+      if (typeof cancelAnimationFrame === "function") {
+        cancelAnimationFrame(frame);
+      }
+    };
     return;
   }
-  reveal();
+  revealDockviewTabByPanelId(panelId, targetRoot);
 }

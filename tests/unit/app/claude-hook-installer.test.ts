@@ -9,6 +9,7 @@ import {
   pierHooksCurrentDir,
 } from "../../../src/main/services/agents/hooks-install.ts";
 import {
+  CLAUDE_IDLE_PROMPT_THRESHOLD_MS,
   installClaudeHooks,
   uninstallClaudeHooks,
   withoutPierClaudeHooks,
@@ -40,7 +41,7 @@ function hookCommand(
 }
 
 describe("withPierClaudeHooks", () => {
-  it("只为有可信状态语义的 12 个 Claude hook 事件注入命令", () => {
+  it("只为有可信状态语义的 Claude hook 事件注入命令", () => {
     const next = withPierClaudeHooks({});
     const hooks = next.hooks as Record<string, unknown[]>;
     for (const evt of [
@@ -53,14 +54,25 @@ describe("withPierClaudeHooks", () => {
       "PostCompact",
       "Stop",
       "StopFailure",
+      "Notification",
       "SubagentStart",
       "SubagentStop",
       "SessionEnd",
     ]) {
       expect(hooks[evt], evt).toHaveLength(1);
     }
+    // idle_prompt 是唯一装入的 Notification matcher（自报空闲 → ready）。
+    const notification = hooks.Notification?.[0] as
+      | { matcher?: string }
+      | undefined;
+    expect(notification?.matcher).toBe("idle_prompt");
+    expect(hookCommand(next, "Notification")).toContain("TurnCompleted");
+    expect(hookCommand(next, "Notification")).toContain(
+      "Notification.idle_prompt"
+    );
+    // 最佳实践：不写全局 idle 阈值（取消主路径 = host Esc）。
+    expect(next.messageIdleNotifThresholdMs).toBeUndefined();
     // 这些事件都没有覆盖所有结果的稳定请求→结果闭环。
-    expect(hooks.Notification).toBeUndefined();
     expect(hooks.PermissionRequest).toBeUndefined();
     expect(hooks.Elicitation).toBeUndefined();
     expect(hooks.ElicitationResult).toBeUndefined();
@@ -69,6 +81,29 @@ describe("withPierClaudeHooks", () => {
     for (const cmd of hookCommands(next)) {
       expect(cmd).toContain(MARK);
     }
+  });
+
+  it("保留用户显式配置的 messageIdleNotifThresholdMs", () => {
+    const next = withPierClaudeHooks({
+      messageIdleNotifThresholdMs: 12_000,
+    });
+    expect(next.messageIdleNotifThresholdMs).toBe(12_000);
+  });
+
+  it("清除历史 Pier idle 阈值，不压低 Claude 默认 60s", () => {
+    expect(
+      withPierClaudeHooks({ messageIdleNotifThresholdMs: 60_000 })
+        .messageIdleNotifThresholdMs
+    ).toBe(60_000);
+    expect(
+      withPierClaudeHooks({ messageIdleNotifThresholdMs: 2500 })
+        .messageIdleNotifThresholdMs
+    ).toBeUndefined();
+    expect(
+      withPierClaudeHooks({
+        messageIdleNotifThresholdMs: CLAUDE_IDLE_PROMPT_THRESHOLD_MS,
+      }).messageIdleNotifThresholdMs
+    ).toBeUndefined();
   });
 
   it("Grok 兼容加载 Pier Claude hooks 时静默跳过，原生 Claude 仍发事件", async () => {
@@ -223,6 +258,29 @@ describe("withoutPierClaudeHooks", () => {
     expect(
       (cleaned.hooks as Record<string, unknown>).SessionStart
     ).toBeUndefined();
+  });
+
+  it("清除 Pier 写入的 messageIdleNotifThresholdMs，保留用户显式阈值", () => {
+    // Claude 默认 60s 不是 Pier 写入，保留
+    const claudeDefault = withoutPierClaudeHooks(
+      withPierClaudeHooks({ messageIdleNotifThresholdMs: 60_000 })
+    );
+    expect(claudeDefault.messageIdleNotifThresholdMs).toBe(60_000);
+
+    const historical = withoutPierClaudeHooks({
+      messageIdleNotifThresholdMs: 2500,
+    });
+    expect(historical.messageIdleNotifThresholdMs).toBeUndefined();
+
+    const pier800 = withoutPierClaudeHooks({
+      messageIdleNotifThresholdMs: CLAUDE_IDLE_PROMPT_THRESHOLD_MS,
+    });
+    expect(pier800.messageIdleNotifThresholdMs).toBeUndefined();
+
+    const kept = withoutPierClaudeHooks({
+      messageIdleNotifThresholdMs: 12_000,
+    });
+    expect(kept.messageIdleNotifThresholdMs).toBe(12_000);
   });
 });
 

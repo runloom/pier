@@ -37,6 +37,9 @@ coverage/
 test-results/
 playwright-report/
 
+# Agent cancel capture scratch (remote/local Esc 语料)
+.tmp-cancel-capture/
+
 # Editor / OS
 .idea/
 .vscode/

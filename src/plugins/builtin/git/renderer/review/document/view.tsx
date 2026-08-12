@@ -46,6 +46,7 @@ interface GitReviewDocumentViewProps {
    * 多阅读面共享侧栏时：只渲染正文（树/壳在父级）。
    * 默认 full：自带 PanelLayout + 树（loading/empty 等单壳场景）。
    */
+  readonly collidingFileLabel?: (name: string) => string;
   readonly contentOnly?: boolean;
   readonly context: RendererPluginContext;
   readonly contextId: string;
@@ -123,6 +124,7 @@ interface GitReviewDocumentViewProps {
 export function GitReviewDocumentView({
   appearance,
   authoritativeEmpty,
+  collidingFileLabel,
   contentOnly = false,
   context,
   diffRef,
@@ -181,6 +183,7 @@ export function GitReviewDocumentView({
     documentContent({
       appearance,
       authoritativeEmpty,
+      ...(collidingFileLabel === undefined ? {} : { collidingFileLabel }),
       context,
       contextId,
       diffRef,

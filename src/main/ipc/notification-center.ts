@@ -8,6 +8,7 @@
 
 import { join } from "node:path";
 import { createDeliverOs } from "@main/services/notification-center/deliver-os.ts";
+import { createDeliverToast } from "@main/services/notification-center/deliver-toast.ts";
 import { parseAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import {
   DEFAULT_NOTIFICATION_CENTER_PREFS,
@@ -20,6 +21,7 @@ import { app, type IpcMain, type IpcMainInvokeEvent } from "electron";
 import type { PierEventBus } from "../app-core/event-bus.ts";
 import {
   broadcastNotificationCenterChanged,
+  sendAttentionSoundPlayToOneWindow,
   sendMessageToastToOneWindow,
 } from "../app-core/window-broadcasts.ts";
 import { getAgentAttentionSettingsCached } from "../services/agent-attention/settings-cache.ts";
@@ -93,6 +95,11 @@ async function init(): Promise<NotificationCenterService> {
       serviceRef?.markReadByDedupeKey(dedupeKey);
     },
   });
+  const deliverToastImpl = createDeliverToast({
+    getAttentionSettings: () => getAgentAttentionSettingsCached(),
+    sendToast: sendMessageToastToOneWindow,
+    sendSoundToWindow: sendAttentionSoundPlayToOneWindow,
+  });
 
   const service = await createNotificationCenterService({
     broadcast: (snapshot) => {
@@ -104,7 +111,7 @@ async function init(): Promise<NotificationCenterService> {
     },
     deliverToast: (notification, target) => {
       try {
-        sendMessageToastToOneWindow(notification, target);
+        deliverToastImpl(notification, target);
       } catch (err) {
         log.warn("message toast deliver failed", { err });
       }

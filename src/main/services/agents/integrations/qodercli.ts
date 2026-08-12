@@ -22,6 +22,10 @@ const qodercliConfigPath = () => join(homedir(), ".qoder", "settings.json");
  *   均不安装。
  * - SubagentStart/Stop 提供稳定 agent_id / agent_type，session_id 是父会话锚点。
  * - Stop 可阻止智能体结束，保持 advisory；StopFailure 才是全局错误。
+ * - **Esc/用户取消不触发 Stop**（实测 turn.finished reason=abort 仍无 hook）。
+ *   中断终态由 `transcript/qoder-reconciler.ts` 读 `~/.qoder/projects` 下
+ *   session JSONL 的 Claude 同款 `[Request interrupted by user]` 标记，
+ *   派发 TurnInterrupted。
  */
 function qoderCommand(
   nativeEvent: string,

@@ -86,6 +86,7 @@ export interface GitReviewGenerationCallbacks {
 }
 
 export function useGitReviewDocumentSession(options: {
+  readonly collidingFileLabel: (name: string) => string;
   readonly commentsIndexRef: RefObject<ReviewCommentIndex | null>;
   readonly commentsSeqRef: RefObject<number>;
   readonly committedProjectionGenerationRef: RefObject<number>;
@@ -120,12 +121,19 @@ export function useGitReviewDocumentSession(options: {
   };
   readonly viewStateRef: RefObject<ReviewDocumentViewState>;
 }): void {
-  const { context, diffBase, entries, indexGeneration, scope } = options;
+  const {
+    collidingFileLabel,
+    context,
+    diffBase,
+    entries,
+    indexGeneration,
+    scope,
+  } = options;
 
-  // 代际 effect 只随 index/scope 重建；refs/setState 故意不进 deps。
+  // 代际 effect 只随 index/scope/label 重建；refs/setState 故意不进 deps。
   // biome-ignore lint/correctness/useExhaustiveDependencies: generation lifecycle is ref-driven
   useEffect(
     () => mountGitReviewDocumentGeneration(options),
-    [context, diffBase, entries, indexGeneration, scope]
+    [collidingFileLabel, context, diffBase, entries, indexGeneration, scope]
   );
 }
