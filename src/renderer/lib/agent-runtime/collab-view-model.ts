@@ -15,6 +15,11 @@ export type CollaborationStatusKey =
   | "agents.section.readyHint"
   | "agents.collab.statusUnknown";
 
+/** E13：协调 vs 工作智能体角色（产品标签，非 invoke）。 */
+export type CollaborationRoleKey =
+  | "agents.collab.roleWork"
+  | "agents.collab.roleCoordinate";
+
 export interface CollaborationSessionVm {
   agentId: string;
   agentRef: string;
@@ -26,6 +31,8 @@ export interface CollaborationSessionVm {
   needsYou: boolean;
   panelId: string;
   projectRootPath?: string;
+  /** 工作智能体 vs 协调智能体（有注意力/needsYou 时标协调侧） */
+  roleKey: CollaborationRoleKey;
   statusKey: CollaborationStatusKey;
   title: string;
   windowId: string;
@@ -88,13 +95,17 @@ export function buildCollaborationSession(
 ): CollaborationSessionVm {
   const sameWindow =
     currentWindowId !== null && entry.windowId === currentWindowId;
+  const needsYou = Boolean(entry.status && isAgentIndexNeedsYou(entry.status));
+  // 索引中的持久 agent 一律为工作智能体；「协调」是人类/CLI 调用方，不用 needsYou 冒充。
+  const roleKey: CollaborationRoleKey = "agents.collab.roleWork";
   return {
     agentId: entry.agentId,
     agentRef: entry.agentRef,
     panelId: entry.panelId,
     windowId: entry.windowId,
     title: sessionTitle(entry),
-    needsYou: Boolean(entry.status && isAgentIndexNeedsYou(entry.status)),
+    needsYou,
+    roleKey,
     statusKey: statusKeyFor(entry),
     ...(sameWindow
       ? { locationKey: "agents.collab.locationThisWindow" as const }
@@ -171,6 +182,17 @@ function buildFacts(
     factKey: "agents.collab.factRuntime",
     sourceKey: "agents.collab.sourceIndex",
     detail: selected.agentId,
+  });
+  facts.push({
+    factKey: "agents.collab.factRole",
+    sourceKey: "agents.collab.sourceIndex",
+    detailKey: selected.roleKey,
+  });
+  // 当前画面定位（窗/面板），非文件内容
+  facts.push({
+    factKey: "agents.collab.factScreen",
+    sourceKey: "agents.collab.sourceIndex",
+    detail: `${selected.windowId}/${selected.panelId}`,
   });
   const worktreeDetail =
     selected.worktreeKey ?? selected.projectRootPath ?? selected.cwd;

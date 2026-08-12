@@ -313,6 +313,94 @@ describe("RuntimeControlService", () => {
     }
   });
 
+  it("E6: screen strips ANSI/control and never exposes content cursor fields", async () => {
+    const backend = createFakeTerminalBackend();
+    const service = createRuntimeControlService({
+      bootId: "boot_e6",
+      backend,
+    });
+    const started = await service.start({ agentId: "codex" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) {
+      return;
+    }
+    const ref = started.data.runtime;
+    backend.setViewport(
+      started.data.panelId,
+      "\u001b[32mgreen\u001b[0m\nframe-a\nframe-b\n\u001b]0;title\u0007"
+    );
+    const screened = await service.screen({
+      ...ref,
+      maxLines: 50,
+      maxBytes: 4096,
+    });
+    expect(screened.ok).toBe(true);
+    if (!screened.ok) {
+      return;
+    }
+    const screen = screened.data.screen;
+    expect(screen.text.includes("\u001b")).toBe(false);
+    expect(screen.text).toContain("green");
+    expect(screen.text).toContain("frame-b");
+    // 单帧 viewport：无 scrollback/history/cursor 字段
+    expect(screen).not.toHaveProperty("scrollback");
+    expect(screen).not.toHaveProperty("history");
+    expect(screen).not.toHaveProperty("cursor");
+    expect(screen).toMatchObject({
+      rows: expect.any(Number),
+      cols: expect.any(Number),
+      truncated: expect.any(Boolean),
+      capturedAt: expect.any(Number),
+    });
+  });
+
+  it("E6: turn only returns accepted + runtime (no work verdict)", async () => {
+    const backend = createFakeTerminalBackend();
+    const service = createRuntimeControlService({
+      bootId: "boot_e6t",
+      backend,
+    });
+    const started = await service.start({ agentId: "codex" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) {
+      return;
+    }
+    const turned = await service.turn({
+      ...started.data.runtime,
+      text: "ping\n",
+    });
+    expect(turned.ok).toBe(true);
+    if (!turned.ok) {
+      return;
+    }
+    expect(turned.data).toEqual({
+      accepted: true,
+      runtime: started.data.runtime,
+    });
+    expect(turned.data).not.toHaveProperty("success");
+    expect(turned.data).not.toHaveProperty("failed");
+    expect(turned.data).not.toHaveProperty("completed");
+  });
+
+  it("listRuntimeSummaries projects open runtimes without screen text", async () => {
+    const backend = createFakeTerminalBackend();
+    const service = createRuntimeControlService({
+      bootId: "boot_sum",
+      backend,
+    });
+    const started = await service.start({ agentId: "codex", cwd: "/r" });
+    expect(started.ok).toBe(true);
+    const rows = service.listRuntimeSummaries();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      bootId: "boot_sum",
+      agentId: "codex",
+      closed: false,
+      cwd: "/r",
+    });
+    expect(rows[0]).not.toHaveProperty("text");
+  });
+
   it("screen clamps large viewport", async () => {
     const backend = createFakeTerminalBackend();
     const service = createRuntimeControlService({

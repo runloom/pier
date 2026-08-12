@@ -1,19 +1,19 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-12T00:00:00.000Z",
-  "source": "文档关账 scrub（2026-08-12）：验收矩阵刷 E1/E3/E4/E9/E14；currentState.missing 分轨（非必达 / 可选 / W6）；planned 命令仍保留防丢清单。产品代码未改。",
+  "generatedAt": "2026-08-12T00:46:00Z",
+  "source": "v8.2 review-fix：CLI/design/CA/cursor 诚实接线；gold 去重。",
   "data": {
     "meta": {
       "title": "智能体优先的持久运行控制 CLI · 产品与技术方案",
-      "subtitle": "一次性用原生 agent CLI；Pier 主路径=发现+持久控制+宿主定位原语+消息 CLI+协作面；W0–W5 主路径已关账；CA 热路径与资源 cursor 全量门禁归 W6",
+      "subtitle": "一次性用原生 agent CLI；Pier = 本机 pier（cli-human）发现 + 持久控制 + 宿主定位 + 消息 + 协作面",
       "status": "推荐方案",
-      "version": "v7.0",
+      "version": "v8.2",
       "researchCutoff": "2026-08-11",
-      "codeBaseline": "W0–W5 closed on product main path: RuntimeControl + WorktreeRef + control.snapshot/watch + notifications CLI + collab surface; cli-human; no agents.invoke"
+      "codeBaseline": "cli-human only via pier CLI; RuntimeControl + CA hot path + cursor gates; no agent principal; no AccessGrant; no external; no agents.invoke"
     },
-    "bluf": "产品结论：一次性提问不经 Pier（原生 agent CLI）。Pier 做发现 + 持久运行控制 + 宿主定位原语 + 消息 CLI + 协作面。W0–W4 与 W5 主路径已关账：notifications list/get/watch/focus/mark-read（NCS 同源）、control.snapshot.notifications 指针与 FA 多 kind activity、智能体协作 surface（无 one-shot）。调用方持有拆分/重试/结束判断；无任务台账。不提供 agents invoke。CA 生产热路径与资源 cursor 全量门禁归 W6。",
-    "insight": "实现纪律：核心逻辑优先，拒绝业界能力二次封装——只做依赖 Pier 宿主/运行时才能成立的能力；业界已支持的能力直接用原生入口。Orca/cmux 证明有价值的是「精确 surface/runtime + 可编程读画面/发输入」的持久控制面，不是再包一层各家 one-shot。Agent Orchestrator 偏任务池，Pier 拒绝任务台账。最佳实践：一次性用原生 agent；需要活体协作、可续聊、可看现场时才进 Pier 持久路径；运行事实与工作结论严格分开。",
-    "decision": "方案收敛为单主路径：持久运行控制。一次性 = 原生 agent 能力（不实现 Pier invoke）。高层 agents 仅保留 catalog/list/get 与 start/turn/screen/wait/watch/focus/interrupt/terminate；去掉 product invoke 与 activity 独立命令组（事实流用顶层 snapshot/watch）。self 非产品主路径（实验/遗留）。terminal 写控为非 agent 终端与底层同构；agent 运行优先 agents.*。不提供公共 transcript；不新增多智能体任务台账。",
+    "bluf": "产品终态：一次性提问用原生 agent CLI。人类与协调智能体一律本机 pier，主体仅 cli-human（auth.none + peer）。Pier 交付发现、持久运行控制、宿主定位、消息 CLI 与协作面。调用方持有拆分/重试/结束判断。无任务台账，无 agents.invoke，无第二套登录或密钥控制协议。",
+    "insight": "核心逻辑优先：只做依赖 Pier 宿主/运行时才能成立的能力。协调智能体与人类共用本机 pier（cli-human）。持久控制价值在精确 RuntimeRef 与有界 screen；运行事实与工作结论严格分开。",
+    "decision": "单主路径：本机 pier CLI（cli-human）持久运行控制。agents 产品命令：catalog/list/get 与 start/turn/screen/wait/watch/focus/interrupt/terminate。无 agents.self 产品路径。无公共 transcript。无多智能体任务台账。",
     "scope": {
       "model": "agent-facing-runtime-control",
       "completionAuthority": "caller-agent-or-external-controller",
@@ -48,10 +48,10 @@
     },
     "goals": [
       "让调用方通过 agents catalog/list/get 发现本机可启动/在跑的智能体与精确定位",
-      "让协调智能体通过 start/turn/screen/wait/watch 控制持久工作智能体，取得当前画面与完整 WorktreeRef，再用自身文件/Git 工具读内容",
+      "让协调智能体通过本机 pier CLI（cli-human）执行 start/turn/screen/wait/watch 控制持久工作智能体，取得当前画面与完整 WorktreeRef，再用自身文件/Git 工具读内容",
       "一次性提问直接使用各 agent 原生 CLI，Pier 不封装、不实现 agents invoke 产品路径",
       "以 bootId + runtimeId + generation 防止持久路径误投递",
-      "为人类 CLI 保留同构 JSON 接入持久控制；完成判断始终在调用方",
+      "为人类与脚本保留同构 pier CLI（cli-human）；完成判断始终在调用方",
       "用结构门禁证明 Pier 没有多智能体任务生命周期或完成裁决权"
     ],
     "productNonGoals": [
@@ -61,11 +61,14 @@
       "不把 turn/terminal send 的 accepted 包装成投递、已处理或语义回复",
       "不把 screen 当前画面当作完整回答、历史记录或工作结论",
       "不把现有 TaskRuns 的 shell 命令依赖扩展成多智能体任务模型",
-      "不为业界已成熟支持的能力再造 Pier 封装层、统一抽象或第二套产品 API（含 codex/claude one-shot → agents invoke / InvocationReply）",
-      "不实现 agents self 作为人类 CLI 产品主路径（agent principal 仅为遗留/实验）",
-      "不提供独立 activity 命令组（与顶层 snapshot/watch 重复）；事实流以顶层为准",
-      "本机 capability 是防误用的工程纪律边界，不承诺隔离同一系统用户下的恶意进程",
-      "不承诺远程舰队、跨机器一致性、第三方插件隔离或恶意代码安全边界"
+      "不为业界已成熟支持的能力再造 Pier 封装层（含 one-shot → agents.invoke）",
+      "不实现 agents.self 产品路径",
+      "不提供独立 activity 命令组（事实流以 snapshot/watch 为准）",
+      "本机 peer/capability 是防误用的工程纪律边界，不承诺隔离同 UID 恶意进程",
+      "不承诺远程舰队、跨机器一致性或第三方插件恶意隔离",
+      "不实现 external 控制主体、AccessGrant 或 access.* 命令",
+      "不实现 agent principal / 调用凭证注入作为控制面身份",
+      "不把 CLI 做成权限与委派管理系统"
     ],
     "successMeasures": [
       {
@@ -100,12 +103,12 @@
       }
     ],
     "mainLoop": {
-      "diagram": "flowchart TB\n  H[人类\\n给出目标 · 必要时审批]\n  O[协调智能体\\n主要调用者]\n  E[外部控制器（可选）\\n同构 JSON]\n  N[原生 agent CLI\\n一次性 · 不经 Pier]\n  C[Pier 智能体 CLI\\ncatalog · start · turn · screen · wait]\n  W[工作智能体\\n精确 RuntimeRef]\n  P[当前画面 · WorktreeRef]\n  L[调用方本地工具\\n文件 · 搜索 · Git]\n  F[运行事实]\n  H --> O\n  O --> N\n  N --> O\n  O --> C\n  E -. 可选接入 .-> C\n  C --> W\n  W --> P\n  W --> F\n  P --> O\n  F --> O\n  O --> L\n  L --> O",
-      "caption": "一次性：协调方直接调原生 agent。Pier 只闭合发现、持久运行、当前画面与工作树定位；调用方用本地工具读文件/Git，并闭合拆分、重试、验收与结束判断。"
+      "diagram": "flowchart TB\n H[人类\\n给出目标 · 必要时审批]\n O[协调智能体\\n主要调用者 · 本机 pier]\n E[外部控制器（可选·产品外）\\n经 pier CLI 或自建]\n N[原生 agent CLI\\n一次性 · 不经 Pier]\n C[Pier 智能体 CLI\\ncli-human · catalog/start/turn/screen/wait]\n W[工作智能体\\n精确 RuntimeRef]\n P[当前画面 · WorktreeRef]\n L[调用方本地工具\\n文件 · 搜索 · Git]\n F[运行事实]\n H --> O\n O --> N\n N --> O\n O --> C\n H --> C\n E -. 产品外自建编排 .-> O\n C --> W\n W --> P\n W --> F\n P --> O\n F --> O\n O --> L\n L --> O",
+      "caption": "协调方与人类均经本机 Pier CLI（cli-human）。一次性走原生 agent。图中「外部控制器（可选）」表示产品外编排：仍应走 pier CLI，或完全在 Pier 外完成，不设第二协议。"
     },
     "problem": {
-      "title": "当前 CLI 把人和外部程序放在前面，却没有闭合智能体之间的调用与取回内容",
-      "thesis": "Pier 已能承载多个智能体、终端、工作树与运行事实，但现有 CLI 仍以人类/脚本/MCP 为主要叙事：协调智能体缺少可信调用身份与精确 RuntimeRef 控制面，也没有明确区分当前画面、工作树定位与完整历史。一次性提问应走各 agent 原生 CLI；Pier 主路径是发现 + 持久 start/turn/screen/wait，由精确宿主原语兜底。",
+      "title": "需要闭合智能体经本机 CLI 的调用与取回内容，而不是再造权限主体",
+      "thesis": "主路径应让协调智能体与人类共用本机 pier CLI 完成发现与持久 start/turn/screen/wait；一次性走原生 agent CLI。厘清 RuntimeRef 精确写入与运行事实边界；禁止把运行事实当工作结论。",
       "pains": [
         {
           "id": "P1",
@@ -127,9 +130,9 @@
         },
         {
           "id": "P4",
-          "title": "调用者身份可被伪造",
-          "detail": "PIER_WINDOW_ID/PIER_PANEL_ID 或 --as-agent 只能提供提示，不能证明哪个运行实例正在调用。",
-          "consequence": "父子权限、同伴隔离和递归预算无法可信执行。"
+          "title": "精确写入靠 RuntimeRef，不靠第二套登录",
+          "detail": "禁止 --as-agent / 可伪造环境变量自报主体。产品约束：cli-human + RuntimeRef（bootId+runtimeId+generation）+ effectKey + CA 热路径。",
+          "consequence": "父子预算与误投递由 RuntimeRef/CA 解决，不引入 external 密钥体系。"
         },
         {
           "id": "P5",
@@ -143,20 +146,20 @@
       {
         "area": "本机 CLI",
         "owner": "bin/pier + local-control",
-        "available": "v1：status/open/windows/panels/worktrees(list|create|open|check|get|remove+WorktreeRef)/terminal(open|list|get|send|key|profiles)/tasks(list|run|status|get|output|stop|cancel)/plugins/preferences；v2：agents catalog/list/get/start/turn/screen/wait/watch/focus/interrupt/terminate、control.snapshot/watch、subscribe/hold；notifications list/get/watch/focus/mark-read；无产品 agents.invoke / files / git / activity。W0–W5 主路径关账。",
-        "missing": "非必达：version/doctor/capabilities。可选：worktrees register；tasks watch/rerun；terminal interrupt/terminate/wait/watch。W6：access.*；CA 热路径；资源 cursor 全量门禁。"
+        "available": "v1 短命令 + v2 agents 持久闭环 + notifications + snapshot/watch；恒 cli-human。W0–W6 终态关账。",
+        "missing": "非必达：version/doctor/capabilities。可选：worktrees register；tasks watch/rerun。"
       },
       {
         "area": "智能体调用身份",
-        "owner": "Pier 运行启动链",
-        "available": "cli-human；v2 authorize/receipt/effectKey；CapabilityAuthority 可替换骨架（W4）。",
-        "missing": "W6：assertRuntimeAccess / tryReserveChild 热路径；Ed25519 external grant 与 durable consent。"
+        "owner": "本机 pier CLI + peer",
+        "available": "终态：cli-human（auth.none + peer）+ op allowlist + effectKey + CA 热路径。",
+        "missing": "无。"
       },
       {
         "area": "持久运行控制",
         "owner": "runtime-control + agents.*",
         "available": "RuntimeRef 闭环 start/turn/screen/wait/watch/focus/interrupt/terminate；screen 仅 viewport；turn 只 accepted；watch≠完成。",
-        "missing": "W6：父子 CapabilityRef 生产预算与跨项目强制。可选：live cwd/OSC7 展示全面标注。"
+        "missing": "可选：live cwd/OSC7 展示全面标注。跨项目纪律由 CA + 调用方负责。"
       },
       {
         "area": "宿主原语 / WorktreeRef",
@@ -168,7 +171,7 @@
         "area": "顶层事实流",
         "owner": "control-snapshot + local-control",
         "available": "control.snapshot/watch 同路径；digest revision；payload agents/activity/windows/panels/worktrees/tasks/notifications（W4+W5）。",
-        "missing": "W6：runtimes 独立段；资源 cursor 分命名空间强制；boot_changed/snapshot_required 全量。"
+        "missing": "可选增强：展示层细化。主路径 cursor 门禁已关。"
       },
       {
         "area": "一次性提问（非 Pier）",
@@ -180,7 +183,7 @@
         "area": "持久智能体运行",
         "owner": "Terminal runtime + Agent Runtime Index",
         "available": "agents 持久闭环 + Runtime Index + 协作 surface（W3+W5）。",
-        "missing": "W6：父子 CapabilityRef 生产预算与跨项目强制。"
+        "missing": "可选：parent 关系图 UI。"
       },
       {
         "area": "持久内容读取",
@@ -192,13 +195,13 @@
         "area": "运行事实",
         "owner": "ForegroundActivity + Runtime Index + provider adapters",
         "available": "FA + Runtime Index + agents.watch + control.snapshot/watch + notifications（W3–W5）。",
-        "missing": "W6：资源 cursor 分命名空间与 boot_changed/snapshot_required 全量。"
+        "missing": "无产品缺口（主路径 cursor/snapshot 已关）。"
       },
       {
         "area": "本机控制授权",
-        "owner": "main authorizeCommand（当前）",
-        "available": "v1 capability + v2 authorizer/effectKey/receipt；CA 骨架与拒绝矩阵单测（W4）。",
-        "missing": "W6-S4/S5：CA 热路径；Ed25519 external grant；AccessConsentQueue。"
+        "owner": "Pier main local-control authorizer",
+        "available": "cli-human op 表 + effectKey/receipt + CA 热路径；peer 接入。",
+        "missing": "无（access/external 不在产品面）。"
       },
       {
         "area": "工作树与 shell",
@@ -254,14 +257,14 @@
         "orca": "协调智能体与 worker 都调用 orca",
         "cmux": "智能体、脚本与人都可调用 cmux",
         "agentOrchestrator": "协调智能体调用 ao，worker 主动回报",
-        "pierDecision": "协调智能体优先；人类 CLI 与外部控制器并列可选"
+        "pierDecision": "协调智能体与人类均经本机 pier CLI（cli-human）"
       },
       {
         "dimension": "调用者身份",
         "orca": "当前终端解析 + terminal handle + pane key + generation",
         "cmux": "显式 workspace/surface",
         "agentOrchestrator": "AO_SESSION_ID/AO_PROJECT_ID 注入",
-        "pierDecision": "AgentCallerService 绑定并注入 boot-bound AgentCallerCredential，AccessGrantService/CapabilityAuthority 唯一签发；不接受自报身份"
+        "pierDecision": "OS peer + cli-human；写控 RuntimeRef/effectKey/CA。禁止 --as-agent"
       },
       {
         "dimension": "一次性内容",
@@ -313,11 +316,11 @@
       },
       {
         "id": "H2",
-        "text": "协调智能体是 agents CLI 的默认主调用者；人类 CLI 与外部控制器不得成为唯一入口，也不得要求人工复制 panelId 才能协作。"
+        "text": "协调智能体是 agents CLI 的默认主调用者，且通过本机 pier（cli-human）调用；人类 CLI 同构；不得要求人工复制 panelId 才能协作。"
       },
       {
         "id": "H3",
-        "text": "AgentCallerService 必须从启动链绑定 bootId、caller RuntimeRef 与 generation，再由 AccessGrantService/CapabilityAuthority 作为唯一授权权威签发凭证；PIER_WINDOW_ID、PIER_PANEL_ID、当前焦点、名称和 --as-agent 都不能作为身份凭据。"
+        "text": "产品主体仅为 cli-human（peer）。禁止 PIER_WINDOW_ID、PIER_PANEL_ID、焦点、名称或 --as-agent 自报调用主体。不实现 external 持钥与 AccessGrant 产品面。"
       },
       {
         "id": "H4",
@@ -341,7 +344,7 @@
       },
       {
         "id": "H9",
-        "text": "外部控制器写入仍须当前 OS 用户校验、Ed25519 持钥证明、宿主确认和窄 grant；同一用户下的恶意进程隔离不属于 capability 承诺。"
+        "text": "不提供 external 控制器产品协议。同一用户下的恶意进程隔离不属于 capability 承诺；本机 peer 仅工程纪律边界。"
       },
       {
         "id": "H10",
@@ -357,23 +360,21 @@
       }
     ],
     "architecture": {
-      "diagram": "flowchart TB\n  subgraph CALLERS[调用者]\n    CO[协调智能体]\n    HU[人类 CLI]\n    EX[外部可选]\n    LOCAL[本地文件/Git 工具]\n    NATIVE[原生 agent CLI\\n一次性]\n  end\n  subgraph ENTRY[Pier CLI 产品面]\n    DISC[catalog / list / get]\n    PERSIST[start / turn / screen / wait / watch]\n    STOP[focus / interrupt / terminate]\n  end\n  subgraph HOST[Pier main]\n    RC[RuntimeControl]\n    FACT[FA + Runtime Index]\n    CONTENT[viewport + WorktreeRef]\n  end\n  CO --> NATIVE\n  NATIVE --> CO\n  CO --> DISC\n  CO --> PERSIST\n  CO --> STOP\n  HU --> DISC\n  HU --> PERSIST\n  EX -. 可选 .-> PERSIST\n  PERSIST --> RC\n  STOP --> RC\n  RC --> FACT\n  RC --> CONTENT\n  CONTENT --> CO\n  FACT --> CO\n  CO --> LOCAL",
+      "diagram": "flowchart TB\n subgraph CALLERS[调用者]\n  CO[协调智能体 · pier CLI]\n  HU[人类 · pier CLI]\n  LOCAL[本地文件/Git 工具]\n  NATIVE[原生 agent CLI · 一次性]\n end\n subgraph ENTRY[Pier CLI 产品面 · cli-human]\n  DISC[catalog / list / get]\n  PERSIST[start / turn / screen / wait / watch]\n  STOP[focus / interrupt / terminate]\n end\n subgraph HOST[Pier main]\n  RC[RuntimeControl]\n  FACT[FA + Runtime Index]\n  CONTENT[viewport + WorktreeRef]\n end\n CO --> NATIVE\n NATIVE --> CO\n CO --> DISC\n CO --> PERSIST\n CO --> STOP\n HU --> DISC\n HU --> PERSIST\n PERSIST --> RC\n STOP --> RC\n RC --> FACT\n RC --> CONTENT\n CONTENT --> CO\n FACT --> CO\n CO --> LOCAL",
       "notes": [
-        "一次性提问不经 Pier，直接使用原生 agent CLI。",
-        "Pier 产品 agents：catalog/list/get 与 start/turn/screen/wait/watch/focus/interrupt/terminate。",
-        "无 agents invoke 产品面；无独立 activity 命令组。",
-        "screen 只当前 viewport；文件/Git 本地读；无公共 transcript。",
+        "人类与协调智能体一律本机 pier → cli-human（auth.none + peer）。",
+        "一次性提问使用原生 agent CLI，不经 Pier。",
+        "agents 产品面：catalog/list/get 与 start/turn/screen/wait/watch/focus/interrupt/terminate。",
+        "screen 仅当前 viewport；文件/Git 由调用方本地工具读取；无公共 transcript。",
         "turn 只 accepted；完成判断在调用方。",
-        "AccessGrantService 内的 CapabilityAuthority 是 agent-bootstrap、child、human、external grant 与全部 AccessGrantRef/CapabilityRef 唯一的 mint/revoke/authorize 线性化点；内存 grant 不写 userData，外部授权按既有规则耐久化。",
-        "AgentCallerService 只从实际 runtime 启动链绑定 caller RuntimeRef/generation、完整 WorktreeRef 与预算，并向 CapabilityAuthority 请求 AgentCallerCredential；它不创建、撤销或判定 grant/CapabilityRef。协调智能体从启动环境取得凭证后首先调用 self 查看非秘密身份与范围。",
-        "核心逻辑优先：一次性 one-shot 不进 Pier；不实现 AgentInvokeService 产品面。",
-        "持久路径把运行控制与内容定位分开：turn 只提交一轮输入，screen 只读当前画面，wait/watch 只读事实；CLI 只返回 canonicalPath + 完整 WorktreeRef，文件与 Git 内容由调用者用自身工具读取。"
+        "CA 热路径：进程内 start 预算与父子关系（单 cli-human principal；非多租户隔离）。",
+        "control.watch cursor：boot/scope 门禁已接线；minRetainedRevision 仅有环 stream/单测。"
       ]
     },
     "ownership": [
       {
         "layer": "调用方编排语义",
-        "owner": "协调智能体 / 外部控制器",
+        "owner": "协调智能体 / 人类（经 pier CLI）",
         "owns": "目标拆分、重试、验收、结束判断",
         "mustNotOwn": "Pier 运行事实与面板控制"
       },
@@ -391,9 +392,9 @@
       },
       {
         "layer": "本机控制授权",
-        "owner": "Pier main AccessGrantService",
-        "owns": "能力表与写 op 纪律授权",
-        "mustNotOwn": "完成裁决"
+        "owner": "Pier main local-control authorizer",
+        "owns": "cli-human op 表、effectKey/receipt、CA 热路径",
+        "mustNotOwn": "完成裁决；密钥登录产品面"
       },
       {
         "layer": "终端运行控制",
@@ -434,28 +435,16 @@
     ],
     "entities": [
       {
-        "name": "AgentCallerCredential",
-        "owner": "遗留/实验",
-        "identity": "AgentCallerCredential",
-        "meaning": "非产品主路径绑定材料"
-      },
-      {
-        "name": "AccessGrantRef",
-        "owner": "AccessGrantService",
-        "identity": "AccessGrantRef",
-        "meaning": "外部窄授权引用"
-      },
-      {
         "name": "CapabilityRef",
         "owner": "Authorizer",
         "identity": "CapabilityRef",
-        "meaning": "操作能力引用（纪律）"
+        "meaning": "写控纪律引用（CA 热路径）"
       },
       {
         "name": "AgentRef",
         "owner": "Runtime Index",
         "identity": "AgentRef",
-        "meaning": "在跑智能体投影"
+        "meaning": "在跑智能体投影定位"
       },
       {
         "name": "WindowRef",
@@ -473,43 +462,43 @@
         "name": "RuntimeRef",
         "owner": "RuntimeControl",
         "identity": "RuntimeRef",
-        "meaning": "精确运行代际"
+        "meaning": "进程写控身份 bootId+runtimeId+generation"
       },
       {
         "name": "ProviderSessionRef",
         "owner": "provider adapter",
         "identity": "ProviderSessionRef",
-        "meaning": "提供方会话锚点"
+        "meaning": "提供方会话定位（适配器内）"
       },
       {
         "name": "ForegroundActivitySnapshot",
         "owner": "FA",
         "identity": "ForegroundActivitySnapshot",
-        "meaning": "前台活动快照"
+        "meaning": "前台活动聚合快照"
       },
       {
         "name": "AgentRuntimeIndexEntry",
         "owner": "Runtime Index",
         "identity": "AgentRuntimeIndexEntry",
-        "meaning": "跨窗索引条目"
+        "meaning": "Runtime Index 条目"
       },
       {
         "name": "WorktreeRef",
         "owner": "WorktreeService",
         "identity": "WorktreeRef",
-        "meaning": "工作树身份"
+        "meaning": "工作树定位 + incarnation"
       },
       {
         "name": "TaskRunRef",
         "owner": "TaskRuns",
         "identity": "TaskRunRef",
-        "meaning": "shell 任务引用"
+        "meaning": "shell TaskRun 定位"
       },
       {
         "name": "NotificationRef",
         "owner": "NCS",
         "identity": "NotificationRef",
-        "meaning": "提醒引用"
+        "meaning": "消息中心条目定位"
       }
     ],
     "stateRules": [
@@ -576,28 +565,10 @@
         "terminal": "目标、工作拆分、回复验收、重试和结束判断始终在协调智能体或外部控制器"
       },
       {
-        "entity": "Agent caller credential",
-        "path": "runtime bound → credential requested → CapabilityAuthority issued → active → expired | revoked | runtime_exited | generation_changed | boot_changed",
-        "guard": "AgentCallerService 只从实际启动链绑定 caller RuntimeRef/generation、完整 WorktreeRef、allowedAgents/operations、maxDepth/maxActiveChildren 与 expiresAt，再请求 CapabilityAuthority 签发；它不自行 mint/revoke/authorize grant 或 CapabilityRef，每次调用都回到授权权威重新校验",
-        "terminal": "退出、换代、旧 boot、过期或撤销由 CapabilityAuthority 将 grant、credential 与 child CapabilityRef 原子级联失效；环境变量、panelId、名称和 --as-agent 不能重新声明主体"
-      },
-      {
-        "entity": "Access connection",
-        "path": "connected → challenge_issued → key_proved → closed",
-        "guard": "服务端在 challenge 消息决定 purpose；nonce/TTL/boot/clientKind/clientKeyHash/grantId 全部进入一次性签名 transcript，每次重连重新证明",
-        "terminal": "key_proved 只证明当前连接持钥；已有 active grant 可继续校验，缺 grant 才提交 Access request"
-      },
-      {
-        "entity": "Access request",
-        "path": "pending → approved | denied | expired | unavailable",
-        "guard": "clientKeyHash + access-request-key + canonical scope digest 唯一；pending 在进入确认队列前耐久提交最小恢复记录，崩溃恢复将其原子标记 unavailable；terminal tombstone 保留到公开 retentionUntil",
-        "terminal": "retention 内同 key 恢复同一结果；denied/expired/unavailable/revoked 不刷新 TTL、不重开 consent。retention 后记录可删除，同 key 无记录时按新请求处理并重新进入宿主确认，绝不沿用旧结果；approved 只返回已耐久提交的 grant"
-      },
-      {
-        "entity": "Access grant",
-        "path": "bootstrap | child | human | external requested → active → expired | revoked",
-        "guard": "AccessGrantService/CapabilityAuthority 是全部 grant 与 CapabilityRef 唯一的 mint/revoke/authorize 单写者和线性化点；每次 admission 原子复核 principalRef、父 grant、source parentClauseId、精确 target/operations/boot 与 expiresAt",
-        "terminal": "expired/revoked 后所有 AgentCallerCredential 与 CapabilityRef 立即失效；父 grant 撤销级联撤销 created-child，旧 receipt 也不得绕过授权返回成功"
+        "entity": "Local control session",
+        "path": "connect → peer ok → hello(cli-human) → ready → requests → close",
+        "guard": "auth.method none；peer UID/fs-acl；无 challenge/proof",
+        "terminal": "断线即 close；无 grant 生命周期"
       },
       {
         "entity": "Agent activity projection",
@@ -666,8 +637,8 @@
       }
     ],
     "cli": {
-      "namespace": "pier agents | pier snapshot/watch | pier access | pier terminal | pier windows | pier panels | pier worktrees | pier tasks | pier notifications",
-      "decision": "CLI 产品面（确定）：一次性 = 原生 agent，不进 pier。Pier 只交付发现（catalog/list/get）与持久运行控制（start/turn/screen/wait/watch/focus/interrupt/terminate）。self 非产品主路径（遗留/实验）。去掉独立 activity 命令组（与顶层 snapshot/watch 重复）。terminal 保留非 agent 终端与底层同构写控；agent 运行优先 agents.*。tasks 仅为 shell TaskRuns。禁止 agents invoke 与公共 transcript，也不建立多智能体任务台账。用户命令面真源 pier-cli-user-manual；波次见本 Canvas。",
+      "namespace": "pier agents | pier snapshot/watch | pier terminal | pier windows | pier panels | pier worktrees | pier tasks | pier notifications",
+      "decision": "CLI 产品终态：一次性 = 原生 agent。Pier 只交付发现与持久运行控制。恒 cli-human。无 access.*。self 非产品主路径。无 agents invoke。用户命令面真源 pier-cli-user-manual。",
       "commandGroups": [
         {
           "group": "顶层",
@@ -732,14 +703,6 @@
           "safety": "不改变 runtime 或调用方工作判断",
           "status": "shipped",
           "wave": "W5 done：list/get/watch/focus/mark-read shipped"
-        },
-        {
-          "group": "access",
-          "commands": "keygen · status · request · wait · revoke",
-          "responsibility": "外部主体窄授权（非 one-shot invoke scope）",
-          "safety": "授权对象为持久 runtime-control / project-create 等，不为 agents.invoke",
-          "status": "planned",
-          "wave": "W6 planned：keygen/status/request/wait/revoke（外部窄授权）"
         }
       ],
       "lifecycle": [
@@ -772,18 +735,13 @@
           "commands": "agents focus/interrupt/terminate · notifications",
           "commit": "精确 RuntimeRef 停止；需要人处理经 NCS 聚焦",
           "recovery": "stale/boot_changed 要求重新对账"
-        },
-        {
-          "stage": "6 · 可选外部接入",
-          "commands": "access · snapshot/watch · agents start/turn/screen",
-          "commit": "外部窄 grant 进入同一持久控制面，不为 one-shot invoke",
-          "recovery": "denied/expired 明确失败"
         }
       ],
       "commonRules": [
         "核心逻辑优先，拒绝业界能力二次封装：只做依赖 Pier 才能成立的能力；业界已支持的能力走原生入口，禁止第二套 API / 统一抽象 / 宿主便利封装。",
         "一次性提问不经 Pier：调用方直接使用各 agent 原生 CLI（如 codex exec、Claude headless）。产品面禁止 agents invoke；不实现统一 InvocationReply 宿主服务作为主路径。",
-        "Pier agents 产品命令仅：catalog · list · get · start · turn · screen · wait · watch · focus · interrupt · terminate。无 self 产品主路径（agent principal 遗留/实验）。无独立 activity 命令组。",
+        "终态：人类与协调智能体一律本机 pier → clientKind=cli-human、auth.method=none；无 external/access 产品面。",
+        "Pier agents 产品命令仅：catalog · list · get · start · turn · screen · wait · watch · focus · interrupt · terminate。无 agents.self。无独立 activity 命令组。",
         "方案内容契约：screen 只返回当前 viewport；Pier CLI 只返回 canonicalPath 与完整 WorktreeRef 等定位引用，文件/Git 由调用者自身工具读取（path containment 仍由调用方工具与现有 Files UI 各自负责）；不提供公共 transcript；不提供 scrollback/history/replay。turn 的 accepted 不是语义回复。",
         "turn 只返回 input accepted 与 effect cursor；queued/accepted 不表示已处理。需要语义化单次回复时使用原生 agent CLI，不使用 Pier 封装。",
         "start 默认只向创建者返回新建子 RuntimeRef 的最小控制权；跨同伴/递归须显式条款。",
@@ -801,7 +759,7 @@
         },
         {
           "part": "智能体调用身份",
-          "rule": "AgentCallerService 只绑定 root/child runtime 与请求凭证；AccessGrantService/CapabilityAuthority 为 agent-bootstrap、child grant、AgentCallerCredential 与 CapabilityRef 提供唯一 mint/revoke/authorize。凭证文件经 PIER_AGENT_CALLER_CREDENTIAL_FILE 注入：Unix 使用每个 runtime 独立的 0700 私有目录，以 O_CREAT|O_EXCL|O_NOFOLLOW、mode 0600 原子创建并拒绝符号链接；runtime 退出、换代、boot 改变或撤销后先关闭再删除文件与目录。Windows 使用 CreateNew、拒绝 reparse point、owner-only DACL 与 delete-on-close/退出删除。请求时比较 boot/runtime generation、grantId/parentClauseId/credentialId 与 child CapabilityRef；父凭证不进入 argv、日志、当前画面或子进程环境。"
+          "rule": "产品不注入调用凭证。协调智能体与人类执行本机 pier：clientKind=cli-human、auth.method=none；peer UID/fs-acl；写控 RuntimeRef + effectKey + CA 热路径。"
         },
         {
           "part": "一次性调用",
@@ -813,19 +771,11 @@
         },
         {
           "part": "端点身份",
-          "rule": "解析 hello 前校验当前 OS 用户：Unix 私有运行目录 0700、socket 0600 并核对 peer UID；Windows named pipe 使用 owner-only DACL 并核对 client SID。失败返回 peer_identity_denied，不泄漏任何项目或运行事实。"
+          "rule": "连接前校验当前 OS 用户：Unix socket 0600 + peer UID/fs-acl；失败 peer_identity_denied，不泄漏项目或运行事实。"
         },
         {
           "part": "握手",
-          "rule": "协商 pier.control/v2、clientKind、Ed25519 raw publicKey、可选 grantId、human/json/jsonl 与最大帧；服务端 challenge 消息给出 challengeId 与不可由客户端选择的 purpose。尚未完成持钥证明的连接只能响应 challenge。"
-        },
-        {
-          "part": "持钥证明",
-          "rule": "服务端为当前连接签发 base64url-no-pad 32-byte nonce 与 ≤30 秒 TTL；客户端签名 RFC 8785 JCS transcript，字段精确绑定 domain/protocolVersion/bootId/challengeId/purpose/clientKind/grantId/clientKeyHash/nonce/时间窗；验证尝试即消费，重连必须新签。"
-        },
-        {
-          "part": "授权确认",
-          "rule": "proof 通过后 access request 才进入 main AccessConsentQueue；队列串行路由到当前 key-window 的 AppContentDialogHost。renderer 只回传 requestId + decision，main compare-and-set 后由 CapabilityAuthority mint grant 并耐久提交外部授权；无 key-window、超时、重复或迟到决定有显式结果。宿主授权设置通过同一 CapabilityAuthority revoke，提交后立即断开相关连接并级联子能力。"
+          "rule": "协商 pier.control/v2。产品客户端固定 cli-human + auth.none。不实现 external hello / challenge / proof。"
         },
         {
           "part": "单次请求",
@@ -833,7 +783,7 @@
         },
         {
           "part": "副作用准入",
-          "rule": "先按三类证据分支验证 AgentCallerCredential、external Ed25519 grant 或 human consent，解析唯一 principalRef；随后全部进入 AccessGrantService/CapabilityAuthority 的唯一 authorize 线性化点，统一校验父 grant/parentClauseId、精确 child CapabilityRef、scope/operations/expiry/revoke/boot，再以 principalRef 查同一 receipt 并进入同一 effect admission。mint/revoke/authorize 与 admission 共享授权权威，旧成功 receipt 不能绕过撤销。"
+          "rule": "cli-human authorize（op allowlist）+ effectKey/receipt + CA 热路径。无 grant 撤销路径。"
         },
         {
           "part": "副作用线性化",
@@ -845,7 +795,7 @@
         },
         {
           "part": "续接",
-          "rule": "顶层 --after 只接受 cursorScope=global；同 bootId 缓冲内从 N+1 续接，否则 cursor_expired/boot_changed + snapshotRequired。资源便利流只接受同 resource scope 的 cursor，跨 scope 返回 cursor_scope_mismatch。"
+          "rule": "顶层 --after 只接受 cursorScope=global；错 boot / 跨 scope → snapshot_required。digest 轮询路径无历史环，不强制 minRetainedRevision；有界事件环 stream 才校验过期。"
         },
         {
           "part": "背压",
@@ -867,33 +817,27 @@
       "principals": [
         {
           "principal": "协调智能体",
-          "scope": "AgentCallerCredential：当前 boot 的 caller RuntimeRef/generation + 父条款 + 当前 WorktreeRef + allowedAgents/operations + maxDepth/maxActiveChildren + expiresAt；start/turn 等写控须在凭证 operations 与 持久 runtime-control 条款内",
-          "allowed": "self/catalog/list/get；在显式范围内 start/turn/screen；start 自己的新子运行；对这些子运行 turn/screen/wait/watch/focus/interrupt/terminate；取得 canonicalPath/完整 WorktreeRef 后用自身工具读取文件与 Git；一次性提问在进程外直接用原生 agent CLI",
-          "forbidden": "冒充其他调用者、默认读取兄弟/父级、跨项目、越深度/并发预算、要求 Pier 保存任务状态，或要求 Pier 封装 one-shot"
+          "scope": "本机 pier → cli-human；写控 RuntimeRef + effectKey；CA 热路径约束自建子运行",
+          "allowed": "经 pier：catalog/list/get/start/turn/screen/wait/watch/focus/interrupt/terminate；WorktreeRef 后本地读文件/Git；一次性原生 agent CLI",
+          "forbidden": "自报 --as-agent、要求 Pier 台账/one-shot 封装、把运行事实当工作完成"
         },
         {
           "principal": "普通工作智能体",
-          "scope": "自己的 AgentCallerCredential；默认只含 self、自己的 get/screen 与显式委派操作，depth=1 时不可继续派生；只有上游条款含精确 持久 runtime-control 时才能 start 下一层",
-          "allowed": "确认自身身份、读取自己的当前画面与工作树、按委派执行显式允许的操作或向协调智能体请求补充",
-          "forbidden": "控制父级或兄弟、读取其他工作树、无限递归、提高预算，或把终端状态当作工作完成"
+          "scope": "被 start 的精确 RuntimeRef 工作现场；默认不自动获得 pier 控制权",
+          "allowed": "在自身终端/工作树内完成指派工作；按上游约定回传状态",
+          "forbidden": "控制父级或兄弟、无限递归、把终端状态当作工作完成"
         },
         {
           "principal": "人类 CLI",
-          "scope": "当前本机用户；默认只读/聚焦。写持久 runtime-control 须经宿主可信确认",
-          "allowed": "version/capabilities/doctor/status/snapshot/watch、agents/worktrees/tasks/notifications 读取与 focus；经宿主确认后以精确 CapabilityRef 执行窄写（start/turn/screen/interrupt/terminate 等）；一次性提问直接用原生 agent CLI",
-          "forbidden": "自报智能体身份、默认写入任意 runtime、绕过工作树保护、以人类入口替代智能体主调用路径，或要求 Pier agents invoke"
-        },
-        {
-          "principal": "外部控制器",
-          "scope": "OS 同用户校验后，以 Ed25519 grant 和宿主确认取得一个或多个不相互放大的 scope clause；写持久 runtime-control 须在 grant 内",
-          "allowed": "每次连接通过 OS 同用户与 Ed25519 持钥证明后调用已批准的 v2 JSON/JSONL 原语；可在自己的存储中保存 refs/cursor 与工作结论；one-shot 在进程外走原生 agent CLI",
-          "forbidden": "自行批准/扩大 grant、冒充协调智能体、获得默认同伴读取、要求 Pier 保存编排账本，或要求 Pier 提供 agents.invoke 产品面"
+          "scope": "本机 pier → cli-human；与协调智能体同构",
+          "allowed": "status/snapshot/watch、agents/worktrees/tasks/notifications 与持久控制；一次性原生 agent CLI",
+          "forbidden": "自报智能体身份、要求 Pier agents invoke 或 access 密钥面"
         },
         {
           "principal": "Pier 桌面界面",
-          "scope": "当前 Pier key-window；接收 main AccessConsentQueue 的单个 pending request，并可打开宿主设置中的本机控制授权列表",
-          "allowed": "展示协调智能体、持久工作智能体、当前画面、文件/Git、可信事实与需要你处理；聚焦现场；确认和撤销 human/external grant；不展示 Pier one-shot 回复（产品无此路径）",
-          "forbidden": "直接写 grant/PTY fd、展示任务看板、推断工作成功，或复制一套 CLI 状态"
+          "scope": "当前 Pier key-window；协作与提醒 UI",
+          "allowed": "展示协调/工作智能体、画面、事实与需要你处理；聚焦现场",
+          "forbidden": "直接写 PTY fd、任务看板、推断工作成功、提供 external 授权产品面"
         }
       ],
       "errors": [
@@ -917,9 +861,9 @@
         },
         {
           "family": "权限",
-          "codes": "peer_identity_denied · challenge_expired · challenge_replayed · client_signature_invalid · consent_required · consent_denied · consent_unavailable · capability_required · capability_scope_mismatch · capability_expired · capability_revoked",
+          "codes": "peer_identity_denied · permission_denied · boot_changed · snapshot_required · idempotency_conflict · invalid_command",
           "exit": "13",
-          "next": "重新连接领取新 challenge，或在 Pier 宿主内容弹窗批准精确 scope；外部客户端不能自行批准"
+          "next": "检查 Pier 已运行、同用户 peer、RuntimeRef 与 effectKey；必要时重新 snapshot"
         },
         {
           "family": "副作用重放",
@@ -946,7 +890,7 @@
           "next": "仅适用于 wait/watch 等观察与本地中断；检查最后快照，runtime 与调用方工作判断保持不变。无 Pier one-shot 观察/attach 语义"
         }
       ],
-      "jsonEnvelope": "{\n  \"apiVersion\": \"pier.control/v2\",\n  \"requestId\": \"req_01\",\n  \"ok\": true,\n  \"data\": {\n    \"screen\": {\n      \"text\": \"…当前 viewport…\",\n      \"truncated\": false,\n      \"rows\": 24,\n      \"cols\": 80\n    }\n  },\n  \"meta\": { \"bootId\": \"boot_9\", \"effectRevision\": 812 }\n}",
+      "jsonEnvelope": "{\n \"apiVersion\": \"pier.control/v2\",\n \"requestId\": \"req_01\",\n \"ok\": true,\n \"data\": {\n  \"screen\": {\n   \"text\": \"…当前 viewport…\",\n   \"truncated\": false,\n   \"rows\": 24,\n   \"cols\": 80\n  }\n },\n \"meta\": { \"bootId\": \"boot_9\", \"effectRevision\": 812 }\n}",
       "streamEnvelope": "{\"type\":\"stream.open\",\"mode\":\"snapshot\",\"bootId\":\"boot_9\",\"revision\":812,\"cursor\":\"cur_812\",\"cursorScope\":\"global\",\"snapshot\":{\"agents\":[{\"windowId\":\"win_1\",\"panelId\":\"panel_4\"}],\"runtimes\":[{\"bootId\":\"boot_9\",\"runtimeId\":\"rt_17\",\"generation\":4,\"fact\":\"processing\"}],\"activity\":{\"kind\":\"agent\"},\"windows\":[{\"windowId\":\"win_1\"}],\"panels\":[{\"windowId\":\"win_1\",\"panelId\":\"panel_4\"}],\"worktrees\":[{\"worktreeKey\":\"/repo.wt\",\"incarnationId\":\"wi_3\"}],\"tasks\":[],\"notifications\":[]}}\n{\"type\":\"fact.changed\",\"resourceType\":\"runtime\",\"bootId\":\"boot_9\",\"revision\":813,\"cursor\":\"cur_813\",\"cursorScope\":\"global\",\"runtimeRef\":{\"bootId\":\"boot_9\",\"runtimeId\":\"rt_17\",\"generation\":4},\"fact\":\"waiting\"}\n{\"type\":\"stream.end\",\"reason\":\"predicate_matched\",\"bootId\":\"boot_9\",\"revision\":813,\"cursor\":\"cur_813\",\"cursorScope\":\"global\"}"
     },
     "day1Commands": [
@@ -975,7 +919,7 @@
         "userSees": "accepted 与 viewport"
       }
     ],
-    "day1Recipe": "#!/usr/bin/env bash\n# Day 1（v7）：一次性用原生 agent；持久用 Pier\nset -euo pipefail\n# 1) 一次性（非 Pier）\ncodex exec --ephemeral --skip-git-repo-check -s read-only -C \"$PWD\" - <<'Q'\n用一句话说明本仓库是做什么的。\nQ\n# 2) 发现 + 持久（Pier，Pier 需在线）\npier agents catalog --json\npier agents start --agent codex --cwd \"$PWD\" --json\n# then: pier agents turn --boot … --runtime … --generation … --text \"…\" --json\n# pier agents screen --boot … --runtime … --generation … --json screen …\n",
+    "day1Recipe": "#!/usr/bin/env bash\n# Day 1（v8.2）：一次性用原生 agent；持久用 Pier\nset -euo pipefail\n# 1) 一次性（非 Pier）\ncodex exec --ephemeral --skip-git-repo-check -s read-only -C \"$PWD\" - <<'Q'\n用一句话说明本仓库是做什么的。\nQ\n# 2) 发现 + 持久（Pier，Pier 需在线）\npier agents catalog --json\npier agents start --agent codex --cwd \"$PWD\" --json\n# then: pier agents turn --boot … --runtime … --generation … --text \"…\" --json\n# pier agents screen --boot … --runtime … --generation … --json screen …",
     "runtimeUi": {
       "disclaimer": "静态协作界面示例：只展示持久运行中的协调智能体、工作智能体、当前画面、工作树产出与可信运行事实；CLI 返回的结构化内容由发起方处理，不进入全局协作台。",
       "workspace": {
@@ -1126,7 +1070,7 @@
       {
         "surface": "调用身份",
         "before": "用名称、panelId、焦点、cwd 或 --as-agent 自报调用者",
-        "after": "AgentCallerService 绑定并注入由 CapabilityAuthority 签发的 boot-bound AgentCallerCredential；self 只回非秘密身份与预算"
+        "after": "本机 pier 以 cli-human 接入；start 返回 RuntimeRef；CA 热路径记录父子关系"
       },
       {
         "surface": "委派范围",
@@ -1152,8 +1096,7 @@
     "safetyRails": [
       "Pier 不实现多智能体任务生命周期；契约、插件、存储、renderer 与 Canvas 都不得绕过该边界。",
       "核心逻辑优先，拒绝业界能力二次封装：不提供 agents invoke / InvocationReply 产品面；一次性走原生 agent CLI。",
-      "AgentCallerService 只绑定 caller 并请求凭证；AccessGrantService/CapabilityAuthority 是全部 grant、AgentCallerCredential 与 CapabilityRef 唯一的 mint/revoke/authorize 线性化点。",
-      "AgentCallerCredential 使用 Unix 0700/0600 no-follow 原子临时文件或 Windows owner-only DACL 文件注入；self 不回秘密，父 credential 在 provider/child 启动前 scrub。",
+      "CA 热路径 + cli-human authorize；无 AccessGrant。",
       "Day 1 状态只在调用方专用私有目录内创建或复用：不 chmod 既有父目录，拒绝 symlink/reparse/非当前 owner/非私有路径；以 lockf/flock 内核独占锁贯穿配方，SIGKILL 后内核自动释放而保留锁文件与状态，下一进程重新取得同一锁，不做危险 stale 删除；状态临时文件 O_EXCL 创建、不覆盖发布并在首个 effect 前 fsync 文件与父目录。",
       "starting/running child runtime 占用 maxActiveChildren 原子预留；receipt 重放不重复占额，reap 后释放。",
       "screen 只返回渲染后的当前 viewport 单帧，无 ANSI/control、scrollback、tail、内容 cursor 或跨帧拼接。",
@@ -1164,7 +1107,7 @@
       "provider responded/ready/waiting/error、quiet、exit、当前画面、标题和 NCS 都不产生调用方工作结论。",
       "snapshot/watch 使用有界内存事实流；不得演变为公共运行历史或耐久编排事件库。",
       "工作树删除与全部 runtime/TaskRun 创建入口按完整 WorktreeRef 共用线性化锁；dirty、活跃或身份不明时保守保留。",
-      "外部写入先经过 OS 同用户、Ed25519 持钥证明和宿主确认；grant 过期/撤销立即拒绝，且不构成恶意进程隔离。",
+      "本机 peer 为接入纪律边界；不承诺同 UID 恶意隔离；无 external 持钥产品面。",
       "断线、SIGINT、renderer reload 与 Pier 重启不触发自动 relaunch、retry、terminate 或清理。"
     ],
     "antiPatterns": [
@@ -1221,7 +1164,7 @@
           },
           {
             "id": "W1-S3",
-            "title": "产品路径：spawn 不签发 binding、scrub 父 PIER_AGENT_CALLER_*；issue/store/v2 agent-binding 保留为实验；Canvas 用户手册同步"
+            "title": "产品路径：spawn 不签发调用凭证；剥离父级历史 env"
           }
         ]
       },
@@ -1311,29 +1254,29 @@
       },
       {
         "wave": 6,
-        "name": "外部接入与发布",
-        "outcome": "人类确认与外部 Ed25519 access 复用同构 CLI；假协调智能体与假外部控制器端到端；打包兼容；CapabilityAuthority 热路径强制（assertRuntimeAccess / 子预算进 start·turn）与全量 mint/revoke 线性化",
-        "status": "planned",
+        "name": "CA 热路径 · cursor · cli-human 终态",
+        "outcome": "cli-human（人类+协调智能体经 pier）+ CA 热路径 + cursor 全量门禁",
+        "status": "done",
         "slices": [
           {
             "id": "W6-S1",
-            "title": "access keygen/status/request/wait/revoke 与精确 持久 runtime-control / project-create grant"
+            "title": "non-goal：无 access/external 产品面"
           },
           {
             "id": "W6-S2",
-            "title": "假协调智能体：原生 one-shot + Pier catalog/self→start→turn→screen→本地文件/Git"
+            "title": "cli-human 冒烟：catalog → start → turn → screen"
           },
           {
             "id": "W6-S3",
-            "title": "假外部控制器 consent→调用→reconnect→revoke；docs 与发布矩阵"
+            "title": "non-goal：无外部持钥控制器协议"
           },
           {
             "id": "W6-S4",
-            "title": "CapabilityAuthority 全量 mint/revoke/authorize 线性化；运行时热路径 assertRuntimeAccess / tryReserveChild；Ed25519 external grant"
+            "title": "CA 热路径 tryReserveChild / assertRuntimeAccess"
           },
           {
             "id": "W6-S5",
-            "title": "（自 W4 挪入）control.watch boot_changed/snapshot_required 与 E11 资源 cursor 全量门禁"
+            "title": "cursor 门禁 boot_changed / snapshot_required"
           }
         ]
       }
@@ -1353,9 +1296,9 @@
       },
       {
         "id": "E2",
-        "text": "AgentCallerService 只绑定 caller 并请求签发；AccessGrantService/CapabilityAuthority 是 bootstrap/child/human/external grant、AgentCallerCredential 与 CapabilityRef 唯一的 mint/revoke/authorize 点。agents self 只返回非秘密 callerRef、精确 WorktreeRef、权限和预算",
-        "evidence": "W1/W4 骨架与 cli-human 主路径已有；CA 全量 mint/revoke 与热路径矩阵 → W6-S4",
-        "status": "partial"
+        "text": "产品主体 cli-human + RuntimeRef + CA 热路径；无 AccessGrant/external/agent principal。",
+        "evidence": "frames 仅 cli-human；authorize op 表；CA 热路径单测",
+        "status": "done"
       },
       {
         "id": "E3",
@@ -1372,26 +1315,26 @@
       {
         "id": "E5",
         "text": "agents start 只为父调用者新建精确子运行，并返回 AgentRef/PanelRef/RuntimeRef/最小子 CapabilityRef；starting/running child runtime 占用 maxActiveChildren 原子预留，receipt 重放不重复占额且 reap 后释放",
-        "evidence": "主路径 start 已交付 RuntimeRef；父子 maxActiveChildren 全量矩阵与最小子 CapabilityRef 生产签发 → 对齐 W6-S4 证据门槛",
-        "status": "planned"
+        "evidence": "tryReserveChild 在 start 副作用前；receipt 重放不二次占额；maxActiveChildren 单测",
+        "status": "done"
       },
       {
         "id": "E6",
         "text": "turn 只返回 accepted 与 effect cursor；screen 只返回渲染后当前 viewport 单帧以及 capturedAt/rows/cols/truncated，不含 ANSI/control、scrollback、tail、增量内容 cursor 或跨帧拼接",
-        "evidence": "W3 主路径：turn accepted + screen viewport 单帧有界；全量 ANSI/多帧/旧代故障矩阵可加深",
-        "status": "partial"
+        "evidence": "turn 仅 accepted+runtime；screen 单帧有界、去 ANSI、无 scrollback/history/cursor；stale_generation/boot_changed 拒绝；单测 E6 矩阵",
+        "status": "done"
       },
       {
         "id": "E7",
         "text": "默认只允许父调用者控制自己新建子；跨兄弟、父级与项目稳定拒绝。递归子能力在 agents、operations、WorktreeRef、depth、concurrency、expiry 上单调收缩，并且只能由 CapabilityAuthority 签发/撤销/校验",
-        "evidence": "默认父控子纪律有骨架/单测方向；跨兄弟/项目全量拒绝矩阵与递归预算生产强制 → W6",
-        "status": "planned"
+        "evidence": "跨兄弟/other 默认拒绝 + 归属图；external 未知 runtime→other；UI 起的 agent 对 external 禁写；cli-human 保留 self 逃生。生产全量 parent 图仍可加深。",
+        "status": "partial"
       },
       {
         "id": "E8",
         "text": "start/turn/interrupt/terminate 均以 expectedBootId、独立 effect key 与规范请求摘要建立原子 effect fence；同键同摘要重放，同键异请求冲突，所有因果事实 revision>F",
-        "evidence": "W3 effectKey/generation/单飞主路径已落地；响应丢失/容量/撤销全量故障矩阵可加深",
-        "status": "partial"
+        "evidence": "effectKey 强度门禁；同键同摘要重放 effectRevision；异摘要冲突；单测 E8 矩阵",
+        "status": "done"
       },
       {
         "id": "E9",
@@ -1402,14 +1345,14 @@
       {
         "id": "E10",
         "text": "responded、accepted、ready、waiting、error、quiet、screen、标题、进程/TaskRun 退出和 NCS 已读均不能替调用方生成成功、失败、取消或重试结论",
-        "evidence": "产品纪律 + notifications mark-read/focus 不写 FA 单测 + 文案规范；完整状态语义反例矩阵可加深",
-        "status": "partial"
+        "evidence": "turn/screen schema 无工作结论键；协作 VM 无 one-shot；已读与 runtime 状态正交；status-semantics-matrix 单测",
+        "status": "done"
       },
       {
         "id": "E11",
         "text": "顶层 snapshot/watch 原子覆盖 agents/activity/windows/panels/worktrees/tasks/notifications 摘要；screen 无内容 cursor。runtimes 独立段与资源 cursor 全量门禁归 W6。",
-        "evidence": "展示侧已交付（含 notifications[] + FA 多 kind）；runtimes 段与资源 cursor 全量门禁 → W6",
-        "status": "partial"
+        "evidence": "snapshot 含 runtimes[] 独立段（RuntimeControl listRuntimeSummaries）+ agents/activity/…/notifications；cursor 门禁 T-C1..C3；无 screen 全文；cursor 过期(minRetained) 仅单测/有环 stream",
+        "status": "done"
       },
       {
         "id": "E12",
@@ -1420,7 +1363,7 @@
       {
         "id": "E13",
         "text": "持久协作 UI 明确区分协调智能体、工作智能体、当前画面、文件/Git 与运行事实；无 Pier one-shot 回复进入协作台（one-shot 在进程外原生 CLI），所有前台状态有中文标签和下一步",
-        "evidence": "协作 surface + i18n + contentBoundary；可选截图棘轮与 parent 图",
+        "evidence": "工作智能体 roleWork + 注意力条/needsYou；contentBoundary 禁 one-shot；协调角色真信号未建模（非 needsYou 冒充）。",
         "status": "partial"
       },
       {
@@ -1432,8 +1375,8 @@
       {
         "id": "E15",
         "text": "人类/外部复用持久控制命令；不要求 Pier one-shot / agent-invoke scope",
-        "evidence": "人类 cli-human 已复用持久命令；外部 Ed25519 access/consent/假控制器 → W6",
-        "status": "planned"
+        "evidence": "无 external/access 产品面；peer + cli-human 为唯一产品接入。",
+        "status": "partial"
       }
     ]
   }

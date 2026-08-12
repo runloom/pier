@@ -1,17 +1,12 @@
 /**
  * feature 广告、op 名单常量与 server.error 帧构造。
  */
-import type { AgentCallerCredentialMaterial } from "@shared/contracts/local-control/agent-credential.ts";
 import {
   LOCAL_CONTROL_API_VERSION,
   type LocalControlErrorCode,
 } from "@shared/contracts/local-control/errors.ts";
-import type {
-  LocalControlClientHello,
-  LocalControlServerFrame,
-} from "@shared/contracts/local-control/frames.ts";
+import type { LocalControlServerFrame } from "@shared/contracts/local-control/frames.ts";
 
-export const LOCAL_CONTROL_FEATURE_AGENTS_SELF = "agents.self";
 export const LOCAL_CONTROL_FEATURE_AGENTS_CATALOG = "agents.catalog";
 export const LOCAL_CONTROL_FEATURE_AGENTS_LIST = "agents.list";
 export const LOCAL_CONTROL_FEATURE_AGENTS_GET = "agents.get";
@@ -85,16 +80,11 @@ export function serverErrorFrame(
 }
 
 export function buildLocalControlFeatures(
-  base: readonly string[],
-  material: AgentCallerCredentialMaterial | null,
-  clientKind: LocalControlClientHello["clientKind"]
+  base: readonly string[] = []
 ): string[] {
   const set = new Set(base);
   for (const f of BASE_ADVERTISED_FEATURES) {
     set.add(f);
-  }
-  if (clientKind === "agent" && material?.operations.includes("agents.self")) {
-    set.add(LOCAL_CONTROL_FEATURE_AGENTS_SELF);
   }
   return [...set];
 }

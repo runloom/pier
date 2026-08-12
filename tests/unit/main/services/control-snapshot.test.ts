@@ -53,6 +53,19 @@ describe("ControlSnapshotService (W4-S3 / W5-S4)", () => {
           agentRef: "w\0p1",
         },
       ],
+      listRuntimes: () => [
+        {
+          bootId: "boot-1",
+          runtimeId: "p1",
+          generation: 1,
+          agentId: "codex",
+          panelId: "p1",
+          windowId: "w1",
+          fact: "running",
+          closed: false,
+          cwd: "/repo",
+        },
+      ],
       nowMs: () => 1000,
     });
     const a = await svc.snapshot();
@@ -72,6 +85,15 @@ describe("ControlSnapshotService (W4-S3 / W5-S4)", () => {
     expect(a.windows[0]?.windowId).toBe("w1");
     expect(a.notifications).toHaveLength(1);
     expect(a.notifications[0]?.id).toBe("n1");
+    // E11：runtimes 独立段，无 screen/text
+    expect(a.runtimes).toHaveLength(1);
+    expect(a.runtimes[0]).toMatchObject({
+      runtimeId: "p1",
+      generation: 1,
+      fact: "running",
+    });
+    expect(a.runtimes[0]).not.toHaveProperty("text");
+    expect(a.runtimes[0]).not.toHaveProperty("screen");
   });
 
   it("selectSnapshotNotifications prefers unread then newer ts", () => {

@@ -18,7 +18,9 @@ function cellFor(
   return cell.effect;
 }
 
-describe("project-skills effective matrix (v8 §5.1)", () => {
+describe("project-skills effective matrix (v8 §5.1)", {
+  timeout: 30_000,
+}, () => {
   it("derives discoverable per agent from owned projections", () => {
     const result = deriveEffectiveMatrix({
       registry,

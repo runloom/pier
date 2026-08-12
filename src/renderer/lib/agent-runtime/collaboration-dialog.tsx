@@ -84,7 +84,7 @@ function SessionCard({
         </ItemContent>
         <ItemActions>
           <span className="text-muted-foreground text-xs">
-            {t(session.statusKey)}
+            {t(session.roleKey)} · {t(session.statusKey)}
           </span>
         </ItemActions>
       </button>
@@ -207,7 +207,9 @@ function CollaborationBody({
             <div className="flex flex-col gap-2 rounded-lg border p-3">
               <div className="font-medium text-sm">{vm.selected.title}</div>
               <div className="grid gap-1 text-muted-foreground text-xs">
-                <span>{t(vm.selected.statusKey)}</span>
+                <span>
+                  {t(vm.selected.roleKey)} · {t(vm.selected.statusKey)}
+                </span>
                 <span>
                   {t(vm.selected.locationKey, vm.selected.locationParams)}
                 </span>

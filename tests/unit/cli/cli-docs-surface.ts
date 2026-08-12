@@ -19,9 +19,10 @@ const AVAILABLE_VIOLATION_PATTERNS: ReadonlyArray<{ id: string; re: RegExp }> =
       id: "agents.unimplemented",
       re: /^\s*pier\s+agents\s+(self|invoke)\b/mu,
     },
+    // access.* 已删除：不得出现在 shipped 可抄写表面
     { id: "access", re: /^\s*pier\s+access\b/mu },
     { id: "activity", re: /^\s*pier\s+activity\b/mu },
-    // notifications.* 已在 W5-S2 产品 shipped
+    // notifications.* 已在 W5 产品 shipped
     { id: "plugins enable", re: /^\s*pier\s+plugins\s+enable\b/mu },
     { id: "plugins disable", re: /^\s*pier\s+plugins\s+disable\b/mu },
   ];
@@ -94,14 +95,13 @@ export const REQUIRED_PLANNED_COMMAND_NAMES = [
   "worktrees register",
   "tasks watch",
   "tasks rerun",
-  "access keygen/status/request/wait/revoke",
-  "agents self",
 ] as const;
 
 export const REQUIRED_BLOCKED_COMMAND_NAMES = [
   "plugins enable",
   "plugins disable",
   "agents invoke",
+  "agents self",
 ] as const;
 
 export interface CliManualCommand {

@@ -38,6 +38,19 @@ export interface RuntimeControlService {
   ): Promise<RuntimeControlResult<{ interrupted: true; runtime: RuntimeRef }>>;
   /** 测试/诊断：当前 boot 内登记数。 */
   listRuntimeIds(): string[];
+  /** E11：snapshot.runtimes 投影（摘要，无 screen 全文）。 */
+  listRuntimeSummaries(): Array<{
+    bootId: string;
+    runtimeId: string;
+    generation: number;
+    agentId: string;
+    panelId: string;
+    windowId: string;
+    fact: string;
+    closed: boolean;
+    worktreeKey?: string | undefined;
+    cwd?: string | undefined;
+  }>;
   screen(
     input: RuntimeControlScreenInput
   ): Promise<RuntimeControlResult<AgentsScreenResult>>;
@@ -149,6 +162,21 @@ export function createRuntimeControlService(
   return {
     listRuntimeIds() {
       return [...byRuntimeId.keys()];
+    },
+
+    listRuntimeSummaries() {
+      return [...byRuntimeId.values()].map((record) => ({
+        bootId: record.runtime.bootId,
+        runtimeId: record.runtime.runtimeId,
+        generation: record.runtime.generation,
+        agentId: record.agentId,
+        panelId: record.panelId,
+        windowId: record.windowId,
+        fact: record.fact,
+        closed: record.closed,
+        ...(record.worktreeKey ? { worktreeKey: record.worktreeKey } : {}),
+        ...(record.cwd ? { cwd: record.cwd } : {}),
+      }));
     },
 
     async start(input) {

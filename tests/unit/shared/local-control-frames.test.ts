@@ -43,29 +43,26 @@ describe("classifyLocalControlFirstFrame", () => {
     expect(result.kind).toBe("v1");
   });
 
-  it("classifies v2 hello with agent-binding", () => {
+  it("classifies v2 hello with cli-human", () => {
     const result = classifyLocalControlFirstFrame({
       apiVersion: LOCAL_CONTROL_API_VERSION,
       type: "client.hello",
       requestId: "r1",
-      clientKind: "agent",
-      auth: {
-        method: "agent-binding",
-        bindingId: "bind_1",
-      },
+      clientKind: "cli-human",
+      auth: { method: "none" },
     });
     expect(result.kind).toBe("session-hello");
   });
 
-  it("parses agent-binding hello schema", () => {
+  it("rejects agent clientKind (removed from product frames)", () => {
     const hello = {
       apiVersion: LOCAL_CONTROL_API_VERSION,
       type: "client.hello" as const,
       requestId: "r1",
-      clientKind: "agent" as const,
-      auth: { method: "agent-binding" as const, bindingId: "bind_1" },
+      clientKind: "agent",
+      auth: { method: "agent-binding", bindingId: "bind_1" },
     };
-    expect(localControlClientHelloSchema.parse(hello)).toEqual(hello);
+    expect(() => localControlClientHelloSchema.parse(hello)).toThrow();
   });
 
   it("rejects v2 non-hello first frame", () => {
@@ -73,7 +70,7 @@ describe("classifyLocalControlFirstFrame", () => {
       apiVersion: LOCAL_CONTROL_API_VERSION,
       type: "request",
       requestId: "r1",
-      op: "agents.self",
+      op: "agents.list",
       params: {},
     });
     expect(result).toMatchObject({

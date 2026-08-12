@@ -1,7 +1,7 @@
 /**
  * CapabilityAuthority 骨架（W4-S4）。
  * 可替换 LocalControlAuthorizer；深度/跨项目/兄弟默认拒绝矩阵。
- * 全量 Ed25519 / durable grant 属 W6。
+ * 产品终态：cli-human authorize + 运行时归属图。
  */
 import type {
   LocalControlAuthorizeInput,
@@ -37,7 +37,7 @@ export interface CapabilityAuthority {
 }
 
 export interface CreateCapabilityAuthorityOptions {
-  /** 可注入 base authorizer；默认 cli-human/agent 规则 */
+  /** 可注入 base authorizer；默认 cli-human 规则 */
   base?: LocalControlAuthorizer;
   maxActiveChildren?: number;
 }
@@ -70,23 +70,15 @@ export function createCapabilityAuthority(
           message: "cross-project runtime access denied by default",
         };
       }
-      if (input.relation === "sibling") {
+      // sibling / other：默认拒绝（W6 归属图：非自己 start 的子 runtime）
+      if (input.relation === "sibling" || input.relation === "other") {
         return {
           ok: false,
           code: "permission_denied",
-          message: "sibling runtime access denied by default",
-        };
-      }
-      if (
-        input.callerRuntimeId &&
-        input.targetRuntimeId &&
-        input.callerRuntimeId !== input.targetRuntimeId &&
-        input.relation === "other"
-      ) {
-        return {
-          ok: false,
-          code: "permission_denied",
-          message: "unrelated runtime access denied by default",
+          message:
+            input.relation === "sibling"
+              ? "sibling runtime access denied by default"
+              : "unrelated runtime access denied by default",
         };
       }
       return { ok: true };

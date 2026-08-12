@@ -25,7 +25,7 @@ export function usage() {
     "  pier tasks rerun <runId> --json",
     "  pier status --json",
     "  pier snapshot --json",
-    "  pier watch [--after <revision>] [--timeout <ms>] [--poll-ms <ms>] --json",
+    "  pier watch [--after <revision>] [--after-boot <bootId>] [--after-scope <scope>] [--timeout <ms>] [--poll-ms <ms>] --json",
     "  pier windows list --json",
     "  pier windows focus <windowId> --json",
     "  pier panels list [--window <windowId>] --json",
@@ -162,6 +162,8 @@ function stripOptions(args) {
       arg === "--task" ||
       arg === "--force" ||
       arg === "--after" ||
+      arg === "--after-boot" ||
+      arg === "--after-scope" ||
       arg === "--scope" ||
       arg === "--id" ||
       arg === "--unread" ||
@@ -202,6 +204,8 @@ function stripOptions(args) {
         arg === "--key" ||
         arg === "--task" ||
         arg === "--after" ||
+        arg === "--after-boot" ||
+        arg === "--after-scope" ||
         arg === "--scope" ||
         arg === "--id"
       ) {
@@ -771,10 +775,9 @@ function parseAgents(action, value, unexpected, args) {
   if (unexpected) {
     throw new Error(`unexpected pier CLI argument: ${unexpected}`);
   }
-  // Product CLI is always cli-human; agents.self needs an agent principal.
   if (action === "self") {
     throw new Error(
-      "pier agents self is not available from the human CLI (requires agent principal / binding). Use agents catalog|list|get instead."
+      "pier agents self is not a product command; use agents catalog|list|get|start|turn|screen|…"
     );
   }
   if (action === "invoke") {
@@ -828,11 +831,23 @@ function parseControlTopLevel(domain, args) {
   }
   if (domain === "watch") {
     const afterRaw = optionValue(args, "--after");
+    const afterBoot = optionValue(args, "--after-boot");
+    const afterScope = optionValue(args, "--after-scope");
     const timeoutRaw = optionValue(args, "--timeout");
     const pollRaw = optionValue(args, "--poll-ms");
     const params = {};
     if (afterRaw !== undefined) {
-      params.after = Number(afterRaw);
+      const revision = Number(afterRaw);
+      // W6-S5：带 boot/scope 时发结构化 after；仅 --after 保持 number 兼容
+      if (afterBoot !== undefined || afterScope !== undefined) {
+        params.after = {
+          revision,
+          ...(afterBoot === undefined ? {} : { bootId: afterBoot }),
+          scope: afterScope ?? "global",
+        };
+      } else {
+        params.after = revision;
+      }
     }
     if (timeoutRaw !== undefined) {
       params.timeoutMs = Number(timeoutRaw);

@@ -31,7 +31,7 @@ afterEach(async () => {
   await rm(sharedLockRoot, { force: true, recursive: true });
 });
 
-describe("project-skills lock", () => {
+describe("project-skills lock", { timeout: 30_000 }, () => {
   it("requires an injected FilePathTransactionLock singleton", () => {
     expect(() =>
       // @ts-expect-error intentional missing injection

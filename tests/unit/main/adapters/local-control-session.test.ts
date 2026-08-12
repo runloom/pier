@@ -7,8 +7,6 @@ import {
   resolveLocalControlSocketPath,
 } from "@main/adapters/cli/local-control/server.ts";
 import { createLocalControlSessionFromHello } from "@main/adapters/cli/local-control/session.ts";
-import { createAgentCallerCredentialStore } from "@main/services/agent-caller/credential-store.ts";
-import type { AgentCallerCredentialMaterial } from "@shared/contracts/local-control/agent-credential.ts";
 import { LOCAL_CONTROL_API_VERSION } from "@shared/contracts/local-control/errors.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -27,28 +25,6 @@ async function makeUserData(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "pier-lc-v2-"));
   tempDirs.push(dir);
   return dir;
-}
-
-function sampleMaterial(
-  over: Partial<AgentCallerCredentialMaterial> = {}
-): AgentCallerCredentialMaterial {
-  return {
-    credentialId: "bind_1",
-    bootId: "boot-fixed-v2",
-    callerRuntimeId: "rt_1",
-    callerGeneration: 2,
-    grantId: "g1",
-    parentClauseId: "p1",
-    allowedAgents: ["codex"],
-    operations: ["agents.self"],
-    maxDepth: 1,
-    maxActiveChildren: 2,
-    activeChildren: 0,
-    expiresAt: Date.now() + 120_000,
-    worktreeKey: "/tmp/wt",
-    incarnationId: "inc",
-    ...over,
-  };
 }
 
 function sendLines(
@@ -151,24 +127,18 @@ describe("local-control v2 session unit", () => {
     ]);
   });
 
-  it("agent-binding hello enables agents.self feature and self snapshot", () => {
-    const store = createAgentCallerCredentialStore();
-    store.put(sampleMaterial({ bootId: "boot-test" }));
+  it("cli-human rejects agents.self as unsupported", () => {
     const emitted: unknown[] = [];
     const created = createLocalControlSessionFromHello(
       {
         apiVersion: LOCAL_CONTROL_API_VERSION,
         type: "client.hello",
         requestId: "h1",
-        clientKind: "agent",
-        auth: {
-          method: "agent-binding",
-          bindingId: "bind_1",
-        },
+        clientKind: "cli-human",
+        auth: { method: "none" },
       },
       {
         bootId: "boot-test",
-        credentialStore: store,
         emit: (f) => emitted.push(f),
       }
     );
@@ -178,8 +148,11 @@ describe("local-control v2 session unit", () => {
     }
     expect(created.helloFrame).toMatchObject({
       type: "server.hello",
-      features: expect.arrayContaining(["agents.self"]),
+      principalRef: "human:peer",
     });
+    expect(
+      (created.helloFrame as { features: string[] }).features
+    ).not.toContain("agents.self");
     created.session.handleLine(
       JSON.stringify({
         apiVersion: LOCAL_CONTROL_API_VERSION,
@@ -189,44 +162,13 @@ describe("local-control v2 session unit", () => {
         params: {},
       })
     );
-    expect(emitted).toHaveLength(1);
-    const frame = emitted[0] as {
-      ok: boolean;
-      data?: { self?: Record<string, unknown> };
-    };
-    expect(frame.ok).toBe(true);
-    expect(frame.data?.self?.bindingId).toBe("bind_1");
-    expect(frame.data?.self?.credentialId).toBe("bind_1");
-    expect(frame.data?.self).not.toHaveProperty("secret");
-  });
-
-  it("rejects agent hello with unknown binding", () => {
-    const store = createAgentCallerCredentialStore();
-    const created = createLocalControlSessionFromHello(
-      {
-        apiVersion: LOCAL_CONTROL_API_VERSION,
-        type: "client.hello",
-        requestId: "h1",
-        clientKind: "agent",
-        auth: {
-          method: "agent-binding",
-          bindingId: "missing",
-        },
-      },
-      {
-        bootId: "boot-test",
-        credentialStore: store,
-        emit: () => undefined,
-      }
-    );
-    expect(created.ok).toBe(false);
-    if (created.ok) {
-      return;
-    }
-    expect(created.errorFrame).toMatchObject({
-      type: "server.error",
-      code: "auth_failed",
-    });
+    expect(emitted).toEqual([
+      expect.objectContaining({
+        type: "response",
+        ok: false,
+        error: expect.objectContaining({ code: "unsupported" }),
+      }),
+    ]);
   });
 });
 
@@ -274,16 +216,13 @@ describe("local-control server v1/v2 split + peer + self", () => {
     }
   });
 
-  it("v2 hello + agents.self e2e with credential store", async () => {
+  it("v2 hello + agents.catalog e2e (cli-human)", async () => {
     const userData = await makeUserData();
     const socketPath = resolveLocalControlSocketPath(userData);
-    const store = createAgentCallerCredentialStore();
-    store.put(sampleMaterial());
     const server = createPierLocalControlServer({
       bootId: "boot-fixed-v2",
       features: [],
       socketPath,
-      credentialStore: store,
       handleRequest: async () => {
         throw new Error("v1 handler must not run for v2");
       },
@@ -297,17 +236,14 @@ describe("local-control server v1/v2 split + peer + self", () => {
             apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "client.hello",
             requestId: "hello-1",
-            clientKind: "agent",
-            auth: {
-              method: "agent-binding",
-              bindingId: "bind_1",
-            },
+            clientKind: "cli-human",
+            auth: { method: "none" },
           }),
           JSON.stringify({
             apiVersion: LOCAL_CONTROL_API_VERSION,
             type: "request",
             requestId: "op-1",
-            op: "agents.self",
+            op: "agents.catalog",
             params: {},
           }),
         ],
@@ -318,24 +254,14 @@ describe("local-control server v1/v2 split + peer + self", () => {
         type: string;
         bootId: string;
         features: string[];
+        principalRef?: string;
       };
       expect(hello.type).toBe("server.hello");
       expect(hello.bootId).toBe("boot-fixed-v2");
-      expect(hello.features).toContain("agents.self");
-      const self = JSON.parse(frames[1] ?? "{}") as {
-        ok: boolean;
-        data?: {
-          self?: {
-            bindingId?: string;
-            credentialId?: string;
-            secret?: string;
-          };
-        };
-      };
-      expect(self.ok).toBe(true);
-      expect(self.data?.self?.bindingId).toBe("bind_1");
-      expect(self.data?.self?.credentialId).toBe("bind_1");
-      expect(self.data?.self?.secret).toBeUndefined();
+      expect(hello.principalRef).toBe("human:peer");
+      expect(hello.features).not.toContain("agents.self");
+      const catalog = JSON.parse(frames[1] ?? "{}") as { ok: boolean };
+      expect(catalog.ok).toBe(true);
     } finally {
       await server.close();
     }
@@ -485,7 +411,7 @@ describe("local-control server v1/v2 split + peer + self", () => {
           apiVersion: LOCAL_CONTROL_API_VERSION,
           type: "request",
           requestId: "r1",
-          op: "agents.self",
+          op: "agents.list",
           params: {},
         }),
       ]);

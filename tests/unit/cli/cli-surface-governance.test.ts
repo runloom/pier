@@ -66,13 +66,14 @@ describe("cli user manual governance (canvas canonical)", () => {
     expect(collectInventoryMismatches(data)).toEqual([]);
   });
 
-  it("shipped 表面不得把未实现 agents / access / 插件写权写成默认可执行", () => {
+  it("shipped 表面不得把未实现 agents / 插件写权写成默认可执行", () => {
     const data = readCliUserManualData();
     const available = collectCliManualShippedSurfaceText(data);
     expect(collectCliDocsAvailableViolations(available)).toEqual([]);
     expect(available).toMatch(/plugins list/u);
     expect(available).toMatch(/agents catalog/u);
     expect(available).toMatch(/status/u);
+    expect(available).not.toMatch(/^\s*pier\s+access\b/mu);
   });
 
   it("产品入口文档指向 Canvas 且不得再引 docs/cli.md", () => {

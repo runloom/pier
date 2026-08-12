@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-12T00:00:00.000Z",
-  "source": "pier-cli-user-manual Canvas：W5 notifications shipped；planned 命令加分轨标签（非必达/可选/W6）；blocked 含 agents invoke（non-goal）。",
+  "generatedAt": "2026-08-11T18:58:48Z",
+  "source": "pier-cli-user-manual 终态清稿：cli-human only；无 access/agent principal。",
   "data": {
     "meta": {
       "title": "Pier 本机 CLI 使用手册",
-      "subtitle": "在终端控制已打开的 Pier。先学会开工，再按任务查找，最后查命令参考。",
+      "subtitle": "在终端控制已打开的 Pier。人类与协调智能体共用本机 pier（cli-human）。",
       "status": "使用手册",
-      "version": "v1.1"
+      "version": "v2.1"
     },
-    "bluf": "先启动 Pier，再运行 pier（或 pnpm --silent cli:dev）。新手路径：status → open . → agents catalog → agents start（持久）。定位工作树用 worktrees list/get（含 WorktreeRef）；跨资源事实用 snapshot/watch。脚本一律加 --json。一次性提问请用各 agent 原生 CLI，不提供 pier agents invoke。",
-    "context": "面向使用 Pier 的人与脚本作者。CLI 是本机工作台控制入口，不是远程 API，也不是智能体权限系统。",
+    "bluf": "先启动 Pier，再运行 pier。人类与协调智能体同一路径：status → open . → agents catalog → agents start（持久）。脚本加 --json。一次性用各 agent 原生 CLI。无应用层鉴权；不提供 access.*。",
+    "context": "面向使用 Pier 的人、脚本与协调智能体作者。CLI 是本机工作台控制入口：一律 cli-human（auth.none + peer）。不是远程 API，不是权限/密钥系统。",
     "goals": [
       "60 秒内完成第一次成功调用",
       "用任务（task）而不是实现状态找答案",
@@ -546,9 +546,9 @@
         ]
       },
       {
-        "id": "activity-notifications-access",
-        "label": "活动 · 消息 · 外部授权",
-        "blurb": "消息中心 CLI 已可用；外部 access 仍为规划。应用内亦有铃铛与「智能体协作」界面。",
+        "id": "activity-notifications",
+        "label": "活动 · 消息",
+        "blurb": "消息中心 CLI 已可用；应用内亦有铃铛与「智能体协作」界面。",
         "commands": [
           {
             "id": "notifications-list",
@@ -590,14 +590,6 @@
             "synopsis": "pier notifications mark-read --id <id> | --all --json",
             "description": "标已读；已读不等于工作成功。",
             "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"marked\": 1,\n    \"read\": true\n  }\n}"
-          },
-          {
-            "id": "access",
-            "name": "access keygen/status/request/wait/revoke",
-            "status": "planned",
-            "synopsis": "pier access keygen|status|request|wait|revoke … --json",
-            "description": "（W6）外部控制器窄授权；非日常本机路径。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"outcome\": \"pending\",\n    \"accessRequestId\": \"…\"\n  }\n}"
           }
         ]
       }
@@ -700,9 +692,9 @@
         {
           "id": "agents-self",
           "name": "agents self",
-          "status": "planned",
-          "synopsis": "pier agents self --json",
-          "description": "（非产品主路径）当前调用者非秘密摘要；人类 cli-human 解析期拒绝；遗留/实验。",
+          "status": "blocked",
+          "synopsis": "（不提供）agents self",
+          "description": "不提供。产品不设 agents.self；请直接使用 catalog/list/get 与 start/turn/screen 等命令。",
           "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"self\": {\n      \"principalRef\": \"…\",\n      \"bootId\": \"…\"\n    }\n  }\n}"
         }
       ]

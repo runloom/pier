@@ -1,8 +1,9 @@
 /**
- * 顶层 control.snapshot / control.watch 负载（W4-S3）。
+ * 顶层 control.snapshot / control.watch 负载（W4-S3 / W6-S5 after）。
  * FA 事实并入此流；无独立 activity 命令组。
  */
 import { z } from "zod";
+import { controlCursorAfterSchema } from "./cursor.ts";
 import { worktreeRefSchema } from "./worktree-ref.ts";
 
 const nonEmpty = z.string().min(1);
@@ -84,6 +85,23 @@ export const controlSnapshotNotificationEntrySchema = z
 /** snapshot 内 notifications 条数上限（未读优先截断后的预算）。 */
 export const CONTROL_SNAPSHOT_NOTIFICATIONS_LIMIT = 50;
 
+/** E11：RuntimeControl 精确运行摘要；≠ screen 全文，无内容 cursor。 */
+export const controlSnapshotRuntimeEntrySchema = z
+  .object({
+    bootId: nonEmpty,
+    runtimeId: nonEmpty,
+    generation: z.number().int().nonnegative(),
+    agentId: nonEmpty,
+    panelId: nonEmpty,
+    windowId: nonEmpty,
+    /** 运行事实字符串；非工作完成结论 */
+    fact: nonEmpty,
+    closed: z.boolean(),
+    worktreeKey: nonEmpty.optional(),
+    cwd: nonEmpty.optional(),
+  })
+  .strict();
+
 export const controlSnapshotPayloadSchema = z
   .object({
     bootId: nonEmpty,
@@ -100,6 +118,8 @@ export const controlSnapshotPayloadSchema = z
       .array(controlSnapshotNotificationEntrySchema)
       .max(CONTROL_SNAPSHOT_NOTIFICATIONS_LIMIT)
       .default([]),
+    /** E11：精确 RuntimeRef 投影；缺省空数组 */
+    runtimes: z.array(controlSnapshotRuntimeEntrySchema).default([]),
   })
   .strict();
 
@@ -117,8 +137,13 @@ export type ControlSnapshotParams = z.infer<typeof controlSnapshotParamsSchema>;
 
 export const controlWatchParamsSchema = z
   .object({
-    /** 上次 snapshot 的 revision；缺省 = 先推当前 snapshot 再 live */
-    after: z.number().int().nonnegative().optional(),
+    /**
+     * 续接游标（W6-S5）。
+     * - number：历史兼容，仅 revision（boot=会话 boot，scope=global）
+     * - object：`{ bootId?, revision, scope? }`；跨 boot/scope → snapshot_required
+     * 缺省 = 先推当前 snapshot 再 live
+     */
+    after: controlCursorAfterSchema.optional(),
     timeoutMs: z.number().int().positive().max(3_600_000).optional(),
     pollMs: z.number().int().positive().max(60_000).optional(),
   })

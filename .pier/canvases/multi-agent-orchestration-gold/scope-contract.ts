@@ -25,8 +25,6 @@ const ALLOWED_OWNERSHIP_LAYERS = new Set([
 ]);
 
 const ALLOWED_ENTITY_NAMES = new Set([
-  "AgentCallerCredential",
-  "AccessGrantRef",
   "CapabilityRef",
   "AgentRef",
   "WindowRef",
@@ -42,10 +40,7 @@ const ALLOWED_ENTITY_NAMES = new Set([
 
 const ALLOWED_STATE_MACHINE_ENTITIES = new Set([
   "调用方任务（非 Pier）",
-  "Agent caller credential",
-  "Access connection",
-  "Access request",
-  "Access grant",
+  "Local control session",
   "Agent activity projection",
   "Terminal runtime",
   "Window surface",

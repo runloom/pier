@@ -53,6 +53,19 @@ export interface ControlSnapshotSources {
       params?: Record<string, unknown> | undefined;
     }>
   >;
+  /** E11：RuntimeControl 精确运行摘要（可选；缺省空）。 */
+  listRuntimes?: () => Array<{
+    bootId: string;
+    runtimeId: string;
+    generation: number;
+    agentId: string;
+    panelId: string;
+    windowId: string;
+    fact: string;
+    closed: boolean;
+    worktreeKey?: string | undefined;
+    cwd?: string | undefined;
+  }>;
   listTasks: () => Array<{
     runId: string;
     status: string;
@@ -189,6 +202,18 @@ export function createControlSnapshotService(
       ...(n.panelId ? { panelId: n.panelId } : {}),
       ...(n.agentRef ? { agentRef: n.agentRef } : {}),
     }));
+    const runtimes = (sources.listRuntimes?.() ?? []).map((r) => ({
+      bootId: r.bootId,
+      runtimeId: r.runtimeId,
+      generation: r.generation,
+      agentId: r.agentId,
+      panelId: r.panelId,
+      windowId: r.windowId,
+      fact: r.fact,
+      closed: r.closed,
+      ...(r.worktreeKey ? { worktreeKey: r.worktreeKey } : {}),
+      ...(r.cwd ? { cwd: r.cwd } : {}),
+    }));
     const body = {
       bootId: sources.bootId,
       agents,
@@ -198,6 +223,7 @@ export function createControlSnapshotService(
       worktrees,
       tasks,
       notifications,
+      runtimes,
     };
     const digest = digestBody(body);
     if (lastDigest === null || digest !== lastDigest) {

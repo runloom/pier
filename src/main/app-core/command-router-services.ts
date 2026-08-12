@@ -67,6 +67,21 @@ export interface PierCoreServices {
    * 未注册时 app.snapshot 降级为临时 service（仍可用，revision 从 1 起）。
    */
   controlBootId?: string;
+  /** E11：RuntimeControl 摘要投影（local-control 注册时注入）。 */
+  controlRuntimes?: {
+    listRuntimeSummaries(): Array<{
+      bootId: string;
+      runtimeId: string;
+      generation: number;
+      agentId: string;
+      panelId: string;
+      windowId: string;
+      fact: string;
+      closed: boolean;
+      worktreeKey?: string | undefined;
+      cwd?: string | undefined;
+    }>;
+  };
   controlSnapshot?: import("../services/control-snapshot/service.ts").ControlSnapshotService;
   fileDrafts?: FileDraftsService;
   files?: FileService;

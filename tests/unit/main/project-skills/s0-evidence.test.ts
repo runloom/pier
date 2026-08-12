@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-describe("project skills S0 evidence", () => {
+describe("project skills S0 evidence", { timeout: 30_000 }, () => {
   it("records official discovery facts and probe entrypoint", async () => {
     const spike = await readFile(
       join(

@@ -1,7 +1,47 @@
+import {
+  attachChildCapabilityRef,
+  releaseRuntimeReservation,
+  reserveChildForStart,
+  resetRuntimeReservationsForTests,
+} from "@main/adapters/cli/local-control/capability-hot-path.ts";
 import { createCapabilityAuthority } from "@main/services/capability/authority.ts";
 import { describe, expect, it } from "vitest";
 
-describe("CapabilityAuthority (W4-S4)", () => {
+describe("CapabilityAuthority (W4-S4 / W6-S4)", () => {
+  it("hot-path reserve attaches childCapabilityRef and release frees slot", () => {
+    resetRuntimeReservationsForTests();
+    const ca = createCapabilityAuthority({ maxActiveChildren: 1 });
+    const reserved = reserveChildForStart({
+      authority: ca,
+      principalRef: "parent-1",
+    });
+    expect(reserved && "childRef" in reserved).toBe(true);
+    if (!(reserved && "childRef" in reserved)) {
+      return;
+    }
+    const data = attachChildCapabilityRef(
+      {
+        runtime: { bootId: "b", runtimeId: "rt-1", generation: 1 },
+        panelId: "p1",
+        windowId: "w1",
+        agentId: "codex",
+      },
+      reserved
+    ) as { childCapabilityRef: { childRef: string } };
+    expect(data.childCapabilityRef.childRef).toBe(reserved.childRef);
+    const denied = reserveChildForStart({
+      authority: ca,
+      principalRef: "parent-1",
+    });
+    expect(denied).toMatchObject({ ok: false });
+    releaseRuntimeReservation({ authority: ca, runtimeId: "rt-1" });
+    const again = reserveChildForStart({
+      authority: ca,
+      principalRef: "parent-1",
+    });
+    expect(again && "childRef" in again).toBe(true);
+  });
+
   it("default denies cross-project and sibling access", () => {
     const ca = createCapabilityAuthority();
     expect(
@@ -45,7 +85,6 @@ describe("CapabilityAuthority (W4-S4)", () => {
     const ca = createCapabilityAuthority();
     const result = ca.authorize({
       principalKind: "cli-human",
-      material: null,
       op: "agents.list",
       params: {},
     });
@@ -57,7 +96,6 @@ describe("CapabilityAuthority (W4-S4)", () => {
     expect(
       ca.authorize({
         principalKind: "cli-human",
-        material: null,
         op: "control.snapshot",
         params: {},
       }).ok

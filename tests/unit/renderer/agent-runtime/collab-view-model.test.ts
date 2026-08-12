@@ -31,6 +31,48 @@ describe("buildCollaborationViewModel (W5-S1)", () => {
     expect(vm.selected).toBeNull();
   });
 
+  it("E13: index agents are work role; needsYou is attention not coordinator", () => {
+    const vm = buildCollaborationViewModel({
+      entries: [
+        entry({
+          agentRef: "w\0work",
+          agentId: "codex",
+          panelId: "a",
+          windowId: "1",
+          status: "processing",
+          worktreeKey: "/repo/wt",
+        }),
+        entry({
+          agentRef: "w\0wait",
+          agentId: "claude",
+          panelId: "b",
+          windowId: "1",
+          status: "waiting",
+          projectRootPath: "/repo",
+        }),
+      ],
+      activities: [],
+      currentWindowId: "1",
+    });
+    expect(
+      vm.sessions.every((s) => s.roleKey === "agents.collab.roleWork")
+    ).toBe(true);
+    expect(vm.sessions.find((s) => s.agentRef === "w\0wait")?.needsYou).toBe(
+      true
+    );
+    expect(vm.contentBoundaryKey).toBe("agents.collab.contentBoundary");
+    expect(vm.selected?.agentRef).toBe("w\0wait");
+    expect(vm.facts.some((f) => f.factKey === "agents.collab.factScreen")).toBe(
+      true
+    );
+    expect(vm.facts.some((f) => f.factKey === "agents.collab.factRole")).toBe(
+      true
+    );
+    expect(
+      vm.facts.some((f) => f.factKey === "agents.collab.factWorktree")
+    ).toBe(true);
+  });
+
   it("prefers needsYou session and builds facts without one-shot fields", () => {
     const vm = buildCollaborationViewModel({
       entries: [

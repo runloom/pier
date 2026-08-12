@@ -11,7 +11,7 @@ import {
   type LocalControlErrorCode,
 } from "@shared/contracts/local-control/errors.ts";
 import type { LocalControlServerFrame } from "@shared/contracts/local-control/frames.ts";
-import type { AgentCallerCredentialStore } from "../../../services/agent-caller/credential-store.ts";
+import type { CapabilityAuthority } from "../../../services/capability/authority.ts";
 import type { ControlSnapshotService } from "../../../services/control-snapshot/service.ts";
 import type { RuntimeControlService } from "../../../services/runtime-control/service.ts";
 import {
@@ -42,11 +42,11 @@ export interface CreatePierLocalControlServerArgs {
   authorizer?: LocalControlAuthorizer | undefined;
   /** 可注入测试；默认随机 UUID。 */
   bootId?: string | undefined;
-  /** T3 凭证索引；agent hello 必需。 */
-  credentialStore?: AgentCallerCredentialStore | undefined;
-  /** T4 发现数据源。 */
+  /** CapabilityAuthority 热路径。 */
+  capabilityAuthority?: CapabilityAuthority | undefined;
+  /** 发现数据源。 */
   discovery?: AgentsDiscovery | undefined;
-  /** v2 features 广告基线；agents.self 在凭证允许时由会话追加。 */
+  /** v2 features 广告基线。 */
   features?: readonly string[] | undefined;
   handleRequest(
     envelope: unknown,
@@ -184,11 +184,11 @@ function attachConnection(
     ): Promise<PierCommandResult>;
     bootId: string;
     features: readonly string[];
-    credentialStore?: AgentCallerCredentialStore | undefined;
     discovery?: AgentsDiscovery | undefined;
     authorizer?: LocalControlAuthorizer | undefined;
     receipts?: EffectReceiptStore | undefined;
     runtimeControl?: RuntimeControlService | undefined;
+    capabilityAuthority?: CapabilityAuthority | undefined;
     snapshotService?: ControlSnapshotService | undefined;
     resolvePeerUid?: ResolvePeerUid | undefined;
     requirePeerUid?: boolean | undefined;
@@ -331,11 +331,11 @@ function attachConnection(
         const created = createLocalControlSessionFromHello(classified.hello, {
           bootId: ctx.bootId,
           features: ctx.features,
-          credentialStore: ctx.credentialStore,
           discovery: ctx.discovery,
           authorizer: ctx.authorizer,
           receipts: ctx.receipts,
           runtimeControl: ctx.runtimeControl,
+          capabilityAuthority: ctx.capabilityAuthority,
           snapshotService: ctx.snapshotService,
           emit: (frame) => {
             if (!closed) {
@@ -367,11 +367,11 @@ export function createPierLocalControlServer({
   socketPath,
   bootId: bootIdArg,
   features = [],
-  credentialStore,
   discovery,
   authorizer,
   receipts,
   runtimeControl,
+  capabilityAuthority,
   snapshotService,
   resolvePeerUid,
   requirePeerUid,
@@ -438,11 +438,11 @@ export function createPierLocalControlServer({
             handleRequest,
             bootId,
             features,
-            credentialStore,
             discovery,
             authorizer,
             receipts,
             runtimeControl,
+            capabilityAuthority,
             snapshotService,
             resolvePeerUid,
             requirePeerUid,

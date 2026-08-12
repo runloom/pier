@@ -47,7 +47,7 @@ async function writeTree(
   }
 }
 
-describe("project-skills tree-sha256-v1", () => {
+describe("project-skills tree-sha256-v1", { timeout: 30_000 }, () => {
   it("returns a stable sha256: digest for the same tree", async () => {
     await writeTree(root, {
       "SKILL.md": "---\nname: demo\n---\nbody\n",

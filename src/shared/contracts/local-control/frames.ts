@@ -1,5 +1,6 @@
 /**
  * pier.control/v2 帧 schema（传输金标准单一来源）。
+ * 产品终态：唯一主体 cli-human（auth.method none）。
  * @see docs/superpowers/specs/2026-08-10-local-control-v1-v2-design.md
  */
 import { z } from "zod";
@@ -11,36 +12,14 @@ import {
 const apiVersionSchema = z.literal(LOCAL_CONTROL_API_VERSION);
 const nonEmpty = z.string().min(1);
 
-export const localControlClientKindSchema = z.enum([
-  "agent",
-  "cli-human",
-  "external",
-]);
+export const localControlClientKindSchema = z.enum(["cli-human"]);
 export type LocalControlClientKind = z.infer<
   typeof localControlClientKindSchema
 >;
 
-export const localControlAuthSchema = z.discriminatedUnion("method", [
-  z.object({
-    /** 本机默认：宿主 spawn 注入的 binding（无 secret） */
-    method: z.literal("agent-binding"),
-    bindingId: nonEmpty,
-  }),
-  z.object({
-    /** 可选增强：binding + secret（委派收紧时） */
-    method: z.literal("agent-credential"),
-    credentialId: nonEmpty,
-    secret: nonEmpty,
-  }),
-  z.object({
-    method: z.literal("none"),
-  }),
-  z.object({
-    method: z.literal("external-grant"),
-    grantId: nonEmpty,
-    publicKey: nonEmpty,
-  }),
-]);
+export const localControlAuthSchema = z.object({
+  method: z.literal("none"),
+});
 
 export const localControlClientHelloSchema = z.object({
   apiVersion: apiVersionSchema,
@@ -52,14 +31,6 @@ export const localControlClientHelloSchema = z.object({
 export type LocalControlClientHello = z.infer<
   typeof localControlClientHelloSchema
 >;
-
-export const localControlClientAuthProofSchema = z.object({
-  apiVersion: apiVersionSchema,
-  type: z.literal("client.auth-proof"),
-  requestId: nonEmpty,
-  challengeId: nonEmpty,
-  signature: nonEmpty,
-});
 
 export const localControlClientRequestSchema = z.object({
   apiVersion: apiVersionSchema,
@@ -82,8 +53,10 @@ export const localControlClientSubscribeSchema = z.object({
   stream: nonEmpty,
   after: z
     .object({
-      bootId: nonEmpty,
+      bootId: nonEmpty.optional(),
       revision: z.number().int().nonnegative(),
+      /** 与 control.watch 同构；跨 scope 禁止 resume */
+      scope: nonEmpty.optional(),
     })
     .optional(),
 });
@@ -103,7 +76,6 @@ export const localControlClientCancelSchema = z.object({
 
 export const localControlClientFrameSchema = z.discriminatedUnion("type", [
   localControlClientHelloSchema,
-  localControlClientAuthProofSchema,
   localControlClientRequestSchema,
   localControlClientSubscribeSchema,
   localControlClientUnsubscribeSchema,
@@ -138,18 +110,6 @@ export const localControlServerHelloSchema = z.object({
 export type LocalControlServerHello = z.infer<
   typeof localControlServerHelloSchema
 >;
-
-export const localControlServerChallengeSchema = z.object({
-  apiVersion: apiVersionSchema,
-  type: z.literal("server.challenge"),
-  requestId: nonEmpty,
-  challengeId: nonEmpty,
-  purpose: z.enum(["request-grant", "use-grant"]),
-  nonce: nonEmpty,
-  issuedAtMs: z.number().int().nonnegative(),
-  expiresAtMs: z.number().int().nonnegative(),
-  bootId: nonEmpty,
-});
 
 export const localControlErrorBodySchema = z.object({
   code: z.enum(LOCAL_CONTROL_ERROR_CODES),
@@ -198,7 +158,6 @@ export type LocalControlServerError = z.infer<
 
 export const localControlServerFrameSchema = z.union([
   localControlServerHelloSchema,
-  localControlServerChallengeSchema,
   localControlServerResponseSchema,
   localControlServerEventSchema,
   localControlServerErrorSchema,

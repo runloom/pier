@@ -2,10 +2,6 @@
  * v2 会话：发现类与探针 op（catalog / list / get / self / trace）。
  */
 import {
-  type AgentCallerCredentialMaterial,
-  toAgentSelfSnapshot,
-} from "@shared/contracts/local-control/agent-credential.ts";
-import {
   LOCAL_CONTROL_API_VERSION,
   type LocalControlErrorCode,
 } from "@shared/contracts/local-control/errors.ts";
@@ -25,32 +21,6 @@ export function controlErrorResponse(
     requestId,
     ok: false,
     error: { code, message },
-  };
-}
-
-export function handleAgentsSelfOp(args: {
-  requestId: string;
-  material: AgentCallerCredentialMaterial | null;
-  principalRef?: string | undefined;
-  nowMs: number;
-}): LocalControlServerFrame {
-  const { requestId, material, principalRef, nowMs } = args;
-  if (!(material && principalRef)) {
-    return controlErrorResponse(
-      requestId,
-      "permission_denied",
-      "agents.self requires authenticated agent principal"
-    );
-  }
-  if (material.expiresAt <= nowMs) {
-    return controlErrorResponse(requestId, "auth_failed", "credential expired");
-  }
-  return {
-    apiVersion: LOCAL_CONTROL_API_VERSION,
-    type: "response",
-    requestId,
-    ok: true,
-    data: { self: toAgentSelfSnapshot(material, principalRef) },
   };
 }
 

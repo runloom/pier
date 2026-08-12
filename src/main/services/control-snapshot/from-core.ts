@@ -179,5 +179,12 @@ export function controlSnapshotSourcesFromCore(
         return [];
       }
     },
+    listRuntimes: () => {
+      try {
+        return services.controlRuntimes?.listRuntimeSummaries() ?? [];
+      } catch {
+        return [];
+      }
+    },
   };
 }

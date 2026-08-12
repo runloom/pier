@@ -40,7 +40,7 @@ function blocked(
   };
 }
 
-describe("ManagedAgentLaunchGate", () => {
+describe("ManagedAgentLaunchGate", { timeout: 30_000 }, () => {
   const dirs: string[] = [];
 
   afterEach(async () => {

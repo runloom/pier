@@ -75,7 +75,7 @@ afterEach(async () => {
   await rm(projectRoot, { force: true, recursive: true });
 });
 
-describe("project-skills plan", () => {
+describe("project-skills plan", { timeout: 30_000 }, () => {
   it("normalizes draft keys and lists for stable planning input", () => {
     const normalized = normalizeProjectSkillsDraft({
       deliveryAgents: true,

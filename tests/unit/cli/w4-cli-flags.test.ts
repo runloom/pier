@@ -87,6 +87,31 @@ describe("W4 CLI flag stripOptions (regression)", () => {
     }
     expect(watch.op).toBe("control.watch");
     expect(watch.params).toMatchObject({ after: 2, timeoutMs: 1000 });
+
+    const watchStructured = parsePierCliArgs([
+      "watch",
+      "--after",
+      "3",
+      "--after-boot",
+      "boot-1",
+      "--after-scope",
+      "global",
+      "--json",
+    ]);
+    expect(watchStructured.protocol).toBe("v2");
+    if (watchStructured.protocol !== "v2") {
+      return;
+    }
+    expect(watchStructured.op).toBe("control.watch");
+    expect(watchStructured.params).toMatchObject({
+      after: { revision: 3, bootId: "boot-1", scope: "global" },
+    });
+  });
+
+  it("rejects removed access.* command domain", () => {
+    expect(() => parsePierCliArgs(["access", "keygen", "--json"])).toThrow(
+      /unknown pier CLI command/i
+    );
   });
 
   it("parses notifications list/get/watch/focus/mark-read (W5-S2)", () => {

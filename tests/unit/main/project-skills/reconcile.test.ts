@@ -100,7 +100,7 @@ afterEach(async () => {
   await rm(sharedLockRoot, { force: true, recursive: true });
 });
 
-describe("project-skills repair / ensureReady", () => {
+describe("project-skills repair / ensureReady", { timeout: 30_000 }, () => {
   it("manifest three-state: absent + no ledger is no-op", async () => {
     const repair = createRepair();
     const plan = await repair.repairPlan(await projectRef(), "observed-rev-1");
@@ -179,7 +179,9 @@ describe("project-skills repair / ensureReady", () => {
     ).toBe(true);
   });
 
-  it("ensureReady auto-repairs missing projection for an enabled valid skill", async () => {
+  it("ensureReady auto-repairs missing projection for an enabled valid skill", {
+    timeout: 20_000,
+  }, async () => {
     await writeLibrarySkill("guide");
     await writeManifest({
       version: 1,

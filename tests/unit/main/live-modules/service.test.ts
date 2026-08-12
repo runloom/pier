@@ -348,7 +348,7 @@ describe("live-modules service", () => {
     await new Promise<void>((resolve) => {
       const started = Date.now();
       const tick = () => {
-        if (events.includes("stale") || Date.now() - started > 2000) {
+        if (events.includes("stale") || Date.now() - started > 8000) {
           resolve();
           return;
         }

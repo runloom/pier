@@ -209,10 +209,10 @@ const EXPECTED_FORBIDDEN_IN_PIER = [
 ] as const;
 
 const EXPECTED_OWNERS = new Map([
-  ["调用方编排语义", "协调智能体 / 外部控制器"],
+  ["调用方编排语义", "协调智能体 / 人类（经 pier CLI）"],
   ["一次性原生调用", "各 agent 原生 CLI"],
   ["本机控制传输", "Pier local-control"],
-  ["本机控制授权", "Pier main AccessGrantService"],
+  ["本机控制授权", "Pier main local-control authorizer"],
   ["终端运行控制", "Pier main RuntimeControlService"],
   ["窗口与面板", "Pier workspace"],
   ["运行事实", "ForegroundActivity + Runtime Index + provider adapters"],
@@ -222,8 +222,6 @@ const EXPECTED_OWNERS = new Map([
 ]);
 
 const EXPECTED_ENTITIES = [
-  "AgentCallerCredential",
-  "AccessGrantRef",
   "CapabilityRef",
   "AgentRef",
   "WindowRef",
@@ -239,10 +237,7 @@ const EXPECTED_ENTITIES = [
 
 const EXPECTED_STATE_MACHINES = [
   "调用方任务（非 Pier）",
-  "Agent caller credential",
-  "Access connection",
-  "Access request",
-  "Access grant",
+  "Local control session",
   "Agent activity projection",
   "Terminal runtime",
   "Window surface",
