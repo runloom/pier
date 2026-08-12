@@ -14,12 +14,12 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
     transport: ["hook-command", "transcript-reconciler"],
     evidence: {
       lifecycle: "native",
-      ready: "reconciled",
+      ready: "native",
       processing: "native",
       tool: "native",
       waiting: "native",
       error: "native",
-      completed: "unsupported",
+      completed: "native",
       interrupted: "reconciled",
       subagent: "native",
     },
@@ -27,6 +27,22 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("lifecycle", "SessionStart", "SessionStart"),
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
       nativeFact("control", "Stop", "Stop"),
+      // Notification matcher=idle_prompt：Claude 自报空闲等输入（Esc 缺 interrupt 时 ready 兜底）
+      nativeFact("ready", "Notification", "TurnCompleted"),
+      nativeFact("completed", "Notification", "TurnCompleted"),
+      // Stop 漏报时：assistant stop_reason 终态 → ready
+      fact(
+        "ready",
+        "reconciled",
+        "claude.transcript.assistant_stop",
+        "TurnCompleted"
+      ),
+      fact(
+        "completed",
+        "reconciled",
+        "claude.transcript.assistant_stop",
+        "TurnCompleted"
+      ),
       fact(
         "ready",
         "reconciled",
@@ -261,22 +277,34 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
   },
   copilot: {
     integration: "active",
-    transport: ["hook-command"],
+    transport: ["hook-command", "transcript-reconciler"],
     evidence: {
       lifecycle: "native",
-      ready: "unsupported",
+      ready: "reconciled",
       processing: "native",
       tool: "native",
       waiting: "unsupported",
       error: "native",
-      completed: "unsupported",
-      interrupted: "unsupported",
+      completed: "reconciled",
+      interrupted: "reconciled",
       subagent: "native",
     },
     eventMappings: facts(
       nativeFact("lifecycle", "sessionStart", "SessionStart"),
       nativeFact("lifecycle", "sessionEnd", "SessionEnd"),
       nativeFact("control", "agentStop", "Stop"),
+      fact(
+        "ready",
+        "reconciled",
+        "copilot.events.assistant.turn_end",
+        "TurnCompleted"
+      ),
+      fact(
+        "ready",
+        "reconciled",
+        "copilot.events.abort.user_initiated",
+        "TurnInterrupted"
+      ),
       nativeFact("processing", "userPromptSubmitted", "PromptSubmit"),
       nativeFact("processing", "postToolUse", "ToolComplete"),
       nativeFact("processing", "postToolUseFailure", "ToolComplete"),
@@ -284,6 +312,18 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("processing", "errorOccurred.recoverable", "processing"),
       nativeFact("tool", "preToolUse", "ToolStart"),
       nativeFact("error", "errorOccurred", "error"),
+      fact(
+        "completed",
+        "reconciled",
+        "copilot.events.assistant.turn_end",
+        "TurnCompleted"
+      ),
+      fact(
+        "interrupted",
+        "reconciled",
+        "copilot.events.abort.user_initiated",
+        "TurnInterrupted"
+      ),
       nativeFact("subagent", "subagentStart", "SubagentStart"),
       nativeFact("subagent", "subagentStop", "SubagentStop")
     ),
@@ -322,22 +362,23 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
   },
   kimi: {
     integration: "active",
-    transport: ["hook-command"],
+    transport: ["hook-command", "transcript-reconciler"],
     evidence: {
       lifecycle: "native",
-      ready: "unsupported",
+      ready: "reconciled",
       processing: "native",
       tool: "native",
       waiting: "unsupported",
       error: "native",
-      completed: "unsupported",
-      interrupted: "unsupported",
+      completed: "reconciled",
+      interrupted: "reconciled",
       subagent: "native",
     },
     eventMappings: facts(
       nativeFact("lifecycle", "SessionStart", "SessionStart"),
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
       nativeFact("control", "Stop", "Stop"),
+      fact("ready", "reconciled", "kimi.wire.TurnEnd", "TurnCompleted"),
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("tool", "PreToolUse", "ToolStart"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
@@ -345,6 +386,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("processing", "PreCompact", "processing"),
       nativeFact("processing", "PostCompact", "processing"),
       nativeFact("error", "StopFailure", "error"),
+      fact("completed", "reconciled", "kimi.wire.TurnEnd", "TurnCompleted"),
       nativeFact("subagent", "SubagentStart", "SubagentStart"),
       nativeFact("subagent", "SubagentStop", "SubagentStop")
     ),

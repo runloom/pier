@@ -179,6 +179,15 @@ export const foregroundActivityService = {
     foregroundActivityAggregator.agentLaunched(windowId, panelId, agentId);
   },
   /**
+   * 直接摄入 agent 事件（如终端裸 Esc 取消）。与 JSONL observer 同入口。
+   */
+  ingestAgentEvent(
+    event: Parameters<typeof foregroundActivityAggregator.ingestAgentEvent>[0],
+    options: Parameters<typeof foregroundActivityAggregator.ingestAgentEvent>[1]
+  ): boolean {
+    return foregroundActivityAggregator.ingestAgentEvent(event, options);
+  },
+  /**
    * PTY 注入用环境变量。**同步** 返回——JSONL 通路本地文件, 无异步启动依赖。
    *
    * 命令行识别不再走 pier 的 ZDOTDIR wrapper——ghostty 自己的 shell integration

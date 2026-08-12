@@ -117,6 +117,14 @@ export interface NativeAddon {
   ): boolean;
   sendText(panelId: string, text: string): boolean;
   setAppShortcutKeys(keys: string[]): void;
+  /**
+   * 裸 Esc 观察（不消费）：terminal 焦点下 keyCode Escape 旁路通知。
+   * 签名 (browserWindowId, panelId)。可选——旧 addon 无此方法时 agent Esc
+   * 对账退化为仅 transcript。
+   */
+  setBareEscapeForwardCallback?(
+    cb: ((browserWindowId: number, panelId: string) => void) | null
+  ): void;
   setChildExitedForwardCallback?(
     cb:
       | ((

@@ -1,7 +1,11 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import { createClaudeTranscriptReconciler } from "./transcript/claude-reconciler.ts";
+import { createCodebuddyTranscriptReconciler } from "./transcript/codebuddy-reconciler.ts";
 import { createCodexTranscriptReconciler } from "./transcript/codex-reconciler.ts";
+import { createCopilotTranscriptReconciler } from "./transcript/copilot-reconciler.ts";
 import { createGrokTranscriptReconciler } from "./transcript/grok-reconciler.ts";
+import { createKimiTranscriptReconciler } from "./transcript/kimi-reconciler.ts";
+import { createQoderTranscriptReconciler } from "./transcript/qoder-reconciler.ts";
 import type {
   TranscriptTailReconciler,
   TranscriptTitleListener,
@@ -10,9 +14,8 @@ import type {
 /**
  * Agent 私有终态对账的统一宿主边界。foreground-activity 只投递已验收的
  * 规范事件，不感知各 provider transcript 路径、格式或 watcher 生命周期。
- * 当前接入：Codex（task_complete / turn_aborted）、Claude（中断标记 +
- * provider 原生会话名）、Grok（updates.jsonl turn_completed cancelled /
- * end_turn）。
+ * 当前接入：Codex；Claude / Qoder / Codebuddy（Claude 族中断）；Copilot
+ * （abort + turn_end）；Kimi（TurnEnd）；Grok（updates.jsonl）。
  */
 export interface AgentTerminalReconciler {
   dispose(): void;
@@ -39,6 +42,10 @@ export function createAgentTerminalReconciler(args: {
   const reconcilers: readonly TranscriptTailReconciler[] = [
     createCodexTranscriptReconciler(terminalOnly),
     createClaudeTranscriptReconciler(args),
+    createQoderTranscriptReconciler(args),
+    createCodebuddyTranscriptReconciler(args),
+    createCopilotTranscriptReconciler(terminalOnly),
+    createKimiTranscriptReconciler(terminalOnly),
     createGrokTranscriptReconciler(terminalOnly),
   ];
   return {

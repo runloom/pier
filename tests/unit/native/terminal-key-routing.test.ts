@@ -120,4 +120,25 @@ describe("native terminal key routing", () => {
     );
     expect(readNativeAddonSource()).toContain("setModifierForwardCallback");
   });
+
+  it("observes bare Escape only on terminal passthrough (not allowlisted Escape)", () => {
+    const source = readGhosttyBridgeSource();
+    expect(source).toContain("forwardBareEscapeCallback");
+    expect(source).toContain(
+      '@_cdecl("ghostty_bridge_set_bare_escape_forward_callback")'
+    );
+    // allowlist Escape 先消费并 return；观察仅在 passthrough 路径
+    const allowlistEscapeIndex = source.indexOf(
+      'terminalAppShortcutKeys.contains("Escape")'
+    );
+    const observeIndex = source.indexOf(
+      "EventRouterView.forwardBareEscapeCallback?(browserWindowId, panelId)"
+    );
+    expect(allowlistEscapeIndex).toBeGreaterThan(-1);
+    expect(observeIndex).toBeGreaterThan(allowlistEscapeIndex);
+    expect(readNativeAddonSource()).toContain(
+      "ghostty_bridge_set_bare_escape_forward_callback"
+    );
+    expect(readNativeAddonSource()).toContain("setBareEscapeForwardCallback");
+  });
 });

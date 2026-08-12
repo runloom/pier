@@ -81,6 +81,11 @@ final class EventRouterView: NSView {
     /// 时 focused 已切走会路由错).
     static var forwardCmdKeyCallback: ((Int, UInt, String) -> Void)?
 
+    /// 裸 Esc 观察（不消费）：terminal 焦点下用户按 Esc 时旁路通知 main。
+    /// 用于 agent 取消状态对账（Claude Esc 常不写 transcript 中断标记）。
+    /// 签名 (browserWindowId, panelId)。
+    static var forwardBareEscapeCallback: ((Int, String) -> Void)?
+
     /// Modifier state 转发: terminal NSView 做 firstResponder 时, Web 收不到纯 Cmd
     /// flagsChanged; 通过此通道只同步修饰键状态, 不消费事件.
     static var forwardModifierStateCallback: ((Int, UInt) -> Void)?
@@ -422,12 +427,18 @@ final class EventRouterView: NSView {
         // Bare Escape: charactersIgnoringModifiers 在部分输入源下为空，不能只靠
         // chars 映射。搜索等浮层打开时 allowlist 会临时含 "Escape"。
         let bareMods = mods.intersection([.command, .control, .option, .shift])
-        if event.keyCode == 53,
-           bareMods.isEmpty,
-           Self.terminalAppShortcutKeys.contains("Escape") {
-            record("shortcut-forward")
-            EventRouterView.forwardCmdKeyCallback?(browserWindowId, mods.rawValue, "\u{1B}")
-            return nil
+        if event.keyCode == 53, bareMods.isEmpty {
+            // 浮层 allowlist Escape：仅转发 web 关闭搜索/composer，不旁路观察 agent 取消
+            // （Esc 未达 TUI，若仍 inject TurnInterrupted 会假 ready + sealed-turn）。
+            if Self.terminalAppShortcutKeys.contains("Escape") {
+                record("shortcut-forward")
+                EventRouterView.forwardCmdKeyCallback?(browserWindowId, mods.rawValue, "\u{1B}")
+                return nil
+            }
+            // 终端 passthrough：观察 agent 取消，事件仍交给 Ghostty。
+            if let panelId = activeTerminalPanelId {
+                EventRouterView.forwardBareEscapeCallback?(browserWindowId, panelId)
+            }
         }
 
         guard !chars.isEmpty else {
@@ -2639,6 +2650,21 @@ public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallbac
             }
         } else {
             EventRouterView.forwardCmdKeyCallback = nil
+        }
+    }
+}
+
+public typealias BareEscapeForwardCallback = @convention(c) (Int, UnsafePointer<CChar>) -> Void
+
+@_cdecl("ghostty_bridge_set_bare_escape_forward_callback")
+public func ghosttyBridgeSetBareEscapeForwardCallback(_ cb: BareEscapeForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            EventRouterView.forwardBareEscapeCallback = { wid, panelId in
+                panelId.withCString { ptr in cb(wid, ptr) }
+            }
+        } else {
+            EventRouterView.forwardBareEscapeCallback = nil
         }
     }
 }

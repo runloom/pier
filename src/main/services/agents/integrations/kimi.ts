@@ -30,6 +30,10 @@ const AGENT_ID: AgentKind = "kimi";
  * kimi-cli main 实际走的是本文所述 TOML 方案。回滚到 TOML 之外, uninstall 还需
  * 清理上一版误写入 ~/.config/agents/hooks/pier-<trigger>/HOOK.md 的死
  * 目录 (marker 检查后再删)。
+ *
+ * 终态对账：`transcript/kimi-reconciler.ts` 读
+ * `~/.kimi/sessions/<project>/<session>/wire.jsonl` 的 `TurnEnd`，
+ * 映射 TurnCompleted（payload 空，无法区分取消；UI 回 ready 即可）。
  */
 
 /**
