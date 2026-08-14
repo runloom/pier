@@ -1,10 +1,10 @@
 export type FetchImpl = (
   input: string,
   init?: {
-    body?: ArrayBuffer | ArrayBufferView | string;
-    headers?: Record<string, string>;
-    method?: string;
-    signal?: AbortSignal;
+    body?: string | Uint8Array | undefined;
+    headers?: Record<string, string> | undefined;
+    method?: string | undefined;
+    signal?: AbortSignal | undefined;
   }
 ) => Promise<{
   arrayBuffer?: () => Promise<ArrayBuffer>;
@@ -12,3 +12,7 @@ export type FetchImpl = (
   status: number;
   text(): Promise<string>;
 }>;
+
+export function resolveFetchImpl(fetchImpl?: FetchImpl): FetchImpl {
+  return fetchImpl ?? (globalThis.fetch as unknown as FetchImpl);
+}

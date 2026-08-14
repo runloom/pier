@@ -64,12 +64,12 @@ export function isEstimateCacheKey(cacheKey: string | undefined): boolean {
   return typeof cacheKey === "string" && cacheKey.startsWith("estimate:");
 }
 
-export function estimatedContentLinesOf(
-  fileDiff: { readonly estimatedContentLines?: unknown } | undefined
-): number | undefined {
-  return typeof fileDiff?.estimatedContentLines === "number"
-    ? fileDiff.estimatedContentLines
-    : undefined;
+export function estimatedContentLinesOf(fileDiff: unknown): number | undefined {
+  if (fileDiff === null || typeof fileDiff !== "object") {
+    return;
+  }
+  const value = Reflect.get(fileDiff, "estimatedContentLines");
+  return typeof value === "number" ? value : undefined;
 }
 
 /**

@@ -23,7 +23,7 @@ export interface MatrixManagedSkill {
    * Frontmatter `name` when known. Collision/presence identity prefers this
    * over skillId when non-empty (Codex/Grok resolve by name).
    */
-  skillName?: string;
+  skillName?: string | undefined;
 }
 
 export interface MatrixUnmanagedSkill {
@@ -31,7 +31,7 @@ export interface MatrixUnmanagedSkill {
   /** Discovery root the directory lives in, e.g. `.claude/skills`. */
   root: string;
   /** Frontmatter `name` when known; presence matching prefers this. */
-  skillName?: string;
+  skillName?: string | undefined;
 }
 
 export interface MatrixUserGlobalSkill {
@@ -39,13 +39,13 @@ export interface MatrixUserGlobalSkill {
   /** `~`-relative user root, e.g. `~/.claude/skills`. */
   root: string;
   /** Frontmatter `name` when known; presence matching prefers this. */
-  skillName?: string;
+  skillName?: string | undefined;
 }
 
 function presenceKey(args: {
-  directoryName?: string;
-  skillId?: string;
-  skillName?: string;
+  directoryName?: string | undefined;
+  skillId?: string | undefined;
+  skillName?: string | undefined;
 }): string {
   const named = args.skillName?.trim();
   if (named != null && named.length > 0) {
@@ -239,7 +239,7 @@ export function deriveUserGlobalEffects(args: {
   root: string;
   directoryName: string;
   /** Frontmatter name when known; defaults to directoryName for matching. */
-  skillName?: string;
+  skillName?: string | undefined;
   managed: readonly MatrixManagedSkill[];
   unmanaged: readonly MatrixUnmanagedSkill[];
   installedAgents?: ReadonlySet<string> | undefined;

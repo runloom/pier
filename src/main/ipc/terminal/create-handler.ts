@@ -403,7 +403,7 @@ export async function handleTerminalCreate(args: {
         ? {}
         : {
             onFailed: () => {
-              foregroundActivityService.ingestCommandFinished(
+              foregroundActivityService.commandFinished(
                 createArgs.panelId,
                 0,
                 String(win.id)

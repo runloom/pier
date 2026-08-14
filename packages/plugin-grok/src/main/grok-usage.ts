@@ -4,7 +4,7 @@ import {
   isAuthFailureMessage,
 } from "./billing-http-error.ts";
 import { parseGrokBillingResult } from "./billing-parse.ts";
-import type { FetchImpl } from "./grok-usage-types.ts";
+import { type FetchImpl, resolveFetchImpl } from "./grok-usage-types.ts";
 import {
   accessTokenExpired,
   extractSessionKeyFromAuthJson,
@@ -149,7 +149,7 @@ export async function fetchGrokUsage(options: {
   ) {
     return await withSoftSubscription(result, {
       caller: options.signal,
-      fetchImpl: options.fetchImpl ?? globalThis.fetch,
+      fetchImpl: resolveFetchImpl(options.fetchImpl),
       overall: null,
       sessionKey: latestSessionKey,
       userId: userIdFromEntry(selectOidcAuthEntry(authJson)?.entry),
@@ -169,7 +169,7 @@ async function fetchGrokUsageAttempt(options: {
   if (!selected || typeof selected.entry.key !== "string") {
     return authFailureResult("session token missing");
   }
-  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const fetchImpl = resolveFetchImpl(options.fetchImpl);
   const overall = createTimeoutSignal(options.overallDeadlineMs);
   const caller = options.signal;
   let sessionKey = selected.entry.key;

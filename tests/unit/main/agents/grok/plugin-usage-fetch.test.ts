@@ -16,6 +16,7 @@ import {
   USAGE_RETRY_OVERALL_DEADLINE_MS,
   USAGE_TEMPORARILY_UNAVAILABLE_ERROR,
 } from "../../../../../packages/plugin-grok/src/main/grok-usage.ts";
+import type { FetchImpl } from "../../../../../packages/plugin-grok/src/main/grok-usage-types.ts";
 import {
   GROK_REMAINING_RESETS_URL,
   GROK_RESET_CREDITS_METRIC_ID,
@@ -291,7 +292,7 @@ describe("fetchGrokUsage", () => {
 
     const result = await fetchGrokUsage({
       authJson: AUTH,
-      fetchImpl,
+      fetchImpl: fetchImpl as FetchImpl,
       kind: "oidc",
       signal: new AbortController().signal,
     });

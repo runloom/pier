@@ -351,7 +351,7 @@ function shouldSilentRetryDocumentFailure(
   runtime: GitReviewDocumentLoaderRuntime,
   entryKey: string,
   next: ReturnType<typeof resourceFromDocumentResult>
-): next is Extract<GitReviewDocumentResource, { kind: "error" }> {
+): boolean {
   if (next.kind !== "error" || !next.failure.retryable) {
     return false;
   }
