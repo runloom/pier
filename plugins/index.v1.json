@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1786388793323,
+  "generatedAt": 1786700445885,
   "plugins": {
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
@@ -137,7 +137,7 @@
       "description": "Manage Grok accounts, login, and switch for Pier.",
       "displayName": "Grok Account Management",
       "id": "pier.grok",
-      "latest": "1.1.10",
+      "latest": "1.1.11",
       "locales": {
         "en": {
           "name": "Grok Account Management",
@@ -202,6 +202,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "d359a8ecaa378fdc006ae431fd0c94b724708c197a36c538ba8f5d837453dded",
           "size": 722510
+        },
+        "1.1.11": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.11/pier.grok-1.1.11.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "2d55c1d746fcfde6f775bf790764df162db3a15633e6faf8974f55dd602ac4a5",
+          "size": 733262
         }
       }
     },
@@ -260,11 +266,11 @@
       }
     }
   },
-  "sequence": 31,
+  "sequence": 32,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "V570WZi1UOuTguICxyWoAHEdtTn26A9i9rcdSbZ2Uel1MOmvs/M3mZOGDVjARB9phtdLg8iZs8wcwBy42r6+DA=="
+    "value": "UVEkDiVo07gO9q69ukPtHEsn5CU5NowUPoupvoV8R8hiS+iwaTYfZSvw02ANTubF6kCSuRebuJe1rndKFdR+BQ=="
   }
 }
