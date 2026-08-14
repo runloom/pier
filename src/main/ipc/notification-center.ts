@@ -35,6 +35,7 @@ import { readPreferences, updatePreferences } from "../state/preferences.ts";
 import { findAppWindowByWebContents } from "../windows/identity.ts";
 import { windowManager } from "../windows/manager.ts";
 import { isTargetAgentPanelFocused } from "./notification-center-agent-focus.ts";
+import { wireAgentCommandInjectFailedReporter } from "./notification-center-inject-report.ts";
 import { terminalFocusCoordinator } from "./terminal/focus-coordinator.ts";
 
 const log = createLogger("notification-center.ipc");
@@ -242,6 +243,7 @@ export function registerNotificationCenterIpc(
   ipcMain: IpcMain,
   args?: { eventBus?: PierEventBus }
 ): void {
+  wireAgentCommandInjectFailedReporter(ingestHostNotification);
   initPromise ??= init().catch((err) => {
     log.error("init failed", { err });
     throw err;

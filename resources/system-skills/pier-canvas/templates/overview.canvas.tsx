@@ -24,17 +24,18 @@ import {
 import { useState } from "react";
 
 /**
- * methodology / primary_nav_5 实心起手稿：
- * 速览 → 问题 → 设计 → 日路径 → 落地。
+ * Starter for methodology / primary_nav_5 (closed-loop):
+ * overview → problem → design → path (Day 1) → landing.
  *
- * - 默认静态表达（见 references/methodology.md「Expression selection」）
- * - 真实方案请绑定相邻 data.json（useCanvasFile），不要硬套 Play/Step 演示
+ * - Default static expression (see references/methodology.md Expression selection)
+ * - Bind adjacent data.json (useCanvasFile); do not add Play/Step chrome
+ * - Rewrite every user-visible string into the user's language before delivery
  */
 export const canvas = {
   description:
-    "产品方案总览：结论优先、五段结构、静态图与表。无强制交互演示。",
+    "Closed-loop overview: conclusion first, five sections including a Day-1 recipe, static figures and tables. No required interactive demo.",
   kind: "composition" as const,
-  title: "方案总览",
+  title: "Proposal overview",
 };
 
 function H2({ children }: { children: string }) {
@@ -53,54 +54,54 @@ export default function OverviewCanvasTemplate() {
       <Stack gap={16}>
         <Stack gap={8}>
           <Row gap={8} wrap>
-            <Badge variant="info">产品设计方案</Badge>
+            <Badge variant="info">Product design</Badge>
             <Badge variant="outline">primary_nav_5</Badge>
           </Row>
           <Text as="h1" className="text-2xl font-semibold tracking-tight">
-            方案标题
+            Proposal title
           </Text>
           <Text tone="secondary" className="text-sm leading-relaxed">
-            副标题：一句话说明这是什么系统的什么决策。
+            Subtitle: one sentence on which system and which decision.
           </Text>
         </Stack>
 
         <Tabs onValueChange={setTab} value={tab}>
           <TabsList className="flex h-auto flex-wrap gap-1">
-            <TabsTrigger value="overview">速览</TabsTrigger>
-            <TabsTrigger value="problem">问题</TabsTrigger>
-            <TabsTrigger value="design">设计</TabsTrigger>
-            <TabsTrigger value="path">日路径</TabsTrigger>
-            <TabsTrigger value="landing">落地</TabsTrigger>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="problem">Problem</TabsTrigger>
+            <TabsTrigger value="design">Design</TabsTrigger>
+            <TabsTrigger value="path">Day 1</TabsTrigger>
+            <TabsTrigger value="landing">Landing</TabsTrigger>
           </TabsList>
 
-          {/* 0 · 速览 — 30 秒内：洞察 + 决策 + 三卡 */}
           <TabsContent className="mt-4" value="overview">
             <Stack gap={14}>
               <Card className="border-status-info/30 bg-status-info/5">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">洞察</CardTitle>
+                  <CardTitle className="text-base">Insight</CardTitle>
                   <CardDescription>
-                    为什么必须做成这样（机制边界，不是功能清单）。
+                    Why it has to work this way (mechanism, not a feature list).
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Text className="text-sm leading-relaxed">
-                    在此写 insight：分层、真相源、默认封装等「不可见」的关键取舍。
+                    Write the insight: layers, source of truth, default
+                    encapsulation — the hidden trade-offs.
                   </Text>
                 </CardContent>
               </Card>
 
               <Card className="border-status-info/30 bg-status-info/5">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">决策（BLUF）</CardTitle>
+                  <CardTitle className="text-base">Decision (BLUF)</CardTitle>
                   <CardDescription>
-                    做什么、不做什么、用户默认路径。
+                    What we will do, what we will not, and the default path.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <Text className="text-sm leading-relaxed">
-                    在此写 decision：例如只教四条命令、默认 wait settled、禁止
-                    quiet 当完成。
+                    Write the decision: for example teach only four commands,
+                    default wait-until-settled, never treat quiet as done.
                   </Text>
                 </CardContent>
               </Card>
@@ -108,34 +109,34 @@ export default function OverviewCanvasTemplate() {
               <div className="grid gap-3 md:grid-cols-3">
                 <Card>
                   <CardHeader className="pb-2">
-                    <Badge variant="destructive">问题</Badge>
-                    <CardTitle className="mt-2 text-base">痛点摘要</CardTitle>
+                    <Badge variant="destructive">Problem</Badge>
+                    <CardTitle className="mt-2 text-base">Pain summary</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Text className="text-sm leading-relaxed">
-                      用户今天卡在哪（一句）。
+                      Where the user gets stuck today (one sentence).
                     </Text>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <Badge variant="info">设计</Badge>
-                    <CardTitle className="mt-2 text-base">关键机制</CardTitle>
+                    <Badge variant="info">Design</Badge>
+                    <CardTitle className="mt-2 text-base">Key mechanism</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Text className="text-sm leading-relaxed">
-                      分层 / 状态出口 / 身份规则各用一短语。
+                      Layers / state exits / identity — one phrase each.
                     </Text>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
-                    <Badge variant="success">形态</Badge>
-                    <CardTitle className="mt-2 text-base">默认路径</CardTitle>
+                    <Badge variant="success">Shape</Badge>
+                    <CardTitle className="mt-2 text-base">Default path</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Text className="text-sm leading-relaxed">
-                      用户首日怎么走完一圈。
+                      How a user finishes one loop on Day 1.
                     </Text>
                   </CardContent>
                 </Card>
@@ -143,91 +144,90 @@ export default function OverviewCanvasTemplate() {
             </Stack>
           </TabsContent>
 
-          {/* 1 · 问题 */}
           <TabsContent className="mt-4" value="problem">
             <Stack gap={14}>
-              <H2>问题</H2>
+              <H2>Problem</H2>
               <Text className="text-sm leading-relaxed">
-                用 2–4 句描述可对号入座的失败路径。不要先列 backlog。
+                Two to four recognizable failure paths. Do not start with a
+                backlog.
               </Text>
               <div className="grid gap-3 md:grid-cols-3">
                 <Card>
                   <CardHeader className="pb-2">
                     <Badge variant="outline">P1</Badge>
-                    <CardTitle className="mt-2 text-base">痛点一</CardTitle>
+                    <CardTitle className="mt-2 text-base">Pain one</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Text className="text-sm leading-relaxed">
-                      现象 + 错误归因（例如完成信号错位）。
+                      Symptom + wrong attribution (for example a bad done
+                      signal).
                     </Text>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
                     <Badge variant="outline">P2</Badge>
-                    <CardTitle className="mt-2 text-base">痛点二</CardTitle>
+                    <CardTitle className="mt-2 text-base">Pain two</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Text className="text-sm leading-relaxed">
-                      现象 + 代价（例如学习陡、胶水脚本）。
+                      Symptom + cost (steep learning, glue scripts).
                     </Text>
                   </CardContent>
                 </Card>
                 <Card>
                   <CardHeader className="pb-2">
                     <Badge variant="outline">P3</Badge>
-                    <CardTitle className="mt-2 text-base">痛点三</CardTitle>
+                    <CardTitle className="mt-2 text-base">Pain three</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <Text className="text-sm leading-relaxed">
-                      现象 + 风险（例如误命中、不可见卡点）。
+                      Symptom + risk (false hits, invisible stalls).
                     </Text>
                   </CardContent>
                 </Card>
               </div>
               <Stack gap={4}>
-                <H2>明确不做</H2>
+                <H2>Out of scope</H2>
                 <Text className="text-sm leading-relaxed">
-                  · 非目标一（产品边界）
+                  · Non-goal one (product boundary)
                 </Text>
-                <Text className="text-sm leading-relaxed">
-                  · 非目标二
-                </Text>
+                <Text className="text-sm leading-relaxed">· Non-goal two</Text>
               </Stack>
             </Stack>
           </TabsContent>
 
-          {/* 2 · 设计 — 静态图与规则，无 Play/Step */}
           <TabsContent className="mt-4" value="design">
             <Stack gap={14}>
-              <H2>设计</H2>
+              <H2>Design</H2>
               <Stack gap={6}>
-                <H2>分层</H2>
+                <H2>Layers</H2>
                 <MermaidDiagram
-                  aria-label="分层"
+                  aria-label="Layers"
                   source={`flowchart TB
-  U[用户 / 外部编排] --> A[产品语义层]
-  A --> S[状态真相源]
-  U -.进阶.-> T[底层 I/O]
-  T -.->|禁止当完成信号| X[误用]`}
+  U[User / external orchestrator] --> A[Product semantics]
+  A --> S[State source of truth]
+  U -.advanced.-> T[Low-level I/O]
+  T -.->|not a done signal| X[Misuse]`}
                 />
                 <Text className="text-sm leading-relaxed">
-                  · 日路径只走语义层。
+                  · Day 1 stays on the semantic layer.
                 </Text>
                 <Text className="text-sm leading-relaxed">
-                  · 底层 I/O 可存在，但不是完成协议。
+                  · Low-level I/O may exist, but it is not the completion
+                  protocol.
                 </Text>
               </Stack>
 
               <Stack gap={6}>
-                <H2>状态出口</H2>
+                <H2>State exits</H2>
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>态</TableHead>
-                        <TableHead>表示</TableHead>
-                        <TableHead>不是</TableHead>
+                        <TableHead>State</TableHead>
+                        <TableHead>Means</TableHead>
+                        <TableHead>Is not</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -235,18 +235,18 @@ export default function OverviewCanvasTemplate() {
                         <TableCell className="font-mono text-xs">
                           ready
                         </TableCell>
-                        <TableCell className="text-sm">可继续</TableCell>
+                        <TableCell className="text-sm">Can continue</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          不是业务成功
+                          Not business success
                         </TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-mono text-xs">
                           waiting
                         </TableCell>
-                        <TableCell className="text-sm">要你处理</TableCell>
+                        <TableCell className="text-sm">Needs a person</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          不是完成
+                          Not done
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -255,26 +255,26 @@ export default function OverviewCanvasTemplate() {
               </Stack>
 
               <Stack gap={6}>
-                <H2>硬约束</H2>
+                <H2>Hard constraints</H2>
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">ID</TableHead>
-                        <TableHead>决策</TableHead>
+                        <TableHead>Decision</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       <TableRow>
                         <TableCell className="font-mono text-xs">H1</TableCell>
                         <TableCell className="text-sm">
-                          不可违反的边界
+                          A boundary that must not be crossed
                         </TableCell>
                       </TableRow>
                       <TableRow>
                         <TableCell className="font-mono text-xs">H2</TableCell>
                         <TableCell className="text-sm">
-                          学习/效率目标
+                          Learning / efficiency goal
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -284,28 +284,27 @@ export default function OverviewCanvasTemplate() {
             </Stack>
           </TabsContent>
 
-          {/* 3 · 日路径 — 形态与配方，不是交互演示 */}
           <TabsContent className="mt-4" value="path">
             <Stack gap={14}>
-              <H2>日路径</H2>
+              <H2>Day 1</H2>
               <MermaidDiagram
-                aria-label="日路径主环"
+                aria-label="Day-1 loop"
                 source={`flowchart LR
-  A[发现] --> B[启动]
-  B --> C{可行动出口}
-  C -->|继续| D[下一轮]
+  A[Discover] --> B[Start]
+  B --> C{Actionable exit}
+  C -->|continue| D[Next turn]
   D --> C
-  C -->|需人| E[注意力列表]
+  C -->|needs a person| E[Attention list]
   E --> C
-  C -->|失败| F[停 + next]`}
+  C -->|failed| F[Stop + next]`}
               />
               <div className="overflow-x-auto rounded-lg border">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>命令 / 动作</TableHead>
-                      <TableHead>用途</TableHead>
-                      <TableHead>用户看到</TableHead>
+                      <TableHead>Command / action</TableHead>
+                      <TableHead>Purpose</TableHead>
+                      <TableHead>User sees</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -313,77 +312,81 @@ export default function OverviewCanvasTemplate() {
                       <TableCell className="font-mono text-xs">
                         command list
                       </TableCell>
-                      <TableCell className="text-sm">发现</TableCell>
+                      <TableCell className="text-sm">Discover</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        可选集合
+                        The set of options
                       </TableCell>
                     </TableRow>
                     <TableRow>
                       <TableCell className="font-mono text-xs">
                         command start …
                       </TableCell>
-                      <TableCell className="text-sm">开干</TableCell>
+                      <TableCell className="text-sm">Start work</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
-                        句柄 + 默认闭环结果
+                        Handle + default closed-loop result
                       </TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>
               </div>
               <Stack gap={4}>
-                <H2>配方</H2>
+                <H2>Recipe</H2>
                 <pre className="overflow-x-auto rounded-md bg-muted/40 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-                  {`# 人手最短路径
+                  {`# Shortest human path
 step1
 step2
 
-# 脚本同构（如适用）
+# Same path in a script (if applicable)
 step1 --json
 step2 --json`}
                 </pre>
               </Stack>
               <Stack gap={4}>
-                <H2>首日不要教</H2>
+                <H2>Do not teach on Day 1</H2>
                 <Text className="text-sm leading-relaxed">
-                  · 进阶面细节（不要塞进首页）
+                  · Advanced-surface details (keep them off the first page)
                 </Text>
               </Stack>
             </Stack>
           </TabsContent>
 
-          {/* 4 · 落地 — 默认对照、分期、验收（非首页） */}
           <TabsContent className="mt-4" value="landing">
             <Stack gap={14}>
-              <H2>落地</H2>
+              <H2>Landing</H2>
               <Text tone="secondary" className="text-sm leading-relaxed">
-                实现者读完应能改默认与排期。验收表放这里，不要放进速览。
+                After this page an implementer can change defaults and
+                schedule. Acceptance tables belong here, not on Overview.
               </Text>
 
               <Stack gap={6}>
-                <H2>默认对照</H2>
+                <H2>Defaults before / after</H2>
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>面</TableHead>
-                        <TableHead>现在</TableHead>
-                        <TableHead>目标</TableHead>
+                        <TableHead>Surface</TableHead>
+                        <TableHead>Today</TableHead>
+                        <TableHead>Target</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       <TableRow>
-                        <TableCell className="text-sm">完成信号</TableCell>
+                        <TableCell className="text-sm">Done signal</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          易误用的旧信号
+                          Easy-to-misuse legacy signal
                         </TableCell>
-                        <TableCell className="text-sm">产品定义的出口态</TableCell>
+                        <TableCell className="text-sm">
+                          Product-defined exit state
+                        </TableCell>
                       </TableRow>
                       <TableRow>
-                        <TableCell className="text-sm">主路径动作</TableCell>
+                        <TableCell className="text-sm">Main path</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          需自拼步骤
+                          User must assemble the steps
                         </TableCell>
-                        <TableCell className="text-sm">默认封装</TableCell>
+                        <TableCell className="text-sm">
+                          Default encapsulation
+                        </TableCell>
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -391,40 +394,41 @@ step2 --json`}
               </Stack>
 
               <Stack gap={6}>
-                <H2>分期</H2>
+                <H2>Phases</H2>
                 <Card>
                   <CardHeader className="pb-2">
                     <Row gap={8} wrap>
-                      <Badge variant="info">波次 1</Badge>
-                      <CardTitle className="text-base">契约</CardTitle>
+                      <Badge variant="info">Wave 1</Badge>
+                      <CardTitle className="text-base">Contract</CardTitle>
                     </Row>
                     <CardDescription>
-                      用户可感知结果（不是只有工单号）
+                      A result the user can feel (not only a ticket id)
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Text className="text-sm leading-relaxed">
-                      · L0 —— 切片标题
+                      · L0 — slice title
                     </Text>
                   </CardContent>
                 </Card>
               </Stack>
 
               <Stack gap={6}>
-                <H2>验收</H2>
+                <H2>Acceptance</H2>
                 <div className="overflow-x-auto rounded-lg border">
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">ID</TableHead>
-                        <TableHead>条件</TableHead>
+                        <TableHead>Condition</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       <TableRow>
                         <TableCell className="font-mono text-xs">C0</TableCell>
                         <TableCell className="text-sm">
-                          用户场景句式：不学进阶面能否完成主路径
+                          User-story form: can they finish the main path without
+                          learning the advanced surface?
                         </TableCell>
                       </TableRow>
                     </TableBody>
@@ -433,9 +437,10 @@ step2 --json`}
               </Stack>
 
               <Stack gap={4}>
-                <H2>附录位（可选）</H2>
+                <H2>Appendix (optional)</H2>
                 <Text tone="secondary" className="text-sm leading-relaxed">
-                  竞品对照、过程考古放文末；不要变成默认首页。
+                  Competitor notes and process archaeology go at the end; they
+                  must not become the default first page.
                 </Text>
               </Stack>
             </Stack>

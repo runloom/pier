@@ -9,10 +9,160 @@ import {
 } from "./canvas-pick-promote.ts";
 import type { CanvasElementPick } from "./canvas-pick-shared.ts";
 import {
+  COPY_LEAF_SELECTOR,
+  INTERACTIVE_SELECTOR,
   isIgnorableCanvasPickTarget,
+  isTabPanelLike,
   pointInClientRect,
   resolveHtmlUnderHost,
 } from "./canvas-pick-shared.ts";
+
+const PRODUCT_SURFACE_SLOTS = new Set([
+  "alert",
+  "badge",
+  "card",
+  "card-content",
+  "card-description",
+  "card-footer",
+  "card-header",
+  "card-title",
+  "empty",
+  "item",
+  "item-actions",
+  "item-content",
+  "item-description",
+  "item-media",
+  "item-title",
+  "mermaid-diagram",
+  "separator",
+  "table",
+  "table-body",
+  "table-cell",
+  "table-head",
+  "table-header",
+  "table-row",
+  "tabs-list",
+  "tabs-trigger",
+]);
+
+const LAYOUT_SLOTS = new Set(["frame", "row", "stack", "tabs"]);
+
+function isCanvasLayoutWrapper(el: HTMLElement): boolean {
+  if (isTabPanelLike(el)) {
+    return true;
+  }
+  const slot = el.getAttribute("data-slot")?.trim() ?? "";
+  if (LAYOUT_SLOTS.has(slot)) {
+    return true;
+  }
+  if (PRODUCT_SURFACE_SLOTS.has(slot)) {
+    return false;
+  }
+  if (el.matches(COPY_LEAF_SELECTOR) || el.matches(INTERACTIVE_SELECTOR)) {
+    return false;
+  }
+  if (el.childElementCount < 2) {
+    return false;
+  }
+  const display = el.style.display.trim();
+  if (display === "flex" || display === "grid" || display === "inline-flex") {
+    return true;
+  }
+  const className = typeof el.className === "string" ? el.className : "";
+  return /(?:^|\s)(?:flex|grid|inline-flex)(?:\s|$)/u.test(className);
+}
+
+function distanceOutside(value: number, start: number, end: number): number {
+  if (value < start) {
+    return start - value;
+  }
+  if (value >= end) {
+    return value - end;
+  }
+  return 0;
+}
+
+function distanceToRect(x: number, y: number, rect: DOMRect): number {
+  return Math.hypot(
+    distanceOutside(x, rect.left, rect.right),
+    distanceOutside(y, rect.top, rect.bottom)
+  );
+}
+
+function pickClosestLayoutChild(
+  el: HTMLElement,
+  clientX: number,
+  clientY: number
+): HTMLElement | null {
+  const kids: HTMLElement[] = [];
+  for (const child of el.children) {
+    if (!(child instanceof HTMLElement) || isIgnorableCanvasPickTarget(child)) {
+      continue;
+    }
+    const rect = child.getBoundingClientRect();
+    if (rect.width <= 0 && rect.height <= 0) {
+      continue;
+    }
+    kids.push(child);
+  }
+  if (kids.length === 0) {
+    return null;
+  }
+  let containing: HTMLElement | null = null;
+  let containingArea = Number.POSITIVE_INFINITY;
+  for (const child of kids) {
+    const rect = child.getBoundingClientRect();
+    if (!pointInClientRect(clientX, clientY, rect)) {
+      continue;
+    }
+    const area = rect.width * rect.height;
+    if (area < containingArea) {
+      containing = child;
+      containingArea = area;
+    }
+  }
+  if (containing) {
+    return containing;
+  }
+  let best = kids[0] ?? null;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (const child of kids) {
+    const dist = distanceToRect(
+      clientX,
+      clientY,
+      child.getBoundingClientRect()
+    );
+    if (dist < bestDist) {
+      best = child;
+      bestDist = dist;
+    }
+  }
+  return best;
+}
+
+/**
+ * Gap/padding on Stack/Frame/tabpanel is not a useful annotation target.
+ * Snap to the nearest child (and walk through nested layout wrappers).
+ */
+export function refineCanvasLayoutHit(
+  host: HTMLElement,
+  leaf: HTMLElement,
+  clientX: number,
+  clientY: number
+): HTMLElement {
+  let current = leaf;
+  for (let i = 0; i < 8; i++) {
+    if (current === host || !isCanvasLayoutWrapper(current)) {
+      break;
+    }
+    const child = pickClosestLayoutChild(current, clientX, clientY);
+    if (!child || child === current) {
+      break;
+    }
+    current = child;
+  }
+  return current;
+}
 
 /**
  * Geometry fallback: smallest visible host descendant whose box contains the
@@ -89,6 +239,9 @@ export function hitTestCanvasElement(
   clientY: number,
   event?: Event
 ): HTMLElement | null {
+  const finish = (el: HTMLElement | null): HTMLElement | null =>
+    el ? refineCanvasLayoutHit(host, el, clientX, clientY) : null;
+
   if (event && typeof event.composedPath === "function") {
     for (const node of event.composedPath()) {
       if (!(node instanceof Element) || isIgnorableCanvasPickTarget(node)) {
@@ -96,7 +249,7 @@ export function hitTestCanvasElement(
       }
       const resolved = resolveHtmlUnderHost(host, node);
       if (resolved) {
-        return resolved;
+        return finish(resolved);
       }
     }
   }
@@ -119,10 +272,10 @@ export function hitTestCanvasElement(
     }
     const resolved = resolveHtmlUnderHost(host, raw);
     if (resolved) {
-      return resolved;
+      return finish(resolved);
     }
   }
-  return geometryHitTestCanvasElement(host, clientX, clientY);
+  return finish(geometryHitTestCanvasElement(host, clientX, clientY));
 }
 
 /**

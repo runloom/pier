@@ -61,6 +61,14 @@ export interface ReviewDocumentSyncContext {
   readonly viewStateRef: RefObject<ReviewDocumentViewState>;
 }
 
+/** 选中未接手滚动时，正文增高必须保锚；用户滚轮会清 selected。 */
+export function shouldPreserveReviewItemAnchor(options: {
+  readonly navigationPending: boolean;
+  readonly selectedEntryKey: string | null;
+}): boolean {
+  return options.navigationPending || options.selectedEntryKey !== null;
+}
+
 export function createReviewDocumentSyncHandler(
   ctx: ReviewDocumentSyncContext
 ): (change: GitReviewDocumentLoaderChange) => void {
@@ -314,7 +322,12 @@ export function createReviewDocumentSyncHandler(
           next.settled || navigationPending || needsImmediateFlush
             ? {
                 ...(next.settled || needsImmediateFlush ? { flush: true } : {}),
-                ...(navigationPending ? { preserveAnchor: true } : {}),
+                ...(shouldPreserveReviewItemAnchor({
+                  navigationPending,
+                  selectedEntryKey: protectedKey,
+                })
+                  ? { preserveAnchor: true }
+                  : {}),
               }
             : undefined
         );

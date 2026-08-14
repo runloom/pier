@@ -801,16 +801,16 @@ body {
 /* === dockview-react custom theme ===
    所有颜色从 Pier 语义令牌派生, light / dark 自动跟随.
 
-   3 种 tab 状态:
-   S1  未选中 (hidden panel, 任意 group)    — 最弱: 透明底 + 暗文字
-   S2  分组选中 (visible panel, 失焦 group 或 窗口失焦) — 中等: 内容底色 + 顶部 1px muted 指示线
-   S3  当前聚焦 (visible panel, 聚焦 group 且 窗口聚焦) — 最强: 内容底色 + 顶部 2px primary 指示线
+   3 种 tab 状态（顶缘指示线权重）:
+   S1  未选中 (hidden panel, 任意 group)    — 最弱: 透明底 + 暗文字；running 时 1px muted 细轨
+   S2  分组选中 (visible panel, 失焦 group 或 窗口失焦) — 中等: 内容底色 + 顶部 2px muted（粗+默认色）
+   S3  当前聚焦 (visible panel, 聚焦 group 且 窗口聚焦) — 最强: 内容底色 + 顶部 2px primary（粗+高亮）
 
    running 加载轨（真正顶缘 soft shimmer，全宽贴边，不占布局）：
    - 与状态栏 agent 扫光同语汇；颜色分轨（--pier-tab-running-accent）
    - 稳底 trough + 扫光 highlight；亮色走经典进度条语汇（极淡轨 + 纯色扫带）
    - running 时顶缘由 shimmer 独占：关闭实心选中 ::after，避免「线下一轨」叠成底部附属感
-   - 几何：外层 .dv-tab::before，top:1px；S3 高 2px / S1·S2 高 1px
+   - 几何：外层 .dv-tab::before，top:0 挨紧顶部；S3/S2 高 2px / S1 高 1px
    - accent：S3=primary（同选中铬，防变深），S2/S1=muted-foreground
 
    窗口聚焦位: html[data-window-focused] (installWindowFocusAttribute) */
@@ -1162,11 +1162,11 @@ body {
  *   改用纯色块 (Solid Background) 配合 background-position/size 实现真正的滑动与拉伸。
  *   因为是纯色块渲染，边缘在任何主题下都绝对锐利，彻底解决“发脏”问题。
  *
- * 几何：外层 .dv-tab::before，top:1px 满宽 absolute，不占布局。
+ * 几何：外层 .dv-tab::before，top:0 挨紧顶部，满宽 absolute，不占布局。
  * 运动：background-position 与 background-size 协同动画，形成拉伸滑动。
  * 材质：稳底 trough（background-color）+ 纯色块 highlight（background-image）。
  * 颜色：S3=primary（与 idle 选中同色，勿用 status-info 压暗）；S1/S2=muted。
- * 高度：S3 = 2px（对齐聚焦选中线权重）；S1/S2 = 1px。
+ * 高度：S3/S2 = 2px（粗）；S1 = 1px（细）。
  */
 @keyframes pier-tab-running-slider {
   0% {
@@ -1237,12 +1237,12 @@ body {
 
 /*
  * 全宽轨道 ::before，内部跑纯色滑块。
- * 稳底用 background-color；纯色块用 background-image 配合 size/position 运动。
+ * 默认 S1：细 1px + muted；稳底用 background-color；滑块用 background-image。
  */
 .dockview-theme-pier .dv-tab:has([data-tab-status="running"])::before {
   content: "";
   position: absolute;
-  top: 1px;
+  top: 0;
   inset-inline: 0;
   z-index: 2;
   height: 1px;
@@ -1257,7 +1257,10 @@ body {
   animation: pier-tab-running-slider 1.5s infinite ease-in-out;
 }
 
-/* — S2: 失焦 group 选中 — accent = muted；仍 1px 顶缘 — */
+/*
+ * — S2: 失焦 group 选中 / 窗口失焦降档 — 粗 2px + muted（默认色）。
+ * accent 与高度与 idle S2 选中线同权，仅靠扫光表达 running。
+ */
 .dockview-theme-pier
   .dv-groupview.dv-inactive-group
   > .dv-tabs-and-actions-container
@@ -1266,7 +1269,6 @@ body {
   --pier-tab-running-accent: var(--muted-foreground);
 }
 
-/* — S2: 窗口失焦降档 — */
 :root[data-window-focused="false"]
   .dockview-theme-pier
   .dv-groupview.dv-active-group
@@ -1276,9 +1278,23 @@ body {
   --pier-tab-running-accent: var(--muted-foreground);
 }
 
+.dockview-theme-pier
+  .dv-groupview.dv-inactive-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before,
+:root[data-window-focused="false"]
+  .dockview-theme-pier
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before {
+  height: 2px;
+}
+
 /*
  * — S3: 真聚焦 — accent = primary（与 idle 选中顶线同色，避免 status-info
- * 把默认铬从近白/主题主色压成深蓝）；2px 顶缘 + 极弱 glow。
+ * 把默认铬从近白/主题主色压成深蓝）；粗 2px 顶缘 + 极弱 glow。
  * trough/highlight 仍由上方默认 / :root.light 派生，勿在此重写 mix。
  * running 语义靠运动（扫光），不靠换色相。
  */
@@ -1361,7 +1377,7 @@ body {
   position: relative;
 }
 
-/* — S3 指示线: 聚焦 group 选中 tab + 窗口聚焦 → 顶部 2px primary — */
+/* — S3 指示线: 聚焦 group 选中 tab + 窗口聚焦 → 顶缘 2px primary（粗+高亮） — */
 .dockview-theme-pier
   .dv-groupview.dv-active-group
   > .dv-tabs-and-actions-container
@@ -1369,7 +1385,7 @@ body {
   > .dv-tab.dv-active-tab::after {
   content: "";
   position: absolute;
-  top: 1px;
+  top: 0;
   inset-inline: 0;
   height: 2px;
   background-color: var(--primary);
@@ -1377,7 +1393,7 @@ body {
   z-index: 2;
 }
 
-/* — S2 指示线: 失焦 group 选中 tab → 顶部 1px muted — */
+/* — S2 指示线: 失焦 group 选中 tab → 顶缘 2px muted（粗+默认色） — */
 .dockview-theme-pier
   .dv-groupview.dv-inactive-group
   > .dv-tabs-and-actions-container
@@ -1385,22 +1401,21 @@ body {
   > .dv-tab.dv-active-tab::after {
   content: "";
   position: absolute;
-  top: 1px;
+  top: 0;
   inset-inline: 0;
-  height: 1px;
+  height: 2px;
   background-color: var(--muted-foreground);
   outline: none !important;
   z-index: 2;
 }
 
-/* — 窗口失焦: active-group 也降为 S2 (dockview 不会因 OS blur 翻 inactive-group) — */
+/* — 窗口失焦: active-group 也降为 S2（仅改色；高度仍 2px 由 S3 基线继承） — */
 :root[data-window-focused="false"]
   .dockview-theme-pier
   .dv-groupview.dv-active-group
   > .dv-tabs-and-actions-container
   .dv-tabs-container
   > .dv-tab.dv-active-tab::after {
-  height: 1px;
   background-color: var(--muted-foreground);
 }
 

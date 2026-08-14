@@ -465,6 +465,7 @@
     "ui.reviewFailureOutputLimit": "此变更超出审查大小限制。",
     "ui.reviewFailureStaleRevision": "变更持续更新，请重试。",
     "ui.reviewFailureTimeout": "读取变更超时。",
+    "ui.reviewDocumentLoadFailed": "无法加载此变更",
     "ui.reviewRenderFailed": "渲染差异失败",
     "ui.reviewRetry": "重试",
     "ui.reviewEmptyTitle": "没有变更",

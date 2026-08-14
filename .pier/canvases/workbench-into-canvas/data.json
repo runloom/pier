@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-13T11:10:00Z",
+  "source": "v7: slim catalog — U1 project card + U2 declare + U3 command; Skill reads catalog; no L0 browser",
+  "bluf": "核心不是拆工作台，而是给 Canvas 一份统一物料目录。今天只能用 pier/canvas 原语，再靠隐式 import 项目组件；系统数据块和工作台物料都进不了生成合同。终态：L0 系统 UI + L1 系统（API+UI）块 + L2 项目声明物料，写入同一 catalog。人只声明或删除 L2；/pier-canvas 生成时按目录组装。",
+  "context": "Canvas 生成合同只允许 import pier/canvas、react、相对路径和 tsconfig paths。pier/canvas 是 @pier/ui 白名单原语加 useCanvasFile，明确排除工作台 widget 与宿主 IPC。Live Modules 已能解析项目组件，但没有声明、没有目录、Skill 也不知道仓库里有哪些可复用块。工作台另有活动/资源/成本/自定义卡和插件账号块，绑定宿主 store，与 Canvas 物料是两套体系。",
+  "goals": [
+    "盘清 L0：catalog 列出 Canvas 现在能 import 什么，供 Skill 枚举",
+    "提供系统物料：宿主 API + UI 封装成可组装块，生成时直接 import",
+    "支持项目自定义物料：仓库内声明、可被目录和 Skill 发现",
+    "统一 catalog：人只声明/删除项目物料，不做 L0 目录浏览器",
+    "pier-canvas Skill 生成前必须读取 catalog，只组装目录内物料"
+  ],
+  "nonGoals": [
+    "本方案不把「拆除工作台」当主交付；工作台物料只是 L1 候选来源",
+    "不做 Retool/Grafana 式拖拽实例表",
+    "不让 *.canvas.tsx 直连 window.pier",
+    "不开放第三方任意 npm 物料市场",
+    "不为每个物料再注册一条 slash skill"
+  ],
+  "design": {
+    "oneLiner": "一份 Canvas 物料 catalog：L0 已有、L1 补系统块、L2 收项目声明；人只维护 L2，Skill 按目录组装。",
+    "fiveCores": [
+      {
+        "id": "C1",
+        "title": "现有可用",
+        "now": "pier/canvas 原语 + useCanvasFile；项目组件可 import 但无目录",
+        "end": "catalog 列出全部可组装项与 import 路径"
+      },
+      {
+        "id": "C2",
+        "title": "系统物料",
+        "now": "无。活动/资源/成本只活在工作台",
+        "end": "L1 块 = 封闭 API 订阅 + UI；生成时 import 组装"
+      },
+      {
+        "id": "C3",
+        "title": "项目物料",
+        "now": "任意 tsconfig/相对路径，Skill 靠猜",
+        "end": "项目声明清单，进入同一 catalog"
+      },
+      {
+        "id": "C4",
+        "title": "统一管理",
+        "now": "工作台物料库 ≠ Canvas SDK",
+        "end": "项目常规一张卡 + 声明命令；目录只给 Skill"
+      },
+      {
+        "id": "C5",
+        "title": "Skill 可知",
+        "now": "只读 sdk/*.d.ts",
+        "end": "生成前读 catalog.json，只使用已登记物料"
+      }
+    ],
+    "inventoryNow": {
+      "l0": {
+        "import": "pier/canvas",
+        "status": "已有",
+        "items": [
+          "布局：Frame Row Stack DocsShell Text",
+          "数据展示：Table DataChart NodeGraph MermaidDiagram",
+          "表单：Field Input Select Switch Checkbox Textarea …",
+          "反馈：Badge Alert Empty Progress Skeleton StatusIcon",
+          "结构：Card Tabs Accordion Item Separator",
+          "文件：useCanvasFile（仅相邻文件）"
+        ],
+        "excluded": "file-tree、diff-view、工作台 widget、Dialog/Sheet、window.pier"
+      },
+      "l1": {
+        "import": "不存在",
+        "status": "缺口",
+        "candidates": [
+          "ActivityOverview（工作台活动）",
+          "SystemResources（系统资源）",
+          "CostOverview（成本）",
+          "MetricCard / CustomCard 区块",
+          "官方插件账号块（codex/claude/grok）"
+        ]
+      },
+      "l2": {
+        "import": "tsconfig paths / 相对路径",
+        "status": "能编，无目录",
+        "note": "Live Modules 可解析项目组件；无声明、无搜索、Skill 不可枚举"
+      }
+    },
+    "catalogShape": {
+      "id": "稳定 id",
+      "tier": "L0 | L1 | L2",
+      "title": "显示名",
+      "import": "模块说明符",
+      "export": "导出名",
+      "kind": "primitive | host-block | project",
+      "summary": "一句用途",
+      "data": "none | host-store（仅 L1）",
+      "source": "core | plugin:<id> | project"
+    },
+    "assemble": "生成 Canvas 时：读 catalog → 选物料 → import 组装。产品面不写布局实例表，也不做目录浏览器。",
+    "skill": {
+      "today": "SKILL 写「读 sdk/index.d.ts」；不知 L1/L2",
+      "end": "工作流增加：读取宿主/项目 catalog（如 .pier/canvas-catalog.json + 内置 L0/L1 快照），组装时只引用其中的 import",
+      "artifact": "catalog 对 Skill 是只读清单，不是新的 slash 命令"
+    },
+    "ergonomics": {
+      "problem": "八屏把目录、Skill JSON、来源、空态、失败、预览都做成产品页。人要做的只有声明/删除项目物料。L0 一百多项不该给人翻。",
+      "cut": [
+        "独立设置分区「Canvas 物料」",
+        "左列表右契约浏览 L0",
+        "Skill JSON 产品页",
+        "复制 import 命令",
+        "生成预览引用侧栏",
+        "单独的失败页/来源页"
+      ],
+      "keep": [
+        "项目常规里一张短列表",
+        "两字段声明弹窗",
+        "一条声明命令",
+        "Skill 读合并 catalog（无 UI）"
+      ]
+    },
+    "product": {
+      "placement": "设置 → 项目 → 选中项目 → 常规，一张 Card，紧挨已有「画布预览目录」。",
+      "interaction": "移除立即生效。声明：模块 + 导出；id=l2.<kebab(export)>。",
+      "commands": ["pier.canvas.materials.declare"],
+      "screens": [
+        { "id": "U1", "name": "项目物料卡", "shell": "常规内 Card" },
+        { "id": "U1b", "name": "同一卡空态", "shell": "一句话 + 声明" },
+        { "id": "U2", "name": "声明", "shell": "两字段 dialog" },
+        { "id": "U3", "name": "命令", "shell": "一条主命令" }
+      ],
+      "persist": {
+        "l0": "导出生成，人不编辑、产品不展示",
+        "l1": "代码注册，常规卡一行状态",
+        "l2": ".pier/canvas-catalog.json，进 git",
+        "skillSnapshot": "读宿主合并后的只读快照，无产品页"
+      },
+      "milestones": [
+        {
+          "id": "P0",
+          "title": "清单",
+          "deliver": "从 pier/canvas 导出生成 L0 catalog 快照；写入 Skill 可读位置"
+        },
+        {
+          "id": "P1",
+          "title": "系统块",
+          "deliver": "抽出 1–2 个 L1（建议活动、资源），import 进 Canvas 可编译"
+        },
+        {
+          "id": "P2",
+          "title": "项目声明",
+          "deliver": ".pier/canvas-catalog.json 合并进同一目录"
+        },
+        {
+          "id": "P3",
+          "title": "人机面",
+          "deliver": "项目常规物料卡 + 两字段声明 + 一条命令"
+        },
+        {
+          "id": "P4",
+          "title": "Skill",
+          "deliver": "/pier-canvas 工作流强制读 catalog 再组装"
+        }
+      ],
+      "acceptance": [
+        "能列出当前全部 L0 导出（与 pier/canvas 一致），供 Skill 读取",
+        "至少一块 L1 可在 *.canvas.tsx 中 import 并显示宿主数据",
+        "项目声明的 L2 出现在同一 catalog",
+        "常规卡能增删 L2；设置里没有 L0 浏览器",
+        "Skill 生成的新 Canvas 只引用 catalog 内物料"
+      ],
+      "files": [
+        "canvas-catalog 契约与合并",
+        "project/general-panel 加物料卡",
+        "openAppContentDialog 声明",
+        "pier-canvas 工作流读 catalog"
+      ]
+    }
+  },
+  "alternatives": [
+    {
+      "name": "继续只靠 sdk.d.ts + 猜项目路径",
+      "rejectReason": "Skill 无法枚举；系统数据块永远进不了生成合同。"
+    },
+    {
+      "name": "把工作台物料库当 Canvas 目录",
+      "rejectReason": "那是网格实例化产品，和源码组装冲突。"
+    },
+    {
+      "name": "每个物料一条 skill",
+      "rejectReason": "发现噪声；与唯一 /pier-canvas 冲突。"
+    },
+    {
+      "name": "统一 catalog + 生成时组装（采纳）",
+      "rejectReason": "采纳项。"
+    }
+  ]
+}

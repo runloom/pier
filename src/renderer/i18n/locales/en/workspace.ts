@@ -38,6 +38,8 @@ export const workspace = {
     searchPlaceholder: "Search panel types or agents…",
     title: "Create in this panel group",
     startAgentFailed: "Couldn't start agent — try again",
+    startAgentInjectFailed:
+      "The terminal opened, but the start command could not be typed. Type it in the terminal, or start the agent again.",
   },
   panelTransfer: {
     dropFailedTitle: "Couldn't move the tab",

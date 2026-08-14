@@ -1,6 +1,9 @@
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
+import type { AgentTurnEventSemantics } from "./agent-turn-event-semantics.ts";
 import {
   type AgentLaunchLayer,
   type HookLayer,
+  newHookLayer,
   type PanelSlot,
   VISIBILITY_DEBOUNCE_MS,
 } from "./entry.ts";
@@ -40,6 +43,32 @@ export function armHookVisibility(
       context.scheduleEmit();
     }
   }, VISIBILITY_DEBOUNCE_MS);
+}
+
+export function acquireHookLayer(
+  key: string,
+  event: AgentHookEventPayload,
+  semantics: AgentTurnEventSemantics,
+  at: number,
+  slotFor: (key: string, panelId: string) => PanelSlot,
+  dropSlotIfEmpty: (key: string) => void,
+  context: VisibilityContext
+): HookLayer | null {
+  const slot = slotFor(key, event.panelId);
+  const existing = slot.hook;
+  if (existing) {
+    return existing;
+  }
+  if (!semantics.createsSession) {
+    dropSlotIfEmpty(key);
+    return null;
+  }
+  const hook = newHookLayer(event, at, semantics.category === "session-start");
+  slot.hook = hook;
+  if (hook.hidden) {
+    armHookVisibility(key, hook, context);
+  }
+  return hook;
 }
 
 export function revealHook(hook: HookLayer): void {

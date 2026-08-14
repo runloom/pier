@@ -21,23 +21,47 @@ Do not mix axes:
 
 ```text
 content      = design-doc
-presentation = primary_nav_5
+presentation = resolved from content (see Pack selection)
 ui           = pier-default
 mode         = methodology
 ```
 
-Scheme / control-plane overviews should prefer `content=closed-loop`.
+Bare `/pier-canvas` → `design-doc` + `decision_nav_4`.  
+`content=closed-loop` with no presentation → `primary_nav_5`.
+
+## Pack selection
+
+Content decides the default presentation. Five-tab **Day 1** is not a universal
+gold standard — it is the closed-loop / Day-1 recipe slot.
+
+| Job | content | presentation | Tabs (en) |
+| --- | --- | --- | --- |
+| Architecture, RFC, product decision | `design-doc` | `decision_nav_4` | Overview → Problem → Design → Landing |
+| Short BLUF | `design-doc` | `one_pager` | none (single scroll) |
+| Runtime / CLI “tomorrow run these ≤4 commands” | `closed-loop` | `primary_nav_5` | Overview → Problem → Design → **Day 1** → Landing |
+
+Rules:
+
+1. **Do not** open a Day-1 / `path` tab unless `day1Commands` (≤4) or a copyable
+   recipe exists. Migration phases belong on **Landing**.
+2. **Day 1** is the English user-facing label for view id `path` (`i18n/nav.json`).
+   Historical name 日路径 means the same slot; do not use it as a product term.
+3. Presentation packs declare `fitsContent`; content packs declare
+   `preferredPresentation`. Explicit `presentation=` still wins.
+4. Industry design docs (Google Design Doc, RFC, ADR) have no Day-1 chapter.
+   Getting-started / runbooks do. Match that split.
 
 ## Built-in packs (P0)
 
 ### content
 
-- `design-doc` — goals / non-goals / design / alternatives + BLUF
-- `closed-loop` — hard constraints, loops, day-1 commands, rails, acceptance
+- `design-doc` — goals / non-goals / design / alternatives + BLUF; preferred presentation `decision_nav_4`
+- `closed-loop` — hard constraints, loops, day-1 commands, rails, acceptance; preferred presentation `primary_nav_5`
 
 ### presentation
 
-- `primary_nav_5` — ≤5 ordered tabs, primary overview
+- `decision_nav_4` — four tabs for design-docs (default)
+- `primary_nav_5` — five tabs including **Day 1**; closed-loop only
 - `one_pager` — single scroll, BLUF first
 
 ### ui
@@ -65,7 +89,7 @@ not acceptance-table dumps. Choose expression by job-to-be-done:
 
 | 形态 | 何时用 | 长什么样 | 禁止 |
 | --- | --- | --- | --- |
-| **静态方案（默认）** | 决策、分层、日路径、落地 | BLUF + 对照表 + ≤1 主图 + 短配方 | 无洞见的 Play/Step、「演示感」空转 |
+| **静态方案（默认）** | 决策、分层、落地（闭环才加首日配方） | BLUF + 对照表 + ≤1 主图 | 无洞见的 Play/Step、「演示感」空转 |
 | **静态对照** | before/after、Do/Don't、旧误区 vs 新默认 | 双列表 / 双卡 / 默认对照表 | 用动画假装对比 |
 | **短任务说明（可选）** | 需要「人手敲什么」 | 配方代码块 + 四命令表 | 冒充机制证明 |
 | **机制交互讲解（例外）** | **仅当**不可见机制必须逐步展开，且每帧有洞见+图变 | 播放/单步 + 结构图状态变化 | CLI 导览高亮、无 before/after 的节点走马灯 |
@@ -84,19 +108,30 @@ not acceptance-table dumps. Choose expression by job-to-be-done:
 - 产品方案默认：**问题 → 决策 → 设计 → 形态 → 落地**。
 - 真 UI/CLI 录屏若需要，放在仓外或单独资产；不要用假交互冒充。
 
-## Recommended information architecture（primary_nav_5）
+## Recommended information architecture
 
-Use this five-tab spine for scheme / closed-loop overviews (labels may localize):
+### `decision_nav_4` (design-doc default)
 
 | Tab id | Label | Role |
 | --- | --- | --- |
-| `overview` | 速览 | insight + decision (BLUF) + three summary cards |
-| `problem` | 问题 | pains + anti-goals |
-| `design` | 设计 | layers, settled/states, identity, hard constraints |
-| `path` | 日路径 | main path diagram + day-1 commands + recipe |
-| `landing` | 落地 | defaults before→after, phases, acceptance, rails |
+| `overview` | `i18n/nav.json` | insight + decision (BLUF) + three summary cards |
+| `problem` | `i18n/nav.json` | pains + anti-goals |
+| `design` | `i18n/nav.json` | layers, alternatives, product frames |
+| `landing` | `i18n/nav.json` | phases, acceptance, risks |
 
-Start from `templates/overview.canvas.tsx`. Dogfood reference:
+Start from `templates/decision.canvas.tsx`.
+
+### `primary_nav_5` (closed-loop only)
+
+| Tab id | Label | Role |
+| --- | --- | --- |
+| `overview` | `i18n/nav.json` | insight + decision (BLUF) + three summary cards |
+| `problem` | `i18n/nav.json` | pains + anti-goals |
+| `design` | `i18n/nav.json` | layers, settled/states, identity, hard constraints |
+| `path` | `i18n/nav.json` | main path diagram + day-1 commands + recipe |
+| `landing` | `i18n/nav.json` | defaults before→after, phases, acceptance, rails |
+
+Start from `templates/overview.canvas.tsx`. Dogfood:
 `.pier/canvases/multi-agent-orchestration-gold/`.
 
 ## Entry

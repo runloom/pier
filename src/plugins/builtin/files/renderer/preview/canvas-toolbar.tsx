@@ -1,5 +1,7 @@
 import { Button } from "@pier/ui/button.tsx";
+import { useMinSpinVisual } from "@pier/ui/hooks/use-min-spin.ts";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { RefreshCw } from "lucide-react";
 import type { FilesTranslate } from "../i18n.ts";
 import { requestCanvasReload, useCanvasChrome } from "./canvas-chrome-store.ts";
@@ -16,6 +18,8 @@ export function CanvasReloadButton(props: {
   t: FilesTranslate;
 }) {
   const chrome = useCanvasChrome(props.moduleId);
+  // 视觉下限：快速重载至少让用户看到按钮响应；不延迟内容与禁用态。
+  const spin = useMinSpinVisual(chrome.isBusy);
   if (!chrome.isActive) {
     return null;
   }
@@ -24,6 +28,7 @@ export function CanvasReloadButton(props: {
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
+          aria-busy={chrome.isBusy || undefined}
           aria-label={label}
           disabled={chrome.isBusy}
           onClick={() => requestCanvasReload(props.moduleId)}
@@ -31,7 +36,10 @@ export function CanvasReloadButton(props: {
           type="button"
           variant="ghost"
         >
-          <RefreshCw data-icon="inline-start" />
+          <RefreshCw
+            className={cn(spin && "animate-spin")}
+            data-icon="inline-start"
+          />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>

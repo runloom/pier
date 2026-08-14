@@ -2,8 +2,9 @@ import { useSyncExternalStore } from "react";
 
 /**
  * Canvas preview chrome state, published from the content area to the panel
- * toolbar (header trailing slot). The preview knows the compile/busy state;
- * the toolbar renders the Reload action.
+ * toolbar (header trailing slot). The toolbar renders the Reload action;
+ * busy covers only user-triggered reloads (auto file-watch recompiles are
+ * silent) and is cleared by the preview once the reload settles.
  *
  * All state is keyed by the canvas module id (rel path) so multiple canvas
  * panels don't clobber each other. Module-level store with a revision counter
@@ -12,7 +13,10 @@ import { useSyncExternalStore } from "react";
 export interface CanvasChromeState {
   /** Panels currently previewing each module id (refcounted). */
   activeByModule: Record<string, number>;
-  /** True while a compile is in flight per module (disable Reload). */
+  /**
+   * True while a user-triggered Reload is in flight per module. Drives the
+   * toolbar spin + disabled state; auto (file-watch) recompiles stay silent.
+   */
   busyByModule: Record<string, boolean>;
   /** Reload request counter per module; preview subscribes and recompiles. */
   reloadByModule: Record<string, number>;
@@ -61,17 +65,28 @@ export function unmarkCanvasActive(moduleId: string): void {
   delete busyByModule[moduleId];
   const reloadByModule = { ...state.reloadByModule };
   delete reloadByModule[moduleId];
-  setState({ activeByModule, busyByModule, reloadByModule });
+  setState({
+    activeByModule,
+    busyByModule,
+    reloadByModule,
+  });
 }
 
-export function setCanvasBusy(moduleId: string, isBusy: boolean): void {
-  setState({
-    busyByModule: { ...state.busyByModule, [moduleId]: isBusy },
-  });
+/**
+ * Preview marks the user-triggered Reload as settled (ready/error terminal
+ * state reached) — the toolbar spin stops. Auto recompiles never set busy,
+ * so they have nothing to clear.
+ */
+export function clearCanvasBusy(moduleId: string): void {
+  if (state.busyByModule[moduleId] !== true) {
+    return;
+  }
+  setState({ busyByModule: { ...state.busyByModule, [moduleId]: false } });
 }
 
 export function requestCanvasReload(moduleId: string): void {
   setState({
+    busyByModule: { ...state.busyByModule, [moduleId]: true },
     reloadByModule: {
       ...state.reloadByModule,
       [moduleId]: (state.reloadByModule[moduleId] ?? 0) + 1,

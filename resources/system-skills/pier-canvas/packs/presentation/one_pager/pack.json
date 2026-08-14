@@ -3,12 +3,13 @@
   "id": "one_pager",
   "axis": "presentation",
   "title": "One-pager BLUF",
-  "description": "Single scrolling overview: conclusion first, no multi-tab nav.",
+  "description": "Single scrolling overview: conclusion first, no multi-tab nav. Short design-docs and restyles.",
+  "fitsContent": ["design-doc", "closed-loop"],
   "requiredContentFields": ["bluf"],
   "views": [
     {
       "id": "overview",
-      "label": "总览",
+      "label": "Overview",
       "primary": true,
       "shows": [
         "bluf",
@@ -30,5 +31,5 @@
     "overviewMax": 1,
     "preferred": ["sequence", "flowchart"]
   },
-  "agentPrompt": "Build a single-scroll composition Canvas (no Tabs). Order: bluf → goals/non-goals or constraints → one diagram or recipe → short next steps. Details only below the fold as compact lists. pier/canvas only."
+  "agentPrompt": "Build a single-scroll composition Canvas (no Tabs). Order: bluf → goals/non-goals or constraints → one diagram or recipe → short next steps. Details only below the fold as compact lists. Write all user-visible copy in the user's language. pier/canvas only."
 }

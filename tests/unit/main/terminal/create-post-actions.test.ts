@@ -1,10 +1,17 @@
-import { sendInitialTerminalInput } from "@main/ipc/terminal/create-post-actions.ts";
+import {
+  finishFailedAgentCommandInject,
+  formatAgentCommandInjectFailedCopy,
+  sendInitialTerminalInput,
+  setAgentCommandInjectFailedReporter,
+} from "@main/ipc/terminal/create-post-actions.ts";
 import {
   cancelPromptReady,
   signalPromptReady,
 } from "@main/ipc/terminal/initial-input-gate.ts";
 import type { NativeAddon } from "@main/ipc/terminal/native-addon.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { workspace as workspaceEn } from "../../../../src/renderer/i18n/locales/en/workspace.ts";
+import { workspace as workspaceZh } from "../../../../src/renderer/i18n/locales/zh-CN/workspace.ts";
 
 describe("terminal create post actions", () => {
   afterEach(() => {
@@ -59,6 +66,55 @@ describe("terminal create post actions", () => {
     expect(sendText).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1500);
     expect(sendText).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onFailed after sendText retries are exhausted", async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const onFailed = vi.fn();
+    const sendText = vi.fn().mockReturnValue(false);
+
+    sendInitialTerminalInput({
+      addon: { sendText } as unknown as NativeAddon,
+      initialInput: "omp\r",
+      nativePanelId: "7::terminal-1",
+      onFailed,
+      panelId: "terminal-1",
+    });
+    signalPromptReady("terminal-1");
+    await vi.runAllTimersAsync();
+
+    expect(sendText.mock.calls.length).toBeGreaterThan(1);
+    expect(onFailed).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it("reports inject failure even when clearing the agent session throws", async () => {
+    const report = vi.fn();
+    const logError = vi.fn();
+    setAgentCommandInjectFailedReporter(report);
+    await finishFailedAgentCommandInject({
+      clearAgent: async () => {
+        throw new Error("session write failed");
+      },
+      logError,
+      panelId: "panel-clear-1",
+      skipClear: false,
+    });
+    expect(logError).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledWith("panel-clear-1");
+    setAgentCommandInjectFailedReporter(undefined);
+  });
+
+  it("keeps inject-failed copy aligned with workspace locales", () => {
+    expect(formatAgentCommandInjectFailedCopy("en")).toEqual({
+      body: workspaceEn.addPanelMenu.startAgentInjectFailed,
+      title: workspaceEn.addPanelMenu.startAgentFailed,
+    });
+    expect(formatAgentCommandInjectFailedCopy("zh-CN")).toEqual({
+      body: workspaceZh.addPanelMenu.startAgentInjectFailed,
+      title: workspaceZh.addPanelMenu.startAgentFailed,
+    });
   });
 
   it("skips injection entirely when initialInput is empty", () => {

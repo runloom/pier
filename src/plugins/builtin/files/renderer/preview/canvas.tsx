@@ -22,8 +22,9 @@ import {
 } from "../comments/use-comment-navigator.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import {
+  clearCanvasBusy,
   markCanvasActive,
-  setCanvasBusy,
+  requestCanvasReload,
   unmarkCanvasActive,
   useCanvasChrome,
 } from "./canvas-chrome-store.ts";
@@ -47,6 +48,7 @@ import {
 } from "./canvas-states.tsx";
 import { subscribeLiveModulesProjectConfigChanged } from "./load-live-modules-config.ts";
 import { useCanvasCommentPins } from "./use-canvas-comment-pins.ts";
+import { useCanvasExternalLinks } from "./use-canvas-external-links.ts";
 import {
   CANVAS_PICK_DRAFT_ID,
   type CanvasCommentThreadView,
@@ -206,6 +208,8 @@ export function FileCanvasPreview(props: {
 
   const chrome = useCanvasChrome(relPath ?? "");
   const lastReloadRef = useRef<number | null>(null);
+  /** True while a user-triggered Reload is in flight (toolbar busy → spin). */
+  const userReloadPendingRef = useRef(false);
   useEffect(() => {
     if (lastReloadRef.current === null) {
       lastReloadRef.current = chrome.reloadRequest;
@@ -213,18 +217,22 @@ export function FileCanvasPreview(props: {
     }
     if (chrome.reloadRequest > lastReloadRef.current) {
       lastReloadRef.current = chrome.reloadRequest;
+      userReloadPendingRef.current = true;
       setNonce((value) => value + 1);
     }
   }, [chrome.reloadRequest]);
 
+  // Clear the toolbar busy state once the reload-triggered generation settles
+  // on a terminal state. Auto (stale) recompiles never set busy.
   useEffect(() => {
-    if (!relPath) {
+    if (!(relPath && userReloadPendingRef.current)) {
       return;
     }
-    setCanvasBusy(
-      relPath,
-      state.kind === "pending" || state.kind === "loading"
-    );
+    if (state.kind !== "ready" && state.kind !== "error") {
+      return;
+    }
+    userReloadPendingRef.current = false;
+    clearCanvasBusy(relPath);
   }, [relPath, state]);
 
   // Host element for anchor scan (ready + host mounted after compile).
@@ -347,12 +355,18 @@ export function FileCanvasPreview(props: {
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [hostEl, revealAnchor, state.kind]);
 
+  useCanvasExternalLinks({
+    context: props.context,
+    enabled: state.kind === "ready",
+    hostRef,
+    t: props.t,
+  });
   if (!relPath) {
     return <CanvasUnavailableEmpty t={props.t} />;
   }
 
   const reload = () => {
-    setNonce((value) => value + 1);
+    requestCanvasReload(relPath);
   };
   const showHost = state.kind === "pending" || state.kind === "ready";
   const isBusy = state.kind === "pending" || state.kind === "loading";

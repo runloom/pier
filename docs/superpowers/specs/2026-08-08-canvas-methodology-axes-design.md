@@ -14,7 +14,7 @@ Canvas 是 Pier **产品核心总览面**：方案/设计打开后应先看到�
 | 参数 | 含义 | 默认 |
 |------|------|------|
 | `content` | 写什么（章节、门禁、内容模型） | `design-doc` |
-| `presentation` | 总览如何组织（导航、绑定、图种） | `primary_nav_5` |
+| `presentation` | 总览如何组织（导航、绑定、图种） | 由 content 解析：`design-doc`→`decision_nav_4`，`closed-loop`→`primary_nav_5` |
 | `ui` | 如何绘制（组件词表、密度、反模式） | `pier-default` |
 | `mode` | `methodology`（默认）或 `freeform` | `methodology` |
 
@@ -105,7 +105,7 @@ resources/system-skills/pier-canvas/
 {
   "schemaVersion": 1,
   "content": "design-doc",
-  "presentation": "primary_nav_5",
+  "presentation": "decision_nav_4",
   "ui": "pier-default",
   "status": "draft",
   "role": "overview"
@@ -114,11 +114,13 @@ resources/system-skills/pier-canvas/
 
 ### 6.2 pack.json（content）
 
-必填概念字段：`id`、`axis: "content"`、`title`、`required`（字段列表）、`gates`、`agentPrompt`（短指令）。
+必填概念字段：`id`、`axis: "content"`、`title`、`required`（字段列表）、`gates`、`agentPrompt`（短指令）。  
+可选：`preferredPresentation`（省略 `presentation=` 时的解析目标）。
 
 ### 6.3 pack.json（presentation）
 
-必填：`id`、`axis: "presentation"`、`title`、`views[]`（含 `primary`）、`antiPatterns[]`、`requiredContentFields[]`、`agentPrompt`。
+必填：`id`、`axis: "presentation"`、`title`、`views[]`（含 `primary`）、`antiPatterns[]`、`requiredContentFields[]`、`agentPrompt`。  
+可选：`fitsContent[]`（声明适合哪些 content pack）。
 
 ### 6.4 pack.json（ui）
 
@@ -128,12 +130,13 @@ resources/system-skills/pier-canvas/
 
 ```text
 content      = design-doc
-presentation = primary_nav_5
+presentation = resolved (design-doc→decision_nav_4; closed-loop→primary_nav_5)
 ui           = pier-default
 mode         = methodology
 ```
 
-方案类推荐（非强制默认）：`closed-loop` + `primary_nav_5` + `pier-default`。
+闭环 / 运行控制方案：`closed-loop` + `primary_nav_5`（含**首日**配方）。  
+设计决策方案：`design-doc` + `decision_nav_4`（无首日 Tab）。
 
 ## 7. 工作流（methodology）
 
@@ -149,18 +152,18 @@ mode         = methodology
 
 ## 8. 兼容矩阵（P0）
 
-| content \\ presentation | primary_nav_5 | one_pager |
-|-------------------------|---------------|-----------|
-| design-doc | 默认 | 允许 |
-| closed-loop | 推荐方案类 | 允许 |
-| adr（后续） | 可用 | 更贴 |
+| content \\ presentation | decision_nav_4 | primary_nav_5 | one_pager |
+|-------------------------|----------------|---------------|-----------|
+| design-doc | 默认 | 仅当确有 Day-1 配方 | 允许 |
+| closed-loop | 不推荐（缺首日槽） | 默认 | 允许 |
+| adr（后续） | 可用 | 否 | 更贴 |
 
 不兼容时 fail 并提示合法组合，不静默降级。
 
 ## 9. 验收
 
 - [ ] 规格与 `SKILL.md` 一致：唯一入口 `/pier-canvas`，无 CLI 主叙事
-- [ ] 内置 packs：design-doc、closed-loop、primary_nav_5、one_pager、pier-default
+- [ ] 内置 packs：design-doc、closed-loop、decision_nav_4、primary_nav_5、one_pager、pier-default
 - [ ] 未传参使用三默认
 - [ ] freeform 路径不回归
 - [ ] 至少一份狗粮总览：`closed-loop` + `primary_nav_5`，入口 ≤5 且有 BLUF

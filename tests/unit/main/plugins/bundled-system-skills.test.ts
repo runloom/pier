@@ -102,5 +102,19 @@ describe("bundled system skills", () => {
       { cwd: process.cwd() }
     );
     expect(tracked.trim()).toBe("");
+
+    const quarantineSample = join(
+      ".pier",
+      "skills",
+      "library",
+      `.pier-system-skill-quarantine-0-${PIER_CANVAS_SYSTEM_SKILL_ID}`,
+      "SKILL.md"
+    );
+    const { stdout: quarantineIgnored } = await execFileAsync(
+      "git",
+      ["check-ignore", "-v", "--", quarantineSample],
+      { cwd: process.cwd() }
+    );
+    expect(quarantineIgnored).toMatch(/\.pier-system-skill-\*/);
   });
 });

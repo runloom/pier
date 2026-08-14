@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 import type { ReviewNavigationMemberReason } from "../review/document/demand.ts";
 import type { GitReviewDocumentLoader } from "../review/document/loader.ts";
 import {
+  isReviewEstimateCacheKey,
   isReviewNavigationTerminal,
   type PendingReviewNavigation,
 } from "../review/navigation.ts";
@@ -85,8 +86,11 @@ export function tryGitReviewPendingNavigation(options: {
   // 每个内容版本只提交一次定位。Pierre 会让 pendingScrollTarget 跟随
   // 后续测量修正；每帧重复 scrollTo 反而会持续重置它的收敛过程。
   if (alreadyScrolledTarget) {
-    // Zed 体感：定位成功 + 视口布局稳定即可结束导航，不挂 loader.settled 大门闩。
-    // 可见性用 scroll 目标（含 estimate 头），不是必须 loaded document。
+    // Intent 可以打在 estimate 上；Commit 必须等目标离开骨架。
+    // 不挂 loader.settled 大门闩，但骨架头可见 ≠ 导航成功。
+    if (isReviewEstimateCacheKey(target.cacheKey)) {
+      return;
+    }
     const targetVisible =
       diffHandleRef.current?.isItemVisible(
         target.sectionId,

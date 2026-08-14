@@ -124,3 +124,37 @@ export function resolveRevealIntentForPath(
   }
   return intent ?? "explicit";
 }
+
+/**
+ * Breadcrumb / command / search / root are a new user intent. Sticky abort
+ * from an earlier wheel must not block them — including when the target is
+ * already the settled active file (clicking the last breadcrumb segment).
+ */
+export function shouldClearRevealUserAbort(input: {
+  intent: PierFileTreeRevealIntent;
+  path: string;
+  pendingPath: string | null | undefined;
+  settledActiveFilePath: string | null;
+}): boolean {
+  if (
+    input.intent === "explicit" ||
+    input.intent === "search" ||
+    input.intent === "root"
+  ) {
+    return true;
+  }
+  return (
+    input.pendingPath !== input.path &&
+    input.settledActiveFilePath !== input.path
+  );
+}
+
+/**
+ * Only in-flight active-file follow may be demoted by a user scroll claim.
+ * User-initiated reveal (breadcrumb, search, root) keeps its policy scroll.
+ */
+export function shouldHonorUserScrollAbort(
+  intent: PierFileTreeRevealIntent | undefined
+): boolean {
+  return intent === "active-file";
+}

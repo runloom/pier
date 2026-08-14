@@ -368,7 +368,7 @@ export function mergeReviewDocumentDemand(
  * - 无 window window：seed
  * - 有 window：seed 退出
  * - window ∪ 双向 lookahead ∪ 选中邻域
- * - nav：boost selected 到队首（保留 window，禁止 exclusive 缩 demand）
+ * - nav：boost selected 到队首；同时只保留目标及其后序（禁止新开上方文件）
  * - protectSelectedAnchor：完成后到用户接管滚动前，优先 selected 及其后序
  */
 export function composeReviewDocumentDemand(options: {
@@ -414,11 +414,10 @@ export function composeReviewDocumentDemand(options: {
     options.selectedEntryKey,
     options.navigationPending
   );
-  if (
-    options.navigationPending ||
-    options.protectSelectedAnchor !== true ||
-    options.selectedEntryKey === null
-  ) {
+  const pinToSelectedAndFollowers =
+    options.selectedEntryKey !== null &&
+    (options.navigationPending || options.protectSelectedAnchor === true);
+  if (!pinToSelectedAndFollowers || options.selectedEntryKey === null) {
     return prioritized;
   }
   const selectedIndex = options.entryKeysInOrder.indexOf(

@@ -455,7 +455,7 @@ describe("composeReviewDocumentDemand", () => {
       windowDemand: { bufferedEntryKeys: [], visibleEntryKeys: [] },
     });
     expect(seeded.visibleEntryKeys).toEqual(seed);
-    // nav：boost 目标到队首，保留 window/lookahead demand（禁止 exclusive 缩）。
+    // nav：boost 目标到队首，且不新开目标上方的 window/lookahead。
     const nav = composeReviewDocumentDemand({
       entryKeysInOrder: keys,
       navigationPending: true,
@@ -467,9 +467,30 @@ describe("composeReviewDocumentDemand", () => {
         visibleEntryKeys: ["entry:5"],
       },
     });
-    expect(nav.visibleEntryKeys[0]).toBe("entry:39");
-    expect(nav.visibleEntryKeys).toContain("entry:5");
-    expect(nav.bufferedEntryKeys).toEqual(expect.arrayContaining(["entry:6"]));
+    expect(nav.visibleEntryKeys).toEqual(["entry:39"]);
+    expect(nav.bufferedEntryKeys).not.toContain("entry:5");
+    expect(nav.bufferedEntryKeys).not.toContain("entry:6");
+  });
+
+  it("tree-nav demand excludes not-yet-loaded predecessors above the target", () => {
+    const keys = Array.from({ length: 12 }, (_, index) => `entry:${index}`);
+    const demand = composeReviewDocumentDemand({
+      entryKeysInOrder: keys,
+      navigationPending: true,
+      seedEntryKeys: keys.slice(0, 4),
+      selectedEntryKey: "entry:8",
+      demandPrefetchEntryKeys: new Set(),
+      windowDemand: {
+        bufferedEntryKeys: ["entry:6", "entry:10"],
+        visibleEntryKeys: ["entry:7", "entry:8", "entry:9"],
+      },
+      lookahead: 0,
+      selectionRadius: 0,
+    });
+    expect(demand.visibleEntryKeys).toEqual(["entry:8", "entry:9"]);
+    expect(demand.bufferedEntryKeys).toEqual(["entry:10"]);
+    expect(demand.visibleEntryKeys).not.toContain("entry:7");
+    expect(demand.bufferedEntryKeys).not.toContain("entry:6");
   });
 
   it("导航完成但选择仍受保护时只允许目标及其后序窗口水合", () => {

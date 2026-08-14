@@ -16,6 +16,11 @@ import {
   USAGE_RETRY_OVERALL_DEADLINE_MS,
   USAGE_TEMPORARILY_UNAVAILABLE_ERROR,
 } from "../../../../../packages/plugin-grok/src/main/grok-usage.ts";
+import type { FetchImpl } from "../../../../../packages/plugin-grok/src/main/grok-usage-types.ts";
+import {
+  GROK_REMAINING_RESETS_URL,
+  GROK_RESET_CREDITS_METRIC_ID,
+} from "../../../../../packages/plugin-grok/src/main/reset-credits.ts";
 
 const AUTH_ENTRY = {
   auth_mode: "oidc",
@@ -287,14 +292,15 @@ describe("fetchGrokUsage", () => {
 
     const result = await fetchGrokUsage({
       authJson: AUTH,
-      fetchImpl,
+      fetchImpl: fetchImpl as FetchImpl,
       kind: "oidc",
       signal: new AbortController().signal,
     });
 
     expect(result.status).toBe("ok");
-    // credits timeout + credits retry + cash + membership fallbacks + task usage
-    expect(fetchImpl).toHaveBeenCalledTimes(6);
+    // credits timeout + credits retry + cash + membership fallbacks +
+    // task usage + remaining resets
+    expect(fetchImpl).toHaveBeenCalledTimes(7);
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
       GROK_BILLING_CREDITS_URL,
@@ -488,6 +494,50 @@ describe("fetchGrokUsage", () => {
     );
     expect(result.status).toBe("ok");
     expect(result.metrics[0]).toMatchObject({ usedPercent: 40 });
+  });
+
+  it("includes official remaining-reset credits in a successful usage snapshot", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      let body = "{}";
+      if (url === GROK_REMAINING_RESETS_URL) {
+        body =
+          "AAAAACNSIVINcmVzdG9rX3ZwWURxb6IBBgicgPPTBvIBBgicvZbVBg==gAAAAA9ncnBjLXN0YXR1czowDQo=";
+      } else if (url === GROK_BILLING_CREDITS_URL) {
+        body = JSON.stringify({
+          config: {
+            creditUsagePercent: 44,
+            currentPeriod: {
+              end: "2026-08-16T02:00:45.506153+00:00",
+              start: "2026-08-09T02:00:45.506153+00:00",
+              type: "USAGE_PERIOD_TYPE_WEEKLY",
+            },
+          },
+        });
+      }
+      return { ok: true, status: 200, text: async () => body };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.metrics).toContainEqual({
+      format: "count",
+      id: GROK_RESET_CREDITS_METRIC_ID,
+      kind: "scalar",
+      value: 1,
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      GROK_REMAINING_RESETS_URL,
+      expect.objectContaining({
+        body: expect.any(Uint8Array),
+        method: "POST",
+      })
+    );
   });
 
   it("refreshes expired OIDC session before billing and persists new auth", async () => {

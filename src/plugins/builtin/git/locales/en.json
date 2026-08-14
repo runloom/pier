@@ -399,6 +399,7 @@
     "ui.reviewFailureOutputLimit": "The change exceeds the review size limit.",
     "ui.reviewFailureStaleRevision": "The change kept updating. Try again.",
     "ui.reviewFailureTimeout": "Reading the change timed out.",
+    "ui.reviewDocumentLoadFailed": "Unable to load this change",
     "ui.reviewRenderFailed": "Failed to render diff",
     "ui.reviewRetry": "Retry",
     "ui.reviewEmptyTitle": "No changes",

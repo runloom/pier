@@ -83,6 +83,9 @@ export function usageMetricLabel(
   if (metric.id === "grok:prepaid-balance") {
     return t("pier.grok.usage.prepaidBalance", "Prepaid balance");
   }
+  if (metric.id === "grok:reset-credits") {
+    return t("pier.grok.usage.resetCredits", "Quota resets");
+  }
   return metric.name
     ? localizeName(metric.name, t)
     : t("pier.grok.usage.value", "Usage value");

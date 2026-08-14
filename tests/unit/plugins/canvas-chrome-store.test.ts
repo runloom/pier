@@ -1,8 +1,8 @@
 import {
+  clearCanvasBusy,
   getCanvasChromeState,
   markCanvasActive,
   requestCanvasReload,
-  setCanvasBusy,
   unmarkCanvasActive,
   useCanvasChrome,
 } from "@plugins/builtin/files/renderer/preview/canvas-chrome-store.ts";
@@ -43,18 +43,36 @@ describe("canvas-chrome-store", () => {
     expect(result.current.isActive).toBe(false);
   });
 
-  it("publishes busy state per module", () => {
+  it("user reload marks busy until the preview clears it", () => {
     const { result } = renderHook(() => useCanvasChrome(MODULE));
     act(() => {
       markCanvasActive(MODULE);
-      setCanvasBusy(MODULE, true);
+    });
+    expect(result.current.isBusy).toBe(false);
+
+    act(() => {
+      requestCanvasReload(MODULE);
     });
     expect(result.current.isBusy).toBe(true);
 
     act(() => {
-      setCanvasBusy(MODULE, false);
+      clearCanvasBusy(MODULE);
     });
     expect(result.current.isBusy).toBe(false);
+  });
+
+  it("clearCanvasBusy is idempotent and leaves other modules alone", () => {
+    act(() => {
+      markCanvasActive(MODULE);
+      requestCanvasReload(MODULE);
+      requestCanvasReload("b.canvas.tsx");
+    });
+    act(() => {
+      clearCanvasBusy(MODULE);
+      clearCanvasBusy(MODULE);
+    });
+    expect(getCanvasChromeState().busyByModule[MODULE]).toBe(false);
+    expect(getCanvasChromeState().busyByModule["b.canvas.tsx"]).toBe(true);
   });
 
   it("bumps reloadRequest only for the requested module", () => {
@@ -78,7 +96,6 @@ describe("canvas-chrome-store", () => {
   it("drops per-module state when last panel unmounts", () => {
     act(() => {
       markCanvasActive(MODULE);
-      setCanvasBusy(MODULE, true);
       requestCanvasReload(MODULE);
     });
     expect(getCanvasChromeState().busyByModule[MODULE]).toBe(true);

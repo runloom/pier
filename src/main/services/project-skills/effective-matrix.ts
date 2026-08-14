@@ -19,18 +19,39 @@ export interface MatrixManagedSkill {
   /** Project-relative roots where an owned projection link actually exists. */
   projectedRoots: readonly string[];
   skillId: string;
+  /**
+   * Frontmatter `name` when known. Collision/presence identity prefers this
+   * over skillId when non-empty (Codex/Grok resolve by name).
+   */
+  skillName?: string | undefined;
 }
 
 export interface MatrixUnmanagedSkill {
   directoryName: string;
   /** Discovery root the directory lives in, e.g. `.claude/skills`. */
   root: string;
+  /** Frontmatter `name` when known; presence matching prefers this. */
+  skillName?: string | undefined;
 }
 
 export interface MatrixUserGlobalSkill {
   directoryName: string;
   /** `~`-relative user root, e.g. `~/.claude/skills`. */
   root: string;
+  /** Frontmatter `name` when known; presence matching prefers this. */
+  skillName?: string | undefined;
+}
+
+function presenceKey(args: {
+  directoryName?: string | undefined;
+  skillId?: string | undefined;
+  skillName?: string | undefined;
+}): string {
+  const named = args.skillName?.trim();
+  if (named != null && named.length > 0) {
+    return named;
+  }
+  return (args.skillId ?? args.directoryName ?? "").trim();
 }
 
 export interface EffectiveMatrixInput {
@@ -84,10 +105,17 @@ function presentProjectRoots(
   for (const root of adapter.discoveryRoots) {
     const ownHit = ownRoots.includes(root);
     const unmanagedHit = input.unmanaged.some(
-      (u) => u.root === root && u.directoryName === name
+      (u) =>
+        u.root === root &&
+        presenceKey({
+          directoryName: u.directoryName,
+          skillName: u.skillName,
+        }) === name
     );
     const managedHit = input.managed.some(
-      (m) => m.skillId === name && m.projectedRoots.includes(root)
+      (m) =>
+        presenceKey({ skillId: m.skillId, skillName: m.skillName }) === name &&
+        m.projectedRoots.includes(root)
     );
     if (ownHit || unmanagedHit || managedHit) {
       present.push(root);
@@ -102,7 +130,14 @@ function userRootsWithName(
   input: EffectiveMatrixInput
 ): string[] {
   return adapter.userDiscoveryRoots.filter((root) =>
-    input.userGlobal.some((g) => g.root === root && g.directoryName === name)
+    input.userGlobal.some(
+      (g) =>
+        g.root === root &&
+        presenceKey({
+          directoryName: g.directoryName,
+          skillName: g.skillName,
+        }) === name
+    )
   );
 }
 
@@ -203,10 +238,16 @@ export function deriveUserGlobalEffects(args: {
   registry: SkillDiscoveryAdapterRegistry;
   root: string;
   directoryName: string;
+  /** Frontmatter name when known; defaults to directoryName for matching. */
+  skillName?: string | undefined;
   managed: readonly MatrixManagedSkill[];
   unmanaged: readonly MatrixUnmanagedSkill[];
   installedAgents?: ReadonlySet<string> | undefined;
 }): SkillEffectiveCell[] {
+  const name = presenceKey({
+    directoryName: args.directoryName,
+    skillName: args.skillName,
+  });
   const cells: SkillEffectiveCell[] = [];
   for (const adapter of args.registry.list()) {
     if (!adapter.consumesProjectSkills) continue;
@@ -221,13 +262,16 @@ export function deriveUserGlobalEffects(args: {
     const projectHasSameName =
       args.managed.some(
         (m) =>
-          m.skillId === args.directoryName &&
+          presenceKey({ skillId: m.skillId, skillName: m.skillName }) ===
+            name &&
           m.projectedRoots.some((root) => adapter.discoveryRoots.includes(root))
       ) ||
       args.unmanaged.some(
         (u) =>
-          u.directoryName === args.directoryName &&
-          adapter.discoveryRoots.includes(u.root)
+          presenceKey({
+            directoryName: u.directoryName,
+            skillName: u.skillName,
+          }) === name && adapter.discoveryRoots.includes(u.root)
       );
     if (!projectHasSameName) {
       cells.push({
@@ -252,11 +296,17 @@ export function deriveUserGlobalEffects(args: {
             (root) =>
               args.managed.some(
                 (m) =>
-                  m.skillId === args.directoryName &&
-                  m.projectedRoots.includes(root)
+                  presenceKey({
+                    skillId: m.skillId,
+                    skillName: m.skillName,
+                  }) === name && m.projectedRoots.includes(root)
               ) ||
               args.unmanaged.some(
-                (u) => u.directoryName === args.directoryName && u.root === root
+                (u) =>
+                  presenceKey({
+                    directoryName: u.directoryName,
+                    skillName: u.skillName,
+                  }) === name && u.root === root
               )
           ) ??
           adapter.discoveryRoots[0] ??
@@ -297,10 +347,14 @@ export function deriveEffectiveMatrix(
 
   for (const skill of input.managed) {
     const cells: SkillEffectiveCell[] = [];
+    const name = presenceKey({
+      skillId: skill.skillId,
+      skillName: skill.skillName,
+    });
     for (const adapter of adapters) {
       const effect = deriveEffect({
         adapter,
-        name: skill.skillId,
+        name,
         input,
         managedProjectedRoots: skill.projectedRoots,
       });
@@ -319,12 +373,16 @@ export function deriveEffectiveMatrix(
   const unmanagedEffects = new Map<string, SkillEffectiveCell[]>();
   for (const entry of input.unmanaged) {
     const cells: SkillEffectiveCell[] = [];
+    const name = presenceKey({
+      directoryName: entry.directoryName,
+      skillName: entry.skillName,
+    });
     for (const adapter of adapters) {
       cells.push({
         agentKind: adapter.agentKind,
         effect: deriveEffect({
           adapter,
-          name: entry.directoryName,
+          name,
           input,
           managedProjectedRoots: null,
           unmanagedRoot: entry.root,

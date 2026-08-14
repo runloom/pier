@@ -95,6 +95,11 @@ export interface ProjectSkillView {
         providerVersion: string;
       };
   totalBytes: number;
+  /**
+   * From SKILL.md `user-invocable` (default true). When false, Enhanced Input
+   * must not offer a force-invoke row (Grok hides non-invocable skills).
+   */
+  userInvocable: boolean;
 }
 
 /** Unmanaged discovery-root entry (layer 5), read-only. */
@@ -106,6 +111,8 @@ export interface UnmanagedSkillView {
   name: string;
   /** Discovery root, e.g. `.claude/skills`. */
   root: string;
+  /** From SKILL.md `user-invocable`; default true when unknown. */
+  userInvocable: boolean;
 }
 
 /**
@@ -119,4 +126,6 @@ export interface UserGlobalSkillView {
   name: string;
   /** `~`-relative user root, e.g. `~/.claude/skills`. */
   root: string;
+  /** From SKILL.md `user-invocable`; default true when unknown. */
+  userInvocable: boolean;
 }

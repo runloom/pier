@@ -21,6 +21,7 @@ function createContext(liveModules: {
   onChanged: ReturnType<typeof vi.fn>;
   registerRoot: ReturnType<typeof vi.fn>;
   unregisterRoot?: ReturnType<typeof vi.fn>;
+  success?: ReturnType<typeof vi.fn>;
 }): RendererPluginContext {
   return {
     liveModules: {
@@ -31,6 +32,9 @@ function createContext(liveModules: {
       unregisterRoot:
         liveModules.unregisterRoot ??
         vi.fn(async (rootId: string) => ({ rootId })),
+    },
+    notifications: {
+      success: liveModules.success ?? vi.fn(),
     },
   } as unknown as RendererPluginContext;
 }
@@ -457,16 +461,30 @@ describe("FileCanvasPreview", () => {
       }
       export default function App() { return null; }
     `);
-    const compile = vi.fn(async () => ({
-      graph: [],
-      moduleId: "smoke/hello.canvas.tsx",
-      ok: true as const,
-      url,
-    }));
+    let resolveCompile:
+      | ((value: {
+          graph: string[];
+          moduleId: string;
+          ok: true;
+          url: string;
+        }) => void)
+      | undefined;
+    const compile = vi.fn(
+      () =>
+        new Promise<{
+          graph: string[];
+          moduleId: string;
+          ok: true;
+          url: string;
+        }>((resolve) => {
+          resolveCompile = resolve;
+        })
+    );
     const onChanged = vi.fn(() => () => undefined);
     const registerRoot = vi.fn(async (spec: { id: string }) => ({
       rootId: spec.id,
     }));
+    const success = vi.fn();
 
     // Reset module-level store for this module so the test sees fresh state.
     act(() => {
@@ -475,13 +493,24 @@ describe("FileCanvasPreview", () => {
 
     const { unmount } = render(
       <FileCanvasPreview
-        context={createContext({ compile, onChanged, registerRoot })}
+        context={createContext({ compile, onChanged, registerRoot, success })}
         path={CANVAS_PATH}
         root={PROJECT_ROOT}
         t={t}
       />
     );
 
+    await waitFor(() => {
+      expect(compile).toHaveBeenCalledTimes(1);
+    });
+    await act(async () => {
+      resolveCompile?.({
+        graph: [],
+        moduleId: "smoke/hello.canvas.tsx",
+        ok: true,
+        url,
+      });
+    });
     await waitFor(() => {
       expect(
         document.querySelector("[data-test-canvas='chrome']")
@@ -493,13 +522,32 @@ describe("FileCanvasPreview", () => {
     ).toBeGreaterThan(0);
     const callsBeforeReload = compile.mock.calls.length;
 
-    // Toolbar Reload bumps the store; preview must recompile.
+    // Toolbar Reload bumps the store: busy in flight, preview recompiles.
     act(() => {
       requestCanvasReload("smoke/hello.canvas.tsx");
     });
     await waitFor(() => {
       expect(compile.mock.calls.length).toBeGreaterThan(callsBeforeReload);
     });
+    expect(getCanvasChromeState().busyByModule["smoke/hello.canvas.tsx"]).toBe(
+      true
+    );
+
+    // Settling the reload generation clears busy; no success toast.
+    await act(async () => {
+      resolveCompile?.({
+        graph: [],
+        moduleId: "smoke/hello.canvas.tsx",
+        ok: true,
+        url,
+      });
+    });
+    await waitFor(() => {
+      expect(
+        getCanvasChromeState().busyByModule["smoke/hello.canvas.tsx"]
+      ).toBe(false);
+    });
+    expect(success).not.toHaveBeenCalled();
 
     unmount();
     // Unmount deactivates the module so other panels don't show stale chrome.

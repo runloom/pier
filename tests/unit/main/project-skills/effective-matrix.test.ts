@@ -273,4 +273,51 @@ describe("project-skills effective matrix (v8 §5.1)", {
       state: "agent-not-installed",
     });
   });
+
+  it("marks pier-canvas discoverable for Grok via .agents/skills projection", () => {
+    const result = deriveEffectiveMatrix({
+      registry,
+      managed: [
+        {
+          skillId: "pier-canvas",
+          enabled: true,
+          projectedRoots: [".agents/skills"],
+        },
+      ],
+      unmanaged: [],
+      userGlobal: [],
+    });
+    expect(cellFor(result.managedEffects, "pier-canvas", "grok")).toEqual({
+      state: "discoverable",
+      viaRoot: ".agents/skills",
+    });
+    // Claude only scans .claude/skills — agents-only projection is not enough.
+    expect(cellFor(result.managedEffects, "pier-canvas", "claude")?.state).toBe(
+      "not-projected"
+    );
+  });
+
+  it("marks pier-canvas discoverable for Claude when dual-projected", () => {
+    const result = deriveEffectiveMatrix({
+      registry,
+      managed: [
+        {
+          skillId: "pier-canvas",
+          skillName: "pier-canvas",
+          enabled: true,
+          projectedRoots: [".agents/skills", ".claude/skills"],
+        },
+      ],
+      unmanaged: [],
+      userGlobal: [],
+    });
+    expect(cellFor(result.managedEffects, "pier-canvas", "claude")).toEqual({
+      state: "discoverable",
+      viaRoot: ".claude/skills",
+    });
+    expect(cellFor(result.managedEffects, "pier-canvas", "grok")).toEqual({
+      state: "discoverable",
+      viaRoot: ".agents/skills",
+    });
+  });
 });

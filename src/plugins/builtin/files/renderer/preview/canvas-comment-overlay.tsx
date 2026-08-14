@@ -10,11 +10,11 @@ import type {
   PierInlineReviewHandlers,
   PierInlineReviewLabels,
 } from "@pier/ui/diff-view/review/inline-comment-types.ts";
+import { cn } from "@pier/ui/utils.ts";
 import {
   type ReactNode,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -94,7 +94,6 @@ export function CanvasCommentOverlay(props: {
     }
   }, [props.onRequestOpenConsumed, props.openInEditMode, props.requestOpenKey]);
   const pickLayerRef = useRef<HTMLDivElement | null>(null);
-  const overlayRootRef = useRef<HTMLDivElement | null>(null);
   const hoverRef = useRef<HoverPickState | null>(null);
   hoverRef.current = hover;
 
@@ -153,33 +152,6 @@ export function CanvasCommentOverlay(props: {
     });
     return () => {
       document.removeEventListener("scroll", onScroll, true);
-    };
-  }, [host, shell]);
-
-  // Keep overlay/pick-layer at least as tall as mounted canvas content.
-  useLayoutEffect(() => {
-    if (!(host && shell && overlayRootRef.current)) {
-      return;
-    }
-    const overlay = overlayRootRef.current;
-    const sync = () => {
-      const height = Math.max(
-        host.scrollHeight,
-        host.offsetHeight,
-        shell.scrollHeight,
-        shell.clientHeight
-      );
-      overlay.style.minHeight = `${height}px`;
-      if (pickLayerRef.current) {
-        pickLayerRef.current.style.minHeight = `${height}px`;
-      }
-    };
-    sync();
-    const ro = new ResizeObserver(sync);
-    ro.observe(host);
-    ro.observe(shell);
-    return () => {
-      ro.disconnect();
     };
   }, [host, shell]);
 
@@ -337,7 +309,6 @@ export function CanvasCommentOverlay(props: {
     <div
       className="pointer-events-none absolute inset-0 z-10"
       data-slot="canvas-comment-overlay"
-      ref={overlayRootRef}
     >
       {pickActive ? (
         <div
@@ -360,7 +331,12 @@ export function CanvasCommentOverlay(props: {
             width: Math.max(1, hover.box.width),
           }}
         >
-          <span className="absolute -top-5 left-0 max-w-56 truncate bg-action-accent px-1 py-0.5 font-medium text-[10px] text-action-accent-foreground">
+          <span
+            className={cn(
+              "absolute left-0 max-w-56 truncate bg-action-accent px-1 py-0.5 font-medium text-[10px] text-action-accent-foreground",
+              hover.box.top >= 22 ? "-top-5" : "top-full mt-0.5"
+            )}
+          >
             {hover.pick.label}
           </span>
         </div>

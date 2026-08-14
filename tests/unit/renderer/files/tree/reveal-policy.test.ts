@@ -1,6 +1,8 @@
 import {
   resolveRevealIntentForPath,
   resolveRevealPolicy,
+  shouldClearRevealUserAbort,
+  shouldHonorUserScrollAbort,
 } from "@pier/ui/file/tree-reveal-policy.ts";
 import { describe, expect, it } from "vitest";
 
@@ -139,5 +141,71 @@ describe("resolveRevealIntentForPath", () => {
       "active-file"
     );
     expect(resolveRevealIntentForPath("src/app.tsx", "search")).toBe("search");
+  });
+});
+
+describe("shouldClearRevealUserAbort", () => {
+  const filePath = "packages/ui/src/skeleton.tsx";
+
+  it("clears sticky abort for breadcrumb/explicit reveal of the settled file", () => {
+    expect(
+      shouldClearRevealUserAbort({
+        intent: "explicit",
+        path: filePath,
+        pendingPath: null,
+        settledActiveFilePath: filePath,
+      })
+    ).toBe(true);
+  });
+
+  it("clears sticky abort for search and root intents on the same path", () => {
+    expect(
+      shouldClearRevealUserAbort({
+        intent: "search",
+        path: filePath,
+        pendingPath: filePath,
+        settledActiveFilePath: filePath,
+      })
+    ).toBe(true);
+    expect(
+      shouldClearRevealUserAbort({
+        intent: "root",
+        path: "",
+        pendingPath: null,
+        settledActiveFilePath: filePath,
+      })
+    ).toBe(true);
+  });
+
+  it("keeps sticky abort for active-file re-entry of the settled path", () => {
+    expect(
+      shouldClearRevealUserAbort({
+        intent: "active-file",
+        path: filePath,
+        pendingPath: null,
+        settledActiveFilePath: filePath,
+      })
+    ).toBe(false);
+  });
+
+  it("clears abort when the active-file path changes", () => {
+    expect(
+      shouldClearRevealUserAbort({
+        intent: "active-file",
+        path: "src/other.ts",
+        pendingPath: null,
+        settledActiveFilePath: filePath,
+      })
+    ).toBe(true);
+  });
+});
+
+describe("shouldHonorUserScrollAbort", () => {
+  it("only demotes in-flight active-file reveal scroll", () => {
+    expect(shouldHonorUserScrollAbort("active-file")).toBe(true);
+    expect(shouldHonorUserScrollAbort("explicit")).toBe(false);
+    expect(shouldHonorUserScrollAbort("search")).toBe(false);
+    expect(shouldHonorUserScrollAbort("root")).toBe(false);
+    expect(shouldHonorUserScrollAbort("inspect")).toBe(false);
   });
 });

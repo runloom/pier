@@ -5,6 +5,7 @@
   "title": "Design Doc",
   "description": "Google-style technical design: context, goals, non-goals, design, alternatives.",
   "alignsWith": ["industry design doc / RFC skeleton"],
+  "preferredPresentation": "decision_nav_4",
   "required": [
     "bluf",
     "context",
@@ -34,5 +35,5 @@
     "design": "string | object — main design",
     "alternatives": "{ name, rejectReason }[]"
   },
-  "agentPrompt": "Fill data.json for a design-doc overview. Required: bluf (≤120 words), context, goals[], nonGoals[], design, alternatives[]. Do not invent a fake completed state. Do not write canvas layout here — content only."
+  "agentPrompt": "Fill data.json for a design-doc overview. Required: bluf (≤120 words), context, goals[], nonGoals[], design, alternatives[]. Write every string field in the user's language. Do not invent day1Commands or a fake completed state. Do not write canvas layout here — content only. Default presentation is decision_nav_4 (no Day-1 tab)."
 }
