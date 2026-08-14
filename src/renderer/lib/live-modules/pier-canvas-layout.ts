@@ -76,6 +76,7 @@ export function Stack({
     "div",
     {
       className,
+      "data-slot": "stack",
       style: {
         display: "flex",
         flexDirection: "column",
@@ -107,6 +108,7 @@ export function Row({
     "div",
     {
       className,
+      "data-slot": "row",
       style: {
         alignItems: align,
         display: "flex",
@@ -135,6 +137,7 @@ export function Frame({
     "div",
     {
       className,
+      "data-slot": "frame",
       style: {
         boxSizing: "border-box",
         display: "flex",

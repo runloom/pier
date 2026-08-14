@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "decision_nav_4",
+  "axis": "presentation",
+  "title": "Decision nav (4)",
+  "description": "Design-doc / RFC overview: Overview → Problem → Design → Landing. No Day-1 command tab.",
+  "fitsContent": ["design-doc"],
+  "requiredContentFields": ["bluf"],
+  "views": [
+    {
+      "id": "overview",
+      "label": "Overview",
+      "primary": true,
+      "shows": ["insight", "decision", "bluf", "goals"]
+    },
+    {
+      "id": "problem",
+      "label": "Problem",
+      "primary": false,
+      "shows": ["context", "pains", "antiGoals", "nonGoals"]
+    },
+    {
+      "id": "design",
+      "label": "Design",
+      "primary": false,
+      "shows": ["design", "layers", "alternatives"]
+    },
+    {
+      "id": "landing",
+      "label": "Landing",
+      "primary": false,
+      "shows": ["milestones", "acceptance", "risks", "openQuestions"]
+    }
+  ],
+  "antiPatterns": [
+    "more than 4 top-level tabs",
+    "a Day-1 tab without a copyable recipe",
+    "equal-weight tabs with no primary",
+    "competitors or full task DAG on overview by default",
+    "Play/Step/demo chrome without per-frame insight and structural change",
+    "acceptance matrix or L0–Ln backlog on the primary view"
+  ],
+  "diagrams": {
+    "overviewMax": 1,
+    "preferred": ["flowchart"]
+  },
+  "agentPrompt": "Build a composition Canvas with exactly 4 ordered Tabs (ids: overview primary, problem, design, landing). Resolve visible labels from i18n/nav.json using locale= (labels[id][locale] ?? labels[id].en ?? view.label). This pack is the default for content=design-doc. Do NOT add a Day-1 / path tab. Put migration phases and acceptance on landing only. Start from templates/decision.canvas.tsx and rewrite all user-visible copy into the user's language."
+}

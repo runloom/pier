@@ -373,7 +373,8 @@ export function createPierBindingsChannel(
             contentDir,
             provider: { id: "pier.home", version: "1" },
           },
-          publishedDigests: publishedDigestsBySkill.get(skillId) ?? new Set(),
+          publishedDigests:
+            desired.publishedContentDigestsBySkillId[skillId] ?? [],
         });
         const knownDigests =
           publishedDigestsBySkill.get(skillId) ?? new Set<string>();

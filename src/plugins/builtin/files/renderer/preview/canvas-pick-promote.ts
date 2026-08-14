@@ -5,8 +5,10 @@ import { CANVAS_COMMENT_ANCHOR_ATTR } from "@shared/comments/canvas-anchor.ts";
 import {
   type CanvasElementPick,
   type CanvasPickChain,
+  COPY_LEAF_SELECTOR,
   INTERACTIVE_SELECTOR,
   isIgnorableCanvasPickTarget,
+  isTabPanelLike,
   normalizeCanvasPickText,
 } from "./canvas-pick-shared.ts";
 
@@ -47,9 +49,11 @@ export function buildCanvasPickChain(
  * - span/icon → nearby button/tab (≤2 ancestors)
  * - inner svg/canvas host → outer mermaid/product surface
  *
- * We deliberately do NOT auto-promote to Card/Item shells: that made badges,
- * titles, and body text feel "unselectable" (everything snapped to the whole
- * card). Promotion never returns out-of-range; leaf is always valid.
+ * We deliberately do NOT auto-promote to Card/Item shells or tab panels:
+ * titles and body copy must stay selectable. Radix TabsContent is
+ * role=tabpanel tabindex=0 — treating that as "interactive" snapped every
+ * heading to the whole page. Promotion never returns out-of-range; leaf is
+ * always valid.
  */
 export function defaultPickDepth(
   _host: HTMLElement,
@@ -67,13 +71,16 @@ export function defaultPickDepth(
   }
 
   const leaf = chain[0];
-  if (leaf && !(leaf.matches(INTERACTIVE_SELECTOR) || leaf.tabIndex >= 0)) {
+  if (leaf?.matches(COPY_LEAF_SELECTOR)) {
+    return 0;
+  }
+  if (leaf && !leaf.matches(INTERACTIVE_SELECTOR)) {
     for (let i = 1; i < Math.min(chain.length, 3); i++) {
       const el = chain[i];
-      if (!el) {
+      if (!el || isTabPanelLike(el)) {
         continue;
       }
-      if (el.matches(INTERACTIVE_SELECTOR) || el.tabIndex >= 0) {
+      if (el.matches(INTERACTIVE_SELECTOR)) {
         if (el.closest("[data-slot='mermaid-diagram']")) {
           const surface = chain.findIndex((node) =>
             isPreferableProductSurface(node)

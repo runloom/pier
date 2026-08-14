@@ -36,6 +36,8 @@ export const workspace = {
     searchPlaceholder: "搜索面板类型或智能体…",
     title: "在此标签组新建",
     startAgentFailed: "无法启动智能体，请重试",
+    startAgentInjectFailed:
+      "终端已打开，但没能自动输入启动命令。请在终端里输入，或再启动一次。",
   },
   panelTransfer: {
     dropFailedTitle: "无法移动该标签",

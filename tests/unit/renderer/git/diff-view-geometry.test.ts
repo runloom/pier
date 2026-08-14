@@ -56,11 +56,39 @@ describe("diffMetrics / slotVirtualHeight（几何单源）", () => {
     ).toBe(metrics.headerHeight);
   });
 
-  it("estimate 未折叠 → skeletonSlot", () => {
+  it("estimate 未折叠且无数 → skeletonSlot", () => {
     const metrics = diffMetrics("13px");
     expect(
       slotVirtualHeight({ collapsed: false, kind: "estimate", metrics })
     ).toBe(metrics.skeletonSlotHeight);
+  });
+
+  it("estimate 未折叠按 numstat 预留，并夹到 48 行", () => {
+    const metrics = diffMetrics("13px");
+    const reserved = slotVirtualHeight({
+      collapsed: false,
+      contentLines: 40,
+      kind: "estimate",
+      metrics,
+    });
+    expect(reserved).toBeGreaterThan(metrics.skeletonSlotHeight);
+    expect(reserved).toBeCloseTo(
+      metrics.headerHeight +
+        40 * metrics.lineHeight +
+        metrics.contentPaddingBottom
+    );
+    expect(
+      slotVirtualHeight({
+        collapsed: false,
+        contentLines: 2000,
+        kind: "estimate",
+        metrics,
+      })
+    ).toBeCloseTo(
+      metrics.headerHeight +
+        48 * metrics.lineHeight +
+        metrics.contentPaddingBottom
+    );
   });
 
   it("loaded 展开 → header + lines×lh + pad", () => {

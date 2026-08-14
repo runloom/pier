@@ -286,8 +286,9 @@ export function createSystemSkillsChannel(
       const digest = await publishSystemSkillContent({
         projectRoot,
         contribution,
+        preferProjectVendorSource: true,
         publishedDigests:
-          publishedDigestsBySkill.get(contribution.id) ?? new Set(),
+          desired.publishedContentDigestsBySkillId[contribution.id] ?? [],
       });
       const knownDigests =
         publishedDigestsBySkill.get(contribution.id) ?? new Set<string>();

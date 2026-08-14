@@ -99,6 +99,17 @@ describe("resolveItemVirtualHeight（geometry 单源）", () => {
     ).toBe(METRICS.skeletonSlotHeight);
   });
 
+  it("estimate 带 numstat 预留高于骨架槽", () => {
+    const reserved = resolveItemVirtualHeight({
+      collapsed: false,
+      contentLines: 40,
+      isEstimate: true,
+      metrics: METRICS,
+      userCollapsed: false,
+    });
+    expect(reserved).toBeGreaterThan(METRICS.skeletonSlotHeight);
+  });
+
   it("estimate 用户折叠 → header 高", () => {
     expect(
       resolveItemVirtualHeight({
@@ -273,6 +284,35 @@ describe("applyDiffVirtualHeights", () => {
     expect(loaded.top).toBe(skeleton + gap + skeleton + gap);
     expect(codeView.scrollHeight).toBe(loaded.top + loaded.height);
     expect(container.style.height).toBe(`${codeView.scrollHeight}px`);
+  });
+
+  it("estimate 读取 fileDiff.estimatedContentLines 预留虚高", () => {
+    const estimate = {
+      height: METRICS.headerHeight,
+      instance: { height: METRICS.headerHeight, top: 0 },
+      item: {
+        collapsed: false,
+        fileDiff: { cacheKey: "estimate:a", estimatedContentLines: 40 },
+        id: "a",
+      },
+      top: 0,
+      type: "diff",
+    };
+    applyDiffVirtualHeights(
+      {
+        container: document.createElement("div"),
+        containerHeight: -1,
+        getLayout: () => ({ gap: 0, paddingTop: 0 }),
+        items: [estimate],
+        scrollDirty: false,
+        scrollHeight: 0,
+      },
+      {
+        isUserCollapsed: () => false,
+        metrics: METRICS,
+      }
+    );
+    expect(estimate.height).toBeGreaterThan(METRICS.skeletonSlotHeight);
   });
 
   it("用户折叠后 estimate 与 loaded 都回到 header 高（清虚高）", () => {

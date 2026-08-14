@@ -38,6 +38,7 @@ export {
 export {
   buildResolvedAgentSurfaceCommand,
   buildStickyExportPrelude,
+  looksLikeShebangScript,
   resolveAbsoluteOnPath,
   resolveManyAbsoluteOnPath,
 } from "./resolve-user-command-surface.ts";

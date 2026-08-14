@@ -464,7 +464,7 @@ describe("GitReviewDocumentLoader", () => {
     });
   });
 
-  it("retries a retryable failure only after an explicit retry", async () => {
+  it("silently retries a transient failure and surfaces the loaded diff", async () => {
     const item = entry(0);
     const load = vi
       .fn<(item: GitReviewIndexEntry) => Promise<GitReviewFileDocumentResult>>()
@@ -487,21 +487,66 @@ describe("GitReviewDocumentLoader", () => {
       visibleEntryKeys: [item.entryKey],
     });
     await flush();
-    loader.setWindowDemand({
-      bufferedEntryKeys: [],
-      visibleEntryKeys: [],
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(loader.getSnapshot().resources[0]?.kind).toBe("loaded");
+  });
+
+  it("commits a retryable error only after silent retries are exhausted", async () => {
+    const item = entry(0);
+    const load = vi
+      .fn<(item: GitReviewIndexEntry) => Promise<GitReviewFileDocumentResult>>()
+      .mockResolvedValue({
+        kind: "error",
+        message: "still busy",
+        reason: "busy",
+        retryable: true,
+      });
+    const loader = new GitReviewDocumentLoader({
+      maxConcurrent: 2,
+      cancel: vi.fn(async () => undefined),
+      entries: [item],
+      load,
     });
+
     loader.setWindowDemand({
       bufferedEntryKeys: [],
       visibleEntryKeys: [item.entryKey],
     });
     await flush();
-    expect(load).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledTimes(4);
+    expect(loader.getSnapshot().resources[0]).toMatchObject({
+      failure: { reason: "busy", retryable: true },
+      kind: "error",
+    });
 
     loader.retry(item.entryKey);
     await flush();
-    expect(load).toHaveBeenCalledTimes(2);
-    expect(loader.getSnapshot().resources[0]?.kind).toBe("loaded");
+    expect(load).toHaveBeenCalledTimes(8);
+  });
+
+  it("does not silently retry a retryable error on the selected navigation target", async () => {
+    const item = entry(0);
+    const load = vi
+      .fn<(item: GitReviewIndexEntry) => Promise<GitReviewFileDocumentResult>>()
+      .mockResolvedValue({
+        kind: "error",
+        message: "still busy",
+        reason: "busy",
+        retryable: true,
+      });
+    const loader = new GitReviewDocumentLoader({
+      maxConcurrent: 2,
+      cancel: vi.fn(async () => undefined),
+      entries: [item],
+      load,
+    });
+    loader.setProtectedEntryKey(item.entryKey);
+    await flush();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(loader.getSnapshot().resources[0]).toMatchObject({
+      failure: { reason: "busy", retryable: true },
+      kind: "error",
+    });
   });
 
   it("pins visible documents and restores the soft cache budget after they leave", async () => {

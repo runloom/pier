@@ -1,3 +1,6 @@
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   buildResolvedAgentSurfaceCommand,
   buildStickyExportPrelude,
@@ -5,6 +8,7 @@ import {
   clearUserCommandResolveCache,
   extractBareCommandName,
   extractProbeProtocolBody,
+  looksLikeShebangScript,
   PIER_CMD_END,
   PIER_CMD_START,
   parseUserCommandProbeOutput,
@@ -89,6 +93,22 @@ describe("resolve-user-command helpers", () => {
     expect(prelude).not.toContain("HOME=");
   });
 
+  it("does not wrap shebang scripts as a PTY command (inject into user shell)", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pier-shebang-"));
+    const script = join(dir, "omp");
+    writeFileSync(script, "#!/usr/bin/env bun\n");
+    chmodSync(script, 0o755);
+    expect(
+      buildResolvedAgentSurfaceCommand({
+        commandLine: "omp",
+        env: { PATH: dir, SHELL: "/bin/zsh" },
+        resolved: { kind: "absolute", path: script },
+        shell: "/bin/zsh",
+      })
+    ).toBeNull();
+    expect(looksLikeShebangScript(script)).toBe(true);
+  });
+
   it("builds absolute surface as thin sh -c exec", () => {
     const command = buildResolvedAgentSurfaceCommand({
       commandLine: "codex --yolo",
@@ -116,9 +136,9 @@ describe("resolve-user-command helpers", () => {
       resolved: { kind: "via-shell" },
       shell: "/bin/zsh",
     });
-    expect(command.startsWith("/bin/zsh -lic ")).toBe(true);
-    expect(command).toContain("export PATH=");
-    expect(command).toContain("codex");
+    expect(command).toEqual(expect.stringMatching(/^\/bin\/zsh -lic /));
+    expect(command).toEqual(expect.stringContaining("export PATH="));
+    expect(command).toEqual(expect.stringContaining("codex"));
   });
 
   it("probe scripts are shell-family aware and include markers", () => {

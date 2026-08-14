@@ -194,8 +194,10 @@ export function registerTerminalTaskLifecycleForwarding(
 
   addon?.setCommandStartedForwardCallback?.(
     (id, panelId, lifecycleId, commandLine) => {
+      const agentId = matchAgentCommand(commandLine);
       recordNativeTerminalRoute(id, "command-started", panelId, {
         commandLine,
+        matchedAgent: agentId,
       });
       const rawPanelId = fromNativePanelKey(panelId);
       const targetWindow = findAppWindowByElectronId(id);
@@ -203,14 +205,14 @@ export function registerTerminalTaskLifecycleForwarding(
         return;
       }
       const windowId = findInternalWindowId(targetWindow) ?? undefined;
-      if (
-        lifecycleId ||
+      const skipped =
+        Boolean(lifecycleId) ||
         !lifecycle.isCurrentLifecycle({
           lifecycleId,
           panelId: rawPanelId,
           windowId,
-        })
-      ) {
+        });
+      if (skipped) {
         return;
       }
       // ghostty OSC 133 C 命令行文本 → matchAgentCommand 词元识别 → 先验点亮
@@ -220,8 +222,6 @@ export function registerTerminalTaskLifecycleForwarding(
       // windowId 用 electron BrowserWindow.id 字符串（不是内部 UUID）——聚合器
       // 广播时对 session.windowId 做 Number()，然后交给 forwardToWindow；UUID
       // 会变 NaN。HTTP `PIER_WINDOW_ID = String(win.id)` 已经是同一约定。
-      const agentId = matchAgentCommand(commandLine);
-      // unified aggregator: null → shell activity, 非空 → agentLaunched 路径。
       foregroundActivityService.ingestCommandStarted(
         rawPanelId,
         String(id),

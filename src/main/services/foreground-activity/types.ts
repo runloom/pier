@@ -77,7 +77,8 @@ export interface ForegroundActivityAggregator {
   /**
    * ghostty shell integration command_started：native 已 embed cmdline，
    * 我们本地做 matchAgentCommand 词元识别; 非空 agent 走 agentLaunched，
-   * null 只覆盖 command 层为 shell（hook 层不动——`fg` 不摧毁挂起会话）。
+   * null 只覆盖空/shell command 层（hook 层不动——`fg` 不摧毁挂起会话）。
+   * 已有 agent-launch 不降成 shell（包装 argv 的 OSC 不是用户 shell）。
    */
   ingestCommandStarted(
     panelId: string,

@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "fallback": "en",
+  "labels": {
+    "overview": { "en": "Overview", "zh-CN": "速览" },
+    "problem": { "en": "Problem", "zh-CN": "问题" },
+    "design": { "en": "Design", "zh-CN": "设计" },
+    "path": { "en": "Day 1", "zh-CN": "首日" },
+    "landing": { "en": "Landing", "zh-CN": "落地" }
+  }
+}

@@ -5,6 +5,7 @@
   "title": "Closed-loop runtime overview",
   "description": "Pier-style local runtime product design: insight/decision, pains, layers, settled exits, day-1 path, defaults, acceptance.",
   "alignsWith": ["Pier multi-agent CLI gold scheme v3 content model"],
+  "preferredPresentation": "primary_nav_5",
   "required": [
     "bluf",
     "hardConstraints",
@@ -67,5 +68,5 @@
     "efficiencyDefaults": "{ id, name, detail }[]",
     "competitors": "{ name, take }[]"
   },
-  "agentPrompt": "Fill data.json for a closed-loop PRODUCT DESIGN overview. Required: bluf (or decision), hardConstraints[], closedLoops[] (or settled model), day1Commands[] (≤4), safetyRails[], acceptance[]. Prefer insight + problem pains + defaults before→after. Quiet ≠ ready; no fake completed. Default expression is STATIC (tables + diagrams). Do not invent Play/Step demos. Content only — presentation owns navigation (速览/问题/设计/日路径/落地)."
+  "agentPrompt": "Fill data.json for a closed-loop PRODUCT DESIGN overview. Required: bluf (or decision), hardConstraints[], closedLoops[] (or settled model), day1Commands[] (≤4), safetyRails[], acceptance[]. Write every string field in the user's language. Prefer insight + problem pains + defaults before→after. Quiet ≠ ready; no fake completed. Default expression is STATIC (tables + diagrams). Do not invent Play/Step demos. Content only — presentation owns navigation (overview/problem/design/path/landing). Default presentation is primary_nav_5."
 }

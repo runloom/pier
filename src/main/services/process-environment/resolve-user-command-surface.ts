@@ -1,7 +1,14 @@
 /**
  * Agent surface command builders after resolve (file-size split).
  */
-import { accessSync, constants } from "node:fs";
+import {
+  accessSync,
+  closeSync,
+  constants,
+  openSync,
+  readSync,
+  realpathSync,
+} from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { pickHostApplyEnv } from "./apply-host-env.ts";
 import { agentShellCommandFlags } from "./resolve-user-command-probe.ts";
@@ -71,8 +78,31 @@ export function buildStickyExportPrelude(env: Record<string, string>): string {
 }
 
 /**
+ * Shebang scripts (omp = `#!/usr/bin/env bun`) cannot be the PTY leader:
+ * Ghostty+Bun stdin goes deaf under `exec` / `sh -c`. Typed `omp` works
+ * because interactive zsh owns job control. Native binaries stay on `exec`.
+ */
+export function looksLikeShebangScript(path: string): boolean {
+  try {
+    const target = realpathSync(path);
+    const fd = openSync(target, "r");
+    try {
+      const buf = Buffer.alloc(2);
+      return (
+        readSync(fd, buf, 0, 2, 0) === 2 && buf[0] === 0x23 && buf[1] === 0x21
+      );
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Build Ghostty-safe surface command after resolve.
- * - absolute: `/bin/sh -c 'exec /abs …'`
+ * - absolute binary: `/bin/sh -c 'exec /abs …'`
+ * - absolute shebang: `null` — start the user shell and inject the logical cmd
  * - via-shell: `$SHELL -lic 'export sticky…; original'`
  */
 export function buildResolvedAgentSurfaceCommand(input: {
@@ -80,7 +110,7 @@ export function buildResolvedAgentSurfaceCommand(input: {
   env: Record<string, string>;
   resolved: ResolvedUserCommand;
   shell: string;
-}): string {
+}): string | null {
   const trimmed = input.commandLine.trim();
   const shell = input.shell;
   const flags = agentShellCommandFlags(shell);
@@ -90,11 +120,13 @@ export function buildResolvedAgentSurfaceCommand(input: {
     const abs = input.resolved.path;
     const name = extractBareCommandName(trimmed);
     if (name) {
+      if (looksLikeShebangScript(abs)) {
+        return null;
+      }
       const rest = name.startsWith("/")
         ? trimmed.slice(name.length)
         : trimmed.slice(name.length);
-      const execLine = `exec ${quoteShellArg(abs)}${rest}`;
-      return `/bin/sh -c ${quoteShellArg(execLine)}`;
+      return `/bin/sh -c ${quoteShellArg(`exec ${quoteShellArg(abs)}${rest}`)}`;
     }
   }
 

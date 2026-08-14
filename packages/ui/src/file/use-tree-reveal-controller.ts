@@ -11,6 +11,8 @@ import { requestRevealAncestorLoads } from "./tree-reveal-ancestor-loads.ts";
 import {
   resolveRevealIntentForPath,
   resolveRevealPolicy,
+  shouldClearRevealUserAbort,
+  shouldHonorUserScrollAbort,
 } from "./tree-reveal-policy.ts";
 import {
   POST_SUCCESS_IDLE_RELEASE_MS,
@@ -201,15 +203,18 @@ export function useFileTreeRevealController(options: {
   const runReveal = React.useCallback(
     (path: string, revealOptions?: PierFileTreeRevealOptions): boolean => {
       seedRevealExpansionIntent(path, revealOptions);
+      const honorUserAbort = shouldHonorUserScrollAbort(revealOptions?.intent);
       const scrollSuppressedByUser =
-        userAbortedScrollRef.current ||
-        (isUserScrolling?.() === true && revealOptions?.scroll !== "none");
+        honorUserAbort &&
+        (userAbortedScrollRef.current ||
+          (isUserScrolling?.() === true && revealOptions?.scroll !== "none"));
       if (scrollSuppressedByUser && !userAbortedScrollRef.current) {
         // First contact with claim window — stick for remaining retries.
         userAbortedScrollRef.current = true;
       }
       const effectiveOptions: PierFileTreeRevealOptions | undefined =
-        scrollSuppressedByUser || userAbortedScrollRef.current
+        honorUserAbort &&
+        (scrollSuppressedByUser || userAbortedScrollRef.current)
           ? { ...revealOptions, scroll: "none" }
           : revealOptions;
       return revealFileTreePath(
@@ -296,10 +301,15 @@ export function useFileTreeRevealController(options: {
         },
       });
 
-      // New reveal target clears sticky user abort for a fresh intent.
+      // User-initiated reveal always clears abort. Active-file only clears
+      // when the target path changes (same file must not re-fight the user).
       if (
-        pendingRevealRef.current?.path !== path &&
-        settledActiveFilePathRef.current !== path
+        shouldClearRevealUserAbort({
+          intent,
+          path,
+          pendingPath: pendingRevealRef.current?.path,
+          settledActiveFilePath: settledActiveFilePathRef.current,
+        })
       ) {
         userAbortedScrollRef.current = false;
       }

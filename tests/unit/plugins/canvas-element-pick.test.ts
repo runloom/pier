@@ -15,6 +15,7 @@ import {
   measureCanvasPickBox,
   pickFromCanvasElement,
   pinPointFromBox,
+  refineCanvasLayoutHit,
   resolveCanvasElementPick,
   resolveCanvasPickAtPoint,
   snapshotCanvasElementPick,
@@ -146,6 +147,114 @@ describe("buildCanvasPickChain + depth", () => {
     // DevTools-like: default is what is under the cursor, not the whole card.
     expect(defaultPickDepth(host, chain!.chain)).toBe(0);
     expect(chain!.chain[0]).toBe(span);
+  });
+
+  it("gap click on a tabpanel/stack picks the nearest child, not the page", () => {
+    const host = document.createElement("div");
+    const panel = document.createElement("div");
+    panel.setAttribute("data-slot", "tabs-content");
+    panel.setAttribute("role", "tabpanel");
+    const stack = document.createElement("div");
+    stack.setAttribute("data-slot", "stack");
+    stack.style.display = "flex";
+    const heading = document.createElement("h2");
+    heading.textContent = "为什么要砍";
+    const para = document.createElement("p");
+    para.textContent = "八屏把目录做成产品页。";
+    stack.append(heading, para);
+    panel.append(stack);
+    host.append(panel);
+    document.body.append(host);
+
+    mockBox(host, { left: 0, top: 0, width: 400, height: 400 });
+    mockBox(panel, { left: 0, top: 0, width: 400, height: 400 });
+    mockBox(stack, { left: 0, top: 0, width: 400, height: 360 });
+    mockBox(heading, { left: 8, top: 20, width: 200, height: 24 });
+    mockBox(para, { left: 8, top: 80, width: 300, height: 40 });
+
+    const originalFromPoint = document.elementFromPoint;
+    const originalFromPoints = document.elementsFromPoint;
+    document.elementsFromPoint = (() => [
+      stack,
+      panel,
+      host,
+    ]) as typeof document.elementsFromPoint;
+    document.elementFromPoint = (() =>
+      stack) as typeof document.elementFromPoint;
+
+    const hit = hitTestCanvasElement(host, 20, 55);
+    expect(hit).toBe(heading);
+    const pick = resolveCanvasPickAtPoint(host, 20, 55);
+    expect(pick?.pick.label).toBe("为什么要砍");
+    expect(refineCanvasLayoutHit(host, panel, 20, 55)).toBe(heading);
+
+    if (originalFromPoint) {
+      document.elementFromPoint = originalFromPoint;
+    } else {
+      Reflect.deleteProperty(document, "elementFromPoint");
+    }
+    if (originalFromPoints) {
+      document.elementsFromPoint = originalFromPoints;
+    } else {
+      Reflect.deleteProperty(document, "elementsFromPoint");
+    }
+    host.remove();
+  });
+
+  it("does not snap a card surface to inner copy when clicking card padding", () => {
+    const host = document.createElement("div");
+    const card = document.createElement("div");
+    card.setAttribute("data-slot", "card");
+    const title = document.createElement("h3");
+    title.textContent = "去掉";
+    card.append(title);
+    host.append(card);
+    document.body.append(host);
+
+    mockBox(host, { left: 0, top: 0, width: 400, height: 400 });
+    mockBox(card, { left: 0, top: 0, width: 300, height: 120 });
+    mockBox(title, { left: 8, top: 8, width: 80, height: 20 });
+
+    const originalFromPoint = document.elementFromPoint;
+    const originalFromPoints = document.elementsFromPoint;
+    document.elementsFromPoint = (() => [
+      card,
+      host,
+    ]) as typeof document.elementsFromPoint;
+    document.elementFromPoint = (() =>
+      card) as typeof document.elementFromPoint;
+
+    const hit = hitTestCanvasElement(host, 24, 80);
+    expect(hit).toBe(card);
+
+    if (originalFromPoint) {
+      document.elementFromPoint = originalFromPoint;
+    } else {
+      Reflect.deleteProperty(document, "elementFromPoint");
+    }
+    if (originalFromPoints) {
+      document.elementsFromPoint = originalFromPoints;
+    } else {
+      Reflect.deleteProperty(document, "elementsFromPoint");
+    }
+    host.remove();
+  });
+
+  it("does not promote heading copy to a tabpanel ancestor", () => {
+    const host = document.createElement("div");
+    host.innerHTML = `
+      <div data-slot="tabs-content" role="tabpanel" tabindex="0">
+        <p>本页：为何砍屏、人只做什么、三块界面。</p>
+        <h2>为什么要砍</h2>
+        <p>八屏把目录做成产品页。</p>
+      </div>
+    `;
+    const heading = host.querySelector("h2") as HTMLElement;
+    const chain = buildCanvasPickChain(host, heading);
+    expect(chain).not.toBeNull();
+    expect(defaultPickDepth(host, chain!.chain)).toBe(0);
+    const pick = pickFromCanvasElement(host, heading);
+    expect(pick?.label).toBe("为什么要砍");
   });
 
   it("never vetoes: unknown wrapper still picks leaf at depth 0", () => {

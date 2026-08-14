@@ -28,7 +28,7 @@ interface CodeViewLayoutItem {
   };
   item?: {
     collapsed?: boolean;
-    fileDiff?: { cacheKey?: string };
+    fileDiff?: { cacheKey?: string; estimatedContentLines?: number };
     id?: string;
   };
   top: number;
@@ -64,6 +64,14 @@ export function isEstimateCacheKey(cacheKey: string | undefined): boolean {
   return typeof cacheKey === "string" && cacheKey.startsWith("estimate:");
 }
 
+export function estimatedContentLinesOf(
+  fileDiff: { readonly estimatedContentLines?: unknown } | undefined
+): number | undefined {
+  return typeof fileDiff?.estimatedContentLines === "number"
+    ? fileDiff.estimatedContentLines
+    : undefined;
+}
+
 /**
  * 单槽目标虚拟高度。
  * @returns null = 不覆盖（用 Pierre 原文高度，仅 loaded 展开）
@@ -71,12 +79,13 @@ export function isEstimateCacheKey(cacheKey: string | undefined): boolean {
  * 折叠优先级（与 isUserCollapsedItem 一致）：
  * - userCollapsed（含「折叠全部」缺省 + 显式收起）→ header
  * - 显式展开（userCollapsed=false）即使全局仍是折叠全部 → 不得钉 header
- * - estimate 未用户折 → skeletonSlot
+ * - estimate 未用户折 → numstat 预留或骨架槽高
  * - loaded 技术 collapsed → header
  * - loaded 展开 → null（Pierre 量正文）
  */
 export function resolveItemVirtualHeight(options: {
   readonly collapsed: boolean;
+  readonly contentLines?: number;
   readonly isEstimate: boolean;
   readonly metrics: DiffMetrics;
   readonly userCollapsed: boolean;
@@ -91,6 +100,9 @@ export function resolveItemVirtualHeight(options: {
   if (options.isEstimate) {
     return slotVirtualHeight({
       collapsed: false,
+      ...(options.contentLines === undefined
+        ? {}
+        : { contentLines: options.contentLines }),
       kind: "estimate",
       metrics: options.metrics,
     });
@@ -141,8 +153,10 @@ export function applyDiffVirtualHeights(
         : collapseAll;
     let target: number | null = null;
     if (typeof itemId === "string") {
+      const contentLines = estimatedContentLinesOf(record.item?.fileDiff);
       target = resolveItemVirtualHeight({
         collapsed,
+        ...(typeof contentLines === "number" ? { contentLines } : {}),
         isEstimate,
         metrics: options.metrics,
         userCollapsed,

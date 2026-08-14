@@ -1,4 +1,5 @@
 import type { FetchImpl } from "./grok-usage-types.ts";
+import { fetchGrokRemainingResetsSoft } from "./reset-credits.ts";
 import {
   type GrokSubscriptionInfo,
   parseGrokSubscriptionResult,
@@ -177,22 +178,36 @@ export async function withSoftSubscription(
     }
     return await fallbackPromise;
   })();
-  const taskMetricsPromise =
+  const extraMetricsPromise =
     result.status === "ok"
-      ? fetchGrokTaskUsageSoft({
-          fetchImpl: options.fetchImpl,
-          sessionKey: options.sessionKey,
-          signal: options.caller,
-          ...(options.userId ? { userId: options.userId } : {}),
-        })
-      : Promise.resolve([]);
-  const [subscription, taskMetrics] = await Promise.all([
+      ? Promise.all([
+          fetchGrokTaskUsageSoft({
+            fetchImpl: options.fetchImpl,
+            sessionKey: options.sessionKey,
+            signal: options.caller,
+            ...(options.userId ? { userId: options.userId } : {}),
+          }),
+          fetchGrokRemainingResetsSoft({
+            fetchImpl: options.fetchImpl,
+            sessionKey: options.sessionKey,
+            signal: options.caller,
+            ...(options.userId ? { userId: options.userId } : {}),
+          }),
+        ])
+      : Promise.resolve([[], []] as const);
+  const [subscription, extraMetrics] = await Promise.all([
     membershipPromise,
-    taskMetricsPromise,
+    extraMetricsPromise,
   ]);
+  const existingIds = new Set(result.metrics.map((metric) => metric.id));
+  const extra = extraMetrics.flat().filter((metric) => {
+    if (existingIds.has(metric.id)) return false;
+    existingIds.add(metric.id);
+    return true;
+  });
   return {
     ...result,
-    metrics: [...result.metrics, ...taskMetrics],
+    metrics: [...result.metrics, ...extra],
     ...(subscription
       ? { subscription, subscriptionResolved: true as const }
       : {}),

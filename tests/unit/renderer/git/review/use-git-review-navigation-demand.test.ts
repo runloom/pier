@@ -167,6 +167,37 @@ describe("useGitReviewNavigation demand sync", () => {
     });
     acknowledgeTargetWindow(hook);
     await flushFrames();
+    expect(hook.result.current.navigationPending).toBe(true);
+  });
+
+  it("does not finish tree navigation on an estimate header; corrective scroll waits for loaded cacheKey", async () => {
+    const scrollToItem = vi.fn(() => true);
+    const { hook, refs } = setup({
+      itemCacheKey: "estimate:section:a",
+      isItemVisible: () => true,
+      scrollToItem,
+    });
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+      hook.result.current.tryPendingNavigation();
+    });
+    acknowledgeTargetWindow(hook);
+    await flushFrames();
+    expect(scrollToItem).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.navigationPending).toBe(true);
+
+    refs.itemCacheKeysRef.current = new Map([
+      ["section:a", "git-review-section:section:a:1"],
+    ]);
+    act(() => {
+      hook.result.current.tryPendingNavigation();
+    });
+    expect(scrollToItem).toHaveBeenCalledTimes(2);
+    acknowledgeTargetWindow(hook);
+    await flushFrames();
     expect(hook.result.current.navigationPending).toBe(false);
   });
 

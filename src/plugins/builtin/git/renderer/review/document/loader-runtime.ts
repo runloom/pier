@@ -11,6 +11,9 @@ import type {
 } from "./resource.ts";
 import type { GitReviewDocumentRetention } from "./retention.ts";
 
+/** 背景路径瞬态失败的静默重试次数（不含首次）。有 last-good 时由 generation 继续展示。 */
+export const GIT_REVIEW_SILENT_RETRY_MAX = 3;
+
 export interface GitReviewDocumentLoaderRuntime {
   readonly activeCount: { value: number };
   readonly activeEntryKeys: Set<string>;
@@ -32,6 +35,7 @@ export interface GitReviewDocumentLoaderRuntime {
   readonly retention: GitReviewDocumentRetention;
   readonly selectedDemandedEntryKey: { value: string | null };
   setResource(entryKey: string, resource: GitReviewDocumentResource): void;
+  readonly silentRetryCount: Map<string, number>;
   readonly visibleEntryKeys: { value: readonly string[] };
   readonly waiting: string[];
 }
@@ -326,10 +330,34 @@ export function settleLoaderLoad(
   }
   const next = resourceFromDocumentResult(resource.entry, result);
   if (next.kind === "retain") {
+    runtime.silentRetryCount.delete(entryKey);
     retainLoaderDocument(runtime, entryKey, resource.entry, next.document);
+  } else if (shouldSilentRetryDocumentFailure(runtime, entryKey, next)) {
+    const used = (runtime.silentRetryCount.get(entryKey) ?? 0) + 1;
+    runtime.silentRetryCount.set(entryKey, used);
+    runtime.setResource(entryKey, { entry: resource.entry, kind: "idle" });
+    rebuildLoaderWaiting(runtime);
   } else {
+    if (next.kind !== "error") {
+      runtime.silentRetryCount.delete(entryKey);
+    }
     runtime.setResource(entryKey, next);
   }
   pumpLoaderLoads(runtime, false);
   emitLoaderChange(runtime);
+}
+
+function shouldSilentRetryDocumentFailure(
+  runtime: GitReviewDocumentLoaderRuntime,
+  entryKey: string,
+  next: ReturnType<typeof resourceFromDocumentResult>
+): next is Extract<GitReviewDocumentResource, { kind: "error" }> {
+  if (next.kind !== "error" || !next.failure.retryable) {
+    return false;
+  }
+  if (runtime.selectedDemandedEntryKey.value === entryKey) {
+    return false;
+  }
+  const used = runtime.silentRetryCount.get(entryKey) ?? 0;
+  return used < GIT_REVIEW_SILENT_RETRY_MAX;
 }

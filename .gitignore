@@ -99,8 +99,10 @@ playwright-report/
 # Pier system-skill projections (design v8 §8): published from app
 # resources/system-skills into each project at ensureReady / skills.snapshot.
 # Canonical content is resources/system-skills/<id>; never treat library as
-# the edit source. `pier-` prefix is reserved for system skills.
+# the edit source. Live projection is `.pier/skills/library/pier-*` only.
+# Swap leftovers / quarantine evidence are runtime debris, not a second skill.
 .pier/skills/library/pier-*/
+.pier/skills/library/.pier-system-skill-*/
 
 # Worktree incarnation registry (runtime local state; path → UUID).
 # Written by worktree identity services; never commit.

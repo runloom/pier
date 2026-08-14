@@ -1,5 +1,8 @@
 import type { PierDiffViewItem } from "@pier/ui/diff-view/index.tsx";
-import { areReviewProjectionItemsEqual } from "@plugins/builtin/git/renderer/review/document/session-sync.ts";
+import {
+  areReviewProjectionItemsEqual,
+  shouldPreserveReviewItemAnchor,
+} from "@plugins/builtin/git/renderer/review/document/session-sync.ts";
 import { expect, it } from "vitest";
 
 const changeKey = `sha256:${"a".repeat(64)}`;
@@ -66,4 +69,25 @@ it("暂存能力变化仍触发目标 item 的实时控制态更新", () => {
   };
 
   expect(areReviewProjectionItemsEqual(previous, next)).toBe(false);
+});
+
+it("选中未接手滚动时正文增高仍保锚", () => {
+  expect(
+    shouldPreserveReviewItemAnchor({
+      navigationPending: false,
+      selectedEntryKey: "entry:a",
+    })
+  ).toBe(true);
+  expect(
+    shouldPreserveReviewItemAnchor({
+      navigationPending: true,
+      selectedEntryKey: null,
+    })
+  ).toBe(true);
+  expect(
+    shouldPreserveReviewItemAnchor({
+      navigationPending: false,
+      selectedEntryKey: null,
+    })
+  ).toBe(false);
 });

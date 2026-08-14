@@ -56,6 +56,38 @@ export interface DiffMetrics {
   readonly skeletonSlotHeight: number;
 }
 
+/** estimate 虚高上限（约 1.5 屏）。超大文件不按真实行数预留空白。 */
+export const MAX_ESTIMATE_VIRTUAL_LINES = 48;
+
+/** index numstat → estimate 预留行输入；0 / 缺省不预留。 */
+export function estimateContentLinesFromLineStats(lineStats?: {
+  readonly additions: number;
+  readonly deletions: number;
+}): number | undefined {
+  if (lineStats === undefined) {
+    return;
+  }
+  const total = lineStats.additions + lineStats.deletions;
+  return total > 0 ? total : undefined;
+}
+
+/** numstat 行数 → estimate 预留行；缺省或 0 回退骨架行数。 */
+export function estimateVirtualContentLines(
+  contentLines: number | undefined
+): number {
+  if (
+    contentLines === undefined ||
+    !Number.isFinite(contentLines) ||
+    contentLines <= 0
+  ) {
+    return PIER_DIFF_ESTIMATE_SKELETON_LINES;
+  }
+  return Math.min(
+    MAX_ESTIMATE_VIRTUAL_LINES,
+    Math.max(PIER_DIFF_ESTIMATE_SKELETON_LINES, Math.floor(contentLines))
+  );
+}
+
 /** 骨架体高度：padY×2 + bars + gaps。与 estimate-skeleton 绘制同源。 */
 export function skeletonBodyHeightPx(): number {
   const bars = PIER_DIFF_ESTIMATE_SKELETON_LINES;
@@ -91,7 +123,7 @@ export function diffMetrics(codeFontSize: string): DiffMetrics {
 /**
  * 唯一槽位虚拟高度函数。
  * collapsed / notice / error → header；
- * estimate 未折叠 → header+skeleton；
+ * estimate 未折叠：无数 → header+skeleton；有 numstat → header+clamp(lines)×lh+pad；
  * loaded 展开 → header + lines×lh + pad。
  */
 export function slotVirtualHeight(args: {
@@ -105,7 +137,19 @@ export function slotVirtualHeight(args: {
     return metrics.headerHeight;
   }
   if (args.kind === "estimate") {
-    return metrics.skeletonSlotHeight;
+    if (
+      args.contentLines === undefined ||
+      !Number.isFinite(args.contentLines) ||
+      args.contentLines <= 0
+    ) {
+      return metrics.skeletonSlotHeight;
+    }
+    const lines = estimateVirtualContentLines(args.contentLines);
+    return (
+      metrics.headerHeight +
+      lines * metrics.lineHeight +
+      metrics.contentPaddingBottom
+    );
   }
   const lines = Math.max(0, args.contentLines ?? 0);
   return (

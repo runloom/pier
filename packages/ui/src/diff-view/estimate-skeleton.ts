@@ -69,7 +69,8 @@ export const PIER_DIFF_ESTIMATE_ATTR = "data-pier-estimate";
  */
 export function syncEstimateSkeleton(
   element: HTMLElement,
-  isEstimate: boolean
+  isEstimate: boolean,
+  reservedBodyHeightPx?: number
 ): void {
   const root = element.shadowRoot;
   if (root == null) {
@@ -81,6 +82,7 @@ export function syncEstimateSkeleton(
     return;
   }
   if (existing != null) {
+    applyEstimateSkeletonReserve(existing, reservedBodyHeightPx);
     return;
   }
   const host = document.createElement("div");
@@ -91,6 +93,7 @@ export function syncEstimateSkeleton(
   host.style.gap = `${PIER_DIFF_ESTIMATE_SKELETON_GAP_PX}px`;
   host.style.width = "100%";
   host.style.padding = `${PIER_DIFF_ESTIMATE_SKELETON_PAD_Y_PX}px ${PIER_DIFF_ESTIMATE_SKELETON_PAD_RIGHT_PX}px ${PIER_DIFF_ESTIMATE_SKELETON_PAD_Y_PX}px ${PIER_DIFF_ESTIMATE_SKELETON_PAD_LEFT_PX}px`;
+  applyEstimateSkeletonReserve(host, reservedBodyHeightPx);
   for (const width of PIER_DIFF_ESTIMATE_SKELETON_BAR_WIDTHS) {
     const bar = document.createElement("div");
     bar.setAttribute(SKELETON_BAR_ATTR, "");
@@ -106,7 +109,27 @@ export function syncEstimateSkeleton(
     bar.style.backgroundSize = "200% 100%";
     host.appendChild(bar);
   }
+  const fill = document.createElement("div");
+  fill.setAttribute("data-pier-estimate-skeleton-fill", "");
+  fill.style.flex = "1 1 auto";
+  fill.style.minHeight = "0";
+  fill.style.backgroundColor = "color-mix(in oklab, CanvasText 6%, Canvas)";
+  host.appendChild(fill);
   root.appendChild(host);
+}
+
+function applyEstimateSkeletonReserve(
+  host: HTMLElement,
+  reservedBodyHeightPx: number | undefined
+): void {
+  if (
+    reservedBodyHeightPx === undefined ||
+    !Number.isFinite(reservedBodyHeightPx)
+  ) {
+    host.style.minHeight = "";
+    return;
+  }
+  host.style.minHeight = `${Math.max(0, reservedBodyHeightPx)}px`;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { type FileDiffMetadata, processFile } from "@pierre/diffs";
 import type { CodeViewItem } from "@pierre/diffs/react";
+import { estimateContentLinesFromLineStats } from "./geometry.ts";
 import { buildHunkActionAnnotations } from "./hunk-annotations.ts";
 import {
   buildDriftAnnotations,
@@ -428,7 +429,7 @@ function patchLineBuffersCoverHunks(fileDiff: FileDiffMetadata): boolean {
 /**
  * estimate 槽：FileDiff **0 正文行**（禁止假行号 / unmodified 假文件体）。
  *
- * 虚拟高度唯一来源：`geometry.slotVirtualHeight`（折叠=header，未折叠=header+skeleton）。
+ * 虚拟高度唯一来源：`geometry.slotVirtualHeight`（折叠=header，未折叠=numstat 预留或骨架）。
  * 折叠全部事务负责全表写 H，禁止靠滚动收敛。
  * 水合后以真 patch 为准。**禁止** isPartial（见 DiffHunks null 行崩溃）。
  */
@@ -437,7 +438,7 @@ export function estimateFileDiff(input: PierDiffViewItem): FileDiffMetadata {
   if (!display) {
     throw new Error(`Pierre estimate is missing file display: ${input.id}`);
   }
-  return {
+  const fileDiff: FileDiffMetadata = {
     additionLines: [],
     cacheKey: input.cacheKey,
     deletionLines: [],
@@ -451,6 +452,11 @@ export function estimateFileDiff(input: PierDiffViewItem): FileDiffMetadata {
     type: "change",
     unifiedLineCount: 0,
   };
+  const contentLines = estimateContentLinesFromLineStats(input.lineStats);
+  if (contentLines !== undefined) {
+    Object.assign(fileDiff, { estimatedContentLines: contentLines });
+  }
+  return fileDiff;
 }
 
 /** 是否为 estimate 占位 FileDiff（0 正文、cacheKey 前缀）。 */

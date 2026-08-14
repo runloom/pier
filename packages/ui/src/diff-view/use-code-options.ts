@@ -18,7 +18,7 @@ import {
   PIER_DIFF_ESTIMATE_ATTR,
   syncEstimateSkeleton,
 } from "./estimate-skeleton.ts";
-import type { DiffMetrics } from "./geometry.ts";
+import { type DiffMetrics, slotVirtualHeight } from "./geometry.ts";
 import {
   gutterReviewThreadForLine,
   type PierDriftCommentLabels,
@@ -31,7 +31,10 @@ import {
 } from "./hunk-actions.tsx";
 import type { DiffViewInputStore } from "./input-store.ts";
 import type { PierDiffReviewCommentThread } from "./items.ts";
-import { installDiffVirtualHeightReconciler } from "./layout-apply.ts";
+import {
+  estimatedContentLinesOf,
+  installDiffVirtualHeightReconciler,
+} from "./layout-apply.ts";
 import { syncPathTitleChrome } from "./path-title-chrome.ts";
 import { PIER_DIFF_LINE_DIFF_TYPE } from "./render-profile.ts";
 import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
@@ -276,7 +279,21 @@ export function useDiffViewCodeOptions(options: {
           // 骨架是正文的一部分，用户收起时不得继续闪——它挂在 shadowRoot 上，
           // 是 Pierre 折叠区的兄弟节点，折叠藏不住它。
           const showSkeleton = isEstimate && !isUserCollapsed(itemId);
-          syncEstimateSkeleton(element, showSkeleton);
+          const estimatedContentLines =
+            isEstimate && context.item.type === "diff"
+              ? estimatedContentLinesOf(context.item.fileDiff)
+              : undefined;
+          const reservedBodyHeightPx = showSkeleton
+            ? slotVirtualHeight({
+                collapsed: false,
+                ...(typeof estimatedContentLines === "number"
+                  ? { contentLines: estimatedContentLines }
+                  : {}),
+                kind: "estimate",
+                metrics,
+              }) - metrics.headerHeight
+            : undefined;
+          syncEstimateSkeleton(element, showSkeleton, reservedBodyHeightPx);
           // 路径 mono + hover 下划线（shadow 内 DOM，不依赖可能过期的 unsafeCSS）
           syncPathTitleChrome(element);
           if (fileHoverHostsRef.current.get(itemId) !== element) {

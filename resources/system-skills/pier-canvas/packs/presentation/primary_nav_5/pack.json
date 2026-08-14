@@ -3,24 +3,25 @@
   "id": "primary_nav_5",
   "axis": "presentation",
   "title": "Primary nav (≤5)",
-  "description": "Ordered navigation with one primary 速览 tab; max five top-level views. Default spine: 速览 → 问题 → 设计 → 日路径 → 落地.",
+  "description": "Closed-loop / runtime overviews only. Spine: Overview → Problem → Design → Day 1 → Landing. The Day-1 tab is a copyable recipe, not a migration schedule.",
+  "fitsContent": ["closed-loop"],
   "requiredContentFields": ["bluf"],
   "views": [
     {
       "id": "overview",
-      "label": "速览",
+      "label": "Overview",
       "primary": true,
       "shows": ["insight", "decision", "bluf", "goals"]
     },
     {
       "id": "problem",
-      "label": "问题",
+      "label": "Problem",
       "primary": false,
       "shows": ["problem", "pains", "antiGoals"]
     },
     {
       "id": "design",
-      "label": "设计",
+      "label": "Design",
       "primary": false,
       "shows": [
         "layers",
@@ -32,13 +33,13 @@
     },
     {
       "id": "path",
-      "label": "日路径",
+      "label": "Day 1",
       "primary": false,
       "shows": ["dayPath", "day1Commands", "day1Recipe", "mainDiagram"]
     },
     {
       "id": "landing",
-      "label": "落地",
+      "label": "Landing",
       "primary": false,
       "shows": ["defaults", "phases", "tasks", "acceptance", "competitors"]
     }
@@ -47,6 +48,8 @@
     "more than 5 top-level tabs",
     "equal-weight tabs with no primary",
     "competitors or full task DAG on overview by default",
+    "using this pack for design-doc unless the user has a real Day-1 recipe",
+    "labeling a migration/backlog tab as Day 1",
     "teaching dual wait / cursor read on day-1 overview",
     "Play/Step/demo chrome without per-frame insight and structural change",
     "acceptance matrix or L0–Ln backlog on the primary view"
@@ -55,5 +58,5 @@
     "overviewMax": 1,
     "preferred": ["sequence", "flowchart"]
   },
-  "agentPrompt": "Build a composition Canvas with ≤5 ordered Tabs: 速览 (primary), 问题, 设计, 日路径, 落地. Default is STATIC product design (BLUF + tables + ≤1 diagram). Do NOT add Play/Step demos unless the user explicitly needs a mechanism explainer with per-frame insight. Put acceptance and implementation phases on 落地 only. Start from templates/overview.canvas.tsx. See references/methodology.md Expression selection."
+  "agentPrompt": "Build a composition Canvas with ≤5 ordered Tabs (ids: overview primary, problem, design, path, landing). Resolve visible labels from i18n/nav.json using locale= (labels[id][locale] ?? labels[id].en ?? view.label). path = Day-1 copyable commands/recipe (≤4). Do not put implementation phases on path. Default STATIC product design. Start from templates/overview.canvas.tsx and rewrite all user-visible copy into the user's language. Prefer this pack only with content=closed-loop. See references/methodology.md Pack selection."
 }

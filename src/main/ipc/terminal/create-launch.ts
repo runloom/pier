@@ -115,19 +115,26 @@ export function nativeLaunchOptions(
  *
  * 1. `launch.env` already has PES layers (shell → project → explicit).
  * 2. Resolve bare name via user interactive shell (functions / aliases).
- * 3. absolute → `/bin/sh -c 'exec /abs …'` (no second full rc for process life).
- * 4. via-shell → `$SHELL -lic` + sticky host-apply exports after rc (L5 layers).
+ * 3. absolute binary → `/bin/sh -c 'exec /abs …'` (no second full rc).
+ * 4. absolute shebang → drop command; caller injects the logical cmd into the
+ *    user shell (same job-control tree as typing `omp`).
+ * 5. via-shell → `$SHELL -lic` + sticky host-apply exports after rc (L5 layers).
  */
+export interface AgentLoginShellSurface {
+  injectCommand?: string;
+  launch: ResolvedTerminalLaunchOptions | undefined;
+}
+
 export async function withAgentLoginShellSafeCommand(
   launch: ResolvedTerminalLaunchOptions | undefined,
   agentId: AgentKind | undefined
-): Promise<ResolvedTerminalLaunchOptions | undefined> {
+): Promise<AgentLoginShellSurface> {
   if (!(launch && agentId && launch.command)) {
-    return launch;
+    return { launch };
   }
   const trimmed = launch.command.trim();
   if (!trimmed || isAlreadyShellWrappedCommand(trimmed)) {
-    return launch;
+    return { launch };
   }
 
   const env = launch.env ?? {};
@@ -159,10 +166,42 @@ export async function withAgentLoginShellSafeCommand(
     resolved,
     shell,
   });
-  if (command === launch.command) {
-    return launch;
+  if (command === null && resolved.kind === "absolute") {
+    const { command: _command, ...rest } = launch;
+    return {
+      injectCommand: shebangInjectCommand(trimmed, resolved.path),
+      launch: rest,
+    };
   }
-  return { ...launch, command };
+  if (command === null || command === launch.command) {
+    return { launch };
+  }
+  return { launch: { ...launch, command } };
+}
+
+/** Absolute shebang + original argv, so zshrc PATH rebuild cannot miss the binary. */
+export function shebangInjectCommand(
+  commandLine: string,
+  absolutePath: string
+): string {
+  const trimmed = commandLine.trim();
+  const name = extractBareCommandName(trimmed);
+  const rest = name ? trimmed.slice(name.length) : "";
+  return `${quoteShellArg(absolutePath)}${rest}`;
+}
+
+/** Shebang agents drop `command` so Ghostty starts the user shell. */
+export function composeAgentInjectInput(args: {
+  existingInput: string | undefined;
+  injectCommand: string | undefined;
+}): string | undefined {
+  const inject = args.injectCommand?.trim();
+  if (!inject) {
+    return args.existingInput;
+  }
+  const typed =
+    inject.endsWith("\n") || inject.endsWith("\r") ? inject : `${inject}\r`;
+  return args.existingInput ? `${typed}${args.existingInput}` : typed;
 }
 
 export function readCreateLaunch(
