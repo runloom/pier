@@ -413,21 +413,25 @@
       "inputMicrousd": 0.14,
       "outputMicrousd": 0.28,
       "aliases": [
+        "dashscope/deepseek-v4-flash",
         "deepseek/deepseek-v4-flash",
         "~deepseek/deepseek-v4-flash-latest"
       ]
     },
     "deepseek-v4-flash-0731": {
-      "cachedInputMicrousd": 0.0028,
-      "inputMicrousd": 0.14,
-      "outputMicrousd": 0.28,
-      "aliases": ["deepseek/deepseek-v4-flash-0731"]
+      "cachedInputMicrousd": 0.04,
+      "inputMicrousd": 0.2,
+      "outputMicrousd": 0.4,
+      "aliases": [
+        "dashscope/deepseek-v4-flash-0731",
+        "deepseek/deepseek-v4-flash-0731"
+      ]
     },
     "deepseek-v4-pro": {
       "cachedInputMicrousd": 0.0036,
       "inputMicrousd": 0.435,
       "outputMicrousd": 0.87,
-      "aliases": ["deepseek/deepseek-v4-pro"]
+      "aliases": ["dashscope/deepseek-v4-pro", "deepseek/deepseek-v4-pro"]
     },
     "deepseek-v4-pro-0813": {
       "cachedInputMicrousd": 0.0036,
@@ -691,6 +695,12 @@
       "outputMicrousd": 7.5,
       "aliases": ["google/gemini-3.6-flash", "google/gemini-3.6-flash:batch"]
     },
+    "gemini-3.7-flash": {
+      "cachedInputMicrousd": 0.075,
+      "inputMicrousd": 0.75,
+      "outputMicrousd": 3.75,
+      "aliases": ["google/gemini-3.7-flash", "google/gemini-3.7-flash:batch"]
+    },
     "gemini-exp-1206": {
       "cachedInputMicrousd": 0.03,
       "inputMicrousd": 0.3,
@@ -822,13 +832,13 @@
       "cachedInputMicrousd": 0.26,
       "inputMicrousd": 1.4,
       "outputMicrousd": 4.4,
-      "aliases": ["z-ai/glm-5.1", "zai/glm-5.1"]
+      "aliases": ["dashscope/glm-5.1", "z-ai/glm-5.1", "zai/glm-5.1"]
     },
     "glm-5.2": {
-      "cachedInputMicrousd": 0.1531,
-      "inputMicrousd": 0.8246,
-      "outputMicrousd": 2.5916,
-      "aliases": ["z-ai/glm-5.2", "z-ai/glm-5.2:batch"]
+      "cachedInputMicrousd": 0.28,
+      "inputMicrousd": 1.4,
+      "outputMicrousd": 4.4,
+      "aliases": ["dashscope/glm-5.2", "z-ai/glm-5.2", "z-ai/glm-5.2:batch"]
     },
     "glm-5v-turbo": {
       "cachedInputMicrousd": 0.24,
@@ -1819,10 +1829,11 @@
       "aliases": ["moonshot/kimi-k2.6", "moonshotai/kimi-k2.6"]
     },
     "kimi-k2.7-code": {
-      "cachedInputMicrousd": 0.15,
-      "inputMicrousd": 0.71,
-      "outputMicrousd": 3.49,
+      "cachedInputMicrousd": 0.19,
+      "inputMicrousd": 0.95,
+      "outputMicrousd": 4,
       "aliases": [
+        "dashscope/kimi-k2.7-code",
         "kimi-k2.7-code-*",
         "moonshotai/kimi-k2.7-code",
         "moonshotai/kimi-k2.7-code:batch"
@@ -2477,6 +2488,12 @@
       "inputMicrousd": 2.5,
       "outputMicrousd": 7.5,
       "aliases": ["dashscope/qwen3.7-max", "qwen/qwen3.7-max"]
+    },
+    "qwen3.8-max": {
+      "cachedInputMicrousd": 0.25,
+      "inputMicrousd": 2,
+      "outputMicrousd": 6,
+      "aliases": ["dashscope/qwen3.8-max", "qwen/qwen3.8-max"]
     },
     "qwq-plus": {
       "cachedInputMicrousd": 0.08,
