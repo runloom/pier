@@ -57,6 +57,7 @@ export class GitReviewDocumentLoader {
   readonly #changedEntryKeys = new Set<string>();
   /** settle 时已提前释放并发的 operationId（插队 yield）。 */
   readonly #preFreedOperationIds = new Set<string>();
+  readonly #silentRetryCount = new Map<string, number>();
   #activeCount = 0;
   #bufferedEntryKeys: readonly string[] = [];
   #disposed = false;
@@ -142,6 +143,7 @@ export class GitReviewDocumentLoader {
     if (resource.kind !== "error" || !resource.failure.retryable) {
       return;
     }
+    this.#silentRetryCount.delete(entryKey);
     this.#setResource(entryKey, { entry: resource.entry, kind: "idle" });
     this.#rebuildWaiting();
     this.#pump(false);
@@ -347,6 +349,7 @@ export class GitReviewDocumentLoader {
     this.#activeEntryKeys.clear();
     this.#budgetDeferredEntryKeys.clear();
     this.#changedEntryKeys.clear();
+    this.#silentRetryCount.clear();
     this.#resources.clear();
     this.#retention.clear();
     this.#listeners.clear();
@@ -468,6 +471,7 @@ export class GitReviewDocumentLoader {
           this.#selectedDemandedEntryKey = next;
         }
       ),
+      silentRetryCount: this.#silentRetryCount,
       visibleEntryKeys: bindLoaderRuntimeField(
         () => this.#visibleEntryKeys,
         (next) => {

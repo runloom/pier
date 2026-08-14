@@ -30,6 +30,17 @@ export const SKIP_CLOSEST =
 export const INTERACTIVE_SELECTOR =
   "button,a,input,textarea,select,label,summary,[role='button'],[role='link'],[role='checkbox'],[role='menuitem'],[role='tab'],[contenteditable='true']";
 
+/** Copy the user is aiming at — never promote these to a page/tab shell. */
+export const COPY_LEAF_SELECTOR =
+  "h1,h2,h3,h4,h5,h6,p,li,blockquote,figcaption,dt,dd";
+
+export function isTabPanelLike(el: HTMLElement): boolean {
+  return (
+    el.getAttribute("role") === "tabpanel" ||
+    el.getAttribute("data-slot") === "tabs-content"
+  );
+}
+
 export function normalizeCanvasPickText(
   value: string | null | undefined,
   max: number

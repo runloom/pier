@@ -1,4 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
+import { useMinSpinVisual } from "@pier/ui/hooks/use-min-spin.ts";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
@@ -45,6 +46,8 @@ export function GitReviewToolbar({
     ? pluginText(context, "reviewToolbarExpandAll", "Expand all files")
     : pluginText(context, "reviewToolbarCollapseAll", "Collapse all files");
   const refreshLabel = pluginText(context, "reviewToolbarRefresh", "Refresh");
+  // 视觉下限：快速刷新至少让用户看到按钮响应；不延迟内容与禁用态。
+  const spinRefresh = useMinSpinVisual(refreshing);
 
   return (
     <div className="flex items-center gap-0.5" data-testid="git-review-toolbar">
@@ -80,7 +83,7 @@ export function GitReviewToolbar({
         label={refreshLabel}
         onClick={onRefresh}
       >
-        <RefreshCw className={cn(refreshing && "animate-spin")} data-icon />
+        <RefreshCw className={cn(spinRefresh && "animate-spin")} data-icon />
       </ToolbarIconButton>
     </div>
   );

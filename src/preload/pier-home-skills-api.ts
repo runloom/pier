@@ -2,8 +2,8 @@ import type {
   PierBindingsConvergeResult,
   PierBoundSkillView,
   PierHomeSkillDelivery,
+  PierHomeSkillsSnapshot,
   PierHomeSkillView,
-  PierHomeUserGlobalSkillView,
 } from "@shared/contracts/pier-home.ts";
 import type { ProjectRootRef } from "@shared/contracts/project-skills.ts";
 import { invokePierCommand } from "./ipc-envelope.ts";
@@ -20,6 +20,7 @@ export interface PierHomeSkillsAPI {
   read(
     args:
       | { skillId: string }
+      | { systemSkillId: string }
       | { root: string; directoryName: string }
       | { absolutePath: string }
   ): Promise<string>;
@@ -32,10 +33,7 @@ export interface PierHomeSkillsAPI {
     converge: PierBindingsConvergeResult;
     skill: PierHomeSkillView;
   }>;
-  snapshot(): Promise<{
-    library: PierHomeSkillView[];
-    userGlobal: PierHomeUserGlobalSkillView[];
-  }>;
+  snapshot(): Promise<PierHomeSkillsSnapshot>;
   write(
     skillId: string,
     skillMd: string
@@ -96,10 +94,13 @@ export const pierHomeSkillsApi: PierHomeSkillsAPI = {
   read: async (args) => {
     let readArgs:
       | { skillId: string }
+      | { systemSkillId: string }
       | { root: string; directoryName: string }
       | { absolutePath: string };
     if ("skillId" in args) {
       readArgs = { skillId: args.skillId };
+    } else if ("systemSkillId" in args) {
+      readArgs = { systemSkillId: args.systemSkillId };
     } else if ("root" in args) {
       readArgs = { root: args.root, directoryName: args.directoryName };
     } else {
@@ -136,10 +137,7 @@ export const pierHomeSkillsApi: PierHomeSkillsAPI = {
     };
   },
   snapshot: () =>
-    invokePierCommand<{
-      library: PierHomeSkillView[];
-      userGlobal: PierHomeUserGlobalSkillView[];
-    }>({
+    invokePierCommand<PierHomeSkillsSnapshot>({
       type: "pierHome.skills.snapshot",
     }),
   write: async (skillId, skillMd) => {

@@ -57,6 +57,7 @@ function managed(
     riskSummary: null,
     source: { type: "local-import" },
     totalBytes: 0,
+    userInvocable: partial.userInvocable ?? true,
   };
 }
 
@@ -70,6 +71,7 @@ function unmanaged(
     kind: "real-directory",
     name: partial.name ?? partial.directoryName,
     root: partial.root ?? ".agents/skills",
+    userInvocable: partial.userInvocable ?? true,
   };
 }
 
@@ -82,6 +84,7 @@ function userGlobal(
     effects: partial.effects ?? [],
     name: partial.name ?? partial.directoryName,
     root: partial.root ?? "~/.agents/skills",
+    userInvocable: partial.userInvocable ?? true,
   };
 }
 
@@ -124,6 +127,22 @@ describe("getSkillSuggestMatch", () => {
     expect(getSkillSuggestMatch("use $code")).toBeNull();
   });
 
+  it("matches Goose progressive /skills [id] form", () => {
+    expect(getSkillSuggestMatch("/skills")).toEqual({
+      matchingString: "",
+      trigger: "/",
+    });
+    expect(getSkillSuggestMatch("/skills ")).toEqual({
+      matchingString: "",
+      trigger: "/",
+    });
+    expect(getSkillSuggestMatch("/skills pier")).toEqual({
+      matchingString: "pier",
+      trigger: "/",
+    });
+    expect(getSkillSuggestMatch("use /skills x")).toBeNull();
+  });
+
   it("does not match mid-path or @/# triggers", () => {
     expect(getSkillSuggestMatch("foo/bar")).toBeNull();
     expect(getSkillSuggestMatch("@file")).toBeNull();
@@ -140,6 +159,19 @@ describe("getSkillSuggestNodeReplaceRange", () => {
     });
     expect(getSkillSuggestNodeReplaceRange("/", 1)).toEqual({
       endOffset: 1,
+      leadOffset: 0,
+      matchingString: "",
+    });
+  });
+
+  it("replaces Goose /skills [id] span through the caret", () => {
+    expect(getSkillSuggestNodeReplaceRange("/skills pier", 12)).toEqual({
+      endOffset: 12,
+      leadOffset: 0,
+      matchingString: "pier",
+    });
+    expect(getSkillSuggestNodeReplaceRange("/skills", 7)).toEqual({
+      endOffset: 7,
       leadOffset: 0,
       matchingString: "",
     });
@@ -164,7 +196,7 @@ describe("buildComposerSkillSuggestItems", () => {
         skills: [
           managed({
             id: "review-guide",
-            name: "Review",
+            name: "review-guide",
             description: "Review checklist",
             effects: [
               {
@@ -442,6 +474,143 @@ describe("buildComposerSkillSuggestItems", () => {
     expect(items.map((i) => i.id)).not.toContain("only-claude");
     expect(items.map((i) => i.id)).not.toContain("repo-skill");
     expect(items.every((i) => i.source === "builtin-command")).toBe(true);
+  });
+
+  it("lists pier-canvas for Grok when projected discoverable under .agents/skills", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "pier-canvas",
+            name: "pier-canvas",
+            description:
+              "Create or update a Pier Canvas under .pier/canvases using pier/canvas",
+            enabled: true,
+            effects: [
+              {
+                agentKind: "grok",
+                effect: {
+                  state: "discoverable",
+                  viaRoot: ".agents/skills",
+                },
+              },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "grok"
+    );
+    const canvas = items.find((i) => i.id === "pier-canvas");
+    expect(canvas).toEqual(
+      expect.objectContaining({
+        id: "pier-canvas",
+        invokeText: "/pier-canvas",
+        source: "project",
+        label: "pier-canvas",
+      })
+    );
+    expect(canvas?.description.toLowerCase()).toContain("canvas");
+    // Prefix filter matches the empty-state repro: /pier-c → pier-canvas.
+    const filtered = filterComposerSkillSuggestItems(items, "pier-c");
+    expect(filtered.map((i) => i.id)).toContain("pier-canvas");
+  });
+
+  it("uses frontmatter name for invoke when it is a valid skill id token", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [],
+        unmanagedSkills: [
+          unmanaged({
+            directoryName: "foo-dir",
+            name: "bar-skill",
+            effects: [
+              {
+                agentKind: "claude",
+                effect: {
+                  state: "discoverable",
+                  viaRoot: ".claude/skills",
+                },
+              },
+            ],
+          }),
+        ],
+        userGlobalSkills: [],
+      },
+      "claude",
+      noBundled
+    );
+    expect(items.find((i) => i.id === "bar-skill")).toEqual(
+      expect.objectContaining({
+        invokeText: "/bar-skill",
+        source: "project-unmanaged",
+      })
+    );
+    expect(items.map((i) => i.id)).not.toContain("foo-dir");
+  });
+
+  it("hides skills with userInvocable false from L1", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "hidden-skill",
+            userInvocable: false,
+            effects: [
+              {
+                agentKind: "grok",
+                effect: {
+                  state: "discoverable",
+                  viaRoot: ".agents/skills",
+                },
+              },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "grok",
+      noBundled
+    );
+    expect(items.map((i) => i.id)).not.toContain("hidden-skill");
+  });
+
+  it("for Grok keeps built-in bare name and qualifies colliding skills", () => {
+    const items = buildComposerSkillSuggestItems(
+      {
+        skills: [
+          managed({
+            id: "compact",
+            name: "compact",
+            effects: [
+              {
+                agentKind: "grok",
+                effect: {
+                  state: "discoverable",
+                  viaRoot: ".agents/skills",
+                },
+              },
+            ],
+          }),
+        ],
+        unmanagedSkills: [],
+        userGlobalSkills: [],
+      },
+      "grok"
+    );
+    const compactRows = items.filter((i) => i.id === "compact");
+    expect(compactRows.map((i) => i.invokeText).sort()).toEqual([
+      "/compact",
+      "/repo:compact",
+    ]);
+    expect(compactRows.find((i) => i.invokeText === "/compact")?.source).toBe(
+      "builtin-command"
+    );
+    expect(
+      compactRows.find((i) => i.invokeText === "/repo:compact")?.source
+    ).toBe("project");
   });
 
   it("lists Claude bundled skills including code-review on empty disk", () => {

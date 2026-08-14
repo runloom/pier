@@ -34,15 +34,49 @@ Unknown pack ids are hard failures (do not guess).
 | --- | --- | --- |
 | `mode` | `methodology` | `methodology` = overview packs; `freeform` = classic free authoring |
 | `content` | `design-doc` | Content pack id under `packs/content/` |
-| `presentation` | `primary_nav_5` | Presentation pack id under `packs/presentation/` |
+| `presentation` | *resolved* | See **Pack selection**. Do not default every overview to five tabs. |
 | `ui` | `pier-default` | UI pack id under `packs/ui/` |
 | `slug` | derived from title | Directory name under `.pier/canvases/<slug>/` |
+| `locale` | injected by Pier | BCP-47 UI language (`en`, `zh-CN`, …). Host adds this on send. |
+
+**Pack selection** (presentation omitted → resolve from content; explicit id wins):
+
+| content | resolved presentation | Use when |
+| --- | --- | --- |
+| `design-doc` (default) | `decision_nav_4` | Architecture / RFC / product decision. Four tabs: Overview → Problem → Design → Landing. **No Day-1 tab.** |
+| `closed-loop` | `primary_nav_5` | Runtime / CLI control plane with a copyable Day-1 recipe. Five tabs: Overview → Problem → Design → **Day 1** → Landing. |
+| either | `one_pager` (explicit) | Short single-scroll BLUF |
+
+Unknown pack ids are hard failures. Do not invent a Day-1 tab for `design-doc` unless the user has a real ≤4-step recipe **and** they pass `presentation=primary_nav_5`.
+
+## Audience language
+
+Skill files and pack ids are English (agent protocol). **Every user-visible string in the Canvas and `data.json` must match the user.**
+
+Resolve language in this order:
+
+1. The `locale=` invocation arg (Pier injects the current UI language on send).
+2. If `locale` is missing, the language of the current user request.
+3. Never keep the template language just because the starter file used it.
+
+Tab labels come from **one glossary**: `i18n/nav.json`.
+
+```text
+labels[<viewId>][<locale>] ?? labels[<viewId>].en ?? view.label
+```
+
+`en` is required. Other locales are optional — missing keys fall back to `en`. Adding a language means adding a column in `i18n/nav.json` only.
+
+Apply that language to tab labels, titles, badges, body copy, table headers, `aria-label`s, and `canvas.title` / `canvas.description`. View **ids** stay English (`overview`, `problem`, `design`, `path`, `landing`).
 
 Examples (skill calls, not shell):
 
 ```text
-/pier-canvas content=closed-loop presentation=primary_nav_5
-  Build an overview for the multi-agent CLI gold scheme
+/pier-canvas
+  Design-doc overview (decision_nav_4)
+
+/pier-canvas content=closed-loop
+  Runtime closed-loop (primary_nav_5, includes Day 1)
 
 /pier-canvas content=design-doc presentation=one_pager
   One-page design overview for <topic>
@@ -127,9 +161,10 @@ Use when `mode` is omitted or `mode=methodology`.
    }
    ```
 
-9. Prefer `templates/overview.canvas.tsx` as the solid starting point for
-   `primary_nav_5` (五段：速览 → 问题 → 设计 → 日路径 → 落地). Prefer a single
-   scrolling Frame for `one_pager`. Dogfood:
+9. Templates: `templates/decision.canvas.tsx` for `decision_nav_4` (four tabs, no Day 1);
+   `templates/overview.canvas.tsx` for `primary_nav_5` (five tabs including Day 1);
+   single scrolling Frame for `one_pager`. Starters are English scaffolds —
+   rewrite visible copy into the user's language. Closed-loop dogfood:
    `.pier/canvases/multi-agent-orchestration-gold/`.
 10. Read `sdk/index.d.ts` and focused declarations before using APIs.
 11. Run verification requirements before delivery.
@@ -168,6 +203,7 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
 
 ## Content requirements
 
+- Write user-visible copy in the user's language (see **Audience language**).
 - Establish a clear information hierarchy before decoration.
 - Charts must identify metrics, units, time ranges, and sources.
 - Do not render fabricated data or empty decorative cards.

@@ -60,12 +60,6 @@ import { createTerminalProfileService } from "../services/terminal-profile-servi
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createSecretsStore } from "../state/secrets-store.ts";
 import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
-import {
-  applyTerminalStatusBarItemOverridePatch,
-  applyTerminalStatusBarItemOverridePatches,
-  readTerminalStatusBarPrefs,
-  resetTerminalStatusBarItem,
-} from "../state/terminal-status-bar-prefs.ts";
 import { windowManager } from "../windows/manager.ts";
 import { showNativeWindowCloseFailure } from "../windows/native-close-failure.ts";
 import { createBootedAgentLifecycleService } from "./agent-lifecycle-boot.ts";
@@ -99,6 +93,7 @@ import { requireAppCoreInitialization } from "./readiness.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
 import { createShellEnvironmentBoot } from "./shell-environment-boot.ts";
 import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
+import { createTerminalStatusBarPrefsFacade } from "./terminal-status-bar-prefs-facade.ts";
 import { createWiredAppUpdateService } from "./update-wiring.ts";
 import { createAppCoreUsageData } from "./usage-data.ts";
 import {
@@ -108,7 +103,6 @@ import {
   broadcastPluginRegistryChanged,
   broadcastProjectSkillsInvalidated,
   broadcastTaskRunsSnapshot,
-  broadcastTerminalStatusBarPrefs,
   broadcastWorktreeCreateProgress,
 } from "./window-broadcasts.ts";
 export interface PierAppCore {
@@ -346,6 +340,7 @@ function createPierAppCore(): PierAppCore {
     pierBindings,
     pierHome,
     projectSkills,
+    systemSkills,
   } = wireAppCorePierHomeAndSkills({
     appVersion: app.getVersion(),
     isProduction: runtimeMode === "production",
@@ -401,6 +396,7 @@ function createPierAppCore(): PierAppCore {
     fileWatch: createFileWatchService(),
     preferences,
     projectSkills,
+    systemSkills,
     secrets,
     usageData,
     processEnvironment,
@@ -427,30 +423,7 @@ function createPierAppCore(): PierAppCore {
         }),
     }),
     terminalProfiles: createTerminalProfileService(),
-    terminalStatusBarPrefs: {
-      applyOverrides: async (patches) => {
-        // F8:一次 mutate 应用全部 patch + 恰一次广播(而非逐项 N 次 IPC)。
-        const next = await applyTerminalStatusBarItemOverridePatches(patches);
-        broadcastTerminalStatusBarPrefs(next);
-        return next;
-      },
-      getAll: () => readTerminalStatusBarPrefs(),
-      resetItem: async (itemId) => {
-        const next = await resetTerminalStatusBarItem(itemId);
-        broadcastTerminalStatusBarPrefs(next);
-        return next;
-      },
-      setItemOverride: async (itemId, patch) => {
-        // F7:main 侧单线程合成(patch → withItemOverridePatch),不再接收
-        // renderer 合成好的整体覆盖,消除 lost-update 竞态。
-        const next = await applyTerminalStatusBarItemOverridePatch(
-          itemId,
-          patch
-        );
-        broadcastTerminalStatusBarPrefs(next);
-        return next;
-      },
-    },
+    terminalStatusBarPrefs: createTerminalStatusBarPrefsFacade(),
     terminalLaunches: terminalLaunchRegistry,
     window: windowService,
     panelTransfer: panelTransferRef,

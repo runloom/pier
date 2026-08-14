@@ -1,4 +1,5 @@
 import { AUDIT_ONLY_SKILL_DISCOVERY_ADAPTERS } from "./adapter-facts-audit.ts";
+import { EXTENDED_SKILL_DISCOVERY_ADAPTERS } from "./adapter-facts-extended.ts";
 import type { SkillDiscoveryAdapter } from "./adapters.ts";
 
 /**
@@ -14,16 +15,20 @@ import type { SkillDiscoveryAdapter } from "./adapters.ts";
  *   Pier never writes (e.g. `.kiro/skills`); the entry is audit evidence
  *   only and has no runtime effect (not gated, no matrix cells).
  *
- * AgentKinds audited on 2026-07-20 and intentionally NOT registered:
+ * AgentKinds intentionally NOT registered (still in agentKindSchema):
  * - aider — no native skills discovery; SKILL.md only loads via manual
  *   `--read` context files (aider.chat docs; community shims exist).
- * - goose — upstream skills platform extension exists but the official docs
- *   page is unavailable and the discovery-root set is version-unstable
- *   (recently re-standardized on `~/.agents/skills` upstream); no adapter
- *   until stable official docs + probe evidence.
- * - continue — CLI skills support merged upstream
- *   (continuedev/continue#9696: `.continue/skills`, `.claude/skills`,
- *   `$CONTINUE_HOME/skills`) but no official docs page yet (#11758).
+ * - continue — CLI can load SKILL.md from `.continue/skills`, `.claude/skills`,
+ *   and `$CONTINUE_HOME/skills` (continuedev/continue#9696 / #11758), but there
+ *   is still no first-class official skills docs page and the product is
+ *   under Cursor acquisition. Pier keeps Continue unregistered as a product
+ *   decision (not “docs missing”); residual risk: dual-delivery `.claude`
+ *   projections may be loadable without L1 matrix cells. Re-audit when
+ *   official docs stabilize.
+ *
+ * goose (2026-08-12): registered as consuming — official Agent Skills docs
+ * document project `.agents/skills/` + user `~/.agents/skills/` (plus
+ * `.goose` / `.claude` compatibility roots).
  */
 export const SKILL_DISCOVERY_ADAPTERS: readonly SkillDiscoveryAdapter[] = [
   {
@@ -43,14 +48,16 @@ export const SKILL_DISCOVERY_ADAPTERS: readonly SkillDiscoveryAdapter[] = [
     agentKind: "claude",
     discoveryRoots: [".claude/skills"],
     userDiscoveryRoots: ["~/.claude/skills"],
-    walkUpToRepoRoot: false,
+    // Official docs: project skills from start directory and every parent up
+    // to the repository root (“Discovery from parent and nested directories”).
+    walkUpToRepoRoot: true,
     consumesProjectSkills: true,
     duplicateSemantics: "user-shadows-project",
     duplicatePolicy: "report",
     sessionRefresh: "live-watch-docs-only",
     probeCaveats: [],
     officialDocsUrl: "https://code.claude.com/docs/en/skills",
-    verifiedOn: "2026-07-19",
+    verifiedOn: "2026-08-12",
   },
   {
     agentKind: "opencode",
@@ -421,20 +428,6 @@ export const SKILL_DISCOVERY_ADAPTERS: readonly SkillDiscoveryAdapter[] = [
     officialDocsUrl: "https://omp.sh/docs/skills",
     verifiedOn: "2026-07-20",
   },
-  {
-    agentKind: "openclaude",
-    discoveryRoots: [".claude/skills"],
-    userDiscoveryRoots: ["~/.claude/skills"],
-    walkUpToRepoRoot: false,
-    consumesProjectSkills: true,
-    duplicateSemantics: "multi-root-scan",
-    duplicatePolicy: "report",
-    sessionRefresh: "new-session-recommended",
-    probeCaveats: [
-      "Claude Code fork; same-name user/project precedence is not separately documented — probe before promising shadowing semantics",
-    ],
-    officialDocsUrl: "https://openclaude.gitlawb.com/docs/skills/",
-    verifiedOn: "2026-07-20",
-  },
+  ...EXTENDED_SKILL_DISCOVERY_ADAPTERS,
   ...AUDIT_ONLY_SKILL_DISCOVERY_ADAPTERS,
 ] as const;

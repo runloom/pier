@@ -13,6 +13,7 @@ export {
   geometryHitTestCanvasElement,
   hitCanvasPickChainAtPoint,
   hitTestCanvasElement,
+  refineCanvasLayoutHit,
   resolveCanvasPickAtPoint,
 } from "./canvas-pick-hit.ts";
 export {

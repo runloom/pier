@@ -117,8 +117,12 @@ describe("GitReviewIndexLoader", () => {
       refreshFailure: { reason: "commandFailed" },
     });
 
+    // 用户点击 Retry：立即发起并在在飞期间置 refreshing（旋转跟随用户动作）。
     loader.retry();
-    await vi.advanceTimersByTimeAsync(120);
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      refreshing: true,
+    });
     expect(requests).toHaveLength(3);
     requests[2]?.resolve({
       ...EMPTY_INDEX,
@@ -152,11 +156,83 @@ describe("GitReviewIndexLoader", () => {
     }
 
     notify();
+    // watch 驱动的自动刷新静默：不置 refreshing（工具栏不转圈）。
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      refreshing: false,
+    });
     await vi.advanceTimersByTimeAsync(120);
     await flush();
 
     expect(loader.getSnapshot()).toMatchObject({
       generation: initial.generation,
+      kind: "loaded",
+      refreshing: false,
+    });
+  });
+
+  it("retry（用户刷新）立即发起并置 refreshing，落定后清除", async () => {
+    vi.useFakeTimers();
+    const requests: ReturnType<typeof deferred<GitReviewIndexResult>>[] = [];
+    const loader = new GitReviewIndexLoader({
+      cancel: vi.fn(async () => undefined),
+      load: () => {
+        const request = deferred<GitReviewIndexResult>();
+        requests.push(request);
+        return request.promise;
+      },
+      watch: () => () => undefined,
+    });
+    requests[0]?.resolve(EMPTY_INDEX);
+    await flush();
+
+    loader.retry();
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      refreshing: true,
+    });
+    // 用户刷新绕过 120ms 防抖，立即发出一轮请求。
+    expect(requests).toHaveLength(2);
+    expect(vi.getTimerCount()).toBe(0);
+
+    requests[1]?.resolve(EMPTY_INDEX);
+    await flush();
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      refreshing: false,
+    });
+  });
+
+  it("被旧状态序列淘汰的用户刷新结果仍结束旋转", async () => {
+    vi.useFakeTimers();
+    const results: GitReviewIndexResult[] = [
+      { ...EMPTY_INDEX, stateSequence: 5 },
+      { ...EMPTY_INDEX, stateSequence: 2 },
+      { ...EMPTY_INDEX, indexRevision: "index:stale", stateSequence: 2 },
+    ];
+    const loader = new GitReviewIndexLoader({
+      cancel: vi.fn(async () => undefined),
+      load: async () => results.shift() as GitReviewIndexResult,
+      watch: () => () => undefined,
+    });
+    await flush();
+    await loader.refreshNow();
+    await flush();
+    expect(loader.getSnapshot()).toMatchObject({
+      generation: 5,
+      kind: "loaded",
+      refreshing: false,
+    });
+
+    loader.retry();
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      refreshing: true,
+    });
+    await flush();
+    // 旧状态序列的结果被丢弃，但用户刷新必须结束（不卡旋转）。
+    expect(loader.getSnapshot()).toMatchObject({
+      generation: 5,
       kind: "loaded",
       refreshing: false,
     });
@@ -426,7 +502,7 @@ describe("GitReviewIndexLoader", () => {
     }
   });
 
-  it("初次失败重试后立即进入 loading 并只启动一轮请求", async () => {
+  it("初次失败重试立即进入 loading 并立即发起一轮请求", async () => {
     vi.useFakeTimers();
     const load = vi
       .fn()
@@ -447,11 +523,10 @@ describe("GitReviewIndexLoader", () => {
 
     loader.retry();
     expect(loader.getSnapshot()).toEqual({ kind: "loading" });
-    expect(load).toHaveBeenCalledTimes(1);
-
-    await vi.advanceTimersByTimeAsync(120);
-    await flush();
+    // 用户重试绕过 debounce，立即发出第二轮请求。
     expect(load).toHaveBeenCalledTimes(2);
+
+    await flush();
     expect(loader.getSnapshot().kind).toBe("loaded");
   });
 

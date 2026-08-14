@@ -43,6 +43,9 @@ export const PIER_DISCOVERY_CHANNELS: readonly PierDiscoveryChannel[] = [
       "autohand",
       "openclaw",
       "mimo-code",
+      "grok",
+      "goose",
+      "droid",
     ],
   },
   {
@@ -63,6 +66,8 @@ export const PIER_DISCOVERY_CHANNELS: readonly PierDiscoveryChannel[] = [
       "mimo-code",
       "omp",
       "openclaude",
+      "grok",
+      "goose",
     ],
   },
 ];

@@ -94,7 +94,11 @@ Pier 为当前项目提供查看、搜索、添加（本地导入 / 收编仓库
 
 官方依据：[Codex](https://developers.openai.com/codex/skills)、[Claude Code](https://code.claude.com/docs/en/skills)、[Cursor](https://cursor.com/docs/skills)、[OpenCode](https://opencode.ai/docs/skills/)（注意 open-code.ai 为第三方镜像，不作权威来源）、[Agent Skills 规范](https://agentskills.io/specification)。适配能力必须同时具有官方文档和版本化探测证据，不能从第三方管理器的路径表推断，也不能在界面硬编码为健康。
 
-2026-07-20 按 Pier 支持的全部 AgentKind 完成覆盖审计：凡有官方技能文档的智能体均已入注册表（Gemini CLI、Antigravity CLI、Amp、GitHub Copilot CLI、Kimi、Cline、Crush、Auggie、Command Code、Rovo Dev、Pi、Devin、Kilo、Codebuff、Mistral Vibe、Autohand、OpenClaw、MiMo Code、OMP、OpenClaude 等，逐条 `officialDocsUrl` + `verifiedOn` 见 `adapter-facts.ts`）；仅扫描产品私有根（Pier 从不投影）的智能体（Kiro、Qwen Code、CodeBuddy、Qoder、Grok、Droid、Ante、Hermes）登记为 `consumesProjectSkills: false` 的事实条目，不参与启动门与矩阵；查证不到官方支持或文档不稳定的（Aider、Goose、Continue）在注册表注释中记录结论，不臆造条目。
+2026-07-20 按 Pier 支持的全部 AgentKind 完成覆盖审计：凡有官方技能文档的智能体均已入注册表（Gemini CLI、Antigravity CLI、Amp、GitHub Copilot CLI、Kimi、Cline、Crush、Auggie、Command Code、Rovo Dev、Pi、Devin、Kilo、Codebuff、Mistral Vibe、Autohand、OpenClaw、MiMo Code、OMP、OpenClaude 等，逐条 `officialDocsUrl` + `verifiedOn` 见 `adapter-facts.ts`）；仅扫描产品私有根（Pier 从不投影）的智能体（Kiro、Qwen Code、CodeBuddy、Qoder、Droid、Ante、Hermes）登记为 `consumesProjectSkills: false` 的事实条目，不参与启动门与矩阵；查证不到官方支持或文档不稳定的（Aider、Goose、Continue）在注册表注释中记录结论，不臆造条目。
+
+2026-08-12 更正：Grok 升级为 **consuming** 适配器（`consumesProjectSkills: true`）。产品文档与本机 guide 确认除原生 `.grok/skills` 外还扫描 `.agents/skills`（系统技能 `pier-canvas` 投影目标）以及默认开启的 Claude/Cursor 兼容根；同名按更高优先级根覆盖（`priority-override`），cwd→仓库根 walk-up。见 `adapter-facts.ts` `agentKind: "grok"`（`verifiedOn: 2026-08-12`）。此前将其留在 audit-only 会导致增强输入 L1 对 Grok 隐藏已投影 skill。
+
+2026-08-12 全量 AgentKind 对齐：goose / droid 升级为 consuming（均扫描 `.agents/skills`，官方 docs 已稳定）；Claude / openclaude `walkUpToRepoRoot: true`；continue 仍故意不注册（产品决策，非「文档缺失」）。治理：`adapters.test.ts` 要求 35 个 `AgentKind` = 注册表 ∪ 故意不支持（aider、continue），且 `PIER_DISCOVERY_CHANNELS` 与 consuming 根扫描集合一致。
 
 业界佐证（v9.0）：vercel-labs/skills、Cursor、Codex、Claude Code 均以**发现路径存在即加载**为主路径；Claude 社区要求的内容哈希重批准**未被官方采纳**。Pier **不再**以 direnv 式批准账本为产品目标；并发用 `observedRevision` 做 CAS 检测，不授权发现。
 

@@ -39,8 +39,9 @@
   - No Play/Step demo chrome unless each frame has an insight and a structural
     visual change (mechanism explainer exception).
   - Acceptance matrices and L0–Ln backlogs stay off the primary view.
-  - Prefer the five-tab spine 速览 → 问题 → 设计 → 日路径 → 落地 for
-    `primary_nav_5` scheme overviews.
+  - `decision_nav_4`: Overview → Problem → Design → Landing (no Day-1 tab).
+  - `primary_nav_5`: Overview → Problem → Design → Day 1 → Landing (closed-loop recipe).
+  - Visible tab labels come from `i18n/nav.json` (`labels[id][locale] ?? labels[id].en`).
 
 ## Evidence language
 

@@ -11,22 +11,24 @@ import {
 import { useState } from "react";
 
 /**
- * docs 起手稿：DocsShell（左目录 + 右正文）+ 章节内容。
- * 布局用宿主 DocsShell（inline flex），勿手写双 ScrollArea / 任意 grid 当命脉。
+ * Starter for docs: DocsShell (left nav + article) plus sections.
+ * Rewrite every user-visible string into the user's language before delivery.
  *
- * 字体：DocsShell 正文/标题走宿主「文档字体」；侧栏控件与活示例里的真实组件
- * 保持界面字体（不要给 Button/Input 等套文档衬线）。
+ * Layout uses host DocsShell. Do not hand-roll dual ScrollArea shells.
+ *
+ * Fonts: DocsShell body/titles use the host document font; sidebar controls
+ * and live component demos keep the UI font.
  */
 export const canvas = {
-  description: "说明文档：DocsShell 章节导航 + 正文。",
+  description: "Guide: DocsShell section nav plus article.",
   kind: "docs" as const,
-  title: "说明文档",
+  title: "Guide",
 };
 
 const NAV = [
-  { id: "intro", label: "简介" },
-  { id: "when", label: "何时使用" },
-  { id: "steps", label: "步骤" },
+  { id: "intro", label: "Intro" },
+  { id: "when", label: "When to use" },
+  { id: "steps", label: "Steps" },
 ] as const;
 
 type NavId = (typeof NAV)[number]["id"];
@@ -40,10 +42,11 @@ export default function DocsCanvas() {
         <Badge variant="secondary">docs</Badge>
       </Row>
       <Text as="h1" className="text-2xl font-semibold tracking-tight">
-        文档标题
+        Document title
       </Text>
       <Text tone="secondary" className="text-sm leading-relaxed">
-        写清读者是谁、读完能完成什么。避免堆砌实现细节。
+        Who the reader is and what they can finish after reading. Avoid a dump
+        of implementation detail.
       </Text>
     </Stack>
   );
@@ -62,12 +65,13 @@ export default function DocsCanvas() {
       {navId === "intro" ? (
         <Stack gap={12}>
           <Text as="h2" className="text-base font-semibold">
-            简介
+            Intro
           </Text>
           <Alert>
-            <AlertTitle>先读这一段</AlertTitle>
+            <AlertTitle>Read this first</AlertTitle>
             <AlertDescription>
-              用两到三句说明前提与边界。没有这些上下文时，后面的步骤可能无意义。
+              Two or three sentences on prerequisites and bounds. Later steps
+              may not make sense without this context.
             </AlertDescription>
           </Alert>
         </Stack>
@@ -75,20 +79,21 @@ export default function DocsCanvas() {
       {navId === "when" ? (
         <Stack gap={8}>
           <Text as="h2" className="text-base font-semibold">
-            何时使用
+            When to use
           </Text>
-          <Text className="text-sm leading-relaxed">· 适合：……</Text>
-          <Text className="text-sm leading-relaxed">· 不适合：……</Text>
+          <Text className="text-sm leading-relaxed">· Good for: …</Text>
+          <Text className="text-sm leading-relaxed">· Not for: …</Text>
         </Stack>
       ) : null}
       {navId === "steps" ? (
         <Stack gap={8}>
           <Text as="h2" className="text-base font-semibold">
-            步骤
+            Steps
           </Text>
           <Text tone="secondary" className="text-sm leading-relaxed">
-            清单类内容用一份可展开列表；已实现项不必打「已实现」标，仅标暂未实现。
-            禁止「表格扫一遍 + 下方再 Accordion 一遍」双份清单。
+            Inventory content belongs in one expandable list. Mark only items
+            that are not done yet. Do not ship a table plus a second Accordion
+            of the same list.
           </Text>
         </Stack>
       ) : null}

@@ -89,6 +89,19 @@ export function parseSafeSkillFrontmatter(markdown: string): {
 export interface SkillMetadataPeek {
   description: string;
   name: string;
+  /**
+   * Agent Skills / Grok: whether the skill appears as a user slash command.
+   * Defaults true when the field is absent or unparsable.
+   */
+  userInvocable: boolean;
+}
+
+function parseUserInvocable(frontmatter: Record<string, unknown>): boolean {
+  const raw = frontmatter["user-invocable"];
+  if (raw === false || raw === "false") {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -103,7 +116,7 @@ export async function peekSkillMetadata(
   try {
     const raw = await readFile(join(skillDir, "SKILL.md"));
     if (raw.byteLength > SKILL_FRONTMATTER_LIMITS.maxSkillMdBytes) {
-      return { name: "", description: "" };
+      return { name: "", description: "", userInvocable: true };
     }
     const { frontmatter } = parseSafeSkillFrontmatter(raw.toString("utf8"));
     const name = typeof frontmatter.name === "string" ? frontmatter.name : "";
@@ -111,9 +124,13 @@ export async function peekSkillMetadata(
       typeof frontmatter.description === "string"
         ? frontmatter.description
         : "";
-    return { name, description };
+    return {
+      name,
+      description,
+      userInvocable: parseUserInvocable(frontmatter),
+    };
   } catch {
-    return { name: "", description: "" };
+    return { name: "", description: "", userInvocable: true };
   }
 }
 

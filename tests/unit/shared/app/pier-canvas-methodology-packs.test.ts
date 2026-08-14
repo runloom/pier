@@ -11,13 +11,25 @@ const REQUIRED_AXES = ["content", "presentation", "ui"] as const;
 
 const REQUIRED_BY_AXIS: Record<(typeof REQUIRED_AXES)[number], string[]> = {
   content: ["design-doc", "closed-loop"],
-  presentation: ["primary_nav_5", "one_pager"],
+  presentation: ["decision_nav_4", "primary_nav_5", "one_pager"],
   ui: ["pier-default"],
 };
 
 function readPack(axis: string, id: string): Record<string, unknown> {
   const path = join(PACKS_ROOT, axis, id, "pack.json");
   return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+}
+
+function readNavGlossary(): {
+  fallback: string;
+  labels: Record<string, Record<string, string>>;
+} {
+  return JSON.parse(
+    readFileSync(
+      join(process.cwd(), "resources/system-skills/pier-canvas/i18n/nav.json"),
+      "utf8"
+    )
+  ) as { fallback: string; labels: Record<string, Record<string, string>> };
 }
 
 describe("pier-canvas methodology packs", () => {
@@ -41,15 +53,37 @@ describe("pier-canvas methodology packs", () => {
     }
   });
 
+  it("nav glossary covers every presentation view id and requires en", () => {
+    const nav = readNavGlossary();
+    expect(nav.fallback).toBe("en");
+    for (const id of REQUIRED_BY_AXIS.presentation) {
+      const pack = readPack("presentation", id);
+      const views = pack.views as { id: string }[];
+      for (const view of views) {
+        expect(
+          nav.labels[view.id]?.en,
+          `${id}.${view.id} missing en in i18n/nav.json`
+        ).toBeTruthy();
+      }
+    }
+  });
+
   it("presentation packs declare a single primary view and ≤5 views", () => {
     for (const id of REQUIRED_BY_AXIS.presentation) {
       const pack = readPack("presentation", id);
-      const views = pack.views as { id: string; primary?: boolean }[];
+      const views = pack.views as {
+        id: string;
+        label: string;
+        primary?: boolean;
+      }[];
       expect(Array.isArray(views)).toBe(true);
       expect(views.length).toBeGreaterThan(0);
       expect(views.length).toBeLessThanOrEqual(5);
       const primaries = views.filter((v) => v.primary === true);
       expect(primaries).toHaveLength(1);
+      for (const view of views) {
+        expect(typeof view.label).toBe("string");
+      }
     }
   });
 
@@ -61,10 +95,15 @@ describe("pier-canvas methodology packs", () => {
     expect(skill).toContain("content");
     expect(skill).toContain("design-doc");
     expect(skill).toContain("primary_nav_5");
+    expect(skill).toContain("decision_nav_4");
     expect(skill).toContain("pier-default");
+    expect(skill).toContain("Pack selection");
     expect(skill).toContain("mode");
     expect(skill).toContain("methodology");
     expect(skill).toContain("freeform");
+    expect(skill).toContain("Audience language");
+    expect(skill).toContain("i18n/nav.json");
+    expect(skill).toContain("locale");
     // Product entry is skill invocation, not CLI
     expect(skill).toMatch(/\/pier-canvas/);
     expect(skill).toContain("not shell flags");
@@ -85,8 +124,34 @@ describe("pier-canvas methodology packs", () => {
     expect(methodology).toContain("静态方案（默认）");
     expect(methodology).toContain("不为「显得高级」加演示");
     expect(methodology).toContain("Recommended information architecture");
-    expect(methodology).toContain("速览");
-    expect(methodology).toContain("落地");
+    expect(methodology).toContain("Pack selection");
+    expect(methodology).toContain("decision_nav_4");
+    expect(methodology).toContain("Day 1");
+    expect(methodology).toContain("Overview");
+    expect(methodology).toContain("Landing");
+    expect(methodology).toContain("i18n/nav.json");
+  });
+
+  it("resolves presentation from content (design-doc has no 首日 tab)", () => {
+    const design = readPack("content", "design-doc");
+    const loop = readPack("content", "closed-loop");
+    expect(design.preferredPresentation).toBe("decision_nav_4");
+    expect(loop.preferredPresentation).toBe("primary_nav_5");
+
+    const four = readPack("presentation", "decision_nav_4");
+    const five = readPack("presentation", "primary_nav_5");
+    expect(four.fitsContent).toEqual(["design-doc"]);
+    expect(five.fitsContent).toEqual(["closed-loop"]);
+    expect((four.views as { id: string }[]).map((v) => v.id)).toEqual([
+      "overview",
+      "problem",
+      "design",
+      "landing",
+    ]);
+    const pathView = (five.views as { id: string; label: string }[]).find(
+      (v) => v.id === "path"
+    );
+    expect(pathView?.label).toBe("Day 1");
   });
 
   it("overview template is a solid five-section product spine without demo chrome", () => {
@@ -100,14 +165,32 @@ describe("pier-canvas methodology packs", () => {
     for (const id of ["overview", "problem", "design", "path", "landing"]) {
       expect(template).toContain(`value="${id}"`);
     }
-    expect(template).toContain("速览");
-    expect(template).toContain("问题");
-    expect(template).toContain("设计");
-    expect(template).toContain("日路径");
-    expect(template).toContain("落地");
+    expect(template).toContain("Overview");
+    expect(template).toContain("Problem");
+    expect(template).toContain("Design");
+    expect(template).toContain("Day 1");
+    expect(template).toContain("Landing");
     expect(template).toContain("BLUF");
+    expect(template).toMatch(/user-visible string|user's language/i);
     expect(template).not.toMatch(/▶ 播放|单步|重置|useStepPlayer|DayPathDemo/);
-    expect(template).toMatch(/无强制交互演示|静态/);
+    expect(template).toMatch(/No required interactive demo|static/i);
+  });
+
+  it("decision template is a four-section spine without Day-1 chrome", () => {
+    const template = readFileSync(
+      join(
+        process.cwd(),
+        "resources/system-skills/pier-canvas/templates/decision.canvas.tsx"
+      ),
+      "utf8"
+    );
+    for (const id of ["overview", "problem", "design", "landing"]) {
+      expect(template).toContain(`value="${id}"`);
+    }
+    expect(template).not.toContain('value="path"');
+    expect(template).not.toContain("日路径");
+    expect(template).toContain("decision_nav_4");
+    expect(template).toContain("BLUF");
   });
 
   it("primary_nav_5 antiPatterns forbid fake demos on primary", () => {

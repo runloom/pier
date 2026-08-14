@@ -1,10 +1,18 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  composeAgentInjectInput,
   nativeLaunchOptions,
   resolveCreateTerminalLaunch,
+  shebangInjectCommand,
   withAgentLoginShellSafeCommand,
   wrapAgentTerminalCommand,
 } from "@main/ipc/terminal/create-launch.ts";
@@ -126,14 +134,16 @@ describe("terminal create launch options", () => {
       },
       "copilot"
     );
-    expect(wrapped?.command).toMatch(/^(\/bin\/sh -c |\/bin\/zsh -lic )/);
-    expect(wrapped?.cwd).toBe("/tmp/pier");
+    expect(wrapped.launch?.command).toMatch(
+      /^(\/bin\/sh -c |\/bin\/zsh -lic )/
+    );
+    expect(wrapped.launch?.cwd).toBe("/tmp/pier");
     expect(
       await withAgentLoginShellSafeCommand(
         { command: "pnpm test", cwd: "/tmp/pier" },
         undefined
       )
-    ).toEqual({ command: "pnpm test", cwd: "/tmp/pier" });
+    ).toEqual({ launch: { command: "pnpm test", cwd: "/tmp/pier" } });
   });
 
   it("restores a task panel as a task result instead of a default shell", () => {
@@ -465,8 +475,47 @@ describe("terminal create launch options", () => {
         },
         result.launchAgentId
       )
-    )?.command;
+    ).launch?.command;
     expect(spawnCommand).toMatch(/^(\/bin\/sh -c |\/bin\/zsh -lic )/);
     expect(spawnCommand).toContain("claude");
+  });
+
+  it("starts the user shell for shebang agents and injects the logical command", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pier-omp-"));
+    const script = join(dir, "omp");
+    writeFileSync(script, "#!/usr/bin/env bun\n");
+    chmodSync(script, 0o755);
+    const spawn = await withAgentLoginShellSafeCommand(
+      {
+        agentId: "omp",
+        command: script,
+        cwd: "/tmp/pier",
+        env: { PATH: dir, SHELL: "/bin/zsh" },
+      },
+      "omp"
+    );
+    expect(spawn.launch?.command).toBeUndefined();
+    expect(spawn.launch?.cwd).toBe("/tmp/pier");
+    expect(spawn.injectCommand).toBe(script);
+    expect(
+      composeAgentInjectInput({
+        existingInput: undefined,
+        injectCommand: spawn.injectCommand,
+      })
+    ).toBe(`${script}\r`);
+    expect(
+      composeAgentInjectInput({
+        existingInput: "你好\r",
+        injectCommand: spawn.injectCommand,
+      })
+    ).toBe(`${script}\r你好\r`);
+    expect(
+      composeAgentInjectInput({
+        existingInput: "keep\r",
+        injectCommand: undefined,
+      })
+    ).toBe("keep\r");
+    expect(shebangInjectCommand("omp --yolo", script)).toBe(`${script} --yolo`);
+    rmSync(dir, { force: true, recursive: true });
   });
 });

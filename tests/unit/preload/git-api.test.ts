@@ -249,9 +249,10 @@ describe("gitApi Review command boundary", () => {
       leaseId: "00000000-0000-4000-8000-000000000003",
     });
     await flush();
+    // watch 就绪触发的刷新是静默的：不置 refreshing（工具栏不转圈）。
     expect(loader.getSnapshot()).toMatchObject({
       kind: "loaded",
-      refreshing: true,
+      refreshing: false,
       result: oldIndex,
     });
 

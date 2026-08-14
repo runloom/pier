@@ -29,3 +29,32 @@ export function parsePierCanvasMeta(value: unknown): PierCanvasMeta | null {
   const parsed = pierCanvasMetaSchema.safeParse(value);
   return parsed.success ? parsed.data : null;
 }
+
+const PIER_CANVAS_INVOKE_RE =
+  /(^|[\s])(\/skills\s+pier-canvas|[/$]pier-canvas)(?=$|[\s])/u;
+
+/** Append `locale=` to a pier-canvas invoke if the host has not already set one. */
+export function annotatePierCanvasInvokeLocale(
+  text: string,
+  locale: string
+): string {
+  const tag = locale.trim();
+  if (!tag || /\blocale=/.test(text)) {
+    return text;
+  }
+  return text.replace(PIER_CANVAS_INVOKE_RE, `$1$2 locale=${tag}`);
+}
+
+/** `labels[id][locale] ?? labels[id].en` — extra locales are optional. */
+export function resolveCanvasNavLabel(
+  labels: Readonly<Record<string, Readonly<Record<string, string>>>>,
+  viewId: string,
+  locale: string,
+  fallback = "en"
+): string | undefined {
+  const row = labels[viewId];
+  if (!row) {
+    return;
+  }
+  return row[locale] ?? row[fallback];
+}

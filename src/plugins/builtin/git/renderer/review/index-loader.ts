@@ -11,6 +11,10 @@ export type GitReviewIndexLoaderSnapshot =
       readonly generation: number;
       readonly kind: "loaded";
       readonly refreshFailure: GitReviewFailure | null;
+      /**
+       * True while a user-initiated refresh is in flight (toolbar click or
+       * post-mutation barrier). Watch-driven refreshes stay silent.
+       */
       readonly refreshing: boolean;
       readonly result: GitReviewIndexOk;
     }
@@ -102,7 +106,7 @@ export class GitReviewIndexLoader {
     if (this.#watchFailed) {
       this.#startWatch();
     }
-    this.#requestRefresh();
+    this.#queueRefresh(true, true);
   }
 
   /**
@@ -113,7 +117,7 @@ export class GitReviewIndexLoader {
     if (this.#disposed) {
       return Promise.resolve();
     }
-    const revision = this.#queueRefresh(true);
+    const revision = this.#queueRefresh(true, true);
     return new Promise<void>((resolve) => {
       this.#refreshWaiters.add({ resolve, revision });
     });
@@ -156,7 +160,6 @@ export class GitReviewIndexLoader {
         this.#snapshot = {
           ...this.#snapshot,
           refreshFailure: this.#watchFailure,
-          refreshing: false,
         };
         this.#emit();
       }
@@ -186,10 +189,14 @@ export class GitReviewIndexLoader {
   }
 
   readonly #requestRefresh = (): void => {
-    this.#queueRefresh(false);
+    this.#queueRefresh(false, false);
   };
 
-  #queueRefresh(immediate: boolean): number {
+  /**
+   * `userInitiated` 只影响 `refreshing` 的可见性：watch 事件合并的静默刷新
+   * 不置位，工具栏旋转仅跟随用户动作（点击 Retry/刷新、mutation 提交屏障）。
+   */
+  #queueRefresh(immediate: boolean, userInitiated: boolean): number {
     if (this.#disposed) {
       return this.#revision;
     }
@@ -200,7 +207,7 @@ export class GitReviewIndexLoader {
       this.#snapshot = {
         ...this.#snapshot,
         refreshFailure: null,
-        refreshing: true,
+        refreshing: userInitiated,
       };
       this.#emit();
     } else if (this.#snapshot.kind === "error") {
@@ -273,6 +280,11 @@ export class GitReviewIndexLoader {
       this.#snapshot.kind === "loaded" &&
       authoritativeGeneration < this.#snapshot.generation
     ) {
+      // 被旧状态序列淘汰的结果仍结束本轮用户刷新，避免旋转卡死。
+      if (this.#snapshot.refreshing) {
+        this.#snapshot = { ...this.#snapshot, refreshing: false };
+        this.#emit();
+      }
       return;
     }
     this.#recoveryPending = false;

@@ -13,6 +13,7 @@ import {
 import {
   agentSupportsSkillForceInvoke,
   skillInvokePrefix,
+  skillInvokeText,
 } from "@shared/skill-invoke.ts";
 import { describe, expect, it } from "vitest";
 import { terminal as enTerminal } from "@/i18n/locales/en/terminal.ts";
@@ -100,10 +101,13 @@ describe("agent-surfaces L1 gold-standard governance", () => {
   it("does not invent skill force-invoke for unsupported or palette-only agents", () => {
     // No native force-invoke skill catalog (documented in skill-invoke.ts).
     expect(skillInvokePrefix("aider")).toBeNull();
-    expect(skillInvokePrefix("goose")).toBeNull();
     expect(skillInvokePrefix("continue")).toBeNull();
     expect(skillInvokePrefix("unknown-agent")).toBeNull();
     expect(skillInvokePrefix(null)).toBeNull();
+    // Goose: no bare /id prefix; L1 inserts `/skills <id>` via skillInvokeText.
+    expect(skillInvokePrefix("goose")).toBeNull();
+    expect(agentSupportsSkillForceInvoke("goose")).toBe(true);
+    expect(skillInvokeText("goose", "pier-canvas")).toBe("/skills pier-canvas");
     // Palette-driven: commands surface empty; no slash skill insert either.
     expect(skillInvokePrefix("amp")).toBeNull();
     expect(skillInvokePrefix("crush")).toBeNull();

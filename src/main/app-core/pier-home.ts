@@ -36,6 +36,7 @@ export function wireAppCorePierHomeAndSkills(input: {
   pierBindings: ReturnType<typeof wireProjectSkills>["pierBindings"];
   pierHome: PierHomeService;
   projectSkills: ReturnType<typeof wireProjectSkills>["projectSkills"];
+  systemSkills: ReturnType<typeof wireProjectSkills>["systemSkills"];
 } {
   let pierHomeRef: PierHomeService | null = null;
   const localEnvironments = createLocalEnvironmentService({
@@ -67,21 +68,22 @@ export function wireAppCorePierHomeAndSkills(input: {
     .catch((err: unknown) => {
       console.error("[pier-home] ensure failed:", err);
     });
-  const { projectSkills, agentLaunchGate, pierBindings } = wireProjectSkills({
-    userData: input.userDataPath,
-    isProduction: input.isProduction,
-    appVersion: input.appVersion,
-    resourcesRoot: input.resourcesRoot,
-    transactionLock: input.transactionLock,
-    panelContexts: input.panelContexts,
-    localEnvironments,
-    pierHome,
-    isPierHomeRoot: (path) => pierHome.isHomeRoot(path),
-    listInstalledAgents: input.listInstalledAgents,
-    onInvalidated: (event) => {
-      input.onProjectSkillsInvalidated(event);
-    },
-  });
+  const { projectSkills, agentLaunchGate, pierBindings, systemSkills } =
+    wireProjectSkills({
+      userData: input.userDataPath,
+      isProduction: input.isProduction,
+      appVersion: input.appVersion,
+      resourcesRoot: input.resourcesRoot,
+      transactionLock: input.transactionLock,
+      panelContexts: input.panelContexts,
+      localEnvironments,
+      pierHome,
+      isPierHomeRoot: (path) => pierHome.isHomeRoot(path),
+      listInstalledAgents: input.listInstalledAgents,
+      onInvalidated: (event) => {
+        input.onProjectSkillsInvalidated(event);
+      },
+    });
 
   return {
     agentLaunchGate,
@@ -91,5 +93,6 @@ export function wireAppCorePierHomeAndSkills(input: {
     pierBindings,
     pierHome,
     projectSkills,
+    systemSkills,
   };
 }

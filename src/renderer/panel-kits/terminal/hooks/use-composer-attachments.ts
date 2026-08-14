@@ -1,3 +1,4 @@
+import { annotatePierCanvasInvokeLocale } from "@shared/contracts/pier-canvas.ts";
 import type { TerminalComposerAttachmentDto } from "@shared/contracts/terminal.ts";
 import {
   type ClipboardEvent,
@@ -6,6 +7,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { resolveLanguagePreference } from "@/i18n/language.ts";
+import { useLocaleStore } from "@/stores/locale.store.ts";
 import {
   buildComposerSendText,
   type ComposerAttachment,
@@ -162,7 +165,10 @@ export function useTerminalComposerAttachments(input: {
         return null;
       }
 
-      const payload = buildComposerSendText(current, draft);
+      const payload = annotatePierCanvasInvokeLocale(
+        buildComposerSendText(current, draft),
+        resolveLanguagePreference(useLocaleStore.getState().language)
+      );
       if (payload.length === 0) {
         return null;
       }

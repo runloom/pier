@@ -36,4 +36,12 @@ describe("active-file reveal re-settle contract (P3)", () => {
     expect(revealController).toContain("subscribeUserClaim");
     expect(revealController).toContain("demotePendingScroll");
   });
+
+  it("lets breadcrumb/explicit reveal of the settled file clear sticky abort", () => {
+    expect(revealController).toContain("shouldClearRevealUserAbort");
+    expect(revealController).toContain("shouldHonorUserScrollAbort");
+    expect(revealController).not.toMatch(
+      /settledActiveFilePathRef\.current !== path\s*\n\s*\) \{\s*\n\s*userAbortedScrollRef\.current = false/m
+    );
+  });
 });

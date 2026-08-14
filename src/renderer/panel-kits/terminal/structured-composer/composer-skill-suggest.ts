@@ -77,6 +77,41 @@ function effectInvocable(
 }
 
 /**
+ * Canonical force-invoke id: frontmatter `name` when it is a valid skill
+ * identifier token (Codex/Grok resolve by name), otherwise directory /
+ * managed id. Free-form display labels with spaces are not invocable ids.
+ */
+function skillInvocationId(skill: {
+  directoryName?: string;
+  id?: string;
+  name: string;
+}): string {
+  const fromName = skill.name.trim();
+  if (
+    fromName.length > 0 &&
+    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(fromName)
+  ) {
+    return fromName;
+  }
+  return (skill.id ?? skill.directoryName ?? "").trim();
+}
+
+/**
+ * Grok: when a skill bare name collides with a built-in, the built-in keeps
+ * `/name` and the skill is advertised under a scope-qualified form
+ * (`/user:name`, `/repo:name`). Project/unmanaged/bundled → repo scope.
+ */
+function grokQualifiedSkillInvoke(
+  bareId: string,
+  source: ComposerSkillSource
+): string {
+  if (source === "user-global") {
+    return `/user:${bareId}`;
+  }
+  return `/repo:${bareId}`;
+}
+
+/**
  * Build skill suggestions for one agent (L1 invocable catalog).
  *
  * Inclusion (strict — list only what this agent can force-invoke):
@@ -85,7 +120,12 @@ function effectInvocable(
  *    (not-projected / disabled / absent-from-matrix are excluded).
  * 2. Unmanaged / user-global → discoverable or duplicate for this agent only.
  * 3. Documented **built-in commands** (agent-surfaces/<kind>); insert text is
- *    the literal `/id`; disk/bundled skills with the same invoke text win.
+ *    the literal `/id`.
+ * 4. Skills with `userInvocable: false` are excluded (Grok slash menu rule).
+ *
+ * Collision with built-ins:
+ * - Default (most agents): disk/bundled skills with the same invoke text win.
+ * - Grok: built-in keeps bare `/id`; colliding skills use qualified invoke.
  *
  * No wide dump when the agent has zero matrix cells — only surface bundled +
  * commands remain (avoids “Pier lists it, agent ignores it”).
@@ -102,6 +142,11 @@ export function buildComposerSkillSuggestItems(
   const invoke = (id: string): string | null => skillInvokeText(agentKind, id);
   const byId = new Map<string, ComposerSkillSuggestItem>();
   const bundled = options?.bundled ?? listBundledSkills(agentKind);
+  const builtinCommands =
+    options?.builtinCommands ?? listBuiltinCommands(agentKind);
+  const builtinIds = new Set(
+    builtinCommands.map((c) => c.id).filter((id) => id.length > 0)
+  );
 
   for (const skill of bundled) {
     const id = skill.id;
@@ -123,10 +168,16 @@ export function buildComposerSkillSuggestItems(
   }
 
   for (const skill of snapshot.userGlobalSkills) {
+    if (skill.userInvocable === false) {
+      continue;
+    }
     if (!effectInvocable(skill.effects, agentKind)) {
       continue;
     }
-    const id = skill.directoryName;
+    const id = skillInvocationId(skill);
+    if (id.length === 0) {
+      continue;
+    }
     const text = invoke(id);
     if (text == null) {
       continue;
@@ -141,10 +192,16 @@ export function buildComposerSkillSuggestItems(
   }
 
   for (const skill of snapshot.unmanagedSkills) {
+    if (skill.userInvocable === false) {
+      continue;
+    }
     if (!effectInvocable(skill.effects, agentKind)) {
       continue;
     }
-    const id = skill.directoryName;
+    const id = skillInvocationId(skill);
+    if (id.length === 0) {
+      continue;
+    }
     const text = invoke(id);
     if (text == null) {
       continue;
@@ -163,10 +220,16 @@ export function buildComposerSkillSuggestItems(
     if (skill.enabled !== true) {
       continue;
     }
+    if (skill.userInvocable === false) {
+      continue;
+    }
     if (!effectInvocable(skill.effects, agentKind)) {
       continue;
     }
-    const id = skill.id;
+    const id = skillInvocationId({ id: skill.id, name: skill.name });
+    if (id.length === 0) {
+      continue;
+    }
     const text = invoke(id);
     if (text == null) {
       continue;
@@ -180,16 +243,35 @@ export function buildComposerSkillSuggestItems(
     });
   }
 
-  const skills = [...byId.values()];
+  // Grok: bare name collisions keep the built-in; skill uses qualified form.
+  if (agentKind === "grok") {
+    for (const [id, item] of byId) {
+      if (!builtinIds.has(id)) {
+        continue;
+      }
+      const bare = invoke(id);
+      if (bare == null || item.invokeText !== bare) {
+        continue;
+      }
+      byId.set(id, {
+        ...item,
+        invokeText: grokQualifiedSkillInvoke(id, item.source),
+      });
+    }
+  }
+
+  let skills = [...byId.values()];
   const usedInvokeText = new Set(skills.map((item) => item.invokeText));
   const commands: ComposerSkillSuggestItem[] = [];
-  const builtinCommands =
-    options?.builtinCommands ?? listBuiltinCommands(agentKind);
   for (const command of builtinCommands) {
     // Commands are always the agent's literal slash syntax (Codex included:
-    // `$` is skill-only). Disk/bundled skills with the same invoke text win.
+    // `$` is skill-only). Non-Grok: disk/bundled skills with the same invoke
+    // text win. Grok: built-ins always keep the bare form (skills qualified).
     const text = `/${command.id}`;
-    if (command.id.length === 0 || usedInvokeText.has(text)) {
+    if (command.id.length === 0) {
+      continue;
+    }
+    if (agentKind !== "grok" && usedInvokeText.has(text)) {
       continue;
     }
     usedInvokeText.add(text);
@@ -209,7 +291,7 @@ export function buildComposerSkillSuggestItems(
     b: ComposerSkillSuggestItem
   ) => a.id.localeCompare(b.id);
   commands.sort(byIdLocale);
-  skills.sort(byIdLocale);
+  skills = skills.sort(byIdLocale);
   return [...commands, ...skills];
 }
 
@@ -239,20 +321,20 @@ export function filterComposerSkillSuggestItems(
 /**
  * Match `/` skill/command trigger for Enhanced Input.
  *
- * **Message-start only** (optional leading whitespace). Agent TUIs force-invoke
- * `/cmd` and skills at the start of a turn; mid-message `use /plan` is free text
- * and must not open the catalog.
- *
- * Pass the agent-facing plain-text prefix from composer start through the caret
- * (not a mid-node fragment alone). `$` never opens the picker (Codex still
- * **inserts** `$id` after pick).
- *
- * Selection inserts agent-correct invokeText via skillInvokeText()
- * (`/id` or `$id` depending on the foreground agent) — never a library path.
+ * **Message-start only** (optional leading whitespace). Also accepts Goose’s
+ * progressive form `/skills` + optional skill id token (space-separated).
  */
 export function getSkillSuggestMatch(
   plainPrefix: string
 ): { matchingString: string; trigger: "/" } | null {
+  // Prefer Goose `/skills [id]` so query is the skill token, not "skills".
+  const goose = plainPrefix.match(/^\s*\/skills(?:\s+([a-z0-9-]*))?$/i);
+  if (goose) {
+    return {
+      matchingString: goose[1] ?? "",
+      trigger: "/",
+    };
+  }
   const match = plainPrefix.match(/^\s*\/([a-z0-9-]*)$/i);
   if (!match) {
     return null;
@@ -265,14 +347,22 @@ export function getSkillSuggestMatch(
 
 /**
  * Node-local slash span for replacement after {@link getSkillSuggestMatch} hits.
- * Returns null when the current text node is not the whole leading slash token
- * (e.g. caret not on that node).
+ * Covers bare `/id` and Goose `/skills [id]`.
  */
 export function getSkillSuggestNodeReplaceRange(
   nodeText: string,
   cursorInNode: number
 ): { leadOffset: number; endOffset: number; matchingString: string } | null {
   const before = nodeText.slice(0, cursorInNode);
+  const goose = before.match(/^(\s*)\/skills(?:\s+([a-z0-9-]*))?$/i);
+  if (goose) {
+    const ws = goose[1] ?? "";
+    return {
+      endOffset: before.length,
+      leadOffset: ws.length,
+      matchingString: goose[2] ?? "",
+    };
+  }
   const match = before.match(/^(\s*)\/([a-z0-9-]*)$/i);
   if (!match) {
     return null;

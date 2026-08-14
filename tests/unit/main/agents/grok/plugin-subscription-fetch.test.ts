@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FetchImpl } from "../../../../../packages/plugin-grok/src/main/grok-usage-types.ts";
+import { GROK_REMAINING_RESETS_URL } from "../../../../../packages/plugin-grok/src/main/reset-credits.ts";
 import {
   GROK_RATE_LIMITS_URL,
   GROK_SUBSCRIPTIONS_URL,
@@ -44,7 +45,7 @@ describe("Grok membership soft fallbacks", () => {
           resolveFallback = resolve;
         });
       }
-      if (url === GROK_RATE_LIMITS_URL) {
+      if (url === GROK_RATE_LIMITS_URL || url === GROK_REMAINING_RESETS_URL) {
         return response({ ok: false, status: 404 });
       }
       throw new Error(`Unexpected URL: ${url}`);

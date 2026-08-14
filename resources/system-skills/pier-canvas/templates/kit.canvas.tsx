@@ -19,15 +19,15 @@ import {
 import { useState } from "react";
 
 /**
- * kit 起手稿：分区展示组件与状态。优先换成项目真实组件。
+ * Starter for kit: grouped components and states. Prefer real project
+ * components. Rewrite every user-visible string into the user's language.
  *
- * 字体：必须界面字体 + 组件 token，展示「产品长什么样」；
- * 禁止使用宿主「文档字体」或用户自定义阅读字。
+ * Fonts: UI font + component tokens. Do not use the host document font.
  */
 export const canvas = {
-  description: "组件目录：按用途分组，展示关键状态与变体。",
+  description: "Component catalog: grouped by use, with key states and variants.",
   kind: "kit" as const,
-  title: "组件目录",
+  title: "Component catalog",
 };
 
 export default function KitCanvas() {
@@ -41,36 +41,39 @@ export default function KitCanvas() {
             <Badge variant="success">kit</Badge>
           </Row>
           <Text as="h1" className="text-2xl font-semibold tracking-tight">
-            组件目录
+            Component catalog
           </Text>
           <Text tone="secondary" className="text-sm leading-relaxed">
-            按用途分组。优先 import 项目设计系统中的真实组件，而不是复制宿主源码。
+            Group by use. Import real design-system components instead of
+            copying host source.
           </Text>
         </Stack>
 
         <Stack gap={10}>
           <Text as="h2" className="text-base font-semibold">
-            按钮
+            Buttons
           </Text>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">变体</CardTitle>
-              <CardDescription>默认密度 28px；图标用 data-icon。</CardDescription>
+              <CardTitle className="text-sm">Variants</CardTitle>
+              <CardDescription>
+                Default density 28px; icons use data-icon.
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Row gap={8} wrap>
-                <Button type="button">默认</Button>
+                <Button type="button">Default</Button>
                 <Button type="button" variant="outline">
-                  描边
+                  Outline
                 </Button>
                 <Button type="button" variant="secondary">
-                  次要
+                  Secondary
                 </Button>
                 <Button type="button" variant="destructive">
-                  危险
+                  Destructive
                 </Button>
                 <Button disabled type="button">
-                  禁用
+                  Disabled
                 </Button>
               </Row>
             </CardContent>
@@ -81,19 +84,19 @@ export default function KitCanvas() {
 
         <Stack gap={10}>
           <Text as="h2" className="text-base font-semibold">
-            输入与开关
+            Input and toggles
           </Text>
           <Card>
             <CardContent className="flex flex-col gap-4 pt-4">
               <Row className="items-center" gap={12} wrap>
                 <Input
                   className="max-w-xs"
-                  placeholder="占位文案"
+                  placeholder="Placeholder"
                   readOnly
-                  value="示例输入"
+                  value="Example input"
                 />
-                <Toggle aria-label="示例开关" type="button">
-                  切换
+                <Toggle aria-label="Example toggle" type="button">
+                  Toggle
                 </Toggle>
               </Row>
               <ToggleGroup
@@ -106,12 +109,12 @@ export default function KitCanvas() {
                 value={tone}
                 variant="outline"
               >
-                <ToggleGroupItem value="default">默认</ToggleGroupItem>
-                <ToggleGroupItem value="quiet">安静</ToggleGroupItem>
-                <ToggleGroupItem value="emphasis">强调</ToggleGroupItem>
+                <ToggleGroupItem value="default">Default</ToggleGroupItem>
+                <ToggleGroupItem value="quiet">Quiet</ToggleGroupItem>
+                <ToggleGroupItem value="emphasis">Emphasis</ToggleGroupItem>
               </ToggleGroup>
               <Text tone="secondary" className="text-xs">
-                当前：{tone}
+                Current: {tone}
               </Text>
             </CardContent>
           </Card>
@@ -119,15 +122,15 @@ export default function KitCanvas() {
 
         <Stack gap={10}>
           <Text as="h2" className="text-base font-semibold">
-            状态徽标
+            Status badges
           </Text>
           <Row gap={8} wrap>
-            <Badge variant="info">信息</Badge>
-            <Badge variant="success">成功</Badge>
-            <Badge variant="warning">警告</Badge>
-            <Badge variant="destructive">错误</Badge>
-            <Badge variant="secondary">中性</Badge>
-            <Badge variant="outline">描边</Badge>
+            <Badge variant="info">Info</Badge>
+            <Badge variant="success">Success</Badge>
+            <Badge variant="warning">Warning</Badge>
+            <Badge variant="destructive">Error</Badge>
+            <Badge variant="secondary">Neutral</Badge>
+            <Badge variant="outline">Outline</Badge>
           </Row>
         </Stack>
       </Stack>

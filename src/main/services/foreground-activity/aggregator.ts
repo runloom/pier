@@ -2,9 +2,12 @@ import {
   isSubagentHookEvent,
   SUBAGENT_HOOK_EVENTS,
 } from "@shared/agent-session-actor.ts";
-import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 import { classifyAgentTurnEvent } from "./agent-turn-event-semantics.ts";
+import {
+  applyUnmatchedCommandStarted,
+  finishPanelCommands,
+} from "./aggregator-command.ts";
 import {
   createHookScopeCoordinator,
   isInCooldown,
@@ -27,14 +30,13 @@ import {
 import {
   logAgentEventDropped,
   logClearForeignHook,
-  logCommandFinished,
   logEndHookSession,
   logPtyExitedTaskRetain,
   logRouting,
   nativeEventForLog,
 } from "./aggregator-tracing.ts";
 import {
-  armHookVisibility,
+  acquireHookLayer,
   armLaunchVisibility,
   revealHook,
 } from "./aggregator-visibility.ts";
@@ -45,15 +47,11 @@ import {
   clearSlotTimers,
   EMIT_DEBOUNCE_MS,
   getOrCreateHookScope,
-  type HookLayer,
   hookScopeIdentity,
   newAgentLaunchLayer,
-  newHookLayer,
-  newShellLayer,
   newTaskLayer,
   type PanelSlot,
   SESSION_END_COOLDOWN_MS,
-  SUSPENDED_JOB_EXIT_CODES,
   type TimerCtx,
 } from "./entry.ts";
 import { armHookTtlTimer } from "./hook-scope-projection.ts";
@@ -165,30 +163,6 @@ export function createForegroundActivityAggregator(
     slots,
   });
 
-  function acquireHookLayer(
-    key: string,
-    event: AgentHookEventPayload,
-    semantics: ReturnType<typeof classifyAgentTurnEvent>,
-    at: number
-  ): HookLayer | null {
-    const slot = slotFor(key, event.panelId);
-    const existing = slot.hook;
-    if (existing) {
-      return existing;
-    }
-    if (!semantics.createsSession) {
-      dropSlotIfEmpty(key);
-      return null;
-    }
-    const startsHidden = semantics.category === "session-start";
-    const hook = newHookLayer(event, at, startsHidden);
-    slot.hook = hook;
-    if (hook.hidden) {
-      armHookVisibility(key, hook, { scheduleEmit, slots });
-    }
-    return hook;
-  }
-
   const api: ForegroundActivityAggregator = {
     agentLaunched(windowId, panelId, agentId) {
       if (disposed) {
@@ -231,29 +205,32 @@ export function createForegroundActivityAggregator(
       if (isInCooldown(panelCooldownUntil, key, now)) {
         return;
       }
-      const slot = slotFor(key, panelId);
-      if (slot.command) {
-        clearCommandTimers(slot.command);
+      if (
+        applyUnmatchedCommandStarted(
+          slotFor(key, panelId),
+          windowId,
+          commandLine,
+          now()
+        )
+      ) {
+        scheduleEmit();
       }
-      slot.command = newShellLayer(windowId, commandLine, now());
-      scheduleEmit();
     },
 
     ingestCommandFinished(panelId, exitCode, windowId) {
-      if (exitCode !== undefined && SUSPENDED_JOB_EXIT_CODES.has(exitCode)) {
-        return;
-      }
       if (disposed) {
         return;
       }
-      let removed = false;
-      for (const key of keysForPanel(slots, panelId, windowId)) {
-        logCommandFinished(key, exitCode);
-        removed =
-          closeSlot(key, { map: hookCooldownUntil, ms: CLOSE_COOLDOWN_MS }) ||
-          removed;
-      }
-      if (removed) {
+      if (
+        finishPanelCommands({
+          closeSlot,
+          exitCode,
+          hookCooldownUntil,
+          panelId,
+          slots,
+          windowId,
+        })
+      ) {
         scheduleEmit();
       }
       pruneExpiredCooldowns();
@@ -316,7 +293,15 @@ export function createForegroundActivityAggregator(
         return sessionEndHandled;
       }
       const at = now();
-      const hook = acquireHookLayer(key, event, semantics, at);
+      const hook = acquireHookLayer(
+        key,
+        event,
+        semantics,
+        at,
+        slotFor,
+        dropSlotIfEmpty,
+        { scheduleEmit, slots }
+      );
       if (!hook) {
         logAgentEventDropped("ghost-rejected", key, event.event);
         return false;

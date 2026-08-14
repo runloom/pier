@@ -310,6 +310,62 @@ describe("PierFileTree", () => {
     expect(onOpenPath).not.toHaveBeenCalled();
   });
 
+  it("explicit reveal of the settled active file still scrolls after a user wheel", async () => {
+    const treeApi = { current: null as PierFileTreeApi | null };
+    const tallItems: PierFileTreeItem[] = [
+      { kind: "directory", path: "src" },
+      ...Array.from({ length: 48 }, (_, index) => ({
+        kind: "file" as const,
+        path: `src/file-${String(index).padStart(2, "0")}.ts`,
+      })),
+    ];
+    const { container } = render(
+      <PierFileTree
+        items={tallItems}
+        label="Project files"
+        revealPath="src/file-00.ts"
+        treeApiRef={treeApi}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: /file-00\.ts/,
+          selected: true,
+        })
+      ).toBeVisible();
+    });
+
+    const host = getFileTreeHost(container);
+    const scroller = host.shadowRoot?.querySelector<HTMLElement>(
+      '[data-file-tree-virtualized-scroll="true"]'
+    );
+    expect(scroller).toBeInstanceOf(HTMLElement);
+    const scrollElement = scroller as HTMLElement;
+
+    await act(async () => {
+      scrollElement.scrollTop = 360;
+      scrollElement.dispatchEvent(new Event("scroll"));
+      scrollElement.dispatchEvent(new WheelEvent("wheel", { deltaY: 40 }));
+    });
+    expect(scrollElement.scrollTop).toBe(360);
+
+    act(() => {
+      treeApi.current?.revealPath("src/file-00.ts", { intent: "explicit" });
+    });
+
+    await waitFor(() => {
+      expect(scrollElement.scrollTop).toBeLessThan(360);
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: /file-00\.ts/,
+          selected: true,
+        })
+      ).toBeVisible();
+    });
+  });
+
   it("reveals the compact-folder terminal when API targets a flattened head", async () => {
     const treeApi = { current: null as PierFileTreeApi | null };
     const chainItems: PierFileTreeItem[] = [
