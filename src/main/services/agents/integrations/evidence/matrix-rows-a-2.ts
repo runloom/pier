@@ -150,6 +150,8 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       nativeFact("processing", "before_agent_start", "PromptSubmit"),
       nativeFact("processing", "agent_end.willContinue", "processing"),
       nativeFact("tool", "tool_execution_start", "ToolStart"),
+      nativeFact("waiting", "tool_execution_start.ask", "InteractionRequested"),
+      nativeFact("waiting", "tool_execution_end.ask", "InteractionResolved"),
       nativeFact("waiting", "tool_approval_requested", "InteractionRequested"),
       nativeFact("waiting", "tool_approval_resolved", "InteractionResolved"),
       nativeFact("processing", "tool_execution_end", "ToolComplete"),

@@ -44,7 +44,7 @@ function openClaudeStandardCommand(
  * 因此不整类进入 waiting。waiting 仅对与 Claude 同名的阻塞工具上报：
  * EnterPlanMode / ExitPlanMode / AskUserQuestion
  * （源码：src/tools/ExitPlanModeTool、EnterPlanModeTool、AskUserQuestionTool；
- * ExitPlanMode 非 teammate 路径 require user confirmation）。
+ * ExitPlanMode 非 teammate 路径 require user confirmation，拒绝无 Post）。
  */
 const OPENCLAUDE_SPEC: NestedJsonIntegrationSpec = {
   agentId: "openclaude",

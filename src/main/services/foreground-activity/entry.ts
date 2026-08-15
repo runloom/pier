@@ -109,6 +109,11 @@ export function hookIdentityFacts(
 
 export interface HookScope {
   activeInteractionIds: Set<string>;
+  /**
+   * 可被后续普通 ToolStart 顶替的未闭环交互：plan 审批门，以及仅以
+   * ToolStart 出现、没有具名 InteractionRequested 闭环的阻塞问卷。
+   */
+  activePlanInteractionIds: Set<string>;
   activeSubagentIds: Set<string>;
   activeToolIds: Set<string>;
   anonymousInteractionCount: number;
@@ -279,6 +284,7 @@ export function newHookScope(
 ): HookScope {
   return {
     activeInteractionIds: new Set(),
+    activePlanInteractionIds: new Set(),
     activeSubagentIds: new Set(),
     activeToolIds: new Set(),
     anonymousInteractionCount: 0,

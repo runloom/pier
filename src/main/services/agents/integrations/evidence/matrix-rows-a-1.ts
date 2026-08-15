@@ -403,7 +403,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       ready: "native",
       processing: "native",
       tool: "native",
-      waiting: "unsupported",
+      waiting: "native",
       error: "unsupported",
       completed: "unsupported",
       interrupted: "unsupported",
@@ -415,7 +415,9 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("ready", "agent_settled", "Stop"),
       nativeFact("processing", "before_agent_start", "PromptSubmit"),
       nativeFact("processing", "tool_execution_end", "ToolComplete"),
-      nativeFact("tool", "tool_execution_start", "ToolStart")
+      nativeFact("tool", "tool_execution_start", "ToolStart"),
+      nativeFact("waiting", "tool_execution_start.ask", "InteractionRequested"),
+      nativeFact("waiting", "tool_execution_end.ask", "InteractionResolved")
     ),
     upstream: sourceCommit(
       "https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/docs/extensions.md",

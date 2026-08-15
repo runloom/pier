@@ -47,8 +47,10 @@ interface CodexTranscriptReconcilerOpts {
  *
  * hooks 当前没有独立的 interrupt 事件；Esc 中断会写入 transcript 的
  * `event_msg/turn_aborted`。这里仅消费 task_complete / turn_aborted 两种终态，
- * 不把 transcript 当工具或过程状态的权威源。格式变化时静默失效，hook 与
- * PTY 退出兜底仍然有效。
+ * 不把 transcript 当工具或过程状态的权威源。现行 rollout 把问卷写成
+ * `response_item.function_call`（`name=request_user_input`）；只认旧
+ * `event_msg` 会漏掉 InteractionRequested，PreToolUse 把问卷标成 tool。
+ * 旧 event_msg 形状仍认。格式再变则静默失效，hook 与 PTY 退出兜底仍然有效。
  *
  * Ev5：`turn_aborted`（含 reason=`interrupted`）只映 `TurnInterrupted`→ready，
  * **不得**映 FA `error`——用户中断不是回合失败。无独立失败终态可映射。
@@ -116,6 +118,45 @@ function interactionOutcome(
   return "completed";
 }
 
+function stringField(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function turnIdFromPayload(payload: {
+  internal_chat_message_metadata_passthrough?: { turn_id?: unknown };
+  turn_id?: unknown;
+}): string {
+  const nested = payload.internal_chat_message_metadata_passthrough?.turn_id;
+  return stringField(payload.turn_id) || stringField(nested);
+}
+
+function rememberInteraction(
+  pending: Map<string, PendingCodexInteraction>,
+  nativeName: PendingCodexInteraction["nativeName"],
+  callId: string,
+  turnId: string
+): TranscriptTerminalRecord | null {
+  if (!callId) return null;
+  const interaction: PendingCodexInteraction = {
+    interactionKind:
+      nativeName === "request_user_input" ? "question" : "permission",
+    nativeName,
+    turnId,
+  };
+  pending.delete(callId);
+  pending.set(callId, interaction);
+  if (pending.size > MAX_PENDING_CODEX_INTERACTIONS) {
+    pending.delete(pending.keys().next().value ?? "");
+  }
+  return {
+    interactionId: callId,
+    interactionKind: interaction.interactionKind,
+    nativeEvent: `codex.transcript.${nativeName}`,
+    pierEvent: "InteractionRequested",
+    turnId,
+  };
+}
+
 function createCodexTranscriptLineClassifier(): (
   line: string
 ) => TranscriptTerminalRecord | null {
@@ -124,6 +165,8 @@ function createCodexTranscriptLineClassifier(): (
     const parsed = JSON.parse(line) as {
       payload?: {
         call_id?: unknown;
+        internal_chat_message_metadata_passthrough?: { turn_id?: unknown };
+        name?: unknown;
         output?: unknown;
         reason?: unknown;
         turn_id?: unknown;
@@ -132,35 +175,31 @@ function createCodexTranscriptLineClassifier(): (
       type?: unknown;
     };
     const payload = parsed.payload;
+    if (
+      parsed.type === "response_item" &&
+      payload?.type === "function_call" &&
+      (payload.name === "request_user_input" ||
+        payload.name === "request_permissions")
+    ) {
+      return rememberInteraction(
+        pending,
+        payload.name,
+        stringField(payload.call_id),
+        turnIdFromPayload(payload)
+      );
+    }
     if (parsed.type === "event_msg") {
       const nativeType = payload?.type;
       if (
         nativeType === "request_user_input" ||
         nativeType === "request_permissions"
       ) {
-        const callId =
-          typeof payload?.call_id === "string" ? payload.call_id : "";
-        const turnId =
-          typeof payload?.turn_id === "string" ? payload.turn_id : "";
-        if (!callId) return null;
-        const interaction: PendingCodexInteraction = {
-          interactionKind:
-            nativeType === "request_user_input" ? "question" : "permission",
-          nativeName: nativeType,
-          turnId,
-        };
-        pending.delete(callId);
-        pending.set(callId, interaction);
-        if (pending.size > MAX_PENDING_CODEX_INTERACTIONS) {
-          pending.delete(pending.keys().next().value ?? "");
-        }
-        return {
-          interactionId: callId,
-          interactionKind: interaction.interactionKind,
-          nativeEvent: `codex.transcript.${nativeType}`,
-          pierEvent: "InteractionRequested",
-          turnId,
-        };
+        return rememberInteraction(
+          pending,
+          nativeType,
+          stringField(payload.call_id),
+          turnIdFromPayload(payload)
+        );
       }
       const terminalType = payload?.type;
       const isCompleted =

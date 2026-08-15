@@ -46,6 +46,7 @@ function claudeStandardCommand(
  *   `messageIdleNotifThresholdMs`（默认 60s；取消主路径是 host 裸 Esc）。
  * - waiting 仅对 EnterPlanMode / ExitPlanMode / AskUserQuestion 经 Pre/Post
  *   toolUseId 闭环上报（见 CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS）。
+ *   ExitPlanMode 非 teammate 为 permission ask；用户拒绝不跑 call、无 Post。
  * - StopFailure = 回合因 API 错误终止 → pier "error" → tab failed。
  * - 取消主路径：host `pier.terminal.user_escape`（busy 时 TurnInterrupted）。
  *   辅：transcript 中断标记 / assistant_stop；hook Stop 常缺。

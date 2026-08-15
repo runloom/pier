@@ -61,7 +61,15 @@ describe("buildOmpExtensionSource", () => {
       { nativeEvent: "session_start", pierEvent: "SessionStart" },
       { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
       { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
+      {
+        nativeEvent: "tool_execution_start.ask",
+        pierEvent: "InteractionRequested",
+      },
       { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
+      {
+        nativeEvent: "tool_execution_end.ask",
+        pierEvent: "InteractionResolved",
+      },
       {
         nativeEvent: "tool_approval_requested",
         pierEvent: "InteractionRequested",
@@ -358,6 +366,70 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       "processing",
       "ready",
     ]);
+  });
+
+  it("ask 问卷走 InteractionRequested，不标成 ToolStart", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: OmpEventCtx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => "session-omp" },
+    };
+    main.fire("before_agent_start", ctx, {
+      prompt: "clean untracked",
+      type: "before_agent_start",
+    });
+    main.fire("tool_execution_start", ctx, {
+      intent: "Clarifying destructive cleanup scope",
+      toolCallId: "call-ask-1",
+      toolName: "ask",
+      type: "tool_execution_start",
+    });
+    main.fire("tool_execution_end", ctx, {
+      toolCallId: "call-ask-1",
+      toolName: "ask",
+      type: "tool_execution_end",
+    });
+    const records = await readEmittedRecords(logPath);
+    expect(records).toMatchObject([
+      { event: "PromptSubmit" },
+      {
+        event: "InteractionRequested",
+        interactionId: "call-ask-1",
+        interactionKind: "question",
+        nativeEvent: "tool_execution_start.ask",
+        toolName: "ask",
+        toolUseId: "call-ask-1",
+      },
+      {
+        event: "InteractionResolved",
+        interactionId: "call-ask-1",
+        interactionKind: "question",
+        interactionOutcome: "completed",
+        nativeEvent: "tool_execution_end.ask",
+        toolName: "ask",
+        toolUseId: "call-ask-1",
+      },
+    ]);
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: string[] = [];
+    for (const record of records) {
+      const parsed = agentHookEventSchema.parse(record);
+      if (parsed.kind !== "agentEvent") {
+        continue;
+      }
+      aggregator.ingestAgentEvent(parsed, {
+        evidenceSource: "hook",
+        stopAuthority: "authoritative",
+        turnStartAuthority: "none",
+      });
+      const activity = aggregator.snapshot().activities[0];
+      if (activity?.kind === "agent" && activity.status) {
+        statuses.push(activity.status);
+      }
+    }
+    expect(statuses).toEqual(["processing", "waiting", "processing"]);
   });
 
   it.each([

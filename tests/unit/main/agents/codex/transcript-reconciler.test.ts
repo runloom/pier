@@ -210,6 +210,64 @@ describe("codex transcript reconciler", () => {
     reconciler.dispose();
   });
 
+  it("现行 rollout 把 request_user_input 写成 function_call，应对账为 waiting", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path, "turn-ask"));
+    appendFileSync(
+      path,
+      `${[
+        {
+          payload: {
+            call_id: "call_zTLeigi8haWyqFdZXifBs2lA",
+            id: "fc_0f6d210d47db475c016a8021252e1c87d095f504c01eba8fbc",
+            internal_chat_message_metadata_passthrough: {
+              turn_id: "turn-ask",
+            },
+            name: "request_user_input",
+            type: "function_call",
+          },
+          type: "response_item",
+        },
+        {
+          payload: {
+            call_id: "call_zTLeigi8haWyqFdZXifBs2lA",
+            output: '{"answers":{"uncommitted_goal":{"answers":["ignore"]}}}',
+            type: "function_call_output",
+          },
+          type: "response_item",
+        },
+      ]
+        .map((line) => JSON.stringify(line))
+        .join("\n")}\n`
+    );
+
+    await waitForTranscript(() => expect(received).toHaveLength(2));
+    expect(received).toMatchObject([
+      {
+        event: "InteractionRequested",
+        interactionId: "call_zTLeigi8haWyqFdZXifBs2lA",
+        interactionKind: "question",
+        nativeEvent: "codex.transcript.request_user_input",
+        turnId: "turn-ask",
+        v: 3,
+      },
+      {
+        event: "InteractionResolved",
+        interactionId: "call_zTLeigi8haWyqFdZXifBs2lA",
+        interactionKind: "question",
+        interactionOutcome: "completed",
+        nativeEvent: "codex.transcript.request_user_input.output",
+        turnId: "turn-ask",
+        v: 3,
+      },
+    ]);
+    reconciler.dispose();
+  });
+
   it("两个 transcript 的相同 call_id 与 turn_id 只解除各自 entry", async () => {
     const secondPath = join(transcriptRoot, "rollout-second.jsonl");
     writeFileSync(secondPath, '{"type":"session_meta"}\n');

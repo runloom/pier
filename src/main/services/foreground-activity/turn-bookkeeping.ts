@@ -6,6 +6,10 @@ import {
   normalizeAgentTurnId,
 } from "./agent-turn-event-semantics.ts";
 import type { HookScope } from "./entry.ts";
+import {
+  isInteractiveBlockingToolName,
+  isPlanApprovalToolName,
+} from "./plan-approval.ts";
 
 const MAX_SETTLED_IDS_PER_KIND = 256;
 
@@ -73,6 +77,56 @@ function settleNamedWork(
 
 function reject(reason: TurnBookkeepingRejectionReason): TurnBookkeepingResult {
   return { accepted: false, reason };
+}
+
+function eventToolName(event: AgentHookEventPayload): string | undefined {
+  return "toolName" in event ? event.toolName?.trim() || undefined : undefined;
+}
+
+function eventInteractionId(event: AgentHookEventPayload): string | undefined {
+  return "interactionId" in event
+    ? event.interactionId?.trim() || undefined
+    : undefined;
+}
+
+function interactiveToolWorkId(
+  event: AgentHookEventPayload,
+  toolName: string
+): string {
+  return event.toolUseId?.trim() || `interactive:${toolName}`;
+}
+
+/** ToolStart 出现的阻塞工具记为可顶替 waiting；已有具名问卷则保持闭环。 */
+function promoteInteractiveToolStart(
+  scope: HookScope,
+  event: AgentHookEventPayload,
+  toolName: string
+): void {
+  const id = interactiveToolWorkId(event, toolName);
+  const alreadyNamed = scope.activeInteractionIds.has(id);
+  reopenNamedWork(scope.settledInteractionIds, id);
+  scope.activeInteractionIds.add(id);
+  if (!alreadyNamed) {
+    scope.activePlanInteractionIds.add(id);
+  }
+}
+
+function settlePlanApprovalId(scope: HookScope, id: string): void {
+  settleNamedWork(scope.settledInteractionIds, id, () => {
+    scope.interactionHistoryIncomplete = true;
+  });
+  scope.activeInteractionIds.delete(id);
+  scope.activePlanInteractionIds.delete(id);
+}
+
+/** 可顶替 waiting（plan / 仅 ToolStart 的阻塞工具）在再次出示、具名非 plan 交互或普通 ToolStart 时结算。 */
+function settleActivePlanApprovals(scope: HookScope): void {
+  if (scope.activePlanInteractionIds.size === 0) {
+    return;
+  }
+  for (const id of [...scope.activePlanInteractionIds]) {
+    settlePlanApprovalId(scope, id);
+  }
 }
 
 function resetTurn(
@@ -217,17 +271,20 @@ export function applyTurnBookkeeping(
   if (semantics.category === "session-end") {
     clearActiveWork(scope);
   } else if (eventName === "InteractionRequested") {
-    const id =
-      "interactionId" in event ? event.interactionId?.trim() : undefined;
+    const id = eventInteractionId(event);
+    const planApproval = isPlanApprovalToolName(eventToolName(event));
     if (id) {
+      settleActivePlanApprovals(scope);
       reopenNamedWork(scope.settledInteractionIds, id);
       scope.activeInteractionIds.add(id);
+      if (planApproval) {
+        scope.activePlanInteractionIds.add(id);
+      }
     } else {
       scope.anonymousInteractionCount += 1;
     }
   } else if (eventName === "InteractionResolved") {
-    const id =
-      "interactionId" in event ? event.interactionId?.trim() : undefined;
+    const id = eventInteractionId(event);
     if (id) {
       const historyIncomplete = scope.interactionHistoryIncomplete;
       if (
@@ -238,6 +295,7 @@ export function applyTurnBookkeeping(
         return ACCEPTED_NONE;
       }
       const removed = scope.activeInteractionIds.delete(id);
+      scope.activePlanInteractionIds.delete(id);
       if (
         !(removed || historyIncomplete) &&
         scope.anonymousInteractionCount > 0
@@ -251,30 +309,41 @@ export function applyTurnBookkeeping(
       );
     }
   } else if (eventName === "ToolStart") {
-    const id = event.toolUseId?.trim();
-    if (id) {
-      reopenNamedWork(scope.settledToolIds, id);
-      scope.activeToolIds.add(id);
+    const toolName = eventToolName(event);
+    if (isInteractiveBlockingToolName(toolName) && toolName) {
+      promoteInteractiveToolStart(scope, event, toolName);
     } else {
-      scope.anonymousToolCount += 1;
+      settleActivePlanApprovals(scope);
+      const id = event.toolUseId?.trim();
+      if (id) {
+        reopenNamedWork(scope.settledToolIds, id);
+        scope.activeToolIds.add(id);
+      } else {
+        scope.anonymousToolCount += 1;
+      }
     }
   } else if (eventName === "ToolComplete") {
-    const id = event.toolUseId?.trim();
-    if (id) {
-      const historyIncomplete = scope.toolHistoryIncomplete;
-      if (
-        !settleNamedWork(scope.settledToolIds, id, () => {
-          scope.toolHistoryIncomplete = true;
-        })
-      ) {
-        return ACCEPTED_NONE;
-      }
-      const removed = scope.activeToolIds.delete(id);
-      if (!(removed || historyIncomplete) && scope.anonymousToolCount > 0) {
-        scope.anonymousToolCount -= 1;
-      }
+    const toolName = eventToolName(event);
+    if (isInteractiveBlockingToolName(toolName) && toolName) {
+      settlePlanApprovalId(scope, interactiveToolWorkId(event, toolName));
     } else {
-      scope.anonymousToolCount = Math.max(0, scope.anonymousToolCount - 1);
+      const id = event.toolUseId?.trim();
+      if (id) {
+        const historyIncomplete = scope.toolHistoryIncomplete;
+        if (
+          !settleNamedWork(scope.settledToolIds, id, () => {
+            scope.toolHistoryIncomplete = true;
+          })
+        ) {
+          return ACCEPTED_NONE;
+        }
+        const removed = scope.activeToolIds.delete(id);
+        if (!(removed || historyIncomplete) && scope.anonymousToolCount > 0) {
+          scope.anonymousToolCount -= 1;
+        }
+      } else {
+        scope.anonymousToolCount = Math.max(0, scope.anonymousToolCount - 1);
+      }
     }
   } else if (eventName === "SubagentStart") {
     const id = subagentWorkId;
@@ -328,6 +397,7 @@ function clearActiveWork(scope: HookScope): TerminalRetiredWork | undefined {
     scope.toolHistoryIncomplete = true;
   }
   scope.activeInteractionIds.clear();
+  scope.activePlanInteractionIds.clear();
   scope.activeSubagentIds.clear();
   scope.activeToolIds.clear();
   scope.anonymousInteractionCount = 0;
