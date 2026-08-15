@@ -55,4 +55,39 @@ describe("withPanelStatusEnv", () => {
     expect(out.env?.PIER_AGENT_CALLER_CREDENTIAL_FILE).toBeUndefined();
     expect(out.env?.PIER_PANEL_ID).toBe("panel-4");
   });
+
+  it("剥离 dump/宿主的 TERM 等模拟器键，交给 Ghostty 自设", () => {
+    const out = withPanelStatusEnv(
+      {
+        cwd: "/tmp/pier.worktrees/wt-1",
+        env: {
+          COLORTERM: "truecolor",
+          COLUMNS: "80",
+          LINES: "24",
+          PATH: "/opt/homebrew/bin:/usr/bin",
+          TERM: "dumb",
+          TERMCAP: "xterm:",
+          TERMINFO: "/usr/share/terminfo",
+          TERMINFO_DIRS: "/usr/share/terminfo",
+          TERM_PROGRAM: "iTerm.app",
+          TERM_PROGRAM_VERSION: "3.5.0",
+        },
+      },
+      "panel-wt",
+      "3",
+      hookEnv
+    );
+    expect(out.env?.PATH).toBe("/opt/homebrew/bin:/usr/bin");
+    expect(out.env?.TERM).toBeUndefined();
+    expect(out.env?.COLORTERM).toBeUndefined();
+    expect(out.env?.TERM_PROGRAM).toBeUndefined();
+    expect(out.env?.TERM_PROGRAM_VERSION).toBeUndefined();
+    expect(out.env?.TERMINFO).toBeUndefined();
+    expect(out.env?.TERMINFO_DIRS).toBeUndefined();
+    expect(out.env?.TERMCAP).toBeUndefined();
+    expect(out.env?.COLUMNS).toBeUndefined();
+    expect(out.env?.LINES).toBeUndefined();
+    expect(out.env?.PIER_PANEL_ID).toBe("panel-wt");
+    expect(out.env?.PIER_WINDOW_ID).toBe("3");
+  });
 });

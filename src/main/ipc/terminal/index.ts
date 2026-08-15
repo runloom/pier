@@ -224,10 +224,7 @@ export function registerTerminalIpc(
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
     recordNativeTerminalRoute(id, "cwd", panelId, { cwd });
     const rawPanelId = fromNativePanelKey(panelId);
-    // 首次 cwd 事件 = ghostty shell integration 已进入 precmd（准备打
-    // prompt），此时把 initialInput 注入 pty 才能落在 shell 已读 stdin
-    // 的区间内，避免命令字符被 raw tty echo 打在登录 banner 之前。后续
-    // cwd 事件对 gate 是 no-op（gate 一次性消费）。
+    // 首次 cwd = precmd。gate 在有 viewport 时等到 prompt 画完再注入。
     signalPromptReady(rawPanelId);
     const targetWindow = findAppWindowByElectronId(id);
     handleTerminalCwdChange(id, rawPanelId, cwd, targetWindow).catch((err) => {

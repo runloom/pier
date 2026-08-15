@@ -28,6 +28,7 @@ export {
   createProcessEnvironmentService,
   DEFAULT_SHELL_ENV_TIMEOUT_MS,
   mergeEnv,
+  omitTerminalEmulatorEnv,
   PIER_RESOLVING_ENVIRONMENT,
   parseShellEnvironmentOutput,
   pickHostApplyEnv,
@@ -36,4 +37,5 @@ export {
   shellEnvCommand,
   shouldApplyHostEnvKey,
   stubProcessEnvironmentService,
+  TERMINAL_EMULATOR_ENV_KEYS,
 } from "./process-environment/index.ts";

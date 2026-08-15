@@ -29,16 +29,12 @@ import { findInternalWindowId } from "../../windows/identity.ts";
 import { foregroundActivityService } from "../foreground-activity.ts";
 import { resolveRestoredAgentLaunchEnv } from "./create-env.ts";
 import {
-  composeAgentInjectInput,
   consumeCreateLaunch,
   resolveCreateTerminalLaunch,
   withAgentLoginShellSafeCommand,
   withPanelStatusEnv,
 } from "./create-launch.ts";
-import {
-  finishFailedAgentCommandInject,
-  sendInitialTerminalInput,
-} from "./create-post-actions.ts";
+import { sendInitialTerminalInput } from "./create-post-actions.ts";
 import { resolveTerminalTransferCreateAction } from "./create-transfer-guard.ts";
 import { recordRendererTerminalRoute } from "./debug.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
@@ -360,10 +356,6 @@ export async function handleTerminalCreate(args: {
       launch.launchAgentId
     );
     const launchForCreate = surface.launch;
-    const initialInput = composeAgentInjectInput({
-      existingInput: createArgs.initialInput,
-      injectCommand: surface.injectCommand,
-    });
     // 不向终端注入 caller binding / 凭证：本机 CLI 不按「权限主体」管理智能体。
     // withPanelStatusEnv 仍剥离父进程残留的 binding 环境变量，避免误传。
     const ok = await createTerminalAndSeedResource({
@@ -397,33 +389,8 @@ export async function handleTerminalCreate(args: {
     // child-exited and calls injectDisplayText (native does not i18n).
     sendInitialTerminalInput({
       addon,
-      initialInput,
+      initialInput: createArgs.initialInput,
       nativePanelId,
-      ...(surface.injectCommand === undefined
-        ? {}
-        : {
-            onFailed: () => {
-              foregroundActivityService.commandFinished(
-                createArgs.panelId,
-                0,
-                String(win.id)
-              );
-              finishFailedAgentCommandInject({
-                clearAgent: () =>
-                  clearTerminalPanelAgent(sessionScope, createArgs.panelId),
-                logError: (err) => {
-                  console.error(
-                    "[terminal] clear agent after inject failure:",
-                    err
-                  );
-                },
-                panelId: createArgs.panelId,
-                skipClear: restoredAgentLaunch,
-              }).catch((err) => {
-                console.error("[terminal] inject failure cleanup failed:", err);
-              });
-            },
-          }),
       panelId: createArgs.panelId,
     });
     if (launch.launchAgentId) {
