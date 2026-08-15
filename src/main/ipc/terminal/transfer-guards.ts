@@ -11,9 +11,9 @@ import {
 import type { AppWindow } from "../../windows/app-window.ts";
 import { findInternalWindowId } from "../../windows/identity.ts";
 import { foregroundActivityService } from "../foreground-activity.ts";
+import { cancelInitialTerminalInput } from "./create-post-actions.ts";
 import { recordRendererTerminalRoute } from "./debug.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
-import { cancelPromptReady } from "./initial-input-gate.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { toNativePanelKey } from "./panel-id.ts";
 import type { RegisteredTerminalTaskLifecycle } from "./task-lifecycle-wiring.ts";
@@ -65,7 +65,7 @@ export function tryAcknowledgeTransferSourceClose(input: {
     return false;
   }
   terminalFocusCoordinator.surfaceWillClose(input.win, input.panelId);
-  cancelPromptReady(input.panelId);
+  cancelInitialTerminalInput(input.panelId);
   return true;
 }
 
@@ -147,7 +147,7 @@ export function registerTerminalTransferGuardIpc(opts: {
       terminalFocusCoordinator.surfaceWillClose(win, panelId);
       // 面板关闭时清 initial-input gate 的 pending 定时器，防止 pty 已死
       // 但 fallback timer 仍尝试注入到不存在的 panel。
-      cancelPromptReady(panelId);
+      cancelInitialTerminalInput(panelId);
       addon?.closeTerminal(nativePanelId);
       try {
         await removeTerminalPanelSession(sessionScope, panelId);

@@ -3701,7 +3701,8 @@ describe("createCommandRouter", () => {
         role: "agent",
       },
       focus: true,
-      initialInput: "修复终端焦点问题\r",
+      initialInput: "修复终端焦点问题",
+      initialInputSubmit: true,
       launchId: "launch-1",
       tab: {
         icon: { id: agentTabIconId("codex") },

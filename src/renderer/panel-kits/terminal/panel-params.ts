@@ -12,6 +12,7 @@ import {
 export interface ActiveTerminalLaunch {
   context?: PanelContext | undefined;
   initialInput?: string | undefined;
+  initialInputSubmit?: boolean | undefined;
   launchId?: string | undefined;
   sequence: number;
   tab?: PanelTabChrome | undefined;

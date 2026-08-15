@@ -52,6 +52,7 @@ export function useTerminalRelaunch({
         setActiveLaunch({
           context: relaunchRequest.context,
           initialInput: relaunchRequest.initialInput,
+          initialInputSubmit: relaunchRequest.initialInputSubmit,
           launchId: relaunchRequest.launchId,
           sequence: relaunchRequest.sequence,
           tab: relaunchRequest.tab,

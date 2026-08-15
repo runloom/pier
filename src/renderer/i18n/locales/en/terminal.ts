@@ -1,5 +1,13 @@
 export const terminal = {
   closeFailed: "Couldn't close terminal — try again",
+  initialInput: {
+    promptEnterFailed: "The text is already typed. Press Return to send it.",
+    promptFailed:
+      "The terminal opened, but the task text could not be typed. Type it in the terminal.",
+    setupEnterFailed: "The command is already typed. Press Return to run it.",
+    setupFailed:
+      "The terminal opened, but the setup command could not be run. Run it in the terminal, or create it again.",
+  },
   frameWaitFailed:
     "Terminal view didn't appear. Try again, or reopen this terminal.",
   openPathFailed: "Couldn't open path — try again",

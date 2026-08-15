@@ -459,6 +459,7 @@ describe("TerminalPanel lifecycle", () => {
           hide: vi.fn(),
           navigateSearch: vi.fn(async () => ({ ok: true })),
           onContextMenuRequest: vi.fn(() => vi.fn()),
+          onInitialInputFailed: vi.fn(() => vi.fn()),
           onOpenUrl: vi.fn(() => vi.fn()),
           onCwdChange: vi.fn((cb) => {
             const listener = { cb };
@@ -892,7 +893,10 @@ describe("TerminalPanel lifecycle", () => {
 
   it("passes launchId into native terminal creation", async () => {
     markFreshTerminalPanel("terminal-1");
-    setFreshTerminalInitialInput("terminal-1", "修复终端焦点问题\r");
+    setFreshTerminalInitialInput("terminal-1", {
+      submit: true,
+      text: "修复终端焦点问题",
+    });
     render(
       <TerminalPanel
         {...createPanelProps({
@@ -908,7 +912,8 @@ describe("TerminalPanel lifecycle", () => {
       expect(window.pier.terminal.create).toHaveBeenCalledWith(
         expect.objectContaining({
           context,
-          initialInput: "修复终端焦点问题\r",
+          initialInput: "修复终端焦点问题",
+          initialInputSubmit: true,
           launchId: "launch-1",
           panelId: "terminal-1",
         })

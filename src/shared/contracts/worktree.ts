@@ -210,9 +210,9 @@ export type WorktreeCreationDefaults = z.infer<
 export const worktreeOpenTerminalRequestSchema = z.object({
   agentId: agentKindSchema.optional(),
   /**
-   * 非 agent 场景下，作为 shell 首次输入自动执行（末尾自动补 `\r`）。
+   * 非 agent 场景下，作为 shell 首次输入自动执行（粘贴正文后再单独打 Return）。
    * agent 场景由 `taskPrompt` 承担，`initialCommand` 会被忽略。
-   * 典型用途：worktree 创建后把 setup 命令挪到终端里跑，让输出对用户可见。
+   * 典型用途：工作树创建后把 setup 命令挪到终端里跑，让输出对用户可见。
    */
   initialCommand: z.string().min(1).optional(),
   path: z.string().min(1),

@@ -184,7 +184,16 @@ export interface CreateTerminalArgs {
   exitPresentation?: TerminalExitPresentation | undefined;
   font: TerminalFont;
   frame: TerminalFrame;
+  /**
+   * 首条输入正文。不要把 `\r` 拼进这里表示提交；提交用
+   * {@link CreateTerminalArgs.initialInputSubmit}。
+   */
   initialInput?: string | undefined;
+  /**
+   * 首条输入是否在粘贴后单独打 Return。有 `initialInput` 且缺省时视为提交。
+   * 仅「只打字不回车」时显式传 false。
+   */
+  initialInputSubmit?: boolean | undefined;
   launchId?: string | undefined;
   panelId: string;
   /**
@@ -278,6 +287,15 @@ export interface TerminalCwdEvent {
 export interface TerminalTitleEvent {
   panelId: string;
   title: string;
+}
+
+/** 首条输入未能提交。setup = 工作树初始化命令；prompt = 智能体任务正文。 */
+export type TerminalInitialInputKind = "prompt" | "setup";
+
+export interface TerminalInitialInputFailedEvent {
+  kind: TerminalInitialInputKind;
+  panelId: string;
+  textDelivered: boolean;
 }
 
 export const terminalOpenUrlKindSchema = z.enum(["text", "html", "unknown"]);

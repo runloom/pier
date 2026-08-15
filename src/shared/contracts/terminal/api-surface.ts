@@ -12,6 +12,7 @@ import type {
   TerminalFocusRequest,
   TerminalFont,
   TerminalHostSnapshot,
+  TerminalInitialInputFailedEvent,
   TerminalOpenUrlEvent,
   TerminalOperation,
   TerminalOperationResult,
@@ -116,6 +117,10 @@ export interface TerminalAPI {
   onFrameCommitted(
     cb: (event: TerminalFrameCommittedEvent) => void
   ): () => void;
+  /** 普通终端首条输入未能粘贴或未能提交 Return。 */
+  onInitialInputFailed: (
+    cb: (event: TerminalInitialInputFailedEvent) => void
+  ) => () => void;
   onOpenUrl(cb: (event: TerminalOpenUrlEvent) => void): () => void;
   /** renderer 下发的 presentation 已被 native 同步应用, 用于 resize 撤占位的精确握手. */
   onPresentationApplied(

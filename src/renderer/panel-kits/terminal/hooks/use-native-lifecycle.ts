@@ -42,6 +42,7 @@ interface UseTerminalNativeLifecycleArgs {
   effectiveMonoFontSize: number;
   initialContext: PanelContext | undefined;
   initialInput: string | undefined;
+  initialInputSubmit: boolean | undefined;
   initialLaunchId: string | undefined;
   initialTab: CreateTerminalArgs["tab"] | undefined;
   initialTask: TaskPanelMetadata | undefined;
@@ -61,6 +62,7 @@ export function useTerminalNativeLifecycle({
   effectiveMonoFontSize,
   initialContext,
   initialInput,
+  initialInputSubmit,
   initialLaunchId,
   initialTab,
   initialTask,
@@ -309,7 +311,10 @@ export function useTerminalNativeLifecycle({
             size: effectiveMonoFontSizeRef.current,
           },
           ...(initialContext && { context: initialContext }),
-          ...(initialInput && { initialInput }),
+          ...(initialInput && {
+            initialInput,
+            initialInputSubmit: initialInputSubmit !== false,
+          }),
           ...(initialLaunchId && { launchId: initialLaunchId }),
           ...(initialTab && { tab: initialTab }),
           ...(initialTask && { task: initialTask }),
@@ -465,6 +470,7 @@ export function useTerminalNativeLifecycle({
     anchorRef,
     initialContext,
     initialInput,
+    initialInputSubmit,
     initialLaunchId,
     initialTab,
     initialTask,

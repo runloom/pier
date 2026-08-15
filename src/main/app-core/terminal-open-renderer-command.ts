@@ -12,6 +12,7 @@ export interface TerminalOpenOptions {
   clientEnv?: Record<string, string> | undefined;
   exitPresentation?: TerminalExitPresentation | undefined;
   initialInput?: string | undefined;
+  initialInputSubmit?: boolean | undefined;
   reusePanel?: TaskPanelRef | undefined;
   source?: ProcessEnvironmentSource | undefined;
   tab?: PanelTabChrome;
@@ -34,6 +35,9 @@ export function rendererTerminalOpenCommand(args: {
     focus: args.command.focus,
     ...(args.options.initialInput && {
       initialInput: args.options.initialInput,
+    }),
+    ...(args.options.initialInputSubmit !== undefined && {
+      initialInputSubmit: args.options.initialInputSubmit,
     }),
     launchId: args.launchId,
     ...(args.options.reusePanel

@@ -391,7 +391,18 @@ export async function handleTerminalCreate(args: {
       addon,
       initialInput: createArgs.initialInput,
       nativePanelId,
+      onFailed: (detail) => {
+        if (win.isDestroyed() || win.webContents.isDestroyed()) {
+          return;
+        }
+        win.webContents.send("pier:terminal:initial-input-failed", {
+          kind: launch.launchAgentId ? "prompt" : "setup",
+          panelId: createArgs.panelId,
+          textDelivered: detail?.textDelivered === true,
+        });
+      },
       panelId: createArgs.panelId,
+      submit: createArgs.initialInputSubmit,
     });
     if (launch.launchAgentId) {
       foregroundActivityService.agentLaunched(

@@ -132,7 +132,7 @@ function buildInitialInput(input: string | undefined): string | undefined {
   if (!normalized) {
     return;
   }
-  return `${normalized}\r`;
+  return normalized;
 }
 
 async function executeWorktreeOpenCommand(
@@ -218,7 +218,7 @@ async function executeWorktreeOpenTerminalCommand(
     services,
     {
       ...(command.agentId ? { tab: agentTerminalTab(command.agentId) } : {}),
-      ...(initialInput ? { initialInput } : {}),
+      ...(initialInput ? { initialInput, initialInputSubmit: true } : {}),
       ...(command.targetGroupId
         ? { targetGroupId: command.targetGroupId }
         : {}),

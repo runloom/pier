@@ -41,6 +41,7 @@ import { useAgentComposer } from "./hooks/use-agent-composer.ts";
 import { useTerminalChildExitedInject } from "./hooks/use-child-exited-inject.ts";
 import { useTerminalEndStateTab } from "./hooks/use-end-state-tab.ts";
 import { useTerminalFloatingLayoutRevision } from "./hooks/use-floating-layout-revision.ts";
+import { useInitialInputFailedToast } from "./hooks/use-initial-input-failed-toast.ts";
 import { useNativeTerminalContextMenuPopup } from "./hooks/use-native-context-menu-popup.ts";
 import { useTerminalNativeLifecycle } from "./hooks/use-native-lifecycle.ts";
 import { useTerminalPanelDescriptor } from "./hooks/use-panel-descriptor.ts";
@@ -82,17 +83,19 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     () => ({ panelId, value: isFreshTerminalPanel(panelId) }),
     [panelId]
   );
-  const [activeLaunch, setActiveLaunch] = useState<ActiveTerminalLaunch>(
-    () => ({
+  const [activeLaunch, setActiveLaunch] = useState<ActiveTerminalLaunch>(() => {
+    const freshInput = consumeFreshTerminalInitialInput(panelId);
+    return {
       context: panelContextFromParams(props.params),
-      initialInput: consumeFreshTerminalInitialInput(panelId),
+      initialInput: freshInput?.text,
+      initialInputSubmit: freshInput?.submit,
       launchId: launchIdFromParams(props.params),
       sequence: 0,
       tab: tabChromeFromParams(props.params),
       task: taskPanelMetadataFromParams(props.params),
       taskOutput: taskOutputFromParams(props.params),
-    })
-  );
+    };
+  });
   const relaunchRequest = useTerminalRelaunchRequest(panelId);
   const monoFontFamily = useFontStore((s) => s.monoFontFamily);
   const monoFontSize = useFontStore((s) => s.monoFontSize);
@@ -300,6 +303,8 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     };
   }, [freshPanel, panelId]);
 
+  useInitialInputFailedToast(panelId);
+
   useTerminalRelaunch({
     activeSequence: activeLaunch.sequence,
     clearTerminalError,
@@ -317,6 +322,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     anchorRef,
     effectiveMonoFontSize,
     initialInput: activeLaunch.initialInput,
+    initialInputSubmit: activeLaunch.initialInputSubmit,
     initialContext: activeLaunch.context,
     initialLaunchId: activeLaunch.launchId,
     initialTab: activeLaunch.tab,
