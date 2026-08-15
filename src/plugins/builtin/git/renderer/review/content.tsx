@@ -22,6 +22,7 @@ import { useGitReviewProjectionCommit } from "../hooks/use-projection-commit.ts"
 import { useGitReviewReadingCallbacks } from "../hooks/use-reading-callbacks.ts";
 import { useGitReviewRenderWindowReady } from "../hooks/use-render-window-ready.ts";
 import { useGitReviewRetentionSync } from "../hooks/use-retention-sync.ts";
+import { useRetryDocumentsAfterIndexRefresh } from "../hooks/use-retry-after-index-refresh.ts";
 import { useReviewCommentsBinding } from "../hooks/use-review-comments-binding.ts";
 import { useGitReviewCommentsIntegration } from "../hooks/use-review-comments-integration.ts";
 import { useGitReviewRetryFailure } from "../hooks/use-review-retry-failure.ts";
@@ -390,6 +391,10 @@ function ReviewSurfaceComponent({
     onSurfaceNavigationSettled,
     projection,
     setSelectedTreeTarget,
+  });
+  useRetryDocumentsAfterIndexRefresh({
+    indexRefreshing,
+    loaderRef,
   });
   const retryFailure = useGitReviewRetryFailure({
     beginNavigation,

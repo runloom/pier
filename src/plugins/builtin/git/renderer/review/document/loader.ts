@@ -26,6 +26,7 @@ import {
   rebuildLoaderWaiting,
   releaseLoaderRetainedEntries,
   retainLoaderDocument,
+  retryLoaderRetryableFailures,
   yieldLoaderConcurrencyForSelected,
 } from "./loader-runtime.ts";
 import {
@@ -148,6 +149,10 @@ export class GitReviewDocumentLoader {
     this.#rebuildWaiting();
     this.#pump(false);
     this.#emit();
+  }
+
+  retryRetryableFailures(): void {
+    retryLoaderRetryableFailures(this.#asRuntime());
   }
 
   /**

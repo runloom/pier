@@ -24,6 +24,7 @@ import {
   claimLegacyDraftForPanelSource,
   clearFilesDocumentStore,
   configureFilesDraftBackend,
+  createUntitledDocument,
   createUntitledMarkdownDocument,
   dismissDocumentDiskConflict,
   ensureDiskDocument,
@@ -44,6 +45,7 @@ import {
   resetFilesDraftBackendForTests,
   restoreUntitledDocumentFromPanelSource,
   setDocumentConflictContents,
+  setDocumentLanguage,
   subscribeFilesDocumentStore,
   updateDocumentContents,
 } from "@plugins/builtin/files/renderer/document/store.ts";
@@ -184,6 +186,24 @@ describe("files-document-store", () => {
     expect(second.name).toBe("Untitled-2.md");
   });
 
+  it("creates a typeless untitled document for New File", () => {
+    const document = createUntitledDocument({
+      contents: "",
+      language: "text",
+      nameKind: "plain",
+    });
+
+    expect(document.name).toBe("Untitled-1");
+    expect(document.language).toBe("text");
+    expect(document.needsSaveAs).toBe(true);
+    expect(document.dirty).toBe(false);
+    expect(document.source.kind).toBe("untitled");
+    if (document.source.kind === "untitled") {
+      expect(document.source.language).toBe("text");
+      expect(document.source.name).toBe("Untitled-1");
+    }
+  });
+
   it("continues untitled numbering from a restored UUID document name", async () => {
     const restoredId =
       "pier.files.untitled:00000000-0000-4000-8000-000000000001";
@@ -206,6 +226,44 @@ describe("files-document-store", () => {
     expect(createUntitledMarkdownDocument({ contents: "next" }).name).toBe(
       "Untitled-2.md"
     );
+  });
+
+  it("restores untitled language, line ending, and encoding from the draft", async () => {
+    const restoredId =
+      "pier.files.untitled:00000000-0000-4000-8000-000000000002";
+    const persisted = JSON.stringify({
+      currentContents: "const n = 1;\n",
+      dirty: true,
+      eol: "crlf",
+      format: { bom: true, encoding: "utf8" },
+      id: restoredId,
+      language: "typescript",
+      name: "Untitled-1",
+      savedContents: "const n = 1;\n",
+      savedEol: "lf",
+      savedFormat: { bom: false, encoding: "utf8" },
+    });
+    await configureFilesDraftBackend(
+      draftBackendFromMap(new Map([[untitledDraftKey(restoredId), persisted]]))
+    );
+
+    const restored = restoreUntitledDocumentFromPanelSource({
+      id: restoredId,
+      kind: "untitled",
+      name: "Untitled-1",
+    });
+
+    expect(restored).toMatchObject({
+      dirty: true,
+      eol: "crlf",
+      format: { bom: true, encoding: "utf8" },
+      language: "typescript",
+      name: "Untitled-1",
+    });
+    expect(restored?.source.kind).toBe("untitled");
+    if (restored?.source.kind === "untitled") {
+      expect(restored.source.language).toBe("typescript");
+    }
   });
 
   it("isolates invalid document draft content without blocking healthy drafts", async () => {
@@ -375,6 +433,74 @@ describe("files-document-store", () => {
     });
     expect(getDocument(disk.id)).toBe(reopened);
     expect(getDocument(preserved.id)).toBe(preserved);
+  });
+
+  it("preserves a deleted open file as untitled with the original language", async () => {
+    await configureFilesDraftBackend(draftBackendFromMap(new Map()));
+    const disk = ensureDiskDocument({ path: "src/app.ts", root: "/repo" });
+    markDocumentReadResult(disk.id, {
+      canonicalPath: "src/app.ts",
+      contents: "export const n = 1;\n",
+      eol: "crlf",
+      format: { bom: true, encoding: "utf8" },
+      kind: "text",
+      mode: 0o644,
+      mtimeMs: 1,
+      path: "src/app.ts",
+      revision: "rev-ts",
+      root: "/repo",
+      size: 20,
+      writable: true,
+    });
+    updateDocumentContents(disk.id, "export const n = 1;\n");
+
+    const preserved = await preserveDiskDocumentAsUntitled(disk.id);
+
+    expect(preserved.name).toBe("Untitled-1");
+    expect(preserved.language).toBe("typescript");
+    expect(preserved.eol).toBe("crlf");
+    expect(preserved.format).toEqual({ bom: true, encoding: "utf8" });
+    expect(preserved.source.kind).toBe("untitled");
+    if (preserved.source.kind === "untitled") {
+      expect(preserved.source.language).toBe("typescript");
+    }
+  });
+
+  it("restores a persisted disk language override", async () => {
+    const path = "notes.txt";
+    const root = "/repo";
+    const documentId = diskDocumentId(root, path);
+    const persisted = JSON.stringify({
+      baseMtimeMs: 1,
+      currentContents: "print(1)\n",
+      dirty: false,
+      id: documentId,
+      language: "python",
+      path,
+      root,
+      savedContents: "print(1)\n",
+    });
+    await configureFilesDraftBackend(
+      draftBackendFromMap(new Map([[diskDraftKey(documentId), persisted]]))
+    );
+
+    const restored = ensureDiskDocument({ path, root });
+    expect(restored.language).toBe("python");
+    expect(restored.languageOverridden).toBe(true);
+  });
+
+  it("preserves a picked language that no longer matches the deleted path", async () => {
+    await configureFilesDraftBackend(draftBackendFromMap(new Map()));
+    const disk = ensureDiskDocument({ path: "notes.txt", root: "/repo" });
+    setDocumentLanguage(disk.id, "python");
+
+    const preserved = await preserveDiskDocumentAsUntitled(disk.id);
+
+    expect(preserved.language).toBe("python");
+    expect(preserved.source.kind).toBe("untitled");
+    if (preserved.source.kind === "untitled") {
+      expect(preserved.source.language).toBe("python");
+    }
   });
 
   it("uses stable identity keys for file panels while creating distinct tab instance ids", () => {

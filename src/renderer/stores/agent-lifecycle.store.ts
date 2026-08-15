@@ -13,14 +13,17 @@ import type { AgentLifecycleFailure } from "@/pages/settings/components/agent-li
 import { isLifecycleSoftFailure } from "@/pages/settings/components/agent-lifecycle-format.ts";
 import {
   hasCachedProbes,
-  isLifecycleUpdateCandidate,
+  listLifecycleUpdateCandidates,
 } from "./agent-lifecycle-probe.ts";
 import { useAgentPreferencesStore } from "./agent-preferences.store.ts";
 import { probesFromAgentSnapshot } from "./host-catalog/agent-mirror.ts";
 import { useHostCatalogStore } from "./host-catalog/store.ts";
 
 export {
+  countLifecycleUpdateCandidates,
+  isLifecycleReinstallCandidate,
   isLifecycleUpdateCandidate,
+  listLifecycleUpdateCandidates,
   mergeProbes,
   withDerivedUpdateFlags,
 } from "./agent-lifecycle-probe.ts";
@@ -352,21 +355,10 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
     },
 
     updatableIds() {
-      const disabled = new Set(
+      return listLifecycleUpdateCandidates(
+        get().probesById,
         useAgentPreferencesStore.getState().disabledAgentIds
       );
-      const out: AgentKind[] = [];
-      for (const probe of Object.values(get().probesById)) {
-        if (
-          probe &&
-          isLifecycleUpdateCandidate(probe, {
-            disabled: disabled.has(probe.agentId),
-          })
-        ) {
-          out.push(probe.agentId);
-        }
-      }
-      return out;
     },
   })
 );

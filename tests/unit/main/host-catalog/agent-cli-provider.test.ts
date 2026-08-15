@@ -108,4 +108,74 @@ describe("createAgentCliCatalogProvider", () => {
       "broken"
     );
   });
+
+  it("does not treat reinstall-only probes as catalog update offers", async () => {
+    const provider = createAgentCliCatalogProvider({
+      detect: async () => ({ detectedIds: ["cursor"] }),
+      persist: {
+        flush: async () => undefined,
+        read: async () => emptyDomainSnapshot("agent-cli"),
+        write: async () => undefined,
+      },
+      probe: async () => [
+        probe({
+          agentId: "cursor",
+          updateMode: "reinstall",
+          // Stale combined meaning from older probes — catalog must ignore it.
+          updateOffered: true,
+          updateAvailable: false,
+        }),
+      ],
+    });
+
+    if (!provider.probeDerived) {
+      throw new Error("expected probeDerived");
+    }
+    const snapshot = await provider.probeDerived({ env: {}, now: 13 });
+    expect(
+      snapshot.items.find((item) => item.id === "cursor")?.updateOffered
+    ).toBe(false);
+  });
+
+  it("re-derives updateOffered from persisted probe details on local probe", async () => {
+    const stale = probe({
+      agentId: "cursor",
+      updateMode: "reinstall",
+      updateOffered: true,
+      updateAvailable: false,
+    });
+    const provider = createAgentCliCatalogProvider({
+      detect: async () => ({ detectedIds: ["cursor"] }),
+      persist: {
+        flush: async () => undefined,
+        read: async () => ({
+          ...emptyDomainSnapshot("agent-cli"),
+          items: [
+            {
+              details: stale,
+              domain: "agent-cli",
+              id: "cursor",
+              label: "Cursor",
+              localVersion: stale.version,
+              presence: "present",
+              remoteVersion: null,
+              updateOffered: true,
+            },
+          ],
+        }),
+        write: async () => undefined,
+      },
+      probe: async () => [],
+    });
+
+    const snapshot = await provider.probeLocal({
+      env: { PATH: "/opt/bin" },
+      now: 14,
+    });
+    const cursor = snapshot.items.find((item) => item.id === "cursor");
+    expect(cursor?.updateOffered).toBe(false);
+    expect(
+      (cursor?.details as { updateOffered?: boolean } | null)?.updateOffered
+    ).toBe(false);
+  });
 });

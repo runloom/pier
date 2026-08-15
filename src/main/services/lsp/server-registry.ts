@@ -34,6 +34,16 @@ export class LspServerRegistry {
     return this.matchAllForPath(path)[0] ?? null;
   }
 
+  matchForLanguageId(languageId: string): LspServerProvider | null {
+    return (
+      this.#providers
+        .filter((provider) =>
+          provider.selector.languageIds.includes(languageId)
+        )
+        .sort((left, right) => right.priority - left.priority)[0] ?? null
+    );
+  }
+
   getById(id: string): LspServerProvider | null {
     return this.#providers.find((provider) => provider.id === id) ?? null;
   }

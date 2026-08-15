@@ -121,11 +121,11 @@ export class WorkspacePathMentionNode extends DecoratorNode<JSX.Element> {
       >
         <PierFileIcon
           aria-hidden="true"
-          className="shrink-0"
+          className="shrink-0 self-center"
           fileName={this.__label}
           size={11}
         />
-        <span className="truncate">@{this.__label}</span>
+        <span className="truncate font-mono">@{this.__label}</span>
       </span>
     );
   }

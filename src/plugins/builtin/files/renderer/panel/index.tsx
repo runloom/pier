@@ -51,6 +51,7 @@ import {
   parseSourceState,
   sourceTitle,
 } from "./source.ts";
+import { fileDocumentShowsUnsavedMark } from "./tab-unsaved.ts";
 import type { FilePanelRuntimeProps } from "./types.ts";
 import { useFilesGroupViewClaim } from "./use-group-view-claim.ts";
 import { useFilesPanelRemoveClose } from "./use-remove-panel-close.ts";
@@ -170,16 +171,19 @@ function FilePanelContent({
     };
   }, [controller, inlineUntitledDocumentId]);
 
-  // tab 未保存圆点:document.dirty 变化时写进 params(与 preview 斜体同通道),
-  // panel-tab-header 经 onDidParametersChange 收到后渲染。dirty 同时并入
-  // preview→pinned promote(写在同一次 updateParameters,避免两个 effect
-  // 各自 spread 旧 params 相互覆盖)。
+  // tab 未保存圆点:dirty 或尚未落盘的 untitled(needsSaveAs) 写进 params,
+  // panel-tab-header 经 onDidParametersChange 收到后渲染。preview→pinned
+  // 只看 content dirty，避免空 untitled 一打开就被钉死。
   const trackedDocumentId = sourceFromParams
     ? controller.documentId(sourceFromParams)
     : null;
   const trackedDocument = useFilesDocument(trackedDocumentId ?? "");
   const trackedSource = panelSourceForDocument(trackedDocument);
   const trackedDirty = trackedDocument?.dirty === true;
+  const trackedUnsaved = fileDocumentShowsUnsavedMark({
+    dirty: trackedDirty,
+    needsSaveAs: trackedDocument?.needsSaveAs === true,
+  });
   useEffect(() => {
     if (
       !(props.api && sourceFromParams && trackedSource) ||
@@ -204,16 +208,16 @@ function FilePanelContent({
       return;
     }
     const paramsDirty = props.params?.dirty === true;
-    if (paramsDirty === trackedDirty) {
+    if (paramsDirty === trackedUnsaved) {
       return;
     }
     const promoteToPinned = trackedDirty && props.params?.pinned === false;
     props.api.updateParameters({
       ...(props.params ?? {}),
-      dirty: trackedDirty,
+      dirty: trackedUnsaved,
       ...(promoteToPinned ? { pinned: true } : {}),
     });
-  }, [props.api, props.params, trackedDirty]);
+  }, [props.api, props.params, trackedDirty, trackedUnsaved]);
 
   useFilesPanelRemoveClose({
     containerApi: (
@@ -427,6 +431,7 @@ function FilePanelContent({
           leading={chromeLeading}
           trailing={
             <ResolvedFilePanelActions
+              context={runtimeContext}
               controller={controller}
               editorSessionId={editorSessionId}
               mode={mode}

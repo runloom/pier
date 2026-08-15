@@ -1,6 +1,8 @@
 import type {
+  FileDocumentFormat,
   FileDocumentReadResult,
   FileDocumentWriteResult,
+  FileWritableDocumentEol,
 } from "@shared/contracts/file.ts";
 import {
   withDocumentConflictContents,
@@ -11,18 +13,21 @@ import {
   withDocumentDurabilityConfirmed,
   withDocumentDurabilityError,
   withDocumentError,
+  withDocumentLanguage,
   withDocumentLoaded,
   withDocumentLoading,
   withDocumentNormalizedEol,
   withDocumentPathReconciled,
   withDocumentReadResult,
   withDocumentSaved,
+  withDocumentSaveEol,
   withDocumentSaveError,
+  withDocumentSaveFormat,
   withDocumentSaveIdle,
   withDocumentSaving,
   withDocumentWritten,
 } from "./reducers.ts";
-import type { FilesDocument } from "./types.ts";
+import type { FilesDocument, FilesDocumentLanguage } from "./types.ts";
 
 type ReplaceDocument = (
   documentId: string,
@@ -116,6 +121,25 @@ export function createFilesDocumentStateActions(replace: ReplaceDocument) {
     normalizeDocumentEol(documentId: string, eol: "crlf" | "lf"): void {
       replace(documentId, (document) =>
         withDocumentNormalizedEol(document, eol)
+      );
+    },
+    setDocumentLanguage(
+      documentId: string,
+      language: FilesDocumentLanguage
+    ): void {
+      replace(documentId, (document) =>
+        withDocumentLanguage(document, language)
+      );
+    },
+    setDocumentSaveEol(documentId: string, eol: FileWritableDocumentEol): void {
+      replace(documentId, (document) => withDocumentSaveEol(document, eol));
+    },
+    setDocumentSaveFormat(
+      documentId: string,
+      format: FileDocumentFormat
+    ): void {
+      replace(documentId, (document) =>
+        withDocumentSaveFormat(document, format)
       );
     },
     setDocumentConflictContents(

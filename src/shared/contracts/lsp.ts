@@ -148,6 +148,11 @@ export const lspSessionEnsureRequestSchema = z.object({
   filePath: z.string().min(1).optional(),
   isWorktree: z.boolean().optional(),
   kind: lspWorkspaceKindSchema.default("local"),
+  /**
+   * Editor language override. When set, provider match uses languageIds
+   * instead of the file path (Plain Text → no provider).
+   */
+  languageId: z.string().min(1).optional(),
   /** Absolute workspace / project root (fallback root, not always server cwd). */
   rootPath: z.string().min(1),
   /** Stable workspace key; default main:${rootPath}. */

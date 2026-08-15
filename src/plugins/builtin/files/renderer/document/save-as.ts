@@ -27,6 +27,7 @@ export function buildSaveAsTargetDocument(input: {
     hasBackingStore: true,
     id: targetId,
     language: languageForPath(input.target.path, input.target.root),
+    languageOverridden: false,
     loadState: "loaded",
     mode: input.result.mode,
     name:
@@ -36,6 +37,8 @@ export function buildSaveAsTargetDocument(input: {
     readOnlyReason: null,
     revision: input.result.revision,
     savedContents: input.savedContents,
+    savedEol: input.source.eol,
+    savedFormat: input.source.format,
     saveState: "idle",
     size: input.result.size,
     source: {

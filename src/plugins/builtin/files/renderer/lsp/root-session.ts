@@ -134,6 +134,9 @@ async function ensureRootAttachment(input: {
       filePath: input.attachment.absolutePath,
       isWorktree,
       kind: "local",
+      ...(input.attachment.requestedLanguageId
+        ? { languageId: input.attachment.requestedLanguageId }
+        : {}),
       rootPath: requestRoot,
       workspaceKey,
     };

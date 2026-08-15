@@ -140,6 +140,8 @@ const document: FilesDocument = {
   readOnlyReason: null,
   revision: "revision-1",
   savedContents: "const value = 'a long line';\n",
+  savedEol: "lf",
+  savedFormat: { bom: false, encoding: "utf8" },
   saveState: "idle",
   size: 29,
   source: { kind: "disk", path: "src/file.ts", root: "/repo" },

@@ -15,6 +15,7 @@ interface DelegatedLspInput {
   absolutePath: string;
   documentId: string;
   getOpenExternal: () => (url: string) => void;
+  languageId?: string;
   ownerId: string;
   rootPath: string;
 }
@@ -74,6 +75,8 @@ function createDiskDocument(id = "document-1"): FilesDocument {
     readOnlyReason: null,
     revision: "revision-1",
     savedContents: "const value = 1;\n",
+    savedEol: "lf",
+    savedFormat: { bom: false, encoding: "utf8" },
     saveState: "idle",
     size: 17,
     source: { kind: "disk", path: "src/file.ts", root: "/repo" },
@@ -208,5 +211,40 @@ describe("FileEditorLanguageTools status ownership", () => {
     expect(
       getFilesLanguageServiceStatus("editor-session-enabled", sharedDocument.id)
     ).toEqual({ state: "starting" });
+  });
+
+  it("does not send a language override when the document still matches the path", () => {
+    const tools = createLanguageTools("editor-session-1", enabledPrefs);
+    tools.extensions(createDiskDocument());
+    expect(lspExtensions.mock.calls[0]?.[0]).not.toHaveProperty("languageId");
+  });
+
+  it("asks LSP to follow a picked language that no longer matches the path", () => {
+    const tools = createLanguageTools("editor-session-1", enabledPrefs);
+    tools.extensions({
+      ...createDiskDocument(),
+      language: "text",
+    });
+    expect(lspExtensions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        languageId: "text",
+      })
+    );
+  });
+
+  it("reconfigures LSP when the picked language changes", () => {
+    const tools = createLanguageTools("editor-session-1", enabledPrefs);
+    tools.extensions(createDiskDocument());
+    lspExtensions.mockClear();
+    const effects = tools.syncDocument({
+      ...createDiskDocument(),
+      language: "python",
+    });
+    expect(effects).toHaveLength(1);
+    expect(lspExtensions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        languageId: "python",
+      })
+    );
   });
 });

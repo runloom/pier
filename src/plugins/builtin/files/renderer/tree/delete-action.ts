@@ -2,13 +2,39 @@ import type {
   RendererPluginAction,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
-import { FILES_DELETE_COMMAND_ID } from "../../manifest.ts";
+import {
+  FILES_DELETE_COMMAND_ID,
+  FILES_FILE_PANEL_ID,
+} from "../../manifest.ts";
 import { isSamePathOrDescendant } from "../document/paths.ts";
-import type { FilesDocument } from "../document/types.ts";
+import {
+  type FilesDocument,
+  parseFilesDocumentPanelSource,
+} from "../document/types.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesTranslate } from "../i18n.ts";
 import { basename, parseTreeMetadata, pluginAction } from "./action-utils.ts";
 import { removeFilesTreeEntry } from "./store.ts";
+
+function closeOpenFilePanelsForDeletedPaths(
+  context: RendererPluginContext,
+  root: string,
+  paths: readonly string[]
+): void {
+  for (const instance of context.panels.listInstances(FILES_FILE_PANEL_ID)) {
+    const source = parseFilesDocumentPanelSource(instance.params);
+    if (
+      source?.kind === "disk" &&
+      source.root === root &&
+      paths.some((path) => isSamePathOrDescendant(source.path, path))
+    ) {
+      context.panels.closeInstance({
+        componentId: FILES_FILE_PANEL_ID,
+        instanceId: instance.id,
+      });
+    }
+  }
+}
 
 function collapseDeletionPaths(paths: readonly string[]): string[] {
   const unique = [...new Set(paths)];
@@ -176,6 +202,7 @@ export function createDeleteAction(
                     isSamePathOrDescendant(document.source.path, path)
                 )
             );
+            closeOpenFilePanelsForDeletedPaths(context, target.root, [path]);
           } catch (error) {
             failures.push({ error, path });
           }

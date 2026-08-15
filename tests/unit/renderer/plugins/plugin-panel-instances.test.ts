@@ -414,6 +414,54 @@ describe("plugin panel instances", () => {
     expect(originalMetadata.count).toBe(1);
   });
 
+  it("closes a plugin panel instance without closing the last remaining tab", () => {
+    const { api } = createMockApi();
+    useWorkspaceStore.setState({ api });
+    const context = createRendererPluginContext(entryWithPanel());
+    context.panels.register(testPanelRegistration);
+    context.panels.openInstance({
+      componentId: "pier.files.filePanel",
+      instanceId: "file-1",
+      title: "file.ts",
+    });
+    context.panels.openInstance({
+      componentId: "pier.files.filePanel",
+      instanceId: "file-2",
+      title: "other.ts",
+    });
+
+    expect(
+      context.panels.closeInstance({
+        componentId: "pier.files.filePanel",
+        instanceId: "file-1",
+      })
+    ).toBe(true);
+    expect(api.removePanel).toHaveBeenCalledOnce();
+    expect(api.panels.map((panel) => panel.id)).toEqual(["file-2"]);
+  });
+
+  it("adds a welcome tab before closing the last panel instance", () => {
+    const { api } = createMockApi();
+    useWorkspaceStore.setState({ api });
+    const addTab = vi.spyOn(useWorkspaceStore.getState(), "addTab");
+    const context = createRendererPluginContext(entryWithPanel());
+    context.panels.register(testPanelRegistration);
+    context.panels.openInstance({
+      componentId: "pier.files.filePanel",
+      instanceId: "file-1",
+      title: "file.ts",
+    });
+
+    expect(
+      context.panels.closeInstance({
+        componentId: "pier.files.filePanel",
+        instanceId: "file-1",
+      })
+    ).toBe(true);
+    expect(addTab).toHaveBeenCalledOnce();
+    expect(api.removePanel).toHaveBeenCalledOnce();
+  });
+
   it("opens panel instances as new tabs in the current dockview group", () => {
     const { api } = createMockApi();
     useWorkspaceStore.setState({ api });

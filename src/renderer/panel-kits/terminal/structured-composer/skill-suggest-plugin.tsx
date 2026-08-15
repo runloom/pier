@@ -34,6 +34,7 @@ import {
   type ComposerSkillSuggestItem,
   getSkillSuggestMatch,
   getSkillSuggestNodeReplaceRange,
+  preserveSuggestActiveIndex,
 } from "./composer-skill-suggest.ts";
 import { $plainPrefixToCaret } from "./serialize.ts";
 import { $createSkillMentionNode } from "./skill-mention-node.tsx";
@@ -195,9 +196,11 @@ export function SkillSuggestPlugin({
         return item;
       },
       onUpdate: (snap) => {
+        setActiveIndex((prev) =>
+          preserveSuggestActiveIndex(prev, itemsRef.current, snap.items)
+        );
         setItems(snap.items);
         setStatus(snap.status);
-        setActiveIndex(0);
         if (snap.status === "done" && queryRef.current.trim().length === 0) {
           setCatalogEmpty(snap.items.length === 0);
         }

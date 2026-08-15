@@ -1,7 +1,10 @@
 import type { AgentLifecycleProbe } from "@shared/contracts/agent/lifecycle.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  countLifecycleUpdateCandidates,
+  isLifecycleReinstallCandidate,
   isLifecycleUpdateCandidate,
+  listLifecycleUpdateCandidates,
   mergeProbes,
   useAgentLifecycleStore,
   withDerivedUpdateFlags,
@@ -121,7 +124,25 @@ describe("mergeProbes / withDerivedUpdateFlags", () => {
       canInstall: true,
     });
     expect(withDerivedUpdateFlags(base, "0.53.1").updateAvailable).toBe(false);
+    expect(withDerivedUpdateFlags(base, "0.53.1").updateOffered).toBe(false);
     expect(withDerivedUpdateFlags(base, "0.60.0").updateAvailable).toBe(true);
+    expect(withDerivedUpdateFlags(base, "0.60.0").updateOffered).toBe(true);
+  });
+
+  it("does not set updateOffered for reinstall-mode with no newer version", () => {
+    const cursor = withDerivedUpdateFlags(
+      makeProbe({
+        agentId: "cursor",
+        updateMode: "reinstall",
+        updateOffered: true,
+        updateAvailable: false,
+        detected: true,
+        canInstall: true,
+      }),
+      null
+    );
+    expect(cursor.updateAvailable).toBe(false);
+    expect(cursor.updateOffered).toBe(false);
   });
 });
 
@@ -136,7 +157,7 @@ describe("isLifecycleUpdateCandidate", () => {
         })
       )
     ).toBe(true);
-    // reinstall-mode always offers a row button, but is not a batch candidate
+    // reinstall-mode is not a pending update (row + toolbar + batch share this)
     expect(
       isLifecycleUpdateCandidate(
         makeProbe({
@@ -172,6 +193,97 @@ describe("isLifecycleUpdateCandidate", () => {
           updateAvailable: true,
         }),
         { disabled: true }
+      )
+    ).toBe(false);
+    // Not installed: an npm/latest hit must not count as "update".
+    expect(
+      isLifecycleUpdateCandidate(
+        makeProbe({
+          agentId: "gemini",
+          detected: false,
+          updateAvailable: true,
+          updateOffered: false,
+        })
+      )
+    ).toBe(false);
+  });
+
+  it("lists the same ids Update all will run", () => {
+    const probesById = {
+      kimi: makeProbe({
+        agentId: "kimi",
+        updateAvailable: true,
+        updateOffered: true,
+      }),
+      droid: makeProbe({
+        agentId: "droid",
+        updateAvailable: true,
+        updateOffered: true,
+      }),
+      cursor: makeProbe({
+        agentId: "cursor",
+        updateMode: "reinstall",
+        updateOffered: true,
+      }),
+    };
+    expect(listLifecycleUpdateCandidates(probesById).toSorted()).toEqual([
+      "droid",
+      "kimi",
+    ]);
+    expect(countLifecycleUpdateCandidates(probesById)).toBe(2);
+    expect(
+      listLifecycleUpdateCandidates(probesById, ["kimi"]).toSorted()
+    ).toEqual(["droid"]);
+  });
+});
+
+describe("isLifecycleReinstallCandidate", () => {
+  it("offers force reinstall only for reinstall-mode installs that are not pending updates", () => {
+    expect(
+      isLifecycleReinstallCandidate(
+        makeProbe({
+          agentId: "cursor",
+          updateMode: "reinstall",
+          updateOffered: true,
+        })
+      )
+    ).toBe(true);
+    expect(
+      isLifecycleReinstallCandidate(
+        makeProbe({
+          agentId: "kimi",
+          updateAvailable: true,
+          updateOffered: true,
+        })
+      )
+    ).toBe(false);
+    expect(
+      isLifecycleReinstallCandidate(
+        makeProbe({
+          agentId: "hermes",
+          updateMode: "reinstall",
+          installedButBroken: true,
+          updateOffered: true,
+        })
+      )
+    ).toBe(false);
+    expect(
+      isLifecycleReinstallCandidate(
+        makeProbe({
+          agentId: "cursor",
+          updateMode: "reinstall",
+          updateOffered: true,
+        }),
+        { disabled: true }
+      )
+    ).toBe(false);
+    expect(
+      isLifecycleReinstallCandidate(
+        makeProbe({
+          agentId: "cursor",
+          detected: false,
+          updateMode: "reinstall",
+        })
       )
     ).toBe(false);
   });

@@ -1578,6 +1578,7 @@ describe("WorkspaceHeaderActions", () => {
           sourcePanelContext: sourceContext,
           sourcePanelGroupId: "group-1",
           sourcePanelId: "terminal-1",
+          surface: "create-menu",
         });
       });
     } finally {

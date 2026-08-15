@@ -15,7 +15,7 @@ export type AgentLifecycleAction = z.infer<typeof agentLifecycleActionSchema>;
 /**
  * How “update available” is determined for a full agent.
  * - versioned: compare current vs latest (npm / brew)
- * - reinstall: no reliable latest; UI may offer reinstall-as-update
+ * - reinstall: no reliable latest; force-reinstall is a separate action, not a pending update
  * - none: update action not offered
  */
 export const agentLifecycleUpdateModeSchema = z.enum([
@@ -91,8 +91,9 @@ export const agentLifecycleProbeSchema = z.object({
   updateAvailable: z.boolean(),
   updateMode: agentLifecycleUpdateModeSchema,
   /**
-   * UI may show Update when versioned+available, reinstall+detected,
-   * or versioned+detected with unknown latest (still can re-run update channels).
+   * Pending update: versioned newer, or installed-but-broken repair.
+   * Reinstall-only (no reliable latest) is not pending — UI uses a separate
+   * force-reinstall action. Same meaning as `isAgentUpdateOffered`.
    */
   updateOffered: z.boolean(),
   uninstallMode: agentLifecycleUninstallModeSchema,

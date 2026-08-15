@@ -174,16 +174,20 @@ export async function writeClipboardText(text: string): Promise<void> {
 
 export function pluginAction(action: {
   category: string;
+  disabledReason?: RendererPluginAction["disabledReason"];
+  enabled?: RendererPluginAction["enabled"];
   handler: RendererPluginAction["handler"];
   id: string;
   metadata?: RendererPluginAction["metadata"];
   surfaces: readonly string[];
-  title: () => string;
+  title: RendererPluginAction["title"];
 }): RendererPluginAction {
   return {
     category: action.category,
     handler: action.handler,
     id: action.id,
+    ...(action.disabledReason ? { disabledReason: action.disabledReason } : {}),
+    ...(action.enabled ? { enabled: action.enabled } : {}),
     ...(action.metadata ? { metadata: action.metadata } : {}),
     surfaces: action.surfaces,
     title: action.title,

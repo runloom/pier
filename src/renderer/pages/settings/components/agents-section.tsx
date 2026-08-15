@@ -22,14 +22,17 @@ import {
   applyPermissionMode,
 } from "@shared/contracts/agent.ts";
 import { Loader2, RefreshCw } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo } from "react";
+import { Fragment, useCallback, useEffect } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { AgentRow } from "@/pages/settings/components/agent-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
-import { useAgentLifecycleStore } from "@/stores/agent-lifecycle.store.ts";
+import {
+  countLifecycleUpdateCandidates,
+  useAgentLifecycleStore,
+} from "@/stores/agent-lifecycle.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
@@ -216,28 +219,12 @@ function AgentsToolbar() {
     Object.values(s.jobById).some((j) => j?.action === "update")
   );
   const runMany = useAgentLifecycleStore((s) => s.runMany);
-  // Primitive count only — never select updatableIds() (new array → infinite re-render).
   const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
-  const disabledSet = useMemo(
-    () => new Set(disabledAgentIds),
-    [disabledAgentIds]
+  const probesById = useAgentLifecycleStore((s) => s.probesById);
+  const updatableCount = countLifecycleUpdateCandidates(
+    probesById,
+    disabledAgentIds
   );
-  const updatableCount = useAgentLifecycleStore((s) => {
-    let n = 0;
-    for (const probe of Object.values(s.probesById)) {
-      if (
-        probe &&
-        !disabledSet.has(probe.agentId) &&
-        // Same eligibility as Update all (versioned newer / broken only).
-        (probe.updateAvailable === true || probe.installedButBroken === true) &&
-        probe.support === "full" &&
-        probe.canInstall
-      ) {
-        n += 1;
-      }
-    }
-    return n;
-  });
 
   const headerBusy = isRefreshing || isProbing || updatingAll;
   const showUpdateAll = updatableCount > 0;

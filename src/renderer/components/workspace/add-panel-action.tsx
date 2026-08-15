@@ -154,6 +154,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
       ...(sourcePanelContext ? { sourcePanelContext } : {}),
       ...(sourcePanelGroupId ? { sourcePanelGroupId } : {}),
       ...(sourcePanelId ? { sourcePanelId } : {}),
+      surface: "create-menu",
     };
   }, [sourcePanelGroupId, sourcePanelId]);
 

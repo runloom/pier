@@ -1,3 +1,4 @@
+import { isAgentUpdateOffered } from "@shared/agent-lifecycle/update-offer.ts";
 import {
   type AgentLifecycleProbe,
   agentLifecycleProbeSchema,
@@ -11,7 +12,10 @@ export function probesFromAgentSnapshot(
   for (const item of snapshot.items) {
     const parsed = agentLifecycleProbeSchema.safeParse(item.details);
     if (parsed.success) {
-      probes.push(parsed.data);
+      probes.push({
+        ...parsed.data,
+        updateOffered: isAgentUpdateOffered(parsed.data),
+      });
     }
   }
   return probes;

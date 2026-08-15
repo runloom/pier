@@ -41,6 +41,7 @@ export const settingsAgents = {
     websiteOpenFailedTitle: "Unable to open website",
     install: "Install",
     update: "Update",
+    reinstall: "Reinstall",
     uninstall: "Uninstall",
     cancel: "Cancel",
     copyInstallCommand: "Copy install command",
@@ -48,9 +49,11 @@ export const settingsAgents = {
     copyInstallCommandFailed: "Couldn't copy install command",
     installFailed: "Couldn't install agent",
     updateFailed: "Couldn't update agent",
+    reinstallFailed: "Couldn't reinstall agent",
     uninstallFailed: "Couldn't uninstall agent",
     installBusy: "Installing",
     updateBusy: "Updating",
+    reinstallBusy: "Reinstalling",
     uninstallBusy: "Uninstalling",
     queueBusy: "Queued",
     /** Multi-step only: "2/3" */
@@ -61,6 +64,7 @@ export const settingsAgents = {
     rowInstallFailedWithStep: "Install failed ({{step}})",
     rowUpdateFailed: "Update failed",
     rowUpdateFailedWithStep: "Update failed ({{step}})",
+    rowReinstallFailed: "Reinstall failed",
     rowUninstallFailed: "Uninstall failed",
     rowUninstallPartial: "Default install removed; others still detected",
     alreadyInstalled: "Already installed",
@@ -68,6 +72,12 @@ export const settingsAgents = {
     conflictConfirmBody:
       "Only the install currently used by default will be updated. Other locations stay unchanged.",
     conflictConfirmContinue: "Update default",
+    reinstallConfirmTitle: "Reinstall this agent?",
+    reinstallConfirmBody:
+      "Reinstalls “{{name}}” using the official installer. Chat and local settings stay.",
+    reinstallConfirmConflictNote:
+      "Only the install currently used by default will be refreshed. Other locations stay unchanged.",
+    reinstallConfirmContinue: "Reinstall",
     uninstallConfirmTitle: "Uninstall this agent?",
     uninstallConfirmBody:
       "Removes “{{name}}” from this Mac ({{source}}: {{path}}). Chat and local settings stay. A running terminal session may stop.",
@@ -87,7 +97,8 @@ export const settingsAgents = {
     latest: "Latest",
     installGuide: "Install commands",
     installs: "Install locations",
-    updateHint: "Update installs the latest version",
+    reinstallHint:
+      "When a newer version can’t be checked, reinstall to refresh the current install.",
     errors: {
       unsupported:
         "This agent can't be installed automatically. Use the install guide or open the website.",
