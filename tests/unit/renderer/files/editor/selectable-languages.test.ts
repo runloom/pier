@@ -1,4 +1,4 @@
-import { listSelectableEditorLanguages } from "@plugins/builtin/files/renderer/editor/selectable-languages.ts";
+import { listSelectableEditorLanguages } from "@plugins/builtin/files/renderer/editor/language/selectable.ts";
 import { describe, expect, it } from "vitest";
 
 describe("listSelectableEditorLanguages", () => {

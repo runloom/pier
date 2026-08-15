@@ -1,8 +1,8 @@
+import { useRetryDocumentsAfterIndexRefresh } from "@plugins/builtin/git/renderer/hooks/use-retry-after-index-refresh.ts";
+import type { GitReviewDocumentLoader } from "@plugins/builtin/git/renderer/review/document/loader.ts";
 import { cleanup, render } from "@testing-library/react";
 import { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useRetryDocumentsAfterIndexRefresh } from "../../../../../src/plugins/builtin/git/renderer/hooks/use-retry-after-index-refresh.ts";
-import type { GitReviewDocumentLoader } from "../../../../../src/plugins/builtin/git/renderer/review/document/loader.ts";
 
 function Harness({
   indexRefreshing,

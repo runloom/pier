@@ -1,6 +1,6 @@
-import type { FilesDocumentLanguage } from "../document/types.ts";
-import { LANGUAGE_LABELS } from "./cm-language.ts";
-import { editorLanguageModeRegistry } from "./language/mode-registry.ts";
+import type { FilesDocumentLanguage } from "../../document/types.ts";
+import { LANGUAGE_LABELS } from "../cm-language.ts";
+import { editorLanguageModeRegistry } from "./mode-registry.ts";
 
 export interface SelectableEditorLanguage {
   id: FilesDocumentLanguage;

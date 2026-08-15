@@ -38,7 +38,7 @@ export function ResolvedFilePanelActions({
   source,
   t,
 }: {
-  context?: RendererPluginContext;
+  context?: RendererPluginContext | undefined;
   controller: FileEditorController;
   editorSessionId: string;
   mode: FileViewMode;

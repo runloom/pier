@@ -51,7 +51,7 @@ import {
   parseSourceState,
   sourceTitle,
 } from "./source.ts";
-import { fileDocumentShowsUnsavedMark } from "./tab-unsaved.ts";
+import { fileDocumentShowsUnsavedMark } from "./tab/unsaved.ts";
 import type { FilePanelRuntimeProps } from "./types.ts";
 import { useFilesGroupViewClaim } from "./use-group-view-claim.ts";
 import { useFilesPanelRemoveClose } from "./use-remove-panel-close.ts";

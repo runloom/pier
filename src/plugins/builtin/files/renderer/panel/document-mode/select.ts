@@ -3,10 +3,10 @@ import type {
   FileDocumentFormat,
   FileWritableDocumentEol,
 } from "@shared/contracts/file.ts";
-import type { FilesDocumentLanguage } from "../document/types.ts";
-import type { FileEditorController } from "../editor/controller.ts";
-import { listSelectableEditorLanguages } from "../editor/selectable-languages.ts";
-import type { FilesTranslate } from "../i18n.ts";
+import type { FilesDocumentLanguage } from "../../document/types.ts";
+import type { FileEditorController } from "../../editor/controller.ts";
+import { listSelectableEditorLanguages } from "../../editor/language/selectable.ts";
+import type { FilesTranslate } from "../../i18n.ts";
 
 export function encodingIdFromFormat(format: FileDocumentFormat): string {
   if (format.encoding === "utf8") {

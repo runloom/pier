@@ -189,7 +189,8 @@ function createCodexTranscriptLineClassifier(): (
       );
     }
     if (parsed.type === "event_msg") {
-      const nativeType = payload?.type;
+      if (!payload) return null;
+      const nativeType = payload.type;
       if (
         nativeType === "request_user_input" ||
         nativeType === "request_permissions"

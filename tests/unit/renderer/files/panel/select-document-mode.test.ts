@@ -1,6 +1,6 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileEditorController } from "@plugins/builtin/files/renderer/editor/controller.ts";
-import { openDocumentLanguagePicker } from "@plugins/builtin/files/renderer/panel/select-document-mode.ts";
+import { openDocumentLanguagePicker } from "@plugins/builtin/files/renderer/panel/document-mode/select.ts";
 import { describe, expect, it, vi } from "vitest";
 
 describe("openDocumentLanguagePicker", () => {

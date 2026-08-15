@@ -17,13 +17,13 @@ import type { FilesDocument } from "../document/types.ts";
 import { languageLabel } from "../editor/cm-language.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesTranslate } from "../i18n.ts";
-import { languageServicePresentation } from "./language-service-presentation.ts";
-import { useFilesLanguageServiceStatus } from "./language-service-status.ts";
 import {
   openDocumentEncodingPicker,
   openDocumentEolPicker,
   openDocumentLanguagePicker,
-} from "./select-document-mode.ts";
+} from "./document-mode/select.ts";
+import { languageServicePresentation } from "./language-service-presentation.ts";
+import { useFilesLanguageServiceStatus } from "./language-service-status.ts";
 import {
   statusTextForDocument,
   statusToneForDocument,
@@ -73,7 +73,7 @@ export function LanguageBadge({
   onLanguageApplied,
   t,
 }: {
-  context?: RendererPluginContext;
+  context?: RendererPluginContext | undefined;
   controller?: FileEditorController;
   document: FilesDocument;
   onLanguageApplied?: (language: string) => void;
@@ -193,7 +193,7 @@ export function DocumentFormatBadge({
   document,
   t,
 }: {
-  context?: RendererPluginContext;
+  context?: RendererPluginContext | undefined;
   controller?: FileEditorController;
   document: FilesDocument;
   t: FilesTranslate;

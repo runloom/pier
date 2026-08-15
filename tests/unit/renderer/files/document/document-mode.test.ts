@@ -18,7 +18,7 @@ import {
 import {
   encodingIdFromFormat,
   formatFromEncodingId,
-} from "@plugins/builtin/files/renderer/panel/select-document-mode.ts";
+} from "@plugins/builtin/files/renderer/panel/document-mode/select.ts";
 import type { FileDocumentReadResult } from "@shared/contracts/file.ts";
 import { afterEach, describe, expect, it } from "vitest";
 

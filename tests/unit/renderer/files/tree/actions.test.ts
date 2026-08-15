@@ -252,6 +252,7 @@ function makeContext() {
         contextId: "c",
         cwd: ROOT,
         projectRootPath: ROOT,
+        updatedAt: 1,
       })),
       listInstances,
       openInstance,
@@ -466,6 +467,7 @@ describe("file-tree-actions", () => {
         contextId: "c",
         cwd: ROOT,
         projectRootPath: ROOT,
+        updatedAt: 1,
       },
       sourcePanelGroupId: "group-1",
     });
@@ -491,6 +493,7 @@ describe("file-tree-actions", () => {
         contextId: "c",
         cwd: ROOT,
         projectRootPath: ROOT,
+        updatedAt: 1,
       },
       sourcePanelGroupId: "group-1",
       surface: "create-menu",

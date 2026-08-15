@@ -1,4 +1,4 @@
-import { fileDocumentShowsUnsavedMark } from "@plugins/builtin/files/renderer/panel/tab-unsaved.ts";
+import { fileDocumentShowsUnsavedMark } from "@plugins/builtin/files/renderer/panel/tab/unsaved.ts";
 import { describe, expect, it } from "vitest";
 
 describe("fileDocumentShowsUnsavedMark", () => {
