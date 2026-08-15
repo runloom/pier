@@ -78,6 +78,8 @@ export function withDocumentReadResult(
       readOnlyReason: null,
       revision: result.revision,
       savedContents: "",
+      savedEol: null,
+      savedFormat: null,
       size: result.size,
     };
   }
@@ -122,6 +124,8 @@ export function withDocumentReadResult(
       readOnlyReason,
       revision: "revision" in result ? result.revision : null,
       savedContents: "",
+      savedEol: null,
+      savedFormat: null,
       size: "size" in result ? result.size : null,
     };
   }
@@ -146,15 +150,14 @@ export function withDocumentReadResult(
       size: result.size,
     };
   }
+  const adoptedEol = createdEmptyEol ?? result.eol;
   const metadata = {
     baseMtimeMs: result.mtimeMs,
     capabilities: readOnlyReason ? [] : DISK_SAVE_CAPABILITIES,
     createdEmptyEol,
     canonicalPath: result.canonicalPath,
     deletedOnDisk: false,
-    eol: createdEmptyEol ?? result.eol,
     error: null,
-    format: result.format,
     hasBackingStore: true,
     loadState: "loaded" as const,
     mode: result.mode,
@@ -175,6 +178,10 @@ export function withDocumentReadResult(
     currentContents: result.contents,
     dirty: false,
     diskConflict: false,
+    eol: adoptedEol,
+    format: result.format,
     savedContents: result.contents,
+    savedEol: adoptedEol,
+    savedFormat: result.format,
   };
 }

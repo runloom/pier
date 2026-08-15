@@ -117,6 +117,19 @@ describe("files-document-draft-records", () => {
     expect(serializeDiskDraft(diskDocument())).toBeNull();
   });
 
+  it("serializes a language-only override as recoverable disk state", () => {
+    const document = diskDocument({
+      language: "python",
+      languageOverridden: true,
+    });
+    const raw = serializeDiskDraft(document);
+    expect(raw).not.toBeNull();
+    expect(parsePersistedDiskDraft(raw!)).toMatchObject({
+      language: "python",
+      path: "README.md",
+    });
+  });
+
   it("uses distinct draft keys for default and explicit identities on the same path", () => {
     const root = "/repo";
     const path = "shared.md";

@@ -13,7 +13,20 @@ import {
   type FilesLanguageServiceStatus,
   publishFilesLanguageServiceStatus,
 } from "../panel/language-service-status.ts";
+import { languageForPath } from "./language-detection.ts";
 import type { FilesEditorPrefs } from "./prefs.ts";
+
+function lspLanguageOverride(
+  document: FilesDocument
+): FilesDocument["language"] | undefined {
+  if (document.source.kind !== "disk") {
+    return;
+  }
+  return document.language ===
+    languageForPath(document.source.path, document.source.root)
+    ? undefined
+    : document.language;
+}
 
 function diskKey(document: FilesDocument): string | null {
   if (document.source.kind !== "disk") {
@@ -34,6 +47,7 @@ export class FileEditorLanguageTools {
   #appliedPrefs: FilesEditorPrefs | null = null;
   #document: FilesDocument | null = null;
   #documentKey: string | null = null;
+  #documentLanguage: FilesDocument["language"] | null = null;
   readonly #ownerId: string;
   readonly #readDocument: FilesLspHoverInput["readDocument"] | undefined;
   #panelContext: PanelContext | undefined;
@@ -65,6 +79,7 @@ export class FileEditorLanguageTools {
     }
     this.#document = document;
     this.#documentKey = diskKey(document);
+    this.#documentLanguage = document.language;
     this.#appliedPrefs = this.#prefs;
     const extensions = [
       this.#wordWrapCompartment.of(
@@ -83,11 +98,17 @@ export class FileEditorLanguageTools {
     if (previousDocumentId && previousDocumentId !== document.id) {
       clearFilesLanguageServiceStatusOwner(this.#ownerId);
     }
+    const languageChanged = this.#documentLanguage !== document.language;
     this.#document = document;
-    if (nextKey === this.#documentKey && previousDocumentId === document.id) {
+    if (
+      nextKey === this.#documentKey &&
+      previousDocumentId === document.id &&
+      !languageChanged
+    ) {
       return [];
     }
     this.#documentKey = nextKey;
+    this.#documentLanguage = document.language;
     return [this.#lspCompartment.reconfigure(this.#lspExtension())];
   }
 
@@ -183,11 +204,13 @@ export class FileEditorLanguageTools {
       };
       return [];
     }
+    const languageId = lspLanguageOverride(document);
     return filesLspEditorExtensions({
       absolutePath: disk.absolutePath,
       documentId: document.id,
       getOpenExternal: this.#getOpenExternal,
       ...(this.#getLabels ? { getLabels: this.#getLabels } : {}),
+      ...(languageId ? { languageId } : {}),
       ...(this.#notifyError ? { notifyError: this.#notifyError } : {}),
       ownerId: this.#ownerId,
       ...(this.#readDocument ? { readDocument: this.#readDocument } : {}),

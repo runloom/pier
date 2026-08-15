@@ -46,6 +46,7 @@ export interface FilesLspRootAttachment {
   languageId?: string;
   readonly ownerId: string;
   publish(status: FilesLanguageServiceStatus | null): void;
+  readonly requestedLanguageId?: string;
 }
 
 export interface FilesLspRootLease {

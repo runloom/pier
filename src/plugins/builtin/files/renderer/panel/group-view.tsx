@@ -434,6 +434,7 @@ export function FilesGroupView({
     );
     trailing = (
       <ResolvedFilePanelActions
+        context={context}
         controller={controller}
         editorSessionId={editorSessionId}
         mode={mode}

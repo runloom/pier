@@ -152,6 +152,25 @@ export function createPluginPanelsContext(
       assertDeclaredContribution(entry, "panel", componentId);
       return panel.id;
     },
+    closeInstance: ({ componentId, instanceId }) => {
+      assertDeclaredContribution(entry, "panel", componentId);
+      assertPluginCapability(entry, "panel:open");
+      const workspace = useWorkspaceStore.getState();
+      const api = workspace.api;
+      const panel = api?.panels.find(
+        (candidate) =>
+          candidate.id === instanceId &&
+          candidate.view.contentComponent === componentId
+      );
+      if (!(api && panel)) {
+        return false;
+      }
+      if (api.totalPanels <= 1) {
+        workspace.addTab();
+      }
+      api.removePanel(panel);
+      return true;
+    },
     listInstances: (componentId): readonly PluginPanelInstanceSnapshot[] => {
       assertDeclaredContribution(entry, "panel", componentId);
       const api = useWorkspaceStore.getState().api;

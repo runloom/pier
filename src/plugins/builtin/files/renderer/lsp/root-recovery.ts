@@ -472,6 +472,9 @@ export class FilesLspRootSession {
     return {
       ...this.#input.request,
       ...(firstAttachment ? { filePath: firstAttachment.absolutePath } : {}),
+      ...(firstAttachment?.requestedLanguageId
+        ? { languageId: firstAttachment.requestedLanguageId }
+        : {}),
     };
   }
   #serverId(): string {

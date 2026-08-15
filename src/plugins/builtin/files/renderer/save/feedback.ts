@@ -13,12 +13,6 @@ export async function reportFileSaveOutcome(
   if (feedback === "none") {
     return;
   }
-  if (outcome === "saved" && feedback === "all") {
-    context.notifications.success(
-      context.i18n.t("filePanel.notifications.saved", undefined, "Saved")
-    );
-    return;
-  }
   if (outcome !== "failed") {
     return;
   }

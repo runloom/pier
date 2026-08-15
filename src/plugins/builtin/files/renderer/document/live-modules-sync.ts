@@ -50,6 +50,9 @@ export function refreshDiskDocumentLanguagesForProject(input: {
     if (normalizeProjectRootKey(document.source.root) !== key) {
       continue;
     }
+    if (document.languageOverridden) {
+      continue;
+    }
     const language = languageForPath(
       document.source.path,
       document.source.root

@@ -24,7 +24,7 @@ import {
   claimLegacyDraftForPanelSource,
   clearFilesDocumentStore,
   configureFilesDraftBackend,
-  createUntitledMarkdownDocument,
+  createUntitledDocument as createUntitledStoreDocument,
   dismissDocumentDiskConflict,
   ensureDiskDocument,
   getDocument,
@@ -41,7 +41,6 @@ import {
 } from "./store.ts";
 import {
   type FilesDocument,
-  type FilesDocumentOrigin,
   type FilesDocumentPanelSource,
   resolveDiskDocumentId,
 } from "./types.ts";
@@ -179,11 +178,10 @@ export class FileDocumentLifecycle {
     this.#claimLegacySource(source);
     return document;
   }
-  createUntitledDocument(input: {
-    contents: string;
-    origin?: FilesDocumentOrigin;
-  }): FilesDocument {
-    return createUntitledMarkdownDocument(input);
+  createUntitledDocument(
+    input: Parameters<typeof createUntitledStoreDocument>[0]
+  ): FilesDocument {
+    return createUntitledStoreDocument(input);
   }
   acquirePanel(panelId: string, source: FilesDocumentPanelSource): () => void {
     const document = this.ensureDocument(source);

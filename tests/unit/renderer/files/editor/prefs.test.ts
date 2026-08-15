@@ -83,6 +83,14 @@ describe("resolveFilesEditorLanguage", () => {
     expect(resolveFilesEditorLanguage("json", "typescript")).toBe("json");
     expect(resolveFilesEditorLanguage("text", null)).toBe("text");
   });
+
+  it("does not remap an explicit Plain Text language", () => {
+    expect(
+      resolveFilesEditorLanguage("text", "typescript", {
+        allowDefault: false,
+      })
+    ).toBe("text");
+  });
 });
 
 describe("readFilesEditorDefaultEol", () => {

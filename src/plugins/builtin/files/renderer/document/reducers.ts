@@ -1,9 +1,13 @@
 import type {
+  FileDocumentFormat,
   FileDocumentReadResult,
   FileDocumentWriteResult,
+  FileWritableDocumentEol,
 } from "@shared/contracts/file.ts";
+import { languageForPath } from "../editor/language-detection.ts";
 import {
   computeDocumentDirty,
+  documentSaveFormatDirty,
   protectsLocalBufferFromDisk,
 } from "./disk-protection.ts";
 import {
@@ -11,7 +15,7 @@ import {
   DISK_SAVE_CAPABILITIES,
   withDocumentReadResult,
 } from "./read-result.ts";
-import type { FilesDocument } from "./types.ts";
+import type { FilesDocument, FilesDocumentLanguage } from "./types.ts";
 
 export { withDocumentReadResult } from "./read-result.ts";
 
@@ -112,6 +116,7 @@ export function withDocumentPathReconciled(
   } else if (result.eol === "mixed") {
     readOnlyReason = "mixed-eol";
   }
+  const adoptedEol = createdEmptyEol ?? result.eol;
   return {
     ...document,
     canonicalPath: result.canonicalPath,
@@ -124,13 +129,15 @@ export function withDocumentPathReconciled(
           currentContents: result.contents,
           dirty: false,
           diskConflict: false,
+          eol: adoptedEol,
+          format: result.format,
           savedContents: result.contents,
+          savedEol: adoptedEol,
+          savedFormat: result.format,
         }),
     ...(protectedContents ? { diskConflict } : {}),
     deletedOnDisk: false,
-    eol: createdEmptyEol ?? result.eol,
     error: null,
-    format: result.format,
     hasBackingStore: true,
     loadState: "loaded",
     mode: result.mode,
@@ -148,11 +155,28 @@ export function withDocumentSaved(
   savedContents: string,
   baseMtimeMs: number | null | undefined
 ): FilesDocument {
-  const dirty = document.currentContents !== savedContents;
   const nextBaseMtime =
     baseMtimeMs === undefined ? document.baseMtimeMs : baseMtimeMs;
+  const next = {
+    ...document,
+    baseMtimeMs: nextBaseMtime,
+    createdEmptyEol: null,
+    deletedOnDisk: false,
+    conflictDiskContents: null,
+    diskConflict: false,
+    error: null,
+    saveState: "idle" as const,
+    savedContents,
+    savedEol: document.eol,
+    savedFormat: document.format,
+  };
+  const dirty =
+    next.currentContents !== next.savedContents ||
+    documentSaveFormatDirty(next);
   if (
     document.savedContents === savedContents &&
+    document.savedEol === next.savedEol &&
+    document.savedFormat === next.savedFormat &&
     document.dirty === dirty &&
     document.error === null &&
     document.baseMtimeMs === nextBaseMtime &&
@@ -161,16 +185,8 @@ export function withDocumentSaved(
     return document;
   }
   return {
-    ...document,
-    baseMtimeMs: nextBaseMtime,
-    createdEmptyEol: null,
+    ...next,
     dirty,
-    deletedOnDisk: false,
-    conflictDiskContents: null,
-    diskConflict: false,
-    error: null,
-    saveState: "idle",
-    savedContents,
   };
 }
 
@@ -179,13 +195,11 @@ export function withDocumentWritten(
   savedContents: string,
   result: Extract<FileDocumentWriteResult, { kind: "written" }>
 ): FilesDocument {
-  const dirty = document.currentContents !== savedContents;
-  return {
+  const next = {
     ...document,
     baseMtimeMs: result.mtimeMs,
     createdEmptyEol: null,
     conflictDiskContents: null,
-    dirty,
     deletedOnDisk: false,
     diskConflict: false,
     durabilityUnknown: result.durability === "unknown",
@@ -193,9 +207,17 @@ export function withDocumentWritten(
     hasBackingStore: true,
     mode: result.mode,
     revision: result.revision,
-    saveState: "idle",
+    saveState: "idle" as const,
     savedContents,
+    savedEol: document.eol,
+    savedFormat: document.format,
     size: result.size,
+  };
+  return {
+    ...next,
+    dirty:
+      next.currentContents !== next.savedContents ||
+      documentSaveFormatDirty(next),
   };
 }
 
@@ -221,6 +243,75 @@ export function withDocumentDurabilityError(
   };
 }
 
+export function withDocumentLanguage(
+  document: FilesDocument,
+  language: FilesDocumentLanguage
+): FilesDocument {
+  const nextSource =
+    document.source.kind === "untitled"
+      ? { ...document.source, language }
+      : document.source;
+  const languageOverridden =
+    document.source.kind === "disk" &&
+    language !== languageForPath(document.source.path, document.source.root);
+  if (
+    document.language === language &&
+    document.source === nextSource &&
+    document.languageOverridden === languageOverridden
+  ) {
+    return document;
+  }
+  return {
+    ...document,
+    language,
+    languageOverridden,
+    source: nextSource,
+  };
+}
+
+export function withDocumentSaveEol(
+  document: FilesDocument,
+  eol: FileWritableDocumentEol
+): FilesDocument {
+  if (document.readOnlyReason === "mixed-eol") {
+    return withDocumentNormalizedEol(document, eol === "cr" ? "lf" : eol);
+  }
+  if (document.eol === eol) {
+    return document;
+  }
+  const next = {
+    ...document,
+    createdEmptyEol: null,
+    eol,
+  };
+  return {
+    ...next,
+    dirty: computeDocumentDirty(next),
+  };
+}
+
+export function withDocumentSaveFormat(
+  document: FilesDocument,
+  format: FileDocumentFormat
+): FilesDocument {
+  const current = document.format;
+  if (
+    current &&
+    current.encoding === format.encoding &&
+    current.bom === format.bom
+  ) {
+    return document;
+  }
+  const next = {
+    ...document,
+    format,
+  };
+  return {
+    ...next,
+    dirty: computeDocumentDirty(next),
+  };
+}
+
 export function withDocumentNormalizedEol(
   document: FilesDocument,
   eol: "crlf" | "lf"
@@ -230,14 +321,17 @@ export function withDocumentNormalizedEol(
       ? document
       : { ...document, createdEmptyEol: null };
   }
-  return {
+  const next = {
     ...document,
     capabilities: DISK_SAVE_CAPABILITIES,
     createdEmptyEol: null,
-    dirty: true,
     eol,
     readOnly: false,
     readOnlyReason: null,
+  };
+  return {
+    ...next,
+    dirty: computeDocumentDirty(next),
   };
 }
 

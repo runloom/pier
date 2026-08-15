@@ -94,9 +94,7 @@ export function languageStatus(
   );
 }
 export function languageBadge(root: LocatorRoot, language?: string): Locator {
-  return root.locator(
-    `[data-slot="badge"][data-language${language ? `="${language}"` : ""}]`
-  );
+  return root.locator(`[data-language${language ? `="${language}"` : ""}]`);
 }
 export function saveStatus(root: LocatorRoot): Locator {
   return root.locator(

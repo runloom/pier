@@ -28,7 +28,6 @@ import {
 } from "./drafts.ts";
 import {
   createDiskDocumentRecord,
-  createUntitledMarkdownRecord,
   restoreUntitledMarkdownRecord,
 } from "./factory.ts";
 import {
@@ -46,12 +45,15 @@ import { createFilesDocumentSaveAsActions } from "./save-as.ts";
 import { createFilesDocumentStateActions } from "./state-actions.ts";
 import {
   type FilesDocument,
-  type FilesDocumentOrigin,
   type FilesDocumentPanelSource,
   resolveDiskDocumentId,
 } from "./types.ts";
 import {
-  nextUntitledIdentity as allocateUntitledIdentity,
+  createUntitledDocumentInStore,
+  createUntitledMarkdownDocumentInStore,
+  type UntitledCreateStore,
+} from "./untitled-create.ts";
+import {
   resetUntitledIdentityForTests,
   syncNextUntitledIndex,
 } from "./untitled-identity.ts";
@@ -112,19 +114,12 @@ export async function claimLegacyDraftForPanelSource(
   notify();
   return true;
 }
-function nextUntitledIdentity(): { id: string; index: number; name: string } {
-  return allocateUntitledIdentity({
-    idExists: (id) =>
-      documents.has(id) ||
-      pendingUntitledRestores.has(id) ||
-      readPersistedUntitledDocument(id) !== null,
-    nameExists: (name) =>
-      [...documents.values()].some((document) => document.name === name) ||
-      [...pendingUntitledRestores.values()].some(
-        (source) => source.name === name
-      ),
-  });
-}
+const untitledStore: UntitledCreateStore = {
+  documents,
+  notify,
+  pendingUntitledRestores,
+  persistedUntitledExists: (id) => readPersistedUntitledDocument(id) !== null,
+};
 function resolveDocumentId(documentId: string): string {
   let currentId = documentId;
   const seenIds = new Set<string>();
@@ -213,6 +208,9 @@ export const {
   markDocumentSaving,
   normalizeDocumentEol,
   setDocumentConflictContents,
+  setDocumentLanguage,
+  setDocumentSaveEol,
+  setDocumentSaveFormat,
   updateDocumentContents,
 } = documentStateActions;
 
@@ -235,23 +233,13 @@ export function refreshDiskDocumentLanguagesForProject(
   refreshLanguagesImpl({ documents, projectRootPath, replaceDocument });
 }
 
-export function createUntitledMarkdownDocument(input: {
-  contents: string;
-  origin?: FilesDocumentOrigin;
-}): FilesDocument {
-  const { id, name } = nextUntitledIdentity();
-  const document = createUntitledMarkdownRecord({
-    contents: input.contents,
-    id,
-    name,
-    ...(input.origin ? { origin: input.origin } : {}),
-  });
+export const createUntitledDocument = (
+  input: Parameters<typeof createUntitledDocumentInStore>[1]
+): FilesDocument => createUntitledDocumentInStore(untitledStore, input);
 
-  documents.set(id, document);
-  persistUntitledDocument(document);
-  notify();
-  return document;
-}
+export const createUntitledMarkdownDocument = (
+  input: Parameters<typeof createUntitledMarkdownDocumentInStore>[1]
+): FilesDocument => createUntitledMarkdownDocumentInStore(untitledStore, input);
 
 export async function preserveDiskDocumentAsUntitled(
   documentId: string
@@ -264,23 +252,27 @@ export async function preserveDiskDocumentAsUntitled(
   if (document.source.kind === "untitled") {
     return document;
   }
-  const { id, name } = nextUntitledIdentity();
-  const preserved = createUntitledMarkdownRecord({
+  const language = document.language;
+  const eol =
+    document.eol === "lf" || document.eol === "crlf" || document.eol === "cr"
+      ? document.eol
+      : undefined;
+  const preserved = createUntitledDocumentInStore(untitledStore, {
     contents: document.currentContents,
-    id,
-    name,
+    language,
+    nameKind: language === "markdown" ? "markdown" : "plain",
     origin: { source: "project-file-tree" },
+    ...(eol ? { eol } : {}),
+    ...(document.format ? { format: document.format } : {}),
   });
-  persistUntitledDocument(preserved);
   try {
     await flushFilesDraftWrites();
   } catch (error) {
-    removePersistedUntitledDocument(id);
+    removePersistedUntitledDocument(preserved.id);
     throw error;
   }
   documents.delete(resolvedId);
-  documents.set(id, preserved);
-  documentAliases.set(resolvedId, id);
+  documentAliases.set(resolvedId, preserved.id);
   notify();
   return preserved;
 }

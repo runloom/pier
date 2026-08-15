@@ -34,6 +34,7 @@ export function filesLspEditorExtensions(input: {
   documentId: string;
   getOpenExternal: () => (url: string) => void;
   getLabels?: FilesLspHoverInput["getLabels"];
+  languageId?: string;
   notifyError?: FilesLspHoverInput["notifyError"];
   onDisplayFile?: (absolutePath: string) => Promise<EditorView | null>;
   ownerId: string;
@@ -127,6 +128,9 @@ export function filesLspEditorExtensions(input: {
               },
               documentId: input.documentId,
               ownerId: input.ownerId,
+              ...(input.languageId
+                ? { requestedLanguageId: input.languageId }
+                : {}),
               publish: (status) => {
                 const manual = manualLifecycleByView.get(this.view);
                 if (manual) {

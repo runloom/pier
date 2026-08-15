@@ -2,16 +2,28 @@ import type {
   RendererPluginContext,
   RendererPluginFilesFacade,
 } from "@plugins/api/renderer.ts";
+import type {
+  FileDocumentFormat,
+  FileWritableDocumentEol,
+} from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { FileDocumentLifecycle } from "../document/lifecycle.ts";
 import { preserveDocumentsAsUntitledAndRebind } from "../document/preserve-as-untitled.ts";
-import { getDocument, normalizeDocumentEol } from "../document/store.ts";
+import {
+  getDocument,
+  normalizeDocumentEol,
+  setDocumentLanguage,
+  setDocumentSaveEol,
+  setDocumentSaveFormat,
+} from "../document/store.ts";
 import type {
   FilesDocument,
+  FilesDocumentLanguage,
   FilesDocumentOrigin,
   FilesDocumentPanelSource,
   FileViewMode,
 } from "../document/types.ts";
+import type { UntitledNameKind } from "../document/untitled-identity.ts";
 import { FilesMutationGate } from "../mutation/gate.ts";
 import {
   type FilePathMutationGuard,
@@ -156,6 +168,10 @@ export class FileEditorController extends FileEditorControllerViewFacade {
 
   createUntitledDocument(input: {
     contents: string;
+    eol?: FileWritableDocumentEol;
+    format?: FileDocumentFormat;
+    language?: FilesDocumentLanguage;
+    nameKind?: UntitledNameKind;
     origin?: FilesDocumentOrigin;
   }): FilesDocument {
     return this.#documents.createUntitledDocument(input);
@@ -402,6 +418,21 @@ export class FileEditorController extends FileEditorControllerViewFacade {
 
   normalizeDocumentEol(documentId: string, eol: "crlf" | "lf"): void {
     normalizeDocumentEol(documentId, eol);
+  }
+
+  setDocumentLanguage(
+    documentId: string,
+    language: FilesDocumentLanguage
+  ): void {
+    setDocumentLanguage(documentId, language);
+  }
+
+  setDocumentSaveEol(documentId: string, eol: FileWritableDocumentEol): void {
+    setDocumentSaveEol(documentId, eol);
+  }
+
+  setDocumentSaveFormat(documentId: string, format: FileDocumentFormat): void {
+    setDocumentSaveFormat(documentId, format);
   }
 
   async showDraftProtectionError(message: string): Promise<void> {

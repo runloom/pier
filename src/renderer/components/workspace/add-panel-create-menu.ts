@@ -14,7 +14,8 @@ export interface CreateActionGroup {
 const CREATE_MENU_CATEGORY_ORDER: Readonly<Record<string, number>> = {
   run: 0,
   panel: 1,
-  worktree: 2,
+  file: 2,
+  worktree: 3,
 };
 
 function createMenuFallbackPriority(action: Action): number {

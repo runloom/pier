@@ -48,8 +48,12 @@ export function normalizeEditorDefaultLanguage(
 
 export function resolveFilesEditorLanguage(
   detected: FilesDocumentLanguage,
-  defaultLanguage: FilesEditorPrefs["defaultLanguage"]
+  defaultLanguage: FilesEditorPrefs["defaultLanguage"],
+  options?: { allowDefault?: boolean }
 ): FilesDocumentLanguage {
+  if (options?.allowDefault === false) {
+    return detected;
+  }
   return detected === "text" && defaultLanguage ? defaultLanguage : detected;
 }
 

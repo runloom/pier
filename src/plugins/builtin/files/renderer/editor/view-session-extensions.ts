@@ -37,7 +37,12 @@ export function buildFileEditorSessionExtensions(input: {
 }): SessionExtensionState {
   const language = resolveFilesEditorLanguage(
     input.document.language,
-    input.editorPrefs.defaultLanguage
+    input.editorPrefs.defaultLanguage,
+    {
+      allowDefault:
+        input.document.source.kind === "disk" &&
+        input.document.languageOverridden !== true,
+    }
   );
   const path =
     input.document.source.kind === "disk"
@@ -81,12 +86,16 @@ export function applyDefaultLanguagePreference(input: {
   languageCompartment: Compartment;
   prefs: FilesEditorPrefs;
   view: EditorView;
-}): { language: FilesDocument["language"]; path: string | undefined } {
+}): { language: FilesDocument["language"]; path: string | undefined } | null {
+  if (
+    input.document.language !== "text" ||
+    input.document.source.kind !== "disk" ||
+    input.document.languageOverridden === true
+  ) {
+    return null;
+  }
   const language = input.prefs.defaultLanguage ?? "text";
-  const path =
-    input.document.source.kind === "disk"
-      ? input.document.source.path
-      : undefined;
+  const path = input.document.source.path;
   input.view.dispatch({
     effects: input.languageCompartment.reconfigure(
       cmLanguageExtension(language, path) ?? []
@@ -109,7 +118,12 @@ export function resolveDocumentEditorChrome(input: {
 } {
   const language = resolveFilesEditorLanguage(
     input.document.language,
-    input.editorPrefs.defaultLanguage
+    input.editorPrefs.defaultLanguage,
+    {
+      allowDefault:
+        input.document.source.kind === "disk" &&
+        input.document.languageOverridden !== true,
+    }
   );
   const path =
     input.document.source.kind === "disk"

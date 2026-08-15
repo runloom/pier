@@ -1,13 +1,43 @@
+import type { FileDocumentFormat } from "@shared/contracts/file.ts";
 import type { FilesDocument } from "./types.ts";
 
 type DirtyDocument = Pick<
   FilesDocument,
   "currentContents" | "deletedOnDisk" | "durabilityUnknown" | "savedContents"
->;
+> &
+  Partial<Pick<FilesDocument, "eol" | "format" | "savedEol" | "savedFormat">>;
 
 type DiskProtectionDocument = DirtyDocument & {
   id?: string;
 };
+
+function sameDocumentFormat(
+  left: FileDocumentFormat | null | undefined,
+  right: FileDocumentFormat | null | undefined
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (!(left && right)) {
+    return left == null && right == null;
+  }
+  return left.encoding === right.encoding && left.bom === right.bom;
+}
+
+export function documentSaveFormatDirty(
+  document: Pick<DirtyDocument, "eol" | "format" | "savedEol" | "savedFormat">
+): boolean {
+  if (document.savedEol === undefined && document.savedFormat === undefined) {
+    return false;
+  }
+  return (
+    (document.eol ?? null) !== (document.savedEol ?? document.eol ?? null) ||
+    !sameDocumentFormat(
+      document.format ?? null,
+      document.savedFormat ?? document.format ?? null
+    )
+  );
+}
 
 /** One-shot force-adopt authorizations (banner "Load disk version"). */
 const diskReplaceAuthorizedIds = new Set<string>();
@@ -35,6 +65,7 @@ export function clearDiskReplaceAuthorizationsForTests(): void {
 export function computeDocumentDirty(document: DirtyDocument): boolean {
   return (
     document.currentContents !== document.savedContents ||
+    documentSaveFormatDirty(document) ||
     document.deletedOnDisk ||
     document.durabilityUnknown
   );
@@ -48,6 +79,7 @@ export function isDeletionOnlyDirty(document: DirtyDocument): boolean {
   return (
     document.deletedOnDisk &&
     document.currentContents === document.savedContents &&
+    !documentSaveFormatDirty(document) &&
     !document.durabilityUnknown
   );
 }
@@ -59,7 +91,7 @@ export function isDeletionOnlyDirty(document: DirtyDocument): boolean {
  * - force-adopt authorization → never protect
  * - durability unconfirmed → protect
  * - deletion-only dirty → do not protect
- * - otherwise protect only when text diverges from saved snapshot
+ * - otherwise protect when text or save-format (eol/encoding) diverges
  */
 export function protectsLocalBufferFromDisk(
   document: DiskProtectionDocument
@@ -73,5 +105,8 @@ export function protectsLocalBufferFromDisk(
   if (isDeletionOnlyDirty(document)) {
     return false;
   }
-  return document.currentContents !== document.savedContents;
+  return (
+    document.currentContents !== document.savedContents ||
+    documentSaveFormatDirty(document)
+  );
 }
