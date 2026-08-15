@@ -1,3 +1,4 @@
+import { isAgentUpdateOffered } from "@shared/agent-lifecycle/update-offer.ts";
 import { isAgentUpdateAvailable } from "@shared/agent-lifecycle/version-compare.ts";
 import type {
   AgentLifecycleProbe,
@@ -91,17 +92,14 @@ export async function probeOneAgent(
     updateMode === "versioned" &&
     latestVersion !== null &&
     isAgentUpdateAvailable(version, latestVersion);
-
-  // Offer Update when:
-  // - versioned and a newer latest is known
-  // - reinstall mode (no reliable latest probe — user can force reinstall)
-  // - installed but broken (repair)
-  // Do NOT treat "latest unknown" as update-needed: brew cask probes used to
-  // return null and inflated "Update all" with false positives.
-  const updateOffered =
-    canInstall &&
-    (installedButBroken ||
-      (detected && (updateMode === "reinstall" || updateAvailable)));
+  const detectedOrBroken = detected || installedButBroken;
+  const updateOffered = isAgentUpdateOffered({
+    canInstall,
+    detected: detectedOrBroken,
+    installedButBroken,
+    support: spec.support,
+    updateAvailable,
+  });
 
   const defaults = defaultCommandsFor(
     agentId,
@@ -118,7 +116,7 @@ export async function probeOneAgent(
   return {
     agentId,
     canInstall,
-    detected: detected || installedButBroken,
+    detected: detectedOrBroken,
     envDegraded: opts.envDegraded,
     guideCommands: guideCommandsFor(agentId),
     installedButBroken,

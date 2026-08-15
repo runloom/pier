@@ -1,5 +1,9 @@
 import { AGENT_CATALOG } from "@shared/agent-catalog.ts";
-import type { AgentLifecycleProbe } from "@shared/contracts/agent/lifecycle.ts";
+import { isAgentUpdateOffered } from "@shared/agent-lifecycle/update-offer.ts";
+import {
+  type AgentLifecycleProbe,
+  agentLifecycleProbeSchema,
+} from "@shared/contracts/agent/lifecycle.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { CatalogItem } from "@shared/contracts/host-catalog/runtime.ts";
 import {
@@ -35,7 +39,7 @@ function itemFromProbe(probe: AgentLifecycleProbe): CatalogItem {
     localVersion: probe.version,
     presence: presenceOf(probe),
     remoteVersion: probe.latestVersion,
-    updateOffered: probe.updateOffered,
+    updateOffered: isAgentUpdateOffered(probe),
   };
 }
 
@@ -46,15 +50,29 @@ function itemFromDetection(
 ): CatalogItem {
   const entry = AGENT_CATALOG.find((candidate) => candidate.id === agentId);
   const present = detected.has(agentId);
+  const parsed = agentLifecycleProbeSchema.safeParse(previous?.details);
+  const details = ((): unknown => {
+    if (!present) {
+      return null;
+    }
+    if (parsed.success) {
+      return {
+        ...parsed.data,
+        updateOffered: isAgentUpdateOffered(parsed.data),
+      };
+    }
+    return previous?.details ?? null;
+  })();
   return {
-    details: present ? (previous?.details ?? null) : null,
+    details,
     domain: "agent-cli",
     id: agentId,
     label: entry?.label ?? agentId,
     localVersion: present ? (previous?.localVersion ?? null) : null,
     presence: present ? "present" : "missing",
     remoteVersion: present ? (previous?.remoteVersion ?? null) : null,
-    updateOffered: present ? (previous?.updateOffered ?? false) : false,
+    updateOffered:
+      present && parsed.success ? isAgentUpdateOffered(parsed.data) : false,
   };
 }
 

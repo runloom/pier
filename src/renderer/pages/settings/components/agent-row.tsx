@@ -22,6 +22,7 @@ import {
   Download,
   ExternalLink,
   Loader2,
+  RotateCcw,
 } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { toast } from "sonner";
@@ -36,7 +37,11 @@ import {
 } from "@/pages/settings/components/agent-lifecycle-format.ts";
 import { AgentExpandedDetails } from "@/pages/settings/components/agent-row-details.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
-import { useAgentLifecycleStore } from "@/stores/agent-lifecycle.store.ts";
+import {
+  isLifecycleReinstallCandidate,
+  isLifecycleUpdateCandidate,
+  useAgentLifecycleStore,
+} from "@/stores/agent-lifecycle.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 
@@ -75,6 +80,10 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
   const canCancelBusy = job?.phase === "running";
   const lifecycleProgress = job?.progress;
   const canInstall = probe?.canInstall === true;
+  const canUpdate = isLifecycleUpdateCandidate(probe, { disabled: isDisabled });
+  const canReinstall = isLifecycleReinstallCandidate(probe, {
+    disabled: isDisabled,
+  });
   const displayName = entry?.label ?? agentId;
 
   const statusBadge = resolveAgentStatusBadge(t, {
@@ -93,17 +102,43 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
     action: busyAction ?? undefined,
     queued: isQueued,
     progress: canCancelBusy ? lifecycleProgress : undefined,
+    reinstall: canReinstall,
   });
 
   const failureText = lifecycleFailure
     ? formatLifecycleRowFailure(t, {
         name: displayName,
         failure: lifecycleFailure,
+        reinstall: canReinstall,
       })
     : null;
 
-  const handleLifecycle = async (action: "install" | "update") => {
-    if (action === "update" && probe?.isConflict) {
+  const handleLifecycle = async (
+    action: "install" | "update",
+    options?: { reinstall?: boolean }
+  ) => {
+    const reinstall = options?.reinstall === true;
+    if (reinstall) {
+      const body = probe?.isConflict
+        ? [
+            t("settings.agents.action.reinstallConfirmBody", {
+              name: displayName,
+            }),
+            t("settings.agents.action.reinstallConfirmConflictNote"),
+          ].join("\n")
+        : t("settings.agents.action.reinstallConfirmBody", {
+            name: displayName,
+          });
+      const confirmed = await showAppConfirm({
+        title: t("settings.agents.action.reinstallConfirmTitle"),
+        body,
+        confirmLabel: t("settings.agents.action.reinstallConfirmContinue"),
+        intent: "default",
+      });
+      if (!confirmed) {
+        return;
+      }
+    } else if (action === "update" && probe?.isConflict) {
       const confirmed = await showAppConfirm({
         title: t("settings.agents.action.conflictConfirmTitle"),
         body: t("settings.agents.action.conflictConfirmBody"),
@@ -135,6 +170,7 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
             errorDetail: result.errorDetail,
             stepLabel: lifecycleProgress?.label,
           },
+          reinstall,
         });
         if (result.errorDetail?.trim() || result.commandPreview?.trim()) {
           await showAppAlert({
@@ -144,11 +180,17 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
         }
       }
     } catch (err) {
+      const failedTitle = ((): string => {
+        if (action === "install") {
+          return t("settings.agents.action.installFailed");
+        }
+        if (reinstall) {
+          return t("settings.agents.action.reinstallFailed");
+        }
+        return t("settings.agents.action.updateFailed");
+      })();
       await showAppAlert({
-        title:
-          action === "install"
-            ? t("settings.agents.action.installFailed")
-            : t("settings.agents.action.updateFailed"),
+        title: failedTitle,
         body: err instanceof Error ? err.message : String(err),
       });
     }
@@ -296,8 +338,7 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
               {t("settings.agents.action.install")}
             </Button>
           ) : null}
-          {/* Broken install: repair via update plan (self / reinstall / script). */}
-          {!isDisabled && probe?.installedButBroken && canInstall && !isBusy ? (
+          {canUpdate && !isBusy ? (
             <Button
               onClick={() => {
                 handleLifecycle("update").catch(() => undefined);
@@ -310,22 +351,19 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
               {t("settings.agents.action.update")}
             </Button>
           ) : null}
-          {!isDisabled &&
-          isDetected &&
-          canInstall &&
-          probe?.updateOffered &&
-          !probe.installedButBroken &&
-          !isBusy ? (
+          {canReinstall && !isBusy ? (
             <Button
               onClick={() => {
-                handleLifecycle("update").catch(() => undefined);
+                handleLifecycle("update", { reinstall: true }).catch(
+                  () => undefined
+                );
               }}
               size="sm"
               type="button"
-              variant="default"
+              variant="outline"
             >
-              <ArrowUpCircle data-icon="inline-start" />
-              {t("settings.agents.action.update")}
+              <RotateCcw data-icon="inline-start" />
+              {t("settings.agents.action.reinstall")}
             </Button>
           ) : null}
           {isDetected ? (
@@ -363,7 +401,7 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
                 <div className="flex flex-col gap-1 text-muted-foreground text-xs">
                   {/* Version lives on the row (`a → b`); don't repeat here. */}
                   {probe.updateMode === "reinstall" && probe.detected ? (
-                    <div>{t("settings.agents.lifecycle.updateHint")}</div>
+                    <div>{t("settings.agents.lifecycle.reinstallHint")}</div>
                   ) : null}
                   {probe.installs.length > 0 ? (
                     <div className="flex flex-col gap-1">

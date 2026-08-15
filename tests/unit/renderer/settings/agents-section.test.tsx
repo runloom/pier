@@ -21,6 +21,7 @@ import { makeFakePreferences } from "../../../setup/preferences-fixture.ts";
 
 const appDialogMocks = vi.hoisted(() => ({
   showAppAlert: vi.fn(async () => undefined),
+  showAppConfirm: vi.fn(async () => true),
 }));
 
 const toastMocks = vi.hoisted(() => ({
@@ -34,6 +35,7 @@ vi.mock("sonner", () => ({ toast: toastMocks }));
 vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => ({
   ...(await importOriginal<typeof AppDialogStoreModule>()),
   showAppAlert: appDialogMocks.showAppAlert,
+  showAppConfirm: appDialogMocks.showAppConfirm,
 }));
 
 /**
@@ -143,6 +145,8 @@ describe("AgentsSection", () => {
   beforeEach(async () => {
     await initI18n();
     appDialogMocks.showAppAlert.mockClear();
+    appDialogMocks.showAppConfirm.mockClear();
+    appDialogMocks.showAppConfirm.mockResolvedValue(true);
     toastMocks.info.mockClear();
     toastMocks.success.mockClear();
 
@@ -615,5 +619,185 @@ describe("AgentsSection", () => {
     expect(useAgentLifecycleStore.getState().probesById.claude?.version).toBe(
       "2.0.0"
     );
+  });
+
+  it("Update all count, row Update buttons, and batch ids are the same real updates", async () => {
+    const probes: AgentLifecycleProbe[] = [
+      {
+        agentId: "kimi",
+        canInstall: true,
+        canUninstall: true,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "1.49.0",
+        support: "full",
+        updateAvailable: true,
+        updateMode: "versioned",
+        updateOffered: true,
+        uninstallMode: "managed",
+        version: "1.48.0",
+      },
+      {
+        agentId: "droid",
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "0.197.0",
+        support: "full",
+        updateAvailable: true,
+        updateMode: "versioned",
+        updateOffered: true,
+        uninstallMode: "none",
+        version: "0.162.1",
+      },
+      {
+        // Stale combined updateOffered (old meaning). Must not count or
+        // show Update; row uses Reinstall instead.
+        agentId: "cursor",
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: null,
+        support: "full",
+        updateAvailable: false,
+        updateMode: "reinstall",
+        updateOffered: true,
+        uninstallMode: "none",
+        version: "2026.07.08-0c04a8a",
+      },
+    ];
+    const pier = makePierMock(["kimi", "droid", "cursor"], {
+      probe: async () => probes,
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    useAgentDetectStore.setState({
+      detectedIds: ["kimi", "droid", "cursor"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+
+    render(<AgentsSection />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Update all (2)" })
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      within(screen.getByTestId("agent-row-kimi")).getByRole("button", {
+        name: "Update",
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("agent-row-droid")).getByRole("button", {
+        name: "Update",
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("agent-row-cursor")).queryByRole("button", {
+        name: "Update",
+      })
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId("agent-row-cursor")).getByRole("button", {
+        name: "Reinstall",
+      })
+    ).toBeInTheDocument();
+
+    const run = pier.agents.lifecycle.run as ReturnType<typeof vi.fn>;
+    run.mockImplementation(async (agentId: AgentKind) => ({
+      action: "update" as const,
+      agentId,
+      ok: true,
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Update all (2)" }));
+
+    await waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(2);
+    });
+    expect(run.mock.calls.map((call) => call[0]).sort()).toEqual([
+      "droid",
+      "kimi",
+    ]);
+    expect(run.mock.calls.every((call) => call[1] === "update")).toBe(true);
+  });
+
+  it("row Reinstall force-refreshes that agent after confirm and stays out of Update all", async () => {
+    const probes: AgentLifecycleProbe[] = [
+      {
+        agentId: "cursor",
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: null,
+        support: "full",
+        updateAvailable: false,
+        updateMode: "reinstall",
+        updateOffered: true,
+        uninstallMode: "none",
+        version: "2026.07.08-0c04a8a",
+      },
+    ];
+    const pier = makePierMock(["cursor"], {
+      probe: async () => probes,
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    useAgentDetectStore.setState({
+      detectedIds: ["cursor"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+
+    render(<AgentsSection />);
+
+    await waitFor(() => {
+      expect(
+        within(screen.getByTestId("agent-row-cursor")).getByRole("button", {
+          name: "Reinstall",
+        })
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: /Update all/ })).toBeNull();
+
+    const run = pier.agents.lifecycle.run as ReturnType<typeof vi.fn>;
+    run.mockImplementation(async (agentId: AgentKind) => ({
+      action: "update" as const,
+      agentId,
+      ok: true,
+    }));
+
+    fireEvent.click(
+      within(screen.getByTestId("agent-row-cursor")).getByRole("button", {
+        name: "Reinstall",
+      })
+    );
+
+    await waitFor(() => {
+      expect(appDialogMocks.showAppConfirm).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(run).toHaveBeenCalledWith("cursor", "update");
+    });
   });
 });

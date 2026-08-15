@@ -151,6 +151,16 @@ describe("lifecycleBusyStatusText", () => {
     });
     expect(text).toMatch(/卸载|Uninstall/i);
   });
+
+  it("uses reinstall busy copy when the row is a force-reinstall", () => {
+    expect(
+      lifecycleBusyStatusText(t, {
+        action: "update",
+        progress: undefined,
+        reinstall: true,
+      })
+    ).toBe("settings.agents.action.reinstallBusy");
+  });
 });
 
 describe("isLifecycleSoftFailure", () => {
@@ -176,6 +186,16 @@ describe("formatLifecycleRowFailure", () => {
         failure: { action: "uninstall", errorCode: "command_failed" },
       })
     ).toBe("settings.agents.action.rowUninstallFailed");
+  });
+
+  it("uses reinstall failed key for force-reinstall rows", () => {
+    expect(
+      formatLifecycleRowFailure(t, {
+        name: "Cursor",
+        failure: { action: "update" },
+        reinstall: true,
+      })
+    ).toBe("settings.agents.action.rowReinstallFailed");
   });
 
   it("uses partial key when still_detected after uninstall", () => {

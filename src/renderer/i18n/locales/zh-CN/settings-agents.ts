@@ -42,6 +42,7 @@ export const settingsAgents = {
     websiteOpenFailedTitle: "无法打开官网",
     install: "安装",
     update: "更新",
+    reinstall: "重新安装",
     uninstall: "卸载",
     cancel: "取消",
     copyInstallCommand: "复制安装命令",
@@ -49,9 +50,11 @@ export const settingsAgents = {
     copyInstallCommandFailed: "无法复制安装命令",
     installFailed: "无法安装智能体",
     updateFailed: "无法更新智能体",
+    reinstallFailed: "无法重新安装智能体",
     uninstallFailed: "无法卸载智能体",
     installBusy: "安装中",
     updateBusy: "更新中",
+    reinstallBusy: "重新安装中",
     uninstallBusy: "卸载中",
     queueBusy: "排队中",
     /** Multi-step only: "2/3" */
@@ -62,12 +65,19 @@ export const settingsAgents = {
     rowInstallFailedWithStep: "安装失败（{{step}}）",
     rowUpdateFailed: "更新失败",
     rowUpdateFailedWithStep: "更新失败（{{step}}）",
+    rowReinstallFailed: "重新安装失败",
     rowUninstallFailed: "卸载失败",
     rowUninstallPartial: "默认位置已处理，仍检测到其他安装",
     alreadyInstalled: "已安装",
     conflictConfirmTitle: "检测到多处安装",
     conflictConfirmBody: "只会更新当前默认使用的那一处，其余位置保持不变。",
     conflictConfirmContinue: "更新默认位置",
+    reinstallConfirmTitle: "重新安装此智能体？",
+    reinstallConfirmBody:
+      "将按官方安装方式重新安装「{{name}}」。对话与本地配置保留。",
+    reinstallConfirmConflictNote:
+      "只会处理当前默认使用的那一处，其余位置保持不变。",
+    reinstallConfirmContinue: "重新安装",
     uninstallConfirmTitle: "卸载此智能体？",
     uninstallConfirmBody:
       "将从本机移除「{{name}}」（{{source}}：{{path}}）。对话与本地配置保留；若仍在终端运行，会话可能中断。",
@@ -87,7 +97,7 @@ export const settingsAgents = {
     latest: "最新",
     installGuide: "安装命令",
     installs: "安装位置",
-    updateHint: "更新将安装最新版本",
+    reinstallHint: "没有可对比的新版本时，可重新安装以刷新当前安装。",
     errors: {
       unsupported: "此智能体无法自动安装。请使用安装指南或打开官网。",
       unavailable: "安装服务暂不可用，请稍后重试。",

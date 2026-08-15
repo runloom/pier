@@ -1,3 +1,4 @@
+import { isAgentUpdateOffered } from "@shared/agent-lifecycle/update-offer.ts";
 import { isAgentUpdateAvailable } from "@shared/agent-lifecycle/version-compare.ts";
 import type { AgentLifecycleProbe } from "@shared/contracts/agent/lifecycle.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
@@ -15,8 +16,7 @@ export function hasCachedProbes(
 
 /**
  * Derive offer/available flags from a probe + optional retained latest.
- * Always recompute — never OR-sticky previous updateOffered (that inflated
- * "Update all (N)" across refreshes without re-check).
+ * Always recompute — never OR-sticky previous updateOffered.
  */
 export function withDerivedUpdateFlags(
   probe: AgentLifecycleProbe,
@@ -30,16 +30,14 @@ export function withDerivedUpdateFlags(
     probe.updateMode === "versioned" &&
     latest !== null &&
     isAgentUpdateAvailable(probe.version, latest);
-  const updateOffered =
-    probe.canInstall &&
-    (probe.installedButBroken ||
-      (probe.detected &&
-        (probe.updateMode === "reinstall" || updateAvailable)));
-  return {
+  const next = {
     ...probe,
     latestVersion: latest,
     updateAvailable,
-    updateOffered,
+  };
+  return {
+    ...next,
+    updateOffered: isAgentUpdateOffered(next),
   };
 }
 
@@ -70,12 +68,50 @@ export function mergeProbes(
 }
 
 /**
- * Batch / "Update all" eligibility.
- * Prefer real versioned updates + broken installs — not reinstall-mode
- * always-on offers (cursor/hermes/kiro) which inflated the toolbar count.
- * Per-row Update still uses `probe.updateOffered` (includes reinstall).
+ * Toolbar count, row Update, and Update all.
+ * Disabled is a preference — not part of probe.updateOffered.
  */
 export function isLifecycleUpdateCandidate(
+  probe: AgentLifecycleProbe | undefined,
+  options?: { disabled?: boolean }
+): boolean {
+  if (options?.disabled === true) {
+    return false;
+  }
+  return isAgentUpdateOffered(probe);
+}
+
+export function listLifecycleUpdateCandidates(
+  probesById: Partial<Record<AgentKind, AgentLifecycleProbe>>,
+  disabledAgentIds: readonly string[] = []
+): AgentKind[] {
+  const disabled = new Set(disabledAgentIds);
+  const out: AgentKind[] = [];
+  for (const probe of Object.values(probesById)) {
+    if (
+      probe &&
+      isLifecycleUpdateCandidate(probe, {
+        disabled: disabled.has(probe.agentId),
+      })
+    ) {
+      out.push(probe.agentId);
+    }
+  }
+  return out;
+}
+
+export function countLifecycleUpdateCandidates(
+  probesById: Partial<Record<AgentKind, AgentLifecycleProbe>>,
+  disabledAgentIds: readonly string[] = []
+): number {
+  return listLifecycleUpdateCandidates(probesById, disabledAgentIds).length;
+}
+
+/**
+ * Force-refresh affordance for agents with no reliable latest
+ * (cursor / hermes / kiro). Never overlaps Update all.
+ */
+export function isLifecycleReinstallCandidate(
   probe: AgentLifecycleProbe | undefined,
   options?: { disabled?: boolean }
 ): boolean {
@@ -85,5 +121,8 @@ export function isLifecycleUpdateCandidate(
   if (!(probe && probe.support === "full" && probe.canInstall)) {
     return false;
   }
-  return probe.updateAvailable === true || probe.installedButBroken === true;
+  if (isLifecycleUpdateCandidate(probe, options)) {
+    return false;
+  }
+  return probe.detected === true && probe.updateMode === "reinstall";
 }

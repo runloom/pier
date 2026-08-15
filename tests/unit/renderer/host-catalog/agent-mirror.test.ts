@@ -59,6 +59,33 @@ describe("agent catalog views", () => {
     ).toEqual([claudeProbe]);
   });
 
+  it("rewrites stale reinstall-only updateOffered on snapshot probes", () => {
+    const [cursor] = probesFromAgentSnapshot({
+      ...emptyDomainSnapshot("agent-cli"),
+      items: [
+        {
+          details: {
+            ...claudeProbe,
+            agentId: "cursor",
+            latestVersion: null,
+            updateAvailable: false,
+            updateMode: "reinstall",
+            updateOffered: true,
+            version: "2026.07.08-0c04a8a",
+          },
+          domain: "agent-cli",
+          id: "cursor",
+          label: "Cursor",
+          localVersion: "2026.07.08-0c04a8a",
+          presence: "present",
+          remoteVersion: null,
+          updateOffered: true,
+        },
+      ],
+    });
+    expect(cursor?.updateOffered).toBe(false);
+  });
+
   it("fills detect and lifecycle stores when catalog applyDomain", () => {
     useHostCatalogStore.getState().applyDomain({
       ...emptyDomainSnapshot("agent-cli"),
