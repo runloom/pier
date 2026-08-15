@@ -318,6 +318,25 @@ export function filterComposerSkillSuggestItems(
   });
 }
 
+/** Keep the highlighted row across a same-query catalog refresh. */
+export function preserveSuggestActiveIndex(
+  prevIndex: number,
+  prevItems: readonly { id: string }[],
+  nextItems: readonly { id: string }[]
+): number {
+  if (nextItems.length === 0) {
+    return 0;
+  }
+  const selectedId = prevItems[prevIndex]?.id;
+  if (selectedId !== undefined) {
+    const next = nextItems.findIndex((item) => item.id === selectedId);
+    if (next >= 0) {
+      return next;
+    }
+  }
+  return Math.min(prevIndex, nextItems.length - 1);
+}
+
 /**
  * Match `/` skill/command trigger for Enhanced Input.
  *

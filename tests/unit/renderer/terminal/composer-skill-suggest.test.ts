@@ -26,6 +26,7 @@ import {
   filterComposerSkillSuggestItems,
   getSkillSuggestMatch,
   getSkillSuggestNodeReplaceRange,
+  preserveSuggestActiveIndex,
 } from "@/panel-kits/terminal/structured-composer/composer-skill-suggest.ts";
 
 const EMPTY_SNAPSHOT = {
@@ -707,6 +708,24 @@ describe("filterComposerSkillSuggestItems", () => {
   });
 });
 
+describe("preserveSuggestActiveIndex", () => {
+  const prev = [{ id: "btw" }, { id: "plan" }, { id: "compact" }];
+
+  it("keeps the same id when the catalog grows", () => {
+    const next = [{ id: "btw" }, { id: "extra" }, { id: "plan" }];
+    expect(preserveSuggestActiveIndex(1, prev, next)).toBe(2);
+  });
+
+  it("clamps when the selected id disappears", () => {
+    const next = [{ id: "btw" }];
+    expect(preserveSuggestActiveIndex(2, prev, next)).toBe(0);
+  });
+
+  it("returns 0 when the next list is empty", () => {
+    expect(preserveSuggestActiveIndex(1, prev, [])).toBe(0);
+  });
+});
+
 describe("listBundledSkills", () => {
   it("returns Claude table for openclaude and empty for unknown agents", () => {
     expect(
@@ -966,6 +985,25 @@ describe("createComposerSkillQueryClient", () => {
     vi.useRealTimers();
     // Drop test pier stub so later suites do not see a partial window.pier.
     (window as { pier?: unknown }).pier = undefined;
+  });
+
+  it("shows filtered surface commands on the first update without waiting for IPC", () => {
+    installPier({
+      projectsSnapshot: vi.fn(() => new Promise(() => undefined)),
+    });
+    const client = createComposerSkillQueryClient();
+    const updates: ComposerSkillQuerySnapshot[] = [];
+    client.search({
+      agentKind: "grok",
+      onUpdate: (snap) => {
+        updates.push(snap);
+      },
+      projectRootPath: "/tmp/proj",
+      query: "b",
+    });
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.items.map((item) => item.id)).toEqual(["btw"]);
+    client.dispose();
   });
 
   it("loads surface commands when projects list is empty", async () => {

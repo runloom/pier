@@ -78,6 +78,46 @@ function surfaceOnlyItems(agentKind: string): ComposerSkillSuggestItem[] {
   );
 }
 
+function cachedItemsForAgent(
+  projectRootPath: string,
+  agentKind: string
+): ComposerSkillSuggestItem[] | null {
+  const now = Date.now();
+  if (
+    !(
+      cache &&
+      cache.projectRootPath === projectRootPath &&
+      now - cache.loadedAt < CACHE_TTL_MS
+    )
+  ) {
+    return null;
+  }
+  return cache.itemsByAgent.get(agentKind) ?? null;
+}
+
+/** Sync seed so `/` is never an empty loading shell. */
+function seedItemsForAgent(
+  projectRootPath: string,
+  agentKind: string
+): { complete: boolean; items: ComposerSkillSuggestItem[] } {
+  const cached = cachedItemsForAgent(projectRootPath, agentKind);
+  if (cached) {
+    return { complete: true, items: cached };
+  }
+  if (!projectRootPath) {
+    return {
+      complete: true,
+      items: rememberItems(
+        projectRootPath,
+        agentKind,
+        surfaceOnlyItems(agentKind),
+        Date.now()
+      ),
+    };
+  }
+  return { complete: false, items: surfaceOnlyItems(agentKind) };
+}
+
 function rememberItems(
   projectRootPath: string,
   agentKind: string,
@@ -181,7 +221,17 @@ export function createComposerSkillQueryClient(): {
         timer = null;
       }
       const id = ++requestId;
-      onUpdate({ items: [], status: "loading" });
+      const seed = seedItemsForAgent(projectRootPath, agentKind);
+      const preparedSeed = mapItem ? seed.items.map(mapItem) : seed.items;
+      onUpdate({
+        items: filterComposerSkillSuggestItems(preparedSeed, query),
+        status: seed.complete ? "done" : "loading",
+      });
+      if (seed.complete) {
+        return () => {
+          requestId += 1;
+        };
+      }
 
       timer = setTimeout(() => {
         timer = null;
