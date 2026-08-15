@@ -122,4 +122,45 @@ describe("GitReviewDocumentLoader.failHydrateTimeout", () => {
     expect(loader.failHydrateTimeout([item.entryKey])).toBe(false);
     expect(loader.getResource(item.entryKey)?.kind).toBe("loaded");
   });
+
+  it("retries every retryable timeout without touching loaded entries", () => {
+    const timedOut = entry("timeout.ts");
+    const loaded = entry("ok.ts");
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries: [timedOut, loaded],
+      load: vi.fn(
+        (): Promise<GitReviewFileDocumentResult> => new Promise(() => undefined)
+      ),
+    });
+    expect(loader.failHydrateTimeout([timedOut.entryKey])).toBe(true);
+    loader.hydrateLoaded(
+      new Map([
+        [
+          loaded.entryKey,
+          {
+            document: {
+              entryKey: loaded.entryKey,
+              kind: "ok",
+              revision: "r1",
+              sections: [],
+              surfaceSections: {
+                committed: null,
+                head: null,
+                index: null,
+                staged: null,
+              },
+            },
+            entry: loaded,
+            kind: "loaded",
+          },
+        ],
+      ])
+    );
+
+    loader.retryRetryableFailures();
+
+    expect(loader.getResource(timedOut.entryKey)?.kind).toBe("idle");
+    expect(loader.getResource(loaded.entryKey)?.kind).toBe("loaded");
+  });
 });
