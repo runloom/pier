@@ -127,4 +127,28 @@ describe("terminal create post actions", () => {
     });
     expect(sendText).not.toHaveBeenCalled();
   });
+
+  it("does not type until the viewport shows a painted prompt", async () => {
+    vi.useFakeTimers();
+    const sendText = vi.fn().mockReturnValue(true);
+    let viewport = "Last login: Sat Aug 15 15:03:30 on ttys012\n";
+    sendInitialTerminalInput({
+      addon: {
+        readViewportText: () => viewport,
+        sendText,
+      } as unknown as NativeAddon,
+      initialInput: "pi\r",
+      nativePanelId: "7::terminal-1",
+      panelId: "terminal-1",
+    });
+    signalPromptReady("terminal-1");
+    expect(sendText).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sendText).not.toHaveBeenCalled();
+    viewport =
+      "Last login: Sat Aug 15 15:03:30 on ttys012\nloomdesk  feat/main (base) is v0.1.0";
+    await vi.advanceTimersByTimeAsync(50);
+    expect(sendText).toHaveBeenCalledTimes(1);
+    expect(sendText).toHaveBeenCalledWith("7::terminal-1", "pi\r");
+  });
 });

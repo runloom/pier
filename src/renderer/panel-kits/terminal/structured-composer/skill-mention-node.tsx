@@ -15,8 +15,7 @@ import type { JSX } from "react";
 import {
   COMPOSER_CHIP_CLASS,
   COMPOSER_CHIP_HOST_CLASS,
-  COMPOSER_CHIP_TONE_COMMAND,
-  COMPOSER_CHIP_TONE_SKILL,
+  COMPOSER_CHIP_TONE_INVOKE,
 } from "./composer-chip-styles.ts";
 
 /** Skill package vs documented built-in slash command (list + chip affordance). */
@@ -143,20 +142,17 @@ export class SkillMentionNode extends DecoratorNode<JSX.Element> {
   override decorate(): JSX.Element {
     const isCommand = this.__kind === "command";
     const Icon = isCommand ? SquareSlash : Zap;
-    const tone = isCommand
-      ? COMPOSER_CHIP_TONE_COMMAND
-      : COMPOSER_CHIP_TONE_SKILL;
     return (
       <span
-        className={cn(COMPOSER_CHIP_CLASS, tone)}
+        className={cn(COMPOSER_CHIP_CLASS, COMPOSER_CHIP_TONE_INVOKE)}
         contentEditable={false}
         data-skill-id={this.__skillId}
         data-skill-kind={this.__kind}
         // Browser must not red-underline skill ids inside the pill.
         spellCheck={false}
       >
-        <Icon aria-hidden="true" className="size-2.5 shrink-0" />
-        <span className="truncate">{this.__skillId}</span>
+        <Icon aria-hidden="true" className="size-2.5 shrink-0 self-center" />
+        <span className="truncate font-mono">{this.__skillId}</span>
       </span>
     );
   }

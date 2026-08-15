@@ -96,6 +96,7 @@ export interface PierCoreServices {
   git: GitService;
   gitReview: GitReviewService;
   gitWatch: GitWatchService;
+  hostCatalog?: import("../services/host-catalog/service.ts").HostCatalogRuntime;
   liveModules?: LiveModulesService;
   localEnvironments: LocalEnvironmentService;
   managedPlugins: ManagedPluginInstallService;

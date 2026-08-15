@@ -3,6 +3,7 @@ import type {
   RendererPluginActionInvocation,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
+import { FilePlus } from "lucide-react";
 import {
   FILES_COPY_PATH_COMMAND_ID,
   FILES_COPY_PATH_WITH_RANGE_COMMAND_ID,
@@ -37,6 +38,7 @@ import {
 import { createDuplicateAction } from "./actions-duplicate.ts";
 import { beginInlineCreate, createViaPrompt } from "./create.ts";
 import { createDeleteAction } from "./delete-action.ts";
+import { openUntitledFileFromCreateMenu } from "./open-untitled.ts";
 import { filePanelProjectRoot } from "./preferences.ts";
 import {
   findFilesTreeInstanceId,
@@ -67,8 +69,10 @@ function resolveCreateTarget(
       ...(background.treeId ? { treeId: background.treeId } : {}),
     };
   }
-  // 无树调用上下文时，落到当前活动 files 树根（如未来快捷键路径）。
-  const root = filePanelProjectRoot(context.panels.getActiveContext());
+  // 无树调用上下文时（创建菜单 / 快捷键），用调用方 panel 或当前活动上下文。
+  const root = filePanelProjectRoot(
+    invocation?.sourcePanelContext ?? context.panels.getActiveContext()
+  );
   if (!root) {
     return null;
   }
@@ -80,34 +84,63 @@ function resolveCreateTarget(
   };
 }
 
+function createNeedsProjectReason(t: FilesTranslate): string {
+  return t(
+    "filePanel.tree.createNeedsProject",
+    "Open a project to create files."
+  );
+}
+
+function newFileActionTitle(
+  t: FilesTranslate,
+  invocation?: RendererPluginActionInvocation
+): string {
+  if (invocation?.surface === "create-menu") {
+    return t("filePanel.createMenu.newFile", "New File");
+  }
+  return t("filePanel.tree.action.newFile", "New File...");
+}
+
 function createNewChildAction(
   kind: "file" | "folder",
   actionId: string,
   context: RendererPluginContext,
-  t: FilesTranslate
+  t: FilesTranslate,
+  controller?: FileEditorController
 ): RendererPluginAction {
+  const isFile = kind === "file";
   return pluginAction({
     id: actionId,
     category: "file",
     metadata: {
+      categoryKey: "file",
       group: "1_new",
-      sortOrder: kind === "file" ? 1 : 2,
+      ...(isFile ? { iconComponent: FilePlus } : {}),
+      sortOrder: isFile ? 1 : 2,
     },
-    // 仅树右键 / 空白处；不进命令面板（文件类仅保留转到文件 / 打开目录）。
-    surfaces: ["files/tree-item", "files/tree-background"],
-    title: () =>
-      kind === "file"
-        ? t("filePanel.tree.action.newFile", "New File...")
+    // 创建菜单：未命名标签，保存再落盘。树右键仍先起名再写盘。
+    // 两者都不进命令面板（文件类仅保留转到文件 / 打开目录）。
+    surfaces: isFile
+      ? ["files/tree-item", "files/tree-background", "create-menu"]
+      : ["files/tree-item", "files/tree-background"],
+    title: (invocation) =>
+      isFile
+        ? newFileActionTitle(t, invocation)
         : t("filePanel.tree.action.newFolder", "New Folder..."),
     handler: async (invocation) => {
+      // 无树选区（创建菜单 / 快捷键，含宿主漏带 surface）→ 未命名标签。
+      if (
+        isFile &&
+        controller &&
+        !parseTreeMetadata(invocation) &&
+        !parseTreeBackgroundMetadata(invocation)
+      ) {
+        openUntitledFileFromCreateMenu(context, controller, invocation);
+        return;
+      }
       const target = resolveCreateTarget(context, invocation);
       if (!target) {
-        context.notifications.info(
-          t(
-            "filePanel.tree.createNeedsProject",
-            "Open a project to create files."
-          )
-        );
+        context.notifications.info(createNeedsProjectReason(t));
         return;
       }
       const started = await beginInlineCreate({
@@ -423,7 +456,13 @@ export function createFilesTreeActions(
 ): RendererPluginAction[] {
   const t = createFilesTranslate(context);
   return [
-    createNewChildAction("file", FILES_NEW_FILE_COMMAND_ID, context, t),
+    createNewChildAction(
+      "file",
+      FILES_NEW_FILE_COMMAND_ID,
+      context,
+      t,
+      controller
+    ),
     createNewChildAction("folder", FILES_NEW_FOLDER_COMMAND_ID, context, t),
     createRenameAction(context, t, controller),
     createDuplicateAction(context, t),

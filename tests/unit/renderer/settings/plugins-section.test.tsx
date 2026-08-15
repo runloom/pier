@@ -1,3 +1,4 @@
+import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/plugin/managed.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   act,
@@ -15,8 +16,10 @@ import {
   reportRendererPluginRuntimeDiagnostic,
 } from "@/lib/plugins/runtime-diagnostics.ts";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
+import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
+import { catalogApiFromManaged } from "../host-catalog/test-api.ts";
 
 function entry(id: string, enabled: boolean): PluginRegistryEntry {
   return {
@@ -49,6 +52,35 @@ const INITIAL_STORE_STATE = {
 
 const WORKBENCH_WIDGETS_SUMMARY_RE = /2 Workbench widgets/i;
 
+function emptyManagedCatalog() {
+  return {
+    checkedAt: 1,
+    officialMutationsAllowed: true,
+    pluginMode: "release" as const,
+    plugins: [],
+  };
+}
+
+function stubPier(managed: {
+  checkUpdates: () => Promise<ManagedPluginCatalogSnapshot>;
+  list: () => Promise<ManagedPluginCatalogSnapshot>;
+  [key: string]: unknown;
+}) {
+  return {
+    catalog: catalogApiFromManaged(managed),
+    managedPlugins: managed,
+    plugins: {
+      disable: vi.fn(async () => entry("pier.git", false)),
+      enable: vi.fn(async () => entry("pier.git", true)),
+      list: vi.fn(async () => ({
+        diagnostics: [],
+        entries: [entry("pier.git", false)],
+      })),
+      onChanged: vi.fn(() => () => undefined),
+    },
+  };
+}
+
 describe("PluginsSection", () => {
   beforeEach(async () => {
     await initI18n();
@@ -56,37 +88,16 @@ describe("PluginsSection", () => {
     usePluginRegistryStore.setState(INITIAL_STORE_STATE);
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => ({
-            checkedAt: 1,
-            officialMutationsAllowed: true,
-            pluginMode: "release" as const,
-            plugins: [],
-          })),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list: vi.fn(async () => ({
-            checkedAt: 1,
-            officialMutationsAllowed: true,
-            pluginMode: "release" as const,
-            plugins: [],
-          })),
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-        plugins: {
-          disable: vi.fn(async () => entry("pier.git", false)),
-          enable: vi.fn(async () => entry("pier.git", true)),
-          list: vi.fn(async () => ({
-            diagnostics: [],
-            entries: [entry("pier.git", false)],
-          })),
-          onChanged: vi.fn(() => () => undefined),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => emptyManagedCatalog()),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list: vi.fn(async () => emptyManagedCatalog()),
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
   });
 
@@ -96,6 +107,7 @@ describe("PluginsSection", () => {
     vi.restoreAllMocks();
     usePluginRegistryStore.setState(INITIAL_STORE_STATE);
     useSettingsDialogStore.setState({ activeSection: "appearance" });
+    useHostCatalogStore.getState().reset();
   });
 
   it("store 未初始化时渲染 loading 骨架", () => {
@@ -240,19 +252,16 @@ describe("PluginsSection", () => {
     }));
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        ...(window as unknown as { pier: Record<string, unknown> }).pier,
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => list()),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list,
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => list()),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list,
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
     usePluginRegistryStore.setState({
       diagnostics: [
@@ -292,19 +301,16 @@ describe("PluginsSection", () => {
     }));
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        ...(window as unknown as { pier: Record<string, unknown> }).pier,
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => list()),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list,
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => list()),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list,
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
     usePluginRegistryStore.setState({
       diagnostics: [],
@@ -327,19 +333,16 @@ describe("PluginsSection", () => {
     });
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        ...(window as unknown as { pier: Record<string, unknown> }).pier,
-        managedPlugins: {
-          checkUpdates: vi.fn(),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list,
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => emptyManagedCatalog()),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list,
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
     usePluginRegistryStore.setState({
       diagnostics: [],

@@ -2,6 +2,31 @@ import type { Environment, RawEnvironment } from "./types.ts";
 
 export const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+/** Emulator-owned keys. Dump injects TERM=dumb; Ghostty must set these itself. */
+export const TERMINAL_EMULATOR_ENV_KEYS = [
+  "COLORTERM",
+  "COLUMNS",
+  "LINES",
+  "TERM",
+  "TERMCAP",
+  "TERMINFO",
+  "TERMINFO_DIRS",
+  "TERM_PROGRAM",
+  "TERM_PROGRAM_VERSION",
+] as const;
+
+export function omitTerminalEmulatorEnv(env: Environment): Environment {
+  let changed = false;
+  const next: Environment = { ...env };
+  for (const key of TERMINAL_EMULATOR_ENV_KEYS) {
+    if (key in next) {
+      Reflect.deleteProperty(next, key);
+      changed = true;
+    }
+  }
+  return changed ? next : env;
+}
+
 function isPierInternalEsbuildBinaryPath(value: string): boolean {
   const normalized = value.replaceAll("\\", "/");
   return (

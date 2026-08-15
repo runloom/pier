@@ -1,5 +1,6 @@
 import { Button } from "@pier/ui/button.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   isProjectCanvasPath,
   liveModuleProjectContentDirectories,
@@ -28,6 +29,7 @@ import {
 // Cmd+S、自动保存与关闭保护链负责，不在编辑区重复提供按钮。
 // Markdown 分屏预览不走 panel 内 split：用 dockview 多 panel 分屏即可。
 export function ResolvedFilePanelActions({
+  context,
   editorSessionId,
   controller,
   mode,
@@ -36,6 +38,7 @@ export function ResolvedFilePanelActions({
   source,
   t,
 }: {
+  context?: RendererPluginContext | undefined;
   controller: FileEditorController;
   editorSessionId: string;
   mode: FileViewMode;
@@ -114,13 +117,36 @@ export function ResolvedFilePanelActions({
         onProtectionError={handleProtectionError}
         t={t}
       />
-      <LanguageBadge document={document} t={t} />
+      <LanguageBadge
+        context={context}
+        controller={controller}
+        document={document}
+        onLanguageApplied={(language) => {
+          if (
+            mode === "preview" &&
+            language !== "markdown" &&
+            language !== "canvas"
+          ) {
+            if (panelId) {
+              controller.setPanelMode(panelId, "source");
+              return;
+            }
+            onModeChange("source");
+          }
+        }}
+        t={t}
+      />
       <LanguageServiceStatus
         documentId={document.id}
         ownerId={editorSessionId}
         t={t}
       />
-      <DocumentFormatBadge document={document} />
+      <DocumentFormatBadge
+        context={context}
+        controller={controller}
+        document={document}
+        t={t}
+      />
       {/* Canvas preview: annotate → reload → source toggle. */}
       {showCanvasComments && canvasCommentPath ? (
         <CanvasCommentsButton path={canvasCommentPath} t={t} />

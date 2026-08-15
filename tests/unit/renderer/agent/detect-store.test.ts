@@ -1,12 +1,14 @@
-import type { AgentKind } from "@shared/contracts/agent.ts";
+import { emptyDomainSnapshot } from "@shared/contracts/host-catalog/runtime.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
+import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
 
 describe("agent detect store", () => {
-  const detect = vi.fn<() => Promise<{ detectedIds: AgentKind[] }>>();
+  const ensureFresh = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useHostCatalogStore.getState().reset();
     useAgentDetectStore.setState({
       detectedIds: [],
       hasDetected: false,
@@ -15,18 +17,30 @@ describe("agent detect store", () => {
     });
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: { agents: { detect } },
+      value: { catalog: { ensureFresh } },
     });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     Reflect.deleteProperty(window, "pier");
+    useHostCatalogStore.getState().reset();
   });
 
-  it("rejects the original detection error and leaves detection retryable", async () => {
+  it("does not revalidate when a previous detect snapshot already exists", async () => {
+    useAgentDetectStore.setState({
+      detectedIds: ["claude"],
+      hasDetected: true,
+    });
+
+    await useAgentDetectStore.getState().ensureDetected();
+
+    expect(ensureFresh).not.toHaveBeenCalled();
+  });
+
+  it("rejects the catalog error and leaves detection retryable", async () => {
     const error = new Error("detect boom");
-    detect.mockRejectedValueOnce(error);
+    ensureFresh.mockRejectedValueOnce(error);
     vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     await expect(useAgentDetectStore.getState().ensureDetected()).rejects.toBe(
@@ -37,5 +51,31 @@ describe("agent detect store", () => {
       hasDetected: false,
       isDetecting: false,
     });
+  });
+
+  it("fills detectedIds from a local catalog refresh", async () => {
+    ensureFresh.mockResolvedValueOnce({
+      ...emptyDomainSnapshot("agent-cli"),
+      items: [
+        {
+          details: null,
+          domain: "agent-cli",
+          id: "claude",
+          label: "Claude",
+          localVersion: "1.0.0",
+          presence: "present",
+          remoteVersion: null,
+          updateOffered: false,
+        },
+      ],
+    });
+
+    await useAgentDetectStore.getState().ensureDetected();
+
+    expect(ensureFresh).toHaveBeenCalledWith({
+      class: "local",
+      domain: "agent-cli",
+    });
+    expect(useAgentDetectStore.getState().detectedIds).toEqual(["claude"]);
   });
 });

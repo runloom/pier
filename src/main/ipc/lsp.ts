@@ -33,6 +33,10 @@ import {
   unbindLspHostBridge,
 } from "../services/lsp/host-bridge.ts";
 import { applyLspPrefsToPolicy } from "../services/lsp/prefs-wiring.ts";
+import {
+  languageIdForEnsure,
+  resolveEnsureProvider,
+} from "../services/lsp/resolve-provider.ts";
 import { normalizeFsRoot } from "../services/lsp/resolve-root.ts";
 import { LspSessionHost } from "../services/lsp/session-host.ts";
 import {
@@ -234,11 +238,7 @@ const handleLanguageToolsRequest = createLspLanguageToolsRequestHandler({
 });
 
 function resolveProvider(request: LspSessionEnsureRequest) {
-  if (request.filePath) {
-    return registry.matchForPath(request.filePath);
-  }
-  // Backward compatible: root-only ensure assumes typescript.
-  return registry.getById("typescript");
+  return resolveEnsureProvider(registry, request);
 }
 
 async function handleEnsure(
@@ -360,12 +360,7 @@ async function handleEnsure(
     } else {
       acquisitionHeld = false;
     }
-    const languageId =
-      (request.filePath
-        ? provider.languageIdForPath(request.filePath)
-        : null) ??
-      provider.selector.languageIds[0] ??
-      "plaintext";
+    const languageId = languageIdForEnsure(provider, request);
     return {
       languageId,
       ok: true,

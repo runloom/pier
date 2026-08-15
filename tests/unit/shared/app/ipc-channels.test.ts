@@ -33,6 +33,21 @@ describe("PIER_BROADCAST.WINDOW_FOCUS_CHANGED", () => {
   });
 });
 
+describe("PIER_BROADCAST.HOST_CATALOG_CHANGED", () => {
+  it("uses pier:// host-catalog channel and is allowlisted for renderer subscribe", () => {
+    expect(PIER_BROADCAST.HOST_CATALOG_CHANGED).toBe(
+      "pier://host-catalog:changed"
+    );
+    expect(ALLOWED_RENDERER_CHANNELS).toContain(
+      PIER_BROADCAST.HOST_CATALOG_CHANGED
+    );
+    expect(PIER.HOST_CATALOG_SNAPSHOT).toBe("pier://host-catalog:snapshot");
+    expect(PIER.HOST_CATALOG_ENSURE_FRESH).toBe(
+      "pier://host-catalog:ensureFresh"
+    );
+  });
+});
+
 describe("PIER_BROADCAST.NOTIFICATION_CENTER_MESSAGE_TOAST", () => {
   it("uses dedicated single-window toast channel on the allowlist", () => {
     expect(PIER_BROADCAST.NOTIFICATION_CENTER_MESSAGE_TOAST).toBe(

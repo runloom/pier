@@ -160,6 +160,32 @@ export function cancelLoaderOperation(
   }
 }
 
+export function retryLoaderRetryableFailures(
+  runtime: GitReviewDocumentLoaderRuntime
+): void {
+  if (runtime.disposed.value) {
+    return;
+  }
+  let changed = false;
+  for (const resource of runtime.resources.values()) {
+    if (resource.kind !== "error" || !resource.failure.retryable) {
+      continue;
+    }
+    runtime.silentRetryCount.delete(resource.entry.entryKey);
+    runtime.setResource(resource.entry.entryKey, {
+      entry: resource.entry,
+      kind: "idle",
+    });
+    changed = true;
+  }
+  if (!changed) {
+    return;
+  }
+  rebuildLoaderWaiting(runtime);
+  pumpLoaderLoads(runtime, false);
+  emitLoaderChange(runtime);
+}
+
 export function emitLoaderChange(
   runtime: GitReviewDocumentLoaderRuntime
 ): void {

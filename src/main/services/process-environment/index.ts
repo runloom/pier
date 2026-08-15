@@ -8,7 +8,12 @@ export {
   pickHostApplyEnv,
   shouldApplyHostEnvKey,
 } from "./apply-host-env.ts";
-export { cleanEnv, mergeEnv } from "./clean-env.ts";
+export {
+  cleanEnv,
+  mergeEnv,
+  omitTerminalEmulatorEnv,
+  TERMINAL_EMULATOR_ENV_KEYS,
+} from "./clean-env.ts";
 export type {
   ShellEnvFailureNotifyController,
   ShellEnvFailureNotifyDeps,

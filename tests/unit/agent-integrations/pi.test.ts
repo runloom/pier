@@ -54,7 +54,15 @@ describe("buildPiExtensionSource", () => {
       { nativeEvent: "session_start", pierEvent: "SessionStart" },
       { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
       { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
+      {
+        nativeEvent: "tool_execution_start.ask",
+        pierEvent: "InteractionRequested",
+      },
       { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
+      {
+        nativeEvent: "tool_execution_end.ask",
+        pierEvent: "InteractionResolved",
+      },
       { nativeEvent: "agent_settled", pierEvent: "Stop" },
       { nativeEvent: "session_shutdown", pierEvent: "SessionEnd" },
     ]);
@@ -301,6 +309,45 @@ describe("生成源码行为（动态加载 + 假 pi 触发）", () => {
       }
     }
     expect(statuses).toEqual(["tool", "processing", "ready"]);
+  });
+
+  it("ask 问卷走 InteractionRequested，不标成 ToolStart", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: PiEventCtx = {
+      sessionManager: { getSessionId: () => "session-pi" },
+    };
+    main.fire("tool_execution_start", ctx, {
+      toolCallId: "call-ask-1",
+      toolName: "ask",
+      type: "tool_execution_start",
+    });
+    main.fire("tool_execution_end", ctx, {
+      toolCallId: "call-ask-1",
+      toolName: "ask",
+      type: "tool_execution_end",
+    });
+    const records = await readEmittedRecords(logPath);
+    expect(records).toMatchObject([
+      {
+        event: "InteractionRequested",
+        interactionId: "call-ask-1",
+        interactionKind: "question",
+        nativeEvent: "tool_execution_start.ask",
+        toolName: "ask",
+        toolUseId: "call-ask-1",
+      },
+      {
+        event: "InteractionResolved",
+        interactionId: "call-ask-1",
+        interactionKind: "question",
+        interactionOutcome: "completed",
+        nativeEvent: "tool_execution_end.ask",
+        toolName: "ask",
+        toolUseId: "call-ask-1",
+      },
+    ]);
   });
 });
 

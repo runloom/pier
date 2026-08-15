@@ -40,7 +40,7 @@ async function runPluginRuntimeTransition<T>(input: {
   const { commit, pluginId, reason, services } = input;
   const canInspect = typeof services.plugins.inspect === "function";
   let runtimeChanged = true;
-  return await services.pluginDisableTransitions.runDisable<T>({
+  const result = await services.pluginDisableTransitions.runDisable<T>({
     commit: async () => {
       let before: PluginRegistryEntry | null = null;
       let inspectionReliable = canInspect;
@@ -116,6 +116,21 @@ async function runPluginRuntimeTransition<T>(input: {
     },
     reason,
   });
+  refreshManagedPluginCatalog(services);
+  return result;
+}
+
+function refreshManagedPluginCatalog(services: PierCoreServices): void {
+  const catalog = services.hostCatalog;
+  if (!catalog) {
+    return;
+  }
+  catalog.invalidate("managed-plugin");
+  catalog
+    .ensureFresh("managed-plugin", { class: "local", force: true })
+    .catch((err: unknown) => {
+      console.error("[host-catalog] plugin mutation refresh failed", err);
+    });
 }
 
 export async function executePluginCommand(
@@ -186,8 +201,11 @@ export async function executePluginCommand(
         requestId,
         await services.managedPlugins.listCatalogSnapshot()
       );
-    case "plugin.checkUpdates":
-      return success(requestId, await services.managedPlugins.checkUpdates());
+    case "plugin.checkUpdates": {
+      const snapshot = await services.managedPlugins.checkUpdates();
+      refreshManagedPluginCatalog(services);
+      return success(requestId, snapshot);
+    }
     case "plugin.install":
       return success(
         requestId,

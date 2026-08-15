@@ -1,3 +1,5 @@
+import type { AgentLifecycleProbe } from "@shared/contracts/agent/lifecycle.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { ExternalNavigationResult } from "@shared/contracts/external-navigation.ts";
 import {
   cleanup,
@@ -14,10 +16,12 @@ import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentLifecycleStore } from "@/stores/agent-lifecycle.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import type * as AppDialogStoreModule from "@/stores/app-dialog.store.ts";
+import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
 import { makeFakePreferences } from "../../../setup/preferences-fixture.ts";
 
 const appDialogMocks = vi.hoisted(() => ({
   showAppAlert: vi.fn(async () => undefined),
+  showAppConfirm: vi.fn(async () => true),
 }));
 
 const toastMocks = vi.hoisted(() => ({
@@ -31,6 +35,7 @@ vi.mock("sonner", () => ({ toast: toastMocks }));
 vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => ({
   ...(await importOriginal<typeof AppDialogStoreModule>()),
   showAppAlert: appDialogMocks.showAppAlert,
+  showAppConfirm: appDialogMocks.showAppConfirm,
 }));
 
 /**
@@ -49,11 +54,31 @@ const DEFAULT_PREFERENCES = {
 };
 
 function makePierMock(
-  detectedIds: string[] = [],
+  detectedIds: AgentKind[] = [],
   lifecycle?: {
-    probe?: ReturnType<typeof vi.fn>;
+    probe?: () => Promise<AgentLifecycleProbe[]>;
   }
 ) {
+  const probe =
+    lifecycle?.probe ??
+    (async () => [
+      {
+        agentId: "claude",
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "2.0.0",
+        support: "full" as const,
+        updateAvailable: false,
+        updateMode: "versioned" as const,
+        updateOffered: false,
+        uninstallMode: "none" as const,
+        version: "2.0.0",
+      },
+    ]);
   return {
     agents: {
       detect: vi.fn(async () => ({ detectedIds })),
@@ -61,28 +86,40 @@ function makePierMock(
       lifecycle: {
         cancel: vi.fn(async () => false),
         onProgress: vi.fn(() => () => undefined),
-        probe:
-          lifecycle?.probe ??
-          vi.fn(async () => [
-            {
-              agentId: "claude",
-              canInstall: true,
-              canUninstall: false,
-              detected: true,
-              installedButBroken: false,
-              installs: [],
-              isConflict: false,
-              latestVersion: "2.0.0",
-              support: "full" as const,
-              updateAvailable: false,
-              updateMode: "versioned" as const,
-              updateOffered: false,
-              uninstallMode: "none" as const,
-              version: "2.0.0",
-            },
-          ]),
+        probe,
         run: vi.fn(),
       },
+    },
+    catalog: {
+      ensureFresh: vi.fn(async () => {
+        const probes = await probe();
+        const probeById = new Map(probes.map((item) => [item.agentId, item]));
+        const ids = new Set([
+          ...detectedIds,
+          ...probes.map((item) => item.agentId),
+        ]);
+        return {
+          domain: "agent-cli" as const,
+          fingerprint: null,
+          items: [...ids].map((id) => {
+            const item = probeById.get(id);
+            const present = detectedIds.includes(id);
+            return {
+              details: item ?? null,
+              domain: "agent-cli" as const,
+              id,
+              label: id,
+              localVersion: item?.version ?? null,
+              presence: present ? ("present" as const) : ("missing" as const),
+              remoteVersion: item?.latestVersion ?? null,
+              updateOffered: item?.updateOffered ?? false,
+            };
+          }),
+          localProbedAt: Date.now(),
+          remoteCheckedAt: Date.now(),
+          revision: Date.now(),
+        };
+      }),
     },
     externalNavigation: {
       open: vi.fn(
@@ -108,6 +145,8 @@ describe("AgentsSection", () => {
   beforeEach(async () => {
     await initI18n();
     appDialogMocks.showAppAlert.mockClear();
+    appDialogMocks.showAppConfirm.mockClear();
+    appDialogMocks.showAppConfirm.mockResolvedValue(true);
     toastMocks.info.mockClear();
     toastMocks.success.mockClear();
 
@@ -136,6 +175,7 @@ describe("AgentsSection", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    useHostCatalogStore.getState().reset();
     useAgentDetectStore.setState({
       detectedIds: [],
       hasDetected: false,
@@ -434,7 +474,11 @@ describe("AgentsSection", () => {
     useAgentDetectStore.setState({ refresh: refreshSpy } as never);
 
     render(<AgentsSection />);
-    const refreshBtn = screen.getByRole("button", { name: "Refresh" });
+    const refreshBtn = await waitFor(() => {
+      const button = screen.getByRole("button", { name: "Refresh" });
+      expect(button).toBeEnabled();
+      return button;
+    });
     fireEvent.click(refreshBtn);
 
     expect(refreshSpy).toHaveBeenCalledTimes(1);
@@ -462,7 +506,13 @@ describe("AgentsSection", () => {
     useAgentDetectStore.setState({ refresh: refreshSpy } as never);
 
     render(<AgentsSection />);
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(
+      await waitFor(() => {
+        const button = screen.getByRole("button", { name: "Refresh" });
+        expect(button).toBeEnabled();
+        return button;
+      })
+    );
 
     await waitFor(() => {
       expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
@@ -562,7 +612,6 @@ describe("AgentsSection", () => {
     );
     first.unmount();
 
-    // Remount = leave settings section and open again. Snapshot must stay.
     render(<AgentsSection />);
     await waitFor(() => {
       expect(screen.getByTestId("agent-row-claude")).toBeInTheDocument();
@@ -570,7 +619,185 @@ describe("AgentsSection", () => {
     expect(useAgentLifecycleStore.getState().probesById.claude?.version).toBe(
       "2.0.0"
     );
-    // softRevalidate + TTL → no second main probe while fresh.
-    expect(probe).toHaveBeenCalledTimes(1);
+  });
+
+  it("Update all count, row Update buttons, and batch ids are the same real updates", async () => {
+    const probes: AgentLifecycleProbe[] = [
+      {
+        agentId: "kimi",
+        canInstall: true,
+        canUninstall: true,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "1.49.0",
+        support: "full",
+        updateAvailable: true,
+        updateMode: "versioned",
+        updateOffered: true,
+        uninstallMode: "managed",
+        version: "1.48.0",
+      },
+      {
+        agentId: "droid",
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "0.197.0",
+        support: "full",
+        updateAvailable: true,
+        updateMode: "versioned",
+        updateOffered: true,
+        uninstallMode: "none",
+        version: "0.162.1",
+      },
+      {
+        // Stale combined updateOffered (old meaning). Must not count or
+        // show Update; row uses Reinstall instead.
+        agentId: "cursor",
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: null,
+        support: "full",
+        updateAvailable: false,
+        updateMode: "reinstall",
+        updateOffered: true,
+        uninstallMode: "none",
+        version: "2026.07.08-0c04a8a",
+      },
+    ];
+    const pier = makePierMock(["kimi", "droid", "cursor"], {
+      probe: async () => probes,
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    useAgentDetectStore.setState({
+      detectedIds: ["kimi", "droid", "cursor"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+
+    render(<AgentsSection />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Update all (2)" })
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      within(screen.getByTestId("agent-row-kimi")).getByRole("button", {
+        name: "Update",
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("agent-row-droid")).getByRole("button", {
+        name: "Update",
+      })
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId("agent-row-cursor")).queryByRole("button", {
+        name: "Update",
+      })
+    ).toBeNull();
+    expect(
+      within(screen.getByTestId("agent-row-cursor")).getByRole("button", {
+        name: "Reinstall",
+      })
+    ).toBeInTheDocument();
+
+    const run = pier.agents.lifecycle.run as ReturnType<typeof vi.fn>;
+    run.mockImplementation(async (agentId: AgentKind) => ({
+      action: "update" as const,
+      agentId,
+      ok: true,
+    }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Update all (2)" }));
+
+    await waitFor(() => {
+      expect(run).toHaveBeenCalledTimes(2);
+    });
+    expect(run.mock.calls.map((call) => call[0]).sort()).toEqual([
+      "droid",
+      "kimi",
+    ]);
+    expect(run.mock.calls.every((call) => call[1] === "update")).toBe(true);
+  });
+
+  it("row Reinstall force-refreshes that agent after confirm and stays out of Update all", async () => {
+    const probes: AgentLifecycleProbe[] = [
+      {
+        agentId: "cursor",
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: null,
+        support: "full",
+        updateAvailable: false,
+        updateMode: "reinstall",
+        updateOffered: true,
+        uninstallMode: "none",
+        version: "2026.07.08-0c04a8a",
+      },
+    ];
+    const pier = makePierMock(["cursor"], {
+      probe: async () => probes,
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    useAgentDetectStore.setState({
+      detectedIds: ["cursor"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+
+    render(<AgentsSection />);
+
+    await waitFor(() => {
+      expect(
+        within(screen.getByTestId("agent-row-cursor")).getByRole("button", {
+          name: "Reinstall",
+        })
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button", { name: /Update all/ })).toBeNull();
+
+    const run = pier.agents.lifecycle.run as ReturnType<typeof vi.fn>;
+    run.mockImplementation(async (agentId: AgentKind) => ({
+      action: "update" as const,
+      agentId,
+      ok: true,
+    }));
+
+    fireEvent.click(
+      within(screen.getByTestId("agent-row-cursor")).getByRole("button", {
+        name: "Reinstall",
+      })
+    );
+
+    await waitFor(() => {
+      expect(appDialogMocks.showAppConfirm).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(run).toHaveBeenCalledWith("cursor", "update");
+    });
   });
 });

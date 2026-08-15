@@ -93,6 +93,8 @@ export function lifecycleBusyStatusText(
     /** True when this agent is in a batch but not yet claimed by a worker. */
     queued?: boolean;
     progress: AgentLifecycleProgress | undefined;
+    /** Force-reinstall row — same main action, different product copy. */
+    reinstall?: boolean;
   }
 ): string {
   const { action, queued, progress } = options;
@@ -105,6 +107,8 @@ export function lifecycleBusyStatusText(
     base = t("settings.agents.action.installBusy");
   } else if (action === "uninstall") {
     base = t("settings.agents.action.uninstallBusy");
+  } else if (action === "update" && options.reinstall === true) {
+    base = t("settings.agents.action.reinstallBusy");
   }
 
   const stepCount = progress?.stepCount;
@@ -178,6 +182,7 @@ export function formatLifecycleRowFailure(
   options: {
     name: string;
     failure: AgentLifecycleFailure;
+    reinstall?: boolean;
   }
 ): string {
   const { failure } = options;
@@ -189,6 +194,9 @@ export function formatLifecycleRowFailure(
       return t("settings.agents.action.rowUninstallPartial");
     }
     return t("settings.agents.action.rowUninstallFailed");
+  }
+  if (options.reinstall === true) {
+    return t("settings.agents.action.rowReinstallFailed");
   }
   return t("settings.agents.action.rowUpdateFailed");
 }

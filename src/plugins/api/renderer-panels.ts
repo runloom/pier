@@ -53,6 +53,11 @@ export type PluginPanelInstanceOpenResult =
 
 /** Plugin-facing panels host surface (local + cross-window). */
 export interface RendererPluginPanelsFacade {
+  /**
+   * Close one of this plugin's instances. Does not close the window when it
+   * is the last panel — a welcome tab is added first.
+   */
+  closeInstance(options: { componentId: string; instanceId: string }): boolean;
   flushLayout(): Promise<void>;
   /** Focus a declared instance in any window (brings that window forward). */
   focusInstance(options: {

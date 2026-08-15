@@ -8,6 +8,7 @@ import type {
   CreateTerminalArgs,
   TerminalAgentPanelMetadata,
 } from "@shared/contracts/terminal.ts";
+import { omitTerminalEmulatorEnv } from "../../services/process-environment/clean-env.ts";
 import {
   agentShellCommandFlags,
   buildResolvedAgentSurfaceCommand,
@@ -111,17 +112,11 @@ export function nativeLaunchOptions(
 }
 
 /**
- * Last-mile agent surface command (async, gold standard).
- *
- * 1. `launch.env` already has PES layers (shell → project → explicit).
- * 2. Resolve bare name via user interactive shell (functions / aliases).
- * 3. absolute binary → `/bin/sh -c 'exec /abs …'` (no second full rc).
- * 4. absolute shebang → drop command; caller injects the logical cmd into the
- *    user shell (same job-control tree as typing `omp`).
- * 5. via-shell → `$SHELL -lic` + sticky host-apply exports after rc (L5 layers).
+ * Last-mile agent surface command.
+ * Shebang scripts cannot lead the PTY — spawn `$SHELL -lic`.
+ * Native binaries stay `/bin/sh -c 'exec …'`.
  */
 export interface AgentLoginShellSurface {
-  injectCommand?: string;
   launch: ResolvedTerminalLaunchOptions | undefined;
 }
 
@@ -166,42 +161,10 @@ export async function withAgentLoginShellSafeCommand(
     resolved,
     shell,
   });
-  if (command === null && resolved.kind === "absolute") {
-    const { command: _command, ...rest } = launch;
-    return {
-      injectCommand: shebangInjectCommand(trimmed, resolved.path),
-      launch: rest,
-    };
-  }
-  if (command === null || command === launch.command) {
+  if (command === launch.command) {
     return { launch };
   }
   return { launch: { ...launch, command } };
-}
-
-/** Absolute shebang + original argv, so zshrc PATH rebuild cannot miss the binary. */
-export function shebangInjectCommand(
-  commandLine: string,
-  absolutePath: string
-): string {
-  const trimmed = commandLine.trim();
-  const name = extractBareCommandName(trimmed);
-  const rest = name ? trimmed.slice(name.length) : "";
-  return `${quoteShellArg(absolutePath)}${rest}`;
-}
-
-/** Shebang agents drop `command` so Ghostty starts the user shell. */
-export function composeAgentInjectInput(args: {
-  existingInput: string | undefined;
-  injectCommand: string | undefined;
-}): string | undefined {
-  const inject = args.injectCommand?.trim();
-  if (!inject) {
-    return args.existingInput;
-  }
-  const typed =
-    inject.endsWith("\n") || inject.endsWith("\r") ? inject : `${inject}\r`;
-  return args.existingInput ? `${typed}${args.existingInput}` : typed;
 }
 
 export function readCreateLaunch(
@@ -286,6 +249,7 @@ export function consumeCreateLaunch(args: CreateTerminalArgs): void {
  * 路由 agent hook 事件到「窗口+面板」。
  *
  * 始终剥离历史 PIER_AGENT_CALLER_* 环境变量，避免子进程继承误身份。
+ * 同时丢掉 dump/宿主的 TERM 等模拟器键，让 Ghostty 自己设置能力。
  */
 export function withPanelStatusEnv(
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined,
@@ -302,11 +266,11 @@ export function withPanelStatusEnv(
   };
   return {
     ...(nativeLaunch ?? {}),
-    env: {
+    env: omitTerminalEmulatorEnv({
       ...baseEnv,
       ...hookEnv,
       PIER_PANEL_ID: panelId,
       PIER_WINDOW_ID: windowId,
-    },
+    }),
   };
 }

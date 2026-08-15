@@ -187,6 +187,8 @@ export interface FilesDocument {
   hasBackingStore: boolean;
   id: string;
   language: FilesDocumentLanguage;
+  /** User picker overrode `languageForPath`; live-modules refresh must not restamp. */
+  languageOverridden?: boolean;
   loadState: "error" | "idle" | "loaded" | "loading";
   mime: string | null;
   mode: number | null;
@@ -208,6 +210,8 @@ export interface FilesDocument {
     | null;
   revision: string | null;
   savedContents: string;
+  savedEol: FileDocumentEol | null;
+  savedFormat: FileDocumentFormat | null;
   saveState: "idle" | "saving";
   size: number | null;
   source: FilesDocumentSource;

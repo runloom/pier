@@ -36,6 +36,7 @@ const grokConfigPath = () => join(grokHomeDir(), "hooks", "pier-status.json");
  * "Turn complete" / "Background task completed" 为主，映成 waiting
  * 会造成假「需要你处理」。Grok 无独立 PermissionRequest 原生事件；
  * waiting 仅对有 toolUseId 闭环的阻塞工具（plan / ask_user_question）上报。
+ * 「请求修改」会丢掉 exit_plan_mode 且不发 Post。
  *
  * PermissionDenied：普通工具 → ToolComplete；交互工具 → InteractionResolved
  * rejected（同一 toolUseId 结算）。

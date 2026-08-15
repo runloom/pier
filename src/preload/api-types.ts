@@ -1,5 +1,5 @@
 import type { AgentSelectionResult } from "@shared/contracts/agent/usage.ts";
-import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AppQuitConfirmationRequest,
   AppQuitDecisionPayload,
@@ -57,11 +57,6 @@ export interface PierAgentsLifecycleAPI {
       progress: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleProgress
     ) => void
   ) => () => void;
-  probe: (
-    request?: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleProbeRequest
-  ) => Promise<
-    import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleProbe[]
-  >;
   run: (
     agentId: AgentKind,
     action: import("@shared/contracts/agent/lifecycle.ts").AgentLifecycleAction
@@ -77,7 +72,6 @@ export interface PierAgentsLifecycleAPI {
 }
 
 export interface PierAgentsAPI {
-  detect: () => Promise<DetectAgentsResult>;
   lifecycle: PierAgentsLifecycleAPI;
   prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
   prepareLaunchFromSpec: (spec: {
@@ -85,7 +79,6 @@ export interface PierAgentsAPI {
     command?: string;
     cwd?: string;
   }) => Promise<{ launchId: string | null }>;
-  refresh: () => Promise<DetectAgentsResult>;
   selection: () => Promise<AgentSelectionResult>;
 }
 

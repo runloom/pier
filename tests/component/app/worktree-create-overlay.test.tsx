@@ -376,6 +376,7 @@ function createMockContext(): RendererPluginContext {
       system: unimplemented("notifications.system"),
     },
     panels: {
+      closeInstance: unimplemented("panels.closeInstance"),
       flushLayout: unimplemented("panels.flushLayout"),
       focusInstance: unimplemented("panels.focusInstance"),
       getActiveContext: unimplemented("panels.getActiveContext"),

@@ -78,9 +78,7 @@ export function buildStickyExportPrelude(env: Record<string, string>): string {
 }
 
 /**
- * Shebang scripts (omp = `#!/usr/bin/env bun`) cannot be the PTY leader:
- * Ghostty+Bun stdin goes deaf under `exec` / `sh -c`. Typed `omp` works
- * because interactive zsh owns job control. Native binaries stay on `exec`.
+ * Shebang scripts cannot be the PTY leader; spawn `$SHELL -lic` instead.
  */
 export function looksLikeShebangScript(path: string): boolean {
   try {
@@ -101,16 +99,14 @@ export function looksLikeShebangScript(path: string): boolean {
 
 /**
  * Build Ghostty-safe surface command after resolve.
- * - absolute binary: `/bin/sh -c 'exec /abs …'`
- * - absolute shebang: `null` — start the user shell and inject the logical cmd
- * - via-shell: `$SHELL -lic 'export sticky…; original'`
+ * Native binary → `/bin/sh -c 'exec …'`. Shebang and via-shell → `$SHELL -lic`.
  */
 export function buildResolvedAgentSurfaceCommand(input: {
   commandLine: string;
   env: Record<string, string>;
   resolved: ResolvedUserCommand;
   shell: string;
-}): string | null {
+}): string {
   const trimmed = input.commandLine.trim();
   const shell = input.shell;
   const flags = agentShellCommandFlags(shell);
@@ -121,7 +117,8 @@ export function buildResolvedAgentSurfaceCommand(input: {
     const name = extractBareCommandName(trimmed);
     if (name) {
       if (looksLikeShebangScript(abs)) {
-        return null;
+        const body = sticky ? `${sticky}; ${trimmed}` : trimmed;
+        return `${quoteShellArg(shell)} ${flags} ${quoteShellArg(body)}`;
       }
       const rest = name.startsWith("/")
         ? trimmed.slice(name.length)

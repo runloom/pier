@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -93,20 +93,22 @@ describe("resolve-user-command helpers", () => {
     expect(prelude).not.toContain("HOME=");
   });
 
-  it("does not wrap shebang scripts as a PTY command (inject into user shell)", () => {
+  it("runs shebang agents as login-shell -c, not a typed REPL inject", () => {
     const dir = mkdtempSync(join(tmpdir(), "pier-shebang-"));
     const script = join(dir, "omp");
     writeFileSync(script, "#!/usr/bin/env bun\n");
     chmodSync(script, 0o755);
-    expect(
-      buildResolvedAgentSurfaceCommand({
-        commandLine: "omp",
-        env: { PATH: dir, SHELL: "/bin/zsh" },
-        resolved: { kind: "absolute", path: script },
-        shell: "/bin/zsh",
-      })
-    ).toBeNull();
+    const command = buildResolvedAgentSurfaceCommand({
+      commandLine: "omp",
+      env: { PATH: dir, SHELL: "/bin/zsh" },
+      resolved: { kind: "absolute", path: script },
+      shell: "/bin/zsh",
+    });
     expect(looksLikeShebangScript(script)).toBe(true);
+    expect(command).toEqual(expect.stringMatching(/^\/bin\/zsh -lic /));
+    expect(command).toContain("omp");
+    expect(command).not.toContain("exec ");
+    rmSync(dir, { force: true, recursive: true });
   });
 
   it("builds absolute surface as thin sh -c exec", () => {

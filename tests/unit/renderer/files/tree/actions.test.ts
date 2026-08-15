@@ -8,10 +8,16 @@ import {
   FILES_COPY_PATH_WITH_RANGE_COMMAND_ID,
   FILES_COPY_RELATIVE_PATH_COMMAND_ID,
   FILES_DELETE_COMMAND_ID,
+  FILES_FILE_PANEL_ID,
   FILES_NEW_FILE_COMMAND_ID,
   FILES_NEW_FOLDER_COMMAND_ID,
   FILES_RENAME_COMMAND_ID,
 } from "@plugins/builtin/files/manifest.ts";
+import {
+  clearFilesDocumentStore,
+  createUntitledDocument,
+  getDocument,
+} from "@plugins/builtin/files/renderer/document/store.ts";
 import type { FileEditorController } from "@plugins/builtin/files/renderer/editor/controller.ts";
 import type {
   FilesNamePromptOptions,
@@ -23,6 +29,7 @@ import {
   clearFilesTreeStore,
   getFilesTreeSnapshot,
 } from "@plugins/builtin/files/renderer/tree/store.ts";
+import { FILES_EDITOR_DEFAULT_EOL_SETTING_KEY } from "@plugins/builtin/files/settings.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -73,6 +80,10 @@ function treeActions(
       };
     }),
     confirmDocumentDurability: vi.fn(async () => true),
+    createUntitledDocument:
+      overrides.createUntitledDocument ??
+      ((input: Parameters<FileEditorController["createUntitledDocument"]>[0]) =>
+        createUntitledDocument(input)),
     documentsForPathMutation,
     moveDiskDocumentSource,
     movePath: vi.fn(async (root: string, oldPath: string, newPath: string) => {
@@ -208,6 +219,12 @@ function makeContext() {
     ),
   };
   const openInstance = vi.fn<RendererPluginContext["panels"]["openInstance"]>();
+  const closeInstance = vi.fn<RendererPluginContext["panels"]["closeInstance"]>(
+    () => true
+  );
+  const listInstances = vi.fn<RendererPluginContext["panels"]["listInstances"]>(
+    () => []
+  );
   const context = {
     configuration: {
       get: vi.fn(() => undefined),
@@ -230,16 +247,27 @@ function makeContext() {
     },
     notifications,
     panels: {
+      closeInstance,
       getActiveContext: vi.fn(() => ({
         contextId: "c",
         cwd: ROOT,
         projectRootPath: ROOT,
+        updatedAt: 1,
       })),
+      listInstances,
       openInstance,
     },
   } as unknown as RendererPluginContext;
 
-  return { context, dialogs, files, notifications, openInstance };
+  return {
+    closeInstance,
+    context,
+    dialogs,
+    files,
+    listInstances,
+    notifications,
+    openInstance,
+  };
 }
 
 function installClipboard() {
@@ -255,6 +283,7 @@ function installClipboard() {
 
 afterEach(() => {
   clearFilesTreeStore();
+  clearFilesDocumentStore();
   showFilesNamePromptMock.mockReset();
   if (ORIGINAL_CLIPBOARD_DESCRIPTOR) {
     Object.defineProperty(
@@ -409,6 +438,120 @@ describe("file-tree-actions", () => {
         expect.arrayContaining(["files/tree-item", "files/tree-background"])
       );
     }
+  });
+
+  it("exposes new-file on the create-menu and keeps new-folder off it", () => {
+    const { context } = makeContext();
+    const actions = treeActions(context);
+    const newFile = actionById(actions, FILES_NEW_FILE_COMMAND_ID);
+    const newFolder = actionById(actions, FILES_NEW_FOLDER_COMMAND_ID);
+
+    expect(newFile.surfaces).toEqual(
+      expect.arrayContaining([
+        "files/tree-item",
+        "files/tree-background",
+        "create-menu",
+      ])
+    );
+    expect(newFolder.surfaces ?? []).not.toContain("create-menu");
+    expect(newFile.title({ surface: "create-menu" })).toBe("New File");
+    expect(newFile.title({ surface: "files/tree-item" })).toBe("New File...");
+  });
+
+  it("opens an untitled tab from create-menu even when the host omits surface", async () => {
+    const { context, files, openInstance } = makeContext();
+    const action = actionById(treeActions(context), FILES_NEW_FILE_COMMAND_ID);
+
+    await action.handler({
+      sourcePanelContext: {
+        contextId: "c",
+        cwd: ROOT,
+        projectRootPath: ROOT,
+        updatedAt: 1,
+      },
+      sourcePanelGroupId: "group-1",
+    });
+
+    expect(showFilesNamePromptMock).not.toHaveBeenCalled();
+    expect(files.writeDocument).not.toHaveBeenCalled();
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          source: expect.objectContaining({ kind: "untitled" }),
+        }),
+        targetGroupId: "group-1",
+      })
+    );
+  });
+
+  it("opens an untitled tab from the create-menu without writing disk", async () => {
+    const { context, files, openInstance } = makeContext();
+    const action = actionById(treeActions(context), FILES_NEW_FILE_COMMAND_ID);
+
+    await action.handler({
+      sourcePanelContext: {
+        contextId: "c",
+        cwd: ROOT,
+        projectRootPath: ROOT,
+        updatedAt: 1,
+      },
+      sourcePanelGroupId: "group-1",
+      surface: "create-menu",
+    });
+
+    expect(showFilesNamePromptMock).not.toHaveBeenCalled();
+    expect(files.writeDocument).not.toHaveBeenCalled();
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentId: FILES_FILE_PANEL_ID,
+        params: expect.objectContaining({
+          pinned: true,
+          dirty: true,
+          source: expect.objectContaining({
+            kind: "untitled",
+            name: "Untitled-1",
+          }),
+        }),
+        targetGroupId: "group-1",
+        title: "Untitled-1",
+      })
+    );
+  });
+
+  it("opens an untitled tab from the create-menu without a project", async () => {
+    const { context, files, openInstance } = makeContext();
+    context.panels.getActiveContext = vi.fn(() => null);
+    const action = actionById(treeActions(context), FILES_NEW_FILE_COMMAND_ID);
+
+    expect(action.enabled?.({ surface: "create-menu" })).not.toBe(false);
+    await action.handler({ surface: "create-menu" });
+
+    expect(files.writeDocument).not.toHaveBeenCalled();
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          source: expect.objectContaining({ kind: "untitled" }),
+        }),
+      })
+    );
+  });
+
+  it("uses the editor default line ending for create-menu untitled files", async () => {
+    const { context, openInstance } = makeContext();
+    vi.mocked(context.configuration.get).mockImplementation(((key: string) =>
+      key === FILES_EDITOR_DEFAULT_EOL_SETTING_KEY
+        ? "crlf"
+        : undefined) as typeof context.configuration.get);
+    const action = actionById(treeActions(context), FILES_NEW_FILE_COMMAND_ID);
+
+    await action.handler({ surface: "create-menu" });
+
+    const source = (
+      openInstance.mock.calls[0]?.[0] as {
+        params?: { source?: { id?: string } };
+      }
+    )?.params?.source;
+    expect(getDocument(source?.id ?? "")?.eol).toBe("crlf");
   });
 
   it("creates a nested path from the tree-background prompt without inline create", async () => {
@@ -682,6 +825,86 @@ describe("file-tree-actions", () => {
     await action.handler(treeInvocation(file("src/late.ts")));
 
     expect(removeDocumentsAfterPathMutation).toHaveBeenCalledWith([discovered]);
+  });
+
+  it("closes the open tab when the deleted file is currently displayed", async () => {
+    const { closeInstance, context, listInstances } = makeContext();
+    listInstances.mockReturnValue([
+      {
+        componentId: FILES_FILE_PANEL_ID,
+        groupId: "group-1",
+        id: "panel-open",
+        params: {
+          source: { kind: "disk", path: "src/open.ts", root: ROOT },
+        },
+        title: "open.ts",
+      },
+    ]);
+    const action = actionById(treeActions(context), FILES_DELETE_COMMAND_ID);
+
+    await action.handler(treeInvocation(file("src/open.ts")));
+
+    expect(closeInstance).toHaveBeenCalledWith({
+      componentId: FILES_FILE_PANEL_ID,
+      instanceId: "panel-open",
+    });
+  });
+
+  it("keeps the tab when unsaved content was preserved as untitled", async () => {
+    const { closeInstance, context, dialogs, listInstances } = makeContext();
+    dialogs.choice
+      .mockResolvedValueOnce("alt")
+      .mockResolvedValueOnce("confirm");
+    const document = {
+      dirty: true,
+      durabilityUnknown: false,
+      id: "dirty-document",
+      needsSaveAs: false,
+      source: { kind: "disk" as const, path: "src/dirty.ts", root: ROOT },
+    };
+    const openInstance: {
+      componentId: string;
+      groupId: string;
+      id: string;
+      params: { source: Record<string, string> };
+      title: string;
+    } = {
+      componentId: FILES_FILE_PANEL_ID,
+      groupId: "group-1",
+      id: "panel-dirty",
+      params: {
+        source: { kind: "disk", path: "src/dirty.ts", root: ROOT },
+      },
+      title: "dirty.ts",
+    };
+    listInstances.mockReturnValue([openInstance]);
+    const action = actionById(
+      treeActions(context, {
+        documentsForPathMutation: vi.fn(async () => [document]),
+        preserveDocumentsAsUntitled: vi.fn(async () => {
+          document.source = {
+            id: "untitled-1",
+            kind: "untitled",
+            language: "typescript",
+            name: "Untitled-1",
+          } as never;
+          openInstance.params = {
+            source: {
+              id: "untitled-1",
+              kind: "untitled",
+              name: "Untitled-1",
+            },
+          };
+          openInstance.title = "Untitled-1";
+          return [document];
+        }),
+      } as unknown as Partial<FileEditorController>),
+      FILES_DELETE_COMMAND_ID
+    );
+
+    await action.handler(treeInvocation(file("src/dirty.ts")));
+
+    expect(closeInstance).not.toHaveBeenCalled();
   });
 
   it("reports multi-path trash failures once with per-path details", async () => {

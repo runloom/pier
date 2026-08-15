@@ -10,6 +10,8 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { ManagedPluginsSection } from "@/pages/settings/components/managed-plugins-section.tsx";
+import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
+import { catalogApiFromManaged } from "../host-catalog/test-api.ts";
 
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
@@ -98,10 +100,17 @@ function catalogTwoUpdates(
   };
 }
 
-function stubPier(managed: Record<string, unknown>): void {
+function stubPier(managed: {
+  checkUpdates: () => Promise<ManagedPluginCatalogSnapshot>;
+  list: () => Promise<ManagedPluginCatalogSnapshot>;
+  [key: string]: unknown;
+}): void {
   Object.defineProperty(window, "pier", {
     configurable: true,
-    value: { managedPlugins: managed },
+    value: {
+      catalog: catalogApiFromManaged(managed),
+      managedPlugins: managed,
+    },
   });
 }
 
@@ -118,6 +127,7 @@ describe("ManagedPluginsSection Update All", () => {
     appDialogMocks.showAppAlert.mockReset();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    useHostCatalogStore.getState().reset();
   });
 
   it("hides Update All when fewer than two plugins can update", async () => {

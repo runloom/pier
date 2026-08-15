@@ -78,6 +78,7 @@ import {
 } from "./command-router.ts";
 import { createPierEventBus, type PierEventBus } from "./event-bus.ts";
 import { createExternalMainPluginContextFactory } from "./external-plugin-context.ts";
+import { wireHostCatalogAndAppUpdates } from "./host-catalog-boot.ts";
 import { createLazyAppCore } from "./lazy.ts";
 import { createAppLiveModulesService } from "./live-modules-wiring.ts";
 import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
@@ -94,7 +95,7 @@ import { sendRendererCommand } from "./renderer-command-host.ts";
 import { createShellEnvironmentBoot } from "./shell-environment-boot.ts";
 import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import { createTerminalStatusBarPrefsFacade } from "./terminal-status-bar-prefs-facade.ts";
-import { createWiredAppUpdateService } from "./update-wiring.ts";
+
 import { createAppCoreUsageData } from "./usage-data.ts";
 import {
   broadcastCommentsChanged,
@@ -256,12 +257,14 @@ function createPierAppCore(): PierAppCore {
     waitForHostEnv,
     getEnv: resolveAgentEnv,
   });
+  let hostCatalog: import("../services/host-catalog/service.ts").HostCatalogRuntime;
   const agentLifecycle = createBootedAgentLifecycleService({
     waitForHostEnv,
     getEnv: resolveAgentEnv,
     preferences,
     refreshDetection: async () => {
       await agentDetection.refresh();
+      hostCatalog.invalidate("agent-cli");
     },
   });
   registerPluginRpcIpc(pluginRpcBus);
@@ -284,34 +287,41 @@ function createPierAppCore(): PierAppCore {
     { waitForHostEnv }
   );
   pluginHostRef = pluginHost;
-  const managedPluginsReady = usageDataReady
-    .then(() =>
-      requireAppCoreInitialization(managedPlugins.init(), (err) =>
-        console.error("[managed-plugins] init failed:", err)
-      )
+  const managedPluginsInit = usageDataReady.then(() =>
+    requireAppCoreInitialization(managedPlugins.init(), (err) =>
+      console.error("[managed-plugins] init failed:", err)
     )
-    .then(async () => {
-      // Kick off async official-index refresh — non-blocking. Cache hit
-      // becomes catalog immediately; network response updates on arrival.
-      httpIndex.refresh().catch((err: unknown) => {
+  );
+  const managedPluginsReady = managedPluginsInit.then(async () => {
+    // Kick off async official-index refresh — non-blocking. Cache hit
+    // becomes catalog immediately; network response updates on arrival.
+    httpIndex
+      .refresh()
+      .then(() =>
+        hostCatalog.ensureFresh("managed-plugin", {
+          class: "local",
+          force: true,
+        })
+      )
+      .catch((err: unknown) => {
         console.error("[managed-plugins] official-index refresh failed:", err);
       });
-      // Workspace mode: pin runtime to local package dirs (first-party + custom roots).
-      if (pluginMode === "workspace") {
-        await bootWorkspacePluginMode(dedupedSpecs, {
-          managedPlugins,
-          managedPluginIndexStore,
-          managedPluginDevRuntimeWatches,
-          officialBundledPluginIds: OFFICIAL_BUNDLED_PLUGIN_SPECS.map(
-            (s) => s.id
-          ),
-        });
-      } else {
-        createLogger("managed-plugins").info(
-          "[managed-plugins] plugin mode: release"
-        );
-      }
-    });
+    // Workspace mode: pin runtime to local package dirs (first-party + custom roots).
+    if (pluginMode === "workspace") {
+      await bootWorkspacePluginMode(dedupedSpecs, {
+        managedPlugins,
+        managedPluginIndexStore,
+        managedPluginDevRuntimeWatches,
+        officialBundledPluginIds: OFFICIAL_BUNDLED_PLUGIN_SPECS.map(
+          (s) => s.id
+        ),
+      });
+    } else {
+      createLogger("managed-plugins").info(
+        "[managed-plugins] plugin mode: release"
+      );
+    }
+  });
   const fileDrafts = createFileDraftsService({
     userDataDir: app.getPath("userData"),
   });
@@ -320,6 +330,21 @@ function createPierAppCore(): PierAppCore {
     broadcast: broadcastCommentsChanged,
   });
   const runtimeMode = isDevRuntime() ? "development" : "production";
+  const wiredCatalog = wireHostCatalogAndAppUpdates({
+    detect: () => agentDetection.detect(),
+    getEnv: resolveAgentEnv,
+    listPlugins: () => managedPlugins.listCatalogSnapshot(),
+    probe: (checkLatest) => agentLifecycle.probe({ checkLatest }),
+    refreshPluginIndex: async (force) => {
+      await httpIndex.refresh({ force });
+    },
+    runtimeMode,
+    userDataDir: app.getPath("userData"),
+    waitForHostEnv,
+    waitPluginsReady: () => managedPluginsInit,
+  });
+  const appUpdates = wiredCatalog.appUpdates;
+  hostCatalog = wiredCatalog.hostCatalog;
   const agentUsage = createAgentUsageService({
     userDataDir: app.getPath("userData"),
   });
@@ -372,6 +397,7 @@ function createPierAppCore(): PierAppCore {
   const services: PierCoreServices = {
     agentDetection,
     agentLifecycle,
+    hostCatalog,
     agentRuntimeIndex,
     foregroundActivity: createForegroundActivityFacade(),
     notificationCenter: createNotificationCenterCommandFacade(),
@@ -386,7 +412,7 @@ function createPierAppCore(): PierAppCore {
       launchGate: agentLaunchGate,
       processEnvironment,
     }),
-    appUpdates: createWiredAppUpdateService(runtimeMode),
+    appUpdates,
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),

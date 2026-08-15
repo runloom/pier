@@ -1163,7 +1163,7 @@ describe("FileEditorController", () => {
     harness.watchHub.dispose();
   });
 
-  it("reports manual save success and detailed failure feedback", async () => {
+  it("does not toast on save and reports detailed failure feedback", async () => {
     const harness = createHarness();
     const release = harness.controller.acquirePanel("panel", SOURCE);
     await flushPromises();
@@ -1173,7 +1173,7 @@ describe("FileEditorController", () => {
     await expect(
       harness.controller.saveDocument(documentId, "panel")
     ).resolves.toBe("saved");
-    expect(harness.notifications.success).toHaveBeenCalledWith("Saved");
+    expect(harness.notifications.success).not.toHaveBeenCalled();
 
     updateDocumentContents(documentId, "# Failed\n");
     harness.writeText.mockRejectedValueOnce(new Error("disk full"));

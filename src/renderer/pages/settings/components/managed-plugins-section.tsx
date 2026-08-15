@@ -15,7 +15,6 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/plugin/managed.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
 import { Loader2, Puzzle, RefreshCw } from "lucide-react";
@@ -31,6 +30,7 @@ import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useManagedPluginCatalog } from "@/stores/host-catalog/use-managed-plugin-catalog.ts";
 import { rejectFailedManagedPluginOperation } from "./managed-plugin-operation.ts";
 import {
   AvailableManagedRow,
@@ -53,58 +53,6 @@ import { useManagedPluginUpdateAll } from "./use-managed-plugin-update-all.ts";
  *    remote official plugin not yet installed) → minimal row with Install.
  * "Check for Updates" and "Restart Pier Now" are page-level controls.
  */
-
-function useCatalog(): {
-  catalog: ManagedPluginCatalogSnapshot | null;
-  refresh: () => void;
-  checkUpdates: () => Promise<ManagedPluginCatalogSnapshot | null>;
-  checkingUpdates: boolean;
-  error: string | null;
-  win: ManagedPluginsWindowShim | undefined;
-} {
-  const win = (window as unknown as { pier?: ManagedPluginsWindowShim }).pier;
-  const [catalog, setCatalog] = useState<ManagedPluginCatalogSnapshot | null>(
-    null
-  );
-  const [checkingUpdates, setCheckingUpdates] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback((): void => {
-    if (!win?.managedPlugins) return;
-    win.managedPlugins
-      .list()
-      .then((next) => {
-        setCatalog(next);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        console.error("[managed-plugins] list failed:", err);
-        setError(errorDescription(err));
-      });
-  }, []);
-
-  const checkUpdates =
-    useCallback(async (): Promise<ManagedPluginCatalogSnapshot | null> => {
-      if (!win?.managedPlugins) return null;
-      setCheckingUpdates(true);
-      try {
-        const next = await win.managedPlugins.checkUpdates();
-        setCatalog(next);
-        return next;
-      } catch (err) {
-        console.error("[managed-plugins] check updates failed:", err);
-        throw err;
-      } finally {
-        setCheckingUpdates(false);
-      }
-    }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  return { catalog, refresh, checkUpdates, checkingUpdates, error, win };
-}
 
 function EmptyList({
   emptyKey,
@@ -264,7 +212,7 @@ export function ManagedPluginsSection({
 }): JSX.Element {
   const t = useT();
   const { catalog, refresh, checkUpdates, checkingUpdates, error, win } =
-    useCatalog();
+    useManagedPluginCatalog();
   const [pendingManagedId, setPendingManagedId] = useState<string | null>(null);
   const { showUpdateAll, updatingAll, handleUpdateAll } =
     useManagedPluginUpdateAll({ catalog, refresh, win });

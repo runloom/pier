@@ -87,6 +87,11 @@ describe("stripShellDumpArtifacts", () => {
     }
   });
 
+  it("keeps dump TERM=dumb for non-interactive consumers", () => {
+    const env = { HOME: "/tmp", PATH: "/bin", TERM: "dumb" };
+    expect(stripShellDumpArtifacts(env)).toEqual(env);
+  });
+
   it("returns the same object when nothing needs stripping", () => {
     const env = { HOME: "/tmp", PATH: "/bin" };
     expect(stripShellDumpArtifacts(env)).toBe(env);

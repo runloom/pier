@@ -1,4 +1,7 @@
-import { schedulePromptReady } from "./initial-input-gate.ts";
+import {
+  schedulePromptReady,
+  viewportHasPaintedPrompt,
+} from "./initial-input-gate.ts";
 import type { NativeAddon } from "./native-addon.ts";
 
 const INITIAL_INPUT_RETRY_DELAYS_MS = [50, 100, 200, 400, 800] as const;
@@ -14,12 +17,20 @@ export function sendInitialTerminalInput(args: {
   if (!initialInput) {
     return;
   }
-  // 等 shell 打完登录 banner + 首个 prompt 后再写入 stdin，防止 raw tty echo
-  // 把命令字符打在 banner 之前。第一次 OSC 7 (cwd) 事件是 ghostty shell
-  // integration 打 prompt 前的钩子，未收到就走 1.5s 后备定时器兜底。
-  schedulePromptReady(args.panelId, () => {
-    trySendInitialTerminalInput({ ...args, initialInput }, 0);
-  });
+  const readViewport = args.addon.readViewportText;
+  schedulePromptReady(
+    args.panelId,
+    () => {
+      trySendInitialTerminalInput({ ...args, initialInput }, 0);
+    },
+    undefined,
+    readViewport
+      ? {
+          isPainted: () =>
+            viewportHasPaintedPrompt(readViewport(args.nativePanelId)),
+        }
+      : {}
+  );
 }
 
 function trySendInitialTerminalInput(

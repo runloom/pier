@@ -7,6 +7,7 @@ import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { CommentProjectSnapshot } from "@shared/contracts/comments/index.ts";
 import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
+import type { CatalogChangedPayload } from "@shared/contracts/host-catalog/runtime.ts";
 import type { LiveModuleEvent } from "@shared/contracts/live-modules.ts";
 import type {
   SystemNotificationPermissionSnapshot,
@@ -102,6 +103,12 @@ export function broadcastAgentLifecycleProgress(
   progress: AgentLifecycleProgress
 ): void {
   broadcastToAllWindows(PIER_BROADCAST.AGENT_LIFECYCLE_PROGRESS, progress);
+}
+
+export function broadcastHostCatalogChanged(
+  payload: CatalogChangedPayload
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.HOST_CATALOG_CHANGED, payload);
 }
 
 export function broadcastUsageDataChanged(

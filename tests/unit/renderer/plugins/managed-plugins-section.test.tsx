@@ -10,6 +10,8 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { ManagedPluginsSection } from "@/pages/settings/components/managed-plugins-section.tsx";
+import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
+import { catalogApiFromManaged } from "../host-catalog/test-api.ts";
 
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),
@@ -86,6 +88,17 @@ function catalog(enabled: boolean): ManagedPluginCatalogSnapshot {
   };
 }
 
+function stubPier(managed: {
+  checkUpdates: () => Promise<ManagedPluginCatalogSnapshot>;
+  list: () => Promise<ManagedPluginCatalogSnapshot>;
+  [key: string]: unknown;
+}) {
+  return {
+    catalog: catalogApiFromManaged(managed),
+    managedPlugins: managed,
+  };
+}
+
 function catalogWithUpdate(): ManagedPluginCatalogSnapshot {
   return {
     checkedAt: 1,
@@ -122,6 +135,7 @@ describe("ManagedPluginsSection", () => {
     appDialogMocks.showAppAlert.mockReset();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+    useHostCatalogStore.getState().reset();
   });
 
   it("uses managed enable/disable commands and refreshes catalog for managed rows", async () => {
@@ -137,17 +151,15 @@ describe("ManagedPluginsSection", () => {
     const onToggleBuiltin = vi.fn();
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => catalog(true)),
-          disable,
-          enable: vi.fn(),
-          install: vi.fn(),
-          list,
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => catalog(true)),
+        disable,
+        enable: vi.fn(),
+        install: vi.fn(),
+        list,
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+      }),
     });
 
     render(
@@ -192,18 +204,16 @@ describe("ManagedPluginsSection", () => {
     const list = vi.fn().mockResolvedValue(catalogWithUpdate());
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => catalogWithUpdate()),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install,
-          list,
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update,
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => catalogWithUpdate()),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install,
+        list,
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update,
+      }),
     });
 
     render(
@@ -227,21 +237,19 @@ describe("ManagedPluginsSection", () => {
     const onCatalogStatusChange = vi.fn();
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => catalog(true)),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list: vi.fn(async () => ({
-            ...catalog(true),
-            pluginMode: "workspace",
-          })),
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => catalog(true)),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list: vi.fn(async () => ({
+          ...catalog(true),
+          pluginMode: "workspace" as const,
+        })),
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
 
     render(
@@ -268,18 +276,16 @@ describe("ManagedPluginsSection", () => {
   it("hides release plugin mode banner in production-like catalog", async () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => catalog(true)),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list: vi.fn(async () => catalog(true)),
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => catalog(true)),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list: vi.fn(async () => catalog(true)),
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
 
     render(
@@ -298,18 +304,16 @@ describe("ManagedPluginsSection", () => {
   it("renders plugin tabs without counts and keeps check updates as an icon button on the tab row", async () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => catalog(true)),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list: vi.fn(async () => catalog(true)),
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => catalog(true)),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list: vi.fn(async () => catalog(true)),
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
 
     render(
@@ -339,18 +343,16 @@ describe("ManagedPluginsSection", () => {
   it("keeps an installed managed plugin visible when its runtime entry is absent", async () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => catalog(true)),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list: vi.fn(async () => catalog(true)),
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => catalog(true)),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list: vi.fn(async () => catalog(true)),
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
 
     render(
@@ -376,14 +378,12 @@ describe("ManagedPluginsSection", () => {
     const onCatalogStatusChange = vi.fn();
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates: vi.fn(),
-          list: vi.fn(async () => {
-            throw new Error("catalog unavailable");
-          }),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => catalog(true)),
+        list: vi.fn(async () => {
+          throw new Error("catalog unavailable");
+        }),
+      }),
     });
 
     render(
@@ -419,18 +419,16 @@ describe("ManagedPluginsSection", () => {
     );
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates,
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list: vi.fn(async () => catalog(true)),
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates,
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list: vi.fn(async () => catalog(true)),
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
 
     render(
@@ -460,20 +458,18 @@ describe("ManagedPluginsSection", () => {
   it("shows an error toast when check updates fails", async () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: {
-        managedPlugins: {
-          checkUpdates: vi.fn(async () => {
-            throw new Error("network down");
-          }),
-          disable: vi.fn(),
-          enable: vi.fn(),
-          install: vi.fn(),
-          list: vi.fn(async () => catalog(true)),
-          rollback: vi.fn(),
-          uninstall: vi.fn(),
-          update: vi.fn(),
-        },
-      },
+      value: stubPier({
+        checkUpdates: vi.fn(async () => {
+          throw new Error("network down");
+        }),
+        disable: vi.fn(),
+        enable: vi.fn(),
+        install: vi.fn(),
+        list: vi.fn(async () => catalog(true)),
+        rollback: vi.fn(),
+        uninstall: vi.fn(),
+        update: vi.fn(),
+      }),
     });
 
     render(

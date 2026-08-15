@@ -42,6 +42,7 @@ import {
   type PierForegroundActivityAPI,
 } from "./foreground-activity-api.ts";
 import { gitApi, type PierGitAPI } from "./git-api.ts";
+import { hostCatalogApi, type PierHostCatalogAPI } from "./host-catalog-api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import { liveModulesApi, type PierLiveModulesAPI } from "./live-modules-api.ts";
 import { lspApi, type PierLspAPI } from "./lsp-api.ts";
@@ -151,6 +152,7 @@ export interface PierWindowAPI {
   app: AppPreloadApi;
   appQuit: PierAppQuitAPI;
   appUpdate: AppUpdatePreloadApi;
+  catalog: PierHostCatalogAPI;
   clipboard: PierClipboardAPI;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
@@ -201,14 +203,11 @@ export interface PierWindowAPI {
 }
 
 const agentsApi: PierAgentsAPI = {
-  detect: () => ipcRenderer.invoke("pier:agents:detect"),
   lifecycle: {
     cancel: (agentId) =>
       ipcRenderer.invoke("pier:agents:lifecycle:cancel", { agentId }),
     onProgress: (cb) =>
       subscribeIpc(PIER_BROADCAST.AGENT_LIFECYCLE_PROGRESS, cb),
-    probe: (request) =>
-      ipcRenderer.invoke("pier:agents:lifecycle:probe", request),
     run: (agentId, action) =>
       ipcRenderer.invoke("pier:agents:lifecycle:run", { agentId, action }),
     runMany: (agentIds, action) =>
@@ -221,7 +220,6 @@ const agentsApi: PierAgentsAPI = {
     ipcRenderer.invoke("pier:agents:prepareLaunch", agentId),
   prepareLaunchFromSpec: (spec) =>
     ipcRenderer.invoke("pier:agents:prepareLaunchFromSpec", spec),
-  refresh: () => ipcRenderer.invoke("pier:agents:refresh"),
   selection: () => ipcRenderer.invoke("pier:agents:selection"),
 };
 
@@ -413,6 +411,7 @@ const api: PierWindowAPI = {
   clipboard: clipboardApi,
   notifications: notificationsApi,
   notificationCenter: notificationCenterApi,
+  catalog: hostCatalogApi,
   comments: commentsApi,
   diagnostics: diagnosticsApi,
   plugins: pluginsApi,

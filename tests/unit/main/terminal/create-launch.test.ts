@@ -9,10 +9,8 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  composeAgentInjectInput,
   nativeLaunchOptions,
   resolveCreateTerminalLaunch,
-  shebangInjectCommand,
   withAgentLoginShellSafeCommand,
   wrapAgentTerminalCommand,
 } from "@main/ipc/terminal/create-launch.ts";
@@ -480,7 +478,7 @@ describe("terminal create launch options", () => {
     expect(spawnCommand).toContain("claude");
   });
 
-  it("starts the user shell for shebang agents and injects the logical command", async () => {
+  it("launches shebang agents via login-shell -c without typing", async () => {
     const dir = mkdtempSync(join(tmpdir(), "pier-omp-"));
     const script = join(dir, "omp");
     writeFileSync(script, "#!/usr/bin/env bun\n");
@@ -494,28 +492,24 @@ describe("terminal create launch options", () => {
       },
       "omp"
     );
-    expect(spawn.launch?.command).toBeUndefined();
     expect(spawn.launch?.cwd).toBe("/tmp/pier");
-    expect(spawn.injectCommand).toBe(script);
-    expect(
-      composeAgentInjectInput({
-        existingInput: undefined,
-        injectCommand: spawn.injectCommand,
-      })
-    ).toBe(`${script}\r`);
-    expect(
-      composeAgentInjectInput({
-        existingInput: "你好\r",
-        injectCommand: spawn.injectCommand,
-      })
-    ).toBe(`${script}\r你好\r`);
-    expect(
-      composeAgentInjectInput({
-        existingInput: "keep\r",
-        injectCommand: undefined,
-      })
-    ).toBe("keep\r");
-    expect(shebangInjectCommand("omp --yolo", script)).toBe(`${script} --yolo`);
+    expect(spawn.launch?.command).toEqual(
+      expect.stringMatching(/^\/bin\/zsh -lic /)
+    );
+    expect(spawn.launch?.command).toContain(script);
+    const named = await withAgentLoginShellSafeCommand(
+      {
+        agentId: "omp",
+        command: "omp --yolo",
+        cwd: "/tmp/pier",
+        env: { PATH: dir, SHELL: "/bin/zsh" },
+      },
+      "omp"
+    );
+    expect(named.launch?.command).toContain("omp --yolo");
+    expect(named.launch?.command).toEqual(
+      expect.stringMatching(/^\/bin\/zsh -lic /)
+    );
     rmSync(dir, { force: true, recursive: true });
   });
 });

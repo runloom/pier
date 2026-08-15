@@ -85,6 +85,37 @@ const piActions: AgentStatusTraceAction[] = [
     { isError: false, toolCallId: "pi-tool-1", toolName: "bash" }
   ),
   extensionAction(
+    "tool_execution_start.ask",
+    "InteractionRequested",
+    "waiting",
+    {
+      expectedEventFields: {
+        interactionId: "pi-ask-1",
+        interactionKind: "question",
+      },
+      expectedStatus: "waiting",
+    },
+    "pi-session-1",
+    { toolCallId: "pi-ask-1", toolName: "ask" },
+    "tool_execution_start"
+  ),
+  extensionAction(
+    "tool_execution_end.ask",
+    "InteractionResolved",
+    "processing",
+    {
+      expectedEventFields: {
+        interactionId: "pi-ask-1",
+        interactionKind: "question",
+        interactionOutcome: "completed",
+      },
+      expectedStatus: "processing",
+    },
+    "pi-session-1",
+    { isError: false, toolCallId: "pi-ask-1", toolName: "ask" },
+    "tool_execution_end"
+  ),
+  extensionAction(
     "agent_settled",
     "Stop",
     "ready",
@@ -268,7 +299,7 @@ export const EXTENSION_PLUGIN_STATUS_TRACES = [
   {
     actions: piActions,
     agentId: "pi",
-    covers: ["lifecycle", "ready", "processing", "tool"],
+    covers: ["lifecycle", "ready", "processing", "tool", "waiting"],
     createProducer: () =>
       createExtensionPluginProducer("pi", buildPiExtensionSource()),
     stopAuthority: piIntegration.runtime.stopAuthority,

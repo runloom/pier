@@ -22,7 +22,15 @@ const PI_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
   { nativeEvent: "session_start", pierEvent: "SessionStart" },
   { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
   { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
+  {
+    nativeEvent: "tool_execution_start.ask",
+    pierEvent: "InteractionRequested",
+  },
   { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
+  {
+    nativeEvent: "tool_execution_end.ask",
+    pierEvent: "InteractionResolved",
+  },
   { nativeEvent: "agent_settled", pierEvent: "Stop" },
   { nativeEvent: "session_shutdown", pierEvent: "SessionEnd" },
 ];
@@ -142,6 +150,15 @@ function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 		...(toolUseId ? { toolUseId } : {}),
 		...(toolName ? { toolName } : {}),
 		...(details.nativeState ? { nativeState: details.nativeState } : {}),
+		...(details.interactionId
+			? { interactionId: details.interactionId }
+			: {}),
+		...(details.interactionKind
+			? { interactionKind: details.interactionKind }
+			: {}),
+		...(details.interactionOutcome
+			? { interactionOutcome: details.interactionOutcome }
+			: {}),
 		...(promptSnippet ? { promptSnippet } : {}),
 	}) + "\\n";
 	try {
@@ -156,12 +173,29 @@ export default function PierAgentStatus(pi) {
 		pierEmit("SessionStart", "session_start", event, ctx));
 	pi.on("before_agent_start", (event, ctx) =>
 		pierEmit("PromptSubmit", "before_agent_start", event, ctx));
-	pi.on("tool_execution_start", (event, ctx) =>
-		pierEmit("ToolStart", "tool_execution_start", event, ctx));
-	pi.on("tool_execution_end", (event, ctx) =>
+	pi.on("tool_execution_start", (event, ctx) => {
+		if (event && event.toolName === "ask") {
+			pierEmit("InteractionRequested", "tool_execution_start.ask", event, ctx, {
+				interactionId: event.toolCallId,
+				interactionKind: "question",
+			});
+			return;
+		}
+		pierEmit("ToolStart", "tool_execution_start", event, ctx);
+	});
+	pi.on("tool_execution_end", (event, ctx) => {
+		if (event && event.toolName === "ask") {
+			pierEmit("InteractionResolved", "tool_execution_end.ask", event, ctx, {
+				interactionId: event.toolCallId,
+				interactionKind: "question",
+				interactionOutcome: event.isError === true ? "failed" : "completed",
+			});
+			return;
+		}
 		pierEmit("ToolComplete", "tool_execution_end", event, ctx, {
 			nativeState: event && event.isError === true ? "error" : "completed",
-		}));
+		});
+	});
 	pi.on("agent_settled", (event, ctx) =>
 		pierEmit("Stop", "agent_settled", event, ctx));
 	pi.on("session_shutdown", (event, ctx) =>

@@ -36,6 +36,13 @@ describe("LspServerRegistry", () => {
     expect(registry.matchForPath("/a/Makefile")).toBeNull();
   });
 
+  it("matches a provider by language id for editor overrides", () => {
+    const registry = createBootstrappedLspRegistry();
+    expect(registry.matchForLanguageId("javascript")?.id).toBe("typescript");
+    expect(registry.matchForLanguageId("typescript")?.id).toBe("typescript");
+    expect(registry.matchForLanguageId("text")).toBeNull();
+  });
+
   it("picks higher priority when multiple match", () => {
     const registry = new LspServerRegistry();
     registry.register(

@@ -35,7 +35,6 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
-import i18next from "i18next";
 import { Plus } from "lucide-react";
 import {
   useCallback,
@@ -71,7 +70,6 @@ import {
   markWebOverlayOutsideDismissIfNeeded,
   restoreTerminalFocusAfterWebOverlayDismiss,
 } from "@/lib/workspace/restore-terminal-focus-after-web-overlay-dismiss.ts";
-import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useCreateMenuRequestStore } from "@/stores/create-menu-request.store.ts";
@@ -124,7 +122,6 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const detectionGenerationRef = useRef(0);
   const invocationRef = useRef<ActionInvocation | null>(null);
   const sourcePanelId = props.activePanel?.id;
   const sourcePanelGroupId = props.group?.id;
@@ -157,6 +154,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
       ...(sourcePanelContext ? { sourcePanelContext } : {}),
       ...(sourcePanelGroupId ? { sourcePanelGroupId } : {}),
       ...(sourcePanelId ? { sourcePanelId } : {}),
+      surface: "create-menu",
     };
   }, [sourcePanelGroupId, sourcePanelId]);
 
@@ -208,22 +206,6 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
     props.activePanel?.api.setActive();
     // Carry the clicked group for action handlers.
     invocationRef.current = sourceActionInvocation();
-    // A reopened creator may share the same in-flight probe; only its current
-    // generation reports a rejection.
-    const detectionGeneration = detectionGenerationRef.current + 1;
-    detectionGenerationRef.current = detectionGeneration;
-    useAgentDetectStore
-      .getState()
-      .ensureDetected()
-      .catch(async (error) => {
-        if (detectionGenerationRef.current !== detectionGeneration) {
-          return;
-        }
-        await showAppAlert({
-          body: error instanceof Error ? error.message : String(error),
-          title: i18next.t("workspace.addPanelMenu.detectAgentsFailed"),
-        });
-      });
     // Block global keybindings while the popover is open.
     useKeybindingScope.getState().pushBlockingScope(CREATE_MENU_SCOPE);
     const releaseWebFocus = requestTerminalWebFocus("add-panel");
@@ -235,9 +217,6 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
     const releaseOverlayRoute =
       registerTerminalFullscreenWebOverlay(CREATE_MENU_SCOPE);
     return () => {
-      if (detectionGenerationRef.current === detectionGeneration) {
-        detectionGenerationRef.current += 1;
-      }
       useKeybindingScope.getState().popBlockingScope(CREATE_MENU_SCOPE);
       releaseOverlayRoute.dispose();
       releaseWebFocus();

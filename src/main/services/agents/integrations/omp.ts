@@ -22,7 +22,15 @@ const OMP_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
   { nativeEvent: "session_start", pierEvent: "SessionStart" },
   { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
   { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
+  {
+    nativeEvent: "tool_execution_start.ask",
+    pierEvent: "InteractionRequested",
+  },
   { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
+  {
+    nativeEvent: "tool_execution_end.ask",
+    pierEvent: "InteractionResolved",
+  },
   {
     nativeEvent: "tool_approval_requested",
     pierEvent: "InteractionRequested",
@@ -86,6 +94,9 @@ export function ompDetect(): boolean {
  * 字段, 本判定仍靠计数器正确降级（首实例=主, 其余=子）；反向方案
  * （要求 hasUI === false 才判子）在同一情形下会把全部实例判成主,
  * 子实例事件直发打穿主状态, 正是本次修的 bug。
+ *
+ * `ask` 是阻塞问卷（与 Hermes clarify 同型）：tool_execution_start 期间
+ * TUI 等人，不得标成 ToolStart（否则状态栏假「执行工具中」）。
  */
 export function buildOmpExtensionSource(): string {
   return `// ${MARKER}. Safe to leave in place.
@@ -204,12 +215,29 @@ export default function PierAgentStatus(pi) {
 		pierEmit("SessionStart", "session_start", event, ctx));
 	pi.on("before_agent_start", (event, ctx) =>
 		pierEmit("PromptSubmit", "before_agent_start", event, ctx));
-	pi.on("tool_execution_start", (event, ctx) =>
-		pierEmit("ToolStart", "tool_execution_start", event, ctx));
-	pi.on("tool_execution_end", (event, ctx) =>
+	pi.on("tool_execution_start", (event, ctx) => {
+		if (event && event.toolName === "ask") {
+			pierEmit("InteractionRequested", "tool_execution_start.ask", event, ctx, {
+				interactionId: event.toolCallId,
+				interactionKind: "question",
+			});
+			return;
+		}
+		pierEmit("ToolStart", "tool_execution_start", event, ctx);
+	});
+	pi.on("tool_execution_end", (event, ctx) => {
+		if (event && event.toolName === "ask") {
+			pierEmit("InteractionResolved", "tool_execution_end.ask", event, ctx, {
+				interactionId: event.toolCallId,
+				interactionKind: "question",
+				interactionOutcome: event.isError === true ? "failed" : "completed",
+			});
+			return;
+		}
 		pierEmit("ToolComplete", "tool_execution_end", event, ctx, {
 			nativeState: event && event.isError === true ? "error" : "completed",
-		}));
+		});
+	});
 	pi.on("tool_approval_requested", (event, ctx) =>
 		pierEmit("InteractionRequested", "tool_approval_requested", event, ctx, {
 			interactionId: event && event.toolCallId,

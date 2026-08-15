@@ -12,12 +12,21 @@ import { resolveAppUpdateUiLocale } from "../services/app-updates/ui-locale.ts";
 import { broadcastAppUpdateChanged } from "./window-broadcasts.ts";
 
 export function createWiredAppUpdateService(
-  runtimeMode: AppUpdateRuntimeMode
+  runtimeMode: AppUpdateRuntimeMode,
+  extras?: {
+    stampPierApp?: () => Promise<void>;
+  }
 ): AppUpdateService {
   return createAppUpdateService({
     currentVersion: app.getVersion(),
     onChange: (snapshot: AppUpdateSnapshot) => {
       broadcastAppUpdateChanged(snapshot);
+      if (snapshot.state === "downloading") {
+        return;
+      }
+      extras?.stampPierApp?.().catch((err: unknown) => {
+        console.error("[host-catalog] pier-app stamp failed:", err);
+      });
     },
     onReady: (version) => {
       notifyAppUpdateReady(version, {

@@ -1,35 +1,32 @@
 /**
- * Shared chrome for @ path / skill / attachment / review chips in Rich Input.
+ * Shared chrome for @ path / skill / attachment / review chips.
+ * Horizontal gap: host ::before/::after in globals.css (caret hit-box).
+ * Do not lock h-5 / 0.85em / host 1.25rem — inherit 1em, export label baseline.
  *
- * Horizontal gap lives on the Lexical host via `.composer-ref-chip-host::before/::after`
- * in globals.css (not margin/padding alone — see that comment).
+ * Tone map — 3 valid families + 2 states:
+ * - 引用 @ path     → status-info    (blue)
+ * - 调用 cmd+skill  → status-success (green; SquareSlash vs Zap)
+ * - 载荷 attachment → status-done    (purple)
+ * - 失效 attach bad → status-warning (amber)
+ * - 待处理 review   → destructive    (red)
  *
- * Tone map (semantic tokens only — must stay distinct at a glance):
- * - @ path        → status-info   (blue)
- * - skill         → status-success (green)
- * - builtin cmd   → status-neutral (muted; distinct from skill green)
- * - attachment OK → status-done   (purple / done)
- * - attachment bad→ status-warning (amber)
- * - review comments → destructive (red; action needed — distinct from invalid attach)
- *
- * Do not use action-accent here: --action-accent tracks --primary, which is
- * near-neutral in Pier themes and does not read as a highlighted chip.
+ * Do not use action-accent: it tracks --primary and reads as unhighlighted.
  */
 export const COMPOSER_CHIP_HOST_CLASS = "composer-ref-chip-host";
 
 /** Visual pill only; tone colors are applied by each node. */
 export const COMPOSER_CHIP_CLASS =
-  "composer-ref-chip inline-flex h-5 max-h-5 max-w-[16rem] items-center gap-0.5 rounded-sm border px-1.5 select-none font-mono text-[0.85em] leading-none";
+  "composer-ref-chip inline-flex max-w-[16rem] items-baseline gap-0.5 rounded-sm border px-1.5 py-px select-none text-[1em] leading-none";
 
 export const COMPOSER_CHIP_TONE_PATH =
   "border-status-info-border bg-status-info-bg text-status-info-fg";
 
-export const COMPOSER_CHIP_TONE_SKILL =
+/** 调用族：内建命令与技能同色。类型靠 SquareSlash / Zap。 */
+export const COMPOSER_CHIP_TONE_INVOKE =
   "border-status-success-border bg-status-success-bg text-status-success-fg";
 
-/** Documented slash commands (distinct from skill chips). */
-export const COMPOSER_CHIP_TONE_COMMAND =
-  "border-status-neutral-border bg-status-neutral-bg text-status-neutral-fg";
+export const COMPOSER_CHIP_TONE_SKILL = COMPOSER_CHIP_TONE_INVOKE;
+export const COMPOSER_CHIP_TONE_COMMAND = COMPOSER_CHIP_TONE_INVOKE;
 
 export const COMPOSER_CHIP_TONE_ATTACHMENT =
   "border-status-done-border bg-status-done-bg text-status-done-fg";

@@ -2,11 +2,9 @@ import { rankAgents } from "@shared/agent-selection.ts";
 import type {
   AgentLifecycleAction,
   AgentLifecycleActionResult,
-  AgentLifecycleProbe,
-  AgentLifecycleProbeRequest,
 } from "@shared/contracts/agent/lifecycle.ts";
 import type { AgentSelectionResult } from "@shared/contracts/agent/usage.ts";
-import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { IpcMain } from "electron";
 import { appCore } from "../app-core/index.ts";
 import { resolveAgentLaunch } from "../services/agents/launch.ts";
@@ -15,16 +13,6 @@ import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
 export function registerAgentsIpc(ipcMain: IpcMain): void {
   const detection = appCore.services.agentDetection;
   const lifecycle = appCore.services.agentLifecycle;
-
-  ipcMain.handle(
-    "pier:agents:detect",
-    (): Promise<DetectAgentsResult> => detection.detect()
-  );
-
-  ipcMain.handle(
-    "pier:agents:refresh",
-    (): Promise<DetectAgentsResult> => detection.refresh()
-  );
 
   ipcMain.handle(
     "pier:agents:selection",
@@ -74,19 +62,6 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
       }
       const launchId = terminalLaunchRegistry.register({ agentId, ...launch });
       return { launchId };
-    }
-  );
-
-  ipcMain.handle(
-    "pier:agents:lifecycle:probe",
-    async (
-      _e,
-      request?: AgentLifecycleProbeRequest
-    ): Promise<AgentLifecycleProbe[]> => {
-      if (!lifecycle) {
-        return [];
-      }
-      return lifecycle.probe(request);
     }
   );
 

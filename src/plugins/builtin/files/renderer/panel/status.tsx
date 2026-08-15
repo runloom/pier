@@ -6,6 +6,7 @@ import {
   HoverCardTrigger,
 } from "@pier/ui/hover-card.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { useSyncExternalStore } from "react";
 import { filesDraftProtectionForDocument } from "../document/draft-protection.ts";
 import {
@@ -14,7 +15,13 @@ import {
 } from "../document/drafts.ts";
 import type { FilesDocument } from "../document/types.ts";
 import { languageLabel } from "../editor/cm-language.ts";
+import type { FileEditorController } from "../editor/controller.ts";
 import type { FilesTranslate } from "../i18n.ts";
+import {
+  openDocumentEncodingPicker,
+  openDocumentEolPicker,
+  openDocumentLanguagePicker,
+} from "./document-mode/select.ts";
 import { languageServicePresentation } from "./language-service-presentation.ts";
 import { useFilesLanguageServiceStatus } from "./language-service-status.ts";
 import {
@@ -60,21 +67,53 @@ export function DocumentStatusDot({
 }
 
 export function LanguageBadge({
+  context,
+  controller,
   document,
+  onLanguageApplied,
+  t,
 }: {
+  context?: RendererPluginContext | undefined;
+  controller?: FileEditorController;
   document: FilesDocument;
+  onLanguageApplied?: (language: string) => void;
   t: FilesTranslate;
 }) {
   const label = languageLabel(document.language);
+  if (!(context && controller)) {
+    return (
+      <Badge
+        className="font-mono uppercase tracking-wide"
+        data-language={document.language}
+        size="xs"
+        variant="ghost"
+      >
+        {label}
+      </Badge>
+    );
+  }
   return (
-    <Badge
+    <Button
+      aria-label={t("filePanel.language.selectTitle", "Select Language Mode")}
       className="font-mono uppercase tracking-wide"
       data-language={document.language}
+      data-slot="badge"
+      onClick={() => {
+        openDocumentLanguagePicker({
+          context,
+          controller,
+          currentLanguage: document.language,
+          documentId: document.id,
+          ...(onLanguageApplied ? { onLanguageApplied } : {}),
+          t,
+        });
+      }}
       size="xs"
+      type="button"
       variant="ghost"
     >
       {label}
-    </Badge>
+    </Button>
   );
 }
 
@@ -148,16 +187,73 @@ export function LanguageServiceStatus({
   );
 }
 
-export function DocumentFormatBadge({ document }: { document: FilesDocument }) {
+export function DocumentFormatBadge({
+  context,
+  controller,
+  document,
+  t,
+}: {
+  context?: RendererPluginContext | undefined;
+  controller?: FileEditorController;
+  document: FilesDocument;
+  t: FilesTranslate;
+}) {
   if (!(document.format && document.eol)) {
     return null;
   }
   const encoding = formatEncodingLabel(document.format);
   const eol = document.eol === "none" ? "—" : document.eol.toUpperCase();
+  if (!(context && controller)) {
+    return (
+      <Badge className="font-mono tabular-nums" size="xs" variant="ghost">
+        {encoding} · {eol}
+      </Badge>
+    );
+  }
   return (
-    <Badge className="font-mono tabular-nums" size="xs" variant="ghost">
-      {encoding} · {eol}
-    </Badge>
+    <span className="inline-flex items-center">
+      <Button
+        aria-label={t("filePanel.encoding.selectTitle", "Select Encoding")}
+        className="font-mono tabular-nums"
+        data-slot="badge"
+        onClick={() => {
+          openDocumentEncodingPicker({
+            context,
+            controller,
+            currentFormat: document.format,
+            documentId: document.id,
+            t,
+          });
+        }}
+        size="xs"
+        type="button"
+        variant="ghost"
+      >
+        {encoding}
+      </Button>
+      <span aria-hidden className="text-muted-foreground text-xs">
+        ·
+      </span>
+      <Button
+        aria-label={t("filePanel.eol.selectTitle", "Select End of Line")}
+        className="font-mono tabular-nums"
+        data-slot="badge"
+        onClick={() => {
+          openDocumentEolPicker({
+            context,
+            controller,
+            currentEol: document.eol,
+            documentId: document.id,
+            t,
+          });
+        }}
+        size="xs"
+        type="button"
+        variant="ghost"
+      >
+        {eol}
+      </Button>
+    </span>
   );
 }
 

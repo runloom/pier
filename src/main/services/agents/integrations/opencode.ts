@@ -110,7 +110,8 @@ export function opencodeConfigPath(): string {
  * 事件映射以该稳定版官方插件文档和运行时事件桥为准：
  * session.created→SessionStart, session.idle→Stop, session.error→error,
  * chat.message→PromptSubmit，permission.asked/replied 与 question.*
- * 分别闭合交互，session.status(busy/retry)→running、
+ * 分别闭合交互（asked 挡住工具直到 replied；allow 规则不发 asked）。
+ * session.status(busy/retry)→running、
  * (idle)→Stop（EventSessionStatus——模型忙碌/重试中的推进心跳）,
  * tool.execute.before→ToolStart, tool.execute.after→ToolComplete。
  */

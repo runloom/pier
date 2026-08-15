@@ -21,19 +21,21 @@
 /*
  * Rich Input Lexical chip hosts.
  *
- * - `inline-block` + ::before/::after gutters: contenteditable carets sit on the
- *   decorator border-box and ignore host *margin*; empty ::before/::after widen
- *   the box so the caret lands past a real gap (padding alone is flaky on atomic
- *   decorators in Chromium).
- * - Do not stretch the host to the compact shell height — that makes the caret
- *   next to a chip paint as tall as the input.
+ * - ::before/::after gutters: contenteditable carets sit on the decorator
+ *   border-box and ignore host *margin*; empty pseudos widen the box so the
+ *   caret lands past a real gap (padding alone is flaky on atomic decorators
+ *   in Chromium). Gutters are caret hit-box only — height: 0 so they do not
+ *   contribute a font strut / steal the flex baseline.
+ * - Do not set a line-height-matching host height (no 1.25rem / 1lh). The
+ *   pill shrink-wraps the decorate() label; vertical-align: baseline puts
+ *   that label on the same alphabetic baseline as adjacent typed text.
+ * - Do not stretch the host to the compact shell height — that makes the
+ *   caret next to a chip paint as tall as the input.
  */
 .composer-ref-chip-host {
   display: inline-flex;
-  align-items: center;
-  /* Match composer `leading-5` (1.25rem) so pill + caret share one line box. */
-  height: 1.25rem;
-  vertical-align: middle;
+  align-items: baseline;
+  vertical-align: baseline;
   line-height: 1;
 }
 
@@ -43,6 +45,9 @@
   display: block;
   width: 0.25rem;
   flex-shrink: 0;
+  height: 0;
+  overflow: hidden;
+  align-self: center;
 }
 
 /*

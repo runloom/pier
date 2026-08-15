@@ -455,15 +455,17 @@ export class FileEditorViewSession {
     this.#editorPrefs = prefs;
     const view = this.#view;
     const document = this.#document;
-    if (defaultLanguageChanged && view && document?.language === "text") {
+    if (defaultLanguageChanged && view && document) {
       const next = applyDefaultLanguagePreference({
         document,
         languageCompartment: this.#languageCompartment,
         prefs,
         view,
       });
-      this.#configuredLanguage = next.language;
-      this.#configuredPath = next.path;
+      if (next) {
+        this.#configuredLanguage = next.language;
+        this.#configuredPath = next.path;
+      }
     }
     this.#languageTools.setPrefs(view, prefs);
   }
