@@ -1,5 +1,6 @@
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { emptyDomainSnapshot } from "@shared/contracts/host-catalog/runtime.ts";
 import {
   act,
   cleanup,
@@ -43,6 +44,7 @@ import {
   useAppDialogStore,
 } from "@/stores/app-dialog.store.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
+import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -283,6 +285,28 @@ beforeEach(async () => {
         detect: detectAgents,
         prepareLaunch: prepareAgentLaunch,
       },
+      catalog: {
+        ensureFresh: async () => {
+          const result = (await detectAgents()) as {
+            detectedIds: AgentKind[];
+          };
+          return {
+            ...emptyDomainSnapshot("agent-cli"),
+            items: result.detectedIds.map((id) => ({
+              details: null,
+              domain: "agent-cli" as const,
+              id,
+              label: id,
+              localVersion: null,
+              presence: "present" as const,
+              remoteVersion: null,
+              updateOffered: false,
+            })),
+            localProbedAt: Date.now(),
+            revision: Date.now(),
+          };
+        },
+      },
       onWindowLayoutPulse: vi.fn(() => vi.fn()),
       worktrees: {
         list: vi.fn(async () => ({
@@ -334,6 +358,7 @@ afterEach(() => {
     isRefreshing: false,
     ensureDetected: defaultEnsureDetected,
   });
+  useHostCatalogStore.getState().reset();
   useKeybindingScope.setState({
     activePanelComponent: null,
     activePanelId: null,
@@ -1643,12 +1668,10 @@ describe("WorkspaceHeaderActions", () => {
     });
   });
 
-  it("adds detected agents to an already-open creator", async () => {
-    const deferred = Promise.withResolvers<{ detectedIds: AgentKind[] }>();
-    detectAgents.mockReturnValueOnce(deferred.promise);
+  it("adds catalog agents to an already-open creator", async () => {
     useAgentDetectStore.setState({
       detectedIds: [],
-      hasDetected: false,
+      hasDetected: true,
       isDetecting: false,
       isRefreshing: false,
     });
@@ -1660,16 +1683,30 @@ describe("WorkspaceHeaderActions", () => {
     expect(screen.queryByText("Start Claude")).not.toBeInTheDocument();
 
     await act(async () => {
-      deferred.resolve({ detectedIds: ["claude"] });
-      await deferred.promise;
+      useHostCatalogStore.getState().applyDomain({
+        ...emptyDomainSnapshot("agent-cli"),
+        items: [
+          {
+            details: null,
+            domain: "agent-cli",
+            id: "claude",
+            label: "Claude",
+            localVersion: null,
+            presence: "present",
+            remoteVersion: null,
+            updateOffered: false,
+          },
+        ],
+        localProbedAt: 1,
+        revision: 2,
+      });
     });
 
     expect(await findCommandItem("Start Claude")).toBeVisible();
+    expect(detectAgents).not.toHaveBeenCalled();
   });
 
-  it("reports background detection failure without hiding other actions", async () => {
-    detectAgents.mockRejectedValueOnce(new Error("detect boom"));
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
+  it("does not probe agents when opening the creator", async () => {
     useAgentDetectStore.setState({
       detectedIds: [],
       hasDetected: false,
@@ -1682,51 +1719,8 @@ describe("WorkspaceHeaderActions", () => {
     render(<WorkspaceHeaderActions {...props} />);
     openAddPanelPopover();
 
-    await waitFor(() => {
-      expect(useAppDialogStore.getState().current).toMatchObject({
-        body: "detect boom",
-        kind: "alert",
-        title: "Couldn't detect agents — try again",
-      });
-    });
     expect(await findCommandItem("New Terminal")).toBeVisible();
-    expect(
-      document.querySelector("[data-slot='popover-content']")
-    ).not.toBeNull();
-
-    resetAppDialogForTests();
-  });
-
-  it("ignores a background detection failure after the creator closes", async () => {
-    const deferred = Promise.withResolvers<{ detectedIds: AgentKind[] }>();
-    detectAgents.mockReturnValueOnce(deferred.promise);
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-    useAgentDetectStore.setState({
-      detectedIds: [],
-      hasDetected: false,
-      isDetecting: false,
-      isRefreshing: false,
-    });
-    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
-    useWorkspaceStore.getState().setApi(props.containerApi as never);
-
-    render(<WorkspaceHeaderActions {...props} />);
-    const trigger = openAddPanelPopover();
-    await waitFor(() => {
-      expect(detectAgents).toHaveBeenCalledOnce();
-    });
-    fireEvent.click(trigger);
-    await waitFor(() => {
-      expect(
-        document.querySelector("[data-slot='popover-content']")
-      ).toBeNull();
-    });
-
-    await act(async () => {
-      deferred.reject(new Error("late detect boom"));
-      await Promise.allSettled([deferred.promise]);
-    });
-
+    expect(detectAgents).not.toHaveBeenCalled();
     expect(useAppDialogStore.getState().current).toBeNull();
   });
 });

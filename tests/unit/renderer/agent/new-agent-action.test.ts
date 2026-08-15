@@ -22,7 +22,7 @@ const toastMocks = vi.hoisted(() => ({ error: vi.fn() }));
 vi.mock("sonner", () => ({ toast: { error: toastMocks.error } }));
 
 const prepareLaunch = vi.fn();
-const detect = vi.fn(async () => ({ detectedIds: [] as AgentKind[] }));
+const ensureFresh = vi.fn();
 const addTerminal = vi.fn(() => "terminal-1");
 
 function runNewAgent(invocation?: ActionInvocation): Promise<void> | void {
@@ -56,7 +56,10 @@ describe("new agent action", () => {
     resetAppDialogForTests();
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: { agents: { detect, prepareLaunch } },
+      value: {
+        agents: { prepareLaunch },
+        catalog: { ensureFresh },
+      },
     });
     useTerminalPreferencesStore.setState({
       terminalNewCwdPolicy: "activeTerminal",
@@ -117,29 +120,19 @@ describe("new agent action", () => {
     await i18next.changeLanguage("en");
   });
 
-  it("首次调用（detectedIds 为空）→ 先探测再 pickAgent，而非直接 toast", async () => {
-    // 模拟未开设置页：detectedIds 为空。ensureDetected → detect 填充 ["claude"]。
+  it("detectedIds 为空 → 不探测，直接 toast，也不创建终端", async () => {
     seedStores({
       defaultAgentId: null,
       detectedIds: [],
       disabledAgentIds: [],
     });
-    detect.mockResolvedValueOnce({ detectedIds: ["claude"] });
-    prepareLaunch.mockResolvedValueOnce({ launchId: "launch-1" });
 
     await runNewAgent();
 
-    expect(detect).toHaveBeenCalledTimes(1);
-    expect(prepareLaunch).toHaveBeenCalledWith("claude");
-    expect(addTerminal).toHaveBeenCalledWith({
-      context: null,
-      exitPresentation: {
-        dismissMode: "explicit",
-        role: "agent",
-      },
-      launchId: "launch-1",
-    });
-    expect(toastMocks.error).not.toHaveBeenCalled();
+    expect(ensureFresh).not.toHaveBeenCalled();
+    expect(prepareLaunch).not.toHaveBeenCalled();
+    expect(addTerminal).not.toHaveBeenCalled();
+    expect(toastMocks.error).toHaveBeenCalledTimes(1);
   });
 
   it("detectedIds 已填充 → 不重复探测（避免每次重跑 which）", async () => {
@@ -152,7 +145,7 @@ describe("new agent action", () => {
 
     await runNewAgent();
 
-    expect(detect).not.toHaveBeenCalled();
+    expect(ensureFresh).not.toHaveBeenCalled();
     expect(prepareLaunch).toHaveBeenCalledWith("claude");
   });
 
@@ -181,34 +174,10 @@ describe("new agent action", () => {
 
     await runNewAgent();
 
-    expect(detect).not.toHaveBeenCalled();
+    expect(ensureFresh).not.toHaveBeenCalled();
     expect(toastMocks.error).toHaveBeenCalledTimes(1);
     expect(prepareLaunch).not.toHaveBeenCalled();
     expect(addTerminal).not.toHaveBeenCalled();
-  });
-
-  it("探测失败 → 用 AppDialog 展示本地化标题和原始错误", async () => {
-    seedStores({
-      defaultAgentId: null,
-      detectedIds: [],
-      disabledAgentIds: [],
-    });
-    detect.mockRejectedValueOnce(new Error("detect detail"));
-    vi.spyOn(console, "error").mockImplementation(() => undefined);
-
-    const pending = runNewAgent();
-    await vi.waitFor(() => {
-      expect(useAppDialogStore.getState().current).toMatchObject({
-        body: "detect detail",
-        kind: "alert",
-        title: "Couldn't detect agents — try again",
-      });
-    });
-    expect(prepareLaunch).not.toHaveBeenCalled();
-    expect(toastMocks.error).not.toHaveBeenCalled();
-
-    resetAppDialogForTests();
-    await pending;
   });
 
   it("启动准备失败 → 用当前语言的 AppDialog 展示原始错误", async () => {

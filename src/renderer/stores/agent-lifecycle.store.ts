@@ -6,27 +6,22 @@ import type {
   AgentLifecycleProbe,
   AgentLifecycleProgress,
 } from "@shared/contracts/agent/lifecycle.ts";
-import type { AgentKind } from "@shared/contracts/agent.ts";
+import { type AgentKind, agentKindSchema } from "@shared/contracts/agent.ts";
+import type { CatalogDomainSnapshot } from "@shared/contracts/host-catalog/runtime.ts";
 import { create } from "zustand";
 import type { AgentLifecycleFailure } from "@/pages/settings/components/agent-lifecycle-format.ts";
 import { isLifecycleSoftFailure } from "@/pages/settings/components/agent-lifecycle-format.ts";
-import { useAgentDetectStore } from "./agent-detect.store.ts";
 import {
   hasCachedProbes,
   isLifecycleUpdateCandidate,
-  isTargetedAgentIds,
-  mergeProbes,
-  shouldSkipFullCatalogProbe,
 } from "./agent-lifecycle-probe.ts";
 import { useAgentPreferencesStore } from "./agent-preferences.store.ts";
+import { probesFromAgentSnapshot } from "./host-catalog/agent-mirror.ts";
+import { useHostCatalogStore } from "./host-catalog/store.ts";
 
 export {
-  AGENT_LIFECYCLE_CHECK_LATEST_TTL_MS,
-  AGENT_LIFECYCLE_PROBE_TTL_MS,
   isLifecycleUpdateCandidate,
-  isTargetedAgentIds,
   mergeProbes,
-  shouldSkipFullCatalogProbe,
   withDerivedUpdateFlags,
 } from "./agent-lifecycle-probe.ts";
 
@@ -37,18 +32,6 @@ export interface LifecycleJob {
   readonly action: AgentLifecycleAction;
   readonly phase: LifecycleJobPhase;
   readonly progress?: AgentLifecycleProgress;
-}
-
-export interface AgentLifecycleProbeOptions {
-  /** Ask main for remote latest versions (npm/brew/…). */
-  checkLatest?: boolean;
-  /** Bypass TTL and always hit main (toolbar refresh / post install). */
-  force?: boolean;
-  /**
-   * Do not flip `isProbing` (settings open SWR path with existing rows).
-   * Failures stay silent; callers that need UI busy pass false/omit.
-   */
-  silent?: boolean;
 }
 
 interface AgentLifecycleState {
@@ -65,10 +48,6 @@ interface AgentLifecycleState {
   lastCheckLatestAt: number | null;
   /** Last successful full-catalog local probe (any checkLatest). */
   lastProbeAt: number | null;
-  probe: (
-    agentIds?: readonly AgentKind[],
-    options?: AgentLifecycleProbeOptions
-  ) => Promise<void>;
   probesById: Partial<Record<AgentKind, AgentLifecycleProbe>>;
   run: (
     agentId: AgentKind,
@@ -79,9 +58,8 @@ interface AgentLifecycleState {
     action: AgentLifecycleAction
   ) => Promise<AgentLifecycleActionResult[]>;
   /**
-   * Settings-open SWR: keep `probesById`, revalidate when TTL says stale.
-   * Silent when a previous snapshot exists so the list never looks like a
-   * full-page reload. Manual toolbar refresh must use force probe instead.
+   * Settings-open: keep `probesById` and ask catalog.ensureFresh (no force).
+   * Silent when a previous snapshot exists. Toolbar refresh uses detect.refresh.
    */
   softRevalidate: () => Promise<void>;
   /** Ensure main→renderer progress subscription is active (idempotent). */
@@ -89,9 +67,7 @@ interface AgentLifecycleState {
   updatableIds: () => AgentKind[];
 }
 
-/** Join concurrent full-catalog probes (Strict Mode / remount / open+refresh). */
-let fullCatalogProbeInFlight: Promise<void> | null = null;
-/** Non-silent probe depth so overlapping busy probes do not clear spinner early. */
+/** Non-silent open-path depth so overlapping SWR does not clear spinner early. */
 let probingBusyDepth = 0;
 
 function failureFromResult(
@@ -109,12 +85,51 @@ function failureFromResult(
   };
 }
 
-async function syncDetectFromMain(): Promise<void> {
-  try {
-    await useAgentDetectStore.getState().refresh();
-  } catch {
-    // best-effort
+async function revalidateAgentCatalog(force: boolean): Promise<void> {
+  await useHostCatalogStore.getState().ensureFresh({
+    class: "all",
+    domain: "agent-cli",
+    ...(force ? { force: true } : {}),
+  });
+}
+
+function applyLifecycleSnapshot(snapshot: CatalogDomainSnapshot): void {
+  if (snapshot.domain !== "agent-cli") {
+    return;
   }
+  const shouldApply =
+    snapshot.revision > 0 ||
+    snapshot.localProbedAt !== null ||
+    snapshot.remoteCheckedAt !== null ||
+    snapshot.items.length > 0;
+  if (!shouldApply) {
+    return;
+  }
+  const incoming = probesFromAgentSnapshot(snapshot);
+  const incomingById = new Map(incoming.map((probe) => [probe.agentId, probe]));
+  const previous = useAgentLifecycleStore.getState().probesById;
+  const next: Partial<Record<AgentKind, AgentLifecycleProbe>> = {};
+  for (const item of snapshot.items) {
+    const parsed = agentKindSchema.safeParse(item.id);
+    if (!parsed.success) {
+      continue;
+    }
+    if (item.presence !== "present" && item.presence !== "broken") {
+      continue;
+    }
+    const id = parsed.data;
+    const incomingProbe = incomingById.get(id);
+    if (incomingProbe) {
+      next[id] = incomingProbe;
+    } else if (previous[id]) {
+      next[id] = previous[id];
+    }
+  }
+  useAgentLifecycleStore.setState({
+    lastCheckLatestAt: snapshot.remoteCheckedAt,
+    lastProbeAt: snapshot.localProbedAt,
+    probesById: next,
+  });
 }
 
 let progressUnsub: (() => void) | null = null;
@@ -195,105 +210,26 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
       return api.cancel(agentId);
     },
 
-    async probe(agentIds, options) {
-      const force = options?.force === true;
-      const checkLatest = options?.checkLatest === true;
-      const silent = options?.silent === true;
-      const targeted = isTargetedAgentIds(agentIds);
-      const state = get();
-      if (
-        shouldSkipFullCatalogProbe({
-          force,
-          checkLatest,
-          ...(agentIds === undefined ? {} : { agentIds }),
-          lastProbeAt: state.lastProbeAt,
-          lastCheckLatestAt: state.lastCheckLatestAt,
-          probesById: state.probesById,
-        })
-      ) {
-        return;
-      }
-
-      // Full-catalog: join an in-flight soft probe; force waits then re-runs.
-      if (!targeted && fullCatalogProbeInFlight) {
-        if (!force) {
-          return fullCatalogProbeInFlight;
-        }
-        await fullCatalogProbeInFlight.catch(() => undefined);
-        const after = get();
-        if (
-          shouldSkipFullCatalogProbe({
-            force,
-            checkLatest,
-            ...(agentIds === undefined ? {} : { agentIds }),
-            lastProbeAt: after.lastProbeAt,
-            lastCheckLatestAt: after.lastCheckLatestAt,
-            probesById: after.probesById,
-          })
-        ) {
-          return;
-        }
-      }
-
-      const run = async (): Promise<void> => {
-        const api = window.pier?.agents?.lifecycle;
-        if (!api?.probe) {
-          return;
-        }
-        // Never clear probesById before merge — SWR keeps previous rows visible.
-        if (!silent) {
+    softRevalidate() {
+      const hasCache = hasCachedProbes(get().probesById);
+      return (async () => {
+        if (!hasCache) {
           probingBusyDepth += 1;
           if (probingBusyDepth === 1) {
             set({ isProbing: true });
           }
         }
         try {
-          const probes = await api.probe({
-            ...(targeted && agentIds ? { agentIds: [...agentIds] } : {}),
-            checkLatest,
-          });
-          const now = Date.now();
-          set((prev) => ({
-            probesById: mergeProbes(prev.probesById, probes),
-            // Targeted re-probes refresh rows but do not extend full-catalog TTL.
-            ...(targeted
-              ? {}
-              : {
-                  lastProbeAt: now,
-                  ...(checkLatest ? { lastCheckLatestAt: now } : {}),
-                }),
-          }));
+          await revalidateAgentCatalog(false);
         } finally {
-          if (!silent) {
+          if (!hasCache) {
             probingBusyDepth = Math.max(0, probingBusyDepth - 1);
             if (probingBusyDepth === 0) {
               set({ isProbing: false });
             }
           }
         }
-      };
-
-      if (!targeted) {
-        const p = run().finally(() => {
-          if (fullCatalogProbeInFlight === p) {
-            fullCatalogProbeInFlight = null;
-          }
-        });
-        fullCatalogProbeInFlight = p;
-        return p;
-      }
-
-      return run();
-    },
-
-    softRevalidate() {
-      const hasCache = hasCachedProbes(get().probesById);
-      // Open path: never force. With cache → silent background; first visit →
-      // show toolbar busy while the initial snapshot loads.
-      return get().probe(undefined, {
-        checkLatest: true,
-        silent: hasCache,
-      });
+      })();
     },
 
     async run(agentId, action) {
@@ -320,9 +256,6 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
       });
       try {
         const result = await api.run(agentId, action);
-        if (result.ok && !result.skipped) {
-          await syncDetectFromMain();
-        }
         const stepLabel = get().jobById[agentId]?.progress?.label;
         const failure = failureFromResult(result, stepLabel);
         set((state) => {
@@ -334,7 +267,9 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
           }
           return { failureById: nextFailures };
         });
-        await get().probe([agentId], { force: true, checkLatest: true });
+        if (result.ok && !result.skipped) {
+          await revalidateAgentCatalog(true);
+        }
         return result;
       } finally {
         get().clearJob(agentId);
@@ -401,9 +336,8 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
           }
         );
         if (results.some((r) => r.ok && !r.skipped)) {
-          await syncDetectFromMain();
+          await revalidateAgentCatalog(true);
         }
-        await get().probe(batchSnapshot, { force: true, checkLatest: true });
         return results;
       } finally {
         // Drop any stragglers if cancel/abort left jobs behind.
@@ -436,3 +370,14 @@ export const useAgentLifecycleStore = create<AgentLifecycleState>(
     },
   })
 );
+
+const initialAgentCli = useHostCatalogStore.getState().domains["agent-cli"];
+if (initialAgentCli) {
+  applyLifecycleSnapshot(initialAgentCli);
+}
+useHostCatalogStore.subscribe((state, previous) => {
+  const next = state.domains["agent-cli"];
+  if (next && next !== previous.domains["agent-cli"]) {
+    applyLifecycleSnapshot(next);
+  }
+});

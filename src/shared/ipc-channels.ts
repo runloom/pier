@@ -92,6 +92,8 @@ export const PIER = {
    * main 落 diagnostics JSONL 并保留每窗环形缓冲，unresponsive 时一并带出。
    */
   RENDERER_HANG_BREADCRUMB: "pier://renderer:hang-breadcrumb",
+  HOST_CATALOG_SNAPSHOT: "pier://host-catalog:snapshot",
+  HOST_CATALOG_ENSURE_FRESH: "pier://host-catalog:ensureFresh",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -187,6 +189,7 @@ export const PIER_BROADCAST = {
   NOTIFICATION_CENTER_CHANGED: "pier://notification-center:changed",
   // 形态 B 消息 toast：main 单窗投递（payload AppNotification）；禁止全窗广播。
   NOTIFICATION_CENTER_MESSAGE_TOAST: "pier://notification-center:message-toast",
+  HOST_CATALOG_CHANGED: "pier://host-catalog:changed",
   // 统一评论项目快照广播 (main → 所有 renderer, payload CommentProjectSnapshot)。
   // main CommentsService 唯一写方；renderer 镜像 store 按 worktreeKey 路由 + seq 守卫。
   COMMENTS_CHANGED: "pier://comments:changed",

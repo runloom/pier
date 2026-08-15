@@ -188,7 +188,9 @@ export async function enumerateInstalls(options: {
     if (!path) {
       continue;
     }
-    const ver = await readVersionAtPath(path, versionArgs, options.env);
+    const ver = shouldProbeInstallVersion(i)
+      ? await readVersionAtPath(path, versionArgs, options.env)
+      : { runnable: true, version: null };
     installs.push({
       isPathDefault: i === 0,
       path,
@@ -198,6 +200,11 @@ export async function enumerateInstalls(options: {
     });
   }
   return installs;
+}
+
+/** Only spawn `--version` on the PATH-default copy (index 0). */
+export function shouldProbeInstallVersion(index: number): boolean {
+  return index === 0;
 }
 
 export function isInstallConflict(

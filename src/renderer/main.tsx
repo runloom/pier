@@ -42,11 +42,11 @@ import { installWindowFocusAttribute } from "./lib/window-focus-attribute.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
 import { registerTerminalPanelCloseGuard } from "./panel-kits/terminal/register-close-guard.ts";
 import { initAgentAttentionPreferences } from "./stores/agent-attention-preferences.store.ts";
-import { initAgentDetection } from "./stores/agent-detect.store.ts";
 import { initAgentPreferences } from "./stores/agent-preferences.store.ts";
 import { initAppQuitPreferences } from "./stores/app-quit-preferences.store.ts";
 import { initCommandPaletteMru } from "./stores/command-palette-mru.store.ts";
 import { initFont } from "./stores/font.store.ts";
+import { initHostCatalog } from "./stores/host-catalog/store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
 import { initLocalEnvironments } from "./stores/local-environments.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
@@ -141,9 +141,7 @@ async function bootstrap() {
   }
 
   window.pier?.terminal?.setup?.()?.catch(() => undefined);
-  initAgentDetection().catch((err) => {
-    console.error("[pier] agent detection init failed:", err);
-  });
+  initHostCatalog();
   // blur 抑制器必须最先注册 (早于一切 window blur 监听, 含 Radix), 见其 doc comment
   installTerminalInputRoutingBlurSuppressor();
   // OS key-window focus → data-window-focused (main broadcast; not DOM blur).

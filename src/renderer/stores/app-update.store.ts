@@ -3,6 +3,7 @@ import i18next from "i18next";
 import { create } from "zustand";
 import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 interface AppUpdateApi {
@@ -47,6 +48,15 @@ export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
     try {
       const snapshot = await api.check();
       get().applySnapshot(snapshot);
+      try {
+        await useHostCatalogStore.getState().ensureFresh({
+          class: "local",
+          domain: "pier-app",
+          force: true,
+        });
+      } catch (stampErr: unknown) {
+        console.error("[app-update] catalog stamp failed:", stampErr);
+      }
     } catch (err) {
       await showAppAlert({
         body: err instanceof Error ? err.message : String(err),

@@ -47,6 +47,7 @@ import {
   registerForegroundActivityIpc,
 } from "./ipc/foreground-activity.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
+import { registerHostCatalogIpc } from "./ipc/host-catalog.ts";
 import { disposeLspIpcHost, registerLspIpc } from "./ipc/lsp.ts";
 import { registerMediaPreviewIpc } from "./ipc/media-preview.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
@@ -353,6 +354,7 @@ if (gotTheLock) {
       registerMenuIpc(ipcMain);
       registerClipboardIpc(ipcMain);
       registerAgentsIpc(ipcMain);
+      registerHostCatalogIpc(ipcMain);
       registerForegroundActivityIpc(ipcMain);
       registerNotificationCenterIpc(ipcMain, {
         eventBus: appCore.eventBus,

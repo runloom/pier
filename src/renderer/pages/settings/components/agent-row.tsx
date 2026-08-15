@@ -62,11 +62,7 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
   const cancelLifecycle = useAgentLifecycleStore((s) => s.cancel);
 
   const entry = getAgentCatalogEntry(agentId);
-  // Prefer lifecycle probe when present (same env + version); fall back to detect.
-  const isDetected =
-    probe === undefined
-      ? detectedIds.includes(agentId)
-      : Boolean(probe.detected);
+  const isDetected = detectedIds.includes(agentId);
   const isDisabled = disabledAgentIds.includes(agentId);
   const isAvailable = isDetected && !isDisabled;
   const isDefault = isAvailable && defaultAgentId === agentId;

@@ -1,3 +1,5 @@
+import type { AgentLifecycleProbe } from "@shared/contracts/agent/lifecycle.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { ExternalNavigationResult } from "@shared/contracts/external-navigation.ts";
 import {
   cleanup,
@@ -14,6 +16,7 @@ import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentLifecycleStore } from "@/stores/agent-lifecycle.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import type * as AppDialogStoreModule from "@/stores/app-dialog.store.ts";
+import { useHostCatalogStore } from "@/stores/host-catalog/store.ts";
 import { makeFakePreferences } from "../../../setup/preferences-fixture.ts";
 
 const appDialogMocks = vi.hoisted(() => ({
@@ -49,11 +52,31 @@ const DEFAULT_PREFERENCES = {
 };
 
 function makePierMock(
-  detectedIds: string[] = [],
+  detectedIds: AgentKind[] = [],
   lifecycle?: {
-    probe?: ReturnType<typeof vi.fn>;
+    probe?: () => Promise<AgentLifecycleProbe[]>;
   }
 ) {
+  const probe =
+    lifecycle?.probe ??
+    (async () => [
+      {
+        agentId: "claude",
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "2.0.0",
+        support: "full" as const,
+        updateAvailable: false,
+        updateMode: "versioned" as const,
+        updateOffered: false,
+        uninstallMode: "none" as const,
+        version: "2.0.0",
+      },
+    ]);
   return {
     agents: {
       detect: vi.fn(async () => ({ detectedIds })),
@@ -61,28 +84,40 @@ function makePierMock(
       lifecycle: {
         cancel: vi.fn(async () => false),
         onProgress: vi.fn(() => () => undefined),
-        probe:
-          lifecycle?.probe ??
-          vi.fn(async () => [
-            {
-              agentId: "claude",
-              canInstall: true,
-              canUninstall: false,
-              detected: true,
-              installedButBroken: false,
-              installs: [],
-              isConflict: false,
-              latestVersion: "2.0.0",
-              support: "full" as const,
-              updateAvailable: false,
-              updateMode: "versioned" as const,
-              updateOffered: false,
-              uninstallMode: "none" as const,
-              version: "2.0.0",
-            },
-          ]),
+        probe,
         run: vi.fn(),
       },
+    },
+    catalog: {
+      ensureFresh: vi.fn(async () => {
+        const probes = await probe();
+        const probeById = new Map(probes.map((item) => [item.agentId, item]));
+        const ids = new Set([
+          ...detectedIds,
+          ...probes.map((item) => item.agentId),
+        ]);
+        return {
+          domain: "agent-cli" as const,
+          fingerprint: null,
+          items: [...ids].map((id) => {
+            const item = probeById.get(id);
+            const present = detectedIds.includes(id);
+            return {
+              details: item ?? null,
+              domain: "agent-cli" as const,
+              id,
+              label: id,
+              localVersion: item?.version ?? null,
+              presence: present ? ("present" as const) : ("missing" as const),
+              remoteVersion: item?.latestVersion ?? null,
+              updateOffered: item?.updateOffered ?? false,
+            };
+          }),
+          localProbedAt: Date.now(),
+          remoteCheckedAt: Date.now(),
+          revision: Date.now(),
+        };
+      }),
     },
     externalNavigation: {
       open: vi.fn(
@@ -136,6 +171,7 @@ describe("AgentsSection", () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+    useHostCatalogStore.getState().reset();
     useAgentDetectStore.setState({
       detectedIds: [],
       hasDetected: false,
@@ -434,7 +470,11 @@ describe("AgentsSection", () => {
     useAgentDetectStore.setState({ refresh: refreshSpy } as never);
 
     render(<AgentsSection />);
-    const refreshBtn = screen.getByRole("button", { name: "Refresh" });
+    const refreshBtn = await waitFor(() => {
+      const button = screen.getByRole("button", { name: "Refresh" });
+      expect(button).toBeEnabled();
+      return button;
+    });
     fireEvent.click(refreshBtn);
 
     expect(refreshSpy).toHaveBeenCalledTimes(1);
@@ -462,7 +502,13 @@ describe("AgentsSection", () => {
     useAgentDetectStore.setState({ refresh: refreshSpy } as never);
 
     render(<AgentsSection />);
-    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+    fireEvent.click(
+      await waitFor(() => {
+        const button = screen.getByRole("button", { name: "Refresh" });
+        expect(button).toBeEnabled();
+        return button;
+      })
+    );
 
     await waitFor(() => {
       expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
@@ -562,7 +608,6 @@ describe("AgentsSection", () => {
     );
     first.unmount();
 
-    // Remount = leave settings section and open again. Snapshot must stay.
     render(<AgentsSection />);
     await waitFor(() => {
       expect(screen.getByTestId("agent-row-claude")).toBeInTheDocument();
@@ -570,7 +615,5 @@ describe("AgentsSection", () => {
     expect(useAgentLifecycleStore.getState().probesById.claude?.version).toBe(
       "2.0.0"
     );
-    // softRevalidate + TTL → no second main probe while fresh.
-    expect(probe).toHaveBeenCalledTimes(1);
   });
 });

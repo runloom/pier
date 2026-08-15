@@ -211,12 +211,10 @@ function AgentListCard() {
 function AgentsToolbar() {
   const t = useT();
   const isRefreshing = useAgentDetectStore((s) => s.isRefreshing);
-  const refresh = useAgentDetectStore((s) => s.refresh);
   const isProbing = useAgentLifecycleStore((s) => s.isProbing);
   const updatingAll = useAgentLifecycleStore((s) =>
     Object.values(s.jobById).some((j) => j?.action === "update")
   );
-  const probeLifecycle = useAgentLifecycleStore((s) => s.probe);
   const runMany = useAgentLifecycleStore((s) => s.runMany);
   // Primitive count only — never select updatableIds() (new array → infinite re-render).
   const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
@@ -247,8 +245,9 @@ function AgentsToolbar() {
   const handleRefreshAndCheck = useCallback(() => {
     // User-initiated hard refresh: bypass TTL, show busy, toast on success.
     // Includes disabled agents so re-enable sees correct update state.
-    refresh()
-      .then(() => probeLifecycle(undefined, { force: true, checkLatest: true }))
+    useAgentDetectStore
+      .getState()
+      .refresh()
       .then(() => {
         toast.success(t("settings.agents.list.refreshSuccess"));
       })
@@ -258,7 +257,7 @@ function AgentsToolbar() {
           body: err instanceof Error ? err.message : String(err),
         });
       });
-  }, [probeLifecycle, refresh, t]);
+  }, [t]);
 
   const handleUpdateAll = useCallback(() => {
     const ids = useAgentLifecycleStore.getState().updatableIds();
@@ -342,35 +341,18 @@ function AgentsToolbar() {
 
 export function AgentsSection() {
   const t = useT();
-  const ensureDetected = useAgentDetectStore((s) => s.ensureDetected);
   const softRevalidate = useAgentLifecycleStore((s) => s.softRevalidate);
 
   useEffect(() => {
-    // SWR open path (not a full-page reload):
-    // 1. Keep previous detect + probesById rows immediately (store survives remount).
-    // 2. Strategy: softRevalidate — TTL may no-op; if stale, merge in background
-    //    without clearing rows (silent when cache exists).
-    // 3. Explicit toolbar refresh = force + checkLatest + toast.
-    let cancelled = false;
     const openTask = (async () => {
       try {
-        await ensureDetected();
-        if (cancelled) {
-          return;
-        }
-        // Await so probe failures stay in this try/catch (no unhandled rejection).
-        // openTask is not awaited by React; first paint still uses cached rows.
         await softRevalidate();
       } catch {
         // Best-effort: catalog + last probes still render.
       }
     })();
-    // Keep the promise referenced so the runtime does not treat it as floating.
     openTask.catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [ensureDetected, softRevalidate]);
+  }, [softRevalidate]);
 
   return (
     <div className="px-4 pb-4" id="agents">

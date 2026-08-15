@@ -1,11 +1,8 @@
 import type { AgentLifecycleProbe } from "@shared/contracts/agent/lifecycle.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  AGENT_LIFECYCLE_CHECK_LATEST_TTL_MS,
-  AGENT_LIFECYCLE_PROBE_TTL_MS,
   isLifecycleUpdateCandidate,
   mergeProbes,
-  shouldSkipFullCatalogProbe,
   useAgentLifecycleStore,
   withDerivedUpdateFlags,
 } from "../../../../src/renderer/stores/agent-lifecycle.store.ts";
@@ -180,82 +177,7 @@ describe("isLifecycleUpdateCandidate", () => {
   });
 });
 
-describe("shouldSkipFullCatalogProbe", () => {
-  const base = {
-    lastProbeAt: 1_000_000,
-    lastCheckLatestAt: 1_000_000,
-    probesById: {
-      claude: makeProbe({ agentId: "claude" }),
-    },
-    now: 1_000_000 + 60_000,
-  };
-
-  it("skips when local cache is fresh and checkLatest is not requested", () => {
-    expect(
-      shouldSkipFullCatalogProbe({
-        ...base,
-        checkLatest: false,
-      })
-    ).toBe(true);
-  });
-
-  it("skips checkLatest when both local and latest TTLs are fresh", () => {
-    expect(
-      shouldSkipFullCatalogProbe({
-        ...base,
-        checkLatest: true,
-      })
-    ).toBe(true);
-  });
-
-  it("does not skip checkLatest when latest TTL expired (even if local is fresh)", () => {
-    expect(
-      shouldSkipFullCatalogProbe({
-        ...base,
-        lastCheckLatestAt: base.now - AGENT_LIFECYCLE_CHECK_LATEST_TTL_MS - 1,
-        checkLatest: true,
-      })
-    ).toBe(false);
-  });
-
-  it("does not skip when local TTL expired", () => {
-    expect(
-      shouldSkipFullCatalogProbe({
-        ...base,
-        lastProbeAt: base.now - AGENT_LIFECYCLE_PROBE_TTL_MS - 1,
-        checkLatest: false,
-      })
-    ).toBe(false);
-  });
-
-  it("does not skip force, targeted agentIds, or empty cache", () => {
-    expect(shouldSkipFullCatalogProbe({ ...base, force: true })).toBe(false);
-    expect(
-      shouldSkipFullCatalogProbe({
-        ...base,
-        agentIds: ["claude"],
-      })
-    ).toBe(false);
-    expect(
-      shouldSkipFullCatalogProbe({
-        ...base,
-        probesById: {},
-      })
-    ).toBe(false);
-  });
-
-  it("treats empty agentIds as full catalog (not targeted)", () => {
-    expect(
-      shouldSkipFullCatalogProbe({
-        ...base,
-        agentIds: [],
-        checkLatest: true,
-      })
-    ).toBe(true);
-  });
-});
-
-describe("probe TTL integration", () => {
+describe("softRevalidate", () => {
   beforeEach(() => {
     useAgentLifecycleStore.setState({
       failureById: {},
@@ -267,77 +189,50 @@ describe("probe TTL integration", () => {
     });
   });
 
-  it("skips full-catalog checkLatest when cache is still fresh", async () => {
-    const probeApi = vi.fn(async () => [
-      makeProbe({ agentId: "claude", latestVersion: "2.0.0" }),
-    ]);
-    Object.defineProperty(window, "pier", {
-      configurable: true,
-      value: {
-        agents: {
-          lifecycle: {
-            cancel: vi.fn(async () => false),
-            onProgress: vi.fn(() => () => undefined),
-            probe: probeApi,
-            run: vi.fn(),
-          },
-        },
-      },
-    });
-
-    await useAgentLifecycleStore.getState().probe(undefined, {
-      checkLatest: true,
-    });
-    expect(probeApi).toHaveBeenCalledTimes(1);
-    expect(useAgentLifecycleStore.getState().lastCheckLatestAt).not.toBeNull();
-
-    await useAgentLifecycleStore.getState().probe(undefined, {
-      checkLatest: true,
-    });
-    expect(probeApi).toHaveBeenCalledTimes(1);
-
-    await useAgentLifecycleStore.getState().probe(undefined, {
-      force: true,
-      checkLatest: true,
-    });
-    expect(probeApi).toHaveBeenCalledTimes(2);
-  });
-
-  it("softRevalidate keeps previous rows and stays silent when cache exists", async () => {
+  it("keeps previous rows and stays silent when cache exists", async () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const probeApi = vi.fn(async () => {
+    const nextProbe = makeProbe({ agentId: "claude", version: "3.0.0" });
+    const ensureFresh = vi.fn(async () => {
       await gate;
-      return [makeProbe({ agentId: "claude", version: "3.0.0" })];
+      return {
+        domain: "agent-cli" as const,
+        fingerprint: null,
+        items: [
+          {
+            details: nextProbe,
+            domain: "agent-cli" as const,
+            id: "claude",
+            label: "Claude",
+            localVersion: "3.0.0",
+            presence: "present" as const,
+            remoteVersion: null,
+            updateOffered: false,
+          },
+        ],
+        localProbedAt: Date.now(),
+        remoteCheckedAt: Date.now(),
+        revision: Date.now(),
+      };
     });
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
-        agents: {
-          lifecycle: {
-            cancel: vi.fn(async () => false),
-            onProgress: vi.fn(() => () => undefined),
-            probe: probeApi,
-            run: vi.fn(),
-          },
-        },
+        catalog: { ensureFresh },
       },
     });
 
-    const now = Date.now();
     useAgentLifecycleStore.setState({
       probesById: {
         claude: makeProbe({ agentId: "claude", version: "1.0.0" }),
       },
-      // Expired so softRevalidate actually runs.
-      lastProbeAt: now - AGENT_LIFECYCLE_PROBE_TTL_MS - 1,
-      lastCheckLatestAt: now - AGENT_LIFECYCLE_CHECK_LATEST_TTL_MS - 1,
+      lastProbeAt: Date.now(),
+      lastCheckLatestAt: Date.now(),
     });
 
     const pending = useAgentLifecycleStore.getState().softRevalidate();
-    // Cached row remains; soft path does not flip isProbing.
     expect(useAgentLifecycleStore.getState().probesById.claude?.version).toBe(
       "1.0.0"
     );
@@ -345,51 +240,14 @@ describe("probe TTL integration", () => {
 
     release();
     await pending;
+    expect(ensureFresh).toHaveBeenCalledWith({
+      class: "all",
+      domain: "agent-cli",
+    });
     expect(useAgentLifecycleStore.getState().probesById.claude?.version).toBe(
       "3.0.0"
     );
     expect(useAgentLifecycleStore.getState().isProbing).toBe(false);
-  });
-
-  it("coalesces concurrent full-catalog soft probes into one main call", async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const probeApi = vi.fn(async () => {
-      await gate;
-      return [makeProbe({ agentId: "claude", version: "9.0.0" })];
-    });
-    Object.defineProperty(window, "pier", {
-      configurable: true,
-      value: {
-        agents: {
-          lifecycle: {
-            cancel: vi.fn(async () => false),
-            onProgress: vi.fn(() => () => undefined),
-            probe: probeApi,
-            run: vi.fn(),
-          },
-        },
-      },
-    });
-
-    const a = useAgentLifecycleStore.getState().probe(undefined, {
-      checkLatest: true,
-    });
-    const b = useAgentLifecycleStore.getState().probe(undefined, {
-      checkLatest: true,
-    });
-    expect(probeApi).toHaveBeenCalledTimes(1);
-    expect(useAgentLifecycleStore.getState().isProbing).toBe(true);
-
-    release();
-    await Promise.all([a, b]);
-    expect(probeApi).toHaveBeenCalledTimes(1);
-    expect(useAgentLifecycleStore.getState().isProbing).toBe(false);
-    expect(useAgentLifecycleStore.getState().probesById.claude?.version).toBe(
-      "9.0.0"
-    );
   });
 });
 
@@ -455,6 +313,16 @@ describe("runMany job phases", () => {
             probe: vi.fn(async () => []),
             run,
           },
+        },
+        catalog: {
+          ensureFresh: vi.fn(async () => ({
+            domain: "agent-cli",
+            fingerprint: null,
+            items: [],
+            localProbedAt: Date.now(),
+            remoteCheckedAt: Date.now(),
+            revision: Date.now(),
+          })),
         },
       },
     });

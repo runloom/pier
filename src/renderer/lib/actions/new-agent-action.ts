@@ -8,7 +8,6 @@ import {
 } from "@/lib/actions/project-path-action-gate.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
-import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { captureAnchoredTerminalTarget } from "@/stores/workspace-panel-helpers.ts";
 import { startAgentInAnchoredTerminal } from "./agent-start-actions.ts";
@@ -31,18 +30,6 @@ export async function handleNewAgent(
     useWorkspaceStore.getState().api,
     invocation
   );
-  // Startup kicks this off globally; this remains a cheap safety net for tests,
-  // debug windows, or early invocations that race the initial probe.
-  try {
-    await useAgentDetectStore.getState().ensureDetected();
-  } catch (error) {
-    await showAppAlert({
-      body: error instanceof Error ? error.message : String(error),
-      title: i18next.t("workspace.addPanelMenu.detectAgentsFailed"),
-    });
-    return;
-  }
-
   const agentId = currentDefaultAgentId();
   if (!agentId) {
     toast.error(i18next.t("commandPalette.agents.noAgentDetected"));
