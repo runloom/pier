@@ -254,6 +254,7 @@ function makeContext() {
         projectRootPath: ROOT,
         updatedAt: 1,
       })),
+      getActiveInstanceId: vi.fn(() => null),
       listInstances,
       openInstance,
     },
@@ -1001,6 +1002,57 @@ describe("file-tree-actions", () => {
     expect(writeClipboardText).toHaveBeenCalledWith(
       "packages/app/src/index.ts:42-58"
     );
+  });
+
+  it("copies the active editor path and selection when invoked without menu metadata", async () => {
+    const { context } = makeContext();
+    const writeClipboardText = installClipboard();
+    vi.mocked(context.panels.getActiveInstanceId).mockReturnValue("panel-1");
+    const action = actionById(
+      treeActions(context, {
+        currentSelectionLinesForSession: vi.fn(() => ({
+          endLine: 58,
+          startLine: 42,
+        })),
+        getPanelSource: vi.fn(() => ({
+          kind: "disk" as const,
+          path: "src/index.ts",
+          root: "/repo/packages/app",
+        })),
+      }),
+      FILES_COPY_PATH_WITH_RANGE_COMMAND_ID
+    );
+
+    await action.handler();
+
+    expect(writeClipboardText).toHaveBeenCalledWith(
+      "packages/app/src/index.ts:42-58"
+    );
+  });
+
+  it("does not copy a path when the active editor is untitled", async () => {
+    const { context } = makeContext();
+    const writeClipboardText = installClipboard();
+    vi.mocked(context.panels.getActiveInstanceId).mockReturnValue("panel-1");
+    const action = actionById(
+      treeActions(context, {
+        currentSelectionLinesForSession: vi.fn(() => ({
+          endLine: 3,
+          startLine: 1,
+        })),
+        getPanelSource: vi.fn(() => ({
+          id: "untitled-1",
+          kind: "untitled" as const,
+          name: "Untitled-1",
+        })),
+      }),
+      FILES_COPY_PATH_WITH_RANGE_COMMAND_ID
+    );
+
+    await action.handler();
+
+    expect(writeClipboardText).not.toHaveBeenCalled();
+    expect(context.notifications.success).not.toHaveBeenCalled();
   });
 
   it("does not expose a manual tree refresh action", () => {

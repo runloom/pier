@@ -1267,6 +1267,9 @@ describe("FileEditorController", () => {
     await flushPromises();
 
     expect(harness.controller.currentLineForSession(editorSessionId)).toBe(2);
+    expect(
+      harness.controller.currentSelectionLinesForSession(editorSessionId)
+    ).toEqual({ endLine: 2, startLine: 2 });
     release();
     harness.controller.dispose();
     harness.watchHub.dispose();

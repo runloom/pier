@@ -28,6 +28,7 @@ import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { KeybindingsSection } from "@/pages/settings/components/keybindings-section.tsx";
 import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.ts";
+import { useKeybindingPreferencesStore } from "@/stores/keybinding-preferences.store.ts";
 
 const RAW_PANEL_METADATA_PATTERN = /Panel ·/;
 
@@ -51,6 +52,11 @@ describe("KeybindingsSection", () => {
     vi.clearAllMocks();
     keybindingRegistry.loadUserKeymap([]);
     keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    useKeybindingPreferencesStore.setState({
+      error: null,
+      recordingCommandId: null,
+      userKeymap: [],
+    });
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -390,6 +396,147 @@ describe("KeybindingsSection", () => {
       expect(toast.error).toHaveBeenCalledWith("已被“新建终端”使用");
     });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(window.pier.preferences.update).not.toHaveBeenCalled();
+    unmount();
+    for (const dispose of disposers) {
+      dispose();
+    }
+  });
+
+  it("filters the list by title and shows an empty state when nothing matches", () => {
+    const disposers = [
+      actionRegistry.register({
+        category: "Panel",
+        handler: vi.fn(),
+        id: "pier.panel.newTerminal",
+        surfaces: ["command-palette"],
+        title: () => "新建终端",
+      }),
+      actionRegistry.register({
+        category: "File",
+        handler: vi.fn(),
+        id: "pier.files.copyPathWithRange",
+        surfaces: ["files/editor"],
+        title: () => "复制路径和所选行",
+      }),
+    ];
+
+    const { unmount } = render(<KeybindingsSection />);
+    const search = screen.getByTestId("keybindings-search");
+    expect(search).toHaveAttribute("placeholder", "搜索名称或快捷键");
+    fireEvent.change(search, { target: { value: "所选行" } });
+    expect(
+      screen.getByTestId("keybinding-row-pier.files.copyPathWithRange")
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("keybinding-row-pier.panel.newTerminal")
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "没有这个命令" } });
+    expect(screen.getByText("没有匹配的快捷键")).toBeInTheDocument();
+    expect(
+      screen.getByText("换个关键词试试，或清空搜索查看全部。")
+    ).toBeInTheDocument();
+    unmount();
+    for (const dispose of disposers) {
+      dispose();
+    }
+  });
+
+  it("cancels an in-progress recording when the search field is focused", () => {
+    const dispose = actionRegistry.register({
+      category: "Panel",
+      handler: vi.fn(),
+      id: "pier.panel.newTerminal",
+      surfaces: ["command-palette"],
+      title: () => "新建终端",
+    });
+
+    const { unmount } = render(<KeybindingsSection />);
+    fireEvent.click(screen.getByRole("button", { name: "录制 新建终端" }));
+    expect(screen.getByText("按下按键...")).toBeInTheDocument();
+
+    fireEvent.focus(screen.getByTestId("keybindings-search"));
+
+    expect(screen.queryByText("按下按键...")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "录制 新建终端" })
+    ).toBeInTheDocument();
+    unmount();
+    dispose();
+  });
+
+  it("records a files-panel command without rewriting it as global", async () => {
+    const dispose = actionRegistry.register({
+      category: "File",
+      handler: vi.fn(),
+      id: "pier.files.copyPathWithRange",
+      surfaces: ["files/editor"],
+      title: () => "复制路径和所选行",
+    });
+
+    const { unmount } = render(<KeybindingsSection />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "录制 复制路径和所选行" })
+    );
+    fireEvent.keyDown(window, {
+      altKey: true,
+      code: "KeyX",
+      ctrlKey: true,
+      key: "X",
+    });
+
+    await waitFor(() => {
+      expect(window.pier.preferences.update).toHaveBeenCalledWith({
+        userKeymap: [
+          {
+            commandId: "-pier.files.copyPathWithRange",
+            keys: "",
+            scope: "global",
+          },
+          {
+            commandId: "pier.files.copyPathWithRange",
+            keys: "Mod+Alt+KeyX",
+            scope: "panel:pier.files.filePanel",
+          },
+        ],
+      });
+    });
+    unmount();
+    dispose();
+  });
+
+  it("shows a conflict when remapping a files-panel command onto save", async () => {
+    const disposers = [
+      actionRegistry.register({
+        category: "File",
+        handler: vi.fn(),
+        id: "pier.files.copyPathWithRange",
+        surfaces: ["files/editor"],
+        title: () => "复制路径和所选行",
+      }),
+      actionRegistry.register({
+        category: "File",
+        handler: vi.fn(),
+        id: "pier.files.save",
+        surfaces: ["files/editor"],
+        title: () => "保存",
+      }),
+    ];
+
+    const { unmount } = render(<KeybindingsSection />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "录制 复制路径和所选行" })
+    );
+    fireEvent.keyDown(window, {
+      code: "KeyS",
+      ctrlKey: true,
+      key: "S",
+    });
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith("已被“保存”使用");
+    });
     expect(window.pier.preferences.update).not.toHaveBeenCalled();
     unmount();
     for (const dispose of disposers) {

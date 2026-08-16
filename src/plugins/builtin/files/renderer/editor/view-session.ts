@@ -38,6 +38,8 @@ import type { FilesEditorPrefs } from "./prefs.ts";
 import {
   applyEditorSearchQuery,
   clearEditorSearch,
+  editorStateCurrentLine,
+  editorStateSelectionLines,
   executeEditorViewCommand,
   type FileEditorCommand,
   navigateEditorSearch,
@@ -359,12 +361,10 @@ export class FileEditorViewSession {
     return this.#view ? captureEditorViewportAnchor(this.#view) : null;
   }
   currentLine(): number | null {
-    const view = this.#view;
-    if (!view) {
-      return null;
-    }
-    const head = view.state.selection.main.head;
-    return view.state.doc.lineAt(head).number;
+    return editorStateCurrentLine(this.#view?.state ?? this.#savedState);
+  }
+  currentSelectionLines(): { endLine: number; startLine: number } | null {
+    return editorStateSelectionLines(this.#view?.state ?? this.#savedState);
   }
   cancelQueuedLspHover(): void {
     if (this.#view) cancelQueuedFilesLspHover(this.#view);

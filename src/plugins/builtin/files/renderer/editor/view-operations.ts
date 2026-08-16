@@ -7,6 +7,7 @@ import {
   selectMatches,
   setSearchQuery,
 } from "@codemirror/search";
+import type { EditorState } from "@codemirror/state";
 import { EditorView } from "codemirror";
 import type { EditorRange } from "../document/types.ts";
 import {
@@ -155,19 +156,70 @@ export async function executeEditorViewCommand(
   view.focus();
 }
 
+export function editorStateRanges(state: EditorState): EditorRange[] {
+  return state.selection.ranges.map((range) =>
+    editorRangeFromOffsets(state, range.from, range.to)
+  );
+}
+
 export function editorViewRanges(view: EditorView): EditorRange[] {
-  return view.state.selection.ranges.map((range) => {
-    const startLine = view.state.doc.lineAt(range.from);
-    const endLine = view.state.doc.lineAt(range.to);
-    return {
-      endCol: range.to - endLine.from + 1,
-      endLine: endLine.number,
-      from: range.from,
-      startCol: range.from - startLine.from + 1,
-      startLine: startLine.number,
-      to: range.to,
-    };
-  });
+  return editorStateRanges(view.state);
+}
+
+export function editorStateCurrentLine(
+  state: EditorState | null | undefined
+): number | null {
+  return state ? state.doc.lineAt(state.selection.main.head).number : null;
+}
+
+export function editorViewCurrentLine(view: EditorView): number {
+  return editorStateCurrentLine(view.state) ?? 1;
+}
+
+export function editorStateSelectionLines(
+  state: EditorState | null | undefined
+): { endLine: number; startLine: number } | null {
+  if (!state) {
+    return null;
+  }
+  const range = editorRangeFromOffsets(
+    state,
+    state.selection.main.from,
+    state.selection.main.to
+  );
+  return { endLine: range.endLine, startLine: range.startLine };
+}
+
+export function editorViewSelectionLines(
+  view: EditorView
+): { endLine: number; startLine: number } | null {
+  return editorStateSelectionLines(view.state);
+}
+
+function editorRangeFromOffsets(
+  state: EditorState,
+  from: number,
+  to: number
+): EditorRange {
+  const start = Math.min(from, to);
+  const end = Math.max(from, to);
+  const startLine = state.doc.lineAt(start);
+  let endLine = state.doc.lineAt(end);
+  let endCol = end - endLine.from + 1;
+  // CodeMirror `to` is exclusive. A non-empty range ending at the next line
+  // start should not count that following line (VS Code end.character === 0).
+  if (end > start && end === endLine.from && endLine.number > 1) {
+    endLine = state.doc.line(endLine.number - 1);
+    endCol = endLine.length + 1;
+  }
+  return {
+    endCol,
+    endLine: endLine.number,
+    from,
+    startCol: start - startLine.from + 1,
+    startLine: startLine.number,
+    to,
+  };
 }
 
 function isEditorViewEditable(view: EditorView): boolean {

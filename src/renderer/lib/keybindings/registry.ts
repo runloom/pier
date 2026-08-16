@@ -97,14 +97,22 @@ class KeybindingRegistry extends Notifier {
     scope: KeybindingScope,
     ignoredCommandId?: string
   ): KeybindingConflict | null {
+    let overlapping: KeybindingConflict | null = null;
     for (const [commandId, list] of this.userOverrides) {
       if (commandId === ignoredCommandId) {
         continue;
       }
       for (const binding of list) {
-        if (binding.scope === scope && chordEquals(binding.chord, chord)) {
-          return { binding, commandId, scope };
+        const conflict = conflictIfOverlapping(
+          binding,
+          commandId,
+          chord,
+          scope
+        );
+        if (conflict?.scope === scope) {
+          return conflict;
         }
+        overlapping ??= conflict;
       }
     }
     for (const [commandId, list] of this.defaults) {
@@ -112,12 +120,19 @@ class KeybindingRegistry extends Notifier {
         continue;
       }
       for (const binding of list) {
-        if (binding.scope === scope && chordEquals(binding.chord, chord)) {
-          return { binding, commandId, scope };
+        const conflict = conflictIfOverlapping(
+          binding,
+          commandId,
+          chord,
+          scope
+        );
+        if (conflict?.scope === scope) {
+          return conflict;
         }
+        overlapping ??= conflict;
       }
     }
-    return null;
+    return overlapping;
   }
 
   /**
@@ -175,6 +190,30 @@ class KeybindingRegistry extends Notifier {
     list.push({ chord, commandId: parsed.commandId, scope, source });
     table.set(parsed.commandId, list);
   }
+}
+
+function keybindingScopesOverlap(
+  left: KeybindingScope,
+  right: KeybindingScope
+): boolean {
+  return left === right || left === "global" || right === "global";
+}
+
+function conflictIfOverlapping(
+  binding: Keybinding,
+  commandId: string,
+  chord: KeyChord,
+  scope: KeybindingScope
+): KeybindingConflict | null {
+  if (
+    !(
+      chordEquals(binding.chord, chord) &&
+      keybindingScopesOverlap(binding.scope, scope)
+    )
+  ) {
+    return null;
+  }
+  return { binding, commandId, scope: binding.scope };
 }
 
 /**

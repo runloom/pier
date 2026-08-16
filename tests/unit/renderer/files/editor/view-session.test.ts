@@ -422,6 +422,45 @@ describe("FileEditorViewSession detached preferences", () => {
   });
 });
 
+describe("FileEditorViewSession selection after detach", () => {
+  it("reads the caret and exclusive line range from saved state", () => {
+    const multiLine: FilesDocument = {
+      ...document,
+      currentContents: "one\ntwo\nthree\n",
+      savedContents: "one\ntwo\nthree\n",
+    };
+    const session = new FileEditorViewSession({
+      documentId: multiLine.id,
+      editorPrefs: initialPrefs,
+      editorSessionId: "session-saved-selection",
+      minimapEnabled: false,
+      onChange: vi.fn(),
+      presentation: {
+        ...viewPresentationDefaults,
+        ariaLabel: "File editor",
+      },
+    });
+    const parent = documentNode();
+    session.mount(parent, multiLine);
+    const view = findView(parent);
+    view.dispatch({
+      selection: { anchor: 0, head: 8 },
+    });
+
+    expect(session.currentSelectionLines()).toEqual({
+      endLine: 2,
+      startLine: 1,
+    });
+    expect(session.detach(parent)).toBe(true);
+    expect(session.currentLine()).toBe(3);
+    expect(session.currentSelectionLines()).toEqual({
+      endLine: 2,
+      startLine: 1,
+    });
+    session.dispose();
+  });
+});
+
 describe("FileEditorViewSession language status ownership", () => {
   it.each([
     [

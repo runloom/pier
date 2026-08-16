@@ -6,7 +6,6 @@ import type {
 import { FilePlus } from "lucide-react";
 import {
   FILES_COPY_PATH_COMMAND_ID,
-  FILES_COPY_PATH_WITH_RANGE_COMMAND_ID,
   FILES_COPY_RELATIVE_PATH_COMMAND_ID,
   FILES_NEW_FILE_COMMAND_ID,
   FILES_NEW_FOLDER_COMMAND_ID,
@@ -36,6 +35,7 @@ import {
   createFileClipboardPasteAction,
 } from "./actions-clipboard.ts";
 import { createDuplicateAction } from "./actions-duplicate.ts";
+import { createCopyPathWithRangeAction } from "./copy-path-range-action.ts";
 import { beginInlineCreate, createViaPrompt } from "./create.ts";
 import { createDeleteAction } from "./delete-action.ts";
 import { openUntitledFileFromCreateMenu } from "./open-untitled.ts";
@@ -362,54 +362,6 @@ function createCopyPathAction(
   });
 }
 
-function createCopyPathWithRangeAction(
-  context: RendererPluginContext,
-  t: FilesTranslate
-): RendererPluginAction {
-  return pluginAction({
-    id: FILES_COPY_PATH_WITH_RANGE_COMMAND_ID,
-    category: "file",
-    metadata: { group: "6_path", sortOrder: 3 },
-    surfaces: ["files/editor"],
-    title: () =>
-      t(
-        "filePanel.editor.action.copyPathWithRange",
-        "Copy Path and Selected Lines"
-      ),
-    handler: async (invocation) => {
-      const target = parseEditorMetadata(invocation);
-      if (!target) {
-        return;
-      }
-      // Cursor 风格:`src/foo.ts:42-58`;单行 `src/foo.ts:42`;无选区不带范围。
-      const rel = relativeToProjectRoot(
-        target.root,
-        target.path,
-        target.projectRoot
-      );
-      let suffix = "";
-      const start = target.selectionStartLine;
-      const end = target.selectionEndLine;
-      if (start && end) {
-        suffix = start === end ? `:${start}` : `:${start}-${end}`;
-      } else if (start) {
-        suffix = `:${start}`;
-      }
-      try {
-        await writeClipboardText(`${rel}${suffix}`);
-        context.notifications.success(
-          t("filePanel.tree.pathCopied", "Path copied")
-        );
-      } catch (error) {
-        await context.dialogs.alert({
-          body: error instanceof Error ? error.message : String(error),
-          title: t("filePanel.tree.copyFailed", "Copy failed"),
-        });
-      }
-    },
-  });
-}
-
 function createRevealAction(
   context: RendererPluginContext,
   t: FilesTranslate
@@ -472,7 +424,7 @@ export function createFilesTreeActions(
     createDeleteAction(context, t, controller),
     createCopyPathAction(context, t, "absolute"),
     createCopyPathAction(context, t, "relative"),
-    createCopyPathWithRangeAction(context, t),
+    createCopyPathWithRangeAction(context, controller, t),
     createRevealAction(context, t),
   ];
 }

@@ -211,6 +211,22 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
+  it("copies path and selected lines with Mod+Shift+Alt+C in Files panels", () => {
+    expect(
+      DEFAULT_KEYMAP.filter(
+        (binding) =>
+          binding.commandId === "pier.files.copyPathWithRange" ||
+          binding.keys === "Mod+Shift+Alt+KeyC"
+      )
+    ).toEqual([
+      {
+        commandId: "pier.files.copyPathWithRange",
+        keys: "Mod+Shift+Alt+KeyC",
+        scope: "panel:pier.files.filePanel",
+      },
+    ]);
+  });
+
   it("shows symbol information with Mod+I only in Files panels", () => {
     expect(
       DEFAULT_KEYMAP.filter(

@@ -83,6 +83,17 @@ function hasDefaultBinding(commandId: string): boolean {
   );
 }
 
+function bindingScopeForCommand(commandId: string): KeybindingScope {
+  const existing = keybindingRegistry.getBindingsFor(commandId)[0];
+  if (existing) {
+    return existing.scope;
+  }
+  const defaultBinding = DEFAULT_KEYMAP.find(
+    (binding) => binding.commandId === commandId
+  );
+  return defaultBinding?.scope ?? "global";
+}
+
 function entriesWithoutCommand(
   entries: readonly UserKeymapEntry[],
   commandId: string
@@ -172,8 +183,10 @@ export const useKeybindingPreferencesStore = create<KeybindingPreferencesState>(
       return persistUserKeymap([]);
     },
 
-    setBinding(commandId, keys, scope = "global") {
+    setBinding(commandId, keys, scope) {
       const normalizedCommandId = normalizeTargetCommandId(commandId);
+      const resolvedScope =
+        scope ?? bindingScopeForCommand(normalizedCommandId);
       let chord: KeyChord;
       try {
         chord = parseChord(keys, isMac());
@@ -185,7 +198,7 @@ export const useKeybindingPreferencesStore = create<KeybindingPreferencesState>(
       const normalizedKeys = stringifyChord(chord);
       const conflict = keybindingRegistry.findConflict(
         chord,
-        scope,
+        resolvedScope,
         normalizedCommandId
       );
       if (conflict) {
@@ -206,7 +219,7 @@ export const useKeybindingPreferencesStore = create<KeybindingPreferencesState>(
       next.push({
         commandId: normalizedCommandId,
         keys: normalizedKeys,
-        scope,
+        scope: resolvedScope,
       });
       return persistUserKeymap(next);
     },
