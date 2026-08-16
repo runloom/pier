@@ -1,5 +1,7 @@
+import { COMMENT_NAVIGATOR_SCROLL_PAD_CLASS } from "@pier/ui/comments/navigator.tsx";
 import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import {
   type CSSProperties,
   useEffect,
@@ -297,7 +299,7 @@ export function MarkdownPreview({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: markdown preview is a native context-menu surface with no accurate interactive ARIA role
     <div
-      className="relative flex h-full min-h-0 overflow-hidden bg-background text-foreground text-sm"
+      className="relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-background text-foreground text-sm"
       data-reading-appearance={
         readingAppearance === "auto" ? undefined : readingAppearance
       }
@@ -338,11 +340,14 @@ export function MarkdownPreview({
         />
       ) : null}
       <div
-        className="group/preview relative flex min-h-0 min-w-0 flex-1 flex-col"
+        className="group/preview relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
         ref={previewFrameRef}
       >
         <div
-          className="min-h-0 flex-1 overflow-auto pb-6 outline-none"
+          className={cn(
+            "min-h-0 flex-1 overflow-auto outline-none",
+            commentNavigator ? COMMENT_NAVIGATOR_SCROLL_PAD_CLASS : "pb-6"
+          )}
           data-scrollbar="stable"
           data-slot="markdown-preview"
           ref={scrollRootRef}

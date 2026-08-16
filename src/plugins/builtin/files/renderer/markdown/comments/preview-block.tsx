@@ -14,7 +14,6 @@ import type {
   PierInlineReviewThread,
 } from "@pier/ui/diff-view/review/inline-comment-types.ts";
 import { InlineReviewThreadCard } from "@pier/ui/diff-view/review/inline-thread-card.tsx";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { MessageSquare } from "lucide-react";
 import type { ReactNode } from "react";
@@ -66,47 +65,31 @@ export function MarkdownCommentBlockShell(props: {
               width: MARKDOWN_COMMENT_GUTTER_PX,
             }}
           >
-            <Tooltip>
-              {/*
-                span carries the trigger ref. Button is not forwardRef, so
-                Radix cannot anchor the tooltip if asChild is on Button.
-              */}
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    "inline-flex",
-                    GUTTER_OPACITY_REVEAL_CLASS,
-                    GUTTER_POINTER_REVEAL_CLASS
-                  )}
-                >
-                  <Button
-                    aria-label={props.addCommentLabel}
-                    className={cn(
-                      GUTTER_POINTER_REVEAL_CLASS,
-                      "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    )}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      props.onOpenDraft();
-                    }}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <MessageSquare aria-hidden data-icon />
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              {/*
-                Icon sits in the left gutter; open tooltip toward the prose
-                (right). Keep sideOffset tight (default product offset is 6) so
-                the label sits close to the icon without a large gap.
-              */}
-              <TooltipContent align="center" side="right" sideOffset={2}>
-                {props.addCommentLabel}
-              </TooltipContent>
-            </Tooltip>
+            <span
+              className={cn(
+                "inline-flex",
+                GUTTER_OPACITY_REVEAL_CLASS,
+                GUTTER_POINTER_REVEAL_CLASS
+              )}
+            >
+              <Button
+                aria-label={props.addCommentLabel}
+                className={cn(
+                  GUTTER_POINTER_REVEAL_CLASS,
+                  "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  props.onOpenDraft();
+                }}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <MessageSquare aria-hidden data-icon />
+              </Button>
+            </span>
           </div>
         ) : null}
       </div>

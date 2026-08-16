@@ -75,6 +75,27 @@
 }
 
 /*
+ * Tooltip caret policy — single owner (do not re-implement in tooltip.tsx).
+ * Radix writes inline `visibility: hidden` on the arrow wrapper when
+ * centerOffset !== 0 (viewport-edge clamp). !important beats that hide.
+ * top / bottom: always show, including left and right edges.
+ * left / right: never show a caret.
+ */
+[data-slot="tooltip-content"][data-side="top"]
+  > span:has([data-slot="tooltip-arrow"]),
+[data-slot="tooltip-content"][data-side="bottom"]
+  > span:has([data-slot="tooltip-arrow"]) {
+  visibility: visible !important;
+}
+
+[data-slot="tooltip-content"][data-side="left"]
+  > span:has([data-slot="tooltip-arrow"]),
+[data-slot="tooltip-content"][data-side="right"]
+  > span:has([data-slot="tooltip-arrow"]) {
+  visibility: hidden !important;
+}
+
+/*
  * Pier UI globals.css
  *
  * shadcn preset b27GcrRo / radix-rhea / neutral。应用 UI chrome 使用中性结构色,

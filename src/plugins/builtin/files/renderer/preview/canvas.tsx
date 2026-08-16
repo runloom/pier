@@ -1,4 +1,7 @@
-import { CommentNavigator } from "@pier/ui/comments/navigator.tsx";
+import {
+  COMMENT_NAVIGATOR_SCROLL_PAD_CLASS,
+  CommentNavigator,
+} from "@pier/ui/comments/navigator.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { findCanvasCommentAnchorElement } from "@shared/comments/canvas-anchor.ts";
@@ -137,7 +140,7 @@ export function FileCanvasPreview(props: {
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const shellRef = useRef<HTMLDivElement | null>(null);
-  /** Relative box for comment overlay geometry (not the outer scroll root). */
+  /** Relative box for comment overlay geometry (not the preview scroll root). */
   const [canvasShellEl, setCanvasShellEl] = useState<HTMLDivElement | null>(
     null
   );
@@ -375,66 +378,74 @@ export function FileCanvasPreview(props: {
   return (
     <div
       aria-busy={isBusy ? true : undefined}
-      className="relative flex min-h-0 flex-1 flex-col overflow-auto bg-background"
+      className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
       data-framework={framework}
       data-pick-mode={comments.pickMode ? "" : undefined}
       data-slot="file-canvas-preview"
-      ref={shellRef}
     >
-      {softError ? (
-        <CanvasSoftErrorBanner
-          message={softError.message}
-          onReload={reload}
-          t={props.t}
-        />
-      ) : null}
-
-      {state.kind === "error" ? (
-        <CanvasCompileErrorEmpty
-          diagnostics={state.diagnostics}
-          isRuntime={state.isRuntime}
-          message={state.message}
-          onReload={reload}
-          t={props.t}
-        />
-      ) : null}
-
-      {state.kind === "loading" ? (
-        <CanvasLoadingSkeleton
-          label={props.t("filePanel.canvas.compiling", "Compiling canvas…")}
-        />
-      ) : null}
-
       <div
         className={cn(
-          "relative mx-auto min-h-full w-full max-w-5xl px-6 py-5",
-          !showHost && "hidden"
+          "min-h-0 flex-1 overflow-auto",
+          commentNavigator.visible && COMMENT_NAVIGATOR_SCROLL_PAD_CLASS
         )}
-        data-pier-canvas-shell=""
-        ref={setCanvasShellEl}
+        data-slot="file-canvas-scroll"
+        ref={shellRef}
       >
-        <div className="relative min-h-full w-full" ref={hostRef} />
-        {showHost ? (
-          <CanvasCommentOverlay
-            draftOpen={comments.draftOpen}
-            draftPick={comments.draftPick}
-            draftPlacement={comments.draftPlacement}
-            handlers={comments.handlers}
-            host={hostEl}
-            labels={labels}
-            onExitPickMode={() => {
-              comments.setPickMode(false);
-            }}
-            onPickElement={comments.openPickDraft}
-            onRequestOpenConsumed={() => {
-              setNavOpenPinKey(null);
-            }}
-            pickMode={comments.pickMode}
-            pins={pins}
-            requestOpenKey={navOpenPinKey}
-            shell={canvasShellEl}
+        {softError ? (
+          <CanvasSoftErrorBanner
+            message={softError.message}
+            onReload={reload}
+            t={props.t}
           />
         ) : null}
+
+        {state.kind === "error" ? (
+          <CanvasCompileErrorEmpty
+            diagnostics={state.diagnostics}
+            isRuntime={state.isRuntime}
+            message={state.message}
+            onReload={reload}
+            t={props.t}
+          />
+        ) : null}
+
+        {state.kind === "loading" ? (
+          <CanvasLoadingSkeleton
+            label={props.t("filePanel.canvas.compiling", "Compiling canvas…")}
+          />
+        ) : null}
+
+        <div
+          className={cn(
+            "relative mx-auto min-h-full w-full max-w-5xl px-6 py-5",
+            !showHost && "hidden"
+          )}
+          data-pier-canvas-shell=""
+          ref={setCanvasShellEl}
+        >
+          <div className="relative min-h-full w-full" ref={hostRef} />
+          {showHost ? (
+            <CanvasCommentOverlay
+              draftOpen={comments.draftOpen}
+              draftPick={comments.draftPick}
+              draftPlacement={comments.draftPlacement}
+              handlers={comments.handlers}
+              host={hostEl}
+              labels={labels}
+              onExitPickMode={() => {
+                comments.setPickMode(false);
+              }}
+              onPickElement={comments.openPickDraft}
+              onRequestOpenConsumed={() => {
+                setNavOpenPinKey(null);
+              }}
+              pickMode={comments.pickMode}
+              pins={pins}
+              requestOpenKey={navOpenPinKey}
+              shell={canvasShellEl}
+            />
+          ) : null}
+        </div>
       </div>
       {commentNavigator.visible ? (
         <CommentNavigator
