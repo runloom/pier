@@ -153,8 +153,11 @@ describe("ContentPreviewHost", () => {
     expect(root.className).toContain("inset-0");
     expect(root.className).toContain("app-no-drag");
     const header = screen.getByTestId("content-preview-header");
+    expect(header.className).toContain("app-drag");
+    expect(header.className).toContain("h-14");
     expect(header.className).toContain("justify-center");
     expect(header.className).toContain("z-50");
+    expect(header.className).not.toContain("pointer-events-none");
     expect(header).toHaveTextContent("preview.png");
     const stage = screen.getByTestId("content-preview-stage");
     expect(stage.className).toContain("inset-0");
@@ -178,6 +181,8 @@ describe("ContentPreviewHost", () => {
     expect(zoomMenu?.className).not.toContain("z-[110]");
     const close = screen.getByTestId("content-preview-close");
     expect(close).toHaveAttribute("data-variant", "outline");
+    expect(close.className).toContain("app-no-drag");
+    expect(close.parentElement?.className).toContain("app-no-drag");
     expect(header.contains(close)).toBe(true);
   });
 

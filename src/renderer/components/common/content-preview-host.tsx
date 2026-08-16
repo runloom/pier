@@ -286,21 +286,23 @@ export function ContentPreviewHost() {
         <PreviewBody payload={payload} />
       </div>
       {/*
-        Chrome sits above the zoom/pan stage (DOM order + z-index). The whole
-        preview opts out of Electron titlebar drag; the close control also
-        stops pointer propagation so canvas pan capture cannot steal the click.
+        Chrome sits above the zoom/pan stage (DOM order + z-index). The preview
+        root stays no-drag so pan/zoom does not move the window. The reserved
+        title band is the drag handle; close opts out so the click is not
+        swallowed, and also stops pointer propagation so canvas pan cannot
+        steal it.
       */}
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-50 flex items-center justify-center px-14 py-3"
+        className="app-drag absolute inset-x-0 top-0 z-50 flex h-14 items-start justify-center px-14 py-3"
         data-testid="content-preview-header"
       >
-        <div className="min-w-0 max-w-full truncate text-center text-foreground text-sm">
+        <div className="min-w-0 max-w-full select-none truncate text-center text-foreground text-sm">
           {title}
         </div>
-        <div className="pointer-events-auto absolute top-2 right-2">
+        <div className="app-no-drag pointer-events-auto absolute top-2 right-2">
           <Button
             aria-label={t("dialog.close")}
-            className="border-border bg-background shadow-sm hover:bg-muted hover:text-foreground"
+            className="app-no-drag border-border bg-background shadow-sm hover:bg-muted hover:text-foreground"
             data-testid="content-preview-close"
             onClick={(event) => {
               event.preventDefault();
