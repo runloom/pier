@@ -18,6 +18,10 @@ vi.mock("../../../../src/main/windows/identity.ts", () => ({
     id: 1,
     isDestroyed: () => false,
   }),
+  findAppWindowForActivityWindowId: () => ({
+    id: 1,
+    isDestroyed: () => false,
+  }),
 }));
 
 vi.mock("../../../../src/main/ipc/terminal/panel-id.ts", () => ({

@@ -57,6 +57,23 @@ export function findAppWindowByInternalId(windowId: string): AppWindow | null {
   return null;
 }
 
+/**
+ * 前台活动 / hook / `PIER_WINDOW_ID` 用 Electron `BrowserWindow.id` 数字串
+ * （如 `"1"`）。少数调用方仍传内部 id（如 `"main"`）。
+ */
+export function findAppWindowForActivityWindowId(
+  windowId: string
+): AppWindow | null {
+  const electronId = Number(windowId);
+  if (Number.isInteger(electronId) && electronId > 0) {
+    const byElectron = findAppWindowByElectronId(electronId);
+    if (byElectron) {
+      return byElectron;
+    }
+  }
+  return findAppWindowByInternalId(windowId);
+}
+
 export function findAppWindowByWebContents(
   webContents: WebContents
 ): AppWindow | null {

@@ -19,7 +19,11 @@ import {
   CODEX_TRANSCRIPT_TERMINAL_EVIDENCE,
 } from "../../../../src/main/services/agents/integrations/transcript/codex-reconciler.ts";
 import { COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/copilot-reconciler.ts";
-import { GROK_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/grok-reconciler.ts";
+import { CURSOR_TRANSCRIPT_INTERACTION_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/cursor-reconciler.ts";
+import {
+  GROK_TRANSCRIPT_INTERACTION_EVIDENCE,
+  GROK_TRANSCRIPT_TERMINAL_EVIDENCE,
+} from "../../../../src/main/services/agents/integrations/transcript/grok-reconciler.ts";
 import { KIMI_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/kimi-reconciler.ts";
 import { QODER_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/qoder-reconciler.ts";
 
@@ -449,6 +453,9 @@ describe("agent status evidence matrix", () => {
     expect(AGENT_STATUS_EVIDENCE.kimi.transport).toContain(
       "transcript-reconciler"
     );
+    expect(AGENT_STATUS_EVIDENCE.cursor.transport).toContain(
+      "transcript-reconciler"
+    );
     for (const [agentId, emittedMappings] of [
       [
         "codex",
@@ -457,11 +464,18 @@ describe("agent status evidence matrix", () => {
           ...CODEX_TRANSCRIPT_INTERACTION_EVIDENCE,
         ],
       ],
-      ["grok", GROK_TRANSCRIPT_TERMINAL_EVIDENCE],
+      [
+        "grok",
+        [
+          ...GROK_TRANSCRIPT_TERMINAL_EVIDENCE,
+          ...GROK_TRANSCRIPT_INTERACTION_EVIDENCE,
+        ],
+      ],
       ["qodercli", QODER_TRANSCRIPT_TERMINAL_EVIDENCE],
       ["codebuddy", CODEBUDDY_TRANSCRIPT_TERMINAL_EVIDENCE],
       ["copilot", COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE],
       ["kimi", KIMI_TRANSCRIPT_TERMINAL_EVIDENCE],
+      ["cursor", CURSOR_TRANSCRIPT_INTERACTION_EVIDENCE],
     ] as const) {
       // host Esc 是独立 transport，不计入 transcript 对账集合
       const reconciledMappings = [

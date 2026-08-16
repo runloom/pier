@@ -10,12 +10,16 @@ export const PLAN_APPROVAL_TOOL_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * 阻塞问卷/权限闸。仅 ToolStart 时按 waiting 且可被普通工具顶替；
- * 具名非 plan InteractionRequested 之后不可顶替。
+ * 各家阻塞问卷/权限工具名（文档与测试用）。
+ * 聚合器不得凭 ToolStart 把这些名字升成 waiting：Gemini ask_user 的
+ * AfterTool 在拒绝/取消时可以不来，CodeIsland / Open Island 也不这样升。
+ * waiting 只来自具名 InteractionRequested 或 transcript / 视口对账。
  */
 export const QUESTION_TOOL_NAMES: ReadonlySet<string> = new Set([
   "AskUserQuestion",
   "ask_user_question",
+  "AskQuestion",
+  "ask_question",
   "ask_user",
   "ask",
   "clarify",

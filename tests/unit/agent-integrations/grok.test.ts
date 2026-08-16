@@ -157,6 +157,9 @@ describe("grokIntegration", () => {
     expect(typedHooks.PreToolUse?.[0]?.hooks[0]?.command).toContain(
       '"InteractionRequested"'
     );
+    expect(typedHooks.PreToolUse?.[0]?.hooks[0]?.command).not.toContain(
+      "ask_user_question"
+    );
     expect(typedHooks.PostToolUse?.[0]?.hooks[0]?.command).toContain(
       '"InteractionResolved"'
     );

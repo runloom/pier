@@ -349,6 +349,30 @@ describe("生成源码行为（动态加载 + 假 pi 触发）", () => {
       },
     ]);
   });
+
+  it("裁掉 ask toolCallId 的签名段，避免契约拒收", async () => {
+    const signedId =
+      "call-03435de8-1557-4d10-b08f-e49c075729b1-0|K8TGf/h4nJMapPL8yM3t44JgGgk3TKEOI+jwKkoboyPoTTTb3qGLC3+8gxvAK1DM96zSbuGQwFAy5vs/5oMz/SIIxyEPUyabg33AkqAeL35VVtH4FOmWeTq2BqBolwQtzTZB8LIpjT21VOkwqa5vfiBNucbgZEBzgygMDAXFe+NW6AlFVX7Q3XZAgWBJRoR9UvnTIBEoug84EvXwJhXySOKLhuRKdFqoFRzaD7nZhdJBOULdabd2prc/NlU2iLaSMLoYp6g8AX0fGj3Jg5MMOtd8FTMnF0XYeH+JvS/+mQ2Yax8MoPwkE5Q9pO4gRJZQ9yUpzRmkhBKOk6FOLlxEqb5q2BNj4RkH7XFKbGcdlmpY43FSk5amhaAyNHfl0+uYghhTU8d/UA==";
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    main.fire(
+      "tool_execution_start",
+      { sessionManager: { getSessionId: () => "session-pi" } },
+      {
+        toolCallId: signedId,
+        toolName: "ask",
+        type: "tool_execution_start",
+      }
+    );
+    const records = await readEmittedRecords(logPath);
+    expect(records[0]).toMatchObject({
+      event: "InteractionRequested",
+      interactionId: "call-03435de8-1557-4d10-b08f-e49c075729b1-0",
+      toolUseId: "call-03435de8-1557-4d10-b08f-e49c075729b1-0",
+    });
+    expect(agentHookEventSchema.safeParse(records[0]).success).toBe(true);
+  });
 });
 
 describe("piHome", () => {

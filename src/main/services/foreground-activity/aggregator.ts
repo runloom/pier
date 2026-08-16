@@ -40,6 +40,7 @@ import {
   armLaunchVisibility,
   revealHook,
 } from "./aggregator-visibility.ts";
+import { applyDisplayQuestionOverlay } from "./display-question.ts";
 import {
   CLOSE_COOLDOWN_MS,
   clearCommandTimers,
@@ -317,8 +318,11 @@ export function createForegroundActivityAggregator(
       }
       const scope = getOrCreateHookScope(hook, identity, event, at);
       const workId = identity.subagentWorkPlan?.id;
+      const overlayBefore = scope.displayQuestionId;
       const result = bookkeepTurn(scope, event, semantics, at, workId);
-      if (!result.accepted) {
+      applyDisplayQuestionOverlay(scope, event, options.evidenceSource);
+      const overlayChanged = scope.displayQuestionId !== overlayBefore;
+      if (!(result.accepted || overlayChanged)) {
         logAgentEventDropped("absorbed", key, event.event, {
           evidenceSource: options.evidenceSource,
           ...(scope.status === undefined ? {} : { frozenStatus: scope.status }),
@@ -340,7 +344,7 @@ export function createForegroundActivityAggregator(
         nextStatus,
         at,
         semantics,
-        result,
+        result.accepted ? result : { accepted: true, transition: "none" },
         options
       );
       armHookTtlTimer(key, timerCtx);

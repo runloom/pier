@@ -19,6 +19,7 @@ import {
 } from "../../windows/identity.ts";
 import { wireTerminalAgentEscapeCancel } from "./agent-escape-cancel.ts";
 import { handleTerminalCreate } from "./create-handler.ts";
+import { bindCursorViewportReader } from "./cursor-viewport-text.ts";
 import { handleTerminalCwdChange } from "./cwd-forwarding.ts";
 import {
   recordNativeTerminalRoute,
@@ -75,6 +76,7 @@ export function registerTerminalIpc(
   const loadAddon = deps.loadNativeAddon ?? loadNativeAddon;
   const { addon, error: loadError } = loadAddon();
   terminalFocusCoordinator.configureNativeAddon(addon);
+  bindCursorViewportReader(addon);
   const taskOutputBindings =
     addon && deps.taskService
       ? createTaskOutputTerminalBindings({
