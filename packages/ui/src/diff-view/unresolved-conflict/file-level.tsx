@@ -16,14 +16,16 @@ export function FileLevelConflictCard(options: {
       data-pier-file-level-conflict=""
       data-pier-unresolved-path={options.path}
     >
-      <ConflictChrome
-        busy={options.busy}
-        labels={options.labels}
-        path={options.path}
-        {...(options.onOpenFile === undefined
-          ? {}
-          : { onOpenFile: options.onOpenFile })}
-      />
+      <div className="min-w-0">
+        <div className="truncate font-mono text-muted-foreground text-xs">
+          {options.path}
+        </div>
+        {options.busy ? (
+          <span className="text-muted-foreground text-xs">
+            {options.labels.resolving}
+          </span>
+        ) : null}
+      </div>
       <p className="text-muted-foreground text-sm">
         {options.labels.description}
       </p>
@@ -69,41 +71,6 @@ export function FileLevelConflictCard(options: {
           </Button>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-export function ConflictChrome(options: {
-  readonly busy: boolean;
-  readonly labels: PierUnresolvedConflictLabels;
-  readonly onOpenFile?: () => void;
-  readonly path: string;
-}): ReactElement {
-  return (
-    <div className="flex shrink-0 items-center gap-2 border-border border-b px-3 py-2">
-      <div className="min-w-0 flex-1">
-        <div className="truncate font-medium text-foreground text-sm">
-          {options.labels.title}
-        </div>
-        <div className="truncate font-mono text-muted-foreground text-xs">
-          {options.path}
-        </div>
-      </div>
-      {options.busy ? (
-        <span className="text-muted-foreground text-xs">
-          {options.labels.resolving}
-        </span>
-      ) : null}
-      {options.onOpenFile ? (
-        <Button
-          disabled={options.busy}
-          onClick={options.onOpenFile}
-          type="button"
-          variant="outline"
-        >
-          {options.labels.openFile}
-        </Button>
-      ) : null}
     </div>
   );
 }

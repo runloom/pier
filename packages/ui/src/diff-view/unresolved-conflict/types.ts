@@ -40,7 +40,6 @@ export interface PierUnresolvedConflictLabels {
   readonly keepTheirs: string;
   readonly openFile: string;
   readonly resolving: string;
-  readonly title: string;
   /** Collapsed unmodified context templates (`{{count}}`). */
   readonly unmodifiedLine?: string;
   readonly unmodifiedLines?: string;
