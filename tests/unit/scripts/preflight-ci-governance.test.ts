@@ -42,6 +42,7 @@ describe("preflight-ci governance", () => {
     const hook = readFileSync(PRE_PUSH, "utf8");
     expect(hook).toContain("PIER_PREFLIGHT:-push");
     expect(hook).toContain("preflight:");
+    expect(hook).toContain("unset GIT_DIR");
   });
 
   it("Quality Gate skips heavy jobs via path filters; no job wall-clock timeouts", () => {
