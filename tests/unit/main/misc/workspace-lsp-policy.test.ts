@@ -51,7 +51,7 @@ describe("WorkspaceLspPolicy", () => {
   });
 
   it("uses the global preference as the sole worktree enablement control", () => {
-    const policy = create();
+    const policy = create({ prefs: { worktreesEnabled: false } });
     const denied = policy.acquire({
       isWorktree: true,
       kind: "local",
@@ -64,6 +64,17 @@ describe("WorkspaceLspPolicy", () => {
     });
 
     policy.setPrefs({ worktreesEnabled: true });
+    const allowed = policy.acquire({
+      isWorktree: true,
+      kind: "local",
+      rootPath: "/wt",
+      workspaceKey: "wt:/wt",
+    });
+    expect(allowed.kind).toBe("allow");
+  });
+
+  it("allows worktrees by default", () => {
+    const policy = create();
     const allowed = policy.acquire({
       isWorktree: true,
       kind: "local",

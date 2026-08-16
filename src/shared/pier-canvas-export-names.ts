@@ -7,7 +7,8 @@
  * - {@link PIER_CANVAS_VALUE_EXPORT_NAMES}: called straight through, so hooks
  *   keep their arguments and return value.
  *
- * Scope: general product primitives from `@pier/ui` + host layout (Frame/Row/Stack/Text).
+ * Scope: general product primitives from `@pier/ui` + host layout
+ * (Artboard/ArtboardStage/Frame/Row/Stack/Text).
  * Excludes domain UI (file-tree, diff-view, widgets), app chrome (command/menubar),
  * and host-owned modals (dialog/sheet).
  */
@@ -20,6 +21,8 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "AlertAction",
   "AlertDescription",
   "AlertTitle",
+  "Artboard",
+  "ArtboardStage",
   "AspectRatio",
   "Avatar",
   "AvatarBadge",

@@ -18,7 +18,10 @@ import type {
   LspRequestCommand,
   LspRequestResult,
 } from "@shared/contracts/lsp-language-tools.ts";
-import type { LspCatalogStatusRow } from "@shared/contracts/lsp-provider.ts";
+import {
+  type LspCatalogStatusRow,
+  parseLspCatalogStatusRows,
+} from "@shared/contracts/lsp-provider.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { type IpcRendererEvent, ipcRenderer } from "electron";
 
@@ -107,18 +110,15 @@ function isEnsureResult(value: unknown): value is LspSessionEnsureResult {
   return false;
 }
 
-function isCatalogStatus(value: unknown): value is LspCatalogStatusRow[] {
-  return Array.isArray(value);
-}
-
 export const lspApi: PierLspAPI = {
   catalogStatus: async () => {
-    try {
-      const result = await ipcRenderer.invoke(PIER.LSP_CATALOG_STATUS);
-      return isCatalogStatus(result) ? result : [];
-    } catch {
-      return [];
+    const rows = parseLspCatalogStatusRows(
+      await ipcRenderer.invoke(PIER.LSP_CATALOG_STATUS)
+    );
+    if (!rows) {
+      throw new Error("Language-server catalog is unavailable");
     }
+    return rows;
   },
   close: async (sessionId) => {
     try {

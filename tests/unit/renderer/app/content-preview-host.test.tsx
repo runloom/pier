@@ -18,6 +18,7 @@ import { resetTerminalSurfaceSuppressionForTests } from "@/panel-kits/terminal/l
 import {
   closeContentPreview,
   openContentPreview,
+  openHtmlWorldPreview,
   openImagePreview,
   openNodeGraphPreview,
 } from "@/stores/content-preview.store.ts";
@@ -238,6 +239,26 @@ describe("ContentPreviewHost", () => {
     expect(stage).toBeTruthy();
     expect(stage).not.toHaveClass("border");
     expect(stage).not.toHaveClass("rounded-lg");
+    expect(
+      document.querySelector('[data-slot="image-preview-controls"]')
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /zoom in/i })).toBeTruthy();
+  });
+
+  it("renders html-world stage with image zoom strip", async () => {
+    render(<ContentPreviewHost />);
+    openHtmlWorldPreview({
+      "aria-label": "设计稿",
+      render: () => <div data-testid="html-world-child">board</div>,
+      title: "设计稿",
+    });
+
+    await screen.findByTestId("content-preview");
+    expect(screen.getByText("设计稿")).toBeInTheDocument();
+    expect(screen.getByTestId("html-world-child")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-slot="html-world-viewport"]')
+    ).toBeTruthy();
     expect(
       document.querySelector('[data-slot="image-preview-controls"]')
     ).toBeTruthy();
