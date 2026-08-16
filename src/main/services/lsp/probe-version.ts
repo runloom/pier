@@ -129,6 +129,7 @@ export function probeResolvedBinaryVersion(
 
     let child: ReturnType<typeof spawn>;
     try {
+      // Class B: PATH-resolved `--version` probe; uses process.env after boot apply.
       child = spawn(launch.command, launch.args, {
         detached: process.platform !== "win32",
         stdio: ["ignore", "pipe", "pipe"],
