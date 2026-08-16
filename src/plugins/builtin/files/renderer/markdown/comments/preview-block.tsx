@@ -1,8 +1,8 @@
 /**
- * Markdown 块评论壳：与 diff 行内评论同构。
+ * Markdown 块评论壳：阅读态不占版心。
  *
  * - 无评论：左缘评论图标（hover/focus 显现；垂直对齐首行中线）
- * - 有评论：块下常驻 InlineReviewThreadCard（无第二套装饰标）
+ * - 有评论：左缘常驻徽标；点开 Popover 才见 InlineReviewThreadCard
  * - 草稿：块下 InlineReviewCommentEditor；不显示入口
  * - overlay 左缘，不占版心、不挤正文
  */
@@ -14,10 +14,10 @@ import type {
   PierInlineReviewThread,
 } from "@pier/ui/diff-view/review/inline-comment-types.ts";
 import { InlineReviewThreadCard } from "@pier/ui/diff-view/review/inline-thread-card.tsx";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@pier/ui/popover.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { MessageSquare } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 /** 左缘 overlay 槽宽（px）；热区 28，glyph 略放大。 */
 export const MARKDOWN_COMMENT_GUTTER_PX = 28;
@@ -28,6 +28,106 @@ const GUTTER_OPACITY_REVEAL_CLASS =
 /** Apply on the hit target so an opacity-0 control cannot steal clicks. */
 const GUTTER_POINTER_REVEAL_CLASS =
   "pointer-events-none group-focus-within/md-comment:pointer-events-auto group-hover/md-comment:pointer-events-auto";
+
+const GUTTER_SLOT_CLASS =
+  "absolute top-0 z-10 flex items-center justify-center";
+
+export function markdownCommentViewLabel(input: {
+  readonly count: number;
+  readonly viewComment: string;
+  readonly viewComments: string;
+}): string {
+  if (input.count <= 1) {
+    return input.viewComment;
+  }
+  return input.viewComments.replaceAll("{{count}}", String(input.count));
+}
+
+function MarkdownCommentGutterSlot(props: {
+  readonly children: ReactNode;
+}): ReactNode {
+  return (
+    <div
+      className={GUTTER_SLOT_CLASS}
+      data-slot="markdown-comment-gutter"
+      style={{
+        // 贴在正文左外侧；高度由 prose.css 按首行盒对齐。
+        right: "100%",
+        width: MARKDOWN_COMMENT_GUTTER_PX,
+      }}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+function MarkdownCommentLocatedBadge(props: {
+  readonly handlers: PierInlineReviewHandlers;
+  readonly labels: PierInlineReviewLabels;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly open: boolean;
+  readonly suppressAutoFocus: boolean;
+  readonly threads: readonly PierInlineReviewThread[];
+  readonly viewLabel: string;
+}): ReactNode {
+  const count = props.threads.length;
+  if (count === 0) {
+    return null;
+  }
+
+  return (
+    <MarkdownCommentGutterSlot>
+      <Popover onOpenChange={props.onOpenChange} open={props.open}>
+        <PopoverTrigger asChild>
+          <Button
+            aria-label={props.viewLabel}
+            className={cn(props.open && "ring-2 ring-background")}
+            data-slot="markdown-comment-badge"
+            size="icon-xs"
+            type="button"
+            variant="default"
+          >
+            {count > 1 ? (
+              <span className="font-semibold text-[10px] tabular-nums">
+                {count}
+              </span>
+            ) : (
+              <MessageSquare aria-hidden data-icon />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          aria-label={props.viewLabel}
+          className="w-72 gap-2 p-3"
+          collisionPadding={12}
+          onOpenAutoFocus={(event) => {
+            if (props.suppressAutoFocus) {
+              event.preventDefault();
+            }
+          }}
+          side="right"
+          sideOffset={6}
+        >
+          <div
+            className="flex flex-col gap-2"
+            data-slot="markdown-comment-thread"
+          >
+            {props.threads.map((thread) => (
+              <InlineReviewThreadCard
+                chrome="plain"
+                handlers={props.handlers}
+                key={thread.threadId}
+                labels={props.labels}
+                thread={thread}
+              />
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </MarkdownCommentGutterSlot>
+  );
+}
 
 export function MarkdownCommentBlockShell(props: {
   readonly addCommentLabel: string;
@@ -41,12 +141,51 @@ export function MarkdownCommentBlockShell(props: {
   readonly handlers: PierInlineReviewHandlers;
   readonly labels: PierInlineReviewLabels;
   readonly onOpenDraft: () => void;
+  readonly requestOpenBlockKey?: string | null;
+  readonly requestOpenNonce?: number;
   readonly threads: readonly PierInlineReviewThread[];
+  readonly viewCommentLabel: string;
+  readonly viewCommentsLabel: string;
 }): ReactNode {
   const draftId = props.draftId;
   const draftOpen = draftId !== null;
-  // 仅「无线程且无草稿」时显示入口；有评论只靠块下卡片。
-  const showAdd = props.threads.length === 0 && !draftOpen;
+  const hasThreads = props.threads.length > 0;
+  // 仅「无线程且无草稿」时显示入口；有评论只靠左缘徽标。
+  const showAdd = !(hasThreads || draftOpen);
+  const [open, setOpen] = useState(false);
+  const [openedByNavigator, setOpenedByNavigator] = useState(false);
+  const viewLabel = markdownCommentViewLabel({
+    count: props.threads.length,
+    viewComment: props.viewCommentLabel,
+    viewComments: props.viewCommentsLabel,
+  });
+
+  useEffect(() => {
+    if ((props.requestOpenNonce ?? 0) === 0) {
+      return;
+    }
+    if (props.requestOpenBlockKey === props.blockKey) {
+      if (hasThreads) {
+        setOpenedByNavigator(true);
+        setOpen(true);
+      }
+      return;
+    }
+    setOpenedByNavigator(false);
+    setOpen(false);
+  }, [
+    hasThreads,
+    props.blockKey,
+    props.requestOpenBlockKey,
+    props.requestOpenNonce,
+  ]);
+
+  useEffect(() => {
+    if (!hasThreads) {
+      setOpenedByNavigator(false);
+      setOpen(false);
+    }
+  }, [hasThreads]);
 
   return (
     <div
@@ -54,60 +193,57 @@ export function MarkdownCommentBlockShell(props: {
       data-markdown-comment-block={props.blockKey}
       data-slot="markdown-comment-block"
     >
-      <div className="relative min-w-0">
+      <div
+        className={cn(
+          "relative min-w-0",
+          open && "rounded-md ring-1 ring-ring/40"
+        )}
+      >
         {props.children}
         {showAdd ? (
-          <div
-            className="absolute top-0 z-10 flex items-center justify-center"
-            data-slot="markdown-comment-gutter"
-            style={{
-              // 贴在正文左外侧；高度由 prose.css 按首行盒对齐。
-              right: "100%",
-              width: MARKDOWN_COMMENT_GUTTER_PX,
+          <MarkdownCommentGutterSlot>
+            <span
+              className={cn(
+                "inline-flex",
+                GUTTER_OPACITY_REVEAL_CLASS,
+                GUTTER_POINTER_REVEAL_CLASS
+              )}
+            >
+              <Button
+                aria-label={props.addCommentLabel}
+                className={cn(
+                  GUTTER_POINTER_REVEAL_CLASS,
+                  "text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  props.onOpenDraft();
+                }}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <MessageSquare aria-hidden data-icon />
+              </Button>
+            </span>
+          </MarkdownCommentGutterSlot>
+        ) : null}
+        {hasThreads && !draftOpen ? (
+          <MarkdownCommentLocatedBadge
+            handlers={props.handlers}
+            labels={props.labels}
+            onOpenChange={(next) => {
+              setOpen(next);
+              if (!next) {
+                setOpenedByNavigator(false);
+              }
             }}
-          >
-            <Tooltip>
-              {/*
-                span carries the trigger ref. Button is not forwardRef, so
-                Radix cannot anchor the tooltip if asChild is on Button.
-              */}
-              <TooltipTrigger asChild>
-                <span
-                  className={cn(
-                    "inline-flex",
-                    GUTTER_OPACITY_REVEAL_CLASS,
-                    GUTTER_POINTER_REVEAL_CLASS
-                  )}
-                >
-                  <Button
-                    aria-label={props.addCommentLabel}
-                    className={cn(
-                      GUTTER_POINTER_REVEAL_CLASS,
-                      "text-muted-foreground hover:bg-accent hover:text-foreground"
-                    )}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      props.onOpenDraft();
-                    }}
-                    size="icon"
-                    type="button"
-                    variant="ghost"
-                  >
-                    <MessageSquare aria-hidden data-icon />
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              {/*
-                Icon sits in the left gutter; open tooltip toward the prose
-                (right). Keep sideOffset tight (default product offset is 6) so
-                the label sits close to the icon without a large gap.
-              */}
-              <TooltipContent align="center" side="right" sideOffset={2}>
-                {props.addCommentLabel}
-              </TooltipContent>
-            </Tooltip>
-          </div>
+            open={open}
+            suppressAutoFocus={openedByNavigator}
+            threads={props.threads}
+            viewLabel={viewLabel}
+          />
         ) : null}
       </div>
       {draftId === null ? null : (
@@ -121,21 +257,6 @@ export function MarkdownCommentBlockShell(props: {
           />
         </div>
       )}
-      {draftId === null && props.threads.length > 0 ? (
-        <div
-          className="mt-1.5 flex flex-col gap-1.5"
-          data-slot="markdown-comment-thread"
-        >
-          {props.threads.map((thread) => (
-            <InlineReviewThreadCard
-              handlers={props.handlers}
-              key={thread.threadId}
-              labels={props.labels}
-              thread={thread}
-            />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

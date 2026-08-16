@@ -42,7 +42,9 @@ export function CanvasReloadButton(props: {
           />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="bottom">{label}</TooltipContent>
+      <TooltipContent align="end" side="bottom">
+        {label}
+      </TooltipContent>
     </Tooltip>
   );
 }

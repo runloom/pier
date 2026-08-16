@@ -10,12 +10,13 @@ import { cn } from "./utils.ts";
  * Product gold standard for `@pier/ui` tooltips (all call sites inherit):
  * - sideOffset 6px — avoid 0px edge collision / flip jitter on tight chrome
  * - collisionPadding — keep clear of viewport / titlebar; horizontal is slightly
- *   tighter than vertical so edge chrome (panel actions) can still center the
- *   arrow on icon triggers (~28px) without Radix hiding it (centerOffset ≠ 0)
- * - arrowPadding — Floating UI clamps the arrow to [padding, width-padding] on
- *   the tooltip edge so it never sits on the extreme L/R of the bubble. Must
- *   stay ≤ ~half icon-trigger width − horizontal collision padding or the
- *   arrow is hidden near the window edge.
+ *   tighter than vertical so edge chrome (panel actions) stay on-screen
+ * - arrowPadding — inset the caret from the bubble L/R extremes
+ * - Caret: overlapping square (rotate-45). Layout box stays 5px tall so
+ *   Radix `sideOffset + arrowHeight` remains ~11px (same as the old triangle).
+ *   Visibility is CSS-only in `src/renderer/app/globals.css`:
+ *   top / bottom always show (including viewport edges); left / right hide
+ *   with `visibility` (not `display`) so collision flip does not collapse gap.
  * - sticky partial — arrow stays on the content edge while pointing at trigger
  * - fade only (no zoom) — Floating UI already drives transform for placement
  * - pointer-events-none — content must never steal hover from the trigger
@@ -24,16 +25,16 @@ import { cn } from "./utils.ts";
 export const TOOLTIP_SIDE_OFFSET_PX = 6;
 /** Vertical inset from viewport / titlebar. */
 export const TOOLTIP_COLLISION_PADDING_PX = 8;
-/**
- * Horizontal inset from viewport. Keep ≤ iconHalf − arrowPadding so right-edge
- * toolbar tooltips (annotate / reload / source) still get a visible arrow.
- * icon-xs ≈ 28px → half 14; arrowPadding 8 → max horizontal collision 6.
- */
+/** Horizontal inset from viewport for edge chrome (panel actions, gutters). */
 export const TOOLTIP_COLLISION_PADDING_X_PX = 6;
-/** Inset of the arrow along the bubble edge (not glued to L/R extremes). */
-export const TOOLTIP_ARROW_PADDING_PX = 8;
-export const TOOLTIP_ARROW_WIDTH_PX = 10;
-export const TOOLTIP_ARROW_HEIGHT_PX = 5;
+/** Inset of the caret along the bubble edge. */
+export const TOOLTIP_ARROW_PADDING_PX = 12;
+/** Visual diamond size before rotate-45. */
+export const TOOLTIP_ARROW_SIZE_PX = 10;
+/** Measured caret height fed to Radix offset (`sideOffset + arrowHeight`). */
+export const TOOLTIP_ARROW_LAYOUT_HEIGHT_PX = 5;
+export const TOOLTIP_ARROW_WIDTH_PX = TOOLTIP_ARROW_SIZE_PX;
+export const TOOLTIP_ARROW_HEIGHT_PX = TOOLTIP_ARROW_LAYOUT_HEIGHT_PX;
 
 export const TOOLTIP_COLLISION_PADDING = {
   top: TOOLTIP_COLLISION_PADDING_PX,
@@ -41,6 +42,14 @@ export const TOOLTIP_COLLISION_PADDING = {
   bottom: TOOLTIP_COLLISION_PADDING_PX,
   left: TOOLTIP_COLLISION_PADDING_X_PX,
 } as const;
+
+/** Measured 5px box. The diamond is absolutely painted so it does not grow offset. */
+export const TOOLTIP_ARROW_LAYOUT_CLASS =
+  "relative z-50 block h-[5px] w-2.5 overflow-visible";
+
+/** Overlapping diamond: half in the bubble so the caret and body share an edge. */
+export const TOOLTIP_ARROW_CLASS =
+  "absolute top-1/2 left-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] bg-foreground";
 
 type DismissListener = () => void;
 
@@ -259,9 +268,6 @@ function TooltipContent({
   const overlayRef = useTerminalOverlay();
   const freezeRef = useFreezeFloatingOnClose();
   const composedRef = useComposedRefs(props.ref, overlayRef, freezeRef);
-  // Prefer arrow on vertical placements only (product rule). Use the *requested*
-  // side; Radix still repositions the arrow when collision shifts the bubble.
-  const showArrow = side === "top" || side === "bottom";
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -270,11 +276,10 @@ function TooltipContent({
         className={cn(
           // Fade only: zoom/slide also use transform and fight Floating UI placement
           // updates (visible as hover jitter on tight chrome like panel maximize).
-          "app-no-drag data-[state=delayed-open]:fade-in-0 data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none relative z-50 inline-flex w-fit max-w-64 origin-(--radix-tooltip-content-transform-origin) items-center gap-1 rounded-xl bg-foreground px-2 py-1 text-[11px] text-background leading-snug duration-100 has-data-[slot=kbd]:pr-1.5 data-[state=delayed-open]:animate-in data-closed:animate-out data-open:animate-in **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-lg",
-          // Room for arrowPadding on both ends + arrow width so Floating UI can
-          // keep the arrow inside the flat edge (not glued to left/right extremes).
-          showArrow &&
-            "min-w-[calc(var(--tooltip-arrow-pad)*2+var(--tooltip-arrow-w))]",
+          "app-no-drag data-[state=delayed-open]:fade-in-0 data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none relative z-50 inline-flex w-fit max-w-64 origin-(--radix-tooltip-content-transform-origin) items-center gap-1 overflow-visible rounded-xl bg-foreground px-2 py-1 text-[11px] text-background leading-snug duration-100 has-data-[slot=kbd]:pr-1.5 data-[state=delayed-open]:animate-in data-closed:animate-out data-open:animate-in **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-lg",
+          // Room for arrowPadding on both ends + caret size so the diamond stays
+          // on the flat edge (not the rounded-xl corner).
+          "min-w-[calc(var(--tooltip-arrow-pad)*2+var(--tooltip-arrow-size))]",
           className
         )}
         collisionPadding={collisionPadding}
@@ -285,7 +290,7 @@ function TooltipContent({
         style={
           {
             "--tooltip-arrow-pad": `${arrowPadding}px`,
-            "--tooltip-arrow-w": `${TOOLTIP_ARROW_WIDTH_PX}px`,
+            "--tooltip-arrow-size": `${TOOLTIP_ARROW_SIZE_PX}px`,
             ...style,
           } as React.CSSProperties
         }
@@ -293,15 +298,19 @@ function TooltipContent({
         ref={composedRef}
       >
         {children}
-        {showArrow ? (
-          <TooltipPrimitive.Arrow
-            aria-hidden="true"
-            className="z-50 fill-foreground"
-            data-slot="tooltip-arrow"
-            height={TOOLTIP_ARROW_HEIGHT_PX}
-            width={TOOLTIP_ARROW_WIDTH_PX}
-          />
-        ) : null}
+        <TooltipPrimitive.Arrow
+          asChild
+          height={TOOLTIP_ARROW_LAYOUT_HEIGHT_PX}
+          width={TOOLTIP_ARROW_SIZE_PX}
+        >
+          <span className={TOOLTIP_ARROW_LAYOUT_CLASS}>
+            <span
+              aria-hidden="true"
+              className={TOOLTIP_ARROW_CLASS}
+              data-slot="tooltip-arrow"
+            />
+          </span>
+        </TooltipPrimitive.Arrow>
       </TooltipPrimitive.Content>
     </TooltipPrimitive.Portal>
   );

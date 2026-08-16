@@ -89,7 +89,7 @@ export function WorkspaceHeaderRightActions(
               <Icon data-icon="inline-start" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">
+          <TooltipContent align="end" side="bottom">
             {toggleLabel}
             {shortcut ? (
               <span className="text-background/70 tracking-wide">

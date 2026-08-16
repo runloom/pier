@@ -455,7 +455,9 @@
     "filePanel.markdown.comment.placeholder": "写下评论…",
     "filePanel.markdown.comment.submit": "提交",
     "filePanel.markdown.comment.title": "评论",
-    "filePanel.markdown.comment.updateFailed": "无法更新评论"
+    "filePanel.markdown.comment.updateFailed": "无法更新评论",
+    "filePanel.markdown.comment.view": "查看评论",
+    "filePanel.markdown.comment.viewCount": "查看 {{count}} 条评论"
   },
   "terminalStatusItems": {
     "pier.files.project": {

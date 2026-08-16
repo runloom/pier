@@ -348,7 +348,7 @@ export function NotificationCenterControl(): ReactNode {
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent side="bottom">
+        <TooltipContent align="end" side="bottom">
           {t("notificationsCenter.header.title")}
           {openShortcut ? (
             <span className="text-background/70 tracking-wide">

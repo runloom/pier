@@ -155,7 +155,9 @@ export function FilePanelLayout({
           id={contentPanelId}
           key={contentPanelId}
         >
-          <section className="flex h-full min-w-0 flex-col">{children}</section>
+          <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+            {children}
+          </section>
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
