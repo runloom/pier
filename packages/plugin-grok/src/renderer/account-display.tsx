@@ -97,13 +97,11 @@ export function accountMembershipSummary(
 
 export function AccountBadges({
   account,
-  includeScalars = false,
   language,
   mode = "all",
   t,
 }: {
   account: Pick<GrokAccountSummary, "kind" | "subscription" | "usage">;
-  includeScalars?: boolean;
   language: string;
   mode?: AccountMetadataBadgeMode;
   t: Translate;
@@ -137,7 +135,7 @@ export function AccountBadges({
       {...(membership ? { membership } : {})}
       membershipLabel={(value) => value.tier.toUpperCase().replaceAll("_", " ")}
       metricLabel={(metric) => usageMetricLabel(metric, language, t)}
-      metrics={includeScalars ? (account.usage?.metrics ?? []) : []}
+      metrics={account.usage?.metrics ?? []}
       mode={mode}
     />
   );

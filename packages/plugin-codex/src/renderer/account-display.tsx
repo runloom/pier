@@ -164,7 +164,6 @@ export function accountPlanSummary(
 
 export function AccountBadges({
   account,
-  includeScalars = false,
   language,
   mode = "all",
   t,
@@ -173,7 +172,6 @@ export function AccountBadges({
     CodexAccountSummary,
     "planType" | "subscriptionExpiresAt" | "usage"
   >;
-  includeScalars?: boolean;
   language: string;
   mode?: AccountMetadataBadgeMode;
   t: Translate;
@@ -202,7 +200,7 @@ export function AccountBadges({
       {...(membership ? { membership } : {})}
       membershipLabel={(membership) => membership.tier.toUpperCase()}
       metricLabel={(metric) => usageMetricLabel(metric, language, t)}
-      metrics={includeScalars ? (account.usage?.metrics ?? []) : []}
+      metrics={account.usage?.metrics ?? []}
       mode={mode}
     />
   );

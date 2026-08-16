@@ -33,6 +33,7 @@ export {
 export {
   type AccountMetadataBadgeMode,
   type AccountWidgetPresentation,
+  accountWidgetMeterMetrics,
   membershipNeedsAttention,
   membershipPeriodNeedsAttention,
   resolveAccountWidgetPresentation,

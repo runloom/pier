@@ -301,7 +301,6 @@ export function AccountsSettingsPage({
     (account) => account.id !== snapshot.activeAccountId
   );
   const language = context.i18n.language();
-  const activeUsage = snapshot.activeUsage;
   const activeRefreshing =
     active !== null &&
     (refreshingAccountIds.has(active.id) ||
@@ -385,30 +384,25 @@ export function AccountsSettingsPage({
                 <ItemTitle title={accountDisplayLabel(active)}>
                   {accountDisplayLabel(active)}
                 </ItemTitle>
-                <AccountBadges
-                  account={active}
-                  includeScalars
-                  language={language}
-                  t={t}
-                />
+                <AccountBadges account={active} language={language} t={t} />
               </ItemContent>
             </Item>
             <ItemSeparator className="my-0" />
             <QuotaGroup
-              error={activeUsage?.error}
-              errorTransient={isTransientUsageError(activeUsage?.error)}
+              error={active.usage?.error}
+              errorTransient={isTransientUsageError(active.usage?.error)}
               language={language}
-              loading={!activeUsage}
+              loading={!active.usage}
               metrics={
-                activeUsage?.metrics.filter(
+                active.usage?.metrics.filter(
                   (metric) => metric.kind === "quota"
                 ) ?? []
               }
-              status={activeUsage?.status ?? "ok"}
+              status={active.usage?.status ?? "ok"}
               t={t}
-              {...(activeUsage?.updatedAt === undefined
+              {...(active.usage?.updatedAt === undefined
                 ? {}
-                : { updatedAt: activeUsage.updatedAt })}
+                : { updatedAt: active.usage.updatedAt })}
             />
           </CardContent>
         </Card>

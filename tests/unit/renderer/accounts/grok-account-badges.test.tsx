@@ -32,6 +32,32 @@ describe("Grok account badges", () => {
     expect(screen.getByText("OIDC")).toBeInTheDocument();
   });
 
+  it("shows quota reset counts from usage metrics", () => {
+    render(
+      <AccountBadges
+        account={{
+          kind: "oidc",
+          usage: {
+            attemptedAt: 1,
+            metrics: [
+              {
+                format: "count",
+                id: "grok:reset-credits",
+                kind: "scalar",
+                value: 2,
+              },
+            ],
+            status: "ok",
+            updatedAt: 1,
+          },
+        }}
+        language="en"
+        t={t}
+      />
+    );
+    expect(screen.getByText("Quota resets 2")).toBeInTheDocument();
+  });
+
   it("does not override compact-mode metadata hiding", () => {
     render(
       <AccountBadges

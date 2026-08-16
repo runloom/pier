@@ -274,7 +274,6 @@ export function AccountsSettingsPage({
     (account) => account.id !== snapshot.activeAccountId
   );
   const language = context.i18n.language();
-  const activeUsage = snapshot.activeUsage;
   const activeRefreshing = active ? refreshingAccountIds.has(active.id) : false;
 
   return (
@@ -366,20 +365,15 @@ export function AccountsSettingsPage({
                     {formatAccountError(active.error, t)}
                   </ItemDescription>
                 ) : (
-                  <AccountBadges
-                    account={active}
-                    includeScalars
-                    language={language}
-                    t={t}
-                  />
+                  <AccountBadges account={active} language={language} t={t} />
                 )}
               </ItemContent>
             </Item>
             <ItemSeparator className="my-0" />
             <QuotaGroup
               error={
-                activeUsage?.status === "error"
-                  ? (activeUsage.error ??
+                active.usage?.status === "error"
+                  ? (active.usage.error ??
                     t(
                       "pier.claude.accounts.settings.usageFailed",
                       "Usage update failed"
@@ -387,17 +381,17 @@ export function AccountsSettingsPage({
                   : undefined
               }
               language={language}
-              loading={!activeUsage}
+              loading={!active.usage}
               metrics={
-                activeUsage?.metrics.filter(
+                active.usage?.metrics.filter(
                   (metric) => metric.kind === "quota"
                 ) ?? []
               }
-              status={activeUsage?.status ?? "ok"}
+              status={active.usage?.status ?? "ok"}
               t={t}
-              {...(activeUsage?.updatedAt === undefined
+              {...(active.usage?.updatedAt === undefined
                 ? {}
-                : { updatedAt: activeUsage.updatedAt })}
+                : { updatedAt: active.usage.updatedAt })}
             />
           </CardContent>
         </Card>
