@@ -102,6 +102,10 @@ export function isCursorMainAgentTranscriptPath(
   );
 }
 
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function isCursorRoleKeyedLine(
   parsed: Record<string, unknown>
 ): parsed is Record<string, unknown> & { role: string } {
@@ -194,12 +198,7 @@ export function applyCursorTranscriptLine(
   sessionId: string
 ): TranscriptTerminalRecord | null {
   const parsed = JSON.parse(line) as unknown;
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    Array.isArray(parsed) ||
-    !isCursorRoleKeyedLine(parsed)
-  ) {
+  if (!(isUnknownRecord(parsed) && isCursorRoleKeyedLine(parsed))) {
     return null;
   }
   if (parsed.role === "user") {

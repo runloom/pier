@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
   type AgentHookEventPayload,
+  type AgentHookEventPayloadV1,
   agentHookEventSchema,
 } from "@shared/contracts/agent/session.ts";
 import type { AgentActivity } from "@shared/contracts/foreground-activity.ts";
@@ -21,6 +22,7 @@ import {
   viewportShowsCursorQuestion,
 } from "../../../../../src/main/services/agents/integrations/transcript/cursor-reconciler.ts";
 import { createForegroundActivityAggregator } from "../../../../../src/main/services/foreground-activity/aggregator.ts";
+import type { AgentEventIngestOptions } from "../../../../../src/main/services/foreground-activity/types.ts";
 
 const SESSION_ID = "a5ff8ad2-73ea-49e9-811a-c81934880086";
 const TRANSCRIPT_WAIT_MS = 5000;
@@ -101,18 +103,30 @@ function canvasQuestionInput(): Record<string, unknown> {
   };
 }
 
+const HOOK_INGEST: AgentEventIngestOptions = {
+  evidenceSource: "hook",
+  stopAuthority: "authoritative",
+  turnStartAuthority: "none",
+};
+
+const TRANSCRIPT_INGEST: AgentEventIngestOptions = {
+  evidenceSource: "transcript",
+  stopAuthority: "authoritative",
+  turnStartAuthority: "none",
+};
+
 function hookEvent(
-  overrides: Partial<AgentHookEventPayload> = {}
-): AgentHookEventPayload {
+  overrides: Partial<AgentHookEventPayloadV1> = {}
+): AgentHookEventPayloadV1 {
   return {
     agent: "cursor",
     event: "PromptSubmit",
     kind: "agentEvent",
     panelId: "panel-1",
     sessionId: SESSION_ID,
-    v: 1,
     windowId: "1",
     ...overrides,
+    v: 1,
   };
 }
 
@@ -434,14 +448,12 @@ describe("cursor transcript reconciler", () => {
     const agg = createForegroundActivityAggregator();
     const reconciler = createCursorTranscriptReconciler({
       onTerminalEvent: (event) => {
-        agg.ingestAgentEvent(event, { evidenceSource: "transcript" });
+        agg.ingestAgentEvent(event, TRANSCRIPT_INGEST);
       },
       projectsRoot,
       readViewportText: () => screen,
     });
-    agg.ingestAgentEvent(hookEvent({ event: "PromptSubmit" }), {
-      evidenceSource: "hook",
-    });
+    agg.ingestAgentEvent(hookEvent({ event: "PromptSubmit" }), HOOK_INGEST);
     await reconciler.observe(hookEvent({ transcriptPath }));
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
       "processing"
@@ -516,14 +528,12 @@ describe("cursor transcript reconciler", () => {
     const reconciler = createCursorTranscriptReconciler({
       onTerminalEvent: (event) => {
         received.push(event);
-        agg.ingestAgentEvent(event, { evidenceSource: "transcript" });
+        agg.ingestAgentEvent(event, TRANSCRIPT_INGEST);
       },
       projectsRoot,
       readViewportText: () => screen,
     });
-    agg.ingestAgentEvent(hookEvent({ event: "PromptSubmit" }), {
-      evidenceSource: "hook",
-    });
+    agg.ingestAgentEvent(hookEvent({ event: "PromptSubmit" }), HOOK_INGEST);
     await reconciler.observe(hookEvent({ transcriptPath }));
     const requested = received.filter(
       (event) => event.event === "InteractionRequested"

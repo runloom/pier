@@ -52,7 +52,9 @@ export function createAgentTerminalReconciler(args: {
     createGrokTranscriptReconciler(terminalOnly),
     createCursorTranscriptReconciler({
       onTerminalEvent: args.onTerminalEvent,
-      readViewportText: args.readViewportText,
+      ...(args.readViewportText
+        ? { readViewportText: args.readViewportText }
+        : {}),
     }),
   ];
   return {

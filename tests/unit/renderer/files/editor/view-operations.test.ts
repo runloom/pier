@@ -8,7 +8,9 @@ import { describe, expect, it } from "vitest";
 
 const DOC = "one\ntwo\nthree\n";
 
-function stateWithSelection(selection: EditorSelection): EditorState {
+function stateWithSelection(
+  selection: EditorSelection | { anchor: number; head?: number }
+): EditorState {
   return EditorState.create({
     doc: DOC,
     extensions: EditorState.allowMultipleSelections.of(true),
@@ -18,7 +20,7 @@ function stateWithSelection(selection: EditorSelection): EditorState {
 
 describe("editor selection line ranges", () => {
   it("treats a caret as a single line", () => {
-    const state = stateWithSelection(EditorSelection.cursor(4));
+    const state = stateWithSelection({ anchor: 4 });
 
     expect(editorStateCurrentLine(state)).toBe(2);
     expect(editorStateSelectionLines(state)).toEqual({
@@ -28,7 +30,7 @@ describe("editor selection line ranges", () => {
   });
 
   it("drops the exclusive end line when the range ends at the next line start", () => {
-    const state = stateWithSelection(EditorSelection.range(0, 8));
+    const state = stateWithSelection({ anchor: 0, head: 8 });
 
     expect(editorStateSelectionLines(state)).toEqual({
       endLine: 2,
@@ -43,7 +45,7 @@ describe("editor selection line ranges", () => {
   });
 
   it("keeps a partial last line when the exclusive end is mid-line", () => {
-    const state = stateWithSelection(EditorSelection.range(0, 10));
+    const state = stateWithSelection({ anchor: 0, head: 10 });
 
     expect(editorStateSelectionLines(state)).toEqual({
       endLine: 3,

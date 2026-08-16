@@ -187,6 +187,9 @@ export function createGrokTranscriptReconciler(
   const inner = createTranscriptTailReconciler({
     agent: "grok",
     createLineClassifier: (path) => {
+      if (!path) {
+        return (line) => classifyGrokUpdatesLine(line);
+      }
       const state = pathQuestionState(path);
       return (line) => {
         try {
