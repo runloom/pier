@@ -14,5 +14,14 @@ describe("Pier dockview maximize CSS", () => {
     expect(css).toContain(".dv-sash-container > .dv-sash::before");
     expect(css).toContain("display: none !important");
     expect(css).toContain("pointer-events: none");
+    expect(css).toContain(
+      '[data-dockview-maximized="true"]\n  .dockview-theme-pier\n  .dv-split-view-container.dv-vertical'
+    );
+    expect(css).toContain(
+      "> .dv-tabs-and-actions-container\n  .dv-tabs-container::after {\n  content: none;"
+    );
+    expect(css).toContain(
+      ".dv-right-actions-container\n  ) {\n  box-shadow: none;"
+    );
   });
 });

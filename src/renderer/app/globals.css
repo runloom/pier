@@ -837,6 +837,12 @@ body {
    - 稳底 trough + 扫光 highlight；亮色走经典进度条语汇（极淡轨 + 纯色扫带）
    - running 时顶缘由 shimmer 独占：关闭实心选中 ::after，避免「线下一轨」叠成底部附属感
    - 几何：外层 .dv-tab::before，top:0 挨紧顶部；S3/S2 高 2px / S1 高 1px
+   - 上下分屏（对齐 VS Code editorGroup.border + tab.activeBorderTop）：
+     必须压过 dockview `.dv-separator-border .dv-view::before`（否则
+     z-index 5 盖住扫光）。idle 线画在下层 `.dv-tabs-container::after`
+     （与 tab 铬同一 transform 层叠，铬 z-index 更高），void/actions
+     用 inset 接上。竖向 hover 只绑被悬停的 sash::before（1.5px，
+     与横向同粗、同缝 top/left: 2px），禁止容器 :has 误亮其它 pane
    - accent：S3=primary（同选中铬，防变深），S2/S1=muted-foreground
    - 选择器必须压过 dockview 非首个 tab 的竖分割线 ::before（同伪元素、后加载）
 
@@ -950,7 +956,7 @@ body {
 
 /* — hover: 非选中 tab 微亮 — */
 .dockview-theme-pier .dv-tab.dv-inactive-tab:hover {
-  background-color: color-mix(in oklab, var(--foreground) 5%, transparent);
+  background-color: color-mix(in oklab, var(--foreground) 9%, var(--sidebar));
   color: var(--foreground);
 }
 
@@ -1490,8 +1496,14 @@ body {
   background-color: var(--muted-foreground);
 }
 
-/* 拖拽线 */
-.dv-split-view-container > .dv-view-container > .dv-view::before {
+/*
+ * 关掉 dockview 自带 view 分割线。仅 `.dv-view::before` 压不过
+ * `.dv-separator-border .dv-view:not(:first-child)::before`（(0,4,1)）。
+ */
+.dv-split-view-container > .dv-view-container > .dv-view::before,
+.dockview-theme-pier
+  .dv-split-view-container.dv-separator-border
+  .dv-view:not(:first-child)::before {
   display: none;
 }
 
@@ -1521,24 +1533,92 @@ body {
 .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
   height: 5px;
   z-index: 10;
+  cursor: row-resize;
 }
 
+/*
+ * 竖 sash idle 不画线（5px 透明热区）。hover 画在本条 sash 上，
+ * 与横向同缝（top: 2px）同粗（1.5px），避免 :has 点亮所有下层 pane。
+ */
 .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 2px;
-  height: 1px;
-  background-color: var(--border);
-  z-index: 10;
+  content: none;
 }
 
 .dv-split-view-container.dv-vertical
   > .dv-sash-container
   > .dv-sash:hover::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 0;
+  left: 0;
+  z-index: 10;
   height: 1.5px;
+  pointer-events: none;
   background-color: var(--primary);
+}
+
+/*
+ * idle 分割线与 S1/S2 同层：画在 .dv-tabs-container 内（translate3d
+ * 层叠上下文），铬 z-index:2 盖住 1px 线。不用 border-top，避免
+ * border-box 34px 被吃成 33px。void / actions 用 inset 接同一顶边。
+ */
+.dockview-theme-pier
+  .dv-split-view-container.dv-vertical
+  > .dv-view-container
+  > .dv-view:not(:first-child)
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: 1px;
+  pointer-events: none;
+  background-color: var(--border);
+}
+
+.dockview-theme-pier
+  .dv-split-view-container.dv-vertical
+  > .dv-view-container
+  > .dv-view:not(:first-child)
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  :is(
+    .dv-void-container,
+    .dv-left-actions-container,
+    .dv-right-actions-container
+  ) {
+  box-shadow: inset 0 1px 0 var(--border);
+}
+
+[data-dockview-maximized="true"]
+  .dockview-theme-pier
+  .dv-split-view-container.dv-vertical
+  > .dv-view-container
+  > .dv-view:not(:first-child)
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container::after {
+  content: none;
+}
+
+[data-dockview-maximized="true"]
+  .dockview-theme-pier
+  .dv-split-view-container.dv-vertical
+  > .dv-view-container
+  > .dv-view:not(:first-child)
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  :is(
+    .dv-void-container,
+    .dv-left-actions-container,
+    .dv-right-actions-container
+  ) {
+  box-shadow: none;
 }
 
 [data-dockview-maximized="true"]

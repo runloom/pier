@@ -120,7 +120,9 @@ describe("Tooltip primitive", () => {
     expect(TOOLTIP_ARROW_LAYOUT_HEIGHT_PX).toBe(5);
     expect(TOOLTIP_ARROW_CLASS).toContain("rotate-45");
     expect(TOOLTIP_ARROW_CLASS).toContain("bg-foreground");
+    expect(TOOLTIP_ARROW_CLASS).toContain("top-0");
     expect(TOOLTIP_ARROW_CLASS).toContain("-translate-y-1/2");
+    expect(TOOLTIP_ARROW_CLASS).not.toContain("top-1/2");
   });
 
   it.each([

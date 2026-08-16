@@ -318,10 +318,45 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     },
     [promotePreview, props.api.isActive]
   );
+  // 锚在图标+标题上，不要整颗 tab（含 × / trailing）。`.dv-default-tab` 是
+  // width:100%，以整 tab 为 trigger 会把短标题 tip 推到文字右侧。
+  const titleLabel = (
+    <span className="flex h-full min-w-0 items-center gap-1 self-stretch">
+      {leadingVisual}
+      <span className="dv-default-tab-content">{displayTitle}</span>
+    </span>
+  );
+  const titleCluster = tooltipText ? (
+    <Tooltip delayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
+      {/*
+       * Tab 条只走 hover delay。Radix focus 会即时 open，快捷键切 tab /
+       * 程序化 focus 会误弹出；tooltip 明细已并入 aria-label。
+       * Provider skipDelayDuration（workspace host）使已打开时跨 tab 滑过
+       * 跳过 delay，直接切到新 tab 文案，而不是先关再等。
+       */}
+      <TooltipTrigger asChild openOnFocus={false}>
+        {titleLabel}
+      </TooltipTrigger>
+      <TooltipContent
+        align="center"
+        // Full title for hover: wider than default max-w-64, wrap instead of
+        // single-line ellipsis (tab short may CSS-truncate; tooltip must not).
+        className="max-w-[min(92vw,40rem)] items-start whitespace-normal text-left"
+        side="bottom"
+      >
+        <span className="block max-w-full whitespace-pre-wrap break-words">
+          {tooltipText}
+        </span>
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    titleLabel
+  );
+
   // biome a11y: onContextMenu 需要 role。
   // dockview 外层 .dv-tab 是主 Tab 停靠（CSS focus-visible ring 见 globals.css）；
   // 内层保留 role=tab + tabIndex=0 + Enter/Space 合约（终端 refocus），outline 清掉避免双环脏描边。
-  const tabContent = (
+  return (
     <div
       aria-label={tabAriaLabel(
         tab?.ariaLabel,
@@ -354,8 +389,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
           role="status"
         />
       ) : null}
-      {leadingVisual}
-      <span className="dv-default-tab-content">{displayTitle}</span>
+      {titleCluster}
       <PanelTabTrailingView trailing={tab?.trailing} />
       {isDirty ? (
         <span
@@ -385,34 +419,5 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         <X className="size-3" />
       </button>
     </div>
-  );
-
-  if (!tooltipText) {
-    return tabContent;
-  }
-
-  return (
-    <Tooltip delayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
-      {/*
-       * Tab 条只走 hover delay。Radix focus 会即时 open，快捷键切 tab /
-       * 程序化 focus 会误弹出；tooltip 明细已并入 aria-label。
-       * Provider skipDelayDuration（workspace host）使已打开时跨 tab 滑过
-       * 跳过 delay，直接切到新 tab 文案，而不是先关再等。
-       */}
-      <TooltipTrigger asChild openOnFocus={false}>
-        {tabContent}
-      </TooltipTrigger>
-      <TooltipContent
-        align="center"
-        // Full title for hover: wider than default max-w-64, wrap instead of
-        // single-line ellipsis (tab short may CSS-truncate; tooltip must not).
-        className="max-w-[min(92vw,40rem)] items-start whitespace-normal text-left"
-        side="bottom"
-      >
-        <span className="block max-w-full whitespace-pre-wrap break-words">
-          {tooltipText}
-        </span>
-      </TooltipContent>
-    </Tooltip>
   );
 }

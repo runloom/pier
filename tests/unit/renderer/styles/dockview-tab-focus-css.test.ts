@@ -193,6 +193,95 @@ describe("Pier dockview tab focus CSS", () => {
     expect(lightS1Block).not.toContain("var(--pier-tab-running-accent) 35%");
   });
 
+  it("owns the vertical split separator on the lower tab strip, flush with header", () => {
+    expect(css).not.toContain("--pier-tab-split-below-inset");
+    expect(css).not.toContain("--pier-split-header-border");
+    expect(css).not.toContain(":has(> .dv-sash-container > .dv-sash:hover)");
+
+    const hideStart = css.indexOf(
+      ".dockview-theme-pier\n  .dv-split-view-container.dv-separator-border\n  .dv-view:not(:first-child)::before"
+    );
+    expect(hideStart).toBeGreaterThanOrEqual(0);
+    const hideEnd = css.indexOf(
+      ".dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash {",
+      hideStart
+    );
+    expect(hideEnd).toBeGreaterThan(hideStart);
+    expect(css.slice(hideStart, hideEnd)).toContain("display: none");
+
+    const sashStart = css.indexOf(
+      ".dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::before"
+    );
+    const sashHoverStart = css.indexOf(
+      ".dv-split-view-container.dv-vertical\n  > .dv-sash-container\n  > .dv-sash:hover::before"
+    );
+    expect(sashStart).toBeGreaterThanOrEqual(0);
+    expect(sashHoverStart).toBeGreaterThan(sashStart);
+    const sashIdleBlock = css.slice(sashStart, sashHoverStart);
+    expect(sashIdleBlock).toContain("content: none");
+    expect(sashIdleBlock).not.toContain("top: 2px");
+
+    const idleLineStart = css.indexOf(
+      ".dv-split-view-container.dv-vertical\n  > .dv-view-container\n  > .dv-view:not(:first-child)\n  .dv-groupview\n  > .dv-tabs-and-actions-container\n  .dv-tabs-container::after"
+    );
+    expect(idleLineStart).toBeGreaterThan(sashHoverStart);
+    const idleLineEnd = css.indexOf(
+      ":is(\n    .dv-void-container,",
+      idleLineStart
+    );
+    expect(idleLineEnd).toBeGreaterThan(idleLineStart);
+    const idleLineBlock = css.slice(idleLineStart, idleLineEnd);
+    expect(idleLineBlock).toContain("top: 0");
+    expect(idleLineBlock).toContain("z-index: 1");
+    expect(idleLineBlock).toContain("height: 1px");
+    expect(idleLineBlock).toContain("background-color: var(--border)");
+    expect(idleLineBlock).not.toContain("border-top:");
+
+    const actionsStart = css.indexOf(
+      ":is(\n    .dv-void-container,\n    .dv-left-actions-container,\n    .dv-right-actions-container\n  )"
+    );
+    expect(actionsStart).toBeGreaterThan(idleLineStart);
+    const actionsEnd = css.indexOf(
+      '[data-dockview-maximized="true"]',
+      actionsStart
+    );
+    expect(actionsEnd).toBeGreaterThan(actionsStart);
+    expect(css.slice(actionsStart, actionsEnd)).toContain(
+      "box-shadow: inset 0 1px 0 var(--border)"
+    );
+
+    const sashHoverEnd = css.indexOf(
+      "/*\n * idle 分割线与 S1/S2 同层",
+      sashHoverStart
+    );
+    expect(sashHoverEnd).toBeGreaterThan(sashHoverStart);
+    const sashHoverBlock = css.slice(sashHoverStart, sashHoverEnd);
+    expect(sashHoverBlock).toContain("top: 2px");
+    expect(sashHoverBlock).toContain("height: 1.5px");
+    expect(sashHoverBlock).not.toContain("height: 2px");
+    expect(sashHoverBlock).toContain("background-color: var(--primary)");
+
+    const horizontalIdleStart = css.indexOf(
+      ".dv-split-view-container.dv-horizontal > .dv-sash-container > .dv-sash::before"
+    );
+    const horizontalHoverStart = css.indexOf(
+      ".dv-split-view-container.dv-horizontal\n  > .dv-sash-container\n  > .dv-sash:hover::before"
+    );
+    expect(horizontalIdleStart).toBeGreaterThanOrEqual(0);
+    expect(horizontalHoverStart).toBeGreaterThan(horizontalIdleStart);
+    const horizontalIdleBlock = css.slice(
+      horizontalIdleStart,
+      horizontalHoverStart
+    );
+    const horizontalHoverBlock = css.slice(
+      horizontalHoverStart,
+      horizontalHoverStart + 160
+    );
+    expect(horizontalIdleBlock).toContain("width: 1px");
+    expect(horizontalHoverBlock).toContain("width: 1.5px");
+    expect(horizontalHoverBlock).not.toContain("width: 2px");
+  });
+
   it("tunes running shimmer for light chrome (clean progress bar style)", () => {
     expect(css).toContain(
       ':root.light .dockview-theme-pier .dv-tab:has([data-tab-status="running"])'

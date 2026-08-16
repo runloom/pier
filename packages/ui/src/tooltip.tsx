@@ -14,6 +14,10 @@ import { cn } from "./utils.ts";
  * - arrowPadding — inset the caret from the bubble L/R extremes
  * - Caret: overlapping square (rotate-45). Layout box stays 5px tall so
  *   Radix `sideOffset + arrowHeight` remains ~11px (same as the old triangle).
+ *   Radix places that box entirely on one side of the content edge, then
+ *   flips/translates it per side. Center the diamond on the box's leading
+ *   edge (`top-0`), not the box midpoint — otherwise the caret sits on the
+ *   pill with a visible seam instead of sharing an edge.
  *   Visibility is CSS-only in `src/renderer/app/globals.css`:
  *   top / bottom always show (including viewport edges); left / right hide
  *   with `visibility` (not `display`) so collision flip does not collapse gap.
@@ -47,9 +51,9 @@ export const TOOLTIP_COLLISION_PADDING = {
 export const TOOLTIP_ARROW_LAYOUT_CLASS =
   "relative z-50 block h-[5px] w-2.5 overflow-visible";
 
-/** Overlapping diamond: half in the bubble so the caret and body share an edge. */
+/** Overlapping diamond: centered on the layout-box leading edge (content edge). */
 export const TOOLTIP_ARROW_CLASS =
-  "absolute top-1/2 left-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] bg-foreground";
+  "absolute top-0 left-1/2 size-2.5 -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-[2px] bg-foreground";
 
 type DismissListener = () => void;
 
