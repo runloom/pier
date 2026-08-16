@@ -42,6 +42,7 @@ export function CommentNavigator({
   onClear,
   onNext,
   onPrevious,
+  onRevealCurrent,
   positionLabel,
   previousLabel,
   toolbarLabel,
@@ -54,6 +55,8 @@ export function CommentNavigator({
   readonly onClear: () => void;
   readonly onNext: () => void;
   readonly onPrevious: () => void;
+  /** Re-reveal the current item (needed when total === 1 so n/N still open). */
+  readonly onRevealCurrent: () => void;
   readonly positionLabel: string;
   readonly previousLabel: string;
   readonly toolbarLabel: string;
@@ -78,19 +81,24 @@ export function CommentNavigator({
         <MessageSquare className="size-3.5" />
       </span>
       <BottomBarTip label={positionLabel}>
-        <span
-          aria-live="polite"
-          className="min-w-10 px-1 text-center text-muted-foreground tabular-nums"
-        >
-          <span className="sr-only">{positionLabel}</span>
-          <span aria-hidden>{positionText}</span>
+        <span className="inline-flex">
+          <Button
+            aria-label={positionLabel}
+            aria-live="polite"
+            className="min-w-10 px-1 tabular-nums"
+            onClick={onRevealCurrent}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            <span aria-hidden>{positionText}</span>
+          </Button>
         </span>
       </BottomBarTip>
       <BottomBarTip label={previousLabel}>
         <span className="inline-flex">
           <Button
             aria-label={previousLabel}
-            disabled={total <= 1}
             onClick={onPrevious}
             size="icon-xs"
             type="button"
@@ -104,7 +112,6 @@ export function CommentNavigator({
         <span className="inline-flex">
           <Button
             aria-label={nextLabel}
-            disabled={total <= 1}
             onClick={onNext}
             size="icon-xs"
             type="button"

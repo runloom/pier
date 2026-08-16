@@ -176,15 +176,20 @@ export function MarkdownPreview({
   // Outline layout exposes a callback ref; comments layer needs RefObject.current.
   const commentsScrollRootRef = useRef<HTMLElement | null>(null);
   commentsScrollRootRef.current = scrollRoot;
-  const { commentNavigator, commentsChrome, driftStrip } =
-    useMarkdownPreviewCommentsLayer({
-      commentLabels,
-      commentsContext,
-      document: state.status === "ready" ? state.document : undefined,
-      relativeCommentPath,
-      scrollRootRef: commentsScrollRootRef,
-      worktreeKey,
-    });
+  const {
+    commentNavigator,
+    commentsChrome,
+    driftStrip,
+    forceCommentPageIndex,
+  } = useMarkdownPreviewCommentsLayer({
+    commentLabels,
+    commentsContext,
+    document: state.status === "ready" ? state.document : undefined,
+    pagination: state.status === "ready" ? state.pagination : undefined,
+    relativeCommentPath,
+    scrollRootRef: commentsScrollRootRef,
+    worktreeKey,
+  });
 
   useEffect(() => {
     let active = true;
@@ -391,6 +396,7 @@ export function MarkdownPreview({
                   codeHighlighter={codeHighlighter}
                   codeTheme={resolvedCodeTheme}
                   colorMode={previewColorMode}
+                  forceCommentPageIndex={forceCommentPageIndex}
                   {...(commentsChrome ? { comments: commentsChrome } : {})}
                   contentAnchor={contentAnchor}
                   contentAnchorRequestId={contentAnchorRequestId}

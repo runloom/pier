@@ -49,6 +49,7 @@ export function useReviewCommentNavigator(options: {
   readonly onClear: () => void;
   readonly onNext: () => void;
   readonly onPrevious: () => void;
+  readonly onRevealCurrent: () => void;
   readonly positionLabel: string;
   readonly previousLabel: string;
   readonly targets: readonly ReviewCommentNavTarget[];
@@ -150,6 +151,18 @@ export function useReviewCommentNavigator(options: {
       return next;
     });
   }, [revealTarget, targets, total]);
+
+  const onRevealCurrent = useCallback(() => {
+    if (total === 0) {
+      return;
+    }
+    const target = targets[Math.min(activeIndex, total - 1)];
+    if (target !== undefined) {
+      queueMicrotask(() => {
+        revealTarget(target);
+      });
+    }
+  }, [activeIndex, revealTarget, targets, total]);
 
   const onClear = useCallback(() => {
     if (clearingRef.current || total === 0) {
@@ -280,6 +293,7 @@ export function useReviewCommentNavigator(options: {
     onClear,
     onNext,
     onPrevious,
+    onRevealCurrent,
     positionLabel: labels.positionLabel,
     previousLabel: labels.previousLabel,
     targets,

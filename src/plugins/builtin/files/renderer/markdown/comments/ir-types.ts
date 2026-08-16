@@ -20,4 +20,14 @@ export interface MarkdownIrCommentsChrome {
     { readonly threads: readonly PierInlineReviewThread[] }
   >;
   readonly onOpenDraft: (blockKey: string) => void;
+  /**
+   * Navigator / reveal asks this block to open its badge popover.
+   * Null with a non-zero nonce means close every located popover (drift).
+   */
+  readonly requestOpenBlockKey: string | null;
+  /** Bumps on each reveal so the same block can reopen after dismiss. */
+  readonly requestOpenNonce: number;
+  readonly viewCommentLabel: string;
+  /** Template with `{{count}}` when a block has more than one thread. */
+  readonly viewCommentsLabel: string;
 }

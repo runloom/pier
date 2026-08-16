@@ -455,6 +455,7 @@ export function FileCanvasPreview(props: {
           onClear={commentNavigator.onClear}
           onNext={commentNavigator.onNext}
           onPrevious={commentNavigator.onPrevious}
+          onRevealCurrent={commentNavigator.onRevealCurrent}
           positionLabel={commentNavigator.positionLabel}
           previousLabel={commentNavigator.previousLabel}
           toolbarLabel={commentNavigator.toolbarLabel}

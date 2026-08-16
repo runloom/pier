@@ -102,6 +102,7 @@ export function useCommentNavigatorController<
   readonly onClear: () => void;
   readonly onNext: () => void;
   readonly onPrevious: () => void;
+  readonly onRevealCurrent: () => void;
   readonly positionLabel: string;
   readonly previousLabel: string;
   readonly toolbarLabel: string;
@@ -113,6 +114,7 @@ export function useCommentNavigatorController<
   const total = targets.length;
   const [activeIndex, setActiveIndex] = useState(0);
   const clearingRef = useRef(false);
+  const activeIndexRef = useRef(0);
   const targetsRef = useRef(targets);
   targetsRef.current = targets;
   const clearTargetsRef = useRef(clearTargets);
@@ -160,6 +162,10 @@ export function useCommentNavigatorController<
       return next;
     });
   }, [revealAt, total]);
+
+  const onRevealCurrent = useCallback(() => {
+    revealAt(activeIndexRef.current);
+  }, [revealAt]);
 
   const onClear = useCallback(() => {
     const toClear = clearTargetsRef.current;
@@ -212,6 +218,7 @@ export function useCommentNavigatorController<
   }, [context, labels, worktreeKey]);
 
   const safeIndex = total === 0 ? 0 : Math.min(activeIndex, total - 1);
+  activeIndexRef.current = safeIndex;
   const positionLabel = useMemo(
     () => formatPositionLabel(labels.positionTemplate, safeIndex + 1, total),
     [labels.positionTemplate, safeIndex, total]
@@ -224,6 +231,7 @@ export function useCommentNavigatorController<
     onClear,
     onNext,
     onPrevious,
+    onRevealCurrent,
     positionLabel,
     previousLabel: labels.previousLabel,
     toolbarLabel: labels.toolbarLabel,

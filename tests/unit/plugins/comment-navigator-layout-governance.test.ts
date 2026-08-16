@@ -55,10 +55,27 @@ describe("comment navigator layout governance", () => {
     const navigator = read("packages/ui/src/comments/navigator.tsx");
     expect(gutter).not.toContain("Tooltip");
     expect(gutter).toContain("aria-label={props.addCommentLabel}");
+    expect(gutter).toContain('data-slot="markdown-comment-badge"');
+    expect(gutter).toContain("Popover");
+    expect(gutter).not.toContain("块下常驻");
     expect(navigator).toContain('<TooltipContent side="top">');
+    expect(navigator).toContain("onRevealCurrent");
+    expect(navigator).not.toContain("disabled={total <= 1}");
     expect(navigator).not.toContain("title={positionLabel}");
     expect(navigator).not.toContain("title={previousLabel}");
     expect(navigator).not.toContain("title={nextLabel}");
+  });
+
+  it("forces lazy markdown pages so comment reveal can mount the block", () => {
+    const pagination = read(
+      "src/plugins/builtin/files/renderer/markdown/pagination-view.tsx"
+    );
+    const preview = read(
+      "src/plugins/builtin/files/renderer/markdown/preview.tsx"
+    );
+    expect(pagination).toContain("forceCommentPageIndex");
+    expect(pagination).toContain("page.index <= forceCommentPageIndex");
+    expect(preview).toContain("forceCommentPageIndex={forceCommentPageIndex}");
   });
 
   it("keeps git review chrome on a clipped surface frame", () => {
