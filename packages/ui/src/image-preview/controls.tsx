@@ -83,11 +83,7 @@ export function ImagePreviewControls({
               <ChevronDown data-icon="inline-end" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="center"
-            className="z-[110] min-w-44"
-            side="top"
-          >
+          <DropdownMenuContent align="center" className="min-w-44" side="top">
             <DropdownMenuRadioGroup
               onValueChange={(value) =>
                 onZoomChange(value === "fit" ? "fit" : Number(value))

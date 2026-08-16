@@ -28,7 +28,16 @@ import {
 } from "@/stores/terminal-input-routing-slice.ts";
 
 const PREVIEW_OVERLAY_ID = "content-preview";
-const PREVIEW_SCOPE_ID = "overlay:content-preview";
+const PREVIEW_KEYBINDING_SCOPE = "overlay:content-preview" as const;
+/** Host chrome and nested menus close first; preview is a content stage, not the top modal. */
+const PREVIEW_ESC_YIELD_SELECTOR = [
+  '[data-slot="dialog-content"][data-state="open"]',
+  '[data-slot="alert-dialog-content"][data-state="open"]',
+  '[data-slot="dropdown-menu-content"][data-state="open"]',
+  '[data-slot="select-content"][data-state="open"]',
+  '[data-slot="popover-content"][data-state="open"]',
+  '[data-slot="context-menu-content"][data-state="open"]',
+].join(",");
 
 function useImagePreviewLabels(): ImagePreviewCanvasLabels {
   const t = useT();
@@ -198,8 +207,8 @@ function PreviewBody({ payload }: { payload: ContentPreviewPayload }) {
 /**
  * Fullscreen content preview host (images + node graphs).
  *
- * Opaque full-window stage covering the titlebar. Native Ghostty is suppressed
- * while open; EventRouter is hole-punched for the full viewport.
+ * Covers the workspace and titlebar (z-40, below host dialogs). Native Ghostty
+ * is suppressed while open; EventRouter is hole-punched for the full viewport.
  */
 export function ContentPreviewHost() {
   const t = useT();
@@ -216,12 +225,12 @@ export function ContentPreviewHost() {
     const releaseFocus = requestTerminalWebFocus(PREVIEW_OVERLAY_ID);
     const releaseSurface =
       acquireTerminalSurfaceSuppression(PREVIEW_OVERLAY_ID);
-    useKeybindingScope.getState().pushBlockingScope(PREVIEW_SCOPE_ID);
+    useKeybindingScope.getState().pushBlockingScope(PREVIEW_KEYBINDING_SCOPE);
     queueMicrotask(() => {
       rootRef.current?.focus();
     });
     return () => {
-      useKeybindingScope.getState().popBlockingScope(PREVIEW_SCOPE_ID);
+      useKeybindingScope.getState().popBlockingScope(PREVIEW_KEYBINDING_SCOPE);
       releaseSurface();
       releaseFocus();
       overlay.dispose();
@@ -238,11 +247,7 @@ export function ContentPreviewHost() {
       if (event.key !== "Escape") {
         return;
       }
-      if (
-        document.querySelector(
-          '[data-slot="dropdown-menu-content"][data-state="open"], [data-slot="select-content"][data-state="open"], [data-slot="popover-content"][data-state="open"], [data-slot="context-menu-content"][data-state="open"]'
-        )
-      ) {
+      if (document.querySelector(PREVIEW_ESC_YIELD_SELECTOR)) {
         return;
       }
       event.preventDefault();
@@ -263,7 +268,7 @@ export function ContentPreviewHost() {
     <div
       aria-label={title || t("dialog.contentPreview.title")}
       aria-modal="true"
-      className="app-no-drag fixed inset-0 z-[100] bg-background outline-none"
+      className="app-no-drag fixed inset-0 z-40 bg-background outline-none"
       data-testid="content-preview"
       ref={rootRef}
       role="dialog"

@@ -1,7 +1,19 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogTitle,
+} from "@pier/ui/alert-dialog.tsx";
+import { Dialog, DialogContent, DialogTitle } from "@pier/ui/dialog.tsx";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContentPreviewHost } from "@/components/common/content-preview-host.tsx";
 import { initI18n } from "@/i18n/index.ts";
+import { DEFAULT_KEYMAP } from "@/lib/keybindings/defaults.ts";
+import { parseChord } from "@/lib/keybindings/parse.ts";
+import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { resetTerminalSurfaceSuppressionForTests } from "@/panel-kits/terminal/layout-coordinator.ts";
 import {
   closeContentPreview,
@@ -70,13 +82,16 @@ describe("ContentPreviewHost", () => {
     expect(root.className).toContain("bg-background");
     expect(registerFullscreen).toHaveBeenCalledWith("content-preview");
     expect(requestWebFocus).toHaveBeenCalledWith("content-preview");
-    expect(useKeybindingScope.getState().overlayStack).toContain(
-      "overlay:content-preview"
-    );
+    expect(useKeybindingScope.getState().overlayStack).toEqual([
+      "overlay:content-preview",
+    ]);
+    expect(root.className).toContain("z-40");
+    expect(root.className).not.toContain("z-[100]");
     expect(useTerminalStore.getState().suppressTerminals).toBe(true);
 
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByTestId("content-preview")).not.toBeInTheDocument();
+    expect(useKeybindingScope.getState().overlayStack).toEqual([]);
     expect(useTerminalStore.getState().suppressTerminals).toBe(false);
   });
 
@@ -151,6 +166,16 @@ describe("ContentPreviewHost", () => {
     expect(controls).not.toBeNull();
     expect(controls?.parentElement?.className).toContain("absolute");
     expect(controls?.parentElement?.className).toContain("bottom-0");
+    fireEvent.keyDown(screen.getByRole("button", { name: /zoom level/i }), {
+      key: "Enter",
+    });
+    await screen.findByRole("menu");
+    const zoomMenu = document.querySelector(
+      '[data-slot="dropdown-menu-content"]'
+    );
+    expect(zoomMenu).not.toBeNull();
+    expect(zoomMenu?.className).toContain("z-50");
+    expect(zoomMenu?.className).not.toContain("z-[110]");
     const close = screen.getByTestId("content-preview-close");
     expect(close).toHaveAttribute("data-variant", "outline");
     expect(header.contains(close)).toBe(true);
@@ -234,5 +259,96 @@ describe("ContentPreviewHost", () => {
     openMenu.remove();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByTestId("content-preview")).not.toBeInTheDocument();
+  });
+
+  it("Esc yields to a real host Dialog and AlertDialog", async () => {
+    const { rerender } = render(
+      <>
+        <ContentPreviewHost />
+        <Dialog open>
+          <DialogContent>
+            <DialogTitle>Host dialog</DialogTitle>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+    openImagePreview({
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "preview",
+    });
+    await screen.findByTestId("content-preview");
+    expect(
+      document.querySelector('[data-slot="dialog-content"][data-state="open"]')
+    ).not.toBeNull();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByTestId("content-preview")).toBeInTheDocument();
+
+    rerender(
+      <>
+        <ContentPreviewHost />
+        <AlertDialog open>
+          <AlertDialogContent>
+            <AlertDialogTitle>Host alert</AlertDialogTitle>
+            <AlertDialogDescription>Details</AlertDialogDescription>
+          </AlertDialogContent>
+        </AlertDialog>
+      </>
+    );
+    expect(
+      document.querySelector(
+        '[data-slot="alert-dialog-content"][data-state="open"]'
+      )
+    ).not.toBeNull();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByTestId("content-preview")).toBeInTheDocument();
+
+    rerender(<ContentPreviewHost />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.queryByTestId("content-preview")).not.toBeInTheDocument();
+  });
+
+  it("keeps settings and command palette chords while blocking workspace zoom", async () => {
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "preview",
+    });
+    await screen.findByTestId("content-preview");
+
+    const scope = {
+      activePanelComponent: null,
+      overlayStack: useKeybindingScope.getState().overlayStack,
+    };
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+Comma", false), scope)
+    ).toBe("pier.settings.open");
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+Shift+KeyP", false), scope)
+    ).toBe("pier.commandPalette.toggle");
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+Equal", false), scope)
+    ).toBeNull();
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyW", false), scope)
+    ).toBeNull();
+  });
+
+  it("mounts below host chrome in AppShell so Settings and the palette paint on top", () => {
+    const appShell = readFileSync(
+      join(process.cwd(), "src/renderer/components/common/app-shell.tsx"),
+      "utf8"
+    );
+    const preview = appShell.indexOf("<ContentPreviewHost");
+    const palette = appShell.indexOf("<CommandPalette");
+    const settings = appShell.indexOf("<SettingsDialog");
+    const dialogs = appShell.indexOf("<AppDialogHost");
+    const contentDialogs = appShell.indexOf("<AppContentDialogHost");
+    expect(preview).toBeGreaterThan(-1);
+    expect(preview).toBeLessThan(palette);
+    expect(preview).toBeLessThan(settings);
+    expect(preview).toBeLessThan(dialogs);
+    expect(preview).toBeLessThan(contentDialogs);
   });
 });
