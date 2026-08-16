@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { Button } from "../../button.tsx";
 import { SCROLLBAR_SYSTEM_CSS } from "../../scrollbar-system.ts";
 import { ensurePierDiffLightDomStyles } from "../appearance.ts";
 import type {
@@ -18,7 +19,7 @@ import type {
 } from "../types.ts";
 import { createFormatUnmodifiedLines } from "../use-code-options.ts";
 import { ConflictAcceptActions } from "./accept-actions.tsx";
-import { ConflictChrome, FileLevelConflictCard } from "./file-level.tsx";
+import { FileLevelConflictCard } from "./file-level.tsx";
 import { applyConflictResolution, countUnresolvedMarkers } from "./rebuild.ts";
 import type {
   ConflictActionLike,
@@ -230,6 +231,37 @@ export function MarkersConflictBody(options: {
     ]
   );
 
+  const renderHeaderMetadata = useCallback(() => {
+    if (options.onOpenFile === undefined && !controlsDisabled) {
+      return null;
+    }
+    return (
+      <span className="inline-flex items-center gap-2">
+        {controlsDisabled ? (
+          <span className="text-muted-foreground text-xs">
+            {options.labels.resolving}
+          </span>
+        ) : null}
+        {options.onOpenFile ? (
+          <Button
+            disabled={controlsDisabled}
+            onClick={options.onOpenFile}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            {options.labels.openFile}
+          </Button>
+        ) : null}
+      </span>
+    );
+  }, [
+    controlsDisabled,
+    options.labels.openFile,
+    options.labels.resolving,
+    options.onOpenFile,
+  ]);
+
   // CSS content tokens need quotes; JSON.stringify is a valid CSS string.
   const style = useMemo(
     (): CSSProperties => ({
@@ -275,20 +307,13 @@ export function MarkersConflictBody(options: {
       data-pier-unresolved-path={options.path}
       style={{ colorScheme: options.appearance.colorMode }}
     >
-      <ConflictChrome
-        busy={controlsDisabled}
-        labels={options.labels}
-        path={options.path}
-        {...(options.onOpenFile === undefined
-          ? {}
-          : { onOpenFile: options.onOpenFile })}
-      />
       <div className="min-h-0 flex-1 overflow-auto">
         <UnresolvedFile
           disableWorkerPool={false}
           file={file}
           key={file.cacheKey}
           options={pierreOptions}
+          renderHeaderMetadata={renderHeaderMetadata}
           renderMergeConflictUtility={renderMergeConflictUtility}
           style={style}
         />
