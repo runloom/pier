@@ -75,6 +75,12 @@ describe("native terminal key routing", () => {
     );
   });
 
+  it("enables Ghostty ssh-env so typed ssh uses a compatible remote TERM", () => {
+    expect(readGhosttyBridgeSource()).toContain(
+      'builder.withCustom("shell-integration-features", "no-cursor,ssh-env")'
+    );
+  });
+
   it("maps native return characters to the Enter keybinding code", () => {
     const source = readGhosttyBridgeSource();
 
