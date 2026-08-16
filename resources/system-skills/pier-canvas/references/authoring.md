@@ -5,7 +5,7 @@
 Read `../sdk/index.d.ts` before implementation. Then read the focused
 declaration for each API you plan to use:
 
-- `core.d.ts` for `Frame`, `Stack`, `Row`, and `Text`.
+- `core.d.ts` for `Frame`, `Artboard`, `ArtboardStage`, `Stack`, `Row`, and `Text`.
 - `visualizations.d.ts` for charts, graphs, and Mermaid diagrams.
 - `files.d.ts` for adjacent-file reads and conflict-safe writes.
 - `forms.d.ts` for controls, selection, and toggle composition.
@@ -85,6 +85,14 @@ stay there. Put complex calculations in pure adjacent modules.
   (inline flex columns) instead of inventing arbitrary `grid-cols-[…]` shells.
 - `Frame` is a **reading column** (max-width + padding), not a full-height app
   chrome. Do not nest dual `ScrollArea` + `70vh` fake viewports inside it.
+- Product UI mockups (settings, panels, chrome) go on **`Artboard`** inside
+  **`ArtboardStage`**. Each artboard is a Figma frame: fixed pixel width
+  (default 1280×800), **clip** overflow — no nested scrollbar. Inline
+  `ArtboardStage` is the **same card as `MermaidDiagram`**: fit-all overview
+  in the reading `Frame`, no wheel capture. Zoom/pan (same chrome as image
+  preview) is **fullscreen preview only**. Do not break the host reading
+  column out to full width. Do not stack screens as a document inside
+  `Frame`.
 - Multi-line `AccordionTrigger` content must not rely on underline hover chrome;
   the host Accordion uses a light background hover.
 

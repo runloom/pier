@@ -169,6 +169,7 @@ import {
 } from "@pier/ui/tooltip.tsx";
 import type { PierCanvasExportName } from "@shared/pier-canvas-export-names.ts";
 import { useCanvasFile } from "./canvas-file-facade.ts";
+import { Artboard, ArtboardStage } from "./pier-canvas-artboard.tsx";
 import { DocsShell, Frame, Row, Stack, Text } from "./pier-canvas-layout.ts";
 import { pierCanvasVisualizationExports } from "./pier-canvas-visualization-exports.ts";
 
@@ -183,6 +184,8 @@ export const pierCanvasExports = {
   AlertAction,
   AlertDescription,
   AlertTitle,
+  Artboard,
+  ArtboardStage,
   AspectRatio,
   Avatar,
   AvatarBadge,

@@ -123,7 +123,7 @@ export function Row({
   );
 }
 
-/** Page-width frame for kit / docs / composition canvases. */
+/** Reading column (max-width). Product mockups use Artboard, not Frame. */
 export function Frame({
   children,
   className,

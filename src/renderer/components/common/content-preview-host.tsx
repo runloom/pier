@@ -3,6 +3,7 @@ import {
   ImagePreviewCanvas,
   type ImagePreviewCanvasLabels,
 } from "@pier/ui/image-preview/canvas.tsx";
+import { HtmlWorldCanvas } from "@pier/ui/image-preview/world-canvas.tsx";
 import { NodeGraph } from "@pier/ui/node-graph.tsx";
 import { X } from "lucide-react";
 import {
@@ -185,6 +186,25 @@ function NodeGraphPreviewBody({
   );
 }
 
+function HtmlWorldPreviewBody({
+  payload,
+}: {
+  payload: Extract<ContentPreviewPayload, { type: "html-world" }>;
+}) {
+  const labels = useImagePreviewLabels();
+  return (
+    <HtmlWorldCanvas
+      className="min-h-0 w-full flex-1 bg-background"
+      labels={labels}
+      onEmptyClick={closeContentPreview}
+      presentation="stage"
+      viewerLabel={payload["aria-label"]}
+    >
+      {payload.render()}
+    </HtmlWorldCanvas>
+  );
+}
+
 function PreviewBody({ payload }: { payload: ContentPreviewPayload }) {
   if (payload.type === "image") {
     return <ImagePreviewBody alt={payload.alt ?? ""} source={payload.source} />;
@@ -192,11 +212,11 @@ function PreviewBody({ payload }: { payload: ContentPreviewPayload }) {
   if (payload.type === "node-graph") {
     return <NodeGraphPreviewBody payload={payload} />;
   }
-  return null;
+  return <HtmlWorldPreviewBody payload={payload} />;
 }
 
 /**
- * Fullscreen content preview host (images + node graphs).
+ * Fullscreen content preview host (images, node graphs, HTML worlds).
  *
  * Opaque full-window stage covering the titlebar. Native Ghostty is suppressed
  * while open; EventRouter is hole-punched for the full viewport.

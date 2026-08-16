@@ -3,13 +3,14 @@ import type {
   NodeGraphEdge,
   NodeGraphNode,
 } from "@pier/ui/node-graph.tsx";
+import type { ReactNode } from "react";
 import { create } from "zustand";
 
 /**
  * Host fullscreen content preview.
  *
- * Payload is a discriminated union: images (markdown / media) and node graphs
- * share one shell (`ContentPreviewHost`).
+ * Payload is a discriminated union: images (markdown / media), node graphs,
+ * and HTML worlds (artboard stages) share one shell (`ContentPreviewHost`).
  */
 
 export type ContentPreviewImageSource =
@@ -28,6 +29,11 @@ export type ContentPreviewPayload =
       edges: readonly NodeGraphEdge[];
       nodes: readonly NodeGraphNode[];
       type: "node-graph";
+    }
+  | {
+      "aria-label": string;
+      render: () => ReactNode;
+      type: "html-world";
     };
 
 export interface OpenContentPreviewRequest {
@@ -60,6 +66,15 @@ export interface OpenNodeGraphPreviewRequest {
   id?: string;
   nodes: readonly NodeGraphNode[];
   onClose?: () => void;
+  /** Fullscreen title (defaults to aria-label). */
+  title?: string;
+}
+
+export interface OpenHtmlWorldPreviewRequest {
+  "aria-label": string;
+  id?: string;
+  onClose?: () => void;
+  render: () => ReactNode;
   /** Fullscreen title (defaults to aria-label). */
   title?: string;
 }
@@ -136,6 +151,22 @@ export function openNodeGraphPreview(
       edges: request.edges,
       nodes: request.nodes,
       ...(request.direction ? { direction: request.direction } : {}),
+    },
+    title: request.title?.trim() || request["aria-label"],
+  });
+}
+
+/** HTML world fullscreen — artboard stages; same zoom/pan chrome as images. */
+export function openHtmlWorldPreview(
+  request: OpenHtmlWorldPreviewRequest
+): void {
+  openContentPreview({
+    ...(request.id ? { id: request.id } : {}),
+    ...(request.onClose ? { onClose: request.onClose } : {}),
+    payload: {
+      type: "html-world",
+      "aria-label": request["aria-label"],
+      render: request.render,
     },
     title: request.title?.trim() || request["aria-label"],
   });

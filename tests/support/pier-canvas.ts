@@ -18,6 +18,8 @@ export const {
   AlertAction,
   AlertDescription,
   AlertTitle,
+  Artboard,
+  ArtboardStage,
   AspectRatio,
   Avatar,
   AvatarBadge,

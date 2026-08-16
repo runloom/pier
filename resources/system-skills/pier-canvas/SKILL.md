@@ -195,7 +195,12 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
      the article keep the **UI font**.
    - **`composition` / `kit`**: use the **UI font** only — never the host
      document font or a custom reading serif (design frames and component
-     catalogs must look like product UI).
+     catalogs must look like product UI). Multi-screen mockups use
+     `ArtboardStage` + `Artboard`. Frames are fixed pixel viewports (default
+     1280×800, clip). Inline `ArtboardStage` is the same fit-all card as
+     `MermaidDiagram` (bordered, in the reading `Frame`, no wheel capture).
+     Zoom/pan is fullscreen preview only. Do not break the reading column
+     out to full width, and do not stack screens as a document.
    - Command inventories: one Accordion list; badge only unfinished items.
 7. Export valid `canvas` metadata.
 8. Do **not** require `instance.json` methodology fields.
