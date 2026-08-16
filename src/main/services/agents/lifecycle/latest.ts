@@ -1,6 +1,10 @@
 // Class B: version probes after host env (curl/npm/brew with optional PES env).
 import { execFile } from "node:child_process";
 import { extractVersionFromOutput } from "@shared/agent-lifecycle/version-compare.ts";
+import {
+  brewPackageTokenFromBinPath,
+  resolveBrewQueryName,
+} from "./plan/brew-token.ts";
 import type { AgentLifecycleSpec } from "./specs/types.ts";
 import { resolveUpdateMode } from "./specs/types.ts";
 
@@ -89,6 +93,16 @@ function resolveUvPackage(spec: AgentLifecycleSpec): string | null {
   return uv?.kind === "uv" ? uv.package : null;
 }
 
+function resolvePipxPackage(spec: AgentLifecycleSpec): string | null {
+  const pipx = spec.install.find((c) => c.kind === "pipx");
+  return pipx?.kind === "pipx" ? pipx.package : null;
+}
+
+/** PyPI name: uv tool first, then pipx (same index for both installers). */
+function resolvePypiPackage(spec: AgentLifecycleSpec): string | null {
+  return resolveUvPackage(spec) ?? resolvePipxPackage(spec);
+}
+
 /**
  * PyPI JSON for uv-tool packages (e.g. kimi-cli). Not interchangeable with
  * npmPackageForLatest when the npm name is a different product line.
@@ -168,12 +182,10 @@ async function fetchNpmLatest(
 }
 
 async function fetchBrewLatest(
-  formula: string,
-  tap: string | undefined,
+  name: string,
   env?: NodeJS.ProcessEnv,
   isCask?: boolean
 ): Promise<string | null> {
-  const name = tap ? `${tap}/${formula}` : formula;
   const cacheKey = `brew:${isCask ? "cask:" : ""}${name}`;
   const cached = cacheGet(cacheKey);
   if (cached !== undefined) {
@@ -240,14 +252,16 @@ function resolveBrewChannel(spec: AgentLifecycleSpec): {
  * source so brew/uv installs are not compared against an unrelated npm tag
  * (false "update available" → no-op upgrade → sticky Update all).
  *
- * Fall through only within the same install ecosystem (brew↔npm for JS tools;
- * uv/PyPI for Astral tools). Path/script installs that declare a uv channel
- * (kimi) probe PyPI, not npmPackageForLatest.
+ * Brew queries use the installed Cellar/Caskroom token when known
+ * (`claude-code@latest` ≠ stable `claude-code`). Fall through only within
+ * the same install ecosystem (brew↔npm for JS tools; uv/pipx PyPI for
+ * Python tools). Path/script installs that declare a uv/pipx channel
+ * (kimi, mistral-vibe) probe PyPI, not npmPackageForLatest.
  */
 export async function fetchLatestVersion(
   spec: AgentLifecycleSpec,
   env?: NodeJS.ProcessEnv,
-  options?: { installSource?: string | null }
+  options?: { defaultBinPath?: string | null; installSource?: string | null }
 ): Promise<string | null> {
   const mode = resolveUpdateMode(spec);
   if (mode !== "versioned") {
@@ -257,7 +271,7 @@ export async function fetchLatestVersion(
   const source = (options?.installSource ?? "").toLowerCase();
   const npmPkg = resolveNpmPackage(spec);
   const brew = resolveBrewChannel(spec);
-  const uvPkg = resolveUvPackage(spec);
+  const pypiPkg = resolvePypiPackage(spec);
   const preferBrew = source === "brew";
   const preferNpm =
     source === "npm" ||
@@ -267,13 +281,16 @@ export async function fetchLatestVersion(
     source === "pnpm" ||
     source === "yarn" ||
     source === "bun";
-  const preferUv = source === "uv" || source.includes("uv");
+  const preferPypi =
+    source === "uv" || source.includes("uv") || source === "pipx";
 
   const tryBrew = async (): Promise<string | null> => {
     if (!brew) {
       return null;
     }
-    return fetchBrewLatest(brew.formula, brew.tap, env, brew.cask);
+    const installedToken = brewPackageTokenFromBinPath(options?.defaultBinPath);
+    const name = resolveBrewQueryName(brew, installedToken);
+    return fetchBrewLatest(name, env, brew.cask);
   };
   const tryNpm = async (): Promise<string | null> => {
     if (!npmPkg) {
@@ -282,10 +299,10 @@ export async function fetchLatestVersion(
     return fetchNpmLatest(npmPkg, env);
   };
   const tryPypi = async (): Promise<string | null> => {
-    if (!uvPkg) {
+    if (!pypiPkg) {
       return null;
     }
-    return fetchPypiLatest(uvPkg, env);
+    return fetchPypiLatest(pypiPkg, env);
   };
 
   if (preferBrew) {
@@ -294,21 +311,21 @@ export async function fetchLatestVersion(
   if (preferNpm) {
     return (await tryNpm()) ?? (await tryBrew());
   }
-  if (preferUv) {
-    // Never fall back to npm when uv is the install source — different package
-    // names (kimi-cli vs @moonshot-ai/kimi-code) are not comparable.
+  if (preferPypi) {
+    // Never fall back to npm when uv/pipx is the install source — different
+    // package names (kimi-cli vs @moonshot-ai/kimi-code) are not comparable.
     return tryPypi();
   }
 
-  // Path / script / unknown: prefer uv/PyPI when the agent declares a uv
-  // channel (official kimi script installs via uv); otherwise npm then brew.
-  if (uvPkg) {
+  // Path / script / unknown: prefer uv/pipx PyPI when the agent declares a
+  // Python channel (official kimi / mistral-vibe scripts); otherwise npm then brew.
+  if (pypiPkg) {
     const fromPypi = await tryPypi();
     if (fromPypi) {
       return fromPypi;
     }
-    // Only use npm when there is no separate uv package line.
-    if (!npmPkg || npmPkg === uvPkg) {
+    // Only use npm when there is no separate PyPI package line.
+    if (!npmPkg || npmPkg === pypiPkg) {
       return tryNpm();
     }
     return null;

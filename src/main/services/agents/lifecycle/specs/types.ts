@@ -101,9 +101,15 @@ export function resolveUpdateMode(
   const hasBrewLatest =
     spec.install.some((c) => c.kind === "brew") ||
     spec.update.some((c) => c.kind === "brew-upgrade");
-  if (hasNpmLatest || hasBrewLatest) {
+  // uv / pipx share a PyPI latest probe (mistral-vibe, kimi-cli, aider-chat).
+  const hasPypiLatest =
+    spec.install.some((c) => c.kind === "uv" || c.kind === "pipx") ||
+    spec.update.some(
+      (c) => c.kind === "uv-upgrade" || c.kind === "pipx-upgrade"
+    );
+  if (hasNpmLatest || hasBrewLatest || hasPypiLatest) {
     return "versioned";
   }
-  // self / reinstall / pipx / uv without remote latest probe
+  // self / reinstall without a remote latest probe
   return "reinstall";
 }

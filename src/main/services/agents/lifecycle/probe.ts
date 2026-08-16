@@ -84,6 +84,7 @@ export async function probeOneAgent(
   ) {
     // Match latest probe to the active install channel (brew ≠ npm lag).
     latestVersion = await fetchLatestVersion(spec, env, {
+      defaultBinPath: defaultInstall?.path ?? null,
       installSource: defaultInstall?.source ?? null,
     });
   }

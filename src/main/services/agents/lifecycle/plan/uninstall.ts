@@ -9,7 +9,10 @@ import type {
   InstallChannel,
   UninstallChannel,
 } from "../specs/types.ts";
-import { brewPackageTokenFromBinPath } from "./brew-token.ts";
+import {
+  brewPackageTokenFromBinPath,
+  resolveBrewQueryName,
+} from "./brew-token.ts";
 import {
   filterUninstallChannels,
   type InstallSourceHint,
@@ -70,12 +73,6 @@ function resolveUninstallChannels(
   return deriveUninstallChannels(spec);
 }
 
-function brewToken(
-  channel: Extract<UninstallChannel, { kind: "brew-uninstall" }>
-): string {
-  return channel.tap ? `${channel.tap}/${channel.formula}` : channel.formula;
-}
-
 function brewUninstallStep(
   channel: Extract<UninstallChannel, { kind: "brew-uninstall" }>,
   host: "posix" | "win",
@@ -87,18 +84,10 @@ function brewUninstallStep(
   if (channel.cask === true && platform() !== "darwin") {
     return null;
   }
-  // Prefer Cellar/Caskroom token when known (align upgrade).
-  let name = brewToken(channel);
-  const installedToken = brewPackageTokenFromBinPath(defaultBinPath);
-  if (installedToken && installedToken.length > 0) {
-    const bare = channel.formula;
-    const isBareMatch =
-      installedToken === bare || installedToken.endsWith(`/${bare}`);
-    name =
-      channel.tap && isBareMatch && !installedToken.includes("@")
-        ? brewToken(channel)
-        : installedToken;
-  }
+  const name = resolveBrewQueryName(
+    channel,
+    brewPackageTokenFromBinPath(defaultBinPath)
+  );
   if (channel.cask === true) {
     return {
       kind: "argv",
