@@ -127,7 +127,7 @@ export const lspPolicyPrefsSchema = z.object({
     .default(1_800_000),
   maxLocalWorkspaces: z.number().int().min(0).max(32).default(3),
   maxRemoteWorkspaces: z.number().int().min(0).max(32).default(2),
-  worktreesEnabled: z.boolean().default(false),
+  worktreesEnabled: z.boolean().default(true),
 });
 export type LspPolicyPrefs = z.infer<typeof lspPolicyPrefsSchema>;
 
@@ -137,7 +137,7 @@ export const DEFAULT_LSP_POLICY_PREFS: LspPolicyPrefs = {
   idleReleaseMs: 1_800_000,
   maxLocalWorkspaces: 3,
   maxRemoteWorkspaces: 2,
-  worktreesEnabled: false,
+  worktreesEnabled: true,
 };
 
 export const lspSessionEnsureRequestSchema = z.object({

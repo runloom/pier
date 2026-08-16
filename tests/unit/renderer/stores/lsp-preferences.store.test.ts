@@ -171,10 +171,10 @@ describe("useLspPreferencesStore", () => {
     updateMock.mockRejectedValue(new Error("disk unavailable"));
 
     await expect(
-      useLspPreferencesStore.getState().setWorktreesEnabled(true)
+      useLspPreferencesStore.getState().setWorktreesEnabled(false)
     ).rejects.toThrow("disk unavailable");
 
-    expect(useLspPreferencesStore.getState().worktreesEnabled).toBe(false);
+    expect(useLspPreferencesStore.getState().worktreesEnabled).toBe(true);
   });
 
   it("hydrates policy broadcasts", async () => {

@@ -21,14 +21,19 @@ async function launch(userDataDir: string): Promise<ElectronApplication> {
   });
 }
 
-async function openWorkspaceSettings(window: Page): Promise<void> {
+async function openFilesSettings(window: Page): Promise<void> {
   await window.waitForLoadState("domcontentloaded");
   await window.waitForTimeout(1500);
   await window.keyboard.press(SETTINGS_ACCELERATOR);
   await expect(window.locator('[role="dialog"]')).toBeVisible({
     timeout: 5000,
   });
-  await window.locator('[data-testid="settings-nav-workspace"]').click();
+  await expect(
+    window.locator('[data-testid="settings-nav-plugin-pier.files"]')
+  ).toBeVisible({ timeout: 10_000 });
+  await window
+    .locator('[data-testid="settings-nav-plugin-pier.files"]')
+    .click();
 }
 
 test("language service settings render and persist resource policy", async () => {
@@ -38,16 +43,20 @@ test("language service settings render and persist resource policy", async () =>
   try {
     application = await launch(userDataDir);
     let window = await application.firstWindow();
-    await openWorkspaceSettings(window);
+    await openFilesSettings(window);
 
     const enabled = window.locator("#settings-lsp-enabled");
     const worktrees = window.locator("#settings-lsp-worktrees-enabled");
     const idleRelease = window.locator("#settings-lsp-idle-release-minutes");
     await expect(enabled).toHaveAttribute("aria-checked", "true");
-    await expect(worktrees).toHaveAttribute("aria-checked", "false");
-    await expect(idleRelease).toHaveValue("30");
-    await worktrees.click();
     await expect(worktrees).toHaveAttribute("aria-checked", "true");
+    await expect(idleRelease).toHaveValue("30");
+    await expect(
+      window.locator('[data-testid="lsp-tools-status-list"]')
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(window.getByText("TypeScript / JavaScript")).toBeVisible();
+    await worktrees.click();
+    await expect(worktrees).toHaveAttribute("aria-checked", "false");
     await idleRelease.fill("45");
     await idleRelease.blur();
     await expect
@@ -62,15 +71,19 @@ test("language service settings render and persist resource policy", async () =>
           };
         })
       )
-      .toEqual({ idleReleaseMs: 2_700_000, worktreesEnabled: true });
+      .toEqual({ idleReleaseMs: 2_700_000, worktreesEnabled: false });
 
     await application.close();
     application = await launch(userDataDir);
     window = await application.firstWindow();
-    await openWorkspaceSettings(window);
+    await openFilesSettings(window);
     await expect(
       window.locator("#settings-lsp-worktrees-enabled")
-    ).toHaveAttribute("aria-checked", "true");
+    ).toHaveAttribute("aria-checked", "false");
+    await expect(
+      window.locator('[data-testid="lsp-tools-status-list"]')
+    ).toBeVisible();
+    await expect(window.getByText("TypeScript / JavaScript")).toBeVisible();
     await expect(
       window.locator("#settings-lsp-idle-release-minutes")
     ).toHaveValue("45");

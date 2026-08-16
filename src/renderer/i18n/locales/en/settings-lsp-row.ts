@@ -18,16 +18,22 @@ export const settingsLspRow = {
   lspUpdateFailed: "Couldn't update language service settings — try again",
   lspWorktreesEnabled: "Run in worktrees",
   lspWorktreesEnabledDesc:
-    "Agent worktrees are off by default to save resources",
+    "Start language servers in agent worktrees too. Extra worktrees use more resources.",
   lspAdvancedTitle: "Resources and limits",
   lspAdvancedDesc: "Defaults are fine for most setups.",
   lspToolsTitle: "Local tools",
   lspToolsDesc:
     "Read-only check of language servers on this machine. Install missing tools yourself (PATH); Pier does not download them.",
   lspToolsLoading: "Checking local tools…",
-  lspToolsEmpty: "Could not load tool status.",
+  lspToolsEmpty: "Could not load tool status",
+  lspToolsEmptyDesc:
+    "Try again in a moment, or restart Pier and reopen this page.",
+  lspToolsNone: "No local tools to list",
+  lspToolsNoneDesc: "Nothing is available to check right now.",
   lspToolsStatusBundled: "Built-in",
   lspToolsStatusAvailable: "On PATH",
   lspToolsStatusMissing: "Not found",
-  lspToolsInstallHint: "Install: {{command}}",
+  lspToolsCopyInstall: "Copy install command for {{name}}",
+  lspToolsCopied: "Copied",
+  lspToolsCopyFailed: "Couldn't copy the install command",
 } as const;

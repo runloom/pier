@@ -1,5 +1,10 @@
 import { Card, CardContent } from "@pier/ui/card.tsx";
-import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
+import {
+  FieldDescription,
+  FieldLegend,
+  FieldSeparator,
+  FieldSet,
+} from "@pier/ui/field.tsx";
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { LspToolsStatusList } from "@/pages/settings/components/lsp-tools-status-list.tsx";
@@ -165,14 +170,10 @@ export function LspSettingsCard() {
     <Card>
       <CardContent>
         <FieldSet>
-          <div className="flex flex-col gap-1">
-            <p className="font-medium text-sm">
-              {t("settings.row.lspHostSectionTitle")}
-            </p>
-            <p className="text-muted-foreground text-sm">
-              {t("settings.row.lspHostSectionDesc")}
-            </p>
-          </div>
+          <LspGroupLegend
+            description={t("settings.row.lspHostSectionDesc")}
+            title={t("settings.row.lspHostSectionTitle")}
+          />
           <SwitchRow
             checked={enabled}
             description={t("settings.row.lspEnabledDesc")}
@@ -193,69 +194,80 @@ export function LspSettingsCard() {
             }}
           />
           <FieldSeparator />
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-1">
-              <p className="font-medium text-sm">
-                {t("settings.row.lspToolsTitle")}
-              </p>
-              <p className="text-muted-foreground text-sm">
-                {t("settings.row.lspToolsDesc")}
-              </p>
-            </div>
+          <FieldSet className="gap-4">
+            <LspGroupLegend
+              description={t("settings.row.lspToolsDesc")}
+              title={t("settings.row.lspToolsTitle")}
+            />
             <LspToolsStatusList />
-          </div>
+          </FieldSet>
           <FieldSeparator />
-          <div className="flex flex-col gap-1">
-            <p className="font-medium text-sm">
-              {t("settings.row.lspAdvancedTitle")}
-            </p>
-            <p className="text-muted-foreground text-sm">
-              {t("settings.row.lspAdvancedDesc")}
-            </p>
-          </div>
-          <LspIdleReleaseRow
-            description={t("settings.row.lspIdleReleaseMinutesDesc")}
-            disabled={!enabled}
-            label={t("settings.row.lspIdleReleaseMinutes")}
-            onChange={async (next) => {
-              try {
-                await setIdleReleaseMs(next);
-              } catch (error) {
-                reportUpdateFailure(error);
-              }
-            }}
-            value={idleReleaseMs}
-          />
-          <LspWorkspaceLimitRow
-            description={t("settings.row.lspMaxLocalWorkspacesDesc")}
-            disabled={!enabled}
-            id="settings-lsp-max-local-workspaces"
-            label={t("settings.row.lspMaxLocalWorkspaces")}
-            onChange={async (next) => {
-              try {
-                await setMaxLocalWorkspaces(next);
-              } catch (error) {
-                reportUpdateFailure(error);
-              }
-            }}
-            value={maxLocalWorkspaces}
-          />
-          <LspWorkspaceLimitRow
-            description={t("settings.row.lspMaxRemoteWorkspacesDesc")}
-            disabled={!enabled}
-            id="settings-lsp-max-remote-workspaces"
-            label={t("settings.row.lspMaxRemoteWorkspaces")}
-            onChange={async (next) => {
-              try {
-                await setMaxRemoteWorkspaces(next);
-              } catch (error) {
-                reportUpdateFailure(error);
-              }
-            }}
-            value={maxRemoteWorkspaces}
-          />
+          <FieldSet className="gap-4">
+            <LspGroupLegend
+              description={t("settings.row.lspAdvancedDesc")}
+              title={t("settings.row.lspAdvancedTitle")}
+            />
+            <LspIdleReleaseRow
+              description={t("settings.row.lspIdleReleaseMinutesDesc")}
+              disabled={!enabled}
+              label={t("settings.row.lspIdleReleaseMinutes")}
+              onChange={async (next) => {
+                try {
+                  await setIdleReleaseMs(next);
+                } catch (error) {
+                  reportUpdateFailure(error);
+                }
+              }}
+              value={idleReleaseMs}
+            />
+            <LspWorkspaceLimitRow
+              description={t("settings.row.lspMaxLocalWorkspacesDesc")}
+              disabled={!enabled}
+              id="settings-lsp-max-local-workspaces"
+              label={t("settings.row.lspMaxLocalWorkspaces")}
+              onChange={async (next) => {
+                try {
+                  await setMaxLocalWorkspaces(next);
+                } catch (error) {
+                  reportUpdateFailure(error);
+                }
+              }}
+              value={maxLocalWorkspaces}
+            />
+            <LspWorkspaceLimitRow
+              description={t("settings.row.lspMaxRemoteWorkspacesDesc")}
+              disabled={!enabled}
+              id="settings-lsp-max-remote-workspaces"
+              label={t("settings.row.lspMaxRemoteWorkspaces")}
+              onChange={async (next) => {
+                try {
+                  await setMaxRemoteWorkspaces(next);
+                } catch (error) {
+                  reportUpdateFailure(error);
+                }
+              }}
+              value={maxRemoteWorkspaces}
+            />
+          </FieldSet>
         </FieldSet>
       </CardContent>
     </Card>
+  );
+}
+
+function LspGroupLegend({
+  description,
+  title,
+}: {
+  description: string;
+  title: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <FieldLegend className="mb-0" variant="label">
+        {title}
+      </FieldLegend>
+      <FieldDescription>{description}</FieldDescription>
+    </div>
   );
 }

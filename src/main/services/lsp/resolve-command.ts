@@ -64,3 +64,54 @@ export function launchSpecForResolvedBinary(
   }
   return { args: [...args], command: binary };
 }
+
+function isLaunchAbsolutePath(pathValue: string): boolean {
+  return (
+    isAbsolute(pathValue) ||
+    /^[A-Za-z]:[\\/]/u.test(pathValue) ||
+    pathValue.startsWith("\\\\")
+  );
+}
+
+function commandLeafName(command: string): string {
+  return (
+    command.split(/[\\/]/u).at(-1)?.trim().toLowerCase() ??
+    command.toLowerCase()
+  );
+}
+
+function isWindowsCmdHost(command: string): boolean {
+  const leaf = commandLeafName(command);
+  return leaf === "cmd.exe" || leaf === "cmd";
+}
+
+function scriptPathFromCmdLaunch(args: readonly string[]): string | null {
+  const cIndex = args.findIndex((arg) => arg.toLowerCase() === "/c");
+  const commandLine = cIndex >= 0 ? args[cIndex + 1] : undefined;
+  if (!commandLine) {
+    return null;
+  }
+  const quoted = /^"([^"]+)"/u.exec(commandLine.trim());
+  const script = quoted?.[1]?.trim();
+  if (script && isLaunchAbsolutePath(script) && !/[\r\n]/.test(script)) {
+    return script;
+  }
+  return null;
+}
+
+/**
+ * Underlying binary path from a launch spec. Never returns `cmd.exe`:
+ * Windows `.cmd` wrappers keep the quoted script path instead.
+ */
+export function binaryPathFromLaunchSpec(launch: {
+  args: readonly string[];
+  command: string;
+}): string | null {
+  if (isWindowsCmdHost(launch.command)) {
+    return scriptPathFromCmdLaunch(launch.args);
+  }
+  if (isLaunchAbsolutePath(launch.command)) {
+    return launch.command;
+  }
+  return resolveCommandOnPath(launch.command);
+}

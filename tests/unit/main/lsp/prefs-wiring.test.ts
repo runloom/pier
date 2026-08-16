@@ -33,12 +33,12 @@ describe("applyLspPrefsToPolicy", () => {
     });
   });
 
-  it("applies worktreesEnabled=true to allow worktree", () => {
+  it("applies worktreesEnabled=false to deny worktree", () => {
     const policy = new WorkspaceLspPolicy({ startIdleTimer: false });
     policies.push(policy);
     applyLspPrefsToPolicy(policy, {
       ...DEFAULT_LSP_POLICY_PREFS,
-      worktreesEnabled: true,
+      worktreesEnabled: false,
     });
     const decision = policy.acquire({
       isWorktree: true,
@@ -46,7 +46,10 @@ describe("applyLspPrefsToPolicy", () => {
       rootPath: "/wt",
       workspaceKey: "wt:/wt",
     });
-    expect(decision.kind).toBe("allow");
+    expect(decision).toMatchObject({
+      kind: "deny",
+      reason: "worktrees-disabled",
+    });
   });
 
   it("applies maxLocalWorkspaces=0 to deny new workspace", () => {
@@ -68,16 +71,23 @@ describe("applyLspPrefsToPolicy", () => {
     });
   });
 
-  it("default prefs allow main workspace", () => {
+  it("default prefs allow main workspace and worktree", () => {
     const policy = new WorkspaceLspPolicy({ startIdleTimer: false });
     policies.push(policy);
     applyLspPrefsToPolicy(policy, DEFAULT_LSP_POLICY_PREFS);
-    const decision = policy.acquire({
+    const main = policy.acquire({
       isWorktree: false,
       kind: "local",
       rootPath: "/repo",
       workspaceKey: "main:/repo",
     });
-    expect(decision.kind).toBe("allow");
+    expect(main.kind).toBe("allow");
+    const worktree = policy.acquire({
+      isWorktree: true,
+      kind: "local",
+      rootPath: "/wt",
+      workspaceKey: "wt:/wt",
+    });
+    expect(worktree.kind).toBe("allow");
   });
 });
