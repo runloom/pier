@@ -1,21 +1,25 @@
 import type { PierFileTreeApi } from "@pier/ui/file/tree.tsx";
 
 /**
- * After the user opens a change from the shared review tree, ensure that row
- * sits in the optimal viewport (center). Does not open files; selection/open
- * stays with the caller.
+ * Explicit tree orient: select the row and scroll it into the optimal viewport.
+ * Does not open files; selection/open stays with the caller.
  *
- * Not continuous active-file tracking: only runs on explicit open intents.
- * Defer past the click frame so expansion/selection settle first.
+ * Not continuous active-file tracking. Defer past the click frame so
+ * expansion/selection settle first.
  */
 export function revealGitReviewTreeSelection(
   api: PierFileTreeApi | null | undefined,
   path: string,
   options?: {
     /**
-     * 搜索栏仍开着时必须传 true：reveal 会跨 microtask 和两帧反复把 DOM 焦点
-     * 抢到行按钮上（为了画焦点环），用户在 Enter 之后紧接着按 Esc / Enter 会
-     * 落到树上而不是搜索框。
+     * Group roots start collapsed; expand so children are visible.
+     * File rows leave this unset.
+     */
+    readonly expandTarget?: boolean;
+    /**
+     * Keep DOM focus where it is. Default focuses the row so the tree can
+     * paint a focus ring; tab/search callers must pass true or the next
+     * key lands on the tree.
      */
     readonly preserveFocus?: boolean;
   }
@@ -25,7 +29,7 @@ export function revealGitReviewTreeSelection(
   }
   const run = () => {
     api.revealPath(path, {
-      expandTarget: false,
+      expandTarget: options?.expandTarget === true,
       intent: "explicit",
       ...(options?.preserveFocus === undefined
         ? {}

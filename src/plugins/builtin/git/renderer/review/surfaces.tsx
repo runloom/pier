@@ -20,6 +20,7 @@ import type {
   UncommittedGitReviewSurface,
 } from "./reading-surface.ts";
 import {
+  addReviewSurface,
   GIT_REVIEW_UNCOMMITTED_READING_SURFACES,
   preferredUncommittedReadingSurface,
   reviewGroupForSurface,
@@ -30,6 +31,7 @@ import type {
   ReviewActiveChrome,
   ReviewSurfaceNavigationRequest,
   ReviewSurfaceProps,
+  ReviewTreeFocus,
   ReviewTreeOpenReveal,
 } from "./surface-types.ts";
 import { buildActivateNavigationRequest } from "./surface-types.ts";
@@ -54,7 +56,6 @@ function ReviewDocumentsComponent(
   }
 ): React.JSX.Element {
   const committed = props.scope.target.kind !== "uncommitted";
-  // 直接打开：优先展示序第一个有内容的面（通常「已暂存更改」先于「更改」）
   const initialSurface: GitReviewReadingSurface = committed
     ? "committed"
     : preferredUncommittedReadingSurface(props.treeModel.visibleGroups);
@@ -65,9 +66,7 @@ function ReviewDocumentsComponent(
   const [mountedSurfaces, setMountedSurfaces] = useState<
     ReadonlySet<GitReviewReadingSurface>
   >(() => new Set([initialSurface]));
-  /** 用户点过页签 / 树导航后不再自动改默认面 */
   const userPickedSurfaceRef = useRef(false);
-  /** index 首次有 visibleGroups 时对齐一次默认面 */
   const defaultSurfaceSettledRef = useRef(
     committed || props.treeModel.visibleGroups.length > 0
   );
@@ -83,7 +82,6 @@ function ReviewDocumentsComponent(
   );
   const lastNavigationPathRef = useRef<string | null>(null);
   const navigationNonceRef = useRef(0);
-  // Monotonic seq (e2e); active nonce attr resets on settle.
   const [navigationSeq, setNavigationSeq] = useState(0);
   useEffect(
     () =>
@@ -118,24 +116,35 @@ function ReviewDocumentsComponent(
       }),
     [props.indexGeneration, props.scope]
   );
-  /** 共享树高亮：跨面点击只改此 id，不换树实例 */
   const [selectedTreeSectionKey, setSelectedTreeSectionKey] = useState<
     string | null
   >(null);
-  /** 活动面折叠等工具条状态 → 共享 header trailing */
+  const [treeFocus, setTreeFocus] = useState<ReviewTreeFocus | null>(null);
   const [activeChrome, setActiveChrome] = useState<ReviewActiveChrome | null>(
     null
   );
   const { options: viewOptions, setOptions: setViewOptions } =
     useReviewViewOptions();
-  const selectSurface = useCallback((surface: GitReviewReadingSurface) => {
-    userPickedSurfaceRef.current = true;
-    navigationRequestRef.current = null;
-    setNavigationRequest(null);
-    setMountedSurfaces((current) => addSurface(current, surface));
-    setActiveSurface(surface);
-    activeSurfaceRef.current = surface;
-  }, []);
+  const selectSurface = useCallback(
+    (surface: GitReviewReadingSurface) => {
+      userPickedSurfaceRef.current = true;
+      navigationRequestRef.current = null;
+      setNavigationRequest(null);
+      setMountedSurfaces((current) => addReviewSurface(current, surface));
+      setActiveSurface(surface);
+      activeSurfaceRef.current = surface;
+      if (surface === "committed") {
+        return;
+      }
+      const path = props.treeModel.getGroupRootPath(
+        reviewGroupForSurface(surface)
+      );
+      if (path !== undefined) {
+        setTreeFocus((current) => ({ nonce: (current?.nonce ?? 0) + 1, path }));
+      }
+    },
+    [props.treeModel]
+  );
   const requestTreeOpen = useCallback(
     (
       entryKey: string,
@@ -149,7 +158,7 @@ function ReviewDocumentsComponent(
       lastNavigationPathRef.current =
         props.entries.find((entry) => entry.entryKey === entryKey)?.path ??
         lastNavigationPathRef.current;
-      setMountedSurfaces((current) => addSurface(current, surface));
+      setMountedSurfaces((current) => addReviewSurface(current, surface));
       // 树跨面点击：立即切面 + 立即可见新面（无旧面 handoff 叠层）。
       // 切面后由目标面 beginNavigation 做 demand/scroll。
       if (activeSurfaceRef.current !== surface) {
@@ -171,7 +180,6 @@ function ReviewDocumentsComponent(
     },
     [props.entries]
   );
-  /** 共享树点击：只切换右侧正文面，树结构/展开态保持 */
   const openSharedTreePath = useCallback(
     (path: string) => {
       const fileRef = props.treeModel.getFileRefForTreePath(path);
@@ -192,8 +200,6 @@ function ReviewDocumentsComponent(
     },
     [props.treeModel, selectedTreeSectionKey]
   );
-  // index 从空 → 有分组：对齐「直接打开」默认面（用户已点选则跳过）
-  // 当前面已无成员：始终落到有内容的面（不受 userPicked 影响）
   useLayoutEffect(() => {
     if (committed) {
       return;
@@ -284,7 +290,7 @@ function ReviewDocumentsComponent(
       return;
     }
     setMountedSurfaces((current) =>
-      addSurface(current, mutationTransition.targetSurface)
+      addReviewSurface(current, mutationTransition.targetSurface)
     );
     navigationNonceRef.current += 1;
     const nonce = navigationNonceRef.current;
@@ -424,6 +430,7 @@ function ReviewDocumentsComponent(
       setSidebarCollapsed={props.setSidebarCollapsed}
       sidebarCollapsed={props.sidebarCollapsed}
       sourcePanelId={props.panelId}
+      treeFocus={treeFocus}
       treeModel={props.targetSelectionPending === true ? null : props.treeModel}
     >
       <div
@@ -488,13 +495,6 @@ function ReviewDocumentsComponent(
       </div>
     </GitReviewPanelLayout>
   );
-}
-
-function addSurface(
-  set: ReadonlySet<GitReviewReadingSurface>,
-  surface: GitReviewReadingSurface
-): ReadonlySet<GitReviewReadingSurface> {
-  return set.has(surface) ? set : new Set([...set, surface]);
 }
 
 export const ReviewDocuments = memo(ReviewDocumentsComponent);

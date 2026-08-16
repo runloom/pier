@@ -25,9 +25,18 @@ import { useFileTreeSearch } from "@pier/ui/file/use-tree-search.tsx";
 
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { SearchX } from "lucide-react";
-import { memo, type ReactNode, useCallback, useEffect, useMemo } from "react";
+import {
+  memo,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import { pluginText } from "../plugin-text.ts";
 import { ReviewTreeLoading } from "./feedback.tsx";
+import type { ReviewTreeFocus } from "./surface-types.ts";
 import type { gitReviewTreeModel } from "./tree.tsx";
 import { registerGitReviewTreeFolderHandlers } from "./tree-collapse-registry.ts";
 import { useGitReviewTreeContextMenu } from "./tree-context-menu.ts";
@@ -245,6 +254,7 @@ export function GitReviewPanelLayout({
   sidebarFooter,
   sidebarHeader,
   sourcePanelId,
+  treeFocus = null,
   treeLoading = false,
   treeModel,
 }: {
@@ -270,11 +280,13 @@ export function GitReviewPanelLayout({
   sidebarFooter?: ReactNode;
   sidebarHeader?: ReactNode;
   sourcePanelId?: string;
+  treeFocus?: ReviewTreeFocus | null;
   /** index 加载中：侧栏显示树骨架而非空 PierFileTree */
   treeLoading?: boolean;
   treeModel?: ReturnType<typeof gitReviewTreeModel> | null;
 }) {
   const treeSearch = useFileTreeSearch();
+  const lastRevealedNonceRef = useRef<number | null>(null);
   // 无变更时侧栏与树 chrome 一并隐藏，避免空树黑区；冷加载骨架仍占位。
   const treeHasContent =
     treeLoading === true || (treeModel != null && treeModel.items.length > 0);
@@ -327,6 +339,26 @@ export function GitReviewPanelLayout({
     treeApiRef,
     treeLoading,
   ]);
+  useLayoutEffect(() => {
+    if (
+      treeFocus == null ||
+      lastRevealedNonceRef.current === treeFocus.nonce ||
+      sidebarCollapsed ||
+      treeLoading === true ||
+      !hasTree
+    ) {
+      return;
+    }
+    const api = treeApiRef.current;
+    if (!api) {
+      return;
+    }
+    lastRevealedNonceRef.current = treeFocus.nonce;
+    revealGitReviewTreeSelection(api, treeFocus.path, {
+      expandTarget: true,
+      preserveFocus: true,
+    });
+  }, [hasTree, sidebarCollapsed, treeApiRef, treeFocus, treeLoading]);
 
   const toggleSearch = () => {
     if (!hasTree || treeLoading) {
@@ -379,6 +411,7 @@ export function GitReviewPanelLayout({
             getFileRefForTreePath: () => undefined,
             getFileRefsUnderTreePath: () => [],
             getGroupForTreePath: () => undefined,
+            getGroupRootPath: () => undefined,
             getRepoRelativePath: () => null,
             orderedFileRefs: [],
             mutation: { expectedIndexRevision: null, uncommitted: true },

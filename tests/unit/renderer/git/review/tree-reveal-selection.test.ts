@@ -18,6 +18,42 @@ describe("revealGitReviewTreeSelection", () => {
     });
   });
 
+  it("expands a directory target when expandTarget is true", async () => {
+    const revealPath = vi.fn(() => true);
+    const api = { revealPath } as unknown as PierFileTreeApi;
+
+    revealGitReviewTreeSelection(api, "Staged Changes", {
+      expandTarget: true,
+    });
+
+    await vi.waitFor(() => {
+      expect(revealPath).toHaveBeenCalled();
+    });
+    expect(revealPath).toHaveBeenCalledWith("Staged Changes", {
+      expandTarget: true,
+      intent: "explicit",
+    });
+  });
+
+  it("keeps caller focus when preserveFocus is true", async () => {
+    const revealPath = vi.fn(() => true);
+    const api = { revealPath } as unknown as PierFileTreeApi;
+
+    revealGitReviewTreeSelection(api, "Changes", {
+      expandTarget: true,
+      preserveFocus: true,
+    });
+
+    await vi.waitFor(() => {
+      expect(revealPath).toHaveBeenCalled();
+    });
+    expect(revealPath).toHaveBeenCalledWith("Changes", {
+      expandTarget: true,
+      intent: "explicit",
+      preserveFocus: true,
+    });
+  });
+
   it("no-ops for missing api or empty path", () => {
     expect(() => {
       revealGitReviewTreeSelection(null, "a");

@@ -65,6 +65,7 @@ export interface GitReviewTreeModel {
   getFileRefsUnderTreePath: (path: string) => readonly GitReviewTreeFileRef[];
   /** Stable group id for a tree path under a group root (including the root). */
   getGroupForTreePath: (path: string) => GitReviewGroup | undefined;
+  getGroupRootPath: (group: GitReviewGroup) => string | undefined;
   /**
    * Repo-relative path for copy/reveal. Tree rows nest under a synthetic group
    * root (`Changed Files` / `Changes` / …); strip that prefix. Group roots
@@ -236,6 +237,7 @@ export function gitReviewTreeModel(
       }
       return;
     },
+    getGroupRootPath: (group) => groupRootByGroup.get(group),
     getRepoRelativePath: (treePath: string) => {
       // Prefer file ref: collision display paths are not real repo paths.
       const fileRef = fileRefByTreePath.get(treePath);
