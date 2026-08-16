@@ -145,9 +145,19 @@ export function probeResolvedBinaryVersion(
         killProbeTree(child);
       } finally {
         releaseChild(child);
-        finish();
+        finish(collectedVersion());
       }
     }, LSP_VERSION_PROBE_TIMEOUT_MS);
+
+    const collectedVersion = (): string | undefined =>
+      parseVersionLine(Buffer.concat(stdoutChunks).toString("utf8"));
+    const finishCollected = (requireSuccess = false, code?: number) => {
+      if (requireSuccess && code !== 0) {
+        finish();
+        return;
+      }
+      finish(collectedVersion());
+    };
 
     child.stdout?.on("data", (chunk: Buffer) => {
       if (settled || byteLength >= VERSION_MAX_BYTES) {
@@ -157,6 +167,16 @@ export function probeResolvedBinaryVersion(
       const slice = chunk.length > room ? chunk.subarray(0, room) : chunk;
       stdoutChunks.push(slice);
       byteLength += slice.length;
+      if (byteLength < VERSION_MAX_BYTES) {
+        return;
+      }
+      clearTimeout(timer);
+      try {
+        killProbeTree(child);
+      } finally {
+        releaseChild(child);
+        finishCollected();
+      }
     });
     child.stderr?.resume();
     child.on("error", () => {
@@ -167,11 +187,7 @@ export function probeResolvedBinaryVersion(
     child.on("close", (code) => {
       clearTimeout(timer);
       releaseChild(child);
-      if (code !== 0) {
-        finish();
-        return;
-      }
-      finish(parseVersionLine(Buffer.concat(stdoutChunks).toString("utf8")));
+      finishCollected(true, code ?? 1);
     });
   });
 }
