@@ -114,10 +114,27 @@ describe("probeResolvedBinaryVersion", () => {
         ? `echo v1.0 ${"x".repeat(8000)}\r\nexit 0`
         : `printf 'v1.0 ${"x".repeat(8000)}\\n'\nexit 0`
     );
+    const started = Date.now();
     const version = await probeResolvedBinaryVersion(noisy);
     expect(version).toBeDefined();
     expect(version?.length).toBeLessThanOrEqual(64);
+    expect(Date.now() - started).toBeLessThan(LSP_VERSION_PROBE_TIMEOUT_MS);
   });
+
+  it("keeps the first line if the process hangs after printing", async () => {
+    const printThenHang = writeScript(
+      process.platform === "win32" ? "print-hang.cmd" : "print-hang",
+      process.platform === "win32"
+        ? "echo gopls v9.9.9\r\nping -n 30 127.0.0.1 >nul"
+        : "echo gopls v9.9.9\nexec sleep 30"
+    );
+    const started = Date.now();
+    const version = await probeResolvedBinaryVersion(printThenHang);
+    expect(version).toBe("gopls v9.9.9");
+    expect(Date.now() - started).toBeLessThan(
+      LSP_VERSION_PROBE_TIMEOUT_MS + 2000
+    );
+  }, 8000);
 
   it("times out a hanging binary without returning a version", async () => {
     const hang = writeScript(
