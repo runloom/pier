@@ -36,6 +36,7 @@ import {
   hasQuotaMetric,
   mergeScalarMetrics,
   SESSION_EXPIRED_RELOGIN_ERROR,
+  softenEmptyQuotaResult,
   timedOutResult,
   transientFailureResult,
 } from "./usage-result.ts";
@@ -463,7 +464,9 @@ async function fetchGrokUsageAttempt(options: {
         userId: userIdFromEntry(selected?.entry),
       });
     }
-    return credits.status === "error" ? credits : fallback;
+    return softenEmptyQuotaResult(
+      credits.status === "error" ? credits : fallback
+    );
   } catch (error) {
     if (caller.aborted) {
       return abortedResult();

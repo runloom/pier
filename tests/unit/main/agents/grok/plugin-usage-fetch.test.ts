@@ -173,6 +173,70 @@ describe("fetchGrokUsage", () => {
     });
   });
 
+  it("treats a credits rollover period without percents as a fresh weekly window", async () => {
+    const fetchImpl = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        url.includes("format=credits")
+          ? JSON.stringify({
+              config: {
+                billingPeriodEnd: "2026-07-21T05:50:57.340339+00:00",
+                billingPeriodStart: "2026-07-14T05:50:57.340339+00:00",
+                currentPeriod: {
+                  end: "2026-07-21T05:50:57.340339+00:00",
+                  start: "2026-07-14T05:50:57.340339+00:00",
+                  type: "USAGE_PERIOD_TYPE_WEEKLY",
+                },
+                onDemandCap: { val: 0 },
+                prepaidBalance: { val: 0 },
+              },
+            })
+          : JSON.stringify({
+              config: {
+                monthlyLimit: { val: 15_000 },
+                used: { val: 4112 },
+              },
+            }),
+    }));
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+    expect(result.status).toBe("ok");
+    expect(result.metrics[0]).toMatchObject({
+      id: "grok:period",
+      name: "Weekly limit",
+      usedPercent: 0,
+      windowMinutes: 10_080,
+    });
+    expect(
+      fetchImpl.mock.calls.some((call) => call[0] === GROK_BILLING_URL)
+    ).toBe(false);
+  });
+
+  it("softens a dual empty billing response into a transient failure", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ config: {} }),
+    }));
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+    expect(result).toMatchObject({
+      status: "error",
+      error: expect.stringContaining(USAGE_TEMPORARILY_UNAVAILABLE_ERROR),
+      metrics: [],
+    });
+    expect(result.error).toMatch(/No Grok quota windows/i);
+  });
+
   it("retries credits once after a transport failure before cash fallback", async () => {
     let creditsCalls = 0;
     const fetchImpl = vi.fn(async (url: string) => {
