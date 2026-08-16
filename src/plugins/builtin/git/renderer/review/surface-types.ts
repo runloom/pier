@@ -16,6 +16,12 @@ import type { gitReviewTreeModel } from "./tree.tsx";
 
 export type { UncommittedGitReviewSurface } from "./reading-surface.ts";
 
+/** 页签切面后对分组根做一次目录式 reveal。 */
+export interface ReviewTreeFocus {
+  readonly nonce: number;
+  readonly path: string;
+}
+
 /**
  * 评论 / 编辑器 gutter reveal 跳转意图（→ git changes 面板）。
  * 经 panel params 透传到 ReviewDocuments，反查 entryKey/sectionKey 后调

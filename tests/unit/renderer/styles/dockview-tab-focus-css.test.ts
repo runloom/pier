@@ -69,11 +69,14 @@ describe("Pier dockview tab focus CSS", () => {
     expect(runningBeforeStart).toBeGreaterThanOrEqual(0);
     const runningBeforeBlock = css.slice(
       runningBeforeStart,
-      runningBeforeStart + 500
+      runningBeforeStart + 650
     );
-    // S1 默认：细 1px + top:0 挨紧顶部
+    // S1 默认：细 1px + top:0 挨紧顶部；S2/S3 再抬到 2px
     expect(runningBeforeBlock).toContain("top: 0");
+    expect(runningBeforeBlock).toContain("left: auto");
+    expect(runningBeforeBlock).toContain("width: auto");
     expect(runningBeforeBlock).toContain("height: 1px");
+    expect(runningBeforeBlock).not.toContain("height: 2px");
     expect(runningBeforeBlock).not.toContain("top: 1px");
     expect(runningBeforeBlock).not.toContain("top: 2px");
     expect(runningBeforeBlock).not.toContain("top: 3px");
@@ -104,6 +107,26 @@ describe("Pier dockview tab focus CSS", () => {
     expect(css).toContain(".dv-tab .pier-tab-running-bar");
   });
 
+  it("beats dockview divider ::before on non-first running tabs", () => {
+    const dividerTwin =
+      '.dv-tabs-container.dv-horizontal\n  .dv-tab:not(:first-child):has([data-tab-status="running"])::before';
+    const verticalTwin =
+      '.dv-tabs-container.dv-vertical\n  .dv-tab:not(:first-child):has([data-tab-status="running"])::before';
+    expect(css).toContain(dividerTwin);
+    expect(css).toContain(verticalTwin);
+    expect(css).toContain("left: auto");
+    expect(css).toContain("width: auto");
+    const reduceStart = css.indexOf("@media (prefers-reduced-motion: reduce)");
+    expect(reduceStart).toBeGreaterThanOrEqual(0);
+    const reduceBlock = css.slice(reduceStart, reduceStart + 900);
+    expect(reduceBlock).toContain(
+      '.dv-tabs-container.dv-horizontal\n    .dv-tab:not(:first-child):has([data-tab-status="running"])::before'
+    );
+    expect(reduceBlock).toContain(
+      '.dv-tabs-container.dv-vertical\n    .dv-tab:not(:first-child):has([data-tab-status="running"])::before'
+    );
+  });
+
   it("locks S2 running track at 2px for inactive-group and window-blur", () => {
     // 切片止于 S3 注释之前，避免 S3 的 height:2px 误满足断言。
     const s2RunningHeightStart = css.indexOf(
@@ -121,6 +144,53 @@ describe("Pier dockview tab focus CSS", () => {
       '.dv-tab.dv-active-tab:has([data-tab-status="running"])::before'
     );
     expect(s2RunningBlock).toContain("height: 2px");
+  });
+
+  it("keeps S1 running thinner than S2 and boosts inactive-tab contrast", () => {
+    const runningHostStart = css.indexOf(
+      "/* 凡 running：外层 tab 定位上下文 + S1 默认 accent / 材质 */"
+    );
+    const s1BoostStart = css.indexOf(
+      "S1 未选中 running：1px 轨要用更实的 trough"
+    );
+    expect(runningHostStart).toBeGreaterThanOrEqual(0);
+    expect(s1BoostStart).toBeGreaterThan(runningHostStart);
+    // 1px 轨在 tab 盒内，不给凡 running 开 overflow:visible（会压过 dockview 拖拽裁切）
+    expect(css.slice(runningHostStart, s1BoostStart)).not.toContain(
+      "overflow: visible"
+    );
+
+    const s1HeightStart = css.indexOf(
+      "默认 S1：细 1px + muted；稳底用 background-color"
+    );
+    const s2RunningStart = css.indexOf(
+      "/*\n * — S2: 失焦 group 选中 / 窗口失焦降档 — 粗 2px + muted（默认色）。"
+    );
+    expect(s1HeightStart).toBeGreaterThanOrEqual(0);
+    expect(s2RunningStart).toBeGreaterThan(s1HeightStart);
+    const s1HeightBlock = css.slice(s1HeightStart, s2RunningStart);
+    expect(s1HeightBlock).toContain("height: 1px");
+    expect(s1HeightBlock).not.toContain("height: 2px");
+
+    const darkS1Start = css.indexOf(
+      '.dockview-theme-pier .dv-tab.dv-inactive-tab:has([data-tab-status="running"]) {'
+    );
+    const lightS1Start = css.indexOf(
+      ':root.light\n  .dockview-theme-pier\n  .dv-tab.dv-inactive-tab:has([data-tab-status="running"]) {'
+    );
+    expect(darkS1Start).toBeGreaterThanOrEqual(0);
+    expect(lightS1Start).toBeGreaterThan(darkS1Start);
+    const darkS1Block = css.slice(darkS1Start, lightS1Start);
+    expect(darkS1Block).toContain("var(--pier-tab-running-accent) 72%");
+    expect(darkS1Block).not.toContain("var(--pier-tab-running-accent) 40%");
+
+    const afterRunningStart = css.indexOf(
+      "running 时关闭实心选中/补线 ::after"
+    );
+    expect(afterRunningStart).toBeGreaterThan(lightS1Start);
+    const lightS1Block = css.slice(lightS1Start, afterRunningStart);
+    expect(lightS1Block).toContain("var(--pier-tab-running-accent) 50%");
+    expect(lightS1Block).not.toContain("var(--pier-tab-running-accent) 35%");
   });
 
   it("tunes running shimmer for light chrome (clean progress bar style)", () => {

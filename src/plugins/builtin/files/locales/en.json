@@ -455,7 +455,9 @@
     "filePanel.markdown.comment.placeholder": "Write a comment…",
     "filePanel.markdown.comment.submit": "Submit",
     "filePanel.markdown.comment.title": "Comment",
-    "filePanel.markdown.comment.updateFailed": "Couldn’t update comment"
+    "filePanel.markdown.comment.updateFailed": "Couldn’t update comment",
+    "filePanel.markdown.comment.view": "View comment",
+    "filePanel.markdown.comment.viewCount": "View {{count}} comments"
   },
   "terminalStatusItems": {
     "pier.files.project": {

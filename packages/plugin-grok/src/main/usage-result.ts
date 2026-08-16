@@ -1,4 +1,5 @@
 import { USAGE_TEMPORARILY_UNAVAILABLE_ERROR } from "../shared/constants.ts";
+import { NO_GROK_QUOTA_WINDOWS_ERROR } from "./billing-parse.ts";
 import type { AccountUsageResult } from "./types.ts";
 import { BILLING_TIMEOUT_ERROR } from "./usage-fetch-timeouts.ts";
 
@@ -67,4 +68,17 @@ export function accessDeniedResult(detail?: string): AccountUsageResult {
     error: detail ? `${ACCESS_DENIED_ERROR} (${detail})` : ACCESS_DENIED_ERROR,
     metrics: [],
   };
+}
+
+/** Empty meters after both billing hops — retry quietly, keep last-good. */
+export function softenEmptyQuotaResult(
+  result: AccountUsageResult
+): AccountUsageResult {
+  if (
+    result.status === "error" &&
+    result.error === NO_GROK_QUOTA_WINDOWS_ERROR
+  ) {
+    return transientFailureResult(result.error);
+  }
+  return result;
 }

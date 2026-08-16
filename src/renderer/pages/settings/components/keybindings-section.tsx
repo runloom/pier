@@ -1,14 +1,32 @@
 import { Button } from "@pier/ui/button.tsx";
 import { Card, CardContent, CardFooter } from "@pier/ui/card.tsx";
 import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@pier/ui/empty.tsx";
+import {
   Field,
   FieldContent,
   FieldDescription,
   FieldLabel,
 } from "@pier/ui/field.tsx";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@pier/ui/input-group.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
 import { ShortcutInput } from "@pier/ui/shortcut-input.tsx";
-import { Fragment, useEffect, useMemo, useSyncExternalStore } from "react";
+import { Search } from "lucide-react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import {
@@ -18,6 +36,7 @@ import {
 } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import {
+  formatChord,
   formatChordParts,
   stringifyChord,
 } from "@/lib/keybindings/formatter.ts";
@@ -27,6 +46,10 @@ import {
   keybindingRegistry,
   subscribeKeybindingRegistry,
 } from "@/lib/keybindings/registry.ts";
+import {
+  keybindingSearchHaystack,
+  matchKeybindingQuery,
+} from "@/lib/keybindings/search.ts";
 import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
@@ -116,12 +139,40 @@ function localizedError(
   return raw;
 }
 
+function actionSearchHaystack(
+  action: Action,
+  t: ReturnType<typeof useT>
+): string {
+  const binding = keybindingRegistry.getBindingsFor(action.id)[0];
+  return keybindingSearchHaystack([
+    action.title(),
+    localizedDescription(action, t),
+    action.id,
+    action.category,
+    ...(binding
+      ? [
+          formatChord(binding.chord),
+          stringifyChord(binding.chord),
+          ...formatChordParts(binding.chord),
+        ]
+      : []),
+  ]);
+}
+
 export function KeybindingsSection() {
   const t = useT();
   const actions = useActions();
+  const [query, setQuery] = useState("");
   const actionsById = useMemo(
     () => new Map(actions.map((action) => [action.id, action])),
     [actions]
+  );
+  const visibleActions = useMemo(
+    () =>
+      actions.filter((action) =>
+        matchKeybindingQuery(actionSearchHaystack(action, t), query)
+      ),
+    [actions, query, t]
   );
   const recordingCommandId = useKeybindingPreferencesStore(
     (s) => s.recordingCommandId
@@ -160,7 +211,7 @@ export function KeybindingsSection() {
         toast.error(t("settings.keybindings.errorNeedsModifier"));
         return;
       }
-      setBinding(recordingCommandId, stringifyChord(chord), "global")
+      setBinding(recordingCommandId, stringifyChord(chord))
         .then((result) => {
           if (result.ok) {
             return;
@@ -197,8 +248,46 @@ export function KeybindingsSection() {
       <h1 className="mb-4 text-xl">{t("settings.section.keybindings")}</h1>
       <Card size="sm">
         <CardContent className="px-0">
+          <div className="px-4 pb-3">
+            <Field>
+              <FieldLabel className="sr-only" htmlFor="keybindings-search">
+                {t("settings.keybindings.searchLabel")}
+              </FieldLabel>
+              <InputGroup>
+                <InputGroupAddon>
+                  <Search />
+                </InputGroupAddon>
+                <InputGroupInput
+                  autoComplete="off"
+                  data-testid="keybindings-search"
+                  id="keybindings-search"
+                  onChange={(event) => setQuery(event.target.value)}
+                  onFocus={() => {
+                    if (recordingCommandId) {
+                      cancelRecording();
+                    }
+                  }}
+                  placeholder={t("settings.keybindings.searchPlaceholder")}
+                  value={query}
+                />
+              </InputGroup>
+            </Field>
+          </div>
+          <Separator className="mx-(--card-spacing) bg-border/70 data-horizontal:w-auto" />
           <div>
-            {actions.map((action, index) => {
+            {visibleActions.length === 0 ? (
+              <Empty className="border-0 py-8">
+                <EmptyHeader>
+                  <EmptyTitle>
+                    {t("settings.keybindings.noResultsTitle")}
+                  </EmptyTitle>
+                  <EmptyDescription>
+                    {t("settings.keybindings.noResultsDescription")}
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
+            ) : null}
+            {visibleActions.map((action, index) => {
               const title = action.title();
               const isRecording = recordingCommandId === action.id;
               const custom = hasUserEntry(action.id);

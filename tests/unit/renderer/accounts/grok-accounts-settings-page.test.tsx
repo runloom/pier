@@ -233,6 +233,78 @@ describe("Grok accounts settings page", () => {
     expect(otherCard?.textContent ?? "").toMatch(/Other accounts\s*1/);
   });
 
+  it("shows quota reset badges on other accounts, not only the current account", async () => {
+    const now = Date.now();
+    const quota = {
+      groupId: "grok",
+      id: "grok:primary",
+      kind: "quota" as const,
+      usedPercent: 20,
+      windowMinutes: 10_080,
+    };
+    const { context } = contextWithSnapshot({
+      accounts: [
+        {
+          email: "active@example.com",
+          error: null,
+          id: "acc-active",
+          kind: "oidc",
+          label: "active@example.com",
+          status: "active",
+          usage: {
+            attemptedAt: now,
+            metrics: [
+              quota,
+              {
+                format: "count",
+                id: "grok:reset-credits",
+                kind: "scalar",
+                value: 1,
+              },
+            ],
+            status: "ok",
+            updatedAt: now,
+          },
+        },
+        {
+          email: "other@example.com",
+          error: null,
+          id: "acc-other",
+          kind: "oidc",
+          label: "other@example.com",
+          status: "available",
+          usage: {
+            attemptedAt: now,
+            metrics: [
+              quota,
+              {
+                format: "count",
+                id: "grok:reset-credits",
+                kind: "scalar",
+                value: 2,
+              },
+            ],
+            status: "ok",
+            updatedAt: now,
+          },
+        },
+      ],
+      activeAccountId: "acc-active",
+      login: null,
+      revision: 2,
+      schemaVersion: 1,
+    });
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
+    await screen.findByText("other@example.com");
+    expect(screen.getByText("Quota resets 1")).toBeTruthy();
+    expect(screen.getByText("Quota resets 2")).toBeTruthy();
+  });
+
   it("opens switch confirm dialog before selecting accounts", async () => {
     const { context, invokeCalls } = contextWithSnapshot(
       snapshotWithAccounts()

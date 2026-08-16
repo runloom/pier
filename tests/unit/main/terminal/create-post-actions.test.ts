@@ -1,22 +1,40 @@
 import {
+  cancelInitialTerminalInput,
   finishFailedAgentCommandInject,
   formatAgentCommandInjectFailedCopy,
   sendInitialTerminalInput,
   setAgentCommandInjectFailedReporter,
 } from "@main/ipc/terminal/create-post-actions.ts";
-import {
-  cancelPromptReady,
-  signalPromptReady,
-} from "@main/ipc/terminal/initial-input-gate.ts";
+import { signalPromptReady } from "@main/ipc/terminal/initial-input-gate.ts";
 import type { NativeAddon } from "@main/ipc/terminal/native-addon.ts";
+import { SUBMIT_ENTER_SETTLE_MS } from "@main/ipc/terminal/operations.ts";
+import { APPKIT_KEYCODE } from "@shared/terminal-appkit-keys.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { workspace as workspaceEn } from "../../../../src/renderer/i18n/locales/en/workspace.ts";
 import { workspace as workspaceZh } from "../../../../src/renderer/i18n/locales/zh-CN/workspace.ts";
 
+function addonWith(handlers: {
+  readViewportText?: () => string;
+  sendKeyPress?: () => boolean;
+  sendText: () => boolean;
+}): NativeAddon {
+  return {
+    sendKeyPress: vi.fn(handlers.sendKeyPress ?? (() => true)),
+    sendText: vi.fn(handlers.sendText),
+    ...(handlers.readViewportText
+      ? { readViewportText: handlers.readViewportText }
+      : {}),
+  } as unknown as NativeAddon;
+}
+
+async function flushSubmitEnter(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(SUBMIT_ENTER_SETTLE_MS);
+}
+
 describe("terminal create post actions", () => {
   afterEach(() => {
     // 清掉可能残留的 fallback timer，防止跨用例污染。
-    cancelPromptReady("terminal-1");
+    cancelInitialTerminalInput("terminal-1");
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -28,54 +46,206 @@ describe("terminal create post actions", () => {
       .fn()
       .mockReturnValueOnce(false)
       .mockReturnValueOnce(true);
+    const addon = addonWith({ sendText });
 
     sendInitialTerminalInput({
-      addon: { sendText } as unknown as NativeAddon,
+      addon,
       initialInput: "修复终端焦点问题\r",
       nativePanelId: "7::terminal-1",
       panelId: "terminal-1",
     });
 
     // Prompt 未就绪之前不写 stdin，避免 raw tty echo 打乱登录 banner。
-    expect(sendText).not.toHaveBeenCalled();
+    expect(addon.sendText).not.toHaveBeenCalled();
 
     signalPromptReady("terminal-1");
-    expect(sendText).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(addon.sendText).toHaveBeenCalledTimes(1);
+    expect(addon.sendKeyPress).not.toHaveBeenCalled();
 
-    await vi.runOnlyPendingTimersAsync();
-
-    expect(sendText).toHaveBeenCalledTimes(2);
-    expect(sendText).toHaveBeenLastCalledWith(
+    await vi.advanceTimersByTimeAsync(50);
+    expect(addon.sendText).toHaveBeenCalledTimes(2);
+    expect(addon.sendText).toHaveBeenLastCalledWith(
       "7::terminal-1",
-      "修复终端焦点问题\r"
+      "修复终端焦点问题"
+    );
+    expect(addon.sendKeyPress).not.toHaveBeenCalled();
+
+    await flushSubmitEnter();
+    expect(addon.sendKeyPress).toHaveBeenCalledWith(
+      "7::terminal-1",
+      APPKIT_KEYCODE.return,
+      0,
+      "\r"
     );
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it("falls back to a timer when the shell integration never emits OSC 7", async () => {
+  it("pastes the command then submits with a synthetic Return", async () => {
     vi.useFakeTimers();
-    const sendText = vi.fn().mockReturnValue(true);
+    const addon = addonWith({ sendText: () => true });
 
     sendInitialTerminalInput({
-      addon: { sendText } as unknown as NativeAddon,
+      addon,
+      initialInput: "pnpm setup:worktree\r",
+      nativePanelId: "7::terminal-1",
+      panelId: "terminal-1",
+    });
+    signalPromptReady("terminal-1");
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(addon.sendText).toHaveBeenCalledWith(
+      "7::terminal-1",
+      "pnpm setup:worktree"
+    );
+    expect(addon.sendKeyPress).not.toHaveBeenCalled();
+
+    await flushSubmitEnter();
+    expect(addon.sendKeyPress).toHaveBeenCalledWith(
+      "7::terminal-1",
+      APPKIT_KEYCODE.return,
+      0,
+      "\r"
+    );
+  });
+
+  it("submits when the submit flag is omitted", async () => {
+    vi.useFakeTimers();
+    const addon = addonWith({ sendText: () => true });
+
+    sendInitialTerminalInput({
+      addon,
+      initialInput: "pnpm setup:worktree",
+      nativePanelId: "7::terminal-1",
+      panelId: "terminal-1",
+    });
+    signalPromptReady("terminal-1");
+    await vi.advanceTimersByTimeAsync(0);
+    await flushSubmitEnter();
+    expect(addon.sendKeyPress).toHaveBeenCalledWith(
+      "7::terminal-1",
+      APPKIT_KEYCODE.return,
+      0,
+      "\r"
+    );
+  });
+
+  it("cancelInitialTerminalInput prevents a pending inject and onFailed", async () => {
+    vi.useFakeTimers();
+    const onFailed = vi.fn();
+    const addon = addonWith({ sendText: () => false });
+    sendInitialTerminalInput({
+      addon,
+      initialInput: "pnpm setup:worktree",
+      nativePanelId: "7::terminal-1",
+      onFailed,
+      panelId: "terminal-1",
+    });
+    cancelInitialTerminalInput("terminal-1");
+    signalPromptReady("terminal-1");
+    await vi.runAllTimersAsync();
+    expect(addon.sendText).not.toHaveBeenCalled();
+    expect(onFailed).not.toHaveBeenCalled();
+  });
+
+  it("submits when initialInputSubmit is true even without a trailing newline", async () => {
+    vi.useFakeTimers();
+    const addon = addonWith({ sendText: () => true });
+
+    sendInitialTerminalInput({
+      addon,
+      initialInput: "pnpm setup:worktree",
+      nativePanelId: "7::terminal-1",
+      panelId: "terminal-1",
+      submit: true,
+    });
+    signalPromptReady("terminal-1");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(addon.sendText).toHaveBeenCalledWith(
+      "7::terminal-1",
+      "pnpm setup:worktree"
+    );
+    expect(addon.sendKeyPress).not.toHaveBeenCalled();
+    await flushSubmitEnter();
+    expect(addon.sendKeyPress).toHaveBeenCalledWith(
+      "7::terminal-1",
+      APPKIT_KEYCODE.return,
+      0,
+      "\r"
+    );
+  });
+
+  it("does not inject Return when submit is explicitly false", async () => {
+    vi.useFakeTimers();
+    const addon = addonWith({ sendText: () => true });
+
+    sendInitialTerminalInput({
+      addon,
+      initialInput: "partial",
+      nativePanelId: "7::terminal-1",
+      panelId: "terminal-1",
+      submit: false,
+    });
+    signalPromptReady("terminal-1");
+    await vi.advanceTimersByTimeAsync(0);
+    await flushSubmitEnter();
+
+    expect(addon.sendText).toHaveBeenCalledWith("7::terminal-1", "partial");
+    expect(addon.sendKeyPress).not.toHaveBeenCalled();
+  });
+
+  it("retries only Return when paste succeeded but the key press is not ready", async () => {
+    vi.useFakeTimers();
+    const sendKeyPress = vi
+      .fn()
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const addon = addonWith({ sendKeyPress, sendText: () => true });
+
+    sendInitialTerminalInput({
+      addon,
+      initialInput: "pnpm setup:worktree\r",
+      nativePanelId: "7::terminal-1",
+      panelId: "terminal-1",
+    });
+    signalPromptReady("terminal-1");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(addon.sendText).toHaveBeenCalledTimes(1);
+    await flushSubmitEnter();
+    // 第一次 Return 在 pasteTerminalText 内失败；随后只重试回车，不再粘贴。
+    expect(addon.sendText).toHaveBeenCalledTimes(1);
+    expect(sendKeyPress).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to a timer when the shell integration never emits OSC 7", async () => {
+    vi.useFakeTimers();
+    const addon = addonWith({ sendText: () => true });
+
+    sendInitialTerminalInput({
+      addon,
       initialInput: "hello\r",
       nativePanelId: "7::terminal-1",
       panelId: "terminal-1",
     });
 
-    expect(sendText).not.toHaveBeenCalled();
+    expect(addon.sendText).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1500);
-    expect(sendText).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(addon.sendText).toHaveBeenCalledTimes(1);
+    expect(addon.sendText).toHaveBeenCalledWith("7::terminal-1", "hello");
+    expect(addon.sendKeyPress).not.toHaveBeenCalled();
+    await flushSubmitEnter();
+    expect(addon.sendKeyPress).toHaveBeenCalledTimes(1);
   });
 
   it("calls onFailed after sendText retries are exhausted", async () => {
     vi.useFakeTimers();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const onFailed = vi.fn();
-    const sendText = vi.fn().mockReturnValue(false);
+    const addon = addonWith({ sendText: () => false });
 
     sendInitialTerminalInput({
-      addon: { sendText } as unknown as NativeAddon,
+      addon,
       initialInput: "omp\r",
       nativePanelId: "7::terminal-1",
       onFailed,
@@ -83,8 +253,10 @@ describe("terminal create post actions", () => {
     });
     signalPromptReady("terminal-1");
     await vi.runAllTimersAsync();
+    await vi.advanceTimersByTimeAsync(0);
 
-    expect(sendText.mock.calls.length).toBeGreaterThan(1);
+    expect(vi.mocked(addon.sendText).mock.calls.length).toBeGreaterThan(1);
+    expect(addon.sendKeyPress).not.toHaveBeenCalled();
     expect(onFailed).toHaveBeenCalledTimes(1);
     expect(warn).toHaveBeenCalled();
   });
@@ -118,37 +290,47 @@ describe("terminal create post actions", () => {
   });
 
   it("skips injection entirely when initialInput is empty", () => {
-    const sendText = vi.fn();
+    const addon = addonWith({ sendText: vi.fn() });
     sendInitialTerminalInput({
-      addon: { sendText } as unknown as NativeAddon,
+      addon,
       initialInput: undefined,
       nativePanelId: "7::terminal-1",
       panelId: "terminal-1",
     });
-    expect(sendText).not.toHaveBeenCalled();
+    expect(addon.sendText).not.toHaveBeenCalled();
+    expect(addon.sendKeyPress).not.toHaveBeenCalled();
   });
 
   it("does not type until the viewport shows a painted prompt", async () => {
     vi.useFakeTimers();
-    const sendText = vi.fn().mockReturnValue(true);
     let viewport = "Last login: Sat Aug 15 15:03:30 on ttys012\n";
+    const addon = addonWith({
+      readViewportText: () => viewport,
+      sendText: () => true,
+    });
     sendInitialTerminalInput({
-      addon: {
-        readViewportText: () => viewport,
-        sendText,
-      } as unknown as NativeAddon,
+      addon,
       initialInput: "pi\r",
       nativePanelId: "7::terminal-1",
       panelId: "terminal-1",
     });
     signalPromptReady("terminal-1");
-    expect(sendText).not.toHaveBeenCalled();
+    expect(addon.sendText).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(200);
-    expect(sendText).not.toHaveBeenCalled();
+    expect(addon.sendText).not.toHaveBeenCalled();
     viewport =
       "Last login: Sat Aug 15 15:03:30 on ttys012\nloomdesk  feat/main (base) is v0.1.0";
     await vi.advanceTimersByTimeAsync(50);
-    expect(sendText).toHaveBeenCalledTimes(1);
-    expect(sendText).toHaveBeenCalledWith("7::terminal-1", "pi\r");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(addon.sendText).toHaveBeenCalledTimes(1);
+    expect(addon.sendText).toHaveBeenCalledWith("7::terminal-1", "pi");
+    expect(addon.sendKeyPress).not.toHaveBeenCalled();
+    await flushSubmitEnter();
+    expect(addon.sendKeyPress).toHaveBeenCalledWith(
+      "7::terminal-1",
+      APPKIT_KEYCODE.return,
+      0,
+      "\r"
+    );
   });
 });

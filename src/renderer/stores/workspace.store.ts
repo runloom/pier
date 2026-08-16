@@ -48,6 +48,7 @@ interface WorkspaceState {
     context?: PanelContext | null;
     exitPresentation?: TerminalPanelParams["exitPresentation"];
     initialInput?: string;
+    initialInputSubmit?: boolean;
     launchId?: string;
     placement?: PierCommandPlacement;
     referenceGroup?: WorkspaceGroupRef;
@@ -187,7 +188,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const titlePath = context?.cwd;
     markFreshTerminalPanel(id);
     if (opts?.initialInput) {
-      setFreshTerminalInitialInput(id, opts.initialInput);
+      setFreshTerminalInitialInput(id, {
+        submit: opts.initialInputSubmit !== false,
+        text: opts.initialInput,
+      });
     }
     try {
       api.addPanel({

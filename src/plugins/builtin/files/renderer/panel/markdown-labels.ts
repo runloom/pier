@@ -188,5 +188,10 @@ export function createMarkdownCommentLabels(
       "filePanel.markdown.comment.updateFailed",
       "Couldn’t update comment"
     ),
+    viewComment: t("filePanel.markdown.comment.view", "View comment"),
+    viewComments: t(
+      "filePanel.markdown.comment.viewCount",
+      "View {{count}} comments"
+    ),
   };
 }

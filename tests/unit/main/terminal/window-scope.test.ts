@@ -3,7 +3,11 @@ import {
   windowRecordIdFor,
 } from "@main/ipc/terminal/window-scope.ts";
 import type { AppWindow } from "@main/windows/app-window.ts";
-import { forgetAppWindow, rememberAppWindow } from "@main/windows/identity.ts";
+import {
+  findAppWindowForActivityWindowId,
+  forgetAppWindow,
+  rememberAppWindow,
+} from "@main/windows/identity.ts";
 import { describe, expect, it, vi } from "vitest";
 
 const RECORD_UUID = "3f11de0e-6bd9-4281-8c3c-c178cd81f1a0";
@@ -43,6 +47,23 @@ describe("terminal window scope", () => {
     try {
       expect(windowRecordIdFor(win)).toBe(RECORD_UUID);
       expect(stableWindowIdFor(win)).toBe("main");
+    } finally {
+      forgetAppWindow(win);
+    }
+  });
+
+  it("resolves FA windowId as Electron id, not the internal main id", () => {
+    const win = fakeWin(1);
+    rememberAppWindow(win, {
+      electronWindowId: "1",
+      mode: "restore",
+      recordId: RECORD_UUID,
+      windowId: "main",
+    });
+    try {
+      expect(findAppWindowForActivityWindowId("1")).toBe(win);
+      expect(findAppWindowForActivityWindowId("main")).toBe(win);
+      expect(findAppWindowForActivityWindowId("2")).toBeNull();
     } finally {
       forgetAppWindow(win);
     }

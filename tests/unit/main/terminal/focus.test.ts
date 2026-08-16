@@ -34,6 +34,7 @@ describe("terminal focus restoration", () => {
       createTerminal: vi.fn(() => true),
       detachWindow: vi.fn(),
       reconcileTerminals: vi.fn(),
+      sendKeyPress: vi.fn(() => true),
       sendText: vi.fn(() => true),
       setKeyboardForwardCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
@@ -649,30 +650,117 @@ describe("terminal focus restoration", () => {
   });
 
   it("sends initial input to the scoped native terminal after creation", async () => {
-    const { fakeAddon, invokeHandlers, ipcWindow } =
-      await setupTerminalFocusHarness();
+    vi.useFakeTimers();
+    try {
+      const { fakeAddon, invokeHandlers, ipcWindow } =
+        await setupTerminalFocusHarness();
 
-    const result = await invokeHandlers.get("pier:terminal:create")?.(
-      { sender: ipcWindow.webContents },
-      {
-        font: { family: "Menlo", size: 13 },
-        frame: { x: 1, y: 2, width: 300, height: 200 },
-        initialInput: "修复终端焦点问题\r",
-        panelId: "terminal-1",
-      }
-    );
+      const result = await invokeHandlers.get("pier:terminal:create")?.(
+        { sender: ipcWindow.webContents },
+        {
+          font: { family: "Menlo", size: 13 },
+          frame: { x: 1, y: 2, width: 300, height: 200 },
+          initialInput: "修复终端焦点问题\r",
+          panelId: "terminal-1",
+        }
+      );
 
-    expect(result).toEqual({ ok: true });
-    // initial-input-gate 把注入延后到 shell 打完 banner + 首个 prompt 之后。
-    // 测试模拟第一次 OSC 7 触发（生产链路是 native shell integration 上报 cwd）。
-    const { signalPromptReady } = await import(
-      "@main/ipc/terminal/initial-input-gate.ts"
-    );
-    signalPromptReady("terminal-1");
-    expect(fakeAddon.sendText).toHaveBeenCalledWith(
-      "7::terminal-1",
-      "修复终端焦点问题\r"
-    );
+      expect(result).toEqual({ ok: true });
+      // initial-input-gate 把注入延后到 shell 打完 banner + 首个 prompt 之后。
+      // 测试模拟第一次 OSC 7 触发（生产链路是 native shell integration 上报 cwd）。
+      const { signalPromptReady } = await import(
+        "@main/ipc/terminal/initial-input-gate.ts"
+      );
+      signalPromptReady("terminal-1");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fakeAddon.sendText).toHaveBeenCalledWith(
+        "7::terminal-1",
+        "修复终端焦点问题"
+      );
+      expect(fakeAddon.sendKeyPress).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(fakeAddon.sendKeyPress).toHaveBeenCalledWith(
+        "7::terminal-1",
+        0x24,
+        0,
+        "\r"
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports setup inject failure over IPC without clearing an agent session", async () => {
+    vi.useFakeTimers();
+    try {
+      const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
+        await setupTerminalFocusHarness();
+      fakeAddon.sendText.mockReturnValue(false);
+      await invokeHandlers.get("pier:terminal:create")?.(
+        { sender: ipcWindow.webContents },
+        {
+          font: { family: "Menlo", size: 13 },
+          frame: { x: 1, y: 2, width: 300, height: 200 },
+          initialInput: "pnpm setup:worktree",
+          initialInputSubmit: true,
+          panelId: "terminal-1",
+        }
+      );
+      const { signalPromptReady } = await import(
+        "@main/ipc/terminal/initial-input-gate.ts"
+      );
+      signalPromptReady("terminal-1");
+      await vi.runAllTimersAsync();
+      expect(ipcWindow.webContents.send).toHaveBeenCalledWith(
+        "pier:terminal:initial-input-failed",
+        {
+          kind: "setup",
+          panelId: "terminal-1",
+          textDelivered: false,
+        }
+      );
+      expect(sessionState.clearTerminalPanelAgent).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports agent prompt inject failure without clearing the live session", async () => {
+    vi.useFakeTimers();
+    try {
+      const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
+        await setupTerminalFocusHarness({
+          launch: { agentId: "claude", command: "claude", cwd: "/repo" },
+        });
+      fakeAddon.sendText.mockReturnValue(false);
+      await invokeHandlers.get("pier:terminal:create")?.(
+        { sender: ipcWindow.webContents },
+        {
+          font: { family: "Menlo", size: 13 },
+          frame: { x: 1, y: 2, width: 300, height: 200 },
+          initialInput: "fix the focus bug",
+          initialInputSubmit: true,
+          launchId: "launch-agent-1",
+          panelId: "terminal-1",
+        }
+      );
+      const { signalPromptReady } = await import(
+        "@main/ipc/terminal/initial-input-gate.ts"
+      );
+      signalPromptReady("terminal-1");
+      await vi.runAllTimersAsync();
+      expect(ipcWindow.webContents.send).toHaveBeenCalledWith(
+        "pier:terminal:initial-input-failed",
+        {
+          kind: "prompt",
+          panelId: "terminal-1",
+          textDelivered: false,
+        }
+      );
+      expect(sessionState.clearTerminalPanelAgent).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("prefers a saved context over a stale renderer-provided initial context", async () => {

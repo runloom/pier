@@ -257,6 +257,95 @@ describe("AccountsWidget (usage)", () => {
     expect(screen.getAllByText("remaining")).toHaveLength(2);
   });
 
+  it("shows quota reset counts once on a full-size widget", async () => {
+    const now = Date.now();
+    const metrics = [
+      {
+        groupId: "codex",
+        id: "codex:primary",
+        kind: "quota" as const,
+        usedPercent: 20,
+        windowMinutes: 10_080,
+      },
+      {
+        format: "count" as const,
+        id: "codex:reset-credits",
+        kind: "scalar" as const,
+        value: 1,
+      },
+    ];
+    const { context } = contextWithSnapshot(
+      usageSnapshot({
+        accounts: [
+          {
+            error: null,
+            id: "acc-1",
+            label: "test@codex.dev",
+            planType: "pro",
+            status: "active",
+            usage: {
+              attemptedAt: now,
+              metrics,
+              status: "ok",
+              updatedAt: now,
+            },
+          },
+        ],
+        activeUsage: {
+          attemptedAt: now,
+          metrics,
+          status: "ok",
+          updatedAt: now,
+        },
+      })
+    );
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
+    );
+
+    await screen.findByText("test@codex.dev");
+    expect(screen.getAllByText("Quota resets 1")).toHaveLength(1);
+  });
+
+  it("keeps quota reset counts on a compact meter when badges are hidden", async () => {
+    const now = Date.now();
+    const { context } = contextWithSnapshot(
+      usageSnapshot({
+        activeUsage: {
+          attemptedAt: now,
+          metrics: [
+            {
+              groupId: "codex",
+              id: "codex:primary",
+              kind: "quota",
+              usedPercent: 20,
+              windowMinutes: 10_080,
+            },
+            {
+              format: "count",
+              id: "codex:reset-credits",
+              kind: "scalar",
+              value: 1,
+            },
+          ],
+          status: "ok",
+          updatedAt: now,
+        },
+      })
+    );
+    render(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ size: { w: 4, h: 2 } })}
+      />
+    );
+
+    expect(await screen.findByText("Quota resets 1")).toBeDefined();
+  });
+
   it("hides the account switcher when no alternative account exists", async () => {
     const { context } = contextWithSnapshot(usageSnapshot());
     render(

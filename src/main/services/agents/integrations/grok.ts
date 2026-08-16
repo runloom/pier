@@ -35,7 +35,7 @@ const grokConfigPath = () => join(grokHomeDir(), "hooks", "pier-status.json");
  * **不装 Notification**：文档定义是「agent 发送通知」，实机 payload 以
  * "Turn complete" / "Background task completed" 为主，映成 waiting
  * 会造成假「需要你处理」。Grok 无独立 PermissionRequest 原生事件；
- * waiting 仅对有 toolUseId 闭环的阻塞工具（plan / ask_user_question）上报。
+ * waiting：plan 走 Pre/Post Interaction；ask_user_question 只走 transcript。
  * 「请求修改」会丢掉 exit_plan_mode 且不发 Post。
  *
  * PermissionDenied：普通工具 → ToolComplete；交互工具 → InteractionResolved

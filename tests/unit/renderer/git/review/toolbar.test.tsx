@@ -1,4 +1,5 @@
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
+import { GitReviewSurfaceSwitcher } from "@plugins/builtin/git/renderer/review/surface-switcher.tsx";
 import { GitReviewToolbar } from "@plugins/builtin/git/renderer/review/toolbar.tsx";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
@@ -80,5 +81,49 @@ describe("GitReviewToolbar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
     expect(onRefresh).toHaveBeenCalledOnce();
+  });
+});
+
+describe("GitReviewSurfaceSwitcher", () => {
+  it("re-selects the current tab on pointer down so the same group can re-orient", () => {
+    const onSelect = vi.fn();
+    renderToolbar(
+      <GitReviewSurfaceSwitcher
+        context={context}
+        groups={["staged", "unstaged"]}
+        labels={{
+          committed: "Changed Files",
+          conflict: "Merge Changes",
+          staged: "Staged Changes",
+          unstaged: "Changes",
+        }}
+        onSelect={onSelect}
+        value="index"
+      />
+    );
+
+    fireEvent.pointerDown(screen.getByRole("tab", { name: "Changes" }));
+    expect(onSelect).toHaveBeenCalledWith("index");
+  });
+
+  it("does not re-select a different tab on pointer down (value change handles that)", () => {
+    const onSelect = vi.fn();
+    renderToolbar(
+      <GitReviewSurfaceSwitcher
+        context={context}
+        groups={["staged", "unstaged"]}
+        labels={{
+          committed: "Changed Files",
+          conflict: "Merge Changes",
+          staged: "Staged Changes",
+          unstaged: "Changes",
+        }}
+        onSelect={onSelect}
+        value="index"
+      />
+    );
+
+    fireEvent.pointerDown(screen.getByRole("tab", { name: "Staged Changes" }));
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

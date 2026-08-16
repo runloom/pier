@@ -4,6 +4,7 @@ import { type IpcMainInvokeEvent, ipcMain } from "electron";
 import { resolveCssImportOnDisk } from "../services/lsp/css-import-resolve-fs.ts";
 import {
   catalogRowsFromRegistry,
+  enrichCatalogVersions,
   probeCoreLspCatalog,
 } from "../services/lsp/probe-catalog.ts";
 import type { LspServerRegistry } from "../services/lsp/server-registry.ts";
@@ -15,7 +16,9 @@ export function registerLspCatalogIpc(input: {
 }): void {
   ipcMain.handle(
     PIER.LSP_CATALOG_STATUS,
-    (event: IpcMainInvokeEvent): LspCatalogStatusRow[] | null => {
+    async (
+      event: IpcMainInvokeEvent
+    ): Promise<LspCatalogStatusRow[] | null> => {
       if (
         !(
           isTrustedMainFrame(event) &&
@@ -24,10 +27,10 @@ export function registerLspCatalogIpc(input: {
       ) {
         return null;
       }
-      return [
+      return await enrichCatalogVersions([
         ...probeCoreLspCatalog(),
-        ...catalogRowsFromRegistry(input.registry),
-      ];
+        ...(await catalogRowsFromRegistry(input.registry)),
+      ]);
     }
   );
 

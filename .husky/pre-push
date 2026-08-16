@@ -3,6 +3,9 @@
 # Default: preflight:push = static + unit + component + plugin-index.
 # Stronger (publish / risky): PIER_PREFLIGHT=merge|ci|full
 set -e
+# Husky sets GIT_DIR to the host repo. Git tests that spawn `git` in a temp
+# work tree then inherit it and fail with "must be run in a work tree".
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX
 tier="${PIER_PREFLIGHT:-push}"
 case "$tier" in
   push | merge | ci | full)

@@ -126,6 +126,11 @@ export interface HookScope {
    */
   completionObservedAt: number | undefined;
   currentTurnId: string | undefined;
+  /**
+   * Transcript 问卷展示覆盖（对齐 CodeIsland waitingQuestion）。
+   * 不是 hook 工作集，clearActiveWork / stop 不得拆掉。
+   */
+  displayQuestionId: string | undefined;
   /** 当前 scope 的主会话身份事实；hook.identity 只是选中 scope 的镜像。 */
   identity: HookIdentityFacts;
   interactionHistoryIncomplete: boolean;
@@ -293,6 +298,7 @@ export function newHookScope(
     completionObserved: false,
     completionObservedAt: undefined,
     currentTurnId: undefined,
+    displayQuestionId: undefined,
     identity,
     interactionHistoryIncomplete: false,
     key,

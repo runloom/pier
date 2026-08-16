@@ -211,6 +211,22 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
+  it("copies path and selected lines with Mod+Shift+Alt+C in Files panels", () => {
+    expect(
+      DEFAULT_KEYMAP.filter(
+        (binding) =>
+          binding.commandId === "pier.files.copyPathWithRange" ||
+          binding.keys === "Mod+Shift+Alt+KeyC"
+      )
+    ).toEqual([
+      {
+        commandId: "pier.files.copyPathWithRange",
+        keys: "Mod+Shift+Alt+KeyC",
+        scope: "panel:pier.files.filePanel",
+      },
+    ]);
+  });
+
   it("shows symbol information with Mod+I only in Files panels", () => {
     expect(
       DEFAULT_KEYMAP.filter(
@@ -294,6 +310,42 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
+  it("lets settings and command palette resolve on the content-preview overlay", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.commandPalette.toggle",
+      keys: "Mod+Shift+KeyP",
+      scope: "overlay:content-preview",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.settings.open",
+      keys: "Mod+Comma",
+      scope: "overlay:content-preview",
+    });
+
+    keybindingRegistry.loadUserKeymap([]);
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+
+    const previewScope = {
+      activePanelComponent: null,
+      overlayStack: ["overlay:content-preview"],
+    };
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+Comma", false), previewScope)
+    ).toBe("pier.settings.open");
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Shift+KeyP", false),
+        previewScope
+      )
+    ).toBe("pier.commandPalette.toggle");
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+Equal", false), previewScope)
+    ).toBeNull();
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyW", false), previewScope)
+    ).toBeNull();
+  });
+
   it("keeps the start default agent shortcut", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.agent.new",
@@ -337,8 +389,10 @@ describe("DEFAULT_KEYMAP", () => {
     const nativeTerminalCommandIds = new Set<string>(
       APP_HANDLED_NATIVE_TERMINAL_COMMANDS
     );
-    const nativeTerminalAppShortcuts = DEFAULT_KEYMAP.filter((binding) =>
-      nativeTerminalCommandIds.has(binding.commandId)
+    const nativeTerminalAppShortcuts = DEFAULT_KEYMAP.filter(
+      (binding) =>
+        nativeTerminalCommandIds.has(binding.commandId) &&
+        (binding.scope ?? "global") === "global"
     )
       .map((binding) => binding.keys)
       .sort();

@@ -7,6 +7,7 @@ export interface TerminalRelaunchRequest {
   context?: PanelContext | undefined;
   exitPresentation?: TerminalExitPresentation | undefined;
   initialInput?: string | undefined;
+  initialInputSubmit?: boolean | undefined;
   launchId: string;
   panelId: string;
   sequence: number;

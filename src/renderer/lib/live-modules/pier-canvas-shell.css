@@ -3,7 +3,8 @@
  * Frame / Stack / Text / Badge / Button for Vue · Solid · Svelte demos.
  * Uses host semantic tokens only (no hard-coded product colors).
  *
- * Classes: pier-c-frame, pier-c-stack, pier-c-row, pier-c-text,
+ * Classes: pier-c-frame, pier-c-artboard-stage, pier-c-artboard-world,
+ * pier-c-artboard, pier-c-artboard-frame, pier-c-stack, pier-c-row, pier-c-text,
  * pier-c-text--secondary, pier-c-text--title, pier-c-badge,
  * pier-c-badge--neutral, pier-c-button, pier-c-button--outline
  */
@@ -23,6 +24,47 @@
   max-width: 520px;
   padding-block: 8px;
   margin-inline: auto;
+}
+
+[data-pier-canvas-shell] .pier-c-artboard-stage {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: min(32rem, 55vh);
+  min-height: 20rem;
+  overflow: hidden;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+[data-pier-canvas-shell] .pier-c-artboard-world {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 56px;
+  align-items: flex-start;
+  width: 4048px;
+  padding: 48px;
+}
+
+[data-pier-canvas-shell] .pier-c-artboard {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 10px;
+  width: 1280px;
+}
+
+[data-pier-canvas-shell] .pier-c-artboard-frame {
+  box-sizing: border-box;
+  width: 100%;
+  height: 800px;
+  overflow: hidden;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
 [data-pier-canvas-shell] .pier-c-stack {

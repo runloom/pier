@@ -75,6 +75,27 @@
 }
 
 /*
+ * Tooltip caret policy — single owner (do not re-implement in tooltip.tsx).
+ * Radix writes inline `visibility: hidden` on the arrow wrapper when
+ * centerOffset !== 0 (viewport-edge clamp). !important beats that hide.
+ * top / bottom: always show, including left and right edges.
+ * left / right: never show a caret.
+ */
+[data-slot="tooltip-content"][data-side="top"]
+  > span:has([data-slot="tooltip-arrow"]),
+[data-slot="tooltip-content"][data-side="bottom"]
+  > span:has([data-slot="tooltip-arrow"]) {
+  visibility: visible !important;
+}
+
+[data-slot="tooltip-content"][data-side="left"]
+  > span:has([data-slot="tooltip-arrow"]),
+[data-slot="tooltip-content"][data-side="right"]
+  > span:has([data-slot="tooltip-arrow"]) {
+  visibility: hidden !important;
+}
+
+/*
  * Pier UI globals.css
  *
  * shadcn preset b27GcrRo / radix-rhea / neutral。应用 UI chrome 使用中性结构色,
@@ -807,7 +828,7 @@ body {
    所有颜色从 Pier 语义令牌派生, light / dark 自动跟随.
 
    3 种 tab 状态（顶缘指示线权重）:
-   S1  未选中 (hidden panel, 任意 group)    — 最弱: 透明底 + 暗文字；running 时 1px muted 细轨
+   S1  未选中 (hidden panel, 任意 group)    — 最弱: 透明底 + 暗文字；running 时 1px muted 细轨（加浓材质，避免看不见）
    S2  分组选中 (visible panel, 失焦 group 或 窗口失焦) — 中等: 内容底色 + 顶部 2px muted（粗+默认色）
    S3  当前聚焦 (visible panel, 聚焦 group 且 窗口聚焦) — 最强: 内容底色 + 顶部 2px primary（粗+高亮）
 
@@ -817,6 +838,7 @@ body {
    - running 时顶缘由 shimmer 独占：关闭实心选中 ::after，避免「线下一轨」叠成底部附属感
    - 几何：外层 .dv-tab::before，top:0 挨紧顶部；S3/S2 高 2px / S1 高 1px
    - accent：S3=primary（同选中铬，防变深），S2/S1=muted-foreground
+   - 选择器必须压过 dockview 非首个 tab 的竖分割线 ::before（同伪元素、后加载）
 
    窗口聚焦位: html[data-window-focused] (installWindowFocusAttribute) */
 
@@ -1171,7 +1193,7 @@ body {
  * 运动：background-position 与 background-size 协同动画，形成拉伸滑动。
  * 材质：稳底 trough（background-color）+ 纯色块 highlight（background-image）。
  * 颜色：S3=primary（与 idle 选中同色，勿用 status-info 压暗）；S1/S2=muted。
- * 高度：S3/S2 = 2px（粗）；S1 = 1px（细）。
+ * 高度：S3/S2 = 2px（粗）；S1 = 1px（细）。档位靠高度，不靠把 S1 抬成 2px。
  */
 @keyframes pier-tab-running-slider {
   0% {
@@ -1220,6 +1242,30 @@ body {
 }
 
 /*
+ * S1 未选中 running：1px 轨要用更实的 trough / highlight，否则在 sidebar 底上等于没有。
+ * 只绑 .dv-inactive-tab，避免把 S2/S3 选中轨一并加浓。
+ */
+.dockview-theme-pier .dv-tab.dv-inactive-tab:has([data-tab-status="running"]) {
+  --pier-tab-shimmer-trough: color-mix(
+    in oklab,
+    var(--pier-tab-running-accent) 72%,
+    transparent
+  );
+  --pier-tab-shimmer-highlight: var(--pier-tab-running-accent);
+}
+
+:root.light
+  .dockview-theme-pier
+  .dv-tab.dv-inactive-tab:has([data-tab-status="running"]) {
+  --pier-tab-shimmer-trough: color-mix(
+    in oklab,
+    var(--pier-tab-running-accent) 50%,
+    transparent
+  );
+  --pier-tab-shimmer-highlight: var(--pier-tab-running-accent);
+}
+
+/*
  * running 时关闭实心选中/补线 ::after —— 顶缘只留 shimmer，避免叠成「线下底轨」。
  * 选择器覆盖：S3 选中、S2 选中、窗口失焦降档、S1 未选中补线。
  */
@@ -1243,13 +1289,25 @@ body {
 /*
  * 全宽轨道 ::before，内部跑纯色滑块。
  * 默认 S1：细 1px + muted；稳底用 background-color；滑块用 background-image。
+ * 必须压过 dockview `.dv-tab:not(:first-child)::before` 竖分割线（同伪元素、后加载）：
+ * 复位 left/width/height，避免变成 1px×100% 透明竖缝。
  */
-.dockview-theme-pier .dv-tab:has([data-tab-status="running"])::before {
+.dockview-theme-pier
+  .dv-tabs-container
+  > .dv-tab:has([data-tab-status="running"])::before,
+.dockview-theme-pier
+  .dv-tabs-container.dv-horizontal
+  .dv-tab:not(:first-child):has([data-tab-status="running"])::before,
+.dockview-theme-pier
+  .dv-tabs-container.dv-vertical
+  .dv-tab:not(:first-child):has([data-tab-status="running"])::before {
   content: "";
   position: absolute;
   top: 0;
+  left: auto;
   inset-inline: 0;
   z-index: 2;
+  width: auto;
   height: 1px;
   pointer-events: none;
   background-color: var(--pier-tab-shimmer-trough);
@@ -1351,7 +1409,15 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dockview-theme-pier .dv-tab:has([data-tab-status="running"])::before {
+  .dockview-theme-pier
+    .dv-tabs-container
+    > .dv-tab:has([data-tab-status="running"])::before,
+  .dockview-theme-pier
+    .dv-tabs-container.dv-horizontal
+    .dv-tab:not(:first-child):has([data-tab-status="running"])::before,
+  .dockview-theme-pier
+    .dv-tabs-container.dv-vertical
+    .dv-tab:not(:first-child):has([data-tab-status="running"])::before {
     animation: none;
     background-image: none;
     box-shadow: none;

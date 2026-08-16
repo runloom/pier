@@ -85,7 +85,6 @@ export function ReviewConflictView(options: {
       ),
       openFile: pluginText(context, "reviewOpenFile", "Open File"),
       resolving: pluginText(context, "reviewConflictResolving", "Resolving…"),
-      title: pluginText(context, "reviewStateConflict", "Merge conflict"),
       unmodifiedLine: pluginText(
         context,
         "reviewUnmodifiedLine",

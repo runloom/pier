@@ -3,6 +3,7 @@ import {
   agentHookEventSchema,
   agentKindFromTabIconId,
   agentTabIconId,
+  HOOK_WORK_ID_MAX,
 } from "@shared/contracts/agent/session.ts";
 import {
   activityStatusForHookEvent,
@@ -64,6 +65,28 @@ describe("agentHookEventSchema", () => {
     expectTypeOf<
       "PermissionRequest" extends PierHookCommandV3Spec["event"] ? true : false
     >().toEqualTypeOf<false>();
+  });
+
+  it("接受 OMP ask 实测长度的 toolUseId / interactionId", () => {
+    const ompAskId =
+      "call-03435de8-1557-4d10-b08f-e49c075729b1-0|K8TGf/h4nJMapPL8yM3t44JgGgk3TKEOI+jwKkoboyPoTTTb3qGLC3+8gxvAK1DM96zSbuGQwFAy5vs/5oMz/SIIxyEPUyabg33AkqAeL35VVtH4FOmWeTq2BqBolwQtzTZB8LIpjT21VOkwqa5vfiBNucbgZEBzgygMDAXFe+NW6AlFVX7Q3XZAgWBJRoR9UvnTIBEoug84EvXwJhXySOKLhuRKdFqoFRzaD7nZhdJBOULdabd2prc/NlU2iLaSMLoYp6g8AX0fGj3Jg5MMOtd8FTMnF0XYeH+JvS/+mQ2Yax8MoPwkE5Q9pO4gRJZQ9yUpzRmkhBKOk6FOLlxEqb5q2BNj4RkH7XFKbGcdlmpY43FSk5amhaAyNHfl0+uYghhTU8d/UA==";
+    expect(ompAskId.length).toBeGreaterThan(128);
+    expect(ompAskId.length).toBeLessThanOrEqual(HOOK_WORK_ID_MAX);
+    expect(
+      agentHookEventSchema.safeParse({
+        v: 3,
+        kind: "agentEvent",
+        agent: "omp",
+        event: "InteractionRequested",
+        nativeEvent: "tool_execution_start.ask",
+        interactionId: ompAskId,
+        interactionKind: "question",
+        toolName: "ask",
+        toolUseId: ompAskId,
+        panelId: "panel-1",
+        windowId: "1",
+      }).success
+    ).toBe(true);
   });
 
   it("接受带具名交互事实的 v3 InteractionRequested", () => {

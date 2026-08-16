@@ -63,13 +63,11 @@ export function accountMembershipSummary(
 
 export function AccountBadges({
   account,
-  includeScalars = false,
   language,
   mode = "all",
   t,
 }: {
   account: Pick<ClaudeAccountSummary, "subscription" | "usage">;
-  includeScalars?: boolean;
   language: string;
   mode?: AccountMetadataBadgeMode;
   t: Translate;
@@ -98,7 +96,7 @@ export function AccountBadges({
       {...(membership ? { membership } : {})}
       membershipLabel={(value) => value.tier.toUpperCase().replaceAll("-", " ")}
       metricLabel={(metric) => usageMetricLabel(metric, t)}
-      metrics={includeScalars ? (account.usage?.metrics ?? []) : []}
+      metrics={account.usage?.metrics ?? []}
       mode={mode}
     />
   );

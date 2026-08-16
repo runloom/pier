@@ -103,6 +103,9 @@ describe("gitReviewTreeModel grouped", () => {
     );
     expect(model.groupCounts).toEqual({ conflict: 0, unstaged: 2, staged: 1 });
     expect(model.visibleGroups).toEqual(["staged", "unstaged"]);
+    expect(model.getGroupRootPath("staged")).toBe(stagedRoot?.path);
+    expect(model.getGroupRootPath("unstaged")).toBe(unstagedRoot?.path);
+    expect(model.getGroupRootPath("conflict")).toBeUndefined();
   });
 
   it("keeps conflict→staged→unstaged root order under zh labels", () => {

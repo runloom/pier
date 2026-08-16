@@ -49,6 +49,7 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     exitPresentation: terminalExitPresentationSchema.optional(),
     focus: z.boolean().optional(),
     initialInput: z.string().min(1).max(64_000).optional(),
+    initialInputSubmit: z.boolean().optional(),
     launchId: z.string().min(1),
     panelId: z.string().min(1).optional(),
     placement: pierCommandPlacementSchema.optional(),

@@ -85,13 +85,9 @@ function CanvasAnnotateButton(props: {
           <Crosshair data-icon="inline-start" />
         </Button>
       </TooltipTrigger>
-      {/*
-        side=bottom + default align=center: arrow is clamped by product
-        arrowPadding into the bubble edge range (not glued to L/R extremes).
-        Do not use align=end here — near the window edge Floating UI often cannot
-        center the arrow on the trigger and Radix hides it entirely.
-      */}
-      <TooltipContent side="bottom">{aria}</TooltipContent>
+      <TooltipContent align="end" side="bottom">
+        {aria}
+      </TooltipContent>
     </Tooltip>
   );
 }

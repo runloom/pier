@@ -1,5 +1,11 @@
 const freshTerminalPanelIds = new Set<string>();
-const freshTerminalInitialInputs = new Map<string, string>();
+
+export interface FreshTerminalInitialInput {
+  submit: boolean;
+  text: string;
+}
+
+const freshTerminalInitialInputs = new Map<string, FreshTerminalInitialInput>();
 
 export function markFreshTerminalPanel(panelId: string): void {
   freshTerminalPanelIds.add(panelId);
@@ -24,14 +30,14 @@ export function consumeFreshTerminalPanel(panelId: string): boolean {
 
 export function setFreshTerminalInitialInput(
   panelId: string,
-  initialInput: string
+  initialInput: FreshTerminalInitialInput
 ): void {
   freshTerminalInitialInputs.set(panelId, initialInput);
 }
 
 export function consumeFreshTerminalInitialInput(
   panelId: string
-): string | undefined {
+): FreshTerminalInitialInput | undefined {
   const initialInput = freshTerminalInitialInputs.get(panelId);
   freshTerminalInitialInputs.delete(panelId);
   return initialInput;

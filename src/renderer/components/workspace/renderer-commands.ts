@@ -152,7 +152,10 @@ async function addTerminalForCommand(
         ...(command.exitPresentation && {
           exitPresentation: command.exitPresentation,
         }),
-        ...(command.initialInput && { initialInput: command.initialInput }),
+        ...(command.initialInput && {
+          initialInput: command.initialInput,
+          initialInputSubmit: command.initialInputSubmit !== false,
+        }),
         ...(command.tab && { tab: command.tab }),
         ...(command.task && { task: command.task }),
       });
@@ -179,7 +182,10 @@ async function addTerminalForCommand(
           ...(command.exitPresentation && {
             exitPresentation: command.exitPresentation,
           }),
-          ...(command.initialInput && { initialInput: command.initialInput }),
+          ...(command.initialInput && {
+            initialInput: command.initialInput,
+            initialInputSubmit: command.initialInputSubmit !== false,
+          }),
           launchId: command.launchId,
           ...(command.placement && {
             placement: command.placement,

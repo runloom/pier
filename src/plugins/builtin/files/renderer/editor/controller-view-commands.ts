@@ -122,6 +122,14 @@ export class FileEditorControllerViewCommands {
     return this.#views.getSession(editorSessionId)?.currentLine() ?? null;
   }
 
+  currentSelectionLinesForSession(
+    editorSessionId: string
+  ): { endLine: number; startLine: number } | null {
+    return (
+      this.#views.getSession(editorSessionId)?.currentSelectionLines() ?? null
+    );
+  }
+
   captureViewportAnchor(editorSessionId: string) {
     return this.#views.captureViewportAnchor(editorSessionId);
   }
@@ -303,6 +311,12 @@ export abstract class FileEditorControllerViewFacade {
 
   currentLineForSession(editorSessionId: string): number | null {
     return this.viewCommands.currentLineForSession(editorSessionId);
+  }
+
+  currentSelectionLinesForSession(
+    editorSessionId: string
+  ): { endLine: number; startLine: number } | null {
+    return this.viewCommands.currentSelectionLinesForSession(editorSessionId);
   }
 
   captureViewportAnchor(editorSessionId: string) {

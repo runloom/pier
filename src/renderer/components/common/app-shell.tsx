@@ -37,12 +37,12 @@ export function AppShell() {
         </DiffWorkerHost>
       </div>
       <ShellKeybindings />
+      <ContentPreviewHost />
       <CommandPalette />
       <SettingsDialog />
       <AppQuitDialogBridge />
       <AppDialogHost />
       <AppContentDialogHost />
-      <ContentPreviewHost />
       <TerminalDebugSnapshotBridge />
       <ForegroundActivityBridge />
       <TerminalEndStateBridge />

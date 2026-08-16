@@ -63,6 +63,8 @@ export const terminalApi: TerminalAPI = {
     };
   },
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
+  onInitialInputFailed: (cb) =>
+    subscribeIpc("pier:terminal:initial-input-failed", cb),
   onFrameCommitted: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_FRAME_COMMITTED, cb),
   onSearchOpenRequest: (cb) =>

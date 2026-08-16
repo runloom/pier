@@ -89,3 +89,10 @@ export function preferredUncommittedReadingSurface(
   }
   return reviewSurfaceForGroup(first);
 }
+
+export function addReviewSurface(
+  set: ReadonlySet<GitReviewReadingSurface>,
+  surface: GitReviewReadingSurface
+): ReadonlySet<GitReviewReadingSurface> {
+  return set.has(surface) ? set : new Set([...set, surface]);
+}

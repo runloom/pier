@@ -45,8 +45,10 @@ describe("native terminal key routing", () => {
     // twice in DEFAULT_KEYMAP; Swift allowlist is a Set and keeps one entry.
     const markedDefaultShortcuts = [
       ...new Set(
-        DEFAULT_KEYMAP.filter((binding) =>
-          nativeTerminalCommandIds.has(binding.commandId)
+        DEFAULT_KEYMAP.filter(
+          (binding) =>
+            nativeTerminalCommandIds.has(binding.commandId) &&
+            (binding.scope ?? "global") === "global"
         ).map((binding) => binding.keys)
       ),
     ].sort();

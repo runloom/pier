@@ -1,5 +1,6 @@
 import {
   AccountWidgetFrame,
+  accountWidgetMeterMetrics,
   createAccountsWidgetRefreshAction,
   resolveAccountWidgetPresentation,
 } from "@pier/plugin-api/account-usage/renderer";
@@ -94,7 +95,10 @@ export function AccountsWidget({
       <UsageMeter
         density={density}
         language={context.i18n.language()}
-        metrics={usage.metrics}
+        metrics={accountWidgetMeterMetrics(
+          usage.metrics,
+          presentation.metadataMode
+        )}
         status={usage.status}
         t={t}
         {...(usage.updatedAt === undefined

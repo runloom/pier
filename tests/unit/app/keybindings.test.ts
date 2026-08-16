@@ -304,7 +304,7 @@ describe("keybinding engine", () => {
     );
   });
 
-  it("detects conflicts in the same scope and ignores the same command", () => {
+  it("detects same-scope conflicts and global/panel shadowing", () => {
     keybindingRegistry.registerDefaults([
       {
         commandId: "pier.test.first",
@@ -315,6 +315,11 @@ describe("keybinding engine", () => {
         commandId: "pier.test.panel",
         keys: "Mod+KeyK",
         scope: "panel:terminal",
+      },
+      {
+        commandId: "pier.test.other-panel",
+        keys: "Mod+KeyK",
+        scope: "panel:pier.files.filePanel",
       },
     ]);
     const chord = parseChord("Mod+KeyK", false);
@@ -327,9 +332,47 @@ describe("keybinding engine", () => {
     });
     expect(
       keybindingRegistry.findConflict(chord, "global", "pier.test.first")
-    ).toBeNull();
+    ).toMatchObject({
+      commandId: "pier.test.panel",
+      scope: "panel:terminal",
+    });
+    expect(
+      keybindingRegistry.findConflict(chord, "panel:terminal")
+    ).toMatchObject({
+      commandId: "pier.test.panel",
+      scope: "panel:terminal",
+    });
+    expect(
+      keybindingRegistry.findConflict(
+        chord,
+        "panel:terminal",
+        "pier.test.panel"
+      )
+    ).toMatchObject({
+      commandId: "pier.test.first",
+      scope: "global",
+    });
     expect(
       keybindingRegistry.findConflict(chord, "overlay:command-palette")
+    ).toMatchObject({
+      commandId: "pier.test.first",
+      scope: "global",
+    });
+    expect(
+      keybindingRegistry.findConflict(
+        chord,
+        "panel:pier.files.filePanel",
+        "pier.test.other-panel"
+      )
+    ).toMatchObject({
+      commandId: "pier.test.first",
+      scope: "global",
+    });
+    expect(
+      keybindingRegistry.findConflict(
+        parseChord("Mod+KeyZ", false),
+        "panel:terminal"
+      )
     ).toBeNull();
   });
 });

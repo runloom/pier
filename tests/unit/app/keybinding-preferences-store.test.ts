@@ -441,6 +441,78 @@ describe("keybinding-preferences.store", () => {
     expect(useKeybindingPreferencesStore.getState().userKeymap).toEqual([]);
   });
 
+  it("keeps a panel command on its default scope when remapping", async () => {
+    const pier = installPierApi();
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+    const result = await useKeybindingPreferencesStore
+      .getState()
+      .setBinding("pier.files.copyPathWithRange", "Mod+Alt+KeyX");
+
+    expect(result.ok).toBe(true);
+    expect(pier.update).toHaveBeenCalledWith({
+      userKeymap: [
+        {
+          commandId: "-pier.files.copyPathWithRange",
+          keys: "",
+          scope: "global",
+        },
+        {
+          commandId: "pier.files.copyPathWithRange",
+          keys: "Mod+Alt+KeyX",
+          scope: "panel:pier.files.filePanel",
+        },
+      ],
+    });
+  });
+
+  it("blocks remapping a panel command onto another files-panel shortcut", async () => {
+    const pier = installPierApi();
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+    const result = await useKeybindingPreferencesStore
+      .getState()
+      .setBinding("pier.files.copyPathWithRange", "Mod+KeyS");
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("pier.files.save");
+    expect(pier.update).not.toHaveBeenCalled();
+  });
+
+  it("blocks remapping a global command onto a panel shortcut that would shadow it", async () => {
+    const pier = installPierApi();
+    const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
+    const { keybindingRegistry } = await import(
+      "@/lib/keybindings/registry.ts"
+    );
+    const { initKeybindingPreferences, useKeybindingPreferencesStore } =
+      await import("@/stores/keybinding-preferences.store.ts");
+
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+    await initKeybindingPreferences();
+    const result = await useKeybindingPreferencesStore
+      .getState()
+      .setBinding("pier.panel.splitRight", "Mod+KeyS");
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain("pier.files.save");
+    expect(pier.update).not.toHaveBeenCalled();
+  });
+
   it("blocks conflicting bindings before writing preferences", async () => {
     const pier = installPierApi();
     const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");

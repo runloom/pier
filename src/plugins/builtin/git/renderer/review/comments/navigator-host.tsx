@@ -39,6 +39,7 @@ export function ReviewCommentNavigatorHost(props: {
       onClear={navigator.onClear}
       onNext={navigator.onNext}
       onPrevious={navigator.onPrevious}
+      onRevealCurrent={navigator.onRevealCurrent}
       positionLabel={navigator.positionLabel}
       previousLabel={navigator.previousLabel}
       toolbarLabel={navigator.toolbarLabel}

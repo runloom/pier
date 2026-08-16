@@ -138,9 +138,20 @@ export const lspCatalogStatusRowSchema = z
     extensions: z.array(z.string().min(1)),
     id: z.string().min(1),
     installCommand: z.string().min(1).optional(),
+    /** Absolute PATH hit when `status` is `available`. */
+    resolvedPath: z.string().min(1).optional(),
     source: lspProviderSourceSchema,
     status: lspBinaryStatusSchema,
+    /** First line of `--version` stdout when the binary exited 0 in time. */
+    version: z.string().min(1).max(64).optional(),
   })
   .strict();
 
 export type LspCatalogStatusRow = z.infer<typeof lspCatalogStatusRowSchema>;
+
+export function parseLspCatalogStatusRows(
+  value: unknown
+): LspCatalogStatusRow[] | null {
+  const parsed = z.array(lspCatalogStatusRowSchema).safeParse(value);
+  return parsed.success ? parsed.data : null;
+}

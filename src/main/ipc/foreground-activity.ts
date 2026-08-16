@@ -174,9 +174,40 @@ function handleBroadcast(b: ForegroundActivityBroadcast): void {
  * window lifecycle、task lifecycle 通过此对象向 ForegroundActivityAggregator 提交
  * 事件。方法一对一转发到 aggregator，单源无双写。
  */
+let cursorViewportReader:
+  | ((panelId: string, windowId: string) => string | null)
+  | undefined;
+
+export function setCursorViewportReader(
+  reader: (panelId: string, windowId: string) => string | null
+): void {
+  cursorViewportReader = reader;
+}
+
+function readCursorViewportText(
+  panelId: string,
+  windowId: string
+): string | null {
+  return cursorViewportReader?.(panelId, windowId) ?? null;
+}
+
 export const foregroundActivityService = {
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void {
     foregroundActivityAggregator.agentLaunched(windowId, panelId, agentId);
+    if (agentId === "cursor") {
+      agentTerminalReconciler
+        ?.observe({
+          agent: "cursor",
+          event: "processing",
+          kind: "agentEvent",
+          panelId,
+          v: 1,
+          windowId,
+        })
+        .catch((err) => {
+          log.warn("cursor viewport watch attach failed", { err });
+        });
+    }
   },
   /**
    * 直接摄入 agent 事件（如终端裸 Esc 取消）。与 JSONL observer 同入口。
@@ -344,6 +375,7 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   // aggregator 对应 hook。commandStart/commandFinished hook 目前无消费者
   // (native shell integration 走 native callback 通路)，是 forward-compat 占位。
   agentTerminalReconciler = createAgentTerminalReconciler({
+    readViewportText: readCursorViewportText,
     onTerminalEvent: (event) => {
       foregroundActivityAggregator.ingestAgentEvent(
         event,
@@ -399,17 +431,17 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
           windowId: routed.windowId,
         });
       }
+      if (effects.observeTranscript) {
+        agentTerminalReconciler?.observe(routed).catch((err) => {
+          log.warn("agent terminal reconciliation failed", { err });
+        });
+      }
       const accepted = foregroundActivityAggregator.ingestAgentEvent(
         routed,
         options
       );
       if (!accepted) {
         return;
-      }
-      if (effects.observeTranscript) {
-        agentTerminalReconciler?.observe(routed).catch((err) => {
-          log.warn("agent terminal reconciliation failed", { err });
-        });
       }
       if (effects.markPanelExited) {
         markAgentSessionExited({

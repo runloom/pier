@@ -1,5 +1,16 @@
 import "@testing-library/jest-dom/vitest";
 
+// Husky pre-push sets GIT_DIR to the host repo. Git tests that spawn `git`
+// in a temp work tree then inherit it and fail with "must be run in a work tree".
+for (const key of [
+  "GIT_DIR",
+  "GIT_WORK_TREE",
+  "GIT_INDEX_FILE",
+  "GIT_PREFIX",
+] as const) {
+  Reflect.deleteProperty(process.env, key);
+}
+
 // jsdom 没有 ResizeObserver;react-resizable-panels(files 面板树列宽拖拽)
 // 挂载期即 new ResizeObserver。提供最小 no-op polyfill,几何断言不依赖它。
 if (typeof globalThis.ResizeObserver === "undefined") {

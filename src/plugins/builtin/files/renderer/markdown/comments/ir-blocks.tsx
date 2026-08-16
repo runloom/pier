@@ -36,7 +36,11 @@ export function wrapBlocksWithComments(
         key={key}
         labels={comments.labels}
         onOpenDraft={() => comments.onOpenDraft(blockKey)}
+        requestOpenBlockKey={comments.requestOpenBlockKey}
+        requestOpenNonce={comments.requestOpenNonce}
         threads={threads}
+        viewCommentLabel={comments.viewCommentLabel}
+        viewCommentsLabel={comments.viewCommentsLabel}
       >
         {content}
       </MarkdownCommentBlockShell>

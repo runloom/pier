@@ -66,6 +66,12 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     keys: "Mod+Shift+KeyP",
     scope: "global",
   },
+  // Preview overlay is blocking; host chrome must still resolve.
+  {
+    commandId: "pier.commandPalette.toggle",
+    keys: "Mod+Shift+KeyP",
+    scope: "overlay:content-preview",
+  },
   {
     commandId: "pier.files.quickOpen",
     keys: "Mod+KeyP",
@@ -110,6 +116,12 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     commandId: "pier.settings.open",
     keys: "Mod+Comma",
     scope: "global",
+  },
+  // Preview overlay is blocking; host chrome must still resolve.
+  {
+    commandId: "pier.settings.open",
+    keys: "Mod+Comma",
+    scope: "overlay:content-preview",
   },
   {
     // 打开/关闭消息中心铃铛 Popover（无独立 dockview panel）。
@@ -196,6 +208,11 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   {
     commandId: "pier.files.saveAll",
     keys: "Mod+Alt+KeyS",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.copyPathWithRange",
+    keys: "Mod+Shift+Alt+KeyC",
     scope: "panel:pier.files.filePanel",
   },
   {

@@ -1,5 +1,12 @@
 export const terminal = {
   closeFailed: "无法关闭终端，请重试",
+  initialInput: {
+    promptEnterFailed: "内容已输入，请按回车发送。",
+    promptFailed: "终端已打开，但没能自动输入任务内容。请在终端里输入。",
+    setupEnterFailed: "命令已输入，请按回车执行。",
+    setupFailed:
+      "终端已打开，但没能自动执行初始化命令。请在终端里运行，或再创建一次。",
+  },
   frameWaitFailed: "终端画面未显示。请重试；仍不行则重新打开该终端。",
   openPathFailed: "无法打开路径，请重试",
   openPathInvalid: "无法打开该路径",

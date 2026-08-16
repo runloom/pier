@@ -385,6 +385,69 @@ describe("AccountsSettingsPage", () => {
     expect(media).toHaveClass("self-center");
   });
 
+  it("shows quota reset badges on other accounts, not only the current account", async () => {
+    const now = Date.now();
+    const { context } = contextWithSnapshot(
+      snapshotWithAccount({
+        accounts: [
+          {
+            error: null,
+            id: "acc-1",
+            label: "active@codex.dev",
+            planType: "pro",
+            status: "active",
+            usage: {
+              attemptedAt: now,
+              metrics: [
+                usageWindow(20, 10_080),
+                {
+                  format: "count",
+                  id: "codex:reset-credits",
+                  kind: "scalar",
+                  value: 1,
+                },
+              ],
+              status: "ok",
+              updatedAt: now,
+            },
+          },
+          {
+            error: null,
+            id: "acc-2",
+            label: "other@codex.dev",
+            planType: "pro",
+            status: "available",
+            usage: {
+              attemptedAt: now,
+              metrics: [
+                usageWindow(80, 10_080),
+                {
+                  format: "count",
+                  id: "codex:reset-credits",
+                  kind: "scalar",
+                  value: 2,
+                },
+              ],
+              status: "ok",
+              updatedAt: now,
+            },
+          },
+        ],
+        activeAccountId: "acc-1",
+      })
+    );
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
+
+    await screen.findByText("other@codex.dev");
+    expect(screen.getByText("Quota resets 1")).toBeDefined();
+    expect(screen.getByText("Quota resets 2")).toBeDefined();
+  });
+
   it("renders a team account's single quota without an invented empty lane", async () => {
     const { context } = contextWithSnapshot(
       snapshotWithAccount({

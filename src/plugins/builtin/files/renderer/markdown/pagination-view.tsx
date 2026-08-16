@@ -10,6 +10,7 @@ import type { MarkdownPagination, MarkdownSemanticPage } from "./runtime.ts";
 export function MarkdownPaginationView({
   activeSearchMatchId,
   activeSearchPageIndex,
+  forceCommentPageIndex,
   contentAnchor,
   contentAnchorRequestId,
   initialAnchor,
@@ -20,6 +21,8 @@ export function MarkdownPaginationView({
 }: {
   activeSearchMatchId: string | undefined;
   activeSearchPageIndex: number | undefined;
+  /** Force-render pages 0..index so comment n/N can mount a lazy block. */
+  forceCommentPageIndex: number | undefined;
   contentAnchor: MarkdownCrossModeAnchor | undefined;
   contentAnchorRequestId: string | number | undefined;
   initialAnchor: string | undefined;
@@ -210,7 +213,10 @@ export function MarkdownPaginationView({
       {pagination.pages.map((page) => (
         <LazyMarkdownPage
           force={
-            forcedPages.has(page.index) || activeSearchPageIndex === page.index
+            forcedPages.has(page.index) ||
+            activeSearchPageIndex === page.index ||
+            (forceCommentPageIndex !== undefined &&
+              page.index <= forceCommentPageIndex)
           }
           key={page.id}
           page={page}

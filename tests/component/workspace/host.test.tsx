@@ -148,6 +148,7 @@ function installPierWindowApi() {
       terminal: {
         applyHostSnapshot: vi.fn(),
         onFocusRequest: vi.fn(() => vi.fn()),
+        onInitialInputFailed: vi.fn(() => vi.fn()),
         reconcile: vi.fn(),
       },
       workspace: {
@@ -996,6 +997,7 @@ describe("WorkspaceHost", () => {
         terminal: {
           applyHostSnapshot: vi.fn(),
           onFocusRequest: vi.fn(),
+          onInitialInputFailed: vi.fn(() => vi.fn()),
           reconcile: vi.fn(),
         },
         workspace: {
@@ -1094,6 +1096,7 @@ describe("WorkspaceHost", () => {
         terminal: {
           applyHostSnapshot: vi.fn(),
           onFocusRequest: vi.fn(),
+          onInitialInputFailed: vi.fn(() => vi.fn()),
           reconcile: vi.fn(),
         },
         workspace: {

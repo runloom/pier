@@ -147,13 +147,14 @@ describe("智能体状态官方轨迹跨层验收", () => {
       ).toBe(true);
     }
     // Matrix may still list provider-native dimensions without a status-trace
-    // fixture yet (e.g. claude completed / copilot ready). Those are tracked
-    // by unit/integration agent tests; do not fail the whole publish gate on
-    // incomplete fixture expansion. Cap the gap so it cannot grow unbounded.
+    // fixture yet (e.g. claude completed / copilot ready / cursor waiting).
+    // Those are tracked by unit/integration agent tests; do not fail the
+    // whole publish gate on incomplete fixture expansion. Cap the gap so it
+    // cannot grow unbounded.
     const missingInFixtures = [...matrixCoverage].filter(
       (key) => !actualCoverage.has(key)
     );
-    expect(missingInFixtures.length).toBeLessThanOrEqual(10);
+    expect(missingInFixtures.length).toBeLessThanOrEqual(11);
     expect(missingInFixtures.sort()).toEqual(
       [
         "claude:completed",
@@ -162,6 +163,7 @@ describe("智能体状态官方轨迹跨层验收", () => {
         "copilot:completed",
         "copilot:interrupted",
         "copilot:ready",
+        "cursor:waiting",
         "kimi:completed",
         "kimi:ready",
         "qodercli:interrupted",

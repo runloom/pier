@@ -8,7 +8,8 @@ import { agentKindSchema } from "@shared/contracts/agent.ts";
 import type { PierCommandResult } from "@shared/contracts/commands.ts";
 import { getTerminalAddon } from "../../ipc/terminal/index.ts";
 import { toNativePanelKey } from "../../ipc/terminal/panel-id.ts";
-import { findAppWindowByInternalId } from "../../windows/identity.ts";
+import { pasteTerminalText } from "../../ipc/terminal/submit-text.ts";
+import { findAppWindowForActivityWindowId } from "../../windows/identity.ts";
 import type { TerminalBackend } from "./types.ts";
 
 export interface HostTerminalBackendDeps {
@@ -28,36 +29,18 @@ function parseAgentKind(agentId: string): AgentKind | null {
 }
 
 function nativeKey(windowId: string, panelId: string): string | null {
-  const win = findAppWindowByInternalId(windowId);
+  const win = findAppWindowForActivityWindowId(windowId);
   if (!win || win.isDestroyed()) {
     return null;
   }
   return toNativePanelKey(win, panelId);
 }
 
-/** 与 ipc/terminal/operations.ts 一致：paste 与 Return 拆次 read。 */
-const SUBMIT_ENTER_SETTLE_MS = 100;
-
 export function createHostTerminalBackend(
   deps: HostTerminalBackendDeps
 ): TerminalBackend {
   /** panelId → windowId */
   const windows = new Map<string, string>();
-  /** per-native-key send serial queue */
-  const sendQueues = new Map<string, Promise<unknown>>();
-
-  function enqueueSend<T>(key: string, task: () => Promise<T>): Promise<T> {
-    const prev = sendQueues.get(key) ?? Promise.resolve();
-    const next = prev.then(task, task);
-    sendQueues.set(
-      key,
-      next.then(
-        () => undefined,
-        () => undefined
-      )
-    );
-    return next;
-  }
 
   return {
     async create(args) {
@@ -114,28 +97,15 @@ export function createHostTerminalBackend(
       if (!(key && addon)) {
         return false;
       }
-      // Bracketed paste: trailing \r/\n inside sendText often does not submit.
-      // Strip trailing newline(s), paste body, settle, then synthetic Return.
       const needsSubmit = /[\r\n]+$/u.test(text);
       const body = needsSubmit ? text.replace(/[\r\n]+$/u, "") : text;
-      return enqueueSend(key, async () => {
-        if (body.length > 0) {
-          const ok = addon.sendText(key, body);
-          if (!ok) {
-            return false;
-          }
-        }
-        if (!needsSubmit) {
-          return true;
-        }
-        await new Promise((resolve) =>
-          setTimeout(resolve, SUBMIT_ENTER_SETTLE_MS)
-        );
-        if (typeof addon.sendKeyPress === "function") {
-          return addon.sendKeyPress(key, 0x24, 0, "\r");
-        }
-        return addon.sendText(key, "\r");
+      const result = await pasteTerminalText({
+        addon,
+        nativePanelId: key,
+        submit: needsSubmit,
+        text: body,
       });
+      return result.ok;
     },
 
     async readViewport(panelId) {

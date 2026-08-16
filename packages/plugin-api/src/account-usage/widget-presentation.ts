@@ -1,5 +1,6 @@
 import type { WidgetDensity } from "@pier/ui/collection-auto-layout.ts";
 import type { AccountMembershipSnapshot } from "./membership-cache.ts";
+import type { AccountUsageMetric } from "./usage-cache.ts";
 
 const MEMBERSHIP_ATTENTION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -92,4 +93,18 @@ export function resolveAccountWidgetPresentation(options: {
     showHeader: true,
     showSwitcher,
   };
+}
+
+/**
+ * Scalars (reset credits, prepaid, extra usage) belong in identity badges
+ * when those badges are fully visible. Compact / tier modes hide badge
+ * scalars, so the meter keeps them.
+ */
+export function accountWidgetMeterMetrics(
+  metrics: readonly AccountUsageMetric[],
+  metadataMode: AccountMetadataBadgeMode
+): readonly AccountUsageMetric[] {
+  return metadataMode === "all"
+    ? metrics.filter((metric) => metric.kind === "quota")
+    : metrics;
 }

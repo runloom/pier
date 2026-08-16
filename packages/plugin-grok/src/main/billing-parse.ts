@@ -1,6 +1,9 @@
 import type { AccountUsageMetric } from "@pier/plugin-api/account-usage";
 import type { AccountUsageResult } from "./types.ts";
 
+export const NO_GROK_QUOTA_WINDOWS_ERROR =
+  "No Grok quota windows in billing response";
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
@@ -52,6 +55,16 @@ function windowMinutesFromRange(
   return Math.max(1, Math.round((endMs - startMs) / 60_000));
 }
 
+/** Parseable start/end on `currentPeriod` itself — not type-only, not config billing dates. */
+function hasCurrentPeriodRange(
+  period: Record<string, unknown> | null
+): boolean {
+  if (!period) return false;
+  const startMs = parseIsoMs(period.start);
+  const endMs = parseIsoMs(period.end);
+  return startMs !== null && endMs !== null && endMs > startMs;
+}
+
 function pushPeriodWindow(
   metrics: AccountUsageMetric[],
   options: {
@@ -79,6 +92,10 @@ function pushPeriodWindow(
  *
  * Priority (must match product semantics):
  * 1. Credit percent meters (`creditUsagePercent` / `productUsage`) — gates API.
+ *    Cycle rollover often keeps `currentPeriod` but omits percents until the
+ *    new window is provisioned; treat a dated period with no percent meters
+ *    as 0% used, not a parse failure. Type-only or product-only bodies do
+ *    not invent a period window.
  * 2. Cash monthly spend (`used` / `monthlyLimit` cents) — last-resort only;
  *    labeled "Monthly spend" so it is not confused with credit quota.
  *
@@ -105,17 +122,9 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
   const metrics: AccountUsageMetric[] = [];
 
   // 1) Credit period percent first — real rate-limit / credit quota.
+  // Dated currentPeriod with no percent meters is a fresh/unprovisioned
+  // window (typical at weekly rollover), not "no quota".
   const creditUsagePercent = asFiniteNumber(config.creditUsagePercent);
-  if (creditUsagePercent !== null) {
-    pushPeriodWindow(metrics, {
-      endMs,
-      limitName: periodLabel(period?.type),
-      minutes,
-      usedPercent: creditUsagePercent,
-    });
-  }
-
-  // 2) Product breakdown (credits shape). Keep a lone product when no period.
   const productUsage = Array.isArray(config.productUsage)
     ? config.productUsage.flatMap((item) => {
         const row = asRecord(item);
@@ -129,6 +138,23 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
         return [{ product, usedPercent }];
       })
     : [];
+  if (creditUsagePercent !== null) {
+    pushPeriodWindow(metrics, {
+      endMs,
+      limitName: periodLabel(period?.type),
+      minutes,
+      usedPercent: creditUsagePercent,
+    });
+  } else if (productUsage.length === 0 && hasCurrentPeriodRange(period)) {
+    pushPeriodWindow(metrics, {
+      endMs,
+      limitName: periodLabel(period?.type),
+      minutes,
+      usedPercent: 0,
+    });
+  }
+
+  // 2) Product breakdown (credits shape). Keep a lone product when no period.
   const hasPeriodWindow = metrics.some((metric) => metric.id === "grok:period");
   if (productUsage.length > 1 || !hasPeriodWindow) {
     // Duplicate product names must still yield unique window ids — the
@@ -203,7 +229,7 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
   if (metrics.length === 0) {
     return {
       status: "error",
-      error: "No Grok quota windows in billing response",
+      error: NO_GROK_QUOTA_WINDOWS_ERROR,
       metrics: [],
     };
   }

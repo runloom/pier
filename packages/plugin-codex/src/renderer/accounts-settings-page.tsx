@@ -394,12 +394,7 @@ export function AccountsSettingsPage({
               </ItemMedia>
               <ItemContent className="min-w-0">
                 <ItemTitle title={active.label}>{active.label}</ItemTitle>
-                <AccountBadges
-                  account={active}
-                  includeScalars
-                  language={language}
-                  t={t}
-                />
+                <AccountBadges account={active} language={language} t={t} />
               </ItemContent>
             </Item>
             <ItemSeparator className="my-0" />

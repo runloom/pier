@@ -4,7 +4,7 @@ import { z } from "zod";
  * Pier canvas file metadata (P-track product semantics).
  *
  * Industry alignment (Storybook Canvas/Docs + Figma Components page):
- * - composition — design canvas / scheme Frame (Playroom-like)
+ * - composition — design canvas / scheme frames on an artboard (Figma Frame / Playroom)
  * - docs — visual documentation (Storybook Docs-like)
  * - kit — global component catalog (Figma Components page)
  *

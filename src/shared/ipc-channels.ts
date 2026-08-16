@@ -203,6 +203,7 @@ export const ALLOWED_RENDERER_CHANNELS: readonly string[] = [
   // 非 broadcast 但 renderer 需订阅的通道
   "pier:terminal:request-context-menu",
   "pier:terminal:focus-request",
+  "pier:terminal:initial-input-failed",
   "pier:terminal:search-state",
   "pier:keybinding:forward",
   "pier:keybinding:modifier-state",

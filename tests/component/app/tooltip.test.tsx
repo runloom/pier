@@ -3,8 +3,10 @@ import {
   releaseTooltipSuppression,
   resetTooltipDismissStateForTests,
   suppressTooltips,
+  TOOLTIP_ARROW_CLASS,
+  TOOLTIP_ARROW_LAYOUT_HEIGHT_PX,
   TOOLTIP_ARROW_PADDING_PX,
-  TOOLTIP_ARROW_WIDTH_PX,
+  TOOLTIP_ARROW_SIZE_PX,
   TOOLTIP_COLLISION_PADDING,
   TOOLTIP_COLLISION_PADDING_PX,
   TOOLTIP_COLLISION_PADDING_X_PX,
@@ -113,17 +115,22 @@ describe("Tooltip primitive", () => {
       bottom: 8,
       left: 6,
     });
-    // Arrow stays inside [padding, width-padding] on the bubble edge.
-    expect(TOOLTIP_ARROW_PADDING_PX).toBe(8);
-    expect(TOOLTIP_ARROW_WIDTH_PX).toBe(10);
+    expect(TOOLTIP_ARROW_PADDING_PX).toBe(12);
+    expect(TOOLTIP_ARROW_SIZE_PX).toBe(10);
+    expect(TOOLTIP_ARROW_LAYOUT_HEIGHT_PX).toBe(5);
+    expect(TOOLTIP_ARROW_CLASS).toContain("rotate-45");
+    expect(TOOLTIP_ARROW_CLASS).toContain("bg-foreground");
+    expect(TOOLTIP_ARROW_CLASS).toContain("-translate-y-1/2");
   });
 
   it.each([
     ["top center", "top", "center"],
+    ["top start", "top", "start"],
+    ["top end", "top", "end"],
     ["bottom center", "bottom", "center"],
     ["bottom start", "bottom", "start"],
     ["bottom end", "bottom", "end"],
-  ] as const)("delegates %s arrow placement to Radix instead of manual pseudo-element offsets", async (_name, side, align) => {
+  ] as const)("keeps a vertical arrow for %s including edge aligns", async (_name, side, align) => {
     render(
       <TooltipProvider>
         <Tooltip defaultOpen>
@@ -139,25 +146,31 @@ describe("Tooltip primitive", () => {
 
     const tooltip = await findTooltipContent();
     expect(tooltip).toHaveTextContent("?");
-    expect(tooltip.querySelector('[data-slot="tooltip-arrow"]')).not.toBeNull();
+    const arrow = tooltip.querySelector('[data-slot="tooltip-arrow"]');
+    expect(arrow).not.toBeNull();
+    expect(arrow).toHaveClass("rotate-45", "bg-foreground");
     expectNoManualHorizontalArrowClasses(tooltip);
   });
 
-  it('does not render an arrow for side="right" without manual horizontal pseudo-arrow classes', async () => {
+  it.each([
+    "left",
+    "right",
+  ] as const)("hides the caret for horizontal side=%s without manual pseudo-arrows", async (side) => {
     render(
       <TooltipProvider>
         <Tooltip defaultOpen>
           <TooltipTrigger asChild>
-            <button type="button">Trigger on the left</button>
+            <button type="button">Trigger on the {side}</button>
           </TooltipTrigger>
-          <TooltipContent side="right">Right-side help</TooltipContent>
+          <TooltipContent side={side}>Side help</TooltipContent>
         </Tooltip>
       </TooltipProvider>
     );
 
     const tooltip = await findTooltipContent();
-    expect(tooltip).toHaveTextContent("Right-side help");
-    expect(tooltip.querySelector('[data-slot="tooltip-arrow"]')).toBeNull();
+    expect(tooltip).toHaveTextContent("Side help");
+    expect(tooltip).toHaveAttribute("data-side", side);
+    expect(tooltip.querySelector('[data-slot="tooltip-arrow"]')).not.toBeNull();
     expectNoManualHorizontalArrowClasses(tooltip);
   });
 

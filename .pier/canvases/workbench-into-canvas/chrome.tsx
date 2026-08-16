@@ -1,12 +1,5 @@
-import { Badge, Button, Input, Row, Text } from "pier/canvas";
-import type { CSSProperties, ReactNode } from "react";
-
-export const STAGE: CSSProperties = {
-  background: "var(--background)",
-  border: "1px solid var(--border)",
-  borderRadius: 12,
-  overflow: "hidden",
-};
+import { Badge, Tabs, TabsList, TabsTrigger } from "pier/canvas";
+import type { ReactNode } from "react";
 
 const SETTINGS_NAV = [
   "外观",
@@ -20,210 +13,57 @@ const SETTINGS_NAV = [
   "更新",
 ] as const;
 
-const PROJECT_TABS = ["环境", "技能", "MCP", "常规"] as const;
-
-export function Screen({
-  id,
-  title,
-  spec,
+export function SettingsChrome({
   children,
+  project = "feat-canvas-20260815",
 }: {
-  id: string;
-  title: string;
-  spec: string;
   children: ReactNode;
+  project?: string;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <Row gap={8} wrap>
-        <Badge variant="outline">{id}</Badge>
-        <Text as="h3" className="text-sm font-medium">
-          {title}
-        </Text>
-      </Row>
-      <Text tone="secondary" className="text-sm leading-relaxed">
-        {spec}
-      </Text>
-      <div style={STAGE}>{children}</div>
-    </div>
-  );
-}
-
-/** Settings dialog: left nav + project detail. Matches current Pier chrome. */
-export function SettingsProjectFrame({ children }: { children: ReactNode }) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "9.5rem 1fr" }}>
-      <div
-        style={{
-          borderRight: "1px solid var(--border)",
-          display: "flex",
-          flexDirection: "column",
-          gap: 2,
-          padding: "8px 6px",
-        }}
-      >
-        <Text tone="tertiary" className="px-2 pb-1 text-xs">
-          设置
-        </Text>
-        {SETTINGS_NAV.map((item) => (
-          <div
-            key={item}
-            style={{
-              background: item === "项目" ? "var(--muted)" : undefined,
-              borderRadius: 6,
-              fontSize: 12,
-              padding: "6px 8px",
-            }}
-          >
-            {item}
+    <div className="flex h-full min-h-0 flex-col bg-background">
+      <div className="shrink-0 border-b px-6 py-3">
+        <h2 className="font-medium text-base leading-none">设置</h2>
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-[10rem_1fr]">
+        <nav className="min-h-0 overflow-y-auto border-r p-2">
+          <div className="flex flex-col gap-0.5">
+            {SETTINGS_NAV.map((name) => (
+              <div
+                className={
+                  name === "项目"
+                    ? "rounded-md bg-muted px-2 py-1.5 text-sm font-medium"
+                    : "rounded-md px-2 py-1.5 text-sm text-muted-foreground"
+                }
+                key={name}
+              >
+                {name}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div style={{ minWidth: 0, padding: "12px 14px 14px" }}>
-        <div
-          style={{
-            alignItems: "center",
-            display: "flex",
-            gap: 8,
-            marginBottom: 4,
-          }}
-        >
-          <Text tone="tertiary" className="text-xs">
-            ←
-          </Text>
-          <Text className="text-sm font-medium">pier</Text>
-          <Badge variant="secondary">当前</Badge>
-        </div>
-        <Text tone="tertiary" className="mb-3 block text-xs">
-          /Users/sheep/Xyz/pier
-        </Text>
-        <Row gap={12}>
-          {PROJECT_TABS.map((item) => (
-            <Text
-              key={item}
-              className="text-xs"
-              tone={item === "常规" ? "default" : "tertiary"}
-            >
-              {item}
-            </Text>
-          ))}
-        </Row>
-        <div
-          style={{
-            borderBottom: "1px solid var(--border)",
-            margin: "6px 0 12px",
-          }}
-        />
-        {children}
-      </div>
-    </div>
-  );
-}
-
-export function ExistingCard({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children?: ReactNode;
-}) {
-  return (
-    <div style={{ ...STAGE, opacity: 0.55, padding: "12px 14px" }}>
-      <Row gap={8}>
-        <Text className="text-sm font-medium">{title}</Text>
-        <Badge variant="outline">已有</Badge>
-      </Row>
-      <Text tone="secondary" className="mt-1 text-xs leading-relaxed">
-        {description}
-      </Text>
-      {children}
-    </div>
-  );
-}
-
-export function DialogChrome({
-  title,
-  description,
-  children,
-  footer,
-}: {
-  title: string;
-  description: string;
-  children: ReactNode;
-  footer: ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        background:
-          "color-mix(in oklab, var(--foreground) 18%, transparent)",
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          ...STAGE,
-          margin: "0 auto",
-          maxWidth: 420,
-        }}
-      >
-        <div style={{ padding: "16px 20px 0" }}>
-          <Text className="text-base font-medium">{title}</Text>
-          <Text tone="secondary" className="mt-1 text-sm leading-relaxed">
-            {description}
-          </Text>
-        </div>
-        <div style={{ padding: "16px 20px" }}>{children}</div>
-        <div
-          style={{
-            borderTop: "1px solid var(--border)",
-            display: "flex",
-            gap: 8,
-            justifyContent: "flex-end",
-            padding: "10px 20px 12px",
-          }}
-        >
-          {footer}
+        </nav>
+        <div className="flex min-h-0 min-w-0 flex-col px-4 pb-3">
+          <div className="flex min-w-0 items-center gap-2 pt-3 pb-2">
+            <h1 className="min-w-0 truncate text-xl">{project}</h1>
+            <Badge variant="secondary">当前</Badge>
+          </div>
+          <p className="truncate pb-3 text-muted-foreground text-xs">
+            /Users/xyz/ABC/{project}
+          </p>
+          <Tabs className="gap-1" value="materials">
+            <TabsList className="gap-3" variant="line">
+              <TabsTrigger value="environment">环境</TabsTrigger>
+              <TabsTrigger value="skills">技能</TabsTrigger>
+              <TabsTrigger value="mcp">MCP</TabsTrigger>
+              <TabsTrigger value="general">常规</TabsTrigger>
+              <TabsTrigger value="materials">物料</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden pt-3">
+            {children}
+          </div>
         </div>
       </div>
     </div>
-  );
-}
-
-export function PaletteChrome({
-  query,
-  children,
-}: {
-  query: string;
-  children: ReactNode;
-}) {
-  return (
-    <div
-      style={{
-        background:
-          "color-mix(in oklab, var(--foreground) 18%, transparent)",
-        padding: 28,
-      }}
-    >
-      <div style={{ ...STAGE, margin: "0 auto", maxWidth: 440 }}>
-        <div style={{ borderBottom: "1px solid var(--border)", padding: 8 }}>
-          <Input aria-label="搜索命令" defaultValue={query} />
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-export function FooterPair({ primary }: { primary: string }) {
-  return (
-    <>
-      <Button type="button" variant="outline">
-        取消
-      </Button>
-      <Button type="button">{primary}</Button>
-    </>
   );
 }

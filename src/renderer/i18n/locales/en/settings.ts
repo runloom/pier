@@ -387,6 +387,10 @@ export const settings = {
         stylePreset: "Choose the interface color style.",
         theme: "Choose the interface color mode.",
       },
+      files: {
+        copyPathWithRange:
+          "Copy the current file path and selected line numbers.",
+      },
       panel: {
         close: "Close the current panel.",
         closeActive: "Close the active panel.",
@@ -431,10 +435,15 @@ export const settings = {
     errorConflict: 'Already used by "{{command}}"',
     errorNeedsModifier: "Add a modifier key",
     errorUnknown: "Couldn't save shortcut",
+    noResultsDescription:
+      "Try a different search, or clear it to see all shortcuts.",
+    noResultsTitle: "No matching shortcuts",
     record: "Record",
     recording: "Press keys...",
     reset: "Reset",
     resetAll: "Reset All",
+    searchLabel: "Search keyboard shortcuts",
+    searchPlaceholder: "Search names or shortcuts",
     unassigned: "Unassigned",
   },
   plugins: settingsPlugins,

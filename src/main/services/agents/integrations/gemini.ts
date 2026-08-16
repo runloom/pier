@@ -30,9 +30,8 @@ function geminiStandardCommand(
  * 依据 google-gemini/gemini-cli packages/core/src/hooks/types.ts：
  * Notification.ToolPermission 没有稳定请求 ID 或结果 hook；ask_user 的
  * BeforeTool 发生在权限判定之前，拒绝、取消、异常可不触发 AfterTool。
- * 两条链路均不能覆盖完整等待闭环，因此不发射交互事件；ask_user 仍只报告
- * ToolStart / ToolComplete。聚合器按工具名升为 waiting，由 AfterTool、
- * 下一普通工具或新回合结算。
+ * 两条链路均不能覆盖完整等待闭环，因此不发射交互事件；ask_user 只报告
+ * ToolStart / ToolComplete，聚合器也不按工具名升 waiting。
  *
  * subagent 风险备忘：AfterAgent 仅在最外层调用（activeCalls===1）时触发,
  * 且按 prompt_id 去重（client.ts fireBeforeAgentHookSafe / fireAfterAgentHookSafe）。

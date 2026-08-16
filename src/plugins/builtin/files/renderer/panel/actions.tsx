@@ -188,7 +188,7 @@ export function ResolvedFilePanelActions({
               )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">
+          <TooltipContent align="end" side="bottom">
             {mode === "preview"
               ? t("filePanel.view.switchToSource", "Switch to source")
               : t("filePanel.view.switchToPreview", "Switch to preview")}
