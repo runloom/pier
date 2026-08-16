@@ -142,10 +142,7 @@ export class ReviewCommentsChipNode extends DecoratorNode<JSX.Element> {
         spellCheck={false}
         title={this.__label}
       >
-        <MessageSquareText
-          aria-hidden="true"
-          className="size-2.5 shrink-0 self-center"
-        />
+        <MessageSquareText aria-hidden="true" className="size-2.5 shrink-0" />
         <span className="truncate">{this.__label}</span>
       </span>
     );

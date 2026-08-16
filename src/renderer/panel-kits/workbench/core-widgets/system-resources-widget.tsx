@@ -61,10 +61,7 @@ function KpiTile({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span
-        className={cn(
-          "truncate text-muted-foreground leading-none",
-          primary ? "text-xs" : "text-[11px]"
-        )}
+        className={cn("truncate text-muted-foreground text-xs leading-none")}
       >
         {label}
       </span>

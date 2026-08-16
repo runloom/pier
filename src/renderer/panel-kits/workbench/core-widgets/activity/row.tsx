@@ -185,7 +185,7 @@ export function ActivityRow({
           ? "text-destructive"
           : "text-muted-foreground";
       statusNode = (
-        <span className={cn("whitespace-nowrap text-[11px]", statusTone)}>
+        <span className={cn("whitespace-nowrap text-xs", statusTone)}>
           {t(key)}
         </span>
       );

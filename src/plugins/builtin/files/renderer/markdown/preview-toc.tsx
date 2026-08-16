@@ -235,7 +235,7 @@ export function MarkdownPreviewToc({
                         className={cn(
                           // Override Button defaults (whitespace-nowrap, fixed height)
                           // so long headings wrap fully inside the panel width.
-                          "h-auto min-h-0 w-full items-start justify-start whitespace-normal px-2 py-1 text-left font-normal text-[11px] leading-4",
+                          "h-auto min-h-0 w-full items-start justify-start whitespace-normal px-2 py-1 text-left font-normal text-xs leading-4",
                           active
                             ? "bg-muted text-foreground"
                             : "text-muted-foreground/80 hover:bg-muted/50 hover:text-foreground"

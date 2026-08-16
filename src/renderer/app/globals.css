@@ -25,17 +25,18 @@
  *   border-box and ignore host *margin*; empty pseudos widen the box so the
  *   caret lands past a real gap (padding alone is flaky on atomic decorators
  *   in Chromium). Gutters are caret hit-box only — height: 0 so they do not
- *   contribute a font strut / steal the flex baseline.
- * - Do not set a line-height-matching host height (no 1.25rem / 1lh). The
- *   pill shrink-wraps the decorate() label; vertical-align: baseline puts
- *   that label on the same alphabetic baseline as adjacent typed text.
+ *   contribute a font strut or stretch the shrink-wrapped host.
+ * - Do not lock host height to 1.25rem. The pill is `h-lh` plus the shared
+ *   editor leading token so 1lh fills the line; host shrink-wraps and
+ *   `vertical-align: top` pins that line box (middle on a shorter box sits
+ *   low next to CJK).
  * - Do not stretch the host to the compact shell height — that makes the
  *   caret next to a chip paint as tall as the input.
  */
 .composer-ref-chip-host {
   display: inline-flex;
-  align-items: baseline;
-  vertical-align: baseline;
+  align-items: center;
+  vertical-align: top;
   line-height: 1;
 }
 

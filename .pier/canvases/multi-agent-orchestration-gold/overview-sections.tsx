@@ -266,10 +266,10 @@ export function ProblemPage({ d }: { d: DesignData }) {
                 {d.researchSources.map((source) => (
                   <Stack className="min-w-0" gap={2} key={source.id}>
                     <Text className="text-xs font-semibold">{source.name}</Text>
-                    <Text className="font-mono text-[11px] break-all text-muted-foreground">
+                    <Text className="font-mono text-xs break-all text-muted-foreground">
                       {source.repository} · {source.revision.slice(0, 8)}
                     </Text>
-                    <Text className="font-mono text-[11px] break-words text-muted-foreground">
+                    <Text className="font-mono text-xs break-words text-muted-foreground">
                       {source.evidence}
                     </Text>
                   </Stack>

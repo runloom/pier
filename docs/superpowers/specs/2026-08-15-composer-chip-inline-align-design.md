@@ -25,21 +25,21 @@
 | 族 | 代表 | 对齐方式 | Pier 是否采用 |
 |---|---|---|---|
 | A 文本实体 | Lexical playground `MentionNode`（`TextNode` + 底色）、TipTap Mention（继承字号的 `<span>` + 少量 padding） | 它就是文字，天然共基线 | **否。** 会丢掉整颗删除、图标、Chromium 光标槽 |
-| B 原子控件 | Slack 文件芯片、Cursor `@file`、Pier 四颗 `DecoratorNode` | 字号级胶囊 + 标签基线 | **是。** 保留装饰语义，视觉密度对齐 A 族 |
+| B 原子控件 | Slack 文件芯片、Cursor `@file`、Pier 四颗 `DecoratorNode` | 字号级胶囊填满编辑器行盒（`h-lh` + 共享 `leading-5`），宿主 `vertical-align: top` | **是。** 保留装饰语义，视觉密度对齐 A 族 |
 
-B 族做对的产品：芯片高度 ≈ em 盒 + 2–4px（**不等于行高**），标签 `1em`，宿主 `vertical-align: baseline`，基线取自标签不是盒子中点。
+B 族做对的产品：药丸高度跟编辑器行高走（`h-lh` + 共享 `COMPOSER_LINE_LEADING_CLASS`，不是锁死 `h-5`），标签 `text-xs` 在药丸里 `items-center`。宿主收缩包裹后 `vertical-align: top`，填进行盒。禁止 `vertical-align: middle`（按拉丁 x-height 对齐，中文 / 行盒会偏下）。禁止任意 `em`/`rem` 字号。
 
 否决：继续 `h-5` 再用 `vertical-align: -Npx` 光学微调（治标，换字体/缩放还会歪）。
 
 ## 3. 不变量
 
-1. 芯片标签基线 == 旁边正文基线。
-2. 标签字号 `1em`（编辑器 `text-sm`）。禁止共享 class 上的 `text-[0.85em]` 或更小覆盖。
-3. 胶囊随内容收缩。禁止 `h-5` / `max-h-5` / 宿主 `height: 1.25rem`。行盒仍由编辑器 `leading-5` 决定。
-4. 宿主是基线对齐的 `inline-flex`，不是中点对齐的替换盒。
+1. 芯片药丸与旁边正文共一个行盒（药丸 `h-lh` + 与编辑器共享的 `COMPOSER_LINE_LEADING_CLASS`）。不要用 `middle` 去对 x-height。
+2. 标签字号 `text-xs`（编辑器 `text-sm`）。禁止共享 class 上的任意 `text-[Nem]` / `text-[Nrem]`。
+3. 药丸高度跟行高走。禁止 `h-5` / `max-h-5` / 宿主 `height: 1.25rem`。行高 token 只在 `COMPOSER_LINE_LEADING_CLASS` 一处声明。
+4. 宿主收缩包裹药丸，不锁 rem 高度，也不拉到紧凑壳 `h-9`。
 5. `::before`/`::after` 只做 0.25rem 光标槽，`height: 0`，不得贡献字体 strut。
-6. 胶囊内部 `items-center`（图标对标签）；宿主 `align-items: baseline` + `vertical-align: baseline`。
-7. 芯片旁光标可以比正文光标矮约 2px。不要为了藏这一点把宿主拉回 `1lh`。
+6. 胶囊内部 `items-center`（图标对标签）；宿主 `align-items: center` + `vertical-align: top`。
+7. 芯片旁光标应与正文同行高。不要把宿主拉到紧凑壳高度。
 8. 圆角 / 最大宽度 / 截断 / 槽宽 / 原子选区不变。
 9. 色相只分 3 族合法 + 2 态：引用 `@` = `status-info` 蓝；调用（命令+技能）= `status-success` 绿（`COMPOSER_CHIP_TONE_INVOKE`）；载荷附件 = `status-done` 紫；附件失效 = `status-warning`；审阅 = `destructive`。命令不得再用 `secondary` / `muted` / `status-neutral`。命令 vs 技能靠 `SquareSlash` / `Zap`，不靠色相。
 
@@ -48,7 +48,7 @@ B 族做对的产品：芯片高度 ≈ em 盒 + 2–4px（**不等于行高**�
 ## 4. 实现入口
 
 - 宿主：`src/renderer/app/globals.css`（`.composer-ref-chip-host`）
-- 共享壳：`COMPOSER_CHIP_CLASS`（`composer-chip-styles.ts`）
-- 禁止以后再引入：`h-5`、`0.85em`、`vertical-align: middle`、宿主 `height: 1.25rem`
+- 共享壳：`COMPOSER_CHIP_CLASS` + `COMPOSER_LINE_LEADING_CLASS`（`composer-chip-styles.ts`；编辑器与药丸共用）
+- 禁止以后再引入：`h-5`、任意 `em`/`rem` 字号、宿主 `height: 1.25rem`、`vertical-align: middle`
 
 jsdom 量不出像素基线。契约由治理测试锁源码，目视在 Electron 紧凑增强输入里确认。

@@ -280,7 +280,7 @@ function TooltipContent({
         className={cn(
           // Fade only: zoom/slide also use transform and fight Floating UI placement
           // updates (visible as hover jitter on tight chrome like panel maximize).
-          "app-no-drag data-[state=delayed-open]:fade-in-0 data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none relative z-50 inline-flex w-fit max-w-64 origin-(--radix-tooltip-content-transform-origin) items-center gap-1 overflow-visible rounded-xl bg-foreground px-2 py-1 text-[11px] text-background leading-snug duration-100 has-data-[slot=kbd]:pr-1.5 data-[state=delayed-open]:animate-in data-closed:animate-out data-open:animate-in **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-lg",
+          "app-no-drag data-[state=delayed-open]:fade-in-0 data-open:fade-in-0 data-closed:fade-out-0 pointer-events-none relative z-50 inline-flex w-fit max-w-64 origin-(--radix-tooltip-content-transform-origin) items-center gap-1 overflow-visible rounded-xl bg-foreground px-2 py-1 text-background text-xs leading-snug duration-100 has-data-[slot=kbd]:pr-1.5 data-[state=delayed-open]:animate-in data-closed:animate-out data-open:animate-in **:data-[slot=kbd]:relative **:data-[slot=kbd]:isolate **:data-[slot=kbd]:z-50 **:data-[slot=kbd]:rounded-lg",
           // Room for arrowPadding on both ends + caret size so the diamond stays
           // on the flat edge (not the rounded-xl corner).
           "min-w-[calc(var(--tooltip-arrow-pad)*2+var(--tooltip-arrow-size))]",

@@ -189,7 +189,7 @@ function TrendBlockBody({
         </AreaChart>
       </ChartContainer>
       <span
-        className="pointer-events-none absolute top-0 right-0 shrink-0 font-mono text-[11px] text-muted-foreground tabular-nums"
+        className="pointer-events-none absolute top-0 right-0 shrink-0 font-mono text-muted-foreground text-xs tabular-nums"
         data-testid="custom-card-trend-last"
       >
         {lastValueText}

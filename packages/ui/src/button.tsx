@@ -51,7 +51,7 @@ const buttonVariants = cva(
          * 与 STATUS_BAR_ITEM_TRIGGER_CLASS 色板组合使用。
          */
         "status-bar": cn(
-          "h-[22px] min-w-0 shrink gap-1 rounded-md px-1.5 font-normal text-[11px]",
+          "h-[22px] min-w-0 shrink gap-1 rounded-md px-1.5 font-normal text-xs",
           CONTROL_ICON_GLYPH_SM_CLASS
         ),
         sm: "h-7 shrink-0 gap-1 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",

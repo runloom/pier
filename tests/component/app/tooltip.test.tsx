@@ -90,7 +90,7 @@ describe("Tooltip primitive", () => {
       "gap-1",
       "px-2",
       "py-1",
-      "text-[11px]",
+      "text-xs",
       "leading-snug",
       "pointer-events-none"
     );

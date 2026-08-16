@@ -39,7 +39,7 @@ import { ActivitySummary } from "./summary.tsx";
 function Section({ children, title }: { children: ReactNode; title: string }) {
   return (
     <section className="flex min-w-0 flex-col gap-0.5">
-      <h3 className="px-1 font-medium text-[11px] text-muted-foreground uppercase tracking-wide">
+      <h3 className="px-1 font-medium text-muted-foreground text-xs uppercase tracking-wide">
         {title}
       </h3>
       <div className="flex flex-col divide-y divide-border/50">{children}</div>
@@ -248,7 +248,7 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
           ) : null}
 
           {truncated ? (
-            <p className="px-1 text-[11px] text-muted-foreground">
+            <p className="px-1 text-muted-foreground text-xs">
               {t("workbench.widget.activityOverview.moreRows", {
                 count: flat.length - limited.length,
               })}

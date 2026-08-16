@@ -151,7 +151,7 @@ export class SkillMentionNode extends DecoratorNode<JSX.Element> {
         // Browser must not red-underline skill ids inside the pill.
         spellCheck={false}
       >
-        <Icon aria-hidden="true" className="size-2.5 shrink-0 self-center" />
+        <Icon aria-hidden="true" className="size-2.5 shrink-0" />
         <span className="truncate font-mono">{this.__skillId}</span>
       </span>
     );

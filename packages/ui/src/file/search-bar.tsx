@@ -275,7 +275,7 @@ export function FileSearchBar({
             <div className="flex shrink-0 items-center gap-0.5">
               <Toggle
                 aria-label={labels.matchCase ?? "Match case"}
-                className="h-6 min-w-7 rounded-lg px-1.5 font-mono text-[11px]"
+                className="h-6 min-w-7 rounded-lg px-1.5 font-mono text-xs"
                 onPressedChange={(pressed) =>
                   onOptionChange?.("caseSensitive", pressed)
                 }
@@ -288,7 +288,7 @@ export function FileSearchBar({
               </Toggle>
               <Toggle
                 aria-label={labels.regexp ?? "Regexp"}
-                className="h-6 min-w-7 rounded-lg px-1.5 font-mono text-[11px]"
+                className="h-6 min-w-7 rounded-lg px-1.5 font-mono text-xs"
                 onPressedChange={(pressed) =>
                   onOptionChange?.("regexp", pressed)
                 }
@@ -301,7 +301,7 @@ export function FileSearchBar({
               </Toggle>
               <Toggle
                 aria-label={labels.wholeWord ?? "Whole word"}
-                className="h-6 min-w-7 rounded-lg px-1.5 font-mono text-[11px]"
+                className="h-6 min-w-7 rounded-lg px-1.5 font-mono text-xs"
                 onPressedChange={(pressed) =>
                   onOptionChange?.("wholeWord", pressed)
                 }
