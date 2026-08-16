@@ -146,6 +146,13 @@ function pierSessionIdFrom(values) {
 	return undefined;
 }
 
+function pierBoundWorkId(value) {
+	if (typeof value !== "string" || !value) return undefined;
+	const pipe = value.indexOf("|");
+	const core = pipe === -1 ? value : value.slice(0, pipe);
+	return core.length <= 1024 ? core : core.slice(0, 1024);
+}
+
 function pierLastAssistantStopReason(event) {
 	const messages = event && Array.isArray(event.messages) ? event.messages : [];
 	for (let index = messages.length - 1; index >= 0; index--) {
@@ -172,11 +179,13 @@ function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 		event === "PromptSubmit"
 			? pierPromptSnippetFrom(nativePayload, ctx)
 			: undefined;
-	const toolUseId =
+	const toolUseId = pierBoundWorkId(
 		details.toolUseId ||
-		(nativePayload && typeof nativePayload.toolCallId === "string"
-			? nativePayload.toolCallId
-			: undefined);
+			(nativePayload && typeof nativePayload.toolCallId === "string"
+				? nativePayload.toolCallId
+				: undefined)
+	);
+	const interactionId = pierBoundWorkId(details.interactionId);
 	const toolName =
 		details.toolName ||
 		(nativePayload && typeof nativePayload.toolName === "string"
@@ -196,9 +205,7 @@ function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 		...(toolUseId ? { toolUseId } : {}),
 		...(toolName ? { toolName } : {}),
 		...(details.nativeState ? { nativeState: details.nativeState } : {}),
-		...(details.interactionId
-			? { interactionId: details.interactionId }
-			: {}),
+		...(interactionId ? { interactionId } : {}),
 		...(details.interactionKind
 			? { interactionKind: details.interactionKind }
 			: {}),

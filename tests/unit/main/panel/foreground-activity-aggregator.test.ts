@@ -1987,6 +1987,102 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
+  it("transcript 问卷覆盖在 TurnInterrupted 后仍保持 waiting", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", {
+        interactionId: "cq:1",
+        interactionKind: "question",
+      }),
+      { evidenceSource: "transcript" }
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+    agg.ingestAgentEvent(hookEvent("TurnInterrupted"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+    agg.dispose();
+  });
+
+  it("封账后的 transcript 问卷解除仍摘掉等待确认", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", {
+        interactionId: "cq:1",
+        interactionKind: "question",
+      }),
+      { evidenceSource: "transcript" }
+    );
+    agg.ingestAgentEvent(hookEvent("TurnInterrupted"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+    expect(
+      agg.ingestAgentEvent(
+        interactionEvent("InteractionResolved", {
+          interactionId: "cq:1",
+          interactionKind: "question",
+          interactionOutcome: "completed",
+        }),
+        { evidenceSource: "transcript" }
+      )
+    ).toBe(true);
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("transcript 问卷覆盖不被 Cursor 普通 ToolStart 揭掉", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", {
+        interactionId: "cq:1",
+        interactionKind: "question",
+      }),
+      { evidenceSource: "transcript" }
+    );
+    agg.ingestAgentEvent(hookEvent("ToolStart"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", {
+        interactionId: "cq:1",
+        interactionKind: "question",
+        interactionOutcome: "completed",
+      }),
+      { evidenceSource: "transcript" }
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("TurnInterrupted 后 InteractionRequested 仍恢复 waiting", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(hookEvent("TurnInterrupted"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "ask-1" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+    agg.dispose();
+  });
+
   it("advisory Stop 后 InteractionRequested 恢复 waiting", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));

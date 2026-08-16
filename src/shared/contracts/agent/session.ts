@@ -21,6 +21,14 @@ const baseHookIdentityFields = {
   pid: z.number().optional(),
 };
 
+/**
+ * 工具 / 交互工作项 id。OMP `ask` 的 `toolCallId` 是
+ * `call-<uuid>-n|<sig>`，实测约 440 字；128 会整行拒收，问卷进不了 waiting。
+ */
+export const HOOK_WORK_ID_MAX = 1024;
+
+const hookWorkId = z.string().max(HOOK_WORK_ID_MAX);
+
 const v1BaseHookFields = { ...baseHookIdentityFields, v: z.literal(1) };
 
 const commandStartEventSchema = z
@@ -54,7 +62,7 @@ const agentEventPayloadV1Schema = z
     agentType: z.string().max(128).optional(),
     sessionId: z.string().max(128).optional(),
     toolName: z.string().max(256).optional(),
-    toolUseId: z.string().max(128).optional(),
+    toolUseId: hookWorkId.optional(),
     transcriptPath: z.string().max(8192).optional(),
     turnId: z.string().max(128).optional(),
   })
@@ -77,7 +85,7 @@ const agentEventPayloadV2Schema = z
     agentType: z.string().max(128).optional(),
     sessionId: z.string().max(128).optional(),
     toolName: z.string().max(256).optional(),
-    toolUseId: z.string().max(128).optional(),
+    toolUseId: hookWorkId.optional(),
     transcriptPath: z.string().max(8192).optional(),
     turnId: z.string().max(128).optional(),
     /** PromptSubmit 旁路：截断用户原文，供 sessionTitle 派生；不进 status 映射。 */
@@ -99,7 +107,7 @@ const agentEventPayloadV3BaseFields = {
   agentType: z.string().max(128).optional(),
   sessionId: z.string().max(128).optional(),
   toolName: z.string().max(256).optional(),
-  toolUseId: z.string().max(128).optional(),
+  toolUseId: hookWorkId.optional(),
   transcriptPath: z.string().max(8192).optional(),
   turnId: z.string().max(128).optional(),
   promptSnippet: z.string().max(512).optional(),
@@ -140,7 +148,7 @@ const interactionRequestedEventV3Schema = z
   .object({
     ...agentEventPayloadV3BaseFields,
     event: z.literal("InteractionRequested"),
-    interactionId: z.string().max(128).optional(),
+    interactionId: hookWorkId.optional(),
     interactionKind: interactionKindSchema,
   })
   .strict();
@@ -158,7 +166,7 @@ const interactionResolvedEventV3Schema = z
   .object({
     ...agentEventPayloadV3BaseFields,
     event: z.literal("InteractionResolved"),
-    interactionId: z.string().max(128).optional(),
+    interactionId: hookWorkId.optional(),
     interactionKind: interactionKindSchema,
     interactionOutcome: interactionOutcomeSchema.optional(),
   })

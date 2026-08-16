@@ -9,6 +9,10 @@ import type {
 import { agentHookEventSchema } from "@shared/contracts/agent/session.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  applyGrokQuestionLine,
+  scanGrokQuestionState,
+} from "../../../../../src/main/services/agents/integrations/transcript/grok-question.ts";
+import {
   classifyGrokUpdatesLine,
   createGrokTranscriptReconciler,
   defaultGrokSessionsRoot,
@@ -250,5 +254,240 @@ describe("createGrokTranscriptReconciler", () => {
     await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 300));
     expect(received).toHaveLength(0);
     reconciler.dispose();
+  });
+
+  it("backfills an open ask_user_question as waiting", async () => {
+    writeFileSync(
+      updatesPath,
+      `${JSON.stringify({
+        method: "session/update",
+        params: {
+          update: {
+            sessionUpdate: "tool_call",
+            title: "ask_user_question",
+            toolCallId: "call-ask-1",
+          },
+        },
+      })}\n`
+    );
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createGrokTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      sessionsRoot,
+    });
+    await reconciler.observe(hookEvent({ sessionId: "session-1" }));
+    expect(received).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: "InteractionRequested",
+          interactionId: "call-ask-1",
+          interactionKind: "question",
+          nativeEvent: "grok.updates.ask_user_question",
+        }),
+      ])
+    );
+    reconciler.dispose();
+  });
+
+  it("resolves the question only when tool_call_update is completed", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createGrokTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      sessionsRoot,
+    });
+    await reconciler.observe(hookEvent({ sessionId: "session-1" }));
+    appendFileSync(
+      updatesPath,
+      `${JSON.stringify({
+        method: "session/update",
+        params: {
+          update: {
+            sessionUpdate: "tool_call",
+            title: "ask_user_question",
+            toolCallId: "call-ask-2",
+          },
+        },
+      })}\n`
+    );
+    await vi.waitFor(() => {
+      expect(
+        received.some((event) => event.event === "InteractionRequested")
+      ).toBe(true);
+    });
+    appendFileSync(
+      updatesPath,
+      `${JSON.stringify({
+        method: "session/update",
+        params: {
+          update: {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "call-ask-2",
+            status: "completed",
+          },
+        },
+      })}\n`
+    );
+    await vi.waitFor(() => {
+      expect(
+        received.some((event) => event.event === "InteractionResolved")
+      ).toBe(true);
+    });
+    expect(
+      received.find((event) => event.event === "InteractionResolved")
+    ).toMatchObject({
+      interactionId: "call-ask-2",
+      interactionOutcome: "completed",
+    });
+    reconciler.dispose();
+  });
+
+  it("does not cancel an open question on TurnCompleted", async () => {
+    writeFileSync(
+      updatesPath,
+      `${JSON.stringify({
+        method: "session/update",
+        params: {
+          update: {
+            sessionUpdate: "tool_call",
+            title: "ask_user_question",
+            toolCallId: "call-ask-keep",
+          },
+        },
+      })}\n`
+    );
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createGrokTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      sessionsRoot,
+    });
+    await reconciler.observe(hookEvent({ sessionId: "session-1" }));
+    expect(
+      received.some((event) => event.event === "InteractionRequested")
+    ).toBe(true);
+    await reconciler.observe(
+      hookEvent({ event: "TurnCompleted", sessionId: "session-1" })
+    );
+    expect(
+      received.filter((event) => event.event === "InteractionResolved")
+    ).toHaveLength(0);
+    reconciler.dispose();
+  });
+
+  it("does not cancel another panel's open question", async () => {
+    const otherDir = join(sessionsRoot, "encoded-cwd", "session-2");
+    await mkdir(otherDir, { recursive: true });
+    const otherPath = join(otherDir, "updates.jsonl");
+    writeFileSync(
+      updatesPath,
+      `${JSON.stringify({
+        method: "session/update",
+        params: {
+          update: {
+            sessionUpdate: "tool_call",
+            title: "ask_user_question",
+            toolCallId: "ask-a",
+          },
+        },
+      })}\n`
+    );
+    writeFileSync(
+      otherPath,
+      `${JSON.stringify({
+        method: "session/update",
+        params: {
+          update: {
+            sessionUpdate: "tool_call",
+            title: "ask_user_question",
+            toolCallId: "ask-b",
+          },
+        },
+      })}\n`
+    );
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createGrokTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      sessionsRoot,
+    });
+    await reconciler.observe(
+      hookEvent({ sessionId: "session-1", panelId: "panel-a" })
+    );
+    await reconciler.observe(
+      hookEvent({
+        sessionId: "session-2",
+        panelId: "panel-b",
+        windowId: "2",
+      })
+    );
+    await reconciler.observe(
+      hookEvent({
+        event: "TurnInterrupted",
+        sessionId: "session-1",
+        panelId: "panel-a",
+      })
+    );
+    expect(
+      received.filter(
+        (event) =>
+          event.event === "InteractionResolved" &&
+          "interactionId" in event &&
+          event.interactionId === "ask-a"
+      )
+    ).toHaveLength(1);
+    expect(
+      received.filter(
+        (event) =>
+          event.event === "InteractionResolved" &&
+          "interactionId" in event &&
+          event.interactionId === "ask-b"
+      )
+    ).toHaveLength(0);
+    reconciler.dispose();
+  });
+});
+
+describe("applyGrokQuestionLine", () => {
+  it("keeps pending until completed, not on a later tool_call_update title", () => {
+    const state = scanGrokQuestionState(
+      [
+        JSON.stringify({
+          method: "session/update",
+          params: {
+            update: {
+              sessionUpdate: "tool_call",
+              title: "ask_user_question",
+              toolCallId: "q1",
+            },
+          },
+        }),
+        JSON.stringify({
+          method: "session/update",
+          params: {
+            update: {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "q1",
+              title: "Ask: 下一步从哪来",
+            },
+          },
+        }),
+      ].join("\n")
+    );
+    expect(state.pendingIds).toEqual(["q1"]);
+    const after = { pendingIds: [...state.pendingIds] };
+    expect(
+      applyGrokQuestionLine(
+        after,
+        JSON.stringify({
+          method: "session/update",
+          params: {
+            update: {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "q1",
+              status: "completed",
+            },
+          },
+        })
+      )?.pierEvent
+    ).toBe("InteractionResolved");
+    expect(after.pendingIds).toEqual([]);
   });
 });

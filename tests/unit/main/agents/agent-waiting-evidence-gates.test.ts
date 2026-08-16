@@ -10,13 +10,16 @@ import {
 import { COPILOT_EVENTS } from "@main/services/agents/integrations/copilot.ts";
 import { CURSOR_EVENTS } from "@main/services/agents/integrations/cursor.ts";
 import { DROID_HOOK_EVENTS } from "@main/services/agents/integrations/droid.ts";
+import { AGENT_STATUS_EVIDENCE } from "@main/services/agents/integrations/evidence/matrix.ts";
 import { GEMINI_HOOK_EVENTS } from "@main/services/agents/integrations/gemini.ts";
 import { GROK_HOOK_EVENTS } from "@main/services/agents/integrations/grok.ts";
+import { buildOmpExtensionSource } from "@main/services/agents/integrations/omp.ts";
 import {
   buildOpencodePluginSource,
   mapOpenCodeNativeEventToPier,
   OPENCODE_PERMISSION_NATIVE_EVENTS,
 } from "@main/services/agents/integrations/opencode.ts";
+import { buildPiExtensionSource } from "@main/services/agents/integrations/pi.ts";
 import { getAgentHookIntegration } from "@main/services/agents/integrations/registry.ts";
 import {
   isAgentStatusHooksIngestEnabled,
@@ -222,6 +225,7 @@ describe("B-tier permission-adjacent mappings retained after review", () => {
     expect(hasWaitingMapping(GEMINI_HOOK_EVENTS, "Notification")).toBe(false);
     expect(hasWaitingMapping(GEMINI_HOOK_EVENTS, "BeforeTool")).toBe(false);
     expect(hasWaitingMapping(GEMINI_HOOK_EVENTS, "AfterTool")).toBe(false);
+    expect(AGENT_STATUS_EVIDENCE.gemini.evidence.waiting).toBe("unsupported");
   });
 
   it("Grok 不装 Notification→PermissionRequest（Turn complete 会假 waiting）", () => {
@@ -233,6 +237,20 @@ describe("B-tier permission-adjacent mappings retained after review", () => {
 
   it("Droid Notification 缺少结果事件，不映射 waiting", () => {
     expect(hasWaitingMapping(DROID_HOOK_EVENTS, "Notification")).toBe(false);
+  });
+
+  it("OMP / Pi 发出 ask 时裁掉 toolCallId 签名段，避免契约拒收", () => {
+    expect(buildOmpExtensionSource()).toContain("function pierBoundWorkId");
+    expect(buildPiExtensionSource()).toContain("function pierBoundWorkId");
+  });
+
+  it("Cursor 问卷 waiting 不来自 hook，而来自 transcript 对账", () => {
+    expect(hasWaitingMapping(CURSOR_EVENTS, "preToolUse")).toBe(false);
+    expect(hasWaitingMapping(CURSOR_EVENTS, "beforeSubmitPrompt")).toBe(false);
+    expect(AGENT_STATUS_EVIDENCE.cursor.evidence.waiting).toBe("reconciled");
+    expect(AGENT_STATUS_EVIDENCE.cursor.transport).toContain(
+      "transcript-reconciler"
+    );
   });
 
   it("Cursor shell/MCP 闸门事件不装——自动放行也触发（假 waiting）且无 tool_use_id（无法配对）", () => {

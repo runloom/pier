@@ -432,6 +432,50 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
     expect(statuses).toEqual(["processing", "waiting", "processing"]);
   });
 
+  it("裁掉 ask toolCallId 的签名段后仍能进 waiting", async () => {
+    const signedId =
+      "call-03435de8-1557-4d10-b08f-e49c075729b1-0|K8TGf/h4nJMapPL8yM3t44JgGgk3TKEOI+jwKkoboyPoTTTb3qGLC3+8gxvAK1DM96zSbuGQwFAy5vs/5oMz/SIIxyEPUyabg33AkqAeL35VVtH4FOmWeTq2BqBolwQtzTZB8LIpjT21VOkwqa5vfiBNucbgZEBzgygMDAXFe+NW6AlFVX7Q3XZAgWBJRoR9UvnTIBEoug84EvXwJhXySOKLhuRKdFqoFRzaD7nZhdJBOULdabd2prc/NlU2iLaSMLoYp6g8AX0fGj3Jg5MMOtd8FTMnF0XYeH+JvS/+mQ2Yax8MoPwkE5Q9pO4gRJZQ9yUpzRmkhBKOk6FOLlxEqb5q2BNj4RkH7XFKbGcdlmpY43FSk5amhaAyNHfl0+uYghhTU8d/UA==";
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: OmpEventCtx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => "session-omp" },
+    };
+    main.fire("before_agent_start", ctx, {
+      prompt: "Is 1+1 equal to 2?",
+      type: "before_agent_start",
+    });
+    main.fire("tool_execution_start", ctx, {
+      toolCallId: signedId,
+      toolName: "ask",
+      type: "tool_execution_start",
+    });
+    const records = await readEmittedRecords(logPath);
+    const requested = records[1];
+    expect(requested).toMatchObject({
+      event: "InteractionRequested",
+      interactionId: "call-03435de8-1557-4d10-b08f-e49c075729b1-0",
+      toolUseId: "call-03435de8-1557-4d10-b08f-e49c075729b1-0",
+    });
+    expect(agentHookEventSchema.safeParse(requested).success).toBe(true);
+    const aggregator = createForegroundActivityAggregator();
+    for (const record of records) {
+      const parsed = agentHookEventSchema.parse(record);
+      if (parsed.kind !== "agentEvent") {
+        continue;
+      }
+      aggregator.ingestAgentEvent(parsed, {
+        evidenceSource: "hook",
+        stopAuthority: "authoritative",
+        turnStartAuthority: "none",
+      });
+    }
+    expect(
+      (aggregator.snapshot().activities[0] as { status?: string }).status
+    ).toBe("waiting");
+  });
+
   it.each([
     {
       expectedEvent: "error",

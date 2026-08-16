@@ -244,13 +244,13 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
   },
   cursor: {
     integration: "active",
-    transport: ["hook-command"],
+    transport: ["hook-command", "transcript-reconciler"],
     evidence: {
       lifecycle: "native",
       ready: "native",
       processing: "native",
       tool: "native",
-      waiting: "unsupported",
+      waiting: "reconciled",
       error: "native",
       completed: "native",
       interrupted: "native",
@@ -264,6 +264,18 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       nativeFact("processing", "postToolUse", "ToolComplete"),
       nativeFact("processing", "postToolUseFailure", "ToolComplete"),
       nativeFact("tool", "preToolUse", "ToolStart"),
+      fact(
+        "waiting",
+        "reconciled",
+        "cursor.transcript.ask_question",
+        "InteractionRequested"
+      ),
+      fact(
+        "waiting",
+        "reconciled",
+        "cursor.transcript.ask_question.answered",
+        "InteractionResolved"
+      ),
       nativeFact("error", "stop.status=error", "error"),
       nativeFact("completed", "stop.status=completed", "TurnCompleted"),
       nativeFact("interrupted", "stop.status=aborted", "TurnInterrupted"),

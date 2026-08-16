@@ -1,12 +1,19 @@
-import { readdir, stat } from "node:fs/promises";
+import { open, readdir, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import { resolveGrokSessionsRoot } from "../../grok-paths.ts";
+import {
+  applyGrokQuestionLine,
+  scanGrokQuestionState,
+} from "./grok-question.ts";
+import { emitTranscriptEvent } from "./tail-event.ts";
 import {
   createTranscriptTailReconciler,
   type TranscriptTailReconciler,
   type TranscriptTerminalRecord,
 } from "./tail-reconciler.ts";
+
+export { GROK_TRANSCRIPT_INTERACTION_EVIDENCE } from "./grok-question.ts";
 
 export type GrokTranscriptReconciler = TranscriptTailReconciler;
 
@@ -45,53 +52,233 @@ interface GrokTranscriptReconcilerOpts {
  * 路径：`<GROK_HOME>/sessions/<encoded-cwd>/<sessionId>/updates.jsonl`
  * （未设置时 `GROK_HOME` 为 `~/.grok`）。
  * hook 当前通常不带 transcriptPath，observe 时按 sessionId 在 sessions 根下解析。
- * 只补终态，不投影 tool / waiting / 内容。
+ * 终态只认 turn_completed。问卷只认 tool_call / completed，不走 hook
+ * Interaction（Post 可能在 UI 画出时就响）。
  */
+function grokScopeKey(event: AgentHookEventPayload): string {
+  return `${event.windowId}\0${event.panelId}`;
+}
+
+function grokQuestionRecord(
+  id: string,
+  pierEvent: "InteractionRequested" | "InteractionResolved",
+  outcome?: "completed" | "cancelled"
+): TranscriptTerminalRecord {
+  return {
+    interactionId: id,
+    interactionKind: "question",
+    nativeEvent:
+      pierEvent === "InteractionRequested"
+        ? "grok.updates.ask_user_question"
+        : "grok.updates.ask_user_question.answered",
+    pierEvent,
+    turnId: "",
+    ...(outcome ? { interactionOutcome: outcome } : {}),
+  };
+}
+
 export function createGrokTranscriptReconciler(
   opts: GrokTranscriptReconcilerOpts
 ): GrokTranscriptReconciler {
   const sessionsRoot = resolve(opts.sessionsRoot ?? defaultGrokSessionsRoot());
   const pathCache = new Map<string, string>();
+  const questionByPath = new Map<string, { pendingIds: string[] }>();
+  const questionByScope = new Map<
+    string,
+    { emittedIds: Set<string>; path?: string }
+  >();
+
+  const pathQuestionState = (path: string): { pendingIds: string[] } => {
+    let state = questionByPath.get(path);
+    if (!state) {
+      state = { pendingIds: [] };
+      questionByPath.set(path, state);
+    }
+    return state;
+  };
+
+  const scopeQuestion = (
+    key: string
+  ): { emittedIds: Set<string>; path?: string } => {
+    let scope = questionByScope.get(key);
+    if (!scope) {
+      scope = { emittedIds: new Set() };
+      questionByScope.set(key, scope);
+    }
+    return scope;
+  };
+
+  const dropScopes = (
+    match: (windowId: string, panelId: string) => boolean
+  ): void => {
+    for (const key of [...questionByScope.keys()]) {
+      const [windowId, panelId] = key.split("\0");
+      if (windowId && panelId && match(windowId, panelId)) {
+        questionByScope.delete(key);
+      }
+    }
+  };
+
+  const emit = (event: AgentHookEventPayload): void => {
+    const scope = scopeQuestion(grokScopeKey(event));
+    if (
+      event.event === "InteractionResolved" &&
+      "interactionId" in event &&
+      event.interactionId
+    ) {
+      scope.emittedIds.delete(event.interactionId);
+      if (scope.path) {
+        const state = questionByPath.get(scope.path);
+        if (state) {
+          state.pendingIds = state.pendingIds.filter(
+            (id) => id !== event.interactionId
+          );
+        }
+      }
+    }
+    if (
+      event.event === "InteractionRequested" &&
+      "interactionId" in event &&
+      event.interactionId
+    ) {
+      scope.emittedIds.add(event.interactionId);
+    }
+    opts.onTerminalEvent(event);
+  };
+
+  const emitQuestion = (
+    context: AgentHookEventPayload,
+    record: TranscriptTerminalRecord
+  ): void => {
+    emitTranscriptEvent(
+      {
+        contextsByTurnId: new Map(),
+        pendingRecords: [],
+        seenTerminalEvents: new Set(),
+        seenTranscriptEvents: new Set(),
+      },
+      { ...context, toolName: "ask_user_question" },
+      record,
+      emit
+    );
+  };
+
+  const cancelScopeQuestions = (event: AgentHookEventPayload): void => {
+    const scope = questionByScope.get(grokScopeKey(event));
+    if (!scope || scope.emittedIds.size === 0) {
+      return;
+    }
+    const ids = [...scope.emittedIds];
+    scope.emittedIds.clear();
+    if (scope.path) {
+      const state = questionByPath.get(scope.path);
+      if (state) {
+        state.pendingIds = state.pendingIds.filter((id) => !ids.includes(id));
+      }
+    }
+    for (const id of ids) {
+      emitQuestion(
+        event,
+        grokQuestionRecord(id, "InteractionResolved", "cancelled")
+      );
+    }
+  };
+
   const inner = createTranscriptTailReconciler({
     agent: "grok",
-    classifyLine: classifyGrokUpdatesLine,
-    onTerminalEvent: opts.onTerminalEvent,
+    createLineClassifier: (path) => {
+      const state = pathQuestionState(path);
+      return (line) => {
+        try {
+          const question = applyGrokQuestionLine(state, line);
+          if (question) {
+            return question;
+          }
+        } catch {
+          // 问卷行坏掉时仍尝试终态分类。
+        }
+        return classifyGrokUpdatesLine(line);
+      };
+    },
+    onTerminalEvent: emit,
     transcriptRoot: sessionsRoot,
   });
 
   return {
     dispose: () => {
       pathCache.clear();
+      questionByPath.clear();
+      questionByScope.clear();
       inner.dispose();
     },
     observe: async (event) => {
       if (event.agent !== "grok") {
         return;
       }
-      if (event.event === "SessionEnd") {
+      const resolved =
+        event.event === "SessionEnd"
+          ? event.transcriptPath?.trim() ||
+            (await resolveGrokUpdatesPath(event, sessionsRoot, pathCache))
+          : await resolveGrokUpdatesPath(event, sessionsRoot, pathCache);
+      if (resolved) {
+        const scope = scopeQuestion(grokScopeKey(event));
+        scope.path = resolved;
+        const text = await readUpdatesTail(resolved);
+        if (text) {
+          const state = pathQuestionState(resolved);
+          state.pendingIds = scanGrokQuestionState(text).pendingIds;
+          for (const id of state.pendingIds) {
+            if (scope.emittedIds.has(id)) {
+              continue;
+            }
+            emitQuestion(
+              { ...event, transcriptPath: resolved },
+              grokQuestionRecord(id, "InteractionRequested")
+            );
+          }
+        }
+        await inner.observe({ ...event, transcriptPath: resolved });
+      } else if (event.event === "SessionEnd") {
         await inner.observe(event);
-        return;
       }
-      const resolved = await resolveGrokUpdatesPath(
-        event,
-        sessionsRoot,
-        pathCache
-      );
-      if (!resolved) {
-        return;
+      if (event.event === "SessionEnd" || event.event === "TurnInterrupted") {
+        cancelScopeQuestions(event);
       }
-      await inner.observe({ ...event, transcriptPath: resolved });
     },
     releasePanel: (panelId, windowId) => {
+      dropScopes(
+        (scopeWindowId, scopePanelId) =>
+          scopePanelId === panelId &&
+          (windowId === undefined || scopeWindowId === windowId)
+      );
       inner.releasePanel(panelId, windowId);
     },
     releasePanelsWhere: (predicate) => {
+      dropScopes((windowId, panelId) => predicate(panelId, windowId));
       inner.releasePanelsWhere(predicate);
     },
     releaseWindow: (windowId) => {
+      dropScopes((scopeWindowId) => scopeWindowId === windowId);
       inner.releaseWindow(windowId);
     },
     transferPanelOwnership: (input) => {
+      const { panelId, sourceWindowId, targetWindowId } = input;
+      if (
+        panelId.trim().length === 0 ||
+        sourceWindowId.trim().length === 0 ||
+        targetWindowId.trim().length === 0 ||
+        sourceWindowId === targetWindowId
+      ) {
+        inner.transferPanelOwnership(input);
+        return;
+      }
+      const sourceKey = `${sourceWindowId}\0${panelId}`;
+      const targetKey = `${targetWindowId}\0${panelId}`;
+      const scope = questionByScope.get(sourceKey);
+      if (scope) {
+        questionByScope.delete(sourceKey);
+        questionByScope.set(targetKey, scope);
+      }
       inner.transferPanelOwnership(input);
     },
   };
@@ -145,6 +332,23 @@ export function classifyGrokUpdatesLine(
     };
   }
   return null;
+}
+
+async function readUpdatesTail(path: string): Promise<string | null> {
+  const fileStat = await stat(path).catch(() => null);
+  if (!fileStat?.isFile()) {
+    return null;
+  }
+  const start = Math.max(0, fileStat.size - 1024 * 1024);
+  const fd = await open(path, "r");
+  try {
+    const length = fileStat.size - start;
+    const buffer = Buffer.alloc(length);
+    const result = await fd.read(buffer, 0, length, start);
+    return buffer.subarray(0, result.bytesRead).toString("utf8");
+  } finally {
+    await fd.close();
+  }
 }
 
 async function resolveGrokUpdatesPath(

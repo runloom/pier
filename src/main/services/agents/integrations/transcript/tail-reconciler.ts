@@ -62,8 +62,9 @@ export function createTranscriptTailReconciler(
   const transcriptRoot = resolve(config.transcriptRoot);
   let disposed = false;
 
-  function createEntryLineClassifier(): TranscriptLineClassifier {
-    const classifyLine = config.createLineClassifier?.() ?? config.classifyLine;
+  function createEntryLineClassifier(path: string): TranscriptLineClassifier {
+    const classifyLine =
+      config.createLineClassifier?.(path) ?? config.classifyLine;
     if (!classifyLine) {
       throw new Error("transcript reconciler requires a line classifier");
     }
@@ -80,7 +81,7 @@ export function createTranscriptTailReconciler(
       if (current.size < entry.offset) {
         entry.initialScanEnd = current.size;
         entry.offset = Math.max(0, current.size - MAX_READ_BYTES);
-        entry.classifyLine = createEntryLineClassifier();
+        entry.classifyLine = createEntryLineClassifier(path);
         entry.pendingRecords.length = 0;
         entry.seenTerminalEvents.clear();
         entry.seenTranscriptEvents.clear();
@@ -253,7 +254,7 @@ export function createTranscriptTailReconciler(
       }
     };
     const entry: TranscriptEntry = {
-      classifyLine: createEntryLineClassifier(),
+      classifyLine: createEntryLineClassifier(canonicalPath),
       contextsByTurnId: new Map(),
       disposed: false,
       initialScanEnd: initial.size,

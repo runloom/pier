@@ -36,11 +36,23 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("tool", "PreToolUse", "ToolStart"),
-      // 同 Pre/Post/Denied 按 toolName 分发；名单见 interactive-blocking-tools.ts
+      // plan 走 Pre/Post Interaction；ask_user_question 只走 transcript
       nativeFact("waiting", "PreToolUse", "InteractionRequested"),
       nativeFact("waiting", "PostToolUse", "InteractionResolved"),
       nativeFact("waiting", "PostToolUseFailure", "InteractionResolved"),
       nativeFact("waiting", "PermissionDenied", "InteractionResolved"),
+      fact(
+        "waiting",
+        "reconciled",
+        "grok.updates.ask_user_question",
+        "InteractionRequested"
+      ),
+      fact(
+        "waiting",
+        "reconciled",
+        "grok.updates.ask_user_question.answered",
+        "InteractionResolved"
+      ),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("processing", "PostToolUseFailure", "ToolComplete"),
       nativeFact("processing", "PermissionDenied", "ToolComplete"),

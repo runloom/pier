@@ -9,7 +9,7 @@ import type { PierCommandResult } from "@shared/contracts/commands.ts";
 import { getTerminalAddon } from "../../ipc/terminal/index.ts";
 import { toNativePanelKey } from "../../ipc/terminal/panel-id.ts";
 import { pasteTerminalText } from "../../ipc/terminal/submit-text.ts";
-import { findAppWindowByInternalId } from "../../windows/identity.ts";
+import { findAppWindowForActivityWindowId } from "../../windows/identity.ts";
 import type { TerminalBackend } from "./types.ts";
 
 export interface HostTerminalBackendDeps {
@@ -29,7 +29,7 @@ function parseAgentKind(agentId: string): AgentKind | null {
 }
 
 function nativeKey(windowId: string, panelId: string): string | null {
-  const win = findAppWindowByInternalId(windowId);
+  const win = findAppWindowForActivityWindowId(windowId);
   if (!win || win.isDestroyed()) {
     return null;
   }

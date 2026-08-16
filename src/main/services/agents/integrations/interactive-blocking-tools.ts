@@ -45,16 +45,12 @@ export const CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS = [
  * Grok Build 阻塞等人工具。
  *
  * 依据（本机 `~/.grok/docs` + https://x.ai/cli）：
- * - Plan：user-guide/19-plan-mode.md — enter/exit_plan_mode、ask_user_question
- * - Hooks：user-guide/10-hooks.md — Pre/PostToolUse + toolName/toolUseId
+ * - Plan：user-guide/19-plan-mode.md — enter/exit_plan_mode
+ * - 问卷：hook Post 可能在 UI 画出时就响，waiting 只走 updates.jsonl
  */
 export const GROK_INTERACTIVE_BLOCKING_TOOLS = [
   {
     interactionKind: "permission",
     toolNames: ["enter_plan_mode", "exit_plan_mode"],
-  },
-  {
-    interactionKind: "question",
-    toolNames: ["ask_user_question"],
   },
 ] as const satisfies readonly InteractiveBlockingToolCase[];

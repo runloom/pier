@@ -48,6 +48,8 @@ type StandardV3Event = Exclude<
  *   tool_use_id 的 preToolUse/postToolUse/postToolUseFailure 完整覆盖
  *   （Shell 与 MCP 工具均触发）, 这四个闸门事件对状态零增量。
  * - `stop` 按 payload `status` 在命令内分发（见 CURSOR_STOP_STATUS_CASES）。
+ * - **不按 hook 分发 AskQuestion**：上游 preToolUse 不覆盖该工具。问卷
+ *   waiting 由 `transcript/cursor-reconciler.ts` 读主会话 jsonl 对账。
  */
 export const CURSOR_EVENTS: ReadonlyArray<{
   nativeEvent: string;

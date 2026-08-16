@@ -5,11 +5,9 @@ import {
   type AgentTurnEventSemantics,
   normalizeAgentTurnId,
 } from "./agent-turn-event-semantics.ts";
+import { statusWithDisplayQuestion } from "./display-question.ts";
 import type { HookScope } from "./entry.ts";
-import {
-  isInteractiveBlockingToolName,
-  isPlanApprovalToolName,
-} from "./plan-approval.ts";
+import { isPlanApprovalToolName } from "./plan-approval.ts";
 
 const MAX_SETTLED_IDS_PER_KIND = 256;
 
@@ -96,7 +94,7 @@ function interactiveToolWorkId(
   return event.toolUseId?.trim() || `interactive:${toolName}`;
 }
 
-/** ToolStart 出现的阻塞工具记为可顶替 waiting；已有具名问卷则保持闭环。 */
+/** 仅 plan 审批的 ToolStart 记为可顶替 waiting。问卷必须走具名 Interaction。 */
 function promoteInteractiveToolStart(
   scope: HookScope,
   event: AgentHookEventPayload,
@@ -237,7 +235,15 @@ export function applyTurnBookkeeping(
     return reject("foreign-turn");
   }
   if (scope.turnEnded && !isTerminalCorrection) {
-    return reject("sealed-turn");
+    if (eventName !== "InteractionRequested") {
+      return reject("sealed-turn");
+    }
+    // transcript 问卷可在 stop/abort 之后仍挂在末行；具名请求重开 waiting。
+    scope.completionObserved = false;
+    scope.completionObservedAt = undefined;
+    scope.terminalEvidence = undefined;
+    scope.turnEnded = false;
+    scope.turnEndedAt = undefined;
   }
   if (semantics.category === "terminal-trusted") {
     const settledTurnId = eventTurnId ?? scope.currentTurnId;
@@ -310,7 +316,7 @@ export function applyTurnBookkeeping(
     }
   } else if (eventName === "ToolStart") {
     const toolName = eventToolName(event);
-    if (isInteractiveBlockingToolName(toolName) && toolName) {
+    if (isPlanApprovalToolName(toolName) && toolName) {
       promoteInteractiveToolStart(scope, event, toolName);
     } else {
       settleActivePlanApprovals(scope);
@@ -324,7 +330,7 @@ export function applyTurnBookkeeping(
     }
   } else if (eventName === "ToolComplete") {
     const toolName = eventToolName(event);
-    if (isInteractiveBlockingToolName(toolName) && toolName) {
+    if (isPlanApprovalToolName(toolName) && toolName) {
       settlePlanApprovalId(scope, interactiveToolWorkId(event, toolName));
     } else {
       const id = event.toolUseId?.trim();
@@ -429,6 +435,12 @@ export function nextStatusAfterTurnBookkeeping(
   scope: HookScope,
   semantics: AgentTurnEventSemantics
 ): ActivityStatus | undefined {
+  if (scope.displayQuestionId) {
+    return statusWithDisplayQuestion(scope, semantics, "waiting");
+  }
+  if (scope.turnEnded) {
+    return scope.terminalEvidence === "error" ? "error" : "ready";
+  }
   if (scope.completionObserved) {
     return;
   }

@@ -68,9 +68,9 @@ export interface TranscriptTailReconcilerConfig {
    * 为每个 transcript entry 创建独立分类器。仅当分类需要跨行状态时使用；
    * entry 截断时会重新创建，释放时会连同闭包状态一起丢弃。
    */
-  createLineClassifier?: () => (
-    line: string
-  ) => TranscriptTerminalRecord | null;
+  createLineClassifier?: (
+    path?: string
+  ) => (line: string) => TranscriptTerminalRecord | null;
   onTerminalEvent: (event: AgentHookEventPayload) => void;
   /** 只在 classifyTitleLine 命中时调用。 */
   onTitleRecord?: TranscriptTitleListener;

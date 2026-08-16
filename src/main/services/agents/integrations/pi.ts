@@ -118,6 +118,13 @@ function pierSessionIdFrom(values) {
 	return undefined;
 }
 
+function pierBoundWorkId(value) {
+	if (typeof value !== "string" || !value) return undefined;
+	const pipe = value.indexOf("|");
+	const core = pipe === -1 ? value : value.slice(0, pipe);
+	return core.length <= 1024 ? core : core.slice(0, 1024);
+}
+
 function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
@@ -128,10 +135,12 @@ function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 		event === "PromptSubmit"
 			? pierPromptSnippetFrom(nativePayload, ctx)
 			: undefined;
-	const toolUseId =
+	const toolUseId = pierBoundWorkId(
 		nativePayload && typeof nativePayload.toolCallId === "string"
 			? nativePayload.toolCallId
-			: undefined;
+			: undefined
+	);
+	const interactionId = pierBoundWorkId(details.interactionId);
 	const toolName =
 		nativePayload && typeof nativePayload.toolName === "string"
 			? nativePayload.toolName
@@ -150,9 +159,7 @@ function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 		...(toolUseId ? { toolUseId } : {}),
 		...(toolName ? { toolName } : {}),
 		...(details.nativeState ? { nativeState: details.nativeState } : {}),
-		...(details.interactionId
-			? { interactionId: details.interactionId }
-			: {}),
+		...(interactionId ? { interactionId } : {}),
 		...(details.interactionKind
 			? { interactionKind: details.interactionKind }
 			: {}),
