@@ -1,46 +1,45 @@
-<!-- Pier app icon · 03 极简版（Docked Terminal）
-     canvas 1024 / visible 824×824 / margin 100 each side
-     主语义：终端会话停靠在持续存在的工作台港湾中。
-     设计源：build/design-sources/pier-berth.svg -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Pier app icon — minimal docked terminal">
+<!-- Pier app icon · Apple HIG / macOS 第三方 app 官方模板:
+       canvas 1024 / visible 824×824 / margin 100 each side
+     dock cell 里 icon 跟原生邻居 (Finder/Safari/Music...) 视觉等大, 不出现"大一圈".
+     几何完全照搬设计师 pier-berth.svg (viewBox 512), 通过 translate(100,100) scale(1.609375)
+     映射到 824 可见区. stroke/rim/ishadow 比例保持不变, 只是整体缩小到 824. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Pier app icon — 泊位">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1b1824"/>
-      <stop offset="1" stop-color="#09080d"/>
+      <stop offset="0" stop-color="#1f1c28"/>
+      <stop offset="1" stop-color="#0b0a10"/>
     </linearGradient>
-    <linearGradient id="dock" x1="0.18" y1="0.04" x2="0.82" y2="1">
-      <stop offset="0" stop-color="#c5b5ff"/>
-      <stop offset="0.48" stop-color="#9675ff"/>
-      <stop offset="1" stop-color="#6547db"/>
+    <linearGradient id="vio" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c6b8ff"/>
+      <stop offset="1" stop-color="#6a51e0"/>
     </linearGradient>
-    <linearGradient id="windowStroke" x1="0.15" y1="0" x2="0.85" y2="1">
-      <stop offset="0" stop-color="#e0d8ff"/>
-      <stop offset="0.52" stop-color="#a889ff"/>
-      <stop offset="1" stop-color="#7354e8"/>
+    <radialGradient id="orb" cx="0.5" cy="0.42" r="0.6">
+      <stop offset="0" stop-color="#efeaff"/>
+      <stop offset="0.55" stop-color="#9d8bff"/>
+      <stop offset="1" stop-color="#6a51e0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.9"/>
+      <stop offset="0.25" stop-color="#ffffff" stop-opacity="0.45"/>
+      <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.18"/>
-      <stop offset="0.08" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="innerShade" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0.76" stop-color="#000000" stop-opacity="0"/>
+    <linearGradient id="ishadow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0.9" stop-color="#000000" stop-opacity="0"/>
       <stop offset="1" stop-color="#000000" stop-opacity="0.26"/>
     </linearGradient>
-    <clipPath id="plate"><rect width="512" height="512" rx="112"/></clipPath>
+    <clipPath id="clip"><rect width="512" height="512" rx="112"/></clipPath>
   </defs>
-  <g transform="translate(100 100) scale(1.609375)">
+  <g transform="translate(100,100) scale(1.609375)">
     <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-    <g clip-path="url(#plate)">
-      <rect width="512" height="512" fill="url(#rim)"/>
-      <rect width="512" height="512" fill="url(#innerShade)"/>
+    <g clip-path="url(#clip)">
+      <rect width="512" height="512" fill="url(#ishadow)"/>
+      <rect width="512" height="512" rx="112" fill="none" stroke="url(#rim)" stroke-width="4"/>
     </g>
-    <g>
-      <path d="M 119 247 V 340 C 119 383 153 417 196 417 H 316 C 359 417 393 383 393 340 V 247"
-        fill="none" stroke="url(#dock)" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
-      <rect x="132" y="104" width="248" height="218" rx="48" fill="#0f0e15" stroke="url(#windowStroke)" stroke-width="22"/>
-      <path d="M 189 169 L 232 211 L 189 253" fill="none" stroke="#f6f3ff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M 255 252 H 309" fill="none" stroke="#f6f3ff" stroke-width="22" stroke-linecap="round"/>
-    </g>
-    <rect x="1" y="1" width="510" height="510" rx="111" fill="none" stroke="#ffffff" stroke-opacity="0.09" stroke-width="2"/>
+    <path d="M 124 112 L 124 376 L 388 376 L 388 112" fill="none" stroke="url(#vio)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="256" cy="240" r="92" fill="#8a76f0" fill-opacity="0.16"/>
+    <circle cx="256" cy="240" r="64" fill="url(#orb)"/>
+    <ellipse cx="256" cy="406" rx="138" ry="9" fill="#8a76f0" fill-opacity="0.32"/>
+    <ellipse cx="256" cy="432" rx="90" ry="7" fill="#8a76f0" fill-opacity="0.18"/>
   </g>
 </svg>
