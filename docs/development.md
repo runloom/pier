@@ -76,8 +76,17 @@ pnpm test:coverage       # 与 CI coverage job 同形（含阈值门槛）
 pnpm test:e2e
 pnpm build               # electron-vite → out/
 pnpm build:dist          # 双架构 dmg/zip（签名 / 公证）
-pnpm build:icons         # 改 build/app-icon-*.svg 后重建 icon
+pnpm build:icons         # 从已确认的 SVG 母版重建 ICNS / ICO / Linux 图标集
 ```
+
+应用图标的透明品牌母版是 `build/design-sources/pier-logo.svg`。平台导出按尺寸分工：
+
+- `build/app-icon-master.svg`：F 标准稿，用于 macOS 256–1024px。
+- `build/app-icon-micro.svg`：I Micro 稿，用于 macOS 16–128px 与开发环境 Dock。
+- `build/app-icon-unplated.svg`：透明 F 稿，用于 Windows 与 Linux。
+
+`pnpm build:icons` 是唯一正式生成入口；不要直接手改生成后的 `build/icon.icns`、
+`build/icon.ico`、`build/icon.png` 或 `build/icons/*.png`。
 
 ## Quality Gate：正确性优先，CI 做确认与加速
 

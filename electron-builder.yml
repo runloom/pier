@@ -73,6 +73,7 @@ asarUnpack:
   - '**/node_modules/typescript/**'
 
 win:
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64, arm64]
@@ -94,6 +95,9 @@ mac:
   forceCodeSigning: true
   gatekeeperAssess: false
   notarize: true
+
+linux:
+  icon: build/icons
 
 publish:
   provider: github
