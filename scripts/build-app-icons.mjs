@@ -1,84 +1,104 @@
-// build/app-icon-{master,rounded}.svg → build/icon.{icns,ico,png}
-// 两个源:
-//   - app-icon-master.svg  方角全幅, 给 .icns (macOS 打包 iconutil + OS 共套圆角遮罩)
-//   - app-icon-rounded.svg 824×824 rx=185 预烘圆角, 给 .png / .ico (dev dock + Win/Linux 运行时不套遮罩)
-// 依赖: rsvg-convert (librsvg), iconutil (macOS 自带), magick (ImageMagick).
-// pnpm build:icons 触发.
+// build/app-icon-{master,micro,unplated}.svg → platform application icons.
+//
+// Sources:
+//   - app-icon-master.svg: F rendition for macOS 256px and larger.
+//   - app-icon-micro.svg: I rendition for macOS 16–128px and development Dock.
+//   - app-icon-unplated.svg: transparent 1024×1024 mark for Windows and Linux.
+//
+// Conversion uses electron-builder's pinned official icons toolset, which produces
+// valid ICNS/ICO/icon sets consistently across host macOS versions. rsvg-convert is
+// used only for the macOS development Dock PNG and Linux's optional 96px slot.
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mergeIcnsRenditions } from "./app-icon-icns.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const BUILD = join(ROOT, "build");
 const SRC_MASTER = join(BUILD, "app-icon-master.svg");
-const SRC_ROUNDED = join(BUILD, "app-icon-rounded.svg");
-const ICONSET = join(BUILD, "icon.iconset");
+const SRC_MICRO = join(BUILD, "app-icon-micro.svg");
+const SRC_UNPLATED = join(BUILD, "app-icon-unplated.svg");
+const LINUX_ICONS = join(BUILD, "icons");
 
-// macOS .icns 规定的 iconset 文件名映射: <basename>_<logicalSize>x<logicalSize>[@2x].png
-// iconutil 严格按文件名解析, 缺一档就报 invalid Iconset.
-const MAC_ICONS = [
-  { name: "icon_16x16.png", size: 16 },
-  { name: "icon_16x16@2x.png", size: 32 },
-  { name: "icon_32x32.png", size: 32 },
-  { name: "icon_32x32@2x.png", size: 64 },
-  { name: "icon_128x128.png", size: 128 },
-  { name: "icon_128x128@2x.png", size: 256 },
-  { name: "icon_256x256.png", size: 256 },
-  { name: "icon_256x256@2x.png", size: 512 },
-  { name: "icon_512x512.png", size: 512 },
-  { name: "icon_512x512@2x.png", size: 1024 },
-];
+const requireFromElectronBuilder = createRequire(
+  import.meta.resolve("electron-builder")
+);
+const { runIconsTool } = requireFromElectronBuilder(
+  "app-builder-lib/out/toolsets/icons.js"
+);
 
-// Windows .ico 多分辨率帧: 16/32/48/64/128/256.
-// magick 的 -define icon:auto-resize 在新版本不允许超过 256, 所以全部预生成再合并.
-const WIN_SIZES = [16, 32, 48, 64, 128, 256];
-
-function run(cmd, args) {
-  const r = spawnSync(cmd, args, { stdio: ["ignore", "inherit", "inherit"] });
-  if (r.status !== 0) {
-    throw new Error(`${cmd} ${args.join(" ")} → exit ${r.status}`);
-  }
-}
-
-function rasterize(src, size, out) {
-  run("rsvg-convert", ["-w", String(size), "-h", String(size), "-o", out, src]);
-}
-
-function buildIcns() {
-  rmSync(ICONSET, { recursive: true, force: true });
-  mkdirSync(ICONSET, { recursive: true });
-  for (const { name, size } of MAC_ICONS) {
-    rasterize(SRC_MASTER, size, join(ICONSET, name));
-  }
-  run("iconutil", ["-c", "icns", ICONSET, "-o", join(BUILD, "icon.icns")]);
-  rmSync(ICONSET, { recursive: true, force: true });
-}
-
-function buildIco() {
-  const tmpDir = join(BUILD, ".ico-tmp");
-  rmSync(tmpDir, { recursive: true, force: true });
-  mkdirSync(tmpDir, { recursive: true });
-  const frames = WIN_SIZES.map((size) => {
-    const p = join(tmpDir, `${size}.png`);
-    rasterize(SRC_ROUNDED, size, p);
-    return p;
+function run(command, args) {
+  const result = spawnSync(command, args, {
+    stdio: ["ignore", "inherit", "inherit"],
   });
-  run("magick", [...frames, join(BUILD, "icon.ico")]);
-  rmSync(tmpDir, { recursive: true, force: true });
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(" ")} → exit ${result.status}`);
+  }
 }
 
-function buildLinuxPng() {
-  // electron-builder linux 期望 512×512 PNG. 也被 dev 期 app.dock.setIcon 取用 (mac),
-  // 所以用 rounded 源, 否则 dock 显示直角方块.
-  rasterize(SRC_ROUNDED, 512, join(BUILD, "icon.png"));
+function rasterize(source, size, output) {
+  run("rsvg-convert", [
+    "-w",
+    String(size),
+    "-h",
+    String(size),
+    "-o",
+    output,
+    source,
+  ]);
 }
 
-console.log("→ build/icon.icns (master · 方角, OS 套 mask)");
-buildIcns();
-console.log("→ build/icon.ico (rounded · 预烘圆角)");
-buildIco();
-console.log("→ build/icon.png 512×512 (rounded · 预烘圆角)");
-buildLinuxPng();
+async function convertToBuffer(source, format, temporaryName) {
+  const outputDirectory = join(BUILD, `.icon-tool-${temporaryName}`);
+  rmSync(outputDirectory, { recursive: true, force: true });
+  mkdirSync(outputDirectory, { recursive: true });
+  try {
+    await runIconsTool({
+      inputFile: source,
+      outputFormat: format,
+      outDir: outputDirectory,
+    });
+    return readFileSync(join(outputDirectory, `icon.${format}`));
+  } finally {
+    rmSync(outputDirectory, { recursive: true, force: true });
+  }
+}
+
+async function buildIcns() {
+  const standard = await convertToBuffer(SRC_MASTER, "icns", "icns-standard");
+  const micro = await convertToBuffer(SRC_MICRO, "icns", "icns-micro");
+  writeFileSync(join(BUILD, "icon.icns"), mergeIcnsRenditions(standard, micro));
+}
+
+async function buildIco() {
+  const icon = await convertToBuffer(SRC_UNPLATED, "ico", "ico");
+  writeFileSync(join(BUILD, "icon.ico"), icon);
+}
+
+async function buildLinuxIcons() {
+  rmSync(LINUX_ICONS, { recursive: true, force: true });
+  mkdirSync(LINUX_ICONS, { recursive: true });
+  await runIconsTool({
+    inputFile: SRC_UNPLATED,
+    outputFormat: "set",
+    outDir: LINUX_ICONS,
+  });
+  rasterize(SRC_UNPLATED, 96, join(LINUX_ICONS, "96x96.png"));
+}
+
+function buildDevDockPng() {
+  rasterize(SRC_MICRO, 512, join(BUILD, "icon.png"));
+}
+
+console.log("→ build/icon.icns (I Micro 16–128px + F Standard 256–1024px)");
+await buildIcns();
+console.log("→ build/icon.ico (transparent Windows official size set)");
+await buildIco();
+console.log("→ build/icons/* (transparent Linux hicolor size set)");
+await buildLinuxIcons();
+console.log("→ build/icon.png 512×512 (macOS development Dock)");
+buildDevDockPng();
 console.log("✓ icons regenerated");

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parseIcns } from "../../../scripts/app-icon-icns.mjs";
 
 const ROOT = process.cwd();
 
@@ -12,6 +13,24 @@ function read(path: string): string {
 function sha256(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
+
+function sha256Bytes(value: Buffer): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+const EXPECTED_ICNS_FRAME_HASHES = {
+  icp4: "d19bd4e91c1cad0ebd05f7ff3356867e6de55230eaed236aa43c0774974410d9",
+  icp5: "c4f670863fa086b9dfc923153bb520348131f7829b97e0c7b90e913157cd33b7",
+  icp6: "77c563f7ac8239944a993cc05879ec633a1b8811a6153d1c100e4ba37a239144",
+  ic07: "b7523263ddab5bcbd4085fcf28ed321ae0f160e876c7cd2e5fdc57916cb636c3",
+  ic08: "78393d531bec6c8fe661a56d6ad51102e7274b344bf341a511e11a5056aec61c",
+  ic09: "d29a33f99def9b356042dae73ec0820b1728e20173fc8ca3fc7240e966a27cdb",
+  ic10: "a9ae3dda2f0f6be5a9407a9814ffccd8170252d6caa3ad44be7e3b5eca668f8e",
+  ic11: "c4f670863fa086b9dfc923153bb520348131f7829b97e0c7b90e913157cd33b7",
+  ic12: "77c563f7ac8239944a993cc05879ec633a1b8811a6153d1c100e4ba37a239144",
+  ic13: "d29a33f99def9b356042dae73ec0820b1728e20173fc8ca3fc7240e966a27cdb",
+  ic14: "a9ae3dda2f0f6be5a9407a9814ffccd8170252d6caa3ad44be7e3b5eca668f8e",
+} as const;
 
 describe("Pier application icon sources", () => {
   it("locks the approved F and I renditions byte-for-byte", () => {
@@ -57,5 +76,22 @@ describe("Pier application icon sources", () => {
       expect(source).not.toMatch(/<text(?:\s|>)/i);
       expect(source).not.toMatch(/(?:base64|data:|\shref=)/i);
     }
+  });
+
+  it("ships Micro ICNS frames through 128px and Standard frames above it", () => {
+    const icns = readFileSync(join(ROOT, "build/icon.icns"));
+    const actual = Object.fromEntries(
+      parseIcns(icns).map((entry) => [entry.type, sha256Bytes(entry.data)])
+    );
+
+    expect(actual).toEqual(EXPECTED_ICNS_FRAME_HASHES);
+  });
+
+  it("uses the approved Micro rendition for the development Dock", () => {
+    const dockIcon = readFileSync(join(ROOT, "build/icon.png"));
+
+    expect(sha256Bytes(dockIcon)).toBe(
+      "26742aaa53f47aa8dbc8a33c7e77caba6220a5895cfd39ff8913267fe634ef32"
+    );
   });
 });
