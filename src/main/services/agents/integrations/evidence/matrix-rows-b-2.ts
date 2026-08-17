@@ -174,7 +174,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_2 = {
       tool: "native",
       waiting: "native",
       error: "native",
-      completed: "unsupported",
+      completed: "reconciled",
       interrupted: "reconciled",
       subagent: "native",
     },
@@ -187,6 +187,18 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_2 = {
         "reconciled",
         "codebuddy.transcript.user_interrupt",
         "TurnInterrupted"
+      ),
+      fact(
+        "ready",
+        "reconciled",
+        "codebuddy.transcript.assistant_completed",
+        "TurnCompleted"
+      ),
+      fact(
+        "completed",
+        "reconciled",
+        "codebuddy.transcript.assistant_completed",
+        "TurnCompleted"
       ),
       nativeFact("processing", "UserPromptSubmit", "PromptSubmit"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),

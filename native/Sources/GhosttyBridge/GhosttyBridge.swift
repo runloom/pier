@@ -919,7 +919,10 @@ final class GhosttyBridgeImpl {
         // Pier 负责光标形状偏好; Ghostty shell integration 默认会在 prompt 强制 bar。
         // 厚度调整走 Ghostty 全局字形度量: bar / 空心块光标会加粗, underline 同时影响
         // 下划线光标和 SGR-4 下划线文本; 为 HiDPI 可读性接受这个一致加粗。
-        builder.withCustom("shell-integration-features", "no-cursor")
+        // ssh-env：交互式 `ssh` 把远端 TERM 降为 xterm-256color，避免云主机没有
+        // xterm-ghostty terminfo 时退格打出 ^H。不启 ssh-terminfo（会写远端
+        // ~/.terminfo，且依赖 ghostty +ssh-cache CLI，Pier 不提供）。
+        builder.withCustom("shell-integration-features", "no-cursor,ssh-env")
         builder.withCustom("adjust-cursor-thickness", "1")
         builder.withCustom("adjust-underline-thickness", "1")
         // 文字锐度: 在线性空间做边缘 alpha 混合并按字形亮度校正。macOS 默认 native 在

@@ -12,6 +12,7 @@ import { testSshConnection } from "../../../../packages/plugin-ssh/src/main/test
 import {
   buildSshCommand,
   describeSshTarget,
+  SSH_REMOTE_COMPAT_TERM,
   type SshHost,
   sshHostSchema,
   sshTargetArgs,
@@ -28,7 +29,9 @@ function host(overrides: Partial<SshHost> = {}): SshHost {
 
 describe("buildSshCommand", () => {
   it("builds a bare target without optional fields", () => {
-    expect(buildSshCommand(host())).toBe("ssh -- example.com");
+    expect(buildSshCommand(host())).toBe(
+      `env TERM=${SSH_REMOTE_COMPAT_TERM} ssh -- example.com`
+    );
   });
 
   it("includes user, port, and identity file", () => {
@@ -36,12 +39,21 @@ describe("buildSshCommand", () => {
       buildSshCommand(
         host({ identityFile: "~/.ssh/id_ed25519", port: 2222, user: "root" })
       )
-    ).toBe("ssh -p 2222 -i '~/.ssh/id_ed25519' -- root@example.com");
+    ).toBe(
+      `env TERM=${SSH_REMOTE_COMPAT_TERM} ssh -p 2222 -i '~/.ssh/id_ed25519' -- root@example.com`
+    );
   });
 
   it("quotes arguments with spaces and single quotes", () => {
     expect(buildSshCommand(host({ identityFile: "/tmp/o'brien key" }))).toBe(
-      "ssh -i '/tmp/o'\\''brien key' -- example.com"
+      `env TERM=${SSH_REMOTE_COMPAT_TERM} ssh -i '/tmp/o'\\''brien key' -- example.com`
+    );
+  });
+
+  it("forces a widely installed TERM so remotes without xterm-ghostty keep Backspace", () => {
+    expect(SSH_REMOTE_COMPAT_TERM).toBe("xterm-256color");
+    expect(buildSshCommand(host()).startsWith("env TERM=xterm-256color ")).toBe(
+      true
     );
   });
 

@@ -17,8 +17,10 @@ import {
   cursorQuestionInteractionId,
   findCursorAgentTranscript,
   isCursorMainAgentTranscriptPath,
+  isCursorPlanToolName,
   isCursorQuestionToolName,
   scanCursorQuestionState,
+  viewportShowsCursorPlan,
   viewportShowsCursorQuestion,
 } from "../../../../../src/main/services/agents/integrations/transcript/cursor-reconciler.ts";
 import { createForegroundActivityAggregator } from "../../../../../src/main/services/foreground-activity/aggregator.ts";
@@ -45,6 +47,19 @@ function assistantTextLine(text: string): string {
   return JSON.stringify({
     role: "assistant",
     message: { content: [{ type: "text", text }] },
+  });
+}
+
+function turnEndedLine(status: "success" | "aborted" | "error"): string {
+  return JSON.stringify({ type: "turn_ended", status });
+}
+
+function planLine(): string {
+  return JSON.stringify({
+    role: "assistant",
+    message: {
+      content: [{ type: "tool_use", name: "CreatePlan", input: {} }],
+    },
   });
 }
 
@@ -181,6 +196,58 @@ describe("cursor question classifier", () => {
     expect(isCursorQuestionToolName("ask-followup-question")).toBe(true);
     expect(isCursorQuestionToolName("Shell")).toBe(false);
     expect(isCursorQuestionToolName("QuestionnaireImport")).toBe(false);
+  });
+
+  it("recognizes CreatePlan and Ready to build, not the follow-up placeholder", () => {
+    expect(isCursorPlanToolName("CreatePlan")).toBe(true);
+    expect(isCursorPlanToolName("create_plan")).toBe(true);
+    expect(isCursorPlanToolName("Shell")).toBe(false);
+    expect(viewportShowsCursorPlan("Ready to build?")).toBe(true);
+    expect(
+      viewportShowsCursorPlan("Add a follow-up — /plan to review and build")
+    ).toBe(false);
+    expect(viewportShowsCursorPlan("Add a follow-up")).toBe(false);
+    expect(viewportShowsCursorQuestion("Ready to build?")).toBe(false);
+  });
+
+  it("maps turn_ended success/aborted and skips error", () => {
+    const success = { generation: 0, pending: true, kind: "question" as const };
+    expect(
+      applyCursorTranscriptLine(success, turnEndedLine("success"), SESSION_ID)
+    ).toMatchObject({
+      nativeEvent: "cursor.transcript.turn_ended",
+      pierEvent: "TurnCompleted",
+    });
+    expect(success.pending).toBe(false);
+
+    const aborted = { generation: 0, pending: true, kind: "plan" as const };
+    expect(
+      applyCursorTranscriptLine(aborted, turnEndedLine("aborted"), SESSION_ID)
+    ).toMatchObject({
+      nativeEvent: "cursor.transcript.turn_ended.aborted",
+      pierEvent: "TurnInterrupted",
+    });
+    expect(aborted.pending).toBe(false);
+
+    const failed = { generation: 1, pending: true, kind: "question" as const };
+    expect(
+      applyCursorTranscriptLine(failed, turnEndedLine("error"), SESSION_ID)
+    ).toBeNull();
+    expect(failed.pending).toBe(false);
+  });
+
+  it("marks pending on trailing CreatePlan and clears on later Grep", () => {
+    const opened = scanCursorQuestionState(
+      [userLine("做个方案"), planLine()].join("\n"),
+      SESSION_ID
+    );
+    expect(opened.pending).toBe(true);
+    expect(opened.kind).toBe("plan");
+    const closed = scanCursorQuestionState(
+      [userLine("做个方案"), planLine(), grepLine()].join("\n"),
+      SESSION_ID
+    );
+    expect(closed.pending).toBe(false);
   });
 
   it("marks pending on trailing AskQuestion", () => {
@@ -371,6 +438,149 @@ describe("cursor transcript reconciler", () => {
   afterEach(async () => {
     vi.useRealTimers();
     await rm(projectsRoot, { force: true, recursive: true });
+  });
+
+  it("treats viewport Ready to build as waiting when jsonl has no CreatePlan", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCursorTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      projectsRoot,
+      readViewportText: () => "Ready to build?\nAdd a follow-up",
+    });
+    await reconciler.observe(hookEvent({ transcriptPath }));
+    expect(received[0]).toMatchObject({
+      event: "InteractionRequested",
+      interactionKind: "permission",
+      nativeEvent: "cursor.transcript.create_plan",
+      toolName: "CreatePlan",
+    });
+    reconciler.dispose();
+  });
+
+  it("backfills trailing CreatePlan as a plan interaction", async () => {
+    writeFileSync(transcriptPath, `${userLine("做个方案")}\n${planLine()}\n`);
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCursorTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      projectsRoot,
+    });
+    await reconciler.observe(hookEvent());
+    expect(received[0]).toMatchObject({
+      event: "InteractionRequested",
+      interactionKind: "permission",
+      nativeEvent: "cursor.transcript.create_plan",
+      toolName: "CreatePlan",
+    });
+    expect(agentHookEventSchema.safeParse(received[0]).success).toBe(true);
+    reconciler.dispose();
+  });
+
+  it("backfills turn_ended as TurnCompleted and clears unmatched tools", async () => {
+    writeFileSync(
+      transcriptPath,
+      `${userLine("提交")}\n${grepLine()}\n${turnEndedLine("success")}\n`
+    );
+    const agg = createForegroundActivityAggregator();
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCursorTranscriptReconciler({
+      onTerminalEvent: (event) => {
+        received.push(event);
+        agg.ingestAgentEvent(event, TRANSCRIPT_INGEST);
+      },
+      projectsRoot,
+    });
+    agg.ingestAgentEvent(hookEvent({ event: "PromptSubmit" }), HOOK_INGEST);
+    agg.ingestAgentEvent(
+      hookEvent({
+        event: "ToolStart",
+        toolName: "Shell",
+        toolUseId: "shell-stuck",
+      }),
+      HOOK_INGEST
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    await reconciler.observe(hookEvent({ event: "Stop", transcriptPath }));
+    expect(received.some((event) => event.event === "TurnCompleted")).toBe(
+      true
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    reconciler.dispose();
+    agg.dispose();
+  });
+
+  it("does not replay trailing turn_ended onto a later PromptSubmit or ToolStart", async () => {
+    writeFileSync(
+      transcriptPath,
+      `${userLine("做个方案")}\n${planLine()}\n${turnEndedLine("success")}\n`
+    );
+    const agg = createForegroundActivityAggregator();
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCursorTranscriptReconciler({
+      onTerminalEvent: (event) => {
+        received.push(event);
+        agg.ingestAgentEvent(event, TRANSCRIPT_INGEST);
+      },
+      projectsRoot,
+    });
+    agg.ingestAgentEvent(
+      hookEvent({ event: "PromptSubmit", turnId: "gen-2" }),
+      HOOK_INGEST
+    );
+    agg.ingestAgentEvent(
+      hookEvent({
+        event: "ToolStart",
+        toolName: "Shell",
+        toolUseId: "shell-build",
+        turnId: "gen-2",
+      }),
+      HOOK_INGEST
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    await reconciler.observe(
+      hookEvent({
+        event: "PromptSubmit",
+        transcriptPath,
+        turnId: "gen-2",
+      })
+    );
+    await reconciler.observe(
+      hookEvent({
+        event: "ToolStart",
+        toolName: "Shell",
+        toolUseId: "shell-build",
+        transcriptPath,
+        turnId: "gen-2",
+      })
+    );
+    expect(received.some((event) => event.event === "TurnCompleted")).toBe(
+      false
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    reconciler.dispose();
+    agg.dispose();
+  });
+
+  it("does not treat follow-up /plan chrome as an open plan approval", async () => {
+    writeFileSync(
+      transcriptPath,
+      `${userLine("做个方案")}\n${planLine()}\n${turnEndedLine("success")}\n`
+    );
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCursorTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      projectsRoot,
+      readViewportText: () => "Add a follow-up — /plan to review and build",
+    });
+    await reconciler.observe(hookEvent({ event: "Stop", transcriptPath }));
+    expect(
+      received.some((event) => event.event === "InteractionRequested")
+    ).toBe(false);
+    expect(received.some((event) => event.event === "TurnCompleted")).toBe(
+      true
+    );
+    reconciler.dispose();
   });
 
   it("treats viewport question chrome as waiting when jsonl has no AskQuestion", async () => {

@@ -1,19 +1,28 @@
-import { open, stat } from "node:fs/promises";
+import { realpath, stat } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
+import { noteCursorLastTerminalBackfill } from "./cursor-last-terminal.ts";
 import {
   applyCursorTranscriptLine,
   CURSOR_QUESTION_BACKFILL_MAX_AGE_MS,
+  type CursorInteractionKind,
   type CursorQuestionScanState,
   composeCursorQuestionPending,
-  cursorQuestionInteractionId,
+  cursorClosingHookEvent,
+  cursorInteractionGenerationOf,
+  cursorInteractionId,
+  cursorInteractionKindOf,
+  cursorInteractionToolName,
+  cursorTranscriptScopeKey,
+  cursorViewportInteractionKind,
   defaultCursorProjectsRoot,
   findCursorAgentTranscript,
   isCursorMainAgentTranscriptPath,
-  requestedCursorQuestion,
-  resolvedCursorQuestion,
+  readCursorTranscriptTail,
+  requestedCursorInteraction,
+  resolvedCursorInteraction,
   scanCursorQuestionState,
-  viewportShowsCursorQuestion,
+  viewportShowsCursorInteraction,
 } from "./cursor-question.ts";
 import { emitTranscriptEvent } from "./tail-event.ts";
 import {
@@ -28,68 +37,34 @@ export {
   applyCursorTranscriptLine,
   CURSOR_QUESTION_BACKFILL_MAX_AGE_MS,
   CURSOR_TRANSCRIPT_INTERACTION_EVIDENCE,
+  CURSOR_TRANSCRIPT_TERMINAL_EVIDENCE,
   composeCursorQuestionPending,
   cursorQuestionInteractionId,
   defaultCursorProjectsRoot,
   findCursorAgentTranscript,
   isCursorMainAgentTranscriptPath,
+  isCursorPlanToolName,
   isCursorQuestionToolName,
   scanCursorQuestionState,
+  viewportShowsCursorInteraction,
+  viewportShowsCursorPlan,
   viewportShowsCursorQuestion,
 } from "./cursor-question.ts";
-
-const MAX_BACKFILL_BYTES = 1024 * 1024;
 
 interface CursorTranscriptReconcilerOpts {
   onTerminalEvent: Parameters<
     typeof createTranscriptTailReconciler
   >[0]["onTerminalEvent"];
-  /** 默认 `~/.cursor/projects`。 */
   projectsRoot?: string;
-  /** 读终端当前屏；缺省则只靠 jsonl。 */
   readViewportText?: (panelId: string, windowId: string) => string | null;
 }
 
-async function readTranscriptTail(
-  path: string,
-  maxBytes = MAX_BACKFILL_BYTES
-): Promise<string | null> {
-  const fileStat = await stat(path).catch(() => null);
-  if (!fileStat?.isFile()) {
-    return null;
-  }
-  const start = Math.max(0, fileStat.size - maxBytes);
-  const fd = await open(path, "r");
-  try {
-    const length = fileStat.size - start;
-    const buffer = Buffer.alloc(length);
-    const result = await fd.read(buffer, 0, length, start);
-    return buffer.subarray(0, result.bytesRead).toString("utf8");
-  } finally {
-    await fd.close();
-  }
+interface PendingInteraction {
+  generation: number;
+  kind: CursorInteractionKind;
+  sessionId: string;
 }
 
-function isQuestionClosingEvent(event: string): boolean {
-  return (
-    event === "SessionEnd" ||
-    event === "TurnCompleted" ||
-    event === "TurnInterrupted" ||
-    event === "error" ||
-    event === "Stop"
-  );
-}
-
-function scopeKey(event: AgentHookEventPayload): string {
-  return `${event.windowId}\0${event.panelId}`;
-}
-
-/**
- * Cursor AskQuestion 对账器。
- *
- * AskQuestion 不走 preToolUse。jsonl 末条同步问卷 → waiting；确认后
- * Grep/Read 解除。jsonl 常晚于 TUI，同时认 viewport 问卷框。
- */
 export function createCursorTranscriptReconciler(
   opts: CursorTranscriptReconcilerOpts
 ): CursorTranscriptReconciler {
@@ -101,29 +76,16 @@ export function createCursorTranscriptReconciler(
     string,
     CursorQuestionScanState & { sessionId: string }
   >();
-  const pendingByScope = new Map<
-    string,
-    { generation: number; sessionId: string }
-  >();
+  const pendingByScope = new Map<string, PendingInteraction>();
   const jsonlPendingByScope = new Map<string, boolean>();
   const viewportPendingByScope = new Map<string, boolean>();
   const viewportTimers = new Map<string, ReturnType<typeof setInterval>>();
   const lastContextByScope = new Map<string, AgentHookEventPayload>();
-
-  const VIEWPORT_POLL_MS = 250;
-
-  const questionGeneration = (event: AgentHookEventPayload): number => {
-    if (!("interactionId" in event && event.interactionId)) {
-      return 1;
-    }
-    const generation = Number(event.interactionId.split(":").at(-1));
-    return Number.isFinite(generation) && generation > 0 ? generation : 1;
-  };
+  const lastTerminalSeenByScope = new Map<string, string>();
 
   const emitResolved = (
     context: AgentHookEventPayload,
-    sessionId: string,
-    generation: number,
+    pending: PendingInteraction,
     outcome: "completed" | "cancelled"
   ): void => {
     emitTranscriptEvent(
@@ -133,40 +95,53 @@ export function createCursorTranscriptReconciler(
         seenTerminalEvents: new Set(),
         seenTranscriptEvents: new Set(),
       },
-      { ...context, sessionId, toolName: "AskQuestion" },
-      resolvedCursorQuestion(sessionId, generation, outcome),
+      {
+        ...context,
+        sessionId: pending.sessionId,
+        toolName: cursorInteractionToolName(pending.kind),
+      },
+      resolvedCursorInteraction(
+        pending.kind,
+        pending.sessionId,
+        pending.generation,
+        outcome
+      ),
       opts.onTerminalEvent
     );
   };
 
   const emit = (event: AgentHookEventPayload): void => {
-    const key = scopeKey(event);
+    const key = cursorTranscriptScopeKey(event);
     if (event.event === "InteractionRequested") {
       const latest = lastContextByScope.get(key);
       if (latest && opts.readViewportText) {
         const text = opts.readViewportText(latest.panelId, latest.windowId);
-        if (text != null && !viewportShowsCursorQuestion(text)) {
+        if (text != null && !viewportShowsCursorInteraction(text)) {
           return;
         }
       }
-      const generation = questionGeneration(event);
+      const generation = cursorInteractionGenerationOf(event);
+      const kind = cursorInteractionKindOf(event);
       const sessionId =
         event.sessionId?.trim() ||
         pendingByScope.get(key)?.sessionId ||
         "viewport";
       const current = pendingByScope.get(key);
-      const nextId = cursorQuestionInteractionId(sessionId, generation);
+      const nextId = cursorInteractionId(kind, sessionId, generation);
       if (
         current &&
-        cursorQuestionInteractionId(current.sessionId, current.generation) ===
-          nextId
+        cursorInteractionId(
+          current.kind,
+          current.sessionId,
+          current.generation
+        ) === nextId
       ) {
         return;
       }
       if (current) {
-        emitResolved(event, current.sessionId, current.generation, "completed");
+        emitResolved(event, current, "completed");
       }
-      pendingByScope.set(key, { generation, sessionId });
+      pendingByScope.set(key, { generation, kind, sessionId });
     }
     if (event.event === "InteractionResolved") {
       pendingByScope.delete(key);
@@ -180,7 +155,12 @@ export function createCursorTranscriptReconciler(
       const seed = path ? attachSeed.get(path) : undefined;
       const sessionId = seed?.sessionId ?? "unknown";
       const state: CursorQuestionScanState = seed
-        ? { generation: seed.generation, pending: seed.pending }
+        ? {
+            generation: seed.generation,
+            kind: seed.kind,
+            lastTerminal: seed.lastTerminal,
+            pending: seed.pending,
+          }
         : { generation: 0, pending: false };
       return (line) => applyCursorTranscriptLine(state, line, sessionId);
     },
@@ -192,6 +172,9 @@ export function createCursorTranscriptReconciler(
     context: AgentHookEventPayload,
     record: TranscriptTerminalRecord
   ): void => {
+    const interactive =
+      record.pierEvent === "InteractionRequested" ||
+      record.pierEvent === "InteractionResolved";
     emitTranscriptEvent(
       {
         contextsByTurnId: new Map(),
@@ -199,7 +182,14 @@ export function createCursorTranscriptReconciler(
         seenTerminalEvents: new Set(),
         seenTranscriptEvents: new Set(),
       },
-      { ...context, toolName: "AskQuestion" },
+      {
+        ...context,
+        toolName: interactive
+          ? cursorInteractionToolName(
+              record.interactionKind === "permission" ? "plan" : "question"
+            )
+          : context.toolName,
+      },
       record,
       emit
     );
@@ -209,30 +199,40 @@ export function createCursorTranscriptReconciler(
     context: AgentHookEventPayload,
     outcome: "completed" | "cancelled"
   ): void => {
-    const pending = pendingByScope.get(scopeKey(context));
+    const pending = pendingByScope.get(cursorTranscriptScopeKey(context));
     if (!pending) {
       return;
     }
     emitRecord(
       { ...context, sessionId: pending.sessionId },
-      resolvedCursorQuestion(pending.sessionId, pending.generation, outcome)
+      resolvedCursorInteraction(
+        pending.kind,
+        pending.sessionId,
+        pending.generation,
+        outcome
+      )
     );
   };
 
   const readViewportState = (
     context: AgentHookEventPayload
-  ): { known: boolean; pending: boolean } => {
-    const key = scopeKey(context);
+  ): {
+    known: boolean;
+    kind: CursorInteractionKind | null;
+    pending: boolean;
+  } => {
+    const key = cursorTranscriptScopeKey(context);
     const text = opts.readViewportText?.(context.panelId, context.windowId);
     if (text == null) {
       return {
         known: false,
+        kind: null,
         pending: viewportPendingByScope.get(key) === true,
       };
     }
-    const pending = viewportShowsCursorQuestion(text);
-    viewportPendingByScope.set(key, pending);
-    return { known: true, pending };
+    const kind = cursorViewportInteractionKind(text);
+    viewportPendingByScope.set(key, kind !== null);
+    return { known: true, kind, pending: kind !== null };
   };
 
   const syncPendingQuestion = (
@@ -240,8 +240,8 @@ export function createCursorTranscriptReconciler(
     sessionId: string,
     scanned: CursorQuestionScanState,
     fresh: boolean
-  ): void => {
-    const key = scopeKey(context);
+  ): boolean => {
+    const key = cursorTranscriptScopeKey(context);
     const jsonlPending = scanned.pending && fresh;
     jsonlPendingByScope.set(key, jsonlPending);
     const viewport = readViewportState(context);
@@ -255,36 +255,50 @@ export function createCursorTranscriptReconciler(
       const generation = jsonlPending
         ? Math.max(scanned.generation, 1)
         : (current?.generation ?? 1);
+      const kind: CursorInteractionKind = jsonlPending
+        ? (scanned.kind ?? current?.kind ?? "question")
+        : (viewport.kind ?? current?.kind ?? "question");
       if (
         current &&
         current.generation === generation &&
+        current.kind === kind &&
         current.sessionId === sessionId
       ) {
-        return;
+        return pending;
       }
-      emitRecord(context, requestedCursorQuestion(sessionId, generation));
-      return;
+      emitRecord(
+        context,
+        requestedCursorInteraction(kind, sessionId, generation)
+      );
+      return pending;
     }
     if (current) {
       emitRecord(
         { ...context, sessionId: current.sessionId },
-        resolvedCursorQuestion(
+        resolvedCursorInteraction(
+          current.kind,
           current.sessionId,
           current.generation,
           "completed"
         )
       );
     }
+    return pending;
   };
 
   const syncFromViewport = (context: AgentHookEventPayload): void => {
-    const key = scopeKey(context);
+    const key = cursorTranscriptScopeKey(context);
+    const current = pendingByScope.get(key);
     const sessionId =
       context.sessionId?.trim() ||
       attachSeed.get(context.transcriptPath ?? "")?.sessionId ||
       "viewport";
-    const scanned = jsonlPendingByScope.get(key)
-      ? { generation: pendingByScope.get(key)?.generation ?? 1, pending: true }
+    const scanned: CursorQuestionScanState = jsonlPendingByScope.get(key)
+      ? {
+          generation: current?.generation ?? 1,
+          kind: current?.kind,
+          pending: true,
+        }
       : { generation: 0, pending: false };
     syncPendingQuestion(context, sessionId, scanned, true);
   };
@@ -293,7 +307,7 @@ export function createCursorTranscriptReconciler(
     if (!opts.readViewportText) {
       return;
     }
-    const key = scopeKey(context);
+    const key = cursorTranscriptScopeKey(context);
     lastContextByScope.set(key, context);
     if (viewportTimers.has(key)) {
       return;
@@ -303,7 +317,7 @@ export function createCursorTranscriptReconciler(
       if (latest) {
         syncFromViewport(latest);
       }
-    }, VIEWPORT_POLL_MS);
+    }, 250);
     timer.unref();
     viewportTimers.set(key, timer);
     syncFromViewport(context);
@@ -318,6 +332,7 @@ export function createCursorTranscriptReconciler(
     lastContextByScope.delete(key);
     viewportPendingByScope.delete(key);
     jsonlPendingByScope.delete(key);
+    lastTerminalSeenByScope.delete(key);
   };
 
   const resolvePath = async (
@@ -326,21 +341,8 @@ export function createCursorTranscriptReconciler(
     const sessionId = event.sessionId?.trim();
     const explicit = event.transcriptPath?.trim();
     if (explicit) {
-      if (sessionId && !isCursorMainAgentTranscriptPath(explicit, sessionId)) {
-        return null;
-      }
-      if (
-        !(
-          sessionId ||
-          isCursorMainAgentTranscriptPath(
-            explicit,
-            basename(explicit, ".jsonl")
-          )
-        )
-      ) {
-        return null;
-      }
-      return explicit;
+      const id = sessionId || basename(explicit, ".jsonl");
+      return isCursorMainAgentTranscriptPath(explicit, id) ? explicit : null;
     }
     if (!sessionId) {
       return null;
@@ -374,6 +376,7 @@ export function createCursorTranscriptReconciler(
       pathCache.clear();
       attachSeed.clear();
       pendingByScope.clear();
+      lastTerminalSeenByScope.clear();
       inner.dispose();
     },
     observe: async (event) => {
@@ -383,13 +386,13 @@ export function createCursorTranscriptReconciler(
       startViewportWatch(event);
       if (event.event === "SessionEnd") {
         closePending(event, "cancelled");
-        stopViewportWatch(scopeKey(event));
+        stopViewportWatch(cursorTranscriptScopeKey(event));
         await inner.observe(event);
         return;
       }
       const resolved = await resolvePath(event);
       if (!resolved) {
-        if (isQuestionClosingEvent(event.event)) {
+        if (cursorClosingHookEvent(event.event)) {
           closePending(event, "cancelled");
           await inner.observe(event);
         }
@@ -397,16 +400,30 @@ export function createCursorTranscriptReconciler(
       }
       const sessionId = event.sessionId?.trim() || basename(resolved, ".jsonl");
       const fileStat = await stat(resolved).catch(() => null);
-      const text = await readTranscriptTail(resolved);
+      const text = await readCursorTranscriptTail(resolved);
       const scanned = text
         ? scanCursorQuestionState(text, sessionId)
         : { generation: 0, pending: false };
       const fresh =
         fileStat !== null &&
         Date.now() - fileStat.mtimeMs <= CURSOR_QUESTION_BACKFILL_MAX_AGE_MS;
-      attachSeed.set(resolved, { ...scanned, sessionId });
+      const seed = { ...scanned, sessionId };
+      attachSeed.set(resolved, seed);
+      attachSeed.set(await realpath(resolved).catch(() => resolved), seed);
       await inner.observe({ ...event, transcriptPath: resolved });
-      syncPendingQuestion(event, sessionId, scanned, fresh);
+      const waiting = syncPendingQuestion(event, sessionId, scanned, fresh);
+      const backfill = noteCursorLastTerminalBackfill({
+        eventName: event.event,
+        fresh,
+        resolvedPath: resolved,
+        scanned,
+        seenByScope: lastTerminalSeenByScope,
+        scopeKey: cursorTranscriptScopeKey(event),
+        waiting,
+      });
+      if (backfill) {
+        emitRecord({ ...event, sessionId }, backfill);
+      }
     },
     releasePanel: (panelId, windowId) => {
       for (const [key, context] of lastContextByScope) {
@@ -465,6 +482,7 @@ export function createCursorTranscriptReconciler(
       move(pendingByScope);
       move(jsonlPendingByScope);
       move(viewportPendingByScope);
+      move(lastTerminalSeenByScope);
       const context = move(lastContextByScope);
       if (context) {
         lastContextByScope.set(targetKey, {

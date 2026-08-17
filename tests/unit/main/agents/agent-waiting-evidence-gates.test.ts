@@ -244,10 +244,27 @@ describe("B-tier permission-adjacent mappings retained after review", () => {
     expect(buildPiExtensionSource()).toContain("function pierBoundWorkId");
   });
 
-  it("Cursor 问卷 waiting 不来自 hook，而来自 transcript 对账", () => {
+  it("Cursor CreatePlan/SwitchMode 走 hook Interaction；AskQuestion 只走 transcript", () => {
+    // CURSOR_EVENTS 表仍把 preToolUse 标成 ToolStart；审批门在 hook 命令内按工具名分发。
     expect(hasWaitingMapping(CURSOR_EVENTS, "preToolUse")).toBe(false);
     expect(hasWaitingMapping(CURSOR_EVENTS, "beforeSubmitPrompt")).toBe(false);
-    expect(AGENT_STATUS_EVIDENCE.cursor.evidence.waiting).toBe("reconciled");
+    expect(AGENT_STATUS_EVIDENCE.cursor.evidence.waiting).toBe("native");
+    expect(
+      AGENT_STATUS_EVIDENCE.cursor.eventMappings.some(
+        (mapping) =>
+          mapping.dimension === "waiting" &&
+          mapping.nativeEvent === "preToolUse" &&
+          mapping.level === "native"
+      )
+    ).toBe(true);
+    expect(
+      AGENT_STATUS_EVIDENCE.cursor.eventMappings.some(
+        (mapping) =>
+          mapping.dimension === "waiting" &&
+          mapping.nativeEvent === "cursor.transcript.ask_question" &&
+          mapping.level === "reconciled"
+      )
+    ).toBe(true);
     expect(AGENT_STATUS_EVIDENCE.cursor.transport).toContain(
       "transcript-reconciler"
     );

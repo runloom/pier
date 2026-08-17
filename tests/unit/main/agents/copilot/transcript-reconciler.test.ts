@@ -85,7 +85,18 @@ describe("copilot transcript reconciler", () => {
     ).toBeNull();
   });
 
-  it("classify: assistant.turn_end → TurnCompleted", () => {
+  it("classify: session.task_complete → TurnCompleted；turn_end 不是终态", () => {
+    expect(
+      classifyCopilotEventsLine(
+        JSON.stringify({
+          data: { summary: "done" },
+          type: "session.task_complete",
+        })
+      )
+    ).toEqual({
+      ...COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE[1],
+      turnId: "",
+    });
     expect(
       classifyCopilotEventsLine(
         JSON.stringify({
@@ -93,10 +104,7 @@ describe("copilot transcript reconciler", () => {
           type: "assistant.turn_end",
         })
       )
-    ).toEqual({
-      ...COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE[1],
-      turnId: "3",
-    });
+    ).toBeNull();
   });
 
   it("sessionId 解析 events.jsonl 后对账 abort", async () => {

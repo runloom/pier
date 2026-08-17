@@ -229,4 +229,82 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_2 = {
       "8b73e1a1b6b9e960304fdf9b25ea2f8cec4329a8"
     ),
   },
+  cursor: {
+    integration: "active",
+    transport: ["hook-command", "transcript-reconciler"],
+    evidence: {
+      lifecycle: "native",
+      ready: "native",
+      processing: "native",
+      tool: "native",
+      waiting: "native",
+      error: "native",
+      completed: "native",
+      interrupted: "native",
+      subagent: "native",
+    },
+    eventMappings: facts(
+      nativeFact("lifecycle", "sessionStart", "SessionStart"),
+      nativeFact("lifecycle", "sessionEnd", "SessionEnd"),
+      nativeFact("ready", "stop.status=completed", "TurnCompleted"),
+      fact(
+        "ready",
+        "reconciled",
+        "cursor.transcript.turn_ended",
+        "TurnCompleted"
+      ),
+      nativeFact("processing", "beforeSubmitPrompt", "PromptSubmit"),
+      nativeFact("processing", "postToolUse", "ToolComplete"),
+      nativeFact("processing", "postToolUseFailure", "ToolComplete"),
+      nativeFact("tool", "preToolUse", "ToolStart"),
+      nativeFact("waiting", "preToolUse", "InteractionRequested"),
+      nativeFact("waiting", "postToolUse", "InteractionResolved"),
+      nativeFact("waiting", "postToolUseFailure", "InteractionResolved"),
+      fact(
+        "waiting",
+        "reconciled",
+        "cursor.transcript.ask_question",
+        "InteractionRequested"
+      ),
+      fact(
+        "waiting",
+        "reconciled",
+        "cursor.transcript.ask_question.answered",
+        "InteractionResolved"
+      ),
+      fact(
+        "waiting",
+        "reconciled",
+        "cursor.transcript.create_plan",
+        "InteractionRequested"
+      ),
+      fact(
+        "waiting",
+        "reconciled",
+        "cursor.transcript.create_plan.answered",
+        "InteractionResolved"
+      ),
+      nativeFact("error", "stop.status=error", "error"),
+      nativeFact("completed", "stop.status=completed", "TurnCompleted"),
+      fact(
+        "completed",
+        "reconciled",
+        "cursor.transcript.turn_ended",
+        "TurnCompleted"
+      ),
+      nativeFact("interrupted", "stop.status=aborted", "TurnInterrupted"),
+      fact(
+        "interrupted",
+        "reconciled",
+        "cursor.transcript.turn_ended.aborted",
+        "TurnInterrupted"
+      ),
+      nativeFact("subagent", "subagentStart", "SubagentStart"),
+      nativeFact("subagent", "subagentStop", "SubagentStop")
+    ),
+    upstream: upstream(
+      "https://cursor.com/docs/hooks",
+      "Cursor CLI hooks documentation"
+    ),
+  },
 } as const satisfies Partial<Record<AgentKind, AgentStatusEvidence>>;

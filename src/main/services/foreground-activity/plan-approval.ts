@@ -7,6 +7,8 @@ export const PLAN_APPROVAL_TOOL_NAMES: ReadonlySet<string> = new Set([
   "ExitPlanMode",
   "enter_plan_mode",
   "exit_plan_mode",
+  "CreatePlan",
+  "SwitchMode",
 ]);
 
 /**

@@ -66,6 +66,14 @@ export function sshTargetArgs(host: SshHost): string[] {
 
 const SHELL_SAFE_ARG = /^[A-Za-z0-9@%+=:,./_-]+$/;
 
+/**
+ * Ghostty advertises `xterm-ghostty`. Most SSH hosts (cloud images, older
+ * Linux) have no such terminfo, so Backspace arrives as a literal `^H`.
+ * OpenSSH copies the client process `TERM` into the remote PTY; this value
+ * is widely installed and does not need `AcceptEnv`.
+ */
+export const SSH_REMOTE_COMPAT_TERM = "xterm-256color";
+
 function quoteShellArg(value: string): string {
   if (SHELL_SAFE_ARG.test(value)) {
     return value;
@@ -75,7 +83,8 @@ function quoteShellArg(value: string): string {
 
 /** Command line executed inside the host terminal panel. */
 export function buildSshCommand(host: SshHost): string {
-  return ["ssh", ...sshTargetArgs(host)].map(quoteShellArg).join(" ");
+  const ssh = ["ssh", ...sshTargetArgs(host)].map(quoteShellArg).join(" ");
+  return `env TERM=${SSH_REMOTE_COMPAT_TERM} ${ssh}`;
 }
 
 /** Short human-readable target, e.g. `user@example.com:2222`. */

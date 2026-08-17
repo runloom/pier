@@ -7,7 +7,10 @@ import {
   openHostTerminal,
   openSshTerminalPicker,
 } from "../../../../packages/plugin-ssh/src/renderer/open-host-terminal.tsx";
-import type { SshHost } from "../../../../packages/plugin-ssh/src/shared/hosts.ts";
+import {
+  SSH_REMOTE_COMPAT_TERM,
+  type SshHost,
+} from "../../../../packages/plugin-ssh/src/shared/hosts.ts";
 
 const host: SshHost = {
   host: "example.com",
@@ -97,7 +100,9 @@ describe("SSH terminal opening", () => {
       "Opening SSH terminal…"
     );
     expect(terminalOpen).toHaveBeenCalledWith({
-      launch: { command: "ssh -p 2222 -- dev@example.com" },
+      launch: {
+        command: `env TERM=${SSH_REMOTE_COMPAT_TERM} ssh -p 2222 -- dev@example.com`,
+      },
     });
     expect(loading.success).toHaveBeenCalledWith("SSH terminal opened");
   });

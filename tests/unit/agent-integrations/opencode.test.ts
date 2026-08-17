@@ -259,7 +259,7 @@ describe("opencode 生成插件的子会话身份继承", () => {
       if (row.kind !== "agentEvent") continue;
       aggregator.ingestAgentEvent(row, {
         evidenceSource: "hook",
-        stopAuthority: "authoritative",
+        stopAuthority: opencodeIntegration.runtime.stopAuthority,
         turnStartAuthority: "none",
       });
       const activity = aggregator.snapshot().activities[0];
