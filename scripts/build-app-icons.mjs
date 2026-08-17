@@ -6,8 +6,9 @@
 //   - app-icon-unplated.svg: transparent 1024×1024 mark for Windows and Linux.
 //
 // Conversion uses electron-builder's pinned official icons toolset, which produces
-// valid ICNS/ICO/icon sets consistently across host macOS versions. rsvg-convert is
-// used only for the macOS development Dock PNG and Linux's optional 96px slot.
+// valid ICNS/ICO/icon sets consistently across host macOS versions. The macOS
+// system `sips` encoder supplies legacy non-Retina 16px/32px frames so `iconutil`
+// and AppKit decode those slots correctly; rsvg-convert rasterizes their SVG input.
 
 import { spawnSync } from "node:child_process";
 import {
@@ -40,9 +41,9 @@ const { runIconsTool } = requireFromElectronBuilder(
   "app-builder-lib/out/toolsets/icons.js"
 );
 
-function run(command, args) {
+function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
-    stdio: ["ignore", "inherit", "inherit"],
+    stdio: options.quiet ? "ignore" : ["ignore", "inherit", "inherit"],
   });
   if (result.error) {
     throw new Error(`${command} could not start: ${result.error.message}`, {
@@ -51,6 +52,16 @@ function run(command, args) {
   }
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(" ")} → exit ${result.status}`);
+  }
+}
+
+function assertSipsAvailable(command) {
+  const result = spawnSync(command, ["--help"], { stdio: "ignore" });
+  if (result.error || result.status !== 0) {
+    throw new Error(
+      "macOS sips is required to encode the official legacy 16px and 32px ICNS frames.",
+      result.error ? { cause: result.error } : undefined
+    );
   }
 }
 
@@ -72,13 +83,14 @@ async function convertToBuffer(
   source,
   format,
   workingDirectory,
-  temporaryName
+  temporaryName,
+  convertIcons
 ) {
   const outputDirectory = join(workingDirectory, `.icon-tool-${temporaryName}`);
   rmSync(outputDirectory, { recursive: true, force: true });
   mkdirSync(outputDirectory, { recursive: true });
   try {
-    await runIconsTool({
+    await convertIcons({
       inputFile: source,
       outputFormat: format,
       outDir: outputDirectory,
@@ -89,39 +101,69 @@ async function convertToBuffer(
   }
 }
 
-async function buildIcns(sources, stagingDirectory) {
+async function encodeLegacyIconsWithSips(options) {
+  const workingDirectory = join(options.stagingDirectory, ".legacy-icon-tool");
+  mkdirSync(workingDirectory, { recursive: true });
+  const encoded = {};
+  for (const size of [16, 32]) {
+    const png = join(workingDirectory, `micro-${size}.png`);
+    const icns = join(workingDirectory, `micro-${size}.icns`);
+    rasterize(options.rsvgCommand, options.source, size, png);
+    run(options.sipsCommand, ["-s", "format", "icns", png, "--out", icns], {
+      quiet: true,
+    });
+    encoded[`legacy${size}`] = readFileSync(icns);
+  }
+  return encoded;
+}
+
+async function buildIcns(sources, stagingDirectory, dependencies) {
   const standard = await convertToBuffer(
     sources.master,
     "icns",
     stagingDirectory,
-    "icns-standard"
+    "icns-standard",
+    dependencies.convertIcons
   );
   const micro = await convertToBuffer(
     sources.micro,
     "icns",
     stagingDirectory,
-    "icns-micro"
+    "icns-micro",
+    dependencies.convertIcons
   );
+  const { legacy16, legacy32 } = await dependencies.encodeLegacyIcons({
+    source: sources.micro,
+    stagingDirectory,
+    rsvgCommand: dependencies.rsvgCommand,
+    sipsCommand: dependencies.sipsCommand,
+  });
   writeFileSync(
     join(stagingDirectory, "icon.icns"),
-    mergeIcnsRenditions(standard, micro)
+    mergeIcnsRenditions(standard, micro, legacy16, legacy32)
   );
 }
 
-async function buildIco(sources, stagingDirectory) {
+async function buildIco(sources, stagingDirectory, convertIcons) {
   const icon = await convertToBuffer(
     sources.unplated,
     "ico",
     stagingDirectory,
-    "ico"
+    "ico",
+    convertIcons
   );
   writeFileSync(join(stagingDirectory, "icon.ico"), icon);
 }
 
-async function buildLinuxIcons(sources, stagingDirectory, rasterizeCommand) {
+async function buildLinuxIcons(
+  sources,
+  stagingDirectory,
+  rasterizeCommand,
+  convertIcons
+) {
   const linuxIcons = join(stagingDirectory, "icons");
   mkdirSync(linuxIcons, { recursive: true });
-  await runIconsTool({
+  await convertIcons({
     inputFile: sources.unplated,
     outputFormat: "set",
     outDir: linuxIcons,
@@ -182,6 +224,10 @@ export async function buildAppIcons(options = {}) {
   const sourceDirectory = options.sourceDirectory ?? DEFAULT_BUILD_DIRECTORY;
   const outputDirectory = options.outputDirectory ?? DEFAULT_BUILD_DIRECTORY;
   const rsvgCommand = options.rsvgCommand ?? "rsvg-convert";
+  const sipsCommand = options.sipsCommand ?? "sips";
+  const convertIcons = options.convertIcons ?? runIconsTool;
+  const encodeLegacyIcons =
+    options.encodeLegacyIcons ?? encodeLegacyIconsWithSips;
   const log = options.log ?? console.log;
   const sources = {
     master: join(sourceDirectory, "app-icon-master.svg"),
@@ -190,6 +236,9 @@ export async function buildAppIcons(options = {}) {
   };
 
   assertRasterizerAvailable(rsvgCommand);
+  if (options.encodeLegacyIcons === undefined) {
+    assertSipsAvailable(sipsCommand);
+  }
   mkdirSync(outputDirectory, { recursive: true });
   const stagingDirectory = mkdtempSync(
     join(outputDirectory, ".icon-build-staging-")
@@ -197,11 +246,16 @@ export async function buildAppIcons(options = {}) {
 
   try {
     log("→ build/icon.icns (I Micro 16–128px + F Standard 256–1024px)");
-    await buildIcns(sources, stagingDirectory);
+    await buildIcns(sources, stagingDirectory, {
+      convertIcons,
+      encodeLegacyIcons,
+      rsvgCommand,
+      sipsCommand,
+    });
     log("→ build/icon.ico (transparent Windows official size set)");
-    await buildIco(sources, stagingDirectory);
+    await buildIco(sources, stagingDirectory, convertIcons);
     log("→ build/icons/* (transparent Linux hicolor size set)");
-    await buildLinuxIcons(sources, stagingDirectory, rsvgCommand);
+    await buildLinuxIcons(sources, stagingDirectory, rsvgCommand, convertIcons);
     log("→ build/icon.png 512×512 (macOS development Dock)");
     buildDevDockPng(sources, stagingDirectory, rsvgCommand);
     publishStagedAssets(stagingDirectory, outputDirectory);

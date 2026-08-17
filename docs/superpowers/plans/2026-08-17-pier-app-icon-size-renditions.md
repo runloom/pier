@@ -4,7 +4,7 @@
 
 **Goal:** 将已确认的 F 标准稿和 I Micro 稿接入 Pier 的全部正式图标资产，并让 macOS ICNS 按尺寸选择正确稿件。
 
-**Architecture:** SVG 是唯一设计源。macOS 先用 electron-builder 固定版本的官方工具分别生成 F/I 临时 ICNS，再由一个纯函数模块校验并合并条目；Windows、Linux 从透明 F 稿生成，开发 Dock 从 I 稿生成。
+**Architecture:** SVG 是唯一设计源。macOS 先用 electron-builder 固定版本的官方工具分别生成 F/I 现代 ICNS 条目，再由 macOS `sips` 为 I 生成系统兼容的非 Retina 16/32px legacy RGB + alpha 条目，最后由纯函数模块完整校验并合并；Windows、Linux 从透明 F 稿生成，开发 Dock 从 I 稿生成。
 
 **Tech Stack:** SVG、Node.js 24 ESM、electron-builder 26.15.3 `runIconsTool`、`rsvg-convert`、Vitest 4、Electron Builder。
 
@@ -30,6 +30,18 @@
 - `tests/unit/scripts/app-icon-icns.test.ts`：ICNS 二进制和尺寸分配测试。
 - `build/icon.icns`、`build/icon.ico`、`build/icon.png`、`build/icons/*.png`：生成资产。
 - `.gitignore`、`electron-builder.yml`、`docs/development.md`、`build/design-sources/index.html`：项目集成与说明。
+
+## 2026-08-18 system-decoder correction (authoritative)
+
+macOS 26 的 `iconutil` 会把 electron-builder 产出的 `icp4` / `icp5` / `icp6` PNG 条目错误解码成彩色噪点；因此最终 ICNS 不得包含这三个非 Retina PNG 条目。最终容器必须使用：
+
+- I Micro：`is32` + `s8mk`（16px）、`il32` + `l8mk`（32px），以及 `ic11`（32px Retina）、`ic12`（64px Retina）、`ic07`（128px）。legacy 条目由 `rsvg-convert` + macOS `sips` 生成。
+- F Standard：`ic08`（256px）、`ic09`（512px）、`ic10`（1024px）；`ic13` 是 256px Retina 槽并复用 `ic08` 数据，`ic14` 是 512px Retina 槽并复用 `ic09` 数据。
+- PNG 校验必须覆盖 CRC、IEND、zlib、非交错 8-bit RGBA、完整 scanline 长度和每行 filter 值，不能只检查签名与 IHDR。
+- 生成必须先写 staging，再一次性发布；测试必须注入离线 converter，禁止触发工具下载或网络访问。
+- macOS CI 必须用系统 `iconutil` 解包最终 ICNS，核对官方 10 个文件名和逐像素内容，防止容器兼容性回归。
+
+下方早期 red-phase 代码片段只记录 TDD 推进方式；若与本节冲突，以本节和仓库中的最终实现为准。
 
 ---
 
@@ -145,73 +157,18 @@ git commit -m "feat: add Pier icon size renditions"
 - Create: `tests/unit/scripts/app-icon-icns.test.ts`
 
 **Interfaces:**
-- Consumes: Two official-tool ICNS `Buffer` values.
+- Consumes: F/I 两个 modern ICNS `Buffer`，以及 16/32px 两个 `sips` legacy ICNS `Buffer`。
 - Produces: `parseIcns`, `encodeIcns`, `mergeIcnsRenditions`, `ICNS_DIMENSIONS`, `MICRO_ICNS_TYPES`, `STANDARD_ICNS_TYPES`.
 
 - [ ] **Step 1: Write the failing ICNS tests**
 
-```ts
-import { Buffer } from "node:buffer";
-import { describe, expect, it } from "vitest";
-import {
-  encodeIcns,
-  ICNS_DIMENSIONS,
-  mergeIcnsRenditions,
-  parseIcns,
-} from "../../../scripts/app-icon-icns.mjs";
+Use complete PNG fixtures built from valid `IHDR` / `IDAT` / `IEND` chunks with real CRC32 values and zlib-compressed RGBA scanlines. The test suite must cover:
 
-const PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+- I selection for the official legacy 16/32px pairs plus `ic11`, `ic12`, and `ic07`.
+- F selection for `ic08`, `ic09`, and `ic10`, with `ic13` sourced from `ic08` and `ic14` sourced from `ic09`.
+- malformed ICNS headers and lengths, duplicate entries, missing entries, wrong dimensions, corrupt CRC/IEND/zlib data, invalid RGBA metadata, invalid scanline length/filter, and invalid legacy masks.
 
-function png(size: number, marker: number) {
-  const data = Buffer.alloc(25);
-  PNG.copy(data);
-  data.write("IHDR", 12, "ascii");
-  data.writeUInt32BE(size, 16);
-  data.writeUInt32BE(size, 20);
-  data[24] = marker;
-  return data;
-}
-
-function rendition(marker: number) {
-  return encodeIcns(
-    Object.entries(ICNS_DIMENSIONS).map(([type, size]) => ({
-      type,
-      data: png(size, marker),
-    }))
-  );
-}
-
-describe("ICNS rendition merger", () => {
-  it("selects I through 128px and F from 256px", () => {
-    const result = parseIcns(
-      mergeIcnsRenditions(rendition(0xf0), rendition(0x1a))
-    );
-    const micro = ["icp4", "icp5", "icp6", "ic07", "ic11", "ic12"];
-    for (const entry of result) {
-      expect(entry.data[24]).toBe(micro.includes(entry.type) ? 0x1a : 0xf0);
-    }
-  });
-
-  it("rejects malformed, duplicate, and wrong-size entries", () => {
-    expect(() => parseIcns(Buffer.from("not-icns"))).toThrow(/ICNS header/);
-    expect(() =>
-      encodeIcns([
-        { type: "icp4", data: png(16, 1) },
-        { type: "icp4", data: png(16, 2) },
-      ])
-    ).toThrow(/duplicate icp4/);
-    const wrongStandard = encodeIcns(
-      Object.entries(ICNS_DIMENSIONS).map(([type, size]) => ({
-        type,
-        data: png(type === "ic08" ? 128 : size, 1),
-      }))
-    );
-    expect(() =>
-      mergeIcnsRenditions(wrongStandard, rendition(2))
-    ).toThrow(/ic08.*256/);
-  });
-});
-```
+Do not use signature-only pseudo-PNGs: they would bypass the same corruption class this validator is intended to prevent.
 
 - [ ] **Step 2: Run the test and observe the expected failure**
 
@@ -225,21 +182,18 @@ Use these exact maps and signatures:
 
 ```js
 export const ICNS_DIMENSIONS = Object.freeze({
-  icp4: 16,
-  icp5: 32,
-  icp6: 64,
   ic07: 128,
   ic08: 256,
   ic09: 512,
   ic10: 1024,
   ic11: 32,
   ic12: 64,
-  ic13: 512,
-  ic14: 1024,
+  ic13: 256,
+  ic14: 512,
 });
 
 export const MICRO_ICNS_TYPES = Object.freeze([
-  "icp4", "icp5", "icp6", "ic07", "ic11", "ic12",
+  "ic07", "ic11", "ic12",
 ]);
 
 export const STANDARD_ICNS_TYPES = Object.freeze([
@@ -247,8 +201,8 @@ export const STANDARD_ICNS_TYPES = Object.freeze([
 ]);
 
 export function parseIcns(buffer) {
-  // Validate ICNS signature and total length; for every entry validate the
-  // 8-byte header, bounds, uniqueness, PNG signature, IHDR, and square size.
+  // Validate ICNS signature and total length; validate modern PNG entries
+  // completely and validate official legacy RGB/alpha entry pairs.
   // Return [{ type, data }] in file order.
 }
 
@@ -257,9 +211,14 @@ export function encodeIcns(entries) {
   // and prefix the ICNS signature plus total length.
 }
 
-export function mergeIcnsRenditions(standardBuffer, microBuffer) {
-  // Require all 11 types, verify ICNS_DIMENSIONS, choose the declared
-  // Micro/Standard arrays, and encode in ICNS_DIMENSIONS key order.
+export function mergeIcnsRenditions(
+  standardBuffer,
+  microBuffer,
+  legacy16Buffer,
+  legacy32Buffer
+) {
+  // Require official legacy pairs and all modern types, verify dimensions,
+  // choose Micro/Standard sources, and encode in deterministic order.
 }
 ```
 
@@ -269,7 +228,7 @@ All errors must name the failing type and expected dimension.
 
 Run: `pnpm exec vitest run tests/unit/scripts/app-icon-icns.test.ts`
 
-Expected: PASS, 2 tests.
+Expected: all ICNS merger and validator tests PASS.
 
 ```bash
 git add scripts/app-icon-icns.mjs tests/unit/scripts/app-icon-icns.test.ts
@@ -292,19 +251,9 @@ git commit -m "feat: merge macOS icon renditions"
 - Consumes: Task 1 SVGs and Task 2 merger.
 - Produces: final deterministic macOS, Windows, Linux, and development assets.
 
-- [ ] **Step 1: Add a failing pipeline assertion**
+- [ ] **Step 1: Add failing pipeline behavior tests**
 
-Append:
-
-```ts
-it("wires I only to small ICNS frames and the development Dock", () => {
-  const script = read("scripts/build-app-icons.mjs");
-  expect(script).toContain('const SRC_MICRO = join(BUILD, "app-icon-micro.svg")');
-  expect(script).toContain("mergeIcnsRenditions");
-  expect(script).toContain("rasterize(SRC_MICRO, 512");
-  expect(script).toContain("SRC_UNPLATED");
-});
-```
+Test generated asset behavior rather than implementation strings: assert the final modern ICNS entry hashes, system `iconutil` round-trip pixels and official filename set, approved development Dock hash, complete transparent ICO/Linux sizes, package/runtime references, transactional rollback, dependency preflight, and injected offline conversion.
 
 Run: `pnpm exec vitest run tests/unit/scripts/app-icon-assets.test.ts`
 
@@ -315,12 +264,12 @@ Expected: FAIL because the current pipeline has no Micro input.
 Add `SRC_MICRO`, import `readFileSync`/`writeFileSync` and `mergeIcnsRenditions`. Replace the one-source ICNS path with:
 
 ```js
-async function convertToBuffer(source, format, temporaryName) {
-  const outputDirectory = join(BUILD, ".icon-tool-" + temporaryName);
+async function convertToBuffer(source, format, workingDirectory, temporaryName, convertIcons) {
+  const outputDirectory = join(workingDirectory, ".icon-tool-" + temporaryName);
   rmSync(outputDirectory, { recursive: true, force: true });
   mkdirSync(outputDirectory, { recursive: true });
   try {
-    await runIconsTool({
+    await convertIcons({
       inputFile: source,
       outputFormat: format,
       outDir: outputDirectory,
@@ -331,28 +280,33 @@ async function convertToBuffer(source, format, temporaryName) {
   }
 }
 
-async function buildIcns() {
-  const standard = await convertToBuffer(SRC_MASTER, "icns", "icns-standard");
-  const micro = await convertToBuffer(SRC_MICRO, "icns", "icns-micro");
+async function buildIcns(stagingDirectory) {
+  const standard = await convertToBuffer(SRC_MASTER, "icns", stagingDirectory, "icns-standard");
+  const micro = await convertToBuffer(SRC_MICRO, "icns", stagingDirectory, "icns-micro");
+  const { legacy16, legacy32 } = await encodeLegacyIconsWithSips({
+    source: SRC_MICRO,
+    stagingDirectory,
+  });
   writeFileSync(
-    join(BUILD, "icon.icns"),
-    mergeIcnsRenditions(standard, micro)
+    join(stagingDirectory, "icon.icns"),
+    mergeIcnsRenditions(standard, micro, legacy16, legacy32)
   );
 }
 
-function buildDevDockPng() {
-  rasterize(SRC_MICRO, 512, join(BUILD, "icon.png"));
+function buildDevDockPng(stagingDirectory) {
+  rasterize(SRC_MICRO, 512, join(stagingDirectory, "icon.png"));
 }
 ```
 
-Keep ICO and Linux generation on `SRC_UNPLATED` and retain the 96px Linux slot.
+Keep ICO and Linux generation on `SRC_UNPLATED` and retain the 96px Linux slot. Generate every target under one staging directory, then publish the complete set transactionally; inject the converter and legacy encoder in tests so this path is offline and deterministic.
 
 - [ ] **Step 3: Verify tests, generation, cleanup, and determinism**
 
 ```bash
 pnpm exec vitest run \
   tests/unit/scripts/app-icon-assets.test.ts \
-  tests/unit/scripts/app-icon-icns.test.ts
+  tests/unit/scripts/app-icon-icns.test.ts \
+  tests/unit/scripts/app-icon-build.test.ts
 pnpm build:icons
 find build -maxdepth 1 -name '.icon-tool-*' -print
 shasum -a 256 build/icon.icns build/icon.ico build/icon.png build/icons/*.png
@@ -425,7 +379,8 @@ Replace the obsolete icon-selection sentence in `build/design-sources/index.html
 ```bash
 pnpm exec vitest run \
   tests/unit/scripts/app-icon-assets.test.ts \
-  tests/unit/scripts/app-icon-icns.test.ts
+  tests/unit/scripts/app-icon-icns.test.ts \
+  tests/unit/scripts/app-icon-build.test.ts
 pnpm lint
 pnpm build:icons
 git diff --check

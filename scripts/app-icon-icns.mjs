@@ -6,9 +6,6 @@ const ICNS_ENTRY_HEADER_SIZE = 8;
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 
 export const ICNS_DIMENSIONS = Object.freeze({
-  icp4: 16,
-  icp5: 32,
-  icp6: 64,
   ic07: 128,
   ic08: 256,
   ic09: 512,
@@ -19,14 +16,7 @@ export const ICNS_DIMENSIONS = Object.freeze({
   ic14: 512,
 });
 
-export const MICRO_ICNS_TYPES = Object.freeze([
-  "icp4",
-  "icp5",
-  "icp6",
-  "ic07",
-  "ic11",
-  "ic12",
-]);
+export const MICRO_ICNS_TYPES = Object.freeze(["ic07", "ic11", "ic12"]);
 
 export const STANDARD_ICNS_TYPES = Object.freeze([
   "ic08",
@@ -43,6 +33,22 @@ const STANDARD_ICNS_SOURCE_TYPES = Object.freeze({
   ic13: "ic08",
   ic14: "ic09",
 });
+const LEGACY_ICNS_TYPES = Object.freeze(["is32", "s8mk", "il32", "l8mk"]);
+const LEGACY_ALPHA_DIMENSIONS = Object.freeze({
+  s8mk: 16,
+  l8mk: 32,
+});
+const LEGACY_RGB_DIMENSIONS = Object.freeze({
+  is32: 16,
+  il32: 32,
+});
+const PNG_ICNS_TYPES = new Set([
+  "icp4",
+  "icp5",
+  "icp6",
+  ...Object.keys(ICNS_DIMENSIONS),
+]);
+const ICNS_METADATA_TYPES = new Set(["TOC ", "info"]);
 
 function assertPng(type, data) {
   if (data.length < 8 || !data.subarray(0, 8).equals(PNG_SIGNATURE)) {
@@ -88,17 +94,23 @@ function assertPng(type, data) {
       }
       width = data.readUInt32BE(dataStart);
       height = data.readUInt32BE(dataStart + 4);
+      const bitDepth = data[dataStart + 8];
+      const colorType = data[dataStart + 9];
       const compression = data[dataStart + 10];
       const filter = data[dataStart + 11];
       const interlace = data[dataStart + 12];
       if (
         width === 0 ||
         height === 0 ||
+        bitDepth !== 8 ||
+        colorType !== 6 ||
         compression !== 0 ||
         filter !== 0 ||
-        (interlace !== 0 && interlace !== 1)
+        interlace !== 0
       ) {
-        throw new Error(`ICNS entry ${type} has unsupported PNG metadata`);
+        throw new Error(
+          `ICNS entry ${type} must be a non-interlaced 8-bit RGBA PNG`
+        );
       }
       sawIhdr = true;
     } else if (chunkType === "IDAT") {
@@ -125,17 +137,97 @@ function assertPng(type, data) {
   if (!sawIend) {
     throw new Error(`ICNS entry ${type} has no PNG IEND`);
   }
+  let scanlines;
   try {
-    inflateSync(Buffer.concat(idatChunks));
+    scanlines = inflateSync(Buffer.concat(idatChunks));
   } catch (error) {
     throw new Error(`ICNS entry ${type} has invalid PNG image data`, {
       cause: error,
     });
   }
+  const rowLength = width * 4 + 1;
+  const expectedScanlineLength = rowLength * height;
+  if (
+    !Number.isSafeInteger(expectedScanlineLength) ||
+    scanlines.length !== expectedScanlineLength
+  ) {
+    throw new Error(
+      `ICNS entry ${type} PNG scanline length ${scanlines.length} does not match ${expectedScanlineLength}`
+    );
+  }
+  for (let row = 0; row < height; row += 1) {
+    const filterType = scanlines.readUInt8(row * rowLength);
+    if (filterType > 4) {
+      throw new Error(
+        `ICNS entry ${type} PNG row ${row} has invalid filter ${filterType}`
+      );
+    }
+  }
   if (width !== height) {
     throw new Error(`ICNS entry ${type} PNG is not square: ${width}x${height}`);
   }
   return width;
+}
+
+function assertEntryData(type, data) {
+  if (PNG_ICNS_TYPES.has(type)) {
+    assertPng(type, data);
+    return;
+  }
+  const rgbDimension = LEGACY_RGB_DIMENSIONS[type];
+  if (rgbDimension !== undefined) {
+    assertLegacyRgb(type, data, rgbDimension);
+    return;
+  }
+  const alphaDimension = LEGACY_ALPHA_DIMENSIONS[type];
+  if (alphaDimension !== undefined) {
+    const expectedLength = alphaDimension * alphaDimension;
+    if (data.length !== expectedLength) {
+      throw new Error(
+        `ICNS legacy alpha entry ${type} has ${data.length} bytes; expected ${expectedLength}`
+      );
+    }
+    return;
+  }
+  if (ICNS_METADATA_TYPES.has(type)) {
+    return;
+  }
+  throw new Error(`Unsupported ICNS entry type ${type}`);
+}
+
+function assertLegacyRgb(type, data, dimension) {
+  const pixelsPerChannel = dimension * dimension;
+  let offset = 0;
+  for (let channel = 0; channel < 3; channel += 1) {
+    let decoded = 0;
+    while (decoded < pixelsPerChannel) {
+      if (offset >= data.length) {
+        throw new Error(
+          `ICNS legacy RGB entry ${type} is truncated in channel ${channel}`
+        );
+      }
+      const control = data[offset];
+      offset += 1;
+      const isLiteral = control < 128;
+      const count = isLiteral ? control + 1 : control - 125;
+      const encodedLength = isLiteral ? count : 1;
+      if (offset + encodedLength > data.length) {
+        throw new Error(
+          `ICNS legacy RGB entry ${type} is truncated in channel ${channel}`
+        );
+      }
+      offset += encodedLength;
+      decoded += count;
+      if (decoded > pixelsPerChannel) {
+        throw new Error(
+          `ICNS legacy RGB entry ${type} overruns channel ${channel}`
+        );
+      }
+    }
+  }
+  if (offset !== data.length) {
+    throw new Error(`ICNS legacy RGB entry ${type} has trailing data`);
+  }
 }
 
 export function parseIcns(buffer) {
@@ -179,7 +271,7 @@ export function parseIcns(buffer) {
     const data = Buffer.from(
       buffer.subarray(offset + ICNS_ENTRY_HEADER_SIZE, end)
     );
-    assertPng(type, data);
+    assertEntryData(type, data);
     entries.push({ type, data });
     seen.add(type);
     offset = end;
@@ -222,11 +314,27 @@ function entriesByType(entries) {
   return new Map(entries.map((entry) => [entry.type, entry]));
 }
 
-export function mergeIcnsRenditions(standardBuffer, microBuffer) {
+export function mergeIcnsRenditions(
+  standardBuffer,
+  microBuffer,
+  legacy16Buffer,
+  legacy32Buffer
+) {
   const standard = entriesByType(parseIcns(standardBuffer));
   const micro = entriesByType(parseIcns(microBuffer));
+  const legacy16 = entriesByType(parseIcns(legacy16Buffer));
+  const legacy32 = entriesByType(parseIcns(legacy32Buffer));
   const microTypes = new Set(MICRO_ICNS_TYPES);
   const merged = [];
+
+  for (const type of LEGACY_ICNS_TYPES) {
+    const source = type === "is32" || type === "s8mk" ? legacy16 : legacy32;
+    const entry = source.get(type);
+    if (!entry) {
+      throw new Error(`Legacy ICNS is missing ${type}`);
+    }
+    merged.push(entry);
+  }
 
   for (const [type, expectedSize] of Object.entries(ICNS_DIMENSIONS)) {
     const useMicro = microTypes.has(type);

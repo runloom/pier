@@ -16,6 +16,7 @@
 | Homebrew | https://brew.sh |
 | zig 0.15 | `brew install zig@0.15`（编译 libghostty） |
 | librsvg | `brew install librsvg`（`pnpm build:icons` 需要 `rsvg-convert`） |
+| macOS `sips` | 系统自带；`pnpm build:icons` 用它生成系统兼容的 16/32px ICNS 条目 |
 
 ## 首次启动
 
@@ -88,8 +89,9 @@ pnpm build:icons         # 从已确认的 SVG 母版重建 ICNS / ICO / Linux �
 
 `pnpm build:icons` 是唯一正式生成入口；不要直接手改生成后的 `build/icon.icns`、
 `build/icon.ico`、`build/icon.png` 或 `build/icons/*.png`。Linux 环境需先安装
-`librsvg2-bin`；脚本会在写入任何正式资产前检查 `rsvg-convert`，并先在暂存目录完成整套
-生成，全部成功后再统一替换。
+`librsvg2-bin`。完整 ICNS 生成需在带系统 `sips` 的 macOS 上执行；脚本会在写入任何正式
+资产前检查两项依赖，并先在暂存目录完成整套生成，全部成功后再统一替换。macOS CI 还会用
+系统 `iconutil` 解包最终 ICNS，核对全部官方尺寸，避免小图标容器兼容性回归。
 
 ## Quality Gate：正确性优先，CI 做确认与加速
 

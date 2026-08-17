@@ -1,9 +1,11 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
-import { encodeIcns, parseIcns } from "../../../scripts/app-icon-icns.mjs";
+import { parseIcns } from "../../../scripts/app-icon-icns.mjs";
 
 const ROOT = process.cwd();
 
@@ -20,9 +22,6 @@ function sha256Bytes(value: Buffer): string {
 }
 
 const EXPECTED_ICNS_FRAME_HASHES = {
-  icp4: "d19bd4e91c1cad0ebd05f7ff3356867e6de55230eaed236aa43c0774974410d9",
-  icp5: "c4f670863fa086b9dfc923153bb520348131f7829b97e0c7b90e913157cd33b7",
-  icp6: "77c563f7ac8239944a993cc05879ec633a1b8811a6153d1c100e4ba37a239144",
   ic07: "b7523263ddab5bcbd4085fcf28ed321ae0f160e876c7cd2e5fdc57916cb636c3",
   ic08: "78393d531bec6c8fe661a56d6ad51102e7274b344bf341a511e11a5056aec61c",
   ic09: "d29a33f99def9b356042dae73ec0820b1728e20173fc8ca3fc7240e966a27cdb",
@@ -35,6 +34,38 @@ const EXPECTED_ICNS_FRAME_HASHES = {
 
 const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256] as const;
 const LINUX_SIZES = [16, 24, 32, 48, 64, 96, 128, 256, 512] as const;
+const SYSTEM_ICONSET_FILES = [
+  "icon_128x128.png",
+  "icon_128x128@2x.png",
+  "icon_16x16.png",
+  "icon_16x16@2x.png",
+  "icon_256x256.png",
+  "icon_256x256@2x.png",
+  "icon_32x32.png",
+  "icon_32x32@2x.png",
+  "icon_512x512.png",
+  "icon_512x512@2x.png",
+] as const;
+const SYSTEM_FRAME_SOURCES = new Map([
+  ["icon_16x16@2x.png", "ic11"],
+  ["icon_32x32@2x.png", "ic12"],
+  ["icon_128x128.png", "ic07"],
+  ["icon_128x128@2x.png", "ic13"],
+  ["icon_256x256.png", "ic08"],
+  ["icon_256x256@2x.png", "ic14"],
+  ["icon_512x512.png", "ic09"],
+  ["icon_512x512@2x.png", "ic10"],
+]);
+const LEGACY_SYSTEM_FRAME_PIXEL_HASHES = new Map([
+  [
+    "icon_16x16.png",
+    "bc1d0256906cdaf2f0fa4640092e598b34382b53ba2842b13a7f930254b16c0a",
+  ],
+  [
+    "icon_32x32.png",
+    "757b400e20af46b0d46f34871349da3723b0d291e845416f368db0aae782177d",
+  ],
+]);
 
 function paeth(left: number, above: number, upperLeft: number): number {
   const prediction = left + above - upperLeft;
@@ -52,8 +83,6 @@ function decodeRgbaPng(data: Buffer): {
   height: number;
   pixels: Buffer;
 } {
-  parseIcns(encodeIcns([{ type: "test", data }]));
-
   const width = data.readUInt32BE(16);
   const height = data.readUInt32BE(20);
   if (
@@ -86,23 +115,29 @@ function decodeRgbaPng(data: Buffer): {
     throw new Error(`Unexpected PNG scanline length for ${width}x${height}`);
   }
 
-  const pixels = Buffer.alloc(rowLength * height);
+  const pixels = Buffer.allocUnsafe(rowLength * height);
+  const rawBytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
+  const pixelBytes = new Uint8Array(
+    pixels.buffer,
+    pixels.byteOffset,
+    pixels.byteLength
+  );
   let rawOffset = 0;
   for (let y = 0; y < height; y += 1) {
-    const filter = raw.readUInt8(rawOffset);
+    const filter = rawBytes[rawOffset] ?? 0;
     rawOffset += 1;
     const rowOffset = y * rowLength;
     const previousRowOffset = rowOffset - rowLength;
     for (let x = 0; x < rowLength; x += 1) {
-      const source = raw.readUInt8(rawOffset + x);
+      const source = rawBytes[rawOffset + x] ?? 0;
       const left =
         x >= bytesPerPixel
-          ? pixels.readUInt8(rowOffset + x - bytesPerPixel)
+          ? (pixelBytes[rowOffset + x - bytesPerPixel] ?? 0)
           : 0;
-      const above = y > 0 ? pixels.readUInt8(previousRowOffset + x) : 0;
+      const above = y > 0 ? (pixelBytes[previousRowOffset + x] ?? 0) : 0;
       const upperLeft =
         y > 0 && x >= bytesPerPixel
-          ? pixels.readUInt8(previousRowOffset + x - bytesPerPixel)
+          ? (pixelBytes[previousRowOffset + x - bytesPerPixel] ?? 0)
           : 0;
       let value = source;
       if (filter === 1) {
@@ -116,11 +151,24 @@ function decodeRgbaPng(data: Buffer): {
       } else if (filter !== 0) {
         throw new Error(`Unsupported PNG filter ${filter}`);
       }
-      pixels.writeUInt8(value % 256, rowOffset + x);
+      pixelBytes[rowOffset + x] = value % 256;
     }
     rawOffset += rowLength;
   }
   return { width, height, pixels };
+}
+
+const DECODED_PIXEL_HASHES = new Map<string, string>();
+
+function decodedPixelHash(data: Buffer): string {
+  const encodedHash = sha256Bytes(data);
+  const cached = DECODED_PIXEL_HASHES.get(encodedHash);
+  if (cached) {
+    return cached;
+  }
+  const pixelHash = sha256Bytes(decodeRgbaPng(data).pixels);
+  DECODED_PIXEL_HASHES.set(encodedHash, pixelHash);
+  return pixelHash;
 }
 
 function cornerAlphas(width: number, height: number, pixels: Buffer): number[] {
@@ -204,11 +252,56 @@ describe("Pier application icon sources", () => {
   it("ships Micro ICNS frames through 128px and Standard frames above it", () => {
     const icns = readFileSync(join(ROOT, "build/icon.icns"));
     const actual = Object.fromEntries(
-      parseIcns(icns).map((entry) => [entry.type, sha256Bytes(entry.data)])
+      parseIcns(icns)
+        .filter((entry) => entry.type in EXPECTED_ICNS_FRAME_HASHES)
+        .map((entry) => [entry.type, sha256Bytes(entry.data)])
     );
 
     expect(actual).toEqual(EXPECTED_ICNS_FRAME_HASHES);
   });
+
+  it.runIf(process.platform === "darwin")(
+    "round-trips every official macOS frame through iconutil without pixel corruption",
+    { timeout: 15_000 },
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "pier-system-iconset-"));
+      const output = join(root, "Pier.iconset");
+      try {
+        execFileSync("iconutil", [
+          "--convert",
+          "iconset",
+          "--output",
+          output,
+          join(ROOT, "build/icon.icns"),
+        ]);
+        expect(readdirSync(output).sort()).toEqual(
+          [...SYSTEM_ICONSET_FILES].sort()
+        );
+
+        const sourceEntries = new Map(
+          parseIcns(readFileSync(join(ROOT, "build/icon.icns"))).map(
+            (entry) => [entry.type, entry.data]
+          )
+        );
+        for (const file of SYSTEM_ICONSET_FILES) {
+          const decoded = readFileSync(join(output, file));
+          const legacyHash = LEGACY_SYSTEM_FRAME_PIXEL_HASHES.get(file);
+          if (legacyHash) {
+            expect(decodedPixelHash(decoded)).toBe(legacyHash);
+            continue;
+          }
+          const sourceType = SYSTEM_FRAME_SOURCES.get(file);
+          const source = sourceType ? sourceEntries.get(sourceType) : undefined;
+          expect(source, `Missing ICNS source for ${file}`).toBeDefined();
+          expect(decodedPixelHash(decoded)).toBe(
+            decodedPixelHash(source as Buffer)
+          );
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  );
 
   it("uses the approved Micro rendition for the development Dock", () => {
     const dockIcon = readFileSync(join(ROOT, "build/icon.png"));
@@ -267,5 +360,8 @@ describe("Pier application icon sources", () => {
     expect(ci).toContain("'build/design-sources/pier-logo.svg'");
     expect(ci).toContain("'build/icon.*'");
     expect(ci).toContain("'build/icons/**'");
+    expect(ci).toContain("mac_icons:");
+    expect(ci).toContain("runs-on: macos-15");
+    expect(ci).toContain("tests/unit/scripts/app-icon-assets.test.ts");
   });
 });
