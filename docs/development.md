@@ -15,6 +15,7 @@
 | Xcode Command Line Tools | `xcode-select --install` |
 | Homebrew | https://brew.sh |
 | zig 0.15 | `brew install zig@0.15`（编译 libghostty） |
+| librsvg | `brew install librsvg`（`pnpm build:icons` 需要 `rsvg-convert`） |
 
 ## 首次启动
 
@@ -86,7 +87,9 @@ pnpm build:icons         # 从已确认的 SVG 母版重建 ICNS / ICO / Linux �
 - `build/app-icon-unplated.svg`：透明 F 稿，用于 Windows 与 Linux。
 
 `pnpm build:icons` 是唯一正式生成入口；不要直接手改生成后的 `build/icon.icns`、
-`build/icon.ico`、`build/icon.png` 或 `build/icons/*.png`。
+`build/icon.ico`、`build/icon.png` 或 `build/icons/*.png`。Linux 环境需先安装
+`librsvg2-bin`；脚本会在写入任何正式资产前检查 `rsvg-convert`，并先在暂存目录完成整套
+生成，全部成功后再统一替换。
 
 ## Quality Gate：正确性优先，CI 做确认与加速
 

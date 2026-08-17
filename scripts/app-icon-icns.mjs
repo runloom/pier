@@ -1,4 +1,5 @@
 import { Buffer } from "node:buffer";
+import { crc32, inflateSync } from "node:zlib";
 
 const ICNS_HEADER_SIZE = 8;
 const ICNS_ENTRY_HEADER_SIZE = 8;
@@ -14,8 +15,8 @@ export const ICNS_DIMENSIONS = Object.freeze({
   ic10: 1024,
   ic11: 32,
   ic12: 64,
-  ic13: 512,
-  ic14: 1024,
+  ic13: 256,
+  ic14: 512,
 });
 
 export const MICRO_ICNS_TYPES = Object.freeze([
@@ -35,16 +36,102 @@ export const STANDARD_ICNS_TYPES = Object.freeze([
   "ic14",
 ]);
 
+const STANDARD_ICNS_SOURCE_TYPES = Object.freeze({
+  ic08: "ic08",
+  ic09: "ic09",
+  ic10: "ic10",
+  ic13: "ic08",
+  ic14: "ic09",
+});
+
 function assertPng(type, data) {
-  if (data.length < 24 || !data.subarray(0, 8).equals(PNG_SIGNATURE)) {
+  if (data.length < 8 || !data.subarray(0, 8).equals(PNG_SIGNATURE)) {
     throw new Error(`ICNS entry ${type} does not contain a PNG`);
   }
-  if (data.toString("ascii", 12, 16) !== "IHDR") {
-    throw new Error(`ICNS entry ${type} has no PNG IHDR`);
+
+  let width;
+  let height;
+  let sawIhdr = false;
+  let sawIend = false;
+  const idatChunks = [];
+  let offset = PNG_SIGNATURE.length;
+
+  while (offset < data.length) {
+    if (data.length - offset < 12) {
+      throw new Error(`ICNS entry ${type} has a truncated PNG chunk header`);
+    }
+
+    const length = data.readUInt32BE(offset);
+    const chunkType = data.toString("ascii", offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + length;
+    const chunkEnd = dataEnd + 4;
+    if (chunkEnd > data.length) {
+      throw new Error(
+        `ICNS entry ${type} has a truncated PNG ${chunkType} chunk`
+      );
+    }
+
+    const expectedCrc = data.readUInt32BE(dataEnd);
+    const actualCrc = crc32(data.subarray(offset + 4, dataEnd));
+    if (actualCrc !== expectedCrc) {
+      throw new Error(`ICNS entry ${type} PNG ${chunkType} CRC is invalid`);
+    }
+
+    if (!sawIhdr && chunkType !== "IHDR") {
+      throw new Error(`ICNS entry ${type} PNG does not begin with IHDR`);
+    }
+
+    if (chunkType === "IHDR") {
+      if (sawIhdr || length !== 13) {
+        throw new Error(`ICNS entry ${type} has an invalid PNG IHDR`);
+      }
+      width = data.readUInt32BE(dataStart);
+      height = data.readUInt32BE(dataStart + 4);
+      const compression = data[dataStart + 10];
+      const filter = data[dataStart + 11];
+      const interlace = data[dataStart + 12];
+      if (
+        width === 0 ||
+        height === 0 ||
+        compression !== 0 ||
+        filter !== 0 ||
+        (interlace !== 0 && interlace !== 1)
+      ) {
+        throw new Error(`ICNS entry ${type} has unsupported PNG metadata`);
+      }
+      sawIhdr = true;
+    } else if (chunkType === "IDAT") {
+      if (!sawIhdr || sawIend) {
+        throw new Error(`ICNS entry ${type} has a misplaced PNG IDAT`);
+      }
+      idatChunks.push(data.subarray(dataStart, dataEnd));
+    } else if (chunkType === "IEND") {
+      if (length !== 0 || !sawIhdr || idatChunks.length === 0) {
+        throw new Error(`ICNS entry ${type} has an invalid PNG IEND`);
+      }
+      if (chunkEnd !== data.length) {
+        throw new Error(`ICNS entry ${type} has data after PNG IEND`);
+      }
+      sawIend = true;
+    }
+
+    offset = chunkEnd;
   }
 
-  const width = data.readUInt32BE(16);
-  const height = data.readUInt32BE(20);
+  if (!sawIhdr) {
+    throw new Error(`ICNS entry ${type} has no PNG IHDR`);
+  }
+  if (!sawIend) {
+    throw new Error(`ICNS entry ${type} has no PNG IEND`);
+  }
+  try {
+    inflateSync(Buffer.concat(idatChunks));
+  } catch (error) {
+    throw new Error(`ICNS entry ${type} has invalid PNG image data`, {
+      cause: error,
+    });
+  }
   if (width !== height) {
     throw new Error(`ICNS entry ${type} PNG is not square: ${width}x${height}`);
   }
@@ -142,21 +229,23 @@ export function mergeIcnsRenditions(standardBuffer, microBuffer) {
   const merged = [];
 
   for (const [type, expectedSize] of Object.entries(ICNS_DIMENSIONS)) {
-    if (!standard.has(type)) {
-      throw new Error(`Standard ICNS is missing ${type}`);
-    }
-    if (!micro.has(type)) {
-      throw new Error(`Micro ICNS is missing ${type}`);
+    const useMicro = microTypes.has(type);
+    const source = useMicro ? micro : standard;
+    const sourceType = useMicro ? type : STANDARD_ICNS_SOURCE_TYPES[type];
+    const entry = source.get(sourceType);
+    if (!entry) {
+      throw new Error(
+        `${useMicro ? "Micro" : "Standard"} ICNS is missing ${sourceType}`
+      );
     }
 
-    const entry = microTypes.has(type) ? micro.get(type) : standard.get(type);
     const actualSize = assertPng(type, entry.data);
     if (actualSize !== expectedSize) {
       throw new Error(
         `ICNS entry ${type} is ${actualSize}x${actualSize}; expected ${expectedSize}x${expectedSize}`
       );
     }
-    merged.push(entry);
+    merged.push({ type, data: entry.data });
   }
 
   return encodeIcns(merged);
