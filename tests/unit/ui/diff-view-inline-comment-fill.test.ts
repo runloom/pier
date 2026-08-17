@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 const CARD = "packages/ui/src/diff-view/review/inline-thread-card.tsx";
 const EDITOR = "packages/ui/src/diff-view/review/inline-comment-editor.tsx";
+const COMPOSER = "packages/ui/src/comments/composer.tsx";
 /** 任何会在卡片上铺出一层可见 surface 的 class。 */
 const FILL_CLASS_RE =
   /\bbg-(?:muted|card|popover|input|background|accent|secondary|surface|\[)/;
@@ -25,31 +26,33 @@ function readCode(relativePath: string): string {
 }
 
 /**
- * 行内评论卡「无填充」契约。
+ * 行内评论卡与批注行底色分工。
  *
- * 批注行底色由 diff 引擎画（pierre 把 `--diffs-annotation-bg` 设为
- * `--diffs-bg-context`，选中行还会再叠一层选中色），且卡片是
- * `<diffs-container>` 的 light DOM slot 子节点，拿不到 shadow 内的批注变量。
- * 卡片自带任何 surface（产品 `bg-muted/xx`、`InputGroup` 默认 `bg-input/50`、
- * 或从 diff 令牌派生的自定义 surface）都会盖掉行底色、与周围割裂。
- *
- * 结论：展示态与编辑态一律 `bg-transparent`，只靠 1px 边框划边界。这条既不会
- * 被类型也不会被 lint 拦住，故在此锁定。
+ * 批注行本身由 pierre 画底；曾把行刷成上下文灰，所以 CODE_VIEW_CUSTOM_CSS
+ * 仍把 `--diffs-annotation-bg` 压回普通行底。评论卡是叠在这行上的产品卡片
+ *（`bg-background` + 阴影），输入壳聚焦时走 `focus-within:ring-*`。
+ * 禁止再从 `--diffs-*` 派生一张自定义 surface。
  */
 describe("inline comment card fill", () => {
-  it("keeps display and edit states unfilled", () => {
-    for (const path of [CARD, EDITOR]) {
-      const source = readCode(path);
-      expect(source).toContain("bg-transparent");
-      expect(source).not.toMatch(FILL_CLASS_RE);
-    }
+  it("paints the display card as a shadowed product surface", () => {
+    const source = readCode(CARD);
+    expect(source).toContain("bg-background");
+    expect(source).toContain("shadow-sm");
+    expect(source).not.toMatch(
+      /\bbg-(?:muted|card|popover|input|accent|secondary|surface|\[)/
+    );
   });
 
-  it("neutralizes the InputGroup default surface", () => {
-    // InputGroup 根壳自带 bg-input/50，不显式覆写就会漏出来。
-    expect(readCode(EDITOR)).toMatch(
-      /<InputGroup className="[^"]*\bbg-transparent\b/
-    );
+  it("keeps the git editor adapter on the plain surface", () => {
+    expect(readCode(EDITOR)).toContain('surface="plain"');
+    expect(readCode(EDITOR)).not.toMatch(FILL_CLASS_RE);
+  });
+
+  it("gives the composer a focus ring on both surfaces", () => {
+    const source = readCode(COMPOSER);
+    expect(source).toContain("focus-within:ring-3");
+    expect(source).toContain("focus-within:ring-ring/30");
+    expect(source).toContain("bg-background");
   });
 
   it("does not reintroduce a diff-derived surface token", () => {

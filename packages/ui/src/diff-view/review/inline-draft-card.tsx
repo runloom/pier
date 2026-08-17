@@ -2,9 +2,9 @@
  * 行内评论草稿卡（diff 行内新建评论态）。
  *
  * 由 `renderAnnotation` 在 `review-draft` annotation 槽内渲染。用户点 gutter
- * `+` 入口后激活，直接呈现 {@link InlineReviewCommentEditor}：无标题栏、无
- * 头像、无取消按钮——提交成功转真实 thread（host 移除草稿槽 + 注入 thread
- * 槽）。失焦时空草稿自动收起、已写内容原样保留；`Escape` 一律取消。
+ * `+` 入口后激活，直接呈现 {@link InlineReviewCommentEditor}（新建默认单行，
+ * 换行后展开）：无标题栏、无头像。提交成功转真实 thread。失焦时空草稿自动
+ * 收起、已写内容原样保留；`Escape` 一律取消。
  *
  * **宽度约束（关键）**：`@pierre/diffs` scroll 模式给 annotation content 设
  * `width: --diffs-column-content-width` + `position: sticky`（= 可视代码列宽），
@@ -35,6 +35,7 @@ export function InlineReviewDraftCard({
     <div className="w-full px-2 py-1.5" data-slot="pier-review-draft">
       <InlineReviewCommentEditor
         labels={labels}
+        mode="compose"
         onCancel={() => handlers.onCancelDraft(draftId)}
         onSubmit={(body) => handlers.onSubmitDraft(draftId, body)}
       />

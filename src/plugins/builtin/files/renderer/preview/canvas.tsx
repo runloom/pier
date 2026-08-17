@@ -31,8 +31,14 @@ import {
   unmarkCanvasActive,
   useCanvasChrome,
 } from "./canvas-chrome-store.ts";
+import {
+  buildCanvasCommentClearTargets,
+  buildCanvasCommentNavTargets,
+  type CanvasCommentNavTarget,
+  revealCanvasCommentNavTarget,
+} from "./canvas-comment-nav.ts";
+import { primaryCanvasPinThread } from "./canvas-comment-order.ts";
 import { CanvasCommentOverlay } from "./canvas-comment-overlay.tsx";
-import type { CanvasCommentPinView } from "./canvas-comment-pins.tsx";
 import { createCanvasCommentLabels } from "./canvas-comments-button.tsx";
 import {
   clearCanvasCommentsSession,
@@ -54,79 +60,9 @@ import { useCanvasCommentPins } from "./use-canvas-comment-pins.ts";
 import { useCanvasExternalLinks } from "./use-canvas-external-links.ts";
 import {
   CANVAS_PICK_DRAFT_ID,
-  type CanvasCommentThreadView,
   useCanvasHostAnchorIds,
   useCanvasPreviewComments,
 } from "./use-canvas-preview-comments.ts";
-
-interface CanvasCommentNavTarget {
-  readonly commentId: string;
-  /** Non-null only for in-preview pin-backed targets (floating n/N reveal). */
-  readonly pinKey: string | null;
-  readonly threadId: string;
-}
-
-/** Floating nav cycle: only threads that have a live pin (reveal can open). */
-function buildCanvasCommentNavTargets(
-  pins: readonly CanvasCommentPinView[]
-): CanvasCommentNavTarget[] {
-  const targets: CanvasCommentNavTarget[] = [];
-  const seen = new Set<string>();
-  for (const pin of pins) {
-    for (const thread of pin.threads) {
-      if (seen.has(thread.threadId)) {
-        continue;
-      }
-      seen.add(thread.threadId);
-      targets.push({
-        commentId: thread.comment.id,
-        pinKey: pin.key,
-        threadId: thread.threadId,
-      });
-    }
-  }
-  return targets;
-}
-
-/**
- * Clear-all set: every live comment on this canvas path (pins + file + drift +
- * unlocated picks). Must match status-bar processable coverage for the file.
- */
-function buildCanvasCommentClearTargets(input: {
-  readonly driftNodeThreads: readonly CanvasCommentThreadView[];
-  readonly fileThreads: readonly CanvasCommentThreadView[];
-  readonly locateDriftThreads: readonly CanvasCommentThreadView[];
-  readonly pickedNodeThreads: readonly CanvasCommentThreadView[];
-  readonly pins: readonly CanvasCommentPinView[];
-}): CanvasCommentNavTarget[] {
-  const targets: CanvasCommentNavTarget[] = [];
-  const seen = new Set<string>();
-  const push = (thread: CanvasCommentThreadView, pinKey: string | null) => {
-    if (seen.has(thread.threadId)) {
-      return;
-    }
-    seen.add(thread.threadId);
-    targets.push({
-      commentId: thread.comment.id,
-      pinKey,
-      threadId: thread.threadId,
-    });
-  };
-  for (const pin of input.pins) {
-    for (const thread of pin.threads) {
-      push(thread, pin.key);
-    }
-  }
-  for (const thread of [
-    ...input.fileThreads,
-    ...input.driftNodeThreads,
-    ...input.pickedNodeThreads,
-    ...input.locateDriftThreads,
-  ]) {
-    push(thread, null);
-  }
-  return targets;
-}
 
 /**
  * Live Modules preview inside the files panel (same shell as Markdown preview).
@@ -262,8 +198,8 @@ export function FileCanvasPreview(props: {
     };
   }, [comments, props.path]);
 
-  // Pins only in-preview; unlocated still clearable / status-bar processable.
-  const { driftThreads: locateDriftThreads, pins } = useCanvasCommentPins({
+  // Visible pins paint; hidden tab pins keep stable n/N + reveal-via-tab-click.
+  const { hiddenPins, pins } = useCanvasCommentPins({
     host: hostEl,
     locatedByAnchorId: comments.locatedByAnchorId,
     pickedNodeThreads: comments.pickedNodeThreads,
@@ -272,52 +208,52 @@ export function FileCanvasPreview(props: {
   });
 
   const [navOpenPinKey, setNavOpenPinKey] = useState<string | null>(null);
-  // Floating n/N is pin-centric (every step has a reveal). Clear covers full path.
-  const navTargets = useMemo(() => buildCanvasCommentNavTargets(pins), [pins]);
-  const clearTargets = useMemo(
+  const [focusedThreadId, setFocusedThreadId] = useState<string | null>(null);
+  const cancelNavScrollRef = useRef<(() => void) | undefined>(undefined);
+  const navTargets = useMemo(
     () =>
-      buildCanvasCommentClearTargets({
-        driftNodeThreads: comments.driftNodeThreads,
-        fileThreads: comments.fileThreads,
-        locateDriftThreads,
-        pickedNodeThreads: comments.pickedNodeThreads,
+      buildCanvasCommentNavTargets({
+        hiddenPins,
         pins,
       }),
-    [
-      comments.driftNodeThreads,
-      comments.fileThreads,
-      comments.pickedNodeThreads,
-      locateDriftThreads,
-      pins,
-    ]
+    [hiddenPins, pins]
   );
+  const clearTargets = useMemo(
+    () => buildCanvasCommentClearTargets(comments.liveThreads),
+    [comments.liveThreads]
+  );
+  const firstVisibleThreadId = useMemo(() => {
+    let first = pins[0];
+    for (const pin of pins) {
+      if (first === undefined || pin.index < first.index) {
+        first = pin;
+      }
+    }
+    return primaryCanvasPinThread(first?.threads ?? [])?.threadId ?? null;
+  }, [pins]);
   const navLabels = useCommentNavigatorLabels(props.t);
   const onRevealNavTarget = useCallback(
     (target: CanvasCommentNavTarget) => {
-      if (target.pinKey === null) {
-        return;
-      }
-      const pin = pins.find((entry) => entry.key === target.pinKey);
-      if (!pin) {
-        return;
-      }
-      const shell = canvasShellEl ?? shellRef.current;
-      const pinEl =
-        shell?.querySelector(`[data-canvas-comment-pin="${pin.index}"]`) ??
-        null;
-      if (pinEl instanceof HTMLElement) {
-        pinEl.scrollIntoView({ block: "center", behavior: "smooth" });
-      }
       comments.setPickMode(false);
-      setNavOpenPinKey(target.pinKey);
+      setFocusedThreadId(target.threadId);
+      cancelNavScrollRef.current?.();
+      cancelNavScrollRef.current = revealCanvasCommentNavTarget({
+        hiddenPins,
+        host: hostEl,
+        onOpenPin: setNavOpenPinKey,
+        pins,
+        shell: canvasShellEl ?? shellRef.current,
+        target,
+      });
     },
-    [canvasShellEl, comments, pins]
+    [canvasShellEl, comments, hiddenPins, hostEl, pins]
   );
   const commentNavigator = useCommentNavigatorController({
     clearTargets,
     context: props.context,
     labels: navLabels,
     onReveal: onRevealNavTarget,
+    selectedThreadId: focusedThreadId ?? firstVisibleThreadId,
     targets: navTargets,
     worktreeKey,
   });
@@ -436,6 +372,12 @@ export function FileCanvasPreview(props: {
                 comments.setPickMode(false);
               }}
               onPickElement={comments.openPickDraft}
+              onPinOpen={(pin) => {
+                const thread = primaryCanvasPinThread(pin.threads);
+                if (thread) {
+                  setFocusedThreadId(thread.threadId);
+                }
+              }}
               onRequestOpenConsumed={() => {
                 setNavOpenPinKey(null);
               }}

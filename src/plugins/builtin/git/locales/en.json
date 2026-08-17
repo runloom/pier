@@ -355,6 +355,8 @@
     "ui.reviewDriftSectionHeading": "Code changed",
     "ui.reviewCommentTitle": "Comment",
     "ui.reviewCommentSubmit": "Submit",
+    "ui.reviewCommentCancel": "Cancel",
+    "ui.reviewCommentSave": "Save",
     "ui.reviewCommentEdit": "Edit",
     "ui.reviewCommentDelete": "Delete",
     "ui.reviewCommentAuthorYou": "You",

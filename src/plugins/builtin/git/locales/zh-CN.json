@@ -421,6 +421,8 @@
     "ui.reviewDriftSectionHeading": "代码已修改",
     "ui.reviewCommentTitle": "评论",
     "ui.reviewCommentSubmit": "提交",
+    "ui.reviewCommentCancel": "取消",
+    "ui.reviewCommentSave": "保存",
     "ui.reviewCommentEdit": "编辑",
     "ui.reviewCommentDelete": "删除",
     "ui.reviewCommentAuthorYou": "我",

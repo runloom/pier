@@ -5,24 +5,26 @@ import type {
   PierInlineReviewThread,
 } from "@pier/ui/diff-view/review/inline-comment-types.ts";
 import { renderReviewAnnotation } from "@pier/ui/diff-view/review/render-review-annotation.ts";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 const LABELS: PierInlineReviewLabels = {
   authorYou: "You",
+  cancel: "Cancel",
   close: "Close",
   deleteComment: "Delete",
   deleted: "Deleted",
   editComment: "Edit",
   inputPlaceholder: "Write a comment…",
+  save: "Save",
   submit: "Submit",
   title: "Comment",
 };
 
 const HANDLERS: PierInlineReviewHandlers = {
   onCancelDraft: vi.fn(),
-  onDeleteComment: vi.fn().mockResolvedValue(undefined),
+  onDeleteComment: vi.fn().mockResolvedValue(true),
   onEditComment: vi.fn().mockResolvedValue(true),
   onSubmitDraft: vi.fn().mockResolvedValue(true),
 };
@@ -45,7 +47,7 @@ function renderNode(node: ReactNode): void {
 }
 
 describe("renderReviewAnnotation", () => {
-  it("review-thread → 渲染单条评论卡（正文 + 编辑 + 删除）", () => {
+  it("review-thread → 渲染带阴影的展示卡（点击进入编辑）", () => {
     const node = renderReviewAnnotation(
       {
         kind: "review-thread",
@@ -62,11 +64,39 @@ describe("renderReviewAnnotation", () => {
     );
     renderNode(node);
     expect(screen.getByText("hello")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+    const card = screen.getByRole("button", { name: "hello" });
+    expect(card).toHaveClass("shadow-sm");
+    expect(
+      document.querySelector("[data-slot='comment-count-badge']")
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Close" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Reply" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Resolve" })).toBeNull();
+  });
+
+  it("review-thread → 点击展示卡进入编辑", () => {
+    const node = renderReviewAnnotation(
+      {
+        kind: "review-thread",
+        lineNumber: 5,
+        side: "additions",
+        threadId: "t1",
+      },
+      {
+        handlers: HANDLERS,
+        labels: LABELS,
+        locale: "en",
+        threadById: new Map([["t1", THREAD]]),
+      }
+    );
+    renderNode(node);
+    fireEvent.click(screen.getByRole("button", { name: "hello" }));
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(
+      document.querySelector("[data-slot='comment-composer']")
+    ).toHaveClass("focus-within:ring-3");
   });
 
   it("review-draft → 渲染草稿卡（提交按钮）", () => {

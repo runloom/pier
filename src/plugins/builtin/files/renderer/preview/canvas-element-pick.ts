@@ -77,6 +77,19 @@ export function pinPointFromBox(box: {
   };
 }
 
+/** Pointer → overlay coordinates (same space as {@link measureCanvasPickBox}). */
+export function clientPointInShell(
+  shell: HTMLElement,
+  clientX: number,
+  clientY: number
+): { readonly x: number; readonly y: number } {
+  const rect = shell.getBoundingClientRect();
+  return {
+    x: clientX - rect.left + shell.scrollLeft,
+    y: clientY - rect.top + shell.scrollTop,
+  };
+}
+
 export function scrollCanvasPickIntoView(
   host: HTMLElement,
   pick: CanvasElementPick

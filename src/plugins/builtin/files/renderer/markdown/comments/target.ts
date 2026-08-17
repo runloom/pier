@@ -52,6 +52,35 @@ export function blockCommentKey(block: MarkdownBlock): string {
   return `${block.kind}:${block.range.startOffset}:${block.range.endOffset}`;
 }
 
+/**
+ * 1-based pin numbers in document order (Codex-style). One number per
+ * located block, not per-block thread count — otherwise every lone comment
+ * paints as "1".
+ */
+export function markdownCommentMarkerIndexes(
+  blocks: readonly MarkdownBlock[],
+  locatedByBlockKey: ReadonlyMap<
+    string,
+    { readonly threads: { readonly length: number } }
+  >
+): ReadonlyMap<string, number> {
+  const indexes = new Map<string, number>();
+  let next = 0;
+  for (const block of blocks) {
+    const key = blockCommentKey(block);
+    if (indexes.has(key)) {
+      continue;
+    }
+    const located = locatedByBlockKey.get(key);
+    if (located === undefined || located.threads.length === 0) {
+      continue;
+    }
+    next += 1;
+    indexes.set(key, next);
+  }
+  return indexes;
+}
+
 /** Content hash for a block, or null when the block is not commentable. */
 export function contentHashForBlock(block: MarkdownBlock): string | null {
   const plain = markdownBlockPlainText(block);

@@ -23,6 +23,7 @@ import { buildCanvasCommentSurface } from "@shared/comments/canvas-surface.ts";
 import type { CommentThread } from "@shared/contracts/comments/base.ts";
 import type { CommentProjectSnapshot } from "@shared/contracts/comments/document.ts";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { sortLiveCanvasCommentThreads } from "./canvas-comment-order.ts";
 import type { CanvasElementPick } from "./canvas-element-pick.ts";
 import { pinPointFromBox } from "./canvas-element-pick.ts";
 import {
@@ -56,6 +57,9 @@ export type CanvasCommentThreadView = PierInlineReviewThread & {
 export interface CanvasDraftPlacement {
   readonly height: number;
   readonly left: number;
+  /** Pointer in shell coords — composer sits beside this, not the box center. */
+  readonly originX: number;
+  readonly originY: number;
   readonly top: number;
   readonly width: number;
 }
@@ -102,6 +106,8 @@ export function useCanvasPreviewComments(input: {
   readonly fileThreads: readonly CanvasCommentThreadView[];
   readonly handlers: PierInlineReviewHandlers;
   readonly locatedByAnchorId: ReadonlyMap<string, CanvasCommentThreadView[]>;
+  /** All live comments on this canvas path, oldest first. Clear-all uses this set. */
+  readonly liveThreads: readonly CanvasCommentThreadView[];
   readonly openPickDraft: (
     pick: CanvasElementPick,
     placement?: CanvasDraftPlacement
@@ -193,19 +199,21 @@ export function useCanvasPreviewComments(input: {
 
   const {
     fileThreads,
+    liveThreads,
     locatedByAnchorId,
     driftNodeThreads,
     pickedNodeThreads,
   } = useMemo(() => {
     const file: CanvasCommentThreadView[] = [];
+    const live: CanvasCommentThreadView[] = [];
     const byAnchor = new Map<string, CanvasCommentThreadView[]>();
-    const drift: CanvasCommentThreadView[] = [];
     const picked: CanvasCommentThreadView[] = [];
     if (!(snapshot && surfacePath.length > 0)) {
       return {
         fileThreads: file,
+        liveThreads: live,
         locatedByAnchorId: byAnchor,
-        driftNodeThreads: drift,
+        driftNodeThreads: [],
         pickedNodeThreads: picked,
       };
     }
@@ -228,6 +236,7 @@ export function useCanvasPreviewComments(input: {
           ? {}
           : { label: thread.target.label }),
       };
+      live.push(view);
       if (anchorId === undefined) {
         // Design Mode pick without declared id → node list by label; else file.
         if (thread.target.label === undefined) {
@@ -237,22 +246,18 @@ export function useCanvasPreviewComments(input: {
         }
         continue;
       }
-      // Only pin in-place when the declared id is still in the live DOM.
-      if (anchorIds.has(anchorId)) {
-        const list = byAnchor.get(anchorId) ?? [];
-        list.push(view);
-        byAnchor.set(anchorId, list);
-      } else {
-        drift.push(view);
-      }
+      const list = byAnchor.get(anchorId) ?? [];
+      list.push(view);
+      byAnchor.set(anchorId, list);
     }
     return {
       fileThreads: file,
+      liveThreads: sortLiveCanvasCommentThreads(live),
       locatedByAnchorId: byAnchor,
-      driftNodeThreads: drift,
+      driftNodeThreads: [],
       pickedNodeThreads: picked,
     };
-  }, [anchorIds, labels.authorYou, snapshot, surfacePath]);
+  }, [labels.authorYou, snapshot, surfacePath]);
 
   const reportFailure = useCallback(
     (title: string, result: { message?: string | null }) => {
@@ -303,7 +308,7 @@ export function useCanvasPreviewComments(input: {
       },
       onDeleteComment: async (threadId, commentId) => {
         if (!(context && worktreeKey)) {
-          return;
+          return false;
         }
         const result = await context.comments.deleteComment({
           commentId,
@@ -312,7 +317,9 @@ export function useCanvasPreviewComments(input: {
         });
         if (result.kind === "error") {
           reportFailure(labels.deleteFailed, result);
+          return false;
         }
+        return true;
       },
       onEditComment: async (threadId, commentId, body) => {
         if (!(context && worktreeKey) || body.trim().length === 0) {
@@ -421,6 +428,7 @@ export function useCanvasPreviewComments(input: {
     fileThreads,
     handlers,
     locatedByAnchorId,
+    liveThreads,
     openPickDraft,
     pickMode,
     pickedNodeThreads,

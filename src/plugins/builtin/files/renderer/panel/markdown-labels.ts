@@ -177,11 +177,13 @@ export function createMarkdownCommentLabels(
       "filePanel.markdown.comment.driftTitle",
       "Comments that can no longer be located precisely"
     ),
+    cancel: t("filePanel.markdown.comment.cancel", "Cancel"),
     editComment: t("filePanel.markdown.comment.edit", "Edit"),
     inputPlaceholder: t(
       "filePanel.markdown.comment.placeholder",
-      "Write a comment…"
+      "Add comment..."
     ),
+    save: t("filePanel.markdown.comment.save", "Save"),
     submit: t("filePanel.markdown.comment.submit", "Submit"),
     title: t("filePanel.markdown.comment.title", "Comment"),
     updateFailed: t(
