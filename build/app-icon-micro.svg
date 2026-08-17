@@ -1,0 +1,11 @@
+<!-- Pier app icon · 03 Minimal · micro optical size (16–32px) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Pier app icon — micro terminal berth">
+  <svg x="100" y="100" width="824" height="824" viewBox="0 0 412 412">
+    <rect x="1" y="1" width="410" height="410" rx="91" fill="#0b0d13"/>
+    <path d="M94 176H136V251C136 286 155 309 187 309H225C257 309 276 286 276 251V176H318V258C318 314 281 350 244 350H168C131 350 94 314 94 258Z" fill="#8f73ff"/>
+    <rect x="119" y="100" width="174" height="156" rx="29" fill="#9a7cff"/>
+    <rect x="136" y="117" width="140" height="123" rx="19" fill="#0b0d13"/>
+    <path d="M168 151L200 181L168 211" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M210 202H244" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round"/>
+  </svg>
+</svg>
