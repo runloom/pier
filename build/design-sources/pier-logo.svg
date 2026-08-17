@@ -1,38 +1,4 @@
-<!-- Pier macOS application icon source.
-     Apple layout: 1024×1024 square canvas; visible 824×824 plate inset by 100px.
-     The approved transparent mark is preserved in build/design-sources/pier-logo.svg. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Pier application icon — macOS">
-  <defs>
-    <linearGradient id="app-plate-fill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#171d2a"/>
-      <stop offset="0.58" stop-color="#090e16"/>
-      <stop offset="1" stop-color="#060910"/>
-    </linearGradient>
-    <radialGradient id="app-plate-glow" cx="0.2" cy="0.08" r="0.9">
-      <stop offset="0" stop-color="#493074" stop-opacity="0.24"/>
-      <stop offset="0.48" stop-color="#1a1630" stop-opacity="0.08"/>
-      <stop offset="1" stop-color="#080b12" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="app-plate-rim" x1="0.12" y1="0" x2="0.86" y2="1">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.34"/>
-      <stop offset="0.38" stop-color="#d9d9e6" stop-opacity="0.13"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.04"/>
-    </linearGradient>
-    <linearGradient id="app-plate-depth" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0.72" stop-color="#000000" stop-opacity="0"/>
-      <stop offset="1" stop-color="#000000" stop-opacity="0.24"/>
-    </linearGradient>
-    <clipPath id="app-plate-clip">
-      <rect x="100" y="100" width="824" height="824" rx="185"/>
-    </clipPath>
-  </defs>
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#app-plate-fill)"/>
-  <g clip-path="url(#app-plate-clip)">
-    <rect x="100" y="100" width="824" height="824" fill="url(#app-plate-glow)"/>
-    <rect x="100" y="100" width="824" height="824" fill="url(#app-plate-depth)"/>
-  </g>
-  <rect x="103" y="103" width="818" height="818" rx="182" fill="none" stroke="url(#app-plate-rim)" stroke-width="6"/>
-  <g id="pier-logo-mark" transform="translate(84.4 199.2) scale(4.092)">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 170" width="210" height="170" role="img" aria-label="Pier docked terminal mark">
   <defs>
     <linearGradient id="berth-fill" x1="0.16" y1="0.02" x2="0.82" y2="1">
       <stop offset="0" stop-color="#b66cff"/>
@@ -155,6 +121,5 @@
       <path id="chevron" d="M73.8 47.6L88.4 59L73.8 70.4" stroke-width="4.95"/>
       <path id="underscore" d="M94.8 74.4H110.2" stroke-width="5.5"/>
     </g>
-  </g>
   </g>
 </svg>
