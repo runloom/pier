@@ -138,7 +138,7 @@ describe("智能体状态官方轨迹跨层验收", () => {
     expect(actualAgents.size).toBe(27);
     // waiting 维度：claude / grok / openclaude 的 plan 与 pi 的 ask 均走原生阻塞交互
     // host-Esc 抬升的 ready/interrupted 不计入 matrixCoverage（见 expectedActiveCoverage）
-    expect(actualCoverage.size).toBe(153);
+    expect(actualCoverage.size).toBe(158);
     // Fixture covers must not invent dimensions outside the matrix claim.
     for (const key of actualCoverage) {
       expect(
@@ -147,23 +147,17 @@ describe("智能体状态官方轨迹跨层验收", () => {
       ).toBe(true);
     }
     // Matrix may still list provider-native dimensions without a status-trace
-    // fixture yet (e.g. claude completed / copilot ready / cursor waiting).
-    // Those are tracked by unit/integration agent tests; do not fail the
-    // whole publish gate on incomplete fixture expansion. Cap the gap so it
-    // cannot grow unbounded.
+    // fixture yet (e.g. claude completed). Those are tracked by
+    // unit/integration agent tests; do not fail the whole publish gate on
+    // incomplete fixture expansion. Cap the gap so it cannot grow unbounded.
     const missingInFixtures = [...matrixCoverage].filter(
       (key) => !actualCoverage.has(key)
     );
-    expect(missingInFixtures.length).toBeLessThanOrEqual(11);
+    expect(missingInFixtures.length).toBeLessThanOrEqual(10);
     expect(missingInFixtures.sort()).toEqual(
       [
         "claude:completed",
-        "codebuddy:interrupted",
-        "codebuddy:ready",
-        "copilot:completed",
         "copilot:interrupted",
-        "copilot:ready",
-        "cursor:waiting",
         "kimi:completed",
         "kimi:ready",
         "qodercli:interrupted",

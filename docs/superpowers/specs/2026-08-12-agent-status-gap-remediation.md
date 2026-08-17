@@ -37,8 +37,8 @@
 | codex | `~/.codex/sessions/**` | `turn_aborted` + host Esc | `task_complete` | 既有 |
 | grok | `~/.grok/sessions/**/updates.jsonl` | `cancelled` + host Esc | `end_turn` | 既有 |
 | **qodercli** | `~/.qoder/projects/**/*.jsonl` | Claude 同款 + host Esc | — | Esc 常不发 Stop |
-| **codebuddy** | `~/.codebuddy/projects/**/*.jsonl` | 同左 + host Esc | — | 同左 |
-| **copilot** | `~/.copilot/session-state/<id>/events.jsonl` | abort 白名单 + host Esc | `assistant.turn_end` | reason 精确匹配 |
+| **codebuddy** | `~/.codebuddy/projects/**/*.jsonl` | 同左 + host Esc | assistant `status=completed` 且无未决工具 | 不用 Claude `end_turn`；`tool_use` 不算完成 |
+| **copilot** | `~/.copilot/session-state/<id>/events.jsonl` | abort 白名单 + host Esc | hook `agentStop`（非 `stop_hook_active`）→`TurnCompleted`；可选 `session.task_complete` | `stop_hook_active=true` 只报 advisory `Stop`；`assistant.turn_end` 不当完成 |
 | **kimi** | `~/.kimi/sessions/*/*/wire.jsonl` | host Esc | `TurnEnd` | wire 无法区分取消 |
 
 共享：`transcript/claude-style-interrupt.ts`、`projects-jsonl-path.ts`、`terminal-escape-cancel.ts`。
@@ -66,7 +66,7 @@ not-integrated / cleanup-only / retired：不装空 hook。
 - 手测：发送 → Esc → 底栏离开「思考中」（主路径 host 裸 Esc；需新 native）
 - 纪律：
   - abort ≠ error
-  - Claude 允许 transcript `assistant.stop_reason` 终态 → `TurnCompleted`；Qoder/Codebuddy **仅** interrupt，不用 `end_turn` 伪造 completed
+  - Claude 允许 transcript `assistant.stop_reason` 终态 → `TurnCompleted`；Qoder **仅** interrupt，不用 `end_turn` 伪造 completed；Codebuddy 用本机语料 `status=completed`，仍不用 Claude `end_turn`
   - 取消主路径：`pier.terminal.user_escape`；allowlist Escape 不观察
 
 ## 相关代码

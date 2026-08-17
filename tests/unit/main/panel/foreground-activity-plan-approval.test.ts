@@ -6,6 +6,7 @@ import type { AgentActivity } from "@shared/contracts/foreground-activity.ts";
 import { describe, expect, it } from "vitest";
 import {
   CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS,
+  CURSOR_INTERACTIVE_BLOCKING_TOOLS,
   GROK_INTERACTIVE_BLOCKING_TOOLS,
 } from "../../../../src/main/services/agents/integrations/interactive-blocking-tools.ts";
 import { createForegroundActivityAggregator as createRawForegroundActivityAggregator } from "../../../../src/main/services/foreground-activity/aggregator.ts";
@@ -211,10 +212,11 @@ describe("plan 审批交互的隐式结算", () => {
     aggregator.dispose();
   });
 
-  it("plan 审批名单覆盖 Claude / Grok 的 permission 工具名", () => {
+  it("plan 审批名单覆盖 Claude / Grok / Cursor 的 permission 工具名", () => {
     const catalogNames = [
       ...CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS,
       ...GROK_INTERACTIVE_BLOCKING_TOOLS,
+      ...CURSOR_INTERACTIVE_BLOCKING_TOOLS,
     ].flatMap((entry) =>
       entry.interactionKind === "permission" ? [...entry.toolNames] : []
     );
@@ -245,6 +247,8 @@ describe("问卷不得仅凭 ToolStart 升 waiting", () => {
   it.each([
     "exit_plan_mode",
     "ExitPlanMode",
+    "CreatePlan",
+    "SwitchMode",
   ])("ToolStart(%s) 仍进入 waiting（plan 丢失 Post 的回退）", (toolName) => {
     const aggregator = createRawForegroundActivityAggregator();
     ingest(aggregator, toolStart("plan-1", toolName));
@@ -327,6 +331,7 @@ describe("问卷不得仅凭 ToolStart 升 waiting", () => {
     const questionNames = [
       ...CLAUDE_FAMILY_INTERACTIVE_BLOCKING_TOOLS,
       ...GROK_INTERACTIVE_BLOCKING_TOOLS,
+      ...CURSOR_INTERACTIVE_BLOCKING_TOOLS,
     ].flatMap((entry) =>
       entry.interactionKind === "question" ? [...entry.toolNames] : []
     );

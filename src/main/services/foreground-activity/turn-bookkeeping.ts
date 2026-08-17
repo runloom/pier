@@ -168,6 +168,17 @@ function isStrongerTerminalCorrection(
   );
 }
 
+/** 无 PromptSubmit 的新回合（方案 Build 后直接 ToolStart / stop）可认领未结算 turnId。 */
+function canAdoptUnsettledTurn(semantics: AgentTurnEventSemantics): boolean {
+  if (semantics.category === "terminal-trusted") {
+    return true;
+  }
+  return (
+    semantics.category === "work" &&
+    (semantics.mappedStatus === "tool" || semantics.mappedStatus === "waiting")
+  );
+}
+
 function turnStartDecision(
   scope: HookScope,
   semantics: AgentTurnEventSemantics,
@@ -226,13 +237,19 @@ export function applyTurnBookkeeping(
       return { accepted: true, transition: "reset" };
     }
   }
+  let adoptedUnsettledTurn = false;
   if (
     eventTurnId &&
     scope.currentTurnId &&
     eventTurnId !== scope.currentTurnId &&
     semantics.category !== "turn-start"
   ) {
-    return reject("foreign-turn");
+    if (canAdoptUnsettledTurn(semantics)) {
+      resetTurn(scope, eventTurnId, at);
+      adoptedUnsettledTurn = true;
+    } else {
+      return reject("foreign-turn");
+    }
   }
   if (scope.turnEnded && !isTerminalCorrection) {
     if (eventName !== "InteractionRequested") {
@@ -378,7 +395,9 @@ export function applyTurnBookkeeping(
   }
   scope.subagentCount =
     scope.activeSubagentIds.size + scope.anonymousSubagentCount;
-  return ACCEPTED_NONE;
+  return adoptedUnsettledTurn
+    ? { accepted: true, transition: "reset" }
+    : ACCEPTED_NONE;
 }
 
 function clearActiveWork(scope: HookScope): TerminalRetiredWork | undefined {

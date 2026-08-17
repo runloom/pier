@@ -268,6 +268,17 @@ scope 协调、子智能体关联退休和日志只消费 `transition`，不再�
 - advisory 完成候选之后可证明仍在活动，因此取消候选。
 - 可信终态之后拒绝，不能重新打开回合。
 
+### 未结算新 turnId 的工作认领
+
+方案 Build、自动续跑等路径常常 **没有** `PromptSubmit`，下一回合的第一份证据是新 `turnId` 的 `ToolStart` 或可信终态。归约器在身份未结算时认领该 `turnId` 并开新回合：
+
+- `ToolStart` / `InteractionRequested`（`mappedStatus` 为 `tool` 或 `waiting`）带未结算新 `turnId`：重置当前回合后按工作事件入账。
+- 可信终态（`TurnCompleted` / `TurnInterrupted` / `error`）带未结算新 `turnId`：重置后立即封账到 `ready` / `error`。
+- `ToolComplete` / `InteractionResolved` / 子智能体收尾带不同 `turnId`：仍拒绝为 `foreign-turn`，不能靠迟到收尾伪造新回合。
+- 已结算 `turnId`、无身份的迟到工作、同身份封账后工作：既有 `settled-turn` / `sealed-turn` 不变。
+
+提供方名称不得进入分类器或归约器；Cursor 方案执行、Claude / Grok 的 ExitPlan 续跑都走同一条规则。
+
 ## 控制流
 
 ```text

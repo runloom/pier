@@ -1,4 +1,5 @@
 export { AMP_PLUGIN_STATUS_TRACE } from "./amp-plugin-trace.ts";
+export { CODEBUDDY_RECONCILER_STATUS_TRACE } from "./codebuddy-reconciler-trace.ts";
 export { EXTENSION_PLUGIN_STATUS_TRACES } from "./extension-plugin-traces.ts";
 export { INACTIVE_AGENT_STATUS_TRACES } from "./inactive-traces.ts";
 export { NESTED_HOOK_STATUS_TRACES } from "./nested-hook-traces.ts";
@@ -9,6 +10,7 @@ export type {
 } from "./status-trace-types.ts";
 
 import { AMP_PLUGIN_STATUS_TRACE } from "./amp-plugin-trace.ts";
+import { CODEBUDDY_RECONCILER_STATUS_TRACE } from "./codebuddy-reconciler-trace.ts";
 import { EXTENSION_PLUGIN_STATUS_TRACES } from "./extension-plugin-traces.ts";
 import { FLAT_COMMAND_STATUS_TRACES } from "./flat-command-traces.ts";
 import { HOSTED_PLUGIN_STATUS_TRACES } from "./hosted-plugin-traces.ts";
@@ -28,6 +30,7 @@ export const ACTIVE_AGENT_STATUS_TRACES: readonly AgentStatusTraceFixture[] = [
   ...HOSTED_PLUGIN_STATUS_TRACES,
   ...REMAINING_HOSTED_PLUGIN_STATUS_TRACES,
   ...RECONCILER_STATUS_TRACES,
+  CODEBUDDY_RECONCILER_STATUS_TRACE,
   ...SPECIAL_COMMAND_STATUS_TRACES,
   ...BRANCHING_COMMAND_STATUS_TRACES,
   AMP_PLUGIN_STATUS_TRACE,
