@@ -1,6 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
@@ -204,6 +210,30 @@ function parseIco(data: Buffer): Array<{ size: number; png: Buffer }> {
 }
 
 describe("Pier application icon sources", () => {
+  it("keeps the design archive on the approved F and I system only", () => {
+    const archive = read("build/design-sources/index.html");
+
+    for (const obsolete of [
+      "build/design-sources/pier-pier.svg",
+      "build/design-sources/pier-panels.svg",
+      "build/design-sources/pier-berth.svg",
+      "build/design-sources/pier-berth-macos.svg",
+    ]) {
+      expect(existsSync(join(ROOT, obsolete))).toBe(false);
+    }
+
+    expect(archive).toContain("../app-icon-master.svg");
+    expect(archive).toContain("../app-icon-micro.svg");
+    expect(archive).toContain("./pier-logo.svg");
+    expect(archive).toContain("#b66cff");
+    expect(archive).toContain("#8549ff");
+    expect(archive).toContain("#542ee5");
+    expect(archive).not.toMatch(/三个停靠的方向|Direction [ABC]|ico-[abc]/i);
+    expect(archive).not.toMatch(
+      /pier-pier\.svg|pier-panels\.svg|pier-berth(?:-macos)?\.svg/
+    );
+  });
+
   it("locks the approved F and I renditions byte-for-byte", () => {
     expect(sha256(read("build/app-icon-master.svg"))).toBe(
       "ed1f59e2d4f95f62ed4a3336999f83e72003f31449a842b70f2d21b6e7ce8f2d"
