@@ -44,18 +44,46 @@ public final class TerminalSurface {
 
     @discardableResult
     public func sendText(_ text: String) -> Bool {
+        sendText(Data(text.utf8))
+    }
+
+    /// Inject UTF-8 bytes from the host (N-API) without a Swift String round-trip.
+    /// Length is the byte count of `data`, matching `ghostty_surface_text`.
+    /// Returns false when the surface is missing or the buffer cannot be read.
+    @discardableResult
+    public func sendText(_ data: Data) -> Bool {
         guard let s = surface else {
             TerminalDebugLog.log(.input, "surface text ignored: missing surface")
             return false
         }
+        if data.isEmpty {
+            return true
+        }
         TerminalDebugLog.log(
             .input,
-            "surface text=\(TerminalDebugLog.describe(text))"
+            "surface text=\(TerminalDebugLog.describe(data))"
         )
-        text.withCString { cStr in
-            ghostty_surface_text(s, cStr, UInt(text.utf8.count))
+        return feedUtf8(data) { base, count in
+            ghostty_surface_text(s, base, count)
+            return true
         }
-        return true
+    }
+
+    /// Copy `data` to a C pointer + byte count. False if the buffer has no base.
+    private func feedUtf8(
+        _ data: Data,
+        _ body: (UnsafePointer<CChar>, UInt) -> Bool
+    ) -> Bool {
+        var invoked = false
+        var result = false
+        data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress?.assumingMemoryBound(to: CChar.self) else {
+                return
+            }
+            result = body(base, UInt(data.count))
+            invoked = true
+        }
+        return invoked && result
     }
 
     @discardableResult
@@ -105,9 +133,14 @@ public final class TerminalSurface {
             TerminalDebugLog.log(.ime, "surface preedit ignored: missing surface")
             return
         }
-        TerminalDebugLog.log(.ime, "surface preedit=\(TerminalDebugLog.describe(text))")
-        text.withCString { cStr in
-            ghostty_surface_preedit(s, cStr, UInt(text.utf8.count))
+        let data = Data(text.utf8)
+        TerminalDebugLog.log(.ime, "surface preedit=\(TerminalDebugLog.describe(data))")
+        if data.isEmpty {
+            return
+        }
+        _ = feedUtf8(data) { base, count in
+            ghostty_surface_preedit(s, base, count)
+            return true
         }
     }
 
@@ -119,8 +152,12 @@ public final class TerminalSurface {
             TerminalDebugLog.log(.actions, "binding action ignored: missing surface")
             return false
         }
-        let result = action.withCString { cStr in
-            ghostty_surface_binding_action(s, cStr, UInt(action.utf8.count))
+        let data = Data(action.utf8)
+        if data.isEmpty {
+            return false
+        }
+        let result = feedUtf8(data) { base, count in
+            ghostty_surface_binding_action(s, base, count)
         }
         TerminalDebugLog.log(
             .actions,

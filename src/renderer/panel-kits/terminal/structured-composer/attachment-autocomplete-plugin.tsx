@@ -20,6 +20,7 @@ import {
   useState,
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { isImePendingLexicalEnter } from "@/lib/keybindings/is-text-input.ts";
 import type { ComposerAttachment } from "../composer-attachments-model.ts";
 import {
   ATTACHMENT_LISTBOX_ID,
@@ -284,6 +285,9 @@ export function AttachmentAutocompletePlugin({
       editor.registerCommand(
         KEY_ENTER_COMMAND,
         (event) => {
+          if (isImePendingLexicalEnter(event)) {
+            return true;
+          }
           event?.preventDefault();
           if (itemsRef.current.length === 0) {
             return true;

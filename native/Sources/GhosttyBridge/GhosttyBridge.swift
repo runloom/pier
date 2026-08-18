@@ -1889,8 +1889,12 @@ final class GhosttyBridgeImpl {
     }
 
     func sendText(panelId: String, text: String) -> Bool {
+        sendText(panelId: panelId, data: Data(text.utf8))
+    }
+
+    func sendText(panelId: String, data: Data) -> Bool {
         guard let term = terminals[panelId] else { return false }
-        return term.terminalView.sendText(text)
+        return term.terminalView.sendText(data)
     }
 
     /// AppKit virtual keycode press+release (e.g. 0x24 = Return). Used after
@@ -2519,12 +2523,20 @@ public func ghosttyBridgePerformBindingAction(
 @_cdecl("ghostty_bridge_send_text")
 public func ghosttyBridgeSendText(
     _ panelId: UnsafePointer<CChar>,
-    _ text: UnsafePointer<CChar>
+    _ bytes: UnsafePointer<UInt8>?,
+    _ count: Int
 ) -> Bool {
-    MainActor.assumeIsolated {
+    let data: Data
+    if count > 0 {
+        guard let bytes else { return false }
+        data = Data(bytes: bytes, count: count)
+    } else {
+        data = Data()
+    }
+    return MainActor.assumeIsolated {
         GhosttyBridgeImpl.shared.sendText(
             panelId: String(cString: panelId),
-            text: String(cString: text)
+            data: data
         )
     }
 }
@@ -2534,12 +2546,23 @@ public func ghosttyBridgeSendKeyPress(
     _ panelId: UnsafePointer<CChar>,
     _ keycode: UInt32,
     _ mods: UInt32,
-    _ text: UnsafePointer<CChar>?
+    _ bytes: UnsafePointer<UInt8>?,
+    _ count: Int
 ) -> Bool {
-    MainActor.assumeIsolated {
-        let textValue: String? = text.map { String(cString: $0) }.flatMap { value in
-            value.isEmpty ? nil : value
+    let textValue: String?
+    if count > 0 {
+        guard let bytes else { return false }
+        guard let decoded = String(
+            data: Data(bytes: bytes, count: count),
+            encoding: .utf8
+        ) else {
+            return false
         }
+        textValue = decoded.isEmpty ? nil : decoded
+    } else {
+        textValue = nil
+    }
+    return MainActor.assumeIsolated {
         return GhosttyBridgeImpl.shared.sendKeyPress(
             panelId: String(cString: panelId),
             keycode: keycode,

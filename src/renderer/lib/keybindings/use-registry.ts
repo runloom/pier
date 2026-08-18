@@ -25,12 +25,11 @@ import { recordTerminalInputRoutingTrace } from "@/lib/terminal-debug/input-rout
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { isTerminalComposerOpen } from "@/stores/terminal-composer-takeover.ts";
+import { isImePendingKeyboardEvent } from "./is-text-input.ts";
 import { chordFromEvent } from "./matcher.ts";
 import { keybindingRegistry } from "./registry.ts";
 import { shouldSuppressKeybindingForTextInput } from "./text-input-guard.ts";
 import type { KeyChord } from "./types.ts";
-
-const IME_PENDING_KEYCODE = 229;
 
 export type KeybindingDispatchRoute = "native-forward" | "web-keydown";
 
@@ -43,10 +42,6 @@ const NS_FLAG_COMMAND = 0x10_00_00;
 // charsToCode 用 — top-level regex 避免每次 keydown re-compile.
 const LATIN_LOWER_RE = /^[a-z]$/;
 const DIGIT_RE = /^[0-9]$/;
-
-function isImePending(e: KeyboardEvent): boolean {
-  return e.isComposing === true || e.keyCode === IME_PENDING_KEYCODE;
-}
 
 function isNewAgentOrAttachChord(chord: KeyChord): boolean {
   return (
@@ -304,7 +299,7 @@ export function useKeyboardShortcuts(): void {
   useEffect(() => {
     // 路径 1: web 层 native keydown (firstResponder 在 WKWebView 时)
     const onKeydown = (e: KeyboardEvent) => {
-      if (isImePending(e)) {
+      if (isImePendingKeyboardEvent(e)) {
         return;
       }
       const action = resolveKeybindingAction(

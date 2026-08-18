@@ -38,6 +38,22 @@ export function setAllComposerEditorsTextForTests(text: string): void {
   }
 }
 
+/**
+ * Write Lexical only, leaving React `value` stale. Send must read `getValue()`.
+ */
+export function setComposerEditorTextLeavingReactDraftForTests(
+  text: string
+): void {
+  if (editorsForTests.size === 0) {
+    throw new Error(
+      "setComposerEditorTextLeavingReactDraftForTests: no Lexical editors registered"
+    );
+  }
+  for (const editor of editorsForTests) {
+    writeLexicalPlainText(editor, text, { tag: "composer-skip-on-change" });
+  }
+}
+
 export function readFirstComposerEditorTextForTests(): string {
   for (const editor of editorsForTests) {
     return readLexicalPlainText(editor);

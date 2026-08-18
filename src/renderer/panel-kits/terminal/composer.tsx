@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { isImePendingKeyboardEvent } from "@/lib/keybindings/is-text-input.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
   useTerminalOverlayFocus,
@@ -341,6 +342,8 @@ export function TerminalComposer({
   const { send } = useTerminalComposerSend({
     buildPayloadOrReport: attachments.buildPayloadOrReport,
     disabled,
+    getDraft: () => editorRef.current?.getValue() ?? valueRef.current,
+    isComposing: () => composingRef.current,
     onSent: () => {
       clearComposerDraft(panelId);
       setValue("");
@@ -349,11 +352,10 @@ export function TerminalComposer({
     },
     panelId,
     t,
-    value,
   });
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (event.nativeEvent.isComposing) {
+    if (isImePendingKeyboardEvent(event.nativeEvent)) {
       return;
     }
     if (event.key === "Escape") {

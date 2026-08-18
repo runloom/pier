@@ -144,28 +144,30 @@ export function readLexicalPlainText(editor: LexicalEditor): string {
 /** Replace the whole document with plain text (\\n → LineBreak within one paragraph). */
 export function writeLexicalPlainText(
   editor: LexicalEditor,
-  text: string
+  text: string,
+  options?: { tag?: string }
 ): void {
-  editor.update(
-    () => {
-      const root = $getRoot();
-      root.clear();
-      const paragraph = $createParagraphNode();
-      const lines = text.split("\n");
-      for (let i = 0; i < lines.length; i += 1) {
-        const line = lines[i] ?? "";
-        if (line.length > 0) {
-          paragraph.append($createTextNode(line));
-        }
-        if (i < lines.length - 1) {
-          paragraph.append($createLineBreakNode());
-        }
+  const updateOptions: { discrete: true; tag?: string } = { discrete: true };
+  if (options?.tag !== undefined) {
+    updateOptions.tag = options.tag;
+  }
+  editor.update(() => {
+    const root = $getRoot();
+    root.clear();
+    const paragraph = $createParagraphNode();
+    const lines = text.split("\n");
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i] ?? "";
+      if (line.length > 0) {
+        paragraph.append($createTextNode(line));
       }
-      root.append(paragraph);
-      root.selectEnd();
-    },
-    { discrete: true }
-  );
+      if (i < lines.length - 1) {
+        paragraph.append($createLineBreakNode());
+      }
+    }
+    root.append(paragraph);
+    root.selectEnd();
+  }, updateOptions);
 }
 
 /**
