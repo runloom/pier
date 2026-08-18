@@ -859,6 +859,36 @@ describe("PanelTabHeader", () => {
     ).not.toBeNull();
   });
 
+  it("renders a folder icon for project-directory file panel chrome", () => {
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "file-project": {
+          display: { short: "feat-canvas-20260815" },
+          tab: {
+            icon: { id: "pier.files.project" },
+            title: "feat-canvas-20260815",
+          },
+        },
+      },
+    });
+
+    const { container } = render(
+      <PanelTabHeader
+        {...createHeaderProps(
+          "pier.files.filePanel",
+          "feat-canvas-20260815",
+          undefined,
+          "file-project"
+        )}
+      />
+    );
+
+    expect(
+      container.querySelector('[data-panel-tab-icon="pier.files.project"]')
+    ).not.toBeNull();
+  });
+
   it("renders a file-tree icon for namespaced file tab chrome", () => {
     usePanelDescriptorStore.setState({
       activeId: null,

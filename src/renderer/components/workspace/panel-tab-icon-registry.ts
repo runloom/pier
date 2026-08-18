@@ -1,6 +1,7 @@
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
 import {
   Diff,
+  Folder,
   GitBranch,
   GitCommitHorizontal,
   ListChecks,
@@ -9,6 +10,7 @@ import {
 import { panelIconOf } from "./panel-registry.ts";
 
 const builtinPanelTabIcons: Readonly<Record<string, LucideIcon>> = {
+  "pier.files.project": Folder,
   "pier.git.changes.branch": GitBranch,
   "pier.git.changes.commit": GitCommitHorizontal,
   "pier.git.changes.uncommitted": Diff,
