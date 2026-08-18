@@ -14,7 +14,6 @@ import {
   cursorInteractionKindOf,
   cursorInteractionToolName,
   cursorTranscriptScopeKey,
-  cursorViewportInteractionKind,
   defaultCursorProjectsRoot,
   findCursorAgentTranscript,
   isCursorMainAgentTranscriptPath,
@@ -22,7 +21,6 @@ import {
   requestedCursorInteraction,
   resolvedCursorInteraction,
   scanCursorQuestionState,
-  viewportShowsCursorInteraction,
 } from "./cursor-question.ts";
 import { emitTranscriptEvent } from "./tail-event.ts";
 import {
@@ -30,6 +28,7 @@ import {
   type TranscriptTailReconciler,
   type TranscriptTerminalRecord,
 } from "./tail-reconciler.ts";
+import { createViewportKindCache } from "./viewport-kind-cache.ts";
 
 export type CursorTranscriptReconciler = TranscriptTailReconciler;
 export type { CursorQuestionScanState } from "./cursor-question.ts";
@@ -82,6 +81,7 @@ export function createCursorTranscriptReconciler(
   const viewportTimers = new Map<string, ReturnType<typeof setInterval>>();
   const lastContextByScope = new Map<string, AgentHookEventPayload>();
   const lastTerminalSeenByScope = new Map<string, string>();
+  const viewportKindCache = createViewportKindCache();
 
   const emitResolved = (
     context: AgentHookEventPayload,
@@ -116,7 +116,7 @@ export function createCursorTranscriptReconciler(
       const latest = lastContextByScope.get(key);
       if (latest && opts.readViewportText) {
         const text = opts.readViewportText(latest.panelId, latest.windowId);
-        if (text != null && !viewportShowsCursorInteraction(text)) {
+        if (text != null && viewportKindCache.kindFor(key, text) === null) {
           return;
         }
       }
@@ -214,13 +214,7 @@ export function createCursorTranscriptReconciler(
     );
   };
 
-  const readViewportState = (
-    context: AgentHookEventPayload
-  ): {
-    known: boolean;
-    kind: CursorInteractionKind | null;
-    pending: boolean;
-  } => {
+  const readViewportState = (context: AgentHookEventPayload) => {
     const key = cursorTranscriptScopeKey(context);
     const text = opts.readViewportText?.(context.panelId, context.windowId);
     if (text == null) {
@@ -230,7 +224,7 @@ export function createCursorTranscriptReconciler(
         pending: viewportPendingByScope.get(key) === true,
       };
     }
-    const kind = cursorViewportInteractionKind(text);
+    const kind = viewportKindCache.kindFor(key, text);
     viewportPendingByScope.set(key, kind !== null);
     return { known: true, kind, pending: kind !== null };
   };
@@ -333,6 +327,7 @@ export function createCursorTranscriptReconciler(
     viewportPendingByScope.delete(key);
     jsonlPendingByScope.delete(key);
     lastTerminalSeenByScope.delete(key);
+    viewportKindCache.clear(key);
   };
 
   const resolvePath = async (
@@ -377,6 +372,7 @@ export function createCursorTranscriptReconciler(
       attachSeed.clear();
       pendingByScope.clear();
       lastTerminalSeenByScope.clear();
+      viewportKindCache.clearAll();
       inner.dispose();
     },
     observe: async (event) => {
@@ -483,6 +479,7 @@ export function createCursorTranscriptReconciler(
       move(jsonlPendingByScope);
       move(viewportPendingByScope);
       move(lastTerminalSeenByScope);
+      viewportKindCache.rekey(sourceKey, targetKey);
       const context = move(lastContextByScope);
       if (context) {
         lastContextByScope.set(targetKey, {

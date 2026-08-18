@@ -59,8 +59,10 @@ describe("native sendText UTF-8 bytes", () => {
     const preeditEnd = source.indexOf("// MARK: - Actions", preeditStart);
     const preedit = source.slice(preeditStart, preeditEnd);
     expect(preedit).toContain("Data(text.utf8)");
+    expect(preedit).toContain("ghostty_surface_preedit(s, nil, 0)");
     expect(preedit).not.toContain("withCString");
     expect(preedit).not.toContain("text.utf8.count");
+    expect(preedit).not.toMatch(/if data\.isEmpty \{\s*return\s*\}/u);
   });
 
   it("passes sendKeyPress text as utf8CString, not withCString", () => {

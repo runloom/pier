@@ -488,6 +488,7 @@ final class TerminalSurfaceCoordinator {
         ghosttyRenderReadySequence &+= 1
         lastRenderReadyUptime = ProcessInfo.processInfo.systemUptime
         drawPending = true
+        surface?.noteViewportChanged()
         TerminalDebugLog.log(.render, "target frame ready")
         scheduleDrawIfNeeded(generation: generation)
     }

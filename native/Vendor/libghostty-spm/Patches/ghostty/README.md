@@ -14,6 +14,7 @@ Lakr233 上游 patches 之后再 apply 这一批。编号从 `0100` 起，跟 La
 | `0103-host-cursor-suppress.patch` | 加 `ghostty_surface_set_cursor_suppress`：renderer 层强制不画光标（不受 TUI `CSI ?25h` 影响）。增强输入 pin 时 suppress 绘制（只闪 composer caret）；探针 0104 仍读模式位。 |
 | `0104-cursor-visibility-probe.patch` | 加 `ghostty_surface_cursor_visible` 只读探针：读应用设置的 DECTCEM(?25) 模式位（不受 0103 渲染层 suppress 影响），用作「TUI 输入框是否聚焦」信号——现代 TUI 输入失焦即藏光标。 |
 | `0105-host-user-messages.patch` | 宿主文案 get API（Pier Swift 实现）：Thread 启动失败 printString 读 catalog；Surface 进程退出 **fallback**（action 未消费）可读 `processExitedWithDismiss`。进程退出主路径不依赖本 patch——Pier 抑制英文后由 renderer `injectDisplayText`。需 `pnpm build:libghostty`。 |
+| `0106-free-text-abi.patch` | 回移上游 main 对 `ghostty_surface_free_text` 的 ABI 修复（v1.2.3–v1.3.1 头文件声明两参、Zig 实现只收一参）：C 调用方把 surface 当 `Text*` 传入，`dumpTextLocked` 分配的文本永不释放。Pier 每 250ms 轮询 agent 终端 viewport 文本，长会话下主进程按 ~8KB/次线性泄漏（实测 40h 泄 ~8GB）。ghostty 升级到包含上游修复的版本后本 patch 会 apply 失败，直接删除即可。 |
 
 ## 规则
 
