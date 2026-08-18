@@ -15,6 +15,12 @@ const EDITOR_DECORATION_KEYS = [
   "editor-selection-match-bg",
   "editor-selection-match-main-bg",
 ] as const;
+const PIERRE_CASES = [
+  ["pierre", "light"],
+  ["pierre", "dark"],
+  ["pierre-soft", "light"],
+  ["pierre-soft", "dark"],
+] as const;
 
 describe("renderer/lib/theme/derive-tokens", () => {
   it("returns theme-owned UI tokens without overriding product status colors", () => {
@@ -175,5 +181,21 @@ describe("renderer/lib/theme/derive-tokens", () => {
     );
     // Keep brand blues vivid; do not crush under ~0.55 L just for 4.5:1.
     expect(oklabLightness(tokens.primary)).toBeGreaterThan(0.55);
+  });
+
+  it("derives the Pier purple for every registered Pierre theme", () => {
+    for (const [preset, mode] of PIERRE_CASES) {
+      const tokens = deriveAppStyleTokens(getShikiTheme(preset, mode), mode);
+
+      expect(tokens.primary).toBe("#8549ff");
+      expect(tokens["primary-foreground"]).toBe("#ffffff");
+      expect(tokens["chart-1"]).toBe("#8549ff");
+      expect(
+        contrast(tokens.primary, tokens["primary-foreground"])
+      ).toBeGreaterThanOrEqual(4);
+      expect(
+        contrast(tokens.background, tokens.primary)
+      ).toBeGreaterThanOrEqual(3);
+    }
   });
 });

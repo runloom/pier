@@ -38,12 +38,18 @@ import solarizedLight from "@shikijs/themes/solarized-light";
 import tokyoNight from "@shikijs/themes/tokyo-night";
 import vitesseDark from "@shikijs/themes/vitesse-dark";
 import vitesseLight from "@shikijs/themes/vitesse-light";
+import {
+  applyPierBrandOverlay,
+  type PierBrandThemeLike,
+  type ThemeTokenColor,
+} from "./pierre-brand-overlay.ts";
 import tokyoNightLight from "./presets/tokyo-night-light.ts";
 
-export interface ShikiThemeLike {
+export interface ShikiThemeLike extends PierBrandThemeLike {
   colors?: Record<string, string>;
   name?: string;
-  tokenColors?: readonly unknown[];
+  semanticTokenColors?: Record<string, unknown>;
+  tokenColors?: readonly ThemeTokenColor[];
   type?: "light" | "dark" | string;
 }
 
@@ -53,8 +59,14 @@ interface PresetEntry {
 }
 
 export const STYLE_PRESET_REGISTRY: Record<StylePresetId, PresetEntry> = {
-  pierre: { light: pierreLight, dark: pierreDark },
-  "pierre-soft": { light: pierreLightSoft, dark: pierreDarkSoft },
+  pierre: {
+    light: applyPierBrandOverlay(pierreLight, "light"),
+    dark: applyPierBrandOverlay(pierreDark, "dark"),
+  },
+  "pierre-soft": {
+    light: applyPierBrandOverlay(pierreLightSoft, "light"),
+    dark: applyPierBrandOverlay(pierreDarkSoft, "dark"),
+  },
   catppuccin: { light: catppuccinLatte, dark: catppuccinMocha },
   everforest: { light: everforestLight, dark: everforestDark },
   github: { light: githubLight, dark: githubDark },

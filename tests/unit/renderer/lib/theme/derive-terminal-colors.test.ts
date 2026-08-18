@@ -1,11 +1,21 @@
-import pierreDark from "@pierre/theme/pierre-dark";
 import { describe, expect, it } from "vitest";
 import { deriveTerminalColors } from "@/lib/theme/derive-terminal-colors.ts";
 import { contrast } from "@/lib/theme/oklch.ts";
+import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
+
+const PIERRE_CASES = [
+  ["pierre", "light"],
+  ["pierre", "dark"],
+  ["pierre-soft", "light"],
+  ["pierre-soft", "dark"],
+] as const;
 
 describe("deriveTerminalColors — selection colors", () => {
   it("derives a readable selection foreground for Pierre dark", () => {
-    const colors = deriveTerminalColors(pierreDark, "dark");
+    const colors = deriveTerminalColors(
+      getShikiTheme("pierre", "dark"),
+      "dark"
+    );
 
     expect(colors.selectionBackground).toBeDefined();
     expect(colors.selectionForeground).toBeDefined();
@@ -18,6 +28,15 @@ describe("deriveTerminalColors — selection colors", () => {
         colors.selectionForeground ?? "#000000"
       )
     ).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("derives Pier purple ANSI blue for every registered Pierre theme", () => {
+    for (const [preset, mode] of PIERRE_CASES) {
+      const terminal = deriveTerminalColors(getShikiTheme(preset, mode), mode);
+
+      expect(terminal.palette[4]).toBe("#8549ff");
+      expect(terminal.palette[12]).toBe("#b66cff");
+    }
   });
 
   it("keeps an explicit readable terminal selection foreground", () => {

@@ -1,8 +1,25 @@
+import pierreDark from "@pierre/theme/pierre-dark";
+import pierreDarkSoft from "@pierre/theme/pierre-dark-soft";
+import pierreLight from "@pierre/theme/pierre-light";
+import pierreLightSoft from "@pierre/theme/pierre-light-soft";
 import { describe, expect, it } from "vitest";
 import {
   applyPierBrandOverlay,
   PIER_BRAND_PALETTE,
 } from "@/lib/theme/pierre-brand-overlay.ts";
+import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
+
+const PIERRE_CASES = [
+  ["pierre", "light"],
+  ["pierre", "dark"],
+  ["pierre-soft", "light"],
+  ["pierre-soft", "dark"],
+] as const;
+const MODES = ["light", "dark"] as const;
+const PIERRE_SOURCES = {
+  pierre: { light: pierreLight, dark: pierreDark },
+  "pierre-soft": { light: pierreLightSoft, dark: pierreDarkSoft },
+} as const;
 
 const source = {
   name: "fixture",
@@ -146,6 +163,34 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
     );
     expect(result.colors?.["statusBar.background"]).toBe(
       source.colors["statusBar.background"]
+    );
+  });
+
+  it("overlays only the Pierre registry themes while preserving their identity and surfaces", () => {
+    const githubBefore = MODES.map((mode) =>
+      structuredClone(getShikiTheme("github", mode))
+    );
+
+    for (const [preset, mode] of PIERRE_CASES) {
+      const theme = getShikiTheme(preset, mode);
+
+      expect(theme.colors?.["button.background"]).toBe("#8549ff");
+      expect(theme.colors?.["button.hoverBackground"]).toBe("#542ee5");
+      expect(theme.colors?.focusBorder).toBe("#b66cff");
+      expect(theme.colors?.["terminal.ansiBlue"]).toBe("#8549ff");
+      expect(theme.colors?.["terminal.ansiBrightBlue"]).toBe("#b66cff");
+      expect(theme.colors?.["charts.blue"]).toBe("#8549ff");
+      expect(theme.colors?.["editor.background"]).toBe(
+        PIERRE_SOURCES[preset][mode].colors?.["editor.background"]
+      );
+      expect(theme.colors?.["editor.foreground"]).toBe(
+        PIERRE_SOURCES[preset][mode].colors?.["editor.foreground"]
+      );
+      expect(theme.name).toBe(PIERRE_SOURCES[preset][mode].name);
+    }
+
+    expect(MODES.map((mode) => getShikiTheme("github", mode))).toEqual(
+      githubBefore
     );
   });
 });
