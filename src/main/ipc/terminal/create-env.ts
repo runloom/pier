@@ -1,4 +1,6 @@
 import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal/launch.ts";
+import type { LocalEnvironmentService } from "../../services/local-environments-service.ts";
+import { resolveProjectEnvForSpawn } from "../../services/process-environment/resolve-project-env.ts";
 import type { ProcessEnvironmentService } from "../../services/process-environment-service.ts";
 
 export interface ResolveRestoredAgentLaunchEnvOptions {
@@ -7,10 +9,19 @@ export interface ResolveRestoredAgentLaunchEnvOptions {
   projectEnv?: Record<string, string> | undefined;
 }
 
+export interface HydrateNativeLaunchEnvOptions {
+  localEnvironments?:
+    | Pick<LocalEnvironmentService, "resolveForWorktree" | "resolveProject">
+    | null
+    | undefined;
+  projectRootPath?: string | undefined;
+}
+
 /**
- * Re-hydrate shell (+ optional layers) for agent restore.
- * Session disk usually omits env; prior launch.env is defensive agentEnv only.
- * Never whole-table overwrite without merge layers.
+ * Overlay login+interactive shell dump onto a native PTY launch.
+ * Used for UI agent start, CLI `terminal.open`, and session restore.
+ * Prior `launch.env` is agentEnv only (defaults / wrap PATH); never persist
+ * the merged dump back to session disk.
  */
 export async function resolveRestoredAgentLaunchEnv(
   launch: ResolvedTerminalLaunchOptions | undefined,
@@ -20,7 +31,6 @@ export async function resolveRestoredAgentLaunchEnv(
   if (!launch) {
     return;
   }
-  // Session restore often has no env; keep prior only when still in memory.
   const priorAgentEnv = launch.env;
   const resolved = await processEnvironment.resolve({
     cwd: launch.cwd,
@@ -34,4 +44,25 @@ export async function resolveRestoredAgentLaunchEnv(
     ...launch,
     env: resolved.env,
   };
+}
+
+/** Last-mile spawn hydrate: project KV + shell dump. Does not persist. */
+export async function hydrateNativeLaunchEnv(
+  launch: ResolvedTerminalLaunchOptions | undefined,
+  processEnvironment: ProcessEnvironmentService,
+  options: HydrateNativeLaunchEnvOptions = {}
+): Promise<ResolvedTerminalLaunchOptions | undefined> {
+  if (!launch) {
+    return;
+  }
+  const projectEnv = options.localEnvironments
+    ? await resolveProjectEnvForSpawn({
+        cwd: launch.cwd,
+        localEnvironments: options.localEnvironments,
+        projectRootPath: options.projectRootPath,
+      })
+    : undefined;
+  return resolveRestoredAgentLaunchEnv(launch, processEnvironment, {
+    ...(projectEnv ? { projectEnv } : {}),
+  });
 }

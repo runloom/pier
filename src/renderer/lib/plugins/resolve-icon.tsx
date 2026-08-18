@@ -10,7 +10,7 @@
 import { cn } from "@pier/ui/utils.ts";
 import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { Puzzle, Server } from "lucide-react";
+import { Columns2, Puzzle, Server } from "lucide-react";
 import type { ComponentType } from "react";
 import { getBuiltinRendererPluginModule } from "./builtin-catalog.ts";
 
@@ -48,6 +48,7 @@ const FIRST_PARTY_PLUGIN_ICONS: Readonly<Record<string, PluginDisplayIcon>> = {
   "pier.codex": agentBrandIcon("codex"),
   "pier.grok": agentBrandIcon("grok"),
   "pier.ssh": Server,
+  "pier.tmux": Columns2,
 };
 
 export function resolvePluginIcon(pluginId: string): PluginDisplayIcon {

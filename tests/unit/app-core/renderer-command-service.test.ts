@@ -1,4 +1,7 @@
-import { createRendererCommandService } from "@main/services/renderer-command-service.ts";
+import {
+  createRendererCommandService,
+  TERMINAL_OPEN_RENDERER_TIMEOUT_MS,
+} from "@main/services/renderer-command-service.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import { describe, expect, it, vi } from "vitest";
@@ -327,6 +330,37 @@ describe("createRendererCommandService", () => {
       },
       ok: false,
       requestId: "renderer-req-3",
+    });
+    vi.useRealTimers();
+  });
+
+  it("terminal.open 默认等待长于普通 renderer command", async () => {
+    vi.useFakeTimers();
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-open-timeout",
+      host: { send: () => 42 },
+      timeoutMs: 15_000,
+    });
+
+    const promise = service.execute({
+      context,
+      launchId: "launch-slow",
+      type: "terminal.open",
+    });
+    await vi.advanceTimersByTimeAsync(15_000);
+    await expect(
+      Promise.race([promise, Promise.resolve("still-waiting")])
+    ).resolves.toBe("still-waiting");
+    await vi.advanceTimersByTimeAsync(
+      TERMINAL_OPEN_RENDERER_TIMEOUT_MS - 15_000
+    );
+    await expect(promise).resolves.toEqual({
+      error: {
+        code: "platform_unavailable",
+        message: "renderer command timed out",
+      },
+      ok: false,
+      requestId: "renderer-req-open-timeout",
     });
     vi.useRealTimers();
   });

@@ -289,6 +289,67 @@ describe("workspace renderer commands", () => {
     });
   });
 
+  it("opens a split relative to referencePanelId without focusing", async () => {
+    const leader = terminalPanel("leader");
+    const teammate = terminalPanel("teammate");
+    const api = createApi([leader, teammate]);
+    useWorkspaceStore.getState().setApi(api as never);
+    const addTerminal = vi
+      .spyOn(useWorkspaceStore.getState(), "addTerminal")
+      .mockReturnValue("terminal-split");
+
+    const command = runWorkspaceRendererCommand({
+      command: {
+        focus: false,
+        launchId: "launch-split-ref",
+        placement: "split-below",
+        referencePanelId: "teammate",
+        type: "terminal.open",
+      },
+      requestId: "renderer-open-split-ref",
+    });
+    confirmTerminalLaunch("launch-split-ref");
+    await command;
+
+    expect(addTerminal).toHaveBeenCalledWith({
+      focus: false,
+      launchId: "launch-split-ref",
+      placement: "split-below",
+      referencePanelId: "teammate",
+    });
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      data: { panelId: "terminal-split" },
+      ok: true,
+      requestId: "renderer-open-split-ref",
+    });
+  });
+
+  it("rejects terminal.open when referencePanelId is missing", async () => {
+    const api = createApi([terminalPanel("leader")]);
+    useWorkspaceStore.getState().setApi(api as never);
+    const addTerminal = vi.spyOn(useWorkspaceStore.getState(), "addTerminal");
+
+    await runWorkspaceRendererCommand({
+      command: {
+        launchId: "launch-missing-ref",
+        placement: "split-below",
+        referencePanelId: "gone",
+        type: "terminal.open",
+      },
+      requestId: "renderer-open-missing-ref",
+    });
+
+    expect(addTerminal).not.toHaveBeenCalled();
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      error: {
+        code: "not_found",
+        message: "reference panel not found: gone",
+      },
+      ok: false,
+      requestId: "renderer-open-missing-ref",
+    });
+  });
+
   it("cancels panel.close / panel.open while bootstrap gate is active", async () => {
     const terminal = terminalPanel("terminal-1");
     const welcome = webPanel("welcome-1");
@@ -355,6 +416,44 @@ describe("workspace renderer commands", () => {
       },
       ok: false,
       requestId: "panel-transfer-bypass",
+    });
+  });
+
+  it("resizes a split via panel.setSize without addPanel", async () => {
+    const resizeView = vi.fn();
+    const addPanel = vi.fn();
+    const root = {
+      children: [{ panelIds: ["p1"] }, { panelIds: ["p2"] }],
+      orientation: "HORIZONTAL",
+      splitview: {
+        contentSize: 1000,
+        distributeViewSizes: vi.fn(),
+        getViewSize: (index: number) => (index === 0 ? 200 : 800),
+        resizeView,
+      },
+    };
+    const api = {
+      addPanel,
+      component: { gridview: { root } },
+      panels: [{ id: "p1" }, { id: "p2" }],
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+
+    await runWorkspaceRendererCommand({
+      command: {
+        panelId: "p1",
+        type: "panel.setSize",
+        widthRatio: 0.3,
+      },
+      requestId: "set-size-1",
+    });
+
+    expect(resizeView).toHaveBeenCalledWith(0, 300);
+    expect(addPanel).not.toHaveBeenCalled();
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      data: { panelId: "p1" },
+      ok: true,
+      requestId: "set-size-1",
     });
   });
 });

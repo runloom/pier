@@ -90,4 +90,17 @@ describe("withPanelStatusEnv", () => {
     expect(out.env?.PIER_PANEL_ID).toBe("panel-wt");
     expect(out.env?.PIER_WINDOW_ID).toBe("3");
   });
+
+  it("writes PIER_CONTROL_SOCKET only when a path is provided", () => {
+    const withSocket = withPanelStatusEnv(
+      undefined,
+      "panel-sock",
+      "2",
+      {},
+      "/tmp/pier-control.sock"
+    );
+    expect(withSocket.env?.PIER_CONTROL_SOCKET).toBe("/tmp/pier-control.sock");
+    const without = withPanelStatusEnv(undefined, "panel-sock", "2", {});
+    expect(without.env?.PIER_CONTROL_SOCKET).toBeUndefined();
+  });
 });

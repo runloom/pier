@@ -26,6 +26,10 @@ describe("development entrypoint governance", () => {
     expect(devOrchestrator).toContain('start("plugin-codex renderer watch"');
     expect(devOrchestrator).toContain('start("plugin-grok main watch"');
     expect(devOrchestrator).toContain('start("plugin-grok renderer watch"');
+    expect(devOrchestrator).toContain('start("plugin-ssh main watch"');
+    expect(devOrchestrator).toContain('start("plugin-ssh renderer watch"');
+    expect(devOrchestrator).toContain('start("plugin-tmux main watch"');
+    expect(devOrchestrator).toContain('start("plugin-tmux renderer watch"');
     expect(devOrchestrator).toContain('start("electron dev"');
   });
 });

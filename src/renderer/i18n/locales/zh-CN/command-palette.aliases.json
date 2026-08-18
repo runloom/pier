@@ -73,7 +73,9 @@
       ]
     },
     "settings": {
-      "open": ["设置", "偏好", "首选项", "shezhi", "pianhao"]
+      "open": ["设置", "偏好", "首选项", "shezhi", "pianhao"],
+      "installCli": ["安装 pier", "pier 命令", "命令行"],
+      "removeCli": ["卸载 pier", "移除 pier 命令"]
     },
     "terminal": {
       "openDebugWindow": [

@@ -273,6 +273,7 @@ function createPierAppCore(): PierAppCore {
       createContext: createExternalMainPluginContextFactory({
         managedPluginWorkDir: managedPluginPaths.workDir,
         pluginRpcBus,
+        pluginSettings,
         processEnvironment,
         secrets,
         usageData,

@@ -1,6 +1,10 @@
 import { registerAgentsIpc } from "@main/ipc/agents.ts";
+import {
+  registerLaunchWrapHandler,
+  resetLaunchWrapRegistryForTests,
+} from "@main/services/terminal-launch-wrap/index.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const fakePreferences = { read: vi.fn() };
 const fakeAgentUsage = { read: vi.fn() };
@@ -61,6 +65,10 @@ beforeEach(() => {
   fakePreferences.read.mockReset();
 });
 
+afterEach(() => {
+  resetLaunchWrapRegistryForTests();
+});
+
 describe("pier:agents:prepareLaunch", () => {
   it("已知 agent → 注册 launch，返回 non-null launchId", async () => {
     fakePreferences.read.mockResolvedValueOnce({
@@ -84,6 +92,31 @@ describe("pier:agents:prepareLaunch", () => {
       agentId: "claude",
       command: expect.stringContaining("claude"),
     });
+  });
+
+  it("registers PATH prepend from wrap handlers", async () => {
+    registerLaunchWrapHandler("pier.wrap.test", {
+      wrap: async () => ({
+        decorateSpawn: true,
+        pathPrepend: ["/tmp/pier-wrap-bin"],
+      }),
+      decorateSpawn: async () => ({}),
+    });
+    fakePreferences.read.mockResolvedValueOnce({
+      agentCommandOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      agentPermissionMode: "manual",
+    });
+
+    const ipcMain = makeIpcMain();
+    registerAgentsIpc(ipcMain as never);
+    await ipcMain.invoke("pier:agents:prepareLaunch", "claude" as AgentKind);
+
+    const registered = registerSpy.mock.calls[0]?.[0] as {
+      env?: { PATH?: string };
+    };
+    expect(registered.env?.PATH?.startsWith("/tmp/pier-wrap-bin")).toBe(true);
   });
 
   it("注册 launch 时带上 agent 默认 env", async () => {

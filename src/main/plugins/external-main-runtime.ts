@@ -1,5 +1,9 @@
 import { pathToFileURL } from "node:url";
-import type { MainPluginUsageData } from "@pier/plugin-api/main";
+import type {
+  LaunchWrapHandler,
+  MainPluginUsageData,
+  PluginConfigurationApi,
+} from "@pier/plugin-api/main";
 import { attachPluginLanguageServers } from "../services/lsp/host-bridge.ts";
 import type { ManagedPluginRuntimeSource } from "../services/managed-plugins/install-runtime.ts";
 import type { PluginRpcBus } from "./rpc-bus.ts";
@@ -23,8 +27,12 @@ export interface ExternalMainPluginModule {
 }
 
 export interface ExternalMainPluginContext {
+  configuration: PluginConfigurationApi;
   events: {
     emit(event: string, payload: unknown): void;
+  };
+  launchWrap: {
+    register(handler: LaunchWrapHandler): () => void;
   };
   legacyCodexAccounts?: {
     readonly legacyAgentAccountsBaseDir: string;

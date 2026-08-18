@@ -40,10 +40,15 @@ export function rendererTerminalOpenCommand(args: {
       initialInputSubmit: args.options.initialInputSubmit,
     }),
     launchId: args.launchId,
-    ...(args.options.reusePanel
-      ? { panelId: args.options.reusePanel.panelId }
+    ...((args.options.reusePanel?.panelId ?? args.command.panelId)
+      ? {
+          panelId: args.options.reusePanel?.panelId ?? args.command.panelId,
+        }
       : {}),
     ...(args.command.placement && { placement: args.command.placement }),
+    ...(args.command.referencePanelId && {
+      referencePanelId: args.command.referencePanelId,
+    }),
     ...(args.options.tab && { tab: args.options.tab }),
     ...(args.options.task && { task: args.options.task }),
     ...(args.options.targetGroupId && {

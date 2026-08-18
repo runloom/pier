@@ -99,6 +99,39 @@ describe("authorizeCommand", () => {
     ).toEqual({ ok: true });
   });
 
+  it("terminal.screen / read 要求 terminal:read；close 要求 terminal:control", () => {
+    expect(
+      authorizeCommand(
+        { panelId: "p1", type: "terminal.screen" },
+        client("cli-local", ["workspace:open"])
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: terminal:read",
+    });
+    expect(
+      authorizeCommand(
+        { panelId: "p1", type: "terminal.read" },
+        client("cli-local")
+      )
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand(
+        { panelId: "p1", type: "terminal.close" },
+        client("cli-local", ["terminal:read"])
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: terminal:control",
+    });
+    expect(
+      authorizeCommand(
+        { panelId: "p1", type: "terminal.close" },
+        client("cli-local")
+      )
+    ).toEqual({ ok: true });
+  });
+
   it("允许 CLI 默认客户端读取和创建 worktree", () => {
     expect(
       authorizeCommand(
@@ -373,5 +406,33 @@ describe("authorizeCommand", () => {
       client("cli-local", ["window:control"])
     );
     expect(cliResult.ok).toBe(false);
+  });
+
+  it("app.cli install commands are desktop-renderer only", () => {
+    for (const command of [
+      { type: "app.cli.status" as const },
+      { type: "app.cli.install" as const },
+      { type: "app.cli.uninstall" as const },
+    ]) {
+      expect(authorizeCommand(command, client("desktop-renderer"))).toEqual({
+        ok: true,
+      });
+      const cliResult = authorizeCommand(
+        command,
+        client("cli-local", ["app:read"])
+      );
+      expect(cliResult.ok).toBe(false);
+    }
+  });
+
+  it("parses terminal:launchWrap but does not grant it to any client kind by default", () => {
+    expect(pierCapabilitySchema.parse("terminal:launchWrap")).toBe(
+      "terminal:launchWrap"
+    );
+    for (const kind of pierClientKindSchema.options) {
+      expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND[kind]).not.toContain(
+        "terminal:launchWrap"
+      );
+    }
   });
 });

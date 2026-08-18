@@ -5,6 +5,12 @@ import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { isWorkspaceBootstrapGateActive } from "@/components/workspace/bootstrap-gate.ts";
 import { equalizeDockviewSplits } from "@/components/workspace/dockview-equalize.ts";
+import { showInactiveSplitPanel } from "@/components/workspace/dockview-inactive-split.ts";
+import {
+  equalizeDockviewPanelGroup,
+  type PanelSizeMutationResult,
+  setDockviewPanelSize,
+} from "@/components/workspace/dockview-panel-size.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { prepareTabStripScrollsForMaximizeLayoutMutation } from "@/lib/workspace/tab-strip-scroll.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
@@ -47,11 +53,15 @@ interface WorkspaceState {
     /** `null` forces no cwd; omit the key to inherit from the active terminal. */
     context?: PanelContext | null;
     exitPresentation?: TerminalPanelParams["exitPresentation"];
+    /** 省略/`true` 保持今天 reveal+激活；`false` 走 dockview `inactive` 且不 reveal。 */
+    focus?: boolean;
     initialInput?: string;
     initialInputSubmit?: boolean;
     launchId?: string;
     placement?: PierCommandPlacement;
     referenceGroup?: WorkspaceGroupRef;
+    /** 相对分屏锚点；缺省为 `api.activePanel`。指向不存在的 panel 时抛错，不回落 active。 */
+    referencePanelId?: string;
     tab?: PanelTabChrome;
     task?: TaskPanelMetadata;
   }) => string | null;
@@ -70,6 +80,10 @@ interface WorkspaceState {
   closePanel: (panelId: string) => Promise<boolean>;
   /** 关闭同组中位于 source 右侧的 tabs（按 group.panels 顺序）。 */
   closeToTheRight: (panelId: string) => Promise<void>;
+  equalizePanelGroup: (input: {
+    axis: "horizontal" | "vertical";
+    panelIds: readonly string[];
+  }) => PanelSizeMutationResult;
   equalizeSplits: () => void;
   focusGroup: (
     direction: "right" | "down" | "left" | "up",
@@ -79,6 +93,11 @@ interface WorkspaceState {
   resetLayout: () => Promise<void>;
   setApi: (api: DockviewApi | null) => void;
   setHasMaximizedGroup: (hasMaximizedGroup: boolean) => void;
+  setPanelSize: (input: {
+    heightRatio?: number;
+    panelId: string;
+    widthRatio?: number;
+  }) => PanelSizeMutationResult;
   splitPanel: (
     panelId: string,
     direction: "right" | "below" | "left" | "above"
@@ -153,6 +172,17 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const id = uniquePanelId(api, "terminal");
     const activeGroup = opts?.referenceGroup ?? api.activeGroup;
     const activePanel = api.activePanel;
+    if (opts?.referencePanelId) {
+      const exists = api.panels.some(
+        (panel) => panel.id === opts.referencePanelId
+      );
+      if (!exists) {
+        throw new Error(`reference panel not found: ${opts.referencePanelId}`);
+      }
+    }
+    const referencePanel = opts?.referencePanelId
+      ? api.panels.find((panel) => panel.id === opts.referencePanelId)
+      : activePanel;
     const splitDirection = (() => {
       switch (opts?.placement) {
         case "split-right":
@@ -167,13 +197,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           return null;
       }
     })();
-    const position =
-      splitDirection && activePanel
-        ? { referencePanel: activePanel.id, direction: splitDirection }
-        : undefined;
-    const fallbackPosition = activeGroup
-      ? { referenceGroup: activeGroup, direction: "within" as const }
-      : { direction: "right" as const };
+    const position = (() => {
+      if (splitDirection && referencePanel) {
+        return { referencePanel: referencePanel.id, direction: splitDirection };
+      }
+      if (opts?.referencePanelId && referencePanel) {
+        return {
+          referencePanel: referencePanel.id,
+          direction: "within" as const,
+        };
+      }
+      if (activeGroup) {
+        return { referenceGroup: activeGroup, direction: "within" as const };
+      }
+      return { direction: "right" as const };
+    })();
     const context =
       opts && Object.hasOwn(opts, "context")
         ? (opts.context ?? undefined)
@@ -193,19 +231,25 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         text: opts.initialInput,
       });
     }
+    const inactive = opts?.focus === false;
     try {
       api.addPanel({
         id,
         component: "terminal",
         title: titlePath ? `Terminal: ${titlePath}` : "Terminal",
         ...(params && { params }),
-        position: position ?? fallbackPosition,
+        ...(inactive ? { inactive: true } : {}),
+        position,
       });
     } catch (err) {
       clearFreshTerminalPanel(id);
       throw err;
     }
-    scheduleRevealDockviewTabByPanelId(id);
+    if (inactive) {
+      showInactiveSplitPanel(api, id);
+    } else {
+      scheduleRevealDockviewTabByPanelId(id);
+    }
     return id;
   },
   addWorkbench(opts) {
@@ -290,6 +334,30 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } catch (err) {
       console.error("[workspace] equalizeSplits failed:", err);
     }
+  },
+
+  equalizePanelGroup: (input) => {
+    const api = get().api;
+    if (!api) {
+      return {
+        code: "platform_unavailable",
+        message: "workspace api not ready",
+        ok: false,
+      };
+    }
+    return equalizeDockviewPanelGroup(api, input);
+  },
+
+  setPanelSize: (input) => {
+    const api = get().api;
+    if (!api) {
+      return {
+        code: "platform_unavailable",
+        message: "workspace api not ready",
+        ok: false,
+      };
+    }
+    return setDockviewPanelSize(api, input);
   },
 
   focusGroup: (direction, sourcePanelId) => {

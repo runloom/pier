@@ -8,6 +8,11 @@ import {
   rulesWriteRequestSchema,
 } from "./agent/assets.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
+import {
+  appCliInstallRequestSchema,
+  appCliStatusRequestSchema,
+  appCliUninstallRequestSchema,
+} from "./app-cli.ts";
 import { commentsCommandSchemas } from "./comments/index.ts";
 import {
   environmentProjectRequestSchema,
@@ -80,6 +85,9 @@ export type PierCommandPlacement = z.infer<typeof pierCommandPlacementSchema>;
 
 export const pierCommandSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("app.status") }),
+  appCliStatusRequestSchema,
+  appCliInstallRequestSchema,
+  appCliUninstallRequestSchema,
   z.object({ type: z.literal("appUpdate.status") }),
   z.object({ type: z.literal("appUpdate.check") }),
   z.object({ type: z.literal("appUpdate.download") }),
@@ -111,13 +119,26 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     placement: pierCommandPlacementSchema.optional(),
     windowId: z.string().min(1).optional(),
   }),
-  z.object({
-    type: z.literal("terminal.open"),
-    focus: z.boolean().optional(),
-    launch: terminalLaunchOptionsSchema.optional(),
-    placement: pierCommandPlacementSchema.optional(),
-    windowId: z.string().min(1).optional(),
-  }),
+  z
+    .object({
+      type: z.literal("terminal.open"),
+      focus: z.boolean().optional(),
+      launch: terminalLaunchOptionsSchema.optional(),
+      /** 复用已有 panel 并换启动；与 `referencePanelId` 互斥。 */
+      panelId: z.string().min(1).optional(),
+      placement: pierCommandPlacementSchema.optional(),
+      /** 相对分屏锚点；缺省为当前 active panel。不可与复用 `panelId` 同时出现。 */
+      referencePanelId: z.string().min(1).optional(),
+      windowId: z.string().min(1).optional(),
+    })
+    .superRefine((value, ctx) => {
+      if (value.panelId && value.referencePanelId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "terminal.open cannot combine panelId and referencePanelId",
+        });
+      }
+    }),
   z.object({
     projectRootPath: z.string().min(1),
     type: z.literal("run.list"),

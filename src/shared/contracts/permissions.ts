@@ -28,6 +28,10 @@ export const pierCapabilitySchema = z.enum([
   "panel:control",
   "terminal:read",
   "terminal:control",
+  /**
+   * Official plugin spawn decoration. Manifest-only; not a client-kind default.
+   */
+  "terminal:launchWrap",
   "plugin:read",
   "plugin:write",
   "command:register",

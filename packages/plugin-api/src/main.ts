@@ -4,9 +4,26 @@
  * between host and external plugins (design §7.1).
  */
 
+export interface PluginConfigurationApi {
+  get<T>(key: string): T;
+  onDidChange(
+    cb: (event: { changedKeys: readonly string[] }) => void
+  ): () => void;
+  reset(key: string): Promise<void>;
+  set(key: string, value: unknown): Promise<void>;
+}
+
 export interface MainPluginContext {
+  configuration: PluginConfigurationApi;
   events: {
     emit(event: string, payload: unknown): void;
+  };
+  /**
+   * Two-phase spawn decoration for agent terminals. Panel identity is injected
+   * by the host before `decorateSpawn`.
+   */
+  launchWrap: {
+    register(handler: LaunchWrapHandler): () => void;
   };
   lifecycle: {
     onBeforeQuit(callback: () => Promise<void> | void): void;
@@ -67,6 +84,36 @@ export interface MainPluginContext {
     set(key: string, value: string): Promise<void>;
   };
   usageData: MainPluginUsageData;
+}
+
+export interface LaunchWrapInput {
+  agentId: string;
+  command: string;
+  cwd?: string;
+  env: Record<string, string>;
+}
+
+export interface LaunchWrapResult {
+  command?: string;
+  decorateSpawn?: boolean;
+  env?: Record<string, string>;
+  pathPrepend?: string[];
+}
+
+export interface LaunchSpawnInput {
+  agentId: string;
+  env: Record<string, string>;
+  panelId: string;
+  windowId: string;
+}
+
+export interface LaunchSpawnResult {
+  env?: Record<string, string>;
+}
+
+export interface LaunchWrapHandler {
+  decorateSpawn(input: LaunchSpawnInput): Promise<LaunchSpawnResult>;
+  wrap(input: LaunchWrapInput): Promise<LaunchWrapResult>;
 }
 
 export type UsageDataScope =
