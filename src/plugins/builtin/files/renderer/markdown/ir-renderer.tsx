@@ -9,7 +9,10 @@ import {
   TableHeader,
   TableRow,
 } from "@pier/ui/table.tsx";
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type {
+  RendererPluginCodeThemeRegistration,
+  RendererPluginContext,
+} from "@plugins/api/renderer.ts";
 import { createElement, type ReactNode, useMemo } from "react";
 import { MarkdownCodeBlock } from "./code-block.tsx";
 import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
@@ -61,6 +64,7 @@ interface MarkdownIrRendererProps {
   charts: RendererPluginContext["charts"] | undefined;
   codeHighlighter: MarkdownCodeHighlighter | undefined;
   codeTheme: string;
+  codeThemeRegistration: RendererPluginCodeThemeRegistration | undefined;
   /** Paper / app light-dark for mermaid re-render on theme switch. */
   colorMode: "dark" | "light";
   comments?: MarkdownIrCommentsChrome | undefined;
@@ -103,6 +107,7 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
           charts: props.charts,
           codeHighlighter: props.codeHighlighter,
           codeTheme: props.codeTheme,
+          codeThemeRegistration: props.codeThemeRegistration,
           colorMode: props.colorMode,
           ...(props.comments ? { comments: props.comments } : {}),
           copyCode: props.copyCode,
@@ -198,6 +203,7 @@ function renderBlock(
             onCopy={context.copyCode}
             searchMatches={searchMatchesFor(context, "code", block.range)}
             theme={context.codeTheme}
+            themeRegistration={context.codeThemeRegistration}
           />
         </div>
       );

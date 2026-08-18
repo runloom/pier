@@ -2,6 +2,7 @@ import { COMMENT_NAVIGATOR_SCROLL_PAD_CLASS } from "@pier/ui/comments/navigator.
 import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import type { RendererPluginCodeThemeRegistration } from "@plugins/api/renderer.ts";
 import {
   type CSSProperties,
   useEffect,
@@ -27,6 +28,7 @@ import {
 import {
   FALLBACK_DARK_CODE_THEME,
   resolvePreviewCodeTheme,
+  resolvePreviewCodeThemeRegistration,
 } from "./preview-code-theme.ts";
 import {
   DEFAULT_RENDERER_LABELS,
@@ -103,6 +105,10 @@ export function MarkdownPreview({
   const [appearanceCodeTheme, setAppearanceCodeTheme] = useState(
     () => appearance?.current().codeTheme ?? FALLBACK_DARK_CODE_THEME
   );
+  const [appearanceCodeThemeRegistration, setAppearanceCodeThemeRegistration] =
+    useState<RendererPluginCodeThemeRegistration | undefined>(
+      () => appearance?.current().codeThemeRegistration
+    );
   const [appearanceTheme, setAppearanceTheme] = useState<
     "light" | "dark" | undefined
   >(() => appearance?.current().theme);
@@ -115,6 +121,13 @@ export function MarkdownPreview({
   );
   const resolvedCodeTheme = resolvePreviewCodeTheme({
     appearanceCodeTheme,
+    appearanceTheme,
+    codeTheme,
+    readingAppearance,
+  });
+  const resolvedCodeThemeRegistration = resolvePreviewCodeThemeRegistration({
+    appearanceCodeTheme,
+    appearanceCodeThemeRegistration,
     appearanceTheme,
     codeTheme,
     readingAppearance,
@@ -234,9 +247,11 @@ export function MarkdownPreview({
     if (!appearance) return;
     const current = appearance.current();
     setAppearanceCodeTheme(current.codeTheme);
+    setAppearanceCodeThemeRegistration(current.codeThemeRegistration);
     setAppearanceTheme(current.theme);
     return appearance.onDidChange((next) => {
       setAppearanceCodeTheme(next.codeTheme);
+      setAppearanceCodeThemeRegistration(next.codeThemeRegistration);
       setAppearanceTheme(next.theme);
     });
   }, [appearance]);
@@ -395,6 +410,7 @@ export function MarkdownPreview({
                   charts={charts}
                   codeHighlighter={codeHighlighter}
                   codeTheme={resolvedCodeTheme}
+                  codeThemeRegistration={resolvedCodeThemeRegistration}
                   colorMode={previewColorMode}
                   forceCommentPageIndex={forceCommentPageIndex}
                   {...(commentsChrome ? { comments: commentsChrome } : {})}

@@ -37,6 +37,10 @@ function mixedSurface(background: string, strength: number): string {
   return mix(background, PIER_BRAND_PALETTE.primary, strength);
 }
 
+function withHexAlpha(color: string, alpha: "2e" | "4d"): string {
+  return `${color}${alpha}`;
+}
+
 export function applyPierBrandOverlay<T extends PierBrandThemeLike>(
   source: T,
   mode: "light" | "dark"
@@ -60,7 +64,10 @@ export function applyPierBrandOverlay<T extends PierBrandThemeLike>(
     "button.foreground": "#ffffff",
     "button.hoverBackground": PIER_BRAND_PALETTE.deep,
     "charts.blue": PIER_BRAND_PALETTE.primary,
-    "editor.selectionBackground": mode === "dark" ? "#8549ff4d" : "#8549ff2e",
+    "editor.selectionBackground": withHexAlpha(
+      PIER_BRAND_PALETTE.primary,
+      mode === "dark" ? "4d" : "2e"
+    ),
     "editorCursor.foreground": PIER_BRAND_PALETTE.highlight,
     focusBorder: PIER_BRAND_PALETTE.highlight,
     "gitDecoration.modifiedResourceForeground": textAccent,

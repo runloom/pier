@@ -2,14 +2,13 @@ import pierreDark from "@pierre/theme/pierre-dark";
 import pierreDarkSoft from "@pierre/theme/pierre-dark-soft";
 import pierreLight from "@pierre/theme/pierre-light";
 import pierreLightSoft from "@pierre/theme/pierre-light-soft";
-import githubDark from "@shikijs/themes/github-dark";
-import githubLight from "@shikijs/themes/github-light";
+import { stylePresetIdSchema } from "@shared/contracts/preferences.ts";
 import { describe, expect, it } from "vitest";
 import {
   applyPierBrandOverlay,
   PIER_BRAND_PALETTE,
 } from "@/lib/theme/pierre-brand-overlay.ts";
-import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
+import * as presetRegistry from "@/lib/theme/preset-registry.ts";
 
 const PIERRE_CASES = [
   ["pierre", "light"],
@@ -17,7 +16,6 @@ const PIERRE_CASES = [
   ["pierre-soft", "light"],
   ["pierre-soft", "dark"],
 ] as const;
-const GITHUB_SOURCES = { light: githubLight, dark: githubDark } as const;
 const PIERRE_SOURCES = {
   pierre: { light: pierreLight, dark: pierreDark },
   "pierre-soft": { light: pierreLightSoft, dark: pierreDarkSoft },
@@ -86,7 +84,7 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
 
     expect(result.colors).toMatchObject({
       ...commonExpectedColors,
-      "editor.selectionBackground": "#8549ff4d",
+      "editor.selectionBackground": `${PIER_BRAND_PALETTE.primary}4d`,
       "gitDecoration.modifiedResourceForeground": PIER_BRAND_PALETTE.highlight,
       "list.activeSelectionBackground": "#35225c",
       "list.inactiveSelectionBackground": "#251a3b",
@@ -102,7 +100,7 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
 
     expect(result.colors).toMatchObject({
       ...commonExpectedColors,
-      "editor.selectionBackground": "#8549ff2e",
+      "editor.selectionBackground": `${PIER_BRAND_PALETTE.primary}2e`,
       "gitDecoration.modifiedResourceForeground": PIER_BRAND_PALETTE.primary,
       "list.activeSelectionBackground": "#e9deff",
       "list.inactiveSelectionBackground": "#f3edff",
@@ -111,6 +109,25 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
       "textLink.activeForeground": PIER_BRAND_PALETTE.primary,
       "textLink.foreground": PIER_BRAND_PALETTE.primary,
     });
+  });
+
+  it("derives editor selection alpha colors from the palette primary", () => {
+    const mutablePalette = PIER_BRAND_PALETTE as {
+      primary: string;
+    };
+    const originalPrimary = mutablePalette.primary;
+    try {
+      mutablePalette.primary = "#123456";
+
+      expect(applyPierBrandOverlay(source, "dark").colors).toMatchObject({
+        "editor.selectionBackground": "#1234564d",
+      });
+      expect(applyPierBrandOverlay(lightSource, "light").colors).toMatchObject({
+        "editor.selectionBackground": "#1234562e",
+      });
+    } finally {
+      mutablePalette.primary = originalPrimary;
+    }
   });
 
   it("uses mode-aware accents for decorator TextMate and semantic tokens", () => {
@@ -170,7 +187,7 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
 
   it("overlays only the Pierre registry themes while preserving their identity and surfaces", () => {
     for (const [preset, mode] of PIERRE_CASES) {
-      const theme = getShikiTheme(preset, mode);
+      const theme = presetRegistry.getShikiTheme(preset, mode);
 
       expect(theme.colors?.["button.background"]).toBe("#8549ff");
       expect(theme.colors?.["button.hoverBackground"]).toBe("#542ee5");
@@ -186,8 +203,30 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
       );
       expect(theme.name).toBe(PIERRE_SOURCES[preset][mode].name);
     }
+  });
 
-    expect(getShikiTheme("github", "light")).toBe(GITHUB_SOURCES.light);
-    expect(getShikiTheme("github", "dark")).toBe(GITHUB_SOURCES.dark);
+  it("preserves source object identity for every non-Pierre preset", () => {
+    const sourceRegistry = (
+      presetRegistry as typeof presetRegistry & {
+        STYLE_PRESET_SOURCE_REGISTRY?: typeof presetRegistry.STYLE_PRESET_REGISTRY;
+      }
+    ).STYLE_PRESET_SOURCE_REGISTRY;
+    expect(sourceRegistry).toBeDefined();
+    if (!sourceRegistry) throw new Error("missing source preset registry");
+
+    const nonPierrePresets = stylePresetIdSchema.options.filter(
+      (preset) => preset !== "pierre" && preset !== "pierre-soft"
+    );
+    for (const preset of nonPierrePresets) {
+      expect(presetRegistry.STYLE_PRESET_REGISTRY[preset]).toBe(
+        sourceRegistry[preset]
+      );
+      expect(presetRegistry.getShikiTheme(preset, "light")).toBe(
+        sourceRegistry[preset].light
+      );
+      expect(presetRegistry.getShikiTheme(preset, "dark")).toBe(
+        sourceRegistry[preset].dark
+      );
+    }
   });
 });

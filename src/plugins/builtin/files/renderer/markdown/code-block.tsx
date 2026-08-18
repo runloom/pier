@@ -1,6 +1,7 @@
 import { Button } from "@pier/ui/button.tsx";
 import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import type { RendererPluginCodeThemeRegistration } from "@plugins/api/renderer.ts";
 import { Check, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -31,6 +32,7 @@ export function MarkdownCodeBlock({
   onCopy,
   searchMatches,
   theme,
+  themeRegistration,
 }: {
   activeSearchMatchId?: string | undefined;
   code: string;
@@ -41,6 +43,7 @@ export function MarkdownCodeBlock({
   onCopy?: ((code: string) => Promise<void>) | undefined;
   searchMatches?: readonly MarkdownSearchMatch[] | undefined;
   theme: string;
+  themeRegistration?: RendererPluginCodeThemeRegistration | undefined;
 }) {
   const [highlight, setHighlight] = useState<MarkdownCodeHighlightOutcome>({
     status: "plain",
@@ -55,13 +58,15 @@ export function MarkdownCodeBlock({
   useEffect(() => {
     let active = true;
     setHighlight({ status: "plain" });
-    highlighter.highlight({ code, language, theme }).then((result) => {
-      if (active) setHighlight(result);
-    });
+    highlighter
+      .highlight({ code, language, theme, themeRegistration })
+      .then((result) => {
+        if (active) setHighlight(result);
+      });
     return () => {
       active = false;
     };
-  }, [code, highlighter, language, theme]);
+  }, [code, highlighter, language, theme, themeRegistration]);
 
   useEffect(
     () => () => {

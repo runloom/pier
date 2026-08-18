@@ -1,3 +1,5 @@
+import type { RendererPluginCodeThemeRegistration } from "@plugins/api/renderer.ts";
+
 export interface MarkdownCodeHighlightToken {
   color?: string;
   content: string;
@@ -9,6 +11,7 @@ export interface MarkdownCodeHighlightRequest {
   language: string;
   requestId: string;
   theme: string;
+  themeRegistration?: RendererPluginCodeThemeRegistration;
   type: "highlight";
 }
 

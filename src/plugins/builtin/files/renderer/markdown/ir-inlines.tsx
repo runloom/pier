@@ -2,7 +2,10 @@
  * Markdown IR inline renderer (text, links, images, kbd, footnotes).
  */
 import { Kbd } from "@pier/ui/kbd.tsx";
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type {
+  RendererPluginCodeThemeRegistration,
+  RendererPluginContext,
+} from "@plugins/api/renderer.ts";
 import { Fragment, type ReactNode } from "react";
 import type { MarkdownCodeBlockLabels } from "./code-block.tsx";
 import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
@@ -39,6 +42,7 @@ export interface MarkdownRenderContext {
   charts: RendererPluginContext["charts"] | undefined;
   codeHighlighter: MarkdownCodeHighlighter | undefined;
   codeTheme: string;
+  codeThemeRegistration: RendererPluginCodeThemeRegistration | undefined;
   colorMode: "dark" | "light";
   comments?: MarkdownIrCommentsChrome | undefined;
   copyCode: ((code: string) => Promise<void>) | undefined;

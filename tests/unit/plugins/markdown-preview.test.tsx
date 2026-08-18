@@ -2,6 +2,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { MarkdownCodeHighlighter } from "@plugins/builtin/files/renderer/markdown/code-highlighter.ts";
 import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/parser.ts";
 import { MarkdownPreview } from "@plugins/builtin/files/renderer/markdown/preview.tsx";
+import { writeMarkdownReadingAppearance } from "@plugins/builtin/files/renderer/markdown/preview-preferences.ts";
 import {
   type MarkdownRuntime,
   type MarkdownRuntimeParseOutcome,
@@ -10,6 +11,7 @@ import {
 import { FILES_IN_FILE_SEARCH_BAR_CLASSNAME } from "@plugins/builtin/files/renderer/search/bar.tsx";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
 
 function immediateRuntime(): MarkdownRuntime {
   return {
@@ -296,6 +298,100 @@ describe("MarkdownPreview", () => {
       expect(copyCode).toHaveBeenCalledWith("const value = 1");
     });
     expect(screen.getByRole("button", { name: "Copied" })).toBeVisible();
+  });
+
+  it("forwards only the selected appearance theme registration to code highlighting", async () => {
+    const registration = getShikiTheme("pierre", "dark");
+    const appearance = {
+      current: () => ({
+        codeTheme: registration.name ?? "pierre-dark",
+        codeThemeRegistration: registration,
+        codeThemes: { dark: "pierre-dark", light: "pierre-light" },
+        density: "compact" as const,
+        language: "en",
+        locale: "en",
+        theme: "dark" as const,
+        typography: {
+          baseFontSize: "13px",
+          codeFontFamily: "monospace",
+          codeFontSize: "13px",
+          fontFamily: "sans-serif",
+        },
+      }),
+      onDidChange: () => () => undefined,
+    } as unknown as RendererPluginContext["appearance"];
+    const highlight = vi.fn(async () => ({ status: "plain" as const }));
+    const highlighter: MarkdownCodeHighlighter = {
+      dispose: vi.fn(),
+      highlight,
+    };
+    writeMarkdownReadingAppearance("auto");
+
+    const auto = render(
+      <MarkdownPreview
+        appearance={appearance}
+        codeHighlighter={highlighter}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-appearance-theme"
+        source={source}
+        value={"```ts\n@sealed\nclass Example {}\n```"}
+      />
+    );
+    await waitFor(() => {
+      expect(highlight).toHaveBeenCalledWith({
+        code: "@sealed\nclass Example {}",
+        language: "ts",
+        theme: registration.name,
+        themeRegistration: registration,
+      });
+    });
+    auto.unmount();
+
+    highlight.mockClear();
+    const explicit = render(
+      <MarkdownPreview
+        appearance={appearance}
+        codeHighlighter={highlighter}
+        codeTheme="github-dark"
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-explicit-theme"
+        source={source}
+        value={"```ts\nconst value = 1\n```"}
+      />
+    );
+    await waitFor(() => {
+      expect(highlight).toHaveBeenCalledWith({
+        code: "const value = 1",
+        language: "ts",
+        theme: "github-dark",
+      });
+    });
+    explicit.unmount();
+
+    highlight.mockClear();
+    writeMarkdownReadingAppearance("light");
+    const fallback = render(
+      <MarkdownPreview
+        appearance={appearance}
+        codeHighlighter={highlighter}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-fallback-theme"
+        source={source}
+        value={"```ts\nconst value = 2\n```"}
+      />
+    );
+    await waitFor(() => {
+      expect(highlight).toHaveBeenCalledWith({
+        code: "const value = 2",
+        language: "ts",
+        theme: "github-light",
+      });
+    });
+    fallback.unmount();
+    writeMarkdownReadingAppearance("auto");
   });
   it("finds, highlights, and navigates visible Markdown text", async () => {
     const runtime = immediateRuntime();

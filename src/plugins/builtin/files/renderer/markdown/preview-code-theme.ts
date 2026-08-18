@@ -1,3 +1,4 @@
+import type { RendererPluginCodeThemeRegistration } from "@plugins/api/renderer.ts";
 import type { MarkdownReadingAppearance } from "./preview-preferences.ts";
 
 export const FALLBACK_LIGHT_CODE_THEME = "github-light";
@@ -21,4 +22,27 @@ export function resolvePreviewCodeTheme(options: {
       : FALLBACK_DARK_CODE_THEME;
   }
   return options.appearanceCodeTheme;
+}
+
+export function resolvePreviewCodeThemeRegistration(options: {
+  appearanceCodeTheme: string;
+  appearanceCodeThemeRegistration:
+    | RendererPluginCodeThemeRegistration
+    | undefined;
+  appearanceTheme: "light" | "dark" | undefined;
+  codeTheme: string | undefined;
+  readingAppearance: MarkdownReadingAppearance;
+}): RendererPluginCodeThemeRegistration | undefined {
+  const registration = options.appearanceCodeThemeRegistration;
+  if (
+    options.codeTheme ||
+    !registration ||
+    registration.name !== options.appearanceCodeTheme
+  ) {
+    return;
+  }
+  if (options.readingAppearance === "auto") return registration;
+  return options.readingAppearance === options.appearanceTheme
+    ? registration
+    : undefined;
 }

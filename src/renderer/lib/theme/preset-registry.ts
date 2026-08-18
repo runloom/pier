@@ -58,15 +58,9 @@ interface PresetEntry {
   light: ShikiThemeLike;
 }
 
-export const STYLE_PRESET_REGISTRY: Record<StylePresetId, PresetEntry> = {
-  pierre: {
-    light: applyPierBrandOverlay(pierreLight, "light"),
-    dark: applyPierBrandOverlay(pierreDark, "dark"),
-  },
-  "pierre-soft": {
-    light: applyPierBrandOverlay(pierreLightSoft, "light"),
-    dark: applyPierBrandOverlay(pierreDarkSoft, "dark"),
-  },
+export const STYLE_PRESET_SOURCE_REGISTRY = {
+  pierre: { light: pierreLight, dark: pierreDark },
+  "pierre-soft": { light: pierreLightSoft, dark: pierreDarkSoft },
   catppuccin: { light: catppuccinLatte, dark: catppuccinMocha },
   everforest: { light: everforestLight, dark: everforestDark },
   github: { light: githubLight, dark: githubDark },
@@ -92,7 +86,42 @@ export const STYLE_PRESET_REGISTRY: Record<StylePresetId, PresetEntry> = {
    */
   "tokyo-night": { light: tokyoNightLight, dark: tokyoNight },
   vitesse: { light: vitesseLight, dark: vitesseDark },
+} satisfies Record<StylePresetId, PresetEntry>;
+
+export const STYLE_PRESET_REGISTRY: Record<StylePresetId, PresetEntry> = {
+  ...STYLE_PRESET_SOURCE_REGISTRY,
+  pierre: {
+    light: applyPierBrandOverlay(
+      STYLE_PRESET_SOURCE_REGISTRY.pierre.light,
+      "light"
+    ),
+    dark: applyPierBrandOverlay(
+      STYLE_PRESET_SOURCE_REGISTRY.pierre.dark,
+      "dark"
+    ),
+  },
+  "pierre-soft": {
+    light: applyPierBrandOverlay(
+      STYLE_PRESET_SOURCE_REGISTRY["pierre-soft"].light,
+      "light"
+    ),
+    dark: applyPierBrandOverlay(
+      STYLE_PRESET_SOURCE_REGISTRY["pierre-soft"].dark,
+      "dark"
+    ),
+  },
 };
+
+const PIERRE_SHIKI_THEME_PAIRS = {
+  pierre: {
+    dark: "pier-branded-pierre-dark",
+    light: "pier-branded-pierre-light",
+  },
+  "pierre-soft": {
+    dark: "pier-branded-pierre-soft-dark",
+    light: "pier-branded-pierre-soft-light",
+  },
+} as const;
 
 export function getShikiTheme(
   presetId: StylePresetId,
@@ -110,6 +139,9 @@ export function getShikiThemePair(presetId: StylePresetId): {
   readonly dark: string;
   readonly light: string;
 } {
+  if (presetId === "pierre" || presetId === "pierre-soft") {
+    return PIERRE_SHIKI_THEME_PAIRS[presetId];
+  }
   const dark = getShikiTheme(presetId, "dark");
   const light = getShikiTheme(presetId, "light");
   return {
