@@ -2,6 +2,8 @@ import pierreDark from "@pierre/theme/pierre-dark";
 import pierreDarkSoft from "@pierre/theme/pierre-dark-soft";
 import pierreLight from "@pierre/theme/pierre-light";
 import pierreLightSoft from "@pierre/theme/pierre-light-soft";
+import githubDark from "@shikijs/themes/github-dark";
+import githubLight from "@shikijs/themes/github-light";
 import { describe, expect, it } from "vitest";
 import {
   applyPierBrandOverlay,
@@ -15,7 +17,7 @@ const PIERRE_CASES = [
   ["pierre-soft", "light"],
   ["pierre-soft", "dark"],
 ] as const;
-const MODES = ["light", "dark"] as const;
+const GITHUB_SOURCES = { light: githubLight, dark: githubDark } as const;
 const PIERRE_SOURCES = {
   pierre: { light: pierreLight, dark: pierreDark },
   "pierre-soft": { light: pierreLightSoft, dark: pierreDarkSoft },
@@ -167,10 +169,6 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
   });
 
   it("overlays only the Pierre registry themes while preserving their identity and surfaces", () => {
-    const githubBefore = MODES.map((mode) =>
-      structuredClone(getShikiTheme("github", mode))
-    );
-
     for (const [preset, mode] of PIERRE_CASES) {
       const theme = getShikiTheme(preset, mode);
 
@@ -189,8 +187,7 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
       expect(theme.name).toBe(PIERRE_SOURCES[preset][mode].name);
     }
 
-    expect(MODES.map((mode) => getShikiTheme("github", mode))).toEqual(
-      githubBefore
-    );
+    expect(getShikiTheme("github", "light")).toBe(GITHUB_SOURCES.light);
+    expect(getShikiTheme("github", "dark")).toBe(GITHUB_SOURCES.dark);
   });
 });
