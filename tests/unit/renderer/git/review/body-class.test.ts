@@ -39,10 +39,29 @@ describe("classifyReviewSlotBodyClass (gold standard)", () => {
     ).toBe("meta");
   });
 
-  it("marks binary as notice and text changes as content", () => {
+  it("marks binary as notice and previewable images as content", () => {
     expect(
       classifyReviewSlotBodyClass(slot({ binary: true, status: "modified" }))
     ).toBe("notice");
+    expect(
+      classifyReviewSlotBodyClass(
+        slot({
+          binary: true,
+          status: "modified",
+          targetPath: "icon.png",
+        })
+      )
+    ).toBe("content");
+    expect(
+      classifyReviewSlotBodyClass(
+        slot({
+          binary: true,
+          oldPath: "old.png",
+          status: "renamed",
+          targetPath: "icon.png",
+        })
+      )
+    ).toBe("meta");
     expect(
       classifyReviewSlotBodyClass(
         slot({ additions: 3, deletions: 1, status: "renamed" })
@@ -50,7 +69,7 @@ describe("classifyReviewSlotBodyClass (gold standard)", () => {
     ).toBe("content");
   });
 
-  it("includes only content in body membership by default", () => {
+  it("includes content and binary notice in the list, not pure rename", () => {
     expect(
       isReviewSlotIncludedInBody(
         slot({ additions: 0, deletions: 0, status: "renamed" })
@@ -59,6 +78,15 @@ describe("classifyReviewSlotBodyClass (gold standard)", () => {
     expect(
       isReviewSlotIncludedInBody(
         slot({ additions: 1, deletions: 0, status: "modified" })
+      )
+    ).toBe(true);
+    expect(
+      isReviewSlotIncludedInBody(
+        slot({
+          binary: true,
+          status: "modified",
+          targetPath: "build/icon.icns",
+        })
       )
     ).toBe(true);
   });
@@ -103,5 +131,25 @@ describe("reviewContentEntryKeysInOrder", () => {
       "entry:mod",
     ]);
     expect(reviewEntryHasBodyContent(renameOnly)).toBe(false);
+  });
+
+  it("treats non-previewable binary as list body without hydrate", () => {
+    const icns: GitReviewIndexEntry = {
+      entryKey: "entry:icns",
+      oldPaths: [],
+      path: "build/icon.icns",
+      renderSlots: [
+        slot({
+          binary: true,
+          sectionKey: "s:icns",
+          status: "modified",
+          targetPath: "build/icon.icns",
+        }),
+      ],
+      status: "modified",
+    };
+    expect(reviewEntryHasBodyContent(icns)).toBe(true);
+    expect(isReviewEntryBodyHydratable(icns)).toBe(false);
+    expect(reviewContentEntryKeysInOrder([icns])).toEqual([]);
   });
 });

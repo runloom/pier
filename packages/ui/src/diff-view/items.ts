@@ -1,7 +1,10 @@
 import { type FileDiffMetadata, processFile } from "@pierre/diffs";
 import type { CodeViewItem } from "@pierre/diffs/react";
-import { estimateContentLinesFromLineStats } from "./geometry.ts";
+import { estimateFileDiff, noticeFileDiff } from "./file-diff/placeholders.ts";
 import { buildHunkActionAnnotations } from "./hunk-annotations.ts";
+import { buildImageDiffAnnotation } from "./image-diff/annotation.ts";
+import { createImageDiffFileDiff } from "./image-diff/file-diff.ts";
+import type { PierDiffViewItemImageDiff } from "./image-diff/types.ts";
 import {
   buildDriftAnnotations,
   buildInlineThreadAnnotations,
@@ -9,6 +12,11 @@ import {
 import type { PierDiffAnnotationMetadata } from "./review/annotation-types.ts";
 import { itemCacheKeyOf } from "./review/drift-cache-key.ts";
 
+export {
+  estimateFileDiff,
+  isEstimateCodeViewItem,
+  placeholderFileDiff,
+} from "./file-diff/placeholders.ts";
 export {
   buildHunkActionAnnotations,
   type HunkAnnotationAnchor,
@@ -61,7 +69,9 @@ export type PierDiffViewItemKind =
   | "error"
   | "ready-notice"
   /** Merge conflict body; render via PierUnresolvedConflictView, not CodeView. */
-  | "conflict";
+  | "conflict"
+  /** Raster image comparison; render via image-diff annotation, not text hunks. */
+  | "image";
 
 import type { PierDiffViewConflictBody } from "./types.ts";
 
@@ -121,6 +131,8 @@ export interface PierDiffViewItem {
   readonly driftComments?: readonly PierDiffReviewDriftThread[];
   readonly fileDisplay?: PierDiffViewFileDisplay;
   readonly id: string;
+  /** Raster sides for `kind: "image"`; locators are resolved by the host. */
+  readonly imageDiff?: PierDiffViewItemImageDiff;
   /** Explicit slot kind; else inferred from patch/stateNotice. */
   readonly kind?: PierDiffViewItemKind;
   /** index/numstat stats for header before patch hydrate. */
@@ -189,7 +201,19 @@ export function toCodeViewItem(
   try {
     const kind = resolvePierDiffViewItemKind(input);
     let fileDiff: FileDiffMetadata;
-    if (kind === "loaded") {
+    if (kind === "image") {
+      if (!input.fileDisplay || input.imageDiff === undefined) {
+        throw new Error(`Pierre image diff is missing sides: ${input.id}`);
+      }
+      fileDiff = createImageDiffFileDiff({
+        cacheKey: input.cacheKey,
+        name: input.fileDisplay.path,
+        type: fileDisplayType(input.fileDisplay.status),
+        ...(input.fileDisplay.previousPath === undefined
+          ? {}
+          : { prevName: input.fileDisplay.previousPath }),
+      });
+    } else if (kind === "loaded") {
       fileDiff = parsedFileDiff(input);
     } else if (kind === "estimate") {
       fileDiff = estimateFileDiff(input);
@@ -203,6 +227,10 @@ export function toCodeViewItem(
       kind === "loaded"
         ? buildHunkActionAnnotations(fileDiff, input.changeControls)
         : undefined;
+    const imageAnnotations =
+      kind === "image" && input.imageDiff !== undefined
+        ? buildImageDiffAnnotation(fileDiff.type, input.imageDiff)
+        : undefined;
     // 文件级 drift 折叠区 annotation（lineNumber: 0，首个 hunk 前渲染）。
     const driftAnnotations = buildDriftAnnotations(
       input.driftComments,
@@ -214,11 +242,13 @@ export function toCodeViewItem(
     );
     const annotations =
       hunkAnnotations === undefined &&
+      imageAnnotations === undefined &&
       driftAnnotations === undefined &&
       inlineThreadAnnotations === undefined
         ? undefined
         : [
             ...(hunkAnnotations ?? []),
+            ...(imageAnnotations ?? []),
             ...(driftAnnotations ?? []),
             ...(inlineThreadAnnotations ?? []),
           ];
@@ -228,7 +258,9 @@ export function toCodeViewItem(
       kind === "error" ||
       kind === "estimate" ||
       kind === "conflict" ||
-      (fileDiff.splitLineCount === 0 && fileDiff.unifiedLineCount === 0);
+      (kind !== "image" &&
+        fileDiff.splitLineCount === 0 &&
+        fileDiff.unifiedLineCount === 0);
     const item: PierDiffCodeViewItem = {
       fileDiff,
       id: input.id,
@@ -424,77 +456,4 @@ function patchLineBuffersCoverHunks(fileDiff: FileDiffMetadata): boolean {
     }
   }
   return true;
-}
-
-/**
- * estimate 槽：FileDiff **0 正文行**（禁止假行号 / unmodified 假文件体）。
- *
- * 虚拟高度唯一来源：`geometry.slotVirtualHeight`（折叠=header，未折叠=numstat 预留或骨架）。
- * 折叠全部事务负责全表写 H，禁止靠滚动收敛。
- * 水合后以真 patch 为准。**禁止** isPartial（见 DiffHunks null 行崩溃）。
- */
-export function estimateFileDiff(input: PierDiffViewItem): FileDiffMetadata {
-  const display = input.fileDisplay;
-  if (!display) {
-    throw new Error(`Pierre estimate is missing file display: ${input.id}`);
-  }
-  const fileDiff: FileDiffMetadata = {
-    additionLines: [],
-    cacheKey: input.cacheKey,
-    deletionLines: [],
-    hunks: [],
-    isPartial: false,
-    name: display.path,
-    ...(display.previousPath === undefined
-      ? {}
-      : { prevName: display.previousPath }),
-    splitLineCount: 0,
-    type: "change",
-    unifiedLineCount: 0,
-  };
-  const contentLines = estimateContentLinesFromLineStats(input.lineStats);
-  if (contentLines !== undefined) {
-    Object.assign(fileDiff, { estimatedContentLines: contentLines });
-  }
-  return fileDiff;
-}
-
-/** 是否为 estimate 占位 FileDiff（0 正文、cacheKey 前缀）。 */
-export function isEstimateCodeViewItem(
-  item: PierDiffCodeViewItem | undefined
-): boolean {
-  if (item?.type !== "diff") {
-    return false;
-  }
-  return (
-    typeof item.fileDiff.cacheKey === "string" &&
-    item.fileDiff.cacheKey.startsWith("estimate:")
-  );
-}
-
-/** error / ready-notice：仅 header 几何（0 正文行），presentation 靠 stateNotice。 */
-function noticeFileDiff(input: PierDiffViewItem): FileDiffMetadata {
-  const display = input.fileDisplay;
-  if (!display) {
-    throw new Error(`Pierre notice item is missing file display: ${input.id}`);
-  }
-  return {
-    additionLines: [],
-    cacheKey: input.cacheKey,
-    deletionLines: [],
-    hunks: [],
-    isPartial: false,
-    name: display.path,
-    ...(display.previousPath === undefined
-      ? {}
-      : { prevName: display.previousPath }),
-    splitLineCount: 0,
-    type: fileDisplayType(display.status),
-    unifiedLineCount: 0,
-  };
-}
-
-/** @deprecated 使用 estimateFileDiff；保留别名避免外部误引用旧名。 */
-export function placeholderFileDiff(input: PierDiffViewItem): FileDiffMetadata {
-  return estimateFileDiff(input);
 }

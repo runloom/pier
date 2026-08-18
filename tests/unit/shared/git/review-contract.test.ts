@@ -335,6 +335,53 @@ describe("Git review shared contract", () => {
     ).toBe(false);
   });
 
+  it("accepts image sections with at least one previewable side", () => {
+    const blobSide = {
+      byteSize: 68,
+      height: 1,
+      kind: "blob" as const,
+      mime: "image/png" as const,
+      oid: "a".repeat(40),
+      width: 1,
+    };
+    expect(
+      gitReviewFileSectionSchema.parse({
+        after: blobSide,
+        before: null,
+        gitRootPath: "/tmp/repo",
+        kind: "image",
+        oldPath: null,
+        sectionKey: "section:unstaged-image",
+        status: "added",
+        targetPath: "icon.png",
+      }).kind
+    ).toBe("image");
+    expect(
+      gitReviewFileSectionSchema.safeParse({
+        after: null,
+        before: null,
+        gitRootPath: "/tmp/repo",
+        kind: "image",
+        oldPath: null,
+        sectionKey: "section:empty-image",
+        status: "added",
+        targetPath: "icon.png",
+      }).success
+    ).toBe(false);
+    expect(
+      gitReviewFileSectionSchema.safeParse({
+        after: blobSide,
+        before: null,
+        gitRootPath: "/tmp/repo",
+        kind: "image",
+        oldPath: null,
+        sectionKey: "section:conflict-image",
+        status: "conflicted",
+        targetPath: "icon.png",
+      }).success
+    ).toBe(false);
+  });
+
   it("rejects legacy conditional document fields and validates documents", () => {
     expect(
       gitReviewFileDocumentRequestSchema.safeParse({

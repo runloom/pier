@@ -6,6 +6,7 @@ import {
   DriftCommentChip,
   type PierDriftCommentLabels,
 } from "./gutter/gutter-comments.tsx";
+import { isImageDiffCacheKey } from "./image-diff/file-diff.ts";
 import { type DiffViewInputStore, useDiffViewInput } from "./input-store.ts";
 import { fileDiffLineStats, type PierDiffCodeViewItem } from "./items.ts";
 import {
@@ -82,7 +83,9 @@ export function LiveHeaderMetadata({
   const loading =
     input !== undefined && pierDiffItemPresentation(input) === "loading";
   // 已解析 hunk 优先；estimate 用 index numstat 首屏齐刷（loading 时仍显示）
-  const fromHunks = fileDiffLineStats(item.fileDiff);
+  const fromHunks = isImageDiffCacheKey(item.fileDiff.cacheKey)
+    ? { additions: 0, deletions: 0 }
+    : fileDiffLineStats(item.fileDiff);
   const fromIndex = input?.lineStats;
   const { additions, deletions } = shouldRenderDiffLineStats(fromHunks)
     ? fromHunks

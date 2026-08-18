@@ -209,3 +209,43 @@ describe("toCodeViewItem estimate slots", () => {
     });
   });
 });
+
+describe("toCodeViewItem image slots", () => {
+  it("builds a non-collapsed image file with a file-level annotation", () => {
+    const input: PierDiffViewItem = {
+      cacheKey: "image:icon.png",
+      fileDisplay: { path: "icon.png", status: "added" },
+      id: "section:image",
+      imageDiff: {
+        after: {
+          byteSize: 68,
+          height: 1,
+          locator: {
+            absolutePath: "/tmp/icon.png",
+            kind: "absolute",
+            mime: "image/png",
+            revision: "abs-v1:test",
+          },
+          width: 1,
+        },
+        before: null,
+      },
+      kind: "image",
+      patch: null,
+    };
+    const { entry, error } = toCodeViewItem(input, undefined);
+    expect(error).toBeNull();
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.collapsed).toBeUndefined();
+    expect(entry.item.fileDiff.cacheKey).toMatch(/^image-diff:/u);
+    expect(entry.item.annotations?.some((item) => item.lineNumber === 0)).toBe(
+      true
+    );
+    expect(fileDiffLineStats(entry.item.fileDiff)).toEqual({
+      additions: 0,
+      deletions: 0,
+    });
+  });
+});

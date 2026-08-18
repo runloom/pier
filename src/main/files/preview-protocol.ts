@@ -5,7 +5,10 @@ import {
 
 export { FILE_PREVIEW_SCHEME } from "@shared/file-preview-url.ts";
 
-import { isAbsoluteFilePreviewLocator } from "@shared/contracts/file/preview-ticket.ts";
+import {
+  isAbsoluteFilePreviewLocator,
+  isGitBlobFilePreviewLocator,
+} from "@shared/contracts/file/preview-ticket.ts";
 import type { OnBeforeRequestListenerDetails } from "electron";
 import { protocol as electronProtocol, session } from "electron";
 import {
@@ -14,6 +17,7 @@ import {
   unsupportedFileType,
 } from "../services/files/path-identity.ts";
 import { resolveAbsoluteImagePreview } from "./absolute-image-preview.ts";
+import { resolveGitBlobImagePreview } from "./git-blob-image-preview.ts";
 import {
   MAX_IMAGE_PREVIEW_FILE_BYTES,
   readFileWithinImagePreviewLimit,
@@ -108,6 +112,25 @@ export async function resolveFilePreviewResponse(
         resolved.locator.mime,
         resolved.locator.revision
       );
+    }
+    if (isGitBlobFilePreviewLocator(entry.locator)) {
+      const resolved = await resolveGitBlobImagePreview({
+        gitRoot: entry.locator.gitRoot,
+        oid: entry.locator.oid,
+      });
+      if (!resolved.ok) {
+        if (resolved.reason === "too-large") {
+          return payloadTooLarge();
+        }
+        return notFound();
+      }
+      if (
+        resolved.mime !== entry.locator.mime ||
+        resolved.revision !== entry.locator.revision
+      ) {
+        return conflict();
+      }
+      return imageResponse(resolved.bytes, resolved.mime, resolved.revision);
     }
     const { path, revision: requestedRevision, root } = entry.locator;
     const identity = await resolveExistingFileIdentity(root, path);

@@ -3599,7 +3599,6 @@ describe("Git review panel", () => {
   });
 
   it("状态文件使用单一 HEAD→Working Tree 文件事实", async () => {
-    // 金标准：binary/notice 默认不进正文；侧栏仍有树项，正文为空态
     const path = "src/current.bin";
     const currentEntry: GitReviewIndexEntry = {
       ...entry(0, path),
@@ -3651,27 +3650,31 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
+    // 默认面 = 已暂存；二进制 notice 与树同列，不拉 document
     await waitFor(() =>
-      expect(
-        view.container.querySelector(
-          '[data-git-review-document-content="empty"]'
-        )
-      ).not.toBeNull()
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        "staged:binary"
+      )
     );
-    // notice 不进 materialize 主路径
+    expect(activeDiff(view.container)).toHaveTextContent(
+      "Binary binary — content not shown"
+    );
     expect(getReviewFileDocument).not.toHaveBeenCalled();
-    expect(findTreeItem(view.container, "current.bin")).toBeTruthy();
-    fireEvent.mouseDown(view.getByRole("tab", { name: "Staged Changes" }), {
-      button: 0,
-      ctrlKey: false,
-    });
+    expect(findTreeItem(view.container, "staged-current.bin")).toBeTruthy();
+    fireEvent.click(findTreeItem(view.container, "staged-current.bin"));
     await waitFor(() =>
-      expect(
-        view.container.querySelector(
-          '[data-git-review-document-content="empty"]'
-        )
-      ).not.toBeNull()
+      expect(scrollToItem).toHaveBeenCalledWith("staged:binary")
     );
+
+    await selectUncommittedTab(view, "Changes");
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        "unstaged:binary"
+      )
+    );
+    expect(getReviewFileDocument).not.toHaveBeenCalled();
   });
 
   it("系统语言的解析 locale 变化会同时更新状态正文和缓存身份", async () => {

@@ -19,6 +19,14 @@ export type {
   PierHunkAnnotationMetadata,
 } from "./hunk-actions.tsx";
 export type {
+  PierDiffViewImageDiff,
+  PierDiffViewItemImageDiff,
+  PierImageDiffLabels,
+  PierImageDiffLocator,
+  PierImageDiffMode,
+  PierImageDiffSide,
+} from "./image-diff/types.ts";
+export type {
   PierDiffReviewCommentThread,
   PierDiffReviewDriftThread,
   PierDiffViewChangeControl,
