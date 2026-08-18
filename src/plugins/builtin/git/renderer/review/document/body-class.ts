@@ -27,9 +27,9 @@ type ReviewSlotLike = Pick<
 };
 
 /**
- * - 明确 0+0 或 pure rename → meta（含预览图片的路径-only rename）
+ * - 明确 0+0 或纯路径 rename → meta（含预览图片的路径-only rename）
  * - previewable raster image (png/jpeg/gif/webp) → content even when binary
- * - other binary → notice（进列表说明卡，不拉 patch）
+ * - other binary（含非预览二进制 rename）→ notice（进列表说明卡，不拉 patch）
  * - 其余有改动状态 → content
  * - 缺证据 → unknown（不进正文）
  */
@@ -42,16 +42,20 @@ export function classifyReviewSlotBodyClass(
     typeof additions === "number" && typeof deletions === "number";
   const hasEdits = hasLineStats && additions + deletions > 0;
 
-  if (slot.status === "renamed" && !hasEdits) {
-    return "meta";
-  }
-
   if (slot.binary === true) {
     const imagePath = slot.targetPath ?? slot.oldPath ?? "";
     if (isPreviewableReviewImagePath(imagePath)) {
+      // 可预览图片的路径-only rename 与文本 rename 一样不进正文。
+      if (slot.status === "renamed" && !hasEdits) {
+        return "meta";
+      }
       return "content";
     }
     return "notice";
+  }
+
+  if (slot.status === "renamed" && !hasEdits) {
+    return "meta";
   }
 
   if (hasLineStats && additions + deletions === 0) {

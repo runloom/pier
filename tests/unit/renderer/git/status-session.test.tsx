@@ -69,4 +69,48 @@ describe("useGitStatus shared session", () => {
     await waitFor(() => expect(secondGetStatus).toHaveBeenCalledTimes(1));
     expect(firstGetStatus).not.toHaveBeenCalled();
   });
+
+  it("gitRoot 为空时保持 loading 且不建 session", () => {
+    const getStatus = vi.fn(() => Promise.resolve(STATUS));
+    const context = {
+      git: {
+        getStatus,
+        watch: vi.fn(() => () => undefined),
+      },
+    } as unknown as RendererPluginContext;
+    const snapshots: Array<{ kind: string }> = [];
+    function Probe() {
+      snapshots.push(useGitStatus(context, null));
+      return null;
+    }
+    render(<Probe />);
+    expect(snapshots[0]).toEqual({ kind: "loading" });
+    expect(getStatus).not.toHaveBeenCalled();
+  });
+
+  it("已有 loaded session 时后续 hook 首帧即可读到快照", async () => {
+    const getStatus = vi.fn(() => Promise.resolve(STATUS));
+    const context = {
+      git: {
+        getStatus,
+        watch: vi.fn(() => () => undefined),
+      },
+    } as unknown as RendererPluginContext;
+
+    const firstKinds: string[] = [];
+    function FirstProbe() {
+      firstKinds.push(useGitStatus(context, "/repo").kind);
+      return null;
+    }
+    render(<FirstProbe />);
+    await waitFor(() => expect(firstKinds.at(-1)).toBe("loaded"));
+
+    const secondSnapshots: Array<{ kind: string }> = [];
+    function SecondProbe() {
+      secondSnapshots.push(useGitStatus(context, "/repo"));
+      return null;
+    }
+    render(<SecondProbe />);
+    expect(secondSnapshots[0]?.kind).toBe("loaded");
+  });
 });

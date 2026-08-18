@@ -64,6 +64,16 @@ describe("classifyReviewSlotBodyClass (gold standard)", () => {
     ).toBe("meta");
     expect(
       classifyReviewSlotBodyClass(
+        slot({
+          binary: true,
+          oldPath: "old.bin",
+          status: "renamed",
+          targetPath: "current.bin",
+        })
+      )
+    ).toBe("notice");
+    expect(
+      classifyReviewSlotBodyClass(
         slot({ additions: 3, deletions: 1, status: "renamed" })
       )
     ).toBe("content");
