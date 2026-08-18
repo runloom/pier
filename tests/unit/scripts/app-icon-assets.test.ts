@@ -212,6 +212,10 @@ function parseIco(data: Buffer): Array<{ size: number; png: Buffer }> {
 describe("Pier application icon sources", () => {
   it("keeps the design archive on the approved F and I system only", () => {
     const archive = read("build/design-sources/index.html");
+    const imageSources = Array.from(
+      archive.matchAll(/<img\b[^>]*\bsrc=(?:"([^"]+)"|'([^']+)')/gi),
+      (match) => match[1] ?? match[2]
+    );
 
     for (const obsolete of [
       "build/design-sources/pier-pier.svg",
@@ -222,24 +226,30 @@ describe("Pier application icon sources", () => {
       expect(existsSync(join(ROOT, obsolete))).toBe(false);
     }
 
-    expect(archive).toContain("../app-icon-master.svg");
-    expect(archive).toContain("../app-icon-micro.svg");
-    expect(archive).toContain("./pier-logo.svg");
+    expect(Array.from(new Set(imageSources)).sort()).toEqual([
+      "../app-icon-master.svg",
+      "../app-icon-micro.svg",
+      "./pier-logo.svg",
+    ]);
     expect(archive).toContain("#b66cff");
     expect(archive).toContain("#8549ff");
     expect(archive).toContain("#542ee5");
+    expect(archive).not.toMatch(/<\s*(?:svg|path|symbol|script)\b/i);
     expect(archive).not.toMatch(/三个停靠的方向|Direction [ABC]|ico-[abc]/i);
     expect(archive).not.toMatch(
       /pier-pier\.svg|pier-panels\.svg|pier-berth(?:-macos)?\.svg/
     );
   });
 
-  it("locks the approved F and I renditions byte-for-byte", () => {
+  it("locks the approved F and I renditions and transparent F mark byte-for-byte", () => {
     expect(sha256(read("build/app-icon-master.svg"))).toBe(
       "ed1f59e2d4f95f62ed4a3336999f83e72003f31449a842b70f2d21b6e7ce8f2d"
     );
     expect(sha256(read("build/app-icon-micro.svg"))).toBe(
       "8e3387d34d9eef1861d3e1768798ca09be1d07c087aed2ea2426afe95eb17ae3"
+    );
+    expect(sha256(read("build/design-sources/pier-logo.svg"))).toBe(
+      "53cb3ffe3a61c35b0710a6d71c135c8970033f44d8aa9e1c448e75ffb747f0bb"
     );
   });
 
