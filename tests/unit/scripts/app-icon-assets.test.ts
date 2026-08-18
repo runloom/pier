@@ -28,14 +28,14 @@ function sha256Bytes(value: Buffer): string {
 }
 
 const EXPECTED_ICNS_FRAME_HASHES = {
-  ic07: "b7523263ddab5bcbd4085fcf28ed321ae0f160e876c7cd2e5fdc57916cb636c3",
-  ic08: "78393d531bec6c8fe661a56d6ad51102e7274b344bf341a511e11a5056aec61c",
-  ic09: "d29a33f99def9b356042dae73ec0820b1728e20173fc8ca3fc7240e966a27cdb",
-  ic10: "a9ae3dda2f0f6be5a9407a9814ffccd8170252d6caa3ad44be7e3b5eca668f8e",
-  ic11: "c4f670863fa086b9dfc923153bb520348131f7829b97e0c7b90e913157cd33b7",
-  ic12: "77c563f7ac8239944a993cc05879ec633a1b8811a6153d1c100e4ba37a239144",
-  ic13: "78393d531bec6c8fe661a56d6ad51102e7274b344bf341a511e11a5056aec61c",
-  ic14: "d29a33f99def9b356042dae73ec0820b1728e20173fc8ca3fc7240e966a27cdb",
+  ic07: "7dec7fb7f242df8bdb3e000bcdffec15ec9d2038ccafed56485048d23794e810",
+  ic08: "3ac2359a170e8587af35b7570a80671991c2a62983ec48eec9497de0805685ff",
+  ic09: "990d6282d5fb4ad596f773899c8e948f4dba0d8de793c2c26857488e43efc4ea",
+  ic10: "50017adb0782266b8279365767d5c4a55c1c7106a6fe7e79f0bf46ab69a2713d",
+  ic11: "016f25eabacaa26440f9a6edda946fe7382c277113cf4b218a819810de420970",
+  ic12: "851d4531ab5350c3721099e2130cc952c590e91d4f2872515349251e05e41dd9",
+  ic13: "3ac2359a170e8587af35b7570a80671991c2a62983ec48eec9497de0805685ff",
+  ic14: "990d6282d5fb4ad596f773899c8e948f4dba0d8de793c2c26857488e43efc4ea",
 } as const;
 
 const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256] as const;
@@ -65,11 +65,11 @@ const SYSTEM_FRAME_SOURCES = new Map([
 const LEGACY_SYSTEM_FRAME_PIXEL_HASHES = new Map([
   [
     "icon_16x16.png",
-    "bc1d0256906cdaf2f0fa4640092e598b34382b53ba2842b13a7f930254b16c0a",
+    "50837fdbb25aae3faa2c4cb86f5916355d5e7d3736d6612ed255e2617c8a431d",
   ],
   [
     "icon_32x32.png",
-    "757b400e20af46b0d46f34871349da3723b0d291e845416f368db0aae782177d",
+    "124257211d7b06681343a29866c871342d9b5970eeaefa2355129602fad75560",
   ],
 ]);
 
@@ -243,13 +243,13 @@ describe("Pier application icon sources", () => {
 
   it("locks the approved F and I renditions and transparent F mark byte-for-byte", () => {
     expect(sha256(read("build/app-icon-master.svg"))).toBe(
-      "ed1f59e2d4f95f62ed4a3336999f83e72003f31449a842b70f2d21b6e7ce8f2d"
+      "114aa8365ad861862679628de4deca14795439f150b44c6d69588c45e58aebef"
     );
     expect(sha256(read("build/app-icon-micro.svg"))).toBe(
-      "8e3387d34d9eef1861d3e1768798ca09be1d07c087aed2ea2426afe95eb17ae3"
+      "adb75880368522de184ba1d74cfafe2538c223e55932041efdfba1290e26c28e"
     );
     expect(sha256(read("build/design-sources/pier-logo.svg"))).toBe(
-      "53cb3ffe3a61c35b0710a6d71c135c8970033f44d8aa9e1c448e75ffb747f0bb"
+      "a8cb88be38a0ea465e5796d2c69042be046c9d850234eea933c9507c020ead52"
     );
   });
 
@@ -260,7 +260,205 @@ describe("Pier application icon sources", () => {
     expect(micro).toMatch(/id="terminal-material-effects"[^>]*opacity="0"/);
     expect(micro).toContain('stroke-width="6.6"');
     expect(micro).toContain('stroke-width="7"');
-    expect(micro).toContain("2.4 19-17.6 35-40 35");
+    expect(micro).toContain("2.4 15-17.6 27-40 27");
+  });
+
+  it("renders the Dock artwork at the approved optical footprint", () => {
+    const { width, height, pixels } = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icon.png"))
+    );
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (pixels.readUInt8((y * width + x) * 4 + 3) === 0) {
+          continue;
+        }
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    const artworkWidth = maxX - minX + 1;
+    const artworkHeight = maxY - minY + 1;
+    expect(artworkWidth).toBeGreaterThanOrEqual(436);
+    expect(artworkWidth).toBeLessThanOrEqual(440);
+    expect(artworkHeight).toBeGreaterThanOrEqual(436);
+    expect(artworkHeight).toBeLessThanOrEqual(440);
+    expect(Math.abs(minX - (width - 1 - maxX))).toBeLessThanOrEqual(1);
+    expect(Math.abs(minY - (height - 1 - maxY))).toBeLessThanOrEqual(1);
+  });
+
+  it("keeps the rendered mark vertically balanced inside the plate", () => {
+    const { width, height, pixels } = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icon.png"))
+    );
+    let plateMinY = height;
+    let plateMaxY = -1;
+    let markMinY = height;
+    let markMaxY = -1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const offset = (y * width + x) * 4;
+        const red = pixels.readUInt8(offset);
+        const green = pixels.readUInt8(offset + 1);
+        const blue = pixels.readUInt8(offset + 2);
+        const alpha = pixels.readUInt8(offset + 3);
+        if (alpha === 0) {
+          continue;
+        }
+        plateMinY = Math.min(plateMinY, y);
+        plateMaxY = Math.max(plateMaxY, y);
+
+        const isColoredMark =
+          blue > 85 &&
+          Math.max(red, green, blue) - Math.min(red, green, blue) > 35;
+        const isLightGlyph = Math.min(red, green, blue) > 145;
+        if (alpha > 200 && (isColoredMark || isLightGlyph)) {
+          markMinY = Math.min(markMinY, y);
+          markMaxY = Math.max(markMaxY, y);
+        }
+      }
+    }
+
+    const topGap = markMinY - plateMinY;
+    const bottomGap = plateMaxY - markMaxY;
+    expect(Math.abs(topGap - bottomGap)).toBeLessThanOrEqual(3);
+  });
+
+  it("keeps upper plate lighting neutral from left to right", () => {
+    const { width, pixels } = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icon.png"))
+    );
+    const rgbAt = (x: number, y: number) => {
+      const offset = (y * width + x) * 4;
+      return [
+        pixels.readUInt8(offset),
+        pixels.readUInt8(offset + 1),
+        pixels.readUInt8(offset + 2),
+      ];
+    };
+    const upperLeft = rgbAt(160, 80);
+    const upperRight = rgbAt(352, 80);
+
+    for (let channel = 0; channel < 3; channel += 1) {
+      expect(
+        Math.abs(upperLeft[channel] - upperRight[channel])
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("keeps the plate surface flat from top to bottom", () => {
+    const { width, pixels } = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icon.png"))
+    );
+    const rgbAt = (x: number, y: number) => {
+      const offset = (y * width + x) * 4;
+      return [
+        pixels.readUInt8(offset),
+        pixels.readUInt8(offset + 1),
+        pixels.readUInt8(offset + 2),
+      ];
+    };
+    const upperPlate = rgbAt(256, 80);
+    const lowerPlate = rgbAt(256, 420);
+
+    for (let channel = 0; channel < 3; channel += 1) {
+      expect(
+        Math.abs(upperPlate[channel] - lowerPlate[channel])
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  it("keeps the plate outline uniform on every edge", () => {
+    const { width, pixels } = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icon.png"))
+    );
+    const rgbAt = (x: number, y: number) => {
+      const offset = (y * width + x) * 4;
+      return [
+        pixels.readUInt8(offset),
+        pixels.readUInt8(offset + 1),
+        pixels.readUInt8(offset + 2),
+      ];
+    };
+    const edges = [
+      rgbAt(256, 41),
+      rgbAt(470, 256),
+      rgbAt(256, 470),
+      rgbAt(41, 256),
+    ];
+
+    for (let index = 1; index < edges.length; index += 1) {
+      for (let channel = 0; channel < 3; channel += 1) {
+        expect(
+          Math.abs(edges[0][channel] - edges[index][channel])
+        ).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it("keeps the rendered U mark at one optical stroke weight", () => {
+    const { width, height, pixels } = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icon.png"))
+    );
+    expect([width, height]).toEqual([512, 512]);
+
+    const isBrandPurple = (x: number, y: number) => {
+      const offset = (y * width + x) * 4;
+      const green = pixels.readUInt8(offset + 1);
+      const blue = pixels.readUInt8(offset + 2);
+      const alpha = pixels.readUInt8(offset + 3);
+      return alpha > 200 && blue >= 100 && blue - green >= 50;
+    };
+    const longestRun = (values: boolean[]) => {
+      let longest = 0;
+      let current = 0;
+      for (const value of values) {
+        current = value ? current + 1 : 0;
+        longest = Math.max(longest, current);
+      }
+      return longest;
+    };
+
+    const leftStroke = longestRun(
+      Array.from({ length: 90 }, (_, index) => isBrandPurple(70 + index, 268))
+    );
+    const rightStroke = longestRun(
+      Array.from({ length: 90 }, (_, index) => isBrandPurple(360 + index, 268))
+    );
+    const bottomStroke = longestRun(
+      Array.from({ length: 120 }, (_, index) => isBrandPurple(256, 300 + index))
+    );
+    const sideStroke = (leftStroke + rightStroke) / 2;
+
+    expect(Math.abs(leftStroke - rightStroke)).toBeLessThanOrEqual(2);
+    expect(Math.abs(bottomStroke - sideStroke)).toBeLessThanOrEqual(6);
+  });
+
+  it("keeps the rendered U mark material highlight above its body", () => {
+    const { width, pixels } = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icon.png"))
+    );
+    const lightnessAt = (x: number, y: number) => {
+      const offset = (y * width + x) * 4;
+      return (
+        pixels.readUInt8(offset) +
+        pixels.readUInt8(offset + 1) +
+        pixels.readUInt8(offset + 2)
+      );
+    };
+
+    const shelfHighlight = lightnessAt(256, 352);
+    const lowerBody = lightnessAt(256, 367);
+
+    expect(shelfHighlight - lowerBody).toBeGreaterThanOrEqual(120);
   });
 
   it("keeps transparent F exports free of the macOS plate", () => {
@@ -347,7 +545,7 @@ describe("Pier application icon sources", () => {
     const dockIcon = readFileSync(join(ROOT, "build/icon.png"));
 
     expect(sha256Bytes(dockIcon)).toBe(
-      "26742aaa53f47aa8dbc8a33c7e77caba6220a5895cfd39ff8913267fe634ef32"
+      "0cb6b2d8f8e071d8f522827625d7e8ae09f5f0dfda5e30f62526941a127704f4"
     );
   });
 
