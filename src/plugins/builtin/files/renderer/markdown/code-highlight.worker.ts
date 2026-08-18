@@ -44,12 +44,13 @@ function requestTheme(
 async function highlight(
   request: MarkdownCodeHighlightRequest
 ): Promise<MarkdownCodeHighlightResponse> {
+  const theme = requestTheme(request);
   const language = bundledLanguage(request.language);
   if (!language) return { requestId: request.requestId, type: "error" };
   try {
     const result = await codeToTokens(request.code, {
       lang: language,
-      theme: requestTheme(request),
+      theme,
     });
     return {
       background: result.bg ?? "transparent",

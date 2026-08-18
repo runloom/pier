@@ -160,6 +160,73 @@ describe("Markdown code highlighter runtime", () => {
     await expect(recovered).resolves.toMatchObject({ status: "highlighted" });
   });
 
+  it("retains a theme registration received with an unsupported request", async () => {
+    const sourceTheme = getShikiTheme("pierre", "dark");
+    const theme = "pierre-unsupported-first-test-dark";
+    const themeRegistration = { ...sourceTheme, name: theme };
+    const unsupportedRequest: MarkdownCodeHighlightRequest = {
+      code: "ignored",
+      language: "definitely-not-supported",
+      requestId: "markdown-unsupported-first",
+      theme,
+      themeRegistration,
+      type: "highlight",
+    };
+    const supportedRequest: MarkdownCodeHighlightRequest = {
+      code: "@sealed\nclass Example {}",
+      language: "ts",
+      requestId: "markdown-supported-second",
+      theme,
+      type: "highlight",
+    };
+
+    await import(
+      "@plugins/builtin/files/renderer/markdown/code-highlight.worker.ts"
+    );
+    const dispatch = (request: MarkdownCodeHighlightRequest) => {
+      const response = new Promise<MarkdownCodeHighlightResponse>((resolve) => {
+        const originalPostMessage = self.postMessage;
+        Object.defineProperty(self, "postMessage", {
+          configurable: true,
+          value: (message: MarkdownCodeHighlightResponse) => {
+            Object.defineProperty(self, "postMessage", {
+              configurable: true,
+              value: originalPostMessage,
+              writable: true,
+            });
+            resolve(message);
+          },
+          writable: true,
+        });
+      });
+      if (typeof self.onmessage !== "function") {
+        throw new Error("missing Markdown highlight worker handler");
+      }
+      self.onmessage(new MessageEvent("message", { data: request }));
+      return response;
+    };
+
+    expect(unsupportedRequest).toMatchObject({ themeRegistration });
+    expect(supportedRequest).not.toEqual(
+      expect.objectContaining({ themeRegistration: expect.anything() })
+    );
+    await expect(dispatch(unsupportedRequest)).resolves.toEqual({
+      requestId: unsupportedRequest.requestId,
+      type: "error",
+    });
+
+    const outcome = await dispatch(supportedRequest);
+    expect(outcome.type).toBe("highlighted");
+    if (outcome.type !== "highlighted") {
+      throw new Error("Markdown highlighting failed");
+    }
+    const decoratorToken = outcome.lines[0]?.[0];
+    expect(decoratorToken?.content).toContain("@");
+    expect(decoratorToken?.color?.toLowerCase()).toBe(
+      PIER_BRAND_PALETTE.highlight
+    );
+  });
+
   it.each([
     ["dark", PIER_BRAND_PALETTE.highlight],
     ["light", PIER_BRAND_PALETTE.primary],
