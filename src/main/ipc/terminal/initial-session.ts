@@ -44,7 +44,7 @@ export async function persistInitialTerminalTask(
   }
 }
 
-function toRestoreLaunch(
+export function toRestoreLaunch(
   launch: ResolvedTerminalLaunchOptions
 ): TerminalAgentRestoreLaunchOptions {
   return {

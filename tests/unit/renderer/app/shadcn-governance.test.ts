@@ -9,6 +9,7 @@ const SOURCE_ROOTS = [
   join(ROOT, "src", "plugins", "builtin"),
   join(ROOT, "packages", "plugin-claude", "src", "renderer"),
   join(ROOT, "packages", "plugin-codex", "src", "renderer"),
+  join(ROOT, "packages", "plugin-tmux", "src", "renderer"),
 ];
 const RAW_BUTTON_OWNERS = new Set([
   // Markdown outline tick / hover list uses raw buttons for Notion-style rail geometry.

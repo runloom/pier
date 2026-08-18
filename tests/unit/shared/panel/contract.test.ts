@@ -240,6 +240,37 @@ describe("shared panel contract", () => {
     });
   });
 
+  it("parses renderer panel.setSize and panel.equalize", () => {
+    expect(
+      rendererCommandSchema.parse({
+        panelId: "p1",
+        type: "panel.setSize",
+        widthRatio: 0.3,
+      })
+    ).toMatchObject({
+      panelId: "p1",
+      type: "panel.setSize",
+      widthRatio: 0.3,
+    });
+    expect(
+      rendererCommandSchema.parse({
+        axis: "vertical",
+        panelIds: ["p1", "p2"],
+        type: "panel.equalize",
+      })
+    ).toMatchObject({
+      axis: "vertical",
+      panelIds: ["p1", "p2"],
+      type: "panel.equalize",
+    });
+    expect(
+      rendererCommandSchema.safeParse({
+        panelId: "p1",
+        type: "panel.setSize",
+      }).success
+    ).toBe(false);
+  });
+
   it("allows public terminal.open commands to carry launch options", () => {
     expect(
       pierCommandSchema.parse({
@@ -270,6 +301,85 @@ describe("shared panel contract", () => {
       type: "terminal.open",
       windowId: "main",
     });
+  });
+
+  it("allows public terminal.open to pin a relative split reference", () => {
+    expect(
+      pierCommandSchema.parse({
+        focus: false,
+        placement: "split-below",
+        referencePanelId: "teammate-1",
+        type: "terminal.open",
+      })
+    ).toMatchObject({
+      focus: false,
+      placement: "split-below",
+      referencePanelId: "teammate-1",
+      type: "terminal.open",
+    });
+  });
+
+  it("allows public terminal.open to reuse an existing panel", () => {
+    expect(
+      pierCommandSchema.parse({
+        focus: false,
+        launch: { command: "claude --teammate" },
+        panelId: "terminal-1",
+        type: "terminal.open",
+      })
+    ).toMatchObject({
+      focus: false,
+      panelId: "terminal-1",
+      type: "terminal.open",
+    });
+  });
+
+  it("rejects public terminal.open that combines panelId and referencePanelId", () => {
+    expect(
+      pierCommandSchema.safeParse({
+        panelId: "reuse-1",
+        referencePanelId: "teammate-1",
+        type: "terminal.open",
+      }).success
+    ).toBe(false);
+  });
+
+  it("rejects renderer terminal.open that combines panelId and referencePanelId", () => {
+    expect(
+      rendererCommandSchema.safeParse({
+        launchId: "launch-1",
+        panelId: "reuse-1",
+        referencePanelId: "teammate-1",
+        type: "terminal.open",
+      }).success
+    ).toBe(false);
+  });
+
+  it("allows public terminal.screen / read / close commands", () => {
+    expect(
+      pierCommandSchema.parse({
+        maxLines: 80,
+        panelId: "terminal-1",
+        type: "terminal.screen",
+        windowId: "main",
+      })
+    ).toMatchObject({
+      maxLines: 80,
+      panelId: "terminal-1",
+      type: "terminal.screen",
+    });
+    expect(
+      pierCommandSchema.parse({
+        panelId: "terminal-1",
+        type: "terminal.read",
+      })
+    ).toMatchObject({ type: "terminal.read", panelId: "terminal-1" });
+    expect(
+      pierCommandSchema.parse({
+        panelId: "terminal-1",
+        type: "terminal.close",
+      })
+    ).toMatchObject({ type: "terminal.close", panelId: "terminal-1" });
   });
 
   it("allows task spawns to pin their source panel group", () => {

@@ -21,6 +21,7 @@ export const pluginPermissions = {
   "secret:read": "读取密钥",
   "secret:write": "写入密钥",
   "terminal:control": "控制终端",
+  "terminal:launchWrap": "装饰智能体终端启动",
   "terminal:read": "读取终端状态",
   "window:close": "关闭窗口",
   "window:control": "控制窗口",

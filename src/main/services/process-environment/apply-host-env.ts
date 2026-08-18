@@ -79,6 +79,16 @@ export function shouldApplyHostEnvKey(key: string): boolean {
   return APPLY_PREFIX_RE.test(key);
 }
 
+const LAUNCH_WRAP_EXTRA_FORBIDDEN = new Set(["TERM", "TERM_PROGRAM"]);
+
+/** Env keys wrap / decorateSpawn must not contribute. */
+export function isForbiddenLaunchWrapEnvKey(key: string): boolean {
+  if (NEVER_APPLY_EXACT.has(key) || LAUNCH_WRAP_EXTRA_FORBIDDEN.has(key)) {
+    return true;
+  }
+  return key.startsWith("DYLD_");
+}
+
 export interface ApplyHostProcessEnvOptions {
   /** Tracked keys from previous apply; used to delete stale host values. */
   lastAppliedKeys?: Set<string>;

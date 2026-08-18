@@ -8,7 +8,7 @@
 Pier 当前只接受两类插件：
 
 - 内置插件：位于 `src/plugins/builtin/*`，随 Pier 一起构建。
-- 官方受管理外部插件：位于 `packages/plugin-*`，通过签名官方索引、包校验、不可变版本目录和启动时运行态快照加载，例如 `pier.claude`、`pier.codex`、`pier.grok`、`pier.ssh`。语言高亮与 PATH 语言服务在 Files / 宿主 L0 内建，不走独立语言包插件。
+- 官方受管理外部插件：位于 `packages/plugin-*`，通过签名官方索引、包校验、不可变版本目录和启动时运行态快照加载，例如 `pier.claude`、`pier.codex`、`pier.grok`、`pier.ssh`、`pier.tmux`。语言高亮与 PATH 语言服务在 Files / 宿主 L0 内建，不走独立语言包插件。
 
 当前不支持第三方插件、任意 local / git / registry 来源、自建索引或 marketplace。源码中的预留枚举不等于产品已经开放对应安装路径。
 
@@ -83,6 +83,8 @@ pnpm plugin:codex:build   # 构建 Codex 官方插件
 pnpm plugin:codex:pack    # 构建并生成 tgz 与 sha256
 pnpm plugin:grok:build    # 构建 Grok 官方插件
 pnpm plugin:grok:pack     # 构建并生成 tgz 与 sha256
+pnpm plugin:tmux:build    # 构建工作台分屏官方插件
+pnpm plugin:tmux:pack     # 构建并生成 tgz 与 sha256
 pnpm plugins:pack         # 依次打包所有官方插件
 pnpm plugins:index        # 重新生成 plugins/index.v1.json
 pnpm dev                  # 启动 Pier 开发环境
@@ -106,6 +108,7 @@ pnpm dev                  # 启动 Pier 开发环境
 - `package.json`
 - manifest 指向的 `dist/main.js`
 - manifest 指向的 `dist/renderer.js`
+- 额外的同目录 `dist/*.js`（例如 `pier.tmux` 的 `dist/tmux.js`）
 
 包不得包含：
 

@@ -3,6 +3,10 @@
  * 并入 pierCommandSchema；不新增 files/git / activity 命令组。
  */
 import { z } from "zod";
+import {
+  terminalScreenMaxBytesSchema,
+  terminalScreenMaxLinesSchema,
+} from "../terminal/screen.ts";
 
 const nonEmpty = z.string().min(1);
 
@@ -27,6 +31,47 @@ export const hostControlCommandSchemas = [
     panelId: nonEmpty,
     /** 简化键名：enter | escape | tab | ctrl-c | 或单字符 */
     key: nonEmpty.max(32),
+    windowId: nonEmpty.optional(),
+  }),
+  z.object({
+    type: z.literal("terminal.screen"),
+    maxBytes: terminalScreenMaxBytesSchema.optional(),
+    maxLines: terminalScreenMaxLinesSchema.optional(),
+    panelId: nonEmpty,
+    windowId: nonEmpty.optional(),
+  }),
+  z.object({
+    type: z.literal("terminal.read"),
+    maxBytes: terminalScreenMaxBytesSchema.optional(),
+    maxLines: terminalScreenMaxLinesSchema.optional(),
+    panelId: nonEmpty,
+    windowId: nonEmpty.optional(),
+  }),
+  z.object({
+    type: z.literal("terminal.close"),
+    panelId: nonEmpty,
+    windowId: nonEmpty.optional(),
+  }),
+  z
+    .object({
+      heightRatio: z.number().gt(0).lt(1).optional(),
+      panelId: nonEmpty,
+      type: z.literal("panel.setSize"),
+      widthRatio: z.number().gt(0).lt(1).optional(),
+      windowId: nonEmpty.optional(),
+    })
+    .superRefine((value, ctx) => {
+      if (value.widthRatio === undefined && value.heightRatio === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: "panel.setSize requires widthRatio and/or heightRatio",
+        });
+      }
+    }),
+  z.object({
+    axis: z.enum(["horizontal", "vertical"]),
+    panelIds: z.array(nonEmpty).min(1),
+    type: z.literal("panel.equalize"),
     windowId: nonEmpty.optional(),
   }),
   z.object({

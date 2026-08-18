@@ -267,6 +267,7 @@ describe("notification center governance", () => {
       join(ROOT, "packages", "plugin-grok", "src"),
       join(ROOT, "packages", "plugin-claude", "src"),
       join(ROOT, "packages", "plugin-ssh", "src"),
+      join(ROOT, "packages", "plugin-tmux", "src"),
     ];
     const offenders: string[] = [];
     for (const root of PLUGIN_ROOTS) {

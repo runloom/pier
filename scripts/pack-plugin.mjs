@@ -10,6 +10,7 @@
 // match `validateManagedPluginPackage` expectations.
 
 import { createHash } from "node:crypto";
+import { existsSync, readdirSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { crc32 } from "node:zlib";
@@ -88,6 +89,19 @@ const members = [
   { name: "dist/main.js", path: join(pluginDir, manifest.main) },
   { name: "dist/renderer.js", path: join(pluginDir, manifest.renderer) },
 ];
+
+const distDir = join(pluginDir, "dist");
+if (existsSync(distDir)) {
+  for (const name of readdirSync(distDir)) {
+    if (!name.endsWith(".js") || name === "main.js" || name === "renderer.js") {
+      continue;
+    }
+    members.push({
+      name: `dist/${name}`,
+      path: join(distDir, name),
+    });
+  }
+}
 
 const pack = tar.pack();
 const tarChunks = [];

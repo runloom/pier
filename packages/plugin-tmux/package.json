@@ -1,0 +1,25 @@
+{
+  "name": "@pier/plugin-tmux",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:main": "vite build --config vite.config.main.ts && vite build --config vite.config.tmux.ts",
+    "build:renderer": "vite build --config vite.config.renderer.ts",
+    "dev:main": "node ./watch-main.mjs",
+    "dev:renderer": "vite build --config vite.config.renderer.ts --watch",
+    "build": "pnpm build:main && pnpm build:renderer",
+    "package": "node ../../scripts/pack-plugin.mjs",
+    "build:package": "pnpm build && pnpm package"
+  },
+  "dependencies": {
+    "@pier/plugin-api": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3"
+  }
+}

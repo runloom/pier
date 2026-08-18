@@ -487,6 +487,22 @@ importers:
         specifier: 24.13.3
         version: 24.13.3
 
+  packages/plugin-tmux:
+    dependencies:
+      '@pier/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/ui:
     dependencies:
       '@pierre/diffs':

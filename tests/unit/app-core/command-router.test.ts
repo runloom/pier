@@ -348,7 +348,10 @@ function services(
           return Promise.resolve({
             data: {
               context: command.context,
-              panelId: "terminal-from-renderer",
+              panelId:
+                command.type === "terminal.open" && command.panelId
+                  ? command.panelId
+                  : "terminal-from-renderer",
             },
             ok: true,
             requestId: "renderer-req",
@@ -965,6 +968,144 @@ describe("createCommandRouter", () => {
     ]);
     await expect(fakeServices.panelContexts.listRecent()).resolves.toEqual([
       panelContext("/tmp/pier"),
+    ]);
+  });
+
+  it("terminal.open 透传 referencePanelId 到 renderer command", async () => {
+    const rendererCommands: unknown[] = [];
+    const terminalLaunches: unknown[] = [];
+    const fakeServices = services(
+      rendererCommands,
+      {
+        main: [
+          panelSnapshot(
+            "terminal-1",
+            panelContext("/Users/dev/ABC/pier"),
+            true
+          ),
+        ],
+      },
+      terminalLaunches
+    );
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          focus: false,
+          placement: "split-below",
+          referencePanelId: "teammate-1",
+          type: "terminal.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-terminal-open-ref",
+      })
+    ).resolves.toMatchObject({
+      ok: true,
+      requestId: "req-terminal-open-ref",
+    });
+
+    expect(rendererCommands).toEqual([
+      {
+        focus: false,
+        launchId: "launch-1",
+        placement: "split-below",
+        referencePanelId: "teammate-1",
+        type: "terminal.open",
+        windowId: "main",
+      },
+    ]);
+  });
+
+  it("terminal.open 透传 panelId 到 renderer command 以复用 panel", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands, {
+      main: [
+        panelSnapshot("terminal-1", panelContext("/Users/dev/ABC/pier"), true),
+      ],
+    });
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          focus: false,
+          launch: { command: "claude --teammate" },
+          panelId: "terminal-1",
+          type: "terminal.open",
+        },
+        protocolVersion: 1,
+        requestId: "req-terminal-open-reuse",
+      })
+    ).resolves.toMatchObject({
+      data: { panelId: "terminal-1", windowId: "main" },
+      ok: true,
+      requestId: "req-terminal-open-reuse",
+    });
+
+    expect(rendererCommands).toEqual([
+      {
+        focus: false,
+        launchId: "launch-1",
+        panelId: "terminal-1",
+        type: "terminal.open",
+        windowId: "main",
+      },
+    ]);
+  });
+
+  it("terminal.open 把 PIER_WINDOW_ID 解析成内部 windowId", async () => {
+    const rendererCommands: unknown[] = [];
+    const fakeServices = services(rendererCommands);
+    fakeServices.window.list = () => [
+      {
+        electronWindowId: "1",
+        focused: true,
+        id: "main",
+        recordId: "record-main",
+      },
+    ];
+    const router = createCommandRouter({
+      clients: registryWith(desktopClient),
+      services: fakeServices,
+    });
+
+    await expect(
+      router.execute({
+        clientId: "desktop-1",
+        command: {
+          focus: false,
+          placement: "split-below",
+          referencePanelId: "terminal-1787015520917",
+          type: "terminal.open",
+          windowId: "1",
+        },
+        protocolVersion: 1,
+        requestId: "req-terminal-open-electron-window",
+      })
+    ).resolves.toMatchObject({
+      data: { windowId: "main" },
+      ok: true,
+      requestId: "req-terminal-open-electron-window",
+    });
+
+    expect(rendererCommands).toEqual([
+      {
+        focus: false,
+        launchId: "launch-1",
+        placement: "split-below",
+        referencePanelId: "terminal-1787015520917",
+        type: "terminal.open",
+        windowId: "main",
+      },
     ]);
   });
 

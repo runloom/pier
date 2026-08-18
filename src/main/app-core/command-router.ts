@@ -24,6 +24,7 @@ import {
 import type { PierCoreServices } from "./command-router-services.ts";
 import { executeAgentAssetsCommand } from "./commands/agent-assets.ts";
 import { executeAiCommand } from "./commands/ai.ts";
+import { executeAppCliCommand } from "./commands/app-cli.ts";
 import { executeAppSnapshotCommand } from "./commands/app-snapshot.ts";
 import { executeCommentsCommand } from "./commands/comments.ts";
 import { executeEnvironmentCommand } from "./commands/environment.ts";
@@ -43,6 +44,10 @@ import {
   executePanelListCommand,
   executePanelOpenCommand,
 } from "./commands/panel.ts";
+import {
+  executePanelEqualizeCommand,
+  executePanelSetSizeCommand,
+} from "./commands/panel-size.ts";
 import { executePanelTransferCommand } from "./commands/panel-transfer.ts";
 import { executePierHomeCommand } from "./commands/pier-home.ts";
 import { executePluginCommand } from "./commands/plugin.ts";
@@ -126,6 +131,10 @@ async function executeAppStateCommand(
       });
     case "app.snapshot":
       return await executeAppSnapshotCommand(requestId, command, services);
+    case "app.cli.status":
+    case "app.cli.install":
+    case "app.cli.uninstall":
+      return await executeAppCliCommand(requestId, command);
     case "notifications.list":
       return await executeNotificationsListCommand(
         requestId,
@@ -319,6 +328,10 @@ async function executePanelCommand(
       return await executePanelListCommand(requestId, command, services);
     case "panel.open":
       return await executePanelOpenCommand(requestId, command, services);
+    case "panel.setSize":
+      return await executePanelSetSizeCommand(requestId, command, services);
+    case "panel.equalize":
+      return await executePanelEqualizeCommand(requestId, command, services);
     default:
       return null;
   }

@@ -8,6 +8,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { IpcMain } from "electron";
 import { appCore } from "../app-core/index.ts";
 import { resolveAgentLaunch } from "../services/agents/launch.ts";
+import { wrapAndRegisterLaunch } from "../services/terminal-launch-wrap/index.ts";
 import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
 
 export function registerAgentsIpc(ipcMain: IpcMain): void {
@@ -60,7 +61,10 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
       if (!launch) {
         return { launchId: null };
       }
-      const launchId = terminalLaunchRegistry.register({ agentId, ...launch });
+      const launchId = await wrapAndRegisterLaunch(
+        { agentId, ...launch },
+        (next) => terminalLaunchRegistry.register(next)
+      );
       return { launchId };
     }
   );
@@ -153,13 +157,16 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
         return { launchId: null };
       }
 
-      const launchId = terminalLaunchRegistry.register({
-        agentId: spec.agentId,
-        command,
-        ...(typeof spec.cwd === "string" && spec.cwd.trim().length > 0
-          ? { cwd: spec.cwd }
-          : {}),
-      });
+      const launchId = await wrapAndRegisterLaunch(
+        {
+          agentId: spec.agentId,
+          command,
+          ...(typeof spec.cwd === "string" && spec.cwd.trim().length > 0
+            ? { cwd: spec.cwd }
+            : {}),
+        },
+        (next) => terminalLaunchRegistry.register(next)
+      );
       return { launchId };
     }
   );

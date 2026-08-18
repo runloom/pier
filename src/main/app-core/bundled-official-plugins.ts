@@ -40,6 +40,14 @@ export const OFFICIAL_BUNDLED_PLUGIN_SPECS: readonly OfficialBundledPluginSpec[]
       prodPluginDirName: "pier.ssh",
     },
     {
+      devPackageDir: "packages/plugin-tmux",
+      fallbackId: "pier.tmux",
+      fallbackName: "Native splits",
+      fallbackVersion: "1.0.0",
+      id: "pier.tmux",
+      prodPluginDirName: "pier.tmux",
+    },
+    {
       devPackageDir: "packages/plugin-claude",
       fallbackId: "pier.claude",
       fallbackName: "Claude",

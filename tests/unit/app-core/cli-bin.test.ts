@@ -54,6 +54,27 @@ describe("bin/pier.mjs", () => {
       op: "agents.catalog",
       protocol: "v2",
     });
+    expect(parsePierCliArgs(["agents", "start", "claude"])).toMatchObject({
+      op: "agents.start",
+      params: { agentId: "claude" },
+      protocol: "v2",
+    });
+    expect(
+      parsePierCliArgs(["agents", "start", "--agent", "claude"])
+    ).toMatchObject({
+      op: "agents.start",
+      params: { agentId: "claude" },
+      protocol: "v2",
+    });
+    expect(() => parsePierCliArgs(["agents", "start"])).toThrow(
+      /agents start requires <id>/u
+    );
+    expect(() =>
+      parsePierCliArgs(["agents", "start", "claude", "--agent", "codex"])
+    ).toThrow(/not both/u);
+    expect(() =>
+      parsePierCliArgs(["agents", "start", "claude", "extra"])
+    ).toThrow(/unexpected pier CLI argument: extra/u);
   });
 
   it("解析 status 并输出命令信封", async () => {
@@ -194,7 +215,7 @@ describe("bin/pier.mjs", () => {
       execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
     ).rejects.toMatchObject({
       stderr: expect.stringContaining(
-        "pier worktrees create --path <repo> --name <dir> --branch <branch> --base <ref> --json"
+        "pier worktrees create <repo> --name <dir> --branch <branch> --base <ref> --json"
       ),
     });
   });
@@ -376,6 +397,16 @@ describe("bin/pier.mjs", () => {
       stderr: expect.stringContaining(
         "pier terminal open [--cwd <path>] [--profile <profileId>]"
       ),
+    });
+    await expect(
+      execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("pier terminal screen <panelId>"),
+    });
+    await expect(
+      execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
+    ).rejects.toMatchObject({
+      stderr: expect.stringContaining("--reference-panel <panelId>"),
     });
     await expect(
       execFileAsync("node", ["bin/pier.mjs", "unknown-command"])
