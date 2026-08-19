@@ -36,6 +36,7 @@ import type {
 } from "./surface-types.ts";
 import { buildActivateNavigationRequest } from "./surface-types.ts";
 import { GitReviewToolbar } from "./toolbar.tsx";
+import { useReviewResponsiveViewOptions } from "./use-responsive-view-options.ts";
 
 type PendingMutationTransition = GitReviewMutationTransition;
 function ReviewDocumentsComponent(
@@ -51,6 +52,7 @@ function ReviewDocumentsComponent(
     | "onRequestTreeOpen"
     | "onAcquireMutationAuthority"
     | "onSelectSurface"
+    | "viewOptions"
   > & {
     readonly onAcquireMutationAuthority: () => boolean;
   }
@@ -123,8 +125,9 @@ function ReviewDocumentsComponent(
   const [activeChrome, setActiveChrome] = useState<ReviewActiveChrome | null>(
     null
   );
-  const { options: viewOptions, setOptions: setViewOptions } =
-    useReviewViewOptions();
+  const reviewViewOptions = useReviewViewOptions();
+  const responsiveViewOptions =
+    useReviewResponsiveViewOptions(reviewViewOptions);
   const selectSurface = useCallback(
     (surface: GitReviewReadingSurface) => {
       userPickedSurfaceRef.current = true;
@@ -159,8 +162,6 @@ function ReviewDocumentsComponent(
         props.entries.find((entry) => entry.entryKey === entryKey)?.path ??
         lastNavigationPathRef.current;
       setMountedSurfaces((current) => addReviewSurface(current, surface));
-      // 树跨面点击：立即切面 + 立即可见新面（无旧面 handoff 叠层）。
-      // 切面后由目标面 beginNavigation 做 demand/scroll。
       if (activeSurfaceRef.current !== surface) {
         setActiveSurface(surface);
         activeSurfaceRef.current = surface;
@@ -221,7 +222,6 @@ function ReviewDocumentsComponent(
       }
       return;
     }
-    // 当前面已无成员（冲突消解 / 全 stage 走空）：落到展示序第一个有内容的面
     if (
       activeSurface === "committed" ||
       navigationRequestRef.current !== null ||
@@ -271,7 +271,6 @@ function ReviewDocumentsComponent(
         candidate.path === mutationTransition.path
     );
     if (entry === undefined) {
-      // 权威 index 未到前 entry 可能尚未出现；catch-up 后仍缺失才放弃。
       if (props.indexGeneration >= mutationTransition.minimumIndexGeneration) {
         setMutationTransition(null);
       }
@@ -337,7 +336,6 @@ function ReviewDocumentsComponent(
         setNavigationRequest(null);
         return;
       }
-      // activate 兜底：树路径已在 requestTreeOpen 切面；无 handoff 叠层。
       if (activeSurfaceRef.current !== request.surface) {
         setActiveSurface(request.surface);
         activeSurfaceRef.current = request.surface;
@@ -420,12 +418,13 @@ function ReviewDocumentsComponent(
             activeChrome?.onToggleCollapseAll();
           }}
           refreshing={props.indexRefreshing === true}
-          setViewOptions={setViewOptions}
-          viewOptions={viewOptions}
+          setViewOptions={responsiveViewOptions.setOptions}
+          viewOptions={reviewViewOptions.options}
         />
       }
       isActiveOpenPath={isActiveOpenPath}
       mutationAuthorityBlocked={props.mutationAuthorityBlocked}
+      onContentResize={responsiveViewOptions.onContentResize}
       onOpenPath={openSharedTreePath}
       setSidebarCollapsed={props.setSidebarCollapsed}
       sidebarCollapsed={props.sidebarCollapsed}
@@ -488,6 +487,7 @@ function ReviewDocumentsComponent(
                 onRequestTreeOpen={requestTreeOpen}
                 onSelectSurface={selectSurface}
                 onSurfaceNavigationSettled={handleNavigationSettled}
+                viewOptions={responsiveViewOptions.effectiveOptions}
               />
             </div>
           );

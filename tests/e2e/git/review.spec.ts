@@ -1624,6 +1624,183 @@ async function dragPanelToWidth(
   }
 }
 
+async function dragReviewContentToWidth(
+  page: Page,
+  separator: Locator,
+  contentPanel: Locator,
+  requestedWidth: number
+): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const [separatorBox, currentWidth] = await Promise.all([
+      separator.boundingBox(),
+      contentPanel.evaluate((element) => element.getBoundingClientRect().width),
+    ]);
+    if (!separatorBox) {
+      throw new Error("Review tree separator has no stable geometry");
+    }
+    if (Math.abs(currentWidth - requestedWidth) <= 0.25) {
+      return;
+    }
+    await dragSeparatorToX(
+      page,
+      separator,
+      separatorBox.x + separatorBox.width / 2 - (requestedWidth - currentWidth)
+    );
+    await page.waitForTimeout(16);
+  }
+  await expect
+    .poll(() =>
+      contentPanel.evaluate((element) => element.getBoundingClientRect().width)
+    )
+    .toBeCloseTo(requestedWidth, 0);
+}
+
+async function reviewDiffType(page: Page): Promise<"split" | "unified" | null> {
+  const value = await activeReviewSurface(page)
+    .locator("[data-diff-type]")
+    .first()
+    .getAttribute("data-diff-type");
+  // Pierre calls its unified rendering "single" in the rendered DOM.
+  if (value === "single") {
+    return "unified";
+  }
+  return value === "split" ? value : null;
+}
+
+async function reviewReadingAnchor(
+  page: Page,
+  path: string
+): Promise<{
+  readonly offsetPx: number;
+  readonly path: string;
+  readonly scrollTop: number;
+}> {
+  return activeReviewSurface(page).evaluate((surface, expectedPath) => {
+    const scroller = surface.querySelector<HTMLElement>(
+      '[data-testid="pierre-diff-root"] .cv-scrollbar'
+    );
+    const container = surface.querySelector<HTMLElement>(
+      `diffs-container[data-pier-file-path="${CSS.escape(expectedPath)}"]`
+    );
+    if (!(scroller && container)) {
+      throw new Error("Review reading anchor is unavailable");
+    }
+    const viewport = scroller.getBoundingClientRect();
+    const anchor =
+      container.shadowRoot?.querySelector("[data-line]") ?? container;
+    return {
+      offsetPx: anchor.getBoundingClientRect().top - viewport.top,
+      path: container.dataset.pierFilePath ?? "",
+      scrollTop: scroller.scrollTop,
+    };
+  }, path);
+}
+
+test("adapts the diff to content width without changing reading state", async () => {
+  test.setTimeout(120_000);
+  const userDataDir = createTemporaryDirectory("pier-git-responsive-e2e-");
+  const repository = createTemporaryDirectory("pier-git-responsive-repo-");
+  await createCompactReviewRepository(repository);
+  const application = await electron.launch({
+    args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    cwd: PROJECT_ROOT,
+    env: { ...process.env, CODEX_HOME: join(userDataDir, "codex-home") },
+  });
+  const child = application.process();
+
+  try {
+    const page = await application.firstWindow();
+    await page.addInitScript(() => {
+      globalThis.localStorage.setItem(
+        "pier.git.review.viewOptions",
+        JSON.stringify({ diffStyle: "split", wrapLines: false })
+      );
+    });
+    await page.reload();
+    await page
+      .locator(
+        '[data-testid="workspace-host-root"][data-workspace-ready="true"]'
+      )
+      .waitFor({ state: "visible", timeout: 30_000 });
+    await expect(async () => {
+      await setWindowSize(application, page, 1400, 800);
+    }).toPass({ timeout: 10_000 });
+
+    const opened = await openTerminalWhenReady(userDataDir, repository);
+    const terminalPanelId = opened.data?.panelId ?? "";
+    expect(terminalPanelId).not.toBe("");
+    await openReviewFromTerminal(page, terminalPanelId);
+    await ensureReviewTreeFilesVisible(page, "unstaged");
+
+    const selectedFile = reviewTreeFileItem(page, /app\.tsx/u, "unstaged");
+    await clickReviewTreeFile(page, /app\.tsx/u, "unstaged");
+    await expect(selectedFile).toHaveAttribute("aria-selected", "true");
+    await expect(
+      activeReviewSurface(page).locator(
+        '[data-git-review-document-settled="true"]'
+      )
+    ).toBeAttached({ timeout: 30_000 });
+    await waitForReviewPathViewportSettle(page, "app.tsx");
+
+    const selectedTreeLabel = await selectedFile.textContent();
+    expect(selectedTreeLabel).toContain("app.tsx");
+    const initialAnchor = await reviewReadingAnchor(page, "src/app.tsx");
+    await expect.poll(() => reviewDiffType(page)).toBe("split");
+
+    const reviewLayout = page
+      .locator('[data-slot="file-panel-header"]')
+      .locator("xpath=parent::*");
+    const reviewSeparator = reviewLayout.locator(
+      '[data-slot="resizable-handle"]'
+    );
+    const contentPanel = reviewLayout.getByTestId("git-review-diff");
+
+    for (const [width, expectedType] of [
+      [899, "unified"],
+      [930, "unified"],
+      [960, "split"],
+    ] as const) {
+      await dragReviewContentToWidth(
+        page,
+        reviewSeparator,
+        contentPanel,
+        width
+      );
+      await expect
+        .poll(() =>
+          contentPanel.evaluate(
+            (element) => element.getBoundingClientRect().width
+          )
+        )
+        .toBeCloseTo(width, 0);
+      await expect.poll(() => reviewDiffType(page)).toBe(expectedType);
+      await expect(selectedFile).toHaveAttribute("aria-selected", "true");
+      expect(await selectedFile.textContent()).toBe(selectedTreeLabel);
+      const anchor = await reviewReadingAnchor(page, "src/app.tsx");
+      expect(anchor.path).toBe(initialAnchor.path);
+      expect(
+        Math.abs(anchor.scrollTop - initialAnchor.scrollTop)
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(anchor.offsetPx - initialAnchor.offsetPx)
+      ).toBeLessThanOrEqual(1);
+    }
+
+    expect(
+      await page.evaluate(() =>
+        JSON.parse(
+          globalThis.localStorage.getItem("pier.git.review.viewOptions") ?? "{}"
+        )
+      )
+    ).toMatchObject({ diffStyle: "split" });
+  } finally {
+    await closeApplicationWithin(application);
+    await forceClose(child);
+    rmSync(userDataDir, { force: true, recursive: true });
+    rmSync(repository, { force: true, recursive: true });
+  }
+});
+
 test("opens one multi-file Review with the real tree and official Pierre CodeView", async () => {
   test.setTimeout(120_000);
   const userDataDir = createTemporaryDirectory("pier-git-review-e2e-");
