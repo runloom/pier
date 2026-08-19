@@ -1681,38 +1681,62 @@ async function dragReviewContentToWidth(
 /** 树最小 170px + 分隔条；正文要能到 split 恢复阈值。 */
 const REVIEW_SPLIT_LAYOUT_MIN_WIDTH_PX =
   GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX + 170 + 16;
+const REVIEW_TREE_HIDE_NAME = /Hide changed files|隐藏目录树|收起变更文件/u;
+const REVIEW_TREE_SHOW_NAME = /Show changed files|显示目录树|展开变更文件/u;
 
-async function ensureReviewContentSplitWidth(
-  application: ElectronApplication,
+async function reviewLayoutWidth(page: Page): Promise<number> {
+  return page.evaluate(
+    () =>
+      document
+        .querySelector("[data-slot='file-panel-layout']")
+        ?.getBoundingClientRect().width ?? 0
+  );
+}
+
+async function collapseReviewTree(page: Page): Promise<void> {
+  const hide = page.getByRole("button", { name: REVIEW_TREE_HIDE_NAME });
+  if (await hide.isVisible().catch(() => false)) {
+    await hide.click();
+  }
+  await expect(
+    page.getByRole("button", { name: REVIEW_TREE_SHOW_NAME })
+  ).toHaveAttribute("aria-expanded", "false");
+}
+
+async function expandReviewTree(page: Page): Promise<void> {
+  const show = page.getByRole("button", { name: REVIEW_TREE_SHOW_NAME });
+  if (await show.isVisible().catch(() => false)) {
+    await show.click();
+  }
+  await expect(
+    page.getByRole("button", { name: REVIEW_TREE_HIDE_NAME })
+  ).toHaveAttribute("aria-expanded", "true");
+}
+
+async function prepareReviewSplitBaseline(
   page: Page,
   separator: Locator,
   contentPanel: Locator
-): Promise<void> {
-  await expect(separator).toBeVisible();
+): Promise<"drag" | "tree"> {
   await expect(contentPanel).toBeVisible();
-  await expect(async () => {
-    await setWindowSize(application, page, 1400, 800);
-    const metrics = await page.evaluate(() => {
-      const layout = document.querySelector("[data-slot='file-panel-layout']");
-      return {
-        layout: layout?.getBoundingClientRect().width ?? 0,
-        window: window.innerWidth,
-      };
-    });
-    expect(metrics.window, `window ${metrics.window}`).toBeGreaterThanOrEqual(
-      REVIEW_SPLIT_LAYOUT_MIN_WIDTH_PX
+  if ((await reviewLayoutWidth(page)) >= REVIEW_SPLIT_LAYOUT_MIN_WIDTH_PX) {
+    await expect(separator).toBeVisible();
+    await dragReviewContentToWidth(
+      page,
+      separator,
+      contentPanel,
+      GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX
     );
-    expect(
-      metrics.layout,
-      `review layout ${metrics.layout}`
-    ).toBeGreaterThanOrEqual(REVIEW_SPLIT_LAYOUT_MIN_WIDTH_PX);
-  }).toPass({ timeout: 10_000 });
-  await dragReviewContentToWidth(
-    page,
-    separator,
-    contentPanel,
-    GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX
-  );
+    return "drag";
+  }
+  // CI macOS 虚拟屏常停在 1024：树开着时正文 < 900，只能收起树才到 split。
+  await collapseReviewTree(page);
+  await expect
+    .poll(() =>
+      contentPanel.evaluate((element) => element.getBoundingClientRect().width)
+    )
+    .toBeGreaterThanOrEqual(GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX);
+  return "tree";
 }
 
 async function reviewDiffType(page: Page): Promise<"split" | "unified" | null> {
@@ -1820,6 +1844,9 @@ test("adapts the diff to content width without changing reading state", async ()
       )
       .toBe(true);
 
+    const selectedTreeLabel = await selectedFile.textContent();
+    expect(selectedTreeLabel).toContain("responsive.ts");
+
     const reviewLayout = page
       .locator('[data-slot="file-panel-header"]')
       .locator("xpath=parent::*");
@@ -1827,8 +1854,7 @@ test("adapts the diff to content width without changing reading state", async ()
       '[data-slot="resizable-handle"]'
     );
     const contentPanel = reviewLayout.getByTestId("git-review-diff");
-    await ensureReviewContentSplitWidth(
-      application,
+    const splitMode = await prepareReviewSplitBaseline(
       page,
       reviewSeparator,
       contentPanel
@@ -1844,41 +1870,69 @@ test("adapts the diff to content width without changing reading state", async ()
     expect(establishedScrollTop).toBeGreaterThan(100);
     await waitForReviewPathViewportSettle(page, "responsive.ts");
 
-    const selectedTreeLabel = await selectedFile.textContent();
-    expect(selectedTreeLabel).toContain("responsive.ts");
     const initialAnchor = await reviewReadingAnchor(page, "src/responsive.ts");
     expect(initialAnchor.scrollTop).toBeGreaterThan(100);
 
-    for (const [width, expectedType] of [
-      [GIT_REVIEW_RESPONSIVE_INLINE_ENTER_PX - 1, "unified"],
-      [930, "unified"],
-      [GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX, "split"],
-    ] as const) {
-      await dragReviewContentToWidth(
-        page,
-        reviewSeparator,
-        contentPanel,
-        width
-      );
+    const assertReadingAnchor = async (label: string) => {
+      const anchor = await reviewReadingAnchor(page, "src/responsive.ts");
+      expect(anchor.path).toBe(initialAnchor.path);
+      expect(
+        Math.abs(anchor.scrollTop - initialAnchor.scrollTop),
+        `reading anchor ${label} ${JSON.stringify({ anchor, initialAnchor })}`
+      ).toBeLessThanOrEqual(1);
+      expect(
+        Math.abs(anchor.offsetPx - initialAnchor.offsetPx)
+      ).toBeLessThanOrEqual(1);
+    };
+
+    if (splitMode === "drag") {
+      for (const [width, expectedType] of [
+        [GIT_REVIEW_RESPONSIVE_INLINE_ENTER_PX - 1, "unified"],
+        [930, "unified"],
+        [GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX, "split"],
+      ] as const) {
+        await dragReviewContentToWidth(
+          page,
+          reviewSeparator,
+          contentPanel,
+          width
+        );
+        await expect
+          .poll(() =>
+            contentPanel.evaluate(
+              (element) => element.getBoundingClientRect().width
+            )
+          )
+          .toBeCloseTo(width, 0);
+        await expect.poll(() => reviewDiffType(page)).toBe(expectedType);
+        await expect(selectedFile).toHaveAttribute("aria-selected", "true");
+        expect(await selectedFile.textContent()).toBe(selectedTreeLabel);
+        await assertReadingAnchor(String(width));
+      }
+    } else {
+      await expandReviewTree(page);
       await expect
         .poll(() =>
           contentPanel.evaluate(
             (element) => element.getBoundingClientRect().width
           )
         )
-        .toBeCloseTo(width, 0);
-      await expect.poll(() => reviewDiffType(page)).toBe(expectedType);
+        .toBeLessThan(GIT_REVIEW_RESPONSIVE_INLINE_ENTER_PX);
+      await expect.poll(() => reviewDiffType(page)).toBe("unified");
       await expect(selectedFile).toHaveAttribute("aria-selected", "true");
       expect(await selectedFile.textContent()).toBe(selectedTreeLabel);
-      const anchor = await reviewReadingAnchor(page, "src/responsive.ts");
-      expect(anchor.path).toBe(initialAnchor.path);
-      expect(
-        Math.abs(anchor.scrollTop - initialAnchor.scrollTop),
-        `reading anchor ${JSON.stringify({ anchor, initialAnchor, width })}`
-      ).toBeLessThanOrEqual(1);
-      expect(
-        Math.abs(anchor.offsetPx - initialAnchor.offsetPx)
-      ).toBeLessThanOrEqual(1);
+      await assertReadingAnchor("tree-expanded");
+
+      await collapseReviewTree(page);
+      await expect
+        .poll(() =>
+          contentPanel.evaluate(
+            (element) => element.getBoundingClientRect().width
+          )
+        )
+        .toBeGreaterThanOrEqual(GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX);
+      await expect.poll(() => reviewDiffType(page)).toBe("split");
+      await assertReadingAnchor("tree-collapsed");
     }
 
     expect(
