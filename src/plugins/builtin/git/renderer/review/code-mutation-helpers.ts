@@ -10,7 +10,10 @@ import type {
   GitReviewMutationRequest,
 } from "@shared/contracts/git/review.ts";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import { gitReviewFailureMessage } from "./message.ts";
+import {
+  gitReviewFailureMessage,
+  gitReviewFailureTechnicalMessage,
+} from "./message.ts";
 
 export function reviewMutationBasename(path: string): string {
   const segments = path.split("/").filter(Boolean);
@@ -29,7 +32,10 @@ export function reviewMutationFailureBody(
     "reason" in error
   ) {
     const failure = error as GitReviewFailure;
-    return [gitReviewFailureMessage(context, failure), failure.message]
+    return [
+      gitReviewFailureMessage(context, failure),
+      gitReviewFailureTechnicalMessage(failure),
+    ]
       .filter((part): part is string => Boolean(part))
       .join("\n\n");
   }

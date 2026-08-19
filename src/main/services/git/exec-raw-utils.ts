@@ -15,6 +15,10 @@ export const GIT_EXEC_DEFAULT_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
 export const GIT_EXEC_SIGKILL_GRACE_MS = 1500;
 export const GIT_EXEC_FORCE_SETTLE_GRACE_MS = 250;
 
+/**
+ * 读路径永不创造 index.lock。写命令也保持 0：会传给 hook 子进程，
+ * 避免 commit 持锁时 husky 的 git status 再抢。禁止为暖缓存在 pulse 上放开。
+ */
 export const GIT_EXEC_ENV: Readonly<Record<string, string>> = {
   GIT_OPTIONAL_LOCKS: "0",
   GIT_PAGER: "cat",

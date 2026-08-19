@@ -18,7 +18,10 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitReviewFailure } from "@shared/contracts/git/review.ts";
 import { pluginText } from "../plugin-text.ts";
 import type { ReviewFailedResource } from "./document/generation.ts";
-import { gitReviewFailureMessage } from "./message.ts";
+import {
+  gitReviewFailureMessage,
+  gitReviewFailureTechnicalMessage,
+} from "./message.ts";
 
 /**
  * Review 失败面 UI 原语 + 反馈门面。
@@ -215,7 +218,7 @@ export function ReviewFailureEmpty({
     <ReviewErrorEmpty
       context={context}
       description={gitReviewFailureMessage(context, failure)}
-      detail={failure.message}
+      detail={gitReviewFailureTechnicalMessage(failure)}
       {...(failure.retryable && onRetry ? { onRetry } : {})}
       title={title}
     />

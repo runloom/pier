@@ -27,6 +27,11 @@ const FAILURE_TEXT = {
     fallback: "This review request is already running.",
     key: "reviewFailureDuplicateOperation",
   },
+  indexLocked: {
+    fallback:
+      "Another program is updating the Git staging area. Try again in a moment.",
+    key: "reviewFailureIndexLocked",
+  },
   internal: {
     fallback: "An internal error occurred while processing the change.",
     key: "reviewFailureInternal",
@@ -62,6 +67,16 @@ export function gitReviewFailureMessage(
 ): string {
   const text = FAILURE_TEXT[failure.reason];
   return pluginText(context, text.key, text.fallback);
+}
+
+/** 锁争用的 Git 原文会教用户删 index.lock；产品文案已给出下一步。 */
+export function gitReviewFailureTechnicalMessage(
+  failure: GitReviewFailure
+): string | null {
+  if (failure.reason === "indexLocked") {
+    return null;
+  }
+  return failure.message;
 }
 
 export function gitReviewWarningMessage(

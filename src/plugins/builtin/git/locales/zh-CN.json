@@ -461,6 +461,7 @@
     "ui.reviewFailureChangeNotFound": "这处变更已移动或更新，请刷新后重试。",
     "ui.reviewFailureCommandFailed": "Git 操作未能完成，请重试。",
     "ui.reviewFailureDuplicateOperation": "此变更审查请求已在执行。",
+    "ui.reviewFailureIndexLocked": "另一个程序正在更新 Git 暂存区，请稍后重试。",
     "ui.reviewFailureInternal": "处理变更时发生内部错误。",
     "ui.reviewFailureInvalidSource": "Git 变更来源已失效。",
     "ui.reviewFailureNotRepository": "此目录已不是 Git 仓库。",

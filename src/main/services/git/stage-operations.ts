@@ -10,9 +10,12 @@ export function isGitPathspecError(error: unknown): boolean {
   );
 }
 
+/** 单次 `git add` 的 pathspec 上限，避免 ARG_MAX。 */
+const STAGE_ADD_PATH_CHUNK_SIZE = 256;
+
 /**
  * Stage paths：已跟踪走 `add -u`，未跟踪先过滤 ignore 再 `add`。
- * 逐路径容错 pathspec 未命中，避免 rename 旧路径拖垮整批。
+ * 预过滤后按批写入；整批 pathspec 未命中时再逐路径跳过。
  */
 export async function stagePaths(
   runGit: GitServiceExec,
@@ -27,8 +30,7 @@ export async function stagePaths(
   // 过滤，避免 Stage All 因忽略项整批失败。
   //
   // rename / 目录整理会同时传入 target+old：旧路径常已不在 index 与
-  // worktree。对「仍可操作」的路径逐个 add，pathspec 未命中则跳过，
-  // 避免整批 exit 128。
+  // worktree。先 ls-files 预过滤，再一次 add；pathspec 竞态再逐条跳过。
   const uniquePaths = [...new Set(paths)];
   const trackedOutput = await runGit(
     ["ls-files", "-z", "--cached", "--", ...uniquePaths],
@@ -41,17 +43,7 @@ export async function stagePaths(
   const trackedPaths = uniquePaths.filter((path) => tracked.has(path));
   const untrackedPaths = uniquePaths.filter((path) => !tracked.has(path));
 
-  for (const path of trackedPaths) {
-    try {
-      await runGit(["add", "-u", "--", path], cwd, {
-        timeoutMs: WRITE_TIMEOUT_MS,
-      });
-    } catch (error) {
-      if (!isGitPathspecError(error)) {
-        throw error;
-      }
-    }
-  }
+  await addPathChunks(runGit, cwd, ["add", "-u"], trackedPaths);
 
   if (untrackedPaths.length === 0) {
     return;
@@ -86,9 +78,46 @@ export async function stagePaths(
   const addableUntracked = untrackedPaths.filter(
     (path) => !ignored.has(path) && existingOthers.has(path)
   );
-  for (const path of addableUntracked) {
+  await addPathChunks(runGit, cwd, ["add"], addableUntracked);
+}
+
+async function addPathChunks(
+  runGit: GitServiceExec,
+  cwd: string,
+  command: readonly string[],
+  paths: readonly string[]
+): Promise<void> {
+  if (paths.length === 0) {
+    return;
+  }
+  for (
+    let offset = 0;
+    offset < paths.length;
+    offset += STAGE_ADD_PATH_CHUNK_SIZE
+  ) {
+    const chunk = paths.slice(offset, offset + STAGE_ADD_PATH_CHUNK_SIZE);
     try {
-      await runGit(["add", "--", path], cwd, {
+      await runGit([...command, "--", ...chunk], cwd, {
+        timeoutMs: WRITE_TIMEOUT_MS,
+      });
+    } catch (error) {
+      if (!isGitPathspecError(error)) {
+        throw error;
+      }
+      await addPathsToleratingMissingPathspec(runGit, cwd, command, chunk);
+    }
+  }
+}
+
+async function addPathsToleratingMissingPathspec(
+  runGit: GitServiceExec,
+  cwd: string,
+  command: readonly string[],
+  paths: readonly string[]
+): Promise<void> {
+  for (const path of paths) {
+    try {
+      await runGit([...command, "--", path], cwd, {
         timeoutMs: WRITE_TIMEOUT_MS,
       });
     } catch (error) {

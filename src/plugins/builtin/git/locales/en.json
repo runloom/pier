@@ -395,6 +395,7 @@
     "ui.reviewFailureChangeNotFound": "This change moved or was updated. Refresh and try again.",
     "ui.reviewFailureCommandFailed": "Git could not complete this operation. Try again.",
     "ui.reviewFailureDuplicateOperation": "This review request is already running.",
+    "ui.reviewFailureIndexLocked": "Another program is updating the Git staging area. Try again in a moment.",
     "ui.reviewFailureInternal": "An internal error occurred while processing the change.",
     "ui.reviewFailureInvalidSource": "The Git review source is no longer valid.",
     "ui.reviewFailureNotRepository": "This directory is no longer a Git repository.",

@@ -1397,9 +1397,8 @@ describe("createGitService", () => {
       "src/a.ts",
       "src/b.ts",
     ]);
-    // 逐 path add -u，避免多 pathspec 中有无效路径时整批 128
-    expect(calls).toContainEqual(["add", "-u", "--", "src/a.ts"]);
-    expect(calls).toContainEqual(["add", "-u", "--", "src/b.ts"]);
+    expect(calls).toContainEqual(["add", "-u", "--", "src/a.ts", "src/b.ts"]);
+    expect(calls.filter((args) => args[0] === "add")).toHaveLength(1);
   });
 
   it("stage 未跟踪路径先 check-ignore 再 git add --", async () => {
@@ -1535,6 +1534,7 @@ describe("createGitService", () => {
     await expect(
       service.stage("/repo", { paths: ["gone.ts", "ok.ts"] })
     ).resolves.toBeUndefined();
+    expect(calls).toContainEqual(["add", "-u", "--", "gone.ts", "ok.ts"]);
     expect(calls).toContainEqual(["add", "-u", "--", "ok.ts"]);
   });
 

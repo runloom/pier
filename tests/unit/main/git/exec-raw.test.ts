@@ -105,6 +105,31 @@ describe("createExecGitRaw", () => {
     });
   });
 
+  it("index.lock 退出后短重试再成功", async () => {
+    vi.useFakeTimers();
+    const first = new FakeChild();
+    const second = new FakeChild();
+    const { exec, spawn } = createRawFor(first, second);
+    const pending = exec(["add", "--", "a.ts"], {
+      cwd: "/repo",
+      mode: "collect",
+    });
+
+    first.stderr.emit(
+      "data",
+      Buffer.from(
+        "fatal: Unable to create '/repo/.git/index.lock': File exists."
+      )
+    );
+    first.emit("close", 128);
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(20);
+    second.emit("close", 0);
+
+    await expect(pending).resolves.toMatchObject({ kind: "collected" });
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
   it("stream 模式跨 chunk 解析 NUL record 且不累计 stdout 正文", async () => {
     const child = new FakeChild();
     const { exec } = createRawFor(child);
