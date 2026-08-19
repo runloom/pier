@@ -40,6 +40,19 @@ describe("useDeferredDialogOpen", () => {
     expect(setTimeoutSpy).not.toHaveBeenCalled();
   });
 
+  it("opens synchronously while a composer slash selector listbox is mounted", () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    const listbox = document.createElement("div");
+    listbox.setAttribute("role", "listbox");
+    listbox.dataset.testid = "terminal-composer-skill-popup";
+    document.body.append(listbox);
+
+    const { getByTestId, rerender } = render(<Probe open={false} />);
+    rerender(<Probe open={true} />);
+    expect(getByTestId("open").textContent).toBe("true");
+    expect(setTimeoutSpy).not.toHaveBeenCalled();
+  });
+
   it("opens synchronously on first mount when already open", () => {
     const { getByTestId } = render(<Probe open={true} />);
     expect(getByTestId("open").textContent).toBe("true");

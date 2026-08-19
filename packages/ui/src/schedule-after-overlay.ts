@@ -4,9 +4,14 @@ import { OPEN_MODAL_CONTENT_SELECTOR } from "./modal-layer.ts";
  * Open Radix portals that currently own modal pointer-events / focus.
  * Present when a menu/select is still mounted in the same turn a Dialog opens.
  *
- * Intentionally excludes dialog / alert-dialog content: an already-open modal
- * (settings, host confirm shell) also sets body pointer-events=none, and nested
- * dialogs opened from inside it must not wait for that lock to clear.
+ * Intentionally excludes:
+ * - dialog / alert-dialog content: an already-open modal (settings, host
+ *   confirm shell) also sets body pointer-events=none, and nested dialogs
+ *   opened from inside it must not wait for that lock to clear.
+ * - generic `[role=listbox]` / `[role=menu]`: composer slash/@/# suggest,
+ *   cmdk lists, and in-file search use those roles without locking the
+ *   body. Treating them as overlays makes Dialog wait then abandon
+ *   (⌘⇧P while the slash selector is open never mounts the palette).
  */
 export const OPEN_OVERLAY_SELECTOR = [
   "[data-slot=select-content]",
@@ -16,8 +21,6 @@ export const OPEN_OVERLAY_SELECTOR = [
   "[data-slot=menubar-content]",
   "[data-slot=hover-card-content]",
   "[data-slot=combobox-content]",
-  "[role=listbox]",
-  "[role=menu]",
 ].join(",");
 
 const OPEN_MODAL_SHELL_SELECTOR = OPEN_MODAL_CONTENT_SELECTOR;
