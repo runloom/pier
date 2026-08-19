@@ -81,7 +81,7 @@ function openStylePresetQuickPick() {
       aliases: resolveI18nAliases(stylePresetAliasesKey(opt.value)),
       checked: opt.value === originalPreset,
       id: opt.value,
-      label: i18next.t(opt.labelKey),
+      label: opt.label,
     })),
     onChangeSelection(item) {
       applyThemeVisual(originalTheme, item.id as StylePresetId);

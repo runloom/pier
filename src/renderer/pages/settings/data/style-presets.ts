@@ -1,34 +1,32 @@
 import type { StylePresetId } from "@shared/contracts/preferences.ts";
 
 export interface StylePresetOption {
-  labelKey: string;
+  label: string;
   value: StylePresetId;
 }
 
+/** Official theme names. Show as-is in every locale. */
 export const STYLE_PRESET_OPTIONS: readonly StylePresetOption[] = [
-  { value: "pierre", labelKey: "settings.stylePreset.pierre" },
-  { value: "pierre-soft", labelKey: "settings.stylePreset.pierre-soft" },
-  { value: "catppuccin", labelKey: "settings.stylePreset.catppuccin" },
-  { value: "everforest", labelKey: "settings.stylePreset.everforest" },
-  { value: "github", labelKey: "settings.stylePreset.github" },
-  { value: "github-default", labelKey: "settings.stylePreset.github-default" },
-  {
-    value: "github-high-contrast",
-    labelKey: "settings.stylePreset.github-high-contrast",
-  },
-  { value: "gruvbox-hard", labelKey: "settings.stylePreset.gruvbox-hard" },
-  { value: "gruvbox-medium", labelKey: "settings.stylePreset.gruvbox-medium" },
-  { value: "gruvbox-soft", labelKey: "settings.stylePreset.gruvbox-soft" },
-  { value: "kanagawa", labelKey: "settings.stylePreset.kanagawa" },
-  { value: "vscode", labelKey: "settings.stylePreset.vscode" },
-  { value: "material", labelKey: "settings.stylePreset.material" },
-  { value: "min", labelKey: "settings.stylePreset.min" },
-  { value: "one", labelKey: "settings.stylePreset.one" },
-  { value: "rose-pine", labelKey: "settings.stylePreset.rose-pine" },
-  { value: "slack", labelKey: "settings.stylePreset.slack" },
-  { value: "solarized", labelKey: "settings.stylePreset.solarized" },
-  { value: "tokyo-night", labelKey: "settings.stylePreset.tokyo-night" },
-  { value: "vitesse", labelKey: "settings.stylePreset.vitesse" },
+  { value: "pierre", label: "Pierre" },
+  { value: "pierre-soft", label: "Pierre Soft" },
+  { value: "catppuccin", label: "Catppuccin" },
+  { value: "everforest", label: "Everforest" },
+  { value: "github", label: "GitHub" },
+  { value: "github-default", label: "GitHub Default" },
+  { value: "github-high-contrast", label: "GitHub High Contrast" },
+  { value: "gruvbox-hard", label: "Gruvbox Hard" },
+  { value: "gruvbox-medium", label: "Gruvbox Medium" },
+  { value: "gruvbox-soft", label: "Gruvbox Soft" },
+  { value: "kanagawa", label: "Kanagawa" },
+  { value: "vscode", label: "VS Code" },
+  { value: "material", label: "Material" },
+  { value: "min", label: "Min" },
+  { value: "one", label: "One" },
+  { value: "rose-pine", label: "Rose Pine" },
+  { value: "slack", label: "Slack" },
+  { value: "solarized", label: "Solarized" },
+  { value: "tokyo-night", label: "Tokyo Night" },
+  { value: "vitesse", label: "Vitesse" },
 ];
 
 export const DEFAULT_STYLE_PRESET: StylePresetId = "pierre";
