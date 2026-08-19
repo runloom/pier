@@ -14,11 +14,9 @@ import { ipcRenderer } from "electron";
  * 原先 index.ts / git-api.ts / worktree-api.ts / plugin-settings-api.ts /
  * terminal-status-bar-api.ts 各自手写一份逐字相同的实现,此处收编为单一来源。
  */
-export async function invokePierCommand<T>(command: PierCommand): Promise<T> {
-  const result = (await ipcRenderer.invoke(
-    PIER.COMMAND_EXECUTE,
-    command
-  )) as PierCommandResult;
+async function unpackPierCommandResult<T>(
+  result: PierCommandResult
+): Promise<T> {
   if (result.ok) {
     return result.data as T;
   }
@@ -27,6 +25,24 @@ export async function invokePierCommand<T>(command: PierCommand): Promise<T> {
   };
   error.code = result.error.code;
   throw error;
+}
+
+export async function invokePierCommand<T>(command: PierCommand): Promise<T> {
+  const result = (await ipcRenderer.invoke(
+    PIER.COMMAND_EXECUTE,
+    command
+  )) as PierCommandResult;
+  return unpackPierCommandResult<T>(result);
+}
+
+export async function invokeCanvasPierCommand<T>(
+  command: PierCommand
+): Promise<T> {
+  const result = (await ipcRenderer.invoke(
+    PIER.CANVAS_COMMAND_EXECUTE,
+    command
+  )) as PierCommandResult;
+  return unpackPierCommandResult<T>(result);
 }
 
 /**

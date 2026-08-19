@@ -10,10 +10,11 @@ export type CanvasFileWriteOutcome =
   | { kind: "failed"; message: string };
 
 export interface CanvasFileApi {
-  /** False when the Canvas has no file scope. */
+  /** False when the canvas has no sibling-file scope. */
   available: boolean;
-  /** Project-relative directory containing the Canvas. */
+  /** Project-relative directory containing the canvas. */
   directory: string;
+  /** Read a sibling text file. */
   read(fileName: string): Promise<CanvasFileReadResult>;
   /**
    * Write a sibling text file. Pass `null` only when the file must not exist;
@@ -26,4 +27,5 @@ export interface CanvasFileApi {
   ): Promise<CanvasFileWriteOutcome>;
 }
 
+/** Read and write files next to this canvas. Not a general file API. */
 export const useCanvasFile: () => CanvasFileApi;

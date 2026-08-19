@@ -35,7 +35,7 @@
       "@pier/ui/*": ["./packages/ui/src/*"],
       "@pier/ui": ["./packages/ui/src"],
       "pier/canvas": ["./tests/support/pier-canvas.ts"],
-      "pier/visualizations": ["./tests/support/pier-visualizations.ts"]
+      "pier/host": ["./tests/support/pier-host.ts"]
     }
   },
   "include": [

@@ -35,9 +35,9 @@ export function ImagePreviewControls({
 }: {
   effectiveZoom: number;
   labels: ImagePreviewCanvasLabels;
-  /** Defaults to image-preview MAX_ZOOM (8). NodeGraph stage passes 4. */
+  /** Defaults to image-preview MAX_ZOOM (8). Mermaid stage passes 4. */
   maxZoom?: number | undefined;
-  /** Defaults to image-preview MIN_ZOOM (0.1). NodeGraph stage passes 0.12. */
+  /** Defaults to image-preview MIN_ZOOM (0.1). Mermaid stage passes 0.12. */
   minZoom?: number | undefined;
   onZoomChange: (zoom: number | "fit") => void;
   onZoomIn: () => void;

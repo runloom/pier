@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { isAbsolute, join, normalize, sep } from "node:path";
 import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
 import { isFrameworkBarePackage } from "@shared/live-module-framework.ts";
@@ -11,7 +12,9 @@ import {
   assertNotNodeModulesPath,
   assertPathInsideRoot,
   isDeniedBareSpecifier,
+  isPathWithinRoot,
 } from "./fence.ts";
+import { registerHostStub } from "./host-stub.ts";
 import { resolveProjectPackage } from "./package-resolve.ts";
 import {
   mapSpecifierWithPaths,
@@ -26,7 +29,6 @@ import {
   PIER_CANVAS_STUB_PATH,
   pierCanvasStubSource,
 } from "./stub-sources.ts";
-import { registerVisualizationsStub } from "./visualizations-stub.ts";
 
 const RUNTIME_BY_SPECIFIER: Record<string, LiveModuleRuntimeId> = {
   react: "react",
@@ -76,6 +78,19 @@ export interface ResolvePluginContext {
   projectRoot: string | null;
 }
 
+function canvasSourceLoader(filePath: string): esbuild.Loader {
+  if (filePath.endsWith(".tsx")) {
+    return "tsx";
+  }
+  if (filePath.endsWith(".ts")) {
+    return "ts";
+  }
+  if (filePath.endsWith(".jsx")) {
+    return "jsx";
+  }
+  return "js";
+}
+
 function addToGraph(
   graphRef: { current: Set<string> },
   realPath: string,
@@ -101,9 +116,8 @@ export function createLiveModuleResolvePlugin(
   return {
     name: "pier-live-modules",
     setup(build) {
-      registerVisualizationsStub(build);
-
       if (ctx.framework === "react") {
+        registerHostStub(build);
         build.onResolve({ filter: /^pier\/canvas$/ }, () => ({
           namespace: PIER_CANVAS_STUB_NAMESPACE,
           path: PIER_CANVAS_STUB_PATH,
@@ -115,6 +129,26 @@ export function createLiveModuleResolvePlugin(
             loader: "js",
             resolveDir: ctx.entryDir,
           })
+        );
+        // Always read canvas sources from disk. esbuild's incremental context
+        // otherwise keeps the previous parse after a missing-export failure.
+        build.onLoad(
+          { filter: /\.[cm]?[jt]sx?$/, namespace: "file" },
+          (args) => {
+            if (
+              !(
+                isPathWithinRoot(args.path, ctx.contentRoot) ||
+                isPathWithinRoot(args.path, ctx.fenceRoot)
+              )
+            ) {
+              return;
+            }
+            return {
+              contents: readFileSync(args.path, "utf8"),
+              loader: canvasSourceLoader(args.path),
+              watchFiles: [args.path],
+            };
+          }
         );
       }
 
@@ -182,6 +216,15 @@ export function createLiveModuleResolvePlugin(
             errors: [
               {
                 text: "pier/canvas is React-only; use project components or the framework's UI kit",
+              },
+            ],
+          };
+        }
+        if (args.path === "pier/host" && ctx.framework !== "react") {
+          return {
+            errors: [
+              {
+                text: "pier/host is React-only; bind Host API from a React canvas",
               },
             ],
           };

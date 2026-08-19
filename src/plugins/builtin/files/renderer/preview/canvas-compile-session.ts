@@ -335,25 +335,35 @@ export function useCanvasCompileSession(props: {
         // Primary error state must be Empty (not soft Alert banner). Soft Alert
         // is only for hot-reload compile failure while previous mount is kept.
         const reportRuntimeError = (error: Error) => {
-          if (!stillOwner()) {
-            return;
-          }
-          const message = canvasMountErrorMessage(error, t);
-          clearMountedCanvas(
-            hostEl,
-            unmountRef,
-            mountedIdentityRef,
-            mountedModuleIdRef.current
-          );
-          mountedModuleIdRef.current = null;
-          setState({
-            diagnostics: [],
-            isRuntime: true,
-            kind: "error",
-            message,
+          queueMicrotask(() => {
+            if (!stillOwner()) {
+              return;
+            }
+            const message = canvasMountErrorMessage(error, t);
+            setState({
+              diagnostics: [],
+              isRuntime: true,
+              kind: "error",
+              message,
+            });
+            queueMicrotask(() => {
+              if (!stillOwner()) {
+                return;
+              }
+              clearMountedCanvas(
+                hostEl,
+                unmountRef,
+                mountedIdentityRef,
+                mountedModuleIdRef.current
+              );
+              mountedModuleIdRef.current = null;
+            });
           });
         };
 
+        if (!stillOwner()) {
+          return;
+        }
         const nextUnmount = await mountLiveModuleExport(
           hostEl,
           framework,

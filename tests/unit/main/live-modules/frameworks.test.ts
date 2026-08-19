@@ -130,58 +130,23 @@ const x = Button;
     }
   });
 
-  it("allows one shared visualization runtime from every canvas framework", async () => {
+  it("rejects pier/host import on non-React frameworks", async () => {
     const { mkdir, writeFile, unlink } = await import("node:fs/promises");
+    const badRel = "smoke/__reject-pier-host.canvas.vue";
+    const badAbs = join(PROJECT_ROOT, ".pier/canvases", badRel);
     await mkdir(join(PROJECT_ROOT, ".pier/canvases/smoke"), {
       recursive: true,
     });
-    const samples = [
-      {
-        content: `import { mountDiagram } from "pier/visualizations";
-export default function Demo() {
-  void mountDiagram;
-  return <div />;
-}`,
-        rel: "smoke/__pier-visualizations.canvas.tsx",
-      },
-      {
-        content: `<script setup>
-import { mountDiagram } from "pier/visualizations";
-const sharedMount = mountDiagram;
+    await writeFile(
+      badAbs,
+      `<script setup>
+import { host } from "pier/host";
+const x = host;
 </script>
-<template><div :data-shared="typeof sharedMount" /></template>
-`,
-        rel: "smoke/__pier-visualizations.canvas.vue",
-      },
-      {
-        content: `import { mountDiagram } from "pier/visualizations";
-export function mount(element: HTMLElement) {
-  void mountDiagram;
-  element.textContent = "solid";
-  return () => element.replaceChildren();
-}
-export default function Demo() {
-  return null;
-}`,
-        rel: "smoke/__pier-visualizations.canvas.solid.tsx",
-      },
-      {
-        content: `<script>
-import { mountDiagram } from "pier/visualizations";
-const sharedMount = mountDiagram;
-</script>
-<div data-shared={typeof sharedMount}>svelte</div>
-`,
-        rel: "smoke/__pier-visualizations.canvas.svelte",
-      },
-    ] as const;
-    const absolutePaths: string[] = [];
+<template><div /></template>
+`
+    );
     try {
-      for (const sample of samples) {
-        const absolutePath = join(PROJECT_ROOT, ".pier/canvases", sample.rel);
-        absolutePaths.push(absolutePath);
-        await writeFile(absolutePath, sample.content);
-      }
       const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
       const service = createLiveModulesService({
         resolveHomeRoot: () => homeRoot,
@@ -189,26 +154,46 @@ const sharedMount = mountDiagram;
       services.push(service);
       const spec = projectLiveRootSpec({ projectRootPath: PROJECT_ROOT });
       service.registerRoot(spec);
-      for (const sample of samples) {
-        const result = await service.compile(spec.id, sample.rel);
-        expect(result.ok, `${sample.rel}: ${JSON.stringify(result)}`).toBe(
-          true
-        );
-        if (!result.ok) {
-          continue;
-        }
-        const source = Buffer.from(
-          service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!
-            .bytes
-        ).toString("utf8");
-        expect(source).toContain("__PIER_LIVE_VISUALIZATIONS__");
+      const result = await service.compile(spec.id, badRel);
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        return;
       }
+      const messages = result.diagnostics.map((d) => d.message).join("\n");
+      expect(messages).toMatch(/pier\/host|React-only/iu);
     } finally {
-      await Promise.all(
-        absolutePaths.map((absolutePath) =>
-          unlink(absolutePath).catch(() => undefined)
-        )
-      );
+      await unlink(badAbs).catch(() => undefined);
+    }
+  });
+
+  it("rejects pier/visualizations — diagrams are pier/canvas Mermaid", async () => {
+    const { mkdir, writeFile, unlink } = await import("node:fs/promises");
+    const rel = "smoke/__pier-visualizations.canvas.tsx";
+    const abs = join(PROJECT_ROOT, ".pier/canvases", rel);
+    await mkdir(join(PROJECT_ROOT, ".pier/canvases/smoke"), {
+      recursive: true,
+    });
+    await writeFile(
+      abs,
+      `import { mountMermaid } from "pier/visualizations";
+export default function Demo() {
+  void mountMermaid;
+  return <div />;
+}
+`
+    );
+    try {
+      const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+      const service = createLiveModulesService({
+        resolveHomeRoot: () => homeRoot,
+      });
+      services.push(service);
+      const spec = projectLiveRootSpec({ projectRootPath: PROJECT_ROOT });
+      service.registerRoot(spec);
+      const result = await service.compile(spec.id, rel);
+      expect(result.ok).toBe(false);
+    } finally {
+      await unlink(abs).catch(() => undefined);
     }
   });
 

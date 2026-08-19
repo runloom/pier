@@ -3,6 +3,7 @@ import type { LiveModuleDiagnostic } from "@shared/contracts/live-modules.ts";
 import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
 import {
   type CompileContextEntry,
+  disposeCompileContextIfCurrent,
   esbuildContextKey,
   getCompileContextEntry,
 } from "./compile-context-cache.ts";
@@ -102,6 +103,10 @@ export async function compileLiveModule(
   });
   const jsxOpts = frameworkEsbuildJsx(input.framework);
 
+  // Incremental reuse is safe: onLoad always re-reads canvas sources from
+  // disk, and the failure path below drops the context, so a failed graph is
+  // never reused. Do not dispose unconditionally here — that would turn every
+  // compile into a full re-bundle.
   // Plugin closures capture the entry's graphRef (and this first-call input).
   // The cache key includes every compile option, so a spec.resolve change
   // creates a fresh context instead of reusing stale closures.
@@ -221,12 +226,18 @@ export async function compileLiveModule(
     }
     return success;
   } catch (error) {
-    return compileFailureResult(
+    const failure = compileFailureResult(
       diagnosticsFromBuildFailure(error),
       entry.graphRef.current,
       input.entryAbsolutePath,
       input.projectRoot,
       input.contentRoot
     );
+    // Drop the cached context so the next reload re-reads files and the stub.
+    // Incremental reuse after a missing-export failure can keep the old graph.
+    // Identity-checked: a timed-out compile must not dispose the successor
+    // context a user retry has already created under the same key.
+    await disposeCompileContextIfCurrent(contextKey, entry);
+    return failure;
   }
 }

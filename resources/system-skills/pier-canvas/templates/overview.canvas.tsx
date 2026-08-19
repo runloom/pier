@@ -5,8 +5,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Mermaid,
   Frame,
-  MermaidDiagram,
   Row,
   Stack,
   Table,
@@ -202,13 +202,26 @@ export default function OverviewCanvasTemplate() {
               <H2>Design</H2>
               <Stack gap={6}>
                 <H2>Layers</H2>
-                <MermaidDiagram
+                <Mermaid
                   aria-label="Layers"
-                  source={`flowchart TB
-  U[User / external orchestrator] --> A[Product semantics]
-  A --> S[State source of truth]
-  U -.advanced.-> T[Low-level I/O]
-  T -.->|not a done signal| X[Misuse]`}
+                  direction="top-to-bottom"
+                  edges={[
+                    { source: "U", target: "A" },
+                    { source: "A", target: "S" },
+                    { label: "advanced", source: "U", target: "T" },
+                    {
+                      label: "not a done signal",
+                      source: "T",
+                      target: "X",
+                    },
+                  ]}
+                  nodes={[
+                    { id: "U", kind: "actor", title: "User / external orchestrator" },
+                    { id: "A", kind: "agent", title: "Product semantics" },
+                    { id: "S", kind: "artifact", title: "State source of truth" },
+                    { id: "T", kind: "tool", title: "Low-level I/O" },
+                    { id: "X", title: "Misuse", tone: "danger" },
+                  ]}
                 />
                 <Text className="text-sm leading-relaxed">
                   · Day 1 stays on the semantic layer.
@@ -287,16 +300,26 @@ export default function OverviewCanvasTemplate() {
           <TabsContent className="mt-4" value="path">
             <Stack gap={14}>
               <H2>Day 1</H2>
-              <MermaidDiagram
+              <Mermaid
                 aria-label="Day-1 loop"
-                source={`flowchart LR
-  A[Discover] --> B[Start]
-  B --> C{Actionable exit}
-  C -->|continue| D[Next turn]
-  D --> C
-  C -->|needs a person| E[Attention list]
-  E --> C
-  C -->|failed| F[Stop + next]`}
+                direction="left-to-right"
+                edges={[
+                  { source: "A", target: "B" },
+                  { source: "B", target: "C" },
+                  { label: "continue", source: "C", target: "D" },
+                  { source: "D", target: "C" },
+                  { label: "needs a person", source: "C", target: "E" },
+                  { source: "E", target: "C" },
+                  { label: "failed", source: "C", target: "F" },
+                ]}
+                nodes={[
+                  { id: "A", kind: "tool", title: "Discover" },
+                  { id: "B", kind: "tool", title: "Start" },
+                  { id: "C", title: "Actionable exit", tone: "warning" },
+                  { id: "D", kind: "tool", title: "Next turn" },
+                  { id: "E", kind: "artifact", title: "Attention list" },
+                  { id: "F", title: "Stop + next", tone: "danger" },
+                ]}
               />
               <div className="overflow-x-auto rounded-lg border">
                 <Table>

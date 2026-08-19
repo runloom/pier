@@ -107,6 +107,8 @@ describe("pier-canvas methodology packs", () => {
     // Product entry is skill invocation, not CLI
     expect(skill).toMatch(/\/pier-canvas/);
     expect(skill).toContain("not shell flags");
+    expect(skill).toContain(".pier/canvases/canvas-kit/canvas-kit.canvas.tsx");
+    expect(skill).toContain("Only import named exports");
     expect(skill).toMatch(
       /Expression selection|static product design|Play\/Step/i
     );
@@ -130,6 +132,30 @@ describe("pier-canvas methodology packs", () => {
     expect(methodology).toContain("Overview");
     expect(methodology).toContain("Landing");
     expect(methodology).toContain("i18n/nav.json");
+  });
+
+  it("documents Mermaid kind versus tone for authors", () => {
+    const authoring = readFileSync(
+      join(
+        process.cwd(),
+        "resources/system-skills/pier-canvas/references/authoring.md"
+      ),
+      "utf8"
+    );
+    const skill = readFileSync(
+      join(process.cwd(), "resources/system-skills/pier-canvas/SKILL.md"),
+      "utf8"
+    );
+    expect(authoring).toContain("## Mermaid");
+    expect(authoring).toContain("`kind`");
+    expect(authoring).toContain("`tone`");
+    expect(authoring).toContain("`source`");
+    expect(authoring).toContain("`sequence`");
+    expect(authoring).toContain("`class`");
+    expect(authoring).toContain("No left color rail");
+    expect(skill).toContain("Mermaid chrome");
+    expect(skill).toContain("actor");
+    expect(skill).toContain("`sequence`");
   });
 
   it("resolves presentation from content (design-doc has no 首日 tab)", () => {

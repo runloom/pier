@@ -54,6 +54,43 @@ const MILESTONE_IDS = ["P0", "P1", "P2", "P3"] as const;
 
 type TextRow<K extends string> = { [P in K]: string };
 
+const DIAGRAM_DIRECTIONS = ["left-to-right", "top-to-bottom"] as const;
+const DIAGRAM_TONES = [
+  "danger",
+  "done",
+  "info",
+  "muted",
+  "success",
+  "warning",
+] as const;
+const DIAGRAM_KINDS = [
+  "actor",
+  "agent",
+  "artifact",
+  "external",
+  "tool",
+] as const;
+
+export type CanvasDiagramNode = {
+  id: string;
+  kind?: (typeof DIAGRAM_KINDS)[number];
+  meta?: string;
+  title: string;
+  tone?: (typeof DIAGRAM_TONES)[number];
+};
+
+export type CanvasDiagramEdge = {
+  label?: string;
+  source: string;
+  target: string;
+};
+
+export type CanvasDiagram = {
+  direction: (typeof DIAGRAM_DIRECTIONS)[number];
+  edges: CanvasDiagramEdge[];
+  nodes: CanvasDiagramNode[];
+};
+
 export type Family = TextRow<"id" | "title" | "source" | "v1" | "excluded"> & {
   items: string[];
 };
@@ -70,20 +107,20 @@ export type SchemeData = {
     goals: string[];
     nonGoals: string[];
     overviewCards: TextRow<"id" | "badge" | "title" | "body">[];
-    mainLoop: TextRow<"diagram" | "caption">;
+    mainLoop: { caption: string; diagram: CanvasDiagram };
     problem: {
       title: string;
       thesis: string;
       pains: TextRow<"id" | "title" | "detail" | "consequence">[];
     };
     currentState: TextRow<"area" | "now" | "missing">[];
-    architecture: { diagram: string; notes: string[] };
+    architecture: { diagram: CanvasDiagram; notes: string[] };
     families: Family[];
     layers: TextRow<"layer" | "owner" | "owns" | "mustNotOwn">[];
     productFrames: TextRow<"id" | "name" | "spec">[];
     alternatives: TextRow<"name" | "disposition" | "reason">[];
     milestones: TextRow<"id" | "title" | "deliver">[];
-    delivery: TextRow<"diagram" | "caption">;
+    delivery: { caption: string; diagram: CanvasDiagram };
     acceptance: TextRow<"id" | "text" | "evidence" | "status">[];
     risks: TextRow<"id" | "text" | "mitigation">[];
     knownDebt: string[];
@@ -171,51 +208,142 @@ function requireIds(
   }
 }
 
-function requireFlowchart(diagram: string, label: string) {
-  if (!diagram.startsWith("flowchart ")) {
-    throw new Error(`${label} 必须是 flowchart`);
-  }
-}
-
-const EDGE_RE =
-  /([A-Za-z][\w]*)\s*(?:-->|---|-\.->|==>)\s*([A-Za-z][\w]*)/g;
-const SUBGRAPH_RE =
-  /subgraph\s+(\w+)\s*\[[^\]]*\]([\s\S]*?)\n[ \t]*end/g;
-
-function idsIn(body: string): Set<string> {
-  const ids = new Set<string>();
-  for (const match of body.matchAll(/([A-Za-z][\w]*)\s*\[/g)) {
-    ids.add(match[1] ?? "");
-  }
-  for (const match of body.matchAll(EDGE_RE)) {
-    ids.add(match[1] ?? "");
-    ids.add(match[2] ?? "");
-  }
-  ids.delete("");
-  return ids;
-}
-
-function assertMainLoopSplit(diagram: string) {
-  const blocks = [...diagram.matchAll(SUBGRAPH_RE)];
-  const names = blocks.map((block) => block[1]);
-  if (
-    names.length !== 2 ||
-    !names.includes("discover") ||
-    !names.includes("author")
-  ) {
-    throw new Error("主回路必须恰好看见与生成两个 subgraph");
-  }
-  const byName = new Map(
-    blocks.map((block) => [block[1], idsIn(block[2] ?? "")]),
+function requireDiagram(value: unknown, label: string): CanvasDiagram {
+  const record = requireRecord(value, label);
+  requireExactKeys(record, ["direction", "nodes", "edges"], label);
+  const direction = DIAGRAM_DIRECTIONS.find(
+    (item) => item === record.direction,
   );
-  const discover = byName.get("discover") ?? new Set<string>();
-  const author = byName.get("author") ?? new Set<string>();
-  for (const match of diagram.matchAll(EDGE_RE)) {
-    const from = match[1] ?? "";
-    const to = match[2] ?? "";
+  if (!direction) {
+    throw new Error(`${label}.direction 必须是 left-to-right 或 top-to-bottom`);
+  }
+  if (!Array.isArray(record.nodes) || record.nodes.length === 0) {
+    throw new Error(`${label}.nodes 必须是非空数组`);
+  }
+  if (!Array.isArray(record.edges)) {
+    throw new Error(`${label}.edges 必须是数组`);
+  }
+  const nodes = record.nodes.map((item, index) =>
+    parseDiagramNode(item, `${label}.nodes[${index}]`),
+  );
+  const ids = new Set(nodes.map((node) => node.id));
+  if (ids.size !== nodes.length) {
+    throw new Error(`${label}.nodes id 必须唯一`);
+  }
+  const edges = record.edges.map((item, index) =>
+    parseDiagramEdge(item, ids, `${label}.edges[${index}]`),
+  );
+  return { direction, edges, nodes };
+}
+
+function parseDiagramNode(value: unknown, label: string): CanvasDiagramNode {
+  const record = requireRecord(value, label);
+  const allowed = ["id", "title", "meta", "kind", "tone"];
+  const unexpected = Object.keys(record).filter((key) => !allowed.includes(key));
+  if (unexpected.length > 0) {
+    throw new Error(`${label} 含未知字段：${unexpected.join("、")}`);
+  }
+  requireString(record, "id", label);
+  requireString(record, "title", label);
+  let meta: string | undefined;
+  if ("meta" in record) {
+    if (typeof record.meta !== "string" || record.meta === "") {
+      throw new Error(`${label}.meta 必须是非空字符串`);
+    }
+    meta = record.meta;
+  }
+  let kind: CanvasDiagramNode["kind"];
+  if ("kind" in record) {
     if (
-      (discover.has(from) && author.has(to)) ||
-      (author.has(from) && discover.has(to))
+      typeof record.kind !== "string" ||
+      !DIAGRAM_KINDS.some((item) => item === record.kind)
+    ) {
+      throw new Error(`${label}.kind 非法`);
+    }
+    kind = record.kind as CanvasDiagramNode["kind"];
+  }
+  let tone: CanvasDiagramNode["tone"];
+  if ("tone" in record) {
+    if (
+      typeof record.tone !== "string" ||
+      !DIAGRAM_TONES.some((item) => item === record.tone)
+    ) {
+      throw new Error(`${label}.tone 非法`);
+    }
+    tone = record.tone as CanvasDiagramNode["tone"];
+  }
+  return {
+    id: record.id as string,
+    title: record.title as string,
+    ...(kind ? { kind } : {}),
+    ...(meta ? { meta } : {}),
+    ...(tone ? { tone } : {}),
+  };
+}
+
+function parseDiagramEdge(
+  value: unknown,
+  ids: Set<string>,
+  label: string,
+): CanvasDiagramEdge {
+  const record = requireRecord(value, label);
+  const allowed = ["source", "target", "label"];
+  const unexpected = Object.keys(record).filter((key) => !allowed.includes(key));
+  if (unexpected.length > 0) {
+    throw new Error(`${label} 含未知字段：${unexpected.join("、")}`);
+  }
+  requireString(record, "source", label);
+  requireString(record, "target", label);
+  const source = record.source as string;
+  const target = record.target as string;
+  if (!ids.has(source) || !ids.has(target)) {
+    throw new Error(`${label} 必须指向已有节点`);
+  }
+  if ("label" in record) {
+    if (typeof record.label !== "string" || record.label === "") {
+      throw new Error(`${label}.label 必须是非空字符串`);
+    }
+    return { label: record.label, source, target };
+  }
+  return { source, target };
+}
+
+function diagramPlainText(diagram: CanvasDiagram): string {
+  return [
+    ...diagram.nodes.flatMap((node) => [node.id, node.title, node.meta ?? ""]),
+    ...diagram.edges.flatMap((edge) => [
+      edge.source,
+      edge.target,
+      edge.label ?? "",
+    ]),
+  ].join("\n");
+}
+
+function assertMainLoopSplit(diagram: CanvasDiagram) {
+  const discover = new Set(
+    diagram.nodes.filter((node) => node.meta === "看见").map((node) => node.id),
+  );
+  const author = new Set(
+    diagram.nodes.filter((node) => node.meta === "生成").map((node) => node.id),
+  );
+  const groups = new Set(
+    diagram.nodes
+      .map((node) => node.meta)
+      .filter((meta): meta is string => Boolean(meta)),
+  );
+  if (
+    groups.size !== 2 ||
+    !groups.has("看见") ||
+    !groups.has("生成") ||
+    discover.size === 0 ||
+    author.size === 0
+  ) {
+    throw new Error("主回路必须恰好看见与生成两个分组");
+  }
+  for (const edge of diagram.edges) {
+    if (
+      (discover.has(edge.source) && author.has(edge.target)) ||
+      (author.has(edge.source) && discover.has(edge.target))
     ) {
       throw new Error("主回路看见与生成不得相连");
     }
@@ -234,9 +362,9 @@ function collectAdoptedText(data: SchemeData["data"]): string {
     data.decision,
     ...data.goals,
     ...data.overviewCards.map((card) => `${card.title}\n${card.body}`),
-    data.mainLoop.diagram,
+    diagramPlainText(data.mainLoop.diagram),
     data.mainLoop.caption,
-    data.delivery.diagram,
+    diagramPlainText(data.delivery.diagram),
     data.delivery.caption,
     ...data.productFrames.map((frame) => `${frame.name}\n${frame.spec}`),
     ...data.milestones.map((step) => step.deliver),
@@ -329,12 +457,13 @@ export function parseScheme(raw: string): SchemeData {
     "data.overviewCards",
   );
   requireIds(overviewCards, ["problem", "design", "landing"], "data.overviewCards");
-  const mainLoop = requireExactStringRecord(
-    data.mainLoop,
-    ["diagram", "caption"],
-    "data.mainLoop",
-  );
-  requireFlowchart(mainLoop.diagram, "data.mainLoop.diagram");
+  const mainLoopRecord = requireRecord(data.mainLoop, "data.mainLoop");
+  requireExactKeys(mainLoopRecord, ["diagram", "caption"], "data.mainLoop");
+  requireString(mainLoopRecord, "caption", "data.mainLoop");
+  const mainLoop = {
+    caption: mainLoopRecord.caption as string,
+    diagram: requireDiagram(mainLoopRecord.diagram, "data.mainLoop.diagram"),
+  };
   assertMainLoopSplit(mainLoop.diagram);
 
   const problem = requireRecord(data.problem, "data.problem");
@@ -357,12 +486,10 @@ export function parseScheme(raw: string): SchemeData {
   );
   const architecture = requireRecord(data.architecture, "data.architecture");
   requireExactKeys(architecture, ["diagram", "notes"], "data.architecture");
-  requireString(architecture, "diagram", "data.architecture");
-  const architectureDiagram = architecture.diagram;
-  if (typeof architectureDiagram !== "string") {
-    throw new Error("data.architecture.diagram 必须是非空字符串");
-  }
-  requireFlowchart(architectureDiagram, "data.architecture.diagram");
+  const architectureDiagram = requireDiagram(
+    architecture.diagram,
+    "data.architecture.diagram",
+  );
   const architectureNotes = requireStringArray(
     architecture.notes,
     "data.architecture.notes",
@@ -403,12 +530,13 @@ export function parseScheme(raw: string): SchemeData {
     "data.milestones",
   );
   requireIds(milestones, MILESTONE_IDS, "data.milestones");
-  const delivery = requireExactStringRecord(
-    data.delivery,
-    ["diagram", "caption"],
-    "data.delivery",
-  );
-  requireFlowchart(delivery.diagram, "data.delivery.diagram");
+  const deliveryRecord = requireRecord(data.delivery, "data.delivery");
+  requireExactKeys(deliveryRecord, ["diagram", "caption"], "data.delivery");
+  requireString(deliveryRecord, "caption", "data.delivery");
+  const delivery = {
+    caption: deliveryRecord.caption as string,
+    diagram: requireDiagram(deliveryRecord.diagram, "data.delivery.diagram"),
+  };
   const acceptance = requireRows(
     data.acceptance,
     ["id", "text", "evidence", "status"],

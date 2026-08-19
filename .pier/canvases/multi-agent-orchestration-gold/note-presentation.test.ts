@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDeliveryDiagram,
   groupNotes,
-  preferredDeliveryEdgeLabels,
+  preferredDeliveryEdges,
   SCOPE_LABELS,
   scopeItemLabel,
   splitNote,
@@ -93,12 +93,17 @@ describe("buildDeliveryDiagram", () => {
   it("对 W0–W6 生成 preferred 依赖边（含 W2∥W3）", () => {
     const { phases } = readSchemeData();
     const diagram = buildDeliveryDiagram(phases);
-    for (const edge of preferredDeliveryEdgeLabels()) {
-      expect(diagram).toContain(edge);
+    for (const edge of preferredDeliveryEdges()) {
+      expect(diagram.edges).toContainEqual(edge);
     }
-    expect(diagram).toContain("flowchart TB");
+    expect(
+      diagram.nodes.find((node) => node.id === "W0")?.tone,
+    ).toBe("success");
+    expect(diagram.direction).toBe("top-to-bottom");
     for (const phase of phases) {
-      expect(diagram).toContain(`W${phase.wave}[`);
+      expect(diagram.nodes.some((node) => node.id === `W${phase.wave}`)).toBe(
+        true,
+      );
     }
   });
 
@@ -108,8 +113,13 @@ describe("buildDeliveryDiagram", () => {
       { wave: 1, name: "身份" },
       { wave: 5, name: "协作" },
     ]);
-    expect(diagram).toContain("W0 --> W1");
-    // W5 不在 preferred 入边集合中时，应接到前序波次
-    expect(diagram).toMatch(/W1 --> W5|W0 --> W5/u);
+    expect(diagram.edges).toContainEqual({ source: "W0", target: "W1" });
+    expect(
+      diagram.edges.some(
+        (edge) =>
+          (edge.source === "W1" && edge.target === "W5") ||
+          (edge.source === "W0" && edge.target === "W5"),
+      ),
+    ).toBe(true);
   });
 });

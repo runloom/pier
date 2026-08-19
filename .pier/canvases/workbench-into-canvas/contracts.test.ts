@@ -29,9 +29,17 @@ describe("Canvas 物料金标准契约", () => {
     expect(
       scheme.data.alternatives.filter((row) => row.disposition === "adopt"),
     ).toHaveLength(1);
-    expect(scheme.data.mainLoop.diagram.startsWith("flowchart ")).toBe(true);
-    expect(scheme.data.architecture.diagram.startsWith("flowchart ")).toBe(true);
-    expect(scheme.data.delivery.diagram.startsWith("flowchart ")).toBe(true);
+    expect(scheme.data.mainLoop.diagram.direction).toBe("left-to-right");
+    expect(
+      scheme.data.mainLoop.diagram.nodes.every((node) => node.kind),
+    ).toBe(true);
+    expect(
+      scheme.data.architecture.diagram.nodes.every((node) => node.kind),
+    ).toBe(true);
+    expect(scheme.data.architecture.diagram.nodes.length).toBeGreaterThan(0);
+    expect(scheme.data.delivery.diagram.edges.map((edge) => edge.source)).toEqual(
+      ["P0", "P1", "P2"],
+    );
     expect(scheme.data.acceptance.length).toBeGreaterThanOrEqual(6);
   });
 
@@ -120,12 +128,14 @@ describe("Canvas 物料金标准契约", () => {
 
   it("把 Kit 文件写进主回路也会失败", () => {
     const injected = cloneData();
-    const mainLoop = injected.data.mainLoop as { diagram: string };
-    mainLoop.diagram = `${mainLoop.diagram}\n  X[kit.canvas.tsx]`;
+    const mainLoop = injected.data.mainLoop as {
+      diagram: { nodes: Array<{ id: string; title: string }> };
+    };
+    mainLoop.diagram.nodes.push({ id: "X", title: "kit.canvas.tsx" });
     expect(() => parseScheme(JSON.stringify(injected))).toThrow("登记产品");
   });
 
-  it("未知字段、缺家族、非 flowchart 会失败", () => {
+  it("未知字段、缺家族、非法主回路图会失败", () => {
     const extra = cloneData() as Record<string, unknown> & {
       data: Record<string, unknown>;
     };
@@ -139,32 +149,44 @@ describe("Canvas 物料金标准契约", () => {
     expect(() => parseScheme(JSON.stringify(families))).toThrow("六类型");
 
     const loop = cloneData();
-    const mainLoop = loop.data.mainLoop as { diagram: string };
+    const mainLoop = loop.data.mainLoop as { diagram: unknown };
     mainLoop.diagram = "sequenceDiagram\n  A-->B";
-    expect(() => parseScheme(JSON.stringify(loop))).toThrow("flowchart");
+    expect(() => parseScheme(JSON.stringify(loop))).toThrow("必须是对象");
 
+    const splitLoop = {
+      direction: "left-to-right",
+      edges: [
+        { source: "List", target: "Dialog" },
+        { source: "Dialog", target: "Skill" },
+      ],
+      nodes: [
+        { id: "List", meta: "看见", title: "卡片网格" },
+        { id: "Dialog", meta: "看见", title: "文档型弹窗" },
+        { id: "Skill", meta: "生成", title: "生成" },
+      ],
+    };
     const bridged = cloneData();
-    const bridgedLoop = bridged.data.mainLoop as { diagram: string };
-    bridgedLoop.diagram =
-      "flowchart LR\n  subgraph discover [看见]\n    List[卡片网格] --> Dialog[文档型弹窗]\n  end\n  subgraph author [生成]\n    Skill[生成]\n  end\n  Dialog --> Skill";
+    const bridgedLoop = bridged.data.mainLoop as { diagram: unknown };
+    bridgedLoop.diagram = splitLoop;
     expect(() => parseScheme(JSON.stringify(bridged))).toThrow("不得相连");
 
     const reverse = cloneData();
-    const reverseLoop = reverse.data.mainLoop as { diagram: string };
-    reverseLoop.diagram =
-      "flowchart LR\n  subgraph discover [看见]\n    List[卡片网格]\n  end\n  subgraph author [生成]\n    Skill[生成]\n  end\n  Skill --> List";
+    const reverseLoop = reverse.data.mainLoop as { diagram: unknown };
+    reverseLoop.diagram = {
+      ...splitLoop,
+      edges: [
+        { source: "List", target: "Dialog" },
+        { source: "Skill", target: "List" },
+      ],
+    };
     expect(() => parseScheme(JSON.stringify(reverse))).toThrow("不得相连");
 
-    const dotted = cloneData();
-    const dottedLoop = dotted.data.mainLoop as { diagram: string };
-    dottedLoop.diagram =
-      "flowchart LR\n  subgraph discover [看见]\n    List[卡片网格]\n  end\n  subgraph author [生成]\n    Skill[生成]\n  end\n  List -.-> Skill";
-    expect(() => parseScheme(JSON.stringify(dotted))).toThrow("不得相连");
-
     const third = cloneData();
-    const thirdLoop = third.data.mainLoop as { diagram: string };
-    thirdLoop.diagram = `${String(thirdLoop.diagram)}\n  subgraph extra [其它]\n    X[x]\n  end`;
-    expect(() => parseScheme(JSON.stringify(third))).toThrow("两个 subgraph");
+    const thirdLoop = third.data.mainLoop as {
+      diagram: { nodes: Array<{ id: string; meta?: string; title: string }> };
+    };
+    thirdLoop.diagram.nodes.push({ id: "X", meta: "其它", title: "x" });
+    expect(() => parseScheme(JSON.stringify(third))).toThrow("两个分组");
   });
 
   it("采纳项必须恰好一条且不含登记文件", () => {

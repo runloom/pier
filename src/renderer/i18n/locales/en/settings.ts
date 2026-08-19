@@ -1,6 +1,7 @@
 import { settingsAgents } from "./settings-agents.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
+import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
@@ -41,7 +42,7 @@ export const settings = {
     addProject: "Add project",
     back: "Back to projects",
     description:
-      "Configure environment, skills, and MCP per project. Use Pier Home for cross-project skills and MCP.",
+      "Configure environment, skills, and MCP per project. Cross-project skills and MCP live in Pier Home.",
     emptyDescription:
       "Add a project to manage its environment, skills, and MCP. Pier Home is always available.",
     emptyTitle: "No projects yet",
@@ -199,6 +200,7 @@ export const settings = {
       "This window is still on an older version. Fully quit Pier, start again, then reopen this tab.",
   },
   skills: settingsSkills,
+  materials: settingsMaterials,
   environment: {
     addEnvironment: "Add environment setting",
     addFailed: "Couldn't add — try again",

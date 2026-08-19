@@ -1,14 +1,14 @@
-import { NodeGraph, type NodeGraphProps } from "@pier/ui/node-graph.tsx";
-import { openNodeGraphPreview } from "@/stores/content-preview.store.ts";
+import { Mermaid, type MermaidProps } from "@pier/ui/mermaid.tsx";
+import { openMermaidPreview } from "@/stores/content-preview.store.ts";
 
 /**
- * Canvas / host NodeGraph — fullscreen routes through ContentPreviewHost
- * (same shell + bottom zoom strip as markdown image / mermaid).
+ * Canvas / host Mermaid — fullscreen routes through ContentPreviewHost
+ * (same shell + bottom zoom strip as markdown image / mermaid fences).
  */
-export function HostNodeGraph(props: NodeGraphProps) {
+export function HostMermaid(props: MermaidProps) {
   const { onOpenFullscreen, expandable = true, ...rest } = props;
   return (
-    <NodeGraph
+    <Mermaid
       {...rest}
       expandable={expandable}
       onOpenFullscreen={
@@ -19,11 +19,12 @@ export function HostNodeGraph(props: NodeGraphProps) {
                 onOpenFullscreen();
                 return;
               }
-              openNodeGraphPreview({
+              openMermaidPreview({
                 "aria-label": rest["aria-label"],
-                edges: rest.edges,
-                nodes: rest.nodes,
+                edges: rest.edges ?? [],
+                nodes: rest.nodes ?? [],
                 ...(rest.direction ? { direction: rest.direction } : {}),
+                ...(rest.source ? { source: rest.source } : {}),
                 title: rest["aria-label"],
               });
             }

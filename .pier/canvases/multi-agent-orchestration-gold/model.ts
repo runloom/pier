@@ -6,6 +6,22 @@ import {
 
 type TextRow<K extends string> = { [P in K]: string };
 
+export type CanvasDiagram = {
+  direction: "left-to-right" | "top-to-bottom";
+  edges: Array<{ label?: string; source: string; target: string }>;
+  nodes: Array<{
+    id: string;
+    kind?: (typeof DIAGRAM_KINDS)[number];
+    meta?: string;
+    title: string;
+    tone?: "danger" | "done" | "info" | "muted" | "success" | "warning";
+  }>;
+};
+
+function diagramPlainText(diagram: CanvasDiagram): string {
+  return JSON.stringify(diagram);
+}
+
 type Meta = TextRow<
   "title" | "subtitle" | "status" | "version" | "researchCutoff" | "codeBaseline"
 >;
@@ -65,7 +81,7 @@ export type SchemeData = {
     goals: string[];
     productNonGoals: string[];
     successMeasures: Measure[];
-    mainLoop: TextRow<"diagram" | "caption">;
+    mainLoop: { caption: string; diagram: CanvasDiagram };
     problem: {
       title: string;
       thesis: string;
@@ -75,7 +91,7 @@ export type SchemeData = {
     researchSources: ResearchSource[];
     comparison: Comparison[];
     hardConstraints: Constraint[];
-    architecture: { diagram: string; notes: string[] };
+    architecture: { diagram: CanvasDiagram; notes: string[] };
     ownership: Ownership[];
     entities: Entity[];
     stateRules: StateRule[];
@@ -171,6 +187,124 @@ function requireRows(value: unknown, keys: string[], label: string) {
   for (const [index, item] of value.entries()) {
     requireExactStringRecord(item, keys, `${label}[${index}]`);
   }
+}
+
+const DIAGRAM_DIRECTIONS = ["left-to-right", "top-to-bottom"] as const;
+const DIAGRAM_TONES = [
+  "danger",
+  "done",
+  "info",
+  "muted",
+  "success",
+  "warning",
+] as const;
+const DIAGRAM_KINDS = [
+  "actor",
+  "agent",
+  "artifact",
+  "external",
+  "tool",
+] as const;
+
+function requireDiagram(value: unknown, label: string): CanvasDiagram {
+  const record = requireRecord(value, label);
+  requireExactKeys(record, ["direction", "nodes", "edges"], label);
+  const direction = record.direction;
+  if (
+    typeof direction !== "string" ||
+    !DIAGRAM_DIRECTIONS.some((item) => item === direction)
+  ) {
+    throw new Error(`${label}.direction 必须是 left-to-right 或 top-to-bottom`);
+  }
+  if (!Array.isArray(record.nodes) || record.nodes.length === 0) {
+    throw new Error(`${label}.nodes 必须是非空数组`);
+  }
+  if (!Array.isArray(record.edges)) {
+    throw new Error(`${label}.edges 必须是数组`);
+  }
+  const nodes = record.nodes.map((item, index) =>
+    parseDiagramNode(item, `${label}.nodes[${index}]`),
+  );
+  const ids = new Set(nodes.map((node) => node.id));
+  if (ids.size !== nodes.length) {
+    throw new Error(`${label}.nodes id 必须唯一`);
+  }
+  const edges = record.edges.map((item, index) =>
+    parseDiagramEdge(item, ids, `${label}.edges[${index}]`),
+  );
+  return { direction: direction as CanvasDiagram["direction"], edges, nodes };
+}
+
+function parseDiagramNode(
+  value: unknown,
+  label: string,
+): CanvasDiagram["nodes"][number] {
+  const record = requireRecord(value, label);
+  const unexpected = Object.keys(record).filter(
+    (key) => !["id", "title", "meta", "kind", "tone"].includes(key),
+  );
+  if (unexpected.length > 0) {
+    throw new Error(`${label} 含未知字段：${unexpected.join("、")}`);
+  }
+  requireString(record, "id", label);
+  requireString(record, "title", label);
+  const node: CanvasDiagram["nodes"][number] = {
+    id: record.id as string,
+    title: record.title as string,
+  };
+  if ("meta" in record) {
+    if (typeof record.meta !== "string" || record.meta === "") {
+      throw new Error(`${label}.meta 必须是非空字符串`);
+    }
+    node.meta = record.meta;
+  }
+  if ("kind" in record) {
+    if (
+      typeof record.kind !== "string" ||
+      !DIAGRAM_KINDS.some((item) => item === record.kind)
+    ) {
+      throw new Error(`${label}.kind 非法`);
+    }
+    node.kind = record.kind as (typeof DIAGRAM_KINDS)[number];
+  }
+  if ("tone" in record) {
+    if (
+      typeof record.tone !== "string" ||
+      !DIAGRAM_TONES.some((item) => item === record.tone)
+    ) {
+      throw new Error(`${label}.tone 非法`);
+    }
+    node.tone = record.tone as (typeof DIAGRAM_TONES)[number];
+  }
+  return node;
+}
+
+function parseDiagramEdge(
+  value: unknown,
+  ids: Set<string>,
+  label: string,
+): CanvasDiagram["edges"][number] {
+  const record = requireRecord(value, label);
+  const unexpected = Object.keys(record).filter(
+    (key) => !["source", "target", "label"].includes(key),
+  );
+  if (unexpected.length > 0) {
+    throw new Error(`${label} 含未知字段：${unexpected.join("、")}`);
+  }
+  requireString(record, "source", label);
+  requireString(record, "target", label);
+  const source = record.source as string;
+  const target = record.target as string;
+  if (!ids.has(source) || !ids.has(target)) {
+    throw new Error(`${label} 必须指向已有节点`);
+  }
+  if ("label" in record) {
+    if (typeof record.label !== "string" || record.label === "") {
+      throw new Error(`${label}.label 必须是非空字符串`);
+    }
+    return { label: record.label, source, target };
+  }
+  return { source, target };
 }
 
 function hasExactStringSet(value: string[], expected: readonly string[]): boolean {
@@ -344,11 +478,18 @@ export function parseScheme(raw: string): SchemeData {
     ["title", "subtitle", "status", "version", "researchCutoff", "codeBaseline"],
     "data.meta",
   );
-  requireExactStringRecord(data.mainLoop, ["diagram", "caption"], "data.mainLoop");
+  const mainLoop = requireRecord(data.mainLoop, "data.mainLoop");
+  requireExactKeys(mainLoop, ["diagram", "caption"], "data.mainLoop");
+  requireString(mainLoop, "caption", "data.mainLoop");
+  const mainLoopDiagram = requireDiagram(mainLoop.diagram, "data.mainLoop.diagram");
   const problem = requireStringRecord(data.problem, ["title", "thesis"], "data.problem");
   requireExactKeys(problem, ["title", "thesis", "pains"], "data.problem");
-  const architecture = requireStringRecord(data.architecture, ["diagram"], "data.architecture");
+  const architecture = requireRecord(data.architecture, "data.architecture");
   requireExactKeys(architecture, ["diagram", "notes"], "data.architecture");
+  const architectureDiagram = requireDiagram(
+    architecture.diagram,
+    "data.architecture.diagram",
+  );
   requireStringArray(architecture.notes, "data.architecture.notes");
   const cli = requireStringRecord(
     data.cli,
@@ -519,7 +660,7 @@ export function parseScheme(raw: string): SchemeData {
         data.decision as string,
         ...(data.goals as string[]),
         ...(data.successMeasures as Measure[]).flatMap((row) => Object.values(row)),
-        (data.mainLoop as TextRow<"diagram" | "caption">).caption,
+        (data.mainLoop as { caption: string }).caption,
         problem.title as string,
         problem.thesis as string,
         ...(problem.pains as Pain[]).flatMap((row) => Object.values(row)),
@@ -601,8 +742,8 @@ export function parseScheme(raw: string): SchemeData {
       externalOwnership: [
         (data.meta as Meta).subtitle,
         data.bluf as string,
-        (data.mainLoop as TextRow<"diagram" | "caption">).diagram,
-        architecture.diagram as string,
+        diagramPlainText(mainLoopDiagram),
+        diagramPlainText(architectureDiagram),
         ...ownershipRows
           .filter((row) => row.layer === "调用方编排语义")
           .flatMap((row) => [row.owner, row.owns]),

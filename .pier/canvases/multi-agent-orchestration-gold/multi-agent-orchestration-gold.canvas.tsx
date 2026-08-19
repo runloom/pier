@@ -108,6 +108,7 @@ export default function MultiAgentOrchestrationCanvas() {
     );
   }
 
+  // Node chrome (kind/tone) is authored in data.json — the single source.
   const d = payload.data;
   const researchVerified = d.acceptance.find((row) => row.id === "E0")?.status === "verified";
   const shortBaseline =

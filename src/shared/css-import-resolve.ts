@@ -221,7 +221,7 @@ function findPackageDir(
       return candidate;
     }
     // Monorepo: dependency may only be installed under packages/*/node_modules
-    // (e.g. @xyflow/react under packages/ui while globals.css is in src/).
+    // (e.g. mermaid under packages/ui while globals.css is in src/).
     const packagesDir = join(dir, "packages");
     if (fs.exists(packagesDir) && fs.isDirectory(packagesDir)) {
       for (const entry of fs.listDir(packagesDir)) {

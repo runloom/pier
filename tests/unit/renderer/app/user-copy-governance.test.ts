@@ -21,7 +21,6 @@ const ZH_BANNED_PATTERNS: ReadonlyArray<{ id: string; pattern: RegExp }> = [
   { id: "面板参数", pattern: /面板参数/ },
   { id: "可绑定", pattern: /可绑定/ },
   { id: "运行标识", pattern: /运行标识/ },
-  { id: "物料", pattern: /物料/ },
   { id: "仅清单预览", pattern: /仅清单预览/ },
   { id: "插件清单", pattern: /插件清单/ },
   { id: "发现路径", pattern: /发现路径/ },
@@ -198,6 +197,19 @@ describe("user-facing copy governance", () => {
     expect(agentContext).toContain(
       "tests/unit/renderer/app/user-copy-governance.test.ts"
     );
+    expect(agentContext).toContain("工作台「组件」");
+    expect(agentContext).toContain("Canvas 发现面「物料」");
+  });
+
+  it("keeps workbench Chinese copy on 组件, not 物料", () => {
+    const workbench = readFileSync(
+      join(ROOT, "src", "renderer", "i18n", "locales", "zh-CN", "workbench.ts"),
+      "utf8"
+    );
+    const hits = findBannedHits(extractTsStringLiterals(workbench), [
+      { id: "物料", pattern: /物料/ },
+    ]);
+    expect(hits).toEqual([]);
   });
 
   it("keeps Chinese locale string values free of implementation jargon", () => {

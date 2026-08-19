@@ -1,6 +1,7 @@
 import { settingsAgents } from "./settings-agents.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
+import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
@@ -41,13 +42,13 @@ export const settings = {
     addProject: "添加项目",
     back: "返回项目列表",
     description:
-      "按项目配置环境、技能与 MCP。也可用本机工作台管理跨项目技能与 MCP。",
+      "按项目配置环境、技能与 MCP。跨项目的技能与 MCP 在本机工作台。",
     emptyDescription:
       "添加项目后，可配置其环境、技能与 MCP。本机工作台始终可用。",
     emptyTitle: "还没有项目",
     pierHomeTitle: "本机工作台",
     pierHomeBadge: "本机",
-    pierHomePathHint: "跨项目的技能、MCP 放这里，不绑定某个仓库",
+    pierHomePathHint: "跨项目的技能与 MCP 放这里，不绑定某个仓库",
     pierHomeLibraryAdd: "添加技能",
     pierHomeSkillsListTitle: "技能",
     pierHomeSkillsListDescription:
@@ -189,6 +190,7 @@ export const settings = {
       "当前窗口仍是旧版本。请完全退出 Pier 后重新打开，再进入此页。",
   },
   skills: settingsSkills,
+  materials: settingsMaterials,
   environment: {
     addEnvironment: "添加环境设置",
     addFailed: "添加失败，请重试",

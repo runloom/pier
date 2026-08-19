@@ -6,6 +6,8 @@
 export const PIER = {
   // command router facade
   COMMAND_EXECUTE: "pier://command:execute",
+  /** Canvas `pier/host` invoke — authorized as client kind `canvas`, not desktop-renderer. */
+  CANVAS_COMMAND_EXECUTE: "pier://canvas:command-execute",
   EXTERNAL_NAVIGATION_OPEN: "pier://external-navigation:open",
   APP_QUIT_DECISION: "pier://app-quit:decision",
   // git watch (订阅/退订;事件本身经 PIER_BROADCAST.GIT_CHANGED 广播)

@@ -390,7 +390,11 @@ describe("规范 Canvas 数据", () => {
     const data = JSON.parse(raw) as {
       data: {
         scope: { model: string; completionAuthority: string };
-        mainLoop: { diagram: string };
+        mainLoop: {
+          diagram: {
+            nodes: Array<{ meta?: string; title: string }>;
+          };
+        };
       };
     };
 
@@ -399,11 +403,70 @@ describe("规范 Canvas 数据", () => {
       completionAuthority: "caller-agent-or-external-controller",
     });
 
-    const diagram = data.data.mainLoop.diagram;
+    const diagram = data.data.mainLoop.diagram.nodes
+      .map((node) => `${node.title} ${node.meta ?? ""}`)
+      .join("\n");
     expect(diagram).toContain("协调智能体");
     expect(diagram).toContain("工作智能体");
     expect(diagram).toContain("Pier 智能体 CLI");
     expect(diagram).toMatch(/外部控制器.*可选|可选.*外部控制器/u);
+  });
+
+  it("主回路按角色 kind 上色；架构图按调用者 / CLI / Pier main 三层 tone 上色", async () => {
+    const raw = await readFile(new URL("./data.json", import.meta.url), "utf8");
+    const scheme = parseScheme(raw);
+    const mainKinds = Object.fromEntries(
+      scheme.data.mainLoop.diagram.nodes.map((node) => [node.id, node.kind]),
+    );
+    expect(mainKinds).toMatchObject({
+      C: "tool",
+      E: "external",
+      F: "artifact",
+      H: "actor",
+      L: "tool",
+      N: "external",
+      O: "agent",
+      P: "artifact",
+      W: "agent",
+    });
+    expect(
+      scheme.data.architecture.diagram.nodes.every((node) => node.kind),
+    ).toBe(true);
+    expect(
+      scheme.data.architecture.diagram.nodes.find((node) => node.id === "HU")
+        ?.kind,
+    ).toBe("actor");
+    expect(
+      scheme.data.architecture.diagram.nodes.find((node) => node.id === "CO")
+        ?.kind,
+    ).toBe("agent");
+    expect(
+      scheme.data.architecture.diagram.nodes.find((node) => node.id === "NATIVE")
+        ?.kind,
+    ).toBe("external");
+    // data.json is the single chrome source — no render-time repaint layer.
+    const architectureNodes = scheme.data.architecture.diagram.nodes;
+    expect(architectureNodes.find((node) => node.id === "STOP")?.tone).toBe(
+      "success",
+    );
+    expect(architectureNodes.find((node) => node.id === "RC")?.tone).toBe(
+      "done",
+    );
+    const layerTones = Object.fromEntries(
+      scheme.data.architecture.diagram.nodes.map((node) => [node.id, node.tone]),
+    );
+    expect(layerTones).toMatchObject({
+      CO: "info",
+      CONTENT: "done",
+      DISC: "success",
+      FACT: "done",
+      HU: "info",
+      LOCAL: "info",
+      NATIVE: "info",
+      PERSIST: "success",
+      RC: "done",
+      STOP: "success",
+    });
   });
 
   it.each([
@@ -655,8 +718,25 @@ describe("规范 Canvas 数据", () => {
     },
     {
       name: "架构图中的后置 Pier 节点",
-      mutate: (value: { data: { architecture: { diagram: string } } }) => {
-        value.data.architecture.diagram = "flowchart LR\nT[任务生命周期与任务台账] --> P[Pier 持有]";
+      mutate: (value: {
+        data: {
+          architecture: {
+            diagram: {
+              direction: string;
+              edges: Array<{ source: string; target: string }>;
+              nodes: Array<{ id: string; title: string }>;
+            };
+          };
+        };
+      }) => {
+        value.data.architecture.diagram = {
+          direction: "left-to-right",
+          edges: [{ source: "T", target: "P" }],
+          nodes: [
+            { id: "T", title: "任务生命周期与任务台账" },
+            { id: "P", title: "Pier 持有" },
+          ],
+        };
       },
     },
   ])("$name 不能利用词序反转绕过外部上下文门禁", async ({ mutate }) => {
@@ -693,9 +773,25 @@ describe("规范 Canvas 数据", () => {
     },
     {
       name: "架构图中的后置本产品主体",
-      mutate: (value: { data: { architecture: { diagram: string } } }) => {
-        value.data.architecture.diagram =
-          "flowchart LR\nT[任务生命周期与任务台账] --> P[本产品持有]";
+      mutate: (value: {
+        data: {
+          architecture: {
+            diagram: {
+              direction: string;
+              edges: Array<{ source: string; target: string }>;
+              nodes: Array<{ id: string; title: string }>;
+            };
+          };
+        };
+      }) => {
+        value.data.architecture.diagram = {
+          direction: "left-to-right",
+          edges: [{ source: "T", target: "P" }],
+          nodes: [
+            { id: "T", title: "任务生命周期与任务台账" },
+            { id: "P", title: "本产品持有" },
+          ],
+        };
       },
     },
   ])("$name 不能利用主体别名绕过外部上下文门禁", async ({ mutate }) => {

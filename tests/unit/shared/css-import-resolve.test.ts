@@ -200,10 +200,11 @@ describe("resolveCssImportPath", () => {
   it("resolves nested dependency from nearest node_modules", () => {
     const fs = memoryFs({
       "/repo/src/app/globals.css": "/* */",
-      "/repo/packages/ui/node_modules/@xyflow/react": "dir",
-      "/repo/packages/ui/node_modules/@xyflow/react/package.json":
-        JSON.stringify({ name: "@xyflow/react" }),
-      "/repo/packages/ui/node_modules/@xyflow/react/dist/style.css": "/* x */",
+      "/repo/packages/ui/node_modules/mermaid": "dir",
+      "/repo/packages/ui/node_modules/mermaid/package.json": JSON.stringify({
+        name: "mermaid",
+      }),
+      "/repo/packages/ui/node_modules/mermaid/dist/mermaid.min.css": "/* x */",
       // from a file under packages/ui
       "/repo/packages/ui/src/theme.css": "/* */",
     });
@@ -211,11 +212,11 @@ describe("resolveCssImportPath", () => {
       resolveCssImportPath({
         fromFilePath: "/repo/packages/ui/src/theme.css",
         fs,
-        specifier: "@xyflow/react/dist/style.css",
+        specifier: "mermaid/dist/mermaid.min.css",
       })
     ).toEqual({
       isDirectory: false,
-      path: "/repo/packages/ui/node_modules/@xyflow/react/dist/style.css",
+      path: "/repo/packages/ui/node_modules/mermaid/dist/mermaid.min.css",
     });
   });
 
@@ -285,16 +286,16 @@ describe("resolveCssImportOnDisk (pier workspace)", () => {
     }
   });
 
-  it("resolves @xyflow style from globals.css via packages/*/node_modules", () => {
+  it("resolves nested package CSS from globals.css via packages/*/node_modules", () => {
     if (!existsSync(fromFilePath)) {
       return;
     }
     const resolved = resolveCssImportOnDisk({
       fromFilePath,
-      specifier: "@xyflow/react/dist/style.css",
+      specifier: "@pier/ui/tailwind-theme.css",
     });
-    expect(resolved, "@xyflow from globals.css").toBeTruthy();
-    expect(resolved?.path).toContain("@xyflow");
+    expect(resolved, "@pier/ui theme from globals.css").toBeTruthy();
+    expect(resolved?.path).toContain("tailwind-theme.css");
     expect(existsSync(resolved?.path as string)).toBe(true);
   });
 

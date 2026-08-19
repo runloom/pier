@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export type DataChartDatum = Record<string, number | string | null | undefined>;
 
@@ -23,51 +23,68 @@ export interface DataChartProps {
   valueFormatter?: (value: number) => string;
 }
 
-export type NodeGraphDirection = "left-to-right" | "top-to-bottom";
-export type NodeGraphTone =
+export type MermaidDirection = "left-to-right" | "top-to-bottom";
+export type MermaidTone =
   | "danger"
   | "done"
   | "info"
   | "muted"
   | "success"
   | "warning";
+/**
+ * Architecture role. Use on layered / main-loop graphs.
+ * Do not reuse `tone` as decoration — `tone` is status only.
+ */
+export type MermaidKind = "actor" | "agent" | "artifact" | "external" | "tool";
+/** Live run state for DAG / pipeline nodes (orthogonal to `tone`/`kind`). */
+export type MermaidRunStatus =
+  | "failed"
+  | "queued"
+  | "running"
+  | "skipped"
+  | "success";
+export type MermaidShape = "circle" | "diamond" | "rect" | "round";
 
-export interface NodeGraphNode {
+export interface MermaidNode {
+  /**
+   * Reserved height (px) for `renderNodeContent` output. Required whenever
+   * the slot renders for this node so layout spaces neighbors correctly.
+   */
+  contentHeight?: number;
   id: string;
+  kind?: MermaidKind;
   meta?: string;
-  position?: { x: number; y: number };
+  shape?: MermaidShape;
+  /** Live run state — trailing glyph in the title row (spinner / check / x). */
+  status?: MermaidRunStatus;
+  /** Accessible name for the status glyph; defaults to the status word. */
+  statusLabel?: string;
   title: string;
-  tone?: NodeGraphTone;
+  /** Status tint (error / success / in-progress). Wins over `kind` chrome. */
+  tone?: MermaidTone;
 }
 
-export interface NodeGraphEdge {
+export interface MermaidEdge {
   id?: string;
   label?: string;
   source: string;
   target: string;
 }
 
-export interface NodeGraphProps {
+export interface MermaidProps {
   "aria-label": string;
   className?: string;
-  direction?: NodeGraphDirection;
-  edges: readonly NodeGraphEdge[];
-  editable?: boolean;
+  direction?: MermaidDirection;
+  edges?: readonly MermaidEdge[];
   emptyText?: string;
   /**
    * Top-right fullscreen control. Default true.
-   * Host canvas wires this to content preview (same shell as mermaid/image).
+   * Host canvas wires this to content preview (same shell as image preview).
    */
   expandable?: boolean;
   /** aria-label / title for expand control. */
   expandLabel?: string;
-  highlightedIds?: ReadonlySet<string>;
-  nodes: readonly NodeGraphNode[];
-  onConnectNodes?: (connection: { source: string; target: string }) => void;
-  onNodePositionChange?: (
-    id: string,
-    position: { x: number; y: number }
-  ) => void;
+  nodes?: readonly MermaidNode[];
   /** Override host content-preview open (tests / custom shells). */
   onOpenFullscreen?: () => void;
   onSelectNode?: (id: string) => void;
@@ -76,22 +93,20 @@ export interface NodeGraphProps {
    * ContentPreviewHost with bottom zoom controls.
    */
   presentation?: "card" | "stage";
+  /**
+   * Embedded component slot rendered inside each node card below title/meta
+   * (progress, timings, badges — display chrome, not interactive controls).
+   * Nodes that render content must set `contentHeight`; return null for
+   * nodes without extra content.
+   */
+  renderNodeContent?: (node: MermaidNode) => ReactNode;
   selectedId?: string;
-}
-
-export interface MermaidDiagramProps {
-  "aria-label": string;
-  className?: string;
-  emptyText?: string;
-  errorText?: string;
-  /** Top-right fullscreen into host content preview. Default true. */
-  expandable?: boolean;
-  expandLabel?: string;
-  loadingText?: string;
-  previewTitle?: string;
-  source: string;
+  /**
+   * Native mermaid source. Sequence, state, class, ER, and mindmap use this.
+   * Architecture / flowchart cards use `nodes` / `edges` when `source` is omitted.
+   */
+  source?: string;
 }
 
 export const DataChart: ComponentType<DataChartProps>;
-export const NodeGraph: ComponentType<NodeGraphProps>;
-export const MermaidDiagram: ComponentType<MermaidDiagramProps>;
+export const Mermaid: ComponentType<MermaidProps>;

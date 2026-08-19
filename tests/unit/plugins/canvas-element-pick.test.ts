@@ -112,21 +112,19 @@ describe("buildCanvasPickChain + depth", () => {
     expect(defaultPickDepth(host, chain!.chain)).toBe(0);
   });
 
-  it("prefers outer mermaid-diagram surface over inner svg host", () => {
+  it("prefers the outer diagram surface over inner svg layers", () => {
     const host = document.createElement("div");
     host.innerHTML = `
-      <div data-slot="mermaid-diagram" role="img" aria-label="架构图">
-        <div data-slot="mermaid-diagram-svg"><svg><g></g></svg></div>
-        <button type="button">expand</button>
+      <div data-slot="mermaid-root" role="img" aria-label="架构图">
+        <div data-slot="mermaid">
+          <svg><g></g></svg>
+          <button type="button">expand</button>
+        </div>
       </div>
     `;
-    const svgHost = host.querySelector(
-      "[data-slot='mermaid-diagram-svg']"
-    ) as HTMLElement;
-    const surface = host.querySelector(
-      "[data-slot='mermaid-diagram']"
-    ) as HTMLElement;
-    const chain = buildCanvasPickChain(host, svgHost);
+    const svg = host.querySelector("svg") as unknown as HTMLElement;
+    const surface = host.querySelector("[data-slot='mermaid']") as HTMLElement;
+    const chain = buildCanvasPickChain(host, svg);
     expect(chain).not.toBeNull();
     const depth = defaultPickDepth(host, chain!.chain);
     expect(chain!.chain[depth]).toBe(surface);
