@@ -117,6 +117,15 @@ export const terminal = {
         review: "审查一个拉取请求",
         clear: "开始全新对话",
       },
+      "command-code": {
+        plan: "进入计划模式，可附带待规划任务",
+        compact: "压缩对话历史",
+        clear: "清空对话并开始新会话",
+        init: "为本项目初始化 AGENTS.md",
+        review: "审查一个拉取请求",
+        fork: "把当前对话分叉成新会话",
+        clone: "把当前分支复制到新会话",
+      },
       codex: {
         plan: "切换到计划模式，可附带提示词",
         btw: "开启临时旁聊，聚焦跟进一个问题",
@@ -177,6 +186,15 @@ export const terminal = {
         init: "分析代码库并生成 AGENTS.md",
         clear: "清空会话内容",
       },
+      omp: {
+        plan: "切换计划模式，智能体先起草再执行",
+        btw: "快速旁问，不写入主对话记录",
+        compact: "总结较早对话，可指定关注点",
+        new: "开始新会话",
+        retry: "失败后重试上一轮输入",
+        loop: "循环执行直到完成或超出额度",
+        handoff: "写一份收尾说明并结束本轮",
+      },
       opencode: {
         init: "创建或更新项目说明文件 AGENTS.md",
         compact: "压缩当前会话内容",
@@ -184,6 +202,13 @@ export const terminal = {
         undo: "撤销上一条消息并回滚其文件改动",
         redo: "重做先前撤销的消息",
         share: "通过公开链接分享当前会话",
+      },
+      pi: {
+        new: "开始新会话",
+        compact: "总结较早内容，可指定关注点",
+        fork: "从先前的用户消息开启新会话",
+        clone: "把当前分支复制到新会话",
+        reload: "重新加载快捷键、扩展、技能与说明文件",
       },
       "qwen-code": {
         plan: "进入计划模式，可附带待规划任务",

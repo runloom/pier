@@ -10,7 +10,10 @@ import type {
   UnmanagedSkillView,
   UserGlobalSkillView,
 } from "@shared/contracts/project-skills.ts";
-import { skillInvokeText } from "@shared/skill-invoke.ts";
+import {
+  agentUsesSkillColonInvoke,
+  skillInvokeText,
+} from "@shared/skill-invoke.ts";
 
 /**
  * Where the entry was discovered (UI badge only).
@@ -318,6 +321,20 @@ export function filterComposerSkillSuggestItems(
   });
 }
 
+/**
+ * Slash-namespace prefixes (`/skills …`, OMP/Pi `/skill:`) only list skills.
+ * Preserve / keyboard nav must use this same list as the popup.
+ */
+export function visibleComposerSkillSuggestItems(
+  items: readonly ComposerSkillSuggestItem[],
+  skillNamespace: boolean
+): ComposerSkillSuggestItem[] {
+  if (!skillNamespace) {
+    return [...items];
+  }
+  return items.filter((item) => item.source !== "builtin-command");
+}
+
 /** Keep the highlighted row across a same-query catalog refresh. */
 export function preserveSuggestActiveIndex(
   prevIndex: number,
@@ -337,52 +354,61 @@ export function preserveSuggestActiveIndex(
   return Math.min(prevIndex, nextItems.length - 1);
 }
 
-/**
- * Match `/` skill/command trigger for Enhanced Input.
- *
- * **Message-start only** (optional leading whitespace). Also accepts Goose’s
- * progressive form `/skills` + optional skill id token (space-separated).
- */
-export function getSkillSuggestMatch(
-  plainPrefix: string
-): { matchingString: string; trigger: "/" } | null {
-  // Prefer Goose `/skills [id]` so query is the skill token, not "skills".
-  const goose = plainPrefix.match(/^\s*\/skills(?:\s+([a-z0-9-]*))?$/i);
-  if (goose) {
-    return {
-      matchingString: goose[1] ?? "",
-      trigger: "/",
-    };
-  }
-  const match = plainPrefix.match(/^\s*\/([a-z0-9-]*)$/i);
-  if (!match) {
-    return null;
-  }
-  return {
-    matchingString: match[1] ?? "",
-    trigger: "/",
-  };
+export interface SkillSuggestMatch {
+  matchingString: string;
+  /**
+   * True when the typed prefix is a skill-only namespace (Goose `/skills …`
+   * or OMP/Pi `/skill:` / `/skill`). Commands stay hidden in that mode.
+   */
+  skillNamespace: boolean;
+  trigger: "/";
 }
 
-/**
- * Node-local slash span for replacement after {@link getSkillSuggestMatch} hits.
- * Covers bare `/id` and Goose `/skills [id]`.
- */
-export function getSkillSuggestNodeReplaceRange(
-  nodeText: string,
-  cursorInNode: number
-): { leadOffset: number; endOffset: number; matchingString: string } | null {
-  const before = nodeText.slice(0, cursorInNode);
-  const goose = before.match(/^(\s*)\/skills(?:\s+([a-z0-9-]*))?$/i);
+function analyzeSlashSuggest(
+  text: string,
+  agentKind?: string | null
+): {
+  leadOffset: number;
+  endOffset: number;
+  matchingString: string;
+  skillNamespace: boolean;
+} | null {
+  // Goose `/skills [id]` — query is the skill token, not "skills".
+  const goose = text.match(/^(\s*)\/skills(?:\s+([a-z0-9-]*))?$/i);
   if (goose) {
     const ws = goose[1] ?? "";
     return {
-      endOffset: before.length,
+      endOffset: text.length,
       leadOffset: ws.length,
       matchingString: goose[2] ?? "",
+      skillNamespace: true,
     };
   }
-  const match = before.match(/^(\s*)\/([a-z0-9-]*)$/i);
+  // OMP / Pi only: `/skill:` is not in the generic id charset. Other agents
+  // (Command Code `/skill:name` collision bypass) must PTY-passthrough.
+  if (agentUsesSkillColonInvoke(agentKind)) {
+    const colon = text.match(/^(\s*)\/skill:([a-z0-9-]*)$/i);
+    if (colon) {
+      const ws = colon[1] ?? "";
+      return {
+        endOffset: text.length,
+        leadOffset: ws.length,
+        matchingString: colon[2] ?? "",
+        skillNamespace: true,
+      };
+    }
+    const bareSkill = text.match(/^(\s*)\/skill$/i);
+    if (bareSkill) {
+      const ws = bareSkill[1] ?? "";
+      return {
+        endOffset: text.length,
+        leadOffset: ws.length,
+        matchingString: "",
+        skillNamespace: true,
+      };
+    }
+  }
+  const match = text.match(/^(\s*)\/([a-z0-9-]*)$/i);
   if (!match) {
     return null;
   }
@@ -393,5 +419,49 @@ export function getSkillSuggestNodeReplaceRange(
     endOffset: leadOffset + 1 + query.length,
     leadOffset,
     matchingString: query,
+    skillNamespace: false,
+  };
+}
+
+/**
+ * Match `/` skill/command trigger for Enhanced Input.
+ *
+ * **Message-start only** (optional leading whitespace). Also accepts Goose’s
+ * progressive form `/skills` + optional skill id token (space-separated), and
+ * OMP/Pi `/skill:` / `/skill`.
+ */
+export function getSkillSuggestMatch(
+  plainPrefix: string,
+  agentKind?: string | null
+): SkillSuggestMatch | null {
+  const analyzed = analyzeSlashSuggest(plainPrefix, agentKind);
+  if (!analyzed) {
+    return null;
+  }
+  return {
+    matchingString: analyzed.matchingString,
+    skillNamespace: analyzed.skillNamespace,
+    trigger: "/",
+  };
+}
+
+/**
+ * Node-local slash span for replacement after {@link getSkillSuggestMatch} hits.
+ * Covers bare `/id`, Goose `/skills [id]`, and OMP/Pi `/skill:` / `/skill`.
+ */
+export function getSkillSuggestNodeReplaceRange(
+  nodeText: string,
+  cursorInNode: number,
+  agentKind?: string | null
+): { leadOffset: number; endOffset: number; matchingString: string } | null {
+  const before = nodeText.slice(0, cursorInNode);
+  const analyzed = analyzeSlashSuggest(before, agentKind);
+  if (!analyzed) {
+    return null;
+  }
+  return {
+    endOffset: analyzed.endOffset,
+    leadOffset: analyzed.leadOffset,
+    matchingString: analyzed.matchingString,
   };
 }

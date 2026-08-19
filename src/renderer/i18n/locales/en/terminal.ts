@@ -127,6 +127,15 @@ export const terminal = {
         review: "Review a pull request",
         clear: "Start a fresh conversation",
       },
+      "command-code": {
+        plan: "Enter plan mode, optionally with a task to plan",
+        compact: "Compact the conversation history",
+        clear: "Start a new session with empty context",
+        init: "Initialize AGENTS.md for this project",
+        review: "Review a pull request",
+        fork: "Fork the conversation into a new session",
+        clone: "Clone the current branch into a new session",
+      },
       codex: {
         plan: "Switch to plan mode and optionally send a prompt",
         btw: "Start an ephemeral side chat for a focused follow-up",
@@ -189,6 +198,15 @@ export const terminal = {
         init: "Analyze the codebase and generate an AGENTS.md file",
         clear: "Clear the context",
       },
+      omp: {
+        plan: "Toggle plan mode; the agent drafts before it executes",
+        btw: "Ask an ephemeral side question without polluting the transcript",
+        compact: "Summarize older conversation, optionally with a focus",
+        new: "Start a new session",
+        retry: "Resubmit the same input after a failed turn",
+        loop: "Iterate until the task is done or the budget runs out",
+        handoff: "Write a structured wrap-up and end the turn",
+      },
       opencode: {
         init: "Create or update the AGENTS.md project guide file",
         compact: "Compact the current session context",
@@ -196,6 +214,13 @@ export const terminal = {
         undo: "Undo the last message and revert its file changes",
         redo: "Redo a previously undone message",
         share: "Share the current session via a public link",
+      },
+      pi: {
+        new: "Start a new session",
+        compact: "Summarize older context, optionally with a focus",
+        fork: "Create a new session from a previous user message",
+        clone: "Duplicate the current branch into a new session",
+        reload: "Reload keybindings, extensions, skills, and context files",
       },
       "qwen-code": {
         plan: "Enter plan mode, optionally with a task to plan",

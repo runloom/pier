@@ -21,6 +21,9 @@ describe("pier-canvas locale helpers", () => {
       annotatePierCanvasInvokeLocale("/skills pier-canvas\nhello", "zh-CN")
     ).toBe("/skills pier-canvas locale=zh-CN\nhello");
     expect(
+      annotatePierCanvasInvokeLocale("/skill:pier-canvas please", "zh-CN")
+    ).toBe("/skill:pier-canvas locale=zh-CN please");
+    expect(
       annotatePierCanvasInvokeLocale("/pier-canvas locale=ja", "zh-CN")
     ).toBe("/pier-canvas locale=ja");
     expect(annotatePierCanvasInvokeLocale("plain text", "zh-CN")).toBe(
