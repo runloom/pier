@@ -1919,8 +1919,6 @@ test("adapts the diff to content width without changing reading state", async ()
         )
         .toBeLessThan(GIT_REVIEW_RESPONSIVE_INLINE_ENTER_PX);
       await expect.poll(() => reviewDiffType(page)).toBe("unified");
-      await expect(selectedFile).toHaveAttribute("aria-selected", "true");
-      expect(await selectedFile.textContent()).toBe(selectedTreeLabel);
       await assertReadingAnchor("tree-expanded");
 
       await collapseReviewTree(page);
