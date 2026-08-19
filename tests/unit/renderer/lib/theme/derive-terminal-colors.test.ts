@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { deriveTerminalColors } from "@/lib/theme/derive-terminal-colors.ts";
-import { contrast } from "@/lib/theme/oklch.ts";
-import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
+import { contrast, opaqueOn, visibleColor } from "@/lib/theme/oklch.ts";
+import { PIER_BRAND_PALETTE } from "@/lib/theme/pierre-brand-overlay.ts";
+import {
+  getShikiTheme,
+  STYLE_PRESET_SOURCE_REGISTRY,
+} from "@/lib/theme/preset-registry.ts";
 
 const PIERRE_CASES = [
   ["pierre", "light"],
@@ -36,6 +40,24 @@ describe("deriveTerminalColors — selection colors", () => {
 
       expect(terminal.palette[4]).toBe("#8549ff");
       expect(terminal.palette[12]).toBe("#b66cff");
+    }
+  });
+
+  it("keeps Pierre terminal selection on the source theme, not the brand primary", () => {
+    for (const [preset, mode] of PIERRE_CASES) {
+      const source = STYLE_PRESET_SOURCE_REGISTRY[preset][mode];
+      const terminal = deriveTerminalColors(getShikiTheme(preset, mode), mode);
+      const expected = visibleColor(
+        terminal.background,
+        opaqueOn(
+          source.colors?.["editor.selectionBackground"] ?? "",
+          terminal.background
+        ),
+        1.5
+      );
+
+      expect(terminal.selectionBackground).toBe(expected);
+      expect(terminal.selectionBackground).not.toBe(PIER_BRAND_PALETTE.primary);
     }
   });
 

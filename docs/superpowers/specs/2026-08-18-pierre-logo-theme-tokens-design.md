@@ -25,7 +25,7 @@
 
 `Pierre` 与 `Pierre Soft` 直接消费 `@pierre/theme`。上游主题把蓝色分散在下列 token：
 
-- focus、selection、editor cursor、list focus
+- focus、editor cursor、list focus
 - activity badge、tab active、panel title active
 - button、button hover、text link、notification link
 - Git modified decoration
@@ -95,8 +95,8 @@ applyPierBrandOverlay(theme, { mode }) -> clonedTheme
 
 ### 派生透明色
 
-- `editor.selectionBackground`：dark 使用主色 30% alpha，light 使用主色 18% alpha。
-- `selection.background`、`list.activeSelectionBackground`、`list.inactiveSelectionBackground`：从主色与当前主题背景混合，不引入独立蓝色色值；active 强于 inactive。
+- 文字选区（`editor.selectionBackground`、`selection.background`、终端 `terminal.selectionBackground`）**不**映射品牌主色。代码编辑器、Diff 字符选区和终端共用各预设原有选区洗色；Diff `::selection` 消费 `--editor-selection-bg`。
+- `list.activeSelectionBackground`、`list.inactiveSelectionBackground`：从主色与当前主题背景混合，只用于列表行高亮，不是文字选区；active 强于 inactive。
 - `button.foreground` 与 `activityBarBadge.foreground`：使用白色，确保落在主色填充上的正文与图标达到 4.5:1。
 
 ### 模式相关的文本强调色

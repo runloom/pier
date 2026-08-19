@@ -205,6 +205,9 @@ describe("Git diff renderer governance", () => {
     expect(appearanceSource).toContain('from "../scrollbar-system.ts"');
     expect(customCss).toBeDefined();
     expect(/\$\{SCROLLBAR_SYSTEM_CSS\}/.test(customCss ?? "")).toBe(true);
+    expect(customCss).toContain("*::selection");
+    expect(customCss).toContain("var(--editor-selection-bg)");
+    expect(customCss).not.toMatch(/::selection[\s\S]{0,160}?var\(--primary\)/u);
     // 头高常量唯一来源：geometry.ts；appearance re-export
     expect(appearanceSource).toContain("DIFF_HEADER_MIN_HEIGHT_PX");
     expect(appearanceSource).toContain('from "./geometry.ts"');

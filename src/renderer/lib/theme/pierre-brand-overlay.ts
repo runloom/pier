@@ -37,10 +37,6 @@ function mixedSurface(background: string, strength: number): string {
   return mix(background, PIER_BRAND_PALETTE.primary, strength);
 }
 
-function withHexAlpha(color: string, alpha: "2e" | "4d"): string {
-  return `${color}${alpha}`;
-}
-
 export function applyPierBrandOverlay<T extends PierBrandThemeLike>(
   source: T,
   mode: "light" | "dark"
@@ -51,10 +47,10 @@ export function applyPierBrandOverlay<T extends PierBrandThemeLike>(
     (mode === "dark" ? "#0a0a0a" : "#ffffff");
   const textAccent =
     mode === "dark" ? PIER_BRAND_PALETTE.highlight : PIER_BRAND_PALETTE.primary;
-  const selectionStrength = mode === "dark" ? 0.24 : 0.12;
   const activeSelectionStrength = mode === "dark" ? 0.32 : 0.18;
   const inactiveSelectionStrength = mode === "dark" ? 0.18 : 0.1;
 
+  // Text selection stays on the source theme (code / diff / terminal).
   const colors = {
     ...originalColors,
     "activityBar.activeBorder": PIER_BRAND_PALETTE.primary,
@@ -64,10 +60,6 @@ export function applyPierBrandOverlay<T extends PierBrandThemeLike>(
     "button.foreground": "#ffffff",
     "button.hoverBackground": PIER_BRAND_PALETTE.deep,
     "charts.blue": PIER_BRAND_PALETTE.primary,
-    "editor.selectionBackground": withHexAlpha(
-      PIER_BRAND_PALETTE.primary,
-      mode === "dark" ? "4d" : "2e"
-    ),
     "editorCursor.foreground": PIER_BRAND_PALETTE.highlight,
     focusBorder: PIER_BRAND_PALETTE.highlight,
     "gitDecoration.modifiedResourceForeground": textAccent,
@@ -82,7 +74,6 @@ export function applyPierBrandOverlay<T extends PierBrandThemeLike>(
     ),
     "notificationLink.foreground": textAccent,
     "panelTitle.activeBorder": PIER_BRAND_PALETTE.primary,
-    "selection.background": mixedSurface(background, selectionStrength),
     "tab.activeBorderTop": PIER_BRAND_PALETTE.primary,
     "terminal.ansiBlue": PIER_BRAND_PALETTE.primary,
     "terminal.ansiBrightBlue": PIER_BRAND_PALETTE.highlight,

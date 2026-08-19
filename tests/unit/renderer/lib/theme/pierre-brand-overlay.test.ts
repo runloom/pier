@@ -84,12 +84,10 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
 
     expect(result.colors).toMatchObject({
       ...commonExpectedColors,
-      "editor.selectionBackground": `${PIER_BRAND_PALETTE.primary}4d`,
       "gitDecoration.modifiedResourceForeground": PIER_BRAND_PALETTE.highlight,
       "list.activeSelectionBackground": "#35225c",
       "list.inactiveSelectionBackground": "#251a3b",
       "notificationLink.foreground": PIER_BRAND_PALETTE.highlight,
-      "selection.background": "#2c1e49",
       "textLink.activeForeground": PIER_BRAND_PALETTE.highlight,
       "textLink.foreground": PIER_BRAND_PALETTE.highlight,
     });
@@ -100,33 +98,43 @@ describe("renderer/lib/theme/pierre-brand-overlay", () => {
 
     expect(result.colors).toMatchObject({
       ...commonExpectedColors,
-      "editor.selectionBackground": `${PIER_BRAND_PALETTE.primary}2e`,
       "gitDecoration.modifiedResourceForeground": PIER_BRAND_PALETTE.primary,
       "list.activeSelectionBackground": "#e9deff",
       "list.inactiveSelectionBackground": "#f3edff",
       "notificationLink.foreground": PIER_BRAND_PALETTE.primary,
-      "selection.background": "#f0e9ff",
       "textLink.activeForeground": PIER_BRAND_PALETTE.primary,
       "textLink.foreground": PIER_BRAND_PALETTE.primary,
     });
   });
 
-  it("derives editor selection alpha colors from the palette primary", () => {
-    const mutablePalette = PIER_BRAND_PALETTE as {
-      primary: string;
-    };
-    const originalPrimary = mutablePalette.primary;
-    try {
-      mutablePalette.primary = "#123456";
+  it("does not recolor editor or global text selection", () => {
+    const result = applyPierBrandOverlay(
+      {
+        ...source,
+        colors: {
+          ...source.colors,
+          "editor.selectionBackground": "#009fff4d",
+          "selection.background": "#19283c",
+        },
+      },
+      "dark"
+    );
 
-      expect(applyPierBrandOverlay(source, "dark").colors).toMatchObject({
-        "editor.selectionBackground": "#1234564d",
-      });
-      expect(applyPierBrandOverlay(lightSource, "light").colors).toMatchObject({
-        "editor.selectionBackground": "#1234562e",
-      });
-    } finally {
-      mutablePalette.primary = originalPrimary;
+    expect(result.colors?.["editor.selectionBackground"]).toBe("#009fff4d");
+    expect(result.colors?.["selection.background"]).toBe("#19283c");
+    const unmapped = applyPierBrandOverlay(source, "dark").colors ?? {};
+    expect(Object.hasOwn(unmapped, "editor.selectionBackground")).toBe(false);
+    expect(Object.hasOwn(unmapped, "selection.background")).toBe(false);
+
+    for (const [preset, mode] of PIERRE_CASES) {
+      const original = PIERRE_SOURCES[preset][mode];
+      const theme = presetRegistry.getShikiTheme(preset, mode);
+      expect(theme.colors?.["editor.selectionBackground"]).toBe(
+        original.colors?.["editor.selectionBackground"]
+      );
+      expect(theme.colors?.["selection.background"]).toBe(
+        original.colors?.["selection.background"]
+      );
     }
   });
 

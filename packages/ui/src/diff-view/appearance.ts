@@ -9,9 +9,11 @@ export const CODE_VIEW_CUSTOM_CSS = `
 ${SCROLLBAR_SYSTEM_CSS}
 
   /*
-   * 正文：浏览器字符级选区（拖选文字蓝块，非整行 data-selected-line）。
+   * 正文：浏览器字符级选区（非整行 data-selected-line）。
    * 行号栏 Pierre 官方已是 user-select:none + 整行选；gutter + 由
    * use-content-selection 拦截，不写行选。
+   * 选区底色走主题原有 --editor-selection-bg（与 CodeMirror 同源），
+   * 不跟品牌主色，也不用 UA / 系统强调色。
    */
   pre,
   [data-code],
@@ -19,6 +21,11 @@ ${SCROLLBAR_SYSTEM_CSS}
   [data-content] {
     -webkit-user-select: text;
     user-select: text;
+  }
+
+  *::selection {
+    background-color: var(--editor-selection-bg);
+    color: inherit;
   }
 
   [data-diffs-header] {
