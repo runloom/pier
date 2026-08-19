@@ -7,6 +7,7 @@ import {
   type ExternalMainPluginContext,
 } from "@main/plugins/external-main-runtime.ts";
 import type { ManagedPluginRuntimeSource } from "@main/services/managed-plugins/install-runtime.ts";
+import type { PluginConfigurationApi } from "@pier/plugin-api/main";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let dir = "";
@@ -57,7 +58,7 @@ function contextFor(
 ): ExternalMainPluginContext {
   return {
     configuration: {
-      get: vi.fn(() => undefined),
+      get: vi.fn() as PluginConfigurationApi["get"],
       onDidChange: vi.fn(() => () => undefined),
       reset: vi.fn(async () => undefined),
       set: vi.fn(async () => undefined),

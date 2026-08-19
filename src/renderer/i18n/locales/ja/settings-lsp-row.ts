@@ -15,6 +15,9 @@ export const settingsLspRow = {
   lspMaxRemoteWorkspaces: "リモートプロジェクト上限",
   lspMaxRemoteWorkspacesDesc:
     "同時に言語サーバーを動かせるリモートプロジェクトの最大数",
+  lspMemoryBudgetMb: "メモリ予算",
+  lspMemoryBudgetMbDesc:
+    "言語サーバー全体のメモリ上限です。超えると、いちばん長く使っていないプロジェクトを停止し、必要になったら再起動します。0 は上限なしです",
   lspUpdateFailed:
     "言語サービスの設定を更新できませんでした。もう一度お試しください",
   lspWorktreesEnabled: "作業ツリーでも実行",

@@ -21,8 +21,10 @@ export interface MarkdownHtmlRenderEnv {
   onOpenInternal: ((target: MarkdownInternalTarget) => void) | undefined;
   range: MarkdownSourceRange;
   searchMatches: readonly MarkdownSearchMatch[] | undefined;
-  searchMatchesForHtml?: (
-    range: MarkdownSourceRange
-  ) => readonly MarkdownSearchMatch[] | undefined;
+  searchMatchesForHtml?:
+    | ((
+        range: MarkdownSourceRange
+      ) => readonly MarkdownSearchMatch[] | undefined)
+    | undefined;
   source: MarkdownDiskSource | undefined;
 }

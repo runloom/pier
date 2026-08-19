@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import type { LaunchWrapHandler } from "@pier/plugin-api/main";
 import { jsonValueSchema } from "@shared/contracts/plugin/settings.ts";
-import type { PluginConfigurationProperty } from "@shared/contracts/plugin.ts";
 import { createLogger } from "@shared/logger.ts";
 import { effectiveConfigurationValue } from "@shared/plugin-settings.ts";
 import type { ExternalMainPluginContext } from "../plugins/external-main-runtime.ts";
@@ -9,6 +8,7 @@ import { createExternalPluginProcessEnv } from "../plugins/external-plugin-proce
 import type { PluginRpcBus } from "../plugins/rpc-bus.ts";
 import { createPluginSecretsFacade } from "../plugins/secrets.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
+import type { ManagedPluginRuntimeSource } from "../services/managed-plugins/install-runtime.ts";
 import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
 import { resolveUserCommand } from "../services/process-environment/resolve-user-command.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
@@ -36,16 +36,7 @@ export function createExternalMainPluginContextFactory(deps: {
   secrets: SecretsStore;
   usageData: UsageData;
   userDataDir: string;
-}): (source: {
-  id: string;
-  manifest: {
-    configuration?: {
-      properties: Record<string, PluginConfigurationProperty>;
-    };
-    permissions: readonly string[];
-  };
-  version: string;
-}) => ExternalMainPluginContext {
+}): (source: ManagedPluginRuntimeSource) => ExternalMainPluginContext {
   return (source) => ({
     configuration: {
       get: <T>(key: string): T => {

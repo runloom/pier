@@ -26,7 +26,9 @@ export function pickSanitizedMarkdownHtmlAttrs(
   if (align && isSafeHtmlAlign(align)) {
     attrs.align = align.trim().toLowerCase();
   }
-  if (Object.hasOwn(raw, "alt")) attrs.alt = raw.alt;
+  if (Object.hasOwn(raw, "alt") && raw.alt !== undefined) {
+    attrs.alt = raw.alt;
+  }
   if (raw.title) attrs.title = raw.title;
   if (tag === "a") {
     const href = safeMarkdownUrl(raw.href);

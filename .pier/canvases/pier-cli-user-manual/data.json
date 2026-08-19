@@ -191,8 +191,7 @@
             "name": "status",
             "status": "shipped",
             "synopsis": "pier status --json",
-            "description": "确认本机 Pier 是否在线，并返回简要状态。",
-            "output": "{\n  \"ok\": true,\n  \"requestId\": \"…\",\n  \"data\": {\n    \"appVersion\": \"0.1.x\",\n    \"platform\": \"darwin\"\n  }\n}"
+            "description": "确认本机 Pier 是否在线，并返回简要状态。"
           },
           {
             "id": "open",
@@ -203,8 +202,7 @@
             "examples": [
               "pier open . --json",
               "pier open ~/proj --split right --json"
-            ],
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-…\",\n    \"windowId\": \"…\"\n  }\n}"
+            ]
           },
           {
             "id": "version",
@@ -235,16 +233,14 @@
             "name": "snapshot",
             "status": "shipped",
             "synopsis": "pier snapshot --json",
-            "description": "原子高水位快照：agents/windows/panels/tasks/activity 摘要；无文件内容。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"bootId\": \"…\",\n    \"windows\": [],\n    \"panels\": []\n  }\n}"
+            "description": "原子高水位快照：agents/windows/panels/tasks/activity 摘要；无文件内容。"
           },
           {
             "id": "watch",
             "name": "watch",
             "status": "shipped",
             "synopsis": "pier watch [--after <rev>] [--timeout <ms>] --json",
-            "description": "顶层事实流（control.watch）；≠ 工作完成。",
-            "output": "{\"type\":\"event\",\"revision\":13,\"resource\":\"panels\"}"
+            "description": "顶层事实流（control.watch）；≠ 工作完成。"
           }
         ]
       },
@@ -258,48 +254,42 @@
             "name": "windows list",
             "status": "shipped",
             "synopsis": "pier windows list --json",
-            "description": "列出所有窗口。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"windows\": [{ \"id\": \"main\", \"focused\": true }]\n  }\n}"
+            "description": "列出所有窗口。"
           },
           {
             "id": "windows-focus",
             "name": "windows focus",
             "status": "shipped",
             "synopsis": "pier windows focus <窗口id> --json",
-            "description": "聚焦指定窗口。",
-            "output": "{\n  \"ok\": true,\n  \"data\": { \"windowId\": \"main\" }\n}"
+            "description": "聚焦指定窗口。"
           },
           {
             "id": "panels-list",
             "name": "panels list",
             "status": "shipped",
             "synopsis": "pier panels list [--window <id>] --json",
-            "description": "列出面板。不加 --json 时可能按窗口分组打印。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panels\": [{\n      \"panelId\": \"terminal-abc\",\n      \"windowId\": \"main\",\n      \"title\": \"Terminal\",\n      \"focused\": true\n    }]\n  }\n}"
+            "description": "列出面板。不加 --json 时可能按窗口分组打印。"
           },
           {
             "id": "panels-focus",
             "name": "panels focus",
             "status": "shipped",
             "synopsis": "pier panels focus <面板id> [--window <id>] [--no-focus] --json",
-            "description": "聚焦面板。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-abc\",\n    \"windowId\": \"main\"\n  }\n}"
+            "description": "聚焦面板。"
           },
           {
             "id": "panels-set-size",
             "name": "panels set-size",
             "status": "shipped",
             "synopsis": "pier panels set-size <面板id> [--width-ratio 0.3] [--height-ratio 0.4] [--window <id>] --json",
-            "description": "按比例调整面板大小。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-abc\",\n    \"windowId\": \"main\"\n  }\n}"
+            "description": "按比例调整面板大小。"
           },
           {
             "id": "panels-equalize",
             "name": "panels equalize",
             "status": "shipped",
             "synopsis": "pier panels equalize --axis horizontal|vertical --panel <面板id> [--panel <面板id> ...] [--window <id>] --json",
-            "description": "均分指定面板所在的分屏。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelIds\": [\"terminal-abc\"],\n    \"windowId\": \"main\"\n  }\n}"
+            "description": "均分指定面板所在的分屏。"
           }
         ]
       },
@@ -318,16 +308,14 @@
               "pier terminal open --cwd . --json",
               "pier terminal open -- pnpm test --json",
               "pier terminal open --split below --reference-panel teammate-1 --no-focus --json"
-            ],
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-…\",\n    \"windowId\": \"…\"\n  }\n}"
+            ]
           },
           {
             "id": "terminal-profiles",
             "name": "terminal profiles list|get|set|delete",
             "status": "shipped",
             "synopsis": "pier terminal profiles list --json\npier terminal profiles get <id> --json\npier terminal profiles set <id> … --json\npier terminal profiles delete <id> --json",
-            "description": "管理终端配置档。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"default\": { \"cwd\": \"/Users/you/project\" }\n  }\n}"
+            "description": "管理终端配置档。"
           },
           {
             "id": "term-list",
@@ -365,24 +353,21 @@
             "description": "读取任意终端（含智能体）当前画面。不含滚回。--panel 仍可用。",
             "examples": [
               "pier terminal screen terminal-abc --json"
-            ],
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"scope\": \"viewport\",\n    \"text\": \"…\",\n    \"truncated\": false,\n    \"panelId\": \"terminal-abc\",\n    \"windowId\": \"main\"\n  }\n}"
+            ]
           },
           {
             "id": "term-read",
             "name": "terminal read",
             "status": "shipped",
             "synopsis": "pier terminal read <panelId> [--window <id>] [--max-lines <n>] [--max-bytes <n>] --json",
-            "description": "screen 的别名：当前画面。滚回尚未提供。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"scope\": \"viewport\",\n    \"text\": \"…\",\n    \"panelId\": \"terminal-abc\"\n  }\n}"
+            "description": "screen 的别名：当前画面。滚回尚未提供。"
           },
           {
             "id": "term-close",
             "name": "terminal close",
             "status": "shipped",
             "synopsis": "pier terminal close <panelId> [--window <id>] --json",
-            "description": "关闭该终端面板（含智能体）。--panel 仍可用。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"closed\": true,\n    \"panelId\": \"terminal-abc\"\n  }\n}"
+            "description": "关闭该终端面板（含智能体）。--panel 仍可用。"
           },
           {
             "id": "terminal-interrupt",
@@ -428,40 +413,35 @@
             "name": "worktrees list",
             "status": "shipped",
             "synopsis": "pier worktrees list [路径] --json",
-            "description": "列出仓库下的工作树。省略路径时用当前目录。--path 仍可用。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"worktrees\": [{\n      \"path\": \"/Users/you/repo\",\n      \"branch\": \"main\"\n    }]\n  }\n}"
+            "description": "列出仓库下的工作树。省略路径时用当前目录。--path 仍可用。"
           },
           {
             "id": "wt-create",
             "name": "worktrees create",
             "status": "shipped",
             "synopsis": "pier worktrees create <仓库> --name <dir> --branch <b> --base <ref> --json",
-            "description": "创建新工作树。仓库路径写在 create 后面；--path 仍可用。",
-            "output": "{\n  \"ok\": true,\n  \"data\": { \"path\": \"/Users/you/repo.worktree/feature-x\" }\n}"
+            "description": "创建新工作树。仓库路径写在 create 后面；--path 仍可用。"
           },
           {
             "id": "wt-open",
             "name": "worktrees open",
             "status": "shipped",
             "synopsis": "pier worktrees open <路径> --json",
-            "description": "在 Pier 中打开工作树路径。",
-            "output": "{\n  \"ok\": true,\n  \"data\": { \"path\": \"…\" }\n}"
+            "description": "在 Pier 中打开工作树路径。"
           },
           {
             "id": "wt-check",
             "name": "worktrees check",
             "status": "shipped",
             "synopsis": "pier worktrees check <路径> --json",
-            "description": "检查路径是否支持 Git 工作树能力。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"isGit\": true,\n    \"canCreateWorktree\": true\n  }\n}"
+            "description": "检查路径是否支持 Git 工作树能力。"
           },
           {
             "id": "wt-get",
             "name": "worktrees get",
             "status": "shipped",
             "synopsis": "pier worktrees get <路径> --json",
-            "description": "查询单条工作树定位（路径、incarnation）。不含文件内容。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"status\": \"found\",\n    \"canonicalPath\": \"/path/to/worktree\",\n    \"worktreeRef\": {\n      \"worktreeKey\": \"/path/to/worktree\",\n      \"rootPath\": \"/path/to/worktree\",\n      \"incarnationId\": \"…\"\n    }\n  }\n}"
+            "description": "查询单条工作树定位（路径、incarnation）。不含文件内容。"
           },
           {
             "id": "wt-register",
@@ -476,8 +456,7 @@
             "name": "worktrees remove",
             "status": "shipped",
             "synopsis": "pier worktrees remove <路径> [--delete-branch] --json",
-            "description": "安全移除 Pier 管理的 linked 工作树。活跃智能体/任务运行或有未提交改动时拒绝；同路径重建会更换 incarnationId。",
-            "output": "{\n  \"ok\": true,\n  \"data\": { \"removed\": true }\n}"
+            "description": "安全移除 Pier 管理的 linked 工作树。活跃智能体/任务运行或有未提交改动时拒绝；同路径重建会更换 incarnationId。"
           }
         ]
       },
@@ -491,40 +470,35 @@
             "name": "tasks list",
             "status": "shipped",
             "synopsis": "pier tasks list [路径] --json",
-            "description": "列出可运行的任务定义。省略路径时用当前目录。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"tasks\": [{\n      \"id\": \"build\",\n      \"label\": \"Build\",\n      \"command\": \"pnpm build\"\n    }]\n  }\n}"
+            "description": "列出可运行的任务定义。省略路径时用当前目录。"
           },
           {
             "id": "tasks-run",
             "name": "tasks run",
             "status": "shipped",
             "synopsis": "pier tasks run <taskId> [--path] [--input id=value] [--window] [--split] [--no-focus] --json",
-            "description": "启动一次 Shell 任务运行。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runId\": \"run-…\",\n    \"taskId\": \"build\",\n    \"status\": \"running\"\n  }\n}"
+            "description": "启动一次 Shell 任务运行。"
           },
           {
             "id": "tasks-status",
             "name": "tasks status",
             "status": "shipped",
             "synopsis": "pier tasks status <runId> --json",
-            "description": "查询运行状态。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runId\": \"run-…\",\n    \"status\": \"succeeded\",\n    \"exitCode\": 0\n  }\n}"
+            "description": "查询运行状态。"
           },
           {
             "id": "tasks-cancel",
             "name": "tasks cancel",
             "status": "shipped",
             "synopsis": "pier tasks cancel <runId> [--window] --json",
-            "description": "取消运行。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runId\": \"run-…\",\n    \"status\": \"cancelled\"\n  }\n}"
+            "description": "取消运行。"
           },
           {
             "id": "tasks-get",
             "name": "tasks get",
             "status": "shipped",
             "synopsis": "pier tasks get <runId> --json",
-            "description": "status 的别名。",
-            "output": "{\n  \"ok\": true,\n  \"data\": { \"runId\": \"run-…\", \"status\": \"running\" }\n}"
+            "description": "status 的别名。"
           },
           {
             "id": "tasks-watch",
@@ -539,8 +513,7 @@
             "name": "tasks output",
             "status": "shipped",
             "synopsis": "pier tasks output <runId> [--task <taskId>] --json",
-            "description": "读取 shell 任务输出缓冲。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"chunk\": \"…\",\n    \"nextByte\": 4096,\n    \"eof\": false\n  }\n}"
+            "description": "读取 shell 任务输出缓冲。"
           },
           {
             "id": "tasks-stop",
@@ -569,24 +542,21 @@
             "name": "preferences read",
             "status": "shipped",
             "synopsis": "pier preferences read --json",
-            "description": "只读应用偏好。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"locale\": \"zh-CN\",\n    \"theme\": \"system\"\n  }\n}"
+            "description": "只读应用偏好。"
           },
           {
             "id": "plugins-list",
             "name": "plugins list",
             "status": "shipped",
             "synopsis": "pier plugins list --json",
-            "description": "列出插件。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"plugins\": [{\n      \"id\": \"pier.codex\",\n      \"enabled\": true\n    }]\n  }\n}"
+            "description": "列出插件。"
           },
           {
             "id": "plugins-inspect",
             "name": "plugins inspect",
             "status": "shipped",
             "synopsis": "pier plugins inspect <id> --json",
-            "description": "查看单个插件详情。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"id\": \"pier.codex\",\n    \"version\": \"…\",\n    \"enabled\": true\n  }\n}"
+            "description": "查看单个插件详情。"
           },
           {
             "id": "plugins-enable",
@@ -617,40 +587,35 @@
             "status": "shipped",
             "synopsis": "pier notifications list [--unread] --json",
             "description": "列出消息中心条目（NCS 同源）。不改变运行事实。",
-            "humanSample": "n-…\t需要你处理\tunread",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"seq\": 3,\n    \"unreadCount\": 1,\n    \"items\": [{\n      \"id\": \"n-…\",\n      \"title\": \"需要你处理\",\n      \"read\": false,\n      \"kind\": \"agent.attention\"\n    }]\n  }\n}"
+            "humanSample": "n-…\t需要你处理\tunread"
           },
           {
             "id": "notifications-get",
             "name": "notifications get",
             "status": "shipped",
             "synopsis": "pier notifications get <id> --json",
-            "description": "查看单条消息。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"item\": {\n      \"id\": \"n-…\",\n      \"title\": \"需要你处理\",\n      \"read\": false\n    }\n  }\n}"
+            "description": "查看单条消息。"
           },
           {
             "id": "notifications-watch",
             "name": "notifications watch",
             "status": "shipped",
             "synopsis": "pier notifications watch [--after <seq>] [--timeout <ms>] --json",
-            "description": "有界等待消息变更；cursorScope 为 notifications，勿与 agents/global after 混用。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"mode\": \"snapshot\",\n    \"seq\": 3,\n    \"cursorScope\": \"notifications\",\n    \"items\": []\n  }\n}"
+            "description": "有界等待消息变更；cursorScope 为 notifications，勿与 agents/global after 混用。"
           },
           {
             "id": "notifications-focus",
             "name": "notifications focus",
             "status": "shipped",
             "synopsis": "pier notifications focus <id> --json",
-            "description": "深链聚焦原智能体面板（与铃铛 focus-panel 同构）；不改运行事实。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"focused\": true,\n    \"status\": \"ok\"\n  }\n}"
+            "description": "深链聚焦原智能体面板（与铃铛 focus-panel 同构）；不改运行事实。"
           },
           {
             "id": "notifications-mark-read",
             "name": "notifications mark-read",
             "status": "shipped",
             "synopsis": "pier notifications mark-read <id> | --all --json",
-            "description": "标已读；已读不等于工作成功。",
-            "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"marked\": 1,\n    \"read\": true\n  }\n}"
+            "description": "标已读；已读不等于工作成功。"
           }
         ]
       }
@@ -664,8 +629,7 @@
           "status": "shipped",
           "synopsis": "pier agents catalog --json",
           "description": "本机已知智能体产品目录。availability 可能为 available / unknown。",
-          "humanSample": "claude\tClaude\tavailable",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"agents\": [{\n      \"agentId\": \"claude\",\n      \"label\": \"Claude\",\n      \"availability\": \"available\"\n    }]\n  }\n}"
+          "humanSample": "claude\tClaude\tavailable"
         },
         {
           "id": "agents-list",
@@ -673,16 +637,14 @@
           "status": "shipped",
           "synopsis": "pier agents list --json",
           "description": "当前会话中正在运行的智能体面板。无运行时列表为空属正常。",
-          "humanSample": "claude\tpanel=terminal-abc\twindow=main",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"ts\": 1730000000000,\n    \"entries\": [{\n      \"agentId\": \"claude\",\n      \"panelId\": \"terminal-abc\",\n      \"windowId\": \"main\"\n    }]\n  }\n}"
+          "humanSample": "claude\tpanel=terminal-abc\twindow=main"
         },
         {
           "id": "agents-get",
           "name": "agents get",
           "status": "shipped",
           "synopsis": "pier agents get <id> | --panel <panelId> | --agent-ref <ref> --json",
-          "description": "查询一条正在运行的智能体。id 写在 get 后面；按面板查用 --panel。",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"agent\": {\n      \"agentId\": \"claude\",\n      \"panelId\": \"terminal-abc\",\n      \"windowId\": \"main\"\n    }\n  }\n}"
+          "description": "查询一条正在运行的智能体。id 写在 get 后面；按面板查用 --panel。"
         },
         {
           "id": "agents-start",
@@ -690,64 +652,56 @@
           "status": "shipped",
           "synopsis": "pier agents start <id> [--cwd <path>] [--window <id>] --json",
           "description": "启动持久智能体并打开对应终端。例：pier agents start claude。--agent 仍可用。",
-          "humanSample": "pier agents start claude",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"runtime\": {\n      \"runtimeId\": \"rt-…\",\n      \"generation\": 1,\n      \"panelId\": \"terminal-…\"\n    }\n  }\n}"
+          "humanSample": "pier agents start claude"
         },
         {
           "id": "agents-turn",
           "name": "agents turn",
           "status": "shipped",
           "synopsis": "pier agents turn --boot … --runtime … --generation … [--text …|--text-file …|--stdin] --json",
-          "description": "向该次运行发送一轮输入。boot/runtime/generation 来自 start 的返回，不要省略。accepted 不等于已经处理完。",
-          "output": "{\n  \"ok\": true,\n  \"data\": { \"accepted\": true }\n}"
+          "description": "向该次运行发送一轮输入。boot/runtime/generation 来自 start 的返回，不要省略。accepted 不等于已经处理完。"
         },
         {
           "id": "agents-screen",
           "name": "agents screen",
           "status": "shipped",
           "synopsis": "pier agents screen --boot … --runtime … --generation … --json",
-          "description": "当前可见区域的有界画面，不是完整对话记录。需 native readViewportText。",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"screen\": {\n      \"text\": \"…\",\n      \"canonicalPath\": \"/Users/you/repo/src/main.ts\"\n    }\n  }\n}"
+          "description": "当前可见区域的有界画面，不是完整对话记录。需 native readViewportText。"
         },
         {
           "id": "agents-wait",
           "name": "agents wait",
           "status": "shipped",
           "synopsis": "pier agents wait --boot … --runtime … --generation … --until ready|waiting|exited|attention [--timeout ms] --json",
-          "description": "等待运行状态。",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"until\": \"ready\",\n    \"reached\": true\n  }\n}"
+          "description": "等待运行状态。"
         },
         {
           "id": "agents-focus",
           "name": "agents focus",
           "status": "shipped",
           "synopsis": "pier agents focus --boot <id> --runtime <id> --generation <n> --json",
-          "description": "聚焦该智能体面板。boot/runtime/generation 来自 start 的返回。",
-          "output": "{\n  \"ok\": true,\n  \"data\": {\n    \"panelId\": \"terminal-abc\"\n  }\n}"
+          "description": "聚焦该智能体面板。boot/runtime/generation 来自 start 的返回。"
         },
         {
           "id": "agents-interrupt",
           "name": "agents interrupt",
           "status": "shipped",
           "synopsis": "pier agents interrupt --boot <id> --runtime <id> --generation <n> --json",
-          "description": "中断运行。",
-          "output": "{\n  \"ok\": true,\n  \"data\": { \"interrupted\": true }\n}"
+          "description": "中断运行。"
         },
         {
           "id": "agents-terminate",
           "name": "agents terminate",
           "status": "shipped",
           "synopsis": "pier agents terminate --boot <id> --runtime <id> --generation <n> --json",
-          "description": "结束运行。",
-          "output": "{\n  \"ok\": true,\n  \"data\": { \"terminated\": true }\n}"
+          "description": "结束运行。"
         },
         {
           "id": "agents-watch",
           "name": "agents watch",
           "status": "shipped",
           "synopsis": "pier agents watch --boot … --runtime … --generation … [--timeout ms] --json",
-          "description": "运行事实流（JSONL event + 终态 response）。事实不等于工作完成。",
-          "output": "{\"type\":\"event\",\"kind\":\"agent.state\",\"state\":\"waiting\"}"
+          "description": "运行事实流（JSONL event + 终态 response）。事实不等于工作完成。"
         }
       ],
       "planned": [

@@ -12,6 +12,9 @@ export const settingsLspRow = {
   lspMaxLocalWorkspacesDesc: "언어 서버를 동시에 둘 수 있는 로컬 프로젝트 수",
   lspMaxRemoteWorkspaces: "원격 프로젝트 한도",
   lspMaxRemoteWorkspacesDesc: "언어 서버를 동시에 둘 수 있는 원격 프로젝트 수",
+  lspMemoryBudgetMb: "메모리 예산",
+  lspMemoryBudgetMbDesc:
+    "언어 서버 전체 메모리 한도입니다. 초과하면 가장 오래 쓰지 않은 프로젝트를 중지하고, 필요할 때 다시 시작합니다. 0은 한도 없음입니다",
   lspUpdateFailed:
     "언어 서비스 설정을 업데이트하지 못했습니다. 다시 시도하세요",
   lspWorktreesEnabled: "작업 트리에서도 실행",

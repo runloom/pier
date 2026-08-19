@@ -242,7 +242,7 @@ export function readUserDataControlSocketPath(
 
 export async function applyLaunchWrapForCreate(input: {
   agentId: AgentKind | undefined;
-  controlSocketPath?: string;
+  controlSocketPath?: string | undefined;
   hookEnv: Record<string, string>;
   launch: ResolvedTerminalLaunchOptions | undefined;
   panelId: string;

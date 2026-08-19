@@ -586,7 +586,7 @@ describe("Git diff renderer governance", () => {
       [
         "src/plugins/api/renderer-facades.ts",
         "src/renderer/lib/plugins/host/git-context.ts",
-        "src/main/app-core/permissions.ts",
+        "src/main/app-core/command-metadata.ts",
         "src/preload/git-api.ts",
         "src/preload/git-review-api.ts",
         "src/main/app-core/commands/git-review.ts",

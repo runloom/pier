@@ -256,7 +256,7 @@ export function withPanelStatusEnv(
   panelId: string,
   windowId: string,
   hookEnv: Record<string, string>,
-  controlSocketPath?: string
+  controlSocketPath?: string | undefined
 ): ResolvedTerminalLaunchOptions {
   const {
     PIER_AGENT_CALLER_BINDING: _parentBinding,

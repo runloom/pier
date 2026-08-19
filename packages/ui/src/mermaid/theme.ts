@@ -64,7 +64,7 @@ export const MERMAID_THEME_CSS = `
     color: initial !important;
     fill: none !important;
   }
-  /* mermaid flowchart CSS is \`.node path { fill: #fff4dd }\`. Lucide
+  /* mermaid flowchart CSS fills node paths with a pale yellow. Lucide
      icons in htmlLabels are descendants of g.node, so that rule turns
      kind/status glyphs into pale yellow blobs unless we isolate them. */
   .${SLOT_CLASS} foreignObject svg {

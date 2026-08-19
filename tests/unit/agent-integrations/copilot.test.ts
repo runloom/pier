@@ -324,7 +324,7 @@ describe("withPierCopilotHooks", () => {
       ingest
     );
     const blocked = rows[0];
-    if (blocked) {
+    if (blocked && "agent" in blocked && "event" in blocked) {
       aggregator.ingestAgentEvent(blocked, ingest);
     }
     expect(

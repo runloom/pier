@@ -41,11 +41,11 @@ export const CURSOR_TRANSCRIPT_TERMINAL_EVIDENCE = [
 
 export interface CursorQuestionScanState {
   generation: number;
-  kind?: CursorInteractionKind;
-  lastTerminal?: TranscriptTerminalRecord;
+  kind?: CursorInteractionKind | undefined;
+  lastTerminal?: TranscriptTerminalRecord | undefined;
   pending: boolean;
   /** 文件内 turn_ended 出现次数，用来区分同一末条与新的收口。 */
-  terminalSeq?: number;
+  terminalSeq?: number | undefined;
 }
 
 const QUESTION_TOOL_COMPACT = new Set([

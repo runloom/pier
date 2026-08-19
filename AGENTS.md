@@ -246,6 +246,7 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
    短时反馈即可；禁止与 focus 环共用 `ring-primary/50` 粗描边。
 5. **`tabIndex={0}` 白名单**（产品源码；新增必须在治理测试里登记理由）：
    - 图片预览画布（缩放/平移快捷键）
+   - 图片 diff 左右滑动条（`role="slider"`，方向键调整对比比例）
    - 工作台网格（Shift+F10 原生右键菜单合约）
    - dockview panel tab 内容（标签激活）
    - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）

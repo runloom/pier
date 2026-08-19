@@ -118,7 +118,7 @@ export function CanvasCommentPinLayer(props: {
   readonly interactive: boolean;
   readonly labels: PierInlineReviewLabels;
   /** Notify when the user opens a pin so n/N can match the pin number. */
-  readonly onPinOpen?: (pin: CanvasCommentPinView) => void;
+  readonly onPinOpen?: ((pin: CanvasCommentPinView) => void) | undefined;
   /** Request open after pick-on-existing (applied once interactive). */
   readonly onRequestOpenConsumed?: () => void;
   /** When true, open the pin's thread(s) in edit mode. */

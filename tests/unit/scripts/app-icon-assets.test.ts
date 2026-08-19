@@ -336,7 +336,7 @@ describe("Pier application icon sources", () => {
     const { width, pixels } = decodeRgbaPng(
       readFileSync(join(ROOT, "build/icon.png"))
     );
-    const rgbAt = (x: number, y: number) => {
+    const rgbAt = (x: number, y: number): [number, number, number] => {
       const offset = (y * width + x) * 4;
       return [
         pixels.readUInt8(offset),
@@ -347,7 +347,7 @@ describe("Pier application icon sources", () => {
     const upperLeft = rgbAt(160, 80);
     const upperRight = rgbAt(352, 80);
 
-    for (let channel = 0; channel < 3; channel += 1) {
+    for (const channel of [0, 1, 2] as const) {
       expect(
         Math.abs(upperLeft[channel] - upperRight[channel])
       ).toBeLessThanOrEqual(2);
@@ -358,7 +358,7 @@ describe("Pier application icon sources", () => {
     const { width, pixels } = decodeRgbaPng(
       readFileSync(join(ROOT, "build/icon.png"))
     );
-    const rgbAt = (x: number, y: number) => {
+    const rgbAt = (x: number, y: number): [number, number, number] => {
       const offset = (y * width + x) * 4;
       return [
         pixels.readUInt8(offset),
@@ -369,7 +369,7 @@ describe("Pier application icon sources", () => {
     const upperPlate = rgbAt(256, 80);
     const lowerPlate = rgbAt(256, 420);
 
-    for (let channel = 0; channel < 3; channel += 1) {
+    for (const channel of [0, 1, 2] as const) {
       expect(
         Math.abs(upperPlate[channel] - lowerPlate[channel])
       ).toBeLessThanOrEqual(2);
@@ -380,7 +380,7 @@ describe("Pier application icon sources", () => {
     const { width, pixels } = decodeRgbaPng(
       readFileSync(join(ROOT, "build/icon.png"))
     );
-    const rgbAt = (x: number, y: number) => {
+    const rgbAt = (x: number, y: number): [number, number, number] => {
       const offset = (y * width + x) * 4;
       return [
         pixels.readUInt8(offset),
@@ -393,13 +393,12 @@ describe("Pier application icon sources", () => {
       rgbAt(470, 256),
       rgbAt(256, 470),
       rgbAt(41, 256),
-    ];
+    ] as const;
+    const first = edges[0];
 
-    for (let index = 1; index < edges.length; index += 1) {
-      for (let channel = 0; channel < 3; channel += 1) {
-        expect(
-          Math.abs(edges[0][channel] - edges[index][channel])
-        ).toBeLessThanOrEqual(2);
+    for (const edge of edges.slice(1)) {
+      for (const channel of [0, 1, 2] as const) {
+        expect(Math.abs(first[channel] - edge[channel])).toBeLessThanOrEqual(2);
       }
     }
   });

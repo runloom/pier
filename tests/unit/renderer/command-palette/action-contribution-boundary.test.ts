@@ -172,8 +172,22 @@ describe("action contribution boundary", () => {
   it("resolves host aliases from every registered locale", async () => {
     await i18next.changeLanguage("en");
 
-    expect(
-      resolveI18nAliases("commandPalette.aliases.pier.view.zoomIn")
-    ).toEqual(["zoom in", "increase zoom", "放大", "放大界面", "fangda"]);
+    const zoomInAliases = resolveI18nAliases(
+      "commandPalette.aliases.pier.view.zoomIn"
+    );
+    expect(zoomInAliases).toEqual(
+      expect.arrayContaining([
+        "zoom in",
+        "increase zoom",
+        "拡大",
+        "ズームイン",
+        "확대",
+        "줌 인",
+        "放大",
+        "放大界面",
+        "fangda",
+      ])
+    );
+    expect(zoomInAliases).toHaveLength(9);
   });
 });

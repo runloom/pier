@@ -135,7 +135,16 @@ describe("hydrateNativeLaunchEnv", () => {
     const logical = { command: "claude", cwd: "/repo" };
     const localEnvironments = {
       resolveForWorktree: async () => ({
-        project: { env: { PIER_ENV: "proj" } },
+        project: {
+          cleanupCommand: "",
+          copyPatterns: [],
+          env: { PIER_ENV: "proj" },
+          kind: "project" as const,
+          projectRootPath: "/repo",
+          setupCommand: "",
+          updatedAt: 0,
+        },
+        projectRootPath: "/repo",
       }),
       resolveProject: async () => null,
     };

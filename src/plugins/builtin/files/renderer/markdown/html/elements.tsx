@@ -1,4 +1,5 @@
 import { Kbd } from "@pier/ui/kbd.tsx";
+import { Separator } from "@pier/ui/separator.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { createElement, type ReactNode } from "react";
 import type { MarkdownInline, MarkdownSourceRange } from "../ir.ts";
@@ -50,7 +51,7 @@ export function createMarkdownHtmlElement(
     return <br />;
   }
   if (name === "hr") {
-    return <hr className={cn("md-hr", alignClass)} />;
+    return <Separator className={cn("md-hr", alignClass)} />;
   }
   if (name === "kbd") {
     return <Kbd>{children}</Kbd>;

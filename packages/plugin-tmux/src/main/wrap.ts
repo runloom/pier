@@ -39,18 +39,20 @@ export function decorateLaunchSpawn(
   options: { workDir: string }
 ): LaunchSpawnResult {
   const inherited = input.env.TMUX;
-  const parsed = inherited ? parseTmuxValue(inherited) : null;
-  if (parsed) {
-    const map = loadSessionMap(parsed.workDir, parsed.sessionId);
-    if (map) {
-      const paneId =
-        paneIdForPanel(map, input.panelId) ?? input.env.TMUX_PANE ?? "%0";
-      return {
-        env: {
-          TMUX: inherited,
-          TMUX_PANE: paneId,
-        },
-      };
+  if (inherited) {
+    const parsed = parseTmuxValue(inherited);
+    if (parsed) {
+      const map = loadSessionMap(parsed.workDir, parsed.sessionId);
+      if (map) {
+        const paneId =
+          paneIdForPanel(map, input.panelId) ?? input.env.TMUX_PANE ?? "%0";
+        return {
+          env: {
+            TMUX: inherited,
+            TMUX_PANE: paneId,
+          },
+        };
+      }
     }
   }
   const bound = bindLeaderSession({

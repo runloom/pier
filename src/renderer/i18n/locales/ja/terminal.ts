@@ -370,8 +370,22 @@ export const terminal = {
           "先にエージェントの会話を開いてから、もう一度お試しください。",
         title: "コメント",
       },
+      history: {
+        title: "ターミナル履歴",
+      },
     },
     manage: "ステータスバーを管理…",
+  },
+  history: {
+    dialogTitle: "ターミナルの全履歴",
+    emptyBody:
+      "このターミナルが出力を出すと、ここに完全な記録が残ります（再起動前の履歴も含みます）。",
+    emptyTitle: "履歴はまだありません",
+    loadFailedBody: "少し待ってもう一度お試しください。",
+    loadFailedTitle: "ターミナル履歴を読み込めませんでした",
+    open: "全履歴を見る",
+    truncatedNotice:
+      "全履歴は {{totalMb}} MB です。いちばん新しい部分を表示しています。",
   },
   /**
    * Ghostty / native host messages (see ghostty-host-copy catalog).
