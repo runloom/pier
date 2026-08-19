@@ -11,6 +11,8 @@ import { SUBMIT_ENTER_SETTLE_MS } from "@main/ipc/terminal/operations.ts";
 import { APPKIT_KEYCODE } from "@shared/terminal-appkit-keys.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { workspace as workspaceEn } from "../../../../src/renderer/i18n/locales/en/workspace.ts";
+import { workspace as workspaceJa } from "../../../../src/renderer/i18n/locales/ja/workspace.ts";
+import { workspace as workspaceKo } from "../../../../src/renderer/i18n/locales/ko/workspace.ts";
 import { workspace as workspaceZh } from "../../../../src/renderer/i18n/locales/zh-CN/workspace.ts";
 
 function addonWith(handlers: {
@@ -286,6 +288,14 @@ describe("terminal create post actions", () => {
     expect(formatAgentCommandInjectFailedCopy("zh-CN")).toEqual({
       body: workspaceZh.addPanelMenu.startAgentInjectFailed,
       title: workspaceZh.addPanelMenu.startAgentFailed,
+    });
+    expect(formatAgentCommandInjectFailedCopy("ja")).toEqual({
+      body: workspaceJa.addPanelMenu.startAgentInjectFailed,
+      title: workspaceJa.addPanelMenu.startAgentFailed,
+    });
+    expect(formatAgentCommandInjectFailedCopy("ko")).toEqual({
+      body: workspaceKo.addPanelMenu.startAgentInjectFailed,
+      title: workspaceKo.addPanelMenu.startAgentFailed,
     });
   });
 

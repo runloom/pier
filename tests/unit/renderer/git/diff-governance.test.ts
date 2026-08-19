@@ -60,8 +60,11 @@ describe("Git diff renderer governance", () => {
 
     expect(importers).toEqual([
       "src/renderer/lib/theme/register-custom-themes.ts",
+      "packages/ui/src/diff-view/file-diff/placeholders.ts",
       "packages/ui/src/diff-view/handle-deps.ts",
       "packages/ui/src/diff-view/hunk-annotations.ts",
+      "packages/ui/src/diff-view/image-diff/annotation.ts",
+      "packages/ui/src/diff-view/image-diff/file-diff.ts",
       "packages/ui/src/diff-view/item-sync.ts",
       "packages/ui/src/diff-view/item-transition.ts",
       "packages/ui/src/diff-view/items.ts",
@@ -135,8 +138,8 @@ describe("Git diff renderer governance", () => {
     // 评论 gutter：host 提供 onGutterReviewActivate 时只开原生 + UI
     // （enableGutterUtility）；点击不走 onGutterUtilityClick（会写蓝选），
     // 改由 content-selection capture + activateGutterReview。
-    // 有评论的行由 base review-thread annotation 常驻渲染评论卡，无折叠 badge 态；
-    // gutter 入口恒为「在这一行新建评论」，不承担展开/收起。
+    // 有评论的行由 base review-thread annotation 常驻渲染带阴影的评论卡，
+    // 无 gutter 折叠态；gutter 入口恒为「在这一行新建评论」，不承担展开/收起。
     expect(codeViewOptions).toContain(
       "enableGutterUtility: onGutterReviewActivate !== undefined"
     );
@@ -202,6 +205,9 @@ describe("Git diff renderer governance", () => {
     expect(appearanceSource).toContain('from "../scrollbar-system.ts"');
     expect(customCss).toBeDefined();
     expect(/\$\{SCROLLBAR_SYSTEM_CSS\}/.test(customCss ?? "")).toBe(true);
+    expect(customCss).toContain("*::selection");
+    expect(customCss).toContain("var(--editor-selection-bg)");
+    expect(customCss).not.toMatch(/::selection[\s\S]{0,160}?var\(--primary\)/u);
     // 头高常量唯一来源：geometry.ts；appearance re-export
     expect(appearanceSource).toContain("DIFF_HEADER_MIN_HEIGHT_PX");
     expect(appearanceSource).toContain('from "./geometry.ts"');
@@ -580,7 +586,7 @@ describe("Git diff renderer governance", () => {
       [
         "src/plugins/api/renderer-facades.ts",
         "src/renderer/lib/plugins/host/git-context.ts",
-        "src/main/app-core/permissions.ts",
+        "src/main/app-core/command-metadata.ts",
         "src/preload/git-api.ts",
         "src/preload/git-review-api.ts",
         "src/main/app-core/commands/git-review.ts",

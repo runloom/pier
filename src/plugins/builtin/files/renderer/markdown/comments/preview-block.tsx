@@ -2,21 +2,38 @@
  * Markdown 块评论壳：阅读态不占版心。
  *
  * - 无评论：左缘评论图标（hover/focus 显现；垂直对齐首行中线）
- * - 有评论：左缘常驻徽标；点开 Popover 才见 InlineReviewThreadCard
- * - 草稿：块下 InlineReviewCommentEditor；不显示入口
- * - overlay 左缘，不占版心、不挤正文
+ * - 有评论：左缘常驻计数气泡（固定最左侧，不叠在正文上）
+ *   悬停预览正文；点击进入共享编辑输入
+ * - 草稿：优先贴在左缘图标右侧；空间不够时走 Radix 碰撞翻转，不画出界面
  */
 import { Button } from "@pier/ui/button.tsx";
-import { InlineReviewCommentEditor } from "@pier/ui/diff-view/review/inline-comment-editor.tsx";
+import { CommentComposer } from "@pier/ui/comments/composer.tsx";
+import { CommentCountBadge } from "@pier/ui/comments/count-badge.tsx";
+import {
+  COMMENT_FLOATER_CONTENT_CLASS,
+  COMMENT_FLOATER_POSITION,
+  COMMENT_HOVER_CARD_CLASS,
+  CommentHoverPreview,
+} from "@pier/ui/comments/hover-preview.tsx";
 import type {
   PierInlineReviewHandlers,
   PierInlineReviewLabels,
   PierInlineReviewThread,
 } from "@pier/ui/diff-view/review/inline-comment-types.ts";
 import { InlineReviewThreadCard } from "@pier/ui/diff-view/review/inline-thread-card.tsx";
-import { Popover, PopoverContent, PopoverTrigger } from "@pier/ui/popover.tsx";
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@pier/ui/hover-card.tsx";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+  PopoverTrigger,
+} from "@pier/ui/popover.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { MessageSquare } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 
 /** 左缘 overlay 槽宽（px）；热区 28，glyph 略放大。 */
@@ -64,6 +81,7 @@ function MarkdownCommentGutterSlot(props: {
 function MarkdownCommentLocatedBadge(props: {
   readonly handlers: PierInlineReviewHandlers;
   readonly labels: PierInlineReviewLabels;
+  readonly markerIndex: number;
   readonly onOpenChange: (open: boolean) => void;
   readonly open: boolean;
   readonly suppressAutoFocus: boolean;
@@ -71,61 +89,108 @@ function MarkdownCommentLocatedBadge(props: {
   readonly viewLabel: string;
 }): ReactNode {
   const count = props.threads.length;
+  const markerIndex = props.markerIndex > 0 ? props.markerIndex : 1;
+  const onEditComment = props.handlers.onEditComment;
+  const [editEpoch, setEditEpoch] = useState(0);
   if (count === 0) {
     return null;
   }
 
   return (
-    <MarkdownCommentGutterSlot>
-      <Popover onOpenChange={props.onOpenChange} open={props.open}>
-        <PopoverTrigger asChild>
-          <Button
-            aria-label={props.viewLabel}
-            className={cn(props.open && "ring-2 ring-background")}
-            data-slot="markdown-comment-badge"
-            size="icon-xs"
-            type="button"
-            variant="default"
-          >
-            {count > 1 ? (
-              <span className="font-semibold text-[10px] tabular-nums">
-                {count}
-              </span>
-            ) : (
-              <MessageSquare aria-hidden data-icon />
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          aria-label={props.viewLabel}
-          className="w-72 gap-2 p-3"
-          collisionPadding={12}
-          onOpenAutoFocus={(event) => {
-            if (props.suppressAutoFocus) {
-              event.preventDefault();
+    <div data-slot="markdown-comment-anchor">
+      <HoverCard
+        closeDelay={50}
+        openDelay={0}
+        {...(props.open ? { open: false } : {})}
+      >
+        <Popover
+          onOpenChange={(next) => {
+            props.onOpenChange(next);
+            if (next) {
+              setEditEpoch((value) => value + 1);
             }
           }}
-          side="right"
-          sideOffset={6}
+          open={props.open}
         >
-          <div
-            className="flex flex-col gap-2"
-            data-slot="markdown-comment-thread"
-          >
-            {props.threads.map((thread) => (
-              <InlineReviewThreadCard
-                chrome="plain"
-                handlers={props.handlers}
-                key={thread.threadId}
-                labels={props.labels}
-                thread={thread}
+          <HoverCardTrigger asChild>
+            <PopoverTrigger asChild>
+              <CommentCountBadge
+                aria-label={props.viewLabel}
+                count={markerIndex}
+                data-slot="markdown-comment-badge"
               />
-            ))}
-          </div>
-        </PopoverContent>
-      </Popover>
-    </MarkdownCommentGutterSlot>
+            </PopoverTrigger>
+          </HoverCardTrigger>
+          <PopoverContent
+            aria-label={props.viewLabel}
+            className={COMMENT_FLOATER_CONTENT_CLASS}
+            onOpenAutoFocus={(event) => {
+              if (props.suppressAutoFocus) {
+                event.preventDefault();
+              }
+            }}
+            {...COMMENT_FLOATER_POSITION}
+          >
+            <div
+              className="flex flex-col gap-2"
+              data-slot="markdown-comment-thread"
+            >
+              {onEditComment
+                ? props.threads.map((thread) => (
+                    <CommentComposer
+                      autoFocus={!props.suppressAutoFocus}
+                      initialBody={thread.comment.body}
+                      key={`${thread.threadId}-${editEpoch}`}
+                      labels={props.labels}
+                      mode="edit"
+                      onCancel={() => props.onOpenChange(false)}
+                      onDelete={async () => {
+                        const ok = await props.handlers.onDeleteComment(
+                          thread.threadId,
+                          thread.comment.id
+                        );
+                        if (ok) {
+                          props.onOpenChange(false);
+                        }
+                      }}
+                      onSubmit={async (body) => {
+                        const ok = await onEditComment(
+                          thread.threadId,
+                          thread.comment.id,
+                          body
+                        );
+                        if (ok) {
+                          props.onOpenChange(false);
+                        }
+                        return ok;
+                      }}
+                    />
+                  ))
+                : props.threads.map((thread) => (
+                    <InlineReviewThreadCard
+                      chrome="plain"
+                      handlers={props.handlers}
+                      key={thread.threadId}
+                      labels={props.labels}
+                      thread={thread}
+                    />
+                  ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+        <HoverCardContent
+          className={COMMENT_HOVER_CARD_CLASS}
+          {...COMMENT_FLOATER_POSITION}
+        >
+          <CommentHoverPreview
+            items={props.threads.map((thread) => ({
+              body: thread.comment.body,
+              id: thread.threadId,
+            }))}
+          />
+        </HoverCardContent>
+      </HoverCard>
+    </div>
   );
 }
 
@@ -140,6 +205,8 @@ export function MarkdownCommentBlockShell(props: {
   readonly draftId: string | null;
   readonly handlers: PierInlineReviewHandlers;
   readonly labels: PierInlineReviewLabels;
+  /** 1-based document-order pin number (Codex); not the per-block thread count. */
+  readonly markerIndex: number;
   readonly onOpenDraft: () => void;
   readonly requestOpenBlockKey?: string | null;
   readonly requestOpenNonce?: number;
@@ -150,8 +217,8 @@ export function MarkdownCommentBlockShell(props: {
   const draftId = props.draftId;
   const draftOpen = draftId !== null;
   const hasThreads = props.threads.length > 0;
-  // 仅「无线程且无草稿」时显示入口；有评论只靠左缘徽标。
-  const showAdd = !(hasThreads || draftOpen);
+  // 无线程时左缘保持添加入口；草稿打开后图标仍在，输入贴在图标右侧。
+  const showAdd = !hasThreads;
   const [open, setOpen] = useState(false);
   const [openedByNavigator, setOpenedByNavigator] = useState(false);
   const viewLabel = markdownCommentViewLabel({
@@ -189,74 +256,90 @@ export function MarkdownCommentBlockShell(props: {
 
   return (
     <div
-      className="group/md-comment relative"
+      className={cn("group/md-comment relative", draftOpen && "z-20")}
       data-markdown-comment-block={props.blockKey}
       data-slot="markdown-comment-block"
     >
-      <div
-        className={cn(
-          "relative min-w-0",
-          open && "rounded-md ring-1 ring-ring/40"
-        )}
-      >
+      <div className="relative min-w-0">
         {props.children}
         {showAdd ? (
           <MarkdownCommentGutterSlot>
-            <span
-              className={cn(
-                "inline-flex",
-                GUTTER_OPACITY_REVEAL_CLASS,
-                GUTTER_POINTER_REVEAL_CLASS
+            <Popover open={draftOpen}>
+              <PopoverAnchor asChild>
+                <span
+                  className={cn(
+                    "inline-flex",
+                    !draftOpen && GUTTER_OPACITY_REVEAL_CLASS,
+                    !draftOpen && GUTTER_POINTER_REVEAL_CLASS
+                  )}
+                >
+                  <Button
+                    aria-label={props.addCommentLabel}
+                    className={cn(
+                      !draftOpen && GUTTER_POINTER_REVEAL_CLASS,
+                      "text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (!draftOpen) {
+                        props.onOpenDraft();
+                      }
+                    }}
+                    size="icon"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <MessageCircle aria-hidden data-icon />
+                  </Button>
+                </span>
+              </PopoverAnchor>
+              {draftId === null ? null : (
+                <PopoverContent
+                  className={COMMENT_FLOATER_CONTENT_CLASS}
+                  onFocusOutside={(event) => {
+                    event.preventDefault();
+                  }}
+                  onPointerDownOutside={(event) => {
+                    event.preventDefault();
+                  }}
+                  {...COMMENT_FLOATER_POSITION}
+                >
+                  <div data-slot="markdown-comment-draft">
+                    <CommentComposer
+                      labels={props.labels}
+                      mode="compose"
+                      onCancel={() => props.handlers.onCancelDraft(draftId)}
+                      onSubmit={async (body) =>
+                        props.handlers.onSubmitDraft(draftId, body)
+                      }
+                    />
+                  </div>
+                </PopoverContent>
               )}
-            >
-              <Button
-                aria-label={props.addCommentLabel}
-                className={cn(
-                  GUTTER_POINTER_REVEAL_CLASS,
-                  "text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  props.onOpenDraft();
-                }}
-                size="icon"
-                type="button"
-                variant="ghost"
-              >
-                <MessageSquare aria-hidden data-icon />
-              </Button>
-            </span>
+            </Popover>
           </MarkdownCommentGutterSlot>
         ) : null}
-        {hasThreads && !draftOpen ? (
-          <MarkdownCommentLocatedBadge
-            handlers={props.handlers}
-            labels={props.labels}
-            onOpenChange={(next) => {
-              setOpen(next);
-              if (!next) {
-                setOpenedByNavigator(false);
-              }
-            }}
-            open={open}
-            suppressAutoFocus={openedByNavigator}
-            threads={props.threads}
-            viewLabel={viewLabel}
-          />
+        {hasThreads ? (
+          <MarkdownCommentGutterSlot>
+            <MarkdownCommentLocatedBadge
+              handlers={props.handlers}
+              labels={props.labels}
+              markerIndex={props.markerIndex}
+              onOpenChange={(next) => {
+                setOpen(next);
+                if (!next) {
+                  setOpenedByNavigator(false);
+                }
+              }}
+              open={open}
+              suppressAutoFocus={openedByNavigator}
+              threads={props.threads}
+              viewLabel={viewLabel}
+            />
+          </MarkdownCommentGutterSlot>
         ) : null}
       </div>
-      {draftId === null ? null : (
-        <div className="mt-1.5" data-slot="markdown-comment-draft">
-          <InlineReviewCommentEditor
-            labels={props.labels}
-            onCancel={() => props.handlers.onCancelDraft(draftId)}
-            onSubmit={async (body) =>
-              props.handlers.onSubmitDraft(draftId, body)
-            }
-          />
-        </div>
-      )}
     </div>
   );
 }

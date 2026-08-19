@@ -1,4 +1,4 @@
-import { MermaidDiagram, Stack, Text } from "pier/canvas";
+import { Mermaid, Stack, Text } from "pier/canvas";
 import type { SchemeData } from "./model.ts";
 import {
   BulletList,
@@ -28,10 +28,11 @@ export function LandingPage({ d }: { d: DesignData }) {
 
       <Stack gap={8}>
         <SectionTitle>交付依赖</SectionTitle>
-        <MermaidDiagram
+        <Mermaid
           aria-label="P0 项目列表到 P3 成本与 Skill 的交付顺序"
-          previewTitle="物料交付顺序"
-          source={d.delivery.diagram}
+          direction={d.delivery.diagram.direction}
+          edges={d.delivery.diagram.edges}
+          nodes={d.delivery.diagram.nodes}
         />
         <Text className="text-sm leading-relaxed text-muted-foreground">
           {d.delivery.caption}

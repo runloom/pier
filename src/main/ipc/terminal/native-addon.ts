@@ -248,6 +248,19 @@ export interface NativeAddon {
     fontSize: number
   ): void;
   /**
+   * 0108：单 surface 滚动历史上限（隐藏面板压力收缩 / 恢复即时生效）。
+   * `nativePanelId` 是 native 作用域 key（`${browserWindowId}::${panelId}`）。
+   */
+  setTerminalScrollbackLimit?(
+    nativePanelId: string,
+    limitBytes: number
+  ): boolean;
+  /**
+   * Transcript 分段落盘根目录（0107 output tap）。启动时调一次；空串禁用。
+   * 旧 addon 无此方法时终端功能不受影响，仅无磁盘历史。
+   */
+  setTerminalTranscriptRoot?(rootPath: string): void;
+  /**
    * 注册 Title forward callback. swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 后调用,
    * 传 (browserWindowId, panelId, title). TUI 应用 (claude / vim / aider) 自定义 title
    * 通道. 与 PWD 路由方式相同, 按 windowId 精准送到对应 BrowserWindow renderer.

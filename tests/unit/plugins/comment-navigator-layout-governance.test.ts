@@ -78,6 +78,27 @@ describe("comment navigator layout governance", () => {
     expect(preview).toContain("forceCommentPageIndex={forceCommentPageIndex}");
   });
 
+  it("reveals canvas comments on hidden tabs instead of shrinking n/N", () => {
+    const canvas = read(
+      "src/plugins/builtin/files/renderer/preview/canvas.tsx"
+    );
+    const nav = read(
+      "src/plugins/builtin/files/renderer/preview/canvas-comment-nav.ts"
+    );
+    const locate = read(
+      "src/plugins/builtin/files/renderer/preview/canvas-comment-locate.ts"
+    );
+    expect(canvas).toContain("revealCanvasCommentNavTarget");
+    expect(canvas).toContain("hiddenPins");
+    expect(canvas).toContain("liveThreads");
+    expect(nav).toContain("revealCanvasTabPanelForTarget");
+    expect(nav).toContain("oldest first");
+    expect(nav).toContain("same number as the pin");
+    expect(nav).toContain("mousedown");
+    expect(locate).toContain("canvasCommentPinIdentityKey");
+    expect(locate).toContain("numberIdentityPins");
+  });
+
   it("keeps git review chrome on a clipped surface frame", () => {
     const content = read("src/plugins/builtin/git/renderer/review/content.tsx");
     expect(content).toContain(

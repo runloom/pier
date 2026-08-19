@@ -19,7 +19,10 @@ import {
   CODEX_TRANSCRIPT_TERMINAL_EVIDENCE,
 } from "../../../../src/main/services/agents/integrations/transcript/codex-reconciler.ts";
 import { COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/copilot-reconciler.ts";
-import { CURSOR_TRANSCRIPT_INTERACTION_EVIDENCE } from "../../../../src/main/services/agents/integrations/transcript/cursor-reconciler.ts";
+import {
+  CURSOR_TRANSCRIPT_INTERACTION_EVIDENCE,
+  CURSOR_TRANSCRIPT_TERMINAL_EVIDENCE,
+} from "../../../../src/main/services/agents/integrations/transcript/cursor-reconciler.ts";
 import {
   GROK_TRANSCRIPT_INTERACTION_EVIDENCE,
   GROK_TRANSCRIPT_TERMINAL_EVIDENCE,
@@ -475,7 +478,13 @@ describe("agent status evidence matrix", () => {
       ["codebuddy", CODEBUDDY_TRANSCRIPT_TERMINAL_EVIDENCE],
       ["copilot", COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE],
       ["kimi", KIMI_TRANSCRIPT_TERMINAL_EVIDENCE],
-      ["cursor", CURSOR_TRANSCRIPT_INTERACTION_EVIDENCE],
+      [
+        "cursor",
+        [
+          ...CURSOR_TRANSCRIPT_INTERACTION_EVIDENCE,
+          ...CURSOR_TRANSCRIPT_TERMINAL_EVIDENCE,
+        ],
+      ],
     ] as const) {
       // host Esc 是独立 transport，不计入 transcript 对账集合
       const reconciledMappings = [

@@ -5,11 +5,11 @@ import type {
 import { gitReviewScopeSchema } from "@shared/contracts/git/review.ts";
 import { GIT_CHANGES_PANEL_ID } from "../../manifest.ts";
 import { pluginText } from "../plugin-text.ts";
+import { toggleGitReviewTreeSidebar } from "./tree/sidebar-preference.ts";
 import {
   collapseGitReviewTreeFolders,
   expandGitReviewTreeFolders,
 } from "./tree-collapse-registry.ts";
-import { toggleGitReviewTreeSidebar } from "./tree-sidebar-preference.ts";
 
 export const GIT_REVIEW_COLLAPSE_FOLDERS_COMMAND_ID =
   "pier.git.review.collapseFolders";

@@ -9,6 +9,10 @@ import { createLogger } from "@shared/logger.ts";
 
 const log = createLogger("renderer-command");
 
+export const DEFAULT_RENDERER_COMMAND_TIMEOUT_MS = 15_000;
+/** Must exceed `TERMINAL_LAUNCH_CONFIRMATION_TIMEOUT_MS` (native create). */
+export const TERMINAL_OPEN_RENDERER_TIMEOUT_MS = 20_000;
+
 export interface RendererCommandHost {
   send(
     envelope: RendererCommandEnvelope,
@@ -88,7 +92,9 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
     case "terminal.open":
       return command.focus ?? true;
     case "panel.close":
+    case "panel.equalize":
     case "panel.list":
+    case "panel.setSize":
     case "panelTransfer.finalize":
     case "panelTransfer.prepareSource":
     case "panelTransfer.probeWorkspace":
@@ -112,10 +118,24 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
   }
 }
 
+function timeoutForRendererCommand(
+  command: RendererCommand,
+  options: RendererCommandExecuteOptions | undefined,
+  defaultTimeoutMs: number
+): number {
+  if (options?.timeoutMs !== undefined) {
+    return options.timeoutMs;
+  }
+  if (command.type === "terminal.open") {
+    return TERMINAL_OPEN_RENDERER_TIMEOUT_MS;
+  }
+  return defaultTimeoutMs;
+}
+
 export function createRendererCommandService({
   createRequestId = randomUUID,
   host,
-  timeoutMs = 15_000,
+  timeoutMs = DEFAULT_RENDERER_COMMAND_TIMEOUT_MS,
 }: CreateRendererCommandServiceArgs): RendererCommandService {
   const pending = new Map<string, PendingRequest>();
 
@@ -147,7 +167,11 @@ export function createRendererCommandService({
       }
       const { promise, resolve } =
         Promise.withResolvers<RendererCommandResult>();
-      const effectiveTimeoutMs = options?.timeoutMs ?? timeoutMs;
+      const effectiveTimeoutMs = timeoutForRendererCommand(
+        command,
+        options,
+        timeoutMs
+      );
       const rejectTimer = setTimeout(() => {
         pending.delete(requestId);
         log.error("timed-out", {

@@ -1,9 +1,16 @@
 import { randomUUID } from "node:crypto";
-import type { PierCommand } from "@shared/contracts/commands.ts";
+import { isCanvasHostCommandAllowed } from "@shared/contracts/canvas-host.ts";
+import type {
+  PierCommand,
+  PierCommandResult,
+} from "@shared/contracts/commands.ts";
 import { pierCommandSchema } from "@shared/contracts/commands.ts";
-import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
+import {
+  DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
+  type PierClientKind,
+} from "@shared/contracts/permissions.ts";
 import { PIER } from "@shared/ipc-channels.ts";
-import type { IpcMain } from "electron";
+import type { IpcMain, IpcMainInvokeEvent } from "electron";
 import { appCore } from "../app-core/index.ts";
 import { findWindowContext } from "../windows/identity.ts";
 import { windowManager } from "../windows/manager.ts";
@@ -77,18 +84,21 @@ function trackGitReviewSender(
   return state.generation;
 }
 
-function ensureDesktopRendererClient(windowId: string): string {
-  const clientId = `desktop-renderer:${windowId}`;
+function ensureCommandClient(
+  windowId: string,
+  kind: Extract<PierClientKind, "desktop-renderer" | "canvas">
+): string {
+  const clientId = `${kind}:${windowId}`;
   const existing = appCore.clients.heartbeat(clientId);
   if (existing) {
     return clientId;
   }
   const now = Date.now();
   appCore.clients.register({
-    capabilities: DEFAULT_CAPABILITIES_BY_CLIENT_KIND["desktop-renderer"],
+    capabilities: DEFAULT_CAPABILITIES_BY_CLIENT_KIND[kind],
     createdAt: now,
     id: clientId,
-    kind: "desktop-renderer",
+    kind,
     lastSeenAt: now,
   });
   return clientId;
@@ -127,35 +137,59 @@ function commandForSender(command: PierCommand, windowId: string): PierCommand {
   return command;
 }
 
-export function registerCommandIpc(ipcMain: IpcMain): void {
-  ipcMain.handle(PIER.COMMAND_EXECUTE, async (event, rawCommand: unknown) => {
-    if (!isTrustedMainFrame(event)) {
-      throw new Error("command sender is not the main frame");
-    }
-    const parsed = pierCommandSchema.safeParse(rawCommand);
-    if (!parsed.success) {
-      throw new Error("invalid command");
-    }
-    const command: PierCommand = parsed.data;
-    const { recordId, windowId } = senderWindowContext(event.sender);
-    const clientId = ensureDesktopRendererClient(windowId);
-    const navigationGeneration = trackGitReviewSender(event.sender, {
-      clientId,
-      recordId,
-    });
-    return await appCore.commandRouter.execute(
-      {
-        clientId,
-        command: commandForSender(command, windowId),
-        protocolVersion: 1,
-        requestId: randomUUID(),
+async function executeTrustedCommand(
+  event: IpcMainInvokeEvent,
+  rawCommand: unknown,
+  kind: Extract<PierClientKind, "desktop-renderer" | "canvas">
+): Promise<PierCommandResult> {
+  if (!isTrustedMainFrame(event)) {
+    throw new Error("command sender is not the main frame");
+  }
+  const parsed = pierCommandSchema.safeParse(rawCommand);
+  if (!parsed.success) {
+    throw new Error("invalid command");
+  }
+  const command: PierCommand = parsed.data;
+  const requestId = randomUUID();
+  if (kind === "canvas" && !isCanvasHostCommandAllowed(command.type)) {
+    return {
+      error: {
+        code: "permission_denied",
+        message: `canvas host denies ${command.type}`,
       },
-      {
-        navigationGeneration,
-        runtimeWindowId: windowId,
-        webContentsId: event.sender.id,
-        windowRecordId: recordId,
-      }
-    );
+      ok: false,
+      requestId,
+    };
+  }
+  const { recordId, windowId } = senderWindowContext(event.sender);
+  const clientId = ensureCommandClient(windowId, kind);
+  const navigationGeneration = trackGitReviewSender(event.sender, {
+    clientId,
+    recordId,
   });
+  return await appCore.commandRouter.execute(
+    {
+      clientId,
+      command: commandForSender(command, windowId),
+      protocolVersion: 1,
+      requestId,
+    },
+    {
+      navigationGeneration,
+      runtimeWindowId: windowId,
+      webContentsId: event.sender.id,
+      windowRecordId: recordId,
+    }
+  );
+}
+
+export function registerCommandIpc(ipcMain: IpcMain): void {
+  ipcMain.handle(PIER.COMMAND_EXECUTE, async (event, rawCommand: unknown) =>
+    executeTrustedCommand(event, rawCommand, "desktop-renderer")
+  );
+  ipcMain.handle(
+    PIER.CANVAS_COMMAND_EXECUTE,
+    async (event, rawCommand: unknown) =>
+      executeTrustedCommand(event, rawCommand, "canvas")
+  );
 }

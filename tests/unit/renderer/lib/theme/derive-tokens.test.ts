@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { deriveAppStyleTokens } from "@/lib/theme/derive-tokens.ts";
 import { chromaOf, contrast, oklabLightness } from "@/lib/theme/oklch.ts";
-import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
+import { PIER_BRAND_PALETTE } from "@/lib/theme/pierre-brand-overlay.ts";
+import {
+  getShikiTheme,
+  STYLE_PRESET_SOURCE_REGISTRY,
+} from "@/lib/theme/preset-registry.ts";
 
 const HEX6_RE = /^#[0-9a-f]{6}$/;
 const HEX8_RE = /^#[0-9a-f]{8}$/;
@@ -14,6 +18,12 @@ const EDITOR_DECORATION_KEYS = [
   "editor-selection-bg",
   "editor-selection-match-bg",
   "editor-selection-match-main-bg",
+] as const;
+const PIERRE_CASES = [
+  ["pierre", "light"],
+  ["pierre", "dark"],
+  ["pierre-soft", "light"],
+  ["pierre-soft", "dark"],
 ] as const;
 
 describe("renderer/lib/theme/derive-tokens", () => {
@@ -175,5 +185,38 @@ describe("renderer/lib/theme/derive-tokens", () => {
     );
     // Keep brand blues vivid; do not crush under ~0.55 L just for 4.5:1.
     expect(oklabLightness(tokens.primary)).toBeGreaterThan(0.55);
+  });
+
+  it("derives the Pier purple for every registered Pierre theme", () => {
+    for (const [preset, mode] of PIERRE_CASES) {
+      const tokens = deriveAppStyleTokens(getShikiTheme(preset, mode), mode);
+
+      expect(tokens.primary).toBe("#8549ff");
+      expect(tokens["primary-foreground"]).toBe("#ffffff");
+      expect(tokens["chart-1"]).toBe("#8549ff");
+      expect(
+        contrast(tokens.primary, tokens["primary-foreground"])
+      ).toBeGreaterThanOrEqual(4);
+      expect(
+        contrast(tokens.background, tokens.primary)
+      ).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("keeps Pierre editor selection on the source theme, not the brand primary", () => {
+    for (const [preset, mode] of PIERRE_CASES) {
+      const source = STYLE_PRESET_SOURCE_REGISTRY[preset][mode];
+      const tokens = deriveAppStyleTokens(getShikiTheme(preset, mode), mode);
+      const pigment = tokens["editor-selection-bg"].slice(0, 7).toLowerCase();
+      const sourcePigment = (
+        source.colors?.["editor.selectionBackground"] ?? ""
+      )
+        .slice(0, 7)
+        .toLowerCase();
+
+      expect(sourcePigment).toMatch(/^#[0-9a-f]{6}$/u);
+      expect(pigment).toBe(sourcePigment);
+      expect(pigment).not.toBe(PIER_BRAND_PALETTE.primary);
+    }
   });
 });

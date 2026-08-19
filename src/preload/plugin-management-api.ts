@@ -1,3 +1,4 @@
+import type { AppCliSnapshot } from "@shared/contracts/app-cli.ts";
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type {
   ManagedPluginCatalogSnapshot,
@@ -41,6 +42,12 @@ export interface PluginRpcPreloadApi {
 
 export interface AppPreloadApi {
   relaunch(): Promise<void>;
+}
+
+export interface AppCliPreloadApi {
+  install(allowAdmin?: boolean): Promise<AppCliSnapshot>;
+  status(): Promise<AppCliSnapshot>;
+  uninstall(allowAdmin?: boolean): Promise<AppCliSnapshot>;
 }
 
 export interface AppUpdatePreloadApi {
@@ -111,6 +118,24 @@ export function createManagedPluginsPreloadApi(): ManagedPluginsPreloadApi {
 export function createAppPreloadApi(): AppPreloadApi {
   return {
     relaunch: () => invokePierCommand<void>({ type: "app.relaunch" }),
+  };
+}
+
+export function createAppCliPreloadApi(): AppCliPreloadApi {
+  return {
+    install: (allowAdmin) =>
+      invokePierCommand<AppCliSnapshot>(
+        allowAdmin
+          ? { allowAdmin: true, type: "app.cli.install" }
+          : { type: "app.cli.install" }
+      ),
+    status: () => invokePierCommand<AppCliSnapshot>({ type: "app.cli.status" }),
+    uninstall: (allowAdmin) =>
+      invokePierCommand<AppCliSnapshot>(
+        allowAdmin
+          ? { allowAdmin: true, type: "app.cli.uninstall" }
+          : { type: "app.cli.uninstall" }
+      ),
   };
 }
 

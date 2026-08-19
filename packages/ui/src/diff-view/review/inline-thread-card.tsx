@@ -2,33 +2,16 @@
  * 行内评论展示卡（diff 行内已有评论态）。
  *
  * 由 `renderAnnotation` 在 `review-thread` annotation 槽内渲染，也被漂移折叠
- * 区（`drifted-comments.tsx`）复用。
+ * 区（`drifted-comments.tsx`）复用。锚点仍是批注行（位置不变）。
  *
- * v1 极简结构：无标题栏、无头像、无作者名、无时间戳——只有正文一段，
- * 「编辑 / 删除」两个图标按钮持续可见（非 hover 才浮出）：命中区走
- * `size="icon"`（28×28 标准纯图标档），glyph 在 SVG 上标 `size-3.5`
- * （14px）——Button 的 `[&_svg:not([class*='size-'])]` 只给未声明尺寸的
- * 图标兜底，显式 size 是规范允许的「同 hit、略小笔形」路径（对齐
- * hunk-actions / stage-button）。
+ * 默认展示是带阴影的产品卡片；点击整卡进入
+ * {@link InlineReviewCommentEditor}。删除只在编辑底栏。
  *
- * **两态一律不铺填充色**：批注行
- * 底色由 diff 引擎画（选中行还会叠选中蓝），卡片自带任何 surface 都会盖掉
- * 它、和周围割裂。只留 1px 边框划出边界，背景恒等于所在批注行。
- *
- * 注意批注行本身默认也不是普通行底色——pierre 把它当上下文块刷成
- * `--diffs-bg-context`。压平那层灰是 `CODE_VIEW_CUSTOM_CSS` 的
- * `--diffs-annotation-bg` 覆写，不要试图在卡片这一侧补偿。
- *
- * 编辑态复用与草稿卡同壳的 {@link InlineReviewCommentEditor}：
- * 单一「提交」；Escape = 放弃编辑回到展示态；**清空正文后失焦 / 外点 =
- * 删除该评论**（与「空内容不该留下」一致，不是静默还原旧文）。
- * `onEditComment` 未注入时不渲染编辑按钮。
- *
- * **宽度约束（关键）**：`@pierre/diffs` scroll 模式给 annotation content 设
+ * **宽度约束**：`@pierre/diffs` scroll 模式给 annotation content 设
  * `width: --diffs-column-content-width` + `position: sticky`，故卡片必须
- * `w-full` 贴合该定宽容器，否则被父 `overflow-hidden` 裁成右缘截断。
+ * `w-full` 贴合该定宽容器。
  */
-import { Pencil, Trash2 } from "lucide-react";
+
 import { type ReactNode, useCallback, useState } from "react";
 import { Button } from "../../button.tsx";
 import { cn } from "../../utils.ts";
@@ -39,6 +22,28 @@ import type {
   PierInlineReviewLabels,
   PierInlineReviewThread,
 } from "./inline-comment-types.ts";
+
+const THREAD_CARD_CLASS =
+  "w-full rounded-2xl border border-border bg-background px-3 py-2.5 shadow-sm";
+
+function ThreadBody(props: {
+  readonly as?: "p" | "span";
+  readonly deletedLabel: string;
+  readonly isDeleted: boolean;
+  readonly text: string;
+}): ReactNode {
+  const Tag = props.as ?? "p";
+  if (props.isDeleted) {
+    return (
+      <Tag className="text-muted-foreground italic">{props.deletedLabel}</Tag>
+    );
+  }
+  return (
+    <Tag className="whitespace-pre-wrap break-words text-foreground text-sm">
+      {props.text}
+    </Tag>
+  );
+}
 
 export function InlineReviewThreadCard({
   chrome = "card",
@@ -62,6 +67,7 @@ export function InlineReviewThreadCard({
   const isDeleted = comment.deletedAt !== undefined;
   const onEditComment = handlers.onEditComment;
   const plain = chrome === "plain";
+  const canEdit = onEditComment !== undefined && !isDeleted;
 
   const handleDelete = useCallback(() => {
     handlers.onDeleteComment(thread.threadId, comment.id).catch(console.error);
@@ -81,12 +87,6 @@ export function InlineReviewThreadCard({
     [comment.id, onEditComment, thread.threadId]
   );
 
-  const handleEmptyDismiss = useCallback(() => {
-    // 编辑态把正文清空再离开 = 用户明确不要这条评论。
-    handlers.onDeleteComment(thread.threadId, comment.id).catch(console.error);
-    setEditing(false);
-  }, [comment.id, handlers, thread.threadId]);
-
   if (editing && onEditComment) {
     return (
       <div
@@ -94,71 +94,57 @@ export function InlineReviewThreadCard({
         data-slot="pier-review-thread"
       >
         <InlineReviewCommentEditor
-          chrome={chrome}
           initialBody={comment.body}
           labels={labels}
+          mode="edit"
           onCancel={() => setEditing(false)}
-          onEmptyDismiss={handleEmptyDismiss}
+          onDelete={handleDelete}
           onSubmit={handleEditSubmit}
         />
       </div>
     );
   }
 
-  return (
-    <div
-      className={cn("w-full", plain ? "p-0" : "px-2 py-1.5")}
-      data-slot="pier-review-thread"
-    >
-      <div
-        className={cn(
-          "flex w-full justify-between gap-3 text-sm",
-          plain
-            ? "bg-transparent px-0.5 py-0.5"
-            : "gap-4 rounded-2xl border border-border bg-transparent px-3 py-2.5"
-        )}
-      >
-        <div className="min-w-0 flex-1">
-          {isDeleted ? (
-            <p className="text-muted-foreground italic">{labels.deleted}</p>
-          ) : (
-            <p
-              className={cn(
-                "whitespace-pre-wrap break-words text-foreground/90",
-                plain ? "py-0.5" : "py-1"
-              )}
-            >
-              {comment.body}
-            </p>
-          )}
-        </div>
-        {isDeleted ? null : (
-          <div className="flex shrink-0 items-start gap-0.5">
-            {onEditComment ? (
-              <Button
-                aria-label={labels.editComment}
-                onClick={() => setEditing(true)}
-                size="icon"
-                title={labels.editComment}
-                tone="muted"
-                variant="ghost"
-              >
-                <Pencil aria-hidden className="size-3.5" data-icon />
-              </Button>
-            ) : null}
-            <Button
-              aria-label={labels.deleteComment}
-              onClick={handleDelete}
-              size="icon"
-              title={labels.deleteComment}
-              tone="muted"
-              variant="ghost"
-            >
-              <Trash2 aria-hidden className="size-3.5" data-icon />
-            </Button>
-          </div>
-        )}
+  if (plain) {
+    return (
+      <div className="w-full p-0" data-slot="pier-review-thread">
+        <ThreadBody
+          deletedLabel={labels.deleted}
+          isDeleted={isDeleted}
+          text={comment.body}
+        />
       </div>
+    );
+  }
+
+  return (
+    <div className="w-full px-2 py-1.5" data-slot="pier-review-thread">
+      {canEdit ? (
+        <Button
+          className={cn(
+            THREAD_CARD_CLASS,
+            "h-auto min-h-0 justify-start whitespace-normal text-left font-normal hover:bg-background"
+          )}
+          onClick={() => setEditing(true)}
+          type="button"
+          variant="ghost"
+        >
+          <ThreadBody
+            as="span"
+            deletedLabel={labels.deleted}
+            isDeleted={isDeleted}
+            text={comment.body}
+          />
+        </Button>
+      ) : (
+        <div className={THREAD_CARD_CLASS}>
+          <ThreadBody
+            deletedLabel={labels.deleted}
+            isDeleted={isDeleted}
+            text={comment.body}
+          />
+        </div>
+      )}
     </div>
   );
 }

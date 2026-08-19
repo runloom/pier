@@ -3,13 +3,13 @@ import type {
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import type {
-  GitReviewFailure,
   GitReviewPathMutationRequest,
   GitReviewScope,
 } from "@shared/contracts/git/review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
 import { pluginText } from "../plugin-text.ts";
+import { showReviewMutationFailure } from "./code-mutation-helpers.ts";
 import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
 import {
   canDiscardUnstagedStatus,
@@ -18,7 +18,6 @@ import {
   isUntrackedDiscardStatus,
   partitionDiscardPaths,
 } from "./discard.ts";
-import { gitReviewFailureMessage } from "./message.ts";
 import type { GitReviewMutationAuthority } from "./mutation-authority.ts";
 import {
   beginGitReviewMutationTransition,
@@ -222,31 +221,6 @@ export function treeMutationSource(
   };
 }
 
-export async function showTreeMutationFailure(
-  context: RendererPluginContext,
-  title: string,
-  error: GitReviewFailure | unknown
-): Promise<void> {
-  console.error(title, error);
-  let body: string;
-  if (
-    error !== null &&
-    typeof error === "object" &&
-    "kind" in error &&
-    error.kind === "error"
-  ) {
-    body = [
-      gitReviewFailureMessage(context, error as GitReviewFailure),
-      (error as GitReviewFailure).message,
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-  } else {
-    body = error instanceof Error ? error.message : String(error);
-  }
-  await context.dialogs.alert({ body, title });
-}
-
 export async function runTreePathMutation(options: {
   readonly action: GitReviewPathMutationRequest["action"];
   readonly authority: GitReviewMutationAuthority;
@@ -302,10 +276,10 @@ export async function runTreePathMutation(options: {
       succeeded = true;
       succeededStateSequence = result.stateSequence;
     } else {
-      await showTreeMutationFailure(context, title, result);
+      await showReviewMutationFailure(context, title, result);
     }
   } catch (error) {
-    await showTreeMutationFailure(context, title, error);
+    await showReviewMutationFailure(context, title, error);
   } finally {
     loading.dismiss();
     if (transitionId !== null) {

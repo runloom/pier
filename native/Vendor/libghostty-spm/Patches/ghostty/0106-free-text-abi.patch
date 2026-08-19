@@ -1,0 +1,25 @@
+Backport of the upstream main fix for a C ABI mismatch present in
+ghostty v1.2.3–v1.3.1: include/ghostty.h declares
+`void ghostty_surface_free_text(ghostty_surface_t, ghostty_text_s*)`
+(two parameters) but the Zig export only accepted the text pointer.
+C callers therefore passed the *surface* pointer where the impl
+expected the Text struct, so `Text.deinit` inspected surface memory
+(text field offset happens to read as null — silent no-op) and the
+buffer allocated by `dumpTextLocked` was never freed. Every
+`ghostty_surface_read_text` / `ghostty_surface_read_selection` call
+leaked its full dumped text. Pier polls viewport text (agent state
+probes) at 250ms per active agent terminal, which compounds this into
+gigabytes of main-process memory over long sessions.
+
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1761,7 +1761,7 @@
+         return true;
+     }
+ 
+-    export fn ghostty_surface_free_text(ptr: *Text) void {
++    export fn ghostty_surface_free_text(_: *Surface, ptr: *Text) void {
+         ptr.deinit();
+     }
+ 

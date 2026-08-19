@@ -125,11 +125,47 @@ const copilotActions = commonTraceActions({
   };
 });
 
+const copilotErrorIndex = copilotActions.findIndex(
+  (action) => action.nativeEvent === "errorOccurred"
+);
+copilotActions.splice(copilotErrorIndex, 0, {
+  checkpoints: [
+    {
+      dimension: "ready",
+      expectedEvent: "TurnCompleted",
+      expectedEventFields: { sessionId: "copilot-session-1" },
+      expectedNativeEvent: "agentStop",
+      expectedStatus: "ready",
+    },
+    {
+      dimension: "completed",
+      expectedEvent: "TurnCompleted",
+      expectedEventFields: { sessionId: "copilot-session-1" },
+      expectedNativeEvent: "agentStop",
+      expectedStatus: "ready",
+    },
+  ],
+  expectedNativeEvents: ["agentStop"],
+  nativeEvent: "agentStop",
+  payload: {
+    sessionId: "copilot-session-1",
+    stopReason: "end_turn",
+  },
+});
+
 export const FLAT_COMMAND_STATUS_TRACES = [
   {
     actions: copilotActions,
     agentId: "copilot",
-    covers: ["lifecycle", "processing", "tool", "error", "subagent"],
+    covers: [
+      "lifecycle",
+      "ready",
+      "processing",
+      "tool",
+      "error",
+      "completed",
+      "subagent",
+    ],
     createProducer: () =>
       createInstalledCommandProducer("copilot", copilotCommands()),
     stopAuthority: copilotIntegration.runtime.stopAuthority,

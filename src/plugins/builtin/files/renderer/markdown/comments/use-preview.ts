@@ -17,6 +17,7 @@ import {
   blockCommentKey,
   buildMarkdownCommentTarget,
   contentHashForBlock,
+  markdownCommentMarkerIndexes,
   nearestHeadingIdsByBlockIndex,
   resolveMarkdownCommentBlockKey,
 } from "./target.ts";
@@ -302,7 +303,7 @@ export function useMarkdownPreviewComments(input: {
       },
       onDeleteComment: async (threadId, commentId) => {
         if (!(context && worktreeKey)) {
-          return;
+          return false;
         }
         const result = await context.comments.deleteComment({
           commentId,
@@ -311,7 +312,9 @@ export function useMarkdownPreviewComments(input: {
         });
         if (result.kind === "error") {
           reportFailure(labels.deleteFailed, result);
+          return false;
         }
+        return true;
       },
       onEditComment: async (threadId, commentId, body) => {
         if (!(context && worktreeKey) || body.trim().length === 0) {
@@ -391,7 +394,20 @@ export function useMarkdownPreviewComments(input: {
   /** Ordered live comments on this path (located then drift) for floating nav. */
   const navTargets = useMemo((): MarkdownCommentNavTarget[] => {
     const targets: MarkdownCommentNavTarget[] = [];
-    for (const entry of locatedByBlockKey.values()) {
+    const blocks = document?.blocks ?? [];
+    const markerIndexes = markdownCommentMarkerIndexes(
+      blocks,
+      locatedByBlockKey
+    );
+    for (const block of blocks) {
+      const blockKey = blockCommentKey(block);
+      if (!markerIndexes.has(blockKey)) {
+        continue;
+      }
+      const entry = locatedByBlockKey.get(blockKey);
+      if (entry === undefined) {
+        continue;
+      }
       for (const thread of entry.threads) {
         targets.push({
           blockKey: entry.blockKey,
@@ -409,7 +425,7 @@ export function useMarkdownPreviewComments(input: {
       });
     }
     return targets;
-  }, [driftComments, locatedByBlockKey]);
+  }, [document?.blocks, driftComments, locatedByBlockKey]);
 
   return {
     draftBlockKey,

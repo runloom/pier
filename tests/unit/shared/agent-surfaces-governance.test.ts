@@ -12,6 +12,8 @@ import {
 } from "@shared/agent-surfaces/index.ts";
 import {
   agentSupportsSkillForceInvoke,
+  agentUsesSkillColonInvoke,
+  listSlashSkillInvokeAgentKinds,
   skillInvokePrefix,
   skillInvokeText,
 } from "@shared/skill-invoke.ts";
@@ -41,7 +43,10 @@ describe("agent-surfaces L1 gold-standard governance", () => {
     );
     expect(surfaceKinds).toContain("claude");
     expect(surfaceKinds).toContain("codex");
+    expect(surfaceKinds).toContain("command-code");
+    expect(surfaceKinds).toContain("omp");
     expect(surfaceKinds).toContain("openclaude");
+    expect(surfaceKinds).toContain("pi");
   });
 
   it("localizes every builtin command description in en and zh-CN", () => {
@@ -108,6 +113,10 @@ describe("agent-surfaces L1 gold-standard governance", () => {
     expect(skillInvokePrefix("goose")).toBeNull();
     expect(agentSupportsSkillForceInvoke("goose")).toBe(true);
     expect(skillInvokeText("goose", "pier-canvas")).toBe("/skills pier-canvas");
+    expect(skillInvokeText("omp", "pier-canvas")).toBe("/skill:pier-canvas");
+    expect(skillInvokeText("pi", "pier-canvas")).toBe("/skill:pier-canvas");
+    expect(agentUsesSkillColonInvoke("omp")).toBe(true);
+    expect(agentUsesSkillColonInvoke("claude")).toBe(false);
     // Palette-driven: commands surface empty; no slash skill insert either.
     expect(skillInvokePrefix("amp")).toBeNull();
     expect(skillInvokePrefix("crush")).toBeNull();
@@ -134,6 +143,43 @@ describe("agent-surfaces L1 gold-standard governance", () => {
         agentSupportsSkillForceInvoke(agentKind),
         `${agentKind} ships bundled skills but has no force-invoke prefix`
       ).toBe(true);
+    }
+  });
+
+  it("documents slash-invoke agents still missing a command surface", () => {
+    // Evidence-backed tables only. Remaining kinds stay PTY passthrough until
+    // official text-composable commands are tabulated (same bar as OMP/Pi).
+    const knownGaps = [
+      "ante",
+      "antigravity",
+      "aug",
+      "autohand",
+      "codebuff",
+      "devin",
+      "kiro",
+      "mimo-code",
+      "mistral-vibe",
+      "openclaw",
+      "qodercli",
+      "rovo",
+    ] as const;
+    const registered = new Set(surfaceKinds);
+    const gaps = new Set<string>(knownGaps);
+    for (const kind of listSlashSkillInvokeAgentKinds()) {
+      const hasSurface = registered.has(kind);
+      expect(
+        hasSurface || gaps.has(kind),
+        `${kind} must have a composer surface or a documented gap`
+      ).toBe(true);
+      expect(
+        !(hasSurface && gaps.has(kind)),
+        `${kind} cannot be both registered and listed as a gap`
+      ).toBe(true);
+    }
+    for (const kind of knownGaps) {
+      expect(registered.has(kind), `${kind} gap is stale — remove it`).toBe(
+        false
+      );
     }
   });
 });

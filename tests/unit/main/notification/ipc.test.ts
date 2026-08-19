@@ -83,7 +83,9 @@ vi.mock("@main/windows/manager.ts", () => ({
 }));
 
 const localeMock = vi.hoisted(() => ({
-  resolveAttentionLocale: vi.fn(async (): Promise<"en" | "zh-CN"> => "en"),
+  resolveAttentionLocale: vi.fn(
+    async (): Promise<"en" | "zh-CN" | "ja" | "ko"> => "en"
+  ),
 }));
 
 vi.mock("@main/services/agent-attention/locale.ts", () => localeMock);

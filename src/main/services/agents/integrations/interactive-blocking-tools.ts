@@ -54,3 +54,15 @@ export const GROK_INTERACTIVE_BLOCKING_TOOLS = [
     toolNames: ["enter_plan_mode", "exit_plan_mode"],
   },
 ] as const satisfies readonly InteractiveBlockingToolCase[];
+
+/**
+ * Cursor 阻塞等人工具。AskQuestion 不走 hook（上游 preToolUse 不覆盖），
+ * 问卷只由 transcript 对账。CreatePlan / SwitchMode 若触发 preToolUse，
+ * 按审批门分发，避免方案卡停在「执行工具中」。
+ */
+export const CURSOR_INTERACTIVE_BLOCKING_TOOLS = [
+  {
+    interactionKind: "permission",
+    toolNames: ["CreatePlan", "SwitchMode"],
+  },
+] as const satisfies readonly InteractiveBlockingToolCase[];

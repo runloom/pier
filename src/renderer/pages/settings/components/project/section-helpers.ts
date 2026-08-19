@@ -23,9 +23,9 @@ export function isTabAllowedForProject(
   tab: ProjectsSettingsTab,
   isPierHome: boolean
 ): boolean {
-  if (tab === "rules") return false;
+  if (tab === "rules" || tab === "materials") return false;
   if (!isPierHome) return true;
-  // Home: skills library + MCP. No environment / general.
+  // Home: skills library + MCP. No environment / general / materials.
   return tab === "skills" || tab === "mcp";
 }
 

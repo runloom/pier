@@ -8,7 +8,7 @@ export type CommandDetail = {
   description: string;
   examples?: string[];
   humanSample?: string;
-  output: string;
+  output?: string;
 };
 
 export type Domain = {

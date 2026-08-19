@@ -1,8 +1,19 @@
+import {
+  DEFAULT_LANGUAGE_PREFERENCE,
+  type LanguagePreference,
+  SUPPORTED_LOCALES,
+} from "@shared/i18n/locales.ts";
+
 export const LOCALE_OPTIONS = [
-  { value: "system", label: "settings.locale.system" },
-  { value: "zh-CN", label: "简体中文" },
-  { value: "en", label: "English" },
+  {
+    label: "settings.locale.system",
+    value: DEFAULT_LANGUAGE_PREFERENCE,
+  },
+  ...SUPPORTED_LOCALES.map((value) => ({
+    label: `settings.locale.${value}`,
+    value,
+  })),
 ] as const;
 
-export type LocaleValue = "system" | "zh-CN" | "en";
-export const DEFAULT_LOCALE: LocaleValue = "system";
+export type LocaleValue = LanguagePreference;
+export const DEFAULT_LOCALE: LocaleValue = DEFAULT_LANGUAGE_PREFERENCE;

@@ -14,7 +14,7 @@ const HANDLER_FILES = [
   join(ROOT, "src/main/app-core/commands/git.ts"),
   join(ROOT, "src/main/app-core/commands/git-review.ts"),
 ];
-const PERMISSIONS_FILE = join(ROOT, "src/main/app-core/permissions.ts");
+const PERMISSIONS_FILE = join(ROOT, "src/main/app-core/command-metadata.ts");
 const PRELOAD_FILES = [
   join(ROOT, "src/preload/git-api.ts"),
   join(ROOT, "src/preload/git-review-api.ts"),

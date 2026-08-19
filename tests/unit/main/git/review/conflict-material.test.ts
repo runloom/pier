@@ -1,5 +1,35 @@
-import { hasCompleteMergeConflictMarkers } from "@main/services/git-review/document/conflict.ts";
+import {
+  classifyConflictWorktreePresentation,
+  hasCompleteMergeConflictMarkers,
+} from "@main/services/git-review/document/conflict.ts";
 import { describe, expect, it } from "vitest";
+
+describe("classifyConflictWorktreePresentation", () => {
+  it("keeps complete marker stacks on UnresolvedFile", () => {
+    expect(
+      classifyConflictWorktreePresentation(
+        ["<<<<<<< HEAD", "ours", "=======", "theirs", ">>>>>>> other"].join(
+          "\n"
+        )
+      )
+    ).toBe("markers-text");
+  });
+
+  it("does not feed marker-free text to UnresolvedFile", () => {
+    expect(classifyConflictWorktreePresentation("resolved\n")).toBe(
+      "file-level"
+    );
+    expect(classifyConflictWorktreePresentation("")).toBe("file-level");
+  });
+
+  it("downgrades incomplete marker stacks to file-level", () => {
+    expect(
+      classifyConflictWorktreePresentation(
+        ["<<<<<<< HEAD", "ours", "=======", "theirs"].join("\n")
+      )
+    ).toBe("file-level");
+  });
+});
 
 describe("hasCompleteMergeConflictMarkers", () => {
   it("accepts a standard two-way conflict", () => {

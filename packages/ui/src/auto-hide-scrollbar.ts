@@ -1,5 +1,38 @@
 export const AUTO_HIDE_SCROLLBAR_IDLE_MS = 900;
 
+/** Chromium `scrollbar-width: thin` 在测不到槽宽时的重建厚度。 */
+export const SHELL_SCROLLBAR_THICKNESS_FALLBACK_PX = 11;
+
+const THICKNESS_PROPERTY = "--shell-scrollbar-width-legacy";
+
+/** 用 `thin` + `scrollbar-gutter: stable` 探针测槽宽；overlay 测到 0 时回退。 */
+export function measureThinScrollbarThickness(doc: Document): number {
+  const probe = doc.createElement("div");
+  probe.setAttribute("data-pier-scrollbar-probe", "true");
+  probe.style.cssText = [
+    "position:absolute",
+    "left:-9999px",
+    "top:0",
+    "width:120px",
+    "height:120px",
+    "overflow:scroll",
+    "scrollbar-width:thin",
+    "scrollbar-gutter:stable",
+    "visibility:hidden",
+    "pointer-events:none",
+  ].join(";");
+  doc.documentElement.append(probe);
+  const measured = Math.round(probe.offsetWidth - probe.clientWidth);
+  probe.remove();
+  return measured > 0 ? measured : SHELL_SCROLLBAR_THICKNESS_FALLBACK_PX;
+}
+
+export function applyShellScrollbarThickness(doc: Document = document): string {
+  const value = `${measureThinScrollbarThickness(doc)}px`;
+  doc.documentElement.style.setProperty(THICKNESS_PROPERTY, value);
+  return value;
+}
+
 const hideTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 
 interface PointerPosition {
@@ -139,6 +172,7 @@ export function installAutoHideScrollbar(element: HTMLElement): () => void {
 export function installDocumentAutoHideScrollbars(
   root: Document = document
 ): () => void {
+  applyShellScrollbarThickness(root);
   let hoveredElement: HTMLElement | null = null;
   const reveal = (event: Event) => {
     const element = scrollbarTarget(event);
@@ -189,5 +223,6 @@ export function installDocumentAutoHideScrollbars(
     root.removeEventListener("pointerleave", clearHover, true);
     root.defaultView?.removeEventListener("blur", clearHover);
     clearHover();
+    root.documentElement.style.removeProperty(THICKNESS_PROPERTY);
   };
 }

@@ -164,7 +164,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 - **说用户动作，不说内部概念。** 反例：「没有可打开的终端选区」；正例：「请先在终端中选中文本。」
 - **失败与空态要带下一步。** 反例：「无项目上下文」；正例：「未打开项目」+「请先打开项目文件夹以浏览文件。」
-- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、工作台「组件」（不要写物料）、需要你处理（中文不要直出 Needs you）。
+- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、工作台「组件」（不要写物料）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）。
 - **实现词禁止进入前台主路径文案。** 包括但不限于：选区、上下文、面板参数、耐久性、绑定、运行标识、运行态、renderer、清单预览、hook（首次可写「钩子（hook）」）、tip tree、upstream（应写「上游分支」）。
 - **中文界面少夹英文状态码。** Git 状态用「分离头指针 / 合并中 / 变基中」等，不要用 DETACHED / MERGING 全大写码。
 - **fallback 英文与 en locale 同步可读**；改中文时必须核对英文是否同样术语化。
@@ -246,6 +246,7 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
    短时反馈即可；禁止与 focus 环共用 `ring-primary/50` 粗描边。
 5. **`tabIndex={0}` 白名单**（产品源码；新增必须在治理测试里登记理由）：
    - 图片预览画布（缩放/平移快捷键）
+   - 图片 diff 左右滑动条（`role="slider"`，方向键调整对比比例）
    - 工作台网格（Shift+F10 原生右键菜单合约）
    - dockview panel tab 内容（标签激活）
    - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）
@@ -255,7 +256,7 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
 7. 菜单/列表的 `:focus` 背景高亮（Radix roving focus）保留；那是选中态，不是 UA outline。
 
 检查点在 `tests/unit/renderer/chart-focus-governance.test.ts`（锁定本节标题、全局
-outline 抑制、Chart/DataChart/NodeGraph 默认、状态徽标不进 Tab、`tabIndex={0}` 白名单、
+outline 抑制、Chart/DataChart/Mermaid 默认、状态徽标不进 Tab、`tabIndex={0}` 白名单、
 禁止 `ring-primary` focus 铬）。
 
 ### 颜色使用规范
@@ -351,6 +352,40 @@ section 根节点下的裸子节点。
 - `contextId` 由 `worktreeKey` 稳定派生，用于面板上下文身份；任务、终端和插件上下文不再依赖额外 `projectId`。
 - 主体不维护 `Project` 注册表，也不把 `projectId` 作为跨模块外键；需要项目粒度能力时优先使用 `projectRootPath` / `gitRoot` / `worktreeRoot`。
 
+### LSP Gateway `src/main/services/lsp/session-broker.ts`
+
+语言服务的进程树按 `(workspaceKey, serverId, rootPath)` 全局唯一（`sessionOwnerKey` 不含窗口与
+消费角色）；renderer editor 消费者持**虚拟会话 id**经 broker 路由，language-tools 是 main 侧
+消费者直连真实会话：
+
+- broker 职责：请求 id 重写（含 `$/cancelRequest`）、通知扇出、initialize 一次化（`client-capabilities.ts`
+ 的 Pier 超集 + 结果缓存合成）、server→client 请求路由到最近活跃消费者、didOpen/didClose
+ 引用计数（`document-gate.ts`；language-tools 短命引用 TTL+LRU）
+- 生命周期活动驱动：会话不持有 policy refCount，空闲回收统一按 `lastTouchAt`；renderer 可见
+ 编辑器周期 `touch()` 保活（`FILES_LSP_VISIBLE_TOUCH_INTERVAL_MS`），隐藏 tab 自然进入空闲窗口，
+ 回收后经 root-recovery 透明复活（focusin / 可见性恢复触发 `resume()`）
+- 全局内存预算安全网：`memory-budget.ts` 周期采样会话进程树 RSS（`pier-resource/process-table`），
+ 超 `lsp.memoryBudgetMb`（默认 4096，0=不限）按 LRU 关最冷 workspace；禁止改用 per-process
+ `maxTsServerMemory` 之类到线自杀方案
+- 检查点：`tests/unit/main/lsp/session-broker-governance.test.ts`（同键恒一棵进程树）、
+ `tests/unit/main/lsp/document-gate.test.ts`、`tests/unit/main/lsp/memory-budget.test.ts`
+
+### 终端历史三层化 `src/main/services/terminal-transcripts/`
+
+终端历史分三层：Tier 0 屏幕/备用屏（ghostty 原生）、Tier 1 RAM 热窗（scrollback，用户偏好上限）、
+Tier 2 磁盘 transcript 分段（`{userData}/terminal-transcripts/{lifecycleId}/NNNNNN.log[.gz]`）：
+
+- 写入端两路：PTY 终端经 ghostty patch `0107-output-tap`（IO 线程持锁回调→Swift `TranscriptTap.swift`
+ 有界队列，永不阻塞 PTY 读；身份 `runId` 或 `term-<panelId>`）；任务输出经 main 侧 sink
+ （`task-{runId}-{taskId}`）。`TaskOutputBuffer` 堆内只保留 replay 尾部（200K 字符 × 20 任务）
+- 有界性硬约束：单段 8MB 轮转、写队列 4MB 超限丢弃并写缺口标记、全局磁盘配额 512MB 按 LRU
+ 淘汰非活体 lifecycle、冷段由 main 清扫 gzip；lifecycle 目录名净化不得逃逸根目录
+- 读路径：`pier:terminal:transcript-tail`（`transcript-ipc.ts`）+ 状态栏「查看完整历史」content dialog
+- 热窗压力（ghostty patch `0108-live-scrollback-limit`）：scrollback 设置即时生效于存量 surface；
+ 隐藏超阈值的 surface 热窗收缩、重新可见恢复（`hot-window-pressure.ts`），历史仍经 Tier 2 可达
+- 检查点：`tests/unit/main/terminal-transcripts/transcripts-governance.test.ts`、
+ `tests/unit/main/terminal/hot-window-pressure.test.ts`、`native/Tests/GhosttyBridgeTests/TranscriptTapTests.swift`
+
 ### 账号域模块迁移：`src/main/services/agent-accounts/` → `pier.codex`
 
 迁移前，宿主 `src/main/services/agent-accounts/` 仍负责多 AI agent 账号的 CRUD、凭据托管与用量轮询：
@@ -444,6 +479,20 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
   Reflow）。注意 containment 会让 `position: fixed` 后代以卡片内容区为包含块——浮层一律
   走 portal（Radix 组件默认如此）。
 - 顶部不放工具栏；网格全局动作走原生 Electron 右键菜单（只保留添加、全部刷新），物料级动作仍走卡片 Radix 菜单，两者不得串开。
+
+### 滚动条外观
+
+产品滚动条必须是同一条滑块。权威规格：
+`docs/superpowers/specs/2026-08-19-scrollbar-visual-gold-standard.md`。
+
+- 空闲透明；滚动或槽位悬停显现；idle 900ms。禁止整容器 hover 当默认亮条。
+- 颜色走不透明 `--shell-scrollbar-thumb`（`--foreground` 混 `--background`），禁止半透明叠在局部底上。
+- 粗细权威是 `scrollbar-width: thin`。`--shell-scrollbar-width-legacy` 是测到的 `thin` 槽宽，只给 Radix / 树 gutter / 渐隐让槽用。
+- 看得见的条：`scroll-fade` / mask 不得盖住拇指。与条同节点时用槽位不透明带（`mask-composite: add`），禁止缩小 `mask-size` 把滑块裁没。`ScrollArea` 的条必须是 viewport 兄弟。
+- `@pierre/trees` / `@pierre/diffs` 自带 webkit 条不是产品表面，Shadow unsafe CSS 必须压住。
+- 槽位 `stable` / `overlay` / `none` 只谈占位。藏条只许 `data-scrollbar="none"`。
+- 关闭清单：终端 AppKit overlay；命令面板 / 画布 / 大纲细轨等 `none`；Markdown 大纲 hover 藏拇指；Dockview Tab 条厚度 4px，颜色对齐，显隐沿用条 hover / 拖拇指（不得关掉 `:hover`）。
+- 检查点在 `tests/unit/renderer/styles/scrollbar-visual-governance.test.ts`。
 
 ## 04 项目命令
 

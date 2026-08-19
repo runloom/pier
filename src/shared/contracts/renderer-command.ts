@@ -31,6 +31,28 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     panelId: z.string().min(1),
     windowId: z.string().min(1).optional(),
   }),
+  z
+    .object({
+      heightRatio: z.number().gt(0).lt(1).optional(),
+      panelId: z.string().min(1),
+      type: z.literal("panel.setSize"),
+      widthRatio: z.number().gt(0).lt(1).optional(),
+      windowId: z.string().min(1).optional(),
+    })
+    .superRefine((value, ctx) => {
+      if (value.widthRatio === undefined && value.heightRatio === undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: "panel.setSize requires widthRatio and/or heightRatio",
+        });
+      }
+    }),
+  z.object({
+    axis: z.enum(["horizontal", "vertical"]),
+    panelIds: z.array(z.string().min(1)).min(1),
+    type: z.literal("panel.equalize"),
+    windowId: z.string().min(1).optional(),
+  }),
   z.object({
     type: z.literal("panel.close"),
     panelId: z.string().min(1),
@@ -43,24 +65,35 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     placement: pierCommandPlacementSchema.optional(),
     windowId: z.string().min(1).optional(),
   }),
-  z.object({
-    type: z.literal("terminal.open"),
-    context: panelContextSchema.optional(),
-    exitPresentation: terminalExitPresentationSchema.optional(),
-    focus: z.boolean().optional(),
-    initialInput: z.string().min(1).max(64_000).optional(),
-    initialInputSubmit: z.boolean().optional(),
-    launchId: z.string().min(1),
-    panelId: z.string().min(1).optional(),
-    placement: pierCommandPlacementSchema.optional(),
-    tab: z.preprocess(
-      normalizePanelTabChromeInput,
-      panelTabChromeSchema.optional()
-    ),
-    task: taskPanelMetadataSchema.optional(),
-    targetGroupId: z.string().min(1).optional(),
-    windowId: z.string().min(1).optional(),
-  }),
+  z
+    .object({
+      type: z.literal("terminal.open"),
+      context: panelContextSchema.optional(),
+      exitPresentation: terminalExitPresentationSchema.optional(),
+      focus: z.boolean().optional(),
+      initialInput: z.string().min(1).max(64_000).optional(),
+      initialInputSubmit: z.boolean().optional(),
+      launchId: z.string().min(1),
+      panelId: z.string().min(1).optional(),
+      placement: pierCommandPlacementSchema.optional(),
+      /** 相对分屏锚点；与 `panelId`（复用/重开）互斥。 */
+      referencePanelId: z.string().min(1).optional(),
+      tab: z.preprocess(
+        normalizePanelTabChromeInput,
+        panelTabChromeSchema.optional()
+      ),
+      task: taskPanelMetadataSchema.optional(),
+      targetGroupId: z.string().min(1).optional(),
+      windowId: z.string().min(1).optional(),
+    })
+    .superRefine((value, ctx) => {
+      if (value.panelId && value.referencePanelId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "terminal.open cannot combine panelId and referencePanelId",
+        });
+      }
+    }),
   z.object({
     type: z.literal("workspace.flushLayout"),
     windowId: z.string().min(1).optional(),

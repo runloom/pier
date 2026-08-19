@@ -2,10 +2,27 @@ import { JSON_RPC_OBJECT_SCHEMA } from "./json-rpc.ts";
 import type { LanguageToolsTextDocument } from "./session-runtime.ts";
 
 interface LanguageToolsDocumentState {
-  text: string;
+  /** null = 服务器侧内容未知（观察到增量 didChange 后无法离线还原）。 */
+  text: string | null;
   version: number;
 }
 
+function readTextDocumentField(value: unknown): Record<string, unknown> | null {
+  const params = JSON_RPC_OBJECT_SCHEMA.safeParse(value);
+  if (!params.success) {
+    return null;
+  }
+  const textDocument = JSON_RPC_OBJECT_SCHEMA.safeParse(
+    params.data.textDocument
+  );
+  return textDocument.success ? textDocument.data : null;
+}
+
+/**
+ * 真实会话的服务器侧文档镜像（Gateway 唯一文档层的底座）：
+ * 跟踪 didOpen / didChange / didClose 后服务器认知的 text/version，
+ * 供 language-tools 按需同步与 document-gate 的 didOpen 归并使用。
+ */
 export class LspLanguageToolsDocuments {
   readonly #syncPromises = new Map<string, Promise<void>>();
   readonly #documents = new Map<string, LanguageToolsDocumentState>();
@@ -14,15 +31,15 @@ export class LspLanguageToolsDocuments {
   observeOutbound(value: Record<string, unknown>): void {
     if (
       value.method !== "textDocument/didOpen" &&
-      value.method !== "textDocument/didClose"
+      value.method !== "textDocument/didClose" &&
+      value.method !== "textDocument/didChange"
     ) {
       return;
     }
     const params = JSON_RPC_OBJECT_SCHEMA.safeParse(value.params);
-    const textDocument = params.success
-      ? JSON_RPC_OBJECT_SCHEMA.safeParse(params.data.textDocument)
+    const documentValue = params.success
+      ? readTextDocumentField(value.params)
       : null;
-    const documentValue = textDocument?.success ? textDocument.data : null;
     if (typeof documentValue?.uri !== "string") {
       return;
     }
@@ -30,11 +47,38 @@ export class LspLanguageToolsDocuments {
       this.#documents.delete(documentValue.uri);
       return;
     }
+    if (value.method === "textDocument/didChange") {
+      const current = this.#documents.get(documentValue.uri);
+      const version =
+        typeof documentValue.version === "number"
+          ? documentValue.version
+          : (current?.version ?? 0) + 1;
+      const changes = params.success ? params.data.contentChanges : undefined;
+      let text: string | null = null;
+      if (Array.isArray(changes) && changes.length === 1) {
+        const only = JSON_RPC_OBJECT_SCHEMA.safeParse(changes[0]);
+        // 单条无 range 的变更是全文替换，可离线还原服务器侧文本。
+        if (
+          only.success &&
+          !Object.hasOwn(only.data, "range") &&
+          typeof only.data.text === "string"
+        ) {
+          text = only.data.text;
+        }
+      }
+      this.#documents.set(documentValue.uri, { text, version });
+      return;
+    }
     this.#documents.set(documentValue.uri, {
       text: typeof documentValue.text === "string" ? documentValue.text : "",
       version:
         typeof documentValue.version === "number" ? documentValue.version : 0,
     });
+  }
+
+  state(uri: string): { text: string | null; version: number } | null {
+    const current = this.#documents.get(uri);
+    return current ? { ...current } : null;
   }
 
   ensureOpen(

@@ -30,12 +30,10 @@ describe("LspSessionHost.request", () => {
     const spawnImpl = vi.fn(() => child) as unknown as typeof spawn;
     const host = createHost(spawnImpl);
     const ensured = host.ensure({
-      clientRole: "language-tools",
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
 
@@ -90,12 +88,10 @@ describe("LspSessionHost.request", () => {
     const spawnImpl = vi.fn(() => child) as unknown as typeof spawn;
     const host = createHost(spawnImpl);
     const ensured = host.ensure({
-      clientRole: "language-tools",
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
     const written: string[] = [];
@@ -137,12 +133,10 @@ describe("LspSessionHost.request", () => {
     const spawnImpl = vi.fn(() => child) as unknown as typeof spawn;
     const host = createHost(spawnImpl);
     const ensured = host.ensure({
-      clientRole: "language-tools",
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
 
@@ -161,12 +155,10 @@ describe("LspSessionHost.request", () => {
     const child = new FakeLspChild();
     const host = createHost(vi.fn(() => child) as unknown as typeof spawn);
     const session = host.ensure({
-      clientRole: "language-tools",
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
     child.stdin.on("data", (chunk: Buffer) => {

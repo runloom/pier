@@ -22,6 +22,7 @@ export function GitReviewToolbar({
   onRefresh,
   onToggleCollapseAll,
   refreshing,
+  responsiveUnified = false,
   setViewOptions,
   viewOptions,
 }: {
@@ -31,14 +32,32 @@ export function GitReviewToolbar({
   readonly onRefresh: () => void;
   readonly onToggleCollapseAll: () => void;
   readonly refreshing: boolean;
+  /** Split preference is temporarily shown inline because the panel is narrow. */
+  readonly responsiveUnified?: boolean;
   readonly setViewOptions: (patch: Partial<ReviewViewOptions>) => void;
   readonly viewOptions: ReviewViewOptions;
 }): React.JSX.Element {
   const split = viewOptions.diffStyle === "split";
   const wrap = viewOptions.wrapLines;
-  const diffStyleLabel = split
-    ? pluginText(context, "reviewToolbarUnified", "Switch to inline view")
-    : pluginText(context, "reviewToolbarSplit", "Switch to side-by-side view");
+  let diffStyleLabel = pluginText(
+    context,
+    "reviewToolbarSplit",
+    "Switch to side-by-side view"
+  );
+  if (split) {
+    diffStyleLabel = pluginText(
+      context,
+      "reviewToolbarUnified",
+      "Switch to inline view"
+    );
+  }
+  if (responsiveUnified) {
+    diffStyleLabel = pluginText(
+      context,
+      "reviewToolbarResponsiveUnified",
+      "Panel is narrow; using inline view"
+    );
+  }
   const wrapLabel = wrap
     ? pluginText(context, "reviewToolbarNoWrap", "Disable line wrapping")
     : pluginText(context, "reviewToolbarWrap", "Wrap lines");
@@ -52,11 +71,12 @@ export function GitReviewToolbar({
   return (
     <div className="flex items-center gap-0.5" data-testid="git-review-toolbar">
       <ToolbarIconButton
+        disabled={responsiveUnified}
         label={diffStyleLabel}
         onClick={() =>
           setViewOptions({ diffStyle: split ? "unified" : "split" })
         }
-        pressed={split}
+        pressed={responsiveUnified ? false : split}
       >
         {split ? <Columns2 data-icon /> : <Rows3 data-icon />}
       </ToolbarIconButton>

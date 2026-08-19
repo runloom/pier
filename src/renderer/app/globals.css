@@ -2,7 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@pier/ui/tailwind-theme.css";
-@import "@xyflow/react/dist/style.css";
 
 @source "../../../packages/ui/src";
 @source "../../plugins";
@@ -25,17 +24,18 @@
  *   border-box and ignore host *margin*; empty pseudos widen the box so the
  *   caret lands past a real gap (padding alone is flaky on atomic decorators
  *   in Chromium). Gutters are caret hit-box only — height: 0 so they do not
- *   contribute a font strut / steal the flex baseline.
- * - Do not set a line-height-matching host height (no 1.25rem / 1lh). The
- *   pill shrink-wraps the decorate() label; vertical-align: baseline puts
- *   that label on the same alphabetic baseline as adjacent typed text.
+ *   contribute a font strut or stretch the shrink-wrapped host.
+ * - Do not lock host height to 1.25rem. The pill is `h-lh` plus the shared
+ *   editor leading token so 1lh fills the line; host shrink-wraps and
+ *   `vertical-align: top` pins that line box (middle on a shorter box sits
+ *   low next to CJK).
  * - Do not stretch the host to the compact shell height — that makes the
  *   caret next to a chip paint as tall as the input.
  */
 .composer-ref-chip-host {
   display: inline-flex;
-  align-items: baseline;
-  vertical-align: baseline;
+  align-items: center;
+  vertical-align: top;
   line-height: 1;
 }
 
@@ -297,26 +297,36 @@
   --radius: 0.625rem;
 
   /* === scrollbar system ===
-     全应用一套外观。Chromium 走 scrollbar-width: thin + scrollbar-color 自动隐藏
-     （空闲透明 / 活动着色）；调粗细只改 --shell-scrollbar-width-legacy（webkit 回退）。
-     唯一例外：data-scrollbar="none" 隐藏。
+     全应用一套外观（2026-08-19 金标准）。Chromium 走 scrollbar-width: thin +
+     scrollbar-color 自动隐藏（空闲透明 / 活动着色）。
+     --shell-scrollbar-width-legacy 是 thin 槽宽的重建值（启动探针覆盖；11px 为测不到时的回退），
+     给 Radix / 树 gutter / 渐隐让槽用，不是另一套皮肤。
+     拇指不透明，混 --background，避免侧栏与正文叠出两种灰。
+     唯一隐藏：data-scrollbar="none"。
      Shadow（trees / diffs）全局穿不进，经 packages/ui/scrollbar-system.ts 同策略。 */
 
   --shell-scrollbar-width: thin;
-  --shell-scrollbar-width-legacy: 6px;
+  --shell-scrollbar-width-legacy: 11px;
   --shell-scrollbar-radius: 999px;
   --shell-scrollbar-thumb: color-mix(
     in oklab,
-    var(--foreground) 30%,
-    transparent
+    var(--foreground) 22%,
+    var(--background)
   );
   --shell-scrollbar-thumb-active: color-mix(
     in oklab,
-    var(--foreground) 58%,
-    transparent
+    var(--foreground) 38%,
+    var(--background)
   );
   --shell-scrollbar-track: transparent;
   --shell-scrollbar-corner: transparent;
+  /* 与内容渐隐做并集：槽位始终不透明，滑块不会被 mask 裁掉。 */
+  --shell-scrollbar-gutter-mask: linear-gradient(
+    to left,
+    #000 0,
+    #000 var(--shell-scrollbar-width-legacy),
+    transparent var(--shell-scrollbar-width-legacy)
+  );
   /* === 字体体系 ===
      UI: HarmonyOS Sans SC (打包 CJK) + emoji + system-ui fallback
      Mono: JetBrainsMono Nerd Font (全量打包 ttf) + HarmonyOS Sans SC (打包 CJK)
@@ -650,6 +660,7 @@
 /*
  * 系统滚动条：默认全局统一；仅 data-scrollbar="none" 可隐藏。
  * data-scrollbar="stable"/"overlay" 保留 gutter，避免首次溢出布局跳动。
+ * 外观契约见 2026-08-19 滚动条外观金标准。
  *
  * Electron / Chromium：scrollbar-width / scrollbar-color（非 auto）会覆盖
  * ::-webkit-scrollbar。自动隐藏必须改 thumb 的 scrollbar-color（空闲透明 →
@@ -737,6 +748,29 @@
   [data-scrollbar="none"] * {
     scrollbar-width: none;
   }
+}
+
+/*
+ * 可见产品条与同节点 scroll-fade：在渐隐 mask 上并一层槽位不透明带。
+ * 不能用缩小 mask-size / content-box clip——未遮罩区域会整段透明，滑块消失。
+ * data-scrollbar=none 不匹配（命令面板等继续全框渐隐）。
+ */
+:where(
+    [data-scrollbar="stable"],
+    [data-scrollbar="overlay"],
+    [data-flat-scroll],
+    .cv-scrollbar
+  ):where(.scroll-fade-y, .scroll-fade-b, .scroll-fade-x, .scroll-fade-e) {
+  -webkit-mask-image: var(--scroll-fade-mask, var(--scroll-fade-block)),
+    var(--shell-scrollbar-gutter-mask);
+  mask-image: var(--scroll-fade-mask, var(--scroll-fade-block)),
+    var(--shell-scrollbar-gutter-mask);
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 html,
@@ -837,6 +871,12 @@ body {
    - 稳底 trough + 扫光 highlight；亮色走经典进度条语汇（极淡轨 + 纯色扫带）
    - running 时顶缘由 shimmer 独占：关闭实心选中 ::after，避免「线下一轨」叠成底部附属感
    - 几何：外层 .dv-tab::before，top:0 挨紧顶部；S3/S2 高 2px / S1 高 1px
+   - 上下分屏（对齐 VS Code editorGroup.border + tab.activeBorderTop）：
+     必须压过 dockview `.dv-separator-border .dv-view::before`（否则
+     z-index 5 盖住扫光）。idle 线画在下层 `.dv-tabs-container::after`
+     （与 tab 铬同一 transform 层叠，铬 z-index 更高），void/actions
+     用 inset 接上。竖向 hover 只绑被悬停的 sash::before（1.5px，
+     与横向同粗、同缝 top/left: 2px），禁止容器 :has 误亮其它 pane
    - accent：S3=primary（同选中铬，防变深），S2/S1=muted-foreground
    - 选择器必须压过 dockview 非首个 tab 的竖分割线 ::before（同伪元素、后加载）
 
@@ -939,18 +979,20 @@ body {
  * 原因：.dv-tabs-container 由 dockview 拥有，无法挂 ScrollArea / Tailwind 类。
  */
 
-/* Tab 条自定义 thumb：空闲透明，hover/滚动时用产品 token（非默认白半透明）。 */
+/* Tab 条自绘条：颜色/圆角对齐产品条；厚度保持 4px。
+ * dockview 只在条 hover / 拖拇指时加 scrolling 类，滚轮不设该类。
+ * 不要关掉 :hover 着色，否则溢出条在普通滚动里永远不出现。 */
 .dockview-theme-pier .dv-tabs-and-actions-container .dv-scrollable {
-  --dv-scrollbar-background-color: color-mix(
-    in oklab,
-    var(--foreground) 28%,
-    transparent
-  );
+  --dv-scrollbar-background-color: var(--shell-scrollbar-thumb);
+}
+
+.dockview-theme-pier .dv-tabs-and-actions-container .dv-scrollable .dv-scrollbar {
+  border-radius: var(--shell-scrollbar-radius);
 }
 
 /* — hover: 非选中 tab 微亮 — */
 .dockview-theme-pier .dv-tab.dv-inactive-tab:hover {
-  background-color: color-mix(in oklab, var(--foreground) 5%, transparent);
+  background-color: color-mix(in oklab, var(--foreground) 9%, var(--sidebar));
   color: var(--foreground);
 }
 
@@ -1083,6 +1125,12 @@ body {
 [data-slot="select-item"]:focus
   .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes.branch"] {
   color: var(--status-success-fg);
+}
+
+.pier-panel-tab-icon[data-panel-tab-icon="pier.files.project"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.files.project"] {
+  color: var(--pier-file-icon-yellow);
 }
 
 .pier-panel-tab-icon[data-panel-tab-icon="workbench"],
@@ -1490,8 +1538,14 @@ body {
   background-color: var(--muted-foreground);
 }
 
-/* 拖拽线 */
-.dv-split-view-container > .dv-view-container > .dv-view::before {
+/*
+ * 关掉 dockview 自带 view 分割线。仅 `.dv-view::before` 压不过
+ * `.dv-separator-border .dv-view:not(:first-child)::before`（(0,4,1)）。
+ */
+.dv-split-view-container > .dv-view-container > .dv-view::before,
+.dockview-theme-pier
+  .dv-split-view-container.dv-separator-border
+  .dv-view:not(:first-child)::before {
   display: none;
 }
 
@@ -1521,24 +1575,92 @@ body {
 .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash {
   height: 5px;
   z-index: 10;
+  cursor: row-resize;
 }
 
+/*
+ * 竖 sash idle 不画线（5px 透明热区）。hover 画在本条 sash 上，
+ * 与横向同缝（top: 2px）同粗（1.5px），避免 :has 点亮所有下层 pane。
+ */
 .dv-split-view-container.dv-vertical > .dv-sash-container > .dv-sash::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 2px;
-  height: 1px;
-  background-color: var(--border);
-  z-index: 10;
+  content: none;
 }
 
 .dv-split-view-container.dv-vertical
   > .dv-sash-container
   > .dv-sash:hover::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 0;
+  left: 0;
+  z-index: 10;
   height: 1.5px;
+  pointer-events: none;
   background-color: var(--primary);
+}
+
+/*
+ * idle 分割线与 S1/S2 同层：画在 .dv-tabs-container 内（translate3d
+ * 层叠上下文），铬 z-index:2 盖住 1px 线。不用 border-top，避免
+ * border-box 34px 被吃成 33px。void / actions 用 inset 接同一顶边。
+ */
+.dockview-theme-pier
+  .dv-split-view-container.dv-vertical
+  > .dv-view-container
+  > .dv-view:not(:first-child)
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: 1px;
+  pointer-events: none;
+  background-color: var(--border);
+}
+
+.dockview-theme-pier
+  .dv-split-view-container.dv-vertical
+  > .dv-view-container
+  > .dv-view:not(:first-child)
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  :is(
+    .dv-void-container,
+    .dv-left-actions-container,
+    .dv-right-actions-container
+  ) {
+  box-shadow: inset 0 1px 0 var(--border);
+}
+
+[data-dockview-maximized="true"]
+  .dockview-theme-pier
+  .dv-split-view-container.dv-vertical
+  > .dv-view-container
+  > .dv-view:not(:first-child)
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container::after {
+  content: none;
+}
+
+[data-dockview-maximized="true"]
+  .dockview-theme-pier
+  .dv-split-view-container.dv-vertical
+  > .dv-view-container
+  > .dv-view:not(:first-child)
+  .dv-groupview
+  > .dv-tabs-and-actions-container
+  :is(
+    .dv-void-container,
+    .dv-left-actions-container,
+    .dv-right-actions-container
+  ) {
+  box-shadow: none;
 }
 
 [data-dockview-maximized="true"]

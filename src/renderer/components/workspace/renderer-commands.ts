@@ -116,6 +116,12 @@ async function addTerminalForCommand(
   const launchConfirmation = waitForTerminalLaunch(command.launchId);
   let panelId: string | undefined;
   try {
+    if (command.panelId && command.referencePanelId) {
+      throw new RendererCommandExecutionError(
+        "invalid_command",
+        "terminal.open cannot combine panelId and referencePanelId"
+      );
+    }
     if (command.panelId) {
       const api = useWorkspaceStore.getState().api;
       if (!api) {
@@ -174,6 +180,21 @@ async function addTerminalForCommand(
           `panel group not found: ${command.targetGroupId}`
         );
       }
+      if (command.referencePanelId) {
+        const api = workspace.api;
+        if (!api) {
+          throw new Error("workspace api not ready");
+        }
+        const reference = api.panels.find(
+          (candidate) => candidate.id === command.referencePanelId
+        );
+        if (!reference) {
+          throw new RendererCommandExecutionError(
+            "not_found",
+            `reference panel not found: ${command.referencePanelId}`
+          );
+        }
+      }
       panelId =
         workspace.addTerminal({
           ...(command.context && {
@@ -182,6 +203,9 @@ async function addTerminalForCommand(
           ...(command.exitPresentation && {
             exitPresentation: command.exitPresentation,
           }),
+          ...(command.focus !== undefined && {
+            focus: command.focus,
+          }),
           ...(command.initialInput && {
             initialInput: command.initialInput,
             initialInputSubmit: command.initialInputSubmit !== false,
@@ -189,6 +213,9 @@ async function addTerminalForCommand(
           launchId: command.launchId,
           ...(command.placement && {
             placement: command.placement,
+          }),
+          ...(command.referencePanelId && {
+            referencePanelId: command.referencePanelId,
           }),
           ...referenceGroupOptions,
           ...(command.tab && { tab: command.tab }),
@@ -234,6 +261,47 @@ async function runWorkspaceRendererCommandAsync(
         focusPanel(envelope.command.panelId);
         window.pier.rendererCommand.resolve({
           data: null,
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
+      case "panel.setSize": {
+        const result = useWorkspaceStore.getState().setPanelSize({
+          panelId: envelope.command.panelId,
+          ...(envelope.command.widthRatio === undefined
+            ? {}
+            : { widthRatio: envelope.command.widthRatio }),
+          ...(envelope.command.heightRatio === undefined
+            ? {}
+            : { heightRatio: envelope.command.heightRatio }),
+        });
+        if (!result.ok) {
+          throw new RendererCommandExecutionError(
+            result.code ?? "invalid_command",
+            result.message ?? "panel.setSize failed"
+          );
+        }
+        window.pier.rendererCommand.resolve({
+          data: { panelId: envelope.command.panelId },
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
+      case "panel.equalize": {
+        const result = useWorkspaceStore.getState().equalizePanelGroup({
+          axis: envelope.command.axis,
+          panelIds: envelope.command.panelIds,
+        });
+        if (!result.ok) {
+          throw new RendererCommandExecutionError(
+            result.code ?? "invalid_command",
+            result.message ?? "panel.equalize failed"
+          );
+        }
+        window.pier.rendererCommand.resolve({
+          data: { panelIds: envelope.command.panelIds },
           ok: true,
           requestId: envelope.requestId,
         });

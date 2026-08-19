@@ -6,7 +6,9 @@
  * keeps process.env. User-facing status is Settings → Terminal only — no
  * notification-center row and no toast by default.
  */
+import { createLogger } from "@shared/logger.ts";
 import { getNotificationCenterService } from "../ipc/notification-center.ts";
+import { maybeInstallPackagedCliOnPath } from "../services/app-cli/index.ts";
 import {
   createShellEnvFailureNotify,
   SHELL_ENV_FAILURE_DEDUPE_KEY_PREFIX,
@@ -99,6 +101,14 @@ export function createShellEnvironmentBoot(
         }
       );
     })();
+
+  hostShellEnvReady
+    .catch(() => undefined)
+    .finally(() => {
+      maybeInstallPackagedCliOnPath().catch((error: unknown) => {
+        createLogger("app-cli").warn("auto-install skipped", { error });
+      });
+    });
 
   return {
     hostShellEnvReady,

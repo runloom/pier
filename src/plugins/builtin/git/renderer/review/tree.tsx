@@ -15,13 +15,13 @@ import {
 import {
   type GitReviewTreeFileRef,
   makeReviewTreeNodeId,
-} from "./tree-section.ts";
+} from "./tree/section.ts";
 
-export type { GitReviewTreeFileRef } from "./tree-section.ts";
+export type { GitReviewTreeFileRef } from "./tree/section.ts";
 export {
   makeReviewTreeNodeId,
   parseReviewTreeNodeId,
-} from "./tree-section.ts";
+} from "./tree/section.ts";
 
 /**
  * Invisible sort key so pierre path sort keeps TREE_GROUP_ORDER even when the

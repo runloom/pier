@@ -135,11 +135,7 @@ async function writeResolvedContents(options: {
     });
   } catch (error) {
     if (error instanceof GitReviewPathError && error.reason === "missing") {
-      return failure(
-        "changeNotFound",
-        true,
-        "Conflict file is missing; use Keep Ours or Keep Theirs"
-      );
+      return failure("changeNotFound", true, "Conflict file is missing");
     }
     throw error;
   }

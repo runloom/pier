@@ -42,9 +42,13 @@ import { GitReviewScopeSwitcher } from "./review/scope-switcher.tsx";
 import { clearReviewSessionsForScope } from "./review/session-cache.ts";
 import type { PendingCommentReveal } from "./review/surface-types.ts";
 import { ReviewDocuments } from "./review/surfaces.tsx";
+import { REVIEW_TREE_COLLAPSED_STORAGE_PREFIX } from "./review/tree/sidebar-preference.ts";
 import { gitReviewTreeModel } from "./review/tree.tsx";
-import { REVIEW_TREE_COLLAPSED_STORAGE_PREFIX } from "./review/tree-sidebar-preference.ts";
-import { planTabChangeSummaryWrite } from "./tab-change-summary-sync.ts";
+import { useGitStatus } from "./status-state.ts";
+import {
+  planTabChangeSummaryWrite,
+  tabWorkingTreeStateForTarget,
+} from "./tab-change-summary-sync.ts";
 import { usePluginLanguage } from "./use-plugin-language.ts";
 
 /** loading/error/空态下侧栏树为空,打开路径无目标可导航。 */
@@ -220,8 +224,13 @@ function GitChangesPanelBody({
     waitForAuthoritativeIndex,
   } = useGitChangesPanelIndexState({ authority, context, source, sourceKey });
 
-  // index 就绪后写 scope 级 +/−；sourceKey 变化时 layout 前清空（useLayoutEffect）。
+  // 未提交 tab +/- 与状态栏同源（GitStatus.changeSummary = git diff HEAD 净变化）。
+  // commit/branch 仍等审查 index 的 committed 组。sourceKey 变化时 layout 前清空。
   // tabChangeSummary 为短暂呈现态，layout 落盘会 strip（strip-ephemeral-layout-params）。
+  const gitStatusState = useGitStatus(
+    context,
+    source?.target.kind === "uncommitted" ? source.gitRootPath : null
+  );
   const lastTabSummarySourceKeyRef = useRef<string | null>(null);
   useLayoutEffect(() => {
     const paramsRecord =
@@ -229,20 +238,26 @@ function GitChangesPanelBody({
         ? (panelParams as Record<string, unknown>)
         : {};
     const current = paramsRecord[GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM];
-    let planState: Parameters<typeof planTabChangeSummaryWrite>[0]["state"];
+    let indexState: Parameters<
+      typeof planTabChangeSummaryWrite
+    >[0]["indexState"];
     if (state.kind === "loaded") {
-      planState = { kind: "loaded", result: state.result };
+      indexState = { kind: "loaded", result: state.result };
     } else if (state.kind === "error") {
-      planState = { kind: "error" };
+      indexState = { kind: "error" };
     } else {
-      planState = { kind: "loading" };
+      indexState = { kind: "loading" };
     }
     const { nextLastSourceKey, plan } = planTabChangeSummaryWrite({
       currentParam: current,
+      indexState,
       lastSourceKey: lastTabSummarySourceKeyRef.current,
       source,
       sourceKey,
-      state: planState,
+      workingTreeState: tabWorkingTreeStateForTarget(
+        source?.target,
+        gitStatusState
+      ),
     });
     lastTabSummarySourceKeyRef.current = nextLastSourceKey;
     if (plan.action === "write") {
@@ -250,7 +265,7 @@ function GitChangesPanelBody({
         [GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM]: plan.summary,
       });
     }
-  }, [panelApi, panelParams, source, sourceKey, state]);
+  }, [gitStatusState, panelApi, panelParams, source, sourceKey, state]);
   const language = usePluginLanguage();
   // language 驱动文案；context 在 panel 生命周期内稳定。
   // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable

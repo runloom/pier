@@ -14,6 +14,7 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
     private var pendingFinish: (exitCode: UInt32, runtimeMilliseconds: UInt64)?
     private var surface: ghostty_surface_t?
     private var lastResize: InMemoryTerminalViewport?
+    private var viewportTextCache = ViewportTextCache()
     private let writeHandler: @Sendable (Data) -> Void
     private let resizeHandler: @Sendable (InMemoryTerminalViewport) -> Void
 
@@ -30,6 +31,7 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
     func setSurface(_ surface: ghostty_surface_t?) {
         lock.lock()
         defer { lock.unlock() }
+        viewportTextCache.clear()
         self.surface = surface
         if let surface {
             if !pendingData.isEmpty {
@@ -64,6 +66,7 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
         }
 
         surface = nil
+        viewportTextCache.clear()
         TerminalDebugLog.log(.lifecycle, "in-memory session surface=nil matched")
     }
 
@@ -81,9 +84,7 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
     /// `ghostty_surface_free_text`) is fully encapsulated — callers never
     /// touch the C buffer.
     ///
-    /// Selection grammar: `(VIEWPORT, TOP_LEFT)` to `(VIEWPORT, BOTTOM_RIGHT)`
-    /// with `rectangle: false` (linear flow). This reads exactly the visible
-    /// rows and ignores scrollback. Empty viewports return an empty string.
+    /// Unchanged grid epochs reuse the last dump (see `ViewportTextCache`).
     ///
     /// Thread-safe: acquires the same `NSLock` as `receive(_:)` and
     /// `setSurface(_:)`, preventing reads against a surface mid-replacement.
@@ -91,37 +92,30 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let surface else { return nil }
-
-        let topLeft = ghostty_point_s(
-            tag: GHOSTTY_POINT_VIEWPORT,
-            coord: GHOSTTY_POINT_COORD_TOP_LEFT,
-            x: 0,
-            y: 0
-        )
-        let bottomRight = ghostty_point_s(
-            tag: GHOSTTY_POINT_VIEWPORT,
-            coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
-            x: 0,
-            y: 0
-        )
-        let selection = ghostty_selection_s(
-            top_left: topLeft,
-            bottom_right: bottomRight,
-            rectangle: false
-        )
-
-        var out = ghostty_text_s()
-        guard ghostty_surface_read_text(surface, selection, &out) else {
-            return nil
+        return viewportTextCache.read {
+            GhosttyText.readViewport(from: surface)
         }
-        defer { ghostty_surface_free_text(surface, &out) }
+    }
 
-        guard let textPtr = out.text, out.text_len > 0 else {
-            return ""
-        }
-        let bytes = UnsafeBufferPointer(start: textPtr, count: Int(out.text_len))
-            .map { UInt8(bitPattern: $0) }
-        return String(decoding: bytes, as: UTF8.self)
+    @_spi(PierDiagnostics)
+    public var viewportTextDumpCount: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return viewportTextCache.dumpCount
+    }
+
+    @_spi(PierDiagnostics)
+    public var viewportTextHitCount: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return viewportTextCache.hitCount
+    }
+
+    @_spi(PierDiagnostics)
+    public func invalidateViewportTextCache() {
+        lock.lock()
+        defer { lock.unlock() }
+        viewportTextCache.noteChanged()
     }
 
     func updateViewport(_ size: TerminalGridMetrics) {
@@ -166,6 +160,7 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
             }
             ghostty_surface_write_buffer(surface, ptr, UInt(buffer.count))
         }
+        viewportTextCache.noteChanged()
     }
 
     /// Feed a UTF-8 string into the terminal from the host backend.
@@ -252,6 +247,7 @@ public final class InMemoryTerminalSession: @unchecked Sendable {
             return
         }
         lastResize = mergedResize
+        viewportTextCache.noteChanged()
         lock.unlock()
 
         TerminalDebugLog.log(

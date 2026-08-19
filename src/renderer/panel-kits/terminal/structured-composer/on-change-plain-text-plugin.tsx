@@ -13,7 +13,7 @@ export function OnChangePlainTextPlugin({
   useEffect(
     () =>
       editor.registerUpdateListener(({ editorState, tags }) => {
-        if (tags.has("history-merge")) {
+        if (tags.has("history-merge") || tags.has("composer-skip-on-change")) {
           return;
         }
         editorState.read(() => {

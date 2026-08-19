@@ -73,7 +73,9 @@
       ]
     },
     "settings": {
-      "open": ["设置", "偏好", "首选项", "shezhi", "pianhao"]
+      "open": ["设置", "偏好", "首选项", "shezhi", "pianhao"],
+      "installCli": ["安装 pier", "pier 命令", "命令行"],
+      "removeCli": ["卸载 pier", "移除 pier 命令"]
     },
     "terminal": {
       "openDebugWindow": [
@@ -128,6 +130,8 @@
   "locale": {
     "system": ["系统", "跟随系统", "自动", "xitong", "zidong"],
     "zh-CN": ["中文", "简体", "简体中文", "zh", "jianti"],
-    "en": ["英文", "英语", "yingwen"]
+    "en": ["英文", "英语", "yingwen"],
+    "ja": ["日语", "日文", "日本語", "riyu"],
+    "ko": ["韩语", "韩文", "한국어", "hanyu"]
   }
 }

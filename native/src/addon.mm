@@ -44,8 +44,14 @@ extern "C" {
     );
     bool ghostty_bridge_close(const char* panelId);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
-    bool ghostty_bridge_send_text(const char* panelId, const char* text);
-    bool ghostty_bridge_send_key_press(const char* panelId, uint32_t keycode, uint32_t mods, const char* text);
+    bool ghostty_bridge_send_text(const char* panelId, const uint8_t* bytes, long count);
+    bool ghostty_bridge_send_key_press(
+        const char* panelId,
+        uint32_t keycode,
+        uint32_t mods,
+        const uint8_t* bytes,
+        long count
+    );
     char* ghostty_bridge_read_selection_text(const char* panelId);
     char* ghostty_bridge_read_viewport_text(const char* panelId);
     int32_t ghostty_bridge_read_cursor_visible(const char* panelId);
@@ -121,6 +127,10 @@ extern "C" {
     void ghostty_bridge_set_child_exited_forward_callback(ChildExitedForwardFn cb);
     void ghostty_bridge_set_host_language(const char* languageTag); // empty/null clears
     void ghostty_bridge_set_host_copy_catalog(const char* json); // null clears
+    // Transcript 分段落盘根目录（0107 output tap）。空串禁用。
+    void ghostty_bridge_set_transcript_root(const char* rootPath);
+    // 0108：单 surface 滚动历史上限（隐藏面板压力收缩 / 恢复）。
+    bool ghostty_bridge_set_scrollback_limit(const char* panelId, uint64_t limitBytes);
     bool ghostty_bridge_inject_display_text(const char* panelId, const char* text);
     int32_t ghostty_bridge_apply_window_state(void* nsWindow, const char* json);
     // 应用 Pier 主题派生的终端配色. cursor / selection 可空 (NULL = 不设置).
@@ -405,7 +415,11 @@ static Napi::Value JsPerformBindingAction(const Napi::CallbackInfo& info) {
 static Napi::Value JsSendText(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
     std::string text = info[1].As<Napi::String>().Utf8Value();
-    bool ok = ghostty_bridge_send_text(panelId.c_str(), text.c_str());
+    bool ok = ghostty_bridge_send_text(
+        panelId.c_str(),
+        reinterpret_cast<const uint8_t*>(text.data()),
+        static_cast<long>(text.size())
+    );
     return Napi::Boolean::New(info.Env(), ok);
 }
 
@@ -416,12 +430,20 @@ static Napi::Value JsSendKeyPress(const Napi::CallbackInfo& info) {
                         ? info[2].As<Napi::Number>().Uint32Value()
                         : 0;
     std::string textStorage;
-    const char* textPtr = nullptr;
+    const uint8_t* textBytes = nullptr;
+    long textCount = 0;
     if (info.Length() > 3 && info[3].IsString()) {
         textStorage = info[3].As<Napi::String>().Utf8Value();
-        textPtr = textStorage.c_str();
+        textBytes = reinterpret_cast<const uint8_t*>(textStorage.data());
+        textCount = static_cast<long>(textStorage.size());
     }
-    bool ok = ghostty_bridge_send_key_press(panelId.c_str(), keycode, mods, textPtr);
+    bool ok = ghostty_bridge_send_key_press(
+        panelId.c_str(),
+        keycode,
+        mods,
+        textBytes,
+        textCount
+    );
     return Napi::Boolean::New(info.Env(), ok);
 }
 
@@ -633,6 +655,29 @@ static Napi::Value JsSetHostLanguage(const Napi::CallbackInfo& info) {
     }
     std::string tag = info[0].As<Napi::String>().Utf8Value();
     ghostty_bridge_set_host_language(tag.c_str());
+    return env.Undefined();
+}
+
+static Napi::Value JsSetTerminalScrollbackLimit(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
+        return Napi::Boolean::New(env, false);
+    }
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    double bytes = info[1].As<Napi::Number>().DoubleValue();
+    if (bytes < 0) bytes = 0;
+    bool ok = ghostty_bridge_set_scrollback_limit(panelId.c_str(), (uint64_t)bytes);
+    return Napi::Boolean::New(env, ok);
+}
+
+static Napi::Value JsSetTerminalTranscriptRoot(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() == 0 || !info[0].IsString()) {
+        ghostty_bridge_set_transcript_root("");
+        return env.Undefined();
+    }
+    std::string root = info[0].As<Napi::String>().Utf8Value();
+    ghostty_bridge_set_transcript_root(root.c_str());
     return env.Undefined();
 }
 
@@ -1282,6 +1327,8 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setAppShortcutKeys", Napi::Function::New(env, JsSetAppShortcutKeys));
     exports.Set("setHostLanguage", Napi::Function::New(env, JsSetHostLanguage));
     exports.Set("setHostCopyCatalog", Napi::Function::New(env, JsSetHostCopyCatalog));
+    exports.Set("setTerminalTranscriptRoot", Napi::Function::New(env, JsSetTerminalTranscriptRoot));
+    exports.Set("setTerminalScrollbackLimit", Napi::Function::New(env, JsSetTerminalScrollbackLimit));
     exports.Set("injectDisplayText", Napi::Function::New(env, JsInjectDisplayText));
     exports.Set("setOpenUrlForwardCallback", Napi::Function::New(env, JsSetOpenUrlForwardCallback));
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));

@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       app: ${{ steps.filter.outputs.app }}
+      mac_icons: ${{ steps.filter.outputs.mac_icons }}
       native: ${{ steps.filter.outputs.native }}
       windows_lsp: ${{ steps.filter.outputs.windows_lsp }}
     steps:
@@ -40,6 +41,10 @@ jobs:
               - 'tests/integration/**'
               - 'tests/setup/**'
               - 'scripts/**'
+              - 'build/app-icon-*.svg'
+              - 'build/design-sources/pier-logo.svg'
+              - 'build/icon.*'
+              - 'build/icons/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
@@ -61,6 +66,16 @@ jobs:
               - 'src/main/ipc/terminal/**'
               - 'src/main/services/terminal/**'
               - 'src/renderer/panel-kits/terminal/**'
+              - '.github/workflows/ci.yml'
+            mac_icons:
+              - 'build/app-icon-*.svg'
+              - 'build/design-sources/pier-logo.svg'
+              - 'build/icon.*'
+              - 'build/icons/**'
+              - 'scripts/app-icon-*.mjs'
+              - 'scripts/build-app-icons.mjs'
+              - 'tests/unit/scripts/app-icon-*.test.ts'
+              - 'electron-builder.yml'
               - '.github/workflows/ci.yml'
             windows_lsp:
               - 'native/lsp-windows-job/**'
@@ -112,6 +127,23 @@ jobs:
           node-version: 24
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+
+  mac-icons:
+    needs: [changes]
+    if: needs.changes.outputs.mac_icons == 'true'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          cache: pnpm
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - run: >-
+          pnpm exec vitest run tests/unit/scripts/app-icon-assets.test.ts
+          tests/unit/scripts/app-icon-icns.test.ts
+          tests/unit/scripts/app-icon-build.test.ts
 
   native:
     needs: [changes]
@@ -185,7 +217,7 @@ jobs:
 
   check:
     if: always()
-    needs: [changes, static, coverage, build, native, windows-lsp]
+    needs: [changes, static, coverage, build, mac-icons, native, windows-lsp]
     runs-on: ubuntu-latest
     steps:
       - name: Require successful quality jobs
@@ -193,6 +225,8 @@ jobs:
           APP: ${{ needs.changes.outputs.app }}
           BUILD_RESULT: ${{ needs.build.result }}
           COVERAGE_RESULT: ${{ needs.coverage.result }}
+          MAC_ICONS: ${{ needs.changes.outputs.mac_icons }}
+          MAC_ICONS_RESULT: ${{ needs.mac-icons.result }}
           NATIVE: ${{ needs.changes.outputs.native }}
           NATIVE_RESULT: ${{ needs.native.result }}
           STATIC_RESULT: ${{ needs.static.result }}
@@ -212,5 +246,6 @@ jobs:
           test "$STATIC_RESULT" = "success"
           require_ok_or_skipped coverage "$APP" "$COVERAGE_RESULT"
           require_ok_or_skipped build "$APP" "$BUILD_RESULT"
+          require_ok_or_skipped mac-icons "$MAC_ICONS" "$MAC_ICONS_RESULT"
           require_ok_or_skipped native "$NATIVE" "$NATIVE_RESULT"
           require_ok_or_skipped windows-lsp "$WINDOWS_LSP" "$WINDOWS_LSP_RESULT"

@@ -2,12 +2,26 @@
 
 ## API discovery
 
-Read `../sdk/index.d.ts` before implementation. Then read the focused
+Look at `.pier/canvases/canvas-kit/canvas-kit.canvas.tsx` in Pier for the
+live catalog. Compose only `pier/canvas` exports that appear there, plus the
+API tab — a capability catalog (`useCanvasFile` first, then host domains
+such as `file` and `git`). `host.invoke` / `useHostSnapshot` /
+`host.subscribe` / `host.inspect` are listed once in the primer; command
+names are `host.invoke` variants, not separate APIs. Then
+read `../sdk/index.d.ts` and `../sdk/host.d.ts`. Then read the focused
 declaration for each API you plan to use:
 
 - `core.d.ts` for `Frame`, `Artboard`, `ArtboardStage`, `Stack`, `Row`, and `Text`.
-- `visualizations.d.ts` for charts, graphs, and Mermaid diagrams.
-- `files.d.ts` for adjacent-file reads and conflict-safe writes.
+- API (canvas-kit → API, plus `sdk/host.d.ts` and `sdk/files.d.ts`) for
+  `import { host, useHostSnapshot } from "pier/host"` and
+  `import { useCanvasFile } from "pier/canvas"`. Bind
+  `host.invoke` / `host.subscribe` / `host.snapshot` on the canvas; do
+  not wrap those capabilities as product hooks. Adjacent files are
+  `useCanvasFile`; global `file.*` is the host `file` domain.
+- `visualizations.d.ts` for `DataChart` and `Mermaid`. Canvas diagrams
+  use the `Mermaid` component (`nodes` / `edges`, or `source` for
+  sequence / class / state). Markdown preview keeps a separate mermaid
+  fence path.
 - `forms.d.ts` for controls, selection, and toggle composition.
 - `primitives.d.ts` for the complete standard UI primitive inventory.
 
@@ -68,6 +82,7 @@ stay there. Put complex calculations in pure adjacent modules.
 ## Components and styling
 
 - Import host-provided components and `useCanvasFile` from `pier/canvas`.
+  Import `host` / `useHostSnapshot` from `pier/host`.
 - You may import adjacent Canvas modules, project-relative paths, and project
   `tsconfig` path aliases.
 - Reuse the project's design system first. Use basic layout primitives only
@@ -88,7 +103,7 @@ stay there. Put complex calculations in pure adjacent modules.
 - Product UI mockups (settings, panels, chrome) go on **`Artboard`** inside
   **`ArtboardStage`**. Each artboard is a Figma frame: fixed pixel width
   (default 1280×800), **clip** overflow — no nested scrollbar. Inline
-  `ArtboardStage` is the **same card as `MermaidDiagram`**: fit-all overview
+  `ArtboardStage` is the **same card as `Mermaid`**: fit-all overview
   in the reading `Frame`, no wheel capture. Zoom/pan (same chrome as image
   preview) is **fullscreen preview only**. Do not break the host reading
   column out to full width. Do not stack screens as a document inside
@@ -105,8 +120,82 @@ stay there. Put complex calculations in pure adjacent modules.
   a summary table and then the same commands again in an Accordion.
 - Badge only **unfinished** or **blocked** commands. Shipped items stay plain.
 
+## Mermaid
+
+One component: `Mermaid`. The host paints with mermaid.js (parse + layout +
+paint). There is no second layout engine.
+
+**Flowchart / architecture / live DAG** — pass `nodes` and `edges`. The host
+writes mermaid `flowchart` text and hydrates Pier cards into mermaid's own
+htmlLabels when a node has `kind`, `tone`, `status`, or `renderNodeContent`.
+Set `shape` (`round` / `diamond` / `rect` / `circle`) for notation
+silhouettes. Omit `shape` (or set `kind` / `tone` / `status`) for Pier cards.
+
+**Sequence, state, class, ER, mindmap** — pass native mermaid `source`. Do
+not compile those families from `nodes` / `edges`. mermaid.js classifies the
+diagram; there is no `type` prop and Pier does not sniff the source header.
+
+| Family | `source` starts with |
+|---|---|
+| `sequence` | `sequenceDiagram` |
+| `state` | `stateDiagram-v2` |
+| `class` | `classDiagram` |
+| `er` | `erDiagram` |
+| `mindmap` | `mindmap` |
+| flowchart | omit `source`; use `nodes` / `edges` |
+
+| Field | When | Values |
+|---|---|---|
+| `kind` | Layered / main-loop / architecture (flowchart from `nodes`) | `actor` human · `agent` coordinating or worker agent · `tool` CLI or local tools · `artifact` screen, facts, documents, product surfaces · `external` optional / out of product |
+| `tone` | State machine, error exit, delivery status | `info` `success` `warning` `danger` `done` `muted` |
+| neither | Only if the graph has no roles and no status | Default `bg-card` |
+
+| `kind` | Chrome (status hue, not `--primary` / `--muted`) |
+|---|---|
+| `actor` | info blue · User |
+| `agent` | done purple · Bot |
+| `tool` | success green · Terminal |
+| `artifact` | info blue, **dashed** · AppWindow |
+| `external` | warning amber, **dashed** · ExternalLink |
+
+Rules:
+
+- Architecture and main-loop graphs **must** set `kind` on every node.
+  Look at `.pier/canvases/multi-agent-orchestration-gold/data.json`
+  `mainLoop.diagram` / `architecture.diagram`.
+- Status graphs **must** set `tone` (success path, warning attention,
+  danger misuse). Templates keep `tone: "danger"` on Error / Misuse /
+  Stop nodes.
+- Set **one** field per node. If both are set, fill follows `tone`;
+  `kind` still shows the role glyph.
+- Chrome is the soft status pairing: pale tint + same-hue hairline
+  border + a title-row glyph. Kind glyphs use foreground (readable at
+  20px); hue lives in the card surface. Run-status marks stay chromatic.
+  **No left color rail.** **No one-color-per-node rainbow.**
+- Do not use `bg-muted` / `bg-primary/10` for roles: light `--muted` is
+  near `--card`, light `--primary` is near-black.
+- One-shot / out-of-product nodes are `external` (example: 原生 agent CLI).
+  Their edges dash too.
+- Short predicates on edges; long copy belongs on node `meta` or a caption.
+- Do not infer `kind` from the title string.
+- **Live DAG / pipeline graphs:** set `status` per node
+  (`queued` | `running` | `success` | `failed` | `skipped`) for the trailing
+  run glyph (spinner / check / cross). For richer per-node chrome (progress,
+  timing, cost) pass `renderNodeContent={(node) => …}` and reserve space with
+  `contentHeight` on the nodes that render it. Content is display chrome —
+  in-node actions use compact `Button size="xs" variant="outline"` in the
+  footer, not filled accent. Keep graph selection on `onSelectNode`.
+
 ## Data and state
 
+- Host snapshots are `pier/host`, not widgets. The API tab is a
+  capability catalog: `useCanvasFile` plus one row per host domain
+  (`file`, `git`, `worktree`, …). The primer states `host.invoke` /
+  `useHostSnapshot` / `host.subscribe` / `host.inspect` once. Domain
+  detail lists command payload fields from `host.inspect()`. Do not
+  expect a live readout or a composed UI on that page. Call those
+  functions on the canvas and bind keys to `Item`, `Table`, or
+  `DataChart` yourself.
 - Use local React state for state that only affects the current viewing session.
 - Use an adjacent `data.json` for data that belongs in Git, is shared by the
   team, or must persist across sessions.

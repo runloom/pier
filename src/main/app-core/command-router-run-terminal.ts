@@ -25,12 +25,17 @@ import {
   executeRunOutputCommand,
   executeRunRerunCommand,
 } from "./commands/run-output.ts";
+import { executeTerminalCloseCommand } from "./commands/terminal-close.ts";
 import {
   executeTerminalGetCommand,
   executeTerminalKeyCommand,
   executeTerminalListCommand,
   executeTerminalSendCommand,
 } from "./commands/terminal-control.ts";
+import {
+  executeTerminalReadCommand,
+  executeTerminalScreenCommand,
+} from "./commands/terminal-screen.ts";
 
 export async function executeRunCommand(
   requestId: string,
@@ -85,6 +90,12 @@ export async function executeTerminalCommand(
       return await executeTerminalSendCommand(requestId, command, services);
     case "terminal.key":
       return await executeTerminalKeyCommand(requestId, command, services);
+    case "terminal.screen":
+      return await executeTerminalScreenCommand(requestId, command, services);
+    case "terminal.read":
+      return await executeTerminalReadCommand(requestId, command, services);
+    case "terminal.close":
+      return await executeTerminalCloseCommand(requestId, command, services);
     case "terminal.profile.delete":
       return success(
         requestId,

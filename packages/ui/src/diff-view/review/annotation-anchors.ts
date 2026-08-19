@@ -128,9 +128,8 @@ export function buildDriftAnnotations(
 /**
  * 把行内评论线程逐条转成 per-line `review-thread` annotation。
  *
- * **无折叠态**：有评论的行直接渲染 `InlineReviewThreadCard`，不再先塌成一个
- * 气泡 badge 等用户点开。v1 单条批注既无计数数字、也无 open/resolved 之分，
- * badge 与展开卡占用同一行 annotation 行高却只画一个通用图标——纯多一次点击。
+ * **无折叠态**：有评论的行直接渲染带阴影的 `InlineReviewThreadCard`，点击
+ * 整卡进入编辑。不把评论收成 gutter 里的折叠入口。
  *
  * `reviewComments` 已是业务层判漂移后的行内匹配线程（漂移的进 `driftComments`
  * 走文件级折叠区）。与草稿提交后的乐观 thread 槽同锚点时由合并 effect 去重。

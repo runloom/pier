@@ -98,6 +98,13 @@ export const SURFACE_PROFILES: Readonly<Record<string, SurfaceProfile>> = {
     selectionSource: "none",
     specializedEditPipeline: false,
   },
+  "files/canvas-preview": {
+    mergeEdit: true,
+    mergeLayout: false,
+    role: "document",
+    selectionSource: "dom",
+    specializedEditPipeline: false,
+  },
   "files/editor": {
     mergeEdit: false,
     mergeLayout: false,

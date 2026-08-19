@@ -29,31 +29,18 @@ import {
 import { GitReviewSurfaceSwitcher } from "./surface-switcher.tsx";
 import type {
   ReviewActiveChrome,
+  ReviewDocumentsProps,
   ReviewSurfaceNavigationRequest,
-  ReviewSurfaceProps,
   ReviewTreeFocus,
   ReviewTreeOpenReveal,
 } from "./surface-types.ts";
 import { buildActivateNavigationRequest } from "./surface-types.ts";
 import { GitReviewToolbar } from "./toolbar.tsx";
+import { useReviewResponsiveViewOptions } from "./use-responsive-view-options.ts";
 
 type PendingMutationTransition = GitReviewMutationTransition;
 function ReviewDocumentsComponent(
-  props: Omit<
-    ReviewSurfaceProps,
-    | "active"
-    | "activeSurface"
-    | "diffBase"
-    | "navigationRequest"
-    | "onNavigationMaterialized"
-    | "onSurfaceNavigationSettled"
-    | "onMutationTransition"
-    | "onRequestTreeOpen"
-    | "onAcquireMutationAuthority"
-    | "onSelectSurface"
-  > & {
-    readonly onAcquireMutationAuthority: () => boolean;
-  }
+  props: ReviewDocumentsProps
 ): React.JSX.Element {
   const committed = props.scope.target.kind !== "uncommitted";
   const initialSurface: GitReviewReadingSurface = committed
@@ -123,8 +110,12 @@ function ReviewDocumentsComponent(
   const [activeChrome, setActiveChrome] = useState<ReviewActiveChrome | null>(
     null
   );
-  const { options: viewOptions, setOptions: setViewOptions } =
-    useReviewViewOptions();
+  const reviewViewOptions = useReviewViewOptions();
+  const responsiveViewOptions =
+    useReviewResponsiveViewOptions(reviewViewOptions);
+  const responsiveUnified =
+    reviewViewOptions.options.diffStyle === "split" &&
+    responsiveViewOptions.effectiveOptions.diffStyle === "unified";
   const selectSurface = useCallback(
     (surface: GitReviewReadingSurface) => {
       userPickedSurfaceRef.current = true;
@@ -420,12 +411,14 @@ function ReviewDocumentsComponent(
             activeChrome?.onToggleCollapseAll();
           }}
           refreshing={props.indexRefreshing === true}
-          setViewOptions={setViewOptions}
-          viewOptions={viewOptions}
+          responsiveUnified={responsiveUnified}
+          setViewOptions={responsiveViewOptions.setOptions}
+          viewOptions={responsiveViewOptions.effectiveOptions}
         />
       }
       isActiveOpenPath={isActiveOpenPath}
       mutationAuthorityBlocked={props.mutationAuthorityBlocked}
+      onContentResize={responsiveViewOptions.onContentResize}
       onOpenPath={openSharedTreePath}
       setSidebarCollapsed={props.setSidebarCollapsed}
       sidebarCollapsed={props.sidebarCollapsed}
@@ -488,6 +481,7 @@ function ReviewDocumentsComponent(
                 onRequestTreeOpen={requestTreeOpen}
                 onSelectSurface={selectSurface}
                 onSurfaceNavigationSettled={handleNavigationSettled}
+                viewOptions={responsiveViewOptions.effectiveOptions}
               />
             </div>
           );

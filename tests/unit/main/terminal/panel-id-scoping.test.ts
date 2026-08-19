@@ -136,12 +136,20 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       })),
     }));
 
+    const closeTerminal = fakeAddon.closeTerminal;
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");
     registerTerminalIpc(fakeIpcMain as never, {
       loadNativeAddon: () => ({ addon: fakeAddon as never, error: null }),
     });
 
-    return { consumeLaunch, fakeAddon, handlers, invokeHandlers, win };
+    return {
+      closeTerminal,
+      consumeLaunch,
+      fakeAddon,
+      handlers,
+      invokeHandlers,
+      win,
+    };
   }
 
   it("two windows with same raw panel id produce distinct scoped ids on addon calls", async () => {
@@ -311,7 +319,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
   });
 
   it("scopes atomic host state, create, and close panel ids", async () => {
-    const { fakeAddon, handlers, invokeHandlers, win } = await setupHarness(7);
+    const { closeTerminal, fakeAddon, handlers, invokeHandlers, win } =
+      await setupHarness(7);
     await invokeHandlers.get("pier:terminal:create")?.(
       { sender: win.webContents },
       {
@@ -353,7 +362,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
         keyboardTarget: { kind: "terminal", panelId: "7::panel-a" },
       })
     );
-    expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::panel-a");
+    expect(closeTerminal).toHaveBeenCalledWith("7::panel-a");
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
       Buffer.from("win-7"),
       "7::panel-a",

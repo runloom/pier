@@ -47,7 +47,6 @@ function createControlledTree(): ControlledTree {
 }
 
 const started = (tree: ProcessTreeHandle) => ({
-  clientRole: "editor" as const,
   pid: 4242,
   processTree: tree,
   rootPath: "/repo",
@@ -122,7 +121,6 @@ describe("LspE2eObserver", () => {
     expect(first).toEqual([
       {
         alive: true,
-        clientRole: "editor",
         closeCause: null,
         pid: 4242,
         rootPath: "/repo",
@@ -182,12 +180,10 @@ describe("LspE2eObserver", () => {
       spawnImpl: () => child,
     });
     const session = host.ensure({
-      clientRole: "language-tools",
       launch: { args: ["--stdio"], command: "fake-ls", cwd: "/repo" },
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
 
@@ -200,7 +196,6 @@ describe("LspE2eObserver", () => {
     await expect(observer.snapshot()).resolves.toEqual([
       {
         alive: false,
-        clientRole: "language-tools",
         closeCause: "workspace-evicted",
         pid: 9876,
         rootPath: "/repo",

@@ -249,6 +249,7 @@ export function GitReviewPanelLayout({
   onOpenPath,
   isActiveOpenPath,
   onContextMenuSession,
+  onContentResize,
   setSidebarCollapsed,
   sidebarCollapsed,
   sidebarFooter,
@@ -275,6 +276,7 @@ export function GitReviewPanelLayout({
       readonly path: string;
     }
   ) => void;
+  onContentResize?: (widthPx: number) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   sidebarCollapsed: boolean;
   sidebarFooter?: ReactNode;
@@ -470,6 +472,7 @@ export function GitReviewPanelLayout({
           }
         />
       }
+      {...(onContentResize === undefined ? {} : { onContentResize })}
       onSidebarAutoCollapse={collapseSidebar}
       sidebar={sidebar}
       sidebarPanelId="git-review-tree"

@@ -19,6 +19,12 @@ files:
 
 extraResources:
   - from: bin/pier.mjs
+    to: bin/pier.mjs
+  - from: bin/pier-cli-parser.js
+    to: bin/pier-cli-parser.js
+  - from: bin/pier-control-client.js
+    to: bin/pier-control-client.js
+  - from: bin/pier-app.sh
     to: bin/pier
   - from: resources/fonts
     to: fonts
@@ -52,6 +58,12 @@ extraResources:
       - '*.tgz'
       - '*.tgz.sha256'
       - 'plugin.json'
+  - from: packages/plugin-tmux/dist-pkg
+    to: plugin-packages/pier.tmux
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
   - from: packages/plugin-claude/dist-pkg
     to: plugin-packages/pier.claude
     filter:
@@ -73,6 +85,7 @@ asarUnpack:
   - '**/node_modules/typescript/**'
 
 win:
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64, arm64]
@@ -94,6 +107,9 @@ mac:
   forceCodeSigning: true
   gatekeeperAssess: false
   notarize: true
+
+linux:
+  icon: build/icons
 
 publish:
   provider: github

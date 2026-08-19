@@ -3,23 +3,19 @@ import {
   type LspChildProcess,
   type ProcessTreeHandle,
 } from "./process-termination.ts";
-import type { LspSessionClientRole } from "./session-runtime.ts";
 
 /**
- * Session identity includes clientRole on purpose: editor sessions are long-lived
- * with streaming JSON-RPC to the renderer (`onMessage`), while language-tools is
- * main-side request/response. Sharing one child would require rebinding message
- * and close handlers on reuse. Cost is one process tree per role per root/window;
- * language-tools holds agentBusy during requests to avoid idle reaping mid-call.
+ * Gateway 终态的会话身份：一个 (workspaceKey, serverId, rootPath) 只允许
+ * 一棵真实进程树。窗口（webContents）与消费角色（editor / language-tools）
+ * 不再进入身份——它们是 session-broker 上的虚拟消费者，消息路由与
+ * didOpen/didClose 引用计数由 broker 统一承担。
  */
 export function sessionOwnerKey(input: {
-  clientRole: LspSessionClientRole;
   rootPath: string;
   serverId: string;
-  webContentsId: number;
   workspaceKey: string;
 }): string {
-  return `${input.webContentsId}::${input.workspaceKey}::${input.serverId}::${input.rootPath}::${input.clientRole}`;
+  return `${input.workspaceKey}::${input.serverId}::${input.rootPath}`;
 }
 
 /** Process tree for a child that spawned without a usable pid. */

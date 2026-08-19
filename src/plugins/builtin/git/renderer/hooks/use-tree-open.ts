@@ -78,7 +78,7 @@ export function useGitReviewTreeOpen(options: {
         sectionKey: fileRef.sectionKey,
       });
       onActivateGroup?.(fileRef.group);
-      // 金标准：meta/notice 槽仅侧栏选中，不 materialize、不假 scroll
+      // 金标准：meta 槽仅侧栏选中，不 materialize、不假 scroll；notice 进正文可滚
       const entry = treeModel.entryByKey.get(fileRef.entryKey);
       const slot = entry?.renderSlots.find(
         (candidate) => candidate.sectionKey === fileRef.sectionKey

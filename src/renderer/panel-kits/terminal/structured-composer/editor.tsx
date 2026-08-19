@@ -17,6 +17,7 @@ import type { ComposerAttachment } from "../composer-attachments-model.ts";
 import { AttachmentAutocompletePlugin } from "./attachment-autocomplete-plugin.tsx";
 import { AttachmentTokenNode } from "./attachment-token-node.tsx";
 import { AttachmentTokenValidityPlugin } from "./attachment-token-validity-plugin.tsx";
+import { COMPOSER_LINE_LEADING_CLASS } from "./composer-chip-styles.ts";
 import { DisableFormattingPlugin } from "./disable-formatting-plugin.tsx";
 import { EmptyPlaceholderPlugin } from "./empty-placeholder-plugin.tsx";
 import { EnterKeyPlugin } from "./enter-key-plugin.tsx";
@@ -290,11 +291,17 @@ export function StructuredComposerEditor({
         Layout + padding live on the outer shell. Empty placeholder is painted
         on the first empty <p> via CSS ::before (Cursor/Codex), not a Lexical
         sibling overlay — overlays hide the native caret when empty.
-        Compact: center the editor in the h-9 chrome *outside* the editable —
-        `flex h-full` on contenteditable makes the caret next to chips as tall
-        as the shell.
+        Compact: center the editor in the h-9 chrome *outside* the editable
+        (`flex-col justify-center`). `flex h-full` on contenteditable makes
+        the caret next to chips as tall as the shell.
       */}
-      <div className={cn("min-w-0", className, compact && "flex items-center")}>
+      <div
+        className={cn(
+          "min-w-0",
+          className,
+          compact && "flex flex-col justify-center"
+        )}
+      >
         <div className="relative w-full min-w-0">
           <MentionPlugin
             chromeAnchor={chromeAnchor}
@@ -321,7 +328,8 @@ export function StructuredComposerEditor({
                 aria-label={placeholder}
                 className={cn(
                   "composer-editor-input w-full min-w-0 resize-none outline-none",
-                  "font-sans text-foreground text-sm leading-5 caret-foreground",
+                  "font-sans text-foreground text-sm caret-foreground",
+                  COMPOSER_LINE_LEADING_CLASS,
                   "whitespace-pre-wrap break-words [&_p]:m-0",
                   compact
                     ? "overflow-x-hidden overflow-y-hidden"

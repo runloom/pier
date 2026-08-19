@@ -112,7 +112,10 @@ export function opencodeConfigPath(): string {
  * chat.message→PromptSubmit，permission.asked/replied 与 question.*
  * 分别闭合交互（asked 挡住工具直到 replied；allow 规则不发 asked）。
  * session.status(busy/retry)→running、
- * (idle)→Stop（EventSessionStatus——模型忙碌/重试中的推进心跳）,
+ * (idle)→Stop（EventSessionStatus——模型忙碌/重试中的推进心跳）。
+ * session.idle / session.status=idle 不是回合完成：OpenCode 自己的
+ * session.turn.completed（#23503 / #23650）未合入，插件作者也写明 idle
+ * 粒度不够。Stop 因此只做 advisory 候选，不抬 ready。
  * tool.execute.before→ToolStart, tool.execute.after→ToolComplete。
  */
 export function buildOpencodePluginSource(
@@ -448,7 +451,7 @@ export const opencodeIntegration: AgentHookIntegration = {
   id: AGENT_ID,
   runtime: {
     emittedMappings: OPENCODE_EMITTED_MAPPINGS,
-    stopAuthority: "authoritative",
+    stopAuthority: "advisory",
   },
   install: () => installOpencodeHooks(),
   uninstall: () => uninstallOpencodeHooks(),

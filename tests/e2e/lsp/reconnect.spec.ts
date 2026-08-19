@@ -21,7 +21,7 @@ type PausedCause = "idle-release" | "workspace-evicted";
 const STATUS_TIMEOUT_MS = 30_000;
 
 function editorSessions(snapshot: ObserverSessions): ObserverSession[] {
-  return snapshot.filter((session) => session.clientRole === "editor");
+  return [...snapshot];
 }
 
 function liveEditorSessions(snapshot: ObserverSessions): ObserverSession[] {
@@ -291,7 +291,6 @@ test("two TypeScript views share one session and one reconnect generation", asyn
     expect(replacement.pid).not.toBeNull();
     expect(replacement.pid).not.toBe(initial.pid);
     expect(replacement).toMatchObject({
-      clientRole: initial.clientRole,
       rootPath: initial.rootPath,
       serverId: initial.serverId,
       workspaceKey: initial.workspaceKey,

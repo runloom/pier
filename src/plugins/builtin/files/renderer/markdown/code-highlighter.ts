@@ -1,3 +1,4 @@
+import type { RendererPluginCodeThemeRegistration } from "@plugins/api/renderer.ts";
 import type {
   MarkdownCodeHighlightRequest,
   MarkdownCodeHighlightResponse,
@@ -21,6 +22,7 @@ export interface MarkdownCodeHighlightInput {
   code: string;
   language: string | null;
   theme: string;
+  themeRegistration?: RendererPluginCodeThemeRegistration | undefined;
 }
 
 export type MarkdownCodeHighlightOutcome =
@@ -53,6 +55,10 @@ export function createMarkdownCodeHighlighter(options: {
   let disposed = false;
   let requestSequence = 0;
   let worker: MarkdownCodeHighlightWorker | null = null;
+  const postedThemeRegistrations = new Map<
+    string,
+    RendererPluginCodeThemeRegistration
+  >();
 
   const settleAllPlain = () => {
     for (const item of pending.values()) {
@@ -70,6 +76,7 @@ export function createMarkdownCodeHighlighter(options: {
       current.onmessage = null;
       current.terminate();
     }
+    postedThemeRegistrations.clear();
   };
 
   const failWorker = () => {
@@ -125,11 +132,17 @@ export function createMarkdownCodeHighlighter(options: {
       const currentWorker = ensureWorker();
       if (!currentWorker) return Promise.resolve({ status: "plain" });
       requestSequence += 1;
+      const themeRegistration =
+        input.themeRegistration?.name === input.theme &&
+        postedThemeRegistrations.get(input.theme) !== input.themeRegistration
+          ? input.themeRegistration
+          : undefined;
       const request: MarkdownCodeHighlightRequest = {
         code: input.code,
         language: input.language,
         requestId: `markdown-highlight-${requestSequence}`,
         theme: input.theme,
+        ...(themeRegistration ? { themeRegistration } : {}),
         type: "highlight",
       };
       return new Promise<MarkdownCodeHighlightOutcome>((resolve) => {
@@ -137,6 +150,9 @@ export function createMarkdownCodeHighlighter(options: {
         pending.set(request.requestId, { resolve, timeoutId });
         try {
           currentWorker.postMessage(request);
+          if (themeRegistration) {
+            postedThemeRegistrations.set(input.theme, themeRegistration);
+          }
         } catch {
           failWorker();
         }

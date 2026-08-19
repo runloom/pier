@@ -21,6 +21,7 @@ export const pluginPermissions = {
   "secret:read": "Read secrets",
   "secret:write": "Write secrets",
   "terminal:control": "Control terminals",
+  "terminal:launchWrap": "Decorate agent terminal launches",
   "terminal:read": "Read terminal state",
   "window:close": "Close windows",
   "window:control": "Control windows",

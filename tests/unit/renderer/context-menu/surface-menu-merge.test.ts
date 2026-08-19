@@ -138,6 +138,20 @@ describe("context-menu surface merge with real panel actions", () => {
     }
   });
 
+  it("files/canvas-preview has shared edit but no layout", () => {
+    const ids = collectActionIds(
+      buildMenuEntries("files/canvas-preview", {
+        surface: "files/canvas-preview",
+      })
+    );
+    for (const id of EDIT_IDS) {
+      expect(ids).toContain(id);
+    }
+    for (const id of LAYOUT_IDS) {
+      expect(ids).not.toContain(id);
+    }
+  });
+
   it("files/markdown-preview has shared edit but no layout", () => {
     const ids = collectActionIds(
       buildMenuEntries("files/markdown-preview", {

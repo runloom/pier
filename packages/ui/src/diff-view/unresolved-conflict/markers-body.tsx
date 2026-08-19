@@ -19,7 +19,6 @@ import type {
 } from "../types.ts";
 import { createFormatUnmodifiedLines } from "../use-code-options.ts";
 import { ConflictAcceptActions } from "./accept-actions.tsx";
-import { FileLevelConflictCard } from "./file-level.tsx";
 import { applyConflictResolution, countUnresolvedMarkers } from "./rebuild.ts";
 import type {
   ConflictActionLike,
@@ -286,19 +285,6 @@ export function MarkersConflictBody(options: {
       options.labels.incomingChange,
     ]
   );
-
-  if (countUnresolvedMarkers(options.contents) === 0) {
-    return (
-      <FileLevelConflictCard
-        busy={options.busy}
-        labels={options.labels}
-        path={options.path}
-        {...(options.onOpenFile === undefined
-          ? {}
-          : { onOpenFile: options.onOpenFile })}
-      />
-    );
-  }
 
   return (
     <div

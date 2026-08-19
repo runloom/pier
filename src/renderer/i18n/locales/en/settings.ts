@@ -1,5 +1,7 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
+import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
@@ -40,7 +42,7 @@ export const settings = {
     addProject: "Add project",
     back: "Back to projects",
     description:
-      "Configure environment, skills, and MCP per project. Use Pier Home for cross-project skills and MCP.",
+      "Configure environment, skills, and MCP per project. Cross-project skills and MCP live in Pier Home.",
     emptyDescription:
       "Add a project to manage its environment, skills, and MCP. Pier Home is always available.",
     emptyTitle: "No projects yet",
@@ -198,6 +200,7 @@ export const settings = {
       "This window is still on an older version. Fully quit Pier, start again, then reopen this tab.",
   },
   skills: settingsSkills,
+  materials: settingsMaterials,
   environment: {
     addEnvironment: "Add environment setting",
     addFailed: "Couldn't add — try again",
@@ -323,7 +326,8 @@ export const settings = {
     terminalCursorBlinkDesc: "Blink the terminal cursor",
     terminalScrollbackMb: "Scrollback Limit",
     terminalScrollbackMbDesc: "Terminal history buffer size, range 10–512",
-    terminalScrollbackRuntimeNote: "Applies to new terminals only.",
+    terminalScrollbackRuntimeNote:
+      "Applies immediately to new and open terminals.",
     terminalPasteProtection: "Paste Protection",
     terminalPasteProtectionDesc:
       "Confirm before pasting content that may run immediately",
@@ -357,6 +361,7 @@ export const settings = {
     },
   },
   shellEnvironment: settingsShellEnvironment,
+  cliCommand: settingsCliCommand,
   /** Numeric InputRow trailing units (shadcn InputGroupAddon). */
   unit: {
     px: "px",
@@ -457,32 +462,12 @@ export const settings = {
     dark: "Dark",
     system: "System",
   },
-  stylePreset: {
-    pierre: "Pierre",
-    "pierre-soft": "Pierre Soft",
-    catppuccin: "Catppuccin",
-    everforest: "Everforest",
-    github: "GitHub",
-    "github-default": "GitHub Default",
-    "github-high-contrast": "GitHub High Contrast",
-    "gruvbox-hard": "Gruvbox Hard",
-    "gruvbox-medium": "Gruvbox Medium",
-    "gruvbox-soft": "Gruvbox Soft",
-    kanagawa: "Kanagawa",
-    vscode: "VS Code",
-    material: "Material",
-    min: "Min",
-    one: "One",
-    "rose-pine": "Rose Pine",
-    slack: "Slack",
-    solarized: "Solarized",
-    "tokyo-night": "Tokyo Night",
-    vitesse: "Vitesse",
-  },
   locale: {
     system: "Follow System",
     "zh-CN": "简体中文",
     en: "English",
+    ja: "日本語",
+    ko: "한국어",
   },
   agents: settingsAgents,
   notifications: settingsNotifications,

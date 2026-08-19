@@ -1,8 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
-import { registerAgentStatusItem } from "@/panel-kits/terminal/agent-status-item.tsx";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/status-bar.tsx";
+import { registerAgentStatusItem } from "@/panel-kits/terminal/status-items/agent.tsx";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 
 const statusCtx = {

@@ -27,6 +27,80 @@ describe("W4 CLI flag stripOptions (regression)", () => {
     });
   });
 
+  it("parses terminal open --reference-panel", () => {
+    const r = parsePierCliArgs([
+      "terminal",
+      "open",
+      "--split",
+      "below",
+      "--reference-panel",
+      "teammate-1",
+      "--no-focus",
+      "--json",
+    ]);
+    expect(r.protocol).toBe("v1");
+    if (r.protocol !== "v1") {
+      return;
+    }
+    expect(r.envelope.command).toMatchObject({
+      type: "terminal.open",
+      placement: "split-below",
+      referencePanelId: "teammate-1",
+      focus: false,
+    });
+  });
+
+  it("parses terminal screen / read / close", () => {
+    const screen = parsePierCliArgs([
+      "terminal",
+      "screen",
+      "--panel",
+      "p1",
+      "--max-lines",
+      "80",
+      "--json",
+    ]);
+    expect(screen.protocol).toBe("v1");
+    if (screen.protocol === "v1") {
+      expect(screen.envelope.command).toMatchObject({
+        type: "terminal.screen",
+        panelId: "p1",
+        maxLines: 80,
+      });
+    }
+    const read = parsePierCliArgs([
+      "terminal",
+      "read",
+      "--panel",
+      "p1",
+      "--max-bytes",
+      "1024",
+      "--json",
+    ]);
+    expect(read.protocol).toBe("v1");
+    if (read.protocol === "v1") {
+      expect(read.envelope.command).toMatchObject({
+        type: "terminal.read",
+        panelId: "p1",
+        maxBytes: 1024,
+      });
+    }
+    const close = parsePierCliArgs([
+      "terminal",
+      "close",
+      "--panel",
+      "p1",
+      "--json",
+    ]);
+    expect(close.protocol).toBe("v1");
+    if (close.protocol === "v1") {
+      expect(close.envelope.command).toMatchObject({
+        type: "terminal.close",
+        panelId: "p1",
+      });
+    }
+  });
+
   it("parses worktrees remove --delete-branch", () => {
     const r = parsePierCliArgs([
       "worktrees",
@@ -195,6 +269,94 @@ describe("W4 CLI flag stripOptions (regression)", () => {
         "--all",
         "--json",
       ])
-    ).toThrow(/either --id or --all/u);
+    ).toThrow(/not both/u);
+  });
+
+  it("parses panels set-size and equalize", () => {
+    const setSize = parsePierCliArgs([
+      "panels",
+      "set-size",
+      "p1",
+      "--width-ratio",
+      "0.3",
+      "--height-ratio",
+      "0.4",
+      "--json",
+    ]);
+    expect(setSize.protocol).toBe("v1");
+    if (setSize.protocol === "v1") {
+      expect(setSize.envelope.command).toMatchObject({
+        heightRatio: 0.4,
+        panelId: "p1",
+        type: "panel.setSize",
+        widthRatio: 0.3,
+      });
+    }
+    const equalize = parsePierCliArgs([
+      "panels",
+      "equalize",
+      "--axis",
+      "horizontal",
+      "--panel",
+      "p1",
+      "--panel",
+      "p2",
+      "--json",
+    ]);
+    expect(equalize.protocol).toBe("v1");
+    if (equalize.protocol === "v1") {
+      expect(equalize.envelope.command).toMatchObject({
+        axis: "horizontal",
+        panelIds: ["p1", "p2"],
+        type: "panel.equalize",
+      });
+    }
+  });
+
+  it("accepts positional primary ids for terminal, notifications, and worktrees", () => {
+    const screen = parsePierCliArgs(["terminal", "screen", "p1", "--json"]);
+    expect(screen.protocol).toBe("v1");
+    if (screen.protocol === "v1") {
+      expect(screen.envelope.command).toMatchObject({
+        panelId: "p1",
+        type: "terminal.screen",
+      });
+    }
+    const keyed = parsePierCliArgs([
+      "terminal",
+      "key",
+      "p1",
+      "enter",
+      "--json",
+    ]);
+    expect(keyed.protocol).toBe("v1");
+    if (keyed.protocol === "v1") {
+      expect(keyed.envelope.command).toMatchObject({
+        key: "enter",
+        panelId: "p1",
+        type: "terminal.key",
+      });
+    }
+    const note = parsePierCliArgs(["notifications", "get", "n-1", "--json"]);
+    expect(note.protocol).toBe("v1");
+    if (note.protocol === "v1") {
+      expect(note.envelope.command).toMatchObject({
+        id: "n-1",
+        type: "notifications.get",
+      });
+    }
+    const trees = parsePierCliArgs(["worktrees", "list", "--json"], {
+      cwd: "/Users/dev/repo",
+    });
+    expect(trees.protocol).toBe("v1");
+    if (trees.protocol === "v1") {
+      expect(trees.envelope.command).toMatchObject({
+        path: "/Users/dev/repo",
+        type: "worktree.list",
+      });
+    }
+    expect(() =>
+      parsePierCliArgs(["terminal", "screen", "p1", "--panel", "p2"])
+    ).toThrow(/not both/u);
   });
 });

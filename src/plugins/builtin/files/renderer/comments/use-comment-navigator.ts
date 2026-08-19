@@ -93,6 +93,8 @@ export function useCommentNavigatorController<
   readonly context: RendererPluginContext | undefined;
   readonly labels: CommentNavigatorLabels;
   readonly onReveal: (target: T) => void;
+  /** When set, n/N tracks this thread (pin click / first visible pin). */
+  readonly selectedThreadId?: string | null;
   readonly targets: readonly T[];
   readonly worktreeKey: string | undefined;
 }): {
@@ -109,7 +111,8 @@ export function useCommentNavigatorController<
   readonly total: number;
   readonly visible: boolean;
 } {
-  const { context, labels, onReveal, targets, worktreeKey } = options;
+  const { context, labels, onReveal, selectedThreadId, targets, worktreeKey } =
+    options;
   const clearTargets = options.clearTargets ?? targets;
   const total = targets.length;
   const [activeIndex, setActiveIndex] = useState(0);
@@ -123,44 +126,48 @@ export function useCommentNavigatorController<
   onRevealRef.current = onReveal;
 
   useEffect(() => {
-    setActiveIndex((prev) => {
-      if (total === 0) {
-        return 0;
+    if (total === 0) {
+      setActiveIndex(0);
+      return;
+    }
+    if (selectedThreadId) {
+      const selected = targets.findIndex(
+        (target) => target.threadId === selectedThreadId
+      );
+      if (selected >= 0) {
+        setActiveIndex(selected);
+        return;
       }
-      return Math.min(prev, total - 1);
-    });
-  }, [total]);
+    }
+    setActiveIndex((prev) => Math.min(prev, total - 1));
+  }, [selectedThreadId, targets, total]);
 
   const revealAt = useCallback((index: number) => {
     const target = targetsRef.current[index];
     if (target === undefined) {
       return;
     }
-    queueMicrotask(() => {
-      onRevealRef.current(target);
-    });
+    onRevealRef.current(target);
   }, []);
 
   const onPrevious = useCallback(() => {
     if (total === 0) {
       return;
     }
-    setActiveIndex((prev) => {
-      const next = (prev - 1 + total) % total;
-      revealAt(next);
-      return next;
-    });
+    const next = (activeIndexRef.current - 1 + total) % total;
+    activeIndexRef.current = next;
+    setActiveIndex(next);
+    revealAt(next);
   }, [revealAt, total]);
 
   const onNext = useCallback(() => {
     if (total === 0) {
       return;
     }
-    setActiveIndex((prev) => {
-      const next = (prev + 1) % total;
-      revealAt(next);
-      return next;
-    });
+    const next = (activeIndexRef.current + 1) % total;
+    activeIndexRef.current = next;
+    setActiveIndex(next);
+    revealAt(next);
   }, [revealAt, total]);
 
   const onRevealCurrent = useCallback(() => {

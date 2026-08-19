@@ -141,6 +141,12 @@ export const settingsAgents = {
     env: "附加环境变量",
     envDesc: "启动此智能体时一并注入",
   },
+  sessionTitleRefine: {
+    label: "自动命名会话",
+    description:
+      "收到第一条回复后，把标签改成与任务相符的名称。关闭时使用第一条消息作为名称。",
+    failed: "无法更新会话命名",
+  },
   statusHooks: {
     label: "智能体状态提示",
     description:

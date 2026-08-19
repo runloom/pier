@@ -82,19 +82,22 @@ describe("focus governance", () => {
     expect(status).toContain("aria-label=");
   });
 
-  it("gates NodeGraph keyboard focus on interactive contracts only", () => {
-    const graph = source("packages/ui/src/node-graph.tsx");
-    // 纯展示不进 Tab；onSelectNode / editable 时才 keyboardSelectable
+  it("gates Mermaid keyboard focus on interactive contracts only", () => {
+    const graph = source("packages/ui/src/mermaid/scene.tsx");
+    const shell = source("packages/ui/src/mermaid/shell.tsx");
+    const mark = source("packages/ui/src/mermaid/mark.tsx");
+    // 纯展示不进 Tab；onSelectNode 时节点才可键盘激活
     expect(graph).toContain(
-      "const keyboardSelectable = editable || onSelectNode !== undefined"
+      "const keyboardSelectable = onSelectNode !== undefined"
     );
-    expect(graph).toContain("nodesFocusable={keyboardSelectable}");
-    expect(graph).toContain("focusable: keyboardSelectable");
-    expect(graph).toContain("edgesFocusable={false}");
+    expect(mark).toContain('type="button"');
+    expect(mark).toContain('role="img"');
+    expect(graph).not.toContain("nodesFocusable");
+    expect(graph).not.toContain("@xyflow/react");
     // Expanded chrome splits roots: application when selectable, img otherwise.
-    expect(graph).toContain('role="application"');
-    expect(graph).toContain('role="img"');
-    expect(graph).toMatch(/if \(keyboardSelectable\)/);
+    expect(shell).toContain('role="application"');
+    expect(shell).toContain('role="img"');
+    expect(graph).not.toContain('colorMode="system"');
   });
 
   it("uses light ring tokens for workbench resize and add-highlight", () => {
@@ -110,9 +113,10 @@ describe("focus governance", () => {
 
   it("allows only intentional product tabIndex={0} stops", () => {
     const allow = new Set([
-      // 键盘合约：缩放/平移、右键菜单、tab 激活、列表项
+      // 键盘合约：缩放/平移、图片 diff 滑动条、右键菜单、tab 激活、列表项
       "packages/ui/src/image-preview/canvas.tsx",
       "packages/ui/src/image-preview/world-canvas.tsx",
+      "packages/ui/src/diff-view/image-diff/compare.tsx",
       "src/plugins/builtin/files/renderer/preview/image.tsx",
       "src/renderer/panel-kits/workbench/panel.tsx",
       "src/renderer/components/workspace/panel-tab-header.tsx",

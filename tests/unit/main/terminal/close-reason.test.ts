@@ -140,6 +140,7 @@ describe("terminal close IPC reason semantics", () => {
       })),
     }));
 
+    const closeTerminal = fakeAddon.closeTerminal;
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");
     registerTerminalIpc(fakeIpcMain as never, {
       loadNativeAddon: () => ({ addon: fakeAddon as never, error: null }),
@@ -147,6 +148,7 @@ describe("terminal close IPC reason semantics", () => {
     });
 
     return {
+      closeTerminal,
       fakeAddon,
       invokeHandlers,
       processClosedForwardCallback: () => processClosedForwardCallback,
@@ -156,7 +158,7 @@ describe("terminal close IPC reason semantics", () => {
   }
 
   it("keeps task panel mapping alive when relaunch close only stops the native session", async () => {
-    const { fakeAddon, invokeHandlers, taskService, win } =
+    const { closeTerminal, invokeHandlers, taskService, win } =
       await setupHarness();
     const sessionState = await import("@main/state/terminal-session-state.ts");
     const close = invokeHandlers.get("pier:terminal:close");
@@ -173,7 +175,7 @@ describe("terminal close IPC reason semantics", () => {
       reason: "relaunch",
     });
 
-    expect(fakeAddon.closeTerminal).toHaveBeenLastCalledWith("7::terminal-1");
+    expect(closeTerminal).toHaveBeenLastCalledWith("7::terminal-1");
     expect(sessionState.removeTerminalPanelSession).toHaveBeenLastCalledWith(
       "window-main",
       "terminal-1"
@@ -182,8 +184,8 @@ describe("terminal close IPC reason semantics", () => {
   });
 
   it("reports force stop failure when the native terminal does not exist", async () => {
-    const { fakeAddon, taskService } = await setupHarness();
-    fakeAddon.closeTerminal.mockReturnValue(false);
+    const { closeTerminal, taskService } = await setupHarness();
+    closeTerminal.mockReturnValue(false);
     const controller = taskService.bindTerminalProcessController.mock
       .calls[0]?.[0] as
       | {
@@ -201,12 +203,12 @@ describe("terminal close IPC reason semantics", () => {
       message: "terminal process was not found",
       ok: false,
     });
-    expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::terminal-1");
+    expect(closeTerminal).toHaveBeenCalledWith("7::terminal-1");
   });
 
   it("ignores the native process-close callback caused by a relaunch close", async () => {
     const {
-      fakeAddon,
+      closeTerminal,
       invokeHandlers,
       processClosedForwardCallback,
       taskService,
@@ -222,7 +224,7 @@ describe("terminal close IPC reason semantics", () => {
       reason: "relaunch",
     });
 
-    expect(fakeAddon.closeTerminal).toHaveBeenLastCalledWith("7::terminal-1");
+    expect(closeTerminal).toHaveBeenLastCalledWith("7::terminal-1");
     expect(sessionState.removeTerminalPanelSession).toHaveBeenLastCalledWith(
       "window-main",
       "terminal-1"

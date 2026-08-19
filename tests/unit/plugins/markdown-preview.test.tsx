@@ -2,6 +2,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { MarkdownCodeHighlighter } from "@plugins/builtin/files/renderer/markdown/code-highlighter.ts";
 import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/parser.ts";
 import { MarkdownPreview } from "@plugins/builtin/files/renderer/markdown/preview.tsx";
+import { writeMarkdownReadingAppearance } from "@plugins/builtin/files/renderer/markdown/preview-preferences.ts";
 import {
   type MarkdownRuntime,
   type MarkdownRuntimeParseOutcome,
@@ -10,6 +11,7 @@ import {
 import { FILES_IN_FILE_SEARCH_BAR_CLASSNAME } from "@plugins/builtin/files/renderer/search/bar.tsx";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
 
 function immediateRuntime(): MarkdownRuntime {
   return {
@@ -31,7 +33,7 @@ function immediateRuntime(): MarkdownRuntime {
 const source = { kind: "disk" as const, path: "docs/readme.md", root: "/repo" };
 
 describe("MarkdownPreview", () => {
-  it("renders GFM from paginated IR and keeps raw HTML non-executable", async () => {
+  it("renders GFM from paginated IR and drops executable HTML", async () => {
     const { container } = render(
       <MarkdownPreview
         labels={{
@@ -71,7 +73,8 @@ describe("MarkdownPreview", () => {
     expect(screen.getByRole("table")).toBeVisible();
     expect(screen.getAllByRole("checkbox")).toHaveLength(2);
     expect(container.querySelector("script")).toBeNull();
-    expect(screen.getByText("<script>alert('never')</script>")).toBeVisible();
+    expect(screen.queryByText("<script>alert('never')</script>")).toBeNull();
+    expect(screen.queryByText("never")).toBeNull();
     expect(
       screen.getByRole("checkbox", { name: "Completed task" })
     ).toBeChecked();
@@ -81,6 +84,135 @@ describe("MarkdownPreview", () => {
     expect(
       container.querySelectorAll('[data-slot="markdown-page"]')
     ).toHaveLength(1);
+  });
+
+  it("renders a sanitized GitHub-style HTML title block", async () => {
+    const openExternal = vi.fn();
+    const openInternal = vi.fn();
+    const { container } = render(
+      <MarkdownPreview
+        openExternal={openExternal}
+        openInternal={openInternal}
+        runtime={immediateRuntime()}
+        sessionId="markdown-html"
+        source={{ kind: "disk", path: "README.md", root: "/repo" }}
+        value={[
+          '<h1 align="center">Pier</h1>',
+          "",
+          '<p align="center">',
+          "  <strong>本地 AI 开发工作台。</strong><br />",
+          "  第二行说明。",
+          "</p>",
+          "",
+          '<p align="center">',
+          '  <a href="https://example.com/download">下载</a> ·',
+          '  <a href="docs/README.md">文档</a>',
+          "</p>",
+          "",
+          '<span id="raw-html">raw</span>',
+          "",
+          "<script>alert('never')</script>",
+        ].join("\n")}
+      />
+    );
+
+    const heading = await screen.findByRole("heading", { name: "Pier" });
+    expect(heading).toHaveAttribute("id", "pier");
+    expect(heading).toHaveClass("text-center");
+    expect(screen.getByText("本地 AI 开发工作台。")).toBeVisible();
+    expect(container.querySelector("#raw-html")).toBeNull();
+    expect(screen.getByText("raw")).toBeVisible();
+    expect(container.querySelector("script")).toBeNull();
+
+    const download = screen.getByRole("link", { name: "下载" });
+    expect(download).toHaveAttribute("href", "https://example.com/download");
+    expect(fireEvent.click(download)).toBe(false);
+    expect(openExternal).toHaveBeenCalledWith("https://example.com/download");
+
+    const docs = screen.getByRole("link", { name: "文档" });
+    expect(fireEvent.click(docs)).toBe(false);
+    expect(openInternal).toHaveBeenCalledWith({ path: "docs/README.md" });
+  });
+
+  it("does not put whitespace-obfuscated javascript on link hrefs", async () => {
+    const openExternal = vi.fn();
+    const openInternal = vi.fn();
+    render(
+      <MarkdownPreview
+        openExternal={openExternal}
+        openInternal={openInternal}
+        runtime={immediateRuntime()}
+        sessionId="markdown-html-js-tab"
+        source={source}
+        value={[
+          '<a href="java\tscript:alert(1)">HTML</a>',
+          "",
+          "[Markdown](<java\tscript:alert(1)>)",
+        ].join("\n")}
+      />
+    );
+
+    const htmlLink = (await screen.findByText("HTML")).closest("a");
+    const markdownLink = screen.getByText("Markdown").closest("a");
+    expect(htmlLink).not.toBeNull();
+    expect(markdownLink).not.toBeNull();
+    for (const link of [htmlLink, markdownLink]) {
+      expect(link).toHaveAttribute("aria-disabled", "true");
+      expect(link).not.toHaveAttribute("href");
+      expect(fireEvent.click(link as HTMLAnchorElement)).toBe(false);
+    }
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(openInternal).not.toHaveBeenCalled();
+  });
+
+  it("does not emit remote https image src", async () => {
+    const { container } = render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-html-https-img"
+        source={source}
+        value={'<img src="https://example.com/tracker.png" alt="Logo">'}
+      />
+    );
+
+    expect(await screen.findByText("Logo")).toBeVisible();
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector('[src^="https:"]')).toBeNull();
+  });
+
+  it("nests Markdown inlines inside HTML tags", async () => {
+    render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-html-inline"
+        source={source}
+        value={"Before <span>**bold**</span> after"}
+      />
+    );
+
+    expect(await screen.findByText("bold")).toBeVisible();
+    expect(screen.getByText("bold").closest("strong")).not.toBeNull();
+    expect(screen.getByText("bold").closest("span")).not.toBeNull();
+    expect(screen.getByText(/Before/)).toBeVisible();
+  });
+
+  it("does not leak script contents from inline HTML tags", async () => {
+    const { container } = render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-html-script"
+        source={source}
+        value="safe <script>alert('never')</script> still"
+      />
+    );
+
+    expect(await screen.findByText(/safe/)).toBeVisible();
+    expect(container.querySelector("script")).toBeNull();
+    expect(screen.queryByText("never")).toBeNull();
+    expect(screen.getByText(/still/)).toBeVisible();
   });
 
   it("re-parses and shows new headings when value changes", async () => {
@@ -297,6 +429,100 @@ describe("MarkdownPreview", () => {
     });
     expect(screen.getByRole("button", { name: "Copied" })).toBeVisible();
   });
+
+  it("forwards only the selected appearance theme registration to code highlighting", async () => {
+    const registration = getShikiTheme("pierre", "dark");
+    const appearance = {
+      current: () => ({
+        codeTheme: registration.name ?? "pierre-dark",
+        codeThemeRegistration: registration,
+        codeThemes: { dark: "pierre-dark", light: "pierre-light" },
+        density: "compact" as const,
+        language: "en",
+        locale: "en",
+        theme: "dark" as const,
+        typography: {
+          baseFontSize: "13px",
+          codeFontFamily: "monospace",
+          codeFontSize: "13px",
+          fontFamily: "sans-serif",
+        },
+      }),
+      onDidChange: () => () => undefined,
+    } as unknown as RendererPluginContext["appearance"];
+    const highlight = vi.fn(async () => ({ status: "plain" as const }));
+    const highlighter: MarkdownCodeHighlighter = {
+      dispose: vi.fn(),
+      highlight,
+    };
+    writeMarkdownReadingAppearance("auto");
+
+    const auto = render(
+      <MarkdownPreview
+        appearance={appearance}
+        codeHighlighter={highlighter}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-appearance-theme"
+        source={source}
+        value={"```ts\n@sealed\nclass Example {}\n```"}
+      />
+    );
+    await waitFor(() => {
+      expect(highlight).toHaveBeenCalledWith({
+        code: "@sealed\nclass Example {}",
+        language: "ts",
+        theme: registration.name,
+        themeRegistration: registration,
+      });
+    });
+    auto.unmount();
+
+    highlight.mockClear();
+    const explicit = render(
+      <MarkdownPreview
+        appearance={appearance}
+        codeHighlighter={highlighter}
+        codeTheme="github-dark"
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-explicit-theme"
+        source={source}
+        value={"```ts\nconst value = 1\n```"}
+      />
+    );
+    await waitFor(() => {
+      expect(highlight).toHaveBeenCalledWith({
+        code: "const value = 1",
+        language: "ts",
+        theme: "github-dark",
+      });
+    });
+    explicit.unmount();
+
+    highlight.mockClear();
+    writeMarkdownReadingAppearance("light");
+    const fallback = render(
+      <MarkdownPreview
+        appearance={appearance}
+        codeHighlighter={highlighter}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-fallback-theme"
+        source={source}
+        value={"```ts\nconst value = 2\n```"}
+      />
+    );
+    await waitFor(() => {
+      expect(highlight).toHaveBeenCalledWith({
+        code: "const value = 2",
+        language: "ts",
+        theme: "github-light",
+      });
+    });
+    fallback.unmount();
+    writeMarkdownReadingAppearance("auto");
+  });
   it("finds, highlights, and navigates visible Markdown text", async () => {
     const runtime = immediateRuntime();
     const view = render(
@@ -352,6 +578,71 @@ describe("MarkdownPreview", () => {
     expect(
       document.querySelectorAll('mark[data-active-search-match="true"]')
     ).toHaveLength(1);
+  });
+
+  it("highlights visible HTML text and not tag source", async () => {
+    const runtime = immediateRuntime();
+    const view = render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={runtime}
+        searchLabels={{
+          close: "Close",
+          matchAnnouncement: "Matches: {{count}}",
+          next: "Next match",
+          noMatches: "No matches",
+          placeholder: "Find",
+          previous: "Previous match",
+        }}
+        searchRequest={0}
+        sessionId="markdown-html-search"
+        source={source}
+        value={
+          '<h1 align="center">Pier</h1>\n\nBefore <span>world</span> after'
+        }
+      />
+    );
+    view.rerender(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={runtime}
+        searchLabels={{
+          close: "Close",
+          matchAnnouncement: "Matches: {{count}}",
+          next: "Next match",
+          noMatches: "No matches",
+          placeholder: "Find",
+          previous: "Previous match",
+        }}
+        searchRequest={1}
+        sessionId="markdown-html-search"
+        source={source}
+        value={
+          '<h1 align="center">Pier</h1>\n\nBefore <span>world</span> after'
+        }
+      />
+    );
+
+    const input = await screen.findByRole("textbox", { name: "Find" });
+    fireEvent.change(input, { target: { value: "Pier" } });
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll("mark[data-search-match-id]")
+      ).toHaveLength(1);
+    });
+    fireEvent.change(input, { target: { value: "world" } });
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll("mark[data-search-match-id]")
+      ).toHaveLength(1);
+    });
+    fireEvent.change(input, { target: { value: "align" } });
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll("mark[data-search-match-id]")
+      ).toHaveLength(0);
+      expect(screen.getAllByText("No matches").length).toBeGreaterThan(0);
+    });
   });
 
   it("opens find with Cmd/Ctrl+F on the preview surface", async () => {

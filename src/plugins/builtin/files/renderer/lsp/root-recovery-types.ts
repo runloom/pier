@@ -53,6 +53,8 @@ export interface FilesLspRootLease {
   release(): void;
   resume(): void;
   setPolicy(prefs: LspPolicyPrefs): void;
+  /** 可见保活：健康态下刷新 main 侧空闲时钟（ensure-reused，无状态机副作用）。 */
+  touch(): void;
 }
 
 export interface RootGeneration {

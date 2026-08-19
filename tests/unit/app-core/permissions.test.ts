@@ -1,4 +1,8 @@
 import { authorizeCommand } from "@main/app-core/permissions.ts";
+import {
+  CANVAS_HOST_ALLOWED_COMMANDS,
+  isCanvasHostCommandAllowed,
+} from "@shared/contracts/canvas-host.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
@@ -95,6 +99,39 @@ describe("authorizeCommand", () => {
       authorizeCommand(
         { type: "terminal.open" },
         client("cli-local", ["workspace:open"])
+      )
+    ).toEqual({ ok: true });
+  });
+
+  it("terminal.screen / read 要求 terminal:read；close 要求 terminal:control", () => {
+    expect(
+      authorizeCommand(
+        { panelId: "p1", type: "terminal.screen" },
+        client("cli-local", ["workspace:open"])
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: terminal:read",
+    });
+    expect(
+      authorizeCommand(
+        { panelId: "p1", type: "terminal.read" },
+        client("cli-local")
+      )
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand(
+        { panelId: "p1", type: "terminal.close" },
+        client("cli-local", ["terminal:read"])
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: terminal:control",
+    });
+    expect(
+      authorizeCommand(
+        { panelId: "p1", type: "terminal.close" },
+        client("cli-local")
       )
     ).toEqual({ ok: true });
   });
@@ -373,5 +410,92 @@ describe("authorizeCommand", () => {
       client("cli-local", ["window:control"])
     );
     expect(cliResult.ok).toBe(false);
+  });
+
+  it("app.cli install commands are desktop-renderer only", () => {
+    for (const command of [
+      { type: "app.cli.status" as const },
+      { type: "app.cli.install" as const },
+      { type: "app.cli.uninstall" as const },
+    ]) {
+      expect(authorizeCommand(command, client("desktop-renderer"))).toEqual({
+        ok: true,
+      });
+      const cliResult = authorizeCommand(
+        command,
+        client("cli-local", ["app:read"])
+      );
+      expect(cliResult.ok).toBe(false);
+    }
+  });
+
+  it("parses terminal:launchWrap but does not grant it to any client kind by default", () => {
+    expect(pierCapabilitySchema.parse("terminal:launchWrap")).toBe(
+      "terminal:launchWrap"
+    );
+    for (const kind of pierClientKindSchema.options) {
+      expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND[kind]).not.toContain(
+        "terminal:launchWrap"
+      );
+    }
+  });
+
+  it("allows canvas clients to read files and git status", () => {
+    expect(pierClientKindSchema.parse("canvas")).toBe("canvas");
+    expect(
+      authorizeCommand(
+        { path: "", root: "/tmp", type: "file.list" },
+        client("canvas")
+      )
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand({ cwd: "/tmp", type: "git.getStatus" }, client("canvas"))
+    ).toEqual({ ok: true });
+  });
+
+  it("denies canvas clients writes and window close", () => {
+    expect(
+      authorizeCommand(
+        {
+          contents: "x",
+          path: "notes.md",
+          root: "/tmp",
+          type: "file.writeText",
+        },
+        client("canvas")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: file:write",
+    });
+    expect(
+      authorizeCommand(
+        { type: "window.close", windowId: "main" },
+        client("canvas")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: window:close",
+    });
+  });
+
+  it("authorizes every canvas host allowlisted command for the canvas client", () => {
+    for (const type of CANVAS_HOST_ALLOWED_COMMANDS) {
+      const result = authorizeCommand(
+        { type } as PierCommand,
+        client("canvas")
+      );
+      expect(result.ok, type).toBe(true);
+    }
+  });
+
+  it("keeps file.openPath readable by capability but off the canvas allowlist", () => {
+    expect(
+      authorizeCommand(
+        { path: "/tmp/a.md", type: "file.openPath" },
+        client("canvas")
+      )
+    ).toEqual({ ok: true });
+    expect(isCanvasHostCommandAllowed("file.openPath")).toBe(false);
   });
 });

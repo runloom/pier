@@ -2,6 +2,8 @@ import i18next from "i18next";
 import { pushHostCopyCatalog } from "@/lib/terminal/push-host-copy-catalog.ts";
 import { FALLBACK_LOCALE, resolveLanguagePreference } from "./language.ts";
 import { en } from "./locales/en/index.ts";
+import { ja } from "./locales/ja/index.ts";
+import { ko } from "./locales/ko/index.ts";
 import { zhCN } from "./locales/zh-CN/index.ts";
 
 let initialized = false;
@@ -35,6 +37,8 @@ export async function initI18n(): Promise<void> {
     resources: {
       "zh-CN": { translation: zhCN },
       en: { translation: en },
+      ja: { translation: ja },
+      ko: { translation: ko },
     },
   });
   const lang = i18next.resolvedLanguage ?? initialLocale;

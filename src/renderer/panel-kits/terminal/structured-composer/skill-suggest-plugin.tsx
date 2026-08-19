@@ -20,6 +20,7 @@ import {
   useState,
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { isImePendingLexicalEnter } from "@/lib/keybindings/is-text-input.ts";
 import { ComposerAutocompletePortal } from "./composer-autocomplete-portal.tsx";
 import { $placeCaretAfterComposerChip } from "./composer-chip-caret.ts";
 import {
@@ -35,6 +36,7 @@ import {
   getSkillSuggestMatch,
   getSkillSuggestNodeReplaceRange,
   preserveSuggestActiveIndex,
+  visibleComposerSkillSuggestItems,
 } from "./composer-skill-suggest.ts";
 import { $plainPrefixToCaret } from "./serialize.ts";
 import { $createSkillMentionNode } from "./skill-mention-node.tsx";
@@ -44,8 +46,10 @@ import {
 } from "./skill-suggest-popup.tsx";
 
 interface SkillMatch {
+  endOffset: number;
   leadOffset: number;
   matchingString: string;
+  skillNamespace: boolean;
   trigger: "/";
 }
 
@@ -80,7 +84,12 @@ export function SkillSuggestPlugin({
   const matchRef = useRef(match);
   matchRef.current = match;
   const itemsRef = useRef(items);
-  itemsRef.current = items;
+  const visibleItems = useMemo(
+    () =>
+      visibleComposerSkillSuggestItems(items, match?.skillNamespace === true),
+    [items, match?.skillNamespace]
+  );
+  itemsRef.current = visibleItems;
   const activeIndexRef = useRef(activeIndex);
   activeIndexRef.current = activeIndex;
   const queryRef = useRef(query);
@@ -105,6 +114,14 @@ export function SkillSuggestPlugin({
 
   useEffect(() => () => client.dispose(), [client]);
 
+  useEffect(() => {
+    if (visibleItems.length === 0) {
+      setActiveIndex(0);
+      return;
+    }
+    setActiveIndex((current) => Math.min(current, visibleItems.length - 1));
+  }, [visibleItems.length]);
+
   useEffect(
     () =>
       editor.registerUpdateListener(({ editorState }) => {
@@ -123,14 +140,19 @@ export function SkillSuggestPlugin({
           }
           // Message-start only on full agent plain text (chips count as content).
           const plainPrefix = $plainPrefixToCaret();
-          if (plainPrefix == null || !getSkillSuggestMatch(plainPrefix)) {
+          const prefixMatch =
+            plainPrefix == null
+              ? null
+              : getSkillSuggestMatch(plainPrefix, agentKind);
+          if (!prefixMatch) {
             setOpen(false);
             setMatch(null);
             return;
           }
           const range = getSkillSuggestNodeReplaceRange(
             node.getTextContent(),
-            selection.anchor.offset
+            selection.anchor.offset,
+            agentKind
           );
           if (!range) {
             setOpen(false);
@@ -138,8 +160,10 @@ export function SkillSuggestPlugin({
             return;
           }
           const found: SkillMatch = {
+            endOffset: range.endOffset,
             leadOffset: range.leadOffset,
             matchingString: range.matchingString,
+            skillNamespace: prefixMatch.skillNamespace,
             trigger: "/",
           };
           setMatch(found);
@@ -150,7 +174,7 @@ export function SkillSuggestPlugin({
           setOpen(true);
         });
       }),
-    [editor]
+    [agentKind, editor]
   );
 
   useEffect(() => {
@@ -196,8 +220,12 @@ export function SkillSuggestPlugin({
         return item;
       },
       onUpdate: (snap) => {
+        const next = visibleComposerSkillSuggestItems(
+          snap.items,
+          matchRef.current?.skillNamespace === true
+        );
         setActiveIndex((prev) =>
-          preserveSuggestActiveIndex(prev, itemsRef.current, snap.items)
+          preserveSuggestActiveIndex(prev, itemsRef.current, next)
         );
         setItems(snap.items);
         setStatus(snap.status);
@@ -228,7 +256,7 @@ export function SkillSuggestPlugin({
         }
         const text = node.getTextContent();
         const start = currentMatch.leadOffset;
-        const end = start + 1 + currentMatch.matchingString.length;
+        const end = currentMatch.endOffset;
         if (start < 0 || end > text.length) {
           return;
         }
@@ -281,7 +309,7 @@ export function SkillSuggestPlugin({
     root.setAttribute("aria-autocomplete", "list");
     root.setAttribute("aria-controls", SKILL_SUGGEST_LISTBOX_ID);
     root.setAttribute("aria-expanded", "true");
-    if (items.length === 0) {
+    if (visibleItems.length === 0) {
       root.removeAttribute("aria-activedescendant");
       return;
     }
@@ -289,7 +317,7 @@ export function SkillSuggestPlugin({
       "aria-activedescendant",
       `terminal-composer-skill-option-${activeIndex}`
     );
-  }, [activeIndex, editor, items.length, open]);
+  }, [activeIndex, editor, open, visibleItems.length]);
 
   useEffect(() => {
     if (!open) {
@@ -325,6 +353,9 @@ export function SkillSuggestPlugin({
       editor.registerCommand(
         KEY_ENTER_COMMAND,
         (event) => {
+          if (isImePendingLexicalEnter(event)) {
+            return true;
+          }
           // Only own Enter when there is something to insert — leave
           // `/model`-style free text and empty catalogs for send/edit.
           if (itemsRef.current.length === 0) {
@@ -377,7 +408,7 @@ export function SkillSuggestPlugin({
     !noAgent &&
     catalogEmpty &&
     status === "done" &&
-    items.length === 0 &&
+    visibleItems.length === 0 &&
     query.trim().length === 0;
 
   return (
@@ -389,7 +420,7 @@ export function SkillSuggestPlugin({
         emptyProject={emptyProject}
         emptyProjectBody={t("terminal.composer.skillEmptyProjectBody")}
         emptyProjectTitle={t("terminal.composer.skillEmptyProjectTitle")}
-        items={items}
+        items={visibleItems}
         noAgent={noAgent}
         noAgentBody={t("terminal.composer.skillNoAgentBody")}
         noAgentTitle={t("terminal.composer.skillNoAgentTitle")}

@@ -8,6 +8,7 @@ import type {
   PierGutterReviewEvent,
 } from "./gutter/gutter-comments.tsx";
 import type { PierHunkActionEvent } from "./hunk-actions.tsx";
+import type { PierDiffViewImageDiff } from "./image-diff/types.ts";
 import type { PierDiffReviewCommentThread, PierDiffViewItem } from "./items.ts";
 import type { PierDiffViewRenderWindow } from "./render-window.ts";
 import type { PierActiveReviewSlot } from "./review/annotation-anchors.ts";
@@ -62,6 +63,11 @@ export interface PierDiffViewProps {
    * 避免仅依赖 React state 时同帧 membership apply 漏 suppress。
    */
   readonly getSuppressMembershipScrollRestore?: () => boolean;
+  /**
+   * Host-owned preview tickets for `kind: "image"` items (GitHub-style
+   * 2-up / swipe / onion). Omit when the view has no image diffs.
+   */
+  readonly imageDiff?: PierDiffViewImageDiff;
   /**
    * 行内评论写操作回调（host 提供）。与 {@link inlineReviewLabels} +
    * {@link inlineReviewThreadById} 同时提供时，激活态的 review annotation

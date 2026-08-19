@@ -69,7 +69,7 @@ class LiveModuleErrorBoundary extends Component<
       return;
     }
     this.reported = true;
-    this.props.onError?.(error);
+    scheduleMountError(this.props.onError, error);
   }
 
   override render(): ReactNode {
@@ -87,19 +87,50 @@ function reportMountError(
   onError?.(error instanceof Error ? error : new Error(String(error)));
 }
 
+/** Notify the host after the canvas root leaves render/commit. */
+function scheduleMountError(
+  onError: ((error: Error) => void) | undefined,
+  error: unknown
+): void {
+  queueMicrotask(() => {
+    reportMountError(onError, error);
+  });
+}
+
+const liveRoots = new WeakMap<HTMLElement, Root>();
+
+function unmountLiveRoot(el: HTMLElement, root: Root): void {
+  if (liveRoots.get(el) !== root) {
+    return;
+  }
+  liveRoots.delete(el);
+  root.unmount();
+}
+
 /**
  * Mount a React component (default-export shape) into `el`.
+ *
+ * `createRoot().render()` is concurrent. Unmounting that root from
+ * `componentDidCatch` / `onUncaughtError` / the same turn as `render()` trips
+ * React's "synchronously unmount a root while React was already rendering"
+ * race and can leave the previous canvas painted.
  */
 export function mountLiveModule(
   el: HTMLElement,
   Comp: ComponentType,
   options: MountLiveModuleOptions = {}
 ): LiveModuleUnmount {
+  const previous = liveRoots.get(el);
+  if (previous) {
+    liveRoots.delete(el);
+    previous.unmount();
+  }
   const root: Root = createRoot(el, {
     onUncaughtError: (error) => {
-      reportMountError(options.onError, error);
+      scheduleMountError(options.onError, error);
     },
   });
+  liveRoots.set(el, root);
   const inner = createElement(Comp);
   const wrapped = options.wrap ? options.wrap(inner) : inner;
   root.render(
@@ -109,8 +140,15 @@ export function mountLiveModule(
       wrapped
     )
   );
+  let closed = false;
   return () => {
-    root.unmount();
+    if (closed) {
+      return;
+    }
+    closed = true;
+    queueMicrotask(() => {
+      unmountLiveRoot(el, root);
+    });
   };
 }
 

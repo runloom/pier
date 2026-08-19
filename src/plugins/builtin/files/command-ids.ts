@@ -61,3 +61,5 @@ export const FILES_MARKDOWN_APPEARANCE_DARK_COMMAND_ID =
   "pier.files.markdown.appearanceDark";
 
 export const FILES_PROJECT_STATUS_ITEM_ID = "pier.files.project";
+/** Tab leading icon for tree-only project panels (must be in builtinPanelTabIcons). */
+export const FILES_PROJECT_TAB_ICON_ID = FILES_PROJECT_STATUS_ITEM_ID;

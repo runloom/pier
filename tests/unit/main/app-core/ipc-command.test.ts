@@ -435,4 +435,75 @@ describe("registerCommandIpc", () => {
     ).rejects.toThrow("invalid command");
     expect(executeMock).not.toHaveBeenCalled();
   });
+
+  it("puts canvas host commands on a canvas client, not desktop-renderer", async () => {
+    const { registerCommandIpc } = await import("@main/ipc/command.ts");
+    const handlers = new Map<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >();
+    const ipcMain = {
+      handle: vi.fn(
+        (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, (...args) => Promise.resolve(handler(...args)));
+        }
+      ),
+    };
+    registerCommandIpc(ipcMain as never);
+    const handler = handlers.get(PIER.CANVAS_COMMAND_EXECUTE);
+    if (!handler) {
+      throw new Error("expected canvas command handler");
+    }
+
+    await handler(testEvent(), { path: "", root: "/tmp", type: "file.list" });
+
+    expect(registerMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "canvas:main",
+        kind: "canvas",
+      })
+    );
+    expect(executeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        clientId: "canvas:main",
+        command: { path: "", root: "/tmp", type: "file.list" },
+      }),
+      expect.anything()
+    );
+  });
+
+  it("denies canvas writes before the command router", async () => {
+    const { registerCommandIpc } = await import("@main/ipc/command.ts");
+    const handlers = new Map<
+      string,
+      (...args: unknown[]) => Promise<unknown>
+    >();
+    const ipcMain = {
+      handle: vi.fn(
+        (channel: string, handler: (...args: unknown[]) => unknown) => {
+          handlers.set(channel, (...args) => Promise.resolve(handler(...args)));
+        }
+      ),
+    };
+    registerCommandIpc(ipcMain as never);
+    const handler = handlers.get(PIER.CANVAS_COMMAND_EXECUTE);
+    if (!handler) {
+      throw new Error("expected canvas command handler");
+    }
+
+    const result = await handler(testEvent(), {
+      contents: "x",
+      path: "notes.md",
+      root: "/tmp",
+      type: "file.writeText",
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        error: expect.objectContaining({ code: "permission_denied" }),
+        ok: false,
+      })
+    );
+    expect(executeMock).not.toHaveBeenCalled();
+  });
 });

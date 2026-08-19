@@ -416,4 +416,24 @@ export interface TerminalCloseOptions {
   reason?: "relaunch" | "workspace" | undefined;
 }
 
+/** 终端历史（transcript 分段落盘）尾部读取请求。 */
+export interface TerminalTranscriptTailRequest {
+  /** 读取上限（UTF-8 字节）；缺省 2MB。 */
+  maxBytes?: number;
+  panelId: string;
+  /** 任务输出面板：定位 `task-{runId}-{taskId}` 转录。 */
+  taskId?: string;
+  /** 任务运行终端：定位 runId 转录。 */
+  taskRunId?: string;
+}
+
+export interface TerminalTranscriptTailResult {
+  error?: string;
+  ok: boolean;
+  text?: string;
+  /** 磁盘上的完整历史体积（截断提示用）。 */
+  totalBytes?: number;
+  truncated?: boolean;
+}
+
 export type { TerminalAPI } from "./terminal/api-surface.ts";

@@ -105,10 +105,16 @@ describe("host-catalog governance", () => {
     }
     expect(hits).toEqual([]);
     expect(
-      readFileSync(join(ROOT, "src", "renderer", "main.tsx"), "utf8")
+      readFileSync(
+        join(ROOT, "src", "renderer", "app", "start-application.tsx"),
+        "utf8"
+      )
     ).toContain("initHostCatalog()");
     expect(
-      readFileSync(join(ROOT, "src", "renderer", "main.tsx"), "utf8")
+      readFileSync(
+        join(ROOT, "src", "renderer", "app", "start-application.tsx"),
+        "utf8"
+      )
     ).not.toContain("initAgentDetection");
   });
 

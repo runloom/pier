@@ -16,6 +16,11 @@ final class TerminalDefaultAppearanceConfigTests: XCTestCase {
                 == true,
             "Pier should let its cursor style settings control the visible default cursor instead of Ghostty shell integration hooks. Rendered config:\n\(configLines.joined(separator: "\n"))"
         )
+        XCTAssertTrue(
+            features?.split(separator: ",").map(String.init).contains("ssh-env")
+                == true,
+            "Interactive ssh should get Ghostty ssh-env so remotes receive xterm-256color instead of xterm-ghostty. Rendered config:\n\(configLines.joined(separator: "\n"))"
+        )
     }
 
     func testDefaultAppearanceThickensBarAndUnderlineCursors() {

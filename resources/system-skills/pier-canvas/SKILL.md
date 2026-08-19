@@ -1,9 +1,10 @@
 ---
 name: pier-canvas
 description: >-
-  Create or update a Pier Canvas under .pier/canvases using pier/canvas and
-  project components. Default mode builds a product overview with content /
-  presentation / ui packs. Use only when explicitly invoked from Pier.
+  Create or update a Pier Canvas under .pier/canvases using pier/canvas,
+  pier/host, and project components. Default mode builds a product overview
+  with content / presentation / ui packs. Use only when explicitly invoked
+  from Pier.
 compatibility: Requires Pier with the pier/canvas React runtime.
 disable-model-invocation: true
 ---
@@ -99,6 +100,12 @@ Project pack override (when present, wins over built-in):
 
 ## Hard boundaries
 
+- Before assembling, look at `.pier/canvases/canvas-kit/canvas-kit.canvas.tsx`
+  and `sdk/*.d.ts`. Only import named exports that already exist in
+  `pier/canvas`. Import commands, events, and snapshots from `pier/host`.
+  The API tab is a capability catalog (`useCanvasFile` plus host domains).
+  Do not invent APIs or import workbench widgets.
+
 - Write outputs only under `.pier/canvases/**` in the current project
   (product default). Preview roots are the full editable list in
   `.pier/live-modules.json` → `contentDirectories` (factory defaults:
@@ -107,7 +114,8 @@ Project pack override (when present, wins over built-in):
   defaults ∪ extras. `/pier-canvas` still creates under `.pier/canvases`
   unless the user explicitly asks otherwise.
 
-- Import React Canvas APIs from `pier/canvas`. Never use `cursor/canvas`.
+- Import React Canvas UI from `pier/canvas`. Import commands from
+  `pier/host`. Never use `cursor/canvas`.
 - Never write to product-private caches such as
   `~/.cursor/projects/**/canvases`.
 - Do not access `window.pier`, Electron, Node.js, IPC, `eval`, or dynamic
@@ -198,7 +206,7 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
      catalogs must look like product UI). Multi-screen mockups use
      `ArtboardStage` + `Artboard`. Frames are fixed pixel viewports (default
      1280×800, clip). Inline `ArtboardStage` is the same fit-all card as
-     `MermaidDiagram` (bordered, in the reading `Frame`, no wheel capture).
+     `Mermaid` (bordered, in the reading `Frame`, no wheel capture).
      Zoom/pan is fullscreen preview only. Do not break the reading column
      out to full width, and do not stack screens as a document.
    - Command inventories: one Accordion list; badge only unfinished items.
@@ -212,6 +220,18 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
 - Establish a clear information hierarchy before decoration.
 - Charts must identify metrics, units, time ranges, and sources.
 - Do not render fabricated data or empty decorative cards.
+- **Mermaid chrome:** flowchart / architecture use `nodes` / `edges`.
+  Architecture / main-loop nodes set `kind`
+  (`actor` | `agent` | `tool` | `artifact` | `external`). State-machine /
+  error-exit nodes set `tone`. Sequence / state / `class` / ER / mindmap
+  use native mermaid `source` (`sequenceDiagram`, `stateDiagram-v2`,
+  `classDiagram`, `erDiagram`, `mindmap`) — do not invent a nodes/edges
+  dialect for `sequence` or class diagrams. Do not paint `tone` as
+  decoration, and do not invent a left color rail. The host writes mermaid
+  flowchart text and paints Pier chrome on slotted nodes. Live
+  DAG / pipeline graphs may also set `status` (trailing run glyph) and
+  `renderNodeContent` (embedded display chrome; reserve `contentHeight`).
+  See [authoring](references/authoring.md) **Mermaid**.
 - Prefer direct layout over unnecessary card stacking.
 - Every user action needs a recognizable UI change or error response.
 - Add `schemaVersion` to adjacent `data.json` files. Data-focused Canvases

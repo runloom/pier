@@ -9,9 +9,11 @@ export const CODE_VIEW_CUSTOM_CSS = `
 ${SCROLLBAR_SYSTEM_CSS}
 
   /*
-   * 正文：浏览器字符级选区（拖选文字蓝块，非整行 data-selected-line）。
+   * 正文：浏览器字符级选区（非整行 data-selected-line）。
    * 行号栏 Pierre 官方已是 user-select:none + 整行选；gutter + 由
    * use-content-selection 拦截，不写行选。
+   * 选区底色走主题原有 --editor-selection-bg（与 CodeMirror 同源），
+   * 不跟品牌主色，也不用 UA / 系统强调色。
    */
   pre,
   [data-code],
@@ -19,6 +21,11 @@ ${SCROLLBAR_SYSTEM_CSS}
   [data-content] {
     -webkit-user-select: text;
     user-select: text;
+  }
+
+  *::selection {
+    background-color: var(--editor-selection-bg);
+    color: inherit;
   }
 
   [data-diffs-header] {
@@ -294,6 +301,65 @@ ${SCROLLBAR_SYSTEM_CSS}
       background-position: -100% 0;
     }
   }
+
+  /*
+   * Image diffs: hide the dummy context line / unused split column so the
+   * file-level annotation (2-up / swipe / onion) is the body.
+   *
+   * Split files keep two 1fr columns even after hiding deletions, so the
+   * compare lands in the left half. Collapse to one column and center the
+   * inner fit-content group in the full file.
+   */
+  :host([data-pier-image-diff]) [data-line]:not([data-line-annotation]) {
+    display: none !important;
+  }
+
+  :host([data-pier-image-diff]) [data-gutter]:not([data-gutter-buffer="annotation"]) {
+    display: none !important;
+  }
+
+  :host([data-pier-image-diff="compare"]) [data-deletions] {
+    display: none !important;
+  }
+
+  :host([data-pier-image-diff="deleted"]) [data-additions] {
+    display: none !important;
+  }
+
+  :host([data-pier-image-diff]) [data-diff-type="split"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :host([data-pier-image-diff]) [data-diff-type="split"][data-overflow="wrap"] {
+    grid-template-columns: var(--diffs-code-grid);
+  }
+
+  :host([data-pier-image-diff]) [data-diff-type="split"] [data-additions],
+  :host([data-pier-image-diff]) [data-diff-type="split"] [data-deletions] {
+    border-inline-width: 0;
+  }
+
+  :host([data-pier-image-diff]) [data-overflow="wrap"] [data-additions] [data-gutter],
+  :host([data-pier-image-diff]) [data-overflow="wrap"] [data-deletions] [data-gutter] {
+    grid-column: 1;
+  }
+
+  :host([data-pier-image-diff]) [data-overflow="wrap"] [data-additions] [data-content],
+  :host([data-pier-image-diff]) [data-overflow="wrap"] [data-deletions] [data-content] {
+    grid-column: 2;
+  }
+
+  :host([data-pier-image-diff]) [data-line-annotation] {
+    padding-inline: 0;
+  }
+
+  :host([data-pier-image-diff]) [data-annotation-content] {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    left: auto;
+    position: relative;
+  }
 `;
 
 /**
@@ -305,6 +371,23 @@ ${SCROLLBAR_SYSTEM_CSS}
  * data-pier-pointer-within; :hover remains a browser fallback.
  */
 export const PIER_DIFF_LIGHT_DOM_CSS = `
+  [data-slot="pier-image-diff"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  [data-slot="pier-image-diff-image"],
+  [data-slot="pier-image-diff-stage"],
+  [data-slot="pier-image-diff-checker"] {
+    background-color: var(--muted);
+    background-image: repeating-conic-gradient(
+      from 90deg at 50% 50%,
+      var(--background) 0% 25%,
+      transparent 0% 50%
+    );
+    background-size: 12px 12px;
+  }
+
   diffs-container[data-pier-file-host] [data-pier-hunk-actions] {
     opacity: 0;
     pointer-events: none;

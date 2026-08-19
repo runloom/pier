@@ -250,6 +250,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
+      id: "pier.git.review.copyPathWithRange",
+      permissions: ["file:read"],
+      title: "Git: Copy Path and Selected Lines",
+    },
+    {
+      category: "Git",
       id: "pier.git.review.revealInFinder",
       permissions: ["file:read"],
       title: "Git: Reveal in Finder",
@@ -309,9 +315,11 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     defaultLocale: "en",
     files: {
       en: "locales/en.json",
+      ja: "locales/ja.json",
+      ko: "locales/ko.json",
       "zh-CN": "locales/zh-CN.json",
     },
-    locales: ["en", "zh-CN"],
+    locales: ["en", "ja", "ko", "zh-CN"],
   },
   name: "Git",
   panels: [

@@ -213,14 +213,26 @@ function releaseSession(root: string, session: GitStatusSession): void {
   sessions.delete(root);
 }
 
+function peekGitStatusSessionState(
+  gitRoot: null | string | undefined
+): GitStatusLoadState {
+  if (!gitRoot) {
+    return LOADING_STATE;
+  }
+  return sessions.get(gitRoot)?.state ?? LOADING_STATE;
+}
+
 /**
- * 分支 / 更改 / 同步状态栏项共用。同一 gitRoot 只建一条 watch。
+ * 分支 / 更改 / 同步状态栏项与审查 tab 共用。同一 gitRoot 只建一条 watch。
+ * 已有 session（例如状态栏先挂载）时 useState 初值即可读到 loaded，避免 tab 先清空再回写。
  */
 export function useGitStatus(
   context: RendererPluginContext,
   gitRoot: null | string | undefined
 ): GitStatusLoadState {
-  const [state, setState] = useState<GitStatusLoadState>(LOADING_STATE);
+  const [state, setState] = useState<GitStatusLoadState>(() =>
+    peekGitStatusSessionState(gitRoot)
+  );
 
   useEffect(() => {
     if (!gitRoot) {

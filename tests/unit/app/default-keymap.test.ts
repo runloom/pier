@@ -211,18 +211,24 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
-  it("copies path and selected lines with Mod+Shift+Alt+C in Files panels", () => {
+  it("copies path and selected lines with Mod+Alt+C in Files and Git review panels", () => {
     expect(
       DEFAULT_KEYMAP.filter(
         (binding) =>
           binding.commandId === "pier.files.copyPathWithRange" ||
-          binding.keys === "Mod+Shift+Alt+KeyC"
+          binding.commandId === "pier.git.review.copyPathWithRange" ||
+          binding.keys === "Mod+Alt+KeyC"
       )
     ).toEqual([
       {
         commandId: "pier.files.copyPathWithRange",
-        keys: "Mod+Shift+Alt+KeyC",
+        keys: "Mod+Alt+KeyC",
         scope: "panel:pier.files.filePanel",
+      },
+      {
+        commandId: "pier.git.review.copyPathWithRange",
+        keys: "Mod+Alt+KeyC",
+        scope: "panel:pier.git.changes",
       },
     ]);
   });

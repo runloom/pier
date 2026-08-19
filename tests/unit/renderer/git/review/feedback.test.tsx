@@ -128,6 +128,31 @@ describe("Git Review feedback", () => {
     expect(screen.getByRole("button", { name: "Details" })).toBeVisible();
   });
 
+  it("暂存区锁争用 Empty 不展示 Git 删锁说明书", () => {
+    render(
+      <ReviewFailureEmpty
+        context={context}
+        failure={{
+          kind: "error",
+          message:
+            "fatal: Unable to create '/repo/.git/index.lock': File exists.",
+          reason: "indexLocked",
+          retryable: true,
+        }}
+        onRetry={vi.fn()}
+        title="Failed to load changes"
+      />
+    );
+
+    expect(
+      screen.getByText(
+        "Another program is updating the Git staging area. Try again in a moment."
+      )
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Details" })).toBeNull();
+    expect(screen.queryByText(/index\.lock/)).toBeNull();
+  });
+
   it("背景 index 刷新失败不弹全局 toast（有 last-good 时静默）", () => {
     const failure = {
       kind: "error" as const,

@@ -1,7 +1,9 @@
 import {
   AUTO_HIDE_SCROLLBAR_IDLE_MS,
+  applyShellScrollbarThickness,
   installAutoHideScrollbar,
   installDocumentAutoHideScrollbars,
+  SHELL_SCROLLBAR_THICKNESS_FALLBACK_PX,
 } from "@pier/ui/auto-hide-scrollbar.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -118,5 +120,23 @@ describe("auto-hide scrollbar behavior", () => {
     scroller.dispatchEvent(new MouseEvent("pointerleave"));
     expect(scroller).not.toHaveAttribute("data-scrollbar-hovering");
     uninstall();
+  });
+
+  it("writes the measured thin gutter onto --shell-scrollbar-width-legacy", () => {
+    const uninstall = installDocumentAutoHideScrollbars(document);
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--shell-scrollbar-width-legacy"
+      )
+    ).toBe(`${SHELL_SCROLLBAR_THICKNESS_FALLBACK_PX}px`);
+    expect(applyShellScrollbarThickness(document)).toBe(
+      `${SHELL_SCROLLBAR_THICKNESS_FALLBACK_PX}px`
+    );
+    uninstall();
+    expect(
+      document.documentElement.style.getPropertyValue(
+        "--shell-scrollbar-width-legacy"
+      )
+    ).toBe("");
   });
 });

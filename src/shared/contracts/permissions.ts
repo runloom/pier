@@ -5,6 +5,7 @@ export const pierClientKindSchema = z.enum([
   "cli-local",
   "mcp-local",
   "mobile-paired",
+  "canvas",
 ]);
 
 export const pierCapabilitySchema = z.enum([
@@ -28,6 +29,10 @@ export const pierCapabilitySchema = z.enum([
   "panel:control",
   "terminal:read",
   "terminal:control",
+  /**
+   * Official plugin spawn decoration. Manifest-only; not a client-kind default.
+   */
+  "terminal:launchWrap",
   "plugin:read",
   "plugin:write",
   "command:register",
@@ -167,6 +172,20 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "panel:control",
     "terminal:read",
     "terminal:control",
+    "notification:read",
+  ],
+  canvas: [
+    "app:read",
+    "environment:read",
+    "preferences:read",
+    "workspace:read",
+    "worktree:read",
+    "window:read",
+    "panel:read",
+    "terminal:read",
+    "plugin:read",
+    "git:read",
+    "file:read",
     "notification:read",
   ],
 };

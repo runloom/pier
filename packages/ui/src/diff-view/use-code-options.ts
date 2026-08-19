@@ -29,6 +29,12 @@ import {
   type PierHunkActionEvent,
   type PierHunkActionLabels,
 } from "./hunk-actions.tsx";
+import { renderImageDiffAnnotation } from "./image-diff/host.tsx";
+import {
+  clearImageDiffHost,
+  syncImageDiffHost,
+} from "./image-diff/sync-host.ts";
+import type { PierDiffViewImageDiff } from "./image-diff/types.ts";
 import type { DiffViewInputStore } from "./input-store.ts";
 import type { PierDiffReviewCommentThread } from "./items.ts";
 import {
@@ -115,6 +121,7 @@ export function useDiffViewCodeOptions(options: {
   readonly onGutterReviewActivate?: (event: PierGutterReviewEvent) => void;
   readonly onHunkAction?: (event: PierHunkActionEvent) => void;
   readonly overflow: "wrap" | "scroll";
+  readonly imageDiff?: PierDiffViewImageDiff;
   /** itemId → 该文件 diff 行内评论线程（host 投影后注入）；缺省无评论入口。 */
   readonly reviewCommentsById?: ReadonlyMap<
     string,
@@ -158,6 +165,7 @@ export function useDiffViewCodeOptions(options: {
     onGutterReviewActivate,
     onHunkAction,
     overflow,
+    imageDiff,
     reviewCommentsById,
     scheduleRenderWindowReport,
     inlineReviewHandlers,
@@ -253,6 +261,7 @@ export function useDiffViewCodeOptions(options: {
           fileHoverHostsRef.current.delete(itemId);
           syncEstimateSkeleton(element, false);
           syncPathTitleChrome(element, true);
+          clearImageDiffHost(element);
         } else {
           markRendered(itemId, context.version, element);
           // 每帧重标 host：Pierre 可能复用 element 但清掉 attribute；
@@ -268,6 +277,13 @@ export function useDiffViewCodeOptions(options: {
             context.item.type === "diff"
               ? context.item.fileDiff.cacheKey
               : undefined;
+          syncImageDiffHost(
+            element,
+            cacheKey,
+            context.item.type === "diff"
+              ? context.item.fileDiff.type
+              : undefined
+          );
           const isEstimate =
             typeof cacheKey === "string" && cacheKey.startsWith("estimate:");
           if (isEstimate) {
@@ -314,6 +330,7 @@ export function useDiffViewCodeOptions(options: {
               element.removeAttribute("data-pier-file-path");
               element.removeAttribute(PIER_DIFF_ESTIMATE_ATTR);
               element.removeAttribute("data-pier-pointer-within");
+              clearImageDiffHost(element);
               syncEstimateSkeleton(element, false);
               syncPathTitleChrome(element, true);
             });
@@ -374,6 +391,10 @@ export function useDiffViewCodeOptions(options: {
       item: { readonly id: string }
     ): ReactNode => {
       const metadata = annotation.metadata;
+      const imageNode = renderImageDiffAnnotation(metadata, imageDiff);
+      if (imageNode !== undefined) {
+        return imageNode;
+      }
       const reviewNode = renderReviewAnnotation(metadata, {
         driftCommentLabels,
         handlers: inlineReviewHandlers,
@@ -398,6 +419,7 @@ export function useDiffViewCodeOptions(options: {
     [
       driftCommentLabels,
       hunkActionLabels,
+      imageDiff,
       inlineReviewHandlers,
       inlineReviewLabels,
       inlineReviewThreadById,

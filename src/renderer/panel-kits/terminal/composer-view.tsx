@@ -211,11 +211,6 @@ export function TerminalComposerView({
             useTerminalStore.getState().activateOverlay(overlayId);
           }}
           onKeyDown={(event) => {
-            if (event.nativeEvent.isComposing) {
-              composingRef.current = true;
-            } else {
-              composingRef.current = false;
-            }
             onKeyDown(event);
             if (!composingRef.current) {
               const el =

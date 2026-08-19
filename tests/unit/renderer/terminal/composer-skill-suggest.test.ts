@@ -27,6 +27,7 @@ import {
   getSkillSuggestMatch,
   getSkillSuggestNodeReplaceRange,
   preserveSuggestActiveIndex,
+  visibleComposerSkillSuggestItems,
 } from "@/panel-kits/terminal/structured-composer/composer-skill-suggest.ts";
 
 const EMPTY_SNAPSHOT = {
@@ -96,6 +97,8 @@ describe("skillInvokePrefix", () => {
     expect(skillInvokePrefix("cursor")).toBe("/");
     expect(skillInvokeText("codex", "prd")).toBe("$prd");
     expect(skillInvokeText("claude", "code-review")).toBe("/code-review");
+    expect(skillInvokeText("omp", "pier-canvas")).toBe("/skill:pier-canvas");
+    expect(skillInvokeText("pi", "pier-canvas")).toBe("/skill:pier-canvas");
   });
 
   it("returns null for missing agent, empty id, or unsupported agents", () => {
@@ -111,14 +114,17 @@ describe("getSkillSuggestMatch", () => {
   it("matches / only at message start (optional leading whitespace)", () => {
     expect(getSkillSuggestMatch("/")).toEqual({
       matchingString: "",
+      skillNamespace: false,
       trigger: "/",
     });
     expect(getSkillSuggestMatch("/prd")).toEqual({
       matchingString: "prd",
+      skillNamespace: false,
       trigger: "/",
     });
     expect(getSkillSuggestMatch("  /code")).toEqual({
       matchingString: "code",
+      skillNamespace: false,
       trigger: "/",
     });
     // Mid-message slash is free text — agent force-invoke is turn-start only.
@@ -131,17 +137,49 @@ describe("getSkillSuggestMatch", () => {
   it("matches Goose progressive /skills [id] form", () => {
     expect(getSkillSuggestMatch("/skills")).toEqual({
       matchingString: "",
+      skillNamespace: true,
       trigger: "/",
     });
     expect(getSkillSuggestMatch("/skills ")).toEqual({
       matchingString: "",
+      skillNamespace: true,
       trigger: "/",
     });
     expect(getSkillSuggestMatch("/skills pier")).toEqual({
       matchingString: "pier",
+      skillNamespace: true,
       trigger: "/",
     });
     expect(getSkillSuggestMatch("use /skills x")).toBeNull();
+  });
+
+  it("matches OMP/Pi progressive /skill: form", () => {
+    expect(getSkillSuggestMatch("/skill:", "omp")).toEqual({
+      matchingString: "",
+      skillNamespace: true,
+      trigger: "/",
+    });
+    expect(getSkillSuggestMatch("/skill:pier", "pi")).toEqual({
+      matchingString: "pier",
+      skillNamespace: true,
+      trigger: "/",
+    });
+    expect(getSkillSuggestMatch("/skill", "omp")).toEqual({
+      matchingString: "",
+      skillNamespace: true,
+      trigger: "/",
+    });
+    // Claude `/skill` is a query token (e.g. skill-creator), not a namespace.
+    expect(getSkillSuggestMatch("/skill", "claude")).toEqual({
+      matchingString: "skill",
+      skillNamespace: false,
+      trigger: "/",
+    });
+    // Command Code `/skill:name` must PTY-passthrough (collision bypass).
+    expect(getSkillSuggestMatch("/skill:plan", "command-code")).toBeNull();
+    expect(getSkillSuggestMatch("/skill:", "claude")).toBeNull();
+    expect(getSkillSuggestMatch("/skill:foo")).toBeNull();
+    expect(getSkillSuggestMatch("use /skill:x", "omp")).toBeNull();
   });
 
   it("does not match mid-path or @/# triggers", () => {
@@ -176,6 +214,27 @@ describe("getSkillSuggestNodeReplaceRange", () => {
       leadOffset: 0,
       matchingString: "",
     });
+  });
+
+  it("replaces OMP/Pi /skill: span through the caret", () => {
+    expect(getSkillSuggestNodeReplaceRange("/skill:pier", 11, "omp")).toEqual({
+      endOffset: 11,
+      leadOffset: 0,
+      matchingString: "pier",
+    });
+    expect(getSkillSuggestNodeReplaceRange("/skill:", 7, "pi")).toEqual({
+      endOffset: 7,
+      leadOffset: 0,
+      matchingString: "",
+    });
+    expect(getSkillSuggestNodeReplaceRange("/skill", 6, "omp")).toEqual({
+      endOffset: 6,
+      leadOffset: 0,
+      matchingString: "",
+    });
+    expect(
+      getSkillSuggestNodeReplaceRange("/skill:plan", 11, "command-code")
+    ).toBeNull();
   });
 
   it("rejects mid-token caret and non-start slash tokens", () => {
@@ -724,6 +783,28 @@ describe("preserveSuggestActiveIndex", () => {
   it("returns 0 when the next list is empty", () => {
     expect(preserveSuggestActiveIndex(1, prev, [])).toBe(0);
   });
+
+  it("drops builtin commands in a skill namespace before preserve", () => {
+    const catalog = [
+      {
+        description: "",
+        id: "plan",
+        invokeText: "/plan",
+        label: "plan",
+        source: "builtin-command" as const,
+      },
+      {
+        description: "",
+        id: "pier-canvas",
+        invokeText: "/skill:pier-canvas",
+        label: "pier-canvas",
+        source: "project" as const,
+      },
+    ];
+    const visible = visibleComposerSkillSuggestItems(catalog, true);
+    expect(visible.map((item) => item.id)).toEqual(["pier-canvas"]);
+    expect(preserveSuggestActiveIndex(0, visible, visible)).toBe(0);
+  });
 });
 
 describe("listBundledSkills", () => {
@@ -776,6 +857,16 @@ describe("builtin command catalog", () => {
       listBuiltinCommands("cursor").some((c) => c.id === "summarize")
     ).toBe(true);
     expect(listBuiltinCommands("droid").some((c) => c.id === "btw")).toBe(true);
+    expect(listBuiltinCommands("omp").some((c) => c.id === "plan")).toBe(true);
+    expect(listBuiltinCommands("omp").some((c) => c.id === "handoff")).toBe(
+      true
+    );
+    expect(listBuiltinCommands("pi").some((c) => c.id === "compact")).toBe(
+      true
+    );
+    expect(
+      listBuiltinCommands("command-code").some((c) => c.id === "plan")
+    ).toBe(true);
     expect(listBuiltinCommands("codebuddy").some((c) => c.id === "btw")).toBe(
       true
     );
@@ -821,6 +912,69 @@ describe("builtin command catalog", () => {
         source: "builtin-command",
       })
     );
+  });
+
+  it("lists omp built-in slash commands on empty disk", () => {
+    const items = buildComposerSkillSuggestItems(EMPTY_SNAPSHOT, "omp");
+    const commands = items.filter((item) => item.source === "builtin-command");
+    expect(commands.map((item) => item.invokeText).sort()).toEqual([
+      "/btw",
+      "/compact",
+      "/handoff",
+      "/loop",
+      "/new",
+      "/plan",
+      "/retry",
+    ]);
+  });
+
+  it("inserts OMP/Pi skills as /skill:id, not bare /id", () => {
+    const snapshot = {
+      skills: [
+        managed({
+          id: "pier-canvas",
+          name: "pier-canvas",
+          effects: [
+            {
+              agentKind: "omp",
+              effect: { state: "discoverable", viaRoot: ".agents/skills" },
+            },
+            {
+              agentKind: "pi",
+              effect: { state: "discoverable", viaRoot: ".agents/skills" },
+            },
+          ],
+        }),
+      ],
+      unmanagedSkills: [],
+      userGlobalSkills: [],
+    };
+    const omp = buildComposerSkillSuggestItems(snapshot, "omp", noBundled).find(
+      (item) => item.id === "pier-canvas"
+    );
+    expect(omp).toEqual(
+      expect.objectContaining({
+        invokeText: "/skill:pier-canvas",
+        source: "project",
+      })
+    );
+    const pi = buildComposerSkillSuggestItems(snapshot, "pi", noBundled).find(
+      (item) => item.id === "pier-canvas"
+    );
+    expect(pi?.invokeText).toBe("/skill:pier-canvas");
+  });
+
+  it("lists pi and command-code documented commands on empty disk", () => {
+    expect(
+      listBuiltinCommands("pi")
+        .map((c) => c.id)
+        .sort()
+    ).toEqual(["clone", "compact", "fork", "new", "reload"]);
+    expect(
+      listBuiltinCommands("command-code")
+        .map((c) => c.id)
+        .sort()
+    ).toEqual(["clear", "clone", "compact", "fork", "init", "plan", "review"]);
   });
 
   it("lists built-in commands before skills, each group sorted by id", () => {

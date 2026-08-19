@@ -55,6 +55,7 @@ describe("useLspPreferencesStore", () => {
       idleReleaseMs: 900_000,
       maxLocalWorkspaces: 6,
       maxRemoteWorkspaces: 4,
+      memoryBudgetMb: 4096,
       worktreesEnabled: true,
     };
     readMock.mockResolvedValue(snapshot(policy));
@@ -72,6 +73,7 @@ describe("useLspPreferencesStore", () => {
       idleReleaseMs: 900_000,
       maxLocalWorkspaces: 6,
       maxRemoteWorkspaces: 4,
+      memoryBudgetMb: 4096,
       worktreesEnabled: true,
     };
     useLspPreferencesStore.getState()._hydrate(policy);

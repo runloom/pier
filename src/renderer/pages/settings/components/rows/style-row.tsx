@@ -18,7 +18,7 @@ export function StyleRow() {
       }}
       options={STYLE_PRESET_OPTIONS.map((o) => ({
         value: o.value,
-        label: t(o.labelKey),
+        label: o.label,
       }))}
       triggerWidth="w-[180px]"
       value={stylePresetId}

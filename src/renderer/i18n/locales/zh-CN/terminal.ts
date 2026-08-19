@@ -117,6 +117,15 @@ export const terminal = {
         review: "审查一个拉取请求",
         clear: "开始全新对话",
       },
+      "command-code": {
+        plan: "进入计划模式，可附带待规划任务",
+        compact: "压缩对话历史",
+        clear: "清空对话并开始新会话",
+        init: "为本项目初始化 AGENTS.md",
+        review: "审查一个拉取请求",
+        fork: "把当前对话分叉成新会话",
+        clone: "把当前分支复制到新会话",
+      },
       codex: {
         plan: "切换到计划模式，可附带提示词",
         btw: "开启临时旁聊，聚焦跟进一个问题",
@@ -177,6 +186,15 @@ export const terminal = {
         init: "分析代码库并生成 AGENTS.md",
         clear: "清空会话内容",
       },
+      omp: {
+        plan: "切换计划模式，智能体先起草再执行",
+        btw: "快速旁问，不写入主对话记录",
+        compact: "总结较早对话，可指定关注点",
+        new: "开始新会话",
+        retry: "失败后重试上一轮输入",
+        loop: "循环执行直到完成或超出额度",
+        handoff: "写一份收尾说明并结束本轮",
+      },
       opencode: {
         init: "创建或更新项目说明文件 AGENTS.md",
         compact: "压缩当前会话内容",
@@ -184,6 +202,13 @@ export const terminal = {
         undo: "撤销上一条消息并回滚其文件改动",
         redo: "重做先前撤销的消息",
         share: "通过公开链接分享当前会话",
+      },
+      pi: {
+        new: "开始新会话",
+        compact: "总结较早内容，可指定关注点",
+        fork: "从先前的用户消息开启新会话",
+        clone: "把当前分支复制到新会话",
+        reload: "重新加载快捷键、扩展、技能与说明文件",
       },
       "qwen-code": {
         plan: "进入计划模式，可附带待规划任务",
@@ -321,8 +346,20 @@ export const terminal = {
         submitUnavailableBody: "请先打开智能体对话，然后再试。",
         title: "评论",
       },
+      history: {
+        title: "终端历史",
+      },
     },
     manage: "管理状态栏…",
+  },
+  history: {
+    dialogTitle: "终端完整历史",
+    emptyBody: "终端产生输出后，这里会保留完整记录（含重启前的历史）。",
+    emptyTitle: "还没有历史记录",
+    loadFailedBody: "请稍后重试。",
+    loadFailedTitle: "无法读取终端历史",
+    open: "查看完整历史",
+    truncatedNotice: "完整历史共 {{totalMb}} MB，此处显示最近的部分。",
   },
   /**
    * Ghostty / native 宿主文案（见 ghostty-host-copy 目录）。

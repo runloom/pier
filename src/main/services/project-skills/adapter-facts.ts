@@ -407,16 +407,19 @@ export const SKILL_DISCOVERY_ADAPTERS: readonly SkillDiscoveryAdapter[] = [
   },
   {
     agentKind: "omp",
-    // Provider priorities: native .omp > claude > codex > github.
+    // Provider priority (highest first): native .omp > claude > agents
+    // (Pier default projection) > codex > github.
     discoveryRoots: [
       ".omp/skills",
       ".claude/skills",
+      ".agents/skills",
       ".codex/skills",
       ".github/skills",
     ],
     userDiscoveryRoots: [
       "~/.omp/agent/skills",
       "~/.claude/skills",
+      "~/.agents/skills",
       "~/.codex/skills",
     ],
     walkUpToRepoRoot: false,
@@ -424,9 +427,11 @@ export const SKILL_DISCOVERY_ADAPTERS: readonly SkillDiscoveryAdapter[] = [
     duplicateSemantics: "priority-override",
     duplicatePolicy: "report",
     sessionRefresh: "new-session-recommended",
-    probeCaveats: [],
+    probeCaveats: [
+      "Force-invoke is /skill:<name> (enableSkillCommands); L1 inserts that form, not bare /name",
+    ],
     officialDocsUrl: "https://omp.sh/docs/skills",
-    verifiedOn: "2026-07-20",
+    verifiedOn: "2026-08-19",
   },
   ...EXTENDED_SKILL_DISCOVERY_ADAPTERS,
   ...AUDIT_ONLY_SKILL_DISCOVERY_ADAPTERS,

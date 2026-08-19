@@ -5,13 +5,20 @@ import { Fragment, type ReactNode } from "react";
 import type { MarkdownBlock } from "../ir.ts";
 import type { MarkdownIrCommentsChrome } from "./ir-types.ts";
 import { MarkdownCommentBlockShell } from "./preview-block.tsx";
-import { blockCommentKey, contentHashForBlock } from "./target.ts";
+import {
+  blockCommentKey,
+  contentHashForBlock,
+  markdownCommentMarkerIndexes,
+} from "./target.ts";
 
 export function wrapBlocksWithComments(
   blocks: readonly MarkdownBlock[],
   renderBlock: (block: MarkdownBlock) => ReactNode,
   comments: MarkdownIrCommentsChrome | undefined
 ): ReactNode[] {
+  const markerIndexes = comments
+    ? markdownCommentMarkerIndexes(blocks, comments.locatedByBlockKey)
+    : null;
   return blocks.map((block) => {
     const content = renderBlock(block);
     const key = `${block.kind}-${block.range.startOffset}-${block.range.endOffset}`;
@@ -35,6 +42,7 @@ export function wrapBlocksWithComments(
         handlers={comments.handlers}
         key={key}
         labels={comments.labels}
+        markerIndex={markerIndexes?.get(blockKey) ?? 0}
         onOpenDraft={() => comments.onOpenDraft(blockKey)}
         requestOpenBlockKey={comments.requestOpenBlockKey}
         requestOpenNonce={comments.requestOpenNonce}

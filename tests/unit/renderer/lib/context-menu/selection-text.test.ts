@@ -69,5 +69,8 @@ describe("selection-text", () => {
     expect(hasSpecializedEditPipelineSurface("files/markdown-preview")).toBe(
       false
     );
+    expect(hasSpecializedEditPipelineSurface("files/canvas-preview")).toBe(
+      false
+    );
   });
 });

@@ -4,6 +4,8 @@
  * | Agent family | Insert form | Notes |
  * |--------------|-------------|--------|
  * | Codex        | `$skill-id` | CLI custom skills; `/` is for commands |
+ * | Goose        | `/skills id` | Official using-skills |
+ * | OMP / Pi     | `/skill:id` | enableSkillCommands namespace |
  * | Claude / most skill TUIs | `/skill-id` | Official slash invoke |
  *
  * Only agents with **verified** skill force-invoke support get a prefix.
@@ -32,6 +34,7 @@ const DOLLAR_INVOKE_AGENTS = new Set<string>(["codex"]);
  * Intentionally absent (no native force-invoke catalog):
  * aider, continue, hermes, amp/crush (palette), and any unknown kind.
  * goose: not bare `/id` — uses `/skills <name>` (handled in skillInvokeText).
+ * omp / pi: not bare `/id` — uses `/skill:<name>` (handled in skillInvokeText).
  */
 const SLASH_INVOKE_AGENTS = new Set<string>([
   "ante",
@@ -65,6 +68,13 @@ const SLASH_INVOKE_AGENTS = new Set<string>([
 ]);
 
 /**
+ * Official force-invoke is `/skill:<name>` (Pi / OMP skill commands).
+ * Prefix remains `/` so L1 still lists skills; {@link skillInvokeText} emits
+ * the namespaced form.
+ */
+const SKILL_COLON_INVOKE_AGENTS = new Set<string>(["omp", "pi"]);
+
+/**
  * Prefix for the running agent. Unknown / unsupported / missing → null
  * (caller skips skill rows; commands use a separate path).
  *
@@ -96,6 +106,23 @@ export function agentSupportsSkillForceInvoke(
   return skillInvokePrefix(agentKind) != null;
 }
 
+/** Sorted slash-style skill force-invoke kinds (excludes goose / `$` Codex). */
+export function listSlashSkillInvokeAgentKinds(): readonly string[] {
+  return [...SLASH_INVOKE_AGENTS].sort((a, b) => a.localeCompare(b));
+}
+
+/**
+ * True when this agent force-invokes skills as `/skill:<id>` (OMP, Pi).
+ * Used by Enhanced Input matching so `/skill:` stays a live query prefix.
+ */
+export function agentUsesSkillColonInvoke(
+  agentKind: string | null | undefined
+): boolean {
+  return (
+    typeof agentKind === "string" && SKILL_COLON_INVOKE_AGENTS.has(agentKind)
+  );
+}
+
 /** Full invoke text, e.g. `/code-review`, `$prd`, or goose `/skills id`. */
 export function skillInvokeText(
   agentKind: string | null | undefined,
@@ -107,6 +134,10 @@ export function skillInvokeText(
   // Goose CLI: `/skills <name>` loads skill(s) by name (official using-skills).
   if (agentKind === "goose") {
     return `/skills ${skillId}`;
+  }
+  // Pi / OMP: `/skill:name` (enableSkillCommands); bare `/name` is a command.
+  if (agentUsesSkillColonInvoke(agentKind)) {
+    return `/skill:${skillId}`;
   }
   const prefix = skillInvokePrefix(agentKind);
   if (prefix == null) {

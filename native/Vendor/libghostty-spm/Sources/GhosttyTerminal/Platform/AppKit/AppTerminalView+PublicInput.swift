@@ -22,7 +22,12 @@
         /// Returns false when the surface has not been created yet.
         @discardableResult
         public func sendText(_ text: String) -> Bool {
-            surface?.sendText(text) ?? false
+            sendText(Data(text.utf8))
+        }
+
+        @discardableResult
+        public func sendText(_ data: Data) -> Bool {
+            surface?.sendText(data) ?? false
         }
 
         /// Inject a synthetic key press+release (AppKit virtual keycode).
@@ -51,7 +56,8 @@
             }
             let pressOk: Bool
             if let text, !text.isEmpty {
-                pressOk = text.withCString { ptr in
+                pressOk = text.utf8CString.withUnsafeBufferPointer { buf in
+                    guard let ptr = buf.baseAddress else { return false }
                     press.text = ptr
                     return surface.sendKeyEvent(press)
                 }

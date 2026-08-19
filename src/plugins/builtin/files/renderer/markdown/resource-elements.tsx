@@ -37,31 +37,62 @@ interface ResolvedRelativeResource {
 }
 
 const ABSOLUTE_SCHEME_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:/u;
+const ASCII_WHITESPACE_MAX_CODE = 0x20;
+
+export type MarkdownUrlClassification =
+  | { href: string; kind: "https" }
+  | { href: string; kind: "relative" }
+  | { href: string; kind: "hash" }
+  | { href: ""; kind: "unsafe" };
+
+export function compactMarkdownUrl(value: string): string {
+  let compacted = "";
+  for (const char of value) {
+    if (char.charCodeAt(0) > ASCII_WHITESPACE_MAX_CODE && !/\s/u.test(char)) {
+      compacted += char;
+    }
+  }
+  return compacted;
+}
+
+export function classifyMarkdownUrl(
+  value: string | null | undefined
+): MarkdownUrlClassification {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return { href: "", kind: "unsafe" };
+  const compact = compactMarkdownUrl(trimmed);
+  if (!compact || compact.startsWith("//")) {
+    return { href: "", kind: "unsafe" };
+  }
+  if (ABSOLUTE_SCHEME_PATTERN.test(compact)) {
+    try {
+      const parsed = new URL(compact);
+      if (parsed.protocol === "https:" && parsed.hostname) {
+        return { href: compact, kind: "https" };
+      }
+    } catch {
+      return { href: "", kind: "unsafe" };
+    }
+    return { href: "", kind: "unsafe" };
+  }
+  if (trimmed.startsWith("#")) {
+    return { href: trimmed, kind: "hash" };
+  }
+  return { href: trimmed, kind: "relative" };
+}
 
 export function safeMarkdownUrl(value: string | null | undefined): string {
-  const trimmedValue = value?.trim();
-  if (!trimmedValue) return "";
-  if (!ABSOLUTE_SCHEME_PATTERN.test(trimmedValue)) return trimmedValue;
-  try {
-    const parsed = new URL(trimmedValue);
-    return parsed.protocol === "https:" && parsed.hostname ? trimmedValue : "";
-  } catch {
-    return "";
-  }
+  const classified = classifyMarkdownUrl(value);
+  return classified.kind === "unsafe" ? "" : classified.href;
 }
 
 export function resolveRelativeMarkdownResource(
   sourcePath: string,
   value: string
 ): ResolvedRelativeResource | null {
-  const trimmed = value.trim();
-  if (
-    !trimmed ||
-    ABSOLUTE_SCHEME_PATTERN.test(trimmed) ||
-    trimmed.startsWith("//")
-  ) {
-    return null;
-  }
+  const classified = classifyMarkdownUrl(value);
+  if (classified.kind !== "relative") return null;
+  const trimmed = classified.href;
   const hashIndex = trimmed.indexOf("#");
   const beforeHash = hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed;
   const fragmentValue = hashIndex >= 0 ? trimmed.slice(hashIndex + 1) : "";
@@ -110,16 +141,17 @@ export function MarkdownResourceLink({
   onOpenInternal: ((target: MarkdownInternalTarget) => void) | undefined;
   source: MarkdownDiskSource | undefined;
 }) {
-  const externalUrl = ABSOLUTE_SCHEME_PATTERN.test(inline.url)
-    ? safeMarkdownUrl(inline.url)
-    : "";
-  const relative = source
-    ? resolveRelativeMarkdownResource(source.path, inline.url)
-    : null;
-  const anchor = inline.url.startsWith("#") ? inline.url.slice(1) : null;
+  const classified = classifyMarkdownUrl(inline.url);
+  const externalUrl = classified.kind === "https" ? classified.href : "";
+  const relative =
+    classified.kind === "relative" && source
+      ? resolveRelativeMarkdownResource(source.path, classified.href)
+      : null;
+  const anchor = classified.kind === "hash" ? classified.href.slice(1) : null;
   const actionable = Boolean(
     externalUrl || anchor !== null || (relative && onOpenInternal)
   );
+  const href = actionable ? classified.href : undefined;
   const activate = () => {
     if (externalUrl) {
       onOpenExternal(externalUrl);
@@ -144,7 +176,7 @@ export function MarkdownResourceLink({
     <a
       aria-disabled={actionable ? undefined : "true"}
       className="md-link"
-      href={actionable ? inline.url : undefined}
+      href={href}
       onAuxClick={onAuxClick}
       onClick={onClick}
       title={inline.title ?? undefined}

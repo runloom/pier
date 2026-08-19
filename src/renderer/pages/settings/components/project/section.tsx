@@ -31,8 +31,8 @@ import { ProjectsSectionList } from "./section-list.tsx";
 
 /**
  * Unified project settings shell: shared project list, then Environment /
- * Skills / MCP / General (Rules deferred). Domain logic stays in environment +
- * skills + MCP modules.
+ * Skills / MCP / General (Rules deferred). Canvas materials are a kit
+ * canvas, not a settings tab.
  */
 export function ProjectsSection() {
   const t = useT();
@@ -46,6 +46,7 @@ export function ProjectsSection() {
 
   const projectsTab = useSettingsDialogStore((s) => s.projectsTab);
   const setProjectsTab = useSettingsDialogStore((s) => s.setProjectsTab);
+  const projectsFocusHome = useSettingsDialogStore((s) => s.projectsFocusHome);
   const projectsFocusPath = useSettingsDialogStore((s) => s.projectsFocusPath);
   const clearProjectsFocusPath = useSettingsDialogStore(
     (s) => s.clearProjectsFocusPath
@@ -83,10 +84,7 @@ export function ProjectsSection() {
       if (!target) return;
       const isPierHome = target.kind === "pier-home";
       const nextKind = isPierHome ? "pier-home" : "project";
-      const kindChanged =
-        selectedKindRef.current !== null &&
-        selectedKindRef.current !== nextKind;
-      if (kindChanged || !isTabAllowedForProject(projectsTab, isPierHome)) {
+      if (!isTabAllowedForProject(projectsTab, isPierHome)) {
         setProjectsTab(defaultTabFor(isPierHome));
       }
       selectedKindRef.current = nextKind;
@@ -96,6 +94,18 @@ export function ProjectsSection() {
   );
 
   useEffect(() => {
+    if (projectsFocusHome) {
+      const home = projects.find((p) => p.kind === "pier-home");
+      if (home) {
+        focusProject(home.projectRootPath);
+        clearProjectsFocusPath();
+        return;
+      }
+      if (hydration !== "pending") {
+        clearProjectsFocusPath();
+      }
+      return;
+    }
     if (projectsFocusPath) {
       if (projects.some((p) => p.projectRootPath === projectsFocusPath)) {
         focusProject(projectsFocusPath);
@@ -117,8 +127,10 @@ export function ProjectsSection() {
     activeProjectRootPath,
     clearProjectsFocusPath,
     focusProject,
+    hydration,
     initializedFromActive,
     projects,
+    projectsFocusHome,
     projectsFocusPath,
     selected,
   ]);

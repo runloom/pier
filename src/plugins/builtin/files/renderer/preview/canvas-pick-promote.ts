@@ -81,7 +81,9 @@ export function defaultPickDepth(
         continue;
       }
       if (el.matches(INTERACTIVE_SELECTOR)) {
-        if (el.closest("[data-slot='mermaid-diagram']")) {
+        // Interactive chrome inside a mermaid surface (zoom strip, expand)
+        // is not the annotation unit — the graph surface is.
+        if (el.closest("[data-slot='mermaid']")) {
           const surface = chain.findIndex((node) =>
             isPreferableProductSurface(node)
           );
@@ -91,6 +93,14 @@ export function defaultPickDepth(
         }
         return i;
       }
+    }
+  }
+
+  // Alert / mermaid: annotate the unit, not inner chrome (title, body, icon).
+  if (leaf && !leaf.matches(INTERACTIVE_SELECTOR)) {
+    const surface = chain.findIndex((node) => isPreferableProductSurface(node));
+    if (surface >= 0) {
+      return surface;
     }
   }
 
@@ -121,7 +131,10 @@ function isInnerMediaHost(el: HTMLElement): boolean {
 /** Outer product chrome users expect to annotate (not inner svg/canvas hosts). */
 function isPreferableProductSurface(el: HTMLElement): boolean {
   const slot = el.getAttribute("data-slot")?.trim() ?? "";
-  if (slot === "mermaid-diagram") {
+  if (slot === "mermaid" || slot === "alert") {
+    return true;
+  }
+  if (el.getAttribute("role") === "alert" && !slot.startsWith("alert-")) {
     return true;
   }
   if (

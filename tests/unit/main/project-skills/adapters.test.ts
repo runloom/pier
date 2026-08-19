@@ -196,6 +196,28 @@ describe("project-skills discovery adapters", { timeout: 30_000 }, () => {
     expect(createSkillDiscoveryAdapterRegistry().isApplicable("droid")).toBe(
       true
     );
+
+    expect(byKind.get("omp")).toMatchObject({
+      agentKind: "omp",
+      discoveryRoots: [
+        ".omp/skills",
+        ".claude/skills",
+        ".agents/skills",
+        ".codex/skills",
+        ".github/skills",
+      ],
+      userDiscoveryRoots: [
+        "~/.omp/agent/skills",
+        "~/.claude/skills",
+        "~/.agents/skills",
+        "~/.codex/skills",
+      ],
+      consumesProjectSkills: true,
+      duplicateSemantics: "priority-override",
+    } satisfies Partial<SkillDiscoveryAdapter>);
+    expect(createSkillDiscoveryAdapterRegistry().isApplicable("omp")).toBe(
+      true
+    );
   });
 
   it("PIER_DISCOVERY_CHANNELS matches consuming adapters that scan each root", async () => {

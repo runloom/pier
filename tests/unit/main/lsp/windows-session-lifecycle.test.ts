@@ -74,7 +74,6 @@ describe("Windows LSP setup failure lifecycle", () => {
     const policyReleased = Promise.withResolvers<void>();
     let treeTerminalState: "pending" | "resolved" | "rejected" = "pending";
     const session = host.ensure({
-      clientRole: "editor",
       launch: { args: [], command: "fake-ls", cwd: "C:\\repo" },
       onClose: (event, treeTerminal) => {
         treeTerminalReceived.resolve({ barrier: treeTerminal });
@@ -95,7 +94,6 @@ describe("Windows LSP setup failure lifecycle", () => {
       onMessage: vi.fn(),
       rootPath: "C:\\repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey,
     });
     policy.bindSession(workspaceKey, session.sessionId);

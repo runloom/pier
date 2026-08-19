@@ -17,12 +17,7 @@ import {
   recordLspMessages,
 } from "./test-fixtures.ts";
 
-function createHarness(
-  options: {
-    clientRole?: "editor" | "language-tools";
-    treeAlive?: boolean;
-  } = {}
-) {
+function createHarness(options: { treeAlive?: boolean } = {}) {
   const child = new FakeLspChild();
   const tree = createFakeProcessTree(options.treeAlive ?? true);
   const messages: Array<{ body: string; sessionId: string }> = [];
@@ -30,7 +25,6 @@ function createHarness(
   const logger = { error: vi.fn(), warn: vi.fn() };
   const runtime = createLspSessionRuntime({
     child,
-    clientRole: options.clientRole ?? "editor",
     logger,
     onMessage: (sessionId, body) => messages.push({ body, sessionId }),
     onOutcome: (event) => outcomes.push(event),
@@ -38,7 +32,6 @@ function createHarness(
     rootPath: "/repo",
     serverId: "typescript",
     sessionId: "lsp-runtime-1",
-    webContentsId: 1,
     workspaceKey: "main:/repo",
   });
   return { child, logger, messages, outcomes, runtime, tree };
@@ -207,9 +200,7 @@ describe("LspSessionRuntime close lifecycle", () => {
   });
 
   it("closes residual documents, waits for shutdown response, then sends exit and ends stdin", async () => {
-    const { child, messages, outcomes, runtime, tree } = createHarness({
-      clientRole: "language-tools",
-    });
+    const { child, messages, outcomes, runtime, tree } = createHarness({});
     const written = recordLspMessages(child.stdin);
     expect(
       runtime.send(
@@ -425,7 +416,6 @@ describe("LspSessionRuntime close lifecycle", () => {
 
   it("cancels a pending document read when close starts and never writes document traffic after shutdown", async () => {
     const { child, runtime } = createHarness({
-      clientRole: "language-tools",
       treeAlive: false,
     });
     const written = recordLspMessages(child.stdin);
@@ -469,9 +459,7 @@ describe("LspSessionRuntime close lifecycle", () => {
   });
 
   it("reports an unrequested natural exit once and clears request timers", async () => {
-    const { child, outcomes, runtime, tree } = createHarness({
-      clientRole: "language-tools",
-    });
+    const { child, outcomes, runtime, tree } = createHarness({});
     const pending = runtime.request("workspace/symbol", { query: "value" });
 
     child.exit(0);

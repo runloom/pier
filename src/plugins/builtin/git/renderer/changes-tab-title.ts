@@ -84,6 +84,10 @@ export function gitChangesPanelTabIconId(
 
 export interface GitChangesTabChromeLabels {
   readonly branchLabel: string;
+  /** `ui.changeSummaryFilesVisible` 模板，含 `{{count}}`。 */
+  readonly fileCountMany: string;
+  /** `ui.changeSummaryFileVisible` 模板，含 `{{count}}`。 */
+  readonly fileCountOne: string;
   readonly pathLabel: string;
   readonly targetBranchLabel: string;
   readonly targetCommitLabel: string;
@@ -106,69 +110,62 @@ function targetTooltipValue(
 }
 
 /**
- * 审查 tab 用的 scope 级变更摘要：
- * - uncommitted：合并 unstaged + staged 的 lineDelta（scope 总览，不随 surface 抖）
- * - commit / branch：committed 组
- * 无可用 lineDelta 或全 0 时返回 undefined（tab 不画 +/−）。
+ * 审查 tab 用的 scope 级变更摘要。
+ * - uncommitted：必须用工作树相对 HEAD 的净变化（与状态栏 `changeSummary` 同源，
+ *   `git diff --numstat HEAD` + 未跟踪正文）。禁止把 staged + unstaged 组摘要相加：
+ *   同路径两层 hunk 会把重叠改写计两次（差值为成对 +N −N）。
+ * - commit / branch：审查 index 的 committed 组（范围 diff，不是工作树）。
  */
 export function gitReviewTabChangeSummary(
   target: GitReviewTarget,
-  groupSummaries: GitReviewIndexOk["groupSummaries"]
+  input: {
+    readonly groupSummaries?: GitReviewIndexOk["groupSummaries"];
+    readonly workingTreeSummary?: GitChangeSummary;
+  }
 ): GitChangeSummary | undefined {
   if (target.kind === "uncommitted") {
-    return mergeChangeSummaries(groupSummaries.unstaged, groupSummaries.staged);
+    return input.workingTreeSummary;
   }
-  return groupSummaries.committed;
+  return input.groupSummaries?.committed;
 }
 
-export function gitLineDeltaTrailingFromSummary(
-  summary: GitChangeSummary | undefined
+function interpolateFileCountLabel(template: string, count: number): string {
+  return template.replace(/\{\{\s*count\s*\}\}/g, String(count));
+}
+
+/**
+ * Tab trailing 与状态栏 `GitChangeSummaryInline` 同规则：
+ * 可见 +/- 用 `git-line-delta`；filesOnly / 全 0 行增量但有变更文件时用文件数文案；
+ * `changedFiles === 0` 不展示（状态栏同样隐藏更改项）。
+ */
+export function gitTabTrailingFromSummary(
+  summary: GitChangeSummary | undefined,
+  labels: Pick<GitChangesTabChromeLabels, "fileCountMany" | "fileCountOne">
 ): PanelTabTrailing | undefined {
-  if (summary?.kind !== "lineDelta") {
+  if (!summary) {
     return;
   }
-  if (summary.insertions === 0 && summary.deletions === 0) {
-    return;
-  }
-  return {
-    deletions: summary.deletions,
-    insertions: summary.insertions,
-    kind: "git-line-delta",
-  };
-}
-
-function mergeChangeSummaries(
-  left: GitChangeSummary | undefined,
-  right: GitChangeSummary | undefined
-): GitChangeSummary | undefined {
-  if (!(left || right)) {
-    return;
-  }
-  if (!(left && right)) {
-    return left ?? right;
-  }
-  if (left.kind === "lineDelta" && right.kind === "lineDelta") {
+  if (
+    summary.kind === "lineDelta" &&
+    (summary.insertions > 0 || summary.deletions > 0)
+  ) {
     return {
-      changedFiles: left.changedFiles + right.changedFiles,
-      deletions: left.deletions + right.deletions,
-      excludedFiles: left.excludedFiles + right.excludedFiles,
-      insertions: left.insertions + right.insertions,
-      kind: "lineDelta",
+      deletions: summary.deletions,
+      insertions: summary.insertions,
+      kind: "git-line-delta",
     };
   }
-  // 任一侧行数不完整时，禁止拼出部分 +/−；优先保留 lineDelta 侧，否则 filesOnly。
-  if (left.kind === "lineDelta") {
-    return left;
+  if (summary.changedFiles === 0) {
+    return;
   }
-  if (right.kind === "lineDelta") {
-    return right;
+  const label = interpolateFileCountLabel(
+    summary.changedFiles === 1 ? labels.fileCountOne : labels.fileCountMany,
+    summary.changedFiles
+  );
+  if (label.length === 0) {
+    return;
   }
-  return {
-    changedFiles: left.changedFiles + right.changedFiles,
-    kind: "filesOnly",
-    omittedFiles: left.omittedFiles + right.omittedFiles,
-    reasons: [...new Set([...left.reasons, ...right.reasons])].slice(0, 8),
-  };
+  return { kind: "text", label };
 }
 
 function readTabChangeSummaryParam(
@@ -218,8 +215,9 @@ export function gitChangesPanelTabChrome(
     value: targetTooltipValue(source.target, labels),
   });
 
-  const trailing = gitLineDeltaTrailingFromSummary(
-    readTabChangeSummaryParam(params)
+  const trailing = gitTabTrailingFromSummary(
+    readTabChangeSummaryParam(params),
+    labels
   );
 
   return {

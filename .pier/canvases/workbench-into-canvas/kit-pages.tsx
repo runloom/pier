@@ -46,22 +46,29 @@ const ALL_ROWS: {
   { kind: "控件", name: "Badge", origin: "系统", lead: "短状态或分类标记" },
   { kind: "控件", name: "Input", origin: "系统", lead: "单行输入" },
   { kind: "控件", name: "Select", origin: "系统", lead: "从列表里选一项" },
-  {
-    kind: "图示",
-    name: "MermaidDiagram",
-    origin: "系统",
-    lead: "流程图、时序图",
-  },
+  { kind: "图示", name: "Table", origin: "系统", lead: "行列对照" },
   { kind: "图示", name: "DataChart", origin: "系统", lead: "数值趋势与对比" },
   {
-    kind: "数据",
-    name: "ActivityOverview",
+    kind: "图示",
+    name: "Mermaid",
     origin: "系统",
-    lead: "当前前台活动摘要",
+    lead: "流程图、时序、状态、类图、实体关系和思维导图。",
+  },
+  {
+    kind: "数据",
+    name: "file",
+    origin: "系统",
+    lead: "文件命令与广播",
+  },
+  {
+    kind: "数据",
+    name: "git",
+    origin: "系统",
+    lead: "Git 命令与广播",
   },
   {
     kind: "文件",
-    name: "useCanvasFile",
+    name: "canvasFile",
     origin: "系统",
     lead: "读写相邻文件，含冲突",
   },
@@ -128,12 +135,25 @@ function Specimen({ name, origin }: { name: string; origin: Origin }) {
       </div>
     );
   }
-  if (name === "MermaidDiagram") {
+  if (name === "Table") {
+    return (
+      <div className="flex w-20 flex-col gap-0.5">
+        <div className="h-1.5 rounded-sm bg-muted-foreground/40" />
+        <div className="h-1.5 rounded-sm bg-muted-foreground/20" />
+        <div className="h-1.5 rounded-sm bg-muted-foreground/20" />
+      </div>
+    );
+  }
+  if (name === "Mermaid") {
     return (
       <div className="flex items-center gap-1">
-        <div className="rounded-sm border px-1.5 py-0.5 text-xs">A</div>
+        <div className="rounded-sm border border-status-info-border bg-info/15 px-1.5 py-0.5 text-xs">
+          A
+        </div>
         <div className="h-px w-4 bg-border" />
-        <div className="rounded-sm border px-1.5 py-0.5 text-xs">B</div>
+        <div className="rounded-sm border border-status-success-border bg-success/15 px-1.5 py-0.5 text-xs">
+          B
+        </div>
       </div>
     );
   }
@@ -147,17 +167,8 @@ function Specimen({ name, origin }: { name: string; origin: Origin }) {
       </div>
     );
   }
-  if (name === "ActivityOverview") {
-    return (
-      <p className="text-muted-foreground text-xs">智能体 · 进行中</p>
-    );
-  }
-  if (name === "useCanvasFile") {
-    return (
-      <Badge size="xs" variant="outline">
-        已读
-      </Badge>
-    );
+  if (name === "file" || name === "git" || name === "canvasFile") {
+    return null;
   }
   return <p className="font-medium text-sm">{name}</p>;
 }
@@ -178,6 +189,7 @@ function MaterialCard({
   selected?: boolean;
 }) {
   const description = path ? fileName(path) : lead;
+  const isApi = kind === "数据" || kind === "文件";
   return (
     <button
       className={
@@ -187,14 +199,22 @@ function MaterialCard({
       }
       type="button"
     >
+      {isApi ? null : (
+        <div
+          aria-hidden
+          className="pointer-events-none flex h-28 w-full items-center justify-center overflow-hidden border-b bg-muted/20 p-4"
+          inert
+        >
+          <Specimen name={name} origin={origin} />
+        </div>
+      )}
       <div
-        aria-hidden
-        className="pointer-events-none flex h-28 w-full items-center justify-center overflow-hidden border-b bg-muted/20 p-4"
-        inert
+        className={
+          isApi
+            ? "flex min-h-28 flex-col justify-center gap-1 p-3"
+            : "flex flex-col gap-1 p-3"
+        }
       >
-        <Specimen name={name} origin={origin} />
-      </div>
-      <div className="flex flex-col gap-1 p-3">
         <div className="flex min-w-0 items-center gap-1.5">
           <span className="truncate font-medium text-sm">{name}</span>
           <span className="shrink-0 text-muted-foreground text-xs">{kind}</span>

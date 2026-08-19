@@ -1,5 +1,7 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
+import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
@@ -40,13 +42,13 @@ export const settings = {
     addProject: "添加项目",
     back: "返回项目列表",
     description:
-      "按项目配置环境、技能与 MCP。也可用本机工作台管理跨项目技能与 MCP。",
+      "按项目配置环境、技能与 MCP。跨项目的技能与 MCP 在本机工作台。",
     emptyDescription:
       "添加项目后，可配置其环境、技能与 MCP。本机工作台始终可用。",
     emptyTitle: "还没有项目",
     pierHomeTitle: "本机工作台",
     pierHomeBadge: "本机",
-    pierHomePathHint: "跨项目的技能、MCP 放这里，不绑定某个仓库",
+    pierHomePathHint: "跨项目的技能与 MCP 放这里，不绑定某个仓库",
     pierHomeLibraryAdd: "添加技能",
     pierHomeSkillsListTitle: "技能",
     pierHomeSkillsListDescription:
@@ -188,6 +190,7 @@ export const settings = {
       "当前窗口仍是旧版本。请完全退出 Pier 后重新打开，再进入此页。",
   },
   skills: settingsSkills,
+  materials: settingsMaterials,
   environment: {
     addEnvironment: "添加环境设置",
     addFailed: "添加失败，请重试",
@@ -313,7 +316,7 @@ export const settings = {
     terminalCursorBlinkDesc: "终端光标是否周期性闪烁",
     terminalScrollbackMb: "滚动历史上限",
     terminalScrollbackMbDesc: "终端历史缓冲区大小，范围 10–512",
-    terminalScrollbackRuntimeNote: "仅对新开终端生效。",
+    terminalScrollbackRuntimeNote: "对新开与已打开的终端即时生效。",
     terminalPasteProtection: "粘贴保护",
     terminalPasteProtectionDesc: "粘贴可能立即执行的内容前先确认",
     terminalNewCwdPolicy: "新终端目录",
@@ -344,6 +347,7 @@ export const settings = {
     },
   },
   shellEnvironment: settingsShellEnvironment,
+  cliCommand: settingsCliCommand,
   /** Numeric InputRow trailing units (shadcn InputGroupAddon). */
   unit: {
     px: "px",
@@ -442,32 +446,12 @@ export const settings = {
     dark: "深色",
     system: "跟随系统",
   },
-  stylePreset: {
-    pierre: "Pierre",
-    "pierre-soft": "Pierre Soft",
-    catppuccin: "Catppuccin",
-    everforest: "Everforest",
-    github: "GitHub",
-    "github-default": "GitHub Default",
-    "github-high-contrast": "GitHub 高对比度",
-    "gruvbox-hard": "Gruvbox Hard",
-    "gruvbox-medium": "Gruvbox Medium",
-    "gruvbox-soft": "Gruvbox Soft",
-    kanagawa: "Kanagawa",
-    vscode: "VS Code",
-    material: "Material",
-    min: "Min",
-    one: "One",
-    "rose-pine": "Rose Pine",
-    slack: "Slack",
-    solarized: "Solarized",
-    "tokyo-night": "Tokyo Night",
-    vitesse: "Vitesse",
-  },
   locale: {
     system: "跟随系统",
     "zh-CN": "简体中文",
     en: "English",
+    ja: "日本語",
+    ko: "한국어",
   },
   agents: settingsAgents,
   notifications: settingsNotifications,

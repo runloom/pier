@@ -4,6 +4,11 @@ export const notificationsCenter = {
     openAgent: "Open conversation",
     viewAgentOutput: "View output",
   },
+  attention: {
+    error: "Agent ran into an error",
+    ready: "Turn finished",
+    waiting: "Needs attention",
+  },
   actionFailed: "Couldn't update notifications — try again",
   bell: {
     aria: "Notifications, {{count}} unread",

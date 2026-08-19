@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderOfficialMermaid } from "@/lib/live-modules/official-mermaid-renderer.ts";
+import { renderMermaidInWorker } from "@/lib/plugins/mermaid/render.worker.ts";
 import {
   normalizeMermaidSvgForXmlParse,
   sanitizeMermaidSvg,
@@ -59,19 +59,16 @@ describe("sanitizeMermaidSvg", () => {
     ).toBeNull();
   });
 
-  it("renders official multi-line flowchart labels through the full pipeline", async () => {
+  it("renders markdown mermaid multi-line flowchart labels through the worker pipeline", () => {
     const source = [
       "flowchart TB",
       '  A["line1\\nline2"] --> B["ok"]',
       '  B --> C["中文单行"]',
     ].join("\n");
-    const result = await renderOfficialMermaid(source, "dark");
-    expect(result.ok, JSON.stringify(result)).toBe(true);
-    if (result.ok) {
-      expect(result.svg).toContain("<svg");
-      expect(result.svg).not.toContain("<script");
-      expect(result.svg).toMatch(/line1/u);
-      expect(result.svg).toMatch(/line2/u);
-    }
-  }, 15_000);
+    const svg = renderMermaidInWorker({ source });
+    expect(svg).toContain("<svg");
+    expect(svg).not.toContain("<script");
+    expect(svg).toMatch(/line1/u);
+    expect(svg).toMatch(/line2/u);
+  });
 });

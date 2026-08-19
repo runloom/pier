@@ -3,7 +3,7 @@ import {
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-  MermaidDiagram,
+  Mermaid,
   Stack,
   Text,
 } from "pier/canvas";
@@ -29,10 +29,11 @@ export function DesignPage({ d }: { d: DesignData }) {
 
       <Stack gap={8}>
         <SectionTitle>分层架构</SectionTitle>
-        <MermaidDiagram
+        <Mermaid
           aria-label="文件树、pier/canvas SDK、宿主 store 与 Live Modules 围栏"
-          previewTitle="Canvas 物料分层"
-          source={d.architecture.diagram}
+          direction={d.architecture.diagram.direction}
+          edges={d.architecture.diagram.edges}
+          nodes={d.architecture.diagram.nodes}
         />
         <SectionLead>
           数据块与文件钩子活在宿主；Canvas 只 import pier/canvas。工作台网格不是看见面。

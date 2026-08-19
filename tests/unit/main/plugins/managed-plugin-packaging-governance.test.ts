@@ -83,6 +83,8 @@ describe("managed plugin packaging governance", () => {
     expect(builderConfig).toContain("to: plugin-packages/pier.grok");
     expect(builderConfig).toContain("from: packages/plugin-ssh/dist-pkg");
     expect(builderConfig).toContain("to: plugin-packages/pier.ssh");
+    expect(builderConfig).toContain("from: packages/plugin-tmux/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.tmux");
     // Language support is L0 (Files + host PATH providers), not bundled packs.
     expect(builderConfig).not.toContain("plugin-lsp-");
     expect(builderConfig).toContain("*.tgz");

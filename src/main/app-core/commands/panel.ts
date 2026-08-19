@@ -25,6 +25,7 @@ import type {
   ProcessEnvironmentService,
 } from "../../services/process-environment-service.ts";
 import type { RendererCommandService } from "../../services/renderer-command-service.ts";
+import { wrapAndRegisterLaunch } from "../../services/terminal-launch-wrap/index.ts";
 import { commandFailure, commandSuccess } from "../command-results.ts";
 import {
   asRecord,
@@ -36,7 +37,11 @@ import {
   rendererTerminalOpenCommand,
   type TerminalOpenOptions,
 } from "../terminal-open-renderer-command.ts";
-import { orderedWindows, resolveCommandWindow } from "../window-routing.ts";
+import {
+  matchingWindows,
+  orderedWindows,
+  resolveCommandWindow,
+} from "../window-routing.ts";
 
 export interface PanelCommandServices {
   localEnvironments: Pick<
@@ -231,9 +236,7 @@ export async function listPanels(
   services: PanelCommandServices
 ): Promise<PanelListSnapshot> {
   const windows = orderedWindows(services.window.list());
-  const targetWindows = command.windowId
-    ? windows.filter((windowInfo) => windowInfo.id === command.windowId)
-    : windows;
+  const targetWindows = matchingWindows(windows, command.windowId);
   const errors: PanelListSnapshot["errors"] = [];
   if (command.windowId && targetWindows.length === 0) {
     errors.push({
@@ -386,7 +389,9 @@ export async function executeTerminalOpenCommand(
     ...launchBase,
     ...optionalEnv(resolvedEnvironment.env),
   };
-  const launchId = await services.terminalLaunches.register(launch);
+  const launchId = await wrapAndRegisterLaunch(launch, (next) =>
+    services.terminalLaunches.register(next)
+  );
   let result: Awaited<ReturnType<typeof services.rendererCommand.execute>>;
   try {
     result = await services.rendererCommand.execute(

@@ -52,7 +52,8 @@ describe("live-modules fence", () => {
     expect(isDeniedBareSpecifier("react-dom/client", false)).toBe(false);
     expect(isDeniedBareSpecifier("react-dom/server", false)).toBe(true);
     expect(isDeniedBareSpecifier("pier/canvas", false)).toBe(false);
-    expect(isDeniedBareSpecifier("pier/visualizations", false)).toBe(false);
+    expect(isDeniedBareSpecifier("pier/host", false)).toBe(false);
+    expect(isDeniedBareSpecifier("pier/visualizations", false)).toBe(true);
   });
 
   it("allowlists framework bare packages only for non-React", () => {
@@ -415,6 +416,55 @@ describe("live-modules service", () => {
     expect(source).not.toContain(`${LIVE_MODULE_SCHEME}://runtime/pier-canvas`);
   });
 
+  it("compiles workbench-into-canvas gold through the Mermaid runtime stub", async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const projectRoot = process.cwd();
+    const spec = projectLiveRootSpec({
+      directory: ".pier/canvases",
+      projectRootPath: projectRoot,
+    });
+    service.registerRoot(spec);
+
+    const result = await service.compile(
+      spec.id,
+      "workbench-into-canvas/workbench-into-canvas.canvas.tsx"
+    );
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const source = Buffer.from(
+      service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
+    ).toString("utf8");
+    expect(source).toContain("getCanvas().Mermaid");
+  });
+
+  it("compiles multi-agent gold through Mermaid without a repaint layer", async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({
+      directory: ".pier/canvases",
+      projectRootPath: process.cwd(),
+    });
+    service.registerRoot(spec);
+    const result = await service.compile(
+      spec.id,
+      "multi-agent-orchestration-gold/multi-agent-orchestration-gold.canvas.tsx"
+    );
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const source = Buffer.from(
+      service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
+    ).toString("utf8");
+    expect(source).toContain("getCanvas().Mermaid");
+    // Node chrome (kind/tone) is authored in data.json and loaded at runtime;
+    // the bundle must not carry a second chrome map.
+    expect(source).not.toContain("paintMermaidNodes");
+  });
+
   it("compiles project Button via @/ path", async () => {
     const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
     const service = createService(homeRoot);
@@ -611,6 +661,50 @@ describe("live-modules service", () => {
     );
     // Recompile after fix — graph registration on first failure is the contract;
     // auto-stale is covered separately by watch tests.
+    const second = await service.compile(spec.id, rel);
+    expect(second.ok, JSON.stringify(second)).toBe(true);
+  });
+
+  it("re-reads canvas sources after a removed pier/canvas export failure", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-live-mermaid-"));
+    const canvases = join(projectRoot, ".pier", "canvases");
+    await mkdir(canvases, { recursive: true });
+    const rel = "flow.canvas.tsx";
+    await writeFile(
+      join(canvases, rel),
+      [
+        'import { RetiredDiagram } from "pier/canvas";',
+        "export default function Flow() {",
+        '  return <RetiredDiagram aria-label="g" chart="graph TD;A-->B" />;',
+        "}",
+        "",
+      ].join("\n")
+    );
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
+    service.registerRoot(spec);
+
+    const failed = await service.compile(spec.id, rel);
+    expect(failed.ok).toBe(false);
+    expect(JSON.stringify(failed)).toMatch(/RetiredDiagram/);
+
+    await writeFile(
+      join(canvases, rel),
+      [
+        'import { Mermaid } from "pier/canvas";',
+        "export default function Flow() {",
+        "  return (",
+        "    <Mermaid",
+        '      aria-label="g"',
+        '      edges={[{ source: "a", target: "b" }]}',
+        '      nodes={[{ id: "a", title: "A" }, { id: "b", title: "B" }]}',
+        "    />",
+        "  );",
+        "}",
+        "",
+      ].join("\n")
+    );
     const second = await service.compile(spec.id, rel);
     expect(second.ok, JSON.stringify(second)).toBe(true);
   });

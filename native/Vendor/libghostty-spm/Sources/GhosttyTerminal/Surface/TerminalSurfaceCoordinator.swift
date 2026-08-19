@@ -69,6 +69,10 @@ final class TerminalSurfaceCoordinator {
     private var isApplicationActive = true
     private var isSurfaceFocused = false
     private var isCursorSuppressed = false
+    private var outputTap: (
+        callback: ghostty_surface_output_tap_cb,
+        userdata: UnsafeMutableRawPointer?
+    )?
     private var surfaceGeneration: UInt64 = 0
     private var refreshPending = false
     private var refreshScheduled = false
@@ -187,6 +191,11 @@ final class TerminalSurfaceCoordinator {
         // rebuilt surface defaults to "not suppressed".
         if isCursorSuppressed {
             newSurface.setCursorSuppress(true)
+        }
+        // Raw output tap (Pier patch 0107): reapply across surface rebuilds
+        // so the transcript stream survives config-driven reconstruction.
+        if let outputTap {
+            newSurface.setOutputTap(outputTap.callback, userdata: outputTap.userdata)
         }
         TerminalDebugLog.log(.lifecycle, "surface rebuild succeeded")
         (delegate as? any TerminalSurfaceLifecycleDelegate)?
@@ -375,6 +384,26 @@ final class TerminalSurfaceCoordinator {
         surface?.setCursorSuppress(suppressed)
     }
 
+    /// Live scrollback limit (Pier patch 0108)。即时生效；surface 重建后由
+    /// 窗口级创建配置接管（压力收缩由宿主在下个周期重新应用）。
+    func setScrollbackLimit(_ bytes: UInt64) {
+        surface?.setScrollbackLimit(bytes)
+    }
+
+    /// Raw PTY output tap (Pier patch 0107)。缓存到 coordinator，surface
+    /// 重建时重放；传 nil 清除（surface free 也会自行摘 tap）。
+    func setOutputTap(
+        _ callback: ghostty_surface_output_tap_cb?,
+        userdata: UnsafeMutableRawPointer?
+    ) {
+        if let callback {
+            outputTap = (callback: callback, userdata: userdata)
+        } else {
+            outputTap = nil
+        }
+        surface?.setOutputTap(callback, userdata: userdata)
+    }
+
     // MARK: - Cleanup
 
     func freeSurface() {
@@ -488,6 +517,7 @@ final class TerminalSurfaceCoordinator {
         ghosttyRenderReadySequence &+= 1
         lastRenderReadyUptime = ProcessInfo.processInfo.systemUptime
         drawPending = true
+        surface?.noteViewportChanged()
         TerminalDebugLog.log(.render, "target frame ready")
         scheduleDrawIfNeeded(generation: generation)
     }

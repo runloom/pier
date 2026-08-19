@@ -39,6 +39,8 @@ export const commandPalette = {
     openTerminalDebugWindowFailed: "无法打开终端调试窗口，请重试",
     openSettings: "打开设置",
     openEnvironment: "打开环境设置",
+    installPierCommand: "安装 pier 命令",
+    removePierCommand: "移除 pier 命令",
     closeActivePanel: "关闭当前面板",
     focusTab: "切换到第 {{index}} 个标签",
     newTab: "新建标签",

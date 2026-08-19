@@ -167,6 +167,7 @@ ensure_project_pnpm() {
     case "${raw}" in
       pnpm@*) want="${raw#pnpm@}" ;;
     esac
+    want="${want%%+*}"
   fi
   if [ -z "${want}" ]; then
     want="11.12.0"

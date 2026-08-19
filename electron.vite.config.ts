@@ -10,11 +10,18 @@ import { createSandboxedPreloadConfig } from "./scripts/preload-build-config.ts"
 // 路径派生不同端口, 避免抢用. 详 scripts/dev-profile.mjs.
 const devProfile = resolveDevProfile();
 const nodeRequire = createRequire(import.meta.url);
+const uiRequire = createRequire(
+  resolve(import.meta.dirname, "packages/ui/package.json")
+);
 // Renderer 的 browser condition 会选中 DOM 解码器；Markdown module worker
 // 没有 document，统一使用包的 default/worker-safe 入口。
 const workerSafeNamedCharacterReference = nodeRequire.resolve(
   "decode-named-character-reference"
 );
+// mermaid 默认入口 mermaid.core.mjs 会再解析 @mermaid-js/parser → langium →
+// `vscode-jsonrpc/lib/common/events.js`。该深路径不在 jsonrpc 9 的 exports 里，
+// CI rolldown 解析失败。esm.min 已内联 parser，避开这层幽灵依赖。
+const mermaidEsmMin = uiRequire.resolve("mermaid/dist/mermaid.esm.min.mjs");
 // 强制 react / react-dom 收敛到宿主唯一物理副本。@pier/ui 源码 alias +
 // packages/ui/node_modules 软链 + @pierre/diffs 预打包并存时，仅靠 dedupe
 // 仍可能让 packages/ui 下的 import 与 .vite/deps 预打包图各取一份 React →
@@ -98,6 +105,7 @@ export default defineConfig({
           find: "decode-named-character-reference",
           replacement: workerSafeNamedCharacterReference,
         },
+        { find: /^mermaid$/, replacement: mermaidEsmMin },
         // 精确匹配：勿用字符串 "react"（会误伤 react-dom / react-grid-layout）。
         { find: /^react$/, replacement: reactPackageRoot },
         {

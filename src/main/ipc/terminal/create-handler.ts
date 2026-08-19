@@ -8,6 +8,7 @@ import type {
   CreateTerminalResult,
   TerminalAgentRestoreOutcome,
 } from "@shared/contracts/terminal.ts";
+import { app } from "electron";
 import {
   resolveAgentResumeLastLaunch,
   resolveAgentResumeLaunch,
@@ -15,10 +16,13 @@ import {
 import type { LocalEnvironmentService } from "../../services/local-environments-service.ts";
 import { getTerminalPanelTransfer } from "../../services/panel-transfer/terminal.ts";
 import { createTerminalAndSeedResource } from "../../services/pier-resource/claim-login-after-create.ts";
-import { resolveProjectEnvForSpawn } from "../../services/process-environment/resolve-project-env.ts";
 import type { ProcessEnvironmentService } from "../../services/process-environment-service.ts";
 import type { ManagedAgentLaunchGate } from "../../services/project-skills/launch-gate/index.ts";
 import type { TaskService } from "../../services/tasks/service-types.ts";
+import {
+  applyLaunchWrapForCreate,
+  readUserDataControlSocketPath,
+} from "../../services/terminal-launch-wrap/index.ts";
 import {
   clearTerminalPanelAgent,
   ensureTerminalPanelSession,
@@ -27,12 +31,11 @@ import {
 import type { AppWindow } from "../../windows/app-window.ts";
 import { findInternalWindowId } from "../../windows/identity.ts";
 import { foregroundActivityService } from "../foreground-activity.ts";
-import { resolveRestoredAgentLaunchEnv } from "./create-env.ts";
+import { hydrateNativeLaunchEnv } from "./create-env.ts";
 import {
   consumeCreateLaunch,
   resolveCreateTerminalLaunch,
   withAgentLoginShellSafeCommand,
-  withPanelStatusEnv,
 } from "./create-launch.ts";
 import { sendInitialTerminalInput } from "./create-post-actions.ts";
 import { resolveTerminalTransferCreateAction } from "./create-transfer-guard.ts";
@@ -67,6 +70,7 @@ export async function handleTerminalCreate(args: {
     | Pick<LocalEnvironmentService, "resolveForWorktree" | "resolveProject">
     | null
     | undefined;
+  onPtyCreated?: (nativePanelId: string, lifecycleId: string) => void;
   processEnvironment: ProcessEnvironmentService;
   recordAgentLaunch?:
     | ((agentId: AgentKind) => Promise<unknown> | unknown)
@@ -82,6 +86,7 @@ export async function handleTerminalCreate(args: {
     loadError,
     launchGate,
     localEnvironments,
+    onPtyCreated,
     processEnvironment,
     recordAgentLaunch,
     taskLifecycle,
@@ -219,28 +224,22 @@ export async function handleTerminalCreate(args: {
         }
       }
     }
-    let launchForNative = nativeLaunchBase;
-    if (launch.restoredAgentLaunch) {
-      const projectEnv = localEnvironments
-        ? await resolveProjectEnvForSpawn({
-            cwd: nativeLaunchBase?.cwd ?? launch.context?.cwd,
-            localEnvironments,
-            projectRootPath: launch.context?.projectRootPath,
-          })
-        : undefined;
-      launchForNative = await resolveRestoredAgentLaunchEnv(
-        nativeLaunchBase,
-        processEnvironment,
-        {
-          ...(projectEnv ? { projectEnv } : {}),
-        }
-      );
-    }
+    // UI prepareLaunch only has agentDefaultEnv + wrap PATH. Overlay the
+    // login-shell dump here so Start Claude matches a user terminal `claude`.
+    // Persist the logical launch, not the hydrated dump.
+    const launchForNative = await hydrateNativeLaunchEnv(
+      nativeLaunchBase,
+      processEnvironment,
+      {
+        localEnvironments,
+        projectRootPath: launch.context?.projectRootPath,
+      }
+    );
     await persistInitialTerminalAgent(
       sessionScope,
       createArgs.panelId,
       launch.launchAgentId,
-      launch.restoredAgent?.launch ?? launchForNative,
+      launch.restoredAgent?.launch ?? nativeLaunchBase,
       {
         existing: launch.restoredAgent,
         resume: launch.restoredAgent?.resume,
@@ -357,7 +356,17 @@ export async function handleTerminalCreate(args: {
     );
     const launchForCreate = surface.launch;
     // 不向终端注入 caller binding / 凭证：本机 CLI 不按「权限主体」管理智能体。
-    // withPanelStatusEnv 仍剥离父进程残留的 binding 环境变量，避免误传。
+    // applyLaunchWrapForCreate 仍剥离父进程残留的 binding 环境变量，避免误传。
+    const spawnLaunch = await applyLaunchWrapForCreate({
+      agentId: launch.launchAgentId,
+      controlSocketPath: readUserDataControlSocketPath(() =>
+        app.getPath("userData")
+      ),
+      hookEnv: foregroundActivityService.hookEnv(),
+      launch: launchForCreate,
+      panelId: createArgs.panelId,
+      windowId: String(win.id),
+    });
     const ok = await createTerminalAndSeedResource({
       create: () =>
         addon.createTerminal(
@@ -366,12 +375,7 @@ export async function handleTerminalCreate(args: {
           createArgs.frame,
           createArgs.font.family,
           createArgs.font.size,
-          withPanelStatusEnv(
-            launchForCreate,
-            createArgs.panelId,
-            String(win.id),
-            foregroundActivityService.hookEnv()
-          ),
+          spawnLaunch,
           lifecycleId,
           createArgs.presentationId ?? 0
         ),
@@ -385,6 +389,7 @@ export async function handleTerminalCreate(args: {
       }
       return { ok: false, error: "createTerminal returned false" };
     }
+    onPtyCreated?.(nativePanelId, lifecycleId);
     // exitPresentation lives on panel params; renderer resolves final copy on
     // child-exited and calls injectDisplayText (native does not i18n).
     sendInitialTerminalInput({

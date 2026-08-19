@@ -15,9 +15,9 @@ import type {
   ReviewDocumentProjection,
   ReviewDocumentViewState,
 } from "./document/projection.ts";
-import {
-  type useReviewAppearance,
-  useReviewViewOptions,
+import type {
+  ReviewViewOptions,
+  useReviewAppearance,
 } from "./document/ui-state.ts";
 import { GitReviewDocumentView } from "./document/view.tsx";
 import type { useReviewFailureSummary } from "./failure-state.ts";
@@ -120,6 +120,7 @@ interface GitReviewSurfaceViewProps {
     error: Error | null,
     settled: boolean
   ) => void;
+  readonly viewOptions: ReviewViewOptions;
   readonly viewState: ReviewDocumentViewState;
   readonly warnings: GitReviewIndexOk["warnings"];
 }
@@ -174,6 +175,7 @@ export function GitReviewSurfaceView({
   treeModel,
   updateRenderFeedback,
   updateRenderItemError,
+  viewOptions,
   viewState,
   warnings,
 }: GitReviewSurfaceViewProps): React.JSX.Element {
@@ -215,8 +217,6 @@ export function GitReviewSurfaceView({
     callbacks.clearForUserIntent();
     callbacks.setSelectedTreeTarget(null);
   }, [activeRef]);
-  // 视图偏好全局一份；工具条写在共享 header，此处只读给 CodeView presentation
-  const { options: viewOptions } = useReviewViewOptions();
   const [allCollapsed, setAllCollapsed] = useState(false);
   const onToggleCollapseAll = useCallback(() => {
     setAllCollapsed((current) => {
@@ -314,7 +314,7 @@ export function GitReviewSurfaceView({
   );
 }
 
-/** 侧栏有文件但均为 pure rename / empty / binary → 正文空态（金标准 meta 不进正文）。 */
+/** 侧栏有文件但均为 pure rename / empty → 正文空态（二进制 notice 仍进列表）。 */
 function gitReviewSurfaceIsMetaOnlyEmpty(
   entries: readonly GitReviewIndexEntry[],
   surface: GitReviewReadingSurface

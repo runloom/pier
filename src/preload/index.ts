@@ -21,6 +21,7 @@ import {
   type PierAgentRuntimeIndexAPI,
 } from "./agent-runtime-index-api.ts";
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
+import { canvasHostApi, type PierCanvasHostAPI } from "./canvas-host-api.ts";
 import { commentsApi, type PierCommentsAPI } from "./comments-api.ts";
 import { diagnosticsApi, type PierDiagnosticsAPI } from "./diagnostics-api.ts";
 import {
@@ -71,8 +72,10 @@ import {
 } from "./pier-home-skills-api.ts";
 import { type PierResourceAPI, pierResourceApi } from "./pier-resource-api.ts";
 import {
+  type AppCliPreloadApi,
   type AppPreloadApi,
   type AppUpdatePreloadApi,
+  createAppCliPreloadApi,
   createAppPreloadApi,
   createAppUpdatePreloadApi,
   createManagedPluginsPreloadApi,
@@ -150,8 +153,10 @@ export interface PierWindowAPI {
   agents: PierAgentsAPI;
   ai: PierAiAPI;
   app: AppPreloadApi;
+  appCli: AppCliPreloadApi;
   appQuit: PierAppQuitAPI;
   appUpdate: AppUpdatePreloadApi;
+  canvasHost: PierCanvasHostAPI;
   catalog: PierHostCatalogAPI;
   clipboard: PierClipboardAPI;
   closeWindow: (windowId: string) => Promise<void>;
@@ -412,6 +417,7 @@ const api: PierWindowAPI = {
   notifications: notificationsApi,
   notificationCenter: notificationCenterApi,
   catalog: hostCatalogApi,
+  canvasHost: canvasHostApi,
   comments: commentsApi,
   diagnostics: diagnosticsApi,
   plugins: pluginsApi,
@@ -435,6 +441,7 @@ const api: PierWindowAPI = {
   panelTransfer: createPanelTransferApi(),
   pluginRpc: createPluginRpcPreloadApi(),
   app: createAppPreloadApi(),
+  appCli: createAppCliPreloadApi(),
   appUpdate: createAppUpdatePreloadApi(),
   theme: themeApi,
   window: createWindowApi(signalRendererBoot),

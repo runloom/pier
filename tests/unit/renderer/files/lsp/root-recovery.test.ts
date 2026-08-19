@@ -145,6 +145,7 @@ vi.mock("@codemirror/lsp-client", async () => {
 });
 
 import {
+  FILES_LSP_VISIBLE_TOUCH_INTERVAL_MS,
   filesLspEditorExtensions,
   resetLspClientCacheForTests,
 } from "../../../../../src/plugins/builtin/files/renderer/lsp/client.ts";
@@ -644,6 +645,176 @@ describe("Files LSP root recovery", () => {
     await flushMicrotasks();
     expect(facade.ensureSession).toHaveBeenCalledOnce();
     unsubscribe();
+  });
+
+  describe("visibility keepalive (A3 活动驱动生命周期)", () => {
+    class MockIntersectionObserver {
+      static instances: MockIntersectionObserver[] = [];
+      readonly callback: IntersectionObserverCallback;
+      readonly observed: Element[] = [];
+      readonly options: IntersectionObserverInit | undefined;
+
+      constructor(
+        callback: IntersectionObserverCallback,
+        options?: IntersectionObserverInit
+      ) {
+        this.callback = callback;
+        this.options = options;
+        MockIntersectionObserver.instances.push(this);
+      }
+
+      observe(element: Element): void {
+        this.observed.push(element);
+      }
+
+      disconnect(): void {
+        this.observed.length = 0;
+      }
+
+      unobserve(): void {
+        // not used
+      }
+
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+
+      trigger(isIntersecting: boolean): void {
+        this.callback(
+          [{ isIntersecting } as IntersectionObserverEntry],
+          this as unknown as IntersectionObserver
+        );
+      }
+    }
+
+    /** CodeMirror 内部也建带 options 的观察器；面板可见性观察器不带 options。 */
+    function panelVisibilityObserver(): MockIntersectionObserver | undefined {
+      return MockIntersectionObserver.instances.find(
+        (instance) => instance.options === undefined
+      );
+    }
+
+    function installIntersectionObserver(): () => void {
+      MockIntersectionObserver.instances.length = 0;
+      Object.assign(globalThis, {
+        IntersectionObserver: MockIntersectionObserver,
+      });
+      return () => {
+        Reflect.deleteProperty(globalThis, "IntersectionObserver");
+        MockIntersectionObserver.instances.length = 0;
+      };
+    }
+
+    it("touches the session while visible and stops when hidden", async () => {
+      const uninstall = installIntersectionObserver();
+      try {
+        await startReady("lsp-keepalive");
+        const observer = panelVisibilityObserver();
+        expect(observer).toBeDefined();
+        facade.ensureSession.mockClear();
+        facade.ensureSession.mockResolvedValue(ensuredSession("lsp-keepalive"));
+
+        observer?.trigger(true);
+        await flushMicrotasks();
+        // 可见即刻 touch 一次。
+        expect(facade.ensureSession).toHaveBeenCalledTimes(1);
+
+        await vi.advanceTimersByTimeAsync(FILES_LSP_VISIBLE_TOUCH_INTERVAL_MS);
+        await flushMicrotasks();
+        expect(facade.ensureSession).toHaveBeenCalledTimes(2);
+        // 同会话复用：touch 不触发 close，也不动状态机。
+        expect(facade.close).not.toHaveBeenCalled();
+        expect(status("editor-main", "document-main")?.state).toBe("ready");
+
+        observer?.trigger(false);
+        await vi.advanceTimersByTimeAsync(
+          FILES_LSP_VISIBLE_TOUCH_INTERVAL_MS * 3
+        );
+        await flushMicrotasks();
+        expect(facade.ensureSession).toHaveBeenCalledTimes(2);
+      } finally {
+        uninstall();
+      }
+    });
+
+    it("resumes a paused session that stayed visible without a new intersection edge", async () => {
+      const uninstall = installIntersectionObserver();
+      try {
+        await startReady("lsp-visible-victim");
+        const observer = panelVisibilityObserver();
+        observer?.trigger(true);
+        await flushMicrotasks();
+        facade.ensureSession.mockClear();
+        facade.ensureSession.mockResolvedValue(
+          ensuredSession("lsp-visible-replacement")
+        );
+
+        facade.emitClosed({
+          cause: "workspace-evicted",
+          reason: "closed",
+          sessionId: "lsp-visible-victim",
+        });
+        await flushMicrotasks();
+
+        expect(facade.ensureSession).toHaveBeenCalled();
+        expect(status("editor-main", "document-main")?.state).toBe("ready");
+      } finally {
+        uninstall();
+      }
+    });
+
+    it("resumes a paused (idle-released) session when the panel becomes visible again", async () => {
+      const uninstall = installIntersectionObserver();
+      try {
+        await startReady("lsp-idle-victim");
+        const observer = panelVisibilityObserver();
+        facade.emitClosed({
+          cause: "idle-release",
+          reason: "closed",
+          sessionId: "lsp-idle-victim",
+        });
+        expect(status("editor-main", "document-main")).toEqual({
+          reason: "idle-release",
+          serverId: "typescript",
+          state: "paused",
+        });
+        facade.ensureSession.mockClear();
+        facade.ensureSession.mockResolvedValue(
+          ensuredSession("lsp-idle-replacement")
+        );
+
+        observer?.trigger(true);
+        await flushMicrotasks();
+
+        expect(facade.ensureSession).toHaveBeenCalled();
+        expect(status("editor-main", "document-main")).toEqual({
+          serverId: "typescript",
+          state: "ready",
+        });
+      } finally {
+        uninstall();
+      }
+    });
+
+    it("closes a stale session id returned by a keepalive touch without adopting it", async () => {
+      const uninstall = installIntersectionObserver();
+      try {
+        await startReady("lsp-touch-current");
+        const observer = panelVisibilityObserver();
+        facade.ensureSession.mockClear();
+        facade.ensureSession.mockResolvedValue(
+          ensuredSession("lsp-touch-other")
+        );
+
+        observer?.trigger(true);
+        await flushMicrotasks();
+
+        expect(facade.close).toHaveBeenCalledWith("lsp-touch-other");
+        expect(status("editor-main", "document-main")?.state).toBe("ready");
+      } finally {
+        uninstall();
+      }
+    });
   });
 
   describe("closed cause table", () => {

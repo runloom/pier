@@ -156,10 +156,7 @@ export class AttachmentTokenNode extends DecoratorNode<JSX.Element> {
         data-attachment-path={this.__absolutePath}
         data-attachment-valid={this.__valid ? "true" : "false"}
       >
-        <Paperclip
-          aria-hidden="true"
-          className="size-2.5 shrink-0 self-center"
-        />
+        <Paperclip aria-hidden="true" className="size-2.5 shrink-0" />
         <span className="tabular-nums">{this.__ordinal}</span>
       </span>
     );

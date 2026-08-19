@@ -10,11 +10,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const LABELS: PierInlineReviewLabels = {
   authorYou: "You",
+  cancel: "Cancel",
   close: "Close",
   deleteComment: "Delete",
   deleted: "Deleted",
   editComment: "Edit",
   inputPlaceholder: "Write a comment…",
+  save: "Save",
   submit: "Submit",
   title: "Comment",
 };
@@ -69,11 +71,10 @@ function mount(
 }
 
 /**
- * 失焦 / 外点语义：空壳收起、有内容保留。
+ * 失焦 / 外点语义（新建态）：空壳收起、有内容保留。
  *
- * 编辑器没有取消按钮，收起靠 blur + capture pointerdown。diff 代码行不可聚焦
- * 时 blur 不会触发，所以外点检测是空草稿能收起的主路径。编辑态清空后离开走
- * `onEmptyDismiss`（删评论），与 Escape 的 `onCancel`（放弃编辑）分离。
+ * 新建没有取消按钮，收起靠 blur + capture pointerdown。编辑态清空后离开
+ * 不删除（删除只走垃圾桶），与 Escape / 取消 的 `onCancel` 分离。
  */
 describe("InlineReviewCommentEditor blur and outside dismiss", () => {
   it("cancels an empty draft when focus leaves", () => {
@@ -169,8 +170,8 @@ describe("InlineReviewCommentEditor blur and outside dismiss", () => {
 });
 
 describe("InlineReviewThreadCard empty edit dismiss", () => {
-  it("deletes the comment when edit body is cleared and focus leaves", async () => {
-    const onDeleteComment = vi.fn().mockResolvedValue(undefined);
+  it("does not delete the comment when edit body is cleared and focus leaves", () => {
+    const onDeleteComment = vi.fn().mockResolvedValue(true);
     const handlers: PierInlineReviewHandlers = {
       onCancelDraft: vi.fn(),
       onDeleteComment,
@@ -200,18 +201,19 @@ describe("InlineReviewThreadCard empty edit dismiss", () => {
       </div>
     );
 
-    fireEvent.click(screen.getByRole("button", { name: LABELS.editComment }));
+    fireEvent.click(screen.getByRole("button", { name: "keep me" }));
     const textarea = screen.getByLabelText(LABELS.title) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "" } });
     fireEvent.blur(textarea, {
       relatedTarget: screen.getByTestId("outside"),
     });
 
-    expect(onDeleteComment).toHaveBeenCalledWith("t1", "c1");
+    expect(onDeleteComment).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: LABELS.save })).toBeTruthy();
   });
 
-  it("does not delete when Escape aborts an emptied edit", () => {
-    const onDeleteComment = vi.fn().mockResolvedValue(undefined);
+  it("deletes from the edit trash control", () => {
+    const onDeleteComment = vi.fn().mockResolvedValue(true);
     const handlers: PierInlineReviewHandlers = {
       onCancelDraft: vi.fn(),
       onDeleteComment,
@@ -236,7 +238,38 @@ describe("InlineReviewThreadCard empty edit dismiss", () => {
       />
     );
 
-    fireEvent.click(screen.getByRole("button", { name: LABELS.editComment }));
+    fireEvent.click(screen.getByRole("button", { name: "keep me" }));
+    fireEvent.click(screen.getByRole("button", { name: LABELS.deleteComment }));
+    expect(onDeleteComment).toHaveBeenCalledWith("t1", "c1");
+  });
+
+  it("does not delete when Escape aborts an emptied edit", () => {
+    const onDeleteComment = vi.fn().mockResolvedValue(true);
+    const handlers: PierInlineReviewHandlers = {
+      onCancelDraft: vi.fn(),
+      onDeleteComment,
+      onEditComment: vi.fn().mockResolvedValue(true),
+      onSubmitDraft: vi.fn().mockResolvedValue(true),
+    };
+    const thread: PierInlineReviewThread = {
+      comment: {
+        authorLabel: "Alice",
+        body: "keep me",
+        createdAt: 1,
+        id: "c1",
+      },
+      threadId: "t1",
+    };
+
+    render(
+      <InlineReviewThreadCard
+        handlers={handlers}
+        labels={LABELS}
+        thread={thread}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "keep me" }));
     const textarea = screen.getByLabelText(LABELS.title);
     fireEvent.change(textarea, { target: { value: "" } });
     fireEvent.keyDown(textarea, { key: "Escape" });

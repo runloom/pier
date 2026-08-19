@@ -3,15 +3,17 @@ import {
   gitChangesPanelTabChrome,
   gitChangesPanelTabIconId,
   gitChangesPanelTitle,
-  gitLineDeltaTrailingFromSummary,
   gitReviewTabChangeSummary,
   gitRootFolderName,
+  gitTabTrailingFromSummary,
   shortGitReviewRef,
 } from "@plugins/builtin/git/renderer/changes-tab-title.ts";
 import { describe, expect, it } from "vitest";
 
 const LABELS = {
   branchLabel: "Branch",
+  fileCountMany: "{{count}} files",
+  fileCountOne: "{{count}} file",
   pathLabel: "Path",
   targetBranchLabel: "Branch",
   targetCommitLabel: "Commit",
@@ -168,7 +170,7 @@ describe("gitChangesPanelTabChrome", () => {
     expect(chrome?.title).toBe("repo");
   });
 
-  it("omits trailing for zero lineDelta or filesOnly summary", () => {
+  it("omits trailing when there are no changed files", () => {
     expect(
       gitChangesPanelTabChrome(
         {
@@ -188,7 +190,9 @@ describe("gitChangesPanelTabChrome", () => {
         LABELS
       )?.trailing
     ).toBeUndefined();
+  });
 
+  it("uses file-count text trailing for filesOnly and zero lineDelta with files", () => {
     expect(
       gitChangesPanelTabChrome(
         {
@@ -206,7 +210,27 @@ describe("gitChangesPanelTabChrome", () => {
         },
         LABELS
       )?.trailing
-    ).toBeUndefined();
+    ).toEqual({ kind: "text", label: "2 files" });
+
+    expect(
+      gitChangesPanelTabChrome(
+        {
+          source: {
+            contextId: "worktree:repo",
+            gitRootPath: "/repo",
+            target: { kind: "uncommitted" },
+          },
+          [GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM]: {
+            changedFiles: 1,
+            deletions: 0,
+            excludedFiles: 1,
+            insertions: 0,
+            kind: "lineDelta",
+          },
+        },
+        LABELS
+      )?.trailing
+    ).toEqual({ kind: "text", label: "1 file" });
   });
 
   it("returns undefined without a valid source", () => {
@@ -215,34 +239,47 @@ describe("gitChangesPanelTabChrome", () => {
 });
 
 describe("gitReviewTabChangeSummary", () => {
-  it("merges unstaged and staged lineDelta for uncommitted target", () => {
+  const staged = {
+    changedFiles: 1,
+    deletions: 1,
+    excludedFiles: 0,
+    insertions: 2,
+    kind: "lineDelta" as const,
+  };
+  const unstaged = {
+    changedFiles: 2,
+    deletions: 4,
+    excludedFiles: 0,
+    insertions: 10,
+    kind: "lineDelta" as const,
+  };
+  const workingTree = {
+    changedFiles: 2,
+    deletions: 4,
+    excludedFiles: 0,
+    insertions: 11,
+    kind: "lineDelta" as const,
+  };
+
+  it("uses working-tree HEAD net for uncommitted, not staged+unstaged sum", () => {
     expect(
       gitReviewTabChangeSummary(
         { kind: "uncommitted" },
         {
-          staged: {
-            changedFiles: 1,
-            deletions: 1,
-            excludedFiles: 0,
-            insertions: 2,
-            kind: "lineDelta",
-          },
-          unstaged: {
-            changedFiles: 2,
-            deletions: 4,
-            excludedFiles: 0,
-            insertions: 10,
-            kind: "lineDelta",
-          },
+          groupSummaries: { staged, unstaged },
+          workingTreeSummary: workingTree,
         }
       )
-    ).toEqual({
-      changedFiles: 3,
-      deletions: 5,
-      excludedFiles: 0,
-      insertions: 12,
-      kind: "lineDelta",
-    });
+    ).toEqual(workingTree);
+  });
+
+  it("does not invent an uncommitted total from review groups", () => {
+    expect(
+      gitReviewTabChangeSummary(
+        { kind: "uncommitted" },
+        { groupSummaries: { staged, unstaged } }
+      )
+    ).toBeUndefined();
   });
 
   it("uses committed summary for commit target", () => {
@@ -253,12 +290,14 @@ describe("gitReviewTabChangeSummary", () => {
           oid: "abcdef0123456789abcdef0123456789abcdef01",
         },
         {
-          committed: {
-            changedFiles: 1,
-            deletions: 2,
-            excludedFiles: 0,
-            insertions: 5,
-            kind: "lineDelta",
+          groupSummaries: {
+            committed: {
+              changedFiles: 1,
+              deletions: 2,
+              excludedFiles: 0,
+              insertions: 5,
+              kind: "lineDelta",
+            },
           },
         }
       )
@@ -270,27 +309,87 @@ describe("gitReviewTabChangeSummary", () => {
       kind: "lineDelta",
     });
   });
+
+  it("uses committed summary for branch target", () => {
+    expect(
+      gitReviewTabChangeSummary(
+        { kind: "branch", ref: "refs/heads/main" },
+        {
+          groupSummaries: {
+            committed: {
+              changedFiles: 3,
+              deletions: 1,
+              excludedFiles: 0,
+              insertions: 4,
+              kind: "lineDelta",
+            },
+          },
+        }
+      )
+    ).toEqual({
+      changedFiles: 3,
+      deletions: 1,
+      excludedFiles: 0,
+      insertions: 4,
+      kind: "lineDelta",
+    });
+  });
 });
 
-describe("gitLineDeltaTrailingFromSummary", () => {
-  it("returns trailing only for non-zero lineDelta", () => {
+describe("gitTabTrailingFromSummary", () => {
+  it("returns git-line-delta for non-zero lineDelta", () => {
     expect(
-      gitLineDeltaTrailingFromSummary({
-        changedFiles: 1,
-        deletions: 0,
-        excludedFiles: 0,
-        insertions: 4,
-        kind: "lineDelta",
-      })
+      gitTabTrailingFromSummary(
+        {
+          changedFiles: 1,
+          deletions: 0,
+          excludedFiles: 0,
+          insertions: 4,
+          kind: "lineDelta",
+        },
+        LABELS
+      )
     ).toEqual({ deletions: 0, insertions: 4, kind: "git-line-delta" });
+  });
+
+  it("omits trailing when changedFiles is 0", () => {
     expect(
-      gitLineDeltaTrailingFromSummary({
-        changedFiles: 0,
-        deletions: 0,
-        excludedFiles: 0,
-        insertions: 0,
-        kind: "lineDelta",
-      })
+      gitTabTrailingFromSummary(
+        {
+          changedFiles: 0,
+          deletions: 0,
+          excludedFiles: 0,
+          insertions: 0,
+          kind: "lineDelta",
+        },
+        LABELS
+      )
     ).toBeUndefined();
+  });
+
+  it("returns file-count text for filesOnly and zero visible lineDelta", () => {
+    expect(
+      gitTabTrailingFromSummary(
+        {
+          changedFiles: 2,
+          kind: "filesOnly",
+          omittedFiles: 2,
+          reasons: ["tooLarge"],
+        },
+        LABELS
+      )
+    ).toEqual({ kind: "text", label: "2 files" });
+    expect(
+      gitTabTrailingFromSummary(
+        {
+          changedFiles: 3,
+          deletions: 0,
+          excludedFiles: 3,
+          insertions: 0,
+          kind: "lineDelta",
+        },
+        LABELS
+      )
+    ).toEqual({ kind: "text", label: "3 files" });
   });
 });

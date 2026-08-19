@@ -1,8 +1,11 @@
 /**
  * WorktreeRef：CLI 定位用身份（W4-S1）。
  * 不承载文件/Git 内容；同路径重建必须更换 incarnationId。
+ *
+ * 本文件会进入 renderer（命令 schema → 物料 Host API 目录），禁止 import Node
+ * builtins。路径规范化只在 main（`attachWorktreeRefs` 的 realpath）完成后再
+ * 调用 `buildWorktreeRef`。
  */
-import { resolve } from "node:path";
 import { z } from "zod";
 
 const nonEmpty = z.string().min(1);
@@ -26,24 +29,18 @@ export const worktreeRefSchema = z
 
 export type WorktreeRef = z.infer<typeof worktreeRefSchema>;
 
-export function canonicalizeWorktreePath(path: string): string {
-  return resolve(path);
-}
-
 export function buildWorktreeRef(args: {
   path: string;
   gitRoot?: string | undefined;
   branch?: string | null | undefined;
   incarnationId: string;
 }): WorktreeRef {
-  const rootPath = canonicalizeWorktreePath(args.path);
+  const rootPath = args.path;
   return {
     worktreeKey: rootPath,
     rootPath,
     incarnationId: args.incarnationId,
-    ...(args.gitRoot
-      ? { gitRoot: canonicalizeWorktreePath(args.gitRoot) }
-      : {}),
+    ...(args.gitRoot ? { gitRoot: args.gitRoot } : {}),
     ...(args.branch === undefined ? {} : { branch: args.branch }),
   };
 }

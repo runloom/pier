@@ -159,6 +159,17 @@ describe("ScrollArea viewport behavior", () => {
     });
     expect(bottomOnly).toContain("scroll-fade-reveal-b");
     expect(bottomOnly).not.toContain("scroll-fade-reveal-t");
+    expect(shortY).not.toContain("--shell-scrollbar-width-legacy");
+
+    const spareY = scrollFadeUnsafeCss({
+      selector: "[data-native-bar]",
+      fade: "vertical",
+      profile: "short",
+      spareNativeScrollbar: "inline-end",
+    });
+    expect(spareY).toContain("var(--shell-scrollbar-gutter-mask)");
+    expect(spareY).toContain("mask-composite: add");
+    expect(spareY).not.toContain("mask-clip: content-box");
   });
 
   it("floating menu viewport owns short fade + inherit max height", () => {

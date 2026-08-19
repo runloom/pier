@@ -1,9 +1,13 @@
 import type {
   PierDiffReviewDriftThread,
   PierDiffViewItem,
+  PierImageDiffSide,
 } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { GitReviewIndexEntry } from "@shared/contracts/git/review.ts";
+import type {
+  GitReviewImageSide,
+  GitReviewIndexEntry,
+} from "@shared/contracts/git/review.ts";
 import { isReviewSlotIncludedInBody } from "./body-class.ts";
 import {
   classifyInlineDrift,
@@ -71,6 +75,14 @@ export function projectReviewDocumentResource(
           section.xy,
         ];
       }
+      if (section.kind === "image") {
+        return [
+          section.sectionKey,
+          section.kind,
+          section.before,
+          section.after,
+        ];
+      }
       return [section.sectionKey, section.kind, section.reason];
     }),
     resource.entry,
@@ -107,7 +119,7 @@ function projectFailedReviewDocumentResource(
           undefined,
           "Unable to load this change"
         );
-  // 仅 content 槽进正文；meta/notice 不挂 error 卡
+  // 仅正文槽进列表；notice 由账本直接出说明卡，不依赖 loaded document
   const slotItems = resource.entry.renderSlots
     .filter((slot) => isReviewSlotIncludedInBody(slot))
     .map((slot) => {
@@ -173,31 +185,63 @@ function projectLoadedReviewDocumentResource(
       }
       if (section.kind === "conflict") {
         const notice = conflictSectionText(context, section, locale);
+        const base = {
+          cacheKey: JSON.stringify([
+            itemId,
+            locale,
+            section.kind,
+            section.presentation,
+            section.contentsDigest,
+            section.xy,
+            notice,
+          ]),
+          fileDisplay: fileDisplayForSlot(slot),
+          id: itemId,
+          ...(lineStats === undefined ? {} : { lineStats }),
+          patch: null,
+          ...(stageControl === null ? {} : { stageControl }),
+          stateNotice: notice,
+        };
+        if (
+          section.presentation === "markers-text" &&
+          section.contents !== null
+        ) {
+          return [
+            {
+              ...base,
+              conflict: {
+                contents: section.contents,
+                contentsDigest: section.contentsDigest,
+                presentation: section.presentation,
+                stages: section.stages,
+                xy: section.xy,
+              },
+              kind: "conflict" as const,
+            },
+          ];
+        }
+        return [{ ...base, kind: "ready-notice" as const }];
+      }
+      if (section.kind === "image") {
         return [
           {
             cacheKey: JSON.stringify([
+              "image",
               itemId,
               locale,
-              section.kind,
-              section.presentation,
-              section.contentsDigest,
-              section.xy,
-              notice,
+              section.before,
+              section.after,
             ]),
-            conflict: {
-              contents: section.contents,
-              contentsDigest: section.contentsDigest,
-              presentation: section.presentation,
-              stages: section.stages,
-              xy: section.xy,
-            },
             fileDisplay: fileDisplayForSlot(slot),
             id: itemId,
-            kind: "conflict",
+            imageDiff: {
+              after: imageSideToView(section.gitRootPath, section.after),
+              before: imageSideToView(section.gitRootPath, section.before),
+            },
+            kind: "image",
             ...(lineStats === undefined ? {} : { lineStats }),
             patch: null,
             ...(stageControl === null ? {} : { stageControl }),
-            stateNotice: notice,
           },
         ];
       }
@@ -259,6 +303,36 @@ function fileDisplayForSlot(
   };
 }
 
+function imageSideToView(
+  gitRootPath: string,
+  side: GitReviewImageSide | null
+): PierImageDiffSide | null {
+  if (side === null) {
+    return null;
+  }
+  const locator =
+    side.kind === "worktree"
+      ? {
+          absolutePath: side.absolutePath,
+          kind: "absolute" as const,
+          mime: side.mime,
+          revision: side.revision,
+        }
+      : {
+          gitRoot: gitRootPath,
+          kind: "blob" as const,
+          mime: side.mime,
+          oid: side.oid,
+          revision: side.oid,
+        };
+  return {
+    byteSize: side.byteSize,
+    height: side.height,
+    locator,
+    width: side.width,
+  };
+}
+
 /**
  * soft-retain 跨 stage 时 document.sections 仍是旧 sectionKey。
  * item id 用**当前** slot.sectionKey；正文借用可匹配的旧 section。
@@ -311,9 +385,12 @@ function fallbackSectionForSlot(
       return byStage;
     }
   }
-  // 仍无匹配：任意唯一 state 段，或首个 patch（总比空 estimate 好）
+  // 仍无匹配：任意唯一非 image 段，或首个 patch（总比空 estimate 好）
   if (document.sections.length === 1) {
-    return document.sections[0];
+    const only = document.sections[0];
+    if (only !== undefined && only.kind !== "image") {
+      return only;
+    }
   }
   return patchSections[0];
 }

@@ -151,6 +151,26 @@ describe("Markdown IR parser", () => {
     );
   });
 
+  it("extracts outline headings from HTML blocks in document order", () => {
+    const document = parseMarkdownToIr(
+      [
+        '<h1 align="center">Pier</h1>',
+        "",
+        "# Pier",
+        "",
+        "<div><h2>Install</h2></div>",
+      ].join("\n")
+    );
+
+    expect(
+      document.headings.map(({ depth, id, text }) => ({ depth, id, text }))
+    ).toEqual([
+      { depth: 1, id: "pier", text: "Pier" },
+      { depth: 1, id: "pier-1", text: "Pier" },
+      { depth: 2, id: "install", text: "Install" },
+    ]);
+  });
+
   it("resolves nested definitions in document order with first-definition precedence", () => {
     const document = parseMarkdownToIr(
       [

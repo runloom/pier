@@ -1,3 +1,4 @@
+import type { ThemeRegistration } from "shiki";
 import {
   type BundledLanguage,
   type BundledTheme,
@@ -12,6 +13,7 @@ import type {
 
 const FALLBACK_DARK_THEME: BundledTheme = "github-dark";
 const FALLBACK_LIGHT_THEME: BundledTheme = "github-light";
+const themeRegistrations = new Map<string, ThemeRegistration>();
 
 function bundledLanguage(value: string): BundledLanguage | null {
   const normalized = value.trim().toLowerCase();
@@ -27,15 +29,28 @@ function bundledTheme(value: string): BundledTheme {
     : FALLBACK_DARK_THEME;
 }
 
+function requestTheme(
+  request: MarkdownCodeHighlightRequest
+): BundledTheme | ThemeRegistration {
+  if (request.themeRegistration?.name === request.theme) {
+    themeRegistrations.set(
+      request.theme,
+      request.themeRegistration as ThemeRegistration
+    );
+  }
+  return themeRegistrations.get(request.theme) ?? bundledTheme(request.theme);
+}
+
 async function highlight(
   request: MarkdownCodeHighlightRequest
 ): Promise<MarkdownCodeHighlightResponse> {
+  const theme = requestTheme(request);
   const language = bundledLanguage(request.language);
   if (!language) return { requestId: request.requestId, type: "error" };
   try {
     const result = await codeToTokens(request.code, {
       lang: language,
-      theme: bundledTheme(request.theme),
+      theme,
     });
     return {
       background: result.bg ?? "transparent",

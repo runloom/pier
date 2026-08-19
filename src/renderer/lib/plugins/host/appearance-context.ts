@@ -1,5 +1,6 @@
 import type {
   RendererPluginAppearance,
+  RendererPluginCodeThemeRegistration,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import i18next from "i18next";
@@ -16,10 +17,18 @@ function currentPluginAppearance(): RendererPluginAppearance {
   const theme = useThemeStore.getState();
   const rootStyles = getComputedStyle(document.documentElement);
   const codeThemes = getShikiThemePair(theme.stylePresetId);
+  const activeCodeTheme = getShikiTheme(
+    theme.stylePresetId,
+    theme.resolvedTheme
+  );
+  const codeTheme = activeCodeTheme.name ?? theme.stylePresetId;
+  const codeThemeRegistration =
+    theme.stylePresetId === "pierre" || theme.stylePresetId === "pierre-soft"
+      ? (activeCodeTheme as RendererPluginCodeThemeRegistration)
+      : undefined;
   return {
-    codeTheme:
-      getShikiTheme(theme.stylePresetId, theme.resolvedTheme).name ??
-      theme.stylePresetId,
+    codeTheme,
+    ...(codeThemeRegistration ? { codeThemeRegistration } : {}),
     codeThemes,
     density: "compact",
     language: useLocaleStore.getState().language,

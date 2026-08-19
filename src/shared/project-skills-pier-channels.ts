@@ -36,6 +36,7 @@ export const PIER_DISCOVERY_CHANNELS: readonly PierDiscoveryChannel[] = [
       "command-code",
       "rovo",
       "pi",
+      "omp",
       "devin",
       "kilo",
       "codebuff",

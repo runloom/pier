@@ -10,6 +10,7 @@ import { claudeComposerSurface } from "./claude.ts";
 import { clineComposerSurface } from "./cline.ts";
 import { codebuddyComposerSurface } from "./codebuddy.ts";
 import { codexComposerSurface } from "./codex.ts";
+import { commandCodeComposerSurface } from "./command-code.ts";
 import { continueComposerSurface } from "./continue.ts";
 import { copilotComposerSurface } from "./copilot.ts";
 import { cursorComposerSurface } from "./cursor.ts";
@@ -19,7 +20,9 @@ import { gooseComposerSurface } from "./goose.ts";
 import { grokComposerSurface } from "./grok.ts";
 import { kiloComposerSurface } from "./kilo.ts";
 import { kimiComposerSurface } from "./kimi.ts";
+import { ompComposerSurface } from "./omp.ts";
 import { opencodeComposerSurface } from "./opencode.ts";
+import { piComposerSurface } from "./pi.ts";
 import { qwenCodeComposerSurface } from "./qwen-code.ts";
 import {
   type AgentBuiltinCommand,
@@ -44,6 +47,7 @@ const BY_AGENT: Readonly<Record<string, ResolvedAgentComposerSurface>> = {
   claude: claudeComposerSurface,
   cline: clineComposerSurface,
   codebuddy: codebuddyComposerSurface,
+  "command-code": commandCodeComposerSurface,
   codex: codexComposerSurface,
   continue: continueComposerSurface,
   copilot: copilotComposerSurface,
@@ -54,9 +58,11 @@ const BY_AGENT: Readonly<Record<string, ResolvedAgentComposerSurface>> = {
   grok: grokComposerSurface,
   kilo: kiloComposerSurface,
   kimi: kimiComposerSurface,
+  omp: ompComposerSurface,
   opencode: opencodeComposerSurface,
   /** openclaude shares Claude Code's slash/skill surface. */
   openclaude: claudeComposerSurface,
+  pi: piComposerSurface,
   "qwen-code": qwenCodeComposerSurface,
 };
 

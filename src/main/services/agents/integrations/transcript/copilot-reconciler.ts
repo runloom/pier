@@ -13,7 +13,8 @@ export type CopilotTranscriptReconciler = TranscriptTailReconciler;
 /**
  * Copilot session-state events.jsonl 终态：
  * - `abort` + 用户取消 reason 白名单 → TurnInterrupted（Esc；agentStop 常不发）
- * - `assistant.turn_end` → TurnCompleted（正常回合结束；与 advisory agentStop 双轨）
+ * - `session.task_complete` → TurnCompleted（可选落盘；交互模式常不写）
+ * `assistant.turn_end` 是单次 LLM 调用，多轮工具循环会多次出现，不当完成。
  */
 export const COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE = [
   {
@@ -21,7 +22,7 @@ export const COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE = [
     pierEvent: "TurnInterrupted" as const,
   },
   {
-    nativeEvent: "copilot.events.assistant.turn_end",
+    nativeEvent: "copilot.events.session.task_complete",
     pierEvent: "TurnCompleted" as const,
   },
 ] as const;
@@ -106,7 +107,7 @@ export function classifyCopilotEventsLine(
   line: string
 ): TranscriptTerminalRecord | null {
   // 廉价预筛
-  if (!(line.includes('"abort"') || line.includes("turn_end"))) {
+  if (!(line.includes('"abort"') || line.includes("task_complete"))) {
     return null;
   }
   let parsed: {
@@ -131,12 +132,10 @@ export function classifyCopilotEventsLine(
     }
     return null;
   }
-  if (parsed.type === "assistant.turn_end") {
-    const turnId =
-      typeof parsed.data?.turnId === "string" ? parsed.data.turnId.trim() : "";
+  if (parsed.type === "session.task_complete") {
     return {
       ...COPILOT_TRANSCRIPT_TERMINAL_EVIDENCE[1],
-      turnId,
+      turnId: "",
     };
   }
   return null;

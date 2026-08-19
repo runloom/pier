@@ -20,6 +20,8 @@ const RAW_COLOR_WHOLE_FILE_OWNERS = new Set([
   "src/renderer/lib/theme/derive-terminal-colors.ts",
   "src/renderer/lib/theme/derive-tokens.ts",
   "src/renderer/lib/theme/oklch.ts",
+  // Single owner for Pierre's brand palette and derived editor/theme overlay.
+  "src/renderer/lib/theme/pierre-brand-overlay.ts",
   "src/shared/theme-colors.ts",
 ]);
 const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([

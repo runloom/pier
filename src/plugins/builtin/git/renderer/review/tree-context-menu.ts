@@ -12,9 +12,9 @@ import { useCallback } from "react";
 import { GIT_CHANGES_PANEL_ID } from "../../manifest.ts";
 import { pluginText } from "../plugin-text.ts";
 import { panelContextFromReviewGitRoot } from "./context/from-git-root.ts";
+import type { GitReviewTreeFileRef } from "./tree/section.ts";
 import type { GitReviewTreeModel } from "./tree.tsx";
 import { GIT_REVIEW_TREE_ITEM_SURFACE } from "./tree-actions.ts";
-import type { GitReviewTreeFileRef } from "./tree-section.ts";
 
 export interface GitReviewTreeItemMenuFlags {
   /** True when every tracked discard path is a deleted working-tree file. */

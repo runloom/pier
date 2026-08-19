@@ -39,6 +39,8 @@ export const commandPalette = {
     openTerminalDebugWindowFailed: "Couldn't open debug window — try again",
     openSettings: "Open Settings",
     openEnvironment: "Open Environment Settings",
+    installPierCommand: "Install pier Command",
+    removePierCommand: "Remove pier Command",
     closeActivePanel: "Close Active Panel",
     focusTab: "Switch to Tab {{index}}",
     newTab: "New Tab",

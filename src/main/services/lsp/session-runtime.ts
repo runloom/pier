@@ -30,7 +30,6 @@ import { LspStderrLogger } from "./stderr-logger.ts";
 
 export type {
   LanguageToolsTextDocument,
-  LspSessionClientRole,
   LspSessionPhase,
   LspSessionRuntime,
   LspSessionRuntimeOptions,
@@ -71,7 +70,8 @@ export function createLspSessionRuntime(
   const pendingRequests = new Map<number, PendingLspRequest>();
   const documents = new LspLanguageToolsDocuments();
   let phase: LspSessionPhase = "running";
-  let initializationPromise: Promise<void> | null = null;
+  let initializationPromise: Promise<unknown> | null = null;
+  let initializeResult: unknown;
   let nextRequestId = -1;
   let shutdownResponse: Deferred<void> | null = null;
 
@@ -187,7 +187,7 @@ export function createLspSessionRuntime(
         }
       }
     }
-    options.onMessage(options.sessionId, body);
+    options.onMessage(options.sessionId, body, message);
   };
 
   const handleStreamError = (
@@ -369,9 +369,9 @@ export function createLspSessionRuntime(
 
   const ensureInitialized = (
     params: Record<string, unknown>
-  ): Promise<void> => {
+  ): Promise<unknown> => {
     if (phase === "ready") {
-      return Promise.resolve();
+      return Promise.resolve(initializeResult);
     }
     if (initializationPromise) {
       return initializationPromise;
@@ -381,7 +381,10 @@ export function createLspSessionRuntime(
     }
     phase = "initializing";
     initializationPromise = (async () => {
-      await request("initialize", mergeInitializationOptions(params));
+      const result = await request(
+        "initialize",
+        mergeInitializationOptions(params)
+      );
       if (
         !send(
           JSON.stringify({ jsonrpc: "2.0", method: "initialized", params: {} })
@@ -389,7 +392,9 @@ export function createLspSessionRuntime(
       ) {
         throw new Error("LSP session not available");
       }
+      initializeResult = result;
       phase = "ready";
+      return result;
     })()
       .catch((error: unknown) => {
         termination.beginAbnormal("failed");
@@ -405,11 +410,7 @@ export function createLspSessionRuntime(
     document: LanguageToolsTextDocument,
     readText: () => Promise<string>
   ): Promise<void> => {
-    if (
-      options.clientRole !== "language-tools" ||
-      !isWritable() ||
-      !isDocumentSyncAccepted()
-    ) {
+    if (!(isWritable() && isDocumentSyncAccepted())) {
       return Promise.reject(new Error("LSP session not available"));
     }
     return documents.ensureOpen(
@@ -466,10 +467,13 @@ export function createLspSessionRuntime(
 
   return {
     child: options.child,
-    clientRole: options.clientRole,
     close,
+    documentState: (uri) => documents.state(uri),
     ensureInitialized,
     ensureLanguageToolsDocumentOpen,
+    get initializeResult() {
+      return initializeResult;
+    },
     get phase() {
       return phase;
     },
@@ -487,7 +491,6 @@ export function createLspSessionRuntime(
     get terminationAttempt() {
       return termination.terminationAttempt;
     },
-    webContentsId: options.webContentsId,
     workspaceKey: options.workspaceKey,
   };
 }

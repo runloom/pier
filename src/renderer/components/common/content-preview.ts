@@ -1,7 +1,7 @@
 /**
  * Public content-preview entry — host fullscreen stage (not a dialog card).
  *
- * Use `openContentPreview` / `openNodeGraphPreview` / `openHtmlWorldPreview`
+ * Use `openContentPreview` / `openMermaidPreview` / `openHtmlWorldPreview`
  * for new call sites. `openImagePreview` remains as an image convenience wrapper.
  */
 export {
@@ -13,9 +13,9 @@ export {
   type ImageLightboxSource as OpenImagePreviewSource,
   type OpenContentPreviewRequest,
   type OpenHtmlWorldPreviewRequest,
-  type OpenNodeGraphPreviewRequest,
+  type OpenMermaidPreviewRequest,
   openContentPreview,
   openHtmlWorldPreview,
   openImagePreview,
-  openNodeGraphPreview,
+  openMermaidPreview,
 } from "@/stores/content-preview.store.ts";

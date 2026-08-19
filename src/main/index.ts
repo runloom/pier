@@ -32,6 +32,7 @@ import {
 } from "./bootstrap-privileged-protocols.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
+import { applyGpuWorkarounds } from "./gpu-workarounds.ts";
 import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerClipboardIpc } from "./ipc/clipboard.ts";
@@ -113,7 +114,7 @@ windowManager.onCreate(({ window }) => {
 });
 
 configureMainAppIdentity(isDev);
-
+applyGpuWorkarounds();
 // 第二实例直接 quit + return 不继续 bootstrap, 否则会撞主实例的 userData 文件锁.
 const gotTheLock = app.requestSingleInstanceLock();
 if (gotTheLock) {
@@ -388,10 +389,11 @@ if (gotTheLock) {
       registerTerminalIpc(ipcMain, {
         launchGate: appCore.services.agentLaunchGate,
         localEnvironments: appCore.services.localEnvironments,
-        recordAgentLaunch: (agentId) =>
-          appCore.services.agentUsage.recordSuccessfulLaunch(agentId),
         processEnvironment: appCore.services.processEnvironment,
+        recordAgentLaunch: (id) =>
+          appCore.services.agentUsage.recordSuccessfulLaunch(id),
         taskService: appCore.services.tasks,
+        terminalTranscripts: appCore.services.terminalTranscripts,
       });
       registerPeerUidFromNativeAddon(getTerminalAddon());
       registerTaskRuntimeDiagnosticsIpc(ipcMain);
@@ -404,8 +406,7 @@ if (gotTheLock) {
       registerFileQueryIpc();
       registerLspIpc();
       localControlRegistration.start();
-      // Legacy terminal session keys (runtime window ids) → record UUIDs.
-      // Before transfer recovery / task reconcile / window restore; failure aborts boot.
+      // Legacy session keys → record UUIDs; must finish before restore.
       try {
         await migrateTerminalSessionScopesToRecordIds(
           await readPreferredOpenWindowRecordIds()

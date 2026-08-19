@@ -11,10 +11,12 @@
 | 依赖 | 说明 |
 | --- | --- |
 | Node.js `^24.15.0` | 与 `package.json` `engines` 一致 |
-| pnpm `>=11.12.0` | 仓库 `packageManager` 锁定 11.12.0 |
+| pnpm `>=11.12.0` | 仓库 `packageManager` 锁定 11.18.0 |
 | Xcode Command Line Tools | `xcode-select --install` |
 | Homebrew | https://brew.sh |
 | zig 0.15 | `brew install zig@0.15`（编译 libghostty） |
+| librsvg | `brew install librsvg`（`pnpm build:icons` 需要 `rsvg-convert`） |
+| macOS `sips` | 系统自带；`pnpm build:icons` 用它生成系统兼容的 16/32px ICNS 条目 |
 
 ## 首次启动
 
@@ -76,8 +78,20 @@ pnpm test:coverage       # 与 CI coverage job 同形（含阈值门槛）
 pnpm test:e2e
 pnpm build               # electron-vite → out/
 pnpm build:dist          # 双架构 dmg/zip（签名 / 公证）
-pnpm build:icons         # 改 build/app-icon-*.svg 后重建 icon
+pnpm build:icons         # 从已确认的 SVG 母版重建 ICNS / ICO / Linux 图标集
 ```
+
+应用图标的透明品牌母版是 `build/design-sources/pier-logo.svg`。平台导出按尺寸分工：
+
+- `build/app-icon-master.svg`：F 标准稿，用于 macOS 256–1024px。
+- `build/app-icon-micro.svg`：I Micro 稿，用于 macOS 16–128px 与开发环境 Dock。
+- `build/app-icon-unplated.svg`：透明 F 稿，用于 Windows 与 Linux。
+
+`pnpm build:icons` 是唯一正式生成入口；不要直接手改生成后的 `build/icon.icns`、
+`build/icon.ico`、`build/icon.png` 或 `build/icons/*.png`。Linux 环境需先安装
+`librsvg2-bin`。完整 ICNS 生成需在带系统 `sips` 的 macOS 上执行；脚本会在写入任何正式
+资产前检查两项依赖，并先在暂存目录完成整套生成，全部成功后再统一替换。macOS CI 还会用
+系统 `iconutil` 解包最终 ICNS，核对全部官方尺寸，避免小图标容器兼容性回归。
 
 ## Quality Gate：正确性优先，CI 做确认与加速
 
@@ -159,7 +173,7 @@ UI / 弹窗 / 文案 / 颜色 / shadcn 治理以 [`AGENTS.md`](../AGENTS.md) 为
 
 ## 相关文档
 
-- [CLI 用户手册（Canvas）](../.pier/canvases/pier-cli-user-manual/)
+- [CLI 用户手册](../.pier/canvases/pier-cli-user-manual/README.md)
 - [插件](./plugins.md)
 - [发布](./release.md)
 - [贡献](../CONTRIBUTING.md)

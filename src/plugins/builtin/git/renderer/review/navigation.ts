@@ -1,4 +1,4 @@
-import { isReviewEntryBodyHydratable } from "./document/body-class.ts";
+import { isReviewSlotIncludedInBody } from "./document/body-class.ts";
 import type { GitReviewDocumentResource } from "./document/resource.ts";
 
 export interface PendingReviewNavigation {
@@ -103,9 +103,17 @@ export function isReviewNavigationTerminal(
   settled: boolean,
   sectionKey?: string
 ): boolean {
-  // 金标准：meta/notice 永不 materialize → 导航立即终态（不假 scroll）
-  if (resource !== undefined && !isReviewEntryBodyHydratable(resource.entry)) {
-    return true;
+  // meta 不进正文 → 导航立即终态（不假 scroll）。notice 已在列表里，继续滚。
+  if (resource !== undefined) {
+    const slot =
+      sectionKey === undefined
+        ? resource.entry.renderSlots[0]
+        : resource.entry.renderSlots.find(
+            (candidate) => candidate.sectionKey === sectionKey
+          );
+    if (slot !== undefined && !isReviewSlotIncludedInBody(slot)) {
+      return true;
+    }
   }
   if (resource?.kind === "error" || (resource === undefined && settled)) {
     return true;

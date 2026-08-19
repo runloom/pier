@@ -19,12 +19,7 @@ async function ingestAgentCommandInjectFailed(
   ingest: (report: NotificationReport) => void,
   panelId: string
 ): Promise<void> {
-  let locale: "en" | "zh-CN" = "en";
-  try {
-    locale = await resolveAttentionLocale();
-  } catch {
-    locale = "en";
-  }
+  const locale = await resolveAttentionLocale().catch(() => "en" as const);
   const copy = formatAgentCommandInjectFailedCopy(locale);
   ingest({
     body: copy.body,

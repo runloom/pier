@@ -128,6 +128,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       })),
     };
 
+    const closeTerminal = fakeAddon.closeTerminal;
     const { registerTerminalIpc } = await import("@main/ipc/terminal/index.ts");
     registerTerminalIpc(fakeIpcMain as never, {
       loadNativeAddon: () => ({ addon: fakeAddon as never, error: null }),
@@ -135,7 +136,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       recordAgentLaunch: opts.recordAgentLaunch as never,
     });
 
-    return { fakeAddon, handlers, invokeHandlers, win };
+    return { closeTerminal, fakeAddon, handlers, invokeHandlers, win };
   }
 
   function terminalPresentation(panelId = "panel-1", rendererSequence = 1) {
@@ -215,7 +216,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     // close 路径必须双侧清理:swift 端释放 NSView (closeTerminal) + main 端删 session
     // state (removeTerminalPanelSession 让下次 fresh 创建 panel 同 id 时不会 reload
     // 旧 cwd). 缺一边都会导致 stale state 泄漏.
-    const { fakeAddon, invokeHandlers, win } = await setupHarness();
+    const { closeTerminal, invokeHandlers, win } = await setupHarness();
     const sessionState = await import("@main/state/terminal-session-state.ts");
 
     await invokeHandlers.get("pier:terminal:close")?.(
@@ -223,7 +224,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       "panel-1"
     );
 
-    expect(fakeAddon.closeTerminal).toHaveBeenCalledWith("7::panel-1");
+    expect(closeTerminal).toHaveBeenCalledWith("7::panel-1");
     expect(sessionState.removeTerminalPanelSession).toHaveBeenCalledWith(
       "main",
       "panel-1"

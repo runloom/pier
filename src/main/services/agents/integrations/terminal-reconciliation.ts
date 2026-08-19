@@ -17,7 +17,7 @@ import type {
  * 规范事件，不感知各 provider transcript 路径、格式或 watcher 生命周期。
  * 当前接入：Codex；Claude / Qoder / Codebuddy（Claude 族中断）；Copilot
  * （abort + turn_end）；Kimi（TurnEnd）；Grok（updates.jsonl）；Cursor
- * （AskQuestion 问卷，hook 不可达）。
+ * （AskQuestion / CreatePlan / turn_ended；AskQuestion hook 不可达）。
  */
 export interface AgentTerminalReconciler {
   dispose(): void;

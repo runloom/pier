@@ -200,7 +200,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
     transport: ["hosted-plugin"],
     evidence: {
       lifecycle: "native",
-      ready: "native",
+      ready: "unsupported",
       processing: "native",
       tool: "native",
       waiting: "native",
@@ -212,8 +212,8 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
     eventMappings: facts(
       nativeFact("lifecycle", "session.created", "SessionStart"),
       nativeFact("lifecycle", "session.deleted", "SessionEnd"),
-      nativeFact("ready", "session.idle", "Stop"),
-      nativeFact("ready", "session.status=idle", "Stop"),
+      nativeFact("control", "session.idle", "Stop"),
+      nativeFact("control", "session.status=idle", "Stop"),
       nativeFact("processing", "chat.message", "PromptSubmit"),
       nativeFact(
         "processing",
@@ -242,7 +242,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       "e8b09927889ba4b5b7fc74bbab5b864d205406ca"
     ),
   },
-  cursor: {
+  copilot: {
     integration: "active",
     transport: ["hook-command", "transcript-reconciler"],
     evidence: {
@@ -250,65 +250,22 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       ready: "native",
       processing: "native",
       tool: "native",
-      waiting: "reconciled",
-      error: "native",
-      completed: "native",
-      interrupted: "native",
-      subagent: "native",
-    },
-    eventMappings: facts(
-      nativeFact("lifecycle", "sessionStart", "SessionStart"),
-      nativeFact("lifecycle", "sessionEnd", "SessionEnd"),
-      nativeFact("ready", "stop.status=completed", "TurnCompleted"),
-      nativeFact("processing", "beforeSubmitPrompt", "PromptSubmit"),
-      nativeFact("processing", "postToolUse", "ToolComplete"),
-      nativeFact("processing", "postToolUseFailure", "ToolComplete"),
-      nativeFact("tool", "preToolUse", "ToolStart"),
-      fact(
-        "waiting",
-        "reconciled",
-        "cursor.transcript.ask_question",
-        "InteractionRequested"
-      ),
-      fact(
-        "waiting",
-        "reconciled",
-        "cursor.transcript.ask_question.answered",
-        "InteractionResolved"
-      ),
-      nativeFact("error", "stop.status=error", "error"),
-      nativeFact("completed", "stop.status=completed", "TurnCompleted"),
-      nativeFact("interrupted", "stop.status=aborted", "TurnInterrupted"),
-      nativeFact("subagent", "subagentStart", "SubagentStart"),
-      nativeFact("subagent", "subagentStop", "SubagentStop")
-    ),
-    upstream: upstream(
-      "https://cursor.com/docs/hooks",
-      "Cursor CLI hooks documentation"
-    ),
-  },
-  copilot: {
-    integration: "active",
-    transport: ["hook-command", "transcript-reconciler"],
-    evidence: {
-      lifecycle: "native",
-      ready: "reconciled",
-      processing: "native",
-      tool: "native",
       waiting: "unsupported",
       error: "native",
-      completed: "reconciled",
+      completed: "native",
       interrupted: "reconciled",
       subagent: "native",
     },
     eventMappings: facts(
       nativeFact("lifecycle", "sessionStart", "SessionStart"),
       nativeFact("lifecycle", "sessionEnd", "SessionEnd"),
-      nativeFact("control", "agentStop", "Stop"),
+      nativeFact("ready", "agentStop", "TurnCompleted"),
+      nativeFact("completed", "agentStop", "TurnCompleted"),
+      nativeFact("control", "agentStop.stop_hook_active=true", "Stop"),
       fact(
         "ready",
         "reconciled",
-        "copilot.events.assistant.turn_end",
+        "copilot.events.session.task_complete",
         "TurnCompleted"
       ),
       fact(
@@ -327,7 +284,7 @@ export const AGENT_STATUS_EVIDENCE_ROWS_A_1 = {
       fact(
         "completed",
         "reconciled",
-        "copilot.events.assistant.turn_end",
+        "copilot.events.session.task_complete",
         "TurnCompleted"
       ),
       fact(

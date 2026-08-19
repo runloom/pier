@@ -7,6 +7,8 @@ const ROOT = process.cwd();
 const LOCALE_ROOTS = [
   join(ROOT, "src", "renderer", "i18n", "locales", "zh-CN"),
   join(ROOT, "src", "renderer", "i18n", "locales", "en"),
+  join(ROOT, "src", "renderer", "i18n", "locales", "ja"),
+  join(ROOT, "src", "renderer", "i18n", "locales", "ko"),
   join(ROOT, "src", "plugins", "builtin", "files", "locales"),
   join(ROOT, "src", "plugins", "builtin", "git", "locales"),
 ] as const;
@@ -21,7 +23,6 @@ const ZH_BANNED_PATTERNS: ReadonlyArray<{ id: string; pattern: RegExp }> = [
   { id: "面板参数", pattern: /面板参数/ },
   { id: "可绑定", pattern: /可绑定/ },
   { id: "运行标识", pattern: /运行标识/ },
-  { id: "物料", pattern: /物料/ },
   { id: "仅清单预览", pattern: /仅清单预览/ },
   { id: "插件清单", pattern: /插件清单/ },
   { id: "发现路径", pattern: /发现路径/ },
@@ -40,6 +41,23 @@ const ZH_BANNED_PATTERNS: ReadonlyArray<{ id: string; pattern: RegExp }> = [
   { id: "Agent 状态", pattern: /\bAgent\s*状态/ },
   { id: "启动的 CLI", pattern: /启动的\s*CLI/ },
   { id: "已保护(旧草稿态)", pattern: /(?<!草稿)已保护|保护中|未保护|草稿保护/ },
+];
+
+/** 日语／韩语用户串禁用英文实现词。 */
+const CJK_LATIN_BANNED_PATTERNS: ReadonlyArray<{
+  id: string;
+  pattern: RegExp;
+}> = [
+  { id: "Agent 英文词", pattern: /\bAgent\b/ },
+  { id: "Needs you", pattern: /\bNeeds you\b/ },
+  { id: "Needs You", pattern: /\bNeeds You\b/ },
+  { id: "worktree 英文词", pattern: /\bworktree\b/i },
+  { id: "DETACHED", pattern: /\bDETACHED\b/ },
+  { id: "MERGING", pattern: /\bMERGING\b/ },
+  { id: "REBASING", pattern: /\bREBASING\b/ },
+  { id: "CHERRY-PICK", pattern: /\bCHERRY-PICK\b/ },
+  { id: "REVERTING", pattern: /\bREVERTING\b/ },
+  { id: "BISECT 全大写状态码", pattern: /\bBISECT\b/ },
 ];
 
 /** 英文用户串禁用实现词（与近期白话化保持同步）。 */
@@ -126,6 +144,18 @@ function isEnglishLocalePath(filePath: string): boolean {
   );
 }
 
+function isJapaneseOrKoreanLocalePath(filePath: string): boolean {
+  const relativePath = projectRelative(filePath);
+  return (
+    relativePath.includes("/ja/") ||
+    relativePath.includes("/ko/") ||
+    relativePath.endsWith("/ja.json") ||
+    relativePath.endsWith("/ko.json") ||
+    relativePath.endsWith("ja.json") ||
+    relativePath.endsWith("ko.json")
+  );
+}
+
 function extractJsonStringValues(value: unknown, out: string[] = []): string[] {
   if (typeof value === "string") {
     out.push(value);
@@ -198,6 +228,19 @@ describe("user-facing copy governance", () => {
     expect(agentContext).toContain(
       "tests/unit/renderer/app/user-copy-governance.test.ts"
     );
+    expect(agentContext).toContain("工作台「组件」");
+    expect(agentContext).toContain("Canvas 发现面「物料」");
+  });
+
+  it("keeps workbench Chinese copy on 组件, not 物料", () => {
+    const workbench = readFileSync(
+      join(ROOT, "src", "renderer", "i18n", "locales", "zh-CN", "workbench.ts"),
+      "utf8"
+    );
+    const hits = findBannedHits(extractTsStringLiterals(workbench), [
+      { id: "物料", pattern: /物料/ },
+    ]);
+    expect(hits).toEqual([]);
   });
 
   it("keeps Chinese locale string values free of implementation jargon", () => {
@@ -224,6 +267,46 @@ describe("user-facing copy governance", () => {
         );
         return hits.map((hit) => `${projectRelative(filePath)}: ${hit}`);
       });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps Japanese and Korean locale string values free of English implementation jargon", () => {
+    const offenders = LOCALE_ROOTS.flatMap(listFiles)
+      .filter(isJapaneseOrKoreanLocalePath)
+      .flatMap((filePath) => {
+        const hits = findBannedHits(
+          extractLocaleValues(filePath),
+          CJK_LATIN_BANNED_PATTERNS
+        );
+        return hits.map((hit) => `${projectRelative(filePath)}: ${hit}`);
+      });
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("keeps official plugin locale strings free of implementation jargon", () => {
+    const manifests = [
+      join(ROOT, "packages", "plugin-claude", "plugin.json"),
+      join(ROOT, "packages", "plugin-codex", "plugin.json"),
+      join(ROOT, "packages", "plugin-grok", "plugin.json"),
+      join(ROOT, "packages", "plugin-ssh", "plugin.json"),
+      join(ROOT, "packages", "plugin-tmux", "plugin.json"),
+    ];
+    const offenders = manifests.flatMap((manifestPath) => {
+      const parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as {
+        locales?: Record<string, unknown>;
+      };
+      const locales = parsed.locales ?? {};
+      return (["zh-CN", "ja", "ko"] as const).flatMap((locale) => {
+        const patterns =
+          locale === "zh-CN" ? ZH_BANNED_PATTERNS : CJK_LATIN_BANNED_PATTERNS;
+        return findBannedHits(
+          extractJsonStringValues(locales[locale]),
+          patterns
+        ).map((hit) => `${projectRelative(manifestPath)}#${locale}: ${hit}`);
+      });
+    });
 
     expect(offenders).toEqual([]);
   });

@@ -229,7 +229,11 @@ export function createReviewDocumentSyncHandler(
     // 仅「真正文变更」才走 updateItems（新 id 的 estimate→estimate 不灌 Pierre）
     const bodyContentUpdates = contentUpdates.filter((item) => {
       const previous = previousItemsSnapshot.get(item.id);
-      if (item.kind === "loaded" || item.kind === "error") {
+      if (
+        item.kind === "loaded" ||
+        item.kind === "error" ||
+        item.kind === "image"
+      ) {
         return true;
       }
       if (item.kind === "ready-notice") {
@@ -243,7 +247,11 @@ export function createReviewDocumentSyncHandler(
     });
     const needsImmediateFlush = bodyContentUpdates.some((item) => {
       const previous = previousItemsSnapshot.get(item.id);
-      if (item.kind === "loaded" || item.kind === "error") {
+      if (
+        item.kind === "loaded" ||
+        item.kind === "error" ||
+        item.kind === "image"
+      ) {
         return previous?.kind === "estimate" || previous === undefined;
       }
       return item.kind === "ready-notice";

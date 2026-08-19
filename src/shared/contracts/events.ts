@@ -6,6 +6,11 @@ import type { ProjectSkillsInvalidatedEvent } from "./project-skills.ts";
 export type { PanelSnapshot } from "./panel.ts";
 
 export interface WindowInfo {
+  /**
+   * Electron `BrowserWindow.id` 字符串（与 `PIER_WINDOW_ID` / hook 同词汇）。
+   * 命令路由同时认 `id`、本字段和 `recordId`。
+   */
+  electronWindowId?: string | undefined;
   focused: boolean;
   id: string;
   lastFocusedAt?: number | undefined;

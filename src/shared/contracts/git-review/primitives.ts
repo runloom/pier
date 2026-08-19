@@ -54,6 +54,7 @@ export const gitReviewFailureReasonSchema = z.enum([
   "outputLimit",
   "commandFailed",
   "internal",
+  "indexLocked",
 ]);
 export type GitReviewFailureReason = z.infer<
   typeof gitReviewFailureReasonSchema

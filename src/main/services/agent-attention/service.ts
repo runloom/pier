@@ -133,6 +133,7 @@ export function createAgentAttentionService({
           severity: inboxSeverityFor(kind),
           source: "agent-attention",
           title: copy.title,
+          titleKey: copy.titleKey,
           trigger: "system-event",
         });
       }

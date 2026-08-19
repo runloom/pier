@@ -1,5 +1,6 @@
 export const CORE_AGENT_STATUS_ITEM_ID = "core.agent-status";
 export const CORE_COMMENTS_STATUS_ITEM_ID = "core.comments-status";
+export const CORE_TERMINAL_HISTORY_STATUS_ITEM_ID = "core.terminal-history";
 export const CORE_TASK_STATUS_ITEM_ID = "core.task-status";
 
 export const CORE_ACTIVITY_OVERVIEW_WIDGET_ID = "core.activity-overview";
@@ -62,6 +63,8 @@ export const CORE_RESERVED_ACTION_IDS = [
   "pier.run.task",
   "pier.run.terminalList",
   "pier.settings.open",
+  "pier.settings.installCli",
+  "pier.settings.removeCli",
   "pier.terminal.clearScreen",
   "pier.terminal.close",
   "pier.terminal.composerAttach",
@@ -92,6 +95,7 @@ export const CORE_RESERVED_TERMINAL_STATUS_ITEM_IDS = [
   CORE_AGENT_STATUS_ITEM_ID,
   CORE_COMMENTS_STATUS_ITEM_ID,
   CORE_TASK_STATUS_ITEM_ID,
+  CORE_TERMINAL_HISTORY_STATUS_ITEM_ID,
 ] as const;
 
 export const CORE_RESERVED_WORKBENCH_WIDGET_IDS = [

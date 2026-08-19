@@ -1,0 +1,32 @@
+/** 设置 → 终端：把安装包里的 pier 命令装到本机。 */
+export const settingsCliCommand = {
+  title: "pier 命令",
+  description: "安装后可在终端运行 pier，用来控制当前已打开的 Pier。",
+  statusLabel: "状态：",
+  status: {
+    installed: "已安装到 {{path}}",
+    notInstalled: "未安装",
+    loading: "正在检查…",
+  },
+  reason: {
+    dev: "开发构建不会安装 pier 命令。请在 Pier 仓库里运行 pnpm --silent cli:dev -- …",
+    unsupported: "当前系统暂不支持安装 pier 命令。",
+    missingSource: "这个 Pier 安装包缺少 pier 命令文件。",
+    conflict: "{{path}} 上已有另一个 pier。请先移除它，然后再试。",
+    needsAdmin: "macOS 会要求输入密码，以便把 pier 加到 {{path}}。",
+  },
+  install: "安装 pier 命令",
+  installing: "正在安装…",
+  uninstall: "移除 pier 命令",
+  uninstalling: "正在移除…",
+  installConfirmTitle: "安装 pier 命令？",
+  installConfirmBody: "macOS 会要求输入密码，以便把 pier 加到 {{path}}。",
+  uninstallConfirmTitle: "移除 pier 命令？",
+  uninstallConfirmBody: "将从 {{path}} 移除 pier。之后可以再次安装。",
+  installFailed: "无法安装 pier 命令",
+  uninstallFailed: "无法移除 pier 命令",
+  statusFailed: "暂时无法读取 pier 命令状态，请重试",
+  toastInstalled: "已安装 pier 命令",
+  toastAlreadyInstalled: "pier 命令已经安装",
+  toastRemoved: "已移除 pier 命令",
+} as const;

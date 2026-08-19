@@ -17,10 +17,7 @@ import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { pluginText } from "../../plugin-text.ts";
 import { openGitReviewPathInEditor } from "../diff-actions.ts";
 
-/**
- * Multi-file conflict host: one official UnresolvedFile (or file-level card)
- * per conflict item. Does not use CodeView.
- */
+/** UnresolvedFile host for markers-text conflict items. */
 export function ReviewConflictView(options: {
   readonly appearance: PierDiffViewAppearance;
   readonly context: RendererPluginContext;
@@ -45,8 +42,8 @@ export function ReviewConflictView(options: {
   } = options;
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const baseLabels = useMemo(
-    (): Omit<PierUnresolvedConflictLabels, "description"> => ({
+  const labels = useMemo(
+    (): PierUnresolvedConflictLabels => ({
       acceptBoth: pluginText(
         context,
         "reviewConflictAcceptBoth",
@@ -77,12 +74,6 @@ export function ReviewConflictView(options: {
         "reviewConflictIncomingChange",
         "(Incoming Change)"
       ),
-      keepOurs: pluginText(context, "reviewConflictKeepOurs", "Keep Ours"),
-      keepTheirs: pluginText(
-        context,
-        "reviewConflictKeepTheirs",
-        "Keep Theirs"
-      ),
       openFile: pluginText(context, "reviewOpenFile", "Open File"),
       resolving: pluginText(context, "reviewConflictResolving", "Resolving…"),
       unmodifiedLine: pluginText(
@@ -97,12 +88,6 @@ export function ReviewConflictView(options: {
       ),
     }),
     [context]
-  );
-
-  const fallbackDescription = pluginText(
-    context,
-    "reviewStateConflictFileLevelDetail",
-    "Merge conflict without markers — keep one side or open the file."
   );
 
   const sourceFor = useCallback(
@@ -131,12 +116,8 @@ export function ReviewConflictView(options: {
   );
 
   /** Throws on failure so marker write-back can remount Accept UI. */
-  const resolve = useCallback(
-    async (
-      item: PierDiffViewItem,
-      action: "ours" | "theirs" | "write",
-      resolvedContents?: string
-    ) => {
+  const writeResolved = useCallback(
+    async (item: PierDiffViewItem, resolvedContents: string) => {
       const path = item.fileDisplay?.path;
       const conflict = item.conflict;
       if (!path || conflict === undefined) {
@@ -144,21 +125,13 @@ export function ReviewConflictView(options: {
       }
       setBusyId(item.id);
       try {
-        const request =
-          action === "write"
-            ? {
-                action,
-                expectedContentsDigest: conflict.contentsDigest,
-                operationId: crypto.randomUUID(),
-                resolvedContents: resolvedContents ?? "",
-                source: sourceFor(path),
-              }
-            : {
-                action,
-                operationId: crypto.randomUUID(),
-                source: sourceFor(path),
-              };
-        const result = await context.git.resolveReviewConflict(request);
+        const result = await context.git.resolveReviewConflict({
+          action: "write",
+          expectedContentsDigest: conflict.contentsDigest,
+          operationId: crypto.randomUUID(),
+          resolvedContents,
+          source: sourceFor(path),
+        });
         if (result.kind === "error") {
           throw new Error(result.message ?? result.reason);
         }
@@ -187,10 +160,13 @@ export function ReviewConflictView(options: {
         {items.map((item) => {
           const path = item.fileDisplay?.path ?? item.id;
           const conflict = item.conflict;
-          if (conflict === undefined) {
+          if (
+            conflict === undefined ||
+            conflict.presentation !== "markers-text" ||
+            conflict.contents === null
+          ) {
             return null;
           }
-          const description = item.stateNotice ?? fallbackDescription;
           return (
             <div
               className="min-h-[12rem] shrink-0 border-border border-b last:border-b-0"
@@ -202,10 +178,7 @@ export function ReviewConflictView(options: {
                 appearance={appearance}
                 busy={mutationBlocked || busyId === item.id}
                 conflict={conflict}
-                labels={{
-                  ...baseLabels,
-                  description,
-                }}
+                labels={labels}
                 onError={(error) => {
                   alertResolveFailed(error).catch(() => undefined);
                 }}
@@ -217,18 +190,8 @@ export function ReviewConflictView(options: {
                     path,
                   });
                 }}
-                onTakeOurs={() => {
-                  resolve(item, "ours").catch((error: unknown) => {
-                    alertResolveFailed(error).catch(() => undefined);
-                  });
-                }}
-                onTakeTheirs={() => {
-                  resolve(item, "theirs").catch((error: unknown) => {
-                    alertResolveFailed(error).catch(() => undefined);
-                  });
-                }}
                 onWriteResolved={({ contents }) =>
-                  resolve(item, "write", contents)
+                  writeResolved(item, contents)
                 }
                 path={path}
                 {...(presentation === undefined ? {} : { presentation })}

@@ -9,7 +9,10 @@ import {
   TableHeader,
   TableRow,
 } from "@pier/ui/table.tsx";
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type {
+  RendererPluginCodeThemeRegistration,
+  RendererPluginContext,
+} from "@plugins/api/renderer.ts";
 import { createElement, type ReactNode, useMemo } from "react";
 import { MarkdownCodeBlock } from "./code-block.tsx";
 import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
@@ -17,6 +20,8 @@ import { wrapBlocksWithComments } from "./comments/ir-blocks.tsx";
 import type { MarkdownIrCommentsChrome } from "./comments/ir-types.ts";
 import type { MarkdownCrossModeAnchor } from "./cross-mode-anchor.ts";
 import { MarkdownDiagram } from "./diagram.tsx";
+import { markdownHtmlRenderEnv } from "./html/env.ts";
+import { renderMarkdownHtmlBlock } from "./html/render.tsx";
 import type { MarkdownBlock } from "./ir.ts";
 import {
   type MarkdownRenderContext,
@@ -61,6 +66,7 @@ interface MarkdownIrRendererProps {
   charts: RendererPluginContext["charts"] | undefined;
   codeHighlighter: MarkdownCodeHighlighter | undefined;
   codeTheme: string;
+  codeThemeRegistration: RendererPluginCodeThemeRegistration | undefined;
   /** Paper / app light-dark for mermaid re-render on theme switch. */
   colorMode: "dark" | "light";
   comments?: MarkdownIrCommentsChrome | undefined;
@@ -103,10 +109,12 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
           charts: props.charts,
           codeHighlighter: props.codeHighlighter,
           codeTheme: props.codeTheme,
+          codeThemeRegistration: props.codeThemeRegistration,
           colorMode: props.colorMode,
           ...(props.comments ? { comments: props.comments } : {}),
           copyCode: props.copyCode,
           fileResources: props.fileResources,
+          headings: props.pagination.headings,
           labels: props.labels,
           onJumpToSource: props.onJumpToSource,
           onOpenAnchor,
@@ -198,6 +206,7 @@ function renderBlock(
             onCopy={context.copyCode}
             searchMatches={searchMatchesFor(context, "code", block.range)}
             theme={context.codeTheme}
+            themeRegistration={context.codeThemeRegistration}
           />
         </div>
       );
@@ -302,15 +311,22 @@ function renderBlock(
     case "thematicBreak":
       return <Separator className="md-hr" />;
     case "html":
-      return (
-        <pre className="md-raw">
-          <MarkdownSearchText
-            activeMatchId={context.activeSearchMatchId}
-            matches={searchMatchesFor(context, "html", block.range)}
-            value={block.value}
-          />
-        </pre>
-      );
+      return renderMarkdownHtmlBlock(block.value, {
+        ...markdownHtmlRenderEnv({
+          activeSearchMatchId: context.activeSearchMatchId,
+          fileResources: context.fileResources,
+          labels: context.labels,
+          onJumpToSource: context.onJumpToSource,
+          onOpenAnchor: context.onOpenAnchor,
+          onOpenExternal: context.onOpenExternal,
+          onOpenInternal: context.onOpenInternal,
+          range: block.range,
+          searchMatches: searchMatchesFor(context, "html", block.range),
+          source: context.source,
+        }),
+        headings: context.headings,
+        range: block.range,
+      });
     case "containerDirective": {
       if (isCalloutDirective(block.name)) {
         const title = block.attributes.title?.trim();

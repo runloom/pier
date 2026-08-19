@@ -7,6 +7,7 @@ import {
   KEY_ENTER_COMMAND,
 } from "lexical";
 import { useEffect } from "react";
+import { isImePendingLexicalEnter } from "@/lib/keybindings/is-text-input.ts";
 
 /**
  * Enter → send (parent). Shift/Mod/Alt+Enter → linebreak.
@@ -26,10 +27,11 @@ export function EnterKeyPlugin({
       editor.registerCommand(
         KEY_ENTER_COMMAND,
         (event: KeyboardEvent | null) => {
-          if (menuOpenRef.current) {
-            return false;
+          // Consume so PlainTextPlugin cannot preventDefault mid-IME.
+          if (isImePendingLexicalEnter(event)) {
+            return true;
           }
-          if (event?.isComposing) {
+          if (menuOpenRef.current) {
             return false;
           }
           if (

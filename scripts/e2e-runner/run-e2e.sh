@@ -18,6 +18,8 @@
 #   PIER_E2E_REBUILD=1         同 --rebuild（强制 plugins:pack + build:electron）
 #   PIER_E2E_REMOTE_PATH       可选；覆盖远端 PATH（须为远端机上的绝对路径列表，
 #                              用 : 分隔）。未设置时用脚本内默认 brew/node 前缀。
+#   ELECTRON_MIRROR            透传到远端；github.com 不可达时用镜像装 Electron
+#                              （例：https://npmmirror.com/mirrors/electron/）
 #   PIER_E2E_COMMITTED_ONLY=1  同 --committed-only：只同步已提交 HEAD；
 #                              工作区 dirty 时拒绝远端（避免“以为测了本地改动”）。
 #   PIER_E2E_SKIP_SYNC=1       跳过「同步本机 tip 到远端」（仅调试用，易测错 commit）
@@ -511,8 +513,14 @@ PIER_E2E_PW_ARGS_B64=$(printf %q "${pw_args_b64}") \
 PIER_E2E_EXPECT_SHA=$(printf %q "${tip_sha}") \
 PIER_E2E_EXPECT_TREE=$(printf %q "${tip_tree}") \
 PIER_E2E_REMOTE_PATH=$(printf %q "${remote_path_payload}") \
+ELECTRON_MIRROR=$(printf %q "${ELECTRON_MIRROR:-}") \
 bash -s" <<'REMOTE'
 set -euo pipefail
+
+if [ -n "${ELECTRON_MIRROR:-}" ]; then
+  export ELECTRON_MIRROR
+  echo "[e2e-run:remote] ELECTRON_MIRROR=${ELECTRON_MIRROR}"
+fi
 
 _path_template="${PIER_E2E_REMOTE_PATH}"
 # shellcheck disable=SC2086
@@ -547,6 +555,8 @@ ensure_project_pnpm() {
     case "${raw}" in
       pnpm@*) want="${raw#pnpm@}" ;;
     esac
+    # Corepack 会写成 11.18.0+sha512.…；pnpm -v 只有 11.18.0
+    want="${want%%+*}"
   fi
   if [ -z "${want}" ]; then
     return 0

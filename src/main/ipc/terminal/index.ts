@@ -38,10 +38,16 @@ import { handleTerminalOpenUrl } from "./open-url-forwarding.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./panel-id.ts";
 import { isTerminalRuntimeConfig } from "./runtime-config.ts";
 import { registerTerminalSearchIpc } from "./search.ts";
+import { registerTerminalSessionTitleIpc } from "./session/title-ipc.ts";
 import { registerTerminalShortcutIpc } from "./shortcuts-ipc.ts";
 import { registerTerminalTaskLifecycleForwarding } from "./task-lifecycle-wiring.ts";
 import { createTaskOutputTerminalBindings } from "./task-output-bindings.ts";
 import { registerTerminalTaskOutputRebindIpc } from "./task-output-rebind.ts";
+import { registerTerminalTranscriptIpc } from "./transcripts/tail-ipc.ts";
+import {
+  createTerminalTranscriptWiring,
+  nativePtyTranscriptLifecycleId,
+} from "./transcripts/wiring.ts";
 import {
   bindTerminalTransferRuntime,
   registerTerminalTransferGuardIpc,
@@ -69,6 +75,9 @@ export function registerTerminalIpc(
       | ((agentId: AgentKind) => Promise<unknown> | unknown)
       | undefined;
     taskService?: TaskService | undefined;
+    terminalTranscripts?:
+      | import("../../services/terminal-transcripts/index.ts").TerminalTranscriptsService
+      | undefined;
   } = {}
 ): void {
   const processEnvironment =
@@ -77,6 +86,19 @@ export function registerTerminalIpc(
   const { addon, error: loadError } = loadAddon();
   terminalFocusCoordinator.configureNativeAddon(addon);
   bindCursorViewportReader(addon);
+  const transcriptWiring = createTerminalTranscriptWiring({
+    addon,
+    ...(deps.terminalTranscripts
+      ? { transcripts: deps.terminalTranscripts }
+      : {}),
+  });
+  if (addon) {
+    const closeTerminal = addon.closeTerminal.bind(addon);
+    addon.closeTerminal = (nativePanelId) => {
+      transcriptWiring.onNativeClosed(nativePanelId);
+      return closeTerminal(nativePanelId);
+    };
+  }
   const taskOutputBindings =
     addon && deps.taskService
       ? createTaskOutputTerminalBindings({
@@ -94,6 +116,7 @@ export function registerTerminalIpc(
         })
       : null;
   registerTerminalDiagnosticsIpc(ipcMain, addon);
+  registerTerminalTranscriptIpc(ipcMain, deps.terminalTranscripts);
   registerTerminalKeybindingForward(addon);
   wireTerminalAgentEscapeCancel(addon);
   deps.taskService?.bindTerminalProcessController({
@@ -272,6 +295,15 @@ export function registerTerminalIpc(
       loadError,
       launchGate: deps.launchGate ?? null,
       localEnvironments: deps.localEnvironments ?? null,
+      onPtyCreated: (nativePanelId, lifecycleId) => {
+        transcriptWiring.markPtyLive(
+          nativePanelId,
+          nativePtyTranscriptLifecycleId({
+            lifecycleId,
+            panelId: nativePanelId,
+          })
+        );
+      },
       processEnvironment,
       recordAgentLaunch: deps.recordAgentLaunch,
       taskLifecycle,
@@ -317,6 +349,13 @@ export function registerTerminalIpc(
         win,
         snapshot
       );
+      transcriptWiring.observeSnapshot(
+        win.id,
+        snapshot.terminals.map((entry) => ({
+          nativePanelId: toNativePanelKey(win, entry.panelId),
+          visible: entry.visible,
+        }))
+      );
       if (result.shouldAck) {
         event.sender.send(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, {
           rendererSequence: snapshot.rendererSequence,
@@ -353,73 +392,7 @@ export function registerTerminalIpc(
     }
   );
 
-  ipcMain.handle(
-    "pier:terminal:set-session-title",
-    async (
-      event,
-      panelId: string,
-      input: { title: string; source: "user" }
-    ) => {
-      const win = windowFromWebContents(event.sender);
-      if (!win || typeof panelId !== "string" || panelId.trim().length === 0) {
-        return { applied: false, ok: false };
-      }
-      if (
-        !input ||
-        typeof input.title !== "string" ||
-        input.source !== "user"
-      ) {
-        return { applied: false, ok: false };
-      }
-      const { setTerminalPanelSessionTitle } = await import(
-        "../../state/terminal-session-title.ts"
-      );
-      const { foregroundActivityService } = await import(
-        "../foreground-activity.ts"
-      );
-      // FA 槽位键 = Electron id；session JSON 键 = record UUID。
-      const faWindowId = String(win.id);
-      const sessionScope = windowRecordIdFor(win);
-      const activity = foregroundActivityService
-        .snapshot(faWindowId)
-        .activities.find(
-          (candidate) =>
-            candidate.kind === "agent" && candidate.panelId === panelId
-        );
-      const sessionId =
-        activity?.kind === "agent" ? activity.sessionId?.trim() : undefined;
-      const persisted = await setTerminalPanelSessionTitle(
-        sessionScope,
-        panelId,
-        {
-          source: input.source,
-          ...(sessionId ? { sessionId } : {}),
-          title: input.title,
-        }
-      );
-      if (!persisted.ok) {
-        return { applied: false, ok: false };
-      }
-      if (persisted.applied && persisted.title) {
-        foregroundActivityService.setAgentSessionTitle(faWindowId, panelId, {
-          source: persisted.source ?? input.source,
-          ...(persisted.sessionId ? { sessionId: persisted.sessionId } : {}),
-          title: persisted.title,
-        });
-      } else if (persisted.title && persisted.source) {
-        foregroundActivityService.hydrateAgentSessionTitle(
-          faWindowId,
-          panelId,
-          {
-            source: persisted.source,
-            ...(persisted.sessionId ? { sessionId: persisted.sessionId } : {}),
-            title: persisted.title,
-          }
-        );
-      }
-      return { applied: Boolean(persisted.applied), ok: true };
-    }
-  );
+  registerTerminalSessionTitleIpc(ipcMain);
 
   registerTerminalTransferGuardIpc({
     addon,
@@ -464,6 +437,7 @@ export function registerTerminalIpc(
     });
     try {
       addon.setTerminalConfig(win.getNativeWindowHandle(), config);
+      transcriptWiring.onSetConfig(config.scrollbackLimitBytes);
     } catch (err) {
       console.error("[pier-terminal-set-config] failed:", err);
     }

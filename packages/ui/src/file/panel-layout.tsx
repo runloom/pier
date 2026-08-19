@@ -60,6 +60,7 @@ export function FilePanelLayout({
   defaultSidebarWidth = FILE_PANEL_DEFAULT_SIDEBAR_WIDTH_PX,
   header,
   minSidebarWidth = FILE_PANEL_MIN_SIDEBAR_WIDTH_PX,
+  onContentResize,
   onSidebarAutoCollapse,
   sidebar,
   sidebarPanelId,
@@ -70,6 +71,7 @@ export function FilePanelLayout({
   defaultSidebarWidth?: number;
   header: ReactNode;
   minSidebarWidth?: number;
+  onContentResize?: (widthPx: number) => void;
   onSidebarAutoCollapse: () => void;
   sidebar: ReactNode;
   sidebarPanelId: string;
@@ -154,6 +156,9 @@ export function FilePanelLayout({
           className="min-h-0"
           id={contentPanelId}
           key={contentPanelId}
+          onResize={(panelSize) => {
+            onContentResize?.(panelSize.inPixels);
+          }}
         >
           <section className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
             {children}

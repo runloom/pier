@@ -9,6 +9,14 @@ import { describe, expect, it } from "vitest";
  */
 const PATH = join(process.cwd(), "src/renderer/components/workspace/host.tsx");
 const SOURCE = readFileSync(PATH, "utf8");
+const RENDERER_BOOT_SIGNAL_SOURCE = readFileSync(
+  join(process.cwd(), "src/renderer/app/boot-signal.tsx"),
+  "utf8"
+);
+const START_APPLICATION_SOURCE = readFileSync(
+  join(process.cwd(), "src/renderer/app/start-application.tsx"),
+  "utf8"
+);
 const RENDERER_MAIN_SOURCE = readFileSync(
   join(process.cwd(), "src/renderer/main.tsx"),
   "utf8"
@@ -87,7 +95,7 @@ const WORKSPACE_READY_WHEN_USER_TOUCHED_RE =
 const BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE =
   /function RendererBootSignal\(\)[\s\S]{0,180}?useEffect\(\(\) => \{\s*window\.pier\?\.window\?\.readyToShow\?\.\(\)/;
 const FINAL_APP_RETAINS_BOOT_SIGNAL_RE =
-  /root\.render\(\s*<>\s*<RendererBootSignal key="application" \/>\s*<AppRuntimeErrorBoundary>\s*<App \/>\s*<\/AppRuntimeErrorBoundary>/;
+  /args\.root\.render\(\s*<>\s*<RendererBootSignal key="application" \/>\s*<AppRuntimeErrorBoundary>\s*<App \/>\s*<\/AppRuntimeErrorBoundary>/;
 
 describe("workspace-host invariants (#17 #19)", () => {
   it("declares userTouched flag and uses it to gate fromJSON (防 user 操作被 saved layout 覆盖)", () => {
@@ -168,8 +176,13 @@ describe("workspace-host invariants (#17 #19)", () => {
   it("separates the visible startup shell from workspace readiness", () => {
     // 启动壳挂载即可显示窗口；布局恢复只更新 workspace ready 状态，慢初始化不应
     // 被 main 的 renderer boot watchdog 当成致命失败。
-    expect(RENDERER_MAIN_SOURCE).toMatch(BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE);
-    expect(RENDERER_MAIN_SOURCE).toMatch(FINAL_APP_RETAINS_BOOT_SIGNAL_RE);
+    expect(RENDERER_BOOT_SIGNAL_SOURCE).toMatch(
+      BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE
+    );
+    expect(RENDERER_MAIN_SOURCE).toContain(
+      'import("./app/start-application.tsx")'
+    );
+    expect(START_APPLICATION_SOURCE).toMatch(FINAL_APP_RETAINS_BOOT_SIGNAL_RE);
     expect(SOURCE).toMatch(WORKSPACE_READY_AFTER_LAYOUT_RE);
     expect(SOURCE).toMatch(WORKSPACE_READY_WHEN_USER_TOUCHED_RE);
     expect(SOURCE).not.toContain("readyToShow");

@@ -7,6 +7,7 @@ import type {
   GitReviewMutationOk,
   GitReviewScope,
 } from "@shared/contracts/git/review.ts";
+import type { ReviewViewOptions } from "./document/ui-state.ts";
 import type {
   GitReviewMutationLease,
   GitReviewMutationTransition,
@@ -149,5 +150,23 @@ export interface ReviewSurfaceProps {
   readonly sidebarHeader?: React.ReactNode;
   readonly targetSelectionPending?: boolean;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
+  readonly viewOptions: ReviewViewOptions;
   readonly warnings: GitReviewIndexOk["warnings"];
 }
+
+export type ReviewDocumentsProps = Omit<
+  ReviewSurfaceProps,
+  | "active"
+  | "activeSurface"
+  | "diffBase"
+  | "navigationRequest"
+  | "onNavigationMaterialized"
+  | "onSurfaceNavigationSettled"
+  | "onMutationTransition"
+  | "onRequestTreeOpen"
+  | "onAcquireMutationAuthority"
+  | "onSelectSurface"
+  | "viewOptions"
+> & {
+  readonly onAcquireMutationAuthority: () => boolean;
+};

@@ -40,6 +40,7 @@ import type { ProjectSkillsService } from "../services/project-skills/service.ts
 import type { SystemSkillsChannel } from "../services/project-skills/system-skills/index.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { TaskService } from "../services/tasks/service.ts";
+import type { TerminalTranscriptsService } from "../services/terminal-transcripts/index.ts";
 import type { UsageDataService } from "../services/usage-data/service.ts";
 import type { WindowTransitionLease } from "../services/window-service.ts";
 import type { SecretsStore } from "../state/secrets-store.ts";
@@ -173,6 +174,8 @@ export interface PierCoreServices {
       patch: TerminalStatusBarItemOverridePatch
     ): Promise<TerminalStatusBarPrefs>;
   };
+  /** 终端 transcript 分段落盘（历史三层化 Tier 2；任务输出 + 历史查看读路径）。 */
+  terminalTranscripts?: TerminalTranscriptsService;
   usageData: UsageDataService;
   window: {
     close(windowId: string): Promise<"closed" | "not-found" | "veto">;

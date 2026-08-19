@@ -16,6 +16,30 @@ export function orderedWindows(windows: readonly WindowInfo[]): WindowInfo[] {
   });
 }
 
+/** 命令 `windowId` 同时认内部 id（`main`）、`PIER_WINDOW_ID`、record UUID。 */
+export function windowInfoMatches(
+  windowInfo: WindowInfo,
+  commandWindowId: string
+): boolean {
+  return (
+    windowInfo.id === commandWindowId ||
+    windowInfo.electronWindowId === commandWindowId ||
+    windowInfo.recordId === commandWindowId
+  );
+}
+
+export function matchingWindows(
+  windows: readonly WindowInfo[],
+  commandWindowId: string | undefined
+): WindowInfo[] {
+  if (!commandWindowId) {
+    return [...windows];
+  }
+  return windows.filter((windowInfo) =>
+    windowInfoMatches(windowInfo, commandWindowId)
+  );
+}
+
 export function resolveCommandWindow(
   commandWindowId: string | undefined,
   services: WindowRoutingServices,
@@ -23,8 +47,8 @@ export function resolveCommandWindow(
 ): { code?: PierCommandErrorCode; error?: string; window?: WindowInfo } {
   const windows = orderedWindows(services.window.list());
   if (commandWindowId) {
-    const windowInfo = windows.find(
-      (candidate) => candidate.id === commandWindowId
+    const windowInfo = windows.find((candidate) =>
+      windowInfoMatches(candidate, commandWindowId)
     );
     return windowInfo
       ? { window: windowInfo }

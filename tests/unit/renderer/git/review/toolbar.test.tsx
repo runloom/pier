@@ -28,6 +28,35 @@ afterEach(() => {
 });
 
 describe("GitReviewToolbar", () => {
+  it("shows the responsive inline state without disabling other toolbar actions", () => {
+    const onRefresh = vi.fn();
+    const onToggleCollapseAll = vi.fn();
+    const setViewOptions = vi.fn();
+    renderToolbar(
+      <GitReviewToolbar
+        allCollapsed={false}
+        context={context}
+        onRefresh={onRefresh}
+        onToggleCollapseAll={onToggleCollapseAll}
+        refreshing={false}
+        responsiveUnified
+        setViewOptions={setViewOptions}
+        viewOptions={{ diffStyle: "unified", wrapLines: false }}
+      />
+    );
+
+    const viewButton = screen.getByRole("button", {
+      name: "Panel is narrow; using inline view",
+    });
+    expect(viewButton).toBeDisabled();
+    expect(viewButton).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: "Wrap lines" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Collapse all files" })
+    ).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+  });
+
   it("toggles icons for layout, wrap, and collapse; refresh stays an action", () => {
     const onRefresh = vi.fn();
     const onToggleCollapseAll = vi.fn();

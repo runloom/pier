@@ -29,15 +29,11 @@ export interface PierUnresolvedConflictLabels {
    * (patched `@pierre/diffs` style.js).
    */
   readonly currentChange: string;
-  /** File-level / fail-closed body copy. Required so UI never invents English. */
-  readonly description: string;
   readonly expandAllUnmodified?: string;
   /**
    * Pseudo-label after `>>>>>>>`. CSS var `--diffs-conflict-incoming-label`.
    */
   readonly incomingChange: string;
-  readonly keepOurs: string;
-  readonly keepTheirs: string;
   readonly openFile: string;
   readonly resolving: string;
   /** Collapsed unmodified context templates (`{{count}}`). */

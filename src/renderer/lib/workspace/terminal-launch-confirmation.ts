@@ -1,4 +1,5 @@
-const TERMINAL_LAUNCH_CONFIRMATION_TIMEOUT_MS = 4500;
+/** Wait for native PTY create after dockview addPanel. Parallel teammate splits share this budget. */
+export const TERMINAL_LAUNCH_CONFIRMATION_TIMEOUT_MS = 15_000;
 
 interface PendingTerminalLaunch {
   reject(error: Error): void;

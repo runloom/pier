@@ -19,9 +19,14 @@ const configPath = () => join(homedir(), ".copilot", "hooks", "pier.json");
 
 /**
  * Copilot CLI 已核验的原生事实 → Pier 规范事件名。
- * Esc 取消常写入 session-state `events.jsonl` 的 `type: abort`
- * （reason 含 user），**不一定**触发 agentStop；终态对账见
- * `transcript/copilot-reconciler.ts`。
+ *
+ * GitHub 官方 agent-loop：`agentStop` 是主 agent 对用户 prompt 答复结束
+ * （`stopReason: "end_turn"`）。`stop_hook_active=true` 表示上一轮 Stop
+ * hook 已 `decision: block` 续跑，只能报 advisory `Stop`，不能封账。
+ * 缺省 / `false` 才映射 `TurnCompleted`。`assistant.turn_end` 只是单次
+ * LLM 调用，不能当用户回合完成。Esc 常写入 session-state `events.jsonl`
+ * 的 `type: abort`（用户 reason 白名单），**不一定**触发 agentStop；
+ * 可选落盘 `session.task_complete` 作完成备份。
  */
 export const COPILOT_EVENTS: ReadonlyArray<{
   nativeEvent: string;
@@ -33,7 +38,8 @@ export const COPILOT_EVENTS: ReadonlyArray<{
   { nativeEvent: "preToolUse", pierEvent: "ToolStart" },
   { nativeEvent: "postToolUse", pierEvent: "ToolComplete" },
   { nativeEvent: "postToolUseFailure", pierEvent: "ToolComplete" },
-  { nativeEvent: "agentStop", pierEvent: "Stop" },
+  { nativeEvent: "agentStop", pierEvent: "TurnCompleted" },
+  { nativeEvent: "agentStop.stop_hook_active=true", pierEvent: "Stop" },
   { nativeEvent: "preCompact", pierEvent: "processing" },
   { nativeEvent: "subagentStart", pierEvent: "SubagentStart" },
   { nativeEvent: "subagentStop", pierEvent: "SubagentStop" },
@@ -61,7 +67,7 @@ function standardCommand(
     | "PromptSubmit"
     | "ToolStart"
     | "ToolComplete"
-    | "Stop"
+    | "TurnCompleted"
     | "processing"
     | "SubagentStart"
     | "SubagentStop",
@@ -96,7 +102,14 @@ const COPILOT_HOOK_SPECS: readonly CopilotHookSpec[] = [
     nativeEvent: "postToolUseFailure",
   },
   {
-    buildCommand: () => standardCommand("Stop", "agentStop"),
+    buildCommand: () =>
+      pierHookCommandV3WithStdinValueDispatch({
+        agentId: AGENT_ID,
+        cases: [{ nativeValue: "true", pierEvent: "Stop" }],
+        fallbackPierEvent: "TurnCompleted",
+        nativeEvent: "agentStop",
+        nativeStateFields: ["stop_hook_active", "stopHookActive"],
+      }),
     nativeEvent: "agentStop",
   },
   {

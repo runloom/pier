@@ -22,12 +22,13 @@ import {
   getGitExecMaxOutputBytes,
   parseGitHookSignal,
 } from "./exec-raw-utils.ts";
+import { withGitIndexLockRetry } from "./index-lock.ts";
 
 /** 唯一 Git spawn 底座：文本执行器只允许包装此 raw core。 */
 export function createExecGitRaw({
   spawn = nodeSpawn,
 }: CreateExecGitRawOptions = {}): ExecGitRaw {
-  return function execGitRaw(args, options) {
+  return withGitIndexLockRetry(function execGitRaw(args, options) {
     const configurationError = getGitExecConfigurationError(options);
     if (configurationError !== null) {
       return Promise.reject(
@@ -490,7 +491,7 @@ export function createExecGitRaw({
         }
       }
     });
-  };
+  });
 }
 
 export const execGitRaw = createExecGitRaw();

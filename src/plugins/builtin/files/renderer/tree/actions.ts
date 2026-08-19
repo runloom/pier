@@ -275,6 +275,7 @@ function createCopyPathAction(
       "files/tree-item",
       "files/editor",
       "files/markdown-preview",
+      "files/canvas-preview",
       "files/breadcrumb",
     ],
     title: () =>
@@ -370,7 +371,12 @@ function createRevealAction(
     id: FILES_REVEAL_COMMAND_ID,
     category: "file",
     metadata: { group: "6_path", sortOrder: 4 },
-    surfaces: ["files/tree-item", "files/editor", "files/markdown-preview"],
+    surfaces: [
+      "files/tree-item",
+      "files/editor",
+      "files/markdown-preview",
+      "files/canvas-preview",
+    ],
     title: () => t("filePanel.tree.action.reveal", "Reveal in Finder"),
     handler: async (invocation) => {
       const treeTarget = parseTreeMetadata(invocation);

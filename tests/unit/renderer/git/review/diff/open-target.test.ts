@@ -2,7 +2,11 @@ import type {
   PierDiffViewHandle,
   PierDiffViewItem,
 } from "@pier/ui/diff-view/index.tsx";
-import { resolveGitReviewDiffOpenTarget } from "@plugins/builtin/git/renderer/review/diff-open-target.ts";
+import {
+  resolveGitReviewDiffCopyRange,
+  resolveGitReviewDiffOpenTarget,
+  resolveGitReviewLiveCopyTarget,
+} from "@plugins/builtin/git/renderer/review/diff-open-target.ts";
 import { describe, expect, it, vi } from "vitest";
 
 function item(path: string, id = "item-a"): PierDiffViewItem {
@@ -201,5 +205,100 @@ describe("resolveGitReviewDiffOpenTarget", () => {
     });
     // Cross-side selection is not a continuous span → hit wins.
     expect(target).toEqual({ path: "src/a.ts", line: 9 });
+  });
+});
+
+describe("resolveGitReviewDiffCopyRange", () => {
+  it("uses an additions-only selection span on the same item", () => {
+    expect(
+      resolveGitReviewDiffCopyRange({
+        handle: handle({
+          selection: {
+            id: "item-a",
+            range: { start: 15, end: 12, side: "additions" },
+          },
+        }),
+        itemId: "item-a",
+      })
+    ).toEqual({ endLine: 15, startLine: 12 });
+  });
+
+  it("ignores another item's selection and uses the working-tree line", () => {
+    expect(
+      resolveGitReviewDiffCopyRange({
+        handle: handle({
+          selection: {
+            id: "item-a",
+            range: { start: 1, end: 4, side: "additions" },
+          },
+        }),
+        itemId: "item-b",
+        line: 9,
+      })
+    ).toEqual({ endLine: 9, startLine: 9 });
+  });
+
+  it("uses a deletions-only selection as the copied line span", () => {
+    expect(
+      resolveGitReviewDiffCopyRange({
+        handle: handle({
+          selection: {
+            id: "item-a",
+            range: { start: 3, end: 5, side: "deletions" },
+          },
+        }),
+        itemId: "item-a",
+      })
+    ).toEqual({ endLine: 5, startLine: 3 });
+  });
+});
+
+describe("resolveGitReviewLiveCopyTarget", () => {
+  it("attaches a range only when the selection is still in the item list", () => {
+    expect(
+      resolveGitReviewLiveCopyTarget({
+        gitRootPath: "/repo",
+        handle: handle({
+          selection: {
+            id: "item-a",
+            range: { start: 10, end: 14, side: "additions" },
+          },
+        }),
+        items: [item("src/a.ts", "item-a")],
+      })
+    ).toEqual({
+      endLine: 14,
+      gitRootPath: "/repo",
+      path: "src/a.ts",
+      startLine: 10,
+    });
+  });
+
+  it("does not mix a leftover selection onto a fallback file", () => {
+    expect(
+      resolveGitReviewLiveCopyTarget({
+        gitRootPath: "/repo",
+        handle: handle({
+          selection: {
+            id: "item-a",
+            range: { start: 10, end: 14, side: "additions" },
+          },
+        }),
+        items: [item("src/b.ts", "item-b")],
+      })
+    ).toEqual({
+      gitRootPath: "/repo",
+      path: "src/b.ts",
+    });
+  });
+
+  it("returns null when multiple items have no matching selection", () => {
+    expect(
+      resolveGitReviewLiveCopyTarget({
+        gitRootPath: "/repo",
+        handle: handle({}),
+        items: [item("src/a.ts", "item-a"), item("src/b.ts", "item-b")],
+      })
+    ).toBeNull();
   });
 });

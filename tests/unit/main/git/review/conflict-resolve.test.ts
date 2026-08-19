@@ -109,6 +109,33 @@ describe("git.resolveReviewConflict", () => {
       { cwd: root }
     );
     expect(status).not.toMatch(/^UU /mu);
+
+    const after = await service.getFileDocument({
+      operationId: randomUUID(),
+      source: fileSource(root),
+    });
+    expect(after.kind).toBe("ok");
+    if (after.kind !== "ok") {
+      throw new Error("expected ok document");
+    }
+    expect(after.sections.some((section) => section.kind === "conflict")).toBe(
+      false
+    );
+  });
+
+  it("classifies accepted UU worktree as file-level until staged", async () => {
+    const root = await createRepository();
+    await createUuConflict(root);
+    await writeFile(join(root, "conflict.ts"), "resolved\n", "utf8");
+    const status = await execGit(
+      ["status", "--porcelain=v1", "--", "conflict.ts"],
+      { cwd: root }
+    );
+    expect(status).toMatch(/^UU /mu);
+
+    const { section } = await conflictSection(root);
+    expect(section.presentation).toBe("file-level");
+    expect(section.contents).toBeNull();
   });
 
   it("keeps theirs for a UU conflict via checkout", async () => {

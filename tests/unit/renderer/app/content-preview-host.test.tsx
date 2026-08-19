@@ -20,7 +20,7 @@ import {
   openContentPreview,
   openHtmlWorldPreview,
   openImagePreview,
-  openNodeGraphPreview,
+  openMermaidPreview,
 } from "@/stores/content-preview.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
@@ -221,9 +221,9 @@ describe("ContentPreviewHost", () => {
     expect(screen.queryByTestId("content-preview")).not.toBeInTheDocument();
   });
 
-  it("renders node-graph stage without card border and with image zoom strip", async () => {
+  it("renders Mermaid stage without card border and with image zoom strip", async () => {
     render(<ContentPreviewHost />);
-    openNodeGraphPreview({
+    openMermaidPreview({
       "aria-label": "任务 DAG",
       edges: [{ source: "a", target: "b" }],
       nodes: [
@@ -235,7 +235,7 @@ describe("ContentPreviewHost", () => {
 
     await screen.findByTestId("content-preview");
     expect(screen.getByText("任务 DAG")).toBeInTheDocument();
-    const stage = document.querySelector('[data-slot="node-graph-stage"]');
+    const stage = document.querySelector('[data-slot="mermaid-stage"]');
     expect(stage).toBeTruthy();
     expect(stage).not.toHaveClass("border");
     expect(stage).not.toHaveClass("rounded-lg");

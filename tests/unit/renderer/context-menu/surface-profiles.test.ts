@@ -90,6 +90,16 @@ describe("context-menu surface profiles", () => {
     ]);
   });
 
+  it("merges edit only for canvas preview", () => {
+    expect(expandContextMenuSurfaces("files/canvas-preview")).toEqual([
+      "files/canvas-preview",
+      PANEL_EDIT_SURFACE,
+    ]);
+    expect(shouldActivatePanelForContextMenu("files/canvas-preview")).toBe(
+      false
+    );
+  });
+
   it("merges edit and layout for terminal restored DOM results", () => {
     expect(expandContextMenuSurfaces("terminal/restored")).toEqual([
       "terminal/restored",

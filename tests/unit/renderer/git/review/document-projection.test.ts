@@ -255,6 +255,128 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     ]);
   });
 
+  it("projects marker-free conflicts as CodeView ready-notice", () => {
+    const path = "src/gone.ts";
+    const item: GitReviewIndexEntry = {
+      entryKey: "entry:dd",
+      oldPaths: [],
+      path,
+      renderSlots: [
+        {
+          group: "conflict",
+          oldPath: null,
+          sectionKey: "section:conflict",
+          status: "conflicted",
+          targetPath: path,
+        },
+      ],
+      status: "conflicted",
+    };
+    const document: GitReviewFileDocumentOk = {
+      entryKey: item.entryKey,
+      kind: "ok",
+      revision: "revision:dd",
+      sections: [
+        {
+          contents: null,
+          contentsDigest: "sha256:dd",
+          kind: "conflict",
+          oldPath: null,
+          presentation: "file-level",
+          sectionKey: "section:conflict",
+          stages: { baseOid: null, oursOid: null, theirsOid: null },
+          status: "conflicted",
+          targetPath: path,
+          xy: "DD",
+        },
+      ],
+      surfaceSections: {
+        committed: null,
+        head: null,
+        index: null,
+        staged: null,
+      },
+    };
+    const projection = projectReviewLedger({
+      context: context(),
+      diffBase: "conflict",
+      entries: [item],
+      locale: "en",
+      resourceByEntryKey: new Map([
+        [item.entryKey, { document, entry: item, kind: "loaded" }],
+      ]),
+    });
+    expect(projection.items).toHaveLength(1);
+    expect(projection.items[0]?.kind).toBe("ready-notice");
+    expect(projection.items[0]?.conflict).toBeUndefined();
+    expect(projection.items[0]?.stateNotice).toContain("stage it to confirm");
+    expect(projection.items[0]?.stateNotice).not.toMatch(/open the file/i);
+  });
+
+  it("keeps markers-text conflicts on UnresolvedFile", () => {
+    const path = "src/conflict.ts";
+    const item: GitReviewIndexEntry = {
+      entryKey: "entry:uu",
+      oldPaths: [],
+      path,
+      renderSlots: [
+        {
+          group: "conflict",
+          oldPath: null,
+          sectionKey: "section:conflict",
+          status: "conflicted",
+          targetPath: path,
+        },
+      ],
+      status: "conflicted",
+    };
+    const contents = [
+      "<<<<<<< HEAD",
+      "ours",
+      "=======",
+      "theirs",
+      ">>>>>>> other",
+      "",
+    ].join("\n");
+    const document: GitReviewFileDocumentOk = {
+      entryKey: item.entryKey,
+      kind: "ok",
+      revision: "revision:uu",
+      sections: [
+        {
+          contents,
+          contentsDigest: "sha256:uu",
+          kind: "conflict",
+          oldPath: null,
+          presentation: "markers-text",
+          sectionKey: "section:conflict",
+          stages: { baseOid: null, oursOid: null, theirsOid: null },
+          status: "conflicted",
+          targetPath: path,
+          xy: "UU",
+        },
+      ],
+      surfaceSections: {
+        committed: null,
+        head: null,
+        index: null,
+        staged: null,
+      },
+    };
+    const projection = projectReviewLedger({
+      context: context(),
+      diffBase: "conflict",
+      entries: [item],
+      locale: "en",
+      resourceByEntryKey: new Map([
+        [item.entryKey, { document, entry: item, kind: "loaded" }],
+      ]),
+    });
+    expect(projection.items[0]?.kind).toBe("conflict");
+    expect(projection.items[0]?.conflict?.presentation).toBe("markers-text");
+    expect(projection.items[0]?.conflict?.contents).toBe(contents);
+  });
+
   it("projects every index slot; idle/loading/unchanged become estimate", () => {
     const entries = [entry(0), entry(1), entry(2), entry(3), entry(4)];
     const resourceByEntryKey = new Map<string, GitReviewDocumentResource>([
@@ -496,6 +618,72 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     expect(projection.items[0]?.patch).toContain(
       "+new line after stage handoff"
     );
+  });
+
+  it("does not reuse a lone image section across staged and unstaged slots", () => {
+    const path = "icon.png";
+    const oid = "a".repeat(40);
+    const entry: GitReviewIndexEntry = {
+      entryKey: "entry:icon",
+      oldPaths: [],
+      path,
+      renderSlots: [
+        {
+          binary: true,
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: "section:unstaged",
+          status: "modified",
+          targetPath: path,
+        },
+        {
+          binary: true,
+          group: "staged",
+          oldPath: null,
+          sectionKey: "section:staged",
+          status: "modified",
+          targetPath: path,
+        },
+      ],
+      status: "modified",
+    };
+    const document: GitReviewFileDocumentOk = {
+      entryKey: entry.entryKey,
+      kind: "ok",
+      revision: "rev-image",
+      sections: [
+        {
+          after: {
+            byteSize: 8,
+            height: 1,
+            kind: "blob",
+            mime: "image/png",
+            oid,
+            width: 1,
+          },
+          before: null,
+          gitRootPath: "/workspace",
+          kind: "image",
+          oldPath: null,
+          sectionKey: "section:staged",
+          status: "modified",
+          targetPath: path,
+        },
+      ],
+      surfaceSections: {
+        committed: null,
+        head: null,
+        index: null,
+        staged: "section:staged",
+      },
+    };
+    const projection = projectReviewDocumentResource(
+      { document, entry, kind: "loaded" },
+      context(),
+      "en"
+    );
+    expect(projection.items.map((item) => item.id)).toEqual(["section:staged"]);
+    expect(projection.items[0]?.kind).toBe("image");
   });
 
   it("attaches index numstat as lineStats on estimate items for first paint", () => {

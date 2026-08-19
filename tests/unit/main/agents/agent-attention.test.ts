@@ -43,10 +43,17 @@ describe("formatAttentionNotificationCopy", () => {
     );
 
     const waitingEn = formatAttentionNotificationCopy(waiting, "en");
-    expect(waitingEn.title).toBe("Needs you");
+    expect(waitingEn.title).toBe("Needs attention");
+    expect(waitingEn.titleKey).toBe("notificationsCenter.attention.waiting");
     expect(waitingEn.body).toBe(
       "Claude — Awaiting confirmation or your next step"
     );
+
+    const waitingJa = formatAttentionNotificationCopy(waiting, "ja");
+    expect(waitingJa.title).toBe("対応が必要");
+    expect(waitingJa.body).toContain("確認または続きの操作を待っています");
+    const waitingKo = formatAttentionNotificationCopy(waiting, "ko");
+    expect(waitingKo.title).toBe("처리 필요");
 
     const errored = agent({
       panelId: "p1",
@@ -133,6 +140,10 @@ describe("formatAttentionIdentity / attentionPathLeaf", () => {
       "智能体"
     );
     expect(formatAttentionIdentity({ agentLabel: "" }, "en")).toBe("Agent");
+    expect(formatAttentionIdentity({ agentLabel: "" }, "ja")).toBe(
+      "エージェント"
+    );
+    expect(formatAttentionIdentity({ agentLabel: "" }, "ko")).toBe("에이전트");
   });
 });
 
@@ -182,7 +193,8 @@ describe("agent attention service (classify → NCS ingest only)", () => {
         panelRef: { panelId: "p1" },
         severity: "warning",
         source: "agent-attention",
-        title: "Needs you",
+        title: "Needs attention",
+        titleKey: "notificationsCenter.attention.waiting",
         trigger: "system-event",
       })
     );
@@ -206,7 +218,8 @@ describe("agent attention service (classify → NCS ingest only)", () => {
     expect(ingestNotification).toHaveBeenCalledWith(
       expect.objectContaining({
         body: "Claude · Fix notifications · pier — Awaiting confirmation or your next step",
-        title: "Needs you",
+        title: "Needs attention",
+        titleKey: "notificationsCenter.attention.waiting",
       })
     );
   });
@@ -227,6 +240,7 @@ describe("agent attention service (classify → NCS ingest only)", () => {
         ],
         body: "Claude — Open the conversation to view the output",
         title: "Agent ran into an error",
+        titleKey: "notificationsCenter.attention.error",
       })
     );
   });
@@ -324,6 +338,7 @@ describe("agent attention service (classify → NCS ingest only)", () => {
         kind: "agent.turn-finished",
         severity: "info",
         title: "Turn finished",
+        titleKey: "notificationsCenter.attention.ready",
         actions: [
           {
             id: "focus-panel",

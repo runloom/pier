@@ -4,6 +4,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, payload: unknown) => unknown>(),
   inspect: vi.fn(),
+  resolveCanonicalGitWatchRoot: vi.fn(
+    async (root: unknown): Promise<string | null> =>
+      typeof root === "string" && root.startsWith("/") ? root : null
+  ),
 }));
 
 vi.mock("electron", () => ({
@@ -33,6 +37,9 @@ vi.mock("@main/windows/manager.ts", () => ({
     fromWebContents: vi.fn(() => ({})),
   },
 }));
+vi.mock("@main/ipc/git-watch-root.ts", () => ({
+  resolveCanonicalGitWatchRoot: mocks.resolveCanonicalGitWatchRoot,
+}));
 
 import { registerFilePreviewTicketIpc } from "@main/ipc/file-preview-ticket.ts";
 
@@ -60,6 +67,11 @@ beforeEach(() => {
     enabled: true,
     manifest: { id: "pier.files" },
   });
+  mocks.resolveCanonicalGitWatchRoot.mockReset();
+  mocks.resolveCanonicalGitWatchRoot.mockImplementation(
+    async (root: unknown): Promise<string | null> =>
+      typeof root === "string" && root.startsWith("/") ? root : null
+  );
   registerFilePreviewTicketIpc();
 });
 
@@ -130,5 +142,41 @@ describe("file preview ticket IPC", () => {
     await expect(
       acquire?.(sender(), { recordId: "pier.files" })
     ).resolves.toEqual({ acquired: false, reason: "forbidden" });
+  });
+
+  it("canonicalizes git blob roots and rejects unknown repositories", async () => {
+    const event = sender();
+    const acquire = mocks.handlers.get(PIER.FILE_PREVIEW_RUNTIME_ACQUIRE);
+    const issue = mocks.handlers.get(PIER.FILE_PREVIEW_TICKET_ISSUE);
+    const acquired = await acquire?.(event, { recordId: "pier.files" });
+    const leaseId = (acquired as { leaseId: string }).leaseId;
+    const oid = "a".repeat(40);
+    mocks.resolveCanonicalGitWatchRoot.mockResolvedValueOnce("/canonical/repo");
+    const issued = await issue?.(event, {
+      leaseId,
+      locator: {
+        gitRoot: "/tmp/repo",
+        mime: "image/png",
+        oid,
+        revision: oid,
+      },
+    });
+    expect(issued).toMatchObject({ issued: true });
+    expect(mocks.resolveCanonicalGitWatchRoot).toHaveBeenCalledWith(
+      "/tmp/repo"
+    );
+
+    mocks.resolveCanonicalGitWatchRoot.mockResolvedValueOnce(null);
+    await expect(
+      issue?.(event, {
+        leaseId,
+        locator: {
+          gitRoot: "/not/a/repo",
+          mime: "image/png",
+          oid,
+          revision: oid,
+        },
+      })
+    ).resolves.toEqual({ issued: false, reason: "not-found" });
   });
 });

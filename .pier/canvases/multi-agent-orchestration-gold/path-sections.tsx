@@ -8,7 +8,7 @@ import {
   ItemDescription,
   ItemGroup,
   ItemTitle,
-  MermaidDiagram,
+  Mermaid,
   Stack,
   Text,
 } from "pier/canvas";
@@ -231,10 +231,11 @@ export function LandingPage({ d }: { d: DesignData }) {
 
       <Stack gap={8}>
         <SectionTitle>交付波次依赖</SectionTitle>
-        <MermaidDiagram
+        <Mermaid
           aria-label="从文档边界到外部发布的交付波次依赖"
-          previewTitle="实施交付路径 W0–W6"
-          source={deliveryDiagram}
+          direction={deliveryDiagram.direction}
+          edges={deliveryDiagram.edges}
+          nodes={deliveryDiagram.nodes}
         />
         <SectionLead>
           W0 文档与边界 → W1 发现；W2 一次性产品撤回；W3（持久

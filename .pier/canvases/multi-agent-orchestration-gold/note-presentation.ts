@@ -154,22 +154,35 @@ const PREFERRED_DELIVERY_EDGES: Array<[number, number]> = [
   [5, 6],
 ];
 
-/** 交付波次依赖图：实施路径，不是产品任务 DAG。 */
+/** 交付波次依赖图：实施路径，不是产品任务 DAG。完成态走 `tone`，不是 `kind`。 */
+const PHASE_NODE_TONE = {
+  cancelled: "muted",
+  done: "success",
+  in_progress: "info",
+  planned: "warning",
+} as const;
+
 export function buildDeliveryDiagram(
-  phases: Array<{ wave: number; name: string }>,
-): string {
+  phases: Array<{ name: string; status?: keyof typeof PHASE_NODE_TONE; wave: number }>,
+): {
+  direction: "top-to-bottom";
+  edges: Array<{ source: string; target: string }>;
+  nodes: Array<{
+    id: string;
+    title: string;
+    tone?: (typeof PHASE_NODE_TONE)[keyof typeof PHASE_NODE_TONE];
+  }>;
+} {
   const sorted = [...phases].sort((a, b) => a.wave - b.wave);
-  const nodes = sorted
-    .map((phase) => {
-      const id = `W${phase.wave}`;
-      const label = `W${phase.wave} ${phase.name}`.replace(/["\n]/gu, " ");
-      return `  ${id}["${label}"]`;
-    })
-    .join("\n");
+  const nodes = sorted.map((phase) => ({
+    id: `W${phase.wave}`,
+    title: `W${phase.wave} ${phase.name}`.replace(/["\n]/gu, " "),
+    ...(phase.status ? { tone: PHASE_NODE_TONE[phase.status] } : {}),
+  }));
 
   const waves = new Set(sorted.map((phase) => phase.wave));
   const edgeKeys = new Set<string>();
-  const edges: string[] = [];
+  const edges: Array<{ source: string; target: string }> = [];
 
   const addEdge = (from: number, to: number) => {
     if (!waves.has(from) || !waves.has(to) || from === to) {
@@ -180,7 +193,7 @@ export function buildDeliveryDiagram(
       return;
     }
     edgeKeys.add(key);
-    edges.push(`  W${from} --> W${to}`);
+    edges.push({ source: `W${from}`, target: `W${to}` });
   };
 
   for (const [from, to] of PREFERRED_DELIVERY_EDGES) {
@@ -218,10 +231,16 @@ export function buildDeliveryDiagram(
     }
   }
 
-  return ["flowchart TB", nodes, ...edges].join("\n");
+  return { direction: "top-to-bottom", edges, nodes };
 }
 
-/** 测试与契约用：期望的 preferred 边集合（字符串形式）。 */
-export function preferredDeliveryEdgeLabels(): string[] {
-  return PREFERRED_DELIVERY_EDGES.map(([from, to]) => `W${from} --> W${to}`);
+/** 测试与契约用：期望的 preferred 边集合。 */
+export function preferredDeliveryEdges(): Array<{
+  source: string;
+  target: string;
+}> {
+  return PREFERRED_DELIVERY_EDGES.map(([from, to]) => ({
+    source: `W${from}`,
+    target: `W${to}`,
+  }));
 }

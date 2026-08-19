@@ -188,11 +188,12 @@ describe("agent hook runtime semantics", () => {
         "grok",
         "kimi",
         "mistral-vibe",
+        "opencode",
         "openclaude",
         "qodercli",
         "qwen-code",
       ],
-      authoritative: ["autohand", "kilo", "mimo-code", "omp", "opencode", "pi"],
+      authoritative: ["autohand", "kilo", "mimo-code", "omp", "pi"],
       none: ["aider", "amp", "cline", "crush", "hermes", "kiro"],
     } as const;
 

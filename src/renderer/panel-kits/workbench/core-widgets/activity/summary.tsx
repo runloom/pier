@@ -52,10 +52,7 @@ function StatTile({
           />
         ) : null}
         <span
-          className={cn(
-            "truncate text-muted-foreground leading-none",
-            compact ? "text-[11px]" : "text-xs"
-          )}
+          className={cn("truncate text-muted-foreground text-xs leading-none")}
         >
           {label}
         </span>

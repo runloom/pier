@@ -3,7 +3,7 @@
  *
  * Artboard is a Figma frame: fixed pixel width, default 1280×800 clip viewport
  * (no inner scrollbar). Inline ArtboardStage is the same fit-all card as
- * Mermaid / node-graph (no wheel capture). Zoom/pan is fullscreen only.
+ * Mermaid (no wheel capture). Zoom/pan is fullscreen only.
  */
 import { HtmlWorldCanvas } from "@pier/ui/image-preview/world-canvas.tsx";
 import { cn } from "@pier/ui/utils.ts";
