@@ -6,11 +6,13 @@ import type {
   RendererPluginCodeThemeRegistration,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { MarkdownCodeBlockLabels } from "./code-block.tsx";
 import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
 import type { MarkdownIrCommentsChrome } from "./comments/ir-types.ts";
-import type { MarkdownInline } from "./ir.ts";
+import { markdownHtmlRenderEnv } from "./html/env.ts";
+import { renderMarkdownHtmlInlines } from "./html/inlines.tsx";
+import type { MarkdownHeadingSummary, MarkdownInline } from "./ir.ts";
 import { searchMatchesFor } from "./ir-render-helpers.ts";
 import { MarkdownMath } from "./math.tsx";
 import type {
@@ -47,6 +49,7 @@ export interface MarkdownRenderContext {
   comments?: MarkdownIrCommentsChrome | undefined;
   copyCode: ((code: string) => Promise<void>) | undefined;
   fileResources: MarkdownFileResources | undefined;
+  headings: readonly MarkdownHeadingSummary[];
   labels: MarkdownRendererLabels;
   onJumpToSource?: ((offset: number) => void) | undefined;
   onOpenAnchor(anchor: string): void;
@@ -60,13 +63,33 @@ export function renderInlines(
   inlines: readonly MarkdownInline[],
   context: MarkdownRenderContext
 ): ReactNode[] {
-  return inlines.map((inline) => (
-    <Fragment
-      key={`${inline.kind}-${inline.range.startOffset}-${inline.range.endOffset}`}
-    >
-      {renderInline(inline, context)}
-    </Fragment>
-  ));
+  const range = inlines[0]?.range ?? {
+    endLine: 1,
+    endOffset: 0,
+    startLine: 1,
+    startOffset: 0,
+  };
+  return renderMarkdownHtmlInlines(
+    inlines,
+    {
+      ...markdownHtmlRenderEnv({
+        activeSearchMatchId: context.activeSearchMatchId,
+        fileResources: context.fileResources,
+        labels: context.labels,
+        onJumpToSource: context.onJumpToSource,
+        onOpenAnchor: context.onOpenAnchor,
+        onOpenExternal: context.onOpenExternal,
+        onOpenInternal: context.onOpenInternal,
+        range,
+        searchMatches: undefined,
+        searchMatchesForHtml: (htmlRange) =>
+          searchMatchesFor(context, "html", htmlRange),
+        source: context.source,
+      }),
+      headingIds: [],
+    },
+    (inline) => renderInline(inline, context)
+  );
 }
 
 function renderInline(
@@ -141,15 +164,7 @@ function renderInline(
         </sup>
       );
     case "html":
-      return (
-        <code className="text-muted-foreground">
-          <MarkdownSearchText
-            activeMatchId={context.activeSearchMatchId}
-            matches={searchMatchesFor(context, "html", inline.range)}
-            value={inline.value}
-          />
-        </code>
-      );
+      return null;
     case "textDirective":
       if (inline.name === "kbd") {
         return <Kbd>{renderInlines(inline.children, context)}</Kbd>;

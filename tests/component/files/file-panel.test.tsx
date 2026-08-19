@@ -4605,7 +4605,7 @@ describe("Files file-panel", () => {
     expect(renamedView.state.doc.toString()).toBe("before\n");
   });
 
-  it("does not render raw HTML and routes safe links through the host", async () => {
+  it("sanitizes HTML and routes safe links through the host", async () => {
     const startHref = window.location.href;
     const openExternal = vi.fn(async () => ({ opened: true as const }));
     const context = createMockContext({ openExternal });

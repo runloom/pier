@@ -1,3 +1,4 @@
+import { htmlVisibleSearchText } from "./html/headings.ts";
 import type {
   MarkdownBlock,
   MarkdownInline,
@@ -82,6 +83,11 @@ function collectBlockSegments(
         }
         break;
       case "html":
+        segments.push({
+          nodeKey: markdownSearchNodeKey(block.kind, block.range),
+          value: htmlVisibleSearchText(block.value),
+        });
+        break;
       case "unsupported":
         segments.push({
           nodeKey: markdownSearchNodeKey(block.kind, block.range),
@@ -124,12 +130,21 @@ function collectInlineSegments(
     switch (inline.kind) {
       case "text":
       case "inlineCode":
-      case "html":
         segments.push({
           nodeKey: markdownSearchNodeKey(inline.kind, inline.range),
           value: inline.value,
         });
         break;
+      case "html": {
+        const visible = htmlVisibleSearchText(inline.value);
+        if (visible) {
+          segments.push({
+            nodeKey: markdownSearchNodeKey(inline.kind, inline.range),
+            value: visible,
+          });
+        }
+        break;
+      }
       case "emphasis":
       case "strong":
       case "delete":

@@ -15,6 +15,7 @@ import remarkMath from "remark-math";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
 import type { Node, Position } from "unist";
+import { collectHtmlBlockHeadings } from "./html/headings.ts";
 import {
   MARKDOWN_IR_VERSION,
   type MarkdownBlock,
@@ -314,6 +315,7 @@ function blockToIr(
     case "thematicBreak":
       return [{ kind: "thematicBreak", range }];
     case "html":
+      collectHtmlBlockHeadings(node.value, range, slugger, headings);
       return [{ kind: "html", range, value: node.value }];
     case "math":
       return [

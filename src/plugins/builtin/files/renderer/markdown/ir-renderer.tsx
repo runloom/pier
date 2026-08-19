@@ -20,6 +20,8 @@ import { wrapBlocksWithComments } from "./comments/ir-blocks.tsx";
 import type { MarkdownIrCommentsChrome } from "./comments/ir-types.ts";
 import type { MarkdownCrossModeAnchor } from "./cross-mode-anchor.ts";
 import { MarkdownDiagram } from "./diagram.tsx";
+import { markdownHtmlRenderEnv } from "./html/env.ts";
+import { renderMarkdownHtmlBlock } from "./html/render.tsx";
 import type { MarkdownBlock } from "./ir.ts";
 import {
   type MarkdownRenderContext,
@@ -112,6 +114,7 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
           ...(props.comments ? { comments: props.comments } : {}),
           copyCode: props.copyCode,
           fileResources: props.fileResources,
+          headings: props.pagination.headings,
           labels: props.labels,
           onJumpToSource: props.onJumpToSource,
           onOpenAnchor,
@@ -308,15 +311,22 @@ function renderBlock(
     case "thematicBreak":
       return <Separator className="md-hr" />;
     case "html":
-      return (
-        <pre className="md-raw">
-          <MarkdownSearchText
-            activeMatchId={context.activeSearchMatchId}
-            matches={searchMatchesFor(context, "html", block.range)}
-            value={block.value}
-          />
-        </pre>
-      );
+      return renderMarkdownHtmlBlock(block.value, {
+        ...markdownHtmlRenderEnv({
+          activeSearchMatchId: context.activeSearchMatchId,
+          fileResources: context.fileResources,
+          labels: context.labels,
+          onJumpToSource: context.onJumpToSource,
+          onOpenAnchor: context.onOpenAnchor,
+          onOpenExternal: context.onOpenExternal,
+          onOpenInternal: context.onOpenInternal,
+          range: block.range,
+          searchMatches: searchMatchesFor(context, "html", block.range),
+          source: context.source,
+        }),
+        headings: context.headings,
+        range: block.range,
+      });
     case "containerDirective": {
       if (isCalloutDirective(block.name)) {
         const title = block.attributes.title?.trim();
