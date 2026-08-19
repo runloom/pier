@@ -42,8 +42,8 @@ import { GitReviewScopeSwitcher } from "./review/scope-switcher.tsx";
 import { clearReviewSessionsForScope } from "./review/session-cache.ts";
 import type { PendingCommentReveal } from "./review/surface-types.ts";
 import { ReviewDocuments } from "./review/surfaces.tsx";
+import { REVIEW_TREE_COLLAPSED_STORAGE_PREFIX } from "./review/tree/sidebar-preference.ts";
 import { gitReviewTreeModel } from "./review/tree.tsx";
-import { REVIEW_TREE_COLLAPSED_STORAGE_PREFIX } from "./review/tree-sidebar-preference.ts";
 import { useGitStatus } from "./status-state.ts";
 import {
   planTabChangeSummaryWrite,

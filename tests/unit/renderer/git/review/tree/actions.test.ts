@@ -3,13 +3,13 @@ import {
   type ScopedGitReviewMutationTransitionEvent,
   subscribeGitReviewMutationTransition,
 } from "@plugins/builtin/git/renderer/review/mutation-transitions.ts";
+import type { GitReviewTreeFileRef } from "@plugins/builtin/git/renderer/review/tree/section.ts";
 import {
   GIT_REVIEW_OPEN_FILE_COMMAND_ID,
   GIT_REVIEW_TREE_ITEM_SURFACE,
   registerGitReviewTreeActions,
 } from "@plugins/builtin/git/renderer/review/tree-actions.ts";
 import { buildGitReviewTreeItemMenuFlags } from "@plugins/builtin/git/renderer/review/tree-context-menu.ts";
-import type { GitReviewTreeFileRef } from "@plugins/builtin/git/renderer/review/tree-section.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";

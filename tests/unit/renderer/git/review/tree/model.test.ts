@@ -1,8 +1,8 @@
-import { gitReviewTreeModel } from "@plugins/builtin/git/renderer/review/tree.tsx";
 import {
   makeReviewTreeNodeId,
   parseReviewTreeNodeId,
-} from "@plugins/builtin/git/renderer/review/tree-section.ts";
+} from "@plugins/builtin/git/renderer/review/tree/section.ts";
+import { gitReviewTreeModel } from "@plugins/builtin/git/renderer/review/tree.tsx";
 import { describe, expect, it } from "vitest";
 
 function entry(partial: {
