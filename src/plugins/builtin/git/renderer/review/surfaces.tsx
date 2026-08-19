@@ -113,6 +113,9 @@ function ReviewDocumentsComponent(
   const reviewViewOptions = useReviewViewOptions();
   const responsiveViewOptions =
     useReviewResponsiveViewOptions(reviewViewOptions);
+  const responsiveUnified =
+    reviewViewOptions.options.diffStyle === "split" &&
+    responsiveViewOptions.effectiveOptions.diffStyle === "unified";
   const selectSurface = useCallback(
     (surface: GitReviewReadingSurface) => {
       userPickedSurfaceRef.current = true;
@@ -408,8 +411,9 @@ function ReviewDocumentsComponent(
             activeChrome?.onToggleCollapseAll();
           }}
           refreshing={props.indexRefreshing === true}
+          responsiveUnified={responsiveUnified}
           setViewOptions={responsiveViewOptions.setOptions}
-          viewOptions={reviewViewOptions.options}
+          viewOptions={responsiveViewOptions.effectiveOptions}
         />
       }
       isActiveOpenPath={isActiveOpenPath}

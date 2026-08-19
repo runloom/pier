@@ -510,6 +510,7 @@
     "ui.reviewScopeBranchSearchPlaceholder": "搜索分支",
     "ui.reviewToolbarSplit": "切换到并排视图",
     "ui.reviewToolbarUnified": "切换到行内视图",
+    "ui.reviewToolbarResponsiveUnified": "面板较窄，已使用行内视图",
     "ui.reviewToolbarWrap": "自动换行",
     "ui.reviewToolbarNoWrap": "关闭自动换行",
     "ui.reviewToolbarCollapseAll": "折叠全部文件",

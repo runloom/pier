@@ -393,6 +393,7 @@
     "ui.reviewScopeBranchSearchPlaceholder": "분기 검색",
     "ui.reviewToolbarSplit": "나란히 보기로 전환",
     "ui.reviewToolbarUnified": "한 줄 보기로 전환",
+    "ui.reviewToolbarResponsiveUnified": "패널이 좁아 한 줄 보기로 표시 중",
     "ui.reviewToolbarWrap": "줄 바꿈",
     "ui.reviewToolbarNoWrap": "줄 바꿈 끄기",
     "ui.reviewToolbarCollapseAll": "모든 파일 접기",

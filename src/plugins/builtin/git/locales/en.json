@@ -444,6 +444,7 @@
     "ui.reviewScopeBranchSearchPlaceholder": "Search branches",
     "ui.reviewToolbarSplit": "Switch to side-by-side view",
     "ui.reviewToolbarUnified": "Switch to inline view",
+    "ui.reviewToolbarResponsiveUnified": "Panel is narrow; using inline view",
     "ui.reviewToolbarWrap": "Wrap lines",
     "ui.reviewToolbarNoWrap": "Disable line wrapping",
     "ui.reviewToolbarCollapseAll": "Collapse all files",

@@ -439,6 +439,7 @@
     "ui.reviewScopeBranchSearchPlaceholder": "ブランチを検索",
     "ui.reviewToolbarSplit": "左右表示に切り替え",
     "ui.reviewToolbarUnified": "インライン表示に切り替え",
+    "ui.reviewToolbarResponsiveUnified": "パネルが狭いため、インライン表示を使用中",
     "ui.reviewToolbarWrap": "行を折り返す",
     "ui.reviewToolbarNoWrap": "折り返しをオフ",
     "ui.reviewToolbarCollapseAll": "すべてのファイルを折りたたむ",
