@@ -7,8 +7,8 @@ import type {
 import { AgentStatusLabel } from "@/components/agent-status/label.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
-import { CORE_AGENT_STATUS_ITEM_ID } from "./core-terminal-status-items.ts";
-import { terminalStatusItemRegistry } from "./status-bar.tsx";
+import { CORE_AGENT_STATUS_ITEM_ID } from "../core-terminal-status-items.ts";
+import { terminalStatusItemRegistry } from "../status-bar.tsx";
 
 function isAgentActivity(
   activity: ForegroundActivity | undefined

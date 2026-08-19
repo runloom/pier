@@ -1,0 +1,92 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+index 82b348a..68627e4 100644
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -1114,6 +1114,9 @@ void ghostty_surface_set_focus(ghostty_surface_t, bool);
+ void ghostty_surface_set_cursor_suppress(ghostty_surface_t, bool);
+ bool ghostty_surface_cursor_visible(ghostty_surface_t);
+ void ghostty_surface_set_occlusion(ghostty_surface_t, bool);
++typedef void (*ghostty_surface_output_tap_cb)(void*, const uint8_t*, uintptr_t);
++void ghostty_surface_set_output_tap(ghostty_surface_t,
++                                    ghostty_surface_output_tap_cb, void*);
+ void ghostty_surface_set_size(ghostty_surface_t, uint32_t, uint32_t);
+ ghostty_surface_size_s ghostty_surface_size(ghostty_surface_t);
+ void ghostty_surface_set_color_scheme(ghostty_surface_t,
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index 1c07a74..b9df4d1 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1842,6 +1842,17 @@ pub const CAPI = struct {
+         surface.occlusionCallback(visible);
+     }
+ 
++    /// Pier patch (0107): register a raw-output tap for this surface. The
++    /// callback fires on the IO thread with the renderer lock held — the
++    /// embedder must only copy the bytes and return. Pass null to clear.
++    export fn ghostty_surface_set_output_tap(
++        surface: *Surface,
++        cb: ?termio.Termio.PierOutputTapFn,
++        userdata: ?*anyopaque,
++    ) void {
++        surface.core_surface.io.setPierOutputTap(cb, userdata);
++    }
++
+     /// Filter the mods if necessary. This handles settings such as
+     /// `macos-option-as-alt`. The filtered mods should be used for
+     /// key translation but should NOT be sent back via the `_key`
+diff --git a/src/termio/Termio.zig b/src/termio/Termio.zig
+index dcd0d8c..e089333 100644
+--- a/src/termio/Termio.zig
++++ b/src/termio/Termio.zig
+@@ -25,6 +25,11 @@ const log = std.log.scoped(.io_exec);
+ /// Mutex state argument for queueMessage.
+ pub const MutexState = enum { locked, unlocked };
+ 
++/// Pier patch (0107): host raw-output tap callback type. Fired on the IO
++/// thread while the renderer lock is held; embedders must only copy the
++/// bytes and return immediately.
++pub const PierOutputTapFn = *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) void;
++
+ /// Allocator
+ alloc: Allocator,
+ 
+@@ -66,6 +71,12 @@ terminal_stream: StreamHandler.Stream,
+ /// flooding with cursor resets.
+ last_cursor_reset: ?std.time.Instant = null,
+ 
++/// Pier patch (0107): optional host tap receiving raw PTY output before
++/// parsing. Guarded by the renderer_state mutex (processOutputLocked holds
++/// it; setPierOutputTap locks it).
++pier_output_tap: ?PierOutputTapFn = null,
++pier_output_tap_userdata: ?*anyopaque = null,
++
+ /// State we have for thread enter. This may be null if we don't need
+ /// to keep track of any state or if its already been freed.
+ thread_enter_state: ?*ThreadEnterState = null,
+@@ -683,8 +694,26 @@ pub fn processOutput(self: *Termio, buf: []const u8) void {
+     self.processOutputLocked(buf);
+ }
+ 
++/// Pier patch (0107): set or clear the host raw-output tap.
++pub fn setPierOutputTap(
++    self: *Termio,
++    cb: ?PierOutputTapFn,
++    userdata: ?*anyopaque,
++) void {
++    self.renderer_state.mutex.lock();
++    defer self.renderer_state.mutex.unlock();
++    self.pier_output_tap = cb;
++    self.pier_output_tap_userdata = userdata;
++}
++
+ /// Process output from readdata but the lock is already held.
+ fn processOutputLocked(self: *Termio, buf: []const u8) void {
++    // Pier patch (0107): forward raw PTY bytes to the host tap before any
++    // parsing so transcripts capture exactly what the process emitted.
++    if (self.pier_output_tap) |tap| {
++        tap(self.pier_output_tap_userdata, buf.ptr, buf.len);
++    }
++
+     // Schedule a render. We can call this first because we have the lock.
+     self.terminal_stream.handler.queueRender() catch unreachable;
+ 

@@ -40,12 +40,10 @@ describe("TypeScript language server integration", () => {
     const host = new LspSessionHost();
     try {
       const session = host.ensure({
-        clientRole: "editor",
         launch,
         onMessage: () => undefined,
         rootPath,
         serverId: provider.id,
-        webContentsId: 1,
         workspaceKey: `main:${rootPath}`,
       });
       const rootUri = fileUriFromAbsolutePath(rootPath);

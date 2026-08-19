@@ -351,6 +351,40 @@ section 根节点下的裸子节点。
 - `contextId` 由 `worktreeKey` 稳定派生，用于面板上下文身份；任务、终端和插件上下文不再依赖额外 `projectId`。
 - 主体不维护 `Project` 注册表，也不把 `projectId` 作为跨模块外键；需要项目粒度能力时优先使用 `projectRootPath` / `gitRoot` / `worktreeRoot`。
 
+### LSP Gateway `src/main/services/lsp/session-broker.ts`
+
+语言服务的进程树按 `(workspaceKey, serverId, rootPath)` 全局唯一（`sessionOwnerKey` 不含窗口与
+消费角色）；renderer editor 消费者持**虚拟会话 id**经 broker 路由，language-tools 是 main 侧
+消费者直连真实会话：
+
+- broker 职责：请求 id 重写（含 `$/cancelRequest`）、通知扇出、initialize 一次化（`client-capabilities.ts`
+ 的 Pier 超集 + 结果缓存合成）、server→client 请求路由到最近活跃消费者、didOpen/didClose
+ 引用计数（`document-gate.ts`；language-tools 短命引用 TTL+LRU）
+- 生命周期活动驱动：会话不持有 policy refCount，空闲回收统一按 `lastTouchAt`；renderer 可见
+ 编辑器周期 `touch()` 保活（`FILES_LSP_VISIBLE_TOUCH_INTERVAL_MS`），隐藏 tab 自然进入空闲窗口，
+ 回收后经 root-recovery 透明复活（focusin / 可见性恢复触发 `resume()`）
+- 全局内存预算安全网：`memory-budget.ts` 周期采样会话进程树 RSS（`pier-resource/process-table`），
+ 超 `lsp.memoryBudgetMb`（默认 4096，0=不限）按 LRU 关最冷 workspace；禁止改用 per-process
+ `maxTsServerMemory` 之类到线自杀方案
+- 检查点：`tests/unit/main/lsp/session-broker-governance.test.ts`（同键恒一棵进程树）、
+ `tests/unit/main/lsp/document-gate.test.ts`、`tests/unit/main/lsp/memory-budget.test.ts`
+
+### 终端历史三层化 `src/main/services/terminal-transcripts/`
+
+终端历史分三层：Tier 0 屏幕/备用屏（ghostty 原生）、Tier 1 RAM 热窗（scrollback，用户偏好上限）、
+Tier 2 磁盘 transcript 分段（`{userData}/terminal-transcripts/{lifecycleId}/NNNNNN.log[.gz]`）：
+
+- 写入端两路：PTY 终端经 ghostty patch `0107-output-tap`（IO 线程持锁回调→Swift `TranscriptTap.swift`
+ 有界队列，永不阻塞 PTY 读；身份 `runId` 或 `term-<panelId>`）；任务输出经 main 侧 sink
+ （`task-{runId}-{taskId}`）。`TaskOutputBuffer` 堆内只保留 replay 尾部（200K 字符 × 20 任务）
+- 有界性硬约束：单段 8MB 轮转、写队列 4MB 超限丢弃并写缺口标记、全局磁盘配额 512MB 按 LRU
+ 淘汰非活体 lifecycle、冷段由 main 清扫 gzip；lifecycle 目录名净化不得逃逸根目录
+- 读路径：`pier:terminal:transcript-tail`（`transcript-ipc.ts`）+ 状态栏「查看完整历史」content dialog
+- 热窗压力（ghostty patch `0108-live-scrollback-limit`）：scrollback 设置即时生效于存量 surface；
+ 隐藏超阈值的 surface 热窗收缩、重新可见恢复（`hot-window-pressure.ts`），历史仍经 Tier 2 可达
+- 检查点：`tests/unit/main/terminal-transcripts/transcripts-governance.test.ts`、
+ `tests/unit/main/terminal/hot-window-pressure.test.ts`、`native/Tests/GhosttyBridgeTests/TranscriptTapTests.swift`
+
 ### 账号域模块迁移：`src/main/services/agent-accounts/` → `pier.codex`
 
 迁移前，宿主 `src/main/services/agent-accounts/` 仍负责多 AI agent 账号的 CRUD、凭据托管与用量轮询：

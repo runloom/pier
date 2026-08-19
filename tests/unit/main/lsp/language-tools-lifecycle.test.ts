@@ -276,11 +276,11 @@ describe("LanguageTools IPC lifecycle", () => {
       ["session:main:/workspace-a"],
       "workspace-evicted"
     );
-    expect(ipcEvent.sender.send).toHaveBeenCalledWith(PIER.LSP_SESSION_CLOSED, {
-      cause: "workspace-evicted",
-      reason: "closed",
-      sessionId: "session:main:/workspace-a",
-    });
+    // Gateway 下 language-tools 会话没有 renderer 消费者，不再推送关闭事件。
+    expect(ipcEvent.sender.send).not.toHaveBeenCalledWith(
+      PIER.LSP_SESSION_CLOSED,
+      expect.anything()
+    );
     expect(
       getLspIpcTestHandles().policy.hasTreeBlocker("main:/workspace-a")
     ).toBe(true);
@@ -310,20 +310,21 @@ describe("LanguageTools IPC lifecycle", () => {
     }
     const ipcEvent = event();
     const workspaceKey = "main:/workspace";
-    const sessionId = `session:${workspaceKey}`;
+    const realSessionId = `session:${workspaceKey}`;
     const ensureRequest = {
       filePath: "/workspace/source.evict.ts",
       rootPath: "/workspace",
       workspaceKey,
     };
 
-    await expect(ensureHandler(ipcEvent, ensureRequest)).resolves.toMatchObject(
-      {
-        ok: true,
-        sessionId,
-      }
-    );
-    const closing = closeHandler(ipcEvent, { sessionId });
+    const ensured = (await ensureHandler(ipcEvent, ensureRequest)) as {
+      ok: boolean;
+      sessionId: string;
+    };
+    expect(ensured).toMatchObject({ ok: true });
+    // renderer 拿到的是虚拟会话 id，真实会话 id 不外泄。
+    expect(ensured.sessionId).not.toBe(realSessionId);
+    const closing = closeHandler(ipcEvent, { sessionId: ensured.sessionId });
 
     expect(getLspIpcTestHandles().policy.hasTreeBlocker(workspaceKey)).toBe(
       true
@@ -341,20 +342,19 @@ describe("LanguageTools IPC lifecycle", () => {
     expect(reensureSettled).toBe(false);
     expect(mocks.host.ensure).toHaveBeenCalledTimes(1);
 
-    const retained = mocks.closingTrees.get(sessionId);
-    const session = mocks.sessions.get(sessionId);
+    const retained = mocks.closingTrees.get(realSessionId);
+    const session = mocks.sessions.get(realSessionId);
     if (!(retained && session)) {
       throw new Error("expected retained closing session");
     }
     session.onClose?.(
-      { cause: "client-release", reason: "closed", sessionId },
+      {
+        cause: "client-release",
+        reason: "closed",
+        sessionId: realSessionId,
+      },
       retained.promise
     );
-    expect(ipcEvent.sender.send).toHaveBeenCalledWith(PIER.LSP_SESSION_CLOSED, {
-      cause: "client-release",
-      reason: "closed",
-      sessionId,
-    });
     retained.resolve();
     await expect(closing).resolves.toBe(true);
     await flushMicrotasks();
@@ -372,9 +372,8 @@ describe("LanguageTools IPC lifecycle", () => {
     const languageToolsHandler = mocks.handlers.get(
       PIER.LSP_LANGUAGE_TOOLS_REQUEST
     );
-    const closeHandler = mocks.handlers.get(PIER.LSP_SESSION_CLOSE);
-    if (!(languageToolsHandler && closeHandler)) {
-      throw new Error("expected LanguageTools request and close handlers");
+    if (!languageToolsHandler) {
+      throw new Error("expected LanguageTools request handler");
     }
     const ipcEvent = event();
     const workspaceKey = "main:/workspace";
@@ -384,7 +383,11 @@ describe("LanguageTools IPC lifecycle", () => {
     await expect(
       languageToolsHandler(ipcEvent, languageToolsRequest)
     ).resolves.toMatchObject({ ok: true });
-    const closing = closeHandler(ipcEvent, { sessionId });
+    // main 侧发起关闭（等价 idle-release 路径）：接受即挂树屏障。
+    const closing = mocks.host.close(
+      sessionId,
+      "idle-release"
+    ) as Promise<boolean>;
 
     expect(getLspIpcTestHandles().policy.hasTreeBlocker(workspaceKey)).toBe(
       true
@@ -408,14 +411,9 @@ describe("LanguageTools IPC lifecycle", () => {
       throw new Error("expected retained closing LanguageTools session");
     }
     session.onClose?.(
-      { cause: "client-release", reason: "closed", sessionId },
+      { cause: "idle-release", reason: "closed", sessionId },
       retained.promise
     );
-    expect(ipcEvent.sender.send).toHaveBeenCalledWith(PIER.LSP_SESSION_CLOSED, {
-      cause: "client-release",
-      reason: "closed",
-      sessionId,
-    });
 
     retained.resolve();
     await expect(closing).resolves.toBe(true);
@@ -425,6 +423,35 @@ describe("LanguageTools IPC lifecycle", () => {
     );
     await expect(replacement).resolves.toMatchObject({ ok: true });
     expect(mocks.host.ensure).toHaveBeenCalledTimes(2);
+  });
+
+  it("makes editor-ensured workspaces eligible for idle reaping (A3 活动驱动)", async () => {
+    const ensureHandler = mocks.handlers.get(PIER.LSP_SESSION_ENSURE);
+    if (!ensureHandler) {
+      throw new Error("expected LSP ensure handler");
+    }
+    const workspaceKey = "main:/workspace";
+    await expect(
+      ensureHandler(event(), {
+        filePath: "/workspace/source.evict.ts",
+        rootPath: "/workspace",
+        workspaceKey,
+      })
+    ).resolves.toMatchObject({ ok: true });
+
+    const { policy } = getLspIpcTestHandles();
+    const state = policy.getState(workspaceKey);
+    // ensure 即取即还：会话不持有 refCount。
+    expect(state?.refCount).toBe(0);
+    expect(state?.active).toBe(true);
+    const idleMs = policy.getPrefs().idleReleaseMs;
+    expect(
+      policy.reapIdleWorkspaceKeys((state?.lastTouchAt ?? 0) + idleMs + 1)
+    ).toContain(workspaceKey);
+    // 未到空闲窗口不回收。
+    expect(
+      policy.reapIdleWorkspaceKeys((state?.lastTouchAt ?? 0) + idleMs - 1)
+    ).not.toContain(workspaceKey);
   });
 
   it.each([

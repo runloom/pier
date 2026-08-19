@@ -1,5 +1,6 @@
 export const CORE_AGENT_STATUS_ITEM_ID = "core.agent-status";
 export const CORE_COMMENTS_STATUS_ITEM_ID = "core.comments-status";
+export const CORE_TERMINAL_HISTORY_STATUS_ITEM_ID = "core.terminal-history";
 export const CORE_TASK_STATUS_ITEM_ID = "core.task-status";
 
 export const CORE_ACTIVITY_OVERVIEW_WIDGET_ID = "core.activity-overview";

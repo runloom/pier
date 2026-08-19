@@ -13,8 +13,8 @@ import {
   useCommentsStore,
 } from "@/stores/comments.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
-import { CORE_COMMENTS_STATUS_ITEM_ID } from "./core-terminal-status-items.ts";
-import { terminalStatusItemRegistry } from "./status-bar.tsx";
+import { CORE_COMMENTS_STATUS_ITEM_ID } from "../core-terminal-status-items.ts";
+import { terminalStatusItemRegistry } from "../status-bar.tsx";
 
 /**
  * Agent 终端状态栏评论入口。

@@ -453,14 +453,12 @@ describe("Windows Job Object process trees with a fake addon", () => {
     const outcomes: Record<string, unknown>[] = [];
     const runtime = createLspSessionRuntime({
       child: supervisor.child,
-      clientRole: "editor",
       onMessage: vi.fn(),
       onOutcome: (event) => outcomes.push(event),
       processTree: tree,
       rootPath: "/repo",
       serverId: "typescript",
       sessionId: "windows-control",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
 

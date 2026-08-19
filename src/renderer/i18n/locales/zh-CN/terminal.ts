@@ -346,8 +346,20 @@ export const terminal = {
         submitUnavailableBody: "请先打开智能体对话，然后再试。",
         title: "评论",
       },
+      history: {
+        title: "终端历史",
+      },
     },
     manage: "管理状态栏…",
+  },
+  history: {
+    dialogTitle: "终端完整历史",
+    emptyBody: "终端产生输出后，这里会保留完整记录（含重启前的历史）。",
+    emptyTitle: "还没有历史记录",
+    loadFailedBody: "请稍后重试。",
+    loadFailedTitle: "无法读取终端历史",
+    open: "查看完整历史",
+    truncatedNotice: "完整历史共 {{totalMb}} MB，此处显示最近的部分。",
   },
   /**
    * Ghostty / native 宿主文案（见 ghostty-host-copy 目录）。

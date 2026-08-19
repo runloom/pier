@@ -4,9 +4,15 @@ import type {
   TaskOutputUpdate,
 } from "@shared/contracts/tasks.ts";
 
-const DEFAULT_MAX_CHARS = 1_000_000;
+/**
+ * 堆内只保留 replay 尾部（历史三层化后全量历史在 terminal-transcripts
+ * 磁盘分段里）：200K 字符 × 20 个任务 ≈ 最坏 8MB，替代旧的 1M × 100
+ * （最坏 ~200MB）全量驻留。尾部被裁剪时 `truncated` 置位，任务输出
+ * 面板已有「更早输出被截断」提示。
+ */
+const DEFAULT_MAX_CHARS = 200_000;
 const DEFAULT_MAX_CHUNKS = 2000;
-const DEFAULT_RETAINED_OUTPUTS = 100;
+const DEFAULT_RETAINED_OUTPUTS = 20;
 const PUBLISH_DELAY_MS = 32;
 
 interface OutputRecord {

@@ -8,13 +8,11 @@ import type {
   LspSessionHostObserver,
   LspSessionStartedEvent,
 } from "./session-host.ts";
-import type { LspSessionClientRole } from "./session-runtime.ts";
 
 export type LspE2eCloseCause = "idle-release" | "workspace-evicted";
 
 export interface LspE2eSessionSnapshot {
   readonly alive: boolean;
-  readonly clientRole: LspSessionClientRole;
   readonly closeCause: LspSessionCloseCause | null;
   readonly pid: number | null;
   readonly rootPath: string;
@@ -38,7 +36,6 @@ export interface LspE2eObserverApi {
 }
 
 interface MutableObservedSession {
-  clientRole: LspSessionClientRole;
   closeCause: LspSessionCloseCause | null;
   pid: number | null;
   processTree: ProcessTreeHandle;
@@ -87,7 +84,6 @@ export class LspE2eObserver
       return;
     }
     this.#sessions.set(event.sessionId, {
-      clientRole: event.clientRole,
       closeCause: null,
       pid: event.pid,
       processTree: event.processTree,
@@ -119,7 +115,6 @@ export class LspE2eObserver
       [...this.#sessions.values()].map(async (session) =>
         Object.freeze({
           alive: await session.processTree.isAlive(),
-          clientRole: session.clientRole,
           closeCause: session.closeCause,
           pid: session.pid,
           rootPath: session.rootPath,

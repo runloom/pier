@@ -12,6 +12,9 @@ export const settingsLspRow = {
     "同时跑语言服务的本地项目数（0 表示不限制关闭语义）",
   lspMaxRemoteWorkspaces: "远程项目上限",
   lspMaxRemoteWorkspacesDesc: "同时跑语言服务的远程项目数",
+  lspMemoryBudgetMb: "内存预算",
+  lspMemoryBudgetMbDesc:
+    "语言服务进程总内存上限；超出时自动关停最久未用的项目，需要时会自动重启。0 表示不限制",
   lspUpdateFailed: "无法更新语言服务设置，请重试",
   lspWorktreesEnabled: "在工作树中运行",
   lspWorktreesEnabledDesc:

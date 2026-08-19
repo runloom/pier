@@ -94,6 +94,20 @@
             core.setDisplayVisible(visible)
         }
 
+        /// Live scrollback limit (Pier patch 0108)：即时生效于存量 surface。
+        open func setScrollbackLimit(_ bytes: UInt64) {
+            core.setScrollbackLimit(bytes)
+        }
+
+        /// Raw PTY output tap (Pier patch 0107)：宿主 transcript 落盘用。
+        /// 回调在 ghostty IO 线程持锁触发；实现方只能拷贝字节后立即返回。
+        open func setOutputTap(
+            _ callback: ghostty_surface_output_tap_cb?,
+            userdata: UnsafeMutableRawPointer?
+        ) {
+            core.setOutputTap(callback, userdata: userdata)
+        }
+
         @_spi(PierDiagnostics)
         public var pierRenderDiagnostics: TerminalSurfaceRenderDiagnostics {
             core.pierDiagnostics

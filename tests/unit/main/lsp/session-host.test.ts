@@ -36,29 +36,25 @@ describe("LspSessionHost", () => {
     vi.useRealTimers();
   });
 
-  it("reuses one session per webContents+workspace+server+root and forwards framed messages", async () => {
+  it("reuses one session per workspace+server+root and forwards framed messages", async () => {
     const child = new FakeLspChild();
     const spawnImpl = vi.fn(() => child) as unknown as typeof spawn;
     const host = createHost(spawnImpl);
     const messages: Array<{ message: string; sessionId: string }> = [];
     const first = host.ensure({
-      clientRole: "editor",
       launch: launch(),
       onMessage: (sessionId, message) => {
         messages.push({ message, sessionId });
       },
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
     const second = host.ensure({
-      clientRole: "editor",
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
     expect(second.sessionId).toBe(first.sessionId);
@@ -75,7 +71,7 @@ describe("LspSessionHost", () => {
     await host.dispose();
   });
 
-  it("isolates editor and LanguageTools protocol connections while reusing editors", async () => {
+  it("shares one process tree per workspace+server+root across all consumers", async () => {
     const children: FakeLspChild[] = [];
     const spawnImpl = vi.fn(() => {
       const child = new FakeLspChild();
@@ -88,30 +84,26 @@ describe("LspSessionHost", () => {
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     };
 
-    // Editor vs language-tools intentionally isolate process trees (streaming
-    // renderer transport vs main request/response); cost is documented on
-    // sessionOwnerKey.
-    const editor = host.ensure({ ...owner, clientRole: "editor" });
-    const languageTools = host.ensure({
-      ...owner,
-      clientRole: "language-tools",
-    });
-    const secondEditor = host.ensure({ ...owner, clientRole: "editor" });
+    // Gateway 终态：消费者（editor / language-tools / 多窗口）不进入会话
+    // 身份，同 (workspaceKey, serverId, rootPath) 恒复用一棵进程树。
+    const first = host.ensure({ ...owner });
+    const second = host.ensure({ ...owner });
+    const third = host.ensure({ ...owner });
 
-    expect(languageTools.sessionId).not.toBe(editor.sessionId);
-    expect(secondEditor.sessionId).toBe(editor.sessionId);
-    expect(spawnImpl).toHaveBeenCalledTimes(2);
+    expect(second.sessionId).toBe(first.sessionId);
+    expect(third.sessionId).toBe(first.sessionId);
+    expect(second.reused).toBe(true);
+    expect(spawnImpl).toHaveBeenCalledTimes(1);
     for (const child of children) {
       child.exit(0);
     }
     await host.dispose();
   });
 
-  it("isolates sessions by webContents id", async () => {
+  it("isolates sessions by workspaceKey", async () => {
     const children: FakeLspChild[] = [];
     const spawnImpl = vi.fn(() => {
       const child = new FakeLspChild();
@@ -120,22 +112,18 @@ describe("LspSessionHost", () => {
     }) as unknown as typeof spawn;
     const host = createHost(spawnImpl);
     const a = host.ensure({
-      clientRole: "editor",
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
     const b = host.ensure({
-      clientRole: "editor",
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 2,
-      workspaceKey: "main:/repo",
+      workspaceKey: "wt:/repo-worktree",
     });
     expect(a.sessionId).not.toBe(b.sessionId);
     expect(spawnImpl).toHaveBeenCalledTimes(2);
@@ -154,21 +142,17 @@ describe("LspSessionHost", () => {
     }) as unknown as typeof spawn;
     const host = createHost(spawnImpl);
     const ts = host.ensure({
-      clientRole: "editor",
       launch: launch("ts"),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
     const py = host.ensure({
-      clientRole: "editor",
       launch: launch("py"),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "pyright",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
     expect(ts.sessionId).not.toBe(py.sessionId);
@@ -211,12 +195,10 @@ describe("LspSessionHost", () => {
       terminal: Promise<void>;
     }>();
     const owner = {
-      clientRole: "editor" as const,
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     };
     const first = host.ensure({
@@ -273,12 +255,10 @@ describe("LspSessionHost", () => {
     const spawnImpl = vi.fn(() => child) as unknown as typeof spawn;
     const host = createHost(spawnImpl);
     const session = host.ensure({
-      clientRole: "language-tools",
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
     const reader = new LspMessageReader();
@@ -360,12 +340,10 @@ describe("LspSessionHost", () => {
     const child = new FakeLspChild();
     const host = createHost(vi.fn(() => child) as unknown as typeof spawn);
     const session = host.ensure({
-      clientRole: "editor",
       launch: launch(),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
     const writes: Buffer[] = [];
@@ -410,22 +388,18 @@ describe("LspSessionHost", () => {
     );
     const outcomes: Record<string, unknown>[] = [];
     const first = host.ensure({
-      clientRole: "editor",
       launch: launch("first"),
       onClose: (event) => outcomes.push(event),
       onMessage: vi.fn(),
       rootPath: "/repo/first",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo/first",
     });
     const second = host.ensure({
-      clientRole: "editor",
       launch: launch("second"),
       onMessage: vi.fn(),
       rootPath: "/repo/second",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo/second",
     });
     const error = vi
@@ -481,13 +455,11 @@ describe("LspSessionHost", () => {
     vi.spyOn(console, "error").mockImplementation(() => undefined);
 
     const session = host.ensure({
-      clientRole: "editor",
       launch: launch("missing-ls"),
       onClose: (event) => outcomes.push(event),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
 
@@ -524,13 +496,11 @@ describe("LspSessionHost", () => {
     );
     const outcomes: Record<string, unknown>[] = [];
     const session = host.ensure({
-      clientRole: "editor",
       launch: launch(),
       onClose: (event) => outcomes.push(event),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
 
@@ -583,7 +553,6 @@ describe("LspSessionHost", () => {
     });
     let treeTerminalSettled = false;
     const session = host.ensure({
-      clientRole: "editor",
       launch: launch(),
       onClose: (event, treeTerminal) => {
         policy.markTreeDraining(workspaceKey, event.sessionId);
@@ -596,7 +565,6 @@ describe("LspSessionHost", () => {
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey,
     });
     policy.bindSession(workspaceKey, session.sessionId);
@@ -637,13 +605,11 @@ describe("LspSessionHost", () => {
     );
     const closed = Promise.withResolvers<{ terminal: Promise<void> }>();
     const session = host.ensure({
-      clientRole: "editor",
       launch: launch(),
       onClose: (_event, terminal) => closed.resolve({ terminal }),
       onMessage: () => undefined,
       rootPath: "/repo",
       serverId: "typescript",
-      webContentsId: 1,
       workspaceKey: "main:/repo",
     });
 

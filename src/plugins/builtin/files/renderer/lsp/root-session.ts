@@ -323,6 +323,11 @@ export class FilesLspAttachmentLifecycle {
     this.#lease?.resume();
   }
 
+  /** 可见保活：刷新 main 侧空闲时钟；无租约（启动中/已停）时为 no-op。 */
+  touch(): void {
+    this.#lease?.touch();
+  }
+
   destroy(): void {
     if (this.#destroyed) {
       return;

@@ -389,10 +389,11 @@ if (gotTheLock) {
       registerTerminalIpc(ipcMain, {
         launchGate: appCore.services.agentLaunchGate,
         localEnvironments: appCore.services.localEnvironments,
-        recordAgentLaunch: (agentId) =>
-          appCore.services.agentUsage.recordSuccessfulLaunch(agentId),
         processEnvironment: appCore.services.processEnvironment,
+        recordAgentLaunch: (id) =>
+          appCore.services.agentUsage.recordSuccessfulLaunch(id),
         taskService: appCore.services.tasks,
+        terminalTranscripts: appCore.services.terminalTranscripts,
       });
       registerPeerUidFromNativeAddon(getTerminalAddon());
       registerTaskRuntimeDiagnosticsIpc(ipcMain);
@@ -405,8 +406,7 @@ if (gotTheLock) {
       registerFileQueryIpc();
       registerLspIpc();
       localControlRegistration.start();
-      // Legacy terminal session keys (runtime window ids) → record UUIDs.
-      // Before transfer recovery / task reconcile / window restore; failure aborts boot.
+      // Legacy session keys → record UUIDs; must finish before restore.
       try {
         await migrateTerminalSessionScopesToRecordIds(
           await readPreferredOpenWindowRecordIds()

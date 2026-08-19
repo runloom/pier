@@ -15,6 +15,7 @@ export function applyLspPrefsToPolicy(
     idleReleaseMs: prefs.idleReleaseMs,
     maxLocalWorkspaces: prefs.maxLocalWorkspaces,
     maxRemoteWorkspaces: prefs.maxRemoteWorkspaces,
+    memoryBudgetMb: prefs.memoryBudgetMb,
     worktreesEnabled: prefs.worktreesEnabled,
   });
   syncCustomLanguageServers(prefs.customServers ?? []);

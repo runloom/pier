@@ -70,6 +70,7 @@ export async function handleTerminalCreate(args: {
     | Pick<LocalEnvironmentService, "resolveForWorktree" | "resolveProject">
     | null
     | undefined;
+  onPtyCreated?: (nativePanelId: string, lifecycleId: string) => void;
   processEnvironment: ProcessEnvironmentService;
   recordAgentLaunch?:
     | ((agentId: AgentKind) => Promise<unknown> | unknown)
@@ -85,6 +86,7 @@ export async function handleTerminalCreate(args: {
     loadError,
     launchGate,
     localEnvironments,
+    onPtyCreated,
     processEnvironment,
     recordAgentLaunch,
     taskLifecycle,
@@ -387,6 +389,7 @@ export async function handleTerminalCreate(args: {
       }
       return { ok: false, error: "createTerminal returned false" };
     }
+    onPtyCreated?.(nativePanelId, lifecycleId);
     // exitPresentation lives on panel params; renderer resolves final copy on
     // child-exited and calls injectDisplayText (native does not i18n).
     sendInitialTerminalInput({

@@ -22,15 +22,11 @@ import {
 import {
   createLspSessionRuntime,
   type LanguageToolsTextDocument,
-  type LspSessionClientRole,
   type LspSessionRuntime,
 } from "./session-runtime.ts";
 import { spawnWindowsSupervisor } from "./windows-supervisor.ts";
 
-export type {
-  LanguageToolsTextDocument,
-  LspSessionClientRole,
-} from "./session-runtime.ts";
+export type { LanguageToolsTextDocument } from "./session-runtime.ts";
 
 interface ProcessTreeFactoryInput {
   child: LspChildProcess;
@@ -38,7 +34,6 @@ interface ProcessTreeFactoryInput {
 }
 
 export interface LspSessionStartedEvent {
-  clientRole: LspSessionClientRole;
   pid: number | null;
   processTree: ProcessTreeHandle;
   rootPath: string;
@@ -100,17 +95,19 @@ export class LspSessionHost {
   }
 
   ensure(input: {
-    clientRole: LspSessionClientRole;
     launch: LspServerLaunchSpec;
     onClose?: (
       event: LspSessionClosedEvent,
       treeTerminal: Promise<void>
     ) => void;
     onCloseAccepted?: (sessionId: string) => void;
-    onMessage: (sessionId: string, jsonBody: string) => void;
+    onMessage: (
+      sessionId: string,
+      jsonBody: string,
+      parsed: Record<string, unknown>
+    ) => void;
     rootPath: string;
     serverId: string;
-    webContentsId: number;
     workspaceKey: string;
   }): {
     reused: boolean;
@@ -205,7 +202,6 @@ export class LspSessionHost {
     let runtime: LspSessionRuntime;
     runtime = createLspSessionRuntime({
       child,
-      clientRole: input.clientRole,
       ...(input.launch.initializationOptions
         ? { initializationOptions: input.launch.initializationOptions }
         : {}),
@@ -217,7 +213,6 @@ export class LspSessionHost {
       rootPath,
       serverId: input.serverId,
       sessionId,
-      webContentsId: input.webContentsId,
       workspaceKey: input.workspaceKey,
     });
     this.#bySessionId.set(sessionId, runtime);
@@ -226,7 +221,6 @@ export class LspSessionHost {
       this.#onCloseAcceptedBySessionId.set(sessionId, input.onCloseAccepted);
     }
     this.#observer?.started({
-      clientRole: input.clientRole,
       pid: typeof child.pid === "number" && child.pid > 0 ? child.pid : null,
       processTree,
       rootPath,
@@ -286,13 +280,6 @@ export class LspSessionHost {
     );
   }
 
-  async dropAllForWebContents(webContentsId: number): Promise<void> {
-    const sessionIds = [...this.#bySessionId.values()]
-      .filter((runtime) => runtime.webContentsId === webContentsId)
-      .map((runtime) => runtime.sessionId);
-    await this.closeMany(sessionIds, "owner-destroyed");
-  }
-
   async dispose(): Promise<void> {
     const active = [...this.#bySessionId.keys()].map((sessionId) =>
       this.close(sessionId, "app-quit")
@@ -323,10 +310,8 @@ export class LspSessionHost {
   }
 
   getSessionMeta(sessionId: string): {
-    clientRole: LspSessionClientRole;
     rootPath: string;
     serverId: string;
-    webContentsId: number;
     workspaceKey: string;
   } | null {
     const runtime = this.#bySessionId.get(sessionId);
@@ -334,12 +319,30 @@ export class LspSessionHost {
       return null;
     }
     return {
-      clientRole: runtime.clientRole,
       rootPath: runtime.rootPath,
       serverId: runtime.serverId,
-      webContentsId: runtime.webContentsId,
       workspaceKey: runtime.workspaceKey,
     };
+  }
+
+  /** 存活真实会话快照（内存预算采样用）。 */
+  listSessions(): Array<{
+    pid: number | null;
+    rootPath: string;
+    serverId: string;
+    sessionId: string;
+    workspaceKey: string;
+  }> {
+    return [...this.#bySessionId.values()].map((runtime) => ({
+      pid:
+        typeof runtime.child.pid === "number" && runtime.child.pid > 0
+          ? runtime.child.pid
+          : null,
+      rootPath: runtime.rootPath,
+      serverId: runtime.serverId,
+      sessionId: runtime.sessionId,
+      workspaceKey: runtime.workspaceKey,
+    }));
   }
 
   /** Session ids currently bound to a provider (exact serverId match). */
@@ -371,11 +374,24 @@ export class LspSessionHost {
   ensureInitialized(
     sessionId: string,
     params: Record<string, unknown>
-  ): Promise<void> {
+  ): Promise<unknown> {
     const runtime = this.#bySessionId.get(sessionId);
     return runtime
       ? runtime.ensureInitialized(params)
       : Promise.reject(new Error("LSP session not available"));
+  }
+
+  /** initialize 结果缓存（broker 为后续消费者合成 initialize 应答用）。 */
+  initializeResultOf(sessionId: string): unknown {
+    return this.#bySessionId.get(sessionId)?.initializeResult;
+  }
+
+  /** 服务器侧文档镜像（document-gate 读取用）。 */
+  documentStateOf(
+    sessionId: string,
+    uri: string
+  ): { text: string | null; version: number } | null {
+    return this.#bySessionId.get(sessionId)?.documentState(uri) ?? null;
   }
 
   ensureLanguageToolsDocumentOpen(

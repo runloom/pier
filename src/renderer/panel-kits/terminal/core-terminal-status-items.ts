@@ -2,11 +2,13 @@ import type { CoreTerminalStatusItemDeclaration } from "@shared/contracts/termin
 import {
   CORE_AGENT_STATUS_ITEM_ID,
   CORE_COMMENTS_STATUS_ITEM_ID,
+  CORE_TERMINAL_HISTORY_STATUS_ITEM_ID,
 } from "@shared/plugin-core-contribution-ids.ts";
 
 export {
   CORE_AGENT_STATUS_ITEM_ID,
   CORE_COMMENTS_STATUS_ITEM_ID,
+  CORE_TERMINAL_HISTORY_STATUS_ITEM_ID,
 } from "@shared/plugin-core-contribution-ids.ts";
 
 /**
@@ -26,5 +28,11 @@ export const CORE_TERMINAL_STATUS_ITEMS: readonly CoreTerminalStatusItemDeclarat
       order: -5,
       overflowPriority: 5,
       titleKey: "terminal.statusBar.item.comments.title",
+    },
+    {
+      id: CORE_TERMINAL_HISTORY_STATUS_ITEM_ID,
+      order: 20,
+      overflowPriority: 1,
+      titleKey: "terminal.statusBar.item.history.title",
     },
   ];

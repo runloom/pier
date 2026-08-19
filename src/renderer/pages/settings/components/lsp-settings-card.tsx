@@ -17,6 +17,7 @@ const MAX_WORKSPACES = 32;
 const IDLE_RELEASE_MINUTES_MAX = 24 * 60;
 const IDLE_RELEASE_MINUTES_MIN = 1;
 const MINUTE_MS = 60_000;
+const MEMORY_BUDGET_MB_MAX = 65_536;
 
 function normalizeWorkspaceLimit(raw: string, fallback: number): number {
   const parsed = Number.parseInt(raw, 10);
@@ -24,6 +25,14 @@ function normalizeWorkspaceLimit(raw: string, fallback: number): number {
     return fallback;
   }
   return Math.min(MAX_WORKSPACES, Math.max(0, parsed));
+}
+
+function normalizeMemoryBudgetMb(raw: string, fallback: number): number {
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed)) {
+    return fallback;
+  }
+  return Math.min(MEMORY_BUDGET_MB_MAX, Math.max(0, parsed));
 }
 
 function normalizeIdleReleaseMinutes(raw: string, fallback: number): number {
@@ -78,6 +87,53 @@ function LspWorkspaceLimitRow({
       }}
       onChange={setDraft}
       step={1}
+      type="number"
+      value={draft}
+    />
+  );
+}
+
+function LspMemoryBudgetRow({
+  description,
+  disabled,
+  label,
+  onChange,
+  value,
+}: {
+  description: string;
+  disabled: boolean;
+  label: string;
+  onChange: (value: number) => Promise<void>;
+  value: number;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [previous, setPrevious] = useState(value);
+  if (value !== previous) {
+    setPrevious(value);
+    setDraft(String(value));
+  }
+
+  const t = useT();
+  return (
+    <InputRow
+      description={description}
+      disabled={disabled}
+      id="settings-lsp-memory-budget-mb"
+      inputClassName="w-32"
+      inputMode="numeric"
+      label={label}
+      max={MEMORY_BUDGET_MB_MAX}
+      min={0}
+      onBlur={(raw) => {
+        const next = normalizeMemoryBudgetMb(raw, value);
+        setDraft(String(next));
+        if (next !== value) {
+          onChange(next).catch(() => undefined);
+        }
+      }}
+      onChange={setDraft}
+      step={256}
+      suffix={t("settings.unit.mb")}
       type="number"
       value={draft}
     />
@@ -148,6 +204,7 @@ export function LspSettingsCard() {
   const maxRemoteWorkspaces = useLspPreferencesStore(
     (s) => s.maxRemoteWorkspaces
   );
+  const memoryBudgetMb = useLspPreferencesStore((s) => s.memoryBudgetMb);
   const setEnabled = useLspPreferencesStore((s) => s.setEnabled);
   const setIdleReleaseMs = useLspPreferencesStore((s) => s.setIdleReleaseMs);
   const setWorktreesEnabled = useLspPreferencesStore(
@@ -159,6 +216,7 @@ export function LspSettingsCard() {
   const setMaxRemoteWorkspaces = useLspPreferencesStore(
     (s) => s.setMaxRemoteWorkspaces
   );
+  const setMemoryBudgetMb = useLspPreferencesStore((s) => s.setMemoryBudgetMb);
   const reportUpdateFailure = (error: unknown): void => {
     showAppAlert({
       body: error instanceof Error ? error.message : String(error),
@@ -247,6 +305,19 @@ export function LspSettingsCard() {
                 }
               }}
               value={maxRemoteWorkspaces}
+            />
+            <LspMemoryBudgetRow
+              description={t("settings.row.lspMemoryBudgetMbDesc")}
+              disabled={!enabled}
+              label={t("settings.row.lspMemoryBudgetMb")}
+              onChange={async (next) => {
+                try {
+                  await setMemoryBudgetMb(next);
+                } catch (error) {
+                  reportUpdateFailure(error);
+                }
+              }}
+              value={memoryBudgetMb}
             />
           </FieldSet>
         </FieldSet>
