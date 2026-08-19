@@ -18,6 +18,10 @@ import {
   type Page,
   test,
 } from "@playwright/test";
+import {
+  GIT_REVIEW_RESPONSIVE_INLINE_ENTER_PX,
+  GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX,
+} from "../../../src/plugins/builtin/git/renderer/review/responsive-diff.ts";
 import { selectTheme, setWindowSize } from "../workbench/e2e-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
@@ -1674,6 +1678,43 @@ async function dragReviewContentToWidth(
     .toBeCloseTo(requestedWidth, 0);
 }
 
+/** 树最小 170px + 分隔条；正文要能到 split 恢复阈值。 */
+const REVIEW_SPLIT_LAYOUT_MIN_WIDTH_PX =
+  GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX + 170 + 16;
+
+async function ensureReviewContentSplitWidth(
+  application: ElectronApplication,
+  page: Page,
+  separator: Locator,
+  contentPanel: Locator
+): Promise<void> {
+  await expect(separator).toBeVisible();
+  await expect(contentPanel).toBeVisible();
+  await expect(async () => {
+    await setWindowSize(application, page, 1400, 800);
+    const metrics = await page.evaluate(() => {
+      const layout = document.querySelector("[data-slot='file-panel-layout']");
+      return {
+        layout: layout?.getBoundingClientRect().width ?? 0,
+        window: window.innerWidth,
+      };
+    });
+    expect(metrics.window, `window ${metrics.window}`).toBeGreaterThanOrEqual(
+      REVIEW_SPLIT_LAYOUT_MIN_WIDTH_PX
+    );
+    expect(
+      metrics.layout,
+      `review layout ${metrics.layout}`
+    ).toBeGreaterThanOrEqual(REVIEW_SPLIT_LAYOUT_MIN_WIDTH_PX);
+  }).toPass({ timeout: 10_000 });
+  await dragReviewContentToWidth(
+    page,
+    separator,
+    contentPanel,
+    GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX
+  );
+}
+
 async function reviewDiffType(page: Page): Promise<"split" | "unified" | null> {
   const value = await activeReviewSurface(page)
     .locator("[data-diff-type]")
@@ -1778,6 +1819,22 @@ test("adapts the diff to content width without changing reading state", async ()
         { timeout: 30_000 }
       )
       .toBe(true);
+
+    const reviewLayout = page
+      .locator('[data-slot="file-panel-header"]')
+      .locator("xpath=parent::*");
+    const reviewSeparator = reviewLayout.locator(
+      '[data-slot="resizable-handle"]'
+    );
+    const contentPanel = reviewLayout.getByTestId("git-review-diff");
+    await ensureReviewContentSplitWidth(
+      application,
+      page,
+      reviewSeparator,
+      contentPanel
+    );
+    await expect.poll(() => reviewDiffType(page)).toBe("split");
+
     const establishedScrollTop = await markReviewSurfaceIdentity(
       page,
       "index",
@@ -1791,20 +1848,11 @@ test("adapts the diff to content width without changing reading state", async ()
     expect(selectedTreeLabel).toContain("responsive.ts");
     const initialAnchor = await reviewReadingAnchor(page, "src/responsive.ts");
     expect(initialAnchor.scrollTop).toBeGreaterThan(100);
-    await expect.poll(() => reviewDiffType(page)).toBe("split");
-
-    const reviewLayout = page
-      .locator('[data-slot="file-panel-header"]')
-      .locator("xpath=parent::*");
-    const reviewSeparator = reviewLayout.locator(
-      '[data-slot="resizable-handle"]'
-    );
-    const contentPanel = reviewLayout.getByTestId("git-review-diff");
 
     for (const [width, expectedType] of [
-      [899, "unified"],
+      [GIT_REVIEW_RESPONSIVE_INLINE_ENTER_PX - 1, "unified"],
       [930, "unified"],
-      [960, "split"],
+      [GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX, "split"],
     ] as const) {
       await dragReviewContentToWidth(
         page,

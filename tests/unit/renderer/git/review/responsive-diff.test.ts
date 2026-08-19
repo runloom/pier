@@ -39,6 +39,18 @@ describe("resolveResponsiveDiffStyle", () => {
       expectedStyle: "split",
       expectedForced: false,
     },
+    {
+      width: 0,
+      previous: false,
+      expectedStyle: "split",
+      expectedForced: false,
+    },
+    {
+      width: 0,
+      previous: true,
+      expectedStyle: "unified",
+      expectedForced: true,
+    },
   ])("resolves split preference at $width", ({
     width,
     previous,
@@ -54,6 +66,19 @@ describe("resolveResponsiveDiffStyle", () => {
     ).toEqual({
       effectiveDiffStyle: expectedStyle,
       responsiveUnified: expectedForced,
+    });
+  });
+
+  it("does not treat an unmeasured width as a narrow-panel fallback", () => {
+    expect(
+      resolveResponsiveDiffStyle({
+        preferredDiffStyle: "split",
+        contentWidthPx: Number.NaN,
+        responsiveUnified: false,
+      })
+    ).toEqual({
+      effectiveDiffStyle: "split",
+      responsiveUnified: false,
     });
   });
 
