@@ -29,8 +29,8 @@ import {
 import { GitReviewSurfaceSwitcher } from "./surface-switcher.tsx";
 import type {
   ReviewActiveChrome,
+  ReviewDocumentsProps,
   ReviewSurfaceNavigationRequest,
-  ReviewSurfaceProps,
   ReviewTreeFocus,
   ReviewTreeOpenReveal,
 } from "./surface-types.ts";
@@ -40,22 +40,7 @@ import { useReviewResponsiveViewOptions } from "./use-responsive-view-options.ts
 
 type PendingMutationTransition = GitReviewMutationTransition;
 function ReviewDocumentsComponent(
-  props: Omit<
-    ReviewSurfaceProps,
-    | "active"
-    | "activeSurface"
-    | "diffBase"
-    | "navigationRequest"
-    | "onNavigationMaterialized"
-    | "onSurfaceNavigationSettled"
-    | "onMutationTransition"
-    | "onRequestTreeOpen"
-    | "onAcquireMutationAuthority"
-    | "onSelectSurface"
-    | "viewOptions"
-  > & {
-    readonly onAcquireMutationAuthority: () => boolean;
-  }
+  props: ReviewDocumentsProps
 ): React.JSX.Element {
   const committed = props.scope.target.kind !== "uncommitted";
   const initialSurface: GitReviewReadingSurface = committed
@@ -162,6 +147,8 @@ function ReviewDocumentsComponent(
         props.entries.find((entry) => entry.entryKey === entryKey)?.path ??
         lastNavigationPathRef.current;
       setMountedSurfaces((current) => addReviewSurface(current, surface));
+      // 树跨面点击：立即切面 + 立即可见新面（无旧面 handoff 叠层）。
+      // 切面后由目标面 beginNavigation 做 demand/scroll。
       if (activeSurfaceRef.current !== surface) {
         setActiveSurface(surface);
         activeSurfaceRef.current = surface;
@@ -222,6 +209,7 @@ function ReviewDocumentsComponent(
       }
       return;
     }
+    // 当前面已无成员（冲突消解 / 全 stage 走空）：落到展示序第一个有内容的面
     if (
       activeSurface === "committed" ||
       navigationRequestRef.current !== null ||
@@ -271,6 +259,7 @@ function ReviewDocumentsComponent(
         candidate.path === mutationTransition.path
     );
     if (entry === undefined) {
+      // 权威 index 未到前 entry 可能尚未出现；catch-up 后仍缺失才放弃。
       if (props.indexGeneration >= mutationTransition.minimumIndexGeneration) {
         setMutationTransition(null);
       }
@@ -336,6 +325,7 @@ function ReviewDocumentsComponent(
         setNavigationRequest(null);
         return;
       }
+      // activate 兜底：树路径已在 requestTreeOpen 切面；无 handoff 叠层。
       if (activeSurfaceRef.current !== request.surface) {
         setActiveSurface(request.surface);
         activeSurfaceRef.current = request.surface;

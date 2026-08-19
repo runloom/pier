@@ -153,3 +153,20 @@ export interface ReviewSurfaceProps {
   readonly viewOptions: ReviewViewOptions;
   readonly warnings: GitReviewIndexOk["warnings"];
 }
+
+export type ReviewDocumentsProps = Omit<
+  ReviewSurfaceProps,
+  | "active"
+  | "activeSurface"
+  | "diffBase"
+  | "navigationRequest"
+  | "onNavigationMaterialized"
+  | "onSurfaceNavigationSettled"
+  | "onMutationTransition"
+  | "onRequestTreeOpen"
+  | "onAcquireMutationAuthority"
+  | "onSelectSurface"
+  | "viewOptions"
+> & {
+  readonly onAcquireMutationAuthority: () => boolean;
+};

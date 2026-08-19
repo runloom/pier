@@ -41,7 +41,9 @@ export function captureTopologyScrollRestore(input: {
   const scrollTop = container.scrollTop;
   let candidate = rendered[0];
   for (const item of rendered) {
-    const top = viewer.getLocalTopForInstance(item.instance);
+    const top =
+      viewer.getTopForItem(item.id) ??
+      viewer.getLocalTopForInstance(item.instance);
     if (top > scrollTop) {
       break;
     }
@@ -54,7 +56,9 @@ export function captureTopologyScrollRestore(input: {
   topologyScrollRestoreRef.current = {
     anchor: {
       id: candidate.id,
-      offset: viewer.getLocalTopForInstance(candidate.instance) - scrollTop,
+      offset:
+        (viewer.getTopForItem(candidate.id) ??
+          viewer.getLocalTopForInstance(candidate.instance)) - scrollTop,
     },
     path: match?.fileDisplay?.path ?? null,
     scrollTop,

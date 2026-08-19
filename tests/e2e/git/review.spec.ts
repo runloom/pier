@@ -455,6 +455,25 @@ async function createReviewRepository(root: string): Promise<void> {
   }
 }
 
+async function createResponsiveReviewRepository(root: string): Promise<void> {
+  const sourceDirectory = join(root, "src");
+  mkdirSync(sourceDirectory);
+  await git(root, ["init", "-q", "-b", "main"]);
+  await git(root, ["config", "user.email", "e2e@pier.local"]);
+  await git(root, ["config", "user.name", "Pier E2E"]);
+  writeFileSync(join(sourceDirectory, "responsive.ts"), "");
+  await git(root, ["add", "."]);
+  await git(root, ["commit", "-q", "--allow-empty", "-m", "initial"]);
+  writeFileSync(
+    join(sourceDirectory, "responsive.ts"),
+    `${Array.from(
+      { length: 1000 },
+      (_, index) =>
+        `export const responsiveLine${String(index).padStart(5, "0")} = 1;`
+    ).join("\n")}\n`
+  );
+}
+
 /**
  * Compact staged+unstaged fixture without large.ts so mutations stay snappy.
  * Single-line app.tsx keeps Pierre hunk round-trips stable; script.py is a
@@ -1700,7 +1719,7 @@ test("adapts the diff to content width without changing reading state", async ()
   test.setTimeout(120_000);
   const userDataDir = createTemporaryDirectory("pier-git-responsive-e2e-");
   const repository = createTemporaryDirectory("pier-git-responsive-repo-");
-  await createCompactReviewRepository(repository);
+  await createResponsiveReviewRepository(repository);
   const application = await electron.launch({
     args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
     cwd: PROJECT_ROOT,
@@ -1732,19 +1751,46 @@ test("adapts the diff to content width without changing reading state", async ()
     await openReviewFromTerminal(page, terminalPanelId);
     await ensureReviewTreeFilesVisible(page, "unstaged");
 
-    const selectedFile = reviewTreeFileItem(page, /app\.tsx/u, "unstaged");
-    await clickReviewTreeFile(page, /app\.tsx/u, "unstaged");
+    const selectedFile = reviewTreeFileItem(
+      page,
+      /responsive\.ts/u,
+      "unstaged"
+    );
+    await clickReviewTreeFile(page, /responsive\.ts/u, "unstaged");
     await expect(selectedFile).toHaveAttribute("aria-selected", "true");
     await expect(
       activeReviewSurface(page).locator(
         '[data-git-review-document-settled="true"]'
       )
     ).toBeAttached({ timeout: 30_000 });
-    await waitForReviewPathViewportSettle(page, "app.tsx");
+    const responsiveContainer = activeReviewSurface(page).locator(
+      'diffs-container[data-pier-file-path="src/responsive.ts"]'
+    );
+    await expect
+      .poll(
+        () =>
+          responsiveContainer.evaluate((container) =>
+            (
+              container.shadowRoot?.querySelector("[data-line]")?.textContent ??
+              ""
+            ).includes("responsiveLine00000")
+          ),
+        { timeout: 30_000 }
+      )
+      .toBe(true);
+    const establishedScrollTop = await markReviewSurfaceIdentity(
+      page,
+      "index",
+      "responsive-width-anchor",
+      480
+    );
+    expect(establishedScrollTop).toBeGreaterThan(100);
+    await waitForReviewPathViewportSettle(page, "responsive.ts");
 
     const selectedTreeLabel = await selectedFile.textContent();
-    expect(selectedTreeLabel).toContain("app.tsx");
-    const initialAnchor = await reviewReadingAnchor(page, "src/app.tsx");
+    expect(selectedTreeLabel).toContain("responsive.ts");
+    const initialAnchor = await reviewReadingAnchor(page, "src/responsive.ts");
+    expect(initialAnchor.scrollTop).toBeGreaterThan(100);
     await expect.poll(() => reviewDiffType(page)).toBe("split");
 
     const reviewLayout = page
@@ -1776,10 +1822,11 @@ test("adapts the diff to content width without changing reading state", async ()
       await expect.poll(() => reviewDiffType(page)).toBe(expectedType);
       await expect(selectedFile).toHaveAttribute("aria-selected", "true");
       expect(await selectedFile.textContent()).toBe(selectedTreeLabel);
-      const anchor = await reviewReadingAnchor(page, "src/app.tsx");
+      const anchor = await reviewReadingAnchor(page, "src/responsive.ts");
       expect(anchor.path).toBe(initialAnchor.path);
       expect(
-        Math.abs(anchor.scrollTop - initialAnchor.scrollTop)
+        Math.abs(anchor.scrollTop - initialAnchor.scrollTop),
+        `reading anchor ${JSON.stringify({ anchor, initialAnchor, width })}`
       ).toBeLessThanOrEqual(1);
       expect(
         Math.abs(anchor.offsetPx - initialAnchor.offsetPx)

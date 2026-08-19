@@ -89,10 +89,10 @@ function ReviewSurfaceComponent({
       navigationRequest,
     });
   const appearance = useReviewAppearance(context, entries.length > 0);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable
+  // Same factory as changes-panel tree model so collision displayPath order matches sidebar / CodeView / demand / comment nav.
   const collidingFileLabel = useMemo(
     () => createReviewCollidingFileLabel(context, appearance.locale),
-    [appearance.locale]
+    [appearance.locale, context]
   );
   const documentControllerRef = useRef<GitReviewDocumentGeneration | null>(
     null
