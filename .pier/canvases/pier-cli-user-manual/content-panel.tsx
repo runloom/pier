@@ -82,6 +82,18 @@ function StartPage({ data }: { data: ManualData }) {
         </Alert>
       </Stack>
 
+      <Stack gap={6}>
+        <SectionHeading>怎么调用 pier</SectionHeading>
+        <Lead>
+          发布版按安装位置选择前两行之一；源码开发使用后两种方式。
+        </Lead>
+        <Stack gap={4}>
+          {data.quickStart.binPaths.map((line) => (
+            <CodeBlock key={line}>{line}</CodeBlock>
+          ))}
+        </Stack>
+      </Stack>
+
       <Stack gap={8}>
         <SectionHeading>四步上手</SectionHeading>
         <Lead>按顺序复制即可。脚本请始终带 --json。</Lead>
@@ -115,15 +127,6 @@ function StartPage({ data }: { data: ManualData }) {
             确认 Pier 已运行，且与 CLI 为同一用户、同一应用数据目录。
           </AlertDescription>
         </Alert>
-      </Stack>
-
-      <Stack gap={6}>
-        <SectionHeading>怎么调用 pier</SectionHeading>
-        <Stack gap={4}>
-          {data.quickStart.binPaths.map((line) => (
-            <CodeBlock key={line}>{line}</CodeBlock>
-          ))}
-        </Stack>
       </Stack>
 
       <Accordion className="w-full" type="multiple">
@@ -163,11 +166,13 @@ function StartPage({ data }: { data: ManualData }) {
             className="text-left text-sm no-underline hover:no-underline"
             style={{ textDecoration: "none" }}
           >
-            输出约定（成功 / 失败示意）
+            `--json` 共同字段（节选）
           </AccordionTrigger>
           <AccordionContent>
             <Stack gap={8}>
-              <Lead>示意形态；以实际 --json 返回为准。</Lead>
+              <Lead>
+                所有命令先检查 ok；其余字段随命令和协议版本不同。
+              </Lead>
               <Stack gap={2}>
                 <Text className="text-xs font-medium">成功</Text>
                 <CodeBlock>{data.outputShapes.success}</CodeBlock>
@@ -202,7 +207,7 @@ function TasksPage({
     <Stack gap={12}>
       <Stack gap={4}>
         <PageTitle>常用任务</PageTitle>
-        <Lead>按场景展开步骤。需要完整参数与输出时，转到「命令参考」。</Lead>
+        <Lead>按场景展开步骤。需要完整写法与说明时，转到「命令参考」。</Lead>
       </Stack>
       <Accordion
         className="w-full"
@@ -275,7 +280,7 @@ function ReferencePage({
       <Stack gap={4}>
         <PageTitle>命令参考</PageTitle>
         <Lead>
-          先选领域，再展开命令查看写法与输出。带「暂未实现」标记的勿写进脚本。
+          先选领域，再展开命令查看写法与说明。带「暂未实现」标记的勿写进脚本。
         </Lead>
       </Stack>
       <Select value={domainId} onValueChange={setDomainId}>
@@ -331,7 +336,7 @@ function AgentsPage({
         <PageTitle>智能体</PageTitle>
         <Lead>{data.agents.intro}</Lead>
         <Text tone="secondary" className="text-sm leading-relaxed">
-          启动智能体请在应用内操作；CLI 侧重查看目录与运行中的面板。带「暂未实现」的不要写进脚本。
+          CLI 可启动和控制持续运行的智能体；一次性调用仍直接使用各智能体原生 CLI。带「暂未实现」的不要写进脚本。
         </Text>
       </Stack>
       <CommandInventory
@@ -402,8 +407,7 @@ function HelpPage({
         ))}
       </Accordion>
       <Text tone="tertiary" className="text-xs">
-        脚本请始终加 --json。本 Canvas（data.json）为 CLI
-        用户手册唯一真源。
+        脚本请始终加 --json；data.json 是本交互版手册的数据源。
       </Text>
     </Stack>
   );

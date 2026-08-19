@@ -10,6 +10,7 @@ import {
   collectCliDocsAvailableViolations,
   collectCliManualShippedSurfaceText,
   collectInventoryMismatches,
+  listCliManualCommands,
   readCliUserManualData,
 } from "./cli-docs-surface.ts";
 
@@ -64,6 +65,14 @@ describe("cli user manual governance (canvas canonical)", () => {
   it("shipped / planned / blocked 必现清单完整且字段齐全", () => {
     const data = readCliUserManualData();
     expect(collectInventoryMismatches(data)).toEqual([]);
+  });
+
+  it("shipped 命令不手抄易漂移的响应结构", () => {
+    const data = readCliUserManualData();
+    const copiedOutputs = listCliManualCommands(data)
+      .filter((command) => command.status === "shipped" && command.output)
+      .map((command) => command.name);
+    expect(copiedOutputs).toEqual([]);
   });
 
   it("shipped 表面不得把未实现 agents / 插件写权写成默认可执行", () => {

@@ -8,7 +8,7 @@ export function statusLabel(status: CmdStatus): string {
     return "暂未实现";
   }
   if (status === "blocked") {
-    return "CLI 默认不可用";
+    return "不可用";
   }
   return status;
 }

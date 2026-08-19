@@ -11,7 +11,7 @@
 | 依赖 | 说明 |
 | --- | --- |
 | Node.js `^24.15.0` | 与 `package.json` `engines` 一致 |
-| pnpm `>=11.12.0` | 仓库 `packageManager` 锁定 11.12.0 |
+| pnpm `>=11.12.0` | 仓库 `packageManager` 锁定 11.18.0 |
 | Xcode Command Line Tools | `xcode-select --install` |
 | Homebrew | https://brew.sh |
 | zig 0.15 | `brew install zig@0.15`（编译 libghostty） |
@@ -173,7 +173,7 @@ UI / 弹窗 / 文案 / 颜色 / shadcn 治理以 [`AGENTS.md`](../AGENTS.md) 为
 
 ## 相关文档
 
-- [CLI 用户手册（Canvas）](../.pier/canvases/pier-cli-user-manual/)
+- [CLI 用户手册](../.pier/canvases/pier-cli-user-manual/README.md)
 - [插件](./plugins.md)
 - [发布](./release.md)
 - [贡献](../CONTRIBUTING.md)

@@ -36,17 +36,19 @@ function CommandDetailBody({ cmd }: { cmd: CommandDetail }) {
           <CodeBlock inCard>{cmd.humanSample}</CodeBlock>
         </Stack>
       ) : null}
-      <Stack gap={2}>
-        <FieldLabel>{outputLabel}</FieldLabel>
-        <CodeBlock inCard>{cmd.output}</CodeBlock>
-      </Stack>
+      {cmd.output ? (
+        <Stack gap={2}>
+          <FieldLabel>{outputLabel}</FieldLabel>
+          <CodeBlock inCard>{cmd.output}</CodeBlock>
+        </Stack>
+      ) : null}
     </Stack>
   );
 }
 
 /**
  * 单一 Accordion 清单：不拆「表 + 下方再列一遍」。
- * 已实现不打标；仅暂未实现 / CLI 默认不可用 显示角标。
+ * 已实现不打标；仅暂未实现 / 不可用显示角标。
  */
 export function CommandInventory({
   commands,
