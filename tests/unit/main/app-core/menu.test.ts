@@ -54,7 +54,12 @@ describe("app menu", () => {
     expect(resolveAppMenuLanguage("zh-CN", () => "en-US")).toBe("zh-CN");
     expect(resolveAppMenuLanguage("en", () => "zh-CN")).toBe("en");
     expect(resolveAppMenuLanguage("system", () => "zh-Hans-CN")).toBe("zh-CN");
+    expect(resolveAppMenuLanguage("system", () => "zh-TW")).toBe("zh-CN");
+    expect(resolveAppMenuLanguage("system", () => "ja-JP")).toBe("ja");
+    expect(resolveAppMenuLanguage("system", () => "ko-KR")).toBe("ko");
     expect(resolveAppMenuLanguage("system", () => "fr-FR")).toBe("en");
+    expect(resolveAppMenuLanguage("ja", () => "en-US")).toBe("ja");
+    expect(resolveAppMenuLanguage("ko", () => "en-US")).toBe("ko");
   });
 
   it("builds a Chinese production menu without reload, but with DevTools", () => {
@@ -108,6 +113,46 @@ describe("app menu", () => {
     expect(labels(submenu(itemAt(template, 3)))).toContain("Reload");
     expect(labels(submenu(itemAt(template, 3)))).toContain("Force Reload");
     expect(labels(submenu(itemAt(template, 3)))).toContain("Developer Tools");
+  });
+
+  it("builds Japanese and Korean menus from the shared catalog", () => {
+    const japanese = buildAppMenuTemplate({
+      appName: "Pier",
+      getTargetWindow: () => null,
+      isDev: false,
+      language: "ja",
+      onFindInTerminal: vi.fn(),
+      onNewTerminal: vi.fn(),
+      onNewWindow: vi.fn(),
+      onOpenCommandPalette: vi.fn(),
+      onResetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
+    });
+    expect(labels(japanese)).toEqual([
+      "Pier",
+      "ファイル",
+      "編集",
+      "表示",
+      "ウインドウ",
+    ]);
+    expect(labels(submenu(itemAt(japanese, 1)))).toContain("新規ターミナル");
+
+    const korean = buildAppMenuTemplate({
+      appName: "Pier",
+      getTargetWindow: () => null,
+      isDev: false,
+      language: "ko",
+      onFindInTerminal: vi.fn(),
+      onNewTerminal: vi.fn(),
+      onNewWindow: vi.fn(),
+      onOpenCommandPalette: vi.fn(),
+      onResetZoom: vi.fn(),
+      onZoomIn: vi.fn(),
+      onZoomOut: vi.fn(),
+    });
+    expect(labels(korean)).toEqual(["Pier", "파일", "편집", "보기", "윈도우"]);
+    expect(labels(submenu(itemAt(korean, 1)))).toContain("새 터미널");
   });
 
   it("runs the core menu actions against the target window", () => {

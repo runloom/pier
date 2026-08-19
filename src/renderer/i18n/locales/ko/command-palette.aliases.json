@@ -1,0 +1,74 @@
+{
+  "pier": {
+    "agent": {
+      "new": ["에이전트", "새 에이전트", "기본 에이전트 시작", "에이전트 시작"]
+    },
+    "commandPalette": {
+      "clearRecent": ["기록 지우기", "기록 재설정", "명령 기록"]
+    },
+    "config": {
+      "locale": ["언어", "표시 언어", "인터페이스 언어"],
+      "stylePreset": ["스타일", "배색", "테마 프리셋"],
+      "theme": ["테마", "색 모드", "다크", "라이트"]
+    },
+    "panel": {
+      "equalizeSplits": ["패널 균등", "레이아웃 균등", "패널 맞추기"],
+      "newTerminal": ["터미널", "새 터미널", "터미널 열기"],
+      "newWorkbench": ["워크벤치", "새 워크벤치", "워크벤치 열기"]
+    },
+    "run": {
+      "task": ["작업", "작업 실행", "명령"],
+      "terminalList": ["터미널 목록", "세션 목록", "터미널 전환"]
+    },
+    "settings": {
+      "open": ["설정", "환경설정", "옵션"],
+      "installCli": ["pier 설치", "pier 명령"],
+      "removeCli": ["pier 제거", "pier 명령 제거"]
+    },
+    "terminal": {
+      "openDebugWindow": ["터미널 디버그", "디버그 경로"]
+    },
+    "view": {
+      "resetZoom": ["확대/축소 재설정", "줌 복원"],
+      "zoomIn": ["확대", "줌 인"],
+      "zoomOut": ["축소", "줌 아웃"]
+    },
+    "workspace": {
+      "resetLayout": ["배치 재설정", "레이아웃 복원"]
+    }
+  },
+  "theme": {
+    "dark": ["다크", "다크 모드"],
+    "light": ["라이트", "라이트 모드"],
+    "system": ["시스템", "자동", "시스템 따르기"]
+  },
+  "stylePreset": {
+    "pierre": ["pierre"],
+    "pierre-soft": ["pierre soft"],
+    "catppuccin": ["catppuccin"],
+    "everforest": ["everforest"],
+    "github": ["github"],
+    "github-default": ["github default"],
+    "github-high-contrast": ["github high contrast", "고대비"],
+    "gruvbox-hard": ["gruvbox hard"],
+    "gruvbox-medium": ["gruvbox medium"],
+    "gruvbox-soft": ["gruvbox soft"],
+    "kanagawa": ["kanagawa"],
+    "vscode": ["vscode", "vs code"],
+    "material": ["material"],
+    "min": ["min"],
+    "one": ["one"],
+    "rose-pine": ["rose pine"],
+    "slack": ["slack"],
+    "solarized": ["solarized"],
+    "tokyo-night": ["tokyo night", "tokyo", "tokyonight"],
+    "vitesse": ["vitesse"]
+  },
+  "locale": {
+    "system": ["시스템", "자동", "시스템 따르기"],
+    "zh-CN": ["중국어", "간체", "간체중문"],
+    "en": ["영어", "english"],
+    "ja": ["일본어", "日本語"],
+    "ko": ["한국어", "한글"]
+  }
+}

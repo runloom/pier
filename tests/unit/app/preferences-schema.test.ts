@@ -14,6 +14,12 @@ describe("projectPreferencesSchema — language", () => {
     expect(projectPreferencesSchema.parse({ language: "en" }).language).toBe(
       "en"
     );
+    expect(projectPreferencesSchema.parse({ language: "ja" }).language).toBe(
+      "ja"
+    );
+    expect(projectPreferencesSchema.parse({ language: "ko" }).language).toBe(
+      "ko"
+    );
   });
 });
 

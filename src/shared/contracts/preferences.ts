@@ -2,6 +2,7 @@
  * 主题/风格/语言 preferences schema (运行时 emission)
  */
 import { z } from "zod";
+import { LANGUAGE_PREFERENCE_VALUES } from "../i18n/locales.ts";
 import {
   agentAttentionSettingsSchema,
   DEFAULT_AGENT_ATTENTION_SETTINGS,
@@ -129,7 +130,7 @@ export const DEFAULT_SHELL_ENVIRONMENT_PREFS: ShellEnvironmentPrefs = {
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
   stylePresetId: stylePresetIdSchema.default("pierre"),
-  language: z.enum(["system", "zh-CN", "en"]).default("system"),
+  language: z.enum(LANGUAGE_PREFERENCE_VALUES).default("system"),
   uiFontFamily: z.string().default(DEFAULT_UI_FONT_FAMILY),
   monoFontFamily: z.string().default(DEFAULT_MONO_FONT_FAMILY),
   docFontMode: docFontModeSchema.default(DEFAULT_DOC_FONT_MODE),

@@ -472,6 +472,8 @@ export const settings = {
     system: "跟随系统",
     "zh-CN": "简体中文",
     en: "English",
+    ja: "日本語",
+    ko: "한국어",
   },
   agents: settingsAgents,
   notifications: settingsNotifications,

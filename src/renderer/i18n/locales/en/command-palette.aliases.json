@@ -92,6 +92,8 @@
   "locale": {
     "system": ["system", "auto", "follow system"],
     "zh-CN": ["zh", "chinese", "simplified chinese"],
-    "en": ["en", "english"]
+    "en": ["en", "english"],
+    "ja": ["ja", "japanese"],
+    "ko": ["ko", "korean"]
   }
 }

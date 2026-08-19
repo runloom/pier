@@ -1,0 +1,112 @@
+import { pluginPermissions } from "./plugin-permissions.ts";
+
+export const settingsPlugins = {
+  title: "プラグイン",
+  description:
+    "内蔵プラグインはここで有効／無効にできます。ローカルプラグインはこの版では情報のみです。",
+  status: {
+    enabled: "有効",
+    disabled: "無効",
+    manifestOnly: "情報のみ",
+    runtimeUnavailable: "読み込まれていません",
+  },
+  runtimeUnavailableDescription:
+    "このプラグインはインストール済みですが、いまは読み込まれていません。Pier を再起動し、直らなければ入れ直してください。",
+  contributionSummary: {
+    command: "{{count}} 個のコマンド",
+    commands: "{{count}} 個のコマンド",
+    workbenchWidget: "{{count}} 個のワークベンチコンポーネント",
+    workbenchWidgets: "{{count}} 個のワークベンチコンポーネント",
+    none: "貢献はありません",
+    panel: "{{count}} 個のパネル",
+    panels: "{{count}} 個のパネル",
+    terminalStatusItem: "{{count}} 個のターミナル状態項目",
+    terminalStatusItems: "{{count}} 個のターミナル状態項目",
+  },
+  permissionLabels: pluginPermissions,
+  loadingTitle: "プラグインを読み込み中",
+  loadingDescription: "プラグイン一覧を読み取り中…",
+  emptyTitle: "プラグインが見つかりません",
+  emptyDescription: "内蔵とローカルのプラグインがここに表示されます。",
+  diagnostics: {
+    invalidManifest: "プラグイン情報を読めませんでした",
+    runtime: "プラグインの読み込みに失敗しました",
+    summaryTitle: "プラグインの問題",
+    unsupported: "このプラグインは未対応です",
+  },
+  errorTitle: "プラグインを読み込めません",
+  openSettings: "設定",
+  openSettingsPlugin: "{{name}} の設定を開く",
+  source: {
+    builtin: "内蔵",
+    local: "ローカル",
+    git: "Git",
+    registry: "レジストリ",
+    official: "公式",
+    devOverride: "ローカル開発",
+  },
+  tabs: {
+    installed: "インストール済み",
+    available: "未インストール",
+  },
+  trustNotice:
+    "公式プラグインは Pier と同じ信頼で動きます（サンドボックスはありません）。",
+  pluginMode: {
+    workspaceTitle: "ローカル開発読み込み",
+    workspaceBody:
+      "ローカルのパッケージフォルダから読み込んでいます。作業を上書きしないよう、公式の更新はオフです。",
+    releaseTitle: "管理インストール",
+    releaseBody:
+      "プラグインは通常のインストールと更新の流れに従います。ローカルのパッケージフォルダから作業するには、開発モードで Pier を再起動してください。",
+  },
+  checkUpdates: "更新を確認",
+  restartNow: "今すぐ Pier を再起動",
+  restartNotice: "インストールした版を使うには Pier を再起動してください。",
+  restartDevNotice:
+    "開発モードは画面だけ再読み込みします。プラグインを外すには Pier を完全に終了してから起動し直してください。",
+  updateAvailable: "更新あり",
+  restartRequired: "再起動が必要",
+  action: {
+    enable: "有効にする",
+    disable: "無効にする",
+    enablePlugin: "{{name}} を有効にする",
+    disablePlugin: "{{name}} を無効にする",
+    install: "インストール",
+    update: "更新",
+    updateAll: "すべて更新",
+    uninstall: "アンインストール",
+    rollback: "{{version}} に戻す",
+    restoreBundled: "同梱版に戻す",
+  },
+  emptyInstalledTitle: "インストール済みのプラグインはありません",
+  emptyInstalledDescription: "内蔵と公式のプラグインがここに表示されます。",
+  emptyAvailableTitle: "未インストールのプラグインはありません",
+  emptyAvailableDescription: "使えるものはすべて入っています。",
+  toast: {
+    installing: "{{name}} をインストール中…",
+    installed: "{{name}} をインストールしました · v{{version}}",
+    installFailed:
+      "{{name}} をインストールできませんでした。もう一度お試しください",
+    enableFailed: "{{name}} を有効にできませんでした。もう一度お試しください",
+    disableFailed: "{{name}} を無効にできませんでした。もう一度お試しください",
+    uninstalling: "{{name}} をアンインストール中…",
+    uninstalled: "{{name}} をアンインストールしました · 次回起動",
+    uninstallFailed:
+      "{{name}} をアンインストールできませんでした。もう一度お試しください",
+    updating: "{{name}} を更新中…",
+    updated: "{{name}} を更新しました · v{{version}}",
+    updateFailed: "{{name}} を更新できませんでした。もう一度お試しください",
+    updatingAll: "プラグインを更新中…",
+    updatingAllProgress: "{{current}}/{{total}} を更新中…",
+    updatedAll: "{{count}} 個のプラグインを更新しました",
+    updateAllPartialTitle: "一部のプラグインを更新できませんでした",
+    updateAllFailedTitle:
+      "プラグインを更新できませんでした。もう一度お試しください",
+    updateAllSuccessSummary: "{{count}} 個を更新しました。",
+    checkUpdatesSuccess: "更新を確認しました",
+    checkUpdatesFailed: "更新を確認できませんでした。もう一度お試しください",
+    rollingBack: "{{name}} を戻しています…",
+    rolledBack: "{{name}} を戻しました · v{{version}}",
+    rollbackFailed: "{{name}} を戻せませんでした。もう一度お試しください",
+  },
+};

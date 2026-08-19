@@ -87,6 +87,7 @@ export const workbench = {
       },
       title: "成本",
       today: "今天",
+      unpricedNote_one: "{{count}} 天成本估算不全",
       unpricedNote_other: "{{count}} 天成本估算不全",
       unpricedNoteHover:
         "这些天用到了本地定价目录中未收录的模型,实际成本可能高于此处显示的估算值。",

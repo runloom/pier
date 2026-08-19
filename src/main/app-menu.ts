@@ -1,136 +1,20 @@
 import type { PierEvent } from "@shared/contracts/events.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
+import {
+  APP_MENU_TEXT,
+  type AppMenuLanguage,
+  resolveAppMenuLanguage as resolveMenuLanguage,
+} from "@shared/i18n/app-menu.ts";
 import { firstAcceleratorForCommand } from "@shared/keybindings.ts";
 import { Menu, type MenuItemConstructorOptions } from "electron";
 import { createDetachedDevToolsMenuItem } from "./devtools.ts";
 import { createOpenSettingsMenuItem } from "./settings-menu.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 
-export type AppMenuLanguage = "en" | "zh-CN";
-
-interface MenuText {
-  about: (appName: string) => string;
-  bringAllToFront: string;
-  commandPalette: string;
-  copy: string;
-  cut: string;
-  delete: string;
-  devTools: string;
-  edit: string;
-  file: string;
-  find: string;
-  forceReload: string;
-  hide: (appName: string) => string;
-  hideOthers: string;
-  minimize: string;
-  newTerminal: string;
-  newWindow: string;
-  paste: string;
-  pasteAndMatchStyle: string;
-  quit: (appName: string) => string;
-  redo: string;
-  reload: string;
-  resetZoom: string;
-  selectAll: string;
-  services: string;
-  settings: string;
-  toggleFullscreen: string;
-  undo: string;
-  unhide: string;
-  view: string;
-  window: string;
-  zoom: string;
-  zoomIn: string;
-  zoomOut: string;
-}
-
-const MENU_TEXT: Record<AppMenuLanguage, MenuText> = {
-  en: {
-    about: (appName) => `About ${appName}`,
-    bringAllToFront: "Bring All to Front",
-    commandPalette: "Command Palette",
-    copy: "Copy",
-    cut: "Cut",
-    delete: "Delete",
-    devTools: "Developer Tools",
-    edit: "Edit",
-    file: "File",
-    find: "Find",
-    forceReload: "Force Reload",
-    hide: (appName) => `Hide ${appName}`,
-    hideOthers: "Hide Others",
-    minimize: "Minimize",
-    newTerminal: "New Terminal",
-    newWindow: "New Window",
-    paste: "Paste",
-    pasteAndMatchStyle: "Paste and Match Style",
-    quit: (appName) => `Quit ${appName}`,
-    redo: "Redo",
-    reload: "Reload",
-    resetZoom: "Reset Zoom",
-    selectAll: "Select All",
-    services: "Services",
-    settings: "Settings...",
-    toggleFullscreen: "Toggle Full Screen",
-    undo: "Undo",
-    unhide: "Show All",
-    view: "View",
-    window: "Window",
-    zoom: "Zoom",
-    zoomIn: "Zoom In",
-    zoomOut: "Zoom Out",
-  },
-  "zh-CN": {
-    about: (appName) => `关于 ${appName}`,
-    bringAllToFront: "全部置于最前",
-    commandPalette: "命令面板",
-    copy: "复制",
-    cut: "剪切",
-    delete: "删除",
-    devTools: "开发者工具",
-    edit: "编辑",
-    file: "文件",
-    find: "查找",
-    forceReload: "强制重新加载",
-    hide: (appName) => `隐藏 ${appName}`,
-    hideOthers: "隐藏其他",
-    minimize: "最小化",
-    newTerminal: "新建终端",
-    newWindow: "新建窗口",
-    paste: "粘贴",
-    pasteAndMatchStyle: "粘贴并匹配样式",
-    quit: (appName) => `退出 ${appName}`,
-    redo: "重做",
-    reload: "重新加载",
-    resetZoom: "重置缩放",
-    selectAll: "全选",
-    services: "服务",
-    settings: "设置...",
-    toggleFullscreen: "切换全屏",
-    undo: "撤销",
-    unhide: "全部显示",
-    view: "视图",
-    window: "窗口",
-    zoom: "缩放",
-    zoomIn: "放大",
-    zoomOut: "缩小",
-  },
-};
-
-export function resolveAppMenuLanguage(
-  language: ProjectPreferences["language"],
-  getSystemLocale: () => string
-): AppMenuLanguage {
-  if (language === "zh-CN" || language === "en") {
-    return language;
-  }
-
-  const normalized = getSystemLocale().toLowerCase();
-  if (normalized === "zh-cn" || normalized.startsWith("zh-hans")) {
-    return "zh-CN";
-  }
-  return "en";
-}
+export {
+  type AppMenuLanguage,
+  resolveAppMenuLanguage,
+} from "@shared/i18n/app-menu.ts";
 
 export interface BuildAppMenuTemplateArgs {
   appName: string;
@@ -181,7 +65,7 @@ export function buildAppMenuTemplate({
   onZoomOut,
   userKeymap = [],
 }: BuildAppMenuTemplateArgs): MenuItemConstructorOptions[] {
-  const t = MENU_TEXT[language];
+  const t = APP_MENU_TEXT[language];
   const newWindowMenuItem: MenuItemConstructorOptions = {
     click: () => onNewWindow(),
     label: t.newWindow,
@@ -326,10 +210,7 @@ export async function installAppMenu({
   const applyMenu = (
     preferences: Pick<ProjectPreferences, "language" | "userKeymap">
   ) => {
-    const language = resolveAppMenuLanguage(
-      preferences.language,
-      getSystemLocale
-    );
+    const language = resolveMenuLanguage(preferences.language, getSystemLocale);
     Menu.setApplicationMenu(
       Menu.buildFromTemplate(
         buildAppMenuTemplate({

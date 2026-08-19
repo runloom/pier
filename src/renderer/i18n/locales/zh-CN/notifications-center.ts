@@ -4,6 +4,11 @@ export const notificationsCenter = {
     openAgent: "打开对话",
     viewAgentOutput: "查看输出",
   },
+  attention: {
+    error: "智能体出错了",
+    ready: "回合已完成",
+    waiting: "需要你处理",
+  },
   actionFailed: "无法更新消息，请重试",
   bell: {
     aria: "消息，{{count}} 条未读",

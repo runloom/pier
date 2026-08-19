@@ -3,6 +3,8 @@ import { managedPluginPackageManifestSchema } from "@shared/contracts/plugin/man
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
 import { pluginPermissions as englishPluginPermissions } from "@/i18n/locales/en/plugin-permissions.ts";
+import { pluginPermissions as japanesePluginPermissions } from "@/i18n/locales/ja/plugin-permissions.ts";
+import { pluginPermissions as koreanPluginPermissions } from "@/i18n/locales/ko/plugin-permissions.ts";
 import { pluginPermissions as chinesePluginPermissions } from "@/i18n/locales/zh-CN/plugin-permissions.ts";
 
 const removedTranscriptCapability = "transcript:read";
@@ -36,6 +38,12 @@ describe("plugin permission contract", () => {
     ).toBe(false);
     expect(
       Object.hasOwn(chinesePluginPermissions, removedTranscriptCapability)
+    ).toBe(false);
+    expect(
+      Object.hasOwn(japanesePluginPermissions, removedTranscriptCapability)
+    ).toBe(false);
+    expect(
+      Object.hasOwn(koreanPluginPermissions, removedTranscriptCapability)
     ).toBe(false);
   });
 

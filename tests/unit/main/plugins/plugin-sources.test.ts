@@ -44,9 +44,11 @@ describe("createDefaultPluginSources", () => {
       localization: {
         files: {
           en: "locales/en.json",
+          ja: "locales/ja.json",
+          ko: "locales/ko.json",
           "zh-CN": "locales/zh-CN.json",
         },
-        locales: ["en", "zh-CN"],
+        locales: ["en", "ja", "ko", "zh-CN"],
       },
       source: { kind: "builtin" },
     });
@@ -127,7 +129,12 @@ describe("createDefaultPluginSources", () => {
     ).resolves.toBeUndefined();
 
     const files = GIT_PLUGIN_MANIFEST.localization?.files ?? {};
-    await expect(Object.keys(files).sort()).toEqual(["en", "zh-CN"]);
+    await expect(Object.keys(files).sort()).toEqual([
+      "en",
+      "ja",
+      "ko",
+      "zh-CN",
+    ]);
     await Promise.all(
       Object.values(files).map((filePath) =>
         access(join(worktreeSource.baseDir, filePath))

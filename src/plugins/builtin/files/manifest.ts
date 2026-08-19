@@ -202,9 +202,11 @@ export const FILES_PLUGIN_MANIFEST = {
     defaultLocale: "en",
     files: {
       en: "locales/en.json",
+      ja: "locales/ja.json",
+      ko: "locales/ko.json",
       "zh-CN": "locales/zh-CN.json",
     },
-    locales: ["en", "zh-CN"],
+    locales: ["en", "ja", "ko", "zh-CN"],
   },
   name: "Files",
   panels: [

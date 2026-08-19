@@ -1,3 +1,4 @@
+import type { SupportedLocale } from "@shared/i18n/locales.ts";
 import {
   cancelPromptReady,
   schedulePromptReady,
@@ -189,20 +190,33 @@ function trySendInitialSubmit(
 }
 
 /** Match workspace.addPanelMenu.startAgentFailed / startAgentInjectFailed. */
-export function formatAgentCommandInjectFailedCopy(locale: "en" | "zh-CN"): {
+const INJECT_FAILED_COPY: Record<
+  SupportedLocale,
+  { body: string; title: string }
+> = {
+  en: {
+    body: "The terminal opened, but the start command could not be typed. Type it in the terminal, or start the agent again.",
+    title: "Couldn't start agent — try again",
+  },
+  ja: {
+    body: "ターミナルは開きましたが、起動コマンドを入力できませんでした。ターミナルに入力するか、もう一度起動してください。",
+    title: "エージェントを起動できませんでした。もう一度お試しください",
+  },
+  ko: {
+    body: "터미널은 열렸지만 시작 명령을 입력하지 못했습니다. 터미널에 직접 입력하거나 에이전트를 다시 시작하세요.",
+    title: "에이전트를 시작하지 못했습니다. 다시 시도하세요",
+  },
+  "zh-CN": {
+    body: "终端已打开，但没能自动输入启动命令。请在终端里输入，或再启动一次。",
+    title: "无法启动智能体，请重试",
+  },
+};
+
+export function formatAgentCommandInjectFailedCopy(locale: SupportedLocale): {
   body: string;
   title: string;
 } {
-  if (locale === "zh-CN") {
-    return {
-      body: "终端已打开，但没能自动输入启动命令。请在终端里输入，或再启动一次。",
-      title: "无法启动智能体，请重试",
-    };
-  }
-  return {
-    body: "The terminal opened, but the start command could not be typed. Type it in the terminal, or start the agent again.",
-    title: "Couldn't start agent — try again",
-  };
+  return INJECT_FAILED_COPY[locale];
 }
 
 let reportAgentCommandInjectFailedImpl: ((panelId: string) => void) | undefined;

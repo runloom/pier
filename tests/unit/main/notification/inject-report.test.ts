@@ -2,7 +2,9 @@ import { resolveAttentionLocale } from "@main/services/agent-attention/locale.ts
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@main/services/agent-attention/locale.ts", () => ({
-  resolveAttentionLocale: vi.fn(async (): Promise<"en" | "zh-CN"> => "en"),
+  resolveAttentionLocale: vi.fn(
+    async (): Promise<"en" | "zh-CN" | "ja" | "ko"> => "en"
+  ),
 }));
 
 import { wireAgentCommandInjectFailedReporter } from "@main/ipc/notification-center-inject-report.ts";

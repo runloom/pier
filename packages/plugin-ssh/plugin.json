@@ -125,6 +125,118 @@
         "pier.ssh.terminal.opening": "正在打开 SSH 终端…",
         "pier.ssh.terminal.opened": "SSH 终端已打开"
       }
+    },
+    "ja": {
+      "name": "SSH ホスト",
+      "description": "Pier で SSH ホストを管理し、SSH ターミナルを開きます。",
+      "commands": {
+        "pier.ssh.openTerminal": {
+          "title": "SSH ターミナルを開く",
+          "description": "保存済みの SSH ホストを選び、接続したターミナルを開きます。"
+        }
+      },
+      "settingsPages": {
+        "pier.ssh.hosts": {
+          "title": "SSH ホスト"
+        }
+      },
+      "messages": {
+        "pier.ssh.openTerminal.title": "SSH ターミナルを開く",
+        "pier.ssh.hosts.settings.title": "SSH ホスト",
+        "pier.ssh.hosts.settings.addHost": "ホストを追加",
+        "pier.ssh.hosts.settings.import": "ssh 設定からインポート",
+        "pier.ssh.hosts.settings.emptyTitle": "SSH ホストはまだありません",
+        "pier.ssh.hosts.settings.emptyDesc": "ホストを追加するか ssh 設定から読み込むと、ワンクリックで SSH ターミナルを開けます。",
+        "pier.ssh.hosts.settings.openTerminal": "ターミナルを開く",
+        "pier.ssh.hosts.settings.edit": "編集",
+        "pier.ssh.hosts.settings.remove": "削除",
+        "pier.ssh.hosts.settings.removeConfirmTitle": "SSH ホストを削除しますか？",
+        "pier.ssh.hosts.settings.removeConfirmBody": "ホストは Pier からのみ削除されます。リモートマシンや ssh 設定は変わりません。",
+        "pier.ssh.hosts.settings.cancel": "キャンセル",
+        "pier.ssh.hosts.settings.save": "保存",
+        "pier.ssh.hosts.settings.testConnection": "接続をテスト",
+        "pier.ssh.hosts.settings.testSuccess": "接続に成功しました",
+        "pier.ssh.hosts.settings.testFailedTitle": "接続に失敗しました",
+        "pier.ssh.hosts.settings.loadFailed": "SSH ホストを読み込めませんでした",
+        "pier.ssh.hosts.settings.retry": "再試行",
+        "pier.ssh.hosts.settings.actionFailed": "SSH ホストの操作に失敗しました",
+        "pier.ssh.form.addTitle": "SSH ホストを追加",
+        "pier.ssh.form.editTitle": "SSH ホストを編集",
+        "pier.ssh.form.name": "表示名",
+        "pier.ssh.form.host": "ホスト",
+        "pier.ssh.form.hostDescription": "ホスト名、IP アドレス、または ssh 設定のエイリアス。",
+        "pier.ssh.form.user": "ユーザー（任意）",
+        "pier.ssh.form.port": "ポート（任意）",
+        "pier.ssh.form.identityFile": "秘密鍵ファイル（任意）",
+        "pier.ssh.form.identityFilePlaceholder": "~/.ssh/id_ed25519",
+        "pier.ssh.form.hostRequired": "ホスト名、IP アドレス、または ssh 設定のエイリアスを入力してください。",
+        "pier.ssh.form.portInvalid": "1 から 65535 のポートを入力してください。",
+        "pier.ssh.import.title": "SSH ホストをインポート",
+        "pier.ssh.import.description": "~/.ssh/config で見つかったホストです。インポートした項目は ssh 設定経由で接続するため、ジャンプホストと秘密鍵はそのまま使えます。",
+        "pier.ssh.import.confirm": "選択した項目をインポート",
+        "pier.ssh.import.none": "~/.ssh/config に新しいホストはありません。",
+        "pier.ssh.picker.title": "SSH ターミナルを開く",
+        "pier.ssh.picker.description": "接続するホストを選んでください。",
+        "pier.ssh.picker.noHosts": "SSH ホストはまだありません。先に設定で追加してください。",
+        "pier.ssh.terminal.opening": "SSH ターミナルを開いています…",
+        "pier.ssh.terminal.opened": "SSH ターミナルを開きました"
+      }
+    },
+    "ko": {
+      "name": "SSH 호스트",
+      "description": "Pier에서 SSH 호스트를 관리하고 SSH 터미널을 엽니다.",
+      "commands": {
+        "pier.ssh.openTerminal": {
+          "title": "SSH 터미널 열기",
+          "description": "저장한 SSH 호스트를 선택하고 연결한 터미널을 엽니다."
+        }
+      },
+      "settingsPages": {
+        "pier.ssh.hosts": {
+          "title": "SSH 호스트"
+        }
+      },
+      "messages": {
+        "pier.ssh.openTerminal.title": "SSH 터미널 열기",
+        "pier.ssh.hosts.settings.title": "SSH 호스트",
+        "pier.ssh.hosts.settings.addHost": "호스트 추가",
+        "pier.ssh.hosts.settings.import": "ssh 설정에서 가져오기",
+        "pier.ssh.hosts.settings.emptyTitle": "SSH 호스트가 아직 없습니다",
+        "pier.ssh.hosts.settings.emptyDesc": "호스트를 추가하거나 ssh 설정에서 가져오면 SSH 터미널을 한 번에 열 수 있습니다.",
+        "pier.ssh.hosts.settings.openTerminal": "터미널 열기",
+        "pier.ssh.hosts.settings.edit": "편집",
+        "pier.ssh.hosts.settings.remove": "삭제",
+        "pier.ssh.hosts.settings.removeConfirmTitle": "SSH 호스트를 삭제할까요?",
+        "pier.ssh.hosts.settings.removeConfirmBody": "호스트는 Pier에서만 삭제됩니다. 원격 기기와 ssh 설정은 바뀌지 않습니다.",
+        "pier.ssh.hosts.settings.cancel": "취소",
+        "pier.ssh.hosts.settings.save": "저장",
+        "pier.ssh.hosts.settings.testConnection": "연결 테스트",
+        "pier.ssh.hosts.settings.testSuccess": "연결되었습니다",
+        "pier.ssh.hosts.settings.testFailedTitle": "연결하지 못했습니다",
+        "pier.ssh.hosts.settings.loadFailed": "SSH 호스트를 불러오지 못했습니다",
+        "pier.ssh.hosts.settings.retry": "다시 시도",
+        "pier.ssh.hosts.settings.actionFailed": "SSH 호스트 작업에 실패했습니다",
+        "pier.ssh.form.addTitle": "SSH 호스트 추가",
+        "pier.ssh.form.editTitle": "SSH 호스트 편집",
+        "pier.ssh.form.name": "표시 이름",
+        "pier.ssh.form.host": "호스트",
+        "pier.ssh.form.hostDescription": "호스트 이름, IP 주소, 또는 ssh 설정의 별칭.",
+        "pier.ssh.form.user": "사용자(선택)",
+        "pier.ssh.form.port": "포트(선택)",
+        "pier.ssh.form.identityFile": "개인 키 파일(선택)",
+        "pier.ssh.form.identityFilePlaceholder": "~/.ssh/id_ed25519",
+        "pier.ssh.form.hostRequired": "호스트 이름, IP 주소, 또는 ssh 설정 별칭을 입력하세요.",
+        "pier.ssh.form.portInvalid": "1에서 65535 사이의 포트를 입력하세요.",
+        "pier.ssh.import.title": "SSH 호스트 가져오기",
+        "pier.ssh.import.description": "~/.ssh/config에서 찾은 호스트입니다. 가져온 항목은 ssh 설정을 통해 연결하므로 점프 호스트와 개인 키는 그대로 동작합니다.",
+        "pier.ssh.import.confirm": "선택한 항목 가져오기",
+        "pier.ssh.import.none": "~/.ssh/config에서 새 호스트를 찾지 못했습니다.",
+        "pier.ssh.picker.title": "SSH 터미널 열기",
+        "pier.ssh.picker.description": "연결할 호스트를 선택하세요.",
+        "pier.ssh.picker.noHosts": "SSH 호스트가 아직 없습니다. 먼저 설정에서 추가하세요.",
+        "pier.ssh.terminal.opening": "SSH 터미널을 여는 중…",
+        "pier.ssh.terminal.opened": "SSH 터미널을 열었습니다"
+      }
     }
   },
   "main": "dist/main.js",

@@ -487,6 +487,8 @@ export const settings = {
     system: "Follow System",
     "zh-CN": "简体中文",
     en: "English",
+    ja: "日本語",
+    ko: "한국어",
   },
   agents: settingsAgents,
   notifications: settingsNotifications,

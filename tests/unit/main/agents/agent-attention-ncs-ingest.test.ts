@@ -64,7 +64,8 @@ describe("agent-attention → NCS ingest", () => {
         panelRef: { panelId: "p1" },
         severity: "warning",
         source: "agent-attention",
-        title: "Needs you",
+        title: "Needs attention",
+        titleKey: "notificationsCenter.attention.waiting",
         trigger: "system-event",
       })
     );
@@ -98,6 +99,7 @@ describe("agent-attention → NCS ingest", () => {
         kind: "agent.turn-finished",
         severity: "info",
         title: "Turn finished",
+        titleKey: "notificationsCenter.attention.ready",
       })
     );
   });
