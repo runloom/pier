@@ -78,3 +78,57 @@ if (
     value: () => 120,
   });
 }
+
+// Mermaid mindmap 走 cytoscape，需要 Canvas 2d。jsdom 的 getContext
+// 会抛 Not implemented；给一个 no-op 上下文即可完成布局，图仍画成 SVG。
+if (typeof globalThis.HTMLCanvasElement !== "undefined") {
+  HTMLCanvasElement.prototype.getContext = function getContext(
+    this: HTMLCanvasElement,
+    type: string
+  ) {
+    if (type !== "2d") {
+      return null;
+    }
+    const target: Record<PropertyKey, unknown> = { canvas: this };
+    return new Proxy(target, {
+      get(current, prop) {
+        if (prop in current) {
+          return current[prop];
+        }
+        if (prop === "measureText") {
+          return (text: string) => ({
+            actualBoundingBoxAscent: 10,
+            actualBoundingBoxDescent: 4,
+            fontBoundingBoxAscent: 12,
+            fontBoundingBoxDescent: 4,
+            width: String(text).length * 8,
+          });
+        }
+        if (prop === "getImageData") {
+          return (_x: number, _y: number, width: number, height: number) => ({
+            data: new Uint8ClampedArray(
+              Math.max(1, width) * Math.max(1, height) * 4
+            ),
+            height,
+            width,
+          });
+        }
+        if (
+          prop === "createLinearGradient" ||
+          prop === "createRadialGradient" ||
+          prop === "createConicGradient"
+        ) {
+          return () => ({ addColorStop() {} });
+        }
+        if (prop === "createPattern") {
+          return () => null;
+        }
+        return () => undefined;
+      },
+      set(current, prop, value) {
+        current[prop] = value;
+        return true;
+      },
+    }) as unknown as CanvasRenderingContext2D;
+  } as typeof HTMLCanvasElement.prototype.getContext;
+}

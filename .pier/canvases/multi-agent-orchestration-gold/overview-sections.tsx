@@ -7,7 +7,7 @@ import {
   ItemDescription,
   ItemGroup,
   ItemTitle,
-  MermaidDiagram,
+  Mermaid,
   Row,
   Stack,
   Text,
@@ -19,6 +19,7 @@ import {
   DataTable,
   DualPathCards,
   ExpandableNoteList,
+  GraphLayerKey,
   GroupedNoteCards,
   IdConstraintList,
   MetricStrips,
@@ -47,10 +48,11 @@ export function OverviewPage({ d }: { d: DesignData }) {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(220px,1fr)]">
         <Stack className="min-w-0" gap={8}>
           <SectionTitle>唯一主回路</SectionTitle>
-          <MermaidDiagram
+          <Mermaid
             aria-label="协调智能体通过 Pier 智能体 CLI 调用工作智能体并读取内容"
-            previewTitle="协调智能体调用工作智能体"
-            source={d.mainLoop.diagram}
+            direction={d.mainLoop.diagram.direction}
+            edges={d.mainLoop.diagram.edges}
+            nodes={d.mainLoop.diagram.nodes}
           />
           <Text tone="secondary" className="text-sm leading-relaxed">
             {d.mainLoop.caption}
@@ -326,11 +328,13 @@ export function DesignPage({ d }: { d: DesignData }) {
 
       <Stack gap={8}>
         <SectionTitle>调用所有权先于命令设计</SectionTitle>
-        <MermaidDiagram
+        <Mermaid
           aria-label="协调智能体、Pier 智能体 CLI 与工作智能体的数据和控制流"
-          previewTitle="智能体调用与内容返回路径"
-          source={d.architecture.diagram}
+          direction={d.architecture.diagram.direction}
+          edges={d.architecture.diagram.edges}
+          nodes={d.architecture.diagram.nodes}
         />
+        <GraphLayerKey />
       </Stack>
 
       <Stack gap={8}>

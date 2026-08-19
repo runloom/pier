@@ -81,15 +81,21 @@ export async function cancelCompileContext(key: string): Promise<void> {
   }
 }
 
-/** Dispose a single context (clearModule / recompile with new options). */
-export async function disposeCompileContext(key: string): Promise<void> {
-  const cached = contextCache.get(key);
-  if (!cached) {
+/**
+ * Dispose `key` only while it still maps to `entry`. Failure-path cleanup
+ * runs after awaits (timeout / user retry may already have replaced the
+ * cache slot) and must not tear down a successor compile's context.
+ */
+export async function disposeCompileContextIfCurrent(
+  key: string,
+  entry: CompileContextEntry
+): Promise<void> {
+  if (contextCache.get(key) !== entry) {
     return;
   }
   contextCache.delete(key);
   try {
-    await cached.context.dispose();
+    await entry.context.dispose();
   } catch {
     // Best-effort cleanup.
   }

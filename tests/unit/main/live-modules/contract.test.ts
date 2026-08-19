@@ -24,8 +24,8 @@ import {
   PIER_CANVAS_VALUE_EXPORT_NAMES,
 } from "@shared/pier-canvas-export-names.ts";
 import { describe, expect, it } from "vitest";
+import { pierHostStubSource } from "../../../../src/main/services/live-modules/host-stub.ts";
 import { pierCanvasStubSource } from "../../../../src/main/services/live-modules/stub-sources.ts";
-import { pierVisualizationsStubSource } from "../../../../src/main/services/live-modules/visualizations-stub.ts";
 
 const SAMPLE_TICKET = "abcdefghijklmnopqrstuv";
 
@@ -211,12 +211,13 @@ describe("pier/canvas stub source", () => {
   });
 });
 
-describe("pier/visualizations stub source", () => {
-  it("forwards the framework-neutral mount controller to the host runtime", () => {
-    const source = pierVisualizationsStubSource();
-    expect(source).toContain("__PIER_LIVE_VISUALIZATIONS__");
-    expect(source).toContain("export function mountDiagram(...args)");
-    expect(source).toContain("getVisualizations().mountDiagram(...args)");
+describe("pier/host stub source", () => {
+  it("forwards the host object without wrapping it as a function", () => {
+    const source = pierHostStubSource();
+    expect(source).toContain("__PIER_LIVE_HOST__");
+    expect(source).toContain("export const host = new Proxy");
+    expect(source).toContain("export function useHostSnapshot(...args)");
+    expect(source).not.toContain("export function host(");
     expect(source).not.toContain('from "react"');
   });
 });

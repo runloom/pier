@@ -1,9 +1,20 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "./tsconfig.json",
-  "comment": "Canvases lane: `.pier/**` is outside the host include. `pier/canvas` is a compile-time stub in the app; root tsconfig maps it to tests/support for types.",
+  "comment": "Canvases lane: `.pier/**` is outside the host include. App compile uses host stubs; this project maps `pier/host` to the SDK types so canvas check does not load renderer.",
   "compilerOptions": {
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@/*": ["./src/renderer/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@main/*": ["./src/main/*"],
+      "@preload/*": ["./src/preload/*"],
+      "@plugins/*": ["./src/plugins/*"],
+      "@pier/ui/*": ["./packages/ui/src/*"],
+      "@pier/ui": ["./packages/ui/src"],
+      "pier/canvas": ["./tests/support/pier-canvas.ts"],
+      "pier/host": ["./resources/system-skills/pier-canvas/sdk/host.d.ts"]
+    }
   },
   "include": [".pier/canvases/**/*.canvas.tsx", "src/renderer/global.d.ts"],
   "exclude": [

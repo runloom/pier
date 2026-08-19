@@ -65,7 +65,7 @@ export function isDeniedBareSpecifier(
       specifier === "react-dom" ||
       specifier === "react-dom/client" ||
       specifier === "pier/canvas" ||
-      specifier === "pier/visualizations"
+      specifier === "pier/host"
     ) {
       return false;
     }

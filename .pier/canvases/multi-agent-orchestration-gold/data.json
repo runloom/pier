@@ -103,7 +103,35 @@
       }
     ],
     "mainLoop": {
-      "diagram": "flowchart TB\n H[人类\\n给出目标 · 必要时审批]\n O[协调智能体\\n主要调用者 · 本机 pier]\n E[外部控制器（可选·产品外）\\n经 pier CLI 或自建]\n N[原生 agent CLI\\n一次性 · 不经 Pier]\n C[Pier 智能体 CLI\\ncli-human · catalog/start/turn/screen/wait]\n W[工作智能体\\n精确 RuntimeRef]\n P[当前画面 · WorktreeRef]\n L[调用方本地工具\\n文件 · 搜索 · Git]\n F[运行事实]\n H --> O\n O --> N\n N --> O\n O --> C\n H --> C\n E -. 产品外自建编排 .-> O\n C --> W\n W --> P\n W --> F\n P --> O\n F --> O\n O --> L\n L --> O",
+      "diagram": {
+        "direction": "top-to-bottom",
+        "edges": [
+          { "source": "H", "target": "O" },
+          { "source": "O", "target": "N" },
+          { "source": "N", "target": "O" },
+          { "source": "O", "target": "C" },
+          { "source": "H", "target": "C" },
+          { "label": "产品外自建编排", "source": "E", "target": "O" },
+          { "source": "C", "target": "W" },
+          { "source": "W", "target": "P" },
+          { "source": "W", "target": "F" },
+          { "source": "P", "target": "O" },
+          { "source": "F", "target": "O" },
+          { "source": "O", "target": "L" },
+          { "source": "L", "target": "O" }
+        ],
+        "nodes": [
+          { "id": "H", "kind": "actor", "meta": "给出目标 · 必要时审批", "title": "人类", "tone": "info" },
+          { "id": "O", "kind": "agent", "meta": "主要调用者 · 本机 pier", "title": "协调智能体", "tone": "done" },
+          { "id": "E", "kind": "external", "meta": "经 pier CLI 或自建", "title": "外部控制器（可选·产品外）", "tone": "warning" },
+          { "id": "N", "kind": "external", "meta": "一次性 · 不经 Pier", "title": "原生 agent CLI", "tone": "warning" },
+          { "id": "C", "kind": "tool", "meta": "cli-human · catalog/start/turn/screen/wait", "title": "Pier 智能体 CLI", "tone": "success" },
+          { "id": "W", "kind": "agent", "meta": "精确 RuntimeRef", "title": "工作智能体", "tone": "done" },
+          { "id": "P", "kind": "artifact", "title": "当前画面 · WorktreeRef", "tone": "info" },
+          { "id": "L", "kind": "tool", "meta": "文件 · 搜索 · Git", "title": "调用方本地工具", "tone": "success" },
+          { "id": "F", "kind": "artifact", "title": "运行事实", "tone": "info" }
+        ]
+      },
       "caption": "协调方与人类均经本机 Pier CLI（cli-human）。一次性走原生 agent。图中「外部控制器（可选）」表示产品外编排：仍应走 pier CLI，或完全在 Pier 外完成，不设第二协议。"
     },
     "problem": {
@@ -360,7 +388,37 @@
       }
     ],
     "architecture": {
-      "diagram": "flowchart TB\n subgraph CALLERS[调用者]\n  CO[协调智能体 · pier CLI]\n  HU[人类 · pier CLI]\n  LOCAL[本地文件/Git 工具]\n  NATIVE[原生 agent CLI · 一次性]\n end\n subgraph ENTRY[Pier CLI 产品面 · cli-human]\n  DISC[catalog / list / get]\n  PERSIST[start / turn / screen / wait / watch]\n  STOP[focus / interrupt / terminate]\n end\n subgraph HOST[Pier main]\n  RC[RuntimeControl]\n  FACT[FA + Runtime Index]\n  CONTENT[viewport + WorktreeRef]\n end\n CO --> NATIVE\n NATIVE --> CO\n CO --> DISC\n CO --> PERSIST\n CO --> STOP\n HU --> DISC\n HU --> PERSIST\n PERSIST --> RC\n STOP --> RC\n RC --> FACT\n RC --> CONTENT\n CONTENT --> CO\n FACT --> CO\n CO --> LOCAL",
+      "diagram": {
+        "direction": "top-to-bottom",
+        "edges": [
+          { "source": "CO", "target": "NATIVE" },
+          { "source": "NATIVE", "target": "CO" },
+          { "source": "CO", "target": "DISC" },
+          { "source": "CO", "target": "PERSIST" },
+          { "source": "CO", "target": "STOP" },
+          { "source": "HU", "target": "DISC" },
+          { "source": "HU", "target": "PERSIST" },
+          { "source": "PERSIST", "target": "RC" },
+          { "source": "STOP", "target": "RC" },
+          { "source": "RC", "target": "FACT" },
+          { "source": "RC", "target": "CONTENT" },
+          { "source": "CONTENT", "target": "CO" },
+          { "source": "FACT", "target": "CO" },
+          { "source": "CO", "target": "LOCAL" }
+        ],
+        "nodes": [
+          { "id": "CO", "kind": "agent", "meta": "调用者", "title": "协调智能体 · pier CLI", "tone": "info" },
+          { "id": "HU", "kind": "actor", "meta": "调用者", "title": "人类 · pier CLI", "tone": "info" },
+          { "id": "LOCAL", "kind": "tool", "meta": "调用者", "title": "本地文件/Git 工具", "tone": "info" },
+          { "id": "NATIVE", "kind": "external", "meta": "调用者", "title": "原生 agent CLI · 一次性", "tone": "info" },
+          { "id": "DISC", "kind": "tool", "meta": "Pier CLI 产品面 · cli-human", "title": "catalog / list / get", "tone": "success" },
+          { "id": "PERSIST", "kind": "tool", "meta": "Pier CLI 产品面 · cli-human", "title": "start / turn / screen / wait / watch", "tone": "success" },
+          { "id": "STOP", "kind": "tool", "meta": "Pier CLI 产品面 · cli-human", "title": "focus / interrupt / terminate", "tone": "success" },
+          { "id": "RC", "kind": "artifact", "meta": "Pier main", "title": "RuntimeControl", "tone": "done" },
+          { "id": "FACT", "kind": "artifact", "meta": "Pier main", "title": "FA + Runtime Index", "tone": "done" },
+          { "id": "CONTENT", "kind": "artifact", "meta": "Pier main", "title": "viewport + WorktreeRef", "tone": "done" }
+        ]
+      },
       "notes": [
         "人类与协调智能体一律本机 pier → cli-human（auth.none + peer）。",
         "一次性提问使用原生 agent CLI，不经 Pier。",

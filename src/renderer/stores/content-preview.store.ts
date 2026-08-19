@@ -1,15 +1,15 @@
 import type {
-  NodeGraphDirection,
-  NodeGraphEdge,
-  NodeGraphNode,
-} from "@pier/ui/node-graph.tsx";
+  MermaidDirection,
+  MermaidEdge,
+  MermaidNode,
+} from "@pier/ui/mermaid.tsx";
 import type { ReactNode } from "react";
 import { create } from "zustand";
 
 /**
  * Host fullscreen content preview.
  *
- * Payload is a discriminated union: images (markdown / media), node graphs,
+ * Payload is a discriminated union: images (markdown / media), mermaid,
  * and HTML worlds (artboard stages) share one shell (`ContentPreviewHost`).
  */
 
@@ -25,10 +25,11 @@ export type ContentPreviewPayload =
     }
   | {
       "aria-label": string;
-      direction?: NodeGraphDirection;
-      edges: readonly NodeGraphEdge[];
-      nodes: readonly NodeGraphNode[];
-      type: "node-graph";
+      direction?: MermaidDirection;
+      edges: readonly MermaidEdge[];
+      nodes: readonly MermaidNode[];
+      type: "mermaid";
+      source?: string;
     }
   | {
       "aria-label": string;
@@ -59,13 +60,14 @@ export interface ImageLightboxRequest {
   title: string;
 }
 
-export interface OpenNodeGraphPreviewRequest {
+export interface OpenMermaidPreviewRequest {
   "aria-label": string;
-  direction?: NodeGraphDirection;
-  edges: readonly NodeGraphEdge[];
+  direction?: MermaidDirection;
+  edges: readonly MermaidEdge[];
   id?: string;
-  nodes: readonly NodeGraphNode[];
+  nodes: readonly MermaidNode[];
   onClose?: () => void;
+  source?: string;
   /** Fullscreen title (defaults to aria-label). */
   title?: string;
 }
@@ -138,19 +140,18 @@ export function openImagePreview(request: ImageLightboxRequest): void {
   });
 }
 
-/** NodeGraph fullscreen — same shell as markdown mermaid / image preview. */
-export function openNodeGraphPreview(
-  request: OpenNodeGraphPreviewRequest
-): void {
+/** Mermaid fullscreen — same shell as markdown mermaid / image preview. */
+export function openMermaidPreview(request: OpenMermaidPreviewRequest): void {
   openContentPreview({
     ...(request.id ? { id: request.id } : {}),
     ...(request.onClose ? { onClose: request.onClose } : {}),
     payload: {
-      type: "node-graph",
+      type: "mermaid",
       "aria-label": request["aria-label"],
       edges: request.edges,
       nodes: request.nodes,
       ...(request.direction ? { direction: request.direction } : {}),
+      ...(request.source ? { source: request.source } : {}),
     },
     title: request.title?.trim() || request["aria-label"],
   });

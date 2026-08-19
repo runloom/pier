@@ -29,15 +29,17 @@ function normalizeSection(section: SettingsSectionId): {
  */
 export function openProjectsSettings(args?: {
   tab?: ProjectsSettingsTab;
+  /** Open Pier Home instead of a repo project. */
+  focusHome?: boolean;
   /** Prefer opening this project when present in the shared index. */
   projectRootPath?: string;
 }): void {
   const tab = args?.tab ?? "skills";
+  const focusHome = args?.focusHome === true;
   useSettingsDialogStore.setState({
     projectsTab: tab,
-    ...(args?.projectRootPath
-      ? { projectsFocusPath: args.projectRootPath }
-      : { projectsFocusPath: null }),
+    projectsFocusHome: focusHome,
+    projectsFocusPath: focusHome ? null : (args?.projectRootPath ?? null),
   });
   useSettingsDialogStore.getState().openSection(PROJECTS_SECTION_ID);
 }

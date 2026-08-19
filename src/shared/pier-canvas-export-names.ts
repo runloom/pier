@@ -105,8 +105,7 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "Kbd",
   "KbdGroup",
   "Label",
-  "MermaidDiagram",
-  "NodeGraph",
+  "Mermaid",
   "Pagination",
   "PaginationContent",
   "PaginationEllipsis",
@@ -170,10 +169,8 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
 /**
  * Non-component exports: hooks and plain functions the host passes through.
  *
- * `useCanvasFile` lets a canvas read and write sibling files in its own
- * directory (e.g. saving a nearby `data.json`). It is deliberately not a
- * general file API: the host resolves the root and the directory, the canvas
- * only names a sibling.
+ * `useCanvasFile` is the sibling-file sandbox (not the global `file.*` API).
+ * Global commands, events, and snapshots live on `pier/host`.
  */
 export const PIER_CANVAS_VALUE_EXPORT_NAMES = ["useCanvasFile"] as const;
 

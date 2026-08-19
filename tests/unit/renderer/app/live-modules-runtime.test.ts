@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { pierHostRuntime } from "../../../../src/renderer/lib/live-modules/host.ts";
 import { installLiveModuleRuntime } from "../../../../src/renderer/lib/live-modules/install-runtime.ts";
 import { mountLiveModule } from "../../../../src/renderer/lib/live-modules/mount.ts";
 import { pierCanvasExports } from "../../../../src/renderer/lib/live-modules/pier-canvas-exports.ts";
-import { pierVisualizationsRuntime } from "../../../../src/renderer/lib/live-modules/pier-visualizations-runtime.tsx";
 import {
   PIER_CANVAS_COMPONENT_EXPORT_NAMES,
   PIER_CANVAS_EXPORT_NAMES,
@@ -35,10 +35,11 @@ describe("live-modules runtime", () => {
       Frame: undefined as unknown as typeof pierCanvasExports.Frame,
     };
     installLiveModuleRuntime();
+    expect(
+      Object.getOwnPropertyDescriptor(globalThis, "__PIER_LIVE_CANVAS__")?.get
+    ).toBeTypeOf("function");
     expect(globalThis.__PIER_LIVE_CANVAS__).toBe(pierCanvasExports);
-    expect(globalThis.__PIER_LIVE_VISUALIZATIONS__).toBe(
-      pierVisualizationsRuntime
-    );
+    expect(globalThis.__PIER_LIVE_HOST__).toBe(pierHostRuntime);
     expect(globalThis.__PIER_LIVE_CANVAS__?.Frame).toBeTypeOf("function");
     expect(pierCanvasExports.Button).toBeTypeOf("function");
     expect(pierCanvasExports.Stack).toBeTypeOf("function");
@@ -50,39 +51,6 @@ describe("live-modules runtime", () => {
     ).toBeTruthy();
   });
 
-  it("mounts, updates and disposes a diagram through one host controller", () => {
-    const element = document.createElement("div");
-    document.body.append(element);
-    const controller = pierVisualizationsRuntime.mountDiagram(element, {
-      ariaLabel: "共享图表",
-      document: {
-        format: "node-graph",
-        nodes: [{ id: "A", title: "入口" }],
-        edges: [],
-        version: 1,
-      },
-    });
-    expect(controller.update).toBeTypeOf("function");
-    expect(controller.dispose).toBeTypeOf("function");
-    expect(() =>
-      controller.update({
-        ariaLabel: "共享图表",
-        document: {
-          format: "node-graph",
-          nodes: [
-            { id: "A", title: "入口" },
-            { id: "B", title: "结果" },
-          ],
-          edges: [{ source: "A", target: "B" }],
-          version: 1,
-        },
-      })
-    ).not.toThrow();
-    expect(() => controller.dispose()).not.toThrow();
-    expect(() => controller.dispose()).not.toThrow();
-    element.remove();
-  });
-
   it("mounts and unmounts a component", () => {
     const el = document.createElement("div");
     document.body.append(el);
@@ -90,6 +58,7 @@ describe("live-modules runtime", () => {
       return pierCanvasExports.Text({ children: "hi" });
     }
     const unmount = mountLiveModule(el, Hello);
+    expect(() => unmount()).not.toThrow();
     expect(() => unmount()).not.toThrow();
     el.remove();
   });

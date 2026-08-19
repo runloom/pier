@@ -163,7 +163,7 @@ function classifyPlainPaste(text: string): "small" | "medium" | "large" {
 | `file` / 目录 | `onReveal(path)` | **不变** |
 | `paste`（新增） | — | `openPasteEditDialog(attachment)` → §6.3 |
 
-- **不要**把 paste 送进 `openContentPreview`（当前 payload 仅 image / node-graph，且全屏只读舞台不适合编辑）。
+- **不要**把 paste 送进 `openContentPreview`（当前 payload 仅 image / diagram，且全屏只读舞台不适合编辑）。
 - **不要**为 paste 默认 `onReveal` 当主路径（临时目录对用户无产品价值）；编辑 dialog 内若需要可再提供「在访达中显示」次要链，**非**轨点击默认。
 
 ### 5.4 数据模型

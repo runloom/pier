@@ -18,7 +18,7 @@
       "打开设置→项目→物料就能搜到 Button；点开弹窗复制 import、看组件和接口",
       "类型只做筛选：版式、控件、图示、数据、文件、页面共用物料列表",
       "系统积木与该项目画布混在一个列表；只有项目卡打来源徽标",
-      "把活动、系统资源、成本做成可 import 的数据物料，三态合同在详情可见",
+      "把活动、系统资源、成本做成可 import 的数据 hook；详情是完整 API 文档，作者在画布上绑到 Item / Table",
       "把 useCanvasFile 做成可看见的文件物料详情；业务 Canvas 继续用文件树管理"
     ],
     "nonGoals": [
@@ -53,7 +53,25 @@
       }
     ],
     "mainLoop": {
-      "diagram": "flowchart LR\n  subgraph discover [看见]\n    OpenSettings[打开设置 项目 物料] --> List[物料列表]\n    List --> Dialog[文档型弹窗]\n    List --> OpenPage[打开项目画布]\n  end\n  subgraph author [生成]\n    Skill[pier-canvas 生成] --> Files[写入 canvases 文件]\n    Files --> TreePreview[文件树预览]\n  end",
+      "diagram": {
+        "direction": "left-to-right",
+        "nodes": [
+          { "id": "OpenSettings", "kind": "artifact", "title": "打开设置 项目 物料", "meta": "看见", "tone": "info" },
+          { "id": "List", "kind": "artifact", "title": "物料列表", "meta": "看见", "tone": "info" },
+          { "id": "Dialog", "kind": "artifact", "title": "文档型弹窗", "meta": "看见", "tone": "info" },
+          { "id": "OpenPage", "kind": "artifact", "title": "打开项目画布", "meta": "看见", "tone": "info" },
+          { "id": "Skill", "kind": "tool", "title": "pier-canvas 生成", "meta": "生成", "tone": "success" },
+          { "id": "Files", "kind": "tool", "title": "写入 canvases 文件", "meta": "生成", "tone": "success" },
+          { "id": "TreePreview", "kind": "tool", "title": "文件树预览", "meta": "生成", "tone": "success" }
+        ],
+        "edges": [
+          { "source": "OpenSettings", "target": "List" },
+          { "source": "List", "target": "Dialog" },
+          { "source": "List", "target": "OpenPage" },
+          { "source": "Skill", "target": "Files" },
+          { "source": "Files", "target": "TreePreview" }
+        ]
+      },
       "caption": "看见与生成是两条路：设置里搜和筛，系统卡进弹窗复制 import，项目卡打开画布；写入画布文件只走独立 Skill，不从列表或弹窗触发。"
     },
     "problem": {
@@ -100,7 +118,7 @@
       {
         "area": "数据物料",
         "now": "只在工作台 widget",
-        "missing": "ActivityOverview 等 host-stub 导出"
+        "missing": "useActivityOverview 等 host 数据 hook"
       },
       {
         "area": "文件物料",
@@ -119,7 +137,40 @@
       }
     ],
     "architecture": {
-      "diagram": "flowchart TB\n  subgraph discover [看见面]\n    Settings[SettingsProjectMaterials]\n  end\n  subgraph pages [Pages]\n    Tree[FileTree]\n    Page[BusinessCanvas]\n  end\n  subgraph sdk [PierCanvasSDK]\n    Registry[MaterialRegistry]\n    Layout[LayoutPrimitives]\n    UI[UiPrimitives]\n    Viz[Visualizations]\n    Data[HostDataBlocks]\n    Persist[UseCanvasFile]\n  end\n  subgraph host [HostRenderer]\n    Stores[ActivityResourcesUsage]\n    FileApi[FilesReadWrite]\n  end\n  subgraph compile [LiveModules]\n    Fence[ImportFence]\n    Stub[HostStub]\n    Mount[DedicatedRoot]\n  end\n  Settings --> Registry\n  Settings --> Tree\n  Registry --> Layout\n  Registry --> UI\n  Registry --> Viz\n  Registry --> Data\n  Registry --> Persist\n  Tree --> Page\n  Page --> Fence\n  Fence --> Stub\n  Stub --> Mount\n  Data --> Stores\n  Persist --> FileApi",
+      "diagram": {
+        "direction": "top-to-bottom",
+        "nodes": [
+          { "id": "Settings", "kind": "artifact", "title": "SettingsProjectMaterials", "meta": "看见面" },
+          { "id": "Tree", "kind": "artifact", "title": "FileTree", "meta": "Pages" },
+          { "id": "Page", "kind": "artifact", "title": "BusinessCanvas", "meta": "Pages" },
+          { "id": "Registry", "kind": "tool", "title": "MaterialRegistry", "meta": "PierCanvasSDK" },
+          { "id": "Layout", "kind": "tool", "title": "LayoutPrimitives", "meta": "PierCanvasSDK" },
+          { "id": "UI", "kind": "tool", "title": "UiPrimitives", "meta": "PierCanvasSDK" },
+          { "id": "Viz", "kind": "tool", "title": "Visualizations", "meta": "PierCanvasSDK" },
+          { "id": "Data", "kind": "tool", "title": "HostDataBlocks", "meta": "PierCanvasSDK" },
+          { "id": "Persist", "kind": "tool", "title": "UseCanvasFile", "meta": "PierCanvasSDK" },
+          { "id": "Stores", "kind": "artifact", "title": "ActivityResourcesUsage", "meta": "HostRenderer" },
+          { "id": "FileApi", "kind": "artifact", "title": "FilesReadWrite", "meta": "HostRenderer" },
+          { "id": "Fence", "kind": "tool", "title": "ImportFence", "meta": "LiveModules" },
+          { "id": "Stub", "kind": "tool", "title": "HostStub", "meta": "LiveModules" },
+          { "id": "Mount", "kind": "tool", "title": "DedicatedRoot", "meta": "LiveModules" }
+        ],
+        "edges": [
+          { "source": "Settings", "target": "Registry" },
+          { "source": "Settings", "target": "Tree" },
+          { "source": "Registry", "target": "Layout" },
+          { "source": "Registry", "target": "UI" },
+          { "source": "Registry", "target": "Viz" },
+          { "source": "Registry", "target": "Data" },
+          { "source": "Registry", "target": "Persist" },
+          { "source": "Tree", "target": "Page" },
+          { "source": "Page", "target": "Fence" },
+          { "source": "Fence", "target": "Stub" },
+          { "source": "Stub", "target": "Mount" },
+          { "source": "Data", "target": "Stores" },
+          { "source": "Persist", "target": "FileApi" }
+        ]
+      },
       "notes": [
         "编译围栏不变：react、pier/canvas、相对路径、项目 tsconfig paths；禁止 npm、electron、Node。",
         "物料注册是代码所有（对齐 CORE_WORKBENCH_WIDGETS 先例）：类型、说明、示例渲染器都在宿主源码里，不存在人维护的 JSON 目录。",
@@ -166,8 +217,7 @@
         "items": [
           "Table",
           "DataChart",
-          "NodeGraph",
-          "MermaidDiagram"
+          "Mermaid"
         ],
         "excluded": "工作台自定义卡与指标目录"
       },
@@ -175,11 +225,11 @@
         "id": "data",
         "title": "数据",
         "source": "宿主 store 经 pier/canvas stub",
-        "v1": "只读块：活动、系统资源、成本；挂载订阅、卸载释放；详情展示加载/空/错误三态",
+        "v1": "只读 hook：活动、系统资源、成本；各返回带领域键的对象；详情是签名 / 用法 / 完整返回类型，不展示实样",
         "items": [
-          "ActivityOverview 订阅 foreground-activity 等已有 store，只读，无改名/聚焦面板",
-          "SystemResources 订阅 pier-resource；挂载 acquire，卸载 release",
-          "CostOverview 订阅 usage-data；range 用组件 props，不用工作台设置弹窗"
+          "useActivityOverview 订阅 foreground-activity 等已有 store，只读，无改名/聚焦面板",
+          "useSystemResources 订阅 pier-resource；挂载 acquire，卸载 release",
+          "useCostOverview 订阅 usage-data；rangeDays 为 hook 参数，不用工作台设置弹窗"
         ],
         "excluded": "自定义卡、指标目录、插件账号块"
       },
@@ -311,16 +361,29 @@
       {
         "id": "P2",
         "title": "数据 v1",
-        "deliver": "ActivityOverview 与 SystemResources 进入 pierCanvasExports 与 SDK dts；数据详情改为真数据与三态。"
+        "deliver": "useActivityOverview 与 useSystemResources 进入 pierCanvasExports 与 SDK dts；数据详情改为 record 与 UI 物料组装。"
       },
       {
         "id": "P3",
         "title": "成本与 Skill 工作流",
-        "deliver": "CostOverview；命令面板只打开设置物料列表；/pier-canvas 写明先看设置→项目→物料与 sdk，只组装 SDK 内导出。"
+        "deliver": "useCostOverview；命令面板只打开设置物料列表；/pier-canvas 写明先看设置→项目→物料与 sdk，只组装 SDK 内导出。"
       }
     ],
     "delivery": {
-      "diagram": "flowchart LR\n  P0[P0_ProjectList] --> P1[P1_FileDetail]\n  P1 --> P2[P2_DataBlocks]\n  P2 --> P3[P3_CostSkill]",
+      "diagram": {
+        "direction": "left-to-right",
+        "nodes": [
+          { "id": "P0", "kind": "artifact", "title": "P0_ProjectList" },
+          { "id": "P1", "kind": "artifact", "title": "P1_FileDetail" },
+          { "id": "P2", "kind": "artifact", "title": "P2_DataBlocks" },
+          { "id": "P3", "kind": "artifact", "title": "P3_CostSkill" }
+        ],
+        "edges": [
+          { "source": "P0", "target": "P1" },
+          { "source": "P1", "target": "P2" },
+          { "source": "P2", "target": "P3" }
+        ]
+      },
       "caption": "先在设置→项目看见统一列表，再补文件合同，再接宿主数据块，最后补成本与 Skill 工作流。这不是任务台账。"
     },
     "acceptance": [
@@ -350,8 +413,8 @@
       },
       {
         "id": "A5",
-        "text": "至少一块数据物料可在 *.canvas.tsx 中从 pier/canvas import 并显示宿主活动",
-        "evidence": "P2 ActivityOverview + 宿主 store 单例",
+        "text": "至少一条数据 hook 可在 *.canvas.tsx 中从 pier/canvas import 并绑到 Item 显示宿主活动",
+        "evidence": "P2 useActivityOverview + 宿主 store 单例",
         "status": "待实现"
       },
       {

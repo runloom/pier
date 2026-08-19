@@ -4,7 +4,7 @@ import {
   type ImagePreviewCanvasLabels,
 } from "@pier/ui/image-preview/canvas.tsx";
 import { HtmlWorldCanvas } from "@pier/ui/image-preview/world-canvas.tsx";
-import { NodeGraph } from "@pier/ui/node-graph.tsx";
+import { Mermaid } from "@pier/ui/mermaid.tsx";
 import { X } from "lucide-react";
 import {
   type SyntheticEvent,
@@ -162,10 +162,10 @@ function ImagePreviewBody({
   );
 }
 
-function NodeGraphPreviewBody({
+function MermaidPreviewBody({
   payload,
 }: {
-  payload: Extract<ContentPreviewPayload, { type: "node-graph" }>;
+  payload: Extract<ContentPreviewPayload, { type: "mermaid" }>;
 }) {
   const labels = useImagePreviewLabels();
   const stageControlLabels = useMemo(
@@ -182,7 +182,7 @@ function NodeGraphPreviewBody({
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col bg-background">
-      <NodeGraph
+      <Mermaid
         aria-label={payload["aria-label"]}
         direction={payload.direction}
         edges={payload.edges}
@@ -190,6 +190,7 @@ function NodeGraphPreviewBody({
         nodes={payload.nodes}
         presentation="stage"
         stageControlLabels={stageControlLabels}
+        {...(payload.source ? { source: payload.source } : {})}
       />
     </div>
   );
@@ -218,8 +219,8 @@ function PreviewBody({ payload }: { payload: ContentPreviewPayload }) {
   if (payload.type === "image") {
     return <ImagePreviewBody alt={payload.alt ?? ""} source={payload.source} />;
   }
-  if (payload.type === "node-graph") {
-    return <NodeGraphPreviewBody payload={payload} />;
+  if (payload.type === "mermaid") {
+    return <MermaidPreviewBody payload={payload} />;
   }
   return <HtmlWorldPreviewBody payload={payload} />;
 }

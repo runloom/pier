@@ -79,14 +79,16 @@ export function canvasMountErrorMessage(
  * was already injected by `import(url)` and prefix-based removal would delete it.
  */
 export function unmountMountedCanvas(
-  hostEl: HTMLElement | null,
+  _hostEl: HTMLElement | null,
   unmountRef: { current: (() => void) | null },
   mountedIdentityRef: { current: string | null }
 ): void {
   unmountRef.current?.();
   unmountRef.current = null;
   mountedIdentityRef.current = null;
-  hostEl?.replaceChildren();
+  // Do not `replaceChildren` here. React canvas unmount is deferred so it
+  // does not race `createRoot().render()`. The next `mountLiveModule` tears
+  // down any leftover root on the same host before creating a new one.
 }
 
 /** Unmount previous canvas, clear host children, and drop injected CSS. */

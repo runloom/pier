@@ -16,7 +16,7 @@ import {
   ItemDescription,
   ItemGroup,
   ItemTitle,
-  MermaidDiagram,
+  Mermaid,
   Stack,
   Text,
 } from "pier/canvas";
@@ -76,10 +76,11 @@ export function OverviewPage({ d }: { d: DesignData }) {
 
       <Stack gap={8}>
         <SectionTitle>主回路</SectionTitle>
-        <MermaidDiagram
+        <Mermaid
           aria-label="看见路径：设置项目物料列表打开文档弹窗或项目画布。生成路径：独立 Skill 写入画布文件并在文件树预览。两条路径不相连。"
-          previewTitle="Canvas 物料主回路"
-          source={d.mainLoop.diagram}
+          direction={d.mainLoop.diagram.direction}
+          edges={d.mainLoop.diagram.edges}
+          nodes={d.mainLoop.diagram.nodes}
         />
         <Text className="text-sm leading-relaxed text-muted-foreground">
           {d.mainLoop.caption}

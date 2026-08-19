@@ -1,8 +1,11 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { parsePierCanvasMeta } from "@shared/contracts/pier-canvas.ts";
 import { PIER_CANVAS_EXPORT_NAMES } from "@shared/pier-canvas-export-names.ts";
 import { cleanup, render } from "@testing-library/react";
 import type { ComponentType } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { initI18n } from "@/i18n/index.ts";
 import * as pierCanvasModule from "../../support/pier-canvas.ts";
 
 /**
@@ -17,6 +20,10 @@ const CANVAS_MODULES = import.meta.glob<Record<string, unknown>>(
   { eager: true }
 );
 
+beforeAll(async () => {
+  await initI18n();
+});
+
 afterEach(cleanup);
 
 function displayPath(path: string): string {
@@ -30,9 +37,26 @@ describe("project canvases render", () => {
     );
   });
 
-  it("finds the in-repo React canvases (smoke + blank)", () => {
+  it("finds the in-repo React canvases (smoke + blank + activity)", () => {
     // Solid entries also end in .canvas.tsx and are excluded below.
-    expect(Object.keys(CANVAS_MODULES).length).toBeGreaterThanOrEqual(2);
+    expect(Object.keys(CANVAS_MODULES).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("shows host activity through pier/host", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        ".pier/canvases/activity-overview/activity-overview.canvas.tsx"
+      ),
+      "utf8"
+    );
+    expect(source).toContain('useHostSnapshot("foreground-activity")');
+    expect(source).toContain("ItemGroup");
+    expect(source).toMatch(/from ["']pier\/host["']/);
+    expect(source).toMatch(/from ["']pier\/canvas["']/);
+    expect(source).not.toContain("window.pier");
+    expect(source).not.toContain("useActivityOverview");
+    expect(source).not.toContain("This canvas reads useHostSnapshot");
   });
 
   for (const [path, module] of Object.entries(CANVAS_MODULES)) {

@@ -40,6 +40,8 @@ interface SettingsDialogState {
   /** 打开设置对话框并定位到指定 section(右键「管理状态栏…」等入口用)。 */
   openSection: (section: SettingsSectionId) => void;
   pendingDestination: SettingsLeaveIntent | null;
+  /** One-shot focus on Pier Home in the projects shell. */
+  projectsFocusHome: boolean;
   /** Optional one-shot project path focus for the projects shell. */
   projectsFocusPath: string | null;
   /** Preferred tab inside the projects shell (environment | skills). */
@@ -66,12 +68,14 @@ interface SettingsDialogState {
  * before activeSection/isOpen change.
  *
  * Project settings IA: `environment` / `skills` deep links canonicalize to
- * `projects` and set `projectsTab`.
+ * `projects` and set `projectsTab`. The former `materials` alias still opens
+ * the projects shell but no longer selects a tab.
  */
 export const useSettingsDialogStore = create<SettingsDialogState>(
   (set, get) => ({
     activeSection: "appearance",
-    clearProjectsFocusPath: () => set({ projectsFocusPath: null }),
+    clearProjectsFocusPath: () =>
+      set({ projectsFocusHome: false, projectsFocusPath: null }),
     close: () => {
       get()
         .requestSettingsClose("close")
@@ -104,6 +108,7 @@ export const useSettingsDialogStore = create<SettingsDialogState>(
       state.requestSectionChange(nextSection).catch(() => undefined);
     },
     pendingDestination: null,
+    projectsFocusHome: false,
     projectsFocusPath: null,
     projectsTab: "skills",
     sectionGuards: {},

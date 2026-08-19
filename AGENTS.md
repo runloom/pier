@@ -164,7 +164,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 - **说用户动作，不说内部概念。** 反例：「没有可打开的终端选区」；正例：「请先在终端中选中文本。」
 - **失败与空态要带下一步。** 反例：「无项目上下文」；正例：「未打开项目」+「请先打开项目文件夹以浏览文件。」
-- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、工作台「组件」（不要写物料）、需要你处理（中文不要直出 Needs you）。
+- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、工作台「组件」（不要写物料）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）。
 - **实现词禁止进入前台主路径文案。** 包括但不限于：选区、上下文、面板参数、耐久性、绑定、运行标识、运行态、renderer、清单预览、hook（首次可写「钩子（hook）」）、tip tree、upstream（应写「上游分支」）。
 - **中文界面少夹英文状态码。** Git 状态用「分离头指针 / 合并中 / 变基中」等，不要用 DETACHED / MERGING 全大写码。
 - **fallback 英文与 en locale 同步可读**；改中文时必须核对英文是否同样术语化。
@@ -255,7 +255,7 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
 7. 菜单/列表的 `:focus` 背景高亮（Radix roving focus）保留；那是选中态，不是 UA outline。
 
 检查点在 `tests/unit/renderer/chart-focus-governance.test.ts`（锁定本节标题、全局
-outline 抑制、Chart/DataChart/NodeGraph 默认、状态徽标不进 Tab、`tabIndex={0}` 白名单、
+outline 抑制、Chart/DataChart/Mermaid 默认、状态徽标不进 Tab、`tabIndex={0}` 白名单、
 禁止 `ring-primary` focus 铬）。
 
 ### 颜色使用规范

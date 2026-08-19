@@ -46,6 +46,25 @@ export function SubTitle({ children }: { children: ReactNode }) {
   );
 }
 
+export function GraphLayerKey() {
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-muted-foreground text-xs">
+      <li className="flex items-center gap-1.5">
+        <span className="size-2.5 rounded-sm border border-status-info-border bg-status-info-bg" />
+        调用者
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span className="size-2.5 rounded-sm border border-status-success-border bg-status-success-bg" />
+        Pier CLI 产品面
+      </li>
+      <li className="flex items-center gap-1.5">
+        <span className="size-2.5 rounded-sm border border-status-done-border bg-status-done-bg" />
+        Pier main
+      </li>
+    </ul>
+  );
+}
+
 export function SectionLead({ children }: { children: ReactNode }) {
   return (
     <Text className="max-w-3xl text-sm leading-relaxed text-muted-foreground">{children}</Text>

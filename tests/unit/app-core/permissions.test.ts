@@ -1,4 +1,8 @@
 import { authorizeCommand } from "@main/app-core/permissions.ts";
+import {
+  CANVAS_HOST_ALLOWED_COMMANDS,
+  isCanvasHostCommandAllowed,
+} from "@shared/contracts/canvas-host.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,
@@ -373,5 +377,64 @@ describe("authorizeCommand", () => {
       client("cli-local", ["window:control"])
     );
     expect(cliResult.ok).toBe(false);
+  });
+
+  it("allows canvas clients to read files and git status", () => {
+    expect(pierClientKindSchema.parse("canvas")).toBe("canvas");
+    expect(
+      authorizeCommand(
+        { path: "", root: "/tmp", type: "file.list" },
+        client("canvas")
+      )
+    ).toEqual({ ok: true });
+    expect(
+      authorizeCommand({ cwd: "/tmp", type: "git.getStatus" }, client("canvas"))
+    ).toEqual({ ok: true });
+  });
+
+  it("denies canvas clients writes and window close", () => {
+    expect(
+      authorizeCommand(
+        {
+          contents: "x",
+          path: "notes.md",
+          root: "/tmp",
+          type: "file.writeText",
+        },
+        client("canvas")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: file:write",
+    });
+    expect(
+      authorizeCommand(
+        { type: "window.close", windowId: "main" },
+        client("canvas")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: window:close",
+    });
+  });
+
+  it("authorizes every canvas host allowlisted command for the canvas client", () => {
+    for (const type of CANVAS_HOST_ALLOWED_COMMANDS) {
+      const result = authorizeCommand(
+        { type } as PierCommand,
+        client("canvas")
+      );
+      expect(result.ok, type).toBe(true);
+    }
+  });
+
+  it("keeps file.openPath readable by capability but off the canvas allowlist", () => {
+    expect(
+      authorizeCommand(
+        { path: "/tmp/a.md", type: "file.openPath" },
+        client("canvas")
+      )
+    ).toEqual({ ok: true });
+    expect(isCanvasHostCommandAllowed("file.openPath")).toBe(false);
   });
 });

@@ -5,13 +5,13 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  Mermaid,
   Frame,
   Item,
   ItemContent,
   ItemDescription,
   ItemGroup,
   ItemTitle,
-  MermaidDiagram,
   Row,
   Separator,
   Stack,
@@ -64,13 +64,21 @@ export default function CompositionCanvas() {
 
         <Stack gap={8}>
           <Text className="text-sm font-medium">Critical path</Text>
-          <MermaidDiagram
+          <Mermaid
             aria-label="Example flow"
-            source={`flowchart LR
-  A[Input] --> B[Process]
-  B --> C[Output]
-  B --> D[Error]
-  D --> B`}
+            direction="left-to-right"
+            edges={[
+              { source: "A", target: "B" },
+              { source: "B", target: "C" },
+              { source: "B", target: "D" },
+              { source: "D", target: "B" },
+            ]}
+            nodes={[
+              { id: "A", kind: "artifact", title: "Input" },
+              { id: "B", kind: "tool", title: "Process" },
+              { id: "C", title: "Output", tone: "success" },
+              { id: "D", title: "Error", tone: "danger" },
+            ]}
           />
         </Stack>
 

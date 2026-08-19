@@ -33,7 +33,7 @@ const PRODUCT_SURFACE_SLOTS = new Set([
   "item-description",
   "item-media",
   "item-title",
-  "mermaid-diagram",
+  "mermaid",
   "separator",
   "table",
   "table-body",

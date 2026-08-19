@@ -110,8 +110,9 @@ describe("本机运行控制协议闭环（v7）", () => {
   it("双路径叙事：一次性原生、持久主路径", async () => {
     const data = await readData();
     expect(data.mainLoop.caption).toMatch(/原生 agent/u);
-    expect(data.mainLoop.diagram).toMatch(/原生 agent CLI/u);
-    expect(data.mainLoop.diagram).not.toMatch(/\binvoke\b/u);
+    const diagramText = JSON.stringify(data.mainLoop.diagram);
+    expect(diagramText).toMatch(/原生 agent CLI/u);
+    expect(diagramText).not.toMatch(/\binvoke\b/u);
     expect(data.decision).toMatch(/不实现 Pier invoke|不实现.*invoke/u);
     expect(data.bluf).toMatch(/不提供 agents invoke/u);
   });

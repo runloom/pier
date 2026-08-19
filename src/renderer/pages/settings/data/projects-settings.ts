@@ -1,9 +1,10 @@
 /**
  * Project settings shell: one settings nav entry owns the shared project
  * index; Environment, Skills, MCP, and General are tabs inside a selected
- * project. Rules are deferred (type kept for persisted tab ids only).
+ * project. Canvas materials are a kit canvas, not a settings tab. Rules and
+ * the former materials tab id are kept for persisted values only.
  *
- * - Nav id: `projects` (aliases: `environment`, `skills` → same section + tab)
+ * - Nav id: `projects` (aliases: `environment`, `skills`, `materials`)
  * - List → project detail → Environment | Skills | MCP | General
  * - Home detail → Skills | MCP
  * - Domain stores/commands stay split (local-environments vs project-skills)
@@ -13,12 +14,17 @@ export type ProjectsSettingsTab =
   | "rules"
   | "skills"
   | "mcp"
-  | "general";
+  | "general"
+  | "materials";
 
 export const PROJECTS_SECTION_ID = "projects" as const;
 
-/** Legacy section ids that deep-link into the projects shell. */
-export const PROJECTS_SECTION_ALIASES = ["environment", "skills"] as const;
+/** Legacy / deep-link section ids that open the projects shell. */
+export const PROJECTS_SECTION_ALIASES = [
+  "environment",
+  "skills",
+  "materials",
+] as const;
 
 export function resolveProjectsSectionId(
   section: string

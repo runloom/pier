@@ -19,10 +19,7 @@ export default defineConfig({
         import.meta.dirname,
         "tests/support/pier-canvas.ts"
       ),
-      "pier/visualizations": resolve(
-        import.meta.dirname,
-        "tests/support/pier-visualizations.ts"
-      ),
+      "pier/host": resolve(import.meta.dirname, "tests/support/pier-host.ts"),
     },
   },
   test: {

@@ -2,7 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@pier/ui/tailwind-theme.css";
-@import "@xyflow/react/dist/style.css";
 
 @source "../../../packages/ui/src";
 @source "../../plugins";

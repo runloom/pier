@@ -21,6 +21,7 @@ import {
   type PierAgentRuntimeIndexAPI,
 } from "./agent-runtime-index-api.ts";
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
+import { canvasHostApi, type PierCanvasHostAPI } from "./canvas-host-api.ts";
 import { commentsApi, type PierCommentsAPI } from "./comments-api.ts";
 import { diagnosticsApi, type PierDiagnosticsAPI } from "./diagnostics-api.ts";
 import {
@@ -152,6 +153,7 @@ export interface PierWindowAPI {
   app: AppPreloadApi;
   appQuit: PierAppQuitAPI;
   appUpdate: AppUpdatePreloadApi;
+  canvasHost: PierCanvasHostAPI;
   catalog: PierHostCatalogAPI;
   clipboard: PierClipboardAPI;
   closeWindow: (windowId: string) => Promise<void>;
@@ -412,6 +414,7 @@ const api: PierWindowAPI = {
   notifications: notificationsApi,
   notificationCenter: notificationCenterApi,
   catalog: hostCatalogApi,
+  canvasHost: canvasHostApi,
   comments: commentsApi,
   diagnostics: diagnosticsApi,
   plugins: pluginsApi,
