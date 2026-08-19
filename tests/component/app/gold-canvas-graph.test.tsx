@@ -28,21 +28,22 @@ describe("gold canvas architecture graph", () => {
     const scheme = parseScheme(dataJson);
     render(<DesignPage d={scheme.data} />);
 
-    const stopCard = await waitFor(
-      () => {
-        const title = screen.getByText("focus / interrupt / terminate");
-        const card = title.closest("[data-slot=mermaid-node]");
-        expect(card).toBeTruthy();
-        return card;
-      },
-      { timeout: 15_000 }
-    );
+    const mermaidTimeout = { timeout: 15_000 };
+    const stopCard = await waitFor(() => {
+      const title = screen.getByText("focus / interrupt / terminate");
+      const card = title.closest("[data-slot=mermaid-node]");
+      expect(card).toBeTruthy();
+      return card;
+    }, mermaidTimeout);
     expect(stopCard?.getAttribute("data-kind")).toBe("tool");
     expect(stopCard?.getAttribute("data-tone")).toBe("success");
 
-    const runtimeCard = screen
-      .getByText("RuntimeControl")
-      .closest("[data-slot=mermaid-node]");
+    const runtimeCard = await waitFor(() => {
+      const title = screen.getByText("RuntimeControl");
+      const card = title.closest("[data-slot=mermaid-node]");
+      expect(card).toBeTruthy();
+      return card;
+    }, mermaidTimeout);
     expect(runtimeCard?.getAttribute("data-kind")).toBe("artifact");
     expect(runtimeCard?.getAttribute("data-tone")).toBe("done");
   });

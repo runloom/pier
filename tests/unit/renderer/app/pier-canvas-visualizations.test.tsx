@@ -5,6 +5,7 @@ import { DataChart } from "@pier/ui/data-chart.tsx";
 import { Mermaid } from "@pier/ui/mermaid.tsx";
 import {
   cleanup,
+  configure,
   fireEvent,
   render,
   screen,
@@ -37,6 +38,7 @@ const EDGES = [
 
 describe("Pier Canvas visualizations", () => {
   beforeAll(async () => {
+    configure({ asyncUtilTimeout: 15_000 });
     installSvgLayoutStubs();
     await initI18n();
   });

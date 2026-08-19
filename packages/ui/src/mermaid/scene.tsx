@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { ImagePreviewCanvasLabels } from "../image-preview/controls.tsx";
 import { HtmlWorldCanvas } from "../image-preview/world-canvas.tsx";
@@ -109,7 +110,11 @@ export function MermaidScene(props: MermaidProps) {
           return;
         }
         hostRef.current.innerHTML = result.svg;
-        paintRef.current();
+        // createRoot.render is async; flush so every slotted card is in the
+        // DOM before tests / click handlers look for titles.
+        flushSync(() => {
+          paintRef.current();
+        });
       })
       .catch(() => {
         if (!cancelled) {
