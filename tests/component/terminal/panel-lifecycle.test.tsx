@@ -2239,6 +2239,7 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
+    expect(props.api.setActive).not.toHaveBeenCalled();
     requestTerminalPresentationMock.mockClear();
 
     props.emitVisibility({ isVisible: false });

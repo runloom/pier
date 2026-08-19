@@ -5,6 +5,8 @@ import { gitChangeSummaryStatToken } from "@main/services/git/change-summary.ts"
 import {
   type ExecGitRaw,
   execGit,
+  GitExecError,
+  GitExecRawError,
   type GitExecRawResult,
 } from "@main/services/git/exec.ts";
 import { GitReviewBudget } from "@main/services/git-review/budget.ts";
@@ -1190,6 +1192,68 @@ describe("GitReviewIndexReader", () => {
       Buffer.byteLength(failure.message ?? "", "utf8")
     ).toBeLessThanOrEqual(4096);
     expect(failure.message).not.toContain("�");
+  });
+
+  it("GitExecError 的 index.lock 争用映射为可重试的 indexLocked", () => {
+    const failure = toGitReviewIndexFailure(
+      new GitExecError({
+        args: ["add", "--", "a.ts"],
+        causeKind: "exit",
+        cwd: "/repo",
+        exitCode: 128,
+        message:
+          "git 退出码 128: fatal: Unable to create '/repo/.git/worktrees/feat-canvas/index.lock': File exists.",
+        stderr:
+          "fatal: Unable to create '/repo/.git/worktrees/feat-canvas/index.lock': File exists.",
+        stdout: "",
+      })
+    );
+    expect(failure).toMatchObject({
+      kind: "error",
+      message: null,
+      reason: "indexLocked",
+      retryable: true,
+    });
+  });
+
+  it("其它 GitExecError 归因为 commandFailed，不再落到 internal", () => {
+    const failure = toGitReviewIndexFailure(
+      new GitExecError({
+        args: ["status"],
+        causeKind: "exit",
+        cwd: "/repo",
+        exitCode: 128,
+        message: "git 退出码 128: fatal: not a git repository",
+        stderr: "fatal: not a git repository",
+        stdout: "",
+      })
+    );
+    expect(failure).toMatchObject({
+      kind: "error",
+      reason: "commandFailed",
+      retryable: true,
+    });
+  });
+
+  it("GitExecRawError 的 index.lock 同样映射为 indexLocked", () => {
+    const message =
+      "git 退出码 128: fatal: Unable to create '/repo/.git/index.lock'";
+    const failure = toGitReviewIndexFailure(
+      new GitExecRawError({
+        args: ["add"],
+        causeKind: "exit",
+        cwd: "/repo",
+        exitCode: 128,
+        message,
+        stderrBytes: Buffer.byteLength(message),
+        stderrTail: Buffer.from(message),
+        stdoutBytes: 0,
+        stdoutTail: Buffer.alloc(0),
+      })
+    );
+    expect(failure.reason).toBe("indexLocked");
+    expect(failure.retryable).toBe(true);
+    expect(failure.message).toBeNull();
   });
 
   it("内部结果契约回归归因为 internal，不伪装成用户输入错误", async () => {

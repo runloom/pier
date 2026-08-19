@@ -3,14 +3,22 @@
  * screen 仅当前 viewport；turn 只 accepted；无 transcript/history。
  */
 import { z } from "zod";
+import {
+  TERMINAL_SCREEN_DEFAULT_MAX_BYTES,
+  TERMINAL_SCREEN_DEFAULT_MAX_LINES,
+  TERMINAL_SCREEN_HARD_MAX_BYTES,
+  TERMINAL_SCREEN_MAX_LINES_LIMIT,
+} from "../terminal/screen.ts";
 import { runtimeRefSchema } from "./runtime-ref.ts";
 
 const nonEmpty = z.string().min(1);
 
-/** screen 默认有界：行/字节上限（单一来源）。 */
-export const AGENTS_SCREEN_DEFAULT_MAX_LINES = 200;
-export const AGENTS_SCREEN_DEFAULT_MAX_BYTES = 65_536;
-export const AGENTS_SCREEN_HARD_MAX_BYTES = 1_048_576;
+/** screen 默认有界：行/字节上限（单一来源：terminal/screen.ts）。 */
+export const AGENTS_SCREEN_DEFAULT_MAX_LINES =
+  TERMINAL_SCREEN_DEFAULT_MAX_LINES;
+export const AGENTS_SCREEN_DEFAULT_MAX_BYTES =
+  TERMINAL_SCREEN_DEFAULT_MAX_BYTES;
+export const AGENTS_SCREEN_HARD_MAX_BYTES = TERMINAL_SCREEN_HARD_MAX_BYTES;
 
 // --- start ---
 
@@ -77,7 +85,7 @@ export const agentsScreenParamsSchema = z
       .number()
       .int()
       .positive()
-      .max(2000)
+      .max(TERMINAL_SCREEN_MAX_LINES_LIMIT)
       .optional()
       .default(AGENTS_SCREEN_DEFAULT_MAX_LINES),
     maxBytes: z

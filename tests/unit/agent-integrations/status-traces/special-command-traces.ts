@@ -87,6 +87,7 @@ function terminalAction(
 }
 
 const cursorActions = commonTraceActions({
+  interactiveToolWaiting: { toolName: "CreatePlan" },
   promptNativeEvent: "beforeSubmitPrompt",
   subagent: true,
   subagentStartNativeEvent: "subagentStart",
@@ -365,6 +366,7 @@ export const SPECIAL_COMMAND_STATUS_TRACES = [
       "ready",
       "processing",
       "tool",
+      "waiting",
       "error",
       "completed",
       "interrupted",

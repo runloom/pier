@@ -354,7 +354,7 @@ export default function PierCliUserManualCanvas() {
                     </Button>
                   ))}
                   {hits.length >= 12 ? (
-                    <Text tone="tertiary" className="px-2 py-1 text-[11px]">
+                    <Text tone="tertiary" className="px-2 py-1 text-xs">
                       仅显示前 12 条，请缩小关键词。
                     </Text>
                   ) : null}

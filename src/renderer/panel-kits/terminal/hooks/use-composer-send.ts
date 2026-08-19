@@ -22,23 +22,34 @@ const AGENT_CLIPBOARD_SUPPRESS_HOLD_MS = 200;
  *   逃生舱（草稿保留，用户可自行决定），避免探针误判时功能彻底不可用。
  * - agent 发送期间 suppress 系统剪贴板图，避免短 bracketed paste 被 Grok
  *   误挂成 `[Image #N]`（例如只输入「你好」）。
+ * - 草稿从编辑器现场读取，避免 IME compositionend 尚未灌进 React state
+ *   时把未提交的汉字漏掉或拆成 UTF-8 字节。
  */
 export function useTerminalComposerSend(opts: {
   buildPayloadOrReport: (value: string) => string | null;
   disabled: boolean;
+  getDraft: () => string;
+  isComposing: () => boolean;
   onSent: () => void;
   panelId: string;
   t: (key: string) => string;
-  value: string;
 }): { send: () => void } {
-  const { buildPayloadOrReport, disabled, onSent, panelId, t, value } = opts;
+  const {
+    buildPayloadOrReport,
+    disabled,
+    getDraft,
+    isComposing,
+    onSent,
+    panelId,
+    t,
+  } = opts;
   const sendingRef = useRef(false);
 
   const send = () => {
-    if (disabled || sendingRef.current) {
+    if (disabled || sendingRef.current || isComposing()) {
       return;
     }
-    const payload = buildPayloadOrReport(value);
+    const payload = buildPayloadOrReport(getDraft());
     if (payload == null) {
       return;
     }

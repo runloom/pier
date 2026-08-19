@@ -1,7 +1,10 @@
 /**
  * Shared chrome for @ path / skill / attachment / review chips.
  * Horizontal gap: host ::before/::after in globals.css (caret hit-box).
- * Do not lock h-5 / 0.85em / host 1.25rem — inherit 1em, export label baseline.
+ * Do not lock h-5 / arbitrary em / host 1.25rem. Label is `text-xs` (one step
+ * below the editor `text-sm`). Pill height is `h-lh` + shared
+ * `COMPOSER_LINE_LEADING_CLASS` so 1lh matches the editor line; `middle` on a
+ * shorter box sits low next to CJK.
  *
  * Tone map — 3 valid families + 2 states:
  * - 引用 @ path     → status-info    (blue)
@@ -14,9 +17,11 @@
  */
 export const COMPOSER_CHIP_HOST_CLASS = "composer-ref-chip-host";
 
+/** Editor line-height token. Chip `h-lh` must use this same class. */
+export const COMPOSER_LINE_LEADING_CLASS = "leading-5";
+
 /** Visual pill only; tone colors are applied by each node. */
-export const COMPOSER_CHIP_CLASS =
-  "composer-ref-chip inline-flex max-w-[16rem] items-baseline gap-0.5 rounded-sm border px-1.5 py-px select-none text-[1em] leading-none";
+export const COMPOSER_CHIP_CLASS = `composer-ref-chip inline-flex h-lh max-w-[16rem] items-center gap-0.5 rounded-sm border px-1.5 select-none text-xs ${COMPOSER_LINE_LEADING_CLASS}`;
 
 export const COMPOSER_CHIP_TONE_PATH =
   "border-status-info-border bg-status-info-bg text-status-info-fg";

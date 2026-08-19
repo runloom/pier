@@ -46,7 +46,7 @@ export function reviewSurfaceSectionKey(
   diffBase: GitReviewReadingSurface
 ): string | null {
   const group = groupForDiffBase(diffBase);
-  // 金标准：导航优先 content 槽；无 content 则 null（不假 scroll）
+  // 导航优先正文槽（content / notice）；仅 meta 时回退树 section（不假 scroll）
   const content = entry.renderSlots.find(
     (slot) => slot.group === group && isReviewSlotIncludedInBody(slot)
   );

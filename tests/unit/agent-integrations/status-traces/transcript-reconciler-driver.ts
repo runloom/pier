@@ -2,10 +2,12 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLAUDE_HOOK_EVENTS } from "@main/services/agents/integrations/claude.ts";
+import { CODEBUDDY_HOOK_EVENTS } from "@main/services/agents/integrations/codebuddy.ts";
 import { CODEX_HOOK_EVENTS } from "@main/services/agents/integrations/codex.ts";
 import { GROK_HOOK_EVENTS } from "@main/services/agents/integrations/grok.ts";
 import type { NestedHookEventSpec } from "@main/services/agents/integrations/shared.ts";
 import { createClaudeTranscriptReconciler } from "@main/services/agents/integrations/transcript/claude-reconciler.ts";
+import { createCodebuddyTranscriptReconciler } from "@main/services/agents/integrations/transcript/codebuddy-reconciler.ts";
 import { createCodexTranscriptReconciler } from "@main/services/agents/integrations/transcript/codex-reconciler.ts";
 import { createGrokTranscriptReconciler } from "@main/services/agents/integrations/transcript/grok-reconciler.ts";
 import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
@@ -34,7 +36,7 @@ async function waitForEvents(
 }
 
 export async function createTranscriptReconcilerProducer(
-  agentId: "claude" | "codex" | "grok"
+  agentId: "claude" | "codebuddy" | "codex" | "grok"
 ): Promise<AgentStatusTraceProducer> {
   const root = await mkdtemp(
     join(tmpdir(), `pier-${agentId}-reconcile-trace-`)
@@ -42,17 +44,26 @@ export async function createTranscriptReconcilerProducer(
   const queue: AgentHookEventPayloadV3[] = [];
   let transcriptPath: string;
   let reconciler: TranscriptReconciler;
-  if (agentId === "claude") {
+  if (agentId === "claude" || agentId === "codebuddy") {
     const transcriptRoot = join(root, "projects");
     await mkdir(transcriptRoot, { recursive: true });
     transcriptPath = join(transcriptRoot, "session.jsonl");
     await writeFile(transcriptPath, '{"type":"summary"}\n', "utf8");
-    reconciler = createClaudeTranscriptReconciler({
-      onTerminalEvent: (event) => {
-        if (event.kind === "agentEvent" && event.v === 3) queue.push(event);
-      },
-      transcriptRoot,
-    });
+    const onTerminalEvent = (event: { kind?: string; v?: number }) => {
+      if (event.kind === "agentEvent" && event.v === 3) {
+        queue.push(event as AgentHookEventPayloadV3);
+      }
+    };
+    reconciler =
+      agentId === "claude"
+        ? createClaudeTranscriptReconciler({
+            onTerminalEvent,
+            transcriptRoot,
+          })
+        : createCodebuddyTranscriptReconciler({
+            onTerminalEvent,
+            transcriptRoot,
+          });
   } else if (agentId === "codex") {
     const transcriptRoot = join(root, "sessions");
     await mkdir(transcriptRoot, { recursive: true });
@@ -84,6 +95,8 @@ export async function createTranscriptReconcilerProducer(
   let events: readonly NestedHookEventSpec[] = GROK_HOOK_EVENTS;
   if (agentId === "claude") {
     events = CLAUDE_HOOK_EVENTS;
+  } else if (agentId === "codebuddy") {
+    events = CODEBUDDY_HOOK_EVENTS;
   } else if (agentId === "codex") {
     events = CODEX_HOOK_EVENTS;
   }

@@ -1,6 +1,7 @@
 /**
  * 落盘 layout 前剥离短暂 panel params。
- * 例如审查 tab 的 tabChangeSummary（index 派生，重启后会重算，不应进 JSON）。
+ * 例如审查 tab 的 tabChangeSummary（未提交与状态栏同源、commit/branch 来自审查
+ * index；重启后会重算，不应进 JSON）。
  */
 
 /** 不进持久化 layout 的 params 键（全产品共用白名单）。 */

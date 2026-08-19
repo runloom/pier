@@ -21,6 +21,16 @@ function gitChangesTabChromeLabels(context: RendererPluginContext) {
       undefined,
       "Branch"
     ),
+    fileCountMany: context.i18n.t(
+      "ui.changeSummaryFilesVisible",
+      undefined,
+      "{{count}} files"
+    ),
+    fileCountOne: context.i18n.t(
+      "ui.changeSummaryFileVisible",
+      undefined,
+      "{{count}} file"
+    ),
     pathLabel: context.i18n.t("ui.reviewTabTooltipPath", undefined, "Path"),
     targetBranchLabel: context.i18n.t(
       "ui.reviewScopeBranch",

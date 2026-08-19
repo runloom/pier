@@ -23,6 +23,7 @@ import {
   readReviewSession,
   reviewSurfaceSessionKey,
 } from "@plugins/builtin/git/renderer/review/session-cache.ts";
+import { resetGitStatusSessionsForTests } from "@plugins/builtin/git/renderer/status-state.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
   GitReviewFileDocumentOk,
@@ -31,7 +32,10 @@ import type {
   GitReviewIndexOk,
   GitReviewIndexResult,
 } from "@shared/contracts/git/review.ts";
-import type { GitCommitSearchResult } from "@shared/contracts/git.ts";
+import type {
+  GitCommitSearchResult,
+  GitStatus,
+} from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   act,
@@ -485,12 +489,129 @@ function panelProps(
   } as unknown as IDockviewPanelProps;
 }
 
+function defaultGitStatus(
+  changeSummary: GitStatus["changeSummary"] = {
+    changedFiles: 0,
+    deletions: 0,
+    excludedFiles: 0,
+    insertions: 0,
+    kind: "lineDelta",
+  }
+): GitStatus {
+  return {
+    branch: {
+      ahead: 0,
+      behind: 0,
+      branch: "main",
+      mergedIntoDefault: null,
+      oid: "abc",
+      upstream: null,
+      upstreamGone: false,
+    },
+    changeSummary,
+    counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+    files: [],
+    remoteSync: null,
+    repoState: { kind: "clean" },
+    stashCount: 0,
+  };
+}
+
+function createGitWatchFanout(
+  watch: RendererPluginContext["git"]["watch"] | undefined
+): RendererPluginContext["git"]["watch"] {
+  type GitWatch = RendererPluginContext["git"]["watch"];
+  type GitWatchListener = Parameters<GitWatch>[1];
+  type GitWatchOnStartFailure = NonNullable<Parameters<GitWatch>[2]>;
+  type GitWatchOnReady = NonNullable<Parameters<GitWatch>[3]>;
+  interface WatchSlot {
+    readonly listeners: Set<GitWatchListener>;
+    readonly onReady: Set<GitWatchOnReady>;
+    readonly onStartFailure: Set<GitWatchOnStartFailure>;
+    unsubscribe: () => void;
+  }
+  const slots = new Map<string, WatchSlot>();
+
+  const attach = (
+    root: string,
+    slot: WatchSlot,
+    listener: GitWatchListener,
+    onStartFailure: Parameters<GitWatch>[2],
+    onReady: Parameters<GitWatch>[3]
+  ): (() => void) => {
+    slot.listeners.add(listener);
+    if (onReady) {
+      slot.onReady.add(onReady);
+    }
+    if (onStartFailure) {
+      slot.onStartFailure.add(onStartFailure);
+    }
+    return () => {
+      slot.listeners.delete(listener);
+      if (onReady) {
+        slot.onReady.delete(onReady);
+      }
+      if (onStartFailure) {
+        slot.onStartFailure.delete(onStartFailure);
+      }
+      if (slot.listeners.size === 0) {
+        slot.unsubscribe();
+        slots.delete(root);
+      }
+    };
+  };
+
+  return (root, listener, onStartFailure, onReady) => {
+    if (!watch) {
+      return () => undefined;
+    }
+    const existing = slots.get(root);
+    if (existing) {
+      return attach(root, existing, listener, onStartFailure, onReady);
+    }
+    const slot: WatchSlot = {
+      listeners: new Set(),
+      onReady: new Set(),
+      onStartFailure: new Set(),
+      unsubscribe: () => undefined,
+    };
+    slots.set(root, slot);
+    const unsubscribeClient = attach(
+      root,
+      slot,
+      listener,
+      onStartFailure,
+      onReady
+    );
+    slot.unsubscribe = watch(
+      root,
+      (event) => {
+        for (const current of slot.listeners) {
+          current(event);
+        }
+      },
+      (error) => {
+        for (const current of slot.onStartFailure) {
+          current(error);
+        }
+      },
+      () => {
+        for (const current of slot.onReady) {
+          current();
+        }
+      }
+    );
+    return unsubscribeClient;
+  };
+}
+
 function pluginContext(input: {
   appearance?: RendererPluginAppearance;
   appearanceOnDidChange?: RendererPluginContext["appearance"]["onDidChange"];
   cancelReviewRequest?: RendererPluginContext["git"]["cancelReviewRequest"];
   getReviewFileDocument?: RendererPluginContext["git"]["getReviewFileDocument"];
   getReviewIndex?: RendererPluginContext["git"]["getReviewIndex"];
+  getStatus?: RendererPluginContext["git"]["getStatus"];
   searchBranches?: RendererPluginContext["git"]["searchBranches"];
   searchCommits?: RendererPluginContext["git"]["searchCommits"];
   translate?: RendererPluginContext["i18n"]["t"];
@@ -570,31 +691,9 @@ function pluginContext(input: {
           message: null,
           status: "ok" as const,
         })),
-      getStatus: vi.fn(async () => ({
-        branch: {
-          ahead: 0,
-          behind: 0,
-          branch: "main",
-          mergedIntoDefault: null,
-          oid: "abc",
-          upstream: null,
-          upstreamGone: false,
-        },
-        changeSummary: {
-          changedFiles: 0,
-          deletions: 0,
-          excludedFiles: 0,
-          insertions: 0,
-          kind: "lineDelta" as const,
-        },
-        counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
-        files: [],
-        remoteSync: null,
-        repoState: { kind: "clean" as const },
-        stashCount: 0,
-      })),
+      getStatus: input.getStatus ?? vi.fn(async () => defaultGitStatus()),
       stage: vi.fn(async () => true),
-      watch: input.watch ?? vi.fn(() => () => undefined),
+      watch: createGitWatchFanout(input.watch),
     },
 
     i18n: {
@@ -681,6 +780,7 @@ afterEach(() => {
   cleanup();
   // cleanup unmount 会写 session；必须在其后清空。
   clearAllReviewSessionsForTests();
+  resetGitStatusSessionsForTests();
   // Shared expansion authority scopes leak collapsed/expanded intents across
   // tests that reuse contextId + gitRoot; clear so file-ancestors seed re-runs.
   resetTreeExpansionAuthoritiesForTests();
@@ -692,6 +792,62 @@ afterEach(() => {
 });
 
 describe("Git review panel", () => {
+  it("未提交 tabChangeSummary 写入状态栏同源 HEAD 净变化", async () => {
+    const changeSummary = {
+      changedFiles: 2,
+      deletions: 3,
+      excludedFiles: 0,
+      insertions: 12,
+      kind: "lineDelta" as const,
+    };
+    const stagedOverlap = {
+      changedFiles: 1,
+      deletions: 1,
+      excludedFiles: 0,
+      insertions: 2,
+      kind: "lineDelta" as const,
+    };
+    const unstagedOverlap = {
+      changedFiles: 1,
+      deletions: 2,
+      excludedFiles: 0,
+      insertions: 10,
+      kind: "lineDelta" as const,
+    };
+    const context = pluginContext({
+      getReviewIndex: vi.fn(async () =>
+        indexResult([entry(0)], {
+          staged: stagedOverlap,
+          unstaged: unstagedOverlap,
+        })
+      ),
+      getStatus: vi.fn(async () => defaultGitStatus(changeSummary)),
+    });
+    const Panel = createGitChangesPanel(context);
+    const harness = createPanelHarness();
+    render(<Panel {...panelProps(harness)} />);
+    await waitFor(() =>
+      expect(harness.api.updateParameters).toHaveBeenCalledWith({
+        tabChangeSummary: changeSummary,
+      })
+    );
+  });
+
+  it("同一 gitRoot 的审查 index 与状态会话只订阅一次 watch", async () => {
+    const watch = vi.fn((_root, _listener, _onStartFailure, onReady) => {
+      onReady?.();
+      return () => undefined;
+    });
+    const context = pluginContext({
+      getReviewIndex: vi.fn(async () => indexResult([entry(0)])),
+      watch,
+    });
+    const Panel = createGitChangesPanel(context);
+    render(<Panel {...panelProps(createPanelHarness())} />);
+    await waitFor(() => expect(watch).toHaveBeenCalled());
+    expect(watch).toHaveBeenCalledTimes(1);
+  });
+
   it("未提交页签复用目录树文案和顺序，并只展示树中存在的分组", async () => {
     const context = pluginContext({
       getReviewFileDocument: vi.fn(async () => documentResult(0)),
@@ -3599,7 +3755,6 @@ describe("Git review panel", () => {
   });
 
   it("状态文件使用单一 HEAD→Working Tree 文件事实", async () => {
-    // 金标准：binary/notice 默认不进正文；侧栏仍有树项，正文为空态
     const path = "src/current.bin";
     const currentEntry: GitReviewIndexEntry = {
       ...entry(0, path),
@@ -3651,27 +3806,31 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
+    // 默认面 = 已暂存；二进制 notice 与树同列，不拉 document
     await waitFor(() =>
-      expect(
-        view.container.querySelector(
-          '[data-git-review-document-content="empty"]'
-        )
-      ).not.toBeNull()
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        "staged:binary"
+      )
     );
-    // notice 不进 materialize 主路径
+    expect(activeDiff(view.container)).toHaveTextContent(
+      "Binary binary — content not shown"
+    );
     expect(getReviewFileDocument).not.toHaveBeenCalled();
-    expect(findTreeItem(view.container, "current.bin")).toBeTruthy();
-    fireEvent.mouseDown(view.getByRole("tab", { name: "Staged Changes" }), {
-      button: 0,
-      ctrlKey: false,
-    });
+    expect(findTreeItem(view.container, "staged-current.bin")).toBeTruthy();
+    fireEvent.click(findTreeItem(view.container, "staged-current.bin"));
     await waitFor(() =>
-      expect(
-        view.container.querySelector(
-          '[data-git-review-document-content="empty"]'
-        )
-      ).not.toBeNull()
+      expect(scrollToItem).toHaveBeenCalledWith("staged:binary")
     );
+
+    await selectUncommittedTab(view, "Changes");
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        "unstaged:binary"
+      )
+    );
+    expect(getReviewFileDocument).not.toHaveBeenCalled();
   });
 
   it("系统语言的解析 locale 变化会同时更新状态正文和缓存身份", async () => {

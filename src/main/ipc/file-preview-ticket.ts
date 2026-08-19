@@ -4,7 +4,9 @@ import {
   filePreviewRuntimeRevokeRequestSchema,
   filePreviewTicketIssueRequestSchema,
   filePreviewTicketReleaseRequestSchema,
+  isGitBlobFilePreviewLocator,
 } from "@shared/contracts/file/preview-ticket.ts";
+import { gitReviewRootPathSchema } from "@shared/contracts/git/review.ts";
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { type IpcMainInvokeEvent, ipcMain, type WebContents } from "electron";
@@ -15,6 +17,7 @@ import {
   filePreviewTicketRegistry,
 } from "../files/preview-ticket-registry.ts";
 import { windowManager } from "../windows/manager.ts";
+import { resolveCanonicalGitWatchRoot } from "./git-watch-root.ts";
 import { isTrustedMainFrame } from "./trusted-main-frame.ts";
 
 interface RuntimeLease {
@@ -157,6 +160,17 @@ export function registerFilePreviewTicketIpc(): void {
         return { issued: false, reason: "invalid-request" } as const;
       const lease = await liveLease(event, parsed.data.leaseId);
       if (!lease) return { issued: false, reason: "forbidden" } as const;
+      let locator = parsed.data.locator;
+      if (isGitBlobFilePreviewLocator(locator)) {
+        if (!gitReviewRootPathSchema.safeParse(locator.gitRoot).success) {
+          return { issued: false, reason: "invalid-request" } as const;
+        }
+        const gitRoot = await resolveCanonicalGitWatchRoot(locator.gitRoot);
+        if (gitRoot === null) {
+          return { issued: false, reason: "not-found" } as const;
+        }
+        locator = { ...locator, gitRoot };
+      }
       if (
         parsed.data.previousTicket &&
         filePreviewTicketRegistry.resolve(
@@ -168,7 +182,7 @@ export function registerFilePreviewTicketIpc(): void {
       return {
         issued: true,
         ...filePreviewTicketRegistry.issue({
-          locator: parsed.data.locator,
+          locator,
           owner: lease.owner,
         }),
       } as const;

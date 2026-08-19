@@ -99,10 +99,7 @@ function KpiTile({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <span
-        className={cn(
-          "truncate text-muted-foreground leading-none",
-          primary ? "text-xs" : "text-[11px]"
-        )}
+        className={cn("truncate text-muted-foreground text-xs leading-none")}
       >
         {label}
       </span>
@@ -323,7 +320,7 @@ export function CostOverviewWidget({
           >
             {t("workbench.widget.costOverview.description")}
           </p>
-          <p className="text-[11px] text-muted-foreground/80">
+          <p className="text-muted-foreground/80 text-xs">
             {t("workbench.widget.costOverview.rangeLabel", {
               count: view.rangeDays,
             })}

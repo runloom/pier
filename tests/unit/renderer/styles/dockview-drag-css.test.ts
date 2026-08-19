@@ -186,6 +186,10 @@ describe("Pier dockview drag CSS", () => {
     );
     expect(css).toContain("color: var(--status-success-fg)");
     expect(css).toContain(
+      '.pier-panel-tab-icon[data-panel-tab-icon="pier.files.project"]'
+    );
+    expect(css).toContain("color: var(--pier-file-icon-yellow)");
+    expect(css).toContain(
       '.pier-panel-tab-icon[data-panel-tab-icon="workbench"]'
     );
     expect(css).toContain("color: var(--pier-file-icon-indigo)");

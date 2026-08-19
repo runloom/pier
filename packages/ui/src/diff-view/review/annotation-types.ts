@@ -15,6 +15,7 @@
  */
 
 import type { PierHunkAnnotationMetadata } from "../hunk-actions.tsx";
+import type { PierImageDiffAnnotationMetadata } from "../image-diff/annotation.ts";
 import type { PierDiffReviewDriftThread } from "../items.ts";
 
 /** 行内评论线程 annotation metadata（激活态：已有线程行内展开）。 */
@@ -56,7 +57,8 @@ export interface PierReviewDriftAnnotationMetadata {
  */
 export type PierDiffAnnotationMetadata =
   | PierHunkAnnotationMetadata
-  | PierDiffReviewAnnotationMetadata;
+  | PierDiffReviewAnnotationMetadata
+  | PierImageDiffAnnotationMetadata;
 
 /** 评论域 annotation metadata（线程卡 + 草稿 + 漂移折叠区）。 */
 export type PierDiffReviewAnnotationMetadata =

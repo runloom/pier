@@ -13,6 +13,7 @@
  * 窗口关闭后自动从 Map 移除并释放 ID; window-all-closed 由 main 侧处理.
  */
 import { join } from "node:path";
+import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { app, nativeTheme } from "electron";
@@ -80,12 +81,7 @@ export interface CreateWindowOptions {
   startup?: { kind: "panel-transfer"; transferId: string };
 }
 
-export interface WindowInfo {
-  focused: boolean;
-  id: string;
-  lastFocusedAt?: number;
-  recordId: string;
-}
+export type { WindowInfo } from "@shared/contracts/events.ts";
 
 export type {
   WindowCloseDecision,
@@ -425,11 +421,13 @@ class WindowManager {
   list(): WindowInfo[] {
     return [...this.windows.entries()].map(([id, w]) => {
       const lastFocusedAt = this.lastFocusedAtByWindowId.get(id);
+      const context = findWindowContext(w);
       return {
         id,
         focused: w.isFocused(),
         ...(lastFocusedAt === undefined ? {} : { lastFocusedAt }),
-        recordId: findWindowContext(w)?.recordId ?? id,
+        recordId: context?.recordId ?? id,
+        electronWindowId: context?.electronWindowId ?? String(w.id),
       };
     });
   }

@@ -199,6 +199,140 @@ describe("withPierCopilotHooks", () => {
     ]);
   }, 15_000);
 
+  it("agentStop 映射 TurnCompleted（用户 prompt 答复结束，不是单次 LLM turn_end）", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-copilot-stop-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const hooks = hookEntries(withPierCopilotHooks({}));
+    const result = spawnSync(
+      "/bin/sh",
+      ["-c", hooks.agentStop?.[0]?.bash ?? ""],
+      {
+        env: {
+          ...process.env,
+          PATH: pathForHookSpawn(process.env.PATH),
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+        },
+        input: JSON.stringify({
+          sessionId: "session-1",
+          stopReason: "end_turn",
+        }),
+      }
+    );
+    expect(result.status, result.stderr.toString()).toBe(0);
+    const row = agentHookEventSchema.parse(
+      JSON.parse((await readFile(logPath, "utf8")).trim())
+    );
+    expect(row).toMatchObject({
+      event: "TurnCompleted",
+      nativeEvent: "agentStop",
+      sessionId: "session-1",
+      v: 3,
+    });
+  }, 15_000);
+
+  it("agentStop 在 stop_hook_active=true 时只报 advisory Stop", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-copilot-stop-hook-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const hooks = hookEntries(withPierCopilotHooks({}));
+    const env = {
+      ...process.env,
+      PATH: pathForHookSpawn(process.env.PATH),
+      PIER_AGENT_EVENT_LOG: logPath,
+      PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+      PIER_PANEL_ID: "p1",
+      PIER_WINDOW_ID: "w1",
+    };
+    const run = (payload: object) => {
+      const result = spawnSync(
+        "/bin/sh",
+        ["-c", hooks.agentStop?.[0]?.bash ?? ""],
+        { env, input: JSON.stringify(payload) }
+      );
+      expect(result.status, result.stderr.toString()).toBe(0);
+    };
+    run({
+      sessionId: "session-1",
+      stopReason: "end_turn",
+      stop_hook_active: true,
+    });
+    run({
+      sessionId: "session-1",
+      stopHookActive: false,
+      stopReason: "end_turn",
+    });
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      {
+        event: "Stop",
+        nativeEvent: "agentStop",
+        nativeState: "true",
+        sessionId: "session-1",
+        v: 3,
+      },
+      {
+        event: "TurnCompleted",
+        nativeEvent: "agentStop",
+        nativeState: "false",
+        sessionId: "session-1",
+        v: 3,
+      },
+    ]);
+    const ingest = {
+      evidenceSource: "hook" as const,
+      stopAuthority: "advisory" as const,
+      turnStartAuthority: "none" as const,
+    };
+    const aggregator = createForegroundActivityAggregator();
+    aggregator.ingestAgentEvent(
+      {
+        agent: "copilot",
+        event: "PromptSubmit",
+        kind: "agentEvent",
+        nativeEvent: "userPromptSubmitted",
+        panelId: "p1",
+        sessionId: "session-1",
+        v: 3,
+        windowId: "w1",
+      },
+      ingest
+    );
+    aggregator.ingestAgentEvent(
+      {
+        agent: "copilot",
+        event: "ToolStart",
+        kind: "agentEvent",
+        nativeEvent: "preToolUse",
+        panelId: "p1",
+        sessionId: "session-1",
+        toolName: "bash",
+        toolUseId: "tool-1",
+        v: 3,
+        windowId: "w1",
+      },
+      ingest
+    );
+    const blocked = rows[0];
+    if (blocked) {
+      aggregator.ingestAgentEvent(blocked, ingest);
+    }
+    expect(
+      (aggregator.snapshot().activities[0] as AgentActivity).status
+    ).not.toBe("ready");
+    aggregator.dispose();
+  }, 15_000);
+
   it("官方子智能体形状只保留父会话作用域，匿名并发可由首次出现的 agentId 逐一关闭", async () => {
     const root = await mkdtemp(join(tmpdir(), "pier-copilot-subagent-v3-"));
     const userData = join(root, "userData");

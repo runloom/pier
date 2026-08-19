@@ -444,7 +444,7 @@ function CommentsActionDialogBody({
                 onClick={jump}
                 type="button"
               >
-                <span className="min-w-0 flex-1 break-all text-left font-mono text-[11px] text-muted-foreground leading-snug">
+                <span className="min-w-0 flex-1 break-all text-left font-mono text-muted-foreground text-xs leading-snug">
                   {location}
                 </span>
                 <Badge className="shrink-0" size="xs" variant="secondary">

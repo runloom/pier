@@ -2,6 +2,7 @@ import {
   blockCommentKey,
   buildMarkdownCommentTarget,
   contentHashForBlock,
+  markdownCommentMarkerIndexes,
   nearestHeadingIdsByBlockIndex,
   resolveMarkdownCommentBlockKey,
 } from "@plugins/builtin/files/renderer/markdown/comments/target.ts";
@@ -126,6 +127,68 @@ describe("resolveMarkdownCommentBlockKey", () => {
       headingId: "title",
     });
     expect(key).toBe(blockCommentKey(heading));
+  });
+});
+
+describe("markdownCommentMarkerIndexes", () => {
+  const headingRange = {
+    endLine: 1,
+    endOffset: 10,
+    startLine: 1,
+    startOffset: 0,
+  };
+  const paraRange = {
+    endLine: 3,
+    endOffset: 40,
+    startLine: 2,
+    startOffset: 11,
+  };
+  const emptyRange = {
+    endLine: 5,
+    endOffset: 50,
+    startLine: 4,
+    startOffset: 41,
+  };
+  const heading: MarkdownBlock = {
+    children: [{ kind: "text", range: headingRange, value: "Title" }],
+    depth: 1,
+    id: "title",
+    kind: "heading",
+    range: headingRange,
+  };
+  const paragraph: MarkdownBlock = {
+    children: [{ kind: "text", range: paraRange, value: "Body text" }],
+    kind: "paragraph",
+    range: paraRange,
+  };
+  const later: MarkdownBlock = {
+    children: [{ kind: "text", range: emptyRange, value: "Later" }],
+    kind: "paragraph",
+    range: emptyRange,
+  };
+
+  it("numbers located blocks in document order, not by thread count", () => {
+    const located = new Map([
+      [blockCommentKey(heading), { threads: { length: 1 } }],
+      [blockCommentKey(later), { threads: { length: 3 } }],
+    ]);
+    const indexes = markdownCommentMarkerIndexes(
+      [heading, paragraph, later],
+      located
+    );
+    expect(indexes.get(blockCommentKey(heading))).toBe(1);
+    expect(indexes.has(blockCommentKey(paragraph))).toBe(false);
+    expect(indexes.get(blockCommentKey(later))).toBe(2);
+  });
+
+  it("skips empty located entries", () => {
+    const located = new Map([
+      [blockCommentKey(heading), { threads: { length: 0 } }],
+      [blockCommentKey(paragraph), { threads: { length: 1 } }],
+    ]);
+    const indexes = markdownCommentMarkerIndexes([heading, paragraph], located);
+    expect(indexes.has(blockCommentKey(heading))).toBe(false);
+    expect(indexes.get(blockCommentKey(paragraph))).toBe(1);
   });
 });
 

@@ -144,7 +144,10 @@ describe("agent lifecycle specs", () => {
   it("classifies update mode honestly", () => {
     expect(resolveUpdateMode(getAgentLifecycleSpec("codex"))).toBe("versioned");
     expect(resolveUpdateMode(getAgentLifecycleSpec("crush"))).toBe("versioned");
-    // cursor is self+reinstall without npm/brew latest probe
+    expect(resolveUpdateMode(getAgentLifecycleSpec("mistral-vibe"))).toBe(
+      "versioned"
+    );
+    // cursor is self+reinstall without npm/brew/pypi latest probe
     expect(resolveUpdateMode(getAgentLifecycleSpec("cursor"))).toBe(
       "reinstall"
     );

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { activeTerminalPanelId } from "@/lib/actions/renderer-action-runtime.ts";
+import { isImePendingKeyboardEvent } from "@/lib/keybindings/is-text-input.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { writeComposerDraft } from "../composer-helpers.ts";
 import {
@@ -49,7 +50,7 @@ export function useTerminalComposerEscape(input: {
       if (event.key !== "Escape" || event.defaultPrevented) {
         return;
       }
-      if (event.isComposing) {
+      if (isImePendingKeyboardEvent(event)) {
         return;
       }
       // ContentEditable 路径已由 React onKeyDown 处理；避免双关。

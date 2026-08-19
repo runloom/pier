@@ -5,6 +5,7 @@ import {
   COMPOSER_CHIP_CLASS,
   COMPOSER_CHIP_TONE_COMMAND,
   COMPOSER_CHIP_TONE_SKILL,
+  COMPOSER_LINE_LEADING_CLASS,
 } from "@/panel-kits/terminal/structured-composer/composer-chip-styles.ts";
 
 const ROOT = process.cwd();
@@ -26,30 +27,33 @@ function readComposer(fileName: string): string {
 }
 
 describe("composer chip inline alignment", () => {
-  it("shared pill inherits editor em and exports the label baseline", () => {
+  it("shared pill uses the type scale and fills the editor line", () => {
     expect(COMPOSER_CHIP_CLASS).toContain("inline-flex");
-    expect(COMPOSER_CHIP_CLASS).toContain("items-baseline");
-    expect(COMPOSER_CHIP_CLASS).toContain("text-[1em]");
-    expect(COMPOSER_CHIP_CLASS).toContain("leading-none");
-    expect(COMPOSER_CHIP_CLASS).toContain("py-px");
+    expect(COMPOSER_CHIP_CLASS).toContain("items-center");
+    expect(COMPOSER_CHIP_CLASS).toContain("text-xs");
+    expect(COMPOSER_LINE_LEADING_CLASS).toBe("leading-5");
+    expect(COMPOSER_CHIP_CLASS).toContain(COMPOSER_LINE_LEADING_CLASS);
+    expect(COMPOSER_CHIP_CLASS).toContain("h-lh");
     expect(COMPOSER_CHIP_CLASS).not.toMatch(/\bh-5\b/);
     expect(COMPOSER_CHIP_CLASS).not.toContain("max-h-5");
-    expect(COMPOSER_CHIP_CLASS).not.toContain("text-[0.85em]");
+    expect(COMPOSER_CHIP_CLASS).not.toContain("leading-none");
+    expect(COMPOSER_CHIP_CLASS).not.toMatch(/text-\[[\d.]+(em|rem)\]/);
     expect(COMPOSER_CHIP_CLASS).not.toMatch(/\bfont-mono\b/);
-    expect(COMPOSER_CHIP_CLASS).not.toContain("items-center");
+    expect(COMPOSER_CHIP_CLASS).not.toContain("items-baseline");
   });
 
-  it("host baseline-aligns and does not match leading-5 height", () => {
+  it("host pins the line-height pill to the line box and does not lock rem height", () => {
     const css = read("src/renderer/app/globals.css");
     const host = css.slice(
       css.indexOf(".composer-ref-chip-host {"),
       css.indexOf(".composer-editor-input")
     );
     expect(host).toContain("display: inline-flex");
-    expect(host).toContain("align-items: baseline");
-    expect(host).toContain("vertical-align: baseline");
+    expect(host).toContain("align-items: center");
+    expect(host).toContain("vertical-align: top");
     expect(host).not.toContain("height: 1.25rem");
     expect(host).not.toContain("vertical-align: middle");
+    expect(host).not.toContain("vertical-align: baseline");
     expect(host).toContain("height: 0");
     expect(host).toContain("align-self: center");
   });
@@ -73,13 +77,28 @@ describe("composer chip inline alignment", () => {
     expect(COMPOSER_CHIP_TONE_COMMAND).not.toContain("text-foreground");
   });
 
-  it("icons self-center so the pill baseline stays on the label", () => {
-    expect(readComposer("attachment-token-node.tsx")).toContain("self-center");
-    expect(readComposer("skill-mention-node.tsx")).toContain("self-center");
-    expect(readComposer("workspace-path-mention-node.tsx")).toContain(
+  it("compact chrome centers the line in the h-9 shell outside the editable", () => {
+    expect(readComposer("editor.tsx")).toContain(
+      'compact && "flex flex-col justify-center"'
+    );
+  });
+
+  it("editor and chip share one leading token so h-lh tracks the line", () => {
+    const editor = readComposer("editor.tsx");
+    expect(editor).toContain("COMPOSER_LINE_LEADING_CLASS");
+    expect(editor).not.toMatch(/text-sm leading-5/);
+    expect(COMPOSER_CHIP_CLASS).toContain(COMPOSER_LINE_LEADING_CLASS);
+  });
+
+  it("icons shrink only; pill items-center owns cross-axis alignment", () => {
+    expect(readComposer("attachment-token-node.tsx")).not.toContain(
       "self-center"
     );
-    expect(readComposer("review-comments-chip-node.tsx")).toContain(
+    expect(readComposer("skill-mention-node.tsx")).not.toContain("self-center");
+    expect(readComposer("workspace-path-mention-node.tsx")).not.toContain(
+      "self-center"
+    );
+    expect(readComposer("review-comments-chip-node.tsx")).not.toContain(
       "self-center"
     );
   });

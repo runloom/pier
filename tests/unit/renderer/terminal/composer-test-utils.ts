@@ -2,6 +2,7 @@ import { act, screen } from "@testing-library/react";
 import {
   readFirstComposerEditorTextForTests,
   setAllComposerEditorsTextForTests,
+  setComposerEditorTextLeavingReactDraftForTests,
 } from "@/panel-kits/terminal/structured-composer/test-registry.ts";
 
 /** Read plain text from the mounted Lexical editor. */
@@ -16,6 +17,13 @@ export function readComposerDraftText(): string {
 export function setComposerDraftText(text: string): void {
   act(() => {
     setAllComposerEditorsTextForTests(text);
+  });
+}
+
+/** Lexical has `text`; React controlled draft is left unchanged. */
+export function setComposerEditorTextLeavingReactDraft(text: string): void {
+  act(() => {
+    setComposerEditorTextLeavingReactDraftForTests(text);
   });
 }
 

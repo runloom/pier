@@ -71,8 +71,10 @@ import {
 } from "./pier-home-skills-api.ts";
 import { type PierResourceAPI, pierResourceApi } from "./pier-resource-api.ts";
 import {
+  type AppCliPreloadApi,
   type AppPreloadApi,
   type AppUpdatePreloadApi,
+  createAppCliPreloadApi,
   createAppPreloadApi,
   createAppUpdatePreloadApi,
   createManagedPluginsPreloadApi,
@@ -150,6 +152,7 @@ export interface PierWindowAPI {
   agents: PierAgentsAPI;
   ai: PierAiAPI;
   app: AppPreloadApi;
+  appCli: AppCliPreloadApi;
   appQuit: PierAppQuitAPI;
   appUpdate: AppUpdatePreloadApi;
   catalog: PierHostCatalogAPI;
@@ -435,6 +438,7 @@ const api: PierWindowAPI = {
   panelTransfer: createPanelTransferApi(),
   pluginRpc: createPluginRpcPreloadApi(),
   app: createAppPreloadApi(),
+  appCli: createAppCliPreloadApi(),
   appUpdate: createAppUpdatePreloadApi(),
   theme: themeApi,
   window: createWindowApi(signalRendererBoot),

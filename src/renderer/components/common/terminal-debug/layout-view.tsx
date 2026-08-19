@@ -198,7 +198,7 @@ function shortId(panelId: string): string {
 
 function LegendChip({ state }: { state: LayoutState }) {
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
       <span className={cn("size-2", stateDotClass(state))} />
       {state}
     </span>
@@ -212,7 +212,7 @@ function StateLegend() {
       <LegendChip state="creating" />
       <LegendChip state="hidden" />
       <LegendChip state="missing" />
-      <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <span className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
         <span className="size-2 border border-status-done-border border-dashed bg-status-done-bg" />
         overlay
       </span>

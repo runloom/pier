@@ -53,7 +53,7 @@ export function AgentStatusLabel({
     }
     return (
       <span
-        className={cn("whitespace-nowrap text-[11px]", className)}
+        className={cn("whitespace-nowrap text-xs", className)}
         data-activity-badge
         data-agent-status="none"
       >
@@ -77,7 +77,7 @@ export function AgentStatusLabel({
     const colorVar = statusColorVar(status, level);
     return (
       <span
-        className={cn("whitespace-nowrap text-[11px]", className)}
+        className={cn("whitespace-nowrap text-xs", className)}
         data-activity-badge
         data-agent-status={status}
       >
@@ -88,7 +88,7 @@ export function AgentStatusLabel({
 
   return (
     <span
-      className={cn("whitespace-nowrap text-[11px]", className)}
+      className={cn("whitespace-nowrap text-xs", className)}
       data-activity-badge
       data-agent-status={status}
     >

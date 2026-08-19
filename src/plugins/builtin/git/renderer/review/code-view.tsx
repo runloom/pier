@@ -1,12 +1,14 @@
 import type {
   PierDiffReviewCommentThread,
   PierDiffViewHandle,
+  PierDiffViewImageDiff,
   PierDiffViewItem,
   PierDiffViewPresentation,
   PierDiffViewProps,
   PierDiffViewRenderWindow,
   PierDriftCommentLabels,
   PierGutterReviewEvent,
+  PierImageDiffLocator,
 } from "@pier/ui/diff-view/index.tsx";
 import type {
   RendererPluginAppearance,
@@ -278,6 +280,48 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       [context, language]
     );
 
+    // biome-ignore lint/correctness/useExhaustiveDependencies: language drives i18n re-read
+    const imageDiff = useMemo<PierDiffViewImageDiff>(
+      () => ({
+        labels: {
+          added: pluginText(context, "reviewImageDiffAdded", "Added"),
+          compare: pluginText(context, "reviewImageDiffCompare", "Compare"),
+          deleted: pluginText(context, "reviewImageDiffDeleted", "Deleted"),
+          dimensions: pluginText(
+            context,
+            "reviewImageDiffDimensions",
+            "{{width}}×{{height}}"
+          ),
+          loadFailed: pluginText(
+            context,
+            "reviewImageDiffLoadFailed",
+            "Couldn't load this image. Open the file to inspect."
+          ),
+          onionSkin: pluginText(
+            context,
+            "reviewImageDiffOnionSkin",
+            "Onion skin"
+          ),
+          swipe: pluginText(context, "reviewImageDiffSwipe", "Swipe"),
+          twoUp: pluginText(context, "reviewImageDiffTwoUp", "2-up"),
+        },
+        locale: appearance.locale,
+        release: (ticket) => {
+          context.filePreviews.release(ticket).catch(() => undefined);
+        },
+        resolve: async (locator) => {
+          const issued = await context.filePreviews.issue(
+            filePreviewLocatorFromImageDiff(locator)
+          );
+          if (!issued.issued) {
+            return null;
+          }
+          return { ticket: issued.ticket, url: issued.url };
+        },
+      }),
+      [appearance.locale, context, language]
+    );
+
     return (
       <fieldset
         aria-busy={mutationAuthorityBlocked}
@@ -311,6 +355,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                   codeThemes: appearance.codeThemes,
                   colorMode: appearance.theme,
                 }}
+                imageDiff={imageDiff}
                 items={displayItems}
                 labels={diffLabels}
                 {...(driftCommentLabels === undefined
@@ -372,3 +417,21 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
 }
 
 export const ReviewCodeView = createReviewCodeView(loadPierDiffView);
+
+function filePreviewLocatorFromImageDiff(
+  locator: PierImageDiffLocator
+): Parameters<RendererPluginContext["filePreviews"]["issue"]>[0] {
+  if (locator.kind === "absolute") {
+    return {
+      absolutePath: locator.absolutePath,
+      mime: locator.mime,
+      revision: locator.revision,
+    };
+  }
+  return {
+    gitRoot: locator.gitRoot,
+    mime: locator.mime,
+    oid: locator.oid,
+    revision: locator.revision,
+  };
+}

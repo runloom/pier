@@ -88,11 +88,18 @@ export function breadcrumbRevealPathForDiskSource(params: {
   return pathParts.slice(0, pathPrefixCount).join("/");
 }
 
+/** True when params claim a document source, including null or malformed. */
+export function hasFilesPanelSourceKey(
+  params: unknown
+): params is Record<string, unknown> {
+  return Boolean(params && typeof params === "object" && "source" in params);
+}
+
 export function parseSourceState(
   params: unknown,
   t: FilesTranslate
 ): ParsedPanelSourceState {
-  if (!params || typeof params !== "object" || !("source" in params)) {
+  if (!hasFilesPanelSourceKey(params)) {
     return { kind: "empty" };
   }
 

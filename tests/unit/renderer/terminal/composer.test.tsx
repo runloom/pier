@@ -29,6 +29,7 @@ import {
   composerInput,
   readComposerDraftText,
   setComposerDraftText,
+  setComposerEditorTextLeavingReactDraft,
 } from "./composer-test-utils.ts";
 
 vi.mock("@/stores/app-dialog.store.ts", () => ({
@@ -792,6 +793,55 @@ describe("TerminalComposer", () => {
     expect(sendText).not.toHaveBeenCalled();
     expect(sendKeyPress).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("does not send or insert a linebreak when Enter is the IME confirm key (keyCode 229)", () => {
+    renderComposer();
+    setComposerDraftText("实");
+    const allowed = fireEvent.keyDown(composerInput(), {
+      isComposing: false,
+      key: "Enter",
+      keyCode: 229,
+      which: 229,
+    });
+    expect(allowed).toBe(true);
+    expect(sendText).not.toHaveBeenCalled();
+    expect(readComposerDraftText()).toBe("实");
+  });
+
+  it("sends on the next real Enter after an IME confirm key (composingRef does not stick)", async () => {
+    renderComposer();
+    setComposerDraftText("实现");
+    fireEvent.keyDown(composerInput(), {
+      isComposing: false,
+      key: "Enter",
+      keyCode: 229,
+      which: 229,
+    });
+    expect(sendText).not.toHaveBeenCalled();
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "实现",
+      });
+    });
+  });
+
+  it("sends CJK from the live editor when the React draft is stale", async () => {
+    renderComposer();
+    setComposerDraftText("实");
+    setComposerEditorTextLeavingReactDraft("实现");
+    expect(readComposerDraftText()).toBe("实现");
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "实现",
+      });
+    });
   });
 
   it("disables the textarea and the send button when disabled", () => {

@@ -115,8 +115,41 @@ describe("git review gold-standard DoD (S1–S9 on Z1)", () => {
     ]);
   });
 
-  it("S7: binary is notice — not body, not hydratable", () => {
-    const binary = entry("pic.png", [
+  it("S7: non-image binary is a list notice without hydrate; images are content", () => {
+    const binary = entry("pic.bin", [
+      slot("pic.bin", {
+        additions: 0,
+        binary: true,
+        deletions: 0,
+        status: "added",
+        targetPath: "pic.bin",
+      }),
+    ]);
+    expect(classifyReviewSlotBodyClass(binary.renderSlots[0]!)).toBe("notice");
+    expect(isReviewSlotIncludedInBody(binary.renderSlots[0]!)).toBe(true);
+    expect(isReviewEntryBodyHydratable(binary)).toBe(false);
+    expect(reviewContentEntryKeysInOrder([binary])).toEqual([]);
+    expect(
+      isReviewNavigationTerminal(
+        { entry: binary, kind: "idle" },
+        false,
+        binary.renderSlots[0]!.sectionKey
+      )
+    ).toBe(false);
+    const projection = projectReviewLedger({
+      context: context(),
+      entries: [binary],
+      locale: "en",
+      resourceByEntryKey: new Map(),
+    });
+    expect(projection.items).toEqual([
+      expect.objectContaining({
+        id: binary.renderSlots[0]!.sectionKey,
+        kind: "ready-notice",
+      }),
+    ]);
+
+    const image = entry("pic.png", [
       slot("pic.png", {
         additions: 0,
         binary: true,
@@ -125,8 +158,26 @@ describe("git review gold-standard DoD (S1–S9 on Z1)", () => {
         targetPath: "pic.png",
       }),
     ]);
-    expect(classifyReviewSlotBodyClass(binary.renderSlots[0]!)).toBe("notice");
-    expect(isReviewEntryBodyHydratable(binary)).toBe(false);
+    expect(classifyReviewSlotBodyClass(image.renderSlots[0]!)).toBe("content");
+    expect(isReviewEntryBodyHydratable(image)).toBe(true);
+
+    const renamedImage = entry("moved.png", [
+      slot("moved.png", {
+        additions: 0,
+        binary: true,
+        deletions: 0,
+        oldPath: "old.png",
+        status: "renamed",
+        targetPath: "moved.png",
+      }),
+    ]);
+    expect(classifyReviewSlotBodyClass(renamedImage.renderSlots[0]!)).toBe(
+      "meta"
+    );
+    expect(isReviewSlotIncludedInBody(renamedImage.renderSlots[0]!)).toBe(
+      false
+    );
+    expect(isReviewEntryBodyHydratable(renamedImage)).toBe(false);
   });
 
   it("S9: demand hydrate timeout forces retryable error within 8s budget", () => {

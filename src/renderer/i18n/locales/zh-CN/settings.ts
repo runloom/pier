@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
@@ -344,6 +345,7 @@ export const settings = {
     },
   },
   shellEnvironment: settingsShellEnvironment,
+  cliCommand: settingsCliCommand,
   /** Numeric InputRow trailing units (shadcn InputGroupAddon). */
   unit: {
     px: "px",

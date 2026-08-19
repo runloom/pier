@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import {
+  isImePendingKeyboardEvent,
+  isImePendingLexicalEnter,
+} from "@/lib/keybindings/is-text-input.ts";
 import { shouldSuppressKeybindingForTextInput } from "@/lib/keybindings/text-input-guard.ts";
 import type { KeyChord } from "@/lib/keybindings/types.ts";
 
@@ -54,5 +58,28 @@ describe("shouldSuppressKeybindingForTextInput", () => {
         button
       )
     ).toBe(false);
+  });
+});
+
+describe("isImePendingKeyboardEvent", () => {
+  it("treats composition and keyCode 229 as IME pending", () => {
+    expect(isImePendingKeyboardEvent({ isComposing: true, keyCode: 13 })).toBe(
+      true
+    );
+    expect(
+      isImePendingKeyboardEvent({ isComposing: false, keyCode: 229 })
+    ).toBe(true);
+    expect(isImePendingKeyboardEvent({ isComposing: false, keyCode: 13 })).toBe(
+      false
+    );
+  });
+});
+
+describe("isImePendingLexicalEnter", () => {
+  it("is false for a null Lexical payload and true for keyCode 229", () => {
+    expect(isImePendingLexicalEnter(null)).toBe(false);
+    const event = new KeyboardEvent("keydown", { key: "Enter" });
+    Object.defineProperty(event, "keyCode", { value: 229 });
+    expect(isImePendingLexicalEnter(event)).toBe(true);
   });
 });

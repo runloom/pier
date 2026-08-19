@@ -57,6 +57,10 @@ function advanceTooltipDelay(milliseconds: number) {
   });
 }
 
+function tabTooltipTrigger(tab: Element): Element {
+  return tab.querySelector("[data-slot='tooltip-trigger']") ?? tab;
+}
+
 function createHeaderProps(
   component: string,
   title: string,
@@ -370,8 +374,13 @@ describe("PanelTabHeader", () => {
     if (!tabElement) {
       return;
     }
+    const trigger = tabTooltipTrigger(tabElement);
+    const closeButton = tabElement.querySelector(".dv-default-tab-action");
+    expect(closeButton).not.toBeNull();
+    expect(closeButton && trigger.contains(closeButton)).toBe(false);
+    expect(trigger).toHaveClass("h-full", "self-stretch");
     act(() => {
-      fireEvent.pointerMove(tabElement, {
+      fireEvent.pointerMove(trigger, {
         pointerType: "mouse",
       });
     });
@@ -528,9 +537,10 @@ describe("PanelTabHeader", () => {
     if (!tabElement) {
       return;
     }
+    const trigger = tabTooltipTrigger(tabElement);
 
     act(() => {
-      fireEvent.pointerMove(tabElement, {
+      fireEvent.pointerMove(trigger, {
         pointerType: "mouse",
       });
     });
@@ -538,11 +548,11 @@ describe("PanelTabHeader", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("dev");
 
     act(() => {
-      fireEvent.pointerOut(tabElement, {
+      fireEvent.pointerOut(trigger, {
         pointerType: "mouse",
         relatedTarget: document.body,
       });
-      fireEvent.pointerLeave(tabElement, {
+      fireEvent.pointerLeave(trigger, {
         pointerType: "mouse",
         relatedTarget: document.body,
       });
@@ -591,9 +601,10 @@ describe("PanelTabHeader", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
 
     // 指针切 tab 后的 focus handoff 也不得 reopen。
+    const secondTrigger = tabTooltipTrigger(secondTab);
     fireEvent.pointerDown(secondTab, { button: 0, detail: 1 });
-    fireEvent.pointerMove(secondTab, { pointerType: "mouse" });
-    fireEvent.pointerLeave(secondTab, { pointerType: "mouse" });
+    fireEvent.pointerMove(secondTrigger, { pointerType: "mouse" });
+    fireEvent.pointerLeave(secondTrigger, { pointerType: "mouse" });
     fireEvent.focus(firstTab);
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
@@ -666,9 +677,12 @@ describe("PanelTabHeader", () => {
     if (!(firstTab && secondTab && thirdTab)) {
       return;
     }
+    const firstTrigger = tabTooltipTrigger(firstTab);
+    const secondTrigger = tabTooltipTrigger(secondTab);
+    const thirdTrigger = tabTooltipTrigger(thirdTab);
 
     act(() => {
-      fireEvent.pointerMove(firstTab, {
+      fireEvent.pointerMove(firstTrigger, {
         pointerType: "mouse",
       });
     });
@@ -676,15 +690,15 @@ describe("PanelTabHeader", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("one");
 
     act(() => {
-      fireEvent.pointerOut(firstTab, {
+      fireEvent.pointerOut(firstTrigger, {
         pointerType: "mouse",
-        relatedTarget: secondTab,
+        relatedTarget: secondTrigger,
       });
-      fireEvent.pointerLeave(firstTab, {
+      fireEvent.pointerLeave(firstTrigger, {
         pointerType: "mouse",
-        relatedTarget: secondTab,
+        relatedTarget: secondTrigger,
       });
-      fireEvent.pointerMove(secondTab, {
+      fireEvent.pointerMove(secondTrigger, {
         pointerType: "mouse",
       });
     });
@@ -696,18 +710,18 @@ describe("PanelTabHeader", () => {
     expect(screen.getByRole("tooltip")).toHaveTextContent("two");
 
     act(() => {
-      fireEvent.pointerOut(secondTab, {
+      fireEvent.pointerOut(secondTrigger, {
         pointerType: "mouse",
-        relatedTarget: thirdTab,
+        relatedTarget: thirdTrigger,
       });
-      fireEvent.pointerLeave(secondTab, {
+      fireEvent.pointerLeave(secondTrigger, {
         pointerType: "mouse",
-        relatedTarget: thirdTab,
+        relatedTarget: thirdTrigger,
       });
     });
 
     act(() => {
-      fireEvent.pointerMove(thirdTab, {
+      fireEvent.pointerMove(thirdTrigger, {
         pointerType: "mouse",
       });
     });
@@ -762,23 +776,25 @@ describe("PanelTabHeader", () => {
     if (!(firstTab && secondTab)) {
       return;
     }
+    const firstTrigger = tabTooltipTrigger(firstTab);
+    const secondTrigger = tabTooltipTrigger(secondTab);
 
     act(() => {
-      fireEvent.pointerMove(firstTab, { pointerType: "mouse" });
+      fireEvent.pointerMove(firstTrigger, { pointerType: "mouse" });
     });
     advanceTooltipDelay(PANEL_TAB_TOOLTIP_DELAY_MS);
     expect(screen.getByRole("tooltip")).toHaveTextContent("one");
 
     act(() => {
-      fireEvent.pointerOut(firstTab, {
+      fireEvent.pointerOut(firstTrigger, {
         pointerType: "mouse",
-        relatedTarget: secondTab,
+        relatedTarget: secondTrigger,
       });
-      fireEvent.pointerLeave(firstTab, {
+      fireEvent.pointerLeave(firstTrigger, {
         pointerType: "mouse",
-        relatedTarget: secondTab,
+        relatedTarget: secondTrigger,
       });
-      fireEvent.pointerMove(secondTab, { pointerType: "mouse" });
+      fireEvent.pointerMove(secondTrigger, { pointerType: "mouse" });
     });
 
     // Within skip-delay window: second tab tooltip should open without full delay.
@@ -840,6 +856,36 @@ describe("PanelTabHeader", () => {
 
     expect(
       container.querySelector('[data-panel-tab-icon="terminal"]')
+    ).not.toBeNull();
+  });
+
+  it("renders a folder icon for project-directory file panel chrome", () => {
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "file-project": {
+          display: { short: "feat-canvas-20260815" },
+          tab: {
+            icon: { id: "pier.files.project" },
+            title: "feat-canvas-20260815",
+          },
+        },
+      },
+    });
+
+    const { container } = render(
+      <PanelTabHeader
+        {...createHeaderProps(
+          "pier.files.filePanel",
+          "feat-canvas-20260815",
+          undefined,
+          "file-project"
+        )}
+      />
+    );
+
+    expect(
+      container.querySelector('[data-panel-tab-icon="pier.files.project"]')
     ).not.toBeNull();
   });
 

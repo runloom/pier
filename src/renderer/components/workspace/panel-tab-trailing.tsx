@@ -58,7 +58,7 @@ export function PanelTabTrailingView({
       <span
         aria-hidden="true"
         className={cn(
-          "inline-flex shrink-0 items-center gap-0.5 font-normal text-[11px] tabular-nums",
+          "inline-flex shrink-0 items-center gap-0.5 font-normal text-xs tabular-nums",
           className
         )}
         data-pier-tab-trailing="git-line-delta"
@@ -82,7 +82,7 @@ export function PanelTabTrailingView({
     <span
       aria-hidden="true"
       className={cn(
-        "inline-flex shrink-0 items-center text-[11px] text-muted-foreground tabular-nums",
+        "inline-flex shrink-0 items-center text-muted-foreground text-xs tabular-nums",
         className
       )}
       data-pier-tab-trailing="text"

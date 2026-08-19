@@ -30,6 +30,7 @@ export function createCanvasCommentLabels(
       "filePanel.canvas.comment.driftTitle",
       "Comments that can no longer be located on a node"
     ),
+    cancel: t("filePanel.canvas.comment.cancel", "Cancel"),
     close: t("filePanel.canvas.comment.close", "Close"),
     createFailed: t(
       "filePanel.canvas.comment.createFailed",
@@ -49,9 +50,10 @@ export function createCanvasCommentLabels(
     fileLevel: t("filePanel.canvas.comment.fileLevel", "File"),
     inputPlaceholder: t(
       "filePanel.canvas.comment.placeholder",
-      "Write a comment…"
+      "Add comment..."
     ),
     nodeLevel: t("filePanel.canvas.comment.nodeLevel", "Elements"),
+    save: t("filePanel.canvas.comment.save", "Save"),
     submit: t("filePanel.canvas.comment.submit", "Submit"),
     title: t("filePanel.canvas.comment.title", "Comments"),
     updateFailed: t(

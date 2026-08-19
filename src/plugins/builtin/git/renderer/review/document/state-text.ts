@@ -95,7 +95,7 @@ export function stateSectionText(
   locale: string
 ): string {
   if (section.reason === "binary") {
-    return binaryStateNotice(context, section.targetPath, locale);
+    return binaryFileStateNotice(context, section.targetPath, locale);
   }
   if (section.reason === "symlink") {
     if (section.oldPath) {
@@ -156,7 +156,7 @@ export function stateSectionText(
 }
 
 /** Extension → industry-style binary kind label (font/image/audio/…). */
-function binaryStateNotice(
+export function binaryFileStateNotice(
   context: RendererPluginContext,
   path: string,
   locale: string
@@ -202,6 +202,7 @@ function binaryKindFromPath(
       "tiff",
       "avif",
       "heic",
+      "icns",
       "svg",
     ].includes(ext)
   ) {

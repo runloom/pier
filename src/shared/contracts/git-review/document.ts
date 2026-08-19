@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { filePreviewImageMimeSchema } from "../file.ts";
 import { gitReviewFileSourceSchema } from "./base.ts";
 import {
   GIT_REVIEW_MAX_SECTIONS,
@@ -8,6 +9,7 @@ import {
   gitReviewOperationIdSchema,
   gitReviewRelativePathSchema,
   gitReviewRevisionSchema,
+  gitReviewRootPathSchema,
   gitReviewSectionKeySchema,
   gitReviewStageStateSchema,
 } from "./primitives.ts";
@@ -59,6 +61,44 @@ const gitReviewStateSectionSchema = z.strictObject({
   status: gitReviewFileStatusSchema,
   targetPath: gitReviewRelativePathSchema,
 });
+
+const gitBlobOidSchema = z
+  .string()
+  .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u, "Expected a full Git object OID");
+
+const gitReviewImageSideBaseShape = {
+  byteSize: z.number().int().nonnegative(),
+  height: z.number().int().positive().nullable(),
+  mime: filePreviewImageMimeSchema,
+  width: z.number().int().positive().nullable(),
+};
+
+export const gitReviewImageSideSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    ...gitReviewImageSideBaseShape,
+    kind: z.literal("blob"),
+    oid: gitBlobOidSchema,
+  }),
+  z.strictObject({
+    ...gitReviewImageSideBaseShape,
+    absolutePath: z.string().min(1).max(4096),
+    kind: z.literal("worktree"),
+    revision: z.string().min(1),
+  }),
+]);
+export type GitReviewImageSide = z.infer<typeof gitReviewImageSideSchema>;
+
+const imageSectionSchema = z.strictObject({
+  ...gitReviewSectionBaseShape,
+  after: gitReviewImageSideSchema.nullable(),
+  before: gitReviewImageSideSchema.nullable(),
+  gitRootPath: gitReviewRootPathSchema,
+  kind: z.literal("image"),
+  oldPath: gitReviewRelativePathSchema.nullable(),
+  status: gitReviewFileStatusSchema,
+  targetPath: gitReviewRelativePathSchema,
+});
+export type GitReviewImageSection = z.infer<typeof imageSectionSchema>;
 
 /** Porcelain v2 unmerged XY codes (git status --porcelain=v2). */
 export const GIT_REVIEW_CONFLICT_XY = [
@@ -120,6 +160,7 @@ export const gitReviewFileSectionSchema = z
   .discriminatedUnion("kind", [
     patchSectionSchema,
     gitReviewStateSectionSchema,
+    imageSectionSchema,
     conflictSectionSchema,
   ])
   .superRefine((section, context) => {
@@ -142,6 +183,32 @@ export const gitReviewFileSectionSchema = z
           code: "custom",
           message: "Only markers-text conflict may carry worktree contents",
           path: ["contents"],
+        });
+      }
+      return;
+    }
+    if (section.kind === "image") {
+      if (section.before === null && section.after === null) {
+        context.addIssue({
+          code: "custom",
+          message: "Image section requires at least one previewable side",
+        });
+      }
+      if (section.status === "conflicted") {
+        context.addIssue({
+          code: "custom",
+          message: "Image section cannot be conflicted",
+        });
+      }
+      if (section.status === "renamed" && section.oldPath === null) {
+        context.addIssue({
+          code: "custom",
+          message: "Renamed image requires an old path",
+        });
+      } else if (section.status !== "renamed" && section.oldPath !== null) {
+        context.addIssue({
+          code: "custom",
+          message: "Only renamed image may carry an old path",
         });
       }
       return;

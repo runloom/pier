@@ -44,8 +44,14 @@ extern "C" {
     );
     bool ghostty_bridge_close(const char* panelId);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
-    bool ghostty_bridge_send_text(const char* panelId, const char* text);
-    bool ghostty_bridge_send_key_press(const char* panelId, uint32_t keycode, uint32_t mods, const char* text);
+    bool ghostty_bridge_send_text(const char* panelId, const uint8_t* bytes, long count);
+    bool ghostty_bridge_send_key_press(
+        const char* panelId,
+        uint32_t keycode,
+        uint32_t mods,
+        const uint8_t* bytes,
+        long count
+    );
     char* ghostty_bridge_read_selection_text(const char* panelId);
     char* ghostty_bridge_read_viewport_text(const char* panelId);
     int32_t ghostty_bridge_read_cursor_visible(const char* panelId);
@@ -405,7 +411,11 @@ static Napi::Value JsPerformBindingAction(const Napi::CallbackInfo& info) {
 static Napi::Value JsSendText(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
     std::string text = info[1].As<Napi::String>().Utf8Value();
-    bool ok = ghostty_bridge_send_text(panelId.c_str(), text.c_str());
+    bool ok = ghostty_bridge_send_text(
+        panelId.c_str(),
+        reinterpret_cast<const uint8_t*>(text.data()),
+        static_cast<long>(text.size())
+    );
     return Napi::Boolean::New(info.Env(), ok);
 }
 
@@ -416,12 +426,20 @@ static Napi::Value JsSendKeyPress(const Napi::CallbackInfo& info) {
                         ? info[2].As<Napi::Number>().Uint32Value()
                         : 0;
     std::string textStorage;
-    const char* textPtr = nullptr;
+    const uint8_t* textBytes = nullptr;
+    long textCount = 0;
     if (info.Length() > 3 && info[3].IsString()) {
         textStorage = info[3].As<Napi::String>().Utf8Value();
-        textPtr = textStorage.c_str();
+        textBytes = reinterpret_cast<const uint8_t*>(textStorage.data());
+        textCount = static_cast<long>(textStorage.size());
     }
-    bool ok = ghostty_bridge_send_key_press(panelId.c_str(), keycode, mods, textPtr);
+    bool ok = ghostty_bridge_send_key_press(
+        panelId.c_str(),
+        keycode,
+        mods,
+        textBytes,
+        textCount
+    );
     return Napi::Boolean::New(info.Env(), ok);
 }
 

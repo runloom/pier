@@ -32,6 +32,7 @@ import {
 } from "./bootstrap-privileged-protocols.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
+import { applyGpuWorkarounds } from "./gpu-workarounds.ts";
 import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerClipboardIpc } from "./ipc/clipboard.ts";
@@ -113,7 +114,7 @@ windowManager.onCreate(({ window }) => {
 });
 
 configureMainAppIdentity(isDev);
-
+applyGpuWorkarounds();
 // 第二实例直接 quit + return 不继续 bootstrap, 否则会撞主实例的 userData 文件锁.
 const gotTheLock = app.requestSingleInstanceLock();
 if (gotTheLock) {

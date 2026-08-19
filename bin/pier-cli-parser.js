@@ -7,16 +7,19 @@ export function usage() {
   return [
     "Usage:",
     "  pier open <path> [--window <windowId>] [--split <direction>] [--no-focus] --json",
-    "  pier terminal open [--cwd <path>] [--profile <profileId>] [--env KEY=VALUE] [--command <command> | -- <command...>] [--window <windowId>] [--split <direction>] [--no-focus] --json",
+    "  pier terminal open [--cwd <path>] [--profile <profileId>] [--env KEY=VALUE] [--command <command> | -- <command...>] [--window <windowId>] [--split <direction>] [--reference-panel <panelId>] [--no-focus] --json",
     "  pier terminal list [--window <windowId>] --json",
-    "  pier terminal get --panel <panelId> [--window <windowId>] --json",
-    "  pier terminal send --panel <panelId> --text <s> [--window <windowId>] --json",
-    "  pier terminal key --panel <panelId> --key <name> [--window <windowId>] --json",
+    "  pier terminal get <panelId> [--window <windowId>] --json",
+    "  pier terminal send <panelId> --text <s> [--window <windowId>] --json",
+    "  pier terminal key <panelId> --key <name> [--window <windowId>] --json",
+    "  pier terminal screen <panelId> [--window <windowId>] [--max-lines <n>] [--max-bytes <n>] --json",
+    "  pier terminal read <panelId> [--window <windowId>] [--max-lines <n>] [--max-bytes <n>] --json",
+    "  pier terminal close <panelId> [--window <windowId>] --json",
     "  pier terminal profiles list --json",
     "  pier terminal profiles get <profileId> --json",
     "  pier terminal profiles set <profileId> [--cwd <path>] [--env KEY=VALUE] [--command <command> | -- <command...>] --json",
     "  pier terminal profiles delete <profileId> --json",
-    "  pier tasks list [--path <path>] --json",
+    "  pier tasks list [path] --json",
     "  pier tasks run <taskId> [--path <path>] [--input id=value] [--window <windowId>] [--split <direction>] [--no-focus] --json",
     "  pier tasks status|get <runId> --json",
     "  pier tasks output <runId> [--task <taskId>] --json",
@@ -30,12 +33,14 @@ export function usage() {
     "  pier windows focus <windowId> --json",
     "  pier panels list [--window <windowId>] --json",
     "  pier panels focus <panelId> [--window <windowId>] [--no-focus] --json",
-    "  pier worktrees list --path <path> --json",
-    "  pier worktrees get --path <path> --json",
-    "  pier worktrees check --path <path> --json",
-    "  pier worktrees create --path <repo> --name <dir> --branch <branch> --base <ref> --json",
+    "  pier panels set-size <panelId> [--width-ratio <n>] [--height-ratio <n>] [--window <windowId>] --json",
+    "  pier panels equalize --axis horizontal|vertical --panel <panelId> [--panel <panelId> ...] [--window <windowId>] --json",
+    "  pier worktrees list [path] --json",
+    "  pier worktrees get <path> --json",
+    "  pier worktrees check <path> --json",
+    "  pier worktrees create <repo> --name <dir> --branch <branch> --base <ref> --json",
     "  pier worktrees open <path> --json",
-    "  pier worktrees remove --path <path> [--delete-branch] --json",
+    "  pier worktrees remove <path> [--delete-branch] --json",
     "  pier plugins list --json",
     "  pier plugins inspect <id> --json",
     "  pier plugins enable <id> --json",
@@ -43,18 +48,18 @@ export function usage() {
     "  pier preferences read --json",
     "  pier agents catalog --json",
     "  pier agents list --json",
-    "  pier agents get --agent-ref <ref> | --agent-id <id> | --panel <panelId> --json",
-    "  pier agents start --agent <id> [--cwd <path>] [--window <windowId>] --json",
+    "  pier agents get <id> | --panel <panelId> | --agent-ref <ref> --json",
+    "  pier agents start <id> [--cwd <path>] [--window <windowId>] --json",
     "  pier agents turn --boot <id> --runtime <id> --generation <n> [--text <s>|--text-file <path>|--stdin] --json",
     "  pier agents screen --boot <id> --runtime <id> --generation <n> [--max-lines <n>] [--max-bytes <n>] --json",
     "  pier agents wait --boot <id> --runtime <id> --generation <n> --until ready|waiting|exited|attention [--timeout <ms>] --json",
     "  pier agents watch --boot <id> --runtime <id> --generation <n> [--timeout <ms>] [--poll-ms <ms>] --json",
     "  pier agents focus|interrupt|terminate --boot <id> --runtime <id> --generation <n> --json",
     "  pier notifications list [--unread] --json",
-    "  pier notifications get --id <id> --json",
+    "  pier notifications get <id> --json",
     "  pier notifications watch [--after <seq>] [--timeout <ms>] [--poll-ms <ms>] --json",
-    "  pier notifications focus --id <id> --json",
-    "  pier notifications mark-read --id <id> | --all --json",
+    "  pier notifications focus <id> --json",
+    "  pier notifications mark-read <id> | --all --json",
   ].join("\n");
 }
 
@@ -63,6 +68,13 @@ function requireValue(value) {
     throw new Error("missing required pier CLI argument");
   }
   return value;
+}
+
+function pickPrimaryId(positional, flagged, flag) {
+  if (positional && flagged && positional !== flagged) {
+    throw new Error(`accepts positional id or ${flag}, not both`);
+  }
+  return positional ?? flagged;
 }
 
 function optionValue(args, name) {
@@ -140,6 +152,7 @@ function stripOptions(args) {
       arg === "--agent-id" ||
       arg === "--agent" ||
       arg === "--panel" ||
+      arg === "--reference-panel" ||
       arg === "--boot" ||
       arg === "--boot-id" ||
       arg === "--runtime" ||
@@ -167,7 +180,10 @@ function stripOptions(args) {
       arg === "--scope" ||
       arg === "--id" ||
       arg === "--unread" ||
-      arg === "--all"
+      arg === "--all" ||
+      arg === "--width-ratio" ||
+      arg === "--height-ratio" ||
+      arg === "--axis"
     ) {
       if (
         arg === "--window" ||
@@ -185,6 +201,7 @@ function stripOptions(args) {
         arg === "--agent-id" ||
         arg === "--agent" ||
         arg === "--panel" ||
+        arg === "--reference-panel" ||
         arg === "--boot" ||
         arg === "--boot-id" ||
         arg === "--runtime" ||
@@ -207,7 +224,10 @@ function stripOptions(args) {
         arg === "--after-boot" ||
         arg === "--after-scope" ||
         arg === "--scope" ||
-        arg === "--id"
+        arg === "--id" ||
+        arg === "--width-ratio" ||
+        arg === "--height-ratio" ||
+        arg === "--axis"
       ) {
         index++;
       }
@@ -315,6 +335,18 @@ function parseOpen(action, unexpected, cwd, route) {
   };
 }
 
+function optionalPositiveInt(args, name) {
+  const raw = optionValue(args, name);
+  if (raw === undefined) {
+    return;
+  }
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new Error(`invalid ${name} value`);
+  }
+  return n;
+}
+
 function parseTerminalOpen(action, unexpected, args, cwd, route) {
   if (action !== "open") {
     throw new Error("unknown pier CLI command");
@@ -330,6 +362,7 @@ function parseTerminalOpen(action, unexpected, args, cwd, route) {
   const rawCwd = optionValue(args, "--cwd");
   const env = parseEnv(args);
   const profileId = optionValue(args, "--profile");
+  const referencePanelId = optionValue(args, "--reference-panel");
   return {
     launch: {
       ...(explicitCommand || command
@@ -341,6 +374,36 @@ function parseTerminalOpen(action, unexpected, args, cwd, route) {
     },
     type: "terminal.open",
     ...route,
+    ...(referencePanelId && { referencePanelId }),
+  };
+}
+
+function parseTerminalInspect(action, value, unexpected, args, route) {
+  rejectUnexpectedOnly(unexpected);
+  const panelId = requireValue(
+    pickPrimaryId(value, optionValue(args, "--panel"), "--panel")
+  );
+  if (action === "close") {
+    if (
+      hasPierCliOption(args, "--max-lines") ||
+      hasPierCliOption(args, "--max-bytes")
+    ) {
+      throw new Error("unexpected pier CLI argument");
+    }
+    return {
+      type: "terminal.close",
+      panelId,
+      ...(route.windowId && { windowId: route.windowId }),
+    };
+  }
+  const maxLines = optionalPositiveInt(args, "--max-lines");
+  const maxBytes = optionalPositiveInt(args, "--max-bytes");
+  return {
+    type: action === "read" ? "terminal.read" : "terminal.screen",
+    panelId,
+    ...(maxLines !== undefined && { maxLines }),
+    ...(maxBytes !== undefined && { maxBytes }),
+    ...(route.windowId && { windowId: route.windowId }),
   };
 }
 
@@ -399,21 +462,29 @@ function rejectUnexpectedArg(value, unexpected) {
   }
 }
 
-function parseTerminalWrite(action, value, unexpected, args, route) {
-  rejectUnexpectedArg(value, unexpected);
-  const panelId = requireValue(optionValue(args, "--panel"));
+function parseTerminalWrite(action, value, extra, unexpected, args, route) {
+  const flaggedPanel = optionValue(args, "--panel");
   if (action === "send") {
+    rejectUnexpectedOnly(extra ?? unexpected);
     return {
       type: "terminal.send",
-      panelId,
+      panelId: requireValue(pickPrimaryId(value, flaggedPanel, "--panel")),
       text: requireValue(optionValue(args, "--text")),
       ...(route.windowId && { windowId: route.windowId }),
     };
   }
+  rejectUnexpectedOnly(unexpected);
+  const flaggedKey = optionValue(args, "--key");
+  const panelId = flaggedPanel ? flaggedPanel : requireValue(value);
+  const keyToken = flaggedPanel ? value : extra;
+  if (flaggedPanel && value && extra) {
+    throw new Error(`unexpected pier CLI argument: ${extra}`);
+  }
+  const key = pickPrimaryId(keyToken, flaggedKey, "--key");
   return {
     type: "terminal.key",
-    panelId,
-    key: requireValue(optionValue(args, "--key")),
+    panelId: requireValue(panelId),
+    key: requireValue(key),
     ...(route.windowId && { windowId: route.windowId }),
   };
 }
@@ -430,17 +501,26 @@ function parseTerminal(action, value, extra, unexpected, args, cwd, route) {
     };
   }
   if (action === "get") {
-    if (unexpected) {
-      throw new Error(`unexpected pier CLI argument: ${unexpected}`);
-    }
+    rejectUnexpectedOnly(extra ?? unexpected);
     return {
       type: "terminal.get",
-      panelId: requireValue(optionValue(args, "--panel") ?? value),
+      panelId: requireValue(
+        pickPrimaryId(value, optionValue(args, "--panel"), "--panel")
+      ),
       ...(route.windowId && { windowId: route.windowId }),
     };
   }
   if (action === "send" || action === "key") {
-    return parseTerminalWrite(action, value, unexpected, args, route);
+    return parseTerminalWrite(action, value, extra, unexpected, args, route);
+  }
+  if (action === "screen" || action === "read" || action === "close") {
+    return parseTerminalInspect(
+      action,
+      value,
+      extra ?? unexpected,
+      args,
+      route
+    );
   }
   if (unexpected) {
     throw new Error(`unexpected pier CLI argument: ${unexpected}`);
@@ -458,7 +538,53 @@ function parseWindows(action, value) {
   throw new Error("unknown pier CLI command");
 }
 
-function parsePanels(action, value, route) {
+function parseRatioOption(args, name) {
+  const raw = optionValue(args, name);
+  if (raw === undefined) {
+    return;
+  }
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    throw new Error(`invalid ${name} value`);
+  }
+  return value;
+}
+
+function parsePanelSetSize(value, route, args) {
+  const widthRatio = parseRatioOption(args, "--width-ratio");
+  const heightRatio = parseRatioOption(args, "--height-ratio");
+  if (widthRatio === undefined && heightRatio === undefined) {
+    throw new Error(
+      "panels set-size requires --width-ratio and/or --height-ratio"
+    );
+  }
+  return {
+    panelId: requireValue(value),
+    type: "panel.setSize",
+    ...(widthRatio === undefined ? {} : { widthRatio }),
+    ...(heightRatio === undefined ? {} : { heightRatio }),
+    ...(route.windowId && { windowId: route.windowId }),
+  };
+}
+
+function parsePanelEqualize(route, args) {
+  const axis = requireValue(optionValue(args, "--axis"));
+  if (axis !== "horizontal" && axis !== "vertical") {
+    throw new Error("invalid --axis value");
+  }
+  const panelIds = optionValues(args, "--panel");
+  if (panelIds.length === 0) {
+    throw new Error("panels equalize requires --panel");
+  }
+  return {
+    axis,
+    panelIds,
+    type: "panel.equalize",
+    ...(route.windowId && { windowId: route.windowId }),
+  };
+}
+
+function parsePanels(action, value, route, args) {
   if (action === "list") {
     return {
       type: "panel.list",
@@ -473,25 +599,39 @@ function parsePanels(action, value, route) {
       ...(route.windowId && { windowId: route.windowId }),
     };
   }
+  if (action === "set-size") {
+    return parsePanelSetSize(value, route, args);
+  }
+  if (action === "equalize") {
+    return parsePanelEqualize(route, args);
+  }
   throw new Error("unknown pier CLI command");
 }
 
 function parseWorktrees(action, value, unexpected, args, cwd, route) {
   if (action === "list" || action === "check" || action === "get") {
-    rejectUnexpectedArg(value, unexpected);
+    rejectUnexpectedOnly(unexpected);
+    const flagged = optionValue(args, "--path");
+    const raw =
+      pickPrimaryId(value, flagged, "--path") ??
+      (action === "list" ? cwd : undefined);
     return {
-      path: absolutePath(requireValue(optionValue(args, "--path")), cwd),
+      path: absolutePath(requireValue(raw), cwd),
       type: `worktree.${action}`,
     };
   }
   if (action === "create") {
-    rejectUnexpectedArg(value, unexpected);
+    rejectUnexpectedOnly(unexpected);
+    const flagged = optionValue(args, "--path");
     const base = optionValue(args, "--base");
     return {
       ...(base && { base }),
       branch: requireValue(optionValue(args, "--branch")),
       name: requireValue(optionValue(args, "--name")),
-      path: absolutePath(requireValue(optionValue(args, "--path")), cwd),
+      path: absolutePath(
+        requireValue(pickPrimaryId(value, flagged, "--path")),
+        cwd
+      ),
       type: "worktree.create",
     };
   }
@@ -506,9 +646,13 @@ function parseWorktrees(action, value, unexpected, args, cwd, route) {
     };
   }
   if (action === "remove") {
-    rejectUnexpectedArg(value, unexpected);
+    rejectUnexpectedOnly(unexpected);
+    const flagged = optionValue(args, "--path");
     return {
-      path: absolutePath(requireValue(optionValue(args, "--path")), cwd),
+      path: absolutePath(
+        requireValue(pickPrimaryId(value, flagged, "--path")),
+        cwd
+      ),
       type: "worktree.remove",
       ...(hasPierCliOption(args, "--delete-branch")
         ? { deleteBranch: true }
@@ -525,6 +669,11 @@ function projectRootOption(args, cwd) {
   return path ? absolutePath(path, cwd) : cwd;
 }
 
+function tasksListRoot(value, args, cwd) {
+  const raw = pickPrimaryId(value, optionValue(args, "--path"), "--path");
+  return raw ? absolutePath(raw, cwd) : cwd;
+}
+
 function rejectUnexpectedOnly(unexpected) {
   if (unexpected) {
     throw new Error(`unexpected pier CLI argument: ${unexpected}`);
@@ -533,9 +682,9 @@ function rejectUnexpectedOnly(unexpected) {
 
 function parseTasks(action, value, unexpected, args, cwd, route) {
   if (action === "list") {
-    rejectUnexpectedArg(value, unexpected);
+    rejectUnexpectedOnly(unexpected);
     return {
-      projectRootPath: projectRootOption(args, cwd),
+      projectRootPath: tasksListRoot(value, args, cwd),
       type: "run.list",
     };
   }
@@ -649,10 +798,14 @@ function parseAgentsGet(value, args) {
 }
 
 function parseAgentsStart(value, args) {
-  const agentId =
-    optionValue(args, "--agent") ?? optionValue(args, "--agent-id") ?? value;
+  const flagged =
+    optionValue(args, "--agent") ?? optionValue(args, "--agent-id");
+  if (value && flagged && value !== flagged) {
+    throw new Error("agents start accepts <id> or --agent <id>, not both");
+  }
+  const agentId = value ?? flagged;
   if (!agentId) {
-    throw new Error("agents start requires --agent <id>");
+    throw new Error("agents start requires <id>");
   }
   const cwdOpt = optionValue(args, "--cwd");
   const windowId = optionValue(args, "--window");
@@ -860,56 +1013,68 @@ function parseControlTopLevel(domain, args) {
   return null;
 }
 
-function parseNotifications(action, args) {
+function notificationItemId(value, args) {
+  return requireValue(pickPrimaryId(value, optionValue(args, "--id"), "--id"));
+}
+
+function parseNotificationsWatch(args) {
+  const afterRaw = optionValue(args, "--after");
+  const timeoutRaw = optionValue(args, "--timeout");
+  const pollRaw = optionValue(args, "--poll-ms");
+  const command = { type: "notifications.watch" };
+  if (afterRaw !== undefined) {
+    command.after = Number(afterRaw);
+  }
+  if (timeoutRaw !== undefined) {
+    command.timeoutMs = Number(timeoutRaw);
+  }
+  if (pollRaw !== undefined) {
+    command.pollMs = Number(pollRaw);
+  }
+  return command;
+}
+
+function parseNotificationsMarkRead(value, args) {
+  const hasAll = hasPierCliOption(args, "--all");
+  const id = pickPrimaryId(value, optionValue(args, "--id"), "--id");
+  if (hasAll && id) {
+    throw new Error(
+      "notifications mark-read accepts either <id> or --all, not both"
+    );
+  }
+  if (hasAll) {
+    return { type: "notifications.mark-read", all: true };
+  }
+  return {
+    type: "notifications.mark-read",
+    id: requireValue(id),
+  };
+}
+
+function parseNotifications(action, value, unexpected, args) {
   if (action === "list") {
+    rejectUnexpectedArg(value, unexpected);
     return {
       type: "notifications.list",
       ...(hasPierCliOption(args, "--unread") ? { unreadOnly: true } : {}),
     };
   }
-  if (action === "get") {
-    return {
-      type: "notifications.get",
-      id: requireValue(optionValue(args, "--id")),
-    };
-  }
   if (action === "watch") {
-    const afterRaw = optionValue(args, "--after");
-    const timeoutRaw = optionValue(args, "--timeout");
-    const pollRaw = optionValue(args, "--poll-ms");
-    const command = { type: "notifications.watch" };
-    if (afterRaw !== undefined) {
-      command.after = Number(afterRaw);
-    }
-    if (timeoutRaw !== undefined) {
-      command.timeoutMs = Number(timeoutRaw);
-    }
-    if (pollRaw !== undefined) {
-      command.pollMs = Number(pollRaw);
-    }
-    return command;
+    rejectUnexpectedArg(value, unexpected);
+    return parseNotificationsWatch(args);
+  }
+  rejectUnexpectedOnly(unexpected);
+  if (action === "get") {
+    return { type: "notifications.get", id: notificationItemId(value, args) };
   }
   if (action === "focus") {
     return {
       type: "notifications.focus",
-      id: requireValue(optionValue(args, "--id")),
+      id: notificationItemId(value, args),
     };
   }
   if (action === "mark-read") {
-    const hasAll = hasPierCliOption(args, "--all");
-    const hasId = optionValue(args, "--id") !== undefined;
-    if (hasAll && hasId) {
-      throw new Error(
-        "notifications mark-read accepts either --id or --all, not both"
-      );
-    }
-    if (hasAll) {
-      return { type: "notifications.mark-read", all: true };
-    }
-    return {
-      type: "notifications.mark-read",
-      id: requireValue(optionValue(args, "--id")),
-    };
+    return parseNotificationsMarkRead(value, args);
   }
   throw new Error(
     "unknown pier notifications command (list|get|watch|focus|mark-read)"
@@ -933,13 +1098,13 @@ function parseCommand(args, cwd) {
     return parseWindows(action, value);
   }
   if (domain === "panels") {
-    return parsePanels(action, value, route);
+    return parsePanels(action, value, route, args);
   }
   if (domain === "worktrees") {
-    return parseWorktrees(action, value, unexpected, args, cwd, route);
+    return parseWorktrees(action, value, extra ?? unexpected, args, cwd, route);
   }
   if (domain === "tasks") {
-    return parseTasks(action, value, unexpected, args, cwd, route);
+    return parseTasks(action, value, extra ?? unexpected, args, cwd, route);
   }
   if (domain === "plugins") {
     return parsePlugins(action, value, unexpected);
@@ -948,10 +1113,10 @@ function parseCommand(args, cwd) {
     return { type: "preferences.read" };
   }
   if (domain === "agents") {
-    return parseAgents(action, value, unexpected, args);
+    return parseAgents(action, value, extra ?? unexpected, args);
   }
   if (domain === "notifications") {
-    return parseNotifications(action, args);
+    return parseNotifications(action, value, extra ?? unexpected, args);
   }
   throw new Error("unknown pier CLI command");
 }

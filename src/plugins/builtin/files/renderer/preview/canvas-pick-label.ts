@@ -2,7 +2,9 @@
  * Label-based re-locate helpers for canvas comment pins / soft markers.
  */
 import {
+  canvasPickLabelStem,
   INTERACTIVE_SELECTOR,
+  isCanvasCommentTargetVisible,
   normalizeCanvasPickText,
 } from "./canvas-pick-shared.ts";
 
@@ -17,6 +19,7 @@ export function findInteractiveByExactLabel(
   }
   const nodes = host.querySelectorAll(INTERACTIVE_SELECTOR);
   let best: HTMLElement | null = null;
+  let hiddenMatch: HTMLElement | null = null;
   let bestArea = Number.POSITIVE_INFINITY;
   for (const node of nodes) {
     if (!(node instanceof HTMLElement && host.contains(node))) {
@@ -27,6 +30,10 @@ export function findInteractiveByExactLabel(
     if (aria !== needle && text !== needle) {
       continue;
     }
+    if (!isCanvasCommentTargetVisible(node)) {
+      hiddenMatch ??= node;
+      continue;
+    }
     const rect = node.getBoundingClientRect();
     const area =
       rect.width > 0 && rect.height > 0 ? rect.width * rect.height : 1;
@@ -35,7 +42,7 @@ export function findInteractiveByExactLabel(
       bestArea = area;
     }
   }
-  return best;
+  return best ?? hiddenMatch;
 }
 
 /**
@@ -75,14 +82,24 @@ export function findCanvasElementByLabel(
     let matchRank = 999;
     for (const needle of needles) {
       const n = needle.toLowerCase();
-      if (hay === n) {
+      const stem = canvasPickLabelStem(n);
+      if (stem.length === 0) {
+        continue;
+      }
+      // Truncated labels only rematch when live text starts with the stem.
+      // A 2-char reverse prefix ("物料") would pin another tab's Alert here.
+      const truncated = n !== stem;
+      if (hay === n || hay === stem) {
         matchRank = Math.min(matchRank, 0);
-      } else if (hay.startsWith(n) && hay.length <= n.length * 2 + 8) {
+      } else if (hay.startsWith(stem) && hay.length <= stem.length * 2 + 8) {
         matchRank = Math.min(matchRank, 1);
-      } else if (n.startsWith(hay) && hay.length >= 2) {
-        // Element text is a short prefix of label (truncated pin title).
+      } else if (!truncated && stem.startsWith(hay) && hay.length >= 2) {
         matchRank = Math.min(matchRank, 2);
-      } else if (hay.includes(n) && hay.length <= n.length * 3 + 16) {
+      } else if (
+        !truncated &&
+        hay.includes(stem) &&
+        hay.length <= stem.length * 3 + 16
+      ) {
         matchRank = Math.min(matchRank, 3);
       }
     }
@@ -92,8 +109,10 @@ export function findCanvasElementByLabel(
     const rect = el.getBoundingClientRect();
     const area =
       rect.width > 0 && rect.height > 0 ? rect.width * rect.height : 1;
-    // Prefer tight matches, then smaller boxes (tab "落地" over whole page).
-    const score = matchRank * 1_000_000 + area;
+    // Hidden-tab exact/prefix beats a weaker visible lookalike so the pin
+    // stays off-screen until that tab is revealed.
+    const hiddenBias = isCanvasCommentTargetVisible(el) ? 0 : 400_000;
+    const score = matchRank * 1_000_000 + hiddenBias + area;
     if (score < bestScore) {
       best = el;
       bestScore = score;

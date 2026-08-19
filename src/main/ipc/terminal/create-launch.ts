@@ -255,7 +255,8 @@ export function withPanelStatusEnv(
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined,
   panelId: string,
   windowId: string,
-  hookEnv: Record<string, string>
+  hookEnv: Record<string, string>,
+  controlSocketPath?: string
 ): ResolvedTerminalLaunchOptions {
   const {
     PIER_AGENT_CALLER_BINDING: _parentBinding,
@@ -271,6 +272,7 @@ export function withPanelStatusEnv(
       ...hookEnv,
       PIER_PANEL_ID: panelId,
       PIER_WINDOW_ID: windowId,
+      ...(controlSocketPath ? { PIER_CONTROL_SOCKET: controlSocketPath } : {}),
     }),
   };
 }

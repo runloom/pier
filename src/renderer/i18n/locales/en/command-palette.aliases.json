@@ -42,7 +42,9 @@
       "terminalList": ["terminal list", "session list", "switch terminal"]
     },
     "settings": {
-      "open": ["settings", "preferences", "options"]
+      "open": ["settings", "preferences", "options"],
+      "installCli": ["install pier", "pier command", "shell command"],
+      "removeCli": ["uninstall pier", "remove pier command"]
     },
     "terminal": {
       "openDebugWindow": [

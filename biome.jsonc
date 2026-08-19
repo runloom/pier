@@ -40,6 +40,8 @@
         "packages/plugin-grok/vite.config.*.ts",
         "packages/plugin-ssh/src/**",
         "packages/plugin-ssh/vite.config.*.ts",
+        "packages/plugin-tmux/src/**",
+        "packages/plugin-tmux/vite.config.*.ts",
         "packages/plugin-claude/src/**",
         "packages/plugin-claude/vite.config.*.ts",
         "electron.vite.config.ts",

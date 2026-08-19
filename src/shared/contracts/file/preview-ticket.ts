@@ -30,9 +30,25 @@ export type AbsoluteFilePreviewTicketLocator = z.infer<
   typeof absoluteFilePreviewTicketLocatorSchema
 >;
 
+const gitBlobOidSchema = z
+  .string()
+  .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u, "Expected a full Git object OID");
+
+/** Git blob locator for review image diffs (HEAD / index / commit objects). */
+export const gitBlobFilePreviewTicketLocatorSchema = z.object({
+  gitRoot: z.string().min(1).max(65_536),
+  mime: z.string().min(1).max(128),
+  oid: gitBlobOidSchema,
+  revision: z.string().min(1),
+});
+export type GitBlobFilePreviewTicketLocator = z.infer<
+  typeof gitBlobFilePreviewTicketLocatorSchema
+>;
+
 export const filePreviewTicketLocatorSchema = z.union([
   rootedFilePreviewTicketLocatorSchema,
   absoluteFilePreviewTicketLocatorSchema,
+  gitBlobFilePreviewTicketLocatorSchema,
 ]);
 export type FilePreviewTicketLocator = z.infer<
   typeof filePreviewTicketLocatorSchema
@@ -42,6 +58,12 @@ export function isAbsoluteFilePreviewLocator(
   locator: FilePreviewTicketLocator
 ): locator is AbsoluteFilePreviewTicketLocator {
   return "absolutePath" in locator;
+}
+
+export function isGitBlobFilePreviewLocator(
+  locator: FilePreviewTicketLocator
+): locator is GitBlobFilePreviewTicketLocator {
+  return "oid" in locator && "gitRoot" in locator;
 }
 
 export const filePreviewRuntimeAcquireRequestSchema = z.object({

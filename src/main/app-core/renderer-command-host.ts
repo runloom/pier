@@ -1,7 +1,27 @@
 import { RENDERER_COMMAND_CHANNEL } from "@shared/contracts/renderer-command-channels.ts";
 import { app } from "electron";
 import type { AppWindow } from "../windows/app-window.ts";
+import { findAppWindowForActivityWindowId } from "../windows/identity.ts";
 import { windowManager } from "../windows/manager.ts";
+
+function resolveRendererTargetWindow(windowId?: string): AppWindow | null {
+  if (windowId) {
+    const fromManager = windowManager.get(windowId);
+    if (fromManager && !fromManager.isDestroyed()) {
+      return fromManager;
+    }
+    const fromActivity = findAppWindowForActivityWindowId(windowId);
+    if (fromActivity && !fromActivity.isDestroyed()) {
+      return fromActivity;
+    }
+    return null;
+  }
+  return (
+    windowManager.getFocused() ??
+    windowManager.getAll().find((win) => !win.isDestroyed()) ??
+    null
+  );
+}
 
 function focusRendererTarget(win: AppWindow): void {
   if (win.isMinimized()) {
@@ -23,28 +43,13 @@ export function sendRendererCommand(
   windowId?: string,
   options: { focus?: boolean } = {}
 ): number | null {
-  if (windowId) {
-    const target = windowManager.get(windowId);
-    if (!target || target.isDestroyed()) {
-      return null;
-    }
-    if (options.focus) {
-      focusRendererTarget(target);
-    }
-    target.webContents.send(RENDERER_COMMAND_CHANNEL, envelope);
-    return target.webContents.id;
-  }
-
-  const focused =
-    windowManager.getFocused() ??
-    windowManager.getAll().find((win) => !win.isDestroyed()) ??
-    null;
-  if (!focused || focused.isDestroyed()) {
+  const target = resolveRendererTargetWindow(windowId);
+  if (!target || target.isDestroyed()) {
     return null;
   }
   if (options.focus) {
-    focusRendererTarget(focused);
+    focusRendererTarget(target);
   }
-  focused.webContents.send(RENDERER_COMMAND_CHANNEL, envelope);
-  return focused.webContents.id;
+  target.webContents.send(RENDERER_COMMAND_CHANNEL, envelope);
+  return target.webContents.id;
 }

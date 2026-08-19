@@ -10,7 +10,11 @@ import type {
   UpdateChannel,
 } from "../specs/types.ts";
 import { wslDistroFromPath } from "../wsl.ts";
-import { brewPackageTokenFromBinPath } from "./brew-token.ts";
+import {
+  brewPackageTokenFromBinPath,
+  brewQualifiedName,
+  resolveBrewQueryName,
+} from "./brew-token.ts";
 import {
   filterInstallChannels,
   filterUpdateChannels,
@@ -59,7 +63,7 @@ function npmExtraArgsFromSpec(spec: AgentLifecycleSpec): readonly string[] {
 }
 
 function brewToken(channel: Extract<InstallChannel, { kind: "brew" }>): string {
-  return channel.tap ? `${channel.tap}/${channel.formula}` : channel.formula;
+  return brewQualifiedName(channel);
 }
 
 function brewInstallStep(
@@ -80,20 +84,7 @@ function brewUpgradeStep(
   channel: Extract<InstallChannel, { kind: "brew" }>,
   installedToken?: string | null
 ): PlannedInvocation {
-  // Prefer the actually-installed cask/formula name when known
-  // (e.g. claude-code@latest vs claude-code). When Cellar reports the bare
-  // formula name but the spec has a tap, keep the tap-qualified token so
-  // third-party taps (anomalyco/tap/opencode) upgrade the right package.
-  let name = brewToken(channel);
-  if (installedToken && installedToken.length > 0) {
-    const bare = channel.formula;
-    const isBareMatch =
-      installedToken === bare || installedToken.endsWith(`/${bare}`);
-    name =
-      channel.tap && isBareMatch && !installedToken.includes("@")
-        ? brewToken(channel)
-        : installedToken;
-  }
+  const name = resolveBrewQueryName(channel, installedToken);
   if (channel.cask === true) {
     return {
       kind: "argv",

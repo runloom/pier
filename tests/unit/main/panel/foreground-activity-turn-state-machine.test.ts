@@ -138,6 +138,123 @@ describe("前台活动回合状态机", () => {
     aggregator.dispose();
   });
 
+  it("封账后新 turnId 的 ToolStart 与可信终态可开新回合", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
+    ingest(aggregator, event("TurnCompleted", { turnId: "turn-1" }));
+
+    expect(
+      ingest(
+        aggregator,
+        event("ToolStart", { toolUseId: "shell-1", turnId: "turn-2" })
+      )
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("tool");
+    expect(
+      ingest(aggregator, event("TurnCompleted", { turnId: "turn-2" }))
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("ready");
+    aggregator.dispose();
+  });
+
+  it("封账后方案解除若无 PromptSubmit，新 turnId 终态仍回到 ready", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
+    ingest(aggregator, event("TurnCompleted", { turnId: "turn-1" }));
+    ingest(aggregator, {
+      agent: "claude",
+      event: "InteractionRequested",
+      interactionId: "cp:session:1",
+      interactionKind: "permission",
+      kind: "agentEvent",
+      nativeEvent: "cursor.transcript.create_plan",
+      panelId: "panel-1",
+      toolName: "CreatePlan",
+      toolUseId: "cp:session:1",
+      v: 3,
+      windowId: "window-1",
+    });
+    ingest(aggregator, {
+      agent: "claude",
+      event: "InteractionResolved",
+      interactionId: "cp:session:1",
+      interactionKind: "permission",
+      interactionOutcome: "completed",
+      kind: "agentEvent",
+      nativeEvent: "cursor.transcript.create_plan.resolved",
+      panelId: "panel-1",
+      toolName: "CreatePlan",
+      toolUseId: "cp:session:1",
+      v: 3,
+      windowId: "window-1",
+    });
+    expect(statusOf(aggregator)).toBe("processing");
+    expect(
+      ingest(
+        aggregator,
+        event("ToolStart", { toolUseId: "shell-1", turnId: "turn-2" })
+      )
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("tool");
+    expect(
+      ingest(
+        aggregator,
+        event("ToolComplete", { toolUseId: "shell-1", turnId: "turn-2" })
+      )
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("processing");
+    expect(
+      ingest(aggregator, event("TurnCompleted", { turnId: "turn-2" }))
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("ready");
+    aggregator.dispose();
+  });
+
+  it("封账后仅新 turnId 的可信终态也可收口，ToolComplete 不能开新回合", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
+    ingest(aggregator, event("TurnCompleted", { turnId: "turn-1" }));
+    ingest(aggregator, {
+      agent: "claude",
+      event: "InteractionRequested",
+      interactionId: "cp:session:1",
+      interactionKind: "permission",
+      kind: "agentEvent",
+      nativeEvent: "cursor.transcript.create_plan",
+      panelId: "panel-1",
+      toolName: "CreatePlan",
+      toolUseId: "cp:session:1",
+      v: 3,
+      windowId: "window-1",
+    });
+    ingest(aggregator, {
+      agent: "claude",
+      event: "InteractionResolved",
+      interactionId: "cp:session:1",
+      interactionKind: "permission",
+      interactionOutcome: "completed",
+      kind: "agentEvent",
+      nativeEvent: "cursor.transcript.create_plan.resolved",
+      panelId: "panel-1",
+      toolName: "CreatePlan",
+      toolUseId: "cp:session:1",
+      v: 3,
+      windowId: "window-1",
+    });
+    expect(
+      ingest(
+        aggregator,
+        event("ToolComplete", { toolUseId: "late-1", turnId: "turn-2" })
+      )
+    ).toBe(false);
+    expect(statusOf(aggregator)).toBe("processing");
+    expect(
+      ingest(aggregator, event("TurnCompleted", { turnId: "turn-2" }))
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("ready");
+    aggregator.dispose();
+  });
+
   it("新回合替换会退休旧身份，迟到旧进展不能夺回且新终态仍可完成", () => {
     const aggregator = createForegroundActivityAggregator();
     ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
@@ -396,6 +513,198 @@ describe("前台活动回合状态机", () => {
     vi.advanceTimersByTime(HOOK_FRESH_TTL_MS + 1000);
 
     expect(statusOf(aggregator)).toBeUndefined();
+    aggregator.dispose();
+  });
+
+  it.each([
+    {
+      name: "claude 文本回合：advisory Stop 不 ready，idle_prompt 才 ready",
+      stopAuthority: "advisory" as const,
+      steps: [
+        { event: "PromptSubmit", turnId: "p1", want: "processing" },
+        { event: "Stop", turnId: "p1", want: undefined },
+        { event: "TurnCompleted", turnId: "p1", want: "ready" },
+      ],
+    },
+    {
+      name: "claude ExitPlan 后续跑：无 PromptSubmit 的新 turnId 仍能收口",
+      stopAuthority: "advisory" as const,
+      steps: [
+        { event: "PromptSubmit", turnId: "plan", want: "processing" },
+        { event: "TurnCompleted", turnId: "plan", want: "ready" },
+        {
+          event: "InteractionRequested",
+          interactionId: "exit-1",
+          toolName: "ExitPlanMode",
+          want: "waiting",
+        },
+        {
+          event: "InteractionResolved",
+          interactionId: "exit-1",
+          toolName: "ExitPlanMode",
+          want: "processing",
+        },
+        {
+          event: "ToolStart",
+          toolUseId: "shell-1",
+          turnId: "build",
+          want: "tool",
+        },
+        { event: "TurnCompleted", turnId: "build", want: "ready" },
+      ],
+    },
+    {
+      name: "codex 问卷：hook 当工具，transcript Interaction 升 waiting；答完后再 advisory Stop，task_complete 才 ready",
+      stopAuthority: "advisory" as const,
+      steps: [
+        { event: "PromptSubmit", turnId: "t1", want: "processing" },
+        {
+          event: "ToolStart",
+          toolUseId: "q1",
+          toolName: "request_user_input",
+          turnId: "t1",
+          want: "tool",
+        },
+        {
+          event: "InteractionRequested",
+          interactionId: "q1",
+          toolName: "request_user_input",
+          turnId: "t1",
+          want: "waiting",
+        },
+        {
+          event: "ToolComplete",
+          toolUseId: "q1",
+          toolName: "request_user_input",
+          turnId: "t1",
+          want: "waiting",
+        },
+        {
+          event: "InteractionResolved",
+          interactionId: "q1",
+          toolName: "request_user_input",
+          turnId: "t1",
+          want: "processing",
+        },
+        { event: "Stop", turnId: "t1", want: undefined },
+        { event: "TurnCompleted", turnId: "t1", want: "ready" },
+      ],
+    },
+    {
+      name: "grok 工具后 advisory Stop 不 ready，updates end_turn 才 ready",
+      stopAuthority: "advisory" as const,
+      steps: [
+        { event: "PromptSubmit", want: "processing" },
+        { event: "ToolStart", toolUseId: "r1", want: "tool" },
+        { event: "ToolComplete", toolUseId: "r1", want: "processing" },
+        { event: "Stop", want: undefined },
+        { event: "TurnCompleted", want: "ready" },
+      ],
+    },
+    {
+      name: "omp ask 闭环后 agent_end.completed 立即 ready",
+      stopAuthority: "authoritative" as const,
+      steps: [
+        { event: "PromptSubmit", want: "processing" },
+        {
+          event: "InteractionRequested",
+          interactionId: "ask-1",
+          toolName: "ask",
+          want: "waiting",
+        },
+        {
+          event: "InteractionResolved",
+          interactionId: "ask-1",
+          toolName: "ask",
+          want: "processing",
+        },
+        { event: "TurnCompleted", want: "ready" },
+      ],
+    },
+    {
+      name: "pi 文本回合：权威 agent_settled 直接 ready",
+      stopAuthority: "authoritative" as const,
+      steps: [
+        { event: "PromptSubmit", want: "processing" },
+        { event: "Stop", want: "ready" },
+      ],
+    },
+    {
+      name: "opencode/kilo：阻塞问卷答完后 session.idle 权威 Stop 直接 ready",
+      stopAuthority: "authoritative" as const,
+      steps: [
+        { event: "PromptSubmit", want: "processing" },
+        {
+          event: "InteractionRequested",
+          interactionId: "q-1",
+          toolName: "question",
+          want: "waiting",
+        },
+        {
+          event: "InteractionResolved",
+          interactionId: "q-1",
+          toolName: "question",
+          want: "processing",
+        },
+        { event: "Stop", want: "ready" },
+      ],
+    },
+    {
+      name: "amp：awaiting-approval 后 agent.end.done 直接 ready",
+      stopAuthority: "none" as const,
+      steps: [
+        { event: "PromptSubmit", want: "processing" },
+        {
+          event: "InteractionRequested",
+          interactionId: "approve-1",
+          toolName: "approval",
+          want: "waiting",
+        },
+        {
+          event: "InteractionResolved",
+          interactionId: "approve-1",
+          toolName: "approval",
+          want: "processing",
+        },
+        { event: "TurnCompleted", want: "ready" },
+      ],
+    },
+  ])("$name", ({ stopAuthority, steps }) => {
+    const aggregator = createForegroundActivityAggregator();
+    for (const step of steps) {
+      const accepted = ingest(
+        aggregator,
+        {
+          agent: "claude",
+          event: step.event,
+          kind: "agentEvent",
+          panelId: "panel-1",
+          v: 3,
+          windowId: "window-1",
+          ...("turnId" in step && step.turnId ? { turnId: step.turnId } : {}),
+          ...("toolUseId" in step && step.toolUseId
+            ? { toolUseId: step.toolUseId }
+            : {}),
+          ...("toolName" in step && step.toolName
+            ? { toolName: step.toolName }
+            : {}),
+          ...("interactionId" in step && step.interactionId
+            ? {
+                interactionId: step.interactionId,
+                interactionKind:
+                  step.toolName === "ExitPlanMode" ? "permission" : "question",
+                interactionOutcome:
+                  step.event === "InteractionResolved"
+                    ? "completed"
+                    : undefined,
+              }
+            : {}),
+        } as AgentHookEventPayload,
+        { stopAuthority }
+      );
+      expect(accepted, step.event).toBe(true);
+      expect(statusOf(aggregator), step.event).toBe(step.want);
+    }
     aggregator.dispose();
   });
 });

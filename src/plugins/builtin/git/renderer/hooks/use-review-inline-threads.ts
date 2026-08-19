@@ -138,12 +138,14 @@ export function useReviewInlineThreads({
       close: pluginText(context, "reviewCommentClose", "Close"),
       deleteComment: pluginText(context, "reviewCommentDelete", "Delete"),
       deleted: pluginText(context, "reviewCommentDeleted", "Deleted"),
+      cancel: pluginText(context, "reviewCommentCancel", "Cancel"),
       editComment: pluginText(context, "reviewCommentEdit", "Edit"),
       inputPlaceholder: pluginText(
         context,
         "reviewCommentInputPlaceholder",
         "Write a comment…"
       ),
+      save: pluginText(context, "reviewCommentSave", "Save"),
       submit: pluginText(context, "reviewCommentSubmit", "Submit"),
       title: pluginText(context, "reviewCommentTitle", "Comment"),
     }),
@@ -363,7 +365,7 @@ export function useReviewInlineThreads({
   );
 
   const onDeleteComment = useCallback(
-    async (threadId: string, commentId: string): Promise<void> => {
+    async (threadId: string, commentId: string): Promise<boolean> => {
       const result = await context.comments.deleteComment({
         commentId,
         threadId,
@@ -375,7 +377,7 @@ export function useReviewInlineThreads({
           "Failed to delete comment",
           result
         );
-        return;
+        return false;
       }
       // 单条批注删除后收起展开卡。
       setSlots((prev) => {
@@ -390,6 +392,7 @@ export function useReviewInlineThreads({
         setDriftThreadId(null);
       }
       bumpEpoch();
+      return true;
     },
     [bumpEpoch, context, driftThreadId, reportFailure, worktreeKey]
   );

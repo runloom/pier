@@ -919,7 +919,10 @@ final class GhosttyBridgeImpl {
         // Pier 负责光标形状偏好; Ghostty shell integration 默认会在 prompt 强制 bar。
         // 厚度调整走 Ghostty 全局字形度量: bar / 空心块光标会加粗, underline 同时影响
         // 下划线光标和 SGR-4 下划线文本; 为 HiDPI 可读性接受这个一致加粗。
-        builder.withCustom("shell-integration-features", "no-cursor")
+        // ssh-env：交互式 `ssh` 把远端 TERM 降为 xterm-256color，避免云主机没有
+        // xterm-ghostty terminfo 时退格打出 ^H。不启 ssh-terminfo（会写远端
+        // ~/.terminfo，且依赖 ghostty +ssh-cache CLI，Pier 不提供）。
+        builder.withCustom("shell-integration-features", "no-cursor,ssh-env")
         builder.withCustom("adjust-cursor-thickness", "1")
         builder.withCustom("adjust-underline-thickness", "1")
         // 文字锐度: 在线性空间做边缘 alpha 混合并按字形亮度校正。macOS 默认 native 在
@@ -1886,8 +1889,12 @@ final class GhosttyBridgeImpl {
     }
 
     func sendText(panelId: String, text: String) -> Bool {
+        sendText(panelId: panelId, data: Data(text.utf8))
+    }
+
+    func sendText(panelId: String, data: Data) -> Bool {
         guard let term = terminals[panelId] else { return false }
-        return term.terminalView.sendText(text)
+        return term.terminalView.sendText(data)
     }
 
     /// AppKit virtual keycode press+release (e.g. 0x24 = Return). Used after
@@ -2516,12 +2523,20 @@ public func ghosttyBridgePerformBindingAction(
 @_cdecl("ghostty_bridge_send_text")
 public func ghosttyBridgeSendText(
     _ panelId: UnsafePointer<CChar>,
-    _ text: UnsafePointer<CChar>
+    _ bytes: UnsafePointer<UInt8>?,
+    _ count: Int
 ) -> Bool {
-    MainActor.assumeIsolated {
+    let data: Data
+    if count > 0 {
+        guard let bytes else { return false }
+        data = Data(bytes: bytes, count: count)
+    } else {
+        data = Data()
+    }
+    return MainActor.assumeIsolated {
         GhosttyBridgeImpl.shared.sendText(
             panelId: String(cString: panelId),
-            text: String(cString: text)
+            data: data
         )
     }
 }
@@ -2531,12 +2546,23 @@ public func ghosttyBridgeSendKeyPress(
     _ panelId: UnsafePointer<CChar>,
     _ keycode: UInt32,
     _ mods: UInt32,
-    _ text: UnsafePointer<CChar>?
+    _ bytes: UnsafePointer<UInt8>?,
+    _ count: Int
 ) -> Bool {
-    MainActor.assumeIsolated {
-        let textValue: String? = text.map { String(cString: $0) }.flatMap { value in
-            value.isEmpty ? nil : value
+    let textValue: String?
+    if count > 0 {
+        guard let bytes else { return false }
+        guard let decoded = String(
+            data: Data(bytes: bytes, count: count),
+            encoding: .utf8
+        ) else {
+            return false
         }
+        textValue = decoded.isEmpty ? nil : decoded
+    } else {
+        textValue = nil
+    }
+    return MainActor.assumeIsolated {
         return GhosttyBridgeImpl.shared.sendKeyPress(
             panelId: String(cString: panelId),
             keycode: keycode,

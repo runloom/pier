@@ -56,6 +56,12 @@ function contextFor(
   errors: string[] = []
 ): ExternalMainPluginContext {
   return {
+    configuration: {
+      get: vi.fn(() => undefined),
+      onDidChange: vi.fn(() => () => undefined),
+      reset: vi.fn(async () => undefined),
+      set: vi.fn(async () => undefined),
+    },
     events: { emit: vi.fn() },
     lifecycle: { onBeforeQuit: vi.fn() },
     logger: {
@@ -82,6 +88,7 @@ function contextFor(
       read: vi.fn(),
       registerSource: vi.fn(() => () => undefined),
     },
+    launchWrap: { register: vi.fn(() => () => undefined) },
   };
 }
 

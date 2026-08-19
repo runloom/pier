@@ -85,6 +85,26 @@ describe("withPierCursorHooks", () => {
       CURSOR_EVENTS.find((event) => event.nativeEvent === "preToolUse")
         ?.pierEvent
     ).toBe("ToolStart");
+    const preTool = (
+      withPierCursorHooks({}).hooks as Record<
+        string,
+        Array<{ command: string }>
+      >
+    ).preToolUse?.[0]?.command;
+    expect(preTool).toContain("CreatePlan");
+    expect(preTool).toContain("SwitchMode");
+    expect(preTool).toContain("InteractionRequested");
+    expect(preTool).not.toContain("AskQuestion");
+  });
+
+  it("stop / subagentStop 写入 loop_limit: null，避免默认 5 次后停报终态", () => {
+    const hooks = withPierCursorHooks({}).hooks as Record<
+      string,
+      Array<{ command: string; loop_limit?: number | null }>
+    >;
+    expect(hooks.stop?.[0]?.loop_limit).toBeNull();
+    expect(hooks.subagentStop?.[0]?.loop_limit).toBeNull();
+    expect(hooks.preToolUse?.[0]?.loop_limit).toBeUndefined();
   });
 
   it("stop 命令按 payload status 分发可信终态, 未知值回落 Stop", () => {
@@ -237,6 +257,94 @@ describe("withPierCursorHooks", () => {
       sessionId: "parent-conversation-1",
       subagentCount: 1,
     } satisfies Partial<AgentActivity>);
+  }, 15_000);
+
+  it("CreatePlan preToolUse 上报 InteractionRequested，普通工具仍 ToolStart", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-cursor-plan-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const hooks = withPierCursorHooks({}).hooks as Record<
+      string,
+      Array<{ command: string }>
+    >;
+    const preTool = hooks.preToolUse?.[0]?.command ?? "";
+    const postTool = hooks.postToolUse?.[0]?.command ?? "";
+    const env = {
+      ...process.env,
+      PATH: pathForHookSpawn(process.env.PATH),
+      PIER_AGENT_EVENT_LOG: logPath,
+      PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+      PIER_PANEL_ID: "p1",
+      PIER_WINDOW_ID: "w1",
+    };
+    for (const [cmd, payload] of [
+      [
+        preTool,
+        {
+          conversation_id: "c1",
+          generation_id: "g1",
+          tool_name: "CreatePlan",
+          tool_use_id: "plan-1",
+        },
+      ],
+      [
+        postTool,
+        {
+          conversation_id: "c1",
+          generation_id: "g1",
+          tool_name: "CreatePlan",
+          tool_use_id: "plan-1",
+        },
+      ],
+      [
+        preTool,
+        {
+          conversation_id: "c1",
+          generation_id: "g1",
+          tool_name: "Shell",
+          tool_use_id: "shell-1",
+        },
+      ],
+    ] as const) {
+      const result = spawnSync("/bin/sh", ["-c", cmd], {
+        env,
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      {
+        agent: "cursor",
+        event: "InteractionRequested",
+        interactionId: "plan-1",
+        interactionKind: "permission",
+        toolName: "CreatePlan",
+        toolUseId: "plan-1",
+        v: 3,
+      },
+      {
+        agent: "cursor",
+        event: "InteractionResolved",
+        interactionId: "plan-1",
+        interactionKind: "permission",
+        interactionOutcome: "completed",
+        toolName: "CreatePlan",
+        v: 3,
+      },
+      {
+        agent: "cursor",
+        event: "ToolStart",
+        toolName: "Shell",
+        toolUseId: "shell-1",
+        v: 3,
+      },
+    ]);
   }, 15_000);
 
   it("schema 形状：command 直接在定义对象上（非嵌套 hooks 数组）", () => {

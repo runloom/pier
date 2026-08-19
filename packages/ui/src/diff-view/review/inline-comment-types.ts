@@ -28,21 +28,25 @@ export interface PierInlineReviewThread {
 
 /**
  * 评论 chrome：
- * - `card` = Diff 注解槽：InputGroup 一体（正文+提交）自带边框
- * - `plain` = Popover 等面板：标准表单 = 带边框 Textarea + 下方独立提交按钮
+ * - `card` = Diff 注解槽：带阴影的展示卡，点击进入编辑
+ * - `plain` = Popover 等面板：无额外 padding/边框，编辑走共享 CommentComposer
  */
 export type PierInlineReviewChrome = "card" | "plain";
 
 /** 行内评论卡 i18n 文案（host 注入，禁止卡片内联用户串）。 */
 export interface PierInlineReviewLabels {
   readonly authorYou: string;
+  /** 编辑态取消。 */
+  readonly cancel: string;
   readonly close: string;
   readonly deleteComment: string;
   readonly deleted: string;
   /** 编辑按钮 aria-label / title。 */
   readonly editComment: string;
   readonly inputPlaceholder: string;
-  /** 编辑器唯一动作按钮文案（草稿与编辑态共用：「提交」）。 */
+  /** 编辑态保存。 */
+  readonly save: string;
+  /** 新建态发送按钮 aria-label（图标发送，不进编辑底栏）。 */
   readonly submit: string;
   readonly title: string;
 }
@@ -58,11 +62,11 @@ export interface PierInlineReviewLabels {
 export interface PierInlineReviewHandlers {
   /** 取消草稿（移除该 draft 槽）。 */
   readonly onCancelDraft: (draftId: string) => void;
-  /** 删除评论（= 删除整条批注）。 */
+  /** 删除评论（= 删除整条批注）。返回 true 表示已删除。 */
   readonly onDeleteComment: (
     threadId: string,
     commentId: string
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   /**
    * 原地改评论正文。未提供时展示卡不渲染编辑按钮（host 未开通编辑能力的
    * 降级路径）。返回 true 表示已写入，卡片据此退出编辑态。

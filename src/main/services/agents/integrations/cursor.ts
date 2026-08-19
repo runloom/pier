@@ -3,10 +3,13 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { CURSOR_INTERACTIVE_BLOCKING_TOOLS } from "./interactive-blocking-tools.ts";
 import {
   commandExistsOnPath,
   isManagedPierHookCommand,
   pierHookCommandV3WithStdin,
+  pierHookCommandV3WithStdinInteractiveToolResolve,
+  pierHookCommandV3WithStdinInteractiveToolStart,
   pierHookCommandV3WithStdinStatusDispatch,
   type StdinStatusDispatchCase,
   skipHookCommandWhenEnvPresent,
@@ -50,6 +53,8 @@ type StandardV3Event = Exclude<
  * - `stop` 按 payload `status` 在命令内分发（见 CURSOR_STOP_STATUS_CASES）。
  * - **不按 hook 分发 AskQuestion**：上游 preToolUse 不覆盖该工具。问卷
  *   waiting 由 `transcript/cursor-reconciler.ts` 读主会话 jsonl 对账。
+ * - CreatePlan / SwitchMode 若走到 preToolUse，按审批门分发 Interaction*，
+ *   避免方案卡停在「执行工具中」。transcript `turn_ended` 补常缺的 stop。
  */
 export const CURSOR_EVENTS: ReadonlyArray<{
   nativeEvent: string;
@@ -90,6 +95,7 @@ export const CURSOR_FA_ERROR_REACHABILITY = "native" as const;
 
 interface CursorHookEntry {
   command: string;
+  loop_limit?: number | null;
   timeout?: number;
 }
 
@@ -159,35 +165,78 @@ function wrapCursorPierCommand(command: string): string {
   return skipHookCommandWhenEnvPresent(command, CURSOR_SKIP_WHEN_ENV_PRESENT);
 }
 
+function cursorStdinExtraction(nativeEvent: string) {
+  const subagent =
+    nativeEvent === "subagentStart" || nativeEvent === "subagentStop";
+  return {
+    ...(subagent
+      ? {
+          actorHintFromAgentId: true,
+          agentInstanceIdFields: ["subagent_id", "subagentId"],
+          agentTypeFields: ["subagent_type", "subagentType"],
+          parentSessionIdFields: [
+            "parent_conversation_id",
+            "parentConversationId",
+            "conversation_id",
+            "conversationId",
+          ],
+          sessionIdAsParent: true,
+          suppressTurnId: true,
+        }
+      : {}),
+    turnIdFields: ["generation_id", "generationId"] as const,
+  };
+}
+
 function cursorHookCommand(
   nativeEvent: string,
   event: StandardV3Event
 ): string {
-  const subagent =
-    nativeEvent === "subagentStart" || nativeEvent === "subagentStop";
   return wrapCursorPierCommand(
     pierHookCommandV3WithStdin({
-      ...(subagent
-        ? {
-            actorHintFromAgentId: true,
-            agentInstanceIdFields: ["subagent_id", "subagentId"],
-            agentTypeFields: ["subagent_type", "subagentType"],
-            parentSessionIdFields: [
-              "parent_conversation_id",
-              "parentConversationId",
-              "conversation_id",
-              "conversationId",
-            ],
-            sessionIdAsParent: true,
-            suppressTurnId: true,
-          }
-        : {}),
+      ...cursorStdinExtraction(nativeEvent),
       agentId: AGENT_ID,
       event,
       nativeEvent,
-      turnIdFields: ["generation_id", "generationId"],
     })
   );
+}
+
+function cursorInteractiveToolCommand(
+  nativeEvent: "preToolUse" | "postToolUse" | "postToolUseFailure"
+): string {
+  const extraction = {
+    ...cursorStdinExtraction(nativeEvent),
+    agentId: AGENT_ID,
+    nativeEvent,
+    tools: CURSOR_INTERACTIVE_BLOCKING_TOOLS,
+  };
+  if (nativeEvent === "preToolUse") {
+    return wrapCursorPierCommand(
+      pierHookCommandV3WithStdinInteractiveToolStart(extraction)
+    );
+  }
+  return wrapCursorPierCommand(
+    pierHookCommandV3WithStdinInteractiveToolResolve({
+      ...extraction,
+      interactionOutcome:
+        nativeEvent === "postToolUseFailure" ? "failed" : "completed",
+    })
+  );
+}
+
+function cursorInstalledCommand(
+  nativeEvent: string,
+  event: StandardV3Event
+): string {
+  if (
+    nativeEvent === "preToolUse" ||
+    nativeEvent === "postToolUse" ||
+    nativeEvent === "postToolUseFailure"
+  ) {
+    return cursorInteractiveToolCommand(nativeEvent);
+  }
+  return cursorHookCommand(nativeEvent, event);
 }
 
 /**
@@ -208,12 +257,15 @@ export function withPierCursorHooks(
     const existing = Array.isArray(current) ? current : [];
     const kept = existing.filter((entry) => !isPierCursorEntry(entry));
     const pierEntry: CursorHookEntry = { command, timeout: TIMEOUT_SECONDS };
+    if (nativeEvent === "stop" || nativeEvent === "subagentStop") {
+      pierEntry.loop_limit = null;
+    }
     hooks[nativeEvent] = [...kept, pierEntry];
   };
   for (const event of CURSOR_EVENTS) {
     install(
       event.nativeEvent,
-      cursorHookCommand(event.nativeEvent, event.pierEvent)
+      cursorInstalledCommand(event.nativeEvent, event.pierEvent)
     );
   }
   install(
@@ -298,7 +350,30 @@ export const cursorIntegration: AgentHookIntegration = {
   // 回落 `Stop`——旧版 cursor CLI 或 payload 变更时退化为候选终态。
   runtime: {
     emittedMappings: [
-      ...CURSOR_EVENTS,
+      ...CURSOR_EVENTS.flatMap((event) => {
+        if (event.nativeEvent === "preToolUse") {
+          return [
+            { nativeEvent: event.nativeEvent, pierEvent: "ToolStart" },
+            {
+              nativeEvent: event.nativeEvent,
+              pierEvent: "InteractionRequested",
+            },
+          ];
+        }
+        if (
+          event.nativeEvent === "postToolUse" ||
+          event.nativeEvent === "postToolUseFailure"
+        ) {
+          return [
+            { nativeEvent: event.nativeEvent, pierEvent: "ToolComplete" },
+            {
+              nativeEvent: event.nativeEvent,
+              pierEvent: "InteractionResolved",
+            },
+          ];
+        }
+        return [event];
+      }),
       ...CURSOR_STOP_STATUS_CASES.map(({ nativeStatus, pierEvent }) => ({
         nativeEvent: `stop.status=${nativeStatus}`,
         pierEvent,

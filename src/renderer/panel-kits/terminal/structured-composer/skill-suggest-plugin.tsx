@@ -20,6 +20,7 @@ import {
   useState,
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { isImePendingLexicalEnter } from "@/lib/keybindings/is-text-input.ts";
 import { ComposerAutocompletePortal } from "./composer-autocomplete-portal.tsx";
 import { $placeCaretAfterComposerChip } from "./composer-chip-caret.ts";
 import {
@@ -325,6 +326,9 @@ export function SkillSuggestPlugin({
       editor.registerCommand(
         KEY_ENTER_COMMAND,
         (event) => {
+          if (isImePendingLexicalEnter(event)) {
+            return true;
+          }
           // Only own Enter when there is something to insert — leave
           // `/model`-style free text and empty catalogs for send/edit.
           if (itemsRef.current.length === 0) {

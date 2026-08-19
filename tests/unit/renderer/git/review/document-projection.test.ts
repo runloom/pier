@@ -498,6 +498,72 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     );
   });
 
+  it("does not reuse a lone image section across staged and unstaged slots", () => {
+    const path = "icon.png";
+    const oid = "a".repeat(40);
+    const entry: GitReviewIndexEntry = {
+      entryKey: "entry:icon",
+      oldPaths: [],
+      path,
+      renderSlots: [
+        {
+          binary: true,
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: "section:unstaged",
+          status: "modified",
+          targetPath: path,
+        },
+        {
+          binary: true,
+          group: "staged",
+          oldPath: null,
+          sectionKey: "section:staged",
+          status: "modified",
+          targetPath: path,
+        },
+      ],
+      status: "modified",
+    };
+    const document: GitReviewFileDocumentOk = {
+      entryKey: entry.entryKey,
+      kind: "ok",
+      revision: "rev-image",
+      sections: [
+        {
+          after: {
+            byteSize: 8,
+            height: 1,
+            kind: "blob",
+            mime: "image/png",
+            oid,
+            width: 1,
+          },
+          before: null,
+          gitRootPath: "/workspace",
+          kind: "image",
+          oldPath: null,
+          sectionKey: "section:staged",
+          status: "modified",
+          targetPath: path,
+        },
+      ],
+      surfaceSections: {
+        committed: null,
+        head: null,
+        index: null,
+        staged: "section:staged",
+      },
+    };
+    const projection = projectReviewDocumentResource(
+      { document, entry, kind: "loaded" },
+      context(),
+      "en"
+    );
+    expect(projection.items.map((item) => item.id)).toEqual(["section:staged"]);
+    expect(projection.items[0]?.kind).toBe("image");
+  });
+
   it("attaches index numstat as lineStats on estimate items for first paint", () => {
     const path = "src/with-stats.ts";
     const item: GitReviewIndexEntry = {

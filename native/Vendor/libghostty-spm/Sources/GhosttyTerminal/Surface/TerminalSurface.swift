@@ -17,6 +17,12 @@ import GhosttyKit
 public final class TerminalSurface {
     private var surface: ghostty_surface_t?
     private var hasBeenFreed = false
+    private var viewportTextCache = ViewportTextCache()
+    private var occlusionVisible = true
+    private var lastPixelWidth: UInt32?
+    private var lastPixelHeight: UInt32?
+    private var lastScaleX: Double?
+    private var lastScaleY: Double?
 
     init(_ surface: ghostty_surface_t) {
         self.surface = surface
@@ -44,18 +50,50 @@ public final class TerminalSurface {
 
     @discardableResult
     public func sendText(_ text: String) -> Bool {
+        sendText(Data(text.utf8))
+    }
+
+    /// Inject UTF-8 bytes from the host (N-API) without a Swift String round-trip.
+    /// Length is the byte count of `data`, matching `ghostty_surface_text`.
+    /// Returns false when the surface is missing or the buffer cannot be read.
+    @discardableResult
+    public func sendText(_ data: Data) -> Bool {
         guard let s = surface else {
             TerminalDebugLog.log(.input, "surface text ignored: missing surface")
             return false
         }
+        if data.isEmpty {
+            return true
+        }
         TerminalDebugLog.log(
             .input,
-            "surface text=\(TerminalDebugLog.describe(text))"
+            "surface text=\(TerminalDebugLog.describe(data))"
         )
-        text.withCString { cStr in
-            ghostty_surface_text(s, cStr, UInt(text.utf8.count))
+        let result = feedUtf8(data) { base, count in
+            ghostty_surface_text(s, base, count)
+            return true
         }
-        return true
+        if result {
+            noteViewportChanged()
+        }
+        return result
+    }
+
+    /// Copy `data` to a C pointer + byte count. False if the buffer has no base.
+    private func feedUtf8(
+        _ data: Data,
+        _ body: (UnsafePointer<CChar>, UInt) -> Bool
+    ) -> Bool {
+        var invoked = false
+        var result = false
+        data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress?.assumingMemoryBound(to: CChar.self) else {
+                return
+            }
+            result = body(base, UInt(data.count))
+            invoked = true
+        }
+        return invoked && result
     }
 
     @discardableResult
@@ -105,10 +143,20 @@ public final class TerminalSurface {
             TerminalDebugLog.log(.ime, "surface preedit ignored: missing surface")
             return
         }
-        TerminalDebugLog.log(.ime, "surface preedit=\(TerminalDebugLog.describe(text))")
-        text.withCString { cStr in
-            ghostty_surface_preedit(s, cStr, UInt(text.utf8.count))
+        let data = Data(text.utf8)
+        TerminalDebugLog.log(.ime, "surface preedit=\(TerminalDebugLog.describe(data))")
+        // Ghostty treats length 0 as "clear IME overlay". Empty `Data` has
+        // no baseAddress, so this must not go through `feedUtf8`.
+        if data.isEmpty {
+            ghostty_surface_preedit(s, nil, 0)
+            noteViewportChanged()
+            return
         }
+        _ = feedUtf8(data) { base, count in
+            ghostty_surface_preedit(s, base, count)
+            return true
+        }
+        noteViewportChanged()
     }
 
     // MARK: - Actions
@@ -119,8 +167,12 @@ public final class TerminalSurface {
             TerminalDebugLog.log(.actions, "binding action ignored: missing surface")
             return false
         }
-        let result = action.withCString { cStr in
-            ghostty_surface_binding_action(s, cStr, UInt(action.utf8.count))
+        let data = Data(action.utf8)
+        if data.isEmpty {
+            return false
+        }
+        let result = feedUtf8(data) { base, count in
+            ghostty_surface_binding_action(s, base, count)
         }
         TerminalDebugLog.log(
             .actions,
@@ -150,6 +202,11 @@ public final class TerminalSurface {
         }
         TerminalDebugLog.log(.metrics, "surface setSize \(width)x\(height)")
         ghostty_surface_set_size(s, width, height)
+        if lastPixelWidth != width || lastPixelHeight != height {
+            lastPixelWidth = width
+            lastPixelHeight = height
+            noteViewportChanged()
+        }
     }
 
     func setContentScale(x: Double, y: Double) {
@@ -162,6 +219,11 @@ public final class TerminalSurface {
             "surface contentScale x=\(String(format: "%.2f", x)) y=\(String(format: "%.2f", y))"
         )
         ghostty_surface_set_content_scale(s, x, y)
+        if lastScaleX != x || lastScaleY != y {
+            lastScaleX = x
+            lastScaleY = y
+            noteViewportChanged()
+        }
     }
 
     // MARK: - State
@@ -190,6 +252,10 @@ public final class TerminalSurface {
         guard let s = surface else { return }
         TerminalDebugLog.log(.lifecycle, "surface occlusion visible=\(visible)")
         ghostty_surface_set_occlusion(s, visible)
+        if occlusionVisible != visible {
+            occlusionVisible = visible
+            noteViewportChanged()
+        }
     }
 
     /// Host-forced cursor suppression: renderer never draws the cursor
@@ -212,6 +278,7 @@ public final class TerminalSurface {
             }
             ghostty_surface_write_buffer(s, base, UInt(data.count))
         }
+        noteViewportChanged()
     }
 
     // MARK: - Size Query
@@ -254,36 +321,25 @@ public final class TerminalSurface {
             TerminalDebugLog.log(.input, "surface readViewportText ignored: missing surface")
             return nil
         }
-        let topLeft = ghostty_point_s(
-            tag: GHOSTTY_POINT_VIEWPORT,
-            coord: GHOSTTY_POINT_COORD_TOP_LEFT,
-            x: 0,
-            y: 0
-        )
-        let bottomRight = ghostty_point_s(
-            tag: GHOSTTY_POINT_VIEWPORT,
-            coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT,
-            x: 0,
-            y: 0
-        )
-        let selection = ghostty_selection_s(
-            top_left: topLeft,
-            bottom_right: bottomRight,
-            rectangle: false
-        )
-        var out = ghostty_text_s()
-        guard ghostty_surface_read_text(s, selection, &out) else {
-            TerminalDebugLog.log(.input, "surface readViewportText returned false")
-            return nil
+        let dump = { () -> String? in
+            let text = GhosttyText.readViewport(from: s)
+            if text == nil {
+                TerminalDebugLog.log(.input, "surface readViewportText returned false")
+            }
+            return text
         }
-        defer { ghostty_surface_free_text(s, &out) }
-        guard let textPtr = out.text, out.text_len > 0 else {
-            return ""
+        if occlusionVisible {
+            return viewportTextCache.read(dump: dump)
         }
-        let bytes = UnsafeBufferPointer(start: textPtr, count: Int(out.text_len))
-            .map { UInt8(bitPattern: $0) }
-        return String(decoding: bytes, as: UTF8.self)
+        return viewportTextCache.readUncached(dump: dump)
     }
+
+    func noteViewportChanged() {
+        viewportTextCache.noteChanged()
+    }
+
+    @_spi(PierDiagnostics)
+    public var viewportTextDumpCount: UInt64 { viewportTextCache.dumpCount }
 
     func readSelectionResult() -> SelectionResult? {
         guard let s = surface else {
@@ -297,7 +353,8 @@ public final class TerminalSurface {
         }
         defer { ghostty_surface_free_text(s, &out) }
 
-        guard let textPtr = out.text, out.text_len > 0 else {
+        let text = GhosttyText.decode(out)
+        guard !text.isEmpty else {
             TerminalDebugLog.log(.input, "surface readSelection empty")
             return SelectionResult(
                 text: "",
@@ -305,10 +362,6 @@ public final class TerminalSurface {
                 offsetLength: out.offset_len
             )
         }
-
-        let bytes = UnsafeBufferPointer(start: textPtr, count: Int(out.text_len))
-            .map { UInt8(bitPattern: $0) }
-        let text = String(decoding: bytes, as: UTF8.self)
         TerminalDebugLog.log(
             .input,
             "surface readSelection bytes=\(text.utf8.count) lines=\(TerminalInputText.lineCount(in: text)) offset=\(out.offset_start)+\(out.offset_len)"
@@ -373,14 +426,7 @@ public final class TerminalSurface {
             }
             defer { ghostty_surface_free_text(s, &out) }
 
-            let word: String
-            if let textPtr = out.text, out.text_len > 0 {
-                let bytes = UnsafeBufferPointer(start: textPtr, count: Int(out.text_len))
-                    .map { UInt8(bitPattern: $0) }
-                word = String(decoding: bytes, as: UTF8.self)
-            } else {
-                word = ""
-            }
+            let word = GhosttyText.decode(out)
             TerminalDebugLog.log(
                 .input,
                 "surface quicklookWord word=\(TerminalDebugLog.describe(word)) offset=\(out.offset_start)+\(out.offset_len) pointX=\(String(format: "%.2f", out.tl_px_x)) pointY=\(String(format: "%.2f", out.tl_px_y))"
@@ -420,6 +466,12 @@ public final class TerminalSurface {
         guard !hasBeenFreed, let s = surface else { return }
         TerminalDebugLog.log(.lifecycle, "surface free")
         hasBeenFreed = true
+        viewportTextCache.clear()
+        occlusionVisible = true
+        lastPixelWidth = nil
+        lastPixelHeight = nil
+        lastScaleX = nil
+        lastScaleY = nil
         surface = nil
         ghostty_surface_free(s)
     }

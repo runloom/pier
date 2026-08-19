@@ -25,7 +25,23 @@ export interface CanvasPickChain {
 }
 
 export const SKIP_CLOSEST =
-  "[data-slot='canvas-comment-overlay'],[data-slot='canvas-comment-pick-chrome'],[data-slot='canvas-comment-pick-layer'],[data-canvas-comment-badge],[data-pier-canvas-pick-box]";
+  "[data-slot='canvas-comment-overlay'],[data-slot='canvas-comment-pick-chrome'],[data-slot='canvas-comment-pick-layer'],[data-canvas-comment-badge],[data-slot='comment-count-badge'],[data-slot='comment-hover-preview'],[data-slot='hover-card-content'],[data-slot='popover-content'],[data-pier-canvas-pick-box]";
+
+/** Pin / floater chrome — pick mode must not steal hover or click from these. */
+export const CANVAS_COMMENT_CHROME_HIT =
+  "[data-canvas-comment-pin],[data-slot='comment-count-badge'],[data-slot='comment-hover-preview'],[data-slot='hover-card-content'],[data-slot='popover-content']";
+
+export function isCanvasCommentChromePointerEvent(event: Event): boolean {
+  const nodes =
+    typeof event.composedPath === "function" ? event.composedPath() : [];
+  const targets = nodes.length > 0 ? nodes : [event.target];
+  for (const node of targets) {
+    if (node instanceof Element && node.closest(CANVAS_COMMENT_CHROME_HIT)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export const INTERACTIVE_SELECTOR =
   "button,a,input,textarea,select,label,summary,[role='button'],[role='link'],[role='checkbox'],[role='menuitem'],[role='tab'],[contenteditable='true']";
@@ -41,6 +57,28 @@ export function isTabPanelLike(el: HTMLElement): boolean {
   );
 }
 
+export function isCanvasTabTrigger(el: HTMLElement): boolean {
+  return (
+    el.getAttribute("role") === "tab" ||
+    el.getAttribute("data-slot") === "tabs-trigger"
+  );
+}
+
+/**
+ * Hide pins whose target lives in an inactive TabsContent.
+ * Tab triggers stay eligible — the tab bar is always on screen.
+ */
+export function isCanvasCommentTargetVisible(el: HTMLElement): boolean {
+  const panel = el.closest("[data-slot='tabs-content'],[role='tabpanel']");
+  if (!(panel instanceof HTMLElement)) {
+    return true;
+  }
+  return !(
+    panel.getAttribute("data-state") === "inactive" ||
+    panel.hasAttribute("hidden")
+  );
+}
+
 export function normalizeCanvasPickText(
   value: string | null | undefined,
   max: number
@@ -53,6 +91,21 @@ export function normalizeCanvasPickText(
     return collapsed;
   }
   return `${collapsed.slice(0, Math.max(1, max - 1))}…`;
+}
+
+/**
+ * Strip the display ellipsis from a stored pick label so rematch can compare
+ * against live text (which never contains the truncation mark).
+ */
+export function canvasPickLabelStem(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.endsWith("…")) {
+    return trimmed.slice(0, -1).trimEnd();
+  }
+  if (trimmed.endsWith("...")) {
+    return trimmed.slice(0, -3).trimEnd();
+  }
+  return trimmed;
 }
 
 export function isIgnorableCanvasPickTarget(node: EventTarget | null): boolean {

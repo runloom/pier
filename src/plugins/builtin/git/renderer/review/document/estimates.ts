@@ -67,6 +67,28 @@ export function estimateReviewSlotItem(options: {
   };
 }
 
+/** 二进制 notice：不 hydrate，index 即可出说明卡。 */
+export function noticeReviewSlotItem(options: {
+  readonly slot: GitReviewIndexEntry["renderSlots"][number];
+  readonly stateNotice: string;
+}): PierDiffViewItem {
+  const { slot, stateNotice } = options;
+  const stageControl = reviewStageControl(slot.group, slot.status);
+  return {
+    cacheKey: JSON.stringify(["notice", slot.sectionKey, stateNotice]),
+    fileDisplay: {
+      path: slot.targetPath,
+      status: slot.status,
+      ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
+    },
+    id: slot.sectionKey,
+    kind: "ready-notice",
+    patch: null,
+    ...(stageControl === null ? {} : { stageControl }),
+    stateNotice,
+  };
+}
+
 /** index numstat → header 首屏 +N −M（不依赖 patch 是否已 materialize）。 */
 export function lineStatsFromReviewSlot(
   slot: GitReviewIndexEntry["renderSlots"][number]

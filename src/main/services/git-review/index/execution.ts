@@ -1,9 +1,11 @@
 import { isUtf8 } from "node:buffer";
 import {
   type ExecGitRaw,
+  GitExecError,
   GitExecRawError,
   type GitExecRawResult,
 } from "../../git/exec.ts";
+import { isGitIndexLockContention } from "../../git/index-lock.ts";
 import { GitReviewIdentityError } from "../identity.ts";
 import {
   type GitReviewIndexExecutionBudget,
@@ -70,6 +72,7 @@ export function toGitReviewIndexFailure(error: unknown): {
   reason:
     | "aborted"
     | "commandFailed"
+    | "indexLocked"
     | "internal"
     | "invalidSource"
     | "notRepository"
@@ -88,7 +91,15 @@ export function toGitReviewIndexFailure(error: unknown): {
       retryable: false,
     };
   }
-  if (error instanceof GitExecRawError) {
+  if (isGitIndexLockContention(error)) {
+    return {
+      kind: "error",
+      message: null,
+      reason: "indexLocked",
+      retryable: true,
+    };
+  }
+  if (error instanceof GitExecRawError || error instanceof GitExecError) {
     if (error.causeKind === "aborted") {
       return { kind: "error", message, reason: "aborted", retryable: true };
     }

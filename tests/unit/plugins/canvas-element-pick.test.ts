@@ -8,6 +8,7 @@ import type { CanvasCommentPinView } from "../../../src/plugins/builtin/files/re
 import {
   buildCanvasPickChain,
   clampPickDepth,
+  clientPointInShell,
   defaultPickDepth,
   findCanvasElementByLabel,
   geometryHitTestCanvasElement,
@@ -129,6 +130,52 @@ describe("buildCanvasPickChain + depth", () => {
     expect(chain).not.toBeNull();
     const depth = defaultPickDepth(host, chain!.chain);
     expect(chain!.chain[depth]).toBe(surface);
+  });
+
+  it("promotes Alert title and description to the alert banner", () => {
+    const host = document.createElement("div");
+    host.innerHTML = `
+      <div data-slot="alert" role="alert">
+        <span data-slot="status-icon"></span>
+        <div data-slot="alert-body">
+          <div data-slot="alert-title">物料在 SDK 里，不在人眼前</div>
+          <div data-slot="alert-description">生成合同只允许 import pier/canvas、react、相对路径。</div>
+        </div>
+      </div>
+    `;
+    const alert = host.querySelector("[data-slot='alert']") as HTMLElement;
+    const title = host.querySelector(
+      "[data-slot='alert-title']"
+    ) as HTMLElement;
+    const description = host.querySelector(
+      "[data-slot='alert-description']"
+    ) as HTMLElement;
+    const icon = host.querySelector("[data-slot='status-icon']") as HTMLElement;
+    const picked = (leaf: HTMLElement): HTMLElement | undefined => {
+      const chain = buildCanvasPickChain(host, leaf);
+      return chain?.chain[defaultPickDepth(host, chain.chain)];
+    };
+    expect(picked(title)).toBe(alert);
+    expect(picked(description)).toBe(alert);
+    expect(picked(icon)).toBe(alert);
+    expect(pickFromCanvasElement(host, title)?.label).toContain(
+      "物料在 SDK 里，不在人眼前"
+    );
+  });
+
+  it("keeps a paragraph inside an alert selectable", () => {
+    const host = document.createElement("div");
+    host.innerHTML = `
+      <div data-slot="alert" role="alert">
+        <p>本段仍可单独标注</p>
+      </div>
+    `;
+    const para = host.querySelector("p") as HTMLElement;
+    const chain = buildCanvasPickChain(host, para);
+    expect(chain).not.toBeNull();
+    expect(defaultPickDepth(host, chain!.chain)).toBe(0);
+    expect(chain!.chain[0]).toBe(para);
+    expect(pickFromCanvasElement(host, para)?.label).toBe("本段仍可单独标注");
   });
 
   it("keeps leaf text under item/card (no forced shell promotion)", () => {
@@ -447,6 +494,18 @@ describe("measureCanvasPickBox", () => {
   });
 });
 
+describe("clientPointInShell", () => {
+  it("maps the pointer into overlay coordinates including scroll", () => {
+    const shell = document.createElement("div");
+    document.body.append(shell);
+    mockBox(shell, { height: 200, left: 40, top: 20, width: 300 });
+    Object.defineProperty(shell, "scrollLeft", { value: 16 });
+    Object.defineProperty(shell, "scrollTop", { value: 8 });
+    expect(clientPointInShell(shell, 100, 60)).toEqual({ x: 76, y: 48 });
+    shell.remove();
+  });
+});
+
 describe("findCanvasElementByLabel", () => {
   it("re-locates the compact element matching pick label", () => {
     const host = document.createElement("div");
@@ -461,6 +520,53 @@ describe("findCanvasElementByLabel", () => {
       left: 110,
       top: 20,
     });
+    host.remove();
+  });
+
+  it("re-locates a long alert after the stored label is truncated", () => {
+    const host = document.createElement("div");
+    const alert = document.createElement("div");
+    alert.setAttribute("data-slot", "alert");
+    alert.setAttribute("role", "alert");
+    const title = document.createElement("div");
+    title.setAttribute("data-slot", "alert-title");
+    title.textContent = "物料在 SDK 里，不在人眼前";
+    const description = document.createElement("div");
+    description.setAttribute("data-slot", "alert-description");
+    description.textContent =
+      "生成合同只允许 import pier/canvas、react、相对路径。pier/canvas 已有约 150 个 UI 导出和 useCanvasFile，但设置里只有预览根目录卡。上一版把看见面做成顶栏新区、三家族分页面廊和并排 Kit，发现模型仍与技能库脱节。";
+    alert.append(title, description);
+    host.append(alert);
+    document.body.append(host);
+
+    const pick = snapshotCanvasElementPick(host, alert);
+    expect(pick.label.endsWith("…")).toBe(true);
+    expect(findCanvasElementByLabel(host, pick.label)).toBe(alert);
+    expect(findCanvasElementByLabel(host, pick.label, pick.excerpt)).toBe(
+      alert
+    );
+
+    const descPick = snapshotCanvasElementPick(host, description);
+    expect(descPick.label.endsWith("…")).toBe(true);
+    const rematch = findCanvasElementByLabel(host, descPick.label);
+    expect(rematch).toBe(description);
+    host.remove();
+  });
+
+  it("does not rematch a truncated other-tab label onto an unrelated alert", () => {
+    const host = document.createElement("div");
+    const alert = document.createElement("div");
+    alert.setAttribute("data-slot", "alert");
+    alert.setAttribute("role", "alert");
+    alert.textContent = "研究收敛 共同结论：一次性用原生 agent。";
+    host.append(alert);
+    document.body.append(host);
+    expect(
+      findCanvasElementByLabel(
+        host,
+        "物料在 SDK 里，不在人眼前 生成合同只允许 import pier/canvas、react、相对路径。pier/canvas 已有约 150 个 UI 导出和 useC…"
+      )
+    ).toBeNull();
     host.remove();
   });
 });

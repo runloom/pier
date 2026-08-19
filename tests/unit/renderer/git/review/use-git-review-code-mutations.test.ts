@@ -239,7 +239,7 @@ it("变更块操作只向 main 传稳定 changeKey 和文档修订号", async ()
   );
 });
 
-it("文件暂存结构化失败会先刷新，再用 alert 展示友好说明和技术详情", async () => {
+it("文件暂存锁争用失败只展示暂存区忙，不拼 Git 锁文件说明书", async () => {
   const alert = vi.fn(async () => undefined);
   const onMutationCommitted = vi.fn(async () => undefined);
   const context = {
@@ -248,7 +248,7 @@ it("文件暂存结构化失败会先刷新，再用 alert 展示友好说明和
       applyReviewMutation: vi.fn(async () => ({
         kind: "error" as const,
         message: "fatal: index.lock already exists",
-        reason: "commandFailed" as const,
+        reason: "indexLocked" as const,
         retryable: true,
       })),
     },
@@ -271,7 +271,7 @@ it("文件暂存结构化失败会先刷新，再用 alert 展示友好说明和
   await waitFor(() => expect(alert).toHaveBeenCalledOnce());
   expect(onMutationCommitted).toHaveBeenCalledWith(null);
   expect(alert).toHaveBeenCalledWith({
-    body: expect.stringContaining("fatal: index.lock already exists"),
+    body: "Another program is updating the Git staging area. Try again in a moment.",
     title: "Unable to Stage",
   });
 });

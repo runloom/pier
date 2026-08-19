@@ -4,27 +4,32 @@ import type { GitReviewIndexEntry } from "@shared/contracts/git/review.ts";
 import { createReviewCollidingFileLabel } from "../../plugin-text.ts";
 import type { GitReviewReadingSurface } from "../reading-surface.ts";
 import { reviewGroupsForSurface } from "../surface-group.ts";
-import { isReviewSlotIncludedInBody } from "./body-class.ts";
+import {
+  classifyReviewSlotBodyClass,
+  isReviewSlotIncludedInBody,
+} from "./body-class.ts";
 import type { ReviewCommentIndex } from "./comment-projection.ts";
 import {
   estimateReviewSlotItem,
   lineStatsFromReviewSlot,
+  noticeReviewSlotItem,
   reviewStageControl,
 } from "./estimates.ts";
 import { orderReviewPresentationSlots } from "./presentation-order.ts";
 import type { ReviewDocumentProjection } from "./projection-types.ts";
 import type { GitReviewDocumentResource } from "./resource.ts";
 import { projectReviewDocumentResource } from "./resource-projection.ts";
+import { binaryFileStateNotice } from "./state-text.ts";
 
 type ReviewSlot = GitReviewIndexEntry["renderSlots"][number];
 
 /**
- * 正文表面投影：仅 content-bearing 槽（金标准 bodyClass）。
- * meta/notice/unknown 不进 CodeView。
+ * 正文表面投影：content 槽 + 二进制 notice 说明卡。
+ * meta/unknown 不进 CodeView。notice **不** materialize patch。
  *
- * 显示集 id = **全部 content 槽**（idle → estimate；loaded/error 照旧）。
+ * 显示集 id = 全部正文槽（content idle → estimate；notice → ready-notice）。
  * demand / seed 只调度 document 水合优先级（allowedBody），**不得**裁剪 id。
- * 折叠全部总高 = n×header+(n−1)×gap，n 必须是 content 槽数。
+ * 折叠全部总高 = n×header+(n−1)×gap，n 必须是正文槽数。
  * estimate 是虚拟高度占位，不是「灰条进度条海」；正文灌载仍有界。
  *
  * 文件顺序 = `orderReviewPresentationSlots`（与侧栏树同一套 displayPath 序）。
@@ -84,7 +89,7 @@ export function projectReviewLedger(options: {
     const slots = slotsForDiffBase(entry, options.diffBase).filter((slot) =>
       isReviewSlotIncludedInBody(slot)
     );
-    // 无 content 槽且无已渲染 body：不进 CodeView（meta/rename 海）
+    // 无正文槽且无已渲染 body：不进 CodeView（meta/rename 海）
     if (slots.length === 0 && !hasRenderableBody) {
       continue;
     }
@@ -93,7 +98,16 @@ export function projectReviewLedger(options: {
       // 金标准：loaded 但投影无 section → error，禁止静默回落 estimate
       let resolved = fromResource;
       if (resolved === undefined) {
-        if (resource?.kind === "loaded") {
+        if (classifyReviewSlotBodyClass(slot) === "notice") {
+          resolved = noticeReviewSlotItem({
+            slot,
+            stateNotice: binaryFileStateNotice(
+              options.context,
+              slot.targetPath,
+              options.locale
+            ),
+          });
+        } else if (resource?.kind === "loaded") {
           resolved = projectionMissingSectionItem(slot, options.context);
         } else if (resource?.kind !== "error") {
           // idle / loading / 缺资源：稳定账本挂 estimate（demand 不决定有无 id）

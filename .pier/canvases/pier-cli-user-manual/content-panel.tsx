@@ -116,6 +116,19 @@ function StartPage({ data }: { data: ManualData }) {
         </div>
       </Stack>
 
+      {data.design.principles && data.design.principles.length > 0 ? (
+        <Stack gap={6}>
+          <SectionHeading>怎么写命令</SectionHeading>
+          <Stack gap={3}>
+            {data.design.principles.map((line) => (
+              <Text key={line} className="text-sm">
+                {line}
+              </Text>
+            ))}
+          </Stack>
+        </Stack>
+      ) : null}
+
       <Separator />
 
       <Stack gap={6}>

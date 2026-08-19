@@ -37,6 +37,7 @@ import {
 export interface MarkdownPreviewCommentLabels {
   addComment: string;
   authorYou: string;
+  cancel: string;
   close: string;
   createFailed: string;
   deleteComment: string;
@@ -45,6 +46,7 @@ export interface MarkdownPreviewCommentLabels {
   driftTitle: string;
   editComment: string;
   inputPlaceholder: string;
+  save: string;
   submit: string;
   title: string;
   updateFailed: string;
@@ -55,6 +57,7 @@ export interface MarkdownPreviewCommentLabels {
 export const DEFAULT_MARKDOWN_COMMENT_LABELS: MarkdownPreviewCommentLabels = {
   addComment: "Add comment",
   authorYou: "You",
+  cancel: "Cancel",
   close: "Close",
   createFailed: "Couldn’t create comment",
   deleteComment: "Delete",
@@ -62,7 +65,8 @@ export const DEFAULT_MARKDOWN_COMMENT_LABELS: MarkdownPreviewCommentLabels = {
   deleted: "Deleted",
   driftTitle: "Comments that can no longer be located precisely",
   editComment: "Edit",
-  inputPlaceholder: "Write a comment…",
+  inputPlaceholder: "Add comment...",
+  save: "Save",
   submit: "Submit",
   title: "Comment",
   updateFailed: "Couldn’t update comment",
@@ -76,6 +80,7 @@ function toCommentLabels(
   return {
     addComment: labels.addComment,
     authorYou: labels.authorYou,
+    cancel: labels.cancel,
     close: labels.close,
     createFailed: labels.createFailed,
     deleteComment: labels.deleteComment,
@@ -84,6 +89,7 @@ function toCommentLabels(
     driftTitle: labels.driftTitle,
     editComment: labels.editComment,
     inputPlaceholder: labels.inputPlaceholder,
+    save: labels.save,
     submit: labels.submit,
     title: labels.title,
     updateFailed: labels.updateFailed,

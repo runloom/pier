@@ -1,6 +1,7 @@
 /**
- * Canvas 评论叠层：拾取层 + 高亮 + 编号 pin（Popover 详情）+ 草稿（Popover）。
- * 浮动 n/N 导航由 canvas 预览根挂载（与 diff 同构）；本层负责 pin 打开请求。
+ * Canvas 评论叠层：拾取层 + 高亮 + 计数气泡（悬停预览正文，点击进入编辑）+
+ * 叠层评论输入。浮动 n/N 导航由 canvas 预览根挂载（与 diff 同构）；本层负责
+ * pin 打开请求。
  *
  * Design Mode pick uses document-level capture so selection works even when the
  * local pick layer does not fully cover tall canvas content. Hit resolution
@@ -29,12 +30,13 @@ import type {
   CanvasPickOverlayBox,
 } from "./canvas-element-pick.ts";
 import {
+  clientPointInShell,
   hitCanvasPickChainAtPoint,
   measureCanvasPickBox,
   snapshotCanvasElementPick,
 } from "./canvas-element-pick.ts";
+import { isCanvasCommentChromePointerEvent } from "./canvas-pick-shared.ts";
 import type { CanvasDraftPlacement } from "./use-canvas-preview-comments.ts";
-import { CANVAS_PICK_DRAFT_ID } from "./use-canvas-preview-comments.ts";
 
 interface HoverPickState {
   readonly box: CanvasPickOverlayBox;
@@ -71,6 +73,7 @@ export function CanvasCommentOverlay(props: {
     pick: CanvasElementPick,
     placement: CanvasDraftPlacement
   ) => void;
+  readonly onPinOpen?: (pin: CanvasCommentPinView) => void;
   /** Parent (navigator) may request opening a pin by key. */
   readonly onRequestOpenConsumed?: () => void;
   readonly openInEditMode?: boolean;
@@ -108,13 +111,9 @@ export function CanvasCommentOverlay(props: {
     }
   }, [pickActive]);
 
-  const draftOpenRef = useRef(props.draftOpen);
-  draftOpenRef.current = props.draftOpen;
-  const cancelDraftRef = useRef(props.handlers.onCancelDraft);
-  cancelDraftRef.current = props.handlers.onCancelDraft;
-
-  // Dismiss draft + pin detail when the preview (or nested) scrolls — the
-  // selection/pin anchor moves under a portaled Popover and would look stuck.
+  // Pin detail is portaled; dismiss it on scroll so the popover does not look
+  // stuck. The draft composer is in overlay coordinates and moves with the
+  // shell, so drafts stay open.
   useEffect(() => {
     if (!(shell || host)) {
       return;
@@ -138,9 +137,8 @@ export function CanvasCommentOverlay(props: {
       if (!(insidePreview || insideHost)) {
         return;
       }
-      if (draftOpenRef.current) {
-        cancelDraftRef.current(CANVAS_PICK_DRAFT_ID);
-      }
+      // Draft composer is in overlay coordinates and moves with the shell.
+      // Only dismiss portaled pin popovers whose anchors would look stuck.
       setHover(null);
       setScrollDismissEpoch((value) => value + 1);
     };
@@ -191,28 +189,34 @@ export function CanvasCommentOverlay(props: {
     (
       element: HTMLElement,
       pick: CanvasElementPick,
-      box: CanvasPickOverlayBox
+      box: CanvasPickOverlayBox,
+      clientX: number,
+      clientY: number
     ) => {
-      if (!host) {
+      if (!(host && shell)) {
         return;
       }
       const existing = findPinForCanvasPick(host, pick, element, pins);
       if (existing) {
         setRequestOpenKey(existing.key);
         setRequestOpenEdit(true);
+        props.onPinOpen?.(existing);
         onExitPickMode();
         setHover(null);
         return;
       }
+      const origin = clientPointInShell(shell, clientX, clientY);
       onPickElement(pick, {
         height: box.height,
         left: box.left,
+        originX: origin.x,
+        originY: origin.y,
         top: box.top,
         width: box.width,
       });
       setHover(null);
     },
-    [host, onExitPickMode, onPickElement, pins]
+    [host, onExitPickMode, onPickElement, pins, props.onPinOpen, shell]
   );
 
   // Document capture: works even if the absolute pick layer does not cover a
@@ -248,6 +252,15 @@ export function CanvasCommentOverlay(props: {
     };
 
     const onPointerMove = (event: PointerEvent) => {
+      if (isCanvasCommentChromePointerEvent(event)) {
+        if (rafId !== 0) {
+          window.cancelAnimationFrame(rafId);
+          rafId = 0;
+        }
+        pending = null;
+        setHover(null);
+        return;
+      }
       pending = {
         clientX: event.clientX,
         clientY: event.clientY,
@@ -260,6 +273,9 @@ export function CanvasCommentOverlay(props: {
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) {
+        return;
+      }
+      if (isCanvasCommentChromePointerEvent(event)) {
         return;
       }
       if (!overCanvas(event.clientX, event.clientY)) {
@@ -280,7 +296,13 @@ export function CanvasCommentOverlay(props: {
       if (!current) {
         return;
       }
-      resolvePickClick(current.element, current.pick, current.box);
+      resolvePickClick(
+        current.element,
+        current.pick,
+        current.box,
+        event.clientX,
+        event.clientY
+      );
     };
 
     const onPointerLeaveWindow = () => {
@@ -358,8 +380,9 @@ export function CanvasCommentOverlay(props: {
 
       <CanvasCommentPinLayer
         handlers={props.handlers}
-        interactive={!(pickActive || showPickDraft)}
+        interactive={!showPickDraft}
         labels={props.labels}
+        onPinOpen={props.onPinOpen}
         onRequestOpenConsumed={() => {
           setRequestOpenKey(null);
           setRequestOpenEdit(false);

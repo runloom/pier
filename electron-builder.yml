@@ -19,6 +19,12 @@ files:
 
 extraResources:
   - from: bin/pier.mjs
+    to: bin/pier.mjs
+  - from: bin/pier-cli-parser.js
+    to: bin/pier-cli-parser.js
+  - from: bin/pier-control-client.js
+    to: bin/pier-control-client.js
+  - from: bin/pier-app.sh
     to: bin/pier
   - from: resources/fonts
     to: fonts
@@ -48,6 +54,12 @@ extraResources:
       - 'plugin.json'
   - from: packages/plugin-ssh/dist-pkg
     to: plugin-packages/pier.ssh
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
+  - from: packages/plugin-tmux/dist-pkg
+    to: plugin-packages/pier.tmux
     filter:
       - '*.tgz'
       - '*.tgz.sha256'

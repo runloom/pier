@@ -27,11 +27,16 @@ import {
   sectionFromConflictMaterial,
 } from "./conflict.ts";
 import {
+  gitReviewImageSectionRevision,
+  tryGitReviewImageSection,
+} from "./image.ts";
+import {
   GitReviewDocumentStaleError,
   type GitReviewPatchMaterial,
   type GitReviewRenderableGroup,
   readGitReviewPatch,
 } from "./patch.ts";
+import type { ReadGitReviewPatchOptions } from "./patch-contract.ts";
 
 interface BuildGitReviewDocumentOptions {
   readonly budget: GitReviewIndexExecutionBudget;
@@ -101,16 +106,19 @@ export async function buildGitReviewDocumentWithEvidence(
     if (!(isRenderableGroup(group) && isRenderableFact(fact))) {
       throw new Error(`Git Review section group ${group} 不可渲染`);
     }
-    const material = await readGitReviewPatch({
-      budget: options.budget,
-      execGitRaw: options.execGitRaw,
+    const patchOptions = createPatchReadOptions(options, fact, group);
+    const imageSection = await tryGitReviewImageSection({
       fact,
-      gitRootPath: options.metadata.canonicalRoot,
       group,
-      headOid: options.metadata.headOid,
-      rangeBounds: options.metadata.rangeBounds,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      patchOptions,
+      sectionKey,
     });
+    if (imageSection !== null) {
+      sections.push(imageSection);
+      revisions.push(gitReviewImageSectionRevision(imageSection));
+      continue;
+    }
+    const material = await readGitReviewPatch(patchOptions);
     assertMaterialMatchesIndexFact(group, fact, material);
     const section = sectionFromMaterial({
       entryKey: options.entry.entryKey,
@@ -133,33 +141,36 @@ export async function buildGitReviewDocumentWithEvidence(
       workingFact.oldPath,
       workingFact.targetPath
     );
-    const material = await readGitReviewPatch({
-      budget: options.budget,
-      execGitRaw: options.execGitRaw,
-      fact: workingFact,
-      gitRootPath: options.metadata.canonicalRoot,
-      group,
-      headOid: options.metadata.headOid,
-      rangeBounds: options.metadata.rangeBounds,
-      ...(options.signal === undefined ? {} : { signal: options.signal }),
-    });
-    assertMaterialMatchesIndexFact(group, workingFact, material);
-    const rawSection = sectionFromMaterial({
-      entryKey: options.entry.entryKey,
+    const patchOptions = createPatchReadOptions(options, workingFact, group);
+    const imageSection = await tryGitReviewImageSection({
       fact: workingFact,
       group,
-      material,
+      patchOptions,
       sectionKey,
-      stageStateOverride: workingStageState(options),
     });
-    const section =
-      rawSection.kind === "patch"
-        ? classifyWorkingChangeBlocks(rawSection, sections)
-        : rawSection;
-    sections.push(section);
-    revisions.push(material.sourceRevision);
-    if (section.kind === "patch") {
-      patches.push({ group, patch: section.patch, sectionKey });
+    if (imageSection === null) {
+      const material = await readGitReviewPatch(patchOptions);
+      assertMaterialMatchesIndexFact(group, workingFact, material);
+      const rawSection = sectionFromMaterial({
+        entryKey: options.entry.entryKey,
+        fact: workingFact,
+        group,
+        material,
+        sectionKey,
+        stageStateOverride: workingStageState(options),
+      });
+      const section =
+        rawSection.kind === "patch"
+          ? classifyWorkingChangeBlocks(rawSection, sections)
+          : rawSection;
+      sections.push(section);
+      revisions.push(material.sourceRevision);
+      if (section.kind === "patch") {
+        patches.push({ group, patch: section.patch, sectionKey });
+      }
+    } else {
+      sections.push(imageSection);
+      revisions.push(gitReviewImageSectionRevision(imageSection));
     }
   }
   const surfaceSections = resolveSurfaceSections(options, sections);
@@ -409,6 +420,7 @@ function createDocumentRevision(
     ...sections.flatMap((section, index) => [
       section.sectionKey,
       revisions[index] ?? "",
+      section.kind === "image" ? gitReviewImageSectionRevision(section) : "",
     ]),
   ]);
 }
@@ -430,6 +442,23 @@ function isRenderableGroup(
   group: GitReviewGroup
 ): group is Exclude<GitReviewRenderableGroup, "working"> {
   return group === "unstaged" || group === "staged" || group === "committed";
+}
+
+function createPatchReadOptions(
+  options: BuildGitReviewDocumentOptions,
+  fact: RenderableGitReviewIndexFact,
+  group: GitReviewRenderableGroup
+): ReadGitReviewPatchOptions {
+  return {
+    budget: options.budget,
+    execGitRaw: options.execGitRaw,
+    fact,
+    gitRootPath: options.metadata.canonicalRoot,
+    group,
+    headOid: options.metadata.headOid,
+    rangeBounds: options.metadata.rangeBounds,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  };
 }
 
 function hashParts(parts: readonly string[]): string {

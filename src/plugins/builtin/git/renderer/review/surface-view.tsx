@@ -314,7 +314,7 @@ export function GitReviewSurfaceView({
   );
 }
 
-/** 侧栏有文件但均为 pure rename / empty / binary → 正文空态（金标准 meta 不进正文）。 */
+/** 侧栏有文件但均为 pure rename / empty → 正文空态（二进制 notice 仍进列表）。 */
 function gitReviewSurfaceIsMetaOnlyEmpty(
   entries: readonly GitReviewIndexEntry[],
   surface: GitReviewReadingSurface

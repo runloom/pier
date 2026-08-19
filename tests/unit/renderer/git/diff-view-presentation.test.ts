@@ -18,6 +18,9 @@ describe("pierDiffItemPresentation", () => {
     expect(pierDiffItemPresentation({ kind: "loaded", patch: "x" })).toBe(
       "ready"
     );
+    expect(pierDiffItemPresentation({ kind: "image", patch: null })).toBe(
+      "ready"
+    );
   });
 
   it("treats header-only state notices as ready empty content", () => {

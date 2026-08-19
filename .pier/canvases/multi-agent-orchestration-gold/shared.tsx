@@ -393,7 +393,7 @@ export function DayStepCards({
               </Badge>
               <Text className="text-sm font-semibold tracking-tight">{step.title}</Text>
             </Row>
-            <pre className="overflow-x-auto rounded-md border bg-background/60 p-2.5 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+            <pre className="overflow-x-auto rounded-md border bg-background/60 p-2.5 font-mono text-xs leading-relaxed whitespace-pre-wrap">
               {step.cmd.replace(/\s+/g, " ").trim()}
             </pre>
             <Text className="text-xs leading-relaxed text-muted-foreground">{step.why}</Text>
@@ -409,7 +409,7 @@ export function DayStepCards({
 
 export function CodeBlock({ children }: { children: string }) {
   return (
-    <pre className="overflow-x-auto rounded-lg border border-border/70 bg-muted/20 p-3 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+    <pre className="overflow-x-auto rounded-lg border border-border/70 bg-muted/20 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
       {children}
     </pre>
   );
@@ -431,7 +431,7 @@ export function IdConstraintList({
             key={item.id}
           >
             <Stack gap={3}>
-              <Text className="font-mono text-[11px] text-muted-foreground">{item.id}</Text>
+              <Text className="font-mono text-xs text-muted-foreground">{item.id}</Text>
               <Text className="text-sm font-medium leading-relaxed">{note.summary}</Text>
               {note.detail ? (
                 <Text tone="secondary" className="text-xs leading-relaxed break-words">
