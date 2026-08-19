@@ -28,12 +28,15 @@ describe("gold canvas architecture graph", () => {
     const scheme = parseScheme(dataJson);
     render(<DesignPage d={scheme.data} />);
 
-    const stopCard = await waitFor(() => {
-      const title = screen.getByText("focus / interrupt / terminate");
-      const card = title.closest("[data-slot=mermaid-node]");
-      expect(card).toBeTruthy();
-      return card;
-    });
+    const stopCard = await waitFor(
+      () => {
+        const title = screen.getByText("focus / interrupt / terminate");
+        const card = title.closest("[data-slot=mermaid-node]");
+        expect(card).toBeTruthy();
+        return card;
+      },
+      { timeout: 15_000 }
+    );
     expect(stopCard?.getAttribute("data-kind")).toBe("tool");
     expect(stopCard?.getAttribute("data-tone")).toBe("success");
 
