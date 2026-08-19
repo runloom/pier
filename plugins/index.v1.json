@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1786872694193,
+  "generatedAt": 1787150830512,
   "plugins": {
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
@@ -14,6 +14,14 @@
         "zh-CN": {
           "name": "Claude 账号管理",
           "description": "在 Pier 中管理 Claude 账号并切换当前登录。"
+        },
+        "ja": {
+          "name": "Claude アカウント管理",
+          "description": "Pier で Claude アカウントを管理し、使用中のログインを切り替えます。"
+        },
+        "ko": {
+          "name": "Claude 계정 관리",
+          "description": "Pier에서 Claude 계정을 관리하고 사용 중인 로그인을 전환합니다."
         }
       },
       "versions": {
@@ -80,6 +88,14 @@
         "zh-CN": {
           "name": "Codex 账号管理",
           "description": "管理 Codex 账号，登录、切换、观测用量。"
+        },
+        "ja": {
+          "name": "Codex アカウント管理",
+          "description": "Codex アカウントの管理、ログイン、切り替え、使用量の確認。"
+        },
+        "ko": {
+          "name": "Codex 계정 관리",
+          "description": "Codex 계정 관리, 로그인, 전환, 사용량 확인."
         }
       },
       "versions": {
@@ -158,6 +174,14 @@
         "zh-CN": {
           "name": "Grok 账号管理",
           "description": "在 Pier 中管理 Grok 账号、登录与切换。"
+        },
+        "ja": {
+          "name": "Grok アカウント管理",
+          "description": "Pier で Grok アカウントの管理、ログイン、切り替えを行います。"
+        },
+        "ko": {
+          "name": "Grok 계정 관리",
+          "description": "Pier에서 Grok 계정을 관리하고 로그인·전환합니다."
         }
       },
       "versions": {
@@ -242,6 +266,14 @@
         "zh-CN": {
           "name": "SSH 主机",
           "description": "在 Pier 中管理 SSH 主机并打开 SSH 终端。"
+        },
+        "ja": {
+          "name": "SSH ホスト",
+          "description": "Pier で SSH ホストを管理し、SSH ターミナルを開きます。"
+        },
+        "ko": {
+          "name": "SSH 호스트",
+          "description": "Pier에서 SSH 호스트를 관리하고 SSH 터미널을 엽니다."
         }
       },
       "versions": {
@@ -282,13 +314,45 @@
           "size": 373808
         }
       }
+    },
+    "pier.tmux": {
+      "description": "Connect splits opened by assistants to workbench panels.",
+      "displayName": "Native splits",
+      "id": "pier.tmux",
+      "latest": "1.0.0",
+      "locales": {
+        "en": {
+          "name": "Native splits",
+          "description": "Connect splits opened by assistants to workbench panels."
+        },
+        "zh-CN": {
+          "name": "工作台分屏",
+          "description": "将智能体打开的分屏接到工作台面板。"
+        },
+        "ja": {
+          "name": "ワークベンチ分割",
+          "description": "エージェントが開いた分割をワークベンチのパネルにつなぎます。"
+        },
+        "ko": {
+          "name": "워크벤치 분할",
+          "description": "에이전트가 연 분할을 워크벤치 패널에 연결합니다."
+        }
+      },
+      "versions": {
+        "1.0.0": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-tmux-v1.0.0/pier.tmux-1.0.0.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "ff1ad0e9f5b9552e6346b37df625c99dff648175fb5fe95704a6ba638b1ebb79",
+          "size": 47127
+        }
+      }
     }
   },
-  "sequence": 33,
+  "sequence": 34,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "hH87C+guSVKNBySLtB/ve9gDBJYhfDLOYkBAk35qnbUx8gPFr6+SgMY7ruYAA9nA6UUFRqrCR4pwNoisT7AaDQ=="
+    "value": "cKXEmWKwPXTO6OAd9JYTG2IrDFa82rq71LIPt68+mkPZL+eciDkdwjzmQesZWOLmKiHbtMT8UvCgXmxExYHYAw=="
   }
 }
