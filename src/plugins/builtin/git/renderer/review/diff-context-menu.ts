@@ -18,7 +18,10 @@ import {
   GIT_REVIEW_DIFF_SURFACE,
   type GitReviewDiffOpenMetadata,
 } from "./diff-actions.ts";
-import { resolveGitReviewDiffOpenTarget } from "./diff-open-target.ts";
+import {
+  resolveGitReviewDiffCopyRange,
+  resolveGitReviewDiffOpenTarget,
+} from "./diff-open-target.ts";
 
 export function openGitReviewDiffContextMenu(options: {
   readonly context: RendererPluginContext;
@@ -72,6 +75,14 @@ export function openGitReviewDiffContextMenu(options: {
         ...(target.line === undefined ? {} : { line: target.line }),
       }
     : null;
+  const hit = handle?.resolvePointerLineHit(event.nativeEvent);
+  const itemId = hit?.id ?? handle?.getSelectedLines()?.id;
+  const pointerLine = target?.line ?? hit?.lineNumber;
+  const copyRange = resolveGitReviewDiffCopyRange({
+    handle,
+    ...(itemId ? { itemId } : {}),
+    ...(pointerLine === undefined ? {} : { line: pointerLine }),
+  });
 
   context.contextMenu
     .popup(
@@ -81,6 +92,12 @@ export function openGitReviewDiffContextMenu(options: {
         metadata: {
           ...(selectedText.length > 0 ? { selectedText } : {}),
           ...(openMetadata ?? {}),
+          ...(copyRange
+            ? {
+                selectionEndLine: copyRange.endLine,
+                selectionStartLine: copyRange.startLine,
+              }
+            : {}),
         },
         ...(sourcePanelComponent ? { sourcePanelComponent } : {}),
         ...(sourcePanelId ? { sourcePanelId } : {}),

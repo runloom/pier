@@ -12,6 +12,7 @@ import {
   FILES_NEW_FILE_COMMAND_ID,
   FILES_NEW_FOLDER_COMMAND_ID,
   FILES_RENAME_COMMAND_ID,
+  FILES_REVEAL_COMMAND_ID,
 } from "@plugins/builtin/files/manifest.ts";
 import {
   clearFilesDocumentStore,
@@ -953,6 +954,8 @@ describe("file-tree-actions", () => {
 
     expect(absolute.surfaces).toContain("files/breadcrumb");
     expect(relative.surfaces).toContain("files/breadcrumb");
+    expect(absolute.surfaces).toContain("files/canvas-preview");
+    expect(relative.surfaces).toContain("files/canvas-preview");
 
     await absolute.handler({
       metadata: {
@@ -978,6 +981,44 @@ describe("file-tree-actions", () => {
     expect(writeClipboardText).toHaveBeenNthCalledWith(
       2,
       "scripts/bootstrap.sh"
+    );
+  });
+
+  it("copies canvas preview paths and reveals the file", async () => {
+    const { context } = makeContext();
+    const writeClipboardText = installClipboard();
+    const actions = treeActions(context);
+    const reveal = actionById(actions, FILES_REVEAL_COMMAND_ID);
+
+    expect(reveal.surfaces).toContain("files/canvas-preview");
+    expect(
+      actionById(actions, FILES_COPY_PATH_WITH_RANGE_COMMAND_ID).surfaces
+    ).not.toContain("files/canvas-preview");
+
+    await actionById(actions, FILES_COPY_PATH_COMMAND_ID).handler({
+      metadata: {
+        path: ".pier/canvases/smoke/hello.canvas.tsx",
+        projectRoot: ROOT,
+        root: ROOT,
+      },
+      surface: "files/canvas-preview",
+    });
+    await actionById(actions, FILES_COPY_RELATIVE_PATH_COMMAND_ID).handler({
+      metadata: {
+        path: ".pier/canvases/smoke/hello.canvas.tsx",
+        projectRoot: ROOT,
+        root: ROOT,
+      },
+      surface: "files/canvas-preview",
+    });
+
+    expect(writeClipboardText).toHaveBeenNthCalledWith(
+      1,
+      "/repo/.pier/canvases/smoke/hello.canvas.tsx"
+    );
+    expect(writeClipboardText).toHaveBeenNthCalledWith(
+      2,
+      ".pier/canvases/smoke/hello.canvas.tsx"
     );
   });
 

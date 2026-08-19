@@ -203,6 +203,7 @@
     "filePanel.tree.expandKnownFolders": "폴더 펼치기",
     "filePanel.tree.expand": "파일 트리 표시",
     "filePanel.tree.toggle": "파일 트리 전환",
+    "filePanel.canvas.contextMenuFailed": "미리보기 메뉴를 열 수 없습니다",
     "filePanel.canvas.compileFailed": "캔버스를 컴파일하지 못했습니다",
     "filePanel.canvas.compileFailedHint": "캔버스 파일이나 import를 고친 다음 다시 불러오세요.",
     "filePanel.canvas.compiling": "캔버스 컴파일 중…",

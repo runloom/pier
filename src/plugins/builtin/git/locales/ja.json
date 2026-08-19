@@ -204,6 +204,11 @@
       "description": "選んだ変更のリポジトリ相対パスをコピーします。",
       "title": "Git: 相対パスをコピー"
     },
+    "pier.git.review.copyPathWithRange": {
+      "category": "Git",
+      "description": "リポジトリ相対パスと選択中の行番号をコピーします。",
+      "title": "Git: パスと選択行をコピー"
+    },
     "pier.git.review.revealInFinder": {
       "category": "Git",
       "description": "選んだ変更をシステムのファイルマネージャで表示します。",
@@ -786,6 +791,7 @@
     "ui.reviewStateInvalidEncodingDetail": "未対応の文字コードです。ファイルを開いて確認してください。",
     "ui.reviewStateConflictDetail": "マージの競合 — 競合ビューが使えないときはファイルを開いてください。",
     "ui.reviewTreeCopyPath": "パスをコピー",
+    "ui.reviewCopyPathWithRange": "パスと選択行をコピー",
     "ui.reviewTreeCopyRelativePath": "相対パスをコピー",
     "ui.reviewTreePathCopied": "パスをコピーしました",
     "ui.reviewTreeCopyPathFailed": "パスをコピーできませんでした",

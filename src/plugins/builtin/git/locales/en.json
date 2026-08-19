@@ -205,6 +205,11 @@
       "description": "Copy the repository-relative path of the selected change.",
       "title": "Git: Copy Relative Path"
     },
+    "pier.git.review.copyPathWithRange": {
+      "category": "Git",
+      "description": "Copy the repository-relative path and selected line numbers.",
+      "title": "Git: Copy Path and Selected Lines"
+    },
     "pier.git.review.revealInFinder": {
       "category": "Git",
       "description": "Reveal the selected change in the system file manager.",
@@ -791,6 +796,7 @@
     "ui.reviewStateInvalidEncodingDetail": "Unsupported text encoding. Open the file to inspect.",
     "ui.reviewStateConflictDetail": "Merge conflict — open the file if the conflict view is unavailable.",
     "ui.reviewTreeCopyPath": "Copy Path",
+    "ui.reviewCopyPathWithRange": "Copy Path and Selected Lines",
     "ui.reviewTreeCopyRelativePath": "Copy Relative Path",
     "ui.reviewTreePathCopied": "Path copied",
     "ui.reviewTreeCopyPathFailed": "Couldn't copy path",

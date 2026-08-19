@@ -10,15 +10,15 @@ describe("keybinding search", () => {
       "复制路径和所选行",
       "Copy Path and Selected Lines",
       "pier.files.copyPathWithRange",
-      "⌘⇧⌥C",
-      "Mod+Shift+Alt+KeyC",
+      "⌥⌘C",
+      "Mod+Alt+KeyC",
     ]);
 
     expect(matchKeybindingQuery(haystack, "")).toBe(true);
     expect(matchKeybindingQuery(haystack, "  ")).toBe(true);
     expect(matchKeybindingQuery(haystack, "复制 路径")).toBe(true);
     expect(matchKeybindingQuery(haystack, "copy path")).toBe(true);
-    expect(matchKeybindingQuery(haystack, "Shift+Alt")).toBe(true);
+    expect(matchKeybindingQuery(haystack, "Alt")).toBe(true);
     expect(matchKeybindingQuery(haystack, "所选行 终端")).toBe(false);
   });
 
@@ -26,8 +26,8 @@ describe("keybinding search", () => {
     const haystack = keybindingSearchHaystack([
       "复制路径和所选行",
       "pier.files.copyPathWithRange",
-      "⌘⇧⌥C",
-      "Mod+Shift+Alt+KeyC",
+      "⌥⌘C",
+      "Mod+Alt+KeyC",
     ]);
 
     expect(matchKeybindingQuery(haystack, "cmd")).toBe(true);
@@ -35,10 +35,10 @@ describe("keybinding search", () => {
     expect(matchKeybindingQuery(haystack, "ctrl")).toBe(true);
     expect(matchKeybindingQuery(haystack, "opt")).toBe(true);
     expect(matchKeybindingQuery(haystack, "option")).toBe(true);
-    expect(matchKeybindingQuery(haystack, "cmd+shift+alt+c")).toBe(true);
-    expect(matchKeybindingQuery(haystack, "Ctrl+Shift+Alt+C")).toBe(true);
+    expect(matchKeybindingQuery(haystack, "cmd+alt+c")).toBe(true);
+    expect(matchKeybindingQuery(haystack, "Ctrl+Alt+C")).toBe(true);
     expect(matchKeybindingQuery(haystack, "⌘C")).toBe(true);
-    expect(matchKeybindingQuery(haystack, "⌘⇧⌥C")).toBe(true);
-    expect(matchKeybindingQuery(haystack, "cmd+shift+alt+z")).toBe(false);
+    expect(matchKeybindingQuery(haystack, "⌥⌘C")).toBe(true);
+    expect(matchKeybindingQuery(haystack, "cmd+alt+z")).toBe(false);
   });
 });

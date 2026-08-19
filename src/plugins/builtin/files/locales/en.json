@@ -203,6 +203,7 @@
     "filePanel.tree.expandKnownFolders": "Expand Folders",
     "filePanel.tree.expand": "Show file tree",
     "filePanel.tree.toggle": "Toggle File Tree",
+    "filePanel.canvas.contextMenuFailed": "Unable to open preview menu",
     "filePanel.canvas.compileFailed": "Couldn’t compile canvas",
     "filePanel.canvas.compileFailedHint": "Fix the canvas file or its imports, then reload.",
     "filePanel.canvas.compiling": "Compiling canvas…",

@@ -208,6 +208,10 @@ describe("buildMenuEntries", () => {
       "files/markdown-preview",
       PANEL_EDIT_SURFACE,
     ]);
+    expect(expandContextMenuSurfaces("files/canvas-preview")).toEqual([
+      "files/canvas-preview",
+      PANEL_EDIT_SURFACE,
+    ]);
     expect(expandContextMenuSurfaces(PANEL_CONTENT_SURFACE)).toEqual([
       PANEL_CONTENT_SURFACE,
       PANEL_EDIT_SURFACE,

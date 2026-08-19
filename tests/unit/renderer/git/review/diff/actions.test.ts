@@ -4,13 +4,37 @@ import {
   parseGitReviewDiffOpenMetadata,
   registerGitReviewDiffActions,
 } from "@plugins/builtin/git/renderer/review/diff-actions.ts";
+import { GIT_REVIEW_TREE_ITEM_SURFACE } from "@plugins/builtin/git/renderer/review/tree-actions.ts";
+import { parseGitReviewTreeItemMetadata } from "@plugins/builtin/git/renderer/review/tree-item-model.ts";
+import {
+  GIT_REVIEW_COPY_PATH_COMMAND_ID,
+  GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID,
+  GIT_REVIEW_COPY_RELATIVE_PATH_COMMAND_ID,
+  GIT_REVIEW_REVEAL_COMMAND_ID,
+  registerGitReviewLiveCopyTarget,
+  registerGitReviewTreePathActions,
+} from "@plugins/builtin/git/renderer/review/tree-path-actions.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
 
+function collectActionIds(
+  entries: ReturnType<typeof buildMenuEntries>
+): string[] {
+  const ids: string[] = [];
+  for (const entry of entries) {
+    if (entry.type === "action") {
+      ids.push(entry.id);
+    }
+  }
+  return ids;
+}
+
 describe("git review diff open actions", () => {
   const openInEditor = vi.fn(() => true);
   const error = vi.fn();
+  const success = vi.fn();
+  const reveal = vi.fn(async () => undefined);
   let dispose: (() => void) | undefined;
 
   const context = {
@@ -18,11 +42,14 @@ describe("git review diff open actions", () => {
       register: (action: Parameters<typeof actionRegistry.register>[0]) =>
         actionRegistry.register(action),
     },
-    files: { openInEditor },
+    dialogs: {
+      alert: vi.fn(async () => undefined),
+    },
+    files: { openInEditor, reveal },
     i18n: {
       t: (_key: string, _values: unknown, fallback: string) => fallback,
     },
-    notifications: { error },
+    notifications: { error, success },
   } as never;
 
   beforeEach(() => {
@@ -31,7 +58,18 @@ describe("git review diff open actions", () => {
     openInEditor.mockClear();
     openInEditor.mockReturnValue(true);
     error.mockClear();
-    dispose = registerGitReviewDiffActions(context);
+    success.mockClear();
+    reveal.mockClear();
+    const disposeDiff = registerGitReviewDiffActions(context);
+    const disposePath = registerGitReviewTreePathActions({
+      context,
+      parseItem: parseGitReviewTreeItemMetadata,
+      surfaces: [GIT_REVIEW_TREE_ITEM_SURFACE, GIT_REVIEW_DIFF_SURFACE],
+    });
+    dispose = () => {
+      disposeDiff();
+      disposePath();
+    };
   });
 
   it("shows Jump to Source when path metadata is present", () => {
@@ -124,5 +162,131 @@ describe("git review diff open actions", () => {
         },
       })
     ).toEqual({ contextId: "ctx", gitRootPath: "/repo", path: "a.ts" });
+  });
+
+  it("shows path actions and path-with-range on the diff surface", () => {
+    const ids = collectActionIds(
+      buildMenuEntries(GIT_REVIEW_DIFF_SURFACE, {
+        metadata: {
+          contextId: "ctx",
+          gitRootPath: "/repo",
+          line: 18,
+          path: "src/a.ts",
+          selectionEndLine: 21,
+          selectionStartLine: 18,
+        },
+        surface: GIT_REVIEW_DIFF_SURFACE,
+      })
+    );
+    expect(ids).toEqual([
+      GIT_REVIEW_OPEN_IN_EDITOR_COMMAND_ID,
+      GIT_REVIEW_COPY_PATH_COMMAND_ID,
+      GIT_REVIEW_COPY_RELATIVE_PATH_COMMAND_ID,
+      GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID,
+      GIT_REVIEW_REVEAL_COMMAND_ID,
+    ]);
+  });
+
+  it("keeps path-with-range visible like the editor when there is no line span", () => {
+    const ids = collectActionIds(
+      buildMenuEntries(GIT_REVIEW_DIFF_SURFACE, {
+        metadata: {
+          contextId: "ctx",
+          gitRootPath: "/repo",
+          path: "src/a.ts",
+        },
+        surface: GIT_REVIEW_DIFF_SURFACE,
+      })
+    );
+    expect(ids).toEqual([
+      GIT_REVIEW_OPEN_IN_EDITOR_COMMAND_ID,
+      GIT_REVIEW_COPY_PATH_COMMAND_ID,
+      GIT_REVIEW_COPY_RELATIVE_PATH_COMMAND_ID,
+      GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID,
+      GIT_REVIEW_REVEAL_COMMAND_ID,
+    ]);
+  });
+
+  it("copies absolute, relative, and ranged paths from diff metadata", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    await actionRegistry.get(GIT_REVIEW_COPY_PATH_COMMAND_ID)?.handler({
+      metadata: {
+        contextId: "ctx",
+        gitRootPath: "/repo",
+        path: "src/a.ts",
+      },
+      surface: GIT_REVIEW_DIFF_SURFACE,
+    });
+    expect(writeText).toHaveBeenCalledWith("/repo/src/a.ts");
+
+    writeText.mockClear();
+    await actionRegistry
+      .get(GIT_REVIEW_COPY_RELATIVE_PATH_COMMAND_ID)
+      ?.handler({
+        metadata: {
+          contextId: "ctx",
+          gitRootPath: "/repo",
+          path: "src/a.ts",
+        },
+        surface: GIT_REVIEW_DIFF_SURFACE,
+      });
+    expect(writeText).toHaveBeenCalledWith("src/a.ts");
+
+    writeText.mockClear();
+    await actionRegistry
+      .get(GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID)
+      ?.handler({
+        metadata: {
+          contextId: "ctx",
+          gitRootPath: "/repo",
+          path: "src/a.ts",
+          selectionEndLine: 21,
+          selectionStartLine: 18,
+        },
+        surface: GIT_REVIEW_DIFF_SURFACE,
+      });
+    expect(writeText).toHaveBeenCalledWith("src/a.ts:18-21");
+
+    writeText.mockClear();
+    await actionRegistry
+      .get(GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID)
+      ?.handler({
+        metadata: {
+          contextId: "ctx",
+          gitRootPath: "/repo",
+          path: "src/a.ts",
+        },
+        surface: GIT_REVIEW_DIFF_SURFACE,
+      });
+    expect(writeText).toHaveBeenCalledWith("src/a.ts");
+  });
+
+  it("copies the live review target when the shortcut has no menu metadata", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const disposeLive = registerGitReviewLiveCopyTarget("panel-1", () => ({
+      endLine: 14,
+      gitRootPath: "/repo",
+      path: "src/live.ts",
+      startLine: 10,
+    }));
+
+    await actionRegistry
+      .get(GIT_REVIEW_COPY_PATH_WITH_RANGE_COMMAND_ID)
+      ?.handler({
+        sourcePanelId: "panel-1",
+        surface: GIT_REVIEW_DIFF_SURFACE,
+      });
+    disposeLive();
+
+    expect(writeText).toHaveBeenCalledWith("src/live.ts:10-14");
   });
 });

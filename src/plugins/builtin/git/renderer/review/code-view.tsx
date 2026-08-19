@@ -35,11 +35,13 @@ import { useGitReviewCodeMutations } from "../hooks/use-code-mutations.ts";
 import { pluginText } from "../plugin-text.ts";
 import { usePluginLanguage } from "../use-plugin-language.ts";
 import { openGitReviewDiffContextMenu } from "./diff-context-menu.ts";
+import { resolveGitReviewLiveCopyTarget } from "./diff-open-target.ts";
 import { ReviewErrorEmpty, ReviewLoading } from "./feedback.tsx";
 import type {
   GitReviewMutationLease,
   GitReviewMutationTransition,
 } from "./reading-surface.ts";
+import { registerGitReviewLiveCopyTarget } from "./tree-path-actions.ts";
 
 const loadPierDiffView = () =>
   import("@pier/ui/diff-view/index.tsx").then((module) => ({
@@ -231,6 +233,19 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       },
       [context, contextId, displayItems, gitRootPath, sourcePanelId]
     );
+
+    useEffect(() => {
+      if (!(gitRootPath && sourcePanelId)) {
+        return;
+      }
+      return registerGitReviewLiveCopyTarget(sourcePanelId, () =>
+        resolveGitReviewLiveCopyTarget({
+          gitRootPath,
+          handle: handleRef.current,
+          items: displayItems,
+        })
+      );
+    }, [displayItems, gitRootPath, sourcePanelId]);
 
     // Rebuild tooltip/aria labels when host locale switches.
     // biome-ignore lint/correctness/useExhaustiveDependencies: language drives i18n re-read

@@ -21,6 +21,8 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         return (
           <FileCanvasPreview
             context={props.context}
+            panelContext={props.panelContext}
+            panelId={props.panelId}
             path={props.canvasDiskSource.path}
             root={props.canvasDiskSource.root}
             t={props.t}

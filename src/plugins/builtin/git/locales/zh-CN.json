@@ -249,6 +249,11 @@
       "description": "复制所选变更在仓库内的相对路径。",
       "title": "Git: 复制相对路径"
     },
+    "pier.git.review.copyPathWithRange": {
+      "category": "Git",
+      "description": "复制仓库内相对路径和当前所选行号。",
+      "title": "Git: 复制路径和所选行"
+    },
     "pier.git.review.revealInFinder": {
       "category": "Git",
       "description": "在系统文件管理器中显示所选变更。",
@@ -857,6 +862,7 @@
     "ui.reviewStateInvalidEncodingDetail": "不支持的文本编码，请打开文件查看",
     "ui.reviewStateConflictDetail": "合并冲突 — 若无法显示冲突视图，请打开文件。",
     "ui.reviewTreeCopyPath": "复制路径",
+    "ui.reviewCopyPathWithRange": "复制路径和所选行",
     "ui.reviewTreeCopyRelativePath": "复制相对路径",
     "ui.reviewTreePathCopied": "已复制路径",
     "ui.reviewTreeCopyPathFailed": "无法复制路径",

@@ -250,6 +250,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
+      id: "pier.git.review.copyPathWithRange",
+      permissions: ["file:read"],
+      title: "Git: Copy Path and Selected Lines",
+    },
+    {
+      category: "Git",
       id: "pier.git.review.revealInFinder",
       permissions: ["file:read"],
       title: "Git: Reveal in Finder",

@@ -187,6 +187,11 @@
       "description": "선택한 변경의 저장소 상대 경로를 복사합니다.",
       "title": "Git: 상대 경로 복사"
     },
+    "pier.git.review.copyPathWithRange": {
+      "category": "Git",
+      "description": "저장소 상대 경로와 선택한 줄 번호를 복사합니다.",
+      "title": "Git: 경로와 선택한 줄 복사"
+    },
     "pier.git.review.revealInFinder": {
       "category": "Git",
       "description": "시스템 파일 관리자에서 선택한 변경을 표시합니다.",
@@ -740,6 +745,7 @@
     "ui.reviewStateInvalidEncodingDetail": "지원하지 않는 텍스트 인코딩입니다. 파일을 열어 확인하세요.",
     "ui.reviewStateConflictDetail": "병합 충돌 — 충돌 보기를 쓸 수 없으면 파일을 여세요.",
     "ui.reviewTreeCopyPath": "경로 복사",
+    "ui.reviewCopyPathWithRange": "경로와 선택한 줄 복사",
     "ui.reviewTreeCopyRelativePath": "상대 경로 복사",
     "ui.reviewTreePathCopied": "경로를 복사했습니다",
     "ui.reviewTreeCopyPathFailed": "경로를 복사하지 못했습니다",

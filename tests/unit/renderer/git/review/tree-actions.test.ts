@@ -30,6 +30,7 @@ describe("git review tree actions", () => {
   const openInEditor = vi.fn(() => true);
   const error = vi.fn();
   const info = vi.fn();
+  const success = vi.fn();
   const loadingDismiss = vi.fn();
   const loading = vi.fn(() => ({
     dismiss: loadingDismiss,
@@ -51,6 +52,7 @@ describe("git review tree actions", () => {
     openInEditor.mockReturnValue(true);
     error.mockClear();
     info.mockClear();
+    success.mockClear();
     loading.mockClear();
     loadingDismiss.mockClear();
     applyReviewPathMutation.mockClear();
@@ -66,7 +68,7 @@ describe("git review tree actions", () => {
       i18n: {
         t: (_key: string, _values: unknown, fallback: string) => fallback,
       },
-      notifications: { error, info, loading },
+      notifications: { error, info, loading, success },
       dialogs: {
         alert: vi.fn(async () => undefined),
         choice: vi.fn(async () => "cancel"),
@@ -191,6 +193,9 @@ describe("git review tree actions", () => {
       "pier.git.review.copyRelativePath",
       "pier.git.review.revealInFinder",
     ]);
+    expect(collectActionIds(fileMenu)).not.toContain(
+      "pier.git.review.copyPathWithRange"
+    );
     expect(collectActionIds(fileMenu)).not.toContain(
       "pier.git.review.expandAll"
     );

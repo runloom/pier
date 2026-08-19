@@ -1,6 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FileText, Minus, Plus, Undo2 } from "lucide-react";
 import { pluginText } from "../plugin-text.ts";
+import { GIT_REVIEW_DIFF_SURFACE } from "./diff-actions.ts";
 import { confirmGitDiscard } from "./discard.ts";
 import { GitReviewMutationAuthority } from "./mutation-authority.ts";
 import { registerGitReviewTreeFolderActions } from "./tree-folder-actions.ts";
@@ -252,7 +253,7 @@ export function registerGitReviewTreeActions(
     registerGitReviewTreePathActions({
       context,
       parseItem: parseGitReviewTreeItemMetadata,
-      surface: GIT_REVIEW_TREE_ITEM_SURFACE,
+      surfaces: [GIT_REVIEW_TREE_ITEM_SURFACE, GIT_REVIEW_DIFF_SURFACE],
     }),
   ];
   return () => {

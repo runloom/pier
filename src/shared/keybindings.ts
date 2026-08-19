@@ -212,8 +212,13 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   },
   {
     commandId: "pier.files.copyPathWithRange",
-    keys: "Mod+Shift+Alt+KeyC",
+    keys: "Mod+Alt+KeyC",
     scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.git.review.copyPathWithRange",
+    keys: "Mod+Alt+KeyC",
+    scope: "panel:pier.git.changes",
   },
   {
     commandId: "pier.files.editor.goToLine",

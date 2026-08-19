@@ -5,6 +5,7 @@ import {
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { findCanvasCommentAnchorElement } from "@shared/comments/canvas-anchor.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   detectProjectCanvasFramework,
   liveModuleProjectContentDirectories,
@@ -48,6 +49,7 @@ import {
   type CanvasPreviewState,
   useCanvasCompileSession,
 } from "./canvas-compile-session.ts";
+import { useCanvasPreviewContextMenu } from "./canvas-preview-surface.ts";
 import {
   CanvasCompileErrorEmpty,
   CanvasLoadingSkeleton,
@@ -69,6 +71,8 @@ import {
  */
 export function FileCanvasPreview(props: {
   context: RendererPluginContext;
+  panelContext?: PanelContext | undefined;
+  panelId?: string | undefined;
   path: string;
   root: string;
   t: FilesTranslate;
@@ -300,6 +304,14 @@ export function FileCanvasPreview(props: {
     hostRef,
     t: props.t,
   });
+  const { onContextMenu, previewRootRef } = useCanvasPreviewContextMenu({
+    context: props.context,
+    panelContext: props.panelContext,
+    panelId: props.panelId,
+    path: props.path,
+    root: props.root,
+    t: props.t,
+  });
   if (!relPath) {
     return <CanvasUnavailableEmpty t={props.t} />;
   }
@@ -312,12 +324,15 @@ export function FileCanvasPreview(props: {
   const softError = state.kind === "ready" ? state.softError : undefined;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: canvas preview is a native context-menu surface with no accurate interactive ARIA role
     <div
       aria-busy={isBusy ? true : undefined}
       className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background"
       data-framework={framework}
       data-pick-mode={comments.pickMode ? "" : undefined}
       data-slot="file-canvas-preview"
+      onContextMenu={onContextMenu}
+      ref={previewRootRef}
     >
       <div
         className={cn(
@@ -359,7 +374,11 @@ export function FileCanvasPreview(props: {
           data-pier-canvas-shell=""
           ref={setCanvasShellEl}
         >
-          <div className="relative min-h-full w-full" ref={hostRef} />
+          <div
+            className="relative min-h-full w-full"
+            data-slot="file-canvas-host"
+            ref={hostRef}
+          />
           {showHost ? (
             <CanvasCommentOverlay
               draftOpen={comments.draftOpen}

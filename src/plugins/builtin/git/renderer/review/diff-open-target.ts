@@ -123,3 +123,71 @@ function normalizeLine(line: number): number | undefined {
   }
   return line;
 }
+
+/**
+ * Line span for “Copy Path and Selected Lines”.
+ * Same-item same-side selection, else the supplied working-tree / pointer line.
+ */
+export function resolveGitReviewDiffCopyRange(options: {
+  readonly handle: PierDiffViewHandle | null | undefined;
+  readonly itemId?: string;
+  readonly line?: number;
+}): { endLine: number; startLine: number } | null {
+  const selection = options.handle?.getSelectedLines();
+  if (selection && (!options.itemId || selection.id === options.itemId)) {
+    const startSide: DiffSide = selection.range.side ?? "additions";
+    const endSide: DiffSide = selection.range.endSide ?? startSide;
+    if (startSide === endSide) {
+      const start = normalizeLine(
+        Math.min(selection.range.start, selection.range.end)
+      );
+      const end = normalizeLine(
+        Math.max(selection.range.start, selection.range.end)
+      );
+      if (start !== undefined && end !== undefined) {
+        return { endLine: end, startLine: start };
+      }
+    }
+  }
+  const line =
+    options.line === undefined ? undefined : normalizeLine(options.line);
+  return line === undefined ? null : { endLine: line, startLine: line };
+}
+
+/**
+ * Shortcut target: path from the selected item (or the sole item). Attach a
+ * line span only when that path is the selected item — never mix a leftover
+ * selection onto a fallback file.
+ */
+export function resolveGitReviewLiveCopyTarget(options: {
+  readonly gitRootPath: string;
+  readonly handle: PierDiffViewHandle | null | undefined;
+  readonly items: readonly PierDiffViewItem[];
+}): {
+  endLine?: number;
+  gitRootPath: string;
+  path: string;
+  startLine?: number;
+} | null {
+  const selection = options.handle?.getSelectedLines();
+  const selectedItem = selection
+    ? options.items.find((entry) => entry.id === selection.id)
+    : undefined;
+  const fallbackItem =
+    selectedItem ?? (options.items.length === 1 ? options.items[0] : undefined);
+  const path = fallbackItem?.fileDisplay?.path;
+  if (!path) {
+    return null;
+  }
+  const range = selectedItem
+    ? resolveGitReviewDiffCopyRange({
+        handle: options.handle,
+        itemId: selectedItem.id,
+      })
+    : null;
+  return {
+    gitRootPath: options.gitRootPath,
+    path,
+    ...(range ? { endLine: range.endLine, startLine: range.startLine } : {}),
+  };
+}
