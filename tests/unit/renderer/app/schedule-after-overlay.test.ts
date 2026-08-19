@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { scheduleAfterOverlay } from "../../../../packages/ui/src/schedule-after-overlay.ts";
+import {
+  isOverlayBlockingDialogOpen,
+  scheduleAfterOverlay,
+} from "../../../../packages/ui/src/schedule-after-overlay.ts";
 
 describe("scheduleAfterOverlay", () => {
   beforeEach(() => {
@@ -74,5 +77,26 @@ describe("scheduleAfterOverlay", () => {
     cancel();
     vi.runAllTimers();
     expect(task).not.toHaveBeenCalled();
+  });
+
+  it("does not treat a composer-style listbox as a blocking overlay", () => {
+    const listbox = document.createElement("div");
+    listbox.setAttribute("role", "listbox");
+    document.body.append(listbox);
+
+    expect(isOverlayBlockingDialogOpen()).toBe(false);
+
+    const task = vi.fn();
+    scheduleAfterOverlay(task);
+    vi.runAllTimers();
+    expect(task).toHaveBeenCalledOnce();
+  });
+
+  it("still treats Radix menu portals as blocking overlays", () => {
+    const menu = document.createElement("div");
+    menu.setAttribute("data-slot", "dropdown-menu-content");
+    document.body.append(menu);
+
+    expect(isOverlayBlockingDialogOpen()).toBe(true);
   });
 });

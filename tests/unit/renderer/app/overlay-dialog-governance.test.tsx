@@ -109,6 +109,14 @@ describe("overlay → dialog open governance", () => {
     expect(alertDialogSource).toContain("isTopmostModalContent");
     expect(scheduleSource).toContain("options.onAbandon");
     expect(scheduleSource).toContain("options.onAbandon?.()");
+    // Generic ARIA roles match composer slash suggest / cmdk / in-file search.
+    // Those must not block Dialog open (⌘⇧P while the selector is open).
+    expect(scheduleSource).not.toMatch(
+      /OPEN_OVERLAY_SELECTOR = \[[\s\S]*?\[role=listbox\]/
+    );
+    expect(scheduleSource).not.toMatch(
+      /OPEN_OVERLAY_SELECTOR = \[[\s\S]*?\[role=menu\]/
+    );
     // Content dialog host must retain closed shells for exit animation and
     // abandon-open must drop staged layers instead of leaving body locked.
     expect(contentHostSource).toContain("retainedStack");
