@@ -185,33 +185,42 @@ function projectLoadedReviewDocumentResource(
       }
       if (section.kind === "conflict") {
         const notice = conflictSectionText(context, section, locale);
-        return [
-          {
-            cacheKey: JSON.stringify([
-              itemId,
-              locale,
-              section.kind,
-              section.presentation,
-              section.contentsDigest,
-              section.xy,
-              notice,
-            ]),
-            conflict: {
-              contents: section.contents,
-              contentsDigest: section.contentsDigest,
-              presentation: section.presentation,
-              stages: section.stages,
-              xy: section.xy,
+        const base = {
+          cacheKey: JSON.stringify([
+            itemId,
+            locale,
+            section.kind,
+            section.presentation,
+            section.contentsDigest,
+            section.xy,
+            notice,
+          ]),
+          fileDisplay: fileDisplayForSlot(slot),
+          id: itemId,
+          ...(lineStats === undefined ? {} : { lineStats }),
+          patch: null,
+          ...(stageControl === null ? {} : { stageControl }),
+          stateNotice: notice,
+        };
+        if (
+          section.presentation === "markers-text" &&
+          section.contents !== null
+        ) {
+          return [
+            {
+              ...base,
+              conflict: {
+                contents: section.contents,
+                contentsDigest: section.contentsDigest,
+                presentation: section.presentation,
+                stages: section.stages,
+                xy: section.xy,
+              },
+              kind: "conflict" as const,
             },
-            fileDisplay: fileDisplayForSlot(slot),
-            id: itemId,
-            kind: "conflict",
-            ...(lineStats === undefined ? {} : { lineStats }),
-            patch: null,
-            ...(stageControl === null ? {} : { stageControl }),
-            stateNotice: notice,
-          },
-        ];
+          ];
+        }
+        return [{ ...base, kind: "ready-notice" as const }];
       }
       if (section.kind === "image") {
         return [

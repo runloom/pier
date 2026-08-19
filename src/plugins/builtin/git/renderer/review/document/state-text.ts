@@ -27,7 +27,7 @@ const STATE_SECTION_TEXT = {
   { readonly fallback: string; readonly key: string }
 >;
 
-/** Localized conflict body copy for section notices / file-level cards. */
+/** Localized conflict body copy for UnresolvedFile and ready-notice. */
 export function conflictSectionText(
   context: RendererPluginContext,
   section: ReviewConflictSection,
@@ -43,18 +43,12 @@ export function conflictSectionText(
         locale
       );
     case "file-level":
-      return pluginText(
-        context,
-        "reviewStateConflictFileLevelDetail",
-        "Merge conflict without markers — keep one side or open the file.",
-        undefined,
-        locale
-      );
+      return fileLevelConflictText(context, section.xy, locale);
     case "binary":
       return pluginText(
         context,
         "reviewStateConflictBinaryDetail",
-        "Binary merge conflict — keep one side or open the file.",
+        "Binary merge conflict — preview is unavailable. Stage the file or open it.",
         undefined,
         locale
       );
@@ -62,7 +56,7 @@ export function conflictSectionText(
       return pluginText(
         context,
         "reviewStateConflictTooLargeDetail",
-        "Conflict file is too large to preview — open the file or keep one side.",
+        "Conflict file is too large to preview — stage it or open it.",
         undefined,
         locale
       );
@@ -70,7 +64,7 @@ export function conflictSectionText(
       return pluginText(
         context,
         "reviewStateConflictInvalidEncodingDetail",
-        "Conflict file has unsupported encoding — open the file or keep one side.",
+        "Conflict file has unsupported encoding — stage it or open it.",
         undefined,
         locale
       );
@@ -78,7 +72,7 @@ export function conflictSectionText(
       return pluginText(
         context,
         "reviewStateConflictReadErrorDetail",
-        "Conflict file could not be read — open the file to resolve.",
+        "Conflict file could not be read — try opening the file.",
         undefined,
         locale
       );
@@ -153,6 +147,68 @@ export function stateSectionText(
   }
   const text = STATE_SECTION_TEXT[section.reason];
   return pluginText(context, text.key, text.fallback, undefined, locale);
+}
+
+function fileLevelConflictText(
+  context: RendererPluginContext,
+  xy: ReviewConflictSection["xy"],
+  locale: string
+): string {
+  switch (xy) {
+    case "DD":
+      return pluginText(
+        context,
+        "reviewStateConflictBothDeletedDetail",
+        "Both sides deleted this file — stage it to confirm.",
+        undefined,
+        locale
+      );
+    case "UD":
+      return pluginText(
+        context,
+        "reviewStateConflictOursChangedTheirsDeletedDetail",
+        "This side changed the file; the incoming side deleted it — open the file or stage it.",
+        undefined,
+        locale
+      );
+    case "DU":
+      return pluginText(
+        context,
+        "reviewStateConflictOursDeletedTheirsChangedDetail",
+        "This side deleted the file; the incoming side changed it — open the file or stage it.",
+        undefined,
+        locale
+      );
+    case "AU":
+      return pluginText(
+        context,
+        "reviewStateConflictOursAddedDetail",
+        "Only this side added the file — open it or stage it.",
+        undefined,
+        locale
+      );
+    case "UA":
+      return pluginText(
+        context,
+        "reviewStateConflictTheirsAddedDetail",
+        "Only the incoming side added the file — open it or stage it.",
+        undefined,
+        locale
+      );
+    case "UU":
+    case "AA":
+      return pluginText(
+        context,
+        "reviewStateConflictFileLevelDetail",
+        "This conflict cannot be shown as current vs incoming — stage the file if it already looks right, or open it.",
+        undefined,
+        locale
+      );
+    default: {
+      const exhaustive: never = xy;
+      return exhaustive;
+    }
+  }
 }
 
 /** Extension → industry-style binary kind label (font/image/audio/…). */

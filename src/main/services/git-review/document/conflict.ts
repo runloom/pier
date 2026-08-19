@@ -41,8 +41,7 @@ export interface GitReviewConflictMaterial {
 
 /**
  * Materialize an unmerged worktree path for review.
- * Never runs `git diff`; conflict body is the worktree file (markers) or a
- * presentation-only classification for non-marker conflicts.
+ * Never runs `git diff`.
  */
 export async function readGitReviewConflictMaterial(
   options: ReadGitReviewConflictOptions
@@ -95,11 +94,12 @@ export async function readGitReviewConflictMaterial(
   }
 
   const text = bytes.toString("utf8");
-  if (hasCompleteMergeConflictMarkers(text)) {
+  const presentation = classifyConflictWorktreePresentation(text);
+  if (presentation === "markers-text") {
     return {
       contents: text,
       contentsDigest: digest,
-      presentation: "markers-text",
+      presentation,
       sourceRevision: digest,
       stages,
       xy,
@@ -133,6 +133,13 @@ export function sectionFromConflictMaterial(options: {
     targetPath: options.targetPath,
     xy: options.material.xy,
   };
+}
+
+/** UnresolvedFile only parses a closed marker stack. */
+export function classifyConflictWorktreePresentation(
+  text: string
+): "markers-text" | "file-level" {
+  return hasCompleteMergeConflictMarkers(text) ? "markers-text" : "file-level";
 }
 
 /**

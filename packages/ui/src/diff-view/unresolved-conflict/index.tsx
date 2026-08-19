@@ -7,7 +7,6 @@ import type {
   PierDiffViewAppearance,
   PierDiffViewPresentation,
 } from "../types.ts";
-import { FileLevelConflictCard } from "./file-level.tsx";
 import { MarkersConflictBody } from "./markers-body.tsx";
 import { applyConflictResolution, countUnresolvedMarkers } from "./rebuild.ts";
 import type {
@@ -33,8 +32,6 @@ export interface PierUnresolvedConflictProps {
   readonly labels: PierUnresolvedConflictLabels;
   readonly onError?: (error: Error) => void;
   readonly onOpenFile?: () => void;
-  readonly onTakeOurs?: () => void | Promise<void>;
-  readonly onTakeTheirs?: () => void | Promise<void>;
   readonly onWriteResolved?: (payload: {
     readonly contents: string;
     readonly contentsDigest: string;
@@ -45,7 +42,7 @@ export interface PierUnresolvedConflictProps {
 
 export function PierUnresolvedConflictView(
   props: PierUnresolvedConflictProps
-): ReactElement {
+): ReactElement | null {
   const {
     appearance,
     busy = false,
@@ -53,38 +50,27 @@ export function PierUnresolvedConflictView(
     labels,
     onError,
     onOpenFile,
-    onTakeOurs,
-    onTakeTheirs,
     onWriteResolved,
     path,
     presentation,
   } = props;
 
-  if (conflict.presentation === "markers-text" && conflict.contents !== null) {
-    return (
-      <MarkersConflictBody
-        appearance={appearance}
-        busy={busy}
-        contents={conflict.contents}
-        contentsDigest={conflict.contentsDigest}
-        labels={labels}
-        path={path}
-        {...(onError === undefined ? {} : { onError })}
-        {...(onOpenFile === undefined ? {} : { onOpenFile })}
-        {...(onWriteResolved === undefined ? {} : { onWriteResolved })}
-        {...(presentation === undefined ? {} : { presentation })}
-      />
-    );
+  if (conflict.presentation !== "markers-text" || conflict.contents === null) {
+    return null;
   }
 
   return (
-    <FileLevelConflictCard
+    <MarkersConflictBody
+      appearance={appearance}
       busy={busy}
+      contents={conflict.contents}
+      contentsDigest={conflict.contentsDigest}
       labels={labels}
       path={path}
+      {...(onError === undefined ? {} : { onError })}
       {...(onOpenFile === undefined ? {} : { onOpenFile })}
-      {...(onTakeOurs === undefined ? {} : { onTakeOurs })}
-      {...(onTakeTheirs === undefined ? {} : { onTakeTheirs })}
+      {...(onWriteResolved === undefined ? {} : { onWriteResolved })}
+      {...(presentation === undefined ? {} : { presentation })}
     />
   );
 }

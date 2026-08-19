@@ -879,16 +879,19 @@
     "ui.reviewConflictAcceptIncoming": "接受传入变更",
     "ui.reviewConflictCurrentChange": "（当前变更）",
     "ui.reviewConflictIncomingChange": "（传入变更）",
-    "ui.reviewConflictKeepOurs": "保留当前",
-    "ui.reviewConflictKeepTheirs": "保留传入",
     "ui.reviewConflictResolving": "正在解决…",
     "ui.reviewConflictResolveFailed": "无法解决冲突",
     "ui.reviewStateConflictMarkersDetail": "合并冲突 — 在下方接受当前、传入或双方。全部区域接受后会保存并暂存文件。",
-    "ui.reviewStateConflictFileLevelDetail": "无冲突标记的合并冲突 — 选择保留一侧或打开文件。",
-    "ui.reviewStateConflictBinaryDetail": "二进制合并冲突 — 选择保留一侧或打开文件。",
-    "ui.reviewStateConflictTooLargeDetail": "冲突文件过大无法预览 — 打开文件或选择保留一侧。",
-    "ui.reviewStateConflictInvalidEncodingDetail": "冲突文件编码不受支持 — 打开文件或选择保留一侧。",
-    "ui.reviewStateConflictReadErrorDetail": "无法读取冲突文件 — 请打开文件解决。"
+    "ui.reviewStateConflictFileLevelDetail": "无法按当前与传入展示 — 若工作区已是结果请暂存，否则打开文件。",
+    "ui.reviewStateConflictBothDeletedDetail": "双方都删除了此文件 — 请暂存以确认删除。",
+    "ui.reviewStateConflictOursChangedTheirsDeletedDetail": "当前改过此文件，传入侧已删除 — 请打开文件或暂存。",
+    "ui.reviewStateConflictOursDeletedTheirsChangedDetail": "当前已删除此文件，传入侧有改动 — 请打开文件或暂存。",
+    "ui.reviewStateConflictOursAddedDetail": "仅当前新增了此文件 — 请打开或暂存。",
+    "ui.reviewStateConflictTheirsAddedDetail": "仅传入侧新增了此文件 — 请打开或暂存。",
+    "ui.reviewStateConflictBinaryDetail": "二进制合并冲突 — 无法预览，请暂存或打开文件。",
+    "ui.reviewStateConflictTooLargeDetail": "冲突文件过大无法预览 — 请暂存或打开文件。",
+    "ui.reviewStateConflictInvalidEncodingDetail": "冲突文件编码不受支持 — 请暂存或打开文件。",
+    "ui.reviewStateConflictReadErrorDetail": "无法读取冲突文件 — 请尝试打开文件。"
   },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {

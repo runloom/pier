@@ -115,8 +115,8 @@ export type GitReviewConflictXy = z.infer<typeof gitReviewConflictXySchema>;
 
 /**
  * How renderer should present a conflict section.
- * - markers-text: worktree has complete <<<<<<< / ======= / >>>>>>> markers
- * - file-level: unmerged without reliable markers (DD, modify/delete, …)
+ * - markers-text: closed <<<<<<< / ======= / >>>>>>> stack for UnresolvedFile
+ * - file-level: no parseable stack (DD, modify/delete, incomplete markers)
  * - binary / tooLarge / invalidEncoding / readError: non-text or unreadable
  */
 export const GIT_REVIEW_CONFLICT_PRESENTATIONS = [
