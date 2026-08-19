@@ -297,26 +297,36 @@
   --radius: 0.625rem;
 
   /* === scrollbar system ===
-     全应用一套外观。Chromium 走 scrollbar-width: thin + scrollbar-color 自动隐藏
-     （空闲透明 / 活动着色）；调粗细只改 --shell-scrollbar-width-legacy（webkit 回退）。
-     唯一例外：data-scrollbar="none" 隐藏。
+     全应用一套外观（2026-08-19 金标准）。Chromium 走 scrollbar-width: thin +
+     scrollbar-color 自动隐藏（空闲透明 / 活动着色）。
+     --shell-scrollbar-width-legacy 是 thin 槽宽的重建值（启动探针覆盖；11px 为测不到时的回退），
+     给 Radix / 树 gutter / 渐隐让槽用，不是另一套皮肤。
+     拇指不透明，混 --background，避免侧栏与正文叠出两种灰。
+     唯一隐藏：data-scrollbar="none"。
      Shadow（trees / diffs）全局穿不进，经 packages/ui/scrollbar-system.ts 同策略。 */
 
   --shell-scrollbar-width: thin;
-  --shell-scrollbar-width-legacy: 6px;
+  --shell-scrollbar-width-legacy: 11px;
   --shell-scrollbar-radius: 999px;
   --shell-scrollbar-thumb: color-mix(
     in oklab,
-    var(--foreground) 30%,
-    transparent
+    var(--foreground) 22%,
+    var(--background)
   );
   --shell-scrollbar-thumb-active: color-mix(
     in oklab,
-    var(--foreground) 58%,
-    transparent
+    var(--foreground) 38%,
+    var(--background)
   );
   --shell-scrollbar-track: transparent;
   --shell-scrollbar-corner: transparent;
+  /* 与内容渐隐做并集：槽位始终不透明，滑块不会被 mask 裁掉。 */
+  --shell-scrollbar-gutter-mask: linear-gradient(
+    to left,
+    #000 0,
+    #000 var(--shell-scrollbar-width-legacy),
+    transparent var(--shell-scrollbar-width-legacy)
+  );
   /* === 字体体系 ===
      UI: HarmonyOS Sans SC (打包 CJK) + emoji + system-ui fallback
      Mono: JetBrainsMono Nerd Font (全量打包 ttf) + HarmonyOS Sans SC (打包 CJK)
@@ -650,6 +660,7 @@
 /*
  * 系统滚动条：默认全局统一；仅 data-scrollbar="none" 可隐藏。
  * data-scrollbar="stable"/"overlay" 保留 gutter，避免首次溢出布局跳动。
+ * 外观契约见 2026-08-19 滚动条外观金标准。
  *
  * Electron / Chromium：scrollbar-width / scrollbar-color（非 auto）会覆盖
  * ::-webkit-scrollbar。自动隐藏必须改 thumb 的 scrollbar-color（空闲透明 →
@@ -737,6 +748,29 @@
   [data-scrollbar="none"] * {
     scrollbar-width: none;
   }
+}
+
+/*
+ * 可见产品条与同节点 scroll-fade：在渐隐 mask 上并一层槽位不透明带。
+ * 不能用缩小 mask-size / content-box clip——未遮罩区域会整段透明，滑块消失。
+ * data-scrollbar=none 不匹配（命令面板等继续全框渐隐）。
+ */
+:where(
+    [data-scrollbar="stable"],
+    [data-scrollbar="overlay"],
+    [data-flat-scroll],
+    .cv-scrollbar
+  ):where(.scroll-fade-y, .scroll-fade-b, .scroll-fade-x, .scroll-fade-e) {
+  -webkit-mask-image: var(--scroll-fade-mask, var(--scroll-fade-block)),
+    var(--shell-scrollbar-gutter-mask);
+  mask-image: var(--scroll-fade-mask, var(--scroll-fade-block)),
+    var(--shell-scrollbar-gutter-mask);
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 html,
@@ -945,13 +979,15 @@ body {
  * 原因：.dv-tabs-container 由 dockview 拥有，无法挂 ScrollArea / Tailwind 类。
  */
 
-/* Tab 条自定义 thumb：空闲透明，hover/滚动时用产品 token（非默认白半透明）。 */
+/* Tab 条自绘条：颜色/圆角对齐产品条；厚度保持 4px。
+ * dockview 只在条 hover / 拖拇指时加 scrolling 类，滚轮不设该类。
+ * 不要关掉 :hover 着色，否则溢出条在普通滚动里永远不出现。 */
 .dockview-theme-pier .dv-tabs-and-actions-container .dv-scrollable {
-  --dv-scrollbar-background-color: color-mix(
-    in oklab,
-    var(--foreground) 28%,
-    transparent
-  );
+  --dv-scrollbar-background-color: var(--shell-scrollbar-thumb);
+}
+
+.dockview-theme-pier .dv-tabs-and-actions-container .dv-scrollable .dv-scrollbar {
+  border-radius: var(--shell-scrollbar-radius);
 }
 
 /* — hover: 非选中 tab 微亮 — */

@@ -53,7 +53,8 @@ const FILE_TREE_SCROLL_SELECTOR = '[data-file-tree-virtualized-scroll="true"]';
  * trees Shadow unsafeCSS bag:
  * 1) layout empty lanes
  * 2) SCROLLBAR_SYSTEM_CSS (same tokens as globals)
- * 3) short vertical scroll-fade on the virtualized scroller
+ * 3) short vertical scroll-fade; union an opaque gutter mask so the
+ *    native thumb stays painted (do not shrink mask-size)
  */
 export const TREE_SHADOW_CSS = `
 [data-item-section="content"] {
@@ -84,6 +85,7 @@ ${scrollFadeUnsafeCss({
   selector: FILE_TREE_SCROLL_SELECTOR,
   fade: "vertical",
   profile: "short",
+  spareNativeScrollbar: "inline-end",
 })}
 `;
 

@@ -486,6 +486,10 @@ describe("PierFileTree", () => {
     expect(shadowCss).toContain(
       '[data-file-tree-virtualized-scroll="true"][data-scrollbar-scrolling="true"]'
     );
+    expect(shadowCss).toContain(
+      '[data-file-tree-virtualized-scroll="true"]:hover'
+    );
+    expect(shadowCss).toContain("--trees-scrollbar-thumb-current: transparent");
     expect(shadowCss).toContain("data-file-tree-scrollbar-measure");
   });
 
@@ -639,6 +643,8 @@ describe("PierFileTree", () => {
     expect(TREE_SHADOW_CSS).toContain("scroll-fade-reveal-b");
     expect(TREE_SHADOW_CSS).toContain("animation-timeline: scroll(self y)");
     expect(TREE_SHADOW_CSS).toContain("--scroll-fade-reveal: 24px");
+    expect(TREE_SHADOW_CSS).toContain("var(--shell-scrollbar-gutter-mask)");
+    expect(TREE_SHADOW_CSS).toContain("mask-composite: add");
   });
 
   it("restores the full tree after clearing or cancelling a search filter", async () => {

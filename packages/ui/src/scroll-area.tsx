@@ -80,16 +80,42 @@ function scrollFadeClassName(options: {
  * reference them by name. Prefer this over hand-copied fade CSS in feature
  * modules (file tree, etc.).
  *
- * Note: when `selector` is also the native scrollbar owner (e.g. file-tree
- * virtualized scroll), the mask soft-fades the thumb at edges; auto-hide
- * scrollbar policy keeps idle thumbs transparent.
+ * Visible product scrollbars on the same node must pass
+ * `spareNativeScrollbar: "inline-end"` so the mask does not fade the thumb.
+ * Hidden bars (`data-scrollbar="none"`) and sibling-bar surfaces (ScrollArea,
+ * dockview tab strip) omit it.
  */
+function scrollFadeMaskPaintCss(options: {
+  image: string;
+  spareNativeScrollbar?: "inline-end" | undefined;
+}): string {
+  if (options.spareNativeScrollbar === "inline-end") {
+    return `
+  -webkit-mask-image: ${options.image}, var(--shell-scrollbar-gutter-mask);
+  mask-image: ${options.image}, var(--shell-scrollbar-gutter-mask);
+  -webkit-mask-composite: source-over;
+  mask-composite: add;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;`;
+  }
+  return `
+  -webkit-mask-image: ${options.image};
+  mask-image: ${options.image};
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;`;
+}
+
 function scrollFadeUnsafeCss(options: {
   selector: string;
   fade: ScrollAreaViewportFade;
   profile?: ScrollAreaViewportFadeProfile | undefined;
+  spareNativeScrollbar?: "inline-end";
 }): string {
-  const { selector, fade, profile } = options;
+  const { selector, fade, profile, spareNativeScrollbar } = options;
   if (fade === "vertical") {
     if (profile === "bottom-only") {
       return `
@@ -102,12 +128,10 @@ ${selector} {
     #000 calc(100% - var(--scroll-fade-b, 0px)),
     transparent 100%
   );
-  -webkit-mask-image: var(--scroll-fade-mask);
-  mask-image: var(--scroll-fade-mask);
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
+${scrollFadeMaskPaintCss({
+  image: "var(--scroll-fade-mask)",
+  spareNativeScrollbar,
+})}
 }
 
 @supports (animation-timeline: scroll()) {
@@ -148,12 +172,10 @@ ${selector} {
     #000 calc(100% - var(--scroll-fade-b, 0px)),
     transparent 100%
   );
-  -webkit-mask-image: var(--scroll-fade-mask, var(--scroll-fade-block));
-  mask-image: var(--scroll-fade-mask, var(--scroll-fade-block));
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
+${scrollFadeMaskPaintCss({
+  image: "var(--scroll-fade-mask, var(--scroll-fade-block))",
+  spareNativeScrollbar,
+})}
 }
 
 @supports (animation-timeline: scroll()) {
@@ -190,12 +212,10 @@ ${selector} {
     #000 calc(100% - var(--scroll-fade-e, 0px)),
     transparent 100%
   );
-  -webkit-mask-image: var(--scroll-fade-mask);
-  mask-image: var(--scroll-fade-mask);
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
+${scrollFadeMaskPaintCss({
+  image: "var(--scroll-fade-mask)",
+  spareNativeScrollbar,
+})}
 }
 
 @supports (animation-timeline: scroll()) {
@@ -236,12 +256,10 @@ ${selector} {
     #000 calc(100% - var(--scroll-fade-e, 0px)),
     transparent 100%
   );
-  -webkit-mask-image: var(--scroll-fade-mask, var(--scroll-fade-inline));
-  mask-image: var(--scroll-fade-mask, var(--scroll-fade-inline));
-  -webkit-mask-composite: source-in;
-  mask-composite: intersect;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
+${scrollFadeMaskPaintCss({
+  image: "var(--scroll-fade-mask, var(--scroll-fade-inline))",
+  spareNativeScrollbar,
+})}
 }
 
 @supports (animation-timeline: scroll()) {

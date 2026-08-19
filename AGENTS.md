@@ -445,6 +445,20 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
   走 portal（Radix 组件默认如此）。
 - 顶部不放工具栏；网格全局动作走原生 Electron 右键菜单（只保留添加、全部刷新），物料级动作仍走卡片 Radix 菜单，两者不得串开。
 
+### 滚动条外观
+
+产品滚动条必须是同一条滑块。权威规格：
+`docs/superpowers/specs/2026-08-19-scrollbar-visual-gold-standard.md`。
+
+- 空闲透明；滚动或槽位悬停显现；idle 900ms。禁止整容器 hover 当默认亮条。
+- 颜色走不透明 `--shell-scrollbar-thumb`（`--foreground` 混 `--background`），禁止半透明叠在局部底上。
+- 粗细权威是 `scrollbar-width: thin`。`--shell-scrollbar-width-legacy` 是测到的 `thin` 槽宽，只给 Radix / 树 gutter / 渐隐让槽用。
+- 看得见的条：`scroll-fade` / mask 不得盖住拇指。与条同节点时用槽位不透明带（`mask-composite: add`），禁止缩小 `mask-size` 把滑块裁没。`ScrollArea` 的条必须是 viewport 兄弟。
+- `@pierre/trees` / `@pierre/diffs` 自带 webkit 条不是产品表面，Shadow unsafe CSS 必须压住。
+- 槽位 `stable` / `overlay` / `none` 只谈占位。藏条只许 `data-scrollbar="none"`。
+- 关闭清单：终端 AppKit overlay；命令面板 / 画布 / 大纲细轨等 `none`；Markdown 大纲 hover 藏拇指；Dockview Tab 条厚度 4px，颜色对齐，显隐沿用条 hover / 拖拇指（不得关掉 `:hover`）。
+- 检查点在 `tests/unit/renderer/styles/scrollbar-visual-governance.test.ts`。
+
 ## 04 项目命令
 
 - 安装依赖：`pnpm install`

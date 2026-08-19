@@ -6,6 +6,9 @@
  * Electron：用 scrollbar-color 空闲透明 / 活动着色做自动隐藏，并固定
  * scrollbar-width: thin，避免与 @pierre/trees 自带 webkit :hover 条打架，
  * 也避免退回经典 webkit 槽位导致 gutter 位移。
+ *
+ * trees `:hover` 会把 `--trees-scrollbar-thumb-current` 设成亮色。unsafe
+ * 层必须把该变量钉在透明，只在 Pier 活动位（滚动 / 槽位悬停）交给产品 token。
  */
 
 export const SCROLLBAR_SIZE_CSS = "var(--shell-scrollbar-width-legacy)";
@@ -21,14 +24,21 @@ export const SCROLLBAR_SYSTEM_CSS = `
 [data-file-tree-scrollbar-measure="true"],
 [data-code],
 :host {
+  --trees-scrollbar-thumb-current: transparent;
   scrollbar-color: transparent transparent;
   scrollbar-width: var(--shell-scrollbar-width, thin);
+}
+
+[data-file-tree-virtualized-scroll="true"]:hover,
+[data-file-tree-scrollbar-measure="true"]:hover {
+  --trees-scrollbar-thumb-current: transparent;
 }
 
 [data-file-tree-virtualized-scroll="true"][data-scrollbar-scrolling="true"],
 [data-file-tree-virtualized-scroll="true"][data-scrollbar-hovering="true"],
 [data-code][data-scrollbar-scrolling="true"],
 [data-code][data-scrollbar-hovering="true"] {
+  --trees-scrollbar-thumb-current: var(--shell-scrollbar-thumb);
   scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track, transparent);
 }
 

@@ -87,6 +87,7 @@ Electron 用标准 `scrollbar-width: thin` + `scrollbar-color`（空闲 transpar
 | Radix `ScrollArea` | 默认 `type="scroll"` + 同 idle；竖/横 `ScrollBar` | 禁止默认整容器 hover |
 | 终端 | AppKit overlay `autohidesScrollers` | 系统外观，不做 Pier 自绘 overlay |
 
-仍可后续增强（非阻断）：Dockview 自有 tab 溢出条与 Pier auto-hide 的视觉统一、
-跨主题截图回归。设置页滚动条贴边：DialogContent `pr-0` + `data-scrollbar="overlay"`
+外观终态（颜色、粗细、渐隐不得盖住滑块、Tab 条皮肤）见
+[2026-08-19 滚动条外观金标准](./2026-08-19-scrollbar-visual-gold-standard.md)。
+设置页滚动条贴边：DialogContent `pr-0` + `data-scrollbar="overlay"`
 （见 `dialog-scrollbar-edge.test.ts`）。
