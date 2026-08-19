@@ -6,11 +6,11 @@ import type { AgentHookEventPayloadV2 } from "@shared/contracts/agent/session.ts
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
-import { registerAgentStatusItem } from "@/panel-kits/terminal/agent-status-item.tsx";
 import {
   TerminalStatusBar,
   terminalStatusItemRegistry,
 } from "@/panel-kits/terminal/status-bar.tsx";
+import { registerAgentStatusItem } from "@/panel-kits/terminal/status-items/agent.tsx";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { createCodexTranscriptReconciler } from "../../../../src/main/services/agents/integrations/transcript/codex-reconciler.ts";
 import { createForegroundActivityAggregator } from "../../../../src/main/services/foreground-activity/aggregator.ts";

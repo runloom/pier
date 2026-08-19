@@ -19,6 +19,7 @@ public final class TerminalSurface {
     private var hasBeenFreed = false
     private var viewportTextCache = ViewportTextCache()
     private var occlusionVisible = true
+    private var hasOutputTap = false
     private var lastPixelWidth: UInt32?
     private var lastPixelHeight: UInt32?
     private var lastScaleX: Double?
@@ -267,6 +268,33 @@ public final class TerminalSurface {
         ghostty_surface_set_cursor_suppress(s, suppressed)
     }
 
+    /// Live scrollback limit (Pier patch 0108): applies to the primary
+    /// screen immediately, freeing pages beyond the new limit. Used for
+    /// live preference changes and hidden-surface memory pressure.
+    func setScrollbackLimit(_ bytes: UInt64) {
+        guard let s = surface else { return }
+        TerminalDebugLog.log(.lifecycle, "surface scrollbackLimit=\(bytes)")
+        ghostty_surface_set_scrollback_limit(s, UInt(bytes))
+        noteViewportChanged()
+    }
+
+    /// Raw PTY output tap (Pier patch 0107): the callback fires on the
+    /// ghostty IO thread with the renderer lock held — copy and return.
+    /// Pass nil to clear. `free()` clears any installed tap before the
+    /// surface is released so the userdata can be safely disposed after.
+    func setOutputTap(
+        _ callback: ghostty_surface_output_tap_cb?,
+        userdata: UnsafeMutableRawPointer?
+    ) {
+        guard let s = surface else { return }
+        TerminalDebugLog.log(
+            .lifecycle,
+            "surface outputTap=\(callback == nil ? "clear" : "set")"
+        )
+        ghostty_surface_set_output_tap(s, callback, userdata)
+        hasOutputTap = callback != nil
+    }
+
     /// Feed bytes into the terminal's VT parser as if the child wrote them
     /// (does **not** send to the PTY). Used for host-driven mode changes such
     /// as DECTCEM cursor hide while a web overlay owns the keyboard.
@@ -465,6 +493,12 @@ public final class TerminalSurface {
     func free() {
         guard !hasBeenFreed, let s = surface else { return }
         TerminalDebugLog.log(.lifecycle, "surface free")
+        // 先摘 tap：setter 持 renderer 锁，返回后不再有在途回调，
+        // 调用方之后释放 userdata 是安全的。
+        if hasOutputTap {
+            ghostty_surface_set_output_tap(s, nil, nil)
+            hasOutputTap = false
+        }
         hasBeenFreed = true
         viewportTextCache.clear()
         occlusionVisible = true

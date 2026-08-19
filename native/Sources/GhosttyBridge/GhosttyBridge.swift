@@ -675,6 +675,9 @@ private struct Terminal {
     /// 同时实现 PwdDelegate + TitleDelegate. 随 Terminal 一起释放, terminalView
     /// weak ref 自动 nil, 不留 dangling.
     let eventDelegate: TerminalEventDelegate
+    /// Transcript tap 上下文（0107）：随 Terminal strong-hold；close 路径先摘
+    /// tap（setter 持 renderer 锁）再 finish，之后 ARC 释放无 dangling。
+    let transcriptTap: TranscriptTapContext?
     var surfaceVisible: Bool
 }
 
@@ -1449,12 +1452,31 @@ final class GhosttyBridgeImpl {
         )
         contentView.addSubview(container, positioned: .below, relativeTo: nil)
 
+        // host-managed 输出已由 main sink 落盘，再装 tap 会双写。
+        // 非空 runId 优先，否则 term-<barePanelId>（与 transcripts/tail-ipc.ts 同推导）。
+        let transcriptLifecycleId: String = {
+            if hostManaged { return "" }
+            if !lifecycleId.isEmpty { return lifecycleId }
+            let bare = panelId.components(separatedBy: "::").last ?? panelId
+            return bare.isEmpty ? "" : "term-\(bare)"
+        }()
+        let transcriptTap = transcriptLifecycleId.isEmpty
+            ? nil
+            : TranscriptTapWriter.makeContext(lifecycleId: transcriptLifecycleId)
+        if let transcriptTap {
+            terminalView.setOutputTap(
+                pierTranscriptTapCallback,
+                userdata: Unmanaged.passUnretained(transcriptTap).toOpaque()
+            )
+        }
+
         let created = Terminal(
             containerView: container,
             terminalView: terminalView,
             parentWindow: parent,
             outputSession: outputSession,
             eventDelegate: eventDelegate,
+            transcriptTap: transcriptTap,
             surfaceVisible: false
         )
         installMouseOverlayFilter(on: created, router: eventRouters[parentWindowId])
@@ -1581,6 +1603,7 @@ final class GhosttyBridgeImpl {
     func close(panelId: String) -> Bool {
         guard let term = terminals[panelId] else { return false }
         let parent = term.parentWindow
+        teardownTranscriptTap(term)
         term.containerView.removeFromSuperview()
         terminals.removeValue(forKey: panelId)
         terminalLayouts.removeValue(forKey: panelId)
@@ -1589,6 +1612,13 @@ final class GhosttyBridgeImpl {
         eventRouters[windowId]?.targets.removeValue(forKey: panelId)
 
         return true
+    }
+
+    /// 摘 tap（setter 持 renderer 锁，返回后无在途回调）→ finish 收口文件。
+    private func teardownTranscriptTap(_ term: Terminal) {
+        guard let tap = term.transcriptTap else { return }
+        term.terminalView.setOutputTap(nil, userdata: nil)
+        tap.finish()
     }
 
     // MARK: - Terminal window move (production)
@@ -1933,6 +1963,7 @@ final class GhosttyBridgeImpl {
         let windowId = ObjectIdentifier(parent)
         let toClose = terminals.filter { ObjectIdentifier($0.value.parentWindow) == windowId }
         for (panelId, term) in toClose {
+            teardownTranscriptTap(term)
             term.containerView.removeFromSuperview()
             terminals.removeValue(forKey: panelId)
             terminalLayouts.removeValue(forKey: panelId)
@@ -2038,6 +2069,21 @@ final class GhosttyBridgeImpl {
             preferences.scrollbackLimitBytes = scrollbackLimitBytes
             preferences.pasteProtection = pasteProtection
         }
+        // 0108：滚动历史上限即时生效于该窗口的存量 surface（旧行为只影响新
+        // 终端）。压力收缩由宿主 per-surface 调 setScrollbackLimit 单独管理。
+        let windowId = ObjectIdentifier(window)
+        for (_, term) in terminals
+        where ObjectIdentifier(term.parentWindow) == windowId {
+            term.terminalView.setScrollbackLimit(scrollbackLimitBytes)
+        }
+    }
+
+    /// 0108：单 surface 的滚动历史上限（隐藏面板内存压力收缩 / 恢复）。
+    @discardableResult
+    func setScrollbackLimit(panelId: String, bytes: UInt64) -> Bool {
+        guard let term = terminals[panelId] else { return false }
+        term.terminalView.setScrollbackLimit(bytes)
+        return true
     }
 
     private static func cursorStyle(from raw: String) -> TerminalCursorStyle {
@@ -2394,6 +2440,30 @@ public func ghosttyBridgeSetTerminalConfig(
 }
 
 /// Push UI language for host-owned terminal copy (paste confirm). Empty clears override.
+/// 0108：单 surface 滚动历史上限（native panel key 定位）。
+@_cdecl("ghostty_bridge_set_scrollback_limit")
+public func ghosttyBridgeSetScrollbackLimit(
+    _ panelIdPtr: UnsafePointer<CChar>?,
+    _ limitBytes: UInt64
+) -> Bool {
+    guard let panelIdPtr else { return false }
+    let panelId = String(cString: panelIdPtr)
+    return MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.setScrollbackLimit(
+            panelId: panelId,
+            bytes: limitBytes
+        )
+    }
+}
+
+/// Transcript 分段落盘根目录（{userData}/terminal-transcripts）。启动时调一次；
+/// 传空串禁用（之后创建的终端不装 tap）。
+@_cdecl("ghostty_bridge_set_transcript_root")
+public func ghosttyBridgeSetTranscriptRoot(_ rootPtr: UnsafePointer<CChar>?) {
+    let root = rootPtr.map { String(cString: $0) } ?? ""
+    TranscriptTapWriter.setRoot(root)
+}
+
 @_cdecl("ghostty_bridge_set_host_language")
 public func ghosttyBridgeSetHostLanguage(_ languageTagPtr: UnsafePointer<CChar>?) {
     let tag = languageTagPtr.map { String(cString: $0) } ?? ""

@@ -1,14 +1,14 @@
 import { relative } from "node:path";
-import type { LspSessionClosedEvent } from "@shared/contracts/lsp.ts";
 import type {
   LspRequestCommand,
   LspRequestResult,
 } from "@shared/contracts/lsp-language-tools.ts";
 import { fileUriFromAbsolutePath } from "@shared/lsp-uri.ts";
-import type { IpcMainInvokeEvent, WebContents } from "electron";
+import type { IpcMainInvokeEvent } from "electron";
 import { appCore } from "../app-core/index.ts";
 import { normalizeFsRoot } from "../services/lsp/resolve-root.ts";
 import type { LspServerRegistry } from "../services/lsp/server-registry.ts";
+import type { LspSessionBroker } from "../services/lsp/session-broker.ts";
 import type { LspSessionHost } from "../services/lsp/session-host.ts";
 import {
   deriveLspWorkspaceKey,
@@ -17,31 +17,26 @@ import {
 } from "../services/lsp/workspace-policy.ts";
 
 interface LspLanguageToolsHandlerDeps {
-  readonly deliverMessage: (
-    webContents: WebContents,
-    sessionId: string,
-    message: string
-  ) => void;
-  readonly deliverSessionClosed: (
-    webContents: WebContents,
-    workspaceKey: string,
-    event: LspSessionClosedEvent,
-    treeTerminal: Promise<void>
-  ) => void;
-  readonly hookLifecycleOnce: (webContents: WebContents) => void;
+  readonly broker: LspSessionBroker;
   readonly host: LspSessionHost;
   readonly policy: WorkspaceLspPolicy;
   readonly registry: LspServerRegistry;
   readonly wirePrefsOnce: () => Promise<void>;
 }
 
+/**
+ * Language-tools 是 Gateway 上的 main 侧消费者：与 editor 消费者共享同一
+ * 真实进程树（无独立会话）。initialize 参数由 broker 统一提供（超集
+ * capabilities），文档打开经 broker 的 document-gate（编辑器持有的文档
+ * 不用磁盘内容覆盖）。
+ */
 export function createLspLanguageToolsRequestHandler(
   deps: LspLanguageToolsHandlerDeps
 ): (
   event: IpcMainInvokeEvent,
   request: LspRequestCommand
 ) => Promise<LspRequestResult> {
-  return async (event, request) => {
+  return async (_event, request) => {
     await deps.wirePrefsOnce();
     const rootPath = normalizeFsRoot(request.rootPath);
     const isWorktree = request.isWorktree === true;
@@ -78,6 +73,7 @@ export function createLspLanguageToolsRequestHandler(
 
     // Hold idle reaping for this workspace while a LanguageTools request runs.
     deps.policy.markAgentBusy(workspaceKey, true);
+    let realSessionId: string | undefined;
     try {
       if (decision.evictWorkspaceKey) {
         const victimSessions = [
@@ -98,51 +94,16 @@ export function createLspLanguageToolsRequestHandler(
       if (!launch) {
         return { ok: false, reason: "server-unavailable", result: null };
       }
-      deps.hookLifecycleOnce(event.sender);
-      const ensured = deps.host.ensure({
-        clientRole: "language-tools",
+      const ensured = deps.broker.ensureRealSession({
         launch,
-        onCloseAccepted: (sessionId) => {
-          deps.policy.markTreeDraining(workspaceKey, sessionId);
-        },
-        onClose: (closedEvent, treeTerminal) => {
-          deps.deliverSessionClosed(
-            event.sender,
-            workspaceKey,
-            closedEvent,
-            treeTerminal
-          );
-        },
-        onMessage: (sessionId, message) => {
-          deps.deliverMessage(event.sender, sessionId, message);
-        },
         rootPath: serverRoot,
         serverId: provider.id,
-        webContentsId: event.sender.id,
         workspaceKey,
       });
-      deps.policy.bindSession(workspaceKey, ensured.sessionId);
-      await deps.host.ensureInitialized(ensured.sessionId, {
-        capabilities: {
-          textDocument: {
-            definition: {},
-            diagnostic: {},
-            documentSymbol: {},
-            hover: {},
-            references: {},
-          },
-          workspace: { symbol: {} },
-        },
-        clientInfo: { name: "Pier LanguageTools" },
-        processId: process.pid,
-        rootUri: fileUriFromAbsolutePath(serverRoot),
-        workspaceFolders: [
-          {
-            name: serverRoot.split(/[\\/]/).at(-1) ?? serverRoot,
-            uri: fileUriFromAbsolutePath(serverRoot),
-          },
-        ],
-      });
+      realSessionId = ensured.realSessionId;
+      deps.broker.retainLanguageTools(ensured.realSessionId);
+      deps.policy.bindSession(workspaceKey, ensured.realSessionId);
+      await deps.broker.ensureInitialized(ensured.realSessionId);
 
       const params = { ...request.params };
       if (request.method.startsWith("textDocument/")) {
@@ -152,8 +113,8 @@ export function createLspLanguageToolsRequestHandler(
           throw new Error("LanguageTools document is not readable");
         }
         const uri = fileUriFromAbsolutePath(request.filePath);
-        await deps.host.ensureLanguageToolsDocumentOpen(
-          ensured.sessionId,
+        await deps.broker.ensureLanguageToolsDocumentOpen(
+          ensured.realSessionId,
           { languageId, uri },
           async () => {
             const document = await files.readDocument({
@@ -169,7 +130,7 @@ export function createLspLanguageToolsRequestHandler(
         params.textDocument = { uri };
       }
       const result = await deps.host.request(
-        ensured.sessionId,
+        ensured.realSessionId,
         request.method,
         params
       );
@@ -178,6 +139,9 @@ export function createLspLanguageToolsRequestHandler(
       console.error("[lsp] language-tools request failed", error);
       return { ok: false, reason: "request-failed", result: null };
     } finally {
+      if (realSessionId) {
+        deps.broker.releaseLanguageTools(realSessionId);
+      }
       deps.policy.markAgentBusy(workspaceKey, false);
       deps.policy.release(workspaceKey);
     }

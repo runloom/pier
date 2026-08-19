@@ -326,7 +326,8 @@ export const settings = {
     terminalCursorBlinkDesc: "Blink the terminal cursor",
     terminalScrollbackMb: "Scrollback Limit",
     terminalScrollbackMbDesc: "Terminal history buffer size, range 10–512",
-    terminalScrollbackRuntimeNote: "Applies to new terminals only.",
+    terminalScrollbackRuntimeNote:
+      "Applies immediately to new and open terminals.",
     terminalPasteProtection: "Paste Protection",
     terminalPasteProtectionDesc:
       "Confirm before pasting content that may run immediately",

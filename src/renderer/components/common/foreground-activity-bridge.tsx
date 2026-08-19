@@ -4,7 +4,7 @@ import {
   currentElectronWindowId,
   rememberElectronWindowId,
 } from "@/lib/agent-runtime/current-window-id.ts";
-import { registerAgentStatusItem } from "@/panel-kits/terminal/agent-status-item.tsx";
+import { registerAgentStatusItem } from "@/panel-kits/terminal/status-items/agent.tsx";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 
 function rememberWindowIdFromActivities(

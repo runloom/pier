@@ -31,7 +31,6 @@ const READY_WORKSPACE =
   '[data-testid="workspace-host-root"][data-workspace-ready="true"]';
 const snapshotSchema = z.object({
   alive: z.boolean(),
-  clientRole: z.string(),
   closeCause: lspSessionCloseCauseSchema.nullable(),
   pid: z.number().int().nullable(),
   rootPath: z.string(),
@@ -120,7 +119,6 @@ export async function waitForEditorLspReady(
         return sessions.some(
           (session) =>
             session.alive &&
-            session.clientRole === "editor" &&
             session.pid !== null &&
             realpathSync(session.rootPath) === workspaceRoot &&
             (serverId === undefined || session.serverId === serverId)

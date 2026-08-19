@@ -316,7 +316,7 @@ export const settings = {
     terminalCursorBlinkDesc: "终端光标是否周期性闪烁",
     terminalScrollbackMb: "滚动历史上限",
     terminalScrollbackMbDesc: "终端历史缓冲区大小，范围 10–512",
-    terminalScrollbackRuntimeNote: "仅对新开终端生效。",
+    terminalScrollbackRuntimeNote: "对新开与已打开的终端即时生效。",
     terminalPasteProtection: "粘贴保护",
     terminalPasteProtectionDesc: "粘贴可能立即执行的内容前先确认",
     terminalNewCwdPolicy: "新终端目录",

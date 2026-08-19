@@ -1,0 +1,97 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+index 68627e4..c1ad9a8 100644
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -1117,6 +1117,7 @@ void ghostty_surface_set_occlusion(ghostty_surface_t, bool);
+ typedef void (*ghostty_surface_output_tap_cb)(void*, const uint8_t*, uintptr_t);
+ void ghostty_surface_set_output_tap(ghostty_surface_t,
+                                     ghostty_surface_output_tap_cb, void*);
++void ghostty_surface_set_scrollback_limit(ghostty_surface_t, uintptr_t);
+ void ghostty_surface_set_size(ghostty_surface_t, uint32_t, uint32_t);
+ ghostty_surface_size_s ghostty_surface_size(ghostty_surface_t);
+ void ghostty_surface_set_color_scheme(ghostty_surface_t,
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index b9df4d1..77b8008 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -1853,6 +1853,22 @@ pub const CAPI = struct {
+         surface.core_surface.io.setPierOutputTap(cb, userdata);
+     }
+ 
++    /// Pier patch (0108): change the primary screen scrollback byte limit
++    /// at runtime, immediately freeing pages beyond the new limit. Lets
++    /// embedders shrink hidden terminals under memory pressure and apply
++    /// scrollback preference changes to live surfaces.
++    export fn ghostty_surface_set_scrollback_limit(
++        surface: *Surface,
++        limit: usize,
++    ) void {
++        surface.core_surface.renderer_state.mutex.lock();
++        defer surface.core_surface.renderer_state.mutex.unlock();
++        const term = &surface.core_surface.io.terminal;
++        if (term.screens.get(.primary)) |primary| {
++            primary.pages.setMaxSize(limit);
++        }
++    }
++
+     /// Filter the mods if necessary. This handles settings such as
+     /// `macos-option-as-alt`. The filtered mods should be used for
+     /// key translation but should NOT be sent back via the `_key`
+diff --git a/src/terminal/PageList.zig b/src/terminal/PageList.zig
+index 6e39428..995754f 100644
+--- a/src/terminal/PageList.zig
++++ b/src/terminal/PageList.zig
+@@ -3080,6 +3080,53 @@ pub fn maxSize(self: *const PageList) usize {
+     return @max(self.explicit_max_size, self.min_max_size);
+ }
+ 
++/// Pier patch (0108): change the scrollback byte limit at runtime and
++/// immediately destroy the oldest pages until the list fits the new
++/// limit. The active area is never pruned. Caller must hold the
++/// renderer state mutex (same contract as all terminal mutations).
++pub fn setMaxSize(self: *PageList, max_size: usize) void {
++    defer self.assertIntegrity();
++    self.explicit_max_size = max_size;
++    while (self.pages.first != null and
++        self.pages.first != self.pages.last and
++        self.page_size > self.maxSize())
++    {
++        const first = self.pages.popFirst().?;
++        self.total_rows -= first.data.size.rows;
++
++        // Never prune rows the active area still needs.
++        if (self.total_rows < self.rows) {
++            self.pages.prepend(first);
++            self.total_rows += first.data.size.rows;
++            return;
++        }
++
++        // Keep the viewport pin cache consistent (same rules as grow()).
++        if (self.viewport == .pin) viewport: {
++            if (self.viewport_pin_row_offset) |*v| {
++                if (v.* < first.data.size.rows) {
++                    self.viewport = .top;
++                    break :viewport;
++                }
++                v.* -= first.data.size.rows;
++            }
++        }
++
++        // Retarget tracked pins that pointed into the pruned page.
++        const pin_keys = self.tracked_pins.keys();
++        for (pin_keys) |p| {
++            if (p.node != first) continue;
++            p.node = self.pages.first.?;
++            p.y = 0;
++            p.x = 0;
++            p.garbage = true;
++        }
++        self.viewport_pin.garbage = false;
++
++        self.destroyNode(first);
++    }
++}
++
+ /// Grow the active area by exactly one row.
+ ///
+ /// This may allocate, but also may not if our current page has more

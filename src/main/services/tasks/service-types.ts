@@ -45,6 +45,15 @@ export interface TaskTerminalProcessController {
   ): { message?: string | undefined; ok: boolean };
 }
 
+/**
+ * 任务输出 transcript 落盘面（terminal-transcripts 服务适配）。
+ * 全量历史归磁盘；堆内 TaskOutputBuffer 只保留 replay 尾部。
+ */
+export interface TaskTranscriptSink {
+  append(runId: string, taskId: string, text: string): void;
+  seal(runId: string, taskId: string): void;
+}
+
 export interface TaskActivityCallbacks {
   onCleared(
     panelId: string,
@@ -78,6 +87,7 @@ export interface CreateTaskServiceOptions {
     projectRootPath?: string | undefined;
   }) => Promise<Record<string, string> | undefined>;
   spawnBackgroundTask?: SpawnBackgroundTask;
+  transcripts?: TaskTranscriptSink;
   writeRecentState?: (state: TaskRecentState) => Promise<void>;
 }
 

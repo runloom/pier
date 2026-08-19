@@ -127,6 +127,8 @@ export const lspPolicyPrefsSchema = z.object({
     .default(1_800_000),
   maxLocalWorkspaces: z.number().int().min(0).max(32).default(3),
   maxRemoteWorkspaces: z.number().int().min(0).max(32).default(2),
+  /** 语言服务进程总内存预算（MB）。0 = 不限制；超限按 LRU 关停最冷工作区。 */
+  memoryBudgetMb: z.number().int().min(0).max(65_536).default(4096),
   worktreesEnabled: z.boolean().default(true),
 });
 export type LspPolicyPrefs = z.infer<typeof lspPolicyPrefsSchema>;
@@ -137,6 +139,7 @@ export const DEFAULT_LSP_POLICY_PREFS: LspPolicyPrefs = {
   idleReleaseMs: 1_800_000,
   maxLocalWorkspaces: 3,
   maxRemoteWorkspaces: 2,
+  memoryBudgetMb: 4096,
   worktreesEnabled: true,
 };
 

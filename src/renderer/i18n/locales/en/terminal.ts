@@ -363,6 +363,9 @@ export const terminal = {
           "Open an agent conversation first, then try again.",
         title: "Comments",
       },
+      history: {
+        title: "Terminal history",
+      },
     },
     manage: "Manage Status Bar…",
   },
@@ -370,6 +373,17 @@ export const terminal = {
    * Ghostty / native host messages (see ghostty-host-copy catalog).
    * Prefer product wording over Ghostty brand for user-facing copy.
    */
+  history: {
+    dialogTitle: "Full terminal history",
+    emptyBody:
+      "Once this terminal produces output, the full record is kept here (including history from before restarts).",
+    emptyTitle: "No history yet",
+    loadFailedBody: "Try again in a moment.",
+    loadFailedTitle: "Couldn't load terminal history",
+    open: "View full history",
+    truncatedNotice:
+      "Full history is {{totalMb}} MB; showing the most recent part.",
+  },
   ghosttyHost: {
     processExited: "Process exited",
     processExitedFailed: "Process exited with code {{code}}",

@@ -12,12 +12,17 @@ import {
   type FilesLspRootAttachment,
   type FilesLspRootLease,
   LSP_RECONNECT_RESET_MS,
-  lspReconnectAttempt,
   type RecoveryReason,
   type RootGeneration,
   type RootSessionInput,
   statusForEnsureFailure,
 } from "./root-recovery-types.ts";
+import {
+  handleRootClosed,
+  handleRootSendFailure,
+  type RootRecoveryHost,
+  scheduleRootRecovery,
+} from "./root-session-recovery.ts";
 import type { LspFacade } from "./session-coordinator.ts";
 export class FilesLspRootSession {
   readonly attachments = new Set<FilesLspRootAttachment>();
@@ -93,6 +98,11 @@ export class FilesLspRootSession {
           this.setPolicy(prefs);
         }
       },
+      touch: () => {
+        if (!released) {
+          this.touch();
+        }
+      },
     };
   }
   setPolicy(prefs: LspPolicyPrefs): void {
@@ -130,6 +140,29 @@ export class FilesLspRootSession {
     }
     this.#paused = false;
     this.#startImmediateEnsure();
+  }
+  /**
+   * 可见保活：健康态经 ensure-reused 刷新 main 侧 lastTouchAt，防止用户
+   * 正在阅读的可见编辑器被空闲回收。暂停/禁用/未就绪时不打扰恢复状态机。
+   */
+  touch(): void {
+    if (this.#terminal || this.#paused || this.#waitingForPolicy) {
+      return;
+    }
+    const current = this.#current;
+    if (!current?.ready || current.faulted) {
+      return;
+    }
+    this.#lspFacade
+      .ensureSession(this.#requestForCurrentAttachment())
+      .then((ensured) => {
+        if (ensured?.ok && ensured.sessionId !== current.sessionId) {
+          // 竞态：main 侧已重建会话。touch 不收编新会话（交给恢复路径），
+          // 只避免泄漏这次 ensure 产生的空闲消费者。
+          this.#closeStaleSession(ensured.sessionId);
+        }
+      })
+      .catch(() => undefined);
   }
   #releaseAttachment(attachment: FilesLspRootAttachment): void {
     if (!this.attachments.delete(attachment)) {
@@ -274,146 +307,70 @@ export class FilesLspRootSession {
     return true;
   }
   #handleSendFailure(generation: number, sessionId: string): void {
-    const current = this.#current;
-    if (
-      !current ||
-      current.generation !== generation ||
-      current.sessionId !== sessionId ||
-      current.faulted
-    ) {
-      return;
-    }
-    this.#handleRecoverableFailure(current, "send-failed", true);
+    handleRootSendFailure(this.#recoveryHost(), generation, sessionId);
   }
   #handleClosed(
     generation: number,
     sessionId: string,
     event: LspSessionClosedEvent
   ): void {
-    const current = this.#current;
-    if (
-      !current ||
-      current.generation !== generation ||
-      current.sessionId !== sessionId ||
-      current.faulted
-    ) {
-      return;
-    }
-    this.#hostClosedSessions.add(sessionId);
-    if (event.reason === "exited" || event.reason === "failed") {
-      this.#handleRecoverableFailure(current, event.reason, false);
-      return;
-    }
-    if (event.cause === "policy-disabled") {
-      this.#waitingForPolicy = true;
-      this.#paused = false;
-      this.#invalidateAsyncWork();
-      const disabled: FilesLanguageServiceStatus = (this.#policyObserved
-        ? disabledFilesLspStatus(this.#policyPrefs, this.#input.isWorktree)
-        : null) ?? { reason: "globally-disabled", state: "disabled" };
-      this.#transition(disabled);
-      this.#disposeCurrent(false);
-      return;
-    }
-    if (event.cause === "idle-release" || event.cause === "workspace-evicted") {
-      this.#paused = true;
-      this.#waitingForPolicy = false;
-      this.#invalidateAsyncWork();
-      this.#transition({
-        reason: event.cause,
-        serverId: current.serverId,
-        state: "paused",
-      });
-      this.#disposeCurrent(false);
-      return;
-    }
-    this.#terminal = true;
-    this.#invalidateAsyncWork();
-    this.#input.onDelete();
-    this.#disposeCurrent(false);
-    for (const attachment of this.attachments) {
-      attachment.publish(null);
-    }
-  }
-  #handleRecoverableFailure(
-    current: RootGeneration,
-    reason: RecoveryReason,
-    closeSession: boolean
-  ): void {
-    if (current.faulted) {
-      return;
-    }
-    current.faulted = true;
-    this.#cancelStableResetTimer();
-    this.#operationEpoch += 1;
-    this.#disposeCurrent(closeSession);
-    if (!current.ready) {
-      if (this.#recoveryAttempt > 0 && this.attachments.size > 0) {
-        this.#scheduleRecovery("initialize-failed");
-      } else {
-        this.#transition({
-          reason: "initialize-failed",
-          serverId: current.serverId,
-          state: "error",
-        });
-      }
-      return;
-    }
-    this.#scheduleRecovery(reason);
+    handleRootClosed(this.#recoveryHost(), generation, sessionId, event);
   }
   #scheduleRecovery(reason: RecoveryReason): void {
-    if (this.#terminal || this.attachments.size === 0 || this.#recoveryTimer) {
-      return;
-    }
-    const retry = lspReconnectAttempt(this.#recoveryAttempt + 1);
-    if (!retry) {
-      this.#transition({
-        reason: "retry-exhausted",
-        serverId: this.#serverId(),
-        state: "error",
-      });
-      return;
-    }
-    this.#recoveryAttempt = retry.attempt;
-    this.#transition({
-      attempt: retry.attempt,
-      delayMs: retry.delayMs,
-      reason,
-      serverId: this.#serverId(),
-      state: "retrying",
-    });
-    const epoch = this.#operationEpoch;
-    this.#recoveryTimer = setTimeout(() => {
-      this.#recoveryTimer = null;
-      this.#attemptRecovery(epoch, reason);
-    }, retry.delayMs);
+    scheduleRootRecovery(this.#recoveryHost(), reason);
   }
-  async #attemptRecovery(epoch: number, reason: RecoveryReason): Promise<void> {
-    const ensured = await this.#lspFacade
-      .ensureSession(this.#requestForCurrentAttachment())
-      .catch(() => null);
-    if (!this.#isCurrentEpoch(epoch)) {
-      if (ensured?.ok) {
-        this.#closeStaleSession(ensured.sessionId);
-      }
-      return;
-    }
-    if (!ensured?.ok) {
-      if (ensured?.reason === "cleanup-failed") {
-        this.#transition({
-          ...(ensured.serverId ? { serverId: ensured.serverId } : {}),
-          reason: "cleanup-failed",
-          state: "error",
-        });
-        return;
-      }
-      this.#scheduleRecovery(reason);
-      return;
-    }
-    const adopted = await this.#adoptEnsured(ensured, epoch, true);
-    if (!adopted && this.#isCurrentEpoch(epoch) && !this.#recoveryTimer) {
-      this.#scheduleRecovery(reason);
-    }
+  #recoveryHost(): RootRecoveryHost {
+    return {
+      adoptEnsured: (ensured, epoch, recovering) =>
+        this.#adoptEnsured(ensured, epoch, recovering),
+      attachments: this.attachments,
+      cancelStableResetTimer: () => {
+        this.#cancelStableResetTimer();
+      },
+      closeStaleSession: (sessionId) => {
+        this.#closeStaleSession(sessionId);
+      },
+      disposeCurrent: (closeSession) => {
+        this.#disposeCurrent(closeSession);
+      },
+      facade: this.#lspFacade,
+      getCurrent: () => this.#current,
+      getOperationEpoch: () => this.#operationEpoch,
+      getPolicyObserved: () => this.#policyObserved,
+      getPolicyPrefs: () => this.#policyPrefs,
+      getRecoveryAttempt: () => this.#recoveryAttempt,
+      getRecoveryTimer: () => this.#recoveryTimer,
+      getTerminal: () => this.#terminal,
+      hostClosedSessions: this.#hostClosedSessions,
+      incrementOperationEpoch: () => {
+        this.#operationEpoch += 1;
+      },
+      input: this.#input,
+      invalidateAsyncWork: () => {
+        this.#invalidateAsyncWork();
+      },
+      isCurrentEpoch: (epoch) => this.#isCurrentEpoch(epoch),
+      requestForCurrentAttachment: () => this.#requestForCurrentAttachment(),
+      serverId: () => this.#serverId(),
+      setPaused: (value) => {
+        this.#paused = value;
+      },
+      setRecoveryAttempt: (value) => {
+        this.#recoveryAttempt = value;
+      },
+      setRecoveryTimer: (value) => {
+        this.#recoveryTimer = value;
+      },
+      setTerminal: (value) => {
+        this.#terminal = value;
+      },
+      setWaitingForPolicy: (value) => {
+        this.#waitingForPolicy = value;
+      },
+      transition: (status) => {
+        this.#transition(status);
+      },
+    };
   }
   #startImmediateEnsure(): void {
     if (

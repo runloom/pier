@@ -1,6 +1,8 @@
 /**
- * LSP session IPC — Policy + Registry + Host orchestration.
- * Renderer speaks bare JSON-RPC strings (Transport for @codemirror/lsp-client).
+ * LSP session IPC — Policy + Registry + Gateway(Broker) + Host orchestration.
+ * Renderer speaks bare JSON-RPC strings (Transport for @codemirror/lsp-client)
+ * against virtual sessions; real process trees are deduped by the broker on
+ * (workspaceKey, serverId, rootPath).
  */
 
 import {
@@ -28,23 +30,20 @@ import {
   installLspE2eObserverGlobal,
   removeLspE2eObserverGlobal,
 } from "../services/lsp/e2e-observer.ts";
+import { ensureEditorLspSession } from "../services/lsp/editor-session-ensure.ts";
 import {
   bindLspHostBridge,
   unbindLspHostBridge,
 } from "../services/lsp/host-bridge.ts";
+import { createLspMemoryBudgetMonitor } from "../services/lsp/memory-budget.ts";
 import { applyLspPrefsToPolicy } from "../services/lsp/prefs-wiring.ts";
-import {
-  languageIdForEnsure,
-  resolveEnsureProvider,
-} from "../services/lsp/resolve-provider.ts";
-import { normalizeFsRoot } from "../services/lsp/resolve-root.ts";
+import { LspSessionBroker } from "../services/lsp/session-broker.ts";
 import { LspSessionHost } from "../services/lsp/session-host.ts";
 import {
-  deriveLspWorkspaceKey,
   type LspWorkspaceRuntimeState,
   WorkspaceLspPolicy,
-  waitForLspTreeCleanupWithRetry,
 } from "../services/lsp/workspace-policy.ts";
+import { listProcessTable } from "../services/pier-resource/process-table.ts";
 import { windowManager } from "../windows/manager.ts";
 import { registerLspCatalogIpc } from "./lsp-catalog.ts";
 import { createLspLanguageToolsRequestHandler } from "./lsp-language-tools.ts";
@@ -61,24 +60,69 @@ if (lspE2eObserver) {
 }
 const registry = createBootstrappedLspRegistry();
 bindLspHostBridge({ host, registry });
+async function closeWorkspaceSessions(
+  workspaceKey: string,
+  cause: "idle-release" | "policy-disabled"
+): Promise<void> {
+  const sessionIds = [...policy.sessionsOf(workspaceKey)];
+  await host.closeMany(sessionIds, cause);
+  policy.markInactive(workspaceKey);
+}
+
 const policy = new WorkspaceLspPolicy({
   onIdleWorkspaces: (workspaceKeys) => {
     for (const workspaceKey of workspaceKeys) {
-      const sessionIds = [...policy.sessionsOf(workspaceKey)];
-      host
-        .closeMany(sessionIds, "idle-release")
-        .then(() => {
-          policy.markInactive(workspaceKey);
-        })
-        .catch((error: unknown) => {
+      closeWorkspaceSessions(workspaceKey, "idle-release").catch(
+        (error: unknown) => {
           console.error("[lsp] idle session cleanup failed", {
             error,
             workspaceKey,
           });
-        });
+        }
+      );
     }
   },
   startIdleTimer: true,
+});
+const memoryBudget = createLspMemoryBudgetMonitor({
+  closeWorkspaceSessions: (workspaceKey, cause) =>
+    closeWorkspaceSessions(
+      workspaceKey,
+      cause === "policy-disabled" ? "policy-disabled" : "idle-release"
+    ),
+  listProcessTable,
+  listSessions: () => host.listSessions(),
+  logger: console,
+  policy: {
+    getPrefs: () => policy.getPrefs(),
+    hasTreeBlocker: (workspaceKey) => policy.hasTreeBlocker(workspaceKey),
+    listActive: () => policy.listActive(),
+  },
+});
+memoryBudget.start();
+const broker = new LspSessionBroker({
+  host,
+  logger: console,
+  onRealSessionCloseAccepted: (info) => {
+    policy.markTreeDraining(info.workspaceKey, info.realSessionId);
+  },
+  onRealSessionClosed: (info, event, treeTerminal) => {
+    policy.markTreeDraining(info.workspaceKey, event.sessionId);
+    treeTerminal.then(
+      () => {
+        policy.release(info.workspaceKey, event.sessionId);
+        policy.markTreeTerminal(event.sessionId);
+      },
+      (error: unknown) => {
+        policy.markTreeCleanupFailed(event.sessionId);
+        console.error("[lsp] process tree cleanup failed", {
+          error,
+          sessionId: event.sessionId,
+          workspaceKey: info.workspaceKey,
+        });
+      }
+    );
+  },
 });
 const hookedWebContents = new WeakSet<WebContents>();
 let prefsWiringPromise: Promise<void> | null = null;
@@ -175,7 +219,7 @@ function hookLifecycleOnce(wc: WebContents): void {
   }
   hookedWebContents.add(wc);
   const drop = () => {
-    host.dropAllForWebContents(wc.id).catch((error: unknown) => {
+    broker.dropConsumersForWebContents(wc.id).catch((error: unknown) => {
       console.error("[lsp] owner session cleanup failed", {
         error,
         webContentsId: wc.id,
@@ -204,182 +248,37 @@ function deliverMessage(
 
 function deliverSessionClosed(
   wc: WebContents,
-  workspaceKey: string,
-  event: LspSessionClosedEvent,
-  treeTerminal: Promise<void>
+  event: LspSessionClosedEvent
 ): void {
-  policy.markTreeDraining(workspaceKey, event.sessionId);
   if (!wc.isDestroyed()) {
     wc.send(PIER.LSP_SESSION_CLOSED, event);
   }
-  treeTerminal.then(
-    () => {
-      policy.release(workspaceKey, event.sessionId);
-      policy.markTreeTerminal(event.sessionId);
-    },
-    (error: unknown) => {
-      policy.markTreeCleanupFailed(event.sessionId);
-      console.error("[lsp] process tree cleanup failed", {
-        error,
-        sessionId: event.sessionId,
-        workspaceKey,
-      });
-    }
-  );
 }
+
 const handleLanguageToolsRequest = createLspLanguageToolsRequestHandler({
-  deliverMessage,
-  deliverSessionClosed,
-  hookLifecycleOnce,
+  broker,
   host,
   policy,
   registry,
   wirePrefsOnce,
 });
 
-function resolveProvider(request: LspSessionEnsureRequest) {
-  return resolveEnsureProvider(registry, request);
-}
-
 async function handleEnsure(
   event: IpcMainInvokeEvent,
   request: LspSessionEnsureRequest
 ): Promise<LspSessionEnsureResult> {
   await wirePrefsOnce();
-  const rootPath = normalizeFsRoot(request.rootPath);
-  const isWorktree = request.isWorktree === true;
-  const workspaceKey = deriveLspWorkspaceKey({
-    isWorktree,
-    rootPath,
-    ...(request.workspaceKey ? { workspaceKey: request.workspaceKey } : {}),
-  });
-  const kind = request.kind ?? "local";
-
-  const provider = resolveProvider(request);
-  if (!provider) {
-    return {
-      ok: false,
-      reason: "no-provider",
-      rootPath,
-      workspaceKey,
-    };
-  }
-
-  const cleaned = await waitForLspTreeCleanupWithRetry({
+  return ensureEditorLspSession({
+    broker,
+    deliverMessage,
+    deliverSessionClosed,
+    hookLifecycleOnce,
     host,
     policy,
-    workspaceKey,
+    registry,
+    request,
+    sender: event.sender,
   });
-  if (!cleaned) {
-    return {
-      ok: false,
-      reason: "cleanup-failed",
-      rootPath,
-      serverId: provider.id,
-      workspaceKey,
-    };
-  }
-
-  const decision = policy.acquire({
-    isWorktree,
-    kind,
-    rootPath,
-    workspaceKey,
-  });
-  if (decision.kind === "deny") {
-    return {
-      ok: false,
-      reason: decision.reason,
-      rootPath,
-      serverId: provider.id,
-      workspaceKey,
-    };
-  }
-
-  let acquisitionHeld = true;
-  const releaseAcquisition = () => {
-    if (!acquisitionHeld) {
-      return;
-    }
-    acquisitionHeld = false;
-    policy.release(workspaceKey);
-  };
-
-  try {
-    if (decision.evictWorkspaceKey) {
-      const victimSessions = [...policy.sessionsOf(decision.evictWorkspaceKey)];
-      await host.closeMany(victimSessions, "workspace-evicted");
-      policy.markInactive(decision.evictWorkspaceKey);
-    }
-
-    const filePath = request.filePath ?? rootPath;
-    const serverRoot = provider.resolveRoot({
-      fallbackWorkspaceRoot: rootPath,
-      filePath,
-    });
-    const launch = await provider.resolveLaunch({
-      rootPath: serverRoot,
-      workspaceKey,
-    });
-    if (!launch) {
-      releaseAcquisition();
-      return {
-        ok: false,
-        reason: "server-unavailable",
-        rootPath,
-        serverId: provider.id,
-        workspaceKey,
-      };
-    }
-    hookLifecycleOnce(event.sender);
-    const ensured = host.ensure({
-      clientRole: "editor",
-      launch,
-      onCloseAccepted: (sessionId) => {
-        policy.markTreeDraining(workspaceKey, sessionId);
-      },
-      onClose: (closedEvent, treeTerminal) => {
-        deliverSessionClosed(
-          event.sender,
-          workspaceKey,
-          closedEvent,
-          treeTerminal
-        );
-      },
-      onMessage: (sessionId, message) => {
-        deliverMessage(event.sender, sessionId, message);
-      },
-      rootPath: serverRoot,
-      serverId: provider.id,
-      webContentsId: event.sender.id,
-      workspaceKey,
-    });
-    policy.bindSession(workspaceKey, ensured.sessionId);
-    if (ensured.reused) {
-      releaseAcquisition();
-    } else {
-      acquisitionHeld = false;
-    }
-    const languageId = languageIdForEnsure(provider, request);
-    return {
-      languageId,
-      ok: true,
-      rootPath: ensured.rootPath,
-      serverId: ensured.serverId,
-      sessionId: ensured.sessionId,
-      workspaceKey,
-    };
-  } catch (error) {
-    console.error("[lsp] ensure failed", error);
-    releaseAcquisition();
-    return {
-      ok: false,
-      reason: "launch-failed",
-      rootPath,
-      serverId: provider.id,
-      workspaceKey,
-    };
-  }
 }
 
 export function registerLspIpc(): void {
@@ -415,13 +314,16 @@ export function registerLspIpc(): void {
         return false;
       }
       const request: LspSessionSendRequest = parsed.data;
-      const meta = host.getSessionMeta(request.sessionId);
-      if (meta?.webContentsId !== event.sender.id) {
-        return false;
-      }
-      const ok = host.send(request.sessionId, request.message);
+      const ok = broker.handleEditorSend(
+        request.sessionId,
+        request.message,
+        event.sender.id
+      );
       if (ok) {
-        policy.touch(meta.workspaceKey);
+        const workspaceKey = broker.workspaceKeyOf(request.sessionId);
+        if (workspaceKey) {
+          policy.touch(workspaceKey);
+        }
       }
       return ok;
     }
@@ -440,11 +342,7 @@ export function registerLspIpc(): void {
         return false;
       }
       const request: LspSessionCloseRequest = parsed.data;
-      const meta = host.getSessionMeta(request.sessionId);
-      if (meta?.webContentsId !== event.sender.id) {
-        return false;
-      }
-      return host.close(request.sessionId, "client-release");
+      return broker.releaseEditorSession(request.sessionId, event.sender.id);
     }
   );
 
@@ -479,6 +377,7 @@ export async function disposeLspIpcHost(): Promise<void> {
     await host.dispose();
     await lspE2eObserver?.writeFinalReport();
   } finally {
+    memoryBudget.dispose();
     policy.dispose();
     unbindLspHostBridge();
     removeLspE2eObserverGlobal(lspE2eObserver);
@@ -487,5 +386,5 @@ export async function disposeLspIpcHost(): Promise<void> {
 
 /** Test seam */
 export function getLspIpcTestHandles() {
-  return { host, policy, registry };
+  return { broker, host, memoryBudget, policy, registry };
 }

@@ -12,11 +12,13 @@ interface LspPreferencesState {
   idleReleaseMs: number;
   maxLocalWorkspaces: number;
   maxRemoteWorkspaces: number;
+  memoryBudgetMb: number;
   setCustomServers: (customServers: LspCustomServer[]) => Promise<void>;
   setEnabled: (enabled: boolean) => Promise<void>;
   setIdleReleaseMs: (idleReleaseMs: number) => Promise<void>;
   setMaxLocalWorkspaces: (maxLocalWorkspaces: number) => Promise<void>;
   setMaxRemoteWorkspaces: (maxRemoteWorkspaces: number) => Promise<void>;
+  setMemoryBudgetMb: (memoryBudgetMb: number) => Promise<void>;
   setWorktreesEnabled: (enabled: boolean) => Promise<void>;
   worktreesEnabled: boolean;
 }
@@ -109,6 +111,22 @@ export const useLspPreferencesStore = create<LspPreferencesState>(
       }
     },
 
+    async setMemoryBudgetMb(memoryBudgetMb) {
+      const previous = get().memoryBudgetMb;
+      set({ memoryBudgetMb });
+      try {
+        const merged = await window.pier.preferences.update({
+          lsp: { ...lspPrefsFromState(get()), memoryBudgetMb },
+        });
+        get()._hydrate(merged.lsp);
+      } catch (error) {
+        if (get().memoryBudgetMb === memoryBudgetMb) {
+          set({ memoryBudgetMb: previous });
+        }
+        throw error;
+      }
+    },
+
     async setWorktreesEnabled(worktreesEnabled) {
       const previous = get().worktreesEnabled;
       set({ worktreesEnabled });
@@ -134,6 +152,7 @@ function lspPrefsFromState(state: LspPreferencesState): LspPolicyPrefs {
     idleReleaseMs: state.idleReleaseMs,
     maxLocalWorkspaces: state.maxLocalWorkspaces,
     maxRemoteWorkspaces: state.maxRemoteWorkspaces,
+    memoryBudgetMb: state.memoryBudgetMb,
     worktreesEnabled: state.worktreesEnabled,
   };
 }

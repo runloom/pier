@@ -26,6 +26,12 @@ import {
 } from "./root-session.ts";
 
 /**
+ * 可见编辑器的保活节奏：明显小于 main 侧 idleReleaseMs 下限（60s 起，
+ * 默认 30 分钟），保证用户正在看的面板不被空闲回收。
+ */
+export const FILES_LSP_VISIBLE_TOUCH_INTERVAL_MS = 5 * 60_000;
+
+/**
  * CodeMirror extensions that connect this editor to the selected LSP session.
  * No-op when main reports no provider or the preload bridge is missing.
  */
@@ -95,6 +101,8 @@ export function filesLspEditorExtensions(input: {
         #connected = false;
         #destroyed = false;
         #unregisterNavigation: (() => void) | null = null;
+        #visibilityObserver: IntersectionObserver | null = null;
+        #keepaliveTimer: ReturnType<typeof setInterval> | null = null;
 
         readonly view: EditorView;
 
@@ -145,6 +153,9 @@ export function filesLspEditorExtensions(input: {
                 } else {
                   clearFilesLanguageServiceStatusOwner(input.ownerId);
                 }
+                if (status?.state === "paused" && this.#keepaliveTimer) {
+                  this.#lifecycle.resume();
+                }
               },
             },
             onDisplayFile,
@@ -159,12 +170,54 @@ export function filesLspEditorExtensions(input: {
             this.#lifecycle.setPolicy(prefs);
           });
           this.view.dom.addEventListener("focusin", this.#resumeOnFocus);
+          this.#observeVisibility();
           this.#lifecycle.start();
         }
 
         readonly #resumeOnFocus = () => {
           this.#lifecycle.resume();
         };
+
+        /**
+         * 面板可见性驱动的生命周期：
+         * - 隐藏 → 可见：立即 resume（空闲关停后的预热藏在切 tab 动作后面）
+         *   并 touch 一次刷新 main 侧空闲时钟；
+         * - 可见期间：周期性 touch 保活，正在阅读的编辑器不会被空闲回收；
+         * - 隐藏（dockview 背景 tab）：停止保活，工作区自然进入空闲窗口。
+         */
+        #observeVisibility(): void {
+          if (typeof IntersectionObserver !== "function") {
+            return;
+          }
+          this.#visibilityObserver = new IntersectionObserver((entries) => {
+            const visible = entries.some((entry) => entry.isIntersecting);
+            if (visible) {
+              this.#startKeepalive();
+            } else {
+              this.#stopKeepalive();
+            }
+          });
+          this.#visibilityObserver.observe(this.view.dom);
+        }
+
+        #startKeepalive(): void {
+          if (this.#destroyed || this.#keepaliveTimer) {
+            return;
+          }
+          this.#lifecycle.resume();
+          this.#lifecycle.touch();
+          this.#keepaliveTimer = setInterval(() => {
+            this.#lifecycle.resume();
+            this.#lifecycle.touch();
+          }, FILES_LSP_VISIBLE_TOUCH_INTERVAL_MS);
+        }
+
+        #stopKeepalive(): void {
+          if (this.#keepaliveTimer) {
+            clearInterval(this.#keepaliveTimer);
+            this.#keepaliveTimer = null;
+          }
+        }
 
         /** Detach language-server plugin only; keep path registration for navigation. */
         #disconnectLsp(): void {
@@ -181,6 +234,9 @@ export function filesLspEditorExtensions(input: {
 
         destroy(): void {
           this.#destroyed = true;
+          this.#stopKeepalive();
+          this.#visibilityObserver?.disconnect();
+          this.#visibilityObserver = null;
           manualLifecycleByView.delete(this.view);
           this.view.dom.removeEventListener("focusin", this.#resumeOnFocus);
           this.#unsubscribePolicy();
