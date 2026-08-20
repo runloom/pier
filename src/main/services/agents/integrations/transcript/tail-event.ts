@@ -1,4 +1,5 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
+import { isGloballyUniqueTurnId } from "../../../foreground-activity/agent-turn-event-semantics.ts";
 import type { TranscriptTerminalRecord } from "./tail-contracts.ts";
 
 const MAX_SEEN_TERMINALS = 256;
@@ -19,7 +20,13 @@ export function emitTranscriptEvent(
   onEvent: (event: AgentHookEventPayload) => void
 ): void {
   const nativeTurnId = record.turnId?.trim() || "";
-  const emittedTurnId = nativeTurnId || context.turnId?.trim() || "";
+  const contextTurnId = context.turnId?.trim() || "";
+  // Cursor generation_id 等跨 session 身份才从 context 补到空 native 终态。
+  // 短 prompt_id（测试夹具 / Claude 族）不得套到下一回合，否则完成会结算该 id，
+  // 随后的中断被当成 settled-turn 丢掉。
+  const inheritedTurnId =
+    contextTurnId && isGloballyUniqueTurnId(contextTurnId) ? contextTurnId : "";
+  const emittedTurnId = nativeTurnId || inheritedTurnId;
   const isTerminal =
     record.pierEvent === "TurnCompleted" ||
     record.pierEvent === "TurnInterrupted";

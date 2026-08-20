@@ -136,6 +136,9 @@ function resetTurn(
   if (previousTurnId && previousTurnId !== eventTurnId) {
     settleNamedWork(scope.recentSettledTurnIds, previousTurnId);
   }
+  if (eventTurnId) {
+    reopenNamedWork(scope.recentSettledTurnIds, eventTurnId);
+  }
   scope.turnEnded = false;
   scope.turnEndedAt = undefined;
   scope.completionObserved = false;
@@ -226,7 +229,8 @@ export function applyTurnBookkeeping(
   if (
     eventTurnId &&
     scope.recentSettledTurnIds.has(eventTurnId) &&
-    !isTerminalCorrection
+    !isTerminalCorrection &&
+    semantics.resetEvidence !== "explicit-prompt"
   ) {
     return reject("settled-turn");
   }

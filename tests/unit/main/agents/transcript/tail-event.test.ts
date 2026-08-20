@@ -60,6 +60,23 @@ describe("emitTranscriptEvent", () => {
     });
   });
 
+  it("does not copy a short context turnId onto empty native terminals", () => {
+    const received: AgentHookEventPayload[] = [];
+    emitTranscriptEvent(
+      emptyState(),
+      context("turn-1"),
+      {
+        nativeEvent: "codebuddy.transcript.user_interrupt",
+        pierEvent: "TurnInterrupted",
+        turnId: "",
+      },
+      (event) => received.push(event)
+    );
+    expect(received).toHaveLength(1);
+    expect(received[0]).toMatchObject({ event: "TurnInterrupted" });
+    expect(received[0]).not.toHaveProperty("turnId");
+  });
+
   it("still dedupes terminals that carry a native turnId", () => {
     const received: AgentHookEventPayload[] = [];
     const state = emptyState();
