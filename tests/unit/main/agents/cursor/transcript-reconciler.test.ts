@@ -499,10 +499,21 @@ describe("cursor transcript reconciler", () => {
       HOOK_INGEST
     );
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
-    await reconciler.observe(hookEvent({ event: "Stop", transcriptPath }));
+    await reconciler.observe(
+      hookEvent({
+        event: "Stop",
+        transcriptPath,
+        turnId: "92c079e3-84b1-4982-8c8a-aaaaaaaaaaa1",
+      })
+    );
     expect(received.some((event) => event.event === "TurnCompleted")).toBe(
       true
     );
+    expect(
+      received.find((event) => event.event === "TurnCompleted")
+    ).toMatchObject({
+      turnId: "92c079e3-84b1-4982-8c8a-aaaaaaaaaaa1",
+    });
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
       "ready"
     );
@@ -934,6 +945,66 @@ describe("cursor transcript reconciler", () => {
     });
     await reconciler.observe(hookEvent({ transcriptPath: child }));
     expect(received).toHaveLength(0);
+    reconciler.dispose();
+  });
+
+  it("keeps watching the prompt transcript when tool or closing hooks point at a stale conversation", async () => {
+    const staleSession = "b6b42eef-0512-4c9f-8666-4963b34fcecb";
+    const turnId = "92c079e3-84b1-4982-8c8a-aaaaaaaaaaa1";
+    const stalePath = join(
+      projectsRoot,
+      "Users-xyz-ws",
+      "agent-transcripts",
+      staleSession,
+      `${staleSession}.jsonl`
+    );
+    await mkdir(dirname(stalePath), { recursive: true });
+    writeFileSync(stalePath, `${userLine("old chat")}\n`);
+    writeFileSync(transcriptPath, `${userLine("current")}\n`);
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCursorTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      projectsRoot,
+    });
+    await reconciler.observe(
+      hookEvent({ event: "PromptSubmit", transcriptPath, turnId })
+    );
+    await reconciler.observe(
+      hookEvent({
+        event: "ToolStart",
+        sessionId: staleSession,
+        toolUseId: "shell-1",
+        transcriptPath: stalePath,
+        turnId,
+      })
+    );
+    await reconciler.observe(
+      hookEvent({
+        event: "Stop",
+        sessionId: staleSession,
+        transcriptPath: stalePath,
+        turnId,
+      })
+    );
+    await reconciler.observe(
+      hookEvent({
+        event: "SessionEnd",
+        sessionId: staleSession,
+        transcriptPath: stalePath,
+      })
+    );
+    appendFileSync(transcriptPath, `${turnEndedLine("success")}\n`);
+    await waitForTranscript(() => {
+      expect(received.some((event) => event.event === "TurnCompleted")).toBe(
+        true
+      );
+    });
+    expect(
+      received.find((event) => event.event === "TurnCompleted")
+    ).toMatchObject({
+      sessionId: SESSION_ID,
+      turnId,
+    });
     reconciler.dispose();
   });
 });

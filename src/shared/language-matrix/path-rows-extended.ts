@@ -331,6 +331,27 @@ export const EXTENDED_PATH_LANGUAGE_MATRIX: readonly LanguageMatrixRow[] = [
       rootMarkers: ["build.zig", "build.zig.zon", ".git"],
     },
   },
+  {
+    editorLanguageId: "terraform",
+    extensions: [".tf", ".tfvars", ".hcl"],
+    id: "terraform",
+    lsp: {
+      args: ["serve"],
+      binaryHint: "terraform-ls",
+      command: "terraform-ls",
+      displayName: "Terraform",
+      extensions: [".tf", ".tfvars"],
+      id: "terraform-ls",
+      installCommand: "brew install terraform-ls",
+      languageIdByExtension: {
+        ".tf": "terraform",
+        ".tfvars": "terraform-vars",
+      },
+      languageIds: ["terraform", "terraform-vars"],
+      priority: 70,
+      rootMarkers: [".terraform.lock.hcl", ".git"],
+    },
+  },
   // --- Display-only (no PATH LSP in matrix) ---
   {
     editorLanguageId: "xml",

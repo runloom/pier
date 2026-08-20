@@ -11,6 +11,7 @@ import { createLogger } from "@shared/logger.ts";
 import { resolveLocalControlSocketPath } from "../../adapters/cli/local-control/server.ts";
 import { withPanelStatusEnv } from "../../ipc/terminal/create-launch.ts";
 import { isForbiddenLaunchWrapEnvKey } from "../process-environment/apply-host-env.ts";
+import { mergeSystemSkillExtraRootEnv } from "../project-skills/system-skills/extra-root.ts";
 import { isHostPanelIdentityEnvKey } from "./ephemeral.ts";
 import {
   listLaunchWrapHandlers,
@@ -246,6 +247,7 @@ export async function applyLaunchWrapForCreate(input: {
   hookEnv: Record<string, string>;
   launch: ResolvedTerminalLaunchOptions | undefined;
   panelId: string;
+  userData?: string | undefined;
   windowId: string;
 }): Promise<ResolvedTerminalLaunchOptions> {
   let launch = input.launch;
@@ -258,13 +260,23 @@ export async function applyLaunchWrapForCreate(input: {
     launch = t1.launch;
     decorateSpawn = t1.decorateSpawn;
   }
-  const withIdentity = withPanelStatusEnv(
+  let withIdentity = withPanelStatusEnv(
     launch,
     input.panelId,
     input.windowId,
     input.hookEnv,
     input.controlSocketPath
   );
+  if (input.agentId && input.userData) {
+    withIdentity = {
+      ...withIdentity,
+      env: mergeSystemSkillExtraRootEnv({
+        agentKind: input.agentId,
+        env: { ...(withIdentity.env ?? {}) },
+        userData: input.userData,
+      }),
+    };
+  }
   if (!(input.agentId && decorateSpawn)) {
     return withIdentity;
   }

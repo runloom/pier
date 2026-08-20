@@ -47,6 +47,10 @@ describe("catalogBinaryBasename", () => {
 describe("shouldProbeBinaryVersion", () => {
   it("allows known version CLIs and skips wrappers", () => {
     expect(shouldProbeBinaryVersion("/opt/homebrew/bin/gopls")).toBe(true);
+    expect(shouldProbeBinaryVersion("/usr/local/bin/astro-ls")).toBe(true);
+    expect(shouldProbeBinaryVersion("/opt/homebrew/bin/terraform-ls")).toBe(
+      true
+    );
     expect(shouldProbeBinaryVersion("C:\\tools\\rust-analyzer.exe")).toBe(true);
     expect(shouldProbeBinaryVersion("/usr/bin/jdtls")).toBe(false);
     expect(shouldProbeBinaryVersion("/usr/bin/metals")).toBe(false);

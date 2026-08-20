@@ -125,6 +125,23 @@ export function normalizeAgentTurnId(
   return turnId?.trim() || undefined;
 }
 
+/**
+ * 跨 session 仍可当同一回合的 turnId。
+ * 只认 UUID / ULID / 32 位 hex；短序号和普通长字符串会在进程级并行会话碰撞。
+ */
+const UUID_TURN_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const ULID_TURN_ID = /^[0-9A-HJKMNP-TV-Z]{26}$/i;
+const HEX32_TURN_ID = /^[0-9a-f]{32}$/i;
+
+export function isGloballyUniqueTurnId(turnId: string): boolean {
+  return (
+    UUID_TURN_ID.test(turnId) ||
+    ULID_TURN_ID.test(turnId) ||
+    HEX32_TURN_ID.test(turnId)
+  );
+}
+
 function semanticsForMappedWorkEvent(
   eventName: string
 ): AgentTurnEventSemantics {

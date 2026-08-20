@@ -11,6 +11,7 @@ const VERSION_MAX_BYTES = 4096;
  * Unknown / wrapper names are skipped so Settings never boots jdtls/metals/etc.
  */
 const VERSION_PROBE_BASENAMES = new Set([
+  "astro-ls",
   "bash-language-server",
   "basedpyright-langserver",
   "clangd",
@@ -32,6 +33,7 @@ const VERSION_PROBE_BASENAMES = new Set([
   "svelte-language-server",
   "svelteserver",
   "taplo",
+  "terraform-ls",
   "vscode-css-language-server",
   "vscode-html-language-server",
   "vscode-json-language-server",

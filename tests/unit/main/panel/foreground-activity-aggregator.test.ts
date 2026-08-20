@@ -1915,6 +1915,361 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
+  const cursorTurnA = "92c079e3-84b1-4982-8c8a-aaaaaaaaaaa1";
+  const cursorTurnB = "e293da54-f249-4220-b8d1-bbbbbbbbbbb2";
+
+  it.each([
+    { terminal: "TurnCompleted", want: "ready" },
+    { terminal: "TurnInterrupted", want: "ready" },
+    { terminal: "error", want: "error" },
+  ] as const)("同 turnId 不同 sessionId 的工具事件并入 PromptSubmit 账本，$terminal 后不为 processing", ({
+    terminal,
+    want,
+  }) => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "prompt-session",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "stale-tool-session",
+        toolUseId: "shell-1",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolComplete",
+        sessionId: "stale-tool-session",
+        toolUseId: "shell-1",
+        turnId: cursorTurnA,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).sessionId).toBe(
+      "prompt-session"
+    );
+
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: terminal,
+        sessionId: "prompt-session",
+        turnId: cursorTurnA,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(want);
+
+    advance(10);
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolComplete",
+        sessionId: "stale-tool-session",
+        toolUseId: "late-same-turn",
+        turnId: cursorTurnA,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(want);
+    agg.dispose();
+  });
+
+  it("不同 turnId 的并行会话不随另一会话终态封账", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "chat-a",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "chat-b",
+        turnId: cursorTurnB,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "chat-b",
+        toolUseId: "other-tool",
+        turnId: cursorTurnB,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "TurnCompleted",
+        sessionId: "chat-a",
+        turnId: cursorTurnA,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("短 turnId 的空终态不扩散到其它 session", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "prompt-session",
+        turnId: "gen-1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "stale-tool-session",
+        toolUseId: "shell-1",
+        turnId: "gen-1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "TurnCompleted",
+        sessionId: "prompt-session",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("先落到错误 session 的工具仍能被对侧终态封账", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "stale-tool-session",
+        toolUseId: "shell-1",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "prompt-session",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "TurnCompleted",
+        sessionId: "prompt-session",
+        turnId: cursorTurnA,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("transcript 空 turnId 终态回退 origin.currentTurnId 封账对侧", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "stale-tool-session",
+        toolUseId: "shell-1",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "prompt-session",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "TurnCompleted",
+        sessionId: "prompt-session",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("进程级并行会话的不同 messageId 互不改写", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "opencode",
+        event: "PromptSubmit",
+        sessionId: "thread-a",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "opencode",
+        event: "PromptSubmit",
+        sessionId: "thread-b",
+        turnId: cursorTurnB,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "opencode",
+        event: "ToolStart",
+        sessionId: "thread-b",
+        toolUseId: "call-b",
+        turnId: cursorTurnB,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "opencode",
+        event: "TurnCompleted",
+        sessionId: "thread-a",
+        turnId: cursorTurnA,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("进程级并行会话的短 turnId 不互相封账", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "amp",
+        event: "PromptSubmit",
+        sessionId: "thread-a",
+        turnId: "1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "amp",
+        event: "PromptSubmit",
+        sessionId: "thread-b",
+        turnId: "1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "amp",
+        event: "ToolStart",
+        sessionId: "thread-b",
+        toolUseId: "call-b",
+        turnId: "1",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "amp",
+        event: "TurnCompleted",
+        sessionId: "thread-a",
+        turnId: "1",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("stale SessionEnd 不得挡住已认领 turn 的工具事件", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "prompt-session",
+        turnId: cursorTurnA,
+      })
+    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEvent({
+          agent: "cursor",
+          event: "SessionEnd",
+          sessionId: "stale-tool-session",
+        })
+      )
+    ).toBe(false);
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "stale-tool-session",
+        toolUseId: "shell-1",
+        turnId: cursorTurnA,
+      })
+    );
+    const afterStaleEnd = agg.snapshot().activities[0] as AgentActivity;
+    expect(afterStaleEnd.status).toBe("tool");
+    expect(afterStaleEnd.sessionId).toBe("prompt-session");
+    agg.dispose();
+  });
+
+  it("stale running 不得抢占 PromptSubmit 认领", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "prompt-session",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "running",
+        sessionId: "stale-tool-session",
+        turnId: cursorTurnA,
+      })
+    );
+    const afterRunning = agg.snapshot().activities[0] as AgentActivity;
+    expect(afterRunning.status).toBe("processing");
+    expect(afterRunning.sessionId).toBe("prompt-session");
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "stale-tool-session",
+        toolUseId: "shell-1",
+        turnId: cursorTurnA,
+      })
+    );
+    const afterTool = agg.snapshot().activities[0] as AgentActivity;
+    expect(afterTool.status).toBe("tool");
+    expect(afterTool.sessionId).toBe("prompt-session");
+    agg.dispose();
+  });
+
   it("主 session 结算后，无 sessionId 的新 PromptSubmit 仍可开新回合", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(

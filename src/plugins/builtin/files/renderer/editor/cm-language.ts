@@ -22,14 +22,18 @@ import { dockerFile } from "@codemirror/legacy-modes/mode/dockerfile";
 import { lua } from "@codemirror/legacy-modes/mode/lua";
 import { r as rMode } from "@codemirror/legacy-modes/mode/r";
 import { ruby } from "@codemirror/legacy-modes/mode/ruby";
+import { sass as sassMode } from "@codemirror/legacy-modes/mode/sass";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { standardSQL } from "@codemirror/legacy-modes/mode/sql";
+import { stylus as stylusMode } from "@codemirror/legacy-modes/mode/stylus";
 import { swift } from "@codemirror/legacy-modes/mode/swift";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import type { Extension } from "@codemirror/state";
 import { svelte } from "@replit/codemirror-lang-svelte";
 import { detectLiveModuleFrameworkFromFileName } from "@shared/live-module-framework.ts";
+import { pierAstroLanguage } from "@shared/source-editor/astro-language.ts";
 import { pierMarkdownLanguage } from "@shared/source-editor/markdown-language.ts";
+import { graphqlMode, hclMode } from "@shared/source-editor/stream-modes.ts";
 import type {
   BuiltinFilesDocumentLanguage,
   FilesDocumentLanguage,
@@ -72,6 +76,8 @@ export function cmLanguageExtension(
   path?: string
 ): Extension | null {
   switch (language) {
+    case "astro":
+      return pierAstroLanguage();
     case "canvas":
       return canvasLanguageExtension(path);
     case "cpp": {
@@ -88,8 +94,17 @@ export function cmLanguageExtension(
     }
     case "csharp":
       return StreamLanguage.define(csharp);
-    case "css":
+    case "css": {
+      const lower = path?.toLowerCase() ?? "";
+      // Indented .sass / Stylus are not CSS/SCSS; Less/SCSS share CSS.
+      if (lower.endsWith(".sass")) {
+        return StreamLanguage.define(sassMode);
+      }
+      if (lower.endsWith(".styl")) {
+        return StreamLanguage.define(stylusMode);
+      }
       return css();
+    }
     case "dart":
       return StreamLanguage.define(clikeDart);
     case "dockerfile":
@@ -98,6 +113,8 @@ export function cmLanguageExtension(
       return StreamLanguage.define(ruby);
     case "go":
       return go();
+    case "graphql":
+      return StreamLanguage.define(graphqlMode);
     case "html":
       return html();
     case "java":
@@ -137,6 +154,8 @@ export function cmLanguageExtension(
       return xml();
     case "swift":
       return StreamLanguage.define(swift);
+    case "terraform":
+      return StreamLanguage.define(hclMode);
     case "toml":
       return StreamLanguage.define(toml);
     case "typescript": {
@@ -168,6 +187,7 @@ export function cmLanguageExtension(
 export const LANGUAGE_LABELS: Readonly<
   Record<BuiltinFilesDocumentLanguage, string>
 > = {
+  astro: "Astro",
   canvas: "Canvas",
   cpp: "C++",
   csharp: "C#",
@@ -176,6 +196,7 @@ export const LANGUAGE_LABELS: Readonly<
   dockerfile: "Dockerfile",
   elixir: "Elixir",
   go: "Go",
+  graphql: "GraphQL",
   html: "HTML",
   java: "Java",
   javascript: "JavaScript",
@@ -194,6 +215,7 @@ export const LANGUAGE_LABELS: Readonly<
   svelte: "Svelte",
   svg: "SVG",
   swift: "Swift",
+  terraform: "Terraform",
   text: "Plain Text",
   toml: "TOML",
   typescript: "TypeScript",

@@ -94,11 +94,29 @@ describe("Multi-language LSP providers", () => {
     );
     expect(registry.getById("json")?.matchPath("/a/b.jsonc")).toBe(true);
     expect(registry.getById("css")?.matchPath("/a/b.scss")).toBe(true);
+    expect(registry.getById("css")?.matchPath("/a/b.less")).toBe(true);
+    expect(registry.getById("css")?.languageIdForPath("a.less")).toBe("less");
+    expect(registry.getById("css")?.matchPath("/a/b.sass")).toBe(false);
     expect(registry.getById("markdown")?.languageIdForPath("x.mdx")).toBe(
       "mdx"
     );
     expect(registry.getById("svelte")?.matchPath("/a/Widget.svelte")).toBe(
       true
+    );
+    expect(registry.getById("astro")?.matchPath("/a/pages/404.astro")).toBe(
+      true
+    );
+    expect(registry.getById("graphql")?.matchPath("/a/schema.graphql")).toBe(
+      true
+    );
+    expect(registry.getById("terraform-ls")?.matchPath("/a/main.tf")).toBe(
+      true
+    );
+    expect(
+      registry.getById("terraform-ls")?.languageIdForPath("a.tfvars")
+    ).toBe("terraform-vars");
+    expect(registry.getById("terraform-ls")?.matchPath("/a/nomad.hcl")).toBe(
+      false
     );
   });
 
@@ -130,6 +148,9 @@ describe("Multi-language LSP providers", () => {
     expect(registry.matchForPath("/repo/a.md")?.id).toBe("markdown");
     expect(registry.matchForPath("/repo/App.vue")?.id).toBe("vue");
     expect(registry.matchForPath("/repo/Widget.svelte")?.id).toBe("svelte");
+    expect(registry.matchForPath("/repo/pages/404.astro")?.id).toBe("astro");
+    expect(registry.matchForPath("/repo/schema.graphql")?.id).toBe("graphql");
+    expect(registry.matchForPath("/repo/main.tf")?.id).toBe("terraform-ls");
     expect(registry.matchForPath("/repo/Makefile")).toBeNull();
   });
 
@@ -245,6 +266,30 @@ describe("Multi-language LSP providers", () => {
     expect(provider.matchPath("/app/app.dockerfile")).toBe(true);
     expect(provider.languageIdForPath("/app/Dockerfile")).toBe("dockerfile");
     expect(provider.matchPath("/app/readme.md")).toBe(false);
+  });
+
+  it("createPathLspProvider injects typescript.tsdk when flagged", async () => {
+    const provider = createPathLspProvider({
+      args: ["--stdio"],
+      command: process.execPath,
+      displayName: "Astro",
+      extensions: [".astro"],
+      id: "astro-tsdk",
+      injectTypescriptSdk: true,
+      languageIds: ["astro"],
+      priority: 90,
+      rootMarkers: [],
+      source: "core",
+    });
+    const launch = await provider.resolveLaunch({
+      rootPath: process.cwd(),
+      workspaceKey: "test",
+    });
+    expect(launch).not.toBeNull();
+    expect(
+      (launch?.initializationOptions as { typescript?: { tsdk?: string } })
+        ?.typescript?.tsdk
+    ).toMatch(/typescript[/\\]lib$/i);
   });
 
   it("createPathLspProvider tries launchCandidates with distinct args", () => {

@@ -23,6 +23,11 @@ describe("shouldNeverSystemOpen", () => {
     expect(shouldNeverSystemOpen("/repo/a.js")).toBe(true);
     expect(shouldNeverSystemOpen("/repo/README.md")).toBe(true);
     expect(shouldNeverSystemOpen("/repo/package.json")).toBe(true);
+    expect(shouldNeverSystemOpen("/repo/theme.less")).toBe(true);
+    expect(shouldNeverSystemOpen("/repo/theme.sass")).toBe(true);
+    expect(shouldNeverSystemOpen("/repo/Page.astro")).toBe(true);
+    expect(shouldNeverSystemOpen("/repo/schema.graphql")).toBe(true);
+    expect(shouldNeverSystemOpen("/repo/main.tf")).toBe(true);
     expect(shouldNeverSystemOpen("/repo/.env")).toBe(true);
     expect(shouldNeverSystemOpen("/repo/.gitignore")).toBe(true);
   });

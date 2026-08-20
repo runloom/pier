@@ -1,15 +1,43 @@
 import { languageForPath } from "@plugins/builtin/files/renderer/editor/language-detection.ts";
 import { describe, expect, it } from "vitest";
 
-describe("languageForPath vue/svelte", () => {
-  it("maps ordinary .vue and .svelte to their language ids", () => {
+describe("languageForPath vue/svelte/astro", () => {
+  it("maps ordinary .vue, .svelte, and .astro to their language ids", () => {
     expect(languageForPath("src/components/App.vue")).toBe("vue");
     expect(languageForPath("src/lib/Widget.svelte")).toBe("svelte");
+    expect(languageForPath("src/pages/404.astro")).toBe("astro");
   });
 
   it("keeps live-module canvas compounds as canvas, not vue/svelte", () => {
     expect(languageForPath(".pier/canvases/a.canvas.vue")).toBe("canvas");
     expect(languageForPath(".pier/canvases/a.canvas.svelte")).toBe("canvas");
+  });
+});
+
+describe("languageForPath css family", () => {
+  it("maps css/scss/less/sass/styl onto the css highlight track", () => {
+    expect(languageForPath("src/app/globals.css")).toBe("css");
+    expect(languageForPath("src/app/theme.scss")).toBe("css");
+    expect(languageForPath("src/app/theme.less")).toBe("css");
+    expect(languageForPath("src/app/theme.sass")).toBe("css");
+    expect(languageForPath("src/app/theme.styl")).toBe("css");
+  });
+});
+
+describe("languageForPath graphql/terraform", () => {
+  it("maps schema and terraform files to their language ids", () => {
+    expect(languageForPath("src/schema.graphql")).toBe("graphql");
+    expect(languageForPath("src/schema.gql")).toBe("graphql");
+    expect(languageForPath("infra/main.tf")).toBe("terraform");
+    expect(languageForPath("infra/prod.tfvars")).toBe("terraform");
+    expect(languageForPath("infra/nomad.hcl")).toBe("terraform");
+  });
+});
+
+describe("languageForPath html", () => {
+  it("maps .html and .htm to html", () => {
+    expect(languageForPath("public/index.html")).toBe("html");
+    expect(languageForPath("legacy/page.HTM")).toBe("html");
   });
 });
 

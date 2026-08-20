@@ -39,6 +39,15 @@ describe("languageServicePresentation", () => {
     expect(lspInstallGuideRegistry.get("svelte")?.installCommand).toBe(
       "npm i -g svelte-language-server"
     );
+    expect(lspInstallGuideRegistry.get("astro")?.installCommand).toBe(
+      "npm i -g @astrojs/language-server"
+    );
+    expect(lspInstallGuideRegistry.get("graphql")?.installCommand).toBe(
+      "npm i -g graphql-language-service-cli graphql"
+    );
+    expect(lspInstallGuideRegistry.get("terraform-ls")?.installCommand).toBe(
+      "brew install terraform-ls"
+    );
   });
 
   it("explains missing CSS server with install command", () => {
@@ -121,6 +130,20 @@ describe("languageServicePresentation", () => {
     expect(presentation.label).toBe("Not installed");
     expect(presentation.command).toBe("npm i -g svelte-language-server");
     expect(presentation.title).toContain("Svelte");
+  });
+
+  it("explains missing Astro server with install command", () => {
+    const presentation = languageServicePresentation(
+      {
+        reason: "server-unavailable",
+        serverId: "astro",
+        state: "error",
+      },
+      t
+    );
+    expect(presentation.label).toBe("Not installed");
+    expect(presentation.command).toBe("npm i -g @astrojs/language-server");
+    expect(presentation.title).toContain("Astro");
   });
 
   it("reads Zig install command from core matrix guide id zls", () => {

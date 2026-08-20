@@ -341,7 +341,7 @@ describe("project-skills repair / ensureReady", { timeout: 30_000 }, () => {
       "pier-test-capability"
     );
     expect(await readlink(target)).toBe(
-      "../../.pier/skills/library/pier-test-capability"
+      join(userData, "skills", ".system", "pier-test-capability")
     );
 
     const second = await repair.ensureReady({
@@ -351,7 +351,7 @@ describe("project-skills repair / ensureReady", { timeout: 30_000 }, () => {
     });
     expect(second.status).toBe("ready");
     expect(await readlink(target)).toBe(
-      "../../.pier/skills/library/pier-test-capability"
+      join(userData, "skills", ".system", "pier-test-capability")
     );
   });
 

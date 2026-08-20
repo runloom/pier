@@ -15,12 +15,22 @@ describe("filesLspHighlightLanguage", () => {
     expect(filesLspHighlightLanguage("go")).not.toBeNull();
   });
 
-  it("resolves vue / svelte / csharp fence tags", () => {
+  it("resolves vue / svelte / astro / csharp fence tags", () => {
     expect(filesLspHighlightLanguage("vue")).not.toBeNull();
     expect(filesLspHighlightLanguage("svelte")).not.toBeNull();
+    expect(filesLspHighlightLanguage("astro")).not.toBeNull();
     expect(filesLspHighlightLanguage("csharp")).not.toBeNull();
     expect(filesLspHighlightLanguage("cs")).not.toBeNull();
     expect(filesLspHighlightLanguage("svg")).not.toBeNull();
+    expect(filesLspHighlightLanguage("less")).not.toBeNull();
+    expect(filesLspHighlightLanguage("scss")).not.toBeNull();
+    expect(filesLspHighlightLanguage("sass")).not.toBeNull();
+    expect(filesLspHighlightLanguage("graphql")).not.toBeNull();
+    expect(filesLspHighlightLanguage("gql")).not.toBeNull();
+    expect(filesLspHighlightLanguage("terraform")).not.toBeNull();
+    expect(filesLspHighlightLanguage("dart")).not.toBeNull();
+    expect(filesLspHighlightLanguage("zig")).not.toBeNull();
+    expect(filesLspHighlightLanguage("dockerfile")).not.toBeNull();
   });
 
   it("returns null for unknown languages", () => {

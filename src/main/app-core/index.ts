@@ -409,6 +409,7 @@ function createPierAppCore(): PierAppCore {
       readPreferences: () => preferences.read(),
       launchGate: agentLaunchGate,
       processEnvironment,
+      userData: userDataDir,
     }),
     appUpdates,
     commandPaletteMru: createCommandPaletteMruService({

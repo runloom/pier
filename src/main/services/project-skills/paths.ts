@@ -9,15 +9,21 @@ import type { StableProjectIdentity } from "./identity.ts";
  * while the key itself stays stable for a given directory object identity.
  */
 export function createProjectSkillsPaths(userData: string): {
-  rootKeyFor(identity: StableProjectIdentity): string;
-  projectDir(rootKey: string): string;
-  ownershipPath(rootKey: string): string;
   operationsDir(rootKey: string): string;
+  ownershipPath(rootKey: string): string;
+  projectDir(rootKey: string): string;
+  rootKeyFor(identity: StableProjectIdentity): string;
   stagingDir(rootKey: string): string;
+  systemSkillsCacheRoot(): string;
+  userData: string;
 } {
   const base = join(userData, "project-skills");
 
   return {
+    userData,
+    systemSkillsCacheRoot(): string {
+      return join(userData, "skills", ".system");
+    },
     rootKeyFor(identity: StableProjectIdentity): string {
       // Path is intentionally excluded: rename must not orphan ledgers.
       return createHash("sha256")

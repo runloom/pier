@@ -52,6 +52,12 @@ export interface SkillDiscoveryAdapter {
   probeCaveats: readonly string[];
   sessionRefresh: SkillDiscoverySessionRefresh;
   /**
+   * Additive extra skill-root env for product (system) skills. v1: no
+   * adapter fills this — discovery symlinks are the delivery path. Do not
+   * use keys that replace the agent's entire skills root.
+   */
+  systemSkillExtraRoot?: { envKey: string };
+  /**
    * User-level (`~`-relative) discovery roots — the fixed whitelist input for
    * the user-global read-only enumeration (design v8 §6.1). Never written by
    * Pier.
