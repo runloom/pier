@@ -33,7 +33,9 @@ import { toml } from "@codemirror/legacy-modes/mode/toml";
 import type { Extension } from "@codemirror/state";
 import { svelte } from "@replit/codemirror-lang-svelte";
 import type { EditorHighlightPreset } from "@shared/contracts/plugin/language-mode.ts";
+import { pierAstroLanguage } from "@shared/source-editor/astro-language.ts";
 import { pierMarkdownLanguage } from "@shared/source-editor/markdown-language.ts";
+import { graphqlMode, hclMode } from "@shared/source-editor/stream-modes.ts";
 
 export function cmExtensionForHighlightPreset(
   preset: EditorHighlightPreset
@@ -89,6 +91,8 @@ export function cmExtensionForHighlightPreset(
       return vue({ base: html() });
     case "svelte":
       return svelte();
+    case "astro":
+      return pierAstroLanguage();
     case "php":
       // No dedicated PHP stream mode in legacy-modes — approximate with C-like.
       return StreamLanguage.define(clikeC);
@@ -105,6 +109,10 @@ export function cmExtensionForHighlightPreset(
     case "elixir":
       // No dedicated Elixir mode — approximate with Ruby.
       return StreamLanguage.define(ruby);
+    case "graphql":
+      return StreamLanguage.define(graphqlMode);
+    case "terraform":
+      return StreamLanguage.define(hclMode);
     default: {
       const _exhaustive: never = preset;
       return _exhaustive;

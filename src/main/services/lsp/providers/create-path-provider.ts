@@ -14,6 +14,7 @@ import {
   normalizeFsRoot,
   resolveRootByMarkers,
 } from "../resolve-root.ts";
+import { resolveTypescriptSdkLibForVue } from "../resolve-typescript-sdk.ts";
 
 function languageIdMap(
   descriptor: LspProviderDescriptor
@@ -120,10 +121,21 @@ export function createPathLspProvider(
         if (!launch) {
           continue;
         }
-        return {
+        const spec = {
           args: launch.args,
           command: launch.command,
           cwd: normalizeFsRoot(rootPath),
+        };
+        if (!descriptor.injectTypescriptSdk) {
+          return spec;
+        }
+        const tsdk = resolveTypescriptSdkLibForVue(rootPath);
+        if (!tsdk) {
+          return spec;
+        }
+        return {
+          ...spec,
+          initializationOptions: { typescript: { tsdk } },
         };
       }
       return null;

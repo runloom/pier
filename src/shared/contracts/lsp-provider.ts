@@ -89,6 +89,12 @@ export const lspProviderDescriptorSchema = z
     /** Shown when binary missing; optional. */
     installCommand: z.string().min(1).optional(),
     /**
+     * Inject `initialize.initializationOptions.typescript.tsdk` from the
+     * workspace TypeScript lib, falling back to Pier's bundled SDK. Required
+     * by servers such as astro-ls that crash when tsdk is undefined.
+     */
+    injectTypescriptSdk: z.boolean().optional(),
+    /**
      * languageId used for didOpen. When omitted, derived from the first
      * extension without the leading dot (e.g. `.py` → `py` is wrong — callers
      * should set languageIds explicitly for multi-ext languages).

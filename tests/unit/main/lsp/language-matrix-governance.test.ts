@@ -67,4 +67,22 @@ describe("language matrix governance (scheme A)", () => {
       true
     );
   });
+
+  it("Astro PATH row requests typescript.tsdk at launch", () => {
+    const astro = pathLspDescriptorsFromMatrix().find((d) => d.id === "astro");
+    expect(astro?.injectTypescriptSdk).toBe(true);
+  });
+
+  it("GraphQL rootMarkers include graphql-config json/js variants before package.json", () => {
+    const graphql = PATH_LANGUAGE_MATRIX.find((row) => row.id === "graphql");
+    const markers = graphql?.lsp?.rootMarkers ?? [];
+    expect(markers).toContain(".graphqlrc.json");
+    expect(markers).toContain(".graphqlrc.js");
+    expect(markers).toContain(".graphqlrc.ts");
+    expect(markers).toContain("graphql.config.json");
+    expect(markers).toContain("graphql.config.js");
+    expect(markers.indexOf("graphql.config.json")).toBeLessThan(
+      markers.indexOf("package.json")
+    );
+  });
 });

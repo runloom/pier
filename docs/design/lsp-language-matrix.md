@@ -45,27 +45,32 @@
 | Rust | rust-analyzer | PATH | `rust-analyzer` |
 | Vue | 打包 **typescript-language-server** + `@vue/typescript-plugin`（工作区或全局 `vue-language-server` 树） | 插件可解析；TLS **打包** | `vue` |
 | Svelte | `svelte-language-server`（`svelteserver`） | PATH | `svelte` |
+| Astro | `@astrojs/language-server`（`astro-ls`） | PATH | `astro` |
 
 > **Vue 与跳转**：Vue LS 3 为 hybrid（需客户端转发 `tsserver/request`）。Pier 单会话宿主暂不实现该桥，因此用 **TLS + `@vue/typescript-plugin`** 提供 script/import 的 go-to-definition；`initialize` 由 main 注入 `initializationOptions.plugins`。用户 `npm i -g @vue/language-server` 即可带上插件。未解析到插件时回退 PATH `vue-language-server --stdio --tsdk=`（应用内 TS 6，进程可起，definition 能力受限）。
 
 > **Svelte**：PATH 发现 `svelteserver`；未做 Vue 同级的 TS/插件注入。安装：`npm i -g svelte-language-server`。
+>
+> **Astro**：PATH 发现 `astro-ls --stdio`；`initialize` 注入 `typescript.tsdk`（工作区 TypeScript lib，否则用应用内 TS 6）。展示轨用 HTML 自闭合标签近似。安装：`npm i -g @astrojs/language-server`。
 
 ### 2.2 配置与文档语言（工作台必含）
 
 | 语言 | Server | 发现方式 | Provider id |
 |------|--------|----------|--------------|
 | JSON / JSONC | vscode-json-language-server | PATH | `json` |
-| CSS / SCSS | vscode-css-language-server | PATH | `css` |
+| CSS / SCSS / Less | vscode-css-language-server | PATH | `css` |
 | HTML | vscode-html-language-server | PATH | `html` |
 | YAML | yaml-language-server | PATH | `yaml` |
 | Markdown | marksman | PATH | `markdown` |
+| GraphQL | `graphql-lsp`（`graphql-language-service-cli`） | PATH | `graphql` |
 
 推荐本机安装（不进 dmg）：
 
 ```bash
 npm i -g vscode-langservers-extracted yaml-language-server
-npm i -g @vue/language-server svelte-language-server
-brew install marksman   # 或 GitHub release
+npm i -g @vue/language-server svelte-language-server @astrojs/language-server
+npm i -g graphql-language-service-cli graphql
+brew install marksman terraform-ls   # 或 GitHub release
 ```
 
 ### 2.2.1 编辑器展示（与 LSP 正交）
@@ -74,14 +79,21 @@ brew install marksman   # 或 GitHub release
 |------|----------------|----------|----------|
 | `.vue` | `vue` / Vue | `@codemirror/lang-vue`（HTML base） | 上表 `vue` |
 | `.svelte` | `svelte` / Svelte | `@replit/codemirror-lang-svelte` | 上表 `svelte` |
+| `.astro` | `astro` / Astro | HTML（`lang-html`，允许自闭合标签） | 上表 `astro` |
 | `.canvas.vue` 等 | `canvas` / Canvas | 按框架后缀选 Vue/Svelte/TSX | 仍按扩展匹配上表 provider |
 | `.svg` | `svg` / SVG | XML（`lang-xml`） | **无**独立 SVG LSP（源码编辑，非位图预览） |
 | `.scss` | 展示 id `css` | CSS | CSS LS，`languageId=scss` |
+| `.less` | 展示 id `css` | CSS | CSS LS，`languageId=less` |
+| `.sass` | 展示 id `css` | indented Sass（legacy stream） | **无**（vscode-css-language-server 不服务缩进语法） |
+| `.styl` | 展示 id `css` | Stylus stream | **无** |
+| `.graphql` / `.gql` | `graphql` / GraphQL | GraphQL stream | PATH `graphql-lsp` |
+| `.tf` / `.tfvars` | `terraform` / Terraform | HCL stream | PATH `terraform-ls` |
+| `.hcl` | `terraform` / Terraform | HCL stream | **无**（terraform-ls 只收 `.tf` / `.tfvars`） |
 | `.cs` | `csharp` / C# | legacy clike csharp | L0 PATH `csharp-ls` / OmniSharp |
 
 ### 2.3 扩展语言（L0 内建声明，工具在本机 PATH）
 
-Java / C/C++ / C# / Swift / Kotlin / Ruby / PHP / Dart / Lua / SQL / Shell / TOML / Dockerfile / R / Scala / Elixir / Zig 等：
+Java / C/C++ / C# / Swift / Kotlin / Ruby / PHP / Dart / Lua / SQL / Shell / TOML / Dockerfile / R / Scala / Elixir / Zig / Terraform 等：
 
 - **展示**：Files `language-detection` + CM 高亮（内建）
 - **服务**：main `path-matrix-providers`（由 `PATH_LANGUAGE_MATRIX` 派生）PATH 发现；`installCommand` 仅作芯片提示
@@ -95,7 +107,7 @@ Java / C/C++ / C# / Swift / Kotlin / Ruby / PHP / Dart / Lua / SQL / Shell / TOM
 
 ### 2.5 CSS `@import` 包跳转（已支持）
 
-Pier Files 编辑器对 `.css` / `.scss` 等：
+Pier Files 编辑器对 `.css` / `.scss` / `.sass` / `.less` / `.styl` 等：
 
 - 解析 `@import "pkg"` / 子路径 / 相对路径（`package.json#exports` 的 **`style` condition** + monorepo/`node_modules` 上溯）
 - **不依赖** `vscode-css-language-server` 是否安装
@@ -275,7 +287,8 @@ Pier Files 编辑器对 `.css` / `.scss` 等：
 | 设置 UI | `src/renderer/pages/settings/components/lsp-settings-card.tsx` |
 | 编辑器语言检测 | `src/plugins/builtin/files/renderer/editor/language-detection.ts` |
 | 编辑器 CM 高亮 | `src/plugins/builtin/files/renderer/editor/cm-language.ts` |
-| Hover fence 高亮 | `src/plugins/builtin/files/renderer/lsp/highlight-language.ts` |
+| 围栏 / hover 高亮目录 | `src/shared/source-editor/fenced-languages.ts`（Markdown 围栏与 LSP hover 共用） |
+| Hover 薄封装 | `src/plugins/builtin/files/renderer/lsp/highlight-language.ts` |
 
 ## 8. 扩展模型目标态（高亮 + LSP 双可扩展）
 
@@ -296,7 +309,7 @@ Pier 使用 CodeMirror，短期**不**自建 TextMate/Tree-sitter 市场；用**
 
 `highlight` / `highlightPreset` 枚举由宿主维护，例如：
 
-`text` · `javascript` · `typescript` · `jsx` · `html` · `xml` · `css` · `json` · `yaml` · `markdown` · `python` · `go` · `rust` · `clike` · `java` · `csharp` · `shell` · `sql` · `toml` · `vue` · `svelte` …
+`text` · `javascript` · `typescript` · `jsx` · `html` · `xml` · `css` · `json` · `yaml` · `markdown` · `python` · `go` · `rust` · `clike` · `java` · `csharp` · `shell` · `sql` · `toml` · `vue` · `svelte` · `astro` · `graphql` · `terraform` …
 
 - 插件**只引用预设 id**，不得塞任意解析器代码（纪律边界；与「仅官方插件」一致）。
 - Files 将预设映射到已依赖的 `@codemirror/lang-*` / legacy-modes / 已装包。

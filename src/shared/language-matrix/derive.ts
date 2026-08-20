@@ -34,6 +34,7 @@ export function pathLspDescriptorsFromMatrix(
         ? { commandCandidates: [...lsp.commandCandidates] }
         : {}),
       ...(lsp.installCommand ? { installCommand: lsp.installCommand } : {}),
+      ...(lsp.injectTypescriptSdk ? { injectTypescriptSdk: true } : {}),
       ...(lsp.languageIdByExtension
         ? { languageIdByExtension: { ...lsp.languageIdByExtension } }
         : {}),
