@@ -18,22 +18,24 @@ export function emitTranscriptEvent(
   record: TranscriptTerminalRecord,
   onEvent: (event: AgentHookEventPayload) => void
 ): void {
+  const nativeTurnId = record.turnId?.trim() || "";
+  const emittedTurnId = nativeTurnId || context.turnId?.trim() || "";
   const isTerminal =
     record.pierEvent === "TurnCompleted" ||
     record.pierEvent === "TurnInterrupted";
-  if (isTerminal && record.turnId) {
-    if (state.seenTerminalEvents.has(record.turnId)) {
+  if (isTerminal && nativeTurnId) {
+    if (state.seenTerminalEvents.has(nativeTurnId)) {
       return;
     }
-    state.seenTerminalEvents.add(record.turnId);
+    state.seenTerminalEvents.add(nativeTurnId);
     if (state.seenTerminalEvents.size > MAX_SEEN_TERMINALS) {
       state.seenTerminalEvents.delete(
         state.seenTerminalEvents.values().next().value ?? ""
       );
     }
-    state.contextsByTurnId.delete(record.turnId);
+    state.contextsByTurnId.delete(nativeTurnId);
     state.pendingRecords = state.pendingRecords.filter(
-      (pending) => pending.turnId !== record.turnId
+      (pending) => pending.turnId !== nativeTurnId
     );
   } else if (!isTerminal) {
     const interactionId =
@@ -107,7 +109,7 @@ export function emitTranscriptEvent(
       ? {}
       : { transcriptPath: context.transcriptPath }),
     ...(context.ts === undefined ? {} : { ts: context.ts }),
-    ...(record.turnId ? { turnId: record.turnId } : {}),
+    ...(emittedTurnId ? { turnId: emittedTurnId } : {}),
     v: 3,
     windowId: context.windowId,
   } as AgentHookEventPayload;

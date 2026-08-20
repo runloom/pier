@@ -262,6 +262,15 @@ export function applyTurnBookkeeping(
     scope.turnEnded = false;
     scope.turnEndedAt = undefined;
   }
+  if (
+    eventTurnId &&
+    !scope.currentTurnId &&
+    (semantics.category === "work" || semantics.category === "progress")
+  ) {
+    // 无 PromptSubmit 的工具会话也要挂上 turnId，否则同 generation 的对侧
+    // 终态无法把分裂 scope 关联起来（Cursor 工具 hook 常走另一 conversation）。
+    scope.currentTurnId = eventTurnId;
+  }
   if (semantics.category === "terminal-trusted") {
     const settledTurnId = eventTurnId ?? scope.currentTurnId;
     if (settledTurnId) {

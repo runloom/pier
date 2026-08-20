@@ -40,6 +40,7 @@ import {
   armLaunchVisibility,
   revealHook,
 } from "./aggregator-visibility.ts";
+import { bindEventToClaimedTurn } from "./claimed-turns.ts";
 import { applyDisplayQuestionOverlay } from "./display-question.ts";
 import {
   CLOSE_COOLDOWN_MS,
@@ -239,10 +240,11 @@ export function createForegroundActivityAggregator(
 
     ingestCommandStartHook(_event) {},
     ingestCommandFinishedHook(_event) {},
-    ingestAgentEvent(event, options) {
+    ingestAgentEvent(incoming, options) {
       if (disposed) {
         return false;
       }
+      let event = incoming;
       const semantics = classifyAgentTurnEvent(event, options);
       const key = panelKey(event.windowId, event.panelId);
       const slotBefore = slots.get(key);
@@ -268,12 +270,20 @@ export function createForegroundActivityAggregator(
         logAgentEventDropped("subagent-detail-ignored", key, event.event);
         return false;
       }
-      const identity = hookScopes.resolveEventIdentity(
+      let identity = hookScopes.resolveEventIdentity(
         slotBefore?.hook ?? null,
         event,
         hookScopeIdentity(event)
       );
       if (!identity) return false;
+      if (slotBefore?.hook) {
+        ({ event, identity } = bindEventToClaimedTurn(
+          slotBefore.hook,
+          event,
+          identity,
+          semantics
+        ));
+      }
       if (
         !hookScopes.allowsAgentEventAfterCooldowns(
           key,

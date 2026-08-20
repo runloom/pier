@@ -158,6 +158,11 @@ export interface HookScope {
 export interface HookLayer {
   activeSubagentWorks: Map<string, SubagentWorkAssociation>;
   agentId: AgentKind;
+  /**
+   * PromptSubmit / 其它 turn-start 认领的 turnId → scopeKey。
+   * 同一 generation 拆到两个 sessionId 时，后续工具事件并入认领方。
+   */
+  claimedTurns: Map<string, string>;
   /** SessionStart 消抖隐藏期为 true——不参与投影。 */
   hidden: boolean;
   /** 当前选中 scope 的身份镜像；事实所有权在 HookScope.identity。 */
@@ -341,6 +346,7 @@ export function newHookLayer(
 ): HookLayer {
   return {
     agentId: event.agent,
+    claimedTurns: new Map(),
     hidden: startsHidden,
     identity: {},
     spawnedAt: at,

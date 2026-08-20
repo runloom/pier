@@ -5,7 +5,10 @@ import {
   agentHookEventSchema,
 } from "@shared/contracts/agent/session.ts";
 import { describe, expect, it } from "vitest";
-import { classifyAgentTurnEvent } from "../../../../src/main/services/foreground-activity/agent-turn-event-semantics.ts";
+import {
+  classifyAgentTurnEvent,
+  isGloballyUniqueTurnId,
+} from "../../../../src/main/services/foreground-activity/agent-turn-event-semantics.ts";
 import type { AgentEventIngestOptions } from "../../../../src/main/services/foreground-activity/types.ts";
 
 function event(
@@ -334,5 +337,21 @@ describe("classifyAgentTurnEvent", () => {
       );
       expect(source, file).not.toMatch(directLifecycleBranch);
     }
+  });
+});
+
+describe("isGloballyUniqueTurnId", () => {
+  it("accepts UUID / ULID / 32-hex and rejects short or shapeless ids", () => {
+    expect(isGloballyUniqueTurnId("92c079e3-84b1-4982-8c8a-aaaaaaaaaaa1")).toBe(
+      true
+    );
+    expect(isGloballyUniqueTurnId("01ARZ3NDEKTSV4RRFFQ69G5FAV")).toBe(true);
+    expect(isGloballyUniqueTurnId("0123456789abcdef0123456789abcdef")).toBe(
+      true
+    );
+    expect(isGloballyUniqueTurnId("1")).toBe(false);
+    expect(isGloballyUniqueTurnId("gen-1")).toBe(false);
+    expect(isGloballyUniqueTurnId("0123456789abcdef")).toBe(false);
+    expect(isGloballyUniqueTurnId("generation-00001")).toBe(false);
   });
 });
