@@ -1,4 +1,5 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
+import { isGloballyUniqueTurnId } from "../../../foreground-activity/agent-turn-event-semantics.ts";
 import type { TranscriptTerminalRecord } from "./tail-contracts.ts";
 
 const MAX_SEEN_TERMINALS = 256;
@@ -18,22 +19,30 @@ export function emitTranscriptEvent(
   record: TranscriptTerminalRecord,
   onEvent: (event: AgentHookEventPayload) => void
 ): void {
+  const nativeTurnId = record.turnId?.trim() || "";
+  const contextTurnId = context.turnId?.trim() || "";
+  // Cursor generation_id 等跨 session 身份才从 context 补到空 native 终态。
+  // 短 prompt_id（测试夹具 / Claude 族）不得套到下一回合，否则完成会结算该 id，
+  // 随后的中断被当成 settled-turn 丢掉。
+  const inheritedTurnId =
+    contextTurnId && isGloballyUniqueTurnId(contextTurnId) ? contextTurnId : "";
+  const emittedTurnId = nativeTurnId || inheritedTurnId;
   const isTerminal =
     record.pierEvent === "TurnCompleted" ||
     record.pierEvent === "TurnInterrupted";
-  if (isTerminal && record.turnId) {
-    if (state.seenTerminalEvents.has(record.turnId)) {
+  if (isTerminal && nativeTurnId) {
+    if (state.seenTerminalEvents.has(nativeTurnId)) {
       return;
     }
-    state.seenTerminalEvents.add(record.turnId);
+    state.seenTerminalEvents.add(nativeTurnId);
     if (state.seenTerminalEvents.size > MAX_SEEN_TERMINALS) {
       state.seenTerminalEvents.delete(
         state.seenTerminalEvents.values().next().value ?? ""
       );
     }
-    state.contextsByTurnId.delete(record.turnId);
+    state.contextsByTurnId.delete(nativeTurnId);
     state.pendingRecords = state.pendingRecords.filter(
-      (pending) => pending.turnId !== record.turnId
+      (pending) => pending.turnId !== nativeTurnId
     );
   } else if (!isTerminal) {
     const interactionId =
@@ -107,7 +116,7 @@ export function emitTranscriptEvent(
       ? {}
       : { transcriptPath: context.transcriptPath }),
     ...(context.ts === undefined ? {} : { ts: context.ts }),
-    ...(record.turnId ? { turnId: record.turnId } : {}),
+    ...(emittedTurnId ? { turnId: emittedTurnId } : {}),
     v: 3,
     windowId: context.windowId,
   } as AgentHookEventPayload;

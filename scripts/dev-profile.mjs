@@ -13,8 +13,10 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -24,7 +26,7 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { withoutEsbuildBinaryOverride } from "./esbuild-process-env.mjs";
@@ -39,6 +41,385 @@ const RUNTIME_FILE_NAME = "runtime.json";
 const BASE_DEV_PORT = 5173;
 const PORT_SCAN_LIMIT = 100;
 const MAC_DEV_ELECTRON_APP_NAME = "PierDev";
+const MAC_DEV_ELECTRON_ICON_FILE = "electron.icns";
+const MAC_DEV_APP_ICON_FILE = "AppIcon.icns";
+const MAC_DEV_APP_ICON_NAME = "AppIcon";
+const MAC_DEV_ELECTRON_ICON_REVISION = 6;
+const MAC_ICON_CANVAS = 1024;
+const MAC_ICON_PLATE_INSET = 100;
+const MAC_ICON_PLATE_SIZE = 824;
+const MAC_ICON_OPTICAL_SCALE = 1.06;
+const MAC_ICON_PLATE_FILL = "#101725";
+const MAC_DEV_ICON_SLOTS = [
+  ["icon_16x16.png", 16, "micro"],
+  ["icon_16x16@2x.png", 32, "micro"],
+  ["icon_32x32.png", 32, "micro"],
+  ["icon_32x32@2x.png", 64, "micro"],
+  ["icon_128x128.png", 128, "micro"],
+  ["icon_128x128@2x.png", 256, "micro"],
+  ["icon_256x256.png", 256, "master"],
+  ["icon_256x256@2x.png", 512, "master"],
+  ["icon_512x512.png", 512, "master"],
+  ["icon_512x512@2x.png", 1024, "master"],
+];
+const MAC_DEV_HELPER_VARIANTS = [
+  { id: "helper", suffix: "" },
+  { id: "helper.GPU", suffix: " (GPU)" },
+  { id: "helper.Plugin", suffix: " (Plugin)" },
+  { id: "helper.Renderer", suffix: " (Renderer)" },
+];
+const MAC_APP_ICON_SLOTS = [
+  ["icon_16x16.png", "16x16", "1x"],
+  ["icon_16x16@2x.png", "16x16", "2x"],
+  ["icon_32x32.png", "32x32", "1x"],
+  ["icon_32x32@2x.png", "32x32", "2x"],
+  ["icon_128x128.png", "128x128", "1x"],
+  ["icon_128x128@2x.png", "128x128", "2x"],
+  ["icon_256x256.png", "256x256", "1x"],
+  ["icon_256x256@2x.png", "256x256", "2x"],
+  ["icon_512x512.png", "512x512", "1x"],
+  ["icon_512x512@2x.png", "512x512", "2x"],
+];
+const LSREGISTER =
+  "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
+
+function hashFileIfExists(file) {
+  return existsSync(file)
+    ? createHash("sha256").update(readFileSync(file)).digest("hex")
+    : "";
+}
+
+function spawnFailed(result) {
+  return Boolean(result.error) || result.status !== 0;
+}
+
+function logDevIconToolFailure(command, args, result) {
+  const detail = [result.error?.message, result.stderr, result.stdout]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  console.error(
+    `[dev-profile] ${command} ${args.join(" ")} failed${
+      detail ? `\n${detail}` : ""
+    }`
+  );
+}
+
+/**
+ * @param {{
+ *   sourceApp: string,
+ *   sourceVersion: string,
+ *   iconHash: string,
+ *   iconApplied: boolean,
+ * }} input
+ */
+export function macDevElectronRuntimeStamp(input) {
+  /** @type {Record<string, string | number>} */
+  const stamp = {
+    appName: MAC_DEV_ELECTRON_APP_NAME,
+    sourceApp: input.sourceApp,
+    sourceVersion: input.sourceVersion,
+  };
+  if (input.iconApplied) {
+    stamp.iconFile = MAC_DEV_APP_ICON_NAME;
+    stamp.iconHash = input.iconHash;
+    stamp.iconRevision = MAC_DEV_ELECTRON_ICON_REVISION;
+  }
+  return stamp;
+}
+
+/**
+ * @param {unknown} stamp
+ * @param {{ sourceApp: string, sourceVersion: string, iconHash: string }} expected
+ */
+export function macDevElectronRuntimeIsCurrent(stamp, expected) {
+  if (!stamp || typeof stamp !== "object") {
+    return false;
+  }
+  const record = /** @type {Record<string, unknown>} */ (stamp);
+  return (
+    record.sourceApp === expected.sourceApp &&
+    record.sourceVersion === expected.sourceVersion &&
+    record.appName === MAC_DEV_ELECTRON_APP_NAME &&
+    record.iconFile === MAC_DEV_APP_ICON_NAME &&
+    record.iconRevision === MAC_DEV_ELECTRON_ICON_REVISION &&
+    record.iconHash === expected.iconHash
+  );
+}
+
+/**
+ * Activity Monitor clips the bundle bitmap into its own rounded well.
+ * The Dock-sized Apple canvas leaves a transparent gutter around the 824pt
+ * plate, which shows up as a second ring. Crop the plate to fill the canvas
+ * and back it with the plate color so the well matches Dock; Dock itself
+ * still uses `icon-dock.png` via `app.dock.setIcon`.
+ *
+ * @param {string} worktreeRoot
+ * @param {string} targetApp
+ * @param {{ bundleVersion?: string }} [options]
+ * @returns {boolean}
+ */
+export function applyPierDevAppIcon(worktreeRoot, targetApp, options = {}) {
+  const masterSvg = path.join(worktreeRoot, "build", "app-icon-master.svg");
+  const microSvg = path.join(worktreeRoot, "build", "app-icon-micro.svg");
+  if (!(existsSync(masterSvg) && existsSync(microSvg))) {
+    return false;
+  }
+  const resources = path.join(targetApp, "Contents", "Resources");
+  mkdirSync(resources, { recursive: true });
+  const built = buildPlatedFillAppIcons(masterSvg, microSvg, resources);
+  if (!built) {
+    return false;
+  }
+  const leftover = path.join(resources, "pier.icns");
+  if (existsSync(leftover)) {
+    rmSync(leftover);
+  }
+  const plist = path.join(targetApp, "Contents", "Info.plist");
+  if (existsSync(plist)) {
+    /** @type {Record<string, string>} */
+    const entries = {
+      CFBundleIconFile: MAC_DEV_APP_ICON_NAME,
+      CFBundleIconName: MAC_DEV_APP_ICON_NAME,
+    };
+    if (options.bundleVersion) {
+      entries.CFBundleVersion = options.bundleVersion;
+    }
+    upsertPlistStrings(plist, entries);
+  }
+  return true;
+}
+
+function plateFillViewBox() {
+  const origin =
+    MAC_ICON_CANVAS / 2 +
+    (MAC_ICON_PLATE_INSET - MAC_ICON_CANVAS / 2) * MAC_ICON_OPTICAL_SCALE;
+  const size = MAC_ICON_PLATE_SIZE * MAC_ICON_OPTICAL_SCALE;
+  return { origin, size };
+}
+
+function platedFillSvg(source) {
+  const { origin, size } = plateFillViewBox();
+  const viewBox = `${origin} ${origin} ${size} ${size}`;
+  const backdrop = `<rect x="${origin}" y="${origin}" width="${size}" height="${size}" fill="${MAC_ICON_PLATE_FILL}"/>`;
+  return source
+    .replace(/viewBox="0 0 1024 1024"/, `viewBox="${viewBox}"`)
+    .replace(/(<svg[^>]*>)/, `$1${backdrop}`);
+}
+
+function rasterizePlatedFillIconset(masterSvg, microSvg, iconsetDir) {
+  mkdirSync(iconsetDir, { recursive: true });
+  const svgRoot = mkdtempSync(path.join(tmpdir(), "pier-plated-fill-"));
+  try {
+    const masterFile = path.join(svgRoot, "master.svg");
+    const microFile = path.join(svgRoot, "micro.svg");
+    writeFileSync(masterFile, platedFillSvg(readFileSync(masterSvg, "utf8")));
+    writeFileSync(microFile, platedFillSvg(readFileSync(microSvg, "utf8")));
+    for (const [file, px, kind] of MAC_DEV_ICON_SLOTS) {
+      const source = kind === "micro" ? microFile : masterFile;
+      const result = spawnSync(
+        "rsvg-convert",
+        [
+          "-w",
+          String(px),
+          "-h",
+          String(px),
+          "-o",
+          path.join(iconsetDir, file),
+          source,
+        ],
+        { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+      );
+      if (spawnFailed(result) || !existsSync(path.join(iconsetDir, file))) {
+        logDevIconToolFailure("rsvg-convert", ["-w", String(px)], result);
+        return false;
+      }
+    }
+    return true;
+  } finally {
+    rmSync(svgRoot, { force: true, recursive: true });
+  }
+}
+
+function buildPlatedFillAppIcons(masterSvg, microSvg, resources) {
+  if (process.platform !== "darwin") {
+    copyFileSync(masterSvg, path.join(resources, "app-icon-master.svg"));
+    copyFileSync(microSvg, path.join(resources, "app-icon-micro.svg"));
+    return true;
+  }
+  const root = mkdtempSync(path.join(tmpdir(), "pier-appicon-"));
+  try {
+    const iconset = path.join(root, "AppIcon.iconset");
+    if (!rasterizePlatedFillIconset(masterSvg, microSvg, iconset)) {
+      return false;
+    }
+    const icnsOut = path.join(root, MAC_DEV_APP_ICON_FILE);
+    const icns = spawnSync("iconutil", ["-c", "icns", iconset, "-o", icnsOut], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (spawnFailed(icns) || !existsSync(icnsOut)) {
+      logDevIconToolFailure("iconutil", ["-c", "icns"], icns);
+      return false;
+    }
+    copyFileSync(icnsOut, path.join(resources, MAC_DEV_APP_ICON_FILE));
+    copyFileSync(icnsOut, path.join(resources, MAC_DEV_ELECTRON_ICON_FILE));
+    return installTahoeAppIconCatalogFromIconset(iconset, resources);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+}
+
+function installTahoeAppIconCatalogFromIconset(iconset, resources) {
+  const root = mkdtempSync(path.join(tmpdir(), "pier-appicon-car-"));
+  try {
+    const catalog = path.join(root, "AppIcon.xcassets");
+    const appiconset = path.join(catalog, "AppIcon.appiconset");
+    const out = path.join(root, "out");
+    mkdirSync(appiconset, { recursive: true });
+    mkdirSync(out, { recursive: true });
+    const images = [];
+    for (const [file, size, scale] of MAC_APP_ICON_SLOTS) {
+      const from = path.join(iconset, file);
+      if (!existsSync(from)) {
+        continue;
+      }
+      copyFileSync(from, path.join(appiconset, file));
+      images.push({ filename: file, idiom: "mac", scale, size });
+    }
+    writeFileSync(
+      path.join(appiconset, "Contents.json"),
+      `${JSON.stringify({ images, info: { author: "xcode", version: 1 } })}\n`
+    );
+    const compiled = spawnSync(
+      "xcrun",
+      [
+        "actool",
+        catalog,
+        "--compile",
+        out,
+        "--app-icon",
+        MAC_DEV_APP_ICON_NAME,
+        "--platform",
+        "macosx",
+        "--minimum-deployment-target",
+        "12.0",
+        "--output-partial-info-plist",
+        path.join(root, "partial.plist"),
+        "--enable-on-demand-resources",
+        "NO",
+        "--development-region",
+        "en",
+        "--target-device",
+        "mac",
+        "--include-all-app-icons",
+        "--product-type",
+        "com.apple.product-type.application",
+      ],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+    const assetsCar = path.join(out, "Assets.car");
+    if (spawnFailed(compiled) || !existsSync(assetsCar)) {
+      logDevIconToolFailure("xcrun", ["actool"], compiled);
+      return false;
+    }
+    copyFileSync(assetsCar, path.join(resources, "Assets.car"));
+    // Keep the iconutil icns (all slots). actool's AppIcon.icns is a small
+    // compatibility subset and would drop 256/512 frames.
+    return true;
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+}
+
+function upsertPlistStrings(plistFile, entries) {
+  for (const [key, value] of Object.entries(entries)) {
+    const replaced = spawnSync(
+      "plutil",
+      ["-replace", key, "-string", value, plistFile],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+    );
+    if (replaced.status === 0) {
+      continue;
+    }
+    runChecked("plutil", ["-insert", key, "-string", value, plistFile]);
+  }
+}
+
+/**
+ * Activity Monitor lists Helper processes as their own apps. Dev copies keep
+ * `Electron Helper` + `com.github.Electron.helper`, so those rows keep the
+ * stock Electron atom. Match the packaged app: rename + give them Pier icons.
+ *
+ * @param {string} targetApp
+ * @returns {boolean}
+ */
+export function brandPierDevHelpers(targetApp) {
+  const frameworks = path.join(targetApp, "Contents", "Frameworks");
+  if (!existsSync(frameworks)) {
+    return false;
+  }
+  const iconSource = path.join(
+    targetApp,
+    "Contents",
+    "Resources",
+    MAC_DEV_APP_ICON_FILE
+  );
+  const assetsCar = path.join(targetApp, "Contents", "Resources", "Assets.car");
+  let branded = false;
+  for (const { id, suffix } of MAC_DEV_HELPER_VARIANTS) {
+    const oldName = `Electron Helper${suffix}`;
+    const newName = `${MAC_DEV_ELECTRON_APP_NAME} Helper${suffix}`;
+    const stockApp = path.join(frameworks, `${oldName}.app`);
+    const brandedApp = path.join(frameworks, `${newName}.app`);
+    let helperApp = null;
+    if (existsSync(stockApp)) {
+      helperApp = stockApp;
+    } else if (existsSync(brandedApp)) {
+      helperApp = brandedApp;
+    }
+    if (!helperApp) {
+      continue;
+    }
+    const stockExec = path.join(helperApp, "Contents", "MacOS", oldName);
+    const brandedExec = path.join(helperApp, "Contents", "MacOS", newName);
+    if (existsSync(stockExec) && stockExec !== brandedExec) {
+      renameSync(stockExec, brandedExec);
+    }
+    const helperResources = path.join(helperApp, "Contents", "Resources");
+    mkdirSync(helperResources, { recursive: true });
+    if (existsSync(iconSource)) {
+      copyFileSync(
+        iconSource,
+        path.join(helperResources, MAC_DEV_APP_ICON_FILE)
+      );
+    }
+    if (existsSync(assetsCar)) {
+      copyFileSync(assetsCar, path.join(helperResources, "Assets.car"));
+    }
+    upsertPlistStrings(path.join(helperApp, "Contents", "Info.plist"), {
+      CFBundleDisplayName: newName,
+      CFBundleExecutable: newName,
+      CFBundleIconFile: MAC_DEV_APP_ICON_NAME,
+      CFBundleIconName: MAC_DEV_APP_ICON_NAME,
+      CFBundleIdentifier: `io.pier.dev-electron.${id}`,
+      CFBundleName: newName,
+    });
+    if (helperApp !== brandedApp) {
+      renameSync(helperApp, brandedApp);
+    }
+    branded = true;
+  }
+  return branded;
+}
+
+function registerDevAppWithLaunchServices(targetApp) {
+  if (!existsSync(LSREGISTER)) {
+    return;
+  }
+  spawnSync(LSREGISTER, ["-u", targetApp], { stdio: "ignore" });
+  spawnSync(LSREGISTER, ["-f", targetApp], { stdio: "ignore" });
+}
 
 /**
  * @typedef {object} DevProfile
@@ -950,11 +1331,21 @@ function prepareMacDevElectronRuntime(profile, env) {
   );
   const stampFile = path.join(targetRoot, "runtime.json");
   const stamp = readJson(stampFile);
+  const iconHash = [
+    hashFileIfExists(
+      path.join(profile.worktreeRoot, "build", "app-icon-master.svg")
+    ),
+    hashFileIfExists(
+      path.join(profile.worktreeRoot, "build", "app-icon-micro.svg")
+    ),
+  ].join(":");
   const isCurrent =
     existsSync(targetExec) &&
-    stamp?.sourceApp === sourceApp &&
-    stamp?.sourceVersion === sourceVersion &&
-    stamp?.appName === MAC_DEV_ELECTRON_APP_NAME;
+    macDevElectronRuntimeIsCurrent(stamp, {
+      iconHash,
+      sourceApp,
+      sourceVersion,
+    });
 
   if (!isCurrent) {
     rmSync(targetRoot, { force: true, recursive: true });
@@ -970,12 +1361,28 @@ function prepareMacDevElectronRuntime(profile, env) {
       CFBundleIdentifier: "io.pier.dev-electron",
       CFBundleName: MAC_DEV_ELECTRON_APP_NAME,
     });
-    runChecked("codesign", ["--force", "--deep", "--sign", "-", targetApp]);
-    writeJson(stampFile, {
-      appName: MAC_DEV_ELECTRON_APP_NAME,
-      sourceApp,
-      sourceVersion,
+    const iconApplied = applyPierDevAppIcon(profile.worktreeRoot, targetApp, {
+      bundleVersion: `${sourceVersion}.${MAC_DEV_ELECTRON_ICON_REVISION}`,
     });
+    if (!iconApplied) {
+      console.error(
+        "[dev-profile] PierDev app icon branding failed; next launch will retry"
+      );
+    }
+    brandPierDevHelpers(targetApp);
+    runChecked("codesign", ["--force", "--deep", "--sign", "-", targetApp]);
+    registerDevAppWithLaunchServices(targetApp);
+    if (iconApplied) {
+      writeJson(
+        stampFile,
+        macDevElectronRuntimeStamp({
+          iconApplied: true,
+          iconHash,
+          sourceApp,
+          sourceVersion,
+        })
+      );
+    }
   }
 
   return targetExec;

@@ -193,7 +193,7 @@ final class TerminalSurfaceCoordinator {
             newSurface.setCursorSuppress(true)
         }
         // Raw output tap (Pier patch 0107): reapply across surface rebuilds
-        // so the transcript stream survives config-driven reconstruction.
+        // if a caller installed one. Pier host currently does not.
         if let outputTap {
             newSurface.setOutputTap(outputTap.callback, userdata: outputTap.userdata)
         }
@@ -385,13 +385,14 @@ final class TerminalSurfaceCoordinator {
     }
 
     /// Live scrollback limit (Pier patch 0108)。即时生效；surface 重建后由
-    /// 窗口级创建配置接管（压力收缩由宿主在下个周期重新应用）。
+    /// 窗口级创建配置接管。不用于隐藏面板收缩。
     func setScrollbackLimit(_ bytes: UInt64) {
         surface?.setScrollbackLimit(bytes)
     }
 
     /// Raw PTY output tap (Pier patch 0107)。缓存到 coordinator，surface
     /// 重建时重放；传 nil 清除（surface free 也会自行摘 tap）。
+    /// Pier 宿主当前不安装 tap。
     func setOutputTap(
         _ callback: ghostty_surface_output_tap_cb?,
         userdata: UnsafeMutableRawPointer?

@@ -14,6 +14,7 @@ export interface LanguageMatrixLspSpec {
   /** When omitted, uses the row's editor extensions. */
   readonly extensions?: readonly string[];
   readonly id: string;
+  readonly injectTypescriptSdk?: boolean;
   readonly installCommand?: string;
   readonly languageIdByExtension?: Readonly<Record<string, string>>;
   readonly languageIds: readonly string[];

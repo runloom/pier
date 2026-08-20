@@ -79,9 +79,10 @@ describe("bundled system skills", () => {
     );
   });
 
-  it("keeps project library projections out of git (single source = resources)", async () => {
-    // System skills publish into `.pier/skills/library/pier-*` at runtime;
-    // that tree must not be a second committed source of truth.
+  it("does not treat project library as a bundled source (home cache is live)", async () => {
+    // Reconcile installs `{userData}/skills/.system` and must not create
+    // `.pier/skills/library/pier-*` (covered in system-skills.test.ts).
+    // Leftover library trees from older Pier builds stay untracked.
     const librarySkillMd = join(
       ".pier",
       "skills",

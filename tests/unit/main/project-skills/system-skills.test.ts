@@ -1,26 +1,48 @@
+import { execFile } from "node:child_process";
 import {
   lstat,
   mkdir,
   mkdtemp,
   readFile,
   readlink,
+  realpath,
   rm,
   symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
+import { createProjectSkillsFileSystemAdapter } from "@main/services/project-skills/fs-adapter.ts";
 import { resolveStableProjectIdentity } from "@main/services/project-skills/identity.ts";
+import { isPathInside } from "@main/services/project-skills/import/fs.ts";
 import { createProjectSkillsPaths } from "@main/services/project-skills/paths.ts";
 import { systemProjectionIssueIds } from "@main/services/project-skills/snapshot-builder.ts";
 import { createProjectSkillsStore } from "@main/services/project-skills/store/index.ts";
+import {
+  installSystemSkillCache,
+  systemSkillCacheMarkerPath,
+  systemSkillsCacheRoot,
+} from "@main/services/project-skills/system-skills/cache.ts";
 import { publishSystemSkillContent } from "@main/services/project-skills/system-skills/content.ts";
+import {
+  mergeSystemSkillExtraRootEnv,
+  systemSkillExtraRootEnvPatch,
+} from "@main/services/project-skills/system-skills/extra-root.ts";
+import {
+  ensureSystemSkillGitExclude,
+  SYSTEM_SKILL_GIT_EXCLUDE_BEGIN,
+} from "@main/services/project-skills/system-skills/git-exclude.ts";
 import {
   assertSystemSkillContribution,
   createSystemSkillsChannel,
   SYSTEM_SKILL_PROJECTION_ROOTS,
 } from "@main/services/project-skills/system-skills/index.ts";
+import { resolveSystemSkillSourceDir } from "@main/services/project-skills/system-skills/source.ts";
+import { computeTreeSha256V1 } from "@main/services/project-skills/tree-digest.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+const execFileAsync = promisify(execFile);
 
 let userData: string;
 let projectRoot: string;
@@ -116,7 +138,7 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     expect(devChannel.list()).toHaveLength(1);
   });
 
-  it("views expose contribution metadata before project library publish", async () => {
+  it("views expose contribution metadata before home-cache publish", async () => {
     const channel = createSystemSkillsChannel({
       userData,
       isProduction: false,
@@ -139,7 +161,7 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     ]);
   });
 
-  it("reconcile publishes library snapshot, digest, projection and ownership", async () => {
+  it("reconcile publishes home cache, digest, projection and ownership", async () => {
     const store = createProjectSkillsStore({ userData });
     const channel = createSystemSkillsChannel({
       userData,
@@ -157,16 +179,12 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     });
     expect(result.published).toEqual(["pier-canvas"]);
 
-    // Library snapshot in the project.
-    const libraryDir = join(
-      projectRoot,
-      ".pier",
-      "skills",
-      "library",
-      "pier-canvas"
-    );
-    const skillMd = await readFile(join(libraryDir, "SKILL.md"), "utf8");
+    const cacheDir = join(userData, "skills", ".system", "pier-canvas");
+    const skillMd = await readFile(join(cacheDir, "SKILL.md"), "utf8");
     expect(skillMd).toContain("pier-canvas");
+    await expect(
+      lstat(join(projectRoot, ".pier", "skills", "library", "pier-canvas"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
 
     const desired = JSON.parse(
       await readFile(
@@ -177,20 +195,21 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
       publishedContentDigestsBySkillId: Record<string, string[]>;
     };
     expect(desired.publishedContentDigestsBySkillId["pier-canvas"]).toEqual([
-      expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+      await computeTreeSha256V1(cacheDir),
     ]);
 
-    // Dual-root projection + ownership (agents + claude) for Claude L1/TUI.
+    const expected = result.desiredProjections[0]?.expectedRelativeLinkTarget;
+    expect(expected).toBe(cacheDir);
     const agentsLink = join(projectRoot, ".agents", "skills", "pier-canvas");
     const claudeLink = join(projectRoot, ".claude", "skills", "pier-canvas");
     expect((await lstat(agentsLink)).isSymbolicLink()).toBe(true);
     expect((await lstat(claudeLink)).isSymbolicLink()).toBe(true);
-    expect(await readlink(agentsLink)).toBe(
-      "../../.pier/skills/library/pier-canvas"
-    );
-    expect(await readlink(claudeLink)).toBe(
-      "../../.pier/skills/library/pier-canvas"
-    );
+    expect(await readlink(agentsLink)).toBe(expected);
+    expect(await readlink(claudeLink)).toBe(expected);
+    const userDataReal = await realpath(userData);
+    expect(await realpath(agentsLink)).toBe(await realpath(cacheDir));
+    expect(await realpath(claudeLink)).toBe(await realpath(cacheDir));
+    expect(isPathInside(userDataReal, await realpath(agentsLink))).toBe(true);
     expect(
       result.desiredProjections.map((p) => p.relativeTarget).sort()
     ).toEqual(
@@ -233,14 +252,8 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
       provider: { id: "pier.canvas", version: "1.1.0" },
     });
     await channel.reconcile({ projectIdentity: identity, rootKey });
-    const libraryDir = join(
-      projectRoot,
-      ".pier",
-      "skills",
-      "library",
-      "pier-canvas"
-    );
-    const updated = await readFile(join(libraryDir, "SKILL.md"), "utf8");
+    const cacheDir = join(userData, "skills", ".system", "pier-canvas");
+    const updated = await readFile(join(cacheDir, "SKILL.md"), "utf8");
     expect(updated).toContain("Updated canvas capability");
 
     const desired = JSON.parse(
@@ -256,7 +269,7 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     ).toHaveLength(2);
   });
 
-  it("quarantines externally modified content on version refresh instead of destroying it (v8.2 §9)", async () => {
+  it("deletes leftover project library copies whose digest Pier already published", async () => {
     const store = createProjectSkillsStore({ userData });
     const channel = createSystemSkillsChannel({
       userData,
@@ -267,9 +280,7 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     const identity = await resolveStableProjectIdentity(projectRoot);
     const paths = createProjectSkillsPaths(userData);
     const rootKey = paths.rootKeyFor(identity);
-    await channel.reconcile({ projectIdentity: identity, rootKey });
 
-    // External tamper: user (or something else) edits the published copy.
     const libraryDir = join(
       projectRoot,
       ".pier",
@@ -277,29 +288,64 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
       "library",
       "pier-canvas"
     );
+    await mkdir(libraryDir, { recursive: true });
+    await writeFile(
+      join(libraryDir, "SKILL.md"),
+      await readFile(join(contentDir, "SKILL.md"), "utf8"),
+      "utf8"
+    );
+
+    await channel.reconcile({ projectIdentity: identity, rootKey });
+
+    await expect(lstat(libraryDir)).rejects.toMatchObject({ code: "ENOENT" });
+    const { readdir } = await import("node:fs/promises");
+    const parent = join(projectRoot, ".pier", "skills", "library");
+    const entries = await readdir(parent);
+    expect(
+      entries.some((entry) =>
+        entry.startsWith(".pier-system-skill-quarantine-")
+      )
+    ).toBe(false);
+  });
+
+  it("quarantines leftover project library copies that were modified outside Pier", async () => {
+    const store = createProjectSkillsStore({ userData });
+    const channel = createSystemSkillsChannel({
+      userData,
+      store,
+      isProduction: false,
+      contributions: [contribution()],
+    });
+    const identity = await resolveStableProjectIdentity(projectRoot);
+    const paths = createProjectSkillsPaths(userData);
+    const rootKey = paths.rootKeyFor(identity);
+
+    const libraryDir = join(
+      projectRoot,
+      ".pier",
+      "skills",
+      "library",
+      "pier-canvas"
+    );
+    await mkdir(libraryDir, { recursive: true });
+    await writeFile(
+      join(libraryDir, "SKILL.md"),
+      "---\nname: pier-canvas\ndescription: Use the Pier canvas\n---\nBody\n",
+      "utf8"
+    );
     await writeFile(
       join(libraryDir, "NOTES.md"),
       "user modifications worth keeping\n",
       "utf8"
     );
 
-    // Version upgrade triggers the swap.
-    await writeFile(
-      join(contentDir, "SKILL.md"),
-      "---\nname: pier-canvas\ndescription: v2\n---\nBody v2\n",
-      "utf8"
-    );
-    channel.register({
-      ...contribution(),
-      provider: { id: "pier.canvas", version: "2.0.0" },
-    });
     await channel.reconcile({ projectIdentity: identity, rootKey });
 
-    // New content published…
-    expect(await readFile(join(libraryDir, "SKILL.md"), "utf8")).toContain(
-      "v2"
+    const cacheDir = join(userData, "skills", ".system", "pier-canvas");
+    expect(await readFile(join(cacheDir, "SKILL.md"), "utf8")).toContain(
+      "pier-canvas"
     );
-    // …and the tampered snapshot is preserved in a quarantine dir.
+    await expect(lstat(libraryDir)).rejects.toMatchObject({ code: "ENOENT" });
     const { readdir } = await import("node:fs/promises");
     const parent = join(projectRoot, ".pier", "skills", "library");
     const entries = await readdir(parent);
@@ -314,7 +360,7 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     }
   });
 
-  it("updates the library to the latest official snapshot and does not keep a duplicate quarantine", async () => {
+  it("sweeps leftover official quarantines when retiring the project library", async () => {
     const store = createProjectSkillsStore({ userData });
     const channel = createSystemSkillsChannel({
       userData,
@@ -345,10 +391,11 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     );
 
     await channel.reconcile({ projectIdentity: identity, rootKey });
-    const libraryDir = join(parent, "pier-canvas");
-    expect(await readFile(join(libraryDir, "SKILL.md"), "utf8")).toContain(
-      "v2"
-    );
+    const cacheDir = join(userData, "skills", ".system", "pier-canvas");
+    expect(await readFile(join(cacheDir, "SKILL.md"), "utf8")).toContain("v2");
+    await expect(lstat(join(parent, "pier-canvas"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
     const { readdir } = await import("node:fs/promises");
     const leftoverNow = (await readdir(parent)).filter((entry) =>
       entry.startsWith(".pier-system-skill-quarantine-")
@@ -356,7 +403,7 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     expect(leftoverNow).toEqual([]);
   });
 
-  it("publishes project resources/system-skills into library/pier-* not a quarantine path", async () => {
+  it("does not let an untrusted project vendor overwrite the home cache", async () => {
     const store = createProjectSkillsStore({ userData });
     const channel = createSystemSkillsChannel({
       userData,
@@ -382,16 +429,110 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
     );
 
     await channel.reconcile({ projectIdentity: identity, rootKey });
-    const parent = join(projectRoot, ".pier", "skills", "library");
-    const libraryDir = join(parent, "pier-canvas");
-    expect(await readFile(join(libraryDir, "SKILL.md"), "utf8")).toContain(
+    const cacheDir = join(userData, "skills", ".system", "pier-canvas");
+    expect(await readFile(join(cacheDir, "SKILL.md"), "utf8")).toContain(
+      "Body"
+    );
+    expect(await readFile(join(cacheDir, "SKILL.md"), "utf8")).not.toContain(
       "From project resources"
     );
-    const { readdir } = await import("node:fs/promises");
-    const leftover = (await readdir(parent)).filter((entry) =>
-      entry.startsWith(".pier-system-skill-")
+    await expect(
+      lstat(join(projectRoot, ".pier", "skills", "library", "pier-canvas"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("dogfoods in-repo resources when the registered contentDir is already in the project", async () => {
+    const bundledDir = join(
+      projectRoot,
+      "out",
+      "resources",
+      "system-skills",
+      "pier-canvas"
     );
-    expect(leftover).toEqual([]);
+    await mkdir(bundledDir, { recursive: true });
+    await writeFile(
+      join(bundledDir, "SKILL.md"),
+      "---\nname: pier-canvas\ndescription: bundled\n---\nFrom bundle\n",
+      "utf8"
+    );
+    const projectSkillDir = join(
+      projectRoot,
+      "resources",
+      "system-skills",
+      "pier-canvas"
+    );
+    await mkdir(projectSkillDir, { recursive: true });
+    await writeFile(
+      join(projectSkillDir, "SKILL.md"),
+      "---\nname: pier-canvas\ndescription: repo source\n---\nFrom project resources\n",
+      "utf8"
+    );
+
+    const store = createProjectSkillsStore({ userData });
+    const channel = createSystemSkillsChannel({
+      userData,
+      store,
+      isProduction: false,
+      contributions: [contribution({ contentDir: bundledDir })],
+    });
+    const identity = await resolveStableProjectIdentity(projectRoot);
+    const paths = createProjectSkillsPaths(userData);
+    const rootKey = paths.rootKeyFor(identity);
+    await channel.reconcile({ projectIdentity: identity, rootKey });
+    const cacheDir = join(userData, "skills", ".system", "pier-canvas");
+    expect(await readFile(join(cacheDir, "SKILL.md"), "utf8")).toContain(
+      "From project resources"
+    );
+    await expect(
+      lstat(join(projectRoot, ".pier", "skills", "library", "pier-canvas"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("production installs only the registered contentDir even when the project vendors the skill", async () => {
+    const bundledDir = join(
+      projectRoot,
+      "out",
+      "resources",
+      "system-skills",
+      "pier-canvas"
+    );
+    await mkdir(bundledDir, { recursive: true });
+    await writeFile(
+      join(bundledDir, "SKILL.md"),
+      "---\nname: pier-canvas\ndescription: bundled\n---\nFrom bundle\n",
+      "utf8"
+    );
+    const projectSkillDir = join(
+      projectRoot,
+      "resources",
+      "system-skills",
+      "pier-canvas"
+    );
+    await mkdir(projectSkillDir, { recursive: true });
+    await writeFile(
+      join(projectSkillDir, "SKILL.md"),
+      "---\nname: pier-canvas\ndescription: repo source\n---\nFrom project resources\n",
+      "utf8"
+    );
+
+    const store = createProjectSkillsStore({ userData });
+    const channel = createSystemSkillsChannel({
+      userData,
+      store,
+      isProduction: true,
+      contributions: [contribution({ contentDir: bundledDir })],
+    });
+    const identity = await resolveStableProjectIdentity(projectRoot);
+    const paths = createProjectSkillsPaths(userData);
+    const rootKey = paths.rootKeyFor(identity);
+    await channel.reconcile({ projectIdentity: identity, rootKey });
+    const cacheDir = join(userData, "skills", ".system", "pier-canvas");
+    expect(await readFile(join(cacheDir, "SKILL.md"), "utf8")).toContain(
+      "From bundle"
+    );
+    expect(await readFile(join(cacheDir, "SKILL.md"), "utf8")).not.toContain(
+      "From project resources"
+    );
   });
 
   it("bindings publish contribution.contentDir even when project vendors the same id", async () => {
@@ -453,21 +594,13 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
       "utf8"
     );
     await channel.reconcile({ projectIdentity: identity, rootKey });
-    const libraryDir = join(
-      projectRoot,
-      ".pier",
-      "skills",
-      "library",
-      "pier-canvas"
-    );
-    expect(await readFile(join(libraryDir, "SKILL.md"), "utf8")).toContain(
+    const cacheDir = join(userData, "skills", ".system", "pier-canvas");
+    expect(await readFile(join(cacheDir, "SKILL.md"), "utf8")).toContain(
       "---\nname: pier-canvas\ndescription: Use the Pier canvas\n---\nBody\n"
     );
-    const { readdir } = await import("node:fs/promises");
-    const leftover = (
-      await readdir(join(projectRoot, ".pier", "skills", "library"))
-    ).filter((entry) => entry.startsWith(".pier-system-skill-quarantine-"));
-    expect(leftover).toEqual([]);
+    await expect(
+      lstat(join(projectRoot, ".pier", "skills", "library", "pier-canvas"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("never replaces an unmanaged target at the projection path (red line 2)", async () => {
@@ -515,7 +648,7 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
         projectIdentity: identity,
         rootKey,
       });
-      // Library may still publish under .pier; projection must not land in escapeRoot.
+      // Home cache may still install; projection must not land in escapeRoot.
       const escaped = join(escapeRoot, "skills", "pier-canvas");
       await expect(lstat(escaped)).rejects.toMatchObject({ code: "ENOENT" });
       expect(
@@ -523,6 +656,329 @@ describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
           (p) => p.relativeTarget === ".agents/skills/pier-canvas"
         )
       ).toBe(true);
+    } finally {
+      await rm(escapeRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("replaces an owned legacy library-relative discovery link with the home cache", async () => {
+    const store = createProjectSkillsStore({ userData });
+    const channel = createSystemSkillsChannel({
+      userData,
+      store,
+      isProduction: false,
+      contributions: [contribution()],
+    });
+    const identity = await resolveStableProjectIdentity(projectRoot);
+    const paths = createProjectSkillsPaths(userData);
+    const rootKey = paths.rootKeyFor(identity);
+
+    const relativeTarget = ".agents/skills/pier-canvas";
+    const linkPath = join(projectRoot, ".agents", "skills", "pier-canvas");
+    await mkdir(join(projectRoot, ".agents", "skills"), { recursive: true });
+    await symlink("../../.pier/skills/library/pier-canvas", linkPath);
+    const live =
+      await createProjectSkillsFileSystemAdapter().lstatIdentity(linkPath);
+    await store.commitOwnership(rootKey, 0, {
+      schemaVersion: 1,
+      generation: 1,
+      projectIdentity: identity,
+      targets: [
+        {
+          relativePath: relativeTarget,
+          skillId: "pier-canvas",
+          expectedRelativeLinkTarget: "../../.pier/skills/library/pier-canvas",
+          objectIdentity: {
+            dev: live.dev,
+            ino: live.ino,
+            mode: live.mode,
+            nlink: live.nlink,
+            isDirectory: live.isDirectory,
+            isSymbolicLink: live.isSymbolicLink,
+          },
+          createdByOperationId: "legacy",
+          createdAt: Date.now(),
+        },
+      ],
+    });
+
+    const result = await channel.reconcile({
+      projectIdentity: identity,
+      rootKey,
+    });
+    const expected = result.desiredProjections.find(
+      (p) => p.relativeTarget === relativeTarget
+    )?.expectedRelativeLinkTarget;
+    expect(await readlink(linkPath)).toBe(expected);
+    expect(expected).toBe(join(userData, "skills", ".system", "pier-canvas"));
+  });
+
+  it("does not replace an unowned legacy library-relative discovery link", async () => {
+    const store = createProjectSkillsStore({ userData });
+    const channel = createSystemSkillsChannel({
+      userData,
+      store,
+      isProduction: false,
+      contributions: [contribution()],
+    });
+    const identity = await resolveStableProjectIdentity(projectRoot);
+    const paths = createProjectSkillsPaths(userData);
+    const rootKey = paths.rootKeyFor(identity);
+
+    const linkPath = join(projectRoot, ".agents", "skills", "pier-canvas");
+    await mkdir(join(projectRoot, ".agents", "skills"), { recursive: true });
+    await symlink("../../.pier/skills/library/pier-canvas", linkPath);
+
+    await channel.reconcile({ projectIdentity: identity, rootKey });
+    expect(await readlink(linkPath)).toBe(
+      "../../.pier/skills/library/pier-canvas"
+    );
+  });
+
+  it("skips rewriting the home cache when the fingerprint still matches", async () => {
+    const first = await installSystemSkillCache({
+      contribution: contribution(),
+      projectRoot,
+      userData,
+    });
+    await writeFile(join(first.cacheDir, "SENTINEL"), "keep\n", "utf8");
+    const markerBefore = await readFile(
+      systemSkillCacheMarkerPath(userData, "pier-canvas"),
+      "utf8"
+    );
+
+    const second = await installSystemSkillCache({
+      contribution: contribution(),
+      projectRoot,
+      userData,
+    });
+    expect(second.cacheDir).toBe(first.cacheDir);
+    expect(await readFile(join(second.cacheDir, "SENTINEL"), "utf8")).toBe(
+      "keep\n"
+    );
+    expect(
+      await readFile(
+        systemSkillCacheMarkerPath(userData, "pier-canvas"),
+        "utf8"
+      )
+    ).toBe(markerBefore);
+  });
+
+  it("writes local git exclude for product-skill discovery links", async () => {
+    await execFileAsync("git", ["init"], { cwd: projectRoot });
+    const store = createProjectSkillsStore({ userData });
+    const channel = createSystemSkillsChannel({
+      userData,
+      store,
+      isProduction: false,
+      contributions: [contribution()],
+    });
+    const identity = await resolveStableProjectIdentity(projectRoot);
+    const paths = createProjectSkillsPaths(userData);
+    const rootKey = paths.rootKeyFor(identity);
+    await channel.reconcile({ projectIdentity: identity, rootKey });
+    const { stdout } = await execFileAsync(
+      "git",
+      [
+        "-C",
+        projectRoot,
+        "check-ignore",
+        "-v",
+        "--",
+        ".agents/skills/pier-canvas",
+      ],
+      { cwd: projectRoot }
+    );
+    expect(stdout).toMatch(/pier-\*/);
+    await ensureSystemSkillGitExclude(projectRoot);
+    const { stdout: excludePath } = await execFileAsync(
+      "git",
+      ["-C", projectRoot, "rev-parse", "--git-path", "info/exclude"],
+      { cwd: projectRoot }
+    );
+    const raw = excludePath.trim();
+    const absolute = raw.startsWith("/") ? raw : join(projectRoot, raw);
+    const exclude = await readFile(absolute, "utf8");
+    expect(exclude).toContain(SYSTEM_SKILL_GIT_EXCLUDE_BEGIN);
+    const once = exclude.split(SYSTEM_SKILL_GIT_EXCLUDE_BEGIN).length - 1;
+    expect(once).toBe(1);
+  });
+
+  it("resolves git exclude through a worktree gitdir file", async () => {
+    await execFileAsync("git", ["init"], { cwd: projectRoot });
+    await execFileAsync(
+      "git",
+      [
+        "-C",
+        projectRoot,
+        "-c",
+        "user.email=a@b.c",
+        "-c",
+        "user.name=t",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "init",
+      ],
+      { cwd: projectRoot }
+    );
+    const worktree = await mkdtemp(join(tmpdir(), "pier-syschan-wt-"));
+    try {
+      await execFileAsync(
+        "git",
+        ["-C", projectRoot, "worktree", "add", "--detach", worktree],
+        { cwd: projectRoot }
+      );
+      await ensureSystemSkillGitExclude(worktree);
+      const { stdout } = await execFileAsync(
+        "git",
+        [
+          "-C",
+          worktree,
+          "check-ignore",
+          "-v",
+          "--",
+          ".agents/skills/pier-canvas",
+        ],
+        { cwd: worktree }
+      );
+      expect(stdout).toMatch(/pier-\*/);
+    } finally {
+      await execFileAsync("git", [
+        "-C",
+        projectRoot,
+        "worktree",
+        "remove",
+        "--force",
+        worktree,
+      ]).catch(() => undefined);
+      await rm(worktree, { force: true, recursive: true });
+    }
+  });
+
+  it("skips git exclude when the project is not a git repository", async () => {
+    await ensureSystemSkillGitExclude(projectRoot);
+    await expect(
+      lstat(join(projectRoot, ".git", "info", "exclude"))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+});
+
+describe("system skill extra-root seam", () => {
+  it("returns no env patch when the adapter has no extra-root", () => {
+    expect(
+      systemSkillExtraRootEnvPatch({
+        extraRoot: undefined,
+        systemSkillsRoot: "/tmp/skills/.system",
+      })
+    ).toEqual({});
+  });
+
+  it("emits the extra-root when an adapter declares one", () => {
+    expect(
+      systemSkillExtraRootEnvPatch({
+        extraRoot: { envKey: "PIER_SYSTEM_SKILLS" },
+        systemSkillsRoot: "/tmp/skills/.system",
+      })
+    ).toEqual({ PIER_SYSTEM_SKILLS: "/tmp/skills/.system" });
+  });
+
+  it("does not clobber an existing env key", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "pier-extra-root-"));
+    try {
+      const merged = mergeSystemSkillExtraRootEnv({
+        agentKind: "codex",
+        env: { PATH: "/usr/bin" },
+        userData,
+      });
+      expect(merged.PATH).toBe("/usr/bin");
+      expect(merged).toEqual({ PATH: "/usr/bin" });
+      expect(systemSkillsCacheRoot(userData)).toBe(
+        join(userData, "skills", ".system")
+      );
+    } finally {
+      await rm(userData, { force: true, recursive: true });
+    }
+  });
+});
+
+describe("system skill source gate", () => {
+  it("refuses a vendor directory that is a symlink out of the project", async () => {
+    const bundledDir = join(
+      projectRoot,
+      "out",
+      "resources",
+      "system-skills",
+      "pier-canvas"
+    );
+    await mkdir(bundledDir, { recursive: true });
+    await writeFile(
+      join(bundledDir, "SKILL.md"),
+      "---\nname: pier-canvas\ndescription: bundled\n---\nFrom bundle\n",
+      "utf8"
+    );
+    const escapeRoot = await mkdtemp(join(tmpdir(), "pier-syschan-vendor-"));
+    try {
+      await writeFile(
+        join(escapeRoot, "SKILL.md"),
+        "---\nname: pier-canvas\ndescription: escaped\n---\nEscaped\n",
+        "utf8"
+      );
+      await mkdir(join(projectRoot, "resources", "system-skills"), {
+        recursive: true,
+      });
+      await symlink(
+        escapeRoot,
+        join(projectRoot, "resources", "system-skills", "pier-canvas")
+      );
+      const resolved = await resolveSystemSkillSourceDir({
+        allowProjectVendorSource: true,
+        fallbackContentDir: bundledDir,
+        projectRoot,
+        skillId: "pier-canvas",
+      });
+      expect(resolved).toBe(bundledDir);
+    } finally {
+      await rm(escapeRoot, { force: true, recursive: true });
+    }
+  });
+
+  it("refuses a vendor tree whose realpath escapes via a parent symlink", async () => {
+    const bundledDir = join(
+      projectRoot,
+      "out",
+      "resources",
+      "system-skills",
+      "pier-canvas"
+    );
+    await mkdir(bundledDir, { recursive: true });
+    await writeFile(
+      join(bundledDir, "SKILL.md"),
+      "---\nname: pier-canvas\ndescription: bundled\n---\nFrom bundle\n",
+      "utf8"
+    );
+    const escapeRoot = await mkdtemp(join(tmpdir(), "pier-syschan-parent-"));
+    try {
+      await mkdir(join(escapeRoot, "system-skills", "pier-canvas"), {
+        recursive: true,
+      });
+      await writeFile(
+        join(escapeRoot, "system-skills", "pier-canvas", "SKILL.md"),
+        "---\nname: pier-canvas\ndescription: escaped\n---\nEscaped\n",
+        "utf8"
+      );
+      await rm(join(projectRoot, "resources"), {
+        force: true,
+        recursive: true,
+      });
+      await symlink(escapeRoot, join(projectRoot, "resources"));
+      const resolved = await resolveSystemSkillSourceDir({
+        allowProjectVendorSource: true,
+        fallbackContentDir: bundledDir,
+        projectRoot,
+        skillId: "pier-canvas",
+      });
+      expect(resolved).toBe(bundledDir);
     } finally {
       await rm(escapeRoot, { force: true, recursive: true });
     }

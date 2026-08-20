@@ -12,6 +12,7 @@ import {
   refreshHookProjectionWithLog,
   setHookScopeStatusWithLog,
 } from "./aggregator-tracing.ts";
+import { claimTurn, dropClaimedTurnsForScope } from "./claimed-turns.ts";
 import {
   type HookLayer,
   type HookScope,
@@ -31,6 +32,7 @@ import type {
   TurnBookkeepingResult,
   TurnTransition,
 } from "./turn-bookkeeping.ts";
+import { sealMatchingTurnPeers } from "./turn-peer-seal.ts";
 import type { AgentEventIngestOptions } from "./types.ts";
 
 function updateSubagentAssociationsAfterBookkeeping(
@@ -159,13 +161,16 @@ export function createHookScopeCoordinator({
     scopeKey: string,
     agent: AgentHookEventPayload["agent"]
   ): boolean {
-    const cooldownKey = scopeCooldownKey(key, scopeKey);
-    hookScopeCooldownUntil.set(cooldownKey, now() + SESSION_END_COOLDOWN_MS);
     const hook = slots.get(key)?.hook ?? null;
     if (!hook?.scopes.has(scopeKey)) {
       return false;
     }
+    hookScopeCooldownUntil.set(
+      scopeCooldownKey(key, scopeKey),
+      now() + SESSION_END_COOLDOWN_MS
+    );
     retireSubagentWorksForScope(hook, scopeKey);
+    dropClaimedTurnsForScope(hook, scopeKey);
     hook.scopes.delete(scopeKey);
     if (hook.scopes.size === 0) {
       endHookSession(key);
@@ -250,6 +255,7 @@ export function createHookScopeCoordinator({
         retireSubagentWorksForScope(hook, scopeKey);
       }
       hook.scopes.clear();
+      hook.claimedTurns.clear();
     }
     return false;
   }
@@ -346,6 +352,9 @@ export function createHookScopeCoordinator({
         semantics.category === "session-start"
           ? facts
           : { ...scope.identity, ...facts };
+      if (semantics.resetEvidence === "explicit-prompt") {
+        claimTurn(hook, event.turnId, identity.key);
+      }
     }
     if (SUBAGENT_HOOK_EVENTS.has(event.event)) {
       // 子智能体生命周期只拥有计数与时间事实。即使父 scope 已无可信状态
@@ -354,6 +363,15 @@ export function createHookScopeCoordinator({
       scope.updatedAt = at;
       refreshHookProjectionWithLog(key, hook, at, event.agent);
       return;
+    }
+    if (result.transition === "terminal-trusted") {
+      sealMatchingTurnPeers({
+        at,
+        event,
+        hook,
+        originScope: scope,
+        semantics,
+      });
     }
     const previousStatus = hook.status;
     setHookScopeStatusWithLog(key, hook, scope, status, at, event.agent);

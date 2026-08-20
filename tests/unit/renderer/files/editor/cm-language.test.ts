@@ -14,32 +14,9 @@ function isLanguageExtension(value: unknown): boolean {
   return value instanceof LanguageSupport || value instanceof StreamLanguage;
 }
 
-const ALL_LANGUAGE_IDS = [
-  "canvas",
-  "cpp",
-  "csharp",
-  "css",
-  "go",
-  "html",
-  "java",
-  "javascript",
-  "json",
-  "kotlin",
-  "markdown",
-  "python",
-  "ruby",
-  "rust",
-  "shell",
-  "sql",
-  "svelte",
-  "svg",
-  "swift",
-  "toml",
-  "typescript",
-  "vue",
-  "xml",
-  "yaml",
-] as const satisfies readonly Exclude<BuiltinFilesDocumentLanguage, "text">[];
+const ALL_LANGUAGE_IDS = (
+  Object.keys(LANGUAGE_LABELS) as BuiltinFilesDocumentLanguage[]
+).filter((id) => id !== "text");
 
 describe("cmLanguageExtension", () => {
   it("returns a CodeMirror language extension for every supported language id", () => {
@@ -56,6 +33,13 @@ describe("cmLanguageExtension", () => {
     expect(cmLanguageExtension("text")).toBeNull();
   });
 
+  it("routes astro through the HTML self-closing highlighter", () => {
+    const astro = cmLanguageExtension("astro", "src/pages/404.astro");
+    const html = cmLanguageExtension("html", "public/index.html");
+    expect(astro).toBeInstanceOf(LanguageSupport);
+    expect(html).toBeInstanceOf(LanguageSupport);
+  });
+
   it("routes tsx / jsx to the JSX-enabled JavaScript parser via the file path hint", () => {
     // tsx / jsx 依 filePath 判断,与 cm-language 内 switch 分支保持一致。
     const tsx = cmLanguageExtension("typescript", "components/Button.tsx");
@@ -67,6 +51,17 @@ describe("cmLanguageExtension", () => {
     // 不同 filePath 应产生不同 extension instance(不同 flag 组合),保证
     // switch 里 typescript+jsx 与 typescript(纯) 不共享 memoized instance。
     expect(tsx).not.toBe(ts);
+  });
+
+  it("uses indented Sass stream mode for .sass and CSS for .less/.scss", () => {
+    const sass = cmLanguageExtension("css", "src/app/theme.sass");
+    const less = cmLanguageExtension("css", "src/app/theme.less");
+    const scss = cmLanguageExtension("css", "src/app/theme.scss");
+    const styl = cmLanguageExtension("css", "src/app/theme.styl");
+    expect(sass).toBeInstanceOf(StreamLanguage);
+    expect(styl).toBeInstanceOf(StreamLanguage);
+    expect(less).toBeInstanceOf(LanguageSupport);
+    expect(scss).toBeInstanceOf(LanguageSupport);
   });
 
   it("switches between clike C and lang-cpp based on the .c/.h extension", () => {
@@ -102,13 +97,9 @@ describe("cmLanguageExtension", () => {
 
 describe("LANGUAGE_LABELS", () => {
   it("provides a display label for every builtin language", () => {
-    const allLanguageIds = [
-      ...ALL_LANGUAGE_IDS,
-      "text",
-    ] satisfies readonly BuiltinFilesDocumentLanguage[];
-    for (const id of allLanguageIds) {
-      expect(LANGUAGE_LABELS[id]).toBeTypeOf("string");
-      expect(LANGUAGE_LABELS[id].length).toBeGreaterThan(0);
+    for (const [id, label] of Object.entries(LANGUAGE_LABELS)) {
+      expect(label, id).toBeTypeOf("string");
+      expect(label.length, id).toBeGreaterThan(0);
     }
   });
 });

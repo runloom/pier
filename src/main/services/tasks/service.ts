@@ -57,7 +57,6 @@ export function createTaskService({
   recentLimit,
   resolveProjectEnv,
   spawnBackgroundTask: spawnBackgroundTaskOption = spawnBackgroundTask,
-  transcripts,
   writeRecentState,
 }: CreateTaskServiceOptions = {}): TaskService {
   const runningByKey = new Map<string, RunningTaskInstance>();
@@ -179,7 +178,6 @@ export function createTaskService({
     ...(resolveProjectEnv ? { resolveProjectEnv } : {}),
     spawnBackgroundTask: spawnBackgroundTaskOption,
     startRun: (args) => taskRuns.start(args),
-    ...(transcripts ? { transcripts } : {}),
   });
   const stopRun = createTaskRunStopper({
     backgroundRuns,

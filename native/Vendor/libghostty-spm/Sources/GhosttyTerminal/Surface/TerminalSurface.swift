@@ -269,8 +269,8 @@ public final class TerminalSurface {
     }
 
     /// Live scrollback limit (Pier patch 0108): applies to the primary
-    /// screen immediately, freeing pages beyond the new limit. Used for
-    /// live preference changes and hidden-surface memory pressure.
+    /// screen immediately, freeing pages beyond the new limit. Used when
+    /// the user changes the scrollback preference on live surfaces.
     func setScrollbackLimit(_ bytes: UInt64) {
         guard let s = surface else { return }
         TerminalDebugLog.log(.lifecycle, "surface scrollbackLimit=\(bytes)")
@@ -282,6 +282,7 @@ public final class TerminalSurface {
     /// ghostty IO thread with the renderer lock held — copy and return.
     /// Pass nil to clear. `free()` clears any installed tap before the
     /// surface is released so the userdata can be safely disposed after.
+    /// Pier host currently does not install a tap (no disk transcripts).
     func setOutputTap(
         _ callback: ghostty_surface_output_tap_cb?,
         userdata: UnsafeMutableRawPointer?

@@ -11,6 +11,7 @@ import { absoluteDiskSourcePath, diskDocumentId } from "./paths.ts";
 
 /** Built-in Files editor languages (L0). Plugin / L1 modes use additional string ids. */
 export type BuiltinFilesDocumentLanguage =
+  | "astro"
   | "canvas"
   | "cpp"
   | "csharp"
@@ -19,6 +20,7 @@ export type BuiltinFilesDocumentLanguage =
   | "dockerfile"
   | "elixir"
   | "go"
+  | "graphql"
   | "html"
   | "java"
   | "javascript"
@@ -37,6 +39,7 @@ export type BuiltinFilesDocumentLanguage =
   | "svelte"
   | "svg"
   | "swift"
+  | "terraform"
   | "text"
   | "toml"
   | "typescript"

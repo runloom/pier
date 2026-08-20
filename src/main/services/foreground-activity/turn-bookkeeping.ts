@@ -136,6 +136,9 @@ function resetTurn(
   if (previousTurnId && previousTurnId !== eventTurnId) {
     settleNamedWork(scope.recentSettledTurnIds, previousTurnId);
   }
+  if (eventTurnId) {
+    reopenNamedWork(scope.recentSettledTurnIds, eventTurnId);
+  }
   scope.turnEnded = false;
   scope.turnEndedAt = undefined;
   scope.completionObserved = false;
@@ -226,7 +229,8 @@ export function applyTurnBookkeeping(
   if (
     eventTurnId &&
     scope.recentSettledTurnIds.has(eventTurnId) &&
-    !isTerminalCorrection
+    !isTerminalCorrection &&
+    semantics.resetEvidence !== "explicit-prompt"
   ) {
     return reject("settled-turn");
   }
@@ -261,6 +265,15 @@ export function applyTurnBookkeeping(
     scope.terminalEvidence = undefined;
     scope.turnEnded = false;
     scope.turnEndedAt = undefined;
+  }
+  if (
+    eventTurnId &&
+    !scope.currentTurnId &&
+    (semantics.category === "work" || semantics.category === "progress")
+  ) {
+    // 无 PromptSubmit 的工具会话也要挂上 turnId，否则同 generation 的对侧
+    // 终态无法把分裂 scope 关联起来（Cursor 工具 hook 常走另一 conversation）。
+    scope.currentTurnId = eventTurnId;
   }
   if (semantics.category === "terminal-trusted") {
     const settledTurnId = eventTurnId ?? scope.currentTurnId;

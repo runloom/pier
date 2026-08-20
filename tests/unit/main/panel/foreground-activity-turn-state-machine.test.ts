@@ -122,6 +122,22 @@ describe("前台活动回合状态机", () => {
     aggregator.dispose();
   });
 
+  it("新 PromptSubmit 可重开已结算 turnId，后续中断计入新回合", () => {
+    const aggregator = createForegroundActivityAggregator();
+    ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));
+    ingest(aggregator, event("TurnCompleted", { turnId: "turn-1" }));
+
+    expect(
+      ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }))
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("processing");
+    expect(
+      ingest(aggregator, event("TurnInterrupted", { turnId: "turn-1" }))
+    ).toBe(true);
+    expect(statusOf(aggregator)).toBe("ready");
+    aggregator.dispose();
+  });
+
   it("新的 turnId 可关联重开，已结算 turnId 不可复活", () => {
     const aggregator = createForegroundActivityAggregator();
     ingest(aggregator, event("PromptSubmit", { turnId: "turn-1" }));

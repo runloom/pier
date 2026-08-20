@@ -80,6 +80,12 @@ describe("project-skills discovery adapters", { timeout: 30_000 }, () => {
     expect(registered.size + intentionalNonSupport.size).toBe(allKinds.length);
   });
 
+  it("v1 adapters do not declare a systemSkillExtraRoot (discovery symlink is delivery)", () => {
+    for (const adapter of SKILL_DISCOVERY_ADAPTERS) {
+      expect(adapter.systemSkillExtraRoot).toBeUndefined();
+    }
+  });
+
   it("every adapter entry carries evidence (officialDocsUrl + verifiedOn)", () => {
     for (const adapter of SKILL_DISCOVERY_ADAPTERS) {
       expect(adapter.officialDocsUrl).toMatch(/^https:\/\//);

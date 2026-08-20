@@ -1,11 +1,12 @@
 import { readlink, unlink } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import type { ProjectSkillsManifest } from "../../../../shared/contracts/project-skills.ts";
 import { toContractProjectRootRef } from "../identity.ts";
 import type {
   OperationTerminalStatus,
   OwnershipRecord,
 } from "../store/index.ts";
+import { publishSystemSkillDiscoveryLink } from "../system-skills/discovery-link.ts";
 import {
   ensureDir,
   isErrno,
@@ -96,10 +97,19 @@ async function reconcileTargets(
         if (!isErrno(error, "ENOENT")) throw error;
       }
 
-      const published = await ctx.fs.publishSymlinkNoReplace({
-        linkPath: absolute,
-        relativeTarget: op.expectedRelativeLinkTarget,
-      });
+      const published = isAbsolute(op.expectedRelativeLinkTarget)
+        ? await publishSystemSkillDiscoveryLink({
+            cacheDir: op.expectedRelativeLinkTarget,
+            owned: null,
+            projectRoot,
+            relativeTarget: op.relativeTarget,
+            skillId: op.skillId,
+            userData: ctx.paths.userData,
+          })
+        : await ctx.fs.publishSymlinkNoReplace({
+            linkPath: absolute,
+            relativeTarget: op.expectedRelativeLinkTarget,
+          });
       if (published.status === "conflict") {
         results.push({
           relativeTarget: op.relativeTarget,
@@ -109,6 +119,15 @@ async function reconcileTargets(
           reason: published.reason,
         });
         log.pendingIssueIds.push(`unmanaged-conflict:${op.relativeTarget}`);
+        continue;
+      }
+      if (published.status === "unchanged") {
+        results.push({
+          relativeTarget: op.relativeTarget,
+          skillId: op.skillId,
+          kind: op.kind,
+          status: "noop",
+        });
         continue;
       }
       log.hadDurableTargetChanges = true;

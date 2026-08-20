@@ -18,7 +18,6 @@ import { signalBackgroundTaskProcess } from "./background-runner.ts";
 import type { TaskBackgroundRuns } from "./background-runs-contract.ts";
 import { createTaskOutputBuffer } from "./output-buffer.ts";
 import type { TaskRunCoordinatorStartResult } from "./run-coordinator.ts";
-import type { TaskTranscriptSink } from "./service-types.ts";
 import { isTerminalRunStatus } from "./spawn-restart.ts";
 
 export interface CreateTaskBackgroundRunsOptions {
@@ -54,8 +53,6 @@ export interface CreateTaskBackgroundRunsOptions {
     ownerWindowId?: string | undefined;
     originPanelId?: string | undefined;
   }): Promise<TaskRunCoordinatorStartResult>;
-  /** 任务输出全量历史落盘（堆内只保留 replay 尾部）。 */
-  transcripts?: TaskTranscriptSink | undefined;
 }
 
 /**
@@ -86,7 +83,6 @@ export function createTaskBackgroundRuns(
       ? { onChanged: options.onTaskOutputChanged }
       : {}),
   });
-  const transcripts = options.transcripts;
 
   function forgetProcess(runId: string): void {
     forgetBackgroundTaskProcess(runId).catch((error: unknown) => {
@@ -218,7 +214,6 @@ export function createTaskBackgroundRuns(
     }
     forgetProcess(processRecord.runId);
     outputs.flush(processRecord.runId, processRecord.outputTaskId);
-    transcripts?.seal(processRecord.runId, processRecord.outputTaskId);
     finishPanel(panelId, 137, windowId).catch((error: unknown) => {
       console.error("[tasks] background force stop completion failed:", error);
     });
@@ -257,13 +252,7 @@ export function createTaskBackgroundRuns(
             "stderr",
             `${error.message}\n`
           );
-          transcripts?.append(
-            processRecord.runId,
-            processRecord.outputTaskId,
-            `${error.message}\n`
-          );
           outputs.flush(processRecord.runId, processRecord.outputTaskId);
-          transcripts?.seal(processRecord.runId, processRecord.outputTaskId);
           console.error("[tasks] background task spawn failed:", error);
           finishPanel(panelId, 1, windowId).catch((err: unknown) => {
             console.error(
@@ -275,7 +264,6 @@ export function createTaskBackgroundRuns(
         onExit: (exitCode) => {
           completedSynchronously = true;
           outputs.flush(processRecord.runId, processRecord.outputTaskId);
-          transcripts?.seal(processRecord.runId, processRecord.outputTaskId);
           finishPanel(panelId, exitCode ?? 1, windowId).catch(
             (err: unknown) => {
               console.error("[tasks] background task completion failed:", err);
@@ -283,11 +271,6 @@ export function createTaskBackgroundRuns(
           );
         },
         onOutput: (stream, text) => {
-          transcripts?.append(
-            processRecord.runId,
-            processRecord.outputTaskId,
-            text
-          );
           outputs.append(
             processRecord.runId,
             processRecord.outputTaskId,

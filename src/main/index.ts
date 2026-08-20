@@ -31,6 +31,7 @@ import {
   registerPrivilegedProtocolSchemes,
 } from "./bootstrap-privileged-protocols.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app.ts";
+import { installDisplayCapturePolicy } from "./display-capture-policy.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { applyGpuWorkarounds } from "./gpu-workarounds.ts";
 import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
@@ -112,7 +113,6 @@ windowManager.onCreate(({ window }) => {
     windowZoomLog.error("apply to new window failed", { error });
   });
 });
-
 configureMainAppIdentity(isDev);
 applyGpuWorkarounds();
 // 第二实例直接 quit + return 不继续 bootstrap, 否则会撞主实例的 userData 文件锁.
@@ -250,6 +250,7 @@ if (gotTheLock) {
         getPluginRuntimeSources: () =>
           appCore.services.managedPlugins.getRuntimeSources(),
       });
+      installDisplayCapturePolicy();
       await appCore.ready;
       await appCore.pluginHost.refresh();
       await installAppMenu({
@@ -331,11 +332,10 @@ if (gotTheLock) {
         gitAutofetch.dispose();
         appCore.services.liveModules?.dispose();
       });
-
       if (isMac && isDev && app.dock) {
         app.dock.setIcon(
           nativeImage.createFromPath(
-            join(import.meta.dirname, "../../build/icon.png")
+            join(import.meta.dirname, "../../build/icon-dock.png")
           )
         );
       }
@@ -393,7 +393,6 @@ if (gotTheLock) {
         recordAgentLaunch: (id) =>
           appCore.services.agentUsage.recordSuccessfulLaunch(id),
         taskService: appCore.services.tasks,
-        terminalTranscripts: appCore.services.terminalTranscripts,
       });
       registerPeerUidFromNativeAddon(getTerminalAddon());
       registerTaskRuntimeDiagnosticsIpc(ipcMain);

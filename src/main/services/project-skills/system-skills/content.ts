@@ -1,52 +1,18 @@
 import { randomUUID } from "node:crypto";
-import {
-  lstat,
-  mkdir,
-  readdir,
-  readFile,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { lstat, readdir, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { ensureProjectRelativeDir } from "../path-containment.ts";
 import { computeTreeSha256V1 } from "../tree-digest.ts";
+import { copySystemSkillTree } from "./copy-tree.ts";
 import type { SystemSkillContribution } from "./index.ts";
+import { resolveSystemSkillSourceDir } from "./source.ts";
 
 /**
- * System-skill library content publication (design v8 §8 / §9 discipline):
- * the project library is a projection of this process's official source.
- * Refresh always writes that source. Retired snapshots are deleted when they
- * digest to a tree Pier published (or already match the source); anything
- * else is quarantined, never destroyed. Duplicate official quarantine dirs
- * are swept. Split from system-skills.ts (file-size cap).
+ * System-skill library content publication for Pier Home bindings (not
+ * product system skills). Product skills install to `{userData}/skills/.system`.
+ * Retired project snapshots of product skills are deleted when they digest
+ * to a tree Pier published; anything else is quarantined.
  */
-
-/**
- * When the project itself vendors `resources/system-skills/<id>` (Pier
- * dogfood), that tree is the official source — not a stale app bundle.
- * Live projection is always `.pier/skills/library/<id>` (`pier-*`).
- */
-async function resolvePublishSourceDir(
-  projectRoot: string,
-  contribution: SystemSkillContribution
-): Promise<string> {
-  const projectSource = join(
-    projectRoot,
-    "resources",
-    "system-skills",
-    contribution.id
-  );
-  try {
-    const skillMd = await lstat(join(projectSource, "SKILL.md"));
-    if (skillMd.isFile()) {
-      return projectSource;
-    }
-  } catch {
-    // Fall through to the registered contribution tree.
-  }
-  return contribution.contentDir;
-}
 
 async function libraryDigest(
   projectRoot: string,
@@ -94,25 +60,58 @@ async function sweepOfficialSystemSkillQuarantines(
   }
 }
 
-/** Copy the immutable content dir into the project library (no-replace or
- * version refresh). Refresh swaps via temp + rename of a fresh copy; the
- * retired snapshot is only removed after the swap succeeded. */
+async function quarantineOrDeleteGrave(args: {
+  grave: string;
+  knownDigests: ReadonlySet<string>;
+  officialDigest: string;
+  projectRoot: string;
+  skillId: string;
+}): Promise<void> {
+  let graveDigest: string | null = null;
+  try {
+    graveDigest = await computeTreeSha256V1(args.grave);
+  } catch {
+    graveDigest = null;
+  }
+  if (
+    graveDigest !== null &&
+    (args.knownDigests.has(graveDigest) || graveDigest === args.officialDigest)
+  ) {
+    await rm(args.grave, { force: true, recursive: true }).catch(
+      () => undefined
+    );
+    return;
+  }
+  const quarantine = join(
+    dirname(args.grave),
+    `.pier-system-skill-quarantine-${Date.now()}-${args.skillId}`
+  );
+  await rename(args.grave, quarantine).catch(() => undefined);
+  console.warn(
+    "[project-skills] system skill content was modified outside Pier; retired copy preserved",
+    { skillId: args.skillId, quarantine }
+  );
+}
+
+/** Copy the immutable content dir into the project library (bindings). */
 export async function publishSystemSkillContent(args: {
   projectRoot: string;
   contribution: SystemSkillContribution;
   /**
-   * System-skills channel only: Pier dogfood may publish
-   * `$projectRoot/resources/system-skills/<id>` instead of the bundle.
-   * Bindings must omit this and always use `contribution.contentDir`.
+   * Dev-only Pier dogfood: may install `$projectRoot/resources/system-skills/<id>`
+   * when that tree is gated. Production and bindings omit this.
    */
   preferProjectVendorSource?: boolean;
   /** Digests Pier itself published for this skill. */
   publishedDigests: readonly string[];
 }): Promise<string> {
   const { projectRoot, contribution } = args;
-  const sourceDir = args.preferProjectVendorSource
-    ? await resolvePublishSourceDir(projectRoot, contribution)
-    : contribution.contentDir;
+  const sourceDir = await resolveSystemSkillSourceDir({
+    allowProjectVendorSource: args.preferProjectVendorSource === true,
+    fallbackContentDir: contribution.contentDir,
+    projectRoot,
+    skillId: contribution.id,
+  });
   const sourceDigest = await computeTreeSha256V1(sourceDir);
   const libraryDir = join(
     projectRoot,
@@ -136,48 +135,28 @@ export async function publishSystemSkillContent(args: {
     `.pier-system-skill-${process.pid}-${randomUUID()}.tmp`
   );
   await ensureProjectRelativeDir(projectRoot, ".pier/skills/library");
-  await copyTree(sourceDir, tempDir);
+  await copySystemSkillTree(sourceDir, tempDir);
   if (current === null) {
     await rename(tempDir, libraryDir);
   } else {
-    // Version refresh: retire old snapshot to a temp grave, then swap.
     const grave = `${tempDir}.old`;
     await rename(libraryDir, grave);
     try {
       await rename(tempDir, libraryDir);
     } catch (error) {
-      // Restore on failure; never leave the library half-swapped.
       await rename(grave, libraryDir).catch(() => undefined);
       await rm(tempDir, { force: true, recursive: true }).catch(
         () => undefined
       );
       throw error;
     }
-    // Library is a projection of official content. Known official snapshots
-    // (and a grave that already matches the source) are deleted. Anything
-    // else is quarantined — never a blind recursive delete of unknown bytes.
-    let graveDigest: string | null = null;
-    try {
-      graveDigest = await computeTreeSha256V1(grave);
-    } catch {
-      graveDigest = null;
-    }
-    if (
-      graveDigest !== null &&
-      (knownDigests.has(graveDigest) || graveDigest === sourceDigest)
-    ) {
-      await rm(grave, { force: true, recursive: true }).catch(() => undefined);
-    } else {
-      const quarantine = join(
-        dirname(libraryDir),
-        `.pier-system-skill-quarantine-${Date.now()}-${contribution.id}`
-      );
-      await rename(grave, quarantine).catch(() => undefined);
-      console.warn(
-        "[project-skills] system skill content was modified outside Pier; retired copy preserved",
-        { skillId: contribution.id, quarantine }
-      );
-    }
+    await quarantineOrDeleteGrave({
+      grave,
+      knownDigests,
+      officialDigest: sourceDigest,
+      projectRoot,
+      skillId: contribution.id,
+    });
   }
   await sweepOfficialSystemSkillQuarantines(
     projectRoot,
@@ -185,6 +164,47 @@ export async function publishSystemSkillContent(args: {
     sourceDigest
   );
   return sourceDigest;
+}
+
+/**
+ * Remove a product-skill snapshot previously copied into the project library.
+ * Known official trees are deleted; unknown bytes are quarantined.
+ */
+export async function retireProjectSystemSkillLibrary(args: {
+  officialDigest: string;
+  projectRoot: string;
+  publishedDigests: readonly string[];
+  skillId: string;
+}): Promise<void> {
+  const { projectRoot, skillId, officialDigest } = args;
+  const libraryDir = join(projectRoot, ".pier", "skills", "library", skillId);
+  const current = await libraryDigest(projectRoot, skillId);
+  if (current === null) {
+    await sweepOfficialSystemSkillQuarantines(
+      projectRoot,
+      skillId,
+      officialDigest
+    );
+    return;
+  }
+  const knownDigests = new Set(args.publishedDigests);
+  const grave = join(
+    dirname(libraryDir),
+    `.pier-system-skill-${process.pid}-${randomUUID()}.tmp.old`
+  );
+  await rename(libraryDir, grave);
+  await quarantineOrDeleteGrave({
+    grave,
+    knownDigests,
+    officialDigest,
+    projectRoot,
+    skillId,
+  });
+  await sweepOfficialSystemSkillQuarantines(
+    projectRoot,
+    skillId,
+    officialDigest
+  );
 }
 
 /** Best-effort sweep of stale swap leftovers (crash debris, >24h old). */
@@ -201,7 +221,6 @@ export async function sweepSystemSkillSwapLeftovers(
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   for (const entry of entries) {
     if (!entry.startsWith(".pier-system-skill-")) continue;
-    // Quarantine directories are preserved evidence — never swept.
     if (entry.startsWith(".pier-system-skill-quarantine-")) continue;
     const absolute = join(libraryParent, entry);
     try {
@@ -212,31 +231,5 @@ export async function sweepSystemSkillSwapLeftovers(
     } catch {
       // Diagnostics-only sweep.
     }
-  }
-}
-
-async function copyTree(sourceDir: string, destDir: string): Promise<void> {
-  await mkdir(destDir, { recursive: true });
-  const entries = await readdir(sourceDir);
-  for (const entryName of entries) {
-    const src = join(sourceDir, entryName);
-    const dst = join(destDir, entryName);
-    const info = await lstat(src);
-    if (info.isSymbolicLink()) {
-      throw new Error(`system skill content must not contain symlinks: ${src}`);
-    }
-    if (info.isDirectory()) {
-      await copyTree(src, dst);
-      continue;
-    }
-    if (!info.isFile()) {
-      throw new Error(`system skill content has special file: ${src}`);
-    }
-    const bytes = await readFile(src);
-    await writeFile(dst, bytes, {
-      // biome-ignore lint/suspicious/noBitwiseOperators: POSIX mode mask
-      mode: info.mode & 0o111 ? 0o755 : 0o644,
-      flag: "w",
-    });
   }
 }

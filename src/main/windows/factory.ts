@@ -12,6 +12,8 @@ const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";
 
 export function resolveDevIcon(): string | undefined {
+  // Window/taskbar consumers clip this bitmap into their own rounded container.
+  // Use the unplated mark; the macOS Dock plate lives only in icon-dock.png / ICNS.
   return isDev ? join(import.meta.dirname, "../../build/icon.png") : undefined;
 }
 

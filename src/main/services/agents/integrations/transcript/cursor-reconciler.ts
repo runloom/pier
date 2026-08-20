@@ -15,13 +15,18 @@ import {
   cursorInteractionToolName,
   cursorTranscriptScopeKey,
   defaultCursorProjectsRoot,
-  findCursorAgentTranscript,
-  isCursorMainAgentTranscriptPath,
   readCursorTranscriptTail,
   requestedCursorInteraction,
   resolvedCursorInteraction,
   scanCursorQuestionState,
 } from "./cursor-question.ts";
+import {
+  type CursorBoundTranscript,
+  cursorTranscriptObserveTarget,
+  isStaleCursorSessionEnd,
+  nextCursorBoundTranscript,
+  resolveCursorMainTranscriptPath,
+} from "./cursor-transcript-bind.ts";
 import { emitTranscriptEvent } from "./tail-event.ts";
 import {
   createTranscriptTailReconciler,
@@ -81,6 +86,7 @@ export function createCursorTranscriptReconciler(
   const viewportTimers = new Map<string, ReturnType<typeof setInterval>>();
   const lastContextByScope = new Map<string, AgentHookEventPayload>();
   const lastTerminalSeenByScope = new Map<string, string>();
+  const boundTranscriptByScope = new Map<string, CursorBoundTranscript>();
   const viewportKindCache = createViewportKindCache();
 
   const emitResolved = (
@@ -155,12 +161,7 @@ export function createCursorTranscriptReconciler(
       const seed = path ? attachSeed.get(path) : undefined;
       const sessionId = seed?.sessionId ?? "unknown";
       const state: CursorQuestionScanState = seed
-        ? {
-            generation: seed.generation,
-            kind: seed.kind,
-            lastTerminal: seed.lastTerminal,
-            pending: seed.pending,
-          }
+        ? { ...seed }
         : { generation: 0, pending: false };
       return (line) => applyCursorTranscriptLine(state, line, sessionId);
     },
@@ -327,40 +328,8 @@ export function createCursorTranscriptReconciler(
     viewportPendingByScope.delete(key);
     jsonlPendingByScope.delete(key);
     lastTerminalSeenByScope.delete(key);
+    boundTranscriptByScope.delete(key);
     viewportKindCache.clear(key);
-  };
-
-  const resolvePath = async (
-    event: AgentHookEventPayload
-  ): Promise<string | null> => {
-    const sessionId = event.sessionId?.trim();
-    const explicit = event.transcriptPath?.trim();
-    if (explicit) {
-      const id = sessionId || basename(explicit, ".jsonl");
-      return isCursorMainAgentTranscriptPath(explicit, id) ? explicit : null;
-    }
-    if (!sessionId) {
-      return null;
-    }
-    const cached = pathCache.get(sessionId);
-    if (cached) {
-      const cachedStat = await stat(cached).catch(() => null);
-      if (cachedStat?.isFile()) {
-        return cached;
-      }
-      pathCache.delete(sessionId);
-    }
-    const resolved = await findCursorAgentTranscript(projectsRoot, sessionId);
-    if (resolved) {
-      pathCache.set(sessionId, resolved);
-      if (pathCache.size > 256) {
-        const first = pathCache.keys().next().value;
-        if (first !== undefined) {
-          pathCache.delete(first);
-        }
-      }
-    }
-    return resolved;
   };
 
   return {
@@ -372,6 +341,7 @@ export function createCursorTranscriptReconciler(
       attachSeed.clear();
       pendingByScope.clear();
       lastTerminalSeenByScope.clear();
+      boundTranscriptByScope.clear();
       viewportKindCache.clearAll();
       inner.dispose();
     },
@@ -379,24 +349,47 @@ export function createCursorTranscriptReconciler(
       if (event.agent !== "cursor") {
         return;
       }
-      startViewportWatch(event);
+      const scopeKey = cursorTranscriptScopeKey(event);
+      if (
+        isStaleCursorSessionEnd(boundTranscriptByScope.get(scopeKey), event)
+      ) {
+        return;
+      }
       if (event.event === "SessionEnd") {
         closePending(event, "cancelled");
-        stopViewportWatch(cursorTranscriptScopeKey(event));
+        stopViewportWatch(scopeKey);
         await inner.observe(event);
         return;
       }
-      const resolved = await resolvePath(event);
-      if (!resolved) {
+      startViewportWatch(event);
+      const resolved = await resolveCursorMainTranscriptPath({
+        event,
+        pathCache,
+        projectsRoot,
+      });
+      const nextBound = nextCursorBoundTranscript({
+        bound: boundTranscriptByScope.get(scopeKey),
+        event,
+        resolvedPath: resolved,
+      });
+      if (nextBound) {
+        boundTranscriptByScope.set(scopeKey, nextBound);
+      }
+      const target = cursorTranscriptObserveTarget({
+        bound: boundTranscriptByScope.get(scopeKey),
+        event,
+        resolvedPath: resolved,
+      });
+      if (!target) {
         if (cursorClosingHookEvent(event.event)) {
           closePending(event, "cancelled");
           await inner.observe(event);
         }
         return;
       }
-      const sessionId = event.sessionId?.trim() || basename(resolved, ".jsonl");
-      const fileStat = await stat(resolved).catch(() => null);
-      const text = await readCursorTranscriptTail(resolved);
+      const sessionId = target.sessionId || basename(target.path, ".jsonl");
+      const fileStat = await stat(target.path).catch(() => null);
+      const text = await readCursorTranscriptTail(target.path);
       const scanned = text
         ? scanCursorQuestionState(text, sessionId)
         : { generation: 0, pending: false };
@@ -404,17 +397,24 @@ export function createCursorTranscriptReconciler(
         fileStat !== null &&
         Date.now() - fileStat.mtimeMs <= CURSOR_QUESTION_BACKFILL_MAX_AGE_MS;
       const seed = { ...scanned, sessionId };
-      attachSeed.set(resolved, seed);
-      attachSeed.set(await realpath(resolved).catch(() => resolved), seed);
-      await inner.observe({ ...event, transcriptPath: resolved });
+      attachSeed.set(target.path, seed);
+      attachSeed.set(
+        await realpath(target.path).catch(() => target.path),
+        seed
+      );
+      await inner.observe({
+        ...event,
+        sessionId,
+        transcriptPath: target.path,
+      });
       const waiting = syncPendingQuestion(event, sessionId, scanned, fresh);
       const backfill = noteCursorLastTerminalBackfill({
         eventName: event.event,
         fresh,
-        resolvedPath: resolved,
+        resolvedPath: target.path,
         scanned,
         seenByScope: lastTerminalSeenByScope,
-        scopeKey: cursorTranscriptScopeKey(event),
+        scopeKey,
         waiting,
       });
       if (backfill) {
@@ -479,6 +479,7 @@ export function createCursorTranscriptReconciler(
       move(jsonlPendingByScope);
       move(viewportPendingByScope);
       move(lastTerminalSeenByScope);
+      move(boundTranscriptByScope);
       viewportKindCache.rekey(sourceKey, targetKey);
       const context = move(lastContextByScope);
       if (context) {

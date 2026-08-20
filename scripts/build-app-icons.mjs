@@ -3,7 +3,8 @@
 // Sources:
 //   - app-icon-master.svg: F rendition for macOS 256px and larger.
 //   - app-icon-micro.svg: I rendition for macOS 16–128px and development Dock.
-//   - app-icon-unplated.svg: transparent 1024×1024 mark for Windows and Linux.
+//   - app-icon-unplated.svg: transparent 1024×1024 mark for Windows, Linux,
+//     and any consumer that wraps the bitmap in its own rounded container.
 //
 // Conversion uses electron-builder's pinned official icons toolset, which produces
 // valid ICNS/ICO/icon sets consistently across host macOS versions. The macOS
@@ -31,6 +32,7 @@ const PUBLISHED_TARGETS = Object.freeze([
   "icon.icns",
   "icon.ico",
   "icon.png",
+  "icon-dock.png",
   "icons",
 ]);
 
@@ -176,12 +178,21 @@ async function buildLinuxIcons(
   );
 }
 
+function buildContainerPng(sources, stagingDirectory, rasterizeCommand) {
+  rasterize(
+    rasterizeCommand,
+    sources.unplated,
+    512,
+    join(stagingDirectory, "icon.png")
+  );
+}
+
 function buildDevDockPng(sources, stagingDirectory, rasterizeCommand) {
   rasterize(
     rasterizeCommand,
     sources.micro,
     512,
-    join(stagingDirectory, "icon.png")
+    join(stagingDirectory, "icon-dock.png")
   );
 }
 
@@ -256,7 +267,11 @@ export async function buildAppIcons(options = {}) {
     await buildIco(sources, stagingDirectory, convertIcons);
     log("→ build/icons/* (transparent Linux hicolor size set)");
     await buildLinuxIcons(sources, stagingDirectory, rsvgCommand, convertIcons);
-    log("→ build/icon.png 512×512 (macOS development Dock)");
+    log(
+      "→ build/icon.png 512×512 (unplated mark for window/taskbar containers)"
+    );
+    buildContainerPng(sources, stagingDirectory, rsvgCommand);
+    log("→ build/icon-dock.png 512×512 (macOS development Dock)");
     buildDevDockPng(sources, stagingDirectory, rsvgCommand);
     publishStagedAssets(stagingDirectory, outputDirectory);
     log("✓ icons regenerated");

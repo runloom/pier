@@ -68,6 +68,7 @@ export function isCssLikePath(path: string): boolean {
     lower.endsWith(".css") ||
     lower.endsWith(".scss") ||
     lower.endsWith(".sass") ||
-    lower.endsWith(".less")
+    lower.endsWith(".less") ||
+    lower.endsWith(".styl")
   );
 }

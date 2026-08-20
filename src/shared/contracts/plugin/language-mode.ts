@@ -41,6 +41,8 @@ export const EDITOR_HIGHLIGHT_PRESETS = [
   "swift",
   "vue",
   "svelte",
+  /** Approximate (no dedicated grammar): Astro uses HTML with self-closing tags. */
+  "astro",
   /** Approximate (no dedicated grammar): PHP uses clike. */
   "php",
   "dart",
@@ -50,6 +52,10 @@ export const EDITOR_HIGHLIGHT_PRESETS = [
   "scala",
   /** Approximate: Elixir uses ruby stream parser. */
   "elixir",
+  /** Approximate stream parser (no dedicated CM grammar in L0). */
+  "graphql",
+  /** Approximate HCL stream parser (no dedicated CM grammar in L0). */
+  "terraform",
 ] as const;
 
 export const editorHighlightPresetSchema = z.enum(EDITOR_HIGHLIGHT_PRESETS);
