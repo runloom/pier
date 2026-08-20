@@ -1,5 +1,6 @@
 import { release } from "node:os";
 import { app } from "electron";
+import { disableUnusedScreenCaptureFeatures } from "./display-capture-policy.ts";
 
 const isMac = process.platform === "darwin";
 
@@ -13,6 +14,8 @@ const isMac = process.platform === "darwin";
  * 需要对比 GL 路径时设 `PIER_USE_ANGLE_GL=1`（仍须在 app ready 前调用）。
  */
 export function applyGpuWorkarounds(): void {
+  // Before ready: unused ScreenCaptureKit features can prompt TCC at launch.
+  disableUnusedScreenCaptureFeatures();
   if (!(isMac && Number.parseInt(release(), 10) >= 25)) {
     return;
   }
