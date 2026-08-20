@@ -363,6 +363,7 @@ export async function handleTerminalCreate(args: {
       hookEnv: foregroundActivityService.hookEnv(),
       launch: launchForCreate,
       panelId: createArgs.panelId,
+      userData: app.getPath("userData"),
       windowId: String(win.id),
     });
     const ok = await createTerminalAndSeedResource({

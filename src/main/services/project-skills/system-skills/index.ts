@@ -1,29 +1,31 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   PIER_SYSTEM_SKILL_PREFIX,
   skillIdSchema,
 } from "../../../../shared/contracts/project-skills.ts";
 import { peekSkillMetadata } from "../frontmatter.ts";
-import { createProjectSkillsFileSystemAdapter } from "../fs-adapter.ts";
 import type { StableProjectIdentity } from "../identity.ts";
-import { ensureProjectRelativeDir } from "../path-containment.ts";
 import { createProjectSkillsPaths } from "../paths.ts";
 import {
   createProjectSkillsStore,
   type ProjectSkillsStore,
 } from "../store/index.ts";
+import { installSystemSkillCache } from "./cache.ts";
 import {
-  publishSystemSkillContent,
+  retireProjectSystemSkillLibrary,
   sweepSystemSkillSwapLeftovers,
 } from "./content.ts";
+import { publishSystemSkillDiscoveryLink } from "./discovery-link.ts";
+import { ensureSystemSkillGitExclude } from "./git-exclude.ts";
 
 /**
  * Pier system skills channel (design v8 §8): capability skills shipped by the
- * app or official managed plugins, injected per project through the SAME
- * projection channel as user skills (library snapshot + relative symlink +
- * ownership ledger).
+ * app or official managed plugins. Canonical content lives under app
+ * `resources/system-skills/<id>`; the live copy is `{userData}/skills/.system/<id>`
+ * (Codex `$CODEX_HOME/skills/.system` analogue). Discovery roots get a
+ * directory symlink to that cache — never a vendored tree in the git repo.
  *
  * Two hard red lines (v8 §8):
  * 1. Published content only comes from immutable managed sources (app
@@ -34,11 +36,7 @@ import {
  *
  * Desired state lives machine-locally in `system-skills.json` (never in the
  * Git manifest). Default: every registered contribution is **enabled** for a
- * project (`enabledBySkillId[id] !== false`). Enablement does **not** require
- * a user skills manifest or “skills management” onboarding — system skills
- * are Pier product surface, projected on ensureReady / skills.snapshot heal.
- * Canonical content lives under app `resources/system-skills/<id>`; the
- * project library copy is a published snapshot only.
+ * project (`enabledBySkillId[id] !== false`).
  */
 
 export interface SystemSkillContribution {
@@ -64,11 +62,11 @@ export interface SystemSkillDesiredState {
 }
 
 export interface SystemSkillView {
-  /** Present after reconcile published it into the project library. */
+  /** Present after reconcile installed the home-cache copy. */
   contentDigest: string | null;
   /**
    * From the immutable contribution SKILL.md (app resources / plugin package).
-   * Independent of whether the project library snapshot exists yet.
+   * Independent of whether the home-cache snapshot exists yet.
    */
   description: string;
   enabled: boolean;
@@ -82,9 +80,9 @@ export interface SystemSkillView {
 export interface SystemSkillsChannel {
   list(): readonly SystemSkillContribution[];
   /**
-   * Reconcile system skills for a project: publish/refresh library snapshots,
-   * record published digests, and report the desired projection targets.
-   * MUST be called while holding the project skills lock (ensureReady path).
+   * Reconcile system skills for a project: install/refresh the home cache,
+   * retire leftover project-library snapshots, and project discovery
+   * symlinks. MUST be called while holding the project skills lock.
    */
   reconcile(args: {
     projectIdentity: StableProjectIdentity;
@@ -120,10 +118,9 @@ function isErrno(error: unknown, code: string): boolean {
 }
 
 /**
- * Pier projection roots for system skills (design v8 §8): always both
- * shared `.agents` and Claude-compat `.claude` so agents that only scan
- * one root still receive pier-canvas and other product skills.
- * Relative link depth is the same for both (`../../.pier/skills/library/…`).
+ * Pier projection roots for system skills: always both shared `.agents` and
+ * Claude-compat `.claude` so agents that only scan one root still receive
+ * product skills. Links point at the home cache, not the project library.
  */
 export const SYSTEM_SKILL_PROJECTION_ROOTS = [
   ".agents/skills",
@@ -159,7 +156,6 @@ export function createSystemSkillsChannel(
   function register(contribution: SystemSkillContribution): void {
     assertSystemSkillContribution(contribution);
     if (options.isProduction && contribution.devOrigin) {
-      // Red line 1: production must not publish from a dev channel.
       throw new Error(
         `dev-origin system skill rejected in production: ${contribution.id}`
       );
@@ -196,8 +192,7 @@ export function createSystemSkillsChannel(
       }
     } catch (error) {
       if (!isErrno(error, "ENOENT")) {
-        // Corrupt desired state degrades to defaults (never blocks launches —
-        // system skills are additive capability, not user data).
+        // Corrupt desired state degrades to defaults.
       }
     }
     return {
@@ -233,8 +228,6 @@ export function createSystemSkillsChannel(
     const desired = await readDesired(rootKey);
     const out: SystemSkillView[] = [];
     for (const contribution of contributions) {
-      // Metadata always comes from the immutable contribution tree so the
-      // settings list is readable before the first project-library publish.
       const meta = await peekSkillMetadata(contribution.contentDir);
       out.push({
         id: contribution.id,
@@ -249,6 +242,54 @@ export function createSystemSkillsChannel(
       });
     }
     return out;
+  }
+
+  async function recordOwnership(args: {
+    identity: {
+      dev: number;
+      ino: number;
+      isDirectory: boolean;
+      isSymbolicLink: boolean;
+      mode: number;
+      nlink: number;
+    };
+    projectIdentity: StableProjectIdentity;
+    relativeTarget: string;
+    rootKey: string;
+    skillId: string;
+    expectedRelativeLinkTarget: string;
+    provider: { id: string; version: string };
+  }): Promise<void> {
+    try {
+      const ownership = await store.readOwnership(args.rootKey);
+      const generation = ownership?.generation ?? 0;
+      const targets = (ownership?.targets ?? []).filter(
+        (t) => t.relativePath !== args.relativeTarget
+      );
+      targets.push({
+        relativePath: args.relativeTarget,
+        skillId: args.skillId,
+        expectedRelativeLinkTarget: args.expectedRelativeLinkTarget,
+        objectIdentity: {
+          dev: args.identity.dev,
+          ino: args.identity.ino,
+          mode: args.identity.mode,
+          nlink: args.identity.nlink,
+          isDirectory: args.identity.isDirectory,
+          isSymbolicLink: args.identity.isSymbolicLink,
+        },
+        createdByOperationId: `system-skills:${args.provider.id}@${args.provider.version}`,
+        createdAt: now(),
+      });
+      await store.commitOwnership(args.rootKey, generation, {
+        schemaVersion: 1,
+        generation: generation + 1,
+        projectIdentity: args.projectIdentity,
+        targets,
+      });
+    } catch {
+      // Next reconcile re-records; never delete without ledger entry.
+    }
   }
 
   async function reconcile(args: {
@@ -278,32 +319,39 @@ export function createSystemSkillsChannel(
       )
     );
     let desiredChanged = false;
-    const fs = createProjectSkillsFileSystemAdapter();
     const projectRoot = args.projectIdentity.realPath;
 
     for (const contribution of contributions) {
       if (!isEnabled(desired, contribution.id)) continue;
-      const digest = await publishSystemSkillContent({
+      const installed = await installSystemSkillCache({
+        userData: options.userData,
         projectRoot,
         contribution,
-        preferProjectVendorSource: true,
-        publishedDigests:
-          desired.publishedContentDigestsBySkillId[contribution.id] ?? [],
+        preferProjectVendorSource: !options.isProduction,
       });
       const knownDigests =
         publishedDigestsBySkill.get(contribution.id) ?? new Set<string>();
-      if (!knownDigests.has(digest)) {
-        knownDigests.add(digest);
+      if (!knownDigests.has(installed.digest)) {
+        knownDigests.add(installed.digest);
         publishedDigestsBySkill.set(contribution.id, knownDigests);
         desired.publishedContentDigestsBySkillId[contribution.id] = [
           ...knownDigests,
         ];
         desiredChanged = true;
       }
+      await retireProjectSystemSkillLibrary({
+        projectRoot,
+        skillId: contribution.id,
+        officialDigest: installed.digest,
+        publishedDigests:
+          desired.publishedContentDigestsBySkillId[contribution.id] ?? [],
+      });
       published.push(contribution.id);
 
-      // Dual-root: SYSTEM_SKILL_PROJECTION_ROOTS; ownership red line 2.
-      const expected = `../../.pier/skills/library/${contribution.id}`;
+      const expected = installed.cacheDir;
+      const ownership = await store
+        .readOwnership(args.rootKey)
+        .catch(() => null);
       for (const root of SYSTEM_SKILL_PROJECTION_ROOTS) {
         const relativeTarget = `${root}/${contribution.id}`;
         desiredProjections.push({
@@ -311,56 +359,37 @@ export function createSystemSkillsChannel(
           relativeTarget,
           expectedRelativeLinkTarget: expected,
         });
-        const absolute = join(projectRoot, ...root.split("/"), contribution.id);
-        try {
-          await lstat(absolute);
-          continue; // Exists (link or dir) — never replace.
-        } catch (error) {
-          if (!isErrno(error, "ENOENT")) continue;
-        }
-        try {
-          await ensureProjectRelativeDir(projectRoot, root);
-        } catch {
-          continue;
-        }
-        const publishedLink = await fs.publishSymlinkNoReplace({
-          linkPath: absolute,
-          relativeTarget: expected,
+        const owned = ownership?.targets.find(
+          (t) => t.relativePath === relativeTarget
+        );
+        const publishedLink = await publishSystemSkillDiscoveryLink({
           projectRoot,
+          relativeTarget,
+          cacheDir: expected,
+          skillId: contribution.id,
+          userData: options.userData,
+          owned: owned
+            ? {
+                identity: owned.objectIdentity,
+                expectedRelativeLinkTarget: owned.expectedRelativeLinkTarget,
+              }
+            : null,
         });
-        if (publishedLink.status !== "created") {
+        if (
+          publishedLink.status !== "created" &&
+          publishedLink.status !== "replaced"
+        ) {
           continue;
         }
-        try {
-          const ownership = await store.readOwnership(args.rootKey);
-          const generation = ownership?.generation ?? 0;
-          const targets = (ownership?.targets ?? []).filter(
-            (t) => t.relativePath !== relativeTarget
-          );
-          targets.push({
-            relativePath: relativeTarget,
-            skillId: contribution.id,
-            expectedRelativeLinkTarget: expected,
-            objectIdentity: {
-              dev: publishedLink.identity.dev,
-              ino: publishedLink.identity.ino,
-              mode: publishedLink.identity.mode,
-              nlink: publishedLink.identity.nlink,
-              isDirectory: publishedLink.identity.isDirectory,
-              isSymbolicLink: publishedLink.identity.isSymbolicLink,
-            },
-            createdByOperationId: `system-skills:${contribution.provider.id}@${contribution.provider.version}`,
-            createdAt: now(),
-          });
-          await store.commitOwnership(args.rootKey, generation, {
-            schemaVersion: 1,
-            generation: generation + 1,
-            projectIdentity: args.projectIdentity,
-            targets,
-          });
-        } catch {
-          // Next reconcile re-records; never delete without ledger entry.
-        }
+        await recordOwnership({
+          identity: publishedLink.identity,
+          projectIdentity: args.projectIdentity,
+          relativeTarget,
+          rootKey: args.rootKey,
+          skillId: contribution.id,
+          expectedRelativeLinkTarget: expected,
+          provider: contribution.provider,
+        });
       }
     }
 
@@ -368,6 +397,8 @@ export function createSystemSkillsChannel(
       desired.generation += 1;
       await writeDesired(args.rootKey, desired);
     }
+
+    await ensureSystemSkillGitExclude(projectRoot);
 
     return { published, desiredProjections };
   }

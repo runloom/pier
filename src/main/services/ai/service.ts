@@ -17,6 +17,7 @@ import { createLogger } from "@shared/logger.ts";
 import { resolveOneShotInvocation } from "../agents/launch.ts";
 import type { ProcessEnvironmentService } from "../process-environment-service.ts";
 import type { ManagedAgentLaunchGate } from "../project-skills/launch-gate/index.ts";
+import { mergeSystemSkillExtraRootEnv } from "../project-skills/system-skills/extra-root.ts";
 import { supportsOneShot } from "./agent-one-shot.ts";
 
 export interface AiService {
@@ -57,6 +58,8 @@ export interface CreateAiServiceOptions {
     options: RunOneShotOptions
   ) => Promise<string>;
   timeoutMs?: number;
+  /** Host userData; used to inject additive system-skill extra-root env. */
+  userData?: string;
 }
 
 export interface RunOneShotOptions {
@@ -211,6 +214,7 @@ export function createAiService({
   readPreferences,
   runOneShot = defaultRunOneShot,
   timeoutMs,
+  userData,
 }: CreateAiServiceOptions): AiService {
   const cooldownUntil = new Map<AgentKind, number>();
   const recentSuccessAt = new Map<AgentKind, number>();
@@ -321,9 +325,17 @@ export function createAiService({
                 })
               ).env
             : undefined;
+          const env =
+            resolvedEnv && userData
+              ? mergeSystemSkillExtraRootEnv({
+                  agentKind: agent,
+                  env: resolvedEnv,
+                  userData,
+                })
+              : resolvedEnv;
           const text = await runOneShot(invocation.binary, invocation.args, {
             cwd,
-            ...(resolvedEnv ? { env: resolvedEnv } : {}),
+            ...(env ? { env } : {}),
             timeoutMs: oneShotTimeout(agent, timeoutMs),
           });
           if (text.trim().length === 0) {
