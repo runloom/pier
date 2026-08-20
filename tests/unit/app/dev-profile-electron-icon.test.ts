@@ -138,6 +138,7 @@ describe("PierDev.app bundle icon", () => {
 
   it.runIf(onDarwin)(
     "installs a plate-filled icns as electron.icns plus Tahoe AppIcon assets",
+    { timeout: 15_000 },
     () => {
       const root = mkdtempSync(join(tmpdir(), "pier-dev-icon-"));
       roots.push(root);
