@@ -7,7 +7,6 @@ import { initI18n } from "@/i18n/index.ts";
 import {
   CORE_AGENT_STATUS_ITEM_ID,
   CORE_COMMENTS_STATUS_ITEM_ID,
-  CORE_TERMINAL_HISTORY_STATUS_ITEM_ID,
   CORE_TERMINAL_STATUS_ITEMS,
 } from "@/panel-kits/terminal/core-terminal-status-items.ts";
 import {
@@ -54,7 +53,6 @@ describe("core terminal status items declarations", () => {
     expect(ids).toEqual([
       CORE_AGENT_STATUS_ITEM_ID,
       CORE_COMMENTS_STATUS_ITEM_ID,
-      CORE_TERMINAL_HISTORY_STATUS_ITEM_ID,
     ]);
     expect(ids).not.toContain("core.task-status");
     expect(ids).not.toContain("core.environment-status");

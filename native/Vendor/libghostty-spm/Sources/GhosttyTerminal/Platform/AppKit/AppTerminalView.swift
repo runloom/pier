@@ -99,8 +99,8 @@
             core.setScrollbackLimit(bytes)
         }
 
-        /// Raw PTY output tap (Pier patch 0107)：宿主 transcript 落盘用。
-        /// 回调在 ghostty IO 线程持锁触发；实现方只能拷贝字节后立即返回。
+        /// Raw PTY output tap (Pier patch 0107)。C API 仍在；Pier 宿主
+        /// 当前不接线。回调在 ghostty IO 线程持锁触发，只能拷贝后立即返回。
         open func setOutputTap(
             _ callback: ghostty_surface_output_tap_cb?,
             userdata: UnsafeMutableRawPointer?

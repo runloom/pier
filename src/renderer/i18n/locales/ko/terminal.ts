@@ -358,22 +358,8 @@ export const terminal = {
         submitUnavailableBody: "에이전트 대화를 먼저 연 다음 다시 시도하세요.",
         title: "댓글",
       },
-      history: {
-        title: "터미널 기록",
-      },
     },
     manage: "상태 표시줄 관리…",
-  },
-  history: {
-    dialogTitle: "터미널 전체 기록",
-    emptyBody:
-      "이 터미널이 출력을 내면 여기에 전체 기록이 남습니다(다시 시작하기 전 기록 포함).",
-    emptyTitle: "아직 기록이 없습니다",
-    loadFailedBody: "잠시 후 다시 시도하세요.",
-    loadFailedTitle: "터미널 기록을 불러오지 못했습니다",
-    open: "전체 기록 보기",
-    truncatedNotice:
-      "전체 기록은 {{totalMb}} MB입니다. 가장 최근 부분을 표시합니다.",
   },
   /**
    * Ghostty / native host messages (see ghostty-host-copy catalog).

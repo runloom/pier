@@ -5,10 +5,8 @@ import type {
 } from "@shared/contracts/tasks.ts";
 
 /**
- * 堆内只保留 replay 尾部（历史三层化后全量历史在 terminal-transcripts
- * 磁盘分段里）：200K 字符 × 20 个任务 ≈ 最坏 8MB，替代旧的 1M × 100
- * （最坏 ~200MB）全量驻留。尾部被裁剪时 `truncated` 置位，任务输出
- * 面板已有「更早输出被截断」提示。
+ * 堆内只保留 replay 尾部：200K 字符 × 20 个任务 ≈ 最坏 8MB。
+ * 尾部被裁剪时 `truncated` 置位，任务输出面板已有「更早输出被截断」提示。
  */
 const DEFAULT_MAX_CHARS = 200_000;
 const DEFAULT_MAX_CHUNKS = 2000;

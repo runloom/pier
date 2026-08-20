@@ -10,7 +10,7 @@ Pier 是本地 AI 开发工作台。参考 loomdesk 产品形态，使用 bay �
 - 核心能力：稳定终端、dockview panel 布局、代码变更预览、文件查看、多 agent 状态可见性。
 - 不做：任务生命周期、SQLite 任务台账、看板、自动调度。
 - **核心逻辑优先，拒绝业界能力二次封装**：只实现本产品独有、且依赖 Pier 宿主身份/运行时才能成立的能力；业界已成熟支持的能力（如各 agent 原生 one-shot CLI）直接走原生入口，禁止为「统一抽象 / 便利封装」再造第二套 API 或宿主服务。判定：去掉 Pier 后用户仍能用原生工具完成同一动作 → 不做 Pier 产品封装。
-- 持久化分层：用户偏好/布局写 userData JSON；原始终端输出写 transcript 分段文件；代码变更实时读 Git；密钥走 safeStorage。
+- 持久化分层：用户偏好/布局写 userData JSON；代码变更实时读 Git；密钥走 safeStorage。
 
 ## 02 技术栈
 
@@ -370,21 +370,17 @@ section 根节点下的裸子节点。
 - 检查点：`tests/unit/main/lsp/session-broker-governance.test.ts`（同键恒一棵进程树）、
  `tests/unit/main/lsp/document-gate.test.ts`、`tests/unit/main/lsp/memory-budget.test.ts`
 
-### 终端历史三层化 `src/main/services/terminal-transcripts/`
+### 终端 scrollback `0108-live-scrollback-limit`
 
-终端历史分三层：Tier 0 屏幕/备用屏（ghostty 原生）、Tier 1 RAM 热窗（scrollback，用户偏好上限）、
-Tier 2 磁盘 transcript 分段（`{userData}/terminal-transcripts/{lifecycleId}/NNNNNN.log[.gz]`）：
+终端可见历史只走 ghostty 原生主屏 scrollback（用户偏好上限，默认 64MB）。设置变更经
+`setTerminalConfig` 即时写回该窗口存量 surface。
 
-- 写入端两路：PTY 终端经 ghostty patch `0107-output-tap`（IO 线程持锁回调→Swift `TranscriptTap.swift`
- 有界队列，永不阻塞 PTY 读；身份 `runId` 或 `term-<panelId>`）；任务输出经 main 侧 sink
- （`task-{runId}-{taskId}`）。`TaskOutputBuffer` 堆内只保留 replay 尾部（200K 字符 × 20 任务）
-- 有界性硬约束：单段 8MB 轮转、写队列 4MB 超限丢弃并写缺口标记、全局磁盘配额 512MB 按 LRU
- 淘汰非活体 lifecycle、冷段由 main 清扫 gzip；lifecycle 目录名净化不得逃逸根目录
-- 读路径：`pier:terminal:transcript-tail`（`transcript-ipc.ts`）+ 状态栏「查看完整历史」content dialog
-- 热窗压力（ghostty patch `0108-live-scrollback-limit`）：scrollback 设置即时生效于存量 surface；
- 隐藏超阈值的 surface 热窗收缩、重新可见恢复（`hot-window-pressure.ts`），历史仍经 Tier 2 可达
-- 检查点：`tests/unit/main/terminal-transcripts/transcripts-governance.test.ts`、
- `tests/unit/main/terminal/hot-window-pressure.test.ts`、`native/Tests/GhosttyBridgeTests/TranscriptTapTests.swift`
+- **不做**磁盘 transcript、状态栏「查看完整历史」、隐藏 tab 热窗收缩：会话历史由各 agent
+  原生能力承担（去掉 Pier 后用户仍能用原生工具完成同一动作）；隐藏面板不得裁掉用户已配的
+  scrollback，否则切回即丢行。
+- 任务输出面板仍只在堆内保留 replay 尾部（`TaskOutputBuffer`：200K 字符 × 20 任务）。
+- 检查点：`tests/unit/main/terminal/scrollback-governance.test.ts`、
+ `native/Tests/GhosttyBridgeTests/TerminalScrollbackLimitTests.swift`
 
 ### 账号域模块迁移：`src/main/services/agent-accounts/` → `pier.codex`
 

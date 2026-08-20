@@ -393,7 +393,6 @@ if (gotTheLock) {
         recordAgentLaunch: (id) =>
           appCore.services.agentUsage.recordSuccessfulLaunch(id),
         taskService: appCore.services.tasks,
-        terminalTranscripts: appCore.services.terminalTranscripts,
       });
       registerPeerUidFromNativeAddon(getTerminalAddon());
       registerTaskRuntimeDiagnosticsIpc(ipcMain);

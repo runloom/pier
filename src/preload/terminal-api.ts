@@ -120,8 +120,6 @@ export const terminalApi: TerminalAPI = {
   setFont: (panelId, font) =>
     ipcRenderer.send("pier:terminal:set-font", panelId, font),
   setup: () => ipcRenderer.invoke("pier:terminal:setup"),
-  transcriptTail: (request) =>
-    ipcRenderer.invoke("pier:terminal:transcript-tail", request),
   onPresentationApplied: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, cb),
 };

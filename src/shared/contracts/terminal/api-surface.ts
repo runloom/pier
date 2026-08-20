@@ -24,8 +24,6 @@ import type {
   TerminalSendTextArgs,
   TerminalSurfaceCloseRequest,
   TerminalTitleEvent,
-  TerminalTranscriptTailRequest,
-  TerminalTranscriptTailResult,
 } from "../terminal.ts";
 import type {
   TerminalComposerImageBytes,
@@ -222,13 +220,6 @@ export interface TerminalAPI {
     input: { title: string; source: "user" }
   ): Promise<{ applied: boolean; ok: boolean }>;
   setup(): Promise<CreateTerminalResult>;
-  /**
-   * 读取该终端的磁盘历史尾部（transcript 分段落盘，含跨重启历史）。
-   * 热窗（scrollback）之外的完整输出经此可达。
-   */
-  transcriptTail(
-    request: TerminalTranscriptTailRequest
-  ): Promise<TerminalTranscriptTailResult>;
   /**
    * Overwrite a text paste file under pier-terminal-pastes (edit dialog save).
    * Paths outside that directory are rejected.

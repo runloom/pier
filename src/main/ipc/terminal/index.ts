@@ -43,11 +43,6 @@ import { registerTerminalShortcutIpc } from "./shortcuts-ipc.ts";
 import { registerTerminalTaskLifecycleForwarding } from "./task-lifecycle-wiring.ts";
 import { createTaskOutputTerminalBindings } from "./task-output-bindings.ts";
 import { registerTerminalTaskOutputRebindIpc } from "./task-output-rebind.ts";
-import { registerTerminalTranscriptIpc } from "./transcripts/tail-ipc.ts";
-import {
-  createTerminalTranscriptWiring,
-  nativePtyTranscriptLifecycleId,
-} from "./transcripts/wiring.ts";
 import {
   bindTerminalTransferRuntime,
   registerTerminalTransferGuardIpc,
@@ -75,9 +70,6 @@ export function registerTerminalIpc(
       | ((agentId: AgentKind) => Promise<unknown> | unknown)
       | undefined;
     taskService?: TaskService | undefined;
-    terminalTranscripts?:
-      | import("../../services/terminal-transcripts/index.ts").TerminalTranscriptsService
-      | undefined;
   } = {}
 ): void {
   const processEnvironment =
@@ -86,19 +78,6 @@ export function registerTerminalIpc(
   const { addon, error: loadError } = loadAddon();
   terminalFocusCoordinator.configureNativeAddon(addon);
   bindCursorViewportReader(addon);
-  const transcriptWiring = createTerminalTranscriptWiring({
-    addon,
-    ...(deps.terminalTranscripts
-      ? { transcripts: deps.terminalTranscripts }
-      : {}),
-  });
-  if (addon) {
-    const closeTerminal = addon.closeTerminal.bind(addon);
-    addon.closeTerminal = (nativePanelId) => {
-      transcriptWiring.onNativeClosed(nativePanelId);
-      return closeTerminal(nativePanelId);
-    };
-  }
   const taskOutputBindings =
     addon && deps.taskService
       ? createTaskOutputTerminalBindings({
@@ -116,7 +95,6 @@ export function registerTerminalIpc(
         })
       : null;
   registerTerminalDiagnosticsIpc(ipcMain, addon);
-  registerTerminalTranscriptIpc(ipcMain, deps.terminalTranscripts);
   registerTerminalKeybindingForward(addon);
   wireTerminalAgentEscapeCancel(addon);
   deps.taskService?.bindTerminalProcessController({
@@ -295,15 +273,6 @@ export function registerTerminalIpc(
       loadError,
       launchGate: deps.launchGate ?? null,
       localEnvironments: deps.localEnvironments ?? null,
-      onPtyCreated: (nativePanelId, lifecycleId) => {
-        transcriptWiring.markPtyLive(
-          nativePanelId,
-          nativePtyTranscriptLifecycleId({
-            lifecycleId,
-            panelId: nativePanelId,
-          })
-        );
-      },
       processEnvironment,
       recordAgentLaunch: deps.recordAgentLaunch,
       taskLifecycle,
@@ -348,13 +317,6 @@ export function registerTerminalIpc(
       const result = terminalFocusCoordinator.acceptRendererSnapshot(
         win,
         snapshot
-      );
-      transcriptWiring.observeSnapshot(
-        win.id,
-        snapshot.terminals.map((entry) => ({
-          nativePanelId: toNativePanelKey(win, entry.panelId),
-          visible: entry.visible,
-        }))
       );
       if (result.shouldAck) {
         event.sender.send(PIER_BROADCAST.TERMINAL_PRESENTATION_APPLIED, {
@@ -437,7 +399,6 @@ export function registerTerminalIpc(
     });
     try {
       addon.setTerminalConfig(win.getNativeWindowHandle(), config);
-      transcriptWiring.onSetConfig(config.scrollbackLimitBytes);
     } catch (err) {
       console.error("[pier-terminal-set-config] failed:", err);
     }

@@ -57,7 +57,6 @@ import { resolveProjectEnvForSpawn } from "../services/process-environment/resol
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createTaskService } from "../services/tasks/service.ts";
 import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
-import { createAppTerminalTranscripts } from "../services/terminal-transcripts/app-wiring.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createSecretsStore } from "../state/secrets-store.ts";
 import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
@@ -349,8 +348,6 @@ function createPierAppCore(): PierAppCore {
   hostCatalog = wiredCatalog.hostCatalog;
   const userDataDir = app.getPath("userData");
   const agentUsage = createAgentUsageService({ userDataDir });
-  const { service: terminalTranscripts, taskSink: taskTranscripts } =
-    createAppTerminalTranscripts(userDataDir);
   const agentRuntimeIndex = createAgentRuntimeIndexService({
     rendererCommand,
     snapshot: () => foregroundActivityService.snapshot(),
@@ -448,9 +445,7 @@ function createPierAppCore(): PierAppCore {
           ...input,
           localEnvironments,
         }),
-      transcripts: taskTranscripts,
     }),
-    terminalTranscripts,
     terminalProfiles: createTerminalProfileService(),
     terminalStatusBarPrefs: createTerminalStatusBarPrefsFacade(),
     terminalLaunches: terminalLaunchRegistry,

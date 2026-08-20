@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { registerCommentsStatusItem } from "@/panel-kits/terminal/status-items/comments.tsx";
-import { registerTerminalHistoryStatusItem } from "@/panel-kits/terminal/status-items/history.tsx";
 import { initComments } from "@/stores/comments.store.ts";
 
 /**
@@ -11,6 +10,5 @@ import { initComments } from "@/stores/comments.store.ts";
 export function CommentsBridge(): null {
   useEffect(() => initComments(), []);
   useEffect(() => registerCommentsStatusItem(), []);
-  useEffect(() => registerTerminalHistoryStatusItem(), []);
   return null;
 }
