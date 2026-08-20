@@ -15,7 +15,7 @@
 | Xcode Command Line Tools | `xcode-select --install` |
 | Homebrew | https://brew.sh |
 | zig 0.15 | `brew install zig@0.15`（编译 libghostty） |
-| librsvg | `brew install librsvg`（`pnpm build:icons` 需要 `rsvg-convert`） |
+| librsvg | `brew install librsvg`（`pnpm build:icons` 与 macOS `pnpm dev` 都需要 `rsvg-convert`） |
 | macOS `sips` | 系统自带；`pnpm build:icons` 用它生成系统兼容的 16/32px ICNS 条目 |
 
 ## 首次启动
@@ -85,11 +85,19 @@ pnpm build:icons         # 从已确认的 SVG 母版重建 ICNS / ICO / Linux �
 
 - `build/app-icon-master.svg`：F 标准稿，用于 macOS 256–1024px。
 - `build/app-icon-micro.svg`：I Micro 稿，用于 macOS 16–128px 与开发环境 Dock。
-- `build/app-icon-unplated.svg`：透明 F 稿，用于 Windows 与 Linux。
+- `build/app-icon-unplated.svg`：透明 F 稿，用于 Windows、Linux，以及窗口/任务栏这类会再套一层圆角容器的场景。
+
+生成后的位图也按这个边界拆开：
+
+- `build/icon.icns`：带 macOS 底板（保留 Apple 画布边距），只给正式 Dock / 程序包。
+- `build/icon-dock.png`：带底板的 I Micro 512px，只给开发环境 Dock。
+- `build/icon.png`、`build/icon.ico`、`build/icons/*.png`：透明 F，给窗口、任务栏和任何自带圆角容器的消费者。不要把带底板的 PNG 塞进这些场景，否则会套两层板。
+
+开发态 macOS 会把 `Electron.app` 复制成 `.pier-dev/electron-runtime/PierDev.app`。活动监视器会把包图标裁进自己的圆角井：若直接用带边距的 `icon.icns`，透明边会露出一圈浅底；若用透明 F 稿，系统会补浅色底板，和程序坞的深色底板对不上。因此包图标从 F / I 底板稿裁到铺满画布，再编成 `AppIcon.icns` / `Assets.car`。`app.dock.setIcon` 仍用 `icon-dock.png`。Helper 改名为 `PierDev Helper` 并写入同一套铺满底板的图标。
 
 `pnpm build:icons` 是唯一正式生成入口；不要直接手改生成后的 `build/icon.icns`、
-`build/icon.ico`、`build/icon.png` 或 `build/icons/*.png`。Linux 环境需先安装
-`librsvg2-bin`。完整 ICNS 生成需在带系统 `sips` 的 macOS 上执行；脚本会在写入任何正式
+`build/icon.ico`、`build/icon.png`、`build/icon-dock.png` 或 `build/icons/*.png`。Linux 环境需先安装
+`librsvg2-bin`。macOS 上 `pnpm dev` 栅格化 PierDev 包图标同样需要 `rsvg-convert`；缺了会打日志并在下次启动重试，不会把失败结果写成已完成。完整 ICNS 生成需在带系统 `sips` 的 macOS 上执行；脚本会在写入任何正式
 资产前检查两项依赖，并先在暂存目录完成整套生成，全部成功后再统一替换。macOS CI 还会用
 系统 `iconutil` 解包最终 ICNS，核对全部官方尺寸，避免小图标容器兼容性回归。
 

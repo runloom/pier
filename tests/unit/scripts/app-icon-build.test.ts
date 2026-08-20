@@ -85,7 +85,8 @@ function seedPublishedAssets(outputDirectory: string): Map<string, Buffer> {
   const assets = new Map([
     ["icon.icns", Buffer.from("previous-icns")],
     ["icon.ico", Buffer.from("previous-ico")],
-    ["icon.png", Buffer.from("previous-dock")],
+    ["icon.png", Buffer.from("previous-container")],
+    ["icon-dock.png", Buffer.from("previous-dock")],
     ["icons/16x16.png", Buffer.from("previous-linux")],
   ]);
   for (const [path, data] of assets) {

@@ -335,7 +335,7 @@ if (gotTheLock) {
       if (isMac && isDev && app.dock) {
         app.dock.setIcon(
           nativeImage.createFromPath(
-            join(import.meta.dirname, "../../build/icon.png")
+            join(import.meta.dirname, "../../build/icon-dock.png")
           )
         );
       }

@@ -504,7 +504,7 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`；覆盖率：`pnpm test:coverage`
 - E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
-- 图标重建：`pnpm build:icons`（改 `build/app-icon-*.svg` 后跑一次，产出 `build/icon.{icns,ico,png}`）
+- 图标重建：`pnpm build:icons`（改 `build/app-icon-*.svg` 后跑一次，产出 `build/icon.{icns,ico,png}` 与 `build/icon-dock.png`）
 
 ### E2E 执行优先级（编码助手硬约定）
 

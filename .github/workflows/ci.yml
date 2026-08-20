@@ -44,6 +44,7 @@ jobs:
               - 'build/app-icon-*.svg'
               - 'build/design-sources/pier-logo.svg'
               - 'build/icon.*'
+              - 'build/icon-dock.png'
               - 'build/icons/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
@@ -71,10 +72,13 @@ jobs:
               - 'build/app-icon-*.svg'
               - 'build/design-sources/pier-logo.svg'
               - 'build/icon.*'
+              - 'build/icon-dock.png'
               - 'build/icons/**'
               - 'scripts/app-icon-*.mjs'
               - 'scripts/build-app-icons.mjs'
+              - 'scripts/dev-profile.mjs'
               - 'tests/unit/scripts/app-icon-*.test.ts'
+              - 'tests/unit/app/dev-profile-electron-icon.test.ts'
               - 'electron-builder.yml'
               - '.github/workflows/ci.yml'
             windows_lsp:
@@ -140,10 +144,13 @@ jobs:
           cache: pnpm
           node-version: 24
       - run: pnpm install --frozen-lockfile
+      - run: which rsvg-convert || brew install librsvg
       - run: >-
           pnpm exec vitest run tests/unit/scripts/app-icon-assets.test.ts
           tests/unit/scripts/app-icon-icns.test.ts
           tests/unit/scripts/app-icon-build.test.ts
+          tests/unit/scripts/app-icon-container-governance.test.ts
+          tests/unit/app/dev-profile-electron-icon.test.ts
 
   native:
     needs: [changes]

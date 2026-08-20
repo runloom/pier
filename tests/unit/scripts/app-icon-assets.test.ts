@@ -265,7 +265,7 @@ describe("Pier application icon sources", () => {
 
   it("renders the Dock artwork at the approved optical footprint", () => {
     const { width, height, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon.png"))
+      readFileSync(join(ROOT, "build/icon-dock.png"))
     );
     let minX = width;
     let minY = height;
@@ -296,7 +296,7 @@ describe("Pier application icon sources", () => {
 
   it("keeps the rendered mark vertically balanced inside the plate", () => {
     const { width, height, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon.png"))
+      readFileSync(join(ROOT, "build/icon-dock.png"))
     );
     let plateMinY = height;
     let plateMaxY = -1;
@@ -334,7 +334,7 @@ describe("Pier application icon sources", () => {
 
   it("keeps upper plate lighting neutral from left to right", () => {
     const { width, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon.png"))
+      readFileSync(join(ROOT, "build/icon-dock.png"))
     );
     const rgbAt = (x: number, y: number): [number, number, number] => {
       const offset = (y * width + x) * 4;
@@ -356,7 +356,7 @@ describe("Pier application icon sources", () => {
 
   it("keeps the plate surface flat from top to bottom", () => {
     const { width, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon.png"))
+      readFileSync(join(ROOT, "build/icon-dock.png"))
     );
     const rgbAt = (x: number, y: number): [number, number, number] => {
       const offset = (y * width + x) * 4;
@@ -378,7 +378,7 @@ describe("Pier application icon sources", () => {
 
   it("keeps the plate outline uniform on every edge", () => {
     const { width, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon.png"))
+      readFileSync(join(ROOT, "build/icon-dock.png"))
     );
     const rgbAt = (x: number, y: number): [number, number, number] => {
       const offset = (y * width + x) * 4;
@@ -405,7 +405,7 @@ describe("Pier application icon sources", () => {
 
   it("keeps the rendered U mark at one optical stroke weight", () => {
     const { width, height, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon.png"))
+      readFileSync(join(ROOT, "build/icon-dock.png"))
     );
     expect([width, height]).toEqual([512, 512]);
 
@@ -443,7 +443,7 @@ describe("Pier application icon sources", () => {
 
   it("keeps the rendered U mark material highlight above its body", () => {
     const { width, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon.png"))
+      readFileSync(join(ROOT, "build/icon-dock.png"))
     );
     const lightnessAt = (x: number, y: number) => {
       const offset = (y * width + x) * 4;
@@ -470,6 +470,8 @@ describe("Pier application icon sources", () => {
     );
     expect(mark).not.toContain("app-plate-fill");
     expect(unplated).not.toContain("app-plate-fill");
+    expect(unplated).not.toContain('fill="#101725"');
+    expect(unplated).not.toContain('width="824" height="824"');
   });
 
   it("ships vector-only sources", () => {
@@ -541,11 +543,26 @@ describe("Pier application icon sources", () => {
   );
 
   it("uses the approved Micro rendition for the development Dock", () => {
-    const dockIcon = readFileSync(join(ROOT, "build/icon.png"));
+    const dockIcon = readFileSync(join(ROOT, "build/icon-dock.png"));
 
     expect(sha256Bytes(dockIcon)).toBe(
       "0cb6b2d8f8e071d8f522827625d7e8ae09f5f0dfda5e30f62526941a127704f4"
     );
+  });
+
+  it("publishes the unplated F mark as the generic 512px PNG", () => {
+    const containerIcon = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icon.png"))
+    );
+
+    expect([containerIcon.width, containerIcon.height]).toEqual([512, 512]);
+    expect(
+      cornerAlphas(
+        containerIcon.width,
+        containerIcon.height,
+        containerIcon.pixels
+      )
+    ).toEqual([0, 0, 0, 0]);
   });
 
   it("ships transparent RGBA Linux icons at the complete official size set", () => {
@@ -581,7 +598,7 @@ describe("Pier application icon sources", () => {
     expect(builder).toMatch(/win:[\s\S]*?icon: build\/icon\.ico/);
     expect(builder).toMatch(/linux:[\s\S]*?icon: build\/icons/);
 
-    expect(read("src/main/index.ts")).toContain('"../../build/icon.png"');
+    expect(read("src/main/index.ts")).toContain('"../../build/icon-dock.png"');
     expect(read("src/main/windows/factory.ts")).toContain(
       '"../../build/icon.png"'
     );
@@ -596,9 +613,14 @@ describe("Pier application icon sources", () => {
     expect(ci).toContain("'build/app-icon-*.svg'");
     expect(ci).toContain("'build/design-sources/pier-logo.svg'");
     expect(ci).toContain("'build/icon.*'");
+    expect(ci).toContain("'build/icon-dock.png'");
     expect(ci).toContain("'build/icons/**'");
     expect(ci).toContain("mac_icons:");
     expect(ci).toContain("runs-on: macos-15");
     expect(ci).toContain("tests/unit/scripts/app-icon-assets.test.ts");
+    expect(ci).toContain(
+      "tests/unit/scripts/app-icon-container-governance.test.ts"
+    );
+    expect(ci).toContain("tests/unit/app/dev-profile-electron-icon.test.ts");
   });
 });
