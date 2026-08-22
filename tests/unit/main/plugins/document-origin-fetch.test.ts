@@ -98,16 +98,18 @@ describe("fetchFromDocumentOrigin", () => {
     expect(script).toContain("btoa");
     expect(script).toContain('credentials: "include"');
     expect(script).toContain("AbortSignal.timeout");
-    expect(BrowserWindow.mock.calls[0]?.[0]).toMatchObject({
-      hiddenInMissionControl: true,
-      show: false,
-      skipTaskbar: true,
-      webPreferences: expect.objectContaining({
-        contextIsolation: true,
-        partition: "persist:pier-document-origin-fetch",
-        sandbox: true,
-      }),
-    });
+    expect(BrowserWindow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hiddenInMissionControl: true,
+        show: false,
+        skipTaskbar: true,
+        webPreferences: expect.objectContaining({
+          contextIsolation: true,
+          partition: "persist:pier-document-origin-fetch",
+          sandbox: true,
+        }),
+      })
+    );
     expect(result).toEqual({
       body: payload,
       ok: true,
@@ -119,8 +121,8 @@ describe("fetchFromDocumentOrigin", () => {
     let releaseLoad: (() => void) | undefined;
     loadURL.mockImplementation(
       () =>
-        new Promise<void>((resolve) => {
-          releaseLoad = resolve;
+        new Promise<undefined>((resolve) => {
+          releaseLoad = () => resolve(undefined);
         })
     );
     executeJavaScriptInIsolatedWorld.mockResolvedValue({
