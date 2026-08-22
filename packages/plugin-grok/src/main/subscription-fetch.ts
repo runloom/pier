@@ -1,5 +1,8 @@
-import type { FetchImpl } from "./grok-usage-types.ts";
-import { fetchGrokRemainingResetsSoft } from "./reset-credits.ts";
+import type {
+  FetchImpl,
+  RemainingResetsOriginFetch,
+} from "./grok-usage-types.ts";
+import { fetchGrokRemainingResetsSoft } from "./reset-credits-fetch.ts";
 import {
   type GrokSubscriptionInfo,
   parseGrokSubscriptionResult,
@@ -145,6 +148,7 @@ export async function withSoftSubscription(
     caller: AbortSignal;
     fetchImpl: FetchImpl;
     overall: AbortSignal | null;
+    remainingResetsOriginFetch?: RemainingResetsOriginFetch;
     sessionKey: string;
     userId?: string | null;
   }
@@ -192,6 +196,9 @@ export async function withSoftSubscription(
             sessionKey: options.sessionKey,
             signal: options.caller,
             ...(options.userId ? { userId: options.userId } : {}),
+            ...(options.remainingResetsOriginFetch
+              ? { originFetch: options.remainingResetsOriginFetch }
+              : {}),
           }),
         ])
       : Promise.resolve([[], []] as const);

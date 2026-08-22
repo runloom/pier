@@ -7,9 +7,12 @@ import {
   fetchGrokUsage,
   USAGE_TEMPORARILY_UNAVAILABLE_ERROR,
 } from "./grok-usage.ts";
+import {
+  originFetchOption,
+  type RemainingResetsOriginFetch,
+} from "./grok-usage-types.ts";
 import type { AccountIdentity } from "./identity.ts";
 import { parseGrokAuthJson, readGrokIdentity } from "./identity.ts";
-// Class A: login spawn uses hostSpawnEnv / resolveProcessEnv (not bare process.env).
 import {
   defaultRealGrokHome,
   defaultSpawnLogin,
@@ -28,6 +31,7 @@ export interface CreateGrokProviderOpts {
   logger?: { warn(message: string, ...args: unknown[]): void };
   processEnv?: Readonly<Record<string, string | undefined>>;
   realGrokHome?: string;
+  remainingResetsOriginFetch?: RemainingResetsOriginFetch;
   resolveProcessEnv?: (request?: {
     cwd?: string;
   }) => Promise<{ env: Record<string, string> }>;
@@ -48,7 +52,6 @@ export interface GrokAccountProvider {
   fetchUsage(options: {
     accountHomeDir?: string | undefined;
     kind: "api_key" | "oidc";
-    /** Fires after OIDC session persisted; mirror tokens to real Grok home. */
     onSessionRefreshed?: ((authJson: string) => Promise<void>) | undefined;
     signal: AbortSignal;
   }): Promise<AccountUsageResult>;
@@ -94,6 +97,7 @@ export function createGrokProvider(
   const realGrokHome = opts.realGrokHome ?? defaultRealGrokHome(processEnv);
   const spawnLogin = opts.spawnLogin ?? defaultSpawnLogin;
   const fetchImpl = opts.fetchImpl;
+  const remainingResetsOriginFetch = opts.remainingResetsOriginFetch;
   const credentials = opts.credentials;
   const logger = opts.logger;
   const credentialTails = new Map<string, Promise<void>>();
@@ -358,9 +362,7 @@ export function createGrokProvider(
           readManagedAuth(accountHomeDir)
         );
       } catch (error) {
-        // ENOENT means there are genuinely no stored credentials (re-login
-        // path below). Any other read failure (safeStorage locked, store IO)
-        // is transient — the session may be perfectly healthy.
+        // ENOENT: no stored credentials. Other read failures are transient.
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
           return {
             status: "error",
@@ -375,14 +377,13 @@ export function createGrokProvider(
         authJson,
         kind: "oidc",
         signal: options.signal,
+        ...originFetchOption(remainingResetsOriginFetch),
         onAuthJsonUpdated: async (nextAuthJson) => {
           await withCredentialLock(accountHomeDir, async () => {
             await credentials.set(credentialKey(accountHomeDir), nextAuthJson);
             await rm(join(accountHomeDir, "auth.json"), { force: true });
           });
-          // Mirror rotated tokens into the real Grok home when the caller
-          // owns the active account; a single-use rotated refresh token that
-          // only lives in the plugin store would strand the CLI's own copy.
+          // Mirror rotated tokens into the real Grok home for the active CLI copy.
           await options.onSessionRefreshed?.(nextAuthJson);
         },
         ...(fetchImpl ? { fetchImpl } : {}),

@@ -305,6 +305,46 @@ describe("Grok accounts settings page", () => {
     expect(screen.getByText("Quota resets 2")).toBeTruthy();
   });
 
+  it("hides quota reset metadata when the count is unavailable", async () => {
+    const now = Date.now();
+    const legacyUnavailableUsage = {
+      attemptedAt: now,
+      metrics: [],
+      resetCreditsResolved: false,
+      status: "ok" as const,
+      updatedAt: now,
+    };
+    const { context } = contextWithSnapshot({
+      accounts: [
+        {
+          email: "active@example.com",
+          error: null,
+          id: "acc-active",
+          kind: "oidc",
+          label: "active@example.com",
+          status: "active",
+          usage: legacyUnavailableUsage,
+        },
+      ],
+      activeAccountId: "acc-active",
+      login: null,
+      revision: 1,
+      schemaVersion: 1,
+    });
+
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
+
+    await screen.findByText("active@example.com");
+    expect(
+      screen.queryByText("Quota resets temporarily unavailable")
+    ).toBeNull();
+  });
+
   it("opens switch confirm dialog before selecting accounts", async () => {
     const { context, invokeCalls } = contextWithSnapshot(
       snapshotWithAccounts()

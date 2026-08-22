@@ -1,11 +1,15 @@
 import type { AccountUsageMetric } from "@pier/plugin-api/account-usage";
-import type { FetchImpl } from "./grok-usage-types.ts";
-import {
-  createTimeoutSignal,
-  mergeAbortSignals,
-} from "./usage-fetch-timeouts.ts";
 
 export const GROK_RESET_CREDITS_METRIC_ID = "grok:reset-credits";
+
+interface RemainingResetsParseResult {
+  metrics: AccountUsageMetric[];
+  valid: boolean;
+}
+
+function invalidRemainingResets(): RemainingResetsParseResult {
+  return { metrics: [], valid: false };
+}
 
 /** Official ConsumerUi remaining-resets RPC (grpc-web). */
 export const GROK_REMAINING_RESETS_URL =
@@ -16,9 +20,6 @@ export const GROK_REMAINING_RESETS_REQUEST_BODY = new Uint8Array([
   0, 0, 0, 0, 0,
 ]);
 
-const CLI_USER_AGENT = "grok-cli/1.0.0";
-const REMAINING_RESETS_HOP_TIMEOUT_MS = 8000;
-
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
@@ -26,8 +27,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function asPositiveInt(value: unknown): number | undefined {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
+function asNonNegativeInt(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
     return;
   }
   return value;
@@ -110,7 +111,7 @@ function tokensFromRecord(root: Record<string, unknown>): unknown {
 function availableCountFromRecord(
   root: Record<string, unknown>
 ): number | undefined {
-  const direct = asPositiveInt(
+  const direct = asNonNegativeInt(
     root.availableCount ?? root.available_count ?? root.resetCount
   );
   if (direct !== undefined) return direct;
@@ -123,7 +124,7 @@ function availableCountFromRecord(
     "remaining_resets",
   ]) {
     const nested = asRecord(root[key]);
-    const count = asPositiveInt(
+    const count = asNonNegativeInt(
       nested?.availableCount ?? nested?.available_count
     );
     if (count !== undefined) return count;
@@ -131,8 +132,12 @@ function availableCountFromRecord(
   return;
 }
 
-function parseJsonResets(payload: unknown, now: number): AccountUsageMetric[] {
+function parseJsonResets(
+  payload: unknown,
+  now: number
+): RemainingResetsParseResult | null {
   const root = asRecord(payload);
+  if (!root) return null;
   const config = asRecord(root?.config);
   const sources = [root, config].filter(
     (value): value is Record<string, unknown> => value !== null
@@ -140,12 +145,17 @@ function parseJsonResets(payload: unknown, now: number): AccountUsageMetric[] {
   for (const source of sources) {
     const tokens = tokensFromRecord(source);
     if (tokens !== undefined) {
-      return metricFromCount(countValidTokens(tokens, now));
+      return {
+        metrics: metricFromCount(countValidTokens(tokens, now)),
+        valid: true,
+      };
     }
     const available = availableCountFromRecord(source);
-    if (available !== undefined) return metricFromCount(available);
+    if (available !== undefined) {
+      return { metrics: metricFromCount(available), valid: true };
+    }
   }
-  return [];
+  return null;
 }
 
 function decodeBase64(value: string): Uint8Array | undefined {
@@ -268,38 +278,60 @@ function parseResetTokenProto(
 function parseRemainingResetsProto(
   bytes: Uint8Array,
   now: number
-): AccountUsageMetric[] {
+): { metrics: AccountUsageMetric[]; valid: boolean } {
   let offset = 0;
   const tokens: Array<{ tokenId: string; validityEnd: number }> = [];
   while (offset < bytes.length) {
     const key = readVarint(bytes, offset);
-    if (!key) return [];
+    if (!key) return { metrics: [], valid: false };
     const { field, wire } = protoField(key.value);
     if (wire !== 2) {
       const skipped = skipProtoField(bytes, key.offset, wire);
-      if (!skipped) return [];
+      if (!skipped) return { metrics: [], valid: false };
       offset = skipped;
       continue;
     }
     const nested = readLengthDelimited(bytes, key.offset);
-    if (!nested) return [];
+    if (!nested) return { metrics: [], valid: false };
     offset = nested.offset;
     if (field === 10) {
       const token = parseResetTokenProto(nested.value);
       if (token) tokens.push(token);
     }
   }
-  return metricFromCount(countValidTokens(tokens, now));
+  return {
+    metrics: metricFromCount(countValidTokens(tokens, now)),
+    valid: true,
+  };
+}
+
+function grpcStatusFromTrailer(bytes: Uint8Array): number | undefined {
+  const trailer = new TextDecoder().decode(bytes);
+  const match = trailer.match(/(?:^|\r?\n)grpc-status:\s*(\d+)(?:\r?\n|$)/i);
+  if (!match?.[1]) return;
+  const status = Number(match[1]);
+  return Number.isInteger(status) ? status : undefined;
 }
 
 function parseGrpcWebBinary(
   bytes: Uint8Array,
   now: number
-): AccountUsageMetric[] {
+): RemainingResetsParseResult | null {
   let offset = 0;
+  let metrics: AccountUsageMetric[] = [];
+  let sawData = false;
+  let sawFrame = false;
+  let sawTrailer = false;
+  let trailerStatus: number | undefined;
   while (offset + 5 <= bytes.length) {
     const flag = bytes[offset];
-    if (flag === undefined) return [];
+    if (flag === undefined) {
+      return sawFrame ? invalidRemainingResets() : null;
+    }
+    if (flag !== 0 && flag !== 128) {
+      return sawFrame ? invalidRemainingResets() : null;
+    }
+    sawFrame = true;
     const length = new DataView(
       bytes.buffer,
       bytes.byteOffset + offset + 1,
@@ -307,25 +339,57 @@ function parseGrpcWebBinary(
     ).getUint32(0);
     const start = offset + 5;
     const end = start + length;
-    if (length < 0 || end > bytes.length) return [];
-    if (flag < 128 && length > 0) {
+    if (end > bytes.length) return invalidRemainingResets();
+    if (flag === 0) {
+      sawData = true;
       const parsed = parseRemainingResetsProto(bytes.subarray(start, end), now);
-      if (parsed.length > 0) return parsed;
+      if (!parsed.valid) return invalidRemainingResets();
+      if (parsed.metrics.length > 0) metrics = parsed.metrics;
+    } else {
+      if (sawTrailer || end !== bytes.length) {
+        return invalidRemainingResets();
+      }
+      sawTrailer = true;
+      trailerStatus = grpcStatusFromTrailer(bytes.subarray(start, end));
+      if (trailerStatus === undefined) return invalidRemainingResets();
     }
     offset = end;
   }
-  return [];
+  if (!sawFrame) return null;
+  if (
+    offset !== bytes.length ||
+    !sawData ||
+    !sawTrailer ||
+    trailerStatus !== 0
+  ) {
+    return invalidRemainingResets();
+  }
+  return { metrics, valid: true };
 }
 
-function parseGrpcWebText(text: string, now: number): AccountUsageMetric[] {
-  const frames = text.match(/[A-Za-z0-9+/]+={0,2}/g) ?? [];
+function parseGrpcWebText(
+  text: string,
+  now: number
+): RemainingResetsParseResult | null {
+  const compact = text.replace(/\s+/g, "");
+  const frames = compact.match(/[A-Za-z0-9+/]+={0,2}/g) ?? [];
+  if (frames.join("") !== compact) return null;
+  const chunks: Uint8Array[] = [];
+  let totalLength = 0;
   for (const frame of frames) {
     const bytes = decodeBase64(frame);
-    if (!bytes || bytes.length < 5) continue;
-    const parsed = parseGrpcWebBinary(bytes, now);
-    if (parsed.length > 0) return parsed;
+    if (!bytes) return null;
+    chunks.push(bytes);
+    totalLength += bytes.length;
   }
-  return [];
+  if (chunks.length === 0) return null;
+  const bytes = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return parseGrpcWebBinary(bytes, now);
 }
 
 /**
@@ -333,63 +397,52 @@ function parseGrpcWebText(text: string, now: number): AccountUsageMetric[] {
  * grpc-web+proto into a Codex-shaped reset-credits scalar. Zero / expired
  * tokens stay off the metric list.
  */
-export function parseGrokRemainingResets(
+function parseGrokRemainingResetsResult(
   payload: unknown,
   now = Date.now()
-): AccountUsageMetric[] {
+): RemainingResetsParseResult {
   if (payload instanceof Uint8Array) {
     const fromBinary = parseGrpcWebBinary(payload, now);
-    if (fromBinary.length > 0) return fromBinary;
-    return parseGrokRemainingResets(new TextDecoder().decode(payload), now);
+    if (fromBinary) return fromBinary;
+    return parseGrokRemainingResetsResult(
+      new TextDecoder().decode(payload),
+      now
+    );
   }
   if (typeof payload === "string") {
     const trimmed = payload.trim();
     if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
       try {
-        return parseJsonResets(JSON.parse(trimmed), now);
+        return (
+          parseJsonResets(JSON.parse(trimmed), now) ?? invalidRemainingResets()
+        );
       } catch {
-        return [];
+        return invalidRemainingResets();
       }
     }
-    return parseGrpcWebText(trimmed, now);
+    return parseGrpcWebText(trimmed, now) ?? invalidRemainingResets();
   }
-  return parseJsonResets(payload, now);
+  return parseJsonResets(payload, now) ?? invalidRemainingResets();
 }
 
-export async function fetchGrokRemainingResetsSoft(options: {
-  fetchImpl: FetchImpl;
-  sessionKey: string;
-  signal: AbortSignal;
-  userId?: string | null;
-}): Promise<AccountUsageMetric[]> {
-  try {
-    const response = await options.fetchImpl(GROK_REMAINING_RESETS_URL, {
-      body: GROK_REMAINING_RESETS_REQUEST_BODY,
-      headers: {
-        Accept: "application/grpc-web+proto",
-        Authorization: `Bearer ${options.sessionKey}`,
-        "Content-Type": "application/grpc-web+proto",
-        "User-Agent": CLI_USER_AGENT,
-        "x-grpc-web": "1",
-        "x-grok-client-mode": "cli",
-        "x-xai-token-auth": "xai-grok-cli",
-        ...(options.userId ? { "x-userid": options.userId } : {}),
-      },
-      method: "POST",
-      signal: mergeAbortSignals([
-        options.signal,
-        createTimeoutSignal(REMAINING_RESETS_HOP_TIMEOUT_MS),
-      ]),
-    });
-    if (!response.ok || options.signal.aborted) return [];
-    if (typeof response.arrayBuffer === "function") {
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (bytes.length > 0) {
-        return parseGrokRemainingResets(bytes);
-      }
-    }
-    return parseGrokRemainingResets(await response.text());
-  } catch {
-    return [];
+export function parseGrokRemainingResetsRpcResult(
+  payload: string | Uint8Array,
+  now = Date.now()
+): RemainingResetsParseResult {
+  if (payload instanceof Uint8Array) {
+    const fromBinary = parseGrpcWebBinary(payload, now);
+    if (fromBinary) return fromBinary;
+    return (
+      parseGrpcWebText(new TextDecoder().decode(payload), now) ??
+      invalidRemainingResets()
+    );
   }
+  return parseGrpcWebText(payload.trim(), now) ?? invalidRemainingResets();
+}
+
+export function parseGrokRemainingResets(
+  payload: unknown,
+  now = Date.now()
+): AccountUsageMetric[] {
+  return parseGrokRemainingResetsResult(payload, now).metrics;
 }

@@ -69,6 +69,27 @@ const committedOfficialIndex = JSON.parse(
   readFileSync(join(process.cwd(), "plugins/index.v1.json"), "utf8")
 ) as { signature?: { alg?: string } };
 
+function pluginSourceImportsElectron(source: string): boolean {
+  return (
+    /from\s+["']electron(?:\/[^"']*)?["']/.test(source) ||
+    /import\(\s*["']electron(?:\/[^"']*)?["']\s*\)/.test(source) ||
+    /require\(\s*["']electron(?:\/[^"']*)?["']\s*\)/.test(source)
+  );
+}
+
+function collectPluginSourceFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === "node_modules" || entry.name === "dist") return [];
+      return collectPluginSourceFiles(path);
+    }
+    return entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")
+      ? [path]
+      : [];
+  });
+}
+
 describe("managed plugin packaging governance", () => {
   it("builds every workspace plugin before starting the dev host", () => {
     expect(packageJson.scripts?.predev).toContain("pnpm plugins:pack");
@@ -181,5 +202,41 @@ describe("managed plugin packaging governance", () => {
     });
 
     expect(sizingPolicies).toEqual(APPROVED_BUNDLED_WIDGET_SIZE_POLICIES);
+  });
+
+  it("treats electron subpaths and require() as forbidden plugin imports", () => {
+    expect(pluginSourceImportsElectron('import { app } from "electron"')).toBe(
+      true
+    );
+    expect(
+      pluginSourceImportsElectron('import { app } from "electron/main"')
+    ).toBe(true);
+    expect(pluginSourceImportsElectron('const e = require("electron")')).toBe(
+      true
+    );
+    expect(pluginSourceImportsElectron('import fs from "node:fs"')).toBe(false);
+  });
+
+  it("does not import electron from official plugin sources", () => {
+    const pluginDirs = readdirSync(packagesRoot, {
+      withFileTypes: true,
+    }).filter(
+      (entry) =>
+        entry.isDirectory() &&
+        entry.name.startsWith("plugin-") &&
+        entry.name !== "plugin-api"
+    );
+    expect(pluginDirs.length).toBeGreaterThan(0);
+    for (const dir of pluginDirs) {
+      const root = join(packagesRoot, dir.name, "src");
+      if (!existsSync(root)) continue;
+      for (const file of collectPluginSourceFiles(root)) {
+        const source = readFileSync(file, "utf8");
+        expect(
+          pluginSourceImportsElectron(source),
+          relative(process.cwd(), file)
+        ).toBe(false);
+      }
+    }
   });
 });

@@ -3,6 +3,7 @@ import type { LaunchWrapHandler } from "@pier/plugin-api/main";
 import { jsonValueSchema } from "@shared/contracts/plugin/settings.ts";
 import { createLogger } from "@shared/logger.ts";
 import { effectiveConfigurationValue } from "@shared/plugin-settings.ts";
+import { fetchFromDocumentOrigin } from "../plugins/document-origin-fetch.ts";
 import type { ExternalMainPluginContext } from "../plugins/external-main-runtime.ts";
 import { createExternalPluginProcessEnv } from "../plugins/external-plugin-process-env.ts";
 import type { PluginRpcBus } from "../plugins/rpc-bus.ts";
@@ -69,6 +70,9 @@ export function createExternalMainPluginContextFactory(deps: {
         deps.pluginRpcBus.emit(source.id, event, payload),
     },
     lifecycle: { onBeforeQuit: () => {} },
+    ...(source.id === "pier.grok"
+      ? { documentOriginFetch: fetchFromDocumentOrigin }
+      : {}),
     ...(source.id === "pier.codex"
       ? {
           legacyCodexAccounts: createCodexLegacyMigrationAdapter({

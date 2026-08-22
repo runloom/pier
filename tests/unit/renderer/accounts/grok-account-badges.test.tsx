@@ -58,6 +58,34 @@ describe("Grok account badges", () => {
     expect(screen.getByText("Quota resets 2")).toBeInTheDocument();
   });
 
+  it("hides quota reset metadata when the count cannot be fetched", () => {
+    const legacyUnavailableUsage = {
+      attemptedAt: 1,
+      metrics: [],
+      resetCreditsResolved: false,
+      status: "ok" as const,
+      updatedAt: 1,
+    };
+    const { container } = render(
+      <AccountBadges
+        account={{
+          kind: "oidc",
+          usage: legacyUnavailableUsage,
+        }}
+        language="en"
+        t={t}
+      />
+    );
+
+    expect(screen.getByText("OIDC")).toBeInTheDocument();
+    expect(
+      screen.queryByText("Quota resets temporarily unavailable")
+    ).not.toBeInTheDocument();
+    expect(
+      container.querySelector('[data-availability="unavailable"]')
+    ).toBeNull();
+  });
+
   it("does not override compact-mode metadata hiding", () => {
     render(
       <AccountBadges

@@ -2,6 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { disposeDocumentOriginWindows } from "@main/plugins/document-origin-fetch.ts";
 import {
   createExternalMainPluginRuntime,
   type ExternalMainPluginContext,
@@ -9,6 +10,10 @@ import {
 import type { ManagedPluginRuntimeSource } from "@main/services/managed-plugins/install-runtime.ts";
 import type { PluginConfigurationApi } from "@pier/plugin-api/main";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@main/plugins/document-origin-fetch.ts", () => ({
+  disposeDocumentOriginWindows: vi.fn(),
+}));
 
 let dir = "";
 
@@ -181,6 +186,7 @@ describe("external main plugin runtime", () => {
     await runtime.flushAllBeforeQuit();
 
     expect(events).toEqual(["flush", "dispose"]);
+    expect(disposeDocumentOriginWindows).toHaveBeenCalled();
   });
 
   it("adds sourceRevision to the dynamic import URL", async () => {
