@@ -14,6 +14,7 @@ import {
 } from "@pier/ui/item.tsx";
 import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import { agentOffersOneClickInstall } from "@shared/agent-lifecycle/one-click-install.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   ArrowUpCircle,
@@ -34,6 +35,7 @@ import {
   isLifecycleSoftFailure,
   lifecycleBusyStatusText,
   resolveAgentStatusBadge,
+  shouldOfferAgentInstall,
 } from "@/pages/settings/components/agent-lifecycle-format.ts";
 import { AgentExpandedDetails } from "@/pages/settings/components/agent-row-details.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
@@ -50,6 +52,7 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
   const [open, setOpen] = useState(false);
 
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
+  const hasDetected = useAgentDetectStore((s) => s.hasDetected);
   const disabledAgentIds = useAgentPreferencesStore((s) => s.disabledAgentIds);
   const defaultAgentId = useAgentPreferencesStore((s) => s.defaultAgentId);
   const setDisabledAgentIds = useAgentPreferencesStore(
@@ -79,7 +82,16 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
   /** Cancel only while main is actually running this agent. */
   const canCancelBusy = job?.phase === "running";
   const lifecycleProgress = job?.progress;
-  const canInstall = probe?.canInstall === true;
+  const offerInstall = shouldOfferAgentInstall({
+    hasDetected,
+    isBusy: Boolean(job),
+    isDetected,
+    oneClickInstall: agentOffersOneClickInstall(agentId),
+    ...(typeof probe?.canInstall === "boolean"
+      ? { canInstall: probe.canInstall }
+      : {}),
+    ...(probe?.installedButBroken === true ? { installedButBroken: true } : {}),
+  });
   const canUpdate = isLifecycleUpdateCandidate(probe, { disabled: isDisabled });
   const canReinstall = isLifecycleReinstallCandidate(probe, {
     disabled: isDisabled,
@@ -323,9 +335,7 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
               {busyStatusText}
             </Button>
           ) : null}
-          {!(isDetected || probe?.installedButBroken) &&
-          canInstall &&
-          !isBusy ? (
+          {offerInstall ? (
             <Button
               onClick={() => {
                 handleLifecycle("install").catch(() => undefined);

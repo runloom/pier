@@ -1,3 +1,7 @@
+import {
+  AGENT_NO_ONE_CLICK_INSTALL,
+  agentOffersOneClickInstall,
+} from "@shared/agent-lifecycle/one-click-install.ts";
 import { agentKindSchema } from "@shared/contracts/agent.ts";
 import { describe, expect, it } from "vitest";
 import { buildGuideCommands } from "../../../../../src/main/services/agents/lifecycle/plan.ts";
@@ -199,9 +203,14 @@ describe("agent lifecycle specs", () => {
     const websiteOnly = agentKindSchema.options.filter(
       (id) => getAgentLifecycleSpec(id).support !== "full"
     );
-    expect(websiteOnly.sort()).toEqual(["ante", "openclaude", "rovo"].sort());
+    expect(websiteOnly.sort()).toEqual([...AGENT_NO_ONE_CLICK_INSTALL].sort());
     for (const id of websiteOnly) {
       expect(getAgentLifecycleSpec(id).install).toEqual([]);
+    }
+    for (const id of agentKindSchema.options) {
+      expect(agentOffersOneClickInstall(id)).toBe(
+        getAgentLifecycleSpec(id).support === "full"
+      );
     }
   });
 });

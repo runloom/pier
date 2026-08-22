@@ -208,8 +208,10 @@ export interface AgentRowStatusBadge {
 
 /**
  * Exception badges only (priority: broken > conflict > missing > disabled).
- * Healthy install and "update available" stay silent — version arrow + Update button carry that.
- * Missing beats disabled so stale prefs for uninstalled agents don't say "Disabled".
+ * Healthy install and "update available" stay silent — version arrow + Update
+ * button carry that. Missing stays on the row even when Install is shown.
+ * Missing beats disabled so stale prefs for uninstalled agents don't say
+ * "Disabled".
  */
 export function resolveAgentStatusBadge(
   t: TFunction,
@@ -245,4 +247,32 @@ export function resolveAgentStatusBadge(
     };
   }
   return null;
+}
+
+/**
+ * Offer one-click install as soon as PATH detect says missing.
+ * Do not wait for the lifecycle probe; hide when the host (or catalog) says
+ * this agent has no managed install.
+ */
+export function shouldOfferAgentInstall(state: {
+  canInstall?: boolean;
+  hasDetected: boolean;
+  installedButBroken?: boolean;
+  isBusy: boolean;
+  isDetected: boolean;
+  oneClickInstall: boolean;
+}): boolean {
+  if (!state.hasDetected || state.isDetected || state.isBusy) {
+    return false;
+  }
+  if (state.installedButBroken === true) {
+    return false;
+  }
+  if (state.canInstall === false) {
+    return false;
+  }
+  if (state.canInstall === true) {
+    return true;
+  }
+  return state.oneClickInstall;
 }

@@ -288,15 +288,63 @@ describe("AgentsSection", () => {
     expect(claudeRow.textContent).not.toContain("Update available");
   });
 
-  it("shows missing badge for agents not on PATH", async () => {
+  it("shows missing badge and Install together before a lifecycle probe", async () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: makePierMock([]),
     });
-    useAgentDetectStore.setState({ detectedIds: [] });
+    useAgentDetectStore.setState({ detectedIds: [], hasDetected: true });
     render(<AgentsSection />);
     const codexRow = await screen.findByTestId("agent-row-codex");
-    expect(codexRow.textContent).toContain("Not installed");
+    expect(within(codexRow).getByText("Not installed")).toBeInTheDocument();
+    expect(
+      within(codexRow).getByRole("button", { name: "Install" })
+    ).toBeInTheDocument();
+  });
+
+  it("does not offer Install for website-only missing agents", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: makePierMock([]),
+    });
+    useAgentDetectStore.setState({ detectedIds: [], hasDetected: true });
+    render(<AgentsSection />);
+    const rovoRow = await screen.findByTestId("agent-row-rovo");
+    expect(within(rovoRow).getByText("Not installed")).toBeInTheDocument();
+    expect(
+      within(rovoRow).queryByRole("button", { name: "Install" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows Install for a missing full-support agent with canInstall probe", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: makePierMock([], {
+        probe: async () => [
+          {
+            agentId: "codex",
+            canInstall: true,
+            canUninstall: false,
+            detected: false,
+            installedButBroken: false,
+            installs: [],
+            isConflict: false,
+            latestVersion: null,
+            support: "full",
+            uninstallMode: "none",
+            updateAvailable: false,
+            updateMode: "versioned",
+            updateOffered: false,
+            version: null,
+          },
+        ],
+      }),
+    });
+    render(<AgentsSection />);
+    const codexRow = await screen.findByTestId("agent-row-codex");
+    expect(
+      within(codexRow).getByRole("button", { name: "Install" })
+    ).toBeInTheDocument();
   });
 
   it("expanding agent-row-claude shows launchCmd", async () => {
@@ -383,6 +431,7 @@ describe("AgentsSection", () => {
     const codexRow = screen.getByTestId("agent-row-codex");
     const codex = within(codexRow);
     expect(codex.getByText("Not installed")).toBeInTheDocument();
+    expect(codex.getByRole("button", { name: "Install" })).toBeInTheDocument();
     expect(codex.queryByText("Default")).not.toBeInTheDocument();
     expect(
       codex.queryByRole("button", { name: "Details" })

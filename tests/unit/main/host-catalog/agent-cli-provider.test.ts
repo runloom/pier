@@ -178,4 +178,53 @@ describe("createAgentCliCatalogProvider", () => {
       (cursor?.details as { updateOffered?: boolean } | null)?.updateOffered
     ).toBe(false);
   });
+
+  it("keeps install capability on missing items from previous probe details", async () => {
+    const previous = probe({
+      agentId: "codex",
+      canInstall: true,
+      detected: true,
+      version: "1.2.3",
+    });
+    const provider = createAgentCliCatalogProvider({
+      detect: async () => ({ detectedIds: [] }),
+      persist: {
+        flush: async () => undefined,
+        read: async () => ({
+          ...emptyDomainSnapshot("agent-cli"),
+          items: [
+            {
+              details: previous,
+              domain: "agent-cli",
+              id: "codex",
+              label: "Codex",
+              localVersion: previous.version,
+              presence: "present",
+              remoteVersion: null,
+              updateOffered: false,
+            },
+          ],
+        }),
+        write: async () => undefined,
+      },
+      probe: async () => [],
+    });
+
+    const snapshot = await provider.probeLocal({
+      env: { PATH: "/opt/bin" },
+      now: 20,
+    });
+    const codex = snapshot.items.find((item) => item.id === "codex");
+    expect(codex?.presence).toBe("missing");
+    expect(codex?.localVersion).toBeNull();
+    expect(codex?.details).toMatchObject({
+      agentId: "codex",
+      canInstall: true,
+      canUninstall: false,
+      detected: false,
+      installedButBroken: false,
+      installs: [],
+      version: null,
+    });
+  });
 });

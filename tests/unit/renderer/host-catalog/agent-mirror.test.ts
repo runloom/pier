@@ -23,6 +23,23 @@ const claudeProbe = agentLifecycleProbeSchema.parse({
   version: "1.2.3",
 });
 
+const missingCodexProbe = agentLifecycleProbeSchema.parse({
+  agentId: "codex",
+  canInstall: true,
+  canUninstall: false,
+  detected: false,
+  installedButBroken: false,
+  installs: [],
+  isConflict: false,
+  latestVersion: null,
+  support: "full",
+  uninstallMode: "none",
+  updateAvailable: false,
+  updateMode: "versioned",
+  updateOffered: false,
+  version: null,
+});
+
 describe("agent catalog views", () => {
   beforeEach(() => {
     useHostCatalogStore.getState().reset();
@@ -155,5 +172,32 @@ describe("agent catalog views", () => {
 
     expect(useAgentDetectStore.getState().detectedIds).toEqual([]);
     expect(useAgentLifecycleStore.getState().probesById.claude).toBeUndefined();
+  });
+
+  it("keeps canInstall probe for a missing catalog item", () => {
+    useHostCatalogStore.getState().applyDomain({
+      ...emptyDomainSnapshot("agent-cli"),
+      items: [
+        {
+          details: missingCodexProbe,
+          domain: "agent-cli",
+          id: "codex",
+          label: "Codex",
+          localVersion: null,
+          presence: "missing",
+          remoteVersion: null,
+          updateOffered: false,
+        },
+      ],
+      localProbedAt: 100,
+      revision: 4,
+    });
+
+    expect(useAgentDetectStore.getState().detectedIds).toEqual([]);
+    expect(useAgentLifecycleStore.getState().probesById.codex).toMatchObject({
+      agentId: "codex",
+      canInstall: true,
+      detected: false,
+    });
   });
 });

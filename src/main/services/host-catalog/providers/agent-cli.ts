@@ -43,6 +43,30 @@ function itemFromProbe(probe: AgentLifecycleProbe): CatalogItem {
   };
 }
 
+function detailsForMissing(
+  previous: CatalogItem | undefined
+): AgentLifecycleProbe | null {
+  const parsed = agentLifecycleProbeSchema.safeParse(previous?.details);
+  if (!parsed.success) {
+    return null;
+  }
+  return {
+    ...parsed.data,
+    canUninstall: false,
+    detected: false,
+    installedButBroken: false,
+    installs: [],
+    isConflict: false,
+    latestVersion: null,
+    uninstallMode: "none",
+    uninstallTargetPath: null,
+    uninstallTargetSource: null,
+    updateAvailable: false,
+    updateOffered: false,
+    version: null,
+  };
+}
+
 function itemFromDetection(
   agentId: AgentKind,
   detected: ReadonlySet<AgentKind>,
@@ -53,7 +77,7 @@ function itemFromDetection(
   const parsed = agentLifecycleProbeSchema.safeParse(previous?.details);
   const details = ((): unknown => {
     if (!present) {
-      return null;
+      return detailsForMissing(previous);
     }
     if (parsed.success) {
       return {

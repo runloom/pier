@@ -5,6 +5,7 @@ import {
   isLifecycleSoftFailure,
   lifecycleBusyStatusText,
   resolveAgentStatusBadge,
+  shouldOfferAgentInstall,
 } from "../../../../src/renderer/pages/settings/components/agent-lifecycle-format.ts";
 
 const t = ((key: string, opts?: Record<string, unknown>) => {
@@ -72,6 +73,75 @@ describe("resolveAgentStatusBadge", () => {
       detected: false,
     });
     expect(badge?.label).toBe("settings.agents.status.missing");
+  });
+});
+
+describe("shouldOfferAgentInstall", () => {
+  it("offers install for a one-click agent before the lifecycle probe returns", () => {
+    expect(
+      shouldOfferAgentInstall({
+        hasDetected: true,
+        installedButBroken: false,
+        isBusy: false,
+        isDetected: false,
+        oneClickInstall: true,
+      })
+    ).toBe(true);
+  });
+
+  it("does not offer install for website-only agents before probe", () => {
+    expect(
+      shouldOfferAgentInstall({
+        hasDetected: true,
+        isBusy: false,
+        isDetected: false,
+        oneClickInstall: false,
+      })
+    ).toBe(false);
+  });
+
+  it("hides install until PATH detection has a snapshot", () => {
+    expect(
+      shouldOfferAgentInstall({
+        hasDetected: false,
+        isBusy: false,
+        isDetected: false,
+        oneClickInstall: true,
+      })
+    ).toBe(false);
+  });
+
+  it("hides install when the host says this agent cannot be installed", () => {
+    expect(
+      shouldOfferAgentInstall({
+        canInstall: false,
+        hasDetected: true,
+        isBusy: false,
+        isDetected: false,
+        oneClickInstall: true,
+      })
+    ).toBe(false);
+  });
+
+  it("hides install for detected or busy rows", () => {
+    expect(
+      shouldOfferAgentInstall({
+        canInstall: true,
+        hasDetected: true,
+        isBusy: false,
+        isDetected: true,
+        oneClickInstall: true,
+      })
+    ).toBe(false);
+    expect(
+      shouldOfferAgentInstall({
+        canInstall: true,
+        hasDetected: true,
+        isBusy: true,
+        isDetected: false,
+        oneClickInstall: true,
+      })
+    ).toBe(false);
   });
 });
 
