@@ -21,6 +21,17 @@ import {
 
 const onDarwin = process.platform === "darwin";
 
+function hasCommand(name: string): boolean {
+  try {
+    execFileSync("which", [name], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const hasRsvgConvert = hasCommand("rsvg-convert");
+
 const ROOT = process.cwd();
 const PIER_ICNS = readFileSync(join(ROOT, "build/icon.icns"));
 const STOCK_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
@@ -136,7 +147,7 @@ describe("PierDev.app bundle icon", () => {
     }
   });
 
-  it.runIf(onDarwin)(
+  it.runIf(onDarwin && hasRsvgConvert)(
     "installs a plate-filled icns as electron.icns plus Tahoe AppIcon assets",
     { timeout: 15_000 },
     () => {
