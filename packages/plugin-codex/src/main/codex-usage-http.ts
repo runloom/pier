@@ -1,7 +1,4 @@
-import type {
-  AccountUsageMetric,
-  AccountUsageQuotaMetric,
-} from "@pier/plugin-api/account-usage";
+import type { AccountUsageQuotaMetric } from "@pier/plugin-api/account-usage";
 import {
   createTimeoutSignal,
   mergeAbortSignals,
@@ -11,6 +8,11 @@ import {
   parseCodexAccountCheckMembership,
   parseCodexSubscriptionsMembership,
 } from "./codex-membership.ts";
+import {
+  fetchCodexResetCreditsSoft,
+  mergeResetCreditMetrics,
+  parseCodexResetCredits,
+} from "./codex-reset-credits.ts";
 import {
   extractAccountIdFromAccessToken,
   parseCodexAuthJsonTokens,
@@ -258,21 +260,10 @@ export function parseWhamUsageResult(json: unknown): AccountUsageResult {
     );
   }
 
-  const availableCount = data.rate_limit_reset_credits?.available_count;
-  // 0 表示没有可用重置次数：不进指标列表，避免 UI 展示「额度重置次数 0」
-  if (
-    typeof availableCount === "number" &&
-    Number.isInteger(availableCount) &&
-    availableCount > 0
-  ) {
-    const resetCredits: AccountUsageMetric = {
-      format: "count",
-      id: "codex:reset-credits",
-      kind: "scalar",
-      value: availableCount,
-    };
-    out.metrics.push(resetCredits);
-  }
+  out.metrics = mergeResetCreditMetrics(
+    out.metrics,
+    parseCodexResetCredits(json)
+  );
 
   if (out.metrics.length === 0) {
     return {
@@ -374,7 +365,18 @@ export async function fetchCodexUsageHttp(
       };
     }
     const result = parseWhamUsageResult(json);
-    if (result.status !== "ok" || accountId.length === 0) return result;
+    if (result.status !== "ok") return result;
+    const resetCredits = await fetchCodexResetCreditsSoft({
+      accessToken,
+      accountId,
+      fetchImpl,
+      signal: requestSignal,
+    });
+    const withCredits = {
+      ...result,
+      metrics: mergeResetCreditMetrics(result.metrics, resetCredits),
+    };
+    if (accountId.length === 0) return withCredits;
     const membership = await fetchCodexMembershipSoft({
       accessToken,
       accountId,
@@ -383,14 +385,14 @@ export async function fetchCodexUsageHttp(
     });
     return membership
       ? {
-          ...result,
+          ...withCredits,
           membershipResolved: true,
           planType: membership.planType,
           ...(membership.expiresAt === undefined
             ? {}
             : { subscriptionExpiresAt: membership.expiresAt }),
         }
-      : result;
+      : withCredits;
   } catch (error) {
     if (options.signal.aborted) {
       return { status: "error", error: "Aborted", metrics: [] };
