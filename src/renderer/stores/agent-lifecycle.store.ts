@@ -117,14 +117,18 @@ function applyLifecycleSnapshot(snapshot: CatalogDomainSnapshot): void {
     if (!parsed.success) {
       continue;
     }
-    if (item.presence !== "present" && item.presence !== "broken") {
-      continue;
-    }
     const id = parsed.data;
     const incomingProbe = incomingById.get(id);
     if (incomingProbe) {
       next[id] = incomingProbe;
-    } else if (previous[id]) {
+      continue;
+    }
+    // Local detect may omit details. Keep the last probe only while still
+    // present/broken so a missing item cannot resurrect a stale install.
+    if (
+      (item.presence === "present" || item.presence === "broken") &&
+      previous[id]
+    ) {
       next[id] = previous[id];
     }
   }

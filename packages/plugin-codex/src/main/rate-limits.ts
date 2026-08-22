@@ -1,7 +1,8 @@
-import type {
-  AccountUsageMetric,
-  AccountUsageQuotaMetric,
-} from "@pier/plugin-api/account-usage";
+import type { AccountUsageQuotaMetric } from "@pier/plugin-api/account-usage";
+import {
+  mergeResetCreditMetrics,
+  parseCodexResetCredits,
+} from "./codex-reset-credits.ts";
 import type { AccountUsageResult } from "./types.ts";
 
 interface RpcWindow {
@@ -112,24 +113,8 @@ export function parseRateLimitsResult(result: unknown): AccountUsageResult {
   if (typeof planTypeCandidate === "string" && planTypeCandidate.length > 0) {
     out.planType = planTypeCandidate;
   }
-  let resetCreditsMetric: AccountUsageMetric | undefined;
-  const resetCredits = rl.rateLimitResetCredits ?? obj.rateLimitResetCredits;
-  if (resetCredits && typeof resetCredits === "object") {
-    const available = (resetCredits as Record<string, unknown>).availableCount;
-    // 0 表示没有可用重置次数：不进指标列表，避免 UI 展示「额度重置次数 0」
-    if (
-      typeof available === "number" &&
-      Number.isInteger(available) &&
-      available > 0
-    ) {
-      resetCreditsMetric = {
-        format: "count",
-        id: "codex:reset-credits",
-        kind: "scalar",
-        value: available,
-      };
-    }
-  }
+  const resetCreditsMetric =
+    parseCodexResetCredits(obj)[0] ?? parseCodexResetCredits(rl)[0];
   if (hasMultiBucketView) {
     const preferredLimitId =
       typeof rl.limitId === "string" && rl.limitId.length > 0
@@ -205,7 +190,7 @@ export function parseRateLimitsResult(result: unknown): AccountUsageResult {
     };
   }
   if (resetCreditsMetric) {
-    out.metrics.push(resetCreditsMetric);
+    out.metrics = mergeResetCreditMetrics(out.metrics, [resetCreditsMetric]);
   }
   return out;
 }

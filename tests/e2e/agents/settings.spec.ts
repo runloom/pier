@@ -121,6 +121,9 @@ test.describe("Agents Settings e2e", () => {
           claudeRow.getByRole("button", { name: "详情" })
         ).toHaveCount(0);
         await expect(
+          claudeRow.getByRole("button", { name: "安装" })
+        ).toBeVisible();
+        await expect(
           claudeRow.getByRole("link", { name: "官网" })
         ).toHaveAttribute("href", "https://claude.com/claude-code");
         return;

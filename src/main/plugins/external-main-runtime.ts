@@ -1,11 +1,13 @@
 import { pathToFileURL } from "node:url";
 import type {
   LaunchWrapHandler,
+  MainPluginContext,
   MainPluginUsageData,
   PluginConfigurationApi,
 } from "@pier/plugin-api/main";
 import { attachPluginLanguageServers } from "../services/lsp/host-bridge.ts";
 import type { ManagedPluginRuntimeSource } from "../services/managed-plugins/install-runtime.ts";
+import { disposeDocumentOriginWindows } from "./document-origin-fetch.ts";
 import type { PluginRpcBus } from "./rpc-bus.ts";
 
 /**
@@ -28,6 +30,7 @@ export interface ExternalMainPluginModule {
 
 export interface ExternalMainPluginContext {
   configuration: PluginConfigurationApi;
+  documentOriginFetch?: MainPluginContext["documentOriginFetch"];
   events: {
     emit(event: string, payload: unknown): void;
   };
@@ -297,8 +300,12 @@ export function createExternalMainPluginRuntime(options: {
     },
     dispose: (pluginId) => disposePlugin(pluginId),
     async disposeAll(): Promise<void> {
-      for (const id of Object.keys(disposers)) {
-        await disposePlugin(id);
+      try {
+        for (const id of Object.keys(disposers)) {
+          await disposePlugin(id);
+        }
+      } finally {
+        disposeDocumentOriginWindows();
       }
     },
     async flushAllBeforeQuit(): Promise<void> {
@@ -306,7 +313,11 @@ export function createExternalMainPluginRuntime(options: {
       for (const [pluginId, callbacks] of Object.entries(flushCallbacks)) {
         tasks.push(flushPluginCallbacks(pluginId, callbacks));
       }
-      await Promise.all(tasks);
+      try {
+        await Promise.all(tasks);
+      } finally {
+        disposeDocumentOriginWindows();
+      }
     },
     async reload(source): Promise<void> {
       await disposePlugin(source.id);

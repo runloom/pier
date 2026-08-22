@@ -13,8 +13,31 @@ export interface PluginConfigurationApi {
   set(key: string, value: unknown): Promise<void>;
 }
 
+export interface DocumentOriginFetchRequest {
+  body?: Uint8Array;
+  headers?: Record<string, string>;
+  method?: "GET" | "POST";
+  origin: string;
+  signal?: AbortSignal;
+  url: string;
+}
+
+export interface DocumentOriginFetchResult {
+  body: Uint8Array;
+  ok: boolean;
+  status: number;
+}
+
 export interface MainPluginContext {
   configuration: PluginConfigurationApi;
+  /**
+   * Fetch `url` as a first-party document of `origin`. Host-owned: plugins
+   * must not import Electron. The host allowlists origins, requires https
+   * same-origin URLs, and honors `signal`.
+   */
+  documentOriginFetch?(
+    request: DocumentOriginFetchRequest
+  ): Promise<DocumentOriginFetchResult>;
   events: {
     emit(event: string, payload: unknown): void;
   };

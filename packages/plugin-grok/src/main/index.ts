@@ -4,6 +4,8 @@ import { createUsagePollingRegistry } from "@pier/plugin-api/account-usage";
 import type { MainPluginModule } from "@pier/plugin-api/main";
 import { createGrokAccountsService } from "./accounts-service.ts";
 import { createGrokProvider } from "./grok-provider.ts";
+import { originFetchOption } from "./grok-usage-types.ts";
+import { createRemainingResetsOriginFetch } from "./reset-credits-fetch.ts";
 import { registerGrokRpcHandlers } from "./rpc-handlers.ts";
 import { createGrokAccountsStateStore } from "./state.ts";
 
@@ -23,6 +25,11 @@ export const plugin: MainPluginModule = {
       ...(context.resolveUserCommand
         ? { resolveUserCommand: context.resolveUserCommand }
         : {}),
+      ...originFetchOption(
+        context.documentOriginFetch
+          ? createRemainingResetsOriginFetch(context.documentOriginFetch)
+          : undefined
+      ),
       realGrokHome:
         context.processEnv.GROK_HOME ??
         process.env.GROK_HOME ??

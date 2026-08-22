@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { createUsageCacheEntry } from "../../../../../packages/plugin-grok/src/main/accounts-usage.ts";
+import {
+  createUsageCacheEntry,
+  toUsageSnapshot,
+} from "../../../../../packages/plugin-grok/src/main/accounts-usage.ts";
 import {
   ACCESS_DENIED_ERROR,
   API_KEY_QUOTA_ERROR,
@@ -1003,6 +1006,39 @@ describe("fetchGrokUsage subscription soft-attach", () => {
 });
 
 describe("createUsageCacheEntry subscription retention", () => {
+  it("hides a cached reset count after the latest usage refresh fails", () => {
+    const cached = createUsageCacheEntry(
+      {
+        metrics: [
+          {
+            groupId: "grok:period",
+            id: "grok:period",
+            kind: "quota",
+            usedPercent: 20,
+          },
+          {
+            format: "count",
+            id: GROK_RESET_CREDITS_METRIC_ID,
+            kind: "scalar",
+            value: 1,
+          },
+        ],
+        status: "ok",
+      },
+      undefined,
+      100
+    );
+    const failed = createUsageCacheEntry(
+      { error: "temporarily unavailable", metrics: [], status: "error" },
+      cached,
+      200
+    );
+
+    expect(toUsageSnapshot(failed).metrics).toEqual([
+      expect.objectContaining({ id: "grok:period", kind: "quota" }),
+    ]);
+  });
+
   it("retains previous membership when a successful quota fetch cannot resolve membership", () => {
     const cached = createUsageCacheEntry(
       {

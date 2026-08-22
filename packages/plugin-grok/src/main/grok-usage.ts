@@ -4,7 +4,12 @@ import {
   isAuthFailureMessage,
 } from "./billing-http-error.ts";
 import { parseGrokBillingResult } from "./billing-parse.ts";
-import { type FetchImpl, resolveFetchImpl } from "./grok-usage-types.ts";
+import {
+  type FetchImpl,
+  originFetchOption,
+  type RemainingResetsOriginFetch,
+  resolveFetchImpl,
+} from "./grok-usage-types.ts";
 import {
   accessTokenExpired,
   extractSessionKeyFromAuthJson,
@@ -97,6 +102,7 @@ export async function fetchGrokUsage(options: {
   kind: "api_key" | "oidc";
   fetchImpl?: FetchImpl;
   onAuthJsonUpdated?: (authJson: string) => Promise<void> | void;
+  remainingResetsOriginFetch?: RemainingResetsOriginFetch;
   signal: AbortSignal;
 }): Promise<AccountUsageResult> {
   if (options.kind === "api_key") {
@@ -132,6 +138,7 @@ export async function fetchGrokUsage(options: {
       fetchGrokUsageAttempt({
         authJson,
         ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+        ...originFetchOption(options.remainingResetsOriginFetch),
         onAuthJsonUpdated,
         overallDeadlineMs: isRetry
           ? USAGE_RETRY_OVERALL_DEADLINE_MS
@@ -154,6 +161,7 @@ export async function fetchGrokUsage(options: {
       overall: null,
       sessionKey: latestSessionKey,
       userId: userIdFromEntry(selectOidcAuthEntry(authJson)?.entry),
+      ...originFetchOption(options.remainingResetsOriginFetch),
     });
   }
   return result;
@@ -163,6 +171,7 @@ async function fetchGrokUsageAttempt(options: {
   fetchImpl?: FetchImpl;
   onAuthJsonUpdated?: (authJson: string) => Promise<void> | void;
   overallDeadlineMs: number;
+  remainingResetsOriginFetch?: RemainingResetsOriginFetch;
   signal: AbortSignal;
 }): Promise<AccountUsageResult> {
   let authJson = options.authJson;
@@ -407,6 +416,7 @@ async function fetchGrokUsageAttempt(options: {
         overall: null,
         sessionKey,
         userId: userIdFromEntry(selected?.entry),
+        ...originFetchOption(options.remainingResetsOriginFetch),
       });
     }
     if (
@@ -439,6 +449,7 @@ async function fetchGrokUsageAttempt(options: {
           overall: null,
           sessionKey,
           userId: userIdFromEntry(selected?.entry),
+          ...originFetchOption(options.remainingResetsOriginFetch),
         });
       }
       if (
@@ -462,6 +473,7 @@ async function fetchGrokUsageAttempt(options: {
         overall: null,
         sessionKey,
         userId: userIdFromEntry(selected?.entry),
+        ...originFetchOption(options.remainingResetsOriginFetch),
       });
     }
     return softenEmptyQuotaResult(

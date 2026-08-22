@@ -4,6 +4,7 @@ import {
   type UsageCacheEntryBase,
 } from "@pier/plugin-api/account-usage";
 import type { GrokUsageSnapshot } from "../shared/accounts.ts";
+import { GROK_RESET_CREDITS_METRIC_ID } from "./reset-credits.ts";
 import type { GrokSubscriptionInfo } from "./subscription-parse.ts";
 import type { AccountUsageResult } from "./types.ts";
 
@@ -37,9 +38,15 @@ export function createUsageCacheEntry(
 }
 
 export function toUsageSnapshot(entry: UsageCacheEntry): GrokUsageSnapshot {
+  const metrics =
+    entry.status === "error"
+      ? entry.metrics.filter(
+          (metric) => metric.id !== GROK_RESET_CREDITS_METRIC_ID
+        )
+      : entry.metrics;
   return {
     attemptedAt: entry.attemptedAt,
-    metrics: entry.metrics,
+    metrics,
     status: entry.status,
     ...(entry.updatedAt === undefined ? {} : { updatedAt: entry.updatedAt }),
     ...(entry.error ? { error: entry.error } : {}),

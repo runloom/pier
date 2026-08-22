@@ -209,6 +209,13 @@ describe("fetchCodexUsageHttp", () => {
             }),
         };
       }
+      if (url.includes("/wham/rate-limit-reset-credits")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ available_count: 0 }),
+        };
+      }
       throw new Error(`unexpected URL: ${url}`);
     });
 
@@ -222,6 +229,117 @@ describe("fetchCodexUsageHttp", () => {
       status: "ok",
       subscriptionExpiresAt: Date.parse("2026-08-28T21:38:26+00:00"),
     });
+  });
+
+  it("fills reset credits from the dedicated wham endpoint", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/wham/usage")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              plan_type: "pro",
+              rate_limit: {
+                primary_window: {
+                  limit_window_seconds: 604_800,
+                  used_percent: 0,
+                },
+              },
+            }),
+        };
+      }
+      if (url.includes("/wham/rate-limit-reset-credits")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ available_count: 3 }),
+        };
+      }
+      if (url.includes("/accounts/check/") || url.includes("/subscriptions")) {
+        return {
+          ok: false,
+          status: 404,
+          text: async () => "",
+        };
+      }
+      throw new Error(`unexpected URL: ${url}`);
+    });
+
+    const result = await fetchCodexUsageHttp(makeAuthJson(), {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.metrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          format: "count",
+          id: "codex:reset-credits",
+          kind: "scalar",
+          value: 3,
+        }),
+      ])
+    );
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits",
+      expect.objectContaining({
+        method: "GET",
+      })
+    );
+  });
+
+  it("keeps quota when the dedicated reset-credits request fails", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/wham/usage")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              rate_limit: {
+                primary_window: {
+                  used_percent: 8,
+                  limit_window_seconds: 18_000,
+                },
+              },
+            }),
+        };
+      }
+      if (url.includes("/wham/rate-limit-reset-credits")) {
+        return {
+          ok: false,
+          status: 429,
+          text: async () =>
+            JSON.stringify({
+              detail: {
+                type: "connector_rate_limit",
+                message: "Connector rate limit exceeded",
+              },
+            }),
+        };
+      }
+      return {
+        ok: false,
+        status: 404,
+        text: async () => "",
+      };
+    });
+
+    const result = await fetchCodexUsageHttp(makeAuthJson(), {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.metrics).toEqual([
+      expect.objectContaining({
+        id: "codex:primary",
+        kind: "quota",
+        usedPercent: 8,
+      }),
+    ]);
   });
 
   it("combines the caller signal with an independent request timeout", async () => {
