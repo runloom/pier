@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1787153145309,
+  "generatedAt": 1787395754574,
   "plugins": {
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
@@ -85,7 +85,7 @@
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.4.12",
+      "latest": "1.4.13",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -170,6 +170,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "6c345490c2dd0e39c8a44218e95b7914b0e87f96aee8b5c439b6078e361709a2",
           "size": 693833
+        },
+        "1.4.13": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.13/pier.codex-1.4.13.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "a4357020eb9a9934ec778cfbf9a8077a1bb58cad391665eaf0aa7d427955f936",
+          "size": 695881
         }
       }
     },
@@ -177,7 +183,7 @@
       "description": "Manage Grok accounts, login, and switch for Pier.",
       "displayName": "Grok Account Management",
       "id": "pier.grok",
-      "latest": "1.1.13",
+      "latest": "1.1.14",
       "locales": {
         "en": {
           "name": "Grok Account Management",
@@ -268,6 +274,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "507ce0e13431c88b7eee8055c05e47d42230e47c296567a6e01c2a5a085f3804",
           "size": 759374
+        },
+        "1.1.14": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.14/pier.grok-1.1.14.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "e9c85532bb9f3956194dd933029919265d5bad7026822eac6803a1b951a32885",
+          "size": 761422
         }
       }
     },
@@ -372,11 +384,11 @@
       }
     }
   },
-  "sequence": 35,
+  "sequence": 36,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "l09Rjq5FS31gHXzqIisrm5+VVlNkcERdBZIaGYIGYwZS31cNJ54vZZjeNRPwx3sK6X0TmNYsRRFh/c5gCY1eDQ=="
+    "value": "/bGJoC6uDOwWuFxBwr4th478ZHrXemjzK8V4Q5O+d64R7tZJ2WXxjcscoWUY9S2S5VOqmzXMB6bWLY/07ZfCCQ=="
   }
 }
