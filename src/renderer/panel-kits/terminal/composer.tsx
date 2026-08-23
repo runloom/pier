@@ -24,7 +24,7 @@ import {
   elementSoftWrapped,
   focusComposerInput,
   readComposerDraft,
-  reportComposerSendFailure,
+  sendComposerPassthroughKeyPress,
   writeComposerDraft,
 } from "./composer-helpers.ts";
 import {
@@ -34,8 +34,8 @@ import {
 import { runComposerPasteEdit } from "./composer-paste-edit-actions.ts";
 import { TerminalComposerView } from "./composer-view.tsx";
 import { useTerminalComposerAttachments } from "./hooks/use-composer-attachments.ts";
-import { useTerminalComposerClose } from "./hooks/use-composer-close.ts";
 import { useComposerDraft } from "./hooks/use-composer-draft.ts";
+import { useComposerEditorSnapshot } from "./hooks/use-composer-editor-snapshot.ts";
 import { useTerminalComposerEscape } from "./hooks/use-composer-escape.ts";
 import { useComposerInserter } from "./hooks/use-composer-inserter.ts";
 import { useTerminalComposerSend } from "./hooks/use-composer-send.ts";
@@ -98,6 +98,11 @@ export function TerminalComposer({
 
   useComposerDraft(panelId, value);
   useEffect(() => registerComposerDraftSinkForTests(setValue), []);
+  const initialSnapshotJson = useComposerEditorSnapshot({
+    editorRef,
+    panelId,
+    value,
+  });
   useComposerInserter({
     editorRef,
     onValueChange: setValue,
@@ -302,12 +307,11 @@ export function TerminalComposer({
     }
   }, [isActive, overlayId]);
 
-  const closeComposer = useTerminalComposerClose({
-    clearAttachments: attachments.clearAll,
-    onClose: () => {
-      onCloseRef.current();
-    },
-  });
+  // Close keeps the panel-scoped draft, editor snapshot, and attachment rail
+  // intact so toggle/reopen restores the full composition (send clears them).
+  const closeComposer = useCallback(() => {
+    onCloseRef.current();
+  }, []);
 
   useTerminalComposerEscape({
     disabled,
@@ -318,26 +322,8 @@ export function TerminalComposer({
     valueRef,
   });
 
-  const sendKey = (keyPress: ComposerPassthroughKeyPress) => {
-    window.pier.terminal
-      .sendKeyPress({
-        keycode: keyPress.keycode,
-        panelId,
-        ...(keyPress.mods === undefined ? {} : { mods: keyPress.mods }),
-        ...(keyPress.text === undefined ? {} : { text: keyPress.text }),
-      })
-      .then((result) => {
-        if (!result.ok) {
-          reportComposerSendFailure(t, result.error ?? "");
-        }
-      })
-      .catch((err: unknown) => {
-        reportComposerSendFailure(
-          t,
-          err instanceof Error ? err.message : String(err)
-        );
-      });
-  };
+  const sendKey = (keyPress: ComposerPassthroughKeyPress) =>
+    sendComposerPassthroughKeyPress({ keyPress, panelId, t });
 
   const { send } = useTerminalComposerSend({
     buildPayloadOrReport: attachments.buildPayloadOrReport,
@@ -359,7 +345,11 @@ export function TerminalComposer({
       return;
     }
     if (event.key === "Escape") {
-      // @ / # 菜单优先：关掉菜单，不关增强输入。
+      // @ / # / 技能菜单优先：关掉菜单，不关增强输入。菜单的 Esc 处理只属于
+      // 本层（以及焦点不在编辑器时的 use-composer-escape）；插件侧刻意不注册
+      // KEY_ESCAPE_COMMAND —— Lexical 原生 keydown 先于本 handler 执行，若在
+      // Lexical 命令里 dismiss 会抢先把 menuOpenRef 翻 false，导致同一个
+      // Esc 直接关掉整张增强输入卡片。
       // 勿因其它层（历史受控 Tooltip 等）的 preventDefault 就放弃关闭。
       if (editorRef.current?.isMentionMenuOpen()) {
         event.preventDefault();
@@ -470,6 +460,7 @@ export function TerminalComposer({
       disabled={disabled}
       editorRef={editorRef}
       hasAttachments={hasAttachments}
+      initialSnapshotJson={initialSnapshotJson}
       inputFocusRisk={inputFocusRisk}
       onChromeMouseDown={focusInputFromChrome}
       onDragOver={attachments.onDragOver}

@@ -146,7 +146,7 @@ describe("createDefaultPluginSources", () => {
     );
     expect(englishLocale).toMatchObject({
       commands: {
-        "pier.worktree.create": { title: "Create Worktree" },
+        "pier.worktree.create": { title: "New Worktree" },
         "pier.worktree.delete": { title: "Delete Worktrees..." },
         "pier.worktree.list": { title: "List Worktrees" },
       },
@@ -183,7 +183,7 @@ describe("createDefaultPluginSources", () => {
         locales: {
           en: {
             commands: {
-              "pier.worktree.create": { title: "Create Worktree" },
+              "pier.worktree.create": { title: "New Worktree" },
               "pier.worktree.delete": { title: "Delete Worktrees..." },
               "pier.worktree.list": { title: "List Worktrees" },
             },
@@ -196,7 +196,7 @@ describe("createDefaultPluginSources", () => {
           },
           "zh-CN": {
             commands: {
-              "pier.worktree.create": { title: "创建工作树" },
+              "pier.worktree.create": { title: "新建工作树" },
               "pier.worktree.delete": { title: "删除工作树..." },
               "pier.worktree.list": { title: "工作树列表" },
             },

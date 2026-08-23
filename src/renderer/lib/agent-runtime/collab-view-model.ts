@@ -8,6 +8,7 @@ import {
 } from "@shared/contracts/agent/runtime-index.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import type { AppNotification } from "@shared/contracts/notification-center.ts";
+import { resolveAgentListTitle } from "@/lib/agent-runtime/list-title.ts";
 
 export type CollaborationStatusKey =
   | "agents.section.needsYou"
@@ -81,17 +82,24 @@ function statusKeyFor(entry: AgentRuntimeIndexEntry): CollaborationStatusKey {
   return "agents.collab.statusUnknown";
 }
 
-function sessionTitle(entry: AgentRuntimeIndexEntry): string {
-  const product = entry.sessionTitle?.trim();
-  if (product) {
-    return product;
-  }
-  return entry.agentId;
+function sessionTitle(
+  entry: AgentRuntimeIndexEntry,
+  tabShort: string | null | undefined
+): string {
+  // 会话列表主标题与 tab 完全一致（本窗 descriptor 优先，跨窗按 tab 优先级降级）。
+  return resolveAgentListTitle({
+    agentId: entry.agentId,
+    cwd: entry.cwd,
+    sessionTitle: entry.sessionTitle,
+    sessionTitleSource: entry.sessionTitleSource,
+    tabShort,
+  });
 }
 
 export function buildCollaborationSession(
   entry: AgentRuntimeIndexEntry,
-  currentWindowId: string | null
+  currentWindowId: string | null,
+  tabShort?: string | null | undefined
 ): CollaborationSessionVm {
   const sameWindow =
     currentWindowId !== null && entry.windowId === currentWindowId;
@@ -103,7 +111,7 @@ export function buildCollaborationSession(
     agentRef: entry.agentRef,
     panelId: entry.panelId,
     windowId: entry.windowId,
-    title: sessionTitle(entry),
+    title: sessionTitle(entry, tabShort ?? null),
     needsYou,
     roleKey,
     statusKey: statusKeyFor(entry),
@@ -260,9 +268,15 @@ export function buildCollaborationViewModel(input: {
   entries: readonly AgentRuntimeIndexEntry[];
   notifications?: readonly AppNotification[];
   selectedAgentRef?: string | null;
+  /** panelId → 已解析 tab short（PanelDescriptorStore）；列表主标题与 tab 一致。 */
+  tabShortByPanelId?: Readonly<Record<string, string>>;
 }): CollaborationViewModel {
   const sessions = input.entries.map((entry) =>
-    buildCollaborationSession(entry, input.currentWindowId)
+    buildCollaborationSession(
+      entry,
+      input.currentWindowId,
+      input.tabShortByPanelId?.[entry.panelId]
+    )
   );
   const attention = pickAttention(sessions, input.notifications ?? []);
   const selected = pickSelected(sessions, input.selectedAgentRef, attention);

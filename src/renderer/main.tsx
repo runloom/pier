@@ -10,6 +10,7 @@ import {
   StartupErrorScreen,
   StartupScreen,
 } from "./components/common/startup-error-screen.tsx";
+import { resolveLanguagePreference } from "./i18n/language.ts";
 
 let applicationRoot: Root | null = null;
 
@@ -26,6 +27,10 @@ function getApplicationRoot(): Root {
 }
 
 async function bootstrap() {
+  // 首帧前把 html lang 同步为系统语言：此时 i18next 尚未初始化，
+  // 启动壳与启动失败兜底文案都靠 documentElement.lang 分中英文，
+  // 否则只会读到 index.html 的默认 lang="en"。必须先于一切可抛错语句。
+  document.documentElement.lang = resolveLanguagePreference("system");
   installBundledFontFaces();
   installDocumentAutoHideScrollbars();
   const root = getApplicationRoot();
