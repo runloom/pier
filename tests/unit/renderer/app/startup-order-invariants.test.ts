@@ -35,6 +35,21 @@ describe("renderer startup ordering", () => {
     );
   });
 
+  // 启动壳先于 i18next 渲染：html lang 必须在首帧前解析为系统语言，
+  // 否则 StartupScreen 等启动期文案只会读到 index.html 的默认 lang="en"。
+  it("resolves the document language from the system locale before painting the startup shell", () => {
+    const langSync = mainSource.indexOf(
+      'document.documentElement.lang = resolveLanguagePreference("system")'
+    );
+    expect(langSync).toBeGreaterThan(-1);
+    // 必须是 bootstrap() 第一条语句：先于一切可抛错调用，
+    // 这样 .catch 兜底的 StartupErrorScreen 也能读到正确语言。
+    expect(mainSource.indexOf("installBundledFontFaces()")).toBeGreaterThan(
+      langSync
+    );
+    expect(mainSource.indexOf("root.render(")).toBeGreaterThan(langSync);
+  });
+
   it("installs the renderer command listener before the first startup await", () => {
     expect(
       startSource.indexOf("installWorkspaceRendererCommandListener()")
