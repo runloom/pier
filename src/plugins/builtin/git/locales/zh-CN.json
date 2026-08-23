@@ -267,13 +267,14 @@
         "chuangjian gongzuoshu",
         "新建工作树",
         "创建 worktree",
+        "新建 worktree",
         "xin jian gong zuo shu",
         "wt",
         "wt add"
       ],
       "category": "工作树",
-      "description": "在仓库托管的工作树目录下创建 Git 工作树。",
-      "title": "创建工作树"
+      "description": "在仓库托管的工作树目录下新建 Git 工作树。",
+      "title": "新建工作树"
     },
     "pier.worktree.delete": {
       "aliases": [
@@ -805,11 +806,11 @@
     "ui.worktreeCreate.baseLabel": "基于",
     "ui.worktreeCreate.branchLabel": "分支",
     "ui.worktreeCreate.branchPlaceholder": "feature/fix-dialog",
-    "ui.worktreeCreate.confirm": "创建",
+    "ui.worktreeCreate.confirm": "新建",
     "ui.worktreeCreate.close": "关闭",
-    "ui.worktreeCreate.createFailed": "工作树创建失败",
-    "ui.worktreeCreate.creatingWorktree": "工作树创建中…",
-    "ui.worktreeCreate.description": "为当前任务创建独立工作树",
+    "ui.worktreeCreate.createFailed": "工作树新建失败",
+    "ui.worktreeCreate.creatingWorktree": "工作树新建中…",
+    "ui.worktreeCreate.description": "为当前任务新建独立工作树",
     "ui.worktreeCreate.errorAgentRequired": "请选择用于开始任务的智能体",
     "ui.worktreeCreate.errorBranchExists": "分支已存在",
     "ui.worktreeCreate.errorBranchInvalid": "请输入有效的 Git 分支名，仅使用字母、数字和 . _ / -",

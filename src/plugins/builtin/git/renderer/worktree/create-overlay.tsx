@@ -227,7 +227,7 @@ function WorktreeCreateOverlay({
           {context.i18n.t("ui.cancel", undefined, "Cancel")}
         </Button>
         <Button form={worktreeFormId} type="submit" variant="default">
-          {text("confirm", undefined, "Create")}
+          {text("confirm", undefined, "New")}
         </Button>
       </div>
     );
@@ -254,11 +254,11 @@ function WorktreeCreateOverlay({
           value={mode}
         >
           <TabsList className="w-full">
-            <TabsTrigger value="ai">
-              {text("modeAi", undefined, "Smart generation")}
-            </TabsTrigger>
             <TabsTrigger value="custom">
               {text("modeCustom", undefined, "Manual naming")}
+            </TabsTrigger>
+            <TabsTrigger value="ai">
+              {text("modeAi", undefined, "Smart generation")}
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -326,12 +326,12 @@ export function openWorktreeCreateOverlay(
 ): void {
   context.dialogs.open({
     id: "worktree-create",
-    size: "lg",
+    size: "default",
     title: context.i18n.t("ui.worktreeCreate.title", undefined, "New Worktree"),
     description: context.i18n.t(
       "ui.worktreeCreate.description",
       undefined,
-      "Create an isolated worktree for this task"
+      "Create a new isolated worktree for this task"
     ),
     content: ({ close, setFooter }) => (
       <WorktreeCreateOverlay
