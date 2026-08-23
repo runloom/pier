@@ -96,6 +96,15 @@ win:
 mac:
   category: public.app-category.developer-tools
   icon: build/icon.icns
+  # macOS 26+ layered icon: actool-compiled from build/app-icon.icon. Without
+  # CFBundleIconName + Assets.car, Tahoe boxes the legacy ICNS onto a system
+  # plate in Activity Monitor / System Settings. icon.icns stays the ≤ macOS 15
+  # fallback.
+  extendInfo:
+    CFBundleIconName: app-icon
+  extraResources:
+    - from: build/Assets.car
+      to: Assets.car
   target:
     - target: dmg
       arch: [arm64, x64]

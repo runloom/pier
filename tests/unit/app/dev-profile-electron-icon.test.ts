@@ -148,7 +148,7 @@ describe("PierDev.app bundle icon", () => {
   });
 
   it.runIf(onDarwin && hasRsvgConvert)(
-    "installs a plate-filled icns as electron.icns plus Tahoe AppIcon assets",
+    "installs a plate-filled icns and keeps the icns-only name without the repo car",
     { timeout: 15_000 },
     () => {
       const root = mkdtempSync(join(tmpdir(), "pier-dev-icon-"));
@@ -170,16 +170,20 @@ describe("PierDev.app bundle icon", () => {
         join(resources, "electron.icns"),
         Buffer.from("electron-stock-icon")
       );
+      writeFileSync(
+        join(resources, "Assets.car"),
+        Buffer.from("stale-bitmap-car")
+      );
       writeFileSync(join(targetApp, "Contents", "Info.plist"), STOCK_PLIST);
 
       expect(
         applyPierDevAppIcon(worktree, targetApp, { bundleVersion: "43.4.0.1" })
-      ).toBe(true);
+      ).toBe("AppIcon");
       const installed = readFileSync(join(resources, "electron.icns"));
       expect(installed.equals(PIER_ICNS)).toBe(false);
       expect(readFileSync(join(resources, "AppIcon.icns"))).toEqual(installed);
       expect(existsSync(join(resources, "pier.icns"))).toBe(false);
-      expect(existsSync(join(resources, "Assets.car"))).toBe(true);
+      expect(existsSync(join(resources, "Assets.car"))).toBe(false);
       const png = extractIcnsPng(
         join(resources, "electron.icns"),
         "icon_512x512.png"
@@ -193,6 +197,46 @@ describe("PierDev.app bundle icon", () => {
       expect(plist).toContain("AppIcon");
       expect(plist).toContain("CFBundleIconName");
       expect(plist).toContain("43.4.0.1");
+    }
+  );
+
+  it.runIf(onDarwin && hasRsvgConvert)(
+    "installs the repo layered Assets.car and stamps CFBundleIconName=app-icon",
+    { timeout: 15_000 },
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "pier-dev-icon-car-"));
+      roots.push(root);
+      const worktree = join(root, "worktree");
+      const targetApp = join(root, "PierDev.app");
+      const resources = join(targetApp, "Contents", "Resources");
+      mkdirSync(join(worktree, "build"), { recursive: true });
+      mkdirSync(resources, { recursive: true });
+      copyFileSync(
+        join(ROOT, "build", "app-icon-master.svg"),
+        join(worktree, "build", "app-icon-master.svg")
+      );
+      copyFileSync(
+        join(ROOT, "build", "app-icon-micro.svg"),
+        join(worktree, "build", "app-icon-micro.svg")
+      );
+      writeFileSync(
+        join(worktree, "build", "Assets.car"),
+        Buffer.from("layered-car")
+      );
+      writeFileSync(join(targetApp, "Contents", "Info.plist"), STOCK_PLIST);
+
+      expect(
+        applyPierDevAppIcon(worktree, targetApp, { bundleVersion: "43.4.0.1" })
+      ).toBe("app-icon");
+      expect(readFileSync(join(resources, "Assets.car"))).toEqual(
+        Buffer.from("layered-car")
+      );
+      const plist = readFileSync(
+        join(targetApp, "Contents", "Info.plist"),
+        "utf8"
+      );
+      expect(plist).toContain("CFBundleIconName");
+      expect(plist).toContain("<string>app-icon</string>");
     }
   );
 
@@ -368,7 +412,9 @@ describe("PierDev.app bundle icon", () => {
     );
     expect(source).toContain("CFBundleIconName");
     expect(source).toContain("Assets.car");
-    expect(source).toContain("brandPierDevHelpers(targetApp)");
+    expect(source).toContain("brandPierDevHelpers(");
+    expect(source).toContain('typeof iconApplied === "string"');
+    expect(source).toContain("MAC_TAHOE_ICON_NAME");
     expect(source).toContain("app-icon-master.svg");
     expect(source).toContain("app-icon-micro.svg");
     expect(source).toContain("platedFillSvg");
