@@ -26,8 +26,15 @@ export const MERMAID_THEME_CSS = `
     fill: var(--foreground) !important;
     font-family: inherit !important;
   }
-  .edgeLabel, .labelBkg {
+  /* mermaid base theme paints edge-label pills pink through its own
+     ".edgeLabel p" / ".edgeLabel rect" rules; neutralize every layer so a
+     label reads as plain foreground text floating on the surface. */
+  .edgeLabel, .labelBkg, .edgeLabel p {
     background-color: var(--background) !important;
+  }
+  .edgeLabel rect {
+    fill: transparent !important;
+    opacity: 1 !important;
   }
   .actor, .actor-man, .classGroup rect, .er.entityBox, .statediagram-state rect, .statediagram-cluster rect, .mindmap-node > * {
     fill: var(--card) !important;

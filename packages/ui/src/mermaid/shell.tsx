@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { MediaFullscreenButton } from "../image-preview/media-fullscreen-button.tsx";
+import { isPlainSurfaceClick } from "../media/surface-open.ts";
 import { cn } from "../utils.ts";
 
 export function MermaidShell({
@@ -21,15 +22,29 @@ export function MermaidShell({
   showExpand: boolean;
   surfaceClassName?: string | undefined;
 }) {
+  const openFromSurface = (event: MouseEvent<HTMLDivElement>): void => {
+    // Whole-card click opens fullscreen preview; the shared guard keeps
+    // node buttons, content-slot controls, links, and finished text
+    // selections from triggering it.
+    if (!isPlainSurfaceClick(event.target)) {
+      return;
+    }
+    onOpenFullscreen?.();
+  };
   const surface = (
+    // biome-ignore lint/a11y/noStaticElementInteractions: redundant pointer shortcut; keyboard path is the visible expand button
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: redundant pointer shortcut; keyboard path is the visible expand button
+    // biome-ignore lint/a11y/useKeyWithClickEvents: redundant pointer shortcut; keyboard path is the visible expand button
     <div
       className={cn(
         "group relative min-w-0 overflow-hidden rounded-lg border bg-background",
+        showExpand && "cursor-zoom-in",
         surfaceClassName,
         className
       )}
       data-presentation="card"
       data-slot="mermaid"
+      onClick={showExpand ? openFromSurface : undefined}
     >
       {children}
       {showExpand ? (
@@ -66,14 +81,14 @@ export function MermaidShell({
 
 export function MermaidEmpty({
   "aria-label": ariaLabel,
-  className,
   isStage,
   text,
+  className,
 }: {
   "aria-label": string;
-  className?: string | undefined;
   isStage: boolean;
   text: string;
+  className?: string | undefined;
 }) {
   return (
     <div

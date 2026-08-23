@@ -94,6 +94,10 @@ export function createMarkdownRendererLabels(
       "filePanel.markdown.diagramPreviewTitle",
       "Diagram preview"
     ),
+    diagramScaledHint: t(
+      "filePanel.markdown.diagramScaledHint",
+      "Scaled down — click to view fullscreen"
+    ),
     imagePreviewFailed: t(
       "filePanel.markdown.imagePreviewFailed",
       "Unable to open image preview"

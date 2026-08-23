@@ -26,6 +26,11 @@ export interface MermaidProps {
   renderNodeContent?: ((node: MermaidNode) => ReactNode) | undefined;
   selectedId?: string | undefined;
   /**
+   * Copy shown next to the shrink hint chip when the inline diagram is scaled
+   * below its natural width. Omit for an icon-only chip.
+   */
+  shrinkHint?: string | undefined;
+  /**
    * Native mermaid source. Sequence, state, class, ER, and mindmap use this
    * so mermaid owns those families. When set, layout ignores `nodes` / `edges`.
    * Architecture / flowchart cards write mermaid `flowchart` from `nodes` /

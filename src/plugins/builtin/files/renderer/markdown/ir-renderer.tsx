@@ -189,6 +189,7 @@ function renderBlock(
               label={context.labels.diagramLabel}
               openFullscreenLabel={context.labels.openFullscreen}
               previewTitle={context.labels.diagramPreviewTitle}
+              shrinkHintLabel={context.labels.diagramScaledHint}
               source={block.value}
             />
           </div>

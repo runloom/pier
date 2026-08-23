@@ -7,7 +7,13 @@ import {
   AlertDialogTitle,
 } from "@pier/ui/alert-dialog.tsx";
 import { Dialog, DialogContent, DialogTitle } from "@pier/ui/dialog.tsx";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContentPreviewHost } from "@/components/common/content-preview-host.tsx";
 import { initI18n } from "@/i18n/index.ts";
@@ -59,12 +65,21 @@ beforeEach(async () => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
   cleanup();
   closeContentPreview();
+  // Any UI-driven close queues history.back(), and jsdom delivers its
+  // unwind popstate asynchronously (~ms). Drain it here so a stray
+  // popstate can never land inside the NEXT test's freshly mounted host.
+  await new Promise((resolve) => {
+    setTimeout(resolve, 20);
+  });
   resetTerminalSurfaceSuppressionForTests();
   useKeybindingScope.setState({ overlayStack: [] });
   Reflect.deleteProperty(window, "pier");
+  // Synthetic-back tests dispatch popstate without traversal; drop any
+  // leftover preview marker so tests stay isolated.
+  window.history.replaceState(null, "");
 });
 
 describe("ContentPreviewHost", () => {
@@ -376,5 +391,50 @@ describe("ContentPreviewHost", () => {
     expect(preview).toBeLessThan(settings);
     expect(preview).toBeLessThan(dialogs);
     expect(preview).toBeLessThan(contentDialogs);
+  });
+
+  it("pushes a history entry on open and closes on user back", async () => {
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "history",
+    });
+    await screen.findByTestId("content-preview");
+    expect(window.history.state).toHaveProperty("pierContentPreview");
+
+    // User-driven back while open closes the preview.
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    await waitFor(() =>
+      expect(screen.queryByTestId("content-preview")).toBeNull()
+    );
+  });
+
+  it("unwinds its history entry when closed from our own UI", async () => {
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "unwind",
+    });
+    await screen.findByTestId("content-preview");
+    expect(window.history.state).toHaveProperty("pierContentPreview");
+    let unwindPopstates = 0;
+    const countPopstate = () => {
+      unwindPopstates += 1;
+    };
+    window.addEventListener("popstate", countPopstate);
+    fireEvent.click(screen.getByTestId("content-preview-close"));
+    await waitFor(() => {
+      const state = window.history.state as Record<string, unknown> | null;
+      expect(state?.pierContentPreview ?? null).toBeNull();
+    });
+    // The queued back() must actually traverse (its popstate lands within
+    // a tick) and the bridge must swallow it — the preview stays closed.
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+    window.removeEventListener("popstate", countPopstate);
+    expect(unwindPopstates).toBe(1);
+    expect(window.history.state).toBeNull();
+    expect(screen.queryByTestId("content-preview")).toBeNull();
   });
 });

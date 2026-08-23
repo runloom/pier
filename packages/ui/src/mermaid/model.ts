@@ -46,30 +46,45 @@ export interface MermaidEdge {
 }
 
 /**
- * Card chrome: the Ant soft-status pairing (`bg-status-*-bg` fill +
- * `bg-status-*-border` hairline) — the same calibrated triad Alert/badges
- * use. Kind glyphs use foreground so 20px strokes stay readable on the
- * pale fill; hue stays in the card surface. Run-status marks keep
- * chromatic tokens. Mermaid theme CSS must not paint those SVG paths
- * (see `MERMAID_THEME_CSS`). Border/fill keep mid/low chroma so a dense
- * graph does not shout.
+ * Card chrome: translucent wash of the family hue over the surface plus a
+ * same-hue hairline. Diagrams are dense multi-card surfaces — opaque
+ * colorXxxBg solids read as mud on near-black canvases, so cards take the
+ * hue at low alpha instead (same recipe as widget preview swatches).
+ * Kind glyphs stay foreground; run-status marks keep chromatic -fg tokens.
+ * Mermaid theme CSS must not paint slotted SVG paths (see theme.ts).
+ *
+ * Every class name is a verbatim literal: Tailwind extracts candidates
+ * statically and silently drops anything composed at runtime, and the
+ * status-token family is `destructive/warning/success/info/done`
+ * (`--color-*` in tailwind-theme.css) — there is no bare `danger` color.
  */
-export const TONE_SURFACE: Partial<Record<MermaidTone, string>> = {
-  danger: "border-status-danger-border bg-status-danger-bg",
-  done: "border-status-done-border bg-status-done-bg",
-  info: "border-status-info-border bg-status-info-bg",
-  success: "border-status-success-border bg-status-success-bg",
-  warning: "border-status-warning-border bg-status-warning-bg",
+const HUE_WASH: Record<
+  "danger" | "done" | "info" | "success" | "warning",
+  string
+> = {
+  danger: "border-destructive/40 bg-destructive/10",
+  done: "border-done/40 bg-done/10",
+  info: "border-info/40 bg-info/10",
+  success: "border-success/40 bg-success/10",
+  warning: "border-warning/40 bg-warning/10",
 };
 
-/** Role chrome: same tint+hairline family; artifact/external dashed.
+export const TONE_SURFACE: Partial<Record<MermaidTone, string>> = {
+  danger: HUE_WASH.danger,
+  done: HUE_WASH.done,
+  info: HUE_WASH.info,
+  success: HUE_WASH.success,
+  warning: HUE_WASH.warning,
+};
+
+/** Role chrome: same hue-wash family; artifact/external dashed.
  * Light `--primary` / `--muted` are near-black / near-white — do not use them. */
 export const KIND_SURFACE: Record<MermaidKind, string> = {
-  actor: "border-status-info-border bg-status-info-bg",
-  agent: "border-status-done-border bg-status-done-bg",
-  artifact: "border-dashed border-status-info-border bg-status-info-bg",
-  external: "border-dashed border-status-warning-border bg-status-warning-bg",
-  tool: "border-status-success-border bg-status-success-bg",
+  actor: HUE_WASH.info,
+  agent: HUE_WASH.done,
+  artifact: "border-dashed border-info/40 bg-info/10",
+  external: "border-dashed border-warning/40 bg-warning/10",
+  tool: HUE_WASH.success,
 };
 
 /** Kind title-row glyph: foreground so 20px strokes read on pale fills. */

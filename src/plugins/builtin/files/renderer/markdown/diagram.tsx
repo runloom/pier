@@ -1,9 +1,12 @@
 import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
 import { bakeSvgForStandalonePreview } from "@pier/ui/image-preview/bake-svg-for-standalone-preview.ts";
 import { MediaFullscreenButton } from "@pier/ui/image-preview/media-fullscreen-button.tsx";
+import { isPlainSurfaceClick } from "@pier/ui/media/surface-open.ts";
+import { isDiagramShrunk } from "@pier/ui/mermaid/scene.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { Maximize2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applySvgDisplaySize,
@@ -24,6 +27,7 @@ export function MarkdownDiagram({
   label,
   openFullscreenLabel,
   previewTitle,
+  shrinkHintLabel,
   source,
 }: {
   charts: RendererPluginContext["charts"];
@@ -34,6 +38,8 @@ export function MarkdownDiagram({
   label: string;
   openFullscreenLabel: string;
   previewTitle: string;
+  /** Copy for the scale-down hint chip; omit for icon-only. */
+  shrinkHintLabel?: string | undefined;
   source: string;
 }) {
   const [state, setState] = useState<
@@ -41,12 +47,13 @@ export function MarkdownDiagram({
     | { status: "error" }
     | { status: "ready"; svg: string }
   >({ status: "loading" });
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   /** Keep last successful SVG while re-rendering so the diagram does not flash empty. */
   const lastReadySvgRef = useRef<string | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [shellEl, setShellEl] = useState<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [scaledDown, setScaledDown] = useState(false);
   const blockHeightLimit = useMarkdownPreviewPrefsStore(
     (state) => state.blockHeightLimit
   );
@@ -129,6 +136,7 @@ export function MarkdownDiagram({
     if (!(slotWidth > 0)) {
       slotWidth = intrinsic.width;
     }
+    setScaledDown(isDiagramShrunk(intrinsic.width, slotWidth));
     const display = computeNaturalCappedSize(intrinsic, slotWidth, 1);
     applySvgDisplaySize(svg, display);
     root.replaceChildren(svg);
@@ -161,13 +169,29 @@ export function MarkdownDiagram({
   }
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: whole-card pointer shortcut; keyboard path is the visible fullscreen button
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: whole-card pointer shortcut; keyboard path is the visible fullscreen button
+    // biome-ignore lint/a11y/useKeyWithClickEvents: whole-card pointer shortcut; keyboard path is the visible fullscreen button
     <div
       className={cn(
         "group relative overflow-auto rounded-md border p-3",
+        contentPreview && "cursor-zoom-in",
         heightCapped && MARKDOWN_DIAGRAM_MAX_HEIGHT_CLASS
       )}
       data-scrollbar={heightCapped ? "overlay" : undefined}
       data-slot="markdown-diagram"
+      onClick={
+        contentPreview
+          ? (event) => {
+              // Parity with canvas mermaid cards: plain surface click opens
+              // fullscreen; interactive children and text selections opt out.
+              if (!isPlainSurfaceClick(event.target)) {
+                return;
+              }
+              openPreview();
+            }
+          : undefined
+      }
       onWheel={heightCapped ? forwardWheelToMarkdownPreview : undefined}
       ref={shellRef}
     >
@@ -187,6 +211,16 @@ export function MarkdownDiagram({
           label={openFullscreenLabel}
           onClick={openPreview}
         />
+      ) : null}
+      {contentPreview && displaySvg && scaledDown ? (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute right-2 bottom-2 z-10 flex items-center gap-1 rounded-full border bg-background/90 px-2 py-0.5 text-muted-foreground text-xs shadow-sm"
+          data-slot="markdown-diagram-shrink-hint"
+        >
+          {shrinkHintLabel ? <span>{shrinkHintLabel}</span> : null}
+          <Maximize2 className="size-3" />
+        </div>
       ) : null}
     </div>
   );
