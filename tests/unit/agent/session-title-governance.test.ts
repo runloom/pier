@@ -263,7 +263,12 @@ describe("agent-session-title governance", () => {
         continue;
       }
       for (const body of titleInputCallBodies(source)) {
-        if (body.includes("projectRootPath:") || body.includes("cwd:")) {
+        if (
+          body.includes("projectRootPath:") ||
+          body.includes("cwd:") ||
+          // 简写 `{ cwd }` 同样传递了路径锚点。
+          /cwd\s*\}/.test(body)
+        ) {
           continue;
         }
         offenders.push(relative(REPO_ROOT, file).split(sep).join("/"));

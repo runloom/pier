@@ -1,9 +1,5 @@
 import { formatDurationShort } from "@pier/ui/format.tsx";
 import {
-  agentSessionTitleInput,
-  resolveAgentSessionTitle,
-} from "@shared/agent-session-title/index.ts";
-import {
   type AgentRuntimeIndexEntry,
   isAgentIndexNeedsYou,
   isAgentIndexRunning,
@@ -12,6 +8,7 @@ import {
 import i18next from "i18next";
 import { Bot } from "lucide-react";
 import { agentStatusTextKey } from "@/components/agent-status/visual.ts";
+import { resolveAgentListTitle } from "@/lib/agent-runtime/list-title.ts";
 import type {
   QuickPickItem,
   QuickPickSection,
@@ -27,6 +24,11 @@ export interface BuildAgentIndexQuickPickOptions {
   preferredProjectRootPath?: string | undefined;
   /** 当前窗 electron windowId，用于「本窗口」标注与同序加权 */
   preferredWindowId?: string | undefined;
+  /**
+   * panelId → 已解析 tab short（PanelDescriptorStore 的 display.short）。
+   * 列表主标题与 tab 完全一致；缺席（跨窗）时按 tab 优先级降级。
+   */
+  tabShortByPanelId?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface AgentIndexQuickPickModel {
@@ -35,16 +37,17 @@ export interface AgentIndexQuickPickModel {
   sections?: QuickPickSection[];
 }
 
-function agentLabel(entry: AgentRuntimeIndexEntry): string {
-  return resolveAgentSessionTitle(
-    agentSessionTitleInput({
-      agentId: entry.agentId,
-      cwd: entry.cwd,
-      projectRootPath: entry.projectRootPath,
-      sessionTitle: entry.sessionTitle,
-      sessionTitleSource: entry.sessionTitleSource,
-    })
-  ).primary;
+function agentLabel(
+  entry: AgentRuntimeIndexEntry,
+  tabShortByPanelId: Readonly<Record<string, string>> | undefined
+): string {
+  return resolveAgentListTitle({
+    agentId: entry.agentId,
+    cwd: entry.cwd,
+    sessionTitle: entry.sessionTitle,
+    sessionTitleSource: entry.sessionTitleSource,
+    tabShort: tabShortByPanelId?.[entry.panelId],
+  });
 }
 
 /**
@@ -101,10 +104,11 @@ function toItem(
     now: number;
     preferredWindowId?: string;
     showWindowLabels: boolean;
+    tabShortByPanelId: Readonly<Record<string, string>> | undefined;
   }
 ): QuickPickItem {
   const statusLabel = statusSearchLabel(entry);
-  const label = agentLabel(entry);
+  const label = agentLabel(entry, options.tabShortByPanelId);
   const detail = windowDetail(entry, {
     preferredWindowId: options.preferredWindowId,
     showWindowLabels: options.showWindowLabels,
@@ -125,6 +129,8 @@ function toItem(
       statusLabel,
       entry.projectRootPath,
       entry.cwd,
+      // 主标题已是 tab short，产品名不再显示，但仍可作搜索词。
+      entry.sessionTitle,
       description,
       detail === "" ? undefined : detail,
     ].filter((value): value is string => typeof value === "string"),
@@ -205,6 +211,7 @@ export function buildAgentIndexQuickPick(
   const itemOpts = {
     now,
     showWindowLabels: distinctWindowIds.size > 1,
+    tabShortByPanelId: options.tabShortByPanelId,
     ...(options.preferredWindowId
       ? { preferredWindowId: options.preferredWindowId }
       : {}),

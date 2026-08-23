@@ -106,6 +106,8 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
   // 同名会话消歧：只在同一屏里确有重复时追加序号，否则原样显示。
   // 范围必须与**实际渲染**的行一致（limited）：若按 flat 计算，被截断掉的
   // 那行会占掉 (1)，用户在屏幕上只看到一个孤零零的「(2)」。
+  // 主标题与 tab 完全一致（descriptor.display.short），消歧序号只在确有
+  // 重复时追加。
   const agentDisplayTitles = disambiguateAgentSessionTitles(
     limited
       .filter(
@@ -116,6 +118,7 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
         panelId: row.panelId,
         primary: agentActivityRowPrimary(
           row,
+          descriptors[row.panelId]?.display.short,
           projectPathForActivity(row, descriptors, indexProjectByPanel)
         ),
         spawnedAt: row.spawnedAt,
@@ -166,6 +169,7 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
               promptRenameAgentSession({
                 initialTitle: agentActivityRowPrimary(
                   activity,
+                  descriptors[activity.panelId]?.display.short,
                   projectPathForActivity(
                     activity,
                     descriptors,
@@ -184,6 +188,7 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
         indexProjectByPanel
       )}
       showMeta={showMeta}
+      tabShort={descriptors[activity.panelId]?.display.short}
       taskRuns={taskRuns}
     />
   );
