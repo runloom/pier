@@ -92,6 +92,7 @@ const VALUE_ALLOWLIST: readonly RegExp[] = [
   /\.worktree\b/,
   /\{[^}]*worktree[^}]*\}/i,
   /^创建 worktree$/,
+  /^新建 worktree$/,
   /^create worktree$/i,
   /^worktree prune$/i,
   /^worktree:[a-z]+$/,
