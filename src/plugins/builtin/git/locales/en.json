@@ -226,8 +226,8 @@
         "wt add"
       ],
       "category": "Worktree",
-      "description": "Creates a Git worktree under the repository-managed worktrees directory.",
-      "title": "Create Worktree"
+      "description": "Creates a new Git worktree under the repository-managed worktrees directory.",
+      "title": "New Worktree"
     },
     "pier.worktree.delete": {
       "aliases": [
@@ -739,11 +739,11 @@
     "ui.worktreeCreate.baseLabel": "Base",
     "ui.worktreeCreate.branchLabel": "Branch",
     "ui.worktreeCreate.branchPlaceholder": "feature/fix-dialog",
-    "ui.worktreeCreate.confirm": "Create",
+    "ui.worktreeCreate.confirm": "New",
     "ui.worktreeCreate.close": "Close",
     "ui.worktreeCreate.createFailed": "Worktree creation failed",
     "ui.worktreeCreate.creatingWorktree": "Creating worktree…",
-    "ui.worktreeCreate.description": "Create an isolated worktree for this task",
+    "ui.worktreeCreate.description": "Create a new isolated worktree for this task",
     "ui.worktreeCreate.errorAgentRequired": "Choose an agent to start the task",
     "ui.worktreeCreate.errorBranchExists": "Branch already exists",
     "ui.worktreeCreate.errorBranchInvalid": "Enter a valid Git branch name using letters, digits and . _ / -",

@@ -1292,6 +1292,7 @@ body {
 /*
  * S1 未选中 running：1px 轨要用更实的 trough / highlight，否则在 sidebar 底上等于没有。
  * 只绑 .dv-inactive-tab，避免把 S2/S3 选中轨一并加浓。
+ * highlight 混入 foreground 提亮：与 trough 拉开对比，滑块运动更清晰。
  */
 .dockview-theme-pier .dv-tab.dv-inactive-tab:has([data-tab-status="running"]) {
   --pier-tab-shimmer-trough: color-mix(
@@ -1299,7 +1300,11 @@ body {
     var(--pier-tab-running-accent) 72%,
     transparent
   );
-  --pier-tab-shimmer-highlight: var(--pier-tab-running-accent);
+  --pier-tab-shimmer-highlight: color-mix(
+    in oklab,
+    var(--pier-tab-running-accent) 40%,
+    var(--foreground)
+  );
 }
 
 :root.light
@@ -1310,7 +1315,11 @@ body {
     var(--pier-tab-running-accent) 50%,
     transparent
   );
-  --pier-tab-shimmer-highlight: var(--pier-tab-running-accent);
+  --pier-tab-shimmer-highlight: color-mix(
+    in oklab,
+    var(--pier-tab-running-accent) 50%,
+    var(--foreground)
+  );
 }
 
 /*

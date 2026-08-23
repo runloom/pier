@@ -192,6 +192,47 @@ describe("buildCollaborationViewModel (W5-S1)", () => {
     );
   });
 
+  it("lists session title exactly as the resolved tab short (list == tab)", () => {
+    const vm = buildCollaborationViewModel({
+      entries: [
+        entry({
+          agentRef: "w\0a",
+          agentId: "claude",
+          cwd: "/repo/pier",
+          panelId: "a",
+          sessionTitle: "Review PR",
+          sessionTitleSource: "provider",
+          status: "processing",
+          windowId: "1",
+        }),
+      ],
+      activities: [],
+      currentWindowId: "1",
+      tabShortByPanelId: { a: "feat-bug-20260823" },
+    });
+    expect(vm.sessions[0]?.title).toBe("feat-bug-20260823");
+  });
+
+  it("falls back to cwd basename without a tab short", () => {
+    const vm = buildCollaborationViewModel({
+      entries: [
+        entry({
+          agentRef: "w\0a",
+          agentId: "claude",
+          cwd: "/repo/pier",
+          panelId: "a",
+          sessionTitle: "Review PR",
+          sessionTitleSource: "provider",
+          status: "processing",
+          windowId: "1",
+        }),
+      ],
+      activities: [],
+      currentWindowId: "1",
+    });
+    expect(vm.sessions[0]?.title).toBe("pier");
+  });
+
   it("pairs FA facts by windowId+panelId not panelId alone", () => {
     const vm = buildCollaborationViewModel({
       entries: [

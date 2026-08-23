@@ -145,6 +145,42 @@ describe("buildAgentIndexQuickPick", () => {
     expect(item?.description).toBe("Running");
   });
 
+  it("uses the resolved tab short as label when provided (list == tab)", () => {
+    const model = buildAgentIndexQuickPick(
+      [
+        entry({
+          cwd: "/repo/pier",
+          panelId: "a",
+          projectRootPath: "/repo/pier",
+          sessionTitle: "Review PR",
+          sessionTitleSource: "user",
+          status: "waiting",
+          windowId: "1",
+        }),
+      ],
+      { tabShortByPanelId: { a: "feat-bug-20260823" } }
+    );
+    const item = model.sections?.[0]?.items[0];
+    expect(item?.label).toBe("feat-bug-20260823");
+    expect(item?.searchTerms).toContain("feat-bug-20260823");
+    // 产品名不再显示，但仍可作搜索词。
+    expect(item?.searchTerms).toContain("Review PR");
+  });
+
+  it("falls back to cwd basename for cross-window entries without a tab short", () => {
+    const model = buildAgentIndexQuickPick([
+      entry({
+        cwd: "/repo/other",
+        panelId: "remote",
+        sessionTitle: "Fix parser crash",
+        sessionTitleSource: "provider",
+        status: "processing",
+        windowId: "2",
+      }),
+    ]);
+    expect(model.sections?.[0]?.items[0]?.label).toBe("other");
+  });
+
   it("keeps focusWaiting as shortcut-only (not a palette or list row)", () => {
     const focusWaiting = AGENT_RUNTIME_ACTION_CONTRIBUTIONS.find(
       (action) => action.id === "pier.agents.focusWaiting"

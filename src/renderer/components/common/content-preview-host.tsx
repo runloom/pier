@@ -225,15 +225,68 @@ function PreviewBody({ payload }: { payload: ContentPreviewPayload }) {
   return <HtmlWorldPreviewBody payload={payload} />;
 }
 
+const PREVIEW_HISTORY_FLAG = "pierContentPreview" as const;
+
+/**
+ * Back-button / history semantics for the fullscreen preview: opening pushes
+ * one entry, closing from our own UI unwinds it, and a user-initiated back
+ * while open closes the preview instead of leaving the app page.
+ */
+function useContentPreviewHistoryBridge(open: boolean): void {
+  const pushedRef = useRef(false);
+  const suppressPopRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) {
+      if (pushedRef.current) {
+        pushedRef.current = false;
+        // Our own close: strip the marker synchronously so history.state
+        // reads clean immediately, then consume the unwind popstate —
+        // jsdom delivers it asynchronously (~ms) after back(), same as
+        // browsers, so suppression must already be armed.
+        history.replaceState(null, "");
+        suppressPopRef.current = true;
+        history.back();
+      }
+      return;
+    }
+    if (!pushedRef.current) {
+      history.pushState({ [PREVIEW_HISTORY_FLAG]: true }, "");
+      pushedRef.current = true;
+    }
+    const onPopState = () => {
+      if (suppressPopRef.current) {
+        suppressPopRef.current = false;
+        return;
+      }
+      // User-driven navigation: the pushed entry is already gone.
+      pushedRef.current = false;
+      closeContentPreview();
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      // Unmounting while open intentionally leaves the pushed entry in
+      // history: unwinding here would race StrictMode's open-remount
+      // re-push (back() during a pending push lands ahead of the cursor).
+      // Safe only because ContentPreviewHost mounts once for the app
+      // lifetime; if it ever becomes conditionally mounted, unwind
+      // explicitly on unmount instead.
+    };
+  }, [open]);
+}
+
 /**
  * Fullscreen content preview host (images, node graphs, HTML worlds).
  *
  * Covers the workspace and titlebar (z-40, below host dialogs). Native Ghostty
  * is suppressed while open; EventRouter is hole-punched for the full viewport.
  */
+
 export function ContentPreviewHost() {
   const t = useT();
   const open = useContentPreviewStore((state) => state.open);
+  useContentPreviewHistoryBridge(open);
   const title = useContentPreviewStore((state) => state.title);
   const payload = useContentPreviewStore((state) => state.payload);
   const rootRef = useRef<HTMLDivElement>(null);

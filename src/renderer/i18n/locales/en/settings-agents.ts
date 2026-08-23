@@ -97,8 +97,7 @@ export const settingsAgents = {
     latest: "Latest",
     installGuide: "Install commands",
     installs: "Install locations",
-    reinstallHint:
-      "When a newer version can’t be checked, reinstall to refresh the current install.",
+    reinstallHint: "Reinstall to refresh the current install.",
     errors: {
       unsupported:
         "This agent can't be installed automatically. Use the install guide or open the website.",
@@ -111,7 +110,7 @@ export const settingsAgents = {
       version_unchanged:
         "The version didn't change. Another install may still be in use.",
       not_runnable:
-        "Installed, but the command couldn't run. Check that required runtimes (for example Node.js) are set up.",
+        "Installed, but it wouldn’t start. Run the command in a terminal to see why.",
       not_found_after_install:
         "Install finished, but the command still wasn't found. Refresh the list or open a new terminal.",
       already_installed: "This agent is already installed.",

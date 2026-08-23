@@ -48,6 +48,7 @@
     "filePanel.markdown.diagramFailed": "Unable to render diagram",
     "filePanel.markdown.diagramLabel": "Mermaid diagram",
     "filePanel.markdown.diagramPreviewTitle": "Diagram preview",
+    "filePanel.markdown.diagramScaledHint": "Scaled down — click to view fullscreen",
     "filePanel.markdown.imagePreviewFailed": "Unable to open image preview",
     "filePanel.markdown.imagePreviewTitle": "Image",
     "filePanel.markdown.openFullscreen": "View fullscreen",

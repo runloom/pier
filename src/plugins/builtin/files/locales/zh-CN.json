@@ -48,6 +48,7 @@
     "filePanel.markdown.diagramFailed": "无法渲染图表",
     "filePanel.markdown.diagramLabel": "Mermaid 图表",
     "filePanel.markdown.diagramPreviewTitle": "图表预览",
+    "filePanel.markdown.diagramScaledHint": "图表已缩小，点击查看全屏",
     "filePanel.markdown.imagePreviewFailed": "无法打开图片预览",
     "filePanel.markdown.imagePreviewTitle": "图片",
     "filePanel.markdown.openFullscreen": "全屏查看",

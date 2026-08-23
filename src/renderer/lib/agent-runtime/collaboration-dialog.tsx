@@ -24,6 +24,7 @@ import {
 } from "@/lib/agent-runtime/collab-view-model.ts";
 import { currentElectronWindowId } from "@/lib/agent-runtime/current-window-id.ts";
 import { reportAgentRuntimeFocusResult } from "@/lib/agent-runtime/focus-feedback.ts";
+import { tabShortByPanelIdFrom } from "@/lib/agent-runtime/list-title.ts";
 import { useAgentRuntimeIndexStore } from "@/stores/agent-runtime-index.store.ts";
 import {
   type AppContentDialogRenderProps,
@@ -31,6 +32,7 @@ import {
 } from "@/stores/app-content-dialog.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { useNotificationCenterStore } from "@/stores/notification-center.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 
 const COLLAB_DIALOG_ID = "agent-collaboration";
 
@@ -118,6 +120,7 @@ function CollaborationBody({
   const entries = useAgentRuntimeIndexStore((s) => s.entries);
   const activityRecord = useForegroundActivityStore((s) => s.activities);
   const notifications = useNotificationCenterStore((s) => s.items);
+  const descriptors = usePanelDescriptorStore((s) => s.descriptors);
   const [selectedAgentRef, setSelectedAgentRef] = useState<string | null>(
     initialSelectedRef ?? null
   );
@@ -128,6 +131,12 @@ function CollaborationBody({
     [activityRecord]
   );
 
+  // 会话列表主标题与 tab 完全一致：本窗读已解析 descriptor.display.short。
+  const tabShortByPanelId = useMemo(
+    () => tabShortByPanelIdFrom(descriptors),
+    [descriptors]
+  );
+
   const vm: CollaborationViewModel = useMemo(
     () =>
       buildCollaborationViewModel({
@@ -136,8 +145,16 @@ function CollaborationBody({
         notifications,
         currentWindowId: windowId,
         selectedAgentRef,
+        tabShortByPanelId,
       }),
-    [activities, entries, notifications, selectedAgentRef, windowId]
+    [
+      activities,
+      entries,
+      notifications,
+      selectedAgentRef,
+      tabShortByPanelId,
+      windowId,
+    ]
   );
 
   const footer = useMemo(

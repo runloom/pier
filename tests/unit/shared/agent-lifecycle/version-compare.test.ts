@@ -31,6 +31,24 @@ describe("agent-lifecycle version-compare", () => {
     expect(isAgentUpdateAvailable(null, "1.0.0")).toBe(false);
   });
 
+  it("compares Cursor date-hash versions by date, not hash", () => {
+    expect(
+      compareAgentVersions("2026.08.11-e8db854", "2026.08.22-abc1234")
+    ).toBeLessThan(0);
+    expect(
+      isAgentUpdateAvailable("2026.08.11-e8db854", "2026.08.22-abc1234")
+    ).toBe(true);
+    expect(
+      isAgentUpdateAvailable("2026.08.22-abc1234", "2026.08.11-e8db854")
+    ).toBe(false);
+    expect(
+      isAgentUpdateAvailable("2026.08.11-e8db854", "2026.08.11-e8db854")
+    ).toBe(false);
+    expect(
+      isAgentUpdateAvailable("2026.08.11-e8db854", "2026.08.11-deadbeef")
+    ).toBe(true);
+  });
+
   it("extracts version from noisy stdout", () => {
     expect(extractVersionFromOutput("claude 2.1.221 (Claude Code)")).toBe(
       "2.1.221"

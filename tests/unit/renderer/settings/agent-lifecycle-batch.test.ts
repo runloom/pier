@@ -286,6 +286,28 @@ describe("isLifecycleReinstallCandidate", () => {
         })
       )
     ).toBe(false);
+    expect(
+      isLifecycleReinstallCandidate(
+        makeProbe({
+          agentId: "cursor",
+          canForceReinstall: true,
+          updateAvailable: false,
+          updateMode: "versioned",
+          updateOffered: false,
+        })
+      )
+    ).toBe(true);
+    expect(
+      isLifecycleReinstallCandidate(
+        makeProbe({
+          agentId: "cursor",
+          canForceReinstall: true,
+          updateAvailable: true,
+          updateMode: "versioned",
+          updateOffered: true,
+        })
+      )
+    ).toBe(false);
   });
 });
 

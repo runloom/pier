@@ -36,8 +36,49 @@ function isBuildMetadataPre(pre: string): boolean {
   return /^g[0-9a-f]{6,}$/i.test(pre);
 }
 
+/** Cursor CLI: `2026.08.11-e8db854`. */
+const DATE_HASH_RE = /^(\d{4})\.(\d{2})\.(\d{2})-([0-9a-f]+)$/i;
+
+interface DateHashVersion {
+  day: number;
+  hash: string;
+  month: number;
+  year: number;
+}
+
+function parseDateHash(version: string): DateHashVersion | null {
+  const match = DATE_HASH_RE.exec(version.trim());
+  if (!match) {
+    return null;
+  }
+  return {
+    day: Number(match[3]),
+    hash: (match[4] ?? "").toLowerCase(),
+    month: Number(match[2]),
+    year: Number(match[1]),
+  };
+}
+
+function compareDateHash(
+  left: DateHashVersion,
+  right: DateHashVersion
+): number {
+  if (left.year !== right.year) {
+    return left.year - right.year;
+  }
+  if (left.month !== right.month) {
+    return left.month - right.month;
+  }
+  return left.day - right.day;
+}
+
 /** Negative if a < b, 0 if equal, positive if a > b. */
 export function compareAgentVersions(a: string, b: string): number {
+  const leftDate = parseDateHash(a);
+  const rightDate = parseDateHash(b);
+  if (leftDate && rightDate) {
+    return compareDateHash(leftDate, rightDate);
+  }
   const left = splitParts(a);
   const right = splitParts(b);
   const len = Math.max(left.nums.length, right.nums.length);
@@ -77,6 +118,16 @@ export function isAgentUpdateAvailable(
   const l = latest.trim();
   if (!(c && l)) {
     return false;
+  }
+  const currentDate = parseDateHash(c);
+  const latestDate = parseDateHash(l);
+  if (currentDate && latestDate) {
+    const byDate = compareDateHash(currentDate, latestDate);
+    if (byDate !== 0) {
+      return byDate < 0;
+    }
+    // Hashes are not ordered; the remote latest is canonical.
+    return c !== l;
   }
   return compareAgentVersions(c, l) < 0;
 }

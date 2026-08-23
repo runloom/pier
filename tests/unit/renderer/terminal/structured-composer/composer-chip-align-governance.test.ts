@@ -30,6 +30,7 @@ describe("composer chip inline alignment", () => {
   it("shared pill uses the type scale and fills the editor line", () => {
     expect(COMPOSER_CHIP_CLASS).toContain("inline-flex");
     expect(COMPOSER_CHIP_CLASS).toContain("items-center");
+    expect(COMPOSER_CHIP_CLASS).toContain("rounded-full");
     expect(COMPOSER_CHIP_CLASS).toContain("text-xs");
     expect(COMPOSER_LINE_LEADING_CLASS).toBe("leading-5");
     expect(COMPOSER_CHIP_CLASS).toContain(COMPOSER_LINE_LEADING_CLASS);

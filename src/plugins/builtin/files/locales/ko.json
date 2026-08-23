@@ -48,6 +48,7 @@
     "filePanel.markdown.diagramFailed": "다이어그램을 그릴 수 없습니다",
     "filePanel.markdown.diagramLabel": "Mermaid 다이어그램",
     "filePanel.markdown.diagramPreviewTitle": "다이어그램 미리보기",
+    "filePanel.markdown.diagramScaledHint": "다이어그램이 축소되었습니다. 클릭하여 전체 화면",
     "filePanel.markdown.imagePreviewFailed": "이미지 미리보기를 열 수 없습니다",
     "filePanel.markdown.imagePreviewTitle": "이미지",
     "filePanel.markdown.openFullscreen": "전체 화면으로 보기",

@@ -1,5 +1,6 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { MarkdownCodeHighlighter } from "@plugins/builtin/files/renderer/markdown/code-highlighter.ts";
+import type * as diagramViewportModule from "@plugins/builtin/files/renderer/markdown/diagram-viewport.ts";
 import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/parser.ts";
 import { MarkdownPreview } from "@plugins/builtin/files/renderer/markdown/preview.tsx";
 import { writeMarkdownReadingAppearance } from "@plugins/builtin/files/renderer/markdown/preview-preferences.ts";
@@ -12,6 +13,20 @@ import { FILES_IN_FILE_SEARCH_BAR_CLASSNAME } from "@plugins/builtin/files/rende
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
+
+const diagramViewportWidth = vi.hoisted(() => ({ contentWidth: 0 }));
+vi.mock(
+  "@plugins/builtin/files/renderer/markdown/diagram-viewport.ts",
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof diagramViewportModule>();
+    return {
+      ...actual,
+      // jsdom reports zero box sizes; shrink tests drive the diagram slot
+      // width through this holder (default 0 keeps natural-size behavior).
+      contentBoxWidthPx: () => diagramViewportWidth.contentWidth,
+    };
+  }
+);
 
 function immediateRuntime(): MarkdownRuntime {
   return {
@@ -797,6 +812,168 @@ describe("MarkdownPreview", () => {
     expect(screen.getByText("Ctrl K").closest("kbd")).not.toBeNull();
   });
 
+  it("opens diagram fullscreen on plain surface click with guard rails", async () => {
+    const charts: RendererPluginContext["charts"] = {
+      renderMermaid: vi.fn(async () => ({
+        ok: true as const,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200"><text>Wide</text></svg>',
+      })),
+    };
+    const openImage = vi.fn();
+    const { container } = render(
+      <MarkdownPreview
+        charts={charts}
+        fileResources={{
+          contentPreview: { openImage },
+          filePreviews: { issue: vi.fn(), release: vi.fn() },
+          files: { readDocument: vi.fn() },
+        }}
+        labels={{
+          completedTask: "Completed task",
+          copiedCode: "Copied",
+          copyCode: "Copy code",
+          diagramFailed: "Unable to render diagram",
+          diagramLabel: "Mermaid diagram",
+          diagramPreviewTitle: "Diagram preview",
+          imagePreviewFailed: "Unable to open image preview",
+          imagePreviewTitle: "Image",
+          incompleteTask: "Incomplete task",
+          openFullscreen: "View fullscreen",
+        }}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-diagram-click"
+        source={{ kind: "disk", path: "README.md", root: "/repo" }}
+        value={"```mermaid\ngraph LR; A-->B\n```"}
+      />
+    );
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-slot="markdown-diagram"] svg')
+      ).toBeTruthy();
+    });
+    const shell = container.querySelector('[data-slot="markdown-diagram"]')!;
+    // Click affordance mirrors canvas mermaid cards.
+    expect(shell.className).toContain("cursor-zoom-in");
+
+    // The fullscreen button's own click must not bubble into a second open.
+    fireEvent.click(screen.getByRole("button", { name: "View fullscreen" }));
+    expect(openImage).toHaveBeenCalledTimes(1);
+
+    // Plain svg surface click opens the preview.
+    fireEvent.click(shell.querySelector("svg")!);
+    expect(openImage).toHaveBeenCalledTimes(2);
+
+    // A finished text selection never opens the preview.
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(shell.querySelector("svg")!);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent.click(shell.querySelector("svg")!);
+    expect(openImage).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows the labeled shrink chip and capped width when scaled down", async () => {
+    diagramViewportWidth.contentWidth = 320;
+    const charts: RendererPluginContext["charts"] = {
+      renderMermaid: vi.fn(async () => ({
+        ok: true as const,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200"><text>Wide</text></svg>',
+      })),
+    };
+    const { container } = render(
+      <MarkdownPreview
+        charts={charts}
+        fileResources={{
+          contentPreview: { openImage: vi.fn() },
+          filePreviews: { issue: vi.fn(), release: vi.fn() },
+          files: { readDocument: vi.fn() },
+        }}
+        labels={{
+          completedTask: "Completed task",
+          copiedCode: "Copied",
+          copyCode: "Copy code",
+          diagramFailed: "Unable to render diagram",
+          diagramLabel: "Mermaid diagram",
+          diagramPreviewTitle: "Diagram preview",
+          diagramScaledHint: "Scaled down — click to view fullscreen",
+          imagePreviewFailed: "Unable to open image preview",
+          imagePreviewTitle: "Image",
+          incompleteTask: "Incomplete task",
+          openFullscreen: "View fullscreen",
+        }}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-diagram-shrink-label"
+        source={{ kind: "disk", path: "README.md", root: "/repo" }}
+        value={"```mermaid\ngraph LR; A-->B\n```"}
+      />
+    );
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-slot="markdown-diagram-shrink-hint"]')
+      ).not.toBeNull();
+    });
+    // Threading ir-renderer → diagram carries the hint copy into the chip.
+    expect(
+      container.querySelector('[data-slot="markdown-diagram-shrink-hint"] span')
+    ).toHaveTextContent("Scaled down — click to view fullscreen");
+    // The same measurement that raises the chip caps the SVG to the slot.
+    const svg = container.querySelector<SVGElement>(
+      '[data-slot="markdown-diagram"] svg'
+    )!;
+    expect(svg.style.width).toBe("320px");
+    diagramViewportWidth.contentWidth = 0;
+  });
+
+  it("falls back to an icon-only shrink chip when the hint label is omitted", async () => {
+    diagramViewportWidth.contentWidth = 320;
+    const charts: RendererPluginContext["charts"] = {
+      renderMermaid: vi.fn(async () => ({
+        ok: true as const,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 200"><text>Wide</text></svg>',
+      })),
+    };
+    const { container } = render(
+      <MarkdownPreview
+        charts={charts}
+        fileResources={{
+          contentPreview: { openImage: vi.fn() },
+          filePreviews: { issue: vi.fn(), release: vi.fn() },
+          files: { readDocument: vi.fn() },
+        }}
+        labels={{
+          completedTask: "Completed task",
+          copiedCode: "Copied",
+          copyCode: "Copy code",
+          diagramFailed: "Unable to render diagram",
+          diagramLabel: "Mermaid diagram",
+          diagramPreviewTitle: "Diagram preview",
+          imagePreviewFailed: "Unable to open image preview",
+          imagePreviewTitle: "Image",
+          incompleteTask: "Incomplete task",
+          openFullscreen: "View fullscreen",
+        }}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-diagram-shrink-icon"
+        source={{ kind: "disk", path: "README.md", root: "/repo" }}
+        value={"```mermaid\ngraph LR; A-->B\n```"}
+      />
+    );
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-slot="markdown-diagram-shrink-hint"]')
+      ).not.toBeNull();
+    });
+    const chip = container.querySelector(
+      '[data-slot="markdown-diagram-shrink-hint"]'
+    )!;
+    expect(chip.querySelector("span")).toBeNull();
+    expect(chip.querySelector("svg")).not.toBeNull();
+    diagramViewportWidth.contentWidth = 0;
+  });
   it("stops nested double-click source jumps at the nearest block", async () => {
     const onJumpToSource = vi.fn();
     render(
