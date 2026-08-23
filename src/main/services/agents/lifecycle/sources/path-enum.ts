@@ -2,12 +2,12 @@ import { execFile } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { platform } from "node:os";
 import { promisify } from "node:util";
-import { extractVersionFromOutput } from "@shared/agent-lifecycle/version-compare.ts";
 import type { AgentInstallInfo } from "@shared/contracts/agent/lifecycle.ts";
+import { readCurrentVersionFromPath } from "./current-version.ts";
+import { readVersionAtPath } from "./version-probe.ts";
 
 const execFileAsync = promisify(execFile);
 
-const VERSION_TIMEOUT_MS = 8000;
 const WHICH_TIMEOUT_MS = 5000;
 
 /**
@@ -120,26 +120,6 @@ async function listPathsForCommand(
   }
 }
 
-async function readVersionAtPath(
-  binPath: string,
-  versionArgs: readonly string[],
-  env?: NodeJS.ProcessEnv
-): Promise<{ runnable: boolean; version: string | null; error?: string }> {
-  try {
-    const { stdout, stderr } = await execFileAsync(binPath, [...versionArgs], {
-      env,
-      timeout: VERSION_TIMEOUT_MS,
-      windowsHide: true,
-    });
-    const text = `${stdout}\n${stderr}`;
-    const version = extractVersionFromOutput(text);
-    return { runnable: true, version };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { runnable: false, version: null, error: message };
-  }
-}
-
 function resolvePathKey(binPath: string): string {
   try {
     return realpathSync(binPath);
@@ -188,9 +168,15 @@ export async function enumerateInstalls(options: {
     if (!path) {
       continue;
     }
-    const ver = shouldProbeInstallVersion(i)
-      ? await readVersionAtPath(path, versionArgs, options.env)
-      : { runnable: true, version: null };
+    const pathVersion = readCurrentVersionFromPath(path);
+    let ver: { runnable: boolean; version: string | null };
+    if (pathVersion) {
+      ver = { runnable: true, version: pathVersion };
+    } else if (shouldProbeInstallVersion(i)) {
+      ver = await readVersionAtPath(path, versionArgs, options.env);
+    } else {
+      ver = { runnable: true, version: null };
+    }
     installs.push({
       isPathDefault: i === 0,
       path,

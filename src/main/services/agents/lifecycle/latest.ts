@@ -1,10 +1,12 @@
 // Class B: version probes after host env (curl/npm/brew with optional PES env).
 import { execFile } from "node:child_process";
 import { extractVersionFromOutput } from "@shared/agent-lifecycle/version-compare.ts";
+import { fetchLatestProbe } from "./latest-http.ts";
 import {
   brewPackageTokenFromBinPath,
   resolveBrewQueryName,
 } from "./plan/brew-token.ts";
+import { isPathLikeSource } from "./plan/source-policy.ts";
 import type { AgentLifecycleSpec } from "./specs/types.ts";
 import { resolveUpdateMode } from "./specs/types.ts";
 
@@ -255,8 +257,9 @@ function resolveBrewChannel(spec: AgentLifecycleSpec): {
  * Brew queries use the installed Cellar/Caskroom token when known
  * (`claude-code@latest` ≠ stable `claude-code`). Fall through only within
  * the same install ecosystem (brew↔npm for JS tools; uv/pipx PyPI for
- * Python tools). Path/script installs that declare a uv/pipx channel
- * (kimi, mistral-vibe) probe PyPI, not npmPackageForLatest.
+ * Python tools). Path/script uses `latestProbe` when declared (Claude native,
+ * Cursor script); else PyPI for uv/pipx agents. Never compare Claude path
+ * installs to the deprecated npm package.
  */
 export async function fetchLatestVersion(
   spec: AgentLifecycleSpec,
@@ -304,6 +307,19 @@ export async function fetchLatestVersion(
     }
     return fetchPypiLatest(pypiPkg, env);
   };
+  const tryHttp = async (): Promise<string | null> => {
+    if (!spec.latestProbe) {
+      return null;
+    }
+    const cacheKey = `http:${spec.latestProbe.kind}:${spec.latestProbe.url}`;
+    const cached = cacheGet(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const version = await fetchLatestProbe(spec.latestProbe, env);
+    cacheSet(cacheKey, version);
+    return version;
+  };
 
   if (preferBrew) {
     return (await tryBrew()) ?? (await tryNpm());
@@ -315,6 +331,10 @@ export async function fetchLatestVersion(
     // Never fall back to npm when uv/pipx is the install source — different
     // package names (kimi-cli vs @moonshot-ai/kimi-code) are not comparable.
     return tryPypi();
+  }
+
+  if (isPathLikeSource(source) && spec.latestProbe) {
+    return tryHttp();
   }
 
   // Path / script / unknown: prefer uv/pipx PyPI when the agent declares a

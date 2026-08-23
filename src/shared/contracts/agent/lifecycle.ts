@@ -66,6 +66,11 @@ export const agentLifecycleProbeSchema = z.object({
    * UI also allows custom uninstall when support===full even if false.
    */
   canUninstall: z.boolean(),
+  /**
+   * Script-only agents (Cursor): even when versioned via latestProbe, details
+   * can force-refresh. Not a pending update.
+   */
+  canForceReinstall: z.boolean().optional(),
   detected: z.boolean(),
   /** PES/env probe degraded — installs may be empty. */
   envDegraded: z.boolean().optional(),

@@ -68,6 +68,25 @@ const execFileMock = vi.hoisted(() =>
         respond(null, JSON.stringify({ info: { version: "1.0.0" } }));
         return;
       }
+      if (
+        file === "curl" &&
+        args.some((arg) => arg.includes("cursor.com/install"))
+      ) {
+        respond(
+          null,
+          'DOWNLOAD_URL="https://downloads.cursor.com/lab/2026.08.22-abc1234/darwin/arm64/agent-cli-package.tar.gz"\n'
+        );
+        return;
+      }
+      if (
+        file === "curl" &&
+        args.some((arg) =>
+          arg.includes("downloads.claude.ai/claude-code-releases/latest")
+        )
+      ) {
+        respond(null, "2.1.241\n");
+        return;
+      }
       if (file === "npm" && args.includes("@moonshot-ai/kimi-code")) {
         respond(null, JSON.stringify("9.9.9"));
         return;
@@ -339,5 +358,39 @@ describe("fetchLatestVersion pypi", () => {
       { installSource: "pipx" }
     );
     expect(latest).toBe("1.2.3");
+  });
+});
+
+describe("fetchLatestVersion http latestProbe", () => {
+  it("reads Cursor latest from the official install script", async () => {
+    const latest = await fetchLatestVersion(
+      getAgentLifecycleSpec("cursor"),
+      {},
+      { installSource: "path" }
+    );
+    expect(latest).toBe("2026.08.22-abc1234");
+    expect(execFileMock.mock.calls.map((call) => call[0])).toContain("curl");
+    expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain("npm");
+    expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
+      expect.arrayContaining([expect.stringContaining("cursor.com/install")])
+    );
+  });
+
+  it("reads Claude native latest and never falls back to npm", async () => {
+    const latest = await fetchLatestVersion(
+      getAgentLifecycleSpec("claude"),
+      {},
+      { installSource: "path" }
+    );
+    expect(latest).toBe("2.1.241");
+    expect(execFileMock.mock.calls.map((call) => call[0])).toContain("curl");
+    expect(execFileMock.mock.calls.map((call) => call[0])).not.toContain("npm");
+    expect(execFileMock.mock.calls.map((call) => call[1])).toContainEqual(
+      expect.arrayContaining([
+        expect.stringContaining(
+          "downloads.claude.ai/claude-code-releases/latest"
+        ),
+      ])
+    );
   });
 });
