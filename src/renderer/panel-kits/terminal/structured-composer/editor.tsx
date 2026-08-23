@@ -51,6 +51,8 @@ export interface StructuredComposerEditorHandle {
   /** Close @ / # / skill autocomplete without closing Rich Input. */
   dismissMentionMenu: () => void;
   focus: () => boolean;
+  /** Serialized editor state (editor.toJSON()) for close/reopen chip restore. */
+  getEditorJson: () => string | null;
   getElement: () => HTMLElement | null;
   getSelection: () => { cursor: number; selectionEnd: number };
   getValue: () => string;
@@ -90,6 +92,8 @@ export interface StructuredComposerEditorProps {
   /** Single-line chrome: center text inside the fixed h-9 shell. */
   compact?: boolean;
   disabled: boolean;
+  /** Editor-state JSON captured at last close; restore keeps chips across toggle. */
+  initialSnapshotJson?: string | null;
   onCompositionEnd?: () => void;
   onCompositionStart?: () => void;
   onFocus: () => void;
@@ -111,6 +115,7 @@ function EditorHandleBridge({
   dismissMentionMenuRef,
   dismissSkillMenuRef,
   handleRef,
+  initialSnapshotJsonRef,
   menuOpenRef,
   value,
 }: {
@@ -118,6 +123,7 @@ function EditorHandleBridge({
   dismissMentionMenuRef: { current: (() => void) | null };
   dismissSkillMenuRef: { current: (() => void) | null };
   handleRef: Ref<StructuredComposerEditorHandle> | undefined;
+  initialSnapshotJsonRef: { current: string | null };
   menuOpenRef: { current: boolean };
   value: string;
 }): null {
@@ -144,6 +150,13 @@ function EditorHandleBridge({
         return document.activeElement === el;
       },
       getElement: () => editor.getRootElement(),
+      getEditorJson: () => {
+        try {
+          return JSON.stringify(editor.getEditorState().toJSON());
+        } catch {
+          return null;
+        }
+      },
       getSelection: () => readLexicalPlainSelection(editor),
       getValue: () => readLexicalPlainText(editor),
       insertAttachmentToken: (absolutePath: string, ordinal1Based: number) => {
@@ -198,8 +211,22 @@ function EditorHandleBridge({
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mount-once seed from initial value
   useEffect(() => {
-    writeLexicalPlainText(editor, value);
-    lastExternalValue.current = value;
+    const snapshot = initialSnapshotJsonRef.current;
+    let restored = false;
+    if (snapshot) {
+      try {
+        editor.setEditorState(editor.parseEditorState(snapshot));
+        // Snapshot from a different code version may project differently;
+        // only keep it when the plain text contract still holds.
+        restored = readLexicalPlainText(editor) === value;
+      } catch {
+        restored = false;
+      }
+    }
+    if (!restored) {
+      writeLexicalPlainText(editor, value);
+    }
+    lastExternalValue.current = readLexicalPlainText(editor);
   }, [editor]);
 
   useEffect(() => {
@@ -233,6 +260,7 @@ export function StructuredComposerEditor({
   className,
   compact = false,
   disabled,
+  initialSnapshotJson = null,
   onCompositionEnd,
   onCompositionStart,
   onFocus,
@@ -252,6 +280,7 @@ export function StructuredComposerEditor({
   const dismissMentionMenuRef = useRef<(() => void) | null>(null);
   const dismissAttachmentMenuRef = useRef<(() => void) | null>(null);
   const dismissSkillMenuRef = useRef<(() => void) | null>(null);
+  const initialSnapshotJsonRef = useRef(initialSnapshotJson);
   const anyMenuOpenRef = useMemo(
     () => ({
       get current() {
@@ -370,6 +399,7 @@ export function StructuredComposerEditor({
         dismissMentionMenuRef={dismissMentionMenuRef}
         dismissSkillMenuRef={dismissSkillMenuRef}
         handleRef={ref}
+        initialSnapshotJsonRef={initialSnapshotJsonRef}
         menuOpenRef={anyMenuOpenRef}
         value={value}
       />
