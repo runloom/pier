@@ -47,8 +47,6 @@ function AgentStatusItemView({ panelId }: { panelId: string }) {
       </span>
       <AgentStatusLabel
         fallbackLabel={fallbackLabel}
-        spawnedAt={agent.spawnedAt}
-        stateStartedAt={agent.stateStartedAt}
         status={agent.status}
         subagentCount={agent.subagentCount}
       />

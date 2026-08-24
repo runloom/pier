@@ -337,19 +337,21 @@ describe("color token governance", () => {
     }
   });
 
-  it("locks shimmer band tokens to the intentional dim-base / status-highlight design", () => {
+  it("locks shimmer band tokens to a dim trough and theme-primary highlight", () => {
     const globals = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),
       "utf8"
     );
-    // Running shimmer uses a deliberately dim trough (--shimmer-base @ 35%) so
-    // the status-tinted highlight band reads clearly; Tier-1 body contrast does
-    // not apply to the trough itself (see globals.css agent shimmer comment).
+    // Trough is 35% foreground so the band reads; Tier-1 body contrast does
+    // not apply to it (see globals.css). Highlight must be --primary 45%
+    // into --foreground, with no status-* or per-instance color var.
     const base = cssVariable(globals, "shimmer-base");
     const highlight = cssVariable(globals, "shimmer-highlight");
     expect(base).toMatch(/var\(--foreground\)\s+35%/);
-    expect(highlight).toMatch(/var\(--pier-agent-status-color/);
+    expect(highlight).toContain("var(--primary) 45%");
     expect(highlight).toMatch(/var\(--foreground\)/);
+    expect(highlight).not.toMatch(/--status-/);
+    expect(highlight).not.toMatch(/--pier-agent-status-color/);
   });
 
   it("binds toast surfaces and glyphs to contrast-safe semantic tokens", () => {

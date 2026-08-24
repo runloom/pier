@@ -169,8 +169,6 @@ export function ActivityRow({
     statusNode = (
       <AgentStatusLabel
         fallbackLabel={t("workbench.widget.activityOverview.agentLaunching")}
-        spawnedAt={activity.spawnedAt}
-        stateStartedAt={activity.stateStartedAt}
         status={activity.status}
         subagentCount={activity.subagentCount}
       />
