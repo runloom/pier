@@ -75,11 +75,32 @@ export function isDefaultExcludedFileTreePath(path: string): boolean {
   return isExcludedFileTreePath(path, FILES_TREE_DEFAULT_EXCLUDE_PATTERNS);
 }
 
+const EMPTY_PINNED_PATHS: ReadonlySet<string> = new Set();
+
+/** True when `path` is a pinned path itself or an ancestor directory of one. */
+export function isVisibleForPinnedPaths(
+  path: string,
+  pinnedPaths: ReadonlySet<string>
+): boolean {
+  if (pinnedPaths.size === 0) {
+    return false;
+  }
+  const candidate = normalizeFileTreePath(path).replace(/\/+$/, "");
+  for (const pinned of pinnedPaths) {
+    if (pinned === candidate || pinned.startsWith(`${candidate}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function filterFilesTreeEntries(
   entries: readonly FileEntry[],
   options: {
     excludePatterns: string;
     gitIgnored?: GitIgnoredIndex;
+    /** Pinned paths stay visible (with ancestors) even when Git-ignored. */
+    pinnedVisiblePaths?: ReadonlySet<string>;
     showExcludedFiles: boolean;
     showGitIgnoredFiles: boolean;
   }
@@ -89,13 +110,19 @@ export function filterFilesTreeEntries(
       !options.showExcludedFiles &&
       isExcludedFileTreePath(entry.path, options.excludePatterns)
     ) {
+      // User exclusion patterns are explicit config; pins never override them.
       return false;
     }
-    return !(
-      !options.showGitIgnoredFiles &&
-      options.gitIgnored &&
-      isGitIgnoredPath(entry.path, options.gitIgnored)
-    );
+    if (
+      options.showGitIgnoredFiles ||
+      !options.gitIgnored ||
+      !isGitIgnoredPath(entry.path, options.gitIgnored)
+    ) {
+      return true;
+    }
+    return options.pinnedVisiblePaths
+      ? isVisibleForPinnedPaths(entry.path, options.pinnedVisiblePaths)
+      : false;
   });
 }
 
@@ -120,6 +147,8 @@ function configurationString(
 export class FilesTreeVisibilityController {
   readonly #context: RendererPluginContext;
   readonly #gitIgnored: FilesTreeGitIgnoredIndex;
+  /** Per-root paths forced visible (active/opened Git-ignored files). */
+  readonly #pinnedPathsByRoot = new Map<string, Set<string>>();
   readonly list: FilesTreeList;
 
   constructor(context: RendererPluginContext) {
@@ -137,6 +166,7 @@ export class FilesTreeVisibilityController {
         return filterFilesTreeEntries(entries, {
           excludePatterns: this.excludePatterns(),
           gitIgnored,
+          pinnedVisiblePaths: this.pinnedVisiblePaths(root),
           showExcludedFiles: this.showsExcludedFiles(),
           showGitIgnoredFiles,
         });
@@ -160,6 +190,54 @@ export class FilesTreeVisibilityController {
     this.#gitIgnored.invalidate(root);
   }
 
+  /** Pin a path visible (with its ancestor chain) even when Git-ignored.
+   *  Returns true when the pin is new and the tree needs a reload. */
+  pinPath(root: string, path: string): boolean {
+    const normalized = normalizeFileTreePath(path).replace(/\/+$/, "");
+    if (!normalized) {
+      return false;
+    }
+    let pinned = this.#pinnedPathsByRoot.get(root);
+    if (!pinned) {
+      pinned = new Set();
+      this.#pinnedPathsByRoot.set(root, pinned);
+    }
+    if (pinned.has(normalized)) {
+      return false;
+    }
+    pinned.add(normalized);
+    return true;
+  }
+
+  /** Release a pin; returns true when visibility changed for `root`. */
+  unpinPath(root: string, path: string): boolean {
+    const pinned = this.#pinnedPathsByRoot.get(root);
+    if (!pinned?.delete(normalizeFileTreePath(path).replace(/\/+$/, ""))) {
+      return false;
+    }
+    if (pinned.size === 0) {
+      this.#pinnedPathsByRoot.delete(root);
+    }
+    return true;
+  }
+
+  pinnedVisiblePaths(root: string): ReadonlySet<string> {
+    return this.#pinnedPathsByRoot.get(root) ?? EMPTY_PINNED_PATHS;
+  }
+
+  /**
+   * True when `path` would be hidden right now (Git-ignore hiding on and
+   * path ignored). Resolves the ignore index first so callers can decide
+   * whether a pin/unpin actually changes visible tree content.
+   */
+  async isPathHiddenByGitIgnore(root: string, path: string): Promise<boolean> {
+    if (this.showsGitIgnoredFiles()) {
+      return false;
+    }
+    const gitIgnored = await this.#gitIgnored.load(root);
+    return isGitIgnoredPath(path, gitIgnored);
+  }
+
   isPathVisible(root: string, path: string): boolean {
     if (
       !this.showsExcludedFiles() &&
@@ -167,12 +245,15 @@ export class FilesTreeVisibilityController {
     ) {
       return false;
     }
+    if (this.showsGitIgnoredFiles()) {
+      return true;
+    }
     const gitIgnored = this.#gitIgnored.current(root);
-    return !(
-      !this.showsGitIgnoredFiles() &&
-      gitIgnored &&
-      isGitIgnoredPath(path, gitIgnored)
-    );
+    if (!(gitIgnored && isGitIgnoredPath(path, gitIgnored))) {
+      return true;
+    }
+    // Pinned (opened) ignored files stay visible; see filterFilesTreeEntries.
+    return isVisibleForPinnedPaths(path, this.pinnedVisiblePaths(root));
   }
 
   async refreshGitIgnored(
@@ -190,10 +271,12 @@ export class FilesTreeVisibilityController {
   }
 
   showsGitIgnoredFiles(): boolean {
+    // Default hidden: ignored entries stay openable — opening one pins its
+    // directory chain visible in the tree until another file becomes active.
     return configurationBoolean(
       this.#context,
       FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
-      true
+      false
     );
   }
 }

@@ -1,4 +1,10 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@pier/ui/alert.tsx";
+import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
   EmptyContent,
@@ -14,14 +20,68 @@ import {
   filePanelTreeToggleShortcutLabel,
   FilePanelSearchButton as SharedFilePanelSearchButton,
 } from "@pier/ui/file/panel-layout.tsx";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FileQuestion, FileX, MousePointerClick } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback } from "react";
 import type { FilesTranslate } from "../i18n.ts";
 
 export {
   FilePanelBreadcrumb,
   FilePanelHeader as FilePanelChrome,
 } from "@pier/ui/file/panel-layout.tsx";
+
+/**
+ * Slim info strip above the editor content: the active disk document lives
+ * outside the panel's project root. Content stays fully readable/editable;
+ * the tree below only shows the panel's own root (VS Code
+ * ResourceNotInWorkspaceElement / JetBrains infobar analogue).
+ */
+export function OutsideWorkspaceBanner({
+  context,
+  path,
+  root,
+  t,
+}: {
+  context: RendererPluginContext | undefined;
+  path: string;
+  root: string;
+  t: FilesTranslate;
+}) {
+  const onReveal = useCallback(async () => {
+    if (!context) {
+      return;
+    }
+    try {
+      await context.files.reveal({ path, root });
+    } catch (error) {
+      await context.dialogs.alert({
+        body: error instanceof Error ? error.message : String(error),
+        title: t("filePanel.tree.revealFailed", "Unable to reveal item"),
+      });
+    }
+  }, [context, path, root, t]);
+  return (
+    <Alert
+      className="shrink-0 rounded-none border-x-0 border-t-0"
+      variant="info"
+    >
+      <AlertTitle>
+        {t(
+          "filePanel.banner.outsideWorkspace",
+          "This file is outside the current workspace"
+        )}
+      </AlertTitle>
+      <AlertDescription className="truncate font-mono">{root}</AlertDescription>
+      {context ? (
+        <AlertAction>
+          <Button onClick={onReveal} variant="outline">
+            {t("filePanel.tree.action.reveal", "Reveal in Finder")}
+          </Button>
+        </AlertAction>
+      ) : null}
+    </Alert>
+  );
+}
 
 export function ReadOnlyErrorState({
   message,

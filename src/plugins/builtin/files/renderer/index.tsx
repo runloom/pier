@@ -28,7 +28,10 @@ import {
   restoreUntitledDocumentFromPanelSource,
 } from "./document/store.ts";
 import { parseFilesDocumentPanelSource } from "./document/types.ts";
-import { createFilesEditorActions } from "./editor/actions.ts";
+import {
+  createFilesEditorActions,
+  createFilesEditorPrefsActions,
+} from "./editor/actions.ts";
 import { FileEditorController } from "./editor/controller.ts";
 import { registerFilesLspNavigationDeps } from "./lsp/navigation.ts";
 import { markdownCodeHighlighter } from "./markdown/code-highlighter.ts";
@@ -334,6 +337,9 @@ export const filesRendererPlugin: RendererPluginModule = {
         context.actions.register(
           withFilesMutationGate(action, editorController)
         )
+      ),
+      ...createFilesEditorPrefsActions(context).map((action) =>
+        context.actions.register(action)
       ),
       ...createFilesMarkdownPreviewActions(context).map((action) =>
         context.actions.register(action)

@@ -48,6 +48,8 @@ export const FILES_EDITOR_PASTE_COMMAND_ID = "pier.files.editor.paste";
 export const FILES_EDITOR_SELECT_ALL_COMMAND_ID = "pier.files.editor.selectAll";
 export const FILES_EDITOR_GO_TO_LINE_COMMAND_ID = "pier.files.editor.goToLine";
 export const FILES_EDITOR_SHOW_HOVER_COMMAND_ID = "pier.files.editor.showHover";
+export const FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID =
+  "pier.files.editor.toggleWordWrap";
 
 export const FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID =
   "pier.files.markdown.measureComfortable";

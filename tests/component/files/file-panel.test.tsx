@@ -164,7 +164,6 @@ vi.mock("@plugins/builtin/files/renderer/markdown/runtime.ts", async () => {
   return { ...actual, markdownRuntime };
 });
 
-const OUTSIDE_WORKSPACE_PATTERN = /outside the current workspace/i;
 const PROJECT_ROOT = "/workspace/pier";
 const CLASS_H_FULL = /\bh-full\b/;
 const CLASS_FLEX = /\bflex\b/;
@@ -1429,6 +1428,138 @@ describe("Files file-panel", () => {
     expect(tree.queryByRole("treeitem", { name: /^build$/ })).toBeNull();
     expect(tree.getByRole("treeitem", { name: /^\.git$/ })).toBeVisible();
     expect(tree.getByRole("treeitem", { name: /^\.env$/ })).toBeVisible();
+  });
+
+  it("opens outside-workspace disk files with a banner and a pinned tree entry", async () => {
+    const otherRoot = "/workspace/other";
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "file", path: "README.md", root: PROJECT_ROOT },
+    ]);
+    const { container } = renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "notes.txt", root: otherRoot },
+      },
+      createMockContext({ list })
+    );
+
+    // Content loads instead of the restore-error empty state.
+    await waitFor(() => {
+      expect(container.querySelector(".cm-editor")).not.toBeNull();
+    });
+    expect(screen.queryByText("Unable to restore file tab")).toBeNull();
+    expect(
+      screen.getByText("This file is outside the current workspace")
+    ).toBeVisible();
+    expect(screen.getByText(otherRoot)).toBeVisible();
+
+    // Tree stays rooted at the panel root; the external doc is pinned on top.
+    const tree = within(getFileTree(container));
+    expect(tree.getByRole("treeitem", { name: /^README\.md$/ })).toBeVisible();
+    const pinned = container.querySelector(
+      '[data-testid="files-tree-external-file"]'
+    );
+    expect(pinned).not.toBeNull();
+    expect(pinned).toHaveTextContent("notes.txt");
+    expect(pinned).toHaveTextContent("other");
+  });
+
+  it("reveals the outside-workspace file through the banner action", async () => {
+    const otherRoot = "/workspace/other";
+    const reveal = vi.fn<RendererPluginContext["files"]["reveal"]>(
+      async (request) => ({ ...request, revealed: true })
+    );
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "file", path: "README.md", root: PROJECT_ROOT },
+    ]);
+    const context = createMockContext({ list, reveal });
+    const { container } = renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "notes.txt", root: otherRoot },
+      },
+      context
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".cm-editor")).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reveal in Finder" }));
+    await waitFor(() => {
+      expect(reveal).toHaveBeenCalledWith({
+        path: "notes.txt",
+        root: otherRoot,
+      });
+    });
+  });
+
+  it("shows outside-workspace reveal failures in the host dialog", async () => {
+    const otherRoot = "/workspace/other";
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "file", path: "README.md", root: PROJECT_ROOT },
+    ]);
+    const context = createMockContext({
+      list,
+      reveal: vi.fn(async () => {
+        throw new Error("Finder unavailable");
+      }),
+    });
+    const { container } = renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "notes.txt", root: otherRoot },
+      },
+      context
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".cm-editor")).not.toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Reveal in Finder" }));
+    await waitFor(() => {
+      expect(context.dialogs.alert).toHaveBeenCalledWith({
+        body: "Finder unavailable",
+        title: "Unable to reveal item",
+      });
+    });
+  });
+
+  it("keeps the outside-workspace editor scrollable via a flex-col wrapper", async () => {
+    // Regression:outside-workspace 分支的 wrapper 曾是 block(`min-h-0 flex-1`,无 flex),
+    // ResolvedFilePanel root 的 flex-1 在 block 父级里被忽略、高度塌成内容高 →
+    // .cm-scroller height:100% 等于内容高、永不溢出 → 编辑器滚不动。wrapper 必须是
+    // flex-col 才能把高度传给 body root。
+    const otherRoot = "/workspace/other";
+    const list = vi.fn<RendererPluginContext["files"]["list"]>(async () => [
+      { kind: "file", path: "README.md", root: PROJECT_ROOT },
+    ]);
+    const { container } = renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "notes.txt", root: otherRoot },
+      },
+      createMockContext({ list })
+    );
+    await waitFor(() => {
+      expect(container.querySelector(".cm-editor")).not.toBeNull();
+    });
+
+    const main = container.querySelector("main");
+    expect(main).toBeInstanceOf(HTMLElement);
+    // body root (ResolvedFilePanel) —— flex-1,不能 h-full(会撑出 chrome)。
+    const bodyRoot = main?.parentElement;
+    expect(bodyRoot).toBeInstanceOf(HTMLElement);
+    expect((bodyRoot as HTMLElement).className).toMatch(CLASS_FLEX_1);
+    expect((bodyRoot as HTMLElement).className).not.toMatch(CLASS_H_FULL);
+    // wrapper(body root 的父层)必须是 flex-col + flex-1 + min-h-0,否则 body root
+    // 的 flex-1 不生效、高度链断在这里。
+    const wrapper = bodyRoot?.parentElement;
+    expect(wrapper).toBeInstanceOf(HTMLElement);
+    const wrapperClass = (wrapper as HTMLElement).className;
+    expect(wrapperClass).toMatch(CLASS_FLEX);
+    expect(wrapperClass).toMatch(CLASS_FLEX_COL);
+    expect(wrapperClass).toMatch(CLASS_FLEX_1);
+    expect(wrapperClass).toMatch(CLASS_MIN_H_0);
   });
 
   it("applies visibility settings live without reopening a collapsed directory", async () => {
@@ -4806,21 +4937,34 @@ describe("Files file-panel", () => {
     expect(screen.getByText("Saved")).toBeVisible();
   });
 
-  it("rejects disk sources outside the restored panel context without file IO", () => {
-    const readText = vi.fn<RendererPluginContext["files"]["readText"]>();
+  it("opens disk sources outside the restored panel context with a context banner", async () => {
     const writeText = vi.fn<RendererPluginContext["files"]["writeText"]>();
 
-    renderFilePanel(
+    const { container } = renderFilePanel(
       {
         context: panelContext,
         source: { kind: "disk", path: "notes.md", root: "/other/repo" },
       },
-      createMockContext({ readText, writeText })
+      createMockContext({ writeText })
     );
 
-    expect(screen.getByText("Unable to restore file tab")).toBeVisible();
-    expect(screen.getByText(OUTSIDE_WORKSPACE_PATTERN)).toBeVisible();
-    expect(readText).not.toHaveBeenCalled();
+    // New semantics: outside docs open read/write instead of being blocked;
+    // the banner + pinned tree entry carry the context.
+    expect(
+      await screen.findByText("This file is outside the current workspace")
+    ).toBeVisible();
+    expect(screen.getByText("/other/repo")).toBeVisible();
+    expect(screen.queryByText("Unable to restore file tab")).toBeNull();
+    await waitFor(() => {
+      expect(container.querySelector(".cm-editor")).not.toBeNull();
+    });
+    const pinned = container.querySelector(
+      '[data-testid="files-tree-external-file"]'
+    );
+    expect(pinned).not.toBeNull();
+    expect(pinned).toHaveTextContent("notes.md");
+    expect(pinned).toHaveTextContent("repo");
+    // Opening must not write; saving stays explicit.
     expect(writeText).not.toHaveBeenCalled();
   });
 

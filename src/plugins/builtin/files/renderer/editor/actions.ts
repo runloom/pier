@@ -11,8 +11,10 @@ import {
   FILES_EDITOR_PASTE_COMMAND_ID,
   FILES_EDITOR_SELECT_ALL_COMMAND_ID,
   FILES_EDITOR_SHOW_HOVER_COMMAND_ID,
+  FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID,
   FILES_FILE_PANEL_ID,
 } from "../../manifest.ts";
+import { FILES_EDITOR_WORD_WRAP_SETTING_KEY } from "../../settings.ts";
 import { createFilesTranslate, type FilesTranslate } from "../i18n.ts";
 import type { FileEditorController } from "./controller.ts";
 import { createFileEditorSessionId } from "./session-id.ts";
@@ -283,6 +285,43 @@ export function createFilesEditorActions(
       surfaces: ["command-palette", "files/editor"],
       title: () =>
         t("filePanel.editor.showHover.title", "Show Symbol Information"),
+    },
+  ];
+}
+
+/**
+ * 视图切换类编辑器 action（全局配置写入，不走文档 mutation gate）。
+ *
+ * wordWrap 切换写回 `pier.files.editor.wordWrap` 全局配置，经
+ * {@link bindFilesEditorPrefs} 联动所有打开的编辑器；不碰文档内容，
+ * 因此不能套 withFilesMutationGate（有 in-flight save/mutation 时会被挂起）。
+ */
+export function createFilesEditorPrefsActions(
+  context: RendererPluginContext
+): RendererPluginAction[] {
+  const t: FilesTranslate = createFilesTranslate(context);
+  return [
+    {
+      category: "file" as const,
+      handler: async () => {
+        const next =
+          context.configuration.get<boolean>(
+            FILES_EDITOR_WORD_WRAP_SETTING_KEY
+          ) !== true;
+        await context.configuration.set(
+          FILES_EDITOR_WORD_WRAP_SETTING_KEY,
+          next
+        );
+      },
+      id: FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID,
+      metadata: { group: "2_view", sortOrder: 1 },
+      surfaces: ["command-palette", "files/editor"],
+      title: () =>
+        context.configuration.get<boolean>(
+          FILES_EDITOR_WORD_WRAP_SETTING_KEY
+        ) === true
+          ? t("filePanel.editor.action.wordWrap.on", "Word Wrap: On")
+          : t("filePanel.editor.action.wordWrap.off", "Word Wrap: Off"),
     },
   ];
 }

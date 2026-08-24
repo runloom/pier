@@ -226,7 +226,7 @@ describe("SettingsDialog — custom plugin settings page", () => {
       document.getElementById(
         `plugin-setting-${FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY}`
       )
-    ).toHaveAttribute("aria-checked", "true");
+    ).toHaveAttribute("aria-checked", "false");
     expect(
       document.getElementById(
         `plugin-setting-${FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY}`

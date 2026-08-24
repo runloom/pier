@@ -15,7 +15,6 @@ import {
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
 import {
   type FilesDocumentPanelSource,
-  isDiskSourceRootAllowed,
   sameFilesDocumentPanelSource,
 } from "../document/types.ts";
 import { useFilesDocument } from "../document/use-document.ts";
@@ -40,6 +39,7 @@ import {
   FilePanelChrome,
   FilePanelSearchButton,
   FilePanelShell,
+  OutsideWorkspaceBanner,
   ReadOnlyErrorState,
   SidebarToggleButton,
 } from "./parts.tsx";
@@ -47,9 +47,9 @@ import { renderFilePanelSidebar } from "./sidebar-slot.tsx";
 import {
   asGroupHandle,
   breadcrumbSegmentsForSource,
+  outsideWorkspaceStateFor,
   panelSourceForDocument,
   parseSourceState,
-  sourceTitle,
 } from "./source.ts";
 import { fileDocumentShowsUnsavedMark } from "./tab/unsaved.ts";
 import type { FilePanelRuntimeProps } from "./types.ts";
@@ -96,10 +96,6 @@ function FilePanelContent({
   panelSessionIdRef.current ??= `inline-panel:${nextInlinePanelSessionId++}`;
   const panelSessionId = props.api?.id ?? panelSessionIdRef.current;
   const editorSessionId = createFileEditorSessionId(panelSessionId);
-  const sourceAllowed =
-    stableSource?.kind === "untitled" ||
-    (stableSource?.kind === "disk" &&
-      isDiskSourceRootAllowed(stableSource.root, props.params?.context));
   const trackedDocumentIdForMode = stableSource
     ? controller.documentId(stableSource)
     : null;
@@ -113,11 +109,13 @@ function FilePanelContent({
     stableSource,
   });
   useLayoutEffect(() => {
-    if (!(stableSource && sourceAllowed)) {
+    if (!stableSource) {
       return;
     }
+    // Outside-workspace disk docs acquire too: they render read/write with an
+    // context banner instead of being blocked at restore.
     return controller.acquirePanel(panelSessionId, stableSource);
-  }, [controller, panelSessionId, sourceAllowed, stableSource]);
+  }, [controller, panelSessionId, stableSource]);
 
   // group 绑定必须是「活的」:dockview 拖拽跨组不 remount 组件,只 reparent
   // 内容 DOM。render 期快照会指向旧 group(薄壳空白 + 旧组视图泄漏),
@@ -303,9 +301,15 @@ function FilePanelContent({
     root,
     source: sourceFromParams,
   });
+  const { externalActiveFile, outsideWorkspace } = outsideWorkspaceStateFor(
+    sourceFromParams,
+    root,
+    props.params?.context
+  );
   const sidebar = renderFilePanelSidebar({
     activeFilePath,
     controller,
+    externalActiveFile,
     instanceId: props.api?.id ?? "pier.files.inlineFilePanel",
     onOpenFile: handleOpenFileFromTree,
     root,
@@ -330,9 +334,6 @@ function FilePanelContent({
     </>
   );
 
-  const outsideWorkspace =
-    sourceFromParams?.kind === "disk" &&
-    !isDiskSourceRootAllowed(sourceFromParams.root, props.params?.context);
   const shellProps = {
     onSidebarAutoCollapse: () => setTreeCollapsed(true),
     sidebar,
@@ -358,7 +359,7 @@ function FilePanelContent({
       />
     );
 
-  if (outsideWorkspace && sourceFromParams) {
+  if (sourceFromParams?.kind === "disk" && outsideWorkspace) {
     return (
       <FilePanelShell
         {...shellProps}
@@ -366,14 +367,31 @@ function FilePanelContent({
           <FilePanelChrome center={diskBreadcrumb} leading={chromeLeading} />
         }
       >
-        <ReadOnlyErrorState
-          message={t(
-            "filePanel.errors.outsideWorkspace",
-            "This file is outside the current workspace and cannot be restored."
-          )}
-          t={t}
-          title={sourceTitle(sourceFromParams)}
-        />
+        <div className="flex h-full min-h-0 flex-col">
+          <OutsideWorkspaceBanner
+            context={runtimeContext}
+            path={sourceFromParams.path}
+            root={sourceFromParams.root}
+            t={t}
+          />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ResolvedFilePanel
+              context={runtimeContext}
+              controller={controller}
+              editorSessionId={editorSessionId}
+              markdownAnchor={props.params?.markdownAnchor}
+              markdownAnchorRequestId={props.params?.markdownAnchorRequestId}
+              markdownRevealLine={props.params?.markdownRevealLine}
+              mode={mode}
+              onModeChange={setMode}
+              panelContext={props.params?.context}
+              panelId={props.api?.id}
+              searchRequest={searchRequest}
+              source={sourceFromParams}
+              t={t}
+            />
+          </div>
+        </div>
       </FilePanelShell>
     );
   }

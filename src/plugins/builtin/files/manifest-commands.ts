@@ -11,6 +11,7 @@ import {
   FILES_EDITOR_PASTE_COMMAND_ID,
   FILES_EDITOR_SELECT_ALL_COMMAND_ID,
   FILES_EDITOR_SHOW_HOVER_COMMAND_ID,
+  FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID,
   FILES_FILE_CLIPBOARD_COPY_COMMAND_ID,
   FILES_FILE_CLIPBOARD_CUT_COMMAND_ID,
   FILES_FILE_CLIPBOARD_PASTE_COMMAND_ID,
@@ -254,6 +255,12 @@ export const FILES_PLUGIN_COMMANDS: PluginManifest["commands"] = [
     id: FILES_EDITOR_SHOW_HOVER_COMMAND_ID,
     permissions: [],
     title: "Show Symbol Information",
+  },
+  {
+    category: "file",
+    id: FILES_EDITOR_TOGGLE_WORD_WRAP_COMMAND_ID,
+    permissions: [],
+    title: "Toggle Word Wrap",
   },
   {
     category: "file",

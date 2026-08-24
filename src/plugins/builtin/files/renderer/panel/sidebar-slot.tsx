@@ -8,6 +8,8 @@ import type { FilesWatchHub } from "../watch-hub.ts";
 export function renderFilePanelSidebar(options: {
   activeFilePath: string | null;
   controller: FileEditorController;
+  /** Active doc from another root; rendered pinned above the tree. */
+  externalActiveFile?: { path: string; root: string } | null;
   instanceId: string;
   onOpenFile: (entry: FileEntry, options?: { pinned?: boolean }) => void;
   root: string | null | undefined;
@@ -18,6 +20,7 @@ export function renderFilePanelSidebar(options: {
   const {
     activeFilePath,
     controller,
+    externalActiveFile,
     instanceId,
     onOpenFile,
     root,
@@ -33,6 +36,7 @@ export function renderFilePanelSidebar(options: {
       activeFilePath={activeFilePath}
       context={runtimeContext}
       controller={controller}
+      {...(externalActiveFile ? { externalActiveFile } : {})}
       instanceId={instanceId}
       onOpenFile={onOpenFile}
       root={root}

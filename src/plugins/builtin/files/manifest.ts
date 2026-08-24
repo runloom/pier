@@ -142,9 +142,9 @@ export const FILES_PLUGIN_MANIFEST = {
         type: "string",
       },
       [FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY]: {
-        default: true,
+        default: false,
         description:
-          "Show files and folders matched by Git ignore rules. This is separate from the file tree exclusion patterns.",
+          "Show files and folders matched by Git ignore rules. Separate from the exclusion patterns.",
         order: 30,
         type: "boolean",
       },
