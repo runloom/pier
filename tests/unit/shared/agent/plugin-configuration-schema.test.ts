@@ -1,7 +1,7 @@
 import { pluginManifestSchema } from "@shared/contracts/plugin.ts";
 import { describe, expect, it } from "vitest";
 
-function manifestWith(configuration?: unknown): unknown {
+function manifestWith(configuration?: unknown): Record<string, unknown> {
   return {
     apiVersion: 1,
     engines: { pier: ">=0.1.0" },
@@ -240,5 +240,21 @@ describe("pluginManifestSchema — configuration", () => {
         )
       )
     ).toThrow();
+  });
+});
+
+describe("pluginManifestSchema — dataProjections", () => {
+  it("dataProjections 缺省为空数组", () => {
+    const parsed = pluginManifestSchema.parse(manifestWith());
+    expect(parsed.dataProjections).toEqual([]);
+  });
+
+  it("dataProjections 拒绝空字符串键", () => {
+    expect(
+      pluginManifestSchema.safeParse({
+        ...manifestWith(),
+        dataProjections: [""],
+      }).success
+    ).toBe(false);
   });
 });

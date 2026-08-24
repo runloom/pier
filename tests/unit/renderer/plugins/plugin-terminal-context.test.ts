@@ -20,6 +20,7 @@ function pluginEntry(
       apiVersion: 1,
       commands: [],
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.test-terminal-context",

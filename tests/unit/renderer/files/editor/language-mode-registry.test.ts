@@ -57,6 +57,7 @@ describe("editor language mode registry", () => {
             terminalStatusItems: [],
             version: "0.1.0",
             workbenchWidgets: [],
+            dataProjections: [],
           },
         }),
       ],
@@ -112,6 +113,7 @@ describe("editor language mode registry", () => {
           terminalStatusItems: [],
           version: "0.1.0",
           workbenchWidgets: [],
+          dataProjections: [],
         },
       }),
     ]);
@@ -145,6 +147,7 @@ describe("editor language mode registry", () => {
             terminalStatusItems: [],
             version: "0.1.0",
             workbenchWidgets: [],
+            dataProjections: [],
           },
         }),
       ],

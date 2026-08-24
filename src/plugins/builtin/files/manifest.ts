@@ -192,6 +192,7 @@ export const FILES_PLUGIN_MANIFEST = {
     },
   },
   workbenchWidgets: [],
+  dataProjections: [],
   settingsPages: [],
   groupContent: [
     {

@@ -266,6 +266,13 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.disable"),
   }),
+  z.object({
+    payload: z.object({
+      key: z.string().min(1),
+      pluginId: z.string().min(1),
+    }),
+    type: z.literal("pluginData.snapshot"),
+  }),
   z.object({ type: z.literal("pluginSettings.getAll") }),
   z.object({
     key: z.string().min(1),

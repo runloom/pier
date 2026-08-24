@@ -174,6 +174,10 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     capabilities: ["plugin:read"],
   },
   "pluginSettings.getAll": { capabilities: ["plugin:read"] },
+  "pluginData.snapshot": {
+    allowedClientKinds: ["canvas"],
+    capabilities: ["plugin:read"],
+  },
   "pluginSettings.reset": { capabilities: ["plugin:write"] },
   "pluginSettings.set": { capabilities: ["plugin:write"] },
   "preferences.read": { capabilities: ["preferences:read"] },

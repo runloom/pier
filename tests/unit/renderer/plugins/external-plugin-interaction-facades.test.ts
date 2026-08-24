@@ -40,6 +40,7 @@ const entry: PluginRegistryEntry = {
     terminalStatusItems: [],
     version: "1.0.0",
     workbenchWidgets: [],
+    dataProjections: [],
   },
   runtime: { canToggle: true, enabled: true, kind: "external" },
 };

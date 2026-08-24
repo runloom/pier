@@ -172,7 +172,12 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
  * `useCanvasFile` is the sibling-file sandbox (not the global `file.*` API).
  * Global commands, events, and snapshots live on `pier/host`.
  */
-export const PIER_CANVAS_VALUE_EXPORT_NAMES = ["useCanvasFile"] as const;
+export const PIER_CANVAS_VALUE_EXPORT_NAMES = [
+  "useActivityOverview",
+  "useCanvasFile",
+  "useCostOverview",
+  "useSystemResources",
+] as const;
 
 export const PIER_CANVAS_EXPORT_NAMES = [
   ...PIER_CANVAS_COMPONENT_EXPORT_NAMES,

@@ -208,6 +208,22 @@ export async function executePluginCommand(
         requestId,
         await services.pluginSettings.reset(command.key)
       );
+    case "pluginData.snapshot": {
+      if (!services.pluginDataProjections) {
+        return failure(
+          requestId,
+          "not_found",
+          "plugin data projections service unavailable"
+        );
+      }
+      return success(
+        requestId,
+        await services.pluginDataProjections.snapshot(
+          command.payload.pluginId,
+          command.payload.key
+        )
+      );
+    }
     case "plugin.catalog.list":
       return success(
         requestId,

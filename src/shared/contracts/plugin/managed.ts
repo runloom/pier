@@ -125,6 +125,11 @@ export const managedPluginPackageManifestSchema = z.preprocess(
       workbenchWidgets: z
         .array(pluginWorkbenchWidgetContributionSchema)
         .default([]),
+      /**
+       * 可投影给 canvas 的只读数据键（设计 §4.1）。未声明键的
+       * pluginData.snapshot 一律拒绝——纪律边界与 panels 同链。
+       */
+      dataProjections: z.array(z.string().min(1)).default([]),
       languageServers: z
         .array(pluginLanguageServerContributionSchema)
         .optional(),

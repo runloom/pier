@@ -99,6 +99,7 @@ function pluginEntry(items: PluginTerminalStatusItemContribution[]) {
       terminalStatusItems: items,
       version: "1.0.0",
       workbenchWidgets: [],
+      dataProjections: [],
     },
     runtime: { canToggle: true, enabled: true, kind: "builtin" as const },
   };

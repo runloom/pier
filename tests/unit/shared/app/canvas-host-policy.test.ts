@@ -9,6 +9,7 @@ import {
   isCanvasHostCommandAllowed,
   isCanvasHostSnapshotAllowed,
   normalizeCanvasHostSnapshotId,
+  parsePluginDataWatchTarget,
 } from "@shared/contracts/canvas-host.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { describe, expect, it } from "vitest";
@@ -56,6 +57,27 @@ describe("canvas host policy", () => {
     expect(
       isCanvasHostChannelAllowed(PIER_BROADCAST.LIVE_MODULES_CHANGED)
     ).toBe(false);
+  });
+
+  it("pluginData.snapshot joins the canvas allowlist", () => {
+    expect(isCanvasHostCommandAllowed("pluginData.snapshot")).toBe(true);
+    expect(isCanvasHostChannelAllowed(PIER_BROADCAST.PLUGIN_DATA_CHANGED)).toBe(
+      true
+    );
+    expect(CANVAS_HOST_ALLOWED_CHANNELS).toContain(
+      PIER_BROADCAST.PLUGIN_DATA_CHANGED
+    );
+  });
+
+  it("plugin watch target parses and rejects malformed ids", () => {
+    expect(
+      parsePluginDataWatchTarget("plugin:pier.codex/accounts.usage")
+    ).toEqual({
+      key: "accounts.usage",
+      pluginId: "pier.codex",
+    });
+    expect(parsePluginDataWatchTarget("plugin:pier.codex/")).toBeNull();
+    expect(parsePluginDataWatchTarget("resources")).toBeNull();
   });
 
   it("watches snapshot ids on their live broadcast", () => {

@@ -169,6 +169,9 @@ import {
 } from "@pier/ui/tooltip.tsx";
 import type { PierCanvasExportName } from "@shared/pier-canvas-export-names.ts";
 import { useCanvasFile } from "./canvas-file-facade.ts";
+import { useActivityOverview } from "./canvas-hooks/use-activity-overview.ts";
+import { useCostOverview } from "./canvas-hooks/use-cost-overview.ts";
+import { useSystemResources } from "./canvas-hooks/use-system-resources.ts";
 import { Artboard, ArtboardStage } from "./pier-canvas-artboard.tsx";
 import { DocsShell, Frame, Row, Stack, Text } from "./pier-canvas-layout.ts";
 import { pierCanvasVisualizationExports } from "./pier-canvas-visualization-exports.ts";
@@ -326,7 +329,10 @@ export const pierCanvasExports = {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useActivityOverview,
   useCanvasFile,
+  useCostOverview,
+  useSystemResources,
 } as const satisfies Record<PierCanvasExportName, unknown>;
 
 export type PierCanvasExports = typeof pierCanvasExports;

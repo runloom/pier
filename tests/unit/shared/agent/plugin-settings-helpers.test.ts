@@ -44,6 +44,7 @@ function entry(
       commands: [],
       configuration: { properties },
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id,

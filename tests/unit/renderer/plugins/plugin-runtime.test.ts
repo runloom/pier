@@ -34,6 +34,7 @@ const pluginEntry = {
     apiVersion: 1,
     commands: [],
     workbenchWidgets: [],
+    dataProjections: [],
     settingsPages: [],
     engines: { pier: ">=0.1.0" },
     groupContent: [{ id: "runtime.test.groupView", title: "Group View" }],

@@ -28,6 +28,7 @@ function externalEntry(): PluginRegistryEntry {
       engines: { pier: ">=0.1.0" },
       id: "pier.external",
       workbenchWidgets: [],
+      dataProjections: [],
       name: "External",
       panels: [
         { id: "pier.external.panel", permissions: [], title: "External" },

@@ -48,6 +48,10 @@ import { createManagedPluginOperationLog } from "../services/managed-plugins/ope
 import { createManagedPluginPaths } from "../services/managed-plugins/paths.ts";
 import { bootWorkspacePluginMode } from "../services/managed-plugins/workspace-boot.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
+import {
+  bootAppCorePluginDataProjections,
+  refreshManifestProjections,
+} from "../services/plugin-data-projections/boot.ts";
 import { createPluginService } from "../services/plugin-service.ts";
 import { createPluginSettingsService } from "../services/plugin-settings-service.ts";
 import { createDefaultPluginSources } from "../services/plugin-sources.ts";
@@ -110,6 +114,7 @@ export interface PierAppCore {
   clients: PierClientRegistry;
   commandRouter: CommandRouter;
   disposeManagedPluginDevRuntimeWatch(): void;
+  disposePluginDataProjections(): void;
   eventBus: PierEventBus;
   flushExternalPluginsBeforeQuit(): Promise<void>;
   pluginHost: MainPluginHostApi;
@@ -206,8 +211,25 @@ function createPierAppCore(): PierAppCore {
       }
     }
   });
+  const pluginRpcBus: PluginRpcBus = createPluginRpcBus({
+    broadcast: (payload) => {
+      for (const win of windowManager.getAll()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send(PIER_BROADCAST.PLUGIN_RPC_EVENT, payload);
+        }
+      }
+    },
+  });
+  // 插件数据投影：canvas 快照命令 + 已声明键变更转发（boot 细节见 helper）。
+  const appCoreProjections = bootAppCorePluginDataProjections({
+    bus: pluginRpcBus,
+    plugins: basePlugins,
+  });
   const pluginHost = createMainPluginHostApi({
-    onRegistryChanged: broadcastPluginRegistryChanged,
+    onRegistryChanged: (result) => {
+      broadcastPluginRegistryChanged(result);
+      refreshManifestProjections(appCoreProjections);
+    },
     plugins: basePlugins,
     settings: pluginSettings,
   });
@@ -223,15 +245,6 @@ function createPierAppCore(): PierAppCore {
     readPreferences: () => preferences.read(),
   });
 
-  const pluginRpcBus: PluginRpcBus = createPluginRpcBus({
-    broadcast: (payload) => {
-      for (const win of windowManager.getAll()) {
-        if (!win.isDestroyed()) {
-          win.webContents.send(PIER_BROADCAST.PLUGIN_RPC_EVENT, payload);
-        }
-      }
-    },
-  });
   // Wait for host shell env (single dump); no second echo $PATH.
   // Detection and lifecycle share PES env so PATH probes stay consistent.
   const resolveAgentEnv = async () => {
@@ -405,6 +418,7 @@ function createPierAppCore(): PierAppCore {
     fileDrafts,
     files,
     fileWatch: createFileWatchService(),
+    pluginDataProjections: appCoreProjections.projections,
     preferences,
     projectSkills,
     systemSkills,
@@ -473,6 +487,7 @@ function createPierAppCore(): PierAppCore {
     disposeManagedPluginDevRuntimeWatch: () => {
       managedPluginDevRuntimeWatches.dispose();
     },
+    disposePluginDataProjections: () => appCoreProjections.disposeTap(),
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),
     pluginHost,

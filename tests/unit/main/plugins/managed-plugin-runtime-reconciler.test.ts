@@ -30,6 +30,7 @@ function source(
       terminalStatusItems: [],
       version,
       workbenchWidgets: [],
+      dataProjections: [],
     },
     rendererEntryUrl: `pier-plugin://pier.codex/${version}/dist/renderer.js`,
     version,

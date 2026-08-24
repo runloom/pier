@@ -261,6 +261,17 @@ export const CANVAS_MATERIAL_GROUPS: readonly CanvasMaterialGroup[] = [
   { family: "viz", id: "DataChart", members: ["DataChart"] },
   { family: "viz", id: "Mermaid", members: ["Mermaid"] },
   { family: "data", id: "canvasFile", members: ["useCanvasFile"] },
+  {
+    family: "data",
+    id: "activityOverview",
+    members: ["useActivityOverview"],
+  },
+  { family: "data", id: "costOverview", members: ["useCostOverview"] },
+  {
+    family: "data",
+    id: "systemResources",
+    members: ["useSystemResources"],
+  },
 ];
 
 export function ungroupedPierCanvasExports(): string[] {

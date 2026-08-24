@@ -8,8 +8,12 @@ export { CANVAS_MATERIAL_FAMILY_IDS } from "./types.ts";
 function groupedSystemMaterials(): CanvasSystemMaterial[] {
   return CANVAS_MATERIAL_GROUPS.map((group) => {
     const catalog = catalogEntryFor(group.id);
-    const surface = group.family === "data" ? "canvas-file" : "component";
-    const exportName = surface === "canvas-file" ? "useCanvasFile" : group.id;
+    const isHookSurface = group.family === "data";
+    const surface = isHookSurface ? "canvas-file" : "component";
+    // data 家族每行对应单个 hook，exportName 取该 hook 本名，避免混入 useCanvasFile。
+    const exportName = isHookSurface
+      ? (group.members[0] ?? group.id)
+      : group.id;
     return {
       commandCount: 0,
       eventCount: 0,
