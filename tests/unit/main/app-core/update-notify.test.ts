@@ -1,10 +1,13 @@
 import {
   type AppUpdateNotifyService,
+  appUpdateErrorDedupeKey,
   appUpdateReadyDedupeKey,
   buildAppUpdateReadyReport,
+  notifyAppUpdateError,
   notifyAppUpdateReady,
+  shouldSuppressAppUpdateErrorToast,
   shouldSuppressAppUpdateReadyToast,
-} from "@main/services/app-updates/notify-ready.ts";
+} from "@main/services/app-updates/notify.ts";
 import type { AppNotification } from "@shared/contracts/notification-center.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -115,6 +118,94 @@ describe("notifyAppUpdateReady", () => {
     });
     await vi.waitFor(() => {
       expect(getService).toHaveBeenCalled();
+    });
+  });
+});
+
+describe("notifyAppUpdateError", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("builds a stable dedupe key per kind", () => {
+    expect(appUpdateErrorDedupeKey("offline")).toBe("app-update-error:offline");
+  });
+
+  it("suppress helper matches history within the window", () => {
+    const now = 1_000_000;
+    expect(
+      shouldSuppressAppUpdateErrorToast(
+        [{ dedupeKey: "app-update-error:offline", ts: now - 1000 }],
+        "offline",
+        now
+      )
+    ).toBe(true);
+    expect(
+      shouldSuppressAppUpdateErrorToast(
+        [
+          {
+            dedupeKey: "app-update-error:offline",
+            ts: now - 25 * 60 * 60 * 1000,
+          },
+        ],
+        "offline",
+        now
+      )
+    ).toBe(false);
+  });
+
+  it("ingests a warning report with toast on first background failure", async () => {
+    const { ingest, service } = makeService();
+    notifyAppUpdateError("offline", {
+      getService: async () => service,
+      resolveLocale: async () => "en",
+    });
+    await vi.waitFor(() => {
+      expect(ingest).toHaveBeenCalledTimes(1);
+    });
+    expect(ingest.mock.calls[0]?.[0]).toMatchObject({
+      actionParams: { section: "updates" },
+      actions: [
+        {
+          id: "open-settings",
+          labelKey: "settings.appUpdate.errorOpenSettings",
+        },
+      ],
+      body: "Pier couldn’t complete the update. Try again later in Settings › Updates.",
+      dedupeKey: "app-update-error:offline",
+      kind: "app.update",
+      severity: "warning",
+      title: "App update failed",
+      titleKey: "settings.appUpdate.toast.failed",
+      trigger: "system-event",
+    });
+    expect(ingest.mock.calls[0]?.[0].suppressToast).toBeUndefined();
+  });
+
+  it("suppresses toast when the same kind is already in history", async () => {
+    const { ingest, service } = makeService([
+      {
+        dedupeKey: "app-update-error:offline",
+        id: "n1",
+        kind: "app.update",
+        read: false,
+        severity: "warning",
+        source: "host",
+        title: "App update failed",
+        trigger: "system-event",
+        ts: Date.now(),
+      },
+    ]);
+    notifyAppUpdateError("offline", {
+      getService: async () => service,
+      resolveLocale: async () => "zh-CN",
+    });
+    await vi.waitFor(() => {
+      expect(ingest).toHaveBeenCalledTimes(1);
+    });
+    expect(ingest.mock.calls[0]?.[0]).toMatchObject({
+      suppressToast: true,
+      title: "应用更新失败",
     });
   });
 });

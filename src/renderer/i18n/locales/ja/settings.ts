@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
@@ -254,45 +255,7 @@ export const settings = {
     setupCommand: "セットアップコマンド",
     setupHint: "作業ツリーを作成するときに実行します。",
   },
-  appUpdate: {
-    title: "アプリの更新",
-    description: "Pier の更新を確認、ダウンロード、インストールします。",
-    available: "バージョン {{version}} が利用できます。",
-    progress: "ダウンロード {{percent}}%",
-    state: {
-      disabled: "開発モードではアプリの更新を確認しません。",
-      idle: "まだ更新確認を実行していません。",
-      checking: "更新を確認中…",
-      available: "更新があります。",
-      "not-available": "Pier は最新です。",
-      downloading: "更新をダウンロード中…",
-      downloaded: "更新をダウンロードしました。再起動してインストールします。",
-      error: "更新の確認に失敗しました。",
-    },
-    action: {
-      check: "更新を確認",
-      download: "ダウンロード",
-      restart: "再起動してインストール",
-    },
-    toast: {
-      statusFailed: "更新状態を読めませんでした。もう一度お試しください",
-      checkFailed: "更新を確認できませんでした。もう一度お試しください",
-      downloadFailed:
-        "更新をダウンロードできませんでした。もう一度お試しください",
-      installFailed:
-        "更新をインストールできませんでした。もう一度お試しください",
-      ready: "更新の準備ができました",
-      readyDetail: "Pier {{version}} · 再起動してインストール",
-    },
-    titleBar: {
-      update: "更新",
-      updateAvailable: "v{{version}}",
-      availableAria: "Pier {{version}} が利用できます",
-      downloadingAria: "更新をダウンロード中 {{percent}} パーセント",
-      restartAria: "再起動して Pier {{version}} をインストール",
-      errorAria: "アプリの更新に失敗しました。更新設定を開いてください。",
-    },
-  },
+  appUpdate: settingsAppUpdate,
   statusBar: {
     title: "ステータスバー",
     description:

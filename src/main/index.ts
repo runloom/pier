@@ -315,7 +315,7 @@ if (gotTheLock) {
       });
       gitAutofetch.start();
       const appUpdateScheduler = createAppUpdateScheduler({
-        check: () => appCore.services.appUpdates.check(),
+        check: () => appCore.services.appUpdates.check("background"),
         enabled: !isDev,
       });
       appUpdateScheduler.start();

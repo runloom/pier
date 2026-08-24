@@ -30,6 +30,19 @@ describe("AppUpdateControl", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it("hides on update error — errors surface in Settings, not the chip", () => {
+    useAppUpdateStore.setState({
+      snapshot: {
+        currentVersion: "0.1.0",
+        errorDetail: "net::ERR_INTERNET_DISCONNECTED",
+        errorKind: "offline",
+        state: "error",
+      },
+    });
+    const { container } = render(<AppUpdateControl />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
   it("opens settings for an available update", () => {
     const snapshot: AppUpdateSnapshot = {
       availableVersion: "0.2.0",

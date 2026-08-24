@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
@@ -240,43 +241,7 @@ export const settings = {
     setupCommand: "启动命令",
     setupHint: "创建工作树时运行。",
   },
-  appUpdate: {
-    title: "应用更新",
-    description: "检查、下载并安装 Pier 更新。",
-    available: "版本 {{version}} 可用。",
-    progress: "已下载 {{percent}}%",
-    state: {
-      disabled: "开发模式不检查应用更新。",
-      idle: "尚未检查更新。",
-      checking: "正在检查更新…",
-      available: "有可用更新。",
-      "not-available": "Pier 已是最新版本。",
-      downloading: "正在下载更新…",
-      downloaded: "更新已下载，重启后安装。",
-      error: "检查更新失败。",
-    },
-    action: {
-      check: "检查更新",
-      download: "下载",
-      restart: "重启并安装",
-    },
-    toast: {
-      statusFailed: "无法读取更新状态，请重试",
-      checkFailed: "无法检查更新，请重试",
-      downloadFailed: "无法下载更新，请重试",
-      installFailed: "无法安装更新，请重试",
-      ready: "更新已就绪",
-      readyDetail: "Pier {{version}} · 重启后安装",
-    },
-    titleBar: {
-      update: "更新",
-      updateAvailable: "v{{version}}",
-      availableAria: "Pier {{version}} 可用",
-      downloadingAria: "正在下载更新 {{percent}}%",
-      restartAria: "重启并安装 Pier {{version}}",
-      errorAria: "应用更新失败，请打开更新设置。",
-    },
-  },
+  appUpdate: settingsAppUpdate,
   statusBar: {
     title: "状态栏",
     description:

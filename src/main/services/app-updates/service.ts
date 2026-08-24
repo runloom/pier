@@ -1,4 +1,8 @@
-import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
+import type {
+  AppUpdateErrorKind,
+  AppUpdateSnapshot,
+} from "@shared/contracts/app-update.ts";
+import { classifyAppUpdateError } from "./error-kind.ts";
 
 export interface AppUpdaterCheckResult {
   readonly isUpdateAvailable?: boolean;
@@ -12,14 +16,17 @@ export interface AppUpdaterAdapter {
     event: "download-progress",
     cb: (progress: { percent?: number }) => void
   ): void;
+  on(event: "error", cb: (err: Error) => void): void;
   quitAndInstall(): void;
 }
 
 export type AppUpdateRuntimeMode = "development" | "production" | "test";
 
+export type AppUpdateTrigger = "user" | "background";
+
 export interface AppUpdateService {
-  check(): Promise<AppUpdateSnapshot>;
-  download(): Promise<AppUpdateSnapshot>;
+  check(trigger?: AppUpdateTrigger): Promise<AppUpdateSnapshot>;
+  download(trigger?: AppUpdateTrigger): Promise<AppUpdateSnapshot>;
   getStatus(): AppUpdateSnapshot;
   quitAndInstall(): void;
 }
@@ -51,6 +58,17 @@ export function createAppUpdateService(options: {
    * Host wires this to NCS (process-level single notify; not per-window mirror).
    */
   readonly onReady?: (version: string) => void;
+  /**
+   * Fired when a check/download lands in the retryable `error` state.
+   * Host wires origin==="background" failures to NCS; user-origin failures
+   * surface inline in Settings. Not fired when a ready package merely
+   * survives a later failed check.
+   */
+  readonly onError?: (err: {
+    readonly detail: string;
+    readonly kind: AppUpdateErrorKind;
+    readonly origin: AppUpdateTrigger;
+  }) => void;
   readonly runtimeMode: AppUpdateRuntimeMode;
   readonly updater?: AppUpdaterAdapter;
 }): AppUpdateService {
@@ -85,30 +103,52 @@ export function createAppUpdateService(options: {
       progress: { percent: progress.percent ?? 0 },
     });
   });
+  // Promise paths own in-flight check/download failures; the event bus covers
+  // out-of-band failures (e.g. install phase). Never double-handle a failure
+  // the in-flight promise will also report.
+  options.updater?.on("error", (err) => {
+    if (snapshot.state === "downloading" || snapshot.state === "checking") {
+      return;
+    }
+    setError(err, "background");
+  });
 
-  function setError(err: unknown): AppUpdateSnapshot {
+  function setError(err: unknown, origin: AppUpdateTrigger): AppUpdateSnapshot {
     const message = err instanceof Error ? err.message : String(err);
+    const kind = classifyAppUpdateError(err);
     // Ready package stays installable if a later check fails.
     if (snapshot.state === "downloaded") {
       return setSnapshot({
         ...snapshot,
-        error: message,
+        errorDetail: message,
+        errorKind: kind,
       });
     }
     // Download failed (or check failed): leave a retryable error so the UI can
     // re-check / re-download. Do not stay on `downloading` — that disables both
     // Download and Check (check early-returns while state is downloading).
-    return setSnapshot({
+    // A late duplicate of an already-recorded failure (e.g. the updater event
+    // bus echoing a settled promise rejection) must not re-report to NCS.
+    const duplicate =
+      snapshot.state === "error" && snapshot.errorDetail === message;
+    const next = setSnapshot({
       ...(snapshot.availableVersion
         ? { availableVersion: snapshot.availableVersion }
         : {}),
       currentVersion: options.currentVersion,
-      error: message,
+      errorDetail: message,
+      errorKind: kind,
       state: "error",
     });
+    if (!duplicate) {
+      options.onError?.({ detail: message, kind, origin });
+    }
+    return next;
   }
 
-  async function runDownload(): Promise<AppUpdateSnapshot> {
+  async function runDownload(
+    trigger: AppUpdateTrigger = "user"
+  ): Promise<AppUpdateSnapshot> {
     if (disabled) {
       return setSnapshot({
         currentVersion: options.currentVersion,
@@ -138,7 +178,7 @@ export function createAppUpdateService(options: {
           state: "downloaded",
         });
       } catch (err) {
-        return setError(err);
+        return setError(err, trigger);
       } finally {
         downloadInFlight = null;
       }
@@ -147,7 +187,9 @@ export function createAppUpdateService(options: {
     return downloadInFlight;
   }
 
-  async function runCheck(): Promise<AppUpdateSnapshot> {
+  async function runCheck(
+    trigger: AppUpdateTrigger = "user"
+  ): Promise<AppUpdateSnapshot> {
     if (disabled) {
       return setSnapshot({
         currentVersion: options.currentVersion,
@@ -183,9 +225,9 @@ export function createAppUpdateService(options: {
           state: "available",
         });
         // Production path: discover then background-download. Install stays manual.
-        return await runDownload();
+        return await runDownload(trigger);
       } catch (err) {
-        return setError(err);
+        return setError(err, trigger);
       } finally {
         checkInFlight = null;
       }

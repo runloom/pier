@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
@@ -252,43 +253,7 @@ export const settings = {
     setupCommand: "준비 명령",
     setupHint: "작업 트리를 만들 때 실행합니다.",
   },
-  appUpdate: {
-    title: "앱 업데이트",
-    description: "Pier 업데이트를 확인하고 내려받아 설치합니다.",
-    available: "버전 {{version}}을(를) 사용할 수 있습니다.",
-    progress: "내려받기 {{percent}}%",
-    state: {
-      disabled: "개발 모드는 앱 업데이트를 확인하지 않습니다.",
-      idle: "아직 업데이트 확인을 실행하지 않았습니다.",
-      checking: "업데이트를 확인하는 중…",
-      available: "업데이트가 있습니다.",
-      "not-available": "Pier는 최신입니다.",
-      downloading: "업데이트를 내려받는 중…",
-      downloaded: "업데이트를 내려받았습니다. 다시 시작해 설치합니다.",
-      error: "업데이트 확인에 실패했습니다.",
-    },
-    action: {
-      check: "업데이트 확인",
-      download: "내려받기",
-      restart: "다시 시작하고 설치",
-    },
-    toast: {
-      statusFailed: "업데이트 상태를 읽지 못했습니다. 다시 시도하세요",
-      checkFailed: "업데이트를 확인하지 못했습니다. 다시 시도하세요",
-      downloadFailed: "업데이트를 내려받지 못했습니다. 다시 시도하세요",
-      installFailed: "업데이트를 설치하지 못했습니다. 다시 시도하세요",
-      ready: "업데이트가 준비됨",
-      readyDetail: "Pier {{version}} · 다시 시작해 설치",
-    },
-    titleBar: {
-      update: "업데이트",
-      updateAvailable: "v{{version}}",
-      availableAria: "Pier {{version}}을(를) 사용할 수 있습니다",
-      downloadingAria: "업데이트 내려받는 중 {{percent}}퍼센트",
-      restartAria: "다시 시작하고 Pier {{version}} 설치",
-      errorAria: "앱 업데이트에 실패했습니다. 업데이트 설정을 여세요.",
-    },
-  },
+  appUpdate: settingsAppUpdate,
   statusBar: {
     title: "상태 표시줄",
     description:

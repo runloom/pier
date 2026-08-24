@@ -150,9 +150,6 @@ export function appUpdateNeedsAttention(
 ): boolean {
   const state = snapshot?.state;
   return (
-    state === "available" ||
-    state === "downloading" ||
-    state === "downloaded" ||
-    state === "error"
+    state === "available" || state === "downloading" || state === "downloaded"
   );
 }

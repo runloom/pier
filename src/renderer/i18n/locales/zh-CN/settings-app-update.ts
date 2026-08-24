@@ -1,0 +1,52 @@
+/** 设置 · 应用更新分区文案（从 settings.ts 拆出，规避单文件行数上限）。 */
+export const settingsAppUpdate = {
+  title: "应用更新",
+  description: "检查、下载并安装 Pier 更新。",
+  available: "版本 {{version}} 可用。",
+  progress: "已下载 {{percent}}%",
+  state: {
+    disabled: "开发模式不检查应用更新。",
+    idle: "尚未检查更新。",
+    checking: "正在检查更新…",
+    available: "有可用更新。",
+    "not-available": "Pier 已是最新版本。",
+    downloading: "正在下载更新…",
+    downloaded: "更新已下载，重启后安装。",
+  },
+  errorOpenSettings: "打开更新设置",
+  errorHint: {
+    offline: "请检查网络连接后重试。",
+    "no-artifact": "服务器上还没有发布新的安装包，请稍后再试。",
+    "rate-limited": "请稍后再试。",
+    server: "请稍后再试。",
+    unknown: "请稍后再试。",
+  },
+  errorKind: {
+    offline: "网络连接失败",
+    "no-artifact": "暂无可用更新包",
+    "rate-limited": "更新请求过于频繁",
+    server: "更新服务暂时不可用",
+    unknown: "更新失败",
+  },
+  action: {
+    check: "检查更新",
+    download: "下载",
+    restart: "重启并安装",
+  },
+  toast: {
+    statusFailed: "无法读取更新状态，请重试",
+    checkFailed: "无法检查更新，请重试",
+    downloadFailed: "无法下载更新，请重试",
+    installFailed: "无法安装更新，请重试",
+    failed: "应用更新失败",
+    ready: "更新已就绪",
+    readyDetail: "Pier {{version}} · 重启后安装",
+  },
+  titleBar: {
+    update: "更新",
+    updateAvailable: "v{{version}}",
+    availableAria: "Pier {{version}} 可用",
+    downloadingAria: "正在下载更新 {{percent}}%",
+    restartAria: "重启并安装 Pier {{version}}",
+  },
+} as const;

@@ -1,4 +1,4 @@
-import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
+import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Card,
@@ -21,6 +21,7 @@ export function AppUpdateSection() {
 
   const state = snapshot?.state ?? "idle";
   const availableVersion = snapshot?.availableVersion;
+  const errorKind = snapshot?.errorKind ?? "unknown";
 
   return (
     <div className="px-4 pb-4" id="updates">
@@ -33,24 +34,35 @@ export function AppUpdateSection() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          <div className="text-sm">
-            {availableVersion
-              ? t("settings.appUpdate.available", {
-                  version: availableVersion,
-                })
-              : t(`settings.appUpdate.state.${state}`)}
-          </div>
+          {state === "error" ? (
+            <Alert variant="destructive">
+              <AlertTitle>
+                {t(`settings.appUpdate.errorKind.${errorKind}`)}
+              </AlertTitle>
+              <AlertDescription>
+                {t(`settings.appUpdate.errorHint.${errorKind}`)}
+                {snapshot?.errorDetail ? (
+                  <div className="mt-1 break-all text-muted-foreground text-xs">
+                    {snapshot.errorDetail}
+                  </div>
+                ) : null}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <div className="text-sm">
+              {availableVersion
+                ? t("settings.appUpdate.available", {
+                    version: availableVersion,
+                  })
+                : t(`settings.appUpdate.state.${state}`)}
+            </div>
+          )}
           {snapshot?.progress ? (
             <div className="text-muted-foreground text-xs">
               {t("settings.appUpdate.progress", {
                 percent: Math.round(snapshot.progress.percent),
               })}
             </div>
-          ) : null}
-          {snapshot?.error ? (
-            <Alert variant="destructive">
-              <AlertDescription>{snapshot.error}</AlertDescription>
-            </Alert>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button

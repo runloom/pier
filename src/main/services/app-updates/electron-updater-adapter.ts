@@ -1,5 +1,8 @@
+import { createLogger } from "@shared/logger.ts";
 import electronUpdater from "electron-updater";
 import type { AppUpdaterAdapter } from "./service.ts";
+
+const log = createLogger("app-updater");
 
 export function createElectronAppUpdaterAdapter(): AppUpdaterAdapter {
   // electron-updater 的 autoUpdater 是 getter，取值即构造 MacUpdater 并读取
@@ -10,6 +13,14 @@ export function createElectronAppUpdaterAdapter(): AppUpdaterAdapter {
   // Keep autoDownload false so checkForUpdates does not start a second download.
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+  // 打包版没有 devtools console：updater 日志转发进结构化 logger，
+  // 更新失败才能落盘排查。
+  autoUpdater.logger = {
+    debug: (message: string) => log.debug(message),
+    error: (message: unknown) => log.error(String(message)),
+    info: (message: unknown) => log.info(String(message)),
+    warn: (message: unknown) => log.warn(String(message)),
+  };
   return {
     checkForUpdates: () => autoUpdater.checkForUpdates(),
     downloadUpdate: () => autoUpdater.downloadUpdate(),
