@@ -25,7 +25,7 @@ function definePresentationGroupOrder<
     GIT_REVIEW_GROUP_ORDER.some((group) => !presentationGroups.has(group))
   ) {
     throw new Error(
-      "Git review presentation groups must exactly cover the protocol groups"
+      "git review presentation groups must exactly cover the protocol groups"
     );
   }
   return order;

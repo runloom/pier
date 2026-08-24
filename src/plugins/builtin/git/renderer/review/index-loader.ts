@@ -87,7 +87,7 @@ export class GitReviewIndexLoader {
       options.createOperationId ?? (() => crypto.randomUUID());
     this.#debounceMs = options.debounceMs ?? DEFAULT_REFRESH_DEBOUNCE_MS;
     if (!(Number.isSafeInteger(this.#debounceMs) && this.#debounceMs >= 0)) {
-      throw new Error("Git Review 刷新合并窗口必须是非负安全整数");
+      throw new Error("git Review 刷新合并窗口必须是非负安全整数");
     }
     this.#load = options.load;
     this.#watch = options.watch;
@@ -111,7 +111,7 @@ export class GitReviewIndexLoader {
 
   /**
    * 用户 mutation 的提交刷新：绕过 watch 防抖，并在该轮或更新一轮 index 落定后完成。
-   * 调用方可据此把局部 busy 保持到权威 index 已提交，而不是只覆盖 Git 写请求。
+   * 调用方可据此把局部 busy 保持到权威 index 已提交，而不是只覆盖 git 写请求。
    */
   refreshNow(): Promise<void> {
     if (this.#disposed) {

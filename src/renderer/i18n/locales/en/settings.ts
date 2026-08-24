@@ -106,7 +106,7 @@ export const settings = {
       deliveryClaude: "Claude Code (.claude/skills)",
       deliveryClaudeHint:
         "Claude Code only looks here. Turn on if Claude Code should see these skills.",
-      gitIgnoreTitle: "Suggested Git ignore",
+      gitIgnoreTitle: "Suggested git ignore",
       gitIgnoreDescription:
         "Skill install links usually shouldn’t be committed.",
       gitIgnoreCopy: "Copy",
@@ -330,7 +330,7 @@ export const settings = {
     monoFontSizeDesc: "Range 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "Code Font Size",
-    codeFontSizeDesc: "Editor and Git diff; range 8–32",
+    codeFontSizeDesc: "Editor and git diff; range 8–32",
     codeFontSizePlaceholder: "13",
     fontUpdateFailed: "Couldn't update font settings",
     terminalCursorStyle: "Cursor Style",

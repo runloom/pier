@@ -25,7 +25,7 @@ function gitEntry(): PluginRegistryEntry {
       },
       engines: { pier: ">=0.1.0" },
       id: "pier.git",
-      name: "Git",
+      name: "git",
       panels: [],
       permissions: [],
       source: { kind: "builtin" },

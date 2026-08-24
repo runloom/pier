@@ -65,7 +65,7 @@
     "filePanel.markdown.zoom.out": "文字を小さくする",
     "filePanel.markdown.zoom.reset": "文字サイズをリセット",
     "filePanel.editor.sourceLabel": "ソースエディタ",
-    "filePanel.editor.gitGutter.openChangesFailed": "変更を開けませんでした。先に Git のあるプロジェクトフォルダを開いてください。",
+    "filePanel.editor.gitGutter.openChangesFailed": "変更を開けませんでした。先に git のあるプロジェクトフォルダを開いてください。",
     "filePanel.editor.contextMenuFailed": "エディタメニューを開けません",
     "filePanel.errors.diskDocumentMissing": "保存済みのこのファイルを復元できませんでした。",
     "filePanel.errors.deleted": "ディスク上にこのファイルはもうありません。",
@@ -387,7 +387,7 @@
     "filePanel.contentSearch.stop": "検索を停止",
     "filePanel.contentSearch.include": "含めるファイル",
     "filePanel.contentSearch.includeHint": "グロブをカンマ区切りで 1 つ以上。空ならすべてのファイルを検索します。",
-    "filePanel.contentSearch.useGitIgnore": "Git の無視規則を使う",
+    "filePanel.contentSearch.useGitIgnore": "git の無視規則を使う",
     "filePanel.contentSearch.useExclude": "検索の除外パターンを使う",
     "filePanel.contentSearch.scope": "検索中のフォルダ: {{path}}",
     "filePanel.contentSearch.clearScope": "プロジェクト全体を検索",
@@ -568,8 +568,8 @@
       "label": "除外パターン"
     },
     "pier.files.tree.showGitIgnoredFiles": {
-      "description": ".gitignore、.git/info/exclude、その他の Git 無視元に一致するファイルとフォルダを表示します。",
-      "label": "Git 無視ファイルを表示"
+      "description": ".gitignore、.git/info/exclude、その他の git 無視元に一致するファイルとフォルダを表示します。",
+      "label": "git 無視ファイルを表示"
     },
     "pier.files.tree.compactFolders": {
       "description": "子が 1 つだけのフォルダ連鎖を、ファイルツリーの 1 行にまとめます。",

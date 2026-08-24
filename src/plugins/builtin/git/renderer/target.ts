@@ -32,7 +32,7 @@ export function unsupportedGitReason(context: RendererPluginContext): string {
   return pluginText(
     context,
     "gitUnsupported",
-    "Current directory is not a Git repository"
+    "Current directory is not a git repository"
   );
 }
 

@@ -42,7 +42,7 @@ export const settingsPlugins = {
   source: {
     builtin: "内蔵",
     local: "ローカル",
-    git: "Git",
+    git: "git",
     registry: "レジストリ",
     official: "公式",
     devOverride: "ローカル開発",

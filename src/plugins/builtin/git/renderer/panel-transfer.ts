@@ -1,8 +1,8 @@
 /**
- * Cross-window panel transfer adapter for the Git changes panel
+ * Cross-window panel transfer adapter for the git changes panel
  * (`pier.git.changes`).
  *
- * The Git panel's durable state is split:
+ * The git panel's durable state is split:
  * - **Params** carry the `GitReviewScope` (`{ contextId, gitRootPath }`). This
  *   is the identity of the review and is already JSON-serializable dockview
  *   params. Moving it across windows is just `params` propagation.
@@ -104,7 +104,7 @@ function sourceKeyOf(scope: GitReviewScope): ReviewSessionSourceKey {
 }
 
 /**
- * Build the `kind: "custom"` transfer registration for the Git changes panel.
+ * Build the `kind: "custom"` transfer registration for the git changes panel.
  * Registered from `index.ts` via `context.panels.register({ transfer })`.
  */
 export function createGitPanelTransferRegistration(): PanelTransferRegistration {

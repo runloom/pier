@@ -262,7 +262,7 @@ export function GitStatusDropdown({
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
   const menuTitleId = useId();
-  const statusLabel = pluginText(pluginContext, "gitStatusLabel", "Git status");
+  const statusLabel = pluginText(pluginContext, "gitStatusLabel", "git status");
   const onRun = (actionId: GitStatusDropdownActionId): void => {
     setOpen(false);
     if (actionId === "viewChanges") {

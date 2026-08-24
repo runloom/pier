@@ -20,7 +20,7 @@ export function assertGitReviewRetentionLimits(
       limits.maxRetainedLines > 0
     )
   ) {
-    throw new Error("Git Review document 常驻上限必须是正安全整数");
+    throw new Error("git Review document 常驻上限必须是正安全整数");
   }
 }
 

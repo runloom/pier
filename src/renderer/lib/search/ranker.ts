@@ -81,7 +81,7 @@ function buildFuzzyOrder<TPayload>(
  * 次带 = 「category title」组合、category、快捷键标签——元数据兜底，tier 4-7。
  * 不分带时，共享 category 的命令在单词类目查询（如 "git"）上会被 category
  * 精确命中拍平到同一 tier，排序退化成 frecency 说了算——常用的 worktree
- * 命令反而压过标题真正带 "Git: " 前缀的命令。
+ * 命令反而压过标题真正带 "git: " 前缀的命令。
  */
 const PRIMARY_TIER_MAX = 3;
 const SECONDARY_TIER_OFFSET = PRIMARY_TIER_MAX + 1;

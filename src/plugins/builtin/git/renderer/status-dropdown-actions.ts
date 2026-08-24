@@ -20,7 +20,7 @@ export type GitRemoteSyncActionId = RemoteSyncActionId;
 
 function assertRemoteOperationOk(result: GitRemoteOperationResult): void {
   if (result.kind === "unavailable") {
-    throw new Error(result.message ?? "Git operation failed");
+    throw new Error(result.message ?? "git operation failed");
   }
 }
 

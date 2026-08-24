@@ -9,9 +9,9 @@ export type RemoteGitErrorKind = GitRemoteFailureKind;
 
 /** Matches main `classifyRemoteGitError` summary prefixes (English, stable). */
 const HOOK_SUMMARY_PREFIX =
-  "A local Git hook rejected or stopped this operation";
+  "A local git hook rejected or stopped this operation";
 const TIMEOUT_SUMMARY_PREFIX =
-  "Git operation timed out (local checks or remote transfer may still be running)";
+  "git operation timed out (local checks or remote transfer may still be running)";
 
 export interface RemoteOperationFailurePresentation {
   body: null | string;
@@ -125,7 +125,7 @@ export function remoteOperationFailurePresentation(
     const nextStep = pluginText(
       context,
       "gitRemoteErrorTimeout",
-      "Git ran longer than Pier allows for push, pull, or sync. This can be long local checks before push, or a stuck remote/network transfer. Check the network, run project checks in a terminal if needed, then try again."
+      "git ran longer than Pier allows for push, pull, or sync. This can be long local checks before push, or a stuck remote/network transfer. Check the network, run project checks in a terminal if needed, then try again."
     );
     return {
       body: joinNextAndDetail(nextStep, detail === nextStep ? "" : detail),
@@ -157,7 +157,7 @@ export function remoteOperationFailurePresentation(
     return {
       body: null,
       kind,
-      title: raw.length > 0 ? raw : "Git operation failed",
+      title: raw.length > 0 ? raw : "git operation failed",
       useAlert: false,
     };
   }

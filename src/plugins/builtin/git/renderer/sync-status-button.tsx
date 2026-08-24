@@ -126,7 +126,7 @@ async function confirmAndRunSync({
       pluginText(
         pluginContext,
         "statusSyncConfirmBody",
-        "This pulls from and pushes to {{upstream}}. You can turn off this confirmation in Git settings.",
+        "This pulls from and pushes to {{upstream}}. You can turn off this confirmation in git settings.",
         { upstream: upstream ?? "" }
       ),
       pluginText(pluginContext, "statusSyncConfirmButton", "Sync"),

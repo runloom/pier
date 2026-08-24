@@ -8,7 +8,7 @@ const PATH_SEPARATOR_RE = /[\\/]/;
 
 export const WORKTREE_UNAVAILABLE_MESSAGES = {
   git_unavailable: {
-    fallback: "Git is unavailable",
+    fallback: "git is unavailable",
     key: "worktreeUnavailable.gitUnavailable",
   },
   invalid_name: {
@@ -20,7 +20,7 @@ export const WORKTREE_UNAVAILABLE_MESSAGES = {
     key: "worktreeUnavailable.invalidPath",
   },
   not_git_repo: {
-    fallback: "The current directory is not a Git repository",
+    fallback: "The current directory is not a git repository",
     key: "worktreeUnavailable.notGitRepository",
   },
 } satisfies Record<
@@ -46,7 +46,7 @@ export function unsupportedReason(context: RendererPluginContext): string {
   return pluginText(
     context,
     "unsupported",
-    "Current directory does not support Git worktrees"
+    "Current directory does not support git worktrees"
   );
 }
 

@@ -152,7 +152,7 @@ export const settingsSkills = {
   leaveEditBody: "저장하지 않은 스킬 내용 변경은 사라집니다.",
   confirmGitDeleteTitle: "{{target}}의 에이전트 스킬 폴더를 삭제할까요?",
   confirmGitDeleteBody:
-    "이 경로는 Git이 추적합니다. 삭제하면 저장소 변경에 삭제로 나타납니다.",
+    "이 경로는 git이 추적합니다. 삭제하면 저장소 변경에 삭제로 나타납니다.",
   confirmContentDeleteTitle: "스킬 {{skill}}을(를) 삭제할까요?",
   confirmContentDeleteBody:
     "이 프로젝트에서 스킬을 제거합니다. 스위치를 끄는 것은 에이전트에게만 숨깁니다. 되돌릴 수 없습니다.",

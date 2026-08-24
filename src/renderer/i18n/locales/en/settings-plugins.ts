@@ -42,7 +42,7 @@ export const settingsPlugins = {
   source: {
     builtin: "Built-in",
     local: "Local",
-    git: "Git",
+    git: "git",
     registry: "Registry",
     official: "Official",
     devOverride: "Local dev",

@@ -50,7 +50,7 @@ export const settingsPlugins = {
   source: {
     builtin: "内置",
     local: "本地",
-    git: "Git",
+    git: "git",
     registry: "Registry",
     official: "官方",
     devOverride: "本地开发",

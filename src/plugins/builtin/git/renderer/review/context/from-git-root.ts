@@ -21,7 +21,7 @@ function sameReviewProject(
 }
 
 /**
- * Build a terminal-ready PanelContext when opening files from Git Review.
+ * Build a terminal-ready PanelContext when opening files from git Review.
  *
  * Review metadata only carries contextId + gitRootPath. Without cwd /
  * worktree anchors, the opened file panel keeps projectRootPath but new

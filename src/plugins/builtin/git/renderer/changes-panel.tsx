@@ -347,7 +347,7 @@ function GitChangesPanelBody({
           title={pluginText(
             context,
             "reviewInvalidSource",
-            "Invalid Git source"
+            "Invalid git source"
           )}
         />
       </GitReviewPanelLayout>

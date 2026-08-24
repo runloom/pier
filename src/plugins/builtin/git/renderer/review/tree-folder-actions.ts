@@ -63,7 +63,7 @@ export function registerGitReviewTreeFolderActions(options: {
   const { context, parseItem, surface } = options;
   const disposers = [
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: () => true,
       handler: async () => {
         toggleGitReviewTreeSidebar(activeGitReviewRootPath(context));
@@ -81,7 +81,7 @@ export function registerGitReviewTreeFolderActions(options: {
         pluginText(context, "reviewToggleTree", "Toggle Changed Files Tree"),
     }),
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: () => true,
       handler: async (invocation) => {
         expandGitReviewTreeFolders(
@@ -100,7 +100,7 @@ export function registerGitReviewTreeFolderActions(options: {
       title: () => pluginText(context, "reviewTreeExpandAll", "Expand Folders"),
     }),
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: () => true,
       handler: async (invocation) => {
         collapseGitReviewTreeFolders(

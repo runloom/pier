@@ -154,7 +154,7 @@ describe("createDefaultPluginSources", () => {
       messages: {
         "ui.title": "Worktrees",
       },
-      name: "Git",
+      name: "git",
     });
   });
 
@@ -164,8 +164,8 @@ describe("createDefaultPluginSources", () => {
       id: GIT_PLUGIN_ID,
       manifest: GIT_PLUGIN_MANIFEST,
       locales: {
-        en: { name: "Git" },
-        "zh-CN": { name: "Git" },
+        en: { name: "git" },
+        "zh-CN": { name: "git" },
       },
     });
 
@@ -192,7 +192,7 @@ describe("createDefaultPluginSources", () => {
             messages: {
               "ui.title": "Worktrees",
             },
-            name: "Git",
+            name: "git",
           },
           "zh-CN": {
             commands: {
@@ -200,11 +200,11 @@ describe("createDefaultPluginSources", () => {
               "pier.worktree.delete": { title: "删除工作树..." },
               "pier.worktree.list": { title: "工作树列表" },
             },
-            description: "提供 Git 命令面板入口和终端状态栏支持。",
+            description: "提供 git 命令面板入口和终端状态栏支持。",
             messages: {
               "ui.title": "工作树",
             },
-            name: "Git",
+            name: "git",
           },
         },
       },

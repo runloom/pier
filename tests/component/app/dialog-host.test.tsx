@@ -179,11 +179,11 @@ describe("AppDialogHost", () => {
     act(() => {
       result = showAppAlert({
         body: "fatal: not a git repository",
-        title: "Git operation failed",
+        title: "git operation failed",
       });
     });
 
-    expect(await screen.findByText("Git operation failed")).toBeVisible();
+    expect(await screen.findByText("git operation failed")).toBeVisible();
     expect(screen.getByText("fatal: not a git repository")).toBeVisible();
     expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(
@@ -384,12 +384,12 @@ describe("AppDialogHost", () => {
     act(() => {
       result = showAppAlert({
         body: "fatal: no rebase in progress",
-        title: "Git 操作失败",
+        title: "git 操作失败",
       });
     });
 
     expect(useCommandPaletteController.getState().open).toBe(false);
-    expect(await screen.findByText("Git 操作失败")).toBeVisible();
+    expect(await screen.findByText("git 操作失败")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await expect(result).resolves.toBeUndefined();
   });

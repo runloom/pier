@@ -216,7 +216,7 @@ describe("SettingsDialog — custom plugin settings page", () => {
 
     expect(await screen.findByText("Show excluded files")).toBeVisible();
     expect(screen.getByText("Exclude patterns")).toBeVisible();
-    expect(screen.getByText("Show Git-ignored files")).toBeVisible();
+    expect(screen.getByText("Show git-ignored files")).toBeVisible();
     expect(
       document.getElementById(
         `plugin-setting-${FILES_TREE_SHOW_EXCLUDED_SETTING_KEY}`

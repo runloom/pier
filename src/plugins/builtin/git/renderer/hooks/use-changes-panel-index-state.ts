@@ -66,7 +66,7 @@ export function useGitChangesPanelIndexState({
   const waitForAuthoritativeIndex = useCallback(
     async (_result: GitReviewMutationOk | null) => {
       // mutation ack 只确认写入。显式无防抖读取是提交屏障；watch 仅负责
-      // 合并外部 Git 变化，不能决定用户操作何时结束。
+      // 合并外部 git 变化，不能决定用户操作何时结束。
       if (!(source && activeSourceKeyRef.current === sourceKey)) {
         return;
       }

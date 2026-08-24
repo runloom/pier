@@ -106,7 +106,7 @@ export const settings = {
       deliveryClaude: "Claude Code（.claude/skills）",
       deliveryClaudeHint:
         "Claude Code はここだけを見ます。Claude Code にも見せるときだけオンにしてください。",
-      gitIgnoreTitle: "推奨する Git 無視",
+      gitIgnoreTitle: "推奨する git 無視",
       gitIgnoreDescription:
         "スキルのインストールリンクは、通常コミットしない方がよいです。",
       gitIgnoreCopy: "コピー",
@@ -224,7 +224,7 @@ export const settings = {
     cleanupHint: "作業ツリーを削除するときに実行します。",
     copyPatterns: {
       addPattern: "パターンを追加",
-      hint: "メインプロジェクトで Git に無視されているファイルに一致させ、新しい作業ツリーへコピーします。",
+      hint: "メインプロジェクトで git に無視されているファイルに一致させ、新しい作業ツリーへコピーします。",
       patternLabel: "ファイルパターン",
       placeholder: ".env*",
       remove: "削除",
@@ -335,7 +335,7 @@ export const settings = {
     monoFontSizeDesc: "範囲 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "コードのフォントサイズ",
-    codeFontSizeDesc: "エディタと Git 差分。範囲 8–32",
+    codeFontSizeDesc: "エディタと git 差分。範囲 8–32",
     codeFontSizePlaceholder: "13",
     fontUpdateFailed: "フォント設定を更新できませんでした",
     terminalCursorStyle: "カーソルの形",

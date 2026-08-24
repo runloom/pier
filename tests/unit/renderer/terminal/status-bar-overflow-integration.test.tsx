@@ -91,7 +91,7 @@ function pluginEntry(items: PluginTerminalStatusItemContribution[]) {
       commands: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.git",
-      name: "Git",
+      name: "git",
       panels: [],
       permissions: [],
       settingsPages: [],

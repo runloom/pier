@@ -97,7 +97,7 @@ export function switchBranchQueryItem(
       detail: pluginText(
         context,
         "gitBranchNameInvalid",
-        "Invalid Git branch name"
+        "Invalid git branch name"
       ),
       disabled: true,
       id: `branch-query:invalid:${name}`,

@@ -102,7 +102,7 @@ export const settings = {
       deliveryClaude: "Claude Code（.claude/skills）",
       deliveryClaudeHint:
         "Claude Code 只扫这里。需要 Claude Code 看到这些技能时再打开。",
-      gitIgnoreTitle: "Git 忽略建议",
+      gitIgnoreTitle: "git 忽略建议",
       gitIgnoreDescription: "技能安装产生的链接一般不必提交。",
       gitIgnoreCopy: "复制",
       gitIgnoreCopied: "已复制",
@@ -210,7 +210,7 @@ export const settings = {
     cleanupHint: "删除工作树时运行。",
     copyPatterns: {
       addPattern: "添加模式",
-      hint: "匹配主项目里被 Git 忽略的文件；创建新工作树时会一并复制。",
+      hint: "匹配主项目里被 git 忽略的文件；创建新工作树时会一并复制。",
       patternLabel: "文件匹配模式",
       placeholder: ".env*",
       remove: "删除",
@@ -318,7 +318,7 @@ export const settings = {
     monoFontSizeDesc: "范围 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "代码字号",
-    codeFontSizeDesc: "文件编辑与 Git 对比；范围 8–32",
+    codeFontSizeDesc: "文件编辑与 git 对比；范围 8–32",
     codeFontSizePlaceholder: "13",
     fontUpdateFailed: "无法更新字体设置",
     terminalCursorStyle: "光标样式",

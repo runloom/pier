@@ -191,39 +191,39 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           commands: {
             "pier.git.merge": {
               aliases: ["locale git merge"],
-              title: "Git: Merge Branch...",
+              title: "git: Merge Branch...",
             },
             "pier.git.switchBranch": {
               aliases: ["locale git switch branch"],
-              title: "Git: Switch Branch...",
+              title: "git: Switch Branch...",
             },
             "pier.git.mergeAbort": {
               aliases: ["locale git merge abort"],
-              title: "Git: Abort Merge",
+              title: "git: Abort Merge",
             },
             "pier.git.stash": {
               aliases: ["locale git stash"],
-              title: "Git: Stash",
+              title: "git: Stash",
             },
             "pier.git.stashPop": {
               aliases: ["locale git stash pop"],
-              title: "Git: Pop Stash...",
+              title: "git: Pop Stash...",
             },
             "pier.git.rebase": {
               aliases: ["locale git rebase"],
-              title: "Git: Rebase Branch...",
+              title: "git: Rebase Branch...",
             },
             "pier.git.rebaseAbort": {
               aliases: ["locale git rebase abort"],
-              title: "Git: Abort Rebase",
+              title: "git: Abort Rebase",
             },
             "pier.git.rebaseContinue": {
               aliases: ["locale git rebase continue"],
-              title: "Git: Continue Rebase",
+              title: "git: Continue Rebase",
             },
             "pier.git.undoLastCommit": {
               aliases: ["locale git undo commit"],
-              title: "Git: Undo Last Commit",
+              title: "git: Undo Last Commit",
             },
             "pier.worktree.create": {
               aliases: ["locale worktree create"],
@@ -272,7 +272,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "ui.statusOpenLabel": "Open worktrees for {{name}}",
             "ui.title": "Worktrees",
             "ui.unsupported":
-              "Current directory does not support Git worktrees",
+              "Current directory does not support git worktrees",
             "ui.worktreeCreateSuccess": "Worktree created",
             "ui.worktreeDeleteSuccess": "Worktree deleted",
             "ui.worktreePruneSuccess": "Stale worktrees pruned",
@@ -282,39 +282,39 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           commands: {
             "pier.git.merge": {
               aliases: ["本地化合并分支"],
-              title: "Git: 合并分支...",
+              title: "git: 合并分支...",
             },
             "pier.git.switchBranch": {
               aliases: ["本地化切换分支"],
-              title: "Git: 切换分支...",
+              title: "git: 切换分支...",
             },
             "pier.git.mergeAbort": {
               aliases: ["本地化中止合并"],
-              title: "Git: 中止合并",
+              title: "git: 中止合并",
             },
             "pier.git.stash": {
               aliases: ["本地化暂存更改"],
-              title: "Git: 暂存更改",
+              title: "git: 暂存更改",
             },
             "pier.git.stashPop": {
               aliases: ["本地化弹出暂存"],
-              title: "Git: 弹出暂存...",
+              title: "git: 弹出暂存...",
             },
             "pier.git.rebase": {
               aliases: ["本地化变基"],
-              title: "Git: 变基到分支...",
+              title: "git: 变基到分支...",
             },
             "pier.git.rebaseAbort": {
               aliases: ["本地化中止变基"],
-              title: "Git: 中止变基",
+              title: "git: 中止变基",
             },
             "pier.git.rebaseContinue": {
               aliases: ["本地化继续变基"],
-              title: "Git: 继续变基",
+              title: "git: 继续变基",
             },
             "pier.git.undoLastCommit": {
               aliases: ["本地化撤销提交"],
-              title: "Git: 撤销上次提交",
+              title: "git: 撤销上次提交",
             },
             "pier.worktree.create": {
               aliases: ["本地化创建工作树"],
@@ -343,11 +343,11 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "ui.selectPlaceholder": "选择工作树…",
             "ui.statusOpenLabel": "打开 {{name}} 的工作树列表",
             "ui.title": "工作树",
-            "ui.unsupported": "当前目录不支持 Git 工作树",
+            "ui.unsupported": "当前目录不支持 git 工作树",
           },
         },
       },
-      name: "Git",
+      name: "git",
       panels: [
         {
           component: GIT_CHANGES_PANEL_ID,
@@ -371,17 +371,17 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         {
           id: "pier.worktree.status",
           permissions: ["worktree:read", "workspace:open"],
-          title: "Git Branch",
+          title: "git Branch",
         },
         {
           id: "pier.git.status.changes",
           permissions: ["git:read", "panel:open"],
-          title: "Git Changes",
+          title: "git Changes",
         },
         {
           id: "pier.git.status.sync",
           permissions: ["git:read", "git:write"],
-          title: "Git Sync",
+          title: "git Sync",
         },
       ],
       version: "1.0.0",
@@ -877,7 +877,7 @@ describe("git builtin plugin", () => {
     expect(terminalStatusItemRegistry.list()).toEqual([]);
   });
 
-  it("Create、Delete 和 Prune 入口在 Git 上下文可用", () => {
+  it("Create、Delete 和 Prune 入口在 git 上下文可用", () => {
     dispose = activateWorktreePlugin();
 
     expect(actionRegistry.get("pier.worktree.create")?.enabled?.()).toBe(true);
@@ -903,7 +903,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("非 Git 上下文禁用 worktree 命令", () => {
+  it("非 git 上下文禁用 worktree 命令", () => {
     usePanelDescriptorStore.setState({
       activeId: "terminal-1",
       descriptors: {
@@ -924,7 +924,7 @@ describe("git builtin plugin", () => {
 
     expect(actionRegistry.get("pier.worktree.list")?.enabled?.()).toBe(false);
     expect(actionRegistry.get("pier.worktree.list")?.disabledReason?.()).toBe(
-      "Current directory does not support Git worktrees"
+      "Current directory does not support git worktrees"
     );
   });
 
@@ -945,7 +945,7 @@ describe("git builtin plugin", () => {
 
     expect(actionRegistry.get("pier.worktree.list")?.enabled?.()).toBe(false);
     expect(actionRegistry.get("pier.worktree.list")?.disabledReason?.()).toBe(
-      "Current directory does not support Git worktrees"
+      "Current directory does not support git worktrees"
     );
   });
 
@@ -1154,7 +1154,7 @@ describe("git builtin plugin", () => {
     expect(messageItem?.label).not.toBe("Stale worktrees pruned");
   });
 
-  it("Git 合并命令列出分支并合并选中分支", async () => {
+  it("git 合并命令列出分支并合并选中分支", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 4,
@@ -1203,7 +1203,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 切换分支命令列出本地与远端分支并切换选中分支", async () => {
+  it("git 切换分支命令列出本地与远端分支并切换选中分支", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 4,
@@ -1238,7 +1238,7 @@ describe("git builtin plugin", () => {
     const quickPick = useCommandPaletteController.getState().quickPick;
     expect(quickPick).toMatchObject({
       placeholder: "Enter a branch name to switch or create",
-      title: "Git: Switch Branch...",
+      title: "git: Switch Branch...",
     });
     expect(quickPick?.items?.map((item) => item.id)).toEqual([
       "refs/remotes/origin/feature/remote",
@@ -1269,7 +1269,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 切换分支输入有效新名称时显示明确候选并原子新建切换", async () => {
+  it("git 切换分支输入有效新名称时显示明确候选并原子新建切换", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 4,
@@ -1308,12 +1308,12 @@ describe("git builtin plugin", () => {
     });
     expect(quickPick?.getQueryItem?.("feature bad")).toMatchObject({
       data: { kind: "invalid", name: "feature bad" },
-      detail: "Invalid Git branch name",
+      detail: "Invalid git branch name",
       disabled: true,
     });
     expect(quickPick?.getQueryItem?.("HEAD")).toMatchObject({
       data: { kind: "invalid", name: "HEAD" },
-      detail: "Invalid Git branch name",
+      detail: "Invalid git branch name",
       disabled: true,
     });
     if (!(quickPick && createItem)) {
@@ -1336,7 +1336,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 搜索结果截断时仍把完整列表中的现有分支作为切换候选", async () => {
+  it("git 搜索结果截断时仍把完整列表中的现有分支作为切换候选", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 4,
@@ -1377,7 +1377,7 @@ describe("git builtin plugin", () => {
     expect(window.pier.git.createAndSwitchBranch).not.toHaveBeenCalled();
   });
 
-  it("Git 只有当前分支时仍打开选择器供用户新建", async () => {
+  it("git 只有当前分支时仍打开选择器供用户新建", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 2,
@@ -1401,7 +1401,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 分支选择请求全量候选、不截断 50 条且不展示列表加载提示", async () => {
+  it("git 分支选择请求全量候选、不截断 50 条且不展示列表加载提示", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 4,
@@ -1429,7 +1429,7 @@ describe("git builtin plugin", () => {
     expect(quickPick?.items).toHaveLength(60);
   });
 
-  it("Git 分支搜索为空时只展示 info toast，不把结果信息写回命令面板", async () => {
+  it("git 分支搜索为空时只展示 info toast，不把结果信息写回命令面板", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 4,
@@ -1449,7 +1449,7 @@ describe("git builtin plugin", () => {
     expect(window.pier.git.merge).not.toHaveBeenCalled();
   });
 
-  it("Git 分支选择使用 LoomDesk searchBranches 结果和完整 ref id", async () => {
+  it("git 分支选择使用 LoomDesk searchBranches 结果和完整 ref id", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "topic/current",
       durationMs: 5,
@@ -1558,7 +1558,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 合并冲突后显示详情且不打开已禁用的 Review 面板", async () => {
+  it("git 合并冲突后显示详情且不打开已禁用的 Review 面板", async () => {
     const addPanel = vi.fn();
     useWorkspaceStore.setState({
       api: {
@@ -1616,7 +1616,7 @@ describe("git builtin plugin", () => {
     ).toBeUndefined();
   });
 
-  it("Git 弹出暂存命令列出 stash 并 pop 选中项", async () => {
+  it("git 弹出暂存命令列出 stash 并 pop 选中项", async () => {
     vi.mocked(window.pier.git.listStashes).mockResolvedValueOnce({
       entries: [
         {
@@ -1645,7 +1645,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 弹出暂存遇到冲突后显示详情且不打开已禁用的 Review 面板", async () => {
+  it("git 弹出暂存遇到冲突后显示详情且不打开已禁用的 Review 面板", async () => {
     const addPanel = vi.fn();
     useWorkspaceStore.setState({
       api: {
@@ -1699,7 +1699,7 @@ describe("git builtin plugin", () => {
     ).toBeUndefined();
   });
 
-  it("Git 暂存列表 unavailable 时展示 LoomDesk 风格失败信息", async () => {
+  it("git 暂存列表 unavailable 时展示 LoomDesk 风格失败信息", async () => {
     vi.mocked(window.pier.git.listStashes).mockResolvedValueOnce({
       kind: "unavailable",
       message: "fatal: not a git repository",
@@ -1708,7 +1708,7 @@ describe("git builtin plugin", () => {
 
     const handlerPromise = actionRegistry.get("pier.git.stashPop")?.handler();
 
-    expect(await screen.findByText("Git: Pop Stash...")).toBeVisible();
+    expect(await screen.findByText("git: Pop Stash...")).toBeVisible();
     expect(screen.getByText("fatal: not a git repository")).toBeVisible();
     expect(getLastTerminalHostSnapshot()).toEqual(
       expect.objectContaining({
@@ -1738,7 +1738,7 @@ describe("git builtin plugin", () => {
     expect(window.pier.git.popStash).not.toHaveBeenCalled();
   });
 
-  it("Git 暂存命令按 VS Code 语义只暂存已跟踪(includeUntracked: false)", async () => {
+  it("git 暂存命令按 VS Code 语义只暂存已跟踪(includeUntracked: false)", async () => {
     dispose = activateWorktreePlugin();
 
     await actionRegistry.get("pier.git.stash")?.handler();
@@ -1751,7 +1751,7 @@ describe("git builtin plugin", () => {
     });
   });
 
-  it("Git 含未跟踪暂存命令传 includeUntracked: true", async () => {
+  it("git 含未跟踪暂存命令传 includeUntracked: true", async () => {
     dispose = activateWorktreePlugin();
 
     await actionRegistry.get("pier.git.stashIncludeUntracked")?.handler();
@@ -1761,7 +1761,7 @@ describe("git builtin plugin", () => {
     });
   });
 
-  it("Git 应用暂存命令 apply 选中项且不走 pop", async () => {
+  it("git 应用暂存命令 apply 选中项且不走 pop", async () => {
     vi.mocked(window.pier.git.listStashes).mockResolvedValueOnce({
       entries: [
         {
@@ -1795,7 +1795,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 应用暂存遇到冲突后显示详情且不打开已禁用的 Review 面板", async () => {
+  it("git 应用暂存遇到冲突后显示详情且不打开已禁用的 Review 面板", async () => {
     const addPanel = vi.fn();
     useWorkspaceStore.setState({
       api: {
@@ -1850,7 +1850,7 @@ describe("git builtin plugin", () => {
     ).toBeUndefined();
   });
 
-  it("Git 删除暂存需确认弹窗通过后才调用 dropStash", async () => {
+  it("git 删除暂存需确认弹窗通过后才调用 dropStash", async () => {
     vi.mocked(window.pier.git.listStashes).mockResolvedValueOnce({
       entries: [
         {
@@ -1873,7 +1873,7 @@ describe("git builtin plugin", () => {
     }
     const acceptPromise = quickPick.onAccept(item);
 
-    expect(await screen.findByText("Git: Drop Stash...")).toBeVisible();
+    expect(await screen.findByText("git: Drop Stash...")).toBeVisible();
     expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     // {{stash}} 插值链路：fallback 也必须替换为实际 label
     expect(await screen.findByText(DROP_STASH_CONFIRM_BODY_RE)).toBeVisible();
@@ -1895,7 +1895,7 @@ describe("git builtin plugin", () => {
     });
   });
 
-  it("Git 删除暂存取消确认则不调用 dropStash", async () => {
+  it("git 删除暂存取消确认则不调用 dropStash", async () => {
     vi.mocked(window.pier.git.listStashes).mockResolvedValueOnce({
       entries: [
         {
@@ -1918,7 +1918,7 @@ describe("git builtin plugin", () => {
     }
     const acceptPromise = quickPick.onAccept(item);
 
-    expect(await screen.findByText("Git: Drop Stash...")).toBeVisible();
+    expect(await screen.findByText("git: Drop Stash...")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await acceptPromise;
 
@@ -1926,14 +1926,14 @@ describe("git builtin plugin", () => {
     expect(toastMocks.loading).not.toHaveBeenCalled();
   });
 
-  it("Git 撤销提交使用 shadcn 确认弹窗并显示 loading 结果", async () => {
+  it("git 撤销提交使用 shadcn 确认弹窗并显示 loading 结果", async () => {
     dispose = activateWorktreePlugin();
 
     const handlerPromise = actionRegistry
       .get("pier.git.undoLastCommit")
       ?.handler();
 
-    expect(await screen.findByText("Git: Undo Last Commit")).toBeVisible();
+    expect(await screen.findByText("git: Undo Last Commit")).toBeVisible();
     expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(
       screen.getByText(
@@ -1980,7 +1980,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 继续变基仍有冲突时显示详情且不打开已禁用的 Review 面板", async () => {
+  it("git 继续变基仍有冲突时显示详情且不打开已禁用的 Review 面板", async () => {
     const addPanel = vi.fn();
     useWorkspaceStore.setState({
       api: {
@@ -2018,7 +2018,7 @@ describe("git builtin plugin", () => {
     ).toBeUndefined();
   });
 
-  it("Git 变基冲突后显示详情且不打开已禁用的 Review 面板", async () => {
+  it("git 变基冲突后显示详情且不打开已禁用的 Review 面板", async () => {
     const addPanel = vi.fn();
     useWorkspaceStore.setState({
       api: {
@@ -2482,7 +2482,7 @@ describe("git builtin plugin", () => {
     expect(trigger.className).not.toMatch(FIXED_MAX_WIDTH_CLASS_RE);
   });
 
-  it("终端状态栏在非 Git context 下不渲染 worktree 入口", () => {
+  it("终端状态栏在非 git context 下不渲染 worktree 入口", () => {
     dispose = activateWorktreePlugin();
     const statusItem = terminalStatusItemRegistry
       .list()

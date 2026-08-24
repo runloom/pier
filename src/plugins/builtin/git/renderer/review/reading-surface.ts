@@ -1,7 +1,7 @@
 /**
  * Renderer-owned reading surfaces.
  *
- * The shared Git contract still exposes the comparison baselines used by main.
+ * The shared git contract still exposes the comparison baselines used by main.
  * The review UI projects the index document into separate conflict and
  * unstaged readers, plus staged and committed readers; `head` is not a UI
  * surface.

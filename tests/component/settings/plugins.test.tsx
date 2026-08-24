@@ -178,7 +178,7 @@ describe("Settings plugins section", () => {
     expect(screen.queryByText("plugin:read")).not.toBeInTheDocument();
     expect(screen.queryByText("Read plugin manifests")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Read Git worktree information")
+      screen.queryByText("Read git worktree information")
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Show Worktree details" })

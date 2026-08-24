@@ -76,7 +76,7 @@ function registerRemotePaletteAction(
   }
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
@@ -118,11 +118,11 @@ function registerRemotePaletteAction(
 
 function registerPushPaletteAction(context: RendererPluginContext): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
-      const title = commandTitle(context, "pier.git.push", "Git: Push");
+      const title = commandTitle(context, "pier.git.push", "git: Push");
       const target = activeGitTarget(context);
       if (!target.enabled) {
         return;
@@ -151,7 +151,7 @@ function registerPushPaletteAction(context: RendererPluginContext): () => void {
       sortOrder: 22,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, "pier.git.push", "Git: Push"),
+    title: () => commandTitle(context, "pier.git.push", "git: Push"),
   });
 }
 
@@ -162,7 +162,7 @@ export function registerGitRemotePaletteActions(
     registerRemotePaletteAction(context, {
       actionId: "fetch",
       commandId: "pier.git.fetch",
-      fallbackTitle: "Git: Fetch",
+      fallbackTitle: "git: Fetch",
       icon: CloudDownload,
       sortOrder: 20,
     }),
@@ -170,7 +170,7 @@ export function registerGitRemotePaletteActions(
       actionId: "pull",
       commandId: "pier.git.pull",
       expectedGate: "pull",
-      fallbackTitle: "Git: Pull",
+      fallbackTitle: "git: Pull",
       icon: ArrowDownToLine,
       sortOrder: 21,
     }),
@@ -179,7 +179,7 @@ export function registerGitRemotePaletteActions(
       actionId: "publish",
       commandId: "pier.git.publish",
       expectedGate: "publish",
-      fallbackTitle: "Git: Publish Branch",
+      fallbackTitle: "git: Publish Branch",
       icon: Upload,
       sortOrder: 23,
     }),
@@ -187,7 +187,7 @@ export function registerGitRemotePaletteActions(
       actionId: "syncChanges",
       commandId: "pier.git.sync",
       expectedGate: "syncChanges",
-      fallbackTitle: "Git: Sync",
+      fallbackTitle: "git: Sync",
       icon: RefreshCw,
       sortOrder: 24,
     }),

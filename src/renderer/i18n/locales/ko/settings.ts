@@ -106,7 +106,7 @@ export const settings = {
       deliveryClaude: "Claude Code(.claude/skills)",
       deliveryClaudeHint:
         "Claude Code는 여기만 봅니다. Claude Code에도 보여야 할 때만 켜세요.",
-      gitIgnoreTitle: "권장 Git 무시",
+      gitIgnoreTitle: "권장 git 무시",
       gitIgnoreDescription:
         "스킬 설치 링크는 보통 커밋하지 않는 것이 좋습니다.",
       gitIgnoreCopy: "복사",
@@ -222,7 +222,7 @@ export const settings = {
     cleanupHint: "작업 트리를 삭제할 때 실행합니다.",
     copyPatterns: {
       addPattern: "패턴 추가",
-      hint: "기본 프로젝트에서 Git이 무시한 파일과 일치시켜, 새 작업 트리로 복사합니다.",
+      hint: "기본 프로젝트에서 git이 무시한 파일과 일치시켜, 새 작업 트리로 복사합니다.",
       patternLabel: "파일 패턴",
       placeholder: ".env*",
       remove: "삭제",
@@ -330,7 +330,7 @@ export const settings = {
     monoFontSizeDesc: "범위 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "코드 글꼴 크기",
-    codeFontSizeDesc: "편집기와 Git 차이. 범위 8–32",
+    codeFontSizeDesc: "편집기와 git 차이. 범위 8–32",
     codeFontSizePlaceholder: "13",
     fontUpdateFailed: "글꼴 설정을 업데이트하지 못했습니다",
     terminalCursorStyle: "커서 모양",

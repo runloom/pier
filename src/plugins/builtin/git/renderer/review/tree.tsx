@@ -38,7 +38,7 @@ const GROUP_SORT_PREFIX = Object.fromEntries(
 function groupSortPrefix(group: GitReviewGroup): string {
   const prefix = GROUP_SORT_PREFIX[group];
   if (prefix === undefined) {
-    throw new Error(`Missing Git review tree sort prefix for ${group}`);
+    throw new Error(`Missing git review tree sort prefix for ${group}`);
   }
   return prefix;
 }

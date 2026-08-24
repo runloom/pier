@@ -41,7 +41,7 @@ export function registerGitReviewTreeActions(
 ): () => void {
   const disposers = [
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: () => true,
       handler: (invocation) => {
         const item = parseGitReviewTreeItemMetadata(invocation);
@@ -84,7 +84,7 @@ export function registerGitReviewTreeActions(
       title: () => pluginText(context, "reviewOpenFile", "Open File"),
     }),
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: (invocation) => {
         const item = parseGitReviewTreeItemMetadata(invocation);
         return item?.mutationBlocked !== true && canStage(item);
@@ -134,7 +134,7 @@ export function registerGitReviewTreeActions(
       },
     }),
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: (invocation) => {
         const item = parseGitReviewTreeItemMetadata(invocation);
         return item?.mutationBlocked !== true && canUnstage(item);
@@ -182,7 +182,7 @@ export function registerGitReviewTreeActions(
       },
     }),
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: (invocation) => {
         const item = parseGitReviewTreeItemMetadata(invocation);
         return item?.mutationBlocked !== true && canDiscard(item);

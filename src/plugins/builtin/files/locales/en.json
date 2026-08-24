@@ -65,7 +65,7 @@
     "filePanel.markdown.zoom.out": "Decrease text size",
     "filePanel.markdown.zoom.reset": "Reset text size",
     "filePanel.editor.sourceLabel": "Source editor",
-    "filePanel.editor.gitGutter.openChangesFailed": "Couldn't open Changes. Open a project folder with Git first.",
+    "filePanel.editor.gitGutter.openChangesFailed": "Couldn't open Changes. Open a project folder with git first.",
     "filePanel.editor.contextMenuFailed": "Unable to open editor menu",
     "filePanel.errors.diskDocumentMissing": "This saved file could not be restored.",
     "filePanel.errors.deleted": "File no longer exists on disk.",
@@ -387,7 +387,7 @@
     "filePanel.contentSearch.stop": "Stop search",
     "filePanel.contentSearch.include": "Files to include",
     "filePanel.contentSearch.includeHint": "One or more globs, separated by commas. Leave empty to search all files.",
-    "filePanel.contentSearch.useGitIgnore": "Use Git ignore rules",
+    "filePanel.contentSearch.useGitIgnore": "Use git ignore rules",
     "filePanel.contentSearch.useExclude": "Use search exclude patterns",
     "filePanel.contentSearch.scope": "Searching in folder: {{path}}",
     "filePanel.contentSearch.clearScope": "Search whole project",
@@ -568,8 +568,8 @@
       "label": "Exclude patterns"
     },
     "pier.files.tree.showGitIgnoredFiles": {
-      "description": "Show files and folders matched by .gitignore, .git/info/exclude and other Git ignore sources.",
-      "label": "Show Git-ignored files"
+      "description": "Show files and folders matched by .gitignore, .git/info/exclude and other git ignore sources.",
+      "label": "Show git-ignored files"
     },
     "pier.files.tree.compactFolders": {
       "description": "Merge single-child folder chains into one row in the file tree.",

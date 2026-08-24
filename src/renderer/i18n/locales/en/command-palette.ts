@@ -20,7 +20,7 @@ export const commandPalette = {
   },
   category: {
     file: "File",
-    git: "Git",
+    git: "git",
     view: "View",
     settings: "Settings",
     workspace: "Workspace",

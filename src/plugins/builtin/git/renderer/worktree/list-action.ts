@@ -35,7 +35,7 @@ function unsupportedReason(context: RendererPluginContext): string {
   return pluginText(
     context,
     "unsupported",
-    "Current directory does not support Git worktrees"
+    "Current directory does not support git worktrees"
   );
 }
 

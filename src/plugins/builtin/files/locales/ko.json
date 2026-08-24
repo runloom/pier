@@ -65,7 +65,7 @@
     "filePanel.markdown.zoom.out": "글자 작게",
     "filePanel.markdown.zoom.reset": "글자 크기 재설정",
     "filePanel.editor.sourceLabel": "소스 편집기",
-    "filePanel.editor.gitGutter.openChangesFailed": "변경을 열지 못했습니다. 먼저 Git이 있는 프로젝트 폴더를 여세요.",
+    "filePanel.editor.gitGutter.openChangesFailed": "변경을 열지 못했습니다. 먼저 git이 있는 프로젝트 폴더를 여세요.",
     "filePanel.editor.contextMenuFailed": "편집기 메뉴를 열 수 없습니다",
     "filePanel.errors.diskDocumentMissing": "저장된 이 파일을 복원하지 못했습니다.",
     "filePanel.errors.deleted": "디스크에 이 파일이 더 이상 없습니다.",
@@ -387,7 +387,7 @@
     "filePanel.contentSearch.stop": "검색 중지",
     "filePanel.contentSearch.include": "포함할 파일",
     "filePanel.contentSearch.includeHint": "글롭을 쉼표로 하나 이상 입력하세요. 비우면 모든 파일을 검색합니다.",
-    "filePanel.contentSearch.useGitIgnore": "Git 무시 규칙 사용",
+    "filePanel.contentSearch.useGitIgnore": "git 무시 규칙 사용",
     "filePanel.contentSearch.useExclude": "검색 제외 패턴 사용",
     "filePanel.contentSearch.scope": "검색 중인 폴더: {{path}}",
     "filePanel.contentSearch.clearScope": "프로젝트 전체 검색",
@@ -568,8 +568,8 @@
       "label": "제외 패턴"
     },
     "pier.files.tree.showGitIgnoredFiles": {
-      "description": ".gitignore, .git/info/exclude 및 기타 Git 무시 원본과 일치하는 파일과 폴더를 표시합니다.",
-      "label": "Git 무시 파일 표시"
+      "description": ".gitignore, .git/info/exclude 및 기타 git 무시 원본과 일치하는 파일과 폴더를 표시합니다.",
+      "label": "git 무시 파일 표시"
     },
     "pier.files.tree.compactFolders": {
       "description": "자식이 하나인 폴더 체인을 파일 트리의 한 줄로 합칩니다.",

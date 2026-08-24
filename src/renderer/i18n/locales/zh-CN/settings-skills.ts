@@ -141,7 +141,7 @@ export const settingsSkills = {
   leaveEditBody: "未保存的技能内容更改将丢失。",
   confirmGitDeleteTitle: "删除 {{target}} 处的技能目录？",
   confirmGitDeleteBody:
-    "此路径已被 Git 跟踪。删除后会作为删除项出现在仓库变更中。",
+    "此路径已被 git 跟踪。删除后会作为删除项出现在仓库变更中。",
   confirmContentDeleteTitle: "删除技能 {{skill}}？",
   confirmContentDeleteBody:
     "将从本项目移除该技能。关闭开关只会让智能体暂时看不到它。此操作不可撤销。",

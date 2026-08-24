@@ -20,7 +20,7 @@ export const commandPalette = {
   },
   category: {
     file: "파일",
-    git: "Git",
+    git: "git",
     view: "보기",
     settings: "설정",
     workspace: "워크스페이스",

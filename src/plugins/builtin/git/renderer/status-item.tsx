@@ -62,7 +62,7 @@ function buildStatusAriaLabel({
     pluginText(
       pluginContext,
       "statusDropdownOpenLabel",
-      "Open Git status for {{name}}",
+      "Open git status for {{name}}",
       { name: branchName }
     ),
   ];
@@ -71,12 +71,12 @@ function buildStatusAriaLabel({
       pluginText(
         pluginContext,
         "statusDropdownUnavailable",
-        "Git status unavailable"
+        "git status unavailable"
       )
     );
   } else if (statusKind === "loading") {
     parts.push(
-      pluginText(pluginContext, "statusDropdownLoading", "Loading Git status…")
+      pluginText(pluginContext, "statusDropdownLoading", "Loading git status…")
     );
   }
   if (operationLabel) {
@@ -111,12 +111,12 @@ function pendingDropdownModel({
       ? pluginText(
           pluginContext,
           "statusDropdownLoading",
-          "Loading Git status…"
+          "Loading git status…"
         )
       : pluginText(
           pluginContext,
           "statusDropdownUnavailable",
-          "Git status unavailable"
+          "git status unavailable"
         );
   return {
     branchLabel,

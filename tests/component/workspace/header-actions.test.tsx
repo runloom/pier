@@ -1401,7 +1401,7 @@ describe("WorkspaceHeaderActions", () => {
     const handler = vi.fn();
     disposeWorktreeCreateAction = actionRegistry.register({
       category: "worktree",
-      disabledReason: () => "Open a Git project first",
+      disabledReason: () => "Open a git project first",
       enabled: () => false,
       handler,
       id: "pier.worktree.create",
@@ -1417,7 +1417,7 @@ describe("WorkspaceHeaderActions", () => {
 
     const item = await findCommandItem("Create Worktree");
     expect(item).toHaveAttribute("aria-disabled", "true");
-    expect(item).toHaveTextContent("Open a Git project first");
+    expect(item).toHaveTextContent("Open a git project first");
     fireEvent.click(item);
     expect(handler).not.toHaveBeenCalled();
   });
@@ -1432,7 +1432,7 @@ describe("WorkspaceHeaderActions", () => {
     disposeWorktreeCreateAction = actionRegistry.register({
       category: "worktree",
       disabledReason: () =>
-        isGitContext() ? null : "Open a Git project first",
+        isGitContext() ? null : "Open a git project first",
       enabled: isGitContext,
       handler,
       id: "pier.worktree.create",
