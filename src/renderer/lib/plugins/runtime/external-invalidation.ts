@@ -32,3 +32,26 @@ export function invalidateSupersededExternalAttempts(input: {
     }
   }
 }
+
+/**
+ * 判定一次外部激活尝试是否仍是当前代次（未被 dispose / 新 refresh /
+ * 更新代次取代）。从 RendererPluginRuntime 抽出以便复用与单测。
+ */
+export function isCurrentExternalAttemptState(input: {
+  desired: ReadonlyMap<string, PluginRegistryEntry>;
+  disposed: boolean;
+  pending: ReadonlyMap<string, PendingExternalAttempt>;
+  pluginId: string;
+  signature: string;
+  token: symbol;
+}): boolean {
+  const pending = input.pending.get(input.pluginId);
+  const desired = input.desired.get(input.pluginId);
+  return (
+    !input.disposed &&
+    pending?.token === input.token &&
+    pending.signature === input.signature &&
+    desired?.runtime.kind === "external" &&
+    runtimeEntrySignature(desired) === input.signature
+  );
+}

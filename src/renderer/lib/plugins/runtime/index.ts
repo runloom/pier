@@ -2,7 +2,10 @@ import type { RendererPluginModule } from "@plugins/api/renderer.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { activateBuiltinRendererPlugin } from "../builtin-activation.ts";
 import { BUILTIN_RENDERER_PLUGIN_MODULES } from "../builtin-catalog.ts";
-import { queueExternalActivation } from "../external/activation-queue.ts";
+import {
+  enqueuePendingExternalActivations,
+  SerialTransitionQueue,
+} from "../external/activation-queue.ts";
 import {
   defaultExternalActivationReporter,
   type ExternalActivationReporter,
@@ -24,6 +27,7 @@ import {
   clearRendererPluginRuntimeDiagnostic,
   reportRendererPluginRuntimeDiagnostic,
 } from "../runtime-diagnostics.ts";
+import { maybeActivateViaSandboxTrack } from "../sandbox/dispatch.tsx";
 import { installPluginSharedRuntime } from "../shared-runtime.ts";
 import { installTerminalOpenUrlHost } from "../terminal-open-url-host.ts";
 import {
@@ -40,20 +44,21 @@ import {
 } from "./entry-signature.ts";
 import {
   invalidateSupersededExternalAttempts,
+  isCurrentExternalAttemptState,
   type PendingExternalAttempt,
 } from "./external-invalidation.ts";
 import { MainDisposalAuthorizationStore } from "./main-disposal-authorizations.ts";
 
 export class RendererPluginRuntime {
-  private readonly active = new Map<string, ActiveRendererPlugin>();
+  /** @internal 供沙箱分派结构化读取。 */
+  readonly active = new Map<string, ActiveRendererPlugin>();
   private readonly modules: ReadonlyMap<string, RendererPluginModule>;
   private readonly rpcBridge: RendererPluginRpcBridge;
   private readonly externalLoader: typeof loadExternalRendererModule;
   private readonly externalLoadTimeoutMs: number;
-  private readonly reportExternalActivation: ExternalActivationReporter;
-  private readonly externalPanelPlaceholders =
-    new ExternalPanelPlaceholderRegistry();
-  private readonly externalDiagnosticPluginIds = new Set<string>();
+  readonly reportExternalActivation: ExternalActivationReporter; // @internal
+  readonly externalPanelPlaceholders = new ExternalPanelPlaceholderRegistry(); // @internal
+  readonly externalDiagnosticPluginIds = new Set<string>(); // @internal 沙箱分派
   private readonly pendingExternal = new Map<string, PendingExternalAttempt>();
   private readonly externalTransitionGate = new ExternalTransitionGate();
   private readonly mainDisposalAuthorizations =
@@ -63,10 +68,9 @@ export class RendererPluginRuntime {
   private disposed = false;
   private externalStarted = false;
   private refreshGeneration = 0;
-  private lastTransitionError: Error | null = null;
   private sharedRuntimeInstalled = false;
   private latestEntries: readonly PluginRegistryEntry[] = [];
-  private transitionTail: Promise<void> = Promise.resolve();
+  readonly transitionQueue = new SerialTransitionQueue();
 
   constructor(
     modules: readonly RendererPluginModule[] = BUILTIN_RENDERER_PLUGIN_MODULES,
@@ -89,7 +93,7 @@ export class RendererPluginRuntime {
     pendingExternalPluginIds: readonly string[];
   } {
     return {
-      lastTransitionError: this.lastTransitionError,
+      lastTransitionError: this.transitionQueue.lastTransitionError,
       pendingExternalPluginIds: [...this.pendingExternal.keys()],
     };
   }
@@ -111,7 +115,7 @@ export class RendererPluginRuntime {
       clearRendererPluginRuntimeDiagnostic(pluginId);
     }
     this.externalDiagnosticPluginIds.clear();
-    return this.enqueue(async () => {
+    return this.transitionQueue.enqueue(async () => {
       const pluginIds = [...this.active.keys()];
       await disposeRendererPluginsAfterDrain(
         pluginIds,
@@ -143,7 +147,7 @@ export class RendererPluginRuntime {
     this.externalTransitionGate.releaseConfirmed((pluginId) =>
       desiredExternalSignature(this.desired, pluginId)
     );
-    const coreReady = this.enqueue(() =>
+    const coreReady = this.transitionQueue.enqueue(() =>
       this.reconcileCore(new Map(this.desired), generation)
     );
     if (options.startExternal ?? this.externalStarted) {
@@ -159,23 +163,22 @@ export class RendererPluginRuntime {
       return;
     }
     this.externalStarted = true;
-    for (const entry of this.desired.values()) {
-      if (
-        entry.runtime.kind !== "external" ||
-        !entry.runtime.rendererEntryUrl ||
-        this.active.has(entry.manifest.id) ||
-        this.pendingExternal.has(entry.manifest.id) ||
-        this.externalTransitionGate.has(entry.manifest.id)
-      ) {
-        continue;
-      }
-      queueExternalActivation({
-        activate: (signature, token) =>
-          this.activateExternalAttempt(entry, signature, token),
-        entry,
-        pending: this.pendingExternal,
-      });
-    }
+    enqueuePendingExternalActivations({
+      active: this.active,
+      activate: (entry) => {
+        const token =
+          this.pendingExternal.get(entry.manifest.id)?.token ??
+          Symbol(entry.manifest.id);
+        return this.activateExternalAttempt(
+          entry,
+          runtimeEntrySignature(entry),
+          token
+        );
+      },
+      desired: this.desired,
+      externalTransitionGate: this.externalTransitionGate,
+      pending: this.pendingExternal,
+    });
   }
   prepareExternalTransition(
     pluginId: string,
@@ -225,14 +228,20 @@ export class RendererPluginRuntime {
     if (!entry.runtime.rendererEntryUrl) {
       return;
     }
-    if (!this.sharedRuntimeInstalled) {
-      installPluginSharedRuntime();
-      this.sharedRuntimeInstalled = true;
-    }
     try {
       const pending = this.pendingExternal.get(pluginId);
       if (!pending || pending.token !== token) {
         return;
+      }
+      if (
+        entry.runtime.kind === "external" &&
+        maybeActivateViaSandboxTrack(this, entry, signature)
+      ) {
+        return;
+      }
+      if (!this.sharedRuntimeInstalled) {
+        installPluginSharedRuntime();
+        this.sharedRuntimeInstalled = true;
       }
       const module = await loadExternalModuleWithTimeout({
         entry,
@@ -333,33 +342,21 @@ export class RendererPluginRuntime {
     }
   }
 
-  private enqueue(operation: () => Promise<void>): Promise<void> {
-    const result = this.transitionTail.then(operation, operation);
-    this.transitionTail = result.then(
-      () => {
-        this.lastTransitionError = null;
-      },
-      (error: unknown) => {
-        this.lastTransitionError =
-          error instanceof Error ? error : new Error(String(error));
-      }
-    );
-    return result;
-  }
-
   private reconcileLatestDesired(): Promise<void> {
     if (this.disposed) return Promise.resolve();
     const generation = this.refreshGeneration;
     const desired = new Map(this.desired);
-    return this.enqueue(() => this.reconcileCore(desired, generation)).then(
-      () => {
-        this.startExternalActivations();
-      },
-      (error: unknown) => {
-        this.startExternalActivations();
-        throw error;
-      }
-    );
+    return this.transitionQueue
+      .enqueue(() => this.reconcileCore(desired, generation))
+      .then(
+        () => {
+          this.startExternalActivations();
+        },
+        (error: unknown) => {
+          this.startExternalActivations();
+          throw error;
+        }
+      );
   }
 
   private async reconcileCore(
@@ -468,15 +465,14 @@ export class RendererPluginRuntime {
     signature: string,
     token: symbol
   ): boolean {
-    const pending = this.pendingExternal.get(pluginId);
-    const desired = this.desired.get(pluginId);
-    return (
-      !this.disposed &&
-      pending?.token === token &&
-      pending.signature === signature &&
-      desired?.runtime.kind === "external" &&
-      runtimeEntrySignature(desired) === signature
-    );
+    return isCurrentExternalAttemptState({
+      desired: this.desired,
+      disposed: this.disposed,
+      pending: this.pendingExternal,
+      pluginId,
+      signature,
+      token,
+    });
   }
 
   private async suspendAndDispose(

@@ -19,11 +19,13 @@ import {
 } from "../plugins/host-api.ts";
 import { createPluginRpcBus, type PluginRpcBus } from "../plugins/rpc-bus.ts";
 import { registerPluginRpcIpc } from "../plugins/rpc-ipc.ts";
+import { registerSandboxAuditIpc } from "../plugins/sandbox-audit-ipc.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/detection-service.ts";
 import { createAgentUsageService } from "../services/agents/usage-service.ts";
 import { createAiService } from "../services/ai/service.ts";
+import { createCanvasTrustService } from "../services/canvas-trust/service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createCommentsService } from "../services/comments/service.ts";
 import { createFileDraftsService } from "../services/files/drafts-service.ts";
@@ -41,10 +43,7 @@ import {
   createManagedPluginInstallService,
   type ManagedPluginInstallService,
 } from "../services/managed-plugins/install-service.ts";
-import {
-  getPierPluginMode,
-  listConfiguredWorkspaceRoots,
-} from "../services/managed-plugins/mode.ts";
+import { getPierPluginMode } from "../services/managed-plugins/mode.ts";
 import { createManagedPluginOperationLog } from "../services/managed-plugins/operation-log.ts";
 import { createManagedPluginPaths } from "../services/managed-plugins/paths.ts";
 import { bootWorkspacePluginMode } from "../services/managed-plugins/workspace-boot.ts";
@@ -83,6 +82,7 @@ import { createLazyAppCore } from "./lazy.ts";
 import { createAppLiveModulesService } from "./live-modules-wiring.ts";
 import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
+import { resolveWorkspaceDevPluginSpecs } from "./managed-plugin-workspace-specs.ts";
 import {
   createForegroundActivityFacade,
   createNotificationCenterCommandFacade,
@@ -150,24 +150,7 @@ function createPierAppCore(): PierAppCore {
   const managedPluginDevRuntimeWatches =
     createManagedPluginDevRuntimeWatchRegistry();
   const pluginMode = getPierPluginMode(process.cwd());
-  const workspaceDevPluginSpecs = [
-    ...OFFICIAL_BUNDLED_PLUGIN_SPECS.map((s) => ({
-      devPackageDir: s.devPackageDir,
-      id: s.id,
-    })),
-    ...listConfiguredWorkspaceRoots(process.cwd()).map((r) => ({
-      devPackageDir: r.path,
-      id: r.id,
-    })),
-  ];
-  // Custom roots override first-party when id collides.
-  const workspaceSpecById = new Map<
-    string,
-    { devPackageDir: string; id: string }
-  >();
-  for (const spec of workspaceDevPluginSpecs)
-    workspaceSpecById.set(spec.id, spec);
-  const dedupedSpecs = [...workspaceSpecById.values()];
+  const workspaceDevPluginSpecs = resolveWorkspaceDevPluginSpecs(process.cwd());
   const managedPlugins: ManagedPluginInstallService =
     createManagedPluginInstallService({
       appendOperationLog: (record) => managedPluginOpLog.append(record),
@@ -192,9 +175,11 @@ function createPierAppCore(): PierAppCore {
       pluginMode,
       runtimeMode: isDevRuntime() ? "development" : "production",
       store: managedPluginIndexStore,
-      workspaceDevPluginSpecs: pluginMode === "workspace" ? dedupedSpecs : [],
+      workspaceDevPluginSpecs:
+        pluginMode === "workspace" ? workspaceDevPluginSpecs : [],
     });
   registerPluginActivationIpc(managedPlugins);
+  registerSandboxAuditIpc(managedPluginOpLog);
   const basePlugins = createPluginService({
     sources: createDefaultPluginSources,
     externalRuntimeSources: () =>
@@ -309,7 +294,7 @@ function createPierAppCore(): PierAppCore {
       });
     // Workspace mode: pin runtime to local package dirs (first-party + custom roots).
     if (pluginMode === "workspace") {
-      await bootWorkspacePluginMode(dedupedSpecs, {
+      await bootWorkspacePluginMode(workspaceDevPluginSpecs, {
         managedPlugins,
         managedPluginIndexStore,
         managedPluginDevRuntimeWatches,
@@ -355,6 +340,7 @@ function createPierAppCore(): PierAppCore {
   const filePathTransactionLock = new FilePathTransactionLock();
   const files = createFileService({ transactionLock: filePathTransactionLock });
   const panelContexts = createPanelContextService();
+  const canvasTrust = createCanvasTrustService({ userDataDir });
   const {
     agentLaunchGate,
     agentMcpCatalog,
@@ -426,8 +412,10 @@ function createPierAppCore(): PierAppCore {
     usageData,
     processEnvironment,
     localEnvironments,
+    canvasTrust,
     liveModules: createAppLiveModulesService({
       resolveHomeRoot: () => pierHome.rootPath(),
+      projectTrust: canvasTrust,
     }),
     pierHome,
     pierBindings,

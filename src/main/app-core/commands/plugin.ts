@@ -3,11 +3,13 @@ import type {
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import { getPierPluginMode } from "../../services/managed-plugins/mode.ts";
 import {
   commandFailure as failure,
   commandSuccess as success,
 } from "../command-results.ts";
 import type { PierCoreServices } from "../command-router-services.ts";
+import { buildPluginWorkspacePlan } from "../plugin-workspace-plan.ts";
 
 function operationCommitted(result: unknown): boolean {
   return !(
@@ -141,6 +143,16 @@ export async function executePluginCommand(
   switch (command.type) {
     case "plugin.list":
       return success(requestId, await services.plugins.list());
+    case "plugin.workspace.plan": {
+      // 打印即所装：与 runtime.refresh 共用同一份 list() 结果。
+      return success(
+        requestId,
+        buildPluginWorkspacePlan(
+          await services.plugins.list(),
+          getPierPluginMode()
+        )
+      );
+    }
     case "plugin.disable": {
       return success(
         requestId,

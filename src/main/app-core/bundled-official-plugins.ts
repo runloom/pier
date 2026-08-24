@@ -72,6 +72,9 @@ export function toBundledPluginRegistration(
       ? {}
       : { description: bundle.description }),
     ...(bundle.locales === undefined ? {} : { locales: bundle.locales }),
+    ...(bundle.permissions === undefined || bundle.permissions.length === 0
+      ? {}
+      : { permissions: bundle.permissions }),
     ...(bundle.size === undefined ? {} : { size: bundle.size }),
   };
 }

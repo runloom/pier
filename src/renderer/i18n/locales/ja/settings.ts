@@ -129,6 +129,20 @@ export const settings = {
       canvasRootsMaxFolders: "追加できるフォルダは最大 {{max}} 個です。",
       canvasRootsConflict:
         "ファイルがほかで変更されました。このページを開き直してから保存してください。",
+      canvasTrustTitle: "キャンバスの信頼",
+      canvasTrustDescription:
+        "このプロジェクトのキャンバスを初めてプレビューする際に確認します。決定はこのマシンにのみ保存され、プロジェクトのファイルには書き込まれません。",
+      canvasTrustLoading: "読み込み中…",
+      canvasTrustLoadFailed: "信頼状態を読み込めませんでした",
+      canvasTrustedBadge: "信頼済み",
+      canvasTrustNotTrusted:
+        "未信頼。このプロジェクトのキャンバスを初めてプレビューする際に確認します。",
+      canvasTrustRevoke: "信頼を取り消す",
+      canvasTrustRevokeTitle:
+        "このプロジェクトのキャンバスの信頼を取り消しますか？",
+      canvasTrustRevokeBody:
+        "取り消すと、次にこのプロジェクトのキャンバスをプレビューする際に再度確認します。",
+      canvasTrustRevokeFailed: "信頼を取り消せませんでした",
     },
     tabEnvironment: "環境",
     tabRules: "ルール",

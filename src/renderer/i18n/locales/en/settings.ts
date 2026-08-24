@@ -129,6 +129,19 @@ export const settings = {
       canvasRootsMaxFolders: "You can add at most {{max}} folders.",
       canvasRootsConflict:
         "The file changed elsewhere. Open this page again, then save.",
+      canvasTrustTitle: "Canvas trust",
+      canvasTrustDescription:
+        "Asks the first time you preview a canvas in this project. The decision stays on this machine — never written into project files.",
+      canvasTrustLoading: "Loading…",
+      canvasTrustLoadFailed: "Couldn’t read trust status",
+      canvasTrustedBadge: "Trusted",
+      canvasTrustNotTrusted:
+        "Not trusted yet. You’ll be asked the first time a canvas from this project is previewed.",
+      canvasTrustRevoke: "Revoke trust",
+      canvasTrustRevokeTitle: "Revoke trust for this project’s canvases?",
+      canvasTrustRevokeBody:
+        "After revoking, previewing a canvas from this project asks again.",
+      canvasTrustRevokeFailed: "Couldn’t revoke trust",
     },
     tabEnvironment: "Environment",
     tabRules: "Rules",

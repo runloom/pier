@@ -6,6 +6,8 @@ export const pierClientKindSchema = z.enum([
   "mcp-local",
   "mobile-paired",
   "canvas",
+  /** 沙箱轨第三方插件主体：能力完全来自 manifest，静态默认为零（Phase 2）。 */
+  "plugin-principal",
 ]);
 
 export const pierCapabilitySchema = z.enum([
@@ -188,4 +190,6 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "file:read",
     "notification:read",
   ],
+  // 沙箱轨插件主体：静态默认为零，能力完全来自 manifest（deny-by-default）。
+  "plugin-principal": [],
 };

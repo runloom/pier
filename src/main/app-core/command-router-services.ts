@@ -57,6 +57,7 @@ export interface PierCoreServices {
   agentUsage: AgentUsageService;
   ai: AiService;
   appUpdates: AppUpdateService;
+  canvasTrust?: import("../services/canvas-trust/service.ts").CanvasTrustService;
   commandPaletteMru: {
     clear(): Promise<MruState>;
     read(): Promise<MruState>;

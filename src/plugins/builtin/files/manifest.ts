@@ -232,6 +232,9 @@ export const FILES_PLUGIN_MANIFEST = {
     "panel:open",
     "file:read",
     "file:write",
+    // 画布项目信任门：读状态 + 记录首次预览的信任决定。
+    "preferences:read",
+    "preferences:write",
     "git:read",
     "comments:read",
     "comments:write",

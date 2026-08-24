@@ -37,6 +37,8 @@ export const settingsPlugins = {
   errorTitle: "Unable to load plugins",
   openSettings: "Settings",
   openSettingsPlugin: "Open {{name}} settings",
+  permissionSummary: "Permissions: {{list}}",
+  permissionSummaryNone: "No special permissions",
   source: {
     builtin: "Built-in",
     local: "Local",

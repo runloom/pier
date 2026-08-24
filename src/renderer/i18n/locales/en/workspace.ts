@@ -11,6 +11,9 @@ export const workspace = {
     loadingTitle: "Loading plugin panel",
     missingRendererDescription: "This plugin has no displayable UI.",
     unavailableTitle: "Plugin panel unavailable",
+    crashTitle: "Plugin panel crashed",
+    crashDescription:
+      "The plugin UI hit an error. Other panels are unaffected. Disable or reload the plugin to recover.",
   },
   startupError: {
     description: "Reload to try again.",

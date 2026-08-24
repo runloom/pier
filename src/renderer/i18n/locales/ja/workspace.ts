@@ -11,6 +11,9 @@ export const workspace = {
     missingRendererDescription:
       "このプラグインには表示できる画面がありません。",
     unavailableTitle: "プラグインパネルを使えません",
+    crashTitle: "プラグインパネルがクラッシュしました",
+    crashDescription:
+      "プラグイン UI でエラーが発生しました。他のパネルには影響ありません。無効化または再読み込みで復旧できます。",
   },
   startupError: {
     description: "再読み込みしてもう一度お試しください。",

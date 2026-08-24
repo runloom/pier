@@ -388,3 +388,33 @@ export const pluginInspectRequestSchema = z.object({
   id: z.string().min(1),
 });
 export type PluginInspectRequest = z.infer<typeof pluginInspectRequestSchema>;
+
+/** One mounted-or-rejected plugin as reported by the workspace plan. */
+export const pluginWorkspacePlanEntrySchema = z.object({
+  enabled: z.boolean(),
+  id: z.string().min(1),
+  permissions: z.array(pierCapabilitySchema),
+  runtime: z.object({
+    canToggle: z.boolean(),
+    enabled: z.boolean(),
+    kind: z.enum(["builtin", "manifest-only", "external"]),
+  }),
+  source: pluginSourceSchema,
+  version: z.string().min(1),
+});
+export type PluginWorkspacePlanEntry = z.infer<
+  typeof pluginWorkspacePlanEntrySchema
+>;
+
+/**
+ * 打印即所装（dsh --dump-config == mounted 纪律）：由 main 侧
+ * `plugins.list()` —— 驱动真实挂载的同一份数据 —— 投影而来，
+ * 不做任何二次解析，保证 plan 与运行时注册表永不漂移。
+ */
+export const pluginWorkspacePlanSchema = z.object({
+  /** Manifest 解析失败被拒绝的条目：它们不会挂载，但属于“将要发生什么”的一部分。 */
+  diagnostics: z.array(pluginRegistryDiagnosticSchema),
+  entries: z.array(pluginWorkspacePlanEntrySchema),
+  mode: z.enum(["workspace", "release"]),
+});
+export type PluginWorkspacePlan = z.infer<typeof pluginWorkspacePlanSchema>;

@@ -57,6 +57,8 @@ export const settingsPlugins = {
   },
   openSettings: "设置",
   openSettingsPlugin: "打开{{name}}设置",
+  permissionSummary: "权限：{{list}}",
+  permissionSummaryNone: "无特殊权限",
   tabs: {
     installed: "已安装",
     available: "未安装",

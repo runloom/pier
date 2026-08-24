@@ -4,19 +4,11 @@ import type {
   PierClientKind,
 } from "@shared/contracts/permissions.ts";
 
-/**
- * 每条命令一行元数据:
- *   capabilities —— 授权层要求的能力集 (authorizeCommand 校验)
- *   allowedClientKinds —— 可选. 若定义, 仅列表中的 client kind 允许通过; 未列出的 kind
- *     在 capability 校验前就被拒绝. 缺省时沿用纯 capability 校验(现有命令的默认行为).
- *
- * 单一真源:加命令时 TypeScript 的 Record 全 key 类型强制必须填 capabilities,
- * 避免遗漏授权配置。allowedClientKinds 用于 managed plugin 命令这类 "某些客户端
- * 只读、某些不可写" 的场景(design §7.0), 未来同类命令沿用同一模式。所有命令统一
- * 经 PIER.COMMAND_EXECUTE 通用 IPC 通道路由。
- */
+/** Exhaustive per-command authorization; Record keys cover every PierCommand type. */
 export interface CommandMetadata {
   readonly allowedClientKinds?: readonly PierClientKind[];
+  /** 沙箱轨主体可调用？缺省 false（deny-by-default，Phase 2）。 */
+  readonly allowPluginPrincipals?: boolean;
   readonly capabilities: readonly PierCapability[];
 }
 
@@ -96,6 +88,18 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["file:read"],
   },
+  "liveModules.trustStatus": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["preferences:read"],
+  },
+  "liveModules.grantTrust": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["preferences:write"],
+  },
+  "liveModules.revokeTrust": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["preferences:write"],
+  },
   "rules.snapshot": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["file:read"],
@@ -165,6 +169,10 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "plugin.enable": { capabilities: ["plugin:write"] },
   "plugin.inspect": { capabilities: ["plugin:read"] },
   "plugin.list": { capabilities: ["plugin:read"] },
+  "plugin.workspace.plan": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["plugin:read"],
+  },
   "pluginSettings.getAll": { capabilities: ["plugin:read"] },
   "pluginSettings.reset": { capabilities: ["plugin:write"] },
   "pluginSettings.set": { capabilities: ["plugin:write"] },
@@ -467,20 +475,15 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   },
 };
 
-function terminalOpenCapabilities(
-  command: Extract<PierCommand, { type: "terminal.open" }>
-): readonly PierCapability[] {
-  if (command.launch && Object.keys(command.launch).length > 0) {
-    return ["workspace:open", "terminal:control"];
-  }
-  return ["workspace:open"];
-}
-
 export function requiredCapabilitiesForCommand(
   command: PierCommand
 ): readonly PierCapability[] {
   if (command.type === "terminal.open") {
-    return terminalOpenCapabilities(command);
+    // launch 存在时的额外能力动态叠加（静态元数据只记基础能力）。
+    if (command.launch && Object.keys(command.launch).length > 0) {
+      return ["workspace:open", "terminal:control"];
+    }
+    return ["workspace:open"];
   }
   return COMMAND_METADATA[command.type].capabilities;
 }

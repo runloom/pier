@@ -6,7 +6,7 @@ import {
   requestCanvasReload,
   unmarkCanvasActive,
 } from "@plugins/builtin/files/renderer/preview/canvas-chrome-store.ts";
-import { CANVAS_SKELETON_DELAY_MS } from "@plugins/builtin/files/renderer/preview/canvas-compile-session.ts";
+import { CANVAS_SKELETON_DELAY_MS } from "@plugins/builtin/files/renderer/preview/canvas-compile-state.ts";
 import { projectLiveRootId } from "@shared/contracts/live-modules.ts";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,15 +15,26 @@ function makeModuleDataUrl(body: string): string {
   return `data:text/javascript,${encodeURIComponent(body)}`;
 }
 
-function createContext(liveModules: {
-  compile: ReturnType<typeof vi.fn>;
-  getUrl?: ReturnType<typeof vi.fn>;
-  onChanged: ReturnType<typeof vi.fn>;
-  registerRoot: ReturnType<typeof vi.fn>;
-  unregisterRoot?: ReturnType<typeof vi.fn>;
-  success?: ReturnType<typeof vi.fn>;
-}): RendererPluginContext {
+function createContext(
+  liveModules: {
+    compile: ReturnType<typeof vi.fn>;
+    getUrl?: ReturnType<typeof vi.fn>;
+    onChanged: ReturnType<typeof vi.fn>;
+    registerRoot: ReturnType<typeof vi.fn>;
+    unregisterRoot?: ReturnType<typeof vi.fn>;
+    success?: ReturnType<typeof vi.fn>;
+  },
+  options?: {
+    confirm?: ReturnType<typeof vi.fn>;
+    trusted?: boolean;
+  }
+): RendererPluginContext {
   return {
+    ...(options?.confirm
+      ? {
+          dialogs: { confirm: options.confirm },
+        }
+      : {}),
     liveModules: {
       compile: liveModules.compile,
       getUrl: liveModules.getUrl ?? vi.fn(),
@@ -32,6 +43,13 @@ function createContext(liveModules: {
       unregisterRoot:
         liveModules.unregisterRoot ??
         vi.fn(async (rootId: string) => ({ rootId })),
+      // Tests exercise the already-trusted path unless stated otherwise.
+      trustStatus: vi.fn(async () => ({
+        grantedAt: options?.trusted ? "2026-01-01T00:00:00.000Z" : null,
+        trusted: options?.trusted ?? true,
+      })),
+      grantTrust: vi.fn(async () => undefined),
+      revokeTrust: vi.fn(async () => undefined),
     },
     notifications: {
       success: liveModules.success ?? vi.fn(),
@@ -554,5 +572,33 @@ describe("FileCanvasPreview", () => {
     expect(
       getCanvasChromeState().activeByModule["smoke/hello.canvas.tsx"]
     ).toBeUndefined();
+  });
+
+  it("stops before compiling when the project trust is declined", async () => {
+    const compile = vi.fn(async () => {
+      throw new Error("must not compile");
+    });
+    const onChanged = vi.fn(() => () => undefined);
+    const registerRoot = vi.fn(async () => undefined);
+    const confirm = vi.fn(async () => false);
+
+    render(
+      <FileCanvasPreview
+        context={createContext(
+          { compile, onChanged, registerRoot },
+          { confirm, trusted: false }
+        )}
+        path={CANVAS_PATH}
+        root={PROJECT_ROOT}
+        t={t}
+      />
+    );
+
+    await waitFor(() => {
+      expect(confirm).toHaveBeenCalled();
+    });
+    expect(compile).not.toHaveBeenCalled();
+    expect(registerRoot).not.toHaveBeenCalled();
+    expect(screen.getByText(/canvases aren’t trusted/i)).toBeTruthy();
   });
 });

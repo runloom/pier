@@ -364,6 +364,9 @@ function createMockContext(): RendererPluginContext {
       onChanged: unimplemented("liveModules.onChanged"),
       registerRoot: unimplemented("liveModules.registerRoot"),
       unregisterRoot: unimplemented("liveModules.unregisterRoot"),
+      trustStatus: unimplemented("liveModules.trustStatus"),
+      grantTrust: unimplemented("liveModules.grantTrust"),
+      revokeTrust: unimplemented("liveModules.revokeTrust"),
     },
     lifecycle: {
       beforeSuspend: vi.fn(() => () => undefined),

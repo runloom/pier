@@ -24,6 +24,7 @@ import { fileCommandSchemas } from "./file/commands.ts";
 import { gitCommandSchemas } from "./git/commands.ts";
 import { hostControlCommandSchemas } from "./host/control-commands.ts";
 import {
+  liveModulesCanvasTrustRequestSchema,
   liveModulesCompileRequestSchema,
   liveModulesGetUrlRequestSchema,
   liveModulesRegisterRootRequestSchema,
@@ -255,6 +256,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("worktree.prune"),
   }),
   z.object({ type: z.literal("plugin.list") }),
+  z.object({ type: z.literal("plugin.workspace.plan") }),
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.inspect"),
   }),
@@ -361,6 +363,15 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   liveModulesGetUrlRequestSchema.extend({
     type: z.literal("liveModules.getUrl"),
+  }),
+  liveModulesCanvasTrustRequestSchema.extend({
+    type: z.literal("liveModules.trustStatus"),
+  }),
+  liveModulesCanvasTrustRequestSchema.extend({
+    type: z.literal("liveModules.grantTrust"),
+  }),
+  liveModulesCanvasTrustRequestSchema.extend({
+    type: z.literal("liveModules.revokeTrust"),
   }),
   rulesSnapshotRequestSchema.extend({
     type: z.literal("rules.snapshot"),

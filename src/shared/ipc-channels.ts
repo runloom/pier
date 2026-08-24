@@ -54,6 +54,7 @@ export const PIER = {
   // command authorization (design §7.0 / §7.3).
   PLUGIN_RPC_INVOKE: "pier://plugin-rpc:invoke",
   PLUGIN_RENDERER_ACTIVATION_REPORT: "pier://plugin:renderer-activation-report",
+  PLUGIN_SANDBOX_AUDIT: "pier://plugin:sandbox-audit",
   ENVIRONMENT_PICK_PROJECT_DIRECTORY:
     "pier://environment:pick-project-directory",
   // Pier 资源快照（renderer 拉取式轮询;工作台 system-resources 物料）

@@ -37,6 +37,8 @@ export const settingsPlugins = {
   errorTitle: "プラグインを読み込めません",
   openSettings: "設定",
   openSettingsPlugin: "{{name}} の設定を開く",
+  permissionSummary: "権限：{{list}}",
+  permissionSummaryNone: "特別な権限なし",
   source: {
     builtin: "内蔵",
     local: "ローカル",

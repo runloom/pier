@@ -37,6 +37,8 @@ export const settingsPlugins = {
   errorTitle: "플러그인을 불러올 수 없습니다",
   openSettings: "설정",
   openSettingsPlugin: "{{name}} 설정 열기",
+  permissionSummary: "권한: {{list}}",
+  permissionSummaryNone: "특별한 권한 없음",
   source: {
     builtin: "내장",
     local: "로컬",

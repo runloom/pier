@@ -129,6 +129,19 @@ export const settings = {
       canvasRootsMaxFolders: "폴더는 최대 {{max}}개까지 추가할 수 있습니다.",
       canvasRootsConflict:
         "파일이 다른 곳에서 변경되었습니다. 이 페이지를 다시 연 다음 저장하세요.",
+      canvasTrustTitle: "캔버스 신뢰",
+      canvasTrustDescription:
+        "이 프로젝트의 캔버스를 처음 미리볼 때 확인합니다. 결정은 이 컴퓨터에만 저장되며 프로젝트 파일에 기록되지 않습니다.",
+      canvasTrustLoading: "로드 중…",
+      canvasTrustLoadFailed: "신뢰 상태를 읽을 수 없습니다",
+      canvasTrustedBadge: "신뢰함",
+      canvasTrustNotTrusted:
+        "아직 신뢰하지 않음. 이 프로젝트의 캔버스를 처음 미리볼 때 확인합니다.",
+      canvasTrustRevoke: "신뢰 철회",
+      canvasTrustRevokeTitle: "이 프로젝트 캔버스에 대한 신뢰를 철회할까요?",
+      canvasTrustRevokeBody:
+        "철회하면 다음에 이 프로젝트의 캔버스를 미리볼 때 다시 확인합니다.",
+      canvasTrustRevokeFailed: "신뢰를 철회할 수 없습니다",
     },
     tabEnvironment: "환경",
     tabRules: "규칙",

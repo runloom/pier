@@ -6,7 +6,6 @@ import {
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY,
-  type LiveModuleDiagnostic,
   projectLiveRootId,
   projectLiveRootSpec,
 } from "@shared/contracts/live-modules.ts";
@@ -17,10 +16,7 @@ import {
   normalizeProjectRootKey,
   projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
-import {
-  detectLiveModuleFrameworkFromFileName,
-  type LiveModuleFramework,
-} from "@shared/live-module-framework.ts";
+import { detectLiveModuleFrameworkFromFileName } from "@shared/live-module-framework.ts";
 import {
   type Dispatch,
   type RefObject,
@@ -29,53 +25,25 @@ import {
 } from "react";
 import type { FilesTranslate } from "../i18n.ts";
 import {
+  CANVAS_SKELETON_DELAY_MS,
+  type CanvasPreviewState,
+  moduleIdentity,
+  type SoftError,
+} from "./canvas-compile-state.ts";
+import {
   canvasMountErrorMessage,
   clearMountedCanvas,
   unmountMountedCanvas,
 } from "./canvas-states.tsx";
+import {
+  ensureProjectCanvasTrusted,
+  trustDeclinedState,
+} from "./canvas-trust-gate.ts";
 import { removeLiveModuleCss } from "./css-cleanup.ts";
 import {
   ensureLiveModulesProjectConfigLoaded,
   subscribeLiveModulesProjectConfigChanged,
 } from "./load-live-modules-config.ts";
-
-/** Only show skeleton if compile still pending after this delay (avoids flash). */
-export const CANVAS_SKELETON_DELAY_MS = 200;
-
-/** Hot-reload compile failure / warnings while previous mount stays visible. */
-export interface SoftError {
-  diagnostics: LiveModuleDiagnostic[];
-  message: string;
-}
-
-export type CanvasPreviewState =
-  | { kind: "pending" }
-  | { kind: "loading" }
-  | {
-      kind: "ready";
-      framework: LiveModuleFramework;
-      /** Hot-reload compile failure: keep previous mount, show banner. */
-      softError?: SoftError;
-    }
-  | {
-      kind: "error";
-      message: string;
-      diagnostics: LiveModuleDiagnostic[];
-      /**
-       * True when the canvas mounted then crashed (React boundary / uncaught).
-       * Content is gone — full Empty, never soft Alert banner.
-       */
-      isRuntime?: boolean;
-    };
-
-function moduleIdentity(
-  root: string,
-  contentDirectory: string,
-  relPath: string,
-  framework: LiveModuleFramework
-): string {
-  return `${root}\0${contentDirectory}\0${relPath}\0${framework}`;
-}
 
 /**
  * The compile + mount session for one canvas preview generation.
@@ -209,6 +177,27 @@ export function useCanvasCompileSession(props: {
           return;
         }
 
+        // 画布项目信任门：首次预览前先取得信任决定；拒绝则不编译不挂载。
+        const gateOutcome = await ensureProjectCanvasTrusted({
+          context,
+          projectRootPath: root,
+          t,
+        });
+        if (!stillOwner()) {
+          return;
+        }
+        if (gateOutcome === "declined") {
+          clearMountedCanvas(
+            hostEl,
+            unmountRef,
+            mountedIdentityRef,
+            mountedModuleIdRef.current
+          );
+          mountedModuleIdRef.current = null;
+          setState(trustDeclinedState(t));
+          return;
+        }
+
         const identity = moduleIdentity(
           root,
           contentDirectory,
@@ -274,6 +263,19 @@ export function useCanvasCompileSession(props: {
             return;
           }
           clearSkeletonTimer();
+          // Trust was revoked (or decided elsewhere) between the proactive
+          // gate and this compile — fail closed with the same declined copy.
+          if (result.trust) {
+            clearMountedCanvas(
+              hostEl,
+              unmountRef,
+              mountedIdentityRef,
+              mountedModuleIdRef.current
+            );
+            mountedModuleIdRef.current = null;
+            setState(trustDeclinedState(t));
+            return;
+          }
           const soft: SoftError = {
             diagnostics: result.diagnostics,
             message:
@@ -481,6 +483,7 @@ export function useCanvasCompileSession(props: {
       }
     };
   }, [
+    context,
     liveModules,
     nonce,
     path,
