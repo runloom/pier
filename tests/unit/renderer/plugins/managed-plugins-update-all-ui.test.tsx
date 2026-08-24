@@ -44,6 +44,7 @@ function entry(id: string, name: string): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id,

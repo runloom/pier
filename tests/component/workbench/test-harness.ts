@@ -138,6 +138,7 @@ export function makePluginRegistryEntry(input: {
       engines: { pier: ">=0.1.0" },
       id: input.pluginId,
       workbenchWidgets: input.widgets,
+      dataProjections: [],
       name: input.pluginId,
       panels: [],
       permissions: [],

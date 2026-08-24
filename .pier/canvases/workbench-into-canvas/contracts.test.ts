@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { parsePluginDataWatchTarget } from "../../../src/shared/contracts/canvas-host.ts";
+import { PIER_CANVAS_VALUE_EXPORT_NAMES } from "../../../src/shared/pier-canvas-export-names.ts";
 import {
   CANVAS_MATERIALS_FAMILY_IDS,
   CANVAS_MATERIALS_FORBIDDEN_ADOPTED_PHRASES,
@@ -207,5 +209,32 @@ describe("Canvas 物料金标准契约", () => {
       adopt.reason = "写入 .pier/canvas-catalog 再生成";
     }
     expect(() => parseScheme(JSON.stringify(adoptCatalog))).toThrow("登记产品");
+  });
+});
+
+describe("canvas host 契约", () => {
+  it("三个数据 hooks 均登记为 value export", () => {
+    for (const name of [
+      "useActivityOverview",
+      "useSystemResources",
+      "useCostOverview",
+    ]) {
+      expect(
+        PIER_CANVAS_VALUE_EXPORT_NAMES,
+        `${name} 未登记为 value export`,
+      ).toContain(name);
+    }
+  });
+
+  it("parsePluginDataWatchTarget 接受合法插件投影目标", () => {
+    expect(parsePluginDataWatchTarget("plugin:pier.codex/accounts.usage")).toEqual({
+      pluginId: "pier.codex",
+      key: "accounts.usage",
+    });
+  });
+
+  it("parsePluginDataWatchTarget 拒绝空段与非 plugin 目标", () => {
+    expect(parsePluginDataWatchTarget("plugin:x/")).toBeNull();
+    expect(parsePluginDataWatchTarget("resources")).toBeNull();
   });
 });

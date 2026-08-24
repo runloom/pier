@@ -17,6 +17,7 @@ function entryWith(overrides: {
       apiVersion: 1,
       commands: [],
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       configuration: {
         properties: {

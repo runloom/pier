@@ -125,6 +125,22 @@ export const settingsMaterials = {
     tone: "テキストの強さ。",
     rows: "見える行数。",
     pressed: "トグルが押されたままか。",
+    aoCounts: "このウィンドウ範囲のアクティビティ概要カウンター。",
+    aoRows: "アクティブな行。新しい順。",
+    aoInProgress: "アクティブなリスト行数。",
+    aoNeedsYou:
+      "待機またはエラーのエージェントと、ブロックされたか失敗したタスク。",
+    aoRunning: "作業中のエージェントと進行中のタスク実行。",
+    aoKind: "この行の種別。",
+    aoPanelId: "アクティビティの所属パネル。",
+    aoUpdatedAt: "最後のシグナル時刻（epoch ミリ秒）。",
+    coRefresh: "すべての使用量ソースを手動で再スキャンします。",
+    coSnapshot: "プラグイン横断の使用量集計。初回読み込み前は null。",
+    coStatus: "スナップショット到達後は ready。初回読み込み失敗時は error。",
+    srCpuHistory: "CPU サンプル列。古い順（約 5 分）。",
+    srError: "直近のポーリングエラー（あれば）。",
+    srSnapshot: "最新の関連プロセス リソース スナップショット。",
+    srStatus: "初回のポーリング成功後は ready。",
   },
   lead: {
     Frame: "最大幅つきの読み取りコンテナ",
@@ -175,5 +191,8 @@ export const settingsMaterials = {
     Mermaid:
       "ノードからフローを描き、ネイティブ mermaid のシーケンス、状態、クラス、ER、マインドマップも使えます。",
     canvasFile: "キャンバス隣のファイル用サンドボックス。競合も含みます",
+    activityOverview: "誰が動き、誰に助けが必要か、ひと目でわかる",
+    costOverview: "プラグイン横断のトークンコスト集計。手動更新つき",
+    systemResources: "関連プロセスの CPU 推移と最新スナップショット",
   },
 } as const;

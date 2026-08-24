@@ -73,6 +73,24 @@ describe("canvas material registry", () => {
     }
   });
 
+  it("keeps data-family exportName on the group's own hook", () => {
+    const dataGroups = CANVAS_MATERIAL_GROUPS.filter(
+      (group) => group.family === "data"
+    );
+    for (const group of dataGroups) {
+      const material = CANVAS_SYSTEM_MATERIALS.find(
+        (row) => row.id === group.id
+      );
+      if (!material) throw new Error(`missing material ${group.id}`);
+      expect(material.exportName).toBe(group.members[0]);
+      if (material.id === "canvasFile") continue;
+      expect(
+        material.importLine,
+        `${material.id} install line must not bind useCanvasFile`
+      ).not.toContain("useCanvasFile");
+    }
+  });
+
   it("does not invent a catalog file or declare command", () => {
     const source = CANVAS_SYSTEM_MATERIALS.map((row) => row.id).join("\n");
     expect(source).not.toContain("canvas-catalog");
@@ -137,7 +155,7 @@ describe("canvas material registry", () => {
       if (material.surface === "canvas-file") {
         expect(material.signature, material.id).toMatch(/^function /);
         expect(material.returnsSignature, material.id).toMatch(/interface /);
-        expect(material.importLine, material.id).toContain("useCanvasFile");
+        expect(material.importLine, material.id).toContain(material.exportName);
         expect(material.importLine, material.id).toContain(
           'from "pier/canvas"'
         );

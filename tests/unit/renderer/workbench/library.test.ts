@@ -53,6 +53,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           title: "Codex Usage",
         },
       ],
+      dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.codex",

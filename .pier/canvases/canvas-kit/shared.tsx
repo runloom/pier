@@ -53,15 +53,15 @@ export function MaterialCard({
   name: string;
 }) {
   return (
-    <Card className="min-w-0 overflow-hidden">
-      <div className="flex min-h-28 items-center justify-center overflow-hidden border-b bg-muted/40 p-4">
+    <Card className="h-full min-w-0 gap-0 overflow-hidden py-0">
+      <div className="flex h-28 items-center justify-center overflow-hidden border-b bg-muted/40 p-4">
         {children}
       </div>
-      <CardHeader className="gap-1">
+      <CardHeader className="gap-1 pt-4">
         <CardTitle className="text-sm">{name}</CardTitle>
         <CardDescription>{lead}</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-4">
         <Text className="block font-mono text-xs leading-relaxed" tone="secondary">
           {install}
         </Text>

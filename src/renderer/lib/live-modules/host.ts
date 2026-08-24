@@ -3,10 +3,14 @@ import {
   canvasHostInspect,
   canvasHostLiveChannel,
   canvasHostPermissionError,
+  extractPluginDataEvent,
   isCanvasHostCommandAllowed,
+  isPluginDataEventFor,
   normalizeCanvasHostSnapshotId,
+  parsePluginDataWatchTarget,
 } from "@shared/contracts/canvas-host.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { useEffect, useState } from "react";
 import { decorateCanvasHostInspect } from "@/lib/canvas-host/inspect.ts";
 import {
@@ -86,7 +90,7 @@ function isUnsupported(error: unknown): boolean {
 }
 
 export function useHostSnapshot(
-  target: CanvasHostWatchTarget
+  target: CanvasHostWatchTarget | (string & {})
 ): HostSnapshotState {
   const [state, setState] = useState<HostSnapshotState>({
     data: null,
@@ -97,7 +101,9 @@ export function useHostSnapshot(
   useEffect(() => {
     const snapshotId = normalizeCanvasHostSnapshotId(target);
     const liveChannel = canvasHostLiveChannel(target);
-    if (!(snapshotId || liveChannel)) {
+    // 插件投影目标不走快照别名/live 通道表，单独解析。
+    const pluginTarget = parsePluginDataWatchTarget(target);
+    if (!(snapshotId || liveChannel || pluginTarget)) {
       setState({
         data: null,
         error: `canvas host denies ${target}`,
@@ -151,6 +157,28 @@ export function useHostSnapshot(
         status: "error",
       });
     };
+    if (pluginTarget) {
+      pending = bridge
+        .invoke({
+          payload: { key: pluginTarget.key, pluginId: pluginTarget.pluginId },
+          type: "pluginData.snapshot",
+        })
+        .then(apply, fail);
+      const unsub = bridge.subscribe(
+        PIER_BROADCAST.PLUGIN_DATA_CHANGED,
+        (event) => {
+          if (!isPluginDataEventFor(event, pluginTarget)) {
+            return;
+          }
+          apply(extractPluginDataEvent(event));
+        }
+      );
+      return () => {
+        cancelled = true;
+        unsub();
+        pending?.catch(() => undefined);
+      };
+    }
     if (snapshotId) {
       pending = bridge.snapshot(snapshotId).then(apply, fail);
     } else {

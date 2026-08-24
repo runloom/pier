@@ -50,6 +50,7 @@ function pluginEntry(overrides: {
       apiVersion: 1,
       commands,
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       ...(overrides.description ? { description: overrides.description } : {}),
       engines: { pier: ">=0.1.0" },

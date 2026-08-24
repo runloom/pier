@@ -23,6 +23,7 @@ function manifest(
     id: "pier.codex",
     main: "dist/main.js",
     workbenchWidgets: [],
+    dataProjections: [],
     name: "Codex",
     panels: [],
     permissions: [],

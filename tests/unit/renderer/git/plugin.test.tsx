@@ -178,6 +178,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         },
       },
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: GIT_PLUGIN_ID,

@@ -6,6 +6,7 @@ import { cleanup, render } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import { MaterialCard } from "../../../.pier/canvases/canvas-kit/shared.tsx";
 import * as pierCanvasModule from "../../support/pier-canvas.ts";
 
 /**
@@ -77,4 +78,22 @@ describe("project canvases render", () => {
       expect(parsePierCanvasMeta(module.canvas)).not.toBeNull();
     });
   }
+
+  it("renders material cards with fixed well and flush chrome", () => {
+    // 2026-08-24 修版：井固定 h-28 居中；卡去自身 py/gap，h-full 行内等高。
+    const { container } = render(
+      <MaterialCard
+        install='import { Button } from "pier/canvas"'
+        lead="触发主操作"
+        name="Button"
+      >
+        <span>sample</span>
+      </MaterialCard>
+    );
+    const card = container.querySelector("[data-slot='card']");
+    expect(card?.className).toContain("h-full");
+    expect(card?.className).toContain("py-0");
+    expect(card?.className).toContain("gap-0");
+    expect(card?.firstElementChild?.className).toContain("h-28");
+  });
 });

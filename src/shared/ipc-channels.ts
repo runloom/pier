@@ -196,6 +196,8 @@ export const PIER_BROADCAST = {
   // 统一评论项目快照广播 (main → 所有 renderer, payload CommentProjectSnapshot)。
   // main CommentsService 唯一写方；renderer 镜像 store 按 worktreeKey 路由 + seq 守卫。
   COMMENTS_CHANGED: "pier://comments:changed",
+  // 插件数据投影变更：宿主仅转发 manifest 已声明键的事件（设计 §4.1）。
+  PLUGIN_DATA_CHANGED: "pier://plugin-data:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

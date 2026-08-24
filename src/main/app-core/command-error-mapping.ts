@@ -22,6 +22,13 @@ export function mapCommandError(
   ) {
     return failure(requestId, "not_found", err.message);
   }
+  if (
+    err instanceof Error &&
+    "code" in err &&
+    (err as Error & { code?: unknown }).code === "permission_denied"
+  ) {
+    return failure(requestId, "permission_denied", err.message);
+  }
   if (err instanceof WorktreeServiceError) {
     return failure(requestId, err.reason, err.message);
   }

@@ -42,6 +42,7 @@ export type CanvasHostCommandType =
   | "plugin.inspect"
   | "plugin.list"
   | "pluginSettings.getAll"
+  | "pluginData.snapshot"
   | "preferences.read"
   | "run.backgroundSnapshot"
   | "run.list"
@@ -78,6 +79,7 @@ export type CanvasHostChannel =
   | "pier://foreground-activity:changed"
   | "pier://git:changed"
   | "pier://notification-center:changed"
+  | "pier://plugin-data:changed"
   | "pier://plugin-settings:changed"
   | "pier://plugins:changed"
   | "pier:preferences:changed"
@@ -130,6 +132,7 @@ export interface HostSnapshotState {
 }
 
 export declare const host: CanvasHost;
+/** 合法 watch 目标：`CanvasHostChannel | CanvasHostSnapshotId`，或投影串 `plugin:<pluginId>/<key>`。 */
 export declare function useHostSnapshot(
-  target: CanvasHostWatchTarget
+  target: CanvasHostWatchTarget | (string & {})
 ): HostSnapshotState;

@@ -36,6 +36,7 @@ const externalPluginEntry = {
         title: "Configurable Widget",
       },
     ],
+    dataProjections: [],
     name: "Demo",
     panels: [],
     permissions: [],

@@ -34,6 +34,7 @@ function entry(id: string, enabled = true): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       configuration: {
         properties: {
@@ -88,6 +89,7 @@ function multilineEntry(id: string): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       configuration: {
         properties: {

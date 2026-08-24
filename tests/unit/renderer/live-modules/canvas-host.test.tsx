@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
-import { cleanup, renderHook } from "@testing-library/react";
+
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { host, useHostSnapshot } from "@/lib/live-modules/host.ts";
 import * as resourceStore from "@/stores/pier-resource.store.ts";
@@ -85,5 +87,112 @@ describe("canvas host runtime", () => {
     expect(acquire).toHaveBeenCalledTimes(1);
     unmount();
     expect(release).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns an empty ready snapshot for plugin targets without a bridge", () => {
+    const { result } = renderHook(() =>
+      useHostSnapshot("plugin:pier.codex/accounts.usage")
+    );
+    expect(result.current).toEqual({
+      data: null,
+      error: null,
+      status: "ready",
+    });
+  });
+
+  it("loads a plugin watch target via command and filters changed events", async () => {
+    const invoke = vi.fn(async () => ({ used: 1 }));
+    let listener: ((event: unknown) => void) | undefined;
+    const unsubscribe = vi.fn();
+    const subscribe = vi.fn(
+      (_channel: string, fn: (event: unknown) => void) => {
+        listener = fn;
+        return unsubscribe;
+      }
+    );
+    window.pier = {
+      canvasHost: {
+        inspect: host.inspect,
+        invoke,
+        snapshot: vi.fn(),
+        subscribe,
+      },
+    } as unknown as typeof window.pier;
+
+    const { result, unmount } = renderHook(() =>
+      useHostSnapshot("plugin:pier.codex/accounts.usage")
+    );
+    await waitFor(() =>
+      expect(result.current).toEqual({
+        data: { used: 1 },
+        error: null,
+        status: "ready",
+      })
+    );
+    expect(invoke).toHaveBeenCalledWith({
+      type: "pluginData.snapshot",
+      payload: { key: "accounts.usage", pluginId: "pier.codex" },
+    });
+    expect(subscribe).toHaveBeenCalledWith(
+      PIER_BROADCAST.PLUGIN_DATA_CHANGED,
+      expect.any(Function)
+    );
+
+    // 扁平对象形状：剥掉信封字段后剩余属性即数据。
+    act(() => {
+      listener?.({ key: "accounts.usage", pluginId: "pier.codex", v: 7 });
+    });
+    expect(result.current).toEqual({
+      data: { v: 7 },
+      error: null,
+      status: "ready",
+    });
+
+    // 包装形状：非对象 payload 存于 payload 键。
+    act(() => {
+      listener?.({
+        key: "accounts.usage",
+        payload: [1, 2],
+        pluginId: "pier.codex",
+      });
+    });
+    expect(result.current.data).toEqual([1, 2]);
+
+    // key 不匹配的事件不改变 state。
+    act(() => {
+      listener?.({ key: "other.key", payload: "nope", pluginId: "pier.codex" });
+    });
+    expect(result.current.data).toEqual([1, 2]);
+    act(() => {
+      listener?.({ key: "accounts.usage", payload: "nope", pluginId: "other" });
+    });
+    expect(result.current.data).toEqual([1, 2]);
+
+    unmount();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("propagates plugin snapshot command failures to the error state", async () => {
+    const invoke = vi.fn(async () => {
+      throw new Error("projection not declared");
+    });
+    window.pier = {
+      canvasHost: {
+        inspect: host.inspect,
+        invoke,
+        snapshot: vi.fn(),
+        subscribe: vi.fn(() => () => undefined),
+      },
+    } as unknown as typeof window.pier;
+    const { result } = renderHook(() =>
+      useHostSnapshot("plugin:pier.codex/accounts.usage")
+    );
+    await waitFor(() =>
+      expect(result.current).toEqual({
+        data: null,
+        error: "projection not declared",
+        status: "error",
+      })
+    );
   });
 });

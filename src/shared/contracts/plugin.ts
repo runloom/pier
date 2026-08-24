@@ -227,6 +227,17 @@ const pluginManifestObjectSchema = z
     workbenchWidgets: z
       .array(pluginWorkbenchWidgetContributionSchema)
       .default([]),
+    /**
+     * 可投影给 canvas 的只读数据键（设计 §4.1）。未声明键的
+     * pluginData.snapshot 一律拒绝——纪律边界与 panels 同链。
+     *
+     * 投影数据顶层保留键：`payload`、`key`、`pluginId`（插件数据不得占用）。
+     * 信封统一为 `{ key, pluginId, ...数据 }`：对象 payload 走扁平合并，
+     * 非对象 payload 包装为 `{ key, pluginId, payload }`。
+     * 投影事件方法名约定：`projection.<key>`——插件的 rpc.handle 必须按此命名，
+     * 宿主仅转发该前缀且已声明键的事件。
+     */
+    dataProjections: z.array(z.string().min(1)).default([]),
     name: z.string().min(1),
     /**
      * Optional so hand-written manifests/tests need not list an empty array.

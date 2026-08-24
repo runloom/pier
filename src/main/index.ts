@@ -193,6 +193,7 @@ const appQuitController = createAppQuitController({
     appCore.services.tasks.dispose();
     windowManager.destroyAllForQuit();
     appCore.disposeManagedPluginDevRuntimeWatch();
+    appCore.disposePluginDataProjections();
     appCore.pluginHost.dispose();
     localControlRegistration.close().catch((error: unknown) => {
       appQuitLog.error("failed to close local control before quit", { error });

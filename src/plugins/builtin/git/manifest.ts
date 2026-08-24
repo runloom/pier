@@ -306,6 +306,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
   },
   workbenchWidgets: [],
+  dataProjections: [],
   settingsPages: [],
   description: "Built-in git command palette and terminal status support.",
   engines: { pier: ">=0.1.0" },
