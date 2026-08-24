@@ -111,3 +111,6 @@ playwright-report/
 # Worktree incarnation registry (runtime local state; path → UUID).
 # Written by worktree identity services; never commit.
 .pier/worktree-incarnations.json
+
+.commandcode/taste
+
