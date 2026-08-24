@@ -403,6 +403,11 @@ export const terminal = {
       "Couldn’t start the terminal session ({{error}}). Close this tab and try again.",
     ioThreadOom:
       "Not enough memory to start the terminal. Close this tab and try again.",
+    createFailed: "Couldn’t start the terminal session ({{error}}). Try again.",
+    createFailedUnknown: "Couldn’t start the terminal session. Try again.",
+    errorRetry: "Retry",
+    relaunchFailed:
+      "Couldn’t restart the terminal session ({{error}}). Close this tab and try again.",
     pasteConfirmTitle: "Paste into the terminal?",
     pasteConfirmBody:
       "This paste has {{lines}} lines and may run commands immediately.",

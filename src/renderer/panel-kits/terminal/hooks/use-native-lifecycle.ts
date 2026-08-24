@@ -214,7 +214,11 @@ export function useTerminalNativeLifecycle({
 
     const logCreateError = (err: unknown) => {
       console.error(`[terminal-panel] create ${panelId} failed:`, err);
-      markCreateFailure(err instanceof Error ? err.message : String(err));
+      markCreateFailure(
+        translateRef.current("terminal.createFailed", {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      );
     };
 
     const hasRenderableAnchor = () => readTerminalAnchorFrame(anchor) !== null;
@@ -266,7 +270,13 @@ export function useTerminalNativeLifecycle({
         return false;
       }
       if (!result.ok) {
-        markCreateFailure(result.error ?? "终端创建失败");
+        markCreateFailure(
+          result.error
+            ? translateRef.current("terminal.createFailed", {
+                error: result.error,
+              })
+            : translateRef.current("terminal.createFailedUnknown")
+        );
         return false;
       }
       notifyAgentRestoreOutcome({

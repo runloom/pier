@@ -398,6 +398,12 @@ export const terminal = {
       "터미널 세션을 시작하지 못했습니다({{error}}). 이 탭을 닫고 다시 시도하세요.",
     ioThreadOom:
       "메모리가 부족해 터미널을 시작할 수 없습니다. 이 탭을 닫고 다시 시도하세요.",
+    createFailed:
+      "터미널 세션을 시작하지 못했습니다({{error}}). 다시 시도하세요.",
+    createFailedUnknown: "터미널 세션을 시작하지 못했습니다. 다시 시도하세요.",
+    errorRetry: "다시 시도",
+    relaunchFailed:
+      "터미널 세션을 다시 시작하지 못했습니다({{error}}). 이 탭을 닫고 다시 시도하세요.",
     pasteConfirmTitle: "터미널에 붙여넣을까요?",
     pasteConfirmBody:
       "이 붙여넣기는 {{lines}}줄이며 명령이 바로 실행될 수 있습니다.",

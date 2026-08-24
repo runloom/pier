@@ -7,6 +7,7 @@ import type {
   ReactNode,
   RefObject,
 } from "react";
+import { useT } from "@/i18n/use-t.ts";
 import { computeMonoFontFamily } from "@/stores/font.store.ts";
 import {
   RestoredAgentResultView,
@@ -49,6 +50,7 @@ export function TerminalPanelBody({
   restoredTaskResult,
   terminalContentClassName,
 }: TerminalPanelBodyProps): ReactNode {
+  const t = useT();
   const showPlaceholder =
     !error && (!nativeTerminalReady || resizePlaceholderVisible);
   const fontFamily = computeMonoFontFamily(monoFontFamily);
@@ -108,7 +110,7 @@ export function TerminalPanelBody({
           <p className="text-muted-foreground text-sm">{error}</p>
           {errorRetryable ? (
             <Button onClick={onRetry} size="sm" type="button">
-              重试
+              {t("terminal.errorRetry")}
             </Button>
           ) : null}
         </div>
