@@ -41,6 +41,14 @@
     "src/main/services/agents/integrations": {
       "max": 43,
       "reason": "debt: provider files still flat; interactive-tool lifecycle helpers pending tools/ folder; evidence/transcript/hooks extracted"
+    },
+    "src/main/app-core": {
+      "max": 41,
+      "reason": "debt: 41 direct files at ratchet introduction; command-router/boot/wiring cluster pending domain split"
+    },
+    "src/plugins/builtin/files/renderer/tree": {
+      "max": 41,
+      "reason": "debt: 41 direct files at ratchet introduction; files tree kit pending feature-folder split"
     }
   }
 }
