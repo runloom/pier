@@ -19,10 +19,7 @@ import type {
   FilesDocumentPanelSource,
   FileViewMode,
 } from "../document/types.ts";
-import {
-  isDiskSourceRootAllowed,
-  parseFilesDocumentPanelSource,
-} from "../document/types.ts";
+import { parseFilesDocumentPanelSource } from "../document/types.ts";
 import { useFilesDocument } from "../document/use-document.ts";
 import type { FileEditorController } from "../editor/controller.ts";
 import { createFileEditorSessionId } from "../editor/session-id.ts";
@@ -58,10 +55,14 @@ import {
   FilePanelChrome,
   FilePanelSearchButton,
   FilePanelShell,
+  OutsideWorkspaceBanner,
   ReadOnlyErrorState,
   SidebarToggleButton,
 } from "./parts.tsx";
-import { breadcrumbSegmentsForSource, sourceTitle } from "./source.ts";
+import {
+  breadcrumbSegmentsForSource,
+  outsideWorkspaceStateFor,
+} from "./source.ts";
 import {
   peekFilesPanelViewSeed,
   rememberFilesPanelViewMode,
@@ -320,12 +321,19 @@ export function FilesGroupView({
     source: selectedSource,
   });
 
+  const { externalActiveFile, outsideWorkspace } = outsideWorkspaceStateFor(
+    selectedSource,
+    root,
+    panelContext
+  );
+
   const sidebar =
     root && !treeCollapsed ? (
       <FileTreeSidebar
         activeFilePath={activeFilePath}
         context={context}
         controller={controller}
+        {...(externalActiveFile ? { externalActiveFile } : {})}
         instanceId={groupId}
         onOpenFile={handleOpenFileFromTree}
         {...(panelContext?.projectRootPath
@@ -357,9 +365,6 @@ export function FilesGroupView({
     </>
   );
 
-  const outsideWorkspace =
-    selectedSource?.kind === "disk" &&
-    !isDiskSourceRootAllowed(selectedSource.root, panelContext);
   const breadcrumbContextMenu = filesBreadcrumbContextMenuHandler({
     context,
     ...(panelContext ? { panelContext } : {}),
@@ -380,16 +385,6 @@ export function FilesGroupView({
           ? { onContextMenu: breadcrumbContextMenu }
           : {})}
         segments={breadcrumbSegmentsForSource(selectedSource, projectName)}
-      />
-    );
-    body = (
-      <ReadOnlyErrorState
-        message={t(
-          "filePanel.errors.outsideWorkspace",
-          "This file is outside the current workspace and cannot be restored."
-        )}
-        t={t}
-        title={sourceTitle(selectedSource)}
       />
     );
   } else if (sourceState.kind === "invalid") {
@@ -448,21 +443,33 @@ export function FilesGroupView({
     // pinned/dirty/source)。共享视图侧绝不回写 —— 曾用 {pinned,source} 局部
     // 快照覆盖过完整 params,丢 context 导致面板落入 outside-workspace 错误态。
     body = (
-      <ResolvedFilePanel
-        context={context}
-        controller={controller}
-        editorSessionId={editorSessionId}
-        markdownAnchor={activeTab?.markdownAnchor}
-        markdownAnchorRequestId={activeTab?.markdownAnchorRequestId}
-        markdownRevealLine={activeTab?.markdownRevealLine}
-        mode={mode}
-        onModeChange={setMode}
-        panelContext={panelContext}
-        panelId={activeTab?.panelId}
-        searchRequest={searchRequest}
-        source={selectedSource}
-        t={t}
-      />
+      <div className="flex h-full min-h-0 flex-col">
+        {outsideWorkspace ? (
+          <OutsideWorkspaceBanner
+            context={context}
+            path={selectedSource.kind === "disk" ? selectedSource.path : ""}
+            root={selectedSource.kind === "disk" ? selectedSource.root : ""}
+            t={t}
+          />
+        ) : null}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ResolvedFilePanel
+            context={context}
+            controller={controller}
+            editorSessionId={editorSessionId}
+            markdownAnchor={activeTab?.markdownAnchor}
+            markdownAnchorRequestId={activeTab?.markdownAnchorRequestId}
+            markdownRevealLine={activeTab?.markdownRevealLine}
+            mode={mode}
+            onModeChange={setMode}
+            panelContext={panelContext}
+            panelId={activeTab?.panelId}
+            searchRequest={searchRequest}
+            source={selectedSource}
+            t={t}
+          />
+        </div>
+      </div>
     );
   } else {
     center = (
