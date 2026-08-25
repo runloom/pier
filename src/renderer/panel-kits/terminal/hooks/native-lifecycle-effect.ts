@@ -210,7 +210,7 @@ export function runTerminalNativeLifecycleEffect({
   const logCreateError = (err: unknown) => {
     console.error(`[terminal-panel] create ${panelId} failed:`, err);
     markCreateFailure(
-      translateRef.current("terminal.createFailed", {
+      translateRef.current("terminal.ghosttyHost.createFailed", {
         error: err instanceof Error ? err.message : String(err),
       })
     );
@@ -270,10 +270,10 @@ export function runTerminalNativeLifecycleEffect({
     if (!result.ok) {
       markCreateFailure(
         result.error
-          ? translateRef.current("terminal.createFailed", {
+          ? translateRef.current("terminal.ghosttyHost.createFailed", {
               error: result.error,
             })
-          : translateRef.current("terminal.createFailedUnknown")
+          : translateRef.current("terminal.ghosttyHost.createFailedUnknown")
       );
       return false;
     }

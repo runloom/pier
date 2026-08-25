@@ -110,7 +110,7 @@ export function TerminalPanelBody({
           <p className="text-muted-foreground text-sm">{error}</p>
           {errorRetryable ? (
             <Button onClick={onRetry} size="sm" type="button">
-              {t("terminal.errorRetry")}
+              {t("terminal.ghosttyHost.errorRetry")}
             </Button>
           ) : null}
         </div>

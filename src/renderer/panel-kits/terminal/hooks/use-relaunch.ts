@@ -86,7 +86,7 @@ export function useTerminalRelaunch({
         );
         if (!disposed) {
           showTerminalError(
-            i18next.t("terminal.relaunchFailed", {
+            i18next.t("terminal.ghosttyHost.relaunchFailed", {
               error: error instanceof Error ? error.message : String(error),
             })
           );
