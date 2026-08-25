@@ -113,7 +113,7 @@ hooks 返回结构化数据；格式化一律走 `@pier/ui/format.tsx` 既有 fo
 ### 6.4 文档
 
 - AGENTS.md「工作台组件贡献点 workbenchWidgets」整节替换为 pluginData 投影说明；「操作反馈规范」「弹窗表单规范」等工作台引用句同步修订
-- `docs/design/workbench-update-policy.md` 删除（刷新语义并入 skill 配方）
+- `docs/archive/design/workbench-update-policy.md` 删除（刷新语义并入 skill 配方）
 - CHANGELOG 记录移除与迁移指引
 
 ### 6.5 保留的共享设施

@@ -752,7 +752,7 @@ git commit -m "fix: seal foreground activity turn transitions"
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-07-13-agent-status-adapter-contract-audit.md`
-- Modify: `docs/superpowers/specs/2026-08-02-foreground-activity-turn-semantics-hardening-design.md` only if implementation proves a named interface must differ; behavior and ownership may not drift silently.
+- Modify: `docs/archive/superpowers/specs/2026-08-02-foreground-activity-turn-semantics-hardening-design.md` only if implementation proves a named interface must differ; behavior and ownership may not drift silently.
 - Verify: all files changed since `9b65adc2`。
 
 **Interfaces:**

@@ -7,7 +7,7 @@
 > 审查：2026-07-19 产品 / Electron 架构 / 竞品 / 无障碍·可靠性 四方并行审查 → **approve-with-changes**；本修订吸收全部 P0 与约定 P1  
 > 范围：仅「需要你处理」注意力提示音；**不含**完成音、终端响铃、音量滑条、自定义音频文件、通知历史
 >
-> **废止说明（2026-07-19）**：其中「不含完成音 / 完成音另开产品」已被 [`2026-07-19-agent-notification-events-design.md`](./2026-07-19-agent-notification-events-design.md) 废止并覆盖；本文件其余提示音管线（防双响、单窗、跟随 shown）仍然有效。
+> **废止说明（2026-07-19）**：其中「不含完成音 / 完成音另开产品」已被 [`../../../superpowers/specs/2026-07-19-agent-notification-events-design.md`](../../../superpowers/specs/2026-07-19-agent-notification-events-design.md) 废止并覆盖；本文件其余提示音管线（防双响、单窗、跟随 shown）仍然有效。
 
 ## 1. 目标与完成标准
 
@@ -415,9 +415,9 @@ sound?: string;   // darwin system 路径传 "default"；其它省略
 ## 11. 参考
 
 - [2026-07-16 Agent 注意力设置与状态准确性](./2026-07-16-agent-attention-settings-and-status-accuracy-design.md)  
-- [2026-07-15 Agent Runtime Index 与 Attention](./2026-07-15-agent-runtime-index-and-attention-design.md)  
+- [2026-07-15 Agent Runtime Index 与 Attention](../../../superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md)  
 - Orca：自定义音 ⇒ native silent + HTMLAudio；delivered 后播；darwin `sound:default`  
 - Vibe Kanban：lite 设置；**不要**独立于 push 的 afplay  
 - Pier：`resources/fonts` + `pier-asset` + `extraResources`；`src/main/csp.ts`  
-- [AGENTS.md](../../../AGENTS.md)  
+- [AGENTS.md](../../../../AGENTS.md)  
 

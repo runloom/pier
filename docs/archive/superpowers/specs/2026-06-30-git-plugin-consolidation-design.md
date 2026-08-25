@@ -12,7 +12,7 @@
 
 与此同时，git 能力在 main 与 preload 都已就绪（`git-service.ts` 约 379 行，`preload/git-api.ts` 暴露 getStatus / watch / stage 等），但 renderer 端几乎没有 git UI，代码变更预览面板尚未实现。
 
-能力评分清单（`docs/superpowers/specs/2026-06-25-ai-workbench-capability-scorecard.md`）已给定调：
+能力评分清单（`docs/archive/superpowers/specs/2026-06-25-ai-workbench-capability-scorecard.md`）已给定调：
 
 - 「Git 变更面板与外部审查入口」是 P0，但 Pier **不做通用 AI 代码审查**，只做变更 diff 面板 + 跨 worktree/agent 可见性 + 证据绑定 + 一键交给 Claude/Codex 审查的入口。
 - 「工作树隔离」是 P1，其能力说明本就包含「diff/证据对比」。

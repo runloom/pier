@@ -8,7 +8,7 @@
 
 **Tech Stack:** Electron 43 · React 19 · TypeScript strict · Vitest · 现有 `pier:terminal:send-text` IPC
 
-**Spec:** `docs/superpowers/specs/2026-07-21-rich-input-attachments-design.md`（`ec687332`）
+**Spec:** `docs/archive/superpowers/specs/2026-07-21-rich-input-attachments-design.md`（`ec687332`）
 
 ## Global Constraints
 

@@ -10,7 +10,7 @@
 
 ## 全局约束
 
-- 设计依据：`docs/superpowers/specs/2026-08-02-terminal-tab-drag-input-routing-diagnostics-design.md`。
+- 设计依据：`docs/archive/superpowers/specs/2026-08-02-terminal-tab-drag-input-routing-diagnostics-design.md`。
 - 直接在当前工作目录修改；**全过程不得执行 `git commit`、`git push` 或创建 PR**。
 - renderer 业务代码不得直接使用 Dockview 运行时 API；Dockview 生命周期逻辑只允许放在 `src/renderer/components/workspace/`。
 - 输入 owner 只能由其生命周期所有者释放；不得在终端聚焦时清空所有 Web owner。

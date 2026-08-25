@@ -2,7 +2,7 @@
 
 日期：2026-07-31  
 状态：**产品已确认（2026-07-31）** — **SCM Review 终态唯一权威**。  
-**树跳转 Commit 条件** 以 [`2026-08-14-git-review-tree-nav-pin-design.md`](./2026-08-14-git-review-tree-nav-pin-design.md) 为准：estimate 头可见 ≠ 导航成功。  
+**树跳转 Commit 条件** 以 [`../../archive/superpowers/specs/2026-08-14-git-review-tree-nav-pin-design.md`](../../archive/superpowers/specs/2026-08-14-git-review-tree-nav-pin-design.md) 为准：estimate 头可见 ≠ 导航成功。  
 体感、加载、渲染、导航、失败态、骨架 UI、验收一体定义；**禁止**症状补丁或「先合半套」当结案。
 
 产品硬约束（继承，不得用本文开脱）：
@@ -21,7 +21,7 @@
 | `2026-07-27-git-review-stable-ledger-design.md` | content 槽几何 / LRU | **仅**适用于本文允许进入正文的 content 槽 |
 | `2026-07-27-diffshub-full-alignment-design.md` | scroll 单写者、CodeView 单实例 | 引擎层保留；**SCM 体感不以 DiffsHub 为准** |
 | `2026-07-25-git-review-codeview-endstate-design.md` | 真正文、soft-retain、stage、failure | 仍有效；显示集以本文 bodyClass 为准；失败面细节见 2026-08-02 契约 |
-| `docs/superpowers/evidence/diffs-upstream-api-verification.md` | Pierre/DiffsHub 上游 API 冻结 | 引擎集成证据 |
+| `docs/archive/superpowers/evidence/diffs-upstream-api-verification.md` | Pierre/DiffsHub 上游 API 冻结 | 引擎集成证据 |
 
 **实现禁令：** 未对照本文时，禁止再合「只调骨架 CSS / 只改 CodeView lineDiffType / 只调 demand 并发 / finishTerminal」类症状补丁充当终态。  
 **里程碑：** PR 可切片，但 **G0–G6 全绿前不得宣称 Review 已金标准**。

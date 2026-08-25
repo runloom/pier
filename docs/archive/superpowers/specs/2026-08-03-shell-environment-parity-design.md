@@ -5,7 +5,7 @@
 | 日期 | 2026-08-03 |
 | 状态 | Draft（评审修订） |
 | 作者 | — |
-| 相关 | `docs/superpowers/specs/2026-07-07-project-environment-flatten-design.md`、`docs/superpowers/specs/2026-08-02-notification-focus-routed-delivery-design.md` |
+| 相关 | `docs/archive/superpowers/specs/2026-07-07-project-environment-flatten-design.md`、`docs/superpowers/specs/2026-08-02-notification-focus-routed-delivery-design.md` |
 | 核心实现 | `src/main/services/process-environment-service.ts` |
 
 ## Overview
@@ -1140,7 +1140,7 @@ export interface ProcessEnvironmentService {
 - app-update 进程级通知：`src/main/services/app-updates/notify-ready.ts`
 - PATH-only：`src/main/services/agents/detection-service.ts`
 - Task 非 login：`src/main/services/tasks/background-runner.ts`
-- 项目环境：`docs/superpowers/specs/2026-07-07-project-environment-flatten-design.md`
+- 项目环境：`docs/archive/superpowers/specs/2026-07-07-project-environment-flatten-design.md`
 - 通知投递：`docs/superpowers/specs/2026-08-02-notification-focus-routed-delivery-design.md`
 - worktree project env：`src/main/app-core/commands/worktree.ts`
 - restore bug：`src/main/ipc/terminal/create-env.ts`

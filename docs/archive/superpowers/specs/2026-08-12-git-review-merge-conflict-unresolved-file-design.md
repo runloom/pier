@@ -9,8 +9,8 @@
 
 | 文档 | 角色 | 与本文关系 |
 |------|------|------------|
-| `2026-07-31-git-review-gold-standard-endstate-design.md` | SCM Review 终态权威（多文件、bodyClass、ledger） | **继承**；冲突文件 bodyClass=content 的正文由本文定义 |
-| `2026-07-27-diffshub-full-alignment-design.md` | CodeView 单实例 / scroll 单写者 | **普通 diff 仍遵守**；冲突 **不**并入 CodeView 成员 id 集 |
+| `../../../superpowers/specs/2026-07-31-git-review-gold-standard-endstate-design.md` | SCM Review 终态权威（多文件、bodyClass、ledger） | **继承**；冲突文件 bodyClass=content 的正文由本文定义 |
+| `../../../superpowers/specs/2026-07-27-diffshub-full-alignment-design.md` | CodeView 单实例 / scroll 单写者 | **普通 diff 仍遵守**；冲突 **不**并入 CodeView 成员 id 集 |
 | **本文** | 冲突详情 + 解析 UI 的唯一实现权威 | 冲突渲染 / 契约 / 写盘闭环 |
 
 **实现禁令：**

@@ -1,5 +1,5 @@
 /**
- * 统一消息中心契约（设计文档 2026-07-24-unified-notification-center-design.md §5）。
+ * 统一消息中心契约（设计文档 docs/archive/superpowers/specs/2026-07-24-unified-notification-center-design.md §5）。
  *
  * - main 侧 NotificationCenterService 是唯一写入方：normalize → dedupe → ring buffer → 广播。
  * - renderer 镜像 store 只读快照；toast / popover 共用同一条 AppNotification。

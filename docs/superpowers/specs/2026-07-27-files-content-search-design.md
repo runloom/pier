@@ -2,7 +2,7 @@
 
 Date: 2026-07-27  
 Status: accepted / implementing（契约 + main 骨架先落地；搜索面板 UI 后置）  
-Parent: `docs/superpowers/plans/2026-07-10-files-core-stability.md` 任务 6–7、9  
+Parent: `docs/archive/superpowers/plans/2026-07-10-files-core-stability.md` 任务 6–7、9  
 Depends: `docs/superpowers/specs/2026-07-17-files-path-query-and-quick-open-design.md`（path mode 已落地）
 
 ## 1. 问题

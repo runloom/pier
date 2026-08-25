@@ -2,7 +2,7 @@
 
 > **SUPERSEDED for product semantics by v9.0.** Do **not** reintroduce
 > `approvals.json`, `approval-required`, or “enabled cannot authorize discovery”.
-> Normative design: `docs/superpowers/specs/2026-07-14-project-skills-management-design.md` (v9.0).
+> Normative design: `docs/archive/superpowers/specs/2026-07-14-project-skills-management-design.md` (v9.0).
 > This plan remains a historical implementation checklist; treat Goal/Constraints
 > below as obsolete wherever they conflict with v9.
 
@@ -14,7 +14,7 @@
 
 **Tech Stack:** Electron 43 · TypeScript 6 strict · Zod · Vitest 4 · React 19 · Zustand 5 · Biome · 现有 `FilePathTransactionLock` / `file-path-identity` / `FileSafeWriter` 先例
 
-**Spec:** `docs/superpowers/specs/2026-07-14-project-skills-management-design.md`（**v9.0**）
+**Spec:** `docs/archive/superpowers/specs/2026-07-14-project-skills-management-design.md`（**v9.0**）
 
 ## Global Constraints
 

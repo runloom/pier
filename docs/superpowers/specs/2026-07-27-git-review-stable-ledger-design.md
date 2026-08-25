@@ -3,7 +3,7 @@
 日期：2026-07-27  
 状态：**部分 supersede（2026-07-31，导航 Commit 2026-08-14）** — **终态唯一权威** 为  
 [`2026-07-31-git-review-gold-standard-endstate-design.md`](./2026-07-31-git-review-gold-standard-endstate-design.md)。  
-树跳转钉住见 [`2026-08-14-git-review-tree-nav-pin-design.md`](./2026-08-14-git-review-tree-nav-pin-design.md)（K6b 第二次 scroll 仅目标自身 estimate→正文）。  
+树跳转钉住见 [`../../archive/superpowers/specs/2026-08-14-git-review-tree-nav-pin-design.md`](../../archive/superpowers/specs/2026-08-14-git-review-tree-nav-pin-design.md)（K6b 第二次 scroll 仅目标自身 estimate→正文）。  
 **SCM 体感 / 正文成员资格 / 点击定位 / 加载主路径** 以金标准为准（zed-feel 为细节补充）。  
 本文仍管辖：**已进入正文表面的** content 槽之高度编码、pending→loaded 几何、body LRU 字节/行闸。  
 **废止作体验模型：**「凡 index `sectionKey` 必进 CodeView 全量 estimate 账本」（见金标准 / zed-feel §0 K2、§3）。  

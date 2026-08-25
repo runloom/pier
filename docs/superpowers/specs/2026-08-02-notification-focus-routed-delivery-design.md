@@ -3,8 +3,8 @@
 **日期：** 2026-08-02  
 **状态：** 已实施  
 **前置：**  
-- [2026-07-24 统一消息中心](./2026-07-24-unified-notification-center-design.md)  
-- [2026-07-26 多窗口通知投递](./2026-07-26-multi-window-notification-delivery-design.md)
+- [2026-07-24 统一消息中心](../../archive/superpowers/specs/2026-07-24-unified-notification-center-design.md)  
+- [2026-07-26 多窗口通知投递](../../archive/superpowers/specs/2026-07-26-multi-window-notification-delivery-design.md)
 
 ## 1. 一句话
 

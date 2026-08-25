@@ -2,7 +2,7 @@
 
 > **For agentic workers:** Implement task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Do not expand scope into Canvas attach, Agents 侧栏, or host DAG.
 
-**Goal:** 落地 [Agent Runtime Index 与注意力通知产品设计](../specs/2026-07-15-agent-runtime-index-and-attention-design.md) 的 **P1（L1/L3/L4）** 与 **P1.5（L2）**：本机 Agent Index facade、标题栏全局计数可点、命令面板发现列表、L4 `focusWaiting`（仅快捷键）、Attention 系统通知 click→focus。FA 仍为活动语义唯一源；本窗 FA 广播隔离不变。
+**Goal:** 落地 [Agent Runtime Index 与注意力通知产品设计](../../../superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md) 的 **P1（L1/L3/L4）** 与 **P1.5（L2）**：本机 Agent Index facade、标题栏全局计数可点、命令面板发现列表、L4 `focusWaiting`（仅快捷键）、Attention 系统通知 click→focus。FA 仍为活动语义唯一源；本窗 FA 广播隔离不变。
 
 **Architecture:**
 
@@ -19,7 +19,7 @@ FA aggregator.snapshot()          ← 语义源（已支持无 windowId = 本机
 
 **Tech Stack:** Electron IPC + zod shared contracts + main service facade + zustand store（Index 专用，勿写入 FA store）+ 现有 QuickPick / action registry + vitest。
 
-**Spec:** [docs/superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md](../specs/2026-07-15-agent-runtime-index-and-attention-design.md)
+**Spec:** [docs/superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md](../../../superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md)
 
 ### main 同步纪要（2026-07-15 · `54665211`）
 

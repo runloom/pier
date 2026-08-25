@@ -556,7 +556,7 @@ export interface NotificationCenterSnapshot {
 ## 8. 实施计划
 
 详细实施方案（任务分解、文件目录结构、测试矩阵、验收标准、风险登记）见：
-**`docs/superpowers/plans/2026-07-24-unified-notification-center.md`**。
+**`docs/archive/superpowers/plans/2026-07-24-unified-notification-center.md`**。
 
 里程碑概览：
 

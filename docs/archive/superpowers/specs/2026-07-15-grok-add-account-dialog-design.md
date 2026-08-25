@@ -3,7 +3,7 @@
 Date: 2026-07-15  
 Status: partially superseded  
 Ownership note: nested plugin Dialog ownership is superseded by
-`docs/superpowers/specs/2026-07-15-host-content-dialog-architecture-design.md`.
+`docs/archive/superpowers/specs/2026-07-15-host-content-dialog-architecture-design.md`.
 Product UX decisions below (two tabs, footer actions, waiting rules) remain valid.
 
 ## Goals

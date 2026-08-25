@@ -2,7 +2,7 @@
 
 - 日期：2026-06-29
 - 状态：设计待评审
-- 相关前作：`docs/superpowers/specs/2026-06-23-keyboard-routing-design.md`（本设计取代其中的焦点归属部分）
+- 相关前作：`docs/archive/superpowers/specs/2026-06-23-keyboard-routing-design.md`（本设计取代其中的焦点归属部分）
 - 触发问题：终端搜索时，终端光标与搜索框光标高速交替闪烁
 
 ## 1. 背景与目标
