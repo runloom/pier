@@ -9,22 +9,11 @@ import {
 import { Item, ItemActions, ItemTitle } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import {
-  getCanvasCommentSurfaces,
-  getCanvasCommentSurfacesRevision,
-  onCanvasCommentSurfacesChanged,
-} from "@plugins/api/canvas-comment-surfaces.ts";
 import type { CommentFailureReason } from "@shared/contracts/comments/primitives.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import i18next from "i18next";
 import { Trash2 } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ContentDialogFooterActions } from "@/components/common/dialogs/footer-actions.tsx";
 import { useContentDialogFooter } from "@/components/common/dialogs/use-footer.ts";
 import { useT } from "@/i18n/use-t.ts";
@@ -41,12 +30,15 @@ import {
 import { useUncommittedLivePaths } from "./live-paths.ts";
 import {
   formatCommentsForComposer,
-  listProcessableComments,
   type ProcessableCommentItem,
   pathInLiveSet,
   processableItemLocationText,
 } from "./processable.ts";
 import { revealComment } from "./reveal.ts";
+import {
+  projectProcessableComments,
+  useProcessableCommentItems,
+} from "./use-processable-items.ts";
 
 function commentFailureTitleKey(
   reason: CommentFailureReason
@@ -101,21 +93,7 @@ function CommentsActionDialogBody({
   const livePaths = useUncommittedLivePaths(gitRoot);
   // livePaths null：仍列 md/canvas；git-diff 在 processable 内因 livePaths 省略而跳过。
   // livePaths Set：git 路径过滤 + md/canvas。
-  const canvasSurfacesRevision = useSyncExternalStore(
-    onCanvasCommentSurfacesChanged,
-    getCanvasCommentSurfacesRevision,
-    () => 0
-  );
-  // Always pass the current surface map (may be empty). Empty ≠ omit:
-  // omit used to mean "no options" but we still want unknown vs soft/located.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: revision drives re-read of module map
-  const items = useMemo(() => {
-    const canvasSurfaces = getCanvasCommentSurfaces();
-    return listProcessableComments(project?.threads, {
-      canvasSurfaces,
-      ...(livePaths === null ? {} : { livePaths }),
-    });
-  }, [canvasSurfacesRevision, livePaths, project?.threads]);
+  const items = useProcessableCommentItems(project?.threads, livePaths);
 
   useEffect(() => {
     setTitle(t("terminal.statusBar.item.comments.dialogTitle"));
@@ -268,12 +246,9 @@ function CommentsActionDialogBody({
     }
     setBusy(true);
     try {
-      // Re-project with live surfaces at handoff — do not use a stale list that
-      // was built before the canvas preview registered its surface.
-      const snapshot = listProcessableComments(project?.threads, {
-        canvasSurfaces: getCanvasCommentSurfaces(),
-        ...(livePaths === null ? {} : { livePaths }),
-      });
+      // Re-project with live surfaces at handoff — do not use a stale list
+      // built before a preview registered its surface.
+      const snapshot = projectProcessableComments(project?.threads, livePaths);
       if (snapshot.length === 0) {
         setBusy(false);
         return;

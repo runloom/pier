@@ -53,6 +53,11 @@ export type UninstallChannel =
   | { kind: "pipx-uninstall"; package: string }
   | { kind: "uv-uninstall"; package: string };
 
+/** Remote latest for channels without npm/brew/PyPI (official script). */
+export type AgentLatestProbe =
+  | { kind: "cursor-install-script"; url: string }
+  | { kind: "http-text"; url: string };
+
 export interface AgentLifecycleSpec {
   readonly agentId: AgentKind;
   /**
@@ -67,6 +72,11 @@ export interface AgentLifecycleSpec {
   readonly expectedBins: readonly string[];
   readonly guideCommands?: readonly AgentLifecycleGuideCommand[];
   readonly install: readonly InstallChannel[];
+  /**
+   * Remote latest for path/script installs. Brew/npm still use their own
+   * indexes when that is the detected source.
+   */
+  readonly latestProbe?: AgentLatestProbe;
   /** npm package used for latest-version probe when install uses npm. */
   readonly npmPackageForLatest?: string;
   readonly support: AgentLifecycleSupport;
@@ -84,6 +94,22 @@ export type AgentLifecycleSpecMap = {
   readonly [K in AgentKind]: AgentLifecycleSpec;
 };
 
+function hasIndexedLatest(spec: AgentLifecycleSpec): boolean {
+  const hasNpmLatest =
+    Boolean(spec.npmPackageForLatest) ||
+    spec.install.some((c) => c.kind === "npm") ||
+    spec.update.some((c) => c.kind === "npm-latest");
+  const hasBrewLatest =
+    spec.install.some((c) => c.kind === "brew") ||
+    spec.update.some((c) => c.kind === "brew-upgrade");
+  const hasPypiLatest =
+    spec.install.some((c) => c.kind === "uv" || c.kind === "pipx") ||
+    spec.update.some(
+      (c) => c.kind === "uv-upgrade" || c.kind === "pipx-upgrade"
+    );
+  return hasNpmLatest || hasBrewLatest || hasPypiLatest;
+}
+
 /** Derive update UX mode from channels + latest probe capability. */
 export function resolveUpdateMode(
   spec: AgentLifecycleSpec
@@ -94,22 +120,20 @@ export function resolveUpdateMode(
   if (spec.update.length === 0) {
     return "none";
   }
-  const hasNpmLatest =
-    Boolean(spec.npmPackageForLatest) ||
-    spec.install.some((c) => c.kind === "npm") ||
-    spec.update.some((c) => c.kind === "npm-latest");
-  const hasBrewLatest =
-    spec.install.some((c) => c.kind === "brew") ||
-    spec.update.some((c) => c.kind === "brew-upgrade");
-  // uv / pipx share a PyPI latest probe (mistral-vibe, kimi-cli, aider-chat).
-  const hasPypiLatest =
-    spec.install.some((c) => c.kind === "uv" || c.kind === "pipx") ||
-    spec.update.some(
-      (c) => c.kind === "uv-upgrade" || c.kind === "pipx-upgrade"
-    );
-  if (hasNpmLatest || hasBrewLatest || hasPypiLatest) {
+  if (hasIndexedLatest(spec) || spec.latestProbe) {
     return "versioned";
   }
   // self / reinstall without a remote latest probe
   return "reinstall";
+}
+
+/** Script-only reinstall: versioned solely by latestProbe, or still reinstall. */
+export function specCanForceReinstall(spec: AgentLifecycleSpec): boolean {
+  if (spec.support !== "full" || spec.update.length === 0) {
+    return false;
+  }
+  if (!spec.update.some((channel) => channel.kind === "reinstall")) {
+    return false;
+  }
+  return !hasIndexedLatest(spec);
 }

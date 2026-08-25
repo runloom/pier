@@ -81,4 +81,30 @@ describe("AppUpdateSection", () => {
       screen.getByRole("button", { name: "Restart and Install" })
     ).toBeEnabled();
   });
+
+  it("renders a friendly error with next step and raw detail", async () => {
+    useAppUpdateStore.setState({
+      snapshot: {
+        currentVersion: "0.1.0",
+        errorDetail: "net::ERR_INTERNET_DISCONNECTED",
+        errorKind: "offline",
+        state: "error",
+      },
+    });
+
+    render(<AppUpdateSection />);
+    expect(
+      await screen.findByText("Network connection failed")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Check your network connection and try again.")
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("net::ERR_INTERNET_DISCONNECTED")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Download" })).toBeEnabled();
+    expect(
+      screen.getByRole("button", { name: "Check for Updates" })
+    ).toBeEnabled();
+  });
 });

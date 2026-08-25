@@ -372,6 +372,22 @@ importers:
         specifier: 3.5.13
         version: 3.5.13(typescript@6.0.3)
 
+  packages/plugin-agent-splits:
+    dependencies:
+      '@pier/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/plugin-api:
     dependencies:
       '@pier/ui':
@@ -479,22 +495,6 @@ importers:
       zod:
         specifier: 4.4.3
         version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: 24.13.3
-        version: 24.13.3
-
-  packages/plugin-tmux:
-    dependencies:
-      '@pier/plugin-api':
-        specifier: workspace:*
-        version: link:../plugin-api
-      react:
-        specifier: 19.2.7
-        version: 19.2.7
-      react-dom:
-        specifier: 19.2.7
-        version: 19.2.7(react@19.2.7)
     devDependencies:
       '@types/node':
         specifier: 24.13.3

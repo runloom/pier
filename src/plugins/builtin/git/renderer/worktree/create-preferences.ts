@@ -2,7 +2,7 @@ import type { CreateMode } from "./create-form.tsx";
 
 const CREATE_MODE_KEY = "pier.git.worktree.createMode";
 const START_TASK_KEY = "pier.git.worktree.createStartTask";
-const DEFAULT_CREATE_MODE: CreateMode = "ai";
+const DEFAULT_CREATE_MODE: CreateMode = "custom";
 const DEFAULT_START_TASK = false;
 
 function createPrefsStorage(): Storage | null {

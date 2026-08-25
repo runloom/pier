@@ -17,6 +17,7 @@ function entryWith(overrides: {
       apiVersion: 1,
       commands: [],
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       configuration: {
         properties: {
@@ -50,7 +51,7 @@ function entryWith(overrides: {
         files: {},
         locales: ["en", "zh-CN"],
       },
-      name: "Git",
+      name: "git",
       panels: [],
       permissions: [],
       source: { kind: "builtin" },
@@ -191,10 +192,10 @@ describe("resolvePluginConfigurationTitle", () => {
   it("configuration.title 优先，缺省回落插件显示名", () => {
     expect(
       resolvePluginConfigurationTitle(
-        entryWith({ configurationTitle: "Git Settings" }),
+        entryWith({ configurationTitle: "git settings" }),
         "en"
       )
-    ).toBe("Git Settings");
-    expect(resolvePluginConfigurationTitle(entryWith({}), "en")).toBe("Git");
+    ).toBe("git settings");
+    expect(resolvePluginConfigurationTitle(entryWith({}), "en")).toBe("git");
   });
 });

@@ -151,7 +151,7 @@ export const settingsSkills = {
   leaveEditBody: "Unsaved changes to skill content will be lost.",
   confirmGitDeleteTitle: "Delete the agent skill folder at {{target}}?",
   confirmGitDeleteBody:
-    "This path is tracked by Git. Deleting it will show up as a deletion in the repository changes.",
+    "This path is tracked by git. Deleting it will show up as a deletion in the repository changes.",
   confirmContentDeleteTitle: "Delete skill {{skill}}?",
   confirmContentDeleteBody:
     "Removes the skill from this project. Turning the switch off only hides it from agents. This cannot be undone.",

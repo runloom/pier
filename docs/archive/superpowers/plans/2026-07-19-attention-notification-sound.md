@@ -19,7 +19,7 @@ preferences.agentAttention (+ soundEnabled, soundId)
 
 **Tech Stack:** Electron Notification + HTMLAudioElement + zod preferences + pier-asset + vitest + 现有 NotificationsSection / Attention 管道。
 
-**Spec:** [`docs/superpowers/specs/2026-07-19-attention-notification-sound-design.md`](../../../superpowers/specs/2026-07-19-attention-notification-sound-design.md)（审查修订版）
+**Spec:** [`docs/archive/superpowers/specs/2026-07-19-attention-notification-sound-design.md`](../specs/2026-07-19-attention-notification-sound-design.md)（审查修订版）
 
 ## Global Constraints
 

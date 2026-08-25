@@ -30,7 +30,7 @@ describe("files tree settings", () => {
       }
     );
     expect(properties?.[FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY]).toMatchObject(
-      { default: true, order: 30, type: "boolean" }
+      { default: false, order: 30, type: "boolean" }
     );
   });
 

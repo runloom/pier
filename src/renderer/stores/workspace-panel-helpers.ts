@@ -6,6 +6,8 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 
 export interface TerminalPanelParams {
+  /** 后台创建：跳过可见性门控，挂载即建面（agents.start 委派路径）。 */
+  backgroundCreate?: boolean;
   context?: PanelContext;
   exitPresentation?: TerminalExitPresentation;
   launchId?: string;
@@ -31,6 +33,7 @@ export function terminalPanelContext(
 }
 
 export function terminalPanelParams(args: {
+  backgroundCreate?: boolean | undefined;
   context: PanelContext | undefined;
   exitPresentation?: TerminalExitPresentation | undefined;
   launchId: string | undefined;
@@ -39,6 +42,7 @@ export function terminalPanelParams(args: {
 }): TerminalPanelParams | undefined {
   if (
     !(
+      args.backgroundCreate ||
       args.context ||
       args.exitPresentation ||
       args.launchId ||
@@ -49,6 +53,7 @@ export function terminalPanelParams(args: {
     return;
   }
   return {
+    ...(args.backgroundCreate && { backgroundCreate: args.backgroundCreate }),
     ...(args.context && { context: args.context }),
     ...(args.exitPresentation && { exitPresentation: args.exitPresentation }),
     ...(args.launchId && { launchId: args.launchId }),

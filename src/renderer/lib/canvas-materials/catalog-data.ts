@@ -100,4 +100,111 @@ export const DATA_CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> =
         "}",
       ].join("\n"),
     },
+    activityOverview: {
+      nestedTypes: [
+        {
+          name: "CanvasActivityCounts",
+          props: [
+            attr("inProgress", "number", "aoInProgress"),
+            attr("needsYou", "number", "aoNeedsYou"),
+            attr("running", "number", "aoRunning"),
+          ],
+          signature: [
+            "interface CanvasActivityCounts {",
+            "  inProgress: number",
+            "  needsYou: number",
+            "  running: number",
+            "}",
+          ].join("\n"),
+        },
+        {
+          name: "CanvasActivityRow",
+          props: [
+            attr("kind", '"agent" | "shell" | "task"', "aoKind"),
+            attr("panelId", "string", "aoPanelId"),
+            attr("updatedAt", "number", "aoUpdatedAt"),
+          ],
+          signature: [
+            "interface CanvasActivityRow {",
+            '  kind: "agent" | "shell" | "task"',
+            "  panelId: string",
+            "  updatedAt: number",
+            "}",
+          ].join("\n"),
+        },
+      ],
+      parameters: [],
+      props: [
+        attr("counts", "CanvasActivityCounts", "aoCounts"),
+        attr("rows", "CanvasActivityRow[]", "aoRows"),
+      ],
+      returnsSignature: [
+        "interface CanvasActivityOverview {",
+        "  counts: CanvasActivityCounts",
+        "  rows: CanvasActivityRow[]",
+        "}",
+      ].join("\n"),
+      signature: "function useActivityOverview(): CanvasActivityOverview",
+      usage: [
+        "const overview = useActivityOverview()",
+        "return (",
+        '  <Text tone="secondary">',
+        "    {overview.counts.running} running ·",
+        "    {overview.counts.needsYou} need you",
+        "  </Text>",
+        ")",
+      ].join("\n"),
+    },
+    costOverview: {
+      nestedTypes: [],
+      parameters: [],
+      props: [
+        attr("refresh", "() => Promise<void>", "coRefresh"),
+        attr("snapshot", "object | null", "coSnapshot"),
+        attr("status", '"error" | "loading" | "ready"', "coStatus"),
+      ],
+      returnsSignature: [
+        "interface CanvasCostOverview {",
+        "  refresh(): Promise<void>",
+        "  snapshot: object | null",
+        '  status: "error" | "loading" | "ready"',
+        "}",
+      ].join("\n"),
+      signature: "function useCostOverview(): CanvasCostOverview",
+      usage: [
+        "const cost = useCostOverview()",
+        'if (cost.status !== "ready") {',
+        "  return <Spinner />",
+        "}",
+        "return <Button onClick={() => cost.refresh()}>Refresh</Button>",
+      ].join("\n"),
+    },
+    systemResources: {
+      nestedTypes: [],
+      parameters: [],
+      props: [
+        attr(
+          "cpuHistory",
+          "readonly { ts: number; value: number }[]",
+          "srCpuHistory"
+        ),
+        attr("error", "string | null", "srError"),
+        attr("snapshot", "object | null", "srSnapshot"),
+        attr("status", '"error" | "loading" | "ready"', "srStatus"),
+      ],
+      returnsSignature: [
+        "interface CanvasSystemResources {",
+        "  cpuHistory: readonly { ts: number; value: number }[]",
+        "  error: string | null",
+        "  snapshot: object | null",
+        '  status: "error" | "loading" | "ready"',
+        "}",
+      ].join("\n"),
+      signature: "function useSystemResources(): CanvasSystemResources",
+      usage: [
+        "const resources = useSystemResources()",
+        "const latest = resources.cpuHistory.at(-1)",
+        'return <Text>{latest ? latest.value + "%" : "…"}</Text>',
+      ].join("\n"),
+    },
   };

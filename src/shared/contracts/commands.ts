@@ -24,6 +24,7 @@ import { fileCommandSchemas } from "./file/commands.ts";
 import { gitCommandSchemas } from "./git/commands.ts";
 import { hostControlCommandSchemas } from "./host/control-commands.ts";
 import {
+  liveModulesCanvasTrustRequestSchema,
   liveModulesCompileRequestSchema,
   liveModulesGetUrlRequestSchema,
   liveModulesRegisterRootRequestSchema,
@@ -124,6 +125,8 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
       type: z.literal("terminal.open"),
       focus: z.boolean().optional(),
       launch: terminalLaunchOptionsSchema.optional(),
+      /** 后台创建：跳过可见性门控，挂载即建面（agents.start 委派路径）。 */
+      backgroundCreate: z.boolean().optional(),
       /** 复用已有 panel 并换启动；与 `referencePanelId` 互斥。 */
       panelId: z.string().min(1).optional(),
       placement: pierCommandPlacementSchema.optional(),
@@ -255,6 +258,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("worktree.prune"),
   }),
   z.object({ type: z.literal("plugin.list") }),
+  z.object({ type: z.literal("plugin.workspace.plan") }),
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.inspect"),
   }),
@@ -263,6 +267,13 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   pluginInspectRequestSchema.extend({
     type: z.literal("plugin.disable"),
+  }),
+  z.object({
+    payload: z.object({
+      key: z.string().min(1),
+      pluginId: z.string().min(1),
+    }),
+    type: z.literal("pluginData.snapshot"),
   }),
   z.object({ type: z.literal("pluginSettings.getAll") }),
   z.object({
@@ -361,6 +372,15 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   liveModulesGetUrlRequestSchema.extend({
     type: z.literal("liveModules.getUrl"),
+  }),
+  liveModulesCanvasTrustRequestSchema.extend({
+    type: z.literal("liveModules.trustStatus"),
+  }),
+  liveModulesCanvasTrustRequestSchema.extend({
+    type: z.literal("liveModules.grantTrust"),
+  }),
+  liveModulesCanvasTrustRequestSchema.extend({
+    type: z.literal("liveModules.revokeTrust"),
   }),
   rulesSnapshotRequestSchema.extend({
     type: z.literal("rules.snapshot"),

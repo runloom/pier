@@ -74,6 +74,12 @@ const codexConfigPath = () => join(codexHomeDir(), "hooks.json");
  * （用户中断 ≠ 出错）。禁止把 `Stop`/`TurnInterrupted` 假装成 `error`。
  * 结论见 `CODEX_FA_ERROR_REACHABILITY`。
  *
+ * stop≠idle 消歧（2026-08-25 业界对齐审计）：官方 `Stop.stop_hook_active`
+ * （hook 续命标记）**无需消费**——本集成的 Stop 是 advisory（不封账），
+ * trusted 终态只来自 transcript 对账，而对账事件携带 `turn_id`：steer /
+ * 续跑回合的新 turn_id 走 `canAdoptUnsettledTurn` 认账重开，omp 式
+ * 「封账后静默续跑冻结」在本集成结构性不可达。
+ *
  * 所有事件均不写 matcher 字段（工厂默认行为：event.matcher 为
  * undefined 时不写入, 此处所有条目均不传 matcher）。
  */

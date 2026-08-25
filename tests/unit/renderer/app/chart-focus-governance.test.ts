@@ -113,10 +113,11 @@ describe("focus governance", () => {
 
   it("allows only intentional product tabIndex={0} stops", () => {
     const allow = new Set([
-      // 键盘合约：缩放/平移、图片 diff 滑动条、右键菜单、tab 激活、列表项
+      // 键盘合约：缩放/平移、图片 diff 滑动条、表格列宽分隔条、右键菜单、tab 激活、列表项
       "packages/ui/src/image-preview/canvas.tsx",
       "packages/ui/src/image-preview/world-canvas.tsx",
       "packages/ui/src/diff-view/image-diff/compare.tsx",
+      "src/plugins/builtin/files/renderer/markdown/table/table-resize.tsx", // table column resize separator (arrow-key adjustable, mirrors image diff slider)
       "src/plugins/builtin/files/renderer/preview/image.tsx",
       "src/renderer/panel-kits/workbench/panel.tsx",
       "src/renderer/components/workspace/panel-tab-header.tsx",

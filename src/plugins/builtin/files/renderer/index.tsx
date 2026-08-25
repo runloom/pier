@@ -28,13 +28,19 @@ import {
   restoreUntitledDocumentFromPanelSource,
 } from "./document/store.ts";
 import { parseFilesDocumentPanelSource } from "./document/types.ts";
-import { createFilesEditorActions } from "./editor/actions.ts";
+import {
+  createFilesEditorActions,
+  createFilesEditorPrefsActions,
+} from "./editor/actions.ts";
 import { FileEditorController } from "./editor/controller.ts";
 import { registerFilesLspNavigationDeps } from "./lsp/navigation.ts";
 import { markdownCodeHighlighter } from "./markdown/code-highlighter.ts";
 import { migrateLegacyMarkdownReadingFontToDocumentFont } from "./markdown/migrate-doc-font.ts";
 import { createFilesMarkdownPreviewActions } from "./markdown/preview-actions.ts";
-import { bindMarkdownSettingsFromConfiguration } from "./markdown/preview-preferences.ts";
+import {
+  bindMarkdownCodeWrapFromConfiguration,
+  bindMarkdownSettingsFromConfiguration,
+} from "./markdown/preview-preferences.ts";
 import { markdownRuntime } from "./markdown/runtime.ts";
 import { FilesMutationSuspendedError } from "./mutation/gate.ts";
 import { registerFilesTerminalOpenUrlHandler } from "./open-url/handler.ts";
@@ -335,10 +341,14 @@ export const filesRendererPlugin: RendererPluginModule = {
           withFilesMutationGate(action, editorController)
         )
       ),
+      ...createFilesEditorPrefsActions(context).map((action) =>
+        context.actions.register(action)
+      ),
       ...createFilesMarkdownPreviewActions(context).map((action) =>
         context.actions.register(action)
       ),
       bindMarkdownSettingsFromConfiguration(context.configuration),
+      bindMarkdownCodeWrapFromConfiguration(context.configuration),
       (() => {
         migrateLegacyMarkdownReadingFontToDocumentFont(context.configuration);
         return () => undefined;

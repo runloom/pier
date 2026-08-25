@@ -34,6 +34,9 @@ export async function initI18n(): Promise<void> {
     lng: initialLocale,
     fallbackLng: FALLBACK_LOCALE,
     interpolation: { escapeValue: false },
+    // Capability ids such as `file:read` are object keys; the default `:`
+    // nsSeparator would split them during lookup and returnObjects.
+    nsSeparator: false,
     resources: {
       "zh-CN": { translation: zhCN },
       en: { translation: en },

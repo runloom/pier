@@ -31,12 +31,15 @@ import {
  * - schema 与 Claude Code 同构，但 `command` 只接受带受支持扩展名的脚本
  *   路径，不能内联 shell。因此配置引用 Pier 受管 `.sh`，严格 v3 分流在
  *   脚本内部完成。
- * - 当前官方状态事件为 SessionStart、SessionEnd、PreToolUse、PostToolUse
- *   和 Stop。公共字段表还列出 Notification，但没有任何等待语义；当前文档
- *   没有 UserPromptSubmit，均不用于状态投影。
- * - 公共会话身份是 conversation_id；工具事件没有稳定调用编号，因此按匿名
- *   工具闭环。Stop 的 agent_stop_cause 区分 end_turn、interrupted、
- *   max_iterations 和 error。
+ * - 工具事件没有稳定调用编号，因此按匿名工具闭环。Stop 的 agent_stop_cause
+ *   区分 end_turn、interrupted、max_iterations 和 error。
+ * - stop≠idle 消歧（2026-08-25 业界对齐审计）：官方 hook 面没有任何
+ *   per-turn 信号（无 UserPromptSubmit / loop 启动事件），trusted 终态
+ *   （TurnInterrupted/error）封账后同会话内没有任何重开通道——中断/
+ *   max_iterations 后用户继续追问的整轮工具事件会被 sealed-turn 拒绝，
+ *   面板冻结在 ready。因此 interrupted/max_iterations 一律降级为
+ *   advisory `Stop`（completionObserved，后续工作可取消候选回到忙态）；
+ *   error 保持 trusted（错误可见性优先，残留冻结风险见对齐文档 P1-B5）。
  * - timeout 单位是毫秒（非 droid/claude 家族的秒）, 默认 60000ms；这里显式
  *   写 5000（5 秒, 与其余集成的默认 5 秒告警窗口对齐, 避免用官方默认的
  *   60 秒拖慢状态反馈）。
@@ -54,7 +57,6 @@ function augEmit(
     | "ToolStart"
     | "ToolComplete"
     | "Stop"
-    | "TurnInterrupted"
     | "error"
     | "SessionEnd"
 ): string {
@@ -108,9 +110,6 @@ case "$_pier_native_state" in
   Stop)
     ${extractAugStopCause()}
     case "$_pier_native_state" in
-      interrupted|max_iterations)
-        ${augEmit("aug", "Stop", "TurnInterrupted")}
-        ;;
       error)
         ${augEmit("aug", "Stop", "error")}
         ;;
@@ -155,7 +154,7 @@ const AUG_SPEC: NestedJsonIntegrationSpec = {
     },
     {
       buildCommand: augManagedHookPath,
-      emittedPierEvents: ["Stop", "TurnInterrupted", "error"],
+      emittedPierEvents: ["Stop", "error"],
       nativeEvent: "Stop",
       pierEvent: "Stop",
     },

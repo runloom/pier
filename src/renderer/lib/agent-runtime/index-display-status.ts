@@ -72,6 +72,12 @@ export function enrichAgentIndexEntriesWithLocalFa(
       ...(localActivity.stateStartedAt === undefined
         ? {}
         : { stateStartedAt: localActivity.stateStartedAt }),
+      ...(entry.sessionTitle === undefined
+        ? {}
+        : { sessionTitle: entry.sessionTitle }),
+      ...(entry.sessionTitleSource === undefined
+        ? {}
+        : { sessionTitleSource: entry.sessionTitleSource }),
       ...(entry.cwd ? { cwd: entry.cwd } : {}),
       ...(entry.projectRootPath
         ? { projectRootPath: entry.projectRootPath }

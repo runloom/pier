@@ -6,9 +6,13 @@ node_modules
 !/build/icon.ico
 !/build/icon.png
 !/build/icon-dock.png
+!/build/Assets.car
+!/build/Assets.car.inputs
 !/build/app-icon-master.svg
 !/build/app-icon-micro.svg
 !/build/app-icon-unplated.svg
+!/build/app-icon.icon/
+!/build/app-icon.icon/**
 !/build/icons/
 !/build/icons/*.png
 !/build/design-sources/
@@ -111,3 +115,6 @@ playwright-report/
 # Worktree incarnation registry (runtime local state; path → UUID).
 # Written by worktree identity services; never commit.
 .pier/worktree-incarnations.json
+
+.commandcode/taste
+

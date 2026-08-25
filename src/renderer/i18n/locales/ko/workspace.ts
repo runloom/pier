@@ -11,6 +11,9 @@ export const workspace = {
     loadingTitle: "플러그인 패널 불러오는 중",
     missingRendererDescription: "이 플러그인에는 표시할 화면이 없습니다.",
     unavailableTitle: "플러그인 패널을 쓸 수 없습니다",
+    crashTitle: "플러그인 패널이 충돌했습니다",
+    crashDescription:
+      "플러그인 UI에 오류가 발생했습니다. 다른 패널은 영향을 받지 않습니다. 플러그인을 비활성화하거나 다시 로드하면 복구됩니다.",
   },
   startupError: {
     description: "다시 불러와 한 번 더 시도하세요.",

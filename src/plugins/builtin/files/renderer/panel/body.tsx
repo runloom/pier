@@ -78,6 +78,7 @@ export function ResolvedFilePanel({
   >(undefined);
   const [previewRestoreRequestId, setPreviewRestoreRequestId] = useState(0);
   const {
+    handleCopyMarkdownAnchor,
     handleCopyMarkdownCode,
     handleMarkdownPreviewContextMenu,
     handleOpenExternal,
@@ -395,6 +396,7 @@ export function ResolvedFilePanel({
           markdownCommentLabels={createMarkdownCommentLabels(t)}
           markdownContentAnchor={previewContentAnchor}
           markdownContentAnchorRequestId={previewContentAnchorRequestId}
+          markdownCopyAnchor={context ? handleCopyMarkdownAnchor : undefined}
           markdownCopyCode={context ? handleCopyMarkdownCode : undefined}
           markdownErrorLabel={createMarkdownErrorLabel(t)}
           markdownFileResources={context}

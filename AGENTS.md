@@ -164,23 +164,23 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 - **说用户动作，不说内部概念。** 反例：「没有可打开的终端选区」；正例：「请先在终端中选中文本。」
 - **失败与空态要带下一步。** 反例：「无项目上下文」；正例：「未打开项目」+「请先打开项目文件夹以浏览文件。」
-- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、工作台「组件」（不要写物料）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）。
+- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、工作台「组件」（不要写物料）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）、git（小写；不要写成 Git / GIT；GitHub 等专有名除外）。
 - **实现词禁止进入前台主路径文案。** 包括但不限于：选区、上下文、面板参数、耐久性、绑定、运行标识、运行态、renderer、清单预览、hook（首次可写「钩子（hook）」）、tip tree、upstream（应写「上游分支」）。
-- **中文界面少夹英文状态码。** Git 状态用「分离头指针 / 合并中 / 变基中」等，不要用 DETACHED / MERGING 全大写码。
+- **中文界面少夹英文状态码。** git 状态用「分离头指针 / 合并中 / 变基中」等，不要用 DETACHED / MERGING 全大写码。
 - **fallback 英文与 en locale 同步可读**；改中文时必须核对英文是否同样术语化。
 
 严格度分层：
 
 - Toast / 空态 / 确认弹窗标题：最严，禁实现词，优先给动作。
 - 状态栏短标签：严，统一产品词。
-- 设置说明：中，可保留 Git 等领域词，仍要白话。
+- 设置说明：中，可保留 git 等领域词，仍要白话。
 - 插件权限列表、开发模式提示：可偏技术，但不得污染前台主路径。
 - 路径占位与代码标识符（如 `{项目名}.worktree`、命令 id）不受禁词约束。
 
 **代码审查检查点**：
 
 - 新增用户文案能否回答「用户看懂吗 / 下一步做什么 / 和现有产品词一致吗」。
-- 中文界面出现 Agent、worktree、选区、上下文、耐久性、Needs you、DETACHED 等 → finding。
+- 中文界面出现 Agent、worktree、选区、上下文、耐久性、Needs you、DETACHED、Title Case Git 等 → finding。
 - 业务代码 `toast.*("…")` / `showAppAlert({ title: "…" })` 内联用户串未走 i18n → finding。
 
 检查点在 `tests/unit/renderer/app/user-copy-governance.test.ts`：锁定本节存在，并扫描中英 locale 字符串值中的禁用实现词。
@@ -203,7 +203,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 浮动大纲在 scroll 内容盒内绝对定位，却期望与预览框上的字号控件右对齐
 - 细轨 / 浮层各抄一份定位 class 且数值不一致
 
-检查点在 `tests/unit/plugins/markdown-preview-layout-governance.test.ts`。
+检查点在 `tests/unit/plugins/markdown/markdown-preview-layout-governance.test.ts`。
 
 Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 `useMarkdownPreviewPrefsStore`（`markdown-preview-preferences.ts`）：全局一份、
@@ -340,11 +340,12 @@ section 根节点下的裸子节点。
 - **tab 优先级**：显式 chrome（任务 label / **用户钉名** `source=user` / end-state）→ **OSC**（路径则 basename）→ cwd basename → `"Terminal"`。long / 顶栏 / tooltip：路径型优先**绝对 cwd（OSC 7）**，非路径 OSC 用全文；禁止把 shell 缩写路径当 long。
 - **用户改名 = 钉死 tab**（`user`），优先于后续 OSC，直到再次改名；对话框初值优先当前 tab 所见（OSC/cwd）。
 - **活体 agent**：overlay 只写状态点 + icon；无 user 钉名时 `stripTabChromeTitle`，勿让旧 chrome title 压 OSC。
-- **产品 `sessionTitle`（仅 Index / 改名，≠ tab）**：枚举只有 `provider` | `user`；历史 `prompt`/`auto`/`rule`/`model` **读取期整段丢弃**；**禁止** prompt 派生与 Claude derive 双写（gen≥11 已卸，`derive.ts` 已删）。
+- **产品 `sessionTitle`（改名域 + 列表降级兜底，不再是列表主标题）**：枚举只有 `provider` | `user`；历史 `prompt`/`auto`/`rule`/`model` **读取期整段丢弃**；**禁止** prompt 派生与 Claude derive 双写（gen≥11 已卸，`derive.ts` 已删）。
+- **智能体列表主标题 = tab short（完全一致，单一实现 `resolveAgentListTitle`）**：Index quickpick / 活动总览行 / 协作会话列表共用 `src/renderer/lib/agent-runtime/list-title.ts`——本窗面板直接消费 `PanelDescriptorStore` 已解析 `display.short`（OSC / 改名变化随动）；跨窗 / descriptor 未注册时按 tab 优先级降级 user 钉名 → cwd 叶子名 → provider 标题 → catalog 标签。禁止各列表再各自 `resolveAgentSessionTitle` 当主标题，否则列表与 tab 无法一一对应。
 - **provider 写入**：`applyProviderAgentSessionTitle` 只收真自生成名（如 `ai-title`），不收 `custom-title`/`agent-name`；同秩不覆盖。
 - **OSC 展示**：折叠空白后进 short；安全上限 `MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH`；视觉截断 CSS。落盘可更长。
 - **身份**与标题无关：`agentId` + 路径锚点 + `panelId` + actor/session 字段；判据只在 `agent-session-actor.ts`。
-- 检查点：`tests/unit/app/cwd-derive.test.ts`、`tests/unit/agent/session-title-governance.test.ts`、`tests/unit/agent/session-title-hook-parity.test.ts`、`tests/unit/main/agents/agent-session-title-hook-event.test.ts`。
+- 检查点：`tests/unit/app/cwd-derive.test.ts`、`tests/unit/agent/session-title-governance.test.ts`、`tests/unit/agent/session-title-hook-parity.test.ts`、`tests/unit/main/agents/agent-session-title-hook-event.test.ts`、`tests/unit/renderer/agent-runtime/list-title.test.ts`。
 
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 
@@ -504,7 +505,7 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`；覆盖率：`pnpm test:coverage`
 - E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
-- 图标重建：`pnpm build:icons`（改 `build/app-icon-*.svg` 后跑一次，产出 `build/icon.{icns,ico,png}` 与 `build/icon-dock.png`）
+- 图标重建：`pnpm build:icons`（改 `build/app-icon-*.svg` 或 `build/app-icon.icon`（Icon Composer 打磨分层）后跑一次；产出 `build/icon.{icns,ico,png}`、`build/icon-dock.png` 与 macOS 26 分层图标 `build/app-icon.icon/Assets` + `build/Assets.car`，并同步更新 `build/Assets.car.inputs` 指纹；编译分层图标需 Xcode 26+ 的 `actool`）
 
 ### E2E 执行优先级（编码助手硬约定）
 

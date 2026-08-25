@@ -14,6 +14,7 @@ function gitEntry(): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       configuration: {
         properties: {
@@ -25,7 +26,7 @@ function gitEntry(): PluginRegistryEntry {
       },
       engines: { pier: ">=0.1.0" },
       id: "pier.git",
-      name: "Git",
+      name: "git",
       panels: [],
       permissions: [],
       source: { kind: "builtin" },

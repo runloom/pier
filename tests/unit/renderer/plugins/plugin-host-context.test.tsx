@@ -190,6 +190,7 @@ const pluginEntry = {
     source: { kind: "builtin" },
     terminalStatusItems: sampleTerminalStatusItems,
     workbenchWidgets: sampleWorkbenchWidgets,
+    dataProjections: [],
     settingsPages: [],
     version: "1.0.0",
   },
@@ -215,6 +216,7 @@ const configurableWidgetEntry = {
         title: "Configurable Widget",
       },
     ],
+    dataProjections: [],
   },
 } satisfies PluginRegistryEntry;
 

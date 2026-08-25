@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { DataChart } from "@pier/ui/data-chart.tsx";
+import { isDiagramShrunk } from "@pier/ui/mermaid/scene.tsx";
 import { Mermaid } from "@pier/ui/mermaid.tsx";
 import {
   cleanup,
@@ -122,8 +123,8 @@ describe("Pier Canvas visualizations", () => {
 
     const warning = await screen.findByLabelText("b 警告");
     const warningCard = warning.querySelector('[data-slot="mermaid-node"]');
-    expect(warningCard?.className).toContain("border-status-warning-border");
-    expect(warningCard?.className).toContain("bg-status-warning-bg");
+    expect(warningCard?.className).toContain("border-warning/40");
+    expect(warningCard?.className).toContain("bg-warning/10");
     expect(warningCard?.getAttribute("style")).toBeNull();
     expect(warningCard?.getAttribute("data-tone")).toBe("warning");
 
@@ -155,14 +156,14 @@ describe("Pier Canvas visualizations", () => {
     const human = await screen.findByLabelText("h 人类");
     const humanCard = human.querySelector('[data-slot="mermaid-node"]');
     expect(humanCard?.getAttribute("data-kind")).toBe("actor");
-    expect(humanCard?.className).toContain("border-status-info-border");
-    expect(humanCard?.className).toContain("bg-status-info-bg");
+    expect(humanCard?.className).toContain("border-info/40");
+    expect(humanCard?.className).toContain("bg-info/10");
     expect(human.querySelector("svg")).toBeTruthy();
 
     const external = screen.getByLabelText("e 外部");
     const externalCard = external.querySelector('[data-slot="mermaid-node"]');
-    expect(externalCard?.className).toContain("border-status-warning-border");
-    expect(externalCard?.className).toContain("bg-status-warning-bg");
+    expect(externalCard?.className).toContain("border-warning/40");
+    expect(externalCard?.className).toContain("bg-warning/10");
     expect(externalCard?.className).toContain("border-dashed");
     expect(
       document.querySelector('[data-slot="mermaid-node"] > span.absolute')
@@ -191,12 +192,12 @@ describe("Pier Canvas visualizations", () => {
     const artifact = (await screen.findByLabelText("p 画面")).querySelector(
       '[data-slot="mermaid-node"]'
     );
-    expect(agent?.className).toContain("border-status-done-border");
-    expect(agent?.className).toContain("bg-status-done-bg");
-    expect(tool?.className).toContain("border-status-success-border");
-    expect(tool?.className).toContain("bg-status-success-bg");
-    expect(artifact?.className).toContain("border-status-info-border");
-    expect(artifact?.className).toContain("bg-status-info-bg");
+    expect(agent?.className).toContain("border-done/40");
+    expect(agent?.className).toContain("bg-done/10");
+    expect(tool?.className).toContain("border-success/40");
+    expect(tool?.className).toContain("bg-success/10");
+    expect(artifact?.className).toContain("border-info/40");
+    expect(artifact?.className).toContain("bg-info/10");
     expect(artifact?.className).toContain("border-dashed");
   });
 
@@ -257,9 +258,9 @@ describe("Pier Canvas visualizations", () => {
     const card = (await screen.findByLabelText("x 出口")).querySelector(
       '[data-slot="mermaid-node"]'
     );
-    expect(card?.className).toContain("border-status-danger-border");
-    expect(card?.className).toContain("bg-status-danger-bg");
-    expect(card?.className).not.toContain("bg-status-success-bg");
+    expect(card?.className).toContain("border-destructive/40");
+    expect(card?.className).toContain("bg-destructive/10");
+    expect(card?.className).not.toContain("bg-success/10");
     expect(card?.getAttribute("data-kind")).toBe("tool");
   });
 
@@ -280,6 +281,111 @@ describe("Pier Canvas visualizations", () => {
     expect(document.querySelector('[data-slot="diagram-expanded"]')).toBeNull();
   });
 
+  it("renders the inline card fit-all and centered without inner scroll", async () => {
+    render(
+      <Mermaid
+        aria-label="适配"
+        edges={EDGES}
+        nodes={NODES}
+        onOpenFullscreen={() => {}}
+      />
+    );
+    const host = await screen.findByLabelText("适配");
+    const wrapper = host.querySelector('[data-slot="mermaid-host"]');
+    expect(wrapper?.className).toContain("justify-center");
+    expect(wrapper?.className).not.toContain("overflow-auto");
+    expect(wrapper?.className).not.toContain("max-h-");
+  });
+
+  it("opens fullscreen on surface click but not from node buttons", async () => {
+    const onOpenFullscreen = vi.fn();
+    const onSelectNode = vi.fn();
+    render(
+      <Mermaid
+        aria-label="点开"
+        edges={EDGES}
+        nodes={NODES}
+        onOpenFullscreen={onOpenFullscreen}
+        onSelectNode={onSelectNode}
+      />
+    );
+    const surface = (await screen.findByLabelText("点开")).querySelector(
+      '[data-slot="mermaid"]'
+    );
+    expect(surface?.className).toContain("cursor-zoom-in");
+
+    // Hydrated node button: selection fires, fullscreen must not.
+    fireEvent.click(await screen.findByRole("button", { name: "T0 边界" }));
+    expect(onSelectNode).toHaveBeenCalledWith("T0");
+    expect(onOpenFullscreen).not.toHaveBeenCalled();
+
+    // Plain surface area (the svg root): opens fullscreen.
+    fireEvent.click(surface!.querySelector("svg")!);
+    expect(onOpenFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores surface clicks that finish a text selection", async () => {
+    const onOpenFullscreen = vi.fn();
+    render(
+      <Mermaid
+        aria-label="划选"
+        edges={EDGES}
+        nodes={NODES}
+        onOpenFullscreen={onOpenFullscreen}
+      />
+    );
+    const surface = (await screen.findByLabelText("划选")).querySelector(
+      '[data-slot="mermaid"]'
+    )!;
+    const svg = surface.querySelector("svg")!;
+
+    // Drag-select finished: click after mouseup must not open fullscreen.
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(svg);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    fireEvent.click(svg);
+    expect(onOpenFullscreen).not.toHaveBeenCalled();
+
+    // Collapsed selection behaves as a plain click again.
+    selection.removeAllRanges();
+    fireEvent.click(surface);
+    expect(onOpenFullscreen).toHaveBeenCalledTimes(1);
+  });
+
+  it("flags shrink only past natural width with a measured container", () => {
+    // Unmeasured (jsdom / pre-layout) never counts as shrunk.
+    expect(isDiagramShrunk(600, 0)).toBe(false);
+    expect(isDiagramShrunk(0, 320)).toBe(false);
+    // Fits: equal or slightly smaller than the container.
+    expect(isDiagramShrunk(320, 320)).toBe(false);
+    expect(isDiagramShrunk(321, 320)).toBe(false);
+    // Scaled down.
+    expect(isDiagramShrunk(640, 320)).toBe(true);
+  });
+
+  it("omits the shrink hint when the diagram is not measured as scaled", async () => {
+    render(
+      <Mermaid
+        aria-label="未缩"
+        edges={EDGES}
+        nodes={NODES}
+        onOpenFullscreen={() => {}}
+        shrinkHint="图表已缩小，点击查看全屏"
+      />
+    );
+    await screen.findByLabelText("未缩");
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-slot="mermaid-host"] svg')
+      ).toBeTruthy()
+    );
+    // jsdom reports clientWidth 0, so the hint must stay hidden.
+    expect(
+      document.querySelector('[data-slot="mermaid-shrink-hint"]')
+    ).toBeNull();
+  });
   it("opens host content preview store from HostMermaid fullscreen", async () => {
     useContentPreviewStore.setState({
       id: "content-preview",

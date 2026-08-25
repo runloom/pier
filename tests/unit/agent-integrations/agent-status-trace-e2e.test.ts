@@ -138,7 +138,9 @@ describe("智能体状态官方轨迹跨层验收", () => {
     expect(actualAgents.size).toBe(27);
     // waiting 维度：claude / grok / openclaude 的 plan 与 pi 的 ask 均走原生阻塞交互
     // host-Esc 抬升的 ready/interrupted 不计入 matrixCoverage（见 expectedActiveCoverage）
-    expect(actualCoverage.size).toBe(158);
+    // aug ready/interrupted 降级为 host-Esc reconciled 后退出 fixture 覆盖
+    // （158 − aug:ready − aug:interrupted）。
+    expect(actualCoverage.size).toBe(156);
     // Fixture covers must not invent dimensions outside the matrix claim.
     for (const key of actualCoverage) {
       expect(

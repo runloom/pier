@@ -15,14 +15,14 @@ export function registerMergeAbortAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
       const title = commandTitle(
         context,
         "pier.git.mergeAbort",
-        "Git: Abort Merge"
+        "git: Abort Merge"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -43,7 +43,7 @@ export function registerMergeAbortAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.mergeAbort", "Git: Abort Merge"),
+      commandTitle(context, "pier.git.mergeAbort", "git: Abort Merge"),
   });
 }
 
@@ -51,14 +51,14 @@ export function registerRebaseAbortAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
       const title = commandTitle(
         context,
         "pier.git.rebaseAbort",
-        "Git: Abort Rebase"
+        "git: Abort Rebase"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -79,7 +79,7 @@ export function registerRebaseAbortAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.rebaseAbort", "Git: Abort Rebase"),
+      commandTitle(context, "pier.git.rebaseAbort", "git: Abort Rebase"),
   });
 }
 
@@ -87,14 +87,14 @@ export function registerRebaseContinueAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
       const title = commandTitle(
         context,
         "pier.git.rebaseContinue",
-        "Git: Continue Rebase"
+        "git: Continue Rebase"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -115,6 +115,6 @@ export function registerRebaseContinueAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.rebaseContinue", "Git: Continue Rebase"),
+      commandTitle(context, "pier.git.rebaseContinue", "git: Continue Rebase"),
   });
 }

@@ -5,6 +5,7 @@ import { initI18n } from "@/i18n/index.ts";
 import { ActivityWidget } from "@/panel-kits/workbench/core-widgets/activity/widget.tsx";
 import { useAgentRuntimeIndexStore } from "@/stores/agent-runtime-index.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
@@ -51,6 +52,7 @@ beforeEach(async () => {
     snapshot: { runs: {}, version: 0 },
   });
   useAgentRuntimeIndexStore.getState().reset();
+  usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
   useWorkspaceStore.setState({
     api: {
       panels: [
@@ -220,6 +222,41 @@ describe("ActivityWidget", () => {
       "panel-wait",
       expect.objectContaining({ reveal: "always" })
     );
+  });
+
+  it("shows the resolved tab short as the agent row title (list == tab)", () => {
+    useForegroundActivityStore.setState({
+      ts: 1,
+      activities: {
+        "panel-run": {
+          agentId: "claude",
+          kind: "agent",
+          panelId: "panel-run",
+          sessionTitle: "Review PR",
+          sessionTitleSource: "provider",
+          source: "hook",
+          spawnedAt: 1,
+          status: "processing",
+          subagentCount: 0,
+          updatedAt: 100,
+          windowId: "win-local",
+        },
+      },
+    });
+    usePanelDescriptorStore.setState({
+      activeId: "panel-run",
+      descriptors: {
+        "panel-run": {
+          display: { short: "feat-bug-20260823" },
+        },
+      },
+    });
+
+    render(<ActivityWidget {...widgetProps()} />);
+
+    expect(screen.getByText("feat-bug-20260823")).toBeInTheDocument();
+    // provider 产品名不得抢占列表主标题（tab 上根本没有它）。
+    expect(screen.queryByText("Review PR")).not.toBeInTheDocument();
   });
 
   it("toasts when the target panel is gone", () => {

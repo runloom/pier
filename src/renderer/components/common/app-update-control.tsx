@@ -47,9 +47,6 @@ function chipAriaLabel(
       percent: Math.round(snapshot?.progress?.percent ?? 0),
     });
   }
-  if (state === "error") {
-    return t("settings.appUpdate.titleBar.errorAria");
-  }
   return t("settings.appUpdate.titleBar.availableAria", { version });
 }
 
@@ -69,7 +66,6 @@ export function AppUpdateControl(): ReactNode {
 
   const state = snapshot?.state ?? "idle";
   const downloaded = state === "downloaded";
-  const errored = state === "error";
   const label = chipLabel(t, snapshot);
   const ariaLabel = chipAriaLabel(t, snapshot);
 
@@ -95,11 +91,7 @@ export function AppUpdateControl(): ReactNode {
       ) : (
         <Download aria-hidden data-icon="inline-start" />
       )}
-      <span
-        className={errored ? "font-medium text-status-warning-fg" : undefined}
-      >
-        {label}
-      </span>
+      <span>{label}</span>
     </Button>
   );
 }

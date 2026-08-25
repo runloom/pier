@@ -3,7 +3,7 @@ import {
   ImagePreviewCanvas,
   measureContainScale,
 } from "@pier/ui/image-preview/canvas.tsx";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const labels = {
@@ -268,5 +268,35 @@ describe("ImagePreviewCanvas", () => {
     expect(screen.getByText("100%")).toBeVisible();
     fireEvent.wheel(viewport, { metaKey: true, deltaY: -40 });
     expect(screen.getByText("125%")).toBeVisible();
+  });
+
+  it("renders a copy-image button that invokes onCopyImage", async () => {
+    const onCopyImage = vi.fn(async () => undefined);
+    render(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={{ ...labels, copyImage: "Copy image" }}
+        onCopyImage={onCopyImage}
+        src="data:image/png;base64,xx"
+        status="ready"
+      />
+    );
+    const copyButton = screen.getByRole("button", { name: "Copy image" });
+    fireEvent.click(copyButton);
+    await waitFor(() => {
+      expect(onCopyImage).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("omits the copy-image button when onCopyImage is not provided", () => {
+    render(
+      <ImagePreviewCanvas
+        alt="shot"
+        labels={{ ...labels, copyImage: "Copy image" }}
+        src="data:image/png;base64,xx"
+        status="ready"
+      />
+    );
+    expect(screen.queryByRole("button", { name: "Copy image" })).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import {
   isCanvasHostChannelAllowed,
   isCanvasHostCommandAllowed,
   normalizeCanvasHostSnapshotId,
+  parsePluginDataWatchTarget,
 } from "@shared/contracts/canvas-host.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
 import { PIER } from "@shared/ipc-channels.ts";
@@ -31,6 +32,13 @@ export const canvasHostApi: PierCanvasHostAPI = {
     return invokeCanvasPierCommand(command);
   },
   snapshot: async (channel) => {
+    const pluginTarget = parsePluginDataWatchTarget(channel);
+    if (pluginTarget) {
+      return invokeCanvasPierCommand({
+        payload: { key: pluginTarget.key, pluginId: pluginTarget.pluginId },
+        type: "pluginData.snapshot",
+      });
+    }
     const id = normalizeCanvasHostSnapshotId(channel);
     if (id === "foreground-activity") {
       return ipcRenderer.invoke(CANVAS_HOST_FOREGROUND_ACTIVITY_SNAPSHOT);

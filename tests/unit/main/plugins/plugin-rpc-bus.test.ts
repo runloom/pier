@@ -49,4 +49,22 @@ describe("createPluginRpcBus", () => {
       bus.invoke({ method: "a:b", payload: null, pluginId: "pier" })
     ).resolves.toEqual({ data: "second", ok: true });
   });
+  it("notifies onEvent observers with the merged envelope and honors dispose", () => {
+    const bus = createPluginRpcBus({ broadcast: vi.fn() });
+    const seen: [string, Record<string, unknown>][] = [];
+    const dispose = bus.onEvent?.call(bus, (event, data) =>
+      seen.push([event, data])
+    );
+
+    bus.emit("pier.first", "projection.usage", { v: 2 });
+    bus.emit("pier.first", "projection.usage", null);
+
+    expect(seen).toEqual([
+      ["projection.usage", { pluginId: "pier.first", v: 2 }],
+      ["projection.usage", { payload: null, pluginId: "pier.first" }],
+    ]);
+    dispose?.();
+    bus.emit("pier.first", "projection.usage", { v: 3 });
+    expect(seen).toHaveLength(2);
+  });
 });

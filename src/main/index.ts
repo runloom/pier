@@ -193,6 +193,7 @@ const appQuitController = createAppQuitController({
     appCore.services.tasks.dispose();
     windowManager.destroyAllForQuit();
     appCore.disposeManagedPluginDevRuntimeWatch();
+    appCore.disposePluginDataProjections();
     appCore.pluginHost.dispose();
     localControlRegistration.close().catch((error: unknown) => {
       appQuitLog.error("failed to close local control before quit", { error });
@@ -315,7 +316,7 @@ if (gotTheLock) {
       });
       gitAutofetch.start();
       const appUpdateScheduler = createAppUpdateScheduler({
-        check: () => appCore.services.appUpdates.check(),
+        check: () => appCore.services.appUpdates.check("background"),
         enabled: !isDev,
       });
       appUpdateScheduler.start();

@@ -3,10 +3,6 @@ import { formatDurationShort } from "@pier/ui/format.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
-import {
-  agentSessionTitleInput,
-  resolveAgentSessionTitle,
-} from "@shared/agent-session-title/index.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import type {
   TaskRunNodeStatus,
@@ -17,6 +13,7 @@ import { ListTodo, Pencil, Terminal } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { AgentStatusLabel } from "@/components/agent-status/label.tsx";
 import { useT } from "@/i18n/use-t.ts";
+import { resolveAgentListTitle } from "@/lib/agent-runtime/list-title.ts";
 import {
   activityIdentityMetaText,
   activityRowMetaText,
@@ -46,30 +43,33 @@ function taskStatusKey(
 }
 
 /**
- * Agent 行主标题。路径锚点必传：否则无标题会话的 placeholder 塌成裸 catalog
- * 标签，同 agent 的多个面板行会完全一样。
+ * Agent 行主标题。与终端 tab short 完全一致：tabShort（本窗已解析
+ * descriptor.display.short）优先；缺席时按 tab 优先级降级（user 钉名 →
+ * 路径叶子名 → provider 产品名 → catalog 标签），fallbackPath 供降级
+ * 链里的路径叶子名使用。
  */
 export function agentActivityRowPrimary(
   activity: ForegroundActivity & { kind: "agent" },
-  projectPath: string | undefined
+  tabShort: string | null | undefined,
+  fallbackPath?: string | undefined
 ): string {
-  return resolveAgentSessionTitle(
-    agentSessionTitleInput({
-      agentId: activity.agentId,
-      projectRootPath: projectPath,
-      sessionTitle: activity.sessionTitle,
-      sessionTitleSource: activity.sessionTitleSource,
-    })
-  ).primary;
+  return resolveAgentListTitle({
+    agentId: activity.agentId,
+    cwd: fallbackPath,
+    sessionTitle: activity.sessionTitle,
+    sessionTitleSource: activity.sessionTitleSource,
+    tabShort,
+  });
 }
 
 function rowTitle(
   activity: ForegroundActivity,
+  tabShort: string | null | undefined,
   projectPath: string | undefined,
   t: (key: string) => string
 ): string {
   if (activity.kind === "agent") {
-    return agentActivityRowPrimary(activity, projectPath);
+    return agentActivityRowPrimary(activity, tabShort, projectPath);
   }
   if (activity.kind === "task") {
     return activity.label;
@@ -117,6 +117,7 @@ export function ActivityRow({
   onReveal,
   projectPath,
   showMeta,
+  tabShort,
   taskRuns,
 }: {
   activity: ForegroundActivity;
@@ -127,10 +128,12 @@ export function ActivityRow({
   onReveal: () => void;
   projectPath?: string | undefined;
   showMeta: boolean;
+  /** agent 行主标题的 tab short（本窗已解析 descriptor.display.short）。 */
+  tabShort?: string | null | undefined;
   taskRuns: TaskRunsSnapshot;
 }) {
   const t = useT();
-  const title = displayTitle ?? rowTitle(activity, projectPath, t);
+  const title = displayTitle ?? rowTitle(activity, tabShort, projectPath, t);
   const kindLabel = t(
     `workbench.widget.activityOverview.kind.${activity.kind}`
   );
@@ -166,8 +169,6 @@ export function ActivityRow({
     statusNode = (
       <AgentStatusLabel
         fallbackLabel={t("workbench.widget.activityOverview.agentLaunching")}
-        spawnedAt={activity.spawnedAt}
-        stateStartedAt={activity.stateStartedAt}
         status={activity.status}
         subagentCount={activity.subagentCount}
       />

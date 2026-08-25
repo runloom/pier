@@ -1,7 +1,7 @@
 # 文件面板与终端选区临时 Markdown 文件设计
 
 - 日期：2026-07-06
-- 状态：已被 `docs/superpowers/plans/2026-07-10-files-core-stability.md` 取代，仅保留历史背景
+- 状态：已被 `docs/archive/superpowers/plans/2026-07-10-files-core-stability.md` 取代，仅保留历史背景
 - 相关前作：
   - `docs/archive/superpowers/specs/2026-07-02-project-file-tree-design.md`
   - `docs/archive/superpowers/specs/2026-06-30-plugin-panel-mechanism-design.md`

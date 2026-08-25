@@ -20,7 +20,7 @@ export interface ReviewDocumentProjection {
   readonly items: readonly PierDiffViewItem[];
   /** Section item id → authoritative file revision. */
   readonly revisionBySectionId: ReadonlyMap<string, string>;
-  /** 接受这份投影的权威 Git index 代数；跨阅读面交接只比较这一时钟。 */
+  /** 接受这份投影的权威 git index 代数；跨阅读面交接只比较这一时钟。 */
   readonly sourceIndexGeneration: number;
 }
 

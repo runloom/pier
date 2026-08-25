@@ -87,7 +87,7 @@ describe("category i18n", () => {
   });
 
   it("getCategory resolves English category labels", () => {
-    expect(getCategory("git")).toBe("Git");
+    expect(getCategory("git")).toBe("git");
     expect(getCategory("panel")).toBe("Panel");
     expect(getCategory("terminal")).toBe("Terminal");
     expect(getCategory("file")).toBe("File");
@@ -125,7 +125,10 @@ describe("category i18n", () => {
     for (const key of allKeys) {
       const label = getCategory(key);
       expect(label).toBeTruthy();
-      expect(label).not.toBe(key);
+      // Product name is lowercase `git`, same as the category id.
+      if (key !== "git") {
+        expect(label).not.toBe(key);
+      }
     }
   });
 });

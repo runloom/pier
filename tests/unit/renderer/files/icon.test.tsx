@@ -44,6 +44,18 @@ describe("Pier file icon", () => {
     expect([...fromIcons].sort()).toEqual([...fromFramework].sort());
   });
 
+  it("omits native title when aria-hidden so host tooltips are the only name surface", () => {
+    const { container } = render(
+      <PierFileIcon aria-hidden="true" fileName="main.ts" />
+    );
+    expect(container.querySelector("title")).toBeNull();
+  });
+
+  it("keeps native title for labeled icons", () => {
+    const { container } = render(<PierFileIcon fileName="main.ts" />);
+    expect(container.querySelector("title")?.textContent).toBe("main.ts");
+  });
+
   it("uses the complete file-tree resolver and shared color token", () => {
     const { container } = render(<PierFileIcon fileName="src/file.ts" />);
     const icon = container.querySelector("[data-pier-file-icon]");

@@ -361,21 +361,6 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
               {t("settings.agents.action.update")}
             </Button>
           ) : null}
-          {canReinstall && !isBusy ? (
-            <Button
-              onClick={() => {
-                handleLifecycle("update", { reinstall: true }).catch(
-                  () => undefined
-                );
-              }}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <RotateCcw data-icon="inline-start" />
-              {t("settings.agents.action.reinstall")}
-            </Button>
-          ) : null}
           {isDetected ? (
             <Button
               onClick={toggleDisabled}
@@ -408,13 +393,32 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
           <CollapsibleContent asChild forceMount>
             <div className="flex w-full flex-col gap-3 px-(--card-spacing) pb-3">
               {probe ? (
-                <div className="flex flex-col gap-1 text-muted-foreground text-xs">
+                <div className="flex flex-col gap-2">
                   {/* Version lives on the row (`a → b`); don't repeat here. */}
-                  {probe.updateMode === "reinstall" && probe.detected ? (
-                    <div>{t("settings.agents.lifecycle.reinstallHint")}</div>
+                  {canReinstall ? (
+                    <div className="flex flex-col items-start gap-2">
+                      <div className="text-muted-foreground text-xs">
+                        {t("settings.agents.lifecycle.reinstallHint")}
+                      </div>
+                      {isBusy ? null : (
+                        <Button
+                          onClick={() => {
+                            handleLifecycle("update", {
+                              reinstall: true,
+                            }).catch(() => undefined);
+                          }}
+                          size="sm"
+                          type="button"
+                          variant="outline"
+                        >
+                          <RotateCcw data-icon="inline-start" />
+                          {t("settings.agents.action.reinstall")}
+                        </Button>
+                      )}
+                    </div>
                   ) : null}
                   {probe.installs.length > 0 ? (
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1 text-muted-foreground text-xs">
                       <div>{t("settings.agents.lifecycle.installs")}</div>
                       <ul className="flex flex-col gap-0.5">
                         {probe.installs.map((inst) => (

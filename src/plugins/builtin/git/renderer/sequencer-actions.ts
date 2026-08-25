@@ -45,7 +45,7 @@ function registerSequencerRunAction(
   sortOrder: number
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: () => {
@@ -123,7 +123,7 @@ function registerSequencerAbortAction(
   sortOrder: number
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
@@ -161,7 +161,7 @@ function registerSequencerContinueAction(
   sortOrder: number
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
@@ -200,7 +200,7 @@ export function registerCherryPickActions(
     registerSequencerRunAction(
       context,
       {
-        commandFallback: "Git: Cherry-pick Commit...",
+        commandFallback: "git: Cherry-pick Commit...",
         commandId: "pier.git.cherryPick",
         conflictBodyFallback:
           "Cherry-pick paused due to conflicts. Resolve them, then continue.",
@@ -218,7 +218,7 @@ export function registerCherryPickActions(
     registerSequencerAbortAction(
       context,
       {
-        commandFallback: "Git: Abort Cherry-pick",
+        commandFallback: "git: Abort Cherry-pick",
         commandId: "pier.git.cherryPickAbort",
         kind: "cherry-picking",
       },
@@ -227,7 +227,7 @@ export function registerCherryPickActions(
     registerSequencerContinueAction(
       context,
       {
-        commandFallback: "Git: Continue Cherry-pick",
+        commandFallback: "git: Continue Cherry-pick",
         commandId: "pier.git.cherryPickContinue",
         kind: "cherry-picking",
       },
@@ -248,7 +248,7 @@ export function registerRevertActions(
     registerSequencerRunAction(
       context,
       {
-        commandFallback: "Git: Revert Commit...",
+        commandFallback: "git: Revert Commit...",
         commandId: "pier.git.revert",
         conflictBodyFallback:
           "Revert paused due to conflicts. Resolve them, then continue.",
@@ -266,7 +266,7 @@ export function registerRevertActions(
     registerSequencerAbortAction(
       context,
       {
-        commandFallback: "Git: Abort Revert",
+        commandFallback: "git: Abort Revert",
         commandId: "pier.git.revertAbort",
         kind: "reverting",
       },
@@ -275,7 +275,7 @@ export function registerRevertActions(
     registerSequencerContinueAction(
       context,
       {
-        commandFallback: "Git: Continue Revert",
+        commandFallback: "git: Continue Revert",
         commandId: "pier.git.revertContinue",
         kind: "reverting",
       },
@@ -293,14 +293,14 @@ export function registerUndoCommitAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
       const title = commandTitle(
         context,
         "pier.git.undoLastCommit",
-        "Git: Undo Last Commit"
+        "git: Undo Last Commit"
       );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
@@ -359,6 +359,6 @@ export function registerUndoCommitAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.undoLastCommit", "Git: Undo Last Commit"),
+      commandTitle(context, "pier.git.undoLastCommit", "git: Undo Last Commit"),
   });
 }

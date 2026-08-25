@@ -161,7 +161,7 @@ export const settingsSkills = {
   confirmGitDeleteTitle:
     "{{target}} のエージェントスキルフォルダを削除しますか？",
   confirmGitDeleteBody:
-    "このパスは Git が追跡しています。削除すると、リポジトリの変更に削除として出ます。",
+    "このパスは git が追跡しています。削除すると、リポジトリの変更に削除として出ます。",
   confirmContentDeleteTitle: "スキル {{skill}} を削除しますか？",
   confirmContentDeleteBody:
     "このプロジェクトからスキルを外します。スイッチをオフにするだけでは、エージェントから隠れるだけです。この操作は元に戻せません。",

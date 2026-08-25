@@ -1,7 +1,7 @@
 # 项目技能 S0：官方发现事实与探测基线
 
 > 日期：2026-07-19  
-> 对应设计：`docs/superpowers/specs/2026-07-14-project-skills-management-design.md` §2.1、§5（`ManagedAgentLaunchGate`）、§9 S0  
+> 对应设计：`docs/archive/superpowers/specs/2026-07-14-project-skills-management-design.md` §2.1、§5（`ManagedAgentLaunchGate`）、§9 S0  
 > 探测入口：`scripts/project-skills/probe-agent-skills.mjs`
 
 本文件固化 Codex / Claude Code / Cursor / OpenCode 的项目级技能发现路径、符号链接（symlink）假设、重复发现（`duplicate-discovery`）语义，以及受管启动门 `ManagedAgentLaunchGate` 的 S0 证据边界。适配能力必须同时具备官方文档与版本化本机探测，不得从第三方管理器路径表推断，也不得在界面硬编码为健康。

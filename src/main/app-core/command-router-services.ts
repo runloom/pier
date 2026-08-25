@@ -31,6 +31,7 @@ import type { ManagedPluginInstallService } from "../services/managed-plugins/in
 import type { PanelContextResolutionControl } from "../services/panel-context-resolver.ts";
 import type { PanelTransferService } from "../services/panel-transfer/types.ts";
 import type { PierHomeService } from "../services/pier-home/service.ts";
+import type { PluginDataProjectionService } from "../services/plugin-data-projections/service.ts";
 import type { PluginService } from "../services/plugin-service.ts";
 import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
@@ -57,6 +58,7 @@ export interface PierCoreServices {
   agentUsage: AgentUsageService;
   ai: AiService;
   appUpdates: AppUpdateService;
+  canvasTrust?: import("../services/canvas-trust/service.ts").CanvasTrustService;
   commandPaletteMru: {
     clear(): Promise<MruState>;
     read(): Promise<MruState>;
@@ -116,6 +118,8 @@ export interface PierCoreServices {
   panelTransfer?: PanelTransferService;
   pierBindings?: PierBindingsChannel;
   pierHome?: PierHomeService;
+  /** 插件数据投影快照服务（canvas 专用命令）。Optional for tests. */
+  pluginDataProjections?: PluginDataProjectionService;
   pluginDisableTransitions: PluginDisableTransitionCoordinator;
   pluginSettings: PluginSettingsService;
   plugins: PluginService;

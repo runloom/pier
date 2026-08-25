@@ -123,7 +123,7 @@ export function resourceFromDocumentResult(
       entry,
       failure: {
         kind: "error",
-        message: "Git Review document does not match the index entry.",
+        message: "git Review document does not match the index entry.",
         reason: "internal",
         retryable: true,
       },

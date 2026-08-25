@@ -24,7 +24,14 @@ function listFiles(dir: string, suffix: string): string[] {
 describe("canvas host data contract", () => {
   it("keeps sibling-file reads on pier/canvas and host commands off it", () => {
     expect(pierCanvasExports.useCanvasFile).toBeTypeOf("function");
-    expect(pierCanvasExports).not.toHaveProperty("useActivityOverview");
+    // P0 能力层（2026-08-24 设计 §4.2）：curated 数据 hooks 进入 pier/canvas。
+    for (const hook of [
+      "useActivityOverview",
+      "useCostOverview",
+      "useSystemResources",
+    ] as const) {
+      expect(pierCanvasExports[hook]).toBeTypeOf("function");
+    }
     expect(pierCanvasExports).not.toHaveProperty("host");
   });
 

@@ -12,7 +12,7 @@ export function registerViewChangesAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
@@ -36,6 +36,6 @@ export function registerViewChangesAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.viewChanges", "Git: Open Review"),
+      commandTitle(context, "pier.git.viewChanges", "git: Open Review"),
   });
 }

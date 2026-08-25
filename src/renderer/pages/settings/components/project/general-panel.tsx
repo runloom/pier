@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { ProjectCanvasRootsCard } from "./canvas-roots-card.tsx";
+import { ProjectCanvasTrustCard } from "./canvas-trust-card.tsx";
 
 const GIT_IGNORE_LINES = [".agents/skills/", ".claude/skills/"].join("\n");
 
@@ -32,6 +33,7 @@ export function ProjectGeneralPanel({
     <div className="flex min-w-0 flex-col gap-5 pb-4">
       <div className="flex min-w-0 flex-col gap-4">
         <ProjectCanvasRootsCard projectRootPath={projectRootPath} />
+        <ProjectCanvasTrustCard projectRootPath={projectRootPath} />
 
         <Card>
           <CardHeader className="pb-3">

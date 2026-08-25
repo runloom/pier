@@ -14,6 +14,7 @@ import {
 } from "./preferences.ts";
 import { revealFilesTreePathAfterAncestors } from "./reveal.ts";
 import { filesTreeVisibilityForContext } from "./visibility.ts";
+import { reloadFilesTreeVisibility } from "./visibility-reload.ts";
 
 /**
  * Explicit reveal of the active editor file in the project tree.
@@ -51,14 +52,29 @@ export function createRevealActiveFileInTreeAction(
         contextRoot && fileRootsEqual(contextRoot, root) ? root : source.root;
 
       ensureProjectFileTreeExpanded(revealRoot);
-      const list = filesTreeVisibilityForContext(context).list;
-      revealFilesTreePathAfterAncestors({
-        instanceId: instance.groupId ?? activePanelId,
-        list,
-        options: { intent: "explicit" },
-        path,
-        root: revealRoot,
-      });
+      const controller = filesTreeVisibilityForContext(context);
+      const reveal = () =>
+        revealFilesTreePathAfterAncestors({
+          instanceId: instance.groupId ?? activePanelId,
+          list: controller.list,
+          options: { intent: "explicit" },
+          path,
+          root: revealRoot,
+        });
+      // Explicit reveal wins over Git-ignore hiding: pin, then re-filter
+      // only when the pinned path is actually hidden. Reload failure still
+      // reveals best-effort; the tree surfaces its own load error.
+      if (
+        controller.pinPath(revealRoot, path) &&
+        (await controller.isPathHiddenByGitIgnore(revealRoot, path))
+      ) {
+        await reloadFilesTreeVisibility(
+          revealRoot,
+          controller.list,
+          t("panel.loadError.fallback", "Failed to load files")
+        ).catch(() => undefined);
+      }
+      reveal();
       return await Promise.resolve();
     },
     id: FILES_REVEAL_ACTIVE_IN_TREE_COMMAND_ID,

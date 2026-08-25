@@ -50,6 +50,7 @@ function pluginEntry(overrides: {
       apiVersion: 1,
       commands,
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       ...(overrides.description ? { description: overrides.description } : {}),
       engines: { pier: ">=0.1.0" },
@@ -178,7 +179,7 @@ describe("Settings plugins section", () => {
     expect(screen.queryByText("plugin:read")).not.toBeInTheDocument();
     expect(screen.queryByText("Read plugin manifests")).not.toBeInTheDocument();
     expect(
-      screen.queryByText("Read Git worktree information")
+      screen.queryByText("Read git worktree information")
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Show Worktree details" })

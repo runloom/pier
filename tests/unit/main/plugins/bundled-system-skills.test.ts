@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import {
   bundledSystemSkillContributions,
   PIER_CANVAS_SYSTEM_SKILL_ID,
+  PIER_SUBAGENT_PANELS_SYSTEM_SKILL_ID,
 } from "@main/app-core/bundled-system-skills.ts";
 import {
   systemSkillContentDir,
@@ -18,13 +19,16 @@ const execFileAsync = promisify(execFile);
 const resourcesRoot = join(process.cwd(), "resources");
 
 describe("bundled system skills", () => {
-  it("registers only pier-canvas with a real content directory", async () => {
+  it("registers pier-canvas with a real content directory", async () => {
     const contributions = bundledSystemSkillContributions({
       appVersion: "0.1.10-test",
       resourcesRoot,
     });
+    // 委派 CLI 走仓库文档（docs/pier-agents-delegation.md），不再捆绑技能：
+    // 模型可自动调用的委派技能与 Claude Code teams 模式撞车（都产面板子智能体）。
     expect(contributions.map((c) => c.id)).toEqual([
       PIER_CANVAS_SYSTEM_SKILL_ID,
+      PIER_SUBAGENT_PANELS_SYSTEM_SKILL_ID,
     ]);
     for (const contribution of contributions) {
       assertSystemSkillContribution(contribution);

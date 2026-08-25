@@ -97,15 +97,14 @@ export const settingsAgents = {
     latest: "最新",
     installGuide: "安装命令",
     installs: "安装位置",
-    reinstallHint: "没有可对比的新版本时，可重新安装以刷新当前安装。",
+    reinstallHint: "可重新安装以刷新当前安装。",
     errors: {
       unsupported: "此智能体无法自动安装。请使用安装指南或打开官网。",
       unavailable: "安装服务暂不可用，请稍后重试。",
       no_command: "当前系统没有为此智能体配置可用的安装命令。",
       command_failed: "安装、更新或卸载命令执行失败，详见下方说明。",
       version_unchanged: "版本未变化。可能仍在使用另一处安装。",
-      not_runnable:
-        "已安装，但命令无法运行。请确认所需运行环境（例如 Node.js）已就绪。",
+      not_runnable: "已安装，但无法启动。请在终端中运行该命令查看原因。",
       not_found_after_install:
         "安装已完成，但仍找不到命令。请刷新列表或新开终端后再试。",
       already_installed: "此智能体已安装。",

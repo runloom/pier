@@ -72,6 +72,7 @@ export const terminal = {
     editPasteSaveFailed:
       "貼り付け内容を保存できませんでした。もう一度お試しください",
     pasteAttachmentAria: "貼り付け内容、添付 {{n}}",
+    pasteAttachmentLabel: "貼り付け内容",
     attachmentAutocompleteEmptyBody:
       "先にファイルを追加してから、# でここに挿入してください。",
     attachmentAutocompleteEmptyTitle: "添付はまだありません",
@@ -411,6 +412,13 @@ export const terminal = {
       "ターミナルセッションを開始できませんでした（{{error}}）。このタブを閉じてもう一度お試しください。",
     ioThreadOom:
       "メモリが足りず、ターミナルを開始できません。このタブを閉じてもう一度お試しください。",
+    createFailed:
+      "ターミナルセッションを開始できませんでした（{{error}}）。もう一度お試しください。",
+    createFailedUnknown:
+      "ターミナルセッションを開始できませんでした。もう一度お試しください。",
+    errorRetry: "再試行",
+    relaunchFailed:
+      "ターミナルセッションを再起動できませんでした（{{error}}）。このタブを閉じてもう一度お試しください。",
     pasteConfirmTitle: "ターミナルにペーストしますか？",
     pasteConfirmBody:
       "このペーストは {{lines}} 行あり、コマンドがすぐ実行される可能性があります。",

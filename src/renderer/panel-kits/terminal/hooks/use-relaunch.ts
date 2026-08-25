@@ -1,3 +1,4 @@
+import i18next from "i18next";
 import { useEffect } from "react";
 import { syncTaskPanelParams } from "@/lib/workspace/task-panel-params-sync.ts";
 import { rejectTerminalLaunch } from "@/lib/workspace/terminal-launch-confirmation.ts";
@@ -85,7 +86,9 @@ export function useTerminalRelaunch({
         );
         if (!disposed) {
           showTerminalError(
-            error instanceof Error ? error.message : String(error)
+            i18next.t("terminal.ghosttyHost.relaunchFailed", {
+              error: error instanceof Error ? error.message : String(error),
+            })
           );
         }
       });

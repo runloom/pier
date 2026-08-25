@@ -1,5 +1,6 @@
 import {
   mkdir,
+  open,
   readdir,
   realpath,
   rm,
@@ -8,7 +9,13 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve } from "node:path";
-import { kindFromFileName } from "@shared/composer-attachment-kind.ts";
+import {
+  COMPOSER_TEXT_PREVIEW_READ_BYTES,
+  clipComposerTextPreview,
+  kindFromFileName,
+  looksLikeComposerBinaryPreviewBytes,
+  shouldAttemptComposerTextPreview,
+} from "@shared/composer-attachment-kind.ts";
 import type {
   TerminalComposerAttachmentDto,
   TerminalComposerImageBytes,
@@ -41,18 +48,29 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function attachmentDto(
-  path: string,
-  name = basename(path),
-  previewDataUrl?: string,
-  kindOverride?: TerminalComposerAttachmentDto["kind"]
-): TerminalComposerAttachmentDto {
+function attachmentDto(input: {
+  isDirectory?: boolean;
+  kindOverride?: TerminalComposerAttachmentDto["kind"];
+  name?: string;
+  path: string;
+  previewDataUrl?: string;
+  previewHeight?: number;
+  previewWidth?: number;
+  textPreview?: string;
+}): TerminalComposerAttachmentDto {
+  const name = input.name ?? basename(input.path);
   return {
     id: crypto.randomUUID(),
-    kind: kindOverride ?? kindFromFileName(name),
+    kind: input.kindOverride ?? kindFromFileName(name),
     name,
-    path,
-    ...(previewDataUrl ? { previewDataUrl } : {}),
+    path: input.path,
+    ...(input.isDirectory === undefined
+      ? {}
+      : { isDirectory: input.isDirectory }),
+    ...(input.previewDataUrl ? { previewDataUrl: input.previewDataUrl } : {}),
+    ...(input.previewWidth ? { previewWidth: input.previewWidth } : {}),
+    ...(input.previewHeight ? { previewHeight: input.previewHeight } : {}),
+    ...(input.textPreview ? { textPreview: input.textPreview } : {}),
   };
 }
 
@@ -68,16 +86,30 @@ export function isPierTerminalPastePath(filePath: string): boolean {
   return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
 }
 
-/** Build a small JPEG/PNG data URL for image chips; failures return undefined. */
-function previewDataUrlForImagePath(filePath: string): string | undefined {
+const IMAGE_PREVIEW_MAX_EDGE_PX = 320;
+const IMAGE_PREVIEW_MAX_BYTES = 250_000;
+
+interface ImageRailPreview {
+  previewDataUrl: string;
+  previewHeight: number;
+  previewWidth: number;
+}
+
+/** Build a small PNG data URL for image chips; failures return undefined. */
+function imagePreviewForPath(filePath: string): ImageRailPreview | undefined {
   try {
     const image = nativeImage.createFromPath(filePath);
     if (image.isEmpty()) {
       return;
     }
     const size = image.getSize();
-    const maxEdge = 128;
-    const scale = Math.min(1, maxEdge / Math.max(size.width, size.height, 1));
+    if (size.width < 1 || size.height < 1) {
+      return;
+    }
+    const scale = Math.min(
+      1,
+      IMAGE_PREVIEW_MAX_EDGE_PX / Math.max(size.width, size.height)
+    );
     const resized =
       scale < 1
         ? image.resize({
@@ -87,27 +119,70 @@ function previewDataUrlForImagePath(filePath: string): string | undefined {
           })
         : image;
     const png = resized.toPNG();
-    if (png.byteLength === 0 || png.byteLength > 250_000) {
+    if (png.byteLength === 0 || png.byteLength > IMAGE_PREVIEW_MAX_BYTES) {
       // Oversized preview: skip rather than push large base64 into renderer.
       return;
     }
-    return `data:image/png;base64,${png.toString("base64")}`;
+    return {
+      previewDataUrl: `data:image/png;base64,${png.toString("base64")}`,
+      previewHeight: size.height,
+      previewWidth: size.width,
+    };
   } catch {
     return;
   }
 }
 
-function attachmentDtoFromPath(
+async function textPreviewForPath(
+  filePath: string,
+  name: string,
+  isDirectory: boolean
+): Promise<string | undefined> {
+  if (!shouldAttemptComposerTextPreview({ isDirectory, name })) {
+    return;
+  }
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(filePath, "r");
+    const buffer = Buffer.alloc(COMPOSER_TEXT_PREVIEW_READ_BYTES);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, 0);
+    if (bytesRead === 0) {
+      return;
+    }
+    const sample = buffer.subarray(0, bytesRead);
+    if (looksLikeComposerBinaryPreviewBytes(sample)) {
+      return;
+    }
+    const clipped = clipComposerTextPreview(sample.toString("utf8"));
+    return clipped.length > 0 ? clipped : undefined;
+  } catch {
+    return;
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+async function attachmentDtoFromPath(
   filePath: string,
   isDirectory = false
-): TerminalComposerAttachmentDto {
+): Promise<TerminalComposerAttachmentDto> {
   const name = basename(filePath);
   const kind = isDirectory ? "file" : kindFromFileName(name);
-  const preview =
+  const imagePreview =
     !isDirectory && kind === "image"
-      ? previewDataUrlForImagePath(filePath)
+      ? imagePreviewForPath(filePath)
       : undefined;
-  return { ...attachmentDto(filePath, name, preview), isDirectory };
+  const textPreview =
+    !isDirectory && kind !== "image"
+      ? await textPreviewForPath(filePath, name, isDirectory)
+      : undefined;
+  return attachmentDto({
+    isDirectory,
+    name,
+    path: filePath,
+    ...(imagePreview ?? {}),
+    ...(textPreview ? { textPreview } : {}),
+  });
 }
 
 async function preparePasteDirectory(): Promise<string> {
@@ -144,9 +219,9 @@ export async function resolveTerminalComposerPaths(
     try {
       const info = await stat(path);
       if (info.isDirectory()) {
-        attachments.push(attachmentDtoFromPath(path, true));
+        attachments.push(await attachmentDtoFromPath(path, true));
       } else if (info.isFile()) {
-        attachments.push(attachmentDtoFromPath(path));
+        attachments.push(await attachmentDtoFromPath(path));
       } else {
         failures.push({ path, reason: "not a file or directory" });
       }
@@ -190,7 +265,7 @@ export async function materializeTerminalComposerClipboardImage(): Promise<Termi
     const name = `clipboard-${crypto.randomUUID()}.png`;
     const path = join(directory, name);
     await writeFile(path, image.toPNG());
-    return { ok: true, attachment: attachmentDtoFromPath(path) };
+    return { ok: true, attachment: await attachmentDtoFromPath(path) };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
@@ -240,10 +315,14 @@ export async function materializeTerminalComposerImageBytes(
         ? rawBytes
         : Uint8Array.from(rawBytes as number[]);
     await writeFile(path, Buffer.from(raw));
-    const preview = previewDataUrlForImagePath(path);
+    const preview = imagePreviewForPath(path);
     return {
       ok: true,
-      attachment: attachmentDto(path, displayName, preview),
+      attachment: attachmentDto({
+        name: displayName,
+        path,
+        ...(preview ?? {}),
+      }),
     };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
@@ -269,14 +348,16 @@ export async function materializeTerminalComposerTextBytes(data: {
     const displayName = displayNameForPaste(data.name, "paste.txt");
     const path = join(directory, uniquePasteFileName("txt"));
     await writeFile(path, text, "utf8");
+    const name = displayName.includes(".") ? displayName : `${displayName}.txt`;
+    const textPreview = clipComposerTextPreview(text);
     return {
       ok: true,
-      attachment: attachmentDto(
+      attachment: attachmentDto({
+        kindOverride: "paste",
+        name,
         path,
-        displayName.includes(".") ? displayName : `${displayName}.txt`,
-        undefined,
-        "paste"
-      ),
+        ...(textPreview.length > 0 ? { textPreview } : {}),
+      }),
     };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };

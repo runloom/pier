@@ -39,6 +39,29 @@ export async function executeLiveModulesCommand(
         const url = liveModules.getUrl(command.rootId, command.moduleId);
         return success(requestId, { url });
       }
+      case "liveModules.trustStatus": {
+        if (!services.canvasTrust) {
+          return null;
+        }
+        const status = await services.canvasTrust.status(
+          command.projectRootPath
+        );
+        return success(requestId, status);
+      }
+      case "liveModules.grantTrust": {
+        if (!services.canvasTrust) {
+          return null;
+        }
+        await services.canvasTrust.grant(command.projectRootPath);
+        return success(requestId, {});
+      }
+      case "liveModules.revokeTrust": {
+        if (!services.canvasTrust) {
+          return null;
+        }
+        await services.canvasTrust.revoke(command.projectRootPath);
+        return success(requestId, {});
+      }
       default:
         return null;
     }

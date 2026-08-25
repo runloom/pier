@@ -33,6 +33,8 @@ export interface ImagePreviewCanvasProps {
   labels: ImagePreviewCanvasLabels;
   /** When true, show the loading skeleton overlay (src may already be set). */
   loading?: boolean;
+  /** When provided (with `labels.copyImage`), shows a copy-image toolbar button. */
+  onCopyImage?: () => Promise<void>;
   /** Fired when the empty viewport chrome is clicked (not the image). */
   onEmptyClick?: () => void;
   onError?: (event: SyntheticEvent<HTMLImageElement>) => void;
@@ -55,6 +57,7 @@ export function ImagePreviewCanvas({
   className,
   labels,
   loading = false,
+  onCopyImage,
   onEmptyClick,
   onError,
   onLoad,
@@ -209,6 +212,7 @@ export function ImagePreviewCanvas({
         onZoomIn={() => pan.adjustZoom(1)}
         onZoomOut={() => pan.adjustZoom(-1)}
         zoom={pan.zoom}
+        {...(onCopyImage ? { onCopyImage } : {})}
       />
     </div>
   );

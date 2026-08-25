@@ -72,7 +72,7 @@ function validateCustomBranch(
     return text(
       "errorBranchInvalid",
       undefined,
-      "Enter a valid Git branch name using letters, digits and . _ / -"
+      "Enter a valid git branch name using letters, digits and . _ / -"
     );
   }
   if (existingBranches.includes(branch)) {
@@ -233,7 +233,7 @@ function buildBranchRepairPrompt({
   task: string;
 }): string {
   return [
-    "The previous response was not a valid Git branch name.",
+    "The previous response was not a valid git branch name.",
     "Return exactly one corrected branch name and nothing else.",
     "Use 2-5 semantic lowercase English words with ASCII letters and digits.",
     "Only . _ / - separators are allowed. Do not use spaces, .., @{, a leading dash, a dot-prefixed path segment, or a .lock suffix.",
@@ -242,7 +242,7 @@ function buildBranchRepairPrompt({
   ].join("\n");
 }
 
-/** custom 模式同步派生;ai 模式先调通用 AI 文本生成,再由 Git 插件规整/去重。 */
+/** custom 模式同步派生;ai 模式先调通用 AI 文本生成,再由 git 插件规整/去重。 */
 export async function resolveSubmitDraft({
   branchNamePromptTemplate,
   data,

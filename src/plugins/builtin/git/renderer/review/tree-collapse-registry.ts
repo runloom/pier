@@ -1,5 +1,5 @@
 /**
- * Active Git review tree expand/collapse hooks (panel-local).
+ * Active git review tree expand/collapse hooks (panel-local).
  * Context-menu actions call through this (no toolbar, no default shortcuts).
  */
 

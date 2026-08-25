@@ -12,7 +12,7 @@ export function pluginText(
 }
 
 /**
- * Shared factory for Git review file/dir collision labels.
+ * Shared factory for git review file/dir collision labels.
  * Tree, CodeView, demand, and comment nav must use the same function so
  * displayPath natural sort stays aligned under every locale.
  */

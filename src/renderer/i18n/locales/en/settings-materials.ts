@@ -122,6 +122,22 @@ export const settingsMaterials = {
     tone: "How strong the text looks.",
     rows: "Visible lines.",
     pressed: "Whether the toggle stays down.",
+    aoCounts: "Window-scoped counters for the activity overview.",
+    aoRows: "Active rows, newest first.",
+    aoInProgress: "Number of active list rows.",
+    aoNeedsYou: "Agents waiting or errored, plus blocked or failed tasks.",
+    aoRunning: "Agents working, plus active task runs.",
+    aoKind: "What kind of row this is.",
+    aoPanelId: "Panel the activity belongs to.",
+    aoUpdatedAt: "Last signal time (epoch ms).",
+    coRefresh: "Manually rescan every usage source.",
+    coSnapshot: "Cross-plugin usage aggregate, null until the first read.",
+    coStatus:
+      "ready once a snapshot arrived; error when the initial read failed.",
+    srCpuHistory: "CPU samples, oldest to newest (about 5 minutes).",
+    srError: "Latest poll error, if any.",
+    srSnapshot: "Latest related-process resource snapshot.",
+    srStatus: "ready after the first successful poll.",
   },
   lead: {
     Frame: "Reading container with a max width",
@@ -172,5 +188,8 @@ export const settingsMaterials = {
     Mermaid:
       "Flowcharts from nodes, plus native mermaid sequence, state, class, ER, and mind maps.",
     canvasFile: "Sibling-file sandbox next to the canvas, including conflicts",
+    activityOverview: "Who is running, who needs you, right now",
+    costOverview: "Cross-plugin token cost aggregate with manual refresh",
+    systemResources: "Related-process CPU trend and latest snapshot",
   },
 } as const;

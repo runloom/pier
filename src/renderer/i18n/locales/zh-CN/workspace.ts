@@ -9,6 +9,9 @@ export const workspace = {
     loadingTitle: "正在加载插件面板",
     missingRendererDescription: "该插件没有可显示的界面。",
     unavailableTitle: "插件面板不可用",
+    crashTitle: "插件面板已崩溃",
+    crashDescription:
+      "插件界面运行出错，其它面板不受影响。禁用或重新加载该插件后可恢复。",
   },
   startupError: {
     description: "请重新加载后再试。",

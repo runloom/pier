@@ -49,6 +49,7 @@ function pluginEntry(input: {
           title: "Codex Accounts",
         },
       ],
+      dataProjections: [],
       name: "Codex",
       panels: [],
       permissions: [],

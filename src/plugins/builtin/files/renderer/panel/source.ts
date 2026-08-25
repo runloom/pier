@@ -1,8 +1,10 @@
 import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import { diskDocumentId } from "../document/paths.ts";
 import {
   type FilesDocument,
   type FilesDocumentPanelSource,
+  isDiskSourceRootAllowed,
   parseFilesDocumentPanelSource,
 } from "../document/types.ts";
 import type { FilesTranslate } from "../i18n.ts";
@@ -130,4 +132,28 @@ export function asGroupHandle(value: unknown): PierDockviewGroupHandle | null {
     return null;
   }
   return value as PierDockviewGroupHandle;
+}
+
+/**
+ * Outside-workspace facts for a panel source: `outsideWorkspace` drives the
+ * content banner; `externalActiveFile` surfaces the doc pinned above a tree
+ * that stays rooted at the panel's project root.
+ */
+export function outsideWorkspaceStateFor(
+  source: FilesDocumentPanelSource | null | undefined,
+  root: string | null | undefined,
+  context: PanelContext | null | undefined
+): {
+  externalActiveFile: { path: string; root: string } | null;
+  outsideWorkspace: boolean;
+} {
+  const outsideWorkspace =
+    source?.kind === "disk" && !isDiskSourceRootAllowed(source.root, context);
+  return {
+    externalActiveFile:
+      outsideWorkspace && root
+        ? { path: source.path, root: source.root }
+        : null,
+    outsideWorkspace,
+  };
 }

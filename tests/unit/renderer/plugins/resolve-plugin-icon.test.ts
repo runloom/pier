@@ -9,7 +9,7 @@ describe("resolvePluginIcon", () => {
 
   it("maps official managed plugins to brand or domain icons", () => {
     expect(resolvePluginIcon("pier.ssh")).toBe(Server);
-    expect(resolvePluginIcon("pier.tmux")).toBe(Columns2);
+    expect(resolvePluginIcon("pier.agent-splits")).toBe(Columns2);
     expect(resolvePluginIcon("pier.codex")).not.toBe(Puzzle);
     expect(resolvePluginIcon("pier.claude")).not.toBe(Puzzle);
     expect(resolvePluginIcon("pier.grok")).not.toBe(Puzzle);

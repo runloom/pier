@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
@@ -106,7 +107,7 @@ export const settings = {
       deliveryClaude: "Claude Code（.claude/skills）",
       deliveryClaudeHint:
         "Claude Code はここだけを見ます。Claude Code にも見せるときだけオンにしてください。",
-      gitIgnoreTitle: "推奨する Git 無視",
+      gitIgnoreTitle: "推奨する git 無視",
       gitIgnoreDescription:
         "スキルのインストールリンクは、通常コミットしない方がよいです。",
       gitIgnoreCopy: "コピー",
@@ -129,6 +130,20 @@ export const settings = {
       canvasRootsMaxFolders: "追加できるフォルダは最大 {{max}} 個です。",
       canvasRootsConflict:
         "ファイルがほかで変更されました。このページを開き直してから保存してください。",
+      canvasTrustTitle: "キャンバスの信頼",
+      canvasTrustDescription:
+        "このプロジェクトのキャンバスを初めてプレビューする際に確認します。決定はこのマシンにのみ保存され、プロジェクトのファイルには書き込まれません。",
+      canvasTrustLoading: "読み込み中…",
+      canvasTrustLoadFailed: "信頼状態を読み込めませんでした",
+      canvasTrustedBadge: "信頼済み",
+      canvasTrustNotTrusted:
+        "未信頼。このプロジェクトのキャンバスを初めてプレビューする際に確認します。",
+      canvasTrustRevoke: "信頼を取り消す",
+      canvasTrustRevokeTitle:
+        "このプロジェクトのキャンバスの信頼を取り消しますか？",
+      canvasTrustRevokeBody:
+        "取り消すと、次にこのプロジェクトのキャンバスをプレビューする際に再度確認します。",
+      canvasTrustRevokeFailed: "信頼を取り消せませんでした",
     },
     tabEnvironment: "環境",
     tabRules: "ルール",
@@ -210,7 +225,7 @@ export const settings = {
     cleanupHint: "作業ツリーを削除するときに実行します。",
     copyPatterns: {
       addPattern: "パターンを追加",
-      hint: "メインプロジェクトで Git に無視されているファイルに一致させ、新しい作業ツリーへコピーします。",
+      hint: "メインプロジェクトで git に無視されているファイルに一致させ、新しい作業ツリーへコピーします。",
       patternLabel: "ファイルパターン",
       placeholder: ".env*",
       remove: "削除",
@@ -240,45 +255,7 @@ export const settings = {
     setupCommand: "セットアップコマンド",
     setupHint: "作業ツリーを作成するときに実行します。",
   },
-  appUpdate: {
-    title: "アプリの更新",
-    description: "Pier の更新を確認、ダウンロード、インストールします。",
-    available: "バージョン {{version}} が利用できます。",
-    progress: "ダウンロード {{percent}}%",
-    state: {
-      disabled: "開発モードではアプリの更新を確認しません。",
-      idle: "まだ更新確認を実行していません。",
-      checking: "更新を確認中…",
-      available: "更新があります。",
-      "not-available": "Pier は最新です。",
-      downloading: "更新をダウンロード中…",
-      downloaded: "更新をダウンロードしました。再起動してインストールします。",
-      error: "更新の確認に失敗しました。",
-    },
-    action: {
-      check: "更新を確認",
-      download: "ダウンロード",
-      restart: "再起動してインストール",
-    },
-    toast: {
-      statusFailed: "更新状態を読めませんでした。もう一度お試しください",
-      checkFailed: "更新を確認できませんでした。もう一度お試しください",
-      downloadFailed:
-        "更新をダウンロードできませんでした。もう一度お試しください",
-      installFailed:
-        "更新をインストールできませんでした。もう一度お試しください",
-      ready: "更新の準備ができました",
-      readyDetail: "Pier {{version}} · 再起動してインストール",
-    },
-    titleBar: {
-      update: "更新",
-      updateAvailable: "v{{version}}",
-      availableAria: "Pier {{version}} が利用できます",
-      downloadingAria: "更新をダウンロード中 {{percent}} パーセント",
-      restartAria: "再起動して Pier {{version}} をインストール",
-      errorAria: "アプリの更新に失敗しました。更新設定を開いてください。",
-    },
-  },
+  appUpdate: settingsAppUpdate,
   statusBar: {
     title: "ステータスバー",
     description:
@@ -321,7 +298,7 @@ export const settings = {
     monoFontSizeDesc: "範囲 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "コードのフォントサイズ",
-    codeFontSizeDesc: "エディタと Git 差分。範囲 8–32",
+    codeFontSizeDesc: "エディタと git 差分。範囲 8–32",
     codeFontSizePlaceholder: "13",
     fontUpdateFailed: "フォント設定を更新できませんでした",
     terminalCursorStyle: "カーソルの形",

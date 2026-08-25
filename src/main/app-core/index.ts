@@ -19,11 +19,13 @@ import {
 } from "../plugins/host-api.ts";
 import { createPluginRpcBus, type PluginRpcBus } from "../plugins/rpc-bus.ts";
 import { registerPluginRpcIpc } from "../plugins/rpc-ipc.ts";
+import { registerSandboxAuditIpc } from "../plugins/sandbox-audit-ipc.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/detection-service.ts";
 import { createAgentUsageService } from "../services/agents/usage-service.ts";
 import { createAiService } from "../services/ai/service.ts";
+import { createCanvasTrustService } from "../services/canvas-trust/service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createCommentsService } from "../services/comments/service.ts";
 import { createFileDraftsService } from "../services/files/drafts-service.ts";
@@ -41,14 +43,15 @@ import {
   createManagedPluginInstallService,
   type ManagedPluginInstallService,
 } from "../services/managed-plugins/install-service.ts";
-import {
-  getPierPluginMode,
-  listConfiguredWorkspaceRoots,
-} from "../services/managed-plugins/mode.ts";
+import { getPierPluginMode } from "../services/managed-plugins/mode.ts";
 import { createManagedPluginOperationLog } from "../services/managed-plugins/operation-log.ts";
 import { createManagedPluginPaths } from "../services/managed-plugins/paths.ts";
 import { bootWorkspacePluginMode } from "../services/managed-plugins/workspace-boot.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
+import {
+  bootAppCorePluginDataProjections,
+  refreshManifestProjections,
+} from "../services/plugin-data-projections/boot.ts";
 import { createPluginService } from "../services/plugin-service.ts";
 import { createPluginSettingsService } from "../services/plugin-settings-service.ts";
 import { createDefaultPluginSources } from "../services/plugin-sources.ts";
@@ -83,6 +86,7 @@ import { createLazyAppCore } from "./lazy.ts";
 import { createAppLiveModulesService } from "./live-modules-wiring.ts";
 import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
+import { resolveWorkspaceDevPluginSpecs } from "./managed-plugin-workspace-specs.ts";
 import {
   createForegroundActivityFacade,
   createNotificationCenterCommandFacade,
@@ -110,6 +114,7 @@ export interface PierAppCore {
   clients: PierClientRegistry;
   commandRouter: CommandRouter;
   disposeManagedPluginDevRuntimeWatch(): void;
+  disposePluginDataProjections(): void;
   eventBus: PierEventBus;
   flushExternalPluginsBeforeQuit(): Promise<void>;
   pluginHost: MainPluginHostApi;
@@ -150,24 +155,7 @@ function createPierAppCore(): PierAppCore {
   const managedPluginDevRuntimeWatches =
     createManagedPluginDevRuntimeWatchRegistry();
   const pluginMode = getPierPluginMode(process.cwd());
-  const workspaceDevPluginSpecs = [
-    ...OFFICIAL_BUNDLED_PLUGIN_SPECS.map((s) => ({
-      devPackageDir: s.devPackageDir,
-      id: s.id,
-    })),
-    ...listConfiguredWorkspaceRoots(process.cwd()).map((r) => ({
-      devPackageDir: r.path,
-      id: r.id,
-    })),
-  ];
-  // Custom roots override first-party when id collides.
-  const workspaceSpecById = new Map<
-    string,
-    { devPackageDir: string; id: string }
-  >();
-  for (const spec of workspaceDevPluginSpecs)
-    workspaceSpecById.set(spec.id, spec);
-  const dedupedSpecs = [...workspaceSpecById.values()];
+  const workspaceDevPluginSpecs = resolveWorkspaceDevPluginSpecs(process.cwd());
   const managedPlugins: ManagedPluginInstallService =
     createManagedPluginInstallService({
       appendOperationLog: (record) => managedPluginOpLog.append(record),
@@ -192,9 +180,11 @@ function createPierAppCore(): PierAppCore {
       pluginMode,
       runtimeMode: isDevRuntime() ? "development" : "production",
       store: managedPluginIndexStore,
-      workspaceDevPluginSpecs: pluginMode === "workspace" ? dedupedSpecs : [],
+      workspaceDevPluginSpecs:
+        pluginMode === "workspace" ? workspaceDevPluginSpecs : [],
     });
   registerPluginActivationIpc(managedPlugins);
+  registerSandboxAuditIpc(managedPluginOpLog);
   const basePlugins = createPluginService({
     sources: createDefaultPluginSources,
     externalRuntimeSources: () =>
@@ -221,8 +211,25 @@ function createPierAppCore(): PierAppCore {
       }
     }
   });
+  const pluginRpcBus: PluginRpcBus = createPluginRpcBus({
+    broadcast: (payload) => {
+      for (const win of windowManager.getAll()) {
+        if (!win.isDestroyed()) {
+          win.webContents.send(PIER_BROADCAST.PLUGIN_RPC_EVENT, payload);
+        }
+      }
+    },
+  });
+  // 插件数据投影：canvas 快照命令 + 已声明键变更转发（boot 细节见 helper）。
+  const appCoreProjections = bootAppCorePluginDataProjections({
+    bus: pluginRpcBus,
+    plugins: basePlugins,
+  });
   const pluginHost = createMainPluginHostApi({
-    onRegistryChanged: broadcastPluginRegistryChanged,
+    onRegistryChanged: (result) => {
+      broadcastPluginRegistryChanged(result);
+      refreshManifestProjections(appCoreProjections);
+    },
     plugins: basePlugins,
     settings: pluginSettings,
   });
@@ -238,15 +245,6 @@ function createPierAppCore(): PierAppCore {
     readPreferences: () => preferences.read(),
   });
 
-  const pluginRpcBus: PluginRpcBus = createPluginRpcBus({
-    broadcast: (payload) => {
-      for (const win of windowManager.getAll()) {
-        if (!win.isDestroyed()) {
-          win.webContents.send(PIER_BROADCAST.PLUGIN_RPC_EVENT, payload);
-        }
-      }
-    },
-  });
   // Wait for host shell env (single dump); no second echo $PATH.
   // Detection and lifecycle share PES env so PATH probes stay consistent.
   const resolveAgentEnv = async () => {
@@ -309,7 +307,7 @@ function createPierAppCore(): PierAppCore {
       });
     // Workspace mode: pin runtime to local package dirs (first-party + custom roots).
     if (pluginMode === "workspace") {
-      await bootWorkspacePluginMode(dedupedSpecs, {
+      await bootWorkspacePluginMode(workspaceDevPluginSpecs, {
         managedPlugins,
         managedPluginIndexStore,
         managedPluginDevRuntimeWatches,
@@ -355,6 +353,7 @@ function createPierAppCore(): PierAppCore {
   const filePathTransactionLock = new FilePathTransactionLock();
   const files = createFileService({ transactionLock: filePathTransactionLock });
   const panelContexts = createPanelContextService();
+  const canvasTrust = createCanvasTrustService({ userDataDir });
   const {
     agentLaunchGate,
     agentMcpCatalog,
@@ -419,6 +418,7 @@ function createPierAppCore(): PierAppCore {
     fileDrafts,
     files,
     fileWatch: createFileWatchService(),
+    pluginDataProjections: appCoreProjections.projections,
     preferences,
     projectSkills,
     systemSkills,
@@ -426,8 +426,10 @@ function createPierAppCore(): PierAppCore {
     usageData,
     processEnvironment,
     localEnvironments,
+    canvasTrust,
     liveModules: createAppLiveModulesService({
       resolveHomeRoot: () => pierHome.rootPath(),
+      projectTrust: canvasTrust,
     }),
     pierHome,
     pierBindings,
@@ -485,6 +487,7 @@ function createPierAppCore(): PierAppCore {
     disposeManagedPluginDevRuntimeWatch: () => {
       managedPluginDevRuntimeWatches.dispose();
     },
+    disposePluginDataProjections: () => appCoreProjections.disposeTap(),
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),
     pluginHost,

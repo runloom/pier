@@ -39,5 +39,17 @@ export function createHostLiveModulesApi(
       assertPluginCapability(entry, "file:write");
       return window.pier.liveModules.unregisterRoot(rootId);
     },
+    trustStatus: (projectRootPath) => {
+      assertPluginCapability(entry, "preferences:read");
+      return window.pier.liveModules.trustStatus(projectRootPath);
+    },
+    grantTrust: (projectRootPath) => {
+      assertPluginCapability(entry, "preferences:write");
+      return window.pier.liveModules.grantTrust(projectRootPath);
+    },
+    revokeTrust: (projectRootPath) => {
+      assertPluginCapability(entry, "preferences:write");
+      return window.pier.liveModules.revokeTrust(projectRootPath);
+    },
   };
 }

@@ -9,6 +9,7 @@ import {
 } from "pier/canvas";
 import { useState } from "react";
 import { ControlsPage } from "./controls.tsx";
+import { DataPage } from "./data.tsx";
 import { HostApiPage } from "./host.tsx";
 import { LayoutPage } from "./layout.tsx";
 import { VizPage } from "./viz.tsx";
@@ -43,6 +44,7 @@ export default function CanvasKit() {
             <TabsTrigger value="layout">布局</TabsTrigger>
             <TabsTrigger value="control">控件</TabsTrigger>
             <TabsTrigger value="viz">图示</TabsTrigger>
+            <TabsTrigger value="data">数据</TabsTrigger>
             <TabsTrigger value="host">API</TabsTrigger>
           </TabsList>
           <TabsContent className="mt-5" value="layout">
@@ -56,6 +58,9 @@ export default function CanvasKit() {
           </TabsContent>
           <TabsContent className="mt-5" value="host">
             <HostApiPage />
+          </TabsContent>
+          <TabsContent className="mt-5" value="data">
+            <DataPage />
           </TabsContent>
         </Tabs>
       </Stack>

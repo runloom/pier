@@ -1,6 +1,8 @@
 /**
- * 展示层：产品 sessionTitle → Index / 活动行 / 改名初值。
+ * 展示层：产品 sessionTitle → 改名初值 / 列表降级兜底。
  * **不驱动终端 tab**（tab 走 OSC → cwd，见 terminalPanelDescriptor）。
+ * **不再是列表主标题**（列表主标题与 tab short 完全一致，见
+ * renderer lib/agent-runtime/list-title.ts 的 resolveAgentListTitle）。
  */
 
 import { getAgentCatalogEntry } from "../agent-catalog.ts";
@@ -20,9 +22,9 @@ export interface ResolveAgentSessionTitleInput {
 export interface ResolvedAgentSessionTitle {
   /** 无 sessionTitle 时的 primary（便于测试与调试）。 */
   placeholder: string;
-  /** Index 主行等。 */
+  /** 改名初值 / 列表降级兜底等。 */
   primary: string;
-  /** Index 副行等可用的项目短名；无路径时缺席。 */
+  /** 项目短名（列表副行等可用）；无路径时缺席。 */
   secondary?: string;
 }
 

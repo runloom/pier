@@ -76,7 +76,7 @@ export class GitReviewDocumentLoader {
     const maxRetainedLines =
       options.maxRetainedLines ?? GIT_REVIEW_MAX_RETAINED_LINES;
     if (!(Number.isSafeInteger(maxConcurrent) && maxConcurrent > 0)) {
-      throw new Error("Git Review document 并发数必须是正安全整数");
+      throw new Error("git Review document 并发数必须是正安全整数");
     }
     assertGitReviewRetentionLimits({
       maxRetainedBytes,
@@ -92,7 +92,7 @@ export class GitReviewDocumentLoader {
     this.#entryOrder = options.entries.map((entry) => entry.entryKey);
     for (const entry of options.entries) {
       if (this.#resources.has(entry.entryKey)) {
-        throw new Error(`Git Review entryKey 重复: ${entry.entryKey}`);
+        throw new Error(`git Review entryKey 重复: ${entry.entryKey}`);
       }
       this.#resources.set(entry.entryKey, { entry, kind: "idle" });
     }
@@ -139,7 +139,7 @@ export class GitReviewDocumentLoader {
     }
     const resource = this.#resources.get(entryKey);
     if (!resource) {
-      throw new Error(`Git Review 重试条目不存在: ${entryKey}`);
+      throw new Error(`git Review 重试条目不存在: ${entryKey}`);
     }
     if (resource.kind !== "error" || !resource.failure.retryable) {
       return;
@@ -367,7 +367,7 @@ export class GitReviewDocumentLoader {
     const resources = this.#entryOrder.map((entryKey) => {
       const resource = this.#resources.get(entryKey);
       if (!resource) {
-        throw new Error(`Git Review document 资源缺失: ${entryKey}`);
+        throw new Error(`git Review document 资源缺失: ${entryKey}`);
       }
       return resource;
     });

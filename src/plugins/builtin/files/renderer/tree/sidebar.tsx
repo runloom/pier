@@ -30,6 +30,7 @@ import { recordFilesPathMru } from "../search/quick-open-mru.ts";
 import { useFilesTreeContextMenus } from "./context-menu.ts";
 import { cancelInlineCreate, commitInlineCreate } from "./create.ts";
 import { type DoubleClickTrack, detectDoubleClick } from "./double-click.ts";
+import { ExternalActiveFileEntry } from "./external-file-entry.tsx";
 import { ignoredStatusFor } from "./git-decorations.ts";
 import {
   hasPendingCreatePath,
@@ -59,6 +60,7 @@ export function FileTreeSidebar({
   activeFilePath,
   context,
   controller,
+  externalActiveFile,
   instanceId,
   onOpenFile,
   projectRoot,
@@ -94,7 +96,9 @@ export function FileTreeSidebar({
   } = useFilesTreeSidebarPrefs({
     activeFilePath,
     context,
+    controller: treeVisibility,
     list: treeVisibility.list,
+    reload: reloadTreeVisibility,
     root,
   });
 
@@ -465,6 +469,12 @@ export function FileTreeSidebar({
         >
           {t("filePanel.tree.noSearchResults.title", "No matching files")}
         </div>
+      ) : null}
+      {externalActiveFile ? (
+        <ExternalActiveFileEntry
+          externalActiveFile={externalActiveFile}
+          t={t}
+        />
       ) : null}
       <div className="flex min-h-0 flex-1">{content}</div>
     </aside>

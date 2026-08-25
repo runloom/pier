@@ -7,12 +7,14 @@ import {
   buildAgentIndexQuickPick,
 } from "@/lib/agent-runtime/index-quickpick.ts";
 import { AgentIndexQuickPickRow } from "@/lib/agent-runtime/index-quickpick-row.tsx";
+import { tabShortByPanelIdFrom } from "@/lib/agent-runtime/list-title.ts";
 import { preferredAgentIndexSortOptions } from "@/lib/agent-runtime/preferred-sort-options.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import type { QuickPick } from "@/lib/command-palette/types.ts";
 import { useAgentRuntimeIndexStore } from "@/stores/agent-runtime-index.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 
 function buildQuickPickSession(
   options: { limit?: number } | undefined,
@@ -28,6 +30,9 @@ function buildQuickPickSession(
     now: Date.now(),
     ...sortOptions,
     ...(options?.limit === undefined ? {} : { limit: options.limit }),
+    tabShortByPanelId: tabShortByPanelIdFrom(
+      usePanelDescriptorStore.getState().descriptors
+    ),
   });
 
   return {
@@ -70,8 +75,8 @@ function isActiveAgentIndexSession(requestId: number): boolean {
 
 /**
  * 打开本机 Agent Index QuickPick（标题栏与命令面板共用）。
- * 先订阅再 list（避免竞态丢推送）；打开期间 Index + 本窗 FA 任一变化即
- * replaceQuickPick，使分组与行文案跟终端状态同源。
+ * 先订阅再 list（避免竞态丢推送）；打开期间 Index + 本窗 FA + panel descriptor
+ * 任一变化即 replaceQuickPick，使分组、状态与 tab 主标题跟终端同源。
  */
 export async function openAgentIndexQuickPick(options?: {
   limit?: number;
@@ -98,9 +103,12 @@ export async function openAgentIndexQuickPick(options?: {
 
   const unsubIndex = useAgentRuntimeIndexStore.subscribe(refresh);
   const unsubFa = useForegroundActivityStore.subscribe(refresh);
+  // tab short 随 OSC / 改名变化，列表必须同步刷新才能始终与 tab 一致。
+  const unsubDescriptors = usePanelDescriptorStore.subscribe(refresh);
   unsubscribe = () => {
     unsubIndex();
     unsubFa();
+    unsubDescriptors();
   };
 
   try {

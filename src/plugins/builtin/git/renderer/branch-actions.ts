@@ -415,14 +415,14 @@ export function registerMergeAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () =>
       openBranchPick(
         context,
         "merge",
-        commandTitle(context, "pier.git.merge", "Git: Merge Branch...")
+        commandTitle(context, "pier.git.merge", "git: Merge Branch...")
       ),
     id: "pier.git.merge",
     metadata: {
@@ -433,7 +433,7 @@ export function registerMergeAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.merge", "Git: Merge Branch..."),
+      commandTitle(context, "pier.git.merge", "git: Merge Branch..."),
   });
 }
 
@@ -444,7 +444,7 @@ export function openSwitchBranchPick(
   return openBranchPick(
     context,
     "switch",
-    commandTitle(context, "pier.git.switchBranch", "Git: Switch Branch..."),
+    commandTitle(context, "pier.git.switchBranch", "git: Switch Branch..."),
     options.cwd
   );
 }
@@ -453,7 +453,7 @@ export function registerSwitchBranchAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => openSwitchBranchPick(context),
@@ -466,7 +466,7 @@ export function registerSwitchBranchAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.switchBranch", "Git: Switch Branch..."),
+      commandTitle(context, "pier.git.switchBranch", "git: Switch Branch..."),
   });
 }
 
@@ -474,14 +474,14 @@ export function registerRebaseAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () =>
       openBranchPick(
         context,
         "rebase",
-        commandTitle(context, "pier.git.rebase", "Git: Rebase Branch...")
+        commandTitle(context, "pier.git.rebase", "git: Rebase Branch...")
       ),
     id: "pier.git.rebase",
     metadata: {
@@ -492,6 +492,6 @@ export function registerRebaseAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.rebase", "Git: Rebase Branch..."),
+      commandTitle(context, "pier.git.rebase", "git: Rebase Branch..."),
   });
 }

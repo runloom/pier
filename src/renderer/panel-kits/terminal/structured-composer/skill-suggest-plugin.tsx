@@ -8,7 +8,6 @@ import {
   KEY_ARROW_DOWN_COMMAND,
   KEY_ARROW_UP_COMMAND,
   KEY_ENTER_COMMAND,
-  KEY_ESCAPE_COMMAND,
   KEY_TAB_COMMAND,
 } from "lexical";
 import {
@@ -97,11 +96,16 @@ export function SkillSuggestPlugin({
 
   menuOpenRef.current = open;
 
+  // NOTE: deliberately NO KEY_ESCAPE_COMMAND handler here. Lexical's native
+  // keydown listener runs before the host React onKeyDown, so dismissing in
+  // a Lexical command races the host's `isMentionMenuOpen()` check and lets
+  // the same Esc close Rich Input. Escape belongs to the host layers
+  // (composer.tsx onKeyDown / use-composer-escape), which dismiss via the
+  // shared dismissMenuRef and keep Rich Input mounted.
   const dismissMenu = useCallback(() => {
-    menuOpenRef.current = false;
     setOpen(false);
     setMatch(null);
-  }, [menuOpenRef]);
+  }, []);
 
   useEffect(() => {
     dismissMenuRef.current = dismissMenu;
@@ -379,22 +383,13 @@ export function SkillSuggestPlugin({
         },
         COMMAND_PRIORITY_CRITICAL
       ),
-      editor.registerCommand(
-        KEY_ESCAPE_COMMAND,
-        (event) => {
-          event?.preventDefault();
-          dismissMenu();
-          return true;
-        },
-        COMMAND_PRIORITY_CRITICAL
-      ),
     ];
     return () => {
       for (const unsub of unsubs) {
         unsub();
       }
     };
-  }, [dismissMenu, editor, open, selectIndex]);
+  }, [editor, open, selectIndex]);
 
   if (!open) {
     return null;

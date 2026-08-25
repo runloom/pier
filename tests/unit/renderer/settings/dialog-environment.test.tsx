@@ -193,6 +193,12 @@ const DEFAULT_SNAPSHOT: LocalEnvironmentState = {
 
 function pierMock() {
   return {
+    liveModules: {
+      trustStatus: vi.fn(async () => ({
+        grantedAt: null,
+        trusted: false,
+      })),
+    },
     environments: {
       onChanged: vi.fn(() => () => undefined),
       pickProjectDirectory: vi.fn(async () => "/Users/dev/new-project"),
@@ -246,6 +252,7 @@ function registryEntry(): PluginRegistryEntry {
       apiVersion: 1,
       commands: [],
       workbenchWidgets: [],
+      dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.test",

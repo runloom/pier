@@ -33,6 +33,7 @@ export interface BundledPluginBundle {
   readonly description?: string;
   readonly locales?: Record<string, { name?: string; description?: string }>;
   readonly name: string;
+  readonly permissions?: string[];
   readonly sha256: string;
   readonly size?: number;
   readonly version: string;
@@ -86,6 +87,7 @@ export function readBundledPlugin(
       missionControlWidgets?: unknown[];
       panels?: unknown[];
       terminalStatusItems?: unknown[];
+      permissions?: unknown[];
       locales?: Record<string, { name?: string; description?: string }>;
     };
     const version = parsed.version ?? options.fallbackVersion;
@@ -104,6 +106,9 @@ export function readBundledPlugin(
     }
     const size = statSync(archivePath).size;
     const localesSubset = pickLocalesSubset(parsed.locales);
+    const permissions = Array.isArray(parsed.permissions)
+      ? parsed.permissions.filter((p): p is string => typeof p === "string")
+      : undefined;
     return {
       archivePath,
       contributionCounts: {
@@ -120,6 +125,7 @@ export function readBundledPlugin(
       version,
       ...(parsed.description ? { description: parsed.description } : {}),
       ...(localesSubset ? { locales: localesSubset } : {}),
+      ...(permissions && permissions.length > 0 ? { permissions } : {}),
     };
   } catch {
     return null;

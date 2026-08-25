@@ -8,7 +8,7 @@
 
 **Tech Stack:** Swift (GhosttyBridge + NSEvent monitor) + N-API ThreadSafeFunction + Electron main IPC + zustand store + React useEffect + dockview onDidActivePanelChange
 
-**详细设计参考:** [docs/superpowers/specs/2026-06-23-keyboard-routing-design.md](../../../superpowers/specs/2026-06-23-keyboard-routing-design.md)
+**详细设计参考:** [docs/superpowers/specs/2026-06-23-keyboard-routing-design.md](../specs/2026-06-23-keyboard-routing-design.md)
 
 ---
 
@@ -967,7 +967,7 @@ EOF
 **Goal:** 跑完 spec 24 条 test matrix，标 ✓/✗ 在 spec 末尾，确认无 regression。不写代码，只验证。
 
 **Files:**
-- Modify: `docs/superpowers/specs/2026-06-23-keyboard-routing-design.md` (末尾加 verification log section)
+- Modify: `docs/archive/superpowers/specs/2026-06-23-keyboard-routing-design.md` (末尾加 verification log section)
 
 - [ ] **Step 1: 跑完 24 条 spec test matrix**
 
@@ -1004,7 +1004,7 @@ P2 N/A panel:file-explorer fall through (future)
 
 - [ ] **Step 2: 在 spec 末尾加 verification log**
 
-修改 `docs/superpowers/specs/2026-06-23-keyboard-routing-design.md` 末尾追加：
+修改 `docs/archive/superpowers/specs/2026-06-23-keyboard-routing-design.md` 末尾追加：
 
 ```markdown
 ---

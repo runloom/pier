@@ -19,6 +19,8 @@ final class TerminalCallbackBridge {
     /// Raw surface pointer for use in C callbacks (e.g. clipboard).
     nonisolated(unsafe) var rawSurface: ghostty_surface_t?
     var onCellSizeChange: ((UInt32, UInt32) -> Void)?
+    var onMouseShape: ((TerminalMouseShape) -> Void)?
+    var onMouseVisibility: ((Bool) -> Void)?
     var onRefreshRequest: (() -> Void)?
     var onRenderReady: (() -> Void)?
 
@@ -196,6 +198,22 @@ final class TerminalCallbackBridge {
                     exitCode: payload.exit_code,
                     runtimeMilliseconds: payload.timetime_ms
                 )
+
+        case GHOSTTY_ACTION_MOUSE_SHAPE:
+            let shape = TerminalMouseShape(action.action.mouse_shape)
+            TerminalDebugLog.log(
+                .actions,
+                "callback action=mouse_shape \(shape)"
+            )
+            onMouseShape?(shape)
+
+        case GHOSTTY_ACTION_MOUSE_VISIBILITY:
+            let visible = action.action.mouse_visibility == GHOSTTY_MOUSE_VISIBLE
+            TerminalDebugLog.log(
+                .actions,
+                "callback action=mouse_visibility visible=\(visible)"
+            )
+            onMouseVisibility?(visible)
 
         default:
             TerminalDebugLog.log(

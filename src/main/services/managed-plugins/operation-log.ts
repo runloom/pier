@@ -24,7 +24,11 @@ export type ManagedPluginOperation =
   | "devOverride.set"
   | "devOverride.clear"
   | "seed-install"
-  | "reconciliation";
+  | "reconciliation"
+  /** 沙箱轨审计（Phase 2）：能力桥安全事件。 */
+  | "sandbox.frozen"
+  | "sandbox.call-denied"
+  | "sandbox.disposed";
 
 export type ManagedPluginOperationResult = "success" | "denied" | "failed";
 

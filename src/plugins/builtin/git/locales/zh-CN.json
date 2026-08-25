@@ -2,9 +2,9 @@
   "commands": {
     "pier.git.merge": {
       "aliases": ["合并分支", "git merge", "he bing fen zhi"],
-      "category": "Git",
+      "category": "git",
       "description": "选择一个分支并合并到当前分支。",
-      "title": "Git: 合并分支..."
+      "title": "git: 合并分支..."
     },
     "pier.git.switchBranch": {
       "aliases": [
@@ -21,15 +21,15 @@
         "qie huan fen zhi",
         "qiehuafenzhi"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "切换到本地分支，或从当前检出新建分支并切换。",
-      "title": "Git: 切换分支..."
+      "title": "git: 切换分支..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["中止合并", "git merge abort", "zhong zhi he bing"],
-      "category": "Git",
+      "category": "git",
       "description": "中止当前合并操作。",
-      "title": "Git: 中止合并"
+      "title": "git: 中止合并"
     },
     "pier.git.stash": {
       "aliases": [
@@ -41,9 +41,9 @@
         "git stash save",
         "zan cun geng gai"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "储藏本地已修改文件的变更。",
-      "title": "Git: 储藏更改"
+      "title": "git: 储藏更改"
     },
     "pier.git.stashApply": {
       "aliases": [
@@ -53,9 +53,9 @@
         "git stash apply",
         "ying yong zan cun"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "选择一条储藏并应用，保留在列表中。",
-      "title": "Git: 应用储藏..."
+      "title": "git: 应用储藏..."
     },
     "pier.git.stashDrop": {
       "aliases": [
@@ -66,9 +66,9 @@
         "git stash drop",
         "shan chu zan cun"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "选择一条储藏并从列表中删除。",
-      "title": "Git: 删除储藏..."
+      "title": "git: 删除储藏..."
     },
     "pier.git.stashIncludeUntracked": {
       "aliases": [
@@ -79,9 +79,9 @@
         "git stash -u",
         "zan cun han wei gen zong"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "储藏本地变更，并包含新增文件。",
-      "title": "Git: 储藏更改（含新增文件）"
+      "title": "git: 储藏更改（含新增文件）"
     },
     "pier.git.stashPop": {
       "aliases": [
@@ -94,27 +94,27 @@
         "tan chu zan cun",
         "hui fu zan cun"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "选择一条储藏，应用后从列表移除。",
-      "title": "Git: 弹出储藏..."
+      "title": "git: 弹出储藏..."
     },
     "pier.git.rebase": {
       "aliases": ["变基到分支", "git rebase", "rebase onto", "bian ji fen zhi"],
-      "category": "Git",
+      "category": "git",
       "description": "选择一个分支并将当前分支变基到它之上。",
-      "title": "Git: 变基到分支..."
+      "title": "git: 变基到分支..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["中止变基", "git rebase abort", "zhong zhi bian ji"],
-      "category": "Git",
+      "category": "git",
       "description": "中止当前变基操作。",
-      "title": "Git: 中止变基"
+      "title": "git: 中止变基"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["继续变基", "git rebase continue", "ji xu bian ji"],
-      "category": "Git",
+      "category": "git",
       "description": "继续当前变基操作。",
-      "title": "Git: 继续变基"
+      "title": "git: 继续变基"
     },
     "pier.git.cherryPick": {
       "aliases": [
@@ -127,39 +127,39 @@
         "jian xuan",
         "jianxuan"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "选择一个提交并应用到当前分支。",
-      "title": "Git: 拣选提交..."
+      "title": "git: 拣选提交..."
     },
     "pier.git.cherryPickAbort": {
       "aliases": ["git cherry-pick abort", "中止 cherry-pick", "中止拣选"],
-      "category": "Git",
+      "category": "git",
       "description": "中止当前拣选操作。",
-      "title": "Git: 中止拣选"
+      "title": "git: 中止拣选"
     },
     "pier.git.cherryPickContinue": {
       "aliases": ["git cherry-pick continue", "继续 cherry-pick", "继续拣选"],
-      "category": "Git",
+      "category": "git",
       "description": "继续当前拣选操作。",
-      "title": "Git: 继续拣选"
+      "title": "git: 继续拣选"
     },
     "pier.git.revert": {
       "aliases": ["git revert", "回滚提交", "还原提交"],
-      "category": "Git",
+      "category": "git",
       "description": "选择一个提交并创建一个还原它的新提交。",
-      "title": "Git: 还原提交..."
+      "title": "git: 还原提交..."
     },
     "pier.git.revertAbort": {
       "aliases": ["git revert abort", "中止 revert", "中止还原"],
-      "category": "Git",
+      "category": "git",
       "description": "中止当前还原操作。",
-      "title": "Git: 中止还原"
+      "title": "git: 中止还原"
     },
     "pier.git.revertContinue": {
       "aliases": ["git revert continue", "继续 revert", "继续还原"],
-      "category": "Git",
+      "category": "git",
       "description": "继续当前还原操作。",
-      "title": "Git: 继续还原"
+      "title": "git: 继续还原"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -174,15 +174,15 @@
         "che xiao ti jiao",
         "hui tui ti jiao"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "撤销上次提交，并保留变更为已暂存。",
-      "title": "Git: 撤销上次提交"
+      "title": "git: 撤销上次提交"
     },
     "pier.git.review.openFile": {
       "aliases": ["打开文件", "打开变更文件", "open file"],
-      "category": "Git",
+      "category": "git",
       "description": "在编辑器中打开此变更文件。",
-      "title": "Git: 打开文件"
+      "title": "git: 打开文件"
     },
     "pier.git.review.openInEditor": {
       "aliases": [
@@ -192,21 +192,21 @@
         "open in editor",
         "jump to source"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "跳转到源码编辑器中的此变更；有工作区对应行时定位到该行。",
-      "title": "Git: 跳转到源码"
+      "title": "git: 跳转到源码"
     },
     "pier.git.review.stageFile": {
       "aliases": ["暂存文件", "git add", "stage"],
-      "category": "Git",
+      "category": "git",
       "description": "暂存所选文件的变更。",
-      "title": "Git: 暂存"
+      "title": "git: 暂存"
     },
     "pier.git.review.unstageFile": {
       "aliases": ["取消暂存", "git restore --staged", "unstage"],
-      "category": "Git",
+      "category": "git",
       "description": "取消所选文件已暂存的变更。",
-      "title": "Git: 取消暂存"
+      "title": "git: 取消暂存"
     },
     "pier.git.review.discardFile": {
       "aliases": [
@@ -220,44 +220,44 @@
         "checkout file",
         "删除未跟踪"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "放弃本地修改；新增文件会移到废纸篓。",
-      "title": "Git: 放弃更改"
+      "title": "git: 放弃更改"
     },
     "pier.git.review.toggleTree": {
-      "category": "Git",
+      "category": "git",
       "description": "显示或隐藏目录树侧栏。",
       "title": "显示/隐藏目录树"
     },
     "pier.git.review.expandAll": {
-      "category": "Git",
+      "category": "git",
       "description": "展开审查目录树中的全部文件夹。",
       "title": "展开文件夹"
     },
     "pier.git.review.collapseFolders": {
-      "category": "Git",
+      "category": "git",
       "description": "折叠审查目录树中的全部文件夹。",
       "title": "折叠文件夹"
     },
     "pier.git.review.copyPath": {
-      "category": "Git",
+      "category": "git",
       "description": "复制所选变更的绝对路径。",
-      "title": "Git: 复制路径"
+      "title": "git: 复制路径"
     },
     "pier.git.review.copyRelativePath": {
-      "category": "Git",
+      "category": "git",
       "description": "复制所选变更在仓库内的相对路径。",
-      "title": "Git: 复制相对路径"
+      "title": "git: 复制相对路径"
     },
     "pier.git.review.copyPathWithRange": {
-      "category": "Git",
+      "category": "git",
       "description": "复制仓库内相对路径和当前所选行号。",
-      "title": "Git: 复制路径和所选行"
+      "title": "git: 复制路径和所选行"
     },
     "pier.git.review.revealInFinder": {
-      "category": "Git",
+      "category": "git",
       "description": "在系统文件管理器中显示所选变更。",
-      "title": "Git: 在访达中显示"
+      "title": "git: 在访达中显示"
     },
     "pier.worktree.create": {
       "aliases": [
@@ -267,13 +267,14 @@
         "chuangjian gongzuoshu",
         "新建工作树",
         "创建 worktree",
+        "新建 worktree",
         "xin jian gong zuo shu",
         "wt",
         "wt add"
       ],
       "category": "工作树",
-      "description": "在仓库托管的工作树目录下创建 Git 工作树。",
-      "title": "创建工作树"
+      "description": "在仓库托管的工作树目录下新建 git 工作树。",
+      "title": "新建工作树"
     },
     "pier.worktree.delete": {
       "aliases": [
@@ -286,7 +287,7 @@
         "wt remove"
       ],
       "category": "工作树",
-      "description": "选择并删除 Git 工作树。",
+      "description": "选择并删除 git 工作树。",
       "title": "删除工作树..."
     },
     "pier.worktree.prune": {
@@ -299,7 +300,7 @@
         "wt prune"
       ],
       "category": "工作树",
-      "description": "清理失效的 Git 工作树记录。",
+      "description": "清理失效的 git 工作树记录。",
       "title": "清理工作树"
     },
     "pier.worktree.list": {
@@ -314,7 +315,7 @@
         "wt list"
       ],
       "category": "工作树",
-      "description": "列出当前仓库的 Git 工作树并打开目标工作树。",
+      "description": "列出当前仓库的 git 工作树并打开目标工作树。",
       "title": "工作树列表"
     },
     "pier.git.fetch": {
@@ -328,21 +329,21 @@
         "huo qu yuan cheng",
         "huoquyuancheng"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "从远程获取最新分支信息，不改动当前工作区。",
-      "title": "Git: 获取远程更新"
+      "title": "git: 获取远程更新"
     },
     "pier.git.pull": {
       "aliases": ["git pull", "pull", "拉取", "拉取更改", "同步拉取", "la qu"],
-      "category": "Git",
+      "category": "git",
       "description": "仅快进拉取远端更改。",
-      "title": "Git: 拉取"
+      "title": "git: 拉取"
     },
     "pier.git.push": {
       "aliases": ["git push", "push", "推送", "推送更改", "tui song"],
-      "category": "Git",
+      "category": "git",
       "description": "将本地提交推送到远端。",
-      "title": "Git: 推送"
+      "title": "git: 推送"
     },
     "pier.git.publish": {
       "aliases": [
@@ -355,9 +356,9 @@
         "fa bu fen zhi",
         "fabufenzhi"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "将当前分支首次推送到远程并设置上游。",
-      "title": "Git: 发布分支"
+      "title": "git: 发布分支"
     },
     "pier.git.sync": {
       "aliases": [
@@ -368,9 +369,9 @@
         "拉取并推送",
         "tong bu"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "先拉取再推送，与远端同步。",
-      "title": "Git: 同步"
+      "title": "git: 同步"
     },
     "pier.git.viewChanges": {
       "aliases": [
@@ -390,12 +391,12 @@
         "cha kan bian geng",
         "da kai shen cha"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "打开当前仓库的变更审查面板。",
-      "title": "Git: 打开审查"
+      "title": "git: 打开审查"
     }
   },
-  "description": "提供 Git 命令面板入口和终端状态栏支持。",
+  "description": "提供 git 命令面板入口和终端状态栏支持。",
   "messages": {
     "ui.cancel": "取消",
     "ui.createUnavailable": "创建工作树暂未开放",
@@ -406,8 +407,8 @@
     "ui.selectPlaceholder": "选择工作树…",
     "ui.statusOpenLabel": "打开 {{name}} 的工作树列表",
     "ui.statusOpenTooltip": "点击切换工作树",
-    "ui.statusDropdownOpenLabel": "打开 {{name}} 的 Git 状态",
-    "ui.statusDropdownOpenTooltip": "点击打开 Git 状态",
+    "ui.statusDropdownOpenLabel": "打开 {{name}} 的 git 状态",
+    "ui.statusDropdownOpenTooltip": "点击打开 git 状态",
     "ui.statusDropdownViewChanges": "查看变更",
     "ui.reviewChangesTitle": "变更",
     "ui.reviewTabTooltipPath": "路径",
@@ -456,20 +457,20 @@
     "ui.reviewRevertHunkFailed": "无法还原更改块",
     "ui.reviewHunkNotReady": "此更改仍在加载，请稍后再试。",
     "ui.reviewDetails": "详情",
-    "ui.reviewInvalidSource": "Git 变更来源无效",
+    "ui.reviewInvalidSource": "git 变更来源无效",
     "ui.reviewLoadFailed": "加载变更失败",
     "ui.reviewNavigationFailed": "定位文件失败",
     "ui.reviewMutationInProgress": "另一项更改仍在处理中",
     "ui.reviewRefreshStale": "刷新时文件又有改动，暂时保留上次差异，待下次更新。",
     "ui.reviewFailureAborted": "请求已取消。",
-    "ui.reviewFailureBusy": "Git 变更审查正忙，请重试。",
+    "ui.reviewFailureBusy": "git 变更审查正忙，请重试。",
     "ui.reviewFailureChangeNotFound": "这处变更已移动或更新，请刷新后重试。",
-    "ui.reviewFailureCommandFailed": "Git 操作未能完成，请重试。",
+    "ui.reviewFailureCommandFailed": "git 操作未能完成，请重试。",
     "ui.reviewFailureDuplicateOperation": "此变更审查请求已在执行。",
-    "ui.reviewFailureIndexLocked": "另一个程序正在更新 Git 暂存区，请稍后重试。",
+    "ui.reviewFailureIndexLocked": "另一个程序正在更新 git 暂存区，请稍后重试。",
     "ui.reviewFailureInternal": "处理变更时发生内部错误。",
-    "ui.reviewFailureInvalidSource": "Git 变更来源已失效。",
-    "ui.reviewFailureNotRepository": "此目录已不是 Git 仓库。",
+    "ui.reviewFailureInvalidSource": "git 变更来源已失效。",
+    "ui.reviewFailureNotRepository": "此目录已不是 git 仓库。",
     "ui.reviewFailureOutputLimit": "此变更超出审查大小限制。",
     "ui.reviewFailureStaleRevision": "变更持续更新，请重试。",
     "ui.reviewFailureTimeout": "读取变更超时。",
@@ -578,7 +579,7 @@
     "ui.reviewStateSubmodule": "子模块变更",
     "ui.reviewStateSymlink": "符号链接",
     "ui.reviewStateTooLarge": "文件过大",
-    "ui.gitStatusLabel": "Git 状态",
+    "ui.gitStatusLabel": "git 状态",
     "ui.statusDropdownFetch": "获取远程更新",
     "ui.statusDropdownFetching": "正在获取远程…",
     "ui.statusDropdownFetchSuccess": "远程已更新",
@@ -597,7 +598,7 @@
     "ui.statusDropdownSyncing": "正在同步更改…",
     "ui.statusDropdownSyncSuccess": "已同步",
     "ui.statusDropdownNoLocalChanges": "无未提交变更",
-    "ui.statusDropdownLoading": "正在加载 Git 状态…",
+    "ui.statusDropdownLoading": "正在加载 git 状态…",
     "ui.statusRowChanges": "更改",
     "ui.statusRowSync": "同步",
     "ui.statusRowPull": "拉取",
@@ -626,7 +627,7 @@
     "ui.statusRowPullBlocked": "本地有改动，请先提交或储藏再拉取",
     "ui.statusSyncLabel": "同步更改",
     "ui.statusSyncAlreadyRunning": "同步正在进行中",
-    "ui.statusSyncConfirmBody": "将与 {{upstream}} 先拉取再推送。可在 Git 设置中关闭确认。",
+    "ui.statusSyncConfirmBody": "将与 {{upstream}} 先拉取再推送。可在 git 设置中关闭确认。",
     "ui.statusSyncConfirmButton": "同步",
     "ui.statusChangesOpenLabel": "打开更改",
     "ui.statusChangesFiles": "个文件",
@@ -643,7 +644,7 @@
     "ui.gitAbortOperationConfirmTitle": "中止{{operation}}？",
     "ui.gitAbortOperationConfirmBody": "将放弃暂停中的{{operation}}，分支回到操作前。不可撤销。",
     "ui.gitAbortOperationConfirmButton": "中止{{operation}}",
-    "ui.statusDropdownUnavailable": "Git 状态不可用",
+    "ui.statusDropdownUnavailable": "git 状态不可用",
     "ui.statusDropdownConflictSingle": "{{count}} 个冲突",
     "ui.statusDropdownConflictPlural": "{{count}} 个冲突",
     "ui.statusDropdownOperationPaused": "{{operation}}已暂停",
@@ -679,7 +680,7 @@
     "ui.srInsertions": "行新增",
     "ui.srDeletions": "行删除",
     "ui.largeChange": "变更过大",
-    "ui.gitUnsupported": "当前目录不是 Git 仓库",
+    "ui.gitUnsupported": "当前目录不是 git 仓库",
     "ui.branchDefault": "默认",
     "ui.branchGraphCaveatTitle": "只统计提交数量差异。经压缩/变基合并后，已合入内容仍可能显示为分支独有提交。",
     "ui.createNamePrompt": "新工作树名称",
@@ -700,7 +701,7 @@
     "ui.pruneConfirm": "确定清理失效的工作树记录？",
     "ui.pruneConfirmButton": "清理",
     "ui.worktreePruneSuccess": "已清理失效工作树",
-    "ui.gitErrorUnavailable": "Git 操作失败",
+    "ui.gitErrorUnavailable": "git 操作失败",
     "ui.gitLoadingMerge": "正在合并…",
     "ui.gitLoadingSwitchBranch": "正在切换分支…",
     "ui.gitLoadingCreateAndSwitchBranch": "正在新建分支…",
@@ -792,11 +793,11 @@
     "ui.gitUndoCommitSuccess": "已撤销提交",
     "ui.gitUndoCommitNothing": "没有可撤销的提交",
     "ui.title": "工作树",
-    "ui.unsupported": "当前目录不支持 Git 工作树",
-    "ui.worktreeUnavailable.gitUnavailable": "Git 不可用",
+    "ui.unsupported": "当前目录不支持 git 工作树",
+    "ui.worktreeUnavailable.gitUnavailable": "git 不可用",
     "ui.worktreeUnavailable.invalidName": "工作树名称无效",
     "ui.worktreeUnavailable.invalidPath": "工作树路径无效",
-    "ui.worktreeUnavailable.notGitRepository": "当前目录不是 Git 仓库",
+    "ui.worktreeUnavailable.notGitRepository": "当前目录不是 git 仓库",
     "ui.worktreeCreate.aiGenerating": "智能生成中…",
     "ui.worktreeCreate.agentEmpty": "没有已启用的智能体",
     "ui.worktreeCreate.agentLabel": "智能体",
@@ -805,14 +806,14 @@
     "ui.worktreeCreate.baseLabel": "基于",
     "ui.worktreeCreate.branchLabel": "分支",
     "ui.worktreeCreate.branchPlaceholder": "feature/fix-dialog",
-    "ui.worktreeCreate.confirm": "创建",
+    "ui.worktreeCreate.confirm": "新建",
     "ui.worktreeCreate.close": "关闭",
-    "ui.worktreeCreate.createFailed": "工作树创建失败",
-    "ui.worktreeCreate.creatingWorktree": "工作树创建中…",
-    "ui.worktreeCreate.description": "为当前任务创建独立工作树",
+    "ui.worktreeCreate.createFailed": "工作树新建失败",
+    "ui.worktreeCreate.creatingWorktree": "工作树新建中…",
+    "ui.worktreeCreate.description": "为当前任务新建独立工作树",
     "ui.worktreeCreate.errorAgentRequired": "请选择用于开始任务的智能体",
     "ui.worktreeCreate.errorBranchExists": "分支已存在",
-    "ui.worktreeCreate.errorBranchInvalid": "请输入有效的 Git 分支名，仅使用字母、数字和 . _ / -",
+    "ui.worktreeCreate.errorBranchInvalid": "请输入有效的 git 分支名，仅使用字母、数字和 . _ / -",
     "ui.worktreeCreate.errorBranchRequired": "请输入分支名",
     "ui.worktreeCreate.errorTaskRequired": "请输入任务描述",
     "ui.worktreeCreate.generateFailed.invalid_response": "智能命名未能生成有效分支名，请重试",
@@ -821,8 +822,8 @@
     "ui.worktreeCreate.generateFailed.timeout": "智能体响应超时，请重试或改用手动命名",
     "ui.worktreeCreate.generatingBranch": "正在生成分支名…",
     "ui.worktreeCreate.generationFailed": "分支名生成失败",
-    "ui.worktreeCreate.hookSignalKilledBody": "macOS 首次 Git 检查较慢，Pier 已中断以免卡住。请稍后重试。",
-    "ui.worktreeCreate.hookSignalKilledTitle": "Git 检查被中断，请重试",
+    "ui.worktreeCreate.hookSignalKilledBody": "macOS 首次 git 检查较慢，Pier 已中断以免卡住。请稍后重试。",
+    "ui.worktreeCreate.hookSignalKilledTitle": "git 检查被中断，请重试",
     "ui.worktreeCreate.initializingEnvironment": "环境初始化中…",
     "ui.worktreeCreate.openingTerminal": "启动终端中…",
     "ui.worktreeCreate.initializationFailed": "工作树已创建，但环境初始化失败",
@@ -903,7 +904,7 @@
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {
       "label": "在分支图标上标示改动",
-      "description": "在状态栏分支图标上标示工作区是否有改动；打开 Git 下拉可查看变更详情。"
+      "description": "在状态栏分支图标上标示工作区是否有改动；打开 git 下拉可查看变更详情。"
     },
     "pier.git.statusItem.showChangesStatus": {
       "label": "显示更改项",
@@ -925,16 +926,16 @@
   },
   "terminalStatusItems": {
     "pier.worktree.status": {
-      "description": "在终端面板中显示 Git 分支；点击打开状态操作。",
-      "title": "Git 分支"
+      "description": "在终端面板中显示 git 分支；点击打开状态操作。",
+      "title": "git 分支"
     },
     "pier.git.status.changes": {
       "description": "显示增删行数；点击打开审查面板。",
-      "title": "Git 更改"
+      "title": "git 更改"
     },
     "pier.git.status.sync": {
       "description": "显示领先/落后计数与一键同步。",
-      "title": "Git 同步"
+      "title": "git 同步"
     }
   },
   "panels": {
@@ -942,5 +943,5 @@
       "title": "变更"
     }
   },
-  "name": "Git"
+  "name": "git"
 }

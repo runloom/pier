@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { SLOT_ATTR } from "@pier/ui/mermaid/model.ts";
 import {
   MERMAID_THEME_CSS,
@@ -17,6 +19,36 @@ describe("Mermaid render", () => {
     expect(MERMAID_THEME_CSS).toContain(
       '[data-slot="button"][data-variant="outline"]'
     );
+  });
+
+  it("neutralizes mermaid edge-label pill backgrounds on every layer", () => {
+    // mermaid base theme emits ".edgeLabel p { background-color: hsl(…) }"
+    // and ".edgeLabel rect { fill: hsl(…); opacity: .5 }" — without these
+    // overrides labels render as pink pills with foreground text.
+    expect(MERMAID_THEME_CSS).toContain(".edgeLabel, .labelBkg, .edgeLabel p");
+    expect(MERMAID_THEME_CSS).toContain(".edgeLabel rect");
+  });
+
+  it("beats mermaid id-scoped span color on hydrated card roles", async () => {
+    // mermaid emits "#<renderId> span { color: #333 }"; an id + type rule
+    // out-specifies single-class utilities, so the two semantic text roles
+    // must carry Tailwind important variants of their own.
+    const source = await readFile(
+      join(import.meta.dirname, "../../../packages/ui/src/mermaid/mark.tsx"),
+      "utf8"
+    );
+    expect(source).toContain("text-card-foreground!");
+    expect(source).toContain("text-muted-foreground!");
+    // The title span itself must carry the important color: mermaid's
+    // "#<id> span" rule is a declaration on that same element, and an
+    // inherited value (from the card root) can never beat it. Containment
+    // (not adjacency) keeps the contract while tolerating class reorder.
+    expect(source).toContain("font-medium");
+    expect(source).toContain("text-card-foreground!");
+    expect(source).toContain("text-sm");
+    expect(source).toContain("break-words");
+    expect(source).toContain("text-muted-foreground!");
+    expect(source).toContain("text-xs");
   });
 
   it("keeps htmlLabel slots in the flowchart SVG", async () => {

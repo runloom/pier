@@ -134,6 +134,45 @@ describe("resolveTerminalComposerPaths", () => {
       [missing].sort()
     );
   });
+
+  it("adds a clipped textPreview for readable text and skips binaries", async () => {
+    const dir = await makeTempDir("pier-composer-preview-");
+    const sourcePath = join(dir, "main.ts");
+    const pdfPath = join(dir, "notes.pdf");
+    const binaryTextPath = join(dir, "weird.txt");
+    const makefilePath = join(dir, "Makefile");
+    await writeFile(
+      sourcePath,
+      "export function boot() {\n  return true;\n}\n"
+    );
+    await writeFile(pdfPath, "%PDF-1.4 binary-ish");
+    await writeFile(binaryTextPath, Buffer.from([65, 0, 66, 67]));
+    await writeFile(makefilePath, "all:\n\tbuild\n");
+
+    const result = await resolveTerminalComposerPaths([
+      sourcePath,
+      pdfPath,
+      binaryTextPath,
+      makefilePath,
+    ]);
+
+    expect(result.failures).toEqual([]);
+    expect(result.attachments[0]).toMatchObject({
+      kind: "file",
+      name: "main.ts",
+      textPreview: "export function boot() {\n  return true;",
+    });
+    expect(result.attachments[1]).toMatchObject({
+      kind: "file",
+      name: "notes.pdf",
+    });
+    expect(result.attachments[1]?.textPreview).toBeUndefined();
+    expect(result.attachments[2]?.textPreview).toBeUndefined();
+    expect(result.attachments[3]).toMatchObject({
+      name: "Makefile",
+      textPreview: "all:\n\tbuild",
+    });
+  });
 });
 
 describe("pickTerminalComposerFiles", () => {
@@ -287,6 +326,7 @@ describe("materializeTerminalComposerTextBytes + writeTerminalComposerPasteText"
     if (!(result.ok && result.attachment)) return;
     fixtures.push(result.attachment.path);
     expect(result.attachment.kind).toBe("paste");
+    expect(result.attachment.textPreview).toBe("original");
     expect(isPierTerminalPastePath(result.attachment.path)).toBe(true);
 
     const written = await writeTerminalComposerPasteText({

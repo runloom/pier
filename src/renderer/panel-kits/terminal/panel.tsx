@@ -56,6 +56,7 @@ import { TerminalPanelBody } from "./panel-body.tsx";
 import { TerminalPanelFloatingHost } from "./panel-floating-host.tsx";
 import {
   type ActiveTerminalLaunch,
+  backgroundCreateFromParams,
   launchIdFromParams,
   panelContextFromParams,
   taskOutputFromParams,
@@ -320,6 +321,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   useTerminalNativeLifecycle({
     api,
     anchorRef,
+    backgroundCreate: backgroundCreateFromParams(props.params),
     effectiveMonoFontSize,
     initialInput: activeLaunch.initialInput,
     initialInputSubmit: activeLaunch.initialInputSubmit,

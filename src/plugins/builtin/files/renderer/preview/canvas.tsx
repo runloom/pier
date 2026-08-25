@@ -45,10 +45,8 @@ import {
   clearCanvasCommentsSession,
   publishCanvasCommentsSession,
 } from "./canvas-comments-session.ts";
-import {
-  type CanvasPreviewState,
-  useCanvasCompileSession,
-} from "./canvas-compile-session.ts";
+import { useCanvasCompileSession } from "./canvas-compile-session.ts";
+import type { CanvasPreviewState } from "./canvas-compile-state.ts";
 import { useCanvasPreviewContextMenu } from "./canvas-preview-surface.ts";
 import {
   CanvasCompileErrorEmpty,

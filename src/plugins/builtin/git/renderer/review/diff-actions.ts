@@ -80,7 +80,7 @@ export function registerGitReviewDiffActions(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     enabled: (invocation) => parseGitReviewDiffOpenMetadata(invocation) != null,
     handler: (invocation) => {
       const target = parseGitReviewDiffOpenMetadata(invocation);

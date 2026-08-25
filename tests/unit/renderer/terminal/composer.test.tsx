@@ -4,7 +4,13 @@ import type {
   TerminalOperationResult,
 } from "@shared/contracts/terminal.ts";
 import { APPKIT_KEYCODE, GHOSTTY_MODS } from "@shared/terminal-appkit-keys.ts";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+} from "@testing-library/react";
 import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -184,6 +190,7 @@ afterEach(() => {
 
 function renderComposer(
   overrides: Partial<{
+    agentKind: string | null;
     attachRequest: number;
     bottomOffsetPx: number;
     disabled: boolean;
@@ -198,6 +205,7 @@ function renderComposer(
   const onHeightChange = overrides.onHeightChange ?? vi.fn();
   const view = render(
     <TerminalComposer
+      agentKind={overrides.agentKind ?? null}
       attachRequest={overrides.attachRequest ?? 0}
       bottomOffsetPx={overrides.bottomOffsetPx ?? 0}
       disabled={overrides.disabled ?? false}
@@ -288,7 +296,36 @@ describe("TerminalComposer", () => {
     expect(readComposerDraftText()).toBe("keep me");
   });
 
-  it("Esc clears attachment rail so remount does not keep clipboard images", async () => {
+  it("reopen places the caret at the end of the restored draft", async () => {
+    const { view } = renderComposer({ panelId: "t-caret" });
+    setComposerDraftText("keep me");
+    view.unmount();
+
+    renderComposer({ panelId: "t-caret" });
+    await act(async () => {
+      // Flush queueMicrotask + rAF from the focusRequest effect.
+      const { promise, resolve } = Promise.withResolvers<void>();
+      window.setTimeout(resolve, 0);
+      await promise;
+    });
+
+    const input = composerInput();
+    expect(document.activeElement).toBe(input);
+    const selection = window.getSelection();
+    expect(selection?.rangeCount).toBe(1);
+    const range = selection?.getRangeAt(0);
+    expect(range?.collapsed).toBe(true);
+    // Collapsed exactly at "end of contents" — same construction as
+    // focusComposerInput (selectNodeContents + collapse(false)).
+    const reference = document.createRange();
+    reference.selectNodeContents(input);
+    reference.collapse(false);
+    expect(`${range?.endContainer.nodeName}#${range?.endOffset}`).toBe(
+      `${reference.endContainer.nodeName}#${reference.endOffset}`
+    );
+  });
+
+  it("Esc keeps the attachment rail so remount restores tiles and tokens", async () => {
     const onClose = vi.fn();
     pickComposerFiles.mockResolvedValue({
       ok: true,
@@ -318,8 +355,8 @@ describe("TerminalComposer", () => {
     view.unmount();
     renderComposer({ panelId: "t-esc-att" });
     expect(
-      screen.queryByTestId("terminal-composer-attachment-1")
-    ).not.toBeInTheDocument();
+      screen.getByTestId("terminal-composer-attachment-1")
+    ).toBeInTheDocument();
   });
 
   it("panel-level Esc closes when focus is outside the editor", () => {
@@ -334,7 +371,6 @@ describe("TerminalComposer", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(sendKeyPress).not.toHaveBeenCalled();
   });
-
   it("sends typed text on Enter, clears textarea, and calls onClose on success", async () => {
     const onClose = vi.fn();
     renderComposer({ onClose });
@@ -1189,7 +1225,7 @@ describe("TerminalComposer", () => {
     ).not.toHaveTextContent("#1");
   });
 
-  it("shows #n badges only when multiple attachments are on the rail", async () => {
+  it("keeps ordinal badges off attachment rail tiles", async () => {
     pickComposerFiles.mockResolvedValue({
       ok: true,
       paths: ["/tmp/a.txt", "/tmp/b.txt"],
@@ -1222,10 +1258,10 @@ describe("TerminalComposer", () => {
 
     expect(
       screen.getByTestId("terminal-composer-attachment-1")
-    ).toHaveTextContent("#1");
+    ).not.toHaveTextContent("#");
     expect(
       screen.getByTestId("terminal-composer-attachment-2")
-    ).toHaveTextContent("#2");
+    ).not.toHaveTextContent("#");
 
     fireEvent.click(
       screen.getByTestId("terminal-composer-attachment-remove-2")
@@ -1237,6 +1273,50 @@ describe("TerminalComposer", () => {
     });
     expect(
       screen.getByTestId("terminal-composer-attachment-1")
-    ).not.toHaveTextContent("#1");
+    ).not.toHaveTextContent("#");
+  });
+  it("Esc with the skill/command list open dismisses only the list", () => {
+    const onClose = vi.fn();
+    renderComposer({ agentKind: "claude", onClose, panelId: "t-skill" });
+
+    setComposerDraftText("/");
+    expect(
+      document.getElementById("terminal-composer-skill-listbox")
+    ).not.toBeNull();
+
+    // First Esc: Lexical cancels the suggest list; Rich Input stays open.
+    fireEvent.keyDown(composerInput(), { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(
+      document.getElementById("terminal-composer-skill-listbox")
+    ).toBeNull();
+
+    // Second Esc (list already gone) closes Rich Input itself.
+    fireEvent.keyDown(composerInput(), { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("skill chip survives close/reopen via the editor snapshot", async () => {
+    const { view } = renderComposer({
+      agentKind: "claude",
+      panelId: "t-chip",
+    });
+
+    setComposerDraftText("/");
+    const item = screen.getByTestId("terminal-composer-skill-popup-item-0");
+    await act(async () => {
+      fireEvent.mouseDown(item);
+    });
+    const chip = document.querySelector(".composer-ref-chip");
+    expect(chip).not.toBeNull();
+    const draftAfterSelect = readComposerDraftText();
+    expect(draftAfterSelect.length).toBeGreaterThan(0);
+
+    // Toggle: unmount (close) and remount with the same panel id.
+    view.unmount();
+    renderComposer({ agentKind: "claude", panelId: "t-chip" });
+
+    expect(document.querySelector(".composer-ref-chip")).not.toBeNull();
+    expect(readComposerDraftText()).toBe(draftAfterSelect);
   });
 });

@@ -108,6 +108,45 @@ export function contributionCountItems(
 }
 
 /**
+ * Capability ids contain `:` (`file:read`). i18next's default nsSeparator is
+ * also `:`, so interpolating the id into a key string splits the lookup.
+ * Read the labels map as an object and index it instead.
+ */
+export function capabilityPermissionLabel(
+  t: ReturnType<typeof useT>,
+  capability: string
+): string {
+  const labels: unknown = t("settings.plugins.permissionLabels", {
+    nsSeparator: false,
+    returnObjects: true,
+  });
+  if (typeof labels !== "object" || labels === null) {
+    return capability;
+  }
+  const value = Object.hasOwn(labels, capability)
+    ? Reflect.get(labels, capability)
+    : undefined;
+  return typeof value === "string" && value.length > 0 ? value : capability;
+}
+
+/** 人话权限摘要（权限透明度契约）：capability 代码 → 各语言可读标签。 */
+export function permissionSummaryLabel(
+  entry: PluginRegistryEntry,
+  t: ReturnType<typeof useT>
+): string | null {
+  const capabilities = entry.effectivePermissions.filter(
+    (capability) => capability !== "command:register"
+  );
+  if (capabilities.length === 0) {
+    return null;
+  }
+  const list = capabilities
+    .map((capability) => capabilityPermissionLabel(t, capability))
+    .join(", ");
+  return t("settings.plugins.permissionSummary", { list });
+}
+
+/**
  * Full plugin row with source badge, contribution summary, settings link,
  * and enable/disable action. Shared between built-in and managed plugin lists.
  * `extraActions` renders adjacent to the enable/disable button (used by
@@ -141,6 +180,7 @@ export function PluginRow({
         );
   const metaText = `v${entry.manifest.version} · ${entry.manifest.publisher ?? "—"}`;
   const countItems = contributionCountItems(entry, t);
+  const permissionLabel = permissionSummaryLabel(entry, t);
   const hasSettingsSection = pluginHasSettingsSection(entry);
 
   return (
@@ -169,6 +209,14 @@ export function PluginRow({
           <ItemDescription className="text-xs">
             {display.description}
           </ItemDescription>
+        ) : null}
+        {permissionLabel ? (
+          <p
+            className="text-muted-foreground text-xs"
+            data-testid={`plugin-permissions-${entry.manifest.id}`}
+          >
+            {permissionLabel}
+          </p>
         ) : null}
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">

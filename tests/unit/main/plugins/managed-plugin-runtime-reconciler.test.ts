@@ -30,6 +30,7 @@ function source(
       terminalStatusItems: [],
       version,
       workbenchWidgets: [],
+      dataProjections: [],
     },
     rendererEntryUrl: `pier-plugin://pier.codex/${version}/dist/renderer.js`,
     version,
@@ -103,5 +104,45 @@ describe("managed plugin runtime reconciler", () => {
 
     expect(ensurePath).toHaveBeenCalledTimes(2);
     expect(order).toEqual(["ensurePath", "activate", "ensurePath", "reload"]);
+  });
+
+  // 失败语义契约 F2（docs/superpowers/specs/2026-08-24-plugin-failure-semantics.md）：
+  // 单个插件 activate 失败不阻断后续插件的激活。
+  it("continues activating later plugins when an earlier activate throws (F2)", async () => {
+    const externalRuntime = runtime();
+    const first = source("1.0.0", { id: "pier.first" });
+    const second = source("1.0.0", { id: "pier.second" });
+    externalRuntime.activate = vi.fn(async (activated) => {
+      if (activated.id === "pier.first") {
+        throw new Error("boom");
+      }
+    });
+    const reconciler = createManagedPluginRuntimeReconciler(externalRuntime);
+
+    await expect(
+      reconciler.reconcile([first, second])
+    ).resolves.toBeUndefined();
+
+    expect(externalRuntime.activate).toHaveBeenCalledTimes(2);
+  });
+
+  it("clears the active key when reload throws so the next pass retries (F2)", async () => {
+    const externalRuntime = runtime();
+    const plugin = source("1.0.0");
+    const reconciler = createManagedPluginRuntimeReconciler(externalRuntime);
+    await reconciler.reconcile([plugin]);
+
+    externalRuntime.reload = vi.fn(async () => {
+      throw new Error("reload boom");
+    });
+    await expect(
+      reconciler.reconcile([source("1.0.1")])
+    ).resolves.toBeUndefined();
+    expect(externalRuntime.dispose).not.toHaveBeenCalled();
+
+    // 下一次 reconcile 视为未激活，重新走 activate。
+    externalRuntime.reload = vi.fn().mockResolvedValue(undefined);
+    await reconciler.reconcile([source("1.0.1")]);
+    expect(externalRuntime.activate).toHaveBeenCalledTimes(2);
   });
 });

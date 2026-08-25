@@ -16,6 +16,7 @@ import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { rejectFailedManagedPluginOperation } from "./managed-plugin-operation.ts";
 import {
   type ContributionCounts,
+  capabilityPermissionLabel,
   contributionCountItemsFromCounts,
 } from "./plugin-row.tsx";
 
@@ -271,6 +272,15 @@ export function AvailableManagedRow({
   const t = useT();
   const display = resolveRowDisplay(row);
   const { pending, run } = usePluginOp(display.name, onRefresh);
+  // 权限透明度契约：安装前向用户展示该插件要什么能力（人话标签）。
+  const permissionSummary =
+    row.permissions && row.permissions.length > 0
+      ? t("settings.plugins.permissionSummary", {
+          list: row.permissions
+            .map((p) => capabilityPermissionLabel(t, p))
+            .join(", "),
+        })
+      : null;
   return (
     <Item
       className="rounded-none border-0 px-(--card-spacing)"
@@ -292,6 +302,14 @@ export function AvailableManagedRow({
         </div>
         {display.description ? (
           <p className="text-muted-foreground text-xs">{display.description}</p>
+        ) : null}
+        {permissionSummary ? (
+          <p
+            className="text-muted-foreground text-xs"
+            data-testid={`plugin-permissions-${row.id}`}
+          >
+            {permissionSummary}
+          </p>
         ) : null}
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <ContributionCountsInline counts={row.contributionCounts} />

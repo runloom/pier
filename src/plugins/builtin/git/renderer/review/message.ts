@@ -12,7 +12,7 @@ const FAILURE_TEXT = {
     key: "reviewFailureAborted",
   },
   busy: {
-    fallback: "Git review is busy. Try again.",
+    fallback: "git review is busy. Try again.",
     key: "reviewFailureBusy",
   },
   changeNotFound: {
@@ -20,7 +20,7 @@ const FAILURE_TEXT = {
     key: "reviewFailureChangeNotFound",
   },
   commandFailed: {
-    fallback: "Git could not complete this operation. Try again.",
+    fallback: "git could not complete this operation. Try again.",
     key: "reviewFailureCommandFailed",
   },
   duplicateOperation: {
@@ -29,7 +29,7 @@ const FAILURE_TEXT = {
   },
   indexLocked: {
     fallback:
-      "Another program is updating the Git staging area. Try again in a moment.",
+      "Another program is updating the git staging area. Try again in a moment.",
     key: "reviewFailureIndexLocked",
   },
   internal: {
@@ -37,11 +37,11 @@ const FAILURE_TEXT = {
     key: "reviewFailureInternal",
   },
   invalidSource: {
-    fallback: "The Git review source is no longer valid.",
+    fallback: "The git review source is no longer valid.",
     key: "reviewFailureInvalidSource",
   },
   notRepository: {
-    fallback: "This directory is no longer a Git repository.",
+    fallback: "This directory is no longer a git repository.",
     key: "reviewFailureNotRepository",
   },
   outputLimit: {
@@ -69,7 +69,7 @@ export function gitReviewFailureMessage(
   return pluginText(context, text.key, text.fallback);
 }
 
-/** 锁争用的 Git 原文会教用户删 index.lock；产品文案已给出下一步。 */
+/** 锁争用的 git 原文会教用户删 index.lock；产品文案已给出下一步。 */
 export function gitReviewFailureTechnicalMessage(
   failure: GitReviewFailure
 ): string | null {

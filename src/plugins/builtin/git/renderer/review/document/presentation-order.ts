@@ -54,7 +54,7 @@ export interface OrderReviewPresentationSlotsOptions {
 }
 
 /**
- * Canonical Git review file order: presentation groups, then
+ * Canonical git review file order: presentation groups, then
  * `@pierre/trees`-compatible path order on **display** paths (dirs-first DFS).
  */
 export function orderReviewPresentationSlots(

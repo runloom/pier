@@ -1292,6 +1292,7 @@ body {
 /*
  * S1 未选中 running：1px 轨要用更实的 trough / highlight，否则在 sidebar 底上等于没有。
  * 只绑 .dv-inactive-tab，避免把 S2/S3 选中轨一并加浓。
+ * highlight 混入 foreground 提亮：与 trough 拉开对比，滑块运动更清晰。
  */
 .dockview-theme-pier .dv-tab.dv-inactive-tab:has([data-tab-status="running"]) {
   --pier-tab-shimmer-trough: color-mix(
@@ -1299,7 +1300,11 @@ body {
     var(--pier-tab-running-accent) 72%,
     transparent
   );
-  --pier-tab-shimmer-highlight: var(--pier-tab-running-accent);
+  --pier-tab-shimmer-highlight: color-mix(
+    in oklab,
+    var(--pier-tab-running-accent) 40%,
+    var(--foreground)
+  );
 }
 
 :root.light
@@ -1310,7 +1315,11 @@ body {
     var(--pier-tab-running-accent) 50%,
     transparent
   );
-  --pier-tab-shimmer-highlight: var(--pier-tab-running-accent);
+  --pier-tab-shimmer-highlight: color-mix(
+    in oklab,
+    var(--pier-tab-running-accent) 50%,
+    var(--foreground)
+  );
 }
 
 /*
@@ -1697,18 +1706,17 @@ body {
  * 单节点文本、固定字重：渐变作背景裁剪到字形（background-clip: text），
  * 动画只推 background-position——零 JS 帧循环、字形静止无抖动。
  *
- * 亮度负责"动"、色相负责"是什么状态"：状态色（内联 --pier-agent-status-color,
- * running 长跑时被覆盖为 warning/danger）不能直接当亮带——暗色主题下
- * --status-info-fg(#1668dc) 比基色更暗, 扫过去是暗斑不是光泽。因此亮带 =
- * 状态色 80% 向 foreground 混：暗色主题必然更亮、浅色主题必然更深（墨带），
- * 方向自动正确；基色压到 35% 保证亮带反差与色相都清晰可辨。混色用 oklab
- * （直角坐标）——oklch 极坐标向近无彩色混合会发生色相漂移（绿混成土黄）。
+ * 扫光只表达「在推进」，不按 processing/tool/长跑换色相——状态靠文案。
+ * 亮带种子是主题 --primary（与 running tab 顶缘同源；主题引擎会写成填充主色）。
+ * 主色在暗色主题里往往比 foreground 更暗，不能直接当亮带，否则扫过去是色斑。
+ * 因此亮带 = primary 45% 混入 foreground（oklab）：默认主色≈前景时就是白/墨光泽；
+ * 有彩色主题时是浅色带一点主色。槽底压到 foreground 35% 给亮带让反差。
  */
 [data-agent-status-text][data-agent-status-kind="running"] {
   --shimmer-base: color-mix(in oklab, var(--foreground) 35%, transparent);
   --shimmer-highlight: color-mix(
     in oklab,
-    var(--pier-agent-status-color, var(--status-info-fg)) 80%,
+    var(--primary) 45%,
     var(--foreground)
   );
 

@@ -253,13 +253,13 @@ describe("augIntegration", () => {
         v: 3,
       },
       {
-        event: "TurnInterrupted",
+        event: "Stop",
         nativeEvent: "Stop",
         nativeState: "interrupted",
         v: 3,
       },
       {
-        event: "TurnInterrupted",
+        event: "Stop",
         nativeEvent: "Stop",
         nativeState: "max_iterations",
         v: 3,

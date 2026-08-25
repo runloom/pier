@@ -108,8 +108,8 @@ export function countLifecycleUpdateCandidates(
 }
 
 /**
- * Force-refresh affordance for agents with no reliable latest
- * (cursor / hermes / kiro). Never overlaps Update all.
+ * Details-only force-refresh: script-only reinstall, or versioned agents
+ * whose latest is probe-only (`canForceReinstall`). Never overlaps Update all.
  */
 export function isLifecycleReinstallCandidate(
   probe: AgentLifecycleProbe | undefined,
@@ -124,5 +124,8 @@ export function isLifecycleReinstallCandidate(
   if (isLifecycleUpdateCandidate(probe, options)) {
     return false;
   }
-  return probe.detected === true && probe.updateMode === "reinstall";
+  if (probe.detected !== true) {
+    return false;
+  }
+  return probe.updateMode === "reinstall" || probe.canForceReinstall === true;
 }

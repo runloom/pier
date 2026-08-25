@@ -68,7 +68,7 @@ export function reviewTreeSectionKeyForSurface(
 function groupForDiffBase(diffBase: GitReviewReadingSurface): GitReviewGroup {
   const group = reviewGroupsForSurface(diffBase)[0];
   if (group === undefined) {
-    throw new Error(`阅读面缺少 Git 分组：${diffBase}`);
+    throw new Error(`阅读面缺少 git 分组：${diffBase}`);
   }
   return group;
 }

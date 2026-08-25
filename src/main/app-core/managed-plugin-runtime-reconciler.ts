@@ -57,7 +57,17 @@ export function createManagedPluginRuntimeReconciler(
           if (waitForHostEnv) {
             await waitForHostEnv();
           }
-          await runtime.activate(source);
+          try {
+            await runtime.activate(source);
+          } catch (error) {
+            // 失败语义契约：单个插件 activate 失败不阻断后续插件。
+            // runtime.activate 内部已清理 RPC/disposer 并上报激活结果。
+            console.error(
+              `[plugin-reconciler] activate failed for ${source.id}:`,
+              error instanceof Error ? error.message : String(error)
+            );
+            continue;
+          }
           activeKeys.set(source.id, nextKey);
           continue;
         }
@@ -65,7 +75,17 @@ export function createManagedPluginRuntimeReconciler(
           if (waitForHostEnv) {
             await waitForHostEnv();
           }
-          await runtime.reload(source);
+          try {
+            await runtime.reload(source);
+          } catch (error) {
+            // reload 失败同上：保留旧键会与真实状态漂移，这里清除并继续。
+            activeKeys.delete(source.id);
+            console.error(
+              `[plugin-reconciler] reload failed for ${source.id}:`,
+              error instanceof Error ? error.message : String(error)
+            );
+            continue;
+          }
           activeKeys.set(source.id, nextKey);
         }
       }

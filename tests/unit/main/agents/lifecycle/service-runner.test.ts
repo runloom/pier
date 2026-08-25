@@ -395,4 +395,62 @@ exit 0
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  it("treats PATH presence as install success when --version cannot run", {
+    timeout: 20_000,
+  }, async () => {
+    const { chmod, mkdir, mkdtemp, writeFile, rm } = await import(
+      "node:fs/promises"
+    );
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const root = await mkdtemp(join(tmpdir(), "pier-claude-path-ok-"));
+    const binDir = join(root, "bin");
+    await mkdir(binDir, { recursive: true });
+    const binPath = join(binDir, "claude");
+
+    const runner: LifecycleRunner = {
+      run: vi.fn(async () => {
+        await writeFile(
+          binPath,
+          `#!/bin/sh
+if [ "$1" = "--version" ]; then
+  kill -KILL $$
+fi
+exit 0
+`,
+          "utf8"
+        );
+        await chmod(binPath, 0o755);
+        return {
+          ok: true,
+          code: 0,
+          stepIndex: 0,
+          stdout: "installed",
+          stderr: "",
+        };
+      }),
+    };
+
+    try {
+      const service = createAgentLifecycleService({
+        getEnv: async () => ({
+          ...process.env,
+          PATH: `${binDir}:/usr/bin:/bin`,
+        }),
+        runner,
+      });
+      const result = await service.run("claude", "install");
+      expect(runner.run).toHaveBeenCalledTimes(1);
+      expect(result.ok).toBe(true);
+      expect(result.errorCode).toBeUndefined();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });

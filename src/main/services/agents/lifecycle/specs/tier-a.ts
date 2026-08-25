@@ -6,6 +6,11 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
     agentId: "claude",
     expectedBins: ["claude"],
     npmPackageForLatest: "@anthropic-ai/claude-code",
+    // Native/script installs: official latest file, not the deprecated npm line.
+    latestProbe: {
+      kind: "http-text",
+      url: "https://downloads.claude.ai/claude-code-releases/latest",
+    },
     support: "full",
     // Official recommended: native installer first, then Homebrew cask, npm last.
     // https://code.claude.com/docs/en/setup
@@ -250,6 +255,10 @@ export const TIER_A_SPECS: readonly AgentLifecycleSpec[] = [
     // Bare `agent` is filtered in path-enum unless it resolves into cursor-agent
     // (avoids picking up Grok's `~/.grok/bin/agent`).
     expectedBins: ["cursor-agent", "agent"],
+    latestProbe: {
+      kind: "cursor-install-script",
+      url: "https://cursor.com/install",
+    },
     support: "full",
     install: [
       {

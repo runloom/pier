@@ -3,7 +3,7 @@
 日期：2026-07-31  
 状态：**部分 supersede（2026-07-31，导航 Commit 2026-08-14）** — **终态唯一权威** 为  
 [`2026-07-31-git-review-gold-standard-endstate-design.md`](./2026-07-31-git-review-gold-standard-endstate-design.md)（产品已确认）。  
-K4「禁止等 document settle」= 禁止等 **整页**；目标自身离开 estimate 才结束导航，见 [`2026-08-14-git-review-tree-nav-pin-design.md`](./2026-08-14-git-review-tree-nav-pin-design.md)。  
+K4「禁止等 document settle」= 禁止等 **整页**；目标自身离开 estimate 才结束导航，见 [`../../archive/superpowers/specs/2026-08-14-git-review-tree-nav-pin-design.md`](../../archive/superpowers/specs/2026-08-14-git-review-tree-nav-pin-design.md)。  
 本文保留 **Zed 对照与 bodyClass / pending_scroll 细节**；冲突时以金标准终态文为准。  
 体感标杆：**Zed Project Diff**（`GitPanel` + `ProjectDiff` MultiBuffer hunk excerpts），**不是** DiffsHub web patch 阅读器，也 **不是**「per-file document + 并发 2 demand」排队模型。
 

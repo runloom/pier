@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
@@ -106,7 +107,7 @@ export const settings = {
       deliveryClaude: "Claude Code (.claude/skills)",
       deliveryClaudeHint:
         "Claude Code only looks here. Turn on if Claude Code should see these skills.",
-      gitIgnoreTitle: "Suggested Git ignore",
+      gitIgnoreTitle: "Suggested git ignore",
       gitIgnoreDescription:
         "Skill install links usually shouldn’t be committed.",
       gitIgnoreCopy: "Copy",
@@ -129,6 +130,19 @@ export const settings = {
       canvasRootsMaxFolders: "You can add at most {{max}} folders.",
       canvasRootsConflict:
         "The file changed elsewhere. Open this page again, then save.",
+      canvasTrustTitle: "Canvas trust",
+      canvasTrustDescription:
+        "Asks the first time you preview a canvas in this project. The decision stays on this machine — never written into project files.",
+      canvasTrustLoading: "Loading…",
+      canvasTrustLoadFailed: "Couldn’t read trust status",
+      canvasTrustedBadge: "Trusted",
+      canvasTrustNotTrusted:
+        "Not trusted yet. You’ll be asked the first time a canvas from this project is previewed.",
+      canvasTrustRevoke: "Revoke trust",
+      canvasTrustRevokeTitle: "Revoke trust for this project’s canvases?",
+      canvasTrustRevokeBody:
+        "After revoking, previewing a canvas from this project asks again.",
+      canvasTrustRevokeFailed: "Couldn’t revoke trust",
     },
     tabEnvironment: "Environment",
     tabRules: "Rules",
@@ -239,43 +253,7 @@ export const settings = {
     setupCommand: "Setup command",
     setupHint: "Runs when a worktree is created.",
   },
-  appUpdate: {
-    title: "App Updates",
-    description: "Check, download, and install Pier updates.",
-    available: "Version {{version}} is available.",
-    progress: "Download {{percent}}%",
-    state: {
-      disabled: "Development mode does not check for app updates.",
-      idle: "No update check has run yet.",
-      checking: "Checking for updates…",
-      available: "An update is available.",
-      "not-available": "Pier is up to date.",
-      downloading: "Downloading update…",
-      downloaded: "Update downloaded. Restart to install.",
-      error: "Update check failed.",
-    },
-    action: {
-      check: "Check for Updates",
-      download: "Download",
-      restart: "Restart and Install",
-    },
-    toast: {
-      statusFailed: "Couldn't read update status — try again",
-      checkFailed: "Couldn't check for updates — try again",
-      downloadFailed: "Couldn't download update — try again",
-      installFailed: "Couldn't install update — try again",
-      ready: "Update ready",
-      readyDetail: "Pier {{version}} · restart to install",
-    },
-    titleBar: {
-      update: "Update",
-      updateAvailable: "v{{version}}",
-      availableAria: "Pier {{version}} is available",
-      downloadingAria: "Downloading update {{percent}} percent",
-      restartAria: "Restart and install Pier {{version}}",
-      errorAria: "App update failed. Open update settings.",
-    },
-  },
+  appUpdate: settingsAppUpdate,
   statusBar: {
     title: "Status Bar",
     description:
@@ -317,7 +295,7 @@ export const settings = {
     monoFontSizeDesc: "Range 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "Code Font Size",
-    codeFontSizeDesc: "Editor and Git diff; range 8–32",
+    codeFontSizeDesc: "Editor and git diff; range 8–32",
     codeFontSizePlaceholder: "13",
     fontUpdateFailed: "Couldn't update font settings",
     terminalCursorStyle: "Cursor Style",

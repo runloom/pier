@@ -2,7 +2,10 @@ import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import { app } from "electron";
 import { getNotificationCenterService } from "../ipc/notification-center.ts";
 import { createElectronAppUpdaterAdapter } from "../services/app-updates/electron-updater-adapter.ts";
-import { notifyAppUpdateReady } from "../services/app-updates/notify-ready.ts";
+import {
+  notifyAppUpdateError,
+  notifyAppUpdateReady,
+} from "../services/app-updates/notify.ts";
 import {
   type AppUpdateRuntimeMode,
   type AppUpdateService,
@@ -30,6 +33,17 @@ export function createWiredAppUpdateService(
     },
     onReady: (version) => {
       notifyAppUpdateReady(version, {
+        getService: getNotificationCenterService,
+        resolveLocale: resolveAppUpdateUiLocale,
+      });
+    },
+    onError: ({ kind, origin }) => {
+      // User-origin failures surface inline in Settings; only silent
+      // background (scheduler / event-bus) failures land in the inbox.
+      if (origin !== "background") {
+        return;
+      }
+      notifyAppUpdateError(kind, {
         getService: getNotificationCenterService,
         resolveLocale: resolveAppUpdateUiLocale,
       });

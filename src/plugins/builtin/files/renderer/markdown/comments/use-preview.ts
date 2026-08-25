@@ -6,6 +6,10 @@ import type {
   PierInlineReviewLabels,
   PierInlineReviewThread,
 } from "@pier/ui/diff-view/review/inline-comment-types.ts";
+import {
+  clearMarkdownCommentSurface,
+  setMarkdownCommentSurface,
+} from "@plugins/api/markdown-comment-surfaces.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { MarkdownCommentSurface } from "@shared/comments/markdown-surface.ts";
 import type { CommentThread } from "@shared/contracts/comments/base.ts";
@@ -166,6 +170,17 @@ export function useMarkdownPreviewComments(input: {
         : buildMarkdownCommentSurfaceFromIr(document),
     [document]
   );
+  // Publish the live surface so the terminal comments dialog can verify
+  // markdown threads (located/stale) instead of degrading every row to unknown.
+  useEffect(() => {
+    if (!(path && surface)) {
+      return;
+    }
+    setMarkdownCommentSurface(path, surface);
+    return () => {
+      clearMarkdownCommentSurface(path);
+    };
+  }, [path, surface]);
 
   const pathThreads = useMemo(() => {
     if (!(snapshot && path)) {

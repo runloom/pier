@@ -30,6 +30,7 @@ const ZH_BANNED_PATTERNS: ReadonlyArray<{ id: string; pattern: RegExp }> = [
   { id: "新建 agent", pattern: /新建\s*agent/i },
   { id: "无 upstream", pattern: /无\s*upstream/i },
   { id: "Git worktree", pattern: /Git\s*worktree/i },
+  { id: "Title Case Git", pattern: /\bGit\b/ },
   { id: "worktree 英文词", pattern: /\bworktree\b/i },
   { id: "DETACHED", pattern: /\bDETACHED\b/ },
   { id: "MERGING", pattern: /\bMERGING\b/ },
@@ -52,6 +53,7 @@ const CJK_LATIN_BANNED_PATTERNS: ReadonlyArray<{
   { id: "Needs you", pattern: /\bNeeds you\b/ },
   { id: "Needs You", pattern: /\bNeeds You\b/ },
   { id: "worktree 英文词", pattern: /\bworktree\b/i },
+  { id: "Title Case Git", pattern: /\bGit\b/ },
   { id: "DETACHED", pattern: /\bDETACHED\b/ },
   { id: "MERGING", pattern: /\bMERGING\b/ },
   { id: "REBASING", pattern: /\bREBASING\b/ },
@@ -76,6 +78,7 @@ const EN_BANNED_PATTERNS: ReadonlyArray<{ id: string; pattern: RegExp }> = [
   { id: "panel parameters", pattern: /panel parameters/i },
   { id: "workspace context", pattern: /workspace context/i },
   { id: "project context", pattern: /project context/i },
+  { id: "Title Case Git", pattern: /\bGit\b/ },
   { id: "DETACHED", pattern: /\bDETACHED\b/ },
   { id: "MERGING", pattern: /\bMERGING\b/ },
   { id: "REBASING", pattern: /\bREBASING\b/ },
@@ -92,6 +95,7 @@ const VALUE_ALLOWLIST: readonly RegExp[] = [
   /\.worktree\b/,
   /\{[^}]*worktree[^}]*\}/i,
   /^创建 worktree$/,
+  /^新建 worktree$/,
   /^create worktree$/i,
   /^worktree prune$/i,
   /^worktree:[a-z]+$/,
@@ -291,7 +295,7 @@ describe("user-facing copy governance", () => {
       join(ROOT, "packages", "plugin-codex", "plugin.json"),
       join(ROOT, "packages", "plugin-grok", "plugin.json"),
       join(ROOT, "packages", "plugin-ssh", "plugin.json"),
-      join(ROOT, "packages", "plugin-tmux", "plugin.json"),
+      join(ROOT, "packages", "plugin-agent-splits", "plugin.json"),
     ];
     const offenders = manifests.flatMap((manifestPath) => {
       const parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as {

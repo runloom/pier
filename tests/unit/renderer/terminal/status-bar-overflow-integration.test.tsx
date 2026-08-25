@@ -91,7 +91,7 @@ function pluginEntry(items: PluginTerminalStatusItemContribution[]) {
       commands: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.git",
-      name: "Git",
+      name: "git",
       panels: [],
       permissions: [],
       settingsPages: [],
@@ -99,6 +99,7 @@ function pluginEntry(items: PluginTerminalStatusItemContribution[]) {
       terminalStatusItems: items,
       version: "1.0.0",
       workbenchWidgets: [],
+      dataProjections: [],
     },
     runtime: { canToggle: true, enabled: true, kind: "builtin" as const },
   };

@@ -47,6 +47,7 @@ function entry(id: string): PluginRegistryEntry {
       engines: { pier: ">=0.1.0" },
       id,
       workbenchWidgets: [],
+      dataProjections: [],
       name: `${id}-name`,
       panels: [],
       permissions: [],
@@ -216,7 +217,7 @@ describe("SettingsDialog — custom plugin settings page", () => {
 
     expect(await screen.findByText("Show excluded files")).toBeVisible();
     expect(screen.getByText("Exclude patterns")).toBeVisible();
-    expect(screen.getByText("Show Git-ignored files")).toBeVisible();
+    expect(screen.getByText("Show git-ignored files")).toBeVisible();
     expect(
       document.getElementById(
         `plugin-setting-${FILES_TREE_SHOW_EXCLUDED_SETTING_KEY}`
@@ -226,7 +227,7 @@ describe("SettingsDialog — custom plugin settings page", () => {
       document.getElementById(
         `plugin-setting-${FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY}`
       )
-    ).toHaveAttribute("aria-checked", "true");
+    ).toHaveAttribute("aria-checked", "false");
     expect(
       document.getElementById(
         `plugin-setting-${FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY}`

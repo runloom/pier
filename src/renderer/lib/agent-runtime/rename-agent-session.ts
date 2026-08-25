@@ -1,13 +1,10 @@
-import {
-  agentSessionTitleInput,
-  normalizeAgentSessionTitle,
-  resolveAgentSessionTitle,
-} from "@shared/agent-session-title/index.ts";
+import { normalizeAgentSessionTitle } from "@shared/agent-session-title/index.ts";
 import i18next from "i18next";
 import { showAppAlert, showAppPrompt } from "@/stores/app-dialog.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { projectPathFromContext } from "@/stores/workspace-panel-helpers.ts";
+import { resolveAgentListTitle } from "./list-title.ts";
 
 /**
  * 用户改名 = 钉死 tab 覆盖（source=user），优先于 OSC，直到再次改名。
@@ -20,10 +17,8 @@ export function canRenameAgentSession(panelId: string): boolean {
 }
 
 /**
- * 改名对话框初值：
- * 1. 已有 user/provider 产品名 → 用它
- * 2. 否则用当前 tab 展示名（OSC / cwd，与用户所见一致）
- * 3. 再否则 catalog·项目占位
+ * 改名对话框初值：优先当前 tab 所见（与智能体列表主标题同一 resolver，
+ * 列表 / tab / 对话框三者一致）；tab 缺席时按 tab 优先级降级。
  */
 export function currentAgentSessionTitle(panelId: string): string | undefined {
   const activity = useForegroundActivityStore.getState().activities[panelId];
@@ -31,22 +26,13 @@ export function currentAgentSessionTitle(panelId: string): string | undefined {
     return;
   }
   const descriptor = usePanelDescriptorStore.getState().descriptors[panelId];
-  const resolved = resolveAgentSessionTitle(
-    agentSessionTitleInput({
-      agentId: activity.agentId,
-      projectRootPath: projectPathFromContext(descriptor?.context),
-      sessionTitle: activity.sessionTitle,
-      sessionTitleSource: activity.sessionTitleSource,
-    })
-  );
-  if (resolved.primary !== resolved.placeholder) {
-    return resolved.primary;
-  }
-  const tabShort = descriptor?.display.short?.trim();
-  if (tabShort) {
-    return tabShort;
-  }
-  return resolved.primary;
+  return resolveAgentListTitle({
+    agentId: activity.agentId,
+    cwd: projectPathFromContext(descriptor?.context),
+    sessionTitle: activity.sessionTitle,
+    sessionTitleSource: activity.sessionTitleSource,
+    tabShort: descriptor?.display.short,
+  });
 }
 
 /**

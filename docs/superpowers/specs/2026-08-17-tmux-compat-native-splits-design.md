@@ -1,7 +1,7 @@
 # tmux 兼容映射：智能体分屏落到原生 panel
 
 > 日期：2026-08-17（同日金标准审查后改写）
-> 状态：金标准终态（未实现）
+> 状态：金标准终态（已实现；2026-08-25 更名为 pier.agent-splits，设置面 + 预设 + cwd 继承 + 确定性布局已交付）
 > 范围：智能体若自己调用 tmux CLI，pane 落到 Pier 原生 dockview + ghostty panel。不含自建 mailbox / task DAG / 编排，不含 `omp` hooks 会话恢复，不含替用户打开 experimental teams / omo。
 
 相关：

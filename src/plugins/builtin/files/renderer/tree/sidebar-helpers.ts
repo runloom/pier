@@ -31,6 +31,8 @@ export interface FileTreeSidebarProps {
   activeFilePath?: string | null;
   context: RendererPluginContext;
   controller: FileEditorController;
+  /** Active doc from another root; rendered pinned above the tree. */
+  externalActiveFile?: { path: string; root: string } | null;
   /** 注册表键:共享 group 视图传 groupId,内联回退传 panelId。 */
   instanceId: string;
   onOpenFile: (entry: FileEntry, options?: { pinned?: boolean }) => void;

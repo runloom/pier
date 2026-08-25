@@ -2,9 +2,9 @@
   "commands": {
     "pier.git.merge": {
       "aliases": ["git merge", "merge branch", "branch merge"],
-      "category": "Git",
+      "category": "git",
       "description": "Select a branch and merge it into the current branch.",
-      "title": "Git: Merge Branch..."
+      "title": "git: Merge Branch..."
     },
     "pier.git.switchBranch": {
       "aliases": [
@@ -17,33 +17,33 @@
         "create branch",
         "new branch"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "Switch to a local branch, or create a new branch from the current checkout.",
-      "title": "Git: Switch Branch..."
+      "title": "git: Switch Branch..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["git merge abort", "abort merge"],
-      "category": "Git",
+      "category": "git",
       "description": "Abort the current merge operation.",
-      "title": "Git: Abort Merge"
+      "title": "git: Abort Merge"
     },
     "pier.git.stash": {
       "aliases": ["git stash", "stash save", "git stash save"],
-      "category": "Git",
+      "category": "git",
       "description": "Stash local changes to modified files.",
-      "title": "Git: Stash"
+      "title": "git: Stash"
     },
     "pier.git.stashApply": {
       "aliases": ["git stash apply", "apply stash"],
-      "category": "Git",
+      "category": "git",
       "description": "Select a stash and apply it while keeping it in the stash list.",
-      "title": "Git: Apply Stash..."
+      "title": "git: Apply Stash..."
     },
     "pier.git.stashDrop": {
       "aliases": ["git stash drop", "drop stash", "delete stash"],
-      "category": "Git",
+      "category": "git",
       "description": "Select a stash and delete it from the stash list.",
-      "title": "Git: Drop Stash..."
+      "title": "git: Drop Stash..."
     },
     "pier.git.stashIncludeUntracked": {
       "aliases": [
@@ -52,33 +52,33 @@
         "stash untracked",
         "stash include untracked"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "Stash local changes, including new files.",
-      "title": "Git: Stash (Include New Files)"
+      "title": "git: Stash (Include New Files)"
     },
     "pier.git.stashPop": {
       "aliases": ["git stash pop", "pop stash", "restore stash"],
-      "category": "Git",
+      "category": "git",
       "description": "Select a stash, apply it, and remove it from the stash list.",
-      "title": "Git: Pop Stash..."
+      "title": "git: Pop Stash..."
     },
     "pier.git.rebase": {
       "aliases": ["git rebase", "rebase branch", "rebase onto"],
-      "category": "Git",
+      "category": "git",
       "description": "Select a branch and rebase the current branch onto it.",
-      "title": "Git: Rebase Branch..."
+      "title": "git: Rebase Branch..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["git rebase abort", "abort rebase"],
-      "category": "Git",
+      "category": "git",
       "description": "Abort the current rebase operation.",
-      "title": "Git: Abort Rebase"
+      "title": "git: Abort Rebase"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["git rebase continue", "continue rebase"],
-      "category": "Git",
+      "category": "git",
       "description": "Continue the current rebase operation.",
-      "title": "Git: Continue Rebase"
+      "title": "git: Continue Rebase"
     },
     "pier.git.cherryPick": {
       "aliases": [
@@ -87,39 +87,39 @@
         "pick commit",
         "cherrypick"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "Select a commit and apply it onto the current branch.",
-      "title": "Git: Cherry-pick Commit..."
+      "title": "git: Cherry-pick Commit..."
     },
     "pier.git.cherryPickAbort": {
       "aliases": ["git cherry-pick abort", "abort cherry-pick"],
-      "category": "Git",
+      "category": "git",
       "description": "Abort the current cherry-pick operation.",
-      "title": "Git: Abort Cherry-pick"
+      "title": "git: Abort Cherry-pick"
     },
     "pier.git.cherryPickContinue": {
       "aliases": ["git cherry-pick continue", "continue cherry-pick"],
-      "category": "Git",
+      "category": "git",
       "description": "Continue the current cherry-pick operation.",
-      "title": "Git: Continue Cherry-pick"
+      "title": "git: Continue Cherry-pick"
     },
     "pier.git.revert": {
       "aliases": ["git revert", "revert commit"],
-      "category": "Git",
+      "category": "git",
       "description": "Select a commit and create a new commit that reverts it.",
-      "title": "Git: Revert Commit..."
+      "title": "git: Revert Commit..."
     },
     "pier.git.revertAbort": {
       "aliases": ["git revert abort", "abort revert"],
-      "category": "Git",
+      "category": "git",
       "description": "Abort the current revert operation.",
-      "title": "Git: Abort Revert"
+      "title": "git: Abort Revert"
     },
     "pier.git.revertContinue": {
       "aliases": ["git revert continue", "continue revert"],
-      "category": "Git",
+      "category": "git",
       "description": "Continue the current revert operation.",
-      "title": "Git: Continue Revert"
+      "title": "git: Continue Revert"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -132,15 +132,15 @@
         "undo last commit",
         "uncommit"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "Undo the last commit while preserving its changes as staged.",
-      "title": "Git: Undo Last Commit"
+      "title": "git: Undo Last Commit"
     },
     "pier.git.review.openFile": {
       "aliases": ["open file", "open changed file", "review open file"],
-      "category": "Git",
+      "category": "git",
       "description": "Open this changed file in the editor.",
-      "title": "Git: Open File"
+      "title": "git: Open File"
     },
     "pier.git.review.openInEditor": {
       "aliases": [
@@ -149,21 +149,21 @@
         "open at line",
         "go to line"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "Jump to this change in the source editor, at the matching working-tree line when available.",
-      "title": "Git: Jump to Source"
+      "title": "git: Jump to Source"
     },
     "pier.git.review.stageFile": {
       "aliases": ["stage file", "git add", "stage changes"],
-      "category": "Git",
+      "category": "git",
       "description": "Stage the selected file's changes.",
-      "title": "Git: Stage"
+      "title": "git: Stage"
     },
     "pier.git.review.unstageFile": {
       "aliases": ["unstage file", "git restore --staged", "unstage changes"],
-      "category": "Git",
+      "category": "git",
       "description": "Unstage the selected file's staged changes.",
-      "title": "Git: Unstage"
+      "title": "git: Unstage"
     },
     "pier.git.review.discardFile": {
       "aliases": [
@@ -176,44 +176,44 @@
         "checkout file",
         "delete untracked"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "Discard local changes, or move new files to Trash.",
-      "title": "Git: Discard Changes"
+      "title": "git: Discard Changes"
     },
     "pier.git.review.toggleTree": {
-      "category": "Git",
+      "category": "git",
       "description": "Show or hide the changed-files tree sidebar.",
       "title": "Toggle Changed Files Tree"
     },
     "pier.git.review.expandAll": {
-      "category": "Git",
+      "category": "git",
       "description": "Expand all folders in the review tree.",
       "title": "Expand Folders"
     },
     "pier.git.review.collapseFolders": {
-      "category": "Git",
+      "category": "git",
       "description": "Collapse all folders in the review tree.",
       "title": "Collapse Folders"
     },
     "pier.git.review.copyPath": {
-      "category": "Git",
+      "category": "git",
       "description": "Copy the absolute path of the selected change.",
-      "title": "Git: Copy Path"
+      "title": "git: Copy Path"
     },
     "pier.git.review.copyRelativePath": {
-      "category": "Git",
+      "category": "git",
       "description": "Copy the repository-relative path of the selected change.",
-      "title": "Git: Copy Relative Path"
+      "title": "git: Copy Relative Path"
     },
     "pier.git.review.copyPathWithRange": {
-      "category": "Git",
+      "category": "git",
       "description": "Copy the repository-relative path and selected line numbers.",
-      "title": "Git: Copy Path and Selected Lines"
+      "title": "git: Copy Path and Selected Lines"
     },
     "pier.git.review.revealInFinder": {
-      "category": "Git",
+      "category": "git",
       "description": "Reveal the selected change in the system file manager.",
-      "title": "Git: Reveal in Finder"
+      "title": "git: Reveal in Finder"
     },
     "pier.worktree.create": {
       "aliases": [
@@ -226,8 +226,8 @@
         "wt add"
       ],
       "category": "Worktree",
-      "description": "Creates a Git worktree under the repository-managed worktrees directory.",
-      "title": "Create Worktree"
+      "description": "Creates a new git worktree under the repository-managed worktrees directory.",
+      "title": "New Worktree"
     },
     "pier.worktree.delete": {
       "aliases": [
@@ -240,7 +240,7 @@
         "wt remove"
       ],
       "category": "Worktree",
-      "description": "Selects and removes a Git worktree.",
+      "description": "Selects and removes a git worktree.",
       "title": "Delete Worktrees..."
     },
     "pier.worktree.prune": {
@@ -252,7 +252,7 @@
         "wt prune"
       ],
       "category": "Worktree",
-      "description": "Prunes stale Git worktree entries.",
+      "description": "Prunes stale git worktree entries.",
       "title": "Prune Stale Worktrees"
     },
     "pier.worktree.list": {
@@ -266,7 +266,7 @@
         "wt list"
       ],
       "category": "Worktree",
-      "description": "Lists Git worktrees for the current repository and opens the selected worktree.",
+      "description": "Lists git worktrees for the current repository and opens the selected worktree.",
       "title": "List Worktrees"
     },
     "pier.git.fetch": {
@@ -277,21 +277,21 @@
         "refresh remote",
         "update remotes"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "Fetch the latest remote branch data without changing your working tree.",
-      "title": "Git: Fetch"
+      "title": "git: Fetch"
     },
     "pier.git.pull": {
       "aliases": ["git pull", "pull", "pull changes", "fast forward"],
-      "category": "Git",
+      "category": "git",
       "description": "Pull remote changes with fast-forward only.",
-      "title": "Git: Pull"
+      "title": "git: Pull"
     },
     "pier.git.push": {
       "aliases": ["git push", "push", "push changes"],
-      "category": "Git",
+      "category": "git",
       "description": "Push local commits to the remote.",
-      "title": "Git: Push"
+      "title": "git: Push"
     },
     "pier.git.publish": {
       "aliases": [
@@ -301,15 +301,15 @@
         "set upstream",
         "first push"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "Push the current branch to the remote and set upstream.",
-      "title": "Git: Publish Branch"
+      "title": "git: Publish Branch"
     },
     "pier.git.sync": {
       "aliases": ["git sync", "sync", "sync changes", "pull and push"],
-      "category": "Git",
+      "category": "git",
       "description": "Pull then push to sync with the remote.",
-      "title": "Git: Sync"
+      "title": "git: Sync"
     },
     "pier.git.viewChanges": {
       "aliases": [
@@ -324,9 +324,9 @@
         "open changes",
         "review changes"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "Open the changes review panel for the current repository.",
-      "title": "Git: Open Review"
+      "title": "git: Open Review"
     }
   },
   "description": "Built-in git command palette and terminal status support.",
@@ -340,8 +340,8 @@
     "ui.selectPlaceholder": "Select a worktree…",
     "ui.statusOpenLabel": "Open worktrees for {{name}}",
     "ui.statusOpenTooltip": "Click to switch worktree",
-    "ui.statusDropdownOpenLabel": "Open Git status for {{name}}",
-    "ui.statusDropdownOpenTooltip": "Click to open Git status",
+    "ui.statusDropdownOpenLabel": "Open git status for {{name}}",
+    "ui.statusDropdownOpenTooltip": "Click to open git status",
     "ui.statusDropdownViewChanges": "View Changes",
     "ui.reviewChangesTitle": "Changes",
     "ui.reviewTabTooltipPath": "Path",
@@ -390,20 +390,20 @@
     "ui.reviewRevertHunkFailed": "Unable to revert hunk",
     "ui.reviewHunkNotReady": "This change is still loading. Try again in a moment.",
     "ui.reviewDetails": "Details",
-    "ui.reviewInvalidSource": "Invalid Git source",
+    "ui.reviewInvalidSource": "Invalid git source",
     "ui.reviewLoadFailed": "Failed to load changes",
     "ui.reviewNavigationFailed": "Failed to navigate to file",
     "ui.reviewMutationInProgress": "Another change is still being applied",
     "ui.reviewRefreshStale": "Files changed again while refreshing. Previous diffs stay until the next update.",
     "ui.reviewFailureAborted": "The request was cancelled.",
-    "ui.reviewFailureBusy": "Git review is busy. Try again.",
+    "ui.reviewFailureBusy": "git review is busy. Try again.",
     "ui.reviewFailureChangeNotFound": "This change moved or was updated. Refresh and try again.",
-    "ui.reviewFailureCommandFailed": "Git could not complete this operation. Try again.",
+    "ui.reviewFailureCommandFailed": "git could not complete this operation. Try again.",
     "ui.reviewFailureDuplicateOperation": "This review request is already running.",
-    "ui.reviewFailureIndexLocked": "Another program is updating the Git staging area. Try again in a moment.",
+    "ui.reviewFailureIndexLocked": "Another program is updating the git staging area. Try again in a moment.",
     "ui.reviewFailureInternal": "An internal error occurred while processing the change.",
-    "ui.reviewFailureInvalidSource": "The Git review source is no longer valid.",
-    "ui.reviewFailureNotRepository": "This directory is no longer a Git repository.",
+    "ui.reviewFailureInvalidSource": "The git review source is no longer valid.",
+    "ui.reviewFailureNotRepository": "This directory is no longer a git repository.",
     "ui.reviewFailureOutputLimit": "The change exceeds the review size limit.",
     "ui.reviewFailureStaleRevision": "The change kept updating. Try again.",
     "ui.reviewFailureTimeout": "Reading the change timed out.",
@@ -512,7 +512,7 @@
     "ui.reviewStateSubmodule": "Submodule change",
     "ui.reviewStateSymlink": "Symbolic link",
     "ui.reviewStateTooLarge": "File is too large",
-    "ui.gitStatusLabel": "Git status",
+    "ui.gitStatusLabel": "git status",
     "ui.statusDropdownFetch": "Fetch",
     "ui.statusDropdownFetching": "Fetching remote…",
     "ui.statusDropdownFetchSuccess": "Remote updated",
@@ -531,7 +531,7 @@
     "ui.statusDropdownSyncing": "Syncing changes…",
     "ui.statusDropdownSyncSuccess": "Synced",
     "ui.statusDropdownNoLocalChanges": "No local changes",
-    "ui.statusDropdownLoading": "Loading Git status…",
+    "ui.statusDropdownLoading": "Loading git status…",
     "ui.statusRowChanges": "Changes",
     "ui.statusRowSync": "Sync",
     "ui.statusRowPull": "Pull",
@@ -560,7 +560,7 @@
     "ui.statusRowPullBlocked": "Commit or stash local changes before pulling",
     "ui.statusSyncLabel": "Sync changes",
     "ui.statusSyncAlreadyRunning": "Sync already in progress",
-    "ui.statusSyncConfirmBody": "Pulls then pushes to {{upstream}}. You can turn off this confirmation in Git settings.",
+    "ui.statusSyncConfirmBody": "Pulls then pushes to {{upstream}}. You can turn off this confirmation in git settings.",
     "ui.statusSyncConfirmButton": "Sync",
     "ui.statusChangesOpenLabel": "Open changes",
     "ui.statusChangesFiles": "files",
@@ -577,7 +577,7 @@
     "ui.gitAbortOperationConfirmTitle": "Abort {{operation}}?",
     "ui.gitAbortOperationConfirmBody": "Discards the paused {{operation}} and restores the branch. Cannot be undone.",
     "ui.gitAbortOperationConfirmButton": "Abort {{operation}}",
-    "ui.statusDropdownUnavailable": "Git status unavailable",
+    "ui.statusDropdownUnavailable": "git status unavailable",
     "ui.statusDropdownConflictSingle": "{{count}} conflict",
     "ui.statusDropdownConflictPlural": "{{count}} conflicts",
     "ui.statusDropdownOperationPaused": "{{operation}} paused",
@@ -613,7 +613,7 @@
     "ui.srInsertions": "insertions",
     "ui.srDeletions": "deletions",
     "ui.largeChange": "large change",
-    "ui.gitUnsupported": "Not a Git repository",
+    "ui.gitUnsupported": "Not a git repository",
     "ui.branchDefault": "default",
     "ui.branchGraphCaveatTitle": "Counts commit divergence only. After squash/rebase, applied commits may still look branch-only.",
     "ui.createNamePrompt": "New worktree name",
@@ -634,7 +634,7 @@
     "ui.pruneConfirmButton": "Prune",
     "ui.worktreePruneSuccess": "Stale worktrees pruned",
     "ui.worktreeDeleteSuccess": "Worktree deleted",
-    "ui.gitErrorUnavailable": "Git operation failed",
+    "ui.gitErrorUnavailable": "git operation failed",
     "ui.gitLoadingMerge": "Merging…",
     "ui.gitLoadingSwitchBranch": "Switching branch…",
     "ui.gitLoadingCreateAndSwitchBranch": "Creating branch…",
@@ -650,7 +650,7 @@
     "ui.gitNoOtherBranches": "No other branches",
     "ui.gitSwitchSelectBranch": "Enter a branch name to switch or create",
     "ui.gitBranchCurrent": "Current branch",
-    "ui.gitBranchNameInvalid": "Invalid Git branch name",
+    "ui.gitBranchNameInvalid": "Invalid git branch name",
     "ui.gitBranchCannotCreate": "Cannot create branch {{branch}}",
     "ui.gitBranchCreateFromHead": "Create from the current checkout",
     "ui.gitBranchCreateAndSwitch": "Create branch {{branch}}",
@@ -726,11 +726,11 @@
     "ui.gitUndoCommitSuccess": "Commit undone",
     "ui.gitUndoCommitNothing": "Nothing to undo",
     "ui.title": "Worktrees",
-    "ui.unsupported": "Current directory does not support Git worktrees",
-    "ui.worktreeUnavailable.gitUnavailable": "Git is unavailable",
+    "ui.unsupported": "Current directory does not support git worktrees",
+    "ui.worktreeUnavailable.gitUnavailable": "git is unavailable",
     "ui.worktreeUnavailable.invalidName": "The worktree name is invalid",
     "ui.worktreeUnavailable.invalidPath": "The worktree path is invalid",
-    "ui.worktreeUnavailable.notGitRepository": "The current directory is not a Git repository",
+    "ui.worktreeUnavailable.notGitRepository": "The current directory is not a git repository",
     "ui.worktreeCreate.aiGenerating": "Generating…",
     "ui.worktreeCreate.agentEmpty": "No enabled agents",
     "ui.worktreeCreate.agentLabel": "Agent",
@@ -739,14 +739,14 @@
     "ui.worktreeCreate.baseLabel": "Base",
     "ui.worktreeCreate.branchLabel": "Branch",
     "ui.worktreeCreate.branchPlaceholder": "feature/fix-dialog",
-    "ui.worktreeCreate.confirm": "Create",
+    "ui.worktreeCreate.confirm": "New",
     "ui.worktreeCreate.close": "Close",
     "ui.worktreeCreate.createFailed": "Worktree creation failed",
     "ui.worktreeCreate.creatingWorktree": "Creating worktree…",
-    "ui.worktreeCreate.description": "Create an isolated worktree for this task",
+    "ui.worktreeCreate.description": "Create a new isolated worktree for this task",
     "ui.worktreeCreate.errorAgentRequired": "Choose an agent to start the task",
     "ui.worktreeCreate.errorBranchExists": "Branch already exists",
-    "ui.worktreeCreate.errorBranchInvalid": "Enter a valid Git branch name using letters, digits and . _ / -",
+    "ui.worktreeCreate.errorBranchInvalid": "Enter a valid git branch name using letters, digits and . _ / -",
     "ui.worktreeCreate.errorBranchRequired": "Enter a branch name",
     "ui.worktreeCreate.errorTaskRequired": "Enter a task description",
     "ui.worktreeCreate.generateFailed.invalid_response": "AI could not generate a valid branch name, try again",
@@ -755,8 +755,8 @@
     "ui.worktreeCreate.generateFailed.timeout": "Agent timed out, try again or switch to manual naming",
     "ui.worktreeCreate.generatingBranch": "Generating branch name…",
     "ui.worktreeCreate.generationFailed": "Branch name generation failed",
-    "ui.worktreeCreate.hookSignalKilledBody": "macOS is slow on first Git check. Pier stopped to avoid hanging — retry usually works.",
-    "ui.worktreeCreate.hookSignalKilledTitle": "Git check interrupted — try again",
+    "ui.worktreeCreate.hookSignalKilledBody": "macOS is slow on first git check. Pier stopped to avoid hanging — retry usually works.",
+    "ui.worktreeCreate.hookSignalKilledTitle": "git check interrupted — try again",
     "ui.worktreeCreate.initializingEnvironment": "Initializing environment…",
     "ui.worktreeCreate.openingTerminal": "Opening terminal…",
     "ui.worktreeCreate.initializationFailed": "Worktree created, but environment initialization failed",
@@ -837,7 +837,7 @@
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {
       "label": "Encode dirtiness in branch icon",
-      "description": "Show dirtiness on the status bar branch icon. Open the Git dropdown for change details."
+      "description": "Show dirtiness on the status bar branch icon. Open the git dropdown for change details."
     },
     "pier.git.statusItem.showChangesStatus": {
       "label": "Show changes item",
@@ -859,16 +859,16 @@
   },
   "terminalStatusItems": {
     "pier.worktree.status": {
-      "description": "Shows the Git branch in terminal panels. Click to open status actions.",
-      "title": "Git Branch"
+      "description": "Shows the git branch in terminal panels. Click to open status actions.",
+      "title": "git Branch"
     },
     "pier.git.status.changes": {
       "description": "Shows changed line counts; click opens the review panel.",
-      "title": "Git Changes"
+      "title": "git Changes"
     },
     "pier.git.status.sync": {
       "description": "Shows ahead/behind counts with one-click sync.",
-      "title": "Git Sync"
+      "title": "git Sync"
     }
   },
   "panels": {
@@ -876,5 +876,5 @@
       "title": "Changes"
     }
   },
-  "name": "Git"
+  "name": "git"
 }

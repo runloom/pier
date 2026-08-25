@@ -49,3 +49,12 @@ export function launchIdFromParams(params: unknown): string | undefined {
     ? launchId
     : undefined;
 }
+
+export function backgroundCreateFromParams(params: unknown): boolean {
+  return (
+    !!params &&
+    typeof params === "object" &&
+    "backgroundCreate" in params &&
+    params.backgroundCreate === true
+  );
+}

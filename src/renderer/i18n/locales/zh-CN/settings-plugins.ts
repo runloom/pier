@@ -50,13 +50,15 @@ export const settingsPlugins = {
   source: {
     builtin: "内置",
     local: "本地",
-    git: "Git",
+    git: "git",
     registry: "Registry",
     official: "官方",
     devOverride: "本地开发",
   },
   openSettings: "设置",
   openSettingsPlugin: "打开{{name}}设置",
+  permissionSummary: "权限：{{list}}",
+  permissionSummaryNone: "无特殊权限",
   tabs: {
     installed: "已安装",
     available: "未安装",

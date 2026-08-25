@@ -101,8 +101,6 @@ export function AgentIndexQuickPickRow({
           {entry ? (
             <AgentStatusLabel
               fallbackLabel={i18next.t("agents.section.running")}
-              spawnedAt={display?.spawnedAt}
-              stateStartedAt={stateStartedAt}
               status={status}
               subagentCount={display?.subagentCount ?? 0}
             />

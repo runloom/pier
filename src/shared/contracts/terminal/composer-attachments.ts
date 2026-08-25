@@ -11,6 +11,15 @@ export interface TerminalComposerAttachmentDto {
    * Omitted for non-images or when preview generation fails.
    */
   previewDataUrl?: string | undefined;
+  /** Natural pixel height of the image; set with `previewDataUrl`. */
+  previewHeight?: number | undefined;
+  /** Natural pixel width of the image; set with `previewDataUrl`. */
+  previewWidth?: number | undefined;
+  /**
+   * Clipped text thumbnail (main-generated). Omitted for binaries,
+   * directories, and when the head looks empty or non-text.
+   */
+  textPreview?: string | undefined;
 }
 
 export interface TerminalComposerPasteTextWrite {

@@ -66,6 +66,7 @@ export const terminal = {
     editPasteSave: "Save",
     editPasteSaveFailed: "Couldn’t save pasted content — try again",
     pasteAttachmentAria: "Pasted content, attachment {{n}}",
+    pasteAttachmentLabel: "Pasted content",
     attachmentAutocompleteEmptyBody:
       "Add a file first, then type # to insert it here.",
     attachmentAutocompleteEmptyTitle: "No attachments yet",
@@ -403,6 +404,11 @@ export const terminal = {
       "Couldn’t start the terminal session ({{error}}). Close this tab and try again.",
     ioThreadOom:
       "Not enough memory to start the terminal. Close this tab and try again.",
+    createFailed: "Couldn’t start the terminal session ({{error}}). Try again.",
+    createFailedUnknown: "Couldn’t start the terminal session. Try again.",
+    errorRetry: "Retry",
+    relaunchFailed:
+      "Couldn’t restart the terminal session ({{error}}). Close this tab and try again.",
     pasteConfirmTitle: "Paste into the terminal?",
     pasteConfirmBody:
       "This paste has {{lines}} lines and may run commands immediately.",

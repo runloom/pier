@@ -223,20 +223,80 @@
 }
 
 [data-slot="markdown-prose"] .md-table-wrap {
+  position: relative;
   margin-block: var(--md-space-3);
   overflow-x: auto;
+  /* 与 aside 等带边框内容块同档；滚动时内容从圆角下滑过。 */
+  border-radius: 0.375rem;
 }
 
+/* separate + 逐边框线（右/下画在每格、首行补上、首列补左）：
+   所有线都落在单元格盒内，横向滚动永不裁切外框——collapse 模型的
+   外框由表格绘制，滚动后左右边线会消失（Chrome 已知绘制缺陷）。 */
 [data-slot="markdown-prose"] .md-table-wrap table {
   margin-block: 0;
   font-size: 0.9375em;
+  /* 数字列对齐（GitHub 表格同款）。 */
+  font-variant: tabular-nums;
   line-height: 1.5;
+  border-spacing: 0;
+  border-collapse: separate;
+}
+
+/* shadcn TableRow/TableHeader 自带行级 border-b，separate 模型下会与
+   单元格底线叠成双横线，markdown 作用域内一律关掉。 */
+[data-slot="markdown-prose"] .md-table-wrap tr {
+  border-bottom: 0;
 }
 
 [data-slot="markdown-prose"] .md-table-wrap th,
 [data-slot="markdown-prose"] .md-table-wrap td {
-  padding-block: 0.45em;
-  padding-inline: 0.65em;
+  padding-block: 0.5em;
+  padding-inline: 0.75em;
+  overflow-wrap: anywhere;
+  /* shadcn TableHead/TableCell 都带 whitespace-nowrap，阅读面必须还原换行；
+     anywhere 让长 URL/标识符在窄面板下可断（同时参与 min-content 计算）。 */
+  white-space: normal;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+[data-slot="markdown-prose"] .md-table-wrap thead th {
+  border-top: 1px solid var(--border);
+}
+
+[data-slot="markdown-prose"] .md-table-wrap th:first-child,
+[data-slot="markdown-prose"] .md-table-wrap td:first-child {
+  border-left: 1px solid var(--border);
+}
+
+/* 外四角圆角：separate 模型下由四个角格承载，边线沿圆角弯曲（真圆角，
+   而非容器裁切出的直角断线）。 */
+[data-slot="markdown-prose"] .md-table-wrap thead th:first-child {
+  border-top-left-radius: 0.375rem;
+}
+[data-slot="markdown-prose"] .md-table-wrap thead th:last-child {
+  border-top-right-radius: 0.375rem;
+}
+[data-slot="markdown-prose"] .md-table-wrap tr:last-child td:first-child {
+  border-bottom-left-radius: 0.375rem;
+}
+[data-slot="markdown-prose"] .md-table-wrap tr:last-child td:last-child {
+  border-bottom-right-radius: 0.375rem;
+}
+
+/* 换行多行单元格时的行追踪（GitHub 斑马纹同款，双主题都保持弱存在感）。 */
+[data-slot="markdown-prose"] .md-table-wrap tbody tr:nth-child(2n) {
+  background-color: color-mix(in oklab, var(--muted) 40%, transparent);
+}
+/* 斑马底色（非分层 CSS，优先级压过 shadcn hover 工具类）会吃掉偶数行的
+   hover 反馈；补一条同源 hover 保持整表一致的扫过反馈。 */
+[data-slot="markdown-prose"] .md-table-wrap tbody tr:hover {
+  background-color: color-mix(in oklab, var(--muted) 55%, transparent);
+}
+/* 拖列宽期间禁止文本选择（pointerdown preventDefault 之外的兜底）。 */
+[data-slot="markdown-prose"] .md-table-wrap[data-md-resizing] {
+  user-select: none;
 }
 
 /* Match markdown code-block header chrome (`bg-muted/40`). */
@@ -328,4 +388,85 @@
 
 [data-slot="markdown-prose"] sup .md-link {
   font-size: 0.75em;
+}
+[data-slot="markdown-prose"] .md-table-wrap th {
+  position: relative;
+  /* shadcn TableHead 默认 h-10：数据网格比例，阅读面用 padding 驱动高度。 */
+  height: auto;
+}
+/* 透明热区叠在 th 右缘 border 上，hover/focus 时边框线亮起。 */
+[data-slot="markdown-prose"] .md-col-resizer {
+  position: absolute;
+  inset-block: 0;
+  right: -5px;
+  z-index: 2;
+  width: 10px;
+  touch-action: none;
+  cursor: col-resize;
+}
+/* hover/focus 直接点亮 th 自身边框（单一线条；伪元素指示线会与 1px 边框
+   错开半像素，Retina 下渲染成两条平行竖线）。拖拽期间由 hook 在滚动容器
+   上标记 data-md-resizing 抑制此高亮，只留全列指示线，避免双线。 */
+[data-slot="markdown-prose"]
+  .md-table-wrap:not([data-md-resizing])
+  th:has(> .md-col-resizer:hover),
+[data-slot="markdown-prose"]
+  .md-table-wrap:not([data-md-resizing])
+  th:has(> .md-col-resizer:focus-visible) {
+  border-right-color: color-mix(in oklab, var(--ring) 75%, transparent);
+}
+
+/* 拖拽进行中：全列高亮线（Notion/Excel 同款）。top/height 由 hook 取自
+   表格矩形（精确贴合表格高度，不含滚动条槽），x = 列左缘 + clamp 宽度。 */
+[data-slot="markdown-prose"] .md-col-resize-line {
+  position: absolute;
+  z-index: 3;
+  width: 1px;
+  pointer-events: none;
+  background-color: color-mix(in oklab, var(--ring) 60%, transparent);
+}
+[data-slot="markdown-prose"] .md-heading-group {
+  position: relative;
+}
+[data-slot="markdown-prose"] .md-anchor-copy {
+  margin-left: 0.5em;
+  vertical-align: middle;
+  opacity: 0;
+}
+[data-slot="markdown-prose"] .md-heading-group:hover .md-anchor-copy,
+[data-slot="markdown-prose"] .md-anchor-copy:focus-visible {
+  opacity: 1;
+}
+
+/* Footnote hover popover is portaled to document.body, so it intentionally
+   lives outside the [data-slot="markdown-prose"] scope. */
+.md-footnote-popover {
+  position: fixed;
+  z-index: 50; /* above sticky table headers / column resizers (z-index: 2) */
+  max-width: 320px;
+  /* 长定义垂直限高：超出内部滚动，避免顶部翻转后上溢出视口不可达。 */
+  max-height: min(60vh, 480px);
+  padding: 0.625rem 0.75rem;
+  overflow-y: auto;
+  font-size: 0.875em;
+  line-height: 1.5;
+  color: var(--popover-foreground);
+  pointer-events: none;
+  background-color: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 18%, transparent);
+}
+/* Popover 传送至 body，脱离 markdown-prose 作用域；内容经 renderInlines
+   产出的 .md-link / .md-inline-code 在此失去作用域样式，用语义令牌镜像。 */
+.md-footnote-popover .md-link {
+  color: var(--action-accent);
+}
+.md-footnote-popover .md-inline-code {
+  padding: 0.15em 0.35em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875em;
+  color: var(--foreground);
+  background-color: var(--muted);
+  border-radius: 0.25rem;
 }

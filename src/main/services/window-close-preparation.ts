@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createLogger } from "@shared/logger.ts";
+import { flushCanvasTrustState } from "../services/canvas-trust/service.ts";
 import { flushPanelContextState } from "../state/panel-context-state.ts";
 import { flushPluginSettings } from "../state/plugin-settings.ts";
 import { flushPluginState } from "../state/plugin-state.ts";
@@ -265,6 +266,7 @@ async function reportCloseFailure(
 export async function flushAllStoresSettled(): Promise<void> {
   const flushes: [string, () => Promise<void>][] = [
     ["plugin-state", flushPluginState],
+    ["canvas-trust", flushCanvasTrustState],
     ["plugin-settings", flushPluginSettings],
     ["panel-context-state", flushPanelContextState],
     ["preferences", flushPreferences],

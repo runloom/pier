@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
@@ -102,7 +103,7 @@ export const settings = {
       deliveryClaude: "Claude Code（.claude/skills）",
       deliveryClaudeHint:
         "Claude Code 只扫这里。需要 Claude Code 看到这些技能时再打开。",
-      gitIgnoreTitle: "Git 忽略建议",
+      gitIgnoreTitle: "git 忽略建议",
       gitIgnoreDescription: "技能安装产生的链接一般不必提交。",
       gitIgnoreCopy: "复制",
       gitIgnoreCopied: "已复制",
@@ -122,6 +123,17 @@ export const settings = {
       canvasRootsInvalidPath: "请填写项目内相对路径（不能用 .. 或绝对路径）。",
       canvasRootsMaxFolders: "最多可添加 {{max}} 个目录。",
       canvasRootsConflict: "文件已在别处更改，请重新打开后再保存。",
+      canvasTrustTitle: "画布信任",
+      canvasTrustDescription:
+        "首次预览项目画布时会询问。决定保存在本机，不写入项目文件。",
+      canvasTrustLoading: "加载中…",
+      canvasTrustLoadFailed: "无法读取信任状态",
+      canvasTrustedBadge: "已信任",
+      canvasTrustNotTrusted: "尚未信任。首次预览此项目的画布时会询问。",
+      canvasTrustRevoke: "撤销信任",
+      canvasTrustRevokeTitle: "撤销对此项目画布的信任？",
+      canvasTrustRevokeBody: "撤销后，下次预览此项目的画布时会再次询问。",
+      canvasTrustRevokeFailed: "无法撤销信任",
     },
     tabEnvironment: "环境",
     tabRules: "规则",
@@ -199,7 +211,7 @@ export const settings = {
     cleanupHint: "删除工作树时运行。",
     copyPatterns: {
       addPattern: "添加模式",
-      hint: "匹配主项目里被 Git 忽略的文件；创建新工作树时会一并复制。",
+      hint: "匹配主项目里被 git 忽略的文件；创建新工作树时会一并复制。",
       patternLabel: "文件匹配模式",
       placeholder: ".env*",
       remove: "删除",
@@ -229,43 +241,7 @@ export const settings = {
     setupCommand: "启动命令",
     setupHint: "创建工作树时运行。",
   },
-  appUpdate: {
-    title: "应用更新",
-    description: "检查、下载并安装 Pier 更新。",
-    available: "版本 {{version}} 可用。",
-    progress: "已下载 {{percent}}%",
-    state: {
-      disabled: "开发模式不检查应用更新。",
-      idle: "尚未检查更新。",
-      checking: "正在检查更新…",
-      available: "有可用更新。",
-      "not-available": "Pier 已是最新版本。",
-      downloading: "正在下载更新…",
-      downloaded: "更新已下载，重启后安装。",
-      error: "检查更新失败。",
-    },
-    action: {
-      check: "检查更新",
-      download: "下载",
-      restart: "重启并安装",
-    },
-    toast: {
-      statusFailed: "无法读取更新状态，请重试",
-      checkFailed: "无法检查更新，请重试",
-      downloadFailed: "无法下载更新，请重试",
-      installFailed: "无法安装更新，请重试",
-      ready: "更新已就绪",
-      readyDetail: "Pier {{version}} · 重启后安装",
-    },
-    titleBar: {
-      update: "更新",
-      updateAvailable: "v{{version}}",
-      availableAria: "Pier {{version}} 可用",
-      downloadingAria: "正在下载更新 {{percent}}%",
-      restartAria: "重启并安装 Pier {{version}}",
-      errorAria: "应用更新失败，请打开更新设置。",
-    },
-  },
+  appUpdate: settingsAppUpdate,
   statusBar: {
     title: "状态栏",
     description:
@@ -307,7 +283,7 @@ export const settings = {
     monoFontSizeDesc: "范围 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "代码字号",
-    codeFontSizeDesc: "文件编辑与 Git 对比；范围 8–32",
+    codeFontSizeDesc: "文件编辑与 git 对比；范围 8–32",
     codeFontSizePlaceholder: "13",
     fontUpdateFailed: "无法更新字体设置",
     terminalCursorStyle: "光标样式",

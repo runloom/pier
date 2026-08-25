@@ -4,6 +4,7 @@ import type {
   ManagedPluginCatalogSnapshot,
   ManagedPluginOperationResult,
   ManagedPluginRendererActivationReport,
+  ManagedPluginSandboxAudit,
 } from "@shared/contracts/plugin/managed.ts";
 import type { PluginRpcEventPayload } from "@shared/contracts/plugin/rpc.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
@@ -26,6 +27,7 @@ export interface ManagedPluginsPreloadApi {
   reportRendererActivation(
     report: ManagedPluginRendererActivationReport
   ): Promise<void>;
+  reportSandboxAudit(report: ManagedPluginSandboxAudit): Promise<void>;
   rollback(id: string, version: string): Promise<ManagedPluginOperationResult>;
   setDevOverride(
     id: string,
@@ -90,6 +92,8 @@ export function createManagedPluginsPreloadApi(): ManagedPluginsPreloadApi {
       }),
     reportRendererActivation: (report) =>
       ipcRenderer.invoke(PIER.PLUGIN_RENDERER_ACTIVATION_REPORT, report),
+    reportSandboxAudit: (report) =>
+      ipcRenderer.invoke(PIER.PLUGIN_SANDBOX_AUDIT, report),
     rollback: (id, version) =>
       invokePierCommand<ManagedPluginOperationResult>({
         id,

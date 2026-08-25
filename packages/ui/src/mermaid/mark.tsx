@@ -95,7 +95,7 @@ export function MermaidMark({
   const card = (
     <div
       className={cn(
-        "relative box-border flex h-full w-full flex-col justify-center border px-3 py-3 text-left text-card-foreground",
+        "relative box-border flex h-full w-full flex-col justify-center border px-3 py-3 text-left text-card-foreground!",
         node.shape === "round" ? "rounded-full" : "rounded-md",
         toneSurface ?? kindSurface ?? "bg-card",
         selected && "border-ring ring-1 ring-ring/40"
@@ -116,11 +116,11 @@ export function MermaidMark({
           />
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="whitespace-normal break-words font-medium text-sm leading-5">
+          <span className="whitespace-normal break-words font-medium text-card-foreground! text-sm leading-5">
             {node.title}
           </span>
           {node.meta ? (
-            <span className="min-w-0 break-words text-muted-foreground text-xs leading-4">
+            <span className="min-w-0 break-words text-muted-foreground! text-xs leading-4">
               {node.meta}
             </span>
           ) : null}

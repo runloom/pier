@@ -1,4 +1,5 @@
 import { settingsAgents } from "./settings-agents.ts";
+import { settingsAppUpdate } from "./settings-app-update.ts";
 import { settingsCliCommand } from "./settings-cli-command.ts";
 import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
@@ -106,7 +107,7 @@ export const settings = {
       deliveryClaude: "Claude Code(.claude/skills)",
       deliveryClaudeHint:
         "Claude Code는 여기만 봅니다. Claude Code에도 보여야 할 때만 켜세요.",
-      gitIgnoreTitle: "권장 Git 무시",
+      gitIgnoreTitle: "권장 git 무시",
       gitIgnoreDescription:
         "스킬 설치 링크는 보통 커밋하지 않는 것이 좋습니다.",
       gitIgnoreCopy: "복사",
@@ -129,6 +130,19 @@ export const settings = {
       canvasRootsMaxFolders: "폴더는 최대 {{max}}개까지 추가할 수 있습니다.",
       canvasRootsConflict:
         "파일이 다른 곳에서 변경되었습니다. 이 페이지를 다시 연 다음 저장하세요.",
+      canvasTrustTitle: "캔버스 신뢰",
+      canvasTrustDescription:
+        "이 프로젝트의 캔버스를 처음 미리볼 때 확인합니다. 결정은 이 컴퓨터에만 저장되며 프로젝트 파일에 기록되지 않습니다.",
+      canvasTrustLoading: "로드 중…",
+      canvasTrustLoadFailed: "신뢰 상태를 읽을 수 없습니다",
+      canvasTrustedBadge: "신뢰함",
+      canvasTrustNotTrusted:
+        "아직 신뢰하지 않음. 이 프로젝트의 캔버스를 처음 미리볼 때 확인합니다.",
+      canvasTrustRevoke: "신뢰 철회",
+      canvasTrustRevokeTitle: "이 프로젝트 캔버스에 대한 신뢰를 철회할까요?",
+      canvasTrustRevokeBody:
+        "철회하면 다음에 이 프로젝트의 캔버스를 미리볼 때 다시 확인합니다.",
+      canvasTrustRevokeFailed: "신뢰를 철회할 수 없습니다",
     },
     tabEnvironment: "환경",
     tabRules: "규칙",
@@ -209,7 +223,7 @@ export const settings = {
     cleanupHint: "작업 트리를 삭제할 때 실행합니다.",
     copyPatterns: {
       addPattern: "패턴 추가",
-      hint: "기본 프로젝트에서 Git이 무시한 파일과 일치시켜, 새 작업 트리로 복사합니다.",
+      hint: "기본 프로젝트에서 git이 무시한 파일과 일치시켜, 새 작업 트리로 복사합니다.",
       patternLabel: "파일 패턴",
       placeholder: ".env*",
       remove: "삭제",
@@ -239,43 +253,7 @@ export const settings = {
     setupCommand: "준비 명령",
     setupHint: "작업 트리를 만들 때 실행합니다.",
   },
-  appUpdate: {
-    title: "앱 업데이트",
-    description: "Pier 업데이트를 확인하고 내려받아 설치합니다.",
-    available: "버전 {{version}}을(를) 사용할 수 있습니다.",
-    progress: "내려받기 {{percent}}%",
-    state: {
-      disabled: "개발 모드는 앱 업데이트를 확인하지 않습니다.",
-      idle: "아직 업데이트 확인을 실행하지 않았습니다.",
-      checking: "업데이트를 확인하는 중…",
-      available: "업데이트가 있습니다.",
-      "not-available": "Pier는 최신입니다.",
-      downloading: "업데이트를 내려받는 중…",
-      downloaded: "업데이트를 내려받았습니다. 다시 시작해 설치합니다.",
-      error: "업데이트 확인에 실패했습니다.",
-    },
-    action: {
-      check: "업데이트 확인",
-      download: "내려받기",
-      restart: "다시 시작하고 설치",
-    },
-    toast: {
-      statusFailed: "업데이트 상태를 읽지 못했습니다. 다시 시도하세요",
-      checkFailed: "업데이트를 확인하지 못했습니다. 다시 시도하세요",
-      downloadFailed: "업데이트를 내려받지 못했습니다. 다시 시도하세요",
-      installFailed: "업데이트를 설치하지 못했습니다. 다시 시도하세요",
-      ready: "업데이트가 준비됨",
-      readyDetail: "Pier {{version}} · 다시 시작해 설치",
-    },
-    titleBar: {
-      update: "업데이트",
-      updateAvailable: "v{{version}}",
-      availableAria: "Pier {{version}}을(를) 사용할 수 있습니다",
-      downloadingAria: "업데이트 내려받는 중 {{percent}}퍼센트",
-      restartAria: "다시 시작하고 Pier {{version}} 설치",
-      errorAria: "앱 업데이트에 실패했습니다. 업데이트 설정을 여세요.",
-    },
-  },
+  appUpdate: settingsAppUpdate,
   statusBar: {
     title: "상태 표시줄",
     description:
@@ -317,7 +295,7 @@ export const settings = {
     monoFontSizeDesc: "범위 8–32",
     monoFontSizePlaceholder: "13",
     codeFontSize: "코드 글꼴 크기",
-    codeFontSizeDesc: "편집기와 Git 차이. 범위 8–32",
+    codeFontSizeDesc: "편집기와 git 차이. 범위 8–32",
     codeFontSizePlaceholder: "13",
     fontUpdateFailed: "글꼴 설정을 업데이트하지 못했습니다",
     terminalCursorStyle: "커서 모양",

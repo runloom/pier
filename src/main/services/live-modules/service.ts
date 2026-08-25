@@ -36,6 +36,13 @@ export interface CreateLiveModulesServiceOptions {
   compileTimeoutMs?: number;
   /** Must be synchronous for `registerRoot` (LiveModulesApi). */
   resolveHomeRoot: () => string;
+  /**
+   * Canvas project trust gate: return false to refuse compiling project-scope
+   * roots that have no stored trust decision. Home-scope roots are never gated.
+   * The refusal surfaces as a compile failure carrying `trust.projectRootPath`
+   * so the renderer can drive the first-open confirm and retry after grant.
+   */
+  resolveProjectTrust?: (projectRootPath: string) => Promise<boolean>;
   ticketRegistry?: LiveModuleTicketRegistry;
 }
 
@@ -212,7 +219,25 @@ export function createLiveModulesService(
       rootRetainCounts.set(rootId, current - 1);
     },
 
-    compile(rootId, relPath) {
+    async compile(rootId, relPath) {
+      const registered = roots.get(rootId);
+      if (
+        registered?.projectRoot &&
+        options.resolveProjectTrust &&
+        !(await options.resolveProjectTrust(registered.projectRoot))
+      ) {
+        return {
+          diagnostics: [
+            {
+              message:
+                "canvas preview blocked: project root has no trust decision",
+              severity: "error" as const,
+            },
+          ],
+          ok: false as const,
+          trust: { projectRootPath: registered.projectRoot },
+        };
+      }
       return runLiveModuleCompile(
         {
           compileEpochs,

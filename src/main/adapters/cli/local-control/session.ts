@@ -15,6 +15,7 @@ import {
   createDefaultLocalControlAuthorizer,
   type LocalControlAuthorizer,
 } from "./authorize.ts";
+import type { ResolveOriginPanel } from "./capability-hot-path.ts";
 import { controlErrorResponse } from "./discovery.ts";
 import { buildLocalControlFeatures, serverErrorFrame } from "./features.ts";
 import { resolveHelloPrincipal } from "./hello-auth.ts";
@@ -50,6 +51,7 @@ export interface CreateLocalControlSessionArgs {
   features?: readonly string[] | undefined;
   nowMs?: (() => number) | undefined;
   receipts?: EffectReceiptStore | undefined;
+  resolveOriginPanel?: ResolveOriginPanel | undefined;
   runtimeControl?: RuntimeControlService | undefined;
   snapshotService?: ControlSnapshotService | undefined;
 }
@@ -268,6 +270,7 @@ export function createLocalControlSessionFromHello(
         receipts,
         runtimeControl: args.runtimeControl,
         capabilityAuthority: args.capabilityAuthority,
+        resolveOriginPanel: args.resolveOriginPanel,
         snapshotService: args.snapshotService,
         inflight,
         disposed: () => disposed,

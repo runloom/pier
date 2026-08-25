@@ -84,14 +84,14 @@ start("plugin-ssh renderer watch", "pnpm", [
   "@pier/plugin-ssh",
   "dev:renderer",
 ]);
-start("plugin-tmux main watch", "pnpm", [
+start("agent-splits main watch", "pnpm", [
   "--filter",
-  "@pier/plugin-tmux",
+  "@pier/plugin-agent-splits",
   "dev:main",
 ]);
-start("plugin-tmux renderer watch", "pnpm", [
+start("agent-splits renderer watch", "pnpm", [
   "--filter",
-  "@pier/plugin-tmux",
+  "@pier/plugin-agent-splits",
   "dev:renderer",
 ]);
 start("plugin-claude main watch", "pnpm", [

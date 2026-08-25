@@ -14,7 +14,7 @@ import {
   getAgentLifecycleSpec,
   listAgentLifecycleSpecs,
 } from "./specs/index.ts";
-import { resolveUpdateMode } from "./specs/types.ts";
+import { resolveUpdateMode, specCanForceReinstall } from "./specs/types.ts";
 
 export async function probeOneAgent(
   agentId: AgentKind,
@@ -29,6 +29,7 @@ export async function probeOneAgent(
   const spec = getAgentLifecycleSpec(agentId);
   const versionArgs = spec.versionArgs ?? ["--version"];
   const updateMode = resolveUpdateMode(spec);
+  const canForceReinstall = specCanForceReinstall(spec);
   const canInstall =
     spec.support === "full" && buildInstallPlan(spec, opts.host) !== null;
 
@@ -38,6 +39,7 @@ export async function probeOneAgent(
     return {
       agentId,
       canInstall,
+      canForceReinstall,
       detected: false,
       envDegraded: true,
       guideCommands: guideCommandsFor(agentId),
@@ -117,6 +119,7 @@ export async function probeOneAgent(
   return {
     agentId,
     canInstall,
+    canForceReinstall,
     detected: detectedOrBroken,
     envDegraded: opts.envDegraded,
     guideCommands: guideCommandsFor(agentId),

@@ -1,4 +1,5 @@
 import type {
+  CanvasTrustStatus,
   LiveModuleCompileResult,
   LiveModuleEvent,
   LiveRootSpec,
@@ -9,6 +10,7 @@ import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 export interface PierLiveModulesAPI {
   compile(rootId: string, relPath: string): Promise<LiveModuleCompileResult>;
   getUrl(rootId: string, moduleId: string): Promise<string>;
+  grantTrust(projectRootPath: string): Promise<void>;
   /**
    * Subscribe to compile/watch events (payload: LiveModuleEvent).
    * Viewer should recompile on `stale` for matching rootId + moduleId.
@@ -16,6 +18,9 @@ export interface PierLiveModulesAPI {
   onChanged(cb: (event: LiveModuleEvent) => void): () => void;
   /** Refcounted register (pair with unregisterRoot when the panel closes). */
   registerRoot(spec: LiveRootSpec): Promise<{ rootId: string }>;
+  revokeTrust(projectRootPath: string): Promise<void>;
+  /** Canvas project trust (first-open gate). */
+  trustStatus(projectRootPath: string): Promise<CanvasTrustStatus>;
   unregisterRoot(rootId: string): Promise<{ rootId: string }>;
 }
 
@@ -46,4 +51,21 @@ export const liveModulesApi: PierLiveModulesAPI = {
       rootId,
       type: "liveModules.unregisterRoot",
     }),
+  trustStatus: (projectRootPath) =>
+    invokePierCommand<CanvasTrustStatus>({
+      projectRootPath,
+      type: "liveModules.trustStatus",
+    }),
+  grantTrust: async (projectRootPath) => {
+    await invokePierCommand({
+      projectRootPath,
+      type: "liveModules.grantTrust",
+    });
+  },
+  revokeTrust: async (projectRootPath) => {
+    await invokePierCommand({
+      projectRootPath,
+      type: "liveModules.revokeTrust",
+    });
+  },
 };

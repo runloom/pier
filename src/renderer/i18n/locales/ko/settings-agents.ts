@@ -94,8 +94,7 @@ export const settingsAgents = {
     latest: "최신",
     installGuide: "설치 명령",
     installs: "설치 위치",
-    reinstallHint:
-      "새 버전을 확인할 수 없을 때는 다시 설치로 현재 설치를 새로고칠 수 있습니다.",
+    reinstallHint: "다시 설치로 현재 설치를 새로고칠 수 있습니다.",
     errors: {
       unsupported:
         "이 에이전트는 자동 설치할 수 없습니다. 안내를 쓰거나 웹사이트를 여세요.",
@@ -106,7 +105,7 @@ export const settingsAgents = {
       version_unchanged:
         "버전이 바뀌지 않았습니다. 다른 설치가 아직 쓰이고 있을 수 있습니다.",
       not_runnable:
-        "설치됐지만 명령을 실행하지 못했습니다. 필요한 런타임(예: Node.js)을 확인하세요.",
+        "설치됐지만 시작하지 못했습니다. 터미널에서 해당 명령을 실행해 원인을 확인하세요.",
       not_found_after_install:
         "설치는 끝났지만 명령을 아직 찾지 못했습니다. 목록을 새로고침하거나 새 터미널을 여세요.",
       already_installed: "이 에이전트는 이미 설치되어 있습니다.",

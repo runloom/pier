@@ -257,13 +257,13 @@ export function registerStashAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () =>
       runStash(
         context,
-        commandTitle(context, "pier.git.stash", "Git: Stash"),
+        commandTitle(context, "pier.git.stash", "git: Stash"),
         false
       ),
     id: "pier.git.stash",
@@ -274,7 +274,7 @@ export function registerStashAction(
       sortOrder: 12,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, "pier.git.stash", "Git: Stash"),
+    title: () => commandTitle(context, "pier.git.stash", "git: Stash"),
   });
 }
 
@@ -282,7 +282,7 @@ export function registerStashIncludeUntrackedAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () =>
@@ -291,7 +291,7 @@ export function registerStashIncludeUntrackedAction(
         commandTitle(
           context,
           "pier.git.stashIncludeUntracked",
-          "Git: Stash (Include Untracked)"
+          "git: Stash (Include Untracked)"
         ),
         true
       ),
@@ -307,7 +307,7 @@ export function registerStashIncludeUntrackedAction(
       commandTitle(
         context,
         "pier.git.stashIncludeUntracked",
-        "Git: Stash (Include Untracked)"
+        "git: Stash (Include Untracked)"
       ),
   });
 }
@@ -316,14 +316,14 @@ export function registerStashPopAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
       const title = commandTitle(
         context,
         "pier.git.stashPop",
-        "Git: Pop Stash..."
+        "git: Pop Stash..."
       );
       await openStashPick(
         context,
@@ -341,7 +341,7 @@ export function registerStashPopAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.stashPop", "Git: Pop Stash..."),
+      commandTitle(context, "pier.git.stashPop", "git: Pop Stash..."),
   });
 }
 
@@ -349,14 +349,14 @@ export function registerStashApplyAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
       const title = commandTitle(
         context,
         "pier.git.stashApply",
-        "Git: Apply Stash..."
+        "git: Apply Stash..."
       );
       await openStashPick(
         context,
@@ -374,7 +374,7 @@ export function registerStashApplyAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.stashApply", "Git: Apply Stash..."),
+      commandTitle(context, "pier.git.stashApply", "git: Apply Stash..."),
   });
 }
 
@@ -382,14 +382,14 @@ export function registerStashDropAction(
   context: RendererPluginContext
 ): () => void {
   return context.actions.register({
-    category: "Git",
+    category: "git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
       const title = commandTitle(
         context,
         "pier.git.stashDrop",
-        "Git: Drop Stash..."
+        "git: Drop Stash..."
       );
       await openStashPick(
         context,
@@ -407,6 +407,6 @@ export function registerStashDropAction(
     },
     surfaces: ["command-palette"],
     title: () =>
-      commandTitle(context, "pier.git.stashDrop", "Git: Drop Stash..."),
+      commandTitle(context, "pier.git.stashDrop", "git: Drop Stash..."),
   });
 }

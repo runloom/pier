@@ -8,14 +8,17 @@ import { Mermaid } from "@pier/ui/mermaid.tsx";
 import { X } from "lucide-react";
 import {
   type SyntheticEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { acquireTerminalSurfaceSuppression } from "@/panel-kits/terminal/layout-coordinator.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
   type ContentPreviewImageSource,
   type ContentPreviewPayload,
@@ -46,6 +49,7 @@ function useImagePreviewLabels(): ImagePreviewCanvasLabels {
     () => ({
       actualSize: t("dialog.imagePreview.actualSize"),
       controlsLabel: t("dialog.imagePreview.controlsLabel"),
+      copyImage: t("dialog.imagePreview.copyImage"),
       fit: t("dialog.imagePreview.fit"),
       loadFailedDescription: t("dialog.imagePreview.loadFailedDescription"),
       loadFailedTitle: t("dialog.imagePreview.loadFailedTitle"),
@@ -59,6 +63,44 @@ function useImagePreviewLabels(): ImagePreviewCanvasLabels {
   );
 }
 
+const CLIPBOARD_WRITABLE_IMAGE_TYPES: Record<string, true> = {
+  "image/jpeg": true,
+  "image/png": true,
+  "image/webp": true,
+};
+
+/** Rasterize a non-writable image blob (e.g. SVG) to PNG for clipboard write. */
+function rasterizeImageBlobToPng(blob: Blob): Promise<Blob> {
+  const { promise, resolve, reject } = Promise.withResolvers<Blob>();
+  const objectUrl = URL.createObjectURL(blob);
+  const image = new Image();
+  image.onload = () => {
+    URL.revokeObjectURL(objectUrl);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth || 300;
+    canvas.height = image.naturalHeight || 150;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      reject(new Error("Canvas 2D context unavailable"));
+      return;
+    }
+    ctx.drawImage(image, 0, 0);
+    canvas.toBlob((png) => {
+      if (png) {
+        resolve(png);
+      } else {
+        reject(new Error("Canvas toBlob failed"));
+      }
+    }, "image/png");
+  };
+  image.onerror = () => {
+    URL.revokeObjectURL(objectUrl);
+    reject(new Error("Image rasterization failed"));
+  };
+  image.src = objectUrl;
+  return promise;
+}
+
 function ImagePreviewBody({
   alt,
   source,
@@ -67,6 +109,7 @@ function ImagePreviewBody({
   source: ContentPreviewImageSource;
 }) {
   const labels = useImagePreviewLabels();
+  const t = useT();
   const [src, setSrc] = useState<string | null>(
     source.kind === "url" ? source.src : null
   );
@@ -147,12 +190,51 @@ function ImagePreviewBody({
     }
   };
 
+  const handleCopyImage = useCallback(async () => {
+    if (!src) {
+      return;
+    }
+    // 能力检测：无 ClipboardItem / clipboard.write 的环境直接归因失败，
+    // 而不是抛 ReferenceError 落进泛化 catch。
+    if (
+      typeof window.ClipboardItem === "undefined" ||
+      typeof navigator.clipboard?.write !== "function"
+    ) {
+      showAppAlert({
+        title: t("dialog.imagePreview.copyImageFailed"),
+        body: "ClipboardItem / navigator.clipboard.write unavailable",
+      });
+      return;
+    }
+    try {
+      const blob = await (await fetch(src)).blob();
+      const writable =
+        Boolean(blob.type) &&
+        Boolean(CLIPBOARD_WRITABLE_IMAGE_TYPES[blob.type]);
+      const clipboardBlob = writable
+        ? blob
+        : await rasterizeImageBlobToPng(blob);
+      const item = new ClipboardItem({
+        [clipboardBlob.type || "image/png"]: clipboardBlob,
+      });
+      await navigator.clipboard.write([item]);
+      toast.success(t("dialog.imagePreview.imageCopied"));
+    } catch (error) {
+      // 失败带技术详情走 showAppAlert（仓库反馈规范；toast 不带 description）。
+      showAppAlert({
+        title: t("dialog.imagePreview.copyImageFailed"),
+        body: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }, [src, t]);
+
   return (
     <ImagePreviewCanvas
       alt={alt}
       className="min-h-0 w-full flex-1 bg-background"
       labels={labels}
       loading={status === "loading"}
+      onCopyImage={handleCopyImage}
       onEmptyClick={closeContentPreview}
       onError={handleError}
       onLoad={() => setStatus("ready")}
@@ -225,15 +307,68 @@ function PreviewBody({ payload }: { payload: ContentPreviewPayload }) {
   return <HtmlWorldPreviewBody payload={payload} />;
 }
 
+const PREVIEW_HISTORY_FLAG = "pierContentPreview" as const;
+
+/**
+ * Back-button / history semantics for the fullscreen preview: opening pushes
+ * one entry, closing from our own UI unwinds it, and a user-initiated back
+ * while open closes the preview instead of leaving the app page.
+ */
+function useContentPreviewHistoryBridge(open: boolean): void {
+  const pushedRef = useRef(false);
+  const suppressPopRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) {
+      if (pushedRef.current) {
+        pushedRef.current = false;
+        // Our own close: strip the marker synchronously so history.state
+        // reads clean immediately, then consume the unwind popstate —
+        // jsdom delivers it asynchronously (~ms) after back(), same as
+        // browsers, so suppression must already be armed.
+        history.replaceState(null, "");
+        suppressPopRef.current = true;
+        history.back();
+      }
+      return;
+    }
+    if (!pushedRef.current) {
+      history.pushState({ [PREVIEW_HISTORY_FLAG]: true }, "");
+      pushedRef.current = true;
+    }
+    const onPopState = () => {
+      if (suppressPopRef.current) {
+        suppressPopRef.current = false;
+        return;
+      }
+      // User-driven navigation: the pushed entry is already gone.
+      pushedRef.current = false;
+      closeContentPreview();
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      // Unmounting while open intentionally leaves the pushed entry in
+      // history: unwinding here would race StrictMode's open-remount
+      // re-push (back() during a pending push lands ahead of the cursor).
+      // Safe only because ContentPreviewHost mounts once for the app
+      // lifetime; if it ever becomes conditionally mounted, unwind
+      // explicitly on unmount instead.
+    };
+  }, [open]);
+}
+
 /**
  * Fullscreen content preview host (images, node graphs, HTML worlds).
  *
  * Covers the workspace and titlebar (z-40, below host dialogs). Native Ghostty
  * is suppressed while open; EventRouter is hole-punched for the full viewport.
  */
+
 export function ContentPreviewHost() {
   const t = useT();
   const open = useContentPreviewStore((state) => state.open);
+  useContentPreviewHistoryBridge(open);
   const title = useContentPreviewStore((state) => state.title);
   const payload = useContentPreviewStore((state) => state.payload);
   const rootRef = useRef<HTMLDivElement>(null);

@@ -26,9 +26,10 @@ describe("app update contracts", () => {
     expect(
       appUpdateSnapshotSchema.parse({
         currentVersion: "0.1.0",
-        error: "network unavailable",
+        errorDetail: "network unavailable",
+        errorKind: "offline",
         state: "error",
-      }).error
+      }).errorDetail
     ).toBe("network unavailable");
   });
 });

@@ -2,9 +2,9 @@
   "commands": {
     "pier.git.merge": {
       "aliases": ["git merge", "ブランチをマージ", "マージ", "マージブランチ"],
-      "category": "Git",
+      "category": "git",
       "description": "ブランチを選び、現在のブランチにマージします。",
-      "title": "Git: ブランチをマージ..."
+      "title": "git: ブランチをマージ..."
     },
     "pier.git.switchBranch": {
       "aliases": [
@@ -17,15 +17,15 @@
         "ブランチを作成",
         "新規ブランチ"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "ローカルブランチに切り替えるか、現在のチェックアウトから新しいブランチを作ります。",
-      "title": "Git: ブランチを切り替え..."
+      "title": "git: ブランチを切り替え..."
     },
     "pier.git.mergeAbort": {
       "aliases": ["git merge abort", "マージを中止", "中止マージ"],
-      "category": "Git",
+      "category": "git",
       "description": "進行中のマージを中止します。",
-      "title": "Git: マージを中止"
+      "title": "git: マージを中止"
     },
     "pier.git.stash": {
       "aliases": [
@@ -34,21 +34,21 @@
         "変更をスタッシュ",
         "git stash save"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "変更済みファイルのローカル変更をスタッシュします。",
-      "title": "Git: スタッシュ"
+      "title": "git: スタッシュ"
     },
     "pier.git.stashApply": {
       "aliases": ["git stash apply", "スタッシュを適用", "適用スタッシュ"],
-      "category": "Git",
+      "category": "git",
       "description": "スタッシュを選んで適用し、一覧には残します。",
-      "title": "Git: スタッシュを適用..."
+      "title": "git: スタッシュを適用..."
     },
     "pier.git.stashDrop": {
       "aliases": ["git stash drop", "スタッシュを削除", "スタッシュを捨てる"],
-      "category": "Git",
+      "category": "git",
       "description": "スタッシュを選んで一覧から削除します。",
-      "title": "Git: スタッシュを削除..."
+      "title": "git: スタッシュを削除..."
     },
     "pier.git.stashIncludeUntracked": {
       "aliases": [
@@ -57,33 +57,33 @@
         "未追跡をスタッシュ",
         "新規ファイルもスタッシュ"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "新規ファイルも含めて、ローカル変更をスタッシュします。",
-      "title": "Git: スタッシュ（新規ファイルを含む）"
+      "title": "git: スタッシュ（新規ファイルを含む）"
     },
     "pier.git.stashPop": {
       "aliases": ["git stash pop", "スタッシュをポップ", "スタッシュを復元"],
-      "category": "Git",
+      "category": "git",
       "description": "スタッシュを選んで適用し、一覧から取り除きます。",
-      "title": "Git: スタッシュをポップ..."
+      "title": "git: スタッシュをポップ..."
     },
     "pier.git.rebase": {
       "aliases": ["git rebase", "ブランチをリベース", "リベース"],
-      "category": "Git",
+      "category": "git",
       "description": "ブランチを選び、現在のブランチをその上へリベースします。",
-      "title": "Git: ブランチをリベース..."
+      "title": "git: ブランチをリベース..."
     },
     "pier.git.rebaseAbort": {
       "aliases": ["git rebase abort", "リベースを中止"],
-      "category": "Git",
+      "category": "git",
       "description": "進行中のリベースを中止します。",
-      "title": "Git: リベースを中止"
+      "title": "git: リベースを中止"
     },
     "pier.git.rebaseContinue": {
       "aliases": ["git rebase continue", "リベースを続ける"],
-      "category": "Git",
+      "category": "git",
       "description": "進行中のリベースを続けます。",
-      "title": "Git: リベースを続ける"
+      "title": "git: リベースを続ける"
     },
     "pier.git.cherryPick": {
       "aliases": [
@@ -92,39 +92,39 @@
         "コミットを摘む",
         "cherrypick"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "コミットを選び、現在のブランチに適用します。",
-      "title": "Git: コミットをチェリーピック..."
+      "title": "git: コミットをチェリーピック..."
     },
     "pier.git.cherryPickAbort": {
       "aliases": ["git cherry-pick abort", "チェリーピックを中止"],
-      "category": "Git",
+      "category": "git",
       "description": "進行中のチェリーピックを中止します。",
-      "title": "Git: チェリーピックを中止"
+      "title": "git: チェリーピックを中止"
     },
     "pier.git.cherryPickContinue": {
       "aliases": ["git cherry-pick continue", "チェリーピックを続ける"],
-      "category": "Git",
+      "category": "git",
       "description": "進行中のチェリーピックを続けます。",
-      "title": "Git: チェリーピックを続ける"
+      "title": "git: チェリーピックを続ける"
     },
     "pier.git.revert": {
       "aliases": ["git revert", "コミットをリバート", "コミットを取り消す"],
-      "category": "Git",
+      "category": "git",
       "description": "コミットを選び、それを取り消す新しいコミットを作ります。",
-      "title": "Git: コミットをリバート..."
+      "title": "git: コミットをリバート..."
     },
     "pier.git.revertAbort": {
       "aliases": ["git revert abort", "リバートを中止"],
-      "category": "Git",
+      "category": "git",
       "description": "進行中のリバートを中止します。",
-      "title": "Git: リバートを中止"
+      "title": "git: リバートを中止"
     },
     "pier.git.revertContinue": {
       "aliases": ["git revert continue", "リバートを続ける"],
-      "category": "Git",
+      "category": "git",
       "description": "進行中のリバートを続けます。",
-      "title": "Git: リバートを続ける"
+      "title": "git: リバートを続ける"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -136,33 +136,33 @@
         "直前のコミットを取り消す",
         "uncommit"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "直前のコミットを取り消し、変更はステージ済みのまま残します。",
-      "title": "Git: 直前のコミットを取り消す"
+      "title": "git: 直前のコミットを取り消す"
     },
     "pier.git.review.openFile": {
       "aliases": ["ファイルを開く", "変更ファイルを開く", "レビューで開く"],
-      "category": "Git",
+      "category": "git",
       "description": "この変更ファイルをエディタで開きます。",
-      "title": "Git: ファイルを開く"
+      "title": "git: ファイルを開く"
     },
     "pier.git.review.openInEditor": {
       "aliases": ["ソースへジャンプ", "エディタで開く", "行で開く", "行へ移動"],
-      "category": "Git",
+      "category": "git",
       "description": "ソースエディタのこの変更へジャンプします。対応する作業ディレクトリの行があればそこに合わせます。",
-      "title": "Git: ソースへジャンプ"
+      "title": "git: ソースへジャンプ"
     },
     "pier.git.review.stageFile": {
       "aliases": ["ファイルをステージ", "git add", "変更をステージ"],
-      "category": "Git",
+      "category": "git",
       "description": "選んだファイルの変更をステージします。",
-      "title": "Git: ステージ"
+      "title": "git: ステージ"
     },
     "pier.git.review.unstageFile": {
       "aliases": ["ステージ解除", "git restore --staged", "変更のステージ解除"],
-      "category": "Git",
+      "category": "git",
       "description": "選んだファイルのステージ済み変更を解除します。",
-      "title": "Git: ステージ解除"
+      "title": "git: ステージ解除"
     },
     "pier.git.review.discardFile": {
       "aliases": [
@@ -175,44 +175,44 @@
         "checkout file",
         "未追跡を削除"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "ローカル変更を破棄するか、新規ファイルをゴミ箱へ移します。",
-      "title": "Git: 変更を破棄"
+      "title": "git: 変更を破棄"
     },
     "pier.git.review.toggleTree": {
-      "category": "Git",
+      "category": "git",
       "description": "変更ファイルツリーのサイドバーを表示または隠します。",
       "title": "変更ファイルツリーを切り替え"
     },
     "pier.git.review.expandAll": {
-      "category": "Git",
+      "category": "git",
       "description": "レビューツリーのフォルダをすべて展開します。",
       "title": "フォルダを展開"
     },
     "pier.git.review.collapseFolders": {
-      "category": "Git",
+      "category": "git",
       "description": "レビューツリーのフォルダをすべて折りたたみます。",
       "title": "フォルダを折りたたむ"
     },
     "pier.git.review.copyPath": {
-      "category": "Git",
+      "category": "git",
       "description": "選んだ変更の絶対パスをコピーします。",
-      "title": "Git: パスをコピー"
+      "title": "git: パスをコピー"
     },
     "pier.git.review.copyRelativePath": {
-      "category": "Git",
+      "category": "git",
       "description": "選んだ変更のリポジトリ相対パスをコピーします。",
-      "title": "Git: 相対パスをコピー"
+      "title": "git: 相対パスをコピー"
     },
     "pier.git.review.copyPathWithRange": {
-      "category": "Git",
+      "category": "git",
       "description": "リポジトリ相対パスと選択中の行番号をコピーします。",
-      "title": "Git: パスと選択行をコピー"
+      "title": "git: パスと選択行をコピー"
     },
     "pier.git.review.revealInFinder": {
-      "category": "Git",
+      "category": "git",
       "description": "選んだ変更をシステムのファイルマネージャで表示します。",
-      "title": "Git: Finder で表示"
+      "title": "git: Finder で表示"
     },
     "pier.worktree.create": {
       "aliases": [
@@ -224,7 +224,7 @@
         "wt add"
       ],
       "category": "作業ツリー",
-      "description": "リポジトリ管理の作業ツリーディレクトリの下に Git 作業ツリーを作ります。",
+      "description": "リポジトリ管理の作業ツリーディレクトリの下に git 作業ツリーを作ります。",
       "title": "作業ツリーを作成"
     },
     "pier.worktree.delete": {
@@ -236,7 +236,7 @@
         "wt remove"
       ],
       "category": "作業ツリー",
-      "description": "Git 作業ツリーを選んで削除します。",
+      "description": "git 作業ツリーを選んで削除します。",
       "title": "作業ツリーを削除..."
     },
     "pier.worktree.prune": {
@@ -248,7 +248,7 @@
         "wt prune"
       ],
       "category": "作業ツリー",
-      "description": "古くなった Git 作業ツリーの記録を整理します。",
+      "description": "古くなった git 作業ツリーの記録を整理します。",
       "title": "無効な作業ツリーを整理"
     },
     "pier.worktree.list": {
@@ -261,7 +261,7 @@
         "wt list"
       ],
       "category": "作業ツリー",
-      "description": "現在のリポジトリの Git 作業ツリーを一覧し、選んだ作業ツリーを開きます。",
+      "description": "現在のリポジトリの git 作業ツリーを一覧し、選んだ作業ツリーを開きます。",
       "title": "作業ツリー一覧"
     },
     "pier.git.fetch": {
@@ -272,21 +272,21 @@
         "リモートを更新",
         "リモートを再読み込み"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "作業ディレクトリは変えずに、最新のリモートブランチ情報を取得します。",
-      "title": "Git: フェッチ"
+      "title": "git: フェッチ"
     },
     "pier.git.pull": {
       "aliases": ["git pull", "プル", "変更をプル", "早送り"],
-      "category": "Git",
+      "category": "git",
       "description": "早送りのみでリモートの変更をプルします。",
-      "title": "Git: プル"
+      "title": "git: プル"
     },
     "pier.git.push": {
       "aliases": ["git push", "プッシュ", "変更をプッシュ"],
-      "category": "Git",
+      "category": "git",
       "description": "ローカルのコミットをリモートへプッシュします。",
-      "title": "Git: プッシュ"
+      "title": "git: プッシュ"
     },
     "pier.git.publish": {
       "aliases": [
@@ -296,15 +296,15 @@
         "上流を設定",
         "初回プッシュ"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "現在のブランチをリモートへプッシュし、上流を設定します。",
-      "title": "Git: ブランチを公開"
+      "title": "git: ブランチを公開"
     },
     "pier.git.sync": {
       "aliases": ["git sync", "同期", "変更を同期", "プルしてプッシュ"],
-      "category": "Git",
+      "category": "git",
       "description": "先にプルしてからプッシュし、リモートと同期します。",
-      "title": "Git: 同期"
+      "title": "git: 同期"
     },
     "pier.git.viewChanges": {
       "aliases": [
@@ -319,12 +319,12 @@
         "変更を開く",
         "変更をレビュー"
       ],
-      "category": "Git",
+      "category": "git",
       "description": "現在のリポジトリの変更レビューパネルを開きます。",
-      "title": "Git: レビューを開く"
+      "title": "git: レビューを開く"
     }
   },
-  "description": "内蔵の Git コマンドパレットとターミナル状態のサポートです。",
+  "description": "内蔵の git コマンドパレットとターミナル状態のサポートです。",
   "messages": {
     "ui.cancel": "キャンセル",
     "ui.createUnavailable": "作業ツリーの作成はまだ利用できません",
@@ -335,8 +335,8 @@
     "ui.selectPlaceholder": "作業ツリーを選択…",
     "ui.statusOpenLabel": "{{name}} の作業ツリーを開く",
     "ui.statusOpenTooltip": "クリックして作業ツリーを切り替え",
-    "ui.statusDropdownOpenLabel": "{{name}} の Git 状態を開く",
-    "ui.statusDropdownOpenTooltip": "クリックして Git 状態を開く",
+    "ui.statusDropdownOpenLabel": "{{name}} の git 状態を開く",
+    "ui.statusDropdownOpenTooltip": "クリックして git 状態を開く",
     "ui.statusDropdownViewChanges": "変更を表示",
     "ui.reviewChangesTitle": "変更",
     "ui.reviewTabTooltipPath": "パス",
@@ -385,20 +385,20 @@
     "ui.reviewRevertHunkFailed": "変更ブロックを元に戻せません",
     "ui.reviewHunkNotReady": "この変更はまだ読み込み中です。少し待ってもう一度お試しください。",
     "ui.reviewDetails": "詳細",
-    "ui.reviewInvalidSource": "Git の出典が無効です",
+    "ui.reviewInvalidSource": "git の出典が無効です",
     "ui.reviewLoadFailed": "変更を読み込めませんでした",
     "ui.reviewNavigationFailed": "ファイルへ移動できませんでした",
     "ui.reviewMutationInProgress": "別の変更をまだ適用中です",
     "ui.reviewRefreshStale": "再読み込み中にファイルが再度変わりました。前回の差分は次の更新まで残します。",
     "ui.reviewFailureAborted": "リクエストはキャンセルされました。",
-    "ui.reviewFailureBusy": "Git レビューが混み合っています。もう一度お試しください。",
+    "ui.reviewFailureBusy": "git レビューが混み合っています。もう一度お試しください。",
     "ui.reviewFailureChangeNotFound": "この変更は移動したか更新されました。再読み込みしてもう一度お試しください。",
-    "ui.reviewFailureCommandFailed": "Git はこの操作を完了できませんでした。もう一度お試しください。",
+    "ui.reviewFailureCommandFailed": "git はこの操作を完了できませんでした。もう一度お試しください。",
     "ui.reviewFailureDuplicateOperation": "このレビュー要求はすでに実行中です。",
-    "ui.reviewFailureIndexLocked": "別のプログラムが Git のステージ領域を更新中です。少し待ってもう一度お試しください。",
+    "ui.reviewFailureIndexLocked": "別のプログラムが git のステージ領域を更新中です。少し待ってもう一度お試しください。",
     "ui.reviewFailureInternal": "変更の処理中に内部エラーが発生しました。",
-    "ui.reviewFailureInvalidSource": "Git レビューの出典はもう有効ではありません。",
-    "ui.reviewFailureNotRepository": "このディレクトリはもう Git リポジトリではありません。",
+    "ui.reviewFailureInvalidSource": "git レビューの出典はもう有効ではありません。",
+    "ui.reviewFailureNotRepository": "このディレクトリはもう git リポジトリではありません。",
     "ui.reviewFailureOutputLimit": "この変更はレビューのサイズ上限を超えています。",
     "ui.reviewFailureStaleRevision": "変更が更新され続けました。もう一度お試しください。",
     "ui.reviewFailureTimeout": "変更の読み取りがタイムアウトしました。",
@@ -507,7 +507,7 @@
     "ui.reviewStateSubmodule": "サブモジュールの変更",
     "ui.reviewStateSymlink": "シンボリックリンク",
     "ui.reviewStateTooLarge": "ファイルが大きすぎます",
-    "ui.gitStatusLabel": "Git 状態",
+    "ui.gitStatusLabel": "git 状態",
     "ui.statusDropdownFetch": "フェッチ",
     "ui.statusDropdownFetching": "リモートをフェッチ中…",
     "ui.statusDropdownFetchSuccess": "リモートを更新しました",
@@ -526,7 +526,7 @@
     "ui.statusDropdownSyncing": "変更を同期中…",
     "ui.statusDropdownSyncSuccess": "同期しました",
     "ui.statusDropdownNoLocalChanges": "ローカルの変更はありません",
-    "ui.statusDropdownLoading": "Git 状態を読み込み中…",
+    "ui.statusDropdownLoading": "git 状態を読み込み中…",
     "ui.statusRowChanges": "変更",
     "ui.statusRowSync": "同期",
     "ui.statusRowPull": "プル",
@@ -555,7 +555,7 @@
     "ui.statusRowPullBlocked": "プルする前に、ローカル変更をコミットするかスタッシュしてください",
     "ui.statusSyncLabel": "変更を同期",
     "ui.statusSyncAlreadyRunning": "同期はすでに進行中です",
-    "ui.statusSyncConfirmBody": "{{upstream}} へ先にプルしてからプッシュします。この確認は Git 設定でオフにできます。",
+    "ui.statusSyncConfirmBody": "{{upstream}} へ先にプルしてからプッシュします。この確認は git 設定でオフにできます。",
     "ui.statusSyncConfirmButton": "同期",
     "ui.statusChangesOpenLabel": "変更を開く",
     "ui.statusChangesFiles": "ファイル",
@@ -572,7 +572,7 @@
     "ui.gitAbortOperationConfirmTitle": "{{operation}} を中止しますか？",
     "ui.gitAbortOperationConfirmBody": "一時停止中の {{operation}} を破棄し、ブランチを戻します。元に戻せません。",
     "ui.gitAbortOperationConfirmButton": "{{operation}} を中止",
-    "ui.statusDropdownUnavailable": "Git 状態を利用できません",
+    "ui.statusDropdownUnavailable": "git 状態を利用できません",
     "ui.statusDropdownConflictSingle": "競合 {{count}}",
     "ui.statusDropdownConflictPlural": "競合 {{count}}",
     "ui.statusDropdownOperationPaused": "{{operation}} が一時停止",
@@ -608,7 +608,7 @@
     "ui.srInsertions": "追加",
     "ui.srDeletions": "削除",
     "ui.largeChange": "大きな変更",
-    "ui.gitUnsupported": "Git リポジトリではありません",
+    "ui.gitUnsupported": "git リポジトリではありません",
     "ui.branchDefault": "デフォルト",
     "ui.branchGraphCaveatTitle": "コミットの分岐数だけを数えます。squash / リベース後も、適用済みコミットがブランチ専用に見えることがあります。",
     "ui.createNamePrompt": "新しい作業ツリー名",
@@ -629,7 +629,7 @@
     "ui.pruneConfirmButton": "整理",
     "ui.worktreePruneSuccess": "無効な作業ツリーを整理しました",
     "ui.worktreeDeleteSuccess": "作業ツリーを削除しました",
-    "ui.gitErrorUnavailable": "Git 操作に失敗しました",
+    "ui.gitErrorUnavailable": "git 操作に失敗しました",
     "ui.gitLoadingMerge": "マージ中…",
     "ui.gitLoadingSwitchBranch": "ブランチを切り替え中…",
     "ui.gitLoadingCreateAndSwitchBranch": "ブランチを作成中…",
@@ -645,7 +645,7 @@
     "ui.gitNoOtherBranches": "ほかのブランチはありません",
     "ui.gitSwitchSelectBranch": "切り替えるか作成するブランチ名を入力",
     "ui.gitBranchCurrent": "現在のブランチ",
-    "ui.gitBranchNameInvalid": "Git ブランチ名が無効です",
+    "ui.gitBranchNameInvalid": "git ブランチ名が無効です",
     "ui.gitBranchCannotCreate": "ブランチ {{branch}} を作成できません",
     "ui.gitBranchCreateFromHead": "現在のチェックアウトから作成",
     "ui.gitBranchCreateAndSwitch": "ブランチ {{branch}} を作成",
@@ -721,11 +721,11 @@
     "ui.gitUndoCommitSuccess": "コミットを取り消しました",
     "ui.gitUndoCommitNothing": "取り消すものはありません",
     "ui.title": "作業ツリー",
-    "ui.unsupported": "現在のディレクトリは Git 作業ツリーに対応していません",
-    "ui.worktreeUnavailable.gitUnavailable": "Git を利用できません",
+    "ui.unsupported": "現在のディレクトリは git 作業ツリーに対応していません",
+    "ui.worktreeUnavailable.gitUnavailable": "git を利用できません",
     "ui.worktreeUnavailable.invalidName": "作業ツリー名が無効です",
     "ui.worktreeUnavailable.invalidPath": "作業ツリーのパスが無効です",
-    "ui.worktreeUnavailable.notGitRepository": "現在のディレクトリは Git リポジトリではありません",
+    "ui.worktreeUnavailable.notGitRepository": "現在のディレクトリは git リポジトリではありません",
     "ui.worktreeCreate.aiGenerating": "生成中…",
     "ui.worktreeCreate.agentEmpty": "有効なエージェントがありません",
     "ui.worktreeCreate.agentLabel": "エージェント",
@@ -741,7 +741,7 @@
     "ui.worktreeCreate.description": "このタスク用の独立した作業ツリーを作ります",
     "ui.worktreeCreate.errorAgentRequired": "タスクを始めるエージェントを選んでください",
     "ui.worktreeCreate.errorBranchExists": "ブランチはすでにあります",
-    "ui.worktreeCreate.errorBranchInvalid": "英数字と . _ / - を使った有効な Git ブランチ名を入力してください",
+    "ui.worktreeCreate.errorBranchInvalid": "英数字と . _ / - を使った有効な git ブランチ名を入力してください",
     "ui.worktreeCreate.errorBranchRequired": "ブランチ名を入力してください",
     "ui.worktreeCreate.errorTaskRequired": "タスクの説明を入力してください",
     "ui.worktreeCreate.generateFailed.invalid_response": "AI が有効なブランチ名を作れませんでした。もう一度お試しください",
@@ -750,8 +750,8 @@
     "ui.worktreeCreate.generateFailed.timeout": "エージェントがタイムアウトしました。もう一度試すか、手動命名に切り替えてください",
     "ui.worktreeCreate.generatingBranch": "ブランチ名を生成中…",
     "ui.worktreeCreate.generationFailed": "ブランチ名の生成に失敗しました",
-    "ui.worktreeCreate.hookSignalKilledBody": "macOS は初回の Git 検査が遅いことがあります。固着を避けるため Pier が止めました。再試行で多くの場合うまくいきます。",
-    "ui.worktreeCreate.hookSignalKilledTitle": "Git 検査が中断されました。もう一度お試しください",
+    "ui.worktreeCreate.hookSignalKilledBody": "macOS は初回の git 検査が遅いことがあります。固着を避けるため Pier が止めました。再試行で多くの場合うまくいきます。",
+    "ui.worktreeCreate.hookSignalKilledTitle": "git 検査が中断されました。もう一度お試しください",
     "ui.worktreeCreate.initializingEnvironment": "環境を初期化中…",
     "ui.worktreeCreate.openingTerminal": "ターミナルを開いています…",
     "ui.worktreeCreate.initializationFailed": "作業ツリーは作りましたが、環境の初期化に失敗しました",
@@ -832,7 +832,7 @@
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {
       "label": "ブランチアイコンに変更を示す",
-      "description": "状態バーのブランチアイコンに変更があることを示します。詳細は Git ドロップダウンで確認できます。"
+      "description": "状態バーのブランチアイコンに変更があることを示します。詳細は git ドロップダウンで確認できます。"
     },
     "pier.git.statusItem.showChangesStatus": {
       "label": "変更項目を表示",
@@ -854,16 +854,16 @@
   },
   "terminalStatusItems": {
     "pier.worktree.status": {
-      "description": "ターミナルパネルに Git ブランチを表示します。クリックで状態操作を開きます。",
-      "title": "Git ブランチ"
+      "description": "ターミナルパネルに git ブランチを表示します。クリックで状態操作を開きます。",
+      "title": "git ブランチ"
     },
     "pier.git.status.changes": {
       "description": "変更行数を表示します。クリックでレビューパネルを開きます。",
-      "title": "Git 変更"
+      "title": "git 変更"
     },
     "pier.git.status.sync": {
       "description": "先行/遅れの数とワンクリック同期を表示します。",
-      "title": "Git 同期"
+      "title": "git 同期"
     }
   },
   "panels": {
@@ -871,5 +871,5 @@
       "title": "変更"
     }
   },
-  "name": "Git"
+  "name": "git"
 }

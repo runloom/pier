@@ -20,8 +20,8 @@ export const COMPOSER_CHIP_HOST_CLASS = "composer-ref-chip-host";
 /** Editor line-height token. Chip `h-lh` must use this same class. */
 export const COMPOSER_LINE_LEADING_CLASS = "leading-5";
 
-/** Visual pill only; tone colors are applied by each node. */
-export const COMPOSER_CHIP_CLASS = `composer-ref-chip inline-flex h-lh max-w-[16rem] items-center gap-0.5 rounded-sm border px-1.5 select-none text-xs ${COMPOSER_LINE_LEADING_CLASS}`;
+/** Visual capsule pill only; tone colors are applied by each node. */
+export const COMPOSER_CHIP_CLASS = `composer-ref-chip inline-flex h-lh max-w-[16rem] items-center gap-0.5 rounded-full border px-1.5 select-none text-xs ${COMPOSER_LINE_LEADING_CLASS}`;
 
 export const COMPOSER_CHIP_TONE_PATH =
   "border-status-info-border bg-status-info-bg text-status-info-fg";

@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+export const appUpdateErrorKindSchema = z.enum([
+  "offline",
+  "server",
+  "no-artifact",
+  "rate-limited",
+  "unknown",
+]);
+export type AppUpdateErrorKind = z.infer<typeof appUpdateErrorKindSchema>;
+
 export const appUpdateStateSchema = z.enum([
   "disabled",
   "idle",
@@ -20,7 +29,8 @@ export type AppUpdateProgress = z.infer<typeof appUpdateProgressSchema>;
 export const appUpdateSnapshotSchema = z.object({
   availableVersion: z.string().min(1).optional(),
   currentVersion: z.string().min(1),
-  error: z.string().min(1).optional(),
+  errorDetail: z.string().min(1).optional(),
+  errorKind: appUpdateErrorKindSchema.optional(),
   progress: appUpdateProgressSchema.optional(),
   state: appUpdateStateSchema,
 });

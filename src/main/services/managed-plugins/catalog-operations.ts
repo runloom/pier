@@ -4,7 +4,10 @@ import type {
   ManagedPluginInstallIndex,
   ManagedPluginInstallIndexEntry,
 } from "@shared/contracts/plugin/managed.ts";
-import type { OperationsContext } from "./install-operations.ts";
+import type {
+  BundledPluginRegistration,
+  OperationsContext,
+} from "./install-operations.ts";
 import { isRetiredManagedPluginId } from "./retired-plugins.ts";
 import { selectNewestVersion } from "./version.ts";
 
@@ -12,6 +15,19 @@ import { selectNewestVersion } from "./version.ts";
  * Read-only catalog derivations. Extracted from install-operations.ts to keep
  * that file under the file-size hard cap.
  */
+
+function resolveCatalogPermissions(
+  bundled: BundledPluginRegistration | undefined,
+  officialEntry: { permissions?: string[] | undefined } | undefined
+): { permissions?: string[] | undefined } {
+  if (bundled?.permissions && bundled.permissions.length > 0) {
+    return { permissions: [...bundled.permissions] };
+  }
+  if (officialEntry?.permissions && officialEntry.permissions.length > 0) {
+    return { permissions: [...officialEntry.permissions] };
+  }
+  return {};
+}
 
 export async function performListCatalogSnapshot(
   ctx: OperationsContext
@@ -59,6 +75,7 @@ export async function performListCatalogSnapshot(
         version: entry.activeVersion,
       },
       contributionCounts: bundled?.contributionCounts,
+      ...resolveCatalogPermissions(bundled, officialEntry),
       diagnostics: [],
       description: bundled?.description,
       displayName:
@@ -99,6 +116,7 @@ export async function performListCatalogSnapshot(
       plugins.push({
         desired: { enabled: false, source: "official", version: null },
         ...(bundled ? { contributionCounts: bundled.contributionCounts } : {}),
+        ...resolveCatalogPermissions(bundled, officialEntry),
         diagnostics: [],
         ...(bundled?.description ? { description: bundled.description } : {}),
         displayName: officialEntry.displayName ?? bundled?.displayName ?? id,

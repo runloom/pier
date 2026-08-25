@@ -10,7 +10,10 @@ import {
   getAgentLifecycleSpec,
   listAgentLifecycleSpecs,
 } from "../../../../../src/main/services/agents/lifecycle/specs/index.ts";
-import { resolveUpdateMode } from "../../../../../src/main/services/agents/lifecycle/specs/types.ts";
+import {
+  resolveUpdateMode,
+  specCanForceReinstall,
+} from "../../../../../src/main/services/agents/lifecycle/specs/types.ts";
 
 describe("agent lifecycle specs", () => {
   it("covers every AgentKind exactly once in the map", () => {
@@ -151,9 +154,8 @@ describe("agent lifecycle specs", () => {
     expect(resolveUpdateMode(getAgentLifecycleSpec("mistral-vibe"))).toBe(
       "versioned"
     );
-    // cursor is self+reinstall without npm/brew/pypi latest probe
     expect(resolveUpdateMode(getAgentLifecycleSpec("cursor"))).toBe(
-      "reinstall"
+      "versioned"
     );
     expect(resolveUpdateMode(getAgentLifecycleSpec("hermes"))).toBe(
       "reinstall"
@@ -192,6 +194,10 @@ describe("agent lifecycle specs", () => {
     // Reinstall (script) must be primary — self update requires auth.
     expect(cursor.update[0]?.kind).toBe("reinstall");
     expect(cursor.update.some((c) => c.kind === "self")).toBe(true);
+    expect(cursor.latestProbe?.kind).toBe("cursor-install-script");
+    expect(specCanForceReinstall(cursor)).toBe(true);
+    expect(specCanForceReinstall(getAgentLifecycleSpec("claude"))).toBe(false);
+    expect(specCanForceReinstall(getAgentLifecycleSpec("hermes"))).toBe(true);
   });
 
   it("builds guide commands from the same install channels as run", () => {

@@ -65,7 +65,7 @@ flowchart LR
 ```
 
 提供方 session 文件不在这条数据流中向外传播。对账器清单与缺口结案见
-[`2026-08-12-agent-status-gap-remediation.md`](./2026-08-12-agent-status-gap-remediation.md)。
+[`../../archive/superpowers/specs/2026-08-12-agent-status-gap-remediation.md`](../../archive/superpowers/specs/2026-08-12-agent-status-gap-remediation.md)。
 
 Codex：`task_complete`→`TurnCompleted`，`turn_aborted`→`TurnInterrupted`。
 Claude 族（Claude / Qoder / Codebuddy）：主链
@@ -107,7 +107,7 @@ Grok：`turn_completed` cancelled/end_turn。
 | aider | 退役清理器；不再安装通知 hook | `coarse` | 无 | `none` | 无 |
 | amp | 提供方 JavaScript 插件 | `full` | `session.start→SessionStart`；`agent.start→PromptSubmit`；`thread.state.running→running`；`thread.state.awaiting-approval→InteractionRequested`；`thread.state.running.resolved/thread.state.idle/thread.state.error.resolved→InteractionResolved`；`thread.state.error/agent.end.error→error`；`agent.end.done→TurnCompleted`；`agent.end.cancelled→TurnInterrupted` | `none` | 无 |
 | antigravity | 命名 JSON hook | `coarse` | `PreInvocation→processing`；`Stop.error→error`；`Stop.fullyIdle→Stop`；`Stop.active→processing` | `advisory` | `PreInvocation: authoritative` |
-| aug | 嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop/TurnInterrupted/error`；`SessionEnd→SessionEnd` | `advisory` | 无 |
+| aug | 嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop/error`；`SessionEnd→SessionEnd` | `advisory` | 无 |
 | autohand | 扁平 JSON hook 数组 | `full` | `session-start→SessionStart`；`session-end→SessionEnd`；`session-error→error`；`pre-prompt→PromptSubmit`；`stop→Stop`；`pre-tool→ToolStart`；`post-tool→ToolComplete` | `authoritative` | 无 |
 | claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart/InteractionRequested`；`PostToolUse→ToolComplete/InteractionResolved`；`PostToolUseFailure→ToolComplete/InteractionResolved`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`Notification→TurnCompleted`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
 | cline | 可执行 hook 文件 | `full` | `TaskStart→SessionStart`；`TaskResume→running`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`TaskComplete→TurnCompleted`；`TaskCancel→TurnInterrupted`；`TaskError→error`；`SessionShutdown→SessionEnd` | `none` | `TaskResume: authoritative` |
@@ -128,7 +128,7 @@ Grok：`turn_completed` cancelled/end_turn。
 | kiro | 历史配置清理器 | `coarse` | 无 | `none` | 无 |
 | mimo-code | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.deleted→SessionEnd`；`chat.message→PromptSubmit`；`session.pre→running`；`session.post=completed→TurnCompleted`；`session.post=cancelled→TurnInterrupted`；`session.post=error→error`；`permission.asked/question.asked→InteractionRequested`；`permission.replied/question.replied/question.rejected→InteractionResolved`；`tool.execute.before→ToolStart`；`tool.execute.after/message.part.updated=completed/message.part.updated=error→ToolComplete` | `authoritative` | 无 |
 | mistral-vibe | 实验性 TOML hook | `coarse` | `pre_tool→processing`；`post_tool→ToolComplete`；`post_agent→Stop` | `advisory` | 无 |
-| omp | JavaScript 扩展 | `full` | `session_start→SessionStart`；`before_agent_start→PromptSubmit`；`tool_execution_start→ToolStart`；`tool_execution_start.ask→InteractionRequested`；`tool_execution_end→ToolComplete`；`tool_execution_end.ask→InteractionResolved`；`tool_approval_requested→InteractionRequested`；`tool_approval_resolved→InteractionResolved`；`agent_end.willContinue→processing`；`agent_end.completed→TurnCompleted`；`agent_end.error→error`；`agent_end.aborted→TurnInterrupted`；`session_stop→Stop`；`session_shutdown→SessionEnd` | `authoritative` | 无 |
+| omp | JavaScript 扩展 | `full` | `session_start→SessionStart`；`agent_start→processing`；`before_agent_start→PromptSubmit`；`tool_execution_start→ToolStart`；`tool_execution_start.ask→InteractionRequested`；`tool_execution_end→ToolComplete`；`tool_execution_end.ask→InteractionResolved`；`tool_approval_requested→InteractionRequested`；`tool_approval_resolved→InteractionResolved`；`agent_end.willContinue→processing`；`agent_end.toolUseDeferred→processing`；`agent_end.completed→TurnCompleted`；`agent_end.error→error`；`agent_end.aborted→TurnInterrupted`；`session_stop→Stop`；`session_shutdown→SessionEnd` | `authoritative` | `agent_start: authoritative`；`agent_end.willContinue: authoritative` |
 | opencode | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.idle/session.status=idle→Stop`；`session.error→error`；`session.deleted→SessionEnd`；`session.status=busy/session.status=retry→running`；`chat.message→PromptSubmit`；`permission.asked/question.asked→InteractionRequested`；`permission.replied/question.replied/question.rejected→InteractionResolved`；`tool.execute.before→ToolStart`；`tool.execute.after/message.part.updated=completed/message.part.updated=error→ToolComplete`；`session.status=busy.child/session.status=retry.child→SubagentStart`；`session.status=idle.child/session.error.child/session.deleted.child→SubagentStop` | `advisory` | 无 |
 | openclaude | Claude 兼容嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart/InteractionRequested`；`PostToolUse→ToolComplete/InteractionResolved`；`PostToolUseFailure→ToolComplete/InteractionResolved`；`PreCompact/PostCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop/SessionEnd→同名` | `advisory` | 无 |
 | pi | JavaScript 扩展 | `coarse` | `session_start→SessionStart`；`before_agent_start→PromptSubmit`；`tool_execution_start→ToolStart`；`tool_execution_start.ask→InteractionRequested`；`tool_execution_end→ToolComplete`；`tool_execution_end.ask→InteractionResolved`；`agent_settled→Stop`；`session_shutdown→SessionEnd` | `authoritative` | 无 |
@@ -311,3 +311,26 @@ Codex 代码模式（code mode）的长命令可能只在后续 `write_stdin` �
 - advisory `Stop` 后仅真实活动取消候选，迟到收尾不投影虚假的 `processing`：`tests/unit/main/panel/agent-turn-event-semantics.test.ts`、`tests/unit/main/panel/foreground-activity-aggregator.test.ts`。
 - Cline `TaskResume` 与 Antigravity `PreInvocation` 的逐事件权威，以及 IPC 的精确映射校验：`tests/unit/main/agents/agent-runtime-event-authority.test.ts`、`tests/unit/main/agents/agent-hook-runtime-semantics.test.ts`、`tests/unit/agent-integrations/agent-status-trace-e2e.test.ts`。
 - Codex hook / transcript 两种事件顺序及全部现役提供方轨迹收敛：`tests/unit/renderer/accounts/codex-status-chain.test.tsx`、`tests/unit/agent-integrations/agent-status-trace-e2e.test.ts`。
+
+## 增补：2026-08-25 omp 静默续跑冻结修复与业界对齐审计
+
+实测复盘（`events.jsonl` 面板 `terminal-1787614430374` + 上游 `@oh-my-pi/pi-coding-agent`
+18.0.4 源码）确认 omp 存在三条**不发 `before_agent_start` 的静默续跑路径**：abort 后的
+steer/follow-up drain（`#drainStrandedQueuedMessages`）、IRC peer 唤醒
+（`#resumeStrandedIrcAsides`）、后台任务让位（`agent_end` stopReason=`toolUse`）。
+trusted `TurnCompleted`/`TurnInterrupted` 封账后这些续跑的全部工具事件被 `sealed-turn`
+拒绝，面板冻结在「等待输入」（实证：封账后持续工作 37 分钟）。逐事件权威首批名单因此
+扩充：omp 的 `agent_start`（loop 启动，含续跑 loop）与 `agent_end.willContinue`
+（TTSR abort 续命）获得 `turnStartAuthority: "authoritative"`；`agent_end` 的
+`stopReason=toolUse` 分支落 `agent_end.toolUseDeferred→processing` 不落终态。
+世代 bump 11→12；事故序列固化为 `extension-plugin-traces.ts` 的 omp 轨迹。
+
+同日业界对齐审计（`2026-08-25-agent-status-industry-alignment.md`）逐家核查 trusted
+终态 × 重开路径：codex（advisory + 对账事件带 `turn_id` 走认账）、amp（续跑必经
+`agent.start→PromptSubmit`）、cursor（自动续跑完全由 hook 返回值驱动，bundle 证据）、
+copilot（`stop_hook_active→Stop` 消歧）、hermes（`pre_llm_call` 逐调用重开）、
+cline（`TaskResume` 权威）均结构性安全；**aug 发现同类冻结**——官方 hook 面无任何
+per-turn 信号，`Stop(interrupted|max_iterations)→TurnInterrupted` 封账后同会话整轮
+工具事件被拒，已降级为 advisory `Stop`（矩阵 ready/interrupted → host-Esc
+`reconciled`）。残留：mimo-code 真实轨迹一条（B7）；host-Esc 乐观封账窗口为产品
+已知代价（B8）。

@@ -229,6 +229,16 @@ describe("agent hook runtime semantics", () => {
         nativeEvent: "TaskResume",
         pierEvent: "running",
       },
+      {
+        agentId: "omp",
+        nativeEvent: "agent_start",
+        pierEvent: "processing",
+      },
+      {
+        agentId: "omp",
+        nativeEvent: "agent_end.willContinue",
+        pierEvent: "processing",
+      },
     ]);
     expect(
       actual.every(({ pierEvent }) =>

@@ -35,11 +35,14 @@ export const dialog = {
   imagePreview: {
     actualSize: "実際のサイズ",
     controlsLabel: "画像操作",
+    copyImage: "画像をコピー",
+    copyImageFailed: "画像をコピーできませんでした",
     fit: "ウインドウに合わせる",
     loadFailedDescription:
       "画像を読み込めなかったか、開いたあとに変更されました。",
     loadFailedTitle: "画像を表示できません",
     loading: "画像を読み込み中",
+    imageCopied: "画像をコピーしました",
     title: "画像プレビュー",
     viewerLabel: "画像プレビュー",
     zoomIn: "拡大",

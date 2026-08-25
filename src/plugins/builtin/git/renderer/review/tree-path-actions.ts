@@ -152,7 +152,7 @@ export function registerGitReviewTreePathActions(options: {
 
   const disposers = [
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
         const item = resolvePathItem(invocation);
@@ -188,7 +188,7 @@ export function registerGitReviewTreePathActions(options: {
       title: () => pluginText(context, "reviewTreeCopyPath", "Copy Path"),
     }),
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
         const item = resolvePathItem(invocation);
@@ -223,7 +223,7 @@ export function registerGitReviewTreePathActions(options: {
         pluginText(context, "reviewTreeCopyRelativePath", "Copy Relative Path"),
     }),
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
         const item = resolvePathItem(invocation);
@@ -262,7 +262,7 @@ export function registerGitReviewTreePathActions(options: {
         ),
     }),
     context.actions.register({
-      category: "Git",
+      category: "git",
       enabled: (invocation) => resolvePathItem(invocation) != null,
       handler: async (invocation) => {
         const item = resolvePathItem(invocation);

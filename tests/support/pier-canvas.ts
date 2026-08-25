@@ -161,5 +161,8 @@ export const {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useActivityOverview,
+  useCostOverview,
+  useSystemResources,
   useCanvasFile,
 } = pierCanvasExports;

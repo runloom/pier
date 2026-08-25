@@ -49,7 +49,7 @@ describe("DropdownMenu freeze-on-close", () => {
         <div style={{ position: "absolute", bottom: 12, left: 220 }}>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button type="button">Git status</button>
+              <button type="button">git status</button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" side="top">
               <DropdownMenuItem>View Changes</DropdownMenuItem>
@@ -59,7 +59,7 @@ describe("DropdownMenu freeze-on-close", () => {
       </div>
     );
 
-    fireEvent.pointerDown(screen.getByRole("button", { name: "Git status" }), {
+    fireEvent.pointerDown(screen.getByRole("button", { name: "git status" }), {
       button: 0,
       pointerType: "mouse",
     });

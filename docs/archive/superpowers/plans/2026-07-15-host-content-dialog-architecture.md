@@ -8,7 +8,7 @@
 
 **Tech Stack:** Electron renderer React 19, Zustand 5, `@pier/ui` Dialog primitives (host only), `@pier/plugin-api` renderer context, Vitest 4.
 
-**Spec:** `docs/superpowers/specs/2026-07-15-host-content-dialog-architecture-design.md`
+**Spec:** `docs/archive/superpowers/specs/2026-07-15-host-content-dialog-architecture-design.md`
 
 ## Global Constraints
 

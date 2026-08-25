@@ -706,7 +706,7 @@ describe("AgentsSection", () => {
       },
       {
         // Stale combined updateOffered (old meaning). Must not count or
-        // show Update; row uses Reinstall instead.
+        // show Update; force reinstall lives in expanded details.
         agentId: "cursor",
         canInstall: true,
         canUninstall: false,
@@ -761,10 +761,10 @@ describe("AgentsSection", () => {
       })
     ).toBeNull();
     expect(
-      within(screen.getByTestId("agent-row-cursor")).getByRole("button", {
+      within(screen.getByTestId("agent-row-cursor")).queryByRole("button", {
         name: "Reinstall",
       })
-    ).toBeInTheDocument();
+    ).toBeNull();
 
     const run = pier.agents.lifecycle.run as ReturnType<typeof vi.fn>;
     run.mockImplementation(async (agentId: AgentKind) => ({
@@ -785,7 +785,7 @@ describe("AgentsSection", () => {
     expect(run.mock.calls.every((call) => call[1] === "update")).toBe(true);
   });
 
-  it("row Reinstall force-refreshes that agent after confirm and stays out of Update all", async () => {
+  it("details Reinstall force-refreshes that agent after confirm and stays out of Update all", async () => {
     const probes: AgentLifecycleProbe[] = [
       {
         agentId: "cursor",
@@ -821,13 +821,16 @@ describe("AgentsSection", () => {
     render(<AgentsSection />);
 
     await waitFor(() => {
-      expect(
-        within(screen.getByTestId("agent-row-cursor")).getByRole("button", {
-          name: "Reinstall",
-        })
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("agent-row-cursor")).toBeInTheDocument();
     });
+    const row = screen.getByTestId("agent-row-cursor");
+    expect(within(row).queryByRole("button", { name: "Reinstall" })).toBeNull();
     expect(screen.queryByRole("button", { name: /Update all/ })).toBeNull();
+
+    fireEvent.click(within(row).getByRole("button", { name: "Details" }));
+    expect(
+      within(row).getByRole("button", { name: "Reinstall" })
+    ).toBeInTheDocument();
 
     const run = pier.agents.lifecycle.run as ReturnType<typeof vi.fn>;
     run.mockImplementation(async (agentId: AgentKind) => ({
@@ -836,11 +839,7 @@ describe("AgentsSection", () => {
       ok: true,
     }));
 
-    fireEvent.click(
-      within(screen.getByTestId("agent-row-cursor")).getByRole("button", {
-        name: "Reinstall",
-      })
-    );
+    fireEvent.click(within(row).getByRole("button", { name: "Reinstall" }));
 
     await waitFor(() => {
       expect(appDialogMocks.showAppConfirm).toHaveBeenCalledTimes(1);
@@ -848,5 +847,100 @@ describe("AgentsSection", () => {
     await waitFor(() => {
       expect(run).toHaveBeenCalledWith("cursor", "update");
     });
+  });
+
+  it("versioned Cursor with a newer remote shows Update and joins Update all", async () => {
+    const probes: AgentLifecycleProbe[] = [
+      {
+        agentId: "cursor",
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "2026.08.22-abc1234",
+        support: "full",
+        updateAvailable: true,
+        updateMode: "versioned",
+        updateOffered: true,
+        uninstallMode: "none",
+        version: "2026.08.11-e8db854",
+      },
+    ];
+    const pier = makePierMock(["cursor"], {
+      probe: async () => probes,
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    useAgentDetectStore.setState({
+      detectedIds: ["cursor"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+
+    render(<AgentsSection />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Update all (1)" })
+      ).toBeInTheDocument();
+    });
+    const row = screen.getByTestId("agent-row-cursor");
+    expect(
+      within(row).getByRole("button", { name: "Update" })
+    ).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Reinstall" })).toBeNull();
+  });
+
+  it("versioned Cursor already on latest keeps Reinstall in details", async () => {
+    const probes: AgentLifecycleProbe[] = [
+      {
+        agentId: "cursor",
+        canForceReinstall: true,
+        canInstall: true,
+        canUninstall: false,
+        detected: true,
+        installedButBroken: false,
+        installs: [],
+        isConflict: false,
+        latestVersion: "2026.08.11-e8db854",
+        support: "full",
+        updateAvailable: false,
+        updateMode: "versioned",
+        updateOffered: false,
+        uninstallMode: "none",
+        version: "2026.08.11-e8db854",
+      },
+    ];
+    const pier = makePierMock(["cursor"], {
+      probe: async () => probes,
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    useAgentDetectStore.setState({
+      detectedIds: ["cursor"],
+      hasDetected: true,
+      isDetecting: false,
+      isRefreshing: false,
+    });
+
+    render(<AgentsSection />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("agent-row-cursor")).toBeInTheDocument();
+    });
+    const row = screen.getByTestId("agent-row-cursor");
+    expect(within(row).queryByRole("button", { name: "Update" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Update all/ })).toBeNull();
+    fireEvent.click(within(row).getByRole("button", { name: "Details" }));
+    expect(
+      within(row).getByRole("button", { name: "Reinstall" })
+    ).toBeInTheDocument();
   });
 });

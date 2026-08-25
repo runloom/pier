@@ -41,6 +41,18 @@
     "src/main/services/agents/integrations": {
       "max": 43,
       "reason": "debt: provider files still flat; interactive-tool lifecycle helpers pending tools/ folder; evidence/transcript/hooks extracted"
+    },
+    "src/plugins/builtin/files/renderer/tree": {
+      "max": 41,
+      "reason": "debt: files panel tree feature grew flat (feat/files word-wrap & minimap round); domain split pending"
+    },
+    "src/main/app-core": {
+      "max": 41,
+      "reason": "debt: app-core assembler grew past cap before P0 (41 files at branch tip); boot module relocated to services/plugin-data-projections; further domain split pending"
+    },
+    "tests/unit/renderer/terminal": {
+      "max": 41,
+      "reason": "debt: terminal input-routing trace test landed from parallel cursor session; domain split pending"
     }
   }
 }

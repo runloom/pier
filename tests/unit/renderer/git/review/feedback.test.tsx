@@ -146,7 +146,7 @@ describe("Git Review feedback", () => {
 
     expect(
       screen.getByText(
-        "Another program is updating the Git staging area. Try again in a moment."
+        "Another program is updating the git staging area. Try again in a moment."
       )
     ).toBeVisible();
     expect(screen.queryByRole("button", { name: "Details" })).toBeNull();

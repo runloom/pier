@@ -29,6 +29,11 @@ export const LOCAL_CONTROL_ERROR_CODES = [
   "timeout",
   "snapshot_required",
   "internal_error",
+  "invalid_origin",
+  "quota_exceeded",
+  "prompt_too_long",
+  "prompt_undeliverable",
+  "cross_window_unsupported",
 ] as const;
 
 export type LocalControlErrorCode = (typeof LOCAL_CONTROL_ERROR_CODES)[number];

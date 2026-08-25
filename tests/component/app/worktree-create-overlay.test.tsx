@@ -33,7 +33,7 @@ import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 const TASK_LABEL = "Task";
 const BRANCH_LABEL = "Branch";
-const CONFIRM_LABEL = "Create";
+const CONFIRM_LABEL = "New";
 const CANCEL_LABEL = "Cancel";
 const CUSTOM_TAB = "Manual naming";
 const AI_TAB = "Smart generation";
@@ -42,7 +42,11 @@ const AGENT_LABEL = "Agent";
 
 const ZH_AI_TAB = "智能生成";
 const ZH_TASK_LABEL = "任务描述";
-const ZH_CONFIRM_LABEL = "创建";
+const ZH_CONFIRM_LABEL = "新建";
+
+// ui.worktreeCreate.errorBranchInvalid(en)
+const INVALID_BRANCH_ERROR =
+  "Enter a valid git branch name using letters, digits and . _ / -";
 
 function interpolate(
   template: string | undefined,
@@ -364,6 +368,9 @@ function createMockContext(): RendererPluginContext {
       onChanged: unimplemented("liveModules.onChanged"),
       registerRoot: unimplemented("liveModules.registerRoot"),
       unregisterRoot: unimplemented("liveModules.unregisterRoot"),
+      trustStatus: unimplemented("liveModules.trustStatus"),
+      grantTrust: unimplemented("liveModules.grantTrust"),
+      revokeTrust: unimplemented("liveModules.revokeTrust"),
     },
     lifecycle: {
       beforeSuspend: vi.fn(() => () => undefined),
@@ -465,6 +472,10 @@ function clickTab(name: string): void {
   fireEvent.click(tab);
 }
 
+async function switchToAi(): Promise<void> {
+  clickTab(AI_TAB);
+  await screen.findByRole("textbox", { name: TASK_LABEL });
+}
 async function switchToCustom(): Promise<void> {
   clickTab(CUSTOM_TAB);
   await screen.findByRole("textbox", { name: BRANCH_LABEL });
@@ -568,7 +579,15 @@ describe("WorktreeCreateOverlay", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("AI 不可用的强制回落不写入缓存:恢复可用后仍默认智能生成", async () => {
+  it("AI 不可用的强制回落不写入缓存:恢复可用后仍回到智能生成偏好", async () => {
+    // 预置用户偏好为智能生成(默认是手动命名)
+    await openOverlay(context);
+    await switchToAi();
+
+    act(() => {
+      resetAppContentDialogForTests();
+    });
+    cleanup();
     aiStatusMock.mockResolvedValueOnce({
       agent: null,
       configured: false,
@@ -592,6 +611,7 @@ describe("WorktreeCreateOverlay", () => {
 
   it("立即开始任务开关全局缓存:再次打开仍保持开启", async () => {
     await openOverlay(context);
+    await switchToAi();
     fireEvent.click(screen.getByRole("switch", { name: START_TASK_LABEL }));
     expect(
       screen.getByRole("switch", { name: START_TASK_LABEL })
@@ -619,6 +639,7 @@ describe("WorktreeCreateOverlay", () => {
       selectedId: "codex",
     });
     await openOverlay(context);
+    await switchToAi();
     fireEvent.click(screen.getByRole("switch", { name: START_TASK_LABEL }));
 
     const trigger = await screen.findByRole("combobox", { name: AGENT_LABEL });
@@ -631,6 +652,7 @@ describe("WorktreeCreateOverlay", () => {
     generateTextMock.mockReturnValueOnce(generation.promise);
 
     await openOverlay(context);
+    await switchToAi();
 
     const dialog = screen.getByRole("dialog");
     fireEvent.change(screen.getByRole("textbox", { name: TASK_LABEL }), {
@@ -668,10 +690,14 @@ describe("WorktreeCreateOverlay", () => {
     generateTextMock.mockReturnValueOnce(generation.promise);
 
     await openOverlay(context);
+    clickTab(ZH_AI_TAB);
 
-    fireEvent.change(screen.getByRole("textbox", { name: ZH_TASK_LABEL }), {
-      target: { value: "修复终端焦点问题" },
-    });
+    fireEvent.change(
+      await screen.findByRole("textbox", { name: ZH_TASK_LABEL }),
+      {
+        target: { value: "修复终端焦点问题" },
+      }
+    );
     fireEvent.click(screen.getByRole("button", { name: ZH_CONFIRM_LABEL }));
 
     await vi.waitFor(() => {
@@ -692,11 +718,15 @@ describe("WorktreeCreateOverlay", () => {
         path: "/repo",
       });
     });
-    expect(loadingUpdateMock).toHaveBeenCalledWith("工作树创建中…");
+    expect(loadingUpdateMock).toHaveBeenCalledWith("工作树新建中…");
   });
 
-  it("默认 AI 模式打开时自动聚焦任务描述输入框", async () => {
+  it("默认手动命名打开时聚焦分支输入框,切到智能生成后聚焦任务输入框", async () => {
     await openOverlay(context);
+
+    expect(screen.getByRole("textbox", { name: BRANCH_LABEL })).toHaveFocus();
+
+    await switchToAi();
 
     expect(screen.getByRole("textbox", { name: TASK_LABEL })).toHaveFocus();
   });
@@ -713,6 +743,7 @@ describe("WorktreeCreateOverlay", () => {
 
   it("默认 AI 模式：创建后在来源标签组打开终端，loading 持续到终端就绪后再 dismiss", async () => {
     await openOverlay(context, overlayData(), "source-group");
+    await switchToAi();
 
     const task = screen.getByRole("textbox", { name: TASK_LABEL });
     await act(() => {
@@ -758,6 +789,7 @@ describe("WorktreeCreateOverlay", () => {
 
   it("AI 模式:勾选开始任务后在新工作树打开所选 agent 对话", async () => {
     await openOverlay(context);
+    await switchToAi();
 
     fireEvent.click(screen.getByRole("switch", { name: START_TASK_LABEL }));
     fireEvent.click(await screen.findByRole("combobox", { name: AGENT_LABEL }));
@@ -787,6 +819,7 @@ describe("WorktreeCreateOverlay", () => {
 
   it("智能体下拉:选项与已选值都带品牌图标", async () => {
     await openOverlay(context);
+    await switchToAi();
 
     fireEvent.click(screen.getByRole("switch", { name: START_TASK_LABEL }));
     const trigger = await screen.findByRole("combobox", { name: AGENT_LABEL });
@@ -804,6 +837,7 @@ describe("WorktreeCreateOverlay", () => {
 
   it("AI 模式:任务描述为空时提交报错且不调 AI", async () => {
     await openOverlay(context);
+    await switchToAi();
 
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
 
@@ -821,6 +855,7 @@ describe("WorktreeCreateOverlay", () => {
       status: "unavailable",
     });
     await openOverlay(context);
+    await switchToAi();
 
     const task = screen.getByRole("textbox", { name: TASK_LABEL });
     fireEvent.change(task, { target: { value: "fix focus" } });
@@ -842,6 +877,7 @@ describe("WorktreeCreateOverlay", () => {
   it("AI 输出不合法时自动修复为语义化分支名", async () => {
     generateTextMock.mockResolvedValueOnce({ status: "ok", text: "！！！\n" });
     await openOverlay(context);
+    await switchToAi();
 
     fireEvent.change(screen.getByRole("textbox", { name: TASK_LABEL }), {
       target: { value: "修复终端焦点问题" },
@@ -1003,19 +1039,11 @@ describe("WorktreeCreateOverlay", () => {
     const branch = screen.getByRole("textbox", { name: BRANCH_LABEL });
     fireEvent.change(branch, { target: { value: "bad branch!" } });
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
-    expect(
-      await screen.findByText(
-        "Enter a valid Git branch name using letters, digits and . _ / -"
-      )
-    ).toBeInTheDocument();
+    expect(await screen.findByText(INVALID_BRANCH_ERROR)).toBeInTheDocument();
 
     fireEvent.change(branch, { target: { value: "feature/fix..dialog" } });
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
-    expect(
-      await screen.findByText(
-        "Enter a valid Git branch name using letters, digits and . _ / -"
-      )
-    ).toBeInTheDocument();
+    expect(await screen.findByText(INVALID_BRANCH_ERROR)).toBeInTheDocument();
 
     fireEvent.change(branch, { target: { value: "main" } });
     fireEvent.click(screen.getByRole("button", { name: CONFIRM_LABEL }));
@@ -1059,7 +1087,7 @@ describe("WorktreeCreateOverlay", () => {
 
     await vi.waitFor(() => {
       expect(
-        screen.queryByRole("textbox", { name: TASK_LABEL })
+        screen.queryByRole("textbox", { name: BRANCH_LABEL })
       ).not.toBeInTheDocument();
     });
     expect(createMock).not.toHaveBeenCalled();
@@ -1172,7 +1200,7 @@ describe("WorktreeCreateOverlay", () => {
     await openOverlay(context);
 
     expect(
-      screen.getByRole("textbox", { name: TASK_LABEL })
+      screen.getByRole("textbox", { name: BRANCH_LABEL })
     ).toBeInTheDocument();
 
     act(() => {
@@ -1181,7 +1209,7 @@ describe("WorktreeCreateOverlay", () => {
 
     await vi.waitFor(() => {
       expect(
-        screen.queryByRole("textbox", { name: TASK_LABEL })
+        screen.queryByRole("textbox", { name: BRANCH_LABEL })
       ).not.toBeInTheDocument();
     });
   });

@@ -35,6 +35,7 @@ export const CANVAS_HOST_ALLOWED_COMMANDS = [
   "plugin.inspect",
   "plugin.list",
   "pluginSettings.getAll",
+  "pluginData.snapshot",
   "preferences.read",
   "run.backgroundSnapshot",
   "run.list",
@@ -70,6 +71,7 @@ export const CANVAS_HOST_ALLOWED_CHANNELS = [
   PIER_BROADCAST.FOREGROUND_ACTIVITY_CHANGED,
   PIER_BROADCAST.GIT_CHANGED,
   PIER_BROADCAST.NOTIFICATION_CENTER_CHANGED,
+  PIER_BROADCAST.PLUGIN_DATA_CHANGED,
   PIER_BROADCAST.PLUGIN_SETTINGS_CHANGED,
   PIER_BROADCAST.PLUGINS_CHANGED,
   PIER_BROADCAST.PREFERENCES_CHANGED,
@@ -102,6 +104,62 @@ const SNAPSHOT_ALIASES: Readonly<Record<string, CanvasHostSnapshotId>> = {
   [PIER.USAGE_DATA_SNAPSHOT]: "usage-data",
   [PIER_BROADCAST.USAGE_DATA_CHANGED]: "usage-data",
 };
+
+/**
+ * 解析插件数据投影 watch 目标 `"plugin:<pluginId>/<key>"`。
+ *
+ * 投影数据的顶层保留键（插件不得占用）：`payload`、`key`、`pluginId`。
+ * 信封统一为 `{ key, pluginId, ...数据 }`：对象 payload 走扁平合并
+ * （信封字段之外即数据，见 {@link extractPluginDataEvent}）；非对象
+ * payload 则包装为 `{ key, pluginId, payload }`。
+ */
+export function parsePluginDataWatchTarget(
+  target: string
+): { key: string; pluginId: string } | null {
+  if (!target.startsWith("plugin:")) {
+    return null;
+  }
+  const rest = target.slice("plugin:".length);
+  const slash = rest.indexOf("/");
+  if (slash <= 0 || slash === rest.length - 1) {
+    return null;
+  }
+  const pluginId = rest.slice(0, slash);
+  const key = rest.slice(slash + 1);
+  return { key, pluginId };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+/** 广播事件只按 pluginId/key 过滤；两种 payload 形状信封字段一致。 */
+export function isPluginDataEventFor(
+  event: unknown,
+  target: { key: string; pluginId: string }
+): boolean {
+  return (
+    isRecord(event) &&
+    event.pluginId === target.pluginId &&
+    event.key === target.key
+  );
+}
+
+/**
+ * 提取插件数据投影事件的数据：对象 payload 扁平合并时剥掉信封字段
+ * （key/pluginId）后剩余属性即数据；非对象 payload 经 `{payload,...}`
+ * 包装，直接取 `payload` 键。非记录事件返回 null。
+ */
+export function extractPluginDataEvent(event: unknown): unknown {
+  if (!isRecord(event)) {
+    return null;
+  }
+  if ("payload" in event) {
+    return event.payload;
+  }
+  const { key: _envelopeKey, pluginId: _envelopePluginId, ...data } = event;
+  return data;
+}
 
 export const CANVAS_HOST_SNAPSHOT_IDS: readonly CanvasHostSnapshotId[] = [
   "foreground-activity",

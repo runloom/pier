@@ -296,7 +296,7 @@ export async function runTreePathMutation(options: {
       .then(() => undefined)
       .catch((error) => {
         console.error(
-          "Failed to refresh Git Review after tree mutation.",
+          "Failed to refresh git Review after tree mutation.",
           error
         );
       });

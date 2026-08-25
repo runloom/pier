@@ -28,12 +28,20 @@ export interface TerminalBackend {
     agentId: string;
     cwd?: string | undefined;
     windowId?: string | undefined;
+    /** 委派发起方面板：present 时走后台创建（backgroundCreate + 不抢焦点）。 */
+    origin?: { panelId: string; windowId: string } | undefined;
+    placement?: "tab" | "right" | "below" | undefined;
   }): Promise<{
     panelId: string;
     windowId: string;
     runtimeId: string;
     cwd?: string | undefined;
   }>;
+  /**
+   * 首轮 prompt 投递：等面板就绪（OSC7/painted）后 paste + Enter。
+   * 返回 false 表示总预算内未投出（调用方负责回滚清理）。
+   */
+  deliverInitialPrompt(panelId: string, text: string): Promise<boolean>;
   focus?(panelId: string, windowId: string): Promise<boolean>;
   interrupt(panelId: string): Promise<boolean>;
   readViewport(panelId: string): Promise<{
@@ -60,6 +68,10 @@ export interface RuntimeControlStartInput {
   agentId: string;
   cwd?: string | undefined;
   incarnationId?: string | undefined;
+  originAgentKind?: string | undefined;
+  originPanelId?: string | undefined;
+  placement?: "tab" | "right" | "below" | undefined;
+  promptText?: string | undefined;
   windowId?: string | undefined;
   worktreeKey?: string | undefined;
 }

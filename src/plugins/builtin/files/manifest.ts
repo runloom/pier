@@ -142,9 +142,9 @@ export const FILES_PLUGIN_MANIFEST = {
         type: "string",
       },
       [FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY]: {
-        default: true,
+        default: false,
         description:
-          "Show files and folders matched by Git ignore rules. This is separate from the file tree exclusion patterns.",
+          "Show files and folders matched by Git ignore rules. Separate from the exclusion patterns.",
         order: 30,
         type: "boolean",
       },
@@ -192,6 +192,7 @@ export const FILES_PLUGIN_MANIFEST = {
     },
   },
   workbenchWidgets: [],
+  dataProjections: [],
   settingsPages: [],
   groupContent: [
     {
@@ -232,6 +233,9 @@ export const FILES_PLUGIN_MANIFEST = {
     "panel:open",
     "file:read",
     "file:write",
+    // 画布项目信任门：读状态 + 记录首次预览的信任决定。
+    "preferences:read",
+    "preferences:write",
     "git:read",
     "comments:read",
     "comments:write",

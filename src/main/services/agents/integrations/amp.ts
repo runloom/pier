@@ -24,6 +24,13 @@ const AMP_PLUGIN_MARKER = pierManagedPluginMarker();
 /**
  * amp.on 原生事件 → Pier 规范事件名。
  * `agent.end` 的 status 是真实回合结果，必须分支保存，不能压成权威 Stop。
+ *
+ * stop≠idle 消歧（2026-08-25 业界对齐审计）：amp 的续跑（SDK `continue` /
+ * CLI 新 execute）必经 `agent.start`→PromptSubmit（explicit-prompt 重开封账
+ * scope）；`--stream-json-input` 的 `steer:true` 是忙时插队（当前 run 内，
+ * 不产生 agent.end）。官方 `thread.state.*` 状态机已全量消费
+ * （awaiting-approval→waiting、idle/error→resolved/error），omp 式静默续跑
+ * 冻结在本集成结构性不可达。
  */
 const AMP_EVENT_MAP: ReadonlyArray<{
   nativeEvent: string;

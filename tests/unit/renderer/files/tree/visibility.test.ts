@@ -61,7 +61,7 @@ function createContext(options?: {
           );
         }
         if (key === FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY) {
-          return options?.showGitIgnoredFiles ?? true;
+          return options?.showGitIgnoredFiles ?? false;
         }
         return;
       }),
@@ -88,8 +88,26 @@ describe("files tree visibility", () => {
     expect(isDefaultExcludedFileTreePath(".gitignore")).toBe(false);
   });
 
-  it("hides default exclusions without hiding developer dotfiles", async () => {
-    const { context, listIgnored } = createContext();
+  it("hides default exclusions and Git ignores independently by default", async () => {
+    const { context, listIgnored } = createContext({
+      ignored: ["dist/"],
+    });
+    const controller = new FilesTreeVisibilityController(context);
+
+    const paths = (await controller.list(ROOT, { path: "" })).map(
+      (item) => item.path
+    );
+
+    // Default exclusions hide .git/.DS_Store; Git-ignore hiding is on by
+    // default too (dist/ collapsed directory), developer dotfiles stay.
+    expect(paths).toEqual([".env", ".github", ".gitignore", "src"]);
+    expect(listIgnored).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows developer dotfiles when Git ignore hiding is disabled", async () => {
+    const { context, listIgnored } = createContext({
+      showGitIgnoredFiles: true,
+    });
     const controller = new FilesTreeVisibilityController(context);
 
     const paths = (await controller.list(ROOT, { path: "" })).map(
@@ -147,6 +165,56 @@ describe("files tree visibility", () => {
     expect(listIgnored).toHaveBeenCalledTimes(1);
     await controller.list(ROOT, { path: "src" });
     expect(listIgnored).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a pinned ignored file and its ancestor chain visible", async () => {
+    const { context } = createContext({
+      ignored: ["dist/", ".env"],
+      showGitIgnoredFiles: false,
+    });
+    const controller = new FilesTreeVisibilityController(context);
+
+    expect(controller.pinPath(ROOT, "dist/bundle.js")).toBe(true);
+
+    const paths = (await controller.list(ROOT)).map((item) => item.path);
+    expect(paths).toContain("dist");
+    expect(paths).toContain("dist/bundle.js");
+    expect(controller.isPathVisible(ROOT, "dist/bundle.js")).toBe(true);
+    expect(controller.isPathVisible(ROOT, "dist")).toBe(true);
+    // Non-pinned ignored siblings stay hidden.
+    expect(controller.isPathVisible(ROOT, ".env")).toBe(false);
+  });
+
+  it("re-hides the pinned chain after unpinning", async () => {
+    const { context } = createContext({
+      ignored: ["dist/"],
+      showGitIgnoredFiles: false,
+    });
+    const controller = new FilesTreeVisibilityController(context);
+    controller.pinPath(ROOT, "dist/bundle.js");
+    expect(controller.unpinPath(ROOT, "dist/bundle.js")).toBe(true);
+    expect(controller.unpinPath(ROOT, "dist/bundle.js")).toBe(false);
+
+    const paths = (await controller.list(ROOT)).map((item) => item.path);
+    expect(paths).not.toContain("dist");
+    expect(paths).not.toContain("dist/bundle.js");
+    expect(controller.isPathVisible(ROOT, "dist/bundle.js")).toBe(false);
+  });
+
+  it("never lets pins override explicit exclusion patterns", async () => {
+    const { context } = createContext({
+      excludePatterns: "# generated output\n**/dist",
+      ignored: [],
+      showExcludedFiles: false,
+      showGitIgnoredFiles: false,
+    });
+    const controller = new FilesTreeVisibilityController(context);
+    controller.pinPath(ROOT, "dist/bundle.js");
+
+    const paths = (await controller.list(ROOT)).map((item) => item.path);
+    expect(paths).not.toContain("dist");
+    expect(paths).not.toContain("dist/bundle.js");
+    expect(controller.isPathVisible(ROOT, "dist/bundle.js")).toBe(false);
   });
 
   it("degrades to default exclusions when Git ignore lookup is unavailable", async () => {

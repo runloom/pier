@@ -68,6 +68,8 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
   z
     .object({
       type: z.literal("terminal.open"),
+      /** 后台创建：跳过可见性门控，挂载即建面（agents.start 委派路径）。 */
+      backgroundCreate: z.boolean().optional(),
       context: panelContextSchema.optional(),
       exitPresentation: terminalExitPresentationSchema.optional(),
       focus: z.boolean().optional(),

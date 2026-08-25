@@ -6,7 +6,7 @@
  * This is **not** the older trees `utils/sortChildren` helper (dotfiles-first +
  * localeCompare). Pin parity in unit tests against path-store semantics.
  *
- * Used so Git review CodeView / demand / comment nav stay aligned with the
+ * Used so git review CodeView / demand / comment nav stay aligned with the
  * sidebar tree. Do not use plain `localeCompare` on full paths — root files
  * would jump above directories (e.g. AGENTS.md before src/).
  *

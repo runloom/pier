@@ -2,6 +2,61 @@ import { z } from "zod";
 import { assetRootRefSchema } from "./agent/assets.ts";
 
 /**
+ * Canvas project trust (画布项目信任门).
+ *
+ * Canvases under a project's content directories are in-repo code that the
+ * host renderer executes in-realm. The first-open trust decision must NOT be
+ * stored inside the project (a hostile repo could pre-seed it), so decisions
+ * persist in userData keyed by normalized project root path — mirroring pi's
+ * project trust model. pier-home canvases are Pier-owned local content and
+ * are never gated.
+ */
+
+export const CANVAS_TRUST_STORE_VERSION = 1;
+
+export const canvasTrustEntrySchema = z
+  .object({
+    grantedAt: z.string().min(1),
+  })
+  .strict();
+
+export type CanvasTrustEntry = z.infer<typeof canvasTrustEntrySchema>;
+
+/** Shape of `{userData}/canvas-trust.json`. Keys are normalizeProjectRootKey outputs. */
+export const canvasTrustStoreSchema = z
+  .object({
+    roots: z.record(z.string().min(1), canvasTrustEntrySchema),
+    version: z.literal(CANVAS_TRUST_STORE_VERSION),
+  })
+  .strict();
+
+export type CanvasTrustStore = z.infer<typeof canvasTrustStoreSchema>;
+
+export function emptyCanvasTrustStore(): CanvasTrustStore {
+  return { roots: {}, version: CANVAS_TRUST_STORE_VERSION };
+}
+
+export const canvasTrustStatusSchema = z
+  .object({
+    grantedAt: z.string().min(1).nullable(),
+    trusted: z.boolean(),
+  })
+  .strict();
+
+export type CanvasTrustStatus = z.infer<typeof canvasTrustStatusSchema>;
+
+/** Shared request body for trustStatus / grantTrust / revokeTrust commands. */
+export const liveModulesCanvasTrustRequestSchema = z
+  .object({
+    projectRootPath: z.string().min(1),
+  })
+  .strict();
+
+export type LiveModulesCanvasTrustRequest = z.infer<
+  typeof liveModulesCanvasTrustRequestSchema
+>;
+
+/**
  * Live Modules host contract (C 轨).
  *
  * Trust model (v1): compiled modules run in the **main renderer same realm** as
@@ -154,6 +209,15 @@ export const liveModuleCompileFailureSchema = z
     ok: z.literal(false),
     /** True when a newer compile superseded this request — renderer should ignore. */
     superseded: z.boolean().optional(),
+    /**
+     * Present when the compile was refused because the project root has no
+     * canvas trust decision yet. Renderer shows the first-open confirm and
+     * retries after grant. Never set for home-scope roots.
+     */
+    trust: z
+      .object({ projectRootPath: z.string().min(1) })
+      .strict()
+      .optional(),
   })
   .strict();
 

@@ -14,7 +14,7 @@ import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { isMac } from "@/lib/keybindings/matcher.ts";
 import { parseChord } from "@/lib/keybindings/parse.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
-import { TerminalComposerAttachmentRail } from "./composer-attachment-rail.tsx";
+import { TerminalComposerAttachmentRail } from "./composer-attachment/rail.tsx";
 import type { ComposerAttachment } from "./composer-attachments-model.ts";
 import {
   elementSoftWrapped,
@@ -70,6 +70,8 @@ export interface TerminalComposerViewProps {
   disabled: boolean;
   editorRef: Ref<StructuredComposerEditorHandle>;
   hasAttachments: boolean;
+  /** Editor-state JSON from last close; keeps chips across toggle. */
+  initialSnapshotJson: string | null;
   inputFocusRisk: TuiInputFocusRisk | null;
   onChromeMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onDragOver: (event: DragEvent) => void;
@@ -100,6 +102,7 @@ export function TerminalComposerView({
   composingRef,
   disabled,
   editorRef,
+  initialSnapshotJson,
   hasAttachments,
   onChromeMouseDown,
   onDragOver,
@@ -194,6 +197,7 @@ export function TerminalComposerView({
           )}
           compact={compact}
           disabled={disabled}
+          initialSnapshotJson={initialSnapshotJson}
           onCompositionEnd={() => {
             composingRef.current = false;
             const el =

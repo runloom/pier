@@ -182,7 +182,7 @@ describe("Pier dockview tab focus CSS", () => {
     expect(lightS1Start).toBeGreaterThan(darkS1Start);
     const darkS1Block = css.slice(darkS1Start, lightS1Start);
     expect(darkS1Block).toContain("var(--pier-tab-running-accent) 72%");
-    expect(darkS1Block).not.toContain("var(--pier-tab-running-accent) 40%");
+    expect(darkS1Block).toContain("var(--pier-tab-running-accent) 40%");
 
     const afterRunningStart = css.indexOf(
       "running 时关闭实心选中/补线 ::after"

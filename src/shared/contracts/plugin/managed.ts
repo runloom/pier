@@ -87,6 +87,22 @@ export type ManagedPluginRendererActivationReport = z.infer<
   typeof managedPluginRendererActivationReportSchema
 >;
 
+/**
+ * 沙箱轨审计事件（Phase 2 M3）：renderer 能力桥的 denied/frozen 等安全
+ * 相关事件上报 main，追加进插件操作日志（append-only JSONL）。
+ */
+export const managedPluginSandboxAuditSchema = z
+  .object({
+    detail: z.string().max(512).optional(),
+    event: z.enum(["frozen", "call-denied", "disposed"]),
+    pluginId: z.string().min(1),
+    version: z.string().min(1).optional(),
+  })
+  .strict();
+export type ManagedPluginSandboxAudit = z.infer<
+  typeof managedPluginSandboxAuditSchema
+>;
+
 export const managedPluginPackageManifestSchema = z.preprocess(
   normalizeLegacyWorkbenchContributionKey,
   z
@@ -109,6 +125,11 @@ export const managedPluginPackageManifestSchema = z.preprocess(
       workbenchWidgets: z
         .array(pluginWorkbenchWidgetContributionSchema)
         .default([]),
+      /**
+       * 可投影给 canvas 的只读数据键（设计 §4.1）。未声明键的
+       * pluginData.snapshot 一律拒绝——纪律边界与 panels 同链。
+       */
+      dataProjections: z.array(z.string().min(1)).default([]),
       languageServers: z
         .array(pluginLanguageServerContributionSchema)
         .optional(),
@@ -273,6 +294,11 @@ const officialPluginEntrySchema = z.object({
   latest: z.string().min(1),
   /** Per-locale name/description overrides. Renderer picks by user locale. */
   locales: pluginLocalizedTextSchema.optional(),
+  /**
+   * 索引 v2：安装前权限展示。可选字段保持对 v1 索引向后兼容；
+   * 发布者签名（key ceremony）为运维前置，不在本 schema 演进内。
+   */
+  permissions: z.array(z.string()).optional(),
   versions: z.record(z.string(), officialPluginVersionSchema),
 });
 export type OfficialPluginEntry = z.infer<typeof officialPluginEntrySchema>;
@@ -325,6 +351,8 @@ export const managedPluginCatalogRowSchema = z.object({
       terminalStatusItems: z.number().int().nonnegative(),
     })
     .optional(),
+  /** Manifest 权限集（安装期已验签的 bundled/index 来源）：安装前展示给用户。 */
+  permissions: z.array(z.string()).optional(),
   description: z.string().min(1).optional(),
   displayName: z.string().min(1),
   /** Per-locale name/description overrides. Renderer resolves against i18n. */

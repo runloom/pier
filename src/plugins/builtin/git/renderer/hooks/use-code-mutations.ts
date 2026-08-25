@@ -195,7 +195,7 @@ export function useGitReviewCodeMutations(
           }
         }
       ).catch((error) => {
-        console.error("Failed to report Git review mutation.", error);
+        console.error("Failed to report git review mutation.", error);
       });
     },
     [context, gitRootPath, contextId]
@@ -360,7 +360,7 @@ export function useGitReviewCodeMutations(
       };
 
       run().catch((error) => {
-        console.error("Failed to report Git review mutation.", error);
+        console.error("Failed to report git review mutation.", error);
       });
     },
     [context, gitRootPath, contextId]
@@ -476,7 +476,7 @@ export function useGitReviewCodeMutations(
           }
         );
       })().catch((error) => {
-        console.error("Failed to report Git review mutation.", error);
+        console.error("Failed to report git review mutation.", error);
       });
     },
     [context, gitRootPath, contextId]

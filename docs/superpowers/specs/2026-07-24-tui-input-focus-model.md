@@ -6,7 +6,7 @@
 
 相关：
 
-- 增强输入编辑器：[`2026-07-22-rich-input-structured-composer-design.md`](./2026-07-22-rich-input-structured-composer-design.md)
+- 增强输入编辑器：[`../../archive/superpowers/specs/2026-07-22-rich-input-structured-composer-design.md`](../../archive/superpowers/specs/2026-07-22-rich-input-structured-composer-design.md)
 - ghostty patches 清单：`native/Vendor/libghostty-spm/Patches/ghostty/README.md`（0103 / 0104）
 
 ## 1. 问题模型

@@ -40,12 +40,12 @@ export const OFFICIAL_BUNDLED_PLUGIN_SPECS: readonly OfficialBundledPluginSpec[]
       prodPluginDirName: "pier.ssh",
     },
     {
-      devPackageDir: "packages/plugin-tmux",
-      fallbackId: "pier.tmux",
-      fallbackName: "Native splits",
+      devPackageDir: "packages/plugin-agent-splits",
+      fallbackId: "pier.agent-splits",
+      fallbackName: "Agent splits",
       fallbackVersion: "1.0.0",
-      id: "pier.tmux",
-      prodPluginDirName: "pier.tmux",
+      id: "pier.agent-splits",
+      prodPluginDirName: "pier.agent-splits",
     },
     {
       devPackageDir: "packages/plugin-claude",
@@ -72,6 +72,9 @@ export function toBundledPluginRegistration(
       ? {}
       : { description: bundle.description }),
     ...(bundle.locales === undefined ? {} : { locales: bundle.locales }),
+    ...(bundle.permissions === undefined || bundle.permissions.length === 0
+      ? {}
+      : { permissions: bundle.permissions }),
     ...(bundle.size === undefined ? {} : { size: bundle.size }),
   };
 }

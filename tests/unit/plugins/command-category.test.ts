@@ -30,9 +30,9 @@ function makeManifest(): PluginManifest {
 describe("plugin command category i18n", () => {
   it("accepts category in locale command entries", () => {
     const parsed = pluginLocaleMessagesSchema.parse({
-      commands: { [COMMAND_ID]: { category: "Git", title: "T" } },
+      commands: { [COMMAND_ID]: { category: "git", title: "T" } },
     });
-    expect(parsed.commands?.[COMMAND_ID]?.category).toBe("Git");
+    expect(parsed.commands?.[COMMAND_ID]?.category).toBe("git");
   });
 
   it("rejects empty category strings", () => {

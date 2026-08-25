@@ -57,7 +57,7 @@ const runtime: ActionContributionRuntime = {
   t: (key) => i18next.t(key),
 };
 
-/** 命令面板 Git 主路径命令（不含 review 树 surface-only 动作）。 */
+/** 命令面板 git 主路径命令（不含 review 树 surface-only 动作）。 */
 const LOOMDESK_GIT_ACTION_IDS = [
   "pier.git.viewChanges",
   "pier.git.pull",
@@ -212,7 +212,7 @@ async function buildGitCommandSearchDocuments(
             (locale) => locale.commands?.[command.id]?.aliases ?? []
           )
         ),
-        { categoryLabel: "Git" }
+        { categoryLabel: "git" }
       )
     );
 }
@@ -342,19 +342,19 @@ describe("action search", () => {
     "gm",
     "合并",
     "分支",
-  ])("matches Git merge action like loomdesk: %s", (query) => {
+  ])("matches git merge action like loomdesk: %s", (query) => {
     const docs = [
       buildActionSearchDocument(
-        action("pier.git.merge", "Git: Merge Branch...", [
+        action("pier.git.merge", "git: Merge Branch...", [
           "git merge",
           "merge branch",
           "合并",
           "分支",
         ]),
-        { categoryLabel: "Git" }
+        { categoryLabel: "git" }
       ),
-      buildActionSearchDocument(action("pier.git.stash", "Git: Stash"), {
-        categoryLabel: "Git",
+      buildActionSearchDocument(action("pier.git.stash", "git: Stash"), {
+        categoryLabel: "git",
       }),
     ];
 
@@ -402,15 +402,15 @@ describe("action search", () => {
   it("prefers shorter matched alias over shorter display title at same tier", () => {
     const docs = [
       buildActionSearchDocument(
-        action("pier.git.mergeAbort", "Git: 中止合并", [
+        action("pier.git.mergeAbort", "git: 中止合并", [
           "中止合并",
           "git merge abort",
         ]),
-        { categoryLabel: "Git" }
+        { categoryLabel: "git" }
       ),
       buildActionSearchDocument(
-        action("pier.git.merge", "Git: 合并分支...", ["合并分支", "git merge"]),
-        { categoryLabel: "Git" }
+        action("pier.git.merge", "git: 合并分支...", ["合并分支", "git merge"]),
+        { categoryLabel: "git" }
       ),
     ];
 
@@ -464,25 +464,25 @@ describe("action search", () => {
     ["撤销提交", "pier.git.undoLastCommit"],
     ["贮藏", "pier.git.stash"],
     ["git stash -u", "pier.git.stashIncludeUntracked"],
-  ])("matches every LoomDesk Git command keyword: %s", (query, expectedId) => {
+  ])("matches every LoomDesk git command keyword: %s", (query, expectedId) => {
     expect(
       rankActionSearchDocuments(gitCommandDocs, query)[0]?.document.id
     ).toBe(expectedId);
   });
 
-  it("uses the production Git-prefixed titles for every Git command document", () => {
+  it("uses the production git-prefixed titles for every git command document", () => {
     for (const docs of [gitCommandDocs, gitCommandDocsZh]) {
       expect(docs).toHaveLength(LOOMDESK_GIT_ACTION_IDS.length);
       for (const doc of docs) {
-        expect(doc.title.startsWith("Git: ")).toBe(true);
+        expect(doc.title.startsWith("git: ")).toBe(true);
       }
     }
   });
 
   it.each([
     "git",
-    "Git:",
-  ])("recalls every Git command for the shared prefix query: %s", (query) => {
+    "git:",
+  ])("recalls every git command for the shared prefix query: %s", (query) => {
     for (const docs of [gitCommandDocs, gitCommandDocsZh]) {
       const ids = rankActionSearchDocuments(docs, query).map(
         (result) => result.document.id
@@ -497,19 +497,19 @@ describe("action search", () => {
   it.each([
     ["en", "git: merge", ["pier.git.merge"]],
     ["en", "git merge branch", ["pier.git.merge"]],
-    ["en", "Git: Stash", ["pier.git.stash"]],
+    ["en", "git: Stash", ["pier.git.stash"]],
     ["en", "git stash pop", ["pier.git.stashPop"]],
     ["en", "git: undo", ["pier.git.undoLastCommit"]],
-    ["zh-CN", "Git: 合并", ["pier.git.merge"]],
+    ["zh-CN", "git: 合并", ["pier.git.merge"]],
     ["zh-CN", "git 合并", ["pier.git.merge"]],
     [
       "zh-CN",
-      "Git: 储藏",
+      "git: 储藏",
       ["pier.git.stash", "pier.git.stashIncludeUntracked"],
     ],
-    ["zh-CN", "Git: 变基", ["pier.git.rebase"]],
+    ["zh-CN", "git: 变基", ["pier.git.rebase"]],
     ["zh-CN", "git: 撤销", ["pier.git.undoLastCommit"]],
-  ])("matches prefixed Git queries against %s titles: %s", (titleLocale, query, expectedIds) => {
+  ])("matches prefixed git queries against %s titles: %s", (titleLocale, query, expectedIds) => {
     const docs = titleLocale === "zh-CN" ? gitCommandDocsZh : gitCommandDocs;
     expect(expectedIds).toContain(
       rankActionSearchDocuments(docs, query)[0]?.document.id
@@ -533,16 +533,16 @@ describe("action search", () => {
   it("ranks a prefixed-title match above a frecency-boosted alias match", () => {
     const docs = [
       buildActionSearchDocument(
-        action("pier.git.stash", "Git: Stash", ["git stash", "stash save"]),
-        { categoryLabel: "Git" }
+        action("pier.git.stash", "git: Stash", ["git stash", "stash save"]),
+        { categoryLabel: "git" }
       ),
       buildActionSearchDocument(
-        action("pier.git.stashPop", "Git: Pop Stash...", [
+        action("pier.git.stashPop", "git: Pop Stash...", [
           "git stash pop",
           "pop stash",
           "restore stash",
         ]),
-        { categoryLabel: "Git" }
+        { categoryLabel: "git" }
       ),
     ];
 
@@ -555,25 +555,25 @@ describe("action search", () => {
 
   it.each([
     "git",
-    "Git",
-  ])("ranks Git-prefixed commands above frecency-boosted worktree category matches: %s", (query) => {
+    "git",
+  ])("ranks git-prefixed commands above frecency-boosted worktree category matches: %s", (query) => {
     const commandIds = ["pier.git.merge", "pier.git.stash"];
     const worktreeIds = ["pier.git.worktreeCreate", "pier.git.worktreeList"];
     const docs = [
       buildActionSearchDocument(
         action("pier.git.worktreeCreate", "创建工作树", ["worktree add"]),
-        { categoryLabel: "Git" }
+        { categoryLabel: "git" }
       ),
       buildActionSearchDocument(
         action("pier.git.worktreeList", "工作树列表", ["worktree list"]),
-        { categoryLabel: "Git" }
+        { categoryLabel: "git" }
       ),
       buildActionSearchDocument(
-        action("pier.git.merge", "Git: Merge Branch...", ["git merge"]),
-        { categoryLabel: "Git" }
+        action("pier.git.merge", "git: Merge Branch...", ["git merge"]),
+        { categoryLabel: "git" }
       ),
-      buildActionSearchDocument(action("pier.git.stash", "Git: Stash"), {
-        categoryLabel: "Git",
+      buildActionSearchDocument(action("pier.git.stash", "git: Stash"), {
+        categoryLabel: "git",
       }),
     ];
 
@@ -684,7 +684,7 @@ describe("action search", () => {
   });
 
   // Worktree 命令已整体退出 "git" 查询空间:别名并集不再含任何 "git" 词面,
-  // 类目标签也从 "Git" 改为 "Worktree"/"工作树"。同场放入真实 Git 命令文档,
+  // 类目标签也从 "git" 改为 "Worktree"/"工作树"。同场放入真实 git 命令文档,
   // 证明 "git" 查询本身仍有召回,worktree 零命中不是空集空转。
   let worktreeCommandDocs: SearchDocument<Action>[] = [];
   let worktreeCommandDocsZh: SearchDocument<Action>[] = [];
@@ -703,9 +703,9 @@ describe("action search", () => {
 
   it.each([
     "git",
-    "Git",
+    "git",
     "git:",
-  ])("keeps worktree commands out of Git queries despite high frecency: %s", (query) => {
+  ])("keeps worktree commands out of git queries despite high frecency: %s", (query) => {
     for (const [worktreeDocs, gitDocs] of worktreeScenes()) {
       const ids = rankActionSearchDocuments(
         [...worktreeDocs, ...gitDocs],
