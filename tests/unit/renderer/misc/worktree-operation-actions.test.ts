@@ -273,8 +273,8 @@ describe("worktree operation actions", () => {
   });
 
   it.each([
-    ["not_git_repo", "The current directory is not a Git repository"],
-    ["git_unavailable", "Git is unavailable"],
+    ["not_git_repo", "The current directory is not a git repository"],
+    ["git_unavailable", "git is unavailable"],
     ["invalid_path", "The worktree path is invalid"],
     ["invalid_name", "The worktree name is invalid"],
   ] as const)("localizes the %s worktree-unavailable reason", async (reason, expectedBody) => {

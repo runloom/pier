@@ -724,7 +724,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       pointerType: "mouse",
     });
 
-    expect(await screen.findByText("Loading Git status…")).toBeInTheDocument();
+    expect(await screen.findByText("Loading git status…")).toBeInTheDocument();
     expect(screen.queryByText("No local changes")).toBeNull();
   });
 
@@ -751,7 +751,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     });
 
     expect(
-      await screen.findByText("Git status unavailable")
+      await screen.findByText("git status unavailable")
     ).toBeInTheDocument();
     expect(screen.queryByText("No local changes")).toBeNull();
   });

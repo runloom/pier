@@ -271,7 +271,7 @@ it("文件暂存锁争用失败只展示暂存区忙，不拼 Git 锁文件说�
   await waitFor(() => expect(alert).toHaveBeenCalledOnce());
   expect(onMutationCommitted).toHaveBeenCalledWith(null);
   expect(alert).toHaveBeenCalledWith({
-    body: "Another program is updating the Git staging area. Try again in a moment.",
+    body: "Another program is updating the git staging area. Try again in a moment.",
     title: "Unable to Stage",
   });
 });

@@ -1270,7 +1270,7 @@ describe("Git review panel", () => {
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
     await expect(
-      view.findByText("Git could not complete this operation. Try again.")
+      view.findByText("git could not complete this operation. Try again.")
     ).resolves.toBeVisible();
     // 初次加载失败没有正文可看:错误是主体状态,用 Empty 呈现而非 Alert 横条。
     expect(

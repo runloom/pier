@@ -1225,7 +1225,7 @@ describe("TerminalComposer", () => {
     ).not.toHaveTextContent("#1");
   });
 
-  it("shows #n badges only when multiple attachments are on the rail", async () => {
+  it("keeps ordinal badges off attachment rail tiles", async () => {
     pickComposerFiles.mockResolvedValue({
       ok: true,
       paths: ["/tmp/a.txt", "/tmp/b.txt"],
@@ -1258,10 +1258,10 @@ describe("TerminalComposer", () => {
 
     expect(
       screen.getByTestId("terminal-composer-attachment-1")
-    ).toHaveTextContent("#1");
+    ).not.toHaveTextContent("#");
     expect(
       screen.getByTestId("terminal-composer-attachment-2")
-    ).toHaveTextContent("#2");
+    ).not.toHaveTextContent("#");
 
     fireEvent.click(
       screen.getByTestId("terminal-composer-attachment-remove-2")
@@ -1273,7 +1273,7 @@ describe("TerminalComposer", () => {
     });
     expect(
       screen.getByTestId("terminal-composer-attachment-1")
-    ).not.toHaveTextContent("#1");
+    ).not.toHaveTextContent("#");
   });
   it("Esc with the skill/command list open dismisses only the list", () => {
     const onClose = vi.fn();

@@ -21,6 +21,7 @@ const NONE_ALLOWLIST = new Set([
   "src/plugins/builtin/files/renderer/markdown/preview-toc.tsx",
   "src/renderer/components/common/notifications/center-control.tsx",
   "src/renderer/components/primitives/sidebar.tsx",
+  "src/renderer/panel-kits/terminal/composer-attachment/rail.tsx",
   "src/renderer/panel-kits/terminal/structured-composer/composer-suggest-list.tsx",
 ]);
 
