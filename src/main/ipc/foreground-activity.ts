@@ -30,7 +30,6 @@ import {
   isAgentStatusHooksIngestEnabled,
   setAgentStatusHooksIngestEnabled,
 } from "../services/agents/status-hooks-gate.ts";
-import { isWindowDetaching } from "../services/agents/window-detaching-guard.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
 import { isBlankShellCommandLine } from "../services/foreground-activity/blank-command-line.ts";
 import { SUSPENDED_JOB_EXIT_CODES } from "../services/foreground-activity/entry.ts";
@@ -39,19 +38,20 @@ import {
   type JsonlObserver,
 } from "../services/foreground-activity/jsonl-observer.ts";
 import { resolveOwner } from "../services/panel-transfer/terminal-hook-owner-routing.ts";
-import { readPreferences } from "../state/preferences.ts";
-import { patchTerminalPanelAgentStatus } from "../state/terminal-session-state.ts";
 import {
-  findAppWindowByElectronId,
+  notifyTerminalPanelClosed,
+  notifyTerminalPtyExited,
+} from "../services/runtime-control/panel-close-listeners.ts";
+import { readPreferences } from "../state/preferences.ts";
+import {
   findAppWindowByInternalId,
   findAppWindowByWebContents,
   listAppWindowIds,
 } from "../windows/identity.ts";
 import { recordAgentResumeSession } from "./agent-resume-persist.ts";
+import { markAgentSessionExited } from "./agent-session-exit-persist.ts";
 import { materializeForegroundActivityPublications } from "./foreground-activity-publication.ts";
-import { broadcastAgentEndStateForPanel } from "./terminal/end-state-broadcast.ts";
 import { forwardToWindow } from "./terminal/forwarding.ts";
-import { windowRecordIdFor } from "./terminal/window-scope.ts";
 
 const log = createLogger("foreground-activity.ipc");
 
@@ -76,39 +76,9 @@ function withResolvedOwner<T extends { panelId: string; windowId: string }>(
   }
   return { ...event, panelId: owner.panelId, windowId: owner.windowId };
 }
+
 let jsonlObserver: JsonlObserver | null = null;
 let agentTerminalReconciler: AgentTerminalReconciler | null = null;
-
-function markAgentSessionExited(args: {
-  exitCode?: number | undefined;
-  panelId: string;
-  windowId: string;
-}): void {
-  const win = findAppWindowByElectronId(Number(args.windowId));
-  if (!win || win.isDestroyed()) {
-    return;
-  }
-  if (
-    isWindowDetaching(args.windowId) ||
-    isWindowDetaching(windowRecordIdFor(win))
-  ) {
-    return;
-  }
-  const sessionWindowId = windowRecordIdFor(win);
-  patchTerminalPanelAgentStatus(sessionWindowId, args.panelId, {
-    ...(args.exitCode === undefined ? {} : { exitCode: args.exitCode }),
-    finishedAt: Date.now(),
-    status: "exited",
-  })
-    .then((ok) => {
-      if (ok) {
-        broadcastAgentEndStateForPanel(win, sessionWindowId, args.panelId);
-      }
-    })
-    .catch((err) => {
-      log.error("agent session exit persist failed", { err });
-    });
-}
 
 /**
  * 按 windowId 定向发送快照。Pier 窗口是 BaseWindow+WebContentsView（见
@@ -292,10 +262,12 @@ export const foregroundActivityService = {
   panelClosed(panelId: string, windowId?: string): void {
     agentTerminalReconciler?.releasePanel(panelId, windowId);
     foregroundActivityAggregator.panelClosed(panelId, windowId);
+    notifyTerminalPanelClosed(panelId, windowId);
   },
   ptyExited(panelId: string, windowId?: string): void {
     agentTerminalReconciler?.releasePanel(panelId, windowId);
     foregroundActivityAggregator.ptyExited(panelId, windowId);
+    notifyTerminalPtyExited(panelId, windowId);
   },
   retainPanels(windowId: string, activePanelIds: readonly string[]): void {
     agentTerminalReconciler?.retainPanels(windowId, activePanelIds);

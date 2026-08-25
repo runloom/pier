@@ -54,7 +54,7 @@ describe("official plugin locale key parity", () => {
     "plugin-codex",
     "plugin-grok",
     "plugin-ssh",
-    "plugin-tmux",
+    "plugin-agent-splits",
   ] as const)("%s locales cover every shipped UI language", (pkg) => {
     const manifest = readJson(join(ROOT, `packages/${pkg}/plugin.json`)) as {
       locales?: Record<string, unknown>;

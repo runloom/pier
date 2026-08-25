@@ -39,6 +39,8 @@ const TERMINAL_FRAME_COMMIT_TIMEOUT_MS = 10_000;
 interface UseTerminalNativeLifecycleArgs {
   anchorRef: RefObject<HTMLDivElement | null>;
   api: IDockviewPanelProps["api"];
+  /** 后台创建（agents.start 委派）：挂载即建面，跳过可见性/真实尺寸门控。 */
+  backgroundCreate: boolean | undefined;
   effectiveMonoFontSize: number;
   initialContext: PanelContext | undefined;
   initialInput: string | undefined;
@@ -59,6 +61,7 @@ interface UseTerminalNativeLifecycleArgs {
 export function useTerminalNativeLifecycle({
   api,
   anchorRef,
+  backgroundCreate,
   effectiveMonoFontSize,
   initialContext,
   initialInput,
@@ -258,8 +261,11 @@ export function useTerminalNativeLifecycle({
     const isDisposed = () =>
       disposed || lifecycleVersionRef.current !== lifecycleVersion;
 
+    // R19 路线 A'：后台面板挂载即建（surface 原生层本就 offscreen+hidden），
+    // 真实 frame 由首次 applyTerminalWindowState 可见性快照贴上。
     const shouldCreateNativeTerminal = () =>
-      !createFailureLatched && (api.isVisible || api.isActive);
+      !createFailureLatched &&
+      (backgroundCreate === true || api.isVisible || api.isActive);
 
     const acceptCreateResult = (result: CreateTerminalResult): boolean => {
       if (isDisposed()) {
@@ -291,7 +297,11 @@ export function useTerminalNativeLifecycle({
         phase: hasRenderableAnchor() ? "creating" : "waiting_for_anchor",
       });
       createPromise = (async () => {
-        const frame = await waitForRealSize(anchor, isDisposed);
+        const useSyntheticFrame = backgroundCreate === true && !api.isVisible;
+        // 合成 frame：surface 原生层本就 hidden，真实 frame 由可见性快照贴上。
+        const frame = useSyntheticFrame
+          ? { height: 800, width: 1200, x: 0, y: 0 }
+          : await waitForRealSize(anchor, isDisposed);
         if (!frame || isDisposed() || didCreateNativeTerminal) {
           return;
         }
@@ -468,6 +478,7 @@ export function useTerminalNativeLifecycle({
   }, [
     api,
     anchorRef,
+    backgroundCreate,
     initialContext,
     initialInput,
     initialInputSubmit,

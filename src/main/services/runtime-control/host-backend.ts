@@ -7,9 +7,14 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import { agentKindSchema } from "@shared/contracts/agent.ts";
 import type { PierCommandResult } from "@shared/contracts/commands.ts";
 import { getTerminalAddon } from "../../ipc/terminal/index.ts";
+import { schedulePromptReady } from "../../ipc/terminal/initial-input-gate.ts";
 import { toNativePanelKey } from "../../ipc/terminal/panel-id.ts";
-import { pasteTerminalText } from "../../ipc/terminal/submit-text.ts";
+import {
+  pasteTerminalText,
+  sendTerminalSubmitReturn,
+} from "../../ipc/terminal/submit-text.ts";
 import { findAppWindowForActivityWindowId } from "../../windows/identity.ts";
+import { deliverPromptWithBackoff } from "./prompt-delivery.ts";
 import type { TerminalBackend } from "./types.ts";
 
 export interface HostTerminalBackendDeps {
@@ -36,6 +41,30 @@ function nativeKey(windowId: string, panelId: string): string | null {
   return toNativePanelKey(win, panelId);
 }
 
+const PROMPT_READY_FALLBACK_MS = 1500;
+/** agents.start --placement → terminal.open 落位（right/below 以发起方面板为锚）。 */
+function placementCommandFor(
+  origin: { panelId: string },
+  placement: "tab" | "right" | "below" | undefined
+): {
+  placement: "active-tab" | "split-right" | "split-below";
+  referencePanelId?: string;
+} {
+  if (placement === "right") {
+    return {
+      placement: "split-right",
+      referencePanelId: origin.panelId,
+    };
+  }
+  if (placement === "below") {
+    return {
+      placement: "split-below",
+      referencePanelId: origin.panelId,
+    };
+  }
+  return { placement: "active-tab" };
+}
+
 export function createHostTerminalBackend(
   deps: HostTerminalBackendDeps
 ): TerminalBackend {
@@ -49,18 +78,26 @@ export function createHostTerminalBackend(
         throw new Error(`unknown agent: ${args.agentId}`);
       }
       const requestId = randomUUID();
+      // 委派路径（带 origin）：后台建面、不抢焦点、按 placement 落位。
+      const origin = args.origin;
+      const placementCommand = origin
+        ? placementCommandFor(origin, args.placement)
+        : {};
       const result = await deps.executeCommand({
         protocolVersion: 1,
         requestId,
         clientId: "cli-local",
         command: {
           type: "terminal.open",
-          focus: true,
+          ...(origin
+            ? { backgroundCreate: true, focus: false }
+            : { focus: true }),
           launch: {
             agentId,
             ...(args.cwd ? { cwd: args.cwd } : {}),
           },
           ...(args.windowId ? { windowId: args.windowId } : {}),
+          ...placementCommand,
         },
       });
       if (!result.ok) {
@@ -106,6 +143,35 @@ export function createHostTerminalBackend(
         text: body,
       });
       return result.ok;
+    },
+
+    async deliverInitialPrompt(panelId, text) {
+      const windowId = windows.get(panelId);
+      if (!windowId) {
+        return false;
+      }
+      const key = nativeKey(windowId, panelId);
+      const addon = getTerminalAddon();
+      if (!(key && addon)) {
+        return false;
+      }
+      // 等 shell 就绪：OSC7 precmd 或 painted 轮询；1500ms 兜底。
+      const ready = Promise.withResolvers<void>();
+      schedulePromptReady(panelId, ready.resolve, PROMPT_READY_FALLBACK_MS);
+      await ready.promise;
+      return deliverPromptWithBackoff(
+        {
+          paste: (text) =>
+            pasteTerminalText({
+              addon,
+              nativePanelId: key,
+              submit: true,
+              text,
+            }),
+          submitReturn: () => sendTerminalSubmitReturn(addon, key),
+        },
+        text
+      );
     },
 
     async readViewport(panelId) {

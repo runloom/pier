@@ -140,6 +140,9 @@ describe("RuntimeControlService", () => {
       async interrupt() {
         return true;
       },
+      async deliverInitialPrompt() {
+        return true;
+      },
       async terminate() {
         return true;
       },
@@ -426,5 +429,109 @@ describe("RuntimeControlService", () => {
     }
     expect(screened.data.screen.truncated).toBe(true);
     expect(screened.data.screen.text.split("\n").length).toBeLessThanOrEqual(5);
+  });
+  it("prompt delivery failure terminates the spawned panel", async () => {
+    const backend = createFakeTerminalBackend();
+    backend.deliverInitialPrompt = async () => false;
+    const service = createRuntimeControlService({
+      bootId: "boot_rb",
+      backend,
+    });
+    const started = await service.start({
+      agentId: "codex",
+      promptText: "hi",
+      originAgentKind: "omp",
+      originPanelId: "panel_parent",
+    });
+    expect(started.ok).toBe(false);
+    if (started.ok) {
+      return;
+    }
+    expect(started.code).toBe("prompt_undeliverable");
+    const panels = [...backend.panels.values()];
+    expect(panels.length).toBe(1);
+    expect(panels[0]?.closed).toBe(true);
+  });
+
+  it("releaseForPanel marks closed, frees quota, and is idempotent", async () => {
+    const backend = createFakeTerminalBackend();
+    const released: string[] = [];
+    const service = createRuntimeControlService({
+      bootId: "boot_rel",
+      backend,
+      releaseReservation: (runtimeId) => {
+        released.push(runtimeId);
+      },
+    });
+    const first = await service.start({ agentId: "codex" });
+    const second = await service.start({ agentId: "omp" });
+    if (!(first.ok && second.ok)) {
+      throw new Error("starts failed");
+    }
+
+    service.releaseForPanel(first.data.panelId);
+    expect(released).toEqual([first.data.runtime.runtimeId]);
+
+    const summaries = service.listRuntimeSummaries();
+    const closedRow = summaries.find(
+      (row) => row.panelId === first.data.panelId
+    );
+    const openRow = summaries.find(
+      (row) => row.panelId === second.data.panelId
+    );
+    expect(closedRow?.closed).toBe(true);
+    expect(openRow?.closed).toBe(false);
+
+    // 幂等：重复释放与未知 panel 均不动作。
+    service.releaseForPanel(first.data.panelId);
+    service.releaseForPanel("panel_never");
+    expect(released).toEqual([first.data.runtime.runtimeId]);
+  });
+
+  it("released runtime still answers wait(until exited)", async () => {
+    const backend = createFakeTerminalBackend();
+    const service = createRuntimeControlService({
+      bootId: "boot_w",
+      backend,
+    });
+    const started = await service.start({ agentId: "codex" });
+    if (!started.ok) {
+      throw new Error("start failed");
+    }
+    service.releaseForPanel(started.data.panelId);
+    const waited = await service.wait({
+      ...started.data.runtime,
+      until: "exited",
+      timeoutMs: 100,
+    });
+    expect(waited.ok).toBe(true);
+    if (waited.ok) {
+      expect(waited.data.reached).toBe(true);
+    }
+  });
+
+  it("oversized assembled prompt fails before create", async () => {
+    const backend = createFakeTerminalBackend();
+    let creates = 0;
+    const origCreate = backend.create.bind(backend);
+    backend.create = async (args) => {
+      creates += 1;
+      return origCreate(args);
+    };
+    const service = createRuntimeControlService({
+      bootId: "boot_big",
+      backend,
+    });
+    const started = await service.start({
+      agentId: "codex",
+      promptText: "x".repeat(70_000),
+      originAgentKind: "omp",
+      originPanelId: "panel_parent",
+    });
+    expect(started.ok).toBe(false);
+    if (!started.ok) {
+      expect(started.code).toBe("prompt_too_long");
+    }
+    expect(creates).toBe(0);
   });
 });

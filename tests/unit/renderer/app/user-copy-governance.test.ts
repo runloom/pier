@@ -292,7 +292,7 @@ describe("user-facing copy governance", () => {
       join(ROOT, "packages", "plugin-codex", "plugin.json"),
       join(ROOT, "packages", "plugin-grok", "plugin.json"),
       join(ROOT, "packages", "plugin-ssh", "plugin.json"),
-      join(ROOT, "packages", "plugin-tmux", "plugin.json"),
+      join(ROOT, "packages", "plugin-agent-splits", "plugin.json"),
     ];
     const offenders = manifests.flatMap((manifestPath) => {
       const parsed = JSON.parse(readFileSync(manifestPath, "utf8")) as {

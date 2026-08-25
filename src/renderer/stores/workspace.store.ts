@@ -50,6 +50,8 @@ interface WorkspaceState {
   }) => void;
   addTab: () => void;
   addTerminal: (opts?: {
+    /** 后台创建：跳过可见性门控，挂载即建面（agents.start 委派路径）。 */
+    backgroundCreate?: boolean;
     /** `null` forces no cwd; omit the key to inherit from the active terminal. */
     context?: PanelContext | null;
     exitPresentation?: TerminalPanelParams["exitPresentation"];
@@ -217,6 +219,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         ? (opts.context ?? undefined)
         : inheritedActiveTerminalContext(api);
     const params = terminalPanelParams({
+      ...(opts?.backgroundCreate && {
+        backgroundCreate: opts.backgroundCreate,
+      }),
       context,
       exitPresentation: opts?.exitPresentation,
       launchId: opts?.launchId,

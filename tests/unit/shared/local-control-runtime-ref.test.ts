@@ -6,6 +6,7 @@ import {
   agentsScreenResultSchema,
   agentsStartParamsSchema,
   agentsStartResultSchema,
+  agentsStartRetryDetailsSchema,
   agentsTurnParamsSchema,
   agentsTurnResultSchema,
   agentsWaitParamsSchema,
@@ -67,11 +68,51 @@ describe("RuntimeRef", () => {
 });
 
 describe("agents runtime contracts", () => {
-  it("start params require agentId", () => {
-    expect(agentsStartParamsSchema.parse({ agentId: "codex" })).toEqual({
+  it("start params require agentId and origin", () => {
+    expect(
+      agentsStartParamsSchema.parse({
+        agentId: "codex",
+        origin: { panelId: "p1", windowId: "w1" },
+      })
+    ).toEqual({
       agentId: "codex",
+      origin: { panelId: "p1", windowId: "w1" },
     });
+    expect(() => agentsStartParamsSchema.parse({ agentId: "codex" })).toThrow();
     expect(() => agentsStartParamsSchema.parse({})).toThrow();
+  });
+
+  it("start params reject missing origin and unknown fields", () => {
+    expect(() =>
+      agentsStartParamsSchema.parse({
+        agentId: "codex",
+        origin: { panelId: "p1" },
+      })
+    ).toThrow();
+    expect(() =>
+      agentsStartParamsSchema.parse({
+        agentId: "codex",
+        origin: { panelId: "p1", windowId: "w1" },
+        placement: "floating",
+      })
+    ).toThrow();
+  });
+
+  it("start retry details schema is strict same-boot", () => {
+    const details = {
+      operationId: "op_1",
+      observedBootId: "boot_1",
+      scope: "same-boot" as const,
+      crashAmbiguous: false,
+      safeToRetry: true,
+    };
+    expect(agentsStartRetryDetailsSchema.parse(details)).toEqual(details);
+    expect(() =>
+      agentsStartRetryDetailsSchema.parse({
+        ...details,
+        scope: "cross-boot",
+      })
+    ).toThrow();
   });
 
   it("start result embeds RuntimeRef", () => {
@@ -152,6 +193,17 @@ describe("agents runtime contracts", () => {
     ).toThrow();
   });
 
+  it("v2 error codes include agents.start delegation codes", () => {
+    for (const code of [
+      "invalid_origin",
+      "quota_exceeded",
+      "prompt_too_long",
+      "prompt_undeliverable",
+      "cross_window_unsupported",
+    ] as const) {
+      expect(LOCAL_CONTROL_ERROR_CODES).toContain(code);
+    }
+  });
   it("v2 error codes include runtime lifecycle codes", () => {
     for (const code of [
       "runtime_gone",

@@ -14,9 +14,17 @@ import { controlSnapshotSourcesFromCore } from "../../services/control-snapshot/
 import { createControlSnapshotService } from "../../services/control-snapshot/service.ts";
 import { createFakeTerminalBackend } from "../../services/runtime-control/fake-backend.ts";
 import { createHostTerminalBackend } from "../../services/runtime-control/host-backend.ts";
+import {
+  onTerminalPanelClosed,
+  onTerminalPtyExited,
+} from "../../services/runtime-control/panel-close-listeners.ts";
 import { createRuntimeControlService } from "../../services/runtime-control/service.ts";
 import { createStaticAgentsDiscovery } from "./local-control/agents-discovery.ts";
 import { createDefaultLocalControlAuthorizer } from "./local-control/authorize.ts";
+import {
+  type ResolveOriginPanel,
+  releaseRuntimeReservation,
+} from "./local-control/capability-hot-path.ts";
 import { createEffectReceiptStore } from "./local-control/receipts.ts";
 import {
   createPierLocalControlServer,
@@ -74,6 +82,19 @@ export async function registerCliLocalControl({
   const discovery = createStaticAgentsDiscovery(() =>
     core.services.agentRuntimeIndex.listMachine()
   );
+  // R18：agents.start 发起方解析——panelId 与 windowId 都命中 FA 索引才算有效 origin。
+  const resolveOriginPanel: ResolveOriginPanel = (panelId, windowId) => {
+    try {
+      const hit = core.services.agentRuntimeIndex
+        .listMachine()
+        .entries.find(
+          (entry) => entry.panelId === panelId && entry.windowId === windowId
+        );
+      return hit ? { agentId: hit.agentId } : undefined;
+    } catch {
+      return;
+    }
+  };
   const bootId = randomUUID();
   const wantFake =
     process.env.PIER_RUNTIME_CONTROL_FAKE === "1" ||
@@ -86,6 +107,10 @@ export async function registerCliLocalControl({
       : createHostTerminalBackend({
           executeCommand: (envelope) => core.commandRouter.execute(envelope),
         }),
+    // R10：UI 关面板 → 释放子额占位（boot 进程内配额）。
+    releaseReservation: (runtimeId) => {
+      releaseRuntimeReservation({ authority: capabilityAuthority, runtimeId });
+    },
     resolveFact: (record) => {
       if (record.closed) {
         return "exited";
@@ -103,6 +128,13 @@ export async function registerCliLocalControl({
       }
       return record.fact;
     },
+  });
+  const unsubscribePanelClose = onTerminalPanelClosed((panelId) => {
+    runtimeControl.releaseForPanel(panelId);
+  });
+  // pty 退出（含用户在子终端里 exit）：运行时已死即释放占额；后关面板幂等。
+  const unsubscribePtyExit = onTerminalPtyExited((panelId) => {
+    runtimeControl.releaseForPanel(panelId);
   });
   core.services.controlRuntimes = {
     listRuntimeSummaries: () => runtimeControl.listRuntimeSummaries(),
@@ -129,9 +161,9 @@ export async function registerCliLocalControl({
     receipts,
     runtimeControl,
     capabilityAuthority,
+    resolveOriginPanel,
     snapshotService,
   });
-
   try {
     await server.start(signal);
     if (signal?.aborted) {
@@ -140,8 +172,11 @@ export async function registerCliLocalControl({
         "AbortError"
       );
     }
+
     return {
       close: async () => {
+        unsubscribePanelClose();
+        unsubscribePtyExit();
         Reflect.deleteProperty(core.services, "controlSnapshot");
         Reflect.deleteProperty(core.services, "controlBootId");
         await server.close();

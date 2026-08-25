@@ -2,17 +2,19 @@
  * RuntimeControlService：持久 agent 运行控制门面（W3）。
  * 不持有任务台账；不产生工作完成结论。
  */
-import type {
-  AgentsScreenResult,
-  AgentsStartResult,
-  AgentsTurnResult,
-  AgentsWaitResult,
-  AgentsWatchResult,
+import {
+  AGENTS_START_ASSEMBLED_MAX_BYTES,
+  type AgentsScreenResult,
+  type AgentsStartResult,
+  type AgentsTurnResult,
+  type AgentsWaitResult,
+  type AgentsWatchResult,
 } from "@shared/contracts/local-control/agents-runtime.ts";
 import type { RuntimeRef } from "@shared/contracts/local-control/runtime-ref.ts";
 import { matchRuntimeRef } from "@shared/contracts/local-control/runtime-ref.ts";
 import { clampScreenText } from "./screen-text.ts";
 import type {
+  RuntimeControlErr,
   RuntimeControlResult,
   RuntimeControlScreenInput,
   RuntimeControlStartInput,
@@ -51,6 +53,11 @@ export interface RuntimeControlService {
     worktreeKey?: string | undefined;
     cwd?: string | undefined;
   }>;
+  /**
+   * UI 关面板 → 释放：按 panelId 标记 closed 并释放子额占位。
+   * 未登记 / 已 closed 的 panelId 静默忽略。
+   */
+  releaseForPanel(panelId: string): void;
   screen(
     input: RuntimeControlScreenInput
   ): Promise<RuntimeControlResult<AgentsScreenResult>>;
@@ -75,10 +82,43 @@ export interface CreateRuntimeControlServiceOptions {
   backend: TerminalBackend;
   bootId: string;
   nowMs?: (() => number) | undefined;
+  /** UI 关面板释放占额时的回调（ops 层注入 capability-hot-path）。 */
+  releaseReservation?: ((runtimeId: string) => void) | undefined;
   /**
    * 解析 wait 谓词。默认：closed → exited；否则 fact 字符串匹配。
    */
   resolveFact?: ((record: RuntimeRecord) => string | undefined) | undefined;
+}
+
+type AssembledStartPrompt =
+  | { ok: false; error: RuntimeControlErr }
+  | { ok: true; text: string | undefined };
+
+/**
+ * 组装委派 marker + promptText（create 之前做，超限不建面）。
+ * text 为 undefined 表示普通 start（无委派 prompt）。
+ */
+function assembleStartPrompt(
+  input: RuntimeControlStartInput
+): AssembledStartPrompt {
+  if (input.promptText === undefined) {
+    return { ok: true, text: undefined };
+  }
+  const kind = input.originAgentKind ?? "unknown";
+  const panel = input.originPanelId ?? "unknown";
+  const marker = `[Delegated by parent ${kind} panel ${panel}]\n\n`;
+  const assembled = `${marker}${input.promptText}`;
+  if (Buffer.byteLength(assembled, "utf8") > AGENTS_START_ASSEMBLED_MAX_BYTES) {
+    return {
+      ok: false,
+      error: {
+        ok: false,
+        code: "prompt_too_long",
+        message: `assembled agents.start prompt exceeds ${AGENTS_START_ASSEMBLED_MAX_BYTES} bytes`,
+      },
+    };
+  }
+  return { ok: true, text: assembled };
 }
 
 export function createRuntimeControlService(
@@ -187,11 +227,24 @@ export function createRuntimeControlService(
           message: "agents.start requires agentId",
         };
       }
+      const assembled = assembleStartPrompt(input);
+      if (!assembled.ok) {
+        return assembled.error;
+      }
       try {
         const created = await backend.create({
           agentId: input.agentId,
           cwd: input.cwd,
           windowId: input.windowId,
+          ...(input.originPanelId && input.windowId
+            ? {
+                origin: {
+                  panelId: input.originPanelId,
+                  windowId: input.windowId,
+                },
+              }
+            : {}),
+          ...(input.placement ? { placement: input.placement } : {}),
         });
         const prevGen = generationByRuntimeId.get(created.runtimeId) ?? 0;
         const generation = prevGen + 1;
@@ -224,6 +277,23 @@ export function createRuntimeControlService(
             ? { incarnationId: record.incarnationId }
             : {}),
         };
+        if (assembled.text !== undefined) {
+          // R17 投递补偿：create 成功但 prompt 送不到 → terminate 回滚清场。
+          const delivered = await backend.deliverInitialPrompt(
+            record.panelId,
+            assembled.text
+          );
+          if (!delivered) {
+            record.closed = true;
+            await backend.terminate(record.panelId);
+            return {
+              ok: false,
+              code: "prompt_undeliverable",
+              message:
+                "initial prompt could not be delivered; the spawned panel was terminated",
+            };
+          }
+        }
         return { ok: true, data };
       } catch (error) {
         return {
@@ -233,6 +303,17 @@ export function createRuntimeControlService(
             error instanceof Error ? error.message : "failed to start runtime",
         };
       }
+    },
+
+    releaseForPanel(panelId) {
+      const record = [...byRuntimeId.values()].find(
+        (candidate) => candidate.panelId === panelId && !candidate.closed
+      );
+      if (!record) {
+        return;
+      }
+      record.closed = true;
+      options.releaseReservation?.(record.runtime.runtimeId);
     },
 
     async turn(input) {

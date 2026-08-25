@@ -58,8 +58,8 @@ extraResources:
       - '*.tgz'
       - '*.tgz.sha256'
       - 'plugin.json'
-  - from: packages/plugin-tmux/dist-pkg
-    to: plugin-packages/pier.tmux
+  - from: packages/plugin-agent-splits/dist-pkg
+    to: plugin-packages/pier.agent-splits
     filter:
       - '*.tgz'
       - '*.tgz.sha256'
