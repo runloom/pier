@@ -17,6 +17,7 @@ import {
   LOCAL_CONTROL_WRITE_OPS,
   type LocalControlAuthorizeResult,
 } from "./authorize.ts";
+import type { ResolveOriginPanel } from "./capability-hot-path.ts";
 import {
   handleControlHoldOp,
   handleControlSnapshotOp,
@@ -42,6 +43,7 @@ export function dispatchSessionRequest(args: {
   receipts: EffectReceiptStore;
   runtimeControl: RuntimeControlService | undefined;
   capabilityAuthority: CapabilityAuthority | undefined;
+  resolveOriginPanel: ResolveOriginPanel | undefined;
   snapshotService: ControlSnapshotService | undefined;
   inflight: Map<
     string,
@@ -68,6 +70,7 @@ export function dispatchSessionRequest(args: {
     receipts,
     runtimeControl,
     capabilityAuthority,
+    resolveOriginPanel,
     snapshotService,
     inflight,
     disposed,
@@ -196,6 +199,7 @@ export function dispatchSessionRequest(args: {
       bootId,
       runtimeControl,
       capabilityAuthority,
+      resolveOriginPanel,
       receipts,
       inflight,
       disposed,

@@ -20,6 +20,7 @@ import {
 } from "../peer-identity.ts";
 import type { AgentsDiscovery } from "./agents-discovery.ts";
 import type { LocalControlAuthorizer } from "./authorize.ts";
+import type { ResolveOriginPanel } from "./capability-hot-path.ts";
 import type { EffectReceiptStore } from "./receipts.ts";
 import {
   createLocalControlSessionFromHello,
@@ -56,6 +57,8 @@ export interface CreatePierLocalControlServerArgs {
   receipts?: EffectReceiptStore | undefined;
   /** 强制要求可解析 peer UID（测试拒绝路径）。 */
   requirePeerUid?: boolean | undefined;
+  /** agents.start 发起方面板解析（宿主 FA 索引；测试可省）。 */
+  resolveOriginPanel?: ResolveOriginPanel | undefined;
   /** T2 peer UID 解析（测试注入）。 */
   resolvePeerUid?: ResolvePeerUid | undefined;
   /** W3 持久运行控制。 */
@@ -189,6 +192,7 @@ function attachConnection(
     receipts?: EffectReceiptStore | undefined;
     runtimeControl?: RuntimeControlService | undefined;
     capabilityAuthority?: CapabilityAuthority | undefined;
+    resolveOriginPanel?: ResolveOriginPanel | undefined;
     snapshotService?: ControlSnapshotService | undefined;
     resolvePeerUid?: ResolvePeerUid | undefined;
     requirePeerUid?: boolean | undefined;
@@ -336,6 +340,7 @@ function attachConnection(
           receipts: ctx.receipts,
           runtimeControl: ctx.runtimeControl,
           capabilityAuthority: ctx.capabilityAuthority,
+          resolveOriginPanel: ctx.resolveOriginPanel,
           snapshotService: ctx.snapshotService,
           emit: (frame) => {
             if (!closed) {
@@ -373,6 +378,7 @@ export function createPierLocalControlServer({
   runtimeControl,
   capabilityAuthority,
   snapshotService,
+  resolveOriginPanel,
   resolvePeerUid,
   requirePeerUid,
   skipPeerCheck,
@@ -444,6 +450,7 @@ export function createPierLocalControlServer({
             runtimeControl,
             capabilityAuthority,
             snapshotService,
+            resolveOriginPanel,
             resolvePeerUid,
             requirePeerUid,
             skipPeerCheck,

@@ -9,7 +9,10 @@ import {
   agentsWaitParamsSchema,
   agentsWatchParamsSchema,
 } from "@shared/contracts/local-control/agents-runtime.ts";
-import { LOCAL_CONTROL_API_VERSION } from "@shared/contracts/local-control/errors.ts";
+import {
+  LOCAL_CONTROL_API_VERSION,
+  type LocalControlErrorCode,
+} from "@shared/contracts/local-control/errors.ts";
 import type { LocalControlServerFrame } from "@shared/contracts/local-control/frames.ts";
 import type { CapabilityAuthority } from "../../../services/capability/authority.ts";
 import type { RuntimeControlService } from "../../../services/runtime-control/service.ts";
@@ -22,12 +25,35 @@ import {
 import {
   attachChildCapabilityRef,
   denyRuntimeAccess,
+  type ResolveOriginPanel,
   releaseChildReservation,
   releaseRuntimeReservation,
   reserveChildForStart,
 } from "./capability-hot-path.ts";
 import { controlErrorResponse } from "./discovery.ts";
 import type { EffectReceiptStore } from "./receipts.ts";
+
+/** 这些失败码附同 boot 重试凭证（operationId 幂等重放安全）。 */
+const START_RETRY_DETAIL_CODES = new Set<LocalControlErrorCode>([
+  "prompt_undeliverable",
+  "provider_unavailable",
+  "execution_deadline_exceeded",
+  "observation_timeout",
+  "timeout",
+]);
+
+function startRetryDetails(
+  effectKey: string,
+  bootId: string | undefined
+): Record<string, unknown> {
+  return {
+    operationId: effectKey,
+    ...(bootId ? { observedBootId: bootId } : {}),
+    scope: "same-boot",
+    crashAmbiguous: false,
+    safeToRetry: true,
+  };
+}
 
 export async function handleAgentsRuntimeOp(args: {
   requestId: string;
@@ -41,6 +67,7 @@ export async function handleAgentsRuntimeOp(args: {
   signal?: AbortSignal | undefined;
   bootId?: string | undefined;
   emitEvent?: ((frame: LocalControlServerFrame) => void) | undefined;
+  resolveOriginPanel?: ResolveOriginPanel | undefined;
 }): Promise<LocalControlServerFrame> {
   const { requestId, op, params, effectKey, principalRef, receipts } = args;
   if (!args.runtimeControl) {
@@ -115,6 +142,32 @@ export async function handleAgentsRuntimeOp(args: {
         parsed.error.issues[0]?.message ?? "invalid agents.start params"
       );
     }
+    // R18：origin 校验（fail-fast，不占额不占 revision）。
+    let originAgentKind: string | undefined;
+    if (args.resolveOriginPanel) {
+      const found = args.resolveOriginPanel(
+        parsed.data.origin.panelId,
+        parsed.data.origin.windowId
+      );
+      if (!found) {
+        return controlErrorResponse(
+          requestId,
+          "invalid_origin",
+          "origin panel not found; agents.start must run inside a Pier agent panel"
+        );
+      }
+      if (
+        parsed.data.windowId !== undefined &&
+        parsed.data.windowId !== parsed.data.origin.windowId
+      ) {
+        return controlErrorResponse(
+          requestId,
+          "cross_window_unsupported",
+          "agents.start cannot target a window other than the originating panel's"
+        );
+      }
+      originAgentKind = found.agentId;
+    }
     // W6-S4：副作用前占额；receipt 重放在 session 层，不会再次 reserve
     const reserved = reserveChildForStart({
       authority: capabilityAuthority,
@@ -131,9 +184,20 @@ export async function handleAgentsRuntimeOp(args: {
       sideEffect: async () => {
         let success = false;
         try {
-          const result = await runtimeControl.start(parsed.data);
+          const result = await runtimeControl.start({
+            ...parsed.data,
+            // origin 必填：目标窗口恒为发起方面板所在窗口。
+            windowId: parsed.data.origin.windowId,
+            ...(originAgentKind === undefined ? {} : { originAgentKind }),
+            originPanelId: parsed.data.origin.panelId,
+          });
           if (!result.ok) {
-            return result;
+            return effectKey && START_RETRY_DETAIL_CODES.has(result.code)
+              ? {
+                  ...result,
+                  details: startRetryDetails(effectKey, args.bootId),
+                }
+              : result;
           }
           success = true;
           return {

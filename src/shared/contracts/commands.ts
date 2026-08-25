@@ -125,6 +125,8 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
       type: z.literal("terminal.open"),
       focus: z.boolean().optional(),
       launch: terminalLaunchOptionsSchema.optional(),
+      /** 后台创建：跳过可见性门控，挂载即建面（agents.start 委派路径）。 */
+      backgroundCreate: z.boolean().optional(),
       /** 复用已有 panel 并换启动；与 `referencePanelId` 互斥。 */
       panelId: z.string().min(1).optional(),
       placement: pierCommandPlacementSchema.optional(),

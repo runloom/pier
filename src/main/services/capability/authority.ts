@@ -50,7 +50,7 @@ export function createCapabilityAuthority(
   options: CreateCapabilityAuthorityOptions = {}
 ): CapabilityAuthority {
   const base = options.base ?? createDefaultLocalControlAuthorizer();
-  const maxActiveChildren = options.maxActiveChildren ?? 8;
+  const maxActiveChildren = options.maxActiveChildren ?? 4;
   const childrenByParent = new Map<string, Set<string>>();
 
   return {

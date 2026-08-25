@@ -9,7 +9,7 @@ const PLUGIN_RENDERER_ROOTS = [
   join(ROOT, "packages", "plugin-codex", "src", "renderer"),
   join(ROOT, "packages", "plugin-grok", "src", "renderer"),
   join(ROOT, "packages", "plugin-ssh", "src", "renderer"),
-  join(ROOT, "packages", "plugin-tmux", "src", "renderer"),
+  join(ROOT, "packages", "plugin-agent-splits", "src", "renderer"),
   join(ROOT, "src", "plugins", "builtin"),
 ];
 

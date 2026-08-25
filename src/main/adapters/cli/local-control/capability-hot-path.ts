@@ -16,6 +16,15 @@ export interface StartReservation {
   parentRef: string;
 }
 
+/**
+ * 发起方面板身份解析（依赖穿透：宿主 FA 索引 → ops 校验）。
+ * panelId 与 windowId 都匹配才视为有效 origin。
+ */
+export type ResolveOriginPanel = (
+  panelId: string,
+  windowId: string
+) => { agentId: string } | undefined;
+
 /** parent principal → 其创建的 runtimeId 集合 */
 const ownedRuntimesByParent = new Map<string, Set<string>>();
 /** runtimeId → 占额，供 terminate 释放（boot 进程内）。 */
@@ -33,11 +42,14 @@ export function reserveChildForStart(args: {
   const parentRef = args.principalRef ?? "anonymous";
   const reserved = authority.tryReserveChild(parentRef);
   if (!reserved.ok) {
-    return {
-      ok: false,
-      code: reserved.code,
-      message: reserved.message,
-    };
+    // R10：子额满员是配额拒绝，不是权限拒绝——映射为稳定错误码。
+    return reserved.message.startsWith("maxActiveChildren")
+      ? {
+          ok: false,
+          code: "quota_exceeded",
+          message: reserved.message,
+        }
+      : { ok: false, code: reserved.code, message: reserved.message };
   }
   return { parentRef, childRef: reserved.childRef };
 }

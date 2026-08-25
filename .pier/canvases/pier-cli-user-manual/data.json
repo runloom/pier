@@ -650,8 +650,8 @@
           "id": "agents-start",
           "name": "agents start",
           "status": "shipped",
-          "synopsis": "pier agents start <id> [--cwd <path>] [--window <id>] --json",
-          "description": "启动持久智能体并打开对应终端。例：pier agents start claude。--agent 仍可用。",
+          "synopsis": "pier agents start <id> [--cwd <path>] [--window <id>] [--placement tab|right|below] [--stdin|--text <text>|--text-file <path>] --json",
+          "description": "启动持久智能体并打开对应终端（须在 Pier 智能体面板内运行；首轮提示词可经 --stdin 传入，作为后台标签委派子智能体）。例：echo \"只回复 OK\" | pier agents start omp --stdin。--agent 仍可用。",
           "humanSample": "pier agents start claude"
         },
         {

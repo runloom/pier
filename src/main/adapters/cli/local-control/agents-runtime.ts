@@ -3,6 +3,7 @@ import type { LocalControlServerFrame } from "@shared/contracts/local-control/fr
 import type { CapabilityAuthority } from "../../../services/capability/authority.ts";
 import type { RuntimeControlService } from "../../../services/runtime-control/service.ts";
 import { handleAgentsRuntimeOp } from "./agents-runtime-ops.ts";
+import type { ResolveOriginPanel } from "./capability-hot-path.ts";
 import { controlErrorResponse } from "./discovery.ts";
 import {
   AGENTS_RUNTIME_OPS,
@@ -60,9 +61,10 @@ export function dispatchAgentsRuntimeRequest(args: {
   params: Record<string, unknown>;
   effectKey?: string | undefined;
   principalRef?: string | undefined;
-  bootId: string;
   runtimeControl: RuntimeControlService | undefined;
+  bootId: string;
   capabilityAuthority?: CapabilityAuthority | undefined;
+  resolveOriginPanel?: ResolveOriginPanel | undefined;
   receipts: EffectReceiptStore;
   inflight: Map<string, InflightEntry>;
   disposed: () => boolean;
@@ -77,6 +79,7 @@ export function dispatchAgentsRuntimeRequest(args: {
     bootId,
     runtimeControl,
     capabilityAuthority,
+    resolveOriginPanel,
     receipts,
     inflight,
     disposed,
@@ -114,6 +117,7 @@ export function dispatchAgentsRuntimeRequest(args: {
         principalRef,
         runtimeControl,
         capabilityAuthority,
+        resolveOriginPanel,
         receipts,
         signal: ac.signal,
         bootId,
@@ -144,6 +148,7 @@ export function dispatchAgentsRuntimeRequest(args: {
       principalRef,
       runtimeControl,
       capabilityAuthority,
+      resolveOriginPanel,
       receipts,
       bootId,
     });

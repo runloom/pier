@@ -39,6 +39,7 @@ export function invalidParams(
 export type AgentsServiceResult =
   | { ok: true; data: unknown }
   | {
+      details?: unknown;
       ok: false;
       code: LocalControlErrorCode;
       message: string;
@@ -52,7 +53,12 @@ export function mapServiceResult(
   }
 ): LocalControlServerFrame {
   if (!result.ok) {
-    return controlErrorResponse(requestId, result.code, result.message);
+    return controlErrorResponse(
+      requestId,
+      result.code,
+      result.message,
+      result.details
+    );
   }
   return okResponse(requestId, result.data, receiptMeta?.effectRevision);
 }
@@ -99,6 +105,9 @@ export async function runWriteWithFence(args: {
           error: {
             code: result.code,
             message: result.message,
+            ...(result.details === undefined
+              ? {}
+              : { details: result.details }),
           },
         }),
   });

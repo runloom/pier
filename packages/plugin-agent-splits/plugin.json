@@ -1,0 +1,205 @@
+{
+  "apiVersion": 1,
+  "commands": [],
+  "description": "Connect splits opened by assistants to workbench panels.",
+  "engines": {
+    "pier": ">=0.1.0 <0.2.0"
+  },
+  "id": "pier.agent-splits",
+  "locales": {
+    "en": {
+      "name": "Agent splits",
+      "description": "Connect splits opened by assistants to workbench panels.",
+      "settingsPages": {
+        "pier.agent-splits.adapter": {
+          "title": "Agent splits"
+        }
+      },
+      "settings": {
+        "pier.agent-splits.adapter.enabled": {
+          "label": "Bridge assistant splits",
+          "description": "Connect splits opened by assistants to workbench panels. Applies to sessions opened afterwards."
+        },
+        "pier.agent-splits.adapter.agents.claude": {
+          "label": "Claude sessions",
+          "description": "Apply the bridge for Claude sessions."
+        },
+        "pier.agent-splits.adapter.agents.opencode": {
+          "label": "OpenCode sessions",
+          "description": "Apply the bridge for OpenCode sessions."
+        },
+        "pier.agent-splits.preset.claudeTeams": {
+          "label": "Preset: Multi-agent sessions for Claude",
+          "description": "Start Claude in its multi-agent mode (requires Claude support)."
+        },
+        "pier.agent-splits.preset.opencodeOmo": {
+          "label": "Preset: Visualization splits for OpenCode",
+          "description": "Start OpenCode with its visualization plugin enabled."
+        }
+      }
+    },
+    "zh-CN": {
+      "name": "智能体分屏",
+      "description": "将智能体打开的分屏接到工作台面板。",
+      "settingsPages": {
+        "pier.agent-splits.adapter": {
+          "title": "智能体分屏"
+        }
+      },
+      "settings": {
+        "pier.agent-splits.adapter.enabled": {
+          "label": "桥接智能体分屏",
+          "description": "将智能体打开的分屏接入工作台面板，仅对之后新开的会话生效。"
+        },
+        "pier.agent-splits.adapter.agents.claude": {
+          "label": "Claude 会话",
+          "description": "对 Claude 会话启用该桥接。"
+        },
+        "pier.agent-splits.adapter.agents.opencode": {
+          "label": "OpenCode 会话",
+          "description": "对 OpenCode 会话启用该桥接。"
+        },
+        "pier.agent-splits.preset.claudeTeams": {
+          "label": "预设：为 Claude 打开多智能体会话",
+          "description": "以多智能体模式启动 Claude（需 Claude 自身支持）。"
+        },
+        "pier.agent-splits.preset.opencodeOmo": {
+          "label": "预设：为 OpenCode 打开可视化分屏",
+          "description": "以可视化插件模式启动 OpenCode。"
+        }
+      }
+    },
+    "ja": {
+      "name": "エージェント分割",
+      "description": "エージェントが開いた分割をワークベンチのパネルにつなぎます。",
+      "settingsPages": {
+        "pier.agent-splits.adapter": {
+          "title": "エージェント分割"
+        }
+      },
+      "settings": {
+        "pier.agent-splits.adapter.enabled": {
+          "label": "エージェント分割をブリッジ",
+          "description": "エージェントが開いた分割をワークベンチのパネルにつなぎます。次に開くセッション以降に適用されます。"
+        },
+        "pier.agent-splits.adapter.agents.claude": {
+          "label": "Claude セッション",
+          "description": "Claude セッションでブリッジを有効にします。"
+        },
+        "pier.agent-splits.adapter.agents.opencode": {
+          "label": "OpenCode セッション",
+          "description": "OpenCode セッションでブリッジを有効にします。"
+        },
+        "pier.agent-splits.preset.claudeTeams": {
+          "label": "プリセット: Claude のマルチエージェントセッション",
+          "description": "Claude をマルチエージェントモードで起動します（Claude 側の対応が必要）。"
+        },
+        "pier.agent-splits.preset.opencodeOmo": {
+          "label": "プリセット: OpenCode の可視化分割",
+          "description": "可視化プラグイン有効で OpenCode を起動します。"
+        }
+      }
+    },
+    "ko": {
+      "name": "에이전트 분할",
+      "description": "에이전트가 연 분할을 워크벤치 패널에 연결합니다.",
+      "settingsPages": {
+        "pier.agent-splits.adapter": {
+          "title": "에이전트 분할"
+        }
+      },
+      "settings": {
+        "pier.agent-splits.adapter.enabled": {
+          "label": "에이전트 분할 브리지",
+          "description": "에이전트가 연 분할을 워크벤치 패널에 연결합니다. 이후 새로 열리는 세션에 적용됩니다."
+        },
+        "pier.agent-splits.adapter.agents.claude": {
+          "label": "Claude 세션",
+          "description": "Claude 세션에 브리지를 적용합니다."
+        },
+        "pier.agent-splits.adapter.agents.opencode": {
+          "label": "OpenCode 세션",
+          "description": "OpenCode 세션에 브리지를 적용합니다."
+        },
+        "pier.agent-splits.preset.claudeTeams": {
+          "label": "프리셋: Claude 멀티 에이전트 세션",
+          "description": "멀티 에이전트 모드로 Claude를 시작합니다(Claude 지원 필요)."
+        },
+        "pier.agent-splits.preset.opencodeOmo": {
+          "label": "프리셋: OpenCode 시각화 분할",
+          "description": "시각화 플러그인을 활성화하여 OpenCode를 시작합니다."
+        }
+      }
+    }
+  },
+  "main": "dist/main.js",
+  "name": "Agent splits",
+  "panels": [],
+  "permissions": [
+    "terminal:launchWrap",
+    "terminal:control",
+    "terminal:read",
+    "panel:control",
+    "panel:read"
+  ],
+  "publisher": "Pier",
+  "renderer": "dist/renderer.js",
+  "settingsPages": [
+    {
+      "id": "pier.agent-splits.adapter"
+    }
+  ],
+  "terminalStatusItems": [],
+  "version": "1.5.1",
+  "workbenchWidgets": [],
+  "configuration": {
+    "properties": {
+      "pier.agent-splits.adapter.enabled": {
+        "default": true,
+        "description": "Bridge splits opened by assistants into workbench panels.",
+        "order": 1,
+        "type": "boolean"
+      },
+      "pier.agent-splits.adapter.agents.claude": {
+        "default": true,
+        "description": "Apply the bridge for Claude sessions.",
+        "order": 2,
+        "type": "boolean",
+        "visibleWhen": {
+          "equals": true,
+          "key": "pier.agent-splits.adapter.enabled"
+        }
+      },
+      "pier.agent-splits.adapter.agents.opencode": {
+        "default": true,
+        "description": "Apply the bridge for OpenCode sessions.",
+        "order": 3,
+        "type": "boolean",
+        "visibleWhen": {
+          "equals": true,
+          "key": "pier.agent-splits.adapter.enabled"
+        }
+      },
+      "pier.agent-splits.preset.claudeTeams": {
+        "default": false,
+        "description": "Open multi-agent sessions for Claude (requires Claude support).",
+        "order": 5,
+        "type": "boolean",
+        "visibleWhen": {
+          "equals": true,
+          "key": "pier.agent-splits.adapter.enabled"
+        }
+      },
+      "pier.agent-splits.preset.opencodeOmo": {
+        "default": false,
+        "description": "Open splits for OpenCode via its visualization plugin.",
+        "order": 6,
+        "type": "boolean",
+        "visibleWhen": {
+          "equals": true,
+          "key": "pier.agent-splits.adapter.enabled"
+        }
+      }
+    }
+  }
+}

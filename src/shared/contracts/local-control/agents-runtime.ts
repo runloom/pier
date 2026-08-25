@@ -29,8 +29,35 @@ export const agentsStartParamsSchema = z
     worktreeKey: nonEmpty.optional(),
     incarnationId: nonEmpty.optional(),
     windowId: nonEmpty.optional(),
+    /** 发起方面板身份（必填；由 CLI 从 PIER_PANEL_ID / PIER_WINDOW_ID 注入）。 */
+    origin: z.object({ panelId: nonEmpty, windowId: nonEmpty }).strict(),
+    promptText: z.string().min(1).optional(),
+    placement: z.enum(["tab", "right", "below"]).optional(),
   })
   .strict();
+
+/** start prompt 单独字节上限（UTF-8）；CLI 与服务端分权校验。 */
+export const AGENTS_START_PROMPT_MAX_BYTES = 65_536;
+/** marker 前缀 + promptText 组装后的字节上限（64KB + 4KB 余量）。 */
+export const AGENTS_START_ASSEMBLED_MAX_BYTES = 69_632;
+
+/**
+ * agents.start 失败时随错误返回的重试凭证：同 boot 内凭 operationId
+ * 幂等重放安全；跨 boot 不适用（scope 固定 same-boot）。
+ */
+export const agentsStartRetryDetailsSchema = z
+  .object({
+    operationId: nonEmpty,
+    observedBootId: nonEmpty.optional(),
+    scope: z.literal("same-boot"),
+    crashAmbiguous: z.boolean(),
+    safeToRetry: z.boolean(),
+  })
+  .strict();
+
+export type AgentsStartRetryDetails = z.infer<
+  typeof agentsStartRetryDetailsSchema
+>;
 
 export type AgentsStartParams = z.infer<typeof agentsStartParamsSchema>;
 

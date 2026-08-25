@@ -101,4 +101,22 @@ describe("CapabilityAuthority (W4-S4 / W6-S4)", () => {
       }).ok
     ).toBe(true);
   });
+
+  it("default maxActiveChildren is 4 (R10 boot-scoped quota)", () => {
+    resetRuntimeReservationsForTests();
+    const ca = createCapabilityAuthority();
+    for (let i = 0; i < 4; i += 1) {
+      const reserved = reserveChildForStart({
+        authority: ca,
+        principalRef: "p",
+      });
+      expect(reserved && "childRef" in reserved).toBe(true);
+    }
+    const fifth = reserveChildForStart({ authority: ca, principalRef: "p" });
+    expect(fifth).toMatchObject({
+      ok: false,
+      code: "quota_exceeded",
+      message: "maxActiveChildren (4) exceeded for parent",
+    });
+  });
 });

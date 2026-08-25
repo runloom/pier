@@ -1,3 +1,4 @@
+// Class B: latest-version probe over allowlisted hosts with host env (curl).
 import { execFile } from "node:child_process";
 import { extractVersionFromOutput } from "@shared/agent-lifecycle/version-compare.ts";
 import type { AgentLatestProbe } from "./specs/types.ts";

@@ -11,7 +11,7 @@ const PRODUCTION_SOURCE_ROOTS = [
   join(ROOT, "packages", "plugin-claude"),
   join(ROOT, "packages", "plugin-grok"),
   join(ROOT, "packages", "plugin-ssh"),
-  join(ROOT, "packages", "plugin-tmux"),
+  join(ROOT, "packages", "plugin-agent-splits"),
 ];
 const ALLOWED_ALERT_DIALOG_IMPORTS = new Set([
   "src/renderer/components/common/dialogs/host.tsx",

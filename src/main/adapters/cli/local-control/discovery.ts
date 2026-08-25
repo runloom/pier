@@ -13,14 +13,15 @@ import { digestRequestParams, type EffectReceiptStore } from "./receipts.ts";
 export function controlErrorResponse(
   requestId: string,
   code: LocalControlErrorCode,
-  message: string
+  message: string,
+  details?: unknown
 ): LocalControlServerFrame {
   return {
     apiVersion: LOCAL_CONTROL_API_VERSION,
     type: "response",
     requestId,
     ok: false,
-    error: { code, message },
+    error: { code, message, ...(details === undefined ? {} : { details }) },
   };
 }
 
