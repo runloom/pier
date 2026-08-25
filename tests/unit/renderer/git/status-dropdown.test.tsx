@@ -319,7 +319,7 @@ describe("GitStatusDropdown", () => {
     const pluginContext = makePluginContext();
     await openDropdown(pluginContext, DIRTY_MODEL);
 
-    expect(screen.getByRole("menu", { name: "Git status" })).toHaveClass(
+    expect(screen.getByRole("menu", { name: "git status" })).toHaveClass(
       "w-72"
     );
     expect(screen.getByTestId("git-status-row-changes")).toHaveAttribute(
