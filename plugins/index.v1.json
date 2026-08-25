@@ -1,38 +1,6 @@
 {
-  "generatedAt": 1787629385190,
+  "generatedAt": 1787395754574,
   "plugins": {
-    "pier.agent-splits": {
-      "description": "Connect splits opened by assistants to workbench panels.",
-      "displayName": "Agent splits",
-      "id": "pier.agent-splits",
-      "latest": "1.5.1",
-      "locales": {
-        "en": {
-          "name": "Agent splits",
-          "description": "Connect splits opened by assistants to workbench panels."
-        },
-        "zh-CN": {
-          "name": "智能体分屏",
-          "description": "将智能体打开的分屏接到工作台面板。"
-        },
-        "ja": {
-          "name": "エージェント分割",
-          "description": "エージェントが開いた分割をワークベンチのパネルにつなぎます。"
-        },
-        "ko": {
-          "name": "에이전트 분할",
-          "description": "에이전트가 연 분할을 워크벤치 패널에 연결합니다."
-        }
-      },
-      "versions": {
-        "1.5.1": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-agent-splits-v1.5.1/pier.agent-splits-1.5.1.tgz",
-          "pier": ">=0.1.0 <0.2.0",
-          "sha256": "6d56d1bca26ec22e86edae054173ce8309a45a7d7cf374ba845c78771bde6d30",
-          "size": 57367
-        }
-      }
-    },
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
       "displayName": "Claude Account Management",
@@ -57,6 +25,54 @@
         }
       },
       "versions": {
+        "1.3.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.2/pier.claude-1.3.2.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "3855c1d9a3a46ff92cf32334815454914ab6940c76ba0e2aa6760de9ebec3adb",
+          "size": 571967
+        },
+        "1.3.3": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.3/pier.claude-1.3.3.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "335ed4d3cd155984df49141c48323cc11b8209d125eb17203a5cdb71d40363c5",
+          "size": 573503
+        },
+        "1.3.4": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.4/pier.claude-1.3.4.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "93b763941cf286e29c790a0baa4692ff019219a049579b8837a8fe620bee3336",
+          "size": 577087
+        },
+        "1.3.5": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.5/pier.claude-1.3.5.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "8c59d3dc1290100676fdc216d755c60b178b8e713a0194816c3c4201c8cb3790",
+          "size": 632900
+        },
+        "1.3.6": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.6/pier.claude-1.3.6.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "290d8ca047bf4d2189f4ab1374dde0238df7abb5620c5d057606cd280acef6cd",
+          "size": 671305
+        },
+        "1.3.7": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.7/pier.claude-1.3.7.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "4004a29d675a3a72491d287aa46eaa417bd5c7f3c23aa3e0ca7dc96690cb8c37",
+          "size": 675401
+        },
+        "1.3.8": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.8/pier.claude-1.3.8.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "867f3b406c1520f96836216c383a6f83469036220a3f44e404e1d2a7d8dac14a",
+          "size": 677449
+        },
+        "1.3.9": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.9/pier.claude-1.3.9.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "399bf986a7a9a8dc12fa07bcff0466ccee6c403b1e859c98ea63f565cfe26478",
+          "size": 678473
+        },
         "1.3.10": {
           "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.10/pier.claude-1.3.10.tgz",
           "pier": ">=0.1.0 <0.2.0",
@@ -89,6 +105,72 @@
         }
       },
       "versions": {
+        "1.4.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.2/pier.codex-1.4.2.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "fe71d261f46b9110837ed3e450085d25d3fddb0e27f585e14ec335e9a9ce008d",
+          "size": 601668
+        },
+        "1.4.3": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.3/pier.codex-1.4.3.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "b619fc16af6d173cf66d06731f91feb3f67d2941958d8754a7418b5167091cca",
+          "size": 615492
+        },
+        "1.4.4": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.4/pier.codex-1.4.4.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "b6f190f437891033a6cb0701cc8c90587bfbddd233af62db940336fb5a8833f7",
+          "size": 617028
+        },
+        "1.4.5": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.5/pier.codex-1.4.5.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "51d474aecc005a515b51bbefe7d7c76f927b02b89e9946d61ae3190630b76983",
+          "size": 620612
+        },
+        "1.4.6": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.6/pier.codex-1.4.6.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "0e136d0f6db9da228f121705ef98e0329eb94676142b769cc780e59da16ee2a0",
+          "size": 624196
+        },
+        "1.4.7": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.7/pier.codex-1.4.7.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "794c823c348338ae23589b07aba8dce836c7bf3445903449f3a0327cb77bb871",
+          "size": 666185
+        },
+        "1.4.8": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.8/pier.codex-1.4.8.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "29e53113cc1104fef015735cdcaa0721d0e7fc7dcef46cf059463bd79e74716d",
+          "size": 670793
+        },
+        "1.4.9": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.9/pier.codex-1.4.9.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "963366e5a29ffc6cb0583c7430349024df3a66cef4159a52a570d97b88669e2e",
+          "size": 673865
+        },
+        "1.4.10": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.10/pier.codex-1.4.10.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "d70f1ce9b5d9ca4ea26e80d4ca195cc3e26f5065c60b1534f2db1053d92916bb",
+          "size": 674377
+        },
+        "1.4.11": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.11/pier.codex-1.4.11.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "6eacd522281067f90a12d39ee73603d66ee9b9fdce5cb802c134bc31ac919c40",
+          "size": 675401
+        },
+        "1.4.12": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.12/pier.codex-1.4.12.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "6c345490c2dd0e39c8a44218e95b7914b0e87f96aee8b5c439b6078e361709a2",
+          "size": 693833
+        },
         "1.4.13": {
           "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.13/pier.codex-1.4.13.tgz",
           "pier": ">=0.1.0 <0.2.0",
@@ -121,6 +203,78 @@
         }
       },
       "versions": {
+        "1.1.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.2/pier.grok-1.1.2.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "3a3a4197449875241cea7245e316cb0f658f781d672f03d4772e88498eb52932",
+          "size": 645700
+        },
+        "1.1.3": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.3/pier.grok-1.1.3.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "4088f563813ea5c404c0ddcbf627d7dcd8234c5226a381d8296858d830eac4bb",
+          "size": 651844
+        },
+        "1.1.4": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.4/pier.grok-1.1.4.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "e79d1a98624dd6a7c1dec9429a055f0ed6a809060b87496635948a985dccdc1d",
+          "size": 663625
+        },
+        "1.1.5": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.5/pier.grok-1.1.5.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "8f66a58e68787b04afb2770ca651470d6a590fa49fc665b60ef113c73aa0b32e",
+          "size": 666697
+        },
+        "1.1.6": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.6/pier.grok-1.1.6.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "e87a7d60558dee799a67ea0e4e899e8b1fcb1163f1e8cbb7618d34c19281bc28",
+          "size": 671305
+        },
+        "1.1.7": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.7/pier.grok-1.1.7.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "7165de887ba671f62764345143c429e301638fdd577a00785c85a799d4bc4c06",
+          "size": 713801
+        },
+        "1.1.8": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.8/pier.grok-1.1.8.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "1d330759603dde5d89074a31ca42b09af514f84b7d4f12ded0c121dc197829b1",
+          "size": 718921
+        },
+        "1.1.9": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.9/pier.grok-1.1.9.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "42a6b61c21c140790df455b22f1ec4900306d722a361265e0887f6a3b54ba111",
+          "size": 721998
+        },
+        "1.1.10": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.10/pier.grok-1.1.10.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "d359a8ecaa378fdc006ae431fd0c94b724708c197a36c538ba8f5d837453dded",
+          "size": 722510
+        },
+        "1.1.11": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.11/pier.grok-1.1.11.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "2d55c1d746fcfde6f775bf790764df162db3a15633e6faf8974f55dd602ac4a5",
+          "size": 733262
+        },
+        "1.1.12": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.12/pier.grok-1.1.12.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "9e56e44e5faa6eaf9a8877050030d8af7e2e1951bf58fdc6825d8d8e8ee75322",
+          "size": 735310
+        },
+        "1.1.13": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.13/pier.grok-1.1.13.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "507ce0e13431c88b7eee8055c05e47d42230e47c296567a6e01c2a5a085f3804",
+          "size": 759374
+        },
         "1.1.14": {
           "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.14/pier.grok-1.1.14.tgz",
           "pier": ">=0.1.0 <0.2.0",
@@ -153,6 +307,42 @@
         }
       },
       "versions": {
+        "1.0.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.2/pier.ssh-1.0.2.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "497de89572cc12a24a0a7e5542d892f572532199b66f74a00ed84566cb4011ee",
+          "size": 367664
+        },
+        "1.0.3": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.3/pier.ssh-1.0.3.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "adb3aee3a7aeb65c6503b20aee6c9e25fd3433cc467a894cda8498474509c0b5",
+          "size": 368688
+        },
+        "1.0.4": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.4/pier.ssh-1.0.4.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "4e74b0aa6dec7d358c33e41f6c5e93077215e95440f28cd55bacd2aab7db76d1",
+          "size": 370736
+        },
+        "1.0.5": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.5/pier.ssh-1.0.5.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "7cedff30ff46bbda52ee0a60a886940201cdb44198216a1d7c40d82b96d8b189",
+          "size": 371248
+        },
+        "1.0.6": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.6/pier.ssh-1.0.6.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "db7d438b397928da26c21934dda4c080b87b286ce366a7da3e4da2188335f29f",
+          "size": 373808
+        },
+        "1.0.7": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.7/pier.ssh-1.0.7.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "257df886f85cc751c945122459323fdb75293d4eb1e2d0a8617b18db8e7ca878",
+          "size": 373808
+        },
         "1.0.8": {
           "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.8/pier.ssh-1.0.8.tgz",
           "pier": ">=0.1.0 <0.2.0",
@@ -160,13 +350,45 @@
           "size": 382512
         }
       }
+    },
+    "pier.tmux": {
+      "description": "Connect splits opened by assistants to workbench panels.",
+      "displayName": "Native splits",
+      "id": "pier.tmux",
+      "latest": "1.0.0",
+      "locales": {
+        "en": {
+          "name": "Native splits",
+          "description": "Connect splits opened by assistants to workbench panels."
+        },
+        "zh-CN": {
+          "name": "工作台分屏",
+          "description": "将智能体打开的分屏接到工作台面板。"
+        },
+        "ja": {
+          "name": "ワークベンチ分割",
+          "description": "エージェントが開いた分割をワークベンチのパネルにつなぎます。"
+        },
+        "ko": {
+          "name": "워크벤치 분할",
+          "description": "에이전트가 연 분할을 워크벤치 패널에 연결합니다."
+        }
+      },
+      "versions": {
+        "1.0.0": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-tmux-v1.0.0/pier.tmux-1.0.0.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "ff1ad0e9f5b9552e6346b37df625c99dff648175fb5fe95704a6ba638b1ebb79",
+          "size": 47127
+        }
+      }
     }
   },
-  "sequence": 52,
+  "sequence": 36,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "2hyfZd4+/svggxTDyycYIAAwZFbVL7UNbEYoKHZtisn4xQEKhj9gFuOyYC5wUnvxJordTDQeNy3YZAlFu8sKAQ=="
+    "value": "/bGJoC6uDOwWuFxBwr4th478ZHrXemjzK8V4Q5O+d64R7tZJ2WXxjcscoWUY9S2S5VOqmzXMB6bWLY/07ZfCCQ=="
   }
 }
