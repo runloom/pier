@@ -167,6 +167,12 @@
             core.onMetricsUpdate = { [weak self] in
                 self?.updateMetalLayerMetrics()
             }
+            core.onMouseShape = { [weak self] shape in
+                self?.applyCursor(for: shape)
+            }
+            core.onMouseVisibility = { [weak self] visible in
+                self?.applyCursorVisibility(visible)
+            }
             core.onPresentationRequested = { [weak self] request in
                 self?.onFramePresentationRequested?(request)
             }

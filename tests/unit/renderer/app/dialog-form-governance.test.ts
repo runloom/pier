@@ -12,7 +12,7 @@ const PRODUCTION_SOURCE_ROOTS = [
   join(ROOT, "packages", "plugin-claude"),
   join(ROOT, "packages", "plugin-grok"),
   join(ROOT, "packages", "plugin-ssh"),
-  join(ROOT, "packages", "plugin-tmux"),
+  join(ROOT, "packages", "plugin-agent-splits"),
 ];
 
 /** Content-dialog commit forms that must use setFooter (not body fake-footer). */
@@ -283,7 +283,7 @@ describe("dialog form governance", () => {
       join(ROOT, "packages", "plugin-codex", "src", "renderer"),
       join(ROOT, "packages", "plugin-grok", "src", "renderer"),
       join(ROOT, "packages", "plugin-ssh", "src", "renderer"),
-      join(ROOT, "packages", "plugin-tmux", "src", "renderer"),
+      join(ROOT, "packages", "plugin-agent-splits", "src", "renderer"),
       join(ROOT, "src", "plugins", "builtin"),
     ]) {
       for (const file of walkSourceFiles(root)) {

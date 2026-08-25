@@ -48,7 +48,7 @@ const FIRST_PARTY_PLUGIN_ICONS: Readonly<Record<string, PluginDisplayIcon>> = {
   "pier.codex": agentBrandIcon("codex"),
   "pier.grok": agentBrandIcon("grok"),
   "pier.ssh": Server,
-  "pier.tmux": Columns2,
+  "pier.agent-splits": Columns2,
 };
 
 export function resolvePluginIcon(pluginId: string): PluginDisplayIcon {

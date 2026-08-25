@@ -197,6 +197,9 @@ async function addTerminalForCommand(
       }
       panelId =
         workspace.addTerminal({
+          ...(command.backgroundCreate && {
+            backgroundCreate: command.backgroundCreate,
+          }),
           ...(command.context && {
             context: command.context,
           }),

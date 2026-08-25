@@ -124,7 +124,11 @@ describe("agents runtime over real local-control socket", () => {
         requestId: "r-start",
         op: "agents.start",
         effectKey: strongKey("start"),
-        params: { agentId: "codex", cwd: "/tmp/repo" },
+        params: {
+          agentId: "codex",
+          cwd: "/tmp/repo",
+          origin: { panelId: "panel_sock", windowId: "win_sock" },
+        },
       });
       const frames1 = (await collectFrames(
         socketPath,

@@ -343,6 +343,8 @@ function formatNotificationsHuman(type, data) {
   return "";
 }
 
+const AGENTS_START_PROMPT_MAX_BYTES = 65_536; // @shared agents-runtime.ts
+
 function exitCodeForV2Response(response) {
   if (response.ok) {
     const data = response.data;
@@ -365,6 +367,21 @@ function exitCodeForV2Response(response) {
   if (code === "observation_timeout" || code === "timeout") {
     return 124;
   }
+  if (code === "invalid_origin") {
+    return 3;
+  }
+  if (code === "quota_exceeded") {
+    return 4;
+  }
+  if (code === "prompt_too_long") {
+    return 5;
+  }
+  if (code === "cross_window_unsupported") {
+    return 6;
+  }
+  if (code === "prompt_undeliverable") {
+    return 7;
+  }
   return 1;
 }
 
@@ -380,7 +397,7 @@ async function readTextSource(source) {
   }
   if (stdinStream.isTTY) {
     throw new Error(
-      "agents turn needs text via --text, --text-file, or stdin redirect (--stdin)"
+      `agents ${source.opName ?? "turn"} needs text via --text, --text-file, or stdin redirect (--stdin)`
     );
   }
   const chunks = [];
@@ -429,11 +446,31 @@ try {
   if (parsed.protocol === "v2") {
     let params = parsed.params ?? {};
     if (parsed.op === "agents.turn") {
-      const text = await readTextSource(parsed.textSource);
+      const text = await readTextSource({
+        ...parsed.textSource,
+        opName: "turn",
+      });
       if (!text || text.length === 0) {
         throw new Error("agents turn text is empty");
       }
       params = { ...params, text };
+    }
+    if (parsed.op === "agents.start" && parsed.textSource) {
+      const text = await readTextSource({
+        ...parsed.textSource,
+        opName: "start",
+      });
+      if (!text || text.length === 0) {
+        throw new Error("agents start prompt is empty");
+      }
+      // CLI 侧只校验 prompt 本身；组装后上限由服务端把关（64KB + marker 余量）。
+      if (Buffer.byteLength(text, "utf8") > AGENTS_START_PROMPT_MAX_BYTES) {
+        console.error(
+          `prompt_too_long: agents start prompt exceeds ${AGENTS_START_PROMPT_MAX_BYTES} bytes`
+        );
+        process.exit(5);
+      }
+      params = { ...params, promptText: text };
     }
     const waitTimeoutMs =
       typeof params.timeoutMs === "number" && Number.isFinite(params.timeoutMs)
@@ -496,12 +533,13 @@ try {
       }
     } else if (response.ok && parsed.op === "agents.screen") {
       process.stdout.write(`${response.data?.screen?.text ?? ""}\n`);
-    } else if (response.ok && parsed.op === "agents.turn") {
-      process.stdout.write("accepted\n");
     } else if (!response.ok) {
       const code = response.error?.code ?? "error";
       const message = response.error?.message ?? "command failed";
       console.error(`${code}: ${message}`);
+      if (response.error?.details !== undefined) {
+        console.error(JSON.stringify(response.error.details));
+      }
     }
     process.exit(exitCodeForV2Response(response));
   }

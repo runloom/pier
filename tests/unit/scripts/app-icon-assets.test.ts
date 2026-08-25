@@ -12,6 +12,11 @@ import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { parseIcns } from "../../../scripts/app-icon-icns.mjs";
+import {
+  layeredIconFingerprint,
+  MAC_ICON_RENDITION_NAME,
+  tahoeMarkSvg,
+} from "../../../scripts/app-icon-layered.mjs";
 
 const ROOT = process.cwd();
 
@@ -72,6 +77,10 @@ const LEGACY_SYSTEM_FRAME_PIXEL_HASHES = new Map([
     "124257211d7b06681343a29866c871342d9b5970eeaefa2355129602fad75560",
   ],
 ]);
+
+// Pin the committed Tahoe mark pixels so a plated render cannot ship silently.
+const LAYERED_MARK_PIXEL_HASH =
+  "ac248f107e01d0e324aafad267229e2b58eeacb2bab356ebd184892e5bcd2cce";
 
 function paeth(left: number, above: number, upperLeft: number): number {
   const prediction = left + above - upperLeft;
@@ -592,9 +601,88 @@ describe("Pier application icon sources", () => {
     }
   });
 
+  it("ships the Icon Composer document with the approved fill and mark layer", () => {
+    const document = JSON.parse(read("build/app-icon.icon/icon.json")) as {
+      fill?: { solid?: string };
+      groups?: { layers?: Record<string, unknown>[] }[];
+      "supported-platforms"?: { squares?: string };
+    };
+
+    // #101725 — the Big Sur plate color, now owned by the Tahoe background fill.
+    expect(document.fill?.solid).toBe("srgb:0.06275,0.09020,0.14510,1.00000");
+    expect(document.groups?.[0]?.layers?.[0]?.["image-name"]).toBe(
+      "pier-mark.png"
+    );
+    expect(document["supported-platforms"]?.squares).toBe("shared");
+  });
+
+  it("derives the Tahoe mark by stripping the plate and cropping to the optical plate box", () => {
+    const mark = tahoeMarkSvg(read("build/app-icon-master.svg"));
+
+    expect(mark).not.toContain('fill="#101725"');
+    expect(mark).not.toContain('width="824" height="824"');
+    const viewBox = mark.match(/viewBox="([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)"/);
+    expect(viewBox).not.toBeNull();
+    const [x, y, width, height] = (viewBox as RegExpMatchArray)
+      .slice(1)
+      .map(Number);
+    expect(x).toBeCloseTo(75.28, 6);
+    expect(y).toBeCloseTo(75.28, 6);
+    expect(width).toBeCloseTo(873.44, 6);
+    expect(height).toBeCloseTo(873.44, 6);
+    expect(() => tahoeMarkSvg(mark)).toThrow(/plate markers/);
+  });
+
+  it("renders the layered mark asset at 1024px with plate-crop framing", () => {
+    const decoded = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/app-icon.icon/Assets/pier-mark.png"))
+    );
+
+    expect([decoded.width, decoded.height]).toEqual([1024, 1024]);
+    expect(cornerAlphas(decoded.width, decoded.height, decoded.pixels)).toEqual(
+      [0, 0, 0, 0]
+    );
+    const centerAlpha = decoded.pixels.readUInt8(
+      (512 * decoded.width + 512) * 4 + 3
+    );
+    expect(centerAlpha).toBe(255);
+    expect(
+      decodedPixelHash(
+        readFileSync(join(ROOT, "build/app-icon.icon/Assets/pier-mark.png"))
+      )
+    ).toBe(LAYERED_MARK_PIXEL_HASH);
+  });
+
+  it("commits the compiled layered rendition as Assets.car", () => {
+    const car = readFileSync(join(ROOT, "build/Assets.car"));
+
+    expect(car.toString("ascii", 0, 8)).toBe("BOMStore");
+    expect(car.length).toBeGreaterThan(100_000);
+    const haystack = car.toString("latin1");
+    expect(haystack).toContain(MAC_ICON_RENDITION_NAME);
+    expect(haystack).toContain("pier-mark");
+  });
+
+  it("keeps the committed Assets.car fresh against the icon document fingerprint", () => {
+    const sidecar = read("build/Assets.car.inputs");
+
+    expect(sidecar).toMatch(/^[0-9a-f]{64}\n$/);
+    expect(sidecar).toBe(
+      layeredIconFingerprint(join(ROOT, "build/app-icon.icon"))
+    );
+  });
+
   it("wires the generated icon assets into packaging, development, docs, and CI", () => {
     const builder = read("electron-builder.yml");
     expect(builder).toMatch(/mac:[\s\S]*?icon: build\/icon\.icns/);
+    expect(builder).toMatch(
+      new RegExp(
+        `mac:\\n(?:[^\\n]*\\n)*?  extendInfo:\\n {4}CFBundleIconName: ${MAC_ICON_RENDITION_NAME}`
+      )
+    );
+    expect(builder).toMatch(
+      /mac:\n(?:[^\n]*\n)*? {4}- from: build\/Assets\.car\n\s+to: Assets\.car/
+    );
     expect(builder).toMatch(/win:[\s\S]*?icon: build\/icon\.ico/);
     expect(builder).toMatch(/linux:[\s\S]*?icon: build\/icons/);
 
@@ -608,13 +696,17 @@ describe("Pier application icon sources", () => {
     expect(development).toContain("build/app-icon-master.svg");
     expect(development).toContain("build/app-icon-micro.svg");
     expect(development).toContain("brew install librsvg");
+    expect(development).toContain("actool");
 
     const ci = read(".github/workflows/ci.yml");
     expect(ci).toContain("'build/app-icon-*.svg'");
+    expect(ci).toContain("'build/app-icon.icon/**'");
     expect(ci).toContain("'build/design-sources/pier-logo.svg'");
     expect(ci).toContain("'build/icon.*'");
     expect(ci).toContain("'build/icon-dock.png'");
     expect(ci).toContain("'build/icons/**'");
+    expect(ci).toContain("'build/Assets.car'");
+    expect(ci).toContain("'build/Assets.car.inputs'");
     expect(ci).toContain("mac_icons:");
     expect(ci).toContain("runs-on: macos-15");
     expect(ci).toContain("tests/unit/scripts/app-icon-assets.test.ts");

@@ -1,3 +1,4 @@
+// Class B: version probe of the resolved agent binary with host env.
 import { execFile } from "node:child_process";
 import { extractVersionFromOutput } from "@shared/agent-lifecycle/version-compare.ts";
 

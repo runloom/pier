@@ -5,6 +5,11 @@
 //   - app-icon-micro.svg: I rendition for macOS 16–128px and development Dock.
 //   - app-icon-unplated.svg: transparent 1024×1024 mark for Windows, Linux,
 //     and any consumer that wraps the bitmap in its own rounded container.
+//   - app-icon.icon: Icon Composer document for macOS 26+. Its mark layer
+//     (Assets/pier-mark.png) is regenerated here from app-icon-master.svg and
+//     the document is compiled with Xcode's actool into build/Assets.car so
+//     Tahoe renders the layered rendition natively instead of boxing the
+//     legacy ICNS onto a system plate.
 //
 // Conversion uses electron-builder's pinned official icons toolset, which produces
 // valid ICNS/ICO/icon sets consistently across host macOS versions. The macOS
@@ -25,6 +30,11 @@ import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mergeIcnsRenditions } from "./app-icon-icns.mjs";
+import {
+  buildMacLayeredIcon,
+  compileIconDocumentWithActool,
+  MAC_ICON_DOCUMENT,
+} from "./app-icon-layered.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_BUILD_DIRECTORY = join(ROOT, "build");
@@ -34,6 +44,9 @@ const PUBLISHED_TARGETS = Object.freeze([
   "icon.png",
   "icon-dock.png",
   "icons",
+  "app-icon.icon",
+  "Assets.car",
+  "Assets.car.inputs",
 ]);
 
 const requireFromElectronBuilder = createRequire(
@@ -72,6 +85,16 @@ function assertRasterizerAvailable(command) {
   if (result.error || result.status !== 0) {
     throw new Error(
       "rsvg-convert is required to build Pier icons. Install librsvg first (macOS: brew install librsvg; Debian/Ubuntu: sudo apt install librsvg2-bin).",
+      result.error ? { cause: result.error } : undefined
+    );
+  }
+}
+
+function assertActoolAvailable(command) {
+  const result = spawnSync(command, ["--find", "actool"], { stdio: "ignore" });
+  if (result.error || result.status !== 0) {
+    throw new Error(
+      "Xcode actool is required to compile the macOS 26 layered icon (build/app-icon.icon → build/Assets.car). Install Xcode 26 or newer and select it with xcode-select.",
       result.error ? { cause: result.error } : undefined
     );
   }
@@ -236,19 +259,28 @@ export async function buildAppIcons(options = {}) {
   const outputDirectory = options.outputDirectory ?? DEFAULT_BUILD_DIRECTORY;
   const rsvgCommand = options.rsvgCommand ?? "rsvg-convert";
   const sipsCommand = options.sipsCommand ?? "sips";
+  const xcrunCommand = options.xcrunCommand ?? "xcrun";
   const convertIcons = options.convertIcons ?? runIconsTool;
   const encodeLegacyIcons =
     options.encodeLegacyIcons ?? encodeLegacyIconsWithSips;
+  const compileIconDocument =
+    options.compileIconDocument ?? compileIconDocumentWithActool;
+  const validatePublishedCar =
+    options.validatePublishedCar ?? options.compileIconDocument === undefined;
   const log = options.log ?? console.log;
   const sources = {
     master: join(sourceDirectory, "app-icon-master.svg"),
     micro: join(sourceDirectory, "app-icon-micro.svg"),
     unplated: join(sourceDirectory, "app-icon-unplated.svg"),
+    iconDocument: join(sourceDirectory, MAC_ICON_DOCUMENT),
   };
 
   assertRasterizerAvailable(rsvgCommand);
   if (options.encodeLegacyIcons === undefined) {
     assertSipsAvailable(sipsCommand);
+  }
+  if (options.compileIconDocument === undefined) {
+    assertActoolAvailable(xcrunCommand);
   }
   mkdirSync(outputDirectory, { recursive: true });
   const stagingDirectory = mkdtempSync(
@@ -273,6 +305,16 @@ export async function buildAppIcons(options = {}) {
     buildContainerPng(sources, stagingDirectory, rsvgCommand);
     log("→ build/icon-dock.png 512×512 (macOS development Dock)");
     buildDevDockPng(sources, stagingDirectory, rsvgCommand);
+    log(
+      "→ build/app-icon.icon Assets + build/Assets.car (macOS 26 layered rendition)"
+    );
+    await buildMacLayeredIcon(sources, stagingDirectory, outputDirectory, {
+      compileIconDocument,
+      rsvgCommand,
+      xcrunCommand,
+      rasterize,
+      validatePublishedCar,
+    });
     publishStagedAssets(stagingDirectory, outputDirectory);
     log("✓ icons regenerated");
   } finally {

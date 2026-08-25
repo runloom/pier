@@ -11,8 +11,8 @@ export interface EffectReceipt {
   digest: string;
   effectKey: string;
   effectRevision: number;
-  /** ok=false 时的错误 */
-  error?: { code: string; message: string } | undefined;
+  /** ok=false 时的错误（details 仅首次错误携带；重放路径不回放） */
+  error?: { code: string; message: string; details?: unknown } | undefined;
   /** 成功时 true；失败终态也登记以防同 key 双执行 */
   ok: boolean;
   op: string;

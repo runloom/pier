@@ -32,6 +32,9 @@ export function rendererTerminalOpenCommand(args: {
     ...(args.options.exitPresentation && {
       exitPresentation: args.options.exitPresentation,
     }),
+    ...(args.command.backgroundCreate && {
+      backgroundCreate: args.command.backgroundCreate,
+    }),
     focus: args.command.focus,
     ...(args.options.initialInput && {
       initialInput: args.options.initialInput,

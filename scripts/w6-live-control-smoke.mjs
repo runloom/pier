@@ -2,7 +2,7 @@
 import { spawnSync } from "node:child_process";
 /**
  * local-control 冒烟（需 Pier 已起 + socket）：
- * status/snapshot → cli-human agents.start/turn/screen → snapshot.runtimes
+ * status/snapshot → cli-human agents.start（origin 校验拒绝）→ snapshot.runtimes
  * → watch 错 boot → agents.invoke unsupported
  *
  * 环境：
@@ -118,26 +118,30 @@ async function main() {
     );
   }
 
-  let runtime = null;
+  // agents.start 现要求 origin（Pier 面板内注入）；无真实面板的冒烟环境
+  // 断言 invalid_origin 拒绝——管线机制仍被覆盖。
   try {
     const started = await invokePierControl({
       socketPath,
       op: "agents.start",
-      params: { agentId: "codex", cwd: ROOT },
+      params: {
+        agentId: "codex",
+        cwd: ROOT,
+        origin: { panelId: "panel_smoke_missing", windowId: "win_smoke" },
+      },
       clientKind: "cli-human",
       effectKey: effectKey("start"),
       timeoutMs: 60_000,
     });
-    const ok =
-      started.response?.ok === true &&
-      started.response?.data?.runtime?.runtimeId;
-    runtime = started.response?.data?.runtime ?? null;
+    const rejected =
+      started.response?.ok === false &&
+      started.response?.error?.code === "invalid_origin";
     record(
       results,
       "cli_human.agents.start",
-      Boolean(ok),
-      ok
-        ? `runtimeId=${runtime.runtimeId} gen=${runtime.generation}`
+      Boolean(rejected),
+      rejected
+        ? "invalid_origin as expected"
         : JSON.stringify(started.response).slice(0, 200)
     );
   } catch (err) {
@@ -147,78 +151,6 @@ async function main() {
       false,
       err instanceof Error ? err.message : String(err)
     );
-  }
-
-  if (runtime) {
-    try {
-      const turned = await invokePierControl({
-        socketPath,
-        op: "agents.turn",
-        params: {
-          bootId: runtime.bootId,
-          runtimeId: runtime.runtimeId,
-          generation: runtime.generation,
-          text: "w6-smoke-hello\n",
-        },
-        clientKind: "cli-human",
-        effectKey: effectKey("turn"),
-        timeoutMs: 30_000,
-      });
-      const ok =
-        turned.response?.ok === true &&
-        turned.response?.data?.accepted === true;
-      record(
-        results,
-        "cli_human.agents.turn",
-        ok,
-        JSON.stringify(turned.response?.data ?? turned.response).slice(0, 160)
-      );
-    } catch (err) {
-      record(
-        results,
-        "cli_human.agents.turn",
-        false,
-        err instanceof Error ? err.message : String(err)
-      );
-    }
-
-    try {
-      const screened = await invokePierControl({
-        socketPath,
-        op: "agents.screen",
-        params: {
-          bootId: runtime.bootId,
-          runtimeId: runtime.runtimeId,
-          generation: runtime.generation,
-          maxLines: 50,
-          maxBytes: 8192,
-        },
-        clientKind: "cli-human",
-        timeoutMs: 30_000,
-      });
-      const screen = screened.response?.data?.screen;
-      const ok =
-        screened.response?.ok === true &&
-        screen &&
-        typeof screen.text === "string" &&
-        !("cursor" in screen) &&
-        !("scrollback" in screen);
-      record(
-        results,
-        "cli_human.agents.screen",
-        ok,
-        ok
-          ? `rows=${screen.rows} truncated=${screen.truncated}`
-          : JSON.stringify(screened.response).slice(0, 160)
-      );
-    } catch (err) {
-      record(
-        results,
-        "cli_human.agents.screen",
-        false,
-        err instanceof Error ? err.message : String(err)
-      );
-    }
   }
 
   {

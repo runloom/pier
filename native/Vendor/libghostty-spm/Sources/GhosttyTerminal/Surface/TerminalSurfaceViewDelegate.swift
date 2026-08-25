@@ -148,6 +148,49 @@ public protocol TerminalSurfaceHoverLinkDelegate: TerminalSurfaceViewDelegate {
     func terminalDidUpdateHoverLink(_ url: String?)
 }
 
+/// Mouse cursor shape requested by the core: link hover (`pointer`), terminal
+/// applications via the kitty keyboard protocol, or the terminal default.
+public enum TerminalMouseShape: Sendable {
+    case arrow
+    case text
+    case pointer
+    case grab
+    case grabbing
+    case crosshair
+    case contextMenu
+    case notAllowed
+    case verticalText
+    case resizeLeft
+    case resizeRight
+    case resizeUp
+    case resizeDown
+    case resizeUpDown
+    case resizeLeftRight
+    case unknown
+
+    init(_ raw: ghostty_action_mouse_shape_e) {
+        switch raw {
+        case GHOSTTY_MOUSE_SHAPE_DEFAULT: self = .arrow
+        case GHOSTTY_MOUSE_SHAPE_TEXT: self = .text
+        case GHOSTTY_MOUSE_SHAPE_POINTER: self = .pointer
+        case GHOSTTY_MOUSE_SHAPE_GRAB: self = .grab
+        case GHOSTTY_MOUSE_SHAPE_GRABBING: self = .grabbing
+        case GHOSTTY_MOUSE_SHAPE_CROSSHAIR: self = .crosshair
+        case GHOSTTY_MOUSE_SHAPE_CONTEXT_MENU: self = .contextMenu
+        case GHOSTTY_MOUSE_SHAPE_NOT_ALLOWED: self = .notAllowed
+        case GHOSTTY_MOUSE_SHAPE_VERTICAL_TEXT: self = .verticalText
+        case GHOSTTY_MOUSE_SHAPE_W_RESIZE: self = .resizeLeft
+        case GHOSTTY_MOUSE_SHAPE_E_RESIZE: self = .resizeRight
+
+        case GHOSTTY_MOUSE_SHAPE_N_RESIZE: self = .resizeUp
+        case GHOSTTY_MOUSE_SHAPE_S_RESIZE: self = .resizeDown
+        case GHOSTTY_MOUSE_SHAPE_NS_RESIZE: self = .resizeUpDown
+        case GHOSTTY_MOUSE_SHAPE_EW_RESIZE: self = .resizeLeftRight
+        default: self = .unknown
+        }
+    }
+}
+
 /// OSC 7 working-directory update.
 @MainActor
 public protocol TerminalSurfacePwdDelegate: TerminalSurfaceViewDelegate {

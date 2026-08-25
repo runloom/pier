@@ -163,6 +163,8 @@ function stripOptions(args) {
       arg === "--text-file" ||
       arg === "--stdin" ||
       arg === "--operation-id" ||
+      arg === "--expected-boot" ||
+      arg === "--placement" ||
       arg === "--worktree-key" ||
       arg === "--incarnation-id" ||
       arg === "--max-lines" ||
@@ -211,6 +213,8 @@ function stripOptions(args) {
         arg === "--text" ||
         arg === "--text-file" ||
         arg === "--operation-id" ||
+        arg === "--expected-boot" ||
+        arg === "--placement" ||
         arg === "--worktree-key" ||
         arg === "--incarnation-id" ||
         arg === "--max-lines" ||
@@ -791,13 +795,59 @@ function parseAgentsGet(value, args) {
     op: "agents.get",
     params: {
       ...(agentRef ? { agentRef } : {}),
-      ...(agentId ? { agentId } : {}),
       ...(panelId ? { panelId } : {}),
     },
   };
 }
 
-function parseAgentsStart(value, args) {
+function requireAgentPanelOrigin() {
+  if (process.env.PIER_AGENT_PANELS_DISABLED) {
+    throw new Error(
+      "agent panel spawning is disabled by PIER_AGENT_PANELS_DISABLED"
+    );
+  }
+  const panelId = process.env.PIER_PANEL_ID;
+  const windowId = process.env.PIER_WINDOW_ID;
+  if (!(panelId && windowId)) {
+    throw new Error(
+      "agents start requires PIER_PANEL_ID and PIER_WINDOW_ID (run inside a Pier panel)"
+    );
+  }
+  return { panelId, windowId };
+}
+
+function parseAgentsStartPlacement(args) {
+  const placement = optionValue(args, "--placement");
+  if (
+    placement !== undefined &&
+    !["tab", "right", "below"].includes(placement)
+  ) {
+    throw new Error("--placement must be one of tab, right, below");
+  }
+  return placement;
+}
+
+// --text / --text-file / --stdin 互斥；都缺省返回 undefined。
+function parseOptionalTextSource(args) {
+  const textInline = optionValue(args, "--text");
+  const textFile = optionValue(args, "--text-file");
+  const useStdin = hasPierCliOption(args, "--stdin");
+  if ([textInline, textFile, useStdin].filter(Boolean).length > 1) {
+    throw new Error("use only one of --text, --text-file, or --stdin");
+  }
+  if (textInline) {
+    return { kind: "inline", text: textInline };
+  }
+  if (textFile) {
+    return { kind: "file", path: textFile };
+  }
+  if (useStdin) {
+    return { kind: "stdin" };
+  }
+  return;
+}
+
+function resolveAgentsStartAgentId(value, args) {
   const flagged =
     optionValue(args, "--agent") ?? optionValue(args, "--agent-id");
   if (value && flagged && value !== flagged) {
@@ -807,15 +857,25 @@ function parseAgentsStart(value, args) {
   if (!agentId) {
     throw new Error("agents start requires <id>");
   }
+  return agentId;
+}
+
+function parseAgentsStart(value, args) {
+  const origin = requireAgentPanelOrigin();
+  const agentId = resolveAgentsStartAgentId(value, args);
   const cwdOpt = optionValue(args, "--cwd");
   const windowId = optionValue(args, "--window");
   const worktreeKey = optionValue(args, "--worktree-key");
   const incarnationId = optionValue(args, "--incarnation-id");
-  const effectKey = optionValue(args, "--operation-id") ?? randomUUID();
+  const placement = parseAgentsStartPlacement(args);
+  const expectedBootId = optionValue(args, "--expected-boot");
+  const textSource = parseOptionalTextSource(args);
   return {
     protocol: "v2",
     op: "agents.start",
-    effectKey,
+    effectKey: optionValue(args, "--operation-id") ?? randomUUID(),
+    ...(expectedBootId ? { expectedBootId } : {}),
+    ...(textSource ? { textSource } : {}),
     params: {
       agentId,
       ...(cwdOpt
@@ -824,6 +884,8 @@ function parseAgentsStart(value, args) {
       ...(windowId ? { windowId } : {}),
       ...(worktreeKey ? { worktreeKey } : {}),
       ...(incarnationId ? { incarnationId } : {}),
+      ...(placement ? { placement } : {}),
+      origin,
     },
   };
 }
