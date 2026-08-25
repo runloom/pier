@@ -12,5 +12,8 @@
  * 7–10 = 历史 derive 标题脚本世代（已下线，见 gen 11）。
  * 11 = 下线 derive-claude-session-title 双写；UserPromptSubmit 只 emit；
  *     终端 tab 标题主权归 OSC 0/2；产品 sessionTitle 仅 provider|user。
+ * 12 = omp 扩展诚实化：订阅 agent_start（turnStartAuthority=authoritative，
+ *     重开 abort/stop 后静默续跑封账的 scope）；agent_end stopReason=toolUse
+ *     （后台工具让位）落 processing 不落 TurnCompleted。
  */
-export const PIER_HOOK_COMMAND_GENERATION = 11;
+export const PIER_HOOK_COMMAND_GENERATION = 12;

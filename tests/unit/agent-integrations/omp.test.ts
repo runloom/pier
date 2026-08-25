@@ -11,13 +11,16 @@ import {
   ompDetect,
   ompExtensionPath,
   ompHome,
+  ompIntegration,
   uninstallOmpExtension,
 } from "../../../src/main/services/agents/integrations/omp.ts";
+import { resolveAgentEventIngestOptions } from "../../../src/main/services/agents/integrations/runtime/event-authority.ts";
 import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
 import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
 
 const NATIVE_EVENTS = [
   "session_start",
+  "agent_start",
   "before_agent_start",
   "tool_execution_start",
   "tool_execution_end",
@@ -59,6 +62,11 @@ describe("buildOmpExtensionSource", () => {
     const src = buildOmpExtensionSource();
     expect(OMP_EVENT_MAP).toEqual([
       { nativeEvent: "session_start", pierEvent: "SessionStart" },
+      {
+        nativeEvent: "agent_start",
+        pierEvent: "processing",
+        turnStartAuthority: "authoritative",
+      },
       { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
       { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
       {
@@ -78,7 +86,12 @@ describe("buildOmpExtensionSource", () => {
         nativeEvent: "tool_approval_resolved",
         pierEvent: "InteractionResolved",
       },
-      { nativeEvent: "agent_end.willContinue", pierEvent: "processing" },
+      {
+        nativeEvent: "agent_end.willContinue",
+        pierEvent: "processing",
+        turnStartAuthority: "authoritative",
+      },
+      { nativeEvent: "agent_end.toolUseDeferred", pierEvent: "processing" },
       { nativeEvent: "agent_end.completed", pierEvent: "TurnCompleted" },
       { nativeEvent: "agent_end.error", pierEvent: "error" },
       { nativeEvent: "agent_end.aborted", pierEvent: "TurnInterrupted" },
@@ -366,6 +379,125 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       "processing",
       "ready",
     ]);
+  });
+
+  it("abort 封账后静默续跑（steer drain / IRC 唤醒）经 agent_start 重开，不冻在 ready", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: OmpEventCtx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => "session-omp" },
+    };
+    main.fire("before_agent_start", ctx, {
+      prompt: "verify moshi full-duplex speech",
+      type: "before_agent_start",
+    });
+    main.fire("tool_execution_start", ctx, {
+      toolCallId: "call-1",
+      toolName: "web_search",
+      type: "tool_execution_start",
+    });
+    // 用户 esc 中断当前 LLM 调用：omp 发 agent_end(aborted)。
+    main.fire("agent_end", ctx, {
+      messages: [{ role: "assistant", stopReason: "aborted" }],
+      type: "agent_end",
+    });
+    // omp 的 steer/follow-up drain 与 IRC 唤醒直接开新 loop，
+    // 不经过 before_agent_start——真实事故里面板封账后继续工作
+    // 37 分钟仍显示「等待输入」。
+    main.fire("agent_start", ctx, { type: "agent_start" });
+    main.fire("tool_execution_start", ctx, {
+      toolCallId: "call-2",
+      toolName: "read",
+      type: "tool_execution_start",
+    });
+    const records = await readEmittedRecords(logPath);
+    expect(eventsOf(records)).toEqual([
+      "PromptSubmit",
+      "ToolStart",
+      "TurnInterrupted",
+      "processing",
+      "ToolStart",
+    ]);
+    expect(records[3]).toMatchObject({
+      event: "processing",
+      nativeEvent: "agent_start",
+      nativeState: "loop_start",
+    });
+
+    const aggregator = createForegroundActivityAggregator();
+    let status: string | undefined;
+    for (const record of records) {
+      const parsed = agentHookEventSchema.parse(record);
+      if (parsed.kind !== "agentEvent") {
+        continue;
+      }
+      aggregator.ingestAgentEvent(
+        parsed,
+        resolveAgentEventIngestOptions({
+          evidenceSource: "hook",
+          event: parsed,
+          runtime: ompIntegration.runtime,
+        })
+      );
+      const activity = aggregator.snapshot().activities[0];
+      if (activity?.kind === "agent" && activity.status) {
+        status = activity.status;
+      }
+    }
+    // 修复前：TurnInterrupted 封账后续跑 ToolStart 被 sealed-turn 拒绝，
+    // 状态永远冻在 ready（谎报「等待输入」）。
+    expect(status).toBe("tool");
+  });
+
+  it("toolUse 让位（后台工具挂起）落 processing，不落 TurnCompleted", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: OmpEventCtx = {
+      hasUI: true,
+      sessionManager: { getSessionId: () => "session-omp" },
+    };
+    main.fire("before_agent_start", ctx, {
+      prompt: "research desktop companions",
+      type: "before_agent_start",
+    });
+    // loop 以 stopReason=toolUse settle：后台任务未完，TUI 未回提示符；
+    // 任务完成后的续跑不带 before_agent_start。
+    main.fire("agent_end", ctx, {
+      messages: [{ role: "assistant", stopReason: "toolUse" }],
+      type: "agent_end",
+    });
+    const records = await readEmittedRecords(logPath);
+    expect(records[1]).toMatchObject({
+      event: "processing",
+      nativeEvent: "agent_end.toolUseDeferred",
+      nativeState: "tool_use_deferred",
+    });
+
+    const aggregator = createForegroundActivityAggregator();
+    let status: string | undefined;
+    for (const record of records) {
+      const parsed = agentHookEventSchema.parse(record);
+      if (parsed.kind !== "agentEvent") {
+        continue;
+      }
+      aggregator.ingestAgentEvent(
+        parsed,
+        resolveAgentEventIngestOptions({
+          evidenceSource: "hook",
+          event: parsed,
+          runtime: ompIntegration.runtime,
+        })
+      );
+      const activity = aggregator.snapshot().activities[0];
+      if (activity?.kind === "agent" && activity.status) {
+        status = activity.status;
+      }
+    }
+    // 修复前落 TurnCompleted → ready，谎报「等待输入」。
+    expect(status).toBe("processing");
   });
 
   it("ask 问卷走 InteractionRequested，不标成 ToolStart", async () => {

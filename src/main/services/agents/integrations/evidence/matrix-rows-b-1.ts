@@ -118,24 +118,24 @@ export const AGENT_STATUS_EVIDENCE_ROWS_B_1 = {
     transport: ["hook-command"],
     evidence: {
       lifecycle: "native",
-      ready: "native",
+      // ready/interrupted 只剩 host 裸 Esc（reconciled）：官方 hook 面无
+      // per-turn 信号，trusted 终态封账后同会话无重开通道（见 aug.ts 审计注释）。
+      ready: "reconciled",
       processing: "native",
       tool: "native",
       waiting: "unsupported",
       error: "native",
       completed: "unsupported",
-      interrupted: "native",
+      interrupted: "reconciled",
       subagent: "unsupported",
     },
     eventMappings: facts(
       nativeFact("lifecycle", "SessionStart", "SessionStart"),
       nativeFact("lifecycle", "SessionEnd", "SessionEnd"),
       nativeFact("control", "Stop", "Stop"),
-      nativeFact("ready", "Stop", "TurnInterrupted"),
       nativeFact("processing", "PostToolUse", "ToolComplete"),
       nativeFact("tool", "PreToolUse", "ToolStart"),
-      nativeFact("error", "Stop", "error"),
-      nativeFact("interrupted", "Stop", "TurnInterrupted")
+      nativeFact("error", "Stop", "error")
     ),
     upstream: upstream(
       "https://docs.augmentcode.com/cli/hooks",

@@ -88,6 +88,17 @@ export const CURSOR_STOP_STATUS_CASES: readonly StdinStatusDispatchCase[] = [
 ];
 
 /**
+ * stop≠idle 消歧（2026-08-25 业界对齐审计，一手 bundle 证据
+ * cursor-agent 2026.08.11）：Cursor 的自动续跑 **完全由 hook 返回值驱动**——
+ * `followup_message` 只从 `StopRequestResponse`/`SubagentStopRequestResponse`
+ * 消费，`{decision:"block", reason}` 兼容 shim 也转换为 followup；
+ * `loop_limit` 是 per-hook 配置（封顶单 hook 的续跑次数），不构成原生
+ * 自动续跑。Pier hook 发完即退（不返回 followup）→ `stop` 即真停，
+ * `stop.status=completed`→trusted TurnCompleted 诚实，无 omp 式静默续跑
+ * 冻结风险。
+ */
+
+/**
  * Ev5：cursor 的 FA `error` 经 `stop.status === "error"` 原生可达
  * （provider 自报回合失败, 非 Stop/中断假装）。
  */

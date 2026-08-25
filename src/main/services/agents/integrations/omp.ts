@@ -17,9 +17,36 @@ const AGENT_ID: AgentKind = "omp";
 const EXTENSION_FILE_NAME = "pier-agent-status.ts";
 const MARKER = pierManagedPluginMarker();
 
-/** 固定提交 cc00ab1 的公开扩展事件。 */
-const OMP_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
+/**
+ * omp（@oh-my-pi/pi-coding-agent）公开扩展事件映射。`agent_start` /
+ * `agent_end` 语义来自上游 shared-events.d.ts（AgentEndEvent.willContinue
+ * =「已调度自动续跑：auto-retry、empty-stop 重试」）。
+ *
+ * 诚实性关键事实（18.0.4 实测 + 上游源码）：omp 存在多条**不带
+ * `before_agent_start` 的静默续跑路径**——abort 后的 steer/follow-up
+ * drain（#drainStrandedQueuedMessages）、IRC peer 唤醒
+ * （#resumeStrandedIrcAsides）、后台任务完成后 task executor 重新驱动。
+ * 因此：
+ * - `agent_start`（每次 loop 启动必发，含续跑 loop）映射 processing 并声明
+ *   `turnStartAuthority: "authoritative"`——封账 scope 由它重开，否则面板
+ *   会从一次 esc/stop 起永远冻在「等待输入」（2026-08-25 事故：封账后续跑
+ *   37 分钟，期间全部工具事件被 sealed-turn 拒绝）。
+ * - `agent_end` 且最后 assistant `stopReason === "toolUse"` 是后台工具
+ *   让位（TUI 未回提示符），落 processing 不落 TurnCompleted。
+ * - `stop`/`aborted` 是真实用户可见 settle，保持 trusted 终态；其后的
+ *   静默续跑由 agent_start 重开兜底。
+ */
+const OMP_EVENTS: ReadonlyArray<{
+  nativeEvent: string;
+  pierEvent: string;
+  turnStartAuthority?: "authoritative";
+}> = [
   { nativeEvent: "session_start", pierEvent: "SessionStart" },
+  {
+    nativeEvent: "agent_start",
+    pierEvent: "processing",
+    turnStartAuthority: "authoritative",
+  },
   { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
   { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
   {
@@ -39,7 +66,12 @@ const OMP_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
     nativeEvent: "tool_approval_resolved",
     pierEvent: "InteractionResolved",
   },
-  { nativeEvent: "agent_end.willContinue", pierEvent: "processing" },
+  {
+    nativeEvent: "agent_end.willContinue",
+    pierEvent: "processing",
+    turnStartAuthority: "authoritative",
+  },
+  { nativeEvent: "agent_end.toolUseDeferred", pierEvent: "processing" },
   { nativeEvent: "agent_end.completed", pierEvent: "TurnCompleted" },
   { nativeEvent: "agent_end.error", pierEvent: "error" },
   { nativeEvent: "agent_end.aborted", pierEvent: "TurnInterrupted" },
@@ -220,6 +252,10 @@ function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 export default function PierAgentStatus(pi) {
 	pi.on("session_start", (event, ctx) =>
 		pierEmit("SessionStart", "session_start", event, ctx));
+	pi.on("agent_start", (event, ctx) =>
+		pierEmit("processing", "agent_start", event, ctx, {
+			nativeState: "loop_start",
+		}));
 	pi.on("before_agent_start", (event, ctx) =>
 		pierEmit("PromptSubmit", "before_agent_start", event, ctx));
 	pi.on("tool_execution_start", (event, ctx) => {
@@ -260,7 +296,8 @@ export default function PierAgentStatus(pi) {
 		});
 	});
 	pi.on("agent_end", (event, ctx) => {
-		// willContinue=true：同一次用户回合内还会继续（多步/工具环），保持 processing。
+		// willContinue=true：omp 已调度自动续跑（auto-retry、empty-stop 重试
+		// 等，见上游 AgentEndEvent 文档），保持 processing 不落终态。
 		// willContinue=false：本回合 agent loop 已结束——正常完成必须落 TurnCompleted，
 		// 否则状态会卡在「思考中」直到 session_stop（会话退出）才 ready。
 		if (event && event.willContinue === true) {
@@ -277,6 +314,13 @@ export default function PierAgentStatus(pi) {
 		} else if (stopReason === "aborted") {
 			pierEmit("TurnInterrupted", "agent_end.aborted", event, ctx, {
 				nativeState: stopReason,
+			});
+		} else if (stopReason === "toolUse") {
+			// toolUse：回合让位等待后台工具/任务完成，TUI 未回提示符；后续
+			// task executor 续跑不带 before_agent_start，落 TurnCompleted 会
+			// 把面板冻在「等待输入」。
+			pierEmit("processing", "agent_end.toolUseDeferred", event, ctx, {
+				nativeState: "tool_use_deferred",
 			});
 		} else {
 			pierEmit("TurnCompleted", "agent_end.completed", event, ctx, {

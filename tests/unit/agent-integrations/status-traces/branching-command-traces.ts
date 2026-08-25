@@ -83,23 +83,16 @@ function augAction(
   );
 }
 
-function augTerminalAction(
-  event: "TurnInterrupted",
-  cause: string
-): AgentStatusTraceAction {
+function augTerminalAction(cause: string): AgentStatusTraceAction {
+  // interrupted/max_iterations 降级为 advisory Stop（completionObserved，
+  // 状态缺席）；后续工作可取消候选回到忙态，不再封账。
   return {
     checkpoints: [
       {
-        dimension: "ready",
-        expectedEvent: event,
+        dimension: "lifecycle",
+        expectedEvent: "Stop",
         expectedNativeEvent: "Stop",
-        expectedStatus: "ready",
-      },
-      {
-        dimension: "interrupted",
-        expectedEvent: event,
-        expectedNativeEvent: "Stop",
-        expectedStatus: "ready",
+        expectedStatusAbsent: true,
       },
     ],
     expectedNativeEvents: ["Stop"],
@@ -110,7 +103,6 @@ function augTerminalAction(
       hook_event_name: "Stop",
       workspace_roots: ["/repo"],
     },
-    scenarios: ["interrupted"],
   };
 }
 
@@ -124,7 +116,14 @@ const augActions: AgentStatusTraceAction[] = [
     tool_name: "bash",
     tool_input: { command: "pwd" },
   }),
-  augTerminalAction("TurnInterrupted", "interrupted"),
+  augTerminalAction("interrupted"),
+  // 事故回归：advisory Stop 之后同会话继续工作必须可观察（修复前
+  // trusted TurnInterrupted 封账，整轮工具事件被 sealed-turn 拒绝，
+  // 面板冻结在 ready）。
+  augAction("PreToolUse", "ToolStart", "tool", "tool", {
+    tool_name: "read",
+    tool_input: { path: "/tmp/next-turn" },
+  }),
   {
     ...augAction("SessionStart", "SessionStart", "lifecycle", undefined, {
       conversation_id: "aug-session-2",
@@ -288,14 +287,7 @@ export const BRANCHING_COMMAND_STATUS_TRACES = [
   {
     actions: augActions,
     agentId: "aug",
-    covers: [
-      "lifecycle",
-      "ready",
-      "processing",
-      "tool",
-      "error",
-      "interrupted",
-    ],
+    covers: ["lifecycle", "processing", "tool", "error"],
     createProducer: () => createInstalledCommandProducer("aug", augCommands()),
     stopAuthority: augIntegration.runtime.stopAuthority,
   },

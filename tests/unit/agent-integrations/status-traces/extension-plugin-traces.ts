@@ -264,6 +264,62 @@ const ompActions: AgentStatusTraceAction[] = [
     ],
     scenarios: ["interrupted"],
   },
+  // ── 2026-08-25 事故回归：abort 封账后的静默续跑不得冻在 ready ──
+  // steer/follow-up drain 与 IRC 唤醒不开新 before_agent_start，
+  // agent_start（loop 启动）是唯一重开信号；toolUse 让位不落终态。
+  extensionAction(
+    "agent_start",
+    "processing",
+    "processing",
+    { expectedStatus: "processing" },
+    "omp-session-2"
+  ),
+  extensionAction(
+    "tool_execution_start",
+    "ToolStart",
+    "tool",
+    {
+      expectedEventFields: { toolUseId: "omp-tool-2" },
+      expectedStatus: "tool",
+    },
+    "omp-session-2",
+    { toolCallId: "omp-tool-2", toolName: "read" }
+  ),
+  extensionAction(
+    "tool_execution_end",
+    "ToolComplete",
+    "processing",
+    {
+      expectedEventFields: { toolUseId: "omp-tool-2" },
+      expectedStatus: "processing",
+    },
+    "omp-session-2",
+    { isError: false, toolCallId: "omp-tool-2", toolName: "read" }
+  ),
+  extensionAction(
+    "agent_end.toolUseDeferred",
+    "processing",
+    "processing",
+    { expectedStatus: "processing" },
+    "omp-session-2",
+    {
+      messages: [{ role: "assistant", stopReason: "toolUse" }],
+      willContinue: false,
+    },
+    "agent_end"
+  ),
+  extensionAction(
+    "agent_end.completed",
+    "TurnCompleted",
+    "completed",
+    { expectedStatus: "ready" },
+    "omp-session-2",
+    {
+      messages: [{ role: "assistant", stopReason: "stop" }],
+      willContinue: false,
+    },
+    "agent_end"
+  ),
   extensionAction(
     "session_start",
     "SessionStart",
