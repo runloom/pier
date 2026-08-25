@@ -74,6 +74,7 @@ export interface FileEditorAdapterProps {
     | undefined;
   markdownContentAnchor?: MarkdownCrossModeAnchor | undefined;
   markdownContentAnchorRequestId?: string | number | undefined;
+  markdownCopyAnchor?: ((anchor: string) => Promise<void>) | undefined;
   markdownCopyCode?: ((code: string) => Promise<void>) | undefined;
   markdownErrorLabel?: string | undefined;
   markdownFileResources?: MarkdownFileResources | undefined;

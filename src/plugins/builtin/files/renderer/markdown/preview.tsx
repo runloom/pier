@@ -54,6 +54,7 @@ import type {
   MarkdownPreviewState,
 } from "./preview-types.ts";
 import { markdownRuntime } from "./runtime.ts";
+import { useScrollMemory } from "./scroll-memory.ts";
 import {
   DEFAULT_MARKDOWN_PREVIEW_SEARCH_LABELS,
   useMarkdownPreviewSearch,
@@ -76,7 +77,10 @@ export function MarkdownPreview({
   commentLabels = DEFAULT_MARKDOWN_COMMENT_LABELS,
   contentAnchor,
   contentAnchorRequestId,
+  copyAnchor,
   copyCode,
+  onToggleWordWrap,
+  onToggleTask,
   errorLabel = "Unable to render Markdown preview.",
   fileResources,
   labels = DEFAULT_RENDERER_LABELS,
@@ -112,6 +116,7 @@ export function MarkdownPreview({
   const [appearanceTheme, setAppearanceTheme] = useState<
     "light" | "dark" | undefined
   >(() => appearance?.current().theme);
+  const codeWrap = useMarkdownPreviewPrefsStore((state) => state.codeWrap);
   const fontScale = useMarkdownPreviewPrefsStore((state) => state.fontScale);
   const measureMode = useMarkdownPreviewPrefsStore(
     (state) => state.measureMode
@@ -186,6 +191,14 @@ export function MarkdownPreview({
     handlePreviewWheel,
   } = useMarkdownPreviewZoom(fontScale);
 
+  useScrollMemory(
+    scrollRoot,
+    source,
+    value,
+    initialAnchor,
+    contentAnchorRequestId,
+    state.status
+  );
   // Outline layout exposes a callback ref; comments layer needs RefObject.current.
   const commentsScrollRootRef = useRef<HTMLElement | null>(null);
   commentsScrollRootRef.current = scrollRoot;
@@ -416,6 +429,7 @@ export function MarkdownPreview({
                   {...(commentsChrome ? { comments: commentsChrome } : {})}
                   contentAnchor={contentAnchor}
                   contentAnchorRequestId={contentAnchorRequestId}
+                  copyAnchor={copyAnchor}
                   copyCode={copyCode}
                   fileResources={fileResources}
                   initialAnchor={effectiveAnchor}
@@ -424,10 +438,13 @@ export function MarkdownPreview({
                   onJumpToSource={onJumpToSource}
                   onOpenExternal={openExternal}
                   onOpenInternal={openInternal}
+                  onToggleTask={onToggleTask}
+                  onToggleWordWrap={onToggleWordWrap}
                   pagination={state.pagination}
                   scrollRoot={scrollRoot}
                   searchMatches={search.searchMatches}
                   source={source}
+                  wordWrap={codeWrap}
                 />
               </div>
             </MarkdownPreviewArticleLayout>

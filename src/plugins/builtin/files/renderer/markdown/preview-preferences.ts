@@ -1,6 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { create } from "zustand";
 import {
+  FILES_EDITOR_WORD_WRAP_SETTING_KEY,
   FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_SETTING_KEY,
   FILES_MARKDOWN_BLOCK_HEIGHT_LIMIT_VALUES,
   type FilesMarkdownBlockHeightLimit,
@@ -30,6 +31,8 @@ export const MARKDOWN_PREFS_CHANGED_EVENT = "pier:files:markdown-prefs-changed";
 
 export interface MarkdownPrefsSnapshot {
   blockHeightLimit: MarkdownBlockHeightLimit;
+  /** In-memory only; durable source is plugin configuration (editor word wrap). */
+  codeWrap: boolean;
   fontScale: MarkdownFontScale;
   measureMode: MarkdownMeasureMode;
   readingAppearance: MarkdownReadingAppearance;
@@ -93,11 +96,12 @@ function normalizeBlockHeightLimit(value: unknown): MarkdownBlockHeightLimit {
   }
   return "none";
 }
-
 function loadPrefsSnapshot(): MarkdownPrefsSnapshot {
   return {
     // Overwritten by bindMarkdownSettingsFromConfiguration on plugin activate.
     blockHeightLimit: "none",
+    // Overwritten by bindMarkdownCodeWrapFromConfiguration on plugin activate.
+    codeWrap: false,
     fontScale: readStoredFontScale(),
     measureMode: readStoredMeasureMode(),
     readingAppearance: readStoredReadingAppearance(),
@@ -167,6 +171,7 @@ function syncStoreFromStorage(): void {
   useMarkdownPreviewPrefsStore.setState({
     ...snapshot,
     blockHeightLimit: state.blockHeightLimit,
+    codeWrap: state.codeWrap,
   });
   emitPrefsChanged(useMarkdownPreviewPrefsStore.getState());
 }
@@ -210,6 +215,28 @@ export function bindMarkdownSettingsFromConfiguration(
   });
 }
 
+/**
+ * Mirror the Files editor word-wrap setting into the preview prefs store
+ * (`codeWrap`). In-memory only; the durable source is plugin configuration.
+ * Call once from the files renderer activate; returns a dispose function.
+ */
+export function bindMarkdownCodeWrapFromConfiguration(
+  configuration: Pick<
+    RendererPluginContext["configuration"],
+    "get" | "onDidChange"
+  >
+): () => void {
+  const KEY = FILES_EDITOR_WORD_WRAP_SETTING_KEY;
+  const apply = () =>
+    useMarkdownPreviewPrefsStore.setState({
+      codeWrap: configuration.get<boolean>(KEY) === true,
+    });
+  apply();
+  return configuration.onDidChange((event) => {
+    if (event.affectsConfiguration(KEY)) apply();
+  });
+}
+
 /** @deprecated Use bindMarkdownSettingsFromConfiguration */
 export const bindMarkdownBlockHeightFromConfiguration =
   bindMarkdownSettingsFromConfiguration;
@@ -226,6 +253,7 @@ export function readMarkdownPrefsSnapshot(): MarkdownPrefsSnapshot {
   const state = useMarkdownPreviewPrefsStore.getState();
   return {
     blockHeightLimit: state.blockHeightLimit,
+    codeWrap: state.codeWrap,
     fontScale: state.fontScale,
     measureMode: state.measureMode,
     readingAppearance: state.readingAppearance,

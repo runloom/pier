@@ -1,7 +1,7 @@
 # Agent Runtime Index 与注意力通知产品设计
 
 > 日期：2026-07-15  
-> 状态：**P1 / P1.5 已实现**（2026-07-15）；产品设计已定稿；[实施计划](../plans/2026-07-15-agent-runtime-index-and-attention.md)  
+> 状态：**P1 / P1.5 已实现**（2026-07-15）；产品设计已定稿；[实施计划](../../archive/superpowers/plans/2026-07-15-agent-runtime-index-and-attention.md)  
 > 基线代码：已对齐 `origin/main` @ `54665211`（#88）；FA/标题栏/通知通道未变，设计不需返工  
 > 审查稿：Cursor Canvas `pier-agent-runtime-design-review.canvas.tsx`  
 > 交互稿：Cursor Canvas `pier-agent-runtime-product-design.canvas.tsx`
@@ -37,7 +37,7 @@
 ### 1.4 与现有边界的关系
 
 - 对齐 [AGENTS.md](../../../AGENTS.md)：不做任务生命周期 / SQLite 任务台账 / 宿主看板与自动调度；操作反馈规范（toast / `showAppAlert` / 强自然 UI）。
-- 对齐 [能力决策清单](./2026-06-25-ai-workbench-capability-scorecard.md)：宿主不做任务 DAG（#27）；Transcript 不做（#09）；多 agent 手动并行已由工作树 + 面板满足（#19）。本设计补 **跨窗发现与注意力投递**，不是重开 #12 状态模型，也不是第二套编排系统。
+- 对齐 [能力决策清单](../../archive/superpowers/specs/2026-06-25-ai-workbench-capability-scorecard.md)：宿主不做任务 DAG（#27）；Transcript 不做（#09）；多 agent 手动并行已由工作树 + 面板满足（#19）。本设计补 **跨窗发现与注意力投递**，不是重开 #12 状态模型，也不是第二套编排系统。
 - 对齐 [Agent 状态适配契约审计](./2026-07-13-agent-status-adapter-contract-audit.md)：`ForegroundActivityBroadcast` 仍是本窗活动权威；Index **不得**成为第二套 status 语义源。
 - Canvas DAG/Kanban 由 **官方插件** 拥有；宿主 P1 只保证运行时 Index / `focus`；宿主 join（`attach`）为可选反查，见 §7。
 
@@ -439,7 +439,7 @@ v1 **不做**通知历史中心或复杂按项目订阅规则。
 ## 12. 参考
 
 - [AGENTS.md](../../../AGENTS.md) — 产品边界、FA、操作反馈规范
-- [2026-06-25-ai-workbench-capability-scorecard.md](./2026-06-25-ai-workbench-capability-scorecard.md) — 能力决策
+- [2026-06-25-ai-workbench-capability-scorecard.md](../../archive/superpowers/specs/2026-06-25-ai-workbench-capability-scorecard.md) — 能力决策
 - [2026-07-13-agent-status-adapter-contract-audit.md](./2026-07-13-agent-status-adapter-contract-audit.md) — FA 所有权
 - `src/shared/contracts/foreground-activity.ts` — 活动与 Agent 五态
 - `src/main/ipc/notification.ts` — 系统通知（P1.5 需权限 / click / kind）

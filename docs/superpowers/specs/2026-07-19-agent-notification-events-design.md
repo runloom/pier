@@ -3,8 +3,8 @@
 > 日期：2026-07-19  
 > 状态：**已实现（待手工验收）**  
 > 前置：  
-> - [`2026-07-16-agent-attention-settings-and-status-accuracy-design.md`](./2026-07-16-agent-attention-settings-and-status-accuracy-design.md)  
-> - [`2026-07-19-attention-notification-sound-design.md`](./2026-07-19-attention-notification-sound-design.md)（提示音管线；本设计**废止**其中「完成音不做 / 完成音另开产品」边界）  
+> - [`../../archive/superpowers/specs/2026-07-16-agent-attention-settings-and-status-accuracy-design.md`](../../archive/superpowers/specs/2026-07-16-agent-attention-settings-and-status-accuracy-design.md)  
+> - [`../../archive/superpowers/specs/2026-07-19-attention-notification-sound-design.md`](../../archive/superpowers/specs/2026-07-19-attention-notification-sound-design.md)（提示音管线；本设计**废止**其中「完成音不做 / 完成音另开产品」边界）  
 > 金标准：本机 Codex App（`/Applications/ChatGPT.app`，bundle `com.openai.codex`）桌面通知实现  
 > 用户拍板：方案包 **B · Codex 对齐 · 全事件可配置**（§1–§4 分段确认通过）
 

@@ -35,10 +35,13 @@ export const dialog = {
   imagePreview: {
     actualSize: "Actual size",
     controlsLabel: "Image controls",
+    copyImage: "Copy image",
+    copyImageFailed: "Couldn't copy the image",
     fit: "Fit to window",
     loadFailedDescription: "Couldn't load the image, or it changed after open.",
     loadFailedTitle: "Unable to display image",
     loading: "Loading image",
+    imageCopied: "Image copied",
     title: "Image preview",
     viewerLabel: "Image preview",
     zoomIn: "Zoom in",

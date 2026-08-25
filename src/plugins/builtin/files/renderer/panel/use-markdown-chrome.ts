@@ -26,6 +26,7 @@ export function useFilePanelMarkdownChrome({
   panelId: string | undefined;
   t: FilesTranslate;
 }): {
+  handleCopyMarkdownAnchor: (anchor: string) => Promise<void>;
   handleCopyMarkdownCode: (code: string) => Promise<void>;
   handleMarkdownPreviewContextMenu: (
     event: ReactMouseEvent<HTMLDivElement>
@@ -166,6 +167,32 @@ export function useFilePanelMarkdownChrome({
     [context, document, panelContext]
   );
 
+  // Heading anchor copy: clipboard write + success toast here, clipboard
+  // failures through the same filePanel.editor.clipboardFailed alert channel
+  // as code copy. No rethrow — the alert is the user-facing feedback.
+  const handleCopyMarkdownAnchor = useCallback(
+    async (anchor: string) => {
+      try {
+        await navigator.clipboard.writeText(anchor);
+      } catch (error) {
+        if (context) {
+          await context.dialogs.alert({
+            body: error instanceof Error ? error.message : String(error),
+            title: t(
+              "filePanel.editor.clipboardFailed",
+              "Clipboard unavailable"
+            ),
+          });
+        }
+        return;
+      }
+      context?.notifications.success(
+        t("filePanel.markdown.anchorCopied", "Anchor copied")
+      );
+    },
+    [context, t]
+  );
+
   const handleCopyMarkdownCode = useCallback(
     async (code: string) => {
       try {
@@ -187,6 +214,7 @@ export function useFilePanelMarkdownChrome({
   );
 
   return {
+    handleCopyMarkdownAnchor,
     handleCopyMarkdownCode,
     handleMarkdownPreviewContextMenu,
     handleOpenExternal,

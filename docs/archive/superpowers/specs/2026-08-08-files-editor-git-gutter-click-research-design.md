@@ -4,9 +4,9 @@
 **范围**：在现有 Files 源码编辑器 git gutter 上，评估「点击色条查看该段 diff」是否可做、CodeMirror 生态如何做、Pier 选哪条路径  
 **关联文档**：
 
-- [2026-07-17-files-editor-git-gutter-design.md](../../archive/superpowers/specs/2026-07-17-files-editor-git-gutter-design.md)（已交付：仅指示条；点击/预览为**非目标**）
-- [2026-07-17-files-editor-minimap-design.md](../../archive/superpowers/specs/2026-07-17-files-editor-minimap-design.md)（minimap 与 gutter 共用 markers）
-- [2026-07-14-git-diff-review-polish-design.md](../../archive/superpowers/specs/2026-07-14-git-diff-review-polish-design.md)（Git 插件完整 diff / review，职责不抢）
+- [2026-07-17-files-editor-git-gutter-design.md](2026-07-17-files-editor-git-gutter-design.md)（已交付：仅指示条；点击/预览为**非目标**）
+- [2026-07-17-files-editor-minimap-design.md](2026-07-17-files-editor-minimap-design.md)（minimap 与 gutter 共用 markers）
+- [2026-07-14-git-diff-review-polish-design.md](2026-07-14-git-diff-review-polish-design.md)（Git 插件完整 diff / review，职责不抢）
 
 **状态**：调研 + 选型确认（尚未进入实现 PR）
 
@@ -70,7 +70,7 @@ CodeMirror 原语对照：
 
 ## 4. 与现有 git gutter 设计的关系
 
-[2026-07-17 设计](../../archive/superpowers/specs/2026-07-17-files-editor-git-gutter-design.md) **已交付且仍成立**：
+[2026-07-17 设计](2026-07-17-files-editor-git-gutter-design.md) **已交付且仍成立**：
 
 | 项 | v1（已交付） | 本文增量 |
 |----|--------------|----------|

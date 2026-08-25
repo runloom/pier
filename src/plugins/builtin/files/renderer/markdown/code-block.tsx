@@ -2,7 +2,7 @@ import { Button } from "@pier/ui/button.tsx";
 import { scrollFadeClassName } from "@pier/ui/scroll-area.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginCodeThemeRegistration } from "@plugins/api/renderer.ts";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, WrapText } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   type MarkdownCodeHighlighter,
@@ -20,6 +20,10 @@ import { MarkdownSearchText } from "./search-mark.tsx";
 export interface MarkdownCodeBlockLabels {
   copiedCode: string;
   copyCode: string;
+  /** aria-label for the word-wrap toggle when wrap is off. */
+  wrapOff: string;
+  /** aria-label for the word-wrap toggle when wrap is on. */
+  wrapOn: string;
 }
 
 export function MarkdownCodeBlock({
@@ -30,9 +34,11 @@ export function MarkdownCodeBlock({
   language,
   meta,
   onCopy,
+  onToggleWordWrap,
   searchMatches,
   theme,
   themeRegistration,
+  wordWrap,
 }: {
   activeSearchMatchId?: string | undefined;
   code: string;
@@ -41,9 +47,11 @@ export function MarkdownCodeBlock({
   language: string | null;
   meta: string | null;
   onCopy?: ((code: string) => Promise<void>) | undefined;
+  onToggleWordWrap?: (() => void) | undefined;
   searchMatches?: readonly MarkdownSearchMatch[] | undefined;
   theme: string;
   themeRegistration?: RendererPluginCodeThemeRegistration | undefined;
+  wordWrap: boolean;
 }) {
   const [highlight, setHighlight] = useState<MarkdownCodeHighlightOutcome>({
     status: "plain",
@@ -104,6 +112,17 @@ export function MarkdownCodeBlock({
           {language ?? "text"}
           {meta ? ` · ${meta}` : ""}
         </span>
+        {onToggleWordWrap ? (
+          <Button
+            aria-label={wordWrap ? labels.wrapOn : labels.wrapOff}
+            onClick={onToggleWordWrap}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <WrapText data-icon="inline-start" />
+          </Button>
+        ) : null}
         {onCopy ? (
           <Button
             aria-label={copied ? labels.copiedCode : labels.copyCode}
@@ -123,6 +142,7 @@ export function MarkdownCodeBlock({
       <pre
         className={cn(
           "p-3 font-mono",
+          wordWrap && "whitespace-pre-wrap break-words",
           heightCapped
             ? cn(
                 MARKDOWN_CODE_BLOCK_MAX_HEIGHT_CLASS,

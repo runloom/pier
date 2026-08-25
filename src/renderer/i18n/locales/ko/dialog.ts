@@ -35,11 +35,14 @@ export const dialog = {
   imagePreview: {
     actualSize: "실제 크기",
     controlsLabel: "이미지 조작",
+    copyImage: "이미지 복사",
+    copyImageFailed: "이미지를 복사하지 못했습니다",
     fit: "윈도우에 맞춤",
     loadFailedDescription:
       "이미지를 불러오지 못했거나, 연 뒤에 변경되었습니다.",
     loadFailedTitle: "이미지를 표시할 수 없습니다",
     loading: "이미지 불러오는 중",
+    imageCopied: "이미지를 복사했습니다",
     title: "이미지 미리보기",
     viewerLabel: "이미지 미리보기",
     zoomIn: "확대",

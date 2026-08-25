@@ -41,7 +41,7 @@ Pier 不建设任务生命周期、SQLite 任务台账、看板、自动调度�
 
 本清单的项目事实以以下仓库证据为准：
 
-- [项目边界与架构纪律](../../../AGENTS.md)
+- [项目边界与架构纪律](../../../../AGENTS.md)
 - `src/shared/contracts/` 中的共享契约
 - `src/main/services/foreground-activity/`
 - `src/main/services/managed-plugins/`
@@ -133,7 +133,7 @@ Pier 不建设任务生命周期、SQLite 任务台账、看板、自动调度�
 | 跨会话证据            | 出现可复现的跨会话验收需求，或至少两个真实消费者需要共享证据。       | 不绑定任务域，不顺带建设宿主 Transcript；先定义最小证据对象和删除策略。                                                                                                                                              |
 | 项目或工作树级 Agent 配置 | 多个真实项目需要不同启动参数、账号或提供方配置，且全局偏好已无法正确表达。 | 当前项目能正确启动不是缺口；不得为了配置绑定引入 Project 注册表。                                                                                                                                                  |
 | 继续上下文辅助          | 提供方原生继续能力无法覆盖重复出现的交接问题。               | 先验证提供方能力；不复制完整会话或建设统一 transcript。                                                                                                                                                      |
-| 轻量引用             | 用户需要在面板或会话间传递标题、路径、网址等引用，并出现稳定工作流。    | 只设计轻量引用，不引入任务状态、负责人、排期或看板。Agent↔Canvas 绑定的持久边由插件图模型持有；宿主 Index 只提供运行时 facade，可选 join 见 [Agent Runtime Index 与注意力通知](./2026-07-15-agent-runtime-index-and-attention-design.md)。 |
+| 轻量引用             | 用户需要在面板或会话间传递标题、路径、网址等引用，并出现稳定工作流。    | 只设计轻量引用，不引入任务状态、负责人、排期或看板。Agent↔Canvas 绑定的持久边由插件图模型持有；宿主 Index 只提供运行时 facade，可选 join 见 [Agent Runtime Index 与注意力通知](../../../superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md)。 |
 | 开发知识资产           | 至少两个真实消费者需要统一的工程知识资产结构。               | 不以假定的 Evidence 路线为前置，不默认建设全文索引或 RAG。                                                                                                                                                   |
 | 研究或知识库插件         | 出现获得产品确认的官方插件提案，并能说明数据来源、存储、权限和删除策略。  | 先在插件私有域验证；不自动上升为宿主能力。                                                                                                                                                                  |
 | 触发器 / 动作共同协议     | 至少两个真实官方插件反复实现相同协议，且重复成本已被证实。         | 只抽取最小共同协议，不建设工作流引擎或自动调度器。                                                                                                                                                              |
@@ -182,9 +182,9 @@ Pier 不建设任务生命周期、SQLite 任务台账、看板、自动调度�
 
 | 收尾事项                    | 结论                                                  | 证据                                                                                                  |
 | ----------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| Agent 状态适配契约审计（原 A1）    | 已确认统一前台活动通道是 renderer 的唯一活动状态源；新增提供方按适配器边界维护。       | [Agent 状态适配契约与公共能力审计](./2026-07-13-agent-status-adapter-contract-audit.md)                          |
-| Transcript 公共能力清理（原 A2） | 已确认宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放。 | [同一审计文档中的 Transcript 结论](./2026-07-13-agent-status-adapter-contract-audit.md)；`AGENTS.md` 的前台活动模块边界 |
-| 插件文档口径统一（原 F1）          | README 和插件指南只描述内置插件、官方受管理插件及其真实发布链路。                | [README](../../../README.md)、[Pier 官方插件开发与发布指南](../../plugins.md)                                   |
+| Agent 状态适配契约审计（原 A1）    | 已确认统一前台活动通道是 renderer 的唯一活动状态源；新增提供方按适配器边界维护。       | [Agent 状态适配契约与公共能力审计](../../../superpowers/specs/2026-07-13-agent-status-adapter-contract-audit.md)                          |
+| Transcript 公共能力清理（原 A2） | 已确认宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放。 | [同一审计文档中的 Transcript 结论](../../../superpowers/specs/2026-07-13-agent-status-adapter-contract-audit.md)；`AGENTS.md` 的前台活动模块边界 |
+| 插件文档口径统一（原 F1）          | README 和插件指南只描述内置插件、官方受管理插件及其真实发布链路。                | [README](../../../../README.md)、[Pier 官方插件开发与发布指南](../../../plugins.md)                                   |
 | 评分路线收敛（原 F2）            | 理论评分、未来能力依赖图和六路五轮实施清单已移除，31 项能力改为唯一决策结论。            | 本文第 2.2 节                                                                                           |
 
 

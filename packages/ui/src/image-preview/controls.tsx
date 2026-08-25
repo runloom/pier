@@ -1,4 +1,5 @@
-import { ChevronDown, Minus, Plus } from "lucide-react";
+import { ChevronDown, Copy, Minus, Plus } from "lucide-react";
+import { useCallback, useState } from "react";
 import { Button } from "../button.tsx";
 import {
   DropdownMenu,
@@ -13,6 +14,7 @@ import { MAX_ZOOM, MIN_ZOOM, PRESET_ZOOM_LEVELS } from "./canvas-math.ts";
 export interface ImagePreviewCanvasLabels {
   actualSize: string;
   controlsLabel: string;
+  copyImage?: string;
   fit: string;
   loadFailedDescription: string;
   loadFailedTitle: string;
@@ -28,6 +30,7 @@ export function ImagePreviewControls({
   labels,
   maxZoom = MAX_ZOOM,
   minZoom = MIN_ZOOM,
+  onCopyImage,
   onZoomChange,
   onZoomIn,
   onZoomOut,
@@ -39,13 +42,28 @@ export function ImagePreviewControls({
   maxZoom?: number | undefined;
   /** Defaults to image-preview MIN_ZOOM (0.1). Mermaid stage passes 0.12. */
   minZoom?: number | undefined;
+  /** When provided (with `labels.copyImage`), appends a copy-image button. */
+  onCopyImage?: () => Promise<void>;
   onZoomChange: (zoom: number | "fit") => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   zoom: number | "fit";
 }) {
+  const [copying, setCopying] = useState(false);
+  const handleCopy = useCallback(async () => {
+    if (copying || !onCopyImage) {
+      return;
+    }
+    setCopying(true);
+    try {
+      await onCopyImage();
+    } finally {
+      setCopying(false);
+    }
+  }, [copying, onCopyImage]);
   const zoomLabel = zoom === "fit" ? labels.fit : `${Math.round(zoom * 100)}%`;
   const presets = PRESET_ZOOM_LEVELS.filter((level) => level <= maxZoom);
+  const showCopy = Boolean(onCopyImage && labels.copyImage);
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pt-2 pb-4">
@@ -116,6 +134,24 @@ export function ImagePreviewControls({
         >
           <Plus data-icon />
         </Button>
+        {showCopy ? (
+          <>
+            <div
+              aria-hidden="true"
+              className="mx-0.5 h-5 w-px shrink-0 bg-border/60"
+            />
+            <Button
+              aria-label={labels.copyImage}
+              disabled={copying}
+              onClick={handleCopy}
+              size="icon-sm"
+              type="button"
+              variant="ghost"
+            >
+              <Copy data-icon />
+            </Button>
+          </>
+        ) : null}
       </div>
     </div>
   );

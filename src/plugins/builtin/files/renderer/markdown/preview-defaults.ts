@@ -11,8 +11,12 @@ export interface MarkdownPreviewZoomLabels {
 }
 
 export const DEFAULT_RENDERER_LABELS: MarkdownRendererLabels = {
+  anchorCopied: "Anchor copied",
   copiedCode: "Copied",
+  copyAnchor: "Copy heading anchor",
   copyCode: "Copy code",
+  wrapOff: "Word Wrap: Off",
+  wrapOn: "Word Wrap: On",
   completedTask: "Completed task",
   diagramFailed: "Unable to render diagram",
   diagramLabel: "Mermaid diagram",
@@ -21,6 +25,7 @@ export const DEFAULT_RENDERER_LABELS: MarkdownRendererLabels = {
   imagePreviewTitle: "Image",
   incompleteTask: "Incomplete task",
   openFullscreen: "View fullscreen",
+  resizeColumn: "Resize column",
 };
 
 export const DEFAULT_TOC_LABELS: MarkdownPreviewTocLabels = {

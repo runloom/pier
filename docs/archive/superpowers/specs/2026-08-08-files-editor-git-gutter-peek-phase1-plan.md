@@ -2,7 +2,7 @@
 
 **日期**：2026-08-08  
 **依据**：[点击查看调研与选型](2026-08-08-files-editor-git-gutter-click-research-design.md)  
-**前置**：[Git gutter v1](../../archive/superpowers/specs/2026-07-17-files-editor-git-gutter-design.md)  
+**前置**：[Git gutter v1](2026-07-17-files-editor-git-gutter-design.md)  
 **状态**：**已交付** — 点击色条 → 宿主 `openUncommittedChanges` + `pendingReveal`（无编辑器内 peek）
 
 ---

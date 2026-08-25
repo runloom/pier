@@ -183,7 +183,7 @@ mode         = methodology
 
 - 系统 skill：`resources/system-skills/pier-canvas/`
 - 项目样例：`.pier/canvases/`
-- 技能管理（复用，不重做）：`docs/superpowers/specs/2026-07-14-project-skills-management-design.md`
+- 技能管理（复用，不重做）：`docs/archive/superpowers/specs/2026-07-14-project-skills-management-design.md`
 
 ## 12. Canvas 预览内容根（与写作默认分离）
 

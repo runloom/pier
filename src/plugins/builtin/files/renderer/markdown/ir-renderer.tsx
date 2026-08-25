@@ -1,19 +1,19 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Checkbox } from "@pier/ui/checkbox.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@pier/ui/table.tsx";
 import type {
   RendererPluginCodeThemeRegistration,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
-import { createElement, type ReactNode, useMemo } from "react";
+import { Link2 } from "lucide-react";
+import {
+  createElement,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { MarkdownCodeBlock } from "./code-block.tsx";
 import type { MarkdownCodeHighlighter } from "./code-highlighter.ts";
 import { wrapBlocksWithComments } from "./comments/ir-blocks.tsx";
@@ -29,13 +29,11 @@ import {
   renderInlines,
 } from "./ir-inlines.tsx";
 import {
-  cellKey,
   groupSearchMatches,
   headingClassName,
   isCalloutDirective,
   searchMatchesFor,
   sourceBlockProps,
-  tableAlignment,
 } from "./ir-render-helpers.ts";
 import { MarkdownMath } from "./math.tsx";
 import { MarkdownPaginationView } from "./pagination-view.tsx";
@@ -47,6 +45,8 @@ import type {
 import type { MarkdownPagination } from "./runtime.ts";
 import type { MarkdownSearchMatch } from "./search.ts";
 import { MarkdownSearchText } from "./search-mark.tsx";
+import { MarkdownTableView } from "./table/table-view.tsx";
+import type { TaskToggleInput } from "./task-patch.ts";
 
 export type { MarkdownIrCommentsChrome } from "./comments/ir-types.ts";
 export type { MarkdownRendererLabels } from "./ir-inlines.tsx";
@@ -72,6 +72,7 @@ interface MarkdownIrRendererProps {
   comments?: MarkdownIrCommentsChrome | undefined;
   contentAnchor?: MarkdownCrossModeAnchor | undefined;
   contentAnchorRequestId?: string | number | undefined;
+  copyAnchor: ((anchor: string) => Promise<void>) | undefined;
   copyCode: ((code: string) => Promise<void>) | undefined;
   fileResources: MarkdownFileResources | undefined;
   forceCommentPageIndex?: number | undefined;
@@ -81,10 +82,13 @@ interface MarkdownIrRendererProps {
   onJumpToSource?: ((offset: number) => void) | undefined;
   onOpenExternal: (url: string) => void;
   onOpenInternal: ((target: MarkdownInternalTarget) => void) | undefined;
+  onToggleTask?: ((input: TaskToggleInput) => void) | undefined;
+  onToggleWordWrap?: (() => void) | undefined;
   pagination: MarkdownPagination;
   scrollRoot?: HTMLElement | null | undefined;
   searchMatches: readonly MarkdownSearchMatch[];
   source: MarkdownDiskSource | undefined;
+  wordWrap: boolean;
 }
 
 export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
@@ -92,6 +96,17 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
     () => groupSearchMatches(props.searchMatches),
     [props.searchMatches]
   );
+  const footnoteDefinitions = useMemo(() => {
+    const map = new Map<string, MarkdownBlock[]>();
+    for (const page of props.pagination.pages) {
+      for (const block of page.blocks) {
+        if (block.kind === "footnoteDefinition") {
+          map.set(block.identifier, block.blocks);
+        }
+      }
+    }
+    return map;
+  }, [props.pagination.pages]);
   return (
     <MarkdownPaginationView
       activeSearchMatchId={props.activeSearchMatchId}
@@ -106,14 +121,18 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
         const context: MarkdownRenderContext = {
           activeSearchMatchId: props.activeSearchMatchId,
           activeSearchPageIndex: props.activeSearchPageIndex,
+          onToggleWordWrap: props.onToggleWordWrap,
+          onToggleTask: props.onToggleTask,
           charts: props.charts,
           codeHighlighter: props.codeHighlighter,
           codeTheme: props.codeTheme,
           codeThemeRegistration: props.codeThemeRegistration,
           colorMode: props.colorMode,
           ...(props.comments ? { comments: props.comments } : {}),
+          copyAnchor: props.copyAnchor,
           copyCode: props.copyCode,
           fileResources: props.fileResources,
+          footnoteDefinitions,
           headings: props.pagination.headings,
           labels: props.labels,
           onJumpToSource: props.onJumpToSource,
@@ -122,6 +141,7 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
           onOpenInternal: props.onOpenInternal,
           searchMatchesByNode,
           source: props.source,
+          wordWrap: props.wordWrap,
         };
         // Top-level only: nested list/quote blocks must not get comment chrome.
         return renderBlocks(page.blocks, context, true);
@@ -143,21 +163,88 @@ function renderBlocks(
   );
 }
 
+function MarkdownTaskCheckbox({
+  checked,
+  context,
+  rangeEnd,
+  rangeStart,
+}: {
+  checked: boolean;
+  context: MarkdownRenderContext;
+  rangeEnd: number;
+  rangeStart: number;
+}) {
+  // Optimistic flip: the document model write-back is async (autosave/CAS),
+  const [optimisticChecked, setOptimisticChecked] = useState<boolean | null>(
+    null
+  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: checked is the trigger for clearing optimistic state; it is not read inside the effect body but must be in deps.
+  useEffect(() => {
+    setOptimisticChecked(null);
+  }, [checked]);
+  // 写入 no-op 或失败时 checked prop 不变，上面的 effect 不会触发；
+  // 超时兜底回落真实状态，避免复选框一直显示未持久化的翻转。
+  useEffect(() => {
+    if (optimisticChecked === null) return;
+    const timer = setTimeout(() => setOptimisticChecked(null), 1500);
+    return () => clearTimeout(timer);
+  }, [optimisticChecked]);
+  const onToggleTask = context.onToggleTask;
+  return (
+    <Checkbox
+      aria-label={
+        checked ? context.labels.completedTask : context.labels.incompleteTask
+      }
+      checked={optimisticChecked ?? checked}
+      className="mt-1.5"
+      {...(onToggleTask
+        ? {
+            onCheckedChange: (next: boolean | "indeterminate") => {
+              setOptimisticChecked(next === true);
+              onToggleTask({
+                checked: next === true,
+                rangeEnd,
+                rangeStart,
+              });
+            },
+          }
+        : {})}
+    />
+  );
+}
+
 function renderBlock(
   block: MarkdownBlock,
   context: MarkdownRenderContext
 ): ReactNode {
   switch (block.kind) {
     case "heading": {
-      const heading = createElement(
+      return createElement(
         `h${block.depth}`,
         sourceBlockProps(block.range, context, {
-          className: headingClassName(block.depth),
+          className: `${headingClassName(block.depth)} md-heading-group`,
           id: block.id,
         }),
-        renderInlines(block.children, context)
+        renderInlines(block.children, context),
+        context.source
+          ? createElement(
+              "button",
+              {
+                "aria-label": context.labels.copyAnchor,
+                className: "md-anchor-copy",
+                type: "button",
+                onClick: async (event: ReactMouseEvent<HTMLElement>) => {
+                  // Keep the heading's own source-jump handler out of the way.
+                  event.stopPropagation();
+                  await context.copyAnchor?.(
+                    `${context.source!.path}#${block.id}`
+                  );
+                },
+              },
+              createElement(Link2)
+            )
+          : null
       );
-      return heading;
     }
     case "paragraph": {
       const tag = block.children.some((inline) => inline.kind === "image")
@@ -205,9 +292,11 @@ function renderBlock(
             language={block.lang}
             meta={block.meta}
             onCopy={context.copyCode}
+            onToggleWordWrap={context.onToggleWordWrap}
             searchMatches={searchMatchesFor(context, "code", block.range)}
             theme={context.codeTheme}
             themeRegistration={context.codeThemeRegistration}
+            wordWrap={context.wordWrap}
           />
         </div>
       );
@@ -240,15 +329,11 @@ function renderBlock(
           key={`${item.range.startOffset}-${item.range.endOffset}`}
         >
           {item.checked === null ? null : (
-            <Checkbox
-              aria-label={
-                item.checked
-                  ? context.labels.completedTask
-                  : context.labels.incompleteTask
-              }
+            <MarkdownTaskCheckbox
               checked={item.checked}
-              className="mt-1.5"
-              disabled
+              context={context}
+              rangeEnd={item.range.endOffset}
+              rangeStart={item.range.startOffset}
             />
           )}
           <div className="min-w-0 flex-1">
@@ -267,48 +352,9 @@ function renderBlock(
         listChildren
       );
     }
-    case "table": {
-      const [header, ...body] = block.rows;
-      if (!header) return null;
-      return (
-        <div
-          {...sourceBlockProps(block.range, context, {
-            className: "md-table-wrap",
-          })}
-        >
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {header.cells.map((cell, index) => (
-                  <TableHead
-                    className={tableAlignment(block.align[index])}
-                    key={cellKey(cell)}
-                  >
-                    {renderInlines(cell.children, context)}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {body.map((row) => (
-                <TableRow
-                  key={`${row.range.startOffset}-${row.range.endOffset}`}
-                >
-                  {row.cells.map((cell, index) => (
-                    <TableCell
-                      className={tableAlignment(block.align[index])}
-                      key={cellKey(cell)}
-                    >
-                      {renderInlines(cell.children, context)}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      );
-    }
+    case "table":
+      // MarkdownTableView owns .md-table-wrap (scroll container + drag line).
+      return <MarkdownTableView block={block} context={context} />;
     case "thematicBreak":
       return <Separator className="md-hr" />;
     case "html":

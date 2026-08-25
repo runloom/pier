@@ -65,7 +65,7 @@ flowchart LR
 ```
 
 提供方 session 文件不在这条数据流中向外传播。对账器清单与缺口结案见
-[`2026-08-12-agent-status-gap-remediation.md`](./2026-08-12-agent-status-gap-remediation.md)。
+[`../../archive/superpowers/specs/2026-08-12-agent-status-gap-remediation.md`](../../archive/superpowers/specs/2026-08-12-agent-status-gap-remediation.md)。
 
 Codex：`task_complete`→`TurnCompleted`，`turn_aborted`→`TurnInterrupted`。
 Claude 族（Claude / Qoder / Codebuddy）：主链

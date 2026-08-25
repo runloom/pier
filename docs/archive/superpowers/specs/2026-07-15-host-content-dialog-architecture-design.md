@@ -249,7 +249,7 @@ Keep permanent:
 - `AppDialogHost` simple dialogs
 
 Update earlier note in
-`docs/superpowers/specs/2026-07-15-grok-add-account-dialog-design.md`:
+`docs/archive/superpowers/specs/2026-07-15-grok-add-account-dialog-design.md`:
 
 - nested ESC/product UX goals remain valid
 - nested plugin Dialog ownership is superseded by this architecture

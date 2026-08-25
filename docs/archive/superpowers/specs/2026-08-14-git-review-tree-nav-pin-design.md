@@ -4,9 +4,9 @@
 状态：**导航 Commit 条件以此文为准**。  
 部分 supersede：
 
-- [`2026-07-31-git-review-gold-standard-endstate-design.md`](./2026-07-31-git-review-gold-standard-endstate-design.md) §7：`content 已在表面` **不含** estimate；`finishTerminal` 不是整页 settle，而是目标槽离开 estimate。
-- [`2026-07-27-git-review-stable-ledger-design.md`](./2026-07-27-git-review-stable-ledger-design.md) K6 / K6b：第二次 `scrollTo` 仅允许目标自身 `estimate→loaded|error|notice`。
-- [`2026-07-31-git-review-zed-feel-design.md`](./2026-07-31-git-review-zed-feel-design.md) K4：禁止等 **整页** document settle；**必须**等目标自己的正文终态再结束导航事务。
+- [`../../../superpowers/specs/2026-07-31-git-review-gold-standard-endstate-design.md`](../../../superpowers/specs/2026-07-31-git-review-gold-standard-endstate-design.md) §7：`content 已在表面` **不含** estimate；`finishTerminal` 不是整页 settle，而是目标槽离开 estimate。
+- [`../../../superpowers/specs/2026-07-27-git-review-stable-ledger-design.md`](../../../superpowers/specs/2026-07-27-git-review-stable-ledger-design.md) K6 / K6b：第二次 `scrollTo` 仅允许目标自身 `estimate→loaded|error|notice`。
+- [`../../../superpowers/specs/2026-07-31-git-review-zed-feel-design.md`](../../../superpowers/specs/2026-07-31-git-review-zed-feel-design.md) K4：禁止等 **整页** document settle；**必须**等目标自己的正文终态再结束导航事务。
 
 体感标杆仍是 Zed `pending_scroll`；引擎仍是 Pierre CodeView。不改成单文件 Review。
 

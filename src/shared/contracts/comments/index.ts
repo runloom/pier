@@ -1,5 +1,5 @@
 /**
- * 统一评论能力契约（设计文档 2026-08-04-comments-data-model-design.md）。
+ * 统一评论能力契约（设计文档 docs/archive/superpowers/specs/2026-08-04-comments-data-model-design.md）。
  *
  * 分层（对齐 git-review/ 四文件拆分）：
  * - primitives：原子 schema（id / 时间戳 / 作者 / target kind 枚举 / 失败 / 阅读状态）

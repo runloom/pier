@@ -6,7 +6,7 @@
 
 - [2026-07-02-project-file-tree-design.md](2026-07-02-project-file-tree-design.md)（Files 树与项目锚点）
 - [2026-07-14-git-diff-review-polish-design.md](2026-07-14-git-diff-review-polish-design.md)（Git 插件完整 diff / review，职责不抢）
-- [2026-08-08-files-editor-git-gutter-click-research-design.md](../../../superpowers/specs/2026-08-08-files-editor-git-gutter-click-research-design.md)（点击查看调研与选型：路径 A 只读 peek；本文件 v1 仍仅指示条）
+- [2026-08-08-files-editor-git-gutter-click-research-design.md](2026-08-08-files-editor-git-gutter-click-research-design.md)（点击查看调研与选型：路径 A 只读 peek；本文件 v1 仍仅指示条）
 - 现有实现：`files-tree-git-decorations.ts`（目录树状态色）、`file-editor-view-session.ts`（CodeMirror 会话）
 
 ## 1. 背景与问题

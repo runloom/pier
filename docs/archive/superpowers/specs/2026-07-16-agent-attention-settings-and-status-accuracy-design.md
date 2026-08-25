@@ -3,8 +3,8 @@
 > 日期：2026-07-16  
 > 状态：**实施中**（Task 1–6 代码已落地，待 commit / 手工验收）；[实施计划](../plans/2026-07-16-agent-attention-settings-and-status-accuracy.md)  
 > 审查：Codex CLI 架构审查（2026-07-16）→ **fail → 本修订吸收 P0/P1**  
-> 前置：[`2026-07-15-agent-runtime-index-and-attention-design.md`](./2026-07-15-agent-runtime-index-and-attention-design.md)（P1 / P1.5 已实现）  
-> 状态基线：[`2026-07-13-agent-status-adapter-contract-audit.md`](./2026-07-13-agent-status-adapter-contract-audit.md)  
+> 前置：[`../../../superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md`](../../../superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md)（P1 / P1.5 已实现）  
+> 状态基线：[`../../../superpowers/specs/2026-07-13-agent-status-adapter-contract-audit.md`](../../../superpowers/specs/2026-07-13-agent-status-adapter-contract-audit.md)  
 > 范围：Phase A（通知可管理闭环）+ 状态准确性治理；**不含**完成通知 / 声音库 / 终端响铃 / 通知历史 / Canvas
 
 ## 1. 目标与完成标准
@@ -226,7 +226,7 @@ macOS best-effort URL；失败 `opened:false` + `showAppAlert` 手动路径；�
 | **注意力投递** | 有智能体需要你去处理吗？ | 系统通知（OS）· 标题栏 Needs you · Index / 命令面板 / `Mod+Shift+Y` · 终端 tab/状态栏 |
 | **操作反馈** | 我刚点的动作成功了吗？ | 强自然 UI · `toast` · `showAppAlert` |
 
-硬纪律（对齐 [AGENTS.md](../../../AGENTS.md) 与 2026-07-15 设计）：
+硬纪律（对齐 [AGENTS.md](../../../../AGENTS.md) 与 2026-07-15 设计）：
 
 1. **不是**所有消息都走系统通知。  
 2. 系统通知 **不当** 操作成功/失败的主通道（`kind: agent.attention` 只服务可行动注意力）。  
@@ -447,9 +447,9 @@ denied + sticky
 
 ## 13. 参考
 
-- [2026-07-15 Index / Attention](./2026-07-15-agent-runtime-index-and-attention-design.md)  
-- [2026-07-13 状态审计](./2026-07-13-agent-status-adapter-contract-audit.md)  
+- [2026-07-15 Index / Attention](../../../superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md)  
+- [2026-07-13 状态审计](../../../superpowers/specs/2026-07-13-agent-status-adapter-contract-audit.md)  
 - `src/main/services/preferences-service.ts`（`PATCHABLE_KEYS`）  
 - `src/main/services/system-notification.ts`（`stickyDenied`）  
 - `src/main/services/agent-attention/service.ts`（`enteredAttention`）  
-- [AGENTS.md](../../../AGENTS.md)  
+- [AGENTS.md](../../../../AGENTS.md)  

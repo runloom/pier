@@ -203,7 +203,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 浮动大纲在 scroll 内容盒内绝对定位，却期望与预览框上的字号控件右对齐
 - 细轨 / 浮层各抄一份定位 class 且数值不一致
 
-检查点在 `tests/unit/plugins/markdown-preview-layout-governance.test.ts`。
+检查点在 `tests/unit/plugins/markdown/markdown-preview-layout-governance.test.ts`。
 
 Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 `useMarkdownPreviewPrefsStore`（`markdown-preview-preferences.ts`）：全局一份、

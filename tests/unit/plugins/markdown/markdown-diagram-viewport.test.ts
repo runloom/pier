@@ -3,7 +3,7 @@ import {
   computeNaturalCappedSize,
   contentBoxWidthPx,
   parseSvgIntrinsicSize,
-} from "../../../src/plugins/builtin/files/renderer/markdown/diagram-viewport.ts";
+} from "../../../../src/plugins/builtin/files/renderer/markdown/diagram-viewport.ts";
 
 describe("parseSvgIntrinsicSize", () => {
   it("reads viewBox dimensions", () => {
