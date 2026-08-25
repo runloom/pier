@@ -44,6 +44,8 @@ final class TerminalSurfaceCoordinator {
     var platformSetup: ((inout ghostty_surface_config_s) -> Void)?
     var onMetricsUpdate: (() -> Void)?
     var onCellSizeDidChange: (() -> Void)?
+    var onMouseShape: ((TerminalMouseShape) -> Void)?
+    var onMouseVisibility: ((Bool) -> Void)?
     var onPresentationRequested: ((TerminalFramePresentationRequest) -> Void)?
     var beginFramePresentationTransaction: (() -> Void)?
     var endFramePresentationTransaction: (() -> Void)?
@@ -160,6 +162,12 @@ final class TerminalSurfaceCoordinator {
                 generation: generation,
                 reason: "ghostty-config-change"
             )
+        }
+        bridge.onMouseShape = { [weak self] shape in
+            self?.onMouseShape?(shape)
+        }
+        bridge.onMouseVisibility = { [weak self] visible in
+            self?.onMouseVisibility?(visible)
         }
         bridge.onRenderReady = { [weak self] in
             self?.handleGhosttyRenderReady(generation: generation)
