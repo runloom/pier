@@ -9,7 +9,7 @@ import {
   resolveLocalControlSocketPath,
 } from "@main/adapters/cli/local-control/server.ts";
 import { pierCommandEnvelopeSchema } from "@shared/contracts/commands.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const execFileAsync = promisify(execFile);
 const tempDirs: string[] = [];
@@ -44,37 +44,43 @@ describe("bin/pier.mjs", () => {
   });
 
   it("rejects agents self at parse time (human CLI, no agent principal)", async () => {
-    const { parsePierCliArgs } = await import(
-      "../../../bin/pier-cli-parser.js"
-    );
-    expect(() => parsePierCliArgs(["agents", "self"])).toThrow(
-      /not a product command/u
-    );
-    expect(parsePierCliArgs(["agents", "catalog"])).toMatchObject({
-      op: "agents.catalog",
-      protocol: "v2",
-    });
-    expect(parsePierCliArgs(["agents", "start", "claude"])).toMatchObject({
-      op: "agents.start",
-      params: { agentId: "claude" },
-      protocol: "v2",
-    });
-    expect(
-      parsePierCliArgs(["agents", "start", "--agent", "claude"])
-    ).toMatchObject({
-      op: "agents.start",
-      params: { agentId: "claude" },
-      protocol: "v2",
-    });
-    expect(() => parsePierCliArgs(["agents", "start"])).toThrow(
-      /agents start requires <id>/u
-    );
-    expect(() =>
-      parsePierCliArgs(["agents", "start", "claude", "--agent", "codex"])
-    ).toThrow(/not both/u);
-    expect(() =>
-      parsePierCliArgs(["agents", "start", "claude", "extra"])
-    ).toThrow(/unexpected pier CLI argument: extra/u);
+    vi.stubEnv("PIER_PANEL_ID", "panel-cli-test");
+    vi.stubEnv("PIER_WINDOW_ID", "window-cli-test");
+    try {
+      const { parsePierCliArgs } = await import(
+        "../../../bin/pier-cli-parser.js"
+      );
+      expect(() => parsePierCliArgs(["agents", "self"])).toThrow(
+        /not a product command/u
+      );
+      expect(parsePierCliArgs(["agents", "catalog"])).toMatchObject({
+        op: "agents.catalog",
+        protocol: "v2",
+      });
+      expect(parsePierCliArgs(["agents", "start", "claude"])).toMatchObject({
+        op: "agents.start",
+        params: { agentId: "claude" },
+        protocol: "v2",
+      });
+      expect(
+        parsePierCliArgs(["agents", "start", "--agent", "claude"])
+      ).toMatchObject({
+        op: "agents.start",
+        params: { agentId: "claude" },
+        protocol: "v2",
+      });
+      expect(() => parsePierCliArgs(["agents", "start"])).toThrow(
+        /agents start requires <id>/u
+      );
+      expect(() =>
+        parsePierCliArgs(["agents", "start", "claude", "--agent", "codex"])
+      ).toThrow(/not both/u);
+      expect(() =>
+        parsePierCliArgs(["agents", "start", "claude", "extra"])
+      ).toThrow(/unexpected pier CLI argument: extra/u);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("解析 status 并输出命令信封", async () => {

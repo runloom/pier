@@ -118,9 +118,9 @@ describe("usage data service", () => {
       sourceId: "local-sessions",
     });
 
-    // Rates from pricing-catalog (standard): sol 5/0.5/30, terra 2/0.2/12.
-    // Non-cached input only: sol (800*5 + 200*0.5 + 100*30) + terra (400*2 + 100*0.2 + 50*12) = 8520.
-    expect(snapshot.summary.estimatedCostMicrousd).toBe(8520);
+    // Rates from pricing-catalog (standard): sol 4/0.4/20, terra 2/0.2/12.
+    // Non-cached input only: sol (800*4 + 200*0.4 + 100*20) + terra (400*2 + 100*0.2 + 50*12) = 6700.
+    expect(snapshot.summary.estimatedCostMicrousd).toBe(6700);
     expect(snapshot.buckets[0]?.pricingStatus).toBe("complete");
   });
 
