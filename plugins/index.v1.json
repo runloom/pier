@@ -1,6 +1,38 @@
 {
-  "generatedAt": 1787395754574,
+  "generatedAt": 1787698589143,
   "plugins": {
+    "pier.agent-splits": {
+      "description": "Connect splits opened by assistants to workbench panels.",
+      "displayName": "Agent splits",
+      "id": "pier.agent-splits",
+      "latest": "1.5.1",
+      "locales": {
+        "en": {
+          "name": "Agent splits",
+          "description": "Connect splits opened by assistants to workbench panels."
+        },
+        "zh-CN": {
+          "name": "智能体分屏",
+          "description": "将智能体打开的分屏接到工作台面板。"
+        },
+        "ja": {
+          "name": "エージェント分割",
+          "description": "エージェントが開いた分割をワークベンチのパネルにつなぎます。"
+        },
+        "ko": {
+          "name": "에이전트 분할",
+          "description": "에이전트가 연 분할을 워크벤치 패널에 연결합니다."
+        }
+      },
+      "versions": {
+        "1.5.1": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-agent-splits-v1.5.1/pier.agent-splits-1.5.1.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "6d56d1bca26ec22e86edae054173ce8309a45a7d7cf374ba845c78771bde6d30",
+          "size": 57367
+        }
+      }
+    },
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
       "displayName": "Claude Account Management",
@@ -384,11 +416,11 @@
       }
     }
   },
-  "sequence": 36,
+  "sequence": 37,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "/bGJoC6uDOwWuFxBwr4th478ZHrXemjzK8V4Q5O+d64R7tZJ2WXxjcscoWUY9S2S5VOqmzXMB6bWLY/07ZfCCQ=="
+    "value": "h5GupJIFSBEnyOOQ0fNVqkgGb5mq7qPZ9j08zHbBHo9Ou1fGNNXev16eitmHJIQFLwLiVU/5LNdrRUojr1jcCQ=="
   }
 }
