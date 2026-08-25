@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { ComposerAttachment } from "@/panel-kits/terminal/composer-attachments-model.ts";
 import {
   buildComposerSendText,
+  createPasteAttachment,
   insertAttachmentPathAtCursor,
   insertPlainTextAtSelection,
   kindFromFileName,
   removeAttachmentById,
+  updatePasteAttachmentContent,
 } from "@/panel-kits/terminal/composer-attachments-model.ts";
 
 const a = (path: string, id = path): ComposerAttachment => ({
@@ -78,6 +80,41 @@ describe("removeAttachmentById", () => {
     expect(removeAttachmentById({ attachments, removeId: "2" })).toEqual([
       a("/p/1.png", "1"),
     ]);
+  });
+});
+
+describe("createPasteAttachment", () => {
+  it("stores a clipped textPreview beside the full paste body", () => {
+    const att = createPasteAttachment({
+      id: "p1",
+      name: "paste.txt",
+      pasteContent: "\n\n  const x = 1;\n  return x;\n  more();\n",
+      pasteTier: "medium",
+      path: "/tmp/paste.txt",
+    });
+    expect(att.pasteContent).toContain("more();");
+    expect(att.textPreview).toBe("  const x = 1;\n  return x;");
+  });
+});
+
+describe("updatePasteAttachmentContent", () => {
+  it("refreshes textPreview when the paste body is edited", () => {
+    const attachments = [
+      createPasteAttachment({
+        id: "p1",
+        name: "paste.txt",
+        pasteContent: "old line\nstale",
+        pasteTier: "medium",
+        path: "/tmp/paste.txt",
+      }),
+    ];
+    const next = updatePasteAttachmentContent({
+      attachments,
+      id: "p1",
+      text: "updated snippet\nsecond line\nthird",
+    });
+    expect(next[0]?.pasteContent).toBe("updated snippet\nsecond line\nthird");
+    expect(next[0]?.textPreview).toBe("updated snippet\nsecond line");
   });
 });
 

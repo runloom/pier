@@ -66,6 +66,7 @@ export const terminal = {
     editPasteSave: "Save",
     editPasteSaveFailed: "Couldn’t save pasted content — try again",
     pasteAttachmentAria: "Pasted content, attachment {{n}}",
+    pasteAttachmentLabel: "Pasted content",
     attachmentAutocompleteEmptyBody:
       "Add a file first, then type # to insert it here.",
     attachmentAutocompleteEmptyTitle: "No attachments yet",

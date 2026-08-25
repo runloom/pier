@@ -80,8 +80,11 @@ export function PierFileIcon({
   const symbolId = icon.name.replace(/^#/, "");
   const viewBox =
     icon.viewBox ?? `0 0 ${icon.width ?? 16} ${icon.height ?? 16}`;
+  const ariaHidden = props["aria-hidden"];
+  const decorative = ariaHidden === true || ariaHidden === "true";
 
   return (
+    // biome-ignore lint/a11y/noSvgWithoutTitle: aria-hidden glyphs must not expose a native title tooltip
     <svg
       {...props}
       className={cn("pier-file-icon", className)}
@@ -93,7 +96,7 @@ export function PierFileIcon({
       viewBox={viewBox}
       width={size}
     >
-      <title>{fileName}</title>
+      {decorative ? null : <title>{fileName}</title>}
       <use href={`#${symbolId}`} />
     </svg>
   );

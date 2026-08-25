@@ -66,6 +66,7 @@ export const terminal = {
     editPasteSave: "저장",
     editPasteSaveFailed: "붙여넣은 내용을 저장하지 못했습니다. 다시 시도하세요",
     pasteAttachmentAria: "붙여넣은 내용, 첨부 {{n}}",
+    pasteAttachmentLabel: "붙여넣은 내용",
     attachmentAutocompleteEmptyBody:
       "먼저 파일을 추가한 다음 #을 입력해 여기에 삽입하세요.",
     attachmentAutocompleteEmptyTitle: "아직 첨부가 없습니다",

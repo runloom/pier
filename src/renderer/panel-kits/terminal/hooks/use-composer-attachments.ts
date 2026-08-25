@@ -65,6 +65,9 @@ function dtoToAttachment(
     path: dto.path,
     ...(dto.isDirectory ? { isDirectory: dto.isDirectory } : {}),
     ...(dto.previewDataUrl ? { previewDataUrl: dto.previewDataUrl } : {}),
+    ...(dto.previewWidth ? { previewWidth: dto.previewWidth } : {}),
+    ...(dto.previewHeight ? { previewHeight: dto.previewHeight } : {}),
+    ...(dto.textPreview ? { textPreview: dto.textPreview } : {}),
   };
 }
 

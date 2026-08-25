@@ -14,7 +14,7 @@ import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { isMac } from "@/lib/keybindings/matcher.ts";
 import { parseChord } from "@/lib/keybindings/parse.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
-import { TerminalComposerAttachmentRail } from "./composer-attachment-rail.tsx";
+import { TerminalComposerAttachmentRail } from "./composer-attachment/rail.tsx";
 import type { ComposerAttachment } from "./composer-attachments-model.ts";
 import {
   elementSoftWrapped,

@@ -4,7 +4,7 @@
 状态：待实现（已按设计审查修订）；**编辑器 / `@` 相关非目标已由 [`2026-07-22-rich-input-structured-composer-design.md`](./2026-07-22-rich-input-structured-composer-design.md) 修订**  
 范围：按需增强输入（Rich Input）上的任意文件附件：选择、粘贴、拖拽；发送时把绝对路径交给智能体自行处理。
 
-**后续修订：** 纯文本粘贴分档（小全文 / 中大上轨 + 可编辑弹窗、中档发送展开正文）见 [`2026-08-10-composer-paste-tiered-ux-design.md`](./2026-08-10-composer-paste-tiered-ux-design.md)；实现时 `kind` 将增加 `paste`，发送序列化对中档 paste 不再只注入 path。
+**后续修订：** 纯文本粘贴分档见 [`2026-08-10-composer-paste-tiered-ux-design.md`](./2026-08-10-composer-paste-tiered-ux-design.md)。附件轨视觉（图片完整可见、文本缩略、文件名）见 [`2026-08-25-composer-attachment-rail-preview-design.md`](./2026-08-25-composer-attachment-rail-preview-design.md)。
 
 ## 1. 背景与目标
 
@@ -80,7 +80,7 @@ attachmentsByPanel: Map<string, Attachment[]>
 - 展示序号 `#n` = 下标 + 1，不写入字段。
 - 数组顺序 = chip 顺序 = 发送路径顺序。
 - **`kind` 判定（v1）：** 扩展名属于 `png|jpe?g|gif|webp|bmp|svg`（大小写不敏感）→ `image`，否则 `file`。不探 mime、不读文件头。
-- **缩略图（v1）：** 仅 `kind === "image"` 且 path 在临时目录 `pier-terminal-pastes` 下时，可用 `file://` 或主进程只读字节生成预览；其它本地路径**默认只显示图标**（避免 CSP/权限/大图问题）。预览失败一律降级图标，不阻断添加。
+- **缩略图：** 以实现与 [`2026-08-25-composer-attachment-rail-preview-design.md`](./2026-08-25-composer-attachment-rail-preview-design.md) 为准：图片 contain 预览（不限临时目录）；可读文本给开头缩略；失败降级为图标 + 文件名，不阻断添加。
 
 正文占位：`[#n]`，n ≥ 1 的十进制数字，无空格。词法锁定：
 

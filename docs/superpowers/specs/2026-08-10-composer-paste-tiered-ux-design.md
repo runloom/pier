@@ -1,9 +1,9 @@
 # 增强输入粘贴分档展示与编辑设计
 
 日期：2026-08-10  
-状态：已实现；**UI 必须与现网附件轨 / 正文 token 一致**（见 §5）  
-范围：按需增强输入中，纯文本粘贴的分档阈值、附件轨统一展示、点击编辑弹窗、发送语义与逃生路径。  
-不包含：终端 PTY 多行粘贴确认、智能体 TUI 自有 `[Pasted text #N]` 协议、图片/文件粘贴既有路径改造；**不重做附件轨视觉**。
+状态：已实现；**发送 / 点击 / 正文 token 仍以本文为准**。附件轨视觉已由 [`2026-08-25-composer-attachment-rail-preview-design.md`](./2026-08-25-composer-attachment-rail-preview-design.md) 修订（废止 §5.1 统一 56 方格）。  
+范围：按需增强输入中，纯文本粘贴的分档阈值、附件轨展示、点击编辑弹窗、发送语义与逃生路径。  
+不包含：终端 PTY 多行粘贴确认、智能体 TUI 自有 `[Pasted text #N]` 协议、图片/文件粘贴既有路径改造。
 
 相关：
 
@@ -11,7 +11,7 @@
 - 结构化编辑器与旧「≥10k → 附件」：[`2026-07-22-rich-input-structured-composer-design.md`](./2026-07-22-rich-input-structured-composer-design.md)（**§6.2 由本规格修订**）
 - 宿主内容弹窗：[`2026-07-15-host-content-dialog-architecture-design.md`](./2026-07-15-host-content-dialog-architecture-design.md)
 - **现网 UI 真源（实现对照，禁止另起一套）：**
-  - 轨：`src/renderer/panel-kits/terminal/composer-attachment-rail.tsx`
+  - 轨：`src/renderer/panel-kits/terminal/composer-attachment/rail.tsx`
   - 模型：`composer-attachments-model.ts`
   - 正文 token：`structured-composer/attachment-token-node.tsx` + `composer-chip-styles.ts`
 
@@ -105,11 +105,13 @@ function classifyPlainPaste(text: string): "small" | "medium" | "large" {
 
 ## 5. UI 一致性（硬约束 · 对照现网）
 
-实现时**禁止**另起横向命名条、行数角标条、第二套 rail、或改正文 token 视觉。只允许：数据字段 + `onOpen` 分支 + 宿主 dialog。
+正文 token 与点击分发仍须与附件同一条轨、同一套 chip，禁止另起 `PasteChip` 或改正文 token 视觉。
 
-### 5.1 附件轨（`composer-attachment-rail.tsx`）
+**附件轨卡片形状与 56×56 方格：** 已废止。现网真源见 [`2026-08-25-composer-attachment-rail-preview-design.md`](./2026-08-25-composer-attachment-rail-preview-design.md)（图片 contain、格内文本缩略、其它文件只显示类型图标、名字在悬停提示）。
 
-现网结构（必须保持）：
+### 5.1 附件轨（历史；视觉以 2026-08-25 为准）
+
+历史结构（实现前快照，勿再当验收）：
 
 ```text
 每项 AttachmentTile：

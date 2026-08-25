@@ -60,6 +60,7 @@ export const terminal = {
     editPasteSave: "保存",
     editPasteSaveFailed: "无法保存粘贴内容，请重试",
     pasteAttachmentAria: "粘贴内容，第 {{n}} 个附件",
+    pasteAttachmentLabel: "粘贴内容",
     attachmentAutocompleteEmptyBody: "请先添加文件，再输入 # 插入到正文。",
     attachmentAutocompleteEmptyTitle: "还没有附件",
     attachmentAutocompleteNoResults: "没有匹配的附件",

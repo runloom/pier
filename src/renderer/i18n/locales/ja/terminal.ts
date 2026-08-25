@@ -72,6 +72,7 @@ export const terminal = {
     editPasteSaveFailed:
       "貼り付け内容を保存できませんでした。もう一度お試しください",
     pasteAttachmentAria: "貼り付け内容、添付 {{n}}",
+    pasteAttachmentLabel: "貼り付け内容",
     attachmentAutocompleteEmptyBody:
       "先にファイルを追加してから、# でここに挿入してください。",
     attachmentAutocompleteEmptyTitle: "添付はまだありません",

@@ -1,3 +1,5 @@
+import { clipComposerTextPreview } from "@shared/composer-attachment-kind.ts";
+
 export { kindFromFileName } from "@shared/composer-attachment-kind.ts";
 
 export type ComposerAttachmentPasteTier = "medium" | "large";
@@ -18,6 +20,10 @@ export interface ComposerAttachment {
   path: string;
   /** Image thumbnail data URL from main; file attachments omit this. */
   previewDataUrl?: string | undefined;
+  previewHeight?: number | undefined;
+  previewWidth?: number | undefined;
+  /** Clipped text thumbnail; paste create/edit keep this in sync with pasteContent. */
+  textPreview?: string | undefined;
 }
 
 export const MAX_COMPOSER_SEND_TEXT_LENGTH = 64_000;
@@ -249,6 +255,7 @@ export function updatePasteAttachmentContent(input: {
     return {
       ...att,
       pasteContent: input.text,
+      textPreview: clipComposerTextPreview(input.text),
     };
   });
 }
@@ -268,5 +275,6 @@ export function createPasteAttachment(input: {
     path: input.path,
     pasteContent: input.pasteContent,
     pasteTier: input.pasteTier,
+    textPreview: clipComposerTextPreview(input.pasteContent),
   };
 }
