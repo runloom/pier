@@ -35,7 +35,7 @@ describe("markdown preview layout governance", () => {
     expect(agents).toContain("默认不遮挡正文");
     expect(agents).toContain("MARKDOWN_TOC_TOP_RATIO");
     expect(agents).toContain(
-      "tests/unit/plugins/markdown-preview-layout-governance.test.ts"
+      "tests/unit/plugins/markdown/markdown-preview-layout-governance.test.ts"
     );
   });
 

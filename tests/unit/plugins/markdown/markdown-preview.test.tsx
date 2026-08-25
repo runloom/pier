@@ -52,8 +52,12 @@ describe("MarkdownPreview", () => {
     const { container } = render(
       <MarkdownPreview
         labels={{
+          anchorCopied: "Anchor copied",
           copiedCode: "Copied",
+          copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
+          wrapOff: "Word Wrap: Off",
+          wrapOn: "Word Wrap: On",
           completedTask: "Completed task",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
@@ -62,6 +66,7 @@ describe("MarkdownPreview", () => {
           imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
           openFullscreen: "View fullscreen",
+          resizeColumn: "Resize column",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -419,8 +424,12 @@ describe("MarkdownPreview", () => {
         copyCode={copyCode}
         labels={{
           completedTask: "Completed task",
+          anchorCopied: "Anchor copied",
           copiedCode: "Copied",
+          copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
+          wrapOff: "Word Wrap: Off",
+          wrapOn: "Word Wrap: On",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
           diagramPreviewTitle: "Diagram preview",
@@ -428,6 +437,7 @@ describe("MarkdownPreview", () => {
           imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
           openFullscreen: "View fullscreen",
+          resizeColumn: "Resize column",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -761,8 +771,12 @@ describe("MarkdownPreview", () => {
         }}
         labels={{
           completedTask: "Completed task",
+          anchorCopied: "Anchor copied",
           copiedCode: "Copied",
+          copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
+          wrapOff: "Word Wrap: Off",
+          wrapOn: "Word Wrap: On",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
           diagramPreviewTitle: "Diagram preview",
@@ -770,6 +784,7 @@ describe("MarkdownPreview", () => {
           imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
           openFullscreen: "View fullscreen",
+          resizeColumn: "Resize column",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -830,8 +845,12 @@ describe("MarkdownPreview", () => {
         }}
         labels={{
           completedTask: "Completed task",
+          anchorCopied: "Anchor copied",
           copiedCode: "Copied",
+          copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
+          wrapOff: "Word Wrap: Off",
+          wrapOn: "Word Wrap: On",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
           diagramPreviewTitle: "Diagram preview",
@@ -839,6 +858,7 @@ describe("MarkdownPreview", () => {
           imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
           openFullscreen: "View fullscreen",
+          resizeColumn: "Resize column",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -892,8 +912,12 @@ describe("MarkdownPreview", () => {
         }}
         labels={{
           completedTask: "Completed task",
+          anchorCopied: "Anchor copied",
           copiedCode: "Copied",
+          copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
+          wrapOff: "Word Wrap: Off",
+          wrapOn: "Word Wrap: On",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
           diagramPreviewTitle: "Diagram preview",
@@ -902,6 +926,7 @@ describe("MarkdownPreview", () => {
           imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
           openFullscreen: "View fullscreen",
+          resizeColumn: "Resize column",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -945,8 +970,12 @@ describe("MarkdownPreview", () => {
         }}
         labels={{
           completedTask: "Completed task",
+          anchorCopied: "Anchor copied",
           copiedCode: "Copied",
+          copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
+          wrapOff: "Word Wrap: Off",
+          wrapOn: "Word Wrap: On",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
           diagramPreviewTitle: "Diagram preview",
@@ -954,6 +983,7 @@ describe("MarkdownPreview", () => {
           imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
           openFullscreen: "View fullscreen",
+          resizeColumn: "Resize column",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -1073,8 +1103,12 @@ describe("MarkdownPreview", () => {
         }}
         labels={{
           completedTask: "Completed task",
+          anchorCopied: "Anchor copied",
           copiedCode: "Copied",
+          copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
+          wrapOff: "Word Wrap: Off",
+          wrapOn: "Word Wrap: On",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
           diagramPreviewTitle: "Diagram preview",
@@ -1082,6 +1116,7 @@ describe("MarkdownPreview", () => {
           imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
           openFullscreen: "View fullscreen",
+          resizeColumn: "Resize column",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -1351,8 +1386,12 @@ describe("MarkdownPreview", () => {
         }}
         labels={{
           completedTask: "Completed task",
+          anchorCopied: "Anchor copied",
           copiedCode: "Copied",
+          copyAnchor: "Copy heading anchor",
           copyCode: "Copy code",
+          wrapOff: "Word Wrap: Off",
+          wrapOn: "Word Wrap: On",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
           diagramPreviewTitle: "Diagram preview",
@@ -1360,6 +1399,7 @@ describe("MarkdownPreview", () => {
           imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
           openFullscreen: "View fullscreen",
+          resizeColumn: "Resize column",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}

@@ -18,6 +18,7 @@ import type {
   MarkdownPreviewZoomLabels,
 } from "./preview-defaults.ts";
 import type { MarkdownPagination, MarkdownRuntime } from "./runtime.ts";
+import type { TaskToggleInput } from "./task-patch.ts";
 import type { MarkdownPreviewSearchLabels } from "./use-preview-search.ts";
 
 export interface MarkdownPreviewProps {
@@ -34,6 +35,8 @@ export interface MarkdownPreviewProps {
   /** One-shot content restore after source → preview mode switch. */
   contentAnchor?: MarkdownCrossModeAnchor | undefined;
   contentAnchorRequestId?: string | number | undefined;
+  /** Heading anchor copy channel; host owns clipboard + toast/alert feedback. */
+  copyAnchor?: ((anchor: string) => Promise<void>) | undefined;
   copyCode?: ((code: string) => Promise<void>) | undefined;
   errorLabel?: string | undefined;
   fileResources?: MarkdownFileResources | undefined;
@@ -44,6 +47,9 @@ export interface MarkdownPreviewProps {
     | ((event: ReactMouseEvent<HTMLDivElement>) => void)
     | undefined;
   onJumpToSource?: ((offset: number) => void) | undefined;
+  /** Host task-checkbox toggle; writes the patched contents back via the document model. */
+  onToggleTask?: ((input: TaskToggleInput) => void) | undefined;
+  onToggleWordWrap?: (() => void) | undefined;
   openExternal: (url: string) => void;
   openInternal?: ((target: MarkdownInternalTarget) => void) | undefined;
   /** Dockview panel instance id — used for select-all provider scope. */

@@ -32,10 +32,13 @@ export const dialog = {
   imagePreview: {
     actualSize: "实际大小",
     controlsLabel: "图片控件",
+    copyImage: "复制图片",
+    copyImageFailed: "无法复制图片",
     fit: "适应窗口",
     loadFailedDescription: "无法加载图片，或文件已在打开后变化。",
     loadFailedTitle: "无法显示图片",
     loading: "正在加载图片",
+    imageCopied: "已复制图片",
     title: "图片预览",
     viewerLabel: "图片预览",
     zoomIn: "放大",

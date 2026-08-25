@@ -1,7 +1,14 @@
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@pier/ui/empty.tsx";
 import { Construction } from "lucide-react";
+import { FILES_EDITOR_WORD_WRAP_SETTING_KEY } from "../../settings.ts";
+import { getDocument, updateDocumentContents } from "../document/store.ts";
+import { useFilesDocument } from "../document/use-document.ts";
 import { FilesLineDiff } from "../markdown/line-diff.tsx";
 import { MarkdownPreview } from "../markdown/preview.tsx";
+import {
+  patchTaskMarker,
+  type TaskToggleInput,
+} from "../markdown/task-patch.ts";
 import { FileCanvasPreview } from "../preview/canvas.tsx";
 import type { FileEditorAdapterProps } from "./adapter-types.ts";
 import { CodeMirrorEditor } from "./cm.tsx";
@@ -13,6 +20,55 @@ const DEFAULT_LABELS = {
 
 export function FileEditorAdapter(props: FileEditorAdapterProps) {
   const labels = props.labels ?? DEFAULT_LABELS;
+  const context = props.context;
+  const onToggleWordWrap = context
+    ? () => {
+        context.configuration
+          .set(
+            FILES_EDITOR_WORD_WRAP_SETTING_KEY,
+            context.configuration.get<boolean>(
+              FILES_EDITOR_WORD_WRAP_SETTING_KEY
+            ) !== true
+          )
+          .catch((error: unknown) => {
+            // 配置写入失败必须可见（仓库反馈规范：异步变更不许静默）。
+            context.notifications.error(
+              error instanceof Error ? error.message : String(error)
+            );
+          });
+      }
+    : undefined;
+  // Task-checkbox write-back: the preview is the only Markdown content edit
+  // channel. Flip the marker in the current buffer and hand the patched
+  // contents to the document model — dirty/autosave/CAS conflict handling is
+  // inherited from updateDocumentContents. Disabled under diskConflict freeze
+  // and readOnly (mirrors saver-side guards).
+  const document = useFilesDocument(props.documentId);
+  const onToggleTask =
+    document && !document.diskConflict && !document.readOnly
+      ? ({ rangeStart, rangeEnd, checked }: TaskToggleInput) => {
+          // Handler 内重读最新 store 状态：基于 render 快照做 read-modify-write
+          // 会覆盖快照之后落库的并发写入（其他面板键入 / 异步 watch 重读），
+          // 且 loadState 未 loaded 时预览渲染的是旧内容，写入会丢盘上新内容。
+          const latest = getDocument(document.id);
+          if (
+            !latest ||
+            latest.diskConflict ||
+            latest.readOnly ||
+            latest.loadState !== "loaded"
+          ) {
+            return;
+          }
+          const next = patchTaskMarker(
+            latest.currentContents,
+            { end: rangeEnd, start: rangeStart },
+            checked
+          );
+          if (next !== latest.currentContents) {
+            updateDocumentContents(latest.id, next);
+          }
+        }
+      : undefined;
 
   if (props.mode === "preview") {
     // Canvas must never fall through to MarkdownPreview (raw TSX as markdown).
@@ -55,6 +111,7 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         commentsContext={props.context}
         contentAnchor={props.markdownContentAnchor}
         contentAnchorRequestId={props.markdownContentAnchorRequestId}
+        copyAnchor={props.markdownCopyAnchor}
         copyCode={props.markdownCopyCode}
         errorLabel={props.markdownErrorLabel}
         fileResources={props.markdownFileResources}
@@ -66,6 +123,8 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         labels={props.markdownLabels}
         onContextMenu={props.onMarkdownPreviewContextMenu}
         onJumpToSource={props.onJumpToSource}
+        onToggleTask={onToggleTask}
+        onToggleWordWrap={onToggleWordWrap}
         openExternal={props.openExternal}
         openInternal={props.onOpenMarkdownInternal}
         panelId={props.panelId}

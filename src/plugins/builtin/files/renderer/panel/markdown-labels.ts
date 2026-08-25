@@ -83,8 +83,12 @@ export function createMarkdownRendererLabels(
   t: FilesTranslate
 ): MarkdownRendererLabels {
   return {
+    anchorCopied: t("filePanel.markdown.anchorCopied", "Anchor copied"),
     copiedCode: t("filePanel.markdown.copiedCode", "Copied"),
+    copyAnchor: t("filePanel.markdown.copyAnchor", "Copy heading anchor"),
     copyCode: t("filePanel.markdown.copyCode", "Copy code"),
+    wrapOff: t("filePanel.editor.action.wordWrap.off", "Word Wrap: Off"),
+    wrapOn: t("filePanel.editor.action.wordWrap.on", "Word Wrap: On"),
     diagramFailed: t(
       "filePanel.markdown.diagramFailed",
       "Unable to render diagram"
@@ -106,6 +110,10 @@ export function createMarkdownRendererLabels(
     openFullscreen: t("filePanel.markdown.openFullscreen", "View fullscreen"),
     completedTask: t("filePanel.markdown.completedTask", "Completed task"),
     incompleteTask: t("filePanel.markdown.incompleteTask", "Incomplete task"),
+    resizeColumn: t(
+      "filePanel.markdown.resizeColumn",
+      "Drag to adjust column display width. Double-click to reset."
+    ),
   };
 }
 

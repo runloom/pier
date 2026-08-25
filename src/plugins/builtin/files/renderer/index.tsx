@@ -37,7 +37,10 @@ import { registerFilesLspNavigationDeps } from "./lsp/navigation.ts";
 import { markdownCodeHighlighter } from "./markdown/code-highlighter.ts";
 import { migrateLegacyMarkdownReadingFontToDocumentFont } from "./markdown/migrate-doc-font.ts";
 import { createFilesMarkdownPreviewActions } from "./markdown/preview-actions.ts";
-import { bindMarkdownSettingsFromConfiguration } from "./markdown/preview-preferences.ts";
+import {
+  bindMarkdownCodeWrapFromConfiguration,
+  bindMarkdownSettingsFromConfiguration,
+} from "./markdown/preview-preferences.ts";
 import { markdownRuntime } from "./markdown/runtime.ts";
 import { FilesMutationSuspendedError } from "./mutation/gate.ts";
 import { registerFilesTerminalOpenUrlHandler } from "./open-url/handler.ts";
@@ -345,6 +348,7 @@ export const filesRendererPlugin: RendererPluginModule = {
         context.actions.register(action)
       ),
       bindMarkdownSettingsFromConfiguration(context.configuration),
+      bindMarkdownCodeWrapFromConfiguration(context.configuration),
       (() => {
         migrateLegacyMarkdownReadingFontToDocumentFont(context.configuration);
         return () => undefined;
