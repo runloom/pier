@@ -13,7 +13,6 @@ function attachment(
     id: overrides.id ?? overrides.path,
     kind: overrides.kind ?? "file",
     name,
-    path: overrides.path,
     ...overrides,
   };
 }

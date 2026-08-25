@@ -955,7 +955,11 @@ describe("TerminalPanel lifecycle", () => {
       />
     );
 
-    await expect(confirmation).rejects.toThrow("native create failed");
+    await expect(confirmation).rejects.toThrow(
+      i18next.t("terminal.ghosttyHost.createFailed", {
+        error: "native create failed",
+      })
+    );
   });
 
   it("does not count hidden panel time toward the committed-frame timeout", async () => {
@@ -1350,7 +1354,9 @@ describe("TerminalPanel lifecycle", () => {
         reason: "relaunch",
       });
     });
-    const errorText = await findByText("close boom");
+    const errorText = await findByText(
+      i18next.t("terminal.ghosttyHost.relaunchFailed", { error: "close boom" })
+    );
     expect(window.pier.terminal.create).toHaveBeenCalledTimes(1);
     const root = container.querySelector('[data-testid="terminal-panel-root"]');
     expect(root?.className ?? "").not.toContain("--terminal-background");
@@ -2045,7 +2051,9 @@ describe("TerminalPanel lifecycle", () => {
 
     const { container, findByText } = render(<TerminalPanel {...props} />);
 
-    const errorText = await findByText("终端创建失败");
+    const errorText = await findByText(
+      i18next.t("terminal.ghosttyHost.createFailed", { error: "终端创建失败" })
+    );
     const root = container.querySelector('[data-testid="terminal-panel-root"]');
     expect(root?.className ?? "").not.toContain("--terminal-background");
     expect(errorText.parentElement?.className ?? "").toContain(
@@ -2126,8 +2134,16 @@ describe("TerminalPanel lifecycle", () => {
 
     const { findByText } = render(<TerminalPanel {...props} />);
 
-    expect(await findByText("终端创建失败")).toBeInTheDocument();
-    const retryButton = screen.getByRole("button", { name: "重试" });
+    expect(
+      await findByText(
+        i18next.t("terminal.ghosttyHost.createFailed", {
+          error: "终端创建失败",
+        })
+      )
+    ).toBeInTheDocument();
+    const retryButton = screen.getByRole("button", {
+      name: i18next.t("terminal.ghosttyHost.errorRetry"),
+    });
     act(() => {
       fireEvent.click(retryButton);
     });
@@ -2135,7 +2151,13 @@ describe("TerminalPanel lifecycle", () => {
     await waitFor(() => {
       expect(window.pier.terminal.create).toHaveBeenCalledTimes(2);
     });
-    expect(screen.queryByText("终端创建失败")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        i18next.t("terminal.ghosttyHost.createFailed", {
+          error: "终端创建失败",
+        })
+      )
+    ).not.toBeInTheDocument();
 
     await act(async () => {
       retryCreate.resolve({ ok: true });
