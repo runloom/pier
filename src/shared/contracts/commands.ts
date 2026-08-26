@@ -30,6 +30,7 @@ import {
   liveModulesRegisterRootRequestSchema,
   liveModulesUnregisterRootRequestSchema,
 } from "./live-modules.ts";
+import { memoryRootRequestSchema } from "./memory.ts";
 import { panelTransferPierCommandSchemas } from "./panel-transfer.ts";
 import {
   pierHomeInfoRequestSchema,
@@ -402,6 +403,15 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   agentMcpPathActionRequestSchema.extend({
     type: z.literal("agentMcp.open"),
+  }),
+  memoryRootRequestSchema.extend({
+    type: z.literal("memory.enable"),
+  }),
+  memoryRootRequestSchema.extend({
+    type: z.literal("memory.disable"),
+  }),
+  memoryRootRequestSchema.extend({
+    type: z.literal("memory.status"),
   }),
   // accounts.* commands removed: Codex accounts now live behind plugin RPC.
   // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)

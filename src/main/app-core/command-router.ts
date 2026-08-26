@@ -32,6 +32,7 @@ import { executeFileCommand } from "./commands/file.ts";
 import { executeGitCommand } from "./commands/git.ts";
 import { executeGitReviewCommand } from "./commands/git-review.ts";
 import { executeLiveModulesCommand } from "./commands/live-modules.ts";
+import { executeMemoryCommand } from "./commands/memory.ts";
 import {
   executeNotificationsFocusCommand,
   executeNotificationsGetCommand,
@@ -359,6 +360,7 @@ async function executeCommandByDomain(
     (cmd: PierCommand) => executePierHomeCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeLiveModulesCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeAgentAssetsCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeMemoryCommand(requestId, cmd, services),
     (cmd: PierCommand) =>
       executeWorktreeCommand(
         requestId,

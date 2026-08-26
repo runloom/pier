@@ -135,10 +135,17 @@ export class MemoryReconciler {
           outcome: record.lastOutcome,
         })
       );
+      const storePath = join(storeDir, "memory.jsonl");
+      const counts = await new MemoryStoreManager({
+        baseDir: this.#deps.baseDir,
+      }).stats(storePath);
       return {
+        derivedState: derivedState(ledger.desiredState, targets),
         desiredState: ledger.desiredState,
-        state: derivedState(ledger.desiredState, targets),
-        storePath: join(storeDir, "memory.jsonl"),
+        enginePackage: ledger.enginePackage,
+        entityCount: counts.entities,
+        observationCount: counts.observations,
+        storePath,
         targets,
       };
     });

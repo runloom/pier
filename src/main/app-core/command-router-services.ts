@@ -10,6 +10,7 @@ import type {
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal/status-bar.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
+import type { MemoryReconciler } from "../services/agent-managed-assets/reconcile.ts";
 import type { AgentMcpCatalogService } from "../services/agent-mcp-catalog/service.ts";
 import type { AgentRulesService } from "../services/agent-rules/service.ts";
 import type { AgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
@@ -128,6 +129,7 @@ export interface PierCoreServices {
     update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
   };
   processEnvironment: ProcessEnvironmentService;
+  projectMemory?: MemoryReconciler;
   projectSkills?: ProjectSkillsService;
   rendererCommand: RendererCommandService;
   secrets: SecretsStore;

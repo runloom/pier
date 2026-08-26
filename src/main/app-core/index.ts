@@ -361,6 +361,7 @@ function createPierAppCore(): PierAppCore {
     localEnvironments,
     pierBindings,
     pierHome,
+    projectMemory,
     projectSkills,
     systemSkills,
   } = wireAppCorePierHomeAndSkills({
@@ -376,7 +377,7 @@ function createPierAppCore(): PierAppCore {
         ? join(process.cwd(), "resources")
         : process.resourcesPath,
     transactionLock: filePathTransactionLock,
-    userDataPath: app.getPath("userData"),
+    userDataPath: userDataDir,
   });
   const workspaceService = createWorkspaceService();
   const { panelTransfer: panelTransferRef, window: windowService } =
@@ -420,6 +421,7 @@ function createPierAppCore(): PierAppCore {
     fileWatch: createFileWatchService(),
     pluginDataProjections: appCoreProjections.projections,
     preferences,
+    projectMemory,
     projectSkills,
     systemSkills,
     secrets,
@@ -484,9 +486,8 @@ function createPierAppCore(): PierAppCore {
       services,
     }),
     eventBus,
-    disposeManagedPluginDevRuntimeWatch: () => {
-      managedPluginDevRuntimeWatches.dispose();
-    },
+    disposeManagedPluginDevRuntimeWatch: () =>
+      managedPluginDevRuntimeWatches.dispose(),
     disposePluginDataProjections: () => appCoreProjections.disposeTap(),
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),

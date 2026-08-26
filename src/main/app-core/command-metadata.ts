@@ -3,6 +3,7 @@ import type {
   PierCapability,
   PierClientKind,
 } from "@shared/contracts/permissions.ts";
+import { ASSET_COMMAND_METADATA } from "./command-metadata-assets.ts";
 
 /** Exhaustive per-command authorization; Record keys cover every PierCommand type. */
 export interface CommandMetadata {
@@ -13,6 +14,7 @@ export interface CommandMetadata {
 }
 
 const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
+  ...ASSET_COMMAND_METADATA,
   "ai.status": { capabilities: ["ai:invoke"] },
   "ai.generateText": { capabilities: ["ai:invoke"] },
   "environment.project.add": { capabilities: ["environment:write"] },
@@ -99,34 +101,6 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "liveModules.revokeTrust": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["preferences:write"],
-  },
-  "rules.snapshot": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["file:read"],
-  },
-  "rules.read": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["file:read"],
-  },
-  "rules.write": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["file:write"],
-  },
-  "rules.ensure": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["file:write"],
-  },
-  "agentMcp.catalog": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["file:read"],
-  },
-  "agentMcp.reveal": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["file:read"],
-  },
-  "agentMcp.open": {
-    allowedClientKinds: ["desktop-renderer"],
-    capabilities: ["file:read"],
   },
   "app.status": { capabilities: ["app:read"] },
   "app.cli.status": {

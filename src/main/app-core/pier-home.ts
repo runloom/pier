@@ -1,4 +1,9 @@
+import { execFile } from "node:child_process";
+import { dirname, join } from "node:path";
+import { promisify } from "node:util";
+import { type AgentKind, agentKindSchema } from "@shared/contracts/agent.ts";
 import type { ProjectSkillsInvalidatedEvent } from "@shared/contracts/project-skills.ts";
+import { MemoryReconciler } from "../services/agent-managed-assets/reconcile.ts";
 import { createAgentMcpCatalogService } from "../services/agent-mcp-catalog/service.ts";
 import { createAgentRulesService } from "../services/agent-rules/service.ts";
 import type { FilePathTransactionLock } from "../services/files/path-transaction-lock.ts";
@@ -35,6 +40,7 @@ export function wireAppCorePierHomeAndSkills(input: {
   localEnvironments: LocalEnvironmentService;
   pierBindings: ReturnType<typeof wireProjectSkills>["pierBindings"];
   pierHome: PierHomeService;
+  projectMemory: MemoryReconciler;
   projectSkills: ReturnType<typeof wireProjectSkills>["projectSkills"];
   systemSkills: ReturnType<typeof wireProjectSkills>["systemSkills"];
 } {
@@ -85,6 +91,37 @@ export function wireAppCorePierHomeAndSkills(input: {
       },
     });
 
+  const projectMemory = new MemoryReconciler({
+    agentRules,
+    baseDir: join(input.userDataPath, "plugin-data", "pier.memory"),
+    isTracked: async (absolutePath) => {
+      try {
+        await promisify(execFile)(
+          "git",
+          [
+            "-C",
+            dirname(absolutePath),
+            "ls-files",
+            "--error-unmatch",
+            "--",
+            absolutePath,
+          ],
+          { timeout: 5000 }
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    listInstalledAgents: async () => {
+      const ids = await input.listInstalledAgents();
+      return ids.filter(
+        (id): id is AgentKind => agentKindSchema.safeParse(id).success
+      );
+    },
+    lock: input.transactionLock,
+  });
+
   return {
     agentLaunchGate,
     agentMcpCatalog,
@@ -92,6 +129,7 @@ export function wireAppCorePierHomeAndSkills(input: {
     localEnvironments,
     pierBindings,
     pierHome,
+    projectMemory,
     projectSkills,
     systemSkills,
   };

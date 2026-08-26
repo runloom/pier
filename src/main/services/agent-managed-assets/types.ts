@@ -21,8 +21,11 @@ export interface NeedsConfirmation {
 }
 
 export interface StatusSnapshot {
+  derivedState: "disabled" | "enabled" | "degraded";
   desiredState: "enabled" | "disabled";
-  state: "disabled" | "enabled" | "degraded";
+  enginePackage: string;
+  entityCount: number | null;
+  observationCount: number | null;
   storePath: string;
   targets: TargetRow[];
 }
