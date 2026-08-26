@@ -214,3 +214,60 @@ export function planRemove(
     return { ok: false, reason: "config is not valid JSON" };
   }
 }
+
+export function inferMemoryFormat(path: string): MemoryConfigFormat {
+  if (path.endsWith(".toml")) {
+    return "codex-toml";
+  }
+  if (path.endsWith("opencode.json")) {
+    return "opencode-json";
+  }
+  return "mcp-servers-json";
+}
+
+export function fingerprintManagedSlice(
+  raw: string | null,
+  format: MemoryConfigFormat
+): string {
+  if (raw === null) {
+    return "absent";
+  }
+  if (format === "codex-toml") {
+    const beginAt = raw.indexOf(BEGIN);
+    const endAt = raw.indexOf(END);
+    if (beginAt < 0 || endAt < 0 || endAt < beginAt) {
+      return "absent";
+    }
+    const blockEnd = endAt + END.length;
+    const afterNewline =
+      raw.charAt(blockEnd) === "\n" ? blockEnd + 1 : blockEnd;
+    return sha(raw.slice(beginAt, afterNewline));
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return "absent";
+    }
+    const doc = parsed as Record<string, unknown>;
+    const key = format === "opencode-json" ? "mcp" : "mcpServers";
+    const sectionRaw = doc[key];
+    if (
+      sectionRaw === null ||
+      typeof sectionRaw !== "object" ||
+      Array.isArray(sectionRaw)
+    ) {
+      return "absent";
+    }
+    const entry = (sectionRaw as Record<string, unknown>)[SERVER_KEY];
+    if (entry === undefined) {
+      return "absent";
+    }
+    return sha(JSON.stringify(entry));
+  } catch {
+    return "absent";
+  }
+}

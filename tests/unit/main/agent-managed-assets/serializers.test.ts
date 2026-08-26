@@ -1,5 +1,6 @@
 import {
   buildServerEntry,
+  fingerprintManagedSlice,
   planJsonUpsert,
   planOpenCodeUpsert,
   planRemove,
@@ -61,6 +62,17 @@ describe("mcp-servers-json upsert", () => {
       return;
     }
     expect(removed.next).toBeNull();
+  });
+
+  it("slice fingerprint matches upsert fingerprint", () => {
+    const plan = planJsonUpsert(null, STORE);
+    expect(plan.ok).toBe(true);
+    if (!plan.ok) {
+      return;
+    }
+    expect(fingerprintManagedSlice(plan.next, "mcp-servers-json")).toBe(
+      plan.fingerprint
+    );
   });
 });
 

@@ -64,6 +64,29 @@ export class LedgerStore {
     return { branch: 3 };
   }
 
+  static applyCommit(ledger: MemoryLedger, item: LedgerPending): void {
+    const commit = item.commitRecord;
+    if (item.kind === "mcp-target") {
+      ledger.targets[item.targetPath] = { ...commit };
+      return;
+    }
+    if (item.kind === "rules-section") {
+      ledger.rulesSection = {
+        agentsMdExistedBefore: ledger.rulesSection.agentsMdExistedBefore,
+        fingerprint: commit.fingerprint,
+        inserted: commit.lastOutcome === "written",
+      };
+      return;
+    }
+    ledger.claudeReference = {
+      insertedByPier:
+        commit.lastOutcome === "written"
+          ? true
+          : ledger.claudeReference.insertedByPier,
+      present: commit.lastOutcome === "written",
+    };
+  }
+
   async load(): Promise<MemoryLedger> {
     try {
       const raw = await readFile(this.#path, "utf8");

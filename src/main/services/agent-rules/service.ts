@@ -25,6 +25,13 @@ import type { PierHomeService } from "../pier-home/service.ts";
 
 export const RULES_MAX_BYTES = 512 * 1024;
 
+export const AGENTS_MD_TEMPLATE = `# AGENTS.md
+
+## Guidance
+
+Add always-on rules for coding agents working in this scope.
+`;
+
 const RULE_FILES: ReadonlyArray<{
   id: RuleFileId;
   relativePath: string;
@@ -35,12 +42,7 @@ const RULE_FILES: ReadonlyArray<{
     id: "agents-md",
     relativePath: "AGENTS.md",
     canEnsure: true,
-    template: `# AGENTS.md
-
-## Guidance
-
-Add always-on rules for coding agents working in this scope.
-`,
+    template: AGENTS_MD_TEMPLATE,
   },
   {
     id: "claude-md",
