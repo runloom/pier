@@ -44,4 +44,5 @@ export const pluginPermissions = {
   "comments:write": "发表评审评论",
   "notification:read": "读取通知",
   "notification:write": "标记通知为已读",
+  "managedAssets:write": "写入受管智能体配置",
 } as const;

@@ -15,5 +15,7 @@
  * 12 = omp 扩展诚实化：订阅 agent_start（turnStartAuthority=authoritative，
  *     重开 abort/stop 后静默续跑封账的 scope）；agent_end stopReason=toolUse
  *     （后台工具让位）落 processing 不落 TurnCompleted。
+ * 13 = hook helper 改由显式 node/sh 解释器读取；不再直接执行带 macOS
+ *     provenance 的脚本，避免 Gatekeeper 检查异常拖到 provider timeout。
  */
-export const PIER_HOOK_COMMAND_GENERATION = 12;
+export const PIER_HOOK_COMMAND_GENERATION = 13;

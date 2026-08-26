@@ -66,6 +66,8 @@ export const pierCapabilitySchema = z.enum([
   // 消息中心：CLI/宿主 list·get·watch 读；mark-read·focus 写（focus 不改 runtime 事实）。
   "notification:read",
   "notification:write",
+  /** 受管智能体资产注册：项目级 MCP 配置 + 规则托管段（pier.memory 插件消费）。 */
+  "managedAssets:write",
 ]);
 
 export type PierClientKind = z.infer<typeof pierClientKindSchema>;
@@ -124,6 +126,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "comments:write",
     "notification:read",
     "notification:write",
+    "managedAssets:write",
   ],
   "cli-local": [
     "app:read",

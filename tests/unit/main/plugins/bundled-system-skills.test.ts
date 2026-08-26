@@ -8,6 +8,7 @@ import {
   PIER_CANVAS_SYSTEM_SKILL_ID,
   PIER_SUBAGENT_PANELS_SYSTEM_SKILL_ID,
 } from "@main/app-core/bundled-system-skills.ts";
+import { parseSafeSkillFrontmatter } from "@main/services/project-skills/frontmatter.ts";
 import {
   systemSkillContentDir,
   systemSkillsRootDir,
@@ -48,6 +49,24 @@ describe("bundled system skills", () => {
     }).map((c) => c.id);
     expect(ids).not.toContain("pier-agent-collaboration");
     expect(ids.some((id) => id.includes("collaborat"))).toBe(false);
+  });
+
+  it("ships valid frontmatter for every bundled system skill", async () => {
+    const contributions = bundledSystemSkillContributions({
+      appVersion: "0.1.10-test",
+      resourcesRoot,
+    });
+
+    for (const contribution of contributions) {
+      const skillMd = await readFile(
+        join(contribution.contentDir, "SKILL.md"),
+        "utf8"
+      );
+      const { frontmatter } = parseSafeSkillFrontmatter(skillMd);
+      expect(frontmatter.name).toBe(contribution.id);
+      expect(frontmatter.description).toEqual(expect.any(String));
+      expect(frontmatter.description).not.toBe("");
+    }
   });
 
   it("packs system-skills via electron-builder extraResources (prod layout)", async () => {

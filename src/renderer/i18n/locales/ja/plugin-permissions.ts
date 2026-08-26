@@ -44,4 +44,5 @@ export const pluginPermissions = {
   "comments:write": "レビューコメントの投稿",
   "notification:read": "通知の読み取り",
   "notification:write": "通知の既読処理",
+  "managedAssets:write": "管理対象のエージェント設定を登録",
 } as const;

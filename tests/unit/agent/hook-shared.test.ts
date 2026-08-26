@@ -16,7 +16,9 @@ import {
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  emitScriptPath,
   eventsJsonlPath,
+  extractStdinMetaScriptPath,
   installAgentHooksEmitScript,
   PIER_HOOK_COMMAND_GENERATION,
   pierHooksCurrentDir,
@@ -728,6 +730,55 @@ describe("stdin hook 缺脚本时不阻断 agent", () => {
       },
     });
     expect(r.status).toBe(0);
+  });
+
+  it("通过解释器运行只读 helper，不依赖脚本直接执行权限", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "pier-hook-readable-helper-"));
+    try {
+      const userData = join(baseDir, "userData");
+      const hooksHome = join(baseDir, "hooks");
+      await installAgentHooksEmitScript(userData, { hooksHome });
+      await Promise.all([
+        chmod(emitScriptPath(hooksHome), 0o644),
+        chmod(extractStdinMetaScriptPath(hooksHome), 0o644),
+      ]);
+
+      const result = spawnSync(
+        "/bin/sh",
+        [
+          "-c",
+          pierHookCommandV3WithStdin({
+            agentId: "codex",
+            event: "ToolStart",
+            nativeEvent: "PreToolUse",
+          }),
+        ],
+        {
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PIER_AGENT_EVENT_LOG: eventsJsonlPath(userData),
+            PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+            PIER_PANEL_ID: "panel-1",
+            PIER_WINDOW_ID: "window-1",
+          },
+          input: JSON.stringify({ session_id: "session-1" }),
+        }
+      );
+
+      expect(result.status).toBe(0);
+      const event = agentHookEventSchema.parse(
+        JSON.parse(await readFile(eventsJsonlPath(userData), "utf8"))
+      );
+      expect(event).toMatchObject({
+        agent: "codex",
+        event: "ToolStart",
+        sessionId: "session-1",
+        v: 3,
+      });
+    } finally {
+      await rm(baseDir, { force: true, recursive: true });
+    }
   });
 });
 

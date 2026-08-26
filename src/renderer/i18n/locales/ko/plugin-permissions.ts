@@ -44,4 +44,5 @@ export const pluginPermissions = {
   "comments:write": "리뷰 코멘트 작성",
   "notification:read": "알림 읽기",
   "notification:write": "알림 읽음 처리",
+  "managedAssets:write": "관리형 에이전트 구성 등록",
 } as const;

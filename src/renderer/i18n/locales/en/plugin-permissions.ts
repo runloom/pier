@@ -44,4 +44,5 @@ export const pluginPermissions = {
   "comments:write": "Create review comments",
   "notification:read": "Read notifications",
   "notification:write": "Mark notifications as read",
+  "managedAssets:write": "Register managed agent configuration",
 } as const;
