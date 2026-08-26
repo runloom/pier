@@ -22,6 +22,7 @@ export const terminal = {
     fieldDuration: "用时",
     fieldExitCode: "退出码",
     fieldStatus: "状态",
+    newSession: "新开会话",
     restart: "重新启动智能体",
     restartFailed: "无法重新启动智能体，请重试",
     statusEnded: "已正常结束",

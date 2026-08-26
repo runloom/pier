@@ -161,6 +161,7 @@ function pierEmit(event, nativeEvent, raw, extra = {}) {
     agent: "${pluginId}",
     event,
     nativeEvent,
+    ...pierSpawnGenerationFromEnv(),
     ...(parentSessionId ? { actorHint: "subagent", parentSessionId } : {}),
     ...(sessionId ? { sessionId } : {}),
     ...extra,

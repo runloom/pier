@@ -12,9 +12,13 @@ import {
   nativeLaunchOptions,
   resolveCreateTerminalLaunch,
   withAgentLoginShellSafeCommand,
+  withAgentSpawnGenerationEnv,
   wrapAgentTerminalCommand,
 } from "@main/ipc/terminal/create-launch.ts";
-import { terminalLaunchRegistry } from "@main/state/terminal-launch-state.ts";
+import {
+  registerLaunchResumeHint,
+  terminalLaunchRegistry,
+} from "@main/state/terminal-launch-state.ts";
 import type { TerminalPanelSession } from "@main/state/terminal-session-state.ts";
 import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
 import { describe, expect, it } from "vitest";
@@ -511,5 +515,45 @@ describe("terminal create launch options", () => {
       expect.stringMatching(/^\/bin\/zsh -lic /)
     );
     rmSync(dir, { force: true, recursive: true });
+  });
+});
+
+describe("resolveCreateTerminalLaunch resume hint", () => {
+  it("synthesizes a running restored agent from launch resume hint", () => {
+    const launchId = terminalLaunchRegistry.register({
+      agentId: "omp",
+      command: "omp",
+      cwd: "/repo",
+    });
+    registerLaunchResumeHint(launchId, "sess-hint");
+    const result = resolveCreateTerminalLaunch(
+      createArgs({ launchId, panelId: "terminal-1" }),
+      null
+    );
+    expect(result.restoredAgentLaunch).toBe(true);
+    expect(result.restoredAgent).toMatchObject({
+      agentId: "omp",
+      launch: { command: "omp" },
+      resume: { sessionId: "sess-hint", source: "hook" },
+      status: "running",
+    });
+  });
+});
+
+describe("withAgentSpawnGenerationEnv", () => {
+  it("adds generation and record id for agent spawns", () => {
+    expect(
+      withAgentSpawnGenerationEnv({ HOOK: "1" }, "omp", 4, "record-main")
+    ).toEqual({
+      HOOK: "1",
+      PIER_AGENT_SPAWN_GENERATION: "4",
+      PIER_WINDOW_RECORD_ID: "record-main",
+    });
+  });
+
+  it("still injects record id for a shell spawn", () => {
+    expect(
+      withAgentSpawnGenerationEnv({}, undefined, 1, "record-main")
+    ).toEqual({ PIER_WINDOW_RECORD_ID: "record-main" });
   });
 });

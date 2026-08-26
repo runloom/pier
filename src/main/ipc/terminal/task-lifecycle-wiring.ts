@@ -19,7 +19,10 @@ import { forwardToWindow } from "./forwarding.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { fromNativePanelKey } from "./panel-id.ts";
 import { parseTaskExitTitle } from "./task-exit-title.ts";
-import { createTerminalTaskLifecycle } from "./task-lifecycle.ts";
+import {
+  createTerminalTaskLifecycle,
+  type TerminalPanelSurface,
+} from "./task-lifecycle.ts";
 import { windowRecordIdFor } from "./window-scope.ts";
 
 const suppressedSurfaceClosePanelIds = new Set<string>();
@@ -48,6 +51,7 @@ export interface RegisteredTerminalTaskLifecycle {
     panelId: string,
     windowId?: string | undefined
   ): void;
+  isTaskSurface(panelId: string, windowId?: string | undefined): boolean;
   moveOwner(input: {
     lifecycleId?: string | undefined;
     panelId: string;
@@ -58,7 +62,8 @@ export interface RegisteredTerminalTaskLifecycle {
   resetPanel(
     panelId: string,
     lifecycleId: string,
-    windowId?: string | undefined
+    windowId?: string | undefined,
+    surface?: TerminalPanelSurface | undefined
   ): void;
 }
 
@@ -128,7 +133,9 @@ export function registerTerminalTaskLifecycleForwarding(
       // 前台命令退出 = 该面板运行中的 agent CLI 已退出（若有会话）——清理并还原
       // tab/状态栏呈现。覆盖崩溃/kill 等无 SessionEnd hook 的路径。
       // 透传原始 exitCode：悬挂家族(145-148, Ctrl+Z)不视为 agent 退出。
-      if (!lifecycleId) {
+      // Task surfaces keep their own exit path; agent/shell share this gate.
+      const agentSurface = !lifecycle.isTaskSurface(rawPanelId, windowId);
+      if (agentSurface) {
         foregroundActivityService.commandFinished(
           rawPanelId,
           exitCode,
@@ -136,7 +143,7 @@ export function registerTerminalTaskLifecycleForwarding(
         );
       }
       if (
-        !lifecycleId &&
+        agentSurface &&
         targetWindow &&
         !targetWindow.isDestroyed() &&
         exitCode >= 0 &&
@@ -205,14 +212,14 @@ export function registerTerminalTaskLifecycleForwarding(
         return;
       }
       const windowId = findInternalWindowId(targetWindow) ?? undefined;
-      const skipped =
-        Boolean(lifecycleId) ||
+      if (
+        lifecycle.isTaskSurface(rawPanelId, windowId) ||
         !lifecycle.isCurrentLifecycle({
           lifecycleId,
           panelId: rawPanelId,
           windowId,
-        });
-      if (skipped) {
+        })
+      ) {
         return;
       }
       // ghostty OSC 133 C 命令行文本 → matchAgentCommand 词元识别 → 先验点亮
@@ -287,7 +294,7 @@ export function registerTerminalTaskLifecycleForwarding(
       // chrome 单源）, 其余面板照旧清理。真正的面板关闭走 pier:terminal:close。
       foregroundActivityService.ptyExited(rawPanelId, String(id));
       if (
-        !lifecycleId &&
+        !lifecycle.isTaskSurface(rawPanelId, windowId) &&
         targetWindow &&
         !targetWindow.isDestroyed() &&
         processAlive === false &&

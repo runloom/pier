@@ -20,6 +20,28 @@ interface TerminalLaunchEntry {
   launch: ResolvedTerminalLaunchOptions;
 }
 
+const resumeHints = new Map<string, { sessionId: string }>();
+
+export function registerLaunchResumeHint(
+  launchId: string,
+  sessionId: string
+): void {
+  const trimmed = sessionId.trim();
+  if (launchId.length === 0 || trimmed.length === 0) {
+    return;
+  }
+  resumeHints.set(launchId, { sessionId: trimmed });
+}
+
+export function peekLaunchResumeHint(
+  launchId: string | undefined
+): { sessionId: string } | undefined {
+  if (!launchId) {
+    return;
+  }
+  return resumeHints.get(launchId);
+}
+
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
 export function createTerminalLaunchRegistry(
@@ -40,6 +62,7 @@ export function createTerminalLaunchRegistry(
     for (const [launchId, entry] of launches) {
       if (current - entry.createdAt > ttlMs) {
         launches.delete(launchId);
+        resumeHints.delete(launchId);
         removed++;
       }
     }
@@ -51,10 +74,12 @@ export function createTerminalLaunchRegistry(
       sweepExpired();
       const launch = launches.get(launchId)?.launch ?? null;
       launches.delete(launchId);
+      resumeHints.delete(launchId);
       return launch;
     },
     discard(launchId) {
       launches.delete(launchId);
+      resumeHints.delete(launchId);
     },
     read(launchId) {
       sweepExpired();

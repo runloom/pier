@@ -19,10 +19,61 @@ import {
   resolveUserCommand,
   resolveWrapperShell,
 } from "../../services/process-environment/resolve-user-command.ts";
-import { terminalLaunchRegistry } from "../../state/terminal-launch-state.ts";
+import {
+  peekLaunchResumeHint,
+  terminalLaunchRegistry,
+} from "../../state/terminal-launch-state.ts";
 import type { TerminalPanelSession } from "../../state/terminal-session-state.ts";
 
 const RESTORED_TASK_SHELL_FALLBACK = "/bin/zsh";
+
+export function nextAgentSpawnGeneration(
+  existing:
+    | { restore?: { spawnGeneration?: number | undefined } | undefined }
+    | null
+    | undefined
+): number {
+  return (existing?.restore?.spawnGeneration ?? 0) + 1;
+}
+
+export function resolveAgentSpawnLifecycle(args: {
+  launchAgentId?: AgentKind | undefined;
+  spawnGeneration: number;
+  taskRunId?: string | undefined;
+}): {
+  lifecycleId: string;
+  surface: "agent" | "shell" | "task";
+} {
+  if (args.taskRunId) {
+    return { lifecycleId: args.taskRunId, surface: "task" };
+  }
+  if (args.launchAgentId) {
+    return {
+      lifecycleId: String(args.spawnGeneration),
+      surface: "agent",
+    };
+  }
+  return { lifecycleId: "", surface: "shell" };
+}
+
+export function withAgentSpawnGenerationEnv(
+  hookEnv: Record<string, string>,
+  launchAgentId: AgentKind | undefined,
+  spawnGeneration: number,
+  recordId?: string | undefined
+): Record<string, string> {
+  const withGen = launchAgentId
+    ? {
+        ...hookEnv,
+        PIER_AGENT_SPAWN_GENERATION: String(spawnGeneration),
+      }
+    : hookEnv;
+  const trimmed = recordId?.trim() ?? "";
+  if (trimmed.length === 0) {
+    return withGen;
+  }
+  return { ...withGen, PIER_WINDOW_RECORD_ID: trimmed };
+}
 /** Ghostty surface prefixes — do not wrap again. */
 const GHOSTTY_COMMAND_PREFIX_RE = /^(?:shell:|direct:)/u;
 
@@ -200,7 +251,10 @@ export function resolveCreateTerminalLaunch(
   const task = explicitCreate
     ? (args.task ?? saved?.task)
     : (saved?.task ?? args.task);
-  const savedAgent = explicitCreate ? undefined : saved?.agent;
+  const hint = peekLaunchResumeHint(args.launchId);
+  const savedAgent = explicitCreate
+    ? syntheticResumeAgent(launch, hint?.sessionId)
+    : saved?.agent;
   if (task && !launch) {
     if (options.taskLive) {
       return {
@@ -235,6 +289,32 @@ export function resolveCreateTerminalLaunch(
       restoredSession: Boolean(saved && !explicitCreate),
     }),
     ...(task && { task }),
+  };
+}
+
+function syntheticResumeAgent(
+  launch: ResolvedTerminalLaunchOptions | null,
+  sessionId: string | undefined
+): TerminalAgentPanelMetadata | undefined {
+  const agentId = launch?.agentId;
+  const trimmed = sessionId?.trim() ?? "";
+  if (!(launch && agentId && trimmed.length > 0)) {
+    return;
+  }
+  return {
+    agentId,
+    launch: {
+      agentId,
+      ...(launch.command ? { command: launch.command } : {}),
+      ...(launch.cwd ? { cwd: launch.cwd } : {}),
+    },
+    resume: {
+      capturedAt: Date.now(),
+      sessionId: trimmed,
+      source: "hook",
+    },
+    startedAt: Date.now(),
+    status: "running",
   };
 }
 

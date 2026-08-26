@@ -248,6 +248,8 @@ export interface RebindTaskOutputResult extends CreateTerminalResult {
 
 export type {
   TerminalAgentPanelMetadata,
+  TerminalAgentRestoreCause,
+  TerminalAgentRestoreMetadata,
   TerminalAgentResumeMetadata,
   TerminalPanelSessionSnapshot,
 } from "./terminal/panel-session.ts";

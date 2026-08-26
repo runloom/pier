@@ -78,6 +78,7 @@ export interface PierAgentsAPI {
     agentId: AgentKind;
     command?: string;
     cwd?: string;
+    resumeSessionId?: string;
   }) => Promise<{ launchId: string | null }>;
   selection: () => Promise<AgentSelectionResult>;
 }

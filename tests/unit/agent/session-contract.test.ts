@@ -150,6 +150,25 @@ describe("agentHookEventSchema", () => {
     ).toBe(true);
   });
 
+  it("接受 v3 SessionEnd 带可选 spawnGeneration，缺字段仍能 parse", () => {
+    const base = {
+      v: 3 as const,
+      kind: "agentEvent" as const,
+      agent: "omp" as const,
+      event: "SessionEnd" as const,
+      nativeEvent: "session_shutdown",
+      panelId: "panel-1",
+      windowId: "3",
+    };
+    expect(agentHookEventSchema.safeParse(base).success).toBe(true);
+    expect(
+      agentHookEventSchema.safeParse({ ...base, spawnGeneration: 2 }).success
+    ).toBe(true);
+    expect(
+      agentHookEventSchema.safeParse({ ...base, extraUnknown: true }).success
+    ).toBe(false);
+  });
+
   it("接受合法 commandStart 分支", () => {
     const parsed = agentHookEventSchema.safeParse({
       v: 1,

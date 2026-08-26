@@ -2,8 +2,9 @@
  * Agent resume index for panel re-entry.
  *
  * Hook session ids often arrive before panel agent metadata is written.
- * Pending is in-memory only; apply is monotonic by `capturedAt` and must not
- * overwrite a newer index. Clear / rekey pending on panel/window/transfer.
+ * Pending is in-memory and on the panel row (`pendingResume`); apply is
+ * monotonic by `capturedAt` and must not overwrite a newer index. Clear /
+ * rekey pending on panel/window/transfer.
  */
 
 import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
@@ -21,6 +22,7 @@ export type AgentResumeWriteInput = NonNullable<
 
 export type AgentResumeWriteResult =
   | "applied"
+  | "unchanged"
   | "pending"
   | "rejected"
   | "invalid";
@@ -126,6 +128,18 @@ function stashPending(
   return "pending";
 }
 
+/** Fold a persisted panel pendingResume into the in-memory stash. */
+export function seedDiskPendingResume(
+  windowId: string,
+  panelId: string,
+  pending: AgentResumeWriteInput | undefined
+): void {
+  if (!pending || windowId.length === 0 || panelId.length === 0) {
+    return;
+  }
+  stashPending(panelKey(windowId, panelId), pending);
+}
+
 /**
  * Merge stashed resume into a just-written running agent (same mutate as
  * agent write). Monotonic: never replaces a newer-or-equal on-disk resume
@@ -207,6 +221,16 @@ export async function updateTerminalPanelAgentResume(
     }
     if (!agent) {
       result = stashPending(key, resume);
+      if (result === "pending") {
+        windowState.panels[panelId] = {
+          ...current,
+          pendingResume: {
+            agentId: resume.agentId,
+            ...resumeFields(resume),
+          },
+          updatedAt: new Date().toISOString(),
+        };
+      }
       return state;
     }
     if (!canApplyToAgent(agent, resume)) {
@@ -220,7 +244,7 @@ export async function updateTerminalPanelAgentResume(
 
     if (agent.resume?.sessionId === resume.sessionId) {
       pendingByPanel.delete(key);
-      result = "applied";
+      result = "unchanged";
       return state;
     }
     if (agent.resume && agent.resume.capturedAt >= resume.capturedAt) {
@@ -246,8 +270,9 @@ export async function updateTerminalPanelAgentResume(
       result = "invalid";
       return state;
     }
+    const { pendingResume: _pending, ...rest } = current;
     windowState.panels[panelId] = {
-      ...current,
+      ...rest,
       agent: parsed.data,
       updatedAt: new Date().toISOString(),
     };
@@ -255,6 +280,9 @@ export async function updateTerminalPanelAgentResume(
     result = "applied";
     return state;
   });
+  if (result === "applied") {
+    await s.flush();
+  }
   return result;
 }
 

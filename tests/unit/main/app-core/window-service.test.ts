@@ -144,6 +144,11 @@ vi.mock("@main/state/window-record-state.ts", () => ({
 vi.mock("@main/state/terminal-session-state.ts", () => ({
   detachAgentsForWindow: mocks.detachAgentsForWindow,
   flushTerminalSessionState: mocks.flushTerminalSessionState,
+  listRunningAgentPanelIds: vi.fn(() => []),
+}));
+
+vi.mock("@main/services/host-teardown-skip.ts", () => ({
+  skipPanelIdsForHostTeardown: vi.fn(() => []),
 }));
 
 vi.mock("@main/services/agents/window-detaching-guard.ts", () => ({
@@ -338,7 +343,10 @@ describe("WindowService", () => {
       electronWindowId: "1",
       recordId: "record-1",
     });
-    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-1");
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith(
+      "record-1",
+      expect.objectContaining({ skipPanelIds: expect.any(Array) })
+    );
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushPreferences).toHaveBeenCalled();
@@ -383,8 +391,14 @@ describe("WindowService", () => {
       electronWindowId: "2",
       recordId: "record-w-1",
     });
-    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-main");
-    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-w-1");
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith(
+      "record-main",
+      expect.objectContaining({ skipPanelIds: expect.any(Array) })
+    );
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith(
+      "record-w-1",
+      expect.objectContaining({ skipPanelIds: expect.any(Array) })
+    );
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushPreferences).toHaveBeenCalled();

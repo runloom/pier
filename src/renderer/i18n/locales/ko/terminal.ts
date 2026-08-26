@@ -25,6 +25,7 @@ export const terminal = {
     fieldDuration: "소요 시간",
     fieldExitCode: "종료 코드",
     fieldStatus: "상태",
+    newSession: "새 세션",
     restart: "에이전트 다시 시작",
     restartFailed: "에이전트를 다시 시작하지 못했습니다. 다시 시도하세요",
     statusEnded: "정상 종료",
