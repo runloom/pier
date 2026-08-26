@@ -3,7 +3,7 @@ import type {
   ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
 import type { PanelSlot } from "./entry.ts";
-import { projectSlot } from "./entry.ts";
+import { projectSlot } from "./slot-projection.ts";
 
 export function buildForegroundActivityBroadcast(
   slots: ReadonlyMap<string, PanelSlot>,

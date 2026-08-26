@@ -235,6 +235,9 @@ export function applyTurnBookkeeping(
     return reject("settled-turn");
   }
   if (semantics.category === "turn-start") {
+    if (semantics.resetEvidence === "explicit-prompt") {
+      scope.sawExplicitPrompt = true;
+    }
     const decision = turnStartDecision(scope, semantics, eventTurnId);
     if (decision === "reset") {
       resetTurn(scope, eventTurnId, at);

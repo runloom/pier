@@ -27,6 +27,7 @@ import {
   nextCursorBoundTranscript,
   resolveCursorMainTranscriptPath,
 } from "./cursor-transcript-bind.ts";
+import { createCursorViewportWatch } from "./cursor-viewport-watch.ts";
 import { emitTranscriptEvent } from "./tail-event.ts";
 import {
   createTranscriptTailReconciler,
@@ -83,8 +84,6 @@ export function createCursorTranscriptReconciler(
   const pendingByScope = new Map<string, PendingInteraction>();
   const jsonlPendingByScope = new Map<string, boolean>();
   const viewportPendingByScope = new Map<string, boolean>();
-  const viewportTimers = new Map<string, ReturnType<typeof setInterval>>();
-  const lastContextByScope = new Map<string, AgentHookEventPayload>();
   const lastTerminalSeenByScope = new Map<string, string>();
   const boundTranscriptByScope = new Map<string, CursorBoundTranscript>();
   const viewportKindCache = createViewportKindCache();
@@ -119,9 +118,8 @@ export function createCursorTranscriptReconciler(
   const emit = (event: AgentHookEventPayload): void => {
     const key = cursorTranscriptScopeKey(event);
     if (event.event === "InteractionRequested") {
-      const latest = lastContextByScope.get(key);
-      if (latest && opts.readViewportText) {
-        const text = opts.readViewportText(latest.panelId, latest.windowId);
+      if (opts.readViewportText) {
+        const text = opts.readViewportText(event.panelId, event.windowId);
         if (text != null && viewportKindCache.kindFor(key, text) === null) {
           return;
         }
@@ -298,33 +296,13 @@ export function createCursorTranscriptReconciler(
     syncPendingQuestion(context, sessionId, scanned, true);
   };
 
-  const startViewportWatch = (context: AgentHookEventPayload): void => {
-    if (!opts.readViewportText) {
-      return;
-    }
-    const key = cursorTranscriptScopeKey(context);
-    lastContextByScope.set(key, context);
-    if (viewportTimers.has(key)) {
-      return;
-    }
-    const timer = setInterval(() => {
-      const latest = lastContextByScope.get(key);
-      if (latest) {
-        syncFromViewport(latest);
-      }
-    }, 250);
-    timer.unref();
-    viewportTimers.set(key, timer);
-    syncFromViewport(context);
-  };
+  const viewportWatch = createCursorViewportWatch({
+    enabled: Boolean(opts.readViewportText),
+    sync: syncFromViewport,
+  });
 
   const stopViewportWatch = (key: string): void => {
-    const timer = viewportTimers.get(key);
-    if (timer) {
-      clearInterval(timer);
-      viewportTimers.delete(key);
-    }
-    lastContextByScope.delete(key);
+    viewportWatch.stop(key);
     viewportPendingByScope.delete(key);
     jsonlPendingByScope.delete(key);
     lastTerminalSeenByScope.delete(key);
@@ -334,12 +312,12 @@ export function createCursorTranscriptReconciler(
 
   return {
     dispose: () => {
-      for (const key of [...viewportTimers.keys()]) {
-        stopViewportWatch(key);
-      }
+      viewportWatch.dispose();
       pathCache.clear();
       attachSeed.clear();
       pendingByScope.clear();
+      viewportPendingByScope.clear();
+      jsonlPendingByScope.clear();
       lastTerminalSeenByScope.clear();
       boundTranscriptByScope.clear();
       viewportKindCache.clearAll();
@@ -361,7 +339,7 @@ export function createCursorTranscriptReconciler(
         await inner.observe(event);
         return;
       }
-      startViewportWatch(event);
+      viewportWatch.start(event);
       const resolved = await resolveCursorMainTranscriptPath({
         event,
         pathCache,
@@ -422,7 +400,7 @@ export function createCursorTranscriptReconciler(
       }
     },
     releasePanel: (panelId, windowId) => {
-      for (const [key, context] of lastContextByScope) {
+      for (const [key, context] of viewportWatch.lastContextByScope) {
         if (
           context.panelId === panelId &&
           (windowId === undefined || context.windowId === windowId)
@@ -433,7 +411,7 @@ export function createCursorTranscriptReconciler(
       inner.releasePanel(panelId, windowId);
     },
     releasePanelsWhere: (predicate) => {
-      for (const [key, context] of lastContextByScope) {
+      for (const [key, context] of viewportWatch.lastContextByScope) {
         if (predicate(context.panelId, context.windowId)) {
           stopViewportWatch(key);
         }
@@ -441,7 +419,7 @@ export function createCursorTranscriptReconciler(
       inner.releasePanelsWhere(predicate);
     },
     releaseWindow: (windowId) => {
-      for (const [key, context] of lastContextByScope) {
+      for (const [key, context] of viewportWatch.lastContextByScope) {
         if (context.windowId === windowId) {
           stopViewportWatch(key);
         }
@@ -461,38 +439,22 @@ export function createCursorTranscriptReconciler(
       }
       const sourceKey = `${sourceWindowId}\0${panelId}`;
       const targetKey = `${targetWindowId}\0${panelId}`;
-      const move = <T>(map: Map<string, T>): T | undefined => {
+      const move = <T>(map: Map<string, T>): void => {
         const value = map.get(sourceKey);
         if (value === undefined) {
           return;
         }
         map.delete(sourceKey);
         map.set(targetKey, value);
-        return value;
       };
-      const timer = viewportTimers.get(sourceKey);
-      if (timer) {
-        clearInterval(timer);
-        viewportTimers.delete(sourceKey);
-      }
       move(pendingByScope);
       move(jsonlPendingByScope);
       move(viewportPendingByScope);
       move(lastTerminalSeenByScope);
       move(boundTranscriptByScope);
       viewportKindCache.rekey(sourceKey, targetKey);
-      const context = move(lastContextByScope);
-      if (context) {
-        lastContextByScope.set(targetKey, {
-          ...context,
-          windowId: targetWindowId,
-        });
-      }
+      viewportWatch.transfer(sourceKey, targetKey, targetWindowId);
       inner.transferPanelOwnership(input);
-      const moved = lastContextByScope.get(targetKey);
-      if (moved && timer) {
-        startViewportWatch(moved);
-      }
     },
   };
 }
