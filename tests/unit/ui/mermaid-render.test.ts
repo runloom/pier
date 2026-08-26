@@ -29,6 +29,36 @@ describe("Mermaid render", () => {
     expect(MERMAID_THEME_CSS).toContain(".edgeLabel rect");
   });
 
+  it("paints sequence notes and alt labels onto tspans, not just parents", () => {
+    // mermaid sequence CSS is `.noteText, .noteText > tspan { fill: <light-theme gray> }`.
+    // Parent `fill: var(--foreground) !important` does not inherit onto the
+    // child tspan, so notes / alt conditions vanish on the dark canvas.
+    expect(MERMAID_THEME_CSS).toContain(".noteText > tspan");
+    expect(MERMAID_THEME_CSS).toContain(".loopText > tspan");
+    expect(MERMAID_THEME_CSS).toContain(".labelText > tspan");
+    expect(MERMAID_THEME_CSS).toContain("text.actor > tspan");
+    expect(MERMAID_THEME_CSS).toContain(".note, .labelBox, rect.actor");
+    expect(MERMAID_THEME_CSS).toMatch(
+      /\.note, \.labelBox, rect\.actor \{[\s\S]*fill: var\(--secondary\)/
+    );
+    expect(MERMAID_THEME_CSS).not.toMatch(
+      /\.note \{[\s\S]*fill: var\(--muted\)/
+    );
+  });
+
+  it("does not nest backticks inside the mermaid theme CSS template", async () => {
+    const source = await readFile(
+      join(import.meta.dirname, "../../../packages/ui/src/mermaid/theme.ts"),
+      "utf8"
+    );
+    const prefix = "export const MERMAID_THEME_CSS = `";
+    const start = source.indexOf(prefix);
+    const end = source.indexOf("`;", start + prefix.length);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(source.slice(start + prefix.length, end)).not.toContain("`");
+  });
+
   it("beats mermaid id-scoped span color on hydrated card roles", async () => {
     // mermaid emits "#<renderId> span { color: #333 }"; an id + type rule
     // out-specifies single-class utilities, so the two semantic text roles
@@ -140,5 +170,27 @@ describe("Mermaid render", () => {
   ] as const)("renders native mermaid %s", async (_family, source, marker) => {
     const result = await renderMermaid(`mm-${_family}`, source);
     expect(result.svg).toContain(marker);
+  });
+
+  it("keeps sequence note and alt tspan overrides in the compiled SVG", async () => {
+    const result = await renderMermaid(
+      "mm-seq-contrast",
+      `sequenceDiagram
+  participant a as Host
+  participant b as Phone
+  Note over a: local listen only
+  alt no token
+      a->>b: pair
+  else has token
+      b->>a: hello
+  end`
+    );
+    expect(result.svg).toContain("noteText");
+    expect(result.svg).toContain("loopText");
+    // stylis nests themeCSS under the svg id and serializes `>` as `&gt;`.
+    const css = result.svg.replaceAll("&gt;", ">");
+    expect(css).toContain(".noteText>tspan");
+    expect(css).toContain("fill:var(--secondary)!important");
+    expect(css).toContain("fill:var(--foreground)!important");
   });
 });

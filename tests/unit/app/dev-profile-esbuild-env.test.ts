@@ -1,5 +1,10 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { withDevProfileEnv } from "../../../scripts/dev-profile.mjs";
+import {
+  withDevProfileEnv,
+  withElectronUserDataCliArgs,
+} from "../../../scripts/dev-profile.mjs";
 import { withoutEsbuildBinaryOverride } from "../../../scripts/esbuild-process-env.mjs";
 
 const PROFILE = {
@@ -43,5 +48,40 @@ describe("development esbuild environment", () => {
 
     expect(env.ESBUILD_BINARY_PATH).toBeUndefined();
     expect(env.PATH).toBe("/usr/bin");
+    expect(JSON.parse(String(env.ELECTRON_CLI_ARGS))).toEqual([
+      "--user-data-dir=/tmp/pier-dev",
+    ]);
+  });
+
+  it("pins --user-data-dir onto electron-vite CLI args without dropping inspect flags", () => {
+    expect(withElectronUserDataCliArgs(undefined, "/tmp/pier-dev")).toBe(
+      JSON.stringify(["--user-data-dir=/tmp/pier-dev"])
+    );
+    expect(
+      withElectronUserDataCliArgs(
+        JSON.stringify(["--inspect=9229"]),
+        "/tmp/pier-dev"
+      )
+    ).toBe(JSON.stringify(["--inspect=9229", "--user-data-dir=/tmp/pier-dev"]));
+    expect(
+      withElectronUserDataCliArgs(
+        JSON.stringify(["--user-data-dir=/already"]),
+        "/tmp/pier-dev"
+      )
+    ).toBe(JSON.stringify(["--user-data-dir=/already"]));
+  });
+
+  it("persists PierDev launch env to the worktree profile so a packaged shell can restore it", () => {
+    const source = readFileSync(
+      join(process.cwd(), "scripts/dev-profile.mjs"),
+      "utf8"
+    );
+    expect(source).toContain(
+      'writeJson(path.join(profile.profileDir, "launch-env.json")'
+    );
+    expect(source).toContain(
+      "ELECTRON_USER_DATA_DIR: profile.electronUserDataDir"
+    );
+    expect(source).toContain('NODE_ENV_ELECTRON_VITE: "development"');
   });
 });

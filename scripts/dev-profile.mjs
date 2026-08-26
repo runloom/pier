@@ -678,6 +678,7 @@ export function sanitizeInheritedDevProfileEnv(env, worktreeRoot) {
     PIER_DEV_RUNTIME_FILE: _runtimeFile,
     ELECTRON_RENDERER_URL: _rendererUrl,
     ELECTRON_USER_DATA_DIR: _userDataDir,
+    ELECTRON_CLI_ARGS: _cliArgs,
     ...cleaned
   } = env;
   return cleaned;
@@ -939,6 +940,36 @@ function ensureLaunchJson(profile) {
 }
 
 /**
+ * electron-vite reads ELECTRON_CLI_ARGS as a JSON argv array. Pin
+ * --user-data-dir at Chromium startup so JS `app.setName("Pier")` cannot
+ * steal the installed app's singleton lock.
+ *
+ * @param {string | undefined} raw
+ * @param {string} userDataDir
+ * @returns {string}
+ */
+export function withElectronUserDataCliArgs(raw, userDataDir) {
+  let existing = [];
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        existing = parsed.filter((arg) => typeof arg === "string");
+      }
+    } catch {
+      existing = [];
+    }
+  }
+  const hasUserDataDir = existing.some(
+    (arg) => arg === "--user-data-dir" || arg.startsWith("--user-data-dir=")
+  );
+  if (hasUserDataDir) {
+    return JSON.stringify(existing);
+  }
+  return JSON.stringify([...existing, `--user-data-dir=${userDataDir}`]);
+}
+
+/**
  * @param {NodeJS.ProcessEnv} [baseEnv]
  * @param {DevProfile} [profile]
  */
@@ -954,6 +985,10 @@ export function withDevProfileEnv(
     PIER_DEV_RUNTIME_FILE: profile.runtimeFile,
     ELECTRON_RENDERER_URL: profile.rendererUrl,
     ELECTRON_USER_DATA_DIR: profile.electronUserDataDir,
+    ELECTRON_CLI_ARGS: withElectronUserDataCliArgs(
+      baseEnv.ELECTRON_CLI_ARGS,
+      profile.electronUserDataDir
+    ),
   };
   return env;
 }
@@ -1361,6 +1396,18 @@ async function electronDev() {
     // lets the main process (plugin-mode resolution) recognize the dev shell
     // without hardcoding the executable name in src/.
     env.PIER_DEV_ELECTRON_SHELL = "1";
+    // Launch Services / packaged-shell relaunch can drop the parent env.
+    // Main hydrates these keys from this file when execPath is PierDev.
+    writeJson(path.join(profile.profileDir, "launch-env.json"), {
+      ELECTRON_RENDERER_URL: profile.rendererUrl,
+      ELECTRON_USER_DATA_DIR: profile.electronUserDataDir,
+      NODE_ENV_ELECTRON_VITE: "development",
+      PIER_DEV_ELECTRON_SHELL: "1",
+      PIER_DEV_PORT: String(profile.devPort),
+      PIER_DEV_PROFILE: profile.profile,
+      PIER_DEV_RUNTIME_FILE: profile.runtimeFile,
+      PIER_HMR_PORT: String(profile.hmrPort),
+    });
   }
   console.log(`[dev-profile] ${profile.profile}: ${profile.rendererUrl}`);
   console.log(`[dev-profile] userData: ${profile.electronUserDataDir}`);

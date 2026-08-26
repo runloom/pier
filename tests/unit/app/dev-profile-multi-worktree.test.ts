@@ -60,6 +60,9 @@ describe("dev-profile multi-worktree env + ports", () => {
         PIER_DEV_RUNTIME_FILE: "/Users/me/pier/.pier-dev/runtime.json",
         ELECTRON_RENDERER_URL: "http://127.0.0.1:5173",
         ELECTRON_USER_DATA_DIR: "/tmp/main-user-data",
+        ELECTRON_CLI_ARGS: JSON.stringify([
+          "--user-data-dir=/tmp/main-user-data",
+        ]),
         PATH: "/usr/bin",
       },
       root
@@ -70,6 +73,7 @@ describe("dev-profile multi-worktree env + ports", () => {
     expect(cleaned.PIER_DEV_RUNTIME_FILE).toBeUndefined();
     expect(cleaned.ELECTRON_RENDERER_URL).toBeUndefined();
     expect(cleaned.ELECTRON_USER_DATA_DIR).toBeUndefined();
+    expect(cleaned.ELECTRON_CLI_ARGS).toBeUndefined();
     expect(cleaned.PATH).toBe("/usr/bin");
   });
 
