@@ -60,6 +60,7 @@ import { createPluginGitContext } from "./git-context.ts";
 import { createHostGroupContentContext } from "./group-content-context.tsx";
 import { createHostLiveModulesApi } from "./live-modules.ts";
 import { createPluginPanelsContext } from "./panels-context.ts";
+import { createPluginProjectMemoryContext } from "./project-memory-context.ts";
 import { createPluginTerminalContext } from "./terminal-context.ts";
 import { createPluginTerminalsContext } from "./terminals-context.ts";
 import { createPluginWorktreesContext } from "./worktree-context.ts";
@@ -475,17 +476,14 @@ export function createRendererPluginContext(
       },
     },
     contentPreview: {
-      close: () => {
-        closeContentPreview();
-      },
-      openImage: (request) => {
+      close: closeContentPreview,
+      openImage: (request) =>
         openImagePreview({
           ...(request.alt ? { alt: request.alt } : {}),
           ...(request.onClose ? { onClose: request.onClose } : {}),
           source: request.source,
           title: request.title,
-        });
-      },
+        }),
     },
     files: createPluginFilesContext(entry, assertPluginCapability),
     terminal: createPluginTerminalContext(entry, assertPluginCapability),
@@ -494,5 +492,9 @@ export function createRendererPluginContext(
     git: createPluginGitContext(entry, assertPluginCapability),
     comments: createPluginCommentsContext(entry, assertPluginCapability),
     ai: createPluginAiContext(entry, assertPluginCapability),
+    projectMemory: createPluginProjectMemoryContext(
+      entry,
+      assertPluginCapability
+    ),
   };
 }

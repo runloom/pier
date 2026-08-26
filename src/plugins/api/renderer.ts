@@ -55,6 +55,7 @@ export type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
+  RendererPluginProjectMemoryFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
 export type {
@@ -446,6 +447,7 @@ export interface RendererPluginContext {
     }): Promise<{ shown: boolean }>;
   };
   panels: RendererPluginPanelsFacade;
+  projectMemory: RendererPluginProjectMemoryFacade;
   settings: {
     openSection(section: "environment"): void;
   };

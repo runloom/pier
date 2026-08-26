@@ -1,3 +1,4 @@
+import type { AssetRootRef } from "@shared/contracts/agent/assets.ts";
 import type {
   CommentProjectSnapshot,
   CommentsCreateThreadRequest,
@@ -99,6 +100,11 @@ import type {
   GitStatus,
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
+import type {
+  MemoryEnableResult,
+  MemoryReport,
+  MemoryStatusSnapshot,
+} from "@shared/contracts/memory.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
   WorktreeCheckRequest,
@@ -381,4 +387,13 @@ export interface RendererPluginCommentsFacade {
     worktreeKey: string,
     listener: (snapshot: CommentProjectSnapshot) => void
   ): () => void;
+}
+
+export interface RendererPluginProjectMemoryFacade {
+  disable(root: AssetRootRef): Promise<MemoryReport>;
+  enable(
+    root: AssetRootRef,
+    options?: { acknowledged?: boolean }
+  ): Promise<MemoryEnableResult>;
+  status(root: AssetRootRef): Promise<MemoryStatusSnapshot>;
 }
