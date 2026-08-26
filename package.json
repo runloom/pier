@@ -193,6 +193,7 @@
     "node-gyp": "12.4.0",
     "playwright": "1.61.1",
     "shadcn": "^4.13.0",
+    "smol-toml": "^1.8.0",
     "solid-js": "1.9.5",
     "svelte": "5.19.0",
     "tailwindcss": "4.3.2",

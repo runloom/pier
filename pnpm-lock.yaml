@@ -347,6 +347,9 @@ importers:
       shadcn:
         specifier: ^4.13.0
         version: 4.13.0(supports-color@7.2.0)(typescript@6.0.3)
+      smol-toml:
+        specifier: ^1.8.0
+        version: 1.8.0
       solid-js:
         specifier: 1.9.5
         version: 1.9.5
@@ -5931,6 +5934,10 @@ packages:
   slice-ansi@8.0.0:
     resolution: {integrity: sha512-stxByr12oeeOyY2BlviTNQlYV5xOj47GirPr4yA1hE9JCtxfQN0+tVbkxwCtYDQWhEKWFHsEK48ORg5jrouCAg==}
     engines: {node: '>=20'}
+
+  smol-toml@1.8.0:
+    resolution: {integrity: sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ==}
+    engines: {node: '>= 18'}
 
   solid-js@1.9.5:
     resolution: {integrity: sha512-ogI3DaFcyn6UhYhrgcyRAMbu/buBJitYQASZz5WzfQVPP10RD2AbCoRZ517psnezrasyCbWzIxZ6kVqet768xw==}
@@ -12688,6 +12695,8 @@ snapshots:
     dependencies:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 5.1.0
+
+  smol-toml@1.8.0: {}
 
   solid-js@1.9.5:
     dependencies:
