@@ -39,7 +39,7 @@ const entry: PluginRegistryEntry = {
     source: { kind: "official" },
     terminalStatusItems: [],
     version: "1.0.0",
-    workbenchWidgets: [],
+    canvasActions: [],
     dataProjections: [],
   },
   runtime: { canToggle: true, enabled: true, kind: "external" },

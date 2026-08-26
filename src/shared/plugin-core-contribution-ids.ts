@@ -2,11 +2,6 @@ export const CORE_AGENT_STATUS_ITEM_ID = "core.agent-status";
 export const CORE_COMMENTS_STATUS_ITEM_ID = "core.comments-status";
 export const CORE_TASK_STATUS_ITEM_ID = "core.task-status";
 
-export const CORE_ACTIVITY_OVERVIEW_WIDGET_ID = "core.activity-overview";
-export const CORE_SYSTEM_RESOURCES_WIDGET_ID = "core.system-resources";
-export const CORE_CUSTOM_CARD_WIDGET_ID = "core.custom-card";
-export const CORE_COST_OVERVIEW_WIDGET_ID = "core.cost-overview";
-
 export const CORE_RESERVED_ACTION_IDS = [
   "pier.agent.new",
   "pier.agents.collaboration",
@@ -44,7 +39,6 @@ export const CORE_RESERVED_ACTION_IDS = [
   "pier.panel.keepOpen",
   "pier.panel.moveToNewWindow",
   "pier.panel.moveToWindow",
-  "pier.panel.newWorkbench",
   "pier.panel.newTab",
   "pier.panel.newTerminal",
   "pier.panel.openCreateMenu",
@@ -94,11 +88,4 @@ export const CORE_RESERVED_TERMINAL_STATUS_ITEM_IDS = [
   CORE_AGENT_STATUS_ITEM_ID,
   CORE_COMMENTS_STATUS_ITEM_ID,
   CORE_TASK_STATUS_ITEM_ID,
-] as const;
-
-export const CORE_RESERVED_WORKBENCH_WIDGET_IDS = [
-  CORE_ACTIVITY_OVERVIEW_WIDGET_ID,
-  CORE_SYSTEM_RESOURCES_WIDGET_ID,
-  CORE_CUSTOM_CARD_WIDGET_ID,
-  CORE_COST_OVERVIEW_WIDGET_ID,
 ] as const;

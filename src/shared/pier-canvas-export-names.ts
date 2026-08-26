@@ -173,6 +173,14 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
  * Global commands, events, and snapshots live on `pier/host`.
  */
 export const PIER_CANVAS_VALUE_EXPORT_NAMES = [
+  "formatBytes",
+  "formatCompactCurrency",
+  "formatCompactNumber",
+  "formatCount",
+  "formatCurrency",
+  "formatDurationShort",
+  "formatPercent",
+  "formatRelativeTime",
   "useActivityOverview",
   "useCanvasFile",
   "useCostOverview",

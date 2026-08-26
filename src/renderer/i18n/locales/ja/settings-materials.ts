@@ -141,6 +141,10 @@ export const settingsMaterials = {
     srError: "直近のポーリングエラー（あれば）。",
     srSnapshot: "最新の関連プロセス リソース スナップショット。",
     srStatus: "初回のポーリング成功後は ready。",
+    fmtPercent: "0–1 の比率を 63% のようなパーセントにします。",
+    fmtBytes: "バイト数を単位つきで表示します。",
+    fmtCurrency: "ロケールに合わせて金額を表示します。",
+    fmtRelative: "タイムスタンプを相対時間にします。",
   },
   lead: {
     Frame: "最大幅つきの読み取りコンテナ",
@@ -192,7 +196,8 @@ export const settingsMaterials = {
       "ノードからフローを描き、ネイティブ mermaid のシーケンス、状態、クラス、ER、マインドマップも使えます。",
     canvasFile: "キャンバス隣のファイル用サンドボックス。競合も含みます",
     activityOverview: "誰が動き、誰に助けが必要か、ひと目でわかる",
-    costOverview: "プラグイン横断のトークンコスト集計。手動更新つき",
+    costOverview: "プラグイン横断のトークンコスト集計",
     systemResources: "関連プロセスの CPU 推移と最新スナップショット",
+    format: "ロケールに合わせた数値・金額・サイズ・相対時間",
   },
 } as const;

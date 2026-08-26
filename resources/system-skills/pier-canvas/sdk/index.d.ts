@@ -10,6 +10,7 @@
 export * from "./core.js";
 export * from "./data.js";
 export * from "./files.js";
+export * from "./format.js";
 export * from "./forms.js";
 export * from "./primitives.js";
 export * from "./visualizations.js";

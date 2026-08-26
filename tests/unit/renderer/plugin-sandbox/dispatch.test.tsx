@@ -34,7 +34,8 @@ function entryWithPanels(
       source: { kind: sourceKind },
       terminalStatusItems: [],
       version: "1.0.0",
-      workbenchWidgets: [],
+      canvasActions: [],
+      dataProjections: [],
     },
     runtime: {
       canToggle: true,

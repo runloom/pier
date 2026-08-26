@@ -275,6 +275,33 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     }),
     type: z.literal("pluginData.snapshot"),
   }),
+  z.object({
+    payload: z.object({
+      key: z.string().min(1),
+      pluginId: z.string().min(1),
+    }),
+    type: z.literal("pluginData.watchStart"),
+  }),
+  z.object({
+    payload: z.object({
+      key: z.string().min(1),
+      pluginId: z.string().min(1),
+    }),
+    type: z.literal("pluginData.watchStop"),
+  }),
+  z.object({
+    payload: z.object({
+      key: z.string().min(1),
+      payload: z.unknown().optional(),
+      pluginId: z.string().min(1),
+    }),
+    type: z.literal("pluginAction.invoke"),
+  }),
+  z.object({
+    section: z.string().min(1).optional(),
+    type: z.literal("settings.open"),
+  }),
+  z.object({ type: z.literal("usageData.refresh") }),
   z.object({ type: z.literal("pluginSettings.getAll") }),
   z.object({
     key: z.string().min(1),

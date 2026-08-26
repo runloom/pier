@@ -13,7 +13,6 @@ import {
   Activity,
   ArrowRight,
   Command,
-  LayoutDashboard,
   type LucideIcon,
   PanelsTopLeft,
 } from "lucide-react";
@@ -37,7 +36,6 @@ export interface ContributionCounts {
   readonly commands: number;
   readonly panels: number;
   readonly terminalStatusItems: number;
-  readonly workbenchWidgets: number;
 }
 
 /** 只保留非零的贡献点计数, 每项配一个 lucide 图标。 */
@@ -73,13 +71,6 @@ export function contributionCountItemsFromCounts(
       pluralKey: "settings.plugins.contributionSummary.terminalStatusItems",
       singularKey: "settings.plugins.contributionSummary.terminalStatusItem",
     },
-    {
-      Icon: LayoutDashboard,
-      count: counts.workbenchWidgets,
-      id: "workbenchWidgets",
-      pluralKey: "settings.plugins.contributionSummary.workbenchWidgets",
-      singularKey: "settings.plugins.contributionSummary.workbenchWidget",
-    },
   ];
   return buckets
     .filter((item) => item.count > 0)
@@ -99,7 +90,6 @@ export function contributionCountItems(
   return contributionCountItemsFromCounts(
     {
       commands: entry.manifest.commands.length,
-      workbenchWidgets: entry.manifest.workbenchWidgets.length,
       panels: entry.manifest.panels.length,
       terminalStatusItems: entry.manifest.terminalStatusItems.length,
     },

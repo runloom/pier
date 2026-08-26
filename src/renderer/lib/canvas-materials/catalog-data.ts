@@ -159,13 +159,11 @@ export const DATA_CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> =
       nestedTypes: [],
       parameters: [],
       props: [
-        attr("refresh", "() => Promise<void>", "coRefresh"),
         attr("snapshot", "object | null", "coSnapshot"),
         attr("status", '"error" | "loading" | "ready"', "coStatus"),
       ],
       returnsSignature: [
         "interface CanvasCostOverview {",
-        "  refresh(): Promise<void>",
         "  snapshot: object | null",
         '  status: "error" | "loading" | "ready"',
         "}",
@@ -176,7 +174,7 @@ export const DATA_CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> =
         'if (cost.status !== "ready") {',
         "  return <Spinner />",
         "}",
-        "return <Button onClick={() => cost.refresh()}>Refresh</Button>",
+        "return <Text>{cost.status}</Text>",
       ].join("\n"),
     },
     systemResources: {
@@ -205,6 +203,48 @@ export const DATA_CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> =
         "const resources = useSystemResources()",
         "const latest = resources.cpuHistory.at(-1)",
         'return <Text>{latest ? latest.value + "%" : "…"}</Text>',
+      ].join("\n"),
+    },
+    format: {
+      nestedTypes: [],
+      parameters: [],
+      props: [
+        attr(
+          "formatPercent",
+          "(ratio: number, locale: string) => string",
+          "fmtPercent"
+        ),
+        attr(
+          "formatBytes",
+          "(value: number, locale: string) => string",
+          "fmtBytes"
+        ),
+        attr(
+          "formatCurrency",
+          "(value: number, locale: string, currency?: string) => string",
+          "fmtCurrency"
+        ),
+        attr(
+          "formatRelativeTime",
+          "(timestamp: number, now: number, locale: string) => string",
+          "fmtRelative"
+        ),
+      ],
+      returnsSignature: [
+        "interface FormatHelpers {",
+        "  formatPercent(ratio: number, locale: string): string",
+        "  formatBytes(value: number, locale: string): string",
+        "  formatCurrency(value: number, locale: string, currency?: string): string",
+        "  formatRelativeTime(timestamp: number, now: number, locale: string): string",
+        "}",
+      ].join("\n"),
+      signature:
+        "function formatPercent(ratio: number, locale: string): string",
+      usage: [
+        'const used = formatPercent(0.63, "en")',
+        'const size = formatBytes(1024, "en")',
+        'const ago = formatRelativeTime(1, 43_000, "en")',
+        "return <Text>{used}</Text>",
       ].join("\n"),
     },
   };

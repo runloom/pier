@@ -272,6 +272,20 @@ export const CANVAS_MATERIAL_GROUPS: readonly CanvasMaterialGroup[] = [
     id: "systemResources",
     members: ["useSystemResources"],
   },
+  {
+    family: "data",
+    id: "format",
+    members: [
+      "formatBytes",
+      "formatCompactCurrency",
+      "formatCompactNumber",
+      "formatCount",
+      "formatCurrency",
+      "formatDurationShort",
+      "formatPercent",
+      "formatRelativeTime",
+    ],
+  },
 ];
 
 export function ungroupedPierCanvasExports(): string[] {

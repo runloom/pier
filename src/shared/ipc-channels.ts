@@ -57,11 +57,11 @@ export const PIER = {
   PLUGIN_SANDBOX_AUDIT: "pier://plugin:sandbox-audit",
   ENVIRONMENT_PICK_PROJECT_DIRECTORY:
     "pier://environment:pick-project-directory",
-  // Pier 资源快照（renderer 拉取式轮询;工作台 system-resources 物料）
+  // Pier 资源快照（renderer 拉取式轮询;Canvas useSystemResources）
   PIER_RESOURCE_SNAPSHOT: "pier://pier-resource:snapshot",
   // 跨插件 API 等价成本聚合快照的初值拉取（增量走 PIER_BROADCAST.USAGE_DATA_CHANGED）。
   USAGE_DATA_SNAPSHOT: "pier://usage-data:snapshot",
-  // 触发所有注册源的 rescan + 广播；成本物料手动刷新入口。
+  // 触发所有注册源的 rescan + 广播；画布 usageData.refresh 的宿主入口。
   USAGE_DATA_REFRESH_ALL: "pier://usage-data:refresh-all",
   // Agent Runtime Index：本机 agent 投影 list / focus（独立 invoke，不进 PierCommand）。
   AGENT_RUNTIME_INDEX_LIST: "pier://agent-runtime-index:list",

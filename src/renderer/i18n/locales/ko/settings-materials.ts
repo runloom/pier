@@ -135,6 +135,10 @@ export const settingsMaterials = {
     srError: "최근 폴링 오류(있으면).",
     srSnapshot: "최신 관련 프로세스 리소스 스냅샷.",
     srStatus: "첫 폴링 성공 후 ready.",
+    fmtPercent: "0–1 비율을 63%처럼 퍼센트로 바꿉니다.",
+    fmtBytes: "바이트 수를 단위와 함께 표시합니다.",
+    fmtCurrency: "로케일에 맞춰 금액을 표시합니다.",
+    fmtRelative: "타임스탬프를 상대 시간으로 표시합니다.",
   },
   lead: {
     Frame: "최대 너비가 있는 읽기 컨테이너",
@@ -186,7 +190,8 @@ export const settingsMaterials = {
       "노드로 흐름을 그리고, 네이티브 mermaid 시퀀스, 상태, 클래스, ER, 마인드맵도 씁니다.",
     canvasFile: "캔버스 옆 파일용 샌드박스. 충돌 포함",
     activityOverview: "누가 움직이고 누가 도움이 필요한지 한눈에",
-    costOverview: "플러그인 전체 토큰 비용 집계. 수동 새로고침 지원",
+    costOverview: "플러그인 전체 토큰 비용 집계",
     systemResources: "관련 프로세스 CPU 추세와 최신 스냅샷",
+    format: "로케일에 맞춘 숫자, 금액, 크기, 상대 시간",
   },
 } as const;

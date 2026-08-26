@@ -25,16 +25,19 @@ import {
 import { useActivityOverview } from "pier/canvas";
 import { useCostOverview } from "pier/canvas";
 import { useSystemResources } from "pier/canvas";
+import { host } from "pier/host";
+import { CodexAccountRows, GrokAccountTable } from "./plugin-accounts.tsx";
 
 /**
  * 工作台常用组件示例 —— 旧工作台四类卡片的画布组装范式。
  * 视觉语言：仪表台。发丝线分区、大号 tabular 数字、微型标签、
- * 语义 token 着色；数据全部来自 pier/canvas 三个 hook。
+ * 语义 token 着色；数据来自 pier/canvas 三个 hook，以及插件 accounts 投影。
  * 组件边界遵循 shadcn 规范：列表项用 Item、空态用 Empty、
  * 卡片用完整 CardHeader/CardContent 组合。
  */
 export const canvas = {
-  description: "活动总览、系统资源、成本概览与自定义区块的组装示例。",
+  description:
+    "活动总览、系统资源、成本概览、自定义区块，以及 Codex / Grok 账号投影的两种拼法。",
   kind: "composition" as const,
   title: "工作台组件示例",
 };
@@ -311,7 +314,9 @@ function CostCard() {
           <CardTitle className="text-sm">成本概览</CardTitle>
           <Button
             onClick={() => {
-              void overview.refresh();
+              host
+                .invoke({ type: "usageData.refresh" })
+                .catch(() => undefined);
             }}
             variant="ghost"
           >
@@ -319,7 +324,7 @@ function CostCard() {
           </Button>
         </div>
         <CardDescription>
-          跨插件聚合；刷新走 store 方法，不经命令。
+          跨插件聚合；刷新走 usageData.refresh。
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -450,8 +455,9 @@ export default function WorkbenchExamples() {
           </Text>
           <Text className="max-w-3xl text-sm leading-relaxed" tone="secondary">
             旧工作台四类卡片的画布组装范式：数据来自 `pier/canvas` 的三个
-            hook，排版与格式化由画布自行组合。复制到项目 `.pier/canvases/`
-            后可自由改造。
+            hook，排版与格式化由画布自行组合。Codex 与 Grok 走同一套插件
+            accounts 投影：紧凑行和表是两种拼法，不是领域组件。复制到项目
+            `.pier/canvases/` 后可自由改造。
           </Text>
         </Stack>
         <HeroStrip />
@@ -460,6 +466,8 @@ export default function WorkbenchExamples() {
           <ResourcesCard />
           <CostCard />
           <BlocksCard />
+          <CodexAccountRows />
+          <GrokAccountTable />
         </div>
       </Stack>
     </Frame>

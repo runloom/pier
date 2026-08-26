@@ -10,7 +10,7 @@ import {
   type Page,
   test,
 } from "@playwright/test";
-import { openWorkbench } from "../workbench/e2e-harness.ts";
+import { openWelcomeTab } from "../support/app-harness.ts";
 
 const OUT_MAIN = join(
   import.meta.dirname,
@@ -821,7 +821,7 @@ test.describe("Native terminal focus e2e", () => {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
       await waitForTerminalCount(win, 1);
-      await openWorkbench(win);
+      await openWelcomeTab(win);
 
       const terminalTab = win
         .locator('[data-panel-tab-id^="terminal-"]')

@@ -52,7 +52,6 @@ export const commandPalette = {
     listAgents: "エージェント一覧…",
     openCollaboration: "エージェント連携…",
     startAgent: "{{agent}} を起動",
-    newWorkbench: "新規ワークベンチ",
     runTask: "タスクを実行…",
     terminalList: "ターミナル一覧...",
     selectTheme: "テーマを選択",

@@ -20,12 +20,6 @@
           "title": "Claude Accounts"
         }
       },
-      "workbenchWidgets": {
-        "pier.claude.accounts": {
-          "title": "Claude Account",
-          "description": "Switch the active Claude account."
-        }
-      },
       "messages": {
         "pier.claude.accounts.settings.title": "Claude Accounts",
         "pier.claude.accounts.settings.currentAccount": "Current account",
@@ -136,12 +130,6 @@
       "settingsPages": {
         "pier.claude.accounts": {
           "title": "Claude 账号"
-        }
-      },
-      "workbenchWidgets": {
-        "pier.claude.accounts": {
-          "title": "Claude 账号",
-          "description": "切换当前 Claude 账号。"
         }
       },
       "messages": {
@@ -256,12 +244,6 @@
           "title": "Claude アカウント"
         }
       },
-      "workbenchWidgets": {
-        "pier.claude.accounts": {
-          "title": "Claude アカウント",
-          "description": "使用中の Claude アカウントを切り替えます。"
-        }
-      },
       "messages": {
         "pier.claude.accounts.settings.title": "Claude アカウント",
         "pier.claude.accounts.settings.currentAccount": "現在のアカウント",
@@ -374,12 +356,6 @@
           "title": "Claude 계정"
         }
       },
-      "workbenchWidgets": {
-        "pier.claude.accounts": {
-          "title": "Claude 계정",
-          "description": "사용 중인 Claude 계정을 전환합니다."
-        }
-      },
       "messages": {
         "pier.claude.accounts.settings.title": "Claude 계정",
         "pier.claude.accounts.settings.currentAccount": "현재 계정",
@@ -486,28 +462,8 @@
     }
   },
   "main": "dist/main.js",
-  "workbenchWidgets": [
-    {
-      "category": "agent",
-      "defaultSize": {
-        "w": 4,
-        "h": 3
-      },
-      "description": "Switch the active Claude account and monitor usage.",
-      "id": "pier.claude.accounts",
-      "maxSize": {
-        "w": 8,
-        "h": 6
-      },
-      "minSize": {
-        "w": 2,
-        "h": 2
-      },
-      "refreshable": false,
-      "searchTerms": ["claude", "anthropic", "account", "usage", "账号"],
-      "title": "Claude Account"
-    }
-  ],
+  "dataProjections": ["accounts"],
+  "canvasActions": ["accounts.select", "accounts.refreshUsage"],
   "name": "Claude Account Management",
   "panels": [],
   "permissions": [

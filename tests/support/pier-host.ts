@@ -45,7 +45,7 @@ export const host: CanvasHost = {
 };
 
 export function useHostSnapshot(
-  _target: CanvasHostWatchTarget
+  _target: CanvasHostWatchTarget | (string & {})
 ): HostSnapshotState {
   return { data: null, error: null, status: "ready" };
 }

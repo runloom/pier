@@ -4,7 +4,6 @@ import { AlertTriangle } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { getPluginPanelRegistrations } from "@/lib/plugins/panel-registry.ts";
 import { terminalPanelKit } from "@/panel-kits/terminal/panel-kit.ts";
-import { workbenchPanelKit } from "@/panel-kits/workbench/panel.tsx";
 import {
   withPanelResourceBoundary,
   withPluginPanelHostBoundary,
@@ -29,7 +28,6 @@ interface PanelKitMetadata {
  * 旧 layout 里的 `notifications` panel 由 sanitizeSavedLayout 剔除。
  */
 export const panelKits = {
-  workbench: workbenchPanelKit,
   terminal: terminalPanelKit,
   welcome: welcomePanelKit,
   // Canvas preview is files panel view mode (like Markdown), not a core kit.

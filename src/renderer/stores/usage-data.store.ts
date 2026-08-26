@@ -16,11 +16,11 @@ interface UsageDataState {
  *
  * 写入方：`initUsageDataBridge()`（挂载 preload subscribe 后初值经
  * `window.pier.usageData.read()` 灌入，增量走 broadcast）。
- * 读取方：工作台 `core.cost-overview` 物料、`core.cost.*` 指标注册器。
+ * 读取方：Canvas 聚合 hook `useCostOverview`。
  *
  * `observedAt` 由 aggregator 保证只增不减；此 store 用 `observedAt` 做
  * 单调守卫，避免网络乱序造成快照回退。空聚合（`sourceCount === 0`
- * 且 `observedAt === 0`）视为有效初值，允许物料立刻渲染 empty 态。
+ * 且 `observedAt === 0`）视为有效初值，允许画布立刻渲染 empty 态。
  */
 export const useUsageDataStore = create<UsageDataState>((set, get) => ({
   error: null,

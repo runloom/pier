@@ -41,10 +41,6 @@ import {
   resolvePluginMessage,
 } from "../display.ts";
 import { pluginLifecycleBarriers } from "../lifecycle/barriers.ts";
-import {
-  assertPluginWorkbenchWidgetRegistration,
-  registerPluginWorkbenchWidget,
-} from "../workbench-widget-registry.ts";
 import { createPluginAgentsContext } from "./agents-context.ts";
 import { createPluginAiContext } from "./ai-context.ts";
 import {
@@ -431,12 +427,6 @@ export function createRendererPluginContext(
       register: (item) => {
         assertDeclaredContribution(entry, "terminalStatusItem", item.id);
         return terminalStatusItemRegistry.register(item);
-      },
-    },
-    workbenchWidgets: {
-      register: (registration) => {
-        assertPluginWorkbenchWidgetRegistration(entry, registration);
-        return registerPluginWorkbenchWidget(registration);
       },
     },
     groupContent: createHostGroupContentContext(

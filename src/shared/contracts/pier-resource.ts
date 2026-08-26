@@ -4,7 +4,7 @@ import { agentKindSchema } from "./agent.ts";
 import { agentSessionTitleSourceSchema } from "./foreground-activity.ts";
 
 /**
- * Pier 资源快照（工作台「工作台资源」物料 / 指标目录）。
+ * Pier 资源快照（Canvas `useSystemResources` / `useHostSnapshot("resources")`）。
  *
  * L1 Electron 进程族 + L2 终端 session 树 + L3 活动身份；
  * renderer 拉取式消费（可见时 2s 轮询）；main 无常驻采样器。

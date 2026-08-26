@@ -259,7 +259,6 @@ function createMockContext(): RendererPluginContext {
       issue: unimplemented("filePreviews.issue"),
       release: unimplemented("filePreviews.release"),
     },
-    workbenchWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
       alert: dialogAlertMock,
       choice: unimplemented("dialogs.choice"),

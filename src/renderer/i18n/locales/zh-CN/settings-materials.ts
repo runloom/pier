@@ -133,6 +133,10 @@ export const settingsMaterials = {
     srError: "最近一次轮询错误（如有）。",
     srSnapshot: "最新一次相关进程资源快照。",
     srStatus: "首次成功轮询后为 ready。",
+    fmtPercent: "把 0–1 比例格式化成百分比，例如 63%。",
+    fmtBytes: "把字节数格式化成带单位的大小。",
+    fmtCurrency: "按语言环境格式化金额。",
+    fmtRelative: "把时间戳格式化成多久以前。",
   },
   lead: {
     Frame: "固定最大宽度的阅读容器",
@@ -183,7 +187,8 @@ export const settingsMaterials = {
       "节点流程图，以及原生 mermaid 时序、状态、类图、实体关系和思维导图。",
     canvasFile: "读写画布相邻文件，含冲突；不是全局 file 命令",
     activityOverview: "谁在运行、谁需要你，一目了然",
-    costOverview: "跨插件 token 成本聚合，可手动刷新",
+    costOverview: "跨插件 token 成本聚合",
     systemResources: "相关进程 CPU 趋势与最新快照",
+    format: "按语言环境格式化数字、金额、大小和相对时间",
   },
 } as const;

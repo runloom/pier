@@ -16,7 +16,7 @@ export function LandingPage({ d }: { d: DesignData }) {
       <Stack gap={6}>
         <SectionTitle>落地波次</SectionTitle>
         <SectionLead>
-          本文件只钉方案。实现从 P0 设置→项目物料列表开始，不先改工作台网格。
+          本文件只钉方案。实现从 P0 设置→项目物料列表开始；组装只走 .canvas.tsx。
         </SectionLead>
         <DataTable
           caption="里程碑"

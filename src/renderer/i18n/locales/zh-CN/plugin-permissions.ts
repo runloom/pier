@@ -14,6 +14,7 @@ export const pluginPermissions = {
   "panel:read": "读取面板状态",
   "panel:register": "注册面板",
   "plugin:read": "读取插件信息",
+  "plugin:action": "在画布中调用插件已声明的动作",
   "plugin:write": "修改插件状态",
   "preferences:read": "读取偏好设置",
   "preferences:write": "修改偏好设置",

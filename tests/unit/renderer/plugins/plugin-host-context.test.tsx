@@ -25,7 +25,6 @@ const WORKTREE_WRITE_CAPABILITY_PATTERN =
 const GROUP_CONTENT_ID_PREFIX_PATTERN =
   /groupContent id must start with.*sample\.plugin\./;
 const ENVIRONMENT_READ_CAPABILITY_PATTERN = /environment:read/;
-const CONFIGURABLE_WIDGET_SETTINGS_PATTERN = /settingsComponent/i;
 const EXTERNAL_OPEN_CAPABILITY_PATTERN = /external:open/;
 
 const toastMocks = vi.hoisted(() => ({
@@ -56,10 +55,6 @@ import { clearHostGroupContentForTests } from "@/lib/plugins/host/group-content-
 import { pluginLifecycleBarriers } from "@/lib/plugins/lifecycle/barriers.ts";
 import { mermaidRenderer } from "@/lib/plugins/mermaid/renderer.ts";
 import { clearPluginPanelsForTests } from "@/lib/plugins/panel-registry.ts";
-import {
-  clearPluginWorkbenchWidgetsForTests,
-  getPluginWorkbenchWidgetRegistrations,
-} from "@/lib/plugins/workbench-widget-registry.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/status-bar.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 import { useLocaleStore } from "@/stores/locale.store.ts";
@@ -132,9 +127,6 @@ const sampleCommands = [
 const sampleTerminalStatusItems = [
   { id: "sample.status", permissions: [], title: "Sample Status" },
 ];
-const sampleWorkbenchWidgets = [
-  { id: "sample.widget", permissions: [], title: "Sample Widget" },
-];
 const undeclaredContributionErrorPattern = /not declared/;
 
 const pluginEntry = {
@@ -189,7 +181,7 @@ const pluginEntry = {
     permissions: ["command:register"],
     source: { kind: "builtin" },
     terminalStatusItems: sampleTerminalStatusItems,
-    workbenchWidgets: sampleWorkbenchWidgets,
+    canvasActions: [],
     dataProjections: [],
     settingsPages: [],
     version: "1.0.0",
@@ -198,25 +190,6 @@ const pluginEntry = {
     canToggle: true,
     enabled: true,
     kind: "builtin",
-  },
-} satisfies PluginRegistryEntry;
-
-const configurableWidgetEntry = {
-  ...pluginEntry,
-  manifest: {
-    ...pluginEntry.manifest,
-    workbenchWidgets: [
-      {
-        configurable: true,
-        defaultSize: { h: 4, w: 4 },
-        id: "sample.configurableWidget",
-        maxSize: { h: 12, w: 12 },
-        minSize: { h: 2, w: 2 },
-        permissions: [],
-        title: "Configurable Widget",
-      },
-    ],
-    dataProjections: [],
   },
 } satisfies PluginRegistryEntry;
 
@@ -353,7 +326,6 @@ afterEach(() => {
   useWorkspaceStore.setState({ api: null });
   workspaceActivationMocks.activateWorkspacePanel.mockReset();
   vi.restoreAllMocks();
-  clearPluginWorkbenchWidgetsForTests();
   vi.useRealTimers();
 });
 
@@ -508,88 +480,6 @@ describe("createRendererPluginContext", () => {
       })
     ).toThrow(undeclaredContributionErrorPattern);
     expect(terminalStatusItemRegistry.list()).toEqual([]);
-  });
-
-  it("delegates Workbench widget registration to the internal registry", () => {
-    const context = createRendererPluginContext(pluginEntry);
-
-    const dispose = context.workbenchWidgets.register({
-      component: () => null,
-      icon: House,
-      id: "sample.widget",
-    });
-
-    expect(getPluginWorkbenchWidgetRegistrations().has("sample.widget")).toBe(
-      true
-    );
-
-    dispose();
-    expect(getPluginWorkbenchWidgetRegistrations().has("sample.widget")).toBe(
-      false
-    );
-  });
-
-  it("rejects a configurable builtin widget without a settings component", () => {
-    const context = createRendererPluginContext(configurableWidgetEntry);
-
-    expect(() =>
-      context.workbenchWidgets.register({
-        component: () => null,
-        icon: House,
-        id: "sample.configurableWidget",
-      })
-    ).toThrow(CONFIGURABLE_WIDGET_SETTINGS_PATTERN);
-    expect(
-      getPluginWorkbenchWidgetRegistrations().has("sample.configurableWidget")
-    ).toBe(false);
-  });
-
-  it("registers a configurable builtin widget with its settings component", () => {
-    const context = createRendererPluginContext(configurableWidgetEntry);
-    const registration = {
-      component: () => null,
-      icon: House,
-      id: "sample.configurableWidget",
-      settingsComponent: () => null,
-    };
-
-    const dispose = context.workbenchWidgets.register(registration);
-
-    expect(
-      getPluginWorkbenchWidgetRegistrations().get("sample.configurableWidget")
-    ).toBe(registration);
-    dispose();
-  });
-
-  it("rejects Workbench widget registration not declared by the plugin manifest", () => {
-    const context = createRendererPluginContext(pluginEntry);
-
-    expect(() =>
-      context.workbenchWidgets.register({
-        component: () => null,
-        icon: House,
-        id: "sample.missingWidget",
-      })
-    ).toThrow(undeclaredContributionErrorPattern);
-    expect(
-      getPluginWorkbenchWidgetRegistrations().has("sample.missingWidget")
-    ).toBe(false);
-  });
-
-  it("allows Workbench widget registration without entry (core context)", () => {
-    const context = createRendererPluginContext();
-
-    const dispose = context.workbenchWidgets.register({
-      component: () => null,
-      icon: House,
-      id: "any.widget",
-    });
-
-    expect(getPluginWorkbenchWidgetRegistrations().has("any.widget")).toBe(
-      true
-    );
-
-    dispose();
   });
 
   it("claims declared group content through the real host context and releases it after the grace period", async () => {

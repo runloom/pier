@@ -81,6 +81,16 @@ import {
   FieldTitle,
 } from "@pier/ui/field.tsx";
 import {
+  formatBytes,
+  formatCompactCurrency,
+  formatCompactNumber,
+  formatCount,
+  formatCurrency,
+  formatDurationShort,
+  formatPercent,
+  formatRelativeTime,
+} from "@pier/ui/format.tsx";
+import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
@@ -247,6 +257,14 @@ export const pierCanvasExports = {
   FieldSeparator,
   FieldSet,
   FieldTitle,
+  formatBytes,
+  formatCompactCurrency,
+  formatCompactNumber,
+  formatCount,
+  formatCurrency,
+  formatDurationShort,
+  formatPercent,
+  formatRelativeTime,
   Frame,
   HoverCard,
   HoverCardContent,

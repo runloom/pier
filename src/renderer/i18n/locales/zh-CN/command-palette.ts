@@ -51,7 +51,6 @@ export const commandPalette = {
     listAgents: "智能体列表…",
     openCollaboration: "智能体协作…",
     startAgent: "启动 {{agent}}",
-    newWorkbench: "新建工作台",
     runTask: "运行任务…",
     terminalList: "终端列表...",
     selectTheme: "选择主题",

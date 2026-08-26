@@ -33,6 +33,7 @@ export function bootAppCorePluginDataProjections(deps: {
   const projections = createPluginDataProjectionService({
     broadcastToWindows,
     bus: deps.bus,
+    manifestActions: manifestProjections.readActions,
     manifestProjections: manifestProjections.read,
   });
   const disposeTap = projections.tapEvents();

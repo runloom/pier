@@ -105,6 +105,10 @@ Project pack override (when present, wins over built-in):
   `pier/canvas`. Import commands, events, and snapshots from `pier/host`.
   The API tab is a capability catalog (`useCanvasFile` plus host domains).
   Do not invent APIs or import workbench widgets.
+  Plugin data: `plugin.list` / `inspect` → `useHostSnapshot("plugin:<id>/<key>")`
+  → declared `pluginAction.invoke` only. Add/remove/OAuth via `settings.open`.
+  Compose with primitives (`Item`, `Table`, `Progress`); see
+  `references/host-data.md`. Never ship `AccountsCard` / `canvasWidgets`.
 
 - Write outputs only under `.pier/canvases/**` in the current project
   (product default). Preview roots are the full editable list in

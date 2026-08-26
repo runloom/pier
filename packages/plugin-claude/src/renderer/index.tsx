@@ -4,13 +4,7 @@ import type {
 } from "@pier/plugin-api/renderer";
 import type { ReactNode } from "react";
 import { AccountsSettingsPage } from "./accounts-settings-page.tsx";
-import {
-  AccountsWidget as AccountsWidgetImpl,
-  accountsWidgetActions,
-} from "./accounts-widget.tsx";
 import rendererStyles from "./styles.css?inline";
-
-export { AccountsWidget } from "./accounts-widget.tsx";
 
 function ClaudeRendererRoot({ children }: { children: ReactNode }) {
   return (
@@ -28,16 +22,6 @@ export const plugin: ExternalRendererPluginModule = {
     styleElement.textContent = rendererStyles;
     document.head.appendChild(styleElement);
 
-    const disposeAccountsWidget = context.workbenchWidgets.register({
-      id: "pier.claude.accounts",
-      actions: (actionContext) => accountsWidgetActions(context, actionContext),
-      component: (props) => (
-        <ClaudeRendererRoot>
-          <AccountsWidgetImpl context={context} {...props} />
-        </ClaudeRendererRoot>
-      ),
-      contentMode: "contained",
-    });
     const disposeSettings = context.settingsPages.register({
       id: "pier.claude.accounts",
       component: () => (
@@ -47,7 +31,6 @@ export const plugin: ExternalRendererPluginModule = {
       ),
     });
     return () => {
-      disposeAccountsWidget();
       disposeSettings();
       styleElement.remove();
     };

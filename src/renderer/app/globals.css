@@ -1133,12 +1133,6 @@ body {
   color: var(--pier-file-icon-yellow);
 }
 
-.pier-panel-tab-icon[data-panel-tab-icon="workbench"],
-[data-slot="select-item"]:focus
-  .pier-panel-tab-icon[data-panel-tab-icon="workbench"] {
-  color: var(--pier-file-icon-indigo);
-}
-
 .pier-panel-tab-icon[data-panel-tab-icon="welcome"],
 [data-slot="select-item"]:focus
   .pier-panel-tab-icon[data-panel-tab-icon="welcome"] {

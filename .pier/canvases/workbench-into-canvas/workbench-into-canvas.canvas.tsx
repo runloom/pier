@@ -26,7 +26,7 @@ import { StatusBadge } from "./shared.tsx";
 
 export const canvas = {
   description:
-    "设置→项目一个物料列表：类型只做筛选，系统与项目混排，页面仍是文件。数据走宿主 stub；不拆工作台网格。",
+    "设置→项目一个物料列表：类型只做筛选，系统与项目混排，页面仍是文件。数据走宿主 stub 与声明制插件通道。",
   kind: "composition" as const,
   title: "Canvas 物料金标准",
 };

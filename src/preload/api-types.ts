@@ -186,8 +186,12 @@ export interface PierClipboardAPI {
   writeText: (text: string) => Promise<void>;
 }
 
+export interface SettingsOpenRequest {
+  section?: string;
+}
+
 export interface PierSettingsAPI {
-  onOpenRequest: (cb: () => void) => () => void;
+  onOpenRequest: (cb: (payload?: SettingsOpenRequest) => void) => () => void;
 }
 
 /** env 子命名空间 — 运行时环境信息. */

@@ -138,6 +138,10 @@ export const settingsMaterials = {
     srError: "Latest poll error, if any.",
     srSnapshot: "Latest related-process resource snapshot.",
     srStatus: "ready after the first successful poll.",
+    fmtPercent: "Turn a 0–1 ratio into a percent, like 63%.",
+    fmtBytes: "Format a byte count with a unit.",
+    fmtCurrency: "Format a money amount for a locale.",
+    fmtRelative: "Format how long ago a timestamp is.",
   },
   lead: {
     Frame: "Reading container with a max width",
@@ -189,7 +193,8 @@ export const settingsMaterials = {
       "Flowcharts from nodes, plus native mermaid sequence, state, class, ER, and mind maps.",
     canvasFile: "Sibling-file sandbox next to the canvas, including conflicts",
     activityOverview: "Who is running, who needs you, right now",
-    costOverview: "Cross-plugin token cost aggregate with manual refresh",
+    costOverview: "Cross-plugin token cost aggregate",
     systemResources: "Related-process CPU trend and latest snapshot",
+    format: "Locale-aware numbers, money, sizes, and relative time",
   },
 } as const;

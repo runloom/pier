@@ -13,7 +13,7 @@ function gitEntry(): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       configuration: {

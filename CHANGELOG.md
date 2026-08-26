@@ -4,6 +4,14 @@
 
 ## [Unreleased]
 
+### Removed
+
+- **工作台面板。** 去掉新建工作台命令、旧 layout 中的工作台 / dashboard / mission-control 标签，以及插件 `workbenchWidgets` 贡献点。账号添加、删除、OAuth 仍在设置页。
+
+### Changed
+
+- **Canvas 用通用插件通道组合。** 画布经 `pluginData` 投影、`pluginAction.invoke`、`settings.open` 与宿主聚合 hook 自拼界面；不提供官方账号组件或第二套 widget 贡献点。
+
 ## [0.1.32] - 2026-08-26
 
 ### Changed

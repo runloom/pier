@@ -87,7 +87,7 @@ function UnmountWhenHiddenPanel({
 
 /**
  * 插件面板局部错误边界（失败语义契约：面板渲染抛错 → 仅该面板显示错误态，
- * 其余面板与工作台不受影响）。见 docs/superpowers/specs/
+ * 其余面板与工作区不受影响）。见 docs/superpowers/specs/
  * 2026-08-24-plugin-failure-semantics.md 的失败矩阵。
  */
 export class PluginPanelErrorBoundary extends Component<

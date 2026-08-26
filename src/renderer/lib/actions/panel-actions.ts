@@ -1,11 +1,5 @@
 import i18next from "i18next";
-import {
-  AppWindow,
-  LayoutDashboard,
-  Plus,
-  RotateCcw,
-  SquarePlus,
-} from "lucide-react";
+import { AppWindow, Plus, RotateCcw, SquarePlus } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import {
@@ -20,7 +14,6 @@ import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import {
   captureAnchoredTerminalTarget,
-  referenceGroupById,
   resolveAnchoredTerminalOptions,
 } from "@/stores/workspace-panel-helpers.ts";
 import { PANEL_LAYOUT_ACTION_CONTRIBUTIONS } from "./panel-layout-contributions.ts";
@@ -59,25 +52,9 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     group: "1_new",
     handler: () => useWorkspaceStore.getState().addTab(),
     id: "pier.panel.newTab",
-    surfaces: [],
-    titleKey: "commandPalette.action.newTab",
-    when: "workspace.hasApi",
-  },
-  {
-    // 工作台是全局 panel，创建不要求项目路径。
-    categoryKey: "panel",
-    group: "1_new",
-    handler: (invocation) => {
-      const api = useWorkspaceStore.getState().api;
-      useWorkspaceStore
-        .getState()
-        .addWorkbench(referenceGroupById(api, invocation?.sourcePanelGroupId));
-    },
-    iconComponent: LayoutDashboard,
-    id: "pier.panel.newWorkbench",
-    sortOrder: 0,
+    sortOrder: 2,
     surfaces: ["command-palette", "create-menu"],
-    titleKey: "commandPalette.action.newWorkbench",
+    titleKey: "commandPalette.action.newTab",
     when: "workspace.hasApi",
   },
   {

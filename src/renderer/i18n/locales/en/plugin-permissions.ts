@@ -14,6 +14,7 @@ export const pluginPermissions = {
   "panel:read": "Read panel state",
   "panel:register": "Register panels",
   "plugin:read": "Read plugin information",
+  "plugin:action": "Run declared plugin actions on canvases",
   "plugin:write": "Change plugin state",
   "preferences:read": "Read preferences",
   "preferences:write": "Change preferences",

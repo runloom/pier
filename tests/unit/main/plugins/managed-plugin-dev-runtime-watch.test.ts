@@ -11,7 +11,7 @@ describe("managed plugin dev runtime watch", () => {
     expect(isManagedPluginDevRuntimeFile("dist/renderer.js")).toBe(true);
 
     expect(
-      isManagedPluginDevRuntimeFile("src/renderer/accounts-widget.tsx")
+      isManagedPluginDevRuntimeFile("src/renderer/accounts-settings-page.tsx")
     ).toBe(false);
     expect(isManagedPluginDevRuntimeFile("dist-pkg/pier.codex-1.0.0.tgz")).toBe(
       false

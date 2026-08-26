@@ -27,7 +27,7 @@ function demoEntry(
       commands: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.demo",
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       name: "Demo",
       panels: [],

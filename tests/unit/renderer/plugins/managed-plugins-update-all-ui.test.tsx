@@ -43,7 +43,7 @@ function entry(id: string, name: string): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
