@@ -1,0 +1,25 @@
+{
+  "description": "Project memory for coding agents.",
+  "messages": {
+    "confirm.tracked.body": "Memory lives on this machine. These project configs are usually committed, so they won't work on other machines.",
+    "confirm.tracked.title": "Share memory configuration through git?",
+    "degraded.details": "View details",
+    "empty.noProject": "No project open",
+    "empty.noProjectHint": "Open a project folder to use project memory.",
+    "first.claudeTrust": "Claude Code asks one-time approval for project memory tools on first use.",
+    "panel.title": "Project Memory",
+    "state.degraded": "Partially connected",
+    "state.disabled": "Off",
+    "state.enabled": "Enabled",
+    "summary.connected": "Connected for {{count}} agents",
+    "summary.engine": "Engine version",
+    "summary.store": "Memory file location",
+    "switch.enable": "Enable project memory"
+  },
+  "name": "Memory",
+  "panels": {
+    "pier.memory.panel": {
+      "title": "Project Memory"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "description": "为智能体提供项目记忆。",
+  "messages": {
+    "confirm.tracked.body": "记忆文件在这台电脑上。这些项目配置通常会被 git 跟踪，在其他机器上不会生效。",
+    "confirm.tracked.title": "要把记忆配置写进 git 跟踪的文件吗？",
+    "degraded.details": "查看详情",
+    "empty.noProject": "未打开项目",
+    "empty.noProjectHint": "请先打开项目文件夹以使用项目记忆。",
+    "first.claudeTrust": "Claude Code 第一次使用项目记忆时会要求一次性批准。",
+    "panel.title": "项目记忆",
+    "state.degraded": "部分接入",
+    "state.disabled": "已关闭",
+    "state.enabled": "已启用",
+    "summary.connected": "已接入 {{count}} 个智能体",
+    "summary.engine": "引擎版本",
+    "summary.store": "记忆文件位置",
+    "switch.enable": "启用项目记忆"
+  },
+  "name": "Memory",
+  "panels": {
+    "pier.memory.panel": {
+      "title": "项目记忆"
+    }
+  }
+}

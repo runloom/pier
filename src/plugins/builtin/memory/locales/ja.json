@@ -1,0 +1,25 @@
+{
+  "description": "コーディング用のプロジェクト記憶。",
+  "messages": {
+    "confirm.tracked.body": "記憶ファイルはこのマシンにあります。これらのプロジェクト設定は通常コミットされるため、他のマシンでは使えません。",
+    "confirm.tracked.title": "記憶の設定を git 管理のファイルに書き込みますか？",
+    "degraded.details": "詳細を見る",
+    "empty.noProject": "プロジェクトが開かれていません",
+    "empty.noProjectHint": "プロジェクト記憶を使うには、先にプロジェクトフォルダを開いてください。",
+    "first.claudeTrust": "Claude Code は初回、プロジェクト記憶ツールの承認を求めます。",
+    "panel.title": "プロジェクト記憶",
+    "state.degraded": "一部のみ接続",
+    "state.disabled": "オフ",
+    "state.enabled": "有効",
+    "summary.connected": "{{count}} 体のエージェントに接続済み",
+    "summary.engine": "エンジンのバージョン",
+    "summary.store": "記憶ファイルの場所",
+    "switch.enable": "プロジェクト記憶を有効にする"
+  },
+  "name": "Memory",
+  "panels": {
+    "pier.memory.panel": {
+      "title": "プロジェクト記憶"
+    }
+  }
+}

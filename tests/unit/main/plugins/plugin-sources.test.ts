@@ -230,6 +230,7 @@ describe("createDefaultPluginSources", () => {
     expect(result.entries.map((entry) => entry.manifest.id).sort()).toEqual([
       FILES_PLUGIN_ID,
       GIT_PLUGIN_ID,
+      "pier.memory",
     ]);
   });
 });

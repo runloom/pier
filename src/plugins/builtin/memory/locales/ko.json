@@ -1,0 +1,25 @@
+{
+  "description": "코딩 에이전트를 위한 프로젝트 기억.",
+  "messages": {
+    "confirm.tracked.body": "기억 파일은 이 컴퓨터에 있습니다. 이런 프로젝트 설정은 보통 커밋되므로 다른 기기에서는 동작하지 않습니다.",
+    "confirm.tracked.title": "기억 설정을 git이 추적하는 파일에 쓸까요?",
+    "degraded.details": "자세히 보기",
+    "empty.noProject": "열린 프로젝트 없음",
+    "empty.noProjectHint": "프로젝트 기억을 쓰려면 먼저 프로젝트 폴더를 여세요.",
+    "first.claudeTrust": "Claude Code는 처음 프로젝트 기억을 쓸 때 한 번 승인을 요청합니다.",
+    "panel.title": "프로젝트 기억",
+    "state.degraded": "일부만 연결됨",
+    "state.disabled": "꺼짐",
+    "state.enabled": "사용 중",
+    "summary.connected": "에이전트 {{count}}개에 연결됨",
+    "summary.engine": "엔진 버전",
+    "summary.store": "기억 파일 위치",
+    "switch.enable": "프로젝트 기억 사용"
+  },
+  "name": "Memory",
+  "panels": {
+    "pier.memory.panel": {
+      "title": "프로젝트 기억"
+    }
+  }
+}
