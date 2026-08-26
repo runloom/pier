@@ -240,6 +240,9 @@ export function useDiffViewCodeOptions(options: {
       itemMetrics: {
         diffHeaderHeight: metrics.headerHeight,
         lineHeight: metrics.lineHeight,
+        // 文件体底垫；与 CSS --pier-diff-content-padding-bottom 同源。
+        // 勿改 spacing（hunk 分隔条也用它）。
+        paddingBottom: metrics.contentPaddingBottom,
       },
       layout: {
         gap: metrics.gap,
@@ -435,14 +438,23 @@ export function useDiffViewCodeOptions(options: {
       "--diffshub-diff-separator": "var(--border)",
       "--diffs-font-family": appearance.codeFontFamily,
       "--diffs-font-size": appearance.codeFontSize,
-      "--diffs-line-height": "1.75",
+      // 行高 px 与 itemMetrics.lineHeight 同源；禁止无单位 1.75（1lh 取整会分叉）。
+      "--diffs-line-height": `${metrics.lineHeight}px`,
       "--diffs-scrollbar-gutter-override":
         "var(--shell-scrollbar-width-legacy)",
       // 头部 CSS 高度与 itemMetrics.diffHeaderHeight 同源，避免折叠导航累积错位。
       "--pier-diff-header-height": `${metrics.headerHeight}px`,
+      // 文件体底垫与 itemMetrics.paddingBottom 同源，避免展开文件把后续 item.top 抬偏。
+      "--pier-diff-content-padding-bottom": `${metrics.contentPaddingBottom}px`,
       height: "100%",
     }),
-    [appearance.codeFontFamily, appearance.codeFontSize, metrics.headerHeight]
+    [
+      appearance.codeFontFamily,
+      appearance.codeFontSize,
+      metrics.contentPaddingBottom,
+      metrics.headerHeight,
+      metrics.lineHeight,
+    ]
   );
 
   return {

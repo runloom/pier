@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { filePreviewImageMimeSchema } from "../file.ts";
-import { gitReviewFileSourceSchema } from "./base.ts";
+import { gitReviewFileSourceSchema, gitReviewScopeSchema } from "./base.ts";
 import {
+  GIT_REVIEW_EXCERPT_BATCH_MAX,
   GIT_REVIEW_MAX_SECTIONS,
   gitReviewChangeKeySchema,
   gitReviewFailureSchema,
@@ -312,4 +313,62 @@ export const gitReviewFileDocumentResultSchema = z.union([
 ]);
 export type GitReviewFileDocumentResult = z.infer<
   typeof gitReviewFileDocumentResultSchema
+>;
+
+/** Z2：同一世代内一批 content 路径；oldPaths 供 rename 对齐 index。 */
+export const gitReviewExcerptFileSchema = z.strictObject({
+  oldPaths: z.array(gitReviewRelativePathSchema).max(3),
+  path: gitReviewRelativePathSchema,
+  previousRevision: gitReviewRevisionSchema.optional(),
+});
+export type GitReviewExcerptFile = z.infer<typeof gitReviewExcerptFileSchema>;
+
+export const gitReviewExcerptBatchRequestSchema = z
+  .strictObject({
+    files: z
+      .array(gitReviewExcerptFileSchema)
+      .min(1)
+      .max(GIT_REVIEW_EXCERPT_BATCH_MAX),
+    operationId: gitReviewOperationIdSchema,
+    source: gitReviewScopeSchema,
+  })
+  .superRefine((request, context) => {
+    const paths = request.files.map((file) => file.path);
+    if (new Set(paths).size !== paths.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Excerpt batch paths must be unique",
+        path: ["files"],
+      });
+    }
+  });
+export type GitReviewExcerptBatchRequest = z.infer<
+  typeof gitReviewExcerptBatchRequestSchema
+>;
+
+export const gitReviewExcerptBatchItemSchema = z.strictObject({
+  path: gitReviewRelativePathSchema,
+  result: gitReviewFileDocumentResultSchema,
+});
+export type GitReviewExcerptBatchItem = z.infer<
+  typeof gitReviewExcerptBatchItemSchema
+>;
+
+export const gitReviewExcerptBatchOkSchema = z.strictObject({
+  items: z
+    .array(gitReviewExcerptBatchItemSchema)
+    .min(1)
+    .max(GIT_REVIEW_EXCERPT_BATCH_MAX),
+  kind: z.literal("ok"),
+});
+export type GitReviewExcerptBatchOk = z.infer<
+  typeof gitReviewExcerptBatchOkSchema
+>;
+
+export const gitReviewExcerptBatchResultSchema = z.union([
+  gitReviewExcerptBatchOkSchema,
+  gitReviewFailureSchema,
+]);
+export type GitReviewExcerptBatchResult = z.infer<
+  typeof gitReviewExcerptBatchResultSchema
 >;

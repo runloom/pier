@@ -17,8 +17,12 @@ import { PierDiffWorkerProvider } from "./worker.tsx";
 
 type PierCodeViewItem = CodeViewItem<PierDiffAnnotationMetadata>;
 
+/**
+ * 文件间分隔只画在 layout.gap 里：底边 1px shadow（不占布局高）。
+ * 禁止 0 -1px 顶 shadow——点树 align:start 时那条发丝落在视口顶，像偏 1px。
+ */
 export const PIER_DIFF_CODE_VIEW_CLASSNAME =
-  "cv-scrollbar relative h-full min-h-0 w-full min-w-0 flex-1 overflow-auto overscroll-contain border-border border-b [contain:strict] [overflow-anchor:none] [scrollbar-gutter:auto] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-x-visible [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))] [&_diffs-container]:[contain:layout_paint_style]";
+  "cv-scrollbar relative h-full min-h-0 w-full min-w-0 flex-1 overflow-auto overscroll-contain border-border border-b [contain:strict] [overflow-anchor:none] [scrollbar-gutter:auto] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-x-visible [&_diffs-container]:shadow-[0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))] [&_diffs-container]:[contain:layout_paint_style]";
 
 export function PierDiffViewShell(props: {
   readonly codeThemes: { readonly dark: string; readonly light: string };

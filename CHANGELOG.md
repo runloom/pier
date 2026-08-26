@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Git Review Z2 批摘录主路径。** content 正文默认走 `git.getReviewExcerptBatch`
+  （单世代、16–32 文件一批）；`getReviewFileDocument` 只用于选中 boost、失败重试
+  和 discard 令牌。金标准 G5 闭合，不再逐文件 IPC 取号。
+- **评论导航图标。** git 审查、Markdown、Canvas 共用的底部评论条改为
+  `MessageCircle`，与正文里的评论标记一致。
+
+### Fixed
+
+- **Git Review 评论导航定位。** 在目录树点到其他文件后再点 n/N，会走树导航 +
+  正文就绪后再滚到评论行，不再用一次估高滚动打偏、连点才准。行级定位在
+  paint 前完成，避免先闪文件头再跳到评论。
+- **评论计数气泡数字居中。** 序号用 grid 叠在气泡同一格里居中，不再用像素 translate 微调。
+
 ## [0.1.32] - 2026-08-26
 
 ### Changed

@@ -66,6 +66,8 @@ import type {
 import type {
   GitReviewCancelRequest,
   GitReviewConflictResolveRequest,
+  GitReviewExcerptBatchRequest,
+  GitReviewExcerptBatchResult,
   GitReviewFileDocumentRequest,
   GitReviewFileDocumentResult,
   GitReviewGroup,
@@ -260,6 +262,9 @@ export interface RendererPluginGitFacade {
       to?: string;
     }
   ): Promise<GitDiffPatch>;
+  getReviewExcerptBatch(
+    request: GitReviewExcerptBatchRequest
+  ): Promise<GitReviewExcerptBatchResult>;
   getReviewFileDocument(
     request: GitReviewFileDocumentRequest
   ): Promise<GitReviewFileDocumentResult>;

@@ -4,6 +4,7 @@ import type { ReviewDocumentProjection } from "../review/document/projection.ts"
 import { isReviewPlaceholderCacheKey } from "../review/navigation.ts";
 import type { GitReviewReadingSurface } from "../review/reading-surface.ts";
 import type { ReviewSurfaceNavigationRequest } from "../review/surface-types.ts";
+import { TREE_NAV_SCROLL_BEHAVIOR } from "./use-navigation-try.ts";
 
 /**
  * Cross-surface tree open 契约（金标准）：
@@ -56,6 +57,7 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
   } = options;
   const handledNavigationNonceRef = useRef(0);
   const preparedNavigationNonceRef = useRef(0);
+  const settledNavigationNonceRef = useRef(0);
 
   useEffect(() => {
     if (
@@ -80,36 +82,29 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
     setSelectedTreeTarget,
   ]);
 
-  // pending 结束后 settle；若 scroll 卡住则安全超时强制 settle
+  // pending 卡住时安全超时强制 settle；行级 reveal 不走这条（可能仍是 estimate）
   useEffect(() => {
     if (
       !active ||
       navigationRequest === null ||
       navigationRequest.surface !== diffBase ||
-      handledNavigationNonceRef.current !== navigationRequest.nonce
+      handledNavigationNonceRef.current !== navigationRequest.nonce ||
+      settledNavigationNonceRef.current === navigationRequest.nonce
     ) {
       return;
     }
     if (!(navigationPending || hasPendingNavigation())) {
-      if (navigationRequest.revealLine !== undefined) {
-        diffHandleRef.current?.scrollToLine(
-          navigationRequest.itemId,
-          navigationRequest.revealLine,
-          mapRevealSide(navigationRequest.revealSide)
-        );
-      }
-      onSurfaceNavigationSettled(navigationRequest);
       return;
     }
     const request = navigationRequest;
     const timer = globalThis.setTimeout(() => {
-      // Still attempt line reveal on safety timeout (slow materialize).
-      if (request.revealLine !== undefined) {
-        diffHandleRef.current?.scrollToLine(
-          request.itemId,
-          request.revealLine,
-          mapRevealSide(request.revealSide)
-        );
+      if (settledNavigationNonceRef.current === request.nonce) {
+        return;
+      }
+      settledNavigationNonceRef.current = request.nonce;
+      const handle = diffHandleRef.current;
+      if (handle?.isItemVisible(request.itemId) === true) {
+        revealNavigationLine(handle, request);
       }
       onSurfaceNavigationSettled(request);
     }, NAVIGATION_SETTLE_SAFETY_MS);
@@ -182,6 +177,35 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
     navigationRequest,
     setSelectedTreeTarget,
   ]);
+
+  // 评论行级 reveal 必须在 paint 前（layout），否则 instant 会先画出文件头再跳行。
+  // 等 pending 状态变 false 的那次 render（tryPending 的 finish 会触发），不要用
+  // 事后 useEffect，否则会多画出一帧顶对齐。
+  useLayoutEffect(() => {
+    if (
+      !active ||
+      navigationRequest === null ||
+      navigationRequest.surface !== diffBase ||
+      handledNavigationNonceRef.current !== navigationRequest.nonce ||
+      settledNavigationNonceRef.current === navigationRequest.nonce
+    ) {
+      return;
+    }
+    if (navigationPending || hasPendingNavigation()) {
+      return;
+    }
+    settledNavigationNonceRef.current = navigationRequest.nonce;
+    revealNavigationLine(diffHandleRef.current, navigationRequest);
+    onSurfaceNavigationSettled(navigationRequest);
+  }, [
+    active,
+    diffBase,
+    diffHandleRef,
+    hasPendingNavigation,
+    navigationPending,
+    navigationRequest,
+    onSurfaceNavigationSettled,
+  ]);
 }
 
 /** 评论 target.side（"old"|"new"）→ diff-view side（"deletions"|"additions"）。 */
@@ -189,4 +213,19 @@ function mapRevealSide(
   side: "new" | "old" | undefined
 ): "additions" | "deletions" {
   return side === "old" ? "deletions" : "additions";
+}
+
+function revealNavigationLine(
+  handle: PierDiffViewHandle | null,
+  request: ReviewSurfaceNavigationRequest
+): void {
+  if (request.revealLine === undefined || handle === null) {
+    return;
+  }
+  handle.scrollToLine(
+    request.itemId,
+    request.revealLine,
+    mapRevealSide(request.revealSide),
+    { behavior: TREE_NAV_SCROLL_BEHAVIOR }
+  );
 }

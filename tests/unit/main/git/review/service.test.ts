@@ -48,6 +48,25 @@ describe("GitReviewService boundary", () => {
     });
   });
 
+  it("非法 excerpt 请求在启动 Git 前返回不可重试 invalidSource", async () => {
+    const service = new GitReviewService();
+    await expect(
+      service.getExcerptBatch(
+        {
+          files: [{ oldPaths: [], path: "a.ts" }],
+          operationId: "not-a-uuid",
+          source: request().source,
+        } as never,
+        gitReviewRequestOptions()
+      )
+    ).resolves.toEqual({
+      kind: "error",
+      message: "Git Review excerpt 请求非法",
+      reason: "invalidSource",
+      retryable: false,
+    });
+  });
+
   it("已到期预算在授权器执行前返回 timeout", async () => {
     const now = () => 100;
     const expired = new GitReviewBudget({ deadlineAtMs: 100, now });

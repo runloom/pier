@@ -52,6 +52,14 @@ export class TestGitReviewService extends GitReviewService {
     return super.getFileDocument(input, { ...defaults, ...options });
   }
 
+  override getExcerptBatch(
+    input: Parameters<GitReviewService["getExcerptBatch"]>[0],
+    options?: Partial<GitReviewRequestOptions>
+  ): ReturnType<GitReviewService["getExcerptBatch"]> {
+    const defaults = gitReviewRequestOptions(options?.budget);
+    return super.getExcerptBatch(input, { ...defaults, ...options });
+  }
+
   override resolveConflict(
     input: Parameters<GitReviewService["resolveConflict"]>[0],
     options: Parameters<GitReviewService["resolveConflict"]>[1]

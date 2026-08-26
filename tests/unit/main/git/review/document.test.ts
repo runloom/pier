@@ -120,6 +120,81 @@ describe("GitReviewService document", () => {
     expect(second).toEqual({ kind: "unchanged" });
   });
 
+  it("excerpt batch materializes multiple content files in one generation", async () => {
+    const root = await createRepository();
+    await writeFile(
+      join(root, "alpha.ts"),
+      "export const alpha = 0;\n",
+      "utf8"
+    );
+    await writeFile(join(root, "beta.ts"), "export const beta = 0;\n", "utf8");
+    await commitAll(root, "base");
+    await writeFile(
+      join(root, "alpha.ts"),
+      "export const alpha = 1;\n",
+      "utf8"
+    );
+    await writeFile(join(root, "beta.ts"), "export const beta = 1;\n", "utf8");
+    const service = new GitReviewService();
+    const result = await service.getExcerptBatch({
+      files: [
+        { oldPaths: [], path: "alpha.ts" },
+        { oldPaths: [], path: "beta.ts" },
+      ],
+      operationId: randomUUID(),
+      source: {
+        contextId: "worktree:test",
+        gitRootPath: root,
+        target: { kind: "uncommitted" },
+      },
+    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") {
+      return;
+    }
+    expect(result.items.map((item) => item.path)).toEqual([
+      "alpha.ts",
+      "beta.ts",
+    ]);
+    expect(result.items.every((item) => item.result.kind === "ok")).toBe(true);
+  });
+
+  it("excerpt batch materializes more than the single-file index path cap", async () => {
+    const root = await createRepository();
+    const names = ["a.ts", "b.ts", "c.ts", "d.ts", "e.ts"] as const;
+    for (const name of names) {
+      await writeFile(
+        join(root, name),
+        `export const ${name[0]} = 0;\n`,
+        "utf8"
+      );
+    }
+    await commitAll(root, "base");
+    for (const name of names) {
+      await writeFile(
+        join(root, name),
+        `export const ${name[0]} = 1;\n`,
+        "utf8"
+      );
+    }
+    const service = new GitReviewService();
+    const result = await service.getExcerptBatch({
+      files: names.map((path) => ({ oldPaths: [], path })),
+      operationId: randomUUID(),
+      source: {
+        contextId: "worktree:test",
+        gitRootPath: root,
+        target: { kind: "uncommitted" },
+      },
+    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") {
+      return;
+    }
+    expect(result.items).toHaveLength(5);
+    expect(result.items.every((item) => item.result.kind === "ok")).toBe(true);
+  });
+
   it("未提交文件分别返回 staged 与 unstaged patch", async () => {
     const root = await createRepository();
     await writeFile(join(root, "file.ts"), "base\n", "utf8");

@@ -99,6 +99,48 @@ describe("comment navigator layout governance", () => {
     expect(locate).toContain("numberIdentityPins");
   });
 
+  it("uses MessageCircle as the shared comment identity across surfaces", () => {
+    const navigator = read("packages/ui/src/comments/navigator.tsx");
+    const badge = read("packages/ui/src/comments/count-badge.tsx");
+    const markdown = read(
+      "src/plugins/builtin/files/renderer/markdown/comments/preview-block.tsx"
+    );
+    const canvasPins = read(
+      "src/plugins/builtin/files/renderer/preview/canvas-comment-pins.tsx"
+    );
+    expect(navigator).toContain("MessageCircle");
+    expect(navigator).not.toContain("MessageSquare");
+    expect(badge).toContain("MessageCircle");
+    expect(badge).toContain("inline-grid size-6 place-items-center");
+    expect(badge).toContain("col-start-1 row-start-1");
+    expect(badge).not.toMatch(/translate-[xy]/u);
+    expect(markdown).toContain("MessageCircle");
+    expect(canvasPins).toContain("CommentCountBadge");
+  });
+
+  it("git review comment n/N tree-opens off-screen targets instead of estimate scroll", () => {
+    const nav = read(
+      "src/plugins/builtin/git/renderer/review/comments/nav-targets.ts"
+    );
+    const hook = read(
+      "src/plugins/builtin/git/renderer/hooks/use-review-comment-navigator.ts"
+    );
+    const handoff = read(
+      "src/plugins/builtin/git/renderer/hooks/use-surface-navigation-handoff.ts"
+    );
+    const useHandle = read("packages/ui/src/diff-view/use-handle.ts");
+    expect(nav).toContain("isItemVisible");
+    expect(nav).toContain("pending_scroll");
+    expect(hook).toContain("revealReviewCommentNavTarget");
+    expect(handoff).toContain("TREE_NAV_SCROLL_BEHAVIOR");
+    expect(handoff).toContain("revealLine");
+    expect(handoff).toContain("评论行级 reveal 必须在 paint 前");
+    expect(handoff).toContain("isItemVisible");
+    expect(useHandle).toMatch(
+      /type: "line",[\s\S]*?scheduleCodeViewLayoutFlush/u
+    );
+  });
+
   it("keeps git review chrome on a clipped surface frame", () => {
     const content = read("src/plugins/builtin/git/renderer/review/content.tsx");
     expect(content).toContain(

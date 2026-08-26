@@ -1,4 +1,5 @@
 import {
+  DIFF_CONTENT_PADDING_BOTTOM_PX,
   DIFF_HEADER_MIN_HEIGHT_PX,
   DIFF_ITEM_GAP_PX,
   diffFontMetrics,
@@ -17,7 +18,8 @@ describe("diffMetrics / slotVirtualHeight（几何单源）", () => {
     expect(m.skeletonBodyHeight).toBe(108);
     expect(m.skeletonSlotHeight).toBeCloseTo(142.75);
     expect(m.gap).toBe(DIFF_ITEM_GAP_PX);
-    expect(m.contentPaddingBottom).toBe(8);
+    expect(m.contentPaddingBottom).toBe(DIFF_CONTENT_PADDING_BOTTOM_PX);
+    expect(DIFF_CONTENT_PADDING_BOTTOM_PX).toBe(8);
     expect(skeletonBodyHeightPx()).toBe(108);
   });
 

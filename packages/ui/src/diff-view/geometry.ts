@@ -24,7 +24,7 @@ export const DIFF_HEADER_MIN_HEIGHT_PX = 32;
  */
 export const DIFF_HEADER_CHROME_PX = 12;
 
-/** 字号 → 行高倍率（与 CSS --diffs-line-height 一致）。 */
+/** 字号 → 行高倍率；CSS --diffs-line-height 必须喂 px，禁止无单位 1.75。 */
 export const DIFF_LINE_HEIGHT_RATIO = 1.75;
 
 /**
@@ -34,15 +34,16 @@ export const DIFF_LINE_HEIGHT_RATIO = 1.75;
 export const DIFF_ITEM_GAP_PX = 1;
 
 /**
- * 展开有 hunk 时 Pierre content paddingBottom（DEFAULT_VIRTUAL_FILE_METRICS.spacing）。
- * 折叠 / 0 行时不计入。
+ * 展开有 hunk 时文件体底垫。必须同时喂给 Pierre `itemMetrics.paddingBottom`
+ * 和 CSS `--pier-diff-content-padding-bottom`；折叠 / 0 行时不计入。
+ * 不要改 `itemMetrics.spacing`（hunk 分隔条 gap 也用它）。
  */
 export const DIFF_CONTENT_PADDING_BOTTOM_PX = 8;
 
 export type DiffSlotKind = "estimate" | "loaded" | "notice" | "error";
 
 export interface DiffMetrics {
-  /** 展开有内容时的底垫（与 Pierre spacing 对齐）。 */
+  /** 展开有内容时的底垫（与 itemMetrics.paddingBottom / CSS 同源）。 */
   readonly contentPaddingBottom: number;
   /** 文件列表 item 间距。 */
   readonly gap: number;

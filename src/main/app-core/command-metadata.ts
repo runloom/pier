@@ -4,10 +4,8 @@ import type {
   PierClientKind,
 } from "@shared/contracts/permissions.ts";
 
-/** Exhaustive per-command authorization; Record keys cover every PierCommand type. */
 export interface CommandMetadata {
   readonly allowedClientKinds?: readonly PierClientKind[];
-  /** 沙箱轨主体可调用？缺省 false（deny-by-default，Phase 2）。 */
   readonly allowPluginPrincipals?: boolean;
   readonly capabilities: readonly PierCapability[];
 }
@@ -284,6 +282,10 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["git:read"],
   },
+  "git.getReviewExcerptBatch": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["git:read"],
+  },
   "git.cancelReviewRequest": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["git:read"],
@@ -483,7 +485,6 @@ export function requiredCapabilitiesForCommand(
   command: PierCommand
 ): readonly PierCapability[] {
   if (command.type === "terminal.open") {
-    // launch 存在时的额外能力动态叠加（静态元数据只记基础能力）。
     if (command.launch && Object.keys(command.launch).length > 0) {
       return ["workspace:open", "terminal:control"];
     }

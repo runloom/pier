@@ -1,9 +1,10 @@
 import type { CSSProperties } from "react";
 import { SCROLLBAR_SYSTEM_CSS } from "../scrollbar-system.ts";
+import { DIFF_CONTENT_PADDING_BOTTOM_PX } from "./geometry.ts";
 
 /**
  * CodeView unsafeCSS：系统滚动条 + Diff 产品壳。
- * 尺寸只来自 SCROLLBAR_SYSTEM_CSS。
+ * 条尺寸来自 SCROLLBAR_SYSTEM_CSS；头高 / 行高 / 文件体底垫走 geometry CSS 变量。
  */
 export const CODE_VIEW_CUSTOM_CSS = `
 ${SCROLLBAR_SYSTEM_CSS}
@@ -64,6 +65,17 @@ ${SCROLLBAR_SYSTEM_CSS}
     width: 100%;
     box-sizing: border-box;
     cursor: pointer;
+  }
+
+  /* 底垫 = itemMetrics.paddingBottom；盖 Pierre gap−gutter，gutter overlay。 */
+  [data-code] {
+    padding-bottom: var(--pier-diff-content-padding-bottom, ${DIFF_CONTENT_PADDING_BOTTOM_PX}px);
+    scrollbar-gutter: auto;
+  }
+
+  [data-overflow="wrap"][data-diff-type="split"] {
+    padding-top: 0;
+    padding-bottom: var(--pier-diff-content-padding-bottom, ${DIFF_CONTENT_PADDING_BOTTOM_PX}px);
   }
 
   /* Whole-header hover (VS Code multi-diff chrome). */
@@ -426,11 +438,13 @@ export interface DiffTypographyStyle extends CSSProperties {
   "--diffs-scrollbar-gutter-override": string;
   "--diffshub-annotation-border": string;
   "--diffshub-diff-separator": string;
+  "--pier-diff-content-padding-bottom": string;
   "--pier-diff-header-height": string;
 }
 
 /** geometry 公开面：虚拟高度唯一真源。 */
 export {
+  DIFF_CONTENT_PADDING_BOTTOM_PX,
   DIFF_HEADER_MIN_HEIGHT_PX,
   DIFF_ITEM_GAP_PX,
   type DiffMetrics,
