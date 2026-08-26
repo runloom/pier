@@ -207,7 +207,7 @@ export async function updateTerminalPanelAgentResume(
   }
 
   const key = panelKey(windowId, panelId);
-  let result: AgentResumeWriteResult = "rejected";
+  let result = "rejected" as AgentResumeWriteResult;
   const s = await ensureTerminalSessionStore();
   s.mutate((state) => {
     const windowState = state.windows[windowId];

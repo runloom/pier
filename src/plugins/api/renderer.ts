@@ -28,6 +28,7 @@ import type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
+  RendererPluginProjectMemoryFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
 import type {

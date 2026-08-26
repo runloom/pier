@@ -99,12 +99,14 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       updateTerminalPanelAgentResume: vi.fn(async () => true),
       updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
+      recordTerminalPanelAgentSpawnGeneration: vi.fn(async () => undefined),
     }));
     vi.doMock("@main/state/panel-context-state.ts", () => ({
       recordRecentPanelContext: vi.fn(async () => undefined),
     }));
     const consumeLaunch = vi.fn(() => opts.launch ?? null);
     vi.doMock("@main/state/terminal-launch-state.ts", () => ({
+      peekLaunchResumeHint: vi.fn(() => undefined),
       terminalLaunchRegistry: {
         consume: consumeLaunch,
         read: vi.fn(() => opts.launch ?? null),

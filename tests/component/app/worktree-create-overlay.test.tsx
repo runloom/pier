@@ -396,6 +396,11 @@ function createMockContext(): RendererPluginContext {
       register: unimplemented("panels.register"),
       registerCloseGuard: unimplemented("panels.registerCloseGuard"),
     },
+    projectMemory: {
+      disable: unimplemented("projectMemory.disable"),
+      enable: unimplemented("projectMemory.enable"),
+      status: unimplemented("projectMemory.status"),
+    },
     terminal: {
       activePanelId: unimplemented("terminal.activePanelId"),
       getPanelContext: unimplemented("terminal.getPanelContext"),

@@ -14,7 +14,7 @@ describe("mcp-servers-json upsert", () => {
   it("creates skeleton when file missing", () => {
     const plan = planJsonUpsert(null, STORE);
     expect(plan.ok).toBe(true);
-    if (!plan.ok) {
+    if (!plan.ok || typeof plan.next !== "string") {
       return;
     }
     expect(JSON.parse(plan.next)).toEqual({
@@ -31,7 +31,7 @@ describe("mcp-servers-json upsert", () => {
     });
     const plan = planJsonUpsert(raw, STORE);
     expect(plan.ok).toBe(true);
-    if (!plan.ok) {
+    if (!plan.ok || typeof plan.next !== "string") {
       return;
     }
     const parsed = JSON.parse(plan.next) as {
@@ -53,7 +53,7 @@ describe("mcp-servers-json upsert", () => {
 
   it("removes only own entry and reports null next for empty skeleton", () => {
     const first = planJsonUpsert(null, STORE);
-    if (!first.ok) {
+    if (!first.ok || typeof first.next !== "string") {
       throw new Error("setup failed");
     }
     const removed = planRemove(first.next, "mcp-servers-json");
@@ -67,7 +67,7 @@ describe("mcp-servers-json upsert", () => {
   it("slice fingerprint matches upsert fingerprint", () => {
     const plan = planJsonUpsert(null, STORE);
     expect(plan.ok).toBe(true);
-    if (!plan.ok) {
+    if (!plan.ok || typeof plan.next !== "string") {
       return;
     }
     expect(fingerprintManagedSlice(plan.next, "mcp-servers-json")).toBe(
@@ -80,7 +80,7 @@ describe("opencode-json upsert", () => {
   it("uses local schema: type/command-array/environment", () => {
     const plan = planOpenCodeUpsert(null, STORE);
     expect(plan.ok).toBe(true);
-    if (!plan.ok) {
+    if (!plan.ok || typeof plan.next !== "string") {
       return;
     }
     expect(JSON.parse(plan.next)).toEqual({
@@ -118,7 +118,7 @@ describe("codex-toml append/remove", () => {
   it("remove restores bytes outside marker block", () => {
     const head = "# my config\nfoo = 1\n";
     const appended = planTomlAppend(head, STORE);
-    if (!appended.ok) {
+    if (!appended.ok || typeof appended.next !== "string") {
       throw new Error("setup failed");
     }
     const removed = planRemove(appended.next, "codex-toml");

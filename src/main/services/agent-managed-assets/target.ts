@@ -90,7 +90,14 @@ export async function applyMemoryTarget(args: {
       ...ledger.pending.filter((item) => item.targetPath !== abs),
       pending,
     ];
-    await ledgerStore.save(ledger);
+    if (plan.next === null) {
+      return {
+        configPath: abs,
+        consumers,
+        detail: "empty write plan",
+        outcome: "failed",
+      };
+    }
     await writeManaged(abs, plan.next);
     LedgerStore.applyCommit(ledger, pending);
     ledger.pending = ledger.pending.filter((item) => item.targetPath !== abs);

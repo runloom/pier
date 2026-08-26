@@ -221,7 +221,8 @@ export async function updateTerminalPanelAgent(
   s.mutate((state) => {
     const windowState = state.windows[windowId] ?? emptyWindowSession();
     state.windows[windowId] = windowState;
-    const current = windowState.panels[panelId] ?? {};
+    const current: Partial<TerminalPanelSession> =
+      windowState.panels[panelId] ?? {};
     if (current.pendingResume) {
       seedDiskPendingResume(windowId, panelId, current.pendingResume);
     }

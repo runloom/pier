@@ -3,6 +3,7 @@ import {
   createPluginPrincipalClient,
 } from "@main/app-core/permissions.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
+import type { PierClient } from "@shared/contracts/permissions.ts";
 import { describe, expect, it } from "vitest";
 
 const enableCmd = {
@@ -10,11 +11,11 @@ const enableCmd = {
   type: "memory.enable",
 } as PierCommand;
 
-const desktop = {
+const desktop: PierClient = {
   capabilities: ["workspace:read", "panel:open", "managedAssets:write"],
   createdAt: 0,
   id: "w1",
-  kind: "desktop-renderer" as const,
+  kind: "desktop-renderer",
   lastSeenAt: 0,
 };
 
@@ -31,11 +32,11 @@ describe("memory command authorization", () => {
   });
 
   it("cli-local denied by client-kind allowlist", () => {
-    const cli = {
+    const cli: PierClient = {
       capabilities: ["managedAssets:write"],
       createdAt: 0,
       id: "c",
-      kind: "cli-local" as const,
+      kind: "cli-local",
       lastSeenAt: 0,
     };
     expect(authorizeCommand(enableCmd, cli).ok).toBe(false);
