@@ -152,7 +152,7 @@ export type { PierFilesAPI } from "./file-api.ts";
 export type { PierFileQueryAPI } from "./file-query-api.ts";
 export type { PierFileSaveTargetAPI } from "./file-save-target-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
-export type { PierMemoryAPI } from "./memory-api.ts";
+export type { PierMemoryAPI } from "./memory/api.ts";
 export type { PierPanelsAPI, PierPanelsListSnapshot } from "./panels-api.ts";
 export type { PierPluginSettingsAPI } from "./plugin-settings-api.ts";
 export type { PierTerminalStatusBarPrefsAPI } from "./terminal-status-bar-api.ts";

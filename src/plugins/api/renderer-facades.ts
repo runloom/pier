@@ -1,5 +1,10 @@
 import type { AssetRootRef } from "@shared/contracts/agent/assets.ts";
 import type {
+  MemoryEnableResult,
+  MemoryReport,
+  MemoryStatusSnapshot,
+} from "@shared/contracts/agent/memory.ts";
+import type {
   CommentProjectSnapshot,
   CommentsCreateThreadRequest,
   CommentsCreateThreadResult,
@@ -100,11 +105,6 @@ import type {
   GitStatus,
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
-import type {
-  MemoryEnableResult,
-  MemoryReport,
-  MemoryStatusSnapshot,
-} from "@shared/contracts/memory.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
   WorktreeCheckRequest,

@@ -1,4 +1,4 @@
-import type { CommandMetadata } from "./command-metadata.ts";
+import type { CommandMetadata } from "../command-metadata.ts";
 
 export const ASSET_COMMAND_METADATA: Record<
   | "rules.snapshot"

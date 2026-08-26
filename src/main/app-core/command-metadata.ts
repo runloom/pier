@@ -3,7 +3,7 @@ import type {
   PierCapability,
   PierClientKind,
 } from "@shared/contracts/permissions.ts";
-import { ASSET_COMMAND_METADATA } from "./command-metadata-assets.ts";
+import { ASSET_COMMAND_METADATA } from "./commands/asset-metadata.ts";
 
 /** Exhaustive per-command authorization; Record keys cover every PierCommand type. */
 export interface CommandMetadata {

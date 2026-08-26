@@ -11,7 +11,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { memoryApi } from "@preload/memory-api.ts";
+import { memoryApi } from "@preload/memory/api.ts";
 
 const root = { projectRootPath: "/p", scope: "project" as const };
 

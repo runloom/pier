@@ -3,8 +3,8 @@ import type {
   MemoryEnableResult,
   MemoryReport,
   MemoryStatusSnapshot,
-} from "@shared/contracts/memory.ts";
-import { invokePierCommand } from "./ipc-envelope.ts";
+} from "@shared/contracts/agent/memory.ts";
+import { invokePierCommand } from "../ipc-envelope.ts";
 
 export interface PierMemoryAPI {
   disable(root: AssetRootRef): Promise<MemoryReport>;

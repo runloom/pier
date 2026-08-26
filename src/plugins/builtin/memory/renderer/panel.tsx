@@ -9,8 +9,8 @@ import {
 import { Label } from "@pier/ui/label.tsx";
 import { Switch } from "@pier/ui/switch.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { MemoryStatusSnapshot } from "@shared/contracts/agent/memory.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
-import type { MemoryStatusSnapshot } from "@shared/contracts/memory.ts";
 import { useCallback, useEffect, useState } from "react";
 
 function projectRootFromParams(params: unknown): string | undefined {
@@ -63,12 +63,12 @@ export function createMemoryPanel(context: RendererPluginContext) {
 
     useEffect(() => {
       refresh().catch((err: unknown) => {
-        context.dialogs
-          .alert({
+        Promise.resolve(
+          context.dialogs.alert({
             body: err instanceof Error ? err.message : String(err),
             title: t("state.degraded", undefined, "Partially connected"),
           })
-          .catch(() => undefined);
+        ).catch(() => undefined);
       });
     }, [refresh, t]);
 
@@ -186,8 +186,8 @@ export function createMemoryPanel(context: RendererPluginContext) {
             <AlertDescription>
               <Button
                 onClick={() => {
-                  context.dialogs
-                    .alert({
+                  Promise.resolve(
+                    context.dialogs.alert({
                       body: (snapshot?.targets ?? [])
                         .map(
                           (row) =>
@@ -196,7 +196,7 @@ export function createMemoryPanel(context: RendererPluginContext) {
                         .join("\n"),
                       title: t("degraded.details", undefined, "View details"),
                     })
-                    .catch(() => undefined);
+                  ).catch(() => undefined);
                 }}
                 variant="outline"
               >

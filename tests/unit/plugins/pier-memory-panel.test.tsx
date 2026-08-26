@@ -1,7 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { createMemoryPanel } from "@plugins/builtin/memory/renderer/panel.tsx";
+import type { MemoryStatusSnapshot } from "@shared/contracts/agent/memory.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
-import type { MemoryStatusSnapshot } from "@shared/contracts/memory.ts";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";

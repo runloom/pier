@@ -7,6 +7,10 @@ import {
   rulesSnapshotRequestSchema,
   rulesWriteRequestSchema,
 } from "./agent/assets.ts";
+import {
+  memoryEnableRequestSchema,
+  memoryRootRequestSchema,
+} from "./agent/memory.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
   appCliInstallRequestSchema,
@@ -30,10 +34,6 @@ import {
   liveModulesRegisterRootRequestSchema,
   liveModulesUnregisterRootRequestSchema,
 } from "./live-modules.ts";
-import {
-  memoryEnableRequestSchema,
-  memoryRootRequestSchema,
-} from "./memory.ts";
 import { panelTransferPierCommandSchemas } from "./panel-transfer.ts";
 import {
   pierHomeInfoRequestSchema,

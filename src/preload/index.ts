@@ -51,7 +51,7 @@ import {
   createMediaPreviewApi,
   type PierMediaPreviewApi,
 } from "./media-preview-api.ts";
-import { memoryApi, type PierMemoryAPI } from "./memory-api.ts";
+import { memoryApi, type PierMemoryAPI } from "./memory/api.ts";
 import {
   notificationCenterApi,
   type PierNotificationCenterAPI,
