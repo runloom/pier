@@ -21,6 +21,7 @@ import {
   bindLoaderRuntimeField,
   cancelLoaderOperation,
   cancelObsoleteLoaderLoads,
+  detachLoaderInFlightEntry,
   emitLoaderChange,
   failLoaderHydrateTimeout,
   type GitReviewDocumentLoaderRuntime,
@@ -165,25 +166,26 @@ export class GitReviewDocumentLoader {
     return failLoaderHydrateTimeout(this.#asRuntime(), entryKeys);
   }
 
-  setProtectedEntryKey(entryKey: string | null): void {
+  setProtectedEntryKey(
+    entryKey: string | null,
+    options?: { readonly retryLoading?: boolean }
+  ): void {
     if (this.#disposed) {
       return;
     }
     const protectedEntryKey =
       entryKey !== null && this.#resources.has(entryKey) ? entryKey : null;
-    if (this.#selectedEntryKey === protectedEntryKey) {
-      if (
-        protectedEntryKey !== null &&
-        this.#selectedDemandedEntryKey !== protectedEntryKey
-      ) {
-        this.#selectedDemandedEntryKey = protectedEntryKey;
-        this.#budgetDeferredEntryKeys.delete(protectedEntryKey);
-        this.#cancelObsoleteLoads(this.#requiredEntryKeys());
-        this.#yieldConcurrencyForSelected();
-        this.#rebuildWaiting();
-        this.#pump(false);
-        this.#emit();
-      }
+    const rearmed = this.#rearmRetryableError(protectedEntryKey);
+    const rearmedLoading =
+      options?.retryLoading === true
+        ? this.#rearmLoading(protectedEntryKey)
+        : false;
+    if (
+      this.#selectedEntryKey === protectedEntryKey &&
+      this.#selectedDemandedEntryKey === protectedEntryKey &&
+      !rearmed &&
+      !rearmedLoading
+    ) {
       return;
     }
     this.#selectedEntryKey = protectedEntryKey;
@@ -200,6 +202,33 @@ export class GitReviewDocumentLoader {
     this.#rebuildWaiting();
     this.#pump(false);
     this.#emit();
+  }
+
+  #rearmRetryableError(entryKey: string | null): boolean {
+    if (entryKey === null) {
+      return false;
+    }
+    const resource = this.#resources.get(entryKey);
+    if (resource?.kind !== "error" || !resource.failure.retryable) {
+      return false;
+    }
+    this.#silentRetryCount.delete(entryKey);
+    this.#setResource(entryKey, { entry: resource.entry, kind: "idle" });
+    return true;
+  }
+
+  #rearmLoading(entryKey: string | null): boolean {
+    if (entryKey === null) {
+      return false;
+    }
+    const resource = this.#resources.get(entryKey);
+    if (resource?.kind !== "loading" && resource?.kind !== "cancelling") {
+      return false;
+    }
+    detachLoaderInFlightEntry(this.#asRuntime(), entryKey);
+    this.#silentRetryCount.delete(entryKey);
+    this.#setResource(entryKey, { entry: resource.entry, kind: "idle" });
+    return true;
   }
 
   setStickyMemberEntryKeys(entryKeys: readonly string[]): void {

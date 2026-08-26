@@ -1,4 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+import {
+  createHydrateTimeoutWatchdog,
+  GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS,
+  GIT_REVIEW_SELECTED_BODY_HYDRATE_TIMEOUT_MS,
+} from "../../../../../src/plugins/builtin/git/renderer/review/document/hydrate-timeout.ts";
 import { GitReviewDocumentLoader } from "../../../../../src/plugins/builtin/git/renderer/review/document/loader.ts";
 import type {
   GitReviewFileDocumentResult,
@@ -162,5 +167,54 @@ describe("GitReviewDocumentLoader.failHydrateTimeout", () => {
 
     expect(loader.getResource(timedOut.entryKey)?.kind).toBe("idle");
     expect(loader.getResource(loaded.entryKey)?.kind).toBe("loaded");
+  });
+
+  it("holds the selected demanded file past the neighbor hydrate window then times out", () => {
+    const item = entry("selected.ts");
+    let now = 0;
+    const watchdog = createHydrateTimeoutWatchdog({ now: () => now });
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries: [item],
+      load: vi.fn(
+        (): Promise<GitReviewFileDocumentResult> => new Promise(() => undefined)
+      ),
+    });
+    loader.setProtectedEntryKey(item.entryKey);
+    expect(loader.getResource(item.entryKey)?.kind).toBe("loading");
+    expect(
+      watchdog.noteDemanded([item.entryKey], () => "loading", item.entryKey)
+    ).toEqual([]);
+    now = GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS;
+    expect(
+      watchdog.noteDemanded([item.entryKey], () => "loading", item.entryKey)
+    ).toEqual([]);
+    expect(loader.getResource(item.entryKey)?.kind).toBe("loading");
+    now = GIT_REVIEW_SELECTED_BODY_HYDRATE_TIMEOUT_MS;
+    const timedOut = watchdog.noteDemanded(
+      [item.entryKey],
+      () => "loading",
+      item.entryKey
+    );
+    expect(timedOut).toEqual([item.entryKey]);
+    expect(loader.failHydrateTimeout(timedOut)).toBe(true);
+    expect(loader.getResource(item.entryKey)?.kind).toBe("error");
+  });
+
+  it("retries a hydrate-timeout error when the file is selected", () => {
+    const item = entry("timed-out.ts");
+    const load = vi.fn(
+      (): Promise<GitReviewFileDocumentResult> => new Promise(() => undefined)
+    );
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries: [item],
+      load,
+    });
+    expect(loader.failHydrateTimeout([item.entryKey])).toBe(true);
+    expect(loader.getResource(item.entryKey)?.kind).toBe("error");
+    loader.setProtectedEntryKey(item.entryKey);
+    expect(loader.getResource(item.entryKey)?.kind).toBe("loading");
+    expect(load).toHaveBeenCalledTimes(1);
   });
 });

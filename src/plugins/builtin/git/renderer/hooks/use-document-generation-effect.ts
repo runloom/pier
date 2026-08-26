@@ -413,24 +413,29 @@ export function mountGitReviewDocumentGeneration(
       return;
     }
     const demand = currentDemandRef.current;
+    const liveSelected = generationCallbacksRef.current.getSelectedEntryKey();
     const demanded = new Set([
       ...demand.visibleEntryKeys,
       ...demand.bufferedEntryKeys,
-      ...(selectedEntryKey === null ? [] : [selectedEntryKey]),
+      ...(liveSelected === null ? [] : [liveSelected]),
       ...seedEntryKeys,
     ]);
-    const timedOut = hydrateWatchdog.noteDemanded(demanded, (entryKey) => {
-      const resource =
-        resourceByEntryKey.get(entryKey) ?? loader.getResource(entryKey);
-      // 仅 content 槽计时；meta 不进 timeout 目标
-      if (
-        resource !== undefined &&
-        !isReviewEntryBodyHydratable(resource.entry)
-      ) {
-        return "unchanged";
-      }
-      return resource?.kind;
-    });
+    const timedOut = hydrateWatchdog.noteDemanded(
+      demanded,
+      (entryKey) => {
+        const resource =
+          resourceByEntryKey.get(entryKey) ?? loader.getResource(entryKey);
+        // 仅 content 槽计时；meta 不进 timeout 目标
+        if (
+          resource !== undefined &&
+          !isReviewEntryBodyHydratable(resource.entry)
+        ) {
+          return "unchanged";
+        }
+        return resource?.kind;
+      },
+      liveSelected
+    );
     if (timedOut.length > 0) {
       loader.failHydrateTimeout(timedOut);
     }

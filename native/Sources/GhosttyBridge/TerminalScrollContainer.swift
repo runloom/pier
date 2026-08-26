@@ -50,6 +50,11 @@ struct TerminalPresentationGate {
         isCovered = false
         return true
     }
+
+    /// Failsafe when requestSequence / 1px mismatch keeps the cover stuck.
+    mutating func forceUncover() {
+        isCovered = false
+    }
 }
 
 @MainActor
@@ -62,6 +67,9 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     private let terminalScrollView: AppTerminalScrollView
     private let presentationCoverView = TerminalPresentationCoverView(frame: .zero)
     private var presentationGate = TerminalPresentationGate()
+    private var presentationCoverTimeoutWorkItem: DispatchWorkItem?
+    /// Matches renderer restore-ack timeout; stuck covers must not last forever.
+    private static let presentationCoverTimeoutSeconds: TimeInterval = 0.5
     private(set) var browserWindowId: Int
     private(set) var panelId: String
     private(set) var presentationId: UInt64
@@ -74,6 +82,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         didSet {
             layer?.backgroundColor = backgroundColor.cgColor
             presentationCoverView.layer?.backgroundColor = backgroundColor.cgColor
+            terminalScrollView.applyHostBackgroundColor(backgroundColor)
         }
     }
 
@@ -108,6 +117,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
             self?.handleFramePresentation(presentation)
         }
         addSubview(terminalScrollView)
+        terminalScrollView.applyHostBackgroundColor(backgroundColor)
 
         presentationCoverView.wantsLayer = true
         presentationCoverView.layer?.backgroundColor = backgroundColor.cgColor
@@ -119,7 +129,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         fatalError("init(coder:) has not been implemented")
     }
 
-    override var isOpaque: Bool { false }
+    override var isOpaque: Bool { true }
 
     override func acceptsFirstMouse(for _: NSEvent?) -> Bool {
         true
@@ -146,18 +156,18 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
 
     func prepareForVisibilityPresentation() {
         presentationGate.rearm()
-        presentationCoverView.layer?.isHidden = false
+        showPresentationCover()
     }
 
     func handlePresentationRequest(_ request: TerminalFramePresentationRequest) {
         presentationGate.request(request)
         guard presentationGate.isCovered else { return }
-        presentationCoverView.layer?.isHidden = false
+        showPresentationCover()
     }
 
     func handleFramePresentation(_ presentation: TerminalFramePresentation) {
         guard presentationGate.commit(presentation) else { return }
-        presentationCoverView.layer?.isHidden = true
+        hidePresentationCover()
         guard lastForwardedPresentationId != presentationId else { return }
         lastForwardedPresentationId = presentationId
         Self.forwardFrameCommittedCallback?(
@@ -165,6 +175,33 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
             panelId,
             presentationId,
             presentation
+        )
+    }
+
+    private func showPresentationCover() {
+        presentationCoverView.layer?.isHidden = false
+        schedulePresentationCoverTimeout()
+    }
+
+    private func hidePresentationCover() {
+        presentationCoverTimeoutWorkItem?.cancel()
+        presentationCoverTimeoutWorkItem = nil
+        presentationCoverView.layer?.isHidden = true
+    }
+
+    private func schedulePresentationCoverTimeout() {
+        presentationCoverTimeoutWorkItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            guard self.presentationGate.isCovered else { return }
+            self.presentationGate.forceUncover()
+            self.presentationCoverView.layer?.isHidden = true
+            self.presentationCoverTimeoutWorkItem = nil
+        }
+        presentationCoverTimeoutWorkItem = work
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.presentationCoverTimeoutSeconds,
+            execute: work
         )
     }
 

@@ -310,9 +310,9 @@ test("collapse-all then tree navigation shows the target diff without failures",
     await expect(
       page.getByText(/Failed to render diff|渲染差异失败/u)
     ).toHaveCount(0);
-    // 13px 代码字号：lineHeight 22.75 + padding 8 + 标题槽 4 = 34.75
+    // 13px 代码字号：头高取整为 35，避免折叠导航按项累积半像素。
     for (const height of await collapsedItemHeights(page)) {
-      expect(height).toBeCloseTo(34.75, 1);
+      expect(height).toBeCloseTo(35, 1);
     }
     // 折叠已静置 12s，此后内容总高不得再逐帧变化，否则滚动条会一直抖。
     const heightSamples = await scrollHeightSamples(page, 60);

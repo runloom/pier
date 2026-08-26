@@ -111,12 +111,20 @@ describe("git review gold-standard governance", () => {
       "src/plugins/builtin/git/renderer/review/document/ledger-projection.ts"
     );
     expect(hydrate).toContain("GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS = 8000");
+    expect(hydrate).toContain("GIT_REVIEW_SELECTED_BODY_HYDRATE_TIMEOUT_MS");
+    expect(hydrate).toContain("用户正在等这份正文");
     expect(loader).toContain("failHydrateTimeout");
     expect(loaderRuntime).toContain('reason: "timeout"');
+    expect(loader).toContain("retryLoading");
     expect(generation).toContain("createHydrateTimeoutWatchdog");
     expect(generation).toContain("failHydrateTimeout");
     expect(ledger).toContain("projectionMissingSectionItem");
     expect(ledger).toContain("projection-empty");
+    const applyNav = read(
+      "src/plugins/builtin/git/renderer/review/document/apply-navigation-demand.ts"
+    );
+    expect(applyNav).toContain("先钉 selected 再 pump window");
+    expect(generation).toContain("liveSelected");
   });
 
   it("G3: estimate skeleton and file chrome geometry are single-sourced", () => {
@@ -195,6 +203,7 @@ describe("git review gold-standard governance", () => {
     );
     expect(codeOptions).not.toContain('"--diffs-line-height": "1.75"');
     expect(appearance).toContain("--pier-diff-content-padding-bottom");
+    expect(appearance).not.toContain("data-pier-estimate-skeleton-fill");
     expect(appearance).toContain(
       '[data-overflow="wrap"][data-diff-type="split"]'
     );
@@ -235,6 +244,9 @@ describe("git review gold-standard governance", () => {
     const excerptClient = read(
       "src/plugins/builtin/git/renderer/review/document/excerpt-client.ts"
     );
+    const loaderBatch = read(
+      "src/plugins/builtin/git/renderer/review/document/loader-batch.ts"
+    );
     const demandHook = read(
       "src/plugins/builtin/git/renderer/hooks/use-document-demand.ts"
     );
@@ -243,6 +255,7 @@ describe("git review gold-standard governance", () => {
     expect(generation).toContain("loadReviewExcerptBatch");
     expect(generation).toContain("GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT");
     expect(excerptClient).toContain("getReviewExcerptBatch");
+    expect(loaderBatch).toContain("禁止塞进同一轮刚启动的批摘录");
     expect(generation).toContain("reviewContentEntryKeysInOrder");
     expect(generation).toContain(
       "gitReviewSeedEntryKeys(contentEntryKeysInOrder)"

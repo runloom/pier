@@ -27,6 +27,7 @@ import {
   nextCursorBoundTranscript,
   resolveCursorMainTranscriptPath,
 } from "./cursor-transcript-bind.ts";
+import { isCursorViewportPollPaused } from "./cursor-viewport-poll-gate.ts";
 import { createCursorViewportWatch } from "./cursor-viewport-watch.ts";
 import { emitTranscriptEvent } from "./tail-event.ts";
 import {
@@ -298,6 +299,7 @@ export function createCursorTranscriptReconciler(
 
   const viewportWatch = createCursorViewportWatch({
     enabled: Boolean(opts.readViewportText),
+    shouldSkipTick: isCursorViewportPollPaused,
     sync: syncFromViewport,
   });
 

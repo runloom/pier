@@ -112,4 +112,82 @@ describe("cursor viewport watch", () => {
     expect(sync).not.toHaveBeenCalled();
     expect(watch.lastContextByScope.size).toBe(0);
   });
+
+  it("reschedules after sync throws so the scope keeps polling", async () => {
+    const sync = vi.fn();
+    sync.mockImplementationOnce(() => undefined);
+    sync.mockImplementationOnce(() => {
+      throw new Error("dump failed");
+    });
+    const watch = createCursorViewportWatch({ enabled: true, sync });
+    watch.start(context());
+    expect(sync).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(sync).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(250);
+    expect(sync).toHaveBeenCalledTimes(3);
+    watch.dispose();
+  });
+
+  it("skips ticks while shouldSkipTick is true without dropping the schedule", async () => {
+    const sync = vi.fn();
+    let skip = true;
+    const watch = createCursorViewportWatch({
+      enabled: true,
+      shouldSkipTick: () => skip,
+      sync,
+    });
+    watch.start(context());
+    expect(sync).toHaveBeenCalledTimes(1);
+    sync.mockClear();
+
+    await vi.advanceTimersByTimeAsync(750);
+    expect(sync).not.toHaveBeenCalled();
+
+    skip = false;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(sync).toHaveBeenCalledTimes(1);
+  });
+
+  it("backs off the poll interval after a slow dump and recovers", async () => {
+    let dumpMs = 25;
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    const timedSync = vi.fn(() => {
+      now += dumpMs;
+    });
+    const watch = createCursorViewportWatch({
+      enabled: true,
+      sync: timedSync,
+    });
+    watch.start(context({ panelId: "slow" }));
+    timedSync.mockClear();
+
+    // 250ms base → slow dump → interval 500
+    now = 0;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(timedSync).toHaveBeenCalledTimes(1);
+
+    // Next tick waits 500ms
+    now = 0;
+    await vi.advanceTimersByTimeAsync(499);
+    expect(timedSync).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(timedSync).toHaveBeenCalledTimes(2);
+
+    // Still slow → interval 1000
+    dumpMs = 1;
+    now = 0;
+    await vi.advanceTimersByTimeAsync(999);
+    expect(timedSync).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(timedSync).toHaveBeenCalledTimes(3);
+
+    // Fast dump recovered → interval 250
+    now = 0;
+    await vi.advanceTimersByTimeAsync(250);
+    expect(timedSync).toHaveBeenCalledTimes(4);
+
+    watch.dispose();
+  });
 });

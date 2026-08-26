@@ -90,18 +90,38 @@ final class TerminalControllerWakeupTests: XCTestCase {
         )
     }
 
-    func testHostResizeWaitsForGhosttyTargetBeforeDrawing() async throws {
+    func testHostResizeDrawsSynchronouslyWhenPixelSizeChanges() async throws {
         let fixture = try makeOneSurfaceFixture()
         defer { fixture.window.orderOut(nil) }
         await settleRendering()
         let baseline = fixture.view.pierRenderDiagnostics
 
+        fixture.view.frame = NSRect(x: 0, y: 0, width: 700, height: 420)
         fixture.view.flushHostResizeFrame()
         let afterResizeSync = fixture.view.pierRenderDiagnostics
 
-        XCTAssertEqual(afterResizeSync.drawSequence, baseline.drawSequence)
+        XCTAssertGreaterThan(afterResizeSync.drawSequence, baseline.drawSequence)
         XCTAssertGreaterThan(
             afterResizeSync.hostRefreshRequestSequence,
+            baseline.hostRefreshRequestSequence
+        )
+        XCTAssertFalse(afterResizeSync.refreshPending)
+        XCTAssertFalse(afterResizeSync.drawPending)
+    }
+
+    func testFitToSizeDoesNotRefreshWhenPixelSizeUnchanged() async throws {
+        let fixture = try makeOneSurfaceFixture()
+        defer { fixture.window.orderOut(nil) }
+        await settleRendering()
+        let baseline = fixture.view.pierRenderDiagnostics
+
+        fixture.view.fitToSize()
+        fixture.view.fitToSize()
+        let after = fixture.view.pierRenderDiagnostics
+
+        XCTAssertEqual(after.drawSequence, baseline.drawSequence)
+        XCTAssertEqual(
+            after.hostRefreshRequestSequence,
             baseline.hostRefreshRequestSequence
         )
     }

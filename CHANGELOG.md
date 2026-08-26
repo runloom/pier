@@ -4,6 +4,24 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **终端 resize / 长会话闪烁。** `fitToSize` 在像素未变时跳过刷新，并把
+  scrollbar 与 surface 尺寸解耦，切断「用久了一直闪」的反馈环；统一
+  点→像素公式；图层改不透明并下推主题底色；host resize flush 同步呈现。
+  分栏 sash 拖拽接入与窗口拖拽相同的 surface suppress；presentation cover
+  增加 500ms 强揭超时；Cursor 视口轮询按窗口在 resize 期间让路，zoom / 关窗
+  / 1s 兜底恢复，慢 dump 退避，sync 失败不中断轮询。
+- **Git Review 搜索栏 Esc。** 从搜索结果打开文件时 reveal 保留输入框焦点，
+  按 Esc 能关掉搜索栏。
+- **Git Review pending 骨架。** 未水合文件只占文件头 + 5 条骨架，不再按
+  git 行数拉高空白占位；+N/−M 仍在文件头。树跳转仍靠一次校正钉顶。
+- **Git Review 树点选正文。** 先钉选中文件再批摘录，避免点中文件进最多
+  32 文件的批次；加载卡住时再点会取消重试。选中正文 24s 仍未就绪才超时，
+  邻项仍 8s。
+- **Git Review 目录树跳转贴顶。** 文件头高度取整到 CSS 像素，分隔线改画在
+  文件底边内侧，点树 align:start 不再空出 1px。
+
 ### Changed
 
 - **Git Review Z2 批摘录主路径。** content 正文默认走 `git.getReviewExcerptBatch`

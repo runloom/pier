@@ -231,7 +231,13 @@ final class TerminalWindowStateTests: XCTestCase {
             ),
             .applied
         )
-        XCTAssertTrue(try presentationCovered(window))
+        // prepareForVisibilityPresentation rearms the cover, then the host-resize
+        // flush synchronously presents a matching IOSurface so applyWindowState
+        // returns with the cover already cleared (no stuck matte).
+        let restoredPresented = await waitUntil {
+            (try? self.presentationCovered(window)) == false
+        }
+        XCTAssertTrue(restoredPresented)
     }
 
     private func presentationCovered(_ window: NSWindow) throws -> Bool {

@@ -211,10 +211,11 @@ describe("Git diff renderer governance", () => {
     // 头高常量唯一来源：geometry.ts；appearance re-export
     expect(appearanceSource).toContain("DIFF_HEADER_MIN_HEIGHT_PX");
     expect(appearanceSource).toContain('from "./geometry.ts"');
-    expect(appearanceSource).toContain("min-height: 32px");
-    // 头部实际高度与喂给 Pierre 的 itemMetrics.diffHeaderHeight 必须同源
     expect(appearanceSource).toContain(
       "height: var(--pier-diff-header-height, 32px)"
+    );
+    expect(appearanceSource).toContain(
+      "min-height: var(--pier-diff-header-height, 32px)"
     );
     // 文件体底垫与 itemMetrics.paddingBottom 同源；禁止再吃 Pierre gap−gutter 公式
     expect(appearanceSource).toContain("DIFF_CONTENT_PADDING_BOTTOM_PX");
@@ -289,11 +290,12 @@ describe("Git diff renderer governance", () => {
     expect(shellSource).toContain('data-scrollbar="overlay"');
     expect(codeViewClassName).toContain("cv-scrollbar");
     expect(codeViewClassName).toContain("[scrollbar-gutter:auto]");
-    // 文件分隔只允许底边 1px shadow；顶 shadow 会在 align:start 落点露出 1px 发丝
+    // 文件分隔只允许 inset 底边；向外的顶/底 shadow 会在 align:start 落点露出 1px 发丝
     expect(codeViewClassName).toContain(
-      "shadow-[0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))]"
+      "shadow-[inset_0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))]"
     );
-    expect(codeViewClassName).not.toContain("0_-1px");
+    expect(codeViewClassName).not.toContain("shadow-[0_-1px");
+    expect(codeViewClassName).not.toContain("shadow-[0_1px_0");
     const packageJson = JSON.parse(
       await readFile(join(ROOT, "packages/ui/package.json"), "utf8")
     ) as { dependencies?: Record<string, string> };

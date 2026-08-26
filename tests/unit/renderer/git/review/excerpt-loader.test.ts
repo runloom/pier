@@ -4,6 +4,7 @@ import {
   type GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
 import { describe, expect, it, vi } from "vitest";
+import { applyReviewNavigationDemand } from "../../../../../src/plugins/builtin/git/renderer/review/document/apply-navigation-demand.ts";
 import { GitReviewDocumentLoader } from "../../../../../src/plugins/builtin/git/renderer/review/document/loader.ts";
 import { GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT } from "../../../../../src/plugins/builtin/git/renderer/review/document/loader-options.ts";
 import { patchDocumentForEntry } from "./document-fixture.ts";
@@ -124,6 +125,41 @@ describe("GitReviewDocumentLoader excerpt batch", () => {
     ).toHaveLength(entries.length);
   });
 
+  it("does not swallow a selected idle file into a fresh excerpt batch", async () => {
+    const entries = Array.from({ length: 8 }, (_, index) => entry(index));
+    const selected = entries[3];
+    if (selected === undefined) {
+      throw new Error("expected selected excerpt fixture");
+    }
+    const load = vi.fn(async (item: GitReviewIndexEntry) =>
+      patchDocumentForEntry(item, "const value = 1;")
+    );
+    const loadBatch = vi.fn(async (batch: readonly GitReviewIndexEntry[]) =>
+      okBatch(batch)
+    );
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries,
+      load,
+      loadBatch,
+      maxConcurrent: GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT,
+    });
+    loader.setProtectedEntryKey(selected.entryKey);
+    loader.setWindowDemand({
+      bufferedEntryKeys: [],
+      visibleEntryKeys: entries.map((item) => item.entryKey),
+    });
+    await flush();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load.mock.calls[0]?.[0]?.entryKey).toBe(selected.entryKey);
+    expect(loadBatch).toHaveBeenCalledTimes(1);
+    expect(loadBatch.mock.calls[0]?.[0]?.map((item) => item.entryKey)).toEqual(
+      entries
+        .filter((item) => item.entryKey !== selected.entryKey)
+        .map((item) => item.entryKey)
+    );
+  });
+
   it("boosts a selected file outside the in-flight batch with a single document load", async () => {
     const entries = Array.from(
       { length: GIT_REVIEW_EXCERPT_BATCH_DEFAULT + 1 },
@@ -211,5 +247,86 @@ describe("GitReviewDocumentLoader excerpt batch", () => {
     expect(loader.getResource(entries[1]?.entryKey ?? "")?.kind).toBe(
       "loading"
     );
+  });
+
+  it("tree-click boosts the selected file before packing the window batch", async () => {
+    const entries = Array.from(
+      { length: GIT_REVIEW_EXCERPT_BATCH_DEFAULT },
+      (_, index) => entry(index)
+    );
+    const selected = entries[0];
+    if (selected === undefined) {
+      throw new Error("expected selected excerpt fixture");
+    }
+    const load = vi.fn(async (item: GitReviewIndexEntry) =>
+      patchDocumentForEntry(item, "const value = 1;")
+    );
+    const loadBatch = vi.fn(async (batch: readonly GitReviewIndexEntry[]) =>
+      okBatch(batch)
+    );
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries,
+      load,
+      loadBatch,
+      maxConcurrent: GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT,
+    });
+    applyReviewNavigationDemand({
+      currentDemand: {
+        bufferedEntryKeys: [],
+        visibleEntryKeys: entries.map((item) => item.entryKey),
+      },
+      entryKey: selected.entryKey,
+      loader,
+      seedEntryKeys: [],
+    });
+    await flush();
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(load.mock.calls[0]?.[0]?.entryKey).toBe(selected.entryKey);
+    expect(loadBatch).toHaveBeenCalledTimes(1);
+    expect(
+      loadBatch.mock.calls[0]?.[0]?.map((item) => item.entryKey)
+    ).not.toContain(selected.entryKey);
+  });
+
+  it("re-clicking a loading selected file cancels and rearms a single load", async () => {
+    const entries = Array.from({ length: 4 }, (_, index) => entry(index));
+    const selected = entries[0];
+    if (selected === undefined) {
+      throw new Error("expected selected excerpt fixture");
+    }
+    const cancel = vi.fn(async () => undefined);
+    const load = vi.fn(() => new Promise(() => undefined));
+    const loadBatch = vi.fn(
+      () => new Promise<GitReviewExcerptBatchResult>(() => undefined)
+    );
+    const loader = new GitReviewDocumentLoader({
+      cancel,
+      entries,
+      load,
+      loadBatch,
+      maxConcurrent: GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT,
+    });
+    const demand = {
+      bufferedEntryKeys: [] as const,
+      visibleEntryKeys: entries.map((item) => item.entryKey),
+    };
+    applyReviewNavigationDemand({
+      currentDemand: demand,
+      entryKey: selected.entryKey,
+      loader,
+      seedEntryKeys: [],
+    });
+    await flush();
+    expect(load).toHaveBeenCalledTimes(1);
+    applyReviewNavigationDemand({
+      currentDemand: demand,
+      entryKey: selected.entryKey,
+      loader,
+      seedEntryKeys: [],
+    });
+    await flush();
+    expect(cancel).toHaveBeenCalled();
+    expect(load).toHaveBeenCalledTimes(2);
   });
 });

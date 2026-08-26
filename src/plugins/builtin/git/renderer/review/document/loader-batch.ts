@@ -15,7 +15,11 @@ export type GitReviewExcerptBatchLoader = (
   operationId: string
 ) => Promise<GitReviewExcerptBatchResult>;
 
-/** 一批占 1 个并发槽；另留 1 槽给选中项单文件 boost。 */
+/**
+ * 一批占 1 个并发槽；另留 1 槽给选中项单文件 boost。
+ * 选中项 idle 时必须先单文件起载，禁止塞进同一轮刚启动的批摘录——
+ * 否则树点选要等最多 32 个文件的 batch IPC，正文预算必爆。
+ */
 export function pumpLoaderExcerptBatch(
   runtime: GitReviewDocumentLoaderRuntime,
   emitChange = true
@@ -29,27 +33,25 @@ export function pumpLoaderExcerptBatch(
     (entryKey) => runtime.resources.get(entryKey)?.kind === "idle"
   );
   const selected = runtime.selectedDemandedEntryKey.value;
-  const batchInFlight = runtime.batchOperationIds.size > 0;
   const selectedIdle =
     selected !== null &&
     runtime.resources.get(selected)?.kind === "idle" &&
     idleKeys.includes(selected);
-  if (
-    selectedIdle &&
-    batchInFlight &&
-    runtime.activeCount.value < runtime.maxConcurrent
-  ) {
+  if (selectedIdle && runtime.activeCount.value < runtime.maxConcurrent) {
     changed = startSingleLoad(runtime, selected) || changed;
   }
+  const batchInFlight = runtime.batchOperationIds.size > 0;
   const canStartBatch =
     !batchInFlight && runtime.activeCount.value < runtime.maxConcurrent;
   if (canStartBatch) {
     const batchKeys = idleKeys
-      .filter((entryKey) => runtime.resources.get(entryKey)?.kind === "idle")
+      .filter(
+        (entryKey) =>
+          entryKey !== selected &&
+          runtime.resources.get(entryKey)?.kind === "idle"
+      )
       .slice(0, GIT_REVIEW_EXCERPT_BATCH_DEFAULT);
-    if (batchKeys.length === 1 && selectedIdle && batchKeys[0] === selected) {
-      changed = startSingleLoad(runtime, selected) || changed;
-    } else if (batchKeys.length > 0) {
+    if (batchKeys.length > 0) {
       changed = startBatchLoad(runtime, loadBatch, batchKeys) || changed;
     }
   }

@@ -283,6 +283,11 @@ test("Files canvas preview paints Mermaid kind and tone fills", async ({
     await openTreeFile(page, ["docs", "graph-colors.canvas.tsx"]);
     const preview = page.locator('[data-slot="file-canvas-preview"]');
     await expect(preview).toBeVisible({ timeout: 30_000 });
+    // First canvas preview in a fresh project must pass the trust gate before
+    // anything compiles; the grant covers the gold canvas opened later.
+    await page
+      .getByRole("button", { name: /Trust and preview|信任并预览/u })
+      .click({ timeout: 20_000 });
     await expect(page.getByText("Node graph color contract")).toBeVisible({
       timeout: 40_000,
     });

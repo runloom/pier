@@ -991,6 +991,17 @@ describe("Git review panel", () => {
     });
     fireEvent.keyDown(searchInput, { key: "Enter" });
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:1"));
+    // 搜索 Enter 打开后 reveal 必须 preserveFocus：焦点留在输入框，
+    // 否则行会抢焦点，下一个 Esc 落到树上、搜索栏关不掉。
+    // reveal/focus 走 microtask + rAF 链，先冲刷两帧再断言。
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+    });
+    expect(searchInput).toHaveFocus();
 
     fireEvent.change(searchInput, { target: { value: "not-present" } });
     await expect(

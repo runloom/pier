@@ -39,7 +39,7 @@ export const GIT_REVIEW_ESTIMATE_CACHE_PREFIX = "estimate:";
 
 /**
  * 与 PIER_DIFF_ESTIMATE_SKELETON_LINES 单源对齐。
- * 仅文档/绘制语义；虚拟高度走 geometry.slotVirtualHeight，不读本常量推 H。
+ * 仅文档/绘制语义；虚拟高度走 geometry.slotVirtualHeight（骨架槽，不读 numstat）。
  */
 export const GIT_REVIEW_ESTIMATE_SKELETON_LINES: number =
   PIER_DIFF_ESTIMATE_SKELETON_LINES;

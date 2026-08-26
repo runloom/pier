@@ -159,6 +159,29 @@ export function yieldLoaderConcurrencyForSelected(
   }
 }
 
+/** 从 in-flight 批/单文件扣掉该 entry；末成员则取消 IPC 并释放并发槽。 */
+export function detachLoaderInFlightEntry(
+  runtime: GitReviewDocumentLoaderRuntime,
+  entryKey: string
+): boolean {
+  const resource = runtime.resources.get(entryKey);
+  if (resource?.kind !== "loading" && resource?.kind !== "cancelling") {
+    return false;
+  }
+  const remaining =
+    (runtime.operationActiveCount.get(resource.operationId) ?? 1) - 1;
+  runtime.activeEntryKeys.delete(entryKey);
+  if (remaining <= 0) {
+    finishLoaderOperation(runtime, resource.operationId);
+    runtime.activeCount.value = Math.max(0, runtime.activeCount.value - 1);
+    runtime.preFreedOperationIds.add(resource.operationId);
+    cancelLoaderOperation(runtime, resource.operationId);
+  } else {
+    runtime.operationActiveCount.set(resource.operationId, remaining);
+  }
+  return true;
+}
+
 export function cancelLoaderOperation(
   runtime: GitReviewDocumentLoaderRuntime,
   operationId: string
@@ -381,19 +404,7 @@ export function failLoaderHydrateTimeout(
     ) {
       continue;
     }
-    if (resource.kind === "loading" || resource.kind === "cancelling") {
-      const remaining =
-        (runtime.operationActiveCount.get(resource.operationId) ?? 1) - 1;
-      runtime.activeEntryKeys.delete(entryKey);
-      if (remaining <= 0) {
-        finishLoaderOperation(runtime, resource.operationId);
-        runtime.activeCount.value = Math.max(0, runtime.activeCount.value - 1);
-        runtime.preFreedOperationIds.add(resource.operationId);
-        cancelLoaderOperation(runtime, resource.operationId);
-      } else {
-        runtime.operationActiveCount.set(resource.operationId, remaining);
-      }
-    }
+    detachLoaderInFlightEntry(runtime, entryKey);
     runtime.setResource(entryKey, {
       entry: resource.entry,
       failure: {

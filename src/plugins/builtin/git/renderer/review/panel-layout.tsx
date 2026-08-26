@@ -120,12 +120,18 @@ function GitReviewTreeSidebarComponent({
 
   // Explicit open: center the row in the tree viewport (sticky-aware via
   // PierFileTree reveal). Not continuous active tracking.
+  // 搜索开启时（Enter 提交打开）reveal 必须 preserveFocus，否则行会抢走
+  // 输入框的 DOM 焦点，下一个按键（如 Esc 关搜索）落到树上。
   const handleOpenPath = useCallback(
     (path: string) => {
       onOpenPath(path);
-      revealGitReviewTreeSelection(treeSearch.treeApiRef.current, path);
+      revealGitReviewTreeSelection(
+        treeSearch.treeApiRef.current,
+        path,
+        treeSearch.open ? { preserveFocus: true } : undefined
+      );
     },
-    [onOpenPath, treeSearch.treeApiRef]
+    [onOpenPath, treeSearch.open, treeSearch.treeApiRef]
   );
 
   return (

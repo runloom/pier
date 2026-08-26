@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
   addWidget,
+  alignWorkbenchGridWidth,
   canvasViewport,
   closeApp,
   type GridSize,
@@ -366,6 +367,9 @@ test.describe("Workbench responsive ordered grid e2e", () => {
     try {
       await setWindowSize(context.app, context.win, 1200, 900);
       await openWorkbench(context.win);
+      // 列宽随视口余数拉伸时 w=2 可宽到能放下全部动作；对齐格宽让
+      // 「2 格 = 真实空间不足、6 格 = 空间充足」在任意屏宽/滚动条下成立。
+      await alignWorkbenchGridWidth(context.app, context.win);
       const card = await addWidget(context.win, "core.custom-card");
       await resizeToBoundary(context.win, card, { h: 2, w: 6 });
       await expect(

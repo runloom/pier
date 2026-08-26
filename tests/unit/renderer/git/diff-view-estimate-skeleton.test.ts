@@ -60,6 +60,19 @@ describe("isUserCollapsedItem", () => {
   });
 });
 
+describe("syncEstimateSkeleton", () => {
+  const BARS = "[data-pier-estimate-skeleton-bar]";
+
+  it("始终 5 条金标准图案，不按预留体铺条", () => {
+    const slot = mountSlot(true);
+    syncEstimateSkeleton(slot, true);
+    expect(slot.shadowRoot?.querySelectorAll(BARS)).toHaveLength(5);
+    expect(
+      slot.shadowRoot?.querySelector("[data-pier-estimate-skeleton-fill]")
+    ).toBeNull();
+  });
+});
+
 describe("syncRenderedEstimateSkeletons", () => {
   it("折叠全部时摘掉 estimate 槽的骨架，展开时装回", () => {
     const slot = mountSlot(true);
@@ -99,15 +112,16 @@ describe("resolveItemVirtualHeight（geometry 单源）", () => {
     ).toBe(METRICS.skeletonSlotHeight);
   });
 
-  it("estimate 带 numstat 预留高于骨架槽", () => {
-    const reserved = resolveItemVirtualHeight({
-      collapsed: false,
-      contentLines: 40,
-      isEstimate: true,
-      metrics: METRICS,
-      userCollapsed: false,
-    });
-    expect(reserved).toBeGreaterThan(METRICS.skeletonSlotHeight);
+  it("estimate 带 numstat 仍是骨架槽，不拉高占位", () => {
+    expect(
+      resolveItemVirtualHeight({
+        collapsed: false,
+        contentLines: 40,
+        isEstimate: true,
+        metrics: METRICS,
+        userCollapsed: false,
+      })
+    ).toBe(METRICS.skeletonSlotHeight);
   });
 
   it("estimate 用户折叠 → header 高", () => {
@@ -286,7 +300,7 @@ describe("applyDiffVirtualHeights", () => {
     expect(container.style.height).toBe(`${codeView.scrollHeight}px`);
   });
 
-  it("estimate 读取 fileDiff.estimatedContentLines 预留虚高", () => {
+  it("estimate 即使带 estimatedContentLines 也只占骨架槽", () => {
     const estimate = {
       height: METRICS.headerHeight,
       instance: { height: METRICS.headerHeight, top: 0 },
@@ -312,7 +326,7 @@ describe("applyDiffVirtualHeights", () => {
         metrics: METRICS,
       }
     );
-    expect(estimate.height).toBeGreaterThan(METRICS.skeletonSlotHeight);
+    expect(estimate.height).toBe(METRICS.skeletonSlotHeight);
   });
 
   it("用户折叠后 estimate 与 loaded 都回到 header 高（清虚高）", () => {

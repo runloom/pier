@@ -21,6 +21,8 @@ const OUT_MAIN = join(
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const GRID_MARGIN = 12;
 const VERTICAL_GRID_STRIDE = 100;
+/** CELL_WIDTH(88) + MARGIN(12)：resolveResponsiveGridCols 的取整单位。 */
+const HORIZONTAL_GRID_UNIT = 100;
 
 export interface AppContext {
   app: ElectronApplication;
@@ -205,6 +207,48 @@ export async function installCodexPlugin(context: AppContext): Promise<void> {
 
 function gridItemForCard(win: Page, card: Locator): Locator {
   return win.locator(".react-grid-item").filter({ has: card });
+}
+
+/**
+ * 把工作台网格宽度收到 88px 格宽的整倍（余数 0）。
+ * 列宽 = 88 + 余数/列数：当视口宽落在取整单位边界附近（受滚动条 gutter、
+ * 虚拟屏宽度影响），列会被拉伸 ~10px，「w=2」的卡实际可到 ~210px——足够
+ * 摆下全部标题栏动作，动作收纳类断言随环境翻转。对齐后 2 格恒为 188px，
+ * 「格数 = 真实空间」跨环境成立。
+ */
+export async function alignWorkbenchGridWidth(
+  app: ElectronApplication,
+  win: Page
+): Promise<void> {
+  const wrapper = win.locator('[data-testid="workbench-grid-wrapper"]');
+  const readResidual = async (): Promise<number> => {
+    const box = await wrapper.boundingBox();
+    if (!box) {
+      throw new Error("Workbench grid wrapper has no bounding box");
+    }
+    return (Math.round(box.width) + GRID_MARGIN) % HORIZONTAL_GRID_UNIT;
+  };
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const residual = await readResidual();
+    if (residual === 0) {
+      return;
+    }
+    await app.evaluate(({ BaseWindow }, delta) => {
+      const targetWindow = BaseWindow.getAllWindows()[0];
+      if (!targetWindow) {
+        throw new Error("Expected Pier BaseWindow before aligning grid");
+      }
+      const [width = 0, height = 0] = targetWindow.getContentSize();
+      targetWindow.setContentSize(Math.max(320, width - delta), height);
+    }, residual);
+    try {
+      await expect.poll(readResidual, { timeout: 5000 }).toBe(0);
+      return;
+    } catch {
+      // 窗口管理器可能取整实际尺寸；用重新测得的余数再收一轮。
+    }
+  }
+  await expect.poll(readResidual, { timeout: 5000 }).toBe(0);
 }
 
 export function canvasViewport(win: Page): Locator {
