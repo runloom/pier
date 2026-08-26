@@ -30,7 +30,10 @@ import {
   liveModulesRegisterRootRequestSchema,
   liveModulesUnregisterRootRequestSchema,
 } from "./live-modules.ts";
-import { memoryRootRequestSchema } from "./memory.ts";
+import {
+  memoryEnableRequestSchema,
+  memoryRootRequestSchema,
+} from "./memory.ts";
 import { panelTransferPierCommandSchemas } from "./panel-transfer.ts";
 import {
   pierHomeInfoRequestSchema,
@@ -404,7 +407,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   agentMcpPathActionRequestSchema.extend({
     type: z.literal("agentMcp.open"),
   }),
-  memoryRootRequestSchema.extend({
+  memoryEnableRequestSchema.extend({
     type: z.literal("memory.enable"),
   }),
   memoryRootRequestSchema.extend({

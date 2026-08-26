@@ -34,6 +34,9 @@ export async function executeMemoryCommand(
   try {
     switch (command.type) {
       case "memory.enable":
+        if (command.acknowledged) {
+          await services.projectMemory.acknowledgeTracked(root);
+        }
         return success(requestId, await services.projectMemory.enable(root));
       case "memory.disable":
         return success(requestId, await services.projectMemory.disable(root));

@@ -7,6 +7,13 @@ export const memoryRootRequestSchema = z
   })
   .strict();
 
+export const memoryEnableRequestSchema = z
+  .object({
+    acknowledged: z.boolean().optional(),
+    root: assetRootRefSchema,
+  })
+  .strict();
+
 export const memoryTargetRowSchema = z
   .object({
     configPath: z.string(),
@@ -49,4 +56,5 @@ export const memoryStatusSnapshotSchema = z
   .strict();
 
 export type MemoryEnableResult = z.infer<typeof memoryEnableResultSchema>;
+export type MemoryReport = z.infer<typeof memoryReportSchema>;
 export type MemoryStatusSnapshot = z.infer<typeof memoryStatusSnapshotSchema>;
