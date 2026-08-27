@@ -14,6 +14,10 @@ import type {
 } from "@shared/contracts/ai.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import { createLogger } from "@shared/logger.ts";
+import {
+  memoryStoreEnvPatch,
+  mergeMemoryStoreEnv,
+} from "../agent-managed-assets/env.ts";
 import { resolveOneShotInvocation } from "../agents/launch.ts";
 import type { ProcessEnvironmentService } from "../process-environment-service.ts";
 import type { ManagedAgentLaunchGate } from "../project-skills/launch-gate/index.ts";
@@ -325,7 +329,7 @@ export function createAiService({
                 })
               ).env
             : undefined;
-          const env =
+          const withSkillsEnv =
             resolvedEnv && userData
               ? mergeSystemSkillExtraRootEnv({
                   agentKind: agent,
@@ -333,6 +337,10 @@ export function createAiService({
                   userData,
                 })
               : resolvedEnv;
+          // v3 记忆:one-shot 智能体同样注入项目 store 路径(env 权威解析)。
+          const env = withSkillsEnv
+            ? mergeMemoryStoreEnv(withSkillsEnv, await memoryStoreEnvPatch(cwd))
+            : withSkillsEnv;
           const text = await runOneShot(invocation.binary, invocation.args, {
             cwd,
             ...(env ? { env } : {}),

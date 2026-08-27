@@ -420,6 +420,15 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 命令授权走 `CommandMetadata.allowedClientKinds`：`plugin.catalog.list` 允许 `desktop-renderer` + `cli-local`；其它 managed 命令 + `app.relaunch` 只允许 `desktop-renderer`
 - 插件 RPC 走独立 IPC 通道（`PIER.PLUGIN_RPC_INVOKE`），不进 `PierCommand`、不经 CLI local-control
 
+### 项目设置贡献点 `projectSettings`
+
+插件可经 manifest `projectSettings` 声明 + renderer 运行时 `context.projectSettings.register` 注册「设置 → 项目」详情 tab：
+
+- 纪律链与 `panels` / `settingsPages` 一致：`assertDeclaredContribution("projectSettings")` → `src/renderer/lib/plugins/project-settings-registry.ts` → `ProjectsSectionDetail` 渲染
+- 宿主按 `visible({ isPierHome })` 过滤；省略 `visible` 时默认 `!isPierHome`
+- 插件不自列项目、不挂侧栏 `settingsPages` 充当项目偏好；`projectRootPath` 由宿主 focused 项目传入
+- contribution `id` 必须带插件 id 前缀（`pluginManifestSchema` superRefine）
+
 ### 工作台组件贡献点 `workbenchWidgets`
 
 插件可经 manifest `workbenchWidgets` 声明 + renderer 运行时 `context.workbenchWidgets.register` 注册工作台卡片组件：

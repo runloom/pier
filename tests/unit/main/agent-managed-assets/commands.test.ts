@@ -41,4 +41,37 @@ describe("memory command authorization", () => {
     };
     expect(authorizeCommand(enableCmd, cli).ok).toBe(false);
   });
+
+  it("authorizes list/delete/clear for desktop-renderer only", () => {
+    const cli: PierClient = {
+      capabilities: ["managedAssets:write"],
+      createdAt: 0,
+      id: "c",
+      kind: "cli-local",
+      lastSeenAt: 0,
+    };
+    const listCmd = {
+      root: { projectRootPath: "/p", scope: "project" as const },
+      type: "memory.list" as const,
+    };
+    expect(authorizeCommand(listCmd, desktop)).toEqual({ ok: true });
+    expect(authorizeCommand(listCmd, cli).ok).toBe(false);
+
+    const deleteCmd = {
+      entityName: "naming",
+      index: 0,
+      observation: "prefer kebab-case",
+      root: { projectRootPath: "/p", scope: "project" as const },
+      type: "memory.deleteObservation" as const,
+    };
+    expect(authorizeCommand(deleteCmd, desktop)).toEqual({ ok: true });
+    expect(authorizeCommand(deleteCmd, cli).ok).toBe(false);
+
+    const clearCmd = {
+      root: { projectRootPath: "/p", scope: "project" as const },
+      type: "memory.clearStore" as const,
+    };
+    expect(authorizeCommand(clearCmd, desktop)).toEqual({ ok: true });
+    expect(authorizeCommand(clearCmd, cli).ok).toBe(false);
+  });
 });

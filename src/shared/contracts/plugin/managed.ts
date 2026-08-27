@@ -10,6 +10,7 @@ import {
   pluginLocaleMessagesSchema,
   pluginLocalizationSchema,
   pluginPanelContributionSchema,
+  pluginProjectSettingsContributionSchema,
   pluginRuntimePolicySchema,
   pluginSettingsPageContributionSchema,
   pluginTerminalStatusItemContributionSchema,
@@ -137,6 +138,9 @@ export const managedPluginPackageManifestSchema = z.preprocess(
       name: z.string().min(1),
       panels: z.array(pluginPanelContributionSchema).default([]),
       permissions: z.array(pierCapabilitySchema).default([]),
+      projectSettings: z
+        .array(pluginProjectSettingsContributionSchema)
+        .optional(),
       publisher: z.string().min(1).optional(),
       settingsPages: z
         .array(pluginSettingsPageContributionSchema)

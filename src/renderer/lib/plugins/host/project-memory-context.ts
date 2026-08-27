@@ -12,16 +12,33 @@ export function createPluginProjectMemoryContext(
   assertPluginCapability: AssertPluginCapability
 ): RendererPluginContext["projectMemory"] {
   return {
+    clearStore: (root) => {
+      assertPluginCapability(entry, "managedAssets:write");
+      return window.pier.memory.clearStore(root);
+    },
+    deleteObservation: (root, entityName, index, observation) => {
+      assertPluginCapability(entry, "managedAssets:write");
+      return window.pier.memory.deleteObservation(
+        root,
+        entityName,
+        index,
+        observation
+      );
+    },
     disable: (root) => {
       assertPluginCapability(entry, "managedAssets:write");
       return window.pier.memory.disable(root);
     },
-    enable: (root, options) => {
+    enable: (root) => {
       assertPluginCapability(entry, "managedAssets:write");
-      return window.pier.memory.enable(root, options);
+      return window.pier.memory.enable(root);
+    },
+    list: (root) => {
+      assertPluginCapability(entry, "workspace:read");
+      return window.pier.memory.list(root);
     },
     status: (root) => {
-      assertPluginCapability(entry, "managedAssets:write");
+      assertPluginCapability(entry, "workspace:read");
       return window.pier.memory.status(root);
     },
   };

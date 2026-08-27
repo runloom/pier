@@ -29,7 +29,6 @@ export const settingsPlugins = {
     commands: "{{count}} 个命令",
     workbenchWidget: "{{count}} 个工作台组件",
     workbenchWidgets: "{{count}} 个工作台组件",
-    none: "没有贡献项",
     panel: "{{count}} 个面板",
     panels: "{{count}} 个面板",
     terminalStatusItem: "{{count}} 个终端状态项",

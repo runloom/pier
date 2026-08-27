@@ -1,25 +1,41 @@
 {
   "description": "为智能体提供项目记忆。",
   "messages": {
-    "confirm.tracked.body": "记忆文件在这台电脑上。这些项目配置通常会被 git 跟踪，在其他机器上不会生效。",
-    "confirm.tracked.title": "要把记忆配置写进 git 跟踪的文件吗？",
+    "clear.action": "清空本项目记忆",
+    "confirm.clear.action": "清空",
+    "confirm.clear.body": "只清空本机记忆内容，不会关掉项目记忆，也不会改智能体配置。",
+    "confirm.clear.title": "清空这个项目的记忆？",
+    "confirm.delete.action": "删除",
+    "confirm.delete.body": "智能体以后不会再读到这条。",
+    "confirm.delete.title": "删除这条记忆？",
     "degraded.details": "查看详情",
-    "empty.noProject": "未打开项目",
-    "empty.noProjectHint": "请先打开项目文件夹以使用项目记忆。",
+    "degraded.detailsTitle": "智能体接入详情",
+    "degraded.status": "部分智能体没有接上。",
+    "delete.aria": "删除这条记忆",
+    "empty.noEntries": "还没有记忆",
+    "empty.noEntriesHint": "智能体在会话里记下的内容会出现在这里。",
+    "empty.tooLarge": "记忆文件较大，无法在设置里列出或删除。",
+    "entity.convention": "约定",
+    "entity.decision": "拍板决策",
+    "entity.environment": "环境事实",
+    "entity.pitfall": "踩过的坑",
+    "entries.title": "记忆条目",
+    "error.clearFailed": "无法清空记忆",
+    "error.deleteFailed": "无法删除这条记忆",
+    "error.disableFailed": "无法关闭项目记忆",
+    "error.enableFailed": "无法开启项目记忆",
+    "error.loadFailed": "无法加载项目记忆",
+    "error.openFailed": "无法打开记忆文件",
+    "error.openFailedBody": "文件面板暂时不可用。",
     "first.claudeTrust": "Claude Code 第一次使用项目记忆时会要求一次性批准。",
-    "panel.title": "项目记忆",
-    "state.degraded": "部分接入",
-    "state.disabled": "已关闭",
-    "state.enabled": "已启用",
+    "page.title": "项目记忆",
     "summary.connected": "已接入 {{count}} 个智能体",
+    "summary.disabledHint": "开启后,智能体会跨会话记住这个项目的约定、踩过的坑和决策。",
     "summary.engine": "引擎版本",
+    "summary.newSessionNote": "开关变更对新开启的智能体会话生效。",
+    "summary.openStore": "在 Pier 中打开记忆文件",
     "summary.store": "记忆文件位置",
     "switch.enable": "启用项目记忆"
   },
-  "name": "Memory",
-  "panels": {
-    "pier.memory.panel": {
-      "title": "项目记忆"
-    }
-  }
+  "name": "项目记忆"
 }

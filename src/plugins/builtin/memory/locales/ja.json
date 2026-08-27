@@ -1,25 +1,41 @@
 {
   "description": "コーディング用のプロジェクト記憶。",
   "messages": {
-    "confirm.tracked.body": "記憶ファイルはこのマシンにあります。これらのプロジェクト設定は通常コミットされるため、他のマシンでは使えません。",
-    "confirm.tracked.title": "記憶の設定を git 管理のファイルに書き込みますか？",
+    "clear.action": "このプロジェクトの記憶を消去",
+    "confirm.clear.action": "消去",
+    "confirm.clear.body": "このコンピュータ上の記憶だけを消します。プロジェクト記憶はオンのまま、エージェント設定は変わりません。",
+    "confirm.clear.title": "このプロジェクトの記憶を消去しますか？",
+    "confirm.delete.action": "削除",
+    "confirm.delete.body": "エージェントはこのメモを二度と読みません。",
+    "confirm.delete.title": "この記憶を削除しますか？",
     "degraded.details": "詳細を見る",
-    "empty.noProject": "プロジェクトが開かれていません",
-    "empty.noProjectHint": "プロジェクト記憶を使うには、先にプロジェクトフォルダを開いてください。",
+    "degraded.detailsTitle": "エージェント接続の詳細",
+    "degraded.status": "一部のエージェントが接続されていません。",
+    "delete.aria": "この記憶を削除",
+    "empty.noEntries": "まだ記憶がありません",
+    "empty.noEntriesHint": "セッションでエージェントが保存した内容がここに表示されます。",
+    "empty.tooLarge": "記憶ファイルが大きいため、ここでは一覧表示や削除ができません。",
+    "entity.convention": "取り決め",
+    "entity.decision": "決定",
+    "entity.environment": "環境",
+    "entity.pitfall": "落とし穴",
+    "entries.title": "記憶",
+    "error.clearFailed": "記憶を消去できませんでした",
+    "error.deleteFailed": "記憶を削除できませんでした",
+    "error.disableFailed": "プロジェクト記憶をオフにできませんでした",
+    "error.enableFailed": "プロジェクト記憶をオンにできませんでした",
+    "error.loadFailed": "プロジェクト記憶を読み込めませんでした",
+    "error.openFailed": "記憶ファイルを開けませんでした",
+    "error.openFailedBody": "ファイルパネルは今使えません。",
     "first.claudeTrust": "Claude Code は初回、プロジェクト記憶ツールの承認を求めます。",
-    "panel.title": "プロジェクト記憶",
-    "state.degraded": "一部のみ接続",
-    "state.disabled": "オフ",
-    "state.enabled": "有効",
+    "page.title": "プロジェクト記憶",
     "summary.connected": "{{count}} 体のエージェントに接続済み",
+    "summary.disabledHint": "オンにすると、エージェントはこのプロジェクトの取り決め・落とし穴・決定をセッションをまたいで記憶します。",
     "summary.engine": "エンジンのバージョン",
+    "summary.newSessionNote": "変更は新しく開始したエージェントセッションから有効になります。",
+    "summary.openStore": "Pier で記憶ファイルを開く",
     "summary.store": "記憶ファイルの場所",
     "switch.enable": "プロジェクト記憶を有効にする"
   },
-  "name": "Memory",
-  "panels": {
-    "pier.memory.panel": {
-      "title": "プロジェクト記憶"
-    }
-  }
+  "name": "プロジェクト記憶"
 }

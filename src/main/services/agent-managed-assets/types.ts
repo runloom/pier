@@ -15,11 +15,6 @@ export interface ReconcileReport {
   targets: TargetRow[];
 }
 
-export interface NeedsConfirmation {
-  kind: "needsConfirmation";
-  trackedTargets: string[];
-}
-
 export interface StatusSnapshot {
   derivedState: "disabled" | "enabled" | "degraded";
   desiredState: "enabled" | "disabled";
@@ -27,5 +22,7 @@ export interface StatusSnapshot {
   entityCount: number | null;
   observationCount: number | null;
   storePath: string;
+  /** 面向展示的路径(家目录折叠为 `~`);打开/定位仍用 storePath。 */
+  storePathDisplay: string;
   targets: TargetRow[];
 }

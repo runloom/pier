@@ -37,6 +37,16 @@ import type {
 } from "./renderer-panels.ts";
 import type { RendererWorkbenchWidgetRegistration } from "./workbench.ts";
 
+export interface RendererProjectSettingsRegistration {
+  id: string;
+  render: (props: {
+    isPierHome: boolean;
+    projectRootPath: string;
+  }) => ReactNode;
+  title: () => string;
+  visible?: (props: { isPierHome: boolean }) => boolean;
+}
+
 export type { PanelTransferRegistration } from "./panel-transfer-registration.ts";
 export type {
   RendererPluginAppearance,
@@ -449,7 +459,12 @@ export interface RendererPluginContext {
   };
   panels: RendererPluginPanelsFacade;
   projectMemory: RendererPluginProjectMemoryFacade;
+  projectSettings: {
+    register(registration: RendererProjectSettingsRegistration): () => void;
+  };
   settings: {
+    /** 关闭设置弹窗(经宿主 leave guard);用于从设置深链进工作区的动作。 */
+    close(): void;
     openSection(section: "environment"): void;
   };
   terminal: RendererPluginTerminalContext;

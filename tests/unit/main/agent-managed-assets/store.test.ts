@@ -1,8 +1,18 @@
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { MemoryStoreManager } from "@main/services/agent-managed-assets/store.ts";
+import {
+  MemoryStoreManager,
+  migrateLegacyMemoryBaseDir,
+} from "@main/services/agent-managed-assets/store.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const dirs: string[] = [];
@@ -11,6 +21,27 @@ afterEach(async () => {
   await Promise.all(
     dirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true }))
   );
+});
+
+describe("migrateLegacyMemoryBaseDir", () => {
+  it("moves the legacy dir once and never clobbers an existing target", () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-mem-migrate-"));
+    dirs.push(root);
+    const legacy = join(root, "userdata", "plugin-data", "pier.memory");
+    const target = join(root, "dot-pier", "memory");
+    mkdirSync(join(legacy, "k1"), { recursive: true });
+    writeFileSync(join(legacy, "k1", "memory.jsonl"), "line\n");
+    migrateLegacyMemoryBaseDir(legacy, target);
+    expect(readFileSync(join(target, "k1", "memory.jsonl"), "utf8")).toBe(
+      "line\n"
+    );
+    expect(existsSync(legacy)).toBe(false);
+    // 目标已存在:即使又出现旧目录也不覆盖。
+    mkdirSync(join(legacy, "k2"), { recursive: true });
+    migrateLegacyMemoryBaseDir(legacy, target);
+    expect(existsSync(join(legacy, "k2"))).toBe(true);
+    expect(existsSync(join(target, "k2"))).toBe(false);
+  });
 });
 
 describe("MemoryStoreManager", () => {
@@ -44,6 +75,13 @@ describe("MemoryStoreManager", () => {
           relationType: "uses",
           to: "Q",
           type: "relation",
+        }),
+        // 非四类 entityType:与设置页列表同口径,不计数。
+        JSON.stringify({
+          entityType: "note",
+          name: "X",
+          observations: ["hidden"],
+          type: "entity",
         }),
         "",
       ].join("\n")

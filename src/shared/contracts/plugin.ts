@@ -201,6 +201,14 @@ export type PluginSettingsPageContribution = z.infer<
   typeof pluginSettingsPageContributionSchema
 >;
 
+export const pluginProjectSettingsContributionSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1).optional(),
+});
+export type PluginProjectSettingsContribution = z.infer<
+  typeof pluginProjectSettingsContributionSchema
+>;
+
 export {
   type PluginConfiguration,
   type PluginConfigurationProperty,
@@ -250,8 +258,10 @@ const pluginManifestObjectSchema = z
      */
     languageModes: z.array(pluginLanguageModeContributionSchema).optional(),
     panels: z.array(pluginPanelContributionSchema).default([]),
-
     permissions: z.array(pierCapabilitySchema).default([]),
+    projectSettings: z
+      .array(pluginProjectSettingsContributionSchema)
+      .optional(),
     settingsPages: z
       .array(pluginSettingsPageContributionSchema)
       .max(1)
@@ -331,6 +341,17 @@ const pluginManifestObjectSchema = z
           code: "custom",
           message: `groupContent id must start with "${prefix}": ${contribution.id}`,
           path: ["groupContent", index, "id"],
+        });
+      }
+    }
+    for (const [index, contribution] of (
+      manifest.projectSettings ?? []
+    ).entries()) {
+      if (!contribution.id.startsWith(prefix)) {
+        ctx.addIssue({
+          code: "custom",
+          message: `projectSettings id must start with "${prefix}": ${contribution.id}`,
+          path: ["projectSettings", index, "id"],
         });
       }
     }

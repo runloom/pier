@@ -3,6 +3,10 @@ import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { ENGINE_PACKAGE } from "./serializers.ts";
 
+/**
+ * WAL 只覆盖 MCP 配置目标:引导段与 CLAUDE.md 引用靠 marker 段整体替换幂等收敛,
+ * 归属由 marker 表达,没有「无法证明归属」的中间态,不进 pending。
+ */
 export interface LedgerPending {
   action: "write" | "remove";
   commitRecord: {
@@ -11,13 +15,18 @@ export interface LedgerPending {
     lastOutcome: "written" | "removed";
   };
   expectedFingerprint: string;
-  kind: "mcp-target" | "rules-section" | "claude-reference";
+  kind: "mcp-target";
   priorFingerprint: string;
   targetPath: string;
 }
 
 export interface MemoryLedger {
   claudeReference: { insertedByPier: boolean; present: boolean };
+  /**
+   * 决策来源:v3 的显式开关写 "user"。v2 确认门残留清理只删**没有**此标记的
+   * 疑似残留形态——用户决策绝不靠形态推断保护。
+   */
+  decidedBy?: "user";
   desiredState: "enabled" | "disabled";
   enginePackage: string;
   pending: LedgerPending[];
@@ -36,7 +45,41 @@ export interface MemoryLedger {
       lastOutcome: "written" | "removed" | "failed" | "skipped";
     }
   >;
-  trackedAcknowledged?: boolean;
+}
+
+/** 账本最小面:v2 项目账本与 v3 全局 registry 共用 WAL/target 记录逻辑。 */
+export interface ManagedTargetBook {
+  pending: LedgerPending[];
+  targets: MemoryLedger["targets"];
+}
+
+/**
+ * 恢复阶段(WAL 三分支):①实况=期望 → 零推导提交;②实况=先验 → 保留 pending,
+ * 由 forward 收敛重放;③第三方漂移 → 记 failed,绝不认领。
+ */
+export async function recoverPendingTargets(
+  book: ManagedTargetBook,
+  currentFingerprint: (item: LedgerPending) => Promise<string>
+): Promise<void> {
+  const remaining: LedgerPending[] = [];
+  for (const item of book.pending) {
+    const verdict = LedgerStore.recover(item, await currentFingerprint(item));
+    if (verdict.branch === 1) {
+      LedgerStore.applyCommit(book, item);
+      continue;
+    }
+    if (verdict.branch === 2) {
+      remaining.push(item);
+      continue;
+    }
+    book.targets[item.targetPath] = {
+      detail: "conflict: third-party change during crash window",
+      existedBefore: book.targets[item.targetPath]?.existedBefore ?? true,
+      fingerprint: book.targets[item.targetPath]?.fingerprint ?? "",
+      lastOutcome: "failed",
+    };
+  }
+  book.pending = remaining;
 }
 
 export class LedgerStore {
@@ -64,27 +107,11 @@ export class LedgerStore {
     return { branch: 3 };
   }
 
-  static applyCommit(ledger: MemoryLedger, item: LedgerPending): void {
-    const commit = item.commitRecord;
-    if (item.kind === "mcp-target") {
-      ledger.targets[item.targetPath] = { ...commit };
-      return;
-    }
-    if (item.kind === "rules-section") {
-      ledger.rulesSection = {
-        agentsMdExistedBefore: ledger.rulesSection.agentsMdExistedBefore,
-        fingerprint: commit.fingerprint,
-        inserted: commit.lastOutcome === "written",
-      };
-      return;
-    }
-    ledger.claudeReference = {
-      insertedByPier:
-        commit.lastOutcome === "written"
-          ? true
-          : ledger.claudeReference.insertedByPier,
-      present: commit.lastOutcome === "written",
-    };
+  static applyCommit(
+    book: Pick<ManagedTargetBook, "targets">,
+    item: LedgerPending
+  ): void {
+    book.targets[item.targetPath] = { ...item.commitRecord };
   }
 
   async load(): Promise<MemoryLedger> {

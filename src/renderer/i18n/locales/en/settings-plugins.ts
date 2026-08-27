@@ -17,7 +17,6 @@ export const settingsPlugins = {
     commands: "{{count}} commands",
     workbenchWidget: "{{count}} Workbench widget",
     workbenchWidgets: "{{count}} Workbench widgets",
-    none: "No contributions",
     panel: "{{count}} panel",
     panels: "{{count}} panels",
     terminalStatusItem: "{{count}} terminal status item",

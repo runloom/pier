@@ -1,8 +1,30 @@
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, renameSync } from "node:fs";
 import { mkdir, open, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { MEMORY_ENTITY_TYPES } from "@shared/contracts/agent/memory.ts";
+import { MEMORY_JSONL_MAX_BYTES } from "./jsonl.ts";
 
-const MAX_SCAN_BYTES = 8 * 1024 * 1024;
+/**
+ * 存量迁移(一次性):记忆根从 userData 移到 `~/.pier/memory`。
+ * userData 路径含 build 名(Pier / Pier-dev),写进项目 MCP 配置的绝对路径会随
+ * build 失效;`~/.pier` 是本 App 机器级、跨实例资产的既定约定(hooks/技能锁同款)。
+ * 目标已存在或旧根不存在时不动;账本随目录整体搬迁,配置里的旧路径由
+ * enable 收敛按账本指纹识别本体后重写。
+ */
+export function migrateLegacyMemoryBaseDir(
+  legacyDir: string,
+  baseDir: string
+): void {
+  if (existsSync(baseDir) || !existsSync(legacyDir)) {
+    return;
+  }
+  mkdirSync(dirname(baseDir), { recursive: true });
+  renameSync(legacyDir, baseDir);
+}
+
+// 与列表读取共用同一上限(单一来源)。
+const MAX_SCAN_BYTES = MEMORY_JSONL_MAX_BYTES;
+const COUNTED_ENTITY_TYPES: readonly string[] = MEMORY_ENTITY_TYPES;
 
 export class MemoryStoreManager {
   readonly #baseDir: string;
@@ -70,10 +92,16 @@ export class MemoryStoreManager {
     }
     try {
       const row = JSON.parse(trimmed) as {
+        entityType?: string;
         observations?: unknown[];
         type?: string;
       };
-      if (row.type === "entity") {
+      // 与设置页列表同口径:只计四类 entityType,计数与可见条目一致。
+      if (
+        row.type === "entity" &&
+        typeof row.entityType === "string" &&
+        COUNTED_ENTITY_TYPES.includes(row.entityType)
+      ) {
         sink(1, Array.isArray(row.observations) ? row.observations.length : 0);
       }
     } catch {

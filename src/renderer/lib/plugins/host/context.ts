@@ -51,6 +51,7 @@ import {
   createPluginAppearanceContext,
   createPluginChartsContext,
 } from "./appearance-context.ts";
+import { assertDeclaredContribution } from "./assert-contribution.ts";
 import { createPluginCommandPaletteContext } from "./command-palette-context.ts";
 import { createPluginCommentsContext } from "./comments-context.ts";
 import { createPluginConfiguration } from "./configuration-context.ts";
@@ -61,6 +62,7 @@ import { createHostGroupContentContext } from "./group-content-context.tsx";
 import { createHostLiveModulesApi } from "./live-modules.ts";
 import { createPluginPanelsContext } from "./panels-context.ts";
 import { createPluginProjectMemoryContext } from "./project-memory-context.ts";
+import { createPluginProjectSettingsContext } from "./project-settings-context.ts";
 import { createPluginTerminalContext } from "./terminal-context.ts";
 import { createPluginTerminalsContext } from "./terminals-context.ts";
 import { createPluginWorktreesContext } from "./worktree-context.ts";
@@ -192,35 +194,6 @@ function adaptAction(
     ...(action.surfaces ? { surfaces: action.surfaces } : {}),
     title: action.title,
   };
-}
-
-function assertDeclaredContribution(
-  entry: PluginRegistryEntry | undefined,
-  kind: "action" | "groupContent" | "panel" | "terminalStatusItem",
-  id: string
-): void {
-  if (!entry) {
-    return;
-  }
-  let declared: boolean;
-  if (kind === "action") {
-    declared = entry.manifest.commands.some((command) => command.id === id);
-  } else if (kind === "panel") {
-    declared = entry.manifest.panels.some((panel) => panel.id === id);
-  } else if (kind === "groupContent") {
-    declared = (entry.manifest.groupContent ?? []).some(
-      (contribution) => contribution.id === id
-    );
-  } else {
-    declared = entry.manifest.terminalStatusItems.some(
-      (item) => item.id === id
-    );
-  }
-  if (!declared) {
-    throw new Error(
-      `plugin contribution not declared: ${entry.manifest.id}:${kind}:${id}`
-    );
-  }
 }
 
 function assertPluginCapability(
@@ -424,6 +397,9 @@ export function createRendererPluginContext(
       assertPluginCapability
     ),
     settings: {
+      close: () => {
+        useSettingsDialogStore.getState().close();
+      },
       openSection: (section) => {
         useSettingsDialogStore.getState().openSection(section);
       },
@@ -447,6 +423,10 @@ export function createRendererPluginContext(
     environments: createPluginEnvironmentsContext(
       entry,
       assertPluginCapability
+    ),
+    projectSettings: createPluginProjectSettingsContext(
+      entry,
+      assertDeclaredContribution
     ),
     externalNavigation: {
       open: async (url) => {

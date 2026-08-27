@@ -2,14 +2,14 @@
 
 日期：2026-08-26  
 作者：待填  
-状态：L1 引擎现行；**插件表面以 [2026-08-27 项目记忆设置页](./2026-08-27-project-memory-settings-ui-design.md) 为准**（dockview 面板作废）。  
+状态：L1 引擎现行；**插件表面以 [2026-08-27 项目记忆设置页](./2026-08-27-project-memory-settings-ui-design.md) 为准**（dockview 面板作废）；**MCP 交付面以 [2026-08-27 v3 全局注册](./2026-08-27-project-memory-global-registration-v3-design.md) 为准**——本文的「写入目标与选择规则」「确认门」「默认启用扫描」章节已被 v3 取代，仅存档。  
 范围：Pier 宿主新增受管资产注册服务与命令接线 + 新增 builtin 插件 `pier.memory`（纯 renderer 表面）；记忆交付覆盖 claude / codex / cursor / gemini / opencode / omp 六个智能体。  
 取代：同日 v1 草稿（其「插件 main 编排」「全局 enabled 配置」「realpath 收敛 projectKey」「pierManaged 注入字段」等设计作废）。  
 相关：
 
 - [2026-08-27 项目记忆设置页](./2026-08-27-project-memory-settings-ui-design.md)（产品表面）
 - [Claude Code Memory 官方文档](https://code.claude.com/docs/en/memory)（auto memory 设计参照）
-- [MCP 官方参考记忆服务器](https://github.com/modelcontextprotocol/servers/tree/main/src/memory)（唯一引擎，**锁定 `@modelcontextprotocol/server-memory@0.6.3`**）
+- [MCP 官方参考记忆服务器](https://github.com/modelcontextprotocol/servers/tree/main/src/memory)（唯一引擎，**锁定 `@modelcontextprotocol/server-memory@2026.7.4`**）
 - [OpenHuman Memory Tree / Obsidian Wiki](https://tinyhumans.gitbook.io/openhuman/features/memory-tree)（「Markdown 即记忆镜像」路线的重量级印证；其 markdown 镜像与热度主题树列入 L2 参考）
 - 宿主既有底座：`src/main/services/agent-rules/service.ts`、`src/main/services/agent-mcp-catalog/{adapter-facts,parse-server-names}.ts`、`src/main/services/files/path-transaction-lock.ts`、`src/shared/contracts/permissions.ts`
 
@@ -46,7 +46,7 @@ Pier 目前没有跨会话、跨智能体的知识积累层。本设计把「项
 关键事实：
 
 - `MEMORY_FILE_PATH` 相对路径按包安装目录解析而非 cwd（引擎源码确认），必须传绝对路径。
-- 引擎 npm dist-tag latest 为 2026.7.4，但本设计**精确锁定 PoC 验证过的 `0.6.3`**，升级随 Pier 发版走（供应链约束，见风险表）。
+- 引擎 npm dist-tag latest 为 2026.7.4，但本设计**精确锁定日历版本 `2026.7.4`(勘误:早期文稿写的 "0.6.3" 是包内部 serverInfo 串,npm 从未发布)**，升级随 Pier 发版走（供应链约束，见风险表）。
 
 ---
 
@@ -54,7 +54,7 @@ Pier 目前没有跨会话、跨智能体的知识积累层。本设计把「项
 
 ### 目标（L1）
 
-1. 用户在设置「项目记忆」页为选定项目开启/关闭记忆，并可删除单条 observation。
+1. **默认启用**：插件本身可停用，装着即视为想要记忆。项目账本不存在（从未决策）时宿主自动 enable——触发点为启动时全项目扫描与项目加入/变更后（组合根 `onEnvironmentsChanged`）。用户在设置「项目记忆」页可关闭/重开，并可删除单条 observation；显式关闭后不再自动开启。
 2. 开启后，全部已装且支持 MCP 的智能体在该项目内获得同一套记忆工具与使用引导。
 3. 记忆随项目积累：约定、坑、决策、环境事实跨会话、跨智能体复用。
 4. 关闭可完整回退托管内容；ownership ledger 保证只动 Pier 自己写入的东西。
@@ -73,7 +73,7 @@ Pier 目前没有跨会话、跨智能体的知识积累层。本设计把「项
 
 ```
 ┌─ 插件 pier.memory（纯 renderer 产品表面）──────────────┐
-│ settingsPage: 项目列表 + 开关 + 可删条目                   │
+│ settingsPage: 列表钻取详情（开关 + 可删条目）               │
 └──────────────┬───────────────────────────────────────────┘
                │ context.projectMemory 窄 facade（宿主实现）
                │ → IPC → PierCommand（allowedClientKinds: desktop-renderer）
@@ -89,7 +89,7 @@ Pier 目前没有跨会话、跨智能体的知识积累层。本设计把「项
 └──────────────┬───────────────────────────────────────────┘
                │ 各智能体原生 MCP 运行时
 ┌──────────────▼───────────────────────────────────────────┐
-│ npx -y @modelcontextprotocol/server-memory@0.6.3           │
+│ npx -y @modelcontextprotocol/server-memory@2026.7.4           │
 │ env MEMORY_FILE_PATH=<store 绝对路径> → memory.jsonl       │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -105,7 +105,7 @@ v1 假设「manifest permissions 声明即可授予」不成立：main 侧 `auth
 1. **capability**：`pierCapabilitySchema` 新增单项 `managedAssets:write`（合并 v1 的两项），**加入 desktop-renderer 默认集**——先例即 `git:write`（permissions.ts L110 注释：「主体提供能力，二次确认由插件 UI 负责」）。不进入其它 client-kind 默认集。
 2. **命令**：宿主注册 `memory.enable` / `memory.disable` / `memory.status`，以及设置页所需的 `memory.list` / `memory.deleteObservation` / `memory.clearStore`。`CommandMetadata.allowedClientKinds = ["desktop-renderer"]`，不进 CLI、不进命令面板。管理入口是插件设置页。
 3. **插件 facade**：`context.projectMemory`（enable/disable/status/list/deleteObservation/clearStore），宿主实现对插件断言 `managedAssets:write`。
-4. **manifest**：不声明 `panels` / plugin commands；声明 `settingsPages: [{ id: "pier.memory.settings" }]` 与 `permissions: ["workspace:read", "managedAssets:write"]`。
+4. **manifest**：声明 `projectSettings: [{ id: "pier.memory.project" }]`、`settingsPages: []`、`panels: []`，permissions 仍 `workspace:read` + `managedAssets:write`。
 
 ---
 
@@ -113,9 +113,9 @@ v1 假设「manifest permissions 声明即可授予」不成立：main 侧 `auth
 
 **以 [2026-08-27 项目记忆设置页](./2026-08-27-project-memory-settings-ui-design.md) 为准。** dockview 面板、`panel:register` / `panel:open` 作废。
 
-- 产品表面是插件设置页（侧栏与 Codex 账号同级）：左项目列表、右开关 + 可删 observation。
-- main module 保持空激活壳；插件零 Node 侧逻辑。
-- 项目身份来自设置页选中的已登记项目（`AssetRootRef.scope: "project"`），不接受任意路径。
+- 产品表面是设置 → 项目详情 tab（宿主 `projectSettings`）；插件不列项目、不进侧栏。
+- 项目身份来自宿主传入的已登记 `projectRootPath`（`AssetRootRef.scope: "project"`），不接受任意路径。
+- main 仍空激活壳；插件零 Node 侧逻辑。
 
 ---
 
@@ -127,7 +127,9 @@ git 项目以 `git rev-parse --absolute-git-dir --git-common-dir` 的 **commonDi
 
 ### 存储
 
-`{userData}/plugin-data/pier.memory/<projectKey>/memory.jsonl`，目录权限 0700、文件 0600。JSONL 行格式为引擎原生 entity/relation 行。
+`~/.pier/memory/<projectKey>/{memory.jsonl,ledger.json}`，目录权限 0700、文件 0600。JSONL 行格式为引擎原生 entity/relation 行。
+
+选 `~/.pier` 而非 userData 的理由：记忆文件被写进项目 MCP 配置的**绝对路径**、由外部智能体进程读写，是机器级跨实例资产——userData 路径含 build 名（Pier / Pier-dev），换 build 即全部失效；`~/.pier/<domain>` 是本产品此类资产的既定约定（`~/.pier/hooks`、`~/.pier/project-skills-locks` 同款）。存量从 `{userData}/plugin-data/pier.memory` 启动时一次性整目录搬迁（目标已存在则不动）；配置里的旧绝对路径由 enable 收敛按账本指纹识别本体后重写。
 
 ### entityType 四类约定（写进引导段）
 
@@ -146,7 +148,7 @@ git 项目以 `git rev-parse --absolute-git-dir --git-common-dir` 的 **commonDi
 interface MemoryLedger {
   projectIdentity: { canonicalRoot: string };   // 诊断用；key 才是身份
   desiredState: "enabled" | "disabled";
-  enginePackage: string;                        // 固定 "@modelcontextprotocol/server-memory@0.6.3"
+  enginePackage: string;                        // 固定 "@modelcontextprotocol/server-memory@2026.7.4"
   trackedAcknowledged?: boolean;                // 用户已确认写入 git 跟踪的配置（每项目一次）
   targets: Record<string, {                     // 键 = canonical 配置绝对路径
     existedBefore: boolean;                     // Pier 是否创建了骨架文件
@@ -164,9 +166,11 @@ interface MemoryLedger {
    * Write-ahead 意图（崩溃一致性）：P1 先持久化完整计划再动文件。
    * priorFingerprint = 动作前实况指纹（文件不存在为 "absent"）；commitRecord =
    * 动作生效后应提交的完整 target 记录——P2 之后任意时刻崩溃都可零推导直接提交。
+   * WAL 只覆盖 MCP 配置目标：AGENTS.md 引导段与 CLAUDE.md 引用由 marker 段整体
+   * 替换幂等收敛，归属由 marker 表达，不存在「无法证明归属」的中间态，不进 pending。
    */
   pending: readonly {
-    kind: "mcp-target" | "rules-section" | "claude-reference";
+    kind: "mcp-target";
     targetPath: string;
     action: "write" | "remove";
     priorFingerprint: string;
@@ -193,9 +197,15 @@ reconcile(identity: ProjectIdentity, desired: "enabled" | "disabled"): Promise<R
 snapshotStatus(identity: ProjectIdentity): Promise<MemoryStatusSnapshot>;
 ```
 
-每次 `reconcile` / `snapshotStatus` 先跑**恢复阶段**：逐条清算 `ledger.pending`，按目标实况指纹三分支——① 等于 `expectedFingerprint`：动作已生效，直接提交 `commitRecord` 并清除该条；② 等于 `priorFingerprint`：动作未发生且前置条件未变，幂等重放后再按①提交；③ 两者皆非：第三方在崩溃窗口内改动过，保留现场、该 target 记 failed（冲突明细）并清除 pending，绝不自动认领。随后 forward-only 幂等收敛到 desired：enable = 确认门 → ensureStore → 逐 target 写入 → 引导段；disable = 逐 target 移除 → 自建文件还原 → 引导段移除（store 与 ledger 保留）。任一 target 失败不中断其余目标，逐项 outcome 进 report；整体状态按派生规则落 degraded。
+每次 `reconcile` / `snapshotStatus` 先跑**恢复阶段**：逐条清算 `ledger.pending`，按目标实况指纹三分支——① 等于 `expectedFingerprint`：动作已生效，直接提交 `commitRecord` 并清除该条；② 等于 `priorFingerprint`：动作未发生且前置条件未变，保留 pending，由 `reconcile` 的 forward 收敛重放（`snapshotStatus` 只核对不重放）；③ 两者皆非：第三方在崩溃窗口内改动过，保留现场、该 target 记 failed（冲突明细）并清除 pending，绝不自动认领。随后 forward-only 幂等收敛到 desired：enable = 确认门 → ensureStore → 逐 target 写入 → 引导段；disable = 逐 target 移除 → 自建文件还原 → 引导段移除（store 与 ledger 保留）。target 的 plan 级失败（冲突/漂移/解析失败）不中断其余目标，逐项 outcome 记入 ledger 与 report；整体状态按派生规则落 degraded。
+
+`snapshotStatus` 的解释权 = ledger + 磁盘实况：`lastOutcome=written` 的目标必须核对磁盘上托管条目指纹，缺失或被第三方改动即派生 failed（degraded）；desired=enabled 而新安装智能体的首选目标尚无 ledger 记录时同样派生 failed（"not configured yet"），提示用户重新开关接入。
 
 **确认门**：预检发现任一目标被 git 跟踪且 ledger 无 `trackedAcknowledged` 时，命令返回 `needsConfirmation`（附跟踪目标清单）；facade 弹 `dialogs.confirm`（intent=default，说明「记忆文件位置在本机，这些配置通常会被 git 跟踪，其它机器上无效」）；确认后持久化 ack 并继续，取消则干净中止、零写入。TOML 不可解析等其它预检失败记 failed/detail，不阻塞其它目标。
+
+**默认启用 + 收敛（`ensureDefaultEnabled`）**：账本文件不存在 = 该项目从未决策 → 自动跑 enable；账本存在且 desiredState=enabled → **幂等重跑 enable 做收敛**（之后新装的智能体自动接入首选配置、被第三方删掉的托管条目自愈；已达成目标零写入）；显式 disable 后 → 永不自动重开。自动路径无 UI，确认门不弹窗：首次决策被跟踪门拦下 → 返回 `needs-confirmation`，组合根经 NCS 落一条 inbox 消息（kind `operation.result`、action 打开「设置 → 项目」、dedupeKey 按项目；账本已落盘故每项目至多一次）；收敛路径命中跟踪门 → 静默跳过（在用项目不重复打扰，缺口由设置页 degraded 呈现）。自动 enable 的部分失败照常落 degraded，由设置页 StatusStack 呈现。
+
+**引擎预热**：enable 收敛完成后经 `onEnabled` 钩子后台预热一次 `npx` 包缓存（`prewarm.ts`：spawn 引擎 + 关 stdin 令 stdio 服务器退出，超时强杀兜底；进程内成功一次即不再跑，失败静默、下次 enable 事件重试），首个智能体会话不再等约 20 秒冷启动下载。
 
 ### 写入目标与选择规则（每智能体一个首选目标）
 
@@ -222,29 +232,29 @@ facts 模块为每个智能体声明**唯一首选项目配置**；实际写入�
 // mcp-servers-json（.mcp.json / .cursor/mcp.json）与 gemini-settings-json 同形
 { "mcpServers": { "pier-memory": {
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-memory@0.6.3"],
+    "args": ["-y", "@modelcontextprotocol/server-memory@2026.7.4"],
     "env": { "MEMORY_FILE_PATH": "<store 绝对路径>" } } } }
 
 // opencode-json（官方 local server schema：command 数组 + environment）
 { "mcp": { "pier-memory": {
     "type": "local",
-    "command": ["npx", "-y", "@modelcontextprotocol/server-memory@0.6.3"],
+    "command": ["npx", "-y", "@modelcontextprotocol/server-memory@2026.7.4"],
     "environment": { "MEMORY_FILE_PATH": "<store 绝对路径>" } } } }
 
 // codex-toml
 [mcp_servers.pier-memory]
 command = "npx"
-args = ["-y", "@modelcontextprotocol/server-memory@0.6.3"]
+args = ["-y", "@modelcontextprotocol/server-memory@2026.7.4"]
 env = { MEMORY_FILE_PATH = "<store 绝对路径>" }
 ```
 
 ### 写入与移除隔离规则
 
 - **不向第三方配置注入任何非 schema 字段**（v1 的 `pierManaged` 作废）。归属判定靠 ledger fingerprint。
-- JSON：读-验-改-写（JSON.stringify 固定 2 空格缩进 + 尾换行；不追求保留用户原格式注释——这些格式均为机器管理文件）。同名 key 已存在且非 Pier 写入（fingerprint 不匹配）→ 该目标 failed（key 冲突明细）。
+- JSON：读-验-改-写（JSON.stringify 固定 2 空格缩进 + 尾换行；不追求保留用户原格式注释——这些格式均为机器管理文件）。同名 key 已存在：与账本指纹匹配 = Pier 本体旧条目（存储迁移 / 引擎版本升级），允许整体重写；不匹配 = 第三方 → 该目标 failed（key 冲突明细）。TOML 同理：marker 块指纹匹配账本时原位替换块，否则拒写。
 - TOML：新增 devDependency `smol-toml` **仅用于 parse 验证**（不重序列化、不破坏注释）。追加前必须 parse 通过且不存在 `mcp_servers.pier-memory` 的任何定义形式（table/inline/dotted）；否则拒写。移除时 parse 后按 marker 包裹块定位，校验块内容 fingerprint 未漂移才删；漂移则保留并报冲突。
 - 全部读-判-写发生在 `FilePathTransactionLock` 单例锁内（app-core 同款）；另加 per-projectKey 操作互斥，enable/disable/status 不会交错执行；命令在 main 侧完成或补偿后才返回，不依赖 renderer 存活。
-- **崩溃一致性（WAL）**：每个 target 动作前先把完整意图（含 `priorFingerprint` / `expectedFingerprint` / `commitRecord`）原子写入 `ledger.pending`（P1）→ 执行文件变更（P2）→ 按 pending 提交 target 记录并清除该条（P3）。P1 先于任何文件变更，因此任意时刻崩溃都不会留下「无法证明归属」或「虚假归属」的中间态：恢复阶段按上述三分支收敛，绝不自动认领。
+- **崩溃一致性（WAL）**：每个 MCP 配置 target 动作前先把完整意图（含 `priorFingerprint` / `expectedFingerprint` / `commitRecord`）原子写入 `ledger.pending`（P1）→ 执行文件变更（P2）→ 按 pending 提交 target 记录并清除该条（P3）。P1 先于任何文件变更，因此任意时刻崩溃都不会留下「无法证明归属」或「虚假归属」的中间态：恢复阶段按上述三分支收敛，绝不自动认领。引导段与 CLAUDE.md 引用不进 WAL：marker 段整体替换幂等、归属由 marker 表达，崩溃窗口内最坏留下旧段或新段，下次 reconcile 自然收敛。
 
 ### 引导段（AGENTS.md 托管段 + CLAUDE.md 引用）
 
@@ -302,7 +312,7 @@ Use them to make future sessions in this repository more effective:
 | 引擎无语义排序、无自动衰减 | 四类 entityType + 引导段修剪责任；语料小；L2 可换 provider |
 | 记忆质量依赖智能体自觉 | 引导段约束 + 用户可关可清；L2 蒸馏队列加人工确认环 |
 | 项目级配置含机器本地绝对路径，git 跟踪后跨机器失效 | reconcile 预检检测目标是否 git-tracked，warn 进状态详情；文案明示「本机记忆」。团队共享是 L2，前置为上游接受相对 cwd 解析 |
-| npx 供应链 | **精确固定 `@0.6.3`**，升级随 Pier 发版并在状态显示版本 |
+| npx 供应链 | **精确固定 `@2026.7.4`**(CalVer;不得回退 0.6.2——其存储路径硬编码不读 MEMORY_FILE_PATH)，升级随 Pier 发版并在状态显示版本 |
 | TOML 追加策略 | smol-toml parse 验证 + 冲突拒写 + fingerprint 移除，见 writer 规则 |
 | OpenCode/Cursor/Gemini schema 未来收紧 | serializer 按 format 独立演进 + verifiedOn 复查机制（adapter-facts 同款）；fixture 单测锁定 |
 
@@ -316,7 +326,7 @@ Use them to make future sessions in this repository more effective:
 - **projectKey**：主仓 ↔ linked worktree 收敛、非 git 目录稳定、symlink、仓库移动。
 - **安全**：未注册 projectRoot 拒绝；escape/symlink 用例；文件权限断言。
 - **统计**：大文件截断、破损行容忍、mtime 缓存命中。
-- **崩溃一致性**：P1 后未 P2 → 分支② 幂等重放；P2 后崩溃（含首次创建）→ 分支① 由 commitRecord 零推导提交；第三方漂移 → 分支③ 冲突保留不认领；remove 的 `"absent"` 指纹语义与引导段/引用两类 pending 全覆盖。
+- **崩溃一致性**：P1 后未 P2 → 分支② 保留 pending、forward 收敛重放；P2 后崩溃（含首次创建）→ 分支① 由 commitRecord 零推导提交；第三方漂移 → 分支③ 冲突保留不认领；remove 的 `"absent"` 指纹语义覆盖。引导段/引用不入 WAL（marker 幂等收敛），另测二次 enable 幂等与 disable 还原。
 - **选择规则与确认门**：仅装 OMP 只写 `.mcp.json` 一份；claude+omp 同装单份；tracked 目标首次写入确认流（ack 持久化、取消零写入）；AGENTS.md 自建模板在 disable 后还原为不存在。
 - **治理检查点**：`tests/unit/plugins/pier-memory-governance.test.ts` 锁定本设计标题、四类 entityType、marker 常量单一来源、capability 仅进 desktop-renderer 默认集、无 `panels`；表面细节见 2026-08-27 spec。
 

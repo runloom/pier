@@ -1,6 +1,7 @@
 import type { AssetRootRef } from "@shared/contracts/agent/assets.ts";
 import type {
   MemoryEnableResult,
+  MemoryListResult,
   MemoryReport,
   MemoryStatusSnapshot,
 } from "@shared/contracts/agent/memory.ts";
@@ -390,10 +391,15 @@ export interface RendererPluginCommentsFacade {
 }
 
 export interface RendererPluginProjectMemoryFacade {
-  disable(root: AssetRootRef): Promise<MemoryReport>;
-  enable(
+  clearStore(root: AssetRootRef): Promise<void>;
+  deleteObservation(
     root: AssetRootRef,
-    options?: { acknowledged?: boolean }
-  ): Promise<MemoryEnableResult>;
+    entityName: string,
+    index: number,
+    observation: string
+  ): Promise<void>;
+  disable(root: AssetRootRef): Promise<MemoryReport>;
+  enable(root: AssetRootRef): Promise<MemoryEnableResult>;
+  list(root: AssetRootRef): Promise<MemoryListResult>;
   status(root: AssetRootRef): Promise<MemoryStatusSnapshot>;
 }

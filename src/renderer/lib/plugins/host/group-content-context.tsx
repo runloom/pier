@@ -4,15 +4,10 @@ import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import type { ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import type { AssertDeclaredContribution } from "./assert-contribution.ts";
 
 const CONTENT_CONTAINER_SELECTOR = ".dv-content-container";
 const CLEANUP_DELAY_MS = 1000;
-
-type AssertDeclaredContribution = (
-  entry: PluginRegistryEntry | undefined,
-  kind: "groupContent",
-  id: string
-) => void;
 
 interface GroupContentEntry {
   cleanupTimer: ReturnType<typeof setTimeout> | null;

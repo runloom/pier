@@ -8,6 +8,7 @@ import {
   rulesWriteRequestSchema,
 } from "./agent/assets.ts";
 import {
+  memoryDeleteObservationRequestSchema,
   memoryEnableRequestSchema,
   memoryRootRequestSchema,
 } from "./agent/memory.ts";
@@ -415,6 +416,15 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   memoryRootRequestSchema.extend({
     type: z.literal("memory.status"),
+  }),
+  memoryRootRequestSchema.extend({
+    type: z.literal("memory.list"),
+  }),
+  memoryDeleteObservationRequestSchema.extend({
+    type: z.literal("memory.deleteObservation"),
+  }),
+  memoryRootRequestSchema.extend({
+    type: z.literal("memory.clearStore"),
   }),
   // accounts.* commands removed: Codex accounts now live behind plugin RPC.
   // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)

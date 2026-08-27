@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import type { StableProjectIdentity } from "./identity.ts";
+import { systemSkillsCacheRoot } from "./system-skills/cache-root.ts";
 
 /**
  * Local state layout under `{userData}/project-skills/<root-key>/…`.
@@ -22,7 +23,7 @@ export function createProjectSkillsPaths(userData: string): {
   return {
     userData,
     systemSkillsCacheRoot(): string {
-      return join(userData, "skills", ".system");
+      return systemSkillsCacheRoot(userData);
     },
     rootKeyFor(identity: StableProjectIdentity): string {
       // Path is intentionally excluded: rename must not orphan ledgers.

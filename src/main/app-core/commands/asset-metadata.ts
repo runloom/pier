@@ -10,7 +10,10 @@ export const ASSET_COMMAND_METADATA: Record<
   | "agentMcp.open"
   | "memory.enable"
   | "memory.disable"
-  | "memory.status",
+  | "memory.status"
+  | "memory.list"
+  | "memory.deleteObservation"
+  | "memory.clearStore",
   CommandMetadata
 > = {
   "agentMcp.catalog": {
@@ -25,6 +28,14 @@ export const ASSET_COMMAND_METADATA: Record<
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["file:read"],
   },
+  "memory.clearStore": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["managedAssets:write"],
+  },
+  "memory.deleteObservation": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["managedAssets:write"],
+  },
   "memory.disable": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["managedAssets:write"],
@@ -32,6 +43,10 @@ export const ASSET_COMMAND_METADATA: Record<
   "memory.enable": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["managedAssets:write"],
+  },
+  "memory.list": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["workspace:read"],
   },
   "memory.status": {
     allowedClientKinds: ["desktop-renderer"],

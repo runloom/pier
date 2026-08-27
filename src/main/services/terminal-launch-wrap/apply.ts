@@ -10,6 +10,10 @@ import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal/l
 import { createLogger } from "@shared/logger.ts";
 import { resolveLocalControlSocketPath } from "../../adapters/cli/local-control/server.ts";
 import { withPanelStatusEnv } from "../../ipc/terminal/create-launch.ts";
+import {
+  memoryStoreEnvPatch,
+  mergeMemoryStoreEnv,
+} from "../agent-managed-assets/env.ts";
 import { isForbiddenLaunchWrapEnvKey } from "../process-environment/apply-host-env.ts";
 import { mergeSystemSkillExtraRootEnv } from "../project-skills/system-skills/extra-root.ts";
 import { isHostPanelIdentityEnvKey } from "./ephemeral.ts";
@@ -275,6 +279,17 @@ export async function applyLaunchWrapForCreate(input: {
         env: { ...(withIdentity.env ?? {}) },
         userData: input.userData,
       }),
+    };
+  }
+  if (input.agentId) {
+    // v3 记忆:注入项目 store 绝对路径,启动器以 env 为权威解析
+    // (不依赖各智能体拉起 stdio server 的 cwd 行为)。
+    withIdentity = {
+      ...withIdentity,
+      env: mergeMemoryStoreEnv(
+        { ...(withIdentity.env ?? {}) },
+        await memoryStoreEnvPatch(withIdentity.cwd)
+      ),
     };
   }
   if (!(input.agentId && decorateSpawn)) {

@@ -33,15 +33,6 @@ describe("memoryApi", () => {
     });
   });
 
-  it("forwards enable with acknowledged flag", async () => {
-    await memoryApi.enable(root, { acknowledged: true });
-    expect(invokeMock).toHaveBeenCalledWith(PIER.COMMAND_EXECUTE, {
-      acknowledged: true,
-      root,
-      type: "memory.enable",
-    });
-  });
-
   it("forwards disable and status payloads", async () => {
     await memoryApi.disable(root);
     await memoryApi.status(root);
@@ -52,6 +43,27 @@ describe("memoryApi", () => {
     expect(invokeMock).toHaveBeenNthCalledWith(2, PIER.COMMAND_EXECUTE, {
       root,
       type: "memory.status",
+    });
+  });
+
+  it("forwards list delete and clear payloads", async () => {
+    await memoryApi.list(root);
+    await memoryApi.deleteObservation(root, "pnpm", 0, "use pnpm");
+    await memoryApi.clearStore(root);
+    expect(invokeMock).toHaveBeenNthCalledWith(1, PIER.COMMAND_EXECUTE, {
+      root,
+      type: "memory.list",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, PIER.COMMAND_EXECUTE, {
+      entityName: "pnpm",
+      index: 0,
+      observation: "use pnpm",
+      root,
+      type: "memory.deleteObservation",
+    });
+    expect(invokeMock).toHaveBeenNthCalledWith(3, PIER.COMMAND_EXECUTE, {
+      root,
+      type: "memory.clearStore",
     });
   });
 });

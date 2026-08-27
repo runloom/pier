@@ -103,7 +103,6 @@ import { createTerminalStatusBarPrefsFacade } from "./terminal-status-bar-prefs-
 import { createAppCoreUsageData } from "./usage-data.ts";
 import {
   broadcastCommentsChanged,
-  broadcastEnvironmentsChanged,
   broadcastMruState,
   broadcastPluginRegistryChanged,
   broadcastProjectSkillsInvalidated,
@@ -359,6 +358,7 @@ function createPierAppCore(): PierAppCore {
     agentMcpCatalog,
     agentRules,
     localEnvironments,
+    onEnvironmentsChanged,
     pierBindings,
     pierHome,
     projectMemory,
@@ -481,7 +481,7 @@ function createPierAppCore(): PierAppCore {
     clients,
     commandRouter: createCommandRouter({
       clients,
-      onEnvironmentsChanged: broadcastEnvironmentsChanged,
+      onEnvironmentsChanged,
       onWorktreeCreateProgress: broadcastWorktreeCreateProgress,
       services,
     }),

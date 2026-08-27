@@ -6,11 +6,11 @@
 
 **Architecture:** 全部副作用在宿主 main 侧服务（ledger WAL + FilePathTransactionLock + 每 format serializer）；经 PierCommand（`memory.enable/disable/status`）暴露；builtin 插件只提供 renderer 面板与窄 facade。
 
-**Tech Stack:** TypeScript 6 strict · Vitest · `smol-toml`（新增 devDependency，仅 parse 验证）· `@modelcontextprotocol/server-memory@0.6.3`（运行时 npx，锁定版本）· `write-file-atomic`（已有）。
+**Tech Stack:** TypeScript 6 strict · Vitest · `smol-toml`（新增 devDependency，仅 parse 验证）· `@modelcontextprotocol/server-memory@2026.7.4`（运行时 npx，锁定版本）· `write-file-atomic`（已有）。
 
 ## Global Constraints
 
-- 引擎包精确固定 `@modelcontextprotocol/server-memory@0.6.3`，不得使用 dist-tag。
+- 引擎包精确固定 `@modelcontextprotocol/server-memory@2026.7.4`，不得使用 dist-tag。
 - 新 capability 名为 `managedAssets:write`，仅加入 `desktop-renderer` 默认集，其它 client-kind 一律不加。
 - 禁止向第三方配置写入任何非 schema 字段（无 `pierManaged` 标记），归属判定只用 ownership ledger fingerprint。
 - 单文件 ≤500 行（`pnpm check:file-size` 门禁）；目录密度门禁 `pnpm check:dir-density`。
@@ -375,7 +375,7 @@ git commit -m "feat(memory): project identity keyed by git common dir"
 - Produces:
   ```ts
   export const SERVER_KEY = "pier-memory";
-  export const ENGINE_PACKAGE = "@modelcontextprotocol/server-memory@0.6.3";
+  export const ENGINE_PACKAGE = "@modelcontextprotocol/server-memory@2026.7.4";
   export function buildServerEntry(storePath: string): Record<string, unknown>;          // 按 format 分形
   export function buildServerEntryFor(format: MemoryConfigFormat, storePath: string): unknown;
   export type PlanOk = { ok: true; next: string; fingerprint: string };
@@ -453,7 +453,7 @@ describe("opencode-json upsert", () => {
       mcp: {
         "pier-memory": {
           type: "local",
-          command: ["npx", "-y", "@modelcontextprotocol/server-memory@0.6.3"],
+          command: ["npx", "-y", "@modelcontextprotocol/server-memory@2026.7.4"],
           environment: { MEMORY_FILE_PATH: STORE },
         },
       },
@@ -504,7 +504,7 @@ import { createHash } from "node:crypto";
 import { parse as parseToml } from "smol-toml";
 
 export const SERVER_KEY = "pier-memory";
-export const ENGINE_PACKAGE = "@modelcontextprotocol/server-memory@0.6.3";
+export const ENGINE_PACKAGE = "@modelcontextprotocol/server-memory@2026.7.4";
 const BEGIN = "# pier-managed:pier-memory begin";
 const END = "# pier-managed:pier-memory end";
 
@@ -865,7 +865,7 @@ export class LedgerStore {
       return {
         projectIdentity: { canonicalRoot: this.#canonicalRoot },
         desiredState: "disabled",
-        enginePackage: "@modelcontextprotocol/server-memory@0.6.3",
+        enginePackage: "@modelcontextprotocol/server-memory@2026.7.4",
         targets: {},
         rulesSection: { inserted: false, fingerprint: "", agentsMdExistedBefore: true },
         claudeReference: { present: false, insertedByPier: false },
