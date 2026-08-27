@@ -20,7 +20,9 @@ import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import {
   clearPendingAgentResume,
   mergePendingResumeIntoAgent,
+  seedDiskPendingResume,
 } from "./terminal-session-agent-resume.ts";
+import { withHealedHostTeardownSession } from "./terminal-session-heal.ts";
 import {
   type TerminalPanelSession,
   terminalAgentPanelMetadataSchema,
@@ -40,10 +42,12 @@ export {
   updateTerminalPanelAgentResume,
 } from "./terminal-session-agent-resume.ts";
 export {
+  type DetachAgentsOptions,
   detachAgentsForWindow,
   detachAgentsForWindowSync,
 } from "./terminal-session-detach-agents.ts";
 export { ensureTerminalPanelSession } from "./terminal-session-ensure.ts";
+export { recordTerminalPanelAgentSpawnGeneration } from "./terminal-session-heal.ts";
 export {
   migrateLegacyAgentSuccessTabs,
   reconcileOrphanedRunningTasks,
@@ -51,6 +55,7 @@ export {
 export { retainTerminalPanelSessions } from "./terminal-session-retain-panels.ts";
 export type { TerminalPanelSession } from "./terminal-session-state-schemas.ts";
 export {
+  listRunningAgentPanelIds,
   peekTerminalPanelAgent,
   peekTerminalPanelContext,
 } from "./terminal-session-store.ts";
@@ -69,16 +74,17 @@ export async function readTerminalPanelSession(
   if (!panel) {
     return null;
   }
+  const healed = withHealedHostTeardownSession(panel);
   // Historical agentExitTabPatch wrote success on clean exit — strip on read.
-  const tab = stripLegacyAgentSuccessTab(panel.tab, panel.agent);
-  if (tab === panel.tab) {
-    return panel;
+  const tab = stripLegacyAgentSuccessTab(healed.tab, healed.agent);
+  if (tab === healed.tab) {
+    return healed;
   }
   if (tab === undefined) {
-    const { tab: _drop, ...rest } = panel;
+    const { tab: _drop, ...rest } = healed;
     return rest;
   }
-  return { ...panel, tab };
+  return { ...healed, tab };
 }
 
 function isRestorableTitle(title: string): boolean {
@@ -215,15 +221,19 @@ export async function updateTerminalPanelAgent(
   s.mutate((state) => {
     const windowState = state.windows[windowId] ?? emptyWindowSession();
     state.windows[windowId] = windowState;
-    const current = windowState.panels[panelId] ?? {};
-    // Apply pending in the same mutate as the agent write (no TOCTOU race).
+    const current: Partial<TerminalPanelSession> =
+      windowState.panels[panelId] ?? {};
+    if (current.pendingResume) {
+      seedDiskPendingResume(windowId, panelId, current.pendingResume);
+    }
     const nextAgent = mergePendingResumeIntoAgent(
       parsed.data,
       windowId,
       panelId
     );
+    const { pendingResume: _pending, ...rest } = current;
     windowState.panels[panelId] = {
-      ...current,
+      ...rest,
       agent: nextAgent,
       updatedAt: new Date().toISOString(),
     };
@@ -256,6 +266,12 @@ export async function patchTerminalPanelAgentStatus(
       patch.status === "exited" &&
       (patch.exitCode !== undefined || patch.finishedAt !== undefined);
     if (!(current.agent.status === "running" || canPatchExited)) {
+      return state;
+    }
+    if (
+      patch.status === "exited" &&
+      current.agent.restore?.cause === "host-teardown"
+    ) {
       return state;
     }
     const exitCode = patch.exitCode ?? current.agent.exitCode;

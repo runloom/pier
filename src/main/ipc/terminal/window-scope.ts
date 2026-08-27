@@ -13,6 +13,24 @@ export function windowFromWebContents(
   return findAppWindowByWebContents(webContents);
 }
 
+const electronIdToRecordId = new Map<string, string>();
+
+export function rememberElectronWindowRecordId(
+  electronWindowId: string,
+  recordId: string
+): void {
+  if (electronWindowId.length === 0 || recordId.length === 0) {
+    return;
+  }
+  electronIdToRecordId.set(electronWindowId, recordId);
+}
+
+export function rememberedRecordIdForElectronWindowId(
+  electronWindowId: string
+): string | undefined {
+  return electronIdToRecordId.get(electronWindowId);
+}
+
 /**
  * 窗口 → 终端 session 持久化作用域 = 窗口 record UUID（跨重启稳定）。
  *
@@ -27,12 +45,14 @@ export function windowRecordIdFor(win: AppWindow): string {
   if (context === null) {
     throw new Error("window not registered");
   }
+  rememberElectronWindowRecordId(String(win.id), context.recordId);
   return context.recordId;
 }
 
 /**
  * FA / hook 侧 `PIER_WINDOW_ID`（Electron `BrowserWindow.id` 数字串）→ session
- * 持久化 record UUID。窗口已毁或不存在时返回 null。
+ * 持久化 record UUID。活窗走注册表；已毁或不存在时回落到进程内
+ * electronId → recordId 映射，避免拆窗后迟到 hook 丢掉 session id。
  */
 export function windowRecordIdForElectronWindowId(
   electronWindowId: string | number
@@ -45,14 +65,14 @@ export function windowRecordIdForElectronWindowId(
     return null;
   }
   const win = findAppWindowByElectronId(id);
-  if (!win || win.isDestroyed()) {
-    return null;
+  if (win && !win.isDestroyed()) {
+    try {
+      return windowRecordIdFor(win);
+    } catch {
+      // fall through to the durable map
+    }
   }
-  try {
-    return windowRecordIdFor(win);
-  } catch {
-    return null;
-  }
+  return rememberedRecordIdForElectronWindowId(String(id)) ?? null;
 }
 
 /** 调试日志用稳定窗口标识（运行时 id，如 "main"）。未注册时抛异常。 */

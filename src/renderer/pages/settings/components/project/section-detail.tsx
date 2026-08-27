@@ -4,8 +4,17 @@ import { Tabs, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
 import type { LocalEnvironmentProject } from "@shared/contracts/environment.ts";
 import { ArrowLeft } from "lucide-react";
 import type { RefObject } from "react";
+import { useSyncExternalStore } from "react";
 import type { useT } from "@/i18n/use-t.ts";
-import type { ProjectsSettingsTab } from "@/pages/settings/data/projects-settings.ts";
+import {
+  getPluginProjectSettingsRegistrations,
+  getPluginProjectSettingsRevision,
+  subscribePluginProjectSettingsRegistry,
+} from "@/lib/plugins/project-settings-registry.ts";
+import {
+  isHostProjectsTab,
+  type ProjectsSettingsTab,
+} from "@/pages/settings/data/projects-settings.ts";
 import {
   EnvironmentEditor,
   type EnvironmentEditorHandle,
@@ -49,9 +58,20 @@ export function ProjectsSectionDetail({
   triggerEnvSave: () => void;
 }) {
   const isPierHome = focused.kind === "pier-home";
-  const activeTab = isTabAllowedForProject(projectsTab, isPierHome)
-    ? projectsTab
-    : defaultTabFor(isPierHome);
+  useSyncExternalStore(
+    subscribePluginProjectSettingsRegistry,
+    getPluginProjectSettingsRevision,
+    () => 0
+  );
+  const pluginTabs = getPluginProjectSettingsRegistrations().filter((item) =>
+    item.visible ? item.visible({ isPierHome }) : !isPierHome
+  );
+  const tabAllowed =
+    (isHostProjectsTab(projectsTab) &&
+      isTabAllowedForProject(projectsTab, isPierHome)) ||
+    pluginTabs.some((item) => item.id === projectsTab);
+  const activeTab = tabAllowed ? projectsTab : defaultTabFor(isPierHome);
+  const activePluginTab = pluginTabs.find((item) => item.id === activeTab);
   const detailKey = `${focused.projectRootPath}:${focused.kind}`;
 
   return (
@@ -113,6 +133,12 @@ export function ProjectsSectionDetail({
               <TabsTrigger value="mcp">
                 {t("settings.projects.tabMcp")}
               </TabsTrigger>
+              {/* 插件域 tab 排在「常规」前:常规含危险区(移除项目),按惯例收尾。 */}
+              {pluginTabs.map((item) => (
+                <TabsTrigger key={item.id} value={item.id}>
+                  {item.title()}
+                </TabsTrigger>
+              ))}
               {isPierHome ? null : (
                 <TabsTrigger value="general">
                   {t("settings.projects.tabGeneral")}
@@ -167,6 +193,12 @@ export function ProjectsSectionDetail({
               projectRootPath={focused.projectRootPath}
             />
           ) : null}
+          {activePluginTab
+            ? activePluginTab.render({
+                isPierHome,
+                projectRootPath: focused.projectRootPath,
+              })
+            : null}
         </div>
       </Tabs>
     </div>

@@ -233,6 +233,7 @@ function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 		agent: "omp",
 		event,
 		nativeEvent,
+		...pierSpawnGenerationFromEnv(),
 		...(sessionId ? { sessionId } : {}),
 		...(toolUseId ? { toolUseId } : {}),
 		...(toolName ? { toolName } : {}),

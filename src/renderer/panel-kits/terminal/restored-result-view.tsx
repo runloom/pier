@@ -118,11 +118,13 @@ export function RestoredAgentResultView({
   agent,
   className,
   onContextMenu,
+  onNewSession,
   onRestart,
 }: {
   agent: TerminalAgentPanelMetadata;
   className: string;
   onContextMenu?: MouseEventHandler<HTMLDivElement>;
+  onNewSession?: () => void | Promise<void>;
   onRestart?: () => void | Promise<void>;
 }) {
   const entry = getAgentCatalogEntry(agent.agentId);
@@ -161,30 +163,54 @@ export function RestoredAgentResultView({
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent className="gap-5">
-          {onRestart ? (
-            <Button
-              aria-busy={restarting || undefined}
-              data-testid="terminal-agent-restart"
-              disabled={restarting}
-              onClick={() => {
-                if (restarting) {
-                  return;
-                }
-                setRestarting(true);
-                Promise.resolve(onRestart()).finally(() => {
-                  setRestarting(false);
-                });
-              }}
-              size="sm"
-              type="button"
-            >
-              <RefreshCw
-                aria-hidden
-                className={cn(restarting && "animate-spin")}
-                data-icon="inline-start"
-              />
-              {i18next.t("terminal.agentSession.restart")}
-            </Button>
+          {onRestart || onNewSession ? (
+            <div className="flex w-full max-w-sm justify-end gap-2">
+              {onNewSession ? (
+                <Button
+                  data-testid="terminal-agent-new-session"
+                  disabled={restarting}
+                  onClick={() => {
+                    if (restarting) {
+                      return;
+                    }
+                    setRestarting(true);
+                    Promise.resolve(onNewSession()).finally(() => {
+                      setRestarting(false);
+                    });
+                  }}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  {i18next.t("terminal.agentSession.newSession")}
+                </Button>
+              ) : null}
+              {onRestart ? (
+                <Button
+                  aria-busy={restarting || undefined}
+                  data-testid="terminal-agent-restart"
+                  disabled={restarting}
+                  onClick={() => {
+                    if (restarting) {
+                      return;
+                    }
+                    setRestarting(true);
+                    Promise.resolve(onRestart()).finally(() => {
+                      setRestarting(false);
+                    });
+                  }}
+                  size="sm"
+                  type="button"
+                >
+                  <RefreshCw
+                    aria-hidden
+                    className={cn(restarting && "animate-spin")}
+                    data-icon="inline-start"
+                  />
+                  {i18next.t("terminal.agentSession.restart")}
+                </Button>
+              ) : null}
+            </div>
           ) : null}
           <Card className="w-full max-w-sm text-left shadow-none" size="sm">
             <CardHeader className="pb-0">

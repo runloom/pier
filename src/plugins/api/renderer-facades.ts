@@ -1,3 +1,10 @@
+import type { AssetRootRef } from "@shared/contracts/agent/assets.ts";
+import type {
+  MemoryEnableResult,
+  MemoryListResult,
+  MemoryReport,
+  MemoryStatusSnapshot,
+} from "@shared/contracts/agent/memory.ts";
 import type {
   CommentProjectSnapshot,
   CommentsCreateThreadRequest,
@@ -386,4 +393,18 @@ export interface RendererPluginCommentsFacade {
     worktreeKey: string,
     listener: (snapshot: CommentProjectSnapshot) => void
   ): () => void;
+}
+
+export interface RendererPluginProjectMemoryFacade {
+  clearStore(root: AssetRootRef): Promise<void>;
+  deleteObservation(
+    root: AssetRootRef,
+    entityName: string,
+    index: number,
+    observation: string
+  ): Promise<void>;
+  disable(root: AssetRootRef): Promise<MemoryReport>;
+  enable(root: AssetRootRef): Promise<MemoryEnableResult>;
+  list(root: AssetRootRef): Promise<MemoryListResult>;
+  status(root: AssetRootRef): Promise<MemoryStatusSnapshot>;
 }

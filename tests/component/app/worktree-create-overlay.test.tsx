@@ -401,6 +401,17 @@ function createMockContext(): RendererPluginContext {
       register: unimplemented("panels.register"),
       registerCloseGuard: unimplemented("panels.registerCloseGuard"),
     },
+    projectMemory: {
+      clearStore: unimplemented("projectMemory.clearStore"),
+      deleteObservation: unimplemented("projectMemory.deleteObservation"),
+      disable: unimplemented("projectMemory.disable"),
+      enable: unimplemented("projectMemory.enable"),
+      list: unimplemented("projectMemory.list"),
+      status: unimplemented("projectMemory.status"),
+    },
+    projectSettings: {
+      register: unimplemented("projectSettings.register"),
+    },
     terminal: {
       activePanelId: unimplemented("terminal.activePanelId"),
       getPanelContext: unimplemented("terminal.getPanelContext"),
@@ -411,6 +422,9 @@ function createMockContext(): RendererPluginContext {
       open: unimplemented("terminals.open"),
     },
     settings: {
+      close: () => {
+        useSettingsDialogStore.getState().close();
+      },
       openSection: (section) =>
         useSettingsDialogStore.getState().openSection(section),
     },

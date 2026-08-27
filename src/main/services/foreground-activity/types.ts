@@ -43,6 +43,11 @@ export interface ForegroundActivityAggregator {
   /** 清除已切换主会话留下的旧标题。 */
   clearAgentSessionTitle(windowId: string, panelId: string): void;
   dispose(): void;
+  /**
+   * Raw hook or agent-launch layer, including the 250ms hidden launch window.
+   * Used by host-teardown skip so a just-launched agent is not treated as ended.
+   */
+  hasAgentPresence(panelId: string, windowId: string): boolean;
   /** 用持久化真值水合标题（reload / launch / 写入冲突回读）。 */
   hydrateAgentSessionTitle(
     windowId: string,

@@ -55,6 +55,7 @@ import {
   createMediaPreviewApi,
   type PierMediaPreviewApi,
 } from "./media-preview-api.ts";
+import { memoryApi, type PierMemoryAPI } from "./memory/api.ts";
 import {
   notificationCenterApi,
   type PierNotificationCenterAPI,
@@ -185,6 +186,7 @@ export interface PierWindowAPI {
   lsp: PierLspAPI;
   managedPlugins: ManagedPluginsPreloadApi;
   mediaPreviews: PierMediaPreviewApi;
+  memory: PierMemoryAPI;
   menu: PierMenuAPI;
   notificationCenter: PierNotificationCenterAPI;
   notifications: PierNotificationsAPI;
@@ -427,6 +429,7 @@ const api: PierWindowAPI = {
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
   liveModules: liveModulesApi,
   menu: menuApi,
+  memory: memoryApi,
   clipboard: clipboardApi,
   notifications: notificationsApi,
   notificationCenter: notificationCenterApi,

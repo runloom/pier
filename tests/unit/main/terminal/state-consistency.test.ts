@@ -84,6 +84,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       updateTerminalPanelAgentResume: vi.fn(async () => true),
       updateTerminalPanelContext: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
+      recordTerminalPanelAgentSpawnGeneration: vi.fn(async () => undefined),
     }));
     vi.doMock("@main/state/panel-context-state.ts", () => ({
       recordRecentPanelContext: vi.fn(async () => undefined),

@@ -1,4 +1,7 @@
-import type { ProjectsSettingsTab } from "@/pages/settings/data/projects-settings.ts";
+import {
+  isHostProjectsTab,
+  type ProjectsSettingsTab,
+} from "@/pages/settings/data/projects-settings.ts";
 import { leavePierHomeSkillsTransientState } from "../pier-home-skills-panel.tsx";
 import {
   leaveSkillsTransientState,
@@ -23,9 +26,15 @@ export function isTabAllowedForProject(
   tab: ProjectsSettingsTab,
   isPierHome: boolean
 ): boolean {
-  if (tab === "rules" || tab === "materials") return false;
-  if (!isPierHome) return true;
-  // Home: skills library + MCP. No environment / general / materials.
+  if (!isHostProjectsTab(tab)) {
+    return !isPierHome;
+  }
+  if (tab === "rules" || tab === "materials") {
+    return false;
+  }
+  if (!isPierHome) {
+    return true;
+  }
   return tab === "skills" || tab === "mcp";
 }
 

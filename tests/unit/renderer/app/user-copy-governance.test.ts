@@ -11,6 +11,7 @@ const LOCALE_ROOTS = [
   join(ROOT, "src", "renderer", "i18n", "locales", "ko"),
   join(ROOT, "src", "plugins", "builtin", "files", "locales"),
   join(ROOT, "src", "plugins", "builtin", "git", "locales"),
+  join(ROOT, "src", "plugins", "builtin", "memory", "locales"),
 ] as const;
 
 /** 中文用户串禁用实现词 / 中英混用。只扫字符串值，不扫 key。 */

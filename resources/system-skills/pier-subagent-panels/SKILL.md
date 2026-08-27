@@ -7,8 +7,9 @@ description: >-
   Pier panels). For all other agents (omp, codex, opencode without omo,
   gemini, etc.), use `pier agents start` to delegate work into observable
   Pier panels.
-compatibility: Requires running inside a Pier agent panel (PIER_PANEL_ID /
-PIER_WINDOW_ID must be set by the host).
+compatibility: >-
+  Requires running inside a Pier agent panel (PIER_PANEL_ID /
+  PIER_WINDOW_ID must be set by the host).
 disable-model-invocation: true
 ---
 

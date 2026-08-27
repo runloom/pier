@@ -1833,6 +1833,12 @@ describe("TerminalPanel lifecycle", () => {
     const result = await screen.findByTestId("terminal-agent-result");
     expect(result).toHaveTextContent("Ended normally");
     expect(result).not.toHaveTextContent("Duration");
+    expect(
+      screen.queryByRole("button", { name: "New session" })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Restart agent" })
+    ).toBeInTheDocument();
   });
 
   it("restarts an exited agent from the saved launch via relaunch store", async () => {
@@ -1845,6 +1851,11 @@ describe("TerminalPanel lifecycle", () => {
           agentId: "claude",
           command: "claude --dangerously-skip-permissions",
           cwd: "/Users/dev/ABC/pier",
+        },
+        resume: {
+          capturedAt: 1_772_000_000_500,
+          sessionId: "sess-claude",
+          source: "hook",
         },
         startedAt: 1_772_000_000_000,
         status: "exited",
@@ -1873,6 +1884,7 @@ describe("TerminalPanel lifecycle", () => {
         agentId: "claude",
         command: "claude --dangerously-skip-permissions",
         cwd: "/Users/dev/ABC/pier",
+        resumeSessionId: "sess-claude",
       });
     });
     await waitFor(() => {
@@ -1891,6 +1903,56 @@ describe("TerminalPanel lifecycle", () => {
         })
       );
     });
+  });
+
+  it("starts a new session without passing resumeSessionId", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      agent: {
+        agentId: "claude",
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        launch: {
+          agentId: "claude",
+          command: "claude --dangerously-skip-permissions",
+          cwd: "/Users/dev/ABC/pier",
+        },
+        resume: {
+          capturedAt: 1_772_000_000_500,
+          sessionId: "sess-claude",
+          source: "hook",
+        },
+        startedAt: 1_772_000_000_000,
+        status: "exited",
+      },
+      context,
+      tab: {
+        icon: { id: "agent:claude" },
+        title: "Claude",
+      },
+      title: "Claude",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } as TerminalPanelSessionSnapshot);
+    vi.mocked(window.pier.terminal.close).mockResolvedValue(undefined);
+
+    render(<TerminalPanel {...createPanelProps({ params: { context } })} />);
+
+    const newSessionButton = await screen.findByRole("button", {
+      name: "New session",
+    });
+    await act(async () => {
+      fireEvent.click(newSessionButton);
+    });
+
+    await waitFor(() => {
+      expect(window.pier.agents.prepareLaunchFromSpec).toHaveBeenCalledWith({
+        agentId: "claude",
+        command: "claude --dangerously-skip-permissions",
+        cwd: "/Users/dev/ABC/pier",
+      });
+    });
+    expect(window.pier.agents.prepareLaunchFromSpec).not.toHaveBeenCalledWith(
+      expect.objectContaining({ resumeSessionId: expect.anything() })
+    );
   });
 
   it("creates a native terminal for running agent session without resume id", async () => {

@@ -196,6 +196,15 @@ case "$1" in
         ;;
     esac
     [ -n "$_prompt_snippet" ] && _json="\${_json},\\"promptSnippet\\":\\"\${_prompt_snippet}\\""
+    _spawn_gen=$PIER_AGENT_SPAWN_GENERATION
+    case "$_spawn_gen" in
+      ''|*[!0-9]*) ;;
+      *)
+        if [ "$_spawn_gen" -ge 1 ] 2>/dev/null; then
+          _json="\${_json},\\"spawnGeneration\\":\${_spawn_gen}"
+        fi
+        ;;
+    esac
     printf '%s}\\n' "$_json" >> "$PIER_AGENT_EVENT_LOG"
     ;;
 esac

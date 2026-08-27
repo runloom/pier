@@ -772,7 +772,7 @@ describe("terminal session state", () => {
         sessionId: "same-id",
         source: "hook",
       })
-    ).resolves.toBe("applied");
+    ).resolves.toBe("unchanged");
     await expect(
       readTerminalPanelSession("main", "terminal-1")
     ).resolves.toMatchObject({

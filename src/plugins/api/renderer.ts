@@ -29,12 +29,23 @@ import type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
+  RendererPluginProjectMemoryFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
 import type {
   PluginGroupContentClaim,
   RendererPluginPanelsFacade,
 } from "./renderer-panels.ts";
+
+export interface RendererProjectSettingsRegistration {
+  id: string;
+  render: (props: {
+    isPierHome: boolean;
+    projectRootPath: string;
+  }) => ReactNode;
+  title: () => string;
+  visible?: (props: { isPierHome: boolean }) => boolean;
+}
 
 export type { PanelTransferRegistration } from "./panel-transfer-registration.ts";
 export type {
@@ -55,6 +66,7 @@ export type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
+  RendererPluginProjectMemoryFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
 export type {
@@ -451,7 +463,13 @@ export interface RendererPluginContext {
     }): Promise<{ shown: boolean }>;
   };
   panels: RendererPluginPanelsFacade;
+  projectMemory: RendererPluginProjectMemoryFacade;
+  projectSettings: {
+    register(registration: RendererProjectSettingsRegistration): () => void;
+  };
   settings: {
+    /** 关闭设置弹窗(经宿主 leave guard);用于从设置深链进工作区的动作。 */
+    close(): void;
     openSection(section: "environment"): void;
   };
   terminal: RendererPluginTerminalContext;

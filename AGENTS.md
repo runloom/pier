@@ -419,6 +419,15 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 命令授权走 `CommandMetadata.allowedClientKinds`：`plugin.catalog.list` 允许 `desktop-renderer` + `cli-local`；其它 managed 命令 + `app.relaunch` 只允许 `desktop-renderer`
 - 插件 RPC 走独立 IPC 通道（`PIER.PLUGIN_RPC_INVOKE`），不进 `PierCommand`、不经 CLI local-control
 
+### 项目设置贡献点 `projectSettings`
+
+插件可经 manifest `projectSettings` 声明 + renderer 运行时 `context.projectSettings.register` 注册「设置 → 项目」详情 tab：
+
+- 纪律链与 `panels` / `settingsPages` 一致：`assertDeclaredContribution("projectSettings")` → `src/renderer/lib/plugins/project-settings-registry.ts` → `ProjectsSectionDetail` 渲染
+- 宿主按 `visible({ isPierHome })` 过滤；省略 `visible` 时默认 `!isPierHome`
+- 插件不自列项目、不挂侧栏 `settingsPages` 充当项目偏好；`projectRootPath` 由宿主 focused 项目传入
+- contribution `id` 必须带插件 id 前缀（`pluginManifestSchema` superRefine）
+
 ### 插件数据投影与 Canvas 动作
 
 宿主给通道和积木；`.canvas.tsx` 是唯一组装层。Canvas **不承载领域组件**（无 `AccountsCard` / `UsageMeter` / `Kpi` / 账号成品模板），也不增加 `canvasWidgets` 或复活 `workbenchWidgets`。

@@ -210,16 +210,12 @@ export function PluginRow({
         ) : null}
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-            {countItems.length > 0 ? (
-              countItems.map(({ Icon, id, label }) => (
-                <span className="inline-flex items-center gap-1" key={id}>
-                  <Icon aria-hidden className="size-3.5" />
-                  {label}
-                </span>
-              ))
-            ) : (
-              <span>{t("settings.plugins.contributionSummary.none")}</span>
-            )}
+            {countItems.map(({ Icon, id, label }) => (
+              <span className="inline-flex items-center gap-1" key={id}>
+                <Icon aria-hidden className="size-3.5" />
+                {label}
+              </span>
+            ))}
             {hasSettingsSection ? (
               <Button
                 aria-label={t("settings.plugins.openSettingsPlugin", {

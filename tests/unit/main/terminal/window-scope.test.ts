@@ -1,6 +1,7 @@
 import {
   stableWindowIdFor,
   windowRecordIdFor,
+  windowRecordIdForElectronWindowId,
 } from "@main/ipc/terminal/window-scope.ts";
 import type { AppWindow } from "@main/windows/app-window.ts";
 import {
@@ -12,7 +13,8 @@ import { describe, expect, it, vi } from "vitest";
 
 const RECORD_UUID = "3f11de0e-6bd9-4281-8c3c-c178cd81f1a0";
 
-function fakeWin(id: number): AppWindow {
+function fakeWin(id: number): AppWindow & { markDestroyed: () => void } {
+  let destroyed = false;
   return {
     id,
     appView: null,
@@ -21,9 +23,12 @@ function fakeWin(id: number): AppWindow {
     focus: vi.fn(),
     getNativeWindowHandle: () => Buffer.from(`handle-${id}`),
     host: {} as AppWindow["host"],
-    isDestroyed: () => false,
+    isDestroyed: () => destroyed,
     isFocused: () => true,
     isMinimized: () => false,
+    markDestroyed: () => {
+      destroyed = true;
+    },
     moveTop: vi.fn(),
     restore: vi.fn(),
     setBackgroundColor: vi.fn(),
@@ -73,5 +78,33 @@ describe("terminal window scope", () => {
     const win = fakeWin(8);
     expect(() => windowRecordIdFor(win)).toThrow("window not registered");
     expect(() => stableWindowIdFor(win)).toThrow("window not registered");
+  });
+
+  it("resolves the record id after the BrowserWindow is forgotten", () => {
+    const win = fakeWin(7);
+    rememberAppWindow(win, {
+      electronWindowId: "7",
+      mode: "restore",
+      recordId: RECORD_UUID,
+      windowId: "main",
+    });
+    expect(windowRecordIdFor(win)).toBe(RECORD_UUID);
+    forgetAppWindow(win);
+    expect(windowRecordIdForElectronWindowId("7")).toBe(RECORD_UUID);
+    expect(windowRecordIdForElectronWindowId(7)).toBe(RECORD_UUID);
+  });
+
+  it("falls back to the remembered record id when the window is destroyed", () => {
+    const win = fakeWin(9);
+    rememberAppWindow(win, {
+      electronWindowId: "9",
+      mode: "restore",
+      recordId: RECORD_UUID,
+      windowId: "main",
+    });
+    expect(windowRecordIdFor(win)).toBe(RECORD_UUID);
+    win.markDestroyed();
+    expect(windowRecordIdForElectronWindowId("9")).toBe(RECORD_UUID);
+    forgetAppWindow(win);
   });
 });

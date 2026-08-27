@@ -71,6 +71,8 @@ interface FinishArgs {
   windowId?: string | undefined;
 }
 
+export type TerminalPanelSurface = "agent" | "shell" | "task";
+
 function panelKey(panelId: string, windowId?: string | undefined): string {
   return windowId ? `${windowId}\0${panelId}` : panelId;
 }
@@ -111,12 +113,14 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
   const inFlightPanels = new Set<string>();
   const ignoredNativeUserClosePanels = new Set<string>();
   const currentLifecycleIds = new Map<string, string>();
+  const currentSurfaces = new Map<string, TerminalPanelSurface>();
 
   const clearPanelLifecycleState = (
     panelId: string,
     windowId?: string | undefined
   ): void => {
     const panel = panelKey(panelId, windowId);
+    currentSurfaces.delete(panel);
     const prefix = `${panel}\0`;
     for (const collection of [
       exitCodeHints,
@@ -251,14 +255,22 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
       return completed;
     },
     isCurrentLifecycle,
+    isTaskSurface(panelId: string, windowId?: string | undefined): boolean {
+      return currentSurfaces.get(panelKey(panelId, windowId)) === "task";
+    },
     resetPanel(
       panelId: string,
       lifecycleId: string,
-      windowId?: string | undefined
+      windowId?: string | undefined,
+      surface?: TerminalPanelSurface | undefined
     ): void {
       const panel = panelKey(panelId, windowId);
       clearPanelLifecycleState(panelId, windowId);
       currentLifecycleIds.set(panel, lifecycleId);
+      currentSurfaces.set(
+        panel,
+        surface ?? (lifecycleId.length > 0 ? "task" : "shell")
+      );
     },
     releasePanel(panelId: string, windowId?: string | undefined): void {
       clearPanelLifecycleState(panelId, windowId);
@@ -281,11 +293,15 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
       const targetKey = panelKey(panelId, targetWindowId);
       const lifecycleId =
         input.lifecycleId ?? currentLifecycleIds.get(sourceKey) ?? "";
+      const surface = currentSurfaces.get(sourceKey);
       // Move lifecycle bookkeeping to the target owner window.
       clearPanelLifecycleState(panelId, sourceWindowId);
       currentLifecycleIds.delete(sourceKey);
       clearPanelLifecycleState(panelId, targetWindowId);
       currentLifecycleIds.set(targetKey, lifecycleId);
+      if (surface) {
+        currentSurfaces.set(targetKey, surface);
+      }
     },
     /**
      * relaunch close 前置臂旗标, 由下一个 processAlive=true 的 native

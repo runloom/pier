@@ -1,12 +1,5 @@
 import { z } from "zod";
-import {
-  agentMcpCatalogRequestSchema,
-  agentMcpPathActionRequestSchema,
-  rulesEnsureRequestSchema,
-  rulesReadRequestSchema,
-  rulesSnapshotRequestSchema,
-  rulesWriteRequestSchema,
-} from "./agent/assets.ts";
+import { assetCommandSchemas } from "./agent/asset-commands.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
   appCliInstallRequestSchema,
@@ -411,27 +404,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   liveModulesCanvasTrustRequestSchema.extend({
     type: z.literal("liveModules.revokeTrust"),
   }),
-  rulesSnapshotRequestSchema.extend({
-    type: z.literal("rules.snapshot"),
-  }),
-  rulesReadRequestSchema.extend({
-    type: z.literal("rules.read"),
-  }),
-  rulesWriteRequestSchema.extend({
-    type: z.literal("rules.write"),
-  }),
-  rulesEnsureRequestSchema.extend({
-    type: z.literal("rules.ensure"),
-  }),
-  agentMcpCatalogRequestSchema.extend({
-    type: z.literal("agentMcp.catalog"),
-  }),
-  agentMcpPathActionRequestSchema.extend({
-    type: z.literal("agentMcp.reveal"),
-  }),
-  agentMcpPathActionRequestSchema.extend({
-    type: z.literal("agentMcp.open"),
-  }),
+  ...assetCommandSchemas,
   // accounts.* commands removed: Codex accounts now live behind plugin RPC.
   // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)
   z.object({ type: z.literal("ai.status") }),
