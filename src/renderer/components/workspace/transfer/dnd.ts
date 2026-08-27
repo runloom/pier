@@ -173,8 +173,10 @@ export function mergeDragStartPanelParams(
 }
 
 function hasPanelTransferType(dataTransfer: DataTransfer): boolean {
-  const types = dataTransfer.types;
-  return types.includes(PANEL_TRANSFER_MIME) || types.includes("text/plain");
+  // Dragover cannot read payload. File-tree / OS text drags also stamp
+  // text/plain, so overlay accept is MIME-only. Drop still parses the
+  // text/plain prefix via readPanelTransferId.
+  return dataTransfer.types.includes(PANEL_TRANSFER_MIME);
 }
 
 export function createWorkspacePanelTransferHandlers(

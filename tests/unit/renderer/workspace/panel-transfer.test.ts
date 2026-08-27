@@ -621,6 +621,24 @@ describe("workspace panel transfer", () => {
       } as never);
       expect(acceptLocal).not.toHaveBeenCalled();
     });
+
+    it("does not accept file-tree text/plain dragover as a panel transfer", () => {
+      installPier();
+      const handlers = createWorkspacePanelTransferHandlers(() => null);
+      const dataTransfer = new FakeDataTransfer();
+      dataTransfer.setData("text/plain", "tools/i18n/LICENSE_ZH.txt");
+      const native = new FakeDragEvent("dragover", { dataTransfer });
+      const accept = vi.fn();
+      const preventSpy = vi.spyOn(native, "preventDefault");
+
+      handlers.onUnhandledDragOver({
+        accept,
+        nativeEvent: native as unknown as DragEvent,
+      } as never);
+
+      expect(accept).not.toHaveBeenCalled();
+      expect(preventSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe("renderer commands", () => {
