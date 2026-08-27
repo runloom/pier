@@ -14,6 +14,11 @@
  *
  * ## 粘贴确认
  * NSAlert 读同一 catalog（pasteConfirm*）。
+ * 生命周期对齐 Ghostty.app：`confirm_read_clipboard` 返回前先挂上
+ * in-flight `opaquePtr`，再在主线程赋 `ClipboardConfirmRequest`；present /
+ * complete 跳出回调。complete 一律 `confirmed=true`（取消交空串）；关
+ * surface 先 cancel pending，再 complete 仍未 adopt 的 in-flight；第二条
+ * 请求替换当前提示。`.aborted` 且 pending 未变视为取消。
  *
  * 不做 web banner。native **不**做 role 矩阵 / i18n 插值（进程退出）。
  */

@@ -464,6 +464,8 @@ final class TerminalSurfaceCoordinator {
         if let session = configuration.inMemorySession {
             session.clearSurface(ifMatches: surface?.rawValue)
         }
+        previousBridge?.cancelPendingClipboardConfirmation()
+        previousBridge?.completeInFlightClipboardConfirmIfNeeded()
         previousBridge?.rawSurface = nil
         let hadSurface = surface != nil
         surface?.setFocus(false)
