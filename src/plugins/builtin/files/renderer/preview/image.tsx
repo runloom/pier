@@ -1,48 +1,18 @@
-import { Button } from "@pier/ui/button.tsx";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from "@pier/ui/dropdown-menu.tsx";
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@pier/ui/empty.tsx";
-import { Skeleton } from "@pier/ui/skeleton.tsx";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@pier/ui/tooltip.tsx";
-import { cn } from "@pier/ui/utils.ts";
+  ImagePreviewCanvas,
+  type ImagePreviewCanvasLabels,
+} from "@pier/ui/image-preview/canvas.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { ChevronDown, ImageOff, ZoomIn, ZoomOut } from "lucide-react";
 import {
-  type KeyboardEvent,
   type SyntheticEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import type { FilesDocument } from "../document/types.ts";
 import type { FilesTranslate } from "../i18n.ts";
-
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 8;
-const ZOOM_STEP = 0.1;
-const PRESET_ZOOM_LEVELS = [0.25, 0.5, 1, 2, 4] as const;
-
-function clampZoom(value: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(1))));
-}
 
 export function FileImagePreview({
   context,
@@ -53,28 +23,28 @@ export function FileImagePreview({
   document: FilesDocument;
   t: FilesTranslate;
 }) {
-  const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const [zoom, setZoom] = useState<number | "fit">("fit");
   const activePreviewRef = useRef<{
     generation: number;
     src: string;
     ticket: string;
   } | null>(null);
   const requestGenerationRef = useRef(0);
-  const [renderGeneration, setRenderGeneration] = useState(0);
   const [src, setSrc] = useState("");
   const [loadState, setLoadState] = useState<"error" | "loading" | "ready">(
     "loading"
   );
   const source = document.source;
   const preview = document.preview;
+  const previewMime = preview?.mime;
+  const previewRevision = preview?.revision;
+  const diskPath = source.kind === "disk" ? source.path : null;
+  const diskRoot = source.kind === "disk" ? source.root : null;
   useEffect(() => {
     requestGenerationRef.current += 1;
     const requestGeneration = requestGenerationRef.current;
-    if (!(preview && source.kind === "disk")) {
+    if (!(previewMime && previewRevision && diskPath && diskRoot)) {
       const abandonedTicket = activePreviewRef.current?.ticket;
       activePreviewRef.current = null;
-      setFailedSrc(null);
       setSrc("");
       setLoadState("error");
       if (abandonedTicket) {
@@ -83,16 +53,15 @@ export function FileImagePreview({
       return;
     }
     setLoadState("loading");
-    setFailedSrc(null);
     let cancelled = false;
     const previousTicket = activePreviewRef.current?.ticket;
     context.filePreviews
       .issue(
         {
-          mime: preview.mime,
-          path: source.path,
-          revision: preview.revision,
-          root: source.root,
+          mime: previewMime,
+          path: diskPath,
+          revision: previewRevision,
+          root: diskRoot,
         },
         previousTicket
       )
@@ -126,8 +95,6 @@ export function FileImagePreview({
           src: result.url,
           ticket: result.ticket,
         };
-        setFailedSrc(null);
-        setRenderGeneration(requestGeneration);
         setSrc(result.url);
       })
       .catch(() => {
@@ -145,7 +112,7 @@ export function FileImagePreview({
     return () => {
       cancelled = true;
     };
-  }, [context, preview, source]);
+  }, [context, diskPath, diskRoot, previewMime, previewRevision]);
 
   useEffect(
     () => () => {
@@ -158,38 +125,13 @@ export function FileImagePreview({
     [context]
   );
 
-  const adjustZoom = useCallback((delta: number) => {
-    setZoom((current) => clampZoom((current === "fit" ? 1 : current) + delta));
-  }, []);
-  const toggleZoom = useCallback(() => {
-    setZoom((current) => (current === "fit" ? 1 : "fit"));
-  }, []);
-
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLElement>) => {
-      if (event.key === "+" || event.key === "=") {
-        event.preventDefault();
-        adjustZoom(ZOOM_STEP);
-      } else if (event.key === "-" || event.key === "_") {
-        event.preventDefault();
-        adjustZoom(-ZOOM_STEP);
-      } else if (event.key === "0") {
-        event.preventDefault();
-        setZoom(1);
-      }
-    },
-    [adjustZoom]
-  );
-
   const previewForImageEvent = useCallback((element: HTMLImageElement) => {
-    const eventGeneration = Number(element.dataset.previewGeneration);
     const eventUrl = element.getAttribute("src");
     const activePreview = activePreviewRef.current;
     if (
       !eventUrl ||
-      activePreview?.generation !== eventGeneration ||
-      activePreview.src !== eventUrl ||
-      requestGenerationRef.current !== eventGeneration
+      activePreview?.src !== eventUrl ||
+      requestGenerationRef.current !== activePreview.generation
     ) {
       return null;
     }
@@ -198,14 +140,13 @@ export function FileImagePreview({
 
   const handleImageError = useCallback(
     (event: SyntheticEvent<HTMLImageElement>) => {
-      const failedUrl = event.currentTarget.getAttribute("src");
       const activePreview = previewForImageEvent(event.currentTarget);
-      if (!(failedUrl && activePreview)) {
+      if (!activePreview) {
         return;
       }
       activePreviewRef.current = null;
       setLoadState("error");
-      setFailedSrc(failedUrl);
+      setSrc("");
       context.filePreviews.release(activePreview.ticket).catch(() => undefined);
     },
     [context, previewForImageEvent]
@@ -216,179 +157,43 @@ export function FileImagePreview({
       if (!previewForImageEvent(event.currentTarget)) {
         return;
       }
-      setFailedSrc(null);
       setLoadState("ready");
     },
     [previewForImageEvent]
   );
 
-  const loading = loadState === "loading";
-  const loadingLabel = t("filePanel.image.loading", "Loading image");
-  const loadingIndicator = loading ? (
-    <div
-      className="absolute inset-3 flex items-center justify-center"
-      role="status"
-    >
-      <span className="sr-only">{loadingLabel}</span>
-      <Skeleton className="h-2/3 w-2/3 max-w-2xl" />
-    </div>
-  ) : null;
-
-  if (preview && loading && !src) {
-    return (
-      <section
-        aria-busy="true"
-        aria-label={t("filePanel.image.viewerLabel", "Image preview")}
-        className="relative flex min-h-0 flex-1 items-center justify-center bg-muted/20 p-3"
-      >
-        {loadingIndicator}
-      </section>
-    );
-  }
-
-  if (!(preview && src) || loadState === "error" || failedSrc === src) {
-    return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <ImageOff />
-          </EmptyMedia>
-          <EmptyTitle>
-            {t("filePanel.image.loadFailed.title", "Unable to display image")}
-          </EmptyTitle>
-          <EmptyDescription>
-            {t(
-              "filePanel.image.loadFailed.description",
-              "The image could not be loaded or changed after it was opened."
-            )}
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
-  }
-
-  const zoomLabel =
-    zoom === "fit"
-      ? t("filePanel.image.fit", "Fit to window")
-      : `${Math.round(zoom * 100)}%`;
+  const labels = useMemo<ImagePreviewCanvasLabels>(
+    () => ({
+      actualSize: t("filePanel.image.actualSize", "Actual size"),
+      controlsLabel: t("filePanel.image.controlsLabel", "Image controls"),
+      fit: t("filePanel.image.fit", "Fit to window"),
+      loadFailedDescription: t(
+        "filePanel.image.loadFailed.description",
+        "The image could not be loaded or changed after it was opened."
+      ),
+      loadFailedTitle: t(
+        "filePanel.image.loadFailed.title",
+        "Unable to display image"
+      ),
+      loading: t("filePanel.image.loading", "Loading image"),
+      viewerLabel: t("filePanel.image.viewerLabel", "Image preview"),
+      zoomIn: t("filePanel.image.zoomIn", "Zoom in"),
+      zoomLevel: t("filePanel.image.zoomLevel", "Zoom level"),
+      zoomOut: t("filePanel.image.zoomOut", "Zoom out"),
+    }),
+    [t]
+  );
 
   return (
-    <div className="relative flex min-h-0 flex-1 bg-background">
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: the focusable image canvas exposes documented keyboard and double-click zoom controls */}
-      <section
-        aria-busy={loading}
-        aria-label={t("filePanel.image.viewerLabel", "Image preview")}
-        className="relative flex min-h-0 flex-1 items-center justify-center overflow-auto bg-muted/20 p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset"
-        onDoubleClick={toggleZoom}
-        onKeyDown={handleKeyDown}
-        // biome-ignore lint/a11y/noNoninteractiveTabindex: the image canvas accepts documented zoom shortcuts when focused
-        tabIndex={0}
-      >
-        {loadingIndicator}
-        {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: image load failures are scoped to the exact preview URL */}
-        <img
-          alt={document.name}
-          className={cn(
-            "object-contain",
-            loading && "opacity-0",
-            zoom === "fit" ? "max-h-full max-w-full" : "max-w-none"
-          )}
-          data-preview-generation={renderGeneration}
-          draggable={false}
-          height={1}
-          key={`${renderGeneration}:${src}`}
-          onError={handleImageError}
-          onLoad={handleImageLoad}
-          src={src}
-          style={{
-            height: "auto",
-            width: "auto",
-            ...(zoom === "fit" ? {} : { zoom }),
-          }}
-          width={1}
-        />
-      </section>
-      <TooltipProvider delayDuration={300}>
-        <div
-          aria-label={t("filePanel.image.controlsLabel", "Image controls")}
-          className="absolute right-3 bottom-3 z-10 flex items-center gap-1"
-          data-slot="file-image-controls"
-          hidden={loading}
-          role="toolbar"
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label={t("filePanel.image.zoomOut", "Zoom out")}
-                disabled={zoom !== "fit" && zoom <= MIN_ZOOM}
-                onClick={() => adjustZoom(-ZOOM_STEP)}
-                size="icon-sm"
-                type="button"
-                variant="secondary"
-              >
-                <ZoomOut data-icon />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {t("filePanel.image.zoomOut", "Zoom out")}
-            </TooltipContent>
-          </Tooltip>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label={`${t("filePanel.image.zoomLevel", "Zoom level")}: ${zoomLabel}`}
-                size="sm"
-                type="button"
-                variant="secondary"
-              >
-                <span className="min-w-10 font-mono tabular-nums">
-                  {zoomLabel}
-                </span>
-                <ChevronDown data-icon="inline-end" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-44" side="top">
-              <DropdownMenuRadioGroup
-                onValueChange={(value) =>
-                  setZoom(value === "fit" ? "fit" : Number(value))
-                }
-                value={zoom === "fit" ? "fit" : String(zoom)}
-              >
-                <DropdownMenuRadioItem value="fit">
-                  {t("filePanel.image.fit", "Fit to window")}
-                </DropdownMenuRadioItem>
-                {PRESET_ZOOM_LEVELS.map((level) => (
-                  <DropdownMenuRadioItem key={level} value={String(level)}>
-                    {level * 100}%
-                    {level === 1 ? (
-                      <DropdownMenuShortcut className="pr-6">
-                        {t("filePanel.image.actualSize", "Actual size")}
-                      </DropdownMenuShortcut>
-                    ) : null}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                aria-label={t("filePanel.image.zoomIn", "Zoom in")}
-                disabled={zoom !== "fit" && zoom >= MAX_ZOOM}
-                onClick={() => adjustZoom(ZOOM_STEP)}
-                size="icon-sm"
-                type="button"
-                variant="secondary"
-              >
-                <ZoomIn data-icon />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {t("filePanel.image.zoomIn", "Zoom in")}
-            </TooltipContent>
-          </Tooltip>
-        </div>
-      </TooltipProvider>
-    </div>
+    <ImagePreviewCanvas
+      alt={document.name}
+      className="min-h-0 w-full flex-1 bg-background"
+      labels={labels}
+      loading={loadState === "loading"}
+      onError={handleImageError}
+      onLoad={handleImageLoad}
+      src={src || null}
+      status={loadState}
+    />
   );
 }

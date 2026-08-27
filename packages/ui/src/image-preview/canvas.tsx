@@ -192,6 +192,7 @@ export function ImagePreviewCanvas({
           className={cn("m-auto max-w-none", showLoading && "opacity-0")}
           draggable={false}
           height={1}
+          key={src}
           onError={onError}
           onLoad={handleImageLoad}
           ref={imageRef}

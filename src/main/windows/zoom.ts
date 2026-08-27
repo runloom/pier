@@ -9,7 +9,15 @@ import type { WebContents } from "electron";
 type ZoomPreferences = Pick<ProjectPreferences, "windowZoomLevel">;
 
 export interface WindowZoomTarget {
-  webContents: Pick<WebContents, "isDestroyed" | "send" | "setZoomLevel">;
+  webContents: Pick<
+    WebContents,
+    "isDestroyed" | "send" | "setVisualZoomLevelLimits" | "setZoomLevel"
+  > & {
+    on(
+      event: "zoom-changed",
+      listener: (event: Event, zoomDirection: "in" | "out") => void
+    ): unknown;
+  };
 }
 
 export interface WindowZoomController {
@@ -35,11 +43,34 @@ export function createWindowZoomController({
   readPreferences,
   updatePreferences,
 }: CreateWindowZoomControllerArgs): WindowZoomController {
+  let lastAppliedLevel = DEFAULT_WINDOW_ZOOM_LEVEL;
+  const chromiumZoomGuarded = new WeakSet<object>();
+
+  const guardChromiumPageZoom = (win: WindowZoomTarget) => {
+    const webContents = win.webContents;
+    if (webContents.isDestroyed()) {
+      return;
+    }
+    webContents.setVisualZoomLevelLimits(1, 1).catch(() => undefined);
+    if (chromiumZoomGuarded.has(webContents)) {
+      return;
+    }
+    chromiumZoomGuarded.add(webContents);
+    webContents.on("zoom-changed", () => {
+      if (webContents.isDestroyed()) {
+        return;
+      }
+      applyZoomLevelToWindow(win, lastAppliedLevel);
+    });
+  };
+
   const applyZoomLevelToWindow = (win: WindowZoomTarget, rawLevel: number) => {
     const level = clampWindowZoomLevel(rawLevel);
     if (win.webContents.isDestroyed()) {
       return;
     }
+    lastAppliedLevel = level;
+    guardChromiumPageZoom(win);
     win.webContents.setZoomLevel(level);
     win.webContents.send(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, {
       reason: "view-zoom",

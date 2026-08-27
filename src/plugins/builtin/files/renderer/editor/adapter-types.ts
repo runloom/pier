@@ -62,6 +62,7 @@ export interface FileEditorAdapterProps {
   controller: FileEditorController;
   documentId: string;
   editorSessionId: string;
+  htmlDiskSource?: { path: string; root: string } | undefined;
   labels?: FileEditorAdapterLabels;
   language?: FilesDocumentLanguage | undefined;
   markdownAppearance?: RendererPluginContext["appearance"] | undefined;

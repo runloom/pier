@@ -176,3 +176,27 @@ export function createPluginFilesContext(
     },
   };
 }
+
+export function createPluginHtmlPreviewsContext(
+  entry: PluginRegistryEntry | undefined,
+  assertPluginCapability: AssertPluginCapability
+): RendererPluginContext["htmlPreviews"] {
+  return {
+    issue: async (input, previousTicket) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.htmlPreviews.issue({
+        path: input.path,
+        root: input.root,
+        ...(previousTicket ? { previousTicket } : {}),
+      });
+    },
+    release: async (ticket) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.htmlPreviews.release({ ticket });
+    },
+    touch: async (ticket) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.htmlPreviews.touch({ ticket });
+    },
+  };
+}

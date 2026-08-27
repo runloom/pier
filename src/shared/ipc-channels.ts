@@ -21,6 +21,9 @@ export const PIER = {
   FILE_PREVIEW_RUNTIME_REVOKE: "pier://file-preview-runtime:revoke",
   FILE_PREVIEW_TICKET_ISSUE: "pier://file-preview-ticket:issue",
   FILE_PREVIEW_TICKET_RELEASE: "pier://file-preview-ticket:release",
+  HTML_PREVIEW_TICKET_ISSUE: "pier://html-preview-ticket:issue",
+  HTML_PREVIEW_TICKET_RELEASE: "pier://html-preview-ticket:release",
+  HTML_PREVIEW_TICKET_TOUCH: "pier://html-preview-ticket:touch",
   MEDIA_PREVIEW_ABSOLUTE_ISSUE: "pier://media-preview-absolute:issue",
   MEDIA_PREVIEW_ABSOLUTE_RELEASE: "pier://media-preview-absolute:release",
   // file path + content query (start/cancel invoke + directed event send;

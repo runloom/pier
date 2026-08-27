@@ -5,6 +5,7 @@ import type {
   AiStatusResult,
 } from "@shared/contracts/ai.ts";
 import type { ExternalNavigationResult } from "@shared/contracts/external-navigation.ts";
+import type { HtmlPreviewTicketIssueResult } from "@shared/contracts/file/html-preview-ticket.ts";
 import type {
   FilePreviewTicketIssueResult,
   FilePreviewTicketLocator,
@@ -408,6 +409,18 @@ export interface RendererPluginContext {
     /** Drop every claimed host for this plugin (stale overlays after HMR / layout). */
     clearAll(): void;
     release(input: { groupId: string; id: string; ownerId: symbol }): void;
+  };
+  /**
+   * HTML 文件预览票据（沙箱 iframe 用）。签发的 URL 只在本窗口本 session
+   * 可访问；重载预览时用 previousTicket 轮换，卸载时 release。
+   */
+  htmlPreviews: {
+    issue(
+      input: { path: string; root: string },
+      previousTicket?: string
+    ): Promise<HtmlPreviewTicketIssueResult>;
+    release(ticket: string): Promise<boolean>;
+    touch(ticket: string): Promise<boolean>;
   };
   i18n: {
     commandDescription(commandId: string): string | undefined;

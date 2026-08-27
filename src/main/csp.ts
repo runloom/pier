@@ -23,6 +23,7 @@ export function buildCspPolicy(isDev: boolean): string {
         "img-src 'self' data: blob: pier-plugin: pier-file-preview: pier-live:",
         "font-src 'self' data: pier-asset: pier-plugin: pier-live:",
         "media-src 'self' pier-asset:",
+        "frame-src 'self' pier-html-preview:",
       ].join("; ")
     : [
         "default-src 'self'",
@@ -32,13 +33,27 @@ export function buildCspPolicy(isDev: boolean): string {
         "img-src 'self' data: pier-plugin: pier-file-preview: pier-live:",
         "font-src 'self' data: pier-asset: pier-plugin: pier-live:",
         "media-src 'self' pier-asset:",
+        "frame-src 'self' pier-html-preview:",
       ].join("; ");
+}
+
+/**
+ * HTML 预览文档（pier-html-preview:）不注入宿主 CSP：沙箱 iframe 是唯一隔离线
+ * （sandbox="allow-scripts"，无 allow-same-origin），预览页需放行 inline script /
+ * CDN / fetch；宿主页面与其余 scheme 一律覆写。
+ */
+export function shouldApplyAppCsp(url: string): boolean {
+  return !url.startsWith("pier-html-preview:");
 }
 
 export function installCsp(): void {
   const policy = buildCspPolicy(isDevRuntime());
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    if (!shouldApplyAppCsp(details.url)) {
+      callback({});
+      return;
+    }
     callback({
       responseHeaders: {
         ...details.responseHeaders,

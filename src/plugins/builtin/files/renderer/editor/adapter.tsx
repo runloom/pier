@@ -1,5 +1,6 @@
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@pier/ui/empty.tsx";
 import { Construction } from "lucide-react";
+import { useMemo } from "react";
 import { FILES_EDITOR_WORD_WRAP_SETTING_KEY } from "../../settings.ts";
 import { getDocument, updateDocumentContents } from "../document/store.ts";
 import { useFilesDocument } from "../document/use-document.ts";
@@ -10,6 +11,8 @@ import {
   type TaskToggleInput,
 } from "../markdown/task-patch.ts";
 import { FileCanvasPreview } from "../preview/canvas.tsx";
+import { FileHtmlPreview } from "../preview/html.tsx";
+import { FileImagePreview } from "../preview/image.tsx";
 import type { FileEditorAdapterProps } from "./adapter-types.ts";
 import { CodeMirrorEditor } from "./cm.tsx";
 
@@ -44,6 +47,19 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
   // inherited from updateDocumentContents. Disabled under diskConflict freeze
   // and readOnly (mirrors saver-side guards).
   const document = useFilesDocument(props.documentId);
+  const svgPreviewDocument = useMemo(() => {
+    if (!(document && document.source.kind === "disk" && document.revision)) {
+      return null;
+    }
+    return {
+      ...document,
+      preview: {
+        kind: "image" as const,
+        mime: "image/svg+xml" as const,
+        revision: document.revision,
+      },
+    };
+  }, [document]);
   const onToggleTask =
     document && !document.diskConflict && !document.readOnly
       ? ({ rangeStart, rangeEnd, checked }: TaskToggleInput) => {
@@ -101,6 +117,32 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
           }
         />
       );
+    }
+    if (props.language === "html") {
+      if (props.context && props.htmlDiskSource && props.t) {
+        return (
+          <FileHtmlPreview
+            context={props.context}
+            documentId={props.documentId}
+            path={props.htmlDiskSource.path}
+            root={props.htmlDiskSource.root}
+            t={props.t}
+          />
+        );
+      }
+      return <CodeMirrorEditor {...props} />;
+    }
+    if (props.language === "svg") {
+      if (props.context && props.t && svgPreviewDocument) {
+        return (
+          <FileImagePreview
+            context={props.context}
+            document={svgPreviewDocument}
+            t={props.t}
+          />
+        );
+      }
+      return <CodeMirrorEditor {...props} />;
     }
     return (
       <MarkdownPreview

@@ -25,10 +25,6 @@ import type { FileEditorController } from "../editor/controller.ts";
 import { createFileEditorSessionId } from "../editor/session-id.ts";
 import { createFilesTranslate } from "../i18n.ts";
 import {
-  readMarkdownOpenMode,
-  writeMarkdownOpenMode,
-} from "../markdown/preview-preferences.ts";
-import {
   ensureLiveModulesProjectConfigLoaded,
   subscribeLiveModulesProjectConfigChanged,
 } from "../preview/load-live-modules-config.ts";
@@ -70,6 +66,10 @@ import {
   takeFilesPanelViewSeed,
 } from "./transfer-state.ts";
 import { useFilesGroupNav } from "./use-group-nav.ts";
+import {
+  defaultModeForSource,
+  persistPreviewOpenMode,
+} from "./use-transfer-view.ts";
 
 export function FilesGroupView({
   context,
@@ -195,8 +195,12 @@ export function FilesGroupView({
     if (stored) {
       return stored;
     }
-    if (selectedDocument?.language === "markdown") {
-      return readMarkdownOpenMode();
+    if (
+      selectedDocument?.language === "markdown" ||
+      selectedDocument?.language === "html" ||
+      selectedDocument?.language === "svg"
+    ) {
+      return defaultModeForSource(selectedSource, selectedDocument.language);
     }
     // liveModulesConfigEpoch in the guard forces re-eval after config load/save.
     if (!root || liveModulesConfigEpoch < 0) {
@@ -224,12 +228,7 @@ export function FilesGroupView({
       if (panelId) {
         rememberFilesPanelViewMode(panelId, nextMode);
       }
-      if (
-        selectedDocument?.language === "markdown" &&
-        (nextMode === "preview" || nextMode === "source")
-      ) {
-        writeMarkdownOpenMode(nextMode);
-      }
+      persistPreviewOpenMode(selectedDocument?.language, nextMode);
     },
     [documentKey, selectedDocument?.language]
   );

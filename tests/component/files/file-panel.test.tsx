@@ -918,8 +918,11 @@ describe("Files file-panel", () => {
       screen.getByRole("region", { name: "Image preview" })
     ).toHaveAttribute("aria-busy", "true");
     expect(
-      screen.queryByRole("toolbar", { name: "Image controls" })
-    ).toBeNull();
+      screen.getByRole("toolbar", { name: "Image controls" })
+    ).toBeVisible();
+    expect(
+      document.querySelector('[data-slot="image-preview-controls"]')
+    ).not.toBeNull();
 
     fireEvent.load(image);
 
@@ -930,13 +933,12 @@ describe("Files file-panel", () => {
     ).toHaveAttribute("aria-busy", "false");
     const toolbar = screen.getByRole("toolbar", { name: "Image controls" });
     expect(toolbar).toBeVisible();
-    expect(toolbar).toHaveClass("absolute", "right-3", "bottom-3");
     expect(screen.getByText("Fit to window", { exact: true })).toBeVisible();
     expect(screen.queryByText("1:1", { exact: true })).toBeNull();
     const zoomMenu = screen.getByRole("button", {
       name: "Zoom level: Fit to window",
     });
-    expect(zoomMenu).toHaveAttribute("data-variant", "secondary");
+    expect(zoomMenu).toHaveAttribute("data-variant", "ghost");
     expect(screen.queryByText("Saved")).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Switch to preview" })
@@ -951,7 +953,7 @@ describe("Files file-panel", () => {
     fireEvent.keyDown(screen.getByRole("region", { name: "Image preview" }), {
       key: "+",
     });
-    expect(screen.getByText("110%")).toBeVisible();
+    expect(screen.getByText("125%")).toBeVisible();
     fireEvent.doubleClick(image);
     expect(screen.getByText("Fit to window", { exact: true })).toBeVisible();
 
@@ -1153,6 +1155,65 @@ describe("Files file-panel", () => {
     expect(releasePreview).toHaveBeenCalledWith("unmount-ticket-00000000");
   });
 
+  it("does not reissue an image ticket when preview is a new object with the same locator", async () => {
+    const source = createDiskDocumentRecord({
+      draft: null,
+      id: "disk:image-preview-stable",
+      path: "assets/icon.svg",
+      root: PROJECT_ROOT,
+    });
+    const imageResult = {
+      canonicalPath: "assets/icon.svg",
+      kind: "image" as const,
+      mime: "image/svg+xml" as const,
+      mtimeMs: 1,
+      path: "assets/icon.svg",
+      revision: "file-v1:stable",
+      root: PROJECT_ROOT,
+      size: 128,
+    };
+    const issuePreview = vi.fn(async () => ({
+      expiresAt: 1,
+      issued: true as const,
+      ticket: "stable-ticket-000000000",
+      url: "pier-file-preview://file/stable-ticket-000000000",
+    }));
+    const first = withDocumentReadResult(source, imageResult);
+    const context = createMockContext({ issuePreview });
+    const view = render(
+      <FileImagePreview
+        context={context}
+        document={{
+          ...first,
+          preview: {
+            kind: "image",
+            mime: "image/svg+xml",
+            revision: "file-v1:stable",
+          },
+        }}
+        t={(_key, fallback) => fallback ?? _key}
+      />
+    );
+    await screen.findByRole("img", { name: "icon.svg" });
+    expect(issuePreview).toHaveBeenCalledOnce();
+
+    view.rerender(
+      <FileImagePreview
+        context={context}
+        document={{
+          ...first,
+          preview: {
+            kind: "image",
+            mime: "image/svg+xml",
+            revision: "file-v1:stable",
+          },
+        }}
+        t={(_key, fallback) => fallback ?? _key}
+      />
+    );
+    expect(issuePreview).toHaveBeenCalledOnce();
+  });
+
   it("shows an error and releases the active ticket when replacement issuance rejects", async () => {
     const initial = createDiskDocumentRecord({
       draft: null,
@@ -1244,6 +1305,43 @@ describe("Files file-panel", () => {
     for (let index = 0; index < 100; index += 1) fireEvent.click(zoomIn);
     expect(screen.getByText("800%")).toBeVisible();
     expect(zoomIn).toBeDisabled();
+  });
+
+  it("zooms files image preview with plain wheel like the shared canvas", async () => {
+    const readDocument = vi.fn<RendererPluginContext["files"]["readDocument"]>(
+      async (request) => ({
+        canonicalPath: request.path,
+        kind: "image" as const,
+        mime: "image/webp" as const,
+        mtimeMs: 1,
+        path: request.path,
+        revision: "file-v1:webp-revision",
+        root: request.root,
+        size: 12,
+      })
+    );
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "preview.webp", root: PROJECT_ROOT },
+      },
+      createMockContext({ readDocument })
+    );
+    await screen.findByRole("img", { name: "preview.webp" });
+    fireEvent.load(screen.getByRole("img", { name: "preview.webp" }));
+    fireEvent.keyDown(
+      screen.getByRole("button", { name: "Zoom level: Fit to window" }),
+      { key: "Enter" }
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitemradio", {
+        name: /100%/u,
+      })
+    );
+    fireEvent.wheel(screen.getByRole("region", { name: "Image preview" }), {
+      deltaY: -40,
+    });
+    expect(screen.getByText("125%")).toBeVisible();
   });
 
   it("renders binary metadata in Empty and reveals it through the system file manager", async () => {

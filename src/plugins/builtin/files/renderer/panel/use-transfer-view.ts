@@ -19,6 +19,11 @@ import {
   writeMarkdownOpenMode,
 } from "../markdown/preview-preferences.ts";
 import {
+  readHtmlOpenMode,
+  writeHtmlOpenMode,
+} from "../preview/html-open-mode.ts";
+import { readSvgOpenMode, writeSvgOpenMode } from "../preview/svg-open-mode.ts";
+import {
   peekFilesPanelViewSeed,
   rememberFilesPanelViewMode,
   subscribeFilesPanelViewSeed,
@@ -71,18 +76,42 @@ function isCanvasSource(
   );
 }
 
-function defaultModeForSource(
+export function defaultModeForSource(
   source: FilesDocumentPanelSource | null,
   language: string | null | undefined
 ): FileViewMode {
   if (source && language === "markdown") {
     return readMarkdownOpenMode();
   }
+  if (source?.kind === "disk" && language === "html") {
+    return readHtmlOpenMode();
+  }
+  if (source?.kind === "disk" && language === "svg") {
+    return readSvgOpenMode();
+  }
   // Canvas: default preview. Use path when language has not hydrated yet.
   if (isCanvasSource(source, language)) {
     return "preview";
   }
   return "source";
+}
+
+export function persistPreviewOpenMode(
+  language: string | null | undefined,
+  mode: FileViewMode
+): void {
+  if (mode !== "preview" && mode !== "source") {
+    return;
+  }
+  if (language === "markdown") {
+    writeMarkdownOpenMode(mode);
+  }
+  if (language === "html") {
+    writeHtmlOpenMode(mode);
+  }
+  if (language === "svg") {
+    writeSvgOpenMode(mode);
+  }
 }
 
 export function useFilesPanelTransferView(input: {
@@ -165,12 +194,7 @@ export function useFilesPanelTransferView(input: {
       pinnedModeForSourceRef.current = true;
       setModeState(next);
       rememberFilesPanelViewMode(panelSessionId, next);
-      if (
-        language === "markdown" &&
-        (next === "preview" || next === "source")
-      ) {
-        writeMarkdownOpenMode(next);
-      }
+      persistPreviewOpenMode(language, next);
     },
     [language, panelSessionId]
   );

@@ -1,7 +1,6 @@
 import type {
   RendererPluginAction,
   RendererPluginContext,
-  RendererPluginMessageValues,
 } from "@plugins/api/renderer.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
@@ -34,12 +33,7 @@ import {
 } from "../../context-menu/selection-text.ts";
 import { popupContextMenuAt } from "../../context-menu/use-menu.ts";
 import { cssPointToContentViewPoint } from "../../window-zoom/coordinates.ts";
-import {
-  interpolateMessage,
-  resolvePluginCommandAliases,
-  resolvePluginCommandDisplay,
-  resolvePluginMessage,
-} from "../display.ts";
+import { resolvePluginCommandAliases } from "../display.ts";
 import { pluginLifecycleBarriers } from "../lifecycle/barriers.ts";
 import {
   assertPluginWorkbenchWidgetRegistration,
@@ -55,57 +49,18 @@ import { createPluginCommandPaletteContext } from "./command-palette-context.ts"
 import { createPluginCommentsContext } from "./comments-context.ts";
 import { createPluginConfiguration } from "./configuration-context.ts";
 import { createPluginEnvironmentsContext } from "./environments-context.ts";
-import { createPluginFilesContext } from "./files-context.ts";
+import {
+  createPluginFilesContext,
+  createPluginHtmlPreviewsContext,
+} from "./files-context.ts";
 import { createPluginGitContext } from "./git-context.ts";
 import { createHostGroupContentContext } from "./group-content-context.tsx";
+import { createPluginI18n } from "./i18n-context.ts";
 import { createHostLiveModulesApi } from "./live-modules.ts";
 import { createPluginPanelsContext } from "./panels-context.ts";
 import { createPluginTerminalContext } from "./terminal-context.ts";
 import { createPluginTerminalsContext } from "./terminals-context.ts";
 import { createPluginWorktreesContext } from "./worktree-context.ts";
-
-function createPluginI18n(
-  entry?: PluginRegistryEntry
-): RendererPluginContext["i18n"] {
-  const language = () => i18next.language || "en";
-  const commandById = (commandId: string) =>
-    entry?.manifest.commands.find((command) => command.id === commandId);
-
-  return {
-    commandDescription: (commandId) => {
-      const command = commandById(commandId);
-      if (!(entry && command)) {
-        return;
-      }
-      return resolvePluginCommandDisplay(entry.manifest, command, language())
-        .description;
-    },
-    commandTitle: (commandId, fallback = commandId) => {
-      const command = commandById(commandId);
-      if (!(entry && command)) {
-        return fallback;
-      }
-      return resolvePluginCommandDisplay(entry.manifest, command, language())
-        .title;
-    },
-    language,
-    // fallback 也过插值：locale 缺 key 时用户不应看到字面 {{name}} 占位符。
-    t: (
-      key: string,
-      values?: RendererPluginMessageValues,
-      fallback = key,
-      locale?: string
-    ) =>
-      entry
-        ? (resolvePluginMessage(
-            entry.manifest,
-            locale ?? language(),
-            key,
-            values
-          ) ?? interpolateMessage(fallback, values))
-        : interpolateMessage(fallback, values),
-  };
-}
 
 function pluginCommandAliases(
   entry: PluginRegistryEntry | undefined,
@@ -474,6 +429,10 @@ export function createRendererPluginContext(
           : false;
       },
     },
+    htmlPreviews: createPluginHtmlPreviewsContext(
+      entry,
+      assertPluginCapability
+    ),
     contentPreview: {
       close: () => {
         closeContentPreview();

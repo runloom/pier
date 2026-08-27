@@ -388,6 +388,11 @@ export function ResolvedFilePanel({
           controller={controller}
           documentId={document.id}
           editorSessionId={editorSessionId}
+          htmlDiskSource={
+            document.source.kind === "disk" && document.language === "html"
+              ? { path: document.source.path, root: document.source.root }
+              : undefined
+          }
           labels={createFileEditorAdapterLabels(t)}
           language={isCanvasDiskDoc(document) ? "canvas" : document.language}
           markdownAppearance={context?.appearance}

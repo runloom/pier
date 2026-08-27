@@ -32,6 +32,7 @@ import {
 } from "./bootstrap-privileged-protocols.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app.ts";
 import { installDisplayCapturePolicy } from "./display-capture-policy.ts";
+import { registerHtmlPreviewTicketIpc } from "./files/html-preview-ipc.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { applyGpuWorkarounds } from "./gpu-workarounds.ts";
 import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
@@ -341,6 +342,7 @@ if (gotTheLock) {
       });
       registerFileSaveTargetIpc(ipcMain);
       registerFilePreviewTicketIpc();
+      registerHtmlPreviewTicketIpc();
       registerMediaPreviewIpc();
       registerMenuIpc(ipcMain);
       registerClipboardIpc(ipcMain);

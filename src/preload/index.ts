@@ -44,6 +44,10 @@ import {
 } from "./foreground-activity-api.ts";
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { hostCatalogApi, type PierHostCatalogAPI } from "./host-catalog-api.ts";
+import {
+  createHtmlPreviewApi,
+  type PierHtmlPreviewApi,
+} from "./html-preview/api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import { liveModulesApi, type PierLiveModulesAPI } from "./live-modules-api.ts";
 import { lspApi, type PierLspAPI } from "./lsp-api.ts";
@@ -174,6 +178,7 @@ export interface PierWindowAPI {
   focusWindow: (windowId: string) => Promise<void>;
   foregroundActivity: PierForegroundActivityAPI;
   git: PierGitAPI;
+  htmlPreviews: PierHtmlPreviewApi;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   liveModules: PierLiveModulesAPI;
@@ -353,6 +358,14 @@ const filePreviewApi = createFilePreviewApi({
   invokeRevoke: (request) =>
     ipcRenderer.invoke(PIER.FILE_PREVIEW_RUNTIME_REVOKE, request),
 });
+const htmlPreviewApi = createHtmlPreviewApi({
+  invokeIssue: (request) =>
+    ipcRenderer.invoke(PIER.HTML_PREVIEW_TICKET_ISSUE, request),
+  invokeRelease: (request) =>
+    ipcRenderer.invoke(PIER.HTML_PREVIEW_TICKET_RELEASE, request),
+  invokeTouch: (request) =>
+    ipcRenderer.invoke(PIER.HTML_PREVIEW_TICKET_TOUCH, request),
+});
 
 // gitApi / pluginSettingsApi 实现在独立文件(避免 preload/index.ts 超 500 行硬上限)。
 
@@ -409,6 +422,7 @@ const api: PierWindowAPI = {
   externalNavigation: externalNavigationApi,
   filePreviews: filePreviewApi,
   git: gitApi,
+  htmlPreviews: htmlPreviewApi,
   keybinding: keybindingApi,
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
   liveModules: liveModulesApi,
