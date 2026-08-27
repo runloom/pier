@@ -1,6 +1,7 @@
 import {
   GIT_REVIEW_EXCERPT_BATCH_DEFAULT,
   type GitReviewExcerptBatchResult,
+  type GitReviewFileDocumentResult,
   type GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
 import { describe, expect, it, vi } from "vitest";
@@ -296,7 +297,9 @@ describe("GitReviewDocumentLoader excerpt batch", () => {
       throw new Error("expected selected excerpt fixture");
     }
     const cancel = vi.fn(async () => undefined);
-    const load = vi.fn(() => new Promise(() => undefined));
+    const load = vi.fn(
+      () => new Promise<GitReviewFileDocumentResult>(() => undefined)
+    );
     const loadBatch = vi.fn(
       () => new Promise<GitReviewExcerptBatchResult>(() => undefined)
     );
