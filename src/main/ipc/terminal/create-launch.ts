@@ -22,7 +22,6 @@ import {
 import { terminalLaunchRegistry } from "../../state/terminal-launch-state.ts";
 import type { TerminalPanelSession } from "../../state/terminal-session-state.ts";
 
-const RESTORED_TASK_SHELL_FALLBACK = "/bin/zsh";
 /** Ghostty surface prefixes — do not wrap again. */
 const GHOSTTY_COMMAND_PREFIX_RE = /^(?:shell:|direct:)/u;
 
@@ -58,7 +57,7 @@ export function wrapAgentTerminalCommand(
   return `${quoteShellArg(shell)} ${agentShellCommandFlags(shell)} ${quoteShellArg(trimmed)}`;
 }
 
-function restoredTaskResultCommand(task: TaskPanelMetadata): string {
+function restoredTaskSummaryScript(task: TaskPanelMetadata): string {
   const displayStatus = task.status === "running" ? "cancelled" : task.status;
   const lines = [
     "[pier] restored task",
@@ -68,26 +67,18 @@ function restoredTaskResultCommand(task: TaskPanelMetadata): string {
     `Command: ${task.rawCommand}`,
     `CWD: ${task.cwd}`,
   ];
-  const restoredShell =
-    process.env.SHELL?.startsWith("/") === true
-      ? process.env.SHELL
-      : RESTORED_TASK_SHELL_FALLBACK;
-  const script = [
+  return [
     ...lines.map((line) => `printf '%s\\n' ${quoteShellArg(line)}`),
     "printf '\\n'",
-    `exec ${quoteShellArg(restoredShell)} -l`,
   ].join("; ");
-  // P2: tasks stay /bin/sh -lc (env-only contract; not agent resolve path).
-  return `/bin/sh -lc ${quoteShellArg(script)}`;
 }
 
 function restoredTaskLaunchOptions(
-  task: TaskPanelMetadata,
-  cwd: string | undefined
+  cwd: string | undefined,
+  taskCwd: string
 ): ResolvedTerminalLaunchOptions {
   return {
-    command: restoredTaskResultCommand(task),
-    cwd: cwd ?? task.cwd,
+    cwd: cwd ?? taskCwd,
   };
 }
 
@@ -179,6 +170,7 @@ export function resolveCreateTerminalLaunch(
   options: { taskLive?: boolean } = {}
 ): {
   context: CreateTerminalArgs["context"];
+  initialInput?: string | undefined;
   /** launcher 启动的 agent 身份（+按钮/命令面板）——用于会话即时点亮。 */
   launchAgentId?: AgentKind | undefined;
   nativeLaunch: ResolvedTerminalLaunchOptions | undefined;
@@ -215,7 +207,8 @@ export function resolveCreateTerminalLaunch(
       task.status === "running" ? { ...task, status: "cancelled" } : task;
     return {
       context,
-      nativeLaunch: restoredTaskLaunchOptions(restoredTask, cwd),
+      initialInput: restoredTaskSummaryScript(restoredTask),
+      nativeLaunch: restoredTaskLaunchOptions(cwd, restoredTask.cwd),
       task: restoredTask,
     };
   }

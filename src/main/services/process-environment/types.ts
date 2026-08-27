@@ -5,7 +5,7 @@ export type RawEnvironment =
   | NodeJS.ProcessEnv
   | Record<string, string | undefined>;
 
-export type ShellEnvDumpMode = "login-interactive" | "non-login-fallback";
+export type ShellEnvDumpMode = "login-interactive";
 
 export type ShellEnvSkipReason = "cli" | "disabled" | "no-shell" | "windows";
 
@@ -19,6 +19,11 @@ export interface ProcessEnvironmentResolveRequest {
   profileEnv?: Record<string, string> | undefined;
   /** Settings → Environment project KV; overrides agentEnv, below explicitEnv. */
   projectEnv?: Record<string, string> | undefined;
+  /**
+   * Dump directory (Zed: project root, not each task cwd). When omitted, dump
+   * at HOME. Child spawn still uses `cwd`.
+   */
+  projectRootPath?: string | undefined;
   source: ProcessEnvironmentSource;
 }
 

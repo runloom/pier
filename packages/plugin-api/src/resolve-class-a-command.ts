@@ -31,10 +31,8 @@ function agentShellCommandFlags(shellPath: string): string[] {
   return ["-lic"];
 }
 
-/** Host-apply style sticky keys (keep in sync with apply-host-env EXACT + prefixes). */
+/** Host-apply sticky keys except PATH/MANPATH (rc rebuilds PATH after login). */
 const STICKY_EXACT = new Set([
-  "PATH",
-  "MANPATH",
   "NVM_DIR",
   "NVM_BIN",
   "NVM_CD_FLAGS",

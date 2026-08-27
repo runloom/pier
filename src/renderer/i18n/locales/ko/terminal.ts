@@ -7,6 +7,9 @@ export const terminal = {
     setupEnterFailed: "명령이 이미 입력되어 있습니다. Return으로 실행하세요.",
     setupFailed:
       "터미널은 열렸지만 설정 명령을 실행하지 못했습니다. 터미널에서 실행하거나 다시 만드세요.",
+    taskEnterFailed: "명령이 이미 입력되어 있습니다. Return으로 실행하세요.",
+    taskFailed:
+      "터미널은 열렸지만 명령을 입력하지 못했습니다. 터미널에 직접 입력하거나 작업을 다시 실행하세요.",
   },
   frameWaitFailed:
     "터미널 화면이 나타나지 않았습니다. 다시 시도하거나 이 터미널을 다시 여세요.",

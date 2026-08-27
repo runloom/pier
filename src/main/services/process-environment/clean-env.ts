@@ -13,6 +13,9 @@ export const TERMINAL_EMULATOR_ENV_KEYS = [
   "TERMINFO_DIRS",
   "TERM_PROGRAM",
   "TERM_PROGRAM_VERSION",
+  // Apple Terminal Resume; leaking this + TERM_PROGRAM sources
+  // /etc/zshrc_Apple_Terminal and prints "Restored session" in task logs.
+  "TERM_SESSION_ID",
 ] as const;
 
 export function omitTerminalEmulatorEnv(env: Environment): Environment {

@@ -413,6 +413,7 @@ describe("PierDev.app bundle icon", () => {
     expect(source).toContain("CFBundleIconName");
     expect(source).toContain("Assets.car");
     expect(source).toContain("brandPierDevHelpers(");
+    expect(source).toContain("launch-env.json");
     expect(source).toContain('typeof iconApplied === "string"');
     expect(source).toContain("MAC_TAHOE_ICON_NAME");
     expect(source).toContain("app-icon-master.svg");

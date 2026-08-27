@@ -16,6 +16,8 @@ const NEVER_APPLY_EXACT = new Set([
   "NODE_OPTIONS",
   "NODE_PATH",
   "OPENSSL_CONF",
+  // Zed #46273: login dump SHLVL must not overwrite the host process.
+  "SHLVL",
 ]);
 
 const NEVER_APPLY_PREFIXES = ["ELECTRON_"] as const;
@@ -104,7 +106,7 @@ export interface ApplyHostProcessEnvResult {
 
 /**
  * Whitelist-replace host `process.env` for which/probe convenience.
- * Not the source of truth for per-cwd child spawns (those use full resolve().env).
+ * Only HOME dump is applied here; project dumps stay on resolve().env.
  *
  * Callers MUST pass the pure shell layer (`result.shellEnv`), never the merged
  * spawn `env` — otherwise agent/project/explicit keys could leak into Electron.

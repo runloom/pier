@@ -76,7 +76,7 @@ import { isDevRuntime } from "./runtime-mode.ts";
 import { createAppUpdateScheduler } from "./services/app-updates/scheduler.ts";
 import { createExternalNavigationService } from "./services/external-navigation.ts";
 import { createGitAutofetchService } from "./services/git/autofetch-service.ts";
-import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
+import { abortMissingSingleInstanceLock } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
 import { migrateTerminalSessionScopesToRecordIds } from "./state/terminal-session-scope-migration.ts";
 import {
@@ -115,25 +115,14 @@ windowManager.onCreate(({ window }) => {
 });
 configureMainAppIdentity(isDev);
 applyGpuWorkarounds();
-// 第二实例直接 quit + return 不继续 bootstrap, 否则会撞主实例的 userData 文件锁.
+// 第二实例不再继续 bootstrap。dev 打印原因并 exit(1)；生产包仍 quit。
 const gotTheLock = app.requestSingleInstanceLock();
 if (gotTheLock) {
   installMainDiagnosticsLogging();
 } else {
-  if (isDev) {
-    startupLog.error(
-      formatDevSingleInstanceLockFailure({
-        userDataDir: app.getPath("userData"),
-        ...(process.env.PIER_DEV_PROFILE
-          ? { profile: process.env.PIER_DEV_PROFILE }
-          : {}),
-        ...(process.env.ELECTRON_RENDERER_URL
-          ? { rendererUrl: process.env.ELECTRON_RENDERER_URL }
-          : {}),
-      })
-    );
-  }
-  app.quit();
+  abortMissingSingleInstanceLock(isDev, app, (message) => {
+    startupLog.error(message);
+  });
 }
 
 function getMenuTargetWindow(): AppWindow | null {

@@ -55,6 +55,13 @@ vi.mock("@main/windows/identity.ts", () => ({
 }));
 
 interface NativeAddonCallbackHarness {
+  childExited?: (
+    id: number,
+    panelId: string,
+    lifecycleId: string,
+    exitCode: number,
+    runtimeMs: number
+  ) => void;
   commandFinished?: (
     id: number,
     panelId: string,
@@ -77,6 +84,9 @@ interface NativeAddonCallbackHarness {
 
 function addonHarness(callbacks: NativeAddonCallbackHarness) {
   return {
+    setChildExitedForwardCallback: vi.fn((cb) => {
+      callbacks.childExited = cb;
+    }),
     setCommandFinishedForwardCallback: vi.fn((cb) => {
       callbacks.commandFinished = cb;
     }),
@@ -246,6 +256,62 @@ describe("terminal task lifecycle wiring", () => {
 
     expect(patchTerminalPanelAgentStatusMock).not.toHaveBeenCalled();
     expect(completeFromNativeProcessCloseMock).toHaveBeenCalled();
+  });
+
+  it("records task command-finished without completing the live login shell", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromExitCodeHintMock.mockResolvedValue(true);
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+
+    callbacks.commandFinished?.(42, "native::terminal-1", "run-1", 0);
+
+    expect(recordExitCodeHintMock).toHaveBeenCalledWith({
+      browserWindowId: 42,
+      code: 0,
+      lifecycleId: "run-1",
+      panelId: "terminal-1",
+      source: "shell-command-finished",
+      windowId: "window-main",
+    });
+    expect(completeFromExitCodeHintMock).not.toHaveBeenCalled();
+  });
+
+  it("completes a task from PTY child-exited when OSC is missing", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromExitCodeHintMock.mockResolvedValue(true);
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+
+    callbacks.childExited?.(42, "native::terminal-1", "run-1", 1, 120);
+
+    expect(completeFromExitCodeHintMock).toHaveBeenCalledWith({
+      browserWindowId: 42,
+      code: 1,
+      lifecycleId: "run-1",
+      panelId: "terminal-1",
+      source: "pty-child-exited",
+      windowId: "window-main",
+    });
+    expect(forwardToWindowMock).toHaveBeenCalledWith(
+      42,
+      PIER_BROADCAST.TERMINAL_CHILD_EXITED,
+      { exitCode: 1, panelId: "terminal-1", runtimeMs: 120 },
+      "pier-child-exited"
+    );
+  });
+
+  it("does not complete a non-task panel from PTY child-exited", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+
+    callbacks.childExited?.(42, "native::terminal-1", "", 0, 40);
+
+    expect(completeFromExitCodeHintMock).not.toHaveBeenCalled();
+    expect(forwardToWindowMock).toHaveBeenCalledWith(
+      42,
+      PIER_BROADCAST.TERMINAL_CHILD_EXITED,
+      { exitCode: 0, panelId: "terminal-1", runtimeMs: 40 },
+      "pier-child-exited"
+    );
   });
 
   it("completes task-exit title markers without waiting for terminal close", () => {

@@ -1,3 +1,8 @@
+import type { TaskPanelStatus } from "@shared/contracts/tasks.ts";
+import type {
+  TerminalInitialInputFailedEvent,
+  TerminalInitialInputKind,
+} from "@shared/contracts/terminal.ts";
 import type { SupportedLocale } from "@shared/i18n/locales.ts";
 import {
   cancelPromptReady,
@@ -6,11 +11,75 @@ import {
 } from "./initial-input-gate.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { pasteTerminalText, sendTerminalSubmitReturn } from "./submit-text.ts";
+import type { ExitCodeHintArgs } from "./task-lifecycle.ts";
 
 const INITIAL_INPUT_RETRY_DELAYS_MS = [50, 100, 200, 400, 800] as const;
 
 export interface InitialInputInjectFailure {
   textDelivered?: boolean;
+}
+
+export function resolveInitialInputFailureAction(input: {
+  hasAgent: boolean;
+  lifecycleId: string;
+  taskStatus: TaskPanelStatus | undefined;
+  textDelivered: boolean;
+}): {
+  completeTask: boolean;
+  kind: TerminalInitialInputKind;
+} {
+  let kind: TerminalInitialInputKind = "setup";
+  if (input.hasAgent) {
+    kind = "prompt";
+  } else if (input.taskStatus) {
+    kind = "task";
+  }
+  return {
+    completeTask:
+      input.taskStatus === "running" &&
+      input.lifecycleId.length > 0 &&
+      !input.textDelivered,
+    kind,
+  };
+}
+
+export function handleInitialInputInjectFailed(args: {
+  browserWindowId: number;
+  completeFromExitCodeHint: (hint: ExitCodeHintArgs) => Promise<boolean>;
+  hasAgent: boolean;
+  lifecycleId: string;
+  panelId: string;
+  sendFailed: (event: TerminalInitialInputFailedEvent) => void;
+  taskStatus: TaskPanelStatus | undefined;
+  textDelivered: boolean;
+  windowId?: string | undefined;
+}): void {
+  const failure = resolveInitialInputFailureAction({
+    hasAgent: args.hasAgent,
+    lifecycleId: args.lifecycleId,
+    taskStatus: args.taskStatus,
+    textDelivered: args.textDelivered,
+  });
+  args.sendFailed({
+    kind: failure.kind,
+    panelId: args.panelId,
+    textDelivered: args.textDelivered,
+  });
+  if (!failure.completeTask) {
+    return;
+  }
+  args
+    .completeFromExitCodeHint({
+      browserWindowId: args.browserWindowId,
+      code: 1,
+      lifecycleId: args.lifecycleId,
+      panelId: args.panelId,
+      source: "inject-failed",
+      ...(args.windowId === undefined ? {} : { windowId: args.windowId }),
+    })
+    .catch((err) => {
+      console.error("[pier-task-lifecycle:inject-failed] failed:", err);
+    });
 }
 
 interface InitialInputSendArgs {

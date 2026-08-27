@@ -36,24 +36,22 @@ export interface TerminalTaskLifecycleDeps {
   sessionScopeForBrowserWindow(browserWindowId: number): string | null;
 }
 
+export type TerminalExitCodeHintSource = Extract<
+  TaskExitSource,
+  | "shell-command-finished"
+  | "task-exit-marker"
+  | "inject-failed"
+  | "pty-child-exited"
+>;
+
 export interface ExitCodeHintArgs {
   browserWindowId: number;
   code: number;
   lifecycleId: string;
   panelId: string;
-  source: Extract<
-    TaskExitSource,
-    "shell-command-finished" | "task-exit-marker"
-  >;
+  source: TerminalExitCodeHintSource;
   windowId?: string | undefined;
 }
-
-type ImmediateExitCodeHintArgs = ExitCodeHintArgs & {
-  source: Extract<
-    TaskExitSource,
-    "shell-command-finished" | "task-exit-marker"
-  >;
-};
 
 export interface NativeProcessCloseArgs {
   browserWindowId: number;
@@ -98,7 +96,7 @@ function normalizedCompletionCode(code: number | undefined): number {
 
 /**
  * Native shell 回调协调器：
- * - 排序 task-exit-marker 与 shell-command-finished 两路 exit code hint（前者胜）
+ * - 排序 task-exit-marker 与其它 exit code hint（标题标记胜）
  * - Dedupe 同 panel 的多路终结事件（native process close + exit code hint）
  * - 记录 launcher/panel 侧「预期用户主动关闭」（`ignoreNextNativeUserClose`）
  * - 终结时把状态写入 terminal-session-state.json（`patchTaskStatus` + `patchTab`，
@@ -220,10 +218,10 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
     }
     const existing = exitCodeHints.get(key);
     // 任务包装器写入的标题标记是 Pier 的权威退出码；
-    // shell integration 可能滞后或只回报包装 shell，不能覆盖它。
+    // shell integration / PTY child-exited 不能覆盖它。
     if (
       existing?.source === "task-exit-marker" &&
-      args.source === "shell-command-finished"
+      args.source !== "task-exit-marker"
     ) {
       return;
     }
@@ -232,17 +230,17 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
 
   return {
     recordExitCodeHint,
-    async completeFromExitCodeHint(
-      args: ImmediateExitCodeHintArgs
-    ): Promise<boolean> {
+    async completeFromExitCodeHint(args: ExitCodeHintArgs): Promise<boolean> {
       recordExitCodeHint(args);
+      const key = lifecycleKey(args.panelId, args.lifecycleId, args.windowId);
+      const hint = exitCodeHints.get(key) ?? args;
       const completed = await finish({
         browserWindowId: args.browserWindowId,
-        code: args.code,
+        code: hint.code,
         lifecycleId: args.lifecycleId,
         panelId: args.panelId,
         reason: "process",
-        source: args.source,
+        source: hint.source,
         windowId: args.windowId,
       });
       if (completed) {

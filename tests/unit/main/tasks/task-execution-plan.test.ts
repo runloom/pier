@@ -12,7 +12,6 @@ const ENV_TARGET_VAR = `${TASK_VAR_PREFIX}{env:PIER_TARGET}`;
 const WORKSPACE_FOLDER_VAR = `${TASK_VAR_PREFIX}{workspaceFolder}`;
 const WORKSPACE_FOLDER_BASENAME_VAR = `${TASK_VAR_PREFIX}{workspaceFolderBasename}`;
 const DAY_MS = 86_400_000;
-const SHELL_LAUNCH_PREFIX_RE = /^\/bin\/sh -c /;
 
 describe("resolveVariables", () => {
   const ctx = {
@@ -43,6 +42,7 @@ describe("task execution planning", () => {
     projectRoot = await mkdtemp(join(tmpdir(), "pier-task-plan-"));
     homeDir = await mkdtemp(join(tmpdir(), "pier-task-plan-home-"));
     vi.stubEnv("PIER_TARGET", "local");
+    vi.stubEnv("SHELL", "/bin/zsh");
   });
 
   afterEach(async () => {
@@ -201,7 +201,9 @@ describe("task execution planning", () => {
     expect(plan.launches[0]?.command).toContain("pnpm lint local");
     expect(plan.launches[1]?.cwd).toBe(projectRoot);
     expect(plan.launches[1]?.command).toContain("pnpm test ");
-    expect(plan.launches[1]?.command).toMatch(SHELL_LAUNCH_PREFIX_RE);
+    expect(plan.launches[1]?.command).toMatch(/^set \+e;/);
+    expect(plan.launches[1]?.command).not.toMatch(/\/bin\/(?:ba)?sh\s+-/);
+    expect(plan.launches[1]?.command).not.toMatch(/\/bin\/zsh\s+-/);
     expect(plan.launches[1]?.command).toContain(TASK_EXIT_TITLE_PREFIX);
     expect(plan.launches[1]?.env).toEqual({ PIER_ENV: "local" });
     expect(plan.launches[1]?.tab).toMatchObject({

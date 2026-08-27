@@ -289,8 +289,8 @@ export interface TerminalTitleEvent {
   title: string;
 }
 
-/** 首条输入未能提交。setup = 工作树初始化命令；prompt = 智能体任务正文。 */
-export type TerminalInitialInputKind = "prompt" | "setup";
+/** 首条输入未能提交。setup = 初始化命令；prompt = 智能体正文；task = 任务命令。 */
+export type TerminalInitialInputKind = "prompt" | "setup" | "task";
 
 export interface TerminalInitialInputFailedEvent {
   kind: TerminalInitialInputKind;
