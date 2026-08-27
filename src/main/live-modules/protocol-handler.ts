@@ -1,5 +1,6 @@
 import {
   type LiveModuleRuntimeId,
+  liveModuleAssetTicketFromUrl,
   liveModuleRuntimeIdFromUrl,
   liveModuleTicketFromUrl,
 } from "@shared/live-module-url.ts";
@@ -112,6 +113,22 @@ export function createLiveModuleProtocolHandler(
     if (runtimeId) {
       return new Response(runtimeShimSource(runtimeId), {
         headers,
+        status: 200,
+      });
+    }
+
+    const assetTicket = liveModuleAssetTicketFromUrl(request.url);
+    if (assetTicket) {
+      const service = getService();
+      const asset = service?.getAssetByTicket(assetTicket);
+      if (!asset) {
+        return new Response("not found", { status: 404 });
+      }
+      return new Response(Uint8Array.from(asset.bytes), {
+        headers: {
+          ...headers,
+          "content-type": asset.mimeType,
+        },
         status: 200,
       });
     }

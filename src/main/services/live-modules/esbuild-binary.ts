@@ -19,6 +19,46 @@ export function isAsarPackagedPath(resolvedPath: string): boolean {
   return resolvedPath.includes("/app.asar/");
 }
 
+/** Packaged Pier's unpacked esbuild — must not leak into `pnpm dev`. */
+export function isPierPackagedEsbuildBinaryPath(value: string): boolean {
+  const normalized = value.replaceAll("\\", "/");
+  return (
+    normalized.includes(
+      "/Contents/Resources/app.asar.unpacked/node_modules/@esbuild/"
+    ) && /\/bin\/esbuild(?:\.exe)?$/u.test(normalized)
+  );
+}
+
+/**
+ * Dev processes that inherit a packaged Pier's `ESBUILD_BINARY_PATH` spawn the
+ * wrong binary. esbuild then exits on the version ping and every later compile
+ * fails with "The service is no longer running".
+ */
+export function shouldClearInheritedEsbuildBinaryPath(input: {
+  currentEnvPath?: string | undefined;
+  resolvedPlatformBinary: string;
+}): boolean {
+  if (!input.currentEnvPath) {
+    return false;
+  }
+  if (isAsarPackagedPath(input.resolvedPlatformBinary)) {
+    return false;
+  }
+  return isPierPackagedEsbuildBinaryPath(input.currentEnvPath);
+}
+
+const ESBUILD_SERVICE_CLOSED_RE =
+  /The service is no longer running|The service was stopped/u;
+
+export function isEsbuildServiceClosedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return ESBUILD_SERVICE_CLOSED_RE.test(message);
+}
+
+/** User-facing diagnostic — do not leak esbuild's "service" wording. */
+export const ESBUILD_SERVICE_CLOSED_USER_MESSAGE =
+  "The canvas compiler stopped. Reload to try again.";
+
 /**
  * Pure resolution: returns the unpacked binary path to set, or null when the
  * caller should leave esbuild's own resolution alone (dev layout, non-asar
@@ -90,6 +130,14 @@ export function loadEsbuildModule(): typeof Esbuild {
     const resolvedPlatformBinary = moduleRequire.resolve(
       `@esbuild/${process.platform}-${process.arch}/bin/esbuild`
     );
+    if (
+      shouldClearInheritedEsbuildBinaryPath({
+        currentEnvPath: process.env.ESBUILD_BINARY_PATH,
+        resolvedPlatformBinary,
+      })
+    ) {
+      Reflect.deleteProperty(process.env, "ESBUILD_BINARY_PATH");
+    }
     binaryPath = resolveEsbuildBinaryPath({
       currentEnvPath: process.env.ESBUILD_BINARY_PATH,
       resolvedPlatformBinary,
@@ -99,6 +147,14 @@ export function loadEsbuildModule(): typeof Esbuild {
     });
   } catch {
     // Dev layout: let esbuild resolve its own binary from node_modules.
+    if (
+      shouldClearInheritedEsbuildBinaryPath({
+        currentEnvPath: process.env.ESBUILD_BINARY_PATH,
+        resolvedPlatformBinary: "",
+      })
+    ) {
+      Reflect.deleteProperty(process.env, "ESBUILD_BINARY_PATH");
+    }
   }
   loadedEsbuildModule = withTemporaryEsbuildBinaryPath({
     binaryPath,

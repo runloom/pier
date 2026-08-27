@@ -29,6 +29,9 @@ export interface LiveModulesService extends LiveModulesApi {
   getArtifactByTicket(
     ticket: string
   ): { bytes: Buffer; moduleId: string; rootId: string } | undefined;
+  getAssetByTicket(
+    ticket: string
+  ): { bytes: Buffer; mimeType: string } | undefined;
 }
 
 export interface CreateLiveModulesServiceOptions {
@@ -292,6 +295,17 @@ export function createLiveModulesService(
         bytes: artifact.bytes,
         moduleId: artifact.moduleId,
         rootId: artifact.rootId,
+      };
+    },
+
+    getAssetByTicket(ticket) {
+      const asset = tickets.getAsset(ticket);
+      if (!asset) {
+        return;
+      }
+      return {
+        bytes: asset.bytes,
+        mimeType: asset.mimeType,
       };
     },
 

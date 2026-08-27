@@ -65,9 +65,19 @@ export const DATA_CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> =
         attr("available", "boolean", "fileAvailable"),
         attr("directory", "string", "fileDirectory"),
         attr(
+          "invokeCommand",
+          "(key: string) => Promise<CanvasFileCommandOutcome>",
+          "fileInvokeCommand"
+        ),
+        attr(
           "read",
           "(fileName: string) => Promise<CanvasFileReadResult>",
           "fileRead"
+        ),
+        attr(
+          "watch",
+          "(fileName: string, listener: (event: CanvasFileWatchEvent) => void) => () => void",
+          "fileWatch"
         ),
         attr(
           "write",
@@ -79,7 +89,12 @@ export const DATA_CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> =
         "interface CanvasFileApi {",
         "  available: boolean",
         "  directory: string",
+        "  invokeCommand(key: string): Promise<CanvasFileCommandOutcome>",
         "  read(fileName: string): Promise<CanvasFileReadResult>",
+        "  watch(",
+        "    fileName: string,",
+        "    listener: (event: CanvasFileWatchEvent) => void",
+        "  ): () => void",
         "  write(",
         "    fileName: string,",
         "    contents: string,",
@@ -94,6 +109,10 @@ export const DATA_CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> =
         "  return",
         "}",
         'const { contents, revision } = await file.read("data.json")',
+        'const stop = file.watch("data.json", () => {',
+        '  void file.read("data.json")',
+        "})",
+        'void file.invokeCommand("refresh")',
         'const outcome = await file.write("data.json", contents, revision)',
         'if (outcome.kind === "conflict") {',
         '  await file.read("data.json")',

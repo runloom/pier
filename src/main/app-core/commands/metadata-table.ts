@@ -190,6 +190,10 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["canvas"],
     capabilities: ["plugin:action"],
   },
+  "canvasCommand.invoke": {
+    allowedClientKinds: ["canvas"],
+    capabilities: ["canvas:command"],
+  },
   "settings.open": {
     allowedClientKinds: ["canvas"],
     capabilities: ["preferences:read"],
@@ -346,11 +350,7 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.sync": { capabilities: ["git:write"] },
   "git.undoLastCommit": { capabilities: ["git:write"] },
   "git.unstage": { capabilities: ["git:write"] },
-  // 统一评论能力：评论是桌面 UI 能力，仅 desktop-renderer 可达。
-  // v1 瘦身：只保留 list / listProjects / createThread / updateComment /
-  // deleteComment。
-  // 读命令 comments:read；写命令 comments:read + comments:write（写也要读，
-  // 因为 main 侧要校验 scope 与 worktreeKey 派生一致性）。
+  // Comments: desktop-renderer only; writes also require comments:read.
   "comments.list": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["comments:read"],
@@ -460,7 +460,6 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer", "cli-local"],
     capabilities: ["skills:read"],
   },
-  // Reuses terminal/agent launch write surface, not skills:read (design §4.1).
   "agent.launch.continue": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["workspace:open", "terminal:control"],

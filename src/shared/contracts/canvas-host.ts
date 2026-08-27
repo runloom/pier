@@ -39,6 +39,7 @@ export const CANVAS_HOST_ALLOWED_COMMANDS = [
   "pluginData.watchStart",
   "pluginData.watchStop",
   "pluginAction.invoke",
+  "canvasCommand.invoke",
   "preferences.read",
   "settings.open",
   "usageData.refresh",

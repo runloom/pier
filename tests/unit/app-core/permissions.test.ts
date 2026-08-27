@@ -498,4 +498,47 @@ describe("authorizeCommand", () => {
     ).toEqual({ ok: true });
     expect(isCanvasHostCommandAllowed("file.openPath")).toBe(false);
   });
+
+  it("grants canvas:command only to the canvas client kind", () => {
+    expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND.canvas).toContain(
+      "canvas:command"
+    );
+    for (const kind of pierClientKindSchema.options.filter(
+      (value) => value !== "canvas"
+    )) {
+      expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND[kind]).not.toContain(
+        "canvas:command"
+      );
+    }
+    expect(
+      authorizeCommand(
+        {
+          payload: {
+            canvasPath: ".pier/canvases/a.canvas.tsx",
+            key: "refresh",
+            projectRootPath: "/tmp",
+          },
+          type: "canvasCommand.invoke",
+        },
+        client("desktop-renderer")
+      )
+    ).toEqual({
+      ok: false,
+      reason:
+        "client kind desktop-renderer not allowed for canvasCommand.invoke",
+    });
+    expect(
+      authorizeCommand(
+        {
+          payload: {
+            canvasPath: ".pier/canvases/a.canvas.tsx",
+            key: "refresh",
+            projectRootPath: "/tmp",
+          },
+          type: "canvasCommand.invoke",
+        },
+        client("canvas")
+      )
+    ).toEqual({ ok: true });
+  });
 });

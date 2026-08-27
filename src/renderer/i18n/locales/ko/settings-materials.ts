@@ -72,6 +72,9 @@ export const settingsMaterials = {
     fileAvailable: "이 캔버스에 인접 파일 범위가 있으면 true.",
     fileDirectory: "캔버스의 프로젝트 상대 폴더.",
     fileRead: "인접 텍스트 파일을 읽습니다. 내용과 리비전을 반환합니다.",
+    fileWatch: "인접 파일 변경을 듣습니다. 반환된 함수를 호출하면 멈춥니다.",
+    fileInvokeCommand:
+      "이 캔버스 폴더 instance.json에 선언된 명령을 실행합니다.",
     fileWrite:
       "인접 파일에 씁니다. read의 리비전을 넘기거나, 파일이 없어야 할 때만 null을 넘깁니다.",
     fileContents: "인접 파일의 텍스트.",
@@ -88,6 +91,8 @@ export const settingsMaterials = {
     variant: "이 컨트롤의 모양.",
     label: "프레임의 짧은 레이블.",
     title: "프레임과 함께 보이는 제목.",
+    artboardPreset:
+      "휴대폰, 태블릿, 노트북, 데스크톱 크기. 직접 지정한 너비·높이가 우선합니다.",
     width: "너비(픽셀).",
     height: "높이(픽셀).",
     ratio: "너비 나누기 높이.",
@@ -108,9 +113,22 @@ export const settingsMaterials = {
       "네이티브 mermaid 텍스트. 시퀀스, 상태, 클래스, ER, 마인드맵에 씁니다.",
     renderNodeContent:
       "제목 아래 표시. 해당 노드는 contentHeight를 설정해야 합니다.",
+    flowGraphPositions: "노드 위치. 생략하면 내장 계층 레이아웃을 씁니다.",
+    onNodePositionsChange:
+      "노드를 드래그한 뒤에 호출됩니다. 레이아웃을 남기려면 직접 저장하세요.",
+    onSelectNode: "노드를 골랐을 때 호출됩니다.",
+    flowGraphOverlay:
+      "배치된 노드 위치에 붙는 표시(게이트, 캡션). 오버레이는 포인터를 무시합니다. 자식이 클릭되어야 하면 그 자식에서 포인터를 켭니다.",
+    sortableItems: "표시 순서의 항목 id.",
+    onReorder: "이 목록 안에서 놓은 뒤의 새 순서.",
+    onDropItem:
+      "다른 목록에서 온 항목이 여기 떨어질 때 항목 id와 삽입 위치를 돌려줍니다. 목록 간 이동은 이 콜백만 호출됩니다.",
+    onDrop: "이 대상에 놓은 항목 id.",
     value: "현재 값.",
     max: "상한.",
     gap: "자식 간격.",
+    stackFill:
+      "캔버스 루트로 쓰면 미리보기를 가득 채우고 읽기 란 폭을 벗깁니다.",
     align: "행 또는 열에서 자식이 맞춰지는 방식.",
     wrap: "자식이 다음 줄로 줄바꿈하는지.",
     orientation: "가로 또는 세로.",
@@ -176,6 +194,8 @@ export const settingsMaterials = {
     Select: "목록에서 하나 고르기",
     Skeleton: "불러오기 자리 표시",
     Slider: "슬라이더",
+    Sortable:
+      "카드 어디를 잡아도 순서를 바꿀 수 있고, 끌면 자리가 실시간으로 비켜 줍니다.",
     Spinner: "불러오기 스피너",
     StatusIcon: "상태 아이콘",
     Switch: "스위치",
@@ -186,6 +206,8 @@ export const settingsMaterials = {
     Tooltip: "호버 힌트",
     Table: "표",
     DataChart: "추세와 비교",
+    FlowGraph:
+      "상태 색이 있는 라이브 그래프. 노드에 보조 설명을 달 수 있고, 실행 중인 변은 따라 흐릅니다.",
     Mermaid:
       "노드로 흐름을 그리고, 네이티브 mermaid 시퀀스, 상태, 클래스, ER, 마인드맵도 씁니다.",
     canvasFile: "캔버스 옆 파일용 샌드박스. 충돌 포함",

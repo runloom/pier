@@ -17,6 +17,7 @@ import {
   createLiveModuleProtocolHandler,
   runtimeShimSource,
 } from "../../../../src/main/live-modules/protocol-handler.ts";
+import { recoverEsbuildService } from "../../../../src/main/services/live-modules/compile-context-cache.ts";
 import { isDeniedBareSpecifier } from "../../../../src/main/services/live-modules/fence.ts";
 import { createLiveModulesService } from "../../../../src/main/services/live-modules/service.ts";
 
@@ -54,6 +55,23 @@ describe("live-modules fence", () => {
     expect(isDeniedBareSpecifier("pier/canvas", false)).toBe(false);
     expect(isDeniedBareSpecifier("pier/host", false)).toBe(false);
     expect(isDeniedBareSpecifier("pier/visualizations", false)).toBe(true);
+    expect(isDeniedBareSpecifier("framer-motion", false)).toBe(true);
+    expect(
+      isDeniedBareSpecifier("framer-motion", false, "react", ["framer-motion"])
+    ).toBe(false);
+    expect(
+      isDeniedBareSpecifier("framer-motion/client", false, "react", [
+        "framer-motion",
+      ])
+    ).toBe(false);
+    expect(
+      isDeniedBareSpecifier("framer-motion-evil", false, "react", [
+        "framer-motion",
+      ])
+    ).toBe(true);
+    expect(
+      isDeniedBareSpecifier("electron", false, "react", ["electron"])
+    ).toBe(true);
   });
 
   it("allowlists framework bare packages only for non-React", () => {
@@ -93,6 +111,61 @@ describe("live-modules fence node_modules path", () => {
     const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
     service.registerRoot(spec);
     const result = await service.compile(spec.id, "nm.canvas.tsx");
+    expect(result.ok, JSON.stringify(result)).toBe(false);
+  });
+
+  it("compiles a project canvas that imports the default allowed package", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-live-motion-"));
+    const canvases = join(projectRoot, ".pier", "canvases");
+    const pkg = join(projectRoot, "node_modules", "framer-motion");
+    await mkdir(pkg, { recursive: true });
+    await mkdir(canvases, { recursive: true });
+    await writeFile(
+      join(pkg, "package.json"),
+      `${JSON.stringify({
+        exports: { ".": "./index.js" },
+        name: "framer-motion",
+        type: "module",
+      })}\n`
+    );
+    await writeFile(join(pkg, "index.js"), "export const motion = {};\n");
+    await writeFile(
+      join(canvases, "motion.canvas.tsx"),
+      [
+        'import { motion } from "framer-motion";',
+        "export default function Motion() {",
+        "  return <span>{String(Boolean(motion))}</span>;",
+        "}",
+        "",
+      ].join("\n")
+    );
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
+    service.registerRoot(spec);
+    const result = await service.compile(spec.id, "motion.canvas.tsx");
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+  });
+
+  it("still denies lodash on a default project root", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-live-lodash-"));
+    const canvases = join(projectRoot, ".pier", "canvases");
+    await mkdir(canvases, { recursive: true });
+    await writeFile(
+      join(canvases, "lodash.canvas.tsx"),
+      [
+        'import _ from "lodash";',
+        "export default function L() {",
+        "  return <span>{String(_)}</span>;",
+        "}",
+        "",
+      ].join("\n")
+    );
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
+    service.registerRoot(spec);
+    const result = await service.compile(spec.id, "lodash.canvas.tsx");
     expect(result.ok, JSON.stringify(result)).toBe(false);
   });
 });
@@ -778,5 +851,26 @@ describe("live-modules service", () => {
       expect(second.graph).toContain(".pier/canvases/dep.ts");
       expect(second.graph).toContain(".pier/canvases/graph.canvas.tsx");
     }
+  });
+
+  it("compiles again after the esbuild helper is recovered", async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const canvases = join(homeRoot, "canvases");
+    await mkdir(canvases, { recursive: true });
+    await writeFile(
+      join(canvases, "hello.canvas.tsx"),
+      "export default function Hello() { return <span>hi</span>; }\n"
+    );
+    const service = createService(homeRoot);
+    const spec = homeLiveRootSpec();
+    service.registerRoot(spec);
+
+    const first = await service.compile(spec.id, "hello.canvas.tsx");
+    expect(first.ok, JSON.stringify(first)).toBe(true);
+
+    await recoverEsbuildService();
+
+    const second = await service.compile(spec.id, "hello.canvas.tsx");
+    expect(second.ok, JSON.stringify(second)).toBe(true);
   });
 });

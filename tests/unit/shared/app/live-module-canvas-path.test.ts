@@ -169,6 +169,16 @@ describe("live-module-canvas-path", () => {
     ).toBe(".pier/canvases/b.json");
   });
 
+  it("allows one nested folder next to the canvas", () => {
+    const canvas = ".pier/canvases/demo/hello.canvas.tsx";
+    expect(canvasSiblingProjectPath(canvas, "nested/data.json")).toBe(
+      ".pier/canvases/demo/nested/data.json"
+    );
+    expect(canvasSiblingProjectPath(canvas, "state/positions.json")).toBe(
+      ".pier/canvases/demo/state/positions.json"
+    );
+  });
+
   it("refuses sibling names that leave the canvas directory", () => {
     const canvas = ".pier/canvases/demo/hello.canvas.tsx";
     for (const name of [
@@ -176,7 +186,9 @@ describe("live-module-canvas-path", () => {
       ".",
       "..",
       "../data.json",
-      "nested/data.json",
+      "a/b/c.json",
+      "nested/",
+      "nested/../x",
       "nested\\data.json",
       "/etc/passwd",
       "C:/secret.json",

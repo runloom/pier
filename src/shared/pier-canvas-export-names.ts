@@ -65,6 +65,7 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "DropdownMenuSubContent",
   "DropdownMenuSubTrigger",
   "DropdownMenuTrigger",
+  "Droppable",
   "Empty",
   "EmptyContent",
   "EmptyDescription",
@@ -81,6 +82,7 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "FieldSeparator",
   "FieldSet",
   "FieldTitle",
+  "FlowGraph",
   "Frame",
   "HoverCard",
   "HoverCardContent",
@@ -105,6 +107,7 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "Kbd",
   "KbdGroup",
   "Label",
+  "Layer",
   "Mermaid",
   "Pagination",
   "PaginationContent",
@@ -139,6 +142,7 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "Separator",
   "Skeleton",
   "Slider",
+  "Sortable",
   "Spinner",
   "Stack",
   "StatusIcon",
@@ -164,10 +168,11 @@ export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "TooltipContent",
   "TooltipProvider",
   "TooltipTrigger",
+  "WorldStage",
 ] as const;
 
 /**
- * Non-component exports: hooks and plain functions the host passes through.
+ * Non-component exports: hooks, format helpers, and `layoutFlowGraph`.
  *
  * `useCanvasFile` is the sibling-file sandbox (not the global `file.*` API).
  * Global commands, events, and snapshots live on `pier/host`.
@@ -181,6 +186,7 @@ export const PIER_CANVAS_VALUE_EXPORT_NAMES = [
   "formatDurationShort",
   "formatPercent",
   "formatRelativeTime",
+  "layoutFlowGraph",
   "useActivityOverview",
   "useCanvasFile",
   "useCostOverview",

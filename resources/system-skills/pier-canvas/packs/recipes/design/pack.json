@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "design",
+  "axis": "recipe",
+  "title": "Design mockup",
+  "description": "Multi-device product frames on a world stage. Comments stay in host Design Mode.",
+  "kind": "composition",
+  "stage": "world",
+  "template": "templates/design-mockup.canvas.tsx",
+  "gold": ".pier/canvases/design-mockup/",
+  "primitives": ["WorldStage", "Layer", "Artboard"],
+  "required": ["worldRoot", "deviceFrames"],
+  "antiPatterns": [
+    "ArtboardStage as the canvas root (that is a flow fit-all card)",
+    "stacking phone and desktop frames as a document inside Frame",
+    "hand-rolled annotation chrome; use host Design Mode pins",
+    "DocsShell or document font on a mockup",
+    "inventing methodology tabs for a mockup"
+  ],
+  "agentPrompt": "Freeform composition. Root the canvas in WorldStage. Place each screen on Artboard with preset (desktop / laptop / phone / tablet); explicit width/height still win. Use Layer x/y for world placement. UI font only. Do not wrap the mockup in Frame. Do not fake comment pins. Rewrite every user-visible string into the user's language. See templates/design-mockup.canvas.tsx and .pier/canvases/design-mockup/."
+}

@@ -100,6 +100,20 @@ describe("focus governance", () => {
     expect(graph).not.toContain('colorMode="system"');
   });
 
+  it("gates FlowGraph keyboard focus on interactive contracts only", () => {
+    const graph = source("packages/ui/src/flow-graph/graph.tsx");
+    const node = source("packages/ui/src/flow-graph/node.tsx");
+    const shell = source("packages/ui/src/flow-graph/shell.tsx");
+    expect(graph).toContain(
+      "const keyboardSelectable = onSelectNode !== undefined"
+    );
+    expect(node).toContain('type="button"');
+    expect(node).toContain('role="img"');
+    expect(graph).not.toContain("@xyflow/react");
+    expect(shell).toContain('role="application"');
+    expect(shell).toContain('role="img"');
+  });
+
   it("allows only intentional product tabIndex={0} stops", () => {
     const allow = new Set([
       // 键盘合约：缩放/平移、图片 diff 滑动条、表格列宽分隔条、右键菜单、tab 激活、列表项
@@ -107,6 +121,7 @@ describe("focus governance", () => {
       "packages/ui/src/image-preview/world-canvas.tsx",
       "packages/ui/src/diff-view/image-diff/compare.tsx",
       "src/plugins/builtin/files/renderer/markdown/table/table-resize.tsx", // table column resize separator (arrow-key adjustable, mirrors image diff slider)
+      "src/plugins/builtin/files/renderer/preview/canvas.tsx", // canvas world stage (zoom/pan keyboard contract; wheel zoom is focus-gated)
       "src/plugins/builtin/files/renderer/preview/image.tsx",
       "src/renderer/components/workspace/panel-tab-header.tsx",
       "src/renderer/pages/settings/components/project/section-list.tsx",

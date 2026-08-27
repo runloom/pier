@@ -11,6 +11,7 @@ import {
   CardTitle,
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
   Empty,
@@ -235,16 +236,18 @@ function PluginAccountCompose({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-auto min-w-48">
-                  {others.map((row) => (
-                    <DropdownMenuItem
-                      key={row.id}
-                      onSelect={() => {
-                        switchAccount(row.id);
-                      }}
-                    >
-                      {row.label}
-                    </DropdownMenuItem>
-                  ))}
+                  <DropdownMenuGroup>
+                    {others.map((row) => (
+                      <DropdownMenuItem
+                        key={row.id}
+                        onSelect={() => {
+                          switchAccount(row.id);
+                        }}
+                      >
+                        {row.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}

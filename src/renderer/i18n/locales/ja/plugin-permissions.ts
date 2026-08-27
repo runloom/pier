@@ -15,6 +15,7 @@ export const pluginPermissions = {
   "panel:register": "パネルを登録する",
   "plugin:read": "プラグイン情報を読む",
   "plugin:action": "キャンバスから宣言済みのプラグイン操作を実行する",
+  "canvas:command": "キャンバスが宣言したコマンドを実行する",
   "plugin:write": "プラグインの状態を変更する",
   "preferences:read": "設定を読む",
   "preferences:write": "設定を変更する",

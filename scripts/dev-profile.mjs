@@ -47,6 +47,8 @@ const MAC_DEV_APP_ICON_NAME = "AppIcon";
 // Icon name inside the repo-committed build/Assets.car (see scripts/app-icon-layered.mjs).
 const MAC_TAHOE_ICON_NAME = "app-icon";
 const MAC_DEV_ELECTRON_ICON_REVISION = 7;
+/** Bump when PierDev helper signing changes so stale copies are rebuilt. */
+export const MAC_DEV_ELECTRON_SIGN_REVISION = 1;
 const MAC_ICON_CANVAS = 1024;
 const MAC_ICON_PLATE_INSET = 100;
 const MAC_ICON_PLATE_SIZE = 824;
@@ -70,6 +72,24 @@ const MAC_DEV_HELPER_VARIANTS = [
   { id: "helper.Plugin", suffix: " (Plugin)" },
   { id: "helper.Renderer", suffix: " (Renderer)" },
 ];
+/**
+ * Chromium helper contract. Adhoc re-sign after renaming Electron → PierDev
+ * must keep library validation off, or macOS SIGKILLs the GPU process
+ * (exit 9) when it loads `libGLESv2.dylib`.
+ */
+const MAC_DEV_HELPER_ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>
+`;
 const LSREGISTER =
   "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
 
@@ -107,6 +127,7 @@ export function macDevElectronRuntimeStamp(input) {
   /** @type {Record<string, string | number>} */
   const stamp = {
     appName: MAC_DEV_ELECTRON_APP_NAME,
+    signRevision: MAC_DEV_ELECTRON_SIGN_REVISION,
     sourceApp: input.sourceApp,
     sourceVersion: input.sourceVersion,
   };
@@ -131,6 +152,7 @@ export function macDevElectronRuntimeIsCurrent(stamp, expected) {
     record.sourceApp === expected.sourceApp &&
     record.sourceVersion === expected.sourceVersion &&
     record.appName === MAC_DEV_ELECTRON_APP_NAME &&
+    record.signRevision === MAC_DEV_ELECTRON_SIGN_REVISION &&
     record.iconFile === MAC_DEV_APP_ICON_NAME &&
     record.iconRevision === MAC_DEV_ELECTRON_ICON_REVISION &&
     record.iconHash === expected.iconHash
@@ -366,6 +388,57 @@ export function brandPierDevHelpers(
     branded = true;
   }
   return branded;
+}
+
+/**
+ * Sign renamed PierDev helpers inside-out. Never `--deep`: that flag
+ * replaces Electron Framework's linker-signed dylibs with a mismatched
+ * adhoc identity, and the GPU helper then cannot load `libGLESv2`.
+ *
+ * @param {string} targetApp
+ */
+export function signMacDevElectronRuntime(targetApp) {
+  const entitlementsPath = path.join(
+    path.dirname(targetApp),
+    "helper.entitlements"
+  );
+  writeFileSync(entitlementsPath, MAC_DEV_HELPER_ENTITLEMENTS);
+  const sign = (bundle) => {
+    runChecked("codesign", [
+      "--sign",
+      "-",
+      "--force",
+      "--timestamp=none",
+      "--options",
+      "runtime",
+      "--entitlements",
+      entitlementsPath,
+      bundle,
+    ]);
+  };
+  const frameworks = path.join(targetApp, "Contents", "Frameworks");
+  for (const { suffix } of MAC_DEV_HELPER_VARIANTS) {
+    const helperName = `${MAC_DEV_ELECTRON_APP_NAME} Helper${suffix}`;
+    const helperApp = path.join(frameworks, `${helperName}.app`);
+    if (!existsSync(helperApp)) {
+      continue;
+    }
+    const helperExec = path.join(helperApp, "Contents", "MacOS", helperName);
+    if (existsSync(helperExec)) {
+      sign(helperExec);
+    }
+    sign(helperApp);
+  }
+  const mainExec = path.join(
+    targetApp,
+    "Contents",
+    "MacOS",
+    MAC_DEV_ELECTRON_APP_NAME
+  );
+  if (existsSync(mainExec)) {
+    sign(mainExec);
+  }
+  sign(targetApp);
 }
 
 function registerDevAppWithLaunchServices(targetApp) {
@@ -1329,7 +1402,7 @@ function prepareMacDevElectronRuntime(profile, env) {
       targetApp,
       typeof iconApplied === "string" ? iconApplied : undefined
     );
-    runChecked("codesign", ["--force", "--deep", "--sign", "-", targetApp]);
+    signMacDevElectronRuntime(targetApp);
     registerDevAppWithLaunchServices(targetApp);
     if (iconApplied) {
       writeJson(

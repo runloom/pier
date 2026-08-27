@@ -60,6 +60,42 @@ describe("createRendererCommandService", () => {
     });
   });
 
+  it("确认对话框会聚焦目标窗口", async () => {
+    let focus: boolean | undefined;
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-confirm",
+      host: {
+        send(_envelope, _windowId, options) {
+          focus = options?.focus;
+          return 42;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute({
+      command: "echo hello",
+      intent: "default",
+      type: "dialog.confirm",
+      windowId: "win-1",
+    });
+    expect(focus).toBe(true);
+    service.resolve(
+      {
+        data: true,
+        ok: true,
+        requestId: "renderer-req-confirm",
+      },
+      42
+    );
+
+    await expect(promise).resolves.toEqual({
+      data: true,
+      ok: true,
+      requestId: "renderer-req-confirm",
+    });
+  });
+
   it("查询类 renderer command 不主动聚焦窗口", async () => {
     let focus: boolean | undefined;
     const service = createRendererCommandService({

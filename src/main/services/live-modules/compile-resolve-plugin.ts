@@ -11,6 +11,7 @@ import { diagnosticFromError } from "./diagnostics.ts";
 import {
   assertNotNodeModulesPath,
   assertPathInsideRoot,
+  isAllowedBarePackage,
   isDeniedBareSpecifier,
   isPathWithinRoot,
 } from "./fence.ts";
@@ -62,6 +63,7 @@ function importerInNodeModules(
 }
 
 export interface ResolvePluginContext {
+  allowedBarePackages: readonly string[];
   allowNodeModules: boolean;
   contentRoot: string;
   entryAbsolutePath: string;
@@ -233,7 +235,8 @@ export function createLiveModuleResolvePlugin(
         const deniedBare = isDeniedBareSpecifier(
           args.path,
           ctx.allowNodeModules,
-          ctx.framework
+          ctx.framework,
+          ctx.allowedBarePackages
         );
         // Transitive deps inside node_modules may bare-import packages
         // outside the framework allowlist; canvas/project source may not.
@@ -294,8 +297,12 @@ export function createLiveModuleResolvePlugin(
                 }
               }
             }
-            // allowNodeModules:true must actually resolve bare packages.
-            if (!resolved && ctx.allowNodeModules) {
+            // allowNodeModules or the per-root package list must resolve.
+            if (
+              !resolved &&
+              (ctx.allowNodeModules ||
+                isAllowedBarePackage(args.path, ctx.allowedBarePackages))
+            ) {
               resolved = resolveProjectPackage(
                 args.resolveDir || ctx.entryDir,
                 args.path
@@ -326,7 +333,12 @@ export function createLiveModuleResolvePlugin(
             (isFrameworkBarePackage(args.path, ctx.framework) ||
               real.includes(`${sep}node_modules${sep}`) ||
               real.includes("/node_modules/"));
-          assertNotNodeModulesPath(real, ctx.allowNodeModules, ctx.framework);
+          assertNotNodeModulesPath(
+            real,
+            ctx.allowNodeModules ||
+              isAllowedBarePackage(args.path, ctx.allowedBarePackages),
+            ctx.framework
+          );
           // Watch project/source files only — not deep registry packages.
           if (!isProjectPkg) {
             addToGraph(ctx.graphRef, real, ctx.projectRoot, ctx.contentRoot);

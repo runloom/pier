@@ -250,7 +250,7 @@ describe("ImagePreviewCanvas", () => {
     expect(viewport.scrollTop).toBe(148);
   });
 
-  it("zooms with plain wheel and ctrl/meta+wheel", async () => {
+  it("zooms with stepped wheel and smooth ctrl+wheel pinch", async () => {
     render(
       <ImagePreviewCanvas
         alt="shot"
@@ -264,10 +264,12 @@ describe("ImagePreviewCanvas", () => {
 
     fireEvent.wheel(viewport, { deltaY: -40 });
     expect(screen.getByText("125%")).toBeVisible();
+    // Trackpad pinch (ctrl+wheel) is smooth: 1.25 × e^(-0.4) ≈ 0.84.
     fireEvent.wheel(viewport, { ctrlKey: true, deltaY: 40 });
-    expect(screen.getByText("100%")).toBeVisible();
+    expect(screen.getByText("84%")).toBeVisible();
+    // Plain (or meta) wheel keeps the multiplicative step.
     fireEvent.wheel(viewport, { metaKey: true, deltaY: -40 });
-    expect(screen.getByText("125%")).toBeVisible();
+    expect(screen.getByText("105%")).toBeVisible();
   });
 
   it("renders a copy-image button that invokes onCopyImage", async () => {

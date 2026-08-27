@@ -27,4 +27,24 @@ describe("canvas host 只读白名单", () => {
       commandMetadataFor("pluginAction.invoke").allowedClientKinds
     ).toEqual(["canvas"]);
   });
+
+  it("canvasCommand.invoke 是唯一使用 canvas:command 的画布命令", () => {
+    const commandCommands = CANVAS_HOST_ALLOWED_COMMANDS.filter((type) =>
+      commandMetadataFor(type).capabilities.includes("canvas:command")
+    );
+    expect(commandCommands).toEqual(["canvasCommand.invoke"]);
+    expect(
+      commandMetadataFor("canvasCommand.invoke").allowedClientKinds
+    ).toEqual(["canvas"]);
+    expect(
+      commandMetadataFor("canvasCommand.invoke").capabilities.some(
+        (capability) => capability.endsWith(":write")
+      )
+    ).toBe(false);
+  });
+
+  it("does not expose run.spawn or run.stop on the canvas allowlist", () => {
+    expect(CANVAS_HOST_ALLOWED_COMMANDS).not.toContain("run.spawn");
+    expect(CANVAS_HOST_ALLOWED_COMMANDS).not.toContain("run.stop");
+  });
 });

@@ -1,0 +1,9 @@
+{
+  "commands": [
+    {
+      "command": "cat graph.json",
+      "cwd": "canvasDir",
+      "key": "refresh"
+    }
+  ]
+}

@@ -13,6 +13,7 @@ import {
   appCliStatusRequestSchema,
   appCliUninstallRequestSchema,
 } from "./app-cli.ts";
+import { canvasCommandInvokeRequestSchema } from "./canvas-command.ts";
 import { commentsCommandSchemas } from "./comments/index.ts";
 import {
   environmentProjectRequestSchema,
@@ -297,6 +298,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     }),
     type: z.literal("pluginAction.invoke"),
   }),
+  canvasCommandInvokeRequestSchema,
   z.object({
     section: z.string().min(1).optional(),
     type: z.literal("settings.open"),

@@ -1090,6 +1090,7 @@ describe("WorkspaceHeaderActions", () => {
       "Start Claude",
       "Start Codex",
       "Run Task…",
+      "New Tab",
       "Create Worktree",
       "New Window",
     ]);
@@ -1097,8 +1098,8 @@ describe("WorkspaceHeaderActions", () => {
       screen.getByText("Run", { selector: "[cmdk-group-heading]" })
     ).toBeVisible();
     expect(
-      screen.queryByText("Panel", { selector: "[cmdk-group-heading]" })
-    ).not.toBeInTheDocument();
+      screen.getByText("Panel", { selector: "[cmdk-group-heading]" })
+    ).toBeVisible();
     expect(
       screen.getByText("Worktree", { selector: "[cmdk-group-heading]" })
     ).toBeVisible();

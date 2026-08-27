@@ -28,6 +28,7 @@ import { executeAgentAssetsCommand } from "./commands/agent-assets.ts";
 import { executeAiCommand } from "./commands/ai.ts";
 import { executeAppCliCommand } from "./commands/app-cli.ts";
 import { executeAppSnapshotCommand } from "./commands/app-snapshot.ts";
+import { executeCanvasCommand } from "./commands/canvas-command.ts";
 import { executeCommentsCommand } from "./commands/comments.ts";
 import { executeEnvironmentCommand } from "./commands/environment.ts";
 import { executeFileCommand } from "./commands/file.ts";
@@ -374,6 +375,8 @@ async function executeCommandByDomain(
       ),
     (cmd: PierCommand) => executePierHomeCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeLiveModulesCommand(requestId, cmd, services),
+    (cmd: PierCommand) =>
+      executeCanvasCommand(requestId, cmd, services, context),
     (cmd: PierCommand) => executeAgentAssetsCommand(requestId, cmd, services),
     (cmd: PierCommand) =>
       executeWorktreeCommand(

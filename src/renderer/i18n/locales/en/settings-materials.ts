@@ -73,6 +73,10 @@ export const settingsMaterials = {
     fileAvailable: "True when this canvas has a sibling-file scope.",
     fileDirectory: "Project-relative folder of the canvas.",
     fileRead: "Read a sibling text file. Returns contents and a revision.",
+    fileWatch:
+      "Listen for changes to a sibling file. Call the returned function to stop.",
+    fileInvokeCommand:
+      "Run a command declared in this canvas folder’s instance.json.",
     fileWrite:
       "Write a sibling file. Pass the revision from read, or null only when the file must not exist.",
     fileContents: "Text of the sibling file.",
@@ -89,6 +93,8 @@ export const settingsMaterials = {
     variant: "Look of this control.",
     label: "Short label on the frame.",
     title: "Title shown with the frame.",
+    artboardPreset:
+      "Phone, tablet, laptop, or desktop size. Width and height you set still win.",
     width: "Width in pixels.",
     height: "Height in pixels.",
     ratio: "Width divided by height.",
@@ -110,9 +116,23 @@ export const settingsMaterials = {
       "Native mermaid text. Use this for sequence, state, class, ER, and mind map.",
     renderNodeContent:
       "Display chrome under the title. That node must set contentHeight.",
+    flowGraphPositions:
+      "Optional node positions. Omit to use the built-in layout.",
+    onNodePositionsChange:
+      "Called after a node is dragged. Save this if you want the layout to stick.",
+    onSelectNode: "Called when a node is selected.",
+    flowGraphOverlay:
+      "Marks anchored to laid-out node positions, such as gates or captions. The overlay ignores pointer events unless a child turns them back on.",
+    sortableItems: "Item ids in display order.",
+    onReorder: "Called with the new order after a drop in this list.",
+    onDropItem:
+      "Called with the item id and insertion index when an item from another list lands here. Only this callback fires for a cross-list move.",
+    onDrop: "Called with the dragged item id when it lands on this target.",
     value: "Current value.",
     max: "Upper bound.",
     gap: "Space between children.",
+    stackFill:
+      "Use as the canvas root for a full-bleed board or dashboard. The shell drops the reading column.",
     align: "How children line up across the row or column.",
     wrap: "Whether children wrap to the next line.",
     orientation: "Horizontal or vertical.",
@@ -179,6 +199,7 @@ export const settingsMaterials = {
     Select: "Pick one item from a list",
     Skeleton: "Loading placeholder",
     Slider: "Slider",
+    Sortable: "Reorder by dragging a card anywhere; drops show a live gap.",
     Spinner: "Loading spinner",
     StatusIcon: "Status icon",
     Switch: "Switch",
@@ -189,6 +210,8 @@ export const settingsMaterials = {
     Tooltip: "Hover hint",
     Table: "Table",
     DataChart: "Trends and comparisons",
+    FlowGraph:
+      "Live graph with status colors. Nodes can carry a secondary line; edges follow a running source.",
     Mermaid:
       "Flowcharts from nodes, plus native mermaid sequence, state, class, ER, and mind maps.",
     canvasFile: "Sibling-file sandbox next to the canvas, including conflicts",

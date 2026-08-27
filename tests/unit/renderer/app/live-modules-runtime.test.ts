@@ -24,7 +24,11 @@ describe("live-modules runtime", () => {
     const components = new Set<string>(PIER_CANVAS_COMPONENT_EXPORT_NAMES);
     for (const name of PIER_CANVAS_VALUE_EXPORT_NAMES) {
       expect(components.has(name)).toBe(false);
-      expect(name.startsWith("use") || name.startsWith("format")).toBe(true);
+      expect(
+        name.startsWith("use") ||
+          name.startsWith("format") ||
+          name === "layoutFlowGraph"
+      ).toBe(true);
       expect(pierCanvasExports[name]).toBeTypeOf("function");
     }
   });

@@ -24,6 +24,19 @@ describe("buildCspPolicy", () => {
     ).toBe(false);
   });
 
+  it("allows loopback connect-src in both modes without https or a bare host wildcard", () => {
+    for (const isDev of [true, false]) {
+      const connectSrc = buildCspPolicy(isDev)
+        .split("; ")
+        .find((directive) => directive.startsWith("connect-src "));
+      expect(connectSrc, `dev=${isDev}`).toBeDefined();
+      expect(connectSrc).toContain("http://localhost:*");
+      expect(connectSrc).toContain("http://127.0.0.1:*");
+      expect(connectSrc).not.toMatch(/\bhttps:/u);
+      expect(connectSrc).not.toMatch(/(?:^|\s)\*(?:\s|;|$)/u);
+    }
+  });
+
   it("allows Shiki wasm compilation without production unsafe-eval", () => {
     const production = buildCspPolicy(false);
     const development = buildCspPolicy(true);

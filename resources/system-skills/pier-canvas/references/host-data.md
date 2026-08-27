@@ -77,6 +77,57 @@ Live composition: `.pier/canvases/workbench-examples/` — Codex uses compact
 goes through `settings.open` with `section: "plugin:pier.codex"` or
 `"plugin:pier.grok"`.
 
+## Loopback fetch
+
+Production CSP allows `http://localhost:*` and `http://127.0.0.1:*` on
+`connect-src`. Canvas code may poll a local orchestrator. Do not fetch
+`https:` origins — remote data goes through a host proxy or a plugin
+projection.
+
+```ts
+const response = await fetch("http://127.0.0.1:8787/graph")
+if (!response.ok) {
+  // Show Alert with the next step. Do not swallow.
+}
+```
+
+## Sibling watch
+
+`useCanvasFile().watch(fileName, listener)` listens to one adjacent file
+(or one nested folder, `state/positions.json`). Call the returned function
+on unmount. Invalid names throw the same way `read` does.
+
+## Declared commands
+
+Shell strings are **not** on the host command. Put them in this canvas
+folder’s `instance.json`:
+
+```json
+{
+  "commands": [
+    { "key": "refresh", "command": "your-cli status", "cwd": "canvasDir" }
+  ]
+}
+```
+
+Then `await file.invokeCommand("refresh")`. First run (or after the command
+string changes) asks the user to confirm. Memory lives in userData, never
+in the repo. Decline returns `{ kind: "cancelled" }`. Do not call
+`run.spawn` / `run.stop` from `pier/host`.
+
+When the result is `{ kind: "started", runId }`, read stdout through the
+existing task output channel — not a second spawn API:
+
+```ts
+const runsChanged = useHostSnapshot("pier://tasks:runs-changed")
+const output = await host.invoke({ type: "run.output", runId: outcome.runId })
+// Re-pull when runsChanged.data ticks. Parse chunks[].text locally.
+```
+
+Gold uses `cat graph.json` so the command output *is* the graph (offline
+closed loop). Replace that string with the orchestrator CLI when you have
+one. Gold: `.pier/canvases/dag-viewer/`.
+
 ## Hard bans
 
 - `window.pier`

@@ -46,6 +46,7 @@ export type CanvasHostCommandType =
   | "pluginData.watchStart"
   | "pluginData.watchStop"
   | "pluginAction.invoke"
+  | "canvasCommand.invoke"
   | "preferences.read"
   | "settings.open"
   | "usageData.refresh"

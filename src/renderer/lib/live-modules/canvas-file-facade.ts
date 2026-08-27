@@ -1,4 +1,9 @@
 import { useLiveModuleCanvasFileScope } from "@plugins/api/live-module-canvas-file.tsx";
+import {
+  type CanvasCommandInvokeResult,
+  canvasCommandInvokeResultSchema,
+} from "@shared/contracts/canvas-command.ts";
+import type { FileWatchChangeKind } from "@shared/contracts/file/watch.ts";
 import type { FileDocumentExpectedState } from "@shared/contracts/file.ts";
 import { canvasSiblingProjectPath } from "@shared/live-module-canvas-path.ts";
 import i18next from "i18next";
@@ -8,10 +13,10 @@ import { useMemo } from "react";
  * `useCanvasFile()` — the sibling-file read/write channel exposed to canvases
  * through `pier/canvas`.
  *
- * Scope on purpose: a canvas names a file next to itself and nothing else. The
- * host supplies the project root and the canvas directory, and the write goes
- * through `file.writeDocument`, which keeps the revision check, the atomic
- * rename and the project-root fence the rest of the app relies on.
+ * Scope on purpose: a canvas names a file in its own folder (or one nested
+ * folder) and nothing else. The host supplies the project root and the canvas
+ * directory. Writes go through `file.writeDocument`. `watch` wraps the existing
+ * `pier://file:changed` listener after starting the project-root file watch.
  *
  * Revisions are not cached here: a caller reads to learn the current revision,
  * writes against it, and gets `conflict` back when the file moved underneath.
@@ -30,12 +35,27 @@ export type CanvasFileWriteOutcome =
   | { kind: "conflict"; message: string }
   | { kind: "failed"; message: string };
 
+export interface CanvasFileWatchEvent {
+  kind: FileWatchChangeKind;
+  path: string;
+}
+
+export type CanvasFileCommandOutcome =
+  | CanvasCommandInvokeResult
+  | { kind: "failed"; message: string };
+
 export interface CanvasFileApi {
   /** False when the canvas has no file scope (preview or test harness). */
   available: boolean;
   /** Project-relative directory of the canvas, for user-facing messages. */
   directory: string;
+  invokeCommand: (key: string) => Promise<CanvasFileCommandOutcome>;
   read: (fileName: string) => Promise<CanvasFileReadResult>;
+  /** Stop listening by calling the returned function (including on unmount). */
+  watch: (
+    fileName: string,
+    listener: (event: CanvasFileWatchEvent) => void
+  ) => () => void;
   /** `expectedRevision: null` means "the file must not exist yet". */
   write: (
     fileName: string,
@@ -86,7 +106,7 @@ export function useCanvasFile(): CanvasFileApi {
         throw new Error(
           message(
             "canvas.file.invalidName",
-            "A canvas may only read or write files next to itself."
+            "A canvas may only use files in its own folder."
           )
         );
       }
@@ -96,6 +116,59 @@ export function useCanvasFile(): CanvasFileApi {
     return {
       available: scope !== null,
       directory: scope?.directory ?? "",
+      invokeCommand: async (key) => {
+        if (!scope) {
+          return {
+            kind: "failed",
+            message: message(
+              "canvas.command.unavailable",
+              "This canvas isn’t opened from a file, so it can’t run commands."
+            ),
+          };
+        }
+        const host = window.pier?.canvasHost;
+        if (!host) {
+          return {
+            kind: "failed",
+            message: message(
+              "canvas.command.unavailable",
+              "This canvas isn’t opened from a file, so it can’t run commands."
+            ),
+          };
+        }
+        try {
+          const raw = await host.invoke({
+            payload: {
+              canvasPath: scope.path,
+              key,
+              projectRootPath: scope.root,
+            },
+            type: "canvasCommand.invoke",
+          });
+          const parsed = canvasCommandInvokeResultSchema.safeParse(raw);
+          if (!parsed.success) {
+            return {
+              kind: "failed",
+              message: message(
+                "canvas.command.failed",
+                "Couldn’t run that command."
+              ),
+            };
+          }
+          return parsed.data;
+        } catch (error) {
+          return {
+            kind: "failed",
+            message:
+              error instanceof Error
+                ? error.message
+                : message(
+                    "canvas.command.failed",
+                    "Couldn’t run that command."
+                  ),
+          };
+        }
+      },
       read: async (fileName) => {
         const path = resolvePath(fileName);
         const result = await window.pier.files.readDocument({
@@ -112,6 +185,23 @@ export function useCanvasFile(): CanvasFileApi {
           );
         }
         return { contents: result.contents, revision: result.revision };
+      },
+      watch: (fileName, listener) => {
+        if (!scope) {
+          return () => undefined;
+        }
+        const path = resolvePath(fileName);
+        const watchFn = window.pier.files?.watch;
+        if (!watchFn) {
+          return () => undefined;
+        }
+        return watchFn(scope.root, (event) => {
+          for (const change of event.changes) {
+            if (change.path === path) {
+              listener({ kind: change.kind, path: change.path });
+            }
+          }
+        });
       },
       write: async (fileName, contents, expectedRevision) => {
         let path: string;

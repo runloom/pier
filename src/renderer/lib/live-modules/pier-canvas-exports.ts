@@ -43,6 +43,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@pier/ui/collapsible.tsx";
+import { Droppable, Sortable } from "@pier/ui/dnd/index.tsx";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -80,6 +81,7 @@ import {
   FieldSet,
   FieldTitle,
 } from "@pier/ui/field.tsx";
+import { layoutFlowGraph } from "@pier/ui/flow-graph/index.tsx";
 import {
   formatBytes,
   formatCompactCurrency,
@@ -182,7 +184,12 @@ import { useCanvasFile } from "./canvas-file-facade.ts";
 import { useActivityOverview } from "./canvas-hooks/use-activity-overview.ts";
 import { useCostOverview } from "./canvas-hooks/use-cost-overview.ts";
 import { useSystemResources } from "./canvas-hooks/use-system-resources.ts";
-import { Artboard, ArtboardStage } from "./pier-canvas-artboard.tsx";
+import {
+  Artboard,
+  ArtboardStage,
+  Layer,
+  WorldStage,
+} from "./pier-canvas-artboard.tsx";
 import { DocsShell, Frame, Row, Stack, Text } from "./pier-canvas-layout.ts";
 import { pierCanvasVisualizationExports } from "./pier-canvas-visualization-exports.ts";
 
@@ -241,6 +248,7 @@ export const pierCanvasExports = {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  Droppable,
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -289,6 +297,8 @@ export const pierCanvasExports = {
   Kbd,
   KbdGroup,
   Label,
+  Layer,
+  layoutFlowGraph,
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -322,6 +332,7 @@ export const pierCanvasExports = {
   Separator,
   Skeleton,
   Slider,
+  Sortable,
   Spinner,
   Stack,
   StatusIcon,
@@ -351,6 +362,7 @@ export const pierCanvasExports = {
   useCanvasFile,
   useCostOverview,
   useSystemResources,
+  WorldStage,
 } as const satisfies Record<PierCanvasExportName, unknown>;
 
 export type PierCanvasExports = typeof pierCanvasExports;
