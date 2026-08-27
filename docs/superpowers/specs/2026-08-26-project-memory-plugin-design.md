@@ -2,11 +2,12 @@
 
 日期：2026-08-26  
 作者：待填  
-状态：v3 草稿（codex 四轮评审定稿：R1 4 blocker+11 major → 全采纳重写 v2；R2 blocker 清零、补 5 项遗留；R3 验收 4/5、补全 WAL 协议；R4 结论「可进实现计划」）  
+状态：L1 引擎现行；**插件表面以 [2026-08-27 项目记忆设置页](./2026-08-27-project-memory-settings-ui-design.md) 为准**（dockview 面板作废）。  
 范围：Pier 宿主新增受管资产注册服务与命令接线 + 新增 builtin 插件 `pier.memory`（纯 renderer 表面）；记忆交付覆盖 claude / codex / cursor / gemini / opencode / omp 六个智能体。  
 取代：同日 v1 草稿（其「插件 main 编排」「全局 enabled 配置」「realpath 收敛 projectKey」「pierManaged 注入字段」等设计作废）。  
 相关：
 
+- [2026-08-27 项目记忆设置页](./2026-08-27-project-memory-settings-ui-design.md)（产品表面）
 - [Claude Code Memory 官方文档](https://code.claude.com/docs/en/memory)（auto memory 设计参照）
 - [MCP 官方参考记忆服务器](https://github.com/modelcontextprotocol/servers/tree/main/src/memory)（唯一引擎，**锁定 `@modelcontextprotocol/server-memory@0.6.3`**）
 - [OpenHuman Memory Tree / Obsidian Wiki](https://tinyhumans.gitbook.io/openhuman/features/memory-tree)（「Markdown 即记忆镜像」路线的重量级印证；其 markdown 镜像与热度主题树列入 L2 参考）
@@ -20,7 +21,7 @@ Pier 目前没有跨会话、跨智能体的知识积累层。本设计把「项
 
 1. **引擎零自研**：托管官方 memory MCP 服务器（本地 JSONL 知识图谱）。读写检索全部由各智能体在会话中经原生 MCP 工具完成。引擎可行性已 PoC 实测（stdio 握手、定向存储、claude 真实会话写入与召回全链路通过）。
 2. **宿主承担全部编排与文件操作**：`agent-managed-assets` 服务负责 store 管理、五个 canonical MCP 配置的受管条目写入/移除、AGENTS.md 托管引导段维护、ownership ledger 与状态派生。插件不触碰文件系统。
-3. **插件只做产品表面**：一个轻量 dockview 面板（开关 + 状态摘要），经宿主提供的窄 facade 表达意图。
+3. **插件只做产品表面**：设置页（项目列表 + 开关 + 可删条目），经宿主窄 facade 表达意图。见 [2026-08-27](./2026-08-27-project-memory-settings-ui-design.md)。
 
 判定对齐产品哲学：去掉 Pier 后用户手动贴同样配置效果相同；Pier 的价值是零配置托管、跨智能体一致、可视化治理。
 
@@ -53,18 +54,18 @@ Pier 目前没有跨会话、跨智能体的知识积累层。本设计把「项
 
 ### 目标（L1）
 
-1. 用户在「项目记忆」面板一键为当前项目开启/关闭记忆。
+1. 用户在设置「项目记忆」页为选定项目开启/关闭记忆，并可删除单条 observation。
 2. 开启后，全部已装且支持 MCP 的智能体在该项目内获得同一套记忆工具与使用引导。
 3. 记忆随项目积累：约定、坑、决策、环境事实跨会话、跨智能体复用。
 4. 关闭可完整回退托管内容；ownership ledger 保证只动 Pier 自己写入的东西。
 
 ### 非目标（L2 及以后）
 
-- 记忆浏览/编辑面板增强、回合末蒸馏候选队列
+- 编辑 observation 正文、新建条目、关系图浏览、回合末蒸馏候选队列
 - 团队共享存储（git 内记忆文件）
 - mem0 云 provider（serverSpec 参数化留缝）
 - 替代各智能体原生 auto-memory；user 级 MCP 配置写入
-- 插件停用时的自动领域清理；但三个宿主命令常驻命令面板（分类「项目记忆」），插件面板消失后关闭路径仍可达
+- 插件停用时的自动领域清理（设置页随插件消失；引擎文件与账本保留）
 
 ---
 
@@ -72,7 +73,7 @@ Pier 目前没有跨会话、跨智能体的知识积累层。本设计把「项
 
 ```
 ┌─ 插件 pier.memory（纯 renderer 产品表面）──────────────┐
-│ panel: 开关(desiredState) + 状态摘要 + dialogs 详情      │
+│ settingsPage: 项目列表 + 开关 + 可删条目                   │
 └──────────────┬───────────────────────────────────────────┘
                │ context.projectMemory 窄 facade（宿主实现）
                │ → IPC → PierCommand（allowedClientKinds: desktop-renderer）
@@ -102,31 +103,19 @@ Pier 目前没有跨会话、跨智能体的知识积累层。本设计把「项
 v1 假设「manifest permissions 声明即可授予」不成立：main 侧 `authorizeCommand` 按 client-kind 授权（AGENTS.md 明示不区分插件主体），且 desktop-renderer 默认集不含新能力时会一律拒绝。v2 采用与 git 能力完全相同的既有模式：
 
 1. **capability**：`pierCapabilitySchema` 新增单项 `managedAssets:write`（合并 v1 的两项），**加入 desktop-renderer 默认集**——先例即 `git:write`（permissions.ts L110 注释：「主体提供能力，二次确认由插件 UI 负责」）。不进入其它 client-kind 默认集。
-2. **命令**：宿主注册 `pier.memory.enable` / `pier.memory.disable` / `pier.memory.status` 三个 PierCommand 并**同时登记进命令面板**（分类「项目记忆」，标题走宿主 locale）；`CommandMetadata.allowedClientKinds = ["desktop-renderer"]`，不进 CLI local-control。shared 契约（zod strict schema）+ command metadata + router executor + app-core wiring + preload 暴露，全套走既有命令基建。命令面板入口不依赖插件运行态——插件停用后用户仍可从面板执行「关闭项目记忆」。
-3. **插件 facade**：`RendererPluginContext` 新增窄门面 `context.projectMemory`（enable/disable/status 三方法，类型在 `src/plugins/api/renderer.ts`，宿主实现于 `src/renderer/lib/plugins/host/context.ts`，内部转发上述 IPC 命令并对本插件断言 `managedAssets:write`）。
-4. **manifest**：插件自身不声明 commands（palette 入口是宿主命令，见上）；声明 `panels`（见下节）与 top-level `permissions: ["workspace:read", "panel:register", "panel:open", "managedAssets:write"]`。
+2. **命令**：宿主注册 `memory.enable` / `memory.disable` / `memory.status`，以及设置页所需的 `memory.list` / `memory.deleteObservation` / `memory.clearStore`。`CommandMetadata.allowedClientKinds = ["desktop-renderer"]`，不进 CLI、不进命令面板。管理入口是插件设置页。
+3. **插件 facade**：`context.projectMemory`（enable/disable/status/list/deleteObservation/clearStore），宿主实现对插件断言 `managedAssets:write`。
+4. **manifest**：不声明 `panels` / plugin commands；声明 `settingsPages: [{ id: "pier.memory.settings" }]` 与 `permissions: ["workspace:read", "managedAssets:write"]`。
 
 ---
 
 ## 插件表面
 
-```ts
-// manifest 片段（对齐 files 插件形态）
-{
-  name: "Memory",
-  panels: [{
-    component: "memory",
-    id: "pier.memory.panel",
-    permissions: ["workspace:read", "panel:open"],
-    title: "Project Memory",
-  }],
-  permissions: ["workspace:read", "panel:register", "panel:open", "managedAssets:write"],
-}
-```
+**以 [2026-08-27 项目记忆设置页](./2026-08-27-project-memory-settings-ui-design.md) 为准。** dockview 面板、`panel:register` / `panel:open` 作废。
 
-- 面板即开关与状态的家：顶部 Switch（写 `desiredState`）+ 状态摘要（派生状态、接入的配置计数、引擎版本、store 位置）+ degraded 时内联告警行。
-- main module 保持空激活壳（与 git/files 现状一致）；插件零 Node 侧逻辑。
-- 面板上下文取当前项目身份来自宿主 PanelContext（`projectRootPath`），不接受任意路径输入。
+- 产品表面是插件设置页（侧栏与 Codex 账号同级）：左项目列表、右开关 + 可删 observation。
+- main module 保持空激活壳；插件零 Node 侧逻辑。
+- 项目身份来自设置页选中的已登记项目（`AssetRootRef.scope: "project"`），不接受任意路径。
 
 ---
 
@@ -287,7 +276,7 @@ Use them to make future sessions in this repository more effective:
 
 ## 安全约束
 
-- `projectRoot` 仅接受宿主 PanelContext 解析出的已注册项目身份；服务入口拒绝任意字符串路径。canonical containment 校验复用 `files/path-identity.ts`。
+- `projectRoot` 仅接受已登记项目身份；服务入口拒绝任意字符串路径。canonical containment 校验复用 `files/path-identity.ts`。
 - TOML 值经合规 encoder 转义；JSON 一律 serializer 输出；escape 测试覆盖引号/反斜杠/换行/symlink 替换。
 - store 目录 0700、文件 0600；ledger 同权限。
 
@@ -295,9 +284,9 @@ Use them to make future sessions in this repository more effective:
 
 ## 操作反馈与 i18n（对齐宿主治理）
 
-- 开关切换与状态摘要本身就是强自然 UI 反馈，**不加成功 toast**。
-- degraded / 部分失败：面板内联告警行 + 「查看详情」经插件 dialogs facade 弹 alert 展示逐项目标 outcome（技术详情允许），禁止 silent catch；confirm 类交互走 `dialogs.confirm` 并显式 `intent`。
-- 文案全部 i18n：`src/plugins/builtin/memory/locales/{en,zh-CN,ja,ko}.json`，覆盖面板标题、开关标签、派生状态、空态、失败/跳过原因、引擎版本行。中文遵循产品词表：「智能体」「记忆文件位置」，不说 MCP/store/renderer 等实现词；英文同步可读。
+- 开关切换与状态摘要本身就是强自然 UI 反馈，**不加成功 toast**。删除靠列表行消失。
+- degraded / 部分失败：设置页 Card 内 Alert + 「查看详情」经插件 dialogs facade 弹 alert 展示逐项目标 outcome（技术详情允许），禁止 silent catch；confirm 类交互走 `dialogs.confirm` 并显式 `intent`。
+- 文案全部 i18n：`src/plugins/builtin/memory/locales/{en,zh-CN,ja,ko}.json`，覆盖设置页标题、开关、派生状态、空态、条目删除/清空、失败原因、引擎版本行。中文遵循产品词表：「智能体」「记忆文件位置」，不说 MCP/store/renderer 等实现词；英文同步可读。
 - 已知原生行为首次提示（一次性，i18n）：Claude Code 对项目级 `.mcp.json` 有一次性信任确认；引擎首次冷启动约 20 秒。
 
 ## 状态统计
@@ -328,12 +317,12 @@ Use them to make future sessions in this repository more effective:
 - **安全**：未注册 projectRoot 拒绝；escape/symlink 用例；文件权限断言。
 - **统计**：大文件截断、破损行容忍、mtime 缓存命中。
 - **崩溃一致性**：P1 后未 P2 → 分支② 幂等重放；P2 后崩溃（含首次创建）→ 分支① 由 commitRecord 零推导提交；第三方漂移 → 分支③ 冲突保留不认领；remove 的 `"absent"` 指纹语义与引导段/引用两类 pending 全覆盖。
-- **选择规则与确认门**：仅装 OMP 只写 `.mcp.json` 一份；claude+omp 同装单份；tracked 目标首次写入确认流（ack 持久化、取消零写入）；AGENTS.md 自建模板在 disable 后还原为不存在；插件停用后面板命令仍可关闭记忆。
-- **治理检查点**：`tests/unit/plugins/pier-memory-governance.test.ts` 锁定本设计标题、四类 entityType、marker 常量单一来源、capability 仅进 desktop-renderer 默认集；service 测试在 `tests/unit/main/agent-managed-assets/`。
+- **选择规则与确认门**：仅装 OMP 只写 `.mcp.json` 一份；claude+omp 同装单份；tracked 目标首次写入确认流（ack 持久化、取消零写入）；AGENTS.md 自建模板在 disable 后还原为不存在。
+- **治理检查点**：`tests/unit/plugins/pier-memory-governance.test.ts` 锁定本设计标题、四类 entityType、marker 常量单一来源、capability 仅进 desktop-renderer 默认集、无 `panels`；表面细节见 2026-08-27 spec。
 
 ---
 
 ## 分阶段交付
 
-1. **本设计（L1）**：facts 抽取 + 宿主服务/命令/preload/facade 接线 + 插件面板 + 全量测试。
-2. **L2 候选（另行立项）**：记忆浏览增强、蒸馏候选队列、团队共享存储、mem0 provider seam 兑现；OpenHuman 式 Markdown 镜像（JSONL 知识图谱投影为人类可直接编辑的 md 笔记目录，编辑回流引擎）与语料增长后的实体热度主题组织。
+1. **本设计（L1 引擎）+ [2026-08-27 设置页](./2026-08-27-project-memory-settings-ui-design.md)**：facts 抽取 + 宿主服务/命令/preload/facade + 插件设置页（含 list/delete）+ 全量测试。
+2. **L2 候选（另行立项）**：编辑/新建条目、蒸馏候选队列、团队共享存储、mem0 provider seam 兑现；OpenHuman 式 Markdown 镜像与语料增长后的实体热度主题组织。
