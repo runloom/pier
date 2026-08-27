@@ -328,17 +328,20 @@
     transparent var(--shell-scrollbar-width-legacy)
   );
   /* === 字体体系 ===
-     UI: HarmonyOS Sans SC (打包 CJK) + emoji + system-ui fallback
-     Mono: JetBrainsMono Nerd Font (全量打包 ttf) + HarmonyOS Sans SC (打包 CJK)
-           + ui-monospace / PingFang SC / Menlo fallback
-     通过 CSS 变量暴露，后续设置页面可动态修改。 */
+     系统字体优先（对齐 VS Code / Linear 金标准）：UI 由系统字体承接
+     （macOS SF Pro），600 是真 Semibold；不打包 CJK UI 字体。
+     CJK 段独立成 --pier-cjk-font-family，经 :root:lang() 随界面语言切换
+     （html lang 由 locale.store 同步），避免日韩文本被 SC 字形渲染。
+     Mono: JetBrainsMono Nerd Font (打包 ttf，图标必需) + 系统等宽 + CJK 段。
+     通过 CSS 变量暴露，font.store 启动后按偏好覆写。 */
+  --pier-cjk-font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC";
   --pier-ui-font-family:
-    "HarmonyOS Sans SC", "Apple Color Emoji", "Segoe UI Emoji",
-    "Noto Color Emoji", system-ui, -apple-system, "Helvetica Neue",
-    "PingFang SC", sans-serif;
+    system-ui, -apple-system, "Helvetica Neue", "Apple Color Emoji",
+    "Segoe UI Emoji", "Noto Color Emoji", var(--pier-cjk-font-family),
+    sans-serif;
   --pier-mono-font-family:
     "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular,
-    "HarmonyOS Sans SC", "PingFang SC", Menlo, monospace;
+    var(--pier-cjk-font-family), Menlo, monospace;
   /* Document reading (Markdown prose + docs canvas); defaults to UI stack. */
   --pier-document-font-family: var(--pier-ui-font-family);
   /* Code editor + Git diff body size; terminal uses monoFontSize separately. */
@@ -350,6 +353,18 @@
   --toast-surface: oklch(0.97 0 0);
   --toast-foreground: oklch(0.18 0 0);
   --toast-action-bg: color-mix(in oklab, var(--toast-foreground) 10%, transparent);
+}
+
+/* 日/韩界面语言的 CJK 系统字体段（html lang 由 locale.store 同步；
+   :root:lang() 双选择器保证优先级高于 :root 默认值）。 */
+:root:lang(ja) {
+  --pier-cjk-font-family:
+    "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo,
+    "Noto Sans CJK JP";
+}
+
+:root:lang(ko) {
+  --pier-cjk-font-family: "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR";
 }
 
 /*

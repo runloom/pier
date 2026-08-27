@@ -51,7 +51,7 @@ describe("font.store — monoFontSize / codeFontSize", () => {
 
   it("_hydrate custom document font 写入 --pier-document-font-family", () => {
     useFontStore.getState()._hydrate({
-      uiFontFamily: "HarmonyOS Sans SC",
+      uiFontFamily: "Inter",
       monoFontFamily: "",
       docFontMode: "custom",
       docFontFamily: "Noto Serif SC",
@@ -177,8 +177,8 @@ describe("font.store — monoFontSize / codeFontSize", () => {
 
 describe("computeDocumentFontFamily", () => {
   it("ui 模式跟随界面字体栈", () => {
-    const ui = computeDocumentFontFamily("ui", "HarmonyOS Sans SC", "");
-    expect(ui.startsWith('"HarmonyOS Sans SC"')).toBe(true);
+    const ui = computeDocumentFontFamily("ui", "Inter", "");
+    expect(ui.startsWith("Inter")).toBe(true);
     expect(ui).toContain("sans-serif");
   });
 
@@ -199,7 +199,7 @@ describe("computeMonoFontFamilyList", () => {
   it("空输入返回内置 fallback 链", () => {
     expect(computeMonoFontFamilyList("")).toEqual([
       "JetBrainsMono Nerd Font Mono",
-      "HarmonyOS Sans SC",
+      "PingFang SC",
       "Menlo",
     ]);
   });
@@ -208,7 +208,7 @@ describe("computeMonoFontFamilyList", () => {
     expect(computeMonoFontFamilyList("Fira Code")).toEqual([
       "Fira Code",
       "JetBrainsMono Nerd Font Mono",
-      "HarmonyOS Sans SC",
+      "PingFang SC",
       "Menlo",
     ]);
   });
@@ -221,7 +221,7 @@ describe("computeMonoFontFamilyList", () => {
     expect(computeMonoFontFamilyList("menlo")).toEqual([
       "menlo",
       "JetBrainsMono Nerd Font Mono",
-      "HarmonyOS Sans SC",
+      "PingFang SC",
     ]);
   });
 
@@ -230,7 +230,7 @@ describe("computeMonoFontFamilyList", () => {
       "Fira Code",
       "Cascadia Code",
       "JetBrainsMono Nerd Font Mono",
-      "HarmonyOS Sans SC",
+      "PingFang SC",
       "Menlo",
     ]);
   });
@@ -244,22 +244,22 @@ describe("computeMonoFontFamilyList", () => {
     expect(result).toEqual([
       "Fira Code",
       "JetBrainsMono Nerd Font Mono",
-      "HarmonyOS Sans SC",
+      "PingFang SC",
       "Menlo",
     ]);
   });
 });
 
 describe("computeMonoFontFamily", () => {
-  it("空输入返回内置 fallback 链 (含 CJK 兜底)", () => {
+  it("空输入返回内置 fallback 链 (CJK 段走 var 引用)", () => {
     expect(computeMonoFontFamily("")).toBe(
-      '"JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular, "HarmonyOS Sans SC", "PingFang SC", Menlo, monospace'
+      '"JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular, var(--pier-cjk-font-family), Menlo, monospace'
     );
   });
 
   it("用户字体置于链首", () => {
     expect(computeMonoFontFamily("Fira Code")).toBe(
-      '"Fira Code", "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular, "HarmonyOS Sans SC", "PingFang SC", Menlo, monospace'
+      '"Fira Code", "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular, var(--pier-cjk-font-family), Menlo, monospace'
     );
   });
 
@@ -269,9 +269,8 @@ describe("computeMonoFontFamily", () => {
     expect(result).toContain('"JetBrainsMono Nerd Font Mono"');
   });
 
-  it("CJK 兜底存在 (HarmonyOS Sans SC + PingFang SC)", () => {
+  it("CJK 兜底走 --pier-cjk-font-family 变量引用", () => {
     const result = computeMonoFontFamily("");
-    expect(result).toContain('"HarmonyOS Sans SC"');
-    expect(result).toContain('"PingFang SC"');
+    expect(result).toContain("var(--pier-cjk-font-family)");
   });
 });

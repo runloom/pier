@@ -278,7 +278,7 @@ export const settings = {
     languageDesc: "Display language",
     uiFontFamily: "UI Font",
     uiFontFamilyDesc: "Font for the interface",
-    uiFontFamilyPlaceholder: "HarmonyOS Sans SC",
+    uiFontFamilyPlaceholder: "system-ui",
     monoFontFamily: "Monospace Font",
     monoFontFamilyDesc: "Terminal and code editor font",
     monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",

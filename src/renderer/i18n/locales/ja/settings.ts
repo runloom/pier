@@ -281,7 +281,7 @@ export const settings = {
     languageDesc: "表示言語",
     uiFontFamily: "UI フォント",
     uiFontFamilyDesc: "インターフェースのフォント",
-    uiFontFamilyPlaceholder: "HarmonyOS Sans SC",
+    uiFontFamilyPlaceholder: "system-ui",
     monoFontFamily: "等幅フォント",
     monoFontFamilyDesc: "ターミナルとコードエディタのフォント",
     monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",

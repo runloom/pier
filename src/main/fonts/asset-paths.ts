@@ -34,9 +34,5 @@ export function bundledFontPaths(): string[] {
     "JetBrainsMonoNerdFontMono-Bold.ttf",
     "JetBrainsMonoNerdFontMono-Italic.ttf",
     "JetBrainsMonoNerdFontMono-BoldItalic.ttf",
-    "HarmonyOS_Sans_SC_Light.ttf",
-    "HarmonyOS_Sans_SC_Regular.ttf",
-    "HarmonyOS_Sans_SC_Medium.ttf",
-    "HarmonyOS_Sans_SC_Bold.ttf",
   ].map((f) => join(root, f));
 }
