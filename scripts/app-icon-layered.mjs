@@ -98,9 +98,7 @@ export function assertCompiledIconStack(carPath, inspect = assetUtilInfo) {
     );
   }
   if (!Array.isArray(entries)) {
-    throw new Error(
-      `assetutil returned a non-array catalog for ${carPath}`
-    );
+    throw new Error(`assetutil returned a non-array catalog for ${carPath}`);
   }
   const missing = [];
   const hasCompileMetadata = entries.some(
@@ -128,9 +126,7 @@ export function assertCompiledIconStack(carPath, inspect = assetUtilInfo) {
 
   const expectedVectorNames = new Set(
     MAC_ICON_VECTOR_GROUPS.flatMap((group) =>
-      group.layers.map(
-        (layer) => `${MAC_ICON_RENDITION_NAME}_Assets/${layer}`
-      )
+      group.layers.map((layer) => `${MAC_ICON_RENDITION_NAME}_Assets/${layer}`)
     )
   );
   const topLevelVectors = entries.filter(
