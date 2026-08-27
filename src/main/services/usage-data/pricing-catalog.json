@@ -1004,6 +1004,14 @@
         "z-ai/glm-5.3"
       ]
     },
+    "glm-5.3-flash": {
+      "cachedInputMicrousd": 0.015,
+      "inputMicrousd": 0.075,
+      "outputMicrousd": 0.25,
+      "aliases": [
+        "z-ai/glm-5.3-flash"
+      ]
+    },
     "glm-5v-turbo": {
       "cachedInputMicrousd": 0.24,
       "inputMicrousd": 1.2,
