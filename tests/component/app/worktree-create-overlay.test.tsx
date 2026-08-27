@@ -287,6 +287,7 @@ function createMockContext(): RendererPluginContext {
       discardChanges: unimplemented("git.discardChanges"),
       getDiffPatch: unimplemented("git.getDiffPatch"),
       getReviewFileDocument: unimplemented("git.getReviewFileDocument"),
+      getReviewExcerptBatch: unimplemented("git.getReviewExcerptBatch"),
       getReviewIndex: unimplemented("git.getReviewIndex"),
       getStatus: unimplemented("git.getStatus"),
       listIgnored: unimplemented("git.listIgnored"),

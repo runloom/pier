@@ -68,11 +68,16 @@ export function resolveManyAbsoluteOnPath(
 
 /**
  * Sticky tool env re-applied *after* interactive rc in via-shell launches
- * so PES layers (PATH, NVM_*, project overrides) win over .zshrc rebuilds.
+ * so NVM_DIR / CODEX_HOME etc. survive .zshrc. PATH and MANPATH are not
+ * re-exported: a second login+interactive shell rebuilds PATH from rc
+ * (nvm vs mise shims). Agent env overlays stay on the parent spawn env.
  */
+const STICKY_SKIP_KEYS = new Set(["MANPATH", "PATH"]);
+
 export function buildStickyExportPrelude(env: Record<string, string>): string {
   const sticky = pickHostApplyEnv(env);
   return Object.entries(sticky)
+    .filter(([key]) => !STICKY_SKIP_KEYS.has(key))
     .map(([key, value]) => `export ${key}=${quoteShellArg(value)}`)
     .join("; ");
 }

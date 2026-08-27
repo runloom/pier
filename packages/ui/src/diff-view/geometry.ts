@@ -20,11 +20,13 @@ export const DIFF_HEADER_MIN_HEIGHT_PX = 32;
 
 /**
  * 标题行盒之外的固定竖向 chrome：padding-block 4+4 + 标题槽行盒余量。
- * 头高 = max(MIN, lineHeight + CHROME)。
+ * 头高 = max(MIN, round(lineHeight + CHROME))，必须是整数 CSS 像素：
+ * 13px 字号 lineHeight 22.75 若不取整，头高 34.75，树跳转 item.top 带 .75，
+ * 再叠文件底分隔，align:start 就会空出 1px。
  */
 export const DIFF_HEADER_CHROME_PX = 12;
 
-/** 字号 → 行高倍率（与 CSS --diffs-line-height 一致）。 */
+/** 字号 → 行高倍率；CSS --diffs-line-height 必须喂 px，禁止无单位 1.75。 */
 export const DIFF_LINE_HEIGHT_RATIO = 1.75;
 
 /**
@@ -34,15 +36,16 @@ export const DIFF_LINE_HEIGHT_RATIO = 1.75;
 export const DIFF_ITEM_GAP_PX = 1;
 
 /**
- * 展开有 hunk 时 Pierre content paddingBottom（DEFAULT_VIRTUAL_FILE_METRICS.spacing）。
- * 折叠 / 0 行时不计入。
+ * 展开有 hunk 时文件体底垫。必须同时喂给 Pierre `itemMetrics.paddingBottom`
+ * 和 CSS `--pier-diff-content-padding-bottom`；折叠 / 0 行时不计入。
+ * 不要改 `itemMetrics.spacing`（hunk 分隔条 gap 也用它）。
  */
 export const DIFF_CONTENT_PADDING_BOTTOM_PX = 8;
 
 export type DiffSlotKind = "estimate" | "loaded" | "notice" | "error";
 
 export interface DiffMetrics {
-  /** 展开有内容时的底垫（与 Pierre spacing 对齐）。 */
+  /** 展开有内容时的底垫（与 itemMetrics.paddingBottom / CSS 同源）。 */
   readonly contentPaddingBottom: number;
   /** 文件列表 item 间距。 */
   readonly gap: number;
@@ -56,10 +59,13 @@ export interface DiffMetrics {
   readonly skeletonSlotHeight: number;
 }
 
-/** estimate 虚高上限（约 1.5 屏）。超大文件不按真实行数预留空白。 */
+/**
+ * 历史 numstat 虚高上限。estimate **槽高禁止再读行数**（见 slotVirtualHeight）；
+ * 本常量只约束 `estimateVirtualContentLines` 诊断/测试，避免误接回占位。
+ */
 export const MAX_ESTIMATE_VIRTUAL_LINES = 48;
 
-/** index numstat → estimate 预留行输入；0 / 缺省不预留。 */
+/** index numstat → 行输入；header +N/−M 用 lineStats，不推 estimate 槽高。 */
 export function estimateContentLinesFromLineStats(lineStats?: {
   readonly additions: number;
   readonly deletions: number;
@@ -71,7 +77,7 @@ export function estimateContentLinesFromLineStats(lineStats?: {
   return total > 0 ? total : undefined;
 }
 
-/** numstat 行数 → estimate 预留行；缺省或 0 回退骨架行数。 */
+/** numstat 行数夹紧；**不得**喂给 estimate 槽高。 */
 export function estimateVirtualContentLines(
   contentLines: number | undefined
 ): number {
@@ -107,7 +113,7 @@ export function diffMetrics(codeFontSize: string): DiffMetrics {
   const lineHeight = codeSize * DIFF_LINE_HEIGHT_RATIO;
   const headerHeight = Math.max(
     DIFF_HEADER_MIN_HEIGHT_PX,
-    lineHeight + DIFF_HEADER_CHROME_PX
+    Math.round(lineHeight + DIFF_HEADER_CHROME_PX)
   );
   const skeletonBodyHeight = skeletonBodyHeightPx();
   return {
@@ -123,7 +129,7 @@ export function diffMetrics(codeFontSize: string): DiffMetrics {
 /**
  * 唯一槽位虚拟高度函数。
  * collapsed / notice / error → header；
- * estimate 未折叠：无数 → header+skeleton；有 numstat → header+clamp(lines)×lh+pad；
+ * estimate 未折叠 → 始终 header+5 条骨架（忽略 contentLines / numstat）；
  * loaded 展开 → header + lines×lh + pad。
  */
 export function slotVirtualHeight(args: {
@@ -137,19 +143,7 @@ export function slotVirtualHeight(args: {
     return metrics.headerHeight;
   }
   if (args.kind === "estimate") {
-    if (
-      args.contentLines === undefined ||
-      !Number.isFinite(args.contentLines) ||
-      args.contentLines <= 0
-    ) {
-      return metrics.skeletonSlotHeight;
-    }
-    const lines = estimateVirtualContentLines(args.contentLines);
-    return (
-      metrics.headerHeight +
-      lines * metrics.lineHeight +
-      metrics.contentPaddingBottom
-    );
+    return metrics.skeletonSlotHeight;
   }
   const lines = Math.max(0, args.contentLines ?? 0);
   return (

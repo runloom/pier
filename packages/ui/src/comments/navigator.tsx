@@ -2,7 +2,7 @@ import { Button } from "@pier/ui/button.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { ChevronDown, ChevronUp, MessageSquare } from "lucide-react";
+import { ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
 import type { JSX, ReactElement } from "react";
 
 function BottomBarTip({
@@ -78,7 +78,7 @@ export function CommentNavigator({
         aria-hidden
         className="flex size-7 items-center justify-center text-muted-foreground"
       >
-        <MessageSquare className="size-3.5" />
+        <MessageCircle aria-hidden className="size-3.5" data-icon />
       </span>
       <BottomBarTip label={positionLabel}>
         <span className="inline-flex">

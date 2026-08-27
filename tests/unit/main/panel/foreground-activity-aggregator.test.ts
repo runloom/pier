@@ -2025,7 +2025,7 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("短 turnId 的空终态不扩散到其它 session", () => {
+  it("短 turnId 的空终态不扩散到其它已提问 session", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(
       agentHookEvent({
@@ -2038,8 +2038,16 @@ describe("ForegroundActivityAggregator", () => {
     agg.ingestAgentEvent(
       agentHookEvent({
         agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "peer-session",
+        turnId: "gen-1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
         event: "ToolStart",
-        sessionId: "stale-tool-session",
+        sessionId: "peer-session",
         toolUseId: "shell-1",
         turnId: "gen-1",
       })
@@ -2117,6 +2125,113 @@ describe("ForegroundActivityAggregator", () => {
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
       "ready"
     );
+    agg.dispose();
+  });
+
+  it("主会话可信终态封掉未见过提问的子智能体独立 conversation", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    const subagentSession = "6597f476-e166-4d4c-a12b-838d579191dc";
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "prompt-session",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: subagentSession,
+        toolUseId: "read-1",
+        turnId: subagentSession,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolComplete",
+        sessionId: subagentSession,
+        toolUseId: "read-1",
+        turnId: subagentSession,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "TurnCompleted",
+        sessionId: "prompt-session",
+        turnId: cursorTurnA,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("主会话空终态仍封掉未见过提问的衍生账本", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "prompt-session",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "stale-tool-session",
+        toolUseId: "shell-1",
+        turnId: cursorTurnA,
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "TurnCompleted",
+        sessionId: "prompt-session",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("origin 未见过提问时，可信终态不封其它 promptless 账", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "processing",
+        sessionId: "silent-session",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "stale-tool-session",
+        toolUseId: "shell-1",
+        turnId: cursorTurnA,
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "TurnCompleted",
+        sessionId: "silent-session",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
     agg.dispose();
   });
 

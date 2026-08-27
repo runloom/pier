@@ -135,11 +135,11 @@
             metal.pixelFormat = .bgra8Unorm
             metal.framebufferOnly = true
             metal.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
-            metal.isOpaque = false
-            metal.backgroundColor = NSColor.clear.cgColor
+            metal.isOpaque = true
+            metal.backgroundColor = NSColor.black.cgColor
             layer = metal
             metalLayer = metal
-            layer?.backgroundColor = NSColor.clear.cgColor
+            layer?.backgroundColor = NSColor.black.cgColor
 
             inputHandler = TerminalKeyEventHandler(view: self)
             setupTrackingArea()

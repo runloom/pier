@@ -1,4 +1,5 @@
 import type {
+  GitReviewExcerptBatchResult,
   GitReviewFileDocumentOk,
   GitReviewFileDocumentResult,
   GitReviewIndexEntry,
@@ -17,6 +18,7 @@ export const GIT_REVIEW_SILENT_RETRY_MAX = 3;
 export interface GitReviewDocumentLoaderRuntime {
   readonly activeCount: { value: number };
   readonly activeEntryKeys: Set<string>;
+  readonly batchOperationIds: Set<string>;
   readonly budgetDeferredEntryKeys: Set<string>;
   readonly bufferedEntryKeys: { value: readonly string[] };
   readonly cancel: (operationId: string) => Promise<void> | void;
@@ -29,8 +31,14 @@ export interface GitReviewDocumentLoaderRuntime {
     entry: GitReviewIndexEntry,
     operationId: string
   ) => Promise<GitReviewFileDocumentResult>;
+  readonly loadBatch?: (
+    entries: readonly GitReviewIndexEntry[],
+    operationId: string
+  ) => Promise<GitReviewExcerptBatchResult>;
   readonly maxConcurrent: number;
+  readonly operationActiveCount: Map<string, number>;
   readonly preFreedOperationIds: Set<string>;
+  pumpLoads(emitChange: boolean): boolean;
   readonly resources: Map<string, GitReviewDocumentResource>;
   readonly retention: GitReviewDocumentRetention;
   readonly selectedDemandedEntryKey: { value: string | null };
@@ -133,6 +141,9 @@ export function yieldLoaderConcurrencyForSelected(
     if (active?.kind !== "loading") {
       continue;
     }
+    if ((runtime.operationActiveCount.get(active.operationId) ?? 1) > 1) {
+      continue;
+    }
     runtime.setResource(entryKey, {
       entry: active.entry,
       kind: "cancelling",
@@ -141,9 +152,34 @@ export function yieldLoaderConcurrencyForSelected(
     runtime.activeEntryKeys.delete(entryKey);
     runtime.activeCount.value -= 1;
     runtime.preFreedOperationIds.add(active.operationId);
+    runtime.operationActiveCount.delete(active.operationId);
+    runtime.batchOperationIds.delete(active.operationId);
     cancelLoaderOperation(runtime, active.operationId);
     break;
   }
+}
+
+/** 从 in-flight 批/单文件扣掉该 entry；末成员则取消 IPC 并释放并发槽。 */
+export function detachLoaderInFlightEntry(
+  runtime: GitReviewDocumentLoaderRuntime,
+  entryKey: string
+): boolean {
+  const resource = runtime.resources.get(entryKey);
+  if (resource?.kind !== "loading" && resource?.kind !== "cancelling") {
+    return false;
+  }
+  const remaining =
+    (runtime.operationActiveCount.get(resource.operationId) ?? 1) - 1;
+  runtime.activeEntryKeys.delete(entryKey);
+  if (remaining <= 0) {
+    finishLoaderOperation(runtime, resource.operationId);
+    runtime.activeCount.value = Math.max(0, runtime.activeCount.value - 1);
+    runtime.preFreedOperationIds.add(resource.operationId);
+    cancelLoaderOperation(runtime, resource.operationId);
+  } else {
+    runtime.operationActiveCount.set(resource.operationId, remaining);
+  }
+  return true;
 }
 
 export function cancelLoaderOperation(
@@ -182,7 +218,7 @@ export function retryLoaderRetryableFailures(
     return;
   }
   rebuildLoaderWaiting(runtime);
-  pumpLoaderLoads(runtime, false);
+  runtime.pumpLoads(false);
   emitLoaderChange(runtime);
 }
 
@@ -234,6 +270,7 @@ export function pumpLoaderLoads(
     });
     runtime.activeCount.value += 1;
     runtime.activeEntryKeys.add(entryKey);
+    runtime.operationActiveCount.set(operationId, 1);
     changed = true;
     let pending: Promise<GitReviewFileDocumentResult>;
     try {
@@ -323,6 +360,71 @@ export function retainLoaderDocument(
   );
 }
 
+function finishLoaderOperation(
+  runtime: GitReviewDocumentLoaderRuntime,
+  operationId: string
+): void {
+  runtime.operationActiveCount.delete(operationId);
+  runtime.batchOperationIds.delete(operationId);
+}
+
+function consumeLoaderActiveSlot(
+  runtime: GitReviewDocumentLoaderRuntime,
+  entryKey: string,
+  operationId: string
+): void {
+  runtime.activeEntryKeys.delete(entryKey);
+  const remaining = (runtime.operationActiveCount.get(operationId) ?? 1) - 1;
+  if (remaining <= 0) {
+    finishLoaderOperation(runtime, operationId);
+    runtime.activeCount.value -= 1;
+    return;
+  }
+  runtime.operationActiveCount.set(operationId, remaining);
+}
+
+/** content 槽 demand 水合超时：单文件扣槽；同批 sibling 仍在飞则不取消整批 IPC。 */
+export function failLoaderHydrateTimeout(
+  runtime: GitReviewDocumentLoaderRuntime,
+  entryKeys: readonly string[]
+): boolean {
+  if (runtime.disposed.value || entryKeys.length === 0) {
+    return false;
+  }
+  let changed = false;
+  for (const entryKey of entryKeys) {
+    const resource = runtime.resources.get(entryKey);
+    if (!(resource && isReviewEntryBodyHydratable(resource.entry))) {
+      continue;
+    }
+    if (
+      resource.kind === "loaded" ||
+      resource.kind === "error" ||
+      resource.kind === "unchanged"
+    ) {
+      continue;
+    }
+    detachLoaderInFlightEntry(runtime, entryKey);
+    runtime.setResource(entryKey, {
+      entry: resource.entry,
+      failure: {
+        kind: "error",
+        message: "Timed out while loading this change",
+        reason: "timeout",
+        retryable: true,
+      },
+      kind: "error",
+    });
+    changed = true;
+  }
+  if (changed) {
+    rebuildLoaderWaiting(runtime);
+    runtime.pumpLoads(false);
+    emitLoaderChange(runtime);
+  }
+  return changed;
+}
+
 export function settleLoaderLoad(
   runtime: GitReviewDocumentLoaderRuntime,
   entryKey: string,
@@ -343,14 +445,14 @@ export function settleLoaderLoad(
   }
   if (runtime.preFreedOperationIds.has(operationId)) {
     runtime.preFreedOperationIds.delete(operationId);
+    finishLoaderOperation(runtime, operationId);
   } else {
-    runtime.activeEntryKeys.delete(entryKey);
-    runtime.activeCount.value -= 1;
+    consumeLoaderActiveSlot(runtime, entryKey, operationId);
   }
   if (resource.kind === "cancelling") {
     runtime.setResource(entryKey, { entry: resource.entry, kind: "idle" });
     rebuildLoaderWaiting(runtime);
-    pumpLoaderLoads(runtime, false);
+    runtime.pumpLoads(false);
     emitLoaderChange(runtime);
     return;
   }
@@ -369,7 +471,7 @@ export function settleLoaderLoad(
     }
     runtime.setResource(entryKey, next);
   }
-  pumpLoaderLoads(runtime, false);
+  runtime.pumpLoads(false);
   emitLoaderChange(runtime);
 }
 

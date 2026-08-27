@@ -26,6 +26,8 @@ import {
 import { resetGitStatusSessionsForTests } from "@plugins/builtin/git/renderer/status-state.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
+  GitReviewExcerptBatchRequest,
+  GitReviewExcerptBatchResult,
   GitReviewFileDocumentOk,
   GitReviewFileDocumentResult,
   GitReviewIndexEntry,
@@ -408,6 +410,17 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+function resolvePendingDocuments(
+  pending: Map<string, ReturnType<typeof deferred<GitReviewFileDocumentResult>>>
+): void {
+  act(() => {
+    for (const [path, next] of pending) {
+      const match = path.match(/file-(\d+)\.ts$/u);
+      next.resolve(documentResult(Number(match?.[1] ?? 0)));
+    }
+  });
+}
+
 async function waitForRefreshWindow(): Promise<void> {
   await act(async () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 140));
@@ -631,6 +644,8 @@ function pluginContext(input: {
       fontFamily: "Inter",
     },
   };
+  const getReviewFileDocumentMock =
+    input.getReviewFileDocument ?? vi.fn(async () => documentResult(0));
   return {
     appearance: {
       current: () => appearance,
@@ -671,8 +686,30 @@ function pluginContext(input: {
       cancelReviewRequest:
         input.cancelReviewRequest ?? vi.fn(async () => undefined),
       commit: vi.fn(async () => true),
-      getReviewFileDocument:
-        input.getReviewFileDocument ?? vi.fn(async () => documentResult(0)),
+      getReviewFileDocument: getReviewFileDocumentMock,
+      getReviewExcerptBatch: vi.fn(
+        async (
+          request: GitReviewExcerptBatchRequest
+        ): Promise<GitReviewExcerptBatchResult> => ({
+          items: await Promise.all(
+            request.files.map(async (file) => ({
+              path: file.path,
+              result: await getReviewFileDocumentMock({
+                operationId: request.operationId,
+                ...(file.previousRevision === undefined
+                  ? {}
+                  : { previousRevision: file.previousRevision }),
+                source: {
+                  ...request.source,
+                  oldPaths: file.oldPaths,
+                  path: file.path,
+                },
+              }),
+            }))
+          ),
+          kind: "ok" as const,
+        })
+      ),
       getReviewIndex: input.getReviewIndex ?? vi.fn(async () => indexResult()),
       searchBranches:
         input.searchBranches ??
@@ -954,6 +991,17 @@ describe("Git review panel", () => {
     });
     fireEvent.keyDown(searchInput, { key: "Enter" });
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:1"));
+    // 搜索 Enter 打开后 reveal 必须 preserveFocus：焦点留在输入框，
+    // 否则行会抢焦点，下一个 Esc 落到树上、搜索栏关不掉。
+    // reveal/focus 走 microtask + rAF 链，先冲刷两帧再断言。
+    await act(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+    });
+    expect(searchInput).toHaveFocus();
 
     fireEvent.change(searchInput, { target: { value: "not-present" } });
     await expect(
@@ -3090,8 +3138,7 @@ describe("Git review panel", () => {
     fireEvent.click(findTreeItem(view.container, "file-3.ts"));
     // 金标准：boost selected，并发未满时可不 cancel；目标必须进入 demand 读取
     await waitFor(() => expect(pending.has("src/file-3.ts")).toBe(true));
-    act(() => pending.get("src/file-0.ts")?.resolve(documentResult(0)));
-    act(() => pending.get("src/file-3.ts")?.resolve(documentResult(3)));
+    resolvePendingDocuments(pending);
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:3"));
   });
 
@@ -3150,12 +3197,11 @@ describe("Git review panel", () => {
       expect(getReviewFileDocument.mock.calls.length).toBeGreaterThanOrEqual(2)
     );
     fireEvent.click(findTreeItem(view.container, "file-3.ts"));
-    act(() => pending.get("src/file-0.ts")?.resolve(documentResult(0)));
     await waitFor(() => expect(pending.has("src/file-3.ts")).toBe(true));
 
     scrollToItem.mockClear();
     act(() => diffViewRuntime.onScroll?.());
-    act(() => pending.get("src/file-3.ts")?.resolve(documentResult(3)));
+    resolvePendingDocuments(pending);
     await waitFor(() => {
       expect(
         view.getByTestId("pierre-diff").getAttribute("data-cache-keys")
@@ -3167,7 +3213,7 @@ describe("Git review panel", () => {
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:3"));
   });
 
-  it("已取消的旧窗口正文迟到时不发布也不重复定位", async () => {
+  it("同批正文一次结算后 pending_scroll 只定位一次，迟到 sibling 不重复滚", async () => {
     const entries = [0, 1, 2, 3].map((index) => entry(index));
     const pending = new Map<
       string,
@@ -3191,25 +3237,16 @@ describe("Git review panel", () => {
       expect(getReviewFileDocument.mock.calls.length).toBeGreaterThanOrEqual(2)
     );
     fireEvent.click(findTreeItem(view.container, "file-3.ts"));
-    await waitFor(() =>
-      expect(cancelReviewRequest.mock.calls.length).toBeGreaterThanOrEqual(1)
-    );
-    act(() => pending.get("src/file-0.ts")?.resolve(documentResult(0)));
     await waitFor(() => expect(pending.has("src/file-3.ts")).toBe(true));
-    act(() => pending.get("src/file-3.ts")?.resolve(documentResult(3)));
+    // Z2：同批 sibling 仍在 demand 时不拆批 cancel
+    expect(cancelReviewRequest).not.toHaveBeenCalled();
+    resolvePendingDocuments(pending);
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:3"));
     const callsAfterFirstVisibility = scrollToItem.mock.calls.filter(
       ([sectionId]) => sectionId === "section:3"
     ).length;
 
-    act(() => pending.get("src/file-1.ts")?.resolve(documentResult(1)));
-
-    expect(
-      scrollToItem.mock.calls.filter(([sectionId]) => sectionId === "section:3")
-    ).toHaveLength(callsAfterFirstVisibility);
-
     act(() => diffViewRuntime.onScroll?.());
-    // 滚动后不得因迟到的旧窗口结果重启对目标的 scrollTo。
     expect(
       scrollToItem.mock.calls.filter(([sectionId]) => sectionId === "section:3")
     ).toHaveLength(callsAfterFirstVisibility);
@@ -3367,10 +3404,7 @@ describe("Git review panel", () => {
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
     await waitFor(() => expect(pending.size).toBeGreaterThanOrEqual(2));
-    act(() => pending.get("src/file-1.ts")?.resolve(documentResult(1)));
-    // 更高 content 并发下 3 个可能已在飞
-    act(() => pending.get("src/file-2.ts")?.resolve(documentResult(2)));
-    act(() => pending.get("src/file-0.ts")?.resolve(documentResult(0)));
+    resolvePendingDocuments(pending);
 
     await waitFor(() => {
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
@@ -3401,8 +3435,8 @@ describe("Git review panel", () => {
       expect(getReviewFileDocument.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
     view.unmount();
-    // 在飞 document 请求数 = min(seed, concurrent)；不再钉死 2
-    expect(cancelReviewRequest.mock.calls.length).toBeGreaterThanOrEqual(2);
+    // Z2：一批一个 operationId；卸载只 cancel 仍在飞的批/boost
+    expect(cancelReviewRequest.mock.calls.length).toBeGreaterThanOrEqual(1);
     expect(
       new Set(
         cancelReviewRequest.mock.calls.map(([request]) => request.operationId)

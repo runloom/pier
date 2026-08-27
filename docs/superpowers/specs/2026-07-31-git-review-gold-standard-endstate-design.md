@@ -179,11 +179,12 @@ SCM 产品体感  ──►  Zed Project Diff
 ### 6.1 Z2 = 默认产品终态
 
 ```
-main：有界变更摘录管道（实现前 spike 钉死主路径）
-  A) 分代 multi-file git diff 流 → 按文件边界切 → 批事件
-  B) path 级 hunk 列表批事件
-renderer：按 index 序批 addItems/updateItem（16–64 content/帧 + work budget）
-单文件 document：仅超大 / 失败重试 / 显式「完整文件」
+main：有界变更摘录管道（选型 **B**，已钉死）
+  path 级 `git.getReviewExcerptBatch`（16–32 content/次，上限 64）
+  单世代 1 个 document lease + 有界 git 池（2）
+  禁止每文件再走 renderer 取号排队
+renderer：按 index 序批灌 loaded（一批一次 IPC）
+单文件 `getReviewFileDocument`：选中 boost / 失败重试 / discard 令牌 / 超大
 ```
 
 约束：
@@ -197,7 +198,7 @@ renderer：按 index 序批 addItems/updateItem（16–64 content/帧 + work bud
 - 可暂用 `getReviewFileDocument`，但 **队列仅 content**
 - 并发默认 **≥ 8**（废除产品语义并发 2；2 仅测试夹具）
 - seed 只对 content 子集
-- **里程碑完成前必须落地 Z2，或证明 S1–S9 在 Z1 已全部满足且 changelog 写明 Z2 未完成风险** —— 默认要求 **G5 进同一里程碑**
+- **Z2 已落地**（`git.getReviewExcerptBatch`）。Z1 并发 ≥8 仅保留为无批夹具 / 单测默认。
 
 ### 6.3 明确拒绝
 
@@ -288,6 +289,21 @@ onBodyItemAttached(id):
 
 meta **不出现** 此骨架。
 
+### 8.4 文件 chrome 几何（content 槽贴顶）
+
+`item.top` 必须等于真实盒子。header / lineHeight / contentPaddingBottom / gap **只**来自 `diffMetrics`；CSS 变量与 `itemMetrics` 必须同值。
+
+| 量 | 单源 |
+|----|------|
+| headerHeight | `diffMetrics` → `itemMetrics.diffHeaderHeight` + `--pier-diff-header-height` |
+| lineHeight | `diffMetrics` → `itemMetrics.lineHeight` + `--diffs-line-height` **px**（禁止无单位 `1.75`） |
+| contentPaddingBottom | `DIFF_CONTENT_PADDING_BOTTOM_PX` → `itemMetrics.paddingBottom` + `--pier-diff-content-padding-bottom` |
+| gap | `DIFF_ITEM_GAP_PX` → `layout.gap` |
+
+**贴顶：** `scrollTo({ type: "item", align: "start" })`；目标 `[data-diffs-header]` 顶边相对 CodeView 滚动根顶边 **≤ 1 CSS 像素**（设备像素取整后 0 或 1）。estimate→loaded 允许第二次钉顶（树跳转 D3）；禁止为像素再滚一次。
+
+**不是布局账本（代码保持，不当贴顶补丁）：** sticky 头 `::before` 1px 裙边；横条 overlay 可能盖最后一行；geometry 不读 `devicePixelRatio`（`scrollTop` 圆整仍由 Pierre `roundToDevicePixel`）。
+
 ---
 
 ## 9. Stage / 刷新 / soft-retain
@@ -325,10 +341,10 @@ meta **不出现** 此骨架。
 | **G2** | pending UI 金标准 + 8s 超时→error；禁止失败回落 pending | S9；无永久 spinner |
 | **G3** | `PierDiffRenderProfile` 单源 + plain 失败隔离 + decoration 错误 0 | S8 |
 | **G4** | pending_scroll 导航；废止 settle 门闩 | S3/S4 |
-| **G5** | Z2 批摘录主路径（默认） | 无「逐文件取号」体感 |
+| **G5** | Z2 批摘录主路径（`getReviewExcerptBatch`）；document 为例外 | 无「逐文件取号」体感 |
 | **G6** | e2e 全表 + 探针 | 防回归 |
 
-**禁止：** G1 前再合「只改 emptyReady」；G2 未完成宣称「加载修好了」；G3 未完成打开 word-alt；G5 未完成宣称金标准。
+**禁止：** G1 前再合「只改 emptyReady」；G2 未完成宣称「加载修好了」；G3 未完成打开 word-alt。
 
 ---
 
@@ -340,7 +356,7 @@ meta **不出现** 此骨架。
 |----|------|----------|
 | **S1** | 1000 pure rename | 交互目标时间内可操作；meta **0** document；正文空态；侧栏可滚可 stage |
 | **S2** | 50 content + 500 rename | 正文 **仅** 50 content 块 |
-| **S3** | 点已附着 content | 应用层 scrollTo ≤1；header 贴顶 |
+| **S3** | 点已附着 content | 应用层 scrollTo ≤1；header 贴顶：目标 `[data-diffs-header]` 顶边相对滚动根顶边 **≤ 1 CSS 像素** |
 | **S4** | 点未附着 content | pending_scroll；附着后 ≤1 scroll；期间可点其它行 |
 | **S5** | 点 pure rename | 不 enqueue document；不假 scroll |
 | **S6** | content stage hunk | 不回归 soft-retain |
@@ -361,12 +377,14 @@ meta **不出现** 此骨架。
 | `shikiDecorationErrorCount` | ≡ 0 |
 | `renderProfileConsistency` | 三处 lineDiffType 一致 |
 | `navigationGateBlocked` | 恒 false |
+| `headerFlushPx` | 目标 header 顶 − `.cv-scrollbar` 顶；S3 ≤ 1 CSS px |
 
 ### 12.3 非目标
 
 - DiffsHub 评论、GitHub PR 流
 - Z3 MultiBuffer（可选后续 RFC，不阻塞本里程碑）
 - 侧栏像素级复制 Zed
+- sticky 裙边、横条 overlay 盖最后一行、geometry 读 `devicePixelRatio`（不当贴顶补丁）
 
 ---
 
@@ -381,6 +399,9 @@ meta **不出现** 此骨架。
 7. O(entries) 无界 git  
 8. 「先发骨架/开关 PR，水合以后再说」当结案  
 9. 未做 decoration 安全前恢复 word-alt  
+10. 导航层 1px/`offset` 瞄贴顶（掩盖估高）  
+11. 文件容器顶 `0 -1px` box-shadow（`align:start` 视口顶发丝）  
+12. 给 `itemMetrics.spacing` 塞产品密度（hunk 分隔条 gap 也用它）  
 
 ---
 
@@ -392,10 +413,10 @@ meta **不出现** 此骨架。
 | K2 | 侧栏 ⊥ 正文；正文仅 content-bearing |
 | K3 | meta/默认 notice 不进正文、不占重队列 |
 | K4 | pending_scroll 定位；禁 settle 门闩 |
-| K5 | Z2 批摘录为默认加载终态；document 为例外 |
+| K5 | Z2 批摘录为默认加载终态（选型 B：`git.getReviewExcerptBatch`）；document 为例外 |
 | K6 | 槽态 pending/loaded/error/notice；8s 超时强制 error |
 | K7 | 渲染配置单源；默认 lineDiffType=none |
-| K8 | pending 骨架仅 content；真实 DOM 几何单源 |
+| K8 | pending 骨架仅 content；文件 chrome（header / lineHeight / pad / gap）与骨架同属 `geometry.ts` 单源；CSS 变量必须等于 `itemMetrics` |
 | K9 | 始终多文件；进程/内存红线保留 |
 | K10 | G0–G6 同一里程碑；可机测 DoD |
 
@@ -407,15 +428,14 @@ meta **不出现** 此骨架。
 |------|------|
 | 用户期望正文扫 rename | 空态说明 + 侧栏权威；可选后续 header-only 须显式开关 |
 | numstat 缺失 → unknown 过多 | main 必填 numstat；unknown 不灌大骨架 |
-| Z2 选型 A/B | G5 前 spike 钉死一种主路径 |
+| Z2 选型 | **B 已钉死**：path 级 `getReviewExcerptBatch`，单世代有界 git 池 |
 | 半套 stable-ledger 与 body 过滤冲突 | 投影单测锁 id 集 = content only |
 | stage 在 meta/content 间跳 | index 代际 + bodyClass 重算 + S6 |
 
-开放（不挡里程碑主体，但 G5 前须关闭选型）：
+开放（不挡本里程碑）：
 
-1. Z2 确切 Git 命令与取消/世代围栏  
-2. notice 是否允许用户设置「显示在正文」  
-3. Z3 是否启动（默认否）
+1. notice 是否允许用户设置「显示在正文」  
+2. Z3 是否启动（默认否）
 
 ---
 

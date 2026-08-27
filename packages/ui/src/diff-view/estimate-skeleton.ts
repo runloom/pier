@@ -13,6 +13,7 @@
  * - 骨架是「代码即将出现」的轻提示，不是二次 gutter 布局
  * - 左右贴齐 header 内容边（12px），条长短错落
  * - 条高略低于真行高，避免灰条比真代码更「厚」
+ * - §8.3：固定 5 条；槽高 = header+骨架体，禁止按 numstat 拉高占位
  *
  * @see docs/superpowers/specs/2026-07-31-git-review-gold-standard-endstate-design.md §8.3
  */
@@ -66,11 +67,11 @@ export const PIER_DIFF_ESTIMATE_ATTR = "data-pier-estimate";
 /**
  * 在 diffs-container 的 shadowRoot 内同步骨架节点。
  * 条几何用 inline style 钉死（高/宽/色），不单靠 host CSS。
+ * 始终 5 条；禁止按预留体再铺条。
  */
 export function syncEstimateSkeleton(
   element: HTMLElement,
-  isEstimate: boolean,
-  reservedBodyHeightPx?: number
+  isEstimate: boolean
 ): void {
   const root = element.shadowRoot;
   if (root == null) {
@@ -82,7 +83,6 @@ export function syncEstimateSkeleton(
     return;
   }
   if (existing != null) {
-    applyEstimateSkeletonReserve(existing, reservedBodyHeightPx);
     return;
   }
   const host = document.createElement("div");
@@ -93,7 +93,6 @@ export function syncEstimateSkeleton(
   host.style.gap = `${PIER_DIFF_ESTIMATE_SKELETON_GAP_PX}px`;
   host.style.width = "100%";
   host.style.padding = `${PIER_DIFF_ESTIMATE_SKELETON_PAD_Y_PX}px ${PIER_DIFF_ESTIMATE_SKELETON_PAD_RIGHT_PX}px ${PIER_DIFF_ESTIMATE_SKELETON_PAD_Y_PX}px ${PIER_DIFF_ESTIMATE_SKELETON_PAD_LEFT_PX}px`;
-  applyEstimateSkeletonReserve(host, reservedBodyHeightPx);
   for (const width of PIER_DIFF_ESTIMATE_SKELETON_BAR_WIDTHS) {
     const bar = document.createElement("div");
     bar.setAttribute(SKELETON_BAR_ATTR, "");
@@ -109,27 +108,7 @@ export function syncEstimateSkeleton(
     bar.style.backgroundSize = "200% 100%";
     host.appendChild(bar);
   }
-  const fill = document.createElement("div");
-  fill.setAttribute("data-pier-estimate-skeleton-fill", "");
-  fill.style.flex = "1 1 auto";
-  fill.style.minHeight = "0";
-  fill.style.backgroundColor = "color-mix(in oklab, CanvasText 6%, Canvas)";
-  host.appendChild(fill);
   root.appendChild(host);
-}
-
-function applyEstimateSkeletonReserve(
-  host: HTMLElement,
-  reservedBodyHeightPx: number | undefined
-): void {
-  if (
-    reservedBodyHeightPx === undefined ||
-    !Number.isFinite(reservedBodyHeightPx)
-  ) {
-    host.style.minHeight = "";
-    return;
-  }
-  host.style.minHeight = `${Math.max(0, reservedBodyHeightPx)}px`;
 }
 
 /**

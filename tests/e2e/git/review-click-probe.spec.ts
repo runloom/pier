@@ -161,13 +161,17 @@ test("tree click still opens files after search navigation", async () => {
 
     console.log("STEP: collapse+expand sidebar");
     await page
-      .getByRole("button", { name: /Hide changed files|收起变更文件/u })
+      .getByRole("button", {
+        name: /Hide changed files|隐藏目录树|收起变更文件/u,
+      })
       .click();
     await expect(
       page.locator('file-tree-container[data-slot="pier-file-tree"]')
     ).toHaveCount(0);
     await page
-      .getByRole("button", { name: /Show changed files|展开变更文件/u })
+      .getByRole("button", {
+        name: /Show changed files|显示目录树|展开变更文件/u,
+      })
       .click();
     await expect(
       page.getByRole("treeitem", { name: /gamma\.ts/u })
@@ -190,7 +194,9 @@ test("tree click still opens files after search navigation", async () => {
       page.locator('file-tree-container[data-slot="pier-file-tree"]')
     ).toHaveCount(0);
     await page
-      .getByRole("button", { name: /Show changed files|展开变更文件/u })
+      .getByRole("button", {
+        name: /Show changed files|显示目录树|展开变更文件/u,
+      })
       .click();
     await expect(
       page.getByRole("treeitem", { name: /gamma\.ts/u })

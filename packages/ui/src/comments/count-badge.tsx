@@ -13,16 +13,16 @@ import type { ComponentProps, ReactNode } from "react";
 function CommentCountBadgeGlyph(props: { readonly count: number }): ReactNode {
   const compact = props.count >= 10;
   return (
-    <span className="relative inline-flex size-6 items-center justify-center">
+    <span className="inline-grid size-6 place-items-center">
       <MessageCircle
         aria-hidden
-        className="absolute inset-0 size-full fill-action-accent stroke-action-accent-foreground"
+        className="col-start-1 row-start-1 size-full fill-action-accent stroke-action-accent-foreground"
         data-icon
         strokeWidth={1.75}
       />
       <span
         className={cn(
-          "relative -translate-y-px font-semibold text-action-accent-foreground tabular-nums leading-none",
+          "col-start-1 row-start-1 font-semibold text-action-accent-foreground tabular-nums leading-none",
           compact ? "text-[9px]" : "text-[10px]"
         )}
       >

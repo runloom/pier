@@ -101,6 +101,8 @@ export interface PierDiffViewHandle {
    *   折叠 item 先展开才能定位行）。
    * - behavior 缺省 smooth；align 固定 center（行级居中可读，区别于
    *   scrollToItem 的 start 顶部对齐）。
+   * - instant 与 scrollToItem 一样经 microtask layout flush，避免先画出
+   *   文件头再跳行。
    * - 调用方负责评论 target.side（"old"|"new"）→ diff-view side
    *   （"deletions"|"additions"）的映射。
    */

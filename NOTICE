@@ -28,10 +28,6 @@ Important bundled assets:
   (SIL Open Font License 1.1) with Nerd Fonts glyphs (MIT License, copyright
   Ryan L. McIntyre / Nerd Fonts). See `resources/fonts/JetBrainsMono-OFL.txt`
   and upstream Nerd Fonts license notices.
-- `resources/fonts/HarmonyOS_Sans_SC_*.ttf` bundles unmodified HarmonyOS Sans SC
-  font files with this software. HarmonyOS Sans Fonts are copyright 2021 Huawei
-  Device Co., Ltd. and licensed under the HarmonyOS Sans Fonts License
-  Agreement. See `resources/fonts/HarmonyOS-Sans-SC-LICENSE.txt`.
 - `resources/notification-sounds/*.wav` are unmodified copies of
   `assets/sounds/*.wav` from the vibe-kanban project
   (https://github.com/BloopAI/vibe-kanban), copyright Bloop AI, licensed under

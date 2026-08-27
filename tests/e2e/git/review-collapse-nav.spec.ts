@@ -142,6 +142,7 @@ async function isDiffTextInViewport(
 /**
  * 目标 diff 顶边相对滚动视口顶边的偏移（px）。
  * 树导航 align:"start"，命中后目标文件头应当齐顶；正数表示上方还留着别的内容。
+ * S3 headerFlushPx：设备像素取整后 |delta| ≤ 1。
  */
 async function diffItemViewportOffset(
   page: Page,
@@ -167,6 +168,18 @@ async function diffItemViewportOffset(
           scroller.getBoundingClientRect().top
       );
     }, text);
+}
+
+async function expectHeaderFlush(page: Page, text: string): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const offset = await diffItemViewportOffset(page, text);
+        return offset == null ? Number.POSITIVE_INFINITY : Math.abs(offset);
+      },
+      { timeout: 10_000 }
+    )
+    .toBeLessThanOrEqual(1);
 }
 
 /**
@@ -297,9 +310,9 @@ test("collapse-all then tree navigation shows the target diff without failures",
     await expect(
       page.getByText(/Failed to render diff|渲染差异失败/u)
     ).toHaveCount(0);
-    // 13px 代码字号：lineHeight 22.75 + padding 8 + 标题槽 4 = 34.75
+    // 13px 代码字号：头高取整为 35，避免折叠导航按项累积半像素。
     for (const height of await collapsedItemHeights(page)) {
-      expect(height).toBeCloseTo(34.75, 1);
+      expect(height).toBeCloseTo(35, 1);
     }
     // 折叠已静置 12s，此后内容总高不得再逐帧变化，否则滚动条会一直抖。
     const heightSamples = await scrollHeightSamples(page, 60);
@@ -319,15 +332,14 @@ test("collapse-all then tree navigation shows the target diff without failures",
       )
     ).toHaveCount(0);
     // 折叠态下导航必须齐顶，不能把上一个文件的折叠头留在目标上方
-    expect(await diffItemViewportOffset(page, "zeta = 1")).toBeLessThanOrEqual(
-      2
-    );
+    await expectHeaderFlush(page, "zeta = 1");
 
     // 再点一个中间的文件,确认可重复导航
     await page.getByRole("treeitem", { name: /gamma\.ts/u }).click();
     await expect
       .poll(() => isDiffTextInViewport(page, "gamma = 1"), { timeout: 10_000 })
       .toBe(true);
+    await expectHeaderFlush(page, "gamma = 1");
     await expect(
       page.getByText(
         /Failed to navigate to file|Failed to render diff|导航到文件失败|渲染 diff 失败/u
@@ -393,6 +405,51 @@ test("collapse-all with a selected file settles instead of looping", async () =>
     expect(directionFlips).toBe(0);
     expect([...new Set(samples)]).toHaveLength(1);
     expect(pageErrors).toEqual([]);
+  } finally {
+    await application.close().catch(() => undefined);
+    await forceClose(child);
+    rmSync(userDataDir, { force: true, recursive: true });
+    rmSync(repository, { force: true, recursive: true });
+  }
+});
+
+/**
+ * 折叠路径前序只剩头高，打不中展开文件底垫 / 行高这条病理。
+ * 默认展开时点第二个及更后的 content 文件，header 必须贴滚动根（S3 ≤ 1px）。
+ */
+test("expanded previous files tree navigation pins later files flush", async () => {
+  test.setTimeout(120_000);
+  const userDataDir = createTemporaryDirectory("pier-git-review-flush-e2e-");
+  const repository = createTemporaryDirectory("pier-git-review-flush-repo-");
+  await createRepository(repository);
+  const application = await electron.launch({
+    args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    cwd: PROJECT_ROOT,
+    env: { ...process.env, CODEX_HOME: join(userDataDir, "codex-home") },
+  });
+  const child = application.process();
+
+  try {
+    const page = await application.firstWindow();
+    await openReviewPanel(application, page, userDataDir, repository);
+    await expect(
+      page.getByRole("treeitem", { name: /alpha\.ts/u })
+    ).toBeVisible({ timeout: 30_000 });
+    await expect
+      .poll(() => isDiffTextInViewport(page, "alpha = 1"), { timeout: 15_000 })
+      .toBe(true);
+
+    await page.getByRole("treeitem", { name: /beta\.ts/u }).click();
+    await expect
+      .poll(() => isDiffTextInViewport(page, "beta = 1"), { timeout: 10_000 })
+      .toBe(true);
+    await expectHeaderFlush(page, "beta = 1");
+
+    await page.getByRole("treeitem", { name: /zeta\.ts/u }).click();
+    await expect
+      .poll(() => isDiffTextInViewport(page, "zeta = 1"), { timeout: 10_000 })
+      .toBe(true);
+    await expectHeaderFlush(page, "zeta = 1");
   } finally {
     await application.close().catch(() => undefined);
     await forceClose(child);

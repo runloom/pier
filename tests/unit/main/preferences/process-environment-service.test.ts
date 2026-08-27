@@ -123,27 +123,67 @@ describe("process environment service", () => {
     expect(result.env.PATH).toBe("/project/bin");
   });
 
-  it("caches shell env by cwd and shell only (source does not split cache)", async () => {
+  it("caches dump by project root (or HOME), not each task cwd", async () => {
     const loadShellEnv = vi.fn(async () => ({
       env: { PATH: "/shell/bin" },
       status: "resolved" as const,
     }));
     const service = createProcessEnvironmentService({
-      baseEnv: { PATH: "/app/bin" },
+      baseEnv: { HOME: "/Users/me", PATH: "/app/bin" },
       loadShellEnv,
       platform: "darwin",
       shell: "/bin/zsh",
     });
 
-    await service.resolve({ cwd: "/repo", source: "terminal" });
-    const second = await service.resolve({ cwd: "/repo", source: "terminal" });
-    await service.resolve({ cwd: "/repo", source: "task" });
+    await service.resolve({
+      cwd: "/repo/pkg",
+      projectRootPath: "/repo",
+      source: "task",
+    });
+    const second = await service.resolve({
+      cwd: "/repo/other",
+      projectRootPath: "/repo",
+      source: "terminal",
+    });
+    await service.resolve({ cwd: "/tmp/task", source: "task" });
 
-    expect(loadShellEnv).toHaveBeenCalledTimes(1);
+    expect(loadShellEnv).toHaveBeenCalledTimes(2);
+    expect(loadShellEnv).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ cwd: "/repo" })
+    );
+    expect(loadShellEnv).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ cwd: "/Users/me" })
+    );
     expect(second.diagnostics).toMatchObject({
       cacheHit: true,
       shellEnvStatus: "cached",
     });
+  });
+
+  it("does not write project dump onto process.env", async () => {
+    const prevPath = process.env.PATH;
+    try {
+      process.env.PATH = "/host";
+      const service = createProcessEnvironmentService({
+        baseEnv: { HOME: "/Users/me", PATH: "/host" },
+        loadShellEnv: async () => ({
+          env: { PATH: "/project/dump" },
+          status: "resolved" as const,
+        }),
+        platform: "darwin",
+        shell: "/bin/zsh",
+      });
+      const result = await service.resolve({
+        projectRootPath: "/repo",
+        source: "task",
+      });
+      expect(result.env.PATH).toBe("/project/dump");
+      expect(process.env.PATH).toBe("/host");
+    } finally {
+      process.env.PATH = prevPath;
+    }
   });
 
   it("uses an OS default shell when SHELL is missing", async () => {
@@ -158,7 +198,11 @@ describe("process environment service", () => {
       platform: "darwin",
     });
 
-    await service.resolve({ cwd: "/repo", source: "terminal" });
+    await service.resolve({
+      cwd: "/repo",
+      projectRootPath: "/repo",
+      source: "terminal",
+    });
 
     expect(loadShellEnv).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -379,25 +423,25 @@ describe("process environment service", () => {
     });
     expect(result.diagnostics.shellEnvStatus).toBe("resolved");
     expect(seenCwds).toHaveLength(1);
-    // Literal placeholder must never reach the loader as cwd.
-    expect(seenCwds[0]).not.toBe("$ZED_WORKTREE_ROOT");
-    if (seenCwds[0] !== undefined) {
-      expect(seenCwds[0]).not.toContain("$");
-    }
+    expect(seenCwds[0]).toBe("/Users/me");
   });
 
-  it("keeps normal absolute cwd unchanged for the loader", async () => {
+  it("dumps at projectRootPath rather than task cwd", async () => {
     const loadShellEnv = vi.fn(async () => ({
       env: { PATH: "/shell" },
       status: "resolved" as const,
     }));
     const service = createProcessEnvironmentService({
-      baseEnv: { PATH: "/app" },
+      baseEnv: { HOME: "/Users/me", PATH: "/app" },
       loadShellEnv,
       platform: "darwin",
       shell: "/bin/zsh",
     });
-    await service.resolve({ cwd: "/repo", source: "terminal" });
+    await service.resolve({
+      cwd: "/repo/pkg",
+      projectRootPath: "/repo",
+      source: "terminal",
+    });
     expect(loadShellEnv).toHaveBeenCalledWith(
       expect.objectContaining({ cwd: "/repo", source: "terminal" })
     );
@@ -481,6 +525,7 @@ describe("applyHostProcessEnv", () => {
           NVM_DIR: "/Users/dev/.nvm",
           NODE_OPTIONS: "--inspect",
           PATH: "/shell/bin",
+          SHLVL: "3",
         },
       },
       { targetEnv: target }
@@ -491,9 +536,11 @@ describe("applyHostProcessEnv", () => {
     expect(target.DYLD_LIBRARY_PATH).toBeUndefined();
     expect(target.NODE_OPTIONS).toBeUndefined();
     expect(target.ELECTRON_RUN_AS_NODE).toBeUndefined();
+    expect(target.SHLVL).toBeUndefined();
     expect(result.diagnosticsPatch.hostAppliedStatus).toBe("applied");
     expect(shouldApplyHostEnvKey("PATH")).toBe(true);
     expect(shouldApplyHostEnvKey("DYLD_LIBRARY_PATH")).toBe(false);
+    expect(shouldApplyHostEnvKey("SHLVL")).toBe(false);
   });
 
   it("deletes previously applied keys missing from the new shell env", () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createHydrateTimeoutWatchdog,
   GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS,
+  GIT_REVIEW_SELECTED_BODY_HYDRATE_TIMEOUT_MS,
 } from "../../../../../src/plugins/builtin/git/renderer/review/document/hydrate-timeout.ts";
 
 describe("createHydrateTimeoutWatchdog", () => {
@@ -44,5 +45,33 @@ describe("createHydrateTimeoutWatchdog", () => {
     watchdog.noteDemanded(["a"], (key) => kinds.get(key));
     now = 4000;
     expect(watchdog.noteDemanded([], (key) => kinds.get(key))).toEqual([]);
+  });
+
+  it("gives the selected entry a longer budget than neighbors", () => {
+    let now = 0;
+    const watchdog = createHydrateTimeoutWatchdog({ now: () => now });
+    expect(
+      watchdog.noteDemanded(
+        ["neighbor", "selected"],
+        () => "loading",
+        "selected"
+      )
+    ).toEqual([]);
+    now = GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS;
+    expect(
+      watchdog.noteDemanded(
+        ["neighbor", "selected"],
+        () => "loading",
+        "selected"
+      )
+    ).toEqual(["neighbor"]);
+    now = GIT_REVIEW_SELECTED_BODY_HYDRATE_TIMEOUT_MS;
+    expect(
+      watchdog.noteDemanded(
+        ["neighbor", "selected"],
+        () => "loading",
+        "selected"
+      )
+    ).toEqual(["selected"]);
   });
 });

@@ -14,6 +14,10 @@ export function useInitialInputFailedToast(panelId: string): void {
         key = event.textDelivered
           ? "terminal.initialInput.promptEnterFailed"
           : "terminal.initialInput.promptFailed";
+      } else if (event.kind === "task") {
+        key = event.textDelivered
+          ? "terminal.initialInput.taskEnterFailed"
+          : "terminal.initialInput.taskFailed";
       } else if (event.textDelivered) {
         key = "terminal.initialInput.setupEnterFailed";
       }

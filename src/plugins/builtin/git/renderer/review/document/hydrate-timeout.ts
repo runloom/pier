@@ -1,8 +1,12 @@
 /**
  * content 槽 demand 内水合超时（金标准 G2）。
+ * 邻项 8s 收骨架；选中项用更长预算——用户正在等这份正文，不把当前文件
+ * 打成 8s 超时，到期仍让出并发槽以便重试。
  * @see docs/superpowers/specs/2026-07-31-git-review-gold-standard-endstate-design.md §5
  */
 export const GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS = 8000;
+export const GIT_REVIEW_SELECTED_BODY_HYDRATE_TIMEOUT_MS =
+  GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS * 3;
 
 export type HydrateTimeoutResourceKind =
   | "idle"
@@ -19,14 +23,18 @@ export type HydrateTimeoutResourceKind =
 export function createHydrateTimeoutWatchdog(options?: {
   readonly now?: () => number;
   readonly timeoutMs?: number;
+  readonly selectedTimeoutMs?: number;
 }): {
   readonly clear: () => void;
   readonly noteDemanded: (
     entryKeys: Iterable<string>,
-    kindOf: (entryKey: string) => HydrateTimeoutResourceKind | undefined
+    kindOf: (entryKey: string) => HydrateTimeoutResourceKind | undefined,
+    selectedEntryKey?: string | null
   ) => readonly string[];
 } {
   const timeoutMs = options?.timeoutMs ?? GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS;
+  const selectedTimeoutMs =
+    options?.selectedTimeoutMs ?? GIT_REVIEW_SELECTED_BODY_HYDRATE_TIMEOUT_MS;
   const now = options?.now ?? Date.now;
   /** entryKey → first demanded while pending ms */
   const pendingSince = new Map<string, number>();
@@ -35,7 +43,7 @@ export function createHydrateTimeoutWatchdog(options?: {
     clear: () => {
       pendingSince.clear();
     },
-    noteDemanded: (entryKeys, kindOf) => {
+    noteDemanded: (entryKeys, kindOf, selectedEntryKey) => {
       const demanded = new Set(entryKeys);
       const timedOut: string[] = [];
       const t = now();
@@ -61,7 +69,13 @@ export function createHydrateTimeoutWatchdog(options?: {
           since = t;
           pendingSince.set(entryKey, since);
         }
-        if (t - since >= timeoutMs) {
+        const limit =
+          selectedEntryKey !== undefined &&
+          selectedEntryKey !== null &&
+          entryKey === selectedEntryKey
+            ? selectedTimeoutMs
+            : timeoutMs;
+        if (t - since >= limit) {
           timedOut.push(entryKey);
           pendingSince.delete(entryKey);
         }

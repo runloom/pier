@@ -1,6 +1,8 @@
 import type {
   GitReviewCancelRequest,
   GitReviewConflictResolveRequest,
+  GitReviewExcerptBatchRequest,
+  GitReviewExcerptBatchResult,
   GitReviewFileDocumentRequest,
   GitReviewFileDocumentResult,
   GitReviewIndexRequest,
@@ -19,6 +21,9 @@ export interface PierGitReviewAPI {
     request: GitReviewPathMutationRequest
   ) => Promise<GitReviewMutationResult>;
   cancelReviewRequest: (request: GitReviewCancelRequest) => Promise<void>;
+  getReviewExcerptBatch: (
+    request: GitReviewExcerptBatchRequest
+  ) => Promise<GitReviewExcerptBatchResult>;
   getReviewFileDocument: (
     request: GitReviewFileDocumentRequest
   ) => Promise<GitReviewFileDocumentResult>;
@@ -45,6 +50,11 @@ export const gitReviewApi: PierGitReviewAPI = {
     invokePierCommand<void>({
       request,
       type: "git.cancelReviewRequest",
+    }),
+  getReviewExcerptBatch: (request) =>
+    invokePierCommand<GitReviewExcerptBatchResult>({
+      request,
+      type: "git.getReviewExcerptBatch",
     }),
   getReviewFileDocument: (request) =>
     invokePierCommand<GitReviewFileDocumentResult>({

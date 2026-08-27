@@ -381,6 +381,7 @@ export async function executeTerminalOpenCommand(
     ...(rawLaunch.env ? { explicitEnv: rawLaunch.env } : {}),
     ...(profile?.env ? { profileEnv: profile.env } : {}),
     ...(projectEnv ? { projectEnv } : {}),
+    projectRootPath: context?.projectRootPath,
     source: options.source ?? "terminal",
   };
   const resolvedEnvironment =

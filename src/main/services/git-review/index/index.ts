@@ -424,6 +424,7 @@ function parseGitReviewIndexRequest(request: ReadGitReviewIndexRequest): {
   }
   let paths: readonly string[] | undefined;
   if (request.paths !== undefined) {
+    // 单文件 document 探测：path + 最多 3 条 oldPaths。批摘录禁止走这条通道。
     const parsedPaths = gitReviewRelativePathSchema
       .array()
       .min(1)

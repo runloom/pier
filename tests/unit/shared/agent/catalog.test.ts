@@ -78,6 +78,15 @@ describe("AGENT_CATALOG 完整性", () => {
     expect(getAgentCatalogEntry("kilo")?.detectCmdAliases).toContain(
       "kilocode"
     );
+    expect(getAgentCatalogEntry("kimi")?.detectCmdAliases).toContain(
+      "kimi-cli"
+    );
+    expect(getAgentCatalogEntry("qodercli")?.detectCmdAliases).toContain(
+      "qoderclicn"
+    );
+    expect(getAgentCatalogEntry("mistral-vibe")?.detectCmdAliases).toContain(
+      "vibe-acp"
+    );
   });
   it("Rovo Dev 使用当前 ACLI 入口，检测命令与子命令分离", () => {
     const rovo = getAgentCatalogEntry("rovo");

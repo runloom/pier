@@ -1,3 +1,4 @@
+import { GIT_REVIEW_EXCERPT_BATCH_DEFAULT } from "@shared/contracts/git/review.ts";
 import { describe, expect, it, vi } from "vitest";
 import {
   classifyReviewSlotBodyClass,
@@ -244,6 +245,11 @@ describe("git review gold-standard DoD (S1–S9 on Z1)", () => {
 
   it("Z1 product concurrency is ≥ 8 (not product-constant 2)", () => {
     expect(DEFAULT_MAX_CONCURRENT_DOCUMENTS).toBeGreaterThanOrEqual(8);
+  });
+
+  it("Z2 excerpt batch size is in the gold-standard 16–64 window", () => {
+    expect(GIT_REVIEW_EXCERPT_BATCH_DEFAULT).toBeGreaterThanOrEqual(16);
+    expect(GIT_REVIEW_EXCERPT_BATCH_DEFAULT).toBeLessThanOrEqual(64);
   });
 
   it("full content ledger mounts all estimates; demand cannot drop ids", () => {

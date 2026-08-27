@@ -395,15 +395,22 @@ function createDiffViewHandle(deps: DiffViewHandleDeps): PierDiffViewHandle {
       ) {
         return false;
       }
+      const behavior = options?.behavior ?? "smooth";
       viewer.scrollTo({
         align: "center",
-        behavior: options?.behavior ?? "smooth",
+        behavior,
         id,
         lineNumber,
         ...(options?.offset === undefined ? {} : { offset: options.offset }),
         ...(side === undefined ? {} : { side }),
         type: "line",
       });
+      if (behavior === "instant") {
+        scheduleCodeViewLayoutFlush(
+          viewer.getInstance(),
+          INSTANT_SCROLL_LAYOUT_PASSES
+        );
+      }
       return true;
     },
     setAllCollapsed(collapsed: boolean): void {

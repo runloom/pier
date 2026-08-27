@@ -489,6 +489,30 @@ describe("live-modules service", () => {
     expect(source).not.toContain(`${LIVE_MODULE_SCHEME}://runtime/pier-canvas`);
   });
 
+  it("compiles mobile-companion through Artboard and Mermaid runtime stubs", async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({
+      directory: ".pier/canvases",
+      projectRootPath: process.cwd(),
+    });
+    service.registerRoot(spec);
+    const result = await service.compile(
+      spec.id,
+      "mobile-companion/mobile-companion.canvas.tsx"
+    );
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const source = Buffer.from(
+      service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
+    ).toString("utf8");
+    expect(source).toContain("getCanvas().ArtboardStage");
+    expect(source).toContain("getCanvas().Artboard");
+    expect(source).toContain("getCanvas().Mermaid");
+  });
+
   it("compiles workbench-into-canvas gold through the Mermaid runtime stub", async () => {
     const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
     const service = createService(homeRoot);

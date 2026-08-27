@@ -171,6 +171,8 @@ export async function executeRunSpawnCommand(
       services,
       {
         clientEnv: options.clientEnv,
+        initialInput: launch.command,
+        initialInputSubmit: true,
         ...(reusePanel ? { reusePanel } : {}),
         source: "task",
         tab: launch.tab,

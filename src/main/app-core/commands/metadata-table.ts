@@ -224,8 +224,7 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "notifications.watch": { capabilities: ["notification:read"] },
   "notifications.focus": { capabilities: ["notification:write"] },
   "notifications.mark-read": { capabilities: ["notification:write"] },
-  // terminal.open 静态元数据只记基础 capabilities;launch 存在时的额外
-  // 能力由 requiredCapabilitiesForCommand 动态叠加。
+  // terminal.open 静态只记基础能力；launch 额外能力由 requiredCapabilitiesForCommand 叠加。
   "terminal.open": { capabilities: ["workspace:open"] },
   "terminal.list": { capabilities: ["terminal:read"] },
   "terminal.get": { capabilities: ["terminal:read"] },
@@ -308,6 +307,10 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["git:read"],
   },
+  "git.getReviewExcerptBatch": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["git:read"],
+  },
   "git.cancelReviewRequest": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["git:read"],
@@ -341,7 +344,6 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.searchBranches": { capabilities: ["git:read"] },
   "git.searchCommits": { capabilities: ["git:read"] },
   "git.stage": { capabilities: ["git:write"] },
-
   "git.stash": { capabilities: ["git:write"] },
   "git.stashApply": { capabilities: ["git:write"] },
   "git.stashDrop": { capabilities: ["git:write"] },
@@ -350,7 +352,6 @@ export const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.sync": { capabilities: ["git:write"] },
   "git.undoLastCommit": { capabilities: ["git:write"] },
   "git.unstage": { capabilities: ["git:write"] },
-  // Comments: desktop-renderer only; writes also require comments:read.
   "comments.list": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["comments:read"],

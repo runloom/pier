@@ -278,7 +278,7 @@ export const settings = {
     languageDesc: "표시 언어",
     uiFontFamily: "UI 글꼴",
     uiFontFamilyDesc: "인터페이스 글꼴",
-    uiFontFamilyPlaceholder: "HarmonyOS Sans SC",
+    uiFontFamilyPlaceholder: "system-ui",
     monoFontFamily: "고정폭 글꼴",
     monoFontFamilyDesc: "터미널과 코드 편집기 글꼴",
     monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",

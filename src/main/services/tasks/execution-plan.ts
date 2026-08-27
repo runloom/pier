@@ -1,11 +1,13 @@
-import {
-  TASK_EXIT_TITLE_PREFIX,
-  type TaskCandidate,
-  type TaskInputRequest,
-  type TaskLaunchPlan,
-  type TaskSource,
+import type {
+  TaskCandidate,
+  TaskInputRequest,
+  TaskLaunchPlan,
+  TaskSource,
 } from "@shared/contracts/tasks.ts";
-import { commandWithArgs, projectBasename, shellQuote } from "./utils.ts";
+import { shellFamily } from "../process-environment/resolve-user-command-probe.ts";
+import { resolveWrapperShell } from "../process-environment/resolve-user-command-types.ts";
+import { buildTaskPresentationScript } from "./presentation-script.ts";
+import { commandWithArgs, projectBasename } from "./utils.ts";
 
 const VARIABLE_RE = /\$\{([^}]+)\}/g;
 
@@ -221,26 +223,19 @@ function buildCommand(
   return resolveVariables(task.commandSpec.command, context);
 }
 
-function shellCommand(script: string): string {
-  return `/bin/sh -c ${shellQuote(script)}`;
-}
-
-function withPresentation(command: string, task: TaskCandidate): string {
-  const parts: string[] = [];
-  if (task.presentation?.clear) {
-    parts.push("clear");
-  }
-  if (task.presentation?.showCommand) {
-    parts.push(`printf '%s\\n' ${shellQuote(`+ ${command}`)}`);
-  }
-  parts.push(command);
-  parts.push("code=$?");
-  parts.push(`printf '\\033]0;${TASK_EXIT_TITLE_PREFIX}%s\\007' "$code"`);
-  if (task.presentation?.showSummary) {
-    parts.push("printf '\\n[pier] task exited with %s\\n' \"$code\"");
-  }
-  parts.push('exit "$code"');
-  return shellCommand(parts.join("; "));
+function withPresentation(
+  command: string,
+  task: TaskCandidate,
+  env?: Record<string, string>
+): string {
+  // Inner script only. Visible tasks open Ghostty's default login shell
+  // (same as an empty terminal) and type this via initialInput — `$SHELL -c`
+  // is not a terminal and cannot enable zle / load .zshrc the same way.
+  return buildTaskPresentationScript({
+    command,
+    family: shellFamily(resolveWrapperShell(env)),
+    presentation: task.presentation ?? {},
+  });
 }
 
 function launchForTask(
@@ -257,8 +252,8 @@ function launchForTask(
     cwd = context.projectRootPath;
   }
   const rawCommand = buildCommand(task, context);
-  const command = withPresentation(rawCommand, task);
   const env = resolvedEnv(task, context);
+  const command = withPresentation(rawCommand, task, env);
   const sourceLabel = TASK_SOURCE_LABELS[task.source];
   const dependsOn = dependencyTasks(task, labels, options).map(
     (dependency) => dependency.id

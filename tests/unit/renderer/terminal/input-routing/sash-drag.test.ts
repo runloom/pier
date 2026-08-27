@@ -3,6 +3,8 @@ import {
   readTerminalInputRoutingTraceSnapshot,
   resetTerminalInputRoutingTraceForTests,
 } from "@/lib/terminal-debug/input-routing-trace.ts";
+import { resetTerminalSurfaceSuppressionForTests } from "@/panel-kits/terminal/layout-coordinator.ts";
+import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
   installTerminalInputRoutingSashDragWatcher,
   resetTerminalInputRoutingSashDragForTests,
@@ -42,6 +44,7 @@ describe("terminal input-routing sash drag trace", () => {
     resetTerminalInputRoutingForTests();
     resetTerminalInputRoutingTraceForTests();
     resetTerminalInputRoutingSashDragForTests();
+    resetTerminalSurfaceSuppressionForTests();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -56,6 +59,7 @@ describe("terminal input-routing sash drag trace", () => {
   afterEach(() => {
     (document as Document & { [CLEANUP_KEY]?: () => void })[CLEANUP_KEY]?.();
     resetTerminalInputRoutingSashDragForTests();
+    resetTerminalSurfaceSuppressionForTests();
     document.body.replaceChildren();
     Reflect.deleteProperty(window, "pier");
   });
@@ -115,5 +119,14 @@ describe("terminal input-routing sash drag trace", () => {
     pressSash();
 
     expect(sashOwnerIds()).toEqual(["dockview-sash-drag:2"]);
+  });
+
+  it("suppresses native terminal surfaces for the sash drag session", () => {
+    pressSash();
+    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(true);
+
+    window.dispatchEvent(new PointerEvent("pointerup"));
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
   });
 });

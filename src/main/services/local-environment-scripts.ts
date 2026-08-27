@@ -1,5 +1,6 @@
 import type { ChildProcess, spawn as nodeSpawn } from "node:child_process";
 import type { LocalEnvironmentProject } from "@shared/contracts/environment.ts";
+import { loginShellSpawnSpec } from "./process-environment/login-shell-spawn.ts";
 import type { ProcessEnvironmentService } from "./process-environment-service.ts";
 
 export type LocalEnvironmentLifecyclePhase = "setup" | "cleanup";
@@ -80,30 +81,18 @@ export async function runLocalEnvironmentLifecycle(request: {
     ...(Object.keys(request.project.env).length > 0
       ? { projectEnv: request.project.env }
       : {}),
+    projectRootPath: request.project.projectRootPath,
     source: "task",
   });
 
-  const platform = process.platform;
-  let shell: string;
-  let args: string[];
-  if (platform === "win32") {
-    shell = process.env.ComSpec ?? "cmd.exe";
-    args = ["/d", "/s", "/c", command];
-  } else {
-    shell = "/bin/sh";
-    // Non-login + POSIX sh: resolved.env already reflects the login+interactive
-    // shell environment. A login flag would re-run .zprofile/.profile and
-    // clobber the resolved PATH. /bin/sh (not env.SHELL) keeps lifecycle
-    // script semantics independent of the user's interactive shell.
-    args = ["-c", command];
-  }
-
+  // Class A: `$SHELL -c` one-shot; env is the dump overlay (PATH already login).
+  const spec = loginShellSpawnSpec(command, resolved.env);
   const spawn = request.spawn ?? getDefaultSpawn();
 
   return new Promise<void>((resolvePromise, reject) => {
     let child: ChildProcess;
     try {
-      child = spawn(shell, args, {
+      child = spawn(spec.command, spec.args, {
         cwd: request.cwd,
         env: resolved.env,
       });

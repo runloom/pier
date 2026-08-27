@@ -1,4 +1,8 @@
 import {
+  AGENT_OSC_BIN_DENYLIST,
+  matchAgentCommand,
+} from "@shared/agent-command-detection.ts";
+import {
   AGENT_NO_ONE_CLICK_INSTALL,
   agentOffersOneClickInstall,
 } from "@shared/agent-lifecycle/one-click-install.ts";
@@ -203,6 +207,28 @@ describe("agent lifecycle specs", () => {
   it("builds guide commands from the same install channels as run", () => {
     const guides = buildGuideCommands(getAgentLifecycleSpec("codex"), "posix");
     expect(guides.some((g) => g.command.includes("@openai/codex"))).toBe(true);
+  });
+
+  it("expectedBins 除 OSC denylist 外都能被 matchAgentCommand 认到", () => {
+    for (const spec of listAgentLifecycleSpecs()) {
+      for (const bin of spec.expectedBins) {
+        if (AGENT_OSC_BIN_DENYLIST.has(bin)) {
+          expect(matchAgentCommand(bin), `${spec.agentId} ${bin}`).toBeNull();
+          continue;
+        }
+        expect(matchAgentCommand(bin), `${spec.agentId} ${bin}`).toBe(
+          spec.agentId
+        );
+      }
+    }
+  });
+
+  it("vibe-acp 只做 OSC 别名，不进 expectedBins（避免与 vibe 双文件冲突）", () => {
+    expect(getAgentLifecycleSpec("mistral-vibe").expectedBins).toEqual([
+      "vibe",
+      "mistral-vibe",
+    ]);
+    expect(matchAgentCommand("vibe-acp")).toBe("mistral-vibe");
   });
 
   it("only leaves true website-only agents without install channels", () => {

@@ -49,8 +49,9 @@ function scopeSettledAt(scope: HookScope): number | undefined {
  * 已结算的隔离 session 压过尚未开新回合的 panel 兜底 scope——修复 Cursor
  * 等 provider 在主会话 TurnCompleted 后，仍有无 sessionId 的迟到
  * preToolUse/postToolUse 把投影粘在 tool/processing 的假忙碌。
- * 同 turnId、不同 sessionId 的分裂（工具 hook 与 stop 会话号不一致）由
- * `sealMatchingTurnPeers` 在可信终态时一并封账。
+ * 同 turnId、不同 sessionId 的分裂（工具 hook 与 stop 会话号不一致），以及
+ * 从未见过 PromptSubmit 的衍生 conversation，由 `sealMatchingTurnPeers`
+ * 在可信终态时一并封账。
  * panel 若在结算之后收到 PromptSubmit 等回合重置，则仍可覆盖（新回合开始）。
  */
 function preferredScope(current: HookScope, candidate: HookScope): HookScope {

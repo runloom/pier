@@ -96,10 +96,12 @@ import { wireAppCorePierHomeAndSkills } from "./pier-home.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
 import { requireAppCoreInitialization } from "./readiness.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
-import { createShellEnvironmentBoot } from "./shell-environment-boot.ts";
+import {
+  createShellEnvironmentBoot,
+  resolvePathEnv,
+} from "./shell-environment-boot.ts";
 import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import { createTerminalStatusBarPrefsFacade } from "./terminal-status-bar-prefs-facade.ts";
-
 import { createAppCoreUsageData } from "./usage-data.ts";
 import {
   broadcastCommentsChanged,
@@ -461,8 +463,7 @@ function createPierAppCore(): PierAppCore {
     // git+gitWatch 一体绑 getStatus（watch 广播需 status；多订阅共享）
     ...(() => {
       const git = createGitService({
-        resolveEnvironment: async (cwd) =>
-          (await processEnvironment.resolve({ cwd, source: "plugin" })).env,
+        resolveEnvironment: (cwd) => resolvePathEnv(processEnvironment, cwd),
       });
       return {
         git,

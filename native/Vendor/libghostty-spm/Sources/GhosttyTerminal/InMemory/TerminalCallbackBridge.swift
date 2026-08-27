@@ -18,6 +18,15 @@ final class TerminalCallbackBridge {
     weak var delegate: (any TerminalSurfaceViewDelegate)?
     /// Raw surface pointer for use in C callbacks (e.g. clipboard).
     nonisolated(unsafe) var rawSurface: ghostty_surface_t?
+    /// Owned before the main-actor hop so teardown cannot miss `opaquePtr`.
+    nonisolated let clipboardConfirmInFlight = ClipboardConfirmInFlightSlot()
+    /// In-flight clipboard confirmation. Replacing it cancels the previous
+    /// request (Ghostty SurfaceView.pendingClipboardConfirmation).
+    var pendingClipboardConfirmation: ClipboardConfirmRequest? {
+        didSet { clipboardConfirmationDidChange(from: oldValue) }
+    }
+
+    var isPresentingClipboardConfirm = false
     var onCellSizeChange: ((UInt32, UInt32) -> Void)?
     var onMouseShape: ((TerminalMouseShape) -> Void)?
     var onMouseVisibility: ((Bool) -> Void)?

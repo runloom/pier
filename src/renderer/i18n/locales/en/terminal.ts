@@ -7,6 +7,9 @@ export const terminal = {
     setupEnterFailed: "The command is already typed. Press Return to run it.",
     setupFailed:
       "The terminal opened, but the setup command could not be run. Run it in the terminal, or create it again.",
+    taskEnterFailed: "The command is already typed. Press Return to run it.",
+    taskFailed:
+      "The terminal opened, but the command could not be typed. Type it in the terminal, or run the task again.",
   },
   frameWaitFailed:
     "Terminal view didn't appear. Try again, or reopen this terminal.",

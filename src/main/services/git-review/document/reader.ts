@@ -1,4 +1,6 @@
 import type {
+  GitReviewExcerptBatchRequest,
+  GitReviewExcerptBatchResult,
   GitReviewFailure,
   GitReviewFileDocumentOk,
   GitReviewFileDocumentRequest,
@@ -14,6 +16,7 @@ import type {
   GitReviewIndexReader,
   GitReviewIndexResolution,
 } from "../index/index.ts";
+import { readGitReviewExcerptBatch, selectGitReviewEntry } from "./excerpt.ts";
 import {
   buildGitReviewDocumentWithEvidence,
   type GitReviewDocumentEvidence,
@@ -48,6 +51,31 @@ export class GitReviewDocumentReader {
   ): Promise<GitReviewFileDocumentResult> {
     assertActive(budget, signal);
     return this.#readStable(request, budget, signal);
+  }
+
+  async executeBatch(
+    request: GitReviewExcerptBatchRequest,
+    budget: GitReviewIndexExecutionBudget,
+    signal: AbortSignal
+  ): Promise<GitReviewExcerptBatchResult> {
+    return readGitReviewExcerptBatch({
+      budget,
+      execGitRaw: this.#execGitRaw,
+      indexReader: this.#indexReader,
+      rememberEvidence: (revision, evidence) => {
+        this.#evidenceByRevision.delete(revision);
+        this.#evidenceByRevision.set(revision, evidence);
+        while (this.#evidenceByRevision.size > 128) {
+          const oldest = this.#evidenceByRevision.keys().next().value;
+          if (typeof oldest !== "string") {
+            break;
+          }
+          this.#evidenceByRevision.delete(oldest);
+        }
+      },
+      request,
+      signal,
+    });
   }
 
   async #readStable(
@@ -146,31 +174,6 @@ export class GitReviewDocumentReader {
       { budget, signal }
     );
   }
-}
-
-function selectGitReviewEntry(
-  resolution: Extract<GitReviewIndexResolution, { kind: "ok" }>,
-  path: string
-): {
-  readonly entry: (typeof resolution.result.entries)[number];
-  readonly resolvedEntry: (typeof resolution.resolvedEntries)[number];
-} | null {
-  const index = resolution.result.entries.findIndex(
-    (entry) => entry.path === path
-  );
-  if (index < 0) {
-    return null;
-  }
-  const entry = resolution.result.entries[index];
-  const resolvedEntry = resolution.resolvedEntries[index];
-  if (
-    entry === undefined ||
-    resolvedEntry === undefined ||
-    entry.path !== resolvedEntry.path
-  ) {
-    throw new Error("Git Review public/resolved index 未对齐");
-  }
-  return { entry, resolvedEntry };
 }
 
 function assertActive(

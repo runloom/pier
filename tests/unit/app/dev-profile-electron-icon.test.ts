@@ -428,6 +428,7 @@ describe("PierDev.app bundle icon", () => {
     expect(source).toContain("MAC_DEV_ELECTRON_SIGN_REVISION");
     expect(source).toContain('"runtime"');
     expect(source).not.toContain('"--deep"');
+    expect(source).toContain("launch-env.json");
     expect(source).toContain('typeof iconApplied === "string"');
     expect(source).toContain("MAC_TAHOE_ICON_NAME");
     expect(source).toContain("app-icon-master.svg");

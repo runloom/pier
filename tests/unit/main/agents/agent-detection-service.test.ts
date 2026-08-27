@@ -110,4 +110,16 @@ describe("agent detection", () => {
     const r = await service.refresh();
     expect(r.detectedIds).toContain("claude");
   });
+
+  it("detectCmdAliases 命中即认到 catalog id", async () => {
+    const installed = new Set(["kimi-cli", "vibe-acp", "qoderclicn"]);
+    const service = createAgentDetectionService({
+      hydratePath: () => Promise.resolve([]),
+      probe: (cmd) => Promise.resolve(installed.has(cmd)),
+    });
+    const result = await service.detect();
+    expect(result.detectedIds).toContain("kimi");
+    expect(result.detectedIds).toContain("mistral-vibe");
+    expect(result.detectedIds).toContain("qodercli");
+  });
 });

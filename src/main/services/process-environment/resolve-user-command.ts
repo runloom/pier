@@ -3,8 +3,8 @@
  *
  * Gold standard (P0): PES owns env layers; this owns *name → how to run*.
  * - External on PATH → absolute path (spawn with env, no second full rc for life).
- * - Alias / function → run via user shell -lic, then re-export sticky tool env
- *   so project/agent PATH layers are not clobbered by .zshrc (design L5).
+ * - Alias / function → run via user shell -lic. Parent env overlay carries
+ *   agent keys; do not re-export dump PATH after rc.
  *
  * Probe is cached; product dump hardening lives in shell-env-loader.ts (P2).
  */

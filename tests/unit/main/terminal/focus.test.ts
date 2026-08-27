@@ -442,6 +442,7 @@ describe("terminal focus restoration", () => {
     expect(result).toEqual({ ok: true, agentRestore: "resumed" });
     expect(processEnvironment.resolve).toHaveBeenCalledWith({
       cwd: "/repo",
+      projectRootPath: "/repo",
       source: "agent",
     });
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(

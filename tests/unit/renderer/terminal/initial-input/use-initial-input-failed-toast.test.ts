@@ -71,6 +71,28 @@ describe("useInitialInputFailedToast", () => {
     );
   });
 
+  it("toasts task copy when command injection fails", () => {
+    renderHook(() => useInitialInputFailedToast("terminal-1"));
+    emit?.({
+      kind: "task",
+      panelId: "terminal-1",
+      textDelivered: false,
+    });
+    expect(toastError).toHaveBeenCalledWith("terminal.initialInput.taskFailed");
+  });
+
+  it("toasts task enter copy when the command is already typed", () => {
+    renderHook(() => useInitialInputFailedToast("terminal-1"));
+    emit?.({
+      kind: "task",
+      panelId: "terminal-1",
+      textDelivered: true,
+    });
+    expect(toastError).toHaveBeenCalledWith(
+      "terminal.initialInput.taskEnterFailed"
+    );
+  });
+
   it("ignores events for other panels", () => {
     renderHook(() => useInitialInputFailedToast("terminal-1"));
     emit?.({

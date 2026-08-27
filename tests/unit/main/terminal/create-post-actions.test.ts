@@ -2,6 +2,8 @@ import {
   cancelInitialTerminalInput,
   finishFailedAgentCommandInject,
   formatAgentCommandInjectFailedCopy,
+  handleInitialInputInjectFailed,
+  resolveInitialInputFailureAction,
   sendInitialTerminalInput,
   setAgentCommandInjectFailedReporter,
 } from "@main/ipc/terminal/create-post-actions.ts";
@@ -342,5 +344,79 @@ describe("terminal create post actions", () => {
       0,
       "\r"
     );
+  });
+});
+
+describe("initial input inject failure action", () => {
+  it("fails a running task when text was not delivered", () => {
+    expect(
+      resolveInitialInputFailureAction({
+        hasAgent: false,
+        lifecycleId: "run-1",
+        taskStatus: "running",
+        textDelivered: false,
+      })
+    ).toEqual({ completeTask: true, kind: "task" });
+  });
+
+  it("does not fail the run when Return failed after the command was typed", () => {
+    expect(
+      resolveInitialInputFailureAction({
+        hasAgent: false,
+        lifecycleId: "run-1",
+        taskStatus: "running",
+        textDelivered: true,
+      })
+    ).toEqual({ completeTask: false, kind: "task" });
+  });
+
+  it("keeps setup and prompt kinds for non-task surfaces", () => {
+    expect(
+      resolveInitialInputFailureAction({
+        hasAgent: true,
+        lifecycleId: "",
+        taskStatus: undefined,
+        textDelivered: false,
+      })
+    ).toEqual({ completeTask: false, kind: "prompt" });
+    expect(
+      resolveInitialInputFailureAction({
+        hasAgent: false,
+        lifecycleId: "",
+        taskStatus: undefined,
+        textDelivered: false,
+      })
+    ).toEqual({ completeTask: false, kind: "setup" });
+  });
+
+  it("completes a live task run from inject-failed", async () => {
+    const completeFromExitCodeHint = vi.fn(async () => true);
+    const sendFailed = vi.fn();
+    handleInitialInputInjectFailed({
+      browserWindowId: 7,
+      completeFromExitCodeHint,
+      hasAgent: false,
+      lifecycleId: "run-1",
+      panelId: "terminal-1",
+      sendFailed,
+      taskStatus: "running",
+      textDelivered: false,
+      windowId: "main",
+    });
+    expect(sendFailed).toHaveBeenCalledWith({
+      kind: "task",
+      panelId: "terminal-1",
+      textDelivered: false,
+    });
+    await vi.waitFor(() => {
+      expect(completeFromExitCodeHint).toHaveBeenCalledWith({
+        browserWindowId: 7,
+        code: 1,
+        lifecycleId: "run-1",
+        panelId: "terminal-1",
+        source: "inject-failed",
+        windowId: "main",
+      });
+    });
   });
 });

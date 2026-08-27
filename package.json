@@ -26,7 +26,7 @@
     "depcruise": "depcruise --config dependency-cruiser.config.cjs src packages",
     "check:file-size": "bash scripts/check-file-size.sh",
     "build:libghostty": "bash scripts/build-libghostty.sh",
-    "build:native": "cd native && bash build.sh",
+    "build:native": "cd native && /bin/bash build.sh",
     "build:lsp-windows-job": "node ./scripts/build-lsp-windows-job.mjs",
     "build:icons": "node ./scripts/build-app-icons.mjs",
     "canvas-sdk:generate-types": "node scripts/generate-canvas-sdk-types.mjs",

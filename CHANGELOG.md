@@ -4,13 +4,42 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Canvas 用通用插件通道组合。** 画布经 `pluginData` 投影、`pluginAction.invoke`、`settings.open` 与宿主聚合 hook 自拼界面；不提供官方账号组件或第二套 widget 贡献点。
+- **Git Review Z2 批摘录主路径。** content 正文默认走 `git.getReviewExcerptBatch`
+  （单世代、16–32 文件一批）；`getReviewFileDocument` 只用于选中 boost、失败重试
+  和 discard 令牌。金标准 G5 闭合，不再逐文件 IPC 取号。
+- **评论导航图标。** git 审查、Markdown、Canvas 共用的底部评论条改为
+  `MessageCircle`，与正文里的评论标记一致。
+
 ### Removed
 
 - **工作台面板。** 去掉新建工作台命令、旧 layout 中的工作台 / dashboard / mission-control 标签，以及插件 `workbenchWidgets` 贡献点。账号添加、删除、OAuth 仍在设置页。
 
-### Changed
+### Fixed
 
-- **Canvas 用通用插件通道组合。** 画布经 `pluginData` 投影、`pluginAction.invoke`、`settings.open` 与宿主聚合 hook 自拼界面；不提供官方账号组件或第二套 widget 贡献点。
+- **终端 resize / 长会话闪烁。** `fitToSize` 在像素未变时跳过刷新，并把
+  scrollbar 与 surface 尺寸解耦，切断「用久了一直闪」的反馈环；统一
+  点→像素公式；图层改不透明并下推主题底色；host resize flush 同步呈现。
+  分栏 sash 拖拽接入与窗口拖拽相同的 surface suppress；presentation cover
+  增加 500ms 强揭超时；Cursor 视口轮询按窗口在 resize 期间让路，zoom / 关窗
+  / 1s 兜底恢复，慢 dump 退避，sync 失败不中断轮询。
+- **Git Review 搜索栏 Esc。** 从搜索结果打开文件时 reveal 保留输入框焦点，
+  按 Esc 能关掉搜索栏。
+- **Git Review pending 骨架。** 未水合文件只占文件头 + 5 条骨架，不再按
+  git 行数拉高空白占位；+N/−M 仍在文件头。树跳转仍靠一次校正钉顶。
+- **Git Review 树点选正文。** 先钉选中文件再批摘录，避免点中文件进最多
+  32 文件的批次；加载卡住时再点会取消重试。选中正文 24s 仍未就绪才超时，
+  邻项仍 8s。
+- **Git Review 目录树跳转贴顶。** 文件头高度取整到 CSS 像素，分隔线改画在
+  文件底边内侧，点树 align:start 不再空出 1px。
+- **Git Review 评论导航定位。** 在目录树点到其他文件后再点 n/N，会走树导航 +
+  正文就绪后再滚到评论行，不再用一次估高滚动打偏、连点才准。行级定位在
+  paint 前完成，避免先闪文件头再跳到评论。
+- **评论计数气泡数字居中。** 序号用 grid 叠在气泡同一格里居中，不再用像素 translate 微调。
+- **Cursor 空闲后仍显示思考中。** 子智能体独立 conversation 只发工具、无
+  stop；主会话可信终态时封掉未见过提问的衍生账本，状态栏回到等待输入。
 
 ## [0.1.32] - 2026-08-26
 

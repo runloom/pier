@@ -93,7 +93,11 @@ export function languageStatus(
   );
 }
 export function languageBadge(root: LocatorRoot, language?: string): Locator {
-  return root.locator(`[data-language${language ? `="${language}"` : ""}]`);
+  // Scoped to the status-bar badge: @codemirror/language also mirrors the
+  // active language onto .cm-content as data-language.
+  return root.locator(
+    `[data-slot="badge"][data-language${language ? `="${language}"` : ""}]`
+  );
 }
 export function saveStatus(root: LocatorRoot): Locator {
   return root.locator(

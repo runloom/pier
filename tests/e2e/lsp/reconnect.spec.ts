@@ -9,6 +9,7 @@ import {
   type LspE2eFixture,
   type LspE2eSessionSnapshot,
   languageStatus,
+  type ObserverCloseCause,
   observerClose,
   observerSnapshot,
   observerTerminate,
@@ -16,7 +17,6 @@ import {
 
 type ObserverSessions = readonly LspE2eSessionSnapshot[];
 type ObserverSession = LspE2eSessionSnapshot;
-type PausedCause = "idle-release" | "workspace-evicted";
 
 const STATUS_TIMEOUT_MS = 30_000;
 
@@ -30,7 +30,7 @@ function liveEditorSessions(snapshot: ObserverSessions): ObserverSession[] {
 
 async function expectLanguageStatuses(
   page: Page,
-  state: "error" | "paused" | "retrying",
+  state: "error" | "retrying",
   count: number
 ): Promise<void> {
   await expect(languageStatus(page)).toHaveCount(count, {
@@ -60,15 +60,6 @@ async function expectSilentLanguageReady(
       { timeout: STATUS_TIMEOUT_MS }
     )
     .toBe(liveEditorCount);
-}
-
-async function blurEditorFocus(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const active = document.activeElement;
-    if (active instanceof HTMLElement) {
-      active.blur();
-    }
-  });
 }
 
 async function waitForOnlyLiveEditorSession(
@@ -164,30 +155,19 @@ async function expectNoAdditionalEditorSessions(
     .toBe(requiredStableSamples);
 }
 
-async function focusEditor(page: Page): Promise<void> {
-  const editor = page
-    .locator('[data-testid="files-code-mirror-editor"] .cm-content')
-    .last();
-  await editor.click();
-  await expect(editor).toBeFocused();
-}
-
-async function closeAndResume(
+/**
+ * 策略性关闭（空闲释放 / 工作区逐出）对「可见编辑器」是透明复活：
+ * publish(paused) 时保活中的编辑器立即 resume，UI 不落 paused 芯片，
+ * 恢复只补一代新会话；paused-直到-聚焦 仅适用于隐藏（停止保活）的编辑器。
+ */
+async function closeAndTransparentlyResume(
   fixture: LspE2eFixture,
   generation: ObserverSession,
-  cause: PausedCause,
+  cause: ObserverCloseCause,
   sessionIds: Set<string>,
   pids: Set<number>
 ): Promise<ObserverSession> {
-  // Ready no longer renders a focusable status chip; blur the editor instead.
-  await blurEditorFocus(fixture.page);
-
-  const pausedRendered = expectLanguageStatuses(fixture.page, "paused", 1);
-  await Promise.all([
-    pausedRendered,
-    observerClose(fixture.application, generation.sessionId, cause),
-  ]);
-
+  await observerClose(fixture.application, generation.sessionId, cause);
   const afterClose = await observerSnapshot(fixture.application);
   const closedGeneration = afterClose.find(
     (session) => session.sessionId === generation.sessionId
@@ -197,6 +177,12 @@ async function closeAndResume(
     closeCause: cause,
     treeTerminal: true,
   });
+
+  // 无需聚焦：可见编辑器自动补一代替换会话，UI 保持安静。
+  const replacement = await waitForReplacement(fixture.application, sessionIds);
+  recordGeneration(replacement, sessionIds, pids);
+  await expectSilentLanguageReady(fixture.page, fixture.application);
+  // 透明复活只补这一代：策略关闭不得像崩溃一样进入连环重试。
   await expectNoAdditionalEditorSessions(
     fixture.application,
     sessionIds,
@@ -204,11 +190,6 @@ async function closeAndResume(
     [100, 250, 500, 1000],
     3000
   );
-
-  await focusEditor(fixture.page);
-  const replacement = await waitForReplacement(fixture.application, sessionIds);
-  recordGeneration(replacement, sessionIds, pids);
-  await expectSilentLanguageReady(fixture.page, fixture.application);
   return replacement;
 }
 
@@ -320,7 +301,7 @@ test("two TypeScript views share one session and one reconnect generation", asyn
   }
 });
 
-test("policy closes pause until focus and unstable generations exhaust retries", async () => {
+test("policy closes revive transparently and unstable generations exhaust retries", async () => {
   test.setTimeout(120_000);
   const fixture = await createLspE2eFixture();
   try {
@@ -332,14 +313,14 @@ test("policy closes pause until focus and unstable generations exhaust retries",
     const pids = new Set<number>();
     recordGeneration(generation, sessionIds, pids);
 
-    generation = await closeAndResume(
+    generation = await closeAndTransparentlyResume(
       fixture,
       generation,
       "idle-release",
       sessionIds,
       pids
     );
-    generation = await closeAndResume(
+    generation = await closeAndTransparentlyResume(
       fixture,
       generation,
       "workspace-evicted",
@@ -371,10 +352,12 @@ test("policy closes pause until focus and unstable generations exhaust retries",
 
     const errorStatus = languageStatus(fixture.page, "error");
     await errorStatus.hover();
-    await expect(fixture.page.getByRole("tooltip")).toContainText(
-      /stopped repeatedly|语言服务器反复停止/u,
-      { timeout: 10_000 }
-    );
+    // 状态芯片详情走 HoverCard（无 role="tooltip"），按 slot 定位浮层内容。
+    await expect(
+      fixture.page.locator('[data-slot="hover-card-content"]')
+    ).toContainText(/stopped repeatedly|语言服务器反复停止/u, {
+      timeout: 10_000,
+    });
 
     await expectNoAdditionalEditorSessions(
       fixture.application,

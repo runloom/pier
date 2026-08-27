@@ -13,7 +13,7 @@ import {
 
 /**
  * 行内评论导航目标（仅 git-diff 且仍有存活评论）。
- * sectionKey 已按当前阅读面解析，调用方直接 scrollToLine / tree open。
+ * sectionKey 已按当前阅读面解析；视口内 scrollToLine，否则 tree open + reveal。
  */
 export interface ReviewCommentNavTarget {
   readonly commentId: string;
@@ -108,4 +108,45 @@ export function mapCommentSideToDiffView(
   side: "new" | "old"
 ): "additions" | "deletions" {
   return side === "old" ? "deletions" : "additions";
+}
+
+/** Minimal CodeView surface used by comment n/N (avoids importing the full handle). */
+export interface ReviewCommentNavRevealHandle {
+  isItemVisible(id: string): boolean;
+  scrollToLine(
+    id: string,
+    lineNumber: number,
+    side?: "additions" | "deletions"
+  ): boolean;
+}
+
+/**
+ * In-place `scrollToLine` is only safe when the target file is already in the
+ * viewport with measured geometry. `getItem` / `scrollToLine` succeeding is
+ * not enough: after tree-navigating to another file the comment section often
+ * remains in the virtualizer as an estimate, so a one-shot line scroll misses
+ * until hydrate. Off-screen targets go through tree open + pending_scroll.
+ */
+export function revealReviewCommentNavTarget(input: {
+  readonly handle: ReviewCommentNavRevealHandle | null;
+  readonly onRequestTreeOpen: (
+    entryKey: string,
+    sectionKey: string,
+    group: GitReviewGroup,
+    reveal?: { readonly line: number; readonly side: "new" | "old" }
+  ) => void;
+  readonly target: ReviewCommentNavTarget;
+}): void {
+  const { handle, onRequestTreeOpen, target } = input;
+  const side = mapCommentSideToDiffView(target.side);
+  if (
+    handle?.isItemVisible(target.sectionKey) === true &&
+    handle.scrollToLine(target.sectionKey, target.line, side) === true
+  ) {
+    return;
+  }
+  onRequestTreeOpen(target.entryKey, target.sectionKey, target.group, {
+    line: target.line,
+    side: target.side,
+  });
 }

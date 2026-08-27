@@ -486,7 +486,9 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     expect(projection.items).toHaveLength(n);
     const metrics = diffMetrics("13px");
     const heights = projection.items.map(() => metrics.headerHeight);
-    expect(totalScrollHeight(heights, metrics.gap)).toBeCloseTo(2108.25);
+    expect(totalScrollHeight(heights, metrics.gap)).toBe(
+      n * metrics.headerHeight + (n - 1) * metrics.gap
+    );
   });
 
   it("omits pure rename slots from CodeView body (gold standard meta)", () => {

@@ -337,7 +337,7 @@ export const TIER_B_SPECS: readonly AgentLifecycleSpec[] = [
   },
   {
     agentId: "qodercli",
-    expectedBins: ["qodercli"],
+    expectedBins: ["qodercli", "qoderclicn"],
     npmPackageForLatest: "@qoder-ai/qodercli",
     support: "full",
     // https://docs.qoder.com/cli/install

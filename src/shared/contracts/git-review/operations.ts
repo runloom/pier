@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { gitReviewScopeSchema } from "./base.ts";
-import { gitReviewFileDocumentRequestSchema } from "./document.ts";
+import {
+  gitReviewExcerptBatchRequestSchema,
+  gitReviewFileDocumentRequestSchema,
+} from "./document.ts";
 import {
   gitReviewChangeKeySchema,
   gitReviewFailureSchema,
@@ -142,6 +145,10 @@ export const gitReviewCommandSchemas = [
   z.object({
     request: gitReviewFileDocumentRequestSchema,
     type: z.literal("git.getReviewFileDocument"),
+  }),
+  z.object({
+    request: gitReviewExcerptBatchRequestSchema,
+    type: z.literal("git.getReviewExcerptBatch"),
   }),
   z.object({
     request: gitReviewCancelRequestSchema,

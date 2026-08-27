@@ -61,6 +61,29 @@ describe("matchAgentCommand (只匹配可执行体, 不扫参数)", () => {
     ["command-code --trust", "command-code"],
     ["gh copilot suggest", "copilot"],
     ["cursor-agent", "cursor"],
+    ["cursor-agent --yolo", "cursor"],
+    ["cn", "continue"],
+    ["agy", "antigravity"],
+    ["vibe", "mistral-vibe"],
+    ["kilocode", "kilo"],
+    ["kimi-cli", "kimi"],
+    ["kimi-cli --yolo", "kimi"],
+    ["qodercli", "qodercli"],
+    ["qoder", "qodercli"],
+    ["qoder --yolo", "qodercli"],
+    ["qoder -p hi", "qodercli"],
+    ["qoder Explain this file", "qodercli"],
+    ["qoder -w .", "qodercli"],
+    ["qodercn", "qodercli"],
+    ["qoderclicn", "qodercli"],
+    ["Qoder", "qodercli"],
+    ["Qoder --yolo", "qodercli"],
+    ["npx qoder", "qodercli"],
+    ["npx -y qoder --yolo", "qodercli"],
+    ["bunx qoder", "qodercli"],
+    ["pnpm dlx qoder", "qodercli"],
+    ["npx qodercli", "qodercli"],
+    ["vibe-acp", "mistral-vibe"],
   ] as const)("%s → %s", (commandLine, agentId) => {
     expect(matchAgentCommand(commandLine)).toBe(agentId);
   });
@@ -77,6 +100,35 @@ describe("matchAgentCommand (只匹配可执行体, 不扫参数)", () => {
     "my-codex-tool",
     "compare", // "omp" 词元不得命中子串
     "romp update", // 词边界：前缀不误伤
+    "cursor .", // 编辑器启动器，不是 cursor-agent
+    "cursor",
+    "cursor -w .",
+    "cursor file.ts",
+    "continue", // bash 内置；Continue CLI 是 cn
+    "kiro .", // Kiro 编辑器启动器；智能体是 kiro-cli
+    "kiro",
+    "qoder .", // V1.1.18+ 合一启动器：路径参数开 IDE
+    "qoder /tmp/proj",
+    "qoder desktop",
+    "qoder ide",
+    "qoder chat",
+    "qoder serve-web",
+    "qoder tunnel",
+    "qoder Desktop",
+    "qoder file.ts",
+    "qoder .gitignore",
+    "qoder ../proj",
+    'qoder "C:\\Users\\proj"',
+    "qoder C:\\Users\\proj",
+    "npx qoder .",
+    "pnpm dlx qoder .",
+    "bunx qoder desktop",
+    "qoder ~",
+    "qodercn .",
+    "qodercn ide",
+    "agent", // 泛名；安装探测才对 cursor-agent 做路径落地
+    "agent --yolo",
+    "antigravity", // 产品 id 不是可执行体（agy）
     "",
   ])("非 agent 命令 → null: %s", (commandLine) => {
     expect(matchAgentCommand(commandLine)).toBeNull();

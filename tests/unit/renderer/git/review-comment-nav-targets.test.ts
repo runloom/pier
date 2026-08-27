@@ -1,9 +1,10 @@
 import type { CommentThread } from "@shared/contracts/comments/base.ts";
 import type { GitReviewIndexEntry } from "@shared/contracts/git/review.ts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildReviewCommentNavTargets,
   mapCommentSideToDiffView,
+  revealReviewCommentNavTarget,
 } from "../../../../src/plugins/builtin/git/renderer/review/comments/nav-targets.ts";
 
 function entry(
@@ -135,5 +136,71 @@ describe("buildReviewCommentNavTargets", () => {
   it("maps comment sides for scrollToLine", () => {
     expect(mapCommentSideToDiffView("old")).toBe("deletions");
     expect(mapCommentSideToDiffView("new")).toBe("additions");
+  });
+});
+
+function navTarget(
+  path: string,
+  sectionKey: string
+): Parameters<typeof revealReviewCommentNavTarget>[0]["target"] {
+  return {
+    commentId: "c1",
+    entryKey: `entry:${path}`,
+    group: "unstaged",
+    line: 12,
+    path,
+    sectionKey,
+    side: "new",
+    threadId: "t1",
+  };
+}
+
+describe("revealReviewCommentNavTarget", () => {
+  it("scrolls in place only when the target file is already visible", () => {
+    const scrollToLine = vi.fn(() => true);
+    const onRequestTreeOpen = vi.fn();
+    revealReviewCommentNavTarget({
+      handle: {
+        isItemVisible: (id) => id === "sec-a",
+        scrollToLine,
+      },
+      onRequestTreeOpen,
+      target: navTarget("a.ts", "sec-a"),
+    });
+    expect(scrollToLine).toHaveBeenCalledWith("sec-a", 12, "additions");
+    expect(onRequestTreeOpen).not.toHaveBeenCalled();
+  });
+
+  it("tree-opens with reveal after navigating to another file", () => {
+    const scrollToLine = vi.fn(() => true);
+    const onRequestTreeOpen = vi.fn();
+    revealReviewCommentNavTarget({
+      handle: {
+        isItemVisible: () => false,
+        scrollToLine,
+      },
+      onRequestTreeOpen,
+      target: navTarget("a.ts", "sec-a"),
+    });
+    expect(scrollToLine).not.toHaveBeenCalled();
+    expect(onRequestTreeOpen).toHaveBeenCalledWith(
+      "entry:a.ts",
+      "sec-a",
+      "unstaged",
+      { line: 12, side: "new" }
+    );
+  });
+
+  it("tree-opens when in-place scrollToLine fails", () => {
+    const onRequestTreeOpen = vi.fn();
+    revealReviewCommentNavTarget({
+      handle: {
+        isItemVisible: () => true,
+        scrollToLine: () => false,
+      },
+      onRequestTreeOpen,
+      target: navTarget("a.ts", "sec-a"),
+    });
+    expect(onRequestTreeOpen).toHaveBeenCalledTimes(1);
   });
 });

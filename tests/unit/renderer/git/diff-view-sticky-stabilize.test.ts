@@ -9,9 +9,8 @@ import { describe, expect, it, vi } from "vitest";
 describe("diff header metrics", () => {
   it("derives header height from lineHeight so Pierre's collapsed estimate matches the DOM", () => {
     expect(DIFF_HEADER_MIN_HEIGHT_PX).toBe(32);
-    // 实测渲染高度 = 标题行盒 lineHeight + padding-block 8 + 标题槽 4px 余量。
-    // 声明值必须等于它：Pierre 折叠项不重测 DOM，差值会按折叠项个数线性累积成滚动错位。
-    expect(diffFontMetrics("13px").diffHeaderHeight).toBeCloseTo(34.75);
+    // 头高取整到整数 CSS 像素：Pierre 折叠项不重测 DOM，半像素会按项累积成贴顶 1px。
+    expect(diffFontMetrics("13px").diffHeaderHeight).toBe(35);
     expect(diffFontMetrics("16px").diffHeaderHeight).toBeCloseTo(40);
     // 极小字号仍不低于 32px chrome floor（与 CSS min-height 一致）
     expect(diffFontMetrics("8px").diffHeaderHeight).toBe(32);

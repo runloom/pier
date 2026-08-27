@@ -5,6 +5,10 @@ export const gitReviewRevisionSchema = z.string().min(1).max(256);
 export const gitReviewChangeKeySchema = z.string().min(1).max(512);
 export const gitReviewSectionKeySchema = z.string().min(1).max(512);
 export const GIT_REVIEW_MAX_SECTIONS = 3;
+/** Z2 批摘录：单次 IPC 文件数上限（金标准 16–64）。 */
+export const GIT_REVIEW_EXCERPT_BATCH_MAX = 64;
+/** Z2 批摘录：默认一批灌入的 content 数。 */
+export const GIT_REVIEW_EXCERPT_BATCH_DEFAULT = 32;
 export const GIT_REVIEW_DIFF_BASES = [
   "head",
   "index",

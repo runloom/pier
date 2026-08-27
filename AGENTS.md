@@ -330,6 +330,7 @@ section 根节点下的裸子节点。
 - 双源迁移已完成：老 `agent-session` broadcast 已下线，此通道是唯一活动广播源
 - 模块内不 import `services/agents/`（agent 只是 activity 的一种 kind，边界单向）
 - Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
+- 命令行 → 智能体身份只走 `src/shared/agent-command-detection.ts` 的 `matchAgentCommand`（OSC 133 C 先验点亮）：词元只来自 catalog 命令字段，产品 id / label 不参与（`cursor .` / `kiro` / `continue` 是启动器或内置命令，不得点亮）；`agent` / `acli` 泛名进 `AGENT_OSC_BIN_DENYLIST`；`qoder` / `qodercn` 合一启动器按 argv 分流 CLI/IDE；安装探测 `expectedBins`（除 denylist）必须能被 OSC 认到。检查点：`tests/unit/agent/command-detection-governance.test.ts`、`tests/unit/agent/command-detection.test.ts` 与 `tests/unit/main/agents/lifecycle/specs.test.ts` 的 expectedBins 词元锁
 
 #### 终端 tab 标题与 Agent 身份（标题 ≠ 身份）— 金标准
 

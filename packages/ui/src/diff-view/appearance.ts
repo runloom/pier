@@ -1,9 +1,10 @@
 import type { CSSProperties } from "react";
 import { SCROLLBAR_SYSTEM_CSS } from "../scrollbar-system.ts";
+import { DIFF_CONTENT_PADDING_BOTTOM_PX } from "./geometry.ts";
 
 /**
  * CodeView unsafeCSS：系统滚动条 + Diff 产品壳。
- * 尺寸只来自 SCROLLBAR_SYSTEM_CSS。
+ * 条尺寸来自 SCROLLBAR_SYSTEM_CSS；头高 / 行高 / 文件体底垫走 geometry CSS 变量。
  */
 export const CODE_VIEW_CUSTOM_CSS = `
 ${SCROLLBAR_SYSTEM_CSS}
@@ -54,16 +55,28 @@ ${SCROLLBAR_SYSTEM_CSS}
     /* Tighter than Pierre default (1lh + 3×8 ≈ 47): 32px chrome row. */
     gap: 6px;
     /*
-     * 必须等于喂给 Pierre 的 itemMetrics.diffHeaderHeight（diffFontMetrics 推导）。
-     * Pierre 折叠项只信这个估值、不重测 DOM，实际高一点点就会在折叠导航时累积错位。
+     * 必须等于喂给 Pierre 的 itemMetrics.diffHeaderHeight（整数 CSS px）。
+     * Pierre 折叠项只信这个估值、不重测 DOM；min-height 也钉同一变量，
+     * 避免官方 calc(1lh + 3x gap) 把头撑高。
      */
     height: var(--pier-diff-header-height, 32px);
-    min-height: 32px;
+    min-height: var(--pier-diff-header-height, 32px);
     padding-block: 4px;
     padding-inline: 12px;
     width: 100%;
     box-sizing: border-box;
     cursor: pointer;
+  }
+
+  /* 底垫 = itemMetrics.paddingBottom；盖 Pierre gap−gutter，gutter overlay。 */
+  [data-code] {
+    padding-bottom: var(--pier-diff-content-padding-bottom, ${DIFF_CONTENT_PADDING_BOTTOM_PX}px);
+    scrollbar-gutter: auto;
+  }
+
+  [data-overflow="wrap"][data-diff-type="split"] {
+    padding-top: 0;
+    padding-bottom: var(--pier-diff-content-padding-bottom, ${DIFF_CONTENT_PADDING_BOTTOM_PX}px);
   }
 
   /* Whole-header hover (VS Code multi-diff chrome). */
@@ -240,13 +253,8 @@ ${SCROLLBAR_SYSTEM_CSS}
 
   /*
    * estimate 槽：shadow 内真实节点 [data-pier-estimate-skeleton]
-   * （由 estimate-skeleton.ts syncEstimateSkeleton 注入）。
-   *
-   * 禁止 :host::after 画条——margin/transparent-border 在 host 伪元素上
-   * 经常失效，截图里左右内距「怎么改都没有」。真实 div + padding 才稳。
-   *
-   * 几何与 estimate-skeleton.ts / geometry.skeletonBody 同源：
-   * pad 12/12/8、条高 12、gap 8、5 行错落宽度。
+   * （estimate-skeleton.ts 注入）。禁止 :host::after 画条。
+   * 固定 5 条；槽高由 geometry.skeletonSlotHeight，不按 numstat 拉高。
    */
   :host([data-pier-estimate="true"]) {
     min-height: 0;
@@ -262,7 +270,6 @@ ${SCROLLBAR_SYSTEM_CSS}
     box-sizing: border-box;
     flex-direction: column;
     width: 100%;
-    /* 与 estimate-skeleton.ts / geometry 金标准对齐 */
     gap: 8px;
     padding: 8px 12px;
     --pier-skel-a: color-mix(
@@ -294,12 +301,8 @@ ${SCROLLBAR_SYSTEM_CSS}
   }
 
   @keyframes pier-estimate-skeleton-shimmer {
-    0% {
-      background-position: 100% 0;
-    }
-    100% {
-      background-position: -100% 0;
-    }
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
   }
 
   /*
@@ -426,11 +429,13 @@ export interface DiffTypographyStyle extends CSSProperties {
   "--diffs-scrollbar-gutter-override": string;
   "--diffshub-annotation-border": string;
   "--diffshub-diff-separator": string;
+  "--pier-diff-content-padding-bottom": string;
   "--pier-diff-header-height": string;
 }
 
 /** geometry 公开面：虚拟高度唯一真源。 */
 export {
+  DIFF_CONTENT_PADDING_BOTTOM_PX,
   DIFF_HEADER_MIN_HEIGHT_PX,
   DIFF_ITEM_GAP_PX,
   type DiffMetrics,

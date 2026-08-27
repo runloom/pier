@@ -1,12 +1,13 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  buildLoginShellDumpCommand,
+  loginShellFlagArgs,
+} from "@main/services/process-environment/login-shell-spawn.ts";
 import { isLaunchedFromCli } from "@main/services/process-environment/shell-env-cli.ts";
 import {
   createShellEnvJsonMark,
-  FALLBACK_TIMEOUT_FLOOR_MS,
-  fallbackDeadlineMs,
-  fallbackTimeoutMs,
   formatShellSpawnError,
   parseShellEnvironmentJsonOutput,
   parseShellEnvironmentOutput,
@@ -30,56 +31,26 @@ describe("remainingTimeoutMs", () => {
   });
 });
 
-describe("fallbackDeadlineMs / fallbackTimeoutMs", () => {
-  it("reuses primary deadline when enough budget remains", () => {
-    const primaryDeadline = 1_000_000;
-    const now = 995_000;
-    expect(fallbackDeadlineMs(primaryDeadline, 10_000, now)).toBe(
-      primaryDeadline
-    );
-    expect(fallbackTimeoutMs(primaryDeadline, 10_000, now)).toBe(5000);
-  });
-
-  it("grants a single floor when primary exhausted the shared deadline", () => {
-    const primaryDeadline = 1_000_000;
-    const now = 1_000_000;
-    expect(fallbackDeadlineMs(primaryDeadline, 10_000, now)).toBe(
-      now + FALLBACK_TIMEOUT_FLOOR_MS
-    );
-    expect(fallbackTimeoutMs(primaryDeadline, 10_000, now)).toBe(
-      FALLBACK_TIMEOUT_FLOOR_MS
-    );
-    expect(fallbackTimeoutMs(primaryDeadline, 10_000, 999_600)).toBe(
-      FALLBACK_TIMEOUT_FLOOR_MS
-    );
-  });
-
-  it("never exceeds the configured total timeout for the floor", () => {
-    expect(fallbackTimeoutMs(1_000_000, 1500, 1_000_000)).toBe(1500);
-  });
-
-  it("shares one fallback deadline so secondary+tertiary cannot stack floors", () => {
-    const primaryDeadline = 1_000_000;
-    const now = 1_000_000;
-    const fbDeadline = fallbackDeadlineMs(primaryDeadline, 10_000, now);
-    // Secondary takes most of the floor; tertiary only gets the remainder.
-    const afterSecondary = now + 2500;
-    expect(remainingTimeoutMs(fbDeadline, afterSecondary)).toBe(500);
-    // A second independent floor would have been 3000 again — must not.
-    expect(remainingTimeoutMs(fbDeadline, afterSecondary)).toBeLessThan(
-      FALLBACK_TIMEOUT_FLOOR_MS
-    );
+describe("login-interactive dump command", () => {
+  it("uses login flags and cds into the dump directory", () => {
+    expect(loginShellFlagArgs("/bin/zsh")).toEqual(["-lic"]);
+    expect(loginShellFlagArgs("/bin/zsh", "command")).toEqual(["-c"]);
+    const jsonCommand = shellEnvJsonCommand("/path/to/Electron", "mark");
+    const dumpCommand = buildLoginShellDumpCommand(jsonCommand, "/tmp/proj");
+    expect(dumpCommand.startsWith("cd /tmp/proj; ")).toBe(true);
+    expect(dumpCommand).toContain("JSON.stringify(process.env)");
   });
 });
 
 describe("stripShellDumpArtifacts", () => {
-  it("removes dump-only ELECTRON_* and PIER_RESOLVING_ENVIRONMENT keys", () => {
+  it("removes dump-only ELECTRON_*, PIER_RESOLVING_ENVIRONMENT, and SHELL_SESSIONS_DISABLE", () => {
     const cleaned = stripShellDumpArtifacts({
       ELECTRON_NO_ATTACH_CONSOLE: "1",
       ELECTRON_RUN_AS_NODE: "1",
       HOME: "/tmp",
       PATH: "/bin",
       PIER_RESOLVING_ENVIRONMENT: "1",
+      SHELL_SESSIONS_DISABLE: "1",
     });
     expect(cleaned).toEqual({ HOME: "/tmp", PATH: "/bin" });
     for (const key of SHELL_DUMP_ARTIFACT_KEYS) {
