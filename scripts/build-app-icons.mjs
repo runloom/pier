@@ -1,15 +1,13 @@
-// build/app-icon-{master,micro,unplated}.svg → platform application icons.
+// build/app-icon-{16,master,small,tiny}.svg → platform application icons.
 //
 // Sources:
-//   - app-icon-master.svg: F rendition for macOS 256px and larger.
-//   - app-icon-micro.svg: I rendition for macOS 16–128px and development Dock.
-//   - app-icon-unplated.svg: transparent 1024×1024 mark for Windows, Linux,
-//     and any consumer that wraps the bitmap in its own rounded container.
-//   - app-icon.icon: Icon Composer document for macOS 26+. Its mark layer
-//     (Assets/pier-mark.png) is regenerated here from app-icon-master.svg and
-//     the document is compiled with Xcode's actool into build/Assets.car so
-//     Tahoe renders the layered rendition natively instead of boxing the
-//     legacy ICNS onto a system plate.
+//   - app-icon-16.svg: pixel-grid correction for physical 16×16 slots only.
+//   - app-icon-master.svg: approved complete rendition for 256px and larger.
+//   - app-icon-small.svg: optically adjusted rendition for 64–128px.
+//   - app-icon-tiny.svg: optically adjusted rendition for 24–48px.
+//   - app-icon.icon: authored three-layer vector document for macOS 26+. It is
+//     compiled with Xcode's actool into build/Assets.car so Tahoe owns the
+//     system mask and container lighting without boxing a legacy icon.
 //
 // Conversion uses electron-builder's pinned official icons toolset, which produces
 // valid ICNS/ICO/icon sets consistently across host macOS versions. The macOS
@@ -42,7 +40,6 @@ const PUBLISHED_TARGETS = Object.freeze([
   "icon.icns",
   "icon.ico",
   "icon.png",
-  "icon-dock.png",
   "icons",
   "app-icon.icon",
   "Assets.car",
@@ -130,10 +127,13 @@ async function encodeLegacyIconsWithSips(options) {
   const workingDirectory = join(options.stagingDirectory, ".legacy-icon-tool");
   mkdirSync(workingDirectory, { recursive: true });
   const encoded = {};
-  for (const size of [16, 32]) {
+  for (const [size, source] of [
+    [16, options.source16],
+    [32, options.source32],
+  ]) {
     const png = join(workingDirectory, `micro-${size}.png`);
     const icns = join(workingDirectory, `micro-${size}.icns`);
-    rasterize(options.rsvgCommand, options.source, size, png);
+    rasterize(options.rsvgCommand, source, size, png);
     run(options.sipsCommand, ["-s", "format", "icns", png, "--out", icns], {
       quiet: true,
     });
@@ -143,79 +143,111 @@ async function encodeLegacyIconsWithSips(options) {
 }
 
 async function buildIcns(sources, stagingDirectory, dependencies) {
-  const standard = await convertToBuffer(
+  const master = await convertToBuffer(
     sources.master,
     "icns",
     stagingDirectory,
-    "icns-standard",
+    "icns-master",
     dependencies.convertIcons
   );
-  const micro = await convertToBuffer(
-    sources.micro,
+  const small = await convertToBuffer(
+    sources.small,
     "icns",
     stagingDirectory,
-    "icns-micro",
+    "icns-small",
+    dependencies.convertIcons
+  );
+  const tiny = await convertToBuffer(
+    sources.tiny,
+    "icns",
+    stagingDirectory,
+    "icns-tiny",
     dependencies.convertIcons
   );
   const { legacy16, legacy32 } = await dependencies.encodeLegacyIcons({
-    source: sources.micro,
+    source16: sources.sixteen,
+    source32: sources.tiny,
     stagingDirectory,
     rsvgCommand: dependencies.rsvgCommand,
     sipsCommand: dependencies.sipsCommand,
   });
   writeFileSync(
     join(stagingDirectory, "icon.icns"),
-    mergeIcnsRenditions(standard, micro, legacy16, legacy32)
+    mergeIcnsRenditions(master, small, tiny, legacy16, legacy32)
   );
 }
 
-async function buildIco(sources, stagingDirectory, convertIcons) {
-  const icon = await convertToBuffer(
-    sources.unplated,
-    "ico",
-    stagingDirectory,
-    "ico",
-    convertIcons
-  );
-  writeFileSync(join(stagingDirectory, "icon.ico"), icon);
+const CROSS_PLATFORM_RENDITIONS = Object.freeze([
+  [16, "sixteen"],
+  [24, "tiny"],
+  [32, "tiny"],
+  [48, "tiny"],
+  [64, "small"],
+  [96, "small"],
+  [128, "small"],
+  [256, "master"],
+  [512, "master"],
+]);
+
+const ICO_SIZES = new Set([16, 24, 32, 48, 64, 128, 256]);
+
+function encodeIco(frames) {
+  const header = Buffer.alloc(6);
+  header.writeUInt16LE(0, 0);
+  header.writeUInt16LE(1, 2);
+  header.writeUInt16LE(frames.length, 4);
+  let payloadOffset = 6 + frames.length * 16;
+  const directory = frames.map(({ size, png }) => {
+    const entry = Buffer.alloc(16);
+    const encodedSize = size === 256 ? 0 : size;
+    entry.writeUInt8(encodedSize, 0);
+    entry.writeUInt8(encodedSize, 1);
+    entry.writeUInt8(0, 2);
+    entry.writeUInt8(0, 3);
+    entry.writeUInt16LE(1, 4);
+    entry.writeUInt16LE(32, 6);
+    entry.writeUInt32LE(png.length, 8);
+    entry.writeUInt32LE(payloadOffset, 12);
+    payloadOffset += png.length;
+    return entry;
+  });
+  return Buffer.concat([header, ...directory, ...frames.map(({ png }) => png)]);
 }
 
-async function buildLinuxIcons(
-  sources,
-  stagingDirectory,
-  rasterizeCommand,
-  convertIcons
-) {
+function buildIco(sources, stagingDirectory, rasterizeCommand) {
+  const workingDirectory = join(stagingDirectory, ".ico-frames");
+  mkdirSync(workingDirectory, { recursive: true });
+  const frames = [];
+  for (const [size, rendition] of CROSS_PLATFORM_RENDITIONS) {
+    if (!ICO_SIZES.has(size)) {
+      continue;
+    }
+    const output = join(workingDirectory, `${size}.png`);
+    rasterize(rasterizeCommand, sources[rendition], size, output);
+    frames.push({ size, png: readFileSync(output) });
+  }
+  writeFileSync(join(stagingDirectory, "icon.ico"), encodeIco(frames));
+}
+
+function buildLinuxIcons(sources, stagingDirectory, rasterizeCommand) {
   const linuxIcons = join(stagingDirectory, "icons");
   mkdirSync(linuxIcons, { recursive: true });
-  await convertIcons({
-    inputFile: sources.unplated,
-    outputFormat: "set",
-    outDir: linuxIcons,
-  });
-  rasterize(
-    rasterizeCommand,
-    sources.unplated,
-    96,
-    join(linuxIcons, "96x96.png")
-  );
+  for (const [size, rendition] of CROSS_PLATFORM_RENDITIONS) {
+    rasterize(
+      rasterizeCommand,
+      sources[rendition],
+      size,
+      join(linuxIcons, `${size}x${size}.png`)
+    );
+  }
 }
 
 function buildContainerPng(sources, stagingDirectory, rasterizeCommand) {
   rasterize(
     rasterizeCommand,
-    sources.unplated,
+    sources.master,
     512,
     join(stagingDirectory, "icon.png")
-  );
-}
-
-function buildDevDockPng(sources, stagingDirectory, rasterizeCommand) {
-  rasterize(
-    rasterizeCommand,
-    sources.micro,
-    512,
-    join(stagingDirectory, "icon-dock.png")
   );
 }
 
@@ -241,6 +273,7 @@ function publishStagedAssets(stagingDirectory, outputDirectory) {
       renameSync(staged, destination);
       published.push(target);
     }
+    rmSync(join(outputDirectory, "icon-dock.png"), { force: true });
   } catch (error) {
     for (const target of published.reverse()) {
       rmSync(join(outputDirectory, target), { recursive: true, force: true });
@@ -269,9 +302,10 @@ export async function buildAppIcons(options = {}) {
     options.validatePublishedCar ?? options.compileIconDocument === undefined;
   const log = options.log ?? console.log;
   const sources = {
+    sixteen: join(sourceDirectory, "app-icon-16.svg"),
     master: join(sourceDirectory, "app-icon-master.svg"),
-    micro: join(sourceDirectory, "app-icon-micro.svg"),
-    unplated: join(sourceDirectory, "app-icon-unplated.svg"),
+    small: join(sourceDirectory, "app-icon-small.svg"),
+    tiny: join(sourceDirectory, "app-icon-tiny.svg"),
     iconDocument: join(sourceDirectory, MAC_ICON_DOCUMENT),
   };
 
@@ -288,31 +322,27 @@ export async function buildAppIcons(options = {}) {
   );
 
   try {
-    log("→ build/icon.icns (I Micro 16–128px + F Standard 256–1024px)");
+    log(
+      "→ build/icon.icns (16px optical + Tiny 32px + Small 64–128px + Master 256–1024px)"
+    );
     await buildIcns(sources, stagingDirectory, {
       convertIcons,
       encodeLegacyIcons,
       rsvgCommand,
       sipsCommand,
     });
-    log("→ build/icon.ico (transparent Windows official size set)");
-    await buildIco(sources, stagingDirectory, convertIcons);
-    log("→ build/icons/* (transparent Linux hicolor size set)");
-    await buildLinuxIcons(sources, stagingDirectory, rsvgCommand, convertIcons);
-    log(
-      "→ build/icon.png 512×512 (unplated mark for window/taskbar containers)"
-    );
+    log("→ build/icon.ico (optically routed Windows size set)");
+    buildIco(sources, stagingDirectory, rsvgCommand);
+    log("→ build/icons/* (optically routed Linux hicolor size set)");
+    buildLinuxIcons(sources, stagingDirectory, rsvgCommand);
+    log("→ build/icon.png 512×512 (complete master composite)");
     buildContainerPng(sources, stagingDirectory, rsvgCommand);
-    log("→ build/icon-dock.png 512×512 (macOS development Dock)");
-    buildDevDockPng(sources, stagingDirectory, rsvgCommand);
     log(
       "→ build/app-icon.icon Assets + build/Assets.car (macOS 26 layered rendition)"
     );
     await buildMacLayeredIcon(sources, stagingDirectory, outputDirectory, {
       compileIconDocument,
-      rsvgCommand,
       xcrunCommand,
-      rasterize,
       validatePublishedCar,
     });
     publishStagedAssets(stagingDirectory, outputDirectory);

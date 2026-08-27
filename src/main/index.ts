@@ -1,14 +1,6 @@
-import { join } from "node:path";
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
-import {
-  app,
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  nativeImage,
-  shell,
-} from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control/registration.ts";
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { registerPeerUidFromNativeAddon } from "./adapters/cli/register-peer-uid-native.ts";
@@ -322,14 +314,6 @@ if (gotTheLock) {
         gitAutofetch.dispose();
         appCore.services.liveModules?.dispose();
       });
-      if (isMac && isDev && app.dock) {
-        app.dock.setIcon(
-          nativeImage.createFromPath(
-            join(import.meta.dirname, "../../build/icon-dock.png")
-          )
-        );
-      }
-
       registerWindowIpc(ipcMain);
       registerCommandIpc(ipcMain);
       registerExternalNavigationIpc(ipcMain, {

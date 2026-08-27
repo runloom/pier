@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -8,49 +8,62 @@ function read(path: string): string {
   return readFileSync(join(ROOT, path), "utf8");
 }
 
-describe("Pier icon container vs Dock plate split", () => {
-  it("keeps the macOS plate only on Dock sources", () => {
-    const plate = 'fill="#101725"';
-    const plateGeometry = 'width="824" height="824"';
-
-    expect(read("build/app-icon-master.svg")).toContain(plate);
-    expect(read("build/app-icon-master.svg")).toContain(plateGeometry);
-    expect(read("build/app-icon-micro.svg")).toContain(plate);
-    expect(read("build/app-icon-micro.svg")).toContain(plateGeometry);
-
-    expect(read("build/app-icon-unplated.svg")).not.toContain(plate);
-    expect(read("build/design-sources/pier-logo.svg")).not.toContain(plate);
+describe("Pier app-icon container governance", () => {
+  it("keeps exactly one authored optical source for each size tier", () => {
+    for (const source of [
+      "build/app-icon-16.svg",
+      "build/app-icon-master.svg",
+      "build/app-icon-small.svg",
+      "build/app-icon-tiny.svg",
+    ]) {
+      expect(existsSync(join(ROOT, source))).toBe(true);
+    }
+    expect(existsSync(join(ROOT, "build/app-icon-micro.svg"))).toBe(false);
+    expect(existsSync(join(ROOT, "build/app-icon-unplated.svg"))).toBe(false);
   });
 
-  it("routes Dock to the plated PNG and window consumers to the unplated PNG", () => {
-    expect(read("src/main/index.ts")).toContain('"../../build/icon-dock.png"');
-    expect(read("src/main/index.ts")).not.toContain('"../../build/icon.png"');
+  it("lets the bundle icon own the macOS Dock instead of replacing it at runtime", () => {
+    const main = read("src/main/index.ts");
+    expect(main).not.toMatch(/\bapp\.dock\.setIcon\s*\(/);
+    expect(main).not.toContain("icon-dock.png");
+    expect(main).not.toMatch(/\bnativeImage\b/);
+    expect(existsSync(join(ROOT, "build/icon-dock.png"))).toBe(false);
+  });
+
+  it("keeps the complete 512px master composite for window icon consumers", () => {
     expect(read("src/main/windows/factory.ts")).toContain(
       '"../../build/icon.png"'
     );
-    expect(read("src/main/windows/factory.ts")).not.toContain(
-      '"../../build/icon-dock.png"'
+    expect(read("scripts/build-app-icons.mjs")).toContain(
+      'join(stagingDirectory, "icon.png")'
+    );
+    const builder = read("scripts/build-app-icons.mjs");
+    expect(builder.match(/icon-dock\.png/g)).toHaveLength(1);
+    expect(builder).toMatch(
+      /rmSync\(join\(outputDirectory, "icon-dock\.png"\), \{ force: true \}\)/
     );
   });
 
-  it("documents that window consumers must not reuse the Dock plate", () => {
-    const development = read("docs/development.md");
-    expect(development).toContain("build/icon-dock.png");
-    expect(development).toContain("会再套一层圆角容器");
-    expect(read(".gitignore")).toContain("!/build/icon-dock.png");
-    expect(read("scripts/build-app-icons.mjs")).toContain('"icon-dock.png"');
-  });
-
-  it("builds the PierDev bundle icon from a plate that fills the canvas", () => {
+  it("installs canonical generated assets into PierDev without rebuilding artwork", () => {
     const development = read("scripts/dev-profile.mjs");
-    expect(development).toContain("app-icon-master.svg");
-    expect(development).toContain("app-icon-micro.svg");
-    expect(development).toContain("platedFillSvg");
-    expect(development).toContain("MAC_ICON_PLATE_FILL");
-    expect(development).toContain("macDevElectronRuntimeStamp");
-    expect(development).toContain("iconApplied");
-    expect(development).not.toContain(
-      'path.join(profile.worktreeRoot, "build", "icon.icns")'
+    expect(development).toContain("macDevIconHash");
+    expect(development).toContain('"icon.icns"');
+    expect(development).toContain('"Assets.car.inputs"');
+    expect(development).toContain("layeredIconFingerprint");
+    expect(development).toContain("assertCompiledIconStack");
+    expect(development).not.toContain("rsvg-convert");
+    expect(development).not.toContain("iconutil");
+    expect(development).not.toContain("platedFillSvg");
+  });
+
+  it("pins Xcode 26 and rebuilds icons before the macOS CI assertions", () => {
+    const workflow = read(".github/workflows/ci.yml");
+    expect(workflow).toContain(
+      "/Applications/Xcode_26.3.app/Contents/Developer"
     );
+    expect(workflow).toMatch(
+      /mac-icons:[\s\S]*pnpm build:icons[\s\S]*git diff --exit-code -- build/
+    );
+    expect(workflow).toContain("build/design-sources/**");
   });
 });

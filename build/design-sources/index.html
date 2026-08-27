@@ -115,7 +115,7 @@
 
       #approved-renditions + .renditions {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         overflow: hidden;
         border: 1px solid var(--rule);
         border-radius: var(--radius);
@@ -406,8 +406,8 @@
     <main>
       <header>
         <p class="eyebrow">Pier · Approved Logo System</p>
-        <h1>F / I 双版本图标系统</h1>
-        <p>F 承担标准与大尺寸展示；I 承担 16–128 px 的小尺寸识别。</p>
+        <h1>三档光学校正图标系统</h1>
+        <p>Master、Small、Tiny 分别服务大、中、小尺寸，保持终端与泊位在每个像素档位都清楚。</p>
       </header>
 
       <section aria-labelledby="approved-renditions">
@@ -415,27 +415,35 @@
         <div class="renditions">
           <article class="rendition">
             <div class="asset-stage dark">
-              <img src="../app-icon-master.svg" alt="Pier F 标准版图标" />
+              <img src="../app-icon-master.svg" alt="Pier Master 图标" />
             </div>
             <p class="source">../app-icon-master.svg</p>
-            <h3>F · Standard</h3>
-            <p>macOS Dock 与 256–1024 px 标准输出。</p>
+            <h3>Master</h3>
+            <p>256–1024 px，保留完整材质、光影与空间层次。</p>
           </article>
           <article class="rendition">
             <div class="asset-stage dark">
-              <img src="../app-icon-micro.svg" alt="Pier I 小尺寸版图标" />
+              <img src="../app-icon-small.svg" alt="Pier Small 图标" />
             </div>
-            <p class="source">../app-icon-micro.svg</p>
-            <h3>I · Micro</h3>
-            <p>16–128 px，减少细节与光效，保持终端和港湾轮廓。</p>
+            <p class="source">../app-icon-small.svg</p>
+            <h3>Small</h3>
+            <p>64–128 px，强化终端笔画与泊位边缘。</p>
+          </article>
+          <article class="rendition">
+            <div class="asset-stage dark">
+              <img src="../app-icon-tiny.svg" alt="Pier Tiny 图标" />
+            </div>
+            <p class="source">../app-icon-tiny.svg</p>
+            <h3>Tiny</h3>
+            <p>16–48 px，压低细节噪声并确保提示符分离。</p>
           </article>
           <article class="rendition transparent-preview">
             <div class="asset-stage">
-              <img src="./pier-logo.svg" alt="Pier F 透明背景标志" />
+              <img src="./pier-logo.svg" alt="Pier 完整矢量源稿" />
             </div>
             <p class="source">./pier-logo.svg</p>
-            <h3>F · Transparent</h3>
-            <p>文档、品牌展示与无系统底板场景。</p>
+            <h3>Vector Source</h3>
+            <p>完整 SVG 交付稿，用于品牌归档与后续编辑。</p>
           </article>
         </div>
       </section>
@@ -443,26 +451,26 @@
       <section aria-labelledby="size-map">
         <h2 id="size-map">尺寸映射</h2>
         <div class="size-map">
-          <div class="size-strip" aria-label="I 版 16 到 128 像素预览">
+          <div class="size-strip" aria-label="Tiny 与 Small 的 16 到 128 像素预览">
             <div>
-              <img src="../app-icon-micro.svg" width="16" height="16" alt="I 版 16px" />
+              <img src="../app-icon-tiny.svg" width="16" height="16" alt="Tiny 版 16px" />
               <span class="size-label">16</span>
             </div>
             <div>
-              <img src="../app-icon-micro.svg" width="32" height="32" alt="I 版 32px" />
+              <img src="../app-icon-tiny.svg" width="32" height="32" alt="Tiny 版 32px" />
               <span class="size-label">32</span>
             </div>
             <div>
-              <img src="../app-icon-micro.svg" width="64" height="64" alt="I 版 64px" />
+              <img src="../app-icon-small.svg" width="64" height="64" alt="Small 版 64px" />
               <span class="size-label">64</span>
             </div>
             <div>
-              <img src="../app-icon-micro.svg" width="128" height="128" alt="I 版 128px" />
+              <img src="../app-icon-small.svg" width="128" height="128" alt="Small 版 128px" />
               <span class="size-label">128</span>
             </div>
           </div>
-          <div class="standard-range" aria-label="F 版 256 到 1024 像素范围">
-            <img src="../app-icon-master.svg" width="160" height="160" alt="F 版 256px 以上" />
+          <div class="standard-range" aria-label="Master 版 256 到 1024 像素范围">
+            <img src="../app-icon-master.svg" width="160" height="160" alt="Master 版 256px 以上" />
             <p>256 / 512 / 1024 px</p>
           </div>
         </div>

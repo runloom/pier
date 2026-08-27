@@ -1,4 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -18,6 +25,7 @@ import { validateLatestRelease } from "../../../../scripts/verify-github-latest-
 import {
   parseArgs,
   validateMacReleaseArtifacts,
+  validatePackagedMacApp,
 } from "../../../../scripts/verify-mac-release-artifacts.mjs";
 
 const COMPLETE_0_1_1 = requiredMacReleaseAssetNames("0.1.1");
@@ -60,7 +68,46 @@ async function makeArtifactDir(
       await writeFile(join(dir, name), `${name}\n`, "utf8");
     }
   }
+  await Promise.all([
+    populatePackagedApp(join(dir, "mac/Pier.app")),
+    populatePackagedApp(join(dir, "mac-arm64/Pier.app")),
+  ]);
   return dir;
+}
+
+async function populatePackagedApp(app: string): Promise<void> {
+  const contents = join(app, "Contents");
+  const resources = join(contents, "Resources");
+  await mkdir(resources, { recursive: true });
+  await writeFile(
+    join(contents, "Info.plist"),
+    [
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<plist version="1.0"><dict>',
+      "<key>CFBundleIdentifier</key><string>io.pier.app</string>",
+      "<key>CFBundlePackageType</key><string>APPL</string>",
+      "<key>CFBundleIconFile</key><string>icon.icns</string>",
+      "<key>CFBundleIconName</key><string>app-icon</string>",
+      "</dict></plist>",
+    ].join("\n"),
+    "utf8"
+  );
+  await copyFile(
+    join(process.cwd(), "build/icon.icns"),
+    join(resources, "icon.icns")
+  );
+  await copyFile(
+    join(process.cwd(), "build/Assets.car"),
+    join(resources, "Assets.car")
+  );
+}
+
+async function makePackagedAppFixture(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "pier-packaged-icon-"));
+  tempDirs.push(root);
+  const app = join(root, "Pier.app");
+  await populatePackagedApp(app);
+  return app;
 }
 
 describe("mac release dual-arch assets", () => {
@@ -149,6 +196,32 @@ files:
       version: "0.1.1",
       assets: ["a.zip", "b.dmg"],
     });
+  });
+
+  it("verifies the packaged app uses the exact release ICNS and native catalog", async () => {
+    const app = await makePackagedAppFixture();
+    await expect(validatePackagedMacApp(app)).resolves.toEqual([]);
+
+    await writeFile(join(app, "Contents/Resources/Assets.car"), "stale-car");
+    await expect(validatePackagedMacApp(app)).resolves.toEqual([
+      expect.stringMatching(/Assets\.car.*build\/Assets\.car/i),
+    ]);
+  });
+
+  it("rejects a packaged app without the native icon name", async () => {
+    const app = await makePackagedAppFixture();
+    const plist = join(app, "Contents/Info.plist");
+    await writeFile(
+      plist,
+      (await readFile(plist, "utf8")).replace(
+        "<string>app-icon</string>",
+        "<string>other-icon</string>"
+      ),
+      "utf8"
+    );
+    await expect(validatePackagedMacApp(app)).resolves.toEqual([
+      expect.stringMatching(/CFBundleIconName.*app-icon/),
+    ]);
   });
 });
 
@@ -323,6 +396,9 @@ describe("build-dist and release-app dual-arch wiring", () => {
     expect(buildDist).toContain("--publish never");
     expect(buildDist).toContain("verify-mac-release-artifacts.mjs");
     expect(buildDist).toContain("publish-mac-release-artifacts.mjs");
+    expect(buildDist).toMatch(
+      /\[1\/5\] app icons[\s\S]*pnpm build:icons[\s\S]*\[5\/5\] electron-builder/
+    );
     expect(buildDist).toMatch(
       /electron-builder --mac --arm64 --x64 --publish never/
     );

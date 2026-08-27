@@ -45,9 +45,8 @@ jobs:
               - 'docs/**'
               - 'build/app-icon-*.svg'
               - 'build/app-icon.icon/**'
-              - 'build/design-sources/pier-logo.svg'
+              - 'build/design-sources/**'
               - 'build/icon.*'
-              - 'build/icon-dock.png'
               - 'build/icons/**'
               - 'build/Assets.car'
               - 'build/Assets.car.inputs'
@@ -76,9 +75,8 @@ jobs:
             mac_icons:
               - 'build/app-icon-*.svg'
               - 'build/app-icon.icon/**'
-              - 'build/design-sources/pier-logo.svg'
+              - 'build/design-sources/**'
               - 'build/icon.*'
-              - 'build/icon-dock.png'
               - 'build/icons/**'
               - 'build/Assets.car'
               - 'build/Assets.car.inputs'
@@ -149,6 +147,17 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Select the pinned Xcode 26 toolchain
+        run: |
+          set -euo pipefail
+          test -z "${DEVELOPER_DIR:-}"
+          readonly pier_xcode_dir=/Applications/Xcode_26.3.app/Contents/Developer
+          test -d "$pier_xcode_dir"
+          sudo xcode-select --switch "$pier_xcode_dir"
+          test "$(xcode-select --print-path)" = "$pier_xcode_dir"
+          xcodebuild -version
+          test "$(xcodebuild -version | sed -n '1p')" = "Xcode 26.3"
+          xcrun --find actool
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -156,10 +165,17 @@ jobs:
           node-version: 24
       - run: pnpm install --frozen-lockfile
       - run: which rsvg-convert || brew install librsvg
+      - name: Rebuild and verify committed icon freshness
+        run: |
+          pnpm build:icons
+          git diff --exit-code -- build
       - run: >-
           pnpm exec vitest run tests/unit/scripts/app-icon-assets.test.ts
+          tests/unit/scripts/app-icon-canonical-sources.test.ts
           tests/unit/scripts/app-icon-icns.test.ts
           tests/unit/scripts/app-icon-build.test.ts
+          tests/unit/scripts/app-icon-layered-document.test.ts
+          tests/unit/scripts/app-icon-small-output.test.ts
           tests/unit/scripts/app-icon-container-governance.test.ts
           tests/unit/app/dev-profile-electron-icon.test.ts
 
