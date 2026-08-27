@@ -337,6 +337,7 @@ export function createTaskBackgroundRuns(
           ...(clientEnv ? { clientEnv } : {}),
           ...(launch.env ? { explicitEnv: launch.env } : {}),
           ...(projectEnv ? { projectEnv } : {}),
+          projectRootPath: launch.projectRootPath ?? projectRootPath,
         });
         outputs.start({
           runId,

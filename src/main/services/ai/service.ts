@@ -322,6 +322,9 @@ export function createAiService({
                 await processEnvironment.resolve({
                   cwd,
                   source: "agent",
+                  ...(request.projectRootPath
+                    ? { projectRootPath: request.projectRootPath }
+                    : {}),
                 })
               ).env
             : undefined;

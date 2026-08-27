@@ -14,6 +14,13 @@ export {
   omitTerminalEmulatorEnv,
   TERMINAL_EMULATOR_ENV_KEYS,
 } from "./clean-env.ts";
+export type { LoginShellSpawnSpec } from "./login-shell-spawn.ts";
+export {
+  buildLoginShellDumpCommand,
+  loginShellFlagArgs,
+  loginShellSpawnSpec,
+  wrapLoginShellCommandLine,
+} from "./login-shell-spawn.ts";
 export type {
   ShellEnvFailureNotifyController,
   ShellEnvFailureNotifyDeps,
@@ -64,9 +71,6 @@ export {
   createDefaultShellEnvironmentLoader,
   createShellEnvJsonMark,
   DEFAULT_SHELL_ENV_TIMEOUT_MS,
-  FALLBACK_TIMEOUT_FLOOR_MS,
-  fallbackDeadlineMs,
-  fallbackTimeoutMs,
   PIER_RESOLVING_ENVIRONMENT,
   parseShellEnvironmentJsonOutput,
   parseShellEnvironmentOutput,

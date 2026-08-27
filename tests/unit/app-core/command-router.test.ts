@@ -1841,6 +1841,8 @@ describe("createCommandRouter", () => {
     }
     const runId = spawnData.runId;
     expect(rendererCommands.at(-1)).toMatchObject({
+      initialInput: expect.stringContaining("pnpm run test"),
+      initialInputSubmit: true,
       launchId: "launch-1",
       targetGroupId: "source-group",
       placement: "active-tab",
@@ -1934,6 +1936,8 @@ describe("createCommandRouter", () => {
     const secondRunId = secondSpawnData.runId;
     expect(secondRunId).not.toBe(runId);
     expect(rendererCommands.at(-1)).toMatchObject({
+      initialInput: expect.stringContaining("pnpm run test"),
+      initialInputSubmit: true,
       launchId: "launch-2",
       panelId: "terminal-from-renderer",
       placement: "active-tab",
@@ -2014,6 +2018,8 @@ describe("createCommandRouter", () => {
     const thirdRunId = thirdSpawnData.runId;
     expect(thirdRunId).not.toBe(secondRunId);
     expect(rendererCommands.at(-1)).toMatchObject({
+      initialInput: expect.stringContaining("pnpm run test"),
+      initialInputSubmit: true,
       launchId: "launch-3",
       panelId: "terminal-from-renderer",
       placement: "active-tab",
@@ -2034,7 +2040,6 @@ describe("createCommandRouter", () => {
     expect(newPanelIdsRequested).toEqual(["terminal-from-renderer"]);
     expect(terminalLaunches).toEqual([
       expect.objectContaining({
-        command: expect.stringContaining("pnpm run test"),
         cwd: process.cwd(),
         env: expect.objectContaining({
           FROM_CLI: "cli",
@@ -2042,7 +2047,6 @@ describe("createCommandRouter", () => {
         }),
       }),
       expect.objectContaining({
-        command: expect.stringContaining("pnpm run test"),
         cwd: process.cwd(),
         env: expect.objectContaining({
           FROM_CLI: "cli",
@@ -2050,7 +2054,6 @@ describe("createCommandRouter", () => {
         }),
       }),
       expect.objectContaining({
-        command: expect.stringContaining("pnpm run test"),
         cwd: process.cwd(),
         env: expect.objectContaining({
           FROM_CLI: "cli",
@@ -2058,6 +2061,7 @@ describe("createCommandRouter", () => {
         }),
       }),
     ]);
+    expect(terminalLaunches[0]).not.toHaveProperty("command");
     expect(resolveEnvironment).toHaveBeenCalledWith(
       expect.objectContaining({
         clientEnv: { FROM_CLI: "cli" },

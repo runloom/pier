@@ -70,25 +70,25 @@ describe("resolve-user-command helpers", () => {
     expect(extractBareCommandName("foo | bar")).toBeNull();
   });
 
-  it("builds sticky export prelude for PATH and tool keys", () => {
+  it("builds sticky export prelude for tool keys but not PATH", () => {
     const prelude = buildStickyExportPrelude({
       PATH: "/custom/bin:/usr/bin",
       NVM_DIR: "/home/u/.nvm",
       HOME: "/home/u",
       RANDOM_UI: "nope",
     });
-    expect(prelude).toContain("export PATH=/custom/bin:/usr/bin");
+    expect(prelude).not.toContain("export PATH=");
     expect(prelude).toContain("export NVM_DIR=/home/u/.nvm");
     expect(prelude).not.toContain("RANDOM_UI");
   });
 
-  it("class A sticky mirrors host-apply keys including NVM", () => {
+  it("class A sticky mirrors host-apply keys including NVM, excluding PATH", () => {
     const prelude = buildClassAStickyPrelude({
       PATH: "/p",
       NVM_BIN: "/n",
       HOME: "/h",
     });
-    expect(prelude).toContain("PATH=");
+    expect(prelude).not.toContain("PATH=");
     expect(prelude).toContain("NVM_BIN=");
     expect(prelude).not.toContain("HOME=");
   });
@@ -139,7 +139,7 @@ describe("resolve-user-command helpers", () => {
       shell: "/bin/zsh",
     });
     expect(command).toEqual(expect.stringMatching(/^\/bin\/zsh -lic /));
-    expect(command).toEqual(expect.stringContaining("export PATH="));
+    expect(command).not.toEqual(expect.stringContaining("export PATH="));
     expect(command).toEqual(expect.stringContaining("codex"));
   });
 

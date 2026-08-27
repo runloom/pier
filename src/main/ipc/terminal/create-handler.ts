@@ -37,7 +37,10 @@ import {
   resolveCreateTerminalLaunch,
   withAgentLoginShellSafeCommand,
 } from "./create-launch.ts";
-import { sendInitialTerminalInput } from "./create-post-actions.ts";
+import {
+  handleInitialInputInjectFailed,
+  sendInitialTerminalInput,
+} from "./create-post-actions.ts";
 import { resolveTerminalTransferCreateAction } from "./create-transfer-guard.ts";
 import { recordRendererTerminalRoute } from "./debug.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
@@ -303,9 +306,12 @@ export async function handleTerminalCreate(args: {
           ? {}
           : { cwd: launchForNative.cwd }),
         ...(launchEnvironment === undefined ? {} : { env: launchEnvironment }),
-        ...(createArgs.initialInput === undefined
+        ...(createArgs.initialInput === undefined &&
+        launch.initialInput === undefined
           ? {}
-          : { initialInput: createArgs.initialInput }),
+          : {
+              initialInput: createArgs.initialInput ?? launch.initialInput,
+            }),
       };
       const projectRootPath = launchForNative?.cwd;
       await launchGate.ensureReady({
@@ -392,16 +398,24 @@ export async function handleTerminalCreate(args: {
     // child-exited and calls injectDisplayText (native does not i18n).
     sendInitialTerminalInput({
       addon,
-      initialInput: createArgs.initialInput,
+      initialInput: createArgs.initialInput ?? launch.initialInput,
       nativePanelId,
       onFailed: (detail) => {
         if (win.isDestroyed() || win.webContents.isDestroyed()) {
           return;
         }
-        win.webContents.send("pier:terminal:initial-input-failed", {
-          kind: launch.launchAgentId ? "prompt" : "setup",
+        handleInitialInputInjectFailed({
+          browserWindowId: win.id,
+          completeFromExitCodeHint: (hint) =>
+            taskLifecycle.completeFromExitCodeHint(hint),
+          hasAgent: Boolean(launch.launchAgentId),
+          lifecycleId,
           panelId: createArgs.panelId,
+          sendFailed: (event) =>
+            win.webContents.send("pier:terminal:initial-input-failed", event),
+          taskStatus: launch.task?.status,
           textDelivered: detail?.textDelivered === true,
+          windowId,
         });
       },
       panelId: createArgs.panelId,

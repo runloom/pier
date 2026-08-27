@@ -7,7 +7,6 @@ import { isLaunchedFromCli } from "./shell-env-cli.ts";
 import {
   createDefaultShellEnvironmentLoader,
   DEFAULT_SHELL_ENV_TIMEOUT_MS,
-  resolveShellDumpCwd,
 } from "./shell-env-loader.ts";
 import type {
   CreateProcessEnvironmentServiceOptions,
@@ -44,8 +43,35 @@ interface ResolvedShellLayer {
   skipReason?: ShellEnvSkipReason | undefined;
 }
 
-function cacheKey(cwd: string | undefined, shell: string): string {
-  return `${cwd ?? ""}\0${shell}`;
+function cacheKey(dumpCwd: string | undefined, shell: string): string {
+  return `${dumpCwd ?? ""}\0${shell}`;
+}
+
+function readHomeDir(baseEnv: Environment): string | undefined {
+  if (baseEnv.HOME) {
+    return baseEnv.HOME;
+  }
+  try {
+    return userInfo().homedir;
+  } catch {
+    return;
+  }
+}
+
+function sanitizeDumpDir(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed.includes("$")) {
+    return;
+  }
+  return trimmed;
+}
+
+/** Zed: dump at project root, otherwise HOME — never each task cwd. */
+function dumpDirectoryForRequest(
+  request: ProcessEnvironmentResolveRequest,
+  home: string | undefined
+): string | undefined {
+  return sanitizeDumpDir(request.projectRootPath) ?? home;
 }
 
 function defaultShell(platform: NodeJS.Platform): string | undefined {
@@ -128,7 +154,7 @@ export function createProcessEnvironmentService({
     loadGeneration: number
   ): Promise<ResolvedShellLayer> {
     const loadRequest: ShellEnvironmentLoadRequest = {
-      cwd: request.cwd,
+      ...(request.cwd ? { cwd: request.cwd } : {}),
       shell: shell as string,
       source: request.source,
     };
@@ -227,30 +253,13 @@ export function createProcessEnvironmentService({
       };
     }
 
-    // Unexpanded placeholders (`$ZED_WORKTREE_ROOT`) are not real paths;
-    // Node reports misleading "spawn shell ENOENT". Prefer HOME or omit.
-    // Loader still validates missing real directories via resolveShellDumpCwd.
-    let shellRequest = request;
-    if (shellRequest.cwd?.includes("$")) {
-      const home =
-        baseEnv.HOME ??
-        (() => {
-          try {
-            return userInfo().homedir;
-          } catch {
-            return;
-          }
-        })();
-      const safeCwd = resolveShellDumpCwd(undefined, home);
-      if (safeCwd) {
-        shellRequest = { ...shellRequest, cwd: safeCwd };
-      } else {
-        const { cwd: _drop, ...rest } = shellRequest;
-        shellRequest = rest;
-      }
-    }
+    // Dump at project root (or HOME). Task cwd is spawn-only, not a dump key.
+    const dumpCwd = dumpDirectoryForRequest(request, readHomeDir(baseEnv));
+    const shellRequest: ProcessEnvironmentResolveRequest = dumpCwd
+      ? { ...request, cwd: dumpCwd }
+      : { ...request, cwd: undefined };
 
-    const key = cacheKey(shellRequest.cwd, shell);
+    const key = cacheKey(dumpCwd, shell);
     const cached = successCache.get(key);
     if (cached) {
       return { cacheHit: true, env: cached, shellEnvStatus: "cached" };
@@ -347,15 +356,7 @@ export function createProcessEnvironmentService({
       if (!(opts?.reapplyHost && shell) || platform === "win32") {
         return hostDiagnostics;
       }
-      const home =
-        process.env.HOME ??
-        (() => {
-          try {
-            return userInfo().homedir;
-          } catch {
-            return;
-          }
-        })();
+      const home = readHomeDir(process.env as Environment);
       const result = await resolve({
         ...(home ? { cwd: home } : {}),
         source: "plugin",

@@ -15,7 +15,6 @@ import { commandFailure, commandSuccess } from "../command-results.ts";
 import type { PierCoreServices } from "../command-router.ts";
 import { executePanelFocusCommand } from "./panel.ts";
 
-const TASK_ENV_PREWARM_LIMIT = 4;
 export const BACKGROUND_PANEL_ID_PREFIX = "background-task:";
 
 export class RunTerminalOpenError extends Error {
@@ -145,12 +144,10 @@ export async function closeRunPanels(
 }
 
 export function terminalLaunchFor(plan: TaskLaunchPlan): {
-  command: string;
   cwd: string;
   env?: Record<string, string>;
 } {
   return {
-    command: plan.command,
     cwd: plan.cwd,
     ...(plan.env ? { env: plan.env } : {}),
   };
@@ -224,19 +221,12 @@ export function prewarmTaskEnvironments(
   result: TaskListResult,
   services: PierCoreServices
 ): void {
-  const cwds = new Set<string>();
-  for (const task of result.tasks) {
-    if (task.unsupportedReason) {
-      continue;
-    }
-    cwds.add(task.cwd);
-    if (cwds.size >= TASK_ENV_PREWARM_LIMIT) {
-      break;
-    }
-  }
-  for (const cwd of cwds) {
-    services.processEnvironment
-      .resolve({ cwd, source: "task" })
-      .catch(() => undefined);
-  }
+  const projectRootPath = result.projectRootPath;
+  services.processEnvironment
+    .resolve({
+      cwd: projectRootPath,
+      projectRootPath,
+      source: "task",
+    })
+    .catch(() => undefined);
 }

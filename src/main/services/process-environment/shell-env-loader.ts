@@ -2,11 +2,11 @@ import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { accessSync, constants, statSync } from "node:fs";
 import { ENV_KEY_RE } from "./clean-env.ts";
-import type {
-  Environment,
-  ShellEnvironmentLoader,
-  ShellEnvironmentLoadResult,
-} from "./types.ts";
+import {
+  buildLoginShellDumpCommand,
+  loginShellFlagArgs,
+} from "./login-shell-spawn.ts";
+import type { Environment, ShellEnvironmentLoader } from "./types.ts";
 
 /** Legacy env -0 markers (fallback parse if JSON mark dump is unavailable). */
 export const SHELL_ENV_START = "__PIER_ENV_START__";
@@ -23,6 +23,7 @@ export const SHELL_DUMP_ARTIFACT_KEYS = [
   "ELECTRON_NO_ATTACH_CONSOLE",
   "ELECTRON_RUN_AS_NODE",
   PIER_RESOLVING_ENVIRONMENT,
+  "SHELL_SESSIONS_DISABLE",
 ] as const;
 
 /** Drop dump-only pollution after a successful parse (VS Code shellEnv does the same). */
@@ -134,8 +135,9 @@ export function parseShellEnvironmentJsonOutput(
 }
 
 /**
- * Prefer a successful parse over exit status.
- * Try JSON-mark (primary) then legacy env -0 markers.
+ * Prefer a successful parse over exit status (Zed parse_env_output).
+ * Try JSON-mark (primary) then legacy env -0 on the same stdout.
+ * Does not spawn a second non-login process.
  */
 export function tryParseShellEnvironmentOutput(
   output: Buffer,
@@ -153,39 +155,6 @@ export function tryParseShellEnvironmentOutput(
   } catch {
     return null;
   }
-}
-
-/** Fallback floor after a timed-out primary so -c still gets a real attempt. */
-export const FALLBACK_TIMEOUT_FLOOR_MS = 3000;
-
-/**
- * Shared fallback deadline after primary fails.
- * Uses remaining primary budget when enough is left; otherwise grants a single
- * floor. Secondary and tertiary must share this deadline via remainingTimeoutMs
- * so total wall time stays at most ~totalTimeoutMs + one floor (not two).
- */
-export function fallbackDeadlineMs(
-  primaryDeadlineMs: number,
-  totalTimeoutMs: number,
-  now = Date.now()
-): number {
-  const remaining = primaryDeadlineMs - now;
-  if (remaining > 500) {
-    return primaryDeadlineMs;
-  }
-  return now + Math.min(FALLBACK_TIMEOUT_FLOOR_MS, Math.max(1, totalTimeoutMs));
-}
-
-/** Timeout slice from a shared fallback deadline (for tests / simple callers). */
-export function fallbackTimeoutMs(
-  deadlineMs: number,
-  totalTimeoutMs: number,
-  now = Date.now()
-): number {
-  return remainingTimeoutMs(
-    fallbackDeadlineMs(deadlineMs, totalTimeoutMs, now),
-    now
-  );
 }
 
 function isExistingDirectory(path: string): boolean {
@@ -273,6 +242,10 @@ function runShellDump({
         ELECTRON_RUN_AS_NODE: "1",
         [PIER_RESOLVING_ENVIRONMENT]: "1",
         TERM: baseEnv.TERM ?? "dumb",
+        // macOS /etc/zshrc_Apple_Terminal: skip "Restored session" during dump.
+        ...(process.platform === "darwin"
+          ? { SHELL_SESSIONS_DISABLE: "1" }
+          : {}),
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -361,20 +334,11 @@ export function createDefaultShellEnvironmentLoader({
   getTimeoutMs: () => number;
 }): ShellEnvironmentLoader {
   return async ({ cwd, shell }) => {
-    const totalTimeoutMs = getTimeoutMs();
-    const deadlineMs = Date.now() + totalTimeoutMs;
+    const timeoutMs = getTimeoutMs();
     const startedAt = Date.now();
     const mark = createShellEnvJsonMark();
     const jsonCommand = shellEnvJsonCommand(execPath, mark);
-    const finishOk = (
-      env: Environment,
-      dumpMode: "login-interactive" | "non-login-fallback"
-    ): ShellEnvironmentLoadResult => ({
-      dumpMode,
-      durationMs: Date.now() - startedAt,
-      env,
-      status: "resolved",
-    });
+    const dumpCommand = buildLoginShellDumpCommand(jsonCommand, cwd);
     const failWithDuration = (error: unknown): never => {
       const err = error instanceof Error ? error : new Error(String(error));
       (err as Error & { durationMs?: number }).durationMs =
@@ -382,47 +346,25 @@ export function createDefaultShellEnvironmentLoader({
       throw err;
     };
 
-    // 1) VS Code-style JSON dump via login-interactive shell.
+    // Login+interactive only. Spawn from HOME so rc files run as a login
+    // shell; the dump command `cd`s into the project root (direnv/mise hooks).
     try {
       const env = await runShellDump({
-        args: ["-lic", jsonCommand],
+        args: [...loginShellFlagArgs(shell), dumpCommand],
         baseEnv,
-        cwd,
+        cwd: resolveShellDumpCwd(baseEnv.HOME),
         jsonMark: mark,
         shell,
-        timeoutMs: remainingTimeoutMs(deadlineMs),
+        timeoutMs,
       });
-      return finishOk(env, "login-interactive");
-    } catch (primaryError) {
-      // One shared fallback budget (single floor, not per attempt).
-      const fbDeadlineMs = fallbackDeadlineMs(deadlineMs, totalTimeoutMs);
-      // 2) Non-login JSON dump (fish / broken -lic / partial timeout).
-      try {
-        const env = await runShellDump({
-          args: ["-c", jsonCommand],
-          baseEnv,
-          cwd,
-          jsonMark: mark,
-          shell,
-          timeoutMs: remainingTimeoutMs(fbDeadlineMs),
-        });
-        return finishOk(env, "non-login-fallback");
-      } catch {
-        // 3) Last resort: legacy env -0 (no Electron re-entry).
-        try {
-          const env = await runShellDump({
-            args: ["-c", shellEnvCommand()],
-            baseEnv,
-            cwd,
-            jsonMark: mark,
-            shell,
-            timeoutMs: remainingTimeoutMs(fbDeadlineMs),
-          });
-          return finishOk(env, "non-login-fallback");
-        } catch {
-          return failWithDuration(primaryError);
-        }
-      }
+      return {
+        dumpMode: "login-interactive",
+        durationMs: Date.now() - startedAt,
+        env,
+        status: "resolved",
+      };
+    } catch (error) {
+      return failWithDuration(error);
     }
   };
 }

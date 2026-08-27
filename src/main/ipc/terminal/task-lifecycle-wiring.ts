@@ -19,7 +19,10 @@ import { forwardToWindow } from "./forwarding.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { fromNativePanelKey } from "./panel-id.ts";
 import { parseTaskExitTitle } from "./task-exit-title.ts";
-import { createTerminalTaskLifecycle } from "./task-lifecycle.ts";
+import {
+  createTerminalTaskLifecycle,
+  type ExitCodeHintArgs,
+} from "./task-lifecycle.ts";
 import { windowRecordIdFor } from "./window-scope.ts";
 
 const suppressedSurfaceClosePanelIds = new Set<string>();
@@ -40,6 +43,7 @@ export function resetTerminalTitleForwardingForTests(): void {
 }
 
 export interface RegisteredTerminalTaskLifecycle {
+  completeFromExitCodeHint(args: ExitCodeHintArgs): Promise<boolean>;
   getCurrentLifecycleId(
     panelId: string,
     windowId?: string | undefined
@@ -163,6 +167,19 @@ export function registerTerminalTaskLifecycleForwarding(
             console.error("[pier-agent-session:command-finished] failed:", err);
           });
       }
+      if (lifecycleId) {
+        // Interactive task: command_finished can fire for rc / clear / the
+        // first `;` fragment. Record the hint and wait for OSC or PTY exit.
+        lifecycle.recordExitCodeHint({
+          browserWindowId: id,
+          code: normalizedExitCode,
+          lifecycleId,
+          panelId: rawPanelId,
+          source: "shell-command-finished",
+          ...(targetWindow ? { windowId } : {}),
+        });
+        return;
+      }
       if (exitCode >= 0) {
         lifecycle
           .completeFromExitCodeHint({
@@ -261,6 +278,22 @@ export function registerTerminalTaskLifecycleForwarding(
         },
         "pier-child-exited"
       );
+      if (!lifecycleId) {
+        return;
+      }
+      const childCode = exitCode < 0 ? 1 : exitCode;
+      lifecycle
+        .completeFromExitCodeHint({
+          browserWindowId: id,
+          code: childCode,
+          lifecycleId,
+          panelId: rawPanelId,
+          source: "pty-child-exited",
+          ...(targetWindow ? { windowId } : {}),
+        })
+        .catch((err) => {
+          console.error("[pier-task-lifecycle:child-exited] failed:", err);
+        });
     }
   );
 

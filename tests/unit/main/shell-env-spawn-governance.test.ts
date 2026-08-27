@@ -1,5 +1,8 @@
 /**
- * Spawn governance for shell-env parity (design §3 inventory A/B/C).
+ * Spawn governance for shell-env parity.
+ * Tasks in a terminal tab use Ghostty's default login shell + initialInput.
+ * Background / lifecycle scripts run `$SHELL -c` with the dump overlay.
+ * Git / LSP spawn binaries with the project env overlay.
  * Scans main for spawn/execFile; require classification markers or allowlist.
  * First-party plugin production spawns are enforced in PR4.
  */
@@ -22,9 +25,9 @@ const ALLOWLIST_RELATIVE = new Set([
   "src/main/services/agents/detection-service.ts",
   // B: git identity uses process.env post boot apply
   "src/main/services/tasks/repo-identity.ts",
-  // A-caller: receives env from background-runs resolve
+  // A-caller: login-shell wrap; env from background-runs resolve
   "src/main/services/tasks/background-runner.ts",
-  // A-caller: receives env from processEnvironment in lifecycle
+  // A-caller: login-shell wrap; env from processEnvironment in lifecycle
   "src/main/services/local-environment-scripts.ts",
   // Shell dump implementation
   "src/main/services/process-environment/shell-env-loader.ts",
@@ -128,5 +131,67 @@ describe("shell-env spawn governance", () => {
     expect(withoutComments).not.toMatch(/echo\s+\$PATH/);
     expect(withoutComments).not.toMatch(/defaultHydratePath/);
     expect(withoutComments).toMatch(/waitForHostEnv/);
+  });
+
+  it("opens visible tasks as a login shell and types the script; background uses dump PATH", () => {
+    const strip = (source: string) =>
+      source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+    const runner = strip(
+      readFileSync(
+        join(REPO_ROOT, "src/main/services/tasks/background-runner.ts"),
+        "utf8"
+      )
+    );
+    expect(runner).toMatch(/loginShellSpawnSpec/);
+    expect(runner).not.toMatch(/spawn\(\s*"\/bin\/sh"/);
+
+    const plan = strip(
+      readFileSync(
+        join(REPO_ROOT, "src/main/services/tasks/execution-plan.ts"),
+        "utf8"
+      )
+    );
+    expect(plan).not.toMatch(/wrapLoginShellCommandLine/);
+    expect(plan).not.toMatch(/\/bin\/sh -c/);
+    expect(plan).toMatch(/buildTaskPresentationScript/);
+
+    const presentation = strip(
+      readFileSync(
+        join(REPO_ROOT, "src/main/services/tasks/presentation-script.ts"),
+        "utf8"
+      )
+    );
+    expect(presentation).toMatch(/TASK_EXIT_TITLE_PREFIX/);
+    expect(presentation).toMatch(/set \+e/);
+
+    const run = strip(
+      readFileSync(join(REPO_ROOT, "src/main/app-core/commands/run.ts"), "utf8")
+    );
+    expect(run).toMatch(/initialInput:\s*launch\.command/);
+    expect(run).toMatch(/initialInputSubmit:\s*true/);
+
+    const scripts = strip(
+      readFileSync(
+        join(REPO_ROOT, "src/main/services/local-environment-scripts.ts"),
+        "utf8"
+      )
+    );
+    expect(scripts).toMatch(/loginShellSpawnSpec/);
+    expect(scripts).not.toMatch(/shell = "\/bin\/sh"/);
+
+    const loader = strip(
+      readFileSync(
+        join(
+          REPO_ROOT,
+          "src/main/services/process-environment/shell-env-loader.ts"
+        ),
+        "utf8"
+      )
+    );
+    expect(loader).toMatch(/loginShellFlagArgs/);
+    expect(loader).toMatch(/buildLoginShellDumpCommand/);
+    expect(loader).toMatch(/SHELL_SESSIONS_DISABLE/);
+    expect(loader).not.toMatch(/non-login-fallback/);
+    expect(loader).not.toMatch(/args:\s*\[\s*"-c"/);
   });
 });

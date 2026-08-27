@@ -6,7 +6,7 @@ export const shellEnvironmentHostStatusSchema = z.object({
   disabled: z.boolean(),
   /** Last dump attempt duration in milliseconds. */
   durationMs: z.number().int().nonnegative().optional(),
-  dumpMode: z.enum(["login-interactive", "non-login-fallback"]).optional(),
+  dumpMode: z.enum(["login-interactive"]).optional(),
   error: z.string().optional(),
   hostAppliedStatus: z
     .enum(["applied", "not-applied", "stale-after-fail"])

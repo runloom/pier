@@ -21,6 +21,15 @@ export function agentShellCommandFlags(shellPath: string): string {
   return "-lic";
 }
 
+/**
+ * One-shot `$SHELL -c` (no `-l` / `-i`). PATH already comes from the
+ * login+interactive dump overlay; a second login would reclobber PATH via
+ * `.zprofile`. Dump / agent PTY keep {@link agentShellCommandFlags}.
+ */
+export function loginShellCommandFlags(): string {
+  return "-c";
+}
+
 export function shellFamily(
   shellPath: string
 ): "zsh" | "bash" | "fish" | "nu" | "posix" {
