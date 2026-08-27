@@ -1,16 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg
-  xmlns="http://www.w3.org/2000/svg"
-  viewBox="0 0 1024 1024"
-  role="img"
-  aria-labelledby="title description"
->
-  <title id="title">Pier berthing terminal app icon</title>
-  <desc id="description">
-    A recessed violet terminal prompt docked into a softly illuminated indigo harbor.
-  </desc>
-
-  <defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<defs>
     <path
       id="shell-shape"
       d="M276 52H748C884 52 968 136 968 272V750C968 886 884 970 748 970H276C140 970 56 886 56 750V272C56 136 140 52 276 52Z"
@@ -219,47 +209,8 @@
       <feGaussianBlur stdDeviation="7" />
     </filter>
   </defs>
-
-  <g id="app-icon-artwork" clip-path="url(#shell-clip)">
-    <g id="app-icon-plate">
-      <use href="#shell-shape" fill="url(#plate-base)" />
-      <rect x="56" y="52" width="912" height="918" fill="url(#plate-sheen)" />
-      <rect x="56" y="52" width="912" height="260" fill="url(#plate-top-light)" />
-      <rect x="56" y="52" width="912" height="918" fill="url(#plate-depth)" />
-      <rect x="56" y="192" width="912" height="562" fill="url(#plate-lower-shade)" />
-    </g>
-
-    <g id="pier-logo-mark">
-      <g id="bay-surface">
-        <use href="#bay-shape" fill="url(#harbor-base)" />
-        <use href="#bay-shape" fill="url(#harbor-violet)" />
-        <use href="#bay-shape" fill="url(#harbor-blue)" />
-        <use href="#bay-shape" fill="url(#harbor-cyan)" />
-        <use href="#bay-shape" fill="url(#harbor-center)" />
-        <use href="#bay-shape" fill="url(#harbor-hotspot)" />
-        <use href="#bay-shape" fill="url(#harbor-mid-lift)" />
-        <use href="#bay-shape" fill="url(#harbor-bottom-lift)" />
-        <rect x="56" y="704" width="912" height="266" fill="url(#harbor-vignette)" />
-        <rect x="56" y="604" width="912" height="366" fill="url(#harbor-side-shade)" />
-      </g>
-
-      <g id="bay-inner-rim" fill="none" stroke-linecap="round" stroke-linejoin="round">
-        <use href="#berth-curve" transform="translate(0 6)" stroke="#020510" stroke-opacity="0.70" stroke-width="20" filter="url(#berth-shadow)" />
-        <use href="#berth-curve" stroke="#050817" stroke-width="14" />
-        <use href="#berth-curve" stroke="url(#berth-light)" stroke-opacity="0.50" stroke-width="14" filter="url(#rim-glow)" />
-        <use href="#berth-curve" stroke="url(#berth-light)" stroke-width="4.2" />
-        <use href="#berth-curve" transform="translate(0 -0.8)" stroke="url(#berth-highlight)" stroke-width="2.2" />
-        <use
-          href="#berth-curve"
-          transform="translate(0 18)"
-          stroke="url(#berth-light)"
-          stroke-opacity="0.30"
-          stroke-width="30"
-          filter="url(#water-glow)"
-        />
-      </g>
-
-      <g id="terminal-prompt" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<g clip-path="url(#shell-clip)">
+<g id="terminal-prompt" fill="none" stroke-linecap="round" stroke-linejoin="round">
         <path d="M326 300L486 438L326 582" stroke="#02040D" stroke-opacity="0.66" stroke-width="86" filter="url(#prompt-shadow)" />
         <path d="M522 591H676" stroke="#02040D" stroke-opacity="0.66" stroke-width="76" filter="url(#prompt-shadow)" />
 
@@ -276,24 +227,5 @@
         <path d="M522 591H676" transform="translate(-1 -1)" stroke="url(#cursor-core)" stroke-width="48" />
         <rect x="270" y="250" width="300" height="380" fill="url(#prompt-turn-light)" mask="url(#chevron-rim-light-mask)" />
       </g>
-    </g>
-
-    <rect x="56" y="52" width="912" height="918" fill="url(#micro-grain)" />
-    <rect x="43" y="593" width="912" height="366" fill="url(#micro-grain)" opacity="0.90" transform="translate(13 11)" />
-    <rect x="37" y="609" width="912" height="366" fill="url(#micro-grain)" opacity="0.72" transform="translate(19 -5)" />
-    <rect x="49" y="597" width="912" height="366" fill="url(#micro-grain)" opacity="0.62" transform="translate(7 7)" />
-    <rect x="31" y="601" width="912" height="366" fill="url(#micro-grain)" opacity="0.95" transform="translate(25 3)" />
-    <rect x="51" y="585" width="912" height="366" fill="url(#micro-grain)" opacity="0.86" transform="translate(5 19)" />
-    <rect x="29" y="615" width="912" height="350" fill="url(#micro-grain)" opacity="0.78" transform="translate(27 -11)" />
-
-  </g>
-
-  <g id="app-icon-edge" clip-path="url(#shell-clip)">
-    <use href="#shell-shape" fill="none" stroke="#060914" stroke-opacity="0.88" stroke-width="3" />
-    <use href="#shell-shape" fill="none" stroke="url(#outer-rim)" stroke-width="17" />
-    <use href="#shell-shape" fill="none" stroke="url(#outer-glint)" stroke-width="3" />
-    <path d="M748 58H276C142 58 59 142 59 272V750" fill="none" stroke="url(#northwest-edge-reflection)" stroke-linecap="round" stroke-width="8" />
-    <path d="M260 967H764" fill="none" stroke="url(#bottom-edge-reflection)" stroke-linecap="round" stroke-width="8" />
-  </g>
+</g>
 </svg>
-

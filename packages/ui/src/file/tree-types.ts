@@ -271,7 +271,7 @@ export interface PierFileTreeProps
   onLoadDirectory?: (path: string) => Promise<void> | void;
   /** 模型层因 Esc/空提交 removeIfCanceled 删除路径时回调(caller path)。 */
   onModelPathsRemoved?: (paths: readonly string[]) => void;
-  /** 树内拖拽完成(模型层已移动);业务方执行真实 fs move,失败自行刷新回滚。 */
+  /** 树内拖拽 drop 完成。Files 配置 commitOnDrop: false，模型尚未移动；业务方确认后才 fs + 改树。 */
   onMovePaths?: (moves: readonly PierFileTreeMove[]) => void;
   /**
    * 由树模型解析真实行目标后触发，兼容压缩目录、Shadow DOM 与键盘菜单键。

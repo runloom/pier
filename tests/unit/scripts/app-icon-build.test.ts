@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import {
   chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -10,11 +11,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { encodeIcns } from "../../../scripts/app-icon-icns.mjs";
 import {
   assertCompiledIconStack,
+  MAC_ICON_APPEARANCES,
+  MAC_ICON_COMPILE_CONTRACT,
   MAC_ICON_MARK_SIZE,
   MAC_ICON_RENDITION_NAME,
 } from "../../../scripts/app-icon-layered.mjs";
@@ -44,8 +47,12 @@ const LINUX_ICON_NAMES = [
 ] as const;
 
 function createOfflineIconConverter(calls: string[]) {
-  return async (options: { outDir: string; outputFormat: string }) => {
-    calls.push(options.outputFormat);
+  return async (options: {
+    inputFile: string;
+    outDir: string;
+    outputFormat: string;
+  }) => {
+    calls.push(`${basename(options.inputFile)}:${options.outputFormat}`);
     mkdirSync(options.outDir, { recursive: true });
     if (options.outputFormat === "icns") {
       copyFileSync(
@@ -137,9 +144,15 @@ interface CompileOptions {
 
 function createRecordingCompile(
   calls: CompileOptions[],
-  result: { omitCar?: boolean; renditionName?: string } = {}
+  result: {
+    iconFileName?: string;
+    omitCar?: boolean;
+    omitIconFile?: boolean;
+    renditionName?: string;
+  } = {}
 ) {
   const renditionName = result.renditionName ?? MAC_ICON_RENDITION_NAME;
+  const iconFileName = result.iconFileName ?? MAC_ICON_RENDITION_NAME;
   return async (options: CompileOptions) => {
     calls.push(options);
     if (!result.omitCar) {
@@ -150,7 +163,7 @@ function createRecordingCompile(
     }
     writeFileSync(
       join(options.outputDirectory, "partial.plist"),
-      `<plist><dict><key>CFBundleIconName</key><string>${renditionName}</string></dict></plist>`
+      `<plist><dict>${result.omitIconFile ? "" : `<key>CFBundleIconFile</key><string>${iconFileName}</string>`}<key>CFBundleIconName</key><string>${renditionName}</string></dict></plist>`
     );
     return Promise.resolve();
   };
@@ -167,12 +180,66 @@ function inspectWith(stdout: string, ok = true) {
 }
 
 const LAYERED_STACK_ENTRIES = JSON.stringify([
-  { AssetType: "IconImageStack", Name: MAC_ICON_RENDITION_NAME },
+  {
+    Platform: MAC_ICON_COMPILE_CONTRACT.platform,
+    PlatformVersion: MAC_ICON_COMPILE_CONTRACT.minimumDeploymentTarget,
+  },
   {
     AssetType: "Icon Image",
     Name: MAC_ICON_RENDITION_NAME,
+    PixelHeight: MAC_ICON_MARK_SIZE,
     PixelWidth: MAC_ICON_MARK_SIZE,
+    Scale: 1,
   },
+  ...MAC_ICON_APPEARANCES.flatMap((appearance) => [
+    {
+      Appearance: appearance,
+      AssetType: "IconImageStack",
+      CanvasHeight: MAC_ICON_MARK_SIZE,
+      CanvasWidth: MAC_ICON_MARK_SIZE,
+      LayerCount: 3,
+      Name: MAC_ICON_RENDITION_NAME,
+      Scale: 1,
+    },
+    {
+      Appearance: appearance,
+      AssetType: "IconGroup",
+      LayerCount: 2,
+      Scale: 1,
+      Layers: [
+        {
+          AssetType: "Vector",
+          Name: `${MAC_ICON_RENDITION_NAME}_Assets/harbor`,
+          Scale: 1,
+        },
+        {
+          AssetType: "Vector",
+          Name: `${MAC_ICON_RENDITION_NAME}_Assets/berth-rim`,
+          Scale: 1,
+        },
+      ],
+      Name: `${MAC_ICON_RENDITION_NAME}/harbor`,
+    },
+    {
+      Appearance: appearance,
+      AssetType: "IconGroup",
+      LayerCount: 1,
+      Scale: 1,
+      Layers: [
+        {
+          AssetType: "Vector",
+          Name: `${MAC_ICON_RENDITION_NAME}_Assets/prompt`,
+          Scale: 1,
+        },
+      ],
+      Name: `${MAC_ICON_RENDITION_NAME}/prompt`,
+    },
+  ]),
+  ...["harbor", "berth-rim", "prompt"].map((name) => ({
+    AssetType: "Vector",
+    Name: `${MAC_ICON_RENDITION_NAME}_Assets/${name}`,
+    Scale: 1,
+  })),
 ]);
 
 describe("Pier application icon builder", () => {
@@ -184,6 +251,7 @@ describe("Pier application icon builder", () => {
     mkdirSync(outputDirectory);
     const previousAssets = seedPublishedAssets(outputDirectory);
     const conversionCalls: string[] = [];
+    const legacySources: string[] = [];
     const failingRasterizer = writeStubRasterizer(root);
 
     try {
@@ -193,12 +261,23 @@ describe("Pier application icon builder", () => {
           outputDirectory,
           rsvgCommand: failingRasterizer,
           convertIcons: createOfflineIconConverter(conversionCalls),
-          encodeLegacyIcons: encodeOfflineLegacyIcons,
+          encodeLegacyIcons: (options) => {
+            legacySources.push(
+              basename(options.source16),
+              basename(options.source32)
+            );
+            return encodeOfflineLegacyIcons();
+          },
           compileIconDocument: rejectLayeredCarCompile,
           log: () => undefined,
         })
       ).rejects.toThrow(/exit 42/);
-      expect(conversionCalls).toEqual(["icns", "icns", "ico", "set"]);
+      expect(conversionCalls).toEqual([
+        "app-icon-master.svg:icns",
+        "app-icon-small.svg:icns",
+        "app-icon-tiny.svg:icns",
+      ]);
+      expect(legacySources).toEqual(["app-icon-16.svg", "app-icon-tiny.svg"]);
 
       for (const [path, data] of previousAssets) {
         expect(readFileSync(join(outputDirectory, path))).toEqual(data);
@@ -296,15 +375,39 @@ describe("Pier application icon builder", () => {
           readFileSync(join(outputDirectory, "Assets.car")).toString()
         ).toBe("fake-layered-car");
         expect(
+          readFileSync(join(outputDirectory, "icon.ico")).readUInt16LE(4)
+        ).toBe(7);
+        expect(readdirSync(join(outputDirectory, "icons")).sort()).toEqual([
+          "128x128.png",
+          "16x16.png",
+          "24x24.png",
+          "256x256.png",
+          "32x32.png",
+          "48x48.png",
+          "512x512.png",
+          "64x64.png",
+          "96x96.png",
+        ]);
+        expect(existsSync(join(outputDirectory, "icon-dock.png"))).toBe(false);
+        expect(
           readFileSync(join(outputDirectory, "app-icon.icon", "icon.json"))
         ).toEqual(
           readFileSync(join(SOURCE_DIRECTORY, "app-icon.icon", "icon.json"))
         );
-        const mark = readFileSync(
-          join(outputDirectory, "app-icon.icon", "Assets", "pier-mark.png")
-        );
-        expect(mark.readUInt32BE(16)).toBe(1024);
-        expect(mark.readUInt32BE(20)).toBe(1024);
+        expect(
+          readdirSync(join(outputDirectory, "app-icon.icon", "Assets")).sort()
+        ).toEqual(["berth-rim.svg", "harbor.svg", "prompt.svg"]);
+        for (const layer of ["berth-rim.svg", "harbor.svg", "prompt.svg"]) {
+          expect(
+            readFileSync(
+              join(outputDirectory, "app-icon.icon", "Assets", layer)
+            )
+          ).toEqual(
+            readFileSync(
+              join(SOURCE_DIRECTORY, "app-icon.icon", "Assets", layer)
+            )
+          );
+        }
         expect(
           readFileSync(join(outputDirectory, "Assets.car.inputs"), "utf8")
         ).toMatch(/^[0-9a-f]{64}\n$/);
@@ -342,9 +445,13 @@ describe("Pier application icon builder", () => {
     ]);
     expect(() =>
       assertCompiledIconStack("Assets.car", inspectWith(flatOnly))
-    ).toThrow(/missing .*layered rendition/);
+    ).toThrow(/missing .*three-layer vector rendition/);
     const undersizedFrame = JSON.stringify([
-      { AssetType: "IconImageStack", Name: MAC_ICON_RENDITION_NAME },
+      {
+        AssetType: "IconImageStack",
+        LayerCount: 3,
+        Name: MAC_ICON_RENDITION_NAME,
+      },
       {
         AssetType: "Icon Image",
         Name: MAC_ICON_RENDITION_NAME,
@@ -353,7 +460,7 @@ describe("Pier application icon builder", () => {
     ]);
     expect(() =>
       assertCompiledIconStack("Assets.car", inspectWith(undersizedFrame))
-    ).toThrow(/missing .*layered rendition/);
+    ).toThrow(/missing .*three-layer vector rendition/);
   });
 
   it("rejects uninspectable or unparseable assetutil output", () => {
@@ -421,7 +528,37 @@ describe("Pier application icon builder", () => {
             }),
             log: () => undefined,
           })
-        ).rejects.toThrow(`CFBundleIconName=${MAC_ICON_RENDITION_NAME}`);
+        ).rejects.toThrow(/CFBundleIconFile and CFBundleIconName as app-icon/);
+        expect(compileCalls).toHaveLength(1);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it.runIf(hasRsvgConvert)(
+    "rejects a partial Info.plist without the legacy icon file key",
+    { timeout: 60_000 },
+    async () => {
+      const root = mkdtempSync(join(tmpdir(), "pier-icon-plist-file-"));
+      const outputDirectory = join(root, "output");
+      mkdirSync(outputDirectory);
+      seedPublishedAssets(outputDirectory);
+      const compileCalls: CompileOptions[] = [];
+
+      try {
+        await expect(
+          buildAppIcons({
+            sourceDirectory: SOURCE_DIRECTORY,
+            outputDirectory,
+            convertIcons: createOfflineIconConverter([]),
+            encodeLegacyIcons: encodeOfflineLegacyIcons,
+            compileIconDocument: createRecordingCompile(compileCalls, {
+              omitIconFile: true,
+            }),
+            log: () => undefined,
+          })
+        ).rejects.toThrow(/CFBundleIconFile and CFBundleIconName as app-icon/);
         expect(compileCalls).toHaveLength(1);
       } finally {
         rmSync(root, { recursive: true, force: true });

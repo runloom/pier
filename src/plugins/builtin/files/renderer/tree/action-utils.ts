@@ -1,3 +1,4 @@
+import type { PierFileTreeMove } from "@pier/ui/file/tree.tsx";
 import type {
   RendererPluginAction,
   RendererPluginActionInvocation,
@@ -226,4 +227,74 @@ export function notifyMoveWithUndo(
       },
     },
   });
+}
+function moveConfirmTarget(to: string, t: FilesTranslate): string {
+  const dir = dirnameRelative(to);
+  if (dir.length === 0) {
+    return t("filePanel.tree.moveConfirm.rootTarget", "project root");
+  }
+  return basename(dir);
+}
+
+/**
+ * 拖拽移动确认(VS Code explorer.confirmDragAndDrop 默认语义):执行真实 fs
+ * move 前询问。
+ */
+export async function confirmTreeMoves(input: {
+  context: RendererPluginContext;
+  moves: readonly PierFileTreeMove[];
+  t: FilesTranslate;
+}): Promise<boolean> {
+  const moves = input.moves.filter((move) => move.from !== move.to);
+  const first = moves[0];
+  if (!first) {
+    return false;
+  }
+  const target = moveConfirmTarget(first.to, input.t);
+  const body =
+    moves.length === 1
+      ? input.t(
+          "filePanel.tree.moveConfirm.body",
+          'Move "{{name}}" into "{{target}}"?',
+          { name: basename(first.from), target }
+        )
+      : input.t(
+          "filePanel.tree.moveConfirm.bodyMulti",
+          'Move {{count}} items into "{{target}}"?',
+          { count: moves.length, target }
+        );
+  return await input.context.dialogs.confirm({
+    body,
+    cancelLabel: input.t("filePanel.tree.moveConfirm.cancelLabel", "Cancel"),
+    confirmLabel: input.t("filePanel.tree.moveConfirm.confirmLabel", "Move"),
+    intent: "default",
+    title: input.t("filePanel.tree.moveConfirm.title", "Move"),
+  });
+}
+
+/**
+ * 树内拖拽移动协调器:先确认,确认前模型未移动,取消为空操作,确认后逐条
+ * 执行真实 move。
+ */
+export async function handleTreeDragMoves(input: {
+  confirm: (moves: readonly PierFileTreeMove[]) => Promise<boolean>;
+  moves: readonly PierFileTreeMove[];
+  performMove: (from: string, to: string) => Promise<void>;
+}): Promise<void> {
+  const moves = input.moves.filter((move) => move.from !== move.to);
+  if (moves.length === 0) {
+    return;
+  }
+  let confirmed = false;
+  try {
+    confirmed = await input.confirm(moves);
+  } catch {
+    confirmed = false;
+  }
+  if (!confirmed) {
+    return;
+  }
+  for (const move of moves) {
+    await input.performMove(move.from, move.to);
+  }
 }

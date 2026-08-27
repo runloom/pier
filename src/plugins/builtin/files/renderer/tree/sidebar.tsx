@@ -27,6 +27,7 @@ import { createFilesTranslate } from "../i18n.ts";
 import { FilesMutationSuspendedError } from "../mutation/gate.ts";
 import { FilesSearchBar } from "../search/bar.tsx";
 import { recordFilesPathMru } from "../search/quick-open-mru.ts";
+import { confirmTreeMoves, handleTreeDragMoves } from "./action-utils.ts";
 import { useFilesTreeContextMenus } from "./context-menu.ts";
 import { cancelInlineCreate, commitInlineCreate } from "./create.ts";
 import { type DoubleClickTrack, detectDoubleClick } from "./double-click.ts";
@@ -182,7 +183,11 @@ export function FileTreeSidebar({
   );
 
   const performMove = useCallback(
-    async (from: string, to: string, options?: { silent?: boolean }) => {
+    async (
+      from: string,
+      to: string,
+      options?: { silent?: boolean; rollbackModel?: boolean }
+    ) => {
       try {
         await controller.runMutation(async () => {
           await controller.movePath(root, from, to);
@@ -203,14 +208,16 @@ export function FileTreeSidebar({
           }
         });
       } catch (error) {
-        // 库已先行把模型移到 to；磁盘失败时必须回滚模型，否则幽灵行残留
-        // 且 force reload 因条目集合不变无法自愈。
-        rollbackFilesTreeModelMove({
-          instanceId,
-          removedPaths: [to],
-          restoredPaths: [from],
-          root,
-        });
+        if (options?.rollbackModel !== false) {
+          // 库已先行把模型移到 to；磁盘失败时必须回滚模型，否则幽灵行残留
+          // 且 force reload 因条目集合不变无法自愈。
+          rollbackFilesTreeModelMove({
+            instanceId,
+            removedPaths: [to],
+            restoredPaths: [from],
+            root,
+          });
+        }
         if (error instanceof FilesMutationSuspendedError) {
           return;
         }
@@ -232,16 +239,15 @@ export function FileTreeSidebar({
 
   const handleMovePaths = useCallback(
     (moves: readonly PierFileTreeMove[]) => {
-      (async () => {
-        for (const move of moves) {
-          if (move.from === move.to) {
-            continue;
-          }
-          await performMove(move.from, move.to);
-        }
-      })().catch(() => undefined);
+      handleTreeDragMoves({
+        confirm: (validMoves) =>
+          confirmTreeMoves({ context, moves: validMoves, t }),
+        moves,
+        performMove: (from, to) =>
+          performMove(from, to, { rollbackModel: false }),
+      }).catch(() => undefined);
     },
-    [performMove]
+    [context, performMove, t]
   );
 
   const handleRenamePath = useCallback(

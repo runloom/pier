@@ -9,7 +9,11 @@ import {
 } from "../../../scripts/app-icon-icns.mjs";
 
 const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-const MICRO_TYPES = new Set(["icp4", "icp5", "icp6", "ic07", "ic11", "ic12"]);
+const RENDITION_BY_TYPE = new Map([
+  ["ic11", "tiny"],
+  ["ic12", "small"],
+  ["ic07", "small"],
+]);
 const LEGACY_TYPES = ["is32", "s8mk", "il32", "l8mk"] as const;
 const RETINA_SOURCE_TYPES = new Map([
   ["ic13", "ic08"],
@@ -114,11 +118,12 @@ function legacyRgb(size: number): Buffer {
 }
 
 describe("Pier ICNS rendition merger", () => {
-  it("selects Micro through 128px and Standard from 256px", () => {
+  it("selects tiny at 32px, small at 64–128px, and master from 256px", () => {
     const result = parseIcns(
       mergeIcnsRenditions(
-        rendition("standard"),
-        rendition("micro"),
+        rendition("master"),
+        rendition("small"),
+        rendition("tiny"),
         legacy16(),
         legacy32()
       )
@@ -133,7 +138,7 @@ describe("Pier ICNS rendition merger", () => {
         continue;
       }
       const sourceType = RETINA_SOURCE_TYPES.get(entry.type) ?? entry.type;
-      const label = MICRO_TYPES.has(entry.type) ? "micro" : "standard";
+      const label = RENDITION_BY_TYPE.get(entry.type) ?? "master";
       expect(pngMarker(entry.data)).toBe(`${sourceType}-${label}`);
     }
   });
@@ -210,7 +215,8 @@ describe("Pier ICNS rendition merger", () => {
     expect(() =>
       mergeIcnsRenditions(
         wrongStandard,
-        rendition("micro"),
+        rendition("small"),
+        rendition("tiny"),
         legacy16(),
         legacy32()
       )
@@ -230,7 +236,8 @@ describe("Pier ICNS rendition merger", () => {
     expect(() =>
       mergeIcnsRenditions(
         incomplete,
-        rendition("micro"),
+        rendition("small"),
+        rendition("tiny"),
         legacy16(),
         legacy32()
       )
@@ -241,8 +248,9 @@ describe("Pier ICNS rendition merger", () => {
     const missingAlpha = encodeIcns([{ type: "is32", data: legacyRgb(16) }]);
     expect(() =>
       mergeIcnsRenditions(
-        rendition("standard"),
-        rendition("micro"),
+        rendition("master"),
+        rendition("small"),
+        rendition("tiny"),
         missingAlpha,
         legacy32()
       )

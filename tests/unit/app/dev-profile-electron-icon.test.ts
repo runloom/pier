@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import {
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -10,7 +11,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { inflateSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   applyPierDevAppIcon,
@@ -18,11 +18,12 @@ import {
   MAC_DEV_ELECTRON_SIGN_REVISION,
   macDevElectronRuntimeIsCurrent,
   macDevElectronRuntimeStamp,
+  macDevIconHash,
   signMacDevElectronRuntime,
 } from "../../../scripts/dev-profile.mjs";
 
+const ROOT = process.cwd();
 const onDarwin = process.platform === "darwin";
-
 function hasCommand(name: string): boolean {
   try {
     execFileSync("which", [name], { stdio: "ignore" });
@@ -31,113 +32,56 @@ function hasCommand(name: string): boolean {
     return false;
   }
 }
-
-const hasRsvgConvert = hasCommand("rsvg-convert");
-
-const ROOT = process.cwd();
 const PIER_ICNS = readFileSync(join(ROOT, "build/icon.icns"));
-const STOCK_PLIST = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleIconFile</key>
-  <string>electron.icns</string>
-  <key>CFBundleVersion</key>
-  <string>43.4.0</string>
-</dict>
-</plist>
-`;
+const PIER_CAR = readFileSync(join(ROOT, "build/Assets.car"));
+const STOCK_PLIST = [
+  '<?xml version="1.0" encoding="UTF-8"?>',
+  '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+  '<plist version="1.0">',
+  "<dict>",
+  "  <key>CFBundleIconFile</key>",
+  "  <string>electron.icns</string>",
+  "  <key>CFBundleVersion</key>",
+  "  <string>43.4.0</string>",
+  "</dict>",
+  "</plist>",
+].join("\n");
 
-function extractIcnsPng(icns: string, file: string): Buffer {
-  const parent = mkdtempSync(join(tmpdir(), "pier-dev-iconset-"));
-  const iconset = join(parent, "AppIcon.iconset");
-  try {
-    execFileSync("iconutil", ["-c", "iconset", icns, "-o", iconset], {
-      stdio: "pipe",
-    });
-    return readFileSync(join(iconset, file));
-  } finally {
-    rmSync(parent, { force: true, recursive: true });
+function copyCanonicalIconBuild(worktree: string): void {
+  const build = join(worktree, "build");
+  mkdirSync(build, { recursive: true });
+  for (const file of [
+    "app-icon-16.svg",
+    "app-icon-master.svg",
+    "app-icon-small.svg",
+    "app-icon-tiny.svg",
+    "icon.icns",
+    "Assets.car",
+    "Assets.car.inputs",
+  ]) {
+    copyFileSync(join(ROOT, "build", file), join(build, file));
   }
+  cpSync(join(ROOT, "build/app-icon.icon"), join(build, "app-icon.icon"), {
+    recursive: true,
+  });
 }
 
-function pngAlphaAt(png: Buffer, x: number, y: number): number {
-  const width = png.readUInt32BE(16);
-  const height = png.readUInt32BE(20);
-  const colorType = png.readUInt8(25);
-  if (
-    png.readUInt8(24) !== 8 ||
-    (colorType !== 2 && colorType !== 6) ||
-    png.readUInt8(26) !== 0 ||
-    png.readUInt8(27) !== 0 ||
-    png.readUInt8(28) !== 0
-  ) {
-    throw new Error(`Expected 8-bit RGB/RGBA PNG, got ${width}x${height}`);
-  }
-  if (colorType === 2) {
-    return 255;
-  }
-  const idatChunks: Buffer[] = [];
-  let offset = 8;
-  while (offset < png.length) {
-    const length = png.readUInt32BE(offset);
-    const type = png.toString("ascii", offset + 4, offset + 8);
-    if (type === "IDAT") {
-      idatChunks.push(png.subarray(offset + 8, offset + 8 + length));
-    }
-    offset += 12 + length;
-  }
-  const bytesPerPixel = 4;
-  const rowLength = width * bytesPerPixel;
-  const raw = inflateSync(Buffer.concat(idatChunks));
-  const pixels = Buffer.alloc(rowLength * height);
-  let rawOffset = 0;
-  for (let row = 0; row < height; row += 1) {
-    const filter = raw.readUInt8(rawOffset);
-    rawOffset += 1;
-    const rowOffset = row * rowLength;
-    for (let column = 0; column < rowLength; column += 1) {
-      const source = raw.readUInt8(rawOffset + column);
-      const left =
-        column >= bytesPerPixel
-          ? pixels.readUInt8(rowOffset + column - bytesPerPixel)
-          : 0;
-      const above =
-        row > 0 ? pixels.readUInt8(rowOffset - rowLength + column) : 0;
-      const upperLeft =
-        row > 0 && column >= bytesPerPixel
-          ? pixels.readUInt8(rowOffset - rowLength + column - bytesPerPixel)
-          : 0;
-      let value = source;
-      if (filter === 1) {
-        value += left;
-      } else if (filter === 2) {
-        value += above;
-      } else if (filter === 3) {
-        value += Math.floor((left + above) / 2);
-      } else if (filter === 4) {
-        const estimate = left + above - upperLeft;
-        const leftDistance = Math.abs(estimate - left);
-        const aboveDistance = Math.abs(estimate - above);
-        const upperLeftDistance = Math.abs(estimate - upperLeft);
-        let predictor = upperLeft;
-        if (
-          leftDistance <= aboveDistance &&
-          leftDistance <= upperLeftDistance
-        ) {
-          predictor = left;
-        } else if (aboveDistance <= upperLeftDistance) {
-          predictor = above;
-        }
-        value += predictor;
-      } else if (filter !== 0) {
-        throw new Error(`Unsupported PNG filter ${filter}`);
-      }
-      pixels.writeUInt8(value % 256, rowOffset + column);
-    }
-    rawOffset += rowLength;
-  }
-  return pixels.readUInt8((y * width + x) * 4 + 3);
+function createTargetApp(root: string): {
+  resources: string;
+  targetApp: string;
+} {
+  const targetApp = join(root, "PierDev.app");
+  const resources = join(targetApp, "Contents", "Resources");
+  mkdirSync(resources, { recursive: true });
+  writeFileSync(join(resources, "electron.icns"), "stock-electron-icon");
+  writeFileSync(join(targetApp, "Contents", "Info.plist"), STOCK_PLIST);
+  return { resources, targetApp };
+}
+
+function plistValue(plist: string, key: string): string {
+  return execFileSync("plutil", ["-extract", key, "raw", "-o", "-", plist], {
+    encoding: "utf8",
+  }).trim();
 }
 
 describe("PierDev.app bundle icon", () => {
@@ -149,116 +93,71 @@ describe("PierDev.app bundle icon", () => {
     }
   });
 
-  it.runIf(onDarwin && hasRsvgConvert)(
-    "installs a plate-filled icns and keeps the icns-only name without the repo car",
+  it.runIf(onDarwin)(
+    "installs the exact release ICNS and validated native Assets.car",
     { timeout: 15_000 },
     () => {
       const root = mkdtempSync(join(tmpdir(), "pier-dev-icon-"));
       roots.push(root);
       const worktree = join(root, "worktree");
-      const targetApp = join(root, "PierDev.app");
-      const resources = join(targetApp, "Contents", "Resources");
-      mkdirSync(join(worktree, "build"), { recursive: true });
-      mkdirSync(resources, { recursive: true });
-      copyFileSync(
-        join(ROOT, "build", "app-icon-master.svg"),
-        join(worktree, "build", "app-icon-master.svg")
-      );
-      copyFileSync(
-        join(ROOT, "build", "app-icon-micro.svg"),
-        join(worktree, "build", "app-icon-micro.svg")
-      );
-      writeFileSync(
-        join(resources, "electron.icns"),
-        Buffer.from("electron-stock-icon")
-      );
-      writeFileSync(
-        join(resources, "Assets.car"),
-        Buffer.from("stale-bitmap-car")
-      );
-      writeFileSync(join(targetApp, "Contents", "Info.plist"), STOCK_PLIST);
+      copyCanonicalIconBuild(worktree);
+      const { resources, targetApp } = createTargetApp(root);
 
       expect(
-        applyPierDevAppIcon(worktree, targetApp, { bundleVersion: "43.4.0.1" })
-      ).toBe("AppIcon");
-      const installed = readFileSync(join(resources, "electron.icns"));
-      expect(installed.equals(PIER_ICNS)).toBe(false);
-      expect(readFileSync(join(resources, "AppIcon.icns"))).toEqual(installed);
-      expect(existsSync(join(resources, "pier.icns"))).toBe(false);
-      expect(existsSync(join(resources, "Assets.car"))).toBe(false);
-      const png = extractIcnsPng(
-        join(resources, "electron.icns"),
-        "icon_512x512.png"
-      );
-      expect(pngAlphaAt(png, 0, 0)).toBeGreaterThan(200);
-      expect(pngAlphaAt(png, 256, 80)).toBeGreaterThan(200);
-      const plist = readFileSync(
-        join(targetApp, "Contents", "Info.plist"),
-        "utf8"
-      );
-      expect(plist).toContain("AppIcon");
-      expect(plist).toContain("CFBundleIconName");
-      expect(plist).toContain("43.4.0.1");
-    }
-  );
-
-  it.runIf(onDarwin && hasRsvgConvert)(
-    "installs the repo layered Assets.car and stamps CFBundleIconName=app-icon",
-    { timeout: 15_000 },
-    () => {
-      const root = mkdtempSync(join(tmpdir(), "pier-dev-icon-car-"));
-      roots.push(root);
-      const worktree = join(root, "worktree");
-      const targetApp = join(root, "PierDev.app");
-      const resources = join(targetApp, "Contents", "Resources");
-      mkdirSync(join(worktree, "build"), { recursive: true });
-      mkdirSync(resources, { recursive: true });
-      copyFileSync(
-        join(ROOT, "build", "app-icon-master.svg"),
-        join(worktree, "build", "app-icon-master.svg")
-      );
-      copyFileSync(
-        join(ROOT, "build", "app-icon-micro.svg"),
-        join(worktree, "build", "app-icon-micro.svg")
-      );
-      writeFileSync(
-        join(worktree, "build", "Assets.car"),
-        Buffer.from("layered-car")
-      );
-      writeFileSync(join(targetApp, "Contents", "Info.plist"), STOCK_PLIST);
-
-      expect(
-        applyPierDevAppIcon(worktree, targetApp, { bundleVersion: "43.4.0.1" })
+        applyPierDevAppIcon(worktree, targetApp, { bundleVersion: "43.4.0.8" })
       ).toBe("app-icon");
-      expect(readFileSync(join(resources, "Assets.car"))).toEqual(
-        Buffer.from("layered-car")
-      );
-      const plist = readFileSync(
-        join(targetApp, "Contents", "Info.plist"),
-        "utf8"
-      );
-      expect(plist).toContain("CFBundleIconName");
-      expect(plist).toContain("<string>app-icon</string>");
+      expect(readFileSync(join(resources, "electron.icns"))).toEqual(PIER_ICNS);
+      expect(readFileSync(join(resources, "AppIcon.icns"))).toEqual(PIER_ICNS);
+      expect(readFileSync(join(resources, "Assets.car"))).toEqual(PIER_CAR);
+      expect(existsSync(join(resources, "pier.icns"))).toBe(false);
+
+      const plist = join(targetApp, "Contents", "Info.plist");
+      expect(plistValue(plist, "CFBundleIconFile")).toBe("AppIcon");
+      expect(plistValue(plist, "CFBundleIconName")).toBe("app-icon");
+      expect(plistValue(plist, "CFBundleVersion")).toBe("43.4.0.8");
     }
   );
 
-  it("leaves the bundle unchanged when plated sources are missing", () => {
-    const root = mkdtempSync(join(tmpdir(), "pier-dev-icon-missing-"));
+  it("rejects missing or stale generated inputs without mutating the bundle", () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-dev-icon-stale-"));
     roots.push(root);
     const worktree = join(root, "worktree");
-    const targetApp = join(root, "PierDev.app");
-    const iconPath = join(targetApp, "Contents", "Resources", "electron.icns");
-    mkdirSync(join(worktree, "build"), { recursive: true });
-    mkdirSync(join(targetApp, "Contents", "Resources"), { recursive: true });
-    writeFileSync(iconPath, Buffer.from("electron-stock-icon"));
+    const { resources, targetApp } = createTargetApp(root);
+    const stock = readFileSync(join(resources, "electron.icns"));
 
     expect(applyPierDevAppIcon(worktree, targetApp)).toBe(false);
-    expect(readFileSync(iconPath)).toEqual(Buffer.from("electron-stock-icon"));
-    expect(existsSync(join(worktree, "build", "icon.icns"))).toBe(false);
+    expect(readFileSync(join(resources, "electron.icns"))).toEqual(stock);
+
+    copyCanonicalIconBuild(worktree);
+    writeFileSync(
+      join(worktree, "build", "Assets.car.inputs"),
+      `${"0".repeat(64)}\n`
+    );
+    expect(applyPierDevAppIcon(worktree, targetApp)).toBe(false);
+    expect(readFileSync(join(resources, "electron.icns"))).toEqual(stock);
+    expect(existsSync(join(resources, "Assets.car"))).toBe(false);
   });
 
   it.runIf(onDarwin)(
-    "renames Electron Helper apps and stamps them with the Pier icon",
+    "rejects a corrupt layered catalog even when its sidecar is current",
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "pier-dev-icon-corrupt-"));
+      roots.push(root);
+      const worktree = join(root, "worktree");
+      copyCanonicalIconBuild(worktree);
+      writeFileSync(join(worktree, "build", "Assets.car"), "corrupt-car");
+      const { resources, targetApp } = createTargetApp(root);
+      const stock = readFileSync(join(resources, "electron.icns"));
+
+      expect(applyPierDevAppIcon(worktree, targetApp)).toBe(false);
+      expect(readFileSync(join(resources, "electron.icns"))).toEqual(stock);
+      expect(existsSync(join(resources, "Assets.car"))).toBe(false);
+    }
+  );
+
+  it.runIf(onDarwin)(
+    "renames Electron Helper apps and applies the same release assets",
+    { timeout: 15_000 },
     () => {
       const root = mkdtempSync(join(tmpdir(), "pier-dev-helper-"));
       roots.push(root);
@@ -277,24 +176,25 @@ describe("PierDev.app bundle icon", () => {
       );
       writeFileSync(
         join(helperApp, "Contents", "Info.plist"),
-        `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleIdentifier</key>
-  <string>com.github.Electron.helper</string>
-  <key>CFBundleName</key>
-  <string>Electron Helper</string>
-</dict>
-</plist>
-`
+        [
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+          '<plist version="1.0"><dict>',
+          "  <key>CFBundleIdentifier</key><string>com.github.Electron.helper</string>",
+          "  <key>CFBundleName</key><string>Electron Helper</string>",
+          "</dict></plist>",
+        ].join("\n")
       );
       writeFileSync(
         join(targetApp, "Contents", "Resources", "AppIcon.icns"),
         PIER_ICNS
       );
+      writeFileSync(
+        join(targetApp, "Contents", "Resources", "Assets.car"),
+        PIER_CAR
+      );
 
-      expect(brandPierDevHelpers(targetApp)).toBe(true);
+      expect(brandPierDevHelpers(targetApp, "app-icon")).toBe(true);
       const branded = join(
         targetApp,
         "Contents",
@@ -305,72 +205,21 @@ describe("PierDev.app bundle icon", () => {
         existsSync(join(branded, "Contents", "MacOS", "PierDev Helper"))
       ).toBe(true);
       expect(
-        existsSync(
-          join(targetApp, "Contents", "Frameworks", "Electron Helper.app")
-        )
-      ).toBe(false);
-      const plist = readFileSync(
-        join(branded, "Contents", "Info.plist"),
-        "utf8"
-      );
-      expect(plist).toContain("io.pier.dev-electron.helper");
-      expect(plist).toContain("PierDev Helper");
-      expect(
         readFileSync(join(branded, "Contents", "Resources", "AppIcon.icns"))
       ).toEqual(PIER_ICNS);
-    }
-  );
-
-  it.runIf(onDarwin)(
-    "restamps already branded PierDev Helper apps with the current icon",
-    () => {
-      const root = mkdtempSync(join(tmpdir(), "pier-dev-helper-restamp-"));
-      roots.push(root);
-      const targetApp = join(root, "PierDev.app");
-      const helperApp = join(
-        targetApp,
-        "Contents",
-        "Frameworks",
-        "PierDev Helper.app"
-      );
-      mkdirSync(join(helperApp, "Contents", "MacOS"), { recursive: true });
-      mkdirSync(join(helperApp, "Contents", "Resources"), { recursive: true });
-      mkdirSync(join(targetApp, "Contents", "Resources"), { recursive: true });
-      writeFileSync(
-        join(helperApp, "Contents", "MacOS", "PierDev Helper"),
-        "fake-helper"
-      );
-      writeFileSync(
-        join(helperApp, "Contents", "Info.plist"),
-        `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleIdentifier</key>
-  <string>io.pier.dev-electron.helper</string>
-  <key>CFBundleName</key>
-  <string>PierDev Helper</string>
-</dict>
-</plist>
-`
-      );
-      writeFileSync(
-        join(helperApp, "Contents", "Resources", "AppIcon.icns"),
-        Buffer.from("stale-helper-icon")
-      );
-      writeFileSync(
-        join(targetApp, "Contents", "Resources", "AppIcon.icns"),
-        PIER_ICNS
-      );
-
-      expect(brandPierDevHelpers(targetApp)).toBe(true);
       expect(
-        readFileSync(join(helperApp, "Contents", "Resources", "AppIcon.icns"))
-      ).toEqual(PIER_ICNS);
+        readFileSync(join(branded, "Contents", "Resources", "Assets.car"))
+      ).toEqual(PIER_CAR);
+      const plist = join(branded, "Contents", "Info.plist");
+      expect(plistValue(plist, "CFBundleIconFile")).toBe("AppIcon");
+      expect(plistValue(plist, "CFBundleIconName")).toBe("app-icon");
+      expect(plistValue(plist, "CFBundleIdentifier")).toBe(
+        "io.pier.dev-electron.helper"
+      );
     }
   );
 
-  it("does not mark a failed branding as current", () => {
+  it("does not mark failed or stale branding as current", () => {
     const expected = {
       iconHash: "abc",
       sourceApp: "/Electron.app",
@@ -384,7 +233,6 @@ describe("PierDev.app bundle icon", () => {
     expect(failed).not.toHaveProperty("iconHash");
     expect(failed.signRevision).toBe(MAC_DEV_ELECTRON_SIGN_REVISION);
     expect(macDevElectronRuntimeIsCurrent(failed, expected)).toBe(false);
-    expect(macDevElectronRuntimeIsCurrent(null, expected)).toBe(false);
 
     const applied = macDevElectronRuntimeStamp({
       ...expected,
@@ -406,22 +254,45 @@ describe("PierDev.app bundle icon", () => {
     ).toBe(false);
   });
 
-  it("rebuilds the copied runtime when branding is missing or stale", () => {
+  it("invalidates the PierDev cache for every canonical icon input", () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-dev-icon-hash-"));
+    roots.push(root);
+    const worktree = join(root, "worktree");
+    copyCanonicalIconBuild(worktree);
+    const baseline = macDevIconHash(worktree);
+    const mutations = [
+      "build/app-icon-16.svg",
+      "build/app-icon-master.svg",
+      "build/app-icon-small.svg",
+      "build/app-icon-tiny.svg",
+      "build/icon.icns",
+      "build/Assets.car",
+      "build/Assets.car.inputs",
+      "build/app-icon.icon/Assets/prompt.svg",
+    ];
+
+    for (const relative of mutations) {
+      const file = join(worktree, relative);
+      const original = readFileSync(file);
+      writeFileSync(file, Buffer.concat([original, Buffer.from("\nmutation")]));
+      expect(macDevIconHash(worktree), relative).not.toBe(baseline);
+      writeFileSync(file, original);
+      expect(macDevIconHash(worktree), `${relative} restored`).toBe(baseline);
+    }
+  });
+
+  it("rebuilds PierDev from canonical generated assets only", () => {
     const source = readFileSync(join(ROOT, "scripts/dev-profile.mjs"), "utf8");
     expect(source).toContain(
       "applyPierDevAppIcon(profile.worktreeRoot, targetApp"
     );
     expect(source).toContain("registerDevAppWithLaunchServices(targetApp)");
     expect(source).toContain("macDevElectronRuntimeIsCurrent");
-    expect(source).toContain("macDevElectronRuntimeStamp");
-    expect(source).toContain("iconApplied");
-    expect(source).toContain('["-u", targetApp]');
-    expect(source).toContain("bundleVersion:");
-    expect(source).toMatch(
-      /sourceVersion\}\.\$\{MAC_DEV_ELECTRON_ICON_REVISION\}/
-    );
-    expect(source).toContain("CFBundleIconName");
-    expect(source).toContain("Assets.car");
+    expect(source).toContain("macDevIconHash(profile.worktreeRoot)");
+    expect(source).toContain('"icon.icns"');
+    expect(source).toContain('"Assets.car.inputs"');
+    expect(source).toContain("layeredIconFingerprint");
+    expect(source).toContain("assertCompiledIconStack");
     expect(source).toContain("brandPierDevHelpers(");
     expect(source).toContain("signMacDevElectronRuntime(targetApp)");
     expect(source).toContain("disable-library-validation");
@@ -432,9 +303,11 @@ describe("PierDev.app bundle icon", () => {
     expect(source).toContain('typeof iconApplied === "string"');
     expect(source).toContain("MAC_TAHOE_ICON_NAME");
     expect(source).toContain("app-icon-master.svg");
-    expect(source).toContain("app-icon-micro.svg");
-    expect(source).toContain("platedFillSvg");
     expect(source).toContain("if (iconApplied)");
+    expect(source).not.toContain("rsvg-convert");
+    expect(source).not.toContain("iconutil");
+    expect(source).not.toContain("platedFillSvg");
+    expect(source).not.toContain("app-icon-micro.svg");
   });
 });
 

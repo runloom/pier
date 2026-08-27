@@ -471,7 +471,7 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`；覆盖率：`pnpm test:coverage`
 - E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
-- 图标重建：`pnpm build:icons`（改 `build/app-icon-*.svg` 或 `build/app-icon.icon`（Icon Composer 打磨分层）后跑一次；产出 `build/icon.{icns,ico,png}`、`build/icon-dock.png` 与 macOS 26 分层图标 `build/app-icon.icon/Assets` + `build/Assets.car`，并同步更新 `build/Assets.car.inputs` 指纹；编译分层图标需 Xcode 26+ 的 `actool`）
+- 图标重建：`pnpm build:icons`（改三档 `build/app-icon-{master,small,tiny}.svg` 或 `build/app-icon.icon/**` 后跑一次；产出 `build/icon.{icns,ico,png}`、`build/icons/*.png` 与 macOS 26 分层图标 `build/Assets.car`，并同步更新 `build/Assets.car.inputs`；需 `rsvg-convert`、macOS `sips` 与 Xcode 26+ `actool`）
 
 ### E2E 执行优先级（编码助手硬约定）
 

@@ -16,7 +16,9 @@ export const ICNS_DIMENSIONS = Object.freeze({
   ic14: 512,
 });
 
-export const MICRO_ICNS_TYPES = Object.freeze(["ic07", "ic11", "ic12"]);
+export const TINY_ICNS_TYPES = Object.freeze(["ic11"]);
+
+export const SMALL_ICNS_TYPES = Object.freeze(["ic07", "ic12"]);
 
 export const STANDARD_ICNS_TYPES = Object.freeze([
   "ic08",
@@ -315,16 +317,19 @@ function entriesByType(entries) {
 }
 
 export function mergeIcnsRenditions(
-  standardBuffer,
-  microBuffer,
+  masterBuffer,
+  smallBuffer,
+  tinyBuffer,
   legacy16Buffer,
   legacy32Buffer
 ) {
-  const standard = entriesByType(parseIcns(standardBuffer));
-  const micro = entriesByType(parseIcns(microBuffer));
+  const master = entriesByType(parseIcns(masterBuffer));
+  const small = entriesByType(parseIcns(smallBuffer));
+  const tiny = entriesByType(parseIcns(tinyBuffer));
   const legacy16 = entriesByType(parseIcns(legacy16Buffer));
   const legacy32 = entriesByType(parseIcns(legacy32Buffer));
-  const microTypes = new Set(MICRO_ICNS_TYPES);
+  const tinyTypes = new Set(TINY_ICNS_TYPES);
+  const smallTypes = new Set(SMALL_ICNS_TYPES);
   const merged = [];
 
   for (const type of LEGACY_ICNS_TYPES) {
@@ -337,14 +342,19 @@ export function mergeIcnsRenditions(
   }
 
   for (const [type, expectedSize] of Object.entries(ICNS_DIMENSIONS)) {
-    const useMicro = microTypes.has(type);
-    const source = useMicro ? micro : standard;
-    const sourceType = useMicro ? type : STANDARD_ICNS_SOURCE_TYPES[type];
-    const entry = source.get(sourceType);
+    let rendition = { entries: master, label: "Master" };
+    if (tinyTypes.has(type)) {
+      rendition = { entries: tiny, label: "Tiny" };
+    } else if (smallTypes.has(type)) {
+      rendition = { entries: small, label: "Small" };
+    }
+    const sourceType =
+      tinyTypes.has(type) || smallTypes.has(type)
+        ? type
+        : STANDARD_ICNS_SOURCE_TYPES[type];
+    const entry = rendition.entries.get(sourceType);
     if (!entry) {
-      throw new Error(
-        `${useMicro ? "Micro" : "Standard"} ICNS is missing ${sourceType}`
-      );
+      throw new Error(`${rendition.label} ICNS is missing ${sourceType}`);
     }
 
     const actualSize = assertPng(type, entry.data);

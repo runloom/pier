@@ -16,7 +16,6 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -26,9 +25,13 @@ import {
 } from "node:fs";
 import { createRequire } from "node:module";
 import net from "node:net";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertCompiledIconStack,
+  layeredIconFingerprint,
+} from "./app-icon-layered.mjs";
 import { withoutEsbuildBinaryOverride } from "./esbuild-process-env.mjs";
 
 const require = createRequire(import.meta.url);
@@ -46,26 +49,9 @@ const MAC_DEV_APP_ICON_FILE = "AppIcon.icns";
 const MAC_DEV_APP_ICON_NAME = "AppIcon";
 // Icon name inside the repo-committed build/Assets.car (see scripts/app-icon-layered.mjs).
 const MAC_TAHOE_ICON_NAME = "app-icon";
-const MAC_DEV_ELECTRON_ICON_REVISION = 7;
+const MAC_DEV_ELECTRON_ICON_REVISION = 9;
 /** Bump when PierDev helper signing changes so stale copies are rebuilt. */
 export const MAC_DEV_ELECTRON_SIGN_REVISION = 1;
-const MAC_ICON_CANVAS = 1024;
-const MAC_ICON_PLATE_INSET = 100;
-const MAC_ICON_PLATE_SIZE = 824;
-const MAC_ICON_OPTICAL_SCALE = 1.06;
-const MAC_ICON_PLATE_FILL = "#101725";
-const MAC_DEV_ICON_SLOTS = [
-  ["icon_16x16.png", 16, "micro"],
-  ["icon_16x16@2x.png", 32, "micro"],
-  ["icon_32x32.png", 32, "micro"],
-  ["icon_32x32@2x.png", 64, "micro"],
-  ["icon_128x128.png", 128, "micro"],
-  ["icon_128x128@2x.png", 256, "micro"],
-  ["icon_256x256.png", 256, "master"],
-  ["icon_256x256@2x.png", 512, "master"],
-  ["icon_512x512.png", 512, "master"],
-  ["icon_512x512@2x.png", 1024, "master"],
-];
 const MAC_DEV_HELPER_VARIANTS = [
   { id: "helper", suffix: "" },
   { id: "helper.GPU", suffix: " (GPU)" },
@@ -93,26 +79,42 @@ const MAC_DEV_HELPER_ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
 const LSREGISTER =
   "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister";
 
-function hashFileIfExists(file) {
-  return existsSync(file)
-    ? createHash("sha256").update(readFileSync(file)).digest("hex")
-    : "";
-}
-
-function spawnFailed(result) {
-  return Boolean(result.error) || result.status !== 0;
-}
-
-function logDevIconToolFailure(command, args, result) {
-  const detail = [result.error?.message, result.stderr, result.stdout]
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-  console.error(
-    `[dev-profile] ${command} ${args.join(" ")} failed${
-      detail ? `\n${detail}` : ""
-    }`
+/**
+ * Digest every authored and generated input that can change PierDev's Dock
+ * identity. Missing inputs are explicit markers, so removing a source also
+ * invalidates an existing runtime rather than accidentally reusing it.
+ *
+ * @param {string} worktreeRoot
+ */
+export function macDevIconHash(worktreeRoot) {
+  const buildDirectory = path.join(worktreeRoot, "build");
+  const hash = createHash("sha256");
+  hash.update("pier-dev-icon-cache-v1\0");
+  for (const relative of [
+    "app-icon-16.svg",
+    "app-icon-master.svg",
+    "app-icon-small.svg",
+    "app-icon-tiny.svg",
+    "icon.icns",
+    "Assets.car",
+    "Assets.car.inputs",
+  ]) {
+    const file = path.join(buildDirectory, relative);
+    hash.update(relative);
+    hash.update("\0");
+    hash.update(
+      existsSync(file) ? readFileSync(file) : Buffer.from("<missing>")
+    );
+    hash.update("\0");
+  }
+  const iconDocument = path.join(buildDirectory, "app-icon.icon");
+  hash.update("app-icon.icon:fingerprint\0");
+  hash.update(
+    existsSync(iconDocument)
+      ? layeredIconFingerprint(iconDocument)
+      : "<missing-document>"
   );
+  return hash.digest("hex");
 }
 
 /**
@@ -160,12 +162,10 @@ export function macDevElectronRuntimeIsCurrent(stamp, expected) {
 }
 
 /**
- * Activity Monitor and other disk-served surfaces clip the bundle bitmap into
- * their own container. The plate-cropped icns keeps pre-Tahoe wells free of
- * the double ring, while the repo-committed layered `build/Assets.car`
- * (`CFBundleIconName=app-icon`) lets macOS 26 render the native rendition
- * instead of boxing the legacy bitmap onto a system plate. Dock itself still
- * uses `icon-dock.png` via `app.dock.setIcon`.
+ * Install the same generated ICNS and native layered Assets.car used by release
+ * packaging. The sidecar must match the authored Icon Composer document and
+ * assetutil must confirm the complete three-layer vector stack, so PierDev can
+ * never silently drift to a separately rasterized or corrupt icon.
  *
  * @param {string} worktreeRoot
  * @param {string} targetApp
@@ -173,136 +173,56 @@ export function macDevElectronRuntimeIsCurrent(stamp, expected) {
  * @returns {string | false} applied CFBundleIconName, or false on failure
  */
 export function applyPierDevAppIcon(worktreeRoot, targetApp, options = {}) {
-  const masterSvg = path.join(worktreeRoot, "build", "app-icon-master.svg");
-  const microSvg = path.join(worktreeRoot, "build", "app-icon-micro.svg");
-  if (!(existsSync(masterSvg) && existsSync(microSvg))) {
+  const buildDirectory = path.join(worktreeRoot, "build");
+  const iconFile = path.join(buildDirectory, "icon.icns");
+  const assetsCar = path.join(buildDirectory, "Assets.car");
+  const assetsInputs = path.join(buildDirectory, "Assets.car.inputs");
+  const iconDocument = path.join(buildDirectory, "app-icon.icon");
+  if (
+    !(
+      existsSync(iconFile) &&
+      existsSync(assetsCar) &&
+      existsSync(assetsInputs) &&
+      existsSync(iconDocument)
+    )
+  ) {
     return false;
   }
+  const expectedFingerprint = layeredIconFingerprint(iconDocument);
+  if (readFileSync(assetsInputs, "utf8") !== expectedFingerprint) {
+    return false;
+  }
+  if (process.platform === "darwin") {
+    try {
+      assertCompiledIconStack(assetsCar);
+    } catch (error) {
+      console.error(
+        `[dev-profile] invalid layered app icon: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return false;
+    }
+  }
+
   const resources = path.join(targetApp, "Contents", "Resources");
   mkdirSync(resources, { recursive: true });
-  const iconName = buildPlatedFillAppIcons(
-    masterSvg,
-    microSvg,
-    resources,
-    worktreeRoot
-  );
-  if (!iconName) {
-    return false;
-  }
+  copyFileSync(iconFile, path.join(resources, MAC_DEV_APP_ICON_FILE));
+  copyFileSync(iconFile, path.join(resources, MAC_DEV_ELECTRON_ICON_FILE));
+  copyFileSync(assetsCar, path.join(resources, "Assets.car"));
   const leftover = path.join(resources, "pier.icns");
-  if (existsSync(leftover)) {
-    rmSync(leftover);
-  }
+  rmSync(leftover, { force: true });
   const plist = path.join(targetApp, "Contents", "Info.plist");
   if (existsSync(plist)) {
     /** @type {Record<string, string>} */
     const entries = {
       CFBundleIconFile: MAC_DEV_APP_ICON_NAME,
-      CFBundleIconName: iconName,
+      CFBundleIconName: MAC_TAHOE_ICON_NAME,
     };
     if (options.bundleVersion) {
       entries.CFBundleVersion = options.bundleVersion;
     }
     upsertPlistStrings(plist, entries);
   }
-  return iconName;
-}
-
-function plateFillViewBox() {
-  const origin =
-    MAC_ICON_CANVAS / 2 +
-    (MAC_ICON_PLATE_INSET - MAC_ICON_CANVAS / 2) * MAC_ICON_OPTICAL_SCALE;
-  const size = MAC_ICON_PLATE_SIZE * MAC_ICON_OPTICAL_SCALE;
-  return { origin, size };
-}
-
-function platedFillSvg(source) {
-  const { origin, size } = plateFillViewBox();
-  const viewBox = `${origin} ${origin} ${size} ${size}`;
-  const backdrop = `<rect x="${origin}" y="${origin}" width="${size}" height="${size}" fill="${MAC_ICON_PLATE_FILL}"/>`;
-  return source
-    .replace(/viewBox="0 0 1024 1024"/, `viewBox="${viewBox}"`)
-    .replace(/(<svg[^>]*>)/, `$1${backdrop}`);
-}
-
-function rasterizePlatedFillIconset(masterSvg, microSvg, iconsetDir) {
-  mkdirSync(iconsetDir, { recursive: true });
-  const svgRoot = mkdtempSync(path.join(tmpdir(), "pier-plated-fill-"));
-  try {
-    const masterFile = path.join(svgRoot, "master.svg");
-    const microFile = path.join(svgRoot, "micro.svg");
-    writeFileSync(masterFile, platedFillSvg(readFileSync(masterSvg, "utf8")));
-    writeFileSync(microFile, platedFillSvg(readFileSync(microSvg, "utf8")));
-    for (const [file, px, kind] of MAC_DEV_ICON_SLOTS) {
-      const source = kind === "micro" ? microFile : masterFile;
-      const result = spawnSync(
-        "rsvg-convert",
-        [
-          "-w",
-          String(px),
-          "-h",
-          String(px),
-          "-o",
-          path.join(iconsetDir, file),
-          source,
-        ],
-        { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
-      );
-      if (spawnFailed(result) || !existsSync(path.join(iconsetDir, file))) {
-        logDevIconToolFailure("rsvg-convert", ["-w", String(px)], result);
-        return false;
-      }
-    }
-    return true;
-  } finally {
-    rmSync(svgRoot, { force: true, recursive: true });
-  }
-}
-
-function buildPlatedFillAppIcons(masterSvg, microSvg, resources, worktreeRoot) {
-  if (process.platform !== "darwin") {
-    copyFileSync(masterSvg, path.join(resources, "app-icon-master.svg"));
-    copyFileSync(microSvg, path.join(resources, "app-icon-micro.svg"));
-    return MAC_DEV_APP_ICON_NAME;
-  }
-  const root = mkdtempSync(path.join(tmpdir(), "pier-appicon-"));
-  try {
-    const iconset = path.join(root, "AppIcon.iconset");
-    if (!rasterizePlatedFillIconset(masterSvg, microSvg, iconset)) {
-      return false;
-    }
-    const icnsOut = path.join(root, MAC_DEV_APP_ICON_FILE);
-    const icns = spawnSync("iconutil", ["-c", "icns", iconset, "-o", icnsOut], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    if (spawnFailed(icns) || !existsSync(icnsOut)) {
-      logDevIconToolFailure("iconutil", ["-c", "icns"], icns);
-      return false;
-    }
-    copyFileSync(icnsOut, path.join(resources, MAC_DEV_APP_ICON_FILE));
-    copyFileSync(icnsOut, path.join(resources, MAC_DEV_ELECTRON_ICON_FILE));
-    return installTahoeLayeredIconCar(worktreeRoot, resources);
-  } finally {
-    rmSync(root, { force: true, recursive: true });
-  }
-}
-
-/**
- * Install the repo-committed layered icon catalog (`pnpm build:icons` output)
- * so Tahoe serves the native rendition for the dev bundle. Without it the
- * plate-cropped icns is still valid, but the plist must then keep pointing at
- * the icns-only name to avoid a dangling CFBundleIconName.
- */
-function installTahoeLayeredIconCar(worktreeRoot, resources) {
-  const repoCar = path.join(worktreeRoot, "build", "Assets.car");
-  const installedCar = path.join(resources, "Assets.car");
-  if (existsSync(repoCar)) {
-    copyFileSync(repoCar, installedCar);
-    return MAC_TAHOE_ICON_NAME;
-  }
-  rmSync(installedCar, { force: true });
-  return MAC_DEV_APP_ICON_NAME;
+  return MAC_TAHOE_ICON_NAME;
 }
 
 function upsertPlistStrings(plistFile, entries) {
@@ -1394,15 +1314,7 @@ function prepareMacDevElectronRuntime(profile, env) {
   );
   const stampFile = path.join(targetRoot, "runtime.json");
   const stamp = readJson(stampFile);
-  const iconHash = [
-    hashFileIfExists(
-      path.join(profile.worktreeRoot, "build", "app-icon-master.svg")
-    ),
-    hashFileIfExists(
-      path.join(profile.worktreeRoot, "build", "app-icon-micro.svg")
-    ),
-    hashFileIfExists(path.join(profile.worktreeRoot, "build", "Assets.car")),
-  ].join(":");
+  const iconHash = macDevIconHash(profile.worktreeRoot);
   const isCurrent =
     existsSync(targetExec) &&
     macDevElectronRuntimeIsCurrent(stamp, {
