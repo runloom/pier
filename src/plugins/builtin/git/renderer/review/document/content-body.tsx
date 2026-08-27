@@ -29,6 +29,11 @@ import type {
   GitReviewMutationTransition,
   GitReviewReadingSurface,
 } from "../reading-surface.ts";
+import {
+  focusConflictItems,
+  isConflictOnlyBody,
+  isConflictSurfaceItem,
+} from "./conflict-focus.ts";
 import { ReviewConflictView } from "./conflict-view.tsx";
 import type { ReviewDocumentProjection } from "./projection.ts";
 import { projectReviewLedger } from "./projection.ts";
@@ -73,6 +78,7 @@ export function documentContent(options: {
   readonly inlineReviewThreadById?: PierDiffViewProps["inlineReviewThreadById"];
   readonly renderErrorVisible: boolean;
   readonly renderWindowReady: boolean;
+  readonly selectedSectionKey?: string | null;
   readonly settled: boolean;
   readonly sourcePanelId?: string;
   readonly getSuppressMembershipScrollRestore?: () => boolean;
@@ -123,13 +129,17 @@ export function documentContent(options: {
             options.getSuppressMembershipScrollRestore,
         };
   if (displayProjection.items.length > 0) {
-    const conflictItems = displayProjection.items.filter(
-      (item) => item.kind === "conflict" && item.conflict !== undefined
+    const conflictFocusItems = focusConflictItems(
+      displayProjection.items,
+      options.selectedSectionKey ?? null
     );
     const codeItems = displayProjection.items.filter(
-      (item) => item.kind !== "conflict"
+      (item) => !isConflictSurfaceItem(item)
     );
-    const conflictOnly = conflictItems.length > 0 && codeItems.length === 0;
+    const conflictOnly = isConflictOnlyBody(
+      conflictFocusItems.length,
+      codeItems.length
+    );
     const appearanceForConflict = {
       codeFontFamily: options.appearance.typography.codeFontFamily,
       codeFontSize: options.appearance.typography.codeFontSize,
@@ -148,7 +158,7 @@ export function documentContent(options: {
             context={options.context}
             contextId={options.contextId}
             gitRootPath={options.gitRootPath}
-            items={conflictItems}
+            items={conflictFocusItems}
             mutationBlocked={options.mutationAuthorityBlocked}
             onMutationCommitted={async (result) => {
               await options.onMutationCommitted(result);
@@ -171,14 +181,14 @@ export function documentContent(options: {
         }
       >
         <div className="flex h-full min-h-0 flex-col">
-          {conflictItems.length > 0 ? (
+          {conflictFocusItems.length > 0 ? (
             <div className="max-h-[45%] shrink-0 border-border border-b">
               <ReviewConflictView
                 appearance={appearanceForConflict}
                 context={options.context}
                 contextId={options.contextId}
                 gitRootPath={options.gitRootPath}
-                items={conflictItems}
+                items={conflictFocusItems}
                 mutationBlocked={options.mutationAuthorityBlocked}
                 onMutationCommitted={async (result) => {
                   await options.onMutationCommitted(result);

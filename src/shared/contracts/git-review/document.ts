@@ -5,6 +5,7 @@ import {
   GIT_REVIEW_EXCERPT_BATCH_MAX,
   GIT_REVIEW_MAX_SECTIONS,
   gitReviewChangeKeySchema,
+  gitReviewConflictXySchema,
   gitReviewFailureSchema,
   gitReviewFileStatusSchema,
   gitReviewOperationIdSchema,
@@ -100,19 +101,6 @@ const imageSectionSchema = z.strictObject({
   targetPath: gitReviewRelativePathSchema,
 });
 export type GitReviewImageSection = z.infer<typeof imageSectionSchema>;
-
-/** Porcelain v2 unmerged XY codes (git status --porcelain=v2). */
-export const GIT_REVIEW_CONFLICT_XY = [
-  "DD",
-  "AU",
-  "UD",
-  "UA",
-  "DU",
-  "AA",
-  "UU",
-] as const;
-export const gitReviewConflictXySchema = z.enum(GIT_REVIEW_CONFLICT_XY);
-export type GitReviewConflictXy = z.infer<typeof gitReviewConflictXySchema>;
 
 /**
  * How renderer should present a conflict section.

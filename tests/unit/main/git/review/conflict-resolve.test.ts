@@ -49,6 +49,21 @@ async function createUuConflict(root: string): Promise<void> {
   await execGit(["merge", "other"], { cwd: root }).catch(() => undefined);
 }
 
+async function createDuConflict(root: string): Promise<void> {
+  await writeFile(join(root, "gone.ts"), "base\n", "utf8");
+  await commitAll(root, "base");
+  const mainBranch = (
+    await execGit(["branch", "--show-current"], { cwd: root })
+  ).trim();
+  await execGit(["switch", "-c", "other"], { cwd: root });
+  await writeFile(join(root, "gone.ts"), "other\n", "utf8");
+  await commitAll(root, "other");
+  await execGit(["switch", mainBranch], { cwd: root });
+  await execGit(["rm", "--", "gone.ts"], { cwd: root });
+  await commitAll(root, "delete on main");
+  await execGit(["merge", "other"], { cwd: root }).catch(() => undefined);
+}
+
 function fileSource(root: string, path = "conflict.ts") {
   return {
     contextId: "worktree:test",
@@ -225,5 +240,75 @@ describe("git.resolveReviewConflict", () => {
     if (result.kind === "error") {
       expect(result.reason).toBe("invalidSource");
     }
+  });
+
+  it("restores theirs for a DU conflict", async () => {
+    const root = await createRepository();
+    await createDuConflict(root);
+    const service = new GitReviewService();
+    const result = await service.resolveConflict(
+      {
+        action: "theirs",
+        operationId: randomUUID(),
+        source: fileSource(root, "gone.ts"),
+      },
+      {
+        ...gitReviewRequestOptions(),
+        writer: createGitService(),
+      }
+    );
+    expect(result.kind).toBe("ok");
+    expect(await readFile(join(root, "gone.ts"), "utf8")).toBe("other\n");
+  });
+
+  it("keeps deletion for a DU conflict", async () => {
+    const root = await createRepository();
+    await createDuConflict(root);
+    const service = new GitReviewService();
+    const result = await service.resolveConflict(
+      {
+        action: "ours",
+        operationId: randomUUID(),
+        source: fileSource(root, "gone.ts"),
+      },
+      {
+        ...gitReviewRequestOptions(),
+        writer: createGitService(),
+      }
+    );
+    expect(result.kind).toBe("ok");
+    await expect(readFile(join(root, "gone.ts"), "utf8")).rejects.toThrow();
+    const status = await execGit(
+      ["status", "--porcelain=v1", "--", "gone.ts"],
+      { cwd: root }
+    );
+    expect(status).not.toMatch(/^(?:DU|UU) /mu);
+  });
+
+  it("stages an already-resolved UU worktree without rewriting it", async () => {
+    const root = await createRepository();
+    await createUuConflict(root);
+    await writeFile(join(root, "conflict.ts"), "resolved\n", "utf8");
+    const service = new GitReviewService();
+    const result = await service.resolveConflict(
+      {
+        action: "stage",
+        operationId: randomUUID(),
+        source: fileSource(root),
+      },
+      {
+        ...gitReviewRequestOptions(),
+        writer: createGitService(),
+      }
+    );
+    expect(result.kind).toBe("ok");
+    expect(await readFile(join(root, "conflict.ts"), "utf8")).toBe(
+      "resolved\n"
+    );
+    const status = await execGit(
+      ["status", "--porcelain=v1", "--", "conflict.ts"],
+      { cwd: root }
+    );
+    expect(status).not.toMatch(/^UU /mu);
   });
 });

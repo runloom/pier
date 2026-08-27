@@ -27,7 +27,7 @@ const STATE_SECTION_TEXT = {
   { readonly fallback: string; readonly key: string }
 >;
 
-/** Localized conflict body copy for UnresolvedFile and ready-notice. */
+/** Localized conflict body copy for UnresolvedFile and file-level notice. */
 export function conflictSectionText(
   context: RendererPluginContext,
   section: ReviewConflictSection,
@@ -45,28 +45,37 @@ export function conflictSectionText(
     case "file-level":
       return fileLevelConflictText(context, section.xy, locale);
     case "binary":
-      return pluginText(
-        context,
-        "reviewStateConflictBinaryDetail",
-        "Binary merge conflict — preview is unavailable. Stage the file or open it.",
-        undefined,
-        locale
+      return joinConflictNotice(
+        pluginText(
+          context,
+          "reviewStateConflictBinaryDetail",
+          "Binary merge conflict — preview is unavailable.",
+          undefined,
+          locale
+        ),
+        fileLevelConflictText(context, section.xy, locale)
       );
     case "tooLarge":
-      return pluginText(
-        context,
-        "reviewStateConflictTooLargeDetail",
-        "Conflict file is too large to preview — stage it or open it.",
-        undefined,
-        locale
+      return joinConflictNotice(
+        pluginText(
+          context,
+          "reviewStateConflictTooLargeDetail",
+          "Conflict file is too large to preview — open the file.",
+          undefined,
+          locale
+        ),
+        fileLevelConflictText(context, section.xy, locale)
       );
     case "invalidEncoding":
-      return pluginText(
-        context,
-        "reviewStateConflictInvalidEncodingDetail",
-        "Conflict file has unsupported encoding — stage it or open it.",
-        undefined,
-        locale
+      return joinConflictNotice(
+        pluginText(
+          context,
+          "reviewStateConflictInvalidEncodingDetail",
+          "Conflict file has unsupported encoding — open the file.",
+          undefined,
+          locale
+        ),
+        fileLevelConflictText(context, section.xy, locale)
       );
     case "readError":
       return pluginText(
@@ -149,6 +158,18 @@ export function stateSectionText(
   return pluginText(context, text.key, text.fallback, undefined, locale);
 }
 
+function joinConflictNotice(prefix: string, actions: string): string {
+  const head = prefix.trim();
+  const tail = actions.trim();
+  if (head.length === 0) {
+    return tail;
+  }
+  if (tail.length === 0 || head.includes(tail)) {
+    return head;
+  }
+  return `${head} ${tail}`;
+}
+
 function fileLevelConflictText(
   context: RendererPluginContext,
   xy: ReviewConflictSection["xy"],
@@ -159,7 +180,7 @@ function fileLevelConflictText(
       return pluginText(
         context,
         "reviewStateConflictBothDeletedDetail",
-        "Both sides deleted this file — stage it to confirm.",
+        "Both sides deleted this file — confirm the deletion.",
         undefined,
         locale
       );
@@ -167,7 +188,7 @@ function fileLevelConflictText(
       return pluginText(
         context,
         "reviewStateConflictOursChangedTheirsDeletedDetail",
-        "This side changed the file; the incoming side deleted it — open the file or stage it.",
+        "This side changed the file; the incoming side deleted it — keep the current file or confirm the deletion.",
         undefined,
         locale
       );
@@ -175,7 +196,7 @@ function fileLevelConflictText(
       return pluginText(
         context,
         "reviewStateConflictOursDeletedTheirsChangedDetail",
-        "This side deleted the file; the incoming side changed it — open the file or stage it.",
+        "This side deleted the file; the incoming side changed it — use the incoming version or confirm the deletion.",
         undefined,
         locale
       );
@@ -183,7 +204,7 @@ function fileLevelConflictText(
       return pluginText(
         context,
         "reviewStateConflictOursAddedDetail",
-        "Only this side added the file — open it or stage it.",
+        "Only this side added the file — keep the current file or confirm the deletion.",
         undefined,
         locale
       );
@@ -191,7 +212,7 @@ function fileLevelConflictText(
       return pluginText(
         context,
         "reviewStateConflictTheirsAddedDetail",
-        "Only the incoming side added the file — open it or stage it.",
+        "Only the incoming side added the file — use the incoming version or keep it deleted.",
         undefined,
         locale
       );
@@ -200,7 +221,7 @@ function fileLevelConflictText(
       return pluginText(
         context,
         "reviewStateConflictFileLevelDetail",
-        "This conflict cannot be shown as current vs incoming — stage the file if it already looks right, or open it.",
+        "This conflict cannot be shown as current vs incoming. Stage the current file if it already looks right; otherwise use the current or incoming version.",
         undefined,
         locale
       );

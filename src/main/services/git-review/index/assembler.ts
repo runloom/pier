@@ -102,6 +102,9 @@ export function assembleGitReviewIndex({
           candidateStat !== undefined && candidateStat.oldPath === fact.oldPath
             ? candidateStat
             : undefined;
+        if (group === "conflict" && fact.conflict === null) {
+          throw new GitReviewIndexProtocolError("conflict 事实缺少 XY");
+        }
         return {
           ...(stat === undefined
             ? {}
@@ -119,6 +122,7 @@ export function assembleGitReviewIndex({
           ),
           status: fact.status,
           targetPath: fact.targetPath,
+          ...(fact.conflict === null ? {} : { xy: fact.conflict.xy }),
         };
       }),
       status,

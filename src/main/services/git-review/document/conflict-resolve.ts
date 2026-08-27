@@ -78,16 +78,30 @@ export async function resolveGitReviewConflict(options: {
       if (writeResult !== null) {
         return writeResult;
       }
-    } else {
-      const side = request.action === "ours" ? "--ours" : "--theirs";
-      await execGitRaw(["--literal-pathspecs", "checkout", side, "--", path], {
-        budget,
-        cwd,
-        mode: "collect",
-        ...(signal ? { signal } : {}),
-      });
+    } else if (request.action !== "stage") {
+      const stages = conflictFact.conflict;
+      const chosenOid =
+        request.action === "ours" ? stages?.oursOid : stages?.theirsOid;
+      if (chosenOid === null || chosenOid === undefined) {
+        await execGitRaw(["--literal-pathspecs", "rm", "-f", "--", path], {
+          budget,
+          cwd,
+          mode: "collect",
+          ...(signal ? { signal } : {}),
+        });
+      } else {
+        const side = request.action === "ours" ? "--ours" : "--theirs";
+        await execGitRaw(
+          ["--literal-pathspecs", "checkout", side, "--", path],
+          {
+            budget,
+            cwd,
+            mode: "collect",
+            ...(signal ? { signal } : {}),
+          }
+        );
+      }
     }
-
     await writer.stage(cwd, { paths: [path] });
   } catch (error) {
     if (error instanceof GitReviewPathError && error.reason === "changed") {

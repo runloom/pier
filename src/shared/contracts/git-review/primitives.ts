@@ -46,6 +46,19 @@ export const GIT_REVIEW_STATUS_PRIORITY = [
 export const gitReviewFileStatusSchema = z.enum(GIT_REVIEW_STATUS_PRIORITY);
 export type GitReviewFileStatus = z.infer<typeof gitReviewFileStatusSchema>;
 
+/** Porcelain v2 unmerged XY codes (`git status --porcelain=v2`). */
+export const GIT_REVIEW_CONFLICT_XY = [
+  "DD",
+  "AU",
+  "UD",
+  "UA",
+  "DU",
+  "AA",
+  "UU",
+] as const;
+export const gitReviewConflictXySchema = z.enum(GIT_REVIEW_CONFLICT_XY);
+export type GitReviewConflictXy = z.infer<typeof gitReviewConflictXySchema>;
+
 export const gitReviewFailureReasonSchema = z.enum([
   "notRepository",
   "invalidSource",

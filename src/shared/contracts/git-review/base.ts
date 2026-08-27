@@ -4,6 +4,7 @@ import {
   GIT_REVIEW_GROUP_ORDER,
   GIT_REVIEW_MAX_SECTIONS,
   GIT_REVIEW_STATUS_PRIORITY,
+  gitReviewConflictXySchema,
   gitReviewFailureSchema,
   gitReviewFileStatusSchema,
   gitReviewRelativePathSchema,
@@ -99,6 +100,7 @@ export const gitReviewRenderSlotSchema = z.strictObject({
   sectionKey: gitReviewSectionKeySchema,
   status: gitReviewFileStatusSchema,
   targetPath: gitReviewRelativePathSchema,
+  xy: gitReviewConflictXySchema.optional(),
 });
 
 export const gitReviewIndexEntrySchema = z
@@ -132,15 +134,27 @@ export const gitReviewIndexEntrySchema = z
           path: ["renderSlots", index],
         });
       }
-      if (
-        slot.group === "conflict" &&
-        (slot.oldPath !== null || slot.status !== "conflicted")
-      ) {
+      if (slot.group === "conflict") {
+        if (slot.oldPath !== null || slot.status !== "conflicted") {
+          context.addIssue({
+            code: "custom",
+            message:
+              "Conflict render slots require conflicted status and no old path",
+            path: ["renderSlots", index],
+          });
+        }
+        if (slot.xy === undefined) {
+          context.addIssue({
+            code: "custom",
+            message: "Conflict render slots require porcelain XY",
+            path: ["renderSlots", index, "xy"],
+          });
+        }
+      } else if (slot.xy !== undefined) {
         context.addIssue({
           code: "custom",
-          message:
-            "Conflict render slots require conflicted status and no old path",
-          path: ["renderSlots", index],
+          message: "Non-conflict render slots cannot include XY",
+          path: ["renderSlots", index, "xy"],
         });
       }
       sectionKeys.add(slot.sectionKey);
