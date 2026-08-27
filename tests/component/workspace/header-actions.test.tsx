@@ -1090,7 +1090,7 @@ describe("WorkspaceHeaderActions", () => {
       "Start Claude",
       "Start Codex",
       "Run Task…",
-      "New Workbench",
+      "New Tab",
       "Create Worktree",
       "New Window",
     ]);
@@ -1198,24 +1198,6 @@ describe("WorkspaceHeaderActions", () => {
 
     fireEvent.change(search, { target: { value: "missing-action" } });
     expect(await screen.findByText("No matching items")).toBeVisible();
-  });
-
-  it.each([
-    "gongzuo",
-    "gongzuotai",
-  ])("searches the localized Workbench action by pinyin: %s", async (query) => {
-    await i18next.changeLanguage("zh-CN");
-    const props = createProps([createPanel("terminal-1", "终端 1")]);
-    useWorkspaceStore.getState().setApi(props.containerApi as never);
-
-    render(<WorkspaceHeaderActions {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "新建" }));
-    const search = screen.getByPlaceholderText("搜索面板类型或智能体…");
-    fireEvent.change(search, { target: { value: query } });
-
-    await waitFor(() => {
-      expect(visibleCommandItemLabels()).toEqual(["新建工作台"]);
-    });
   });
 
   it("lets frecency promote a create action without changing its source", async () => {
@@ -1330,19 +1312,6 @@ describe("WorkspaceHeaderActions", () => {
       expect.objectContaining({
         component: "terminal",
         id: "terminal-123",
-        position: {
-          direction: "within",
-          referenceGroup: originalGroup,
-        },
-      })
-    );
-
-    openAddPanelPopover();
-    fireEvent.click(await findCommandItem("New Workbench"));
-    expect(props.containerApi.addPanel).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        component: "workbench",
         position: {
           direction: "within",
           referenceGroup: originalGroup,

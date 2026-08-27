@@ -3,7 +3,6 @@ import { pierCapabilitySchema } from "./permissions.ts";
 import { pluginConfigurationSchema } from "./plugin/configuration.ts";
 import { pluginLanguageModeContributionSchema } from "./plugin/language-mode.ts";
 import { pluginLanguageServerContributionSchema } from "./plugin/language-server.ts";
-import { pluginWorkbenchWidgetContributionSchema } from "./workbench.ts";
 
 export type {
   EditorHighlightPreset,
@@ -75,35 +74,12 @@ export type PluginLocalizedSettingsPage = z.infer<
   typeof pluginLocalizedSettingsPageSchema
 >;
 
-/**
- * 只读兼容 apiVersion 1 早期包中的旧贡献键；解析结果始终只暴露新键。
- * 新清单、运行时快照和再次序列化不得写回旧键。
- */
-export function normalizeLegacyWorkbenchContributionKey(raw: unknown): unknown {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    return raw;
-  }
-  const record = raw as Record<string, unknown>;
-  const legacyKey = "missionControlWidgets";
-  if (
-    record.workbenchWidgets !== undefined ||
-    record[legacyKey] === undefined
-  ) {
-    return raw;
-  }
-  const { [legacyKey]: legacyWidgets, ...rest } = record;
-  return { ...rest, workbenchWidgets: legacyWidgets };
-}
-
 const pluginLocaleMessagesObjectSchema = z.object({
   commands: z
     .record(z.string().min(1), pluginLocalizedCommandContributionSchema)
     .optional(),
   description: z.string().min(1).optional(),
   messages: z.record(z.string().min(1), z.string().min(1)).optional(),
-  workbenchWidgets: z
-    .record(z.string().min(1), pluginLocalizedContributionSchema)
-    .optional(),
   name: z.string().min(1).optional(),
   panels: z
     .record(z.string().min(1), pluginLocalizedContributionSchema)
@@ -118,10 +94,7 @@ const pluginLocaleMessagesObjectSchema = z.object({
     .record(z.string().min(1), pluginLocalizedContributionSchema)
     .optional(),
 });
-export const pluginLocaleMessagesSchema = z.preprocess(
-  normalizeLegacyWorkbenchContributionKey,
-  pluginLocaleMessagesObjectSchema
-);
+export const pluginLocaleMessagesSchema = pluginLocaleMessagesObjectSchema;
 export type PluginLocaleMessages = z.infer<typeof pluginLocaleMessagesSchema>;
 
 export const pluginLocalizationSchema = z.object({
@@ -224,9 +197,6 @@ const pluginManifestObjectSchema = z
     locales: z
       .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
       .optional(),
-    workbenchWidgets: z
-      .array(pluginWorkbenchWidgetContributionSchema)
-      .default([]),
     /**
      * 可投影给 canvas 的只读数据键（设计 §4.1）。未声明键的
      * pluginData.snapshot 一律拒绝——纪律边界与 panels 同链。
@@ -238,6 +208,11 @@ const pluginManifestObjectSchema = z
      * 宿主仅转发该前缀且已声明键的事件。
      */
     dataProjections: z.array(z.string().min(1)).default([]),
+    /**
+     * Canvas-invokable plugin RPC method names (design §4.2).
+     * `pluginAction.invoke` rejects keys not listed here.
+     */
+    canvasActions: z.array(z.string().min(1)).default([]),
     name: z.string().min(1),
     /**
      * Optional so hand-written manifests/tests need not list an empty array.
@@ -335,10 +310,7 @@ const pluginManifestObjectSchema = z
       }
     }
   });
-export const pluginManifestSchema = z.preprocess(
-  normalizeLegacyWorkbenchContributionKey,
-  pluginManifestObjectSchema
-);
+export const pluginManifestSchema = pluginManifestObjectSchema;
 export type PluginManifest = z.infer<typeof pluginManifestSchema>;
 
 export const pluginRuntimeStateSchema = z.object({

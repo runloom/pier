@@ -60,6 +60,67 @@ describe("project canvases render", () => {
     expect(source).not.toContain("This canvas reads useHostSnapshot");
   });
 
+  it("kanban gold is a fill board with DnD primitives", () => {
+    const source = readFileSync(
+      join(process.cwd(), ".pier/canvases/kanban/kanban.canvas.tsx"),
+      "utf8"
+    );
+    expect(source).toContain("fill gap={16}");
+    expect(source).toContain("Sortable");
+    expect(source).toContain("Droppable");
+    expect(source).toContain('watch("board.json"');
+    expect(source).not.toContain("WorldStage");
+  });
+
+  it("kanban gold mounts with data-canvas-fill on the root stack", () => {
+    const path = Object.keys(CANVAS_MODULES).find((entry) =>
+      entry.endsWith("kanban/kanban.canvas.tsx")
+    );
+    expect(path).toBeDefined();
+    const module = CANVAS_MODULES[path ?? ""];
+    const Canvas = module?.default as ComponentType | undefined;
+    if (typeof Canvas !== "function") {
+      throw new Error("kanban canvas must default-export a component");
+    }
+    const { container } = render(<Canvas />);
+    expect(container.querySelector("[data-canvas-fill]")).not.toBeNull();
+  });
+
+  it("dag-viewer gold closes invokeCommand through run.output", () => {
+    const source = readFileSync(
+      join(process.cwd(), ".pier/canvases/dag-viewer/dag-viewer.canvas.tsx"),
+      "utf8"
+    );
+    const instance = readFileSync(
+      join(process.cwd(), ".pier/canvases/dag-viewer/instance.json"),
+      "utf8"
+    );
+    expect(source).toContain("http://127.0.0.1");
+    expect(source).not.toContain("https://");
+    expect(source).toContain("FlowGraph");
+    expect(source).toContain('presentation="plain"');
+    expect(source).toContain("layoutFlowGraph");
+    expect(source).toContain("onSelectNode");
+    expect(source).toContain("renderOverlay");
+    expect(source).toContain('useHostSnapshot("pier://tasks:runs-changed")');
+    expect(source).toContain('type: "run.output"');
+    expect(source).toMatch(/from ["']pier\/host["']/);
+    expect(instance).toContain("cat graph.json");
+  });
+
+  it("design-mockup gold declares stable Design Mode anchors", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        ".pier/canvases/design-mockup/design-mockup.canvas.tsx"
+      ),
+      "utf8"
+    );
+    expect(source).toContain("data-pier-comment-id");
+    expect(source).toContain("desktop-settings");
+    expect(source).toContain("phone-home");
+  });
+
   for (const [path, module] of Object.entries(CANVAS_MODULES)) {
     if (path.endsWith(".canvas.solid.tsx")) {
       continue;

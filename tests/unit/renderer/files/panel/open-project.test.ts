@@ -46,7 +46,6 @@ function makePlugin(overrides?: {
     files: {} as RendererPluginContext["files"],
     git: {} as RendererPluginContext["git"],
     i18n: { t: vi.fn((key: string) => key), lang: "en" },
-    workbenchWidgets: { register: vi.fn() },
     notifications: {
       error: vi.fn(),
       info: vi.fn(),

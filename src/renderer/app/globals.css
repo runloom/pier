@@ -5,10 +5,10 @@
 
 @source "../../../packages/ui/src";
 @source "../../plugins";
-/* Project Live Modules canvases: className utilities must enter the CSS
- * bundle. Without this, arbitrary/layout classes only written under
- * `.pier/canvases` silently no-op (e.g. docs two-column grids). */
-@source "../../../.pier/canvases";
+/* No @source for canvases: canvas utility CSS is generated at runtime by the
+ * live-modules Tailwind JIT (src/main/services/live-modules/tailwind.ts) and
+ * injected scoped per module — repo canvases and user-project canvases share
+ * that one pipeline. */
 
 /*
  * Pier dark variant: default 是 dark（:root），加 .light class 切换到 light。
@@ -375,6 +375,19 @@
  */
 [data-reading-surface] {
   font-family: var(--pier-document-font-family);
+}
+
+/*
+ * DocsShell canvas reading: the files preview shell sets `--md-scale` from the
+ * Markdown prefs store. Text primitives consume it; this fallback covers raw
+ * children under the reading surface. Composition/kit shells omit the attr.
+ */
+[data-pier-canvas-shell][data-canvas-reading] {
+  --md-scale: 1;
+}
+
+[data-pier-canvas-shell][data-canvas-reading] [data-reading-surface] {
+  font-size: calc(13px * var(--md-scale, 1));
 }
 
 [data-reading-surface]
@@ -1146,12 +1159,6 @@ body {
 [data-slot="select-item"]:focus
   .pier-panel-tab-icon[data-panel-tab-icon="pier.files.project"] {
   color: var(--pier-file-icon-yellow);
-}
-
-.pier-panel-tab-icon[data-panel-tab-icon="workbench"],
-[data-slot="select-item"]:focus
-  .pier-panel-tab-icon[data-panel-tab-icon="workbench"] {
-  color: var(--pier-file-icon-indigo);
 }
 
 .pier-panel-tab-icon[data-panel-tab-icon="welcome"],

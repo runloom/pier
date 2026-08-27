@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import {
-  createAccountsWidgetRefreshAction,
   isNoActiveAccountError,
   NoActiveAccountError,
   normalizeAccountId,
@@ -173,114 +172,6 @@ describe("refreshAccountUsage (shared manual refresh)", () => {
   });
 });
 
-describe("createAccountsWidgetRefreshAction", () => {
-  const actionContext = {
-    instanceId: "w1",
-    params: {},
-    requestRefresh: vi.fn(),
-    updateParams: vi.fn(),
-  };
-
-  const i18n = {
-    label: { fallback: "Refresh usage", key: "label" },
-    noActiveAccountBody: { fallback: "No active account", key: "none" },
-    refreshFailedTitle: { fallback: "Could not refresh", key: "fail" },
-    refreshSuccess: { fallback: "Usage refreshed", key: "ok" },
-  };
-
-  it("toasts success after shared refresh", async () => {
-    const { context, invokeCalls } = mockContext({ activeAccountId: "acc-1" });
-    const action = createAccountsWidgetRefreshAction({
-      context,
-      icon: () => null,
-      i18n,
-    });
-    await action.invoke(actionContext);
-    expect(invokeCalls).toContainEqual({
-      method: "accounts.refreshUsage",
-      payload: { force: true },
-    });
-    expect(context.notifications.success).toHaveBeenCalledWith(
-      "Usage refreshed"
-    );
-    expect(context.dialogs.alert).not.toHaveBeenCalled();
-  });
-
-  it("alerts without success toast when there is no active account", async () => {
-    const { context } = mockContext({ activeAccountId: null });
-    const action = createAccountsWidgetRefreshAction({
-      context,
-      icon: () => null,
-      i18n,
-    });
-    await action.invoke(actionContext);
-    expect(context.notifications.success).not.toHaveBeenCalled();
-    expect(context.dialogs.alert).toHaveBeenCalledWith({
-      body: "No active account",
-      title: "Could not refresh",
-    });
-  });
-
-  it("alerts with the error message when the RPC fails", async () => {
-    const { context } = mockContext({
-      activeAccountId: "acc-1",
-      refreshError: new Error("upstream down"),
-    });
-    const action = createAccountsWidgetRefreshAction({
-      context,
-      icon: () => null,
-      i18n,
-    });
-    await action.invoke(actionContext);
-    expect(context.notifications.success).not.toHaveBeenCalled();
-    expect(context.dialogs.alert).toHaveBeenCalledWith({
-      body: "upstream down",
-      title: "Could not refresh",
-    });
-  });
-
-  it("resolves even when dialogs.alert rejects (no cascade)", async () => {
-    const { context } = mockContext({
-      activeAccountId: "acc-1",
-      refreshError: new Error("upstream down"),
-    });
-    context.dialogs.alert = vi.fn(async () => {
-      throw new Error("dialog host failed");
-    });
-    const action = createAccountsWidgetRefreshAction({
-      context,
-      icon: () => null,
-      i18n,
-    });
-    await expect(action.invoke(actionContext)).resolves.toBeUndefined();
-  });
-
-  it("bulkRefresh skips success toast and rethrows failures for host aggregation", async () => {
-    const ok = mockContext({ activeAccountId: "acc-1" });
-    const actionOk = createAccountsWidgetRefreshAction({
-      context: ok.context,
-      icon: () => null,
-      i18n,
-    });
-    await actionOk.invoke({ ...actionContext, bulkRefresh: true });
-    expect(ok.context.notifications.success).not.toHaveBeenCalled();
-
-    const bad = mockContext({
-      activeAccountId: "acc-1",
-      refreshError: new Error("upstream down"),
-    });
-    const actionBad = createAccountsWidgetRefreshAction({
-      context: bad.context,
-      icon: () => null,
-      i18n,
-    });
-    await expect(
-      actionBad.invoke({ ...actionContext, bulkRefresh: true })
-    ).rejects.toThrow("upstream down");
-    expect(bad.context.dialogs.alert).not.toHaveBeenCalled();
-  });
-});
-
 describe("useAccountsRefresh", () => {
   const i18n = {
     refreshAllSuccess: { fallback: "All refreshed", key: "all" },
@@ -347,21 +238,9 @@ describe("useAccountsRefresh", () => {
 });
 
 describe("account plugin renderer refresh governance", () => {
-  it("settings and widgets use the shared refresh primitives (no inline RPC)", () => {
+  it("settings pages use the shared refresh primitives (no inline RPC)", () => {
     const plugins = ["codex", "grok", "claude"] as const;
     for (const id of plugins) {
-      const widget = readFileSync(
-        join(
-          process.cwd(),
-          `packages/plugin-${id}/src/renderer/accounts-widget.tsx`
-        ),
-        "utf8"
-      );
-      expect(widget).toContain("createAccountsWidgetRefreshAction");
-      expect(widget).not.toMatch(
-        /rpc\.invoke\(\s*["']accounts\.refreshUsage["']/
-      );
-
       const settingsPage = readFileSync(
         join(
           process.cwd(),

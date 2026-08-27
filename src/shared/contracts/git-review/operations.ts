@@ -98,13 +98,14 @@ export type GitReviewMutationResult = z.infer<
  * Resolve an unmerged path from review:
  * - write: host wrote conflict-free contents (after UnresolvedFile Accept)
  * - ours / theirs: git checkout --ours|--theirs then stage
+ * - stage: git add the current worktree path (already-resolved UU)
  */
 export const gitReviewConflictResolveRequestSchema = z
   .strictObject({
-    action: z.enum(["ours", "theirs", "write"]),
+    action: z.enum(["ours", "stage", "theirs", "write"]),
     /**
      * Worktree content digest (sha256:…) observed by the client.
-     * Required for write; optional for ours/theirs (still re-validates unmerged).
+     * Required for write; optional for ours/theirs/stage (still re-validates unmerged).
      */
     expectedContentsDigest: gitReviewRevisionSchema.optional(),
     operationId: gitReviewOperationIdSchema,

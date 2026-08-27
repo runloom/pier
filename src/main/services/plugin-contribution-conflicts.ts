@@ -3,7 +3,6 @@ import {
   CORE_RESERVED_ACTION_IDS,
   CORE_RESERVED_PANEL_IDS,
   CORE_RESERVED_TERMINAL_STATUS_ITEM_IDS,
-  CORE_RESERVED_WORKBENCH_WIDGET_IDS,
 } from "@shared/plugin-core-contribution-ids.ts";
 
 function includesId(ids: readonly string[], id: string): boolean {
@@ -59,24 +58,6 @@ export function findCommandIdConflict(
   return (
     candidate.commands.find((command) =>
       includesId(CORE_RESERVED_ACTION_IDS, command.id)
-    )?.id ?? null
-  );
-}
-
-export function findWorkbenchWidgetIdConflict(
-  acceptedManifests: readonly PluginManifest[],
-  candidate: PluginManifest
-): string | null {
-  const conflict = findContributionIdConflict(
-    acceptedManifests,
-    candidate,
-    (manifest) => manifest.workbenchWidgets,
-    (widget) => widget.id
-  );
-  if (conflict) return conflict;
-  return (
-    candidate.workbenchWidgets.find((widget) =>
-      includesId(CORE_RESERVED_WORKBENCH_WIDGET_IDS, widget.id)
     )?.id ?? null
   );
 }

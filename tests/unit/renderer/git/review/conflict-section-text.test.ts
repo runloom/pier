@@ -18,12 +18,19 @@ function context() {
 }
 
 function fileLevel(xy: ReviewConflictSection["xy"]): ReviewConflictSection {
+  return section("file-level", xy);
+}
+
+function section(
+  presentation: ReviewConflictSection["presentation"],
+  xy: ReviewConflictSection["xy"]
+): ReviewConflictSection {
   return {
     contents: null,
     contentsDigest: "sha256:test",
     kind: "conflict",
     oldPath: null,
-    presentation: "file-level",
+    presentation,
     sectionKey: "section:conflict",
     stages: { baseOid: null, oursOid: null, theirsOid: null },
     status: "conflicted",
@@ -35,22 +42,33 @@ function fileLevel(xy: ReviewConflictSection["xy"]): ReviewConflictSection {
 describe("conflictSectionText", () => {
   it("does not tell the user to open a both-deleted file", () => {
     const notice = conflictSectionText(context(), fileLevel("DD"), "en");
-    expect(notice).toContain("stage it to confirm");
+    expect(notice).toContain("confirm the deletion");
     expect(notice).not.toMatch(/open the file/i);
   });
 
-  it("tells modify/delete conflicts to open or stage", () => {
+  it("tells modify/delete conflicts to pick a version", () => {
     expect(conflictSectionText(context(), fileLevel("UD"), "en")).toContain(
-      "open the file or stage it"
+      "keep the current file or confirm the deletion"
     );
     expect(conflictSectionText(context(), fileLevel("DU"), "en")).toContain(
-      "open the file or stage it"
+      "use the incoming version or confirm the deletion"
     );
   });
 
   it("tells marker-free UU to stage if the worktree already looks right", () => {
     expect(conflictSectionText(context(), fileLevel("UU"), "en")).toContain(
-      "stage the file if it already looks right"
+      "Stage the current file if it already looks right"
     );
+  });
+
+  it("specializes binary copy to the xy actions actually shown", () => {
+    const du = conflictSectionText(context(), section("binary", "DU"), "en");
+    expect(du).toContain("preview is unavailable");
+    expect(du).toContain("use the incoming version or confirm the deletion");
+    expect(du).not.toMatch(/current version or the incoming version/i);
+
+    const uu = conflictSectionText(context(), section("binary", "UU"), "en");
+    expect(uu).toContain("preview is unavailable");
+    expect(uu).toContain("Stage the current file if it already looks right");
   });
 });

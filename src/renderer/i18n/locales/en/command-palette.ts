@@ -51,7 +51,6 @@ export const commandPalette = {
     listAgents: "Agent List…",
     openCollaboration: "Agent Collaboration…",
     startAgent: "Start {{agent}}",
-    newWorkbench: "New Workbench",
     runTask: "Run Task…",
     terminalList: "Terminal List...",
     selectTheme: "Select Theme",

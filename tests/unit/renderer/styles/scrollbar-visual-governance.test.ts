@@ -16,7 +16,6 @@ const NONE_ALLOWLIST = new Set([
   "packages/ui/src/command.tsx",
   "packages/ui/src/file/panel-breadcrumb.tsx",
   "packages/ui/src/image-preview/canvas.tsx",
-  "packages/ui/src/image-preview/world-canvas.tsx",
   "packages/ui/src/scroll-area.tsx",
   "src/plugins/builtin/files/renderer/markdown/preview-toc.tsx",
   "src/renderer/components/common/notifications/center-control.tsx",
@@ -56,7 +55,8 @@ function hidesProductScrollbar(source: string): boolean {
   if (
     source.includes('data-scrollbar="none"') ||
     source.includes("data-scrollbar='none'") ||
-    /data-scrollbar=\{['"]none['"]\}/.test(source)
+    /data-scrollbar=\{['"]none['"]\}/.test(source) ||
+    /data-scrollbar=\{[^}]*["']none["'][^}]*\}/.test(source)
   ) {
     return true;
   }

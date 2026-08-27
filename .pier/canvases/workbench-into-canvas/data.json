@@ -5,11 +5,11 @@
   "data": {
     "meta": {
       "title": "Canvas 物料金标准",
-      "subtitle": "发现面在设置→项目，与技能库同一壳：一个列表、类型只是筛选、系统与项目混排。业务 Canvas 仍是文件。数据走宿主 stub，不拆工作台网格。",
+      "subtitle": "发现面在设置→项目。业务 Canvas 仍是文件。宿主给通道和积木；.canvas.tsx 是唯一组装层。",
       "status": "推荐方案",
       "version": "v3",
       "researchCutoff": "2026-08-16",
-      "codeBaseline": "pier/canvas 原语 + useCanvasFile；设置项目壳已有环境/技能/MCP/常规；工作台 widget 未进 Canvas SDK"
+      "codeBaseline": "pier/canvas 原语 + pluginData/canvasActions + 三个宿主聚合 hook；无领域组件"
     },
     "bluf": "核心是让人能找到并看见 Canvas 能用的物料：入口与技能库一致，落在设置→项目的「物料」页。系统积木与该项目画布用两列预览卡列表展示：上半是实样，下半是名称和说明，单卡不是通栏。类型只是筛选。点系统卡用宿主内容弹窗展示实样、安装、用法和接口；点项目卡走文件树。业务 Canvas 继续按文件管理；数据块经宿主 stub 订阅已有 store，源码不碰 window.pier；物料注册是代码所有，不新增人维护的登记文件。",
     "insight": "今天的缺口仍是发现与看见。业界组件目录（shadcn blocks、Origin UI、Chromatic、Pier 工作台物料库）用预览卡：上实样、下名称，两列铺满。不是通栏设置行，也不是定宽空卡换行，更不是字母砖货架。搜索加类型下拉；点卡进宿主内容弹窗看安装、用法和接口。",
@@ -29,8 +29,8 @@
       "不把工作台物料库当 Canvas 看见面",
       "不强制 forcePreviewBarrel，以免误伤页内 ./model.ts",
       "不为每个物料再注册一条 slash skill",
-      "v1 不做插件账号块（依赖 plugin RPC）",
-      "自定义卡与指标目录留在工作台；不拆工作台网格"
+      "不向 pier/canvas 增加领域组件（AccountsCard / UsageMeter / canvasWidgets）",
+      "不把添加/删除/OAuth 登录流复制进画布；走 settings.open"
     ],
     "overviewCards": [
       {
@@ -173,13 +173,13 @@
       },
       "notes": [
         "编译围栏不变：react、pier/canvas、相对路径、项目 tsconfig paths；禁止 npm、electron、Node。",
-        "物料注册是代码所有（对齐 CORE_WORKBENCH_WIDGETS 先例）：类型、说明、示例渲染器都在宿主源码里，不存在人维护的 JSON 目录。",
+        "物料注册是代码所有：类型、说明、示例渲染器都在宿主源码里，不存在人维护的 JSON 目录。",
         "唯一看见面是设置→项目→物料列表与文档型弹窗；不设顶栏新区，不做并排阅读面板。",
         "数据块必须走 stub：组件活在宿主 bundle，独立 root 经 globalThis 取同一 Zustand 单例。",
-        "禁止从 Canvas 源码 import 工作台 widget 或 store：会撞 node_modules 围栏，并打出第二份空 store。",
+        "禁止从 Canvas 源码 import 宿主私有模块或 store：会撞 node_modules 围栏，并打出第二份空 store。",
         "页内模块如 ./model.ts 不是物料，不必登记，也因此不能默认强制 preview barrel。",
-        "工作台继续做网格实例；物料详情展示的是 Canvas 形 API，无拖拽壳、无格数 size。",
-        "插件账号块 v1 不做：它们依赖 plugin RPC，Canvas 没有 plugin activate。"
+        "物料详情展示的是 Canvas 形 API，无拖拽壳、无格数 size。",
+        "插件数据只走声明制投影与 canvasActions；添加/删除/OAuth 走 settings.open，不在画布演登录。"
       ]
     },
     "families": [
@@ -229,9 +229,9 @@
         "items": [
           "useActivityOverview 订阅 foreground-activity 等已有 store，只读，无改名/聚焦面板",
           "useSystemResources 订阅 pier-resource；挂载 acquire，卸载 release",
-          "useCostOverview 订阅 usage-data；rangeDays 为 hook 参数，不用工作台设置弹窗"
+          "useCostOverview 订阅 usage-data；刷新走 host.invoke usageData.refresh"
         ],
-        "excluded": "自定义卡、指标目录、插件账号块"
+        "excluded": "自定义卡、指标目录、领域组件、成品账号模板"
       },
       {
         "id": "file",
@@ -282,10 +282,10 @@
         "mustNotOwn": "打包第二份 store"
       },
       {
-        "layer": "工作台",
-        "owner": "workbench panel kit",
-        "owns": "网格实例与物料库对话框",
-        "mustNotOwn": "Canvas 看见面"
+        "layer": "插件通道",
+        "owner": "pluginData / canvasActions",
+        "owns": "声明制投影、画布动作、watch 租约",
+        "mustNotOwn": "领域组件、canvasWidgets、登录 Dialog"
       }
     ],
     "productFrames": [
@@ -448,8 +448,8 @@
       },
       {
         "id": "R4",
-        "text": "官方插件账号块需要 RPC",
-        "mitigation": "v1 明确不做；需要时另开 canvasBlocks 贡献点。"
+        "text": "把插件领域组件写进 pier/canvas",
+        "mitigation": "只给 pluginData / canvasActions / 原语；画布本地收窄类型并组合。"
       }
     ],
     "knownDebt": [

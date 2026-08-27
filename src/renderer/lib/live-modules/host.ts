@@ -158,12 +158,22 @@ export function useHostSnapshot(
       });
     };
     if (pluginTarget) {
+      const payload = {
+        key: pluginTarget.key,
+        pluginId: pluginTarget.pluginId,
+      };
       pending = bridge
         .invoke({
-          payload: { key: pluginTarget.key, pluginId: pluginTarget.pluginId },
+          payload,
           type: "pluginData.snapshot",
         })
         .then(apply, fail);
+      bridge
+        .invoke({
+          payload,
+          type: "pluginData.watchStart",
+        })
+        .catch(() => undefined);
       const unsub = bridge.subscribe(
         PIER_BROADCAST.PLUGIN_DATA_CHANGED,
         (event) => {
@@ -177,6 +187,12 @@ export function useHostSnapshot(
         cancelled = true;
         unsub();
         pending?.catch(() => undefined);
+        bridge
+          .invoke({
+            payload,
+            type: "pluginData.watchStop",
+          })
+          .catch(() => undefined);
       };
     }
     if (snapshotId) {

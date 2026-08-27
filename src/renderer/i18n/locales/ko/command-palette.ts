@@ -52,7 +52,6 @@ export const commandPalette = {
     listAgents: "에이전트 목록…",
     openCollaboration: "에이전트 협업…",
     startAgent: "{{agent}} 시작",
-    newWorkbench: "새 워크벤치",
     runTask: "작업 실행…",
     terminalList: "터미널 목록...",
     selectTheme: "테마 선택",

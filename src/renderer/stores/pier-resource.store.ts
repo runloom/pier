@@ -19,7 +19,7 @@ interface PierResourceState {
 
 /**
  * Pier 资源镜像 —— 拉取式轮询（acquire 计数门控），无人订阅即零开销。
- * 消费方：工作台资源物料、指标目录 core.pier.*。
+ * 消费方：Canvas 聚合 hook `useSystemResources` 与 `useHostSnapshot("resources")`。
  */
 export const usePierResourceStore = create<PierResourceState>(() => ({
   cpuHistory: [],

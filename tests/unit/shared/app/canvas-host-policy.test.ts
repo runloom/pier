@@ -61,6 +61,13 @@ describe("canvas host policy", () => {
 
   it("pluginData.snapshot joins the canvas allowlist", () => {
     expect(isCanvasHostCommandAllowed("pluginData.snapshot")).toBe(true);
+    expect(isCanvasHostCommandAllowed("pluginData.watchStart")).toBe(true);
+    expect(isCanvasHostCommandAllowed("pluginAction.invoke")).toBe(true);
+    expect(isCanvasHostCommandAllowed("canvasCommand.invoke")).toBe(true);
+    expect(isCanvasHostCommandAllowed("run.spawn")).toBe(false);
+    expect(isCanvasHostCommandAllowed("run.stop")).toBe(false);
+    expect(isCanvasHostCommandAllowed("settings.open")).toBe(true);
+    expect(isCanvasHostCommandAllowed("usageData.refresh")).toBe(true);
     expect(isCanvasHostChannelAllowed(PIER_BROADCAST.PLUGIN_DATA_CHANGED)).toBe(
       true
     );

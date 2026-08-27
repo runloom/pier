@@ -17,7 +17,6 @@ const REPO_ROOT = process.cwd();
 
 const LIST_SURFACES = [
   "src/renderer/lib/agent-runtime/index-quickpick.ts",
-  "src/renderer/panel-kits/workbench/core-widgets/activity/row.tsx",
   "src/renderer/lib/agent-runtime/collab-view-model.ts",
 ];
 

@@ -83,6 +83,13 @@ asarUnpack:
   # from a real path, not only from inside app.asar.
   - '**/node_modules/typescript-language-server/**'
   - '**/node_modules/typescript/**'
+  # Canvas Tailwind JIT loads @tailwindcss/oxide (and lightningcss via
+  # @tailwindcss/node). Native .node files must be real paths, not asar.
+  - '**/node_modules/@tailwindcss/oxide/**'
+  - '**/node_modules/@tailwindcss/oxide-*/**'
+  - '**/node_modules/@tailwindcss/node/**'
+  - '**/node_modules/lightningcss/**'
+  - '**/node_modules/lightningcss-*/**'
 
 win:
   icon: build/icon.ico

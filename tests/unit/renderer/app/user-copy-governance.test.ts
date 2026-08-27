@@ -232,19 +232,7 @@ describe("user-facing copy governance", () => {
     expect(agentContext).toContain(
       "tests/unit/renderer/app/user-copy-governance.test.ts"
     );
-    expect(agentContext).toContain("工作台「组件」");
     expect(agentContext).toContain("Canvas 发现面「物料」");
-  });
-
-  it("keeps workbench Chinese copy on 组件, not 物料", () => {
-    const workbench = readFileSync(
-      join(ROOT, "src", "renderer", "i18n", "locales", "zh-CN", "workbench.ts"),
-      "utf8"
-    );
-    const hits = findBannedHits(extractTsStringLiterals(workbench), [
-      { id: "物料", pattern: /物料/ },
-    ]);
-    expect(hits).toEqual([]);
   });
 
   it("keeps Chinese locale string values free of implementation jargon", () => {

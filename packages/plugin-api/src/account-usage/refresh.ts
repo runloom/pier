@@ -55,9 +55,8 @@ export interface RefreshAccountUsageOptions {
  * Single source of truth for manual usage refresh RPC.
  *
  * Always sends `force: true` so the main min-refetch window cannot swallow a
- * user click. Settings buttons and workbench widget actions must both call
- * this (via {@link useAccountsRefresh} or
- * {@link createAccountsWidgetRefreshAction}) — do not re-inline the RPC.
+ * user click. Settings buttons must call this (via {@link useAccountsRefresh})
+ * — do not re-inline the RPC.
  *
  * This is the manual-refresh contract only. Automatic polling still goes
  * through the usage-polling lease + main scheduler (not this function).

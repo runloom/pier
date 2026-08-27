@@ -25,7 +25,7 @@ export const CANVAS_MATERIAL_GROUPS: readonly CanvasMaterialGroup[] = [
   {
     family: "layout",
     id: "Artboard",
-    members: ["Artboard", "ArtboardStage"],
+    members: ["Artboard", "ArtboardStage", "Layer", "WorldStage"],
   },
   { family: "layout", id: "Separator", members: ["Separator"] },
   { family: "layout", id: "ScrollArea", members: ["ScrollArea", "ScrollBar"] },
@@ -224,6 +224,11 @@ export const CANVAS_MATERIAL_GROUPS: readonly CanvasMaterialGroup[] = [
   },
   { family: "control", id: "Skeleton", members: ["Skeleton"] },
   { family: "control", id: "Slider", members: ["Slider"] },
+  {
+    family: "control",
+    id: "Sortable",
+    members: ["Droppable", "Sortable"],
+  },
   { family: "control", id: "Spinner", members: ["Spinner"] },
   { family: "control", id: "StatusIcon", members: ["StatusIcon"] },
   { family: "control", id: "Switch", members: ["Switch"] },
@@ -259,6 +264,7 @@ export const CANVAS_MATERIAL_GROUPS: readonly CanvasMaterialGroup[] = [
     ],
   },
   { family: "viz", id: "DataChart", members: ["DataChart"] },
+  { family: "viz", id: "FlowGraph", members: ["FlowGraph", "layoutFlowGraph"] },
   { family: "viz", id: "Mermaid", members: ["Mermaid"] },
   { family: "data", id: "canvasFile", members: ["useCanvasFile"] },
   {
@@ -271,6 +277,20 @@ export const CANVAS_MATERIAL_GROUPS: readonly CanvasMaterialGroup[] = [
     family: "data",
     id: "systemResources",
     members: ["useSystemResources"],
+  },
+  {
+    family: "data",
+    id: "format",
+    members: [
+      "formatBytes",
+      "formatCompactCurrency",
+      "formatCompactNumber",
+      "formatCount",
+      "formatCurrency",
+      "formatDurationShort",
+      "formatPercent",
+      "formatRelativeTime",
+    ],
   },
 ];
 

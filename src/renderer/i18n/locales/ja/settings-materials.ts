@@ -76,6 +76,9 @@ export const settingsMaterials = {
     fileDirectory: "キャンバスのプロジェクト相対フォルダ。",
     fileRead:
       "隣接するテキストファイルを読みます。内容とリビジョンを返します。",
+    fileWatch: "隣接ファイルの変更を受け取ります。返す関数を呼ぶと停止します。",
+    fileInvokeCommand:
+      "このキャンバスフォルダの instance.json に宣言したコマンドを実行します。",
     fileWrite:
       "隣接ファイルに書き込みます。read のリビジョンを渡すか、ファイルが存在してはいけないときだけ null を渡します。",
     fileContents: "隣接ファイルのテキスト。",
@@ -92,6 +95,8 @@ export const settingsMaterials = {
     variant: "このコントロールの見た目。",
     label: "フレーム上の短いラベル。",
     title: "フレームと一緒に出すタイトル。",
+    artboardPreset:
+      "スマホ・タブレット・ノート・デスクトップのサイズ。指定した幅と高さが優先されます。",
     width: "幅（ピクセル）。",
     height: "高さ（ピクセル）。",
     ratio: "幅 ÷ 高さ。",
@@ -113,9 +118,23 @@ export const settingsMaterials = {
       "ネイティブ mermaid テキスト。シーケンス、状態、クラス、ER、マインドマップに使います。",
     renderNodeContent:
       "タイトルの下の表示。そのノードは contentHeight を設定する必要があります。",
+    flowGraphPositions:
+      "ノード位置。省略すると組み込みの階層レイアウトを使います。",
+    onNodePositionsChange:
+      "ノードをドラッグしたあとに呼ばれます。レイアウトを残すなら自分で保存します。",
+    onSelectNode: "ノードを選んだときに呼ばれます。",
+    flowGraphOverlay:
+      "レイアウト済みのノード位置に置く印（ゲートやキャプション）。オーバーレイはポインターを無視します。子が操作を受けるなら、その子でポインターを有効にします。",
+    sortableItems: "表示順の項目 id。",
+    onReorder: "このリスト内でドロップしたあとの新しい順。",
+    onDropItem:
+      "別のリストから来た項目がここに落ちたとき、項目 id と挿入位置を返します。リストをまたぐ移動はこのコールバックだけが呼ばれます。",
+    onDrop: "このターゲットにドロップした項目 id。",
     value: "現在の値。",
     max: "上限。",
     gap: "子要素の間隔。",
+    stackFill:
+      "キャンバスの根にするとプレビューいっぱいに広がり、読み欄の版面を外します。",
     align: "行または列での子要素の揃え。",
     wrap: "子要素が次の行へ折り返すか。",
     orientation: "横または縦。",
@@ -141,6 +160,10 @@ export const settingsMaterials = {
     srError: "直近のポーリングエラー（あれば）。",
     srSnapshot: "最新の関連プロセス リソース スナップショット。",
     srStatus: "初回のポーリング成功後は ready。",
+    fmtPercent: "0–1 の比率を 63% のようなパーセントにします。",
+    fmtBytes: "バイト数を単位つきで表示します。",
+    fmtCurrency: "ロケールに合わせて金額を表示します。",
+    fmtRelative: "タイムスタンプを相対時間にします。",
   },
   lead: {
     Frame: "最大幅つきの読み取りコンテナ",
@@ -178,6 +201,8 @@ export const settingsMaterials = {
     Select: "一覧から 1 つ選ぶ",
     Skeleton: "読み込みプレースホルダ",
     Slider: "スライダー",
+    Sortable:
+      "カードのどこをつかんでも並べ替えられ、ドラッグ中は隙間が動きます。",
     Spinner: "読み込みスピナー",
     StatusIcon: "状態アイコン",
     Switch: "スイッチ",
@@ -188,11 +213,14 @@ export const settingsMaterials = {
     Tooltip: "ホバーヒント",
     Table: "表",
     DataChart: "推移と比較",
+    FlowGraph:
+      "状態色つきのライブグラフ。ノードに補足を置け、実行中の辺は流れます。",
     Mermaid:
       "ノードからフローを描き、ネイティブ mermaid のシーケンス、状態、クラス、ER、マインドマップも使えます。",
     canvasFile: "キャンバス隣のファイル用サンドボックス。競合も含みます",
     activityOverview: "誰が動き、誰に助けが必要か、ひと目でわかる",
-    costOverview: "プラグイン横断のトークンコスト集計。手動更新つき",
+    costOverview: "プラグイン横断のトークンコスト集計",
     systemResources: "関連プロセスの CPU 推移と最新スナップショット",
+    format: "ロケールに合わせた数値・金額・サイズ・相対時間",
   },
 } as const;

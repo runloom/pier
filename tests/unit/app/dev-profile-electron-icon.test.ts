@@ -15,8 +15,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   applyPierDevAppIcon,
   brandPierDevHelpers,
+  MAC_DEV_ELECTRON_SIGN_REVISION,
   macDevElectronRuntimeIsCurrent,
   macDevElectronRuntimeStamp,
+  signMacDevElectronRuntime,
 } from "../../../scripts/dev-profile.mjs";
 
 const onDarwin = process.platform === "darwin";
@@ -380,6 +382,7 @@ describe("PierDev.app bundle icon", () => {
     });
     expect(failed).not.toHaveProperty("iconRevision");
     expect(failed).not.toHaveProperty("iconHash");
+    expect(failed.signRevision).toBe(MAC_DEV_ELECTRON_SIGN_REVISION);
     expect(macDevElectronRuntimeIsCurrent(failed, expected)).toBe(false);
     expect(macDevElectronRuntimeIsCurrent(null, expected)).toBe(false);
 
@@ -388,6 +391,13 @@ describe("PierDev.app bundle icon", () => {
       iconApplied: true,
     });
     expect(macDevElectronRuntimeIsCurrent(applied, expected)).toBe(true);
+    expect(applied.signRevision).toBe(MAC_DEV_ELECTRON_SIGN_REVISION);
+    expect(
+      macDevElectronRuntimeIsCurrent(
+        { ...applied, signRevision: MAC_DEV_ELECTRON_SIGN_REVISION - 1 },
+        expected
+      )
+    ).toBe(false);
     expect(
       macDevElectronRuntimeIsCurrent(applied, {
         ...expected,
@@ -413,6 +423,11 @@ describe("PierDev.app bundle icon", () => {
     expect(source).toContain("CFBundleIconName");
     expect(source).toContain("Assets.car");
     expect(source).toContain("brandPierDevHelpers(");
+    expect(source).toContain("signMacDevElectronRuntime(targetApp)");
+    expect(source).toContain("disable-library-validation");
+    expect(source).toContain("MAC_DEV_ELECTRON_SIGN_REVISION");
+    expect(source).toContain('"runtime"');
+    expect(source).not.toContain('"--deep"');
     expect(source).toContain("launch-env.json");
     expect(source).toContain('typeof iconApplied === "string"');
     expect(source).toContain("MAC_TAHOE_ICON_NAME");
@@ -421,4 +436,71 @@ describe("PierDev.app bundle icon", () => {
     expect(source).toContain("platedFillSvg");
     expect(source).toContain("if (iconApplied)");
   });
+});
+
+describe("PierDev helper signing", () => {
+  const hasClang = hasCommand("clang");
+
+  it.skipIf(!(onDarwin && hasClang))(
+    "adhoc-signs GPU helpers with library validation disabled",
+    () => {
+      const root = mkdtempSync(join(tmpdir(), "pier-dev-sign-"));
+      const targetApp = join(root, "PierDev.app");
+      const gpuHelper = join(
+        targetApp,
+        "Contents",
+        "Frameworks",
+        "PierDev Helper (GPU).app"
+      );
+      const writeMachOBundle = (
+        appDir: string,
+        execName: string,
+        id: string
+      ) => {
+        const mac = join(appDir, "Contents", "MacOS");
+        mkdirSync(mac, { recursive: true });
+        writeFileSync(
+          join(appDir, "Contents", "Info.plist"),
+          `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleExecutable</key><string>${execName}</string>
+  <key>CFBundleIdentifier</key><string>${id}</string>
+</dict></plist>
+`
+        );
+        const src = join(root, `${execName.replaceAll(" ", "-")}.c`);
+        writeFileSync(src, "int main(void) { return 0; }\n");
+        execFileSync("clang", ["-o", join(mac, execName), src], {
+          stdio: "pipe",
+        });
+      };
+      try {
+        writeMachOBundle(targetApp, "PierDev", "io.pier.dev-electron");
+        writeMachOBundle(
+          gpuHelper,
+          "PierDev Helper (GPU)",
+          "io.pier.dev-electron.helper.GPU"
+        );
+        signMacDevElectronRuntime(targetApp);
+        const dumped = join(root, "gpu.entitlements");
+        const gpuExec = join(
+          gpuHelper,
+          "Contents",
+          "MacOS",
+          "PierDev Helper (GPU)"
+        );
+        execFileSync(
+          "codesign",
+          ["-d", "--entitlements", dumped, "--xml", gpuExec],
+          { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+        );
+        expect(readFileSync(dumped, "utf8")).toContain(
+          "disable-library-validation"
+        );
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    }
+  );
 });

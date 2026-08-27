@@ -1,10 +1,12 @@
 import type { PierCommandErrorCode } from "@shared/contracts/commands.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
+import i18next from "i18next";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import {
   rejectTerminalLaunch,
   waitForTerminalLaunch,
 } from "@/lib/workspace/terminal-launch-confirmation.ts";
+import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { requestTerminalRelaunch } from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -252,6 +254,33 @@ async function runWorkspaceRendererCommandAsync(
 ): Promise<void> {
   try {
     switch (envelope.command.type) {
+      case "dialog.confirm": {
+        // v1: canvasCommand.invoke is the only caller. Copy stays
+        // canvas-scoped so we do not grow a generic confirm envelope.
+        const commandText = envelope.command.command;
+        const confirmed = await showAppConfirm({
+          body: i18next.t("canvas.command.confirmBody", {
+            command: commandText,
+            defaultValue: "This canvas wants to run:\n\n{{command}}",
+          }),
+          cancelLabel: i18next.t("canvas.command.cancelLabel", {
+            defaultValue: "Cancel",
+          }),
+          confirmLabel: i18next.t("canvas.command.confirmLabel", {
+            defaultValue: "Run",
+          }),
+          intent: envelope.command.intent,
+          title: i18next.t("canvas.command.confirmTitle", {
+            defaultValue: "Run this command?",
+          }),
+        });
+        window.pier.rendererCommand.resolve({
+          data: confirmed,
+          ok: true,
+          requestId: envelope.requestId,
+        });
+        return;
+      }
       case "panel.list": {
         window.pier.rendererCommand.resolve({
           data: panelSnapshots(),

@@ -39,6 +39,9 @@ const FORBIDDEN_ADOPTED_PHRASES = [
   "kit.canvas.tsx",
   "在面板中打开",
   "Kit 面板",
+  "workbenchWidgets",
+  "canvasWidgets",
+  "AccountsCard",
 ] as const;
 
 const FAMILY_IDS = [

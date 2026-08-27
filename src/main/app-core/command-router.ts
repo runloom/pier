@@ -10,6 +10,8 @@ import {
 } from "@shared/contracts/panel.ts";
 import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { applyAgentStatusHooksPreference } from "../services/agents/integrations/registry.ts";
+import { requestOpenSettings } from "../settings-menu.ts";
+import { windowManager } from "../windows/manager.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import { mapCommandError } from "./command-error-mapping.ts";
 import type { CommandExecutionContext } from "./command-execution-context.ts";
@@ -26,6 +28,7 @@ import { executeAgentAssetsCommand } from "./commands/agent-assets.ts";
 import { executeAiCommand } from "./commands/ai.ts";
 import { executeAppCliCommand } from "./commands/app-cli.ts";
 import { executeAppSnapshotCommand } from "./commands/app-snapshot.ts";
+import { executeCanvasCommand } from "./commands/canvas-command.ts";
 import { executeCommentsCommand } from "./commands/comments.ts";
 import { executeEnvironmentCommand } from "./commands/environment.ts";
 import { executeFileCommand } from "./commands/file.ts";
@@ -259,6 +262,20 @@ async function executeAppStateCommand(
         requestId,
         await services.terminalStatusBarPrefs.applyOverrides(command.patches)
       );
+    case "settings.open": {
+      const targeted = context.runtimeWindowId
+        ? windowManager.get(context.runtimeWindowId)
+        : undefined;
+      const win = targeted ?? windowManager.getFocused();
+      requestOpenSettings(
+        win,
+        command.section ? { section: command.section } : undefined
+      );
+      return success(requestId, null);
+    }
+    case "usageData.refresh":
+      await services.usageData.refreshAll();
+      return success(requestId, null);
     default:
       return null;
   }
@@ -358,6 +375,8 @@ async function executeCommandByDomain(
       ),
     (cmd: PierCommand) => executePierHomeCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeLiveModulesCommand(requestId, cmd, services),
+    (cmd: PierCommand) =>
+      executeCanvasCommand(requestId, cmd, services, context),
     (cmd: PierCommand) => executeAgentAssetsCommand(requestId, cmd, services),
     (cmd: PierCommand) =>
       executeWorktreeCommand(

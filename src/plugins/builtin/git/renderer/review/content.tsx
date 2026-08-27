@@ -89,7 +89,6 @@ function ReviewSurfaceComponent({
       navigationRequest,
     });
   const appearance = useReviewAppearance(context, entries.length > 0);
-  // Same factory as changes-panel tree model so collision displayPath order matches sidebar / CodeView / demand / comment nav.
   const collidingFileLabel = useMemo(
     () => createReviewCollidingFileLabel(context, appearance.locale),
     [appearance.locale, context]
@@ -470,6 +469,7 @@ function ReviewSurfaceComponent({
         retryLatestItemUpdates={retryLatestItemUpdates}
         reviewCommentsById={comments.reviewCommentsById}
         scope={scope}
+        selectedSectionKey={selectedSectionKey}
         setDiffHandle={setDiffHandle}
         setSelectedTreeTarget={setSelectedTreeTarget}
         setSidebarCollapsed={setSidebarCollapsed}

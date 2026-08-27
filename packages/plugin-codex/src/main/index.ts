@@ -50,8 +50,10 @@ export const plugin: MainPluginModule = {
       ...(codexContext.legacyCodexAccounts
         ? { legacyMigration: codexContext.legacyCodexAccounts }
         : {}),
-      onChanged: (snapshot) =>
-        context.events.emit("accounts.changed", snapshot),
+      onChanged: (snapshot) => {
+        context.events.emit("accounts.changed", snapshot);
+        context.events.emit("projection.accounts", snapshot);
+      },
     });
     await service.init();
 

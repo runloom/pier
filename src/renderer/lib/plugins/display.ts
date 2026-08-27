@@ -6,7 +6,6 @@ import type {
   PluginRegistryEntry,
   PluginTerminalStatusItemContribution,
 } from "@shared/contracts/plugin.ts";
-import type { PluginWorkbenchWidgetContribution } from "@shared/contracts/workbench.ts";
 
 export interface PluginDisplayText {
   description?: string;
@@ -220,28 +219,6 @@ export function resolvePluginTerminalStatusItemDisplay(
         locale,
         (messages) => messages.terminalStatusItems?.[item.id]?.title
       ) ?? item.title,
-    ...(description ? { description } : {}),
-  };
-}
-
-export function resolvePluginWorkbenchWidgetDisplay(
-  manifest: PluginManifest,
-  widget: PluginWorkbenchWidgetContribution,
-  locale: string
-): PluginContributionDisplayText {
-  const description =
-    resolveFromLocales(
-      manifest,
-      locale,
-      (messages) => messages.workbenchWidgets?.[widget.id]?.description
-    ) ?? widget.description;
-  return {
-    title:
-      resolveFromLocales(
-        manifest,
-        locale,
-        (messages) => messages.workbenchWidgets?.[widget.id]?.title
-      ) ?? widget.title,
     ...(description ? { description } : {}),
   };
 }

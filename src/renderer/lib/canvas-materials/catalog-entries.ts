@@ -55,7 +55,14 @@ export const CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> = {
     )
   ),
   Artboard: entry(
-    `<Artboard label="K1" title="List" width={1280}>…</Artboard>`,
+    [
+      "<WorldStage>",
+      "  <Layer x={40} y={24}>",
+      `    <Artboard preset="phone" title="Home">…</Artboard>`,
+      "  </Layer>",
+      "</WorldStage>",
+    ].join("\n"),
+    p("preset", "desktop | laptop | phone | tablet", "—", "artboardPreset"),
     p("label", "string", "—", "label"),
     p("title", "string", "—", "title"),
     p("width", "number", "1280", "width"),
@@ -145,6 +152,36 @@ export const CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> = {
     "<Field><FieldLabel>…</FieldLabel><Input /></Field>",
     p("orientation", "vertical | horizontal", "vertical", "orientation")
   ),
+  FlowGraph: entry(
+    [
+      "<FlowGraph",
+      `  aria-label="…"`,
+      `  presentation="plain"`,
+      "  nodes={[{ id, label, status, meta, badge }]}",
+      "  edges={[{ source, target, label }]}",
+      "  renderOverlay={({ positions }) => …}",
+      "/>",
+    ].join("\n"),
+    p("nodes", "FlowGraphNode[]", "—", "nodes"),
+    p("edges", "FlowGraphEdge[]", "—", "edges"),
+    p(
+      "direction",
+      "left-to-right | top-to-bottom",
+      "left-to-right",
+      "direction"
+    ),
+    p("positions", "Record<string, { x, y }>", "—", "flowGraphPositions"),
+    p(
+      "onNodePositionsChange",
+      "(positions) => void",
+      "—",
+      "onNodePositionsChange"
+    ),
+    p("onSelectNode", "(id) => void", "—", "onSelectNode"),
+    p("renderNodeContent", "(node) => ReactNode", "—", "renderNodeContent"),
+    p("renderOverlay", "(layout) => ReactNode", "—", "flowGraphOverlay"),
+    p("expandable", "boolean", "true", "expandable")
+  ),
   Frame: entry(
     "<Frame maxWidth={720}>…</Frame>",
     p("maxWidth", "number", "—", "maxWidth")
@@ -232,10 +269,38 @@ export const CATALOG_ENTRIES: Record<string, CanvasMaterialCatalogEntry> = {
     p("max", "number", "100", "max"),
     p("step", "number", "1", "step")
   ),
+  Sortable: entry(
+    [
+      `<Droppable id="todo">`,
+      "  <Sortable",
+      "    items={ids}",
+      "    onDropItem={(id, index) => …}",
+      "    onReorder={onReorder}",
+      "  >",
+      "    {(id, item) => (",
+      "      <Item>",
+      "        {item.handle}",
+      "        <ItemTitle>{id}</ItemTitle>",
+      "      </Item>",
+      "    )}",
+      "  </Sortable>",
+      "</Droppable>",
+    ].join("\n"),
+    p("items", "string[]", "—", "sortableItems"),
+    p("onReorder", "(items: string[]) => void", "—", "onReorder"),
+    p(
+      "onDropItem",
+      "(itemId: string, index: number) => void",
+      "—",
+      "onDropItem"
+    ),
+    p("onDrop", "(itemId: string) => void", "—", "onDrop")
+  ),
   Spinner: entry("<Spinner />", CLASS_NAME_PROP),
   Stack: entry(
-    "<Stack gap={12}>…</Stack>",
-    p("gap", "string | number", "—", "gap")
+    "<Stack fill gap={12}>…</Stack>",
+    p("gap", "string | number", "—", "gap"),
+    p("fill", "boolean", "false", "stackFill")
   ),
   StatusIcon: entry(
     `<StatusIcon kind="success" />`,

@@ -40,7 +40,7 @@ describe("context-menu surface merge with real panel actions", () => {
     useWorkspaceStore.getState().setApi({
       activePanel: {
         id: "p1",
-        view: { contentComponent: "workbench" },
+        view: { contentComponent: "welcome" },
       },
       groups: [
         { id: "g1", panels: [{ id: "p1" }] },
@@ -49,7 +49,7 @@ describe("context-menu surface merge with real panel actions", () => {
       panels: [
         {
           id: "p1",
-          view: { contentComponent: "workbench" },
+          view: { contentComponent: "welcome" },
         },
       ],
     } as never);
@@ -77,13 +77,13 @@ describe("context-menu surface merge with real panel actions", () => {
     useWorkspaceStore.getState().setApi({
       activePanel: {
         id: "p1",
-        view: { contentComponent: "workbench" },
+        view: { contentComponent: "welcome" },
       },
       groups: [{ id: "g1", panels: [{ id: "p1" }] }],
       panels: [
         {
           id: "p1",
-          view: { contentComponent: "workbench" },
+          view: { contentComponent: "welcome" },
         },
       ],
     } as never);

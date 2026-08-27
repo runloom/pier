@@ -2,7 +2,6 @@ import { z } from "zod";
 import { pierCapabilitySchema } from "../permissions.ts";
 import { pluginLanguageModeContributionSchema } from "../plugin/language-mode.ts";
 import {
-  normalizeLegacyWorkbenchContributionKey,
   pluginCommandContributionSchema,
   pluginConfigurationSchema,
   pluginLanguageServerContributionSchema,
@@ -14,7 +13,6 @@ import {
   pluginSettingsPageContributionSchema,
   pluginTerminalStatusItemContributionSchema,
 } from "../plugin.ts";
-import { pluginWorkbenchWidgetContributionSchema } from "../workbench.ts";
 
 /**
  * Managed plugin package manifest (`plugin.json` shipped inside `.tgz`).
@@ -103,78 +101,72 @@ export type ManagedPluginSandboxAudit = z.infer<
   typeof managedPluginSandboxAuditSchema
 >;
 
-export const managedPluginPackageManifestSchema = z.preprocess(
-  normalizeLegacyWorkbenchContributionKey,
-  z
-    .object({
-      apiVersion: z.literal(1),
-      commands: z.array(pluginCommandContributionSchema).default([]),
-      configuration: pluginConfigurationSchema.optional(),
-      dataSchemas: z
-        .record(z.string(), managedPluginDataSchemaSchema)
-        .optional(),
-      description: z.string().min(1).optional(),
-      engines: z.object({ pier: z.string().min(1) }),
-      homepage: z.string().min(1).optional(),
-      id: z.string().min(1),
-      locales: z
-        .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
-        .optional(),
-      localization: pluginLocalizationSchema.optional(),
-      main: relativePosixPathSchema,
-      workbenchWidgets: z
-        .array(pluginWorkbenchWidgetContributionSchema)
-        .default([]),
-      /**
-       * 可投影给 canvas 的只读数据键（设计 §4.1）。未声明键的
-       * pluginData.snapshot 一律拒绝——纪律边界与 panels 同链。
-       */
-      dataProjections: z.array(z.string().min(1)).default([]),
-      languageServers: z
-        .array(pluginLanguageServerContributionSchema)
-        .optional(),
-      languageModes: z.array(pluginLanguageModeContributionSchema).optional(),
-      name: z.string().min(1),
-      panels: z.array(pluginPanelContributionSchema).default([]),
-      permissions: z.array(pierCapabilitySchema).default([]),
-      publisher: z.string().min(1).optional(),
-      settingsPages: z
-        .array(pluginSettingsPageContributionSchema)
-        .max(1)
-        .default([]),
-      renderer: relativePosixPathSchema,
-      repository: z.string().min(1).optional(),
-      runtime: pluginRuntimePolicySchema.optional(),
-      terminalStatusItems: z
-        .array(pluginTerminalStatusItemContributionSchema)
-        .default([]),
-      version: z.string().min(1),
-    })
-    .superRefine((manifest, ctx) => {
-      if (
-        (manifest.languageServers?.length ?? 0) > 0 &&
-        !manifest.permissions.includes("lsp:provide")
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          message:
-            'languageServers require permissions to include "lsp:provide"',
-          path: ["languageServers"],
-        });
-      }
-      if (
-        (manifest.languageModes?.length ?? 0) > 0 &&
-        !manifest.permissions.includes("languageMode:provide")
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          message:
-            'languageModes require permissions to include "languageMode:provide"',
-          path: ["languageModes"],
-        });
-      }
-    })
-);
+export const managedPluginPackageManifestSchema = z
+  .object({
+    apiVersion: z.literal(1),
+    commands: z.array(pluginCommandContributionSchema).default([]),
+    configuration: pluginConfigurationSchema.optional(),
+    dataSchemas: z.record(z.string(), managedPluginDataSchemaSchema).optional(),
+    description: z.string().min(1).optional(),
+    engines: z.object({ pier: z.string().min(1) }),
+    homepage: z.string().min(1).optional(),
+    id: z.string().min(1),
+    locales: z
+      .record(pluginLocaleCodeSchema, pluginLocaleMessagesSchema)
+      .optional(),
+    localization: pluginLocalizationSchema.optional(),
+    main: relativePosixPathSchema,
+    /**
+     * 可投影给 canvas 的只读数据键（设计 §4.1）。未声明键的
+     * pluginData.snapshot 一律拒绝——纪律边界与 panels 同链。
+     */
+    dataProjections: z.array(z.string().min(1)).default([]),
+    /**
+     * Canvas-invokable plugin RPC method names (design §4.2).
+     * `pluginAction.invoke` rejects keys not listed here.
+     */
+    canvasActions: z.array(z.string().min(1)).default([]),
+    languageServers: z.array(pluginLanguageServerContributionSchema).optional(),
+    languageModes: z.array(pluginLanguageModeContributionSchema).optional(),
+    name: z.string().min(1),
+    panels: z.array(pluginPanelContributionSchema).default([]),
+    permissions: z.array(pierCapabilitySchema).default([]),
+    publisher: z.string().min(1).optional(),
+    settingsPages: z
+      .array(pluginSettingsPageContributionSchema)
+      .max(1)
+      .default([]),
+    renderer: relativePosixPathSchema,
+    repository: z.string().min(1).optional(),
+    runtime: pluginRuntimePolicySchema.optional(),
+    terminalStatusItems: z
+      .array(pluginTerminalStatusItemContributionSchema)
+      .default([]),
+    version: z.string().min(1),
+  })
+  .superRefine((manifest, ctx) => {
+    if (
+      (manifest.languageServers?.length ?? 0) > 0 &&
+      !manifest.permissions.includes("lsp:provide")
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: 'languageServers require permissions to include "lsp:provide"',
+        path: ["languageServers"],
+      });
+    }
+    if (
+      (manifest.languageModes?.length ?? 0) > 0 &&
+      !manifest.permissions.includes("languageMode:provide")
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          'languageModes require permissions to include "languageMode:provide"',
+        path: ["languageModes"],
+      });
+    }
+  });
 export type ManagedPluginPackageManifest = z.infer<
   typeof managedPluginPackageManifestSchema
 >;
@@ -346,7 +338,6 @@ export const managedPluginCatalogRowSchema = z.object({
   contributionCounts: z
     .object({
       commands: z.number().int().nonnegative(),
-      workbenchWidgets: z.number().int().nonnegative(),
       panels: z.number().int().nonnegative(),
       terminalStatusItems: z.number().int().nonnegative(),
     })

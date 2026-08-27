@@ -12,6 +12,7 @@ function entry(partial: {
     group: "unstaged" | "staged" | "conflict" | "committed";
     sectionKey: string;
     status?: "modified" | "added" | "conflicted";
+    xy?: "AA" | "AU" | "DD" | "DU" | "UA" | "UD" | "UU";
   }>;
 }) {
   return {
@@ -25,6 +26,7 @@ function entry(partial: {
       status: s.status ?? "modified",
       targetPath: partial.path,
       oldPath: null,
+      ...(s.xy === undefined ? {} : { xy: s.xy }),
     })),
   };
 }
@@ -150,6 +152,89 @@ describe("gitReviewTreeModel grouped", () => {
     expect(model.visibleGroups).toEqual(["conflict", "staged", "unstaged"]);
     expect(sorted[1]?.path.endsWith("已暂存更改")).toBe(true);
     expect(sorted[2]?.path.endsWith("更改")).toBe(true);
+  });
+
+  it("maps conflict XY to tree letters instead of a blanket M", () => {
+    const model = gitReviewTreeModel(
+      [
+        entry({
+          path: "gone.ts",
+          slots: [
+            {
+              group: "conflict",
+              sectionKey: "sec:c:gone",
+              status: "conflicted",
+              xy: "DU",
+            },
+          ],
+        }),
+        entry({
+          path: "kept.ts",
+          slots: [
+            {
+              group: "conflict",
+              sectionKey: "sec:c:kept",
+              status: "conflicted",
+              xy: "UD",
+            },
+          ],
+        }),
+        entry({
+          path: "both.ts",
+          slots: [
+            {
+              group: "conflict",
+              sectionKey: "sec:c:both",
+              status: "conflicted",
+              xy: "UU",
+            },
+          ],
+        }),
+        entry({
+          path: "added.ts",
+          slots: [
+            {
+              group: "conflict",
+              sectionKey: "sec:c:added",
+              status: "conflicted",
+              xy: "UA",
+            },
+          ],
+        }),
+      ],
+      (name) => name,
+      labels
+    );
+    const fileStatus = (name: string) =>
+      model.items.find((item) => item.path.endsWith(`/${name}`))?.gitStatus;
+    expect(fileStatus("gone.ts")).toBe("deleted");
+    expect(fileStatus("kept.ts")).toBe("modified");
+    expect(fileStatus("both.ts")).toBe("modified");
+    expect(fileStatus("added.ts")).toBe("added");
+  });
+
+  it("keeps deleted letter on folders of only-deleted conflict files", () => {
+    const model = gitReviewTreeModel(
+      [
+        entry({
+          path: "src/gone.ts",
+          slots: [
+            {
+              group: "conflict",
+              sectionKey: "sec:c:gone",
+              status: "conflicted",
+              xy: "DU",
+            },
+          ],
+        }),
+      ],
+      (name) => name,
+      labels
+    );
+    const dir = model.items.find(
+      (item) => item.kind === "directory" && item.path.endsWith("/src")
+    );
+    expect(dir?.gitStatus).toBe("deleted");
   });
 
   it("只创建实际包含内容的未提交分组根", () => {

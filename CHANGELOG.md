@@ -4,6 +4,19 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Canvas 用通用插件通道组合。** 画布经 `pluginData` 投影、`pluginAction.invoke`、`settings.open` 与宿主聚合 hook 自拼界面；不提供官方账号组件或第二套 widget 贡献点。
+- **Git Review Z2 批摘录主路径。** content 正文默认走 `git.getReviewExcerptBatch`
+  （单世代、16–32 文件一批）；`getReviewFileDocument` 只用于选中 boost、失败重试
+  和 discard 令牌。金标准 G5 闭合，不再逐文件 IPC 取号。
+- **评论导航图标。** git 审查、Markdown、Canvas 共用的底部评论条改为
+  `MessageCircle`，与正文里的评论标记一致。
+
+### Removed
+
+- **工作台面板。** 去掉新建工作台命令、旧 layout 中的工作台 / dashboard / mission-control 标签，以及插件 `workbenchWidgets` 贡献点。账号添加、删除、OAuth 仍在设置页。
+
 ### Fixed
 
 - **终端 resize / 长会话闪烁。** `fitToSize` 在像素未变时跳过刷新，并把
@@ -21,17 +34,6 @@
   邻项仍 8s。
 - **Git Review 目录树跳转贴顶。** 文件头高度取整到 CSS 像素，分隔线改画在
   文件底边内侧，点树 align:start 不再空出 1px。
-
-### Changed
-
-- **Git Review Z2 批摘录主路径。** content 正文默认走 `git.getReviewExcerptBatch`
-  （单世代、16–32 文件一批）；`getReviewFileDocument` 只用于选中 boost、失败重试
-  和 discard 令牌。金标准 G5 闭合，不再逐文件 IPC 取号。
-- **评论导航图标。** git 审查、Markdown、Canvas 共用的底部评论条改为
-  `MessageCircle`，与正文里的评论标记一致。
-
-### Fixed
-
 - **Git Review 评论导航定位。** 在目录树点到其他文件后再点 n/N，会走树导航 +
   正文就绪后再滚到评论行，不再用一次估高滚动打偏、连点才准。行级定位在
   paint 前完成，避免先闪文件头再跳到评论。

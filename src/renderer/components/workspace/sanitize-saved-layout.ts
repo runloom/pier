@@ -24,36 +24,11 @@ interface SerializedFloatingGroup {
   data?: SerializedGroupState;
 }
 
-const WORKBENCH_COMPONENT = "workbench";
-const LEGACY_WORKBENCH_COMPONENTS = new Set(["dashboard", "mission-control"]);
-const LEGACY_WORKBENCH_TITLES = new Set(["Dashboard", "Mission Control"]);
-
-function migrateWorkbenchPanelState(state: unknown): {
-  migrated: boolean;
-  state: unknown;
-} {
-  if (typeof state !== "object" || state === null) {
-    return { migrated: false, state };
-  }
-  const record = state as Record<string, unknown>;
-  if (
-    typeof record.contentComponent !== "string" ||
-    !LEGACY_WORKBENCH_COMPONENTS.has(record.contentComponent)
-  ) {
-    return { migrated: false, state };
-  }
-  return {
-    migrated: true,
-    state: {
-      ...record,
-      contentComponent: WORKBENCH_COMPONENT,
-      ...(typeof record.title === "string" &&
-      LEGACY_WORKBENCH_TITLES.has(record.title)
-        ? { title: "Workbench" }
-        : {}),
-    },
-  };
-}
+const DROPPED_LAYOUT_COMPONENTS = new Set([
+  "dashboard",
+  "mission-control",
+  "workbench",
+]);
 
 function isLeaf(node: unknown): node is SerializedGridLeaf {
   return (
@@ -173,9 +148,9 @@ function pruneFloatingGroups(
 }
 
 /**
- * 读取边界先把历史工作台 component/title 单向迁移为当前值，再剔除 saved layout
- * 中引用了未注册 dockview component 的 panel + grid/floating 引用。用于更名和
- * 禁用插件后重启的边界：旧布局不会继续写出旧工作台值；旧布局中的 plugin panel
+ * 读取边界剔除 saved layout 中引用了未注册 dockview component 的 panel +
+ * grid/floating 引用，并把历史 dashboard / mission-control / workbench 一律
+ * 当 unknown 剪除。用于更名和禁用插件后重启的边界：旧布局中的 plugin panel
  * 若已 unregister，也只剪掉无效引用，避免 fromJSON 失败后把其它正常 panel 一并丢失。
  *
  * 注意 dockview 序列化里 grid leaf 的 data.id 是"组 id"(顺序号),data.views 才是
@@ -208,20 +183,17 @@ export function sanitizeSavedLayout(
   const keepPanelIds = new Set<string>();
   const sanitizedPanels: Record<string, unknown> = {};
   let panelsPruned = false;
-  let panelsMigrated = false;
   for (const [panelId, state] of Object.entries(
     panels as Record<string, unknown>
   )) {
-    const migrated = migrateWorkbenchPanelState(state);
-    panelsMigrated ||= migrated.migrated;
-    const contentComponent = (
-      migrated.state as { contentComponent?: unknown } | null
-    )?.contentComponent;
+    const contentComponent = (state as { contentComponent?: unknown } | null)
+      ?.contentComponent;
     if (
       typeof contentComponent === "string" &&
+      !DROPPED_LAYOUT_COMPONENTS.has(contentComponent) &&
       knownComponents.has(contentComponent)
     ) {
-      sanitizedPanels[panelId] = migrated.state;
+      sanitizedPanels[panelId] = state;
       keepPanelIds.add(panelId);
     } else {
       panelsPruned = true;
@@ -246,7 +218,7 @@ export function sanitizeSavedLayout(
   }
 
   // 无 panel 被剪 → 透传原 layout,保留 maximizedNode / activeGroup 等用户状态。
-  if (!(panelsPruned || panelsMigrated)) {
+  if (!panelsPruned) {
     return saved as SerializedDockview;
   }
 

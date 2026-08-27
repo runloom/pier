@@ -138,19 +138,12 @@ describe("canvas hooks", () => {
     expect(release).toHaveBeenCalledTimes(1);
   });
 
-  it("useCostOverview exposes refresh through the store bridge", async () => {
-    const windowWithPier = window as { pier?: unknown };
-    const originalPier = windowWithPier.pier;
-    const refreshAll = vi.fn().mockResolvedValue(undefined);
-    windowWithPier.pier = {
-      usageData: { refreshAll },
-    };
-    try {
-      const { result } = renderHook(() => useCostOverview());
-      await result.current.refresh();
-      expect(refreshAll).toHaveBeenCalledTimes(1);
-    } finally {
-      windowWithPier.pier = originalPier;
-    }
+  it("useCostOverview is read-only and has no refresh method", () => {
+    const { result } = renderHook(() => useCostOverview());
+    expect(result.current).toEqual({
+      snapshot: null,
+      status: "loading",
+    });
+    expect(result.current).not.toHaveProperty("refresh");
   });
 });

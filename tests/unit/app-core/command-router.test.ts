@@ -186,7 +186,7 @@ function pluginEntry(
     manifest: {
       apiVersion: 1,
       commands,
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
@@ -1182,6 +1182,7 @@ describe("createCommandRouter", () => {
       cwd: "/tmp/pier",
       explicitEnv: { FROM_EXPLICIT: "explicit", PATH: "/explicit/bin" },
       profileEnv: { FROM_PROFILE: "profile", PATH: "/profile/bin" },
+      projectRootPath: "/tmp/pier",
       source: "terminal",
     });
     expect(terminalLaunches).toEqual([
@@ -1505,6 +1506,7 @@ describe("createCommandRouter", () => {
 
     expect(resolveEnvironment).toHaveBeenCalledWith({
       cwd: projectRootPath,
+      projectRootPath,
       source: "task",
     });
 

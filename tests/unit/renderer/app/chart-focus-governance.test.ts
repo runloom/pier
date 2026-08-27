@@ -37,7 +37,7 @@ function walkFiles(dir: string, out: string[] = []): string[] {
  * - 鼠标点中不画 UA outline（globals :focus:not(:focus-visible)）
  * - 真正可操作控件用 focus-visible ring（ring-ring/30~50）
  * - 展示型图 / 状态徽标 / 节点图不进 Tab 序
- * - 业务高亮 ≠ focus（workbench ring-ring，不用 ring-primary）
+ * - 业务高亮 ≠ focus（ring-ring，不用 ring-primary）
  */
 describe("focus governance", () => {
   it("documents focus and tab-order rules in AGENTS.md", () => {
@@ -100,15 +100,18 @@ describe("focus governance", () => {
     expect(graph).not.toContain('colorMode="system"');
   });
 
-  it("uses light ring tokens for workbench resize and add-highlight", () => {
-    const panel = source("src/renderer/panel-kits/workbench/panel.tsx");
-    expect(panel).toContain(
-      "resizing_[data-slot=card]]:ring-1 [&_.react-grid-item.resizing_[data-slot=card]]:ring-ring/40"
+  it("gates FlowGraph keyboard focus on interactive contracts only", () => {
+    const graph = source("packages/ui/src/flow-graph/graph.tsx");
+    const node = source("packages/ui/src/flow-graph/node.tsx");
+    const shell = source("packages/ui/src/flow-graph/shell.tsx");
+    expect(graph).toContain(
+      "const keyboardSelectable = onSelectNode !== undefined"
     );
-    expect(panel).toContain(
-      "data-highlighted=true]_[data-slot=card]]:ring-1 [&_[data-highlighted=true]_[data-slot=card]]:ring-ring/40"
-    );
-    expect(panel).not.toContain("ring-primary/50");
+    expect(node).toContain('type="button"');
+    expect(node).toContain('role="img"');
+    expect(graph).not.toContain("@xyflow/react");
+    expect(shell).toContain('role="application"');
+    expect(shell).toContain('role="img"');
   });
 
   it("allows only intentional product tabIndex={0} stops", () => {
@@ -118,8 +121,8 @@ describe("focus governance", () => {
       "packages/ui/src/image-preview/world-canvas.tsx",
       "packages/ui/src/diff-view/image-diff/compare.tsx",
       "src/plugins/builtin/files/renderer/markdown/table/table-resize.tsx", // table column resize separator (arrow-key adjustable, mirrors image diff slider)
+      "src/plugins/builtin/files/renderer/preview/canvas.tsx", // canvas world stage (zoom/pan keyboard contract; wheel zoom is focus-gated)
       "src/plugins/builtin/files/renderer/preview/image.tsx",
-      "src/renderer/panel-kits/workbench/panel.tsx",
       "src/renderer/components/workspace/panel-tab-header.tsx",
       "src/renderer/pages/settings/components/project/section-list.tsx",
     ]);

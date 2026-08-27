@@ -16,8 +16,9 @@ import {
  *
  * typecheck/vitest lanes resolve full node_modules, so they happily pass on
  * bare imports (e.g. zod) that the compile fence denies for canvas source
- * (fence allows only react/react-dom/pier/canvas/pier/host). This test is the
- * lane that matches what the host actually does when opening a canvas.
+ * (fence allows react/react-dom/pier/canvas/pier/host plus the per-root
+ * `allowedBarePackages` list — project roots seed `framer-motion`). This test
+ * is the lane that matches what the host actually does when opening a canvas.
  */
 
 const CANVAS_ROOT = join(process.cwd(), ".pier", "canvases");

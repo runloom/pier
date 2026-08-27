@@ -1,4 +1,5 @@
 import {
+  type CSSProperties,
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
   useCallback,
@@ -8,16 +9,137 @@ import {
   useState,
 } from "react";
 import { cn } from "../utils.ts";
-import { measureContainScale } from "./canvas-math.ts";
+import {
+  measureContainScale,
+  measureWorldContentBounds,
+  type WorldCamera,
+} from "./canvas-math.ts";
 import {
   type ImagePreviewCanvasLabels,
   ImagePreviewControls,
 } from "./controls.tsx";
 import { MediaFullscreenButton } from "./media-fullscreen-button.tsx";
-import { useZoomPanViewport } from "./use-zoom-pan-viewport.ts";
+import { useWorldCamera, type WorldCameraApi } from "./use-world-camera.ts";
 
-const INTERACTIVE_PAN_IGNORE =
+/** Shared pan-capture ignore list — canvas world stage imports this too. */
+export const INTERACTIVE_PAN_IGNORE =
   "button, a, input, textarea, select, [role='tab'], [data-no-drag]";
+
+function resolveViewportCursor(camera: WorldCameraApi): string {
+  if (camera.panning) {
+    return "cursor-grabbing";
+  }
+  if (camera.spacePressed) {
+    return "cursor-grab";
+  }
+  return "cursor-default";
+}
+
+function computeDotGridStyle(
+  active: boolean,
+  camera: WorldCamera | null
+): CSSProperties | undefined {
+  if (!(active && camera)) {
+    return;
+  }
+  const spacing = 20;
+  const offsetX = ((camera.x % spacing) + spacing) % spacing;
+  const offsetY = ((camera.y % spacing) + spacing) % spacing;
+  return {
+    backgroundImage:
+      "radial-gradient(circle, var(--border) 1.25px, transparent 1.25px)",
+    backgroundPosition: `${offsetX}px ${offsetY}px`,
+    backgroundSize: `${spacing}px ${spacing}px`,
+  };
+}
+
+/**
+ * Single source for the world camera viewport chrome (section + camera box).
+ * Both world shells consume it: `ZoomPanWorldStage` here and the files
+ * canvas preview (which must keep its imperative live-module host mounted —
+ * `active={false}` renders both wrappers as `display: contents`, so flipping
+ * flow ↔ world never re-parents the host DOM).
+ *
+ * Interaction model (camera, not scroll): plain wheel pans, ctrl+wheel
+ * (trackpad pinch) zooms at the cursor, background drag pans, double-click
+ * toggles fit ↔ 100%. No focus gate — wheel-pan is standard canvas behavior
+ * and the world shell has no competing scroll target.
+ */
+export function WorldViewportFrame({
+  active,
+  "aria-label": ariaLabel,
+  camera,
+  children,
+  onEmptyClick,
+  viewportSlot,
+  zoomSlot,
+}: {
+  active: boolean;
+  "aria-label"?: string | undefined;
+  camera: WorldCameraApi;
+  children: ReactNode;
+  onEmptyClick?: (() => void) | undefined;
+  viewportSlot: string;
+  zoomSlot: string;
+}) {
+  const gridStyle = computeDotGridStyle(active, camera.camera);
+
+  return (
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: focusable canvas exposes zoom/pan shortcuts
+    <section
+      aria-label={active ? ariaLabel : undefined}
+      className={cn(
+        active
+          ? "absolute inset-0 overflow-hidden bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset"
+          : "contents",
+        active && resolveViewportCursor(camera),
+        active && camera.panning && "select-none"
+      )}
+      data-slot={viewportSlot}
+      onDoubleClick={
+        active
+          ? (event) => {
+              const target = event.target;
+              if (
+                target === event.currentTarget ||
+                (target instanceof Element &&
+                  !target.closest(INTERACTIVE_PAN_IGNORE))
+              ) {
+                camera.toggleZoom();
+              }
+            }
+          : undefined
+      }
+      onKeyDown={active ? camera.handleKeyDown : undefined}
+      onPointerCancel={
+        active
+          ? (event) => camera.endPanSession(event, onEmptyClick)
+          : undefined
+      }
+      onPointerDown={active ? camera.handlePointerDown : undefined}
+      onPointerMove={active ? camera.handlePointerMove : undefined}
+      onPointerUp={
+        active
+          ? (event) => camera.endPanSession(event, onEmptyClick)
+          : undefined
+      }
+      onWheel={active ? camera.handleWheel : undefined}
+      ref={(el) => {
+        camera.viewportRef.current = el;
+      }}
+      style={gridStyle}
+      tabIndex={active ? 0 : undefined}
+    >
+      <div
+        className={active ? "w-max" : "contents"}
+        data-slot={zoomSlot}
+        style={active ? camera.cameraStyle : undefined}
+      >
+        {children}
+      </div>
+    </section>
+  );
+}
 
 function worldNaturalSize(
   world: HTMLElement | null
@@ -137,8 +259,9 @@ function ZoomPanWorldStage({
   onOpenFullscreen?: () => void;
 }) {
   const worldRef = useRef<HTMLDivElement | null>(null);
-  const getNaturalSize = useCallback(
-    () => worldNaturalSize(worldRef.current),
+  const getContentSize = useCallback(
+    () =>
+      worldRef.current ? measureWorldContentBounds(worldRef.current) : null,
     []
   );
   const shouldCapturePointer = useCallback(
@@ -151,8 +274,8 @@ function ZoomPanWorldStage({
     },
     []
   );
-  const pan = useZoomPanViewport({
-    getNaturalSize,
+  const camera = useWorldCamera({
+    getContentSize,
     shouldCapturePointer,
   });
 
@@ -162,57 +285,38 @@ function ZoomPanWorldStage({
       return;
     }
     const observer = new ResizeObserver(() => {
-      pan.measureFit();
+      camera.measureFit();
     });
     observer.observe(world);
     return () => observer.disconnect();
-  }, [pan.measureFit]);
+  }, [camera.measureFit]);
 
   return (
     <div
       className={cn("group relative min-h-0 flex-1 bg-background", className)}
     >
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: focusable canvas exposes zoom/pan shortcuts */}
-      <section
+      <WorldViewportFrame
+        active
         aria-label={labels.viewerLabel}
-        className={cn(
-          "absolute inset-0 flex overflow-auto bg-background p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset",
-          pan.canPan && (pan.panning ? "cursor-grabbing" : "cursor-grab"),
-          pan.panning && "select-none"
-        )}
-        data-scrollbar="none"
-        data-slot="html-world-viewport"
-        onDoubleClick={pan.toggleZoom}
-        onKeyDown={pan.handleKeyDown}
-        onPointerCancel={(event) => pan.endPanSession(event, onEmptyClick)}
-        onPointerDown={pan.handlePointerDown}
-        onPointerMove={pan.handlePointerMove}
-        onPointerUp={(event) => pan.endPanSession(event, onEmptyClick)}
-        onWheel={pan.handleWheel}
-        ref={pan.viewportRef}
-        // biome-ignore lint/a11y/noNoninteractiveTabindex: canvas accepts zoom/pan shortcuts when focused
-        tabIndex={0}
+        camera={camera}
+        onEmptyClick={onEmptyClick}
+        viewportSlot="html-world-viewport"
+        zoomSlot="html-world-zoom"
       >
-        <div
-          className="m-auto max-w-none"
-          data-slot="html-world-zoom"
-          style={{ zoom: pan.effectiveZoom }}
-        >
-          <div data-slot="html-world" ref={worldRef}>
-            {children}
-          </div>
+        <div data-slot="html-world" ref={worldRef}>
+          {children}
         </div>
-      </section>
+      </WorldViewportFrame>
       {onOpenFullscreen && expandable ? (
         <MediaFullscreenButton label={expandLabel} onClick={onOpenFullscreen} />
       ) : null}
       <ImagePreviewControls
-        effectiveZoom={pan.effectiveZoom}
+        effectiveZoom={camera.effectiveZoom}
         labels={labels}
-        onZoomChange={pan.setZoom}
-        onZoomIn={() => pan.adjustZoom(1)}
-        onZoomOut={() => pan.adjustZoom(-1)}
-        zoom={pan.zoom}
+        onZoomChange={camera.setZoom}
+        onZoomIn={() => camera.adjustZoom(1)}
+        onZoomOut={() => camera.adjustZoom(-1)}
+        zoom={camera.zoom}
       />
     </div>
   );
@@ -222,7 +326,9 @@ function ZoomPanWorldStage({
  * HTML world on the same zoom/pan stage as image / mermaid preview.
  *
  * `card` — static fit-all snapshot (does not capture wheel / page scroll).
- * `stage` — fullscreen preview: fit by default, wheel/buttons zoom, drag pan.
+ * `stage` — ContentPreviewHost fullscreen: fit by default, wheel/buttons zoom,
+ * drag pan. Live-module canvas preview must NOT wrap this; it keeps a stable
+ * host DOM and consumes `useZoomPanViewport` directly (design §3.4).
  */
 export function HtmlWorldCanvas({
   children,

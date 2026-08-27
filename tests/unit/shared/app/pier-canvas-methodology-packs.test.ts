@@ -101,6 +101,12 @@ describe("pier-canvas methodology packs", () => {
     expect(skill).toContain("mode");
     expect(skill).toContain("methodology");
     expect(skill).toContain("freeform");
+    expect(skill).toContain("Stage selection");
+    expect(skill).toContain("recipe=design");
+    expect(skill).toContain("recipe=orchestration");
+    expect(skill).toContain("recipe=board");
+    expect(skill).toContain("WorldStage");
+    expect(skill).toContain("<Stack fill>");
     expect(skill).toContain("Audience language");
     expect(skill).toContain("i18n/nav.json");
     expect(skill).toContain("locale");
@@ -239,5 +245,48 @@ describe("pier-canvas methodology packs", () => {
       "landing",
     ]);
     expect(views.find((v) => v.primary)?.id).toBe("overview");
+  });
+
+  it("ships freeform recipe packs that are not methodology axes", () => {
+    const recipes = [
+      { id: "design", stage: "world" },
+      { id: "orchestration", stage: "world" },
+      { id: "board", stage: "fill" },
+    ] as const;
+    for (const recipe of recipes) {
+      const pack = JSON.parse(
+        readFileSync(
+          join(PACKS_ROOT, "recipes", recipe.id, "pack.json"),
+          "utf8"
+        )
+      ) as Record<string, unknown>;
+      expect(pack.schemaVersion).toBe(1);
+      expect(pack.id).toBe(recipe.id);
+      expect(pack.axis).toBe("recipe");
+      expect(pack.stage).toBe(recipe.stage);
+      expect(typeof pack.agentPrompt).toBe("string");
+      expect(String(pack.agentPrompt).length).toBeGreaterThan(20);
+    }
+    const skill = readFileSync(
+      join(process.cwd(), "resources/system-skills/pier-canvas/SKILL.md"),
+      "utf8"
+    );
+    expect(skill).toContain("packs/recipes/design/");
+    expect(skill).toContain("packs/recipes/board/");
+    expect(skill).toContain("templates/design-mockup.canvas.tsx");
+    expect(skill).toContain("templates/dag-viewer.canvas.tsx");
+    expect(skill).toContain("templates/kanban.canvas.tsx");
+    expect(skill).toContain("recipe=board");
+    const hostData = readFileSync(
+      join(
+        process.cwd(),
+        "resources/system-skills/pier-canvas/references/host-data.md"
+      ),
+      "utf8"
+    );
+    expect(hostData).toContain("http://127.0.0.1");
+    expect(hostData).toContain("invokeCommand");
+    expect(hostData).toContain("Do not call");
+    expect(hostData).toContain("run.spawn");
   });
 });

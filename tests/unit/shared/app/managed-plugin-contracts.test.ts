@@ -13,7 +13,8 @@ import { describe, expect, it } from "vitest";
 const manifest = {
   apiVersion: 1,
   commands: [{ id: "pier.codex.addAccount", title: "Codex: Add Account" }],
-  workbenchWidgets: [],
+  canvasActions: [],
+  dataProjections: [],
   engines: { pier: ">=0.1.0 <0.2.0" },
   id: "pier.codex",
   main: "dist/main.js",
@@ -30,16 +31,6 @@ describe("managed plugin contracts", () => {
     expect(managedPluginPackageManifestSchema.parse(manifest)).toMatchObject({
       id: "pier.codex",
     });
-  });
-
-  it("normalizes the legacy package contribution key", () => {
-    const { workbenchWidgets, ...withoutCanonicalKey } = manifest;
-    const parsed = managedPluginPackageManifestSchema.parse({
-      ...withoutCanonicalKey,
-      missionControlWidgets: workbenchWidgets,
-    });
-    expect(parsed.workbenchWidgets).toEqual([]);
-    expect(parsed).not.toHaveProperty("missionControlWidgets");
   });
 
   it("accepts a managed package runtime reload policy", () => {

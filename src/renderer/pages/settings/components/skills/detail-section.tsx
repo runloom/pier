@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
  * Flat section for skill open dialogs (no Card chrome).
  * Dialog shell is already a bordered surface — nesting Cards creates a
  * triple-frame look that fights shadcn form-dialog practice.
- * Title class shared with workbench live-preference sections.
+ * Title class shared with other live-preference dialog sections.
  */
 export function SkillDetailSection({
   title,

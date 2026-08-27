@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "source": "fixture",
+  "nodes": [
+    {
+      "id": "plan",
+      "label": "Plan",
+      "status": "success",
+      "meta": "signed off",
+      "badge": "lead"
+    },
+    {
+      "id": "run",
+      "label": "Run",
+      "status": "running",
+      "meta": "worker-2"
+    },
+    {
+      "id": "review",
+      "label": "Review",
+      "status": "blocked",
+      "meta": "needs sign-off",
+      "badge": "gate"
+    },
+    { "id": "ship", "label": "Ship", "status": "ready" }
+  ],
+  "edges": [
+    { "source": "plan", "target": "run", "label": "ok" },
+    { "source": "run", "target": "review" },
+    { "source": "review", "target": "ship" }
+  ]
+}

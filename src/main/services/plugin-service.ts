@@ -20,7 +20,6 @@ import {
   findPanelIdConflict,
   findPluginIdDotPrefixConflict,
   findTerminalStatusItemIdConflict,
-  findWorkbenchWidgetIdConflict,
 } from "./plugin-contribution-conflicts.ts";
 import { loadManifestLocaleFiles } from "./plugin-localization.ts";
 import {
@@ -105,11 +104,6 @@ export function collectEffectivePermissions(
   }
   for (const item of manifest.terminalStatusItems) {
     for (const permission of item.permissions) {
-      permissions.add(permission);
-    }
-  }
-  for (const widget of manifest.workbenchWidgets) {
-    for (const permission of widget.permissions) {
       permissions.add(permission);
     }
   }
@@ -312,18 +306,6 @@ export function createPluginService({
           });
           continue;
         }
-        const workbenchWidgetConflict = findWorkbenchWidgetIdConflict(
-          manifests.map((item) => item.manifest),
-          withLocales.manifest
-        );
-        if (workbenchWidgetConflict) {
-          diagnostics.push({
-            code: "invalid_manifest",
-            message: `workbenchWidgets id must be unique across plugins ("${workbenchWidgetConflict}"): ${withLocales.manifest.id}`,
-            source: diagnosticSource(source),
-          });
-          continue;
-        }
         manifests.push({ manifest: withLocales.manifest, source });
       } catch (err) {
         diagnostics.push(diagnosticFromError(source, err));
@@ -381,18 +363,6 @@ export function createPluginService({
           diagnostics.push({
             code: "invalid_manifest",
             message: `terminalStatusItems id must be unique across plugins ("${statusItemConflict}"): ${ext.manifest.id}`,
-            source: { kind: ext.source },
-          });
-          continue;
-        }
-        const workbenchWidgetConflict = findWorkbenchWidgetIdConflict(
-          acceptedManifests,
-          ext.manifest
-        );
-        if (workbenchWidgetConflict) {
-          diagnostics.push({
-            code: "invalid_manifest",
-            message: `workbenchWidgets id must be unique across plugins ("${workbenchWidgetConflict}"): ${ext.manifest.id}`,
             source: { kind: ext.source },
           });
           continue;

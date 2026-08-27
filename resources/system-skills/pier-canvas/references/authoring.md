@@ -11,22 +11,29 @@ names are `host.invoke` variants, not separate APIs. Then
 read `../sdk/index.d.ts` and `../sdk/host.d.ts`. Then read the focused
 declaration for each API you plan to use:
 
-- `core.d.ts` for `Frame`, `Artboard`, `ArtboardStage`, `Stack`, `Row`, and `Text`.
+- `core.d.ts` for `Frame`, `Artboard`, `ArtboardStage`, `WorldStage`, `Layer`,
+  `Stack`, `Row`, and `Text`.
 - API (canvas-kit → API, plus `sdk/host.d.ts` and `sdk/files.d.ts`) for
   `import { host, useHostSnapshot } from "pier/host"` and
   `import { useCanvasFile } from "pier/canvas"`. Bind
   `host.invoke` / `host.subscribe` / `host.snapshot` on the canvas; do
   not wrap those capabilities as product hooks. Adjacent files are
   `useCanvasFile`; global `file.*` is the host `file` domain.
-- `visualizations.d.ts` for `DataChart` and `Mermaid`. Canvas diagrams
-  use the `Mermaid` component (`nodes` / `edges`, or `source` for
-  sequence / class / state). Markdown preview keeps a separate mermaid
-  fence path.
+- `visualizations.d.ts` for `DataChart`, `Mermaid`, and `FlowGraph`.
+  `Mermaid` is a static diagram (architecture / sequence). `FlowGraph` is
+  a live DAG (status coloring + optional drag-to-place). Markdown preview
+  keeps a separate mermaid fence path.
 - `forms.d.ts` for controls, selection, and toggle composition.
 - `primitives.d.ts` for the complete standard UI primitive inventory.
+- `format.d.ts` for number / money / size / relative-time helpers.
+- [host-data.md](./host-data.md) for plugin projections, canvas actions,
+  `settings.open`, and two layout recipes for the same snapshot.
+  Composition sample: `.pier/canvases/workbench-examples/` (Codex `Item`
+  rows, Grok `Table`).
 
 The declarations are the public contract. Do not infer props from component
-names or copy host source.
+names or copy host source. Do not copy plugin `accounts-widget` source or
+invent undeclared `pluginAction.invoke` keys.
 
 ## Choose the output kind
 
@@ -94,20 +101,21 @@ stay there. Put complex calculations in pure adjacent modules.
 
 ### Layout and CSS (common failure mode)
 
-- Host Tailwind scans `packages/ui`, plugins, and `.pier/canvases` (see
-  `src/renderer/app/globals.css` `@source`). Prefer utilities that already
-  exist in the product; for **docs two-pane layout**, always use **`DocsShell`**
-  (inline flex columns) instead of inventing arbitrary `grid-cols-[…]` shells.
+- Host Tailwind is compiled per canvas at runtime (entry + graph). Prefer
+  utilities that already exist in the product; for **docs two-pane layout**,
+  always use **`DocsShell`** (inline flex columns) instead of inventing
+  arbitrary `grid-cols-[…]` shells.
 - `Frame` is a **reading column** (max-width + padding), not a full-height app
   chrome. Do not nest dual `ScrollArea` + `70vh` fake viewports inside it.
-- Product UI mockups (settings, panels, chrome) go on **`Artboard`** inside
-  **`ArtboardStage`**. Each artboard is a Figma frame: fixed pixel width
-  (default 1280×800), **clip** overflow — no nested scrollbar. Inline
-  `ArtboardStage` is the **same card as `Mermaid`**: fit-all overview
-  in the reading `Frame`, no wheel capture. Zoom/pan (same chrome as image
-  preview) is **fullscreen preview only**. Do not break the host reading
-  column out to full width. Do not stack screens as a document inside
-  `Frame`.
+- **Stage:** flow (default) for docs and overviews; `<Stack fill>` for a
+  one-screen board that owns scroll; `WorldStage` for multi-device mockups
+  and live DAGs. See SKILL.md **Stage selection**.
+- Product UI mockups (settings, panels, chrome) go on **`Artboard`**
+  (`preset="desktop" | "laptop" | "phone" | "tablet"`). In **world** they sit
+  on `WorldStage` with `Layer` (`x` / `y`). Flow children always wrap; omit
+  `width` to use the same 3×desktop line as `ArtboardStage`. `ArtboardStage` remains the
+  **flow fit-all card** (same chrome as `Mermaid`); it does not capture
+  wheel. Do not stack screens as a document inside `Frame`.
 - Multi-line `AccordionTrigger` content must not rely on underline hover chrome;
   the host Accordion uses a light background hover.
 
@@ -125,11 +133,18 @@ stay there. Put complex calculations in pure adjacent modules.
 One component: `Mermaid`. The host paints with mermaid.js (parse + layout +
 paint). There is no second layout engine.
 
-**Flowchart / architecture / live DAG** — pass `nodes` and `edges`. The host
+**Static architecture / sequence** — `Mermaid`. **Live DAG / pipeline
+status** — `FlowGraph` (`recipe=orchestration`). Do not use `Mermaid` for a
+viewer that recolors from a poll or persists node positions.
+
+**Flowchart / architecture** — pass `nodes` and `edges`. The host
 writes mermaid `flowchart` text and hydrates Pier cards into mermaid's own
-htmlLabels when a node has `kind`, `tone`, `status`, or `renderNodeContent`.
+htmlLabels when a node has `kind` or `tone`.
 Set `shape` (`round` / `diamond` / `rect` / `circle`) for notation
-silhouettes. Omit `shape` (or set `kind` / `tone` / `status`) for Pier cards.
+silhouettes. Omit `shape` (or set `kind` / `tone`) for Pier cards.
+`status` / `renderNodeContent` remain as leftover APIs for static
+architecture diagrams that need a run glyph — **not** for a polling
+viewer (`FlowGraph` owns that).
 
 **Sequence, state, class, ER, mindmap** — pass native mermaid `source`. Do
 not compile those families from `nodes` / `edges`. mermaid.js classifies the
@@ -178,13 +193,35 @@ Rules:
   Their edges dash too.
 - Short predicates on edges; long copy belongs on node `meta` or a caption.
 - Do not infer `kind` from the title string.
-- **Live DAG / pipeline graphs:** set `status` per node
-  (`queued` | `running` | `success` | `failed` | `skipped`) for the trailing
-  run glyph (spinner / check / cross). For richer per-node chrome (progress,
-  timing, cost) pass `renderNodeContent={(node) => …}` and reserve space with
-  `contentHeight` on the nodes that render it. Content is display chrome —
-  in-node actions use compact `Button size="xs" variant="outline"` in the
-  footer, not filled accent. Keep graph selection on `onSelectNode`.
+- **Live DAG / pipeline graphs:** use `FlowGraph` (status coloring +
+  optional `onNodePositionsChange`). `Mermaid` `status` / `renderNodeContent`
+  stays for static architecture diagrams that need a run glyph, not for a
+  polling viewer.
+
+## FlowGraph
+
+Live DAG / pipeline viewer. Root it in `WorldStage` with
+`presentation="plain"` (the host also infers plain inside a world stage).
+
+| Field | Role |
+|---|---|
+| `status` | `queued` · `ready` · `running` · `blocked` · `success` · `failed` · `skipped` |
+| `meta` | Secondary line under the title |
+| `badge` | Corner chip (display only) |
+| `contentHeight` | Reserved px when `renderNodeContent` paints this node |
+| edge `label` | Drawn on the path. A `running` source dashes the edge |
+
+`renderOverlay({ positions, width, height })` places gates and captions on
+the laid-out plane. The overlay root ignores pointer events; turn them on
+for a child that must be clicked.
+
+`layoutFlowGraph` recomputes ranks. Pass no `positions`, or `{}`, to
+relayer. Do not add a force-directed layout.
+
+Inspect with `onSelectNode` and a `Stack` / `Text` beside the graph. Keep
+Run / Refresh / parallel controls as canvas `Button` / `Select` composition.
+Do not put interactive controls inside `renderNodeContent`. Do not invent
+topology editing (`onConnect`) or a host run toolbar.
 
 ## Data and state
 

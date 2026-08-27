@@ -37,6 +37,16 @@ export const pierCapabilitySchema = z.enum([
   "terminal:launchWrap",
   "plugin:read",
   "plugin:write",
+  /**
+   * Canvas-declared plugin RPC actions (`pluginAction.invoke`).
+   * Not a `:write` host-domain capability; gated by manifest `canvasActions`.
+   */
+  "plugin:action",
+  /**
+   * Canvas-declared shell commands (`canvasCommand.invoke`).
+   * Not a `:write` host-domain capability; gated by instance.json + confirm.
+   */
+  "canvas:command",
   "command:register",
   "panel:register",
   "git:read",
@@ -186,6 +196,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "panel:read",
     "terminal:read",
     "plugin:read",
+    "plugin:action",
+    "canvas:command",
     "git:read",
     "file:read",
     "notification:read",

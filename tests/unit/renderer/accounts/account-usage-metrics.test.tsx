@@ -8,33 +8,6 @@ describe("shared account usage metrics", () => {
     expect(typeof accountUsageRenderer.AccountMetadataBadges).toBe("function");
   });
 
-  it("keeps scalars on the meter only when identity badges hide them", () => {
-    const metrics = [
-      {
-        groupId: "codex",
-        id: "codex:primary",
-        kind: "quota" as const,
-        usedPercent: 20,
-      },
-      {
-        format: "count" as const,
-        id: "codex:reset-credits",
-        kind: "scalar" as const,
-        value: 1,
-      },
-    ];
-
-    expect(
-      accountUsageRenderer.accountWidgetMeterMetrics(metrics, "all")
-    ).toEqual([metrics[0]]);
-    expect(
-      accountUsageRenderer.accountWidgetMeterMetrics(metrics, "tier")
-    ).toEqual(metrics);
-    expect(
-      accountUsageRenderer.accountWidgetMeterMetrics(metrics, "hidden")
-    ).toEqual(metrics);
-  });
-
   it("labels quota percentages as remaining and formats relative reset time", () => {
     render(
       <accountUsageRenderer.AccountUsageMetrics

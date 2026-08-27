@@ -10,7 +10,7 @@ import {
   type Page,
   test,
 } from "@playwright/test";
-import { selectTheme, setWindowSize } from "../workbench/e2e-harness.ts";
+import { selectTheme, setWindowSize } from "../support/app-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
@@ -138,6 +138,19 @@ async function openTreeFile(
     }
     await item.click();
   }
+}
+
+async function acceptCanvasTrustIfPrompted(page: Page): Promise<void> {
+  const confirm = page.getByRole("button", {
+    name: /信任并预览|Trust and preview/u,
+  });
+  try {
+    await expect(confirm).toBeVisible({ timeout: 15_000 });
+  } catch {
+    return;
+  }
+  await confirm.click();
+  await expect(confirm).toHaveCount(0);
 }
 
 function rgbDistance(left: Rgb, right: Rgb): number {
@@ -283,11 +296,7 @@ test("Files canvas preview paints Mermaid kind and tone fills", async ({
     await openTreeFile(page, ["docs", "graph-colors.canvas.tsx"]);
     const preview = page.locator('[data-slot="file-canvas-preview"]');
     await expect(preview).toBeVisible({ timeout: 30_000 });
-    // First canvas preview in a fresh project must pass the trust gate before
-    // anything compiles; the grant covers the gold canvas opened later.
-    await page
-      .getByRole("button", { name: /Trust and preview|信任并预览/u })
-      .click({ timeout: 20_000 });
+    await acceptCanvasTrustIfPrompted(page);
     await expect(page.getByText("Node graph color contract")).toBeVisible({
       timeout: 40_000,
     });

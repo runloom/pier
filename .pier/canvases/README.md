@@ -13,6 +13,9 @@ should land here too.
     hello.canvas.vue     Vue
     hello.canvas.solid.tsx
     hello.canvas.svelte
+    world.canvas.tsx     world-stage shell
+  design-mockup/         recipe=design gold (WorldStage + Artboard presets)
+  dag-viewer/            recipe=orchestration gold (FlowGraph + watch + command)
   templates/
     blank.canvas.tsx     minimal React composition scaffold
 ```
@@ -20,6 +23,8 @@ should land here too.
 | Folder | Role |
 |--------|------|
 | **smoke/** | Compile → protocol → mount (four frameworks) |
+| **design-mockup/** | World-stage device frames (`recipe=design`) |
+| **dag-viewer/** | FlowGraph viewer (`recipe=orchestration`) |
 | **templates/** | Thin AI/human start scaffolds only |
 
 ## Conventions
@@ -33,5 +38,8 @@ should land here too.
 
 ```text
 smoke/hello.canvas.tsx
+smoke/world.canvas.tsx
+design-mockup/design-mockup.canvas.tsx
+dag-viewer/dag-viewer.canvas.tsx
 templates/blank.canvas.tsx
 ```

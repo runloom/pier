@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { parsePluginDataWatchTarget } from "../../../src/shared/contracts/canvas-host.ts";
@@ -236,5 +236,63 @@ describe("canvas host 契约", () => {
   it("parsePluginDataWatchTarget 拒绝空段与非 plugin 目标", () => {
     expect(parsePluginDataWatchTarget("plugin:x/")).toBeNull();
     expect(parsePluginDataWatchTarget("resources")).toBeNull();
+  });
+});
+
+describe("skill 配方与领域组件禁令", () => {
+  const repo = join(dir, "../../..");
+
+  it("host-data 教发现→组合，并禁止成品账号模板", () => {
+    const skill = readFileSync(
+      join(repo, "resources/system-skills/pier-canvas/SKILL.md"),
+      "utf8",
+    );
+    const hostData = readFileSync(
+      join(repo, "resources/system-skills/pier-canvas/references/host-data.md"),
+      "utf8",
+    );
+    expect(skill).toContain("references/host-data.md");
+    expect(hostData).toContain("plugin.list");
+    expect(hostData).toContain("pluginAction.invoke");
+    expect(hostData).toContain("settings.open");
+    expect(hostData).toContain("Item");
+    expect(hostData).toContain("Table");
+    expect(
+      existsSync(
+        join(
+          repo,
+          "resources/system-skills/pier-canvas/templates/accounts.canvas.tsx",
+        ),
+      ),
+    ).toBe(false);
+    expect(hostData).toContain("Do not invent domain components");
+    expect(hostData).toContain("plugin:pier.grok/accounts");
+    expect(hostData).toContain("workbench-examples");
+    expect(hostData).toContain("formatPercent(usedPercent / 100");
+  });
+
+  it("workbench-examples 用同一投影拼 Codex Item 行与 Grok Table", () => {
+    const examples = readFileSync(
+      join(repo, ".pier/canvases/workbench-examples/plugin-accounts.tsx"),
+      "utf8",
+    );
+    const entry = readFileSync(
+      join(
+        repo,
+        ".pier/canvases/workbench-examples/workbench-examples.canvas.tsx",
+      ),
+      "utf8",
+    );
+    expect(examples).toContain("plugin:pier.codex/accounts");
+    expect(examples).toContain("plugin:pier.grok/accounts");
+    expect(examples).toContain("Item");
+    expect(examples).toContain("Table");
+    expect(examples).toContain("DropdownMenu");
+    expect(examples).toContain("clampPercent");
+    expect(examples).toContain("formatPercent(usedPercent / 100");
+    expect(examples).not.toContain("AccountsCard");
+    expect(entry).toContain("CodexAccountRows");
+    expect(entry).toContain("GrokAccountTable");
+    expect(entry).not.toContain("void host.invoke");
   });
 });

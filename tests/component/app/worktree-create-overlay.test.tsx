@@ -264,7 +264,6 @@ function createMockContext(): RendererPluginContext {
       release: unimplemented("htmlPreviews.release"),
       touch: unimplemented("htmlPreviews.touch"),
     },
-    workbenchWidgets: { register: vi.fn(() => vi.fn()) },
     dialogs: {
       alert: dialogAlertMock,
       choice: unimplemented("dialogs.choice"),

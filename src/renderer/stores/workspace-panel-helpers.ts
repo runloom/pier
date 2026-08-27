@@ -21,7 +21,7 @@ type WorkspacePanelRef = DockviewApi["panels"][number];
 /**
  * 读 panel descriptor 上的路径锚点。命名历史来自终端，但任意 panel 只要
  * 经 `usePanelDescriptor` / plugin host boundary 注册了 `context` 即可读到。
- * 项目相关 panel 应自持 context；全局 panel（workbench / welcome 等）不写 context。
+ * 项目相关 panel 应自持 context；全局 panel（welcome 等）不写 context。
  */
 export function terminalPanelContext(
   panelId: string | undefined
@@ -128,7 +128,7 @@ export function findGroupById(
 /**
  * Build a `{ referenceGroup }` opts object for the requested group ID.
  * Returns `{}` when the group can't be resolved, so callers can spread it into
- * addTerminal/addWorkbench opts without tripping exactOptionalPropertyTypes.
+ * addTerminal opts without tripping exactOptionalPropertyTypes.
  */
 export function referenceGroupById(
   api: DockviewApi | null,
@@ -215,7 +215,7 @@ export function resolveWorkspaceAnchor(input: {
 
 /**
  * 当前（或 invocation 指定）panel 是否持有项目路径锚点。
- * 路径依赖操作（新建终端/任务/智能体/工作台等）用此判定 enabled。
+ * 路径依赖操作（新建终端/任务/智能体等）用此判定 enabled。
  * 不读 terminalNewCwdPolicy——那是「新建终端 cwd 继承」，不是「panel 有无路径」。
  */
 export function hasProjectPathAnchor(input: {

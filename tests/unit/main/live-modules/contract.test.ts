@@ -1,5 +1,6 @@
 import {
   homeLiveRootSpec,
+  LIVE_MODULE_DEFAULT_ALLOWED_BARE_PACKAGES,
   LIVE_MODULE_DEFAULT_HOME_DIRECTORY,
   LIVE_MODULE_DEFAULT_PREVIEW_BARREL,
   LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY,
@@ -14,6 +15,8 @@ import {
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import {
   LIVE_MODULE_SCHEME,
+  liveModuleAssetTicketFromUrl,
+  liveModuleAssetUrlForTicket,
   liveModuleRuntimeIdFromUrl,
   liveModuleRuntimeUrl,
   liveModuleTicketFromUrl,
@@ -44,6 +47,9 @@ describe("live-modules contract", () => {
     expect(spec.resolve.tsconfigPaths).toBe(true);
     expect(spec.resolve.forcePreviewBarrel).toBe(false);
     expect(spec.resolve.allowNodeModules).toBe(false);
+    expect(spec.resolve.allowedBarePackages).toEqual([
+      ...LIVE_MODULE_DEFAULT_ALLOWED_BARE_PACKAGES,
+    ]);
   });
 
   it("derives distinct project live root ids per path", () => {
@@ -57,6 +63,7 @@ describe("live-modules contract", () => {
     expect(spec.anchor).toEqual({ scope: "home" });
     expect(spec.directory).toBe(LIVE_MODULE_DEFAULT_HOME_DIRECTORY);
     expect(spec.resolve.tsconfigPaths).toBe(false);
+    expect(spec.resolve.allowedBarePackages).toEqual([]);
   });
 
   it("rejects home roots that enable tsconfigPaths", () => {
@@ -227,6 +234,18 @@ describe("live-module-url", () => {
     const url = liveModuleUrlForTicket(SAMPLE_TICKET);
     expect(url).toBe(`${LIVE_MODULE_SCHEME}://module/${SAMPLE_TICKET}`);
     expect(liveModuleTicketFromUrl(url)).toBe(SAMPLE_TICKET);
+  });
+
+  it("round-trips opaque asset tickets on a distinct hostname", () => {
+    const url = liveModuleAssetUrlForTicket(SAMPLE_TICKET);
+    expect(url).toBe(`${LIVE_MODULE_SCHEME}://asset/${SAMPLE_TICKET}`);
+    expect(liveModuleAssetTicketFromUrl(url)).toBe(SAMPLE_TICKET);
+    expect(liveModuleTicketFromUrl(url)).toBeNull();
+    expect(
+      liveModuleAssetTicketFromUrl(
+        `${LIVE_MODULE_SCHEME}://asset/${SAMPLE_TICKET}?x=1`
+      )
+    ).toBeNull();
   });
 
   it("rejects tickets that look like paths", () => {

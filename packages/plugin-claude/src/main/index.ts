@@ -29,8 +29,10 @@ export const plugin: MainPluginModule = {
       hasVisibleTarget: () => usagePolling.hasVisibleTarget(),
       logger: context.logger,
       managedBaseDir,
-      onChanged: (snapshot) =>
-        context.events.emit("accounts.changed", snapshot),
+      onChanged: (snapshot) => {
+        context.events.emit("accounts.changed", snapshot);
+        context.events.emit("projection.accounts", snapshot);
+      },
       provider,
       stateStore,
     });

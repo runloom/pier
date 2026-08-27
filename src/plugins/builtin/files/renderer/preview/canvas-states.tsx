@@ -20,6 +20,22 @@ import { removeLiveModuleCss } from "./css-cleanup.ts";
  * hot-reload soft error, ready chrome and the delayed loading skeleton.
  */
 
+/** esbuild / Chromium helper death — not a bad `.canvas.tsx` file. */
+const PREVIEW_STOPPED_RE =
+  /The canvas compiler stopped|The service is no longer running|The service was stopped/u;
+
+export function isCanvasPreviewStoppedFailure(input: {
+  diagnostics?: readonly LiveModuleDiagnostic[];
+  message: string;
+}): boolean {
+  if (PREVIEW_STOPPED_RE.test(input.message)) {
+    return true;
+  }
+  return (input.diagnostics ?? []).some((diagnostic) =>
+    PREVIEW_STOPPED_RE.test(diagnostic.message)
+  );
+}
+
 export function formatDiagnosticLocation(
   diagnostic: LiveModuleDiagnostic
 ): string {
@@ -135,24 +151,35 @@ export function CanvasSoftErrorBanner(props: {
   onReload: () => void;
   t: FilesTranslate;
 }) {
+  const previewStopped = isCanvasPreviewStoppedFailure({
+    message: props.message,
+  });
+  let body: string;
+  if (previewStopped) {
+    body = props.t(
+      "filePanel.canvas.previewStoppedHint",
+      "Preview stopped unexpectedly. Reload to try again."
+    );
+  } else if (props.message.trim().length > 0) {
+    body = props.message;
+  } else {
+    body = props.t(
+      "filePanel.canvas.compileFailedHint",
+      "Fix the canvas file or its imports, then reload."
+    );
+  }
+  const title = previewStopped
+    ? props.t("filePanel.canvas.previewStopped", "Couldn’t preview canvas")
+    : props.t("filePanel.canvas.compileFailed", "Couldn’t compile canvas");
   return (
     <div
       className="shrink-0 border-border border-b px-4 py-3"
       data-slot="file-canvas-soft-error"
     >
       <Alert variant="warning">
-        <AlertTitle>
-          {props.t("filePanel.canvas.compileFailed", "Couldn’t compile canvas")}
-        </AlertTitle>
+        <AlertTitle>{title}</AlertTitle>
         <AlertDescription>
-          <p>
-            {props.message.trim().length > 0
-              ? props.message
-              : props.t(
-                  "filePanel.canvas.compileFailedHint",
-                  "Fix the canvas file or its imports, then reload."
-                )}
-          </p>
+          <p>{body}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button
               onClick={props.onReload}
@@ -169,6 +196,39 @@ export function CanvasSoftErrorBanner(props: {
   );
 }
 
+function canvasErrorEmptyCopy(input: {
+  isRuntime: boolean | undefined;
+  previewStopped: boolean;
+}): {
+  hintFallback: string;
+  hintKey: string;
+  titleFallback: string;
+  titleKey: string;
+} {
+  if (input.previewStopped) {
+    return {
+      hintFallback: "Preview stopped unexpectedly. Reload to try again.",
+      hintKey: "filePanel.canvas.previewStoppedHint",
+      titleFallback: "Couldn’t preview canvas",
+      titleKey: "filePanel.canvas.previewStopped",
+    };
+  }
+  if (input.isRuntime) {
+    return {
+      hintFallback: "Fix the runtime error in the canvas, then reload.",
+      hintKey: "filePanel.canvas.runtimeFailedHint",
+      titleFallback: "Canvas crashed while rendering",
+      titleKey: "filePanel.canvas.runtimeFailed",
+    };
+  }
+  return {
+    hintFallback: "Fix the canvas file or its imports, then reload.",
+    hintKey: "filePanel.canvas.compileFailedHint",
+    titleFallback: "Couldn’t compile canvas",
+    titleKey: "filePanel.canvas.compileFailed",
+  };
+}
+
 /**
  * Full-region error when there is no canvas body to show (first compile fail,
  * or runtime crash after ErrorBoundary nulls the tree).
@@ -181,28 +241,33 @@ export function CanvasCompileErrorEmpty(props: {
   onReload: () => void;
   t: FilesTranslate;
 }) {
-  const titleKey = props.isRuntime
-    ? "filePanel.canvas.runtimeFailed"
-    : "filePanel.canvas.compileFailed";
-  const titleFallback = props.isRuntime
-    ? "Canvas crashed while rendering"
-    : "Couldn’t compile canvas";
-  const hintKey = props.isRuntime
-    ? "filePanel.canvas.runtimeFailedHint"
-    : "filePanel.canvas.compileFailedHint";
-  const hintFallback = props.isRuntime
-    ? "Fix the runtime error in the canvas, then reload."
-    : "Fix the canvas file or its imports, then reload.";
+  const previewStopped =
+    !props.isRuntime &&
+    isCanvasPreviewStoppedFailure({
+      diagnostics: props.diagnostics,
+      message: props.message,
+    });
+  const copy = canvasErrorEmptyCopy({
+    isRuntime: props.isRuntime,
+    previewStopped,
+  });
+  const showDiagnostics = !previewStopped && props.diagnostics.length > 0;
+  const showMessage =
+    !previewStopped &&
+    props.diagnostics.length === 0 &&
+    props.message.trim().length > 0;
   return (
     <Empty className="min-h-64 py-12" data-slot="file-canvas-error-empty">
       <EmptyHeader>
         <EmptyMedia variant="icon">
           <FileQuestion />
         </EmptyMedia>
-        <EmptyTitle>{props.t(titleKey, titleFallback)}</EmptyTitle>
-        <EmptyDescription>{props.t(hintKey, hintFallback)}</EmptyDescription>
+        <EmptyTitle>{props.t(copy.titleKey, copy.titleFallback)}</EmptyTitle>
+        <EmptyDescription>
+          {props.t(copy.hintKey, copy.hintFallback)}
+        </EmptyDescription>
       </EmptyHeader>
-      {props.diagnostics.length > 0 ? (
+      {showDiagnostics ? (
         <div
           className="mx-auto w-full max-w-lg px-6 text-left"
           data-slot="file-canvas-diagnostics"
@@ -218,7 +283,7 @@ export function CanvasCompileErrorEmpty(props: {
           </ul>
         </div>
       ) : null}
-      {props.diagnostics.length === 0 && props.message.trim().length > 0 ? (
+      {showMessage ? (
         <div className="mx-auto w-full max-w-lg px-6 text-left">
           <p className="text-muted-foreground text-xs">{props.message}</p>
         </div>

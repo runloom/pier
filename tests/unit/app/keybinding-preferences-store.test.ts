@@ -312,7 +312,7 @@ describe("keybinding-preferences.store", () => {
     );
   });
 
-  it("migrates legacy mission control shortcuts to the workbench action", async () => {
+  it("does not remap legacy mission control shortcuts to a workbench action", async () => {
     installPierApi({
       userKeymap: [
         {
@@ -335,7 +335,7 @@ describe("keybinding-preferences.store", () => {
 
     expect(useKeybindingPreferencesStore.getState().userKeymap).toEqual([
       {
-        commandId: "pier.panel.newWorkbench",
+        commandId: "pier.panel.newMissionControl",
         keys: "Mod+Alt+KeyW",
         scope: "global",
       },
@@ -345,7 +345,7 @@ describe("keybinding-preferences.store", () => {
         activePanelComponent: null,
         overlayStack: [],
       })
-    ).toBe("pier.panel.newWorkbench");
+    ).toBe("pier.panel.newMissionControl");
   });
 
   it("migrates legacy terminal debug unbind entries when hydrating preferences", async () => {

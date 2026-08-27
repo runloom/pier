@@ -120,9 +120,6 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         reset: vi.fn(async () => undefined),
         set: vi.fn(async () => undefined),
       },
-      workbenchWidgets: {
-        register: vi.fn(() => () => undefined),
-      },
       dialogs: {
         alert: vi.fn(async () => undefined),
         choice: vi.fn(async () => "cancel" as const),

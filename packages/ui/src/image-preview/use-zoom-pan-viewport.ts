@@ -15,6 +15,7 @@ import {
   KEYBOARD_PAN_STEP_PX,
   measureContainScale,
   PAN_CLICK_SLOP_PX,
+  pinchZoom,
   ZOOM_FACTOR,
 } from "./canvas-math.ts";
 
@@ -48,6 +49,8 @@ export function useZoomPanViewport({
   const viewportRef = useRef<HTMLElement | null>(null);
   const panSessionRef = useRef<PanSession | null>(null);
   const prevEffectiveZoomRef = useRef<number | null>(null);
+  /** Pointer position for the next zoom application (wheel/pinch anchor). */
+  const pendingAnchorRef = useRef<{ x: number; y: number } | null>(null);
 
   const effectiveZoom = zoom === "fit" ? fitScale : zoom;
   const canPan = zoom !== "fit";
@@ -122,6 +125,8 @@ export function useZoomPanViewport({
       return;
     }
     prevEffectiveZoomRef.current = effectiveZoom;
+    const anchor = pendingAnchorRef.current;
+    pendingAnchorRef.current = null;
 
     const overflows =
       viewport.scrollWidth > viewport.clientWidth + 1 ||
@@ -140,6 +145,7 @@ export function useZoomPanViewport({
     }
 
     const next = anchoredScrollAfterZoom({
+      ...(anchor ? { anchorX: anchor.x, anchorY: anchor.y } : {}),
       clientHeight: viewport.clientHeight,
       clientWidth: viewport.clientWidth,
       newZoom: effectiveZoom,
@@ -295,9 +301,26 @@ export function useZoomPanViewport({
         return;
       }
       event.preventDefault();
+      const viewport = viewportRef.current;
+      if (viewport) {
+        const rect = viewport.getBoundingClientRect();
+        pendingAnchorRef.current = {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        };
+      }
+      // Trackpad pinch arrives as ctrl+wheel — smooth factor, not steps.
+      if (event.ctrlKey) {
+        const deltaY = event.deltaY;
+        setZoom((current) => {
+          const base = current === "fit" ? fitScale : current;
+          return pinchZoom(base, deltaY);
+        });
+        return;
+      }
       adjustZoom(event.deltaY < 0 ? 1 : -1);
     },
-    [adjustZoom, enabled]
+    [adjustZoom, enabled, fitScale]
   );
 
   return {

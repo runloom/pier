@@ -1,7 +1,4 @@
-import {
-  findPluginIdDotPrefixConflict,
-  findWorkbenchWidgetIdConflict,
-} from "@main/services/plugin-contribution-conflicts.ts";
+import { findPluginIdDotPrefixConflict } from "@main/services/plugin-contribution-conflicts.ts";
 import type { PluginStateStore } from "@main/services/plugin-service.ts";
 import { createPluginService } from "@main/services/plugin-service.ts";
 import type { PluginRegistryState } from "@shared/contracts/plugin.ts";
@@ -94,21 +91,6 @@ function builtinSourceWithPanels(id: string, panelIds: readonly string[]) {
         permissions: [],
         title: panelId,
       })),
-      source: { kind: "builtin" },
-      version: "1.0.0",
-    },
-  };
-}
-
-function builtinSourceWithWidget(id: string, widgetId: string) {
-  return {
-    kind: "builtin" as const,
-    manifest: {
-      apiVersion: 1,
-      engines: { pier: ">=0.1.0" },
-      id,
-      workbenchWidgets: [{ id: widgetId, permissions: [], title: widgetId }],
-      name: id,
       source: { kind: "builtin" },
       version: "1.0.0",
     },
@@ -236,25 +218,6 @@ describe("plugin registry — 插件 id 互为点分前缀拒绝", () => {
     expect(result.diagnostics[0]?.message).toContain("shared.status");
   });
 
-  it("外部插件也参与跨插件工作台物料唯一性校验", async () => {
-    const external = externalSource("pier.beta");
-    external.manifest.workbenchWidgets = [
-      { id: "shared.widget", permissions: [], title: "External widget" },
-    ];
-    const service = createPluginService({
-      externalRuntimeSources: () => [external],
-      sources: [builtinSourceWithWidget("pier.alpha", "shared.widget")],
-      state: memoryState(),
-    });
-
-    const result = await service.list();
-
-    expect(result.entries.map((entry) => entry.manifest.id)).toEqual([
-      "pier.alpha",
-    ]);
-    expect(result.diagnostics[0]?.message).toContain("shared.widget");
-  });
-
   it("同一插件清单内的重复 command id 会被拒绝", async () => {
     const service = createPluginService({
       sources: [
@@ -327,18 +290,6 @@ describe("plugin registry — 插件 id 互为点分前缀拒绝", () => {
 
     expect(result.entries).toEqual([]);
     expect(result.diagnostics[0]?.message).toContain("core.agent-status");
-  });
-
-  it("插件清单不能占用宿主核心工作台物料 id", async () => {
-    const service = createPluginService({
-      sources: [builtinSourceWithWidget("pier.duplicate", "core.custom-card")],
-      state: memoryState(),
-    });
-
-    const result = await service.list();
-
-    expect(result.entries).toEqual([]);
-    expect(result.diagnostics[0]?.message).toContain("core.custom-card");
   });
 
   it("内置与外部插件的 command id 冲突时拒绝外部插件", async () => {
@@ -416,60 +367,5 @@ describe("plugin registry — terminalStatusItems id 跨插件唯一性", () => 
       "pier.beta",
     ]);
     expect(result.diagnostics).toHaveLength(0);
-  });
-});
-
-function manifestWith(overrides: {
-  workbenchWidgets?: Array<{
-    id: string;
-    permissions: string[];
-    title: string;
-  }>;
-  id: string;
-}) {
-  return pluginManifestSchema.parse({
-    apiVersion: 1,
-    workbenchWidgets: overrides.workbenchWidgets ?? [],
-    engines: { pier: ">=0.1.0" },
-    id: overrides.id,
-    name: overrides.id,
-    source: { kind: "builtin" },
-    version: "1.0.0",
-  });
-}
-
-describe("findWorkbenchWidgetIdConflict", () => {
-  it("两个插件声明同一 widget id 时返回冲突 id", () => {
-    const accepted = manifestWith({
-      workbenchWidgets: [
-        { id: "pier.a.widget", permissions: [], title: "A Widget" },
-      ],
-      id: "pier.a",
-    });
-    const candidate = manifestWith({
-      workbenchWidgets: [
-        { id: "pier.a.widget", permissions: [], title: "Steal" },
-      ],
-      id: "pier.b",
-    });
-    expect(findWorkbenchWidgetIdConflict([accepted], candidate)).toBe(
-      "pier.a.widget"
-    );
-  });
-
-  it("无重叠 id 时返回 null", () => {
-    const accepted = manifestWith({
-      workbenchWidgets: [
-        { id: "pier.a.widget", permissions: [], title: "A Widget" },
-      ],
-      id: "pier.a",
-    });
-    const candidate = manifestWith({
-      workbenchWidgets: [
-        { id: "pier.b.widget", permissions: [], title: "B Widget" },
-      ],
-      id: "pier.b",
-    });
-    expect(findWorkbenchWidgetIdConflict([accepted], candidate)).toBeNull();
   });
 });

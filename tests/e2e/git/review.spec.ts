@@ -22,7 +22,7 @@ import {
   GIT_REVIEW_RESPONSIVE_INLINE_ENTER_PX,
   GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX,
 } from "../../../src/plugins/builtin/git/renderer/review/responsive-diff.ts";
-import { selectTheme, setWindowSize } from "../workbench/e2e-harness.ts";
+import { selectTheme, setWindowSize } from "../support/app-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");

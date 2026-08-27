@@ -52,7 +52,7 @@ export function estimateReviewSlotItem(options: {
   const { slot } = options;
   const stageControl = reviewStageControl(slot.group, slot.status);
   const lineStats = lineStatsFromReviewSlot(slot);
-  return {
+  const base = {
     cacheKey: `${GIT_REVIEW_ESTIMATE_CACHE_PREFIX}${slot.sectionKey}`,
     fileDisplay: {
       path: slot.targetPath,
@@ -60,11 +60,24 @@ export function estimateReviewSlotItem(options: {
       ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
     },
     id: slot.sectionKey,
-    kind: "estimate",
     ...(lineStats === undefined ? {} : { lineStats }),
     patch: null,
     ...(stageControl === null ? {} : { stageControl }),
   };
+  if (slot.group === "conflict" && slot.xy !== undefined) {
+    return {
+      ...base,
+      conflict: {
+        contents: null,
+        contentsDigest: `estimate:${slot.sectionKey}`,
+        presentation: "file-level" as const,
+        stages: { baseOid: null, oursOid: null, theirsOid: null },
+        xy: slot.xy,
+      },
+      kind: "conflict" as const,
+    };
+  }
+  return { ...base, kind: "estimate" as const };
 }
 
 /** 二进制 notice：不 hydrate，index 即可出说明卡。 */

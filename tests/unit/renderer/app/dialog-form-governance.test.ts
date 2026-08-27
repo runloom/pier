@@ -28,12 +28,6 @@ const COMMIT_FORM_DIALOG_FILES = [
   "packages/plugin-grok/src/renderer/switch-confirm-dialog.tsx",
   "packages/plugin-grok/src/renderer/add-account-content.tsx",
   "packages/plugin-claude/src/renderer/add-account-content.tsx",
-  "src/renderer/panel-kits/workbench/core-widgets/custom-card/add-block-dialog.tsx",
-] as const;
-
-const WIDGET_SETTINGS_FILES = [
-  "src/renderer/panel-kits/workbench/core-widgets/cost/overview-settings.tsx",
-  "src/renderer/panel-kits/workbench/core-widgets/custom-card/settings.tsx",
 ] as const;
 
 /** Body fake-footer: cancel/primary cluster that should live in setFooter. */
@@ -71,7 +65,6 @@ describe("dialog form governance", () => {
     expect(agents).toContain("即时偏好（live preference）");
     expect(agents).toContain("dialog-form-layout.ts");
     expect(agents).toContain("禁止 body 内仿 footer");
-    expect(agents).toContain("WorkbenchSettingsDialog");
     expect(agents).toContain(
       "tests/unit/renderer/app/dialog-form-governance.test.ts"
     );
@@ -120,45 +113,6 @@ describe("dialog form governance", () => {
     expect(host).not.toContain("viewportFade");
   });
 
-  it("keeps WorkbenchSettingsDialog as live-preference shell with optional sticky footer", () => {
-    const dialog = source(
-      "src/renderer/panel-kits/workbench/settings-dialog.tsx"
-    );
-    expect(dialog).toContain("workbench-widget-settings-dialog");
-    expect(dialog).toContain("settingsComponent");
-    expect(dialog).toContain("px-6 py-4");
-    expect(dialog).toContain("px-6 py-5");
-    // Optional sticky footer via setFooter (same chrome as content dialog).
-    expect(dialog).toContain("DialogFooter");
-    expect(dialog).toContain("setFooter");
-    expect(dialog).toContain('data-testid="workbench-widget-settings-footer"');
-    expect(dialog).toContain("即时偏好");
-    // Clear footer only when dialog fully closes (widget falsy), not on
-    // instance-id layout race after child registration.
-    expect(dialog).not.toContain("settingsInstanceId");
-    expect(dialog).toContain("setFooterState(null)");
-    expect(dialog).toMatch(/if\s*\(\s*widget\s*\)/);
-  });
-
-  it("keeps workbench settings body as a native flex scroller (max-h shell)", () => {
-    const dialog = source(
-      "src/renderer/panel-kits/workbench/settings-dialog.tsx"
-    );
-    // Same bug class as content dialog: flex max-h + ScrollArea clips tall
-    // settings (custom-card block lists). Body owns native overflow-y-auto.
-    expect(dialog).toContain('data-slot="workbench-widget-settings-body"');
-    expect(dialog).toContain("overflow-y-auto");
-    expect(dialog).toContain("min-h-0");
-    expect(dialog).toContain("flex-1");
-    expect(dialog).toContain(
-      "max-h-[min(36rem,calc(100vh-var(--app-titlebar-height)-2rem))]"
-    );
-    expect(dialog).toContain("scrollFadeClassName");
-    expect(dialog).toContain('data-scrollbar="overlay"');
-    expect(dialog).not.toMatch(/<ScrollArea\b/);
-    expect(dialog).not.toContain("viewportFade");
-  });
-
   it("requires skill content-dialog MarkdownSourceEditor to use autoHeight", () => {
     // Parent dialog body owns scroll; nested CM overflow traps wheel otherwise.
     const skillDialogSources = [
@@ -202,64 +156,6 @@ describe("dialog form governance", () => {
       }
     }
     expect(offenders).toEqual([]);
-  });
-
-  it("aligns widget settings to dialog commit-form field layout (vertical, full-width)", () => {
-    for (const file of WIDGET_SETTINGS_FILES) {
-      const text = source(file);
-      expect(text).toContain("@pier/ui/dialog-form-layout.ts");
-      expect(text).toContain("DIALOG_COMMIT_FORM_CLASS");
-      expect(text).toContain("workbench-live-preference-form");
-      // Default 28px Select — no size="sm" on primary form triggers.
-      expect(text).not.toMatch(/SelectTrigger[^>]*size=["']sm["']/);
-      // No nested rounded-xl form cards (Dialog shell is enough).
-      // Multi-instance lists may use Item outline, not Card / rounded-xl shells.
-      expect(text).not.toMatch(/rounded-xl\s+border/);
-      expect(text).not.toMatch(/from\s+["']@pier\/ui\/card/);
-      // Primary scalar fields must not use settings-page horizontal rows
-      // (left label + narrow right control). Checkbox list rows may stay horizontal.
-      expect(text).not.toMatch(
-        /FieldContent[\s\S]{0,200}SelectTrigger[\s\S]{0,80}w-\[11/
-      );
-    }
-    const cost = source(WIDGET_SETTINGS_FILES[0]);
-    expect(cost).toContain("DIALOG_COMMIT_FIELD_GROUP_CLASS");
-
-    const customCard = source(WIDGET_SETTINGS_FILES[1]);
-    expect(customCard).toContain("ItemGroup");
-    expect(customCard).toContain("DIALOG_FOOTER_ACTIONS_CLASS");
-    expect(customCard).toContain("useContentDialogFooter");
-    expect(customCard).toContain("setFooter");
-    expect(customCard).toContain("openAddBlockDialog");
-    const customCardAdd = source(
-      "src/renderer/panel-kits/workbench/core-widgets/custom-card/add-block-dialog.tsx"
-    );
-    expect(customCardAdd).toContain("openAppContentDialog");
-    expect(customCardAdd).toContain("DIALOG_COMMIT_FIELD_GROUP_CLASS");
-    expect(customCardAdd).toContain("DIALOG_FOOTER_ACTIONS_CLASS");
-    const customCardEditor = source(
-      "src/renderer/panel-kits/workbench/core-widgets/custom-card/block-editor.tsx"
-    );
-    expect(customCardEditor).toContain('variant="outline"');
-    expect(customCardEditor).toContain("DIALOG_COMMIT_FIELD_GROUP_CLASS");
-    const settingsHost = source(
-      "src/renderer/panel-kits/workbench/settings-dialog.tsx"
-    );
-    expect(settingsHost).toContain("DialogFooter");
-    expect(settingsHost).toContain("setFooter");
-    expect(settingsHost).toContain(
-      'data-testid="workbench-widget-settings-footer"'
-    );
-    // Primary Select is full width under vertical label; range chips stay content-sized.
-    expect(cost).toMatch(/SelectTrigger[\s\S]{0,80}w-full/);
-    expect(cost).toContain("w-fit max-w-full");
-    expect(cost).not.toMatch(/ToggleGroupItem[\s\S]{0,40}flex-1/);
-    // Source checkboxes wrap horizontally (not a tall single-column list).
-    expect(cost).toContain("flex-row flex-wrap");
-    // Must not reintroduce left-label / right-control primary rows for view.
-    expect(cost).not.toMatch(
-      /orientation=["']horizontal["'][\s\S]{0,120}cost-overview-preset/
-    );
   });
 
   it("keeps worktree create as the commit-form reference implementation", () => {

@@ -35,7 +35,6 @@ import type {
   PluginGroupContentClaim,
   RendererPluginPanelsFacade,
 } from "./renderer-panels.ts";
-import type { RendererWorkbenchWidgetRegistration } from "./workbench.ts";
 
 export type { PanelTransferRegistration } from "./panel-transfer-registration.ts";
 export type {
@@ -69,13 +68,6 @@ export type {
   PluginPanelRegistration,
   RendererPluginPanelsFacade,
 } from "./renderer-panels.ts";
-export type {
-  RendererWorkbenchWidgetAction,
-  RendererWorkbenchWidgetRegistration,
-  WorkbenchWidgetActionContext,
-  WorkbenchWidgetComponentProps,
-  WorkbenchWidgetSettingsProps,
-} from "./workbench.ts";
 
 export type RendererPluginMessageValues = Record<string, number | string>;
 
@@ -467,9 +459,6 @@ export interface RendererPluginContext {
     register(item: RendererTerminalStatusItem): () => void;
   };
   terminals: RendererPluginTerminalsContext;
-  workbenchWidgets: {
-    register(registration: RendererWorkbenchWidgetRegistration): () => void;
-  };
   worktrees: RendererPluginWorktreesFacade;
 }
 

@@ -22,6 +22,12 @@ import { taskPanelMetadataSchema } from "./tasks.ts";
 
 export const rendererCommandSchema = z.discriminatedUnion("type", [
   z.object({
+    command: z.string().min(1).max(8192),
+    intent: z.enum(["default", "destructive"]),
+    type: z.literal("dialog.confirm"),
+    windowId: z.string().min(1).optional(),
+  }),
+  z.object({
     type: z.literal("panel.list"),
     windowId: z.string().min(1).optional(),
   }),
