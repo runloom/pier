@@ -12,7 +12,7 @@ import {
   prioritizeReviewNavigationDemand,
   reviewDocumentDemandForRenderWindow,
   selectBodyHydrationPriorityEntryKeys,
-} from "../../../../../src/plugins/builtin/git/renderer/review/document/demand.ts";
+} from "../../../../../../src/plugins/builtin/git/renderer/review/document/demand.ts";
 
 function entry(index: number): GitReviewIndexEntry {
   const path = `src/file-${index}.ts`;

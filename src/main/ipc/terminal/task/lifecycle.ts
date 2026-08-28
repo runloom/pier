@@ -4,7 +4,10 @@ import type {
   TaskExitSource,
   TaskPanelStatus,
 } from "@shared/contracts/tasks.ts";
-import { type TerminalTaskExitStatus, taskExitTabPatch } from "./tab-chrome.ts";
+import {
+  type TerminalTaskExitStatus,
+  taskExitTabPatch,
+} from "../tab-chrome.ts";
 
 export interface TerminalTaskLifecycleDeps {
   completePanel(

@@ -40,9 +40,9 @@ import { isTerminalRuntimeConfig } from "./runtime-config.ts";
 import { registerTerminalSearchIpc } from "./search.ts";
 import { registerTerminalSessionTitleIpc } from "./session/title-ipc.ts";
 import { registerTerminalShortcutIpc } from "./shortcuts-ipc.ts";
-import { registerTerminalTaskLifecycleForwarding } from "./task-lifecycle-wiring.ts";
-import { createTaskOutputTerminalBindings } from "./task-output-bindings.ts";
-import { registerTerminalTaskOutputRebindIpc } from "./task-output-rebind.ts";
+import { registerTerminalTaskLifecycleForwarding } from "./task/lifecycle-wiring.ts";
+import { createTaskOutputTerminalBindings } from "./task/output-bindings.ts";
+import { registerTerminalTaskOutputRebindIpc } from "./task/output-rebind.ts";
 import {
   bindTerminalTransferRuntime,
   registerTerminalTransferGuardIpc,

@@ -1,30 +1,30 @@
 import { matchAgentCommand } from "@shared/agent-command-detection.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
-import { isWindowDetaching } from "../../services/agents/window-detaching-guard.ts";
-import { isSuspendedJobExitCode } from "../../services/foreground-activity/entry.ts";
+import { isWindowDetaching } from "../../../services/agents/window-detaching-guard.ts";
+import { isSuspendedJobExitCode } from "../../../services/foreground-activity/entry.ts";
 import {
   patchTerminalPanelAgentStatus,
   patchTerminalPanelTab,
   patchTerminalPanelTaskStatus,
   updateTerminalPanelTitle,
-} from "../../state/terminal-session-state.ts";
+} from "../../../state/terminal-session-state.ts";
 import {
   findAppWindowByElectronId,
   findInternalWindowId,
-} from "../../windows/identity.ts";
-import { foregroundActivityService } from "../foreground-activity.ts";
-import { recordNativeTerminalRoute } from "./debug.ts";
-import { broadcastAgentEndStateForPanel } from "./end-state-broadcast.ts";
-import { forwardToWindow } from "./forwarding.ts";
-import type { NativeAddon } from "./native-addon.ts";
-import { fromNativePanelKey } from "./panel-id.ts";
-import { parseTaskExitTitle } from "./task-exit-title.ts";
+} from "../../../windows/identity.ts";
+import { foregroundActivityService } from "../../foreground-activity.ts";
+import { recordNativeTerminalRoute } from "../debug.ts";
+import { broadcastAgentEndStateForPanel } from "../end-state-broadcast.ts";
+import { forwardToWindow } from "../forwarding.ts";
+import type { NativeAddon } from "../native-addon.ts";
+import { fromNativePanelKey } from "../panel-id.ts";
+import { windowRecordIdFor } from "../window-scope.ts";
+import { parseTaskExitTitle } from "./exit-title.ts";
 import {
   createTerminalTaskLifecycle,
   type ExitCodeHintArgs,
   type TerminalPanelSurface,
-} from "./task-lifecycle.ts";
-import { windowRecordIdFor } from "./window-scope.ts";
+} from "./lifecycle.ts";
 
 const suppressedSurfaceClosePanelIds = new Set<string>();
 /** Last OSC title forwarded per panel — shells often re-set the same title on precmd. */

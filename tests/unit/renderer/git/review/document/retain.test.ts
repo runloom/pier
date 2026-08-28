@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { retainLoadedDocumentForEntry } from "../../../../../src/plugins/builtin/git/renderer/review/document/loader-utils.ts";
-import type { GitReviewIndexEntry } from "../../../../../src/shared/contracts/git/review.ts";
-import { patchDocument } from "./document-fixture.ts";
+import { retainLoadedDocumentForEntry } from "../../../../../../src/plugins/builtin/git/renderer/review/document/loader-utils.ts";
+import type { GitReviewIndexEntry } from "../../../../../../src/shared/contracts/git/review.ts";
+import { patchDocument } from "./fixture.ts";
 
 function makeEntry(
   slots: readonly {

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { GitReviewDocumentResource } from "../../../../../src/plugins/builtin/git/renderer/review/document/resource.ts";
+import type { GitReviewDocumentResource } from "../../../../../../src/plugins/builtin/git/renderer/review/document/resource.ts";
 import {
   clearAllReviewDocumentSoftCachesForTests,
   publishReviewDocumentSoftCache,
   readReviewDocumentSoftCache,
   reviewDocumentSoftCacheScopeKey,
-} from "../../../../../src/plugins/builtin/git/renderer/review/document/soft-cache.ts";
-import type { GitReviewIndexEntry } from "../../../../../src/shared/contracts/git/review.ts";
-import { patchDocument } from "./document-fixture.ts";
+} from "../../../../../../src/plugins/builtin/git/renderer/review/document/soft-cache.ts";
+import type { GitReviewIndexEntry } from "../../../../../../src/shared/contracts/git/review.ts";
+import { patchDocument } from "./fixture.ts";
 
 function entry(path: string): GitReviewIndexEntry {
   return {

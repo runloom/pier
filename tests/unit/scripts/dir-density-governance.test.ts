@@ -25,6 +25,8 @@ const NO_PARENT_PREFIX_DIRS: { dir: string; bannedPrefix: string }[] = [
   { dir: "src/main/services/project-skills/repair", bannedPrefix: "repair-" },
   { dir: "src/main/services/project-skills/import", bannedPrefix: "import-" },
   { dir: "src/main/app-core", bannedPrefix: "app-core-" },
+  { dir: "src/main/app-core/plugin-runtime", bannedPrefix: "plugin-runtime-" },
+  { dir: "src/main/ipc/terminal/task", bannedPrefix: "task-" },
   { dir: "src/main/services/file-query", bannedPrefix: "file-query-" },
   {
     dir: "src/plugins/builtin/git/renderer/review",

@@ -1,7 +1,7 @@
 import {
   createManagedPluginRuntimeReconciler,
   runtimeSourceActivationKey,
-} from "@main/app-core/managed-plugin-runtime-reconciler.ts";
+} from "@main/app-core/plugin-runtime/runtime-reconciler.ts";
 import type { ExternalMainPluginRuntime } from "@main/plugins/external-main-runtime.ts";
 import type { ManagedPluginRuntimeSource } from "@main/services/managed-plugins/install-runtime.ts";
 import { describe, expect, it, vi } from "vitest";

@@ -1,7 +1,7 @@
 import {
   createManagedPluginDevRuntimeWatchRegistry,
   isManagedPluginDevRuntimeFile,
-} from "@main/app-core/managed-plugin-dev-runtime-watch.ts";
+} from "@main/app-core/plugin-runtime/dev-runtime-watch.ts";
 import { describe, expect, it, vi } from "vitest";
 
 describe("managed plugin dev runtime watch", () => {

@@ -48,7 +48,7 @@ import {
   within,
 } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
-import { patchDocument, stateDocument } from "./document-fixture.ts";
+import { patchDocument, stateDocument } from "./document/fixture.ts";
 
 function render(ui: ReactElement, options?: Parameters<typeof renderBase>[1]) {
   const wrapped = (

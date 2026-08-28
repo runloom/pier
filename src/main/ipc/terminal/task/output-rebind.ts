@@ -1,10 +1,10 @@
 import { taskOutputPanelParamsSchema } from "@shared/contracts/tasks.ts";
 import type { IpcMain, WebContents } from "electron";
-import type { AppWindow } from "../../windows/app-window.ts";
-import { findInternalWindowId } from "../../windows/identity.ts";
-import type { NativeAddon } from "./native-addon.ts";
-import { toNativePanelKey } from "./panel-id.ts";
-import type { TaskOutputTerminalBindings } from "./task-output-bindings.ts";
+import type { AppWindow } from "../../../windows/app-window.ts";
+import { findInternalWindowId } from "../../../windows/identity.ts";
+import type { NativeAddon } from "../native-addon.ts";
+import { toNativePanelKey } from "../panel-id.ts";
+import type { TaskOutputTerminalBindings } from "./output-bindings.ts";
 
 /** Renderer 只提交视图选择；main 在同一窗口作用域内完成 native adapter 重绑定。 */
 export function registerTerminalTaskOutputRebindIpc(args: {

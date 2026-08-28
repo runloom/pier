@@ -1,7 +1,7 @@
 import {
   registerTerminalTaskLifecycleForwarding,
   suppressNextTerminalSurfaceClose,
-} from "@main/ipc/terminal/task-lifecycle-wiring.ts";
+} from "@main/ipc/terminal/task/lifecycle-wiring.ts";
 import {
   armDetaching,
   disarmDetaching,
@@ -31,7 +31,7 @@ vi.mock("@main/ipc/terminal/forwarding.ts", () => ({
 let currentLifecycleId: string | undefined;
 let currentSurface: "agent" | "shell" | "task" = "shell";
 
-vi.mock("@main/ipc/terminal/task-lifecycle.ts", () => ({
+vi.mock("@main/ipc/terminal/task/lifecycle.ts", () => ({
   createTerminalTaskLifecycle: () => ({
     completeFromExitCodeHint: completeFromExitCodeHintMock,
     completeFromNativeProcessClose: completeFromNativeProcessCloseMock,

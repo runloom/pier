@@ -1,7 +1,7 @@
 import {
   createTerminalTaskLifecycle,
   type TerminalTaskLifecycleDeps,
-} from "@main/ipc/terminal/task-lifecycle.ts";
+} from "@main/ipc/terminal/task/lifecycle.ts";
 import { describe, expect, it, vi } from "vitest";
 
 function deps(): TerminalTaskLifecycleDeps {

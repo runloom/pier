@@ -1,5 +1,5 @@
 import type { NativeAddon } from "@main/ipc/terminal/native-addon.ts";
-import { createTaskOutputTerminalBindings } from "@main/ipc/terminal/task-output-bindings.ts";
+import { createTaskOutputTerminalBindings } from "@main/ipc/terminal/task/output-bindings.ts";
 import type { TaskService } from "@main/services/tasks/service.ts";
 import type {
   TaskOutputUpdate,

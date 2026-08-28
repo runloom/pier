@@ -1,5 +1,5 @@
-import { listConfiguredWorkspaceRoots } from "../services/managed-plugins/mode.ts";
-import { OFFICIAL_BUNDLED_PLUGIN_SPECS } from "./bundled-official-plugins.ts";
+import { listConfiguredWorkspaceRoots } from "../../services/managed-plugins/mode.ts";
+import { OFFICIAL_BUNDLED_PLUGIN_SPECS } from "../bundled-official-plugins.ts";
 
 export interface WorkspaceDevPluginSpec {
   devPackageDir: string;

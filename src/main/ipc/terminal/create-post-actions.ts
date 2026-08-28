@@ -11,7 +11,7 @@ import {
 } from "./initial-input-gate.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { pasteTerminalText, sendTerminalSubmitReturn } from "./submit-text.ts";
-import type { ExitCodeHintArgs } from "./task-lifecycle.ts";
+import type { ExitCodeHintArgs } from "./task/lifecycle.ts";
 
 const INITIAL_INPUT_RETRY_DELAYS_MS = [50, 100, 200, 400, 800] as const;
 

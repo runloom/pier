@@ -5,13 +5,13 @@ import type {
   GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
 import { describe, expect, it, vi } from "vitest";
-import { GitReviewDocumentLoader } from "../../../../../src/plugins/builtin/git/renderer/review/document/loader.ts";
-import type { GitReviewDocumentResource } from "../../../../../src/plugins/builtin/git/renderer/review/document/resource.ts";
+import { GitReviewDocumentLoader } from "../../../../../../src/plugins/builtin/git/renderer/review/document/loader.ts";
+import type { GitReviewDocumentResource } from "../../../../../../src/plugins/builtin/git/renderer/review/document/resource.ts";
 import {
   patchDocument,
   patchDocumentForEntry,
   stateDocument,
-} from "./document-fixture.ts";
+} from "./fixture.ts";
 
 function entry(
   index: number,

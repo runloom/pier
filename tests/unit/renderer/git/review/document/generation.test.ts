@@ -8,7 +8,7 @@ import type {
   GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
 import { describe, expect, it } from "vitest";
-import { patchDocument } from "./document-fixture.ts";
+import { patchDocument } from "./fixture.ts";
 
 function entry(index: number): GitReviewIndexEntry {
   const path = `src/file-${index}.ts`;

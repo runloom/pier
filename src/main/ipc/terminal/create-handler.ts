@@ -53,8 +53,8 @@ import {
 import type { NativeAddon } from "./native-addon.ts";
 import { toNativePanelKey } from "./panel-id.ts";
 import { persistInitialTerminalTab } from "./tab-chrome.ts";
-import type { RegisteredTerminalTaskLifecycle } from "./task-lifecycle-wiring.ts";
-import type { TaskOutputTerminalBindings } from "./task-output-bindings.ts";
+import type { RegisteredTerminalTaskLifecycle } from "./task/lifecycle-wiring.ts";
+import type { TaskOutputTerminalBindings } from "./task/output-bindings.ts";
 import { windowRecordIdFor } from "./window-scope.ts";
 
 function isStringRecord(value: unknown): value is Record<string, string> {

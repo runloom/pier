@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { applyReviewNavigationDemand } from "../../../../../src/plugins/builtin/git/renderer/review/document/apply-navigation-demand.ts";
 import { GitReviewDocumentLoader } from "../../../../../src/plugins/builtin/git/renderer/review/document/loader.ts";
 import { GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT } from "../../../../../src/plugins/builtin/git/renderer/review/document/loader-options.ts";
-import { patchDocumentForEntry } from "./document-fixture.ts";
+import { patchDocumentForEntry } from "./document/fixture.ts";
 
 function entry(index: number): GitReviewIndexEntry {
   const path = `src/file-${index}.ts`;

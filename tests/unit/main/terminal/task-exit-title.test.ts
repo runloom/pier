@@ -1,4 +1,4 @@
-import { parseTaskExitTitle } from "@main/ipc/terminal/task-exit-title.ts";
+import { parseTaskExitTitle } from "@main/ipc/terminal/task/exit-title.ts";
 import { TASK_EXIT_TITLE_PREFIX } from "@shared/contracts/tasks.ts";
 import { describe, expect, it } from "vitest";
 

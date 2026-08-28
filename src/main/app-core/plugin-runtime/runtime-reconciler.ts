@@ -1,5 +1,5 @@
-import type { ExternalMainPluginRuntime } from "../plugins/external-main-runtime.ts";
-import type { ManagedPluginRuntimeSource } from "../services/managed-plugins/install-runtime.ts";
+import type { ExternalMainPluginRuntime } from "../../plugins/external-main-runtime.ts";
+import type { ManagedPluginRuntimeSource } from "../../services/managed-plugins/install-runtime.ts";
 
 export function runtimeSourceActivationKey(
   source: ManagedPluginRuntimeSource

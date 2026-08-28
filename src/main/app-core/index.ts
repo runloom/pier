@@ -82,9 +82,6 @@ import { createExternalMainPluginContextFactory } from "./external-plugin-contex
 import { wireHostCatalogAndAppUpdates } from "./host-catalog-boot.ts";
 import { createLazyAppCore } from "./lazy.ts";
 import { createAppLiveModulesService } from "./live-modules-wiring.ts";
-import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
-import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
-import { resolveWorkspaceDevPluginSpecs } from "./managed-plugin-workspace-specs.ts";
 import {
   createForegroundActivityFacade,
   createNotificationCenterCommandFacade,
@@ -92,6 +89,9 @@ import {
 import { wireAppCoreWindowAndPanelTransfer } from "./panel-transfer.ts";
 import { wireAppCorePierHomeAndSkills } from "./pier-home.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
+import { createManagedPluginDevRuntimeWatchRegistry } from "./plugin-runtime/dev-runtime-watch.ts";
+import { createManagedPluginRuntimeReconciler } from "./plugin-runtime/runtime-reconciler.ts";
+import { resolveWorkspaceDevPluginSpecs } from "./plugin-runtime/workspace-specs.ts";
 import { requireAppCoreInitialization } from "./readiness.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
 import {

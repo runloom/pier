@@ -7,9 +7,9 @@ import { describe, expect, it, vi } from "vitest";
 import {
   diffMetrics,
   totalScrollHeight,
-} from "../../../../../packages/ui/src/diff-view/geometry.ts";
-import { toCodeViewItems } from "../../../../../packages/ui/src/diff-view/items.ts";
-import { reviewContentEntryKeysInOrder } from "../../../../../src/plugins/builtin/git/renderer/review/document/body-class.ts";
+} from "../../../../../../packages/ui/src/diff-view/geometry.ts";
+import { toCodeViewItems } from "../../../../../../packages/ui/src/diff-view/items.ts";
+import { reviewContentEntryKeysInOrder } from "../../../../../../src/plugins/builtin/git/renderer/review/document/body-class.ts";
 import {
   compareReviewTreePaths,
   defaultReviewCollidingFileLabel,
@@ -20,10 +20,10 @@ import {
   orderReviewPresentationSlots,
   projectReviewDocumentResource,
   projectReviewLedger,
-} from "../../../../../src/plugins/builtin/git/renderer/review/document/projection.ts";
-import type { GitReviewDocumentResource } from "../../../../../src/plugins/builtin/git/renderer/review/document/resource.ts";
-import { gitReviewTreeModel } from "../../../../../src/plugins/builtin/git/renderer/review/tree.tsx";
-import { patchDocument } from "./document-fixture.ts";
+} from "../../../../../../src/plugins/builtin/git/renderer/review/document/projection.ts";
+import type { GitReviewDocumentResource } from "../../../../../../src/plugins/builtin/git/renderer/review/document/resource.ts";
+import { gitReviewTreeModel } from "../../../../../../src/plugins/builtin/git/renderer/review/tree.tsx";
+import { patchDocument } from "./fixture.ts";
 
 function entry(index: number): GitReviewIndexEntry {
   const path = `src/file-${index}.ts`;

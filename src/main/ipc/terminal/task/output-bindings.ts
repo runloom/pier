@@ -8,9 +8,9 @@ import {
   selectedTaskOutputRunId,
   taskOutputBindingGeneration,
 } from "@shared/contracts/tasks.ts";
-import type { TaskService } from "../../services/tasks/service.ts";
-import type { NativeAddon } from "./native-addon.ts";
-import { suppressNextTerminalSurfaceClose } from "./task-lifecycle-wiring.ts";
+import type { TaskService } from "../../../services/tasks/service.ts";
+import type { NativeAddon } from "../native-addon.ts";
+import { suppressNextTerminalSurfaceClose } from "./lifecycle-wiring.ts";
 
 interface OutputBinding {
   browserWindowId: number;

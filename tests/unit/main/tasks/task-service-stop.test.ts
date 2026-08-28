@@ -1,4 +1,4 @@
-import { createTerminalTaskLifecycle } from "@main/ipc/terminal/task-lifecycle.ts";
+import { createTerminalTaskLifecycle } from "@main/ipc/terminal/task/lifecycle.ts";
 import { createTaskService } from "@main/services/tasks/service.ts";
 import type { TaskLaunchPlan } from "@shared/contracts/tasks.ts";
 import { TASK_STOP_GRACE_MS } from "@shared/contracts/tasks.ts";
