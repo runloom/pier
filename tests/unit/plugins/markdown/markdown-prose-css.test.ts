@@ -22,6 +22,33 @@ function ruleBody(selectorFragment: string): string {
   return css.slice(open + 1, close);
 }
 
+describe("markdown prose comfortable measure wrapping", () => {
+  it("breaks long tokens at the measure instead of stretching the column", () => {
+    const proseBody = ruleBody('[data-slot="markdown-prose"] {');
+    expect(proseBody).toContain("max-width: var(--md-measure)");
+    expect(proseBody).toContain("--md-measure-comfortable: 42rem");
+    expect(proseBody).toContain("overflow-wrap: anywhere");
+    expect(proseBody).toContain("text-align: start");
+    expect(proseBody).toContain("text-wrap: wrap");
+    expect(proseBody).not.toContain("85ch");
+    expect(ruleBody(".md-inline-code")).toContain("overflow-wrap: anywhere");
+    expect(ruleBody(".md-footnote-popover {")).toContain(
+      "overflow-wrap: anywhere"
+    );
+  });
+
+  it("keeps list grid tracks shrinkable so unbreakable code cannot expand them", () => {
+    const listBody = ruleBody(".md-ul,");
+    expect(listBody).toContain("display: grid");
+    expect(listBody).toContain("grid-template-columns: minmax(0, 1fr)");
+    expect(listBody).toContain("padding-inline-end: 0");
+    expect(listBody).toContain("text-wrap: wrap");
+    expect(ruleBody(".md-blockquote")).toContain("padding-inline-end: 0");
+    expect(ruleBody(".md-li {")).toContain("min-width: 0");
+    expect(ruleBody(".md-li-task")).toContain("min-width: 0");
+  });
+});
+
 describe("markdown prose table cell wrapping", () => {
   it("restores normal wrapping and break-anywhere on cells", () => {
     const body = ruleBody(

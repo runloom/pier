@@ -6,6 +6,7 @@
 
 ### Changed
 
+- **Markdown 舒适阅读栏。** 版心改为根字号 `42rem`（不再随文档字体的 `ch` 或预览缩放伸缩）；长路径在栏内折行，左对齐不两端对齐；HTML `align=justify` 丢弃；callout 列表不继承 `text-balance`。
 - **Canvas 用通用插件通道组合。** 画布经 `pluginData` 投影、`pluginAction.invoke`、`settings.open` 与宿主聚合 hook 自拼界面；不提供官方账号组件或第二套 widget 贡献点。
 - **Git Review Z2 批摘录主路径。** content 正文默认走 `git.getReviewExcerptBatch`
   （单世代、16–32 文件一批）；`getReviewFileDocument` 只用于选中 boost、失败重试
