@@ -75,73 +75,76 @@ describe("canvas Tailwind native unpack verifier", () => {
     ).toBe(true);
   });
 
-  it("loads oxide and lightningcss from a flattened unpacked layout", () => {
-    const dist = makeTempDir("pier-unpack-flat-");
-    const app = join(dist, "mac-arm64", "Pier.app");
-    const unpacked = unpackedResourcesDir(app);
-    const modules = join(unpacked, "node_modules");
-    mkdirSync(join(app, "Contents", "MacOS"), { recursive: true });
-    mkdirSync(modules, { recursive: true });
+  it.skipIf(process.platform !== "darwin")(
+    "loads oxide and lightningcss from a flattened unpacked layout",
+    () => {
+      const dist = makeTempDir("pier-unpack-flat-");
+      const app = join(dist, "mac-arm64", "Pier.app");
+      const unpacked = unpackedResourcesDir(app);
+      const modules = join(unpacked, "node_modules");
+      mkdirSync(join(app, "Contents", "MacOS"), { recursive: true });
+      mkdirSync(modules, { recursive: true });
 
-    const oxideJs = repoRequire.resolve("@tailwindcss/oxide");
-    const oxideRequire = createRequire(oxideJs);
-    const oxideNative = oxideRequire.resolve(
-      `@tailwindcss/oxide-${process.platform}-${process.arch}`
-    );
-    const twNode = repoRequire.resolve("@tailwindcss/node");
-    const twNodeRequire = createRequire(twNode);
-    const lightning = twNodeRequire.resolve("lightningcss");
-    const lightningRequire = createRequire(lightning);
-    const lightningNative = lightningRequire.resolve(
-      `lightningcss-${process.platform}-${process.arch}`
-    );
-    const esbuildBin = repoRequire.resolve(
-      `@esbuild/${process.platform}-${process.arch}/bin/esbuild`
-    );
+      const oxideJs = repoRequire.resolve("@tailwindcss/oxide");
+      const oxideRequire = createRequire(oxideJs);
+      const oxideNative = oxideRequire.resolve(
+        `@tailwindcss/oxide-${process.platform}-${process.arch}`
+      );
+      const twNode = repoRequire.resolve("@tailwindcss/node");
+      const twNodeRequire = createRequire(twNode);
+      const lightning = twNodeRequire.resolve("lightningcss");
+      const lightningRequire = createRequire(lightning);
+      const lightningNative = lightningRequire.resolve(
+        `lightningcss-${process.platform}-${process.arch}`
+      );
+      const esbuildBin = repoRequire.resolve(
+        `@esbuild/${process.platform}-${process.arch}/bin/esbuild`
+      );
 
-    cpSync(
-      packageDirFromResolve("@tailwindcss/oxide"),
-      join(modules, "@tailwindcss/oxide"),
-      {
+      cpSync(
+        packageDirFromResolve("@tailwindcss/oxide"),
+        join(modules, "@tailwindcss/oxide"),
+        {
+          recursive: true,
+        }
+      );
+      mkdirSync(join(modules, "@tailwindcss"), { recursive: true });
+      cpSync(
+        dirname(oxideNative),
+        join(modules, `@tailwindcss/oxide-${process.platform}-${process.arch}`),
+        {
+          recursive: true,
+        }
+      );
+      cpSync(
+        packageDirFromResolve("@tailwindcss/node"),
+        join(modules, "@tailwindcss/node"),
+        {
+          recursive: true,
+        }
+      );
+      cpSync(dirname(dirname(lightning)), join(modules, "lightningcss"), {
         recursive: true,
-      }
-    );
-    mkdirSync(join(modules, "@tailwindcss"), { recursive: true });
-    cpSync(
-      dirname(oxideNative),
-      join(modules, `@tailwindcss/oxide-${process.platform}-${process.arch}`),
-      {
-        recursive: true,
-      }
-    );
-    cpSync(
-      packageDirFromResolve("@tailwindcss/node"),
-      join(modules, "@tailwindcss/node"),
-      {
-        recursive: true,
-      }
-    );
-    cpSync(dirname(dirname(lightning)), join(modules, "lightningcss"), {
-      recursive: true,
-    });
-    cpSync(
-      dirname(lightningNative),
-      join(modules, `lightningcss-${process.platform}-${process.arch}`),
-      { recursive: true }
-    );
-    mkdirSync(join(modules, "@esbuild"), { recursive: true });
-    cpSync(
-      dirname(dirname(esbuildBin)),
-      join(modules, "@esbuild", `${process.platform}-${process.arch}`),
-      { recursive: true }
-    );
+      });
+      cpSync(
+        dirname(lightningNative),
+        join(modules, `lightningcss-${process.platform}-${process.arch}`),
+        { recursive: true }
+      );
+      mkdirSync(join(modules, "@esbuild"), { recursive: true });
+      cpSync(
+        dirname(dirname(esbuildBin)),
+        join(modules, "@esbuild", `${process.platform}-${process.arch}`),
+        { recursive: true }
+      );
 
-    expect(findPierApps(dist)).toEqual([app]);
-    expect(collectUnpackErrors(unpacked)).toEqual([]);
-    expect(loadUnpackedNatives(unpacked)).toEqual([]);
-    expect(verifyUnpackedRoot(unpacked).errors).toEqual([]);
-    expect(verifyDistBuilder(dist).errors).toEqual([]);
-  });
+      expect(findPierApps(dist)).toEqual([app]);
+      expect(collectUnpackErrors(unpacked)).toEqual([]);
+      expect(loadUnpackedNatives(unpacked)).toEqual([]);
+      expect(verifyUnpackedRoot(unpacked).errors).toEqual([]);
+      expect(verifyDistBuilder(dist).errors).toEqual([]);
+    }
+  );
 
   it("infers Intel vs Apple Silicon from electron-builder output paths", () => {
     expect(inferMacAppArch("/tmp/dist-builder/mac-arm64/Pier.app")).toBe(
