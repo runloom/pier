@@ -4,6 +4,7 @@
 - 状态：W1–W6 能力已通；W7 产品闭环已收口。§9 由 Playwright Electron e2e 守门；`build:dist` 后硬校验 oxide / lightningcss unpack。
 - 设计稿：`docs/superpowers/specs/2026-08-26-canvas-dual-stage-and-ui-expansion-design.md`
 - 规模标注：S ≤ 半天 · M ≈ 1–2 天 · L ≈ 3 天+
+- 后续（2026-08-28）：仓库 `.pier/canvases/` 去掉 per-recipe 金样（design-mockup / dag-viewer / kanban / smoke/world 等）；权威模板改在 `resources/system-skills/pier-canvas/templates/`。下文实施记录保留当时路径，不再作为现行真源。
 
 ## 0. 相对设计稿的优化修正（实现级核对结论）
 

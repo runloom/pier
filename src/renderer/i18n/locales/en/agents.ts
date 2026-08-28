@@ -1,4 +1,5 @@
 export const agents = {
+  focusAlreadyCurrent: "Already on the only session needing attention",
   focusEmpty: "Nothing needs your attention",
   focusFailed: "Couldn't focus agent — try again",
   focusPanelGone: "Panel closed",

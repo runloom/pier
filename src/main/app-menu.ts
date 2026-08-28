@@ -22,7 +22,7 @@ export interface BuildAppMenuTemplateArgs {
   isDev: boolean;
   isMac?: boolean;
   language: AppMenuLanguage;
-  onFindInTerminal: (target: AppWindow | null) => void;
+  onMenuCommand: (target: AppWindow | null, commandId: string) => void;
   onNewTerminal: (target: AppWindow | null) => void;
   onNewWindow: () => void;
   onOpenCommandPalette: (target: AppWindow | null) => void;
@@ -56,7 +56,7 @@ export function buildAppMenuTemplate({
   isDev,
   isMac = true,
   language,
-  onFindInTerminal,
+  onMenuCommand,
   onNewTerminal,
   onNewWindow,
   onOpenCommandPalette,
@@ -66,6 +66,13 @@ export function buildAppMenuTemplate({
   userKeymap = [],
 }: BuildAppMenuTemplateArgs): MenuItemConstructorOptions[] {
   const t = APP_MENU_TEXT[language];
+  const cmd = (commandId: string, label: string): MenuItemConstructorOptions =>
+    appCommandMenuItem(
+      commandId,
+      label,
+      () => onMenuCommand(getTargetWindow(), commandId),
+      userKeymap
+    );
   const newWindowMenuItem: MenuItemConstructorOptions = {
     click: () => onNewWindow(),
     label: t.newWindow,
@@ -75,10 +82,13 @@ export function buildAppMenuTemplate({
     label: t.file,
     submenu: [
       newWindowMenuItem,
-      {
-        click: () => onNewTerminal(getTargetWindow()),
-        label: t.newTerminal,
-      },
+      appCommandMenuItem(
+        "pier.panel.newTerminal",
+        t.newTerminal,
+        () => onNewTerminal(getTargetWindow()),
+        userKeymap
+      ),
+      cmd("pier.panel.closeActive", t.closePanel),
     ],
   };
 
@@ -103,22 +113,26 @@ export function buildAppMenuTemplate({
             { label: t.selectAll, role: "selectAll" },
           ] satisfies MenuItemConstructorOptions[])),
       separator(),
-      appCommandMenuItem(
-        "pier.terminal.search",
-        t.find,
-        () => onFindInTerminal(getTargetWindow()),
-        userKeymap
-      ),
+      cmd("pier.find", t.find),
+      cmd("pier.findNext", t.findNext),
+      cmd("pier.findPrev", t.findPrevious),
     ],
   };
 
   const viewMenu: MenuItemConstructorOptions = {
     label: t.view,
     submenu: [
-      {
-        click: () => onOpenCommandPalette(getTargetWindow()),
-        label: t.commandPalette,
-      },
+      appCommandMenuItem(
+        "pier.commandPalette.toggle",
+        t.commandPalette,
+        () => onOpenCommandPalette(getTargetWindow()),
+        userKeymap
+      ),
+      cmd("pier.files.searchContents", t.searchInFiles),
+      separator(),
+      cmd("pier.view.toggleSideTree", t.toggleSideTree),
+      cmd("pier.agents.list", t.listAgents),
+      cmd("pier.agents.focusWaiting", t.focusWaiting),
       ...(isDev
         ? ([
             separator(),
@@ -127,7 +141,6 @@ export function buildAppMenuTemplate({
           ] satisfies MenuItemConstructorOptions[])
         : []),
       separator(),
-      // Available in production too (same chord as installDetachedDevToolsHandlers).
       createDetachedDevToolsMenuItem(() => getTargetWindow(), t.devTools),
       separator(),
       appCommandMenuItem(
@@ -143,11 +156,26 @@ export function buildAppMenuTemplate({
     ],
   };
 
+  const windowLayoutItems: MenuItemConstructorOptions[] = [
+    cmd("pier.panel.focusNextTab", t.nextTab),
+    cmd("pier.panel.focusPrevTab", t.prevTab),
+    separator(),
+    cmd("pier.panel.splitRight", t.splitRight),
+    cmd("pier.panel.splitDown", t.splitDown),
+    separator(),
+    cmd("pier.panel.focusUp", t.focusUp),
+    cmd("pier.panel.focusDown", t.focusDown),
+    cmd("pier.panel.focusLeft", t.focusLeft),
+    cmd("pier.panel.focusRight", t.focusRight),
+  ];
+
   const windowMenu: MenuItemConstructorOptions = {
     label: t.window,
     submenu: isMac
       ? [
           newWindowMenuItem,
+          separator(),
+          ...windowLayoutItems,
           separator(),
           { label: t.minimize, role: "minimize" },
           { label: t.zoom, role: "zoom" },
@@ -158,6 +186,8 @@ export function buildAppMenuTemplate({
         ]
       : [
           newWindowMenuItem,
+          separator(),
+          ...windowLayoutItems,
           separator(),
           { label: t.minimize, role: "minimize" },
           { label: t.zoom, role: "zoom" },

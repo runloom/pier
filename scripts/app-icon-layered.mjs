@@ -1,17 +1,15 @@
-// macOS 26 (Tahoe) layered app icon pipeline.
+// macOS 26+ native app-icon pipeline.
 //
-// The checked-in Icon Composer document is the authored source of truth. Its
-// three SVG layers preserve the terminal, berth, and harbor geometry as vectors
-// while macOS owns the outer mask and container lighting.
+// A validated 1024px ICNS frame is staged in a minimal Icon Composer document,
+// then discarded. Only Assets.car and the authored SVG fingerprint are
+// published.
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
-  cpSync,
   existsSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -20,7 +18,6 @@ import {
 import { join } from "node:path";
 
 export const MAC_ICON_DOCUMENT = "app-icon.icon";
-// actool --app-icon name; must match the packaged CFBundleIconName.
 export const MAC_ICON_RENDITION_NAME = "app-icon";
 export const MAC_ICON_MARK_SIZE = 1024;
 export const MAC_ICON_APPEARANCES = Object.freeze([
@@ -37,18 +34,43 @@ export const MAC_ICON_COMPILE_CONTRACT = Object.freeze({
   schemaVersion: 1,
   targetDevice: "mac",
 });
-const MAC_ICON_VECTOR_GROUPS = Object.freeze([
-  {
-    layerCount: 2,
-    layers: ["harbor", "berth-rim"],
-    name: "harbor",
+export const MAC_ICON_RENDER_CONTRACT = Object.freeze({
+  frame: "ic10",
+  input: "svg",
+  renderer: "electron-builder-pinned-icons-tool",
+  resize: "lanczos",
+  size: MAC_ICON_MARK_SIZE,
+  version: 1,
+});
+export const MAC_ICON_DOCUMENT_MANIFEST = Object.freeze({
+  fill: {
+    solid: "srgb:0.00000,0.00000,0.00000,0.00000",
   },
-  {
-    layerCount: 1,
-    layers: ["prompt"],
-    name: "prompt",
+  groups: [
+    {
+      layers: [
+        {
+          glass: false,
+          "image-name": "app-icon-source.png",
+          name: "pier",
+        },
+      ],
+      name: "artwork",
+      shadow: {
+        kind: "none",
+        opacity: 0,
+      },
+      specular: false,
+      translucency: {
+        enabled: false,
+        value: 0,
+      },
+    },
+  ],
+  "supported-platforms": {
+    squares: "shared",
   },
-]);
+});
 
 function runChecked(command, args) {
   const result = spawnSync(command, args, {
@@ -76,10 +98,119 @@ function assetUtilInfo(carPath) {
   };
 }
 
+const SEMANTIC_RENDITION_KEYS = Object.freeze([
+  "Appearance",
+  "AssetType",
+  "CanvasHeight",
+  "CanvasWidth",
+  "Color components",
+  "ColorModel",
+  "Colorspace",
+  "LayerCount",
+  "Name",
+  "Opaque",
+  "PixelHeight",
+  "PixelWidth",
+  "Scale",
+  "SHA1Digest",
+]);
+
 /**
- * The compiled car must carry both the layered stack and a full-size flat
- * rendition under the packaged icon name. `inspect` is injectable so tests can
- * pin this contract without spawning the real assetutil.
+ * Return a stable signature of the rendered catalog content. actool writes
+ * volatile timestamps, UUID-bearing rendition names, compression sizes, and
+ * tool metadata into Assets.car, so byte equality is not reproducible even
+ * for identical input. Visible rendition digests and geometry are stable.
+ */
+export function compiledIconSemanticSignature(
+  carPath,
+  inspect = assetUtilInfo
+) {
+  const info = inspect(carPath);
+  if (!info.ok) {
+    throw new Error(
+      `assetutil could not inspect the compiled ${carPath}${info.stderr ? `\n${info.stderr}` : ""}`
+    );
+  }
+  let entries;
+  try {
+    entries = JSON.parse(info.stdout);
+  } catch (error) {
+    throw new Error(`assetutil returned invalid JSON for ${carPath}`, {
+      cause: error,
+    });
+  }
+  if (!Array.isArray(entries)) {
+    throw new Error(`assetutil returned a non-array catalog for ${carPath}`);
+  }
+  const renditions = entries
+    .filter(
+      (entry) =>
+        entry &&
+        typeof entry === "object" &&
+        entry.AssetType !== "Icon Image" &&
+        typeof entry.SHA1Digest === "string"
+    )
+    .map((entry) =>
+      Object.fromEntries(
+        SEMANTIC_RENDITION_KEYS.flatMap((key) =>
+          key in entry ? [[key, entry[key]]] : []
+        )
+      )
+    )
+    .map((entry) => JSON.stringify(entry))
+    .sort();
+  if (renditions.length === 0) {
+    throw new Error(
+      `Compiled ${carPath} does not expose visible rendition digests`
+    );
+  }
+  return JSON.stringify(renditions);
+}
+
+export function stageMacIconDocument(sourcePng, documentDirectory) {
+  if (!existsSync(sourcePng)) {
+    throw new Error(`Canonical app icon is missing: ${sourcePng}`);
+  }
+  const assetsDirectory = join(documentDirectory, "Assets");
+  mkdirSync(assetsDirectory, { recursive: true });
+  copyFileSync(sourcePng, join(assetsDirectory, "app-icon-source.png"));
+  writeFileSync(
+    join(documentDirectory, "icon.json"),
+    `${JSON.stringify(MAC_ICON_DOCUMENT_MANIFEST, null, 2)}\n`
+  );
+}
+
+/**
+ * @param {string} sourceSvg
+ * @param {Buffer} sourcePngBytes
+ * @param {Readonly<Record<string, unknown>>} [compileContract]
+ */
+export function macIconFingerprint(
+  sourceSvg,
+  sourcePngBytes,
+  compileContract = MAC_ICON_COMPILE_CONTRACT
+) {
+  const hash = createHash("sha256");
+  hash.update("pier-svg-native-icon-v2\0");
+  hash.update(
+    JSON.stringify({
+      appearances: MAC_ICON_APPEARANCES,
+      compileContract,
+      document: MAC_ICON_DOCUMENT_MANIFEST,
+      renderer: MAC_ICON_RENDER_CONTRACT,
+    })
+  );
+  hash.update("\0svg\0");
+  hash.update(readFileSync(sourceSvg));
+  hash.update("\0png\0");
+  hash.update(sourcePngBytes);
+  return `${hash.digest("hex")}\n`;
+}
+
+/**
+ * The compiled catalog must contain a full-size fallback plus one bitmap stack
+ * for each native appearance. Exact rendition order and volatile Xcode
+ * metadata are intentionally ignored.
  */
 export function assertCompiledIconStack(carPath, inspect = assetUtilInfo) {
   const info = inspect(carPath);
@@ -100,6 +231,7 @@ export function assertCompiledIconStack(carPath, inspect = assetUtilInfo) {
   if (!Array.isArray(entries)) {
     throw new Error(`assetutil returned a non-array catalog for ${carPath}`);
   }
+
   const missing = [];
   const hasCompileMetadata = entries.some(
     (entry) =>
@@ -124,27 +256,41 @@ export function assertCompiledIconStack(carPath, inspect = assetUtilInfo) {
     missing.push(`${MAC_ICON_MARK_SIZE}px full-size fallback`);
   }
 
-  const expectedVectorNames = new Set(
-    MAC_ICON_VECTOR_GROUPS.flatMap((group) =>
-      group.layers.map((layer) => `${MAC_ICON_RENDITION_NAME}_Assets/${layer}`)
-    )
-  );
-  const topLevelVectors = entries.filter(
+  const images = entries.filter(
     (entry) =>
-      entry.AssetType === "Vector" &&
-      typeof entry.Name === "string" &&
-      entry.Name.startsWith(`${MAC_ICON_RENDITION_NAME}_Assets/`)
+      entry.AssetType === "Image" &&
+      entry.Name === `${MAC_ICON_RENDITION_NAME}_Assets/app-icon-source`
   );
-  const topLevelVectorNames = new Set(
-    topLevelVectors.map((entry) => entry.Name)
-  );
+  const image = images[0];
   if (
-    topLevelVectors.length !== expectedVectorNames.size ||
-    topLevelVectorNames.size !== expectedVectorNames.size ||
-    topLevelVectors.some((entry) => entry.Scale !== 1) ||
-    [...expectedVectorNames].some((name) => !topLevelVectorNames.has(name))
+    images.length !== 1 ||
+    image.Opaque !== false ||
+    image.PixelWidth !== MAC_ICON_MARK_SIZE ||
+    image.PixelHeight !== MAC_ICON_MARK_SIZE ||
+    image.Scale !== 1
   ) {
-    missing.push("three top-level vector leaves");
+    missing.push("one full-size PNG leaf");
+  }
+  if (
+    entries.some(
+      (entry) =>
+        entry.AssetType === "Vector" &&
+        typeof entry.Name === "string" &&
+        entry.Name.startsWith(`${MAC_ICON_RENDITION_NAME}_Assets/`)
+    )
+  ) {
+    missing.push("zero vector leaves");
+  }
+  const hasTransparentFill = entries.some(
+    (entry) =>
+      entry.AssetType === "Color" &&
+      entry.Scale === 1 &&
+      Array.isArray(entry["Color components"]) &&
+      entry["Color components"].length === 4 &&
+      entry["Color components"].every((component) => component === 0)
+  );
+  if (!hasTransparentFill) {
+    missing.push("transparent native fill");
   }
 
   for (const appearance of MAC_ICON_APPEARANCES) {
@@ -155,56 +301,86 @@ export function assertCompiledIconStack(carPath, inspect = assetUtilInfo) {
         entry.Name === MAC_ICON_RENDITION_NAME
     );
     const stack = stacks[0];
+    const stackLayers = Array.isArray(stack?.Layers) ? stack.Layers : [];
+    const transparentFills = stackLayers.filter(
+      (layer) =>
+        layer.AssetType === "Color" &&
+        Array.isArray(layer["Color components"]) &&
+        layer["Color components"].length === 4 &&
+        layer["Color components"].every((component) => component === 0)
+    );
+    const groupReferences = stackLayers.filter(
+      (layer) =>
+        layer.AssetType === "IconGroup" &&
+        layer.Name === `${MAC_ICON_RENDITION_NAME}/artwork`
+    );
+    const groupReferencesDisableEffects = groupReferences.every(
+      (layer) =>
+        layer.LayerShadowOpacity == null &&
+        layer.LayerShadowStyle == null &&
+        layer.LayerHasSpecular == null &&
+        layer.LayerTranslucency == null
+    );
     if (
       stacks.length !== 1 ||
-      stack.LayerCount !== 3 ||
+      stack.LayerCount !== 2 ||
+      stack.CompositeImagePresent !== false ||
       stack.CanvasWidth !== MAC_ICON_MARK_SIZE ||
       stack.CanvasHeight !== MAC_ICON_MARK_SIZE ||
-      stack.Scale !== 1
+      stack.Scale !== 1 ||
+      transparentFills.length !== 1 ||
+      groupReferences.length === 0 ||
+      !groupReferencesDisableEffects
     ) {
       missing.push(`${appearance} appearance stack`);
     }
 
-    for (const expected of MAC_ICON_VECTOR_GROUPS) {
-      const expectedNames = new Set(
-        expected.layers.map(
-          (layer) => `${MAC_ICON_RENDITION_NAME}_Assets/${layer}`
-        )
-      );
-      const groups = entries.filter(
-        (entry) =>
-          entry.Appearance === appearance &&
-          entry.AssetType === "IconGroup" &&
-          entry.Name === `${MAC_ICON_RENDITION_NAME}/${expected.name}`
-      );
-      const group = groups[0];
-      let validGroup =
-        groups.length === 1 &&
-        group.LayerCount === expected.layerCount &&
-        group.Scale === 1 &&
-        Array.isArray(group.Layers) &&
-        group.Layers.length === expected.layerCount;
-      if (validGroup) {
-        const vectorLayerNames = new Set(
-          group.Layers.filter(
-            (layer) => layer.AssetType === "Vector" && layer.Scale === 1
-          ).map((layer) => layer.Name)
-        );
-        validGroup =
-          vectorLayerNames.size === expectedNames.size &&
-          [...expectedNames].every((name) => vectorLayerNames.has(name));
-      }
-      if (!validGroup) {
-        missing.push(`${appearance} appearance ${expected.name} vector group`);
-      }
+    const groups = entries.filter(
+      (entry) =>
+        entry.Appearance === appearance &&
+        entry.AssetType === "IconGroup" &&
+        entry.Name === `${MAC_ICON_RENDITION_NAME}/artwork`
+    );
+    const group = groups[0];
+    if (
+      groups.length !== 1 ||
+      group.LayerCount !== 1 ||
+      group.Scale !== 1 ||
+      !Array.isArray(group.Layers) ||
+      group.Layers.length !== 1 ||
+      group.Layers[0]?.AssetType !== "Image" ||
+      group.Layers[0]?.Name !==
+        `${MAC_ICON_RENDITION_NAME}_Assets/app-icon-source` ||
+      group.Layers[0]?.Opaque !== false ||
+      group.Layers[0]?.PixelWidth !== MAC_ICON_MARK_SIZE ||
+      group.Layers[0]?.PixelHeight !== MAC_ICON_MARK_SIZE ||
+      group.Layers[0]?.LayerPosition !== "0,0" ||
+      group.Layers[0]?.LayerSize !== "1024,1024" ||
+      group.Layers[0]?.LayerHasLightingEffects === true ||
+      group.Layers[0]?.Scale !== 1
+    ) {
+      missing.push(`${appearance} appearance PNG group`);
     }
   }
 
   if (missing.length > 0) {
     throw new Error(
-      `Compiled Assets.car is missing complete appearance coverage for the ${MAC_ICON_RENDITION_NAME} three-layer vector rendition: ${missing.join(
+      `Compiled Assets.car is missing complete appearance coverage for the ${MAC_ICON_RENDITION_NAME} single-PNG rendition: ${missing.join(
         ", "
       )}`
+    );
+  }
+}
+
+export function assertCompiledIconIntegrity(carPath, command = "assetutil") {
+  const result = spawnSync(command, ["-Z", carPath], {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  if (result.error || result.status !== 0) {
+    throw new Error(
+      `assetutil integrity validation failed for ${carPath}${result.stderr ? `\n${result.stderr}` : ""}`,
+      result.error ? { cause: result.error } : undefined
     );
   }
 }
@@ -236,147 +412,39 @@ export function compileIconDocumentWithActool(options) {
     "--errors"
   );
   runChecked(options.xcrunCommand, args);
-  assertCompiledIconStack(join(options.outputDirectory, "Assets.car"));
-}
-
-/**
- * Content fingerprint of an Icon Composer document. actool output embeds
- * volatile metadata, so the compiled car cannot be byte-compared; the
- * committed `Assets.car.inputs` sidecar records which document produced
- * `Assets.car` and gates both rebuild skipping and CI freshness checks.
- * Entries sort byte-wise (not locale collation) so the digest is host-stable;
- * bump the version salt to force a global recompile (e.g. actool upgrades).
- */
-export function layeredIconFingerprint(
-  documentDirectory,
-  compileContract = MAC_ICON_COMPILE_CONTRACT
-) {
-  const hash = createHash("sha256");
-  hash.update("pier-layered-icon-v3");
-  hash.update("\0");
-  hash.update(
-    JSON.stringify({
-      appIcon: compileContract.appIcon,
-      appearances: MAC_ICON_APPEARANCES,
-      includeAllAppIcons: compileContract.includeAllAppIcons,
-      minimumDeploymentTarget: compileContract.minimumDeploymentTarget,
-      outputFormat: compileContract.outputFormat,
-      platform: compileContract.platform,
-      schemaVersion: compileContract.schemaVersion,
-      targetDevice: compileContract.targetDevice,
-      vectorGroups: MAC_ICON_VECTOR_GROUPS,
-    })
-  );
-  hash.update("\0");
-  const walk = (directory, prefix) => {
-    const entries = readdirSync(directory, { withFileTypes: true });
-    entries.sort((a, b) => {
-      if (a.name !== b.name) {
-        return a.name < b.name ? -1 : 1;
-      }
-      return 0;
-    });
-    for (const entry of entries) {
-      const relative = `${prefix}${entry.name}`;
-      const absolute = join(directory, entry.name);
-      if (entry.isDirectory()) {
-        walk(absolute, `${relative}/`);
-        continue;
-      }
-      hash.update(relative);
-      hash.update("\0");
-      hash.update(readFileSync(absolute));
-      hash.update("\0");
-    }
-  };
-  walk(documentDirectory, "");
-  return `${hash.digest("hex")}\n`;
+  const car = join(options.outputDirectory, "Assets.car");
+  assertCompiledIconStack(car);
+  assertCompiledIconIntegrity(car);
 }
 
 export function assertActoolAvailable(command) {
   const result = spawnSync(command, ["--find", "actool"], { stdio: "ignore" });
   if (result.error || result.status !== 0) {
     throw new Error(
-      "Xcode actool is required to compile the macOS 26 layered icon (build/app-icon.icon → build/Assets.car). Install Xcode 26 or newer and select it with xcode-select.",
+      "Xcode actool is required to compile the macOS 26 PNG icon stack. Install Xcode 26 or newer and select it with xcode-select.",
       result.error ? { cause: result.error } : undefined
     );
   }
 }
 
-/**
- * Stage the authored Icon Composer document byte-for-byte, then reuse or compile
- * Assets.car plus its fingerprint sidecar. `validatePublishedCar` re-runs the
- * rendition checks on a reused car so a corrupted artifact cannot ship.
- */
 export async function buildMacLayeredIcon(
-  sources,
+  sourcePng,
+  sourceSvg,
   stagingDirectory,
   outputDirectory,
   dependencies
 ) {
-  const sourceDocument = join(sources.iconDocument, "icon.json");
-  if (!existsSync(sourceDocument)) {
-    throw new Error(`Icon Composer source is missing: ${sourceDocument}`);
-  }
-  const documentText = readFileSync(sourceDocument, "utf8");
-  const document = JSON.parse(documentText);
-  for (const expected of MAC_ICON_VECTOR_GROUPS) {
-    const group = document.groups?.find(
-      (candidate) => candidate.name === expected.name
-    );
-    if (!group || group.layers?.length !== expected.layerCount) {
-      throw new Error(
-        `${sourceDocument} must preserve the ${expected.name} semantic vector group.`
-      );
-    }
-    for (const layerName of expected.layers) {
-      const layer = group.layers.find(
-        (candidate) =>
-          candidate.name === layerName &&
-          candidate["image-name"] === `${layerName}.svg`
-      );
-      const layerPath = join(
-        sources.iconDocument,
-        "Assets",
-        `${layerName}.svg`
-      );
-      if (!(layer && existsSync(layerPath))) {
-        throw new Error(
-          `${sourceDocument} is missing the ${layerName}.svg vector layer.`
-        );
-      }
-    }
-  }
-
-  const stagedDocument = join(stagingDirectory, MAC_ICON_DOCUMENT);
-  cpSync(sources.iconDocument, stagedDocument, { recursive: true });
+  const fingerprint = macIconFingerprint(sourceSvg, readFileSync(sourcePng));
+  const publishedCar = join(outputDirectory, "Assets.car");
 
   const workingDirectory = join(stagingDirectory, ".layered-icon-tool");
-  mkdirSync(workingDirectory, { recursive: true });
+  const documentDirectory = join(workingDirectory, MAC_ICON_DOCUMENT);
+  const compileDirectory = join(workingDirectory, "out");
+  mkdirSync(compileDirectory, { recursive: true });
   try {
-    // actool embeds volatile metadata, so identical inputs never produce
-    // identical car bytes. Reuse the published car while the fingerprint of
-    // the staged document matches the committed sidecar; delete the sidecar
-    // to force a recompile (e.g. after an actool upgrade).
-    const fingerprint = layeredIconFingerprint(stagedDocument);
-    const publishedCar = join(outputDirectory, "Assets.car");
-    const publishedInputs = join(outputDirectory, "Assets.car.inputs");
-    const publishedFingerprint = existsSync(publishedInputs)
-      ? readFileSync(publishedInputs, "utf8")
-      : null;
-    if (existsSync(publishedCar) && publishedFingerprint === fingerprint) {
-      if (dependencies.validatePublishedCar) {
-        assertCompiledIconStack(publishedCar);
-      }
-      copyFileSync(publishedCar, join(stagingDirectory, "Assets.car"));
-      writeFileSync(join(stagingDirectory, "Assets.car.inputs"), fingerprint);
-      return;
-    }
-
-    const compileDirectory = join(workingDirectory, "out");
-    mkdirSync(compileDirectory, { recursive: true });
+    stageMacIconDocument(sourcePng, documentDirectory);
     await dependencies.compileIconDocument({
-      documentDirectory: stagedDocument,
+      documentDirectory,
       outputDirectory: compileDirectory,
       xcrunCommand: dependencies.xcrunCommand,
     });
@@ -400,7 +468,25 @@ export async function buildMacLayeredIcon(
         `Compiled icon partial Info.plist must declare CFBundleIconFile and CFBundleIconName as ${MAC_ICON_RENDITION_NAME}`
       );
     }
-    renameSync(car, join(stagingDirectory, "Assets.car"));
+    let preservePublishedCar = false;
+    if (existsSync(publishedCar)) {
+      try {
+        if (dependencies.validatePublishedCar) {
+          assertCompiledIconStack(publishedCar);
+          assertCompiledIconIntegrity(publishedCar);
+        }
+        preservePublishedCar =
+          dependencies.compiledIconSemanticSignature(publishedCar) ===
+          dependencies.compiledIconSemanticSignature(car);
+      } catch {
+        preservePublishedCar = false;
+      }
+    }
+    if (preservePublishedCar) {
+      copyFileSync(publishedCar, join(stagingDirectory, "Assets.car"));
+    } else {
+      renameSync(car, join(stagingDirectory, "Assets.car"));
+    }
     writeFileSync(join(stagingDirectory, "Assets.car.inputs"), fingerprint);
   } finally {
     rmSync(workingDirectory, { recursive: true, force: true });

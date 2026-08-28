@@ -117,13 +117,20 @@ export function createTreeToggleAction(
   return {
     category: "file",
     handler: async () => {
-      // Panel-scoped keybinding only resolves while a files panel is active.
-      toggleProjectFileTree(activeFilesPanelRoot(context));
+      if (!toggleProjectFileTree(activeFilesPanelRoot(context))) {
+        context.notifications.info(
+          t("filePanel.tree.toggleUnavailable", "Open a project folder first.")
+        );
+      }
       return await Promise.resolve();
     },
     id: FILES_TREE_TOGGLE_COMMAND_ID,
-    metadata: { group: "2_view", sortOrder: 0 },
-    // Cmd/Ctrl+B; not command-palette primary (chrome toggle is the discover path).
+    metadata: {
+      group: "2_view",
+      shortcutSourceId: "pier.view.toggleSideTree",
+      sortOrder: 0,
+    },
+    // Invoked from global pier.view.toggleSideTree (including terminals).
     surfaces: [],
     title: () => t("filePanel.tree.toggle", "Toggle File Tree"),
   };

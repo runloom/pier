@@ -361,8 +361,16 @@ export const settings = {
   keybindings: {
     change: "단축키 변경",
     clear: "지우기",
+    alsoBound: "다른 단축키는 {{chords}}입니다.",
     descriptionDefault: "{{category}} 명령.",
     description: {
+      agent: {
+        new: "기본 에이전트를 시작합니다. 리치 입력이 포커스일 때는 같은 단축키가 파일을 추가합니다.",
+      },
+      agents: {
+        focusWaiting: "다음으로 처리가 필요한 에이전트로 이동합니다.",
+        list: "에이전트 목록을 엽니다. 편집 중에도 사용할 수 있습니다.",
+      },
       commandPalette: {
         clearRecent: "명령 팔레트 기록을 지웁니다.",
         toggle: "명령 팔레트를 열거나 닫습니다.",
@@ -374,7 +382,13 @@ export const settings = {
       },
       files: {
         copyPathWithRange: "현재 파일 경로와 선택한 줄 번호를 복사합니다.",
+        editor: {
+          goToLine: "현재 파일의 지정한 줄로 이동합니다.",
+        },
       },
+      find: "현재 터미널, 파일 또는 변경 목록에서 찾습니다.",
+      findNext: "현재 패널에서 다음 일치를 찾습니다.",
+      findPrev: "현재 패널에서 이전 일치를 찾습니다.",
       panel: {
         close: "현재 패널을 닫습니다.",
         closeActive: "활성 패널을 닫습니다.",
@@ -382,6 +396,8 @@ export const settings = {
         closeOthers: "현재 패널을 제외한 모든 패널을 닫습니다.",
         focusDown: "아래 패널 그룹으로 이동합니다.",
         focusLeft: "왼쪽 패널 그룹으로 이동합니다.",
+        focusNextTab: "현재 그룹의 다음 탭으로 전환합니다.",
+        focusPrevTab: "현재 그룹의 이전 탭으로 전환합니다.",
         focusRight: "오른쪽 패널 그룹으로 이동합니다.",
         focusUp: "위 패널 그룹으로 이동합니다.",
         newTab: "새 패널 탭을 만듭니다.",
@@ -402,10 +418,13 @@ export const settings = {
       },
       terminal: {
         close: "현재 터미널 패널을 닫습니다.",
+        composerAttach:
+          "리치 입력에 파일을 추가합니다. 리치 입력이 포커스가 아니면 같은 단축키가 기본 에이전트를 시작합니다.",
         openDebugWindow: "터미널 디버그 윈도우를 엽니다.",
       },
       view: {
         resetZoom: "인터페이스 확대/축소를 기본값으로 되돌립니다.",
+        toggleSideTree: "파일 트리를 보이거나 숨깁니다.",
         zoomIn: "Pier 화면을 확대합니다.",
         zoomOut: "Pier 화면을 축소합니다.",
       },

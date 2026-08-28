@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { parsePierCanvasMeta } from "@shared/contracts/pier-canvas.ts";
 import { PIER_CANVAS_EXPORT_NAMES } from "@shared/pier-canvas-export-names.ts";
 import { cleanup, render } from "@testing-library/react";
@@ -31,6 +29,12 @@ function displayPath(path: string): string {
   return path.replace("../../../.pier/canvases/", "canvases/");
 }
 
+const IN_REPO_REACT_CANVASES = [
+  "canvas-kit/canvas-kit.canvas.tsx",
+  "pier-cli-user-manual/pier-cli-user-manual.canvas.tsx",
+  "smoke/hello.canvas.tsx",
+] as const;
+
 describe("project canvases render", () => {
   it("exposes exactly the whitelisted pier/canvas exports", () => {
     expect(Object.keys(pierCanvasModule).sort()).toEqual(
@@ -38,87 +42,12 @@ describe("project canvases render", () => {
     );
   });
 
-  it("finds the in-repo React canvases (smoke + blank + activity)", () => {
-    // Solid entries also end in .canvas.tsx and are excluded below.
-    expect(Object.keys(CANVAS_MODULES).length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("shows host activity through pier/host", () => {
-    const source = readFileSync(
-      join(
-        process.cwd(),
-        ".pier/canvases/activity-overview/activity-overview.canvas.tsx"
-      ),
-      "utf8"
-    );
-    expect(source).toContain('useHostSnapshot("foreground-activity")');
-    expect(source).toContain("ItemGroup");
-    expect(source).toMatch(/from ["']pier\/host["']/);
-    expect(source).toMatch(/from ["']pier\/canvas["']/);
-    expect(source).not.toContain("window.pier");
-    expect(source).not.toContain("useActivityOverview");
-    expect(source).not.toContain("This canvas reads useHostSnapshot");
-  });
-
-  it("kanban gold is a fill board with DnD primitives", () => {
-    const source = readFileSync(
-      join(process.cwd(), ".pier/canvases/kanban/kanban.canvas.tsx"),
-      "utf8"
-    );
-    expect(source).toContain("fill gap={16}");
-    expect(source).toContain("Sortable");
-    expect(source).toContain("Droppable");
-    expect(source).toContain('watch("board.json"');
-    expect(source).not.toContain("WorldStage");
-  });
-
-  it("kanban gold mounts with data-canvas-fill on the root stack", () => {
-    const path = Object.keys(CANVAS_MODULES).find((entry) =>
-      entry.endsWith("kanban/kanban.canvas.tsx")
-    );
-    expect(path).toBeDefined();
-    const module = CANVAS_MODULES[path ?? ""];
-    const Canvas = module?.default as ComponentType | undefined;
-    if (typeof Canvas !== "function") {
-      throw new Error("kanban canvas must default-export a component");
-    }
-    const { container } = render(<Canvas />);
-    expect(container.querySelector("[data-canvas-fill]")).not.toBeNull();
-  });
-
-  it("dag-viewer gold closes invokeCommand through run.output", () => {
-    const source = readFileSync(
-      join(process.cwd(), ".pier/canvases/dag-viewer/dag-viewer.canvas.tsx"),
-      "utf8"
-    );
-    const instance = readFileSync(
-      join(process.cwd(), ".pier/canvases/dag-viewer/instance.json"),
-      "utf8"
-    );
-    expect(source).toContain("http://127.0.0.1");
-    expect(source).not.toContain("https://");
-    expect(source).toContain("FlowGraph");
-    expect(source).toContain('presentation="plain"');
-    expect(source).toContain("layoutFlowGraph");
-    expect(source).toContain("onSelectNode");
-    expect(source).toContain("renderOverlay");
-    expect(source).toContain('useHostSnapshot("pier://tasks:runs-changed")');
-    expect(source).toContain('type: "run.output"');
-    expect(source).toMatch(/from ["']pier\/host["']/);
-    expect(instance).toContain("cat graph.json");
-  });
-
-  it("design-mockup gold declares stable Design Mode anchors", () => {
-    const source = readFileSync(
-      join(
-        process.cwd(),
-        ".pier/canvases/design-mockup/design-mockup.canvas.tsx"
-      ),
-      "utf8"
-    );
-    expect(source).toContain("data-pier-comment-id");
-    expect(source).toContain("desktop-settings");
-    expect(source).toContain("phone-home");
+  it("finds exactly the in-repo React canvases (canvas-kit + cli manual + smoke)", () => {
+    const relative = Object.keys(CANVAS_MODULES)
+      .filter((path) => !path.endsWith(".canvas.solid.tsx"))
+      .map((path) => path.replace("../../../.pier/canvases/", ""))
+      .sort();
+    expect(relative).toEqual([...IN_REPO_REACT_CANVASES]);
   });
 
   for (const [path, module] of Object.entries(CANVAS_MODULES)) {

@@ -528,6 +528,8 @@
     "ui.reviewTreeExpandAll": "展开目录",
     "ui.reviewTreeExpand": "显示目录树",
     "ui.reviewToggleTree": "显示/隐藏目录树",
+    "ui.reviewToggleTreeUnavailable": "请先打开 git 仓库。",
+    "ui.reviewSearchUnavailable": "无法在变更文件中查找。请先打开 git 仓库。",
     "ui.reviewTreeSearch": "在变更文件中查找",
     "ui.reviewTreeSearchClose": "关闭",
     "ui.reviewTreeSearchNext": "下一个匹配项",

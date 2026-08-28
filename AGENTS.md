@@ -194,7 +194,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 1. **一个大纲壳**：只允许 `MarkdownPreviewToc` 渲染大纲 UI（Notion 细轨横线 + hover/focus-within 浮层列表）。禁止再写一份 aside。
 2. **布局分工**：正文在 `data-slot="markdown-preview-layout"`；大纲始终走右侧 `data-slot="markdown-preview-outline-rail"`，必须与字号控件挂在**同一预览框包含块**；大纲右缘用 `MARKDOWN_TOC_EDGE_INSET_PX`（比字号控件更松），垂直用 `MARKDOWN_TOC_TOP_RATIO` 居中偏上，禁止在带 padding 的 scroll 内容盒里用负偏移猜对齐。
 3. **共享几何**：顶距比例、细轨槽位宽、浮层面板宽、右边距、底边预留、tick 尺寸只来自 `markdown-preview-toc-layout.ts` 常量 / `markdownOutlineHoverMaxHeightPx` / `markdownOutlineHoverWidthPx` / `markdownTocTickWidthPx`。hover 卡片必须落在预览框内的右侧槽位（`inset-0`），禁止浮层再写 `max-h-[min(70%,…)]` 或另一套 px 公式；禁止 TOC 与布局各自手写 `top-2` / `right-3` / `w-56` 而不读共享常量。
-4. **版心单一来源**：可见行宽由 `[data-slot="markdown-prose"]` 的 `--md-measure`（CSS）决定；TS 不得再平行维护第二套「渲染用 85ch」。
+4. **版心单一来源**：可见行宽由 `[data-slot="markdown-prose"]` 的 `--md-measure`（CSS）决定；舒适档为根 `42rem`（禁止 `ch`）；TS 只允许与 CSS 同值的 `MARKDOWN_COMFORTABLE_MEASURE_REM` 作治理锁定，禁止平行测宽 helper。权威规格：[`docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md`](docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md)。
 5. **默认不遮挡正文**：持久态只显示细轨横线（按 heading depth 变宽，active 高亮并跟随滚动）；完整标题列表仅在 hover / focus-within 淡入，**相对细轨垂直居中**覆盖；槽位宽高按预览框 clamp（`markdownOutlineHoverWidthPx` / `markdownOutlineHoverMaxHeightPx`），禁止卡片溢出 `overflow-hidden` 预览根；有大纲时滚动区右侧使用 `MARKDOWN_TOC_CONTENT_INSET_PX`（宽屏 `100%` 版心也不得压到细轨）；离开即隐藏；浮层无关闭按钮，不提供左右位置切换。Scroll-spy 必须每次滚动重新 query heading DOM（适配懒加载分页），不得缓存节点。
 
 反例（禁止）：
@@ -204,6 +204,18 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 细轨 / 浮层各抄一份定位 class 且数值不一致
 
 检查点在 `tests/unit/plugins/markdown/markdown-preview-layout-governance.test.ts`。
+
+### Markdown 预览阅读版心
+
+权威规格：[`docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md`](docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md)。
+
+- 舒适：`--md-measure: 42rem`（根 rem）。禁止 `ch`、正文字体 `0` 宽、或随 `--md-scale` 派生栏宽。
+- 宽屏：`--md-measure: 100%`。窄面板 `min(容器, 42rem)`。
+- 左齐（`text-align: start`）；禁止 `justify`（含 HTML `align="justify"` / `text-justify`）。折满行共用右缘；未折满的参差右缘是正确表现。
+- 长路径 / 行内代码：`overflow-wrap: anywhere`。列表与引用只缩进 start 侧，右缘对齐版心盒。正文列表 `text-wrap: wrap`（不受 callout `text-balance` 继承）。
+- `MARKDOWN_COMFORTABLE_MEASURE_REM` 只与 CSS 同值作治理锁定。Canvas flow `max-w-5xl` 是积木壳，不是文章栏。
+
+检查点在 `tests/unit/plugins/markdown/markdown-reading-measure-governance.test.ts`。
 
 Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 `useMarkdownPreviewPrefsStore`（`markdown-preview-preferences.ts`）：全局一份、
@@ -441,7 +453,7 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 格式化函数进 `pier/canvas` VALUE 导出（`formatPercent` / `formatBytes` 等），不是组件。
 - skill 只教发现 API + 原语组合（至少两种拼法）；不设官方 `templates/accounts.canvas.tsx`，物料页不登记「账号管理」行。
 
-检查点：plugin-data-projections、canvas-host、canvas-hooks、只读例外治理、`.pier/canvases/workbench-into-canvas/` 契约。
+检查点：plugin-data-projections、canvas-host、canvas-hooks、只读例外治理。
 
 ### 滚动条外观
 
@@ -471,7 +483,7 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`；覆盖率：`pnpm test:coverage`
 - E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
-- 图标重建：`pnpm build:icons`（改三档 `build/app-icon-{master,small,tiny}.svg` 或 `build/app-icon.icon/**` 后跑一次；产出 `build/icon.{icns,ico,png}`、`build/icons/*.png` 与 macOS 26 分层图标 `build/Assets.car`，并同步更新 `build/Assets.car.inputs`；需 `rsvg-convert`、macOS `sips` 与 Xcode 26+ `actool`）
+- 图标重建：`pnpm build:icons`（修改唯一母版 `build/app-icon-source.svg` 后跑一次；产出 `build/icon.{icns,ico,png}`、`build/icons/*.png` 与正式发布使用的 macOS 26 `build/Assets.car`，并同步更新 `build/Assets.car.inputs`；标准尺寸统一由锁定的 electron-builder 图标工具从 SVG 直接降采样，`sips` 只封装 legacy ICNS，原生资源需 Xcode 26+ `actool`；PierDev 与四类 Helper 仅安装 ICNS，必须移除 `Assets.car` 与 `CFBundleIconName`）
 
 ### E2E 执行优先级（编码助手硬约定）
 

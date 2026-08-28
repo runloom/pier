@@ -22,7 +22,7 @@ import { bindTreeExpansionPersistence } from "@pier/ui/file/tree-expansion-persi
 import { FILE_TREE_SEARCH_SHELL_CLASS } from "@pier/ui/file/tree-style.ts";
 import type { PierFileTreeExpandAllOptions } from "@pier/ui/file/tree-types.ts";
 import { useFileTreeSearch } from "@pier/ui/file/use-tree-search.tsx";
-
+import { type PanelFindAction, usePanelFind } from "@plugins/api/panel-find.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { SearchX } from "lucide-react";
 import {
@@ -45,10 +45,6 @@ import { revealGitReviewTreeSelection } from "./tree-reveal-selection.ts";
 const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
 const REVIEW_TREE_EXPANSION_STORAGE_PREFIX =
   "pier.git.review.tree.expansion.v1:";
-/**
- * Review 树已全量投影，Expand Folders 用独立层数预算（勿直接复用 maxDepth 标识符）。
- * 与 absolute maxDepth 安全轨同数量级，避免默认 3 层只开浅目录。
- */
 const GIT_REVIEW_TREE_EXPAND_ALL_MAX_LEVELS = 64;
 
 function GitReviewTreeSidebarComponent({
@@ -101,7 +97,6 @@ function GitReviewTreeSidebarComponent({
       ),
     [contextId, gitRootPath]
   );
-  // 展开态跨重开面板 / 重启保留；未持久化时每次进 review 都要重新折叠一遍。
   useEffect(
     () =>
       bindTreeExpansionPersistence(
@@ -117,11 +112,6 @@ function GitReviewTreeSidebarComponent({
     treeSearch.queryApplied &&
     treeSearch.matchCount === 0;
   const searchActionsDisabled = treeSearch.matchCount === 0;
-
-  // Explicit open: center the row in the tree viewport (sticky-aware via
-  // PierFileTree reveal). Not continuous active tracking.
-  // 搜索开启时（Enter 提交打开）reveal 必须 preserveFocus，否则行会抢走
-  // 输入框的 DOM 焦点，下一个按键（如 Esc 关搜索）落到树上。
   const handleOpenPath = useCallback(
     (path: string) => {
       onOpenPath(path);
@@ -289,18 +279,15 @@ export function GitReviewPanelLayout({
   sidebarHeader?: ReactNode;
   sourcePanelId?: string;
   treeFocus?: ReviewTreeFocus | null;
-  /** index 加载中：侧栏显示树骨架而非空 PierFileTree */
   treeLoading?: boolean;
   treeModel?: ReturnType<typeof gitReviewTreeModel> | null;
 }) {
   const treeSearch = useFileTreeSearch();
   const lastRevealedNonceRef = useRef<number | null>(null);
-  // 无变更时侧栏与树 chrome 一并隐藏，避免空树黑区；冷加载骨架仍占位。
   const treeHasContent =
     treeLoading === true || (treeModel != null && treeModel.items.length > 0);
   const hasTree = Boolean(treeHasContent && onOpenPath);
 
-  // 依赖稳定 ref / callback，避免 treeSearch 对象每 render 换新导致 handler 空窗
   const treeApiRef = treeSearch.treeApiRef;
   const collapseAllFolders = treeSearch.collapseAllFolders;
   const expandAllFolders = treeSearch.expandAllFolders;
@@ -368,17 +355,39 @@ export function GitReviewPanelLayout({
     });
   }, [hasTree, sidebarCollapsed, treeApiRef, treeFocus, treeLoading]);
 
-  const toggleSearch = () => {
-    if (!hasTree || treeLoading) {
-      return;
-    }
-    if (sidebarCollapsed) {
-      setSidebarCollapsed(false);
-      treeSearch.openSearch();
-      return;
-    }
-    treeSearch.toggleSearch();
-  };
+  const onFind = useCallback(
+    (action: PanelFindAction) => {
+      if (!hasTree || treeLoading) {
+        context.notifications.info(
+          pluginText(
+            context,
+            "reviewSearchUnavailable",
+            "Open a git repository first."
+          )
+        );
+        return;
+      }
+      if ((action === "next" || action === "prev") && treeSearch.open) {
+        treeSearch.navigateSearch(action === "next" ? "next" : "previous");
+        return;
+      }
+      if (sidebarCollapsed) {
+        setSidebarCollapsed(false);
+        treeSearch.openSearch();
+        return;
+      }
+      treeSearch.toggleSearch();
+    },
+    [
+      context,
+      hasTree,
+      setSidebarCollapsed,
+      sidebarCollapsed,
+      treeLoading,
+      treeSearch,
+    ]
+  );
+  usePanelFind(sourcePanelId, onFind);
   const collapseSidebar = () => {
     treeSearch.closeSearch();
     setSidebarCollapsed(true);
@@ -470,7 +479,7 @@ export function GitReviewPanelLayout({
                     "reviewTreeSearch",
                     "Find in changed files"
                   )}
-                  onOpenSearch={toggleSearch}
+                  onOpenSearch={treeSearch.toggleSearch}
                 />
               ) : null}
               {headerLeading}

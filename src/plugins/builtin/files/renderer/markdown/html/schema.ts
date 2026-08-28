@@ -116,7 +116,7 @@ export function htmlAlignClass(align: string | undefined): string | undefined {
   if (value === "center") return "text-center";
   if (value === "right") return "text-right";
   if (value === "left") return "text-left";
-  if (value === "justify") return "text-justify";
+  // justify is not a reading-column alignment (gold standard forbids it).
   return;
 }
 

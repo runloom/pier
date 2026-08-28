@@ -71,11 +71,11 @@ to `[0, 100]`; plugins may report values outside that range.
 Empty and error states use `Empty` / `Alert`. Surface failed
 `pluginAction.invoke` on that `Alert`; do not swallow the rejection.
 
-Live composition: `.pier/canvases/workbench-examples/` — Codex uses compact
-`Item` rows + `DropdownMenu`; Grok uses `Table`. Both read
-`plugin:pier.codex/accounts` / `plugin:pier.grok/accounts`. Sign-in still
-goes through `settings.open` with `section: "plugin:pier.codex"` or
-`"plugin:pier.grok"`.
+Compose those two layouts from `Item` / `Table` in
+`.pier/canvases/canvas-kit/` (Controls / Viz). Read
+`plugin:pier.codex/accounts` / `plugin:pier.grok/accounts` on the canvas.
+Sign-in still goes through `settings.open` with `section: "plugin:pier.codex"`
+or `"plugin:pier.grok"`.
 
 ## Loopback fetch
 
@@ -124,9 +124,9 @@ const output = await host.invoke({ type: "run.output", runId: outcome.runId })
 // Re-pull when runsChanged.data ticks. Parse chunks[].text locally.
 ```
 
-Gold uses `cat graph.json` so the command output *is* the graph (offline
-closed loop). Replace that string with the orchestrator CLI when you have
-one. Gold: `.pier/canvases/dag-viewer/`.
+The template uses `cat graph.json` so the command output *is* the graph
+(offline closed loop). Replace that string with the orchestrator CLI when
+you have one.
 
 ## Hard bans
 

@@ -544,8 +544,14 @@
  * Markdown preview paper appearance (files plugin).
  * Independent of app chrome: only the preview root sets
  * data-reading-appearance="light"|"dark". "auto" omits the attribute and
- * inherits app tokens. Values mirror :root / :root.light neutral shells so
- * prose, code chrome, TOC, and zoom controls stay consistent.
+ * inherits app tokens. Values mirror :root / :root.light neutral shells AND
+ * status hues so prose, code chrome, TOC, callouts, search marks, Mermaid
+ * tones, and scrollbars stay consistent. Root-level composite variables
+ * (scrollbar thumb, status-neutral/done, interactive hover, action
+ * secondary hover) resolve at declaration and inherit baked — they must
+ * be re-declared here with the same formulas. Do not mirror toast tokens
+ * (toasts portal outside the paper).
+ * Parity lock: tests/unit/renderer/app/color-token-governance.test.ts.
  */
 [data-slot="markdown-preview-root"][data-reading-appearance="light"] {
   color-scheme: light;
@@ -569,6 +575,70 @@
   --action-accent: var(--primary);
   --action-accent-foreground: var(--primary-foreground);
   --action-muted: var(--muted-foreground);
+  --action-danger: var(--destructive);
+  /* hover/pressed 洗色与滚动条拇指同理：:root 处已按应用主题定值，
+     纸面必须同公式重算，否则 ghost 按钮 hover 带着应用主题灰。 */
+  --interactive-hover: color-mix(
+    in oklab,
+    var(--foreground) 12%,
+    var(--background)
+  );
+  --interactive-active: color-mix(
+    in oklab,
+    var(--foreground) 16%,
+    var(--background)
+  );
+  --action-secondary-hover: color-mix(
+    in oklab,
+    var(--secondary),
+    var(--foreground) 10%
+  );
+  /* 滚动条拇指在 :root 处已按应用主题定值（自定义属性在声明处求值后继承）；
+     纸面换 token 后必须同公式重算，否则深色应用里的浅色纸面顶着近白拇指。 */
+  --shell-scrollbar-thumb: color-mix(
+    in oklab,
+    var(--foreground) 22%,
+    var(--background)
+  );
+  --shell-scrollbar-thumb-active: color-mix(
+    in oklab,
+    var(--foreground) 38%,
+    var(--background)
+  );
+  /* 状态色随纸面取对应主题的调校值（镜像 :root.light 字面量；callout、
+     搜索高亮 bg-warning/30、Mermaid tone 都在元素处解析这些 token——
+     不镜像就是暗色主题的浅黄字落在白纸上）。 */
+  --destructive: #ff4d4f;
+  --destructive-foreground: oklch(0.985 0 0);
+  --warning: #faad14;
+  --warning-foreground: oklch(0.985 0 0);
+  --success: #52c41a;
+  --info: #1677ff;
+  --done: #7e22ce;
+  --status-solid-foreground: oklch(0.985 0 0);
+  --status-info-bg: #e6f4ff;
+  --status-info-fg: #1677ff;
+  --status-info-border: #91caff;
+  --status-success-bg: #f6ffed;
+  --status-success-fg: #52c41a;
+  --status-success-border: #b7eb8f;
+  --status-warning-bg: #fffbe6;
+  --status-warning-fg: #faad14;
+  --status-warning-border: #ffe58f;
+  --status-danger-bg: #fff2f0;
+  --status-danger-fg: #ff4d4f;
+  --status-danger-border: #ffccc7;
+  /* neutral/done 是复合公式：在纸面作用域重声明以按纸面 token 重算。 */
+  --status-neutral-bg: color-mix(in oklab, var(--muted) 64%, transparent);
+  --status-neutral-fg: var(--muted-foreground);
+  --status-neutral-border: color-mix(
+    in oklab,
+    var(--muted-foreground) 20%,
+    transparent
+  );
+  --status-done-bg: color-mix(in oklab, var(--done) 14%, transparent);
+  --status-done-fg: color-mix(in oklab, var(--done) 82%, var(--foreground));
+  --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
 }
 
 [data-slot="markdown-preview-root"][data-reading-appearance="dark"] {
@@ -593,6 +663,64 @@
   --action-accent: var(--primary);
   --action-accent-foreground: var(--primary-foreground);
   --action-muted: var(--muted-foreground);
+  --action-danger: var(--destructive);
+  --interactive-hover: color-mix(
+    in oklab,
+    var(--foreground) 12%,
+    var(--background)
+  );
+  --interactive-active: color-mix(
+    in oklab,
+    var(--foreground) 16%,
+    var(--background)
+  );
+  --action-secondary-hover: color-mix(
+    in oklab,
+    var(--secondary),
+    var(--foreground) 10%
+  );
+  /* 同上：纸面 token 重混滚动条拇指。 */
+  --shell-scrollbar-thumb: color-mix(
+    in oklab,
+    var(--foreground) 22%,
+    var(--background)
+  );
+  --shell-scrollbar-thumb-active: color-mix(
+    in oklab,
+    var(--foreground) 38%,
+    var(--background)
+  );
+  /* 状态色镜像 :root 暗色字面量（同上理由）。 */
+  --destructive: #ff4d4f;
+  --destructive-foreground: oklch(0.145 0 0);
+  --warning: #d89614;
+  --warning-foreground: oklch(0.145 0 0);
+  --success: #49aa19;
+  --info: #1668dc;
+  --done: #c084fc;
+  --status-solid-foreground: oklch(0.985 0 0);
+  --status-info-bg: #111a2c;
+  --status-info-fg: #1668dc;
+  --status-info-border: #15325b;
+  --status-success-bg: #162312;
+  --status-success-fg: #49aa19;
+  --status-success-border: #274916;
+  --status-warning-bg: #2b2111;
+  --status-warning-fg: #d89614;
+  --status-warning-border: #594214;
+  --status-danger-bg: #2c1618;
+  --status-danger-fg: #dc4446;
+  --status-danger-border: #5b2526;
+  --status-neutral-bg: color-mix(in oklab, var(--muted) 64%, transparent);
+  --status-neutral-fg: var(--muted-foreground);
+  --status-neutral-border: color-mix(
+    in oklab,
+    var(--muted-foreground) 20%,
+    transparent
+  );
+  --status-done-bg: color-mix(in oklab, var(--done) 14%, transparent);
+  --status-done-fg: color-mix(in oklab, var(--done) 82%, var(--foreground));
+  --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
 }
 
 :root:not(.light) {

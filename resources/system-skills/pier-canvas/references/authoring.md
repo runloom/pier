@@ -27,9 +27,9 @@ declaration for each API you plan to use:
 - `primitives.d.ts` for the complete standard UI primitive inventory.
 - `format.d.ts` for number / money / size / relative-time helpers.
 - [host-data.md](./host-data.md) for plugin projections, canvas actions,
-  `settings.open`, and two layout recipes for the same snapshot.
-  Composition sample: `.pier/canvases/workbench-examples/` (Codex `Item`
-  rows, Grok `Table`).
+  `settings.open`, and two layout recipes for the same snapshot
+  (compact `Item` row vs `Table`). Primitive specimens:
+  `.pier/canvases/canvas-kit/` (`Item`, `Table`).
 
 The declarations are the public contract. Do not infer props from component
 names or copy host source. Do not copy plugin `accounts-widget` source or
@@ -176,8 +176,6 @@ diagram; there is no `type` prop and Pier does not sniff the source header.
 Rules:
 
 - Architecture and main-loop graphs **must** set `kind` on every node.
-  Look at `.pier/canvases/multi-agent-orchestration-gold/data.json`
-  `mainLoop.diagram` / `architecture.diagram`.
 - Status graphs **must** set `tone` (success path, warning attention,
   danger misuse). Templates keep `tone: "danger"` on Error / Misuse /
   Stop nodes.

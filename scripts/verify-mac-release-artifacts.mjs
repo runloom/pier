@@ -11,9 +11,14 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  assertCompiledIconIntegrity,
   assertCompiledIconStack,
   MAC_ICON_RENDITION_NAME,
 } from "./app-icon-layered.mjs";
+import {
+  MAC_HELPER_SUFFIXES,
+  rootPlistStringValue,
+} from "./mac-helper-icons.mjs";
 import {
   normalizeReleaseVersion,
   recommendedMacReleaseBlockmapNames,
@@ -64,13 +69,6 @@ export function validateMacReleaseArtifacts(input) {
   return errors;
 }
 
-function plistStringValue(source, key) {
-  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(
-    `<key>\\s*${escaped}\\s*</key>\\s*<string>\\s*([^<]+?)\\s*</string>`
-  ).exec(source)?.[1];
-}
-
 async function readPlistValue(plistPath, key) {
   if (process.platform === "darwin") {
     const result = spawnSync(
@@ -81,8 +79,87 @@ async function readPlistValue(plistPath, key) {
     if (!result.error && result.status === 0) {
       return result.stdout.trim();
     }
+    return;
   }
-  return plistStringValue(await readFile(plistPath, "utf8"), key);
+  try {
+    return rootPlistStringValue(await readFile(plistPath, "utf8"), key);
+  } catch {
+    return;
+  }
+}
+
+async function validatePackagedMacHelpers(app, canonicalIcon) {
+  const errors = [];
+  for (const suffix of MAC_HELPER_SUFFIXES) {
+    const helperName = `Pier Helper${suffix}.app`;
+    const helperContents = join(
+      app,
+      "Contents",
+      "Frameworks",
+      helperName,
+      "Contents"
+    );
+    const plistPath = join(helperContents, "Info.plist");
+    const resources = join(helperContents, "Resources");
+    try {
+      await readFile(plistPath);
+    } catch (error) {
+      errors.push(
+        `${helperName}: missing readable Contents/Info.plist (${error instanceof Error ? error.message : String(error)})`
+      );
+      continue;
+    }
+
+    const iconFile = await readPlistValue(plistPath, "CFBundleIconFile");
+    if (iconFile !== "icon.icns") {
+      errors.push(
+        `${helperName}: CFBundleIconFile must be icon.icns (received ${iconFile ?? "missing"})`
+      );
+    }
+    const iconName = await readPlistValue(plistPath, "CFBundleIconName");
+    if (iconName !== undefined) {
+      errors.push(
+        `${helperName}: CFBundleIconName must be absent for the ICNS-only Helper (received ${iconName})`
+      );
+    }
+
+    try {
+      const [helperIcon, canonicalIconBytes] = await Promise.all([
+        readFile(join(resources, "icon.icns")),
+        readFile(canonicalIcon),
+      ]);
+      if (!helperIcon.equals(canonicalIconBytes)) {
+        errors.push(`${helperName}: icon.icns does not match build/icon.icns`);
+      }
+    } catch (error) {
+      errors.push(
+        `${helperName}: cannot compare icon.icns (${error instanceof Error ? error.message : String(error)})`
+      );
+    }
+
+    for (const stale of ["Assets.car", "electron.icns", "AppIcon.icns"]) {
+      try {
+        await readFile(join(resources, stale));
+        errors.push(
+          `${helperName}: ${stale} must be absent; Helpers use only icon.icns`
+        );
+      } catch (error) {
+        if (
+          !(
+            error &&
+            typeof error === "object" &&
+            "code" in error &&
+            error.code === "ENOENT"
+          )
+        ) {
+          errors.push(
+            `${helperName}: cannot verify ${stale} is absent (${error instanceof Error ? error.message : String(error)})`
+          );
+        }
+      }
+    }
+  }
+  return errors;
 }
 
 /**
@@ -166,7 +243,12 @@ export async function validatePackagedMacApp(appPath, options = {}) {
     try {
       const validateCar =
         options.validateCar ??
-        (process.platform === "darwin" ? assertCompiledIconStack : undefined);
+        (process.platform === "darwin"
+          ? (path) => {
+              assertCompiledIconStack(path);
+              assertCompiledIconIntegrity(path);
+            }
+          : undefined);
       validateCar?.(packagedCar);
     } catch (error) {
       errors.push(
@@ -174,6 +256,7 @@ export async function validatePackagedMacApp(appPath, options = {}) {
       );
     }
   }
+  errors.push(...(await validatePackagedMacHelpers(app, canonicalIcon)));
   return errors;
 }
 

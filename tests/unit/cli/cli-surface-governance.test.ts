@@ -96,4 +96,12 @@ describe("cli user manual governance (canvas canonical)", () => {
       expect(text, path).not.toMatch(/docs\/cli\.md/u);
     }
   });
+
+  it("手册搜索 Enter 跳过 IME 合成（isComposing / keyCode 229）", () => {
+    const canvas = readFile(
+      ".pier/canvases/pier-cli-user-manual/pier-cli-user-manual.canvas.tsx"
+    );
+    expect(canvas).toContain("nativeEvent.isComposing");
+    expect(canvas).toContain("nativeEvent.keyCode === 229");
+  });
 });

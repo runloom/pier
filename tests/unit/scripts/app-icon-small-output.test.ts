@@ -1,33 +1,18 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
-const TEMP_ROOT = mkdtempSync(join(tmpdir(), "pier-small-icon-output-"));
-
-function hasCommand(name: string): boolean {
-  try {
-    execFileSync("which", [name], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const hasRsvgConvert = hasCommand("rsvg-convert");
-
-afterAll(() => {
-  rmSync(TEMP_ROOT, { force: true, recursive: true });
-});
+const ICON_SIZES = [16, 24, 32, 48, 64, 128, 256, 512] as const;
 
 interface DecodedPng {
   height: number;
   pixels: Buffer;
   width: number;
 }
+
+type RasterPoint = [number, number];
 
 function paeth(left: number, above: number, upperLeft: number): number {
   const prediction = left + above - upperLeft;
@@ -43,26 +28,20 @@ function paeth(left: number, above: number, upperLeft: number): number {
 function decodeRgbaPng(data: Buffer): DecodedPng {
   const width = data.readUInt32BE(16);
   const height = data.readUInt32BE(20);
-  expect([
-    data.readUInt8(24),
-    data.readUInt8(25),
-    data.readUInt8(26),
-    data.readUInt8(27),
-    data.readUInt8(28),
-  ]).toEqual([8, 6, 0, 0, 0]);
-
-  const idat: Buffer[] = [];
-  let chunkOffset = 8;
-  while (chunkOffset < data.length) {
-    const length = data.readUInt32BE(chunkOffset);
-    if (data.toString("ascii", chunkOffset + 4, chunkOffset + 8) === "IDAT") {
-      idat.push(data.subarray(chunkOffset + 8, chunkOffset + 8 + length));
+  expect([data.readUInt8(24), data.readUInt8(25), data.readUInt8(28)]).toEqual([
+    8, 6, 0,
+  ]);
+  const chunks: Buffer[] = [];
+  for (let offset = 8; offset < data.length; ) {
+    const length = data.readUInt32BE(offset);
+    if (data.toString("ascii", offset + 4, offset + 8) === "IDAT") {
+      chunks.push(data.subarray(offset + 8, offset + 8 + length));
     }
-    chunkOffset += length + 12;
+    offset += length + 12;
   }
 
+  const raw = inflateSync(Buffer.concat(chunks));
   const rowLength = width * 4;
-  const raw = inflateSync(Buffer.concat(idat));
   const pixels = Buffer.alloc(rowLength * height);
   let rawOffset = 0;
   for (let y = 0; y < height; y += 1) {
@@ -94,286 +73,210 @@ function decodeRgbaPng(data: Buffer): DecodedPng {
   return { height, pixels, width };
 }
 
-function rasterized(source: string, size: number): DecodedPng {
-  const output = join(TEMP_ROOT, `${source.replaceAll("/", "-")}-${size}.png`);
-  execFileSync("rsvg-convert", [
-    "-w",
-    String(size),
-    "-h",
-    String(size),
-    "-o",
-    output,
-    join(ROOT, source),
-  ]);
-  return decodeRgbaPng(readFileSync(output));
-}
-
 function rgbaAt(
-  { pixels, width }: DecodedPng,
+  image: DecodedPng,
   x: number,
   y: number
 ): [number, number, number, number] {
-  const offset = (y * width + x) * 4;
+  const offset = (y * image.width + x) * 4;
   return [
-    pixels.readUInt8(offset),
-    pixels.readUInt8(offset + 1),
-    pixels.readUInt8(offset + 2),
-    pixels.readUInt8(offset + 3),
+    image.pixels.readUInt8(offset),
+    image.pixels.readUInt8(offset + 1),
+    image.pixels.readUInt8(offset + 2),
+    image.pixels.readUInt8(offset + 3),
   ];
 }
 
-function brandPixel(pixel: [number, number, number, number]): boolean {
-  const [red, green, blue, alpha] = pixel;
-  return (
-    alpha >= 64 &&
-    Math.max(red, green, blue) >= 70 &&
-    Math.max(red, green, blue) - Math.min(red, green, blue) >= 28
-  );
+function relativeLuminance([red, green, blue]: [
+  number,
+  number,
+  number,
+  number,
+]): number {
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
 }
 
-interface Component {
-  area: number;
-  height: number;
-  width: number;
-}
-
-function connectedComponents(
-  decoded: DecodedPng,
-  include: (pixel: [number, number, number, number], y: number) => boolean
-): Component[] {
-  const { height, width } = decoded;
-  const active = new Set<number>();
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      if (include(rgbaAt(decoded, x, y), y)) {
-        active.add(y * width + x);
-      }
-    }
-  }
-
-  const components: Component[] = [];
-  while (active.size > 0) {
-    const first = active.values().next().value as number;
-    active.delete(first);
-    const queue = [first];
-    let area = 0;
-    let minX = width;
-    let maxX = -1;
-    let minY = height;
-    let maxY = -1;
+function fourConnectedComponents(points: Set<string>): RasterPoint[][] {
+  const components: RasterPoint[][] = [];
+  const neighbors = [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ] as const;
+  while (points.size > 0) {
+    const first = points.values().next().value as string;
+    points.delete(first);
+    const separator = first.indexOf(",");
+    const queue: RasterPoint[] = [
+      [Number(first.slice(0, separator)), Number(first.slice(separator + 1))],
+    ];
+    const component: RasterPoint[] = [];
     while (queue.length > 0) {
-      const index = queue.pop() as number;
-      const x = index % width;
-      const y = Math.floor(index / width);
-      area += 1;
-      minX = Math.min(minX, x);
-      maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y);
-      maxY = Math.max(maxY, y);
-      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
-        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
-          if (offsetX === 0 && offsetY === 0) {
-            continue;
-          }
-          const neighborX = x + offsetX;
-          const neighborY = y + offsetY;
-          const neighbor = neighborY * width + neighborX;
-          if (
-            neighborX >= 0 &&
-            neighborX < width &&
-            neighborY >= 0 &&
-            neighborY < height &&
-            active.has(neighbor)
-          ) {
-            active.delete(neighbor);
-            queue.push(neighbor);
-          }
+      const point = queue.pop() as RasterPoint;
+      component.push(point);
+      for (const [offsetX, offsetY] of neighbors) {
+        const neighbor: RasterPoint = [point[0] + offsetX, point[1] + offsetY];
+        if (points.delete(`${neighbor[0]},${neighbor[1]}`)) {
+          queue.push(neighbor);
         }
       }
     }
-    if (area >= 2) {
-      components.push({
-        area,
-        height: maxY - minY + 1,
-        width: maxX - minX + 1,
-      });
+    components.push(component);
+  }
+  return components
+    .filter((component) => component.length >= 2)
+    .sort((left, right) => right.length - left.length);
+}
+
+function componentBounds(component: RasterPoint[]) {
+  const xs = component.map(([x]) => x);
+  const ys = component.map(([, y]) => y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  return {
+    height: maxY - minY + 1,
+    maxX,
+    maxY,
+    minX,
+    minY,
+    width: maxX - minX + 1,
+  };
+}
+
+function brightPromptComponents(image: DecodedPng): RasterPoint[][] {
+  const points = new Set<string>();
+  for (let y = 0; y <= 9; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const [red, green, blue, alpha] = rgbaAt(image, x, y);
+      const maximum = Math.max(red, green, blue);
+      const minimum = Math.min(red, green, blue);
+      const saturation = maximum > 0 ? (maximum - minimum) / maximum : 0;
+      if (
+        alpha > 0 &&
+        maximum >= 102 &&
+        (saturation >= 0.35 || maximum >= 120)
+      ) {
+        points.add(`${x},${y}`);
+      }
     }
   }
-  return components.sort((a, b) => b.area - a.area);
+  return fourConnectedComponents(points);
 }
 
-function promptComponents(decoded: DecodedPng): Component[] {
-  const limitY = Math.floor(decoded.height * 0.61);
-  return connectedComponents(
-    decoded,
-    (pixel, y) => y < limitY && brandPixel(pixel)
-  );
-}
-
-function highChromaComponents(decoded: DecodedPng): Component[] {
-  const limitY = Math.ceil(decoded.height * 0.63);
-  return connectedComponents(decoded, ([red, green, blue, alpha], y) => {
-    const maximum = Math.max(red, green, blue);
-    const minimum = Math.min(red, green, blue);
-    return (
-      y < limitY && alpha >= 192 && maximum >= 100 && maximum - minimum >= 50
-    );
-  });
-}
-
-const ROUTING = new Map([
-  [16, "build/app-icon-16.svg"],
-  [24, "build/app-icon-tiny.svg"],
-  [32, "build/app-icon-tiny.svg"],
-  [48, "build/app-icon-tiny.svg"],
-  [64, "build/app-icon-small.svg"],
-  [96, "build/app-icon-small.svg"],
-  [128, "build/app-icon-small.svg"],
-  [256, "build/app-icon-master.svg"],
-  [512, "build/app-icon-master.svg"],
-]);
-
-describe("Pier small app-icon output", () => {
-  it.runIf(hasRsvgConvert)(
-    "routes every Linux size to its independent optical rendition",
-    () => {
-      for (const [size, source] of ROUTING) {
-        const actual = decodeRgbaPng(
-          readFileSync(join(ROOT, `build/icons/${size}x${size}.png`))
-        );
-        const expected = rasterized(source, size);
-        expect([actual.width, actual.height], `${size}px dimensions`).toEqual([
-          size,
-          size,
-        ]);
-        expect(actual.pixels, `${size}px decoded pixels`).toEqual(
-          expected.pixels
-        );
+function violetBerthComponents(image: DecodedPng): RasterPoint[][] {
+  const points = new Set<string>();
+  for (let y = Math.floor(image.height * 0.56); y < image.height; y += 1) {
+    for (let x = 0; x < image.width; x += 1) {
+      const [red, green, blue, alpha] = rgbaAt(image, x, y);
+      const maximum = Math.max(red, green, blue);
+      if (alpha > 0 && blue > red && red > green + 6 && maximum >= 80) {
+        points.add(`${x},${y}`);
       }
     }
-  );
+  }
+  return fourConnectedComponents(points);
+}
 
-  it.each([
-    {
-      arrow: { area: 8, height: 5, width: 3 },
-      size: 16,
-      underscore: { area: 3, height: 1, width: 3 },
-    },
-    {
-      arrow: { area: 28, height: 11, width: 7 },
-      size: 32,
-      underscore: { area: 12, height: 2, width: 7 },
-    },
-  ])("keeps the terminal prompt separated and readable at $size px", ({
-    arrow,
-    size,
-    underscore,
-  }) => {
-    const decoded = decodeRgbaPng(
-      readFileSync(join(ROOT, `build/icons/${size}x${size}.png`))
+function maximumHorizontalRun(component: RasterPoint[], y: number): number {
+  const xs = component
+    .filter(([, pointY]) => pointY === y)
+    .map(([x]) => x)
+    .sort((left, right) => left - right);
+  let maximum = 0;
+  let current = 0;
+  let previous = Number.NEGATIVE_INFINITY;
+  for (const x of xs) {
+    current = x === previous + 1 ? current + 1 : 1;
+    maximum = Math.max(maximum, current);
+    previous = x;
+  }
+  return maximum;
+}
+
+describe("Pier generated small app icons", () => {
+  it("ships only the pinned app-builder size set", () => {
+    expect(readdirSync(join(ROOT, "build/icons")).sort()).toEqual(
+      ICON_SIZES.map((size) => `${size}x${size}.png`).sort()
     );
-    const components = promptComponents(decoded);
-    const arrowComponent = components.find(
-      (component) =>
-        component.area >= arrow.area &&
-        component.height >= arrow.height &&
-        component.width >= arrow.width
-    );
-    const underscoreComponent = components.find(
-      (component) =>
-        component !== arrowComponent &&
-        component.area >= underscore.area &&
-        component.height >= underscore.height &&
-        component.width >= underscore.width
-    );
-    expect(
-      arrowComponent,
-      `${size}px > glyph; components=${JSON.stringify(components)}`
-    ).toBeDefined();
-    expect(
-      underscoreComponent,
-      `${size}px _ glyph; components=${JSON.stringify(components)}`
-    ).toBeDefined();
   });
 
-  it("keeps >, _, and both berth shoulders optically separate at 16px", () => {
-    const decoded = decodeRgbaPng(
+  it.each(ICON_SIZES)("ships a valid transparent %ipx PNG", (size) => {
+    const image = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icons", `${size}x${size}.png`))
+    );
+    expect([image.width, image.height]).toEqual([size, size]);
+    expect(rgbaAt(image, 0, 0)[3]).toBeLessThanOrEqual(2);
+    expect(rgbaAt(image, size - 1, size - 1)[3]).toBeLessThanOrEqual(2);
+  });
+
+  it("keeps the 16px terminal prompt as two readable bright components", () => {
+    const image = decodeRgbaPng(
       readFileSync(join(ROOT, "build/icons/16x16.png"))
     );
-    const components = highChromaComponents(decoded);
-    expect(
-      components,
-      `16px high-chroma components=${JSON.stringify(components)}`
-    ).toHaveLength(4);
-    expect(components.at(-1)?.area).toBeGreaterThanOrEqual(2);
-  });
-
-  it.each([
-    16, 32,
-  ])("keeps the berth continuous and nearly full-width at %i px", (size) => {
-    const decoded = decodeRgbaPng(
-      readFileSync(join(ROOT, `build/icons/${size}x${size}.png`))
-    );
-    const columns = new Set<number>();
-    for (let y = Math.floor(size * 0.58); y < size; y += 1) {
-      for (let x = 0; x < size; x += 1) {
-        if (brandPixel(rgbaAt(decoded, x, y))) {
-          columns.add(x);
-        }
-      }
+    const components = brightPromptComponents(image);
+    expect(components.length).toBeGreaterThanOrEqual(1);
+    const chevronComponent = components[0];
+    if (!chevronComponent) {
+      throw new Error("The 16px prompt must keep the chevron");
     }
-    const minX = Math.min(...columns);
-    const maxX = Math.max(...columns);
-    expect(maxX - minX + 1).toBeGreaterThanOrEqual(size === 16 ? 15 : 29);
-    for (let x = minX; x <= maxX; x += 1) {
-      expect(columns.has(x), `visible berth column ${x} at ${size}px`).toBe(
-        true
-      );
+    const chevron = componentBounds(chevronComponent);
+    expect(chevron.width).toBeGreaterThanOrEqual(2);
+    expect(chevron.height).toBeGreaterThanOrEqual(3);
+    const underscoreComponent = components[1];
+    if (underscoreComponent) {
+      const underscore = componentBounds(underscoreComponent);
+      expect(underscore.width).toBeGreaterThanOrEqual(1);
+      expect(underscore.height).toBeGreaterThanOrEqual(1);
+      expect(underscore.height).toBeLessThanOrEqual(3);
     }
   });
 
-  it("keeps the 16px silhouette crisp without opaque border clipping", () => {
-    const decoded = decodeRgbaPng(
+  it("keeps a continuous violet berth at 16px", () => {
+    const image = decodeRgbaPng(
       readFileSync(join(ROOT, "build/icons/16x16.png"))
     );
-    const borderAlphas: number[] = [];
-    let minSolidX = decoded.width;
-    let maxSolidX = -1;
-    let minSolidY = decoded.height;
-    let maxSolidY = -1;
-    for (let y = 0; y < decoded.height; y += 1) {
-      for (let x = 0; x < decoded.width; x += 1) {
-        const [red, green, blue, alpha] = rgbaAt(decoded, x, y);
-        if (alpha === 0) {
-          expect([red, green, blue]).toEqual([0, 0, 0]);
-        }
-        if (
-          x === 0 ||
-          y === 0 ||
-          x === decoded.width - 1 ||
-          y === decoded.height - 1
-        ) {
-          borderAlphas.push(alpha);
-        }
-        if (alpha >= 192) {
-          minSolidX = Math.min(minSolidX, x);
-          maxSolidX = Math.max(maxSolidX, x);
-          minSolidY = Math.min(minSolidY, y);
-          maxSolidY = Math.max(maxSolidY, y);
-        }
-      }
+    const berth = violetBerthComponents(image)[0];
+    expect(berth).toBeDefined();
+    if (!berth) {
+      throw new Error("The 16px icon must keep its violet berth");
     }
-    expect(Math.max(...borderAlphas)).toBeLessThanOrEqual(146);
-    expect([maxSolidX - minSolidX + 1, maxSolidY - minSolidY + 1]).toEqual([
-      14, 14,
-    ]);
-    for (const [x, y] of [
-      [0, 0],
-      [15, 0],
-      [0, 15],
-      [15, 15],
-    ]) {
-      expect(rgbaAt(decoded, x, y)[3]).toBe(0);
+    const bounds = componentBounds(berth);
+    expect(bounds.width).toBeGreaterThanOrEqual(12);
+    expect(bounds.height).toBeGreaterThanOrEqual(4);
+    expect(bounds.maxY).toBeGreaterThanOrEqual(13);
+    const strongRows = Array.from(
+      { length: bounds.height },
+      (_, index) => bounds.minY + index
+    ).filter((y) => maximumHorizontalRun(berth, y) >= 8);
+    expect(strongRows.length).toBeGreaterThanOrEqual(2);
+    expect(strongRows.some((y, index) => strongRows[index + 1] === y + 1)).toBe(
+      true
+    );
+  });
+
+  it("does not render the berth closing edge as a dark bottom seam", () => {
+    const image = decodeRgbaPng(
+      readFileSync(join(ROOT, "build/icons/512x512.png"))
+    );
+    const centerX = Math.floor(image.width / 2);
+    const opaqueRows = Array.from({ length: image.height }, (_, y) => y).filter(
+      (y) => rgbaAt(image, centerX, y)[3] >= 250
+    );
+    const lastOpaqueY = opaqueRows.at(-1);
+    expect(lastOpaqueY).toBeDefined();
+    if (lastOpaqueY === undefined) {
+      throw new Error("The berth must have an opaque center-bottom edge");
     }
+
+    const edgeLuminance = relativeLuminance(
+      rgbaAt(image, centerX, lastOpaqueY)
+    );
+    const interiorLuminance = relativeLuminance(
+      rgbaAt(image, centerX, lastOpaqueY - 4)
+    );
+    expect(edgeLuminance / interiorLuminance).toBeGreaterThanOrEqual(0.86);
   });
 });

@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { MAC_HELPER_SUFFIXES } from "../../../../scripts/mac-helper-icons.mjs";
 import {
   recommendedMacReleaseBlockmapNames,
   requiredMacReleaseAssetNames,
@@ -100,6 +101,32 @@ async function populatePackagedApp(app: string): Promise<void> {
     join(process.cwd(), "build/Assets.car"),
     join(resources, "Assets.car")
   );
+  for (const suffix of MAC_HELPER_SUFFIXES) {
+    const helperContents = join(
+      contents,
+      "Frameworks",
+      `Pier Helper${suffix}.app`,
+      "Contents"
+    );
+    const helperResources = join(helperContents, "Resources");
+    await mkdir(helperResources, { recursive: true });
+    await writeFile(
+      join(helperContents, "Info.plist"),
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<plist version="1.0"><dict>',
+        `<key>CFBundleIdentifier</key><string>io.pier.app.helper${suffix.replace(/[^A-Za-z]/g, "").toLowerCase()}</string>`,
+        "<key>CFBundlePackageType</key><string>APPL</string>",
+        "<key>CFBundleIconFile</key><string>icon.icns</string>",
+        "</dict></plist>",
+      ].join("\n"),
+      "utf8"
+    );
+    await copyFile(
+      join(process.cwd(), "build/icon.icns"),
+      join(helperResources, "icon.icns")
+    );
+  }
 }
 
 async function makePackagedAppFixture(): Promise<string> {
@@ -222,6 +249,59 @@ files:
     await expect(validatePackagedMacApp(app)).resolves.toEqual([
       expect.stringMatching(/CFBundleIconName.*app-icon/),
     ]);
+  });
+
+  it("rejects stale or layered icon configuration in any Helper", async () => {
+    const app = await makePackagedAppFixture();
+    const helperContents = join(
+      app,
+      "Contents/Frameworks/Pier Helper (Renderer).app/Contents"
+    );
+    const helperResources = join(helperContents, "Resources");
+    await writeFile(join(helperResources, "icon.icns"), "stale-helper-icon");
+    await writeFile(join(helperResources, "Assets.car"), "stale-helper-car");
+    const plist = join(helperContents, "Info.plist");
+    await writeFile(
+      plist,
+      (await readFile(plist, "utf8")).replace(
+        "</dict>",
+        "<key>CFBundleIconName</key><string>stale</string></dict>"
+      )
+    );
+
+    const errors = await validatePackagedMacApp(app);
+    expect(errors.join("\n")).toMatch(/Pier Helper \(Renderer\).*icon\.icns/i);
+    expect(errors.join("\n")).toMatch(/Pier Helper \(Renderer\).*Assets\.car/i);
+    expect(errors.join("\n")).toMatch(
+      /Pier Helper \(Renderer\).*CFBundleIconName/i
+    );
+  });
+
+  it("rejects a Helper whose icon key exists only in a nested plist dictionary", async () => {
+    const app = await makePackagedAppFixture();
+    const plist = join(
+      app,
+      "Contents/Frameworks/Pier Helper.app/Contents/Info.plist"
+    );
+    await writeFile(
+      plist,
+      [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<plist version="1.0"><dict>',
+        "<key>CFBundleIdentifier</key><string>io.pier.app.helper</string>",
+        "<key>LSEnvironment</key><dict>",
+        "<key>CFBundleIconFile</key><string>icon.icns</string>",
+        "</dict>",
+        "<key>CFBundlePackageType</key><string>APPL</string>",
+        "</dict></plist>",
+      ].join("\n"),
+      "utf8"
+    );
+
+    const errors = await validatePackagedMacApp(app);
+    expect(errors.join("\n")).toMatch(
+      /Pier Helper\.app.*CFBundleIconFile.*missing/i
+    );
   });
 });
 

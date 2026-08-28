@@ -98,6 +98,43 @@ describe("scrollbar visual gold standard", () => {
     );
   });
 
+  it("re-mixes the scrollbar thumb inside markdown paper scopes", () => {
+    // 自定义属性在声明处求值后继承：:root 的拇指混色固定为应用主题，
+    // 纸面（data-reading-appearance）换 token 后必须同公式重算。
+    const globals = read("src/renderer/app/globals.css");
+    for (const appearance of ["light", "dark"] as const) {
+      const header = globals.match(
+        new RegExp(
+          `\\[data-slot="markdown-preview-root"\\]\\[data-reading-appearance="${appearance}"\\]\\s*\\{`
+        )
+      );
+      expect(header, `${appearance} paper block`).toBeTruthy();
+      if (!header || header.index === undefined) {
+        continue;
+      }
+      const start = header.index + header[0].length;
+      let depth = 1;
+      let end = -1;
+      for (let index = start; index < globals.length; index++) {
+        const char = globals[index];
+        if (char === "{") {
+          depth += 1;
+        } else if (char === "}") {
+          depth -= 1;
+          if (depth === 0) {
+            end = index;
+            break;
+          }
+        }
+      }
+      const block = end === -1 ? "" : globals.slice(header.index, end + 1);
+      expect(block).toContain("--shell-scrollbar-thumb:");
+      expect(block).toContain("--shell-scrollbar-thumb-active:");
+      expect(block).toContain("--interactive-hover:");
+      expect(block).toContain("--action-secondary-hover:");
+    }
+  });
+
   it("spares native gutters when fade and a visible bar share a node", () => {
     const globals = read("src/renderer/app/globals.css");
     const tree = read("packages/ui/src/file/tree-style.ts");

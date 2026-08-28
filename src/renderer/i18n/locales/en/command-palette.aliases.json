@@ -9,6 +9,19 @@
         "start default agent"
       ]
     },
+    "find": [
+      "find",
+      "search",
+      "find in file",
+      "find in panel",
+      "find in terminal"
+    ],
+    "findNext": ["find next", "next match"],
+    "findPrev": ["find previous", "previous match"],
+    "agents": {
+      "list": ["agent list", "agents"],
+      "focusWaiting": ["needs attention", "waiting", "jump to next"]
+    },
     "commandPalette": {
       "clearRecent": ["clear history", "reset history", "command history"]
     },
@@ -24,6 +37,8 @@
         "even panels",
         "layout panels"
       ],
+      "focusNextTab": ["next tab", "cycle tabs"],
+      "focusPrevTab": ["previous tab", "prev tab"],
       "newTerminal": [
         "terminal",
         "new terminal",
@@ -49,6 +64,7 @@
     },
     "view": {
       "resetZoom": ["reset zoom", "restore zoom", "default zoom"],
+      "toggleSideTree": ["sidebar", "side tree", "file tree", "toggle tree"],
       "zoomIn": ["zoom in", "increase zoom"],
       "zoomOut": ["zoom out", "decrease zoom"]
     },

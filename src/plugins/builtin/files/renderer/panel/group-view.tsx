@@ -1,3 +1,4 @@
+import { usePanelFindSearchRequest as useFindRequest } from "@plugins/api/panel-find.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
@@ -34,10 +35,6 @@ import {
   projectNameFromRoot,
   useProjectFileTreeCollapsed,
 } from "../tree/preferences.ts";
-import {
-  openFilesTreeSearch,
-  toggleFilesTreeSearch,
-} from "../tree/registry.ts";
 import { FileTreeSidebar } from "../tree/sidebar.tsx";
 import type { FilesWatchHub } from "../watch-hub.ts";
 import { ResolvedFilePanelActions } from "./actions.tsx";
@@ -122,7 +119,7 @@ export function FilesGroupView({
   const [modeByDocumentId, setModeByDocumentId] = useState<
     ReadonlyMap<string, FileViewMode>
   >(() => new Map());
-  const [searchRequest, setSearchRequest] = useState(0);
+  const [searchRequest, setSearchRequest] = useFindRequest(activeTab?.panelId);
   /** Bump after live-modules config loads so canvas path checks re-run. */
   const [liveModulesConfigEpoch, setLiveModulesConfigEpoch] = useState(0);
 
@@ -298,22 +295,9 @@ export function FilesGroupView({
     panelContext,
   });
 
-  // chrome 🔍:树可用时切换树内搜索(折叠先展开,等挂载再聚焦);
-  // 无项目树(如终端 Markdown 草稿)退回编辑器内查找。
   const handleOpenSearch = useCallback(() => {
-    if (!root) {
-      setSearchRequest((request) => request + 1);
-      return;
-    }
-    if (treeCollapsed) {
-      setTreeCollapsed(false);
-      setTimeout(() => {
-        openFilesTreeSearch({ instanceId: groupId, root });
-      }, 80);
-      return;
-    }
-    toggleFilesTreeSearch({ instanceId: groupId, root });
-  }, [groupId, root, setTreeCollapsed, treeCollapsed]);
+    setSearchRequest((request) => request + 1);
+  }, [setSearchRequest]);
 
   const activeFilePath = activeFilePathForTree({
     root,
@@ -353,11 +337,7 @@ export function FilesGroupView({
         t={t}
       />
       <FilePanelSearchButton
-        label={
-          root
-            ? t("filePanel.tree.action.search", "Find in File Tree")
-            : t("filePanel.search", "Find in file")
-        }
+        label={t("filePanel.search", "Find in file")}
         onOpenSearch={handleOpenSearch}
         t={t}
       />

@@ -1,9 +1,0 @@
-{
-  "schemaVersion": 1,
-  "content": "closed-loop",
-  "presentation": "primary_nav_5",
-  "ui": "pier-default",
-  "status": "draft",
-  "role": "overview",
-  "source": "重写于 2026-08-10：协调智能体主调 Pier CLI、一次性调用与持久会话协作的五页产品与技术方案。"
-}

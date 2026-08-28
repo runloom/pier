@@ -1,24 +1,26 @@
 <!doctype html>
 <html lang="zh-CN">
   <head>
-    <meta charset="utf-8" />
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pier — Approved Logo System</title>
+    <title>Pier 应用图标</title>
     <style>
       :root {
-        color-scheme: light;
-        --paper: #f4f3f1;
-        --paper-raised: #fbfaf8;
-        --ink: #191820;
-        --muted: #696773;
-        --rule: #d7d4dc;
-        --highlight: #b66cff;
-        --primary: #8549ff;
-        --deep: #542ee5;
-        --radius: 18px;
-        --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
+        color-scheme: dark;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC",
           sans-serif;
-        --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+        --bg: #070b15;
+        --panel: #0c1120;
+        --line: rgba(210, 222, 255, 0.09);
+        --fg: #e9edf6;
+        --muted: #a2acc2;
+        --faint: #69748f;
+        --brand: #8549ff;
+        --brand-hi: #b66cff;
+        --brand-deep: #542ee5;
+        --dock: #c8c8c8;
+        --day: #f6f7fb;
       }
 
       * {
@@ -26,378 +28,210 @@
       }
 
       body {
+        min-height: 100vh;
         margin: 0;
-        background: var(--paper);
-        color: var(--ink);
-        font: 16px/1.55 var(--sans);
+        background:
+          radial-gradient(42% 50% at 50% 0%, rgba(133, 73, 255, 0.18), transparent 70%),
+          var(--bg);
+        color: var(--fg);
       }
 
       main {
-        width: min(1120px, calc(100% - 64px));
+        width: min(1040px, calc(100% - 40px));
         margin: 0 auto;
-        padding: 88px 0 112px;
+        padding: 48px 0 80px;
       }
 
       header {
-        max-width: 700px;
-        padding-bottom: 72px;
-      }
-
-      .eyebrow,
-      h2,
-      .source,
-      .size-label {
-        font-family: var(--mono);
-        letter-spacing: 0.09em;
-        text-transform: uppercase;
-      }
-
-      .eyebrow {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin: 0 0 20px;
-        color: var(--deep);
-        font-size: 12px;
-        font-weight: 700;
-      }
-
-      .eyebrow::before {
-        width: 28px;
-        height: 1px;
-        background: currentColor;
-        content: "";
+        max-width: 720px;
+        margin-bottom: 36px;
       }
 
       h1,
       h2,
-      h3,
       p {
-        margin-top: 0;
+        margin: 0;
       }
 
       h1 {
-        max-width: 10ch;
-        margin-bottom: 18px;
-        font-size: clamp(42px, 7vw, 76px);
-        font-weight: 650;
-        letter-spacing: -0.065em;
-        line-height: 0.98;
-      }
-
-      header > p:last-child {
-        max-width: 42ch;
-        margin-bottom: 0;
-        color: var(--muted);
-        font-size: 18px;
-      }
-
-      section + section {
-        margin-top: 76px;
+        font-size: clamp(28px, 4.4vw, 46px);
+        letter-spacing: -0.04em;
       }
 
       h2 {
+        font-size: 13px;
+        color: var(--faint);
+        font-weight: 650;
+      }
+
+      .lead {
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      section {
+        margin-top: 42px;
+      }
+
+      .section-head {
         display: flex;
         align-items: baseline;
-        gap: 14px;
-        margin-bottom: 24px;
-        color: var(--ink);
-        font-size: 12px;
-        font-weight: 700;
-      }
-
-      h2::after {
-        height: 1px;
-        flex: 1;
-        background: var(--rule);
-        content: "";
-      }
-
-      #approved-renditions + .renditions {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        overflow: hidden;
-        border: 1px solid var(--rule);
-        border-radius: var(--radius);
-        background: var(--paper-raised);
-      }
-
-      .rendition {
-        min-width: 0;
-        padding: 28px;
-      }
-
-      .rendition + .rendition {
-        border-left: 1px solid var(--rule);
-      }
-
-      .asset-stage {
-        display: grid;
-        min-height: 235px;
-        place-items: center;
-        border-radius: 12px;
-        background: #e9e7ec;
-      }
-
-      .asset-stage.dark {
-        background: #1c1a21;
-      }
-
-      .transparent-preview .asset-stage {
-        background-color: #ece9ee;
-        background-image: linear-gradient(45deg, #d8d4dc 25%, transparent 25%),
-          linear-gradient(-45deg, #d8d4dc 25%, transparent 25%),
-          linear-gradient(45deg, transparent 75%, #d8d4dc 75%),
-          linear-gradient(-45deg, transparent 75%, #d8d4dc 75%);
-        background-position: 0 0, 0 10px, 10px -10px, -10px 0;
-        background-size: 20px 20px;
-      }
-
-      .asset-stage img {
-        display: block;
-        width: min(82%, 194px);
-        height: auto;
-      }
-
-      .transparent-preview .asset-stage img {
-        width: min(88%, 210px);
-      }
-
-      .source {
-        margin: 18px 0 28px;
-        color: var(--muted);
-        font-size: 10px;
-        overflow-wrap: anywhere;
-      }
-
-      h3 {
-        margin-bottom: 5px;
-        font-size: 20px;
-        font-weight: 650;
-        letter-spacing: -0.03em;
-      }
-
-      .rendition p {
-        margin-bottom: 0;
-        color: var(--muted);
-        font-size: 14px;
-      }
-
-      .size-map {
-        display: grid;
-        grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr);
+        justify-content: space-between;
         gap: 16px;
+        margin-bottom: 14px;
       }
 
-      .size-strip,
-      .standard-range {
-        display: flex;
-        align-items: end;
-        gap: clamp(14px, 3vw, 32px);
-        min-height: 208px;
-        padding: 28px;
-        border: 1px solid var(--rule);
-        border-radius: var(--radius);
-        background: #201d26;
-      }
-
-      .size-strip > div {
-        display: grid;
-        justify-items: center;
-        gap: 12px;
-      }
-
-      .size-strip img,
-      .standard-range img {
-        display: block;
-        border-radius: 21%;
-      }
-
-      .size-label {
-        color: #c7c2cc;
-        font-size: 10px;
-      }
-
-      .standard-range {
-        display: grid;
-        align-content: center;
-        justify-items: start;
-        gap: 18px;
-        background: #e8e5ec;
-      }
-
-      .standard-range p {
-        margin: 0;
-        color: var(--muted);
-        font: 11px/1.4 var(--mono);
-        letter-spacing: 0.04em;
-      }
-
-      .palette {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 1px;
-        margin: 0;
-        padding: 0;
-        overflow: hidden;
-        border: 1px solid var(--rule);
-        border-radius: var(--radius);
-        background: var(--rule);
-        list-style: none;
-      }
-
-      .palette li {
-        display: grid;
-        grid-template-columns: 42px 1fr;
-        align-items: center;
-        gap: 16px;
-        padding: 20px;
-        background: var(--paper-raised);
+      .section-head p {
         color: var(--muted);
         font-size: 13px;
+        line-height: 1.5;
       }
 
-      .swatch {
-        width: 42px;
-        height: 42px;
-        border-radius: 50%;
-        background: var(--swatch);
-        box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.1);
-      }
-
-      code {
-        display: block;
-        margin-bottom: 1px;
-        color: var(--ink);
-        font: 700 12px/1.3 var(--mono);
-      }
-
-      .theme-grid {
+      .grid-2 {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 12px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 16px;
       }
 
-      .theme-grid article {
-        min-height: 158px;
-        padding: 20px;
-        border-radius: 15px;
-        border: 1px solid var(--theme-rule);
-        background: var(--theme-surface);
-        color: var(--theme-ink);
+      .card {
+        border: 1px solid var(--line);
+        background: color-mix(in oklab, var(--panel) 88%, transparent);
+        border-radius: 22px;
+        overflow: hidden;
       }
 
-      .theme-grid h3 {
-        margin-bottom: 32px;
+      .stage {
+        display: grid;
+        place-items: center;
+        aspect-ratio: 1;
+        background: var(--dock);
+      }
+
+      .stage img {
+        display: block;
+        width: 78%;
+        height: 78%;
+      }
+
+      .stage-night {
+        background: #04060d;
+      }
+
+      .stage-day {
+        background: var(--day);
+      }
+
+      .caption {
+        padding: 14px 16px 16px;
+      }
+
+      .caption strong {
+        display: block;
+        font-size: 14px;
+        font-weight: 650;
+      }
+
+      .caption span {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .hero-row {
+        display: grid;
+        grid-template-columns: minmax(240px, 420px) 1fr;
+        gap: 16px;
+        align-items: stretch;
+      }
+
+      .contexts {
+        display: grid;
+        gap: 16px;
+      }
+
+      .strip {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 22px;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        margin-top: 12px;
+      }
+
+      .strip figure {
+        margin: 0;
+        display: grid;
+        justify-items: center;
+        gap: 8px;
+      }
+
+      .strip img {
+        display: block;
+      }
+
+      .strip figcaption {
+        color: var(--faint);
+        font-size: 11px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .px-16 { width: 16px; height: 16px; }
+      .px-32 { width: 32px; height: 32px; }
+      .px-48 { width: 48px; height: 48px; }
+      .px-64 { width: 64px; height: 64px; }
+      .px-128 { width: 128px; height: 128px; }
+
+      .bg-dock { background: var(--dock); }
+      .bg-night { background: #04060d; }
+      .bg-day { background: var(--day); }
+
+      .site-bar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 56px;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in oklab, #070b15 82%, transparent);
+      }
+
+      .site-bar img {
+        width: 36px;
+        height: 36px;
+        display: block;
+      }
+
+      .wordmark {
+        font-weight: 700;
+        letter-spacing: 0.16em;
         font-size: 15px;
       }
 
-      button {
-        border: 0;
-        border-radius: 8px;
-        background: var(--primary);
-        color: white;
-        padding: 8px 12px;
-        font: 650 12px/1 var(--sans);
-        box-shadow: 0 1px 1px rgb(0 0 0 / 0.15);
+      .cta {
+        margin-left: auto;
+        color: #fff;
+        background: linear-gradient(135deg, var(--brand-hi), var(--brand) 55%, var(--brand-deep));
+        border-radius: 999px;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 600;
       }
 
-      button:focus-visible {
-        outline: 3px solid var(--highlight);
-        outline-offset: 3px;
-      }
-
-      [data-theme="pierre-light"] {
-        --theme-surface: #f7f6f4;
-        --theme-ink: #1d1b22;
-        --theme-rule: #d8d4dc;
-      }
-
-      [data-theme="pierre-dark"] {
-        --theme-surface: #1e1c23;
-        --theme-ink: #f5f3f7;
-        --theme-rule: #3a3741;
-      }
-
-      [data-theme="soft-light"] {
-        --theme-surface: #eeebf1;
-        --theme-ink: #27232c;
-        --theme-rule: #e6e1e9;
-        box-shadow: inset 0 1px rgb(255 255 255 / 0.8);
-      }
-
-      [data-theme="soft-dark"] {
-        --theme-surface: #292531;
-        --theme-ink: #f6f1f9;
-        --theme-rule: #312d39;
-        box-shadow: inset 0 1px rgb(255 255 255 / 0.05);
-      }
-
-      @media (max-width: 760px) {
+      @media (max-width: 860px) {
         main {
-          width: min(100% - 40px, 620px);
-          padding: 56px 0 72px;
+          width: min(100% - 24px, 640px);
+          padding-top: 28px;
         }
 
-        header {
-          padding-bottom: 52px;
-        }
-
-        section + section {
-          margin-top: 56px;
-        }
-
-        #approved-renditions + .renditions,
-        .size-map,
-        .theme-grid {
+        .grid-2,
+        .hero-row {
           grid-template-columns: 1fr;
-        }
-
-        .rendition + .rendition {
-          border-top: 1px solid var(--rule);
-          border-left: 0;
-        }
-
-        .asset-stage {
-          min-height: 204px;
-        }
-
-        .size-strip {
-          min-height: 176px;
-          justify-content: space-between;
-          gap: 9px;
-          padding: 22px 16px;
-        }
-
-        .size-strip img[width="64"] {
-          width: 54px;
-          height: 54px;
-        }
-
-        .size-strip img[width="128"] {
-          width: 96px;
-          height: 96px;
-        }
-
-        .palette {
-          grid-template-columns: 1fr;
-        }
-      }
-
-      @media (max-width: 390px) {
-        .size-strip img[width="32"] {
-          width: 28px;
-          height: 28px;
-        }
-
-        .size-strip img[width="64"] {
-          width: 42px;
-          height: 42px;
-        }
-
-        .size-strip img[width="128"] {
-          width: 72px;
-          height: 72px;
         }
       }
     </style>
@@ -405,102 +239,114 @@
   <body>
     <main>
       <header>
-        <p class="eyebrow">Pier · Approved Logo System</p>
-        <h1>三档光学校正图标系统</h1>
-        <p>Master、Small、Tiny 分别服务大、中、小尺寸，保持终端与泊位在每个像素档位都清楚。</p>
+        <h1>Pier 应用图标</h1>
+        <p class="lead">
+          白 <code>&gt;_</code> 作为一组，在泊位上方的暗面里水平、垂直都居中。
+        </p>
       </header>
 
-      <section aria-labelledby="approved-renditions">
-        <h2 id="approved-renditions">当前批准稿</h2>
-        <div class="renditions">
-          <article class="rendition">
-            <div class="asset-stage dark">
-              <img src="../app-icon-master.svg" alt="Pier Master 图标" />
-            </div>
-            <p class="source">../app-icon-master.svg</p>
-            <h3>Master</h3>
-            <p>256–1024 px，保留完整材质、光影与空间层次。</p>
-          </article>
-          <article class="rendition">
-            <div class="asset-stage dark">
-              <img src="../app-icon-small.svg" alt="Pier Small 图标" />
-            </div>
-            <p class="source">../app-icon-small.svg</p>
-            <h3>Small</h3>
-            <p>64–128 px，强化终端笔画与泊位边缘。</p>
-          </article>
-          <article class="rendition">
-            <div class="asset-stage dark">
-              <img src="../app-icon-tiny.svg" alt="Pier Tiny 图标" />
-            </div>
-            <p class="source">../app-icon-tiny.svg</p>
-            <h3>Tiny</h3>
-            <p>16–48 px，压低细节噪声并确保提示符分离。</p>
-          </article>
-          <article class="rendition transparent-preview">
-            <div class="asset-stage">
-              <img src="./pier-logo.svg" alt="Pier 完整矢量源稿" />
-            </div>
-            <p class="source">./pier-logo.svg</p>
-            <h3>Vector Source</h3>
-            <p>完整 SVG 交付稿，用于品牌归档与后续编辑。</p>
-          </article>
+      <section aria-labelledby="hero-heading">
+        <div class="section-head">
+          <h2 id="hero-heading">正式发布稿</h2>
+          <p>由 <code>build/app-icon-source.svg</code> 生成的 512px PNG。</p>
         </div>
-      </section>
-
-      <section aria-labelledby="size-map">
-        <h2 id="size-map">尺寸映射</h2>
-        <div class="size-map">
-          <div class="size-strip" aria-label="Tiny 与 Small 的 16 到 128 像素预览">
-            <div>
-              <img src="../app-icon-tiny.svg" width="16" height="16" alt="Tiny 版 16px" />
-              <span class="size-label">16</span>
+        <div class="hero-row">
+          <article class="card">
+            <div class="stage">
+              <img src="../icons/512x512.png" alt="Pier 应用图标" />
             </div>
-            <div>
-              <img src="../app-icon-tiny.svg" width="32" height="32" alt="Tiny 版 32px" />
-              <span class="size-label">32</span>
+          </article>
+          <div class="contexts">
+            <article class="card">
+              <div class="site-bar">
+                <img src="../icons/512x512.png" alt="" />
+                <span class="wordmark">PIER</span>
+                <span class="cta">下载</span>
+              </div>
+              <div class="caption">
+                <strong>页头 36px</strong>
+                <span>白提示符，金属泊位。</span>
+              </div>
+            </article>
+            <div class="grid-2">
+              <div class="card">
+                <div class="stage stage-night">
+                  <img src="../icons/512x512.png" alt="" />
+                </div>
+              </div>
+              <div class="card">
+                <div class="stage stage-day">
+                  <img src="../icons/512x512.png" alt="" />
+                </div>
+              </div>
             </div>
-            <div>
-              <img src="../app-icon-small.svg" width="64" height="64" alt="Small 版 64px" />
-              <span class="size-label">64</span>
-            </div>
-            <div>
-              <img src="../app-icon-small.svg" width="128" height="128" alt="Small 版 128px" />
-              <span class="size-label">128</span>
-            </div>
-          </div>
-          <div class="standard-range" aria-label="Master 版 256 到 1024 像素范围">
-            <img src="../app-icon-master.svg" width="160" height="160" alt="Master 版 256px 以上" />
-            <p>256 / 512 / 1024 px</p>
           </div>
         </div>
       </section>
 
-      <section aria-labelledby="brand-palette">
-        <h2 id="brand-palette">品牌色</h2>
-        <ul class="palette">
-          <li>
-            <span class="swatch" style="--swatch: #b66cff"></span>
-            <span><code>#b66cff</code>Highlight</span>
-          </li>
-          <li>
-            <span class="swatch" style="--swatch: #8549ff"></span>
-            <span><code>#8549ff</code>Primary</span>
-          </li>
-          <li>
-            <span class="swatch" style="--swatch: #542ee5"></span>
-            <span><code>#542ee5</code>Deep</span>
-          </li>
-        </ul>
+      <section aria-labelledby="before-heading">
+        <div class="section-head">
+          <h2 id="before-heading">改前对照</h2>
+          <p>左为拆开的提示符，右为整体居中的正式稿。</p>
+        </div>
+        <div class="grid-2">
+          <article class="card">
+            <div class="stage">
+              <img src="./previous-shipping.png" alt="改前：哑光" />
+            </div>
+            <div class="caption">
+              <strong>改前</strong>
+              <span><code>&gt;</code> 和 <code>_</code> 拆开、不居中。</span>
+            </div>
+          </article>
+          <article class="card">
+            <div class="stage">
+              <img src="../icons/512x512.png" alt="改后：金属高光" />
+            </div>
+            <div class="caption">
+              <strong>现在</strong>
+              <span><code>&gt;_</code> 作为一组居中，停在泊位上方。</span>
+            </div>
+          </article>
+        </div>
       </section>
 
-      <section aria-labelledby="theme-preview">
-        <h2 id="theme-preview">主题输入示例</h2>
-        <div class="theme-grid">
-          <article data-theme="pierre-light"><h3>Pierre · Light</h3><button type="button">Primary</button></article>
-          <article data-theme="pierre-dark"><h3>Pierre · Dark</h3><button type="button">Primary</button></article>
-          <article data-theme="soft-light"><h3>Pierre Soft · Light</h3><button type="button">Primary</button></article>
-          <article data-theme="soft-dark"><h3>Pierre Soft · Dark</h3><button type="button">Primary</button></article>
+      <section aria-labelledby="size-heading">
+        <div class="section-head">
+          <h2 id="size-heading">16–128px</h2>
+          <p>同一份稿直接缩小。</p>
+        </div>
+        <div class="strip bg-dock">
+          <figure>
+            <img class="px-16" src="../icons/512x512.png" alt="" />
+            <figcaption>16</figcaption>
+          </figure>
+          <figure>
+            <img class="px-32" src="../icons/512x512.png" alt="" />
+            <figcaption>32</figcaption>
+          </figure>
+          <figure>
+            <img class="px-48" src="../icons/512x512.png" alt="" />
+            <figcaption>48</figcaption>
+          </figure>
+          <figure>
+            <img class="px-64" src="../icons/512x512.png" alt="" />
+            <figcaption>64</figcaption>
+          </figure>
+          <figure>
+            <img class="px-128" src="../icons/512x512.png" alt="" />
+            <figcaption>128</figcaption>
+          </figure>
+        </div>
+        <div class="strip bg-night">
+          <figure>
+            <img class="px-32" src="../icons/512x512.png" alt="" />
+            <figcaption>32</figcaption>
+          </figure>
+          <figure>
+            <img class="px-64" src="../icons/512x512.png" alt="" />
+            <figcaption>64</figcaption>
+          </figure>
         </div>
       </section>
     </main>

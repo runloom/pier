@@ -140,8 +140,7 @@ Start from `templates/decision.canvas.tsx`.
 | `path` | `i18n/nav.json` | main path diagram + day-1 commands + recipe |
 | `landing` | `i18n/nav.json` | defaults before→after, phases, acceptance, rails |
 
-Start from `templates/overview.canvas.tsx`. Dogfood:
-`.pier/canvases/multi-agent-orchestration-gold/`.
+Start from `templates/overview.canvas.tsx`.
 
 ## Freeform recipes
 

@@ -21,7 +21,8 @@ import {
  * `useHostSnapshot("pier://tasks:runs-changed")`. Persist positions in
  * state/positions.json. Relayout with layoutFlowGraph (or write `{}`).
  * Inspect with onSelectNode + a Stack beside the graph — not a host panel.
- * See .pier/canvases/dag-viewer/ for the closed loop.
+ * Closed loop: this template + references/host-data.md (loopback fetch,
+ * invokeCommand, run.output).
  */
 export const canvas = {
   description: "Read-only DAG viewer on a world stage.",

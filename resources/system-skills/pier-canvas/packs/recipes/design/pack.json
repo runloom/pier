@@ -7,7 +7,6 @@
   "kind": "composition",
   "stage": "world",
   "template": "templates/design-mockup.canvas.tsx",
-  "gold": ".pier/canvases/design-mockup/",
   "primitives": ["WorldStage", "Layer", "Artboard"],
   "required": ["worldRoot", "deviceFrames"],
   "antiPatterns": [
@@ -17,5 +16,5 @@
     "DocsShell or document font on a mockup",
     "inventing methodology tabs for a mockup"
   ],
-  "agentPrompt": "Freeform composition. Root the canvas in WorldStage. Place each screen on Artboard with preset (desktop / laptop / phone / tablet); explicit width/height still win. Use Layer x/y for world placement. UI font only. Do not wrap the mockup in Frame. Do not fake comment pins. Rewrite every user-visible string into the user's language. See templates/design-mockup.canvas.tsx and .pier/canvases/design-mockup/."
+  "agentPrompt": "Freeform composition. Root the canvas in WorldStage. Place each screen on Artboard with preset (desktop / laptop / phone / tablet); explicit width/height still win. Use Layer x/y for world placement. UI font only. Do not wrap the mockup in Frame. Do not fake comment pins. Rewrite every user-visible string into the user's language. See templates/design-mockup.canvas.tsx."
 }

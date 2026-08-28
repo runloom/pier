@@ -143,11 +143,15 @@ Project pack override (when present, wins over built-in):
 The files preview is **one shell**. The canvas root chooses the geometry.
 Do not set a meta flag or invent a third “app mode”.
 
-| Choose | When | Root |
+Four root shells exist. **Pick the shell from the user's ask before writing
+code — do not ask the user to choose a shell:**
+
+| Root shell | Auto-select when the ask is… | Preview chrome it gets |
 | --- | --- | --- |
-| **flow** (default) | Docs, decision overviews, dashboards that scroll | `Frame` / `DocsShell` / any flow composition |
-| **fill** | One-screen board or dashboard that owns its own scroll | `<Stack fill>` (`data-canvas-fill`) |
-| **world** | Multi-device mockups, live DAG, whiteboard layout | `WorldStage` |
+| `Frame` (flow, default) | An article, decision overview, dashboard that scrolls | Reading measure (`max-w-5xl`); no zoom chrome |
+| `DocsShell` (flow, docs) | A manual / multi-section docs site with sidebar nav | Inherits global reading size + document font passively; **no floating font-scale control** — the docs shell owns its chrome |
+| `<Stack fill>` (`data-canvas-fill`) | A one-screen board or app shell that owns its own scroll | Full-bleed; the flow measure is dropped |
+| `WorldStage` | Multi-device mockups, live DAG, whiteboard layout | Viewport zoom/pan; fit / 100% controls (world only) |
 
 - Do not wrap a reading doc in `WorldStage`.
 - Do not stack phone/desktop frames as a document inside `Frame` — use
@@ -157,11 +161,11 @@ Do not set a meta flag or invent a third “app mode”.
   zoom/pan is world only.
 - Unknown `recipe` ids are hard failures. Known recipes:
 
-| `recipe` | Pack | Stage | Start from | Gold |
-| --- | --- | --- | --- | --- |
-| `design` | `packs/recipes/design/` | world | `templates/design-mockup.canvas.tsx` | `.pier/canvases/design-mockup/` |
-| `orchestration` | `packs/recipes/orchestration/` | world | `templates/dag-viewer.canvas.tsx` | `.pier/canvases/dag-viewer/` |
-| `board` | `packs/recipes/board/` | fill | `templates/kanban.canvas.tsx` | `.pier/canvases/kanban/` |
+| `recipe` | Pack | Stage | Start from |
+| --- | --- | --- | --- |
+| `design` | `packs/recipes/design/` | world | `templates/design-mockup.canvas.tsx` |
+| `orchestration` | `packs/recipes/orchestration/` | world | `templates/dag-viewer.canvas.tsx` |
+| `board` | `packs/recipes/board/` | fill | `templates/kanban.canvas.tsx` |
 
 When `recipe=` is set, use **Workflow B** (freeform). Do not invent methodology
 tabs for a mockup or a DAG viewer.
@@ -211,8 +215,7 @@ Use when `mode` is omitted or `mode=methodology`.
 9. Templates: `templates/decision.canvas.tsx` for `decision_nav_4` (four tabs, no Day 1);
    `templates/overview.canvas.tsx` for `primary_nav_5` (five tabs including Day 1);
    single scrolling Frame for `one_pager`. Starters are English scaffolds —
-   rewrite visible copy into the user's language. Closed-loop dogfood:
-   `.pier/canvases/multi-agent-orchestration-gold/`.
+   rewrite visible copy into the user's language.
 10. Read `sdk/index.d.ts` and focused declarations before using APIs.
 11. Run verification requirements before delivery.
 

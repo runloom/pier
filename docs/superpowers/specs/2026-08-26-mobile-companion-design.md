@@ -28,8 +28,7 @@
 > ⑦ **先主机、后投影**——移动端根面是主机管理（未配对空态 → 主机列表 → 当前主机工作台），会话终端 / 变更 / 只读文件挂在当前主机下。桌面出码与移动端扫入分成两面。交互流程与配对时序进 Canvas。
 >
 > 第四次修订摘要：
-> ⑥ **线框真源是 Canvas**——六面 IA 用 `.pier/canvases/mobile-companion/` 的 `ArtboardStage` + `Artboard`（360×680）实现，不再平行维护 HTML 稿。规格正文只保留文字对照表。
->
+> ⑥ **线框真源是本文 §11**——六面 IA 用正文 ASCII 树与对照表锁定（360 宽移动端信息架构）。曾用 `.pier/canvases/mobile-companion/` 的 `ArtboardStage` + `Artboard` 作平行真源，该演示画布已于 2026-08-28 删除，不再维护第二份稿。
 > 第三次修订摘要：
 > ④ **线框取代视觉稿**——前一版 HTML/截图是深色成品风界面，把未定的视觉（色、圆角、底栏、品牌）写成了「设计」。本版只保留信息架构线框：页面、区块、字段、动作、事实源；视觉另立。
 >
@@ -470,7 +469,7 @@ S1 默认面只画审批条（`agent.attention.respond` 的 Enter/Esc/y/n/数字
 - 数据：轮询 / 订阅触发的 `terminal.screen`（viewport 纯文本）。
 - UI：**标明「当前屏幕」**，禁止写「完整历史 / scrollback」；无色彩、无光标、切换面板或回前台才刷新。够用场景：看清 TUI 审批题面、读到 agent 卡住的那一屏、配合审批动作条按 Enter/Esc/y/n。
 - 刷新：会话详情在前台时按 300–500ms 拉一次（与 `control.watch` 的 digest 轮询同量级）；切后台停。
-- **这不是金标准终端**，是现有 API 能支撑的监督闭环最低档。Canvas 文案按此改（见 §11）。
+- **这不是金标准终端**，是现有 API 能支撑的监督闭环最低档。§11 文案按此锁定。
 
 **T2 · 金标准档（增强 · M3，与 Orca/VibeTunnel 同构）**
 
@@ -494,7 +493,7 @@ T2 的产品承诺才允许 UI 写「终端历史 / 实时输出」。能力广�
 
 #### 11.1 交互流程：先主机、后投影
 
-规范线框真源：[`.pier/canvases/mobile-companion/`](../../../.pier/canvases/mobile-companion/mobile-companion.canvas.tsx)。**根面是主机。核心闭环必须整条齐（§2.1）。**
+规范线框真源：本文 §11（ASCII 树 + 对照表）。**根面是主机。核心闭环必须整条齐（§2.1）。** 原 Canvas 线框 `.pier/canvases/mobile-companion/` 已删除。
 
 ```text
 打开移动端

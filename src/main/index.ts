@@ -59,8 +59,8 @@ import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerUsageDataIpc } from "./ipc/usage-data.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import {
+  invokeRendererMenuCommand,
   openTerminalFromMenu,
-  openTerminalSearchFromMenu,
   prepareQuitDialogWindow,
   toggleCommandPaletteFromMenu,
 } from "./menu/window-actions.ts";
@@ -252,7 +252,7 @@ if (gotTheLock) {
         getTargetWindow: getMenuTargetWindow,
         isDev,
         isMac,
-        onFindInTerminal: openTerminalSearchFromMenu,
+        onMenuCommand: invokeRendererMenuCommand,
         onNewTerminal: openTerminalFromMenu,
         onNewWindow: createFreshWindowFromMenu,
         onOpenCommandPalette: toggleCommandPaletteFromMenu,

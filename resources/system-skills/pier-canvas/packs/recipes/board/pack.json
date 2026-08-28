@@ -7,7 +7,6 @@
   "kind": "composition",
   "stage": "fill",
   "template": "templates/kanban.canvas.tsx",
-  "gold": ".pier/canvases/kanban/",
   "primitives": ["Stack", "Droppable", "Sortable", "Item", "useCanvasFile"],
   "required": ["columns", "cards"],
   "antiPatterns": [
@@ -16,5 +15,5 @@
     "@dnd-kit or react-flow",
     "inventing methodology tabs for a board"
   ],
-  "agentPrompt": "Freeform composition. Root in Stack fill so the preview drops the reading measure. Each column is a Droppable; cards in a Sortable. Cross-column moves arrive at the target Sortable.onDropItem(itemId, index) — do one write there; do not also mutate from the source onReorder. Persist board.json with useCanvasFile and watch it so other windows stay in sync. Columns and cards are sibling data — Pier is not a task ledger. Rewrite every user-visible string into the user's language. See templates/kanban.canvas.tsx and .pier/canvases/kanban/."
+  "agentPrompt": "Freeform composition. Root in Stack fill so the preview drops the reading measure. Each column is a Droppable; cards in a Sortable. Cross-column moves arrive at the target Sortable.onDropItem(itemId, index) — do one write there; do not also mutate from the source onReorder. Persist board.json with useCanvasFile and watch it so other windows stay in sync. Columns and cards are sibling data — Pier is not a task ledger. Rewrite every user-visible string into the user's language. See templates/kanban.canvas.tsx."
 }

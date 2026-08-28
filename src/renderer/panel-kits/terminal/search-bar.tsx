@@ -19,6 +19,10 @@ import {
   acquireTerminalEscapeShortcut,
   isBareEscapeForward,
 } from "./escape-shortcut.ts";
+import {
+  isTerminalSearchNavigateEvent,
+  TERMINAL_SEARCH_NAVIGATE_EVENT,
+} from "./search-events.ts";
 
 interface TerminalSearchBarProps {
   focusRequest: number;
@@ -134,19 +138,22 @@ export function TerminalSearchBar({
       .catch((err: unknown) => reportSearchError("search", err));
   };
 
-  const navigate = (direction: "next" | "previous") => {
-    if (query === "") {
-      return;
-    }
-    window.pier.terminal
-      .navigateSearch(panelId, direction)
-      .then((result) => {
-        if (!result.ok) {
-          console.error("[terminal-search] navigate failed:", result.error);
-        }
-      })
-      .catch((err: unknown) => reportSearchError("navigate", err));
-  };
+  const navigate = useCallback(
+    (direction: "next" | "previous") => {
+      if (query === "") {
+        return;
+      }
+      window.pier.terminal
+        .navigateSearch(panelId, direction)
+        .then((result) => {
+          if (!result.ok) {
+            console.error("[terminal-search] navigate failed:", result.error);
+          }
+        })
+        .catch((err: unknown) => reportSearchError("navigate", err));
+    },
+    [panelId, query]
+  );
 
   const close = useCallback(() => {
     setQuery("");
@@ -155,6 +162,25 @@ export function TerminalSearchBar({
     useTerminalStore.getState().deactivateOverlay(searchId);
     onClose();
   }, [endSearch, onClose, searchId]);
+
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    const onNavigate = (event: Event) => {
+      if (
+        !isTerminalSearchNavigateEvent(event) ||
+        event.detail.panelId !== panelId
+      ) {
+        return;
+      }
+      navigate(event.detail.direction);
+    };
+    window.addEventListener(TERMINAL_SEARCH_NAVIGATE_EVENT, onNavigate);
+    return () => {
+      window.removeEventListener(TERMINAL_SEARCH_NAVIGATE_EVENT, onNavigate);
+    };
+  }, [navigate, panelId, visible]);
 
   // Panel 内任意处 Esc 关闭：web 焦点走 window keydown；终端占 FR 时走
   // native shortcut forward（打开期间临时允许 Escape）。

@@ -40,9 +40,12 @@ describe("main app identity", () => {
       "userData",
       "/Users/me/Library/Application Support/Pier-dev/feat-bug"
     );
-    expect(setName.mock.invocationCallOrder[0]).toBeLessThan(
-      setPath.mock.invocationCallOrder[0]
-    );
+    const setNameOrder = setName.mock.invocationCallOrder[0];
+    const setPathOrder = setPath.mock.invocationCallOrder[0];
+    if (setNameOrder === undefined || setPathOrder === undefined) {
+      throw new Error("Both app identity calls must be recorded");
+    }
+    expect(setNameOrder).toBeLessThan(setPathOrder);
   });
 
   it("reapplies --user-data-dir from argv after setName", () => {

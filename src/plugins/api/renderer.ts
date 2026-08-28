@@ -105,6 +105,10 @@ export interface RendererPluginActionMetadata {
    * 仅 context menu 投影读取；命令面板/快捷键路径不读此字段。
    */
   menuHidden?: (invocation?: RendererPluginActionInvocation) => boolean;
+  /**
+   * 自身没有生效的 keybinding 时，菜单和命令面板展示可借用另一条 command。
+   */
+  shortcutSourceId?: string;
   sortOrder?: number;
   submenu?: () => string;
 }

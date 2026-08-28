@@ -161,10 +161,41 @@ export const PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS: readonly ActionContribution[]
     })
   );
 
+export const PANEL_TAB_CYCLE_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
+  [
+    {
+      categoryKey: "panel",
+      excludeFromMru: true,
+      group: "3_focus",
+      handler: () => {
+        useWorkspaceStore.getState().cycleActiveGroupTab(1);
+      },
+      id: "pier.panel.focusNextTab",
+      sortOrder: 20,
+      surfaces: ["command-palette"],
+      titleKey: "commandPalette.action.focusNextTab",
+      when: "workspace.hasActivePanel",
+    },
+    {
+      categoryKey: "panel",
+      excludeFromMru: true,
+      group: "3_focus",
+      handler: () => {
+        useWorkspaceStore.getState().cycleActiveGroupTab(-1);
+      },
+      id: "pier.panel.focusPrevTab",
+      sortOrder: 21,
+      surfaces: ["command-palette"],
+      titleKey: "commandPalette.action.focusPrevTab",
+      when: "workspace.hasActivePanel",
+    },
+  ];
+
 export const PANEL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   ...PANEL_LAYOUT_ACTION_CONTRIBUTIONS,
   ...PANEL_HOST_ACTION_CONTRIBUTIONS,
   ...PANEL_TAB_FOCUS_ACTION_CONTRIBUTIONS,
+  ...PANEL_TAB_CYCLE_ACTION_CONTRIBUTIONS,
 ];
 
 export function registerPanelActions(): () => void {
