@@ -87,6 +87,7 @@ describe("不变量 1：remote-control 默认关闭（无设置开启不监听�
       /owner\.start\(|registration\.start\(|server\.start\(/
     );
     expect(bootSrc).not.toMatch(/\.listen\(/);
+    expect(bootSrc).not.toMatch(/store\.init\(/);
     expect(bootSrc).toMatch(/默认关/u);
   });
 
@@ -156,6 +157,7 @@ function unusedPairing(): PairingService {
     authenticate: fail,
     beginPairing: fail,
     cancelPairing: fail,
+    ensureReady: fail,
     listDevices: () => [],
     onRevoke: () => () => {},
     pendingPairing: () => null,

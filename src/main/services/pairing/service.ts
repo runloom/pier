@@ -59,6 +59,8 @@ export interface PairingService {
     expiresAt: number;
   };
   cancelPairing(): void;
+  /** 首次使用前加载磁盘态；幂等。默认关路径不得在 boot 调用。 */
+  ensureReady(): Promise<void>;
   listDevices(): PierPairedDevice[];
   /** 适配器订阅吊销以踢会话；返回退订函数。 */
   onRevoke(listener: (deviceId: string) => void): () => void;
@@ -101,6 +103,7 @@ export function createPairingService(args: {
   }
 
   return {
+    ensureReady: () => store.init().then(() => undefined),
     beginPairing({ host, port }) {
       const code = generatePairingCode();
       const codeHash = sha256Hex(code);

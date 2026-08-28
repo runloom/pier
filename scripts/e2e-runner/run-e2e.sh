@@ -15,7 +15,7 @@
 #   PIER_E2E_CONNECT_TIMEOUT   SSH 探测秒数，默认 4
 #   PIER_E2E_FORCE_LOCAL=1     同 --local
 #   PIER_E2E_FORCE_REMOTE=1    同 --remote（远端不可达则失败，不回退）
-#   PIER_E2E_REBUILD=1         同 --rebuild（强制 plugins:pack + build:electron）
+#   PIER_E2E_REBUILD=1         同 --rebuild（强制 plugins:pack + build:electron + build:mobile-web）
 #   PIER_E2E_REMOTE_PATH       可选；覆盖远端 PATH（须为远端机上的绝对路径列表，
 #                              用 : 分隔）。未设置时用脚本内默认 brew/node 前缀。
 #   ELECTRON_MIRROR            透传到远端；github.com 不可达时用镜像装 Electron
@@ -181,15 +181,18 @@ EOS
 run_local() {
   info "在本机执行 e2e（会弹出 Electron 测试窗，可能打扰当前使用）"
   if [ "${REBUILD}" = "1" ]; then
-    info "本机 rebuild: plugins:pack + build:electron"
+    info "本机 rebuild: plugins:pack + build:electron + build:mobile-web"
     pnpm plugins:pack
     pnpm build:electron
+    pnpm build:mobile-web
   elif [ ! -f out/main/index.js ]; then
-    info "本机缺少 out/main → plugins:pack + build:electron"
+    info "本机缺少 out/main → plugins:pack + build:electron + build:mobile-web"
     pnpm plugins:pack
     pnpm build:electron
+    pnpm build:mobile-web
   else
     pnpm plugins:pack
+    pnpm build:mobile-web
   fi
   if [ "${#PLAYWRIGHT_ARGS[@]}" -eq 0 ]; then
     pnpm exec playwright test --config playwright.config.ts
@@ -613,16 +616,18 @@ elif [ ! -f native/build/Release/ghostty_native.node ]; then
 fi
 
 if [ "${need_build}" = "1" ]; then
-  echo "[e2e-run:remote] plugins:pack + build:electron"
+  echo "[e2e-run:remote] plugins:pack + build:electron + build:mobile-web"
   # dirty snapshot 后依赖锁若变更需要 install；失败不静默
   if [ -f pnpm-lock.yaml ]; then
     pnpm install --frozen-lockfile || pnpm install
   fi
   pnpm plugins:pack
   pnpm build:electron
+  pnpm build:mobile-web
   printf '%s\n' "${build_id}" > "${build_marker}"
 else
   pnpm plugins:pack
+  pnpm build:mobile-web
 fi
 
 # playwright args：base64(printf %q ...) → eval set，保留多路径/空格

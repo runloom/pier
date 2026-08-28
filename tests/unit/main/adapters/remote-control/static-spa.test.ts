@@ -2,8 +2,11 @@
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { createSpaStaticHandler } from "@main/adapters/remote-control/static-spa.ts";
+import { join, resolve } from "node:path";
+import {
+  createSpaStaticHandler,
+  resolveMobileWebSpaDistDir,
+} from "@main/adapters/remote-control/static-spa.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 let rootDir: string;
@@ -107,5 +110,44 @@ describe("createSpaStaticHandler", () => {
   it("非 GET/HEAD 方法 → 405", async () => {
     const res = await fetch(`${baseUrl}/`, { method: "POST" });
     expect(res.status).toBe(405);
+  });
+});
+
+describe("resolveMobileWebSpaDistDir", () => {
+  it("优先 asar/repo 根下 out/mobile-web", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-spa-asar-"));
+    try {
+      const dist = join(root, "out", "mobile-web");
+      await mkdir(dist, { recursive: true });
+      await writeFile(join(dist, "index.html"), "<html/>");
+      expect(resolveMobileWebSpaDistDir(root)).toBe(resolve(dist));
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("unpackaged out/main → 兄目录 mobile-web", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-spa-main-"));
+    try {
+      const appPath = join(root, "out", "main");
+      const dist = join(root, "out", "mobile-web");
+      await mkdir(appPath, { recursive: true });
+      await mkdir(dist, { recursive: true });
+      await writeFile(join(dist, "index.html"), "<html/>");
+      expect(resolveMobileWebSpaDistDir(appPath)).toBe(resolve(dist));
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it("产物缺失时回落到 out/mobile-web", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-spa-miss-"));
+    try {
+      expect(resolveMobileWebSpaDistDir(root)).toBe(
+        resolve(join(root, "out", "mobile-web"))
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 });

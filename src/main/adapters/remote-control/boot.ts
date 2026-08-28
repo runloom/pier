@@ -10,11 +10,11 @@
  * 快照/发现/运行时控制依赖；CLI 轨未注册时缺省降级（相关 op 回
  * unavailable/unsupported 类错误），绝不另建第二实例与之竞争。
  *
- * SPA 静态托管目录：monorepo 产物 out/mobile-web（dev 即 repo 根；打包时
- * electron-builder files 已含 out/**，app.asar 根即 app.getAppPath()）。
+ * SPA 静态托管目录：monorepo 产物 out/mobile-web。打包 asar 根含 out/**；
+ * unpackaged e2e/dev 的 getAppPath() 常是 out/main，见 resolveMobileWebSpaDistDir。
+ * pairing store 构造期不 init（首次 remoteAccess 命令才加载）。
  */
 import { randomUUID } from "node:crypto";
-import { join } from "node:path";
 import type { PierCommandEnvelope } from "@shared/contracts/commands.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
@@ -37,6 +37,7 @@ import {
   attachMobileSession,
   createMobileSessionTracker,
 } from "./session-bridge.ts";
+import { resolveMobileWebSpaDistDir } from "./static-spa.ts";
 
 const log = createLogger("remote-control");
 
@@ -59,10 +60,8 @@ export function bootAppCoreRemoteControl(args: {
   getServices: () => PierCoreServices;
 }): RemoteControlBoot {
   const store = getSharedPairingStore();
-  // 后台初始化：失败只记日志，pairing 服务在 store 未就绪时按空态工作。
-  store.init().catch((error: unknown) => {
-    log.error("pairing store init failed", { error });
-  });
+  // 默认关：构造期不 init / 不写 pairing.json。首次 remoteAccess.* 或
+  // owner.start 才加载；否则 FIFO 启动关窗会与 userData 写盘竞态挂死。
   const pairing = createPairingService({ store });
   const sessionTracker = createMobileSessionTracker();
   const { getServices } = args;
@@ -126,7 +125,7 @@ export function bootAppCoreRemoteControl(args: {
     },
     pairing,
     sessionDeps,
-    spaDistDir: join(app.getAppPath(), "out", "mobile-web"),
+    spaDistDir: resolveMobileWebSpaDistDir(app.getAppPath()),
   });
   const registration = createRemoteControlRegistrationOwner({
     logError: (error) => {

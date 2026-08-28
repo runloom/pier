@@ -154,7 +154,9 @@ export async function updatePairingState(
 }
 
 export async function flushPairingState(): Promise<void> {
-  const store = getStore();
-  await store.init();
-  await store.flush();
+  if (singleton === undefined) {
+    return;
+  }
+  // 未 init 则无脏数据；quit 不得为生成 instanceSecret 写盘。
+  await singleton.flush();
 }

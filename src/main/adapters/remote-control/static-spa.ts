@@ -3,7 +3,7 @@
  * 路径 normalize 后必须仍在 distDir 内（防 .. 穿越），否则 404；
  * 缓存：html no-cache，/assets/** immutable。
  */
-import { createReadStream } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { extname, join, resolve, sep } from "node:path";
@@ -22,6 +22,24 @@ const MIME_BY_EXT: Record<string, string> = {
 function writeText(res: ServerResponse, status: number, body: string): void {
   res.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
   res.end(body);
+}
+
+/**
+ * SPA 产物：打包 asar 根下 `out/mobile-web`；unpackaged e2e/dev 的
+ * `app.getAppPath()` 常是 `…/out/main`，产物在其兄目录。
+ */
+export function resolveMobileWebSpaDistDir(appPath: string): string {
+  const candidates = [
+    join(appPath, "out", "mobile-web"),
+    join(appPath, "..", "mobile-web"),
+    join(appPath, "mobile-web"),
+  ];
+  for (const dir of candidates) {
+    if (existsSync(join(dir, "index.html"))) {
+      return resolve(dir);
+    }
+  }
+  return resolve(candidates[0] ?? join(appPath, "out", "mobile-web"));
 }
 
 export function createSpaStaticHandler(

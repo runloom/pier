@@ -71,6 +71,9 @@ jobs:
       - name: Build electron
         run: pnpm build:electron
 
+      - name: Build mobile-web SPA
+        run: pnpm build:mobile-web
+
       - name: Pack plugins (pretest:e2e)
         run: pnpm plugins:pack
 

@@ -238,13 +238,19 @@ export function RemoteAccessSection() {
           {enabled && address !== null ? (
             <div className="flex items-center justify-between gap-3 text-sm">
               <span>{t("settings.remoteAccess.addressLabel")}</span>
-              <code className="font-mono text-xs">{address}</code>
+              <code
+                className="font-mono text-xs"
+                data-testid="remote-access-address"
+              >
+                {address}
+              </code>
             </div>
           ) : null}
           {enabled ? (
             <div className="flex flex-col gap-3">
               <div>
                 <Button
+                  data-testid="remote-access-generate"
                   disabled={generating}
                   onClick={onGenerate}
                   size="sm"
@@ -259,7 +265,10 @@ export function RemoteAccessSection() {
                 <div className="flex items-start gap-4">
                   <PairingQr payload={challenge.qrPayload} />
                   <div className="flex flex-col gap-1">
-                    <div className="font-mono text-2xl tracking-widest">
+                    <div
+                      className="font-mono text-2xl tracking-widest"
+                      data-testid="remote-access-code"
+                    >
                       {challenge.code}
                     </div>
                     <div className="text-muted-foreground text-xs">
@@ -281,7 +290,10 @@ export function RemoteAccessSection() {
               {t("settings.remoteAccess.devicesTitle")}
             </div>
             {devices.length === 0 ? (
-              <div className="text-muted-foreground text-sm">
+              <div
+                className="text-muted-foreground text-sm"
+                data-testid="remote-access-devices-empty"
+              >
                 {t("settings.remoteAccess.devicesEmpty")}
               </div>
             ) : (
@@ -289,6 +301,7 @@ export function RemoteAccessSection() {
                 {devices.map((device) => (
                   <li
                     className="flex items-center justify-between gap-3"
+                    data-testid="remote-access-device"
                     key={device.deviceId}
                   >
                     <div className="flex min-w-0 flex-col">
@@ -303,6 +316,7 @@ export function RemoteAccessSection() {
                       </span>
                     </div>
                     <Button
+                      data-testid="remote-access-revoke"
                       onClick={() => onRevoke(device)}
                       size="sm"
                       type="button"

@@ -53,6 +53,7 @@ export async function executeRemoteAccessCommand(
       "remote access services not assembled"
     );
   }
+  await pairing.ensureReady();
   switch (command.type) {
     case "remoteAccess.getState": {
       const state = remoteControl.server.state();
