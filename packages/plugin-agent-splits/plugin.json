@@ -150,7 +150,7 @@
     }
   ],
   "terminalStatusItems": [],
-  "version": "1.5.1",
+  "version": "1.5.2",
   "configuration": {
     "properties": {
       "pier.agent-splits.adapter.enabled": {
