@@ -16,38 +16,6 @@ const MONO_FONT_UNICODE_RANGE = [
 
 const BUNDLED_FONT_FACE_CSS = `
 @font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 300;
-  font-display: swap;
-  src: url("pier-asset://fonts/HarmonyOS_Sans_SC_Light.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("pier-asset://fonts/HarmonyOS_Sans_SC_Regular.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url("pier-asset://fonts/HarmonyOS_Sans_SC_Medium.ttf") format("truetype");
-}
-
-@font-face {
-  font-family: "HarmonyOS Sans SC";
-  font-style: normal;
-  font-weight: 600 700;
-  font-display: swap;
-  src: url("pier-asset://fonts/HarmonyOS_Sans_SC_Bold.ttf") format("truetype");
-}
-
-@font-face {
   font-family: "JetBrainsMono Nerd Font Mono";
   font-style: normal;
   font-weight: 400;

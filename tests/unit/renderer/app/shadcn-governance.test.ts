@@ -22,16 +22,6 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/components/primitives/sidebar.tsx",
   // Dockview tab action 必须保留其原生 class 与事件边界。
   "src/renderer/components/workspace/panel-tab-header.tsx",
-  // 工作台显式拖拽抓手属于网格几何交互，不是普通业务按钮。
-  "src/renderer/panel-kits/workbench/widget-card.tsx",
-  // 物料添加卡与物料预览卡属于响应式网格中的专用几何表面。
-  "src/renderer/panel-kits/workbench/add-card.tsx",
-  // 活动列表（壳 + 行）需要保持卡内响应式几何与整面点击区域。
-  "src/renderer/panel-kits/workbench/core-widgets/activity/widget.tsx",
-  "src/renderer/panel-kits/workbench/core-widgets/activity/row.tsx",
-  // 资源会话行是列表内窄行 hit target，不是通用控制 chrome。
-  "src/renderer/panel-kits/workbench/core-widgets/system-resources-widget.tsx",
-  "src/renderer/panel-kits/workbench/library-dialog.tsx",
   // 环境列表按钮由 Item asChild 提供视觉和交互原语。
   "src/renderer/pages/settings/components/environment-section.tsx",
   // 技能项目列表同上。
@@ -272,17 +262,11 @@ describe("shadcn composition governance", () => {
       join(ROOT, "src/renderer/pages/settings/components/agent-row.tsx"),
       "utf8"
     );
-    const widgetLibrary = readFileSync(
-      join(ROOT, "src/renderer/panel-kits/workbench/library-dialog.tsx"),
-      "utf8"
-    );
 
     expect(environmentEditor.match(/font-mono/g)).toHaveLength(2);
     expect(environmentVariables.match(/font-mono/g)).toHaveLength(2);
     expect(agentRow).not.toContain("@pier/ui/kbd.tsx");
     expect(agentRow).toContain("rounded-none border-0");
-    expect(widgetLibrary).toContain("previewComponent");
-    expect(widgetLibrary).toContain("group flex flex-col overflow-hidden");
   });
 
   it("keeps group-owned items inside their matching container", () => {

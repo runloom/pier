@@ -20,10 +20,10 @@ export const MARKDOWN_TOC_TICK_WIDTH_MIN_PX = 8;
 export const MARKDOWN_TOC_TICK_WIDTH_STEP_PX = 4;
 
 /**
- * Fallback measure in `ch` for width helpers only.
+ * Comfortable column in root rem. Must match CSS `--md-measure-comfortable`.
  * Visible measure is CSS `--md-measure` on `[data-slot="markdown-prose"]`.
  */
-export const MARKDOWN_COMFORTABLE_MEASURE_CH = 85;
+export const MARKDOWN_COMFORTABLE_MEASURE_REM = 42;
 
 /**
  * Preview-frame top inset for scroll padding / legacy chrome.
@@ -132,53 +132,4 @@ export function readScrollContentWidthPx(scrollRoot: HTMLElement): number {
     (Number.parseFloat(styles.paddingLeft) || 0) +
     (Number.parseFloat(styles.paddingRight) || 0);
   return Math.max(0, scrollRoot.clientWidth - padX);
-}
-
-function measureMarkdownChWidthPx(prose: HTMLElement): number {
-  const span = document.createElement("span");
-  span.textContent = "0";
-  span.setAttribute("aria-hidden", "true");
-  const font = getComputedStyle(prose).font;
-  span.style.cssText =
-    "position:absolute;visibility:hidden;pointer-events:none;white-space:nowrap";
-  if (font) {
-    span.style.font = font;
-  }
-  prose.appendChild(span);
-  const width = span.getBoundingClientRect().width;
-  span.remove();
-  if (width > 0) return width;
-  const fontSize = Number.parseFloat(getComputedStyle(prose).fontSize);
-  return Number.isFinite(fontSize) && fontSize > 0 ? fontSize * 0.5 : 6.5;
-}
-
-/**
- * Article column width helper. Cap by CSS max-width so a stretched box cannot
- * inflate the measure.
- */
-export function readMarkdownContentWidthPx(
-  prose: HTMLElement | null,
-  fallbackChWidthPx?: number
-): number {
-  const chWidth =
-    fallbackChWidthPx ?? (prose ? measureMarkdownChWidthPx(prose) : 6.5);
-  const fallback = MARKDOWN_COMFORTABLE_MEASURE_CH * chWidth;
-  if (!prose) {
-    return fallback;
-  }
-  const laidOut = prose.getBoundingClientRect().width;
-  const maxWidth = getComputedStyle(prose).maxWidth;
-  if (maxWidth.endsWith("px")) {
-    const maxPx = Number.parseFloat(maxWidth);
-    if (Number.isFinite(maxPx) && maxPx > 0) {
-      if (laidOut > 0) {
-        return Math.min(laidOut, maxPx);
-      }
-      return maxPx;
-    }
-  }
-  if (laidOut > 0) {
-    return laidOut;
-  }
-  return fallback;
 }

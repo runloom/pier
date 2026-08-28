@@ -498,4 +498,174 @@ describe("authorizeCommand", () => {
     ).toEqual({ ok: true });
     expect(isCanvasHostCommandAllowed("file.openPath")).toBe(false);
   });
+
+  it("grants canvas:command only to the canvas client kind", () => {
+    expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND.canvas).toContain(
+      "canvas:command"
+    );
+    for (const kind of pierClientKindSchema.options.filter(
+      (value) => value !== "canvas"
+    )) {
+      expect(DEFAULT_CAPABILITIES_BY_CLIENT_KIND[kind]).not.toContain(
+        "canvas:command"
+      );
+    }
+    expect(
+      authorizeCommand(
+        {
+          payload: {
+            canvasPath: ".pier/canvases/a.canvas.tsx",
+            key: "refresh",
+            projectRootPath: "/tmp",
+          },
+          type: "canvasCommand.invoke",
+        },
+        client("desktop-renderer")
+      )
+    ).toEqual({
+      ok: false,
+      reason:
+        "client kind desktop-renderer not allowed for canvasCommand.invoke",
+    });
+    expect(
+      authorizeCommand(
+        {
+          payload: {
+            canvasPath: ".pier/canvases/a.canvas.tsx",
+            key: "refresh",
+            projectRootPath: "/tmp",
+          },
+          type: "canvasCommand.invoke",
+        },
+        client("canvas")
+      )
+    ).toEqual({ ok: true });
+  });
+
+  it("agent.attention.respond：mobile-paired 带 notification:write 通过", () => {
+    expect(
+      authorizeCommand(
+        {
+          agentRef: "w1p1",
+          interactionId: "ix-1",
+          key: "enter",
+          type: "agent.attention.respond",
+        },
+        client("mobile-paired")
+      )
+    ).toEqual({ ok: true });
+  });
+
+  it("agent.attention.respond：mobile-paired 缺 notification:write 被拒", () => {
+    expect(
+      authorizeCommand(
+        {
+          agentRef: "w1p1",
+          interactionId: "ix-1",
+          key: "y",
+          type: "agent.attention.respond",
+        },
+        client("mobile-paired", ["app:read"])
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: notification:write",
+    });
+  });
+
+  it("agent.attention.respond：mcp-local kind 被拒", () => {
+    expect(
+      authorizeCommand(
+        {
+          agentRef: "w1p1",
+          interactionId: "ix-1",
+          key: "n",
+          type: "agent.attention.respond",
+        },
+        client("mcp-local")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "client kind mcp-local not allowed for agent.attention.respond",
+    });
+  });
+
+  it("agent.attention.respond：cli-local kind 被拒（先过 kind 门）", () => {
+    expect(
+      authorizeCommand(
+        {
+          agentRef: "w1p1",
+          interactionId: "ix-1",
+          key: "1",
+          type: "agent.attention.respond",
+        },
+        client("cli-local")
+      )
+    ).toEqual({
+      ok: false,
+      reason: "client kind cli-local not allowed for agent.attention.respond",
+    });
+  });
+  it("remoteAccess.*：desktop-renderer 默认能力五条全通过", () => {
+    const commands: PierCommand[] = [
+      { type: "remoteAccess.getState" },
+      { type: "remoteAccess.setEnabled", enabled: true },
+      { type: "remoteAccess.beginPairing" },
+      { type: "remoteAccess.cancelPairing" },
+      { type: "remoteAccess.revokeDevice", deviceId: "dev-1" },
+    ];
+    for (const command of commands) {
+      expect(authorizeCommand(command, client("desktop-renderer"))).toEqual({
+        ok: true,
+      });
+    }
+  });
+
+  it("remoteAccess.*：mobile-paired / cli-local kind 被拒", () => {
+    const commands: PierCommand[] = [
+      { type: "remoteAccess.getState" },
+      { type: "remoteAccess.setEnabled", enabled: false },
+      { type: "remoteAccess.beginPairing" },
+      { type: "remoteAccess.cancelPairing" },
+      { type: "remoteAccess.revokeDevice", deviceId: "dev-1" },
+    ];
+    for (const kind of ["mobile-paired", "cli-local"] as const) {
+      for (const command of commands) {
+        expect(authorizeCommand(command, client(kind))).toEqual({
+          ok: false,
+          reason: `client kind ${kind} not allowed for ${command.type}`,
+        });
+      }
+    }
+  });
+
+  it("remoteAccess.*：读写能力分闸", () => {
+    const readOnly = client("desktop-renderer", ["remote-access:read"]);
+    expect(
+      authorizeCommand({ type: "remoteAccess.getState" }, readOnly)
+    ).toEqual({ ok: true });
+
+    const controlCommands: PierCommand[] = [
+      { type: "remoteAccess.setEnabled", enabled: true },
+      { type: "remoteAccess.beginPairing" },
+      { type: "remoteAccess.cancelPairing" },
+      { type: "remoteAccess.revokeDevice", deviceId: "dev-1" },
+    ];
+    for (const command of controlCommands) {
+      expect(authorizeCommand(command, readOnly)).toEqual({
+        ok: false,
+        reason: "missing capability: remote-access:control",
+      });
+    }
+
+    expect(
+      authorizeCommand(
+        { type: "remoteAccess.getState" },
+        client("desktop-renderer", [])
+      )
+    ).toEqual({
+      ok: false,
+      reason: "missing capability: remote-access:read",
+    });
+  });
 });

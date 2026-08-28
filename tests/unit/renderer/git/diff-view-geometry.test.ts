@@ -1,8 +1,10 @@
 import {
+  DIFF_CONTENT_PADDING_BOTTOM_PX,
   DIFF_HEADER_MIN_HEIGHT_PX,
   DIFF_ITEM_GAP_PX,
   diffFontMetrics,
   diffMetrics,
+  estimateVirtualContentLines,
   skeletonBodyHeightPx,
   slotVirtualHeight,
   totalScrollHeight,
@@ -10,14 +12,15 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("diffMetrics / slotVirtualHeight（几何单源）", () => {
-  it("13px：lineHeight 22.75 / header 34.75 / skeletonBody 108 / skeletonSlot 142.75", () => {
+  it("13px：lineHeight 22.75 / header 35 / skeletonBody 108 / skeletonSlot 143", () => {
     const m = diffMetrics("13px");
     expect(m.lineHeight).toBeCloseTo(22.75);
-    expect(m.headerHeight).toBeCloseTo(34.75);
+    expect(m.headerHeight).toBe(35);
     expect(m.skeletonBodyHeight).toBe(108);
-    expect(m.skeletonSlotHeight).toBeCloseTo(142.75);
+    expect(m.skeletonSlotHeight).toBe(143);
     expect(m.gap).toBe(DIFF_ITEM_GAP_PX);
-    expect(m.contentPaddingBottom).toBe(8);
+    expect(m.contentPaddingBottom).toBe(DIFF_CONTENT_PADDING_BOTTOM_PX);
+    expect(DIFF_CONTENT_PADDING_BOTTOM_PX).toBe(8);
     expect(skeletonBodyHeightPx()).toBe(108);
   });
 
@@ -29,6 +32,22 @@ describe("diffMetrics / slotVirtualHeight（几何单源）", () => {
     const m = diffMetrics("16px");
     expect(m.lineHeight).toBeCloseTo(28);
     expect(m.headerHeight).toBeCloseTo(40);
+  });
+
+  it("头高是整数 CSS 像素，树跳转 item.top 不带半像素", () => {
+    for (const size of [
+      "8px",
+      "11px",
+      "12px",
+      "13px",
+      "14px",
+      "16px",
+      "18px",
+    ]) {
+      const m = diffMetrics(size);
+      expect(Number.isInteger(m.headerHeight)).toBe(true);
+      expect(Number.isInteger(m.skeletonSlotHeight)).toBe(true);
+    }
   });
 
   it("diffFontMetrics 是 thin wrapper", () => {
@@ -63,20 +82,19 @@ describe("diffMetrics / slotVirtualHeight（几何单源）", () => {
     ).toBe(metrics.skeletonSlotHeight);
   });
 
-  it("estimate 未折叠按 numstat 预留，并夹到 48 行", () => {
+  it("estimateVirtualContentLines 仍夹 5..48，但不驱动槽高", () => {
+    expect(estimateVirtualContentLines(undefined)).toBe(5);
+    expect(estimateVirtualContentLines(40)).toBe(40);
+    expect(estimateVirtualContentLines(2000)).toBe(48);
     const metrics = diffMetrics("13px");
-    const reserved = slotVirtualHeight({
-      collapsed: false,
-      contentLines: 40,
-      kind: "estimate",
-      metrics,
-    });
-    expect(reserved).toBeGreaterThan(metrics.skeletonSlotHeight);
-    expect(reserved).toBeCloseTo(
-      metrics.headerHeight +
-        40 * metrics.lineHeight +
-        metrics.contentPaddingBottom
-    );
+    expect(
+      slotVirtualHeight({
+        collapsed: false,
+        contentLines: 40,
+        kind: "estimate",
+        metrics,
+      })
+    ).toBe(metrics.skeletonSlotHeight);
     expect(
       slotVirtualHeight({
         collapsed: false,
@@ -84,11 +102,7 @@ describe("diffMetrics / slotVirtualHeight（几何单源）", () => {
         kind: "estimate",
         metrics,
       })
-    ).toBeCloseTo(
-      metrics.headerHeight +
-        48 * metrics.lineHeight +
-        metrics.contentPaddingBottom
-    );
+    ).toBe(metrics.skeletonSlotHeight);
   });
 
   it("loaded 展开 → header + lines×lh + pad", () => {

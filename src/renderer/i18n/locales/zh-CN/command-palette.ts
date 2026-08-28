@@ -51,7 +51,6 @@ export const commandPalette = {
     listAgents: "智能体列表…",
     openCollaboration: "智能体协作…",
     startAgent: "启动 {{agent}}",
-    newWorkbench: "新建工作台",
     runTask: "运行任务…",
     terminalList: "终端列表...",
     selectTheme: "选择主题",
@@ -64,6 +63,14 @@ export const commandPalette = {
     zoomIn: "放大界面",
     zoomOut: "缩小界面",
     resetZoom: "重置界面缩放",
+    find: "查找",
+    findNext: "查找下一个",
+    findPrev: "查找上一个",
+    findUnavailable: "此处无法查找。请打开终端或文件。",
+    focusNextTab: "下一个标签",
+    focusPrevTab: "上一个标签",
+    toggleSideTree: "显示或隐藏文件树",
+    toggleSideTreeUnavailable: "请先打开项目文件夹。",
   },
   run: {
     action: {

@@ -48,8 +48,6 @@ export interface CanvasSystemResources {
 }
 
 export interface CanvasCostOverview {
-  /** Manually refresh the aggregate cache (host store method, no command). */
-  refresh: () => Promise<void>;
   /** Cross-plugin usage aggregate; null until the first bridge read. */
   snapshot: unknown;
   status: "error" | "loading" | "ready";
@@ -61,5 +59,5 @@ export const useActivityOverview: () => CanvasActivityOverview;
 /** Related-process CPU trend and latest resource snapshot. */
 export const useSystemResources: () => CanvasSystemResources;
 
-/** Cross-plugin cost aggregate with manual refresh. */
+/** Cross-plugin cost aggregate. Refresh with `host.invoke({ type: "usageData.refresh" })`. */
 export const useCostOverview: () => CanvasCostOverview;

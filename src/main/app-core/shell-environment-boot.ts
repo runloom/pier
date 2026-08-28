@@ -116,3 +116,16 @@ export function createShellEnvironmentBoot(
     waitForHostEnv: () => hostShellEnvReady.then(() => undefined),
   };
 }
+
+/** Git/LSP inherit the project dump at `cwd` (Zed: binary + project env). */
+export async function resolvePathEnv(
+  processEnvironment: ProcessEnvironmentService,
+  cwd: string
+): Promise<Record<string, string>> {
+  const { env } = await processEnvironment.resolve({
+    cwd,
+    projectRootPath: cwd,
+    source: "plugin",
+  });
+  return env;
+}

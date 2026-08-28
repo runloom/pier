@@ -5,6 +5,10 @@ export const gitReviewRevisionSchema = z.string().min(1).max(256);
 export const gitReviewChangeKeySchema = z.string().min(1).max(512);
 export const gitReviewSectionKeySchema = z.string().min(1).max(512);
 export const GIT_REVIEW_MAX_SECTIONS = 3;
+/** Z2 批摘录：单次 IPC 文件数上限（金标准 16–64）。 */
+export const GIT_REVIEW_EXCERPT_BATCH_MAX = 64;
+/** Z2 批摘录：默认一批灌入的 content 数。 */
+export const GIT_REVIEW_EXCERPT_BATCH_DEFAULT = 32;
 export const GIT_REVIEW_DIFF_BASES = [
   "head",
   "index",
@@ -41,6 +45,19 @@ export const GIT_REVIEW_STATUS_PRIORITY = [
 ] as const;
 export const gitReviewFileStatusSchema = z.enum(GIT_REVIEW_STATUS_PRIORITY);
 export type GitReviewFileStatus = z.infer<typeof gitReviewFileStatusSchema>;
+
+/** Porcelain v2 unmerged XY codes (`git status --porcelain=v2`). */
+export const GIT_REVIEW_CONFLICT_XY = [
+  "DD",
+  "AU",
+  "UD",
+  "UA",
+  "DU",
+  "AA",
+  "UU",
+] as const;
+export const gitReviewConflictXySchema = z.enum(GIT_REVIEW_CONFLICT_XY);
+export type GitReviewConflictXy = z.infer<typeof gitReviewConflictXySchema>;
 
 export const gitReviewFailureReasonSchema = z.enum([
   "notRepository",

@@ -41,7 +41,7 @@
             NotificationCenter.default.removeObserver(self)
         }
 
-        public override var isOpaque: Bool { false }
+        public override var isOpaque: Bool { true }
 
         public override var safeAreaInsets: NSEdgeInsets {
             NSEdgeInsetsZero
@@ -58,17 +58,32 @@
 
         public func applyScrollbarState(_ state: TerminalScrollbarState) {
             scrollbarState = state
-            synchronizeLayout()
+            // Scrollbar updates must only move the document/scroller — never
+            // re-fit the surface. Upstream Ghostty SurfaceScrollView keeps the
+            // same decoupling; unconditional fitToSize here caused a per-frame
+            // refresh storm once scrollback grew.
+            synchronizeScrollChrome()
             updateTrackingAreas()
         }
 
         public func synchronizeLayout() {
             scrollView.frame = bounds
-            terminalView.frame.size = scrollView.contentSize
+            let nextTerminalSize = scrollView.contentSize
+            let terminalSizeChanged = terminalView.frame.size != nextTerminalSize
+            terminalView.frame.size = nextTerminalSize
             documentView.frame.size.width = scrollView.bounds.width
             synchronizeScrollView()
             synchronizeTerminalView()
-            terminalView.fitToSize()
+            if terminalSizeChanged {
+                terminalView.fitToSize()
+            }
+        }
+
+        private func synchronizeScrollChrome() {
+            scrollView.frame = bounds
+            documentView.frame.size.width = scrollView.bounds.width
+            synchronizeScrollView()
+            synchronizeTerminalView()
         }
 
         public func isScrollerHitTarget(_ view: NSView?) -> Bool {
@@ -119,7 +134,7 @@
 
         private func configureViews() {
             wantsLayer = true
-            layer?.backgroundColor = NSColor.clear.cgColor
+            layer?.backgroundColor = NSColor.black.cgColor
 
             scrollView.hasVerticalScroller = true
             scrollView.hasHorizontalScroller = false
@@ -138,6 +153,11 @@
 
             documentView.addSubview(terminalView)
             addSubview(scrollView)
+        }
+
+        public func applyHostBackgroundColor(_ color: NSColor) {
+            layer?.backgroundColor = color.cgColor
+            terminalView.applyHostBackgroundColor(color)
         }
 
         private func configureObservers() {

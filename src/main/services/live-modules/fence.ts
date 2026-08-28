@@ -29,10 +29,27 @@ for (const name of ["fs/promises", "path/posix", "path/win32", "stream/web"]) {
   DENIED_BARE.add(name);
 }
 
+/**
+ * `framer-motion` matches `framer-motion` and `framer-motion/client`,
+ * not `framer-motion-evil`.
+ */
+export function isAllowedBarePackage(
+  specifier: string,
+  allowedBarePackages: readonly string[]
+): boolean {
+  for (const pkg of allowedBarePackages) {
+    if (specifier === pkg || specifier.startsWith(`${pkg}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function isDeniedBareSpecifier(
   specifier: string,
   allowNodeModules: boolean,
-  framework: LiveModuleFramework = "react"
+  framework: LiveModuleFramework = "react",
+  allowedBarePackages: readonly string[] = []
 ): boolean {
   if (specifier.startsWith("node:")) {
     return true;
@@ -54,6 +71,7 @@ export function isDeniedBareSpecifier(
   if (
     !(
       allowNodeModules ||
+      isAllowedBarePackage(specifier, allowedBarePackages) ||
       specifier.startsWith(".") ||
       specifier.startsWith("/")
     )

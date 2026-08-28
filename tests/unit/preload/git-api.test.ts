@@ -88,6 +88,11 @@ describe("gitApi Review command boundary", () => {
 
     await gitApi.getReviewIndex(indexRequest);
     await gitApi.getReviewFileDocument(documentRequest);
+    await gitApi.getReviewExcerptBatch({
+      files: [{ oldPaths: [], path: "src/app.ts" }],
+      operationId,
+      source,
+    });
     await gitApi.cancelReviewRequest(cancelRequest);
     await gitApi.applyReviewMutation(mutationRequest);
     await gitApi.applyReviewPathMutation(pathMutationRequest);
@@ -100,6 +105,17 @@ describe("gitApi Review command boundary", () => {
       [
         PIER.COMMAND_EXECUTE,
         { request: documentRequest, type: "git.getReviewFileDocument" },
+      ],
+      [
+        PIER.COMMAND_EXECUTE,
+        {
+          request: {
+            files: [{ oldPaths: [], path: "src/app.ts" }],
+            operationId,
+            source,
+          },
+          type: "git.getReviewExcerptBatch",
+        },
       ],
       [
         PIER.COMMAND_EXECUTE,

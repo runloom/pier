@@ -1,6 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { DataChart } from "@pier/ui/data-chart.tsx";
 import { isDiagramShrunk } from "@pier/ui/mermaid/scene.tsx";
 import { Mermaid } from "@pier/ui/mermaid.tsx";
@@ -16,7 +14,6 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { HostMermaid } from "@/lib/live-modules/host-mermaid.tsx";
 import { useContentPreviewStore } from "@/stores/content-preview.store.ts";
-import { parseScheme as parseWorkbenchScheme } from "../../../../.pier/canvases/workbench-into-canvas/model.ts";
 import { installSvgLayoutStubs } from "../../../support/svg-layout-stubs.ts";
 
 const NODES = [
@@ -199,33 +196,6 @@ describe("Pier Canvas visualizations", () => {
     expect(artifact?.className).toContain("border-info/40");
     expect(artifact?.className).toContain("bg-info/10");
     expect(artifact?.className).toContain("border-dashed");
-  });
-
-  it("paints workbench gold main-loop kinds from data.json", async () => {
-    const raw = readFileSync(
-      join(process.cwd(), ".pier/canvases/workbench-into-canvas/data.json"),
-      "utf8"
-    );
-    const scheme = parseWorkbenchScheme(raw);
-    render(
-      <Mermaid
-        aria-label="主回路"
-        direction={scheme.data.mainLoop.diagram.direction}
-        edges={scheme.data.mainLoop.diagram.edges}
-        expandable={false}
-        nodes={scheme.data.mainLoop.diagram.nodes}
-      />
-    );
-    const generate = await screen.findByLabelText("Skill pier-canvas 生成");
-    expect(
-      generate
-        .querySelector("[data-slot=mermaid-node]")
-        ?.getAttribute("data-kind")
-    ).toBe("tool");
-    const see = screen.getByLabelText("OpenSettings 打开设置 项目 物料");
-    expect(
-      see.querySelector("[data-slot=mermaid-node]")?.getAttribute("data-kind")
-    ).toBe("artifact");
   });
 
   it("renders no kind legend overlay (glyph + hue carry the role)", async () => {

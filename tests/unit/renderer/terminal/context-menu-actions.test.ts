@@ -14,6 +14,7 @@ import { initI18n } from "@/i18n/index.ts";
 import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { registerRunActions } from "@/lib/actions/run-actions.ts";
+import { registerViewActions } from "@/lib/actions/view-actions.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-menu.ts";
 import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.ts";
@@ -223,6 +224,7 @@ describe("terminal content context menu actions", () => {
     disposers.push(registerPanelActions());
     disposers.push(registerTerminalActions());
     disposers.push(registerRunActions());
+    disposers.push(registerViewActions());
   }
 
   it("adds terminal editing actions to the top of terminal/content", async () => {
@@ -296,19 +298,13 @@ describe("terminal content context menu actions", () => {
 
     const contentIds = collectActionIds(buildMenuEntries("terminal/content"));
     expect(contentIds).toContain("pier.run.rerunTask");
-    expect(contentIds).not.toEqual(
-      expect.arrayContaining([
-        "pier.panel.newTerminal",
-        "pier.panel.splitRight",
-        "pier.panel.splitDown",
-        "pier.panel.splitLeft",
-        "pier.panel.splitUp",
-      ])
-    );
+    expect(contentIds).toContain("pier.panel.splitRight");
+    expect(contentIds).not.toContain("pier.panel.newTerminal");
 
     const tabIds = collectActionIds(buildMenuEntries("dockview-tab"));
     expect(tabIds).toContain("pier.run.rerunTask");
     expect(tabIds).not.toContain("pier.panel.newTerminal");
+    expect(tabIds).toContain("pier.panel.splitRight");
   });
 
   it("adds the same restart and stop actions to task tabs and panels", async () => {
@@ -362,6 +358,7 @@ describe("terminal content context menu actions", () => {
       expect.arrayContaining(["pier.run.rerunTask", "pier.run.stopTask"])
     );
     expect(ids).not.toContain("pier.panel.newTerminal");
+    expect(ids).toContain("pier.panel.splitRight");
   });
 
   it("dispatches stop against the source task run", async () => {
@@ -542,18 +539,14 @@ describe("terminal content context menu actions", () => {
     expect(tabIds).not.toContain("pier.run.rerunTask");
   });
 
-  it("does not expose terminal-only actions on the dockview tab menu", async () => {
+  it("exposes split on dockview tabs but not terminal-only edit actions", async () => {
     await registerActions();
 
     const ids = collectActionIds(buildMenuEntries("dockview-tab"));
 
-    expect(ids).not.toEqual(
-      expect.arrayContaining([
-        "pier.terminal.clearScreen",
-        "pier.panel.splitRight",
-        "pier.panel.focusRight",
-      ])
-    );
+    expect(ids).toContain("pier.panel.splitRight");
+    expect(ids).not.toContain("pier.terminal.clearScreen");
+    expect(ids).not.toContain("pier.panel.focusRight");
   });
 
   it("dispatches terminal operations against the active terminal panel", async () => {
@@ -576,6 +569,7 @@ describe("terminal content context menu actions", () => {
     if (!action) {
       throw new Error("missing pier.terminal.search action");
     }
+    expect(action.metadata?.shortcutSourceId).toBe("pier.find");
 
     await action.handler();
 

@@ -1,8 +1,8 @@
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { TerminalFocusCoordinator } from "../../ipc/terminal/focus-coordinator.ts";
 import type { NativeAddon } from "../../ipc/terminal/native-addon.ts";
-import type { RegisteredTerminalTaskLifecycle } from "../../ipc/terminal/task-lifecycle-wiring.ts";
-import type { TaskOutputTerminalBindings } from "../../ipc/terminal/task-output-bindings.ts";
+import type { RegisteredTerminalTaskLifecycle } from "../../ipc/terminal/task/lifecycle-wiring.ts";
+import type { TaskOutputTerminalBindings } from "../../ipc/terminal/task/output-bindings.ts";
 import type { AppWindow } from "../../windows/app-window.ts";
 import type { TaskService } from "../tasks/service-types.ts";
 import type { PanelTransferTerminalPort } from "./types.ts";

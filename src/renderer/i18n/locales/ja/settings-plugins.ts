@@ -15,8 +15,6 @@ export const settingsPlugins = {
   contributionSummary: {
     command: "{{count}} 個のコマンド",
     commands: "{{count}} 個のコマンド",
-    workbenchWidget: "{{count}} 個のワークベンチコンポーネント",
-    workbenchWidgets: "{{count}} 個のワークベンチコンポーネント",
     none: "貢献はありません",
     panel: "{{count}} 個のパネル",
     panels: "{{count}} 個のパネル",

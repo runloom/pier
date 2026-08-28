@@ -68,6 +68,13 @@ Rules:
 
 - `pier-default` — pier/canvas desktop-tool discipline
 
+## Recipes (not methodology axes)
+
+`packs/recipes/design` and `packs/recipes/orchestration` are **freeform**
+starters (`recipe=` on `/pier-canvas`). They do not add a fourth axis, do
+not invent overview tabs, and do not replace `design-doc` / `closed-loop`.
+See SKILL.md **Stage selection**.
+
 ## Resolve order
 
 1. `.pier/canvas-packs/{axis}/{id}/pack.json` (project)
@@ -133,8 +140,13 @@ Start from `templates/decision.canvas.tsx`.
 | `path` | `i18n/nav.json` | main path diagram + day-1 commands + recipe |
 | `landing` | `i18n/nav.json` | defaults before→after, phases, acceptance, rails |
 
-Start from `templates/overview.canvas.tsx`. Dogfood:
-`.pier/canvases/multi-agent-orchestration-gold/`.
+Start from `templates/overview.canvas.tsx`.
+
+## Freeform recipes
+
+`recipe=` is **not** a fourth methodology axis. Packs live under
+`packs/recipes/` and force Workflow B (freeform). Known ids: `design`
+(world mockup), `orchestration` (DAG viewer), `board` (fill kanban).
 
 ## Entry
 

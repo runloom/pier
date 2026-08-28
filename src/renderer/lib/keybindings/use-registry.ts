@@ -27,21 +27,18 @@ import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { isTerminalComposerOpen } from "@/stores/terminal-composer-takeover.ts";
 import { isImePendingKeyboardEvent } from "./is-text-input.ts";
 import { chordFromEvent } from "./matcher.ts";
+import { charsToCode } from "./native-forward-code.ts";
 import { keybindingRegistry } from "./registry.ts";
 import { shouldSuppressKeybindingForTextInput } from "./text-input-guard.ts";
 import type { KeyChord } from "./types.ts";
 
-export type KeybindingDispatchRoute = "native-forward" | "web-keydown";
+export type KeybindingDispatchRoute = "menu" | "native-forward" | "web-keydown";
 
 // NSEvent.ModifierFlags raw bits (deviceIndependentFlagsMask 子集).
 const NS_FLAG_SHIFT = 0x2_00_00;
 const NS_FLAG_CONTROL = 0x4_00_00;
 const NS_FLAG_OPTION = 0x8_00_00;
 const NS_FLAG_COMMAND = 0x10_00_00;
-
-// charsToCode 用 — top-level regex 避免每次 keydown re-compile.
-const LATIN_LOWER_RE = /^[a-z]$/;
-const DIGIT_RE = /^[0-9]$/;
 
 function isNewAgentOrAttachChord(chord: KeyChord): boolean {
   return (
@@ -141,15 +138,6 @@ export function resolveKeybindingAction(
     recordKeybindingDecision("missing-action", commandId, route);
     return null;
   }
-  // 路径依赖等动作在菜单里禁用；快捷键仍命中并 toast 原因，避免静默无响应。
-  if (action.enabled?.() === false) {
-    recordKeybindingDecision("disabled", action.id, route);
-    const reason = action.disabledReason?.();
-    if (reason) {
-      toast(reason);
-    }
-    return null;
-  }
   return action;
 }
 
@@ -157,6 +145,15 @@ export function dispatchKeybindingAction(
   action: Action,
   route: KeybindingDispatchRoute
 ): void {
+  // 路径依赖等动作在菜单里禁用；快捷键仍命中并 toast 原因，避免静默无响应。
+  if (action.enabled?.() === false) {
+    recordKeybindingDecision("disabled", action.id, route);
+    const reason = action.disabledReason?.();
+    if (reason) {
+      toast(reason);
+    }
+    return;
+  }
   recordKeybindingDecision("dispatched", action.id, route);
   const scope = useKeybindingScope.getState();
   noteHangBreadcrumb({
@@ -208,67 +205,6 @@ export function dispatchKeybindingAction(
       detail: "handler-threw",
     });
     console.error(`[keybindings] action ${action.id} threw:`, err);
-  }
-}
-
-/**
- * 把 swift forward 来的 chars 转成 KeyboardEvent.code 格式 (与 default keymap
- * 一致 — keymap 用 "KeyT" / "Backquote" / "Digit1" / "ArrowUp" 等).
- *
- * Pier 当前默认 keymap 涉及的字符: t/w/n/p/r/`/,. + Enter + 方向键. 其他不在 keymap 的
- * chord 即使命中也 resolve 不到 action, 不需要在这里穷举所有可能符号.
- *
- * 方向键: macOS charactersIgnoringModifiers 在按方向键时返回 NSUpArrowFunctionKey
- * (\u{F700}) 等私有 Unicode, 必须映射到 "ArrowUp"/"ArrowDown"/"ArrowLeft"/"ArrowRight"
- * 才能跟 web 层 KeyboardEvent.code 命名空间对齐.
- */
-function charsToCode(chars: string): string {
-  const ch = chars.toLowerCase();
-  if (LATIN_LOWER_RE.test(ch)) {
-    return `Key${ch.toUpperCase()}`;
-  }
-  if (DIGIT_RE.test(ch)) {
-    return `Digit${ch}`;
-  }
-  switch (ch) {
-    case "`":
-      return "Backquote";
-    case ",":
-      return "Comma";
-    case ".":
-      return "Period";
-    case "/":
-      return "Slash";
-    case ";":
-      return "Semicolon";
-    case "'":
-      return "Quote";
-    case "[":
-      return "BracketLeft";
-    case "]":
-      return "BracketRight";
-    case "\\":
-      return "Backslash";
-    case "-":
-      return "Minus";
-    case "=":
-      return "Equal";
-    case "\r":
-      return "Enter";
-    case "\u{3}":
-      return "Enter";
-    case "\u{F700}":
-      return "ArrowUp";
-    case "\u{F701}":
-      return "ArrowDown";
-    case "\u{F702}":
-      return "ArrowLeft";
-    case "\u{F703}":
-      return "ArrowRight";
-    case "\u{1b}":
-      return "Escape";
-    default:
-      return ch; // fallback: 让 keymap resolve 自行不命中
   }
 }
 

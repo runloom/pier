@@ -18,6 +18,13 @@ describe("cursor transcript bind", () => {
     expect(shouldBindCursorTranscript("SessionEnd")).toBe(false);
     expect(shouldBindCursorTranscript("ToolStart")).toBe(false);
     expect(shouldBindCursorTranscript("ToolComplete")).toBe(false);
+    expect(
+      nextCursorBoundTranscript({
+        bound: undefined,
+        event: { event: "ToolStart", sessionId: "stale" },
+        resolvedPath: "/tmp/stale.jsonl",
+      })
+    ).toBeUndefined();
   });
 
   it("keeps the prompt jsonl when a later tool or stop event resolves a different path", () => {

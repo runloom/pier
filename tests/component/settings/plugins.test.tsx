@@ -49,7 +49,7 @@ function pluginEntry(overrides: {
     manifest: {
       apiVersion: 1,
       commands,
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       ...(overrides.description ? { description: overrides.description } : {}),

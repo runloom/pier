@@ -17,32 +17,6 @@ private enum TerminalCallbacks {
         private static let terminalPasteImageDirectoryName = "pier-terminal-pastes"
         private static let terminalPasteImageRetentionInterval: TimeInterval = 24 * 60 * 60
 
-        static func confirmUnsafePaste(text: String) -> Bool {
-            if Thread.isMainThread {
-                return MainActor.assumeIsolated {
-                    runUnsafePasteAlert(text: text)
-                }
-            }
-            return DispatchQueue.main.sync {
-                MainActor.assumeIsolated {
-                    runUnsafePasteAlert(text: text)
-                }
-            }
-        }
-
-        @MainActor
-        private static func runUnsafePasteAlert(text: String) -> Bool {
-            let lineCount = TerminalInputText.lineCount(in: text)
-            let copy = TerminalHostCopy.pasteConfirm(lineCount: lineCount)
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = copy.title
-            alert.informativeText = copy.body
-            alert.addButton(withTitle: copy.accept)
-            alert.addButton(withTitle: copy.cancel)
-            return alert.runModal() == .alertFirstButtonReturn
-        }
-
         private static func terminalPasteImagePathFromPasteboard(
             _ pasteboard: NSPasteboard
         ) -> String? {
@@ -135,10 +109,6 @@ private enum TerminalCallbacks {
                     try? fileManager.removeItem(at: url)
                 }
             }
-        }
-    #else
-        static func confirmUnsafePaste(text _: String) -> Bool {
-            true
         }
     #endif
 
@@ -261,27 +231,28 @@ private enum TerminalCallbacks {
         let bridge = Unmanaged<TerminalCallbackBridge>
             .fromOpaque(userdata)
             .takeUnretainedValue()
-        guard let surface = bridge.rawSurface else { return }
-
         let text = String(cString: string)
+        let kind = ClipboardConfirmRequest.Kind(request)
         TerminalDebugLog.log(
             .input,
             "clipboard paste confirm request=\(request.rawValue) bytes=\(text.utf8.count) lines=\(TerminalInputText.lineCount(in: text))"
         )
-
-        let confirmed = confirmUnsafePaste(text: text)
-        text.withCString { cString in
-            ghostty_surface_complete_clipboard_request(
-                surface,
-                cString,
-                opaquePtr,
-                confirmed
+        let state = ClipboardConfirmState(opaquePtr)
+        // Own opaquePtr before this callback returns (and before any hop)
+        // so teardown cannot miss it. Adopt on main assigns pending; do
+        // not present or complete here: libghostty is still on the stack
+        // of the complete() that raised UnsafePaste.
+        bridge.clipboardConfirmInFlight.store(state)
+        terminalRunOnMainSync {
+            bridge.adoptClipboardConfirmation(
+                contents: text,
+                kind: kind,
+                state: state
             )
         }
-        TerminalDebugLog.log(
-            .input,
-            confirmed ? "clipboard paste confirmed" : "clipboard paste canceled"
-        )
+        terminalRunOnMainAsync {
+            bridge.presentClipboardConfirmIfNeeded()
+        }
     }
 }
 

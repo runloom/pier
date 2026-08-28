@@ -1,7 +1,7 @@
 import {
   createTerminalTaskLifecycle,
   type TerminalTaskLifecycleDeps,
-} from "@main/ipc/terminal/task-lifecycle.ts";
+} from "@main/ipc/terminal/task/lifecycle.ts";
 import { describe, expect, it, vi } from "vitest";
 
 function deps(): TerminalTaskLifecycleDeps {
@@ -518,5 +518,111 @@ describe("terminal task lifecycle", () => {
       })
     ).resolves.toBe(false);
     expect(d.completePanel).not.toHaveBeenCalled();
+  });
+
+  it("completes from inject-failed as a failed process exit", async () => {
+    const d = deps();
+    const lifecycle = lifecycleFor(d);
+
+    await expect(
+      lifecycle.completeFromExitCodeHint({
+        browserWindowId: 42,
+        code: 1,
+        lifecycleId: "run-1",
+        panelId: "terminal-1",
+        source: "inject-failed",
+        windowId: "window-main",
+      })
+    ).resolves.toBe(true);
+
+    expect(d.completePanel).toHaveBeenCalledWith(
+      "terminal-1",
+      1,
+      "run-1",
+      "window-main"
+    );
+    expect(d.patchTaskStatus).toHaveBeenCalledWith(
+      "session-main",
+      "terminal-1",
+      "run-1",
+      expect.objectContaining({
+        exitCode: 1,
+        exitSource: "inject-failed",
+        status: "failed",
+      })
+    );
+  });
+
+  it("completes from PTY child-exited when no task-exit marker exists", async () => {
+    const d = deps();
+    const lifecycle = lifecycleFor(d);
+
+    await expect(
+      lifecycle.completeFromExitCodeHint({
+        browserWindowId: 42,
+        code: 7,
+        lifecycleId: "run-1",
+        panelId: "terminal-1",
+        source: "pty-child-exited",
+        windowId: "window-main",
+      })
+    ).resolves.toBe(true);
+
+    expect(d.completePanel).toHaveBeenCalledWith(
+      "terminal-1",
+      7,
+      "run-1",
+      "window-main"
+    );
+    expect(d.patchTaskStatus).toHaveBeenCalledWith(
+      "session-main",
+      "terminal-1",
+      "run-1",
+      expect.objectContaining({
+        exitCode: 7,
+        exitSource: "pty-child-exited",
+        status: "failed",
+      })
+    );
+  });
+
+  it("keeps task-exit title hints over later PTY child-exited completion", async () => {
+    const d = deps();
+    const lifecycle = lifecycleFor(d);
+
+    lifecycle.recordExitCodeHint({
+      browserWindowId: 42,
+      code: 0,
+      lifecycleId: "run-1",
+      panelId: "terminal-1",
+      source: "task-exit-marker",
+      windowId: "window-main",
+    });
+
+    await lifecycle.completeFromExitCodeHint({
+      browserWindowId: 42,
+      code: 1,
+      lifecycleId: "run-1",
+      panelId: "terminal-1",
+      source: "pty-child-exited",
+      windowId: "window-main",
+    });
+
+    expect(d.completePanel).toHaveBeenCalledWith(
+      "terminal-1",
+      0,
+      "run-1",
+      "window-main"
+    );
+    expect(d.patchTaskStatus).toHaveBeenCalledWith(
+      "session-main",
+      "terminal-1",
+      "run-1",
+      expect.objectContaining({
+        exitCode: 0,
+        exitSource: "task-exit-marker",
+        status: "succeeded",
+      })
+    );
   });
 });

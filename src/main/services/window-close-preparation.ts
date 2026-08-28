@@ -22,6 +22,7 @@ import {
   type NativeWindowCloseFailureDecision,
 } from "../windows/native-close-failure.ts";
 import { armDetaching } from "./agents/window-detaching-guard.ts";
+import { skipPanelIdsForHostTeardown } from "./host-teardown-skip.ts";
 
 export interface WindowTransitionLease {
   readonly token: symbol;
@@ -305,7 +306,11 @@ export async function armAndDetachAgentsBeforeClose(
   const electronWindowId = context.electronWindowId ?? String(window.id);
   const sessionScope = context.recordId;
   armDetaching({ electronWindowId, recordId: sessionScope });
-  await detachAgentsForWindow(sessionScope);
+  const skipPanelIds = skipPanelIdsForHostTeardown(
+    sessionScope,
+    electronWindowId
+  );
+  await detachAgentsForWindow(sessionScope, { skipPanelIds });
 }
 
 export async function prepareWindowBeforeCloseCore(

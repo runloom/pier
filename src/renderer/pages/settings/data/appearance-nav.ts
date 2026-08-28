@@ -9,6 +9,7 @@ import {
   type LucideIcon,
   Paintbrush,
   Plug,
+  Smartphone,
   Terminal,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -41,6 +42,8 @@ export const NAV_ITEMS: readonly StaticNavItem[] = [
   { id: "projects", icon: Box, variant: "static" },
   // workspace: 工作树路径、关标签聚焦（不含语言服务；语言服务在 Files 插件设置）。
   { id: "workspace", icon: FolderGit2, variant: "static" },
+  // remoteAccess: 移动端伴侣接入（LAN 配对 QR + 已配对设备吊销）。
+  { id: "remoteAccess", icon: Smartphone, variant: "static" },
   { id: "plugins", icon: Plug, variant: "static" },
   { id: "updates", icon: Download, variant: "static" },
 ] as const;

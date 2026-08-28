@@ -9,7 +9,7 @@ import {
   expect,
   test,
 } from "@playwright/test";
-import { selectTheme, setWindowSize } from "../workbench/e2e-harness.ts";
+import { selectTheme, setWindowSize } from "../support/app-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
@@ -96,7 +96,7 @@ test("previews a signature-validated image and changes its zoom", async ({
     const zoomMenu = page.getByRole("button", {
       name: /Zoom level: Fit to window|缩放级别: 适应窗口/u,
     });
-    await expect(zoomMenu).toHaveAttribute("data-variant", "secondary");
+    await expect(zoomMenu).toHaveAttribute("data-variant", "ghost");
 
     await zoomMenu.click();
     await page.screenshot({
@@ -109,7 +109,7 @@ test("previews a signature-validated image and changes its zoom", async ({
       .click();
     await expect(page.getByText("100%", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /Zoom in|放大/u }).click();
-    await expect(page.getByText("110%", { exact: true })).toBeVisible();
+    await expect(page.getByText("125%", { exact: true })).toBeVisible();
 
     await page.screenshot({
       path: testInfo.outputPath("files-image-preview.png"),

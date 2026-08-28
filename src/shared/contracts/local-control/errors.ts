@@ -34,6 +34,10 @@ export const LOCAL_CONTROL_ERROR_CODES = [
   "prompt_too_long",
   "prompt_undeliverable",
   "cross_window_unsupported",
+  /** 移动端：令牌或 epoch 失效（吊销），随断连返回（规格 §17.1）。 */
+  "device_revoked",
+  /** 移动端：审批回写双重门拒绝（waiting + interactionId 过期）。 */
+  "interaction_stale",
 ] as const;
 
 export type LocalControlErrorCode = (typeof LOCAL_CONTROL_ERROR_CODES)[number];

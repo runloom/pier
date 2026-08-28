@@ -95,6 +95,8 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     label: "Kimi",
     launchCmd: "kimi",
     detectCmd: "kimi",
+    // uv `kimi-cli` 与 npm `kimi` 是同一 CLI；连字符词边界下 `kimi` 匹配不到 `kimi-cli`。
+    detectCmdAliases: ["kimi-cli"],
     expectedProcess: "kimi",
     faviconDomain: "moonshot.cn",
     homepageUrl:
@@ -273,7 +275,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     label: "Mistral Vibe",
     launchCmd: "vibe",
     detectCmd: "vibe",
-    detectCmdAliases: ["mistral-vibe"],
+    detectCmdAliases: ["mistral-vibe", "vibe-acp"],
     expectedProcess: "vibe",
     faviconDomain: "mistral.ai",
     homepageUrl: "https://github.com/mistralai/mistral-vibe",
@@ -353,6 +355,9 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     label: "Qoder",
     launchCmd: "qodercli",
     detectCmd: "qodercli",
+    // 中国版独占 CLI。`qoder` / `qodercn` 是 CLI+IDE 合一启动器，由
+    // matchAgentCommand 按 argv 区分，不进词元表（否则 `qoder .` 会开 IDE 却点亮智能体）。
+    detectCmdAliases: ["qoderclicn"],
     expectedProcess: "qodercli",
     homepageUrl: "https://qoder.com/cli",
     oneShotArgs: (prompt) => ["-p", prompt],

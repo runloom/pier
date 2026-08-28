@@ -65,6 +65,11 @@ export const controlSnapshotActivityEntrySchema = z
     status: nonEmpty.optional(),
     panelId: nonEmpty.optional(),
     windowId: nonEmpty.optional(),
+    /**
+     * M1 审批回写：waiting 态 agent 的未决交互 id（SPA 审批条数据源，
+     * 客户端不得猜测）；无登记则缺省。
+     */
+    pendingInteractionId: nonEmpty.optional(),
   })
   .strict();
 

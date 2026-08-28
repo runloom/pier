@@ -9,15 +9,19 @@ import {
 } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { computeTreeSha256V1 } from "../tree-digest.ts";
+import { systemSkillsCacheRoot } from "./cache-root.ts";
 import { copySystemSkillTree } from "./copy-tree.ts";
 import type { SystemSkillContribution } from "./index.ts";
 import { resolveSystemSkillSourceDir } from "./source.ts";
 
 const MARKER_VERSION = "v1";
 
-export function systemSkillsCacheRoot(userData: string): string {
-  return join(userData, "skills", ".system");
-}
+export {
+  migrateLegacySystemSkillsCacheRoot,
+  resetSystemSkillsCacheRootForTests,
+  setSystemSkillsCacheRootForHost,
+  systemSkillsCacheRoot,
+} from "./cache-root.ts";
 
 export function systemSkillCacheDir(userData: string, skillId: string): string {
   return join(systemSkillsCacheRoot(userData), skillId);
@@ -52,9 +56,9 @@ async function readMarker(path: string): Promise<string | null> {
 }
 
 /**
- * Install one system skill into `{userData}/skills/.system/<id>/` (Codex
- * `$CODEX_HOME/skills/.system` analogue). Fingerprint skip when the marker
- * matches this process's official source.
+ * Install one system skill into `{systemSkillsCacheRoot}/<id>/`(宿主注入
+ * `~/.pier/system-skills`;Codex `$CODEX_HOME/skills/.system` analogue)。
+ * Fingerprint skip when the marker matches this process's official source.
  */
 export async function installSystemSkillCache(args: {
   contribution: SystemSkillContribution;

@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
+import { bootAppCoreRemoteControl } from "../adapters/remote-control/boot.ts";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import {
   getTerminalTaskLifecycleForTransfer,
@@ -21,6 +22,7 @@ import { createPluginRpcBus, type PluginRpcBus } from "../plugins/rpc-bus.ts";
 import { registerPluginRpcIpc } from "../plugins/rpc-ipc.ts";
 import { registerSandboxAuditIpc } from "../plugins/sandbox-audit-ipc.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
+import { createPendingInteractionRegistry } from "../services/agent-attention/pending-interactions.ts";
 import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/detection-service.ts";
 import { createAgentUsageService } from "../services/agents/usage-service.ts";
@@ -70,23 +72,16 @@ import {
   collectBundledPluginRegistrations,
   OFFICIAL_BUNDLED_PLUGIN_SPECS,
 } from "./bundled-official-plugins.ts";
+import { createClientRegistry } from "./client-registry.ts";
 import {
-  createClientRegistry,
-  type PierClientRegistry,
-} from "./client-registry.ts";
-import {
-  type CommandRouter,
   createCommandRouter,
   type PierCoreServices,
 } from "./command-router.ts";
-import { createPierEventBus, type PierEventBus } from "./event-bus.ts";
+import { createPierEventBus } from "./event-bus.ts";
 import { createExternalMainPluginContextFactory } from "./external-plugin-context.ts";
 import { wireHostCatalogAndAppUpdates } from "./host-catalog-boot.ts";
 import { createLazyAppCore } from "./lazy.ts";
 import { createAppLiveModulesService } from "./live-modules-wiring.ts";
-import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
-import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
-import { resolveWorkspaceDevPluginSpecs } from "./managed-plugin-workspace-specs.ts";
 import {
   createForegroundActivityFacade,
   createNotificationCenterCommandFacade,
@@ -94,37 +89,39 @@ import {
 import { wireAppCoreWindowAndPanelTransfer } from "./panel-transfer.ts";
 import { wireAppCorePierHomeAndSkills } from "./pier-home.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
+import { createManagedPluginDevRuntimeWatchRegistry } from "./plugin-runtime/dev-runtime-watch.ts";
+import { createManagedPluginRuntimeReconciler } from "./plugin-runtime/runtime-reconciler.ts";
+import { resolveWorkspaceDevPluginSpecs } from "./plugin-runtime/workspace-specs.ts";
 import { requireAppCoreInitialization } from "./readiness.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
-import { createShellEnvironmentBoot } from "./shell-environment-boot.ts";
+import {
+  createShellEnvironmentBoot,
+  resolvePathEnv,
+} from "./shell-environment-boot.ts";
 import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import { createTerminalStatusBarPrefsFacade } from "./terminal-status-bar-prefs-facade.ts";
-
+import type { PierAppCore } from "./types.ts";
 import { createAppCoreUsageData } from "./usage-data.ts";
 import {
   broadcastCommentsChanged,
-  broadcastEnvironmentsChanged,
   broadcastMruState,
   broadcastPluginRegistryChanged,
   broadcastProjectSkillsInvalidated,
   broadcastTaskRunsSnapshot,
   broadcastWorktreeCreateProgress,
 } from "./window-broadcasts.ts";
-export interface PierAppCore {
-  clients: PierClientRegistry;
-  commandRouter: CommandRouter;
-  disposeManagedPluginDevRuntimeWatch(): void;
-  disposePluginDataProjections(): void;
-  eventBus: PierEventBus;
-  flushExternalPluginsBeforeQuit(): Promise<void>;
-  pluginHost: MainPluginHostApi;
-  ready: Promise<void>;
-  services: PierCoreServices;
-}
+
+export type { PierAppCore } from "./types.ts";
 
 function createPierAppCore(): PierAppCore {
   const eventBus = createPierEventBus();
   const clients = createClientRegistry();
+  // remote-control 装配：默认关（构造期零监听）；executeCommand 桥经
+  // setCommandRouter 延迟绑定到 return 前创建的 commandRouter。
+  const remoteControlBoot = bootAppCoreRemoteControl({
+    clients,
+    getServices: () => services,
+  });
   const rendererCommand = createRendererCommandService({
     host: { send: sendRendererCommand },
   });
@@ -359,8 +356,10 @@ function createPierAppCore(): PierAppCore {
     agentMcpCatalog,
     agentRules,
     localEnvironments,
+    onEnvironmentsChanged,
     pierBindings,
     pierHome,
+    projectMemory,
     projectSkills,
     systemSkills,
   } = wireAppCorePierHomeAndSkills({
@@ -376,7 +375,7 @@ function createPierAppCore(): PierAppCore {
         ? join(process.cwd(), "resources")
         : process.resourcesPath,
     transactionLock: filePathTransactionLock,
-    userDataPath: app.getPath("userData"),
+    userDataPath: userDataDir,
   });
   const workspaceService = createWorkspaceService();
   const { panelTransfer: panelTransferRef, window: windowService } =
@@ -398,6 +397,7 @@ function createPierAppCore(): PierAppCore {
     agentRuntimeIndex,
     foregroundActivity: createForegroundActivityFacade(),
     notificationCenter: createNotificationCenterCommandFacade(),
+    pendingInteractions: createPendingInteractionRegistry(),
     agentUsage,
     agentLaunchGate,
     agentMcpCatalog,
@@ -420,6 +420,7 @@ function createPierAppCore(): PierAppCore {
     fileWatch: createFileWatchService(),
     pluginDataProjections: appCoreProjections.projections,
     preferences,
+    projectMemory,
     projectSkills,
     systemSkills,
     secrets,
@@ -454,6 +455,8 @@ function createPierAppCore(): PierAppCore {
     terminalLaunches: terminalLaunchRegistry,
     window: windowService,
     panelTransfer: panelTransferRef,
+    // pairing + remoteControl：remoteAccess.* 命令面（Task 9）经此消费。
+    ...remoteControlBoot.services,
     workspace: workspaceService,
     worktrees: createWorktreeService({
       readPreferences: () => preferences.read(),
@@ -461,32 +464,28 @@ function createPierAppCore(): PierAppCore {
     // git+gitWatch 一体绑 getStatus（watch 广播需 status；多订阅共享）
     ...(() => {
       const git = createGitService({
-        resolveEnvironment: async (cwd) =>
-          (await processEnvironment.resolve({ cwd, source: "plugin" })).env,
+        resolveEnvironment: (cwd) => resolvePathEnv(processEnvironment, cwd),
       });
-      return {
-        git,
-        gitReview: new GitReviewService(),
-        gitWatch: createGitWatchService({
-          getStatus: (gitRoot, prefetched) =>
-            git.getStatus(gitRoot, prefetched),
-          isPollActive: () => windowManager.getFocused() !== null,
-        }),
-      };
+      const gitWatch = createGitWatchService({
+        getStatus: (gitRoot, prefetched) => git.getStatus(gitRoot, prefetched),
+        isPollActive: () => windowManager.getFocused() !== null,
+      });
+      return { git, gitReview: new GitReviewService(), gitWatch };
     })(),
   };
+  const commandRouter = createCommandRouter({
+    clients,
+    onEnvironmentsChanged,
+    onWorktreeCreateProgress: broadcastWorktreeCreateProgress,
+    services,
+  });
+  remoteControlBoot.setCommandRouter(commandRouter);
   return {
     clients,
-    commandRouter: createCommandRouter({
-      clients,
-      onEnvironmentsChanged: broadcastEnvironmentsChanged,
-      onWorktreeCreateProgress: broadcastWorktreeCreateProgress,
-      services,
-    }),
+    commandRouter,
     eventBus,
-    disposeManagedPluginDevRuntimeWatch: () => {
-      managedPluginDevRuntimeWatches.dispose();
-    },
+    disposeManagedPluginDevRuntimeWatch: () =>
+      managedPluginDevRuntimeWatches.dispose(),
     disposePluginDataProjections: () => appCoreProjections.disposeTap(),
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),

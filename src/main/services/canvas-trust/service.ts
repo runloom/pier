@@ -8,6 +8,7 @@ import {
 } from "@shared/contracts/live-modules.ts";
 import { normalizeProjectRootKey } from "@shared/live-module-canvas-path.ts";
 import { debouncedJsonStore } from "../../state/debounced-store.ts";
+import { createCanvasCommandGrantService } from "./command-grants.ts";
 
 /**
  * Canvas project trust service (画布项目信任门).
@@ -19,9 +20,21 @@ import { debouncedJsonStore } from "../../state/debounced-store.ts";
  */
 
 export interface CanvasTrustService {
+  commandGrantMatches(input: {
+    canvasPath: string;
+    commandHash: string;
+    key: string;
+    projectRootPath: string;
+  }): Promise<boolean>;
   flush(): Promise<void>;
   /** Record an explicit trust decision for the project root. */
   grant(projectRootPath: string): Promise<void>;
+  rememberCommandGrant(input: {
+    canvasPath: string;
+    commandHash: string;
+    key: string;
+    projectRootPath: string;
+  }): Promise<void>;
   /** Drop the stored decision; the next preview asks again. */
   revoke(projectRootPath: string): Promise<void>;
   status(projectRootPath: string): Promise<CanvasTrustStatus>;
@@ -78,7 +91,15 @@ export function createCanvasTrustService(options: {
     return store.replace(emptyCanvasTrustStore());
   };
 
+  const grants = createCanvasCommandGrantService({
+    canonicalizeProjectRootKey,
+    userDataDir: options.userDataDir,
+    ...(options.now ? { now: options.now } : {}),
+  });
+
   const service: CanvasTrustService = {
+    commandGrantMatches: (input) => grants.matches(input),
+    rememberCommandGrant: (input) => grants.remember(input),
     async grant(projectRootPath) {
       await ensureStore();
       const key = await canonicalizeProjectRootKey(projectRootPath);
@@ -122,6 +143,7 @@ export function createCanvasTrustService(options: {
 
     async flush() {
       await store.flush();
+      await grants.flush();
     },
   };
 

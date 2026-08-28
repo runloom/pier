@@ -14,6 +14,7 @@ import {
   createOpenSettingsMenuItem,
   OPEN_SETTINGS_ACCELERATOR,
   OPEN_SETTINGS_CHANNEL,
+  requestOpenSettings,
 } from "@main/settings-menu.ts";
 
 describe("settings menu", () => {
@@ -53,5 +54,23 @@ describe("settings menu", () => {
     expect(win.focus).toHaveBeenCalled();
     expect(win.webContents.focus).toHaveBeenCalled();
     expect(win.webContents.send).toHaveBeenCalledWith(OPEN_SETTINGS_CHANNEL);
+  });
+
+  it("sends an optional section payload when opening a settings page", () => {
+    const win = {
+      focus: vi.fn(),
+      isDestroyed: () => false,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      webContents: {
+        focus: vi.fn(),
+        isDestroyed: () => false,
+        send: vi.fn(),
+      },
+    };
+    requestOpenSettings(win, { section: "plugin:pier.codex" });
+    expect(win.webContents.send).toHaveBeenCalledWith(OPEN_SETTINGS_CHANNEL, {
+      section: "plugin:pier.codex",
+    });
   });
 });

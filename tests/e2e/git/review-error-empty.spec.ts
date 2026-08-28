@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { _electron as electron, expect, test } from "@playwright/test";
-import { setWindowSize } from "../workbench/e2e-harness.ts";
+import { setWindowSize } from "../support/app-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");

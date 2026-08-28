@@ -14,6 +14,8 @@ export const pluginPermissions = {
   "panel:read": "패널 상태 읽기",
   "panel:register": "패널 등록",
   "plugin:read": "플러그인 정보 읽기",
+  "plugin:action": "캔버스에서 선언된 플러그인 동작 실행",
+  "canvas:command": "캔버스가 선언한 명령 실행",
   "plugin:write": "플러그인 상태 변경",
   "preferences:read": "환경설정 읽기",
   "preferences:write": "환경설정 변경",
@@ -44,4 +46,7 @@ export const pluginPermissions = {
   "comments:write": "리뷰 코멘트 작성",
   "notification:read": "알림 읽기",
   "notification:write": "알림 읽음 처리",
+  "managedAssets:write": "관리형 에이전트 구성 등록",
+  "remote-access:read": "모바일 접속 상태 보기",
+  "remote-access:control": "모바일 페어링과 기기 관리",
 } as const;

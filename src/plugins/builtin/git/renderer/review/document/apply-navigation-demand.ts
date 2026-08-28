@@ -5,7 +5,10 @@ import {
 
 type ReviewDemandLoader = {
   getResource(entryKey: string): unknown;
-  setProtectedEntryKey(entryKey: string | null): void;
+  setProtectedEntryKey(
+    entryKey: string | null,
+    options?: { readonly retryLoading?: boolean }
+  ): void;
   setWindowDemand(demand: ReviewDocumentDemand): void;
 } | null;
 
@@ -49,7 +52,11 @@ export function applyReviewNavigationDemand(options: {
   const demand = entryKnown
     ? prioritizeReviewNavigationDemand(base, entryKey, true)
     : base;
+  // 先钉 selected 再 pump window：否则点中的 idle 文件会进 32 文件批摘录。
+  loader?.setProtectedEntryKey(
+    entryKnown ? entryKey : null,
+    entryKnown ? { retryLoading: true } : undefined
+  );
   loader?.setWindowDemand(demand);
-  loader?.setProtectedEntryKey(entryKnown ? entryKey : null);
   return demand;
 }

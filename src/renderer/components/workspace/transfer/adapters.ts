@@ -6,7 +6,7 @@
  * release / finalize a cross-window move:
  *
  * - `kind: "params"` — stateless panel; only dockview params need to move.
- *   welcome / workbench.
+ *   welcome.
  * - `kind: "custom"` — panel owns durable state (drafts, sessions, watchers).
  *   Git / Files. Provides the five lifecycle callbacks.
  * - `kind: "terminal"` — core-internal only. External plugins CANNOT declare
@@ -63,8 +63,8 @@ export type CorePanelTransferRegistration =
   | { kind: "terminal" };
 
 /**
- * Core transfer registrations. Core panels that are stateless (welcome,
- * workbench) use `kind: "params"`. Terminal is `kind: "terminal"` (core-only).
+ * Core transfer registrations. Core panels that are stateless (welcome)
+ * use `kind: "params"`. Terminal is `kind: "terminal"` (core-only).
  * Git / Files register `kind: "custom"` from their own modules via
  * `registerCorePanelTransfer`.
  */
@@ -74,11 +74,9 @@ const coreTransferRegistrations = new Map<
 >();
 
 /**
- * Default core registrations. welcome / workbench are params-only; terminal is
- * core-only.
+ * Default core registrations. welcome is params-only; terminal is core-only.
  */
 coreTransferRegistrations.set("welcome", { kind: "params" });
-coreTransferRegistrations.set("workbench", { kind: "params" });
 coreTransferRegistrations.set("terminal", { kind: "terminal" });
 coreTransferRegistrations.set("panel-transfer-unavailable", {
   kind: "params",
@@ -152,7 +150,6 @@ export function isPanelTransferMovable(component: string): boolean {
 export function clearCorePanelTransferForTests(): void {
   coreTransferRegistrations.clear();
   coreTransferRegistrations.set("welcome", { kind: "params" });
-  coreTransferRegistrations.set("workbench", { kind: "params" });
   coreTransferRegistrations.set("terminal", { kind: "terminal" });
   coreTransferRegistrations.set("panel-transfer-unavailable", {
     kind: "params",

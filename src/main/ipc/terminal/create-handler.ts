@@ -6,13 +6,9 @@ import {
 import type {
   CreateTerminalArgs,
   CreateTerminalResult,
-  TerminalAgentRestoreOutcome,
 } from "@shared/contracts/terminal.ts";
 import { app } from "electron";
-import {
-  resolveAgentResumeLastLaunch,
-  resolveAgentResumeLaunch,
-} from "../../services/agents/resume-adapters.ts";
+import { agentRestoreCreateFields } from "../../services/agents/resume-adapters.ts";
 import type { LocalEnvironmentService } from "../../services/local-environments-service.ts";
 import { getTerminalPanelTransfer } from "../../services/panel-transfer/terminal.ts";
 import { createTerminalAndSeedResource } from "../../services/pier-resource/claim-login-after-create.ts";
@@ -27,6 +23,7 @@ import {
   clearTerminalPanelAgent,
   ensureTerminalPanelSession,
   readTerminalPanelSession,
+  recordTerminalPanelAgentSpawnGeneration,
 } from "../../state/terminal-session-state.ts";
 import type { AppWindow } from "../../windows/app-window.ts";
 import { findInternalWindowId } from "../../windows/identity.ts";
@@ -34,10 +31,17 @@ import { foregroundActivityService } from "../foreground-activity.ts";
 import { hydrateNativeLaunchEnv } from "./create-env.ts";
 import {
   consumeCreateLaunch,
+  nextAgentSpawnGeneration,
+  resolveAgentSpawnLifecycle,
   resolveCreateTerminalLaunch,
   withAgentLoginShellSafeCommand,
+  withAgentSpawnGenerationEnv,
 } from "./create-launch.ts";
-import { sendInitialTerminalInput } from "./create-post-actions.ts";
+import {
+  handleInitialInputInjectFailed,
+  sendInitialTerminalInput,
+} from "./create-post-actions.ts";
+import { resolveRestoredAgentNativeLaunch } from "./create-restore.ts";
 import { resolveTerminalTransferCreateAction } from "./create-transfer-guard.ts";
 import { recordRendererTerminalRoute } from "./debug.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
@@ -49,8 +53,8 @@ import {
 import type { NativeAddon } from "./native-addon.ts";
 import { toNativePanelKey } from "./panel-id.ts";
 import { persistInitialTerminalTab } from "./tab-chrome.ts";
-import type { RegisteredTerminalTaskLifecycle } from "./task-lifecycle-wiring.ts";
-import type { TaskOutputTerminalBindings } from "./task-output-bindings.ts";
+import type { RegisteredTerminalTaskLifecycle } from "./task/lifecycle-wiring.ts";
+import type { TaskOutputTerminalBindings } from "./task/output-bindings.ts";
 import { windowRecordIdFor } from "./window-scope.ts";
 
 function isStringRecord(value: unknown): value is Record<string, string> {
@@ -170,12 +174,6 @@ export async function handleTerminalCreate(args: {
       : false;
     const launch = resolveCreateTerminalLaunch(createArgs, saved, { taskLive });
     restoredAgentLaunch = Boolean(launch.restoredAgentLaunch);
-    const lifecycleId = launch.task?.runId ?? "";
-    taskLifecycle.resetPanel(
-      createArgs.panelId,
-      lifecycleId,
-      findInternalWindowId(win) ?? undefined
-    );
     await persistInitialTerminalTask(
       sessionScope,
       createArgs.panelId,
@@ -187,44 +185,13 @@ export async function handleTerminalCreate(args: {
       x: createArgs.frame.x,
       y: createArgs.frame.y,
     });
-    const restoreCwd = launch.context?.cwd ?? launch.restoredAgent?.launch.cwd;
-    const resumeLaunch = launch.restoredAgent
-      ? resolveAgentResumeLaunch({
-          agent: launch.restoredAgent,
-          cwd: restoreCwd ?? launch.nativeLaunch?.cwd,
-        })
-      : null;
-    let agentRestore: TerminalAgentRestoreOutcome | undefined;
-    // Default spawn: pin-id resume command, else original launch.
-    let nativeLaunchBase = resumeLaunch?.launch ?? launch.nativeLaunch;
-    if (resumeLaunch) {
-      if (resumeLaunch.resumed) {
-        agentRestore = "resumed";
-      } else if (resumeLaunch.reason === "unsupported-agent") {
-        agentRestore = "unsupported";
-      } else {
-        // missing-session-id / missing-launch-command: prefer agent-native
-        // folder-latest on the *first* spawn so we do not create a fresh
-        // session that becomes "latest" before the user can continue.
-        const restored = launch.restoredAgent;
-        const lastLaunch = restored
-          ? resolveAgentResumeLastLaunch({
-              agentId: restored.agentId,
-              cwd: restoreCwd ?? restored.launch.cwd,
-              launch: restored.launch,
-            })
-          : null;
-        if (lastLaunch?.command) {
-          nativeLaunchBase = lastLaunch;
-          agentRestore = "resumed";
-        } else {
-          agentRestore = "cold-start";
-        }
-      }
-    }
-    // UI prepareLaunch only has agentDefaultEnv + wrap PATH. Overlay the
-    // login-shell dump here so Start Claude matches a user terminal `claude`.
-    // Persist the logical launch, not the hydrated dump.
+    const { agentRestore, nativeLaunchBase, restoreCwd } =
+      resolveRestoredAgentNativeLaunch({
+        contextCwd: launch.context?.cwd,
+        nativeLaunch: launch.nativeLaunch,
+        restoredAgent: launch.restoredAgent,
+      });
+    // Overlay login-shell dump for spawn; persist the logical launch.
     const launchForNative = await hydrateNativeLaunchEnv(
       nativeLaunchBase,
       processEnvironment,
@@ -303,9 +270,12 @@ export async function handleTerminalCreate(args: {
           ? {}
           : { cwd: launchForNative.cwd }),
         ...(launchEnvironment === undefined ? {} : { env: launchEnvironment }),
-        ...(createArgs.initialInput === undefined
+        ...(createArgs.initialInput === undefined &&
+        launch.initialInput === undefined
           ? {}
-          : { initialInput: createArgs.initialInput }),
+          : {
+              initialInput: createArgs.initialInput ?? launch.initialInput,
+            }),
       };
       const projectRootPath = launchForNative?.cwd;
       await launchGate.ensureReady({
@@ -347,20 +317,35 @@ export async function handleTerminalCreate(args: {
       terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
       return { ok: true };
     }
-    // Last-mile agent resolve + thin wrap (do not persist this form).
+    const nextSpawnGeneration = nextAgentSpawnGeneration(saved?.agent ?? null);
+    const spawnLifecycle = resolveAgentSpawnLifecycle({
+      launchAgentId: launch.launchAgentId,
+      spawnGeneration: nextSpawnGeneration,
+      taskRunId: launch.task?.runId,
+    });
+    const lifecycleId = spawnLifecycle.lifecycleId;
+    taskLifecycle.resetPanel(
+      createArgs.panelId,
+      lifecycleId,
+      windowId,
+      spawnLifecycle.surface
+    );
     const surface = await withAgentLoginShellSafeCommand(
       launchForNative,
       launch.launchAgentId
     );
     const launchForCreate = surface.launch;
-    // 不向终端注入 caller binding / 凭证：本机 CLI 不按「权限主体」管理智能体。
-    // applyLaunchWrapForCreate 仍剥离父进程残留的 binding 环境变量，避免误传。
     const spawnLaunch = await applyLaunchWrapForCreate({
       agentId: launch.launchAgentId,
       controlSocketPath: readUserDataControlSocketPath(() =>
         app.getPath("userData")
       ),
-      hookEnv: foregroundActivityService.hookEnv(),
+      hookEnv: withAgentSpawnGenerationEnv(
+        foregroundActivityService.hookEnv(),
+        launch.launchAgentId,
+        nextSpawnGeneration,
+        sessionScope
+      ),
       launch: launchForCreate,
       panelId: createArgs.panelId,
       userData: app.getPath("userData"),
@@ -388,20 +373,35 @@ export async function handleTerminalCreate(args: {
       }
       return { ok: false, error: "createTerminal returned false" };
     }
+    if (launch.launchAgentId) {
+      await recordTerminalPanelAgentSpawnGeneration(
+        sessionScope,
+        createArgs.panelId,
+        nextSpawnGeneration
+      );
+    }
     // exitPresentation lives on panel params; renderer resolves final copy on
     // child-exited and calls injectDisplayText (native does not i18n).
     sendInitialTerminalInput({
       addon,
-      initialInput: createArgs.initialInput,
+      initialInput: createArgs.initialInput ?? launch.initialInput,
       nativePanelId,
       onFailed: (detail) => {
         if (win.isDestroyed() || win.webContents.isDestroyed()) {
           return;
         }
-        win.webContents.send("pier:terminal:initial-input-failed", {
-          kind: launch.launchAgentId ? "prompt" : "setup",
+        handleInitialInputInjectFailed({
+          browserWindowId: win.id,
+          completeFromExitCodeHint: (hint) =>
+            taskLifecycle.completeFromExitCodeHint(hint),
+          hasAgent: Boolean(launch.launchAgentId),
+          lifecycleId,
           panelId: createArgs.panelId,
+          sendFailed: (event) =>
+            win.webContents.send("pier:terminal:initial-input-failed", event),
+          taskStatus: launch.task?.status,
           textDelivered: detail?.textDelivered === true,
+          windowId,
         });
       },
       panelId: createArgs.panelId,
@@ -422,7 +422,6 @@ export async function handleTerminalCreate(args: {
         }
       }
     }
-    consumeCreateLaunch(createArgs);
     // Invariant: live terminal ⇒ session entry exists (transfer CAS relies on
     // it). Context/tab writers below only add metadata onto this entry.
     await ensureTerminalPanelSession(sessionScope, createArgs.panelId);
@@ -460,7 +459,11 @@ export async function handleTerminalCreate(args: {
     terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
     return {
       ok: true,
-      ...(agentRestore === undefined ? {} : { agentRestore }),
+      ...agentRestoreCreateFields({
+        agentRestore,
+        cwd: restoreCwd,
+        restoredAgent: launch.restoredAgent,
+      }),
     };
   } catch (err) {
     foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));
@@ -471,5 +474,7 @@ export async function handleTerminalCreate(args: {
       ok: false,
       error: err instanceof Error ? err.message : String(err),
     };
+  } finally {
+    consumeCreateLaunch(createArgs);
   }
 }

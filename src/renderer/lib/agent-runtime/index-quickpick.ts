@@ -162,7 +162,7 @@ function partition(entries: readonly AgentRuntimeIndexEntry[]): {
 
 /**
  * Index 发现列表唯一 builder（命令面板全量 + 标题栏 limit:8 共用）。
- * L4「跳到下一个」只走快捷键 `pier.agents.focusWaiting`，不在列表内嵌重复行
+ * L4「跳到下一个」走快捷键与命令面板 `pier.agents.focusWaiting`，不在列表内嵌重复行
  * （对齐 VS Code F8 / Slack 下一未读：零选择是快捷键，不是列表假条目）。
  */
 export function buildAgentIndexQuickPick(

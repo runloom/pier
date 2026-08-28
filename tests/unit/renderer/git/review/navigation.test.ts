@@ -6,7 +6,7 @@ import {
   resolveReviewSectionKey,
 } from "@plugins/builtin/git/renderer/review/navigation.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { patchDocument, stateDocument } from "./document-fixture.ts";
+import { patchDocument, stateDocument } from "./document/fixture.ts";
 
 afterEach(() => vi.restoreAllMocks());
 

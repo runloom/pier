@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const PATH = join(
   process.cwd(),
-  "src/renderer/lib/keybindings/use-registry.ts"
+  "src/renderer/lib/keybindings/native-forward-code.ts"
 );
 const SOURCE = readFileSync(PATH, "utf8");
 const ENTER_RETURN_RE = /return "Enter"/;

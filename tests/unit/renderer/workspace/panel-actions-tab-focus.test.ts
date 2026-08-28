@@ -105,6 +105,37 @@ describe("panel tab focus actions", () => {
     expect(scrollLeftFor(root)).toBe(88);
   });
 
+  it("cycles to the next tab and wraps in the active group", async () => {
+    const first = terminalPanel("terminal-1");
+    const second = terminalPanel("terminal-2");
+    const third = terminalPanel("terminal-3");
+    const activeGroup = {
+      activePanel: third,
+      id: "group-1",
+      panels: [first, second, third],
+    };
+    const api = {
+      activeGroup,
+      activePanel: third,
+      panels: [first, second, third],
+    };
+    useWorkspaceStore.getState().setApi(api as never);
+
+    disposePanelActions = registerPanelActions();
+    const next = actionRegistry.get("pier.panel.focusNextTab");
+    const prev = actionRegistry.get("pier.panel.focusPrevTab");
+    expect(next?.surfaces).toEqual(["command-palette"]);
+    expect(prev?.surfaces).toEqual(["command-palette"]);
+
+    await next?.handler();
+    expect(first.api.setActive).toHaveBeenCalledOnce();
+
+    api.activePanel = first;
+    activeGroup.activePanel = first;
+    await prev?.handler();
+    expect(third.api.setActive).toHaveBeenCalledOnce();
+  });
+
   it("ignores tab numbers outside the active group", () => {
     const first = terminalPanel("terminal-1");
     const second = terminalPanel("terminal-2");

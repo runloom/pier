@@ -144,6 +144,19 @@ export async function registerCliLocalControl({
   );
   core.services.controlBootId = bootId;
   core.services.controlSnapshot = snapshotService;
+  // §8 共享控制面单例：remote-control（移动端轨）经 services.controlPlane
+  // 复用同一批实例（快照/发现/运行时控制等），不另建第二实例（见
+  // command-router-services.ts CoreControlPlane）。
+  core.services.controlPlane = {
+    authorizer,
+    bootId,
+    capabilityAuthority,
+    discovery,
+    receipts,
+    resolveOriginPanel,
+    runtimeControl,
+    snapshotService,
+  };
   const server: PierLocalControlServer = createPierLocalControlServer({
     handleRequest(envelope, context) {
       const clientId = clientIdOf(envelope);
@@ -178,6 +191,7 @@ export async function registerCliLocalControl({
         unsubscribePanelClose();
         unsubscribePtyExit();
         Reflect.deleteProperty(core.services, "controlSnapshot");
+        Reflect.deleteProperty(core.services, "controlPlane");
         Reflect.deleteProperty(core.services, "controlBootId");
         await server.close();
       },

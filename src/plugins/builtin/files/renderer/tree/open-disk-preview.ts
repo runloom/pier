@@ -4,7 +4,7 @@
  */
 import { onFilesDiskPathOpened } from "@plugins/api/files-disk-path-opened.ts";
 import { seedFilesPanelView } from "../panel/transfer-state.ts";
-import { requestCanvasAnchorReveal } from "../preview/canvas.tsx";
+import { requestCanvasAnchorReveal } from "../preview/canvas-anchor-reveal.ts";
 
 export function registerFilesDiskOpenPreviewPrefer(): () => void {
   return onFilesDiskPathOpened((event) => {

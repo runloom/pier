@@ -79,6 +79,20 @@ export function registerCodexRpcHandlers(options: {
     releaseUsagePolling(consumerId);
     return null;
   });
+  rpc.handle("projection.accounts", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    return service.snapshot();
+  });
+  rpc.handle("projection.accounts.watch", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    await acquireUsagePolling("canvas-projection:accounts");
+    return null;
+  });
+  rpc.handle("projection.accounts.unwatch", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    releaseUsagePolling("canvas-projection:accounts");
+    return null;
+  });
   // v1.2 起 `usage.refreshCost` 由宿主 `window.pier.usageData.refreshAll()`
   // 通过 UsageSourceRegistry fan-out 到 registerSource 上报的 rescan 回调统一
   // 触发，Codex 不再对 renderer 暴露独立 RPC。

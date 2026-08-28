@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { attachWorkspaceTabStripBehavior } from "@/components/workspace/tab-strip-behavior.ts";
-import { withSuppressedTabReveal } from "@/lib/workspace/tab-reveal-suppress.ts";
+import {
+  resetTabRevealSuppressionForTests,
+  withSuppressedTabReveal,
+} from "@/lib/workspace/tab-reveal-suppress.ts";
 
 function setRect(
   element: HTMLElement,
@@ -98,6 +101,7 @@ function createApiMock(group: {
 describe("attachWorkspaceTabStripBehavior", () => {
   afterEach(() => {
     document.body.replaceChildren();
+    resetTabRevealSuppressionForTests();
     vi.unstubAllGlobals();
   });
 
@@ -181,6 +185,61 @@ describe("attachWorkspaceTabStripBehavior", () => {
     });
 
     expect(mounted.tabs.scrollLeft).toBe(0);
+    dispose();
+  });
+
+  it("does not reveal when pointerdown lands in panel content", () => {
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(performance.now());
+      return 1;
+    });
+
+    const mounted = mountGroupTab("terminal-1", 0);
+    const content = document.createElement("div");
+    content.className = "dv-content-container";
+    mounted.groupEl.append(content);
+    const group = {
+      activePanel: { id: "terminal-1" },
+      element: mounted.groupEl,
+      id: "group-1",
+    };
+    const { api, fireActiveGroup } = createApiMock(group);
+    const dispose = attachWorkspaceTabStripBehavior(
+      api as never,
+      document.body
+    );
+
+    content.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    fireActiveGroup(group);
+
+    expect(mounted.tabs.scrollLeft).toBe(0);
+    dispose();
+  });
+
+  it("still reveals when pointerdown is on the tab strip", () => {
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      cb(performance.now());
+      return 1;
+    });
+
+    const mounted = mountGroupTab("terminal-1", 0);
+    const group = {
+      activePanel: { id: "terminal-1" },
+      element: mounted.groupEl,
+      id: "group-1",
+    };
+    const { api, fireActiveGroup } = createApiMock(group);
+    const dispose = attachWorkspaceTabStripBehavior(
+      api as never,
+      document.body
+    );
+
+    mounted.tab.dispatchEvent(
+      new PointerEvent("pointerdown", { bubbles: true })
+    );
+    fireActiveGroup(group);
+
+    expect(mounted.tabs.scrollLeft).toBe(88);
     dispose();
   });
 });

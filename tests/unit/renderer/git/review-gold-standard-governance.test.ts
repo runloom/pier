@@ -26,6 +26,11 @@ describe("git review gold-standard governance", () => {
     expect(gold).toContain("lineDiffType");
     expect(gold).toContain("Zed Project Diff");
     expect(gold).toContain("DiffsHub");
+    expect(gold).toContain("≤ 1 CSS 像素");
+    expect(gold).toContain("文件 chrome");
+    expect(gold).toContain("headerFlushPx");
+    expect(gold).toContain("itemMetrics.spacing");
+    expect(gold).toContain("0 -1px");
   });
 
   it("locks hard bans against symptom patches and dual-track config", () => {
@@ -96,6 +101,9 @@ describe("git review gold-standard governance", () => {
     const loader = read(
       "src/plugins/builtin/git/renderer/review/document/loader.ts"
     );
+    const loaderRuntime = read(
+      "src/plugins/builtin/git/renderer/review/document/loader-runtime.ts"
+    );
     const generation = read(
       "src/plugins/builtin/git/renderer/hooks/use-document-generation-effect.ts"
     );
@@ -103,15 +111,23 @@ describe("git review gold-standard governance", () => {
       "src/plugins/builtin/git/renderer/review/document/ledger-projection.ts"
     );
     expect(hydrate).toContain("GIT_REVIEW_BODY_HYDRATE_TIMEOUT_MS = 8000");
+    expect(hydrate).toContain("GIT_REVIEW_SELECTED_BODY_HYDRATE_TIMEOUT_MS");
+    expect(hydrate).toContain("用户正在等这份正文");
     expect(loader).toContain("failHydrateTimeout");
-    expect(loader).toContain('reason: "timeout"');
+    expect(loaderRuntime).toContain('reason: "timeout"');
+    expect(loader).toContain("retryLoading");
     expect(generation).toContain("createHydrateTimeoutWatchdog");
     expect(generation).toContain("failHydrateTimeout");
     expect(ledger).toContain("projectionMissingSectionItem");
     expect(ledger).toContain("projection-empty");
+    const applyNav = read(
+      "src/plugins/builtin/git/renderer/review/document/apply-navigation-demand.ts"
+    );
+    expect(applyNav).toContain("先钉 selected 再 pump window");
+    expect(generation).toContain("liveSelected");
   });
 
-  it("G3: estimate skeleton geometry is single-sourced real DOM", () => {
+  it("G3: estimate skeleton and file chrome geometry are single-sourced", () => {
     const skeleton = read("packages/ui/src/diff-view/estimate-skeleton.ts");
     const geometry = read("packages/ui/src/diff-view/geometry.ts");
     const estimateHeight = read("packages/ui/src/diff-view/layout-apply.ts");
@@ -176,6 +192,21 @@ describe("git review gold-standard governance", () => {
     );
     expect(sessionCache).not.toContain("measuredEstimateLinesByPath");
     expect(estimates).not.toContain("recordReviewRenderedHeightEstimates");
+    const codeOptions = read("packages/ui/src/diff-view/use-code-options.ts");
+    const appearance = read("packages/ui/src/diff-view/appearance.ts");
+    expect(geometry).toContain("DIFF_CONTENT_PADDING_BOTTOM_PX");
+    expect(codeOptions).toContain(
+      "paddingBottom: metrics.contentPaddingBottom"
+    );
+    expect(codeOptions).toMatch(
+      /"--diffs-line-height": `\$\{metrics\.lineHeight\}px`/u
+    );
+    expect(codeOptions).not.toContain('"--diffs-line-height": "1.75"');
+    expect(appearance).toContain("--pier-diff-content-padding-bottom");
+    expect(appearance).not.toContain("data-pier-estimate-skeleton-fill");
+    expect(appearance).toContain(
+      '[data-overflow="wrap"][data-diff-type="split"]'
+    );
   });
 
   it("G4: pending_scroll boosts demand; settle is not navigation gate", () => {
@@ -203,29 +234,36 @@ describe("git review gold-standard governance", () => {
     expect(view).toContain("data-git-review-body-hydrate-timeout-ms");
   });
 
-  it("G5: Z1 content-only concurrent ≥8 is product path until Z2 stream", () => {
+  it("G5: Z2 excerpt batch is the product path; document is exception", () => {
     const options = read(
       "src/plugins/builtin/git/renderer/review/document/loader-options.ts"
     );
     const generation = read(
       "src/plugins/builtin/git/renderer/hooks/use-document-generation-effect.ts"
     );
+    const excerptClient = read(
+      "src/plugins/builtin/git/renderer/review/document/excerpt-client.ts"
+    );
+    const loaderBatch = read(
+      "src/plugins/builtin/git/renderer/review/document/loader-batch.ts"
+    );
     const demandHook = read(
       "src/plugins/builtin/git/renderer/hooks/use-document-demand.ts"
     );
     const changelog = read("CHANGELOG.md");
-    expect(options).toMatch(
-      /DEFAULT_MAX_CONCURRENT_DOCUMENTS\s*=\s*(?:1[2-9]|[2-9]\d+)/u
-    );
+    expect(options).toContain("GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT = 2");
+    expect(generation).toContain("loadReviewExcerptBatch");
+    expect(generation).toContain("GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT");
+    expect(excerptClient).toContain("getReviewExcerptBatch");
+    expect(loaderBatch).toContain("禁止塞进同一轮刚启动的批摘录");
     expect(generation).toContain("reviewContentEntryKeysInOrder");
     expect(generation).toContain(
       "gitReviewSeedEntryKeys(contentEntryKeysInOrder)"
     );
     expect(generation).toContain("tickHydrateTimeout()");
     expect(demandHook).toContain("isReviewEntryBodyHydratable");
-    // Z2 未合入时必须 changelog 明示风险
+    expect(changelog).toContain("getReviewExcerptBatch");
     expect(changelog).toContain("Z2");
-    expect(changelog).toContain("未完成");
   });
 
   it("G6: e2e probe coverage for hydrate timeout and pure-rename empty body", () => {
@@ -235,5 +273,11 @@ describe("git review gold-standard governance", () => {
     expect(e2e).toContain("data-git-review-body-hydrate-timeout-ms");
     expect(e2e).toContain("data-git-review-navigation-gate");
     expect(e2e).toContain('data-git-review-document-content="empty"');
+    const collapseNav = read("tests/e2e/git/review-collapse-nav.spec.ts");
+    expect(collapseNav).toContain("headerFlushPx");
+    expect(collapseNav).toContain("toBeLessThanOrEqual(1)");
+    expect(collapseNav).toContain(
+      "expanded previous files tree navigation pins later files flush"
+    );
   });
 });

@@ -5,16 +5,16 @@ import {
   formatRelativeTime,
 } from "@pier/ui/format.tsx";
 import type { JSX } from "react";
+import {
+  type AccountMetadataBadgeMode,
+  membershipNeedsAttention,
+  membershipPeriodNeedsAttention,
+} from "./membership-attention.ts";
 import type { AccountMembershipSnapshot } from "./membership-cache.ts";
 import type {
   AccountUsageMetric,
   AccountUsageScalarMetric,
 } from "./usage-cache.ts";
-import {
-  type AccountMetadataBadgeMode,
-  membershipNeedsAttention,
-  membershipPeriodNeedsAttention,
-} from "./widget-presentation.ts";
 
 export interface AccountMetadataBadgesCopy {
   /** Fallback when cancel-at-period-end has no usable end date. */

@@ -16,8 +16,8 @@ import {
 import { createReviewCollidingFileLabel, pluginText } from "../plugin-text.ts";
 import {
   buildReviewCommentNavTargets,
-  mapCommentSideToDiffView,
   type ReviewCommentNavTarget,
+  revealReviewCommentNavTarget,
 } from "../review/comments/nav-targets.ts";
 import type { GitReviewReadingSurface } from "../review/reading-surface.ts";
 import type { ReviewTreeOpenReveal } from "../review/surface-types.ts";
@@ -25,7 +25,8 @@ import { usePluginLanguage } from "../use-plugin-language.ts";
 
 /**
  * Diff 评论导航：有存活 git-diff 评论时暴露浮动条数据与动作。
- * - 上下：在当前阅读面目标列表循环，优先 scrollToLine，失败再 tree open + reveal。
+ * - 上下 / n/N：目标文件已在视口内时 scrollToLine；否则 tree open +
+ *   pending_scroll 后再行级 reveal（估高一次滚动会打偏，连点才准）。
  * - 清除：确认后逐条 soft-delete 存活评论。
  */
 export function useReviewCommentNavigator(options: {
@@ -101,19 +102,10 @@ export function useReviewCommentNavigator(options: {
 
   const revealTarget = useCallback(
     (target: ReviewCommentNavTarget) => {
-      const side = mapCommentSideToDiffView(target.side);
-      const scrolled =
-        diffHandleRef.current?.scrollToLine(
-          target.sectionKey,
-          target.line,
-          side
-        ) === true;
-      if (scrolled) {
-        return;
-      }
-      onRequestTreeOpen(target.entryKey, target.sectionKey, target.group, {
-        line: target.line,
-        side: target.side,
+      revealReviewCommentNavTarget({
+        handle: diffHandleRef.current,
+        onRequestTreeOpen,
+        target,
       });
     },
     [diffHandleRef, onRequestTreeOpen]
@@ -158,9 +150,7 @@ export function useReviewCommentNavigator(options: {
     }
     const target = targets[Math.min(activeIndex, total - 1)];
     if (target !== undefined) {
-      queueMicrotask(() => {
-        revealTarget(target);
-      });
+      revealTarget(target);
     }
   }, [activeIndex, revealTarget, targets, total]);
 

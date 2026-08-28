@@ -230,31 +230,29 @@ final class TerminalSurfaceCoordinator {
             return
         }
 
-        let pixelWidth = UInt32((size.width * scale).rounded(.down))
-        let pixelHeight = UInt32((size.height * scale).rounded(.down))
-        guard pixelWidth > 0, pixelHeight > 0 else {
+        guard let pixels = TerminalPixelGeometry.pixels(size: size, scale: scale) else {
             TerminalDebugLog.log(
                 .metrics,
-                "synchronizeMetrics skipped: invalid pixel size=\(pixelWidth)x\(pixelHeight)"
+                "synchronizeMetrics skipped: invalid pixel size for view=\(String(format: "%.2f", size.width))x\(String(format: "%.2f", size.height)) scale=\(String(format: "%.2f", scale))"
             )
             return
         }
 
         TerminalDebugLog.log(
             .metrics,
-            "sync view=\(String(format: "%.2f", size.width))x\(String(format: "%.2f", size.height)) scale=\(String(format: "%.2f", scale)) pixels=\(pixelWidth)x\(pixelHeight)"
+            "sync view=\(String(format: "%.2f", size.width))x\(String(format: "%.2f", size.height)) scale=\(String(format: "%.2f", scale)) pixels=\(pixels.width)x\(pixels.height)"
         )
 
         surface.setContentScale(x: scale, y: scale)
-        surface.setSize(width: pixelWidth, height: pixelHeight)
+        surface.setSize(width: pixels.width, height: pixels.height)
         if currentPresentationRequest?.surfaceGeneration != surfaceGeneration
-            || currentPresentationRequest?.pixelWidth != pixelWidth
-            || currentPresentationRequest?.pixelHeight != pixelHeight
+            || currentPresentationRequest?.pixelWidth != pixels.width
+            || currentPresentationRequest?.pixelHeight != pixels.height
         {
             presentationRequestSequence &+= 1
             let request = TerminalFramePresentationRequest(
-                pixelHeight: pixelHeight,
-                pixelWidth: pixelWidth,
+                pixelHeight: pixels.height,
+                pixelWidth: pixels.width,
                 requestSequence: presentationRequestSequence,
                 surfaceGeneration: surfaceGeneration
             )
@@ -297,23 +295,46 @@ final class TerminalSurfaceCoordinator {
     func fitToSize() {
         if surface == nil {
             rebuildIfReady()
-        } else {
-            synchronizeMetrics()
         }
-        if surface != nil {
-            requestSurfaceRefresh(
-                generation: surfaceGeneration,
-                reason: "fit-to-size"
-            )
-        }
-    }
 
-    func resizeAndRenderSynchronously() {
+        guard surface != nil else { return }
+
+        let scale = scaleFactor()
+        guard let pixels = TerminalPixelGeometry.pixels(size: viewSize(), scale: scale) else {
+            return
+        }
+
+        // Scrollbar / layout churn with unchanged pixels must not refresh —
+        // that feedback loop is the long-session continuous flash trigger.
+        if let surface, surface.matchesAppliedMetrics(pixels: pixels, scale: scale) {
+            TerminalDebugLog.log(
+                .metrics,
+                "fitToSize skipped: unchanged \(pixels.width)x\(pixels.height)@\(String(format: "%.2f", scale))"
+            )
+            return
+        }
+
         synchronizeMetrics()
         requestSurfaceRefresh(
             generation: surfaceGeneration,
-            reason: "host-resize"
+            reason: "fit-to-size"
         )
+    }
+
+    func resizeAndRenderSynchronously() {
+        // Host frame path already no-ops when the NSView frame is unchanged.
+        // Always sync metrics + present here so the matching IOSurface lands in
+        // the same CATransaction as applyHostFrame — even when fitToSize just
+        // applied the same pixels during synchronizeChildFrames.
+        synchronizeMetrics()
+        if canRenderFrame {
+            renderImmediately()
+        } else {
+            requestSurfaceRefresh(
+                generation: surfaceGeneration,
+                reason: "host-resize"
+            )
+        }
     }
 
     func requestHostPresentationFrame() {
@@ -443,6 +464,8 @@ final class TerminalSurfaceCoordinator {
         if let session = configuration.inMemorySession {
             session.clearSurface(ifMatches: surface?.rawValue)
         }
+        previousBridge?.cancelPendingClipboardConfirmation()
+        previousBridge?.completeInFlightClipboardConfirmIfNeeded()
         previousBridge?.rawSurface = nil
         let hadSurface = surface != nil
         surface?.setFocus(false)
@@ -510,14 +533,17 @@ final class TerminalSurfaceCoordinator {
               !refreshScheduled
         else { return }
         refreshScheduled = true
+        // Always hop via main.async — even when already on the main thread.
+        // RENDER actions arrive inside `ghostty_app_tick`; drawing inline there
+        // re-enters Metal.drawFrame while its unfair lock is held and aborts.
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard generation == surfaceGeneration else { return }
-            refreshScheduled = false
-            guard refreshPending, canRenderFrame else { return }
-            refreshPending = false
+            guard generation == self.surfaceGeneration else { return }
+            self.refreshScheduled = false
+            guard self.refreshPending, self.canRenderFrame else { return }
+            self.refreshPending = false
             TerminalDebugLog.log(.render, "surface refresh")
-            surface?.refresh()
+            self.surface?.refresh()
         }
     }
 
@@ -540,15 +566,15 @@ final class TerminalSurfaceCoordinator {
         drawScheduled = true
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            guard generation == surfaceGeneration else { return }
-            drawScheduled = false
-            guard drawPending, canRenderFrame else { return }
-            drawPending = false
-            drawSequence &+= 1
-            lastDrawnGhosttyRenderReadySequence = ghosttyRenderReadySequence
-            lastDrawUptime = ProcessInfo.processInfo.systemUptime
+            guard generation == self.surfaceGeneration else { return }
+            self.drawScheduled = false
+            guard self.drawPending, self.canRenderFrame else { return }
+            self.drawPending = false
+            self.drawSequence &+= 1
+            self.lastDrawnGhosttyRenderReadySequence = self.ghosttyRenderReadySequence
+            self.lastDrawUptime = ProcessInfo.processInfo.systemUptime
             TerminalDebugLog.log(.render, "surface draw ready frame")
-            drawCurrentSurface()
+            self.drawCurrentSurface()
         }
     }
 

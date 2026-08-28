@@ -4,21 +4,14 @@ import type {
   RendererPluginQuickPick as ExternalPluginQuickPick,
   ExternalRendererPluginContext,
   RendererSettingsPageRegistration as ExternalSettingsPageRegistration,
-  RendererWorkbenchWidgetRegistration as ExternalWorkbenchWidgetRegistration,
 } from "@pier/plugin-api/renderer";
-import type {
-  RendererPluginQuickPick as HostPluginQuickPick,
-  WorkbenchWidgetComponentProps as HostWorkbenchWidgetComponentProps,
-  WorkbenchWidgetSettingsProps as HostWorkbenchWidgetSettingsProps,
-} from "@plugins/api/renderer.ts";
+import type { RendererPluginQuickPick as HostPluginQuickPick } from "@plugins/api/renderer.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
   collectEnabledConfigurationProperties,
   effectiveConfigurationValue,
 } from "@shared/plugin-settings.ts";
 import i18next from "i18next";
-import { KeyRound, type LucideIcon } from "lucide-react";
-import type { FunctionComponent } from "react";
 import { toast } from "sonner";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { reportPluginSystemEvent } from "@/lib/plugins/notification-report.ts";
@@ -42,10 +35,6 @@ import {
   getPluginSettingsPage,
   registerPluginSettingsPage,
 } from "../settings-page-registry.ts";
-import {
-  assertPluginWorkbenchWidgetRegistration,
-  registerPluginWorkbenchWidget,
-} from "../workbench-widget-registry.ts";
 import type { ExternalRendererActivationScope } from "./activation-scope.ts";
 
 /**
@@ -106,43 +95,6 @@ export function createExternalRendererPluginContext(
   const track = (dispose: () => void): (() => void) =>
     scope?.add(dispose) ?? dispose;
   const hostCommandPalette = createPluginCommandPaletteContext();
-  const workbenchWidgets: ExternalRendererPluginContext["workbenchWidgets"] = {
-    register: (registration: ExternalWorkbenchWidgetRegistration) => {
-      assertPluginWorkbenchWidgetRegistration(entry, registration);
-      const title = registration.title;
-      return track(
-        registerPluginWorkbenchWidget({
-          ...(registration.actions
-            ? {
-                actions: registration.actions as NonNullable<
-                  import("@plugins/api/renderer.ts").RendererWorkbenchWidgetRegistration["actions"]
-                >,
-              }
-            : {}),
-          component:
-            registration.component as FunctionComponent<HostWorkbenchWidgetComponentProps>,
-          ...(registration.contentMode
-            ? { contentMode: registration.contentMode }
-            : {}),
-          icon: (registration.icon ?? KeyRound) as LucideIcon,
-          id: registration.id,
-          ...(registration.previewComponent
-            ? {
-                previewComponent:
-                  registration.previewComponent as FunctionComponent,
-              }
-            : {}),
-          ...(registration.settingsComponent
-            ? {
-                settingsComponent:
-                  registration.settingsComponent as FunctionComponent<HostWorkbenchWidgetSettingsProps>,
-              }
-            : {}),
-          ...(title === undefined ? {} : { title: () => resolveTitle(title) }),
-        })
-      );
-    },
-  };
 
   const context: ExternalRendererPluginContext = {
     app: {
@@ -230,7 +182,6 @@ export function createExternalRendererPluginContext(
         );
       },
     },
-    workbenchWidgets,
     settingsPages: {
       register: (registration: ExternalSettingsPageRegistration) => {
         assertDeclared(entry, "settingsPage", registration.id);
@@ -403,12 +354,5 @@ export function createExternalRendererPluginContext(
     },
   };
 
-  // 只给已安装的 apiVersion 1 旧包提供不可枚举运行时别名；公开类型和新包只使用新键。
-  Object.defineProperty(context, "missionControlWidgets", {
-    configurable: false,
-    enumerable: false,
-    value: workbenchWidgets,
-    writable: false,
-  });
   return context;
 }

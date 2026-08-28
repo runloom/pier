@@ -1,9 +1,0 @@
-{
-  "schemaVersion": 1,
-  "content": "design-doc",
-  "presentation": "decision_nav_4",
-  "ui": "pier-default",
-  "status": "draft",
-  "role": "overview",
-  "source": "v3 金标准：设置→项目一个物料列表；类型只做筛选；否决并排 Kit 与登记文件"
-}

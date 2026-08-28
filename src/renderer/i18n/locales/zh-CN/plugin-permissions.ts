@@ -14,6 +14,8 @@ export const pluginPermissions = {
   "panel:read": "读取面板状态",
   "panel:register": "注册面板",
   "plugin:read": "读取插件信息",
+  "plugin:action": "在画布中调用插件已声明的动作",
+  "canvas:command": "运行画布已声明的命令",
   "plugin:write": "修改插件状态",
   "preferences:read": "读取偏好设置",
   "preferences:write": "修改偏好设置",
@@ -44,4 +46,7 @@ export const pluginPermissions = {
   "comments:write": "发表评审评论",
   "notification:read": "读取通知",
   "notification:write": "标记通知为已读",
+  "managedAssets:write": "写入受管智能体配置",
+  "remote-access:read": "查看移动端接入状态",
+  "remote-access:control": "管理移动端配对与设备",
 } as const;

@@ -29,6 +29,11 @@ describe("file preview startup governance", () => {
     expect(bootstrapSource).toContain("handleFilePreviewProtocol()");
     expect(bootstrapSource).toContain("registerLiveModuleProtocolScheme()");
     expect(bootstrapSource).toContain("attachLiveModuleProtocolHandler()");
+    expect(bootstrapSource).toContain("registerHtmlPreviewScheme()");
+    expect(bootstrapSource).toContain("handleHtmlPreviewProtocol()");
+    expect(bootstrapSource).toContain("registerPreviewRequestGuards()");
+    expect(bootstrapSource).not.toContain("registerFilePreviewRequestGuard()");
+    expect(bootstrapSource).not.toContain("registerHtmlPreviewRequestGuard()");
 
     const schemeFnIndex = bootstrapSource.indexOf(
       "export function registerPrivilegedProtocolSchemes"
@@ -48,5 +53,14 @@ describe("file preview startup governance", () => {
     expect(filePreviewSchemeIndex).toBeGreaterThan(schemeFnIndex);
     expect(filePreviewSchemeIndex).toBeLessThan(handlerFnIndex);
     expect(filePreviewHandlerIndex).toBeGreaterThan(handlerFnIndex);
+    const htmlPreviewSchemeIndex = bootstrapSource.indexOf(
+      "registerHtmlPreviewScheme()"
+    );
+    const htmlPreviewHandlerIndex = bootstrapSource.indexOf(
+      "handleHtmlPreviewProtocol()"
+    );
+    expect(htmlPreviewSchemeIndex).toBeGreaterThan(schemeFnIndex);
+    expect(htmlPreviewSchemeIndex).toBeLessThan(handlerFnIndex);
+    expect(htmlPreviewHandlerIndex).toBeGreaterThan(handlerFnIndex);
   });
 });

@@ -2,6 +2,7 @@
  * Project content search panel (Cmd+Shift+F).
  * Design: docs/superpowers/specs/2026-07-27-files-content-search-design.md
  */
+import { usePanelFind } from "@plugins/api/panel-find.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type { FileContentQueryItem } from "@shared/contracts/file/query.ts";
@@ -263,6 +264,10 @@ export function createFilesContentSearchPanel(
     }, []);
 
     const statusText = contentSearchStatusText({ conditions, snapshot, t });
+    const focusQuery = useCallback(() => {
+      document.getElementById("files-content-search-query")?.focus();
+    }, []);
+    usePanelFind(props.api?.id, focusQuery);
 
     return (
       <div

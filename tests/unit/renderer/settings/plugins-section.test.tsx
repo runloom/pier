@@ -28,7 +28,7 @@ function entry(id: string, enabled: boolean): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },
@@ -50,8 +50,6 @@ const INITIAL_STORE_STATE = {
   initialized: false,
   plugins: [],
 };
-
-const WORKBENCH_WIDGETS_SUMMARY_RE = /2 Workbench widgets/i;
 
 function emptyManagedCatalog() {
   return {
@@ -468,26 +466,5 @@ describe("PluginsSection", () => {
       screen.queryByTestId("plugin-settings-link-pier.git")
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Settings")).not.toBeInTheDocument();
-  });
-
-  it("contributionSummary 显示 workbenchWidgets 计数", () => {
-    const e = entry("pier.dash", true);
-    e.manifest.workbenchWidgets = [
-      { id: "w1", permissions: [], title: "W1" },
-      { id: "w2", permissions: [], title: "W2" },
-    ];
-    usePluginRegistryStore.setState({
-      diagnostics: [],
-      error: null,
-      initialized: true,
-      plugins: [e],
-    });
-
-    render(<PluginsSection />);
-
-    const pluginRow = screen.getByText("pier.dash");
-    fireEvent.click(pluginRow);
-
-    expect(screen.getByText(WORKBENCH_WIDGETS_SUMMARY_RE)).toBeInTheDocument();
   });
 });

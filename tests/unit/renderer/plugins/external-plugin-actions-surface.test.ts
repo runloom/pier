@@ -18,7 +18,7 @@ function externalEntry(
         ...command,
         permissions: [],
       })),
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },

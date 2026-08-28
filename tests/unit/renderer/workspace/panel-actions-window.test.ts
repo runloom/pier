@@ -60,6 +60,20 @@ describe("panel window actions", () => {
     }
   });
 
+  it("exposes new tab in the command palette and create-menu after workbench teardown", async () => {
+    const { registerPanelActions } = await import(
+      "@/lib/actions/panel-actions.ts"
+    );
+
+    const dispose = registerPanelActions();
+    try {
+      const action = actionRegistry.get("pier.panel.newTab");
+      expect(action?.surfaces).toEqual(["command-palette", "create-menu"]);
+    } finally {
+      dispose();
+    }
+  });
+
   it("shows window creation failures with localized title and raw detail", async () => {
     createWindow.mockRejectedValueOnce(new Error("window detail"));
     const { registerPanelActions } = await import(

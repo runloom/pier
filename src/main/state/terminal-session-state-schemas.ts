@@ -36,7 +36,9 @@ export const terminalAgentPanelMetadataSchema = z.object({
     .optional(),
   restore: z
     .object({
+      cause: z.literal("host-teardown").optional(),
       detachedAt: z.number().int().nonnegative().optional(),
+      spawnGeneration: z.number().int().positive().optional(),
     })
     .optional(),
   startedAt: z.number().int().nonnegative(),
@@ -77,6 +79,14 @@ export const terminalPanelSessionSchema = z.preprocess(
   scrubLegacyAgentSessionTitle,
   z.object({
     agent: terminalAgentPanelMetadataSchema.optional(),
+    pendingResume: z
+      .object({
+        agentId: agentKindSchema,
+        capturedAt: z.number().int().nonnegative(),
+        sessionId: z.string().min(1).max(128),
+        source: z.literal("hook"),
+      })
+      .optional(),
     context: panelContextSchema.optional(),
     tab: z.preprocess(
       normalizePanelTabChromeInput,

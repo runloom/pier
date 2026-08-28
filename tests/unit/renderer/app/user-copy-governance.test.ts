@@ -11,6 +11,7 @@ const LOCALE_ROOTS = [
   join(ROOT, "src", "renderer", "i18n", "locales", "ko"),
   join(ROOT, "src", "plugins", "builtin", "files", "locales"),
   join(ROOT, "src", "plugins", "builtin", "git", "locales"),
+  join(ROOT, "src", "plugins", "builtin", "memory", "locales"),
 ] as const;
 
 /** 中文用户串禁用实现词 / 中英混用。只扫字符串值，不扫 key。 */
@@ -232,19 +233,7 @@ describe("user-facing copy governance", () => {
     expect(agentContext).toContain(
       "tests/unit/renderer/app/user-copy-governance.test.ts"
     );
-    expect(agentContext).toContain("工作台「组件」");
     expect(agentContext).toContain("Canvas 发现面「物料」");
-  });
-
-  it("keeps workbench Chinese copy on 组件, not 物料", () => {
-    const workbench = readFileSync(
-      join(ROOT, "src", "renderer", "i18n", "locales", "zh-CN", "workbench.ts"),
-      "utf8"
-    );
-    const hits = findBannedHits(extractTsStringLiterals(workbench), [
-      { id: "物料", pattern: /物料/ },
-    ]);
-    expect(hits).toEqual([]);
   });
 
   it("keeps Chinese locale string values free of implementation jargon", () => {

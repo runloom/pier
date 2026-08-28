@@ -67,9 +67,6 @@ interface WorkspaceState {
     tab?: PanelTabChrome;
     task?: TaskPanelMetadata;
   }) => string | null;
-  addWorkbench: (opts?: {
-    referenceGroup?: WorkspaceGroupRef;
-  }) => string | null;
   api: DockviewApi | null;
   closeActivePanel: () => Promise<boolean>;
   closeAll: () => Promise<void>;
@@ -82,6 +79,8 @@ interface WorkspaceState {
   closePanel: (panelId: string) => Promise<boolean>;
   /** 关闭同组中位于 source 右侧的 tabs（按 group.panels 顺序）。 */
   closeToTheRight: (panelId: string) => Promise<void>;
+  /** Cycle tabs in the active group; wraps. Positive = next. */
+  cycleActiveGroupTab: (delta: number) => void;
   equalizePanelGroup: (input: {
     axis: "horizontal" | "vertical";
     panelIds: readonly string[];
@@ -119,6 +118,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
     const targetPanel = api.activeGroup?.panels[index];
     if (!targetPanel) {
+      return;
+    }
+    activateWorkspacePanel(api, targetPanel.id, {
+      reveal: "always",
+    });
+  },
+  cycleActiveGroupTab: (delta) => {
+    const api = get().api;
+    const panels = api?.activeGroup?.panels;
+    if (!(api && panels && panels.length > 0 && Number.isInteger(delta))) {
+      return;
+    }
+    const currentId = api.activePanel?.id;
+    const currentIndex = panels.findIndex((panel) => panel.id === currentId);
+    const from = currentIndex < 0 ? 0 : currentIndex;
+    const nextIndex = (from + delta + panels.length) % panels.length;
+    const targetPanel = panels[nextIndex];
+    if (!targetPanel || targetPanel.id === currentId) {
       return;
     }
     activateWorkspacePanel(api, targetPanel.id, {
@@ -255,28 +272,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     } else {
       scheduleRevealDockviewTabByPanelId(id);
     }
-    return id;
-  },
-  addWorkbench(opts) {
-    const api = get().api;
-    if (!api) {
-      return null;
-    }
-    const id = uniquePanelId(api, "workbench");
-    const activeGroup = opts?.referenceGroup ?? api.activeGroup;
-    const fallbackPosition = activeGroup
-      ? { referenceGroup: activeGroup, direction: "within" as const }
-      : { direction: "right" as const };
-    // 工作台是全局 panel：不持有项目路径。其上的路径依赖操作（新建终端/任务等）
-    // 因无 context 而禁用，不会回落到同组终端 cwd。
-    api.addPanel({
-      id,
-      component: "workbench",
-      title: "Workbench",
-      params: { widgets: [] },
-      position: fallbackPosition,
-    });
-    scheduleRevealDockviewTabByPanelId(id);
     return id;
   },
   closeActivePanel: async () => closeActivePanelImpl(get),

@@ -14,7 +14,9 @@ const CANVAS_PATH = ".pier/canvases/demo/hello.canvas.tsx";
 const PROJECT_ROOT = "/Users/dev/app";
 
 function installFilesApi(overrides: {
+  invoke?: ReturnType<typeof vi.fn>;
   readDocument?: ReturnType<typeof vi.fn>;
+  watch?: ReturnType<typeof vi.fn>;
   writeDocument?: ReturnType<typeof vi.fn>;
 }) {
   const readDocument =
@@ -29,8 +31,15 @@ function installFilesApi(overrides: {
   const writeDocument =
     overrides.writeDocument ??
     vi.fn(() => Promise.resolve({ kind: "written", revision: "rev-2" }));
-  window.pier = { files: { readDocument, writeDocument } } as never;
-  return { readDocument, writeDocument };
+  const watch = overrides.watch ?? vi.fn(() => () => undefined);
+  const invoke =
+    overrides.invoke ??
+    vi.fn(() => Promise.resolve({ kind: "started", runId: "run-1" }));
+  window.pier = {
+    canvasHost: { invoke },
+    files: { readDocument, watch, writeDocument },
+  } as never;
+  return { invoke, readDocument, watch, writeDocument };
 }
 
 /** Render `useCanvasFile()` and hand the API back for direct assertions. */
@@ -154,5 +163,127 @@ describe("useCanvasFile", () => {
       ),
     });
     await expect(mountHook(true).read("logo.png")).rejects.toThrow();
+  });
+
+  it("writes a file one folder down from the canvas", async () => {
+    const { writeDocument } = installFilesApi({});
+    await mountHook(true).write("state/data.json", "{}\n", "rev-1");
+    expect(writeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: ".pier/canvases/demo/state/data.json",
+      })
+    );
+  });
+
+  it("watches the sibling path and ignores other files", () => {
+    let listener:
+      | ((event: {
+          changes: readonly {
+            kind: "changed" | "created" | "deleted";
+            path: string;
+          }[];
+          root: string;
+        }) => void)
+      | undefined;
+    const unsubscribe = vi.fn();
+    const watch = vi.fn((_root: string, callback: typeof listener) => {
+      listener = callback;
+      return unsubscribe;
+    });
+    installFilesApi({ watch });
+    const onEvent = vi.fn();
+    const stop = mountHook(true).watch("data.json", onEvent);
+
+    expect(watch).toHaveBeenCalledWith(PROJECT_ROOT, expect.any(Function));
+    listener?.({
+      changes: [
+        { kind: "changed", path: ".pier/canvases/demo/other.json" },
+        { kind: "changed", path: ".pier/canvases/demo/data.json" },
+      ],
+      root: PROJECT_ROOT,
+    });
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    expect(onEvent).toHaveBeenCalledWith({
+      kind: "changed",
+      path: ".pier/canvases/demo/data.json",
+    });
+    stop();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("watches a one-folder nested sibling", () => {
+    let listener:
+      | ((event: {
+          changes: readonly { kind: "created"; path: string }[];
+          root: string;
+        }) => void)
+      | undefined;
+    installFilesApi({
+      watch: vi.fn((_root: string, callback: typeof listener) => {
+        listener = callback;
+        return () => undefined;
+      }),
+    });
+    const onEvent = vi.fn();
+    mountHook(true).watch("state/positions.json", onEvent);
+    listener?.({
+      changes: [
+        {
+          kind: "created",
+          path: ".pier/canvases/demo/state/positions.json",
+        },
+      ],
+      root: PROJECT_ROOT,
+    });
+    expect(onEvent).toHaveBeenCalledWith({
+      kind: "created",
+      path: ".pier/canvases/demo/state/positions.json",
+    });
+  });
+
+  it("refuses watch names outside the canvas folder", () => {
+    const { watch } = installFilesApi({});
+    const api = mountHook(true);
+    expect(() => api.watch("../escape.json", () => undefined)).toThrow();
+    expect(() => api.watch("a/b/c.json", () => undefined)).toThrow();
+    expect(watch).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op watch without a canvas file scope", () => {
+    const { watch } = installFilesApi({});
+    const stop = mountHook(false).watch("data.json", () => undefined);
+    expect(watch).not.toHaveBeenCalled();
+    expect(() => stop()).not.toThrow();
+  });
+
+  it("invokes a declared canvas command through canvasHost", async () => {
+    const { invoke } = installFilesApi({});
+    await expect(mountHook(true).invokeCommand("refresh")).resolves.toEqual({
+      kind: "started",
+      runId: "run-1",
+    });
+    expect(invoke).toHaveBeenCalledWith({
+      payload: {
+        canvasPath: CANVAS_PATH,
+        key: "refresh",
+        projectRootPath: PROJECT_ROOT,
+      },
+      type: "canvasCommand.invoke",
+    });
+  });
+
+  it("returns cancelled when the host confirms a decline", async () => {
+    installFilesApi({
+      invoke: vi.fn(() => Promise.resolve({ kind: "cancelled" })),
+    });
+    await expect(mountHook(true).invokeCommand("refresh")).resolves.toEqual({
+      kind: "cancelled",
+    });
+  });
+
+  it("surfaces an invoke failure without a canvas file scope", async () => {
+    installFilesApi({});
+    const result = await mountHook(false).invokeCommand("refresh");
+    expect(result.kind).toBe("failed");
   });
 });

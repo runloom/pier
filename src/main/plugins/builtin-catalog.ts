@@ -7,6 +7,9 @@ import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
 import { GIT_PLUGIN_LOCALES } from "@plugins/builtin/git/locales/index.ts";
 import { gitMainPlugin } from "@plugins/builtin/git/main/index.ts";
 import { GIT_PLUGIN_MANIFEST } from "@plugins/builtin/git/manifest.ts";
+import { MEMORY_PLUGIN_LOCALES } from "@plugins/builtin/memory/locales/index.ts";
+import { memoryMainPlugin } from "@plugins/builtin/memory/main/index.ts";
+import { MEMORY_PLUGIN_MANIFEST } from "@plugins/builtin/memory/manifest.ts";
 import type { PluginDiscoverySource } from "../services/plugin-service.ts";
 
 export type BuiltinPluginSource = Extract<
@@ -18,12 +21,13 @@ export type BuiltinPluginSource = Extract<
   main: MainPluginModule;
 };
 
-type BuiltinPluginFolder = "files" | "git";
+type BuiltinPluginFolder = "files" | "git" | "memory";
 
 function pluginPackageBaseDir(pluginId: BuiltinPluginFolder): string {
   const urlByPlugin = {
     files: new URL("../../plugins/builtin/files/", import.meta.url),
     git: new URL("../../plugins/builtin/git/", import.meta.url),
+    memory: new URL("../../plugins/builtin/memory/", import.meta.url),
   } satisfies Record<BuiltinPluginFolder, URL>;
   const url = urlByPlugin[pluginId];
   if (url.protocol === "file:") {
@@ -54,6 +58,15 @@ export const BUILTIN_PLUGIN_SOURCES = [
     locales: FILES_PLUGIN_LOCALES,
     main: filesMainPlugin,
     manifest: FILES_PLUGIN_MANIFEST,
+  },
+  {
+    baseDir: pluginPackageBaseDir("memory"),
+    defaultEnabled: true,
+    id: MEMORY_PLUGIN_MANIFEST.id,
+    kind: "builtin",
+    locales: MEMORY_PLUGIN_LOCALES,
+    main: memoryMainPlugin,
+    manifest: MEMORY_PLUGIN_MANIFEST,
   },
 ] satisfies readonly BuiltinPluginSource[];
 

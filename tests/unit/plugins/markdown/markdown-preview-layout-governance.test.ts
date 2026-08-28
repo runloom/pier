@@ -137,6 +137,10 @@ describe("markdown preview layout governance", () => {
     );
     expect(proseCss).toContain("--md-measure:");
     expect(proseCss).toContain("max-width: var(--md-measure)");
+    expect(proseCss).toContain("--md-measure-comfortable: 42rem");
+    // anywhere (not break-word) so long tokens shrink min-content to the measure.
+    expect(proseCss).toContain("overflow-wrap: anywhere");
+    expect(proseCss).not.toMatch(/--md-measure:\s*85ch/);
   });
 
   it("shares viewport focus band between TOC spy and cross-mode anchors", () => {

@@ -90,6 +90,8 @@ export function ResolvedFilePanelActions({
   const supportsPreview =
     document.language === "markdown" ||
     document.language === "canvas" ||
+    (document.language === "html" && document.source.kind === "disk") ||
+    (document.language === "svg" && document.source.kind === "disk") ||
     (document.source.kind === "disk" &&
       isProjectCanvasPath(document.source.path, contentDirectories));
   const isCanvas =
@@ -125,7 +127,9 @@ export function ResolvedFilePanelActions({
           if (
             mode === "preview" &&
             language !== "markdown" &&
-            language !== "canvas"
+            language !== "canvas" &&
+            language !== "html" &&
+            language !== "svg"
           ) {
             if (panelId) {
               controller.setPanelMode(panelId, "source");

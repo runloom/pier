@@ -48,6 +48,7 @@ jobs:
         if: steps.generate.outputs.slug != ''
         env:
           BLOG_PAT: ${{ secrets.BLOG_PAT }}
+          GH_TOKEN: ${{ secrets.BLOG_PAT }}
         run: |
           set -euo pipefail
           if [ -z "$BLOG_PAT" ]; then
@@ -58,8 +59,16 @@ jobs:
           BRANCH="blog/$SLUG"
           git clone --depth 1 "https://x-access-token:${BLOG_PAT}@github.com/runloom/pier-website.git" /tmp/pier-site
           cd /tmp/pier-site
+          if gh pr view --repo runloom/pier-website "$BRANCH" >/dev/null 2>&1; then
+            echo "已有对应 PR，跳过"
+            exit 0
+          fi
           if git ls-remote --heads origin "$BRANCH" | grep -q "refs/heads/$BRANCH"; then
-            echo "分支 $BRANCH 已存在（可能已有对应 PR），跳过"
+            echo "分支 $BRANCH 已存在但无 PR，补开"
+            gh pr create --repo runloom/pier-website --base main --head "$BRANCH" \
+              --title "博客：Pier $SLUG 更新" \
+              --body "由 release 事件自动生成的更新文章（来源 CHANGELOG.md）。合并后自动构建部署上线。"
+            echo "PR 已创建"
             exit 0
           fi
           cp /tmp/blog-posts/zh/*.md src/content/blog/zh/

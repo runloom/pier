@@ -728,6 +728,9 @@ describe("GitReviewIndexReader", () => {
       entries: expect.arrayContaining([
         expect.objectContaining({
           path: "conflict.ts",
+          renderSlots: [
+            expect.objectContaining({ group: "conflict", xy: "UU" }),
+          ],
           status: "conflicted",
         }),
         expect.objectContaining({

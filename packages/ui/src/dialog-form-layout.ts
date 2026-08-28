@@ -5,8 +5,8 @@
  * - Commit form: draft + sticky footer 取消|主按钮（content dialog）
  * - Live preference: change applies immediately, no primary footer
  *
- * Field layout for multi-field dialogs (content dialog + workbench widget
- * settings) is the same vertical stack — only save timing differs.
+ * Field layout for multi-field dialogs (content dialog) is the same
+ * vertical stack — only save timing differs.
  * Settings *page* dense rows may still use horizontal *Row helpers.
  *
  * Import from `@pier/ui/dialog-form-layout.ts` so host and plugins share one
@@ -15,8 +15,7 @@
  */
 
 /**
- * Outer stack for multi-field dialog forms (worktree, skill create, SSH,
- * workbench widget settings bodies).
+ * Outer stack for multi-field dialog forms (worktree, skill create, SSH).
  */
 export const DIALOG_COMMIT_FORM_CLASS = "flex min-w-0 flex-col gap-6";
 
@@ -25,7 +24,7 @@ export const DIALOG_COMMIT_FIELD_GROUP_CLASS = "gap-4";
 
 /**
  * Outer stack for dense settings-page preference panels (horizontal rows).
- * Do not use this for WorkbenchSettingsDialog widget settings.
+ * Do not use this inside content-dialog forms (those stay vertical).
  */
 export const DIALOG_PREFERENCE_FORM_CLASS = "flex min-w-0 flex-col gap-0";
 

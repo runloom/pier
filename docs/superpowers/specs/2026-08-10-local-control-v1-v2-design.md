@@ -7,7 +7,7 @@
 
 | 层级 | 权威 | 冲突时 |
 |------|------|--------|
-| 产品边界 / 命令语义 / 完成权 / 内容路径 | Canvas [multi-agent-orchestration-gold](../../../.pier/canvases/multi-agent-orchestration-gold/) | **以 Canvas 为准** |
+| 产品边界 / 命令语义 / 完成权 / 内容路径 | Canvas [pier-cli-user-manual](../../../.pier/canvases/pier-cli-user-manual/) + 本文 §1 | **以手册与本文为准**（原 multi-agent-orchestration-gold 演示画布已于 2026-08-28 删除） |
 | Socket 分流、帧形状、会话状态机、cursor/流、peer 校验 | **本文** | **以本文为准** |
 | 命令面地图（已实现 vs 规划） | Canvas [pier-cli-user-manual](../../../.pier/canvases/pier-cli-user-manual/) | 实现未落地不得写成可用 |
 

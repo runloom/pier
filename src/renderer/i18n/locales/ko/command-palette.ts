@@ -52,7 +52,6 @@ export const commandPalette = {
     listAgents: "에이전트 목록…",
     openCollaboration: "에이전트 협업…",
     startAgent: "{{agent}} 시작",
-    newWorkbench: "새 워크벤치",
     runTask: "작업 실행…",
     terminalList: "터미널 목록...",
     selectTheme: "테마 선택",
@@ -65,6 +64,14 @@ export const commandPalette = {
     zoomIn: "확대",
     zoomOut: "축소",
     resetZoom: "확대/축소 재설정",
+    find: "찾기",
+    findNext: "다음 찾기",
+    findPrev: "이전 찾기",
+    findUnavailable: "여기에서는 찾을 수 없습니다. 터미널이나 파일을 여세요.",
+    focusNextTab: "다음 탭",
+    focusPrevTab: "이전 탭",
+    toggleSideTree: "파일 트리 전환",
+    toggleSideTreeUnavailable: "먼저 프로젝트 폴더를 여세요.",
   },
   run: {
     action: {

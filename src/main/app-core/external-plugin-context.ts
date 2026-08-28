@@ -88,7 +88,9 @@ export function createExternalMainPluginContextFactory(deps: {
     processEnv: createExternalPluginProcessEnv(),
     resolveProcessEnv: async (request = {}) => {
       const result = await deps.processEnvironment.resolve({
-        ...(request.cwd ? { cwd: request.cwd } : {}),
+        ...(request.cwd
+          ? { cwd: request.cwd, projectRootPath: request.cwd }
+          : {}),
         source: "plugin",
       });
       return {
@@ -104,7 +106,9 @@ export function createExternalMainPluginContextFactory(deps: {
     },
     resolveUserCommand: async (commandName, request = {}) => {
       const { env } = await deps.processEnvironment.resolve({
-        ...(request.cwd ? { cwd: request.cwd } : {}),
+        ...(request.cwd
+          ? { cwd: request.cwd, projectRootPath: request.cwd }
+          : {}),
         source: "plugin",
       });
       return await resolveUserCommand({

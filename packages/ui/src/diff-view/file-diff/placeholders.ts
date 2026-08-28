@@ -1,5 +1,4 @@
 import type { FileDiffMetadata } from "@pierre/diffs";
-import { estimateContentLinesFromLineStats } from "../geometry.ts";
 
 interface PlaceholderFileDisplay {
   readonly path: string;
@@ -40,7 +39,7 @@ function fileDisplayType(
 /**
  * estimate 槽：FileDiff **0 正文行**（禁止假行号 / unmodified 假文件体）。
  *
- * 虚拟高度唯一来源：`geometry.slotVirtualHeight`（折叠=header，未折叠=numstat 预留或骨架）。
+ * 虚拟高度唯一来源：`geometry.slotVirtualHeight`（折叠=header，未折叠=骨架槽，不按 numstat 占位）。
  * 折叠全部事务负责全表写 H，禁止靠滚动收敛。
  * 水合后以真 patch 为准。**禁止** isPartial（见 DiffHunks null 行崩溃）。
  */
@@ -63,10 +62,6 @@ export function estimateFileDiff(input: PlaceholderItem): FileDiffMetadata {
     type: "change",
     unifiedLineCount: 0,
   };
-  const contentLines = estimateContentLinesFromLineStats(input.lineStats);
-  if (contentLines !== undefined) {
-    Object.assign(fileDiff, { estimatedContentLines: contentLines });
-  }
   return fileDiff;
 }
 

@@ -189,6 +189,8 @@ export const taskExitSourceSchema = z.enum([
   "native-process-close",
   "shell-command-finished",
   "task-exit-marker",
+  "pty-child-exited",
+  "inject-failed",
   "panel-close",
   "restore",
 ]);

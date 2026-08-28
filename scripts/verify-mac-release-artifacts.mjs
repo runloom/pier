@@ -6,9 +6,19 @@
  *   node scripts/verify-mac-release-artifacts.mjs --dir dist-builder --version 0.1.1
  *   node scripts/verify-mac-release-artifacts.mjs --version 0.1.1 --assets a,b,c
  */
+import { spawnSync } from "node:child_process";
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  assertCompiledIconIntegrity,
+  assertCompiledIconStack,
+  MAC_ICON_RENDITION_NAME,
+} from "./app-icon-layered.mjs";
+import {
+  MAC_HELPER_SUFFIXES,
+  rootPlistStringValue,
+} from "./mac-helper-icons.mjs";
 import {
   normalizeReleaseVersion,
   recommendedMacReleaseBlockmapNames,
@@ -59,6 +69,197 @@ export function validateMacReleaseArtifacts(input) {
   return errors;
 }
 
+async function readPlistValue(plistPath, key) {
+  if (process.platform === "darwin") {
+    const result = spawnSync(
+      "plutil",
+      ["-extract", key, "raw", "-o", "-", plistPath],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    if (!result.error && result.status === 0) {
+      return result.stdout.trim();
+    }
+    return;
+  }
+  try {
+    return rootPlistStringValue(await readFile(plistPath, "utf8"), key);
+  } catch {
+    return;
+  }
+}
+
+async function validatePackagedMacHelpers(app, canonicalIcon) {
+  const errors = [];
+  for (const suffix of MAC_HELPER_SUFFIXES) {
+    const helperName = `Pier Helper${suffix}.app`;
+    const helperContents = join(
+      app,
+      "Contents",
+      "Frameworks",
+      helperName,
+      "Contents"
+    );
+    const plistPath = join(helperContents, "Info.plist");
+    const resources = join(helperContents, "Resources");
+    try {
+      await readFile(plistPath);
+    } catch (error) {
+      errors.push(
+        `${helperName}: missing readable Contents/Info.plist (${error instanceof Error ? error.message : String(error)})`
+      );
+      continue;
+    }
+
+    const iconFile = await readPlistValue(plistPath, "CFBundleIconFile");
+    if (iconFile !== "icon.icns") {
+      errors.push(
+        `${helperName}: CFBundleIconFile must be icon.icns (received ${iconFile ?? "missing"})`
+      );
+    }
+    const iconName = await readPlistValue(plistPath, "CFBundleIconName");
+    if (iconName !== undefined) {
+      errors.push(
+        `${helperName}: CFBundleIconName must be absent for the ICNS-only Helper (received ${iconName})`
+      );
+    }
+
+    try {
+      const [helperIcon, canonicalIconBytes] = await Promise.all([
+        readFile(join(resources, "icon.icns")),
+        readFile(canonicalIcon),
+      ]);
+      if (!helperIcon.equals(canonicalIconBytes)) {
+        errors.push(`${helperName}: icon.icns does not match build/icon.icns`);
+      }
+    } catch (error) {
+      errors.push(
+        `${helperName}: cannot compare icon.icns (${error instanceof Error ? error.message : String(error)})`
+      );
+    }
+
+    for (const stale of ["Assets.car", "electron.icns", "AppIcon.icns"]) {
+      try {
+        await readFile(join(resources, stale));
+        errors.push(
+          `${helperName}: ${stale} must be absent; Helpers use only icon.icns`
+        );
+      } catch (error) {
+        if (
+          !(
+            error &&
+            typeof error === "object" &&
+            "code" in error &&
+            error.code === "ENOENT"
+          )
+        ) {
+          errors.push(
+            `${helperName}: cannot verify ${stale} is absent (${error instanceof Error ? error.message : String(error)})`
+          );
+        }
+      }
+    }
+  }
+  return errors;
+}
+
+/**
+ * Verify the application bundle that electron-builder actually produced, not
+ * only its release filenames. The packaged icon bytes must be identical to the
+ * canonical generated outputs and the native catalog must remain inspectable.
+ *
+ * @param {string} appPath
+ * @param {{ buildDirectory?: string, validateCar?: (path: string) => void }} [options]
+ * @returns {Promise<string[]>}
+ */
+export async function validatePackagedMacApp(appPath, options = {}) {
+  const app = resolve(appPath);
+  const buildDirectory = resolve(options.buildDirectory ?? "build");
+  const contents = join(app, "Contents");
+  const resources = join(contents, "Resources");
+  const errors = [];
+  const plistPath = join(contents, "Info.plist");
+  try {
+    await readFile(plistPath);
+  } catch (error) {
+    return [
+      `${appPath}: missing readable Contents/Info.plist (${error instanceof Error ? error.message : String(error)})`,
+    ];
+  }
+
+  const bundleIdentifier = await readPlistValue(
+    plistPath,
+    "CFBundleIdentifier"
+  );
+  if (bundleIdentifier !== "io.pier.app") {
+    errors.push(
+      `${appPath}: CFBundleIdentifier must be io.pier.app (received ${bundleIdentifier ?? "missing"})`
+    );
+  }
+  const packageType = await readPlistValue(plistPath, "CFBundlePackageType");
+  if (packageType !== "APPL") {
+    errors.push(
+      `${appPath}: CFBundlePackageType must be APPL (received ${packageType ?? "missing"})`
+    );
+  }
+  const iconFile = await readPlistValue(plistPath, "CFBundleIconFile");
+  if (!(iconFile === "icon" || iconFile === "icon.icns")) {
+    errors.push(
+      `${appPath}: CFBundleIconFile must resolve to icon.icns (received ${iconFile ?? "missing"})`
+    );
+  }
+  const iconName = await readPlistValue(plistPath, "CFBundleIconName");
+  if (iconName !== MAC_ICON_RENDITION_NAME) {
+    errors.push(
+      `${appPath}: CFBundleIconName must be ${MAC_ICON_RENDITION_NAME} (received ${iconName ?? "missing"})`
+    );
+  }
+
+  const packagedIcon = join(resources, "icon.icns");
+  const packagedCar = join(resources, "Assets.car");
+  const canonicalIcon = join(buildDirectory, "icon.icns");
+  const canonicalCar = join(buildDirectory, "Assets.car");
+  for (const [label, packaged, canonical] of [
+    ["icon.icns", packagedIcon, canonicalIcon],
+    ["Assets.car", packagedCar, canonicalCar],
+  ]) {
+    try {
+      const [packagedBytes, canonicalBytes] = await Promise.all([
+        readFile(packaged),
+        readFile(canonical),
+      ]);
+      if (!packagedBytes.equals(canonicalBytes)) {
+        errors.push(
+          `${appPath}: packaged ${label} does not match ${canonical.replace(`${process.cwd()}/`, "")}`
+        );
+      }
+    } catch (error) {
+      errors.push(
+        `${appPath}: cannot compare packaged ${label} (${error instanceof Error ? error.message : String(error)})`
+      );
+    }
+  }
+
+  if (!errors.some((error) => error.includes("Assets.car"))) {
+    try {
+      const validateCar =
+        options.validateCar ??
+        (process.platform === "darwin"
+          ? (path) => {
+              assertCompiledIconStack(path);
+              assertCompiledIconIntegrity(path);
+            }
+          : undefined);
+      validateCar?.(packagedCar);
+    } catch (error) {
+      errors.push(
+        `${appPath}: packaged Assets.car is invalid (${error instanceof Error ? error.message : String(error)})`
+      );
+    }
+  }
+  errors.push(...(await validatePackagedMacHelpers(app, canonicalIcon)));
+  return errors;
+}
+
 /**
  * @param {string} dir
  * @param {string} version
@@ -77,6 +278,13 @@ export async function validateMacReleaseDir(dir, version) {
     version: v,
     latestMacYmlText,
   });
+  for (const relativeApp of ["mac/Pier.app", "mac-arm64/Pier.app"]) {
+    errors.push(
+      ...(await validatePackagedMacApp(join(abs, relativeApp), {
+        buildDirectory: resolve("build"),
+      }))
+    );
+  }
   return {
     errors,
     required: requiredMacReleaseAssetNames(v),

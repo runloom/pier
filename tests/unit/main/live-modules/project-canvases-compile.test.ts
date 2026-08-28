@@ -16,11 +16,24 @@ import {
  *
  * typecheck/vitest lanes resolve full node_modules, so they happily pass on
  * bare imports (e.g. zod) that the compile fence denies for canvas source
- * (fence allows only react/react-dom/pier/canvas/pier/host). This test is the
- * lane that matches what the host actually does when opening a canvas.
+ * (fence allows react/react-dom/pier/canvas/pier/host plus the per-root
+ * `allowedBarePackages` list — project roots seed `framer-motion`). This test
+ * is the lane that matches what the host actually does when opening a canvas.
  */
 
 const CANVAS_ROOT = join(process.cwd(), ".pier", "canvases");
+
+const IN_REPO_CANVAS_DIRS = [
+  "canvas-kit",
+  "pier-cli-user-manual",
+  "smoke",
+] as const;
+
+const IN_REPO_REACT_CANVASES = [
+  "canvas-kit/canvas-kit.canvas.tsx",
+  "pier-cli-user-manual/pier-cli-user-manual.canvas.tsx",
+  "smoke/hello.canvas.tsx",
+] as const;
 
 function isReactCanvasEntry(name: string): boolean {
   return detectLiveModuleFrameworkFromFileName(name) === "react";
@@ -54,13 +67,13 @@ afterEach(() => {
 describe("project canvases compile through the live-modules fence", () => {
   const modules = listReactCanvasModules(CANVAS_ROOT);
 
-  it("finds the in-repo React canvases", () => {
-    expect(
-      modules.some((module) =>
-        module.endsWith("harness-plugin-architecture.canvas.tsx")
-      )
-    ).toBe(true);
-    expect(modules.length).toBeGreaterThanOrEqual(3);
+  it("finds exactly the in-repo React canvases", () => {
+    const dirs = readdirSync(CANVAS_ROOT, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && !entry.name.startsWith("."))
+      .map((entry) => entry.name)
+      .sort();
+    expect(dirs).toEqual([...IN_REPO_CANVAS_DIRS]);
+    expect([...modules].sort()).toEqual([...IN_REPO_REACT_CANVASES]);
   });
 
   for (const module of modules) {

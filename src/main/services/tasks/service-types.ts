@@ -128,6 +128,8 @@ export interface TaskService {
     launches: readonly TaskLaunchPlan[];
     originPanelId?: string | undefined;
     projectRootPath: string;
+    /** When false, do not add this launch to recently-run. Default true. */
+    recordRecent?: boolean | undefined;
     rootTaskId: string;
     windowId?: string | undefined;
   }): Promise<TaskRunCoordinatorStartResult>;

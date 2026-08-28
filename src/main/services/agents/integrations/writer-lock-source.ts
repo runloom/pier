@@ -42,4 +42,13 @@ function pierAppend(log, line) {
 			}
 		} finally { await fs.rm(candidate, { force: true }); }
 	}).catch(() => {});
-}`;
+}
+
+function pierSpawnGenerationFromEnv() {
+	const raw = process.env.PIER_AGENT_SPAWN_GENERATION;
+	if (!raw) return {};
+	const n = Number(raw);
+	if (!Number.isInteger(n) || n < 1) return {};
+	return { spawnGeneration: n };
+}
+`;

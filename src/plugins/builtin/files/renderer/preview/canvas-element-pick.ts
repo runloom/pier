@@ -41,6 +41,22 @@ import {
   normalizeCanvasPickText,
 } from "./canvas-pick-shared.ts";
 
+/**
+ * Visual scale applied by ancestors (world-stage CSS `zoom`). Client rects are
+ * scaled while offset layout stays in local CSS px, so the ratio recovers the
+ * factor; flow mode measures 1 and stays a no-op.
+ */
+export function canvasShellVisualScale(
+  shell: HTMLElement,
+  shellRect: Pick<DOMRect, "width">
+): number {
+  const layoutWidth = shell.offsetWidth;
+  if (!(layoutWidth > 0 && shellRect.width > 0)) {
+    return 1;
+  }
+  return shellRect.width / layoutWidth;
+}
+
 /** Measure element box relative to shell (for overlay highlight, no DOM style writes). */
 export function measureCanvasPickBox(
   element: HTMLElement,
@@ -48,16 +64,17 @@ export function measureCanvasPickBox(
 ): CanvasPickOverlayBox {
   const shellRect = shell.getBoundingClientRect();
   const rect = element.getBoundingClientRect();
+  const scale = canvasShellVisualScale(shell, shellRect);
   const tag = element.tagName.toLowerCase();
   const aria = element.getAttribute("aria-label")?.trim();
   const text = normalizeCanvasPickText(element.textContent, 40);
   const label = normalizeCanvasPickText(aria, 40) || text || tag;
   return {
-    height: Math.max(0, rect.height),
+    height: Math.max(0, rect.height) / scale,
     label: label.length > 0 ? label : tag,
-    left: rect.left - shellRect.left + shell.scrollLeft,
-    top: rect.top - shellRect.top + shell.scrollTop,
-    width: Math.max(0, rect.width),
+    left: (rect.left - shellRect.left) / scale + shell.scrollLeft,
+    top: (rect.top - shellRect.top) / scale + shell.scrollTop,
+    width: Math.max(0, rect.width) / scale,
   };
 }
 
@@ -84,9 +101,10 @@ export function clientPointInShell(
   clientY: number
 ): { readonly x: number; readonly y: number } {
   const rect = shell.getBoundingClientRect();
+  const scale = canvasShellVisualScale(shell, rect);
   return {
-    x: clientX - rect.left + shell.scrollLeft,
-    y: clientY - rect.top + shell.scrollTop,
+    x: (clientX - rect.left) / scale + shell.scrollLeft,
+    y: (clientY - rect.top) / scale + shell.scrollTop,
   };
 }
 

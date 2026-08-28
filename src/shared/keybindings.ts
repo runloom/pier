@@ -56,9 +56,14 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
-    // L4 零选择：跳到下一个 Needs you（仅快捷键；不进命令面板、不嵌列表假行）
+    // L4 零选择：跳到下一个需要你处理的（快捷键 + 命令面板；不嵌列表假行）
     commandId: "pier.agents.focusWaiting",
     keys: "Mod+Shift+KeyY",
+    scope: "global",
+  },
+  {
+    commandId: "pier.agents.list",
+    keys: "Mod+Shift+KeyL",
     scope: "global",
   },
   {
@@ -95,8 +100,18 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
-    commandId: "pier.terminal.search",
+    commandId: "pier.find",
     keys: "Mod+KeyF",
+    scope: "global",
+  },
+  {
+    commandId: "pier.findNext",
+    keys: "Mod+KeyG",
+    scope: "global",
+  },
+  {
+    commandId: "pier.findPrev",
+    keys: "Mod+Shift+KeyG",
     scope: "global",
   },
   {
@@ -166,6 +181,36 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    commandId: "pier.panel.focusNextTab",
+    keys: "Mod+Shift+BracketRight",
+    scope: "global",
+  },
+  {
+    commandId: "pier.panel.focusPrevTab",
+    keys: "Mod+Shift+BracketLeft",
+    scope: "global",
+  },
+  {
+    commandId: "pier.panel.focusUp",
+    keys: "Mod+Alt+ArrowUp",
+    scope: "global",
+  },
+  {
+    commandId: "pier.panel.focusDown",
+    keys: "Mod+Alt+ArrowDown",
+    scope: "global",
+  },
+  {
+    commandId: "pier.panel.focusLeft",
+    keys: "Mod+Alt+ArrowLeft",
+    scope: "global",
+  },
+  {
+    commandId: "pier.panel.focusRight",
+    keys: "Mod+Alt+ArrowRight",
+    scope: "global",
+  },
+  {
     commandId: "pier.panel.focusUp",
     keys: "Ctrl+Shift+ArrowUp",
     scope: "global",
@@ -186,14 +231,9 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
-    commandId: "pier.files.tree.toggle",
+    commandId: "pier.view.toggleSideTree",
     keys: "Mod+KeyB",
-    scope: "panel:pier.files.filePanel",
-  },
-  {
-    commandId: "pier.git.review.toggleTree",
-    keys: "Mod+KeyB",
-    scope: "panel:pier.git.changes",
+    scope: "global",
   },
   {
     commandId: "pier.files.save",
@@ -222,7 +262,7 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   },
   {
     commandId: "pier.files.editor.goToLine",
-    keys: "Mod+Shift+KeyG",
+    keys: "Ctrl+KeyG",
     scope: "panel:pier.files.filePanel",
   },
   {

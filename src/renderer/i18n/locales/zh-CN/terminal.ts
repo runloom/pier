@@ -6,6 +6,9 @@ export const terminal = {
     setupEnterFailed: "命令已输入，请按回车执行。",
     setupFailed:
       "终端已打开，但没能自动执行初始化命令。请在终端里运行，或再创建一次。",
+    taskEnterFailed: "命令已输入，请按回车执行。",
+    taskFailed:
+      "终端已打开，但没能自动输入任务命令。请在终端里输入，或再运行一次。",
   },
   frameWaitFailed: "终端画面未显示。请重试；仍不行则重新打开该终端。",
   openPathFailed: "无法打开路径，请重试",
@@ -22,6 +25,7 @@ export const terminal = {
     fieldDuration: "用时",
     fieldExitCode: "退出码",
     fieldStatus: "状态",
+    newSession: "新开会话",
     restart: "重新启动智能体",
     restartFailed: "无法重新启动智能体，请重试",
     statusEnded: "已正常结束",

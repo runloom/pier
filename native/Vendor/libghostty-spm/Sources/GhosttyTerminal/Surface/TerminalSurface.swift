@@ -33,6 +33,24 @@ public final class TerminalSurface {
         surface
     }
 
+    /// Last pixel size successfully applied via ``setSize(width:height:)``.
+    var appliedPixelSize: TerminalPixelGeometry.Pixels? {
+        guard let lastPixelWidth, let lastPixelHeight else { return nil }
+        return TerminalPixelGeometry.Pixels(width: lastPixelWidth, height: lastPixelHeight)
+    }
+
+    /// Last content scale applied via ``setContentScale(x:y:)``.
+    var appliedContentScale: Double? {
+        lastScaleX
+    }
+
+    func matchesAppliedMetrics(
+        pixels: TerminalPixelGeometry.Pixels,
+        scale: Double
+    ) -> Bool {
+        appliedPixelSize == pixels && appliedContentScale == scale
+    }
+
     // MARK: - Input
 
     @discardableResult

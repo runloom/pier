@@ -21,7 +21,10 @@ export interface OpenSettingsWindowLike {
   webContents: SettingsWebContentsLike;
 }
 
-export function requestOpenSettings(win: OpenSettingsWindowLike | null): void {
+export function requestOpenSettings(
+  win: OpenSettingsWindowLike | null | undefined,
+  payload?: { section?: string }
+): void {
   if (!win || win.isDestroyed() || win.webContents.isDestroyed()) {
     return;
   }
@@ -33,6 +36,10 @@ export function requestOpenSettings(win: OpenSettingsWindowLike | null): void {
   }
   win.focus();
   win.webContents.focus();
+  if (payload?.section) {
+    win.webContents.send(OPEN_SETTINGS_CHANNEL, payload);
+    return;
+  }
   win.webContents.send(OPEN_SETTINGS_CHANNEL);
 }
 

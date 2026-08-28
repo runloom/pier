@@ -5,7 +5,7 @@ import {
   isActiveReviewResource,
   nextDemandPrefetchEntryKeys,
 } from "../../../../../src/plugins/builtin/git/renderer/review/materialization.ts";
-import { patchDocument } from "./document-fixture.ts";
+import { patchDocument } from "./document/fixture.ts";
 
 function entry(index: number): GitReviewIndexEntry {
   return {

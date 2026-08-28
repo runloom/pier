@@ -1,10 +1,19 @@
 export const canvas = {
   file: {
     conflict: "{{name}} changed on disk. Reload it before saving again.",
-    invalidName: "A canvas may only read or write files next to itself.",
+    invalidName: "A canvas may only use files in its own folder.",
     readFailed: "Couldn’t read {{name}} — it isn’t a text file.",
     unavailable: "This canvas isn’t opened from a file, so it can’t save.",
     writeFailed: "Couldn’t save {{name}}.",
+  },
+  command: {
+    cancelLabel: "Cancel",
+    confirmBody: "This canvas wants to run:\n\n{{command}}",
+    confirmLabel: "Run",
+    confirmTitle: "Run this command?",
+    failed: "Couldn’t run that command.",
+    unavailable:
+      "This canvas isn’t opened from a file, so it can’t run commands.",
   },
   blocks: {
     activityEmpty: "No activity in this window",

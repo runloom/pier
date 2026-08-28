@@ -18,6 +18,9 @@ describe("app release workflow", () => {
     expect(source).toContain("latest-mac.yml");
     expect(source).toContain("verify-mac-release-artifacts.mjs");
     expect(source).toContain("PIER_DIST_ALLOW_CSC_LINK_PUBLISH");
+    expect(source).toContain("runs-on: macos-26");
+    expect(source).toContain("/Applications/Xcode_26.6.app/Contents/Developer");
+    expect(source).toContain("Xcode 26.6");
     expect(source).toMatch(
       /ref:\s*\$\{\{\s*steps\.version\.outputs\.tag\s*\}\}/
     );

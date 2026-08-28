@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -10,15 +10,17 @@ import {
   type Page,
   test,
 } from "@playwright/test";
-import { selectTheme, setWindowSize } from "../workbench/e2e-harness.ts";
+import { selectTheme, setWindowSize } from "../support/app-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
 const PIER_CLI = join(PROJECT_ROOT, "bin", "pier.mjs");
-const GOLD_DIR = join(
-  PROJECT_ROOT,
-  ".pier/canvases/multi-agent-orchestration-gold"
-);
+const GRAPH_NODES = `[
+            { id: "caller", kind: "actor", meta: "info", title: "Caller", tone: "info" },
+            { id: "cli", kind: "tool", meta: "success", title: "CLI", tone: "success" },
+            { id: "runtime", kind: "artifact", meta: "done", title: "Runtime", tone: "done" },
+          ]`;
+
 const FIXTURE_CANVAS_SOURCE = `import { Mermaid, Frame, Stack, Text } from "pier/canvas";
 
 export const canvas = {
@@ -41,14 +43,46 @@ export default function GraphColorCanvas() {
             { source: "caller", target: "cli" },
             { source: "cli", target: "runtime" },
           ]}
-          nodes={[
-            { id: "caller", kind: "actor", meta: "info", title: "Caller", tone: "info" },
-            { id: "cli", kind: "tool", meta: "success", title: "CLI", tone: "success" },
-            { id: "runtime", kind: "artifact", meta: "done", title: "Runtime", tone: "done" },
-          ]}
+          nodes={${GRAPH_NODES}}
         />
       </Stack>
     </Frame>
+  );
+}
+`;
+
+const FIXTURE_DOCS_CANVAS_SOURCE = `import { DocsShell, Mermaid, Stack, Text } from "pier/canvas";
+import { useState } from "react";
+
+export const canvas = {
+  description: "E2E contract: Mermaid kind/tone fills under DocsShell.",
+  kind: "docs",
+  title: "Docs graph color contract",
+};
+
+export default function GraphColorDocsCanvas() {
+  const [navId, setNavId] = useState("graph");
+  return (
+    <DocsShell
+      nav={[{ id: "graph", label: "Graph" }]}
+      navId={navId}
+      onNavChange={setNavId}
+    >
+      <Stack gap={8}>
+        <Text as="h1" className="font-semibold text-lg">
+          Docs graph color contract
+        </Text>
+        <Mermaid
+          aria-label="docs color contract"
+          direction="left-to-right"
+          edges={[
+            { source: "caller", target: "cli" },
+            { source: "cli", target: "runtime" },
+          ]}
+          nodes={${GRAPH_NODES}}
+        />
+      </Stack>
+    </DocsShell>
   );
 }
 `;
@@ -138,6 +172,19 @@ async function openTreeFile(
     }
     await item.click();
   }
+}
+
+async function acceptCanvasTrustIfPrompted(page: Page): Promise<void> {
+  const confirm = page.getByRole("button", {
+    name: /信任并预览|Trust and preview/u,
+  });
+  try {
+    await expect(confirm).toBeVisible({ timeout: 15_000 });
+  } catch {
+    return;
+  }
+  await confirm.click();
+  await expect(confirm).toHaveCount(0);
 }
 
 function rgbDistance(left: Rgb, right: Rgb): number {
@@ -262,7 +309,7 @@ function expectPainted(
 test("Files canvas preview paints Mermaid kind and tone fills", async ({
   browserName: _browserName,
 }, testInfo) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const userDataDir = mkdtempSync(join(tmpdir(), "pier-canvas-graph-e2e-"));
   const workspaceDir = mkdtempSync(join(tmpdir(), "pier-canvas-graph-ws-"));
   mkdirSync(join(workspaceDir, "docs"), { recursive: true });
@@ -270,8 +317,10 @@ test("Files canvas preview paints Mermaid kind and tone fills", async ({
     join(workspaceDir, "docs", "graph-colors.canvas.tsx"),
     FIXTURE_CANVAS_SOURCE
   );
-  const goldDest = join(workspaceDir, "docs", "multi-agent-orchestration-gold");
-  cpSync(GOLD_DIR, goldDest, { recursive: true });
+  writeFileSync(
+    join(workspaceDir, "docs", "graph-colors-docs.canvas.tsx"),
+    FIXTURE_DOCS_CANVAS_SOURCE
+  );
   const application = await launchPier(userDataDir);
 
   try {
@@ -283,6 +332,7 @@ test("Files canvas preview paints Mermaid kind and tone fills", async ({
     await openTreeFile(page, ["docs", "graph-colors.canvas.tsx"]);
     const preview = page.locator('[data-slot="file-canvas-preview"]');
     await expect(preview).toBeVisible({ timeout: 30_000 });
+    await acceptCanvasTrustIfPrompted(page);
     await expect(page.getByText("Node graph color contract")).toBeVisible({
       timeout: 40_000,
     });
@@ -293,54 +343,59 @@ test("Files canvas preview paints Mermaid kind and tone fills", async ({
       path: testInfo.outputPath("canvas-graph-colors-fixture-light.png"),
     });
 
-    const themeProbe = await readThemeProbe(page);
-    const fixtureNodes = await readGraphNodes(page);
-    expectPainted(fixtureNodes, themeProbe, [
+    const contractNodes = [
       { kind: "actor", title: "Caller", tone: "info" },
       { kind: "tool", title: "CLI", tone: "success" },
       { kind: "artifact", title: "Runtime", tone: "done" },
-    ]);
-
-    await openTreeFile(page, [
-      "docs",
-      "multi-agent-orchestration-gold",
-      "multi-agent-orchestration-gold.canvas.tsx",
-    ]);
-    await expect(page.getByRole("tab", { name: "设计" })).toBeVisible({
-      timeout: 40_000,
-    });
-    await page.getByRole("tab", { name: "设计" }).click();
-    await expect(page.getByText("RuntimeControl")).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect
-      .poll(async () => (await readGraphNodes(page)).length, {
-        timeout: 30_000,
-      })
-      .toBeGreaterThan(5);
-
-    const goldNodes = await readGraphNodes(page);
-    expectPainted(goldNodes, await readThemeProbe(page), [
-      { kind: "tool", title: "focus / interrupt / terminate", tone: "success" },
-      { kind: "artifact", title: "RuntimeControl", tone: "done" },
-      { kind: "actor", title: "人类 · pier CLI", tone: "info" },
-    ]);
-    await page.screenshot({
-      path: testInfo.outputPath("canvas-graph-colors-gold-light.png"),
-    });
+    ] as const;
+    expectPainted(
+      await readGraphNodes(page),
+      await readThemeProbe(page),
+      contractNodes
+    );
 
     await selectTheme(page, { id: "dark", label: /Dark|深色/u });
-    await expect(page.getByText("RuntimeControl")).toBeVisible({
+    await expect(page.getByText("Node graph color contract")).toBeVisible({
       timeout: 20_000,
     });
-    const darkNodes = await readGraphNodes(page);
-    expectPainted(darkNodes, await readThemeProbe(page), [
-      { kind: "tool", title: "focus / interrupt / terminate", tone: "success" },
-      { kind: "artifact", title: "RuntimeControl", tone: "done" },
-      { kind: "actor", title: "人类 · pier CLI", tone: "info" },
-    ]);
+    expectPainted(
+      await readGraphNodes(page),
+      await readThemeProbe(page),
+      contractNodes
+    );
     await page.screenshot({
-      path: testInfo.outputPath("canvas-graph-colors-gold-dark.png"),
+      path: testInfo.outputPath("canvas-graph-colors-fixture-dark.png"),
+    });
+
+    await openTreeFile(page, ["docs", "graph-colors-docs.canvas.tsx"]);
+    await acceptCanvasTrustIfPrompted(page);
+    await expect(page.getByText("Docs graph color contract")).toBeVisible({
+      timeout: 40_000,
+    });
+    await expect(page.locator('[data-slot="docs-shell"]')).toBeVisible();
+    await expect(page.locator('[data-slot="mermaid-node"]')).toHaveCount(3, {
+      timeout: 40_000,
+    });
+    expectPainted(
+      await readGraphNodes(page),
+      await readThemeProbe(page),
+      contractNodes
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("canvas-graph-colors-docs-dark.png"),
+    });
+
+    await selectTheme(page, { id: "light", label: /Light|浅色/u });
+    await expect(page.getByText("Docs graph color contract")).toBeVisible({
+      timeout: 20_000,
+    });
+    expectPainted(
+      await readGraphNodes(page),
+      await readThemeProbe(page),
+      contractNodes
+    );
+    await page.screenshot({
+      path: testInfo.outputPath("canvas-graph-colors-docs-light.png"),
     });
   } finally {
     await forceClose(application);

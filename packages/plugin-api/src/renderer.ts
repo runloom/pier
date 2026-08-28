@@ -17,83 +17,6 @@ export type JsonValue =
  * plugin coupling into a de-facto host API.
  */
 
-export interface WorkbenchGridSize {
-  h: number;
-  w: number;
-}
-
-export interface WorkbenchWidgetComponentProps {
-  /** Instance id. Multi-instance widgets use this as their persistence scope. */
-  instanceId: string;
-  /** Widget-private persisted params. Plugins own validation and fallback. */
-  params: Readonly<Record<string, JsonValue>>;
-  /** Incremented when the user triggers widget refresh. */
-  refreshToken: number;
-  /** Grid size in cells. Use container queries for visual responsiveness. */
-  size: WorkbenchGridSize;
-  /** Shallow-merge params patch back into the host panel state. */
-  updateParams: (patch: Record<string, JsonValue>) => void;
-  /** Current Workbench panel visibility. Polling widgets should pause when false. */
-  visible: boolean;
-}
-
-export interface WorkbenchWidgetSettingsProps {
-  instanceId: string;
-  params: Readonly<Record<string, JsonValue>>;
-  /**
-   * Sticky DialogFooter slot owned by the host WorkbenchSettingsDialog.
-   * Host always provides this; pass null to hide. Use for primary panel
-   * actions (e.g. add block).
-   */
-  setFooter: (footer: ReactNode | null) => void;
-  updateParams: (patch: Record<string, JsonValue>) => void;
-}
-
-export interface WorkbenchWidgetActionContext {
-  /**
-   * Host "Refresh all" sets this so actions skip their own success toast and
-   * rethrow failures for aggregation. Header single-button refresh leaves it
-   * unset / false.
-   */
-  bulkRefresh?: boolean;
-  instanceId: string;
-  params: Readonly<Record<string, JsonValue>>;
-  requestRefresh(): void;
-  updateParams(patch: Record<string, JsonValue>): void;
-}
-
-export interface RendererWorkbenchWidgetAction {
-  disabled?: boolean;
-  icon: ComponentType<{ size?: number | string }>;
-  id: string;
-  intent?: "default" | "destructive";
-  invoke(context: WorkbenchWidgetActionContext): Promise<void> | void;
-  label: string | (() => string);
-  priority?: number;
-}
-
-export type WorkbenchWidgetContentMode = "contained" | "host-scroll";
-
-export interface RendererWorkbenchWidgetRegistration {
-  actions?(
-    context: WorkbenchWidgetActionContext
-  ): readonly RendererWorkbenchWidgetAction[];
-  component: ComponentType<WorkbenchWidgetComponentProps>;
-  /**
-   * `host-scroll` keeps the compatible host-owned scroller. `contained`
-   * clips the card body so the widget can own pinned and scrollable regions.
-   */
-  contentMode?: WorkbenchWidgetContentMode;
-  icon?: ComponentType<{ size?: number | string }>;
-  id: string;
-  /** 物料库预览卡（样例数据静态渲染，宿主以 pointer-events-none 展示）。 */
-  previewComponent?: ComponentType;
-  /** Settings panel. Required when the manifest contribution is configurable. */
-  settingsComponent?: ComponentType<WorkbenchWidgetSettingsProps>;
-  /** 省略时用 manifest 本地化标题（locales.<lang>.workbenchWidgets）。 */
-  title?: string | (() => string);
-}
-
 export interface RendererPluginAction {
   category?: string;
   id: string;
@@ -380,9 +303,6 @@ export interface ExternalRendererPluginContext {
    */
   terminals: {
     open(request?: TerminalOpenRequest): Promise<TerminalOpenResult>;
-  };
-  workbenchWidgets: {
-    register(registration: RendererWorkbenchWidgetRegistration): () => void;
   };
 }
 

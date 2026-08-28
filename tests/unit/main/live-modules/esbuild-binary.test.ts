@@ -1,7 +1,9 @@
 import * as esbuildBinaryModule from "@main/services/live-modules/esbuild-binary.ts";
 import {
   isAsarPackagedPath,
+  isEsbuildServiceClosedError,
   resolveEsbuildBinaryPath,
+  shouldClearInheritedEsbuildBinaryPath,
   unpackedEsbuildBinaryPath,
 } from "@main/services/live-modules/esbuild-binary.ts";
 import { describe, expect, it } from "vitest";
@@ -75,6 +77,54 @@ describe("resolveEsbuildBinaryPath", () => {
         unpackedExists: true,
       })
     ).toBeNull();
+  });
+});
+
+describe("inherited packaged esbuild binary", () => {
+  it("clears a packaged Pier binary when resolving from a dev layout", () => {
+    expect(
+      shouldClearInheritedEsbuildBinaryPath({
+        currentEnvPath:
+          "/Applications/Pier.app/Contents/Resources/app.asar.unpacked/node_modules/@esbuild/darwin-arm64/bin/esbuild",
+        resolvedPlatformBinary: DEV,
+      })
+    ).toBe(true);
+  });
+
+  it("keeps the env override when the host itself is packaged", () => {
+    expect(
+      shouldClearInheritedEsbuildBinaryPath({
+        currentEnvPath:
+          "/Applications/Pier.app/Contents/Resources/app.asar.unpacked/node_modules/@esbuild/darwin-arm64/bin/esbuild",
+        resolvedPlatformBinary: PACKAGED,
+      })
+    ).toBe(false);
+  });
+
+  it("does not clear a user-supplied non-Pier binary", () => {
+    expect(
+      shouldClearInheritedEsbuildBinaryPath({
+        currentEnvPath: "/custom/esbuild",
+        resolvedPlatformBinary: DEV,
+      })
+    ).toBe(false);
+  });
+});
+
+describe("esbuild service-closed errors", () => {
+  it("detects the dead-service message with and without a spawn reason", () => {
+    expect(
+      isEsbuildServiceClosedError(new Error("The service is no longer running"))
+    ).toBe(true);
+    expect(
+      isEsbuildServiceClosedError(
+        new Error("The service is no longer running: spawn ENOENT")
+      )
+    ).toBe(true);
+    expect(
+      isEsbuildServiceClosedError(new Error("The service was stopped"))
+    ).toBe(true);
+    expect(isEsbuildServiceClosedError(new Error("Build failed"))).toBe(false);
   });
 });
 

@@ -21,7 +21,9 @@ export const MERMAID_THEME_CSS = `
     fill: var(--muted-foreground) !important;
     stroke: var(--muted-foreground) !important;
   }
-  .nodeLabel, .edgeLabel, .label, .actor, .messageText, .labelText, .loopText, .noteText, .entityLabel, .classTitle, .titleText, .taskText, .legendText {
+  .nodeLabel, .edgeLabel, .label, .actor, .messageText, .labelText, .loopText, .noteText, .entityLabel, .classTitle, .titleText, .taskText, .legendText,
+  .messageText > tspan, .labelText > tspan, .loopText > tspan, .noteText > tspan,
+  text.actor > tspan {
     color: var(--foreground) !important;
     fill: var(--foreground) !important;
     font-family: inherit !important;
@@ -36,7 +38,9 @@ export const MERMAID_THEME_CSS = `
     fill: transparent !important;
     opacity: 1 !important;
   }
-  .actor, .actor-man, .classGroup rect, .er.entityBox, .statediagram-state rect, .statediagram-cluster rect, .mindmap-node > * {
+  /* Sequence actor titles share class "actor" with the box; paint only the
+     rect here so text.actor keeps --foreground from the rule above. */
+  .actor-man, .classGroup rect, .er.entityBox, .statediagram-state rect, .statediagram-cluster rect, .mindmap-node > * {
     fill: var(--card) !important;
     stroke: var(--border) !important;
   }
@@ -44,8 +48,15 @@ export const MERMAID_THEME_CSS = `
     fill: var(--muted) !important;
     stroke: var(--border) !important;
   }
-  .note {
-    fill: var(--muted) !important;
+  /* Sequence notes / alt headers: mermaid's light theme paints a dark gray
+     fill on .noteText > tspan (and loop/label/actor tspans). !important
+     on the parent does not inherit, so those labels stay dark-on-dark
+     unless the tspan rule above paints them. --muted on --background is
+     ~0.09 L in dark theme, so the note rect itself also vanishes;
+     --secondary is the next structural surface that still contrasts in
+     both themes. */
+  .note, .labelBox, rect.actor {
+    fill: var(--secondary) !important;
     stroke: var(--border) !important;
   }
   .${SLOT_CLASS} > rect,

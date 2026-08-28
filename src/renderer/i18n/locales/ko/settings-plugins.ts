@@ -15,8 +15,6 @@ export const settingsPlugins = {
   contributionSummary: {
     command: "명령 {{count}}개",
     commands: "명령 {{count}}개",
-    workbenchWidget: "워크벤치 컴포넌트 {{count}}개",
-    workbenchWidgets: "워크벤치 컴포넌트 {{count}}개",
     none: "기여 없음",
     panel: "패널 {{count}}개",
     panels: "패널 {{count}}개",

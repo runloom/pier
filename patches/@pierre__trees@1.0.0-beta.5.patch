@@ -1,8 +1,36 @@
 diff --git a/dist/model/FileTreeController.js b/dist/model/FileTreeController.js
-index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..ce3f101fc8401dd89c5c77b3335c959a88b621e9 100644
+index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..49ebd437d385a58e240c6840b9a744d1102a54bd 100644
 --- a/dist/model/FileTreeController.js
 +++ b/dist/model/FileTreeController.js
-@@ -943,7 +943,7 @@ var FileTreeController = class FileTreeController {
+@@ -504,13 +504,15 @@ var FileTreeController = class FileTreeController {
+ 			return false;
+ 		}
+ 		try {
+-			if (dropPlan.operations.length === 1) {
+-				const singleOperation = dropPlan.operations[0];
+-				if (singleOperation == null || singleOperation.type !== "move") throw new Error("Expected a single move operation for one-item drops");
+-				this.#store.move(singleOperation.from, singleOperation.to, { collision: singleOperation.collision });
+-			} else {
+-				this.#validateBatchDropOperations(dropPlan.operations);
+-				this.#store.batch(dropPlan.operations);
++			if (this.#dragAndDropConfig?.commitOnDrop !== false) {
++				if (dropPlan.operations.length === 1) {
++					const singleOperation = dropPlan.operations[0];
++					if (singleOperation == null || singleOperation.type !== "move") throw new Error("Expected a single move operation for one-item drops");
++					this.#store.move(singleOperation.from, singleOperation.to, { collision: singleOperation.collision });
++				} else {
++					this.#validateBatchDropOperations(dropPlan.operations);
++					this.#store.batch(dropPlan.operations);
++				}
+ 			}
+ 		} catch (error) {
+ 			this.#emit();
+@@ -520,3 +522,4 @@ var FileTreeController = class FileTreeController {
+ 		this.#dragAndDropConfig?.onDropComplete?.(dropPlan.result);
++		this.#emit();
+ 		return true;
+ 	}
+@@ -943,7 +946,7 @@ var FileTreeController = class FileTreeController {
  		}
  		const currentVisiblePaths = this.#projectionPaths;
  		this.#searchMatchingPaths = currentVisiblePaths.filter((path) => this.#searchMatchPathSet.has(path));
@@ -11,7 +39,7 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..ce3f101fc8401dd89c5c77b3335c959a
  			this.#searchVisibleIndices = null;
  			this.#searchVisiblePaths = null;
  			this.#searchVisibleIndexByPath = null;
-@@ -1042,7 +1042,7 @@ var FileTreeController = class FileTreeController {
+@@ -1042,7 +1045,7 @@ var FileTreeController = class FileTreeController {
  			focusCandidate ??= path;
  		}
  		this.#searchMatchPathSet = matchingPathSet;
@@ -21,7 +49,7 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..ce3f101fc8401dd89c5c77b3335c959a
  		const expandedPaths = this.#searchMode === "expand-matches" ? new Set(this.#searchPreviousExpandedPaths ?? []) : /* @__PURE__ */ new Set();
  		for (const matchingPath of matchingPaths) {
 diff --git a/dist/model/publicTypes.d.ts b/dist/model/publicTypes.d.ts
-index 0d75f14780eb033fdbc8fde76e6f4c080e1d096a..4fadbc7f48ad3f890985d550add3f32477636249 100644
+index 0d75f14780eb033fdbc8fde76e6f4c080e1d096a..c57180801ee12479c521f7b9c3482a1327c64837 100644
 --- a/dist/model/publicTypes.d.ts
 +++ b/dist/model/publicTypes.d.ts
 @@ -42,6 +42,12 @@ interface FileTreeGitStatusPatch {
@@ -37,6 +65,24 @@ index 0d75f14780eb033fdbc8fde76e6f4c080e1d096a..4fadbc7f48ad3f890985d550add3f324
    initialExpansion?: FileTreeInitialExpansion;
    initialExpandedPaths?: readonly FileTreePublicId[];
    presorted?: boolean;
+@@ -146,6 +152,17 @@ interface FileTreeDropResult extends FileTreeDropContext {
+ interface FileTreeDragAndDropConfig {
+   canDrag?: (paths: readonly FileTreePublicId[]) => boolean;
+   canDrop?: (event: FileTreeDropContext) => boolean;
++  /**
++   * When false, completeDrag does not mutate the path store; onDropComplete
++   * still fires. Default true (upstream).
++   */
++  commitOnDrop?: boolean;
++  /**
++   * Mouse pointer distance before starting an in-tree drag. 0 (default) keeps
++   * native HTML5 `draggable`. Values > 0 disable row `draggable` and use a
++   * pointer session (same machinery as touch).
++   */
++  pointerDragThresholdPx?: number;
+   onDropComplete?: (event: FileTreeDropResult) => void;
+   onDropError?: (error: string, event: FileTreeDropContext) => void;
+   openOnDropDelay?: number;
 diff --git a/dist/path-store/src/flatten.js b/dist/path-store/src/flatten.js
 index 1f7a2fd6d24db92e4c42aa7d3b5a7881a36af7ae..df9ff1b014f8d1c93212727a86b86a236f24947b 100644
 --- a/dist/path-store/src/flatten.js
@@ -140,7 +186,7 @@ index a3acb5917de61ee8283f12fe5a73282437cfcfab..3b9a14bed67c25109e2303259e9911a6
  		this.#controller.add(path);
  	}
 diff --git a/dist/render/FileTreeView.js b/dist/render/FileTreeView.js
-index 3d02080ad553347e7fe95e261c993b607b4134c2..badd8788f67c0f70c94d8c0e81cf662f1c196110 100644
+index 3d02080ad553347e7fe95e261c993b607b4134c2..0b13cdc326b4fa60f1abaafbdb3c268143236a9d 100644
 --- a/dist/render/FileTreeView.js
 +++ b/dist/render/FileTreeView.js
 @@ -3,7 +3,7 @@ import { createFileTreeIconResolver } from "./iconResolver.js";
@@ -188,7 +234,67 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..badd8788f67c0f70c94d8c0e81cf662f
  		}),
  		decorationLaneEnabled ? /* @__PURE__ */ jsx("div", {
  			"data-item-section": "decoration",
-@@ -704,9 +703,12 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -392,7 +391,7 @@ function renderFileTreeRowContent(row, resolveIcon, { actionLaneEnabled = false,
+ 	] });
+ }
+ function renderStyledRow(frame, row, key, options = {}) {
+-	const { controller, renameView, visualFocusPath, contextHoverPath, draggedPathSet, dragTarget, dragAndDropEnabled, shouldSuppressContextMenu, handleRowDragStart, handleRowDragEnd, handleRowTouchStart, instanceId, itemHeight, gitStatusByPath, ignoredGitDirectories, ignoredInheritanceCache, directoriesWithGitChanges, gitLaneActive, contextMenuEnabled, contextMenuTriggerMode, contextMenuButtonTriggerEnabled, contextMenuButtonVisibility, contextMenuRightClickEnabled, registerRenameInput, registerButton, resolveIcon, renderDecorationForRow, openContextMenuForRow, onRowClick, onKeyDown } = frame;
++	const { controller, renameView, visualFocusPath, contextHoverPath, draggedPathSet, dragTarget, dragAndDropEnabled, shouldSuppressContextMenu, handleRowDragStart, handleRowDragEnd, handleRowTouchStart, handleRowPointerDown, pointerDragThresholdPx, suppressClickRef, instanceId, itemHeight, gitStatusByPath, ignoredGitDirectories, ignoredInheritanceCache, directoriesWithGitChanges, gitLaneActive, contextMenuEnabled, contextMenuTriggerMode, contextMenuButtonTriggerEnabled, contextMenuButtonVisibility, contextMenuRightClickEnabled, registerRenameInput, registerButton, resolveIcon, renderDecorationForRow, openContextMenuForRow, onRowClick, onKeyDown } = frame;
+ 	const targetPath = getFileTreeRowPath(row);
+ 	const { isParked = false, mode = "flow", style } = options;
+ 	const isSticky = mode === "sticky";
+@@ -483,9 +482,9 @@ function renderStyledRow(frame, row, key, options = {}) {
+ 	return /* @__PURE__ */ jsx("button", {
+ 		...commonProps,
+ 		type: "button",
+-		draggable: dragAndDropEnabled && !isParked,
+-		onDragEnd: dragAndDropEnabled && !isParked ? handleRowDragEnd : void 0,
+-		onDragStart: dragAndDropEnabled && !isParked ? (event) => {
++		draggable: dragAndDropEnabled && !isParked && pointerDragThresholdPx <= 0,
++		onDragEnd: dragAndDropEnabled && !isParked && pointerDragThresholdPx <= 0 ? handleRowDragEnd : void 0,
++		onDragStart: dragAndDropEnabled && !isParked && pointerDragThresholdPx <= 0 ? (event) => {
+ 			handleRowDragStart(event, row, targetPath);
+ 		} : void 0,
+ 		onMouseDown: (event) => {
+@@ -495,10 +494,17 @@ function renderStyledRow(frame, row, key, options = {}) {
+ 			}
+ 			if (controller.isSearchOpen()) event.preventDefault();
+ 		},
++		onPointerDown: dragAndDropEnabled && !isParked && pointerDragThresholdPx > 0 ? (event) => {
++			handleRowPointerDown(event, row, targetPath);
++		} : void 0,
+ 		onTouchStart: dragAndDropEnabled && !isParked ? (event) => {
+ 			handleRowTouchStart(event, row, targetPath);
+ 		} : void 0,
+ 		onClick: (event) => {
++			if (suppressClickRef.current) {
++				suppressClickRef.current = false;
++				return;
++			}
+ 			onRowClick(event, row, targetPath, mode);
+ 		},
+ 		children: rowContent
+@@ -546,6 +552,11 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 	const touchSourceElementRef = useRef(null);
+ 	const touchStartPointRef = useRef(null);
+ 	const touchLongPressTimerRef = useRef(null);
++	const pointerCleanupRef = useRef(null);
++	const pointerDragActiveRef = useRef(false);
++	const pointerDragArmedRef = useRef(null);
++	const pointerPreviewOffsetRef = useRef(null);
++	const suppressClickRef = useRef(false);
+ 	const ignoredInheritanceCache = useMemo(() => /* @__PURE__ */ new Map(), []);
+ 	const [, setControllerRevision] = useState(0);
+ 	const hasSeenInitialControllerSnapshotRef = useRef(false);
+@@ -655,6 +666,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 	const focusedIndex = controller.getFocusedIndex();
+ 	const scrollRequest = controller.getScrollRequest();
+ 	const dragAndDropEnabled = controller.isDragAndDropEnabled();
++	const pointerDragThresholdPx = controller.getDragAndDropConfig()?.pointerDragThresholdPx ?? 0;
+ 	const dragSession = controller.getDragSession();
+ 	const draggedPathSet = useMemo(() => dragSession == null ? null : new Set(dragSession.draggedPaths), [dragSession]);
+ 	const dragTarget = dragSession?.target ?? null;
+@@ -704,9 +716,12 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  		const item = controller.getItem(targetPath);
  		if (item == null) return;
  		const anchorButton = getTriggerAnchorButton(targetPath);
@@ -203,7 +309,142 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..badd8788f67c0f70c94d8c0e81cf662f
  			domFocusOwnerRef.current = true;
  			setActiveItemPath((previousPath) => previousPath === targetPath ? previousPath : targetPath);
  		}
-@@ -1051,7 +1053,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -1021,6 +1036,134 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 			document.addEventListener("touchcancel", handleActiveTouchCancel);
+ 		}, TOUCH_LONG_PRESS_DELAY);
+ 	};
++	const handleRowPointerDown = (event, row, targetPath) => {
++		if (event.pointerType === "touch" || event.button !== 0 || !(pointerDragThresholdPx > 0) || !dragAndDropEnabled) return;
++		const dragSource = event.currentTarget;
++		if (dragSource == null) return;
++		pointerCleanupRef.current?.();
++		pointerDragActiveRef.current = false;
++		pointerDragArmedRef.current = {
++			x: event.clientX,
++			y: event.clientY,
++			path: targetPath,
++			row
++		};
++		const threshold = pointerDragThresholdPx;
++		const clearPointerListeners = () => {
++			window.removeEventListener("pointermove", handlePointerMove);
++			window.removeEventListener("pointerup", handlePointerUp);
++			window.removeEventListener("pointercancel", handlePointerCancel);
++			window.removeEventListener("keydown", handlePointerKeyDown);
++			if (pointerCleanupRef.current === clearPointerListeners) pointerCleanupRef.current = null;
++		};
++		const disarmPointerDrag = () => {
++			clearPointerListeners();
++			pointerDragArmedRef.current = null;
++			pointerDragActiveRef.current = false;
++			pointerPreviewOffsetRef.current = null;
++		};
++		const armSuppressNextClick = (deferClearUntilPointerUp = false) => {
++			suppressClickRef.current = true;
++			let timeoutId = 0;
++			const swallowClick = (clickEvent) => {
++				clickEvent.preventDefault();
++				clickEvent.stopPropagation();
++				suppressClickRef.current = false;
++				window.removeEventListener("click", swallowClick, true);
++				if (timeoutId !== 0) {
++					clearTimeout(timeoutId);
++					timeoutId = 0;
++				}
++			};
++			const clearSuppressClick = () => {
++				suppressClickRef.current = false;
++				window.removeEventListener("click", swallowClick, true);
++			};
++			window.addEventListener("click", swallowClick, { capture: true, once: true });
++			if (deferClearUntilPointerUp) {
++				const scheduleClear = () => {
++					timeoutId = setTimeout(clearSuppressClick, 0);
++				};
++				window.addEventListener("pointerup", scheduleClear, { capture: true, once: true });
++				window.addEventListener("pointercancel", scheduleClear, { capture: true, once: true });
++			} else timeoutId = setTimeout(clearSuppressClick, 0);
++		};
++		const cancelArmedPointerDrag = (deferClickSuppress = false) => {
++			const wasActive = pointerDragActiveRef.current;
++			disarmPointerDrag();
++			controller.cancelDrag();
++			clearDragPreview();
++			clearDragHoverOpen();
++			stopDragAutoScroll();
++			dragRowSnapshotRef.current = null;
++			if (wasActive) {
++				suppressClickRef.current = true;
++				armSuppressNextClick(deferClickSuppress);
++			}
++		};
++		const handlePointerMove = (moveEvent) => {
++			const armed = pointerDragArmedRef.current;
++			if (armed == null) return;
++			const dx = moveEvent.clientX - armed.x;
++			const dy = moveEvent.clientY - armed.y;
++			if (!pointerDragActiveRef.current) {
++				if (dx * dx + dy * dy < threshold * threshold) return;
++				if (controller.startDrag(armed.path) === false) {
++					disarmPointerDrag();
++					return;
++				}
++				pointerDragActiveRef.current = true;
++				dragRowSnapshotRef.current = armed.row;
++				const rect = dragSource.getBoundingClientRect();
++				const preview = createDragPreviewElement(dragSource);
++				Object.assign(preview.style, {
++					height: `${rect.height}px`,
++					opacity: "0.85",
++					transform: `translate3d(${rect.left}px, ${rect.top}px, 0)`,
++					width: `${rect.width}px`
++				});
++				mountDragPreview(preview);
++				dragPreviewRef.current = preview;
++				pointerPreviewOffsetRef.current = {
++					x: armed.x - rect.left,
++					y: armed.y - rect.top
++				};
++			}
++			moveEvent.preventDefault();
++			const previewOffset = pointerPreviewOffsetRef.current;
++			if (previewOffset != null && dragPreviewRef.current != null) dragPreviewRef.current.style.transform = `translate3d(${moveEvent.clientX - previewOffset.x}px, ${moveEvent.clientY - previewOffset.y}px, 0)`;
++			scheduleDragHoverOpen(syncDropTargetFromPoint(moveEvent.clientX, moveEvent.clientY));
++			updateDragPoint(moveEvent.clientX, moveEvent.clientY);
++		};
++		const handlePointerUp = (upEvent) => {
++			const wasActive = pointerDragActiveRef.current;
++			if (!wasActive) {
++				disarmPointerDrag();
++				return;
++			}
++			syncDropTargetFromPoint(upEvent.clientX, upEvent.clientY);
++			controller.completeDrag();
++			suppressClickRef.current = true;
++			armSuppressNextClick();
++			disarmPointerDrag();
++			clearDragPreview();
++			clearDragHoverOpen();
++			stopDragAutoScroll();
++			dragRowSnapshotRef.current = null;
++		};
++		const handlePointerCancel = () => {
++			cancelArmedPointerDrag();
++		};
++		const handlePointerKeyDown = (keyEvent) => {
++			if (keyEvent.key !== "Escape") return;
++			cancelArmedPointerDrag(true);
++		};
++		window.addEventListener("pointermove", handlePointerMove, { passive: false });
++		window.addEventListener("pointerup", handlePointerUp);
++		window.addEventListener("pointercancel", handlePointerCancel);
++		window.addEventListener("keydown", handlePointerKeyDown);
++		pointerCleanupRef.current = clearPointerListeners;
++	};
+ 	const handleTreeKeyDown = (event) => {
+ 		if (contextMenuState != null) {
+ 			if (event.key === "Escape") {
+@@ -1051,7 +1194,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  			event.stopPropagation();
  			return;
  		}
@@ -212,7 +453,16 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..badd8788f67c0f70c94d8c0e81cf662f
  			if (event.key === "Escape") {
  				restoreTreeFocusAfterSearchCloseRef.current = false;
  				restoreTreeFocusViewportOffsetRef.current = null;
-@@ -1692,15 +1694,20 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -1599,6 +1742,8 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 		window.addEventListener("dragend", handleWindowDragEnd);
+ 		return () => {
+ 			window.removeEventListener("dragend", handleWindowDragEnd);
++			pointerCleanupRef.current?.();
++			pointerCleanupRef.current = null;
+ 			clearTouchDragResources();
+ 			controller.cancelDrag();
+ 		};
+@@ -1692,15 +1837,20 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  			setActiveItemPath((previousPath) => previousPath === actionTargetPath ? previousPath : actionTargetPath);
  			setLastContextMenuInteraction("focus");
  		}
@@ -236,3 +486,25 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..badd8788f67c0f70c94d8c0e81cf662f
  	]);
  	const openMenuFromTrigger = () => {
  		if (isScrollingRef.current) return;
+@@ -1733,11 +1883,13 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 		dragAndDropEnabled,
+ 		draggedPathSet,
+ 		dragTarget,
++		pointerDragThresholdPx,
+ 		gitLaneActive,
+ 		gitStatusByPath,
+ 		handleRowDragEnd,
+ 		handleRowDragStart,
+ 		handleRowTouchStart,
++		handleRowPointerDown,
+ 		ignoredGitDirectories,
+ 		ignoredInheritanceCache,
+ 		instanceId,
+@@ -1751,6 +1903,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 		renderDecorationForRow,
+ 		resolveIcon,
+ 		shouldSuppressContextMenu,
++		suppressClickRef,
+ 		visualFocusPath
+ 	};
+ 	const stickyRowFrame = {

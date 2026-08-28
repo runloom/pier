@@ -22,7 +22,7 @@ describe("DocsShell", () => {
 
     expect(screen.getByRole("heading", { name: "Manual" })).toBeTruthy();
     expect(screen.getByText("Article body")).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "目录" })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Contents" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "开始" })).toHaveAttribute(
       "aria-current",
       "page"

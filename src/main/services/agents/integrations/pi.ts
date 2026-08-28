@@ -155,6 +155,7 @@ function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 		agent: "pi",
 		event,
 		nativeEvent,
+		...pierSpawnGenerationFromEnv(),
 		...(sessionId ? { sessionId } : {}),
 		...(toolUseId ? { toolUseId } : {}),
 		...(toolName ? { toolName } : {}),

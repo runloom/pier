@@ -99,8 +99,15 @@ describe("native terminal key routing", () => {
     );
 
     expect(source).toContain(
-      "terminalAppShortcutKey(modifierFlags: mods, chars: chars)"
+      "terminalAppShortcutKey(modifierFlags: mods, code: code)"
     );
+    expect(source).toContain("keyboardEventCode(fromHardwareKeyCode");
+    expect(source).toContain("case 0x21:");
+    expect(source).toContain("case 0x1E:");
+    expect(source).toContain("case 0x18:");
+    expect(source).toContain('case "[", "{":');
+    expect(source).toContain('case "]", "}":');
+    expect(source).toContain('case "=", "+":');
     expect(allowlistCheckIndex).toBeGreaterThan(-1);
     expect(forwardIndex).toBeGreaterThan(allowlistCheckIndex);
   });

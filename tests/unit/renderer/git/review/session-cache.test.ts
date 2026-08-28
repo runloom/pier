@@ -20,7 +20,7 @@ import type {
   GitReviewIndexEntry,
   GitReviewIndexOk,
 } from "../../../../../src/shared/contracts/git/review.ts";
-import { patchDocument } from "./document-fixture.ts";
+import { patchDocument } from "./document/fixture.ts";
 
 type LoadedDocument = Extract<GitReviewDocumentResource, { kind: "loaded" }>;
 function entry(index: number): GitReviewIndexEntry {

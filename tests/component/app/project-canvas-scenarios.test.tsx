@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { parsePierCanvasMeta } from "@shared/contracts/pier-canvas.ts";
 import { PIER_CANVAS_EXPORT_NAMES } from "@shared/pier-canvas-export-names.ts";
 import { cleanup, render } from "@testing-library/react";
@@ -31,6 +29,12 @@ function displayPath(path: string): string {
   return path.replace("../../../.pier/canvases/", "canvases/");
 }
 
+const IN_REPO_REACT_CANVASES = [
+  "canvas-kit/canvas-kit.canvas.tsx",
+  "pier-cli-user-manual/pier-cli-user-manual.canvas.tsx",
+  "smoke/hello.canvas.tsx",
+] as const;
+
 describe("project canvases render", () => {
   it("exposes exactly the whitelisted pier/canvas exports", () => {
     expect(Object.keys(pierCanvasModule).sort()).toEqual(
@@ -38,26 +42,12 @@ describe("project canvases render", () => {
     );
   });
 
-  it("finds the in-repo React canvases (smoke + blank + activity)", () => {
-    // Solid entries also end in .canvas.tsx and are excluded below.
-    expect(Object.keys(CANVAS_MODULES).length).toBeGreaterThanOrEqual(3);
-  });
-
-  it("shows host activity through pier/host", () => {
-    const source = readFileSync(
-      join(
-        process.cwd(),
-        ".pier/canvases/activity-overview/activity-overview.canvas.tsx"
-      ),
-      "utf8"
-    );
-    expect(source).toContain('useHostSnapshot("foreground-activity")');
-    expect(source).toContain("ItemGroup");
-    expect(source).toMatch(/from ["']pier\/host["']/);
-    expect(source).toMatch(/from ["']pier\/canvas["']/);
-    expect(source).not.toContain("window.pier");
-    expect(source).not.toContain("useActivityOverview");
-    expect(source).not.toContain("This canvas reads useHostSnapshot");
+  it("finds exactly the in-repo React canvases (canvas-kit + cli manual + smoke)", () => {
+    const relative = Object.keys(CANVAS_MODULES)
+      .filter((path) => !path.endsWith(".canvas.solid.tsx"))
+      .map((path) => path.replace("../../../.pier/canvases/", ""))
+      .sort();
+    expect(relative).toEqual([...IN_REPO_REACT_CANVASES]);
   });
 
   for (const [path, module] of Object.entries(CANVAS_MODULES)) {

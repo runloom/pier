@@ -16,16 +16,6 @@ export const ICNS_DIMENSIONS = Object.freeze({
   ic14: 512,
 });
 
-export const MICRO_ICNS_TYPES = Object.freeze(["ic07", "ic11", "ic12"]);
-
-export const STANDARD_ICNS_TYPES = Object.freeze([
-  "ic08",
-  "ic09",
-  "ic10",
-  "ic13",
-  "ic14",
-]);
-
 const STANDARD_ICNS_SOURCE_TYPES = Object.freeze({
   ic08: "ic08",
   ic09: "ic09",
@@ -315,16 +305,13 @@ function entriesByType(entries) {
 }
 
 export function mergeIcnsRenditions(
-  standardBuffer,
-  microBuffer,
+  completeBuffer,
   legacy16Buffer,
   legacy32Buffer
 ) {
-  const standard = entriesByType(parseIcns(standardBuffer));
-  const micro = entriesByType(parseIcns(microBuffer));
+  const complete = entriesByType(parseIcns(completeBuffer));
   const legacy16 = entriesByType(parseIcns(legacy16Buffer));
   const legacy32 = entriesByType(parseIcns(legacy32Buffer));
-  const microTypes = new Set(MICRO_ICNS_TYPES);
   const merged = [];
 
   for (const type of LEGACY_ICNS_TYPES) {
@@ -337,14 +324,10 @@ export function mergeIcnsRenditions(
   }
 
   for (const [type, expectedSize] of Object.entries(ICNS_DIMENSIONS)) {
-    const useMicro = microTypes.has(type);
-    const source = useMicro ? micro : standard;
-    const sourceType = useMicro ? type : STANDARD_ICNS_SOURCE_TYPES[type];
-    const entry = source.get(sourceType);
+    const sourceType = STANDARD_ICNS_SOURCE_TYPES[type] ?? type;
+    const entry = complete.get(sourceType);
     if (!entry) {
-      throw new Error(
-        `${useMicro ? "Micro" : "Standard"} ICNS is missing ${sourceType}`
-      );
+      throw new Error(`Complete ICNS is missing ${sourceType}`);
     }
 
     const actualSize = assertPng(type, entry.data);

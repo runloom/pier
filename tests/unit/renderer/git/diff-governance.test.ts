@@ -211,16 +211,47 @@ describe("Git diff renderer governance", () => {
     // 头高常量唯一来源：geometry.ts；appearance re-export
     expect(appearanceSource).toContain("DIFF_HEADER_MIN_HEIGHT_PX");
     expect(appearanceSource).toContain('from "./geometry.ts"');
-    expect(appearanceSource).toContain("min-height: 32px");
-    // 头部实际高度与喂给 Pierre 的 itemMetrics.diffHeaderHeight 必须同源
     expect(appearanceSource).toContain(
       "height: var(--pier-diff-header-height, 32px)"
     );
+    expect(appearanceSource).toContain(
+      "min-height: var(--pier-diff-header-height, 32px)"
+    );
+    // 文件体底垫与 itemMetrics.paddingBottom 同源；禁止再吃 Pierre gap−gutter 公式
+    expect(appearanceSource).toContain("DIFF_CONTENT_PADDING_BOTTOM_PX");
+    expect(appearanceSource).toContain(
+      `  [data-code] {
+    padding-bottom: var(--pier-diff-content-padding-bottom, \${DIFF_CONTENT_PADDING_BOTTOM_PX}px);
+    scrollbar-gutter: auto;
+  }`
+    );
+    expect(appearanceSource).toContain(
+      `  [data-overflow="wrap"][data-diff-type="split"] {
+    padding-top: 0;
+    padding-bottom: var(--pier-diff-content-padding-bottom, \${DIFF_CONTENT_PADDING_BOTTOM_PX}px);
+  }`
+    );
+    expect(customCss).not.toMatch(/padding-bottom:\s*max\(0px,\s*calc\(/u);
+    expect(codeOptionsSource).toContain(
+      "paddingBottom: metrics.contentPaddingBottom"
+    );
+    expect(codeOptionsSource).toMatch(
+      /"--diffs-line-height": `\$\{metrics\.lineHeight\}px`/u
+    );
+    expect(codeOptionsSource).not.toContain('"--diffs-line-height": "1.75"');
+    expect(codeOptionsSource).toMatch(
+      /"--pier-diff-content-padding-bottom": `\$\{metrics\.contentPaddingBottom\}px`/u
+    );
+    expect(codeOptionsSource).toMatch(
+      /itemMetrics:\s*\{[^}]*paddingBottom: metrics.contentPaddingBottom/u
+    );
+    expect(codeOptionsSource).not.toMatch(/itemMetrics:\s*\{[^}]*spacing\s*:/u);
     const geometrySource = await readFile(
       join(ROOT, "packages/ui/src/diff-view/geometry.ts"),
       "utf8"
     );
     expect(geometrySource).toContain("DIFF_HEADER_MIN_HEIGHT_PX = 32");
+    expect(geometrySource).toContain("DIFF_CONTENT_PADDING_BOTTOM_PX = 8");
     expect(geometrySource).toContain("export function slotVirtualHeight");
     expect(geometrySource).toContain("export function totalScrollHeight");
     // 禁止平行 144 魔法数作为槽高
@@ -259,6 +290,12 @@ describe("Git diff renderer governance", () => {
     expect(shellSource).toContain('data-scrollbar="overlay"');
     expect(codeViewClassName).toContain("cv-scrollbar");
     expect(codeViewClassName).toContain("[scrollbar-gutter:auto]");
+    // 文件分隔只允许 inset 底边；向外的顶/底 shadow 会在 align:start 落点露出 1px 发丝
+    expect(codeViewClassName).toContain(
+      "shadow-[inset_0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))]"
+    );
+    expect(codeViewClassName).not.toContain("shadow-[0_-1px");
+    expect(codeViewClassName).not.toContain("shadow-[0_1px_0");
     const packageJson = JSON.parse(
       await readFile(join(ROOT, "packages/ui/package.json"), "utf8")
     ) as { dependencies?: Record<string, string> };
@@ -444,7 +481,7 @@ describe("Git diff renderer governance", () => {
     );
   });
 
-  it("冻结六个 Review 命令并要求 Changes 继续复用 PierFileTree", async () => {
+  it("冻结八个 Review 命令并要求 Changes 继续复用 PierFileTree", async () => {
     const operations = await readFile(
       join(ROOT, "src/shared/contracts/git-review/operations.ts"),
       "utf8"
@@ -455,6 +492,7 @@ describe("Git diff renderer governance", () => {
     expect(commandTypes).toEqual([
       "git.getReviewIndex",
       "git.getReviewFileDocument",
+      "git.getReviewExcerptBatch",
       "git.cancelReviewRequest",
       "git.applyReviewMutation",
       "git.applyReviewPathMutation",
@@ -507,11 +545,16 @@ describe("Git diff renderer governance", () => {
       join(ROOT, "src/plugins/builtin/git/renderer/review/panel-layout.tsx"),
       "utf8"
     );
-    expect(reviewPanelLayout).toContain(
+    const reviewTreeSidebar = await readFile(
+      join(ROOT, "src/plugins/builtin/git/renderer/review/tree/sidebar.tsx"),
+      "utf8"
+    );
+    expect(reviewTreeSidebar).toContain(
       'PierFileTree,\n} from "@pier/ui/file/tree.tsx"'
     );
-    expect(reviewPanelLayout).toContain('from "@pier/ui/file/tree.tsx"');
-    expect(reviewPanelLayout.match(/<PierFileTree\b/gu)).toHaveLength(1);
+    expect(reviewTreeSidebar).toContain('from "@pier/ui/file/tree.tsx"');
+    expect(reviewTreeSidebar.match(/<PierFileTree\b/gu)).toHaveLength(1);
+    expect(reviewPanelLayout).toContain("<GitReviewTreeSidebar");
     expect(reviewDocumentView).toContain("<GitReviewPanelLayout");
     expect(projectionCommit).toContain(
       "renderedGenerationRef.current = projectionGeneration;"
@@ -586,7 +629,7 @@ describe("Git diff renderer governance", () => {
       [
         "src/plugins/api/renderer-facades.ts",
         "src/renderer/lib/plugins/host/git-context.ts",
-        "src/main/app-core/command-metadata.ts",
+        "src/main/app-core/commands/metadata-table.ts",
         "src/preload/git-api.ts",
         "src/preload/git-review-api.ts",
         "src/main/app-core/commands/git-review.ts",
@@ -617,11 +660,19 @@ describe("Git diff renderer governance", () => {
       {
         command: "git.getReviewFileDocument",
         consumers: [
-          "src/plugins/builtin/git/renderer/hooks/use-document-generation-effect.ts",
           "src/plugins/builtin/git/renderer/review/discard-revision.ts",
+          "src/plugins/builtin/git/renderer/review/document/excerpt-client.ts",
         ],
         method: "getReviewFileDocument",
         service: "getFileDocument",
+      },
+      {
+        command: "git.getReviewExcerptBatch",
+        consumers: [
+          "src/plugins/builtin/git/renderer/review/document/excerpt-client.ts",
+        ],
+        method: "getReviewExcerptBatch",
+        service: "getExcerptBatch",
       },
       {
         command: "git.cancelReviewRequest",

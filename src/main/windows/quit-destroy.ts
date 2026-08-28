@@ -3,6 +3,7 @@ import {
   armDetaching,
   scheduleDisarmDetaching,
 } from "../services/agents/window-detaching-guard.ts";
+import { skipPanelIdsForHostTeardown } from "../services/host-teardown-skip.ts";
 import { detachAgentsForWindowSync } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "./app-window.ts";
 import { findWindowContext } from "./identity.ts";
@@ -22,7 +23,12 @@ export function destroyAppWindowForQuit(window: AppWindow): void {
         };
   if (detachingKeys) {
     armDetaching(detachingKeys);
-    detachAgentsForWindowSync(detachingKeys.recordId);
+    detachAgentsForWindowSync(detachingKeys.recordId, {
+      skipPanelIds: skipPanelIdsForHostTeardown(
+        detachingKeys.recordId,
+        detachingKeys.electronWindowId
+      ),
+    });
   }
   try {
     getTerminalAddon()?.detachWindow(window.getNativeWindowHandle());

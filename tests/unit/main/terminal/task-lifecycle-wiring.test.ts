@@ -1,7 +1,7 @@
 import {
   registerTerminalTaskLifecycleForwarding,
   suppressNextTerminalSurfaceClose,
-} from "@main/ipc/terminal/task-lifecycle-wiring.ts";
+} from "@main/ipc/terminal/task/lifecycle-wiring.ts";
 import {
   armDetaching,
   disarmDetaching,
@@ -18,6 +18,7 @@ const recordNativeTerminalRouteMock = vi.hoisted(() => vi.fn());
 const resetPanelMock = vi.hoisted(() => vi.fn());
 const patchTerminalPanelAgentStatusMock = vi.hoisted(() => vi.fn());
 const updateTerminalPanelTitleMock = vi.hoisted(() => vi.fn());
+const ingestCommandStartedMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@main/ipc/terminal/debug.ts", () => ({
   recordNativeTerminalRoute: recordNativeTerminalRouteMock,
@@ -27,13 +28,28 @@ vi.mock("@main/ipc/terminal/forwarding.ts", () => ({
   forwardToWindow: forwardToWindowMock,
 }));
 
-vi.mock("@main/ipc/terminal/task-lifecycle.ts", () => ({
+let currentLifecycleId: string | undefined;
+let currentSurface: "agent" | "shell" | "task" = "shell";
+
+vi.mock("@main/ipc/terminal/task/lifecycle.ts", () => ({
   createTerminalTaskLifecycle: () => ({
     completeFromExitCodeHint: completeFromExitCodeHintMock,
     completeFromNativeProcessClose: completeFromNativeProcessCloseMock,
-    isCurrentLifecycle: () => true,
+    isCurrentLifecycle: (args: { lifecycleId: string }) =>
+      currentLifecycleId === undefined ||
+      currentLifecycleId === args.lifecycleId,
+    isTaskSurface: () => currentSurface === "task",
     recordExitCodeHint: recordExitCodeHintMock,
-    resetPanel: resetPanelMock,
+    resetPanel: (
+      _panelId: string,
+      lifecycleId: string,
+      _windowId?: string,
+      surface?: "agent" | "shell" | "task"
+    ) => {
+      resetPanelMock(_panelId, lifecycleId, _windowId, surface);
+      currentLifecycleId = lifecycleId;
+      currentSurface = surface ?? (lifecycleId.length > 0 ? "task" : "shell");
+    },
   }),
 }));
 
@@ -54,12 +70,33 @@ vi.mock("@main/windows/identity.ts", () => ({
   findInternalWindowId: () => "window-main",
 }));
 
+vi.mock("@main/ipc/foreground-activity.ts", () => ({
+  foregroundActivityService: {
+    commandFinished: vi.fn(),
+    ingestCommandStarted: ingestCommandStartedMock,
+    ptyExited: vi.fn(),
+  },
+}));
+
 interface NativeAddonCallbackHarness {
+  childExited?: (
+    id: number,
+    panelId: string,
+    lifecycleId: string,
+    exitCode: number,
+    runtimeMs: number
+  ) => void;
   commandFinished?: (
     id: number,
     panelId: string,
     lifecycleId: string,
     exitCode: number
+  ) => void;
+  commandStarted?: (
+    id: number,
+    panelId: string,
+    lifecycleId: string,
+    commandLine: string
   ) => void;
   processClosed?: (
     id: number,
@@ -77,6 +114,12 @@ interface NativeAddonCallbackHarness {
 
 function addonHarness(callbacks: NativeAddonCallbackHarness) {
   return {
+    setChildExitedForwardCallback: vi.fn((cb) => {
+      callbacks.childExited = cb;
+    }),
+    setCommandStartedForwardCallback: vi.fn((cb) => {
+      callbacks.commandStarted = cb;
+    }),
     setCommandFinishedForwardCallback: vi.fn((cb) => {
       callbacks.commandFinished = cb;
     }),
@@ -91,11 +134,14 @@ function addonHarness(callbacks: NativeAddonCallbackHarness) {
 
 describe("terminal task lifecycle wiring", () => {
   beforeEach(() => {
+    currentLifecycleId = undefined;
+    currentSurface = "shell";
     completeFromExitCodeHintMock.mockReset();
     completeFromNativeProcessCloseMock.mockReset();
     forwardToWindowMock.mockReset();
     recordExitCodeHintMock.mockReset();
     recordNativeTerminalRouteMock.mockReset();
+    ingestCommandStartedMock.mockReset();
     resetPanelMock.mockReset();
     patchTerminalPanelAgentStatusMock.mockReset();
     patchTerminalPanelAgentStatusMock.mockResolvedValue(false);
@@ -248,6 +294,62 @@ describe("terminal task lifecycle wiring", () => {
     expect(completeFromNativeProcessCloseMock).toHaveBeenCalled();
   });
 
+  it("records task command-finished without completing the live login shell", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromExitCodeHintMock.mockResolvedValue(true);
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+
+    callbacks.commandFinished?.(42, "native::terminal-1", "run-1", 0);
+
+    expect(recordExitCodeHintMock).toHaveBeenCalledWith({
+      browserWindowId: 42,
+      code: 0,
+      lifecycleId: "run-1",
+      panelId: "terminal-1",
+      source: "shell-command-finished",
+      windowId: "window-main",
+    });
+    expect(completeFromExitCodeHintMock).not.toHaveBeenCalled();
+  });
+
+  it("completes a task from PTY child-exited when OSC is missing", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromExitCodeHintMock.mockResolvedValue(true);
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+
+    callbacks.childExited?.(42, "native::terminal-1", "run-1", 1, 120);
+
+    expect(completeFromExitCodeHintMock).toHaveBeenCalledWith({
+      browserWindowId: 42,
+      code: 1,
+      lifecycleId: "run-1",
+      panelId: "terminal-1",
+      source: "pty-child-exited",
+      windowId: "window-main",
+    });
+    expect(forwardToWindowMock).toHaveBeenCalledWith(
+      42,
+      PIER_BROADCAST.TERMINAL_CHILD_EXITED,
+      { exitCode: 1, panelId: "terminal-1", runtimeMs: 120 },
+      "pier-child-exited"
+    );
+  });
+
+  it("does not complete a non-task panel from PTY child-exited", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+
+    callbacks.childExited?.(42, "native::terminal-1", "", 0, 40);
+
+    expect(completeFromExitCodeHintMock).not.toHaveBeenCalled();
+    expect(forwardToWindowMock).toHaveBeenCalledWith(
+      42,
+      PIER_BROADCAST.TERMINAL_CHILD_EXITED,
+      { exitCode: 0, panelId: "terminal-1", runtimeMs: 40 },
+      "pier-child-exited"
+    );
+  });
+
   it("completes task-exit title markers without waiting for terminal close", () => {
     const callbacks: NativeAddonCallbackHarness = {};
     completeFromExitCodeHintMock.mockResolvedValue(true);
@@ -270,5 +372,81 @@ describe("terminal task lifecycle wiring", () => {
     });
     expect(updateTerminalPanelTitleMock).not.toHaveBeenCalled();
     expect(forwardToWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("patches agent exited for current spawn generation after cause is cleared", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromExitCodeHintMock.mockResolvedValue(true);
+    const lifecycle = registerTerminalTaskLifecycleForwarding(
+      addonHarness(callbacks)
+    );
+    lifecycle.resetPanel("terminal-1", "2", "window-main", "agent");
+    patchTerminalPanelAgentStatusMock.mockResolvedValue(true);
+
+    callbacks.commandFinished?.(42, "native::terminal-1", "2", 0);
+
+    expect(patchTerminalPanelAgentStatusMock).toHaveBeenCalledWith(
+      "session-main",
+      "terminal-1",
+      expect.objectContaining({ exitCode: 0, status: "exited" })
+    );
+  });
+
+  it("drops stale spawn generation command_finished without patching exited", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromExitCodeHintMock.mockResolvedValue(true);
+    const lifecycle = registerTerminalTaskLifecycleForwarding(
+      addonHarness(callbacks)
+    );
+    lifecycle.resetPanel("terminal-1", "2", "window-main", "agent");
+
+    callbacks.commandFinished?.(42, "native::terminal-1", "1", 0);
+
+    expect(patchTerminalPanelAgentStatusMock).not.toHaveBeenCalled();
+    expect(completeFromExitCodeHintMock).not.toHaveBeenCalled();
+  });
+
+  it("does not patch agent exited for task surfaces with a runId lifecycle", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromExitCodeHintMock.mockResolvedValue(true);
+    const lifecycle = registerTerminalTaskLifecycleForwarding(
+      addonHarness(callbacks)
+    );
+    lifecycle.resetPanel("terminal-1", "run-1", "window-main", "task");
+
+    callbacks.commandFinished?.(42, "native::terminal-1", "run-1", 0);
+
+    expect(patchTerminalPanelAgentStatusMock).not.toHaveBeenCalled();
+    expect(completeFromExitCodeHintMock).not.toHaveBeenCalled();
+    expect(recordExitCodeHintMock).toHaveBeenCalled();
+  });
+
+  it("ingests command_started for the current agent spawn generation", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    const lifecycle = registerTerminalTaskLifecycleForwarding(
+      addonHarness(callbacks)
+    );
+    lifecycle.resetPanel("terminal-1", "2", "window-main", "agent");
+
+    callbacks.commandStarted?.(42, "native::terminal-1", "2", "omp");
+
+    expect(ingestCommandStartedMock).toHaveBeenCalledWith(
+      "terminal-1",
+      "42",
+      "omp",
+      "omp"
+    );
+  });
+
+  it("does not ingest command_started for task surfaces", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    const lifecycle = registerTerminalTaskLifecycleForwarding(
+      addonHarness(callbacks)
+    );
+    lifecycle.resetPanel("terminal-1", "run-1", "window-main", "task");
+
+    callbacks.commandStarted?.(42, "native::terminal-1", "run-1", "pnpm test");
+
+    expect(ingestCommandStartedMock).not.toHaveBeenCalled();
   });
 });

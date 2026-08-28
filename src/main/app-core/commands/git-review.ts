@@ -69,6 +69,12 @@ export async function executeGitReviewCommand(
         await services.gitReview.getFileDocument(command.request, options)
       );
     }
+    case "git.getReviewExcerptBatch": {
+      return success(
+        requestId,
+        await services.gitReview.getExcerptBatch(command.request, options)
+      );
+    }
     case "git.applyReviewMutation": {
       const result = await services.gitReview.applyMutation(command.request, {
         ...options,
@@ -110,6 +116,7 @@ function isGitReviewCommand(command: PierCommand): command is Extract<
       | "git.cancelReviewRequest"
       | "git.applyReviewMutation"
       | "git.applyReviewPathMutation"
+      | "git.getReviewExcerptBatch"
       | "git.getReviewFileDocument"
       | "git.getReviewIndex"
       | "git.resolveReviewConflict";
@@ -119,6 +126,7 @@ function isGitReviewCommand(command: PierCommand): command is Extract<
     command.type === "git.cancelReviewRequest" ||
     command.type === "git.applyReviewMutation" ||
     command.type === "git.applyReviewPathMutation" ||
+    command.type === "git.getReviewExcerptBatch" ||
     command.type === "git.getReviewFileDocument" ||
     command.type === "git.getReviewIndex" ||
     command.type === "git.resolveReviewConflict"

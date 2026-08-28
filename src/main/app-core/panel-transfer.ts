@@ -24,12 +24,12 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
   fileDraftsFlush: () => Promise<void>;
   getTaskLifecycle?:
     | (() =>
-        | import("../ipc/terminal/task-lifecycle-wiring.ts").RegisteredTerminalTaskLifecycle
+        | import("../ipc/terminal/task/lifecycle-wiring.ts").RegisteredTerminalTaskLifecycle
         | null)
     | undefined;
   getTaskOutputBindings?:
     | (() =>
-        | import("../ipc/terminal/task-output-bindings.ts").TaskOutputTerminalBindings
+        | import("../ipc/terminal/task/output-bindings.ts").TaskOutputTerminalBindings
         | null)
     | undefined;
   getTaskService?:

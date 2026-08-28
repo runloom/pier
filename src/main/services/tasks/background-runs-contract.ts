@@ -24,6 +24,7 @@ export interface TaskBackgroundRuns {
     launches: readonly TaskLaunchPlan[];
     originPanelId?: string | undefined;
     projectRootPath: string;
+    recordRecent?: boolean | undefined;
     rootTaskId: string;
     windowId?: string | undefined;
   }): Promise<TaskRunCoordinatorStartResult>;

@@ -155,6 +155,35 @@ describe("canvas trust service", () => {
     });
   });
 
+  it("remembers command grants in userData and not the project", async () => {
+    const service = await createService();
+    const root = await projectRoot();
+    const input = {
+      canvasPath: ".pier/canvases/demo/hello.canvas.tsx",
+      commandHash: "abc123",
+      key: "refresh",
+      projectRootPath: root,
+    };
+    await expect(service.commandGrantMatches(input)).resolves.toBe(false);
+    await service.rememberCommandGrant(input);
+    await expect(service.commandGrantMatches(input)).resolves.toBe(true);
+    await expect(
+      service.commandGrantMatches({ ...input, commandHash: "other" })
+    ).resolves.toBe(false);
+    await service.flush();
+    const stored = await readFile(
+      join(userDataDir(), "canvas-command-grants.json"),
+      "utf-8"
+    );
+    expect(stored).toContain("abc123");
+    await expect(
+      readFile(join(root, "canvas-command-grants.json"), "utf-8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      readFile(join(root, ".pier", "canvas-command-grants.json"), "utf-8")
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("fails closed on a corrupt store file", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-canvas-trust-"));
     dirs.push(dir);

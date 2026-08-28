@@ -1,18 +1,15 @@
 .DS_Store
+__pycache__/
+*.pyc
 node_modules
 # build/ 默认忽略; 但 electron-builder buildResources (icon.*, entitlements) 必须入库.
 /build/*
 !/build/icon.icns
 !/build/icon.ico
 !/build/icon.png
-!/build/icon-dock.png
 !/build/Assets.car
 !/build/Assets.car.inputs
-!/build/app-icon-master.svg
-!/build/app-icon-micro.svg
-!/build/app-icon-unplated.svg
-!/build/app-icon.icon/
-!/build/app-icon.icon/**
+!/build/app-icon-source.svg
 !/build/icons/
 !/build/icons/*.png
 !/build/design-sources/
@@ -117,4 +114,3 @@ playwright-report/
 .pier/worktree-incarnations.json
 
 .commandcode/taste
-

@@ -1,7 +1,6 @@
-import { execFileSync } from "node:child_process";
 import {
-  chmodSync,
   copyFileSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -10,29 +9,21 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { encodeIcns } from "../../../scripts/app-icon-icns.mjs";
+import { basename, join } from "node:path";
+import { crc32, deflateSync } from "node:zlib";
+import { describe, expect, it, vi } from "vitest";
 import {
-  assertCompiledIconStack,
-  MAC_ICON_MARK_SIZE,
-  MAC_ICON_RENDITION_NAME,
-} from "../../../scripts/app-icon-layered.mjs";
-import { buildAppIcons } from "../../../scripts/build-app-icons.mjs";
-
-function hasCommand(name: string): boolean {
-  try {
-    execFileSync("which", [name], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-const hasRsvgConvert = hasCommand("rsvg-convert");
+  encodeIcns,
+  ICNS_DIMENSIONS,
+} from "../../../scripts/app-icon-icns.mjs";
+import { MAC_ICON_RENDITION_NAME } from "../../../scripts/app-icon-layered.mjs";
+import {
+  buildAppIcons,
+  extractLargestIconPng,
+} from "../../../scripts/build-app-icons.mjs";
 
 const SOURCE_DIRECTORY = join(process.cwd(), "build");
-const LINUX_ICON_NAMES = [
+const ICON_NAMES = [
   "16x16.png",
   "24x24.png",
   "32x32.png",
@@ -43,15 +34,71 @@ const LINUX_ICON_NAMES = [
   "512x512.png",
 ] as const;
 
-function createOfflineIconConverter(calls: string[]) {
-  return async (options: { outDir: string; outputFormat: string }) => {
-    calls.push(options.outputFormat);
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+
+function pngChunk(type: string, data = Buffer.alloc(0)): Buffer {
+  const chunk = Buffer.alloc(12 + data.length);
+  chunk.writeUInt32BE(data.length, 0);
+  chunk.write(type, 4, 4, "ascii");
+  data.copy(chunk, 8);
+  chunk.writeUInt32BE(
+    crc32(chunk.subarray(4, 8 + data.length)),
+    8 + data.length
+  );
+  return chunk;
+}
+
+function rgbaPng(size: number, marker: string): Buffer {
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(size, 0);
+  ihdr.writeUInt32BE(size, 4);
+  ihdr.set([8, 6, 0, 0, 0], 8);
+  return Buffer.concat([
+    PNG_SIGNATURE,
+    pngChunk("IHDR", ihdr),
+    pngChunk("tEXt", Buffer.from(`fixture\0${marker}`)),
+    pngChunk("IDAT", deflateSync(Buffer.alloc((size * 4 + 1) * size))),
+    pngChunk("IEND"),
+  ]);
+}
+
+const IC10_PNG = rgbaPng(1024, "literal-ic10-frame");
+const GENERATED_ICNS = encodeIcns(
+  Object.entries(ICNS_DIMENSIONS).map(([type, size]) => ({
+    type,
+    data: type === "ic10" ? IC10_PNG : rgbaPng(size, type),
+  }))
+);
+const CHANGED_IC10_PNG = rgbaPng(1024, "changed-literal-ic10-frame");
+const GENERATED_ICNS_WITH_CHANGED_IC10 = encodeIcns(
+  Object.entries(ICNS_DIMENSIONS).map(([type, size]) => ({
+    type,
+    data: type === "ic10" ? CHANGED_IC10_PNG : rgbaPng(size, type),
+  }))
+);
+
+function createOfflineConverter(
+  calls: string[],
+  failOn?: string,
+  generatedIcns: () => Buffer = () => GENERATED_ICNS
+) {
+  return async (options: {
+    inputFile: string;
+    outDir: string;
+    outputFormat: string;
+  }) => {
+    calls.push(`${basename(options.inputFile)}:${options.outputFormat}`);
+    if (options.outputFormat === failOn) {
+      throw new Error(`failed ${failOn} conversion`);
+    }
     mkdirSync(options.outDir, { recursive: true });
-    if (options.outputFormat === "icns") {
-      copyFileSync(
-        join(SOURCE_DIRECTORY, "icon.icns"),
-        join(options.outDir, "icon.icns")
-      );
+    if (options.outputFormat === "set") {
+      for (const name of ICON_NAMES) {
+        copyFileSync(
+          join(SOURCE_DIRECTORY, "icons", name),
+          join(options.outDir, name)
+        );
+      }
       return;
     }
     if (options.outputFormat === "ico") {
@@ -61,24 +108,23 @@ function createOfflineIconConverter(calls: string[]) {
       );
       return;
     }
-    if (options.outputFormat === "set") {
-      for (const name of LINUX_ICON_NAMES) {
-        copyFileSync(
-          join(SOURCE_DIRECTORY, "icons", name),
-          join(options.outDir, name)
-        );
-      }
+    if (options.outputFormat === "icns") {
+      writeFileSync(join(options.outDir, "icon.icns"), generatedIcns());
       return;
     }
-    throw new Error(`Unexpected icon format ${options.outputFormat}`);
+    throw new Error(`unexpected format ${options.outputFormat}`);
   };
 }
 
-function encodeOfflineLegacyIcons() {
+function encodeOfflineLegacyIcons(options: {
+  source16: string;
+  source32: string;
+}) {
+  expect(basename(options.source16)).toBe("16x16.png");
+  expect(basename(options.source32)).toBe("32x32.png");
   const legacyRgb = (size: number) => {
     const channel: number[] = [];
-    let remaining = size * size;
-    while (remaining > 0) {
+    for (let remaining = size * size; remaining > 0; ) {
       const count = Math.min(130, remaining);
       channel.push(count + 125, 0);
       remaining -= count;
@@ -97,18 +143,18 @@ function encodeOfflineLegacyIcons() {
   });
 }
 
-function seedPublishedAssets(outputDirectory: string): Map<string, Buffer> {
+function seedPublishedAssets(outputDirectory: string) {
   mkdirSync(join(outputDirectory, "icons"), { recursive: true });
-  mkdirSync(join(outputDirectory, "app-icon.icon"), { recursive: true });
   const assets = new Map([
     ["icon.icns", Buffer.from("previous-icns")],
     ["icon.ico", Buffer.from("previous-ico")],
     ["icon.png", Buffer.from("previous-container")],
     ["icon-dock.png", Buffer.from("previous-dock")],
     ["icons/16x16.png", Buffer.from("previous-linux")],
-    ["app-icon.icon/icon.json", Buffer.from("previous-icon-document")],
+    ["icons/96x96.png", Buffer.from("previous-extra-size")],
     ["Assets.car", Buffer.from("previous-car")],
     ["Assets.car.inputs", Buffer.from("previous-inputs")],
+    ["app-icon-source.png", Buffer.from("previous-published-source")],
   ]);
   for (const [path, data] of assets) {
     writeFileSync(join(outputDirectory, path), data);
@@ -116,431 +162,366 @@ function seedPublishedAssets(outputDirectory: string): Map<string, Buffer> {
   return assets;
 }
 
-function writeStubRasterizer(root: string): string {
-  const stub = join(root, "stub-rsvg-convert");
-  writeFileSync(
-    stub,
-    '#!/bin/sh\nif [ "$1" = "--version" ]; then exit 0; fi\nexit 42\n'
-  );
-  chmodSync(stub, 0o755);
-  return stub;
-}
-
-async function rejectLayeredCarCompile(): Promise<never> {
-  throw new Error("car compile must not run after an earlier failure");
-}
-
-interface CompileOptions {
-  documentDirectory: string;
-  outputDirectory: string;
-}
-
-function createRecordingCompile(
-  calls: CompileOptions[],
-  result: { omitCar?: boolean; renditionName?: string } = {}
+function createCompile(
+  calls: string[],
+  options: {
+    expectedPng?: () => Buffer;
+    carContents?: () => string;
+    iconName?: string;
+    omitCar?: boolean;
+    omitIconFile?: boolean;
+  } = {}
 ) {
-  const renditionName = result.renditionName ?? MAC_ICON_RENDITION_NAME;
-  return async (options: CompileOptions) => {
-    calls.push(options);
-    if (!result.omitCar) {
+  return async ({
+    documentDirectory,
+    outputDirectory,
+  }: {
+    documentDirectory: string;
+    outputDirectory: string;
+  }) => {
+    calls.push(documentDirectory);
+    expect(
+      readFileSync(join(documentDirectory, "Assets/app-icon-source.png"))
+    ).toEqual(options.expectedPng?.() ?? IC10_PNG);
+    if (!options.omitCar) {
       writeFileSync(
-        join(options.outputDirectory, "Assets.car"),
-        Buffer.from("fake-layered-car")
+        join(outputDirectory, "Assets.car"),
+        options.carContents?.() ?? "fake-car"
       );
     }
+    const iconName = options.iconName ?? MAC_ICON_RENDITION_NAME;
     writeFileSync(
-      join(options.outputDirectory, "partial.plist"),
-      `<plist><dict><key>CFBundleIconName</key><string>${renditionName}</string></dict></plist>`
+      join(outputDirectory, "partial.plist"),
+      `<plist><dict>${options.omitIconFile ? "" : `<key>CFBundleIconFile</key><string>${iconName}</string>`}<key>CFBundleIconName</key><string>${iconName}</string></dict></plist>`
     );
-    return Promise.resolve();
   };
 }
 
-interface AssetUtilInfo {
-  ok: boolean;
-  stderr: string;
-  stdout: string;
-}
+describe("Pier SVG-first application icon builder", () => {
+  it("extracts only a validated 1024 RGBA ic10 frame", () => {
+    expect(extractLargestIconPng(GENERATED_ICNS)).toEqual(IC10_PNG);
+    expect(() =>
+      extractLargestIconPng(
+        encodeIcns([{ type: "ic09", data: rgbaPng(512, "no-ic10") }])
+      )
+    ).toThrow(/ic10/);
+    expect(() =>
+      extractLargestIconPng(
+        encodeIcns([{ type: "ic10", data: rgbaPng(512, "wrong-size") }])
+      )
+    ).toThrow(/1024/);
+  });
 
-function inspectWith(stdout: string, ok = true) {
-  return (): AssetUtilInfo => ({ ok, stdout, stderr: "" });
-}
-
-const LAYERED_STACK_ENTRIES = JSON.stringify([
-  { AssetType: "IconImageStack", Name: MAC_ICON_RENDITION_NAME },
-  {
-    AssetType: "Icon Image",
-    Name: MAC_ICON_RENDITION_NAME,
-    PixelWidth: MAC_ICON_MARK_SIZE,
-  },
-]);
-
-describe("Pier application icon builder", () => {
-  it("keeps the complete published asset set unchanged when generation fails", {
-    timeout: 15_000,
-  }, async () => {
+  it("keeps every published asset unchanged when generation fails", async () => {
     const root = mkdtempSync(join(tmpdir(), "pier-icon-transaction-"));
-    const outputDirectory = join(root, "output");
-    mkdirSync(outputDirectory);
-    const previousAssets = seedPublishedAssets(outputDirectory);
-    const conversionCalls: string[] = [];
-    const failingRasterizer = writeStubRasterizer(root);
-
+    const output = join(root, "output");
+    mkdirSync(output);
+    const previous = seedPublishedAssets(output);
     try {
       await expect(
         buildAppIcons({
-          sourceDirectory: SOURCE_DIRECTORY,
-          outputDirectory,
-          rsvgCommand: failingRasterizer,
-          convertIcons: createOfflineIconConverter(conversionCalls),
+          compileIconDocument: vi.fn(),
+          convertIcons: createOfflineConverter([], "ico"),
           encodeLegacyIcons: encodeOfflineLegacyIcons,
-          compileIconDocument: rejectLayeredCarCompile,
           log: () => undefined,
+          outputDirectory: output,
+          sourceDirectory: SOURCE_DIRECTORY,
         })
-      ).rejects.toThrow(/exit 42/);
-      expect(conversionCalls).toEqual(["icns", "icns", "ico", "set"]);
-
-      for (const [path, data] of previousAssets) {
-        expect(readFileSync(join(outputDirectory, path))).toEqual(data);
+      ).rejects.toThrow(/failed ico conversion/);
+      for (const [path, data] of previous) {
+        expect(readFileSync(join(output, path)), path).toEqual(data);
       }
       expect(
-        readdirSync(outputDirectory).filter((name) =>
-          name.startsWith(".icon-build-")
-        )
+        readdirSync(output).filter((name) => name.startsWith(".icon-build-"))
       ).toEqual([]);
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      rmSync(root, { force: true, recursive: true });
     }
   });
 
-  it("reports the missing librsvg dependency before touching outputs", async () => {
-    const root = mkdtempSync(join(tmpdir(), "pier-icon-dependency-"));
-    const outputDirectory = join(root, "output");
-    mkdirSync(outputDirectory);
-    const previousAssets = seedPublishedAssets(outputDirectory);
-
+  it("reports missing sips and actool before touching outputs", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-icon-dependencies-"));
+    const output = join(root, "output");
+    mkdirSync(output);
+    const previous = seedPublishedAssets(output);
     try {
       await expect(
         buildAppIcons({
-          sourceDirectory: SOURCE_DIRECTORY,
-          outputDirectory,
-          rsvgCommand: join(root, "missing-rsvg-convert"),
+          compileIconDocument: vi.fn(),
+          convertIcons: createOfflineConverter([]),
           log: () => undefined,
+          outputDirectory: output,
+          sipsCommand: join(root, "missing-sips"),
+          sourceDirectory: SOURCE_DIRECTORY,
         })
-      ).rejects.toThrow(/rsvg-convert.*librsvg/i);
+      ).rejects.toThrow(/sips.*legacy/i);
 
-      for (const [path, data] of previousAssets) {
-        expect(readFileSync(join(outputDirectory, path))).toEqual(data);
-      }
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  it("reports the missing actool dependency before touching outputs", async () => {
-    const root = mkdtempSync(join(tmpdir(), "pier-icon-actool-"));
-    const outputDirectory = join(root, "output");
-    mkdirSync(outputDirectory);
-    const previousAssets = seedPublishedAssets(outputDirectory);
-    const stubRasterizer = writeStubRasterizer(root);
-
-    try {
       await expect(
         buildAppIcons({
+          convertIcons: createOfflineConverter([]),
+          encodeLegacyIcons: encodeOfflineLegacyIcons,
+          log: () => undefined,
+          outputDirectory: output,
           sourceDirectory: SOURCE_DIRECTORY,
-          outputDirectory,
-          rsvgCommand: stubRasterizer,
           xcrunCommand: join(root, "missing-xcrun"),
-          convertIcons: createOfflineIconConverter([]),
-          encodeLegacyIcons: encodeOfflineLegacyIcons,
-          log: () => undefined,
         })
-      ).rejects.toThrow(/actool.*Xcode/);
+      ).rejects.toThrow(/actool.*Xcode/i);
 
-      for (const [path, data] of previousAssets) {
-        expect(readFileSync(join(outputDirectory, path))).toEqual(data);
+      for (const [path, data] of previous) {
+        expect(readFileSync(join(output, path)), path).toEqual(data);
       }
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      rmSync(root, { force: true, recursive: true });
     }
   });
 
-  it.runIf(hasRsvgConvert)(
-    "publishes the staged layered icon document and reuses the car on identical inputs",
-    { timeout: 60_000 },
-    async () => {
-      const root = mkdtempSync(join(tmpdir(), "pier-icon-success-"));
-      const outputDirectory = join(root, "output");
-      mkdirSync(outputDirectory);
-      seedPublishedAssets(outputDirectory);
-      const compileCalls: CompileOptions[] = [];
-      const fakeCompile = createRecordingCompile(compileCalls);
-      const buildOnce = () =>
-        buildAppIcons({
-          sourceDirectory: SOURCE_DIRECTORY,
-          outputDirectory,
-          convertIcons: createOfflineIconConverter([]),
-          encodeLegacyIcons: encodeOfflineLegacyIcons,
-          compileIconDocument: fakeCompile,
-          log: () => undefined,
-        });
+  it("publishes the complete set, deletes stale sources, and recompiles the native catalog every time", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-icon-success-"));
+    const output = join(root, "output");
+    mkdirSync(output);
+    seedPublishedAssets(output);
+    mkdirSync(join(output, "app-icon.icon"));
+    const conversions: string[] = [];
+    const compileCalls: string[] = [];
+    const build = () =>
+      buildAppIcons({
+        compileIconDocument: createCompile(compileCalls),
+        convertIcons: createOfflineConverter(conversions),
+        encodeLegacyIcons: encodeOfflineLegacyIcons,
+        log: () => undefined,
+        outputDirectory: output,
+        sourceDirectory: SOURCE_DIRECTORY,
+      });
 
-      try {
-        await buildOnce();
+    try {
+      await build();
+      expect(conversions).toEqual([
+        "app-icon-source.svg:set",
+        "app-icon-source.svg:ico",
+        "app-icon-source.svg:icns",
+      ]);
+      expect(compileCalls).toHaveLength(1);
+      expect(readdirSync(join(output, "icons")).sort()).toEqual(
+        [...ICON_NAMES].sort()
+      );
+      expect(existsSync(join(output, "icons/96x96.png"))).toBe(false);
+      expect(existsSync(join(output, "app-icon.icon"))).toBe(false);
+      expect(existsSync(join(output, "app-icon-source.png"))).toBe(false);
+      expect(existsSync(join(output, "icon-dock.png"))).toBe(false);
+      expect(readFileSync(join(output, "icon.png"))).toEqual(
+        readFileSync(join(output, "icons/512x512.png"))
+      );
+      expect(readFileSync(join(output, "Assets.car")).toString()).toBe(
+        "fake-car"
+      );
+      expect(readFileSync(join(output, "Assets.car.inputs"), "utf8")).toMatch(
+        /^[0-9a-f]{64}\n$/
+      );
 
-        expect(compileCalls).toHaveLength(1);
-        expect(
-          compileCalls[0]?.documentDirectory.endsWith("app-icon.icon")
-        ).toBe(true);
-        expect(
-          readFileSync(join(outputDirectory, "Assets.car")).toString()
-        ).toBe("fake-layered-car");
-        expect(
-          readFileSync(join(outputDirectory, "app-icon.icon", "icon.json"))
-        ).toEqual(
-          readFileSync(join(SOURCE_DIRECTORY, "app-icon.icon", "icon.json"))
-        );
-        const mark = readFileSync(
-          join(outputDirectory, "app-icon.icon", "Assets", "pier-mark.png")
-        );
-        expect(mark.readUInt32BE(16)).toBe(1024);
-        expect(mark.readUInt32BE(20)).toBe(1024);
-        expect(
-          readFileSync(join(outputDirectory, "Assets.car.inputs"), "utf8")
-        ).toMatch(/^[0-9a-f]{64}\n$/);
-        expect(
-          readdirSync(outputDirectory).filter((name) =>
-            name.startsWith(".icon-build-")
-          )
-        ).toEqual([]);
-
-        // Identical inputs must not recompile the volatile car.
-        await buildOnce();
-        expect(compileCalls).toHaveLength(1);
-        expect(
-          readFileSync(join(outputDirectory, "Assets.car")).toString()
-        ).toBe("fake-layered-car");
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
+      await build();
+      expect(compileCalls).toHaveLength(2);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
     }
-  );
-
-  it("accepts a compiled car carrying the layered stack and full-size rendition", () => {
-    expect(() =>
-      assertCompiledIconStack("Assets.car", inspectWith(LAYERED_STACK_ENTRIES))
-    ).not.toThrow();
   });
 
-  it("rejects a car without the layered rendition or full-size frame", () => {
-    const flatOnly = JSON.stringify([
-      {
-        AssetType: "Icon Image",
-        Name: MAC_ICON_RENDITION_NAME,
-        PixelWidth: MAC_ICON_MARK_SIZE,
-      },
-    ]);
-    expect(() =>
-      assertCompiledIconStack("Assets.car", inspectWith(flatOnly))
-    ).toThrow(/missing .*layered rendition/);
-    const undersizedFrame = JSON.stringify([
-      { AssetType: "IconImageStack", Name: MAC_ICON_RENDITION_NAME },
-      {
-        AssetType: "Icon Image",
-        Name: MAC_ICON_RENDITION_NAME,
-        PixelWidth: 512,
-      },
-    ]);
-    expect(() =>
-      assertCompiledIconStack("Assets.car", inspectWith(undersizedFrame))
-    ).toThrow(/missing .*layered rendition/);
+  it("recompiles the native catalog when authored SVG bytes change but the extracted PNG does not", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-icon-svg-fingerprint-"));
+    const sourceDirectory = join(root, "source");
+    const output = join(root, "output");
+    mkdirSync(sourceDirectory);
+    mkdirSync(output);
+    copyFileSync(
+      join(SOURCE_DIRECTORY, "app-icon-source.svg"),
+      join(sourceDirectory, "app-icon-source.svg")
+    );
+    const compileCalls: string[] = [];
+    const build = () =>
+      buildAppIcons({
+        compileIconDocument: createCompile(compileCalls),
+        convertIcons: createOfflineConverter([]),
+        encodeLegacyIcons: encodeOfflineLegacyIcons,
+        log: () => undefined,
+        outputDirectory: output,
+        sourceDirectory,
+      });
+
+    try {
+      await build();
+      const baseline = readFileSync(join(output, "Assets.car.inputs"), "utf8");
+      const source = join(sourceDirectory, "app-icon-source.svg");
+      writeFileSync(
+        source,
+        `${readFileSync(source, "utf8")}\n<!-- changed -->\n`
+      );
+
+      await build();
+
+      expect(compileCalls).toHaveLength(2);
+      expect(readFileSync(join(output, "Assets.car.inputs"), "utf8")).not.toBe(
+        baseline
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
-  it("rejects uninspectable or unparseable assetutil output", () => {
-    expect(() =>
-      assertCompiledIconStack("Assets.car", () => ({
-        ok: false,
-        stdout: "",
-        stderr: "boom",
-      }))
-    ).toThrow(/could not inspect/);
-    expect(() =>
-      assertCompiledIconStack("Assets.car", inspectWith("not-json"))
-    ).toThrow(/unparseable/);
+  it("keeps published catalog bytes when a fresh compile has the same semantic icon", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-icon-semantic-cache-"));
+    const output = join(root, "output");
+    mkdirSync(output);
+    let compiledCar = "first-nondeterministic-car";
+    const build = () =>
+      buildAppIcons({
+        compileIconDocument: createCompile([], {
+          carContents: () => compiledCar,
+        }),
+        compiledIconSemanticSignature: () => "same-visible-icon",
+        convertIcons: createOfflineConverter([]),
+        encodeLegacyIcons: encodeOfflineLegacyIcons,
+        log: () => undefined,
+        outputDirectory: output,
+        sourceDirectory: SOURCE_DIRECTORY,
+      });
+
+    try {
+      await build();
+      compiledCar = "second-nondeterministic-car";
+      await build();
+      expect(readFileSync(join(output, "Assets.car"), "utf8")).toBe(
+        "first-nondeterministic-car"
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
-  it.runIf(hasRsvgConvert)(
-    "rejects an actool run that produces no Assets.car",
-    { timeout: 60_000 },
-    async () => {
-      const root = mkdtempSync(join(tmpdir(), "pier-icon-nocar-"));
-      const outputDirectory = join(root, "output");
-      mkdirSync(outputDirectory);
-      seedPublishedAssets(outputDirectory);
-      const compileCalls: CompileOptions[] = [];
+  it("replaces a structurally valid catalog when fresh semantic content differs", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-icon-semantic-drift-"));
+    const output = join(root, "output");
+    mkdirSync(output);
+    let compiledCar = "visible-icon-a";
+    const build = () =>
+      buildAppIcons({
+        compileIconDocument: createCompile([], {
+          carContents: () => compiledCar,
+        }),
+        compiledIconSemanticSignature: (path: string) =>
+          readFileSync(path, "utf8"),
+        convertIcons: createOfflineConverter([]),
+        encodeLegacyIcons: encodeOfflineLegacyIcons,
+        log: () => undefined,
+        outputDirectory: output,
+        sourceDirectory: SOURCE_DIRECTORY,
+      });
 
-      try {
+    try {
+      await build();
+      compiledCar = "visible-icon-b";
+      await build();
+      expect(readFileSync(join(output, "Assets.car"), "utf8")).toBe(
+        "visible-icon-b"
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it("recompiles the native catalog when the extracted ic10 PNG changes but authored SVG bytes do not", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-icon-png-fingerprint-"));
+    const output = join(root, "output");
+    mkdirSync(output);
+    const compileCalls: string[] = [];
+    let generatedIcns = GENERATED_ICNS;
+    let expectedPng = IC10_PNG;
+    const build = () =>
+      buildAppIcons({
+        compileIconDocument: createCompile(compileCalls, {
+          expectedPng: () => expectedPng,
+        }),
+        convertIcons: createOfflineConverter(
+          [],
+          undefined,
+          () => generatedIcns
+        ),
+        encodeLegacyIcons: encodeOfflineLegacyIcons,
+        log: () => undefined,
+        outputDirectory: output,
+        sourceDirectory: SOURCE_DIRECTORY,
+      });
+
+    try {
+      await build();
+      const baseline = readFileSync(join(output, "Assets.car.inputs"), "utf8");
+      generatedIcns = GENERATED_ICNS_WITH_CHANGED_IC10;
+      expectedPng = CHANGED_IC10_PNG;
+
+      await build();
+
+      expect(compileCalls).toHaveLength(2);
+      expect(readFileSync(join(output, "Assets.car.inputs"), "utf8")).not.toBe(
+        baseline
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it("rejects SVG sources without the exact viewBox or with external assets", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-icon-invalid-svg-"));
+    try {
+      const invalidSources: readonly (readonly [string, string])[] = [
+        ["wrong-viewbox", '<svg viewBox="0 0 512 512"/>'],
+        [
+          "external-image",
+          '<svg viewBox="0 0 1024 1024"><image href="art.png"/></svg>',
+        ],
+      ];
+      for (const [name, source] of invalidSources) {
+        const sourceDirectory = join(root, name);
+        const outputDirectory = join(root, `${name}-output`);
+        mkdirSync(sourceDirectory);
+        mkdirSync(outputDirectory);
+        writeFileSync(join(sourceDirectory, "app-icon-source.svg"), source);
         await expect(
           buildAppIcons({
-            sourceDirectory: SOURCE_DIRECTORY,
-            outputDirectory,
-            convertIcons: createOfflineIconConverter([]),
+            compileIconDocument: vi.fn(),
+            convertIcons: createOfflineConverter([]),
             encodeLegacyIcons: encodeOfflineLegacyIcons,
-            compileIconDocument: createRecordingCompile(compileCalls, {
-              omitCar: true,
-            }),
             log: () => undefined,
+            outputDirectory,
+            sourceDirectory,
           })
-        ).rejects.toThrow(/did not produce Assets\.car/);
-        expect(compileCalls).toHaveLength(1);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
+        ).rejects.toThrow(/viewBox|self-contained/i);
       }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
     }
-  );
+  });
 
-  it.runIf(hasRsvgConvert)(
-    "rejects a partial Info.plist naming a different icon",
-    { timeout: 60_000 },
-    async () => {
-      const root = mkdtempSync(join(tmpdir(), "pier-icon-plist-"));
-      const outputDirectory = join(root, "output");
-      mkdirSync(outputDirectory);
-      seedPublishedAssets(outputDirectory);
-      const compileCalls: CompileOptions[] = [];
-
-      try {
+  it("rejects missing native outputs and mismatched plist identity", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pier-icon-native-errors-"));
+    try {
+      for (const compile of [
+        createCompile([], { omitCar: true }),
+        createCompile([], { iconName: "other-icon" }),
+        createCompile([], { omitIconFile: true }),
+      ]) {
+        const output = join(root, Math.random().toString(36));
+        mkdirSync(output);
         await expect(
           buildAppIcons({
-            sourceDirectory: SOURCE_DIRECTORY,
-            outputDirectory,
-            convertIcons: createOfflineIconConverter([]),
+            compileIconDocument: compile,
+            convertIcons: createOfflineConverter([]),
             encodeLegacyIcons: encodeOfflineLegacyIcons,
-            compileIconDocument: createRecordingCompile(compileCalls, {
-              renditionName: "other-icon",
-            }),
             log: () => undefined,
+            outputDirectory: output,
+            sourceDirectory: SOURCE_DIRECTORY,
           })
-        ).rejects.toThrow(`CFBundleIconName=${MAC_ICON_RENDITION_NAME}`);
-        expect(compileCalls).toHaveLength(1);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
+        ).rejects.toThrow(/Assets\.car|CFBundleIconFile/);
       }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
     }
-  );
-
-  it.runIf(hasRsvgConvert)(
-    "recompiles when the sidecar is stale even though the car exists",
-    { timeout: 60_000 },
-    async () => {
-      const root = mkdtempSync(join(tmpdir(), "pier-icon-stale-"));
-      const outputDirectory = join(root, "output");
-      mkdirSync(outputDirectory);
-      seedPublishedAssets(outputDirectory);
-      const compileCalls: CompileOptions[] = [];
-      const buildOnce = () =>
-        buildAppIcons({
-          sourceDirectory: SOURCE_DIRECTORY,
-          outputDirectory,
-          convertIcons: createOfflineIconConverter([]),
-          encodeLegacyIcons: encodeOfflineLegacyIcons,
-          compileIconDocument: createRecordingCompile(compileCalls),
-          log: () => undefined,
-        });
-
-      try {
-        await buildOnce();
-        writeFileSync(
-          join(outputDirectory, "Assets.car.inputs"),
-          `${"0".repeat(64)}\n`
-        );
-
-        await buildOnce();
-
-        expect(compileCalls).toHaveLength(2);
-        expect(
-          readFileSync(join(outputDirectory, "Assets.car.inputs"), "utf8")
-        ).toMatch(/^[0-9a-f]{64}\n$/);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    }
-  );
-
-  it.runIf(hasRsvgConvert)(
-    "recompiles when the published car is missing despite a matching sidecar",
-    { timeout: 60_000 },
-    async () => {
-      const root = mkdtempSync(join(tmpdir(), "pier-icon-orphan-"));
-      const outputDirectory = join(root, "output");
-      mkdirSync(outputDirectory);
-      seedPublishedAssets(outputDirectory);
-      const compileCalls: CompileOptions[] = [];
-      const buildOnce = () =>
-        buildAppIcons({
-          sourceDirectory: SOURCE_DIRECTORY,
-          outputDirectory,
-          convertIcons: createOfflineIconConverter([]),
-          encodeLegacyIcons: encodeOfflineLegacyIcons,
-          compileIconDocument: createRecordingCompile(compileCalls),
-          log: () => undefined,
-        });
-
-      try {
-        await buildOnce();
-        rmSync(join(outputDirectory, "Assets.car"));
-
-        await buildOnce();
-
-        expect(compileCalls).toHaveLength(2);
-        expect(
-          readFileSync(join(outputDirectory, "Assets.car")).toString()
-        ).toBe("fake-layered-car");
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    }
-  );
-
-  it.runIf(hasRsvgConvert)(
-    "validates a reused car only when publication validation is enabled",
-    { timeout: 60_000 },
-    async () => {
-      const root = mkdtempSync(join(tmpdir(), "pier-icon-validate-"));
-      const outputDirectory = join(root, "output");
-      mkdirSync(outputDirectory);
-      seedPublishedAssets(outputDirectory);
-      const compileCalls: CompileOptions[] = [];
-      const buildOnce = (validatePublishedCar?: boolean) =>
-        buildAppIcons({
-          sourceDirectory: SOURCE_DIRECTORY,
-          outputDirectory,
-          convertIcons: createOfflineIconConverter([]),
-          encodeLegacyIcons: encodeOfflineLegacyIcons,
-          compileIconDocument: createRecordingCompile(compileCalls),
-          validatePublishedCar,
-          log: () => undefined,
-        });
-
-      try {
-        await buildOnce();
-        writeFileSync(
-          join(outputDirectory, "Assets.car"),
-          Buffer.from("corrupt-car")
-        );
-
-        // Injection seam off (tests/hermetic hosts): reuse skips inspection.
-        await buildOnce();
-        expect(compileCalls).toHaveLength(1);
-        expect(
-          readFileSync(join(outputDirectory, "Assets.car")).toString()
-        ).toBe("corrupt-car");
-
-        await expect(buildOnce(true)).rejects.toThrow(/assetutil/);
-        expect(compileCalls).toHaveLength(1);
-      } finally {
-        rmSync(root, { recursive: true, force: true });
-      }
-    }
-  );
+  });
 });

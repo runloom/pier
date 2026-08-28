@@ -14,6 +14,7 @@ import {
   writeMarkdownMeasureMode,
   writeMarkdownReadingAppearance,
 } from "@plugins/builtin/files/renderer/markdown/preview-preferences.ts";
+import { FILES_CANVAS_PREVIEW_SURFACE } from "@plugins/builtin/files/renderer/preview/canvas-preview-surface.ts";
 import { beforeEach, describe, expect, it } from "vitest";
 
 function fakeContext(): RendererPluginContext {
@@ -37,7 +38,18 @@ describe("createFilesMarkdownPreviewActions", () => {
     expect(readMarkdownMeasureMode()).toBe("comfortable");
     expect(readMarkdownReadingAppearance()).toBe("auto");
     const actions = createFilesMarkdownPreviewActions(fakeContext());
+    const measureSurfaces = [
+      FILES_MARKDOWN_PREVIEW_SURFACE,
+      FILES_CANVAS_PREVIEW_SURFACE,
+    ];
     for (const action of actions) {
+      if (
+        action.id === FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID ||
+        action.id === FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID
+      ) {
+        expect(action.surfaces).toEqual(measureSurfaces);
+        continue;
+      }
       expect(action.surfaces).toEqual([FILES_MARKDOWN_PREVIEW_SURFACE]);
     }
 

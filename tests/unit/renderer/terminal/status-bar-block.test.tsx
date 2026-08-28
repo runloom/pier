@@ -47,7 +47,7 @@ function entry(
     manifest: {
       apiVersion: 1,
       commands: [],
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },

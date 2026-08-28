@@ -71,6 +71,7 @@ describe("withPanelStatusEnv", () => {
           TERMINFO_DIRS: "/usr/share/terminfo",
           TERM_PROGRAM: "iTerm.app",
           TERM_PROGRAM_VERSION: "3.5.0",
+          TERM_SESSION_ID: "w0t0p0:fake",
         },
       },
       "panel-wt",
@@ -82,6 +83,7 @@ describe("withPanelStatusEnv", () => {
     expect(out.env?.COLORTERM).toBeUndefined();
     expect(out.env?.TERM_PROGRAM).toBeUndefined();
     expect(out.env?.TERM_PROGRAM_VERSION).toBeUndefined();
+    expect(out.env?.TERM_SESSION_ID).toBeUndefined();
     expect(out.env?.TERMINFO).toBeUndefined();
     expect(out.env?.TERMINFO_DIRS).toBeUndefined();
     expect(out.env?.TERMCAP).toBeUndefined();

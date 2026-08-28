@@ -1,5 +1,7 @@
 /** Dockview sash 拖拽期间的全屏 web 输入捕获。tab 拖拽由 workspace 边界管理。 */
+
 import { recordTerminalInputRoutingTrace } from "@/lib/terminal-debug/input-routing-trace.ts";
+import { acquireTerminalSurfaceSuppression } from "@/panel-kits/terminal/layout-coordinator.ts";
 import {
   getTerminalFocusRoutingDebugSnapshot,
   registerTerminalFullscreenWebOverlay,
@@ -55,6 +57,10 @@ export function installTerminalInputRoutingSashDragWatcher(): void {
     nextSashSessionSequence += 1;
     const startedAt = performance.now();
     const endSashCapture = beginFullscreenWebInputCapture(sessionId);
+    // Same matte+suppress path as window live-resize: hide native while the
+    // sash moves so Web/native size cannot tear for a frame.
+    const releaseSurfaceSuppression =
+      acquireTerminalSurfaceSuppression(sessionId);
     recordTerminalInputRoutingTrace({
       action: "started",
       sessionId,
@@ -66,6 +72,7 @@ export function installTerminalInputRoutingSashDragWatcher(): void {
         return;
       }
       sashDragActive = false;
+      releaseSurfaceSuppression();
       endSashCapture();
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);

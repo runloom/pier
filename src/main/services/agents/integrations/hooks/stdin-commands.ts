@@ -42,8 +42,8 @@ function stdinPathArgument(paths: readonly string[] | undefined): string {
 /**
  * stdin 身份提取前奏（各 stdin 系构造器共用）。
  *
- * 只走 `${PIER_AGENT_HOOKS_DIR}/extract-stdin-meta`（PTY 注入，默认
- * `~/.pier/hooks/current` 共享运行时）。**禁止**在全局 hooks 命令里嵌
+ * 只通过 `/usr/bin/env node ${PIER_AGENT_HOOKS_DIR}/extract-stdin-meta`
+ * 读取共享运行时（PTY 注入，默认 `~/.pier/hooks/current`）。**禁止**在全局 hooks 命令里嵌
  * `process.execPath`：多 worktree 互盖会改写 Codex `trusted_hash`。
  * 脚本缺失或坏 payload 时全部提取字段为空（`|| true`），不阻断 agent。
  */
@@ -70,7 +70,7 @@ export function stdinIdentityExtractionLines(
     "_pier_metadata_b64=; _pier_session_id=; _pier_turn_id=; _pier_tool_use_id=; _pier_tool_name=",
     "_pier_agent_id=; _pier_agent_type=; _pier_transcript_path=; _pier_parent_session_id=",
     "_pier_native_state=; _pier_interaction_id=; _pier_actor_hint=",
-    `_pier_extracted_fields=$(printf '%s' "$_pier_payload" | { if [ -x "${extractMeta}" ]; then "${extractMeta}" --shell-fields "${interactionFields}" "${nativeStateFields}" "${turnIdFields}" "${nativeStatePaths}" "${agentInstanceIdFields}" "${parentSessionIdFields}" "${agentTypeFields}" "${toolUseIdPaths}" "${toolNamePaths}"; fi; } 2>/dev/null || true)`,
+    `_pier_extracted_fields=$(printf '%s' "$_pier_payload" | { if [ -f "${extractMeta}" ]; then /usr/bin/env node "${extractMeta}" --shell-fields "${interactionFields}" "${nativeStateFields}" "${turnIdFields}" "${nativeStatePaths}" "${agentInstanceIdFields}" "${parentSessionIdFields}" "${agentTypeFields}" "${toolUseIdPaths}" "${toolNamePaths}"; fi; } 2>/dev/null || true)`,
     'eval "$_pier_extracted_fields" 2>/dev/null || true',
     ...(options.sessionIdAsParent
       ? [

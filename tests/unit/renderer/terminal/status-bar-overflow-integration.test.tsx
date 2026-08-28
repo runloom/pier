@@ -98,7 +98,7 @@ function pluginEntry(items: PluginTerminalStatusItemContribution[]) {
       source: { kind: "builtin" as const },
       terminalStatusItems: items,
       version: "1.0.0",
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
     },
     runtime: { canToggle: true, enabled: true, kind: "builtin" as const },

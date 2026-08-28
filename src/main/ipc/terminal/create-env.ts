@@ -7,6 +7,7 @@ export interface ResolveRestoredAgentLaunchEnvOptions {
   clientEnv?: Record<string, string> | undefined;
   profileEnv?: Record<string, string> | undefined;
   projectEnv?: Record<string, string> | undefined;
+  projectRootPath?: string | undefined;
 }
 
 export interface HydrateNativeLaunchEnvOptions {
@@ -39,6 +40,9 @@ export async function resolveRestoredAgentLaunchEnv(
     ...(priorAgentEnv ? { agentEnv: priorAgentEnv } : {}),
     ...(options.profileEnv ? { profileEnv: options.profileEnv } : {}),
     ...(options.projectEnv ? { projectEnv: options.projectEnv } : {}),
+    ...(options.projectRootPath
+      ? { projectRootPath: options.projectRootPath }
+      : {}),
   });
   return {
     ...launch,
@@ -64,5 +68,8 @@ export async function hydrateNativeLaunchEnv(
     : undefined;
   return resolveRestoredAgentLaunchEnv(launch, processEnvironment, {
     ...(projectEnv ? { projectEnv } : {}),
+    ...(options.projectRootPath
+      ? { projectRootPath: options.projectRootPath }
+      : {}),
   });
 }

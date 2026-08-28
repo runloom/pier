@@ -56,9 +56,6 @@ AGPLv3 允许用户修改源码。因此，高级会员权益不应只依赖本�
 源码许可证不自动覆盖所有资产。
 
 - JetBrains Mono / Nerd Font Mono：见 `resources/fonts/JetBrainsMono-OFL.txt`。
-- HarmonyOS Sans SC：见 `resources/fonts/HarmonyOS-Sans-SC-LICENSE.txt`。
-
-HarmonyOS Sans Fonts License Agreement 允许将未修改的 HarmonyOS Sans Fonts 随软件嵌入、打包、再分发和销售，但要求在软件中显著声明使用了 HarmonyOS Sans Fonts，保留版权和许可证，不得修改字体或其组件，也不得把字体作为独立字体产品再分发或销售。Pier 只随软件打包未修改的 SC TTF 文件，并在 `NOTICE` 中声明使用。
 
 ## 贡献者授权
 

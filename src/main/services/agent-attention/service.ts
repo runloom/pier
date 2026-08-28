@@ -24,17 +24,28 @@ import {
   type AgentNotificationEventKind,
   classifyAgentNotificationEvent,
 } from "./notification-event.ts";
+import {
+  createPendingInteractionRegistry,
+  type PendingInteractionRegistry,
+} from "./pending-interactions.ts";
 
 export interface AgentAttentionService {
   observe(
     previous: ForegroundActivityBroadcast | null,
     next: ForegroundActivityBroadcast
   ): Promise<void>;
+  /**
+   * M1：未决交互注册表（hook 事件流登记/清除；agent.attention.respond
+   * 双重门与 control.snapshot 注入共用同一实例）。
+   */
+  readonly pendingInteractions: PendingInteractionRegistry;
 }
 
 export interface CreateAgentAttentionServiceArgs {
   /** 同步投递到消息中心（NCS）。 */
   ingestNotification: (report: NotificationReport) => void;
+  /** 生产由 registerAgentAttention 注入共享实例；缺省服务自建。 */
+  pendingInteractions?: PendingInteractionRegistry;
   resolveLocale?(): AttentionUiLocale | Promise<AttentionUiLocale>;
   /**
    * 尽力解析路径锚点（项目根 / cwd），供通知 body 区分多实例。
@@ -78,8 +89,11 @@ export function createAgentAttentionService({
   resolveLocale = () => "en" as AttentionUiLocale,
   settings = () => DEFAULT_AGENT_ATTENTION_SETTINGS,
   resolveLocation,
+  pendingInteractions,
 }: CreateAgentAttentionServiceArgs): AgentAttentionService {
   return {
+    pendingInteractions:
+      pendingInteractions ?? createPendingInteractionRegistry(),
     async observe(previous, next) {
       const prefs = settings();
       const prevMap = previous

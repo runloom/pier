@@ -2,7 +2,6 @@ import type {
   GitReviewFileDocumentOk,
   GitReviewIndexEntry,
 } from "@shared/contracts/git/review.ts";
-import { isReviewEntryBodyHydratable } from "./body-class.ts";
 import type { ReviewDocumentDemand } from "./demand.ts";
 import {
   assertGitReviewRetentionLimits,
@@ -11,6 +10,10 @@ import {
   type GitReviewRetentionLimits,
 } from "./limits.ts";
 import {
+  cancelObsoleteLoaderBatchLoads,
+  pumpLoaderExcerptBatch,
+} from "./loader-batch.ts";
+import {
   DEFAULT_MAX_CONCURRENT_DOCUMENTS,
   type GitReviewDocumentLoaderOptions,
 } from "./loader-options.ts";
@@ -18,7 +21,9 @@ import {
   bindLoaderRuntimeField,
   cancelLoaderOperation,
   cancelObsoleteLoaderLoads,
+  detachLoaderInFlightEntry,
   emitLoaderChange,
+  failLoaderHydrateTimeout,
   type GitReviewDocumentLoaderRuntime,
   loaderIsSettled,
   loaderRequiredEntryKeys,
@@ -50,13 +55,15 @@ export class GitReviewDocumentLoader {
   readonly #entryOrder: readonly string[];
   readonly #listeners = new Set<Listener>();
   readonly #load: GitReviewDocumentLoaderOptions["load"];
+  readonly #loadBatch: GitReviewDocumentLoaderOptions["loadBatch"];
   readonly #maxConcurrent: number;
   readonly #resources = new Map<string, GitReviewDocumentResource>();
   readonly #retention: GitReviewDocumentRetention;
   readonly #waiting: string[] = [];
   readonly #budgetDeferredEntryKeys = new Set<string>();
   readonly #changedEntryKeys = new Set<string>();
-  /** settle 时已提前释放并发的 operationId（插队 yield）。 */
+  readonly #operationActiveCount = new Map<string, number>();
+  readonly #batchOperationIds = new Set<string>();
   readonly #preFreedOperationIds = new Set<string>();
   readonly #silentRetryCount = new Map<string, number>();
   #activeCount = 0;
@@ -86,6 +93,7 @@ export class GitReviewDocumentLoader {
     this.#createOperationId =
       options.createOperationId ?? (() => crypto.randomUUID());
     this.#load = options.load;
+    this.#loadBatch = options.loadBatch;
     this.#maxConcurrent = maxConcurrent;
     this.#retentionLimits = { maxRetainedBytes, maxRetainedLines };
     this.#retention = new GitReviewDocumentRetention(this.#retentionLimits);
@@ -114,7 +122,6 @@ export class GitReviewDocumentLoader {
     return this.#disposed || this.#isSettled();
   }
 
-  /** 从 session 灌入仍匹配的正文；不发网络，结束只 #emit 一次。 */
   hydrateLoaded(
     loaded: ReadonlyMap<
       string,
@@ -155,78 +162,30 @@ export class GitReviewDocumentLoader {
     retryLoaderRetryableFailures(this.#asRuntime());
   }
 
-  /**
-   * demand 内水合超时：idle/loading → error(timeout)。
-   * @returns 是否写入了至少一个 error
-   */
   failHydrateTimeout(entryKeys: readonly string[]): boolean {
-    if (this.#disposed || entryKeys.length === 0) {
-      return false;
-    }
-    let changed = false;
-    for (const entryKey of entryKeys) {
-      const resource = this.#resources.get(entryKey);
-      if (!resource) {
-        continue;
-      }
-      // meta/notice 永不 materialize，超时不适用
-      if (!isReviewEntryBodyHydratable(resource.entry)) {
-        continue;
-      }
-      if (
-        resource.kind === "loaded" ||
-        resource.kind === "error" ||
-        resource.kind === "unchanged"
-      ) {
-        continue;
-      }
-      if (resource.kind === "loading" || resource.kind === "cancelling") {
-        this.#activeEntryKeys.delete(entryKey);
-        this.#activeCount = Math.max(0, this.#activeCount - 1);
-        this.#preFreedOperationIds.add(resource.operationId);
-        this.#cancelOperation(resource.operationId);
-      }
-      this.#setResource(entryKey, {
-        entry: resource.entry,
-        failure: {
-          kind: "error",
-          message: "Timed out while loading this change",
-          reason: "timeout",
-          retryable: true,
-        },
-        kind: "error",
-      });
-      changed = true;
-    }
-    if (changed) {
-      this.#rebuildWaiting();
-      this.#pump(false);
-      this.#emit();
-    }
-    return changed;
+    return failLoaderHydrateTimeout(this.#asRuntime(), entryKeys);
   }
 
-  setProtectedEntryKey(entryKey: string | null): void {
+  setProtectedEntryKey(
+    entryKey: string | null,
+    options?: { readonly retryLoading?: boolean }
+  ): void {
     if (this.#disposed) {
       return;
     }
-    // 暂存会让条目跨阅读面移动；旧语义锚应取消，而不是升级为 renderer 致命错误。
     const protectedEntryKey =
       entryKey !== null && this.#resources.has(entryKey) ? entryKey : null;
-    if (this.#selectedEntryKey === protectedEntryKey) {
-      // 已保护同一项时仍确保其在 demand 队首（树点选后 window 未更新的窗口期）。
-      if (
-        protectedEntryKey !== null &&
-        this.#selectedDemandedEntryKey !== protectedEntryKey
-      ) {
-        this.#selectedDemandedEntryKey = protectedEntryKey;
-        this.#budgetDeferredEntryKeys.delete(protectedEntryKey);
-        this.#cancelObsoleteLoads(this.#requiredEntryKeys());
-        this.#yieldConcurrencyForSelected();
-        this.#rebuildWaiting();
-        this.#pump(false);
-        this.#emit();
-      }
+    const rearmed = this.#rearmRetryableError(protectedEntryKey);
+    const rearmedLoading =
+      options?.retryLoading === true
+        ? this.#rearmLoading(protectedEntryKey)
+        : false;
+    if (
+      this.#selectedEntryKey === protectedEntryKey &&
+      this.#selectedDemandedEntryKey === protectedEntryKey &&
+      !rearmed &&
+      !rearmedLoading
+    ) {
       return;
     }
     this.#selectedEntryKey = protectedEntryKey;
@@ -245,10 +204,33 @@ export class GitReviewDocumentLoader {
     this.#emit();
   }
 
-  /**
-   * tree-nav 期间把 sticky CodeView 成员并入 retention pin，避免 LRU 抽空 candidates。
-   * settled 后传 [] 即可。
-   */
+  #rearmRetryableError(entryKey: string | null): boolean {
+    if (entryKey === null) {
+      return false;
+    }
+    const resource = this.#resources.get(entryKey);
+    if (resource?.kind !== "error" || !resource.failure.retryable) {
+      return false;
+    }
+    this.#silentRetryCount.delete(entryKey);
+    this.#setResource(entryKey, { entry: resource.entry, kind: "idle" });
+    return true;
+  }
+
+  #rearmLoading(entryKey: string | null): boolean {
+    if (entryKey === null) {
+      return false;
+    }
+    const resource = this.#resources.get(entryKey);
+    if (resource?.kind !== "loading" && resource?.kind !== "cancelling") {
+      return false;
+    }
+    detachLoaderInFlightEntry(this.#asRuntime(), entryKey);
+    this.#silentRetryCount.delete(entryKey);
+    this.#setResource(entryKey, { entry: resource.entry, kind: "idle" });
+    return true;
+  }
+
   setStickyMemberEntryKeys(entryKeys: readonly string[]): void {
     if (this.#disposed) {
       return;
@@ -260,7 +242,6 @@ export class GitReviewDocumentLoader {
     const evicted = this.#syncPinnedEntries();
     this.#releaseRetainedEntries(evicted);
     this.#rebuildWaiting();
-    // sticky 常在 sync 监听器内更新；无资源变更时勿 #emit 重入（滚动热路径双倍 sync）。
     const pumped = this.#pump(false);
     if (evicted.length > 0 || pumped || this.#changedEntryKeys.size > 0) {
       this.#emit();
@@ -315,7 +296,6 @@ export class GitReviewDocumentLoader {
         this.#budgetDeferredEntryKeys.delete(entryKey);
       }
     }
-    // selected 在 demand 中则 boost 为队首 required
     if (
       this.#selectedEntryKey !== null &&
       [...visibleEntryKeys, ...bufferedEntryKeys].includes(
@@ -343,18 +323,21 @@ export class GitReviewDocumentLoader {
       return;
     }
     this.#disposed = true;
-    const operationIds = [...this.#activeEntryKeys].flatMap((entryKey) => {
+    const operationIds = new Set<string>();
+    for (const entryKey of this.#activeEntryKeys) {
       const resource = this.#resources.get(entryKey);
-      return resource?.kind === "loading" || resource?.kind === "cancelling"
-        ? [resource.operationId]
-        : [];
-    });
+      if (resource?.kind === "loading" || resource?.kind === "cancelling") {
+        operationIds.add(resource.operationId);
+      }
+    }
     this.#waiting.length = 0;
     this.#activeCount = 0;
     this.#activeEntryKeys.clear();
     this.#budgetDeferredEntryKeys.clear();
     this.#changedEntryKeys.clear();
     this.#silentRetryCount.clear();
+    this.#batchOperationIds.clear();
+    this.#operationActiveCount.clear();
     this.#resources.clear();
     this.#retention.clear();
     this.#listeners.clear();
@@ -381,7 +364,12 @@ export class GitReviewDocumentLoader {
   }
 
   #cancelObsoleteLoads(requiredEntryKeys: ReadonlySet<string>): void {
-    cancelObsoleteLoaderLoads(this.#asRuntime(), requiredEntryKeys);
+    const runtime = this.#asRuntime();
+    if (this.#loadBatch === undefined) {
+      cancelObsoleteLoaderLoads(runtime, requiredEntryKeys);
+      return;
+    }
+    cancelObsoleteLoaderBatchLoads(runtime, requiredEntryKeys);
   }
 
   #yieldConcurrencyForSelected(): void {
@@ -397,6 +385,9 @@ export class GitReviewDocumentLoader {
   }
 
   #pump(emitChange = true): boolean {
+    if (this.#loadBatch !== undefined) {
+      return pumpLoaderExcerptBatch(this.#asRuntime(), emitChange);
+    }
     return pumpLoaderLoads(this.#asRuntime(), emitChange);
   }
 
@@ -466,8 +457,12 @@ export class GitReviewDocumentLoader {
       ),
       listeners: this.#listeners,
       load: (entry, operationId) => this.#load(entry, operationId),
+      ...(this.#loadBatch === undefined ? {} : { loadBatch: this.#loadBatch }),
+      batchOperationIds: this.#batchOperationIds,
       maxConcurrent: this.#maxConcurrent,
+      operationActiveCount: this.#operationActiveCount,
       preFreedOperationIds: this.#preFreedOperationIds,
+      pumpLoads: (emitChange) => this.#pump(emitChange),
       resources: this.#resources,
       retention: this.#retention,
       selectedDemandedEntryKey: bindLoaderRuntimeField(

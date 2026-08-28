@@ -90,6 +90,10 @@ export function createPluginGitContext(
         ...(path ? { paths: [path] } : {}),
       });
     },
+    getReviewExcerptBatch: (request) => {
+      assertPluginCapability(entry, "git:read");
+      return window.pier.git.getReviewExcerptBatch(request);
+    },
     getReviewFileDocument: (request) => {
       assertPluginCapability(entry, "git:read");
       return window.pier.git.getReviewFileDocument(request);

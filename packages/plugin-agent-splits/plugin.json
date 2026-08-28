@@ -151,7 +151,6 @@
   ],
   "terminalStatusItems": [],
   "version": "1.5.1",
-  "workbenchWidgets": [],
   "configuration": {
     "properties": {
       "pier.agent-splits.adapter.enabled": {

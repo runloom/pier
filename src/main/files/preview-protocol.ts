@@ -10,7 +10,7 @@ import {
   isGitBlobFilePreviewLocator,
 } from "@shared/contracts/file/preview-ticket.ts";
 import type { OnBeforeRequestListenerDetails } from "electron";
-import { protocol as electronProtocol, session } from "electron";
+import { protocol as electronProtocol } from "electron";
 import {
   resolveExistingFileIdentity,
   revisionForFileBytes,
@@ -22,10 +22,12 @@ import {
   MAX_IMAGE_PREVIEW_FILE_BYTES,
   readFileWithinImagePreviewLimit,
 } from "./image-preview-file.ts";
-import { classifyPreviewImageSignature } from "./image-signature.ts";
+import {
+  classifyPreviewImageSignature,
+  classifyPreviewSvgMarkup,
+} from "./image-signature.ts";
 import {
   type FilePreviewTicketRegistry,
-  filePreviewPartitionKey,
   filePreviewTicketRegistry,
 } from "./preview-ticket-registry.ts";
 
@@ -147,7 +149,10 @@ export async function resolveFilePreviewResponse(
     if (!bytes) {
       return payloadTooLarge();
     }
-    const mime = classifyPreviewImageSignature(bytes);
+    const mime =
+      entry.locator.mime === "image/svg+xml"
+        ? classifyPreviewSvgMarkup(bytes)
+        : classifyPreviewImageSignature(bytes);
     if (!mime || mime !== entry.locator.mime) {
       return notFound();
     }
@@ -177,22 +182,6 @@ export function authorizeFilePreviewRequest(
         partition,
         webContentsId: details.webContentsId,
       })
-  );
-}
-
-export function registerFilePreviewRequestGuard(
-  targetSession = session.defaultSession
-): void {
-  targetSession.webRequest.onBeforeRequest(
-    { urls: [`${FILE_PREVIEW_SCHEME}://file/*`] },
-    (details, callback) => {
-      callback({
-        cancel: !authorizeFilePreviewRequest(
-          details,
-          filePreviewPartitionKey(targetSession)
-        ),
-      });
-    }
   );
 }
 

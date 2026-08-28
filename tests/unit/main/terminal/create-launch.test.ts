@@ -1,20 +1,18 @@
-import { spawnSync } from "node:child_process";
-import {
-  chmodSync,
-  existsSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   nativeLaunchOptions,
   resolveCreateTerminalLaunch,
   withAgentLoginShellSafeCommand,
+  withAgentSpawnGenerationEnv,
   wrapAgentTerminalCommand,
 } from "@main/ipc/terminal/create-launch.ts";
-import { terminalLaunchRegistry } from "@main/state/terminal-launch-state.ts";
+import { isAlreadyShellWrappedCommand } from "@main/services/process-environment/resolve-user-command.ts";
+import {
+  registerLaunchResumeHint,
+  terminalLaunchRegistry,
+} from "@main/state/terminal-launch-state.ts";
 import type { TerminalPanelSession } from "@main/state/terminal-session-state.ts";
 import type { CreateTerminalArgs } from "@shared/contracts/terminal.ts";
 import { describe, expect, it } from "vitest";
@@ -171,18 +169,18 @@ describe("terminal create launch options", () => {
       null
     );
 
-    expect(result.nativeLaunch).toMatchObject({
-      command: expect.stringContaining("[pier] restored task"),
+    expect(result.nativeLaunch).toEqual({
       cwd: "/tmp/pier",
     });
-    expect(result.nativeLaunch?.command).toContain("Task: test");
-    expect(result.nativeLaunch?.command).toContain("Status: succeeded");
-    expect(result.nativeLaunch?.command).toContain("Exit code: 0");
-    expect(result.nativeLaunch?.command).toContain("/bin/sh -lc");
-    expect(result.nativeLaunch?.command).toContain("exec ");
-    expect(result.nativeLaunch?.command).toContain(" -l");
-    expect(result.nativeLaunch?.command).not.toContain("; exit ");
-    expect(result.nativeLaunch?.command).not.toBe("pnpm test");
+    expect(result.nativeLaunch?.command).toBeUndefined();
+    expect(result.initialInput).toContain("[pier] restored task");
+    expect(result.initialInput).toContain("Task: test");
+    expect(result.initialInput).toContain("Status: succeeded");
+    expect(result.initialInput).toContain("Exit code: 0");
+    expect(isAlreadyShellWrappedCommand(result.initialInput ?? "")).toBe(false);
+    expect(result.initialInput).not.toContain("exec ");
+    expect(result.initialInput).not.toMatch(/ -l(?:c|\s|$)/);
+    expect(result.initialInput).not.toBe("pnpm test");
   });
 
   it("restores an interrupted running task as cancelled display output", () => {
@@ -210,53 +208,41 @@ describe("terminal create launch options", () => {
       null
     );
 
-    expect(result.nativeLaunch?.command).toContain("Task: dev");
-    expect(result.nativeLaunch?.command).toContain("Status: cancelled");
-    expect(result.nativeLaunch?.command).not.toContain("Status: running");
+    expect(result.initialInput).toContain("Task: dev");
+    expect(result.initialInput).toContain("Status: cancelled");
+    expect(result.initialInput).not.toContain("Status: running");
+    expect(result.nativeLaunch?.command).toBeUndefined();
     expect(result.task).toMatchObject({ status: "cancelled" });
     expect(result.task).not.toHaveProperty("finishedAt");
   });
 
   it("quotes restored task summary fields as shell literals", () => {
-    const markerDir = mkdtempSync(join(tmpdir(), "pier-restore-quote-"));
-    const markerPath = join(markerDir, "pwn");
-    const previousShell = process.env.SHELL;
-    process.env.SHELL = "/usr/bin/true";
-    try {
-      const result = resolveCreateTerminalLaunch(
-        createArgs({
-          task: {
-            cwd: "/tmp/pier",
-            label: `x'; touch ${markerPath}; #`,
-            projectRootPath: "/tmp/pier",
-            rawCommand: `$(touch ${markerPath})`,
-            runId: "run-1",
-            source: "history",
-            startedAt: 1_772_000_000_000,
-            status: "failed",
-            taskId: "history:dev",
-          },
-        }),
-        null
-      );
+    const markerPath = "/tmp/pier-restore-pwn";
+    const label = `x'; touch ${markerPath}; #`;
+    const rawCommand = `$(touch ${markerPath})`;
+    const result = resolveCreateTerminalLaunch(
+      createArgs({
+        task: {
+          cwd: "/tmp/pier",
+          label,
+          projectRootPath: "/tmp/pier",
+          rawCommand,
+          runId: "run-1",
+          source: "history",
+          startedAt: 1_772_000_000_000,
+          status: "failed",
+          taskId: "history:dev",
+        },
+      }),
+      null
+    );
 
-      const command = result.nativeLaunch?.command;
-      expect(command).toBeTruthy();
-      const run = spawnSync("/bin/sh", ["-c", command ?? ""], {
-        encoding: "utf8",
-      });
-
-      expect(run.stdout).toContain(`Task: x'; touch ${markerPath}; #`);
-      expect(run.stdout).toContain(`Command: $(touch ${markerPath})`);
-      expect(existsSync(markerPath)).toBe(false);
-    } finally {
-      if (previousShell === undefined) {
-        delete process.env.SHELL;
-      } else {
-        process.env.SHELL = previousShell;
-      }
-      rmSync(markerDir, { force: true, recursive: true });
-    }
+    const script = result.initialInput ?? "";
+    expect(script).toContain("[pier] restored task");
+    expect(script).toMatch(/Task: x/);
+    expect(script).toContain("pier-restore-pwn");
+    expect(script).toContain("$(touch");
+    expect(isAlreadyShellWrappedCommand(script)).toBe(false);
   });
   it("prefers explicit relaunch metadata over a saved running task", () => {
     const launchId = terminalLaunchRegistry.register({
@@ -364,14 +350,12 @@ describe("terminal create launch options", () => {
 
     expect(result.context).toEqual(savedContext);
     expect(result.task).toEqual(savedTask);
-    expect(result.nativeLaunch).toMatchObject({
-      command: expect.stringContaining("[pier] restored task"),
-      cwd: "/tmp/saved",
-    });
-    expect(result.nativeLaunch?.command).toContain("Task: saved:test");
-    expect(result.nativeLaunch?.command).toContain("Command: pnpm saved:test");
-    expect(result.nativeLaunch?.command).not.toContain("args:test");
-    expect(result.nativeLaunch?.command).not.toContain("pnpm args:test");
+    expect(result.nativeLaunch).toEqual({ cwd: "/tmp/saved" });
+    expect(result.initialInput).toContain("[pier] restored task");
+    expect(result.initialInput).toContain("Task: saved:test");
+    expect(result.initialInput).toContain("Command: pnpm saved:test");
+    expect(result.initialInput).not.toContain("args:test");
+    expect(result.initialInput).not.toContain("pnpm args:test");
   });
 
   it("passes a live saved running task through unchanged on renderer reload", () => {
@@ -394,10 +378,10 @@ describe("terminal create launch options", () => {
     const result = resolveCreateTerminalLaunch(createArgs(), saved);
 
     expect(result.task).toMatchObject({ status: "cancelled" });
-    expect(result.nativeLaunch?.cwd).toBe("/tmp/pier");
-    expect(result.nativeLaunch?.command).toContain("[pier] restored task");
-    expect(result.nativeLaunch?.command).toContain("Status: cancelled");
-    expect(result.nativeLaunch?.command).not.toContain("Status: running");
+    expect(result.nativeLaunch).toEqual({ cwd: "/tmp/pier" });
+    expect(result.initialInput).toContain("[pier] restored task");
+    expect(result.initialInput).toContain("Status: cancelled");
+    expect(result.initialInput).not.toContain("Status: running");
   });
 
   it("falls back shell cwd to projectRootPath when context.cwd is missing", () => {
@@ -511,5 +495,45 @@ describe("terminal create launch options", () => {
       expect.stringMatching(/^\/bin\/zsh -lic /)
     );
     rmSync(dir, { force: true, recursive: true });
+  });
+});
+
+describe("resolveCreateTerminalLaunch resume hint", () => {
+  it("synthesizes a running restored agent from launch resume hint", () => {
+    const launchId = terminalLaunchRegistry.register({
+      agentId: "omp",
+      command: "omp",
+      cwd: "/repo",
+    });
+    registerLaunchResumeHint(launchId, "sess-hint");
+    const result = resolveCreateTerminalLaunch(
+      createArgs({ launchId, panelId: "terminal-1" }),
+      null
+    );
+    expect(result.restoredAgentLaunch).toBe(true);
+    expect(result.restoredAgent).toMatchObject({
+      agentId: "omp",
+      launch: { command: "omp" },
+      resume: { sessionId: "sess-hint", source: "hook" },
+      status: "running",
+    });
+  });
+});
+
+describe("withAgentSpawnGenerationEnv", () => {
+  it("adds generation and record id for agent spawns", () => {
+    expect(
+      withAgentSpawnGenerationEnv({ HOOK: "1" }, "omp", 4, "record-main")
+    ).toEqual({
+      HOOK: "1",
+      PIER_AGENT_SPAWN_GENERATION: "4",
+      PIER_WINDOW_RECORD_ID: "record-main",
+    });
+  });
+
+  it("still injects record id for a shell spawn", () => {
+    expect(
+      withAgentSpawnGenerationEnv({}, undefined, 1, "record-main")
+    ).toEqual({ PIER_WINDOW_RECORD_ID: "record-main" });
   });
 });

@@ -14,6 +14,8 @@ export const pluginPermissions = {
   "panel:read": "Read panel state",
   "panel:register": "Register panels",
   "plugin:read": "Read plugin information",
+  "plugin:action": "Run declared plugin actions on canvases",
+  "canvas:command": "Run commands declared by a canvas",
   "plugin:write": "Change plugin state",
   "preferences:read": "Read preferences",
   "preferences:write": "Change preferences",
@@ -44,4 +46,7 @@ export const pluginPermissions = {
   "comments:write": "Create review comments",
   "notification:read": "Read notifications",
   "notification:write": "Mark notifications as read",
+  "managedAssets:write": "Register managed agent configuration",
+  "remote-access:read": "View mobile companion access",
+  "remote-access:control": "Manage mobile pairing and devices",
 } as const;

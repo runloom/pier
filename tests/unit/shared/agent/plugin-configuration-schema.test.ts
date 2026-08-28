@@ -258,3 +258,19 @@ describe("pluginManifestSchema — dataProjections", () => {
     ).toBe(false);
   });
 });
+
+describe("pluginManifestSchema — canvasActions", () => {
+  it("canvasActions 缺省为空数组", () => {
+    const parsed = pluginManifestSchema.parse(manifestWith());
+    expect(parsed.canvasActions).toEqual([]);
+  });
+
+  it("canvasActions 拒绝空字符串键", () => {
+    expect(
+      pluginManifestSchema.safeParse({
+        ...manifestWith(),
+        canvasActions: [""],
+      }).success
+    ).toBe(false);
+  });
+});

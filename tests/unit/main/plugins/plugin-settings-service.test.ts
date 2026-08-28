@@ -41,7 +41,7 @@ function gitEntry(enabled = true): PluginRegistryEntry {
           },
         },
       },
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },

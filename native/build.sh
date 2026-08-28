@@ -1,4 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
+# Use Apple's /bin/bash, not `env bash`. Homebrew bash is adhoc-signed against
+# Cellar dylibs; when macOS syspolicyd wedges on those, `pnpm build:native`
+# hangs in dyld before this script runs.
 set -euo pipefail
 cd "$(dirname "$0")"
 

@@ -147,6 +147,7 @@ function emitPierEvent(nativeEvent, ...values) {
     agent: "amp",
     event: pierEvent,
     nativeEvent,
+    ...pierSpawnGenerationFromEnv(),
     ...(sessionId ? { sessionId } : {}),
     ...(turnId ? { turnId } : {}),
     ...(nativeState ? { nativeState } : {}),

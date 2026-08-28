@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdtempSync,
@@ -10,77 +9,37 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { parseIcns } from "../../../scripts/app-icon-icns.mjs";
 import {
-  layeredIconFingerprint,
-  MAC_ICON_RENDITION_NAME,
-  tahoeMarkSvg,
+  assertCompiledIconStack,
+  macIconFingerprint,
 } from "../../../scripts/app-icon-layered.mjs";
 
 const ROOT = process.cwd();
-
-function read(path: string): string {
-  return readFileSync(join(ROOT, path), "utf8");
-}
-
-function sha256(value: string): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-function sha256Bytes(value: Buffer): string {
-  return createHash("sha256").update(value).digest("hex");
-}
-
-const EXPECTED_ICNS_FRAME_HASHES = {
-  ic07: "7dec7fb7f242df8bdb3e000bcdffec15ec9d2038ccafed56485048d23794e810",
-  ic08: "3ac2359a170e8587af35b7570a80671991c2a62983ec48eec9497de0805685ff",
-  ic09: "990d6282d5fb4ad596f773899c8e948f4dba0d8de793c2c26857488e43efc4ea",
-  ic10: "50017adb0782266b8279365767d5c4a55c1c7106a6fe7e79f0bf46ab69a2713d",
-  ic11: "016f25eabacaa26440f9a6edda946fe7382c277113cf4b218a819810de420970",
-  ic12: "851d4531ab5350c3721099e2130cc952c590e91d4f2872515349251e05e41dd9",
-  ic13: "3ac2359a170e8587af35b7570a80671991c2a62983ec48eec9497de0805685ff",
-  ic14: "990d6282d5fb4ad596f773899c8e948f4dba0d8de793c2c26857488e43efc4ea",
-} as const;
-
+const TEMP_ROOT = mkdtempSync(join(tmpdir(), "pier-icon-assets-"));
+const ICON_SIZES = [16, 24, 32, 48, 64, 128, 256, 512] as const;
 const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256] as const;
-const LINUX_SIZES = [16, 24, 32, 48, 64, 96, 128, 256, 512] as const;
-const SYSTEM_ICONSET_FILES = [
-  "icon_128x128.png",
-  "icon_128x128@2x.png",
-  "icon_16x16.png",
-  "icon_16x16@2x.png",
-  "icon_256x256.png",
-  "icon_256x256@2x.png",
-  "icon_32x32.png",
-  "icon_32x32@2x.png",
-  "icon_512x512.png",
-  "icon_512x512@2x.png",
-] as const;
-const SYSTEM_FRAME_SOURCES = new Map([
-  ["icon_16x16@2x.png", "ic11"],
-  ["icon_32x32@2x.png", "ic12"],
-  ["icon_128x128.png", "ic07"],
-  ["icon_128x128@2x.png", "ic13"],
-  ["icon_256x256.png", "ic08"],
-  ["icon_256x256@2x.png", "ic14"],
-  ["icon_512x512.png", "ic09"],
-  ["icon_512x512@2x.png", "ic10"],
-]);
-const LEGACY_SYSTEM_FRAME_PIXEL_HASHES = new Map([
-  [
-    "icon_16x16.png",
-    "50837fdbb25aae3faa2c4cb86f5916355d5e7d3736d6612ed255e2617c8a431d",
-  ],
-  [
-    "icon_32x32.png",
-    "124257211d7b06681343a29866c871342d9b5970eeaefa2355129602fad75560",
-  ],
+const ICNS_PNG_SIZES = new Map([
+  ["ic11", 32],
+  ["ic12", 64],
+  ["ic07", 128],
+  ["ic08", 256],
+  ["ic13", 256],
+  ["ic09", 512],
+  ["ic14", 512],
+  ["ic10", 1024],
 ]);
 
-// Pin the committed Tahoe mark pixels so a plated render cannot ship silently.
-const LAYERED_MARK_PIXEL_HASH =
-  "ac248f107e01d0e324aafad267229e2b58eeacb2bab356ebd184892e5bcd2cce";
+interface DecodedPng {
+  height: number;
+  pixels: Buffer;
+  width: number;
+}
+
+afterAll(() => {
+  rmSync(TEMP_ROOT, { force: true, recursive: true });
+});
 
 function paeth(left: number, above: number, upperLeft: number): number {
   const prediction = left + above - upperLeft;
@@ -93,67 +52,34 @@ function paeth(left: number, above: number, upperLeft: number): number {
   return aboveDistance <= upperLeftDistance ? above : upperLeft;
 }
 
-function decodeRgbaPng(data: Buffer): {
-  width: number;
-  height: number;
-  pixels: Buffer;
-} {
+function decodeRgbaPng(data: Buffer): DecodedPng {
   const width = data.readUInt32BE(16);
   const height = data.readUInt32BE(20);
-  if (
-    data.readUInt8(24) !== 8 ||
-    data.readUInt8(25) !== 6 ||
-    data.readUInt8(26) !== 0 ||
-    data.readUInt8(27) !== 0 ||
-    data.readUInt8(28) !== 0
-  ) {
-    throw new Error(
-      `Expected a non-interlaced 8-bit RGBA PNG, got ${width}x${height}`
-    );
-  }
-
-  const idatChunks: Buffer[] = [];
-  let offset = 8;
-  while (offset < data.length) {
+  expect([data.readUInt8(24), data.readUInt8(25), data.readUInt8(28)]).toEqual([
+    8, 6, 0,
+  ]);
+  const chunks: Buffer[] = [];
+  for (let offset = 8; offset < data.length; ) {
     const length = data.readUInt32BE(offset);
-    const type = data.toString("ascii", offset + 4, offset + 8);
-    if (type === "IDAT") {
-      idatChunks.push(data.subarray(offset + 8, offset + 8 + length));
+    if (data.toString("ascii", offset + 4, offset + 8) === "IDAT") {
+      chunks.push(data.subarray(offset + 8, offset + 8 + length));
     }
-    offset += 12 + length;
+    offset += length + 12;
   }
-
-  const bytesPerPixel = 4;
-  const rowLength = width * bytesPerPixel;
-  const raw = inflateSync(Buffer.concat(idatChunks));
-  if (raw.length !== (rowLength + 1) * height) {
-    throw new Error(`Unexpected PNG scanline length for ${width}x${height}`);
-  }
-
-  const pixels = Buffer.allocUnsafe(rowLength * height);
-  const rawBytes = new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength);
-  const pixelBytes = new Uint8Array(
-    pixels.buffer,
-    pixels.byteOffset,
-    pixels.byteLength
-  );
+  const raw = inflateSync(Buffer.concat(chunks));
+  const rowLength = width * 4;
+  const pixels = Buffer.alloc(rowLength * height);
   let rawOffset = 0;
   for (let y = 0; y < height; y += 1) {
-    const filter = rawBytes[rawOffset] ?? 0;
+    const filter = raw.readUInt8(rawOffset);
     rawOffset += 1;
     const rowOffset = y * rowLength;
-    const previousRowOffset = rowOffset - rowLength;
     for (let x = 0; x < rowLength; x += 1) {
-      const source = rawBytes[rawOffset + x] ?? 0;
-      const left =
-        x >= bytesPerPixel
-          ? (pixelBytes[rowOffset + x - bytesPerPixel] ?? 0)
-          : 0;
-      const above = y > 0 ? (pixelBytes[previousRowOffset + x] ?? 0) : 0;
+      const source = raw.readUInt8(rawOffset + x);
+      const left = x >= 4 ? pixels.readUInt8(rowOffset + x - 4) : 0;
+      const above = y > 0 ? pixels.readUInt8(rowOffset - rowLength + x) : 0;
       const upperLeft =
-        y > 0 && x >= bytesPerPixel
-          ? (pixelBytes[previousRowOffset + x - bytesPerPixel] ?? 0)
-          : 0;
+        y > 0 && x >= 4 ? pixels.readUInt8(rowOffset - rowLength + x - 4) : 0;
       let value = source;
       if (filter === 1) {
         value += left;
@@ -166,553 +92,198 @@ function decodeRgbaPng(data: Buffer): {
       } else if (filter !== 0) {
         throw new Error(`Unsupported PNG filter ${filter}`);
       }
-      pixelBytes[rowOffset + x] = value % 256;
+      pixels.writeUInt8(value % 256, rowOffset + x);
     }
     rawOffset += rowLength;
   }
-  return { width, height, pixels };
+  return { height, pixels, width };
 }
 
-const DECODED_PIXEL_HASHES = new Map<string, string>();
-
-function decodedPixelHash(data: Buffer): string {
-  const encodedHash = sha256Bytes(data);
-  const cached = DECODED_PIXEL_HASHES.get(encodedHash);
-  if (cached) {
-    return cached;
-  }
-  const pixelHash = sha256Bytes(decodeRgbaPng(data).pixels);
-  DECODED_PIXEL_HASHES.set(encodedHash, pixelHash);
-  return pixelHash;
+function parseIco(data: Buffer) {
+  expect([data.readUInt16LE(0), data.readUInt16LE(2)]).toEqual([0, 1]);
+  return Array.from({ length: data.readUInt16LE(4) }, (_, index) => {
+    const entry = 6 + index * 16;
+    const size = data.readUInt8(entry) || 256;
+    const length = data.readUInt32LE(entry + 8);
+    const offset = data.readUInt32LE(entry + 12);
+    return { png: data.subarray(offset, offset + length), size };
+  });
 }
 
-function cornerAlphas(width: number, height: number, pixels: Buffer): number[] {
+function cornerAlphas(data: Buffer) {
+  const image = decodeRgbaPng(data);
   const alphaAt = (x: number, y: number) =>
-    pixels.readUInt8((y * width + x) * 4 + 3);
+    image.pixels.readUInt8((y * image.width + x) * 4 + 3);
   return [
     alphaAt(0, 0),
-    alphaAt(width - 1, 0),
-    alphaAt(0, height - 1),
-    alphaAt(width - 1, height - 1),
+    alphaAt(image.width - 1, 0),
+    alphaAt(0, image.height - 1),
+    alphaAt(image.width - 1, image.height - 1),
   ];
 }
 
-function parseIco(data: Buffer): Array<{ size: number; png: Buffer }> {
-  if (data.readUInt16LE(0) !== 0 || data.readUInt16LE(2) !== 1) {
-    throw new Error("Invalid ICO header");
-  }
-  const count = data.readUInt16LE(4);
-  return Array.from({ length: count }, (_, index) => {
-    const offset = 6 + index * 16;
-    const width = data.readUInt8(offset) || 256;
-    const height = data.readUInt8(offset + 1) || 256;
-    if (width !== height) {
-      throw new Error(`Non-square ICO frame ${width}x${height}`);
-    }
-    const length = data.readUInt32LE(offset + 8);
-    const payloadOffset = data.readUInt32LE(offset + 12);
-    return {
-      size: width,
-      png: Buffer.from(data.subarray(payloadOffset, payloadOffset + length)),
-    };
-  });
+const ICON_SOURCE = join(ROOT, "build/app-icon-source.svg");
+const NIGHT_HARBOR_TRIALS = [
+  "night-harbor-deep-water.svg",
+  "night-harbor-brand-berth.svg",
+  "night-harbor-same-chroma.svg",
+] as const;
+
+function svgAttribute(source: string, id: string, attribute: string): string {
+  const match = new RegExp(
+    `<[^>]*\\bid="${id}"[^>]*\\b${attribute}="([^"]+)"`,
+    "i"
+  ).exec(source);
+  return match?.[1] ?? "";
 }
 
-describe("Pier application icon sources", () => {
-  it("keeps the design archive on the approved F and I system only", () => {
-    const archive = read("build/design-sources/index.html");
-    const imageSources = Array.from(
-      archive.matchAll(/<img\b[^>]*\bsrc=(?:"([^"]+)"|'([^']+)')/gi),
-      (match) => match[1] ?? match[2]
+describe("Pier generated application icon assets", () => {
+  it("presents the shipping icon against the previous cyan berth", () => {
+    const archive = readFileSync(
+      join(ROOT, "build/design-sources/index.html"),
+      "utf8"
     );
-
-    for (const obsolete of [
-      "build/design-sources/pier-pier.svg",
-      "build/design-sources/pier-panels.svg",
-      "build/design-sources/pier-berth.svg",
-      "build/design-sources/pier-berth-macos.svg",
-    ]) {
-      expect(existsSync(join(ROOT, obsolete))).toBe(false);
-    }
-
-    expect(Array.from(new Set(imageSources)).sort()).toEqual([
-      "../app-icon-master.svg",
-      "../app-icon-micro.svg",
-      "./pier-logo.svg",
-    ]);
-    expect(archive).toContain("#b66cff");
-    expect(archive).toContain("#8549ff");
-    expect(archive).toContain("#542ee5");
+    const sources = Array.from(
+      archive.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/gi),
+      (match) => match[1]
+    );
+    expect(sources[0]).toBe("../icons/512x512.png");
+    expect(new Set(sources)).toEqual(
+      new Set(["../icons/512x512.png", "./previous-shipping.png"])
+    );
+    expect(archive).toContain("下载");
     expect(archive).not.toMatch(/<\s*(?:svg|path|symbol|script)\b/i);
-    expect(archive).not.toMatch(/三个停靠的方向|Direction [ABC]|ico-[abc]/i);
     expect(archive).not.toMatch(
-      /pier-pier\.svg|pier-panels\.svg|pier-berth(?:-macos)?\.svg/
+      /app-icon-micro|app-icon-master|app-icon-tiny|pier-logo\.svg/
     );
   });
 
-  it("locks the approved F and I renditions and transparent F mark byte-for-byte", () => {
-    expect(sha256(read("build/app-icon-master.svg"))).toBe(
-      "114aa8365ad861862679628de4deca14795439f150b44c6d69588c45e58aebef"
-    );
-    expect(sha256(read("build/app-icon-micro.svg"))).toBe(
-      "adb75880368522de184ba1d74cfafe2538c223e55932041efdfba1290e26c28e"
-    );
-    expect(sha256(read("build/design-sources/pier-logo.svg"))).toBe(
-      "a8cb88be38a0ea465e5796d2c69042be046c9d850234eea933c9507c020ead52"
-    );
-  });
-
-  it("keeps the approved Micro optical corrections", () => {
-    const micro = read("build/app-icon-micro.svg");
-
-    expect(micro).toMatch(/id="screen-left-top-glow"[^>]*opacity="0"/);
-    expect(micro).toMatch(/id="terminal-material-effects"[^>]*opacity="0"/);
-    expect(micro).toContain('stroke-width="6.6"');
-    expect(micro).toContain('stroke-width="7"');
-    expect(micro).toContain("2.4 15-17.6 27-40 27");
-  });
-
-  it("renders the Dock artwork at the approved optical footprint", () => {
-    const { width, height, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon-dock.png"))
-    );
-    let minX = width;
-    let minY = height;
-    let maxX = -1;
-    let maxY = -1;
-
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        if (pixels.readUInt8((y * width + x) * 4 + 3) === 0) {
-          continue;
-        }
-        minX = Math.min(minX, x);
-        minY = Math.min(minY, y);
-        maxX = Math.max(maxX, x);
-        maxY = Math.max(maxY, y);
-      }
-    }
-
-    const artworkWidth = maxX - minX + 1;
-    const artworkHeight = maxY - minY + 1;
-    expect(artworkWidth).toBeGreaterThanOrEqual(436);
-    expect(artworkWidth).toBeLessThanOrEqual(440);
-    expect(artworkHeight).toBeGreaterThanOrEqual(436);
-    expect(artworkHeight).toBeLessThanOrEqual(440);
-    expect(Math.abs(minX - (width - 1 - maxX))).toBeLessThanOrEqual(1);
-    expect(Math.abs(minY - (height - 1 - maxY))).toBeLessThanOrEqual(1);
-  });
-
-  it("keeps the rendered mark vertically balanced inside the plate", () => {
-    const { width, height, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon-dock.png"))
-    );
-    let plateMinY = height;
-    let plateMaxY = -1;
-    let markMinY = height;
-    let markMaxY = -1;
-
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const offset = (y * width + x) * 4;
-        const red = pixels.readUInt8(offset);
-        const green = pixels.readUInt8(offset + 1);
-        const blue = pixels.readUInt8(offset + 2);
-        const alpha = pixels.readUInt8(offset + 3);
-        if (alpha === 0) {
-          continue;
-        }
-        plateMinY = Math.min(plateMinY, y);
-        plateMaxY = Math.max(plateMaxY, y);
-
-        const isColoredMark =
-          blue > 85 &&
-          Math.max(red, green, blue) - Math.min(red, green, blue) > 35;
-        const isLightGlyph = Math.min(red, green, blue) > 145;
-        if (alpha > 200 && (isColoredMark || isLightGlyph)) {
-          markMinY = Math.min(markMinY, y);
-          markMaxY = Math.max(markMaxY, y);
-        }
-      }
-    }
-
-    const topGap = markMinY - plateMinY;
-    const bottomGap = plateMaxY - markMaxY;
-    expect(Math.abs(topGap - bottomGap)).toBeLessThanOrEqual(3);
-  });
-
-  it("keeps upper plate lighting neutral from left to right", () => {
-    const { width, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon-dock.png"))
-    );
-    const rgbAt = (x: number, y: number): [number, number, number] => {
-      const offset = (y * width + x) * 4;
-      return [
-        pixels.readUInt8(offset),
-        pixels.readUInt8(offset + 1),
-        pixels.readUInt8(offset + 2),
-      ];
-    };
-    const upperLeft = rgbAt(160, 80);
-    const upperRight = rgbAt(352, 80);
-
-    for (const channel of [0, 1, 2] as const) {
-      expect(
-        Math.abs(upperLeft[channel] - upperRight[channel])
-      ).toBeLessThanOrEqual(2);
-    }
-  });
-
-  it("keeps the plate surface flat from top to bottom", () => {
-    const { width, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon-dock.png"))
-    );
-    const rgbAt = (x: number, y: number): [number, number, number] => {
-      const offset = (y * width + x) * 4;
-      return [
-        pixels.readUInt8(offset),
-        pixels.readUInt8(offset + 1),
-        pixels.readUInt8(offset + 2),
-      ];
-    };
-    const upperPlate = rgbAt(256, 80);
-    const lowerPlate = rgbAt(256, 420);
-
-    for (const channel of [0, 1, 2] as const) {
-      expect(
-        Math.abs(upperPlate[channel] - lowerPlate[channel])
-      ).toBeLessThanOrEqual(2);
-    }
-  });
-
-  it("keeps the plate outline uniform on every edge", () => {
-    const { width, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon-dock.png"))
-    );
-    const rgbAt = (x: number, y: number): [number, number, number] => {
-      const offset = (y * width + x) * 4;
-      return [
-        pixels.readUInt8(offset),
-        pixels.readUInt8(offset + 1),
-        pixels.readUInt8(offset + 2),
-      ];
-    };
-    const edges = [
-      rgbAt(256, 41),
-      rgbAt(470, 256),
-      rgbAt(256, 470),
-      rgbAt(41, 256),
-    ] as const;
-    const first = edges[0];
-
-    for (const edge of edges.slice(1)) {
-      for (const channel of [0, 1, 2] as const) {
-        expect(Math.abs(first[channel] - edge[channel])).toBeLessThanOrEqual(2);
-      }
-    }
-  });
-
-  it("keeps the rendered U mark at one optical stroke weight", () => {
-    const { width, height, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon-dock.png"))
-    );
-    expect([width, height]).toEqual([512, 512]);
-
-    const isBrandPurple = (x: number, y: number) => {
-      const offset = (y * width + x) * 4;
-      const green = pixels.readUInt8(offset + 1);
-      const blue = pixels.readUInt8(offset + 2);
-      const alpha = pixels.readUInt8(offset + 3);
-      return alpha > 200 && blue >= 100 && blue - green >= 50;
-    };
-    const longestRun = (values: boolean[]) => {
-      let longest = 0;
-      let current = 0;
-      for (const value of values) {
-        current = value ? current + 1 : 0;
-        longest = Math.max(longest, current);
-      }
-      return longest;
-    };
-
-    const leftStroke = longestRun(
-      Array.from({ length: 90 }, (_, index) => isBrandPurple(70 + index, 268))
-    );
-    const rightStroke = longestRun(
-      Array.from({ length: 90 }, (_, index) => isBrandPurple(360 + index, 268))
-    );
-    const bottomStroke = longestRun(
-      Array.from({ length: 120 }, (_, index) => isBrandPurple(256, 300 + index))
-    );
-    const sideStroke = (leftStroke + rightStroke) / 2;
-
-    expect(Math.abs(leftStroke - rightStroke)).toBeLessThanOrEqual(2);
-    expect(Math.abs(bottomStroke - sideStroke)).toBeLessThanOrEqual(6);
-  });
-
-  it("keeps the rendered U mark material highlight above its body", () => {
-    const { width, pixels } = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon-dock.png"))
-    );
-    const lightnessAt = (x: number, y: number) => {
-      const offset = (y * width + x) * 4;
-      return (
-        pixels.readUInt8(offset) +
-        pixels.readUInt8(offset + 1) +
-        pixels.readUInt8(offset + 2)
+  it("keeps night-harbor color trials on the canonical geometry", () => {
+    const source = readFileSync(ICON_SOURCE, "utf8");
+    const berth = svgAttribute(source, "pier-berth", "d");
+    const chevron = svgAttribute(source, "pier-chevron", "d");
+    const underscore = svgAttribute(source, "pier-underscore", "d");
+    expect(berth.length).toBeGreaterThan(0);
+    for (const file of NIGHT_HARBOR_TRIALS) {
+      const trial = readFileSync(
+        join(ROOT, "build/design-sources", file),
+        "utf8"
       );
-    };
-
-    const shelfHighlight = lightnessAt(256, 352);
-    const lowerBody = lightnessAt(256, 367);
-
-    expect(shelfHighlight - lowerBody).toBeGreaterThanOrEqual(120);
-  });
-
-  it("keeps transparent F exports free of the macOS plate", () => {
-    const mark = read("build/design-sources/pier-logo.svg");
-    const unplated = read("build/app-icon-unplated.svg");
-
-    expect(mark).toContain('viewBox="0 0 210 170"');
-    expect(mark).toContain(
-      'id="berth-layer" transform="translate(104.5 145) scale(0.9) translate(-104.5 -145)"'
-    );
-    expect(mark).not.toContain("app-plate-fill");
-    expect(unplated).not.toContain("app-plate-fill");
-    expect(unplated).not.toContain('fill="#101725"');
-    expect(unplated).not.toContain('width="824" height="824"');
-  });
-
-  it("ships vector-only sources", () => {
-    for (const path of [
-      "build/app-icon-master.svg",
-      "build/app-icon-micro.svg",
-      "build/design-sources/pier-logo.svg",
-      "build/app-icon-unplated.svg",
-    ]) {
-      const source = read(path);
-      expect(source).not.toMatch(/<image(?:\s|>)/i);
-      expect(source).not.toMatch(/<text(?:\s|>)/i);
-      expect(source).not.toMatch(/(?:base64|data:|\shref=)/i);
+      expect(svgAttribute(trial, "pier-berth", "d"), file).toBe(berth);
+      expect(svgAttribute(trial, "pier-chevron", "d"), file).toBe(chevron);
+      expect(svgAttribute(trial, "pier-underscore", "d"), file).toBe(
+        underscore
+      );
+      expect(trial, file).not.toMatch(/#9bd9ff|#55aef4|#2478ca/i);
+      expect(trial, file).toContain("#8549ff");
+      expect(trial, file).toContain("#161b28");
     }
   });
 
-  it("ships Micro ICNS frames through 128px and Standard frames above it", () => {
-    const icns = readFileSync(join(ROOT, "build/icon.icns"));
-    const actual = Object.fromEntries(
-      parseIcns(icns)
-        .filter((entry) => entry.type in EXPECTED_ICNS_FRAME_HASHES)
-        .map((entry) => [entry.type, sha256Bytes(entry.data)])
+  it("publishes the pinned PNG size set and exact 512px container image", () => {
+    expect(readdirSync(join(ROOT, "build/icons")).sort()).toEqual(
+      ICON_SIZES.map((size) => `${size}x${size}.png`).sort()
     );
+    expect(readFileSync(join(ROOT, "build/icon.png"))).toEqual(
+      readFileSync(join(ROOT, "build/icons/512x512.png"))
+    );
+  });
 
-    expect(actual).toEqual(EXPECTED_ICNS_FRAME_HASHES);
+  it("keeps Windows frames pixel-identical to the PNG size set", () => {
+    const frames = parseIco(readFileSync(join(ROOT, "build/icon.ico")));
+    expect(frames.map(({ size }) => size)).toEqual(ICO_SIZES);
+    for (const { png, size } of frames) {
+      expect(decodeRgbaPng(png).pixels, `${size}px ICO`).toEqual(
+        decodeRgbaPng(
+          readFileSync(join(ROOT, "build/icons", `${size}x${size}.png`))
+        ).pixels
+      );
+    }
+  });
+
+  it("keeps every generated modern ICNS frame on the canonical resize output", {
+    timeout: 20_000,
+  }, () => {
+    const frames = new Map(
+      parseIcns(readFileSync(join(ROOT, "build/icon.icns"))).map((entry) => [
+        entry.type,
+        entry.data,
+      ])
+    );
+    for (const [type, size] of ICNS_PNG_SIZES) {
+      const actual = frames.get(type);
+      expect(actual, `missing ${type}`).toBeDefined();
+      const decoded = decodeRgbaPng(actual as Buffer);
+      expect([decoded.width, decoded.height], type).toEqual([size, size]);
+      if (size <= 512) {
+        expect(decoded.pixels, type).toEqual(
+          decodeRgbaPng(
+            readFileSync(join(ROOT, "build/icons", `${size}x${size}.png`))
+          ).pixels
+        );
+      }
+    }
+  });
+
+  it("keeps every raster output transparent at all four corners", () => {
+    for (const size of ICON_SIZES) {
+      const corners = cornerAlphas(
+        readFileSync(join(ROOT, "build/icons", `${size}x${size}.png`))
+      );
+      expect(
+        corners.every((alpha) => alpha <= 2),
+        `${size}px`
+      ).toBe(true);
+    }
   });
 
   it.runIf(process.platform === "darwin")(
-    "round-trips every official macOS frame through iconutil without pixel corruption",
-    { timeout: 15_000 },
+    "round-trips the complete ICNS through iconutil",
+    { timeout: 20_000 },
     () => {
-      const root = mkdtempSync(join(tmpdir(), "pier-system-iconset-"));
-      const output = join(root, "Pier.iconset");
-      try {
-        execFileSync("iconutil", [
-          "--convert",
-          "iconset",
-          "--output",
-          output,
-          join(ROOT, "build/icon.icns"),
+      const output = join(TEMP_ROOT, "Pier.iconset");
+      execFileSync("iconutil", [
+        "--convert",
+        "iconset",
+        "--output",
+        output,
+        join(ROOT, "build/icon.icns"),
+      ]);
+      expect(readdirSync(output).sort()).toEqual([
+        "icon_128x128.png",
+        "icon_128x128@2x.png",
+        "icon_16x16.png",
+        "icon_16x16@2x.png",
+        "icon_256x256.png",
+        "icon_256x256@2x.png",
+        "icon_32x32.png",
+        "icon_32x32@2x.png",
+        "icon_512x512.png",
+        "icon_512x512@2x.png",
+      ]);
+      for (const file of readdirSync(output)) {
+        expect(cornerAlphas(readFileSync(join(output, file))), file).toEqual([
+          0, 0, 0, 0,
         ]);
-        expect(readdirSync(output).sort()).toEqual(
-          [...SYSTEM_ICONSET_FILES].sort()
-        );
-
-        const sourceEntries = new Map(
-          parseIcns(readFileSync(join(ROOT, "build/icon.icns"))).map(
-            (entry) => [entry.type, entry.data]
-          )
-        );
-        for (const file of SYSTEM_ICONSET_FILES) {
-          const decoded = readFileSync(join(output, file));
-          const legacyHash = LEGACY_SYSTEM_FRAME_PIXEL_HASHES.get(file);
-          if (legacyHash) {
-            expect(decodedPixelHash(decoded)).toBe(legacyHash);
-            continue;
-          }
-          const sourceType = SYSTEM_FRAME_SOURCES.get(file);
-          const source = sourceType ? sourceEntries.get(sourceType) : undefined;
-          expect(source, `Missing ICNS source for ${file}`).toBeDefined();
-          expect(decodedPixelHash(decoded)).toBe(
-            decodedPixelHash(source as Buffer)
-          );
-        }
-      } finally {
-        rmSync(root, { recursive: true, force: true });
       }
     }
   );
 
-  it("uses the approved Micro rendition for the development Dock", () => {
-    const dockIcon = readFileSync(join(ROOT, "build/icon-dock.png"));
-
-    expect(sha256Bytes(dockIcon)).toBe(
-      "0cb6b2d8f8e071d8f522827625d7e8ae09f5f0dfda5e30f62526941a127704f4"
-    );
-  });
-
-  it("publishes the unplated F mark as the generic 512px PNG", () => {
-    const containerIcon = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/icon.png"))
-    );
-
-    expect([containerIcon.width, containerIcon.height]).toEqual([512, 512]);
-    expect(
-      cornerAlphas(
-        containerIcon.width,
-        containerIcon.height,
-        containerIcon.pixels
-      )
-    ).toEqual([0, 0, 0, 0]);
-  });
-
-  it("ships transparent RGBA Linux icons at the complete official size set", () => {
-    for (const size of LINUX_SIZES) {
-      const png = readFileSync(join(ROOT, `build/icons/${size}x${size}.png`));
-      const decoded = decodeRgbaPng(png);
-      expect([decoded.width, decoded.height]).toEqual([size, size]);
-      expect(
-        cornerAlphas(decoded.width, decoded.height, decoded.pixels)
-      ).toEqual([0, 0, 0, 0]);
-    }
-  });
-
-  it("ships transparent Windows frames matching the Linux F rendition pixels", () => {
-    const frames = parseIco(readFileSync(join(ROOT, "build/icon.ico")));
-    expect(frames.map((frame) => frame.size)).toEqual(ICO_SIZES);
-
-    for (const frame of frames) {
-      const linux = readFileSync(
-        join(ROOT, `build/icons/${frame.size}x${frame.size}.png`)
+  it.runIf(process.platform === "darwin")(
+    "ships a complete and fresh native single-PNG catalog",
+    () => {
+      const car = join(ROOT, "build/Assets.car");
+      expect(existsSync(car)).toBe(true);
+      expect(readFileSync(car).toString("ascii", 0, 8)).toBe("BOMStore");
+      expect(() => assertCompiledIconStack(car)).not.toThrow();
+      expect(readFileSync(join(ROOT, "build/Assets.car.inputs"), "utf8")).toBe(
+        macIconFingerprint(
+          join(ROOT, "build/app-icon-source.svg"),
+          parseIcns(readFileSync(join(ROOT, "build/icon.icns"))).find(
+            ({ type }) => type === "ic10"
+          )?.data as Buffer
+        )
       );
-      expect(frame.png).toEqual(linux);
-      const decoded = decodeRgbaPng(frame.png);
-      expect(
-        cornerAlphas(decoded.width, decoded.height, decoded.pixels)
-      ).toEqual([0, 0, 0, 0]);
     }
-  });
-
-  it("ships the Icon Composer document with the approved fill and mark layer", () => {
-    const document = JSON.parse(read("build/app-icon.icon/icon.json")) as {
-      fill?: { solid?: string };
-      groups?: { layers?: Record<string, unknown>[] }[];
-      "supported-platforms"?: { squares?: string };
-    };
-
-    // #101725 — the Big Sur plate color, now owned by the Tahoe background fill.
-    expect(document.fill?.solid).toBe("srgb:0.06275,0.09020,0.14510,1.00000");
-    expect(document.groups?.[0]?.layers?.[0]?.["image-name"]).toBe(
-      "pier-mark.png"
-    );
-    expect(document["supported-platforms"]?.squares).toBe("shared");
-  });
-
-  it("derives the Tahoe mark by stripping the plate and cropping to the optical plate box", () => {
-    const mark = tahoeMarkSvg(read("build/app-icon-master.svg"));
-
-    expect(mark).not.toContain('fill="#101725"');
-    expect(mark).not.toContain('width="824" height="824"');
-    const viewBox = mark.match(/viewBox="([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+)"/);
-    expect(viewBox).not.toBeNull();
-    const [x, y, width, height] = (viewBox as RegExpMatchArray)
-      .slice(1)
-      .map(Number);
-    expect(x).toBeCloseTo(75.28, 6);
-    expect(y).toBeCloseTo(75.28, 6);
-    expect(width).toBeCloseTo(873.44, 6);
-    expect(height).toBeCloseTo(873.44, 6);
-    expect(() => tahoeMarkSvg(mark)).toThrow(/plate markers/);
-  });
-
-  it("renders the layered mark asset at 1024px with plate-crop framing", () => {
-    const decoded = decodeRgbaPng(
-      readFileSync(join(ROOT, "build/app-icon.icon/Assets/pier-mark.png"))
-    );
-
-    expect([decoded.width, decoded.height]).toEqual([1024, 1024]);
-    expect(cornerAlphas(decoded.width, decoded.height, decoded.pixels)).toEqual(
-      [0, 0, 0, 0]
-    );
-    const centerAlpha = decoded.pixels.readUInt8(
-      (512 * decoded.width + 512) * 4 + 3
-    );
-    expect(centerAlpha).toBe(255);
-    expect(
-      decodedPixelHash(
-        readFileSync(join(ROOT, "build/app-icon.icon/Assets/pier-mark.png"))
-      )
-    ).toBe(LAYERED_MARK_PIXEL_HASH);
-  });
-
-  it("commits the compiled layered rendition as Assets.car", () => {
-    const car = readFileSync(join(ROOT, "build/Assets.car"));
-
-    expect(car.toString("ascii", 0, 8)).toBe("BOMStore");
-    expect(car.length).toBeGreaterThan(100_000);
-    const haystack = car.toString("latin1");
-    expect(haystack).toContain(MAC_ICON_RENDITION_NAME);
-    expect(haystack).toContain("pier-mark");
-  });
-
-  it("keeps the committed Assets.car fresh against the icon document fingerprint", () => {
-    const sidecar = read("build/Assets.car.inputs");
-
-    expect(sidecar).toMatch(/^[0-9a-f]{64}\n$/);
-    expect(sidecar).toBe(
-      layeredIconFingerprint(join(ROOT, "build/app-icon.icon"))
-    );
-  });
-
-  it("wires the generated icon assets into packaging, development, docs, and CI", () => {
-    const builder = read("electron-builder.yml");
-    expect(builder).toMatch(/mac:[\s\S]*?icon: build\/icon\.icns/);
-    expect(builder).toMatch(
-      new RegExp(
-        `mac:\\n(?:[^\\n]*\\n)*?  extendInfo:\\n {4}CFBundleIconName: ${MAC_ICON_RENDITION_NAME}`
-      )
-    );
-    expect(builder).toMatch(
-      /mac:\n(?:[^\n]*\n)*? {4}- from: build\/Assets\.car\n\s+to: Assets\.car/
-    );
-    expect(builder).toMatch(/win:[\s\S]*?icon: build\/icon\.ico/);
-    expect(builder).toMatch(/linux:[\s\S]*?icon: build\/icons/);
-
-    expect(read("src/main/index.ts")).toContain('"../../build/icon-dock.png"');
-    expect(read("src/main/windows/factory.ts")).toContain(
-      '"../../build/icon.png"'
-    );
-
-    const development = read("docs/development.md");
-    expect(development).toContain("pnpm build:icons");
-    expect(development).toContain("build/app-icon-master.svg");
-    expect(development).toContain("build/app-icon-micro.svg");
-    expect(development).toContain("brew install librsvg");
-    expect(development).toContain("actool");
-
-    const ci = read(".github/workflows/ci.yml");
-    expect(ci).toContain("'build/app-icon-*.svg'");
-    expect(ci).toContain("'build/app-icon.icon/**'");
-    expect(ci).toContain("'build/design-sources/pier-logo.svg'");
-    expect(ci).toContain("'build/icon.*'");
-    expect(ci).toContain("'build/icon-dock.png'");
-    expect(ci).toContain("'build/icons/**'");
-    expect(ci).toContain("'build/Assets.car'");
-    expect(ci).toContain("'build/Assets.car.inputs'");
-    expect(ci).toContain("mac_icons:");
-    expect(ci).toContain("runs-on: macos-15");
-    expect(ci).toContain("tests/unit/scripts/app-icon-assets.test.ts");
-    expect(ci).toContain(
-      "tests/unit/scripts/app-icon-container-governance.test.ts"
-    );
-    expect(ci).toContain("tests/unit/app/dev-profile-electron-icon.test.ts");
-  });
+  );
 });

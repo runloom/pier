@@ -1,5 +1,7 @@
-import { Text } from "pier/canvas";
 import {
+  formatBytes,
+  formatPercent,
+  Text,
   useActivityOverview,
   useCostOverview,
   useSystemResources,
@@ -20,7 +22,7 @@ function CostSample() {
   const overview = useCostOverview();
   return (
     <Text className="text-sm" tone="secondary">
-      状态 {overview.status}；refresh() 手动重扫全部用量来源
+      状态 {overview.status}；刷新走 host.invoke usageData.refresh
     </Text>
   );
 }
@@ -30,6 +32,14 @@ function ResourcesSample() {
   return (
     <Text className="text-sm" tone="secondary">
       状态 {resources.status}；CPU 序列 {resources.cpuHistory.length} 点
+    </Text>
+  );
+}
+
+function FormatSample() {
+  return (
+    <Text className="text-sm" tone="secondary">
+      {formatBytes(1024, "en")} · {formatPercent(0.63, "en")}
     </Text>
   );
 }
@@ -50,7 +60,7 @@ export function DataPage() {
         </MaterialCard>
         <MaterialCard
           install='import { useCostOverview } from "pier/canvas"'
-          lead="跨插件成本聚合，可手动刷新"
+          lead="跨插件成本聚合；刷新走 usageData.refresh"
           name="useCostOverview"
         >
           <CostSample />
@@ -61,6 +71,13 @@ export function DataPage() {
           name="useSystemResources"
         >
           <ResourcesSample />
+        </MaterialCard>
+        <MaterialCard
+          install='import { formatBytes, formatPercent } from "pier/canvas"'
+          lead="数字、金额、大小、相对时间；不是组件"
+          name="formatBytes"
+        >
+          <FormatSample />
         </MaterialCard>
       </KitGrid>
     </KitSection>

@@ -20,12 +20,6 @@
           "title": "Codex Accounts"
         }
       },
-      "workbenchWidgets": {
-        "pier.codex.accounts": {
-          "title": "Codex Account & Quota",
-          "description": "Switch the active Codex account and monitor its quota."
-        }
-      },
       "messages": {
         "pier.codex.accounts.settings.title": "Codex Accounts",
         "pier.codex.accounts.settings.addAccount": "Add account",
@@ -120,12 +114,6 @@
       "settingsPages": {
         "pier.codex.accounts": {
           "title": "Codex 账号"
-        }
-      },
-      "workbenchWidgets": {
-        "pier.codex.accounts": {
-          "title": "Codex 账号与配额",
-          "description": "切换当前 Codex 账号并查看对应配额。"
         }
       },
       "messages": {
@@ -224,12 +212,6 @@
           "title": "Codex アカウント"
         }
       },
-      "workbenchWidgets": {
-        "pier.codex.accounts": {
-          "title": "Codex アカウントとクォータ",
-          "description": "使用中の Codex アカウントを切り替え、クォータを確認します。"
-        }
-      },
       "messages": {
         "pier.codex.accounts.settings.title": "Codex アカウント",
         "pier.codex.accounts.settings.addAccount": "アカウントを追加",
@@ -326,12 +308,6 @@
           "title": "Codex 계정"
         }
       },
-      "workbenchWidgets": {
-        "pier.codex.accounts": {
-          "title": "Codex 계정과 할당량",
-          "description": "사용 중인 Codex 계정을 전환하고 할당량을 확인합니다."
-        }
-      },
       "messages": {
         "pier.codex.accounts.settings.title": "Codex 계정",
         "pier.codex.accounts.settings.addAccount": "계정 추가",
@@ -422,28 +398,8 @@
     }
   },
   "main": "dist/main.js",
-  "workbenchWidgets": [
-    {
-      "category": "agent",
-      "defaultSize": {
-        "w": 4,
-        "h": 3
-      },
-      "description": "Switch the active Codex account and monitor its quota.",
-      "id": "pier.codex.accounts",
-      "maxSize": {
-        "w": 8,
-        "h": 6
-      },
-      "minSize": {
-        "w": 2,
-        "h": 2
-      },
-      "refreshable": false,
-      "searchTerms": ["codex", "account", "quota", "账号", "配额"],
-      "title": "Codex Account & Quota"
-    }
-  ],
+  "dataProjections": ["accounts"],
+  "canvasActions": ["accounts.select", "accounts.refreshUsage"],
   "name": "Codex Account Management",
   "panels": [],
   "permissions": ["plugin:read", "secret:read", "secret:write"],

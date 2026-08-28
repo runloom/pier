@@ -6,10 +6,14 @@ import type { FileTreeRefs } from "./tree-internal.ts";
 import { lastSegment, stripTrailingSlash } from "./tree-model.ts";
 import type { FileTreeRenameDeliveryRef } from "./tree-rename-session.ts";
 
+export const FILE_TREE_POINTER_DRAG_THRESHOLD_PX = 8;
+
 export function fileTreeDragAndDropConfig(
   readRefs: () => FileTreeRefs
 ): FileTreeDragAndDropConfig {
   return {
+    commitOnDrop: false,
+    pointerDragThresholdPx: FILE_TREE_POINTER_DRAG_THRESHOLD_PX,
     onDropComplete: (event) => {
       const handler = readRefs().onMovePaths;
       if (!handler) {

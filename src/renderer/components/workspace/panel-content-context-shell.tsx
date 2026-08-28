@@ -13,7 +13,7 @@ import { useZoomStore } from "@/stores/zoom.store.ts";
 
 /**
  * 所有 web panel 内容区的兜底右键：弹出共享 panel/content 布局菜单。
- * 子树若已 preventDefault + stopPropagation（terminal 走 native、files/workbench
+ * 子树若已 preventDefault + stopPropagation（terminal 走 native、files
  * 自管菜单），本壳不接管；那些 surface 通过 expandContextMenuSurfaces 并入布局项。
  */
 export function PanelContentContextShell({

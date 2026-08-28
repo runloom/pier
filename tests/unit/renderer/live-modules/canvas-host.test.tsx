@@ -133,6 +133,10 @@ describe("canvas host runtime", () => {
       type: "pluginData.snapshot",
       payload: { key: "accounts.usage", pluginId: "pier.codex" },
     });
+    expect(invoke).toHaveBeenCalledWith({
+      type: "pluginData.watchStart",
+      payload: { key: "accounts.usage", pluginId: "pier.codex" },
+    });
     expect(subscribe).toHaveBeenCalledWith(
       PIER_BROADCAST.PLUGIN_DATA_CHANGED,
       expect.any(Function)
@@ -170,6 +174,10 @@ describe("canvas host runtime", () => {
 
     unmount();
     expect(unsubscribe).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith({
+      type: "pluginData.watchStop",
+      payload: { key: "accounts.usage", pluginId: "pier.codex" },
+    });
   });
 
   it("propagates plugin snapshot command failures to the error state", async () => {

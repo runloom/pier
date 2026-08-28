@@ -29,7 +29,7 @@ const repoB = makeContext("ctx:b", "/repo/b", 20);
 
 interface MockPanel {
   id: string;
-  view: { contentComponent: "terminal" | "workbench" | "welcome" };
+  view: { contentComponent: "terminal" | "welcome" };
 }
 
 interface MockGroup {
@@ -40,10 +40,6 @@ interface MockGroup {
 
 function terminalPanel(id: string): MockPanel {
   return { id, view: { contentComponent: "terminal" } };
-}
-
-function workbenchPanel(id: string): MockPanel {
-  return { id, view: { contentComponent: "workbench" } };
 }
 
 function welcomePanel(id: string): MockPanel {
@@ -82,11 +78,11 @@ describe("resolveWorkspaceAnchor", () => {
 
   it("uses the source panel context when present", () => {
     const api = createApi({
-      activePanelId: "workbench-1",
+      activePanelId: "welcome-1",
       groups: [
         {
           id: "group-a",
-          panels: [workbenchPanel("workbench-1"), terminalPanel("terminal-1")],
+          panels: [welcomePanel("welcome-1"), terminalPanel("terminal-1")],
         },
       ],
     });
@@ -104,7 +100,7 @@ describe("resolveWorkspaceAnchor", () => {
           cwd: "/explicit",
         },
         sourcePanelGroupId: "group-a",
-        sourcePanelId: "workbench-1",
+        sourcePanelId: "welcome-1",
       })
     ).toEqual({
       context: expect.objectContaining({
@@ -115,17 +111,17 @@ describe("resolveWorkspaceAnchor", () => {
     });
   });
 
-  it("treats workbench as a global pathless panel (no sibling terminal fallback)", () => {
+  it("treats welcome as a global pathless panel (no sibling terminal fallback)", () => {
     const terminalOld = terminalPanel("terminal-old");
     const terminalActive = terminalPanel("terminal-active");
-    const workbench = workbenchPanel("workbench-1");
+    const welcome = welcomePanel("welcome-1");
     const api = createApi({
-      activePanelId: "workbench-1",
+      activePanelId: "welcome-1",
       groups: [
         {
           activePanel: terminalActive,
           id: "group-a",
-          panels: [terminalOld, workbench, terminalActive],
+          panels: [terminalOld, welcome, terminalActive],
         },
       ],
     });
@@ -137,13 +133,13 @@ describe("resolveWorkspaceAnchor", () => {
       context: repoB,
       display: { short: "active" },
     });
-    // Workbench intentionally has no descriptor context.
+    // Welcome intentionally has no descriptor context.
 
     expect(
       resolveWorkspaceAnchor({
         api: api as never,
         sourcePanelGroupId: "group-a",
-        sourcePanelId: "workbench-1",
+        sourcePanelId: "welcome-1",
       })
     ).toEqual({
       groupId: "group-a",
@@ -151,7 +147,7 @@ describe("resolveWorkspaceAnchor", () => {
     expect(
       hasProjectPathAnchor({
         api: api as never,
-        sourcePanelId: "workbench-1",
+        sourcePanelId: "welcome-1",
       })
     ).toBe(false);
   });
@@ -163,7 +159,7 @@ describe("resolveWorkspaceAnchor", () => {
       groups: [
         {
           id: "group-a",
-          panels: [workbenchPanel("workbench-a"), terminalPanel("terminal-a")],
+          panels: [welcomePanel("welcome-a"), terminalPanel("terminal-a")],
         },
         {
           id: "group-b",
@@ -179,7 +175,7 @@ describe("resolveWorkspaceAnchor", () => {
       context: repoB,
       display: { short: "b" },
     });
-    usePanelDescriptorStore.getState().upsert("workbench-a", {
+    usePanelDescriptorStore.getState().upsert("welcome-a", {
       context: repoA,
       display: { short: "wb" },
     });
@@ -188,7 +184,7 @@ describe("resolveWorkspaceAnchor", () => {
       resolveWorkspaceAnchor({
         api: api as never,
         sourcePanelGroupId: "group-a",
-        sourcePanelId: "workbench-a",
+        sourcePanelId: "welcome-a",
       })
     ).toEqual({
       context: repoA,
@@ -249,13 +245,13 @@ describe("resolveWorkspaceAnchor", () => {
     ).toEqual({ context: null, groupId: "group-a" });
   });
 
-  it("captureAnchoredTerminalTarget from global workbench pins null context", () => {
+  it("captureAnchoredTerminalTarget from global welcome pins null context", () => {
     const api = createApi({
-      activePanelId: "workbench-1",
+      activePanelId: "welcome-1",
       groups: [
         {
           id: "group-a",
-          panels: [workbenchPanel("workbench-1"), terminalPanel("terminal-1")],
+          panels: [welcomePanel("welcome-1"), terminalPanel("terminal-1")],
         },
       ],
     });
@@ -267,7 +263,7 @@ describe("resolveWorkspaceAnchor", () => {
     expect(
       captureAnchoredTerminalTarget(api as never, {
         sourcePanelGroupId: "group-a",
-        sourcePanelId: "workbench-1",
+        sourcePanelId: "welcome-1",
       })
     ).toEqual({
       context: null,
@@ -275,13 +271,13 @@ describe("resolveWorkspaceAnchor", () => {
     });
   });
 
-  it("inheritedActiveTerminalContext is empty on global workbench", () => {
+  it("inheritedActiveTerminalContext is empty on global welcome", () => {
     const api = createApi({
-      activePanelId: "workbench-1",
+      activePanelId: "welcome-1",
       groups: [
         {
           id: "group-a",
-          panels: [workbenchPanel("workbench-1"), terminalPanel("terminal-1")],
+          panels: [welcomePanel("welcome-1"), terminalPanel("terminal-1")],
         },
       ],
     });
@@ -302,7 +298,7 @@ describe("resolveWorkspaceAnchor", () => {
       groups: [
         {
           id: "group-a",
-          panels: [workbenchPanel("workbench-1"), terminalPanel("terminal-1")],
+          panels: [welcomePanel("welcome-1"), terminalPanel("terminal-1")],
         },
       ],
     });

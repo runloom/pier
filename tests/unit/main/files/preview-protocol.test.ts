@@ -119,7 +119,7 @@ describe("file preview protocol", () => {
     });
   });
 
-  it("rejects directories, SVG, and image-extension spoofing", async () => {
+  it("rejects directories, SVG served as png, and image-extension spoofing", async () => {
     await mkdir(join(root, "folder"));
     await writeFile(join(root, "vector.svg"), "<svg></svg>");
     await writeFile(join(root, "spoof.png"), Buffer.from([0, 1, 2, 3]));
@@ -130,6 +130,41 @@ describe("file preview protocol", () => {
       );
       expect(response.status).toBe(404);
     }
+  });
+
+  it("serves SVG markup when the ticket mime is image/svg+xml", async () => {
+    const bytes = Buffer.from(
+      "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'></svg>"
+    );
+    await writeFile(join(root, "icon.svg"), bytes);
+    const document = await readFileDocument({ path: "icon.svg", root });
+    expect(document.kind).toBe("text");
+    if (document.kind !== "text") {
+      return;
+    }
+    const url = ticketUrl({
+      mime: "image/svg+xml",
+      path: "icon.svg",
+      revision: document.revision,
+      root,
+    });
+    const response = await resolveFilePreviewResponse(url);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/svg+xml");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+  });
+
+  it("rejects an svg ticket whose bytes are not svg markup", async () => {
+    await writeFile(join(root, "icon.svg"), Buffer.from("<html></html>"));
+    const response = await resolveFilePreviewResponse(
+      ticketUrl({
+        mime: "image/svg+xml",
+        path: "icon.svg",
+        revision: "file-v1:any",
+        root,
+      })
+    );
+    expect(response.status).toBe(404);
   });
 
   it("rejects an in-root symlink whose target escapes the root", async () => {

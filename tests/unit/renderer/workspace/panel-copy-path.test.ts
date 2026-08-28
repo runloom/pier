@@ -114,16 +114,16 @@ describe("panel copy path (tab menu)", () => {
     useWorkspaceStore.getState().setApi({
       panels: [
         {
-          id: "workbench-1",
+          id: "welcome-1",
           params: { widgets: [] },
-          view: { contentComponent: "workbench" },
+          view: { contentComponent: "welcome" },
         },
       ],
     } as never);
 
     expect(
       resolvePanelCopyPath({
-        sourcePanelId: "workbench-1",
+        sourcePanelId: "welcome-1",
         surface: "dockview-tab",
       })
     ).toBeUndefined();
@@ -132,14 +132,14 @@ describe("panel copy path (tab menu)", () => {
   it("hides the tab menu item when there is no path", () => {
     useWorkspaceStore.getState().setApi({
       activePanel: {
-        id: "workbench-1",
-        view: { contentComponent: "workbench" },
+        id: "welcome-1",
+        view: { contentComponent: "welcome" },
       },
       panels: [
         {
-          id: "workbench-1",
+          id: "welcome-1",
           params: {},
-          view: { contentComponent: "workbench" },
+          view: { contentComponent: "welcome" },
         },
       ],
     } as never);
@@ -147,7 +147,7 @@ describe("panel copy path (tab menu)", () => {
     expect(
       collectActionIds(
         buildMenuEntries("dockview-tab", {
-          sourcePanelId: "workbench-1",
+          sourcePanelId: "welcome-1",
           surface: "dockview-tab",
         })
       )

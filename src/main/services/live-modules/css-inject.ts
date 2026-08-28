@@ -4,17 +4,30 @@ import { createHash } from "node:crypto";
  * Append a module-evaluation side-effect that injects CSS scoped to the canvas
  * shell (`[data-pier-canvas-shell]`) and tagged for teardown with
  * `data-pier-live-css="${moduleId}::${hash}"`.
+ *
+ * `unscopedPropertyCss` is appended after the `@scope` block at the top level
+ * of the injected stylesheet: `@property` registrations are invalid inside
+ * grouping rules, so the Tailwind JIT hoists them here. The caller guarantees
+ * it contains only `@property --tw-*` rules — never selector rules
+ * (governance-locked by canvas-tailwind-source-governance).
  */
 export function appendScopedCssInjector(
   jsSource: string,
   cssText: string,
-  moduleId: string
+  moduleId: string,
+  unscopedPropertyCss = ""
 ): string {
-  if (!cssText.trim()) {
+  const scopedPart = cssText.trim()
+    ? `@scope ([data-pier-canvas-shell]) {\n${cssText}\n}\n`
+    : "";
+  const propertyPart = unscopedPropertyCss.trim()
+    ? `${unscopedPropertyCss.trim()}\n`
+    : "";
+  if (!(scopedPart || propertyPart)) {
     return jsSource;
   }
-  const hash = createHash("sha256").update(cssText).digest("hex").slice(0, 8);
-  const scoped = `@scope ([data-pier-canvas-shell]) {\n${cssText}\n}\n`;
+  const scoped = `${scopedPart}${propertyPart}`;
+  const hash = createHash("sha256").update(scoped).digest("hex").slice(0, 8);
   const key = `${moduleId}::${hash}`;
   const injector = `
 ;(() => {

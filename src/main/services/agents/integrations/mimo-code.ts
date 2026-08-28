@@ -164,6 +164,7 @@ function emitPierEvent(pierEvent, nativeEvent, rawEvent, extra = {}) {
     agent: "mimo-code",
     event: pierEvent,
     nativeEvent,
+    ...pierSpawnGenerationFromEnv(),
     ...(nativeState ? { nativeState } : {}),
     ...(isSubagent ? { actorHint: "subagent" } : {}),
     ...(typeof parentSessionId === "string" && parentSessionId

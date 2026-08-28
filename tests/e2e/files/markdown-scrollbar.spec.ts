@@ -9,7 +9,7 @@ import {
   expect,
   test,
 } from "@playwright/test";
-import { selectTheme, setWindowSize } from "../workbench/e2e-harness.ts";
+import { selectTheme, setWindowSize } from "../support/app-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
@@ -130,24 +130,24 @@ test("renders Markdown in the production worker and keeps scrollbar policy consi
       '[data-slot="markdown-preview"][data-scrollbar="stable"]'
     );
     await expect(previewScroller).toBeVisible();
+    await expect(page.locator('[data-slot="markdown-prose"]')).toBeVisible({
+      timeout: 30_000,
+    });
+    // Accessible name includes the copy-anchor button label; match the
+    // heading's own text so "Section 10" cannot steal "Section 1".
     await expect(
-      page.getByRole("heading", { name: "Section 1", exact: true })
+      page
+        .locator('[data-slot="markdown-prose"] h2.md-heading-group')
+        .filter({ hasText: /^Section 1$/u })
     ).toBeVisible({ timeout: 30_000 });
     await expect(
       page.getByText(
         /Unable to render Markdown preview|无法渲染 Markdown 预览/u
       )
     ).toHaveCount(0);
-    // Mermaid may inject helper SVGs (markers); pin the flowchart root only.
-    const diagram = page
-      .locator('[data-slot="markdown-diagram"]')
-      .locator("svg.flowchart")
-      .or(
-        page.locator('[data-slot="markdown-diagram"] svg').filter({
-          has: page.locator("g.nodes, g.clusters, path.flowchart-link"),
-        })
-      )
-      .first();
+    // beautiful-mermaid does not emit official `svg.flowchart` / `g.nodes`;
+    // the preview mounts one live SVG under the diagram shell.
+    const diagram = page.locator('[data-slot="markdown-diagram"] svg').first();
     await expect(diagram).toBeVisible({ timeout: 30_000 });
     // Mermaid DOM shape varies by version; require a real SVG and non-accent
     // stroke/fill on graph geometry when present.

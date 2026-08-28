@@ -9,6 +9,10 @@ export const terminal = {
       "コマンドはすでに入力されています。Return で実行してください。",
     setupFailed:
       "ターミナルは開きましたが、セットアップコマンドを実行できませんでした。ターミナルで実行するか、もう一度作成してください。",
+    taskEnterFailed:
+      "コマンドはすでに入力されています。Return で実行してください。",
+    taskFailed:
+      "ターミナルは開きましたが、コマンドを入力できませんでした。ターミナルに入力するか、もう一度実行してください。",
   },
   frameWaitFailed:
     "ターミナル画面が表示されませんでした。もう一度試すか、このターミナルを開き直してください。",
@@ -28,6 +32,7 @@ export const terminal = {
     fieldDuration: "所要時間",
     fieldExitCode: "終了コード",
     fieldStatus: "状態",
+    newSession: "新しいセッション",
     restart: "エージェントを再起動",
     restartFailed:
       "エージェントを再起動できませんでした。もう一度お試しください",

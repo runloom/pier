@@ -31,5 +31,10 @@ describe("CommentNavigator", () => {
     expect(onNext).toHaveBeenCalledTimes(1);
     expect(onPrevious).toHaveBeenCalledTimes(1);
     expect(onRevealCurrent).toHaveBeenCalledTimes(1);
+    expect(
+      screen
+        .getByRole("toolbar", { name: "Comments" })
+        .querySelector("svg.lucide-message-circle")
+    ).not.toBeNull();
   });
 });

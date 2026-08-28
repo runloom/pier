@@ -34,7 +34,6 @@ async function writePluginBundle(options: {
       commands: [],
       panels: [],
       terminalStatusItems: [],
-      workbenchWidgets: [{ id: `${options.id}.widget` }],
     }),
     "utf8"
   );
@@ -163,7 +162,8 @@ describe("readBundledPlugin", () => {
         commands: [{ id: "x" }],
         panels: [],
         terminalStatusItems: [],
-        workbenchWidgets: [],
+        canvasActions: [],
+        dataProjections: [],
       }),
       "utf8"
     );
@@ -194,7 +194,6 @@ describe("readBundledPlugin", () => {
         commands: 1,
         panels: 0,
         terminalStatusItems: 0,
-        workbenchWidgets: 0,
       },
       name: "Codex dev",
       sha256: "pier.codex-sha",

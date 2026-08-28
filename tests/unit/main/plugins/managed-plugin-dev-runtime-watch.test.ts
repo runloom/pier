@@ -1,7 +1,7 @@
 import {
   createManagedPluginDevRuntimeWatchRegistry,
   isManagedPluginDevRuntimeFile,
-} from "@main/app-core/managed-plugin-dev-runtime-watch.ts";
+} from "@main/app-core/plugin-runtime/dev-runtime-watch.ts";
 import { describe, expect, it, vi } from "vitest";
 
 describe("managed plugin dev runtime watch", () => {
@@ -11,7 +11,7 @@ describe("managed plugin dev runtime watch", () => {
     expect(isManagedPluginDevRuntimeFile("dist/renderer.js")).toBe(true);
 
     expect(
-      isManagedPluginDevRuntimeFile("src/renderer/accounts-widget.tsx")
+      isManagedPluginDevRuntimeFile("src/renderer/accounts-settings-page.tsx")
     ).toBe(false);
     expect(isManagedPluginDevRuntimeFile("dist-pkg/pier.codex-1.0.0.tgz")).toBe(
       false

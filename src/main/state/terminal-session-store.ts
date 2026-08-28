@@ -83,6 +83,21 @@ export function peekTerminalPanelContext(
   return s.get().windows[windowId]?.panels[panelId]?.context ?? null;
 }
 
+/** Running agent panel ids for a window record. Empty if the store is cold. */
+export function listRunningAgentPanelIds(windowId: string): string[] {
+  if (windowId.trim().length === 0) {
+    return [];
+  }
+  const s = tryGetTerminalSessionStore();
+  if (!s) {
+    return [];
+  }
+  const panels = s.get().windows[windowId]?.panels ?? {};
+  return Object.entries(panels)
+    .filter(([, panel]) => panel.agent?.status === "running")
+    .map(([panelId]) => panelId);
+}
+
 /** Sync peek of agent session metadata (running or exited). Null if store cold. */
 export function peekTerminalPanelAgent(
   windowId: string,

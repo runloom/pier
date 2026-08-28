@@ -2,7 +2,10 @@
  * @vitest-environment jsdom
  */
 import { describe, expect, it } from "vitest";
-import { findPinForCanvasPick } from "../../../src/plugins/builtin/files/renderer/preview/canvas-comment-locate.ts";
+import {
+  findPinForCanvasPick,
+  locateCanvasCommentPins,
+} from "../../../src/plugins/builtin/files/renderer/preview/canvas-comment-locate.ts";
 import type { CanvasCommentPinView } from "../../../src/plugins/builtin/files/renderer/preview/canvas-comment-pins.tsx";
 // CanvasCommentThreadView includes optional label
 import {
@@ -504,6 +507,54 @@ describe("clientPointInShell", () => {
   });
 });
 
+describe("world-stage zoom scale", () => {
+  // World mode applies CSS `zoom` on an ancestor: client rects scale while
+  // offset layout stays local. Pin/pick math must recover local coordinates.
+  it("divides pick box geometry by the ancestor zoom factor", () => {
+    const shell = document.createElement("div");
+    const child = document.createElement("div");
+    child.textContent = "Box";
+    shell.append(child);
+    document.body.append(shell);
+    Object.defineProperty(shell, "offsetWidth", { value: 300 });
+    mockBox(shell, { height: 400, left: 100, top: 50, width: 600 });
+    mockBox(child, { height: 40, left: 140, top: 90, width: 80 });
+    const box = measureCanvasPickBox(child, shell);
+    expect(box.left).toBe(20);
+    expect(box.top).toBe(20);
+    expect(box.width).toBe(40);
+    expect(box.height).toBe(20);
+    shell.remove();
+  });
+
+  it("maps pointer coordinates through the zoom factor", () => {
+    const shell = document.createElement("div");
+    document.body.append(shell);
+    Object.defineProperty(shell, "offsetWidth", { value: 300 });
+    mockBox(shell, { height: 200, left: 40, top: 20, width: 600 });
+    Object.defineProperty(shell, "scrollLeft", { value: 16 });
+    Object.defineProperty(shell, "scrollTop", { value: 8 });
+    expect(clientPointInShell(shell, 140, 120)).toEqual({ x: 66, y: 58 });
+    shell.remove();
+  });
+
+  it("stays a no-op at zoom 1 (flow mode)", () => {
+    const shell = document.createElement("div");
+    const child = document.createElement("div");
+    child.textContent = "Box";
+    shell.append(child);
+    document.body.append(shell);
+    Object.defineProperty(shell, "offsetWidth", { value: 300 });
+    mockBox(shell, { height: 400, left: 100, top: 50, width: 300 });
+    mockBox(child, { height: 40, left: 140, top: 90, width: 80 });
+    const box = measureCanvasPickBox(child, shell);
+    expect(box.left).toBe(40);
+    expect(box.top).toBe(40);
+    expect(box.width).toBe(80);
+    shell.remove();
+  });
+});
+
 describe("findCanvasElementByLabel", () => {
   it("re-locates the compact element matching pick label", () => {
     const host = document.createElement("div");
@@ -689,5 +740,56 @@ describe("findPinForCanvasPick", () => {
     );
     expect(hit).toBeNull();
     host.remove();
+  });
+});
+
+describe("locateCanvasCommentPins world zoom", () => {
+  it("hits the same anchor in local coords at 1× and 2×", () => {
+    const shell = document.createElement("div");
+    const host = document.createElement("div");
+    const target = document.createElement("button");
+    target.type = "button";
+    target.textContent = "Save";
+    target.setAttribute("data-pier-comment-id", "save");
+    host.append(target);
+    shell.append(host);
+    document.body.append(shell);
+
+    const thread = {
+      anchorId: "save",
+      comment: {
+        authorLabel: "You",
+        body: "Check this",
+        createdAt: 1,
+        id: "c1",
+      },
+      label: "Save",
+      threadId: "t1",
+    };
+    const input = {
+      host,
+      locatedByAnchorId: new Map([["save", [thread]]]),
+      pickedNodeThreads: [] as const,
+      shell,
+      softMarkers: [] as const,
+    };
+
+    Object.defineProperty(shell, "offsetWidth", { value: 300 });
+    mockBox(shell, { height: 400, left: 0, top: 0, width: 600 });
+    mockBox(target, { height: 40, left: 80, top: 40, width: 80 });
+    const zoomed = locateCanvasCommentPins(input);
+    expect(zoomed.pins).toHaveLength(1);
+
+    mockBox(shell, { height: 200, left: 0, top: 0, width: 300 });
+    mockBox(target, { height: 20, left: 40, top: 20, width: 40 });
+    const fit = locateCanvasCommentPins(input);
+    expect(fit.pins).toHaveLength(1);
+    expect(fit.pins[0]?.key).toBe(zoomed.pins[0]?.key);
+    expect(fit.pins[0]?.left).toBe(zoomed.pins[0]?.left);
+    expect(fit.pins[0]?.top).toBe(zoomed.pins[0]?.top);
+    expect(fit.pins[0]?.left).toBe(80);
+    expect(fit.pins[0]?.top).toBe(20);
+
+    shell.remove();
   });
 });

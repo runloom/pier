@@ -84,7 +84,7 @@ export function attachWorkspaceTerminalTabDragInputCapture(
 
   const startSession = (panelId: string): void => {
     if (activeSession) {
-      // 上一会话未收到结束信号即被新拖拽顶替；勿记 dispose（那是工作台卸载）。
+      // 上一会话未收到结束信号即被新拖拽顶替；勿记 dispose（那是工作区卸载）。
       finishSession(activeSession.sessionId, "superseded");
     }
     const sessionId = `dockview-tab-drag:${nextSessionSequence}`;

@@ -22,7 +22,7 @@ import {
   GIT_REVIEW_RESPONSIVE_INLINE_ENTER_PX,
   GIT_REVIEW_RESPONSIVE_SPLIT_RESTORE_PX,
 } from "../../../src/plugins/builtin/git/renderer/review/responsive-diff.ts";
-import { selectTheme, setWindowSize } from "../workbench/e2e-harness.ts";
+import { selectTheme, setWindowSize } from "../support/app-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
@@ -365,12 +365,17 @@ const BINARY_STATE_NOTICE = /Binary (?:file|binary)|二进制文件/u;
  * noisier after ledger/hunk-stage work (observed peaks ~1.2s on retries).
  */
 const REVIEW_LONGTASK_MS_BUDGET = process.env.CI ? 1500 : 250;
+/** 2001-file scale after index recovery: one layout hitch is allowed. */
+const REVIEW_SCALE_LONGTASK_MS_BUDGET = process.env.CI ? 1500 : 500;
 
 /** Large-file first paint after tree click → first virtual window. */
 const REVIEW_LARGE_FIRST_PAINT_MS_BUDGET = process.env.CI ? 8000 : 5000;
 
-/** Already-loaded file navigation (tree click → viewport text). */
-const REVIEW_LOADED_NAVIGATION_MS_BUDGET = process.env.CI ? 1500 : 500;
+/**
+ * Tree-click after eviction is selected-boost on-demand (full document),
+ * not an in-memory hop. Same cap as file-2000 cold navigation.
+ */
+const REVIEW_LOADED_NAVIGATION_MS_BUDGET = 2000;
 /** Device-pixel rounding only; visible post-materialization movement fails. */
 const REVIEW_NAVIGATION_ANCHOR_JITTER_PX = 0.5;
 
@@ -640,19 +645,22 @@ async function installNavigationCompletionProbe(
         const startedAt = Number(
           Reflect.get(window, "__pierGitReviewNavigationStartedAt")
         );
-        const host = document.querySelector<HTMLElement>(
-          `[data-pier-file-path*="${fragment}"]`
+        const surface = document.querySelector<HTMLElement>(
+          '[data-git-review-surface][aria-hidden="false"]'
         );
-        const scroller = document.querySelector<HTMLElement>(
+        const scroller = surface?.querySelector<HTMLElement>(
           '[data-testid="pierre-diff-root"] .cv-scrollbar'
         );
-        if (
-          Number.isFinite(startedAt) &&
-          startedAt > 0 &&
-          host &&
-          scroller &&
-          (host.shadowRoot?.textContent ?? "").includes(expectedText)
-        ) {
+        const host = [
+          ...(surface?.querySelectorAll<HTMLElement>("diffs-container") ?? []),
+        ].find(
+          (container) =>
+            (container.getAttribute("data-pier-file-path") ?? "").includes(
+              fragment
+            ) &&
+            (container.shadowRoot?.textContent ?? "").includes(expectedText)
+        );
+        if (Number.isFinite(startedAt) && startedAt > 0 && host && scroller) {
           const item = host.getBoundingClientRect();
           const viewport = scroller.getBoundingClientRect();
           if (item.bottom > viewport.top && item.top < viewport.bottom) {
@@ -2171,19 +2179,17 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await reviewSeparator.focus();
     await page.keyboard.press("Enter");
     await expect(
-      page.getByRole("button", { name: /Show changed files|展开变更文件/u })
+      page.getByRole("button", { name: REVIEW_TREE_SHOW_NAME })
     ).toHaveAttribute("aria-expanded", "false");
     await expect(
       page.locator('file-tree-container[data-slot="pier-file-tree"]')
     ).toHaveCount(0);
     await expect(reviewTreePanel).toHaveAttribute("aria-hidden", "true");
     expect(pageErrors).toEqual([]);
-    await page
-      .getByRole("button", { name: /Show changed files|展开变更文件/u })
-      .click();
+    await page.getByRole("button", { name: REVIEW_TREE_SHOW_NAME }).click();
     await expect(
       page.getByRole("button", {
-        name: /Hide changed files|收起变更文件/u,
+        name: REVIEW_TREE_HIDE_NAME,
       })
     ).toHaveAttribute("aria-expanded", "true");
     await expect(
@@ -2207,7 +2213,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     ).toBeVisible();
     await expect(
       page.getByRole("button", {
-        name: /Hide changed files|收起变更文件/u,
+        name: REVIEW_TREE_HIDE_NAME,
       })
     ).toHaveAttribute("aria-expanded", "true");
     await expect(
@@ -2225,7 +2231,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
 
     await page
       .getByRole("button", {
-        name: /Hide changed files|收起变更文件/u,
+        name: REVIEW_TREE_HIDE_NAME,
       })
       .click();
     await expect(
@@ -3674,6 +3680,7 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
 
     const indexPath = join(repository, ".git", "index");
     const validIndex = readFileSync(indexPath);
+    let indexRestored = false;
     try {
       writeFileSync(indexPath, "invalid Git index for Review E2E");
       writeFileSync(
@@ -3697,6 +3704,7 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         activeReviewSurface(page).locator('[data-slot="alert"]')
       ).toHaveCount(0);
       writeFileSync(indexPath, validIndex);
+      indexRestored = true;
       // 必须读到故障期间改写的新正文；相邻预取或旧 retention 无法满足该断言。
       const recoveredTarget = page.getByRole("treeitem", {
         name: /file-0000\.ts/u,
@@ -3713,7 +3721,11 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         })
         .toBe(true);
     } finally {
-      writeFileSync(indexPath, validIndex);
+      // 已恢复则不再重写：多余的 mtime 变化会再触发一轮后台刷新，
+      // 与下方按需导航测量竞争。
+      if (!indexRestored) {
+        writeFileSync(indexPath, validIndex);
+      }
     }
 
     await page.locator('[data-slot="pier-file-tree-bridge"]').hover();
@@ -3722,13 +3734,21 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
       name: /file-0001\.ts/u,
     });
     await expect(loadedTarget).toBeVisible({ timeout: 5000 });
+    // Z2 批摘录后 file-0001 未必仍驻留：点选经 selected boost 按需重取，
+    // 完成时刻用 rAF 探针（poll 间隔不进预算，见 installNavigationCompletionProbe）。
+    // 预算与 file-2000 冷跳相同：这是单文件 on-demand，不是内存内跳转。
+    await page.evaluate(() => {
+      Reflect.set(window, "__pierGitReviewNavigationStartedAt", Number.NaN);
+      Reflect.set(window, "__pierGitReviewNavigationCompletedIn", Number.NaN);
+    });
+    await installNavigationCompletionProbe(page, "value0001", "file-0001");
     await loadedTarget.evaluate((element) => {
       element.addEventListener(
         "click",
         () => {
           Reflect.set(
             window,
-            "__pierGitReviewLoadedNavigationStartedAt",
+            "__pierGitReviewNavigationStartedAt",
             performance.now()
           );
         },
@@ -3738,14 +3758,13 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
     await loadedTarget.click();
     await expect
       .poll(() => isDiffTextInViewport(page, "value0001"), {
-        timeout: 5000,
+        timeout: 15_000,
       })
       .toBe(true);
-    const loadedNavigationDuration = await page.evaluate(
-      () =>
-        performance.now() -
-        Number(Reflect.get(window, "__pierGitReviewLoadedNavigationStartedAt"))
+    const loadedNavigationDuration = await page.evaluate(() =>
+      Number(Reflect.get(window, "__pierGitReviewNavigationCompletedIn"))
     );
+    expect(Number.isFinite(loadedNavigationDuration)).toBe(true);
     expect(loadedNavigationDuration).toBeLessThan(
       REVIEW_LOADED_NAVIGATION_MS_BUDGET
     );
@@ -3753,7 +3772,9 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
       () =>
         (Reflect.get(window, "__pierGitReviewScaleLongTasks") as number[]) ?? []
     );
-    expect(Math.max(0, ...longTasks)).toBeLessThan(REVIEW_LONGTASK_MS_BUDGET);
+    expect(Math.max(0, ...longTasks)).toBeLessThan(
+      REVIEW_SCALE_LONGTASK_MS_BUDGET
+    );
     await expect(
       page.locator('[data-panel-tab-id^="pier.git.changes:"]')
     ).toHaveCount(1);

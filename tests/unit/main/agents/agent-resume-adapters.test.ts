@@ -3,6 +3,7 @@ import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_RESUME_ADAPTERS,
+  agentRestoreCreateFields,
   resolveAgentResumeLastLaunch,
   resolveAgentResumeLaunch,
 } from "../../../../src/main/services/agents/resume-adapters.ts";
@@ -440,5 +441,32 @@ describe("agent resume adapters", () => {
     }
     expect(resolved.reason).toBe("missing-session-id");
     expect(resolved.launch).toEqual(agent.launch);
+  });
+
+  it("only returns tryResumeLast on cold-start for continue-capable agents", () => {
+    expect(
+      agentRestoreCreateFields({
+        agentRestore: "resumed",
+        cwd: "/repo",
+        restoredAgent: runningAgent(),
+      }).tryResumeLast
+    ).toBeUndefined();
+    const cold = agentRestoreCreateFields({
+      agentRestore: "cold-start",
+      cwd: "/repo",
+      restoredAgent: runningAgent(),
+    });
+    expect(cold.agentRestore).toBe("cold-start");
+    expect(cold.tryResumeLast?.command).toContain("--continue");
+    expect(
+      agentRestoreCreateFields({
+        agentRestore: "cold-start",
+        cwd: "/repo",
+        restoredAgent: runningAgent({
+          agentId: "omp",
+          launch: { command: "omp" },
+        }),
+      }).tryResumeLast
+    ).toBeUndefined();
   });
 });

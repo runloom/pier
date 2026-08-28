@@ -2,7 +2,10 @@ import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import { splitShellCommandWords } from "@shared/agent-command-detection.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { TerminalAgentRestoreLaunchOptions } from "@shared/contracts/terminal/launch.ts";
-import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
+import type {
+  TerminalAgentPanelMetadata,
+  TerminalTryResumeLastSpec,
+} from "@shared/contracts/terminal.ts";
 
 type ResumeUnsupportedReason =
   | "missing-launch-command"
@@ -427,6 +430,46 @@ export function resolveAgentResumeLastLaunch(args: {
     return withCommand(args.launch, args.cwd, [...cleaned, "--continue"]);
   }
   return null;
+}
+
+export function agentRestoreCreateFields(args: {
+  agentRestore: "cold-start" | "resumed" | "unsupported" | undefined;
+  cwd: string | undefined;
+  restoredAgent: TerminalAgentPanelMetadata | undefined;
+}): {
+  agentRestore?: "cold-start" | "resumed" | "unsupported";
+  tryResumeLast?: TerminalTryResumeLastSpec;
+} {
+  const tryLast = coldStartTryResumeLast(args);
+  return {
+    ...(args.agentRestore === undefined
+      ? {}
+      : { agentRestore: args.agentRestore }),
+    ...(tryLast ? { tryResumeLast: tryLast } : {}),
+  };
+}
+
+export function coldStartTryResumeLast(args: {
+  agentRestore: "cold-start" | "resumed" | "unsupported" | undefined;
+  cwd: string | undefined;
+  restoredAgent: TerminalAgentPanelMetadata | undefined;
+}): TerminalTryResumeLastSpec | undefined {
+  if (args.agentRestore !== "cold-start" || !args.restoredAgent) {
+    return;
+  }
+  const last = resolveAgentResumeLastLaunch({
+    agentId: args.restoredAgent.agentId,
+    cwd: args.cwd ?? args.restoredAgent.launch.cwd,
+    launch: args.restoredAgent.launch,
+  });
+  if (!last?.command) {
+    return;
+  }
+  return {
+    agentId: args.restoredAgent.agentId,
+    command: last.command,
+    ...(last.cwd ? { cwd: last.cwd } : {}),
+  };
 }
 
 /**

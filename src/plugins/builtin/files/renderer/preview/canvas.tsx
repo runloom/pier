@@ -2,6 +2,8 @@ import {
   COMMENT_NAVIGATOR_SCROLL_PAD_CLASS,
   CommentNavigator,
 } from "@pier/ui/comments/navigator.tsx";
+import { ImagePreviewControls } from "@pier/ui/image-preview/controls.tsx";
+import { WorldViewportFrame } from "@pier/ui/image-preview/world-canvas.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { findCanvasCommentAnchorElement } from "@shared/comments/canvas-anchor.ts";
@@ -12,19 +14,13 @@ import {
   normalizeProjectRootKey,
   projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useCommentNavigatorController,
   useCommentNavigatorLabels,
 } from "../comments/use-comment-navigator.ts";
 import type { FilesTranslate } from "../i18n.ts";
+import { useCanvasRevealAnchor } from "./canvas-anchor-reveal.ts";
 import {
   clearCanvasBusy,
   markCanvasActive,
@@ -48,6 +44,7 @@ import {
 import { useCanvasCompileSession } from "./canvas-compile-session.ts";
 import type { CanvasPreviewState } from "./canvas-compile-state.ts";
 import { useCanvasPreviewContextMenu } from "./canvas-preview-surface.ts";
+import { canvasFlowMeasureClass } from "./canvas-stage.ts";
 import {
   CanvasCompileErrorEmpty,
   CanvasLoadingSkeleton,
@@ -63,6 +60,8 @@ import {
   useCanvasHostAnchorIds,
   useCanvasPreviewComments,
 } from "./use-canvas-preview-comments.ts";
+import { useCanvasReadingPrefs } from "./use-canvas-reading-prefs.ts";
+import { useCanvasStageViewport } from "./use-canvas-stage-viewport.ts";
 
 /**
  * Live Modules preview inside the files panel (same shell as Markdown preview).
@@ -193,6 +192,23 @@ export function FileCanvasPreview(props: {
     worktreeKey,
   });
 
+  const { camera, stageInfo, stageLabels, worldStage } = useCanvasStageViewport(
+    {
+      canvasShellEl,
+      hostEl,
+      nonce,
+      path: props.path,
+      pickMode: comments.pickMode,
+      stateKind: state.kind,
+      t: props.t,
+    }
+  );
+  const reading = useCanvasReadingPrefs({
+    stageInfo,
+    worldActive:
+      worldStage && (state.kind === "pending" || state.kind === "ready"),
+  });
+
   useEffect(() => {
     publishCanvasCommentsSession(props.path, comments);
     return () => {
@@ -286,15 +302,15 @@ export function FileCanvasPreview(props: {
     comments.setPickMode,
   ]);
 
-  // Reveal: scroll to anchor when panel params request it.
+  // Reveal: scroll to anchor when panel params request it (flow mode only).
   const revealAnchor = useCanvasRevealAnchor(props.path);
   useEffect(() => {
-    if (!(revealAnchor && hostEl && state.kind === "ready")) {
+    if (!(revealAnchor && hostEl && state.kind === "ready" && !worldStage)) {
       return;
     }
     const el = findCanvasCommentAnchorElement(hostEl, revealAnchor);
     el?.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [hostEl, revealAnchor, state.kind]);
+  }, [hostEl, revealAnchor, state.kind, worldStage]);
 
   useCanvasExternalLinks({
     context: props.context,
@@ -320,6 +336,8 @@ export function FileCanvasPreview(props: {
   const showHost = state.kind === "pending" || state.kind === "ready";
   const isBusy = state.kind === "pending" || state.kind === "loading";
   const softError = state.kind === "ready" ? state.softError : undefined;
+  // Error / trust / loading states always present in the reading flow.
+  const worldActive = worldStage && showHost;
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: canvas preview is a native context-menu surface with no accurate interactive ARIA role
@@ -334,18 +352,21 @@ export function FileCanvasPreview(props: {
     >
       <div
         className={cn(
-          "min-h-0 flex-1 overflow-auto",
+          "min-h-0 flex-1",
+          worldActive ? "relative overflow-hidden" : "overflow-auto",
           commentNavigator.visible && COMMENT_NAVIGATOR_SCROLL_PAD_CLASS
         )}
         data-slot="file-canvas-scroll"
         ref={shellRef}
       >
         {softError ? (
-          <CanvasSoftErrorBanner
-            message={softError.message}
-            onReload={reload}
-            t={props.t}
-          />
+          <div className={cn(worldActive && "absolute inset-x-0 top-0 z-30")}>
+            <CanvasSoftErrorBanner
+              message={softError.message}
+              onReload={reload}
+              t={props.t}
+            />
+          </div>
         ) : null}
 
         {state.kind === "error" ? (
@@ -364,47 +385,61 @@ export function FileCanvasPreview(props: {
           />
         ) : null}
 
-        <div
-          className={cn(
-            "relative mx-auto min-h-full w-full max-w-5xl px-6 py-5",
-            !showHost && "hidden"
-          )}
-          data-pier-canvas-shell=""
-          ref={setCanvasShellEl}
+        {/* Stable stage/zoom wrappers: `contents` in flow keeps today's layout
+            and preserves the imperative mount across mode flips (no re-parent). */}
+        <WorldViewportFrame
+          active={worldActive}
+          aria-label={stageLabels.viewerLabel}
+          camera={camera}
+          viewportSlot="file-canvas-stage"
+          zoomSlot="file-canvas-zoom"
         >
           <div
-            className="relative min-h-full w-full"
-            data-slot="file-canvas-host"
-            ref={hostRef}
-          />
-          {showHost ? (
-            <CanvasCommentOverlay
-              draftOpen={comments.draftOpen}
-              draftPick={comments.draftPick}
-              draftPlacement={comments.draftPlacement}
-              handlers={comments.handlers}
-              host={hostEl}
-              labels={labels}
-              onExitPickMode={() => {
-                comments.setPickMode(false);
-              }}
-              onPickElement={comments.openPickDraft}
-              onPinOpen={(pin) => {
-                const thread = primaryCanvasPinThread(pin.threads);
-                if (thread) {
-                  setFocusedThreadId(thread.threadId);
-                }
-              }}
-              onRequestOpenConsumed={() => {
-                setNavOpenPinKey(null);
-              }}
-              pickMode={comments.pickMode}
-              pins={pins}
-              requestOpenKey={navOpenPinKey}
-              shell={canvasShellEl}
+            className={cn(
+              "relative",
+              !worldActive &&
+                canvasFlowMeasureClass(stageInfo, reading.measureMode),
+              !showHost && "hidden"
+            )}
+            data-canvas-reading={reading.readingActive ? "" : undefined}
+            data-pier-canvas-shell=""
+            ref={setCanvasShellEl}
+            style={reading.shellStyle}
+          >
+            <div
+              className="relative min-h-full w-full"
+              data-slot="file-canvas-host"
+              ref={hostRef}
             />
-          ) : null}
-        </div>
+            {showHost ? (
+              <CanvasCommentOverlay
+                draftOpen={comments.draftOpen}
+                draftPick={comments.draftPick}
+                draftPlacement={comments.draftPlacement}
+                handlers={comments.handlers}
+                host={hostEl}
+                labels={labels}
+                onExitPickMode={() => {
+                  comments.setPickMode(false);
+                }}
+                onPickElement={comments.openPickDraft}
+                onPinOpen={(pin) => {
+                  const thread = primaryCanvasPinThread(pin.threads);
+                  if (thread) {
+                    setFocusedThreadId(thread.threadId);
+                  }
+                }}
+                onRequestOpenConsumed={() => {
+                  setNavOpenPinKey(null);
+                }}
+                pickMode={comments.pickMode}
+                pins={pins}
+                requestOpenKey={navOpenPinKey}
+                shell={canvasShellEl}
+              />
+            ) : null}
+          </div>
+        </WorldViewportFrame>
       </div>
       {commentNavigator.visible ? (
         <CommentNavigator
@@ -421,33 +456,16 @@ export function FileCanvasPreview(props: {
           total={commentNavigator.total}
         />
       ) : null}
+      {worldActive ? (
+        <ImagePreviewControls
+          effectiveZoom={camera.effectiveZoom}
+          labels={stageLabels}
+          onZoomChange={camera.setZoom}
+          onZoomIn={() => camera.adjustZoom(1)}
+          onZoomOut={() => camera.adjustZoom(-1)}
+          zoom={camera.zoom}
+        />
+      ) : null}
     </div>
-  );
-}
-
-/** Panel-params reveal bus for canvas anchor scroll. */
-const revealByPath = new Map<string, string>();
-const revealListeners = new Set<() => void>();
-
-export function requestCanvasAnchorReveal(
-  path: string,
-  anchorId: string
-): void {
-  revealByPath.set(path, anchorId);
-  for (const listener of revealListeners) {
-    listener();
-  }
-}
-
-function useCanvasRevealAnchor(path: string): string | null {
-  return useSyncExternalStore(
-    (onStoreChange) => {
-      revealListeners.add(onStoreChange);
-      return () => {
-        revealListeners.delete(onStoreChange);
-      };
-    },
-    () => revealByPath.get(path) ?? null,
-    () => null
   );
 }

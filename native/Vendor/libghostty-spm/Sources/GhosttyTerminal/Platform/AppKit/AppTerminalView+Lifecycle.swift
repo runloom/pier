@@ -214,6 +214,10 @@
         func updateMetalLayerMetrics() {
             guard bounds.width > 0, bounds.height > 0 else { return }
             let scale = core.scaleFactor()
+            guard let pixels = TerminalPixelGeometry.pixels(size: bounds.size, scale: scale) else {
+                return
+            }
+            let drawable = TerminalPixelGeometry.drawableSize(pixels: pixels)
             // Write to the actually-attached backing layer (not just the
             // cached `metalLayer` ivar). The render pipeline can swap
             // `self.layer` to an IOSurfaceLayer for IOSurface-backed
@@ -225,18 +229,22 @@
             // backingScaleFactor.
             layer?.contentsScale = scale
             if let metal = layer as? CAMetalLayer {
-                metal.drawableSize = CGSize(
-                    width: bounds.width * scale,
-                    height: bounds.height * scale
-                )
+                metal.drawableSize = drawable
             }
             // Mirror to the cached ivar in case anything else still
             // reads through it during a transitional layout pass.
             metalLayer?.contentsScale = scale
-            metalLayer?.drawableSize = CGSize(
-                width: bounds.width * scale,
-                height: bounds.height * scale
-            )
+            metalLayer?.drawableSize = drawable
+        }
+
+        public func applyHostBackgroundColor(_ color: NSColor) {
+            layer?.backgroundColor = color.cgColor
+            if let metal = layer as? CAMetalLayer {
+                metal.isOpaque = true
+                metal.backgroundColor = color.cgColor
+            }
+            metalLayer?.isOpaque = true
+            metalLayer?.backgroundColor = color.cgColor
         }
 
         func enforceMetalLayerScale() {

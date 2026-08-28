@@ -15,9 +15,8 @@
 | Xcode Command Line Tools | `xcode-select --install` |
 | Homebrew | https://brew.sh |
 | zig 0.15 | `brew install zig@0.15`（编译 libghostty） |
-| librsvg | `brew install librsvg`（`pnpm build:icons` 与 macOS `pnpm dev` 都需要 `rsvg-convert`） |
 | macOS `sips` | 系统自带；`pnpm build:icons` 用它生成系统兼容的 16/32px ICNS 条目 |
-| Xcode 26 `actool` | 随 Xcode 26+ 提供；`pnpm build:icons` 用它把 `build/app-icon.icon` 编译成 macOS 26 分层图标 `build/Assets.car` |
+| Xcode 26 `actool` | 随 Xcode 26+ 提供；`pnpm build:icons` 用它从 ICNS 的 1024px 帧临时构建 macOS 26 原生图标 `build/Assets.car` |
 
 ## 首次启动
 
@@ -79,31 +78,30 @@ pnpm test:coverage       # 与 CI coverage job 同形（含阈值门槛）
 pnpm test:e2e
 pnpm build               # electron-vite → out/
 pnpm build:dist          # 双架构 dmg/zip（签名 / 公证）
-pnpm build:icons         # 从已确认的 SVG 母版重建 ICNS / ICO / Linux 图标集
+pnpm build:icons         # 从唯一 SVG 母版重建全部平台图标
 ```
 
-应用图标的透明品牌母版是 `build/design-sources/pier-logo.svg`。平台导出按尺寸分工：
+应用图标只有一个可编辑视觉来源：`build/app-icon-source.svg`，其 `viewBox` 固定为
+`0 0 1024 1024`。任何平台或尺寸都不得另建 PNG 母版、手工小图稿或第二份几何。
+标准尺寸统一由仓库锁定的 electron-builder 图标工具从 SVG 做 Lanczos 降采样，
+禁止级联缩放。
 
-- `build/app-icon-master.svg`：F 标准稿，用于 macOS 256–1024px。
-- `build/app-icon-micro.svg`：I Micro 稿，用于 macOS 16–128px 与开发环境 Dock。
-- `build/app-icon-unplated.svg`：透明 F 稿，用于 Windows、Linux，以及窗口/任务栏这类会再套一层圆角容器的场景。
-- `build/app-icon.icon`：Icon Composer 文档（macOS 26+ 分层图标）。背景填充持有 `#101725` 底板色，前景 `Assets/pier-mark.png` 由 F 标准稿去掉底板后按光学缩放底板框裁切生成。可用 Xcode 26 自带的 Icon Composer.app 打开做玻璃分层打磨。
+生成产物按系统能力分工：
 
-生成后的位图也按这个边界拆开：
+- `build/icon.icns`：macOS 15 及更早版本的回退图标；现代帧与跨平台 PNG 使用同一缩放器，16/32px legacy 帧只由 `sips` 封装。
+- `build/Assets.car`：正式发布构建从 ICNS 的 1024px 帧临时生成单 PNG Icon Composer 文档，再由 `actool` 编译为 macOS 26 原生图标（`CFBundleIconName=app-icon`）；透明底色且关闭额外玻璃、阴影和透光，避免双层容器。`Assets.car.inputs` 记录 SVG、实际 ICNS 1024px 帧、固定渲染器与编译合约的指纹。
+- `build/icon.ico`、`build/icons/*.png`：Windows / Linux 标准尺寸输出。
+- `build/icon.png`：与 `build/icons/512x512.png` 完全相同，供 Electron 窗口等通用消费者使用。
 
-- `build/icon.icns`：带 macOS 底板（保留 Apple 画布边距），给 macOS 15 及更早版本的 Dock / 程序包回退。
-- `build/Assets.car`：actool 编译的 macOS 26 分层图标（`CFBundleIconName=app-icon`；`Assets.car.inputs` 记录来源指纹，输入不变时复用既有 car）。缺少它时 Tahoe 会把旧式 ICNS 缩小装进系统浅色底板——活动监视器 / 系统设置里那圈"额外边缘"就是这么来的。
-- `build/icon-dock.png`：带底板的 I Micro 512px，只给开发环境 Dock。
-- `build/icon.png`、`build/icon.ico`、`build/icons/*.png`：透明 F，给窗口、任务栏和任何自带圆角容器的消费者。不要把带底板的 PNG 塞进这些场景，否则会套两层板。
-
-开发态 macOS 会把 `Electron.app` 复制成 `.pier-dev/electron-runtime/PierDev.app`。活动监视器会把包图标裁进自己的圆角井：若直接用带边距的 `icon.icns`，透明边会露出一圈浅底；若用透明 F 稿，系统会补浅色底板，和程序坞的深色底板对不上。因此包图标从 F / I 底板稿裁到铺满画布编成 `AppIcon.icns`，并直接复用仓库编译好的分层 `build/Assets.car`（`CFBundleIconName=app-icon`），让 macOS 26 各表面原生渲染。`app.dock.setIcon` 仍用 `icon-dock.png`。Helper 改名为 `PierDev Helper` 并写入同一套图标。
+开发态 macOS 会把 `Electron.app` 复制成 `.pier-dev/electron-runtime/PierDev.app`。PierDev 不再另画或运行时替换程序坞图标；主程序与四类 Helper 只逐字节安装正式产物 `icon.icns`，并移除 `Assets.car` 和 `CFBundleIconName`，避免开发态再叠一层系统材质。复用现有 PierDev runtime 或写入 bundle 前都会核对 SVG 与 `Assets.car.inputs` 的严格指纹；缺失或过期时直接提示先运行 `pnpm build:icons`，不会静默启动旧图标。
 
 `pnpm build:icons` 是唯一正式生成入口；不要直接手改生成后的 `build/icon.icns`、
-`build/icon.ico`、`build/icon.png`、`build/icon-dock.png`、`build/icons/*.png`、
-`build/Assets.car`、`build/Assets.car.inputs` 或 `build/app-icon.icon/Assets/*`。Linux 环境需先安装
-`librsvg2-bin`。macOS 上 `pnpm dev` 栅格化 PierDev 包图标同样需要 `rsvg-convert`；缺了会打日志并在下次启动重试，不会把失败结果写成已完成。完整 ICNS 生成需在带系统 `sips` 的 macOS 上执行；macOS 26 分层图标编译还需要 Xcode 26+ 的 `actool`。脚本会在写入任何正式
-资产前检查全部依赖，并先在暂存目录完成整套生成（含 `assetutil` 校验分层条目），全部成功后再统一替换。macOS CI 还会用
-系统 `iconutil` 解包最终 ICNS，核对全部官方尺寸，避免小图标容器兼容性回归。
+`build/icon.ico`、`build/icon.png`、`build/icons/*.png`、`build/Assets.car` 或
+`build/Assets.car.inputs`。唯一可编辑源是 `build/app-icon-source.svg`；完整 ICNS 生成需 macOS
+系统 `sips`，macOS 26 原生图标还需要 Xcode 26+ 的 `actool`。脚本会先在暂存目录完成全部生成和
+`assetutil` 结构校验，
+再原子替换正式资产。macOS CI 还会用系统 `iconutil` 解包 ICNS，核对全部官方尺寸、小图标透明
+边缘与泊位连续性。
 
 ## Quality Gate：正确性优先，CI 做确认与加速
 

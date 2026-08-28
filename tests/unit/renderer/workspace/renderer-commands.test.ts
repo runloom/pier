@@ -2,9 +2,14 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const closeCurrentWindowMock = vi.hoisted(() => vi.fn(async () => undefined));
+const showAppConfirmMock = vi.hoisted(() => vi.fn(async () => true));
 
 vi.mock("@/lib/ipc/window-ipc.ts", () => ({
   closeCurrentWindow: closeCurrentWindowMock,
+}));
+
+vi.mock("@/stores/app-dialog.store.ts", () => ({
+  showAppConfirm: showAppConfirmMock,
 }));
 
 import { runWorkspaceRendererCommand } from "@/components/workspace/renderer-commands.ts";
@@ -58,6 +63,8 @@ describe("workspace renderer commands", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     closeCurrentWindowMock.mockClear();
+    showAppConfirmMock.mockReset();
+    showAppConfirmMock.mockResolvedValue(true);
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -454,6 +461,45 @@ describe("workspace renderer commands", () => {
       data: { panelId: "p1" },
       ok: true,
       requestId: "set-size-1",
+    });
+  });
+
+  it("confirms a canvas command and resolves true", async () => {
+    showAppConfirmMock.mockResolvedValueOnce(true);
+    await runWorkspaceRendererCommand({
+      command: {
+        command: "echo hello",
+        intent: "default",
+        type: "dialog.confirm",
+      },
+      requestId: "canvas-confirm-1",
+    });
+    expect(showAppConfirmMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: "default",
+      })
+    );
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      data: true,
+      ok: true,
+      requestId: "canvas-confirm-1",
+    });
+  });
+
+  it("resolves false when the canvas command confirm is declined", async () => {
+    showAppConfirmMock.mockResolvedValueOnce(false);
+    await runWorkspaceRendererCommand({
+      command: {
+        command: "echo hello",
+        intent: "default",
+        type: "dialog.confirm",
+      },
+      requestId: "canvas-confirm-2",
+    });
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      data: false,
+      ok: true,
+      requestId: "canvas-confirm-2",
     });
   });
 });

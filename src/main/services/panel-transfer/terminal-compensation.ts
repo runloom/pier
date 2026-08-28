@@ -4,8 +4,8 @@
 
 import type { TerminalFocusCoordinator } from "../../ipc/terminal/focus-coordinator.ts";
 import type { NativeAddon } from "../../ipc/terminal/native-addon.ts";
-import type { RegisteredTerminalTaskLifecycle } from "../../ipc/terminal/task-lifecycle-wiring.ts";
-import type { TaskOutputTerminalBindings } from "../../ipc/terminal/task-output-bindings.ts";
+import type { RegisteredTerminalTaskLifecycle } from "../../ipc/terminal/task/lifecycle-wiring.ts";
+import type { TaskOutputTerminalBindings } from "../../ipc/terminal/task/output-bindings.ts";
 import {
   rollbackTransferPanelOwnership,
   type TerminalPanelOwnershipRollbackToken,

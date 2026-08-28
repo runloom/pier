@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useGitReviewNavigation } from "../../../../../src/plugins/builtin/git/renderer/hooks/use-navigation.ts";
-import { patchDocument } from "./document-fixture.ts";
+import { patchDocument } from "./document/fixture.ts";
 
 function setup(options?: {
   readonly itemCacheKey?: string;

@@ -5,6 +5,7 @@ import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsRemoteAccess } from "./settings-remote-access.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
 import { settingsSkills } from "./settings-skills.ts";
 
@@ -23,6 +24,7 @@ export const settings = {
     workspace: "ワークスペース",
     agents: "エージェント",
     notifications: "通知",
+    remoteAccess: "リモートアクセス",
     pluginGroup: "プラグイン設定",
   },
   section: {
@@ -38,6 +40,7 @@ export const settings = {
     workspace: "ワークスペース",
     agents: "エージェント",
     notifications: "通知",
+    remoteAccess: "リモートアクセス",
   },
   projects: {
     addProject: "プロジェクトを追加",
@@ -256,6 +259,7 @@ export const settings = {
     setupHint: "作業ツリーを作成するときに実行します。",
   },
   appUpdate: settingsAppUpdate,
+  remoteAccess: settingsRemoteAccess,
   statusBar: {
     title: "ステータスバー",
     description:
@@ -281,7 +285,7 @@ export const settings = {
     languageDesc: "表示言語",
     uiFontFamily: "UI フォント",
     uiFontFamilyDesc: "インターフェースのフォント",
-    uiFontFamilyPlaceholder: "HarmonyOS Sans SC",
+    uiFontFamilyPlaceholder: "system-ui",
     monoFontFamily: "等幅フォント",
     monoFontFamilyDesc: "ターミナルとコードエディタのフォント",
     monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",
@@ -361,8 +365,16 @@ export const settings = {
   keybindings: {
     change: "ショートカットを変更",
     clear: "消去",
+    alsoBound: "ほかに {{chords}} も使えます。",
     descriptionDefault: "{{category}} のコマンド。",
     description: {
+      agent: {
+        new: "デフォルトのエージェントを起動します。リッチ入力にフォーカスがあるときは、同じショートカットでファイルを追加します。",
+      },
+      agents: {
+        focusWaiting: "次の対応が必要なエージェントへ移動します。",
+        list: "エージェント一覧を開きます。編集中でも使えます。",
+      },
       commandPalette: {
         clearRecent: "コマンドパレットの履歴を消します。",
         toggle: "コマンドパレットを開くか閉じます。",
@@ -374,7 +386,13 @@ export const settings = {
       },
       files: {
         copyPathWithRange: "現在のファイルパスと選択中の行番号をコピーします。",
+        editor: {
+          goToLine: "現在のファイルの指定行へ移動します。",
+        },
       },
+      find: "現在のターミナル、ファイル、または変更一覧で検索します。",
+      findNext: "現在のパネルで次の一致を検索します。",
+      findPrev: "現在のパネルで前の一致を検索します。",
       panel: {
         close: "現在のパネルを閉じます。",
         closeActive: "アクティブなパネルを閉じます。",
@@ -382,6 +400,8 @@ export const settings = {
         closeOthers: "現在のパネル以外をすべて閉じます。",
         focusDown: "下のパネルグループへ移動します。",
         focusLeft: "左のパネルグループへ移動します。",
+        focusNextTab: "現在のグループの次のタブへ切り替えます。",
+        focusPrevTab: "現在のグループの前のタブへ切り替えます。",
         focusRight: "右のパネルグループへ移動します。",
         focusUp: "上のパネルグループへ移動します。",
         newTab: "新しいパネルタブを作ります。",
@@ -402,10 +422,13 @@ export const settings = {
       },
       terminal: {
         close: "現在のターミナルパネルを閉じます。",
+        composerAttach:
+          "リッチ入力にファイルを追加します。リッチ入力にフォーカスがないときは、同じショートカットでデフォルトのエージェントを起動します。",
         openDebugWindow: "ターミナルのデバッグウインドウを開きます。",
       },
       view: {
         resetZoom: "インターフェースの拡大率を既定に戻します。",
+        toggleSideTree: "ファイルツリーを表示または隠します。",
         zoomIn: "Pier の画面を拡大します。",
         zoomOut: "Pier の画面を縮小します。",
       },

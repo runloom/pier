@@ -44,6 +44,10 @@ import {
 } from "./foreground-activity-api.ts";
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { hostCatalogApi, type PierHostCatalogAPI } from "./host-catalog-api.ts";
+import {
+  createHtmlPreviewApi,
+  type PierHtmlPreviewApi,
+} from "./html-preview/api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import { liveModulesApi, type PierLiveModulesAPI } from "./live-modules-api.ts";
 import { lspApi, type PierLspAPI } from "./lsp-api.ts";
@@ -51,6 +55,7 @@ import {
   createMediaPreviewApi,
   type PierMediaPreviewApi,
 } from "./media-preview-api.ts";
+import { memoryApi, type PierMemoryAPI } from "./memory/api.ts";
 import {
   notificationCenterApi,
   type PierNotificationCenterAPI,
@@ -91,6 +96,10 @@ import {
   type PierProjectSkillsAPI,
   projectSkillsApi,
 } from "./project-skills-api.ts";
+import {
+  createRemoteAccessPreloadApi,
+  type RemoteAccessPreloadApi,
+} from "./remote-access/api.ts";
 import { installRendererBootHandshake } from "./renderer-boot-handshake.ts";
 import { type PierTasksAPI, tasksApi } from "./task-api.ts";
 import { terminalApi } from "./terminal-api.ts";
@@ -174,12 +183,14 @@ export interface PierWindowAPI {
   focusWindow: (windowId: string) => Promise<void>;
   foregroundActivity: PierForegroundActivityAPI;
   git: PierGitAPI;
+  htmlPreviews: PierHtmlPreviewApi;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   liveModules: PierLiveModulesAPI;
   lsp: PierLspAPI;
   managedPlugins: ManagedPluginsPreloadApi;
   mediaPreviews: PierMediaPreviewApi;
+  memory: PierMemoryAPI;
   menu: PierMenuAPI;
   notificationCenter: PierNotificationCenterAPI;
   notifications: PierNotificationsAPI;
@@ -192,6 +203,7 @@ export interface PierWindowAPI {
   plugins: PierPluginsAPI;
   preferences: PierPreferencesAPI;
   projectSkills: PierProjectSkillsAPI;
+  remoteAccess: RemoteAccessPreloadApi;
   rendererCommand: PierRendererCommandAPI;
   resources: PierResourceAPI;
   settings: PierSettingsAPI;
@@ -314,6 +326,7 @@ const commandPaletteMruApi: PierCommandPaletteMruAPI = {
 };
 
 const commandPaletteApi: PierCommandPaletteAPI = {
+  onMenuCommand: (cb) => subscribeIpc(PIER_BROADCAST.MENU_COMMAND_REQUEST, cb),
   onToggleRequest: (cb) =>
     subscribeIpc(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST, cb),
 };
@@ -352,6 +365,14 @@ const filePreviewApi = createFilePreviewApi({
     ipcRenderer.invoke(PIER.FILE_PREVIEW_TICKET_RELEASE, request),
   invokeRevoke: (request) =>
     ipcRenderer.invoke(PIER.FILE_PREVIEW_RUNTIME_REVOKE, request),
+});
+const htmlPreviewApi = createHtmlPreviewApi({
+  invokeIssue: (request) =>
+    ipcRenderer.invoke(PIER.HTML_PREVIEW_TICKET_ISSUE, request),
+  invokeRelease: (request) =>
+    ipcRenderer.invoke(PIER.HTML_PREVIEW_TICKET_RELEASE, request),
+  invokeTouch: (request) =>
+    ipcRenderer.invoke(PIER.HTML_PREVIEW_TICKET_TOUCH, request),
 });
 
 // gitApi / pluginSettingsApi 实现在独立文件(避免 preload/index.ts 超 500 行硬上限)。
@@ -409,10 +430,12 @@ const api: PierWindowAPI = {
   externalNavigation: externalNavigationApi,
   filePreviews: filePreviewApi,
   git: gitApi,
+  htmlPreviews: htmlPreviewApi,
   keybinding: keybindingApi,
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
   liveModules: liveModulesApi,
   menu: menuApi,
+  memory: memoryApi,
   clipboard: clipboardApi,
   notifications: notificationsApi,
   notificationCenter: notificationCenterApi,
@@ -428,6 +451,7 @@ const api: PierWindowAPI = {
   pierHomeSkills: pierHomeSkillsApi,
   pierBindings: pierBindingsApi,
   rendererCommand: rendererCommandApi,
+  remoteAccess: createRemoteAccessPreloadApi(),
   settings: settingsApi,
   resources: pierResourceApi,
   tasks: tasksApi,

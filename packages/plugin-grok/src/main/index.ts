@@ -45,8 +45,10 @@ export const plugin: MainPluginModule = {
       provider,
       stateStore,
       logger: context.logger,
-      onChanged: (snapshot) =>
-        context.events.emit("accounts.changed", snapshot),
+      onChanged: (snapshot) => {
+        context.events.emit("accounts.changed", snapshot);
+        context.events.emit("projection.accounts", snapshot);
+      },
       hasVisibleTarget: () => usagePolling.hasVisibleTarget(),
     });
     // Register RPC before init so renderer snapshot calls during boot/reload

@@ -700,17 +700,17 @@ test.describe("Terminal task status e2e", () => {
         (handleBox?.y ?? 0) + (handleBox?.height ?? 0) / 2
       );
       await win.mouse.down();
+      // 默认位置在右上角钳制缘(right=inset),向右拖会被几何钳制为零位移;
+      // 向左+向下拖进空旷区,验证同一拖拽/持久化行为。
       await win.mouse.move(
-        (handleBox?.x ?? 0) + (handleBox?.width ?? 0) / 2 + 80,
+        (handleBox?.x ?? 0) + (handleBox?.width ?? 0) / 2 - 80,
         (handleBox?.y ?? 0) + (handleBox?.height ?? 0) / 2 + 64,
         { steps: 8 }
       );
       await win.mouse.up();
       const movedRuntimeBox = await runtimeControl.boundingBox();
       expect(movedRuntimeBox).not.toBeNull();
-      expect(movedRuntimeBox?.x ?? 0).toBeGreaterThan(
-        (runtimeBox?.x ?? 0) + 40
-      );
+      expect(movedRuntimeBox?.x ?? 0).toBeLessThan((runtimeBox?.x ?? 0) - 40);
       expect(movedRuntimeBox?.y ?? 0).toBeGreaterThan(
         (runtimeBox?.y ?? 0) + 32
       );

@@ -78,6 +78,7 @@ export interface PierAgentsAPI {
     agentId: AgentKind;
     command?: string;
     cwd?: string;
+    resumeSessionId?: string;
   }) => Promise<{ launchId: string | null }>;
   selection: () => Promise<AgentSelectionResult>;
 }
@@ -124,6 +125,7 @@ export interface PierCommandPaletteMruAPI {
 }
 
 export interface PierCommandPaletteAPI {
+  onMenuCommand: (cb: (commandId: string) => void) => () => void;
   onToggleRequest: (cb: () => void) => () => void;
 }
 
@@ -151,6 +153,7 @@ export type { PierFilesAPI } from "./file-api.ts";
 export type { PierFileQueryAPI } from "./file-query-api.ts";
 export type { PierFileSaveTargetAPI } from "./file-save-target-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
+export type { PierMemoryAPI } from "./memory/api.ts";
 export type { PierPanelsAPI, PierPanelsListSnapshot } from "./panels-api.ts";
 export type { PierPluginSettingsAPI } from "./plugin-settings-api.ts";
 export type { PierTerminalStatusBarPrefsAPI } from "./terminal-status-bar-api.ts";
@@ -186,8 +189,12 @@ export interface PierClipboardAPI {
   writeText: (text: string) => Promise<void>;
 }
 
+export interface SettingsOpenRequest {
+  section?: string;
+}
+
 export interface PierSettingsAPI {
-  onOpenRequest: (cb: () => void) => () => void;
+  onOpenRequest: (cb: (payload?: SettingsOpenRequest) => void) => () => void;
 }
 
 /** env 子命名空间 — 运行时环境信息. */

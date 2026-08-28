@@ -3,6 +3,7 @@
  * 并入 pierCommandSchema；不新增 files/git / activity 命令组。
  */
 import { z } from "zod";
+import { HOOK_WORK_ID_MAX } from "../agent/session.ts";
 import {
   terminalScreenMaxBytesSchema,
   terminalScreenMaxLinesSchema,
@@ -127,4 +128,58 @@ export const hostControlCommandSchemas = [
         });
       }
     }),
+  // M1：移动端审批回写。只允许 13 个固定审批键的按键字节，不开任意文本。
+  // 语义动作（approve/reject 映射表）待证据矩阵——未验证一律 unsupported，
+  // schema 不含语义动作字段，UI 不出现语义按钮。
+  z
+    .object({
+      type: z.literal("agent.attention.respond"),
+      agentRef: nonEmpty,
+      interactionId: nonEmpty.max(HOOK_WORK_ID_MAX),
+      key: z.enum([
+        "enter",
+        "escape",
+        "y",
+        "n",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+      ]),
+    })
+    .strict(),
+  // M1：宿主远程访问管理命令面（Task 9）。仅 desktop-renderer；
+  // 能力 remote-access:read（getState）/ remote-access:control（其余四条）。
+  z
+    .object({
+      type: z.literal("remoteAccess.getState"),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("remoteAccess.setEnabled"),
+      enabled: z.boolean(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("remoteAccess.beginPairing"),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("remoteAccess.cancelPairing"),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("remoteAccess.revokeDevice"),
+      deviceId: nonEmpty,
+    })
+    .strict(),
 ] as const;

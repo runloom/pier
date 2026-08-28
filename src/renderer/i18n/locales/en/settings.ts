@@ -5,6 +5,7 @@ import { settingsLspRow } from "./settings-lsp-row.ts";
 import { settingsMaterials } from "./settings-materials.ts";
 import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsRemoteAccess } from "./settings-remote-access.ts";
 import { settingsShellEnvironment } from "./settings-shell-environment.ts";
 import { settingsSkills } from "./settings-skills.ts";
 
@@ -23,6 +24,7 @@ export const settings = {
     workspace: "Workspace",
     agents: "Agents",
     notifications: "Notifications",
+    remoteAccess: "Remote Access",
     pluginGroup: "Plugin Settings",
   },
   section: {
@@ -38,6 +40,7 @@ export const settings = {
     workspace: "Workspace",
     agents: "Agents",
     notifications: "Notifications",
+    remoteAccess: "Remote Access",
   },
   projects: {
     addProject: "Add project",
@@ -254,6 +257,7 @@ export const settings = {
     setupHint: "Runs when a worktree is created.",
   },
   appUpdate: settingsAppUpdate,
+  remoteAccess: settingsRemoteAccess,
   statusBar: {
     title: "Status Bar",
     description:
@@ -278,7 +282,7 @@ export const settings = {
     languageDesc: "Display language",
     uiFontFamily: "UI Font",
     uiFontFamilyDesc: "Font for the interface",
-    uiFontFamilyPlaceholder: "HarmonyOS Sans SC",
+    uiFontFamilyPlaceholder: "system-ui",
     monoFontFamily: "Monospace Font",
     monoFontFamilyDesc: "Terminal and code editor font",
     monoFontFamilyPlaceholder: "JetBrainsMono Nerd Font Mono",
@@ -359,8 +363,16 @@ export const settings = {
   keybindings: {
     change: "Change Shortcut",
     clear: "Clear",
+    alsoBound: "Also available: {{chords}}.",
     descriptionDefault: "{{category}} command.",
     description: {
+      agent: {
+        new: "Start the default agent. The same shortcut attaches a file when Rich Input is focused.",
+      },
+      agents: {
+        focusWaiting: "Jump to the next agent that needs attention.",
+        list: "Open the agent list. Works while editing.",
+      },
       commandPalette: {
         clearRecent: "Clear command palette history.",
         toggle: "Open or close the command palette.",
@@ -373,7 +385,13 @@ export const settings = {
       files: {
         copyPathWithRange:
           "Copy the current file path and selected line numbers.",
+        editor: {
+          goToLine: "Jump to a line in the current file.",
+        },
       },
+      find: "Find in the current terminal, file, or change list.",
+      findNext: "Find the next match in the current panel.",
+      findPrev: "Find the previous match in the current panel.",
       panel: {
         close: "Close the current panel.",
         closeActive: "Close the active panel.",
@@ -381,6 +399,8 @@ export const settings = {
         closeOthers: "Close every panel except the current one.",
         focusDown: "Focus the panel group below.",
         focusLeft: "Focus the panel group on the left.",
+        focusNextTab: "Switch to the next tab in the current group.",
+        focusPrevTab: "Switch to the previous tab in the current group.",
         focusRight: "Focus the panel group on the right.",
         focusUp: "Focus the panel group above.",
         newTab: "Create a new panel tab.",
@@ -401,10 +421,13 @@ export const settings = {
       },
       terminal: {
         close: "Close the current terminal panel.",
+        composerAttach:
+          "Attach a file in Rich Input. The same shortcut starts the default agent when Rich Input is not focused.",
         openDebugWindow: "Open the terminal debug window.",
       },
       view: {
         resetZoom: "Restore the default interface zoom.",
+        toggleSideTree: "Show or hide the file tree.",
         zoomIn: "Zoom the Pier interface in.",
         zoomOut: "Zoom the Pier interface out.",
       },

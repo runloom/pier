@@ -1,23 +1,12 @@
-// build/app-icon-{master,micro,unplated}.svg → platform application icons.
+// build/app-icon-source.svg → every platform application icon.
 //
-// Sources:
-//   - app-icon-master.svg: F rendition for macOS 256px and larger.
-//   - app-icon-micro.svg: I rendition for macOS 16–128px and development Dock.
-//   - app-icon-unplated.svg: transparent 1024×1024 mark for Windows, Linux,
-//     and any consumer that wraps the bitmap in its own rounded container.
-//   - app-icon.icon: Icon Composer document for macOS 26+. Its mark layer
-//     (Assets/pier-mark.png) is regenerated here from app-icon-master.svg and
-//     the document is compiled with Xcode's actool into build/Assets.car so
-//     Tahoe renders the layered rendition natively instead of boxing the
-//     legacy ICNS onto a system plate.
-//
-// Conversion uses electron-builder's pinned official icons toolset, which produces
-// valid ICNS/ICO/icon sets consistently across host macOS versions. The macOS
-// system `sips` encoder supplies legacy non-Retina 16px/32px frames so `iconutil`
-// and AppKit decode those slots correctly; rsvg-convert rasterizes their SVG input.
+// electron-builder's pinned icon tool rasterizes the approved 1024-unit SVG
+// and performs every standard-size Lanczos resize. The validated ICNS ic10
+// frame is staged temporarily for macOS 26 Icon Composer compilation.
 
 import { spawnSync } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -29,22 +18,25 @@ import {
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { mergeIcnsRenditions } from "./app-icon-icns.mjs";
+import {
+  ICNS_DIMENSIONS,
+  mergeIcnsRenditions,
+  parseIcns,
+} from "./app-icon-icns.mjs";
 import {
   buildMacLayeredIcon,
+  compiledIconSemanticSignature,
   compileIconDocumentWithActool,
-  MAC_ICON_DOCUMENT,
 } from "./app-icon-layered.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_BUILD_DIRECTORY = join(ROOT, "build");
+const CANONICAL_ICON_FILE = "app-icon-source.svg";
 const PUBLISHED_TARGETS = Object.freeze([
   "icon.icns",
   "icon.ico",
   "icon.png",
-  "icon-dock.png",
   "icons",
-  "app-icon.icon",
   "Assets.car",
   "Assets.car.inputs",
 ]);
@@ -80,38 +72,57 @@ function assertSipsAvailable(command) {
   }
 }
 
-function assertRasterizerAvailable(command) {
-  const result = spawnSync(command, ["--version"], { stdio: "ignore" });
-  if (result.error || result.status !== 0) {
-    throw new Error(
-      "rsvg-convert is required to build Pier icons. Install librsvg first (macOS: brew install librsvg; Debian/Ubuntu: sudo apt install librsvg2-bin).",
-      result.error ? { cause: result.error } : undefined
-    );
-  }
-}
-
 function assertActoolAvailable(command) {
   const result = spawnSync(command, ["--find", "actool"], { stdio: "ignore" });
   if (result.error || result.status !== 0) {
     throw new Error(
-      "Xcode actool is required to compile the macOS 26 layered icon (build/app-icon.icon → build/Assets.car). Install Xcode 26 or newer and select it with xcode-select.",
+      "Xcode actool is required to compile the macOS 26 PNG icon stack. Install Xcode 26 or newer and select it with xcode-select.",
       result.error ? { cause: result.error } : undefined
     );
   }
 }
 
-function rasterize(command, source, size, output) {
-  run(command, ["-w", String(size), "-h", String(size), "-o", output, source]);
+function assertCanonicalSvg(source) {
+  if (!existsSync(source)) {
+    throw new Error(`Canonical app icon is missing: ${source}`);
+  }
+  const data = readFileSync(source, "utf8");
+  const svgTag = data.match(/<svg\b[^>]*>/i)?.[0];
+  if (!(svgTag && /\bviewBox\s*=\s*["']0 0 1024 1024["']/.test(svgTag))) {
+    throw new Error(
+      `${source} must have the exact SVG viewBox "0 0 1024 1024".`
+    );
+  }
+  const references = [
+    ...data.matchAll(/\b(?:href|xlink:href)\s*=\s*["']([^"']+)["']/gi),
+  ];
+  const urls = [...data.matchAll(/url\(\s*["']?([^)'"\s]+)["']?\s*\)/gi)];
+  if (
+    /<(?:image|text|script|foreignObject)\b/i.test(data) ||
+    /@(?:font-face|import)\b/i.test(data) ||
+    references.some((match) => !match[1].startsWith("#")) ||
+    urls.some((match) => !match[1].startsWith("#"))
+  ) {
+    throw new Error(`${source} must be a self-contained SVG.`);
+  }
 }
 
-async function convertToBuffer(
-  source,
-  format,
-  workingDirectory,
-  temporaryName,
-  convertIcons
-) {
-  const outputDirectory = join(workingDirectory, `.icon-tool-${temporaryName}`);
+export function extractLargestIconPng(icns) {
+  const entry = parseIcns(icns).find(({ type }) => type === "ic10");
+  if (!entry) {
+    throw new Error("Generated ICNS is missing the ic10 1024px frame");
+  }
+  if (
+    entry.data.readUInt32BE(16) !== ICNS_DIMENSIONS.ic10 ||
+    entry.data.readUInt32BE(20) !== ICNS_DIMENSIONS.ic10
+  ) {
+    throw new Error("Generated ICNS ic10 frame must be 1024×1024");
+  }
+  return entry.data;
+}
+
+async function convertToBuffer(source, format, workingDirectory, convertIcons) {
+  const outputDirectory = join(workingDirectory, `.icon-tool-${format}`);
   rmSync(outputDirectory, { recursive: true, force: true });
   mkdirSync(outputDirectory, { recursive: true });
   try {
@@ -130,10 +141,11 @@ async function encodeLegacyIconsWithSips(options) {
   const workingDirectory = join(options.stagingDirectory, ".legacy-icon-tool");
   mkdirSync(workingDirectory, { recursive: true });
   const encoded = {};
-  for (const size of [16, 32]) {
-    const png = join(workingDirectory, `micro-${size}.png`);
-    const icns = join(workingDirectory, `micro-${size}.icns`);
-    rasterize(options.rsvgCommand, options.source, size, png);
+  for (const [size, png] of [
+    [16, options.source16],
+    [32, options.source32],
+  ]) {
+    const icns = join(workingDirectory, `${size}.icns`);
     run(options.sipsCommand, ["-s", "format", "icns", png, "--out", icns], {
       quiet: true,
     });
@@ -142,80 +154,55 @@ async function encodeLegacyIconsWithSips(options) {
   return encoded;
 }
 
-async function buildIcns(sources, stagingDirectory, dependencies) {
-  const standard = await convertToBuffer(
-    sources.master,
+async function buildIcns(
+  source,
+  iconDirectory,
+  stagingDirectory,
+  dependencies
+) {
+  const complete = await convertToBuffer(
+    source,
     "icns",
     stagingDirectory,
-    "icns-standard",
-    dependencies.convertIcons
-  );
-  const micro = await convertToBuffer(
-    sources.micro,
-    "icns",
-    stagingDirectory,
-    "icns-micro",
     dependencies.convertIcons
   );
   const { legacy16, legacy32 } = await dependencies.encodeLegacyIcons({
-    source: sources.micro,
-    stagingDirectory,
-    rsvgCommand: dependencies.rsvgCommand,
     sipsCommand: dependencies.sipsCommand,
+    source16: join(iconDirectory, "16x16.png"),
+    source32: join(iconDirectory, "32x32.png"),
+    stagingDirectory,
   });
   writeFileSync(
     join(stagingDirectory, "icon.icns"),
-    mergeIcnsRenditions(standard, micro, legacy16, legacy32)
+    mergeIcnsRenditions(complete, legacy16, legacy32)
   );
+  return complete;
 }
 
-async function buildIco(sources, stagingDirectory, convertIcons) {
-  const icon = await convertToBuffer(
-    sources.unplated,
-    "ico",
-    stagingDirectory,
-    "ico",
-    convertIcons
-  );
-  writeFileSync(join(stagingDirectory, "icon.ico"), icon);
-}
-
-async function buildLinuxIcons(
-  sources,
+async function buildCrossPlatformRasters(
+  source,
   stagingDirectory,
-  rasterizeCommand,
-  convertIcons
+  dependencies
 ) {
-  const linuxIcons = join(stagingDirectory, "icons");
-  mkdirSync(linuxIcons, { recursive: true });
-  await convertIcons({
-    inputFile: sources.unplated,
+  const iconDirectory = join(stagingDirectory, "icons");
+  mkdirSync(iconDirectory, { recursive: true });
+  await dependencies.convertIcons({
+    inputFile: source,
     outputFormat: "set",
-    outDir: linuxIcons,
+    outDir: iconDirectory,
   });
-  rasterize(
-    rasterizeCommand,
-    sources.unplated,
-    96,
-    join(linuxIcons, "96x96.png")
+  writeFileSync(
+    join(stagingDirectory, "icon.ico"),
+    await convertToBuffer(
+      source,
+      "ico",
+      stagingDirectory,
+      dependencies.convertIcons
+    )
   );
-}
-
-function buildContainerPng(sources, stagingDirectory, rasterizeCommand) {
-  rasterize(
-    rasterizeCommand,
-    sources.unplated,
-    512,
+  copyFileSync(
+    join(iconDirectory, "512x512.png"),
     join(stagingDirectory, "icon.png")
-  );
-}
-
-function buildDevDockPng(sources, stagingDirectory, rasterizeCommand) {
-  rasterize(
-    rasterizeCommand,
-    sources.micro,
-    512,
-    join(stagingDirectory, "icon-dock.png")
   );
 }
 
@@ -241,6 +228,10 @@ function publishStagedAssets(stagingDirectory, outputDirectory) {
       renameSync(staged, destination);
       published.push(target);
     }
+    rmSync(join(outputDirectory, "app-icon-source.png"), { force: true });
+    for (const stale of ["app-icon.icon", "icon-dock.png"]) {
+      rmSync(join(outputDirectory, stale), { force: true, recursive: true });
+    }
   } catch (error) {
     for (const target of published.reverse()) {
       rmSync(join(outputDirectory, target), { recursive: true, force: true });
@@ -257,7 +248,6 @@ function publishStagedAssets(stagingDirectory, outputDirectory) {
 export async function buildAppIcons(options = {}) {
   const sourceDirectory = options.sourceDirectory ?? DEFAULT_BUILD_DIRECTORY;
   const outputDirectory = options.outputDirectory ?? DEFAULT_BUILD_DIRECTORY;
-  const rsvgCommand = options.rsvgCommand ?? "rsvg-convert";
   const sipsCommand = options.sipsCommand ?? "sips";
   const xcrunCommand = options.xcrunCommand ?? "xcrun";
   const convertIcons = options.convertIcons ?? runIconsTool;
@@ -265,17 +255,17 @@ export async function buildAppIcons(options = {}) {
     options.encodeLegacyIcons ?? encodeLegacyIconsWithSips;
   const compileIconDocument =
     options.compileIconDocument ?? compileIconDocumentWithActool;
+  const semanticSignature =
+    options.compiledIconSemanticSignature ??
+    (options.compileIconDocument === undefined
+      ? compiledIconSemanticSignature
+      : (path) => readFileSync(path).toString("base64"));
   const validatePublishedCar =
     options.validatePublishedCar ?? options.compileIconDocument === undefined;
   const log = options.log ?? console.log;
-  const sources = {
-    master: join(sourceDirectory, "app-icon-master.svg"),
-    micro: join(sourceDirectory, "app-icon-micro.svg"),
-    unplated: join(sourceDirectory, "app-icon-unplated.svg"),
-    iconDocument: join(sourceDirectory, MAC_ICON_DOCUMENT),
-  };
+  const source = join(sourceDirectory, CANONICAL_ICON_FILE);
 
-  assertRasterizerAvailable(rsvgCommand);
+  assertCanonicalSvg(source);
   if (options.encodeLegacyIcons === undefined) {
     assertSipsAvailable(sipsCommand);
   }
@@ -288,35 +278,38 @@ export async function buildAppIcons(options = {}) {
   );
 
   try {
-    log("→ build/icon.icns (I Micro 16–128px + F Standard 256–1024px)");
-    await buildIcns(sources, stagingDirectory, {
+    log("→ build/icon.ico + build/icons/* + build/icon.png");
+    await buildCrossPlatformRasters(source, stagingDirectory, {
       convertIcons,
-      encodeLegacyIcons,
-      rsvgCommand,
-      sipsCommand,
     });
-    log("→ build/icon.ico (transparent Windows official size set)");
-    await buildIco(sources, stagingDirectory, convertIcons);
-    log("→ build/icons/* (transparent Linux hicolor size set)");
-    await buildLinuxIcons(sources, stagingDirectory, rsvgCommand, convertIcons);
-    log(
-      "→ build/icon.png 512×512 (unplated mark for window/taskbar containers)"
+    log("→ build/icon.icns (single approved SVG source)");
+    const generatedIcns = await buildIcns(
+      source,
+      join(stagingDirectory, "icons"),
+      stagingDirectory,
+      {
+        convertIcons,
+        encodeLegacyIcons,
+        sipsCommand,
+      }
     );
-    buildContainerPng(sources, stagingDirectory, rsvgCommand);
-    log("→ build/icon-dock.png 512×512 (macOS development Dock)");
-    buildDevDockPng(sources, stagingDirectory, rsvgCommand);
-    log(
-      "→ build/app-icon.icon Assets + build/Assets.car (macOS 26 layered rendition)"
+    const temporaryPng = join(stagingDirectory, "app-icon-source.png");
+    writeFileSync(temporaryPng, extractLargestIconPng(generatedIcns));
+    log("→ build/Assets.car (generated one-PNG macOS 26 icon stack)");
+    await buildMacLayeredIcon(
+      temporaryPng,
+      source,
+      stagingDirectory,
+      outputDirectory,
+      {
+        compileIconDocument,
+        compiledIconSemanticSignature: semanticSignature,
+        validatePublishedCar,
+        xcrunCommand,
+      }
     );
-    await buildMacLayeredIcon(sources, stagingDirectory, outputDirectory, {
-      compileIconDocument,
-      rsvgCommand,
-      xcrunCommand,
-      rasterize,
-      validatePublishedCar,
-    });
     publishStagedAssets(stagingDirectory, outputDirectory);
-    log("✓ icons regenerated");
+    log("✓ icons regenerated from build/app-icon-source.svg");
   } finally {
     rmSync(stagingDirectory, { recursive: true, force: true });
   }

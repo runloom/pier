@@ -9,7 +9,10 @@ import type { IpcMain } from "electron";
 import { appCore } from "../app-core/index.ts";
 import { resolveAgentLaunch } from "../services/agents/launch.ts";
 import { wrapAndRegisterLaunch } from "../services/terminal-launch-wrap/index.ts";
-import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
+import {
+  registerLaunchResumeHint,
+  terminalLaunchRegistry,
+} from "../state/terminal-launch-state.ts";
 
 export function registerAgentsIpc(ipcMain: IpcMain): void {
   const detection = appCore.services.agentDetection;
@@ -135,6 +138,7 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
         agentId: AgentKind;
         command?: string;
         cwd?: string;
+        resumeSessionId?: string;
       }
     ): Promise<{ launchId: string | null }> => {
       const prefs = await appCore.services.preferences.read();
@@ -167,6 +171,9 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
         },
         (next) => terminalLaunchRegistry.register(next)
       );
+      if (launchId && spec.resumeSessionId?.trim()) {
+        registerLaunchResumeHint(launchId, spec.resumeSessionId);
+      }
       return { launchId };
     }
   );

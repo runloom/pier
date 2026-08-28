@@ -93,6 +93,63 @@ describe("detachAgentsForWindow", () => {
     expect(typeof detachedAt).toBe("number");
     expect(detachedAt).toBeGreaterThanOrEqual(before);
     expect(detachedAt).toBeLessThanOrEqual(after);
+    expect(session?.agent?.restore?.cause).toBe("host-teardown");
+  });
+
+  it("refuses exited patches after host-teardown even without another flush", async () => {
+    const {
+      detachAgentsForWindow,
+      patchTerminalPanelAgentStatus,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+    } = await loadTerminalSessionState();
+
+    await updateTerminalPanelAgent("record-main", "terminal-1", runningAgent());
+    await detachAgentsForWindow("record-main");
+    const patched = await patchTerminalPanelAgentStatus(
+      "record-main",
+      "terminal-1",
+      { exitCode: 0, finishedAt: Date.now(), status: "exited" }
+    );
+    expect(patched).toBe(false);
+    const session = await readTerminalPanelSession("record-main", "terminal-1");
+    expect(session?.agent?.status).toBe("running");
+    expect(session?.agent?.restore?.cause).toBe("host-teardown");
+  });
+
+  it("skips panels listed in skipPanelIds", async () => {
+    const {
+      detachAgentsForWindow,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+    } = await loadTerminalSessionState();
+
+    await updateTerminalPanelAgent("record-main", "terminal-1", runningAgent());
+    await updateTerminalPanelAgent(
+      "record-main",
+      "terminal-2",
+      runningAgent({
+        resume: { capturedAt: 1, sessionId: "other", source: "hook" },
+      })
+    );
+    await detachAgentsForWindow("record-main", {
+      skipPanelIds: ["terminal-1"],
+    });
+
+    await expect(
+      readTerminalPanelSession("record-main", "terminal-1")
+    ).resolves.toMatchObject({
+      agent: { status: "running", resume: { sessionId: "sess-running" } },
+    });
+    expect(
+      (await readTerminalPanelSession("record-main", "terminal-1"))?.agent
+        ?.restore?.cause
+    ).toBeUndefined();
+    await expect(
+      readTerminalPanelSession("record-main", "terminal-2")
+    ).resolves.toMatchObject({
+      agent: { restore: { cause: "host-teardown" }, status: "running" },
+    });
   });
 
   it("leaves exited agents unchanged", async () => {

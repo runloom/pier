@@ -3,8 +3,10 @@ import {
   SUBAGENT_HOOK_EVENTS,
 } from "@shared/agent-session-actor.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
+import { clearForegroundAgentCommandFinished } from "./agent-session-ended.ts";
 import { classifyAgentTurnEvent } from "./agent-turn-event-semantics.ts";
 import {
+  applyAgentLaunched,
   applyUnmatchedCommandStarted,
   finishPanelCommands,
 } from "./aggregator-command.ts";
@@ -29,17 +31,12 @@ import {
 } from "./aggregator-slots.ts";
 import {
   logAgentEventDropped,
-  logClearForeignHook,
   logEndHookSession,
   logPtyExitedTaskRetain,
   logRouting,
   nativeEventForLog,
 } from "./aggregator-tracing.ts";
-import {
-  acquireHookLayer,
-  armLaunchVisibility,
-  revealHook,
-} from "./aggregator-visibility.ts";
+import { acquireHookLayer, revealHook } from "./aggregator-visibility.ts";
 import { bindEventToClaimedTurn } from "./claimed-turns.ts";
 import { applyDisplayQuestionOverlay } from "./display-question.ts";
 import {
@@ -50,7 +47,6 @@ import {
   EMIT_DEBOUNCE_MS,
   getOrCreateHookScope,
   hookScopeIdentity,
-  newAgentLaunchLayer,
   newTaskLayer,
   type PanelSlot,
   SESSION_END_COOLDOWN_MS,
@@ -170,29 +166,17 @@ export function createForegroundActivityAggregator(
       if (disposed) {
         return;
       }
-      const key = panelKey(windowId, panelId);
-      panelCooldownUntil.delete(key);
-      hookCooldownUntil.delete(key);
-      const slot = slotFor(key, panelId);
-      const existing = slot.command;
-      if (existing?.kind === "agent-launch" && existing.agentId === agentId) {
-        existing.updatedAt = now();
-        existing.windowId = windowId;
-      } else {
-        if (existing) {
-          clearCommandTimers(existing);
-        }
-        const layer = newAgentLaunchLayer(windowId, agentId, now());
-        slot.command = layer;
-        armLaunchVisibility(key, layer, { scheduleEmit, slots });
-      }
-      const hook = slot.hook;
-      if (hook && hook.agentId !== agentId) {
-        logClearForeignHook(key, hook.agentId, agentId);
-        clearHookTimers(hook);
-        slot.hook = null;
-      }
-      scheduleEmit();
+      applyAgentLaunched({
+        agentId,
+        hookCooldownUntil,
+        now,
+        panelCooldownUntil,
+        panelId,
+        scheduleEmit,
+        slotFor,
+        slots,
+        windowId,
+      });
     },
 
     ingestCommandStarted(panelId, windowId, commandLine, matchedAgent) {
@@ -396,6 +380,7 @@ export function createForegroundActivityAggregator(
     },
 
     panelClosed(panelId, windowId) {
+      clearForegroundAgentCommandFinished(panelId, windowId);
       let removed = false;
       for (const key of keysForPanel(slots, panelId, windowId)) {
         removed =
@@ -471,6 +456,10 @@ export function createForegroundActivityAggregator(
       };
     },
 
+    hasAgentPresence(panelId, windowId) {
+      const slot = slots.get(panelKey(windowId, panelId));
+      return Boolean(slot?.hook || slot?.command?.kind === "agent-launch");
+    },
     snapshot(windowId) {
       const b = buildBroadcast();
       if (windowId === undefined) {

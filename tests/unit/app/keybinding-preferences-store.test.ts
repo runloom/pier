@@ -233,7 +233,7 @@ describe("keybinding-preferences.store", () => {
     expect(pier.setAppShortcutKeys).toHaveBeenCalledTimes(callsAfterLocalApply);
   });
 
-  it("does not route user-only commands that are not marked for terminal focus", async () => {
+  it("routes user global bindings while the terminal is focused", async () => {
     const pier = installPierApi();
     const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
     const { keybindingRegistry } = await import(
@@ -246,10 +246,10 @@ describe("keybinding-preferences.store", () => {
     await initKeybindingPreferences();
     await useKeybindingPreferencesStore
       .getState()
-      .setBinding("pier.panel.splitLeft", "Mod+Alt+ArrowLeft", "global");
+      .setBinding("pier.panel.splitLeft", "Mod+Alt+KeyQ", "global");
 
     expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
-      expect.not.arrayContaining(["Mod+Alt+ArrowLeft"])
+      expect.arrayContaining(["Mod+Alt+KeyQ"])
     );
   });
 
@@ -312,7 +312,7 @@ describe("keybinding-preferences.store", () => {
     );
   });
 
-  it("migrates legacy mission control shortcuts to the workbench action", async () => {
+  it("does not remap legacy mission control shortcuts to a workbench action", async () => {
     installPierApi({
       userKeymap: [
         {
@@ -335,7 +335,7 @@ describe("keybinding-preferences.store", () => {
 
     expect(useKeybindingPreferencesStore.getState().userKeymap).toEqual([
       {
-        commandId: "pier.panel.newWorkbench",
+        commandId: "pier.panel.newMissionControl",
         keys: "Mod+Alt+KeyW",
         scope: "global",
       },
@@ -345,7 +345,7 @@ describe("keybinding-preferences.store", () => {
         activePanelComponent: null,
         overlayStack: [],
       })
-    ).toBe("pier.panel.newWorkbench");
+    ).toBe("pier.panel.newMissionControl");
   });
 
   it("migrates legacy terminal debug unbind entries when hydrating preferences", async () => {

@@ -114,6 +114,7 @@ describe("terminal focus restoration", () => {
       updateTerminalPanelTab: vi.fn(async () => undefined),
       updateTerminalPanelTask: vi.fn(async () => undefined),
       updateTerminalPanelTitle: vi.fn(async () => undefined),
+      recordTerminalPanelAgentSpawnGeneration: vi.fn(async () => undefined),
     };
     vi.doMock("@main/state/terminal-session-state.ts", () => sessionState);
     vi.doMock("@main/state/panel-context-state.ts", () => ({
@@ -122,6 +123,7 @@ describe("terminal focus restoration", () => {
     const consumeLaunch = vi.fn(() => opts.launch ?? null);
     const readLaunch = vi.fn(() => opts.launch ?? null);
     vi.doMock("@main/state/terminal-launch-state.ts", () => ({
+      peekLaunchResumeHint: vi.fn(() => undefined),
       terminalLaunchRegistry: {
         consume: consumeLaunch,
         read: readLaunch,
@@ -442,6 +444,7 @@ describe("terminal focus restoration", () => {
     expect(result).toEqual({ ok: true, agentRestore: "resumed" });
     expect(processEnvironment.resolve).toHaveBeenCalledWith({
       cwd: "/repo",
+      projectRootPath: "/repo",
       source: "agent",
     });
     expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
@@ -455,7 +458,7 @@ describe("terminal focus restoration", () => {
           OPENAI_API_KEY: "sk-restored",
         }),
       }),
-      "",
+      expect.any(String),
       2
     );
     expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(

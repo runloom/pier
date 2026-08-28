@@ -1,5 +1,8 @@
 import type { DockviewApi } from "dockview-react";
-import { isTabRevealSuppressed } from "@/lib/workspace/tab-reveal-suppress.ts";
+import {
+  isTabRevealSuppressed,
+  suppressTabRevealForCurrentInteraction,
+} from "@/lib/workspace/tab-reveal-suppress.ts";
 import {
   createTabStripScrollMemory,
   setActiveTabStripScrollMemory,
@@ -35,6 +38,24 @@ export function attachWorkspaceTabStripBehavior(
   });
   setActiveTabStripScrollMemory(scrollMemory);
   setTabStripRevealAbortHook(abortScheduledDockviewTabReveal);
+
+  // Content-area pointerdown focuses the container (tabIndex=-1) → dockview
+  // activates the group in the same turn. That user gesture must not scroll
+  // the strip; only tab clicks / keyboard nav / explicit reveals may.
+  const onContentPointerDown = (event: PointerEvent): void => {
+    const target = event.target;
+    if (
+      target instanceof Element &&
+      target.closest(".dv-content-container") !== null
+    ) {
+      suppressTabRevealForCurrentInteraction();
+    }
+  };
+  const listenerDocument =
+    root instanceof Document ? root : (root as Element).ownerDocument;
+  listenerDocument?.addEventListener("pointerdown", onContentPointerDown, {
+    capture: true,
+  });
 
   const revealActiveGroupTab = (
     group: DockviewApi["activeGroup"] | undefined
@@ -90,6 +111,9 @@ export function attachWorkspaceTabStripBehavior(
   );
 
   return () => {
+    listenerDocument?.removeEventListener("pointerdown", onContentPointerDown, {
+      capture: true,
+    });
     maximizedSubscription.dispose();
     activeGroupSubscription.dispose();
     layoutSubscription.dispose();

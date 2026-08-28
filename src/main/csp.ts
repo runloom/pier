@@ -19,26 +19,41 @@ export function buildCspPolicy(isDev: boolean): string {
         "default-src 'self' http://localhost:* ws://localhost:*",
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' http://localhost:* pier-plugin: pier-live:",
         "style-src 'self' 'unsafe-inline' pier-plugin: pier-live:",
-        "connect-src 'self' http://localhost:* ws://localhost:* pier-live:",
+        "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* pier-live:",
         "img-src 'self' data: blob: pier-plugin: pier-file-preview: pier-live:",
         "font-src 'self' data: pier-asset: pier-plugin: pier-live:",
         "media-src 'self' pier-asset:",
+        "frame-src 'self' pier-html-preview:",
       ].join("; ")
     : [
         "default-src 'self'",
         "script-src 'self' 'wasm-unsafe-eval' pier-plugin: pier-live:",
         "style-src 'self' 'unsafe-inline' pier-plugin: pier-live:",
-        "connect-src 'self' pier-live:",
+        "connect-src 'self' http://localhost:* http://127.0.0.1:* pier-live:",
         "img-src 'self' data: pier-plugin: pier-file-preview: pier-live:",
         "font-src 'self' data: pier-asset: pier-plugin: pier-live:",
         "media-src 'self' pier-asset:",
+        "frame-src 'self' pier-html-preview:",
       ].join("; ");
+}
+
+/**
+ * HTML 预览文档（pier-html-preview:）不注入宿主 CSP：沙箱 iframe 是唯一隔离线
+ * （sandbox="allow-scripts"，无 allow-same-origin），预览页需放行 inline script /
+ * CDN / fetch；宿主页面与其余 scheme 一律覆写。
+ */
+export function shouldApplyAppCsp(url: string): boolean {
+  return !url.startsWith("pier-html-preview:");
 }
 
 export function installCsp(): void {
   const policy = buildCspPolicy(isDevRuntime());
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    if (!shouldApplyAppCsp(details.url)) {
+      callback({});
+      return;
+    }
     callback({
       responseHeaders: {
         ...details.responseHeaders,

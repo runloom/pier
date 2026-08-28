@@ -38,6 +38,7 @@ async function initRepo(): Promise<string> {
 function mockElectron(userDataDir: string): void {
   const appMock = {
     focus: vi.fn(),
+    getAppPath: vi.fn(() => userDataDir),
     getLocale: vi.fn(() => "en-US"),
     getPath: vi.fn((name: string) => {
       if (name !== "userData") {

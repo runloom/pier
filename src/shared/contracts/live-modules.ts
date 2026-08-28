@@ -68,6 +68,7 @@ export type LiveModulesCanvasTrustRequest = z.infer<
  * - preview barrel path hint: `.pier/preview-exports.ts`
  * - `forcePreviewBarrel` default false (encourage, do not force)
  * - `allowNodeModules` default false
+ * - `allowedBarePackages` default empty; project roots seed `framer-motion`
  * - home roots forbid `tsconfigPaths: true`
  * - React is the core host path (`pier/canvas`). Vue / Solid / Svelte canvases
  *   are first-class entries (suffix-selected); their runtimes come from the
@@ -89,6 +90,11 @@ export const LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY = ".pier/canvases";
 export const LIVE_MODULE_DEFAULT_PROJECT_CONTENT_DIRECTORIES = [
   LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY,
   "docs",
+] as const;
+
+/** First React-root motion candidate. Project roots seed this; home roots do not. */
+export const LIVE_MODULE_DEFAULT_ALLOWED_BARE_PACKAGES = [
+  "framer-motion",
 ] as const;
 
 /** Project config path (relative to project root). */
@@ -143,6 +149,20 @@ export const liveRootResolveSchema = z
     forcePreviewBarrel: z.boolean().default(false),
     /** v1 default false; bare node_modules specifiers denied unless later allowlisted. */
     allowNodeModules: z.boolean().default(false),
+    /**
+     * Per-root bare package allowlist (React). Does not override the electron /
+     * Node builtin deny list. `allowNodeModules: true` still means every package.
+     */
+    allowedBarePackages: z
+      .array(
+        z
+          .string()
+          .min(1)
+          .max(128)
+          .regex(/^(?:@[a-z0-9][\w.-]*\/)?[a-z0-9][\w.-]*$/u)
+      )
+      .max(16)
+      .default([]),
   })
   .strict();
 
@@ -316,6 +336,7 @@ export function projectLiveRootSpec(input: {
     pattern: input.pattern ?? LIVE_MODULE_DEFAULT_PATTERN,
     resolve: {
       allowNodeModules: false,
+      allowedBarePackages: [...LIVE_MODULE_DEFAULT_ALLOWED_BARE_PACKAGES],
       forcePreviewBarrel: false,
       tsconfigPaths: true,
       ...input.resolve,
@@ -336,6 +357,7 @@ export function homeLiveRootSpec(input?: {
     pattern: input?.pattern ?? LIVE_MODULE_DEFAULT_PATTERN,
     resolve: {
       allowNodeModules: false,
+      allowedBarePackages: [],
       forcePreviewBarrel: false,
       ...input?.resolve,
       tsconfigPaths: false,

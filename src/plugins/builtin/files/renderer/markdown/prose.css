@@ -4,7 +4,9 @@
   --md-scale: 1;
   --md-font-size: calc(13px * var(--md-scale));
   --md-line-height: 1.7;
-  --md-measure: 85ch;
+  /* Root rem: independent of document font, CJK/Latin mix, and --md-scale. */
+  --md-measure-comfortable: 42rem;
+  --md-measure: var(--md-measure-comfortable);
   --md-space-1: 0.4em;
   --md-space-2: 0.9em;
   --md-space-3: 1.25em;
@@ -17,6 +19,11 @@
   font-size: var(--md-font-size);
   line-height: var(--md-line-height);
   color: var(--foreground);
+  text-align: start;
+  text-wrap: wrap;
+  /* anywhere participates in min-content, so long paths / inline code cannot
+     stretch the column (break-word still would). */
+  overflow-wrap: anywhere;
 }
 
 [data-slot="markdown-prose"][data-measure="wide"] {
@@ -126,9 +133,13 @@
 [data-slot="markdown-prose"] .md-ul,
 [data-slot="markdown-prose"] .md-ol {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--md-space-1);
   padding-inline-start: 1.5em;
+  padding-inline-end: 0;
   margin-block: var(--md-space-2);
+  /* Beat AlertDescription `text-balance` so callout lists stay ragged-right. */
+  text-wrap: wrap;
 }
 
 [data-slot="markdown-prose"] .md-ul {
@@ -151,10 +162,15 @@
   color: var(--muted-foreground);
 }
 
+[data-slot="markdown-prose"] .md-li {
+  min-width: 0;
+}
+
 [data-slot="markdown-prose"] .md-li-task {
   display: flex;
   gap: 0.5em;
   align-items: flex-start;
+  min-width: 0;
   list-style: none;
 }
 
@@ -172,6 +188,7 @@
 
 [data-slot="markdown-prose"] .md-blockquote {
   padding-inline-start: 1em;
+  padding-inline-end: 0;
   margin-block: var(--md-space-3);
   color: var(--muted-foreground);
   border-inline-start: 2px solid var(--border);
@@ -186,6 +203,7 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.875em;
   color: var(--foreground);
+  overflow-wrap: anywhere;
   background-color: var(--muted);
   border-radius: 0.25rem;
 }
@@ -316,6 +334,10 @@
 
 [data-slot="markdown-prose"] .md-callout {
   margin-block: var(--md-space-3);
+}
+
+[data-slot="markdown-prose"] .md-callout [data-slot="alert-description"] {
+  text-wrap: wrap;
 }
 
 [data-slot="markdown-prose"] .md-callout .md-p {
@@ -451,6 +473,7 @@
   font-size: 0.875em;
   line-height: 1.5;
   color: var(--popover-foreground);
+  overflow-wrap: anywhere;
   pointer-events: none;
   background-color: var(--popover);
   border: 1px solid var(--border);
@@ -467,6 +490,7 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.875em;
   color: var(--foreground);
+  overflow-wrap: anywhere;
   background-color: var(--muted);
   border-radius: 0.25rem;
 }

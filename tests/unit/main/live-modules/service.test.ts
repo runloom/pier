@@ -17,6 +17,7 @@ import {
   createLiveModuleProtocolHandler,
   runtimeShimSource,
 } from "../../../../src/main/live-modules/protocol-handler.ts";
+import { recoverEsbuildService } from "../../../../src/main/services/live-modules/compile-context-cache.ts";
 import { isDeniedBareSpecifier } from "../../../../src/main/services/live-modules/fence.ts";
 import { createLiveModulesService } from "../../../../src/main/services/live-modules/service.ts";
 
@@ -54,6 +55,23 @@ describe("live-modules fence", () => {
     expect(isDeniedBareSpecifier("pier/canvas", false)).toBe(false);
     expect(isDeniedBareSpecifier("pier/host", false)).toBe(false);
     expect(isDeniedBareSpecifier("pier/visualizations", false)).toBe(true);
+    expect(isDeniedBareSpecifier("framer-motion", false)).toBe(true);
+    expect(
+      isDeniedBareSpecifier("framer-motion", false, "react", ["framer-motion"])
+    ).toBe(false);
+    expect(
+      isDeniedBareSpecifier("framer-motion/client", false, "react", [
+        "framer-motion",
+      ])
+    ).toBe(false);
+    expect(
+      isDeniedBareSpecifier("framer-motion-evil", false, "react", [
+        "framer-motion",
+      ])
+    ).toBe(true);
+    expect(
+      isDeniedBareSpecifier("electron", false, "react", ["electron"])
+    ).toBe(true);
   });
 
   it("allowlists framework bare packages only for non-React", () => {
@@ -93,6 +111,61 @@ describe("live-modules fence node_modules path", () => {
     const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
     service.registerRoot(spec);
     const result = await service.compile(spec.id, "nm.canvas.tsx");
+    expect(result.ok, JSON.stringify(result)).toBe(false);
+  });
+
+  it("compiles a project canvas that imports the default allowed package", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-live-motion-"));
+    const canvases = join(projectRoot, ".pier", "canvases");
+    const pkg = join(projectRoot, "node_modules", "framer-motion");
+    await mkdir(pkg, { recursive: true });
+    await mkdir(canvases, { recursive: true });
+    await writeFile(
+      join(pkg, "package.json"),
+      `${JSON.stringify({
+        exports: { ".": "./index.js" },
+        name: "framer-motion",
+        type: "module",
+      })}\n`
+    );
+    await writeFile(join(pkg, "index.js"), "export const motion = {};\n");
+    await writeFile(
+      join(canvases, "motion.canvas.tsx"),
+      [
+        'import { motion } from "framer-motion";',
+        "export default function Motion() {",
+        "  return <span>{String(Boolean(motion))}</span>;",
+        "}",
+        "",
+      ].join("\n")
+    );
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
+    service.registerRoot(spec);
+    const result = await service.compile(spec.id, "motion.canvas.tsx");
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+  });
+
+  it("still denies lodash on a default project root", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "pier-live-lodash-"));
+    const canvases = join(projectRoot, ".pier", "canvases");
+    await mkdir(canvases, { recursive: true });
+    await writeFile(
+      join(canvases, "lodash.canvas.tsx"),
+      [
+        'import _ from "lodash";',
+        "export default function L() {",
+        "  return <span>{String(_)}</span>;",
+        "}",
+        "",
+      ].join("\n")
+    );
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const service = createService(homeRoot);
+    const spec = projectLiveRootSpec({ projectRootPath: projectRoot });
+    service.registerRoot(spec);
+    const result = await service.compile(spec.id, "lodash.canvas.tsx");
     expect(result.ok, JSON.stringify(result)).toBe(false);
   });
 });
@@ -416,31 +489,7 @@ describe("live-modules service", () => {
     expect(source).not.toContain(`${LIVE_MODULE_SCHEME}://runtime/pier-canvas`);
   });
 
-  it("compiles workbench-into-canvas gold through the Mermaid runtime stub", async () => {
-    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
-    const service = createService(homeRoot);
-    const projectRoot = process.cwd();
-    const spec = projectLiveRootSpec({
-      directory: ".pier/canvases",
-      projectRootPath: projectRoot,
-    });
-    service.registerRoot(spec);
-
-    const result = await service.compile(
-      spec.id,
-      "workbench-into-canvas/workbench-into-canvas.canvas.tsx"
-    );
-    expect(result.ok, JSON.stringify(result)).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    const source = Buffer.from(
-      service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
-    ).toString("utf8");
-    expect(source).toContain("getCanvas().Mermaid");
-  });
-
-  it("compiles multi-agent gold through Mermaid without a repaint layer", async () => {
+  it("compiles canvas-kit through Artboard and Mermaid runtime stubs", async () => {
     const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
     const service = createService(homeRoot);
     const spec = projectLiveRootSpec({
@@ -450,7 +499,7 @@ describe("live-modules service", () => {
     service.registerRoot(spec);
     const result = await service.compile(
       spec.id,
-      "multi-agent-orchestration-gold/multi-agent-orchestration-gold.canvas.tsx"
+      "canvas-kit/canvas-kit.canvas.tsx"
     );
     expect(result.ok, JSON.stringify(result)).toBe(true);
     if (!result.ok) {
@@ -459,8 +508,10 @@ describe("live-modules service", () => {
     const source = Buffer.from(
       service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
     ).toString("utf8");
+    expect(source).toContain("getCanvas().ArtboardStage");
+    expect(source).toContain("getCanvas().Artboard");
     expect(source).toContain("getCanvas().Mermaid");
-    // Node chrome (kind/tone) is authored in data.json and loaded at runtime;
+    // Node chrome (kind/tone) is authored in data and loaded at runtime;
     // the bundle must not carry a second chrome map.
     expect(source).not.toContain("paintMermaidNodes");
   });
@@ -595,7 +646,7 @@ describe("live-modules service", () => {
     expect(events).toContain("changed");
   });
 
-  it("compiles in-repo smoke + blank templates", async () => {
+  it("compiles the in-repo smoke template", async () => {
     const projectRoot = process.cwd();
     const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
     const service = createService(homeRoot);
@@ -604,10 +655,7 @@ describe("live-modules service", () => {
     });
     service.registerRoot(spec);
 
-    for (const relPath of [
-      "smoke/hello.canvas.tsx",
-      "templates/blank.canvas.tsx",
-    ] as const) {
+    for (const relPath of ["smoke/hello.canvas.tsx"] as const) {
       const result = await service.compile(spec.id, relPath);
       expect(result.ok, `${relPath}: ${JSON.stringify(result)}`).toBe(true);
       if (!result.ok) {
@@ -778,5 +826,26 @@ describe("live-modules service", () => {
       expect(second.graph).toContain(".pier/canvases/dep.ts");
       expect(second.graph).toContain(".pier/canvases/graph.canvas.tsx");
     }
+  });
+
+  it("compiles again after the esbuild helper is recovered", async () => {
+    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+    const canvases = join(homeRoot, "canvases");
+    await mkdir(canvases, { recursive: true });
+    await writeFile(
+      join(canvases, "hello.canvas.tsx"),
+      "export default function Hello() { return <span>hi</span>; }\n"
+    );
+    const service = createService(homeRoot);
+    const spec = homeLiveRootSpec();
+    service.registerRoot(spec);
+
+    const first = await service.compile(spec.id, "hello.canvas.tsx");
+    expect(first.ok, JSON.stringify(first)).toBe(true);
+
+    await recoverEsbuildService();
+
+    const second = await service.compile(spec.id, "hello.canvas.tsx");
+    expect(second.ok, JSON.stringify(second)).toBe(true);
   });
 });

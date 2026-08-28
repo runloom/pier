@@ -259,7 +259,11 @@ function createMockContext(): RendererPluginContext {
       issue: unimplemented("filePreviews.issue"),
       release: unimplemented("filePreviews.release"),
     },
-    workbenchWidgets: { register: vi.fn(() => vi.fn()) },
+    htmlPreviews: {
+      issue: unimplemented("htmlPreviews.issue"),
+      release: unimplemented("htmlPreviews.release"),
+      touch: unimplemented("htmlPreviews.touch"),
+    },
     dialogs: {
       alert: dialogAlertMock,
       choice: unimplemented("dialogs.choice"),
@@ -288,6 +292,7 @@ function createMockContext(): RendererPluginContext {
       discardChanges: unimplemented("git.discardChanges"),
       getDiffPatch: unimplemented("git.getDiffPatch"),
       getReviewFileDocument: unimplemented("git.getReviewFileDocument"),
+      getReviewExcerptBatch: unimplemented("git.getReviewExcerptBatch"),
       getReviewIndex: unimplemented("git.getReviewIndex"),
       getStatus: unimplemented("git.getStatus"),
       listIgnored: unimplemented("git.listIgnored"),
@@ -396,6 +401,17 @@ function createMockContext(): RendererPluginContext {
       register: unimplemented("panels.register"),
       registerCloseGuard: unimplemented("panels.registerCloseGuard"),
     },
+    projectMemory: {
+      clearStore: unimplemented("projectMemory.clearStore"),
+      deleteObservation: unimplemented("projectMemory.deleteObservation"),
+      disable: unimplemented("projectMemory.disable"),
+      enable: unimplemented("projectMemory.enable"),
+      list: unimplemented("projectMemory.list"),
+      status: unimplemented("projectMemory.status"),
+    },
+    projectSettings: {
+      register: unimplemented("projectSettings.register"),
+    },
     terminal: {
       activePanelId: unimplemented("terminal.activePanelId"),
       getPanelContext: unimplemented("terminal.getPanelContext"),
@@ -406,6 +422,9 @@ function createMockContext(): RendererPluginContext {
       open: unimplemented("terminals.open"),
     },
     settings: {
+      close: () => {
+        useSettingsDialogStore.getState().close();
+      },
       openSection: (section) =>
         useSettingsDialogStore.getState().openSection(section),
     },

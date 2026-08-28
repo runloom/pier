@@ -160,12 +160,13 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const sessionLoaded = savedSession !== undefined;
   const restoredTaskResult = restoredTaskResultFromSession(savedSession);
   const restoredAgentResult = restoredAgentResultFromSession(savedSession);
-  const restartRestoredAgent = useRestartRestoredAgent({
-    activeLaunch,
-    panelId,
-    restoredAgentResult,
-    savedSession,
-  });
+  const { restart: restartRestoredAgent, startNew: startNewRestoredAgent } =
+    useRestartRestoredAgent({
+      activeLaunch,
+      panelId,
+      restoredAgentResult,
+      savedSession,
+    });
   const effectiveContext =
     runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
@@ -407,6 +408,11 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         monoFontFamily={monoFontFamily}
         nativeTerminalReady={nativeTerminalReady}
         onContextMenu={openTaskResultContextMenu}
+        onNewSession={
+          restoredAgentResult?.resume?.sessionId
+            ? startNewRestoredAgent
+            : undefined
+        }
         onRestartAgent={restartRestoredAgent}
         onRetry={retryTerminalCreate}
         resizePlaceholderVisible={resizePlaceholderVisible}

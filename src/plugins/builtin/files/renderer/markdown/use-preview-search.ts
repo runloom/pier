@@ -1,3 +1,4 @@
+import { usePanelFind } from "@plugins/api/panel-find.ts";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
@@ -40,12 +41,14 @@ const EMPTY_SEARCH_MATCHES: readonly MarkdownSearchMatch[] = [];
 export function useMarkdownPreviewSearch({
   labels,
   pagination,
+  panelId,
   scrollRoot,
   searchRequest,
   surfaceRef,
 }: {
   labels: MarkdownPreviewSearchLabels;
   pagination: MarkdownPagination | null;
+  panelId?: string | undefined;
   scrollRoot: HTMLElement | null;
   searchRequest: number | undefined;
   surfaceRef: RefObject<HTMLElement | null>;
@@ -110,6 +113,23 @@ export function useMarkdownPreviewSearch({
     },
     [searchMatches.length]
   );
+  const searchOpenRef = useRef(searchOpen);
+  searchOpenRef.current = searchOpen;
+  const navigateSearchRef = useRef(navigateSearch);
+  navigateSearchRef.current = navigateSearch;
+  const onPanelFind = useCallback(
+    (action: "next" | "open" | "prev") => {
+      if (action === "open") {
+        return;
+      }
+      if (!searchOpenRef.current) {
+        openSearch();
+      }
+      navigateSearchRef.current(action === "prev" ? "previous" : "next");
+    },
+    [openSearch]
+  );
+  usePanelFind(panelId, onPanelFind);
 
   const handleSearchChange = useCallback((next: string) => {
     setSearchValue(next);

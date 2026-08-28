@@ -20,9 +20,14 @@ import {
   reviewDocumentDemandForRenderWindow,
   selectBodyHydrationPriorityEntryKeys,
 } from "../review/document/demand.ts";
+import {
+  loadReviewExcerptBatch,
+  loadReviewFileDocument,
+} from "../review/document/excerpt-client.ts";
 import { GitReviewDocumentGeneration } from "../review/document/generation.ts";
 import { createHydrateTimeoutWatchdog } from "../review/document/hydrate-timeout.ts";
 import { GitReviewDocumentLoader } from "../review/document/loader.ts";
+import { GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT } from "../review/document/loader-options.ts";
 import {
   EMPTY_DOCUMENT_VIEW_STATE,
   indexReviewEntrySections,
@@ -236,21 +241,22 @@ export function mountGitReviewDocumentGeneration(
     cancel: (operationId) => context.git.cancelReviewRequest({ operationId }),
     entries,
     load: (entry, operationId) =>
-      context.git.getReviewFileDocument({
-        operationId,
-        ...(previousByEntryKey.get(entry.entryKey)?.document.revision ===
-        undefined
-          ? {}
-          : {
-              previousRevision: previousByEntryKey.get(entry.entryKey)?.document
-                .revision,
-            }),
-        source: {
-          ...scope,
-          oldPaths: entry.oldPaths,
-          path: entry.path,
-        },
-      }),
+      loadReviewFileDocument(
+        context,
+        scope,
+        previousByEntryKey,
+        entry,
+        operationId
+      ),
+    loadBatch: (batchEntries, operationId) =>
+      loadReviewExcerptBatch(
+        context,
+        scope,
+        previousByEntryKey,
+        batchEntries,
+        operationId
+      ),
+    maxConcurrent: GIT_REVIEW_EXCERPT_MAX_IN_FLIGHT,
   });
   // previousByEntryKey 灌 soft-retain 正文进 loader，首帧即可投影真正文；
   // 权威文档仍由 demand 重新拉取（revision 不匹配则覆盖）。
@@ -407,24 +413,29 @@ export function mountGitReviewDocumentGeneration(
       return;
     }
     const demand = currentDemandRef.current;
+    const liveSelected = generationCallbacksRef.current.getSelectedEntryKey();
     const demanded = new Set([
       ...demand.visibleEntryKeys,
       ...demand.bufferedEntryKeys,
-      ...(selectedEntryKey === null ? [] : [selectedEntryKey]),
+      ...(liveSelected === null ? [] : [liveSelected]),
       ...seedEntryKeys,
     ]);
-    const timedOut = hydrateWatchdog.noteDemanded(demanded, (entryKey) => {
-      const resource =
-        resourceByEntryKey.get(entryKey) ?? loader.getResource(entryKey);
-      // 仅 content 槽计时；meta 不进 timeout 目标
-      if (
-        resource !== undefined &&
-        !isReviewEntryBodyHydratable(resource.entry)
-      ) {
-        return "unchanged";
-      }
-      return resource?.kind;
-    });
+    const timedOut = hydrateWatchdog.noteDemanded(
+      demanded,
+      (entryKey) => {
+        const resource =
+          resourceByEntryKey.get(entryKey) ?? loader.getResource(entryKey);
+        // 仅 content 槽计时；meta 不进 timeout 目标
+        if (
+          resource !== undefined &&
+          !isReviewEntryBodyHydratable(resource.entry)
+        ) {
+          return "unchanged";
+        }
+        return resource?.kind;
+      },
+      liveSelected
+    );
     if (timedOut.length > 0) {
       loader.failHydrateTimeout(timedOut);
     }

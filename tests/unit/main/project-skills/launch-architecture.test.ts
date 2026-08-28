@@ -83,7 +83,7 @@ describe("project-skills launch architecture", { timeout: 30_000 }, () => {
       "never treat renderer createArgs.context"
     );
     // Prefer native launch cwd / main-resolved fields
-    expect(terminalHandler).toContain("launch.nativeLaunch?.cwd");
+    expect(terminalHandler).toContain("launchForNative?.cwd");
   });
 
   it("production wiring provides every runtime seam (no test-only injection gaps)", async () => {

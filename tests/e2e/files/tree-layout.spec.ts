@@ -9,7 +9,7 @@ import {
   expect,
   test,
 } from "@playwright/test";
-import { selectTheme, setWindowSize } from "../workbench/e2e-harness.ts";
+import { selectTheme, setWindowSize } from "../support/app-harness.ts";
 
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
@@ -131,7 +131,7 @@ test("uses available file-tree width and shares file icons and the sidebar searc
     };
     expect(tabFileIconPresentation).toEqual(treeFileIconPresentation);
     const fileChrome = page
-      .getByRole("button", { name: /Find in tree|在树中查找/u })
+      .getByRole("button", { name: /Find in File Tree|在目录树中查找/u })
       .locator("xpath=ancestor::header");
     const fileChromeCenter = fileChrome.locator(":scope > div").nth(1);
     await expect(fileChromeCenter).toBeVisible();
@@ -232,7 +232,7 @@ test("uses available file-tree width and shares file icons and the sidebar searc
     });
 
     await page
-      .getByRole("button", { name: /Find in tree|在树中查找/u })
+      .getByRole("button", { name: /Find in File Tree|在目录树中查找/u })
       .click();
     const search = page.getByTestId("files-tree-search-bar");
     await expect(search).toBeVisible();

@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-latest
+    runs-on: macos-26
     steps:
       - name: Resolve release version
         id: version
@@ -44,6 +44,18 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ steps.version.outputs.tag }}
+
+      - name: Select the pinned Xcode 26.6 toolchain
+        run: |
+          set -euo pipefail
+          test -z "${DEVELOPER_DIR:-}"
+          readonly pier_xcode_dir=/Applications/Xcode_26.6.app/Contents/Developer
+          test -d "$pier_xcode_dir"
+          sudo xcode-select --switch "$pier_xcode_dir"
+          test "$(xcode-select --print-path)" = "$pier_xcode_dir"
+          xcodebuild -version
+          test "$(xcodebuild -version | sed -n '1p')" = "Xcode 26.6"
+          xcrun --find actool
 
       - uses: pnpm/action-setup@v4
 

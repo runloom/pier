@@ -16,8 +16,8 @@ import { recordRendererTerminalRoute } from "./debug.ts";
 import { terminalFocusCoordinator } from "./focus-coordinator.ts";
 import type { NativeAddon } from "./native-addon.ts";
 import { toNativePanelKey } from "./panel-id.ts";
-import type { RegisteredTerminalTaskLifecycle } from "./task-lifecycle-wiring.ts";
-import type { TaskOutputTerminalBindings } from "./task-output-bindings.ts";
+import type { RegisteredTerminalTaskLifecycle } from "./task/lifecycle-wiring.ts";
+import type { TaskOutputTerminalBindings } from "./task/output-bindings.ts";
 import { windowRecordIdFor } from "./window-scope.ts";
 
 let cachedAddon: NativeAddon | null = null;

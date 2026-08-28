@@ -1,14 +1,6 @@
-import { join } from "node:path";
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
-import {
-  app,
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  nativeImage,
-  shell,
-} from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control/registration.ts";
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { registerPeerUidFromNativeAddon } from "./adapters/cli/register-peer-uid-native.ts";
@@ -32,6 +24,7 @@ import {
 } from "./bootstrap-privileged-protocols.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app.ts";
 import { installDisplayCapturePolicy } from "./display-capture-policy.ts";
+import { registerHtmlPreviewTicketIpc } from "./files/html-preview-ipc.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { applyGpuWorkarounds } from "./gpu-workarounds.ts";
 import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
@@ -66,8 +59,8 @@ import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerUsageDataIpc } from "./ipc/usage-data.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import {
+  invokeRendererMenuCommand,
   openTerminalFromMenu,
-  openTerminalSearchFromMenu,
   prepareQuitDialogWindow,
   toggleCommandPaletteFromMenu,
 } from "./menu/window-actions.ts";
@@ -76,8 +69,9 @@ import { isDevRuntime } from "./runtime-mode.ts";
 import { createAppUpdateScheduler } from "./services/app-updates/scheduler.ts";
 import { createExternalNavigationService } from "./services/external-navigation.ts";
 import { createGitAutofetchService } from "./services/git/autofetch-service.ts";
-import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
+import { abortMissingSingleInstanceLock } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
+import { flushPairingState } from "./state/pairing-store.ts";
 import { migrateTerminalSessionScopesToRecordIds } from "./state/terminal-session-scope-migration.ts";
 import {
   migrateLegacyAgentSuccessTabs,
@@ -115,25 +109,14 @@ windowManager.onCreate(({ window }) => {
 });
 configureMainAppIdentity(isDev);
 applyGpuWorkarounds();
-// 第二实例直接 quit + return 不继续 bootstrap, 否则会撞主实例的 userData 文件锁.
+// 第二实例不再继续 bootstrap。dev 打印原因并 exit(1)；生产包仍 quit。
 const gotTheLock = app.requestSingleInstanceLock();
 if (gotTheLock) {
   installMainDiagnosticsLogging();
 } else {
-  if (isDev) {
-    startupLog.error(
-      formatDevSingleInstanceLockFailure({
-        userDataDir: app.getPath("userData"),
-        ...(process.env.PIER_DEV_PROFILE
-          ? { profile: process.env.PIER_DEV_PROFILE }
-          : {}),
-        ...(process.env.ELECTRON_RENDERER_URL
-          ? { rendererUrl: process.env.ELECTRON_RENDERER_URL }
-          : {}),
-      })
-    );
-  }
-  app.quit();
+  abortMissingSingleInstanceLock(isDev, app, (message) => {
+    startupLog.error(message);
+  });
 }
 
 function getMenuTargetWindow(): AppWindow | null {
@@ -164,6 +147,9 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
       flushNotificationCenterHistory(),
     ]);
   });
+  // remote-control：先停监听（断开移动端连接）再 flush 配对状态落盘。
+  await appCore.services.remoteControl?.owner.stop();
+  await flushPairingState();
   // Clean quit：在销毁窗口前对 background 任务做 TERM→grace→KILL。
   await appCore.services.tasks.shutdownForQuit();
   await localControlRegistration.close();
@@ -197,6 +183,11 @@ const appQuitController = createAppQuitController({
     appCore.pluginHost.dispose();
     localControlRegistration.close().catch((error: unknown) => {
       appQuitLog.error("failed to close local control before quit", { error });
+    });
+    appCore.services.remoteControl?.owner.stop().catch((error: unknown) => {
+      appQuitLog.error("failed to stop remote control before quit", {
+        error,
+      });
     });
   },
   flushBeforeQuit: flushBeforeQuitConfirmed,
@@ -261,7 +252,7 @@ if (gotTheLock) {
         getTargetWindow: getMenuTargetWindow,
         isDev,
         isMac,
-        onFindInTerminal: openTerminalSearchFromMenu,
+        onMenuCommand: invokeRendererMenuCommand,
         onNewTerminal: openTerminalFromMenu,
         onNewWindow: createFreshWindowFromMenu,
         onOpenCommandPalette: toggleCommandPaletteFromMenu,
@@ -333,14 +324,6 @@ if (gotTheLock) {
         gitAutofetch.dispose();
         appCore.services.liveModules?.dispose();
       });
-      if (isMac && isDev && app.dock) {
-        app.dock.setIcon(
-          nativeImage.createFromPath(
-            join(import.meta.dirname, "../../build/icon-dock.png")
-          )
-        );
-      }
-
       registerWindowIpc(ipcMain);
       registerCommandIpc(ipcMain);
       registerExternalNavigationIpc(ipcMain, {
@@ -352,6 +335,7 @@ if (gotTheLock) {
       });
       registerFileSaveTargetIpc(ipcMain);
       registerFilePreviewTicketIpc();
+      registerHtmlPreviewTicketIpc();
       registerMediaPreviewIpc();
       registerMenuIpc(ipcMain);
       registerClipboardIpc(ipcMain);
@@ -364,6 +348,9 @@ if (gotTheLock) {
       registerAgentRuntimeHostIpc(ipcMain, {
         eventBus: appCore.eventBus,
         index: appCore.services.agentRuntimeIndex,
+        ...(appCore.services.pendingInteractions
+          ? { pendingInteractions: appCore.services.pendingInteractions }
+          : {}),
       });
       registerPierResourceIpc(ipcMain);
       registerUsageDataIpc(ipcMain, appCore.services.usageData);

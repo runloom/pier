@@ -1,6 +1,8 @@
 import {
   type GitReviewCancelRequest,
   type GitReviewConflictResolveRequest,
+  type GitReviewExcerptBatchRequest,
+  type GitReviewExcerptBatchResult,
   type GitReviewFailure,
   type GitReviewFileDocumentRequest,
   type GitReviewFileDocumentResult,
@@ -33,6 +35,7 @@ import {
   type GitReviewOperationOwner,
   type GitReviewScheduler,
 } from "./scheduler/index.ts";
+import { runGitReviewExcerptBatch } from "./service-excerpt.ts";
 import {
   gitReviewServiceFailure as failure,
   parseGitReviewServiceRequest as parseRequest,
@@ -224,6 +227,19 @@ export class GitReviewService {
       },
     });
     return settleReadLease(lease);
+  }
+
+  async getExcerptBatch(
+    input: GitReviewExcerptBatchRequest,
+    options: GitReviewRequestOptions
+  ): Promise<GitReviewExcerptBatchResult> {
+    return runGitReviewExcerptBatch({
+      documentReader: this.#documentReader,
+      input,
+      repositoryCoordinator: this.#repositoryCoordinator,
+      requestOptions: options,
+      scheduler: this.#scheduler,
+    });
   }
 
   async applyMutation(

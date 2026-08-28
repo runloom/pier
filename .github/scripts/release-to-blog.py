@@ -79,14 +79,31 @@ def make_description(bullet: str) -> str:
     return desc[:150] + "…" if len(desc) > 150 else desc
 
 
+def yaml_string(value: str) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def parse_yaml_string(raw: str) -> str | None:
+    raw = raw.strip()
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        if len(raw) >= 2 and raw[0] == raw[-1] == '"':
+            return raw[1:-1]
+        return raw
+    return value if isinstance(value, str) else None
+
+
 def build_zh(version: str, date: str, body: str) -> str:
     bullet = first_bullet(body)
     title = make_title(version, bullet)
     desc = make_description(bullet) if bullet else f"Pier {version.lstrip('vV')}（{date}）的更新内容。"
     frontmatter = (
         "---\n"
-        f'title: "{title}"\n'
-        f'description: "{desc}"\n'
+        f"title: {yaml_string(title)}\n"
+        f"description: {yaml_string(desc)}\n"
         f"pubDate: {date}\n"
         "lang: zh\n"
         "---\n"
@@ -120,8 +137,19 @@ def call_llm(prompt: str) -> str | None:
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read())
-        return data["choices"][0]["message"]["content"].strip()
-    except (urllib.error.URLError, KeyError, json.JSONDecodeError) as e:
+        content = data["choices"][0]["message"]["content"]
+        if not isinstance(content, str) or not content.strip():
+            print("[warn] LLM 翻译失败：empty content", file=sys.stderr)
+            return None
+        return content.strip()
+    except (
+        urllib.error.URLError,
+        KeyError,
+        IndexError,
+        TypeError,
+        AttributeError,
+        json.JSONDecodeError,
+    ) as e:
         print(f"[warn] LLM 翻译失败：{e}", file=sys.stderr)
         return None
 
@@ -130,14 +158,16 @@ def translate_doc(zh: str, lang: str) -> str | None:
     """把中文文章翻译成目标语言：title/description/正文三次请求，保留 frontmatter 结构。"""
     name = LANG_NAMES.get(lang, lang)
     front, _, body = zh.partition("\n---\n")
-    title = re.search(r'^title: "(.+)"$', front, re.M)
-    desc = re.search(r'^description: "(.+)"$', front, re.M)
+    title_match = re.search(r"^title:\s*(.*)$", front, re.M)
+    desc_match = re.search(r"^description:\s*(.*)$", front, re.M)
     date = re.search(r"^pubDate: (.+)$", front, re.M)
+    title = parse_yaml_string(title_match.group(1)) if title_match else None
+    desc = parse_yaml_string(desc_match.group(1)) if desc_match else None
 
     en_title = (
         call_llm(
             f"Translate the following Chinese blog post title into natural {name}. "
-            f'Return only the translated title, no quotes.\n\n{title.group(1)}'
+            f"Return only the translated title, no quotes.\n\n{title}"
         )
         if title
         else None
@@ -145,7 +175,7 @@ def translate_doc(zh: str, lang: str) -> str | None:
     en_desc = (
         call_llm(
             f"Translate the following Chinese blog post description into natural {name}. "
-            f'Return only the translated description, no quotes.\n\n{desc.group(1)}'
+            f"Return only the translated description, no quotes.\n\n{desc}"
         )
         if desc
         else None
@@ -160,8 +190,9 @@ def translate_doc(zh: str, lang: str) -> str | None:
         return None
     parts = ["---"]
     if en_title:
-        parts.append(f'title: "{en_title}"')
-    parts.append(f"description: {json.dumps(en_desc) if en_desc else ''}")
+        parts.append(f"title: {yaml_string(en_title)}")
+    if en_desc:
+        parts.append(f"description: {yaml_string(en_desc)}")
     if date:
         parts.append(f"pubDate: {date.group(1)}")
     parts.append(f"lang: {lang}\n---\n")
