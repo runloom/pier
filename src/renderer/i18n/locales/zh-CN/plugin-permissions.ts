@@ -47,4 +47,6 @@ export const pluginPermissions = {
   "notification:read": "读取通知",
   "notification:write": "标记通知为已读",
   "managedAssets:write": "写入受管智能体配置",
+  "remote-access:read": "查看移动端接入状态",
+  "remote-access:control": "管理移动端配对与设备",
 } as const;

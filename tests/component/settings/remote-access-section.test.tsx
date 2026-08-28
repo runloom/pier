@@ -24,7 +24,7 @@ import {
   vi,
 } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
-import { RemoteAccessSection } from "@/pages/settings/components/remote-access-section.tsx";
+import { RemoteAccessSection } from "@/pages/settings/components/remote-access/section.tsx";
 
 const toCanvasMock = vi.fn(
   (..._args: unknown[]): Promise<void> => Promise.resolve()

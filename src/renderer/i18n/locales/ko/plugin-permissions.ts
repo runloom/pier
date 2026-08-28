@@ -47,4 +47,6 @@ export const pluginPermissions = {
   "notification:read": "알림 읽기",
   "notification:write": "알림 읽음 처리",
   "managedAssets:write": "관리형 에이전트 구성 등록",
+  "remote-access:read": "모바일 접속 상태 보기",
+  "remote-access:control": "모바일 페어링과 기기 관리",
 } as const;

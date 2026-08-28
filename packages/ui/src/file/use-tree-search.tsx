@@ -157,3 +157,5 @@ export function useFileTreeSearch({
     value,
   };
 }
+
+export type FileTreeSearch = ReturnType<typeof useFileTreeSearch>;

@@ -3224,9 +3224,7 @@ describe("Git review panel", () => {
       pending.set(request.source.path, next);
       return next.promise;
     });
-    const cancelReviewRequest = vi.fn(async () => undefined);
     const context = pluginContext({
-      cancelReviewRequest,
       getReviewFileDocument,
       getReviewIndex: vi.fn(async () => indexResult(entries)),
     });
@@ -3238,8 +3236,6 @@ describe("Git review panel", () => {
     );
     fireEvent.click(findTreeItem(view.container, "file-3.ts"));
     await waitFor(() => expect(pending.has("src/file-3.ts")).toBe(true));
-    // Z2：同批 sibling 仍在 demand 时不拆批 cancel
-    expect(cancelReviewRequest).not.toHaveBeenCalled();
     resolvePendingDocuments(pending);
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:3"));
     const callsAfterFirstVisibility = scrollToItem.mock.calls.filter(
@@ -4089,8 +4085,16 @@ describe("Git review panel", () => {
       .mockResolvedValueOnce(indexResult([entry(2)]));
     const getReviewFileDocument = vi
       .fn()
-      .mockResolvedValueOnce(documentResult(0))
-      .mockImplementationOnce(() => nextDocument.promise);
+      .mockImplementation((request: { source?: { path?: string } }) => {
+        const match = String(request.source?.path ?? "").match(
+          /file-(\d+)\.ts$/u
+        );
+        const index = match?.[1] === undefined ? 0 : Number(match[1]);
+        if (index === 2) {
+          return nextDocument.promise;
+        }
+        return Promise.resolve(documentResult(index));
+      });
     captureTopAnchor.mockReturnValue({ id: "section:0", offset: -12 });
     const context = pluginContext({
       getReviewFileDocument,

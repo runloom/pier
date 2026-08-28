@@ -182,9 +182,16 @@ describe("keybinding input-routing trace", () => {
       { commandId: REJECTED_COMMAND, keys: "Mod+KeyO" },
     ]);
 
-    expect(
-      resolveKeybindingAction(chord("KeyI"), null, "web-keydown")
-    ).toBeNull();
+    const disabledAction = resolveKeybindingAction(
+      chord("KeyI"),
+      null,
+      "web-keydown"
+    );
+    if (!disabledAction) {
+      throw new Error("expected disabled action");
+    }
+    expect(disabledAction.id).toBe(DISABLED_COMMAND);
+    dispatchKeybindingAction(disabledAction, "web-keydown");
     const action = resolveKeybindingAction(chord("KeyO"), null, "web-keydown");
     if (!action) {
       throw new Error("expected rejected action");

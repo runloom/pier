@@ -47,4 +47,6 @@ export const pluginPermissions = {
   "notification:read": "通知の読み取り",
   "notification:write": "通知の既読処理",
   "managedAssets:write": "管理対象のエージェント設定を登録",
+  "remote-access:read": "モバイル連携の状態を表示",
+  "remote-access:control": "モバイルのペアリングとデバイスを管理",
 } as const;

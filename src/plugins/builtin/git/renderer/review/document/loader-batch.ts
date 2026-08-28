@@ -78,7 +78,8 @@ function startSingleLoad(
   runtime.activeCount.value += 1;
   runtime.activeEntryKeys.add(entryKey);
   runtime.operationActiveCount.set(operationId, 1);
-  runtime.load(resource.entry, operationId).then(
+  const loaded = Promise.resolve(runtime.load(resource.entry, operationId));
+  loaded.then(
     (result) => settleLoaderLoad(runtime, entryKey, operationId, result),
     (error: unknown) =>
       settleLoaderLoad(runtime, entryKey, operationId, {

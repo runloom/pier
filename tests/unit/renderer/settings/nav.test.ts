@@ -17,7 +17,7 @@ describe("settings navigation metadata", () => {
     expect(NAV_ITEMS.map((item) => item.id)).not.toContain("skills");
   });
 
-  it("workspace sits immediately after projects, before plugins", () => {
+  it("workspace sits immediately after projects, before remote access and plugins", () => {
     expect(NAV_ITEMS.map((item) => item.id)).toEqual([
       "appearance",
       "terminal",
@@ -26,6 +26,7 @@ describe("settings navigation metadata", () => {
       "notifications",
       "projects",
       "workspace",
+      "remoteAccess",
       "plugins",
       "updates",
     ]);

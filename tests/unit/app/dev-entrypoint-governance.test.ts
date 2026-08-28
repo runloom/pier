@@ -32,7 +32,7 @@ describe("development entrypoint governance", () => {
     expect(devOrchestrator).toContain('start("agent-splits renderer watch"');
     expect(devOrchestrator).toContain('"electron dev"');
     expect(devOrchestrator.indexOf('"electron dev"')).toBeLessThan(
-      devOrchestrator.indexOf("startPluginWatchers")
+      devOrchestrator.indexOf("\nstartPluginWatchers();")
     );
   });
 });

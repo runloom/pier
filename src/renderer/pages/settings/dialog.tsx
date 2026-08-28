@@ -46,7 +46,7 @@ import { NotificationsSection } from "@/pages/settings/components/notifications-
 import { PluginConfigurationSection } from "@/pages/settings/components/plugin-configuration-section.tsx";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
 import { ProjectsSection } from "@/pages/settings/components/project/section.tsx";
-import { RemoteAccessSection } from "@/pages/settings/components/remote-access-section.tsx";
+import { RemoteAccessSection } from "@/pages/settings/components/remote-access/section.tsx";
 import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
 import { WorkspaceSection } from "@/pages/settings/components/worktree-section.tsx";
 import {

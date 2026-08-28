@@ -25,7 +25,7 @@ function parseLabels(locale: string): Map<string, string> {
   const text = readFileSync(path, "utf-8");
   const map = new Map<string, string>();
   for (const match of text.matchAll(
-    /"?([a-zA-Z]+:[a-zA-Z]+|[a-z]+)"?\s*:\s*"([^"]*)"/gu
+    /"?([a-zA-Z]+(?:-[a-zA-Z]+)*:[a-zA-Z]+|[a-z]+)"?\s*:\s*"([^"]*)"/gu
   )) {
     const key = match[1];
     if (

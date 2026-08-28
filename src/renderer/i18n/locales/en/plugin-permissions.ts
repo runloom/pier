@@ -47,4 +47,6 @@ export const pluginPermissions = {
   "notification:read": "Read notifications",
   "notification:write": "Mark notifications as read",
   "managedAssets:write": "Register managed agent configuration",
+  "remote-access:read": "View mobile companion access",
+  "remote-access:control": "Manage mobile pairing and devices",
 } as const;

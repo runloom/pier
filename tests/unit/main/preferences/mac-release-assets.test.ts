@@ -477,7 +477,7 @@ describe("build-dist and release-app dual-arch wiring", () => {
     expect(buildDist).toContain("verify-mac-release-artifacts.mjs");
     expect(buildDist).toContain("publish-mac-release-artifacts.mjs");
     expect(buildDist).toMatch(
-      /\[1\/5\] app icons[\s\S]*pnpm build:icons[\s\S]*\[5\/5\] electron-builder/
+      /\[1\/6\] app icons[\s\S]*pnpm build:icons[\s\S]*\[6\/6\] electron-builder/
     );
     expect(buildDist).toMatch(
       /electron-builder --mac --arm64 --x64 --publish never/
