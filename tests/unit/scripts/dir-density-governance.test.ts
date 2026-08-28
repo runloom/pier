@@ -87,8 +87,6 @@ const NO_PARENT_PREFIX_DIRS: { dir: string; bannedPrefix: string }[] = [
     dir: "src/renderer/lib/command-palette",
     bannedPrefix: "use-command-palette-",
   },
-  { dir: "src/renderer/panel-kits/workbench", bannedPrefix: "use-workbench-" },
-  { dir: "src/renderer/panel-kits/workbench", bannedPrefix: "core-workbench-" },
   { dir: "src/renderer/lib/context-menu", bannedPrefix: "use-context-menu" },
   { dir: "src/renderer/lib/keybindings", bannedPrefix: "use-keybindings" },
   { dir: "src/renderer/lib/attention", bannedPrefix: "play-attention-" },
@@ -107,18 +105,6 @@ const NO_PARENT_PREFIX_DIRS: { dir: string; bannedPrefix: string }[] = [
   {
     dir: "src/renderer/panel-kits/terminal/structured-composer",
     bannedPrefix: "structured-composer-",
-  },
-  {
-    dir: "src/renderer/panel-kits/workbench/core-widgets/activity",
-    bannedPrefix: "activity-",
-  },
-  {
-    dir: "src/renderer/panel-kits/workbench/core-widgets/cost",
-    bannedPrefix: "cost-",
-  },
-  {
-    dir: "src/renderer/panel-kits/workbench/core-widgets/custom-card",
-    bannedPrefix: "custom-card-",
   },
   { dir: "src/shared/contracts/terminal", bannedPrefix: "terminal-" },
   { dir: "src/shared/contracts/agent", bannedPrefix: "agent-" },

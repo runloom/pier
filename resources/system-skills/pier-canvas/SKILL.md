@@ -37,6 +37,7 @@ Unknown pack ids are hard failures (do not guess).
 | `content` | `design-doc` | Content pack id under `packs/content/` |
 | `presentation` | *resolved* | See **Pack selection**. Do not default every overview to five tabs. |
 | `ui` | `pier-default` | UI pack id under `packs/ui/` |
+| `recipe` | (none) | Freeform starter: `design`, `orchestration`, or `board` (see **Stage selection**). Ignored in methodology mode. |
 | `slug` | derived from title | Directory name under `.pier/canvases/<slug>/` |
 | `locale` | injected by Pier | BCP-47 UI language (`en`, `zh-CN`, …). Host adds this on send. |
 
@@ -82,8 +83,14 @@ Examples (skill calls, not shell):
 /pier-canvas content=design-doc presentation=one_pager
   One-page design overview for <topic>
 
-/pier-canvas mode=freeform
-  Freeform canvas without methodology packs
+/pier-canvas mode=freeform recipe=design
+  Multi-device mockup on a world stage
+
+/pier-canvas mode=freeform recipe=orchestration
+  Live DAG viewer (FlowGraph + watch + declared command)
+
+/pier-canvas mode=freeform recipe=board
+  Full-bleed kanban (fill + Sortable / Droppable + sibling JSON)
 ```
 
 Recommended combo for runtime/control-plane schemes:
@@ -105,6 +112,10 @@ Project pack override (when present, wins over built-in):
   `pier/canvas`. Import commands, events, and snapshots from `pier/host`.
   The API tab is a capability catalog (`useCanvasFile` plus host domains).
   Do not invent APIs or import workbench widgets.
+  Plugin data: `plugin.list` / `inspect` → `useHostSnapshot("plugin:<id>/<key>")`
+  → declared `pluginAction.invoke` only. Add/remove/OAuth via `settings.open`.
+  Compose with primitives (`Item`, `Table`, `Progress`); see
+  `references/host-data.md`. Never ship `AccountsCard` / `canvasWidgets`.
 
 - Write outputs only under `.pier/canvases/**` in the current project
   (product default). Preview roots are the full editable list in
@@ -126,6 +137,38 @@ Project pack override (when present, wins over built-in):
   security sandbox.
 - Do not register extra system skills for each methodology pack. Packs live
   under this skill's `packs/` directory.
+
+## Stage selection (flow vs world vs fill)
+
+The files preview is **one shell**. The canvas root chooses the geometry.
+Do not set a meta flag or invent a third “app mode”.
+
+Four root shells exist. **Pick the shell from the user's ask before writing
+code — do not ask the user to choose a shell:**
+
+| Root shell | Auto-select when the ask is… | Preview chrome it gets |
+| --- | --- | --- |
+| `Frame` (flow, default) | An article, decision overview, dashboard that scrolls | Reading measure (`max-w-5xl`); no zoom chrome |
+| `DocsShell` (flow, docs) | A manual / multi-section docs site with sidebar nav | Inherits global reading size + document font passively; **no floating font-scale control** — the docs shell owns its chrome |
+| `<Stack fill>` (`data-canvas-fill`) | A one-screen board or app shell that owns its own scroll | Full-bleed; the flow measure is dropped |
+| `WorldStage` | Multi-device mockups, live DAG, whiteboard layout | Viewport zoom/pan; fit / 100% controls (world only) |
+
+- Do not wrap a reading doc in `WorldStage`.
+- Do not stack phone/desktop frames as a document inside `Frame` — use
+  `WorldStage` + `Artboard` (`preset`) + `Layer`.
+- Full-bleed kanban / app shells use **fill**, not world.
+- `ArtboardStage` stays a **fit-all card in flow** (same as `Mermaid`). Inline
+  zoom/pan is world only.
+- Unknown `recipe` ids are hard failures. Known recipes:
+
+| `recipe` | Pack | Stage | Start from |
+| --- | --- | --- | --- |
+| `design` | `packs/recipes/design/` | world | `templates/design-mockup.canvas.tsx` |
+| `orchestration` | `packs/recipes/orchestration/` | world | `templates/dag-viewer.canvas.tsx` |
+| `board` | `packs/recipes/board/` | fill | `templates/kanban.canvas.tsx` |
+
+When `recipe=` is set, use **Workflow B** (freeform). Do not invent methodology
+tabs for a mockup or a DAG viewer.
 
 ## Workflow A — methodology (default)
 
@@ -172,8 +215,7 @@ Use when `mode` is omitted or `mode=methodology`.
 9. Templates: `templates/decision.canvas.tsx` for `decision_nav_4` (four tabs, no Day 1);
    `templates/overview.canvas.tsx` for `primary_nav_5` (five tabs including Day 1);
    single scrolling Frame for `one_pager`. Starters are English scaffolds —
-   rewrite visible copy into the user's language. Closed-loop dogfood:
-   `.pier/canvases/multi-agent-orchestration-gold/`.
+   rewrite visible copy into the user's language.
 10. Read `sdk/index.d.ts` and focused declarations before using APIs.
 11. Run verification requirements before delivery.
 
@@ -203,13 +245,30 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
      the article keep the **UI font**.
    - **`composition` / `kit`**: use the **UI font** only — never the host
      document font or a custom reading serif (design frames and component
-     catalogs must look like product UI). Multi-screen mockups use
-     `ArtboardStage` + `Artboard`. Frames are fixed pixel viewports (default
-     1280×800, clip). Inline `ArtboardStage` is the same fit-all card as
-     `Mermaid` (bordered, in the reading `Frame`, no wheel capture).
-     Zoom/pan is fullscreen preview only. Do not break the reading column
-     out to full width, and do not stack screens as a document.
-   - Command inventories: one Accordion list; badge only unfinished items.
+     catalogs must look like product UI).
+     - **`recipe=design`**: `WorldStage` root; `Artboard preset` + `Layer`;
+       comments stay in host Design Mode (do not fake annotation chrome).
+     - **`recipe=orchestration`**: `WorldStage` + `FlowGraph` with
+       `presentation="plain"`; persist node positions with `useCanvasFile`
+       (`state/positions.json`); declare commands in `instance.json` and call
+       `file.invokeCommand(key)`. After `{ kind: "started" }`, pull
+       `host.invoke({ type: "run.output", runId })` and
+       `useHostSnapshot("pier://tasks:runs-changed")`. Poll a loopback
+       service with `fetch("http://127.0.0.1:…")` — never `https:`. Status
+       lives in the external system; this canvas is a viewer. Node `meta` /
+       `badge`, `renderOverlay` (gates), and `onSelectNode` + a `Stack` beside
+       the graph are the inspect surface. `renderNodeContent` is display
+       chrome (`contentHeight` required); keep buttons beside the graph.
+       Relayout with `layoutFlowGraph` or by writing empty positions.
+     - **`recipe=board`**: root `<Stack fill>`; `Droppable` columns +
+       `Sortable` cards; persist the board with `useCanvasFile` (`board.json`)
+       and `watch` so other windows stay in sync. Cross-column moves land in
+       the target `Sortable.onDropItem(itemId, index)` — one callback, one
+       write (do not also mutate from the source `onReorder`). Not a host
+       task ledger.
+     - Multi-screen mockups without `recipe=`: still prefer `WorldStage`.
+       `ArtboardStage` is only the flow fit-all card (no wheel capture).
+     - Command inventories: one Accordion list; badge only unfinished items.
 7. Export valid `canvas` metadata.
 8. Do **not** require `instance.json` methodology fields.
 9. Run verification requirements.
@@ -228,10 +287,14 @@ Use when `mode=freeform` (or the user clearly asks for an unconstrained canvas).
   `classDiagram`, `erDiagram`, `mindmap`) — do not invent a nodes/edges
   dialect for `sequence` or class diagrams. Do not paint `tone` as
   decoration, and do not invent a left color rail. The host writes mermaid
-  flowchart text and paints Pier chrome on slotted nodes. Live
-  DAG / pipeline graphs may also set `status` (trailing run glyph) and
-  `renderNodeContent` (embedded display chrome; reserve `contentHeight`).
-  See [authoring](references/authoring.md) **Mermaid**.
+  flowchart text and paints Pier chrome on slotted nodes. **Live DAG /
+  pipeline viewers use `FlowGraph`** (`recipe=orchestration`), not Mermaid.
+  Put `presentation="plain"` on the world stage. Live-DAG display chrome
+  belongs on FlowGraph (`renderNodeContent` + `contentHeight`, `renderOverlay`,
+  node `meta` / `badge`). Mermaid `status` / `renderNodeContent` is leftover
+  for static architecture diagrams that need a run glyph — do not teach it
+  as a polling viewer.
+  See [authoring](references/authoring.md) **Mermaid** and **FlowGraph**.
 - Prefer direct layout over unnecessary card stacking.
 - Every user action needs a recognizable UI change or error response.
 - Add `schemaVersion` to adjacent `data.json` files. Data-focused Canvases

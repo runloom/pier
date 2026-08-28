@@ -49,4 +49,28 @@ describe("canvasHostApi", () => {
     ).rejects.toThrow(/canvas host denies file.writeText/);
     expect(invokeMock).not.toHaveBeenCalled();
   });
+
+  it("allows canvasCommand.invoke on the canvas execute channel", async () => {
+    invokeMock.mockResolvedValue({
+      data: { kind: "cancelled" },
+      ok: true,
+      requestId: "request-2",
+    });
+    await canvasHostApi.invoke({
+      payload: {
+        canvasPath: ".pier/canvases/demo/hello.canvas.tsx",
+        key: "refresh",
+        projectRootPath: "/tmp/proj",
+      },
+      type: "canvasCommand.invoke",
+    });
+    expect(invokeMock).toHaveBeenCalledWith(PIER.CANVAS_COMMAND_EXECUTE, {
+      payload: {
+        canvasPath: ".pier/canvases/demo/hello.canvas.tsx",
+        key: "refresh",
+        projectRootPath: "/tmp/proj",
+      },
+      type: "canvasCommand.invoke",
+    });
+  });
 });

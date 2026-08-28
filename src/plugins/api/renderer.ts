@@ -5,6 +5,7 @@ import type {
   AiStatusResult,
 } from "@shared/contracts/ai.ts";
 import type { ExternalNavigationResult } from "@shared/contracts/external-navigation.ts";
+import type { HtmlPreviewTicketIssueResult } from "@shared/contracts/file/html-preview-ticket.ts";
 import type {
   FilePreviewTicketIssueResult,
   FilePreviewTicketLocator,
@@ -28,13 +29,23 @@ import type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
+  RendererPluginProjectMemoryFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
 import type {
   PluginGroupContentClaim,
   RendererPluginPanelsFacade,
 } from "./renderer-panels.ts";
-import type { RendererWorkbenchWidgetRegistration } from "./workbench.ts";
+
+export interface RendererProjectSettingsRegistration {
+  id: string;
+  render: (props: {
+    isPierHome: boolean;
+    projectRootPath: string;
+  }) => ReactNode;
+  title: () => string;
+  visible?: (props: { isPierHome: boolean }) => boolean;
+}
 
 export type { PanelTransferRegistration } from "./panel-transfer-registration.ts";
 export type {
@@ -55,6 +66,7 @@ export type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
   RendererPluginGitFacade,
+  RendererPluginProjectMemoryFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
 export type {
@@ -68,13 +80,6 @@ export type {
   PluginPanelRegistration,
   RendererPluginPanelsFacade,
 } from "./renderer-panels.ts";
-export type {
-  RendererWorkbenchWidgetAction,
-  RendererWorkbenchWidgetRegistration,
-  WorkbenchWidgetActionContext,
-  WorkbenchWidgetComponentProps,
-  WorkbenchWidgetSettingsProps,
-} from "./workbench.ts";
 
 export type RendererPluginMessageValues = Record<string, number | string>;
 
@@ -100,6 +105,10 @@ export interface RendererPluginActionMetadata {
    * 仅 context menu 投影读取；命令面板/快捷键路径不读此字段。
    */
   menuHidden?: (invocation?: RendererPluginActionInvocation) => boolean;
+  /**
+   * 自身没有生效的 keybinding 时，菜单和命令面板展示可借用另一条 command。
+   */
+  shortcutSourceId?: string;
   sortOrder?: number;
   submenu?: () => string;
 }
@@ -409,6 +418,18 @@ export interface RendererPluginContext {
     clearAll(): void;
     release(input: { groupId: string; id: string; ownerId: symbol }): void;
   };
+  /**
+   * HTML 文件预览票据（沙箱 iframe 用）。签发的 URL 只在本窗口本 session
+   * 可访问；重载预览时用 previousTicket 轮换，卸载时 release。
+   */
+  htmlPreviews: {
+    issue(
+      input: { path: string; root: string },
+      previousTicket?: string
+    ): Promise<HtmlPreviewTicketIssueResult>;
+    release(ticket: string): Promise<boolean>;
+    touch(ticket: string): Promise<boolean>;
+  };
   i18n: {
     commandDescription(commandId: string): string | undefined;
     commandTitle(commandId: string, fallback?: string): string;
@@ -446,7 +467,13 @@ export interface RendererPluginContext {
     }): Promise<{ shown: boolean }>;
   };
   panels: RendererPluginPanelsFacade;
+  projectMemory: RendererPluginProjectMemoryFacade;
+  projectSettings: {
+    register(registration: RendererProjectSettingsRegistration): () => void;
+  };
   settings: {
+    /** 关闭设置弹窗(经宿主 leave guard);用于从设置深链进工作区的动作。 */
+    close(): void;
     openSection(section: "environment"): void;
   };
   terminal: RendererPluginTerminalContext;
@@ -454,9 +481,6 @@ export interface RendererPluginContext {
     register(item: RendererTerminalStatusItem): () => void;
   };
   terminals: RendererPluginTerminalsContext;
-  workbenchWidgets: {
-    register(registration: RendererWorkbenchWidgetRegistration): () => void;
-  };
   worktrees: RendererPluginWorktreesFacade;
 }
 

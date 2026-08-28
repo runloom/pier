@@ -182,6 +182,11 @@ def _pier_emit(
     )
     if session_id:
         body["sessionId"] = session_id
+    spawn_raw = os.environ.get("PIER_AGENT_SPAWN_GENERATION", "")
+    if spawn_raw.isdigit():
+        spawn_generation = int(spawn_raw)
+        if spawn_generation >= 1:
+            body["spawnGeneration"] = spawn_generation
     turn_id = _pier_string(payload, "turn_id", "parent_turn_id", "task_id")
     if turn_id:
         body["turnId"] = turn_id

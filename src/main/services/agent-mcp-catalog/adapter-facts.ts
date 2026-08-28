@@ -29,7 +29,11 @@ export interface McpDiscoveryAdapter {
   officialDocsUrl: string;
   /** Project-scoped MCP config files this agent reads. */
   projectConfigs: readonly McpConfigLocation[];
-  /** User-scoped (`~`) MCP config files this agent reads. Pier never writes. */
+  /**
+   * User-scoped (`~`) MCP config files this agent reads. Catalog 只读发现;
+   * 写入方是 agent-managed-assets/registry.ts(pier-memory 全局注册,
+   * merge-don't-clobber + 指纹归属),不经本模块。
+   */
   userConfigs: readonly McpConfigLocation[];
   verifiedOn: string;
 }

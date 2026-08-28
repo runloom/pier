@@ -255,9 +255,10 @@ export const fileUnsupportedTypeSchema = z.enum([
 export type FileUnsupportedType = z.infer<typeof fileUnsupportedTypeSchema>;
 
 export const filePreviewImageMimeSchema = z.enum([
-  "image/png",
-  "image/jpeg",
   "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/svg+xml",
   "image/webp",
 ]);
 export type FilePreviewImageMime = z.infer<typeof filePreviewImageMimeSchema>;

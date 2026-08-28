@@ -32,6 +32,7 @@ export const terminal = {
     fieldDuration: "所要時間",
     fieldExitCode: "終了コード",
     fieldStatus: "状態",
+    newSession: "新しいセッション",
     restart: "エージェントを再起動",
     restartFailed:
       "エージェントを再起動できませんでした。もう一度お試しください",

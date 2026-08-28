@@ -9,6 +9,7 @@ import {
   isCanvasTabTrigger,
   normalizeCanvasPickText,
 } from "./canvas-pick-shared.ts";
+import { detectCanvasStage } from "./canvas-stage.ts";
 import type { CanvasCommentThreadView } from "./use-canvas-preview-comments.ts";
 
 export interface CanvasCommentNavTarget {
@@ -200,11 +201,13 @@ export function revealCanvasTabPanelForTarget(el: HTMLElement): boolean {
 export function scheduleCanvasCommentPinScroll(
   shell: HTMLElement,
   pinIndex: number,
-  onReady?: () => void
+  onReady?: () => void,
+  host?: HTMLElement | null
 ): () => void {
   let cancelled = false;
   let observer: MutationObserver | null = null;
   let timer = 0;
+  const isWorld = host ? detectCanvasStage(host).stage === "world" : false;
   const tryScroll = (): boolean => {
     if (cancelled) {
       return true;
@@ -215,7 +218,9 @@ export function scheduleCanvasCommentPinScroll(
     if (!(pinEl instanceof HTMLElement)) {
       return false;
     }
-    pinEl.scrollIntoView({ block: "center", behavior: "auto" });
+    if (!isWorld) {
+      pinEl.scrollIntoView({ block: "center", behavior: "auto" });
+    }
     onReady?.();
     return true;
   };
@@ -344,7 +349,12 @@ export function revealCanvasCommentNavTarget(input: {
       open();
       return () => undefined;
     }
-    return scheduleCanvasCommentPinScroll(input.shell, target.index, open);
+    return scheduleCanvasCommentPinScroll(
+      input.shell,
+      target.index,
+      open,
+      input.host
+    );
   };
   const located = findTarget();
   if (located) {

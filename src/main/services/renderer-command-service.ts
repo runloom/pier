@@ -87,6 +87,8 @@ function isPanelTransferRendererCommand(command: RendererCommand): boolean {
 
 function shouldFocusRendererWindow(command: RendererCommand): boolean {
   switch (command.type) {
+    case "dialog.confirm":
+      return true;
     case "panel.focus":
     case "panel.open":
     case "terminal.open":

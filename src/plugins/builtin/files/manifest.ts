@@ -191,7 +191,7 @@ export const FILES_PLUGIN_MANIFEST = {
       },
     },
   },
-  workbenchWidgets: [],
+  canvasActions: [],
   dataProjections: [],
   settingsPages: [],
   groupContent: [

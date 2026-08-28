@@ -10,7 +10,6 @@ import {
   markdownOutlineHoverMaxHeightPx,
   markdownOutlineHoverWidthPx,
   markdownTocTickWidthPx,
-  readMarkdownContentWidthPx,
 } from "@plugins/builtin/files/renderer/markdown/preview-toc-layout.ts";
 import { describe, expect, it } from "vitest";
 
@@ -20,30 +19,6 @@ describe("markdownTocTickWidthPx", () => {
     expect(markdownTocTickWidthPx(2)).toBe(12);
     expect(markdownTocTickWidthPx(3)).toBe(MARKDOWN_TOC_TICK_WIDTH_MIN_PX);
     expect(markdownTocTickWidthPx(6)).toBe(MARKDOWN_TOC_TICK_WIDTH_MIN_PX);
-  });
-});
-
-describe("readMarkdownContentWidthPx", () => {
-  it("does not let a stretched box exceed the CSS max-width measure", () => {
-    const prose = document.createElement("div");
-    prose.style.maxWidth = "560px";
-    document.body.appendChild(prose);
-    Object.defineProperty(prose, "getBoundingClientRect", {
-      value: () =>
-        ({
-          width: 1200,
-          height: 0,
-          top: 0,
-          left: 0,
-          bottom: 0,
-          right: 0,
-          x: 0,
-          y: 0,
-          toJSON: () => undefined,
-        }) satisfies DOMRect,
-    });
-    expect(readMarkdownContentWidthPx(prose, 8)).toBe(560);
-    prose.remove();
   });
 });
 

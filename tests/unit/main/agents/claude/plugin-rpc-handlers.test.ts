@@ -62,6 +62,9 @@ describe("Claude plugin RPC handlers", () => {
       "accounts.syncToPeers",
       "accounts.usagePolling.acquire",
       "accounts.usagePolling.release",
+      "projection.accounts",
+      "projection.accounts.unwatch",
+      "projection.accounts.watch",
     ]);
 
     await handlers.get("accounts.snapshot")?.(null);
@@ -138,5 +141,21 @@ describe("Claude plugin RPC handlers", () => {
     await expect(
       handlers.get("accounts.completeLogin")?.({ code: "" })
     ).rejects.toThrow();
+  });
+
+  it("projects accounts snapshots and watch leases for canvas", async () => {
+    const { handlers, acquireUsagePolling, releaseUsagePolling, service } =
+      register();
+    await expect(handlers.get("projection.accounts")?.(null)).resolves.toEqual(
+      service.snapshot()
+    );
+    await handlers.get("projection.accounts.watch")?.(null);
+    await handlers.get("projection.accounts.unwatch")?.(null);
+    expect(acquireUsagePolling).toHaveBeenCalledWith(
+      "canvas-projection:accounts"
+    );
+    expect(releaseUsagePolling).toHaveBeenCalledWith(
+      "canvas-projection:accounts"
+    );
   });
 });

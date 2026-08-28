@@ -50,7 +50,6 @@ describe("collectBundledPluginRegistrations", () => {
         commands: 3,
         panels: 2,
         terminalStatusItems: 1,
-        workbenchWidgets: 4,
       },
       description: "",
       locales: {
@@ -70,7 +69,6 @@ describe("collectBundledPluginRegistrations", () => {
         commands: 1,
         panels: 0,
         terminalStatusItems: 2,
-        workbenchWidgets: 3,
       },
       description: "Codex account integration",
       locales: {
@@ -140,7 +138,6 @@ describe("collectBundledPluginRegistrations", () => {
         commands: 0,
         panels: 0,
         terminalStatusItems: 0,
-        workbenchWidgets: 0,
       },
       name: "Codex",
       sha256: "codex-sha256",

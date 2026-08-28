@@ -293,6 +293,9 @@ export const foregroundActivityService = {
   snapshot(windowId?: string): ForegroundActivityBroadcast {
     return foregroundActivityAggregator.snapshot(windowId);
   },
+  hasAgentPresence(panelId: string, windowId: string): boolean {
+    return foregroundActivityAggregator.hasAgentPresence(panelId, windowId);
+  },
   setAgentSessionTitle(
     windowId: string,
     panelId: string,
@@ -419,6 +422,9 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
         markAgentSessionExited({
           panelId: routed.panelId,
           windowId: routed.windowId,
+          ...("spawnGeneration" in routed && routed.spawnGeneration
+            ? { spawnGeneration: routed.spawnGeneration }
+            : {}),
         });
       }
       if (!isSubagentHookEvent(routed)) {

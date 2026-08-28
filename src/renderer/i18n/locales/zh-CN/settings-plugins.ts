@@ -27,8 +27,6 @@ export const settingsPlugins = {
   contributionSummary: {
     command: "{{count}} 个命令",
     commands: "{{count}} 个命令",
-    workbenchWidget: "{{count}} 个工作台组件",
-    workbenchWidgets: "{{count}} 个工作台组件",
     none: "没有贡献项",
     panel: "{{count}} 个面板",
     panels: "{{count}} 个面板",

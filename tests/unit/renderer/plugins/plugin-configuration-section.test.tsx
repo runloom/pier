@@ -33,7 +33,7 @@ function entry(id: string, enabled = true): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       configuration: {
@@ -88,7 +88,7 @@ function multilineEntry(id: string): PluginRegistryEntry {
     manifest: {
       apiVersion: 1,
       commands: [],
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       configuration: {

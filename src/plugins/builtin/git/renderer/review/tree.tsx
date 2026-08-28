@@ -2,10 +2,12 @@ import type {
   PierFileTreeGitStatus,
   PierFileTreeItem,
 } from "@pier/ui/file/tree.tsx";
-import type {
-  GitReviewFileStatus,
-  GitReviewGroup,
-  GitReviewIndexEntry,
+import {
+  type GitReviewConflictXy,
+  type GitReviewFileStatus,
+  type GitReviewGroup,
+  type GitReviewIndexEntry,
+  gitReviewConflictTreeStatus,
 } from "@shared/contracts/git/review.ts";
 import { orderReviewPresentationSlots } from "./document/presentation-order.ts";
 import {
@@ -93,12 +95,20 @@ export interface GitReviewTreeModel {
   visibleGroups: readonly GitReviewUncommittedGroup[];
 }
 
-function treeStatus(status: GitReviewFileStatus): PierFileTreeGitStatus {
-  return status === "conflicted" ? "modified" : status;
+function treeStatus(
+  status: GitReviewFileStatus,
+  xy: GitReviewConflictXy | undefined
+): PierFileTreeGitStatus {
+  if (status !== "conflicted") {
+    return status;
+  }
+  return xy === undefined ? "modified" : gitReviewConflictTreeStatus(xy);
 }
 
 function inheritedStatus(status: PierFileTreeGitStatus): PierFileTreeGitStatus {
-  return status === "added" || status === "untracked" ? status : "modified";
+  return status === "added" || status === "untracked" || status === "deleted"
+    ? status
+    : "modified";
 }
 
 export function gitReviewTreeModel(
@@ -168,7 +178,7 @@ export function gitReviewTreeModel(
       groupCounts[currentGroup] += 1;
     }
 
-    const status = treeStatus(row.status);
+    const status = treeStatus(row.status, row.slot.xy);
     const treePath = `${groupRoot}/${row.displayPath}`;
     const fileRef: GitReviewTreeFileRef = {
       entryKey: row.entryKey,

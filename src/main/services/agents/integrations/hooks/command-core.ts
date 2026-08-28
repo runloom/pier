@@ -13,7 +13,9 @@ export const PIER_HOOK_GEN_MARK = `pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}
 
 const SAFE_ENVIRONMENT_VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const PIER_EMIT_INVOCATION_RE =
-  /(?:^|&&|\|\||[;{(])\s*["']?\$\{PIER_AGENT_HOOKS_DIR\}\/emit["']?(?=\s|$)/;
+  /(?:^|&&|\|\||[;{(])\s*(?:\/bin\/sh\s+)?["']?\$\{PIER_AGENT_HOOKS_DIR\}\/emit["']?(?=\s|$)/;
+
+const POSIX_SHELL = "/bin/sh";
 
 /**
  * 外部兼容宿主会加载其他提供方的 hook 配置。命中宿主标志变量时整条命令
@@ -61,8 +63,8 @@ export function pierHookCommand(
     .map((expression) => ` "${expression}"`)
     .join("");
   return (
-    `[ -x "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
-    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEventV2" "${agentId}" "${pierEvent}" "${nativeEvent}"${payloadArgs} || true`
+    `[ -f "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
+    `${POSIX_SHELL} "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEventV2" "${agentId}" "${pierEvent}" "${nativeEvent}"${payloadArgs} || true`
   );
 }
 
@@ -139,8 +141,8 @@ function formatAgentEventV3Command(
     .map((expression) => ` "${expression ?? ""}"`)
     .join("");
   return (
-    `[ -x "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
-    `"\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEventV3" "${agentId}" "${event}" "${nativeEvent}"${payloadArgs} || true`
+    `[ -f "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" ] && ` +
+    `${POSIX_SHELL} "\${${PIER_AGENT_HOOKS_DIR_MARK}}/emit" "agentEventV3" "${agentId}" "${event}" "${nativeEvent}"${payloadArgs} || true`
   );
 }
 

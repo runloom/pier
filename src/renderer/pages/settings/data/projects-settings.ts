@@ -9,13 +9,22 @@
  * - Home detail → Skills | MCP
  * - Domain stores/commands stay split (local-environments vs project-skills)
  */
-export type ProjectsSettingsTab =
-  | "environment"
-  | "rules"
-  | "skills"
-  | "mcp"
-  | "general"
-  | "materials";
+const HOST_PROJECTS_TABS = [
+  "environment",
+  "rules",
+  "skills",
+  "mcp",
+  "general",
+  "materials",
+] as const;
+
+export type HostProjectsSettingsTab = (typeof HOST_PROJECTS_TABS)[number];
+/** Host tabs plus plugin `projectSettings` contribution ids. */
+export type ProjectsSettingsTab = HostProjectsSettingsTab | string;
+
+export function isHostProjectsTab(tab: string): tab is HostProjectsSettingsTab {
+  return (HOST_PROJECTS_TABS as readonly string[]).includes(tab);
+}
 
 export const PROJECTS_SECTION_ID = "projects" as const;
 

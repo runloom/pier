@@ -14,6 +14,8 @@ export const pluginPermissions = {
   "panel:read": "パネルの状態を読む",
   "panel:register": "パネルを登録する",
   "plugin:read": "プラグイン情報を読む",
+  "plugin:action": "キャンバスから宣言済みのプラグイン操作を実行する",
+  "canvas:command": "キャンバスが宣言したコマンドを実行する",
   "plugin:write": "プラグインの状態を変更する",
   "preferences:read": "設定を読む",
   "preferences:write": "設定を変更する",
@@ -44,4 +46,5 @@ export const pluginPermissions = {
   "comments:write": "レビューコメントの投稿",
   "notification:read": "通知の読み取り",
   "notification:write": "通知の既読処理",
+  "managedAssets:write": "管理対象のエージェント設定を登録",
 } as const;

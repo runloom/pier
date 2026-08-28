@@ -10,16 +10,21 @@ export interface TerminalAgentResumeMetadata {
   source: "hook";
 }
 
+/** Host tore down the PTY; conversation still belongs to the agent. */
+export type TerminalAgentRestoreCause = "host-teardown";
+
+export interface TerminalAgentRestoreMetadata {
+  cause?: TerminalAgentRestoreCause | undefined;
+  detachedAt?: number | undefined;
+  spawnGeneration?: number | undefined;
+}
+
 export interface TerminalAgentPanelMetadata {
   agentId: AgentKind;
   exitCode?: number | undefined;
   finishedAt?: number | undefined;
   launch: TerminalAgentRestoreLaunchOptions;
-  restore?:
-    | {
-        detachedAt?: number | undefined;
-      }
-    | undefined;
+  restore?: TerminalAgentRestoreMetadata | undefined;
   resume?: TerminalAgentResumeMetadata | undefined;
   startedAt: number;
   status: "exited" | "running";

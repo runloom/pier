@@ -292,6 +292,7 @@ export function createTaskBackgroundRuns(
     launches: readonly TaskLaunchPlan[];
     originPanelId?: string | undefined;
     projectRootPath: string;
+    recordRecent?: boolean | undefined;
     rootTaskId: string;
     windowId?: string | undefined;
   }): Promise<TaskRunCoordinatorStartResult> {
@@ -303,6 +304,7 @@ export function createTaskBackgroundRuns(
       rootTaskId,
       windowId,
     } = args;
+    const recordRecent = args.recordRecent !== false;
     const { processEnvironment } = options;
     if (options.isDisposed()) {
       throw new Error("TaskService has been disposed");
@@ -359,7 +361,9 @@ export function createTaskBackgroundRuns(
           processKey,
           windowId,
         });
-        options.recordLaunch(launch);
+        if (recordRecent) {
+          options.recordLaunch(launch);
+        }
         return {
           panelId,
           ...(windowId ? { windowId } : {}),

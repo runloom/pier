@@ -31,7 +31,6 @@ interface KeybindingPreferencesState {
 }
 
 const LEGACY_COMMAND_IDS: Record<string, string> = {
-  "pier.panel.newMissionControl": "pier.panel.newWorkbench",
   "pier.terminal.toggleDebugOverlay": "pier.terminal.openDebugWindow",
 };
 

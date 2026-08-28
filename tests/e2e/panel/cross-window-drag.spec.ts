@@ -19,6 +19,7 @@ import {
   test,
 } from "@playwright/test";
 import type { TerminalInputRoutingTraceEvent } from "@shared/contracts/terminal/debug.ts";
+import { setWindowSize } from "../support/app-harness.ts";
 import {
   killAndWait,
   makeTempUserDataDir,
@@ -30,7 +31,6 @@ import {
   spawnTaskUntilRunning,
   writePidLoopProject,
 } from "../terminal/e2e-harness.ts";
-import { openWorkbench, setWindowSize } from "../workbench/e2e-harness.ts";
 
 /**
  * Cross-window panel drag e2e — Path B via `pier.panelTransfer` (offer/drop/
@@ -760,27 +760,6 @@ async function reorderTabsSameWindow(page: Page): Promise<void> {
     .not.toEqual([firstId, secondId]);
 }
 
-async function resolveWorkbenchPanelId(
-  page: Page,
-  welcomeId: string
-): Promise<string> {
-  const ids = await page
-    .locator("[data-panel-tab-id]")
-    .evaluateAll((els) =>
-      els.map((el) => el.getAttribute("data-panel-tab-id") ?? "")
-    );
-  for (const id of ids) {
-    if (!id || id === welcomeId || id.startsWith("terminal-")) {
-      continue;
-    }
-    const info = await readPanelInfo(page, id);
-    if (info.componentId === "workbench") {
-      return id;
-    }
-  }
-  throw new Error("workbench panel id not found");
-}
-
 test.describe("Panel cross-window drag (Path B)", () => {
   test.describe("tab placement", () => {
     test("places transferred panel at tab index 0 (before)", async () => {
@@ -1167,15 +1146,13 @@ test.describe("Panel cross-window drag (Path B)", () => {
   });
 
   test.describe("panel kinds", () => {
-    test("Welcome / Workbench transfer via Path B", async () => {
+    test("Welcome transfer via Path B", async () => {
       test.setTimeout(DEFAULT_TEST_TIMEOUT_MS);
       const ctx = await launchApp();
       try {
         const source = await ctx.app.firstWindow();
         await waitForWorkspaceReady(source);
         const welcomeId = await openWelcome(source);
-        await openWorkbench(source);
-        const workbenchId = await resolveWorkbenchPanelId(source, welcomeId);
 
         const target = await createSecondWindow(ctx.app, source);
         await positionWindowsSideBySide(ctx.app);
@@ -1192,25 +1169,6 @@ test.describe("Panel cross-window drag (Path B)", () => {
         expect(welcomeResult.ok).toBe(true);
         await expectPanelOn(target, welcomeId);
         await expectPanelGone(source, welcomeId);
-
-        const workbench = await readPanelInfo(source, workbenchId);
-        const wbResult = await transferPanel(source, target, {
-          panelId: workbench.panelId,
-          componentId: "workbench",
-          title: workbench.title || "Workbench",
-          placement: {
-            kind: "split",
-            direction: "right",
-            referenceGroupId: targetGroupId,
-          },
-        });
-        expect(wbResult.ok).toBe(true);
-        await expectPanelOn(target, workbenchId);
-        await expectPanelGone(source, workbenchId);
-        await target.locator(`[data-panel-tab-id="${workbenchId}"]`).click();
-        await expect(
-          target.locator('[data-testid="workbench-grid-wrapper"]')
-        ).toBeVisible({ timeout: 15_000 });
       } finally {
         await forceClose(ctx.app);
         removeDirectory(ctx.userDataDir);

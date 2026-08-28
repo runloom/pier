@@ -49,6 +49,7 @@ describe("bundled pier-canvas SDK export surface", () => {
       "core",
       "data",
       "files",
+      "format",
       "forms",
       "primitives",
       "visualizations",

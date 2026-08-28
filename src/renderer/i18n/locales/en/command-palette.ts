@@ -51,7 +51,6 @@ export const commandPalette = {
     listAgents: "Agent List…",
     openCollaboration: "Agent Collaboration…",
     startAgent: "Start {{agent}}",
-    newWorkbench: "New Workbench",
     runTask: "Run Task…",
     terminalList: "Terminal List...",
     selectTheme: "Select Theme",
@@ -64,6 +63,14 @@ export const commandPalette = {
     zoomIn: "Zoom In",
     zoomOut: "Zoom Out",
     resetZoom: "Reset Zoom",
+    find: "Find",
+    findNext: "Find Next",
+    findPrev: "Find Previous",
+    findUnavailable: "Find isn't available here. Open a terminal or a file.",
+    focusNextTab: "Next Tab",
+    focusPrevTab: "Previous Tab",
+    toggleSideTree: "Toggle File Tree",
+    toggleSideTreeUnavailable: "Open a project folder first.",
   },
   run: {
     action: {

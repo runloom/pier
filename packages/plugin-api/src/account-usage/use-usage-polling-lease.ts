@@ -3,13 +3,12 @@ import type { ExternalRendererPluginContext } from "../renderer.ts";
 import { USAGE_POLLING_HEARTBEAT_MS } from "./usage-polling-registry.ts";
 
 /**
- * Acquire/release accounts.usagePolling while a settings page or widget is
+ * Acquire/release accounts.usagePolling while a settings page is
  * visible. logLabel is only for diagnostics (e.g. "pier.grok").
  *
  * The consumer id is suffixed with a per-mount random token so identical
- * logical ids from different windows (or duplicate widget instances restored
- * from a shared layout) never collapse into one lease — releasing one window
- * must not stop polling for another. While active, the lease is renewed on a
+ * logical ids from different windows never collapse into one lease — releasing
+ * one window must not stop polling for another. While active, the lease is renewed on a
  * heartbeat so the main process can expire leases from windows that reloaded
  * or crashed without running unmount effects.
  */

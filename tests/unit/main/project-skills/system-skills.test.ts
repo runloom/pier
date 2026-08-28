@@ -21,6 +21,9 @@ import { systemProjectionIssueIds } from "@main/services/project-skills/snapshot
 import { createProjectSkillsStore } from "@main/services/project-skills/store/index.ts";
 import {
   installSystemSkillCache,
+  migrateLegacySystemSkillsCacheRoot,
+  resetSystemSkillsCacheRootForTests,
+  setSystemSkillsCacheRootForHost,
   systemSkillCacheMarkerPath,
   systemSkillsCacheRoot,
 } from "@main/services/project-skills/system-skills/cache.ts";
@@ -898,6 +901,51 @@ describe("system skill extra-root seam", () => {
       );
     } finally {
       await rm(userData, { force: true, recursive: true });
+    }
+  });
+});
+
+describe("system skill cache root host override", () => {
+  afterEach(() => {
+    resetSystemSkillsCacheRootForTests();
+  });
+
+  it("routes cache root and extra-root env through the injected machine root", async () => {
+    setSystemSkillsCacheRootForHost("/machine/.pier/system-skills");
+    expect(systemSkillsCacheRoot("/ignored-user-data")).toBe(
+      "/machine/.pier/system-skills"
+    );
+    const merged = mergeSystemSkillExtraRootEnv({
+      agentKind: "codex",
+      env: {},
+      userData: "/ignored-user-data",
+    });
+    for (const value of Object.values(merged)) {
+      expect(value).toBe("/machine/.pier/system-skills");
+    }
+    const paths = createProjectSkillsPaths("/ignored-user-data");
+    expect(paths.systemSkillsCacheRoot()).toBe("/machine/.pier/system-skills");
+  });
+
+  it("migrates the legacy cache root once and never clobbers the target", async () => {
+    const scratch = await mkdtemp(join(tmpdir(), "pier-sys-migrate-"));
+    try {
+      const legacy = join(scratch, "userdata", "skills", ".system");
+      const target = join(scratch, "dot-pier", "system-skills");
+      await mkdir(join(legacy, "pier-canvas"), { recursive: true });
+      await writeFile(join(legacy, "pier-canvas.marker"), "m\n", "utf8");
+      migrateLegacySystemSkillsCacheRoot(legacy, target);
+      expect(await readFile(join(target, "pier-canvas.marker"), "utf8")).toBe(
+        "m\n"
+      );
+      await expect(lstat(legacy)).rejects.toMatchObject({ code: "ENOENT" });
+      await mkdir(join(legacy, "again"), { recursive: true });
+      migrateLegacySystemSkillsCacheRoot(legacy, target);
+      await expect(lstat(join(target, "again"))).rejects.toMatchObject({
+        code: "ENOENT",
+      });
+    } finally {
+      await rm(scratch, { force: true, recursive: true });
     }
   });
 });

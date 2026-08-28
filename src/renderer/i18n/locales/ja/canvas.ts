@@ -2,11 +2,20 @@ export const canvas = {
   file: {
     conflict:
       "{{name}} がディスク上で変更されました。保存する前に再読み込みしてください。",
-    invalidName: "キャンバスは同じフォルダ内のファイルだけ読み書きできます。",
+    invalidName: "キャンバスは同じフォルダ内のファイルだけ使えます。",
     readFailed: "{{name}} を読めませんでした。テキストファイルではありません。",
     unavailable:
       "このキャンバスはファイルから開いていないため、保存できません。",
     writeFailed: "{{name}} を保存できませんでした。",
+  },
+  command: {
+    cancelLabel: "キャンセル",
+    confirmBody: "このキャンバスは次を実行します:\n\n{{command}}",
+    confirmLabel: "実行",
+    confirmTitle: "このコマンドを実行しますか？",
+    failed: "コマンドを実行できませんでした。",
+    unavailable:
+      "このキャンバスはファイルから開いていないため、コマンドを実行できません。",
   },
   blocks: {
     activityEmpty: "このウインドウに作業はありません",

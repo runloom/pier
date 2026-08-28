@@ -305,7 +305,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       },
     },
   },
-  workbenchWidgets: [],
+  canvasActions: [],
   dataProjections: [],
   settingsPages: [],
   description: "Built-in git command palette and terminal status support.",

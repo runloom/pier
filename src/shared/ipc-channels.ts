@@ -21,6 +21,9 @@ export const PIER = {
   FILE_PREVIEW_RUNTIME_REVOKE: "pier://file-preview-runtime:revoke",
   FILE_PREVIEW_TICKET_ISSUE: "pier://file-preview-ticket:issue",
   FILE_PREVIEW_TICKET_RELEASE: "pier://file-preview-ticket:release",
+  HTML_PREVIEW_TICKET_ISSUE: "pier://html-preview-ticket:issue",
+  HTML_PREVIEW_TICKET_RELEASE: "pier://html-preview-ticket:release",
+  HTML_PREVIEW_TICKET_TOUCH: "pier://html-preview-ticket:touch",
   MEDIA_PREVIEW_ABSOLUTE_ISSUE: "pier://media-preview-absolute:issue",
   MEDIA_PREVIEW_ABSOLUTE_RELEASE: "pier://media-preview-absolute:release",
   // file path + content query (start/cancel invoke + directed event send;
@@ -57,11 +60,11 @@ export const PIER = {
   PLUGIN_SANDBOX_AUDIT: "pier://plugin:sandbox-audit",
   ENVIRONMENT_PICK_PROJECT_DIRECTORY:
     "pier://environment:pick-project-directory",
-  // Pier 资源快照（renderer 拉取式轮询;工作台 system-resources 物料）
+  // Pier 资源快照（renderer 拉取式轮询;Canvas useSystemResources）
   PIER_RESOURCE_SNAPSHOT: "pier://pier-resource:snapshot",
   // 跨插件 API 等价成本聚合快照的初值拉取（增量走 PIER_BROADCAST.USAGE_DATA_CHANGED）。
   USAGE_DATA_SNAPSHOT: "pier://usage-data:snapshot",
-  // 触发所有注册源的 rescan + 广播；成本物料手动刷新入口。
+  // 触发所有注册源的 rescan + 广播；画布 usageData.refresh 的宿主入口。
   USAGE_DATA_REFRESH_ALL: "pier://usage-data:refresh-all",
   // Agent Runtime Index：本机 agent 投影 list / focus（独立 invoke，不进 PierCommand）。
   AGENT_RUNTIME_INDEX_LIST: "pier://agent-runtime-index:list",
@@ -106,6 +109,8 @@ export const PIER_BROADCAST = {
   NEW_TERMINAL_REQUEST: "pier://panel:new-terminal-request",
   // main 端应用菜单 / 原生快捷键请求 renderer 打开设置.
   SETTINGS_OPEN_REQUEST: "pier://settings:open-request",
+  // main 端应用菜单请求 renderer 执行已注册命令（查找下一个、下一标签等）。
+  MENU_COMMAND_REQUEST: "pier://menu:command-request",
   // main 端应用菜单请求 renderer 打开当前终端搜索栏.
   TERMINAL_SEARCH_OPEN_REQUEST: "pier://terminal:search-open-request",
   // 偏好更新后广播完整快照给每个 renderer.

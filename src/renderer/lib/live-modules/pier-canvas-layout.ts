@@ -46,18 +46,18 @@ const TEXT_AS_STYLE: Record<TextAs, CSSProperties> = {
     margin: 0,
   },
   p: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 400,
     lineHeight: 1.6,
     margin: 0,
   },
   span: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 400,
     lineHeight: 1.5,
   },
   div: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: 400,
     lineHeight: 1.6,
   },
@@ -66,10 +66,13 @@ const TEXT_AS_STYLE: Record<TextAs, CSSProperties> = {
 export function Stack({
   children,
   className,
+  fill = false,
   gap = 16,
 }: {
   children?: ReactNode;
   className?: string;
+  /** Full-bleed flow root: drops the shell measure so this canvas owns scroll. */
+  fill?: boolean;
   gap?: string | number;
 }) {
   return createElement(
@@ -77,12 +80,14 @@ export function Stack({
     {
       className,
       "data-slot": "stack",
+      ...(fill ? { "data-canvas-fill": "" } : {}),
       style: {
         display: "flex",
         flexDirection: "column",
         gap: typeof gap === "number" ? `${gap}px` : gap,
         width: "100%",
         minWidth: 0,
+        ...(fill ? { height: "100%", minHeight: 0 } : {}),
       },
     },
     children
@@ -173,16 +178,20 @@ export function DocsShell({
   children,
   className,
   header,
-  maxWidth = 1080,
+  maxWidth,
   nav,
   navId,
-  navLabel = "目录",
+  navLabel = "Contents",
   navWidth = 160,
   onNavChange,
 }: {
   children?: ReactNode;
   className?: string;
   header?: ReactNode;
+  /**
+   * Optional inner cap. Omit so the files preview shell owns the measure
+   * (comfortable `max-w-5xl` / wide full bleed).
+   */
   maxWidth?: number;
   nav: DocsShellNavItem[];
   navId: string;
@@ -191,12 +200,24 @@ export function DocsShell({
   onNavChange: (id: string) => void;
 }) {
   const activeLabel = nav.find((item) => item.id === navId)?.label ?? navLabel;
-  const frameProps =
-    className === undefined ? { maxWidth } : { className, maxWidth };
 
   return createElement(
-    Frame,
-    frameProps,
+    "div",
+    {
+      className,
+      "data-canvas-docs": "",
+      "data-slot": "docs-shell",
+      style: {
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        gap: 24,
+        minWidth: 0,
+        paddingBlock: 8,
+        width: "100%",
+        ...(maxWidth === undefined ? {} : { maxWidth }),
+      },
+    },
     createElement(
       Stack,
       { gap: 16 },
@@ -311,14 +332,18 @@ export function Text({
   style,
   ...rest
 }: TextProps) {
+  const asStyle = TEXT_AS_STYLE[Tag];
   return createElement(
     Tag,
     {
       ...rest,
       className,
       style: {
-        ...TEXT_AS_STYLE[Tag],
+        ...asStyle,
         color: TEXT_TONE_COLOR[tone],
+        // `--md-scale` is only set on `[data-canvas-reading]`. Unset → 1,
+        // so kanban / world Text does not inherit a docs zoom.
+        fontSize: `calc(${asStyle.fontSize}px * var(--md-scale, 1))`,
         ...style,
       },
     },

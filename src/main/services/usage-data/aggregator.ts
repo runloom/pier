@@ -9,7 +9,7 @@ import type {
 } from "@shared/contracts/usage-data.ts";
 
 /**
- * 聚合多个源快照为一份工作台可消费的整体快照。
+ * 聚合多个源快照为一份可直接消费的整体快照（Canvas `useCostOverview` 读取）。
  *
  * 语义：
  * - `buckets`：按 `date` 分组求和；`estimatedCostMicrousd` 全 `null` 才保持 `null`，

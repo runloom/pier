@@ -1,4 +1,5 @@
 export const agents = {
+  focusAlreadyCurrent: "対応が必要なエージェントはこれだけです",
   focusEmpty: "対応が必要なエージェントはありません",
   focusFailed: "エージェントに移動できませんでした。もう一度お試しください",
   focusPanelGone: "パネルは閉じています",
@@ -16,7 +17,7 @@ export const agents = {
     emptyDetail: "エージェントを起動するとここに表示されます",
     emptyNew: "デフォルトのエージェントを起動",
     emptyNewDetail: "いま実行中のエージェントはありません",
-    focusNextNeedsYou: "次の対応が必要な項目へ",
+    focusNextNeedsYou: "次の対応が必要なエージェントへ",
     placeholder: "エージェントを検索…",
     thisWindow: "このウインドウ",
     title: "エージェント",

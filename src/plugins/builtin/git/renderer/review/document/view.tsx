@@ -109,6 +109,7 @@ interface GitReviewDocumentViewProps {
     string,
     readonly PierDiffReviewCommentThread[]
   >;
+  readonly selectedSectionKey?: string | null;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
   readonly sidebarFooter?: React.ReactNode;
@@ -165,6 +166,7 @@ export function GitReviewDocumentView({
   renderFeedback,
   renderWindowReady,
   reviewCommentsById,
+  selectedSectionKey,
   sourcePanelId,
   setSidebarCollapsed,
   sidebarCollapsed,
@@ -222,6 +224,7 @@ export function GitReviewDocumentView({
         : { inlineReviewThreadById }),
       renderErrorVisible: renderFeedback !== null,
       renderWindowReady,
+      ...(selectedSectionKey === undefined ? {} : { selectedSectionKey }),
       settled: viewState.settled,
       ...(sourcePanelId === undefined ? {} : { sourcePanelId }),
       ...(getSuppressMembershipScrollRestore === undefined

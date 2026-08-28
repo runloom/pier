@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   Artboard,
   ArtboardStage,
+  Layer,
+  WorldStage,
 } from "@/lib/live-modules/pier-canvas-artboard.tsx";
 import { openHtmlWorldPreview } from "@/stores/content-preview.store.ts";
 
@@ -110,11 +112,49 @@ describe("canvas preview artboard stage", () => {
     const source = readFileSync(
       join(
         process.cwd(),
-        "src/plugins/builtin/files/renderer/preview/canvas.tsx"
+        "src/plugins/builtin/files/renderer/preview/canvas-stage.ts"
       ),
       "utf8"
     );
     expect(source).toContain("max-w-5xl");
     expect(source).not.toContain("has-[[data-slot=artboard-stage]]:max-w-none");
+  });
+});
+
+describe("WorldStage", () => {
+  it("always wraps; flow children use the ArtboardStage line width", () => {
+    render(
+      <WorldStage>
+        <Artboard height={360} title="A" width={560}>
+          <p>a</p>
+        </Artboard>
+        <Artboard height={360} title="B" width={560}>
+          <p>b</p>
+        </Artboard>
+      </WorldStage>
+    );
+    const stage = document.querySelector(
+      "[data-canvas-stage='world']"
+    ) as HTMLElement | null;
+    expect(stage).toBeTruthy();
+    expect(stage?.style.flexWrap).toBe("wrap");
+    // 3×1280 + 2×56 gap + 2×48 padding — same line as ArtboardStage.
+    expect(stage?.style.width).toBe("4048px");
+  });
+
+  it("envelopes Layer-only children and still wraps", () => {
+    render(
+      <WorldStage>
+        <Layer h={100} w={200} x={40} y={24}>
+          <p>pin</p>
+        </Layer>
+      </WorldStage>
+    );
+    const stage = document.querySelector(
+      "[data-canvas-stage='world']"
+    ) as HTMLElement | null;
+    expect(stage?.style.flexWrap).toBe("wrap");
+    expect(stage?.style.width).toBe("336px");
+    expect(stage?.style.height).toBe("220px");
   });
 });

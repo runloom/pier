@@ -16,15 +16,21 @@ import type { DocFontMode } from "@shared/contracts/preferences.ts";
 import { create } from "zustand";
 
 // ── Fallback 链 ─────────────────────────────────────────────────────────────
+// 系统字体优先（对齐 VS Code / Linear 金标准）：macOS 由 SF Pro + PingFang SC
+// 承接，600 是真 Semibold；不再打包 CJK UI 字体。
+// CJK 段不硬编码具体字体名，而是引用 globals.css 的 --pier-cjk-font-family ——
+// 该变量经 :root:lang(ja|ko) 随界面语言切换（zh → PingFang SC，ja → Hiragino
+// Sans，ko → Apple SD Gothic Neo），避免日韩文本被 SC 字形渲染。
+const CJK_STACK_REF = "var(--pier-cjk-font-family)";
+
 const UI_FALLBACK = [
-  "HarmonyOS Sans SC",
-  "Apple Color Emoji",
-  "Segoe UI Emoji",
-  "Noto Color Emoji",
   "system-ui",
   "-apple-system",
   "Helvetica Neue",
-  "PingFang SC",
+  "Apple Color Emoji",
+  "Segoe UI Emoji",
+  "Noto Color Emoji",
+  CJK_STACK_REF,
   "sans-serif",
 ];
 
@@ -32,16 +38,17 @@ const MONO_FALLBACK = [
   "JetBrainsMono Nerd Font Mono",
   "ui-monospace",
   "SFMono-Regular",
-  "HarmonyOS Sans SC",
-  "PingFang SC",
+  CJK_STACK_REF,
   "Menlo",
   "monospace",
 ];
 
-// 终端 (ghostty) 专用 fallback：必须是真实字体名，不能含 ui-monospace/monospace 这类 CSS generic
+// 终端 (ghostty) 专用 fallback：必须是真实字体名，不能含 ui-monospace/monospace
+// 这类 CSS generic，也不能含 var() 引用 —— CoreText 只认具体家族名。
+// CJK 用系统 PingFang SC（macOS 必装，真 Bold 字 cut，无需注册）。
 const MONO_TERMINAL_FALLBACK = [
   "JetBrainsMono Nerd Font Mono",
-  "HarmonyOS Sans SC",
+  "PingFang SC",
   "Menlo",
 ];
 

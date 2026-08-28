@@ -27,7 +27,7 @@ function externalEntry(): PluginRegistryEntry {
       commands: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.external",
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       name: "External",
       panels: [

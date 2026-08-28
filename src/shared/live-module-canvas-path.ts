@@ -413,13 +413,34 @@ export function canvasDirectoryFromProjectPath(
   return cut < 0 ? "" : normalized.slice(0, cut);
 }
 
+const CANVAS_SCOPED_FILE_NAME_MAX = 255;
+
 /**
- * Resolve `fileName` as a sibling of a canvas, or null when it is not one.
- *
- * A canvas may only address plain file names in its own directory: no path
- * separators, no `..`, no absolute or drive paths, no NUL, no dot entries. The
- * lexical check runs before any IPC; the file service still applies its own
- * realpath fence on the resulting project-relative path.
+ * A canvas may address a file in its own directory, or one nested folder
+ * (`state/positions.json`). Reject `..`, absolute/drive paths, NUL, extra
+ * depth, and empty segments. Lexical only; the file service still realpath-fences.
+ */
+export function isCanvasScopedFileName(fileName: string): boolean {
+  if (
+    fileName.length === 0 ||
+    fileName.length > CANVAS_SCOPED_FILE_NAME_MAX ||
+    fileName.includes("\0") ||
+    fileName.includes("\\") ||
+    /^[A-Za-z]:/u.test(fileName)
+  ) {
+    return false;
+  }
+  const segments = fileName.split("/");
+  if (segments.length < 1 || segments.length > 2) {
+    return false;
+  }
+  return segments.every(
+    (segment) => segment.length > 0 && segment !== "." && segment !== ".."
+  );
+}
+
+/**
+ * Resolve `fileName` as a file next to a canvas (or one folder down), or null.
  */
 export function canvasSiblingProjectPath(
   canvasProjectRelativePath: string,
@@ -430,19 +451,7 @@ export function canvasSiblingProjectPath(
     canvasProjectRelativePath,
     contentDirectories
   );
-  if (directory === null) {
-    return null;
-  }
-  if (
-    fileName.length === 0 ||
-    fileName.length > 255 ||
-    fileName === "." ||
-    fileName === ".." ||
-    fileName.includes("\0") ||
-    fileName.includes("/") ||
-    fileName.includes("\\") ||
-    /^[A-Za-z]:/u.test(fileName)
-  ) {
+  if (directory === null || !isCanvasScopedFileName(fileName)) {
     return null;
   }
   return directory.length > 0 ? `${directory}/${fileName}` : fileName;

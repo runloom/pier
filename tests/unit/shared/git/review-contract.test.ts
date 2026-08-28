@@ -184,6 +184,53 @@ describe("Git review shared contract", () => {
     ).toBe(false);
   });
 
+  it("requires porcelain XY on conflict slots only", () => {
+    const conflictEntry = gitReviewIndexEntrySchema.parse({
+      entryKey: "src/gone.ts",
+      oldPaths: [],
+      path: "src/gone.ts",
+      renderSlots: [
+        {
+          group: "conflict",
+          oldPath: null,
+          sectionKey: "section:src-gone:conflict",
+          status: "conflicted",
+          targetPath: "src/gone.ts",
+          xy: "DU",
+        },
+      ],
+      status: "conflicted",
+    });
+    expect(conflictEntry.renderSlots[0]?.xy).toBe("DU");
+    expect(
+      gitReviewIndexEntrySchema.safeParse({
+        ...conflictEntry,
+        renderSlots: conflictEntry.renderSlots.map((slot) => {
+          const { xy: _xy, ...rest } = slot;
+          return rest;
+        }),
+      }).success
+    ).toBe(false);
+    expect(
+      gitReviewIndexEntrySchema.safeParse({
+        entryKey: "src/index.ts",
+        oldPaths: [],
+        path: "src/index.ts",
+        renderSlots: [
+          {
+            group: "unstaged",
+            oldPath: null,
+            sectionKey: "section:src-index",
+            status: "modified",
+            targetPath: "src/index.ts",
+            xy: "UU",
+          },
+        ],
+        status: "modified",
+      }).success
+    ).toBe(false);
+  });
+
   it("公共 index 不回传 main 内部解析元数据", () => {
     const result = gitReviewIndexOkSchema.parse({
       entries: [],

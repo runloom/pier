@@ -230,14 +230,7 @@ describe("agent-session-title governance", () => {
         offenders.push(rel);
       }
     }
-    // 展示层读 activity.actorHint 是渲染判断，不是事件判据。
-    expect(
-      offenders.filter(
-        (rel) =>
-          rel !==
-          "src/renderer/panel-kits/workbench/core-widgets/activity/row.tsx"
-      )
-    ).toEqual([]);
+    expect(offenders).toEqual([]);
   });
 
   it("provider title callback rejects subagent ownership", async () => {
@@ -277,7 +270,7 @@ describe("agent-session-title governance", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("rename action is available on all three terminal surfaces and activity uses the shared facade", async () => {
+  it("rename action is available on all three terminal surfaces", async () => {
     const actions = await readFile(
       join(REPO_ROOT, "src/renderer/panel-kits/terminal/register-actions.ts"),
       "utf8"
@@ -293,17 +286,5 @@ describe("agent-session-title governance", () => {
     ]) {
       expect(renameAction, surface).toContain(surface);
     }
-
-    const activityWidget = await readFile(
-      join(
-        REPO_ROOT,
-        "src/renderer/panel-kits/workbench/core-widgets/activity/widget.tsx"
-      ),
-      "utf8"
-    );
-    expect(activityWidget).toContain("promptRenameAgentSession");
-    expect(activityWidget).toContain(
-      "@/lib/agent-runtime/rename-agent-session.ts"
-    );
   });
 });

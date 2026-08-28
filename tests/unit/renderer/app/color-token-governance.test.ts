@@ -91,9 +91,28 @@ function contrastRatio(a: number, b: number): number {
 
 function cssBlock(source: string, selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const match = new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(source);
-  if (!match?.[1]) throw new Error(`missing CSS block: ${selector}`);
-  return match[1];
+  const header = new RegExp(`${escaped}\\s*\\{`).exec(source);
+  if (!header) {
+    throw new Error(`missing CSS block: ${selector}`);
+  }
+  const start = header.index + header[0].length;
+  let depth = 1;
+  for (let index = start; index < source.length; index++) {
+    const char = source[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index);
+      }
+    }
+  }
+  throw new Error(`unclosed CSS block: ${selector}`);
+}
+
+function hasCssVariable(block: string, name: string): boolean {
+  return new RegExp(`--${name}:\\s*[^;]+;`).test(block);
 }
 
 function cssVariable(block: string, name: string): string {
@@ -151,6 +170,88 @@ describe("color token governance", () => {
       .map(projectRelative);
 
     expect(offenders).toEqual([]);
+  });
+
+  it("mirrors theme status tokens inside markdown paper scopes", () => {
+    // 纸面（data-reading-appearance）换基础 token；状态色若不镜像对应主题
+    // 的调校值，callout / 搜索高亮 / Mermaid tone 会拿到另一主题的色调
+    // （暗色主题浅黄 warning 落在白纸上）。复合公式（neutral/done/滚动条/
+    // interactive hover / action-secondary-hover）引用基础 token，必须在
+    // 纸面作用域按同一公式重算。toast 在 portal 外，禁止镜像。
+    const globals = readFileSync(
+      join(ROOT, "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const normalize = (value: string) => value.replace(/\s+/g, " ");
+    const themeBlocks = {
+      dark: cssBlock(globals, ":root"),
+      light: cssBlock(globals, ":root.light"),
+    } as const;
+    const LITERAL_TOKENS = [
+      "destructive",
+      "destructive-foreground",
+      "warning",
+      "warning-foreground",
+      "success",
+      "info",
+      "done",
+      "status-solid-foreground",
+      "status-info-bg",
+      "status-info-fg",
+      "status-info-border",
+      "status-success-bg",
+      "status-success-fg",
+      "status-success-border",
+      "status-warning-bg",
+      "status-warning-fg",
+      "status-warning-border",
+      "status-danger-bg",
+      "status-danger-fg",
+      "status-danger-border",
+    ] as const;
+    const FORMULA_TOKENS = [
+      "status-neutral-bg",
+      "status-neutral-fg",
+      "status-neutral-border",
+      "status-done-bg",
+      "status-done-fg",
+      "status-done-border",
+      "shell-scrollbar-thumb",
+      "shell-scrollbar-thumb-active",
+      "interactive-hover",
+      "interactive-active",
+      "action-secondary-hover",
+      "action-accent",
+      "action-accent-foreground",
+      "action-muted",
+      "action-danger",
+    ] as const;
+    for (const appearance of ["light", "dark"] as const) {
+      const paper = cssBlock(
+        globals,
+        `[data-slot="markdown-preview-root"][data-reading-appearance="${appearance}"]`
+      );
+      expect(paper, `${appearance} paper must not mirror toast`).not.toContain(
+        "--toast-surface"
+      );
+      expect(paper).not.toContain("--toast-foreground");
+      for (const token of LITERAL_TOKENS) {
+        expect(
+          normalize(cssVariable(paper, token)),
+          `${appearance} paper --${token}`
+        ).toBe(normalize(cssVariable(themeBlocks[appearance], token)));
+      }
+      for (const token of FORMULA_TOKENS) {
+        const themeSource =
+          appearance === "light" && hasCssVariable(themeBlocks.light, token)
+            ? themeBlocks.light
+            : themeBlocks.dark;
+        expect(
+          normalize(cssVariable(paper, token)),
+          `${appearance} paper --${token} formula`
+        ).toBe(normalize(cssVariable(themeSource, token)));
+      }
+    }
   });
 
   it("keeps neutral actions independent from semantic state colors", () => {

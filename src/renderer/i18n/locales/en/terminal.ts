@@ -28,6 +28,7 @@ export const terminal = {
     fieldDuration: "Duration",
     fieldExitCode: "Exit code",
     fieldStatus: "Status",
+    newSession: "New session",
     restart: "Restart agent",
     restartFailed: "Couldn't restart agent — try again",
     statusEnded: "Ended normally",

@@ -17,6 +17,10 @@ if (!file.available) {
   return
 }
 const { contents, revision } = await file.read("data.json")
+const stop = file.watch("data.json", () => {
+  void file.read("data.json")
+})
+void file.invokeCommand("refresh")
 const outcome = await file.write("data.json", contents, revision)
 if (outcome.kind === "conflict") {
   await file.read("data.json")
@@ -27,7 +31,12 @@ if (outcome.kind === "conflict") {
         >{`interface CanvasFileApi {
   available: boolean
   directory: string
+  invokeCommand(key: string): Promise<CanvasFileCommandOutcome>
   read(fileName: string): Promise<CanvasFileReadResult>
+  watch(
+    fileName: string,
+    listener: (event: CanvasFileWatchEvent) => void
+  ): () => void
   write(
     fileName: string,
     contents: string,
@@ -47,9 +56,19 @@ if (outcome.kind === "conflict") {
               type: "string",
             },
             {
+              description: "运行此画布目录 instance.json 里声明的命令。",
+              name: "invokeCommand",
+              type: "(key: string) => Promise<CanvasFileCommandOutcome>",
+            },
+            {
               description: "读取相邻文本文件，返回内容和 revision。",
               name: "read",
               type: "(fileName: string) => Promise<CanvasFileReadResult>",
+            },
+            {
+              description: "监听相邻文件的改动。调用返回的函数即可停止。",
+              name: "watch",
+              type: "(fileName: string, listener: (event: CanvasFileWatchEvent) => void) => () => void",
             },
             {
               description:
@@ -107,6 +126,20 @@ if (outcome.kind === "conflict") {
               },
             ]}
           />
+        </Stack>
+        <Stack gap={6}>
+          <DocCode
+          >{`type CanvasFileCommandOutcome =
+  | { kind: "started"; runId: string }
+  | { kind: "cancelled" }
+  | { kind: "failed"; message: string }`}</DocCode>
+        </Stack>
+        <Stack gap={6}>
+          <DocCode
+          >{`interface CanvasFileWatchEvent {
+  kind: "changed" | "created" | "deleted"
+  path: string
+}`}</DocCode>
         </Stack>
       </DocSection>
     </Stack>

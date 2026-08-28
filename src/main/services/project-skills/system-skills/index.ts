@@ -23,8 +23,9 @@ import { ensureSystemSkillGitExclude } from "./git-exclude.ts";
 /**
  * Pier system skills channel (design v8 §8): capability skills shipped by the
  * app or official managed plugins. Canonical content lives under app
- * `resources/system-skills/<id>`; the live copy is `{userData}/skills/.system/<id>`
- * (Codex `$CODEX_HOME/skills/.system` analogue). Discovery roots get a
+ * `resources/system-skills/<id>`; the live copy is `{systemSkillsCacheRoot}/<id>`
+ * (宿主注入 `~/.pier/system-skills`;Codex `$CODEX_HOME/skills/.system`
+ * analogue). Discovery roots get a
  * directory symlink to that cache — never a vendored tree in the git repo.
  *
  * Two hard red lines (v8 §8):

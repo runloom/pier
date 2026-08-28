@@ -11,6 +11,7 @@ import {
   FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
 } from "../../manifest.ts";
 import { createFilesTranslate, type FilesTranslate } from "../i18n.ts";
+import { FILES_CANVAS_PREVIEW_SURFACE } from "../preview/canvas-preview-surface.ts";
 import {
   FILES_MARKDOWN_PREVIEW_SURFACE,
   type MarkdownReadingAppearance,
@@ -26,6 +27,7 @@ function previewAction(action: {
   id: string;
   menuHidden?: (invocation?: RendererPluginActionInvocation) => boolean;
   sortOrder: number;
+  surfaces?: readonly string[];
   title: () => string;
 }): RendererPluginAction {
   return {
@@ -37,7 +39,7 @@ function previewAction(action: {
       sortOrder: action.sortOrder,
       ...(action.menuHidden ? { menuHidden: action.menuHidden } : {}),
     },
-    surfaces: [FILES_MARKDOWN_PREVIEW_SURFACE],
+    surfaces: [...(action.surfaces ?? [FILES_MARKDOWN_PREVIEW_SURFACE])],
     title: action.title,
   };
 }
@@ -72,6 +74,7 @@ export function createFilesMarkdownPreviewActions(
       group: "1_reading",
       id: FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID,
       sortOrder: 1,
+      surfaces: [FILES_MARKDOWN_PREVIEW_SURFACE, FILES_CANVAS_PREVIEW_SURFACE],
       title: () =>
         t("filePanel.markdown.measure.comfortable", "Comfortable reading"),
       menuHidden: () => readMarkdownMeasureMode() === "comfortable",
@@ -83,6 +86,7 @@ export function createFilesMarkdownPreviewActions(
       group: "1_reading",
       id: FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
       sortOrder: 2,
+      surfaces: [FILES_MARKDOWN_PREVIEW_SURFACE, FILES_CANVAS_PREVIEW_SURFACE],
       title: () => t("filePanel.markdown.measure.wide", "Wide reading"),
       menuHidden: () => readMarkdownMeasureMode() === "wide",
       handler: () => {

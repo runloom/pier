@@ -255,7 +255,7 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
     ]);
   });
 
-  it("projects marker-free conflicts as CodeView ready-notice", () => {
+  it("projects marker-free conflicts onto the conflict surface", () => {
     const path = "src/gone.ts";
     const item: GitReviewIndexEntry = {
       entryKey: "entry:dd",
@@ -268,6 +268,7 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
           sectionKey: "section:conflict",
           status: "conflicted",
           targetPath: path,
+          xy: "DD",
         },
       ],
       status: "conflicted",
@@ -307,10 +308,44 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
       ]),
     });
     expect(projection.items).toHaveLength(1);
-    expect(projection.items[0]?.kind).toBe("ready-notice");
-    expect(projection.items[0]?.conflict).toBeUndefined();
-    expect(projection.items[0]?.stateNotice).toContain("stage it to confirm");
+    expect(projection.items[0]?.kind).toBe("conflict");
+    expect(projection.items[0]?.conflict?.presentation).toBe("file-level");
+    expect(projection.items[0]?.conflict?.xy).toBe("DD");
+    expect(projection.items[0]?.stateNotice).toContain("confirm the deletion");
     expect(projection.items[0]?.stateNotice).not.toMatch(/open the file/i);
+  });
+
+  it("keeps idle conflict slots on the conflict surface", () => {
+    const path = "src/gone.ts";
+    const item: GitReviewIndexEntry = {
+      entryKey: "entry:du",
+      oldPaths: [],
+      path,
+      renderSlots: [
+        {
+          group: "conflict",
+          oldPath: null,
+          sectionKey: "section:conflict",
+          status: "conflicted",
+          targetPath: path,
+          xy: "DU",
+        },
+      ],
+      status: "conflicted",
+    };
+    const projection = projectReviewLedger({
+      context: context(),
+      diffBase: "conflict",
+      entries: [item],
+      locale: "en",
+      resourceByEntryKey: new Map([
+        [item.entryKey, { entry: item, kind: "idle" }],
+      ]),
+    });
+    expect(projection.items).toHaveLength(1);
+    expect(projection.items[0]?.kind).toBe("conflict");
+    expect(projection.items[0]?.conflict?.xy).toBe("DU");
+    expect(projection.items.some((row) => row.kind === "estimate")).toBe(false);
   });
 
   it("keeps markers-text conflicts on UnresolvedFile", () => {

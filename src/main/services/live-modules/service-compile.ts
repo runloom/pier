@@ -155,6 +155,7 @@ export async function runLiveModuleCompile(
 
     const compilePromise = compileLiveModule({
       allowNodeModules: root.spec.resolve.allowNodeModules,
+      allowedBarePackages: root.spec.resolve.allowedBarePackages,
       contentRoot: root.contentRoot,
       entryAbsolutePath: entryReal,
       forcePreviewBarrel: root.spec.resolve.forcePreviewBarrel,
@@ -185,6 +186,7 @@ export async function runLiveModuleCompile(
           cancelCompileContext(
             esbuildContextKey({
               allowNodeModules: root.spec.resolve.allowNodeModules,
+              allowedBarePackages: root.spec.resolve.allowedBarePackages,
               contentRoot: root.contentRoot,
               entryAbsolutePath: entryReal,
               forcePreviewBarrel: root.spec.resolve.forcePreviewBarrel,
@@ -234,7 +236,11 @@ export async function runLiveModuleCompile(
     if (previousTicket) {
       ctx.scheduleTicketRevoke(previousTicket);
     }
+    for (const asset of result.assets) {
+      ctx.tickets.putAsset(asset);
+    }
     const artifact = ctx.tickets.put({
+      assetTickets: result.assets.map((asset) => asset.ticket),
       bytes: Buffer.from(result.bytes),
       graph: result.graph,
       moduleId: relPath,

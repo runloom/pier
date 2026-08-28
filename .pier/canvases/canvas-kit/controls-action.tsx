@@ -11,6 +11,9 @@ import {
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Droppable,
+  Item,
+  ItemTitle,
   Pagination,
   PaginationContent,
   PaginationItem,
@@ -18,6 +21,7 @@ import {
   PaginationNext,
   PaginationPrevious,
   Row,
+  Sortable,
   Tabs,
   TabsContent,
   TabsList,
@@ -141,6 +145,25 @@ export function ActionControls() {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+        </MaterialCard>
+        <MaterialCard
+          install='import { Droppable, Item, ItemTitle, Sortable } from "pier/canvas"'
+          lead="拖动手柄给列表重新排序。"
+          name="Sortable"
+        >
+          <Droppable id="kit-todo" onDrop={() => undefined}>
+            <Sortable
+              items={["alpha", "beta"]}
+              onReorder={() => undefined}
+            >
+              {(id, item) => (
+                <Item>
+                  {item.handle}
+                  <ItemTitle>{id}</ItemTitle>
+                </Item>
+              )}
+            </Sortable>
+          </Droppable>
         </MaterialCard>
       </KitGrid>
     </KitSection>

@@ -1,3 +1,4 @@
+import { type PanelFindAction, usePanelFind } from "@plugins/api/panel-find.ts";
 import {
   useCallback,
   useEffect,
@@ -30,6 +31,7 @@ export function CodeMirrorEditor({
   onEditorContextMenu,
   openExternal,
   panelContext,
+  panelId,
   readOnly = false,
   searchLabels,
   searchRequest,
@@ -217,6 +219,20 @@ export function CodeMirrorEditor({
     },
     [controller, editorSessionId]
   );
+  const searchOpenRef = useRef(searchOpen);
+  searchOpenRef.current = searchOpen;
+  const navigateSearchRef = useRef(handleSearchNavigate);
+  navigateSearchRef.current = handleSearchNavigate;
+  const onPanelFind = useCallback((action: PanelFindAction) => {
+    if (action === "open") {
+      return;
+    }
+    if (!searchOpenRef.current) {
+      openSearchRef.current();
+    }
+    navigateSearchRef.current(action === "prev" ? "previous" : "next");
+  }, []);
+  usePanelFind(panelId, onPanelFind);
 
   useEffect(() => {
     if (handledSearchRequestRef.current === searchRequest) {

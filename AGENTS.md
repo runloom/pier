@@ -100,14 +100,14 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 | 模型 | 何时用 | 壳 | 字段方向 | Footer | 保存时机 |
 |------|--------|----|----------|--------|----------|
 | **提交型（commit form）** | 创建/写入/有草稿可取消（新建 worktree、建 skill、SSH host、账号添加主路径） | `AppContentDialogHost` / `dialogs.open` | **垂直** `Field`（Label → 全宽控件 → Description/Error；`DIALOG_COMMIT_FORM_CLASS` + `DIALOG_COMMIT_FIELD_GROUP_CLASS`） | **必须** `setFooter` / `useContentDialogFooter`：右簇 `取消 \| 主按钮`（`DIALOG_FOOTER_ACTIONS_CLASS`）；宿主可复用 `ContentDialogFooterActions` | 点主按钮才提交；取消/ Esc 丢弃草稿 |
-| **即时偏好（live preference）** | 改了即生效、无独立「保存」语义 | **设置页** 内：水平 `*Row`（密度）；**物料 `settingsComponent` / WorkbenchSettingsDialog**：字段布局 **与提交型相同**（垂直 Label → 全宽控件），仅保存时机不同 | 物料设置用 `DIALOG_COMMIT_FORM_CLASS`；**禁止** 再套 Card/`rounded-xl border` 表单壳；禁止左标签右窄控件的「设置行」伪装 dialog 表单 | **默认无「保存」footer**；物料主操作可经 `setFooter` 挂可选底栏（如「添加区块」），关窗用 Header X | `onChange` / `updateParams` 即时写 |
+| **即时偏好（live preference）** | 改了即生效、无独立「保存」语义 | **设置页** 内：水平 `*Row`（密度）；content dialog 内若有即时偏好，字段布局 **与提交型相同**（垂直 Label → 全宽控件） | 用 `DIALOG_COMMIT_FORM_CLASS`；**禁止** 再套 Card/`rounded-xl border` 表单壳；禁止左标签右窄控件的「设置行」伪装 dialog 表单 | **默认无「保存」footer**；关窗用 Header X | `onChange` 即时写 |
 
 硬规则：
 
 1. **禁止 body 内仿 footer**：content dialog 的取消/主按钮不得写在滚动 body 底部（`flex justify-end` 一排冒充 footer）；一律 `setFooter`，由宿主 sticky `DialogFooter` 承载。行内次要动作（列表「添加」、授权「打开浏览器」）除外。
 2. **禁止嵌套产品壳**：Dialog body 内不得再挂 `@pier/ui/dialog` / `Card` 当表单分区；分区用 `FieldSet` + `FieldLegend` 或扁平 `DIALOG_SECTION_TITLE_CLASS`（对齐 skill 详情）。
 3. **控件密度**：弹窗表单主路径 Select / Input / Button 用默认 28px 密度；**禁止**为「显得紧凑」给主表单 `SelectTrigger size="sm"` / footer `Button size="sm"`。列表内图标排序等次要 hit 可用 `icon-xs`。
-4. **物料设置**：`configurable` widget 的 `settingsComponent` 只渲染 **即时偏好**（改即写），但 **字段布局必须与提交型 dialog 一致**（垂直堆叠、全宽 Select/Input，参考 worktree）；宿主壳固定 `WorkbenchSettingsDialog`（Header + 可滚 body + **可选 sticky footer**，经 `setFooter` 注册，与 content dialog 同壳）。主面主操作（如「添加区块」）放 **footer**，不要散在 body 底。不得自挂 Dialog，不得用设置页水平 `SelectRow` 样式塞进物料弹窗。多实例列表用 `Item outline` 表达块边界。**添加/创建类草稿** 走 **二级 content dialog**（`openAppContentDialog` + sticky `取消|确认`）。
+4. **设置页即时偏好**：设置页内水平 `*Row`；若在 content dialog 里做即时偏好，字段布局必须与提交型 dialog 一致（垂直堆叠、全宽 Select/Input，参考 worktree）。不得自挂 Dialog，不得用设置页水平 `SelectRow` 样式塞进 content dialog。多实例列表用 `Item outline` 表达块边界。**添加/创建类草稿** 走 **二级 content dialog**（`openAppContentDialog` + sticky `取消|确认`）。
 5. **校验**：提交型在 submit 时校验并用 `FieldError`；`prompt` 走 `validate`。即时偏好以合法枚举/开关为主，避免半填草稿。
 6. **检查点**：`tests/unit/renderer/app/dialog-form-governance.test.ts`（与本节标题绑定）。
 
@@ -164,7 +164,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 - **说用户动作，不说内部概念。** 反例：「没有可打开的终端选区」；正例：「请先在终端中选中文本。」
 - **失败与空态要带下一步。** 反例：「无项目上下文」；正例：「未打开项目」+「请先打开项目文件夹以浏览文件。」
-- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、工作台「组件」（不要写物料）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）、git（小写；不要写成 Git / GIT；GitHub 等专有名除外）。
+- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、Canvas 发现面「物料」（仓库 `.pier/canvases/canvas-kit`，后续官网文档；不要做进设置）、需要你处理（中文不要直出 Needs you）、git（小写；不要写成 Git / GIT；GitHub 等专有名除外）。
 - **实现词禁止进入前台主路径文案。** 包括但不限于：选区、上下文、面板参数、耐久性、绑定、运行标识、运行态、renderer、清单预览、hook（首次可写「钩子（hook）」）、tip tree、upstream（应写「上游分支」）。
 - **中文界面少夹英文状态码。** git 状态用「分离头指针 / 合并中 / 变基中」等，不要用 DETACHED / MERGING 全大写码。
 - **fallback 英文与 en locale 同步可读**；改中文时必须核对英文是否同样术语化。
@@ -194,7 +194,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 1. **一个大纲壳**：只允许 `MarkdownPreviewToc` 渲染大纲 UI（Notion 细轨横线 + hover/focus-within 浮层列表）。禁止再写一份 aside。
 2. **布局分工**：正文在 `data-slot="markdown-preview-layout"`；大纲始终走右侧 `data-slot="markdown-preview-outline-rail"`，必须与字号控件挂在**同一预览框包含块**；大纲右缘用 `MARKDOWN_TOC_EDGE_INSET_PX`（比字号控件更松），垂直用 `MARKDOWN_TOC_TOP_RATIO` 居中偏上，禁止在带 padding 的 scroll 内容盒里用负偏移猜对齐。
 3. **共享几何**：顶距比例、细轨槽位宽、浮层面板宽、右边距、底边预留、tick 尺寸只来自 `markdown-preview-toc-layout.ts` 常量 / `markdownOutlineHoverMaxHeightPx` / `markdownOutlineHoverWidthPx` / `markdownTocTickWidthPx`。hover 卡片必须落在预览框内的右侧槽位（`inset-0`），禁止浮层再写 `max-h-[min(70%,…)]` 或另一套 px 公式；禁止 TOC 与布局各自手写 `top-2` / `right-3` / `w-56` 而不读共享常量。
-4. **版心单一来源**：可见行宽由 `[data-slot="markdown-prose"]` 的 `--md-measure`（CSS）决定；TS 不得再平行维护第二套「渲染用 85ch」。
+4. **版心单一来源**：可见行宽由 `[data-slot="markdown-prose"]` 的 `--md-measure`（CSS）决定；舒适档为根 `42rem`（禁止 `ch`）；TS 只允许与 CSS 同值的 `MARKDOWN_COMFORTABLE_MEASURE_REM` 作治理锁定，禁止平行测宽 helper。权威规格：[`docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md`](docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md)。
 5. **默认不遮挡正文**：持久态只显示细轨横线（按 heading depth 变宽，active 高亮并跟随滚动）；完整标题列表仅在 hover / focus-within 淡入，**相对细轨垂直居中**覆盖；槽位宽高按预览框 clamp（`markdownOutlineHoverWidthPx` / `markdownOutlineHoverMaxHeightPx`），禁止卡片溢出 `overflow-hidden` 预览根；有大纲时滚动区右侧使用 `MARKDOWN_TOC_CONTENT_INSET_PX`（宽屏 `100%` 版心也不得压到细轨）；离开即隐藏；浮层无关闭按钮，不提供左右位置切换。Scroll-spy 必须每次滚动重新 query heading DOM（适配懒加载分页），不得缓存节点。
 
 反例（禁止）：
@@ -204,6 +204,18 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 细轨 / 浮层各抄一份定位 class 且数值不一致
 
 检查点在 `tests/unit/plugins/markdown/markdown-preview-layout-governance.test.ts`。
+
+### Markdown 预览阅读版心
+
+权威规格：[`docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md`](docs/superpowers/specs/2026-08-28-markdown-reading-measure-gold-standard.md)。
+
+- 舒适：`--md-measure: 42rem`（根 rem）。禁止 `ch`、正文字体 `0` 宽、或随 `--md-scale` 派生栏宽。
+- 宽屏：`--md-measure: 100%`。窄面板 `min(容器, 42rem)`。
+- 左齐（`text-align: start`）；禁止 `justify`（含 HTML `align="justify"` / `text-justify`）。折满行共用右缘；未折满的参差右缘是正确表现。
+- 长路径 / 行内代码：`overflow-wrap: anywhere`。列表与引用只缩进 start 侧，右缘对齐版心盒。正文列表 `text-wrap: wrap`（不受 callout `text-balance` 继承）。
+- `MARKDOWN_COMFORTABLE_MEASURE_REM` 只与 CSS 同值作治理锁定。Canvas flow `max-w-5xl` 是积木壳，不是文章栏。
+
+检查点在 `tests/unit/plugins/markdown/markdown-reading-measure-governance.test.ts`。
 
 Markdown 预览阅读偏好（字号、舒适/宽屏、纸面明暗）必须走
 `useMarkdownPreviewPrefsStore`（`markdown-preview-preferences.ts`）：全局一份、
@@ -242,12 +254,10 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
    有选择/编辑合约时节点可键盘聚焦并带产品 `ring-ring`）、
    状态徽标（短标签 + 完整 `aria-label`，不要为 tooltip 硬挂 `tabIndex={0}`）、
    装饰 SVG。hover tooltip / 点击选点仍可用。
-4. **业务高亮 ≠ focus。** 工作台新加/缩放物料用轻量 `ring-1 ring-ring/40`（或阴影），
-   短时反馈即可；禁止与 focus 环共用 `ring-primary/50` 粗描边。
+4. **业务高亮 ≠ focus。** 短时反馈用轻量 `ring-1 ring-ring/40`（或阴影）；禁止与 focus 环共用 `ring-primary/50` 粗描边。
 5. **`tabIndex={0}` 白名单**（产品源码；新增必须在治理测试里登记理由）：
    - 图片预览画布（缩放/平移快捷键）
    - 图片 diff 左右滑动条（`role="slider"`，方向键调整对比比例）
-   - 工作台网格（Shift+F10 原生右键菜单合约）
    - dockview panel tab 内容（标签激活）
    - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）
 6. **`role="button"` 的非 button 元素**必须同时具备：键盘激活（Enter/Space）、
@@ -421,62 +431,29 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 命令授权走 `CommandMetadata.allowedClientKinds`：`plugin.catalog.list` 允许 `desktop-renderer` + `cli-local`；其它 managed 命令 + `app.relaunch` 只允许 `desktop-renderer`
 - 插件 RPC 走独立 IPC 通道（`PIER.PLUGIN_RPC_INVOKE`），不进 `PierCommand`、不经 CLI local-control
 
-### 工作台组件贡献点 `workbenchWidgets`
+### 项目设置贡献点 `projectSettings`
 
-插件可经 manifest `workbenchWidgets` 声明 + renderer 运行时 `context.workbenchWidgets.register` 注册工作台卡片组件：
+插件可经 manifest `projectSettings` 声明 + renderer 运行时 `context.projectSettings.register` 注册「设置 → 项目」详情 tab：
 
-- 纪律链与 `panels` / `terminalStatusItems` 一致：`assertDeclaredContribution("workbenchWidget")` → 运行时注册表 → 宿主容器渲染
-- 注册表在 `src/renderer/lib/plugins/workbench-widget-registry.ts`（镜像 `panel-registry.ts` 结构）
-- Core-owned widget 走 `CORE_WORKBENCH_WIDGETS` 静态声明（平行于 `CORE_TERMINAL_STATUS_ITEMS`），不经插件通道
-- 工作台 panel 为 core panel kit（`component: "workbench"`，多实例 `workbench-<uuid>`），组装状态存 dockview panel params 随 layout 持久化
+- 纪律链与 `panels` / `settingsPages` 一致：`assertDeclaredContribution("projectSettings")` → `src/renderer/lib/plugins/project-settings-registry.ts` → `ProjectsSectionDetail` 渲染
+- 宿主按 `visible({ isPierHome })` 过滤；省略 `visible` 时默认 `!isPierHome`
+- 插件不自列项目、不挂侧栏 `settingsPages` 充当项目偏好；`projectRootPath` 由宿主 focused 项目传入
+- contribution `id` 必须带插件 id 前缀（`pluginManifestSchema` superRefine）
 
-#### 物料协议 v3（响应式有序网格）
+### 插件数据投影与 Canvas 动作
 
-- 持久化参数 `{layoutVersion: 3, widgets: [{id, widgetId?, params?, w, h}]}`：数组顺序是唯一阅读顺序；`w/h` 是用户尺寸偏好；`x/y` 只在渲染期按容器宽度派生，不持久化。`id` 是实例 id（多实例物料为 uuid），`widgetId` 是物料 id；`params` 是物料私有配置，宿主视为黑盒 JSON，校验责任在物料边界。
-- 旧版 `x/y/locked/placementDirection` 只在读取时转换：条目按 `y → x → 原始索引` 得到稳定顺序，废弃字段不进入 v3。打开面板不得主动写回；首次添加、删除、排序、调整尺寸或设置修改时自然写入 v3。
-- 组件 props：`size / instanceId / params / updateParams / refreshToken / visible`。拉取型物料把 `refreshToken` 放进 effect 依赖；`visible=false` 时**必须停轮询**（数据源用 acquire/release 引用计数，参考 `pier-resource.store.ts`）。
-- 声明元数据：`category`（物料库分类）、`searchTerms`（搜索命中面）、`multiInstance`（可复制/重复添加）、`configurable`（注册时须提供 `settingsComponent`，渲染进宿主设置弹窗）、`refreshable`（菜单显示"刷新"）；注册可带 `previewComponent`（物料库预览卡，样例数据静态渲染）。
-- 添加入口是物料库对话框（分类 + 搜索 + 预览），不是下拉菜单；空态和底部添加入口只打开物料库，不提供快速开始预设。
-- 指标目录（`src/renderer/lib/workbench/metric-registry.ts`）：core/插件用代码贡献指标（instant/series/grouped × 格式），"自定义卡片"物料把区块（kpi/gauge/trend/ranking）绑定到指标做用户级组装；不做查询语言、不做自由画布。
+宿主给通道和积木；`.canvas.tsx` 是唯一组装层。Canvas **不承载领域组件**（无 `AccountsCard` / `UsageMeter` / `Kpi` / 账号成品模板），也不增加 `canvasWidgets` 或复活 `workbenchWidgets`。
 
-#### 物料 UI 质量红线（每个物料 PR 逐条过）
+- Manifest：`dataProjections` 声明可投影只读键；`canvasActions` 声明画布可调用的 RPC 方法名。纪律链与 `panels` 同款：未声明键一律拒绝。
+- 读：`pluginData.snapshot` → 插件 RPC `projection.<key>`；renderer 经 `useHostSnapshot("plugin:<pluginId>/<key>")` 订阅广播，类型为 `unknown`，画布本地收窄。禁止 `useCodexAccounts` 一类插件 hook，禁止把三家 snapshot DTO 写进 `pier/canvas` sdk。
+- Watch 租约：`pluginData.watchStart` / `watchStop` 按 `(pluginId, key)` 引用计数；首次 start 调可选 `projection.<key>.watch`，归零 `unwatch`；handler 不存在则忽略。
+- 写：仅 `pluginAction.invoke` `{ pluginId, key, payload? }`，方法名即声明键（不加 `projection.` 前缀）。能力 `plugin:action`；宿主命令路径不出现业务键字符串。
+- Chrome：`settings.open` `{ section?: string }` 打开宿主设置（插件 CRUD / OAuth 仍在设置页，Canvas 不复制登录流）。`usageData.refresh` 刷新宿主用量聚合。
+- 宿主聚合 hook 只读：`useActivityOverview` / `useSystemResources` / `useCostOverview`。`useSystemResources` 不可删：`useHostSnapshot("resources")` 不含 `cpuHistory`。禁止再为插件加第四个 hook。
+- 格式化函数进 `pier/canvas` VALUE 导出（`formatPercent` / `formatBytes` 等），不是组件。
+- skill 只教发现 API + 原语组合（至少两种拼法）；不设官方 `templates/accounts.canvas.tsx`，物料页不登记「账号管理」行。
 
-1. 节奏：间距落在 12px 网格节奏；卡内 padding 走 `--card-spacing`。
-2. 三态：loading / empty / error 齐备且用 `@pier/ui/widget-state.tsx` 统一组件（`WidgetSkeleton` / `WidgetEmpty` / `WidgetError`），禁止裸文字占位。
-3. 响应：窄（2 格）/ 中（4 格）/ 宽（6+ 格）三档 container query 均不破版、不横向溢出；`size` prop 只用于逻辑分支。
-4. 主题：深浅色都验收；无硬编码色值；数据色只承载状态与系列，文本一律走前景 token。
-5. 数字：一律走 `@pier/ui/format.tsx` 共享 formatter（compact/bytes/percent/duration/relative）；高频跳动数字 `tabular-nums`。
-6. 反馈：每个动作能回答"用户怎么知道刚才发生了什么"（操作反馈规范）；文案全部 i18n key。
-7. 无障碍：图标按钮有 `aria-label`；拖拽只从显式抓手开始，交互元素必须在拖拽 `cancel` 名单内（`button/a/input/...`），特殊容器用 `[data-no-drag]` 逃生舱。
-8. 尺寸适配：`size` prop 做结构决策（是否渲染某区块、图表显示天数/范围），container query 做布局密度（列数、横排↔纵排）；两者不可互换。禁止用 container query `display: none` 静默删除有意义内容（时间戳、余额、次要指标等）——compact 尺寸应摘要化或重排，辅以 tooltip / 渐进式披露保留可访问性。`minSize` 必须能容纳物料核心信息（至少一个指标 + 状态），不得声明小于核心内容所需的最小格数。
-9. 重复指标自适应：重复指标是同构且均有意义的数据项，必须保留数据契约中的源顺序和语义标识；只有存在独立标题、操作或说明时才拆成占整行的可见分区，普通指标不得仅因数据分组键不同而强制换行。指标集合优先使用浏览器原生内在尺寸网格 `repeat(auto-fit, minmax(min(100%, var(--item-min-width)), 1fr))`：集合只有单项时占满整行，多项在核心内容最小宽度允许时横排，否则纵向重排。`--item-min-width` 由标签、数值、状态和操作等核心内容共同决定，不得从宿主 `size.w` 换算像素，也不得用固定列数留下空轨道。所有数据必须进入可访问的 DOM，不得按尺寸丢弃、用 `hidden` 隐藏或只保留部分数据；高度不足时保持 `min-content` 并交由宿主滚动，高度富余时按内容自然高度顶部对齐，不得靠居中或拉大项目内部间距伪造填满效果。重复指标之间留白优先于分割线，只有存在无法由标题、标签或间距表达的独立语义章节时才使用 `Separator`。
-
-#### 工作台滚动区域
-
-- 每张卡遵守单一滚动所有者原则，只允许一个实际纵向滚动容器。注册项 `contentMode` 省略或为
-  `host-scroll` 时由宿主正文滚动；需要固定头部或自主管理滚动区时必须声明
-  `contained`，此时宿主只裁切溢出，组件负责自己的 viewport。
-- 外部插件注册经宿主适配时必须透传 `contentMode`，不得在重建注册对象时丢失布局语义并
-  静默回退到 `host-scroll`。
-- 可见渐隐统一使用 `@pier/ui/scroll-area.tsx` 的 `viewportFade`。渐隐 class 只能落在
-  Radix viewport，圆角、背景和边框归外层壳，ScrollBar 保持为 viewport 的兄弟节点。
-- 固定区与滚动区的内边距归各自内容层；滚动 viewport 必须全宽贴卡片内容区边缘。
-  禁止使用负边距、超宽度或绝对偏移把滚动条拉到边框，也禁止宿主与组件嵌套
-  `overflow-y-auto`。
-- 检查点在 `tests/unit/renderer/workbench-scroll-governance.test.ts`、
-  `tests/unit/renderer/scroll-area.test.tsx`、
-  `tests/unit/renderer/external-plugin-workbench-contract.test.ts` 与
-  `tests/component/workbench-panel.test.tsx`。
-
-- 网格几何：`CELL_WIDTH = 88`、`ROW_HEIGHT = 88`、`MARGIN = [12, 12]` 为目标节奏；容器宽度自动换算为 `2..12` 列。布局严格按实例数组做 Z 字逐行排布，当前行放不下即换行，行高取本行最高物料，不用后续小物料回填纵向空洞。删除后由同一派生算法立即压实；添加和复制追加到数组末尾；拖拽只修改数组顺序。
-- Dockview 宽度变化只重新派生列数与 `x/y`，不得写 panel params。窄容器可把卡片显示宽度临时夹到当前列数，容器恢复后继续使用原 `w/h` 偏好；普通布局禁止横向滚动。
-- 调整尺寸仍由 RGL 处理，停止时只持久化目标实例的 `w/h`；不得把 RGL compactor 与自定义排序求解器混用。全局菜单不提供“整理布局”“锁定布局”或新增方向，自动布局始终生效。
-- widget 内容响应的分工：`size` prop 决定渲染哪些区块（结构决策），container query
-  决定已渲染区块的排列密度（布局决策）。不要用 `size` prop 换算像素宽度（实际宽度取决于
-  容器，非格数）；不要用 container query `display: none` 隐藏有意义内容（违反 WCAG
-  Reflow）。注意 containment 会让 `position: fixed` 后代以卡片内容区为包含块——浮层一律
-  走 portal（Radix 组件默认如此）。
-- 顶部不放工具栏；网格全局动作走原生 Electron 右键菜单（只保留添加、全部刷新），物料级动作仍走卡片 Radix 菜单，两者不得串开。
+检查点：plugin-data-projections、canvas-host、canvas-hooks、只读例外治理。
 
 ### 滚动条外观
 

@@ -43,7 +43,7 @@ function entry(
       apiVersion: 1,
       commands: [],
       configuration: { properties },
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
       settingsPages: [],
       engines: { pier: ">=0.1.0" },

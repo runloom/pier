@@ -83,4 +83,18 @@ export function registerClaudeRpcHandlers(options: {
     releaseUsagePolling(consumerId);
     return null;
   });
+  rpc.handle("projection.accounts", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    return service.snapshot();
+  });
+  rpc.handle("projection.accounts.watch", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    await acquireUsagePolling("canvas-projection:accounts");
+    return null;
+  });
+  rpc.handle("projection.accounts.unwatch", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    releaseUsagePolling("canvas-projection:accounts");
+    return null;
+  });
 }

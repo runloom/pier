@@ -4,6 +4,7 @@ import { installFilesHangBreadcrumbSink } from "@plugins/builtin/files/renderer/
 import { filesRendererPlugin } from "@plugins/builtin/files/renderer/index.tsx";
 import { syncLspInstallGuides } from "@plugins/builtin/files/renderer/panel/sync-lsp-install-guides.ts";
 import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
+import { memoryRendererPlugin } from "@plugins/builtin/memory/renderer/index.tsx";
 import { noteHangBreadcrumb } from "@/lib/diagnostics/hang-breadcrumb.ts";
 import { useLspPreferencesStore } from "@/stores/lsp-preferences.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
@@ -61,6 +62,7 @@ function withFilesHangTrail(
 export const BUILTIN_RENDERER_PLUGIN_MODULES = [
   gitRendererPlugin,
   withFilesHangTrail(filesRendererPlugin),
+  memoryRendererPlugin,
 ] satisfies readonly RendererPluginModule[];
 
 export function getBuiltinRendererPluginModule(

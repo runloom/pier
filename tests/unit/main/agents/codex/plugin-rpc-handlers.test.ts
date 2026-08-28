@@ -188,4 +188,33 @@ describe("Codex plugin RPC handlers", () => {
       })
     );
   });
+
+  it("projects accounts snapshots and watch leases for canvas", async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
+    const service = serviceStub();
+    const acquireUsagePolling = vi.fn(async () => undefined);
+    const releaseUsagePolling = vi.fn();
+    registerCodexRpcHandlers({
+      acquireUsagePolling,
+      releaseUsagePolling,
+      rpc: {
+        handle: (method, handler) => {
+          handlers.set(method, handler);
+        },
+      },
+      service,
+    });
+
+    await expect(handlers.get("projection.accounts")?.(null)).resolves.toEqual(
+      service.snapshot()
+    );
+    await handlers.get("projection.accounts.watch")?.(null);
+    await handlers.get("projection.accounts.unwatch")?.(null);
+    expect(acquireUsagePolling).toHaveBeenCalledWith(
+      "canvas-projection:accounts"
+    );
+    expect(releaseUsagePolling).toHaveBeenCalledWith(
+      "canvas-projection:accounts"
+    );
+  });
 });

@@ -20,12 +20,6 @@
           "title": "Grok Accounts"
         }
       },
-      "workbenchWidgets": {
-        "pier.grok.accounts": {
-          "title": "Grok Account & Quota",
-          "description": "Switch the active Grok account and monitor its quota."
-        }
-      },
       "messages": {
         "pier.grok.accounts.settings.title": "Grok Accounts",
         "pier.grok.accounts.settings.addAccount": "Add account",
@@ -147,12 +141,6 @@
       "settingsPages": {
         "pier.grok.accounts": {
           "title": "Grok 账号"
-        }
-      },
-      "workbenchWidgets": {
-        "pier.grok.accounts": {
-          "title": "Grok 账号与配额",
-          "description": "切换当前 Grok 账号并查看对应配额。"
         }
       },
       "messages": {
@@ -278,12 +266,6 @@
           "title": "Grok アカウント"
         }
       },
-      "workbenchWidgets": {
-        "pier.grok.accounts": {
-          "title": "Grok アカウントとクォータ",
-          "description": "使用中の Grok アカウントを切り替え、クォータを確認します。"
-        }
-      },
       "messages": {
         "pier.grok.accounts.settings.title": "Grok アカウント",
         "pier.grok.accounts.settings.addAccount": "アカウントを追加",
@@ -407,12 +389,6 @@
           "title": "Grok 계정"
         }
       },
-      "workbenchWidgets": {
-        "pier.grok.accounts": {
-          "title": "Grok 계정과 할당량",
-          "description": "사용 중인 Grok 계정을 전환하고 할당량을 확인합니다."
-        }
-      },
       "messages": {
         "pier.grok.accounts.settings.title": "Grok 계정",
         "pier.grok.accounts.settings.addAccount": "계정 추가",
@@ -530,28 +506,8 @@
     }
   },
   "main": "dist/main.js",
-  "workbenchWidgets": [
-    {
-      "category": "agent",
-      "defaultSize": {
-        "w": 4,
-        "h": 3
-      },
-      "description": "Switch the active Grok account and monitor its quota.",
-      "id": "pier.grok.accounts",
-      "maxSize": {
-        "w": 8,
-        "h": 6
-      },
-      "minSize": {
-        "w": 2,
-        "h": 2
-      },
-      "refreshable": false,
-      "searchTerms": ["grok", "xai", "account", "quota", "账号", "配额"],
-      "title": "Grok Account & Quota"
-    }
-  ],
+  "dataProjections": ["accounts"],
+  "canvasActions": ["accounts.select", "accounts.refreshUsage"],
   "name": "Grok Account Management",
   "panels": [],
   "permissions": [

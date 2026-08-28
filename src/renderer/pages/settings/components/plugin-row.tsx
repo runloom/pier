@@ -13,7 +13,6 @@ import {
   Activity,
   ArrowRight,
   Command,
-  LayoutDashboard,
   type LucideIcon,
   PanelsTopLeft,
 } from "lucide-react";
@@ -37,7 +36,6 @@ export interface ContributionCounts {
   readonly commands: number;
   readonly panels: number;
   readonly terminalStatusItems: number;
-  readonly workbenchWidgets: number;
 }
 
 /** 只保留非零的贡献点计数, 每项配一个 lucide 图标。 */
@@ -73,13 +71,6 @@ export function contributionCountItemsFromCounts(
       pluralKey: "settings.plugins.contributionSummary.terminalStatusItems",
       singularKey: "settings.plugins.contributionSummary.terminalStatusItem",
     },
-    {
-      Icon: LayoutDashboard,
-      count: counts.workbenchWidgets,
-      id: "workbenchWidgets",
-      pluralKey: "settings.plugins.contributionSummary.workbenchWidgets",
-      singularKey: "settings.plugins.contributionSummary.workbenchWidget",
-    },
   ];
   return buckets
     .filter((item) => item.count > 0)
@@ -99,7 +90,6 @@ export function contributionCountItems(
   return contributionCountItemsFromCounts(
     {
       commands: entry.manifest.commands.length,
-      workbenchWidgets: entry.manifest.workbenchWidgets.length,
       panels: entry.manifest.panels.length,
       terminalStatusItems: entry.manifest.terminalStatusItems.length,
     },
@@ -220,16 +210,12 @@ export function PluginRow({
         ) : null}
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">
-            {countItems.length > 0 ? (
-              countItems.map(({ Icon, id, label }) => (
-                <span className="inline-flex items-center gap-1" key={id}>
-                  <Icon aria-hidden className="size-3.5" />
-                  {label}
-                </span>
-              ))
-            ) : (
-              <span>{t("settings.plugins.contributionSummary.none")}</span>
-            )}
+            {countItems.map(({ Icon, id, label }) => (
+              <span className="inline-flex items-center gap-1" key={id}>
+                <Icon aria-hidden className="size-3.5" />
+                {label}
+              </span>
+            ))}
             {hasSettingsSection ? (
               <Button
                 aria-label={t("settings.plugins.openSettingsPlugin", {

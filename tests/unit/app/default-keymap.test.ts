@@ -10,6 +10,10 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Ctrl+Shift+ArrowRight",
   "Ctrl+Shift+ArrowUp",
   "Ctrl+Shift+KeyD",
+  "Mod+Alt+ArrowDown",
+  "Mod+Alt+ArrowLeft",
+  "Mod+Alt+ArrowRight",
+  "Mod+Alt+ArrowUp",
   "Mod+Alt+KeyR",
   "Mod+Comma",
   "Mod+Digit0",
@@ -23,8 +27,10 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Digit8",
   "Mod+Digit9",
   "Mod+Equal",
+  "Mod+KeyB",
   "Mod+KeyD",
   "Mod+KeyF",
+  "Mod+KeyG",
   "Mod+KeyN",
   "Mod+KeyP",
   "Mod+KeyT",
@@ -40,15 +46,21 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Numpad7",
   "Mod+Numpad8",
   "Mod+Numpad9",
+  "Mod+Shift+BracketLeft",
+  "Mod+Shift+BracketRight",
   "Mod+Shift+Equal",
   // Shared by pier.agent.new + pier.terminal.composerAttach (contextual).
   "Mod+Shift+KeyA",
   "Mod+Shift+KeyA",
   "Mod+Shift+KeyD",
+  "Mod+Shift+KeyF",
+  "Mod+Shift+KeyG",
   "Mod+Shift+KeyI",
+  "Mod+Shift+KeyL",
   "Mod+Shift+KeyM",
   "Mod+Shift+KeyN",
   "Mod+Shift+KeyP",
+  "Mod+Shift+KeyY",
 ];
 
 describe("DEFAULT_KEYMAP", () => {
@@ -116,6 +128,26 @@ describe("DEFAULT_KEYMAP", () => {
       keys: "Ctrl+Shift+ArrowRight",
       scope: "global",
     });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.focusUp",
+      keys: "Mod+Alt+ArrowUp",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.focusDown",
+      keys: "Mod+Alt+ArrowDown",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.focusLeft",
+      keys: "Mod+Alt+ArrowLeft",
+      scope: "global",
+    });
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.panel.focusRight",
+      keys: "Mod+Alt+ArrowRight",
+      scope: "global",
+    });
   });
 
   it("contains active group tab switch shortcuts for digit and numpad keys", () => {
@@ -141,17 +173,34 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
-  it("toggles file and git review tree sidebars with Mod+B in panel scope", () => {
+  it("cycles tabs in the active group with Mod+Shift+brackets", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
-      commandId: "pier.files.tree.toggle",
-      keys: "Mod+KeyB",
-      scope: "panel:pier.files.filePanel",
+      commandId: "pier.panel.focusNextTab",
+      keys: "Mod+Shift+BracketRight",
+      scope: "global",
     });
     expect(DEFAULT_KEYMAP).toContainEqual({
-      commandId: "pier.git.review.toggleTree",
-      keys: "Mod+KeyB",
-      scope: "panel:pier.git.changes",
+      commandId: "pier.panel.focusPrevTab",
+      keys: "Mod+Shift+BracketLeft",
+      scope: "global",
     });
+  });
+
+  it("toggles the side tree globally with Mod+B", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.view.toggleSideTree",
+      keys: "Mod+KeyB",
+      scope: "global",
+    });
+    expect(
+      DEFAULT_KEYMAP.filter((binding) => binding.keys === "Mod+KeyB")
+    ).toEqual([
+      {
+        commandId: "pier.view.toggleSideTree",
+        keys: "Mod+KeyB",
+        scope: "global",
+      },
+    ]);
   });
 
   it("contains view zoom shortcuts", () => {
@@ -195,12 +244,17 @@ describe("DEFAULT_KEYMAP", () => {
     ).toBe(false);
   });
 
-  it("contains the terminal search shortcut", () => {
+  it("contains the find shortcut on pier.find", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
-      commandId: "pier.terminal.search",
+      commandId: "pier.find",
       keys: "Mod+KeyF",
       scope: "global",
     });
+    expect(
+      DEFAULT_KEYMAP.filter(
+        (binding) => binding.commandId === "pier.terminal.search"
+      )
+    ).toEqual([]);
   });
 
   it("contains the open agent composer shortcut", () => {
@@ -366,6 +420,49 @@ describe("DEFAULT_KEYMAP", () => {
       keys: "Mod+Shift+KeyY",
       scope: "global",
     });
+  });
+
+  it("keeps the agent list shortcut", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.agents.list",
+      keys: "Mod+Shift+KeyL",
+      scope: "global",
+    });
+  });
+
+  it("resolves side-tree and find shortcuts from a terminal panel", () => {
+    keybindingRegistry.loadUserKeymap([]);
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+
+    const terminalScope = {
+      activePanelComponent: "terminal",
+      overlayStack: [],
+    };
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyB", false), terminalScope)
+    ).toBe("pier.view.toggleSideTree");
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyF", false), terminalScope)
+    ).toBe("pier.find");
+    expect(
+      keybindingRegistry.resolve(
+        parseChord("Mod+Shift+KeyY", false),
+        terminalScope
+      )
+    ).toBe("pier.agents.focusWaiting");
+  });
+
+  it("resolves split from a files panel", () => {
+    keybindingRegistry.loadUserKeymap([]);
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+
+    const filesScope = {
+      activePanelComponent: "pier.files.filePanel",
+      overlayStack: [],
+    };
+    expect(
+      keybindingRegistry.resolve(parseChord("Mod+KeyD", false), filesScope)
+    ).toBe("pier.panel.splitRight");
   });
 
   it("resolves the rerun task shortcut from DEFAULT_KEYMAP", () => {

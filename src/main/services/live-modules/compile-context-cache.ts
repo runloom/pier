@@ -1,22 +1,34 @@
 import type * as esbuild from "esbuild";
-import { loadEsbuildModule } from "./esbuild-binary.ts";
+import type { CompiledLiveAsset } from "./assets.ts";
+import { loadEsbuildModule, stopEsbuildModule } from "./esbuild-binary.ts";
+import {
+  type CanvasTailwindCacheSlot,
+  createCanvasTailwindCacheSlot,
+} from "./tailwind.ts";
 
 /**
  * Per-module esbuild context cache for incremental rebuilds + timeout cancel.
  *
  * Keyed by contentRoot/entry/framework plus the compile-option signature so a
- * spec.resolve change (allowNodeModules / tsconfigPaths / forcePreviewBarrel /
+ * spec.resolve change (allowNodeModules / allowedBarePackages / tsconfigPaths / forcePreviewBarrel /
  * previewBarrel) creates a fresh context instead of silently reusing one whose
  * plugin closures captured the old options.
  *
- * The cached entry owns the `graphRef` the plugin closures capture — callers
- * reset `entry.graphRef.current` before each rebuild, so the dependency graph
- * is fresh without rebinding the closures.
+ * The cached entry owns the refs the plugin closures capture — callers
+ * reset `entry.graphRef.current` / `entry.assetsRef.current` before each
+ * rebuild, so graphs and asset lists stay fresh without rebinding closures.
  */
-export interface CompileContextEntry {
-  context: esbuild.BuildContext;
-  /** Captured by the plugin closures; reset by the caller before rebuild. */
+export interface CompileContextRefs {
+  /** Captured by the asset plugin; reset by the caller before rebuild. */
+  assetsRef: { current: CompiledLiveAsset[] };
+  /** Captured by the resolve plugin; reset by the caller before rebuild. */
   graphRef: { current: Set<string> };
+}
+
+export interface CompileContextEntry extends CompileContextRefs {
+  context: esbuild.BuildContext;
+  /** Tailwind JIT cache — lives and dies with this esbuild context. */
+  tailwindCache: CanvasTailwindCacheSlot;
 }
 
 const contextCache = new Map<string, CompileContextEntry>();
@@ -24,6 +36,7 @@ const contextCache = new Map<string, CompileContextEntry>();
 /** Full signature used to key the cache (options included). */
 export function esbuildContextKey(input: {
   allowNodeModules: boolean;
+  allowedBarePackages: readonly string[];
   contentRoot: string;
   entryAbsolutePath: string;
   forcePreviewBarrel: boolean;
@@ -40,6 +53,7 @@ export function esbuildContextKey(input: {
     input.entryAbsolutePath,
     input.framework,
     input.allowNodeModules ? "nm1" : "nm0",
+    `abp:${[...input.allowedBarePackages].sort().join(",")}`,
     input.tsconfigPaths ? "tp1" : "tp0",
     input.forcePreviewBarrel ? "fb1" : "fb0",
     input.previewBarrelAbsolutePath ?? "",
@@ -49,21 +63,27 @@ export function esbuildContextKey(input: {
 
 /**
  * Get (or create) the cached context for `key`. `createOptions` receives the
- * entry's `graphRef` so plugin closures capture the same object that later
- * rebuilds reset.
+ * entry's refs so plugin closures capture the same objects that later rebuilds
+ * reset.
  */
 export async function getCompileContextEntry(
   key: string,
-  createOptions: (graphRef: { current: Set<string> }) => esbuild.BuildOptions
+  createOptions: (refs: CompileContextRefs) => esbuild.BuildOptions
 ): Promise<CompileContextEntry> {
   const cached = contextCache.get(key);
   if (cached) {
     return cached;
   }
   const graphRef: { current: Set<string> } = { current: new Set<string>() };
+  const assetsRef: { current: CompiledLiveAsset[] } = { current: [] };
   const esbuild = loadEsbuildModule();
-  const context = await esbuild.context(createOptions(graphRef));
-  const entry: CompileContextEntry = { context, graphRef };
+  const context = await esbuild.context(createOptions({ assetsRef, graphRef }));
+  const entry: CompileContextEntry = {
+    assetsRef,
+    context,
+    graphRef,
+    tailwindCache: createCanvasTailwindCacheSlot(),
+  };
   contextCache.set(key, entry);
   return entry;
 }
@@ -132,4 +152,15 @@ export async function disposeAllCompileContexts(): Promise<void> {
       }
     })
   );
+}
+
+/**
+ * Drop dead contexts and call `esbuild.stop()` so the next `context()` spawns
+ * a new helper. Needed when the child exits without going through `stop()` —
+ * esbuild keeps the closed channel and every compile then fails with
+ * "The service is no longer running".
+ */
+export async function recoverEsbuildService(): Promise<void> {
+  await disposeAllCompileContexts();
+  await stopEsbuildModule();
 }

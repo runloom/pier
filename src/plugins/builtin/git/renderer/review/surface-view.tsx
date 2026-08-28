@@ -101,6 +101,7 @@ interface GitReviewSurfaceViewProps {
     typeof GitReviewDocumentView
   >["reviewCommentsById"];
   readonly scope: GitReviewScope;
+  readonly selectedSectionKey: string | null;
   readonly setDiffHandle: React.ComponentProps<
     typeof GitReviewDocumentView
   >["diffRef"];
@@ -167,6 +168,7 @@ export function GitReviewSurfaceView({
   retryFailure,
   retryLatestItemUpdates,
   scope,
+  selectedSectionKey,
   setDiffHandle,
   setSelectedTreeTarget,
   setSidebarCollapsed,
@@ -302,6 +304,7 @@ export function GitReviewSurfaceView({
           : null)
       }
       renderWindowReady={renderWindowReady}
+      selectedSectionKey={selectedSectionKey}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
       sourcePanelId={panelId}

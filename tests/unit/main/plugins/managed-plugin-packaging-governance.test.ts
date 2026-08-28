@@ -3,33 +3,6 @@ import { join, relative } from "node:path";
 import { managedPluginPackageManifestSchema } from "@shared/contracts/plugin/managed.ts";
 import { describe, expect, it } from "vitest";
 
-// Ordered to match the manifest scan (readdir, alphabetical by package dir:
-// plugin-claude, plugin-codex, plugin-grok).
-const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
-  {
-    defaultSize: { h: 3, w: 4 },
-    maxSize: { h: 6, w: 8 },
-    minSize: { h: 2, w: 2 },
-    pluginId: "pier.claude",
-    widgetId: "pier.claude.accounts",
-  },
-  {
-    defaultSize: { h: 3, w: 4 },
-    maxSize: { h: 6, w: 8 },
-    minSize: { h: 2, w: 2 },
-    pluginId: "pier.codex",
-    widgetId: "pier.codex.accounts",
-  },
-  {
-    defaultSize: { h: 3, w: 4 },
-    maxSize: { h: 6, w: 8 },
-    minSize: { h: 2, w: 2 },
-    pluginId: "pier.grok",
-    widgetId: "pier.grok.accounts",
-  },
-  // v1.2: `pier.codex.cost` widget 已由宿主 `core.cost-overview` 替代，不再打包。
-] as const;
-
 const packagesRoot = join(process.cwd(), "packages");
 const bundledPluginManifests = readdirSync(packagesRoot, {
   withFileTypes: true,
@@ -186,24 +159,17 @@ describe("managed plugin packaging governance", () => {
     );
   });
 
-  it("matches every bundled widget to its approved explicit sizing policy", () => {
+  it("does not declare workbenchWidgets on bundled plugin manifests", () => {
     expect(
       bundledPluginManifests,
       "packages/plugin-*/plugin.json enumeration must not be empty"
     ).not.toHaveLength(0);
 
-    const sizingPolicies = bundledPluginManifests.flatMap(({ raw }) => {
+    for (const { path, raw } of bundledPluginManifests) {
+      expect(raw, path).not.toHaveProperty("workbenchWidgets");
       const manifest = managedPluginPackageManifestSchema.parse(raw);
-      return manifest.workbenchWidgets.map((widget) => ({
-        defaultSize: widget.defaultSize,
-        maxSize: widget.maxSize,
-        minSize: widget.minSize,
-        pluginId: manifest.id,
-        widgetId: widget.id,
-      }));
-    });
-
-    expect(sizingPolicies).toEqual(APPROVED_BUNDLED_WIDGET_SIZE_POLICIES);
+      expect(manifest, path).not.toHaveProperty("workbenchWidgets");
+    }
   });
 
   it("treats electron subpaths and require() as forbidden plugin imports", () => {

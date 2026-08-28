@@ -266,6 +266,9 @@ APP_VERSION="$(node -p "require('./package.json').version")"
 echo "[build:dist] verify dual-arch mac artifacts for ${APP_VERSION}"
 node ./scripts/verify-mac-release-artifacts.mjs --dir dist-builder --version "$APP_VERSION"
 
+echo "[build:dist] verify canvas Tailwind native unpack (oxide / lightningcss / esbuild)"
+node ./scripts/verify-canvas-tailwind-native-unpack.mjs --dir dist-builder
+
 if [ "$PUBLISH_POLICY" != "never" ]; then
     echo "[build:dist] publish verified artifacts (policy=$PUBLISH_POLICY)"
     # 不用 `electron-builder publish` CLI：它上传失败时常 return null 且 exit 0。

@@ -1,18 +1,12 @@
 import { z } from "zod";
-import {
-  agentMcpCatalogRequestSchema,
-  agentMcpPathActionRequestSchema,
-  rulesEnsureRequestSchema,
-  rulesReadRequestSchema,
-  rulesSnapshotRequestSchema,
-  rulesWriteRequestSchema,
-} from "./agent/assets.ts";
+import { assetCommandSchemas } from "./agent/asset-commands.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
   appCliInstallRequestSchema,
   appCliStatusRequestSchema,
   appCliUninstallRequestSchema,
 } from "./app-cli.ts";
+import { canvasCommandInvokeRequestSchema } from "./canvas-command.ts";
 import { commentsCommandSchemas } from "./comments/index.ts";
 import {
   environmentProjectRequestSchema,
@@ -275,6 +269,34 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     }),
     type: z.literal("pluginData.snapshot"),
   }),
+  z.object({
+    payload: z.object({
+      key: z.string().min(1),
+      pluginId: z.string().min(1),
+    }),
+    type: z.literal("pluginData.watchStart"),
+  }),
+  z.object({
+    payload: z.object({
+      key: z.string().min(1),
+      pluginId: z.string().min(1),
+    }),
+    type: z.literal("pluginData.watchStop"),
+  }),
+  z.object({
+    payload: z.object({
+      key: z.string().min(1),
+      payload: z.unknown().optional(),
+      pluginId: z.string().min(1),
+    }),
+    type: z.literal("pluginAction.invoke"),
+  }),
+  canvasCommandInvokeRequestSchema,
+  z.object({
+    section: z.string().min(1).optional(),
+    type: z.literal("settings.open"),
+  }),
+  z.object({ type: z.literal("usageData.refresh") }),
   z.object({ type: z.literal("pluginSettings.getAll") }),
   z.object({
     key: z.string().min(1),
@@ -382,27 +404,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   liveModulesCanvasTrustRequestSchema.extend({
     type: z.literal("liveModules.revokeTrust"),
   }),
-  rulesSnapshotRequestSchema.extend({
-    type: z.literal("rules.snapshot"),
-  }),
-  rulesReadRequestSchema.extend({
-    type: z.literal("rules.read"),
-  }),
-  rulesWriteRequestSchema.extend({
-    type: z.literal("rules.write"),
-  }),
-  rulesEnsureRequestSchema.extend({
-    type: z.literal("rules.ensure"),
-  }),
-  agentMcpCatalogRequestSchema.extend({
-    type: z.literal("agentMcp.catalog"),
-  }),
-  agentMcpPathActionRequestSchema.extend({
-    type: z.literal("agentMcp.reveal"),
-  }),
-  agentMcpPathActionRequestSchema.extend({
-    type: z.literal("agentMcp.open"),
-  }),
+  ...assetCommandSchemas,
   // accounts.* commands removed: Codex accounts now live behind plugin RPC.
   // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)
   z.object({ type: z.literal("ai.status") }),

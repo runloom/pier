@@ -18,7 +18,7 @@
 | 空闲 | 拇指不可见（`scrollbar-color` 透明） |
 | 显现 | 滚动 / 滚轮 / 触控 / 槽位悬停。禁止整容器 hover 当默认 |
 | 隐藏 | 停止活动后 900ms（`AUTO_HIDE_SCROLLBAR_IDLE_MS`） |
-| 颜色 | 相对 `--background` 的不透明混合，不随侧栏/画布底「染色」 |
+| 颜色 | 相对 `--background` 的不透明混合，不随侧栏/画布底「染色」。**Markdown 纸面（`data-reading-appearance`）换 token 时必须在该作用域同公式重混**——自定义属性在声明处求值后继承，:root 的拇指值不会跟随纸面（2026-08-28） |
 | 粗细 | Chromium `scrollbar-width: thin`。自绘重建跟 `--shell-scrollbar-width-legacy`（测到的 `thin` 槽宽；测不到用 11px） |
 | 圆角 | `--shell-scrollbar-radius`（胶囊） |
 | 轨道 | 透明 |
@@ -35,7 +35,7 @@
 3. 卡片 / 物料能用 `ScrollArea` → `ScrollArea`（`type="scroll"`，渐隐在 viewport，条是兄弟）
 4. 必须藏条 → 只许 `data-scrollbar="none"`，治理测试白名单写理由
 5. 终端正文 → AppKit overlay，不自绘
-6. 平移/缩放画布 → `none`
+6. 平移/缩放画布 → 相机 transform 视口 `overflow-hidden`，天然无条（图片查看器仍是 `none`）
 
 ## 渐隐
 
@@ -54,6 +54,7 @@
 |---|---|
 | Ghostty 终端 | AppKit overlay + `autohidesScrollers` |
 | `data-scrollbar="none"` | 无条（命令面板、提及/补全、侧栏壳、面包屑、大纲细轨、通知列表、图片画布） |
+| Canvas world 预览台 | 相机 transform + `overflow-hidden` 视口，本就没有滚动条 |
 | Markdown 大纲 hover 列表 | `ScrollArea` + fade，藏 Radix 拇指 |
 | CodeMirror 小地图 | 独立概览，不是滚动条 |
 | Dockview Tab 条 | 颜色 / 圆角对齐产品条；**厚度保持 4px**；显隐沿用 dockview 的条 hover 与拖拇指（滚轮不设 `dv-scrollable-scrolling`，Pier 不得关掉 `:hover` 着色） |

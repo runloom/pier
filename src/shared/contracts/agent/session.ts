@@ -106,6 +106,7 @@ const agentEventPayloadV3BaseFields = {
   agentInstanceId: z.string().max(128).optional(),
   agentType: z.string().max(128).optional(),
   sessionId: z.string().max(128).optional(),
+  spawnGeneration: z.number().int().positive().optional(),
   toolName: z.string().max(256).optional(),
   toolUseId: hookWorkId.optional(),
   transcriptPath: z.string().max(8192).optional(),

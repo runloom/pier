@@ -29,7 +29,7 @@ function source(
       settingsPages: [],
       terminalStatusItems: [],
       version,
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
     },
     rendererEntryUrl: `pier-plugin://pier.codex/${version}/dist/renderer.js`,

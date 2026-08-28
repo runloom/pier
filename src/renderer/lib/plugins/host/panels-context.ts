@@ -19,6 +19,7 @@ import {
   getPluginPanelRegistrations,
   registerPluginPanel,
 } from "../panel-registry.ts";
+import type { AssertDeclaredContribution } from "./assert-contribution.ts";
 import {
   pluginPanelDescriptor,
   resolveRegistrationTitle,
@@ -73,12 +74,6 @@ function globalInstancesFromPanelList(
   }
   return out;
 }
-
-type AssertDeclaredContribution = (
-  entry: PluginRegistryEntry | undefined,
-  kind: "panel",
-  id: string
-) => void;
 
 type AssertPluginCapability = (
   entry: PluginRegistryEntry | undefined,

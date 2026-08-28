@@ -135,6 +135,58 @@ function refreshManagedPluginCatalog(services: PierCoreServices): void {
     });
 }
 
+async function executePluginDataCommand(
+  requestId: string,
+  command: PierCommand,
+  services: PierCoreServices
+): Promise<PierCommandResult> {
+  if (!services.pluginDataProjections) {
+    return failure(
+      requestId,
+      "not_found",
+      "plugin data projections service unavailable"
+    );
+  }
+  const projections = services.pluginDataProjections;
+  switch (command.type) {
+    case "pluginData.snapshot":
+      return success(
+        requestId,
+        await projections.snapshot(
+          command.payload.pluginId,
+          command.payload.key
+        )
+      );
+    case "pluginData.watchStart":
+      await projections.watchStart(
+        command.payload.pluginId,
+        command.payload.key
+      );
+      return success(requestId, null);
+    case "pluginData.watchStop":
+      await projections.watchStop(
+        command.payload.pluginId,
+        command.payload.key
+      );
+      return success(requestId, null);
+    case "pluginAction.invoke":
+      return success(
+        requestId,
+        await projections.invokeAction(
+          command.payload.pluginId,
+          command.payload.key,
+          command.payload.payload
+        )
+      );
+    default:
+      return failure(
+        requestId,
+        "invalid_command",
+        `unsupported plugin data command: ${command.type}`
+      );
+  }
+}
+
 export async function executePluginCommand(
   requestId: string,
   command: PierCommand,
@@ -208,22 +260,11 @@ export async function executePluginCommand(
         requestId,
         await services.pluginSettings.reset(command.key)
       );
-    case "pluginData.snapshot": {
-      if (!services.pluginDataProjections) {
-        return failure(
-          requestId,
-          "not_found",
-          "plugin data projections service unavailable"
-        );
-      }
-      return success(
-        requestId,
-        await services.pluginDataProjections.snapshot(
-          command.payload.pluginId,
-          command.payload.key
-        )
-      );
-    }
+    case "pluginData.snapshot":
+    case "pluginData.watchStart":
+    case "pluginData.watchStop":
+    case "pluginAction.invoke":
+      return await executePluginDataCommand(requestId, command, services);
     case "plugin.catalog.list":
       return success(
         requestId,

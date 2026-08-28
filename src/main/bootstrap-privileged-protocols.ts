@@ -1,9 +1,13 @@
 import { installCsp } from "./csp.ts";
 import {
+  handleHtmlPreviewProtocol,
+  registerHtmlPreviewScheme,
+} from "./files/html-preview-protocol.ts";
+import {
   handleFilePreviewProtocol,
-  registerFilePreviewRequestGuard,
   registerFilePreviewScheme,
 } from "./files/preview-protocol.ts";
+import { registerPreviewRequestGuards } from "./files/preview-request-guard.ts";
 import {
   handleAssetProtocol,
   registerAssetScheme,
@@ -23,6 +27,7 @@ export function registerPrivilegedProtocolSchemes(): void {
   registerAssetScheme();
   registerPluginAssetScheme();
   registerFilePreviewScheme();
+  registerHtmlPreviewScheme();
   registerLiveModuleProtocolScheme();
 }
 
@@ -32,8 +37,9 @@ export function attachPrivilegedProtocolHandlers(input: {
 }): void {
   installCsp();
   handleAssetProtocol();
-  registerFilePreviewRequestGuard();
+  registerPreviewRequestGuards();
   handleFilePreviewProtocol();
+  handleHtmlPreviewProtocol();
   attachLiveModuleProtocolHandler();
   handlePluginAssetProtocol({
     getRuntimeSources: input.getPluginRuntimeSources,

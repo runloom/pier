@@ -26,7 +26,7 @@ function thirdPartyEntry(id: string): PluginRegistryEntry {
       source: { kind: "local" },
       terminalStatusItems: [],
       version: "1.0.0",
-      workbenchWidgets: [],
+      canvasActions: [],
       dataProjections: [],
     },
     runtime: {

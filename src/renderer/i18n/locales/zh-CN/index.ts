@@ -9,7 +9,6 @@ import { dialog } from "./dialog.ts";
 import { notificationsCenter } from "./notifications-center.ts";
 import { settings } from "./settings.ts";
 import { terminal } from "./terminal.ts";
-import { workbench } from "./workbench.ts";
 import { workspace } from "./workspace.ts";
 
 export const zhCN = {
@@ -22,7 +21,6 @@ export const zhCN = {
   contextMenu,
   dialog,
   notificationsCenter,
-  workbench,
   settings,
   terminal,
   workspace,

@@ -1,3 +1,4 @@
+import { Button } from "@pier/ui/button.tsx";
 import type {
   PierDiffViewAppearance,
   PierDiffViewItem,
@@ -9,15 +10,66 @@ import {
   PierUnresolvedConflictView,
 } from "@pier/ui/diff-view/index.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type {
-  GitReviewFileSource,
-  GitReviewMutationOk,
+import {
+  type GitReviewConflictFileActionIntent,
+  type GitReviewFileSource,
+  type GitReviewMutationOk,
+  gitReviewConflictCanOpen,
+  gitReviewConflictFileActions,
 } from "@shared/contracts/git/review.ts";
 import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { pluginText } from "../../plugin-text.ts";
 import { openGitReviewPathInEditor } from "../diff-actions.ts";
 
-/** UnresolvedFile host for markers-text conflict items. */
+function fileLevelActionLabel(
+  context: RendererPluginContext,
+  intent: GitReviewConflictFileActionIntent
+): string {
+  switch (intent) {
+    case "confirm-delete":
+      return pluginText(
+        context,
+        "reviewConflictConfirmDelete",
+        "Confirm Delete"
+      );
+    case "keep-current":
+      return pluginText(
+        context,
+        "reviewConflictKeepCurrent",
+        "Keep Current File"
+      );
+    case "keep-deleted":
+      return pluginText(context, "reviewConflictKeepDeleted", "Keep Deleted");
+    case "stage-current":
+      return pluginText(
+        context,
+        "reviewConflictStageCurrent",
+        "Stage Current File"
+      );
+    case "take-incoming":
+      return pluginText(
+        context,
+        "reviewConflictTakeIncoming",
+        "Use Incoming Version"
+      );
+    default: {
+      const exhaustive: never = intent;
+      return exhaustive;
+    }
+  }
+}
+
+function openIsPrimaryPresentation(
+  presentation: NonNullable<PierDiffViewItem["conflict"]>["presentation"]
+): boolean {
+  return (
+    presentation === "tooLarge" ||
+    presentation === "invalidEncoding" ||
+    presentation === "readError"
+  );
+}
+
+/** UnresolvedFile host for markers-text; file-level ours/theirs/stage notice. */
 export function ReviewConflictView(options: {
   readonly appearance: PierDiffViewAppearance;
   readonly context: RendererPluginContext;
@@ -41,6 +93,7 @@ export function ReviewConflictView(options: {
     presentation,
   } = options;
   const [busyId, setBusyId] = useState<string | null>(null);
+  const item = items[0];
 
   const labels = useMemo(
     (): PierUnresolvedConflictLabels => ({
@@ -117,13 +170,13 @@ export function ReviewConflictView(options: {
 
   /** Throws on failure so marker write-back can remount Accept UI. */
   const writeResolved = useCallback(
-    async (item: PierDiffViewItem, resolvedContents: string) => {
-      const path = item.fileDisplay?.path;
-      const conflict = item.conflict;
+    async (target: PierDiffViewItem, resolvedContents: string) => {
+      const path = target.fileDisplay?.path;
+      const conflict = target.conflict;
       if (!path || conflict === undefined) {
         return;
       }
-      setBusyId(item.id);
+      setBusyId(target.id);
       try {
         const result = await context.git.resolveReviewConflict({
           action: "write",
@@ -143,6 +196,83 @@ export function ReviewConflictView(options: {
     [context, onMutationCommitted, sourceFor]
   );
 
+  const resolveSide = useCallback(
+    async (target: PierDiffViewItem, action: "ours" | "stage" | "theirs") => {
+      const path = target.fileDisplay?.path;
+      if (!path) {
+        return;
+      }
+      setBusyId(target.id);
+      try {
+        const result = await context.git.resolveReviewConflict({
+          action,
+          operationId: crypto.randomUUID(),
+          source: sourceFor(path),
+        });
+        if (result.kind === "error") {
+          throw new Error(result.message ?? result.reason);
+        }
+        await onMutationCommitted(result);
+      } catch (error) {
+        await alertResolveFailed(error);
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [alertResolveFailed, context, onMutationCommitted, sourceFor]
+  );
+
+  let focused: ReactElement | null = null;
+  if (item !== undefined && item.conflict !== undefined) {
+    if (
+      item.conflict.presentation === "markers-text" &&
+      item.conflict.contents !== null
+    ) {
+      focused = (
+        <div className="min-h-0 flex-1" data-git-review-conflict-item={item.id}>
+          <PierUnresolvedConflictView
+            appearance={appearance}
+            busy={mutationBlocked || busyId === item.id}
+            conflict={item.conflict}
+            labels={labels}
+            onError={(error) => {
+              alertResolveFailed(error).catch(() => undefined);
+            }}
+            onOpenFile={() => {
+              openGitReviewPathInEditor({
+                context,
+                contextId,
+                gitRootPath,
+                path: item.fileDisplay?.path ?? item.id,
+              });
+            }}
+            onWriteResolved={({ contents }) => writeResolved(item, contents)}
+            path={item.fileDisplay?.path ?? item.id}
+            {...(presentation === undefined ? {} : { presentation })}
+          />
+        </div>
+      );
+    } else {
+      focused = (
+        <FileLevelConflictCard
+          busy={
+            mutationBlocked ||
+            busyId === item.id ||
+            item.conflict.contentsDigest.startsWith("estimate:")
+          }
+          context={context}
+          contextId={contextId}
+          gitRootPath={gitRootPath}
+          item={item}
+          onResolve={(action) => {
+            resolveSide(item, action).catch(() => undefined);
+          }}
+          openLabel={labels.openFile}
+        />
+      );
+    }
+  }
+
   return (
     <PierDiffWorkerProvider
       onError={(error) => {
@@ -154,52 +284,95 @@ export function ReviewConflictView(options: {
       theme={appearance.codeThemes}
     >
       <div
-        className="flex h-full min-h-0 min-w-0 flex-col overflow-auto"
+        className="flex h-full min-h-0 min-w-0 flex-col"
         data-git-review-conflict-view=""
       >
-        {items.map((item) => {
-          const path = item.fileDisplay?.path ?? item.id;
-          const conflict = item.conflict;
-          if (
-            conflict === undefined ||
-            conflict.presentation !== "markers-text" ||
-            conflict.contents === null
-          ) {
-            return null;
-          }
-          return (
-            <div
-              className="min-h-[12rem] shrink-0 border-border border-b last:border-b-0"
-              data-git-review-conflict-item={item.id}
-              key={item.id}
-              style={{ minHeight: "40vh" }}
-            >
-              <PierUnresolvedConflictView
-                appearance={appearance}
-                busy={mutationBlocked || busyId === item.id}
-                conflict={conflict}
-                labels={labels}
-                onError={(error) => {
-                  alertResolveFailed(error).catch(() => undefined);
-                }}
-                onOpenFile={() => {
-                  openGitReviewPathInEditor({
-                    context,
-                    contextId,
-                    gitRootPath,
-                    path,
-                  });
-                }}
-                onWriteResolved={({ contents }) =>
-                  writeResolved(item, contents)
-                }
-                path={path}
-                {...(presentation === undefined ? {} : { presentation })}
-              />
-            </div>
-          );
-        })}
+        {focused}
       </div>
     </PierDiffWorkerProvider>
+  );
+}
+
+function FileLevelConflictCard(options: {
+  readonly busy: boolean;
+  readonly context: RendererPluginContext;
+  readonly contextId: string;
+  readonly gitRootPath: string;
+  readonly item: PierDiffViewItem;
+  readonly onResolve: (action: "ours" | "stage" | "theirs") => void;
+  readonly openLabel: string;
+}): ReactElement | null {
+  const { busy, context, contextId, gitRootPath, item, onResolve, openLabel } =
+    options;
+  const conflict = item.conflict;
+  const path = item.fileDisplay?.path ?? item.id;
+  if (conflict === undefined) {
+    return null;
+  }
+  const canOpen = gitReviewConflictCanOpen(conflict.xy);
+  const openPrimary = openIsPrimaryPresentation(conflict.presentation);
+  const showOpen = canOpen || openPrimary;
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col gap-4 p-5"
+      data-git-review-conflict-file-level={item.id}
+    >
+      <div className="min-w-0">
+        <div className="truncate text-sm">{path}</div>
+        {item.stateNotice === undefined ? null : (
+          <p className="text-muted-foreground text-sm">{item.stateNotice}</p>
+        )}
+      </div>
+      <div className="mt-auto flex justify-end gap-2">
+        {showOpen && !openPrimary ? (
+          <Button
+            data-git-review-conflict-open=""
+            disabled={busy}
+            onClick={() => {
+              openGitReviewPathInEditor({
+                context,
+                contextId,
+                gitRootPath,
+                path,
+              });
+            }}
+            type="button"
+            variant="outline"
+          >
+            {openLabel}
+          </Button>
+        ) : null}
+        {gitReviewConflictFileActions(conflict.xy).map((spec) => (
+          <Button
+            disabled={busy}
+            key={spec.action}
+            onClick={() => {
+              onResolve(spec.action);
+            }}
+            type="button"
+            variant={spec.destructive ? "destructive" : "default"}
+          >
+            {fileLevelActionLabel(context, spec.intent)}
+          </Button>
+        ))}
+        {showOpen && openPrimary ? (
+          <Button
+            data-git-review-conflict-open=""
+            disabled={busy}
+            onClick={() => {
+              openGitReviewPathInEditor({
+                context,
+                contextId,
+                gitRootPath,
+                path,
+              });
+            }}
+            type="button"
+          >
+            {openLabel}
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }

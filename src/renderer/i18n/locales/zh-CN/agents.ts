@@ -1,4 +1,5 @@
 export const agents = {
+  focusAlreadyCurrent: "已经在需要你处理的智能体上",
   focusEmpty: "没有需要处理的智能体",
   focusFailed: "无法聚焦智能体，请重试",
   focusPanelGone: "面板已关闭",
@@ -14,7 +15,7 @@ export const agents = {
     emptyDetail: "启动智能体后会显示在这里",
     emptyNew: "启动默认智能体",
     emptyNewDetail: "当前没有运行中的智能体",
-    focusNextNeedsYou: "跳到下一个需要你处理的",
+    focusNextNeedsYou: "跳到下一个需要你处理",
     placeholder: "搜索智能体…",
     thisWindow: "本窗口",
     title: "智能体",

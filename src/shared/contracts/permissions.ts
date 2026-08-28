@@ -37,6 +37,16 @@ export const pierCapabilitySchema = z.enum([
   "terminal:launchWrap",
   "plugin:read",
   "plugin:write",
+  /**
+   * Canvas-declared plugin RPC actions (`pluginAction.invoke`).
+   * Not a `:write` host-domain capability; gated by manifest `canvasActions`.
+   */
+  "plugin:action",
+  /**
+   * Canvas-declared shell commands (`canvasCommand.invoke`).
+   * Not a `:write` host-domain capability; gated by instance.json + confirm.
+   */
+  "canvas:command",
   "command:register",
   "panel:register",
   "git:read",
@@ -66,6 +76,8 @@ export const pierCapabilitySchema = z.enum([
   // 消息中心：CLI/宿主 list·get·watch 读；mark-read·focus 写（focus 不改 runtime 事实）。
   "notification:read",
   "notification:write",
+  /** 受管智能体资产注册：项目级 MCP 配置 + 规则托管段（pier.memory 插件消费）。 */
+  "managedAssets:write",
 ]);
 
 export type PierClientKind = z.infer<typeof pierClientKindSchema>;
@@ -124,6 +136,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "comments:write",
     "notification:read",
     "notification:write",
+    "managedAssets:write",
   ],
   "cli-local": [
     "app:read",
@@ -186,6 +199,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "panel:read",
     "terminal:read",
     "plugin:read",
+    "plugin:action",
+    "canvas:command",
     "git:read",
     "file:read",
     "notification:read",

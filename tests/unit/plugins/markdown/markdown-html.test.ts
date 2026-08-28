@@ -5,6 +5,10 @@ import {
   isSafeMarkdownHtmlSrc,
   sanitizeMarkdownHtml,
 } from "@plugins/builtin/files/renderer/markdown/html/sanitizer.ts";
+import {
+  htmlAlignClass,
+  isSafeHtmlAlign,
+} from "@plugins/builtin/files/renderer/markdown/html/schema.ts";
 import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/parser.ts";
 import {
   classifyMarkdownUrl,
@@ -38,6 +42,14 @@ describe("markdown HTML sanitizer", () => {
     expect(root.querySelector("a")?.getAttribute("href")).toBe(
       "docs/README.md"
     );
+  });
+
+  it("drops align=justify so HTML cannot override the reading column", () => {
+    const root = document.createElement("div");
+    root.innerHTML = fragmentHtml('<p align="justify">wide</p>');
+    const paragraph = root.querySelector("p");
+    expect(paragraph?.textContent).toBe("wide");
+    expect(paragraph?.hasAttribute("align")).toBe(false);
   });
 
   it("strips script and iframe content", () => {
@@ -208,5 +220,16 @@ describe("markdown HTML search text", () => {
     expect(findMarkdownSearchMatches(pagination, "world")).toHaveLength(1);
     expect(findMarkdownSearchMatches(pagination, "alert")).toHaveLength(0);
     expect(findMarkdownSearchMatches(pagination, "<h1")).toHaveLength(0);
+  });
+});
+
+describe("htmlAlignClass", () => {
+  it("maps left/center/right and rejects justify", () => {
+    expect(htmlAlignClass("center")).toBe("text-center");
+    expect(htmlAlignClass("right")).toBe("text-right");
+    expect(htmlAlignClass("left")).toBe("text-left");
+    expect(htmlAlignClass("justify")).toBeUndefined();
+    expect(isSafeHtmlAlign("justify")).toBe(false);
+    expect(isSafeHtmlAlign("center")).toBe(true);
   });
 });

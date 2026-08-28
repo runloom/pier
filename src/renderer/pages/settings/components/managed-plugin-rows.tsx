@@ -238,12 +238,9 @@ function ContributionCountsInline({
   const t = useT();
   if (!counts) return <span />;
   const items = contributionCountItemsFromCounts(counts, t);
+  // 无贡献项时不渲染占位文案:这行信息对用户没有行动价值,纯噪声。
   if (items.length === 0) {
-    return (
-      <span className="text-muted-foreground text-xs">
-        {t("settings.plugins.contributionSummary.none")}
-      </span>
-    );
+    return <span />;
   }
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground text-xs">

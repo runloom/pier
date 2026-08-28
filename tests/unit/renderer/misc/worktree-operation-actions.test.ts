@@ -80,9 +80,6 @@ function createMockContext(): {
       reset: unimplemented("configuration.reset"),
       set: unimplemented("configuration.set"),
     },
-    workbenchWidgets: {
-      register: unimplemented("workbenchWidgets.register"),
-    },
     dialogs: {
       alert: alertMock,
       choice: unimplemented("dialogs.choice"),

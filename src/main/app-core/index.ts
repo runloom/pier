@@ -70,16 +70,12 @@ import {
   collectBundledPluginRegistrations,
   OFFICIAL_BUNDLED_PLUGIN_SPECS,
 } from "./bundled-official-plugins.ts";
+import { createClientRegistry } from "./client-registry.ts";
 import {
-  createClientRegistry,
-  type PierClientRegistry,
-} from "./client-registry.ts";
-import {
-  type CommandRouter,
   createCommandRouter,
   type PierCoreServices,
 } from "./command-router.ts";
-import { createPierEventBus, type PierEventBus } from "./event-bus.ts";
+import { createPierEventBus } from "./event-bus.ts";
 import { createExternalMainPluginContextFactory } from "./external-plugin-context.ts";
 import { wireHostCatalogAndAppUpdates } from "./host-catalog-boot.ts";
 import { createLazyAppCore } from "./lazy.ts";
@@ -102,27 +98,18 @@ import {
 } from "./shell-environment-boot.ts";
 import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import { createTerminalStatusBarPrefsFacade } from "./terminal-status-bar-prefs-facade.ts";
+import type { PierAppCore } from "./types.ts";
 import { createAppCoreUsageData } from "./usage-data.ts";
 import {
   broadcastCommentsChanged,
-  broadcastEnvironmentsChanged,
   broadcastMruState,
   broadcastPluginRegistryChanged,
   broadcastProjectSkillsInvalidated,
   broadcastTaskRunsSnapshot,
   broadcastWorktreeCreateProgress,
 } from "./window-broadcasts.ts";
-export interface PierAppCore {
-  clients: PierClientRegistry;
-  commandRouter: CommandRouter;
-  disposeManagedPluginDevRuntimeWatch(): void;
-  disposePluginDataProjections(): void;
-  eventBus: PierEventBus;
-  flushExternalPluginsBeforeQuit(): Promise<void>;
-  pluginHost: MainPluginHostApi;
-  ready: Promise<void>;
-  services: PierCoreServices;
-}
+
+export type { PierAppCore } from "./types.ts";
 
 function createPierAppCore(): PierAppCore {
   const eventBus = createPierEventBus();
@@ -361,8 +348,10 @@ function createPierAppCore(): PierAppCore {
     agentMcpCatalog,
     agentRules,
     localEnvironments,
+    onEnvironmentsChanged,
     pierBindings,
     pierHome,
+    projectMemory,
     projectSkills,
     systemSkills,
   } = wireAppCorePierHomeAndSkills({
@@ -378,7 +367,7 @@ function createPierAppCore(): PierAppCore {
         ? join(process.cwd(), "resources")
         : process.resourcesPath,
     transactionLock: filePathTransactionLock,
-    userDataPath: app.getPath("userData"),
+    userDataPath: userDataDir,
   });
   const workspaceService = createWorkspaceService();
   const { panelTransfer: panelTransferRef, window: windowService } =
@@ -422,6 +411,7 @@ function createPierAppCore(): PierAppCore {
     fileWatch: createFileWatchService(),
     pluginDataProjections: appCoreProjections.projections,
     preferences,
+    projectMemory,
     projectSkills,
     systemSkills,
     secrets,
@@ -480,14 +470,13 @@ function createPierAppCore(): PierAppCore {
     clients,
     commandRouter: createCommandRouter({
       clients,
-      onEnvironmentsChanged: broadcastEnvironmentsChanged,
+      onEnvironmentsChanged,
       onWorktreeCreateProgress: broadcastWorktreeCreateProgress,
       services,
     }),
     eventBus,
-    disposeManagedPluginDevRuntimeWatch: () => {
-      managedPluginDevRuntimeWatches.dispose();
-    },
+    disposeManagedPluginDevRuntimeWatch: () =>
+      managedPluginDevRuntimeWatches.dispose(),
     disposePluginDataProjections: () => appCoreProjections.disposeTap(),
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),

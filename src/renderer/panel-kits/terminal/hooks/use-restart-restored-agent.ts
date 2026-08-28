@@ -16,60 +16,75 @@ export function useRestartRestoredAgent(args: {
   panelId: string;
   restoredAgentResult: TerminalAgentPanelMetadata | undefined;
   savedSession: TerminalPanelSessionSnapshot | null | undefined;
-}): () => Promise<void> {
+}): {
+  restart: () => Promise<void>;
+  startNew: () => Promise<void>;
+} {
   const { activeLaunch, panelId, restoredAgentResult, savedSession } = args;
 
-  return useCallback(async () => {
-    if (!restoredAgentResult) {
-      return;
-    }
-    try {
-      const { launchId } = await window.pier.agents.prepareLaunchFromSpec({
-        agentId: restoredAgentResult.agentId,
-        ...(restoredAgentResult.launch.command
-          ? { command: restoredAgentResult.launch.command }
-          : {}),
-        ...(restoredAgentResult.launch.cwd
-          ? { cwd: restoredAgentResult.launch.cwd }
-          : {}),
-      });
-      if (!launchId) {
-        toast.error(i18next.t("terminal.agentSession.restartFailed"));
+  const run = useCallback(
+    async (fresh: boolean) => {
+      if (!restoredAgentResult) {
         return;
       }
-      const context =
-        savedSession?.context ??
-        activeLaunch.context ??
-        cwdFallbackContext(panelId, restoredAgentResult.launch.cwd);
-      requestTerminalRelaunch({
-        panelId,
-        exitPresentation: AGENT_TERMINAL_EXIT_PRESENTATION,
-        launchId,
-        ...(context
-          ? {
-              context: restoredAgentResult.launch.cwd
-                ? { ...context, cwd: restoredAgentResult.launch.cwd }
-                : context,
-            }
-          : {}),
-        ...(savedSession?.tab || activeLaunch.tab
-          ? { tab: savedSession?.tab ?? activeLaunch.tab }
-          : {}),
-      });
-    } catch (error) {
-      await showAppAlert({
-        body: error instanceof Error ? error.message : String(error),
-        title: i18next.t("terminal.agentSession.restartFailed"),
-      });
-    }
-  }, [
-    activeLaunch.context,
-    activeLaunch.tab,
-    panelId,
-    restoredAgentResult,
-    savedSession?.context,
-    savedSession?.tab,
-  ]);
+      try {
+        const resumeSessionId = fresh
+          ? undefined
+          : restoredAgentResult.resume?.sessionId.trim();
+        const { launchId } = await window.pier.agents.prepareLaunchFromSpec({
+          agentId: restoredAgentResult.agentId,
+          ...(restoredAgentResult.launch.command
+            ? { command: restoredAgentResult.launch.command }
+            : {}),
+          ...(restoredAgentResult.launch.cwd
+            ? { cwd: restoredAgentResult.launch.cwd }
+            : {}),
+          ...(resumeSessionId ? { resumeSessionId } : {}),
+        });
+        if (!launchId) {
+          toast.error(i18next.t("terminal.agentSession.restartFailed"));
+          return;
+        }
+        const context =
+          savedSession?.context ??
+          activeLaunch.context ??
+          cwdFallbackContext(panelId, restoredAgentResult.launch.cwd);
+        requestTerminalRelaunch({
+          panelId,
+          exitPresentation: AGENT_TERMINAL_EXIT_PRESENTATION,
+          launchId,
+          ...(context
+            ? {
+                context: restoredAgentResult.launch.cwd
+                  ? { ...context, cwd: restoredAgentResult.launch.cwd }
+                  : context,
+              }
+            : {}),
+          ...(savedSession?.tab || activeLaunch.tab
+            ? { tab: savedSession?.tab ?? activeLaunch.tab }
+            : {}),
+        });
+      } catch (error) {
+        await showAppAlert({
+          body: error instanceof Error ? error.message : String(error),
+          title: i18next.t("terminal.agentSession.restartFailed"),
+        });
+      }
+    },
+    [
+      activeLaunch.context,
+      activeLaunch.tab,
+      panelId,
+      restoredAgentResult,
+      savedSession?.context,
+      savedSession?.tab,
+    ]
+  );
+
+  return {
+    restart: () => run(false),
+    startNew: () => run(true),
+  };
 }
 
 function cwdFallbackContext(

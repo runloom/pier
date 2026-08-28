@@ -5,7 +5,10 @@ import {
   updateTerminalPanelAgentResume,
 } from "../state/terminal-session-state.ts";
 import { findAppWindowByElectronId } from "../windows/identity.ts";
-import { windowRecordIdFor } from "./terminal/window-scope.ts";
+import {
+  windowRecordIdFor,
+  windowRecordIdForElectronWindowId,
+} from "./terminal/window-scope.ts";
 
 const log = createLogger("agent-resume-persist");
 
@@ -26,7 +29,11 @@ export function recordAgentResumeSession(args: {
     return;
   }
   const win = findAppWindowByElectronId(Number(args.windowId));
-  if (!win || win.isDestroyed()) {
+  const recordId =
+    win && !win.isDestroyed()
+      ? windowRecordIdFor(win)
+      : windowRecordIdForElectronWindowId(args.windowId);
+  if (!recordId) {
     log.warn("agent resume metadata skipped: window missing", {
       agentId: args.agentId,
       panelId: args.panelId,
@@ -34,7 +41,6 @@ export function recordAgentResumeSession(args: {
     });
     return;
   }
-  const recordId = windowRecordIdFor(win);
   const panelAgent = peekTerminalPanelAgent(recordId, args.panelId);
   if (panelAgent && panelAgent.agentId !== args.agentId) {
     log.warn("agent resume metadata skipped: foreign agent", {

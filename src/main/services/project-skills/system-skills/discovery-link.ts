@@ -68,8 +68,9 @@ async function readLinkIdentity(linkPath: string): Promise<FsObjectIdentity> {
 
 /**
  * Publish `.agents/skills/<id>` (or `.claude/...`) as a directory symlink to
- * `{userData}/skills/.system/<id>`. Replaces only owned links or owned
- * legacy library-relative links. Never overwrites unowned objects.
+ * `{systemSkillsCacheRoot}/<id>`(宿主注入 `~/.pier/system-skills`,跨 build
+ * 稳定). Replaces only owned links or owned legacy library-relative links.
+ * Never overwrites unowned objects.
  */
 export async function publishSystemSkillDiscoveryLink(args: {
   cacheDir: string;

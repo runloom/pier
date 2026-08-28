@@ -36,7 +36,13 @@ export const CANVAS_HOST_ALLOWED_COMMANDS = [
   "plugin.list",
   "pluginSettings.getAll",
   "pluginData.snapshot",
+  "pluginData.watchStart",
+  "pluginData.watchStop",
+  "pluginAction.invoke",
+  "canvasCommand.invoke",
   "preferences.read",
+  "settings.open",
+  "usageData.refresh",
   "run.backgroundSnapshot",
   "run.list",
   "run.output",
@@ -224,8 +230,13 @@ const CHANNEL_DOMAIN_ALIASES: Readonly<Record<string, string>> = {
   "terminal-status-bar": "terminalStatusBar",
 };
 
+const COMMAND_DOMAIN_ALIASES: Readonly<Record<string, string>> = {
+  usageData: "usage-data",
+};
+
 export function canvasHostDomainIdFromCommand(type: string): string {
-  return type.split(".")[0] ?? type;
+  const head = type.split(".")[0] ?? type;
+  return COMMAND_DOMAIN_ALIASES[head] ?? head;
 }
 
 export function canvasHostDomainIdFromChannel(channel: string): string {

@@ -171,7 +171,12 @@ export function SettingsDialog() {
 
   useEffect(
     () =>
-      window.pier?.settings?.onOpenRequest?.(() => {
+      window.pier?.settings?.onOpenRequest?.((payload) => {
+        const section = payload?.section;
+        if (typeof section === "string" && section.length > 0) {
+          useSettingsDialogStore.getState().openSection(section);
+          return;
+        }
         useSettingsDialogStore.getState().open();
       }),
     []

@@ -24,6 +24,7 @@ import {
 } from "./bootstrap-privileged-protocols.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app.ts";
 import { installDisplayCapturePolicy } from "./display-capture-policy.ts";
+import { registerHtmlPreviewTicketIpc } from "./files/html-preview-ipc.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { applyGpuWorkarounds } from "./gpu-workarounds.ts";
 import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
@@ -58,8 +59,8 @@ import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerUsageDataIpc } from "./ipc/usage-data.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import {
+  invokeRendererMenuCommand,
   openTerminalFromMenu,
-  openTerminalSearchFromMenu,
   prepareQuitDialogWindow,
   toggleCommandPaletteFromMenu,
 } from "./menu/window-actions.ts";
@@ -242,7 +243,7 @@ if (gotTheLock) {
         getTargetWindow: getMenuTargetWindow,
         isDev,
         isMac,
-        onFindInTerminal: openTerminalSearchFromMenu,
+        onMenuCommand: invokeRendererMenuCommand,
         onNewTerminal: openTerminalFromMenu,
         onNewWindow: createFreshWindowFromMenu,
         onOpenCommandPalette: toggleCommandPaletteFromMenu,
@@ -325,6 +326,7 @@ if (gotTheLock) {
       });
       registerFileSaveTargetIpc(ipcMain);
       registerFilePreviewTicketIpc();
+      registerHtmlPreviewTicketIpc();
       registerMediaPreviewIpc();
       registerMenuIpc(ipcMain);
       registerClipboardIpc(ipcMain);
