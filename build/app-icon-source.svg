@@ -12,22 +12,20 @@
       <stop offset="46%" stop-color="#8549ff"/>
       <stop offset="100%" stop-color="#542ee5"/>
     </linearGradient>
-    <radialGradient id="pier-ping-left" cx="160" cy="720" r="120" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.70"/>
-      <stop offset="35%" stop-color="#f0e4ff" stop-opacity="0.28"/>
+    <radialGradient id="pier-ping-left" cx="160" cy="720" r="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="40%" stop-color="#f0e4ff" stop-opacity="0.10"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </radialGradient>
-    <radialGradient id="pier-ping-right" cx="864" cy="720" r="120" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.70"/>
-      <stop offset="35%" stop-color="#f0e4ff" stop-opacity="0.28"/>
+    <radialGradient id="pier-ping-right" cx="864" cy="720" r="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="40%" stop-color="#f0e4ff" stop-opacity="0.10"/>
       <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="pier-rim" x1="64" y1="0" x2="960" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.82"/>
-      <stop offset="18%" stop-color="#efe4ff" stop-opacity="0.30"/>
-      <stop offset="50%" stop-color="#cbb6ff" stop-opacity="0.05"/>
-      <stop offset="82%" stop-color="#efe4ff" stop-opacity="0.30"/>
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.82"/>
+    <linearGradient id="pier-rim" x1="512" y1="682" x2="512" y2="868" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="50%" stop-color="#f0e4ff" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#cbb6ff" stop-opacity="0.04"/>
     </linearGradient>
     <filter id="pier-relief" x="-16" y="-16" width="1056" height="1056" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
       <feOffset in="SourceAlpha" dx="0" dy="6" result="top-shift"/>

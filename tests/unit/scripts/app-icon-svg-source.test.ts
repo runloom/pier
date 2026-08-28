@@ -202,6 +202,39 @@ describe("Pier minimal vector app-icon source", () => {
     );
   });
 
+  it("keeps berth metal shine low-frequency so small sizes do not form two hotspots", () => {
+    if (!existsSync(SOURCE)) {
+      return;
+    }
+
+    const document = parseSource();
+    const leftPing = document.querySelector("#pier-ping-left");
+    const rightPing = document.querySelector("#pier-ping-right");
+    expect(leftPing?.getAttribute("r")).toBe("180");
+    expect(rightPing?.getAttribute("r")).toBe("180");
+    expect(
+      Array.from(leftPing?.querySelectorAll("stop") ?? []).map((stop) =>
+        stop.getAttribute("stop-opacity")
+      )
+    ).toEqual(["0.22", "0.10", "0"]);
+    expect(
+      Array.from(rightPing?.querySelectorAll("stop") ?? []).map((stop) =>
+        stop.getAttribute("stop-opacity")
+      )
+    ).toEqual(["0.22", "0.10", "0"]);
+
+    const rim = document.querySelector("#pier-rim");
+    expect(rim?.getAttribute("x1")).toBe("512");
+    expect(rim?.getAttribute("x2")).toBe("512");
+    expect(rim?.getAttribute("y1")).toBe("682");
+    expect(rim?.getAttribute("y2")).toBe("868");
+    expect(
+      Array.from(rim?.querySelectorAll("stop") ?? []).map((stop) =>
+        stop.getAttribute("stop-opacity")
+      )
+    ).toEqual(["0.32", "0.14", "0.04"]);
+  });
+
   it("keeps the outer contour crisp with a shared internal micro-bevel", () => {
     if (!existsSync(SOURCE)) {
       return;

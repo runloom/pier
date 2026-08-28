@@ -42,9 +42,13 @@ Every target is a deterministic resize of the one master.
   metal.
 - The prompt `>_` is solid white `#ffffff`. It is the lamp, not the metal.
 - The berth is brand-violet metal (`#b66cff → #8549ff → #542ee5`). Shoulder
-  pings are radial highlights whose centers sit on the inner U, so clipping
-  to the berth yields a semicircle, not a quarter-circle cut by the inner
-  corner. An inset inner-U rim uses round caps.
+  pings are large, quiet radial washes (`r=180`, peak opacity `0.22`) whose
+  centers sit on the inner U, so clipping to the berth yields a semicircle,
+  not a quarter-circle cut by the inner corner. An inset inner-U rim uses
+  round caps and a vertical light-from-above gradient (peak opacity `0.32`
+  at the waterline, `0.04` in the trough). Do not restore a horizontal
+  endpoint-hot rim or ping peaks near white; those collapse into two Dock
+  lamps.
 - The berth path remains the canonical visible geometry. A same-fill overscan
   seam guard continues its otherwise hidden closing edge below the body clip
   before relief is evaluated, preventing that implementation-only edge from
@@ -52,7 +56,9 @@ Every target is a deterministic resize of the one master.
 - Brand and body gradients use the shared `0% / 46% / 100%` stop positions.
   Ping and rim highlights may use extra stops.
 - Micro-bevel applies to the berth only. The white prompt is a hard-edged lamp.
-  Metal shine on the berth is the pings plus clipped rim.
+  Metal shine on the berth is one continuous inner-U lip plus the quiet
+  shoulder washes. At 32–64 px it must read as a single metal edge, not two
+  isolated highlights.
 - The shared relief is a strictly internal micro-bevel. It subtracts a shifted
   `SourceAlpha` from the original alpha to derive a top facet (`blur=1.25`,
   `dy=6`, `opacity=.28`) and a lower facet (`blur=1.75`, `dy=-8`,
