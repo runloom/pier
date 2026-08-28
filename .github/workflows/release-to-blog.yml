@@ -1,0 +1,80 @@
+name: Publish Release to Blog
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "版本标签（如 0.1.33）"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pier
+        uses: actions/checkout@v7
+
+      - name: 解析版本标签
+        id: version
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          [ -z "$TAG" ] && TAG="${{ inputs.tag }}"
+          [ -z "$TAG" ] && { echo "未提供版本标签"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: 生成博客文章
+        id: generate
+        env:
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_BASE_URL: ${{ secrets.LLM_BASE_URL }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+        run: |
+          python3 .github/scripts/release-to-blog.py \
+            --changelog CHANGELOG.md \
+            --version "${{ steps.version.outputs.tag }}" \
+            --out /tmp/blog-posts
+          echo "slug=$(cat /tmp/blog-posts/slug 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+
+      - name: 无对应条目则跳过
+        if: steps.generate.outputs.slug == ''
+        run: echo "CHANGELOG 中无对应条目，本次发布不生成博客文章"
+
+      - name: 写入 pier-site 并开 PR
+        if: steps.generate.outputs.slug != ''
+        env:
+          BLOG_PAT: ${{ secrets.BLOG_PAT }}
+        run: |
+          set -euo pipefail
+          if [ -z "$BLOG_PAT" ]; then
+            echo "::error::缺少 secrets.BLOG_PAT：请创建对 runloom/pier-website 有 contents:write 与 pull_requests:write 权限的 PAT，并配置到本仓库 Secrets"
+            exit 1
+          fi
+          SLUG="${{ steps.generate.outputs.slug }}"
+          BRANCH="blog/$SLUG"
+          git clone --depth 1 "https://x-access-token:${BLOG_PAT}@github.com/runloom/pier-website.git" /tmp/pier-site
+          cd /tmp/pier-site
+          if git ls-remote --heads origin "$BRANCH" | grep -q "refs/heads/$BRANCH"; then
+            echo "分支 $BRANCH 已存在（可能已有对应 PR），跳过"
+            exit 0
+          fi
+          cp /tmp/blog-posts/zh/*.md src/content/blog/zh/
+          for lang in en ja ko; do
+            if ls /tmp/blog-posts/$lang/*.md >/dev/null 2>&1; then
+              cp /tmp/blog-posts/$lang/*.md src/content/blog/$lang/
+            fi
+          done
+          git config user.name "pier-release-bot"
+          git config user.email "pier-release-bot@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add src/content/blog
+          git commit -m "blog: 发布 Pier $SLUG 更新文章"
+          git push origin "$BRANCH"
+          gh pr create --repo runloom/pier-website --base main --head "$BRANCH" \
+            --title "博客：Pier $SLUG 更新" \
+            --body "由 release 事件自动生成的更新文章（来源 CHANGELOG.md）。合并后自动构建部署上线。"
+          echo "PR 已创建"
