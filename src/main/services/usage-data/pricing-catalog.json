@@ -366,7 +366,8 @@
       "inputMicrousd": 0.3,
       "outputMicrousd": 0.9,
       "aliases": [
-        "mistralai/codestral-2508"
+        "mistralai/codestral-2508",
+        "mistralai/codestral-2508:batch"
       ]
     },
     "deepseek-chat": {
@@ -490,9 +491,9 @@
       ]
     },
     "deepseek-v4-flash-vision-exp": {
-      "cachedInputMicrousd": 0.007,
-      "inputMicrousd": 0.22,
-      "outputMicrousd": 0.66,
+      "cachedInputMicrousd": 0.014,
+      "inputMicrousd": 0.44,
+      "outputMicrousd": 1.32,
       "aliases": [
         "deepseek/deepseek-v4-flash-vision-exp"
       ]
@@ -574,7 +575,7 @@
       ]
     },
     "gemini-2.5-flash-lite-preview-06-17": {
-      "cachedInputMicrousd": 0.025,
+      "cachedInputMicrousd": 0.01,
       "inputMicrousd": 0.1,
       "outputMicrousd": 0.4
     },
@@ -584,22 +585,22 @@
       "outputMicrousd": 0.4
     },
     "gemini-2.5-flash-native-audio": {
-      "cachedInputMicrousd": 0.03,
-      "inputMicrousd": 0.3,
-      "outputMicrousd": 2.5
+      "cachedInputMicrousd": 0.05,
+      "inputMicrousd": 0.5,
+      "outputMicrousd": 2
     },
     "gemini-2.5-flash-native-audio-preview-09-2025": {
-      "cachedInputMicrousd": 0.03,
-      "inputMicrousd": 0.3,
-      "outputMicrousd": 2.5
+      "cachedInputMicrousd": 0.05,
+      "inputMicrousd": 0.5,
+      "outputMicrousd": 2
     },
     "gemini-2.5-flash-native-audio-preview-12-2025": {
-      "cachedInputMicrousd": 0.03,
-      "inputMicrousd": 0.3,
-      "outputMicrousd": 2.5
+      "cachedInputMicrousd": 0.05,
+      "inputMicrousd": 0.5,
+      "outputMicrousd": 2
     },
     "gemini-2.5-flash-preview-09-2025": {
-      "cachedInputMicrousd": 0.075,
+      "cachedInputMicrousd": 0.03,
       "inputMicrousd": 0.3,
       "outputMicrousd": 2.5
     },
@@ -637,14 +638,8 @@
     },
     "gemini-2.5-pro-preview-tts": {
       "cachedInputMicrousd": 0.125,
-      "inputMicrousd": 1.25,
-      "outputMicrousd": 10,
-      "longContext": {
-        "cachedInputMicrousd": 0.25,
-        "inputMicrousd": 2.5,
-        "outputMicrousd": 15,
-        "threshold": 200000
-      }
+      "inputMicrousd": 1,
+      "outputMicrousd": 20
     },
     "gemini-3-flash": {
       "inputMicrousd": 0.5,
@@ -1001,7 +996,8 @@
       "inputMicrousd": 1.4,
       "outputMicrousd": 4.4,
       "aliases": [
-        "z-ai/glm-5.3"
+        "z-ai/glm-5.3",
+        "zai/glm-5.3"
       ]
     },
     "glm-5.3-flash": {
@@ -2504,7 +2500,8 @@
       "inputMicrousd": 0.5,
       "outputMicrousd": 1.5,
       "aliases": [
-        "mistralai/mistral-large-2512"
+        "mistralai/mistral-large-2512",
+        "mistralai/mistral-large-2512:batch"
       ]
     },
     "mistral-medium-3": {
@@ -2520,7 +2517,8 @@
       "inputMicrousd": 1.5,
       "outputMicrousd": 7.5,
       "aliases": [
-        "mistralai/mistral-medium-3-5"
+        "mistralai/mistral-medium-3-5",
+        "mistralai/mistral-medium-3-5:batch"
       ]
     },
     "mistral-medium-3.1": {
@@ -2528,7 +2526,8 @@
       "inputMicrousd": 0.4,
       "outputMicrousd": 2,
       "aliases": [
-        "mistralai/mistral-medium-3.1"
+        "mistralai/mistral-medium-3.1",
+        "mistralai/mistral-medium-3.1:batch"
       ]
     },
     "mistral-small-24b-instruct-2501": {
@@ -2544,7 +2543,8 @@
       "inputMicrousd": 0.15,
       "outputMicrousd": 0.6,
       "aliases": [
-        "mistralai/mistral-small-2603"
+        "mistralai/mistral-small-2603",
+        "mistralai/mistral-small-2603:batch"
       ]
     },
     "mistral-small-3.1-24b-instruct": {
