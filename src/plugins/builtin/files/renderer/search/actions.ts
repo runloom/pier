@@ -118,8 +118,8 @@ export function createSearchContentsAction(
     },
     id: FILES_SEARCH_CONTENTS_COMMAND_ID,
     metadata: { group: "2_view", sortOrder: 2 },
-    // 快捷键主路径；不进命令面板（文件类仅保留转到文件 / 打开目录）。
-    surfaces: [],
+    // 快捷键主路径，同时进命令面板。
+    surfaces: ["command-palette"],
     title: () => t("filePanel.contentSearch.command", "Search in Files"),
   };
 }

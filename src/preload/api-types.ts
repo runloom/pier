@@ -125,6 +125,7 @@ export interface PierCommandPaletteMruAPI {
 }
 
 export interface PierCommandPaletteAPI {
+  onMenuCommand: (cb: (commandId: string) => void) => () => void;
   onToggleRequest: (cb: () => void) => () => void;
 }
 

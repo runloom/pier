@@ -461,6 +461,8 @@
     "ui.reviewTreeExpandAll": "Expand Folders",
     "ui.reviewTreeExpand": "Show changed files",
     "ui.reviewToggleTree": "Toggle Changed Files Tree",
+    "ui.reviewToggleTreeUnavailable": "Open a git repository first.",
+    "ui.reviewSearchUnavailable": "Find isn't available in changed files. Open a git repository first.",
     "ui.reviewTreeSearch": "Find in changed files",
     "ui.reviewTreeSearchClose": "Close",
     "ui.reviewTreeSearchNext": "Next match",

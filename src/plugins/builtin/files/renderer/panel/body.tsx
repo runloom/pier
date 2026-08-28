@@ -17,6 +17,7 @@ import {
   sourceOffsetForLine,
 } from "../markdown/cross-mode-anchor.ts";
 import { FileImagePreview } from "../preview/image.tsx";
+import { FilesFindUnavailableNotice } from "../search/use-find-unavailable.ts";
 import { isCanvasDiskDoc } from "./canvas-doc.ts";
 import { FileDiskConflictState } from "./disk-conflict-banner.tsx";
 import {
@@ -304,7 +305,16 @@ export function ResolvedFilePanel({
   }
 
   if (document.preview && context) {
-    return <FileImagePreview context={context} document={document} t={t} />;
+    return (
+      <FilesFindUnavailableNotice
+        context={context}
+        panelId={panelId}
+        searchRequest={searchRequest}
+        t={t}
+      >
+        <FileImagePreview context={context} document={document} t={t} />
+      </FilesFindUnavailableNotice>
+    );
   }
 
   // Full-panel Empty decision state (not a top banner). Diff mode keeps the

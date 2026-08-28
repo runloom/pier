@@ -343,8 +343,16 @@ export const settings = {
   keybindings: {
     change: "更改快捷键",
     clear: "清除",
+    alsoBound: "也可使用 {{chords}}。",
     descriptionDefault: "{{category}}命令。",
     description: {
+      agent: {
+        new: "启动默认智能体。增强输入聚焦时，同一快捷键改为添加文件。",
+      },
+      agents: {
+        focusWaiting: "跳到下一个需要你处理的智能体。",
+        list: "打开智能体列表。编辑时同样有效。",
+      },
       commandPalette: {
         clearRecent: "清空命令面板的使用记录。",
         toggle: "打开或关闭命令面板。",
@@ -356,7 +364,13 @@ export const settings = {
       },
       files: {
         copyPathWithRange: "把当前文件路径和所选行号复制到剪贴板。",
+        editor: {
+          goToLine: "跳到当前文件的指定行。",
+        },
       },
+      find: "在当前终端、文件或变更列表中查找。",
+      findNext: "查找当前面板中的下一个匹配。",
+      findPrev: "查找当前面板中的上一个匹配。",
       panel: {
         close: "关闭当前面板。",
         closeActive: "关闭当前活动面板。",
@@ -364,6 +378,8 @@ export const settings = {
         closeOthers: "关闭除当前面板外的其他面板。",
         focusDown: "聚焦下方的面板组。",
         focusLeft: "聚焦左侧的面板组。",
+        focusNextTab: "切换到当前组的下一个标签。",
+        focusPrevTab: "切换到当前组的上一个标签。",
         focusRight: "聚焦右侧的面板组。",
         focusUp: "聚焦上方的面板组。",
         newTab: "新建一个面板标签。",
@@ -384,10 +400,13 @@ export const settings = {
       },
       terminal: {
         close: "关闭当前终端面板。",
+        composerAttach:
+          "在增强输入中添加文件。增强输入未聚焦时，同一快捷键启动默认智能体。",
         openDebugWindow: "打开终端调试窗口。",
       },
       view: {
         resetZoom: "恢复默认界面缩放。",
+        toggleSideTree: "显示或隐藏文件树。",
         zoomIn: "放大 Pier 界面。",
         zoomOut: "缩小 Pier 界面。",
       },

@@ -106,6 +106,14 @@ function currentShortcutParts(actionId: string): readonly string[] {
   return binding ? formatChordParts(binding.chord) : [];
 }
 
+function extraShortcutLabel(actionId: string): string {
+  return keybindingRegistry
+    .getBindingsFor(actionId)
+    .slice(1)
+    .map((binding) => formatChord(binding.chord))
+    .join(" · ");
+}
+
 function localizedDescription(
   action: Action,
   t: ReturnType<typeof useT>
@@ -123,6 +131,17 @@ function localizedDescription(
   return t("settings.keybindings.descriptionDefault", {
     category: category === categoryKey ? action.category : category,
   });
+}
+
+function bindingDescription(
+  action: Action,
+  t: ReturnType<typeof useT>
+): string {
+  const extra = extraShortcutLabel(action.id);
+  const description = localizedDescription(action, t);
+  return extra
+    ? `${description} ${t("settings.keybindings.alsoBound", { chords: extra })}`
+    : description;
 }
 
 function localizedError(
@@ -143,19 +162,17 @@ function actionSearchHaystack(
   action: Action,
   t: ReturnType<typeof useT>
 ): string {
-  const binding = keybindingRegistry.getBindingsFor(action.id)[0];
+  const bindings = keybindingRegistry.getBindingsFor(action.id);
   return keybindingSearchHaystack([
     action.title(),
     localizedDescription(action, t),
     action.id,
     action.category,
-    ...(binding
-      ? [
-          formatChord(binding.chord),
-          stringifyChord(binding.chord),
-          ...formatChordParts(binding.chord),
-        ]
-      : []),
+    ...bindings.flatMap((binding) => [
+      formatChord(binding.chord),
+      stringifyChord(binding.chord),
+      ...formatChordParts(binding.chord),
+    ]),
   ]);
 }
 
@@ -309,7 +326,7 @@ export function KeybindingsSection() {
                       <FieldContent className="min-w-0 gap-1">
                         <FieldLabel>{title}</FieldLabel>
                         <FieldDescription className="text-xs">
-                          {localizedDescription(action, t)}
+                          {bindingDescription(action, t)}
                         </FieldDescription>
                       </FieldContent>
                       <ShortcutInput

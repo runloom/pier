@@ -30,10 +30,22 @@ describe("files command-palette surface policy", () => {
     expect(index).toContain("createFilesQuickOpenAction");
   });
 
-  it("keeps save / search / tree-create off the command palette", () => {
+  it("registers search-in-files for the palette", () => {
+    const searchActions = readFileSync(
+      join(FILES_RENDERER_ROOT, "search/actions.ts"),
+      "utf8"
+    );
+    expect(searchActions).toMatch(
+      /id: FILES_SEARCH_CONTENTS_COMMAND_ID[\s\S]*?surfaces: \["command-palette"\]/
+    );
+    expect(searchActions).toMatch(
+      /id: FILES_SEARCH_IN_FOLDER_COMMAND_ID[\s\S]*?surfaces: \["files\/tree-item", "files\/tree-background"\]/
+    );
+  });
+
+  it("keeps save / tree-create off the command palette", () => {
     for (const fileName of [
       "save/all-action.ts",
-      "search/actions.ts",
       "tree/actions.ts",
       "tree/view-actions.ts",
     ] as const) {

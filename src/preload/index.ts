@@ -321,6 +321,7 @@ const commandPaletteMruApi: PierCommandPaletteMruAPI = {
 };
 
 const commandPaletteApi: PierCommandPaletteAPI = {
+  onMenuCommand: (cb) => subscribeIpc(PIER_BROADCAST.MENU_COMMAND_REQUEST, cb),
   onToggleRequest: (cb) =>
     subscribeIpc(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST, cb),
 };

@@ -9,6 +9,21 @@
         "zhili"
       ]
     },
+    "find": [
+      "查找",
+      "搜索",
+      "当前面板查找",
+      "文件查找",
+      "终端查找",
+      "chazhao",
+      "sousuo"
+    ],
+    "findNext": ["查找下一个", "下一个匹配"],
+    "findPrev": ["查找上一个", "上一个匹配"],
+    "agents": {
+      "list": ["智能体列表", "zhili liebiao"],
+      "focusWaiting": ["需要你处理", "下一个需要处理"]
+    },
     "commandPalette": {
       "clearRecent": [
         "清空历史",
@@ -44,6 +59,8 @@
         "junfen",
         "pingfen"
       ],
+      "focusNextTab": ["下一个标签", "xiayige biaoqian"],
+      "focusPrevTab": ["上一个标签", "shangyige biaoqian"],
       "newTerminal": [
         "新建终端",
         "打开终端",
@@ -77,6 +94,7 @@
     },
     "view": {
       "resetZoom": ["重置缩放", "重置界面缩放", "恢复缩放", "chongzhi suofang"],
+      "toggleSideTree": ["侧栏树", "文件树", "目录树", "celan shu"],
       "zoomIn": ["放大", "放大界面", "fangda"],
       "zoomOut": ["缩小", "缩小界面", "suoxiao"]
     },

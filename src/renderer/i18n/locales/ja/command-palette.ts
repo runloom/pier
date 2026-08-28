@@ -64,6 +64,15 @@ export const commandPalette = {
     zoomIn: "拡大",
     zoomOut: "縮小",
     resetZoom: "拡大率をリセット",
+    find: "検索",
+    findNext: "次を検索",
+    findPrev: "前を検索",
+    findUnavailable:
+      "ここでは検索できません。ターミナルかファイルを開いてください。",
+    focusNextTab: "次のタブ",
+    focusPrevTab: "前のタブ",
+    toggleSideTree: "ファイルツリーを切り替え",
+    toggleSideTreeUnavailable: "先にプロジェクトフォルダを開いてください。",
   },
   run: {
     action: {

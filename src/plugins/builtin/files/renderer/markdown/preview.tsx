@@ -177,6 +177,7 @@ export function MarkdownPreview({
   const search = useMarkdownPreviewSearch({
     labels: searchLabels,
     pagination: state.status === "ready" ? state.pagination : null,
+    panelId,
     scrollRoot,
     searchRequest,
     surfaceRef: rootRef,

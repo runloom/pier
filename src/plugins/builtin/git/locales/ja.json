@@ -456,6 +456,8 @@
     "ui.reviewTreeExpandAll": "フォルダを展開",
     "ui.reviewTreeExpand": "変更ファイルを表示",
     "ui.reviewToggleTree": "変更ファイルツリーを切り替え",
+    "ui.reviewToggleTreeUnavailable": "先に git リポジトリを開いてください。",
+    "ui.reviewSearchUnavailable": "変更ファイルでは検索できません。先に git リポジトリを開いてください。",
     "ui.reviewTreeSearch": "変更ファイル内を検索",
     "ui.reviewTreeSearchClose": "閉じる",
     "ui.reviewTreeSearchNext": "次の一致",

@@ -108,6 +108,9 @@ function adaptActionMetadata(
   if (metadata?.menuHidden) {
     adapted.menuHidden = metadata.menuHidden;
   }
+  if (metadata?.shortcutSourceId) {
+    adapted.shortcutSourceId = metadata.shortcutSourceId;
+  }
   if (metadata?.sortOrder != null) {
     adapted.sortOrder = metadata.sortOrder;
   }
