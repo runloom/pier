@@ -233,7 +233,7 @@ describe("keybinding-preferences.store", () => {
     expect(pier.setAppShortcutKeys).toHaveBeenCalledTimes(callsAfterLocalApply);
   });
 
-  it("does not route user-only commands that are not marked for terminal focus", async () => {
+  it("routes user global bindings while the terminal is focused", async () => {
     const pier = installPierApi();
     const { DEFAULT_KEYMAP } = await import("@/lib/keybindings/defaults.ts");
     const { keybindingRegistry } = await import(
@@ -246,10 +246,10 @@ describe("keybinding-preferences.store", () => {
     await initKeybindingPreferences();
     await useKeybindingPreferencesStore
       .getState()
-      .setBinding("pier.panel.splitLeft", "Mod+Alt+ArrowLeft", "global");
+      .setBinding("pier.panel.splitLeft", "Mod+Alt+KeyQ", "global");
 
     expect(pier.setAppShortcutKeys).toHaveBeenLastCalledWith(
-      expect.not.arrayContaining(["Mod+Alt+ArrowLeft"])
+      expect.arrayContaining(["Mod+Alt+KeyQ"])
     );
   });
 

@@ -1,3 +1,4 @@
+import { usePanelFindSearchRequest as useFindRequest } from "@plugins/api/panel-find.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type {
   IDockviewPanelProps,
@@ -88,7 +89,7 @@ function FilePanelContent({
     stableSourceRef.current = null;
   }
   const stableSource = stableSourceRef.current;
-  const [searchRequest, setSearchRequest] = useState(0);
+  const [searchRequest, setSearchRequest] = useFindRequest(props.api?.id);
   const root = filePanelProjectRoot(props.params?.context);
   const [treeCollapsed, setTreeCollapsed] = useProjectFileTreeCollapsed(root);
   const projectName = root ? projectNameFromRoot(root) : null;
@@ -263,7 +264,7 @@ function FilePanelContent({
 
   const handleOpenSearch = useCallback(() => {
     setSearchRequest((r) => r + 1);
-  }, []);
+  }, [setSearchRequest]);
 
   const treeInstanceId = props.api?.id ?? "pier.files.inlineFilePanel";
   const handleBreadcrumbClick = useCallback(

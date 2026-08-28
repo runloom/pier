@@ -410,6 +410,8 @@
     "ui.reviewTreeExpandAll": "폴더 펼치기",
     "ui.reviewTreeExpand": "변경된 파일 보이기",
     "ui.reviewToggleTree": "변경 파일 트리 전환",
+    "ui.reviewToggleTreeUnavailable": "먼저 git 저장소를 여세요.",
+    "ui.reviewSearchUnavailable": "변경 파일에서 찾을 수 없습니다. 먼저 git 저장소를 여세요.",
     "ui.reviewTreeSearch": "변경된 파일에서 찾기",
     "ui.reviewTreeSearchClose": "닫기",
     "ui.reviewTreeSearchNext": "다음 일치",

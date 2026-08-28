@@ -109,6 +109,8 @@ export const PIER_BROADCAST = {
   NEW_TERMINAL_REQUEST: "pier://panel:new-terminal-request",
   // main 端应用菜单 / 原生快捷键请求 renderer 打开设置.
   SETTINGS_OPEN_REQUEST: "pier://settings:open-request",
+  // main 端应用菜单请求 renderer 执行已注册命令（查找下一个、下一标签等）。
+  MENU_COMMAND_REQUEST: "pier://menu:command-request",
   // main 端应用菜单请求 renderer 打开当前终端搜索栏.
   TERMINAL_SEARCH_OPEN_REQUEST: "pier://terminal:search-open-request",
   // 偏好更新后广播完整快照给每个 renderer.

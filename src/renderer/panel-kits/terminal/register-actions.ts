@@ -108,6 +108,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     },
     iconComponent: Search,
     id: "pier.terminal.search",
+    shortcutSourceId: "pier.find",
     sortOrder: 4,
     surfaces: ["terminal/content"],
     titleKey: "contextMenu.action.find",
@@ -262,7 +263,7 @@ export function registerTerminalActions(): () => void {
   );
   const searchOpenRequestDispose = window.pier?.terminal?.onSearchOpenRequest?.(
     () => {
-      actionRegistry.get("pier.terminal.search")?.handler();
+      actionRegistry.get("pier.find")?.handler();
     }
   );
 

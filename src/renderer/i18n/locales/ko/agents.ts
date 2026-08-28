@@ -1,4 +1,5 @@
 export const agents = {
+  focusAlreadyCurrent: "이미 처리가 필요한 세션에 있습니다",
   focusEmpty: "처리할 에이전트가 없습니다",
   focusFailed: "에이전트로 이동하지 못했습니다. 다시 시도하세요",
   focusPanelGone: "패널이 닫혔습니다",
@@ -15,7 +16,7 @@ export const agents = {
     emptyDetail: "에이전트를 시작하면 여기에 나타납니다",
     emptyNew: "기본 에이전트 시작",
     emptyNewDetail: "지금 실행 중인 에이전트가 없습니다",
-    focusNextNeedsYou: "다음 처리 필요로 이동",
+    focusNextNeedsYou: "처리가 필요한 다음으로",
     placeholder: "에이전트 검색…",
     thisWindow: "이 윈도우",
     title: "에이전트",

@@ -85,6 +85,10 @@ describe("action contributions", () => {
       "pier.panel.closeOthers",
       "pier.panel.closeToTheRight",
       "pier.panel.closeGroup",
+      "pier.panel.splitRight",
+      "pier.panel.splitDown",
+      "pier.panel.splitLeft",
+      "pier.panel.splitUp",
     ]);
     expect(closeAction?.shortcutSourceId).toBe("pier.panel.closeActive");
     expect(editActions.map((action) => action.id)).toEqual([
@@ -107,24 +111,33 @@ describe("action contributions", () => {
       "pier.panel.splitLeft",
       "pier.panel.splitUp",
     ]);
+    expect(
+      terminalSplitActions.every((action) =>
+        action.surfaces.includes("command-palette")
+      )
+    ).toBe(true);
   });
 
-  it("gates split actions to an active terminal panel", () => {
+  it("gates split actions to an active workspace panel", () => {
     const splitActions = PANEL_LAYOUT_ACTION_CONTRIBUTIONS.filter((action) =>
       action.id.startsWith("pier.panel.split")
     );
     expect(splitActions.map((action) => action.when)).toEqual([
-      "terminal.hasActivePanel",
-      "terminal.hasActivePanel",
-      "terminal.hasActivePanel",
-      "terminal.hasActivePanel",
+      "workspace.hasActivePanel",
+      "workspace.hasActivePanel",
+      "workspace.hasActivePanel",
+      "workspace.hasActivePanel",
     ]);
 
-    const terminalRuntime = runtime(1, false);
-    const nonTerminalRuntime: typeof terminalRuntime = {
-      ...terminalRuntime,
+    const withPanel = runtime(1, false);
+    const withoutPanel: typeof withPanel = {
+      ...withPanel,
       getContext: () => ({
-        ...terminalRuntime.getContext(),
+        ...withPanel.getContext(),
+        workspace: {
+          ...withPanel.getContext().workspace,
+          hasActivePanel: false,
+        },
         terminal: {
           activeIsTaskPanel: false,
           hasActivePanel: false,
@@ -133,14 +146,8 @@ describe("action contributions", () => {
     };
 
     for (const contribution of splitActions) {
-      const enabled = createActionFromContribution(
-        contribution,
-        terminalRuntime
-      );
-      const disabled = createActionFromContribution(
-        contribution,
-        nonTerminalRuntime
-      );
+      const enabled = createActionFromContribution(contribution, withPanel);
+      const disabled = createActionFromContribution(contribution, withoutPanel);
       expect(enabled.enabled?.()).toBe(true);
       expect(disabled.enabled?.()).toBe(false);
     }

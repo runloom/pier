@@ -40,6 +40,20 @@ export function openTerminalSearchFromMenu(target: AppWindow | null): void {
   target.webContents.send(PIER_BROADCAST.TERMINAL_SEARCH_OPEN_REQUEST);
 }
 
+export function invokeRendererMenuCommand(
+  target: AppWindow | null,
+  commandId: string
+): void {
+  if (!target) {
+    return;
+  }
+  focusAppWindow(target);
+  if (target.isDestroyed() || target.webContents.isDestroyed()) {
+    return;
+  }
+  target.webContents.send(PIER_BROADCAST.MENU_COMMAND_REQUEST, commandId);
+}
+
 export function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
   if (!target) {
     return;

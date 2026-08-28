@@ -66,16 +66,25 @@ export function registerGitReviewTreeFolderActions(options: {
       category: "git",
       enabled: () => true,
       handler: async () => {
-        toggleGitReviewTreeSidebar(activeGitReviewRootPath(context));
+        if (!toggleGitReviewTreeSidebar(activeGitReviewRootPath(context))) {
+          context.notifications.info(
+            pluginText(
+              context,
+              "reviewToggleTreeUnavailable",
+              "Open a git repository first."
+            )
+          );
+        }
         return await Promise.resolve();
       },
       id: GIT_REVIEW_TOGGLE_TREE_COMMAND_ID,
       metadata: {
         categoryKey: "git",
         group: "2_view",
+        shortcutSourceId: "pier.view.toggleSideTree",
         sortOrder: 48,
       },
-      // Cmd/Ctrl+B while Changes panel is active.
+      // Invoked from global pier.view.toggleSideTree while Changes is active.
       surfaces: [],
       title: () =>
         pluginText(context, "reviewToggleTree", "Toggle Changed Files Tree"),

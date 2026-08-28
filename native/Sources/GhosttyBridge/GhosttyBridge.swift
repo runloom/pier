@@ -108,6 +108,10 @@ final class EventRouterView: NSView {
         "Ctrl+Shift+ArrowRight",
         "Ctrl+Shift+ArrowUp",
         "Ctrl+Shift+KeyD",
+        "Mod+Alt+ArrowDown",
+        "Mod+Alt+ArrowLeft",
+        "Mod+Alt+ArrowRight",
+        "Mod+Alt+ArrowUp",
         "Mod+Alt+KeyR",
         "Mod+Comma",
         "Mod+Digit0",
@@ -121,8 +125,10 @@ final class EventRouterView: NSView {
         "Mod+Digit8",
         "Mod+Digit9",
         "Mod+Equal",
+        "Mod+KeyB",
         "Mod+KeyD",
         "Mod+KeyF",
+        "Mod+KeyG",
         "Mod+KeyN",
         "Mod+KeyP",
         "Mod+KeyT",
@@ -138,13 +144,19 @@ final class EventRouterView: NSView {
         "Mod+Numpad7",
         "Mod+Numpad8",
         "Mod+Numpad9",
+        "Mod+Shift+BracketLeft",
+        "Mod+Shift+BracketRight",
         "Mod+Shift+Equal",
         "Mod+Shift+KeyA",
         "Mod+Shift+KeyD",
+        "Mod+Shift+KeyF",
+        "Mod+Shift+KeyG",
         "Mod+Shift+KeyI",
+        "Mod+Shift+KeyL",
         "Mod+Shift+KeyM",
         "Mod+Shift+KeyN",
         "Mod+Shift+KeyP",
+        "Mod+Shift+KeyY",
     ]
 
     static func setTerminalAppShortcutKeys(_ keys: Set<String>) {
@@ -300,27 +312,27 @@ final class EventRouterView: NSView {
             return "Key\(chars.uppercased())"
         case "0"..."9":
             return "Digit\(chars)"
-        case "`":
+        case "`", "~":
             return "Backquote"
-        case ",":
+        case ",", "<":
             return "Comma"
-        case ".":
+        case ".", ">":
             return "Period"
-        case "/":
+        case "/", "?":
             return "Slash"
-        case ";":
+        case ";", ":":
             return "Semicolon"
-        case "'":
+        case "'", "\"":
             return "Quote"
-        case "[":
+        case "[", "{":
             return "BracketLeft"
-        case "]":
+        case "]", "}":
             return "BracketRight"
-        case "\\":
+        case "\\", "|":
             return "Backslash"
-        case "-":
+        case "-", "_":
             return "Minus"
-        case "=":
+        case "=", "+":
             return "Equal"
         case "\r":
             return "Enter"
@@ -341,9 +353,70 @@ final class EventRouterView: NSView {
         }
     }
 
-    private static func terminalAppShortcutKey(modifierFlags mods: NSEvent.ModifierFlags, chars: String) -> String? {
-        guard let code = keyCode(from: chars) else { return nil }
+    /// Carbon virtual key codes → KeyboardEvent.code. AppKit
+    /// `charactersIgnoringModifiers` keeps Shift, so ⌘⇧] is "}" not "]".
+    private static func keyboardEventCode(fromHardwareKeyCode keyCode: UInt16) -> String? {
+        switch keyCode {
+        case 0x00: return "KeyA"
+        case 0x01: return "KeyS"
+        case 0x02: return "KeyD"
+        case 0x03: return "KeyF"
+        case 0x04: return "KeyH"
+        case 0x05: return "KeyG"
+        case 0x06: return "KeyZ"
+        case 0x07: return "KeyX"
+        case 0x08: return "KeyC"
+        case 0x09: return "KeyV"
+        case 0x0B: return "KeyB"
+        case 0x0C: return "KeyQ"
+        case 0x0D: return "KeyW"
+        case 0x0E: return "KeyE"
+        case 0x0F: return "KeyR"
+        case 0x10: return "KeyY"
+        case 0x11: return "KeyT"
+        case 0x12: return "Digit1"
+        case 0x13: return "Digit2"
+        case 0x14: return "Digit3"
+        case 0x15: return "Digit4"
+        case 0x16: return "Digit6"
+        case 0x17: return "Digit5"
+        case 0x18: return "Equal"
+        case 0x19: return "Digit9"
+        case 0x1A: return "Digit7"
+        case 0x1B: return "Minus"
+        case 0x1C: return "Digit8"
+        case 0x1D: return "Digit0"
+        case 0x1E: return "BracketRight"
+        case 0x1F: return "KeyO"
+        case 0x20: return "KeyU"
+        case 0x21: return "BracketLeft"
+        case 0x22: return "KeyI"
+        case 0x23: return "KeyP"
+        case 0x24: return "Enter"
+        case 0x25: return "KeyL"
+        case 0x26: return "KeyJ"
+        case 0x27: return "Quote"
+        case 0x28: return "KeyK"
+        case 0x29: return "Semicolon"
+        case 0x2A: return "Backslash"
+        case 0x2B: return "Comma"
+        case 0x2C: return "Slash"
+        case 0x2D: return "KeyN"
+        case 0x2E: return "KeyM"
+        case 0x2F: return "Period"
+        case 0x32: return "Backquote"
+        case 0x33: return "Backspace"
+        case 0x35: return "Escape"
+        case 0x7B: return "ArrowLeft"
+        case 0x7C: return "ArrowRight"
+        case 0x7D: return "ArrowDown"
+        case 0x7E: return "ArrowUp"
+        default:
+            return nil
+        }
+    }
 
+    private static func terminalAppShortcutKey(modifierFlags mods: NSEvent.ModifierFlags, code: String) -> String {
         var parts: [String] = []
         if mods.contains(.command) {
             parts.append("Mod")
@@ -441,12 +514,17 @@ final class EventRouterView: NSView {
             }
         }
 
-        guard !chars.isEmpty else {
+        guard !chars.isEmpty || Self.keyboardEventCode(fromHardwareKeyCode: event.keyCode) != nil else {
             record("terminal-passthrough-no-chars")
             return passThroughToTerminal(window: window, event: event)
         }
-        guard let shortcutKey = Self.terminalAppShortcutKey(modifierFlags: mods, chars: chars),
-              Self.terminalAppShortcutKeys.contains(shortcutKey) else {
+        guard let code = Self.keyboardEventCode(fromHardwareKeyCode: event.keyCode)
+                ?? Self.keyCode(from: chars) else {
+            record("terminal-passthrough")
+            return passThroughToTerminal(window: window, event: event)
+        }
+        let shortcutKey = Self.terminalAppShortcutKey(modifierFlags: mods, code: code)
+        guard Self.terminalAppShortcutKeys.contains(shortcutKey) else {
             record("terminal-passthrough")
             return passThroughToTerminal(window: window, event: event)
         }

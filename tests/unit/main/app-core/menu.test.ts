@@ -68,7 +68,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       isDev: false,
       language: "zh-CN",
-      onFindInTerminal: vi.fn(),
+      onMenuCommand: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
@@ -93,7 +93,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       isDev: true,
       language: "en",
-      onFindInTerminal: vi.fn(),
+      onMenuCommand: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
@@ -121,7 +121,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       isDev: false,
       language: "ja",
-      onFindInTerminal: vi.fn(),
+      onMenuCommand: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
@@ -143,7 +143,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       isDev: false,
       language: "ko",
-      onFindInTerminal: vi.fn(),
+      onMenuCommand: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
@@ -165,13 +165,13 @@ describe("app menu", () => {
     const onResetZoom = vi.fn();
     const onZoomIn = vi.fn();
     const onZoomOut = vi.fn();
-    const onFindInTerminal = vi.fn();
+    const onMenuCommand = vi.fn();
     const template = buildAppMenuTemplate({
       appName: "Pier",
       getTargetWindow: () => win as never,
       isDev: false,
       language: "en",
-      onFindInTerminal,
+      onMenuCommand,
       onNewTerminal,
       onNewWindow,
       onOpenCommandPalette: (target) => {
@@ -183,6 +183,14 @@ describe("app menu", () => {
     });
 
     const fileMenu = submenu(itemAt(template, 1));
+    expect(
+      fileMenu.find((item) => item.label === "New Terminal")
+    ).toMatchObject({ accelerator: "CmdOrCtrl+T" });
+    expect(
+      submenu(itemAt(template, 3)).find(
+        (item) => item.label === "Command Palette"
+      )
+    ).toMatchObject({ accelerator: "CmdOrCtrl+Shift+P" });
     fileMenu
       .find((item) => item.label === "New Window")
       ?.click?.(undefined as never, undefined as never, undefined as never);
@@ -198,19 +206,19 @@ describe("app menu", () => {
 
     expect(onNewWindow).toHaveBeenCalledOnce();
     expect(onNewTerminal).toHaveBeenCalledWith(win);
-    expect(onFindInTerminal).toHaveBeenCalledWith(win);
+    expect(onMenuCommand).toHaveBeenCalledWith(win, "pier.find");
     expect(send).toHaveBeenCalledWith(
       PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST
     );
   });
 
-  it("adds a Find menu item with the terminal search accelerator", () => {
+  it("adds a Find menu item with the pier.find accelerator", () => {
     const template = buildAppMenuTemplate({
       appName: "Pier",
       getTargetWindow: () => null,
       isDev: false,
       language: "en",
-      onFindInTerminal: vi.fn(),
+      onMenuCommand: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
@@ -224,6 +232,14 @@ describe("app menu", () => {
 
     expect(find).toMatchObject({ accelerator: "CmdOrCtrl+F" });
     expect(find).not.toHaveProperty("role");
+    expect(editMenu.find((item) => item.label === "Find Next")).toMatchObject({
+      accelerator: "CmdOrCtrl+G",
+    });
+    expect(
+      editMenu.find((item) => item.label === "Find Previous")
+    ).toMatchObject({
+      accelerator: "CmdOrCtrl+Shift+G",
+    });
   });
 
   it("routes zoom menu items through Pier handlers with keymap accelerators", () => {
@@ -235,7 +251,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       isDev: false,
       language: "en",
-      onFindInTerminal: vi.fn(),
+      onMenuCommand: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),
@@ -289,7 +305,7 @@ describe("app menu", () => {
       getTargetWindow: () => null,
       getSystemLocale: () => "en-US",
       isDev: false,
-      onFindInTerminal: vi.fn(),
+      onMenuCommand: vi.fn(),
       onNewTerminal: vi.fn(),
       onNewWindow: vi.fn(),
       onOpenCommandPalette: vi.fn(),

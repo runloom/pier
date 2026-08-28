@@ -10,7 +10,10 @@ export function terminalAppShortcutKeys(): string[] {
   // declared as app-handled while the native terminal is focused.
   const commandIds = new Set<string>(APP_HANDLED_NATIVE_TERMINAL_COMMANDS);
   for (const binding of keybindingRegistry.getUserBindings()) {
-    if (binding.commandId.startsWith(AGENT_START_COMMAND_PREFIX)) {
+    if (
+      binding.commandId.startsWith(AGENT_START_COMMAND_PREFIX) ||
+      binding.scope === "global"
+    ) {
       commandIds.add(binding.commandId);
     }
   }

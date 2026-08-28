@@ -181,11 +181,11 @@ describe("buildAgentIndexQuickPick", () => {
     expect(model.sections?.[0]?.items[0]?.label).toBe("other");
   });
 
-  it("keeps focusWaiting as shortcut-only (not a palette or list row)", () => {
+  it("keeps focusWaiting in the command palette without embedding a list row", () => {
     const focusWaiting = AGENT_RUNTIME_ACTION_CONTRIBUTIONS.find(
       (action) => action.id === "pier.agents.focusWaiting"
     );
-    expect(focusWaiting?.surfaces).toEqual([]);
+    expect(focusWaiting?.surfaces).toEqual(["command-palette"]);
     expect(focusWaiting?.titleKey).toBe("agents.quickPick.focusNextNeedsYou");
   });
 

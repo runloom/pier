@@ -13,6 +13,7 @@ import {
 import { FileCanvasPreview } from "../preview/canvas.tsx";
 import { FileHtmlPreview } from "../preview/html.tsx";
 import { FileImagePreview } from "../preview/image.tsx";
+import { FilesFindUnavailableNotice } from "../search/use-find-unavailable.ts";
 import type { FileEditorAdapterProps } from "./adapter-types.ts";
 import { CodeMirrorEditor } from "./cm.tsx";
 
@@ -91,43 +92,64 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
     if (props.language === "canvas" || props.canvasDiskSource) {
       if (props.context && props.canvasDiskSource && props.t) {
         return (
-          <FileCanvasPreview
+          <FilesFindUnavailableNotice
             context={props.context}
-            panelContext={props.panelContext}
             panelId={props.panelId}
-            path={props.canvasDiskSource.path}
-            root={props.canvasDiskSource.root}
+            searchRequest={props.searchRequest}
             t={props.t}
-            worktreeKey={
-              props.panelContext?.worktreeKey ??
-              props.panelContext?.worktreeRoot ??
-              props.panelContext?.gitRoot ??
-              props.canvasDiskSource.root
-            }
-          />
+          >
+            <FileCanvasPreview
+              context={props.context}
+              panelContext={props.panelContext}
+              panelId={props.panelId}
+              path={props.canvasDiskSource.path}
+              root={props.canvasDiskSource.root}
+              t={props.t}
+              worktreeKey={
+                props.panelContext?.worktreeKey ??
+                props.panelContext?.worktreeRoot ??
+                props.panelContext?.gitRoot ??
+                props.canvasDiskSource.root
+              }
+            />
+          </FilesFindUnavailableNotice>
         );
       }
       return (
-        <UnsupportedFileView
-          label={
-            props.t?.(
-              "filePanel.canvas.unavailableTitle",
-              "Can’t preview canvas"
-            ) ?? "Can’t preview canvas"
-          }
-        />
+        <FilesFindUnavailableNotice
+          context={props.context}
+          panelId={props.panelId}
+          searchRequest={props.searchRequest}
+          t={props.t}
+        >
+          <UnsupportedFileView
+            label={
+              props.t?.(
+                "filePanel.canvas.unavailableTitle",
+                "Can’t preview canvas"
+              ) ?? "Can’t preview canvas"
+            }
+          />
+        </FilesFindUnavailableNotice>
       );
     }
     if (props.language === "html") {
       if (props.context && props.htmlDiskSource && props.t) {
         return (
-          <FileHtmlPreview
+          <FilesFindUnavailableNotice
             context={props.context}
-            documentId={props.documentId}
-            path={props.htmlDiskSource.path}
-            root={props.htmlDiskSource.root}
+            panelId={props.panelId}
+            searchRequest={props.searchRequest}
             t={props.t}
-          />
+          >
+            <FileHtmlPreview
+              context={props.context}
+              documentId={props.documentId}
+              path={props.htmlDiskSource.path}
+              root={props.htmlDiskSource.root}
+              t={props.t}
+            />
+          </FilesFindUnavailableNotice>
         );
       }
       return <CodeMirrorEditor {...props} />;
@@ -135,11 +157,18 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
     if (props.language === "svg") {
       if (props.context && props.t && svgPreviewDocument) {
         return (
-          <FileImagePreview
+          <FilesFindUnavailableNotice
             context={props.context}
-            document={svgPreviewDocument}
+            panelId={props.panelId}
+            searchRequest={props.searchRequest}
             t={props.t}
-          />
+          >
+            <FileImagePreview
+              context={props.context}
+              document={svgPreviewDocument}
+              t={props.t}
+            />
+          </FilesFindUnavailableNotice>
         );
       }
       return <CodeMirrorEditor {...props} />;
@@ -194,15 +223,31 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
   if (props.mode === "diff") {
     // originalValue = 磁盘版本(保存冲突 Compare)或最近一次保存的内容。
     if (props.originalValue === undefined) {
-      return <UnsupportedFileView label={labels.diffUnsupported} />;
+      return (
+        <FilesFindUnavailableNotice
+          context={props.context}
+          panelId={props.panelId}
+          searchRequest={props.searchRequest}
+          t={props.t}
+        >
+          <UnsupportedFileView label={labels.diffUnsupported} />
+        </FilesFindUnavailableNotice>
+      );
     }
     return (
-      <FilesLineDiff
-        currentLabel="editor"
-        originalLabel="disk"
-        originalValue={props.originalValue}
-        value={props.value}
-      />
+      <FilesFindUnavailableNotice
+        context={props.context}
+        panelId={props.panelId}
+        searchRequest={props.searchRequest}
+        t={props.t}
+      >
+        <FilesLineDiff
+          currentLabel="editor"
+          originalLabel="disk"
+          originalValue={props.originalValue}
+          value={props.value}
+        />
+      </FilesFindUnavailableNotice>
     );
   }
 
