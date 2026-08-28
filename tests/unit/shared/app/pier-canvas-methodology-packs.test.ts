@@ -102,6 +102,10 @@ describe("pier-canvas methodology packs", () => {
     expect(skill).toContain("methodology");
     expect(skill).toContain("freeform");
     expect(skill).toContain("Stage selection");
+    // Shell inventory + auto-selection (docs shell carries its own chrome).
+    expect(skill).toContain("DocsShell");
+    expect(skill).toContain("Pick the shell from the user's ask");
+    expect(skill).toContain("no floating font-scale control");
     expect(skill).toContain("recipe=design");
     expect(skill).toContain("recipe=orchestration");
     expect(skill).toContain("recipe=board");

@@ -176,8 +176,6 @@ diagram; there is no `type` prop and Pier does not sniff the source header.
 Rules:
 
 - Architecture and main-loop graphs **must** set `kind` on every node.
-  Look at `.pier/canvases/multi-agent-orchestration-gold/data.json`
-  `mainLoop.diagram` / `architecture.diagram`.
 - Status graphs **must** set `tone` (success path, warning attention,
   danger misuse). Templates keep `tone: "danger"` on Error / Misuse /
   Stop nodes.

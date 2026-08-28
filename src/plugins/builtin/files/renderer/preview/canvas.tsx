@@ -60,10 +60,7 @@ import {
   useCanvasHostAnchorIds,
   useCanvasPreviewComments,
 } from "./use-canvas-preview-comments.ts";
-import {
-  CanvasReadingChrome,
-  useCanvasReadingPrefs,
-} from "./use-canvas-reading-prefs.ts";
+import { useCanvasReadingPrefs } from "./use-canvas-reading-prefs.ts";
 import { useCanvasStageViewport } from "./use-canvas-stage-viewport.ts";
 
 /**
@@ -208,7 +205,6 @@ export function FileCanvasPreview(props: {
   );
   const reading = useCanvasReadingPrefs({
     stageInfo,
-    t: props.t,
     worldActive:
       worldStage && (state.kind === "pending" || state.kind === "ready"),
   });
@@ -470,7 +466,6 @@ export function FileCanvasPreview(props: {
           zoom={camera.zoom}
         />
       ) : null}
-      <CanvasReadingChrome {...reading} />
     </div>
   );
 }

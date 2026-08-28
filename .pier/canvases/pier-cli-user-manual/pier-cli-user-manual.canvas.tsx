@@ -319,6 +319,19 @@ export default function PierCliUserManualCanvas() {
             setSearchOpen(true);
           }}
           onFocus={() => setSearchOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") {
+              return;
+            }
+            const first = hits[0];
+            if (!first) {
+              return;
+            }
+            event.preventDefault();
+            goTo(first.navId, first.focus);
+            setQuery("");
+            setSearchOpen(false);
+          }}
         />
         {showSearchPanel ? (
           <div

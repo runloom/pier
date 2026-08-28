@@ -489,7 +489,7 @@ describe("live-modules service", () => {
     expect(source).not.toContain(`${LIVE_MODULE_SCHEME}://runtime/pier-canvas`);
   });
 
-  it("compiles mobile-companion through Artboard and Mermaid runtime stubs", async () => {
+  it("compiles canvas-kit through Artboard and Mermaid runtime stubs", async () => {
     const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
     const service = createService(homeRoot);
     const spec = projectLiveRootSpec({
@@ -499,7 +499,7 @@ describe("live-modules service", () => {
     service.registerRoot(spec);
     const result = await service.compile(
       spec.id,
-      "mobile-companion/mobile-companion.canvas.tsx"
+      "canvas-kit/canvas-kit.canvas.tsx"
     );
     expect(result.ok, JSON.stringify(result)).toBe(true);
     if (!result.ok) {
@@ -511,53 +511,7 @@ describe("live-modules service", () => {
     expect(source).toContain("getCanvas().ArtboardStage");
     expect(source).toContain("getCanvas().Artboard");
     expect(source).toContain("getCanvas().Mermaid");
-  });
-
-  it("compiles workbench-into-canvas gold through the Mermaid runtime stub", async () => {
-    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
-    const service = createService(homeRoot);
-    const projectRoot = process.cwd();
-    const spec = projectLiveRootSpec({
-      directory: ".pier/canvases",
-      projectRootPath: projectRoot,
-    });
-    service.registerRoot(spec);
-
-    const result = await service.compile(
-      spec.id,
-      "workbench-into-canvas/workbench-into-canvas.canvas.tsx"
-    );
-    expect(result.ok, JSON.stringify(result)).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    const source = Buffer.from(
-      service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
-    ).toString("utf8");
-    expect(source).toContain("getCanvas().Mermaid");
-  });
-
-  it("compiles multi-agent gold through Mermaid without a repaint layer", async () => {
-    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
-    const service = createService(homeRoot);
-    const spec = projectLiveRootSpec({
-      directory: ".pier/canvases",
-      projectRootPath: process.cwd(),
-    });
-    service.registerRoot(spec);
-    const result = await service.compile(
-      spec.id,
-      "multi-agent-orchestration-gold/multi-agent-orchestration-gold.canvas.tsx"
-    );
-    expect(result.ok, JSON.stringify(result)).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    const source = Buffer.from(
-      service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
-    ).toString("utf8");
-    expect(source).toContain("getCanvas().Mermaid");
-    // Node chrome (kind/tone) is authored in data.json and loaded at runtime;
+    // Node chrome (kind/tone) is authored in data and loaded at runtime;
     // the bundle must not carry a second chrome map.
     expect(source).not.toContain("paintMermaidNodes");
   });
@@ -692,7 +646,7 @@ describe("live-modules service", () => {
     expect(events).toContain("changed");
   });
 
-  it("compiles in-repo smoke + blank templates", async () => {
+  it("compiles the in-repo smoke template", async () => {
     const projectRoot = process.cwd();
     const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
     const service = createService(homeRoot);
@@ -701,10 +655,7 @@ describe("live-modules service", () => {
     });
     service.registerRoot(spec);
 
-    for (const relPath of [
-      "smoke/hello.canvas.tsx",
-      "templates/blank.canvas.tsx",
-    ] as const) {
+    for (const relPath of ["smoke/hello.canvas.tsx"] as const) {
       const result = await service.compile(spec.id, relPath);
       expect(result.ok, `${relPath}: ${JSON.stringify(result)}`).toBe(true);
       if (!result.ok) {

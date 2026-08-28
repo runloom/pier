@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -15,10 +15,6 @@ import { selectTheme, setWindowSize } from "../support/app-harness.ts";
 const PROJECT_ROOT = join(import.meta.dirname, "..", "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
 const PIER_CLI = join(PROJECT_ROOT, "bin", "pier.mjs");
-const GOLD_DIR = join(
-  PROJECT_ROOT,
-  ".pier/canvases/multi-agent-orchestration-gold"
-);
 const FIXTURE_CANVAS_SOURCE = `import { Mermaid, Frame, Stack, Text } from "pier/canvas";
 
 export const canvas = {
@@ -283,8 +279,6 @@ test("Files canvas preview paints Mermaid kind and tone fills", async ({
     join(workspaceDir, "docs", "graph-colors.canvas.tsx"),
     FIXTURE_CANVAS_SOURCE
   );
-  const goldDest = join(workspaceDir, "docs", "multi-agent-orchestration-gold");
-  cpSync(GOLD_DIR, goldDest, { recursive: true });
   const application = await launchPier(userDataDir);
 
   try {
@@ -315,46 +309,18 @@ test("Files canvas preview paints Mermaid kind and tone fills", async ({
       { kind: "artifact", title: "Runtime", tone: "done" },
     ]);
 
-    await openTreeFile(page, [
-      "docs",
-      "multi-agent-orchestration-gold",
-      "multi-agent-orchestration-gold.canvas.tsx",
-    ]);
-    await expect(page.getByRole("tab", { name: "设计" })).toBeVisible({
-      timeout: 40_000,
-    });
-    await page.getByRole("tab", { name: "设计" }).click();
-    await expect(page.getByText("RuntimeControl")).toBeVisible({
-      timeout: 30_000,
-    });
-    await expect
-      .poll(async () => (await readGraphNodes(page)).length, {
-        timeout: 30_000,
-      })
-      .toBeGreaterThan(5);
-
-    const goldNodes = await readGraphNodes(page);
-    expectPainted(goldNodes, await readThemeProbe(page), [
-      { kind: "tool", title: "focus / interrupt / terminate", tone: "success" },
-      { kind: "artifact", title: "RuntimeControl", tone: "done" },
-      { kind: "actor", title: "人类 · pier CLI", tone: "info" },
-    ]);
-    await page.screenshot({
-      path: testInfo.outputPath("canvas-graph-colors-gold-light.png"),
-    });
-
     await selectTheme(page, { id: "dark", label: /Dark|深色/u });
-    await expect(page.getByText("RuntimeControl")).toBeVisible({
+    await expect(page.getByText("Node graph color contract")).toBeVisible({
       timeout: 20_000,
     });
     const darkNodes = await readGraphNodes(page);
     expectPainted(darkNodes, await readThemeProbe(page), [
-      { kind: "tool", title: "focus / interrupt / terminate", tone: "success" },
-      { kind: "artifact", title: "RuntimeControl", tone: "done" },
-      { kind: "actor", title: "人类 · pier CLI", tone: "info" },
+      { kind: "actor", title: "Caller", tone: "info" },
+      { kind: "tool", title: "CLI", tone: "success" },
+      { kind: "artifact", title: "Runtime", tone: "done" },
     ]);
     await page.screenshot({
-      path: testInfo.outputPath("canvas-graph-colors-gold-dark.png"),
+      path: testInfo.outputPath("canvas-graph-colors-fixture-dark.png"),
     });
   } finally {
     await forceClose(application);

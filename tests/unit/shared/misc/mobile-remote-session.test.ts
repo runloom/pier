@@ -1,12 +1,11 @@
 /**
- * 把移动端画布契约挂进宿主 unit include。
+ * 移动端配对会话契约：live session 绑定可吊销的设备 epoch。
  */
 import { describe, expect, it } from "vitest";
 import type {
   PierPairedDevice,
   PierRemoteSession,
-} from "../../../src/shared/contracts/remote.ts";
-import "../../../.pier/canvases/mobile-companion/contracts.test.ts";
+} from "../../../../src/shared/contracts/remote.ts";
 
 describe("mobile-paired session identity", () => {
   it("binds a live session to a revocable device epoch", () => {

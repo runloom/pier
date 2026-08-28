@@ -57,9 +57,7 @@ describe("project canvases compile through the live-modules fence", () => {
 
   it("finds the in-repo React canvases", () => {
     expect(
-      modules.some((module) =>
-        module.endsWith("harness-plugin-architecture.canvas.tsx")
-      )
+      modules.some((module) => module.endsWith("canvas-kit.canvas.tsx"))
     ).toBe(true);
     expect(modules.length).toBeGreaterThanOrEqual(3);
   });

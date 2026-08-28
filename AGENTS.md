@@ -453,7 +453,7 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 格式化函数进 `pier/canvas` VALUE 导出（`formatPercent` / `formatBytes` 等），不是组件。
 - skill 只教发现 API + 原语组合（至少两种拼法）；不设官方 `templates/accounts.canvas.tsx`，物料页不登记「账号管理」行。
 
-检查点：plugin-data-projections、canvas-host、canvas-hooks、只读例外治理、`.pier/canvases/workbench-into-canvas/` 契约。
+检查点：plugin-data-projections、canvas-host、canvas-hooks、只读例外治理。
 
 ### 滚动条外观
 
