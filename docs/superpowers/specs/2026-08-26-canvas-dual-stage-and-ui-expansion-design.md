@@ -74,8 +74,8 @@ file-canvas-preview（相对根）
 │        └─ [data-pier-canvas-shell]（flow 版心 class 只出自 canvas-stage.ts · 评论 overlay 几何盒）
 │           ├─ file-canvas-host（mount 目标）
 │           └─ CanvasCommentOverlay
-├─ ImagePreviewControls（仅 world；文案走 filePanel.canvas.stage.*）
-└─ CanvasReadingChrome（仅 DocsShell flow）
+└─ ImagePreviewControls（仅 world；文案走 filePanel.canvas.stage.*）
+   （DocsShell flow 无浮动字号控件；阅读偏好经 CSS 变量被动应用）
 ```
 
 `ArtboardStage` / FlowGraph 的 fit-all **卡片**仍用 `HtmlWorldCanvas`；全屏 zoom/pan 只在 ContentPreviewHost。files 预览内联 world **不得**包 `HtmlWorldCanvas presentation="stage"`。
@@ -88,7 +88,7 @@ file-canvas-preview（相对根）
 
 ### 3.3 flow 模式（现状 + 阅读增强）
 
-- 几何不变；`DocsShell` 为根时打 `data-canvas-docs`。壳（files 插件）直接复用 `useMarkdownPreviewPrefsStore`（字号 / 舒适宽屏；纸面明暗不适用 canvas）。store **不**提升到 `src/shared`——插件边界下由预览壳拥有阅读 chrome，「文档就是文档」。
+- 几何不变；`DocsShell` 为根时打 `data-canvas-docs`。壳（files 插件）直接复用 `useMarkdownPreviewPrefsStore`（字号 / 舒适宽屏；纸面明暗不适用 canvas）。store **不**提升到 `src/shared`。字号经 `--md-scale` 被动作用在 DocsShell 上——**无浮动字号控件**（`CanvasReadingChrome` 已于 2026-08-28 摘除；Markdown 预览仍有自己的字号浮控）。「文档就是文档」。
 - **版心只归壳**：comfortable 为 `max-w-5xl`；docs + wide 去掉上限（对齐 markdown `--md-measure: 100%`）。`DocsShell` 填满壳，不再自带 1080 第二套版心。
 - 新增 fill 挡位：根内容声明 `data-canvas-fill`（由 `Stack` 等原语的 `fill` prop 渲染）时，壳去掉版心与 py，交给内容自滚——满幅仪表盘 / 看板的归宿。fill / world 不应用阅读偏好。
 

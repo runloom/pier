@@ -19,7 +19,7 @@
 > 第五次修订摘要：
 > ⑦ **先主机、后投影**——移动端根面是主机管理（未配对空态 → 主机列表 → 当前主机工作台），会话终端 / 变更 / 只读文件挂在当前主机下。桌面出码与移动端扫入分成两面。交互流程与配对时序进 Canvas。
 > 第四次修订摘要：
-> ⑥ **线框真源是 Canvas**——六面 IA 用 `.pier/canvases/mobile-companion/` 的 `ArtboardStage` + `Artboard`（360×680）实现，不再平行维护 HTML 稿。规格正文只保留文字对照表。
+> ⑥ **线框真源是本文 §11**——六面 IA 用正文 ASCII 树与对照表锁定（360 宽移动端信息架构）。曾用 `.pier/canvases/mobile-companion/` 的 `ArtboardStage` + `Artboard` 作平行真源，该演示画布已于 2026-08-28 删除，不再维护第二份稿。
 > 第三次修订摘要：
 > ④ **线框取代视觉稿**——前一版 HTML/截图是深色成品风界面，把未定的视觉（色、圆角、底栏、品牌）写成了「设计」。本版只保留信息架构线框：页面、区块、字段、动作、事实源；视觉另立。
 > ⑤ **三壳共用协议**——移动端终态是 Web、原生 App、小程序都要能连同一宿主。`mobile-paired` 仍是唯一 client-kind；壳是设备元数据。首壳是 Web，但帧协议 / 信息架构 / T1 终端不得绑死浏览器 API。见 §11.3、D3。
@@ -480,7 +480,7 @@ T2 的产品承诺才允许 UI 写「终端历史 / 实时输出」。能力广�
 
 #### 11.1 交互流程：先主机、后投影
 
-规范线框真源：[`.pier/canvases/mobile-companion/`](../../../.pier/canvases/mobile-companion/mobile-companion.canvas.tsx)。**根面是主机。核心闭环必须整条齐（§2.1）。**
+规范线框真源：本文 §11（ASCII 树 + 对照表）。**根面是主机。核心闭环必须整条齐（§2.1）。** 原 Canvas 线框 `.pier/canvases/mobile-companion/` 已删除。
 
 ```text
 打开移动端

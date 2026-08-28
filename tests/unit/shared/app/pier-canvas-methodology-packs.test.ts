@@ -288,9 +288,26 @@ describe("pier-canvas methodology packs", () => {
       ),
       "utf8"
     );
+    const authoring = readFileSync(
+      join(
+        process.cwd(),
+        "resources/system-skills/pier-canvas/references/authoring.md"
+      ),
+      "utf8"
+    );
     expect(hostData).toContain("http://127.0.0.1");
     expect(hostData).toContain("invokeCommand");
     expect(hostData).toContain("Do not call");
     expect(hostData).toContain("run.spawn");
+    expect(hostData).not.toContain("workbench-examples");
+    expect(authoring).not.toContain("workbench-examples");
+    const dagTemplate = readFileSync(
+      join(
+        process.cwd(),
+        "resources/system-skills/pier-canvas/templates/dag-viewer.canvas.tsx"
+      ),
+      "utf8"
+    );
+    expect(dagTemplate).not.toContain(".pier/canvases/dag-viewer");
   });
 });

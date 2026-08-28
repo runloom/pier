@@ -71,11 +71,11 @@ to `[0, 100]`; plugins may report values outside that range.
 Empty and error states use `Empty` / `Alert`. Surface failed
 `pluginAction.invoke` on that `Alert`; do not swallow the rejection.
 
-Live composition: `.pier/canvases/workbench-examples/` — Codex uses compact
-`Item` rows + `DropdownMenu`; Grok uses `Table`. Both read
-`plugin:pier.codex/accounts` / `plugin:pier.grok/accounts`. Sign-in still
-goes through `settings.open` with `section: "plugin:pier.codex"` or
-`"plugin:pier.grok"`.
+Compose those two layouts from `Item` / `Table` in
+`.pier/canvases/canvas-kit/` (Controls / Viz). Read
+`plugin:pier.codex/accounts` / `plugin:pier.grok/accounts` on the canvas.
+Sign-in still goes through `settings.open` with `section: "plugin:pier.codex"`
+or `"plugin:pier.grok"`.
 
 ## Loopback fetch
 

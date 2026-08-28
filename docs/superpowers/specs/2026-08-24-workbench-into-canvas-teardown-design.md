@@ -3,7 +3,7 @@
 - 日期：2026-08-24
 - 修订：2026-08-26（金标准终态：通用 API + 原语组合；无领域组件 / 无官方账号页）
 - 状态：已落地
-- 前置：`.pier/canvases/workbench-into-canvas/`；P0 能力层（pluginData.snapshot + 三个宿主聚合 hook）已落地
+- 前置：P0 能力层（pluginData.snapshot + 三个宿主聚合 hook）已落地。演示金样 `.pier/canvases/workbench-into-canvas/` 已于 2026-08-28 删除；教法见 `resources/system-skills/pier-canvas/references/host-data.md`。
 
 ## 1. 背景与问题
 

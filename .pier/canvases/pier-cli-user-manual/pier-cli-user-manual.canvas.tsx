@@ -320,7 +320,11 @@ export default function PierCliUserManualCanvas() {
           }}
           onFocus={() => setSearchOpen(true)}
           onKeyDown={(event) => {
-            if (event.key !== "Enter") {
+            if (
+              event.key !== "Enter" ||
+              event.nativeEvent.isComposing ||
+              event.nativeEvent.keyCode === 229
+            ) {
               return;
             }
             const first = hits[0];

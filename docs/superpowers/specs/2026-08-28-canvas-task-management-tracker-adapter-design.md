@@ -60,7 +60,7 @@
 
 - **团队任务看板**：用户在项目设置里连上 repo（凭据自动复用 gh CLI）→ 让 agent 生成 tracker-board canvas，**生成后 agent 立即打开预览面板挂进布局**（随 dockview 布局持久化）→ 板子显示 issues 列/卡、每张卡叠加「绑定的 worktree + agent 活动点」→ **P0 起拖卡即改状态**（`task.setStatus`），其余改数据可找 agent（gh 原生）→ 卡片「开工」一键建 worktree + 起 agent + 自动绑定（P1.5，§4.6）。
 - **任务依赖 DAG**：同一投影的 `dag` 键 → `FlowGraph` 渲染节点（issue）与边（blockedBy）→ 就绪节点高亮（`blockedBy == 0`）→ agent 领就绪任务开 worktree，完成 close issue，下游自动解锁。
-- **分支内容板**（存量场景）：发布 checklist、分支内规划——继续走兄弟文件（`useCanvasFile`），数据随分支评审是特性；金样板补 CRUD 后可直接使用。
+- **分支内容板**（存量场景）：发布 checklist、分支内规划——继续走兄弟文件（`useCanvasFile`），数据随分支评审是特性；模板补 CRUD 后可直接使用。
 
 ### 2.4 非目标
 
@@ -112,7 +112,7 @@ graph TB
   subgraph Renderer["Pier renderer"]
     BRIDGE["pier/host 桥<br/>useHostSnapshot / pluginAction.invoke"]
     subgraph Canvas["L3 canvas（.canvas.tsx 组装）"]
-      BOARD["tracker-board 金样板<br/>Droppable/Sortable 列卡"]
+      BOARD["tracker-board 模板<br/>Droppable/Sortable 列卡"]
       DAG["DAG 视图<br/>FlowGraph + layoutFlowGraph"]
     end
   end
@@ -189,6 +189,7 @@ flowchart LR
     key,                               // "gh:owner/name#123"
     number, title, state, url,
     assignees: string[], labels: string[],
+    milestone?: string | null,         // GitHub 单里程碑标题；canvas 侧筛选用
     blockedByCount: number,            // 就绪判据：=== 0
     columnId,
     overlay?: { worktreePath?, panelId?, boundAt }   // 本机 join，跨机自然缺席
@@ -250,7 +251,7 @@ sequenceDiagram
     P-->>CV: 新投影广播（乐观态收敛）
   else 失败
     P-->>CV: 错误 → 回滚乐观态
-    CV->>U: showAppAlert（带 API 错误详情，遵守反馈规范）
+    CV->>U: canvas Alert（带 API 错误详情与下一步；禁止 showAppAlert / 宿主弹窗）
   end
   end
   rect rgb(245,245,245)
@@ -281,10 +282,10 @@ sequenceDiagram
 
 ### 5.1 `tracker-board` 配方（新增）
 
-- 金样板 `.pier/canvases/tracker-board/`、模板 `resources/system-skills/pier-canvas/templates/tracker-board.canvas.tsx`、配方 `packs/recipes/tracker-board/pack.json`（`stage: fill`）。
+- 模板即 P0 金样：`resources/system-skills/pier-canvas/templates/tracker-board.canvas.tsx` + 配方 `packs/recipes/tracker-board/pack.json`（`stage: fill`）。**不**落 `.pier/canvases/tracker-board/`——仓库 canvases 只留 canvas-kit / pier-cli-user-manual / smoke（见 `.pier/canvases/README.md`）。agent 按用户项目生成后立即打开预览。
 - 组装：根 `<Stack fill>`；列 `Droppable` + 卡 `Sortable`（复用现有 DnD 积木）；数据 `useHostSnapshot("plugin:pier.tasks/board")` 收窄渲染；活动点双订阅 foreground-activity。
-- 状态面：投影 `status` 为 loading/error/ready 三态 + 无凭据 `Empty` 引导（「未连接任务系统。请在设置 → 项目中连接」，文案进 locale）；`staleSince` 显示数据时间。
-- P0 交互：拖卡改状态可用（`task.setStatus`，乐观更新/失败回滚）；卡片标题点开浏览器原 issue（心智锚：数据在 GitHub）；筛选控件（负责人/label/milestone，`Select`/`Input` 客户端过滤投影数据）+ 列溢出「在 GitHub 查看全部」出口；「开工」按钮 P1.5 点亮。
+- 状态面：投影 `status` 为 loading/error/ready 三态 + 无凭据 `Empty` 引导（「未连接任务系统。请在设置 → 项目中连接」，文案进 locale）；`staleSince` 显示数据时间。写失败用壳内 `Alert`（不要 `showAppAlert`）。
+- P0 交互：拖卡改状态可用（`task.setStatus`，乐观更新/失败回滚）；卡片标题点开浏览器原 issue（心智锚：数据在 GitHub）；筛选控件（负责人/label/milestone，`Select`/`Input` 客户端过滤投影数据——卡片带 `milestone`）+ 列溢出「在 GitHub 查看全部」出口；「开工」按钮 P1.5 点亮。
 - 板标题带 repo 名；`staleSince` 显示「数据来自 x 分钟前」。
 
 ### 5.2 DAG 视图
@@ -295,7 +296,7 @@ sequenceDiagram
 ### 5.3 存量配方改造
 
 - `board` 配方重定位：pack.json description/agentPrompt 明确「分支作用域内容板」适用边界；antiPatterns 增加「团队共享任务数据放兄弟 JSON（应走 tracker-board）」。
-- `board` 模板补最小 CRUD 并**重建金样板**（2026-08-28 清理已删除旧 kanban 金样板）：列底「+ 添加卡片」（`Input` + Enter）、卡片 `Popover` 编辑（`Field`/`Select`）、`DropdownMenu` 删除——全部现有 SDK 积木，写路径复用既有 `persist`/revision 冲突处理；新金样板须随契约测试落地（对齐 canvases README 准入规则）。
+- `board` 模板补最小 CRUD 并作为配方金样（2026-08-28 清理已删除旧 kanban 仓库演示）：列底「+ 添加卡片」（`Input` + Enter）、卡片 `Popover` 编辑（`Field`/`Select`）、`DropdownMenu` 删除——全部现有 SDK 积木，写路径复用既有 `persist`/revision 冲突处理；**不**把新演示落回 `.pier/canvases/`（对齐 README 准入；契约测试锁模板）。
 - `orchestration` 配方 agentPrompt 补数据源说明（编排器 loopback | tracker 投影，指向 §5.2 分工）。
 
 ### 5.4 skill 教学
@@ -325,8 +326,7 @@ flowchart TB
 | 项 | 路径 |
 |---|---|
 | 任务适配插件 | `src/plugins/builtin/tasks/**`（manifest/main/renderer/locales） |
-| tracker-board 金样板 | `.pier/canvases/tracker-board/` |
-| tracker-board 模板 | `resources/system-skills/pier-canvas/templates/tracker-board.canvas.tsx` |
+| tracker-board 模板（P0 金样） | `resources/system-skills/pier-canvas/templates/tracker-board.canvas.tsx` |
 | tracker-board 配方 | `resources/system-skills/pier-canvas/packs/recipes/tracker-board/pack.json` |
 | 治理测试 | `tests/unit/plugins/tasks/`（manifest 声明链、投影 shape、凭据不泄漏）；对齐 plugin-data-projections 既有模式 |
 
@@ -345,7 +345,7 @@ flowchart TB
 
 | 项 | 处置 |
 |---|---|
-| 冗余演示画布 ×10（activity-overview / dag-viewer / design-mockup / harness-plugin-architecture / kanban / mobile-companion / multi-agent-orchestration-gold / templates / workbench-examples / workbench-into-canvas）及其专属测试、配方 gold 指针 | **已删除**（2026-08-28 清理；保留 canvas-kit 物料、pier-cli-user-manual、smoke 编译夹具） |
+| 冗余演示画布 ×11（activity-overview / dag-viewer / design-mockup / harness-plugin-architecture / kanban / mobile-companion / multi-agent-orchestration-gold / templates / workbench-examples / workbench-into-canvas / **smoke/world.canvas.tsx**）及其专属测试、配方 gold 指针 | **已删除**（2026-08-28 清理；保留 canvas-kit 物料、pier-cli-user-manual、smoke 编译夹具） |
 | 自建同步方案（应用级共享 store / 操作日志 CRDT / git-refs 传输） | 无代码，方案层否决，记入 §10 储备 |
 
 ### 7.4 明确不动
@@ -356,10 +356,10 @@ canvas 壳/信任门/热重载、`Sortable`/`Droppable`/`FlowGraph`/`useCanvasFi
 
 | 期 | 内容 | 解锁 | 量级 |
 |---|---|---|---|
-| P0 | 插件骨架 + GitHub 投影（默认过滤/每列上限）+ `task.setStatus` 动作 + tracker-board 金样板（拖卡/筛选/空态直达/生成即开）+ projectSettings（零配置列默认） | 板子出数据且**拖卡可用**；agent gh 写回流 | 约一周 |
+| P0 | 插件骨架 + GitHub 投影（默认过滤/每列上限）+ `task.setStatus` 动作 + tracker-board **模板**（拖卡/筛选/空态直达/生成即开，不落仓库 canvases）+ projectSettings（零配置列默认） | 板子出数据且**拖卡可用**；agent gh 写回流 | 约一周 |
 | P1 | 其余 canvasActions（create/assign/close/dep.*）+ 写队列完备 | 全量交互写 | 3-5 天 |
 | P1.5 | 本机 overlay + `task.startWork` 开工复合动作 + 活动点叠加 + 机会主义刷新 | 「看板即驾驶舱」闭环 | 3-4 天 |
-| P2 | 存量配方改造（重建带 CRUD 的 board 金样板 + 重定位 + skill + 物料登记） | 内容板可直接使用；教法闭环 | 2-3 天，可与 P0 并行 |
+| P2 | 存量配方改造（board **模板**补 CRUD + 重定位 + skill + 物料登记；不重建 `.pier/canvases/kanban/`） | 内容板可直接使用；教法闭环 | 2-3 天，可与 P0 并行 |
 | P3 | Linear/Jira provider + Projects V2 status 列 + GHES 降级 | 生态扩展 | 按需 |
 
 ## 9. 治理检查点
@@ -392,4 +392,4 @@ canvas 壳/信任门/热重载、`Sortable`/`Droppable`/`FlowGraph`/`useCanvasFi
 | 2 | GitHub 凭据：复用 gh CLI vs 自建 OAuth app | 复用 gh CLI（显式授权） |
 | 3 | v0 列语义：label/state vs Projects V2 | label/state 起步 |
 | 4 | 产品词：Issue 中文界面用词（议题/任务） | 「任务」（与智能体/工作树同级的产品词，避免直出英文） |
-| 5 | kanban 金样板 CRUD（P2）是否与 P0 并行 | 并行（互不依赖） |
+| 5 | kanban 模板 CRUD（P2）是否与 P0 并行 | 并行（互不依赖） |
