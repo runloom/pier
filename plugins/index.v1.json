@@ -1,11 +1,11 @@
 {
-  "generatedAt": 1787698589143,
+  "generatedAt": 1787934234824,
   "plugins": {
     "pier.agent-splits": {
       "description": "Connect splits opened by assistants to workbench panels.",
       "displayName": "Agent splits",
       "id": "pier.agent-splits",
-      "latest": "1.5.1",
+      "latest": "1.5.2",
       "locales": {
         "en": {
           "name": "Agent splits",
@@ -30,6 +30,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "6d56d1bca26ec22e86edae054173ce8309a45a7d7cf374ba845c78771bde6d30",
           "size": 57367
+        },
+        "1.5.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-agent-splits-v1.5.2/pier.agent-splits-1.5.2.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "ce589917eb3ff1f45571e4eba236dfb6fb2c63de37775447ba35e140558639e5",
+          "size": 57367
         }
       }
     },
@@ -37,7 +43,7 @@
       "description": "Manage Claude accounts and switch the active login for Pier.",
       "displayName": "Claude Account Management",
       "id": "pier.claude",
-      "latest": "1.3.10",
+      "latest": "1.3.11",
       "locales": {
         "en": {
           "name": "Claude Account Management",
@@ -110,6 +116,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "ca0d6a8b2c08bee170ad87b9a629472fa263228e094353191d8bc20f1fe1c478",
           "size": 701513
+        },
+        "1.3.11": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.11/pier.claude-1.3.11.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "b58382f78474bb57d8fa82ab711adc2f7d058980a50961cd05234c957554d43d",
+          "size": 575039
         }
       }
     },
@@ -117,7 +129,7 @@
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.4.13",
+      "latest": "1.4.14",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -208,6 +220,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "a4357020eb9a9934ec778cfbf9a8077a1bb58cad391665eaf0aa7d427955f936",
           "size": 695881
+        },
+        "1.4.14": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.14/pier.codex-1.4.14.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "0d6bf81dd5f3b589afc36e5471d7bce6e477690ee9101a13ef1085133f995ec7",
+          "size": 568895
         }
       }
     },
@@ -215,7 +233,7 @@
       "description": "Manage Grok accounts, login, and switch for Pier.",
       "displayName": "Grok Account Management",
       "id": "pier.grok",
-      "latest": "1.1.14",
+      "latest": "1.1.15",
       "locales": {
         "en": {
           "name": "Grok Account Management",
@@ -312,6 +330,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "e9c85532bb9f3956194dd933029919265d5bad7026822eac6803a1b951a32885",
           "size": 761422
+        },
+        "1.1.15": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.15/pier.grok-1.1.15.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "6afea6279f075e32c32f5399d01a4001bdc292a0c1e9c5d60227cbd36b022e1f",
+          "size": 633412
         }
       }
     },
@@ -319,7 +343,7 @@
       "description": "Manage SSH hosts and open SSH terminals from Pier.",
       "displayName": "SSH Hosts",
       "id": "pier.ssh",
-      "latest": "1.0.8",
+      "latest": "1.0.9",
       "locales": {
         "en": {
           "name": "SSH Hosts",
@@ -380,6 +404,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "1b9a6b924b46ec68d4ebec0bac1e855e602a6891786c78dfae4fe650c4386096",
           "size": 382512
+        },
+        "1.0.9": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.9/pier.ssh-1.0.9.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "eebadb84c23222f9adedaad508f09c94c0676d1cc518fe4251da07b53d5ab332",
+          "size": 382512
         }
       }
     },
@@ -416,11 +446,11 @@
       }
     }
   },
-  "sequence": 37,
+  "sequence": 38,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "h5GupJIFSBEnyOOQ0fNVqkgGb5mq7qPZ9j08zHbBHo9Ou1fGNNXev16eitmHJIQFLwLiVU/5LNdrRUojr1jcCQ=="
+    "value": "GmlkewLSNOodTlYGW0F3xtWgNIDvTffJFx/0f6xbzYMJrOsadZz0wLmRQPrgR9BQJW94QKQggunazgVyMhdZCA=="
   }
 }
