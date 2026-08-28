@@ -122,11 +122,24 @@ async function openPaletteAction(win: Page, name: RegExp): Promise<void> {
   await win.keyboard.press("Meta+Shift+KeyP");
   const input = win.locator("[cmdk-input]");
   await expect(input).toBeVisible({ timeout: 10_000 });
-  const query = name.source.split("|")[0]?.replaceAll("\\", "") ?? "";
-  if (query.length > 0) {
-    await input.fill(query);
-  }
+  const queries = name.source
+    .split("|")
+    .map((part) => part.replaceAll("\\", ""))
+    .filter((part) => part.length > 0);
   const item = win.locator("[cmdk-item]").filter({ hasText: name });
+  // CI runners are usually English; the first alternative is often Chinese.
+  // Try each locale string so filtering does not empty the list.
+  for (const query of queries) {
+    await input.fill(query);
+    try {
+      await expect(item).toBeVisible({ timeout: 2500 });
+      await item.click();
+      return;
+    } catch {
+      // Try the next locale label.
+    }
+  }
+  await input.fill("");
   await expect(item).toBeVisible({ timeout: 10_000 });
   await item.click();
 }
@@ -139,7 +152,7 @@ export async function openWelcomeTab(win: Page): Promise<void> {
 }
 
 export async function selectTheme(win: Page, theme: AppTheme): Promise<void> {
-  await openPaletteAction(win, /选择主题|Select Theme/);
+  await openPaletteAction(win, /选择主题|Select Theme|テーマを選択|테마 선택/);
   const option = win.locator("[cmdk-item]").filter({ hasText: theme.label });
   await expect(option).toBeVisible({ timeout: 10_000 });
   await option.click();
