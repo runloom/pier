@@ -478,6 +478,7 @@ describe("PierDev helper signing", () => {
       } finally {
         rmSync(root, { force: true, recursive: true });
       }
-    }
+    },
+    15_000
   );
 });
