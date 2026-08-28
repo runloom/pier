@@ -37,10 +37,7 @@ export function FlowGraphEdgeLayer({
           <g
             data-slot="flow-graph-edge"
             data-status={status ?? "idle"}
-            key={
-              edge.id ??
-              `${edge.source}->${edge.target}${edge.label ? `:${edge.label}` : ""}`
-            }
+            key={`${edge.source}->${edge.target}${edge.label ? `:${edge.label}` : ""}`}
           >
             <path
               className={cn(

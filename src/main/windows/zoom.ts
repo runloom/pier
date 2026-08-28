@@ -11,13 +11,8 @@ type ZoomPreferences = Pick<ProjectPreferences, "windowZoomLevel">;
 export interface WindowZoomTarget {
   webContents: Pick<
     WebContents,
-    "isDestroyed" | "send" | "setVisualZoomLevelLimits" | "setZoomLevel"
-  > & {
-    on(
-      event: "zoom-changed",
-      listener: (event: Event, zoomDirection: "in" | "out") => void
-    ): unknown;
-  };
+    "isDestroyed" | "on" | "send" | "setVisualZoomLevelLimits" | "setZoomLevel"
+  >;
 }
 
 export interface WindowZoomController {

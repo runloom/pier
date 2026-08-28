@@ -63,10 +63,17 @@ describe("font stack governance (system-first, no bundled CJK)", () => {
     );
     const uiBlock = FONT_STORE.match(/const UI_FALLBACK = \[([\s\S]*?)\];/);
     expect(uiBlock).not.toBeNull();
-    expect(uiBlock?.[1]).toContain('"system-ui"');
+    const uiBody = uiBlock?.[1];
+    expect(uiBody).toBeTruthy();
+    if (!uiBody) {
+      return;
+    }
+    expect(uiBody).toContain('"system-ui"');
     // 系统字体必须排在链首段（emoji / CJK 之前）
-    expect(uiBlock?.[1].indexOf('"system-ui"')).toBeLessThan(
-      uiBlock?.[1].indexOf("CJK_STACK_REF") ?? -1
+    expect(uiBody.indexOf('"system-ui"')).toBeLessThan(
+      uiBody.indexOf("CJK_STACK_REF") === -1
+        ? Number.POSITIVE_INFINITY
+        : uiBody.indexOf("CJK_STACK_REF")
     );
   });
 
@@ -75,10 +82,15 @@ describe("font stack governance (system-first, no bundled CJK)", () => {
       /const MONO_TERMINAL_FALLBACK = \[([\s\S]*?)\];/
     );
     expect(termBlock).not.toBeNull();
-    expect(termBlock?.[1]).toContain('"PingFang SC"');
-    expect(termBlock?.[1]).not.toContain("CJK_STACK_REF");
-    expect(termBlock?.[1]).not.toContain("monospace");
-    expect(termBlock?.[1]).not.toContain("ui-monospace");
+    const termBody = termBlock?.[1];
+    expect(termBody).toBeTruthy();
+    if (!termBody) {
+      return;
+    }
+    expect(termBody).toContain('"PingFang SC"');
+    expect(termBody).not.toContain("CJK_STACK_REF");
+    expect(termBody).not.toContain("monospace");
+    expect(termBody).not.toContain("ui-monospace");
   });
 
   it("globals.css 定义 --pier-cjk-font-family 并按界面语言切换", () => {

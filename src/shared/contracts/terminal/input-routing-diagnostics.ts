@@ -70,7 +70,7 @@ export const terminalInputRoutingDiagnosticSchema = z.discriminatedUnion(
         activePanelComponent: z.string().max(80).optional(),
         commandId: z.string().min(1).max(160),
         overlayCount: z.number().int().nonnegative().max(32),
-        route: z.enum(["web-keydown", "native-forward"]),
+        route: z.enum(["menu", "native-forward", "web-keydown"]),
         source: z.literal("keybinding"),
       })
       .strict(),

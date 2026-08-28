@@ -32,10 +32,10 @@ export function FilesFindUnavailableNotice({
   t,
 }: {
   children: ReactNode;
-  context?: RendererPluginContext;
-  panelId?: string;
-  searchRequest?: number;
-  t?: FilesTranslate;
+  context?: RendererPluginContext | undefined;
+  panelId?: string | undefined;
+  searchRequest?: number | undefined;
+  t?: FilesTranslate | undefined;
 }): ReactNode {
   const message =
     t?.("filePanel.search.unavailable", DEFAULT_UNAVAILABLE) ??
