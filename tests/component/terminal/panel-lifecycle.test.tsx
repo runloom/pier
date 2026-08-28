@@ -1767,9 +1767,10 @@ describe("TerminalPanel lifecycle", () => {
     expect(result).toHaveTextContent("0");
     const statusBadge = screen.getByTestId("terminal-agent-status-badge");
     expect(statusBadge).toHaveAttribute("data-variant", "success");
-    expect(
-      screen.getByRole("button", { name: "Restart agent" })
-    ).toBeInTheDocument();
+    const restartButton = screen.getByRole("button", { name: "Restart agent" });
+    expect(restartButton).toBeInTheDocument();
+    expect(restartButton.parentElement).toHaveClass("justify-center");
+    expect(restartButton.parentElement).not.toHaveClass("justify-end");
     expect(window.pier.terminal.create).not.toHaveBeenCalled();
   });
 
