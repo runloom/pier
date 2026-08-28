@@ -857,6 +857,12 @@
       "outputMicrousd": 4.4,
       "aliases": ["z-ai/glm-5.3"]
     },
+    "glm-5.3-flash": {
+      "cachedInputMicrousd": 0.015,
+      "inputMicrousd": 0.075,
+      "outputMicrousd": 0.25,
+      "aliases": ["z-ai/glm-5.3-flash"]
+    },
     "glm-5v-turbo": {
       "cachedInputMicrousd": 0.24,
       "inputMicrousd": 1.2,
@@ -2030,7 +2036,7 @@
       "cachedInputMicrousd": 0.06,
       "inputMicrousd": 0.3,
       "outputMicrousd": 1.2,
-      "aliases": ["minimax/minimax-m2.7"]
+      "aliases": ["minimax/minimax-m2.7", "minimax/minimax-m2.7:free"]
     },
     "minimax-m3": {
       "cachedInputMicrousd": 0.06,
@@ -2039,7 +2045,8 @@
       "aliases": [
         "minimax/MiniMax-M3",
         "minimax/minimax-m3",
-        "minimax/minimax-m3:batch"
+        "minimax/minimax-m3:batch",
+        "minimax/minimax-m3:free"
       ]
     },
     "MiniMax-M3": {
